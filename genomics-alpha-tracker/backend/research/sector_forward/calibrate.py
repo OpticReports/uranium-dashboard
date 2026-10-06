@@ -63,7 +63,9 @@ SEED = 20261006
 def own_rows(sym: str, aliases: dict) -> list[dict]:
     al = set(aliases[sym]["aliases"])
     rows, seen = [], set()
-    for q in aliases[sym]["queries"]:
+    # audited aliases are searched too: a subsidiary's own trials (Kite for Gilead,
+    # ModernaTX for Moderna) need not mention the parent's name
+    for q in list(dict.fromkeys(aliases[sym]["queries"] + aliases[sym]["aliases"])):
         for st in C.search_name(q):
             r = C.compact(st, q)
             if not r["nct"] or r["nct"] in seen:

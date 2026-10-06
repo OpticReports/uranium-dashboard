@@ -47,7 +47,26 @@
   ],
   "aliases": [
    "Abbott",
-   "Abbott Laboratories (Pak) Ltd."
+   "Abbott (China)",
+   "Abbott Biologicals",
+   "Abbott Diabetes Care",
+   "Abbott Diabetes Care, Inc - providing financial support for the study",
+   "Abbott Diagnostics Division",
+   "Abbott Healthcare Private Limited (in India)",
+   "Abbott Laboratories (Pak) Ltd.",
+   "Abbott Medical Devices",
+   "Abbott Molecular",
+   "Abbott Nutrition",
+   "Abbott Point of Care",
+   "Abbott Products Operations AG",
+   "Abbott RDx Cardiometabolic",
+   "Abbott Rapid Diagnostics Jena GmbH",
+   "Abbott Rapid Dx",
+   "Abbott Transfusion Medicine",
+   "Alere San Diego",
+   "Alere, Inc.",
+   "Thoratec Corporation",
+   "Thoratec Europe Ltd"
   ],
   "alias_study_counts": {
    "Abbott": 783,
@@ -67,7 +86,35 @@
    "Quintiles, Inc.",
    "Merck Sharp & Dohme LLC"
   ],
-  "old_query": "Abbott Laboratories"
+  "old_query": "Abbott Laboratories",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Abbott (China)",
+     "Abbott Biologicals",
+     "Abbott Diabetes Care",
+     "Abbott Diabetes Care, Inc - providing financial support for the study",
+     "Abbott Diagnostics Division",
+     "Abbott Healthcare Private Limited (in India)",
+     "Abbott Medical Devices",
+     "Abbott Molecular",
+     "Abbott Nutrition",
+     "Abbott Point of Care",
+     "Abbott Products Operations AG",
+     "Abbott RDx Cardiometabolic",
+     "Abbott Rapid Diagnostics Jena GmbH",
+     "Abbott Rapid Dx",
+     "Abbott Transfusion Medicine",
+     "Alere San Diego",
+     "Alere, Inc.",
+     "Thoratec Corporation",
+     "Thoratec Europe Ltd"
+    ],
+    "reason": "The rule kept only 'Abbott'. It misses Abbott's operating divisions, which lead most of its current trials: Medical Devices (686 cached studies, e.g. 2026 TriClip and Grid mapping studies), Nutrition (178), Diabetes Care (74), and the diagnostics units RDx, Point of Care (i-STAT 2026), Rapid Dx (BinaxNOW/Panbio 2024-25), Molecular and Transfusion. It also misses the EPD units Biologicals (Influvac) and Products Operations AG, and country affiliates. Thoratec (via St. Jude, 2017) and Alere (2017) are wholly owned; their HeartMate and Triage studies are Abbott Medical Devices / RDx trials. Deliberately NOT added: 'AbbVie (prior sponsor, Abbott)'; Abbott Medical Optics (now J&J Surgical Vision); Guidant (Boston Scientific); Abbott Japan, Abbott (Ukraine) and Abbott Products (pharma-era or ambiguous); Abbott Fund (philanthropy); Abbott Research Group (unrelated douching-device sponsor).",
+    "source": "adjudicated"
+   }
+  ]
  },
  "ABUS": {
   "listing": "Arbutus Biopharma Corporation Common Stock",
@@ -143,6 +190,7 @@
    "adarx"
   ],
   "aliases": [
+   "ADARx Australia Pty Ltd",
    "ADARx Pharmaceuticals, Inc."
   ],
   "alias_study_counts": {
@@ -153,7 +201,17 @@
    "Avance Clinical Pty Ltd.",
    "Novotech (Australia) Pty Limited"
   ],
-  "old_query": "ADARx Pharmaceuticals"
+  "old_query": "ADARx Pharmaceuticals",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "ADARx Australia Pty Ltd"
+    ],
+    "reason": "ADARx's Australian trial subsidiary, listed as collaborator on both ADARx-led first-in-human studies (ADX-850 NCT06205628, ADX-038 NCT05876312). It is in rejected_top.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "ALLO": {
   "listing": "Allogene Therapeutics Inc. Common Stock",
@@ -214,7 +272,14 @@
    "Amgen Astellas Biopharma K.K.",
    "Amgen Europe B.V",
    "Amgen Ltd., United Kingdom",
-   "Amgen Research (Munich) GmbH"
+   "Amgen Research (Munich) GmbH",
+   "BioVex Limited",
+   "Five Prime Therapeutics, Inc.",
+   "Immunex Corporation",
+   "KAI Pharmaceuticals",
+   "Onyx Therapeutics, Inc.",
+   "Onyx/Amgen",
+   "deCODE genetics"
   ],
   "alias_study_counts": {
    "Amgen": 1581,
@@ -237,7 +302,23 @@
    "Eli Lilly and Company",
    "Wyeth is now a wholly owned subsidiary of Pfizer"
   ],
-  "old_query": "Amgen"
+  "old_query": "Amgen",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "BioVex Limited",
+     "Five Prime Therapeutics, Inc.",
+     "Immunex Corporation",
+     "KAI Pharmaceuticals",
+     "Onyx Therapeutics, Inc.",
+     "Onyx/Amgen",
+     "deCODE genetics"
+    ],
+    "reason": "Wholly owned Amgen subsidiaries and acquisitions, all strings in the cache: Immunex (2002, Enbrel; in rejected_top), Five Prime (2021, bemarituzumab; 11 studies), Onyx (2013, carfilzomib; 'Onyx/Amgen' names Amgen), BioVex (2011, T-VEC; its trials already list Amgen), deCODE genetics (2012, still an Amgen subsidiary) and KAI (2012). Horizon and ChemoCentryx strings are not in the cache, so they were not added.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "ARCT": {
   "listing": "Arcturus Therapeutics Holdings Inc. Common Stock",
@@ -343,10 +424,20 @@
    "astrazeneca"
   ],
   "aliases": [
+   "Acerta Pharma BV",
+   "Acerta Pharma, LLC",
+   "Alexion Pharmaceuticals, Inc.",
+   "Amylin Pharmaceuticals, LLC.",
+   "Ardea Biosciences, Inc.",
    "AstraZeneca",
    "AstraZeneca Global R&D (Beijing) Co., Ltd.",
    "AstraZeneca Global R&D (China) Co., Ltd.",
-   "AstraZeneca Turkey"
+   "AstraZeneca Turkey",
+   "Gracell Biotechnologies (Shanghai) Co., Ltd.",
+   "MedImmune LLC",
+   "MedImmune Ltd",
+   "Portola Pharmaceuticals",
+   "Suzhou Gracell Biotechnologies Co., Ltd."
   ],
   "alias_study_counts": {
    "AstraZeneca": 4806,
@@ -368,7 +459,26 @@
    "Cancer Research UK",
    "Dana-Farber Cancer Institute"
   ],
-  "old_query": "AstraZeneca"
+  "old_query": "AstraZeneca",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Acerta Pharma BV",
+     "Acerta Pharma, LLC",
+     "Alexion Pharmaceuticals, Inc.",
+     "Amylin Pharmaceuticals, LLC.",
+     "Ardea Biosciences, Inc.",
+     "Gracell Biotechnologies (Shanghai) Co., Ltd.",
+     "MedImmune LLC",
+     "MedImmune Ltd",
+     "Portola Pharmaceuticals",
+     "Suzhou Gracell Biotechnologies Co., Ltd."
+    ],
+    "reason": "AstraZeneca subsidiaries that sponsor its trials: MedImmune (biologics arm; in rejected_top), Alexion (2021; leads AZ-collaborated eculizumab, ravulizumab and ALXN1920 trials into 2025), Acerta (acalabrutinib = Calquence; leads AZ trials with AZ as collaborator; AZ-controlled even if the final buyout is unconfirmed), Gracell (2024; GC012F trials co-list AZ Global R&D China), Ardea (2012), Amylin (fully taken over in 2014) and Portola (via Alexion). 'Astra Zeneca, Bristol-Myers Squibb' (an old alliance string) was not added.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "BDSX": {
   "listing": "Biodesix Inc. Common Stock",
@@ -398,7 +508,6 @@
    "beam"
   ],
   "aliases": [
-   "Beam",
    "Beam Therapeutics Inc."
   ],
   "alias_study_counts": {
@@ -412,7 +521,17 @@
    "Citruslabs",
    "Baptist Health South Florida"
   ],
-  "old_query": "Beam Therapeutics"
+  "old_query": "Beam Therapeutics",
+  "audit": [
+   {
+    "removed": [
+     "Beam"
+    ],
+    "added": [],
+    "reason": "'Beam' is a consumer sleep-supplement brand (both studies are sleep powders run with Citruslabs), not Beam Therapeutics; Beam's own trials all use 'Beam Therapeutics Inc.'.",
+    "source": "agreed"
+   }
+  ]
  },
  "BIIB": {
   "listing": "Biogen Inc. Common Stock",
@@ -422,10 +541,12 @@
   ],
   "aliases": [
    "Biogen",
-   "Biogen Extracts Pvt Ltd",
    "Biogen Idec A/S",
    "Biogen Netherlands B.V",
-   "Biogen-Domp\u00e9 AG"
+   "Biogen-Domp\u00e9 AG",
+   "HI-Bio, A Biogen Company",
+   "NightstaRx Ltd, a Biogen Company",
+   "Reata, a wholly owned subsidiary of Biogen"
   ],
   "alias_study_counts": {
    "Biogen": 671,
@@ -448,7 +569,21 @@
    "Astellas Pharma Inc",
    "Denali Therapeutics Inc."
   ],
-  "old_query": "Biogen"
+  "old_query": "Biogen",
+  "audit": [
+   {
+    "removed": [
+     "Biogen Extracts Pvt Ltd"
+    ],
+    "added": [
+     "HI-Bio, A Biogen Company",
+     "NightstaRx Ltd, a Biogen Company",
+     "Reata, a wholly owned subsidiary of Biogen"
+    ],
+    "reason": "Remove 'Biogen Extracts Pvt Ltd' (Indian herbal-extract maker; its study is a Loughborough nitrate/caffeine trial). Add wholly owned subsidiaries that self-identify as Biogen: HI-Bio (felzartamab; in rejected_top), NightstaRx, Reata.",
+    "source": "agreed"
+   }
+  ]
  },
  "BIO": {
   "listing": "Bio-Rad Laboratories Inc. Class A Common Stock",
@@ -498,7 +633,8 @@
    "biomarin"
   ],
   "aliases": [
-   "BioMarin Pharmaceutical"
+   "BioMarin Pharmaceutical",
+   "Inozyme Pharma"
   ],
   "alias_study_counts": {
    "BioMarin Pharmaceutical": 342
@@ -517,7 +653,17 @@
    "The Children's Health Council",
    "Greenwood Genetic Center"
   ],
-  "old_query": "BioMarin Pharmaceutical"
+  "old_query": "BioMarin Pharmaceutical",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Inozyme Pharma"
+    ],
+    "reason": "BioMarin acquired Inozyme outright in 2025. Inozyme leads the INZ-701 trials (ENERGY 1-3, SEAPORT 1), which list BioMarin as collaborator, including ENERGY 2 posted March 2026. In rejected_top.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "BMY": {
   "listing": "Bristol-Myers Squibb Company Common Stock",
@@ -527,12 +673,23 @@
    "bristol"
   ],
   "aliases": [
+   "2seventy bio",
+   "Adnexus, A Bristol-Myers Squibb R&D Company",
    "Bristol Myers Squibb Co. and Ono Pharmaceutical Co., Ltd",
    "Bristol Myers Squibb Company (BMS)",
    "Bristol Myers Squibb Pharmaceuticals Limited",
    "Bristol Myers Squibb Srl Italia",
    "Bristol-Myers Squibb",
-   "Bristol-Myers Squibb Services Unlimited Company"
+   "Bristol-Myers Squibb Services Unlimited Company",
+   "Celgene",
+   "Celgene Corporation",
+   "Juno Therapeutics, Inc., a Bristol-Myers Squibb Company",
+   "Juno Therapeutics, a Subsidiary of Celgene",
+   "Karuna Therapeutics, Inc., a Bristol Myers Squibb company",
+   "Medarex",
+   "Mirati Therapeutics Inc.",
+   "Turning Point Therapeutics, Inc.",
+   "ZymoGenetics"
   ],
   "alias_study_counts": {
    "Bristol Myers Squibb Co. and Ono Pharmaceutical Co., Ltd": 2,
@@ -556,7 +713,27 @@
    "Sidney Kimmel Comprehensive Cancer Center at Johns Hopkins",
    "Memorial Sloan Kettering Cancer Center"
   ],
-  "old_query": "Bristol-Myers Squibb"
+  "old_query": "Bristol-Myers Squibb",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "2seventy bio",
+     "Adnexus, A Bristol-Myers Squibb R&D Company",
+     "Celgene",
+     "Celgene Corporation",
+     "Juno Therapeutics, Inc., a Bristol-Myers Squibb Company",
+     "Juno Therapeutics, a Subsidiary of Celgene",
+     "Karuna Therapeutics, Inc., a Bristol Myers Squibb company",
+     "Medarex",
+     "Mirati Therapeutics Inc.",
+     "Turning Point Therapeutics, Inc.",
+     "ZymoGenetics"
+    ],
+    "reason": "Wholly owned BMS subsidiaries. Celgene and Celgene Corporation are 107 cached studies, still used on 2024-26 BMS trials (ide-cel, iberdomide). Juno (lead on 2026 zola-cel and QUINTESSENTIAL-2), Karuna and Adnexus strings name BMS. Also acquired outright: Mirati (2024), Turning Point (2022), Medarex (2009), ZymoGenetics (2010) and 2seventy bio (2025; collaborator on a Celgene ide-cel trial). Not added: the Cormorant note string, 'Bristol-Meyers Squibb & Pfizer' and the University of Bristol and other Bristol hospitals.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "BNTC": {
   "listing": "Benitec Biopharma Inc. Common Stock",
@@ -587,7 +764,9 @@
    "BioNTech RNA Pharmaceuticals GmbH",
    "BioNTech Research & Development, Inc.",
    "BioNTech SE",
-   "BioNTech US Inc."
+   "BioNTech US Inc.",
+   "Biotheus (Hengqin) Co., Ltd.",
+   "Biotheus Inc."
   ],
   "alias_study_counts": {
    "BioNTech (Shanghai) Pharmaceuticals Co., Ltd.": 9,
@@ -612,7 +791,18 @@
    "Regeneron Pharmaceuticals",
    "Boehringer Ingelheim"
   ],
-  "old_query": "BioNTech SE"
+  "old_query": "BioNTech SE",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Biotheus (Hengqin) Co., Ltd.",
+     "Biotheus Inc."
+    ],
+    "reason": "BioNTech completed its acquisition of all of Biotheus in 2025. Biotheus Inc. leads the PM8002 = BNT327 trials (18 cached; the 2025 mCRC trial lists BioNTech SE as collaborator). Biotheus (Hengqin) collaborates on BioNTech-led BNT3212/BNT3214 first-in-human trials (2025-26). Both are in rejected_top.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "BRKR": {
   "listing": "Bruker Corporation Common Stock",
@@ -688,7 +878,8 @@
    "caris"
   ],
   "aliases": [
-   "Caris Life Sciences"
+   "Caris Life Sciences",
+   "Caris Science, Inc."
   ],
   "alias_study_counts": {
    "Caris Life Sciences": 8
@@ -707,7 +898,17 @@
    "Arbeitsgemeinschaft medikamentoese Tumortherapie",
    "Hoffmann-La Roche"
   ],
-  "old_query": "Caris Life Sciences"
+  "old_query": "Caris Life Sciences",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Caris Science, Inc."
+    ],
+    "reason": "Caris' own research entity. It leads the Caris Molecular Intelligence Registry, the Caris biorepositories and the 2026 'Caris Chromoseq Data Collection' (NCT07680868). #1 in rejected_top. 'Caristo' is a different company and was not added.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "CAMP": {
   "listing": "CAMP4 Therapeutics Corporation Common Stock",
@@ -1028,7 +1229,9 @@
    "exact"
   ],
   "aliases": [
-   "Exact Sciences Corporation"
+   "Exact Science Corporation",
+   "Exact Sciences Corporation",
+   "Genomic Health\u00ae, Inc."
   ],
   "alias_study_counts": {
    "Exact Sciences Corporation": 72
@@ -1047,7 +1250,18 @@
    "University of Michigan",
    "VA Medical Center-West Los Angeles"
   ],
-  "old_query": "Exact Sciences"
+  "old_query": "Exact Sciences",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Exact Science Corporation",
+     "Genomic Health\u00ae, Inc."
+    ],
+    "reason": "Genomic Health (Oncotype DX) has been wholly owned by Exact Sciences since 2019; 4 cached collaborator studies. 'Exact Science Corporation' is a misspelt Exact Sciences collaborator string on the 2026 BWH/DFCI genetic-testing trial NCT07787156. Exact Imaging and EXACT Therapeutics are different companies and were not added.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "FATE": {
   "listing": "Fate Therapeutics Inc. Common Stock",
@@ -1095,7 +1309,9 @@
    "fulgent"
   ],
   "aliases": [
-   "Fulgent Genetics"
+   "Fulgent Genetics",
+   "Fulgent Laboratories",
+   "Fulgent Pharma LLC."
   ],
   "alias_study_counts": {
    "Fulgent Genetics": 2
@@ -1108,7 +1324,18 @@
    "Fulgent Laboratories",
    "Navitas Clinical Research, Inc"
   ],
-  "old_query": "Fulgent Genetics"
+  "old_query": "Fulgent Genetics",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Fulgent Laboratories",
+     "Fulgent Pharma LLC."
+    ],
+    "reason": "Fulgent Pharma is Fulgent Genetics' therapeutics subsidiary and the lead sponsor of its drug trials (FID-007 NCT06332092, FID-022 NCT06694480). Fulgent Laboratories is its testing lab on the 2019 PD GENEration record (NCT04057794); the successor record (NCT04994015) lists 'Fulgent Genetics'. Both are in rejected_top.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "FRNM": {
   "listing": "Freenome Inc. Common stock",
@@ -1193,7 +1420,14 @@
   ],
   "aliases": [
    "Gilead Sciences",
-   "Gilead Sciences, Inc., GlaxoSmithKline plc, Seattle Genetics and Astellas"
+   "Gilead Sciences, Inc., GlaxoSmithKline plc, Seattle Genetics and Astellas",
+   "Kite Pharma (a Gilead Company)",
+   "Kite, A Gilead Company",
+   "Nexstar Pharmaceuticals",
+   "Nimbus Apollo",
+   "Pharmasset",
+   "Tmunity Therapeutics, a wholly owned subsidiary of Kite Pharma (a Gilead company)",
+   "Triangle Pharmaceuticals"
   ],
   "alias_study_counts": {
    "Gilead Sciences": 2410,
@@ -1213,7 +1447,23 @@
    "ANRS, Emerging Infectious Diseases",
    "French National Agency for Research on AIDS and Viral Hepatitis"
   ],
-  "old_query": "Gilead Sciences"
+  "old_query": "Gilead Sciences",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Kite Pharma (a Gilead Company)",
+     "Kite, A Gilead Company",
+     "Nexstar Pharmaceuticals",
+     "Nimbus Apollo",
+     "Pharmasset",
+     "Tmunity Therapeutics, a wholly owned subsidiary of Kite Pharma (a Gilead company)",
+     "Triangle Pharmaceuticals"
+    ],
+    "reason": "Kite is Gilead's wholly owned cell-therapy unit (55 cached studies, #1 rejected). Tmunity is wholly owned via Kite, and its string says so. Pharmasset (2012), Triangle (2003), NeXstar (1999) and Nimbus Apollo (2016; the GS-0976 study) are acquired, wholly owned Gilead entities. All strings are in the cache.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "GLSI": {
   "listing": "Greenwich LifeSciences Inc. Common Stock",
@@ -1294,9 +1544,21 @@
    "gsk"
   ],
   "aliases": [
+   "Bellus Health Inc. - a GSK company",
    "GSK Pharma",
    "GSK Vaccines Institute For Global Health S.r.l.",
-   "GSK/TESARO"
+   "GSK/TESARO",
+   "Glaxo Wellcome",
+   "GlaxoSmithKline",
+   "Human Genome Sciences Inc.",
+   "Human Genome Sciences Inc., a GSK Company",
+   "IDRX, Inc., a wholly owned subsidiary of GSK, LLC",
+   "RAPT Therapeutics, Inc., a member of the GSK plc group of companies",
+   "Sierra Oncology LLC - a GSK company",
+   "Sirtris, a GSK Company",
+   "SmithKline Beecham",
+   "Stiefel, a GSK Company",
+   "Tesaro, Inc."
   ],
   "alias_study_counts": {
    "GSK Pharma": 1,
@@ -1317,7 +1579,28 @@
    "Rho, Inc.",
    "Quintiles, Inc."
   ],
-  "old_query": "GSK"
+  "old_query": "GSK",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Bellus Health Inc. - a GSK company",
+     "Glaxo Wellcome",
+     "GlaxoSmithKline",
+     "Human Genome Sciences Inc.",
+     "Human Genome Sciences Inc., a GSK Company",
+     "IDRX, Inc., a wholly owned subsidiary of GSK, LLC",
+     "RAPT Therapeutics, Inc., a member of the GSK plc group of companies",
+     "Sierra Oncology LLC - a GSK company",
+     "Sirtris, a GSK Company",
+     "SmithKline Beecham",
+     "Stiefel, a GSK Company",
+     "Tesaro, Inc."
+    ],
+    "reason": "Core 'gsk' misses GSK's main registered sponsor 'GlaxoSmithKline' (#1 rejected; leads trials into 2025-26). It also misses every self-identified GSK subsidiary (Stiefel, Sierra, Bellus, HGS, Sirtris, RAPT, which leads a 2025 RPT904 trial, and IDRX), plus plain 'Human Genome Sciences Inc.' (wholly owned since 2012), Tesaro (2019) and the predecessors Glaxo Wellcome and SmithKline Beecham. Deliberately NOT added: ViiV Healthcare (majority, not wholly, owned), the GSK cardiovascular foundation, and Novartis Vaccines (split between GSK and CSL).",
+    "source": "adjudicated"
+   }
+  ]
  },
  "GUTS": {
   "listing": "Fractyl Health Inc. Common Stock",
@@ -1347,7 +1630,8 @@
   "aliases": [
    "Hologic B.V.",
    "Hologic Deutschland GmbH",
-   "Hologic, Inc."
+   "Hologic, Inc.",
+   "Suros Surgical (now Hologic )"
   ],
   "alias_study_counts": {
    "Hologic B.V.": 1,
@@ -1368,7 +1652,17 @@
    "Dutch Breast Cancer Association",
    "University of Sydney"
   ],
-  "old_query": "Hologic"
+  "old_query": "Hologic",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Suros Surgical (now Hologic )"
+    ],
+    "reason": "Hologic acquired Suros Surgical Systems in 2007, and the sponsor string itself says 'now Hologic' (collaborator on NCT01920139).",
+    "source": "adjudicated"
+   }
+  ]
  },
  "IBRX": {
   "listing": "ImmunityBio Inc. Common Stock",
@@ -1377,7 +1671,9 @@
    "immunitybio"
   ],
   "aliases": [
-   "ImmunityBio, Inc."
+   "Altor BioScience",
+   "ImmunityBio, Inc.",
+   "NantCell, Inc."
   ],
   "alias_study_counts": {
    "ImmunityBio, Inc.": 92
@@ -1396,7 +1692,18 @@
    "The Foundation for Barnes-Jewish Hospital",
    "Noah Hahn, M.D."
   ],
-  "old_query": "ImmunityBio"
+  "old_query": "ImmunityBio",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Altor BioScience",
+     "NantCell, Inc."
+    ],
+    "reason": "ImmunityBio's predecessor/subsidiary names: NantCell, Inc. was the private ImmunityBio before the 2021 NantKwest merger; Altor BioScience (N-803/Anktiva originator) is a wholly owned subsidiary.",
+    "source": "agreed"
+   }
+  ]
  },
  "ILMN": {
   "listing": "Illumina Inc. Common Stock",
@@ -1486,6 +1793,7 @@
    "ionis"
   ],
   "aliases": [
+   "Akcea Therapeutics",
    "Ionis Pharmaceuticals, Inc."
   ],
   "alias_study_counts": {
@@ -1505,7 +1813,17 @@
    "ALS Association",
    "The Emmes Company, LLC"
   ],
-  "old_query": "Ionis Pharmaceuticals"
+  "old_query": "Ionis Pharmaceuticals",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Akcea Therapeutics"
+    ],
+    "reason": "Akcea has been a wholly owned Ionis subsidiary since 2020 (in rejected_top). Kastle Therapeutics deliberately not added (licensee, separate company).",
+    "source": "agreed"
+   }
+  ]
  },
  "IOVA": {
   "listing": "Iovance Biotherapeutics Inc. Common Stock",
@@ -1575,6 +1893,7 @@
    "opus"
   ],
   "aliases": [
+   "Ocuphire Pharma, Inc.",
    "Opus Genetics, Inc"
   ],
   "alias_study_counts": {
@@ -1583,7 +1902,17 @@
   "rejected_top": [
    "University of Pennsylvania"
   ],
-  "old_query": "Opus Genetics"
+  "old_query": "Opus Genetics",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Ocuphire Pharma, Inc."
+    ],
+    "reason": "Opus Genetics Inc. is the renamed Ocuphire Pharma (Ocuphire acquired private Opus in Oct 2024 and took its name); Ocuphire's phentolamine trials are the listed company's own. String seen in the cache (Viatris query).",
+    "source": "agreed"
+   }
+  ]
  },
  "JNJ": {
   "listing": "Johnson & Johnson Common Stock",
@@ -1593,18 +1922,52 @@
    "johnson"
   ],
   "aliases": [
+   "Abbott Medical Optics",
+   "Abiomed Inc.",
+   "Actelion",
+   "Alios Biopharma Inc.",
+   "Ambrx, Inc.",
+   "Biosense Webster, Inc.",
+   "Centocor Ortho Biotech Services, L.L.C.",
+   "Centocor, Inc.",
+   "Cougar Biotechnology, Inc.",
+   "Crucell Holland BV",
+   "DePuy International",
+   "DePuy Orthopaedics",
+   "DePuy Spine",
+   "DePuy Synthes",
+   "Ethicon Endo-Surgery",
+   "Ethicon, Inc.",
+   "Intra-Cellular Therapies, Inc.",
+   "Janssen (China) Research & Development Center",
+   "Janssen Biotech, Inc.",
+   "Janssen Biotech, Inc., including Johnson & Johnson",
+   "Janssen Infectious Diseases BVBA",
+   "Janssen Korea, Ltd., Korea",
+   "Janssen Pharmaceutica",
+   "Janssen Pharmaceutica N.V., Belgium",
+   "Janssen Pharmaceutical Companies (formerly Johnson & Johnson Pharmaceutical Research & Development L.L.C.)",
+   "Janssen Pharmaceutical K.K.",
+   "Janssen Pharmaceuticals",
+   "Janssen R&D Ireland",
+   "Janssen Research & Development, LLC",
+   "Janssen Sciences Ireland UC",
+   "Janssen Scientific Affairs, LLC",
+   "Janssen Vaccines & Prevention B.V.",
+   "Janssen, LP",
+   "Janssen-Cilag G.m.b.H",
+   "Janssen-Cilag International NV",
+   "Janssen-Cilag Ltd.",
+   "Janssen-Cilag S.p.A.",
+   "Janssen-Cilag div. of Johnson&Johnson SE",
+   "Janssen-Ortho Inc., Canada",
+   "Janssen-Ortho LLC",
    "Johnson & Johnson",
    "Johnson & Johnson (China) Investment Ltd.",
    "Johnson & Johnson (Hong Kong) Ltd.",
-   "Johnson & Johnson Citizenship Trust, in cooperation with Johnson & Johnson GmbHInitiative R\u00fcckenwirbel e.V., Gmund",
-   "Johnson & Johnson Consumer Inc. (J&JCI)",
-   "Johnson & Johnson Consumer Inc., McNeil Consumer Healthcare Division",
-   "Johnson & Johnson Consumer Products Company Division of Johnson & Johnson Consumer Companies, Inc.",
-   "Johnson & Johnson Consumer and Personal Products Worldwide",
    "Johnson & Johnson Enterprise Innovation Inc.",
    "Johnson & Johnson GmbH",
    "Johnson & Johnson Health and Wellness Solutions, Inc.",
-   "Johnson & Johnson Healthcare Products Division of McNEIL-PPC, Inc.",
    "Johnson & Johnson International (Singapore) Pte. Ltd.",
    "Johnson & Johnson K.K. Medical Company",
    "Johnson & Johnson Medical (Shanghai) Ltd.",
@@ -1618,7 +1981,23 @@
    "Johnson & Johnson Pte Ltd",
    "Johnson & Johnson Surgical Vision, Inc.",
    "Johnson & Johnson Taiwan Ltd",
-   "Johnson & Johnson Vision Care, Inc."
+   "Johnson & Johnson Vision Care, Inc.",
+   "Mentor Worldwide, LLC",
+   "Momenta Pharmaceuticals, Inc.",
+   "Ortho Biotech Clinical Affairs, L.L.C.",
+   "Ortho Biotech Products, L.P.",
+   "Ortho Biotech, Inc.",
+   "Ortho-McNeil Neurologics, Inc.",
+   "PriCara, Unit of Ortho-McNeil, Inc.",
+   "R W Johnson Pharmaceutical Research Institute",
+   "Shockwave Medical, Inc.",
+   "Synthes GmbH",
+   "Tibotec BVBA",
+   "Tibotec Pharmaceutical Limited",
+   "Tibotec Pharmaceuticals, Ireland",
+   "Tibotec Therapeutics, a Division of Ortho Biotech Products, L.P., USA",
+   "Tibotec, Inc",
+   "V-Wave Ltd"
   ],
   "alias_study_counts": {
    "Johnson & Johnson": 276,
@@ -1662,7 +2041,79 @@
    "Bayer",
    "University of Pennsylvania"
   ],
-  "old_query": "Johnson & Johnson"
+  "old_query": "Johnson & Johnson",
+  "audit": [
+   {
+    "removed": [
+     "Johnson & Johnson Citizenship Trust, in cooperation with Johnson & Johnson GmbHInitiative R\u00fcckenwirbel e.V., Gmund",
+     "Johnson & Johnson Consumer Inc. (J&JCI)",
+     "Johnson & Johnson Consumer Inc., McNeil Consumer Healthcare Division",
+     "Johnson & Johnson Consumer Products Company Division of Johnson & Johnson Consumer Companies, Inc.",
+     "Johnson & Johnson Consumer and Personal Products Worldwide",
+     "Johnson & Johnson Healthcare Products Division of McNEIL-PPC, Inc."
+    ],
+    "added": [
+     "Abbott Medical Optics",
+     "Abiomed Inc.",
+     "Actelion",
+     "Alios Biopharma Inc.",
+     "Ambrx, Inc.",
+     "Biosense Webster, Inc.",
+     "Centocor Ortho Biotech Services, L.L.C.",
+     "Centocor, Inc.",
+     "Cougar Biotechnology, Inc.",
+     "Crucell Holland BV",
+     "DePuy International",
+     "DePuy Orthopaedics",
+     "DePuy Spine",
+     "DePuy Synthes",
+     "Ethicon Endo-Surgery",
+     "Ethicon, Inc.",
+     "Intra-Cellular Therapies, Inc.",
+     "Janssen (China) Research & Development Center",
+     "Janssen Biotech, Inc.",
+     "Janssen Biotech, Inc., including Johnson & Johnson",
+     "Janssen Infectious Diseases BVBA",
+     "Janssen Korea, Ltd., Korea",
+     "Janssen Pharmaceutica",
+     "Janssen Pharmaceutica N.V., Belgium",
+     "Janssen Pharmaceutical Companies (formerly Johnson & Johnson Pharmaceutical Research & Development L.L.C.)",
+     "Janssen Pharmaceutical K.K.",
+     "Janssen Pharmaceuticals",
+     "Janssen R&D Ireland",
+     "Janssen Research & Development, LLC",
+     "Janssen Sciences Ireland UC",
+     "Janssen Scientific Affairs, LLC",
+     "Janssen Vaccines & Prevention B.V.",
+     "Janssen, LP",
+     "Janssen-Cilag G.m.b.H",
+     "Janssen-Cilag International NV",
+     "Janssen-Cilag Ltd.",
+     "Janssen-Cilag S.p.A.",
+     "Janssen-Cilag div. of Johnson&Johnson SE",
+     "Janssen-Ortho Inc., Canada",
+     "Janssen-Ortho LLC",
+     "Mentor Worldwide, LLC",
+     "Momenta Pharmaceuticals, Inc.",
+     "Ortho Biotech Clinical Affairs, L.L.C.",
+     "Ortho Biotech Products, L.P.",
+     "Ortho Biotech, Inc.",
+     "Ortho-McNeil Neurologics, Inc.",
+     "PriCara, Unit of Ortho-McNeil, Inc.",
+     "R W Johnson Pharmaceutical Research Institute",
+     "Shockwave Medical, Inc.",
+     "Synthes GmbH",
+     "Tibotec BVBA",
+     "Tibotec Pharmaceutical Limited",
+     "Tibotec Pharmaceuticals, Ireland",
+     "Tibotec Therapeutics, a Division of Ortho Biotech Products, L.P., USA",
+     "Tibotec, Inc",
+     "V-Wave Ltd"
+    ],
+    "reason": "REMOVE: the consumer strings belong to Kenvue (separate since Aug 2023) and are still used for Kenvue trials: J&JCI skin-care studies posted 2024-25, a 2025 OTC Motilium study and 2024-25 mouthwash/fluoride studies. The Citizenship Trust is J&J philanthropy co-funding a school programme. ADD: the pharma arm (Janssen) is missing entirely; Janssen R&D LLC is J&J's main CT.gov sponsor. Also added: legacy pharma names (Centocor, Ortho Biotech, Ortho-McNeil, PriCara, Tibotec, RW Johnson PRI, Crucell = Janssen Vaccines), wholly owned acquisitions (Actelion, Alios, Cougar, Momenta 2020, Ambrx 2024, Intra-Cellular 2025, Abiomed 2022, Shockwave 2024, V-Wave 2024; Abiomed/V-Wave 2025-26 trials list J&J as collaborator), MedTech units (Biosense Webster, Ethicon, Mentor; DePuy Synthes is still wholly owned until the announced orthopaedics separation completes), and Abbott Medical Optics (the former name of J&J Surgical Vision, already an alias). 'Janssen Pharmaceutical K.K.', 'Janssen Sciences Ireland UC' and 'Intra-Cellular Therapies, Inc.' are not in the cache; they are standard CT.gov strings for J&J units. Not added: divested units (Acclarent, Cordis, Codman, LifeScan, Janssen Diagnostics), McNeil AB/McNeil consumer (Kenvue), the Janssen Alzheimer Immunotherapy JV, Pharmacyclics (AbbVie), and the ambiguous 'Johnson and Johnson, S.A.' and Shanghai J&J strings.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "KRRO": {
   "listing": "Korro Bio Inc. Common Stock",
@@ -1776,7 +2227,9 @@
   ],
   "aliases": [
    "Legend Biotech",
-   "Legend Biotech USA Inc"
+   "Legend Biotech USA Inc",
+   "Nanjing Legend Biotech Co.",
+   "Nanjing Legend Biotechnology Co.,Ltd."
   ],
   "alias_study_counts": {
    "Legend Biotech": 2,
@@ -1796,7 +2249,18 @@
    "First Affiliated Hospital of Wenzhou Medical University",
    "Zhejiang Provincial People's Hospital"
   ],
-  "old_query": "Legend Biotech"
+  "old_query": "Legend Biotech",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Nanjing Legend Biotech Co.",
+     "Nanjing Legend Biotechnology Co.,Ltd."
+    ],
+    "reason": "Nanjing Legend is Legend Biotech's wholly owned China operating subsidiary and lead/collaborator on 37 cached CAR-T studies (top of rejected_top).",
+    "source": "agreed"
+   }
+  ]
  },
  "LH": {
   "listing": "Labcorp Holdings Inc. Common Stock",
@@ -1806,7 +2270,10 @@
   ],
   "aliases": [
    "Labcorp Central Laboratory",
-   "Labcorp Corporation of America Holdings, Inc"
+   "Labcorp Corporation of America Holdings, Inc",
+   "Laboratory Corporation of America",
+   "Monogram Biosciences (LabCorp Specialty Testing Group)",
+   "Sequenom, Inc."
   ],
   "alias_study_counts": {
    "Labcorp Central Laboratory": 2,
@@ -1826,7 +2293,19 @@
    "ICON plc",
    "Dent Neuroscience Research Center"
   ],
-  "old_query": "Labcorp"
+  "old_query": "Labcorp",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Laboratory Corporation of America",
+     "Monogram Biosciences (LabCorp Specialty Testing Group)",
+     "Sequenom, Inc."
+    ],
+    "reason": "Sequenom has been wholly owned by Labcorp since 2016 and leads Labcorp's own test studies with the existing Labcorp alias as collaborator (2023 Labcorp COVID+Flu+RSV home kit, 2024 preeclampsia biobank, 2026 Proclarix validation). Monogram Biosciences is LabCorp's specialty-testing subsidiary (2009), and its string says so. 'Laboratory Corporation of America' is Labcorp's own legal name (6 cached studies, including the Sequenom-led preeclampsia study); it is not in the cache under the 'labcorp' query. Covance/Fortrea (CRO, spun off) and Invitae were not added.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "LLY": {
   "listing": "Eli Lilly and Company Common Stock",
@@ -1835,7 +2314,27 @@
    "eli lilly and"
   ],
   "aliases": [
-   "Eli Lilly and Company"
+   "ARMO BioSciences",
+   "Ajax Therapeutics, Inc., a wholly owned subsidiary of Eli Lilly and Company",
+   "Akouos, Inc.",
+   "Applied Molecular Evolution",
+   "Avid Radiopharmaceuticals",
+   "CoLucid Pharmaceuticals",
+   "DICE Therapeutics, Inc., a wholly owned subsidiary of Eli Lilly and Company",
+   "Dermira, Inc.",
+   "Disarm Therapeutics",
+   "Eli Lilly and Company",
+   "ICOS Corporation",
+   "Lilly Deutschland GmbH Germany",
+   "Lilly USA",
+   "Loxo Oncology, Inc.",
+   "Morphic Therapeutic, Inc. (A Wholly Owned Subsidiary of Eli Lilly and Company)",
+   "POINT Biopharma, a wholly owned subsidiary of Eli Lilly and Company",
+   "Prevail Therapeutics",
+   "Scorpion Therapeutics, a wholly owned subsidiary of Eli Lilly and Company",
+   "Sigilon Therapeutics, Inc.",
+   "Vaccine Company, Inc, a wholly owned subsidiary of Eli Lilly and Company",
+   "Versanis Bio, Inc."
   ],
   "alias_study_counts": {
    "Eli Lilly and Company": 2884
@@ -1854,7 +2353,36 @@
    "Daiichi Sankyo",
    "M.D. Anderson Cancer Center"
   ],
-  "old_query": "Eli Lilly"
+  "old_query": "Eli Lilly",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "ARMO BioSciences",
+     "Ajax Therapeutics, Inc., a wholly owned subsidiary of Eli Lilly and Company",
+     "Akouos, Inc.",
+     "Applied Molecular Evolution",
+     "Avid Radiopharmaceuticals",
+     "CoLucid Pharmaceuticals",
+     "DICE Therapeutics, Inc., a wholly owned subsidiary of Eli Lilly and Company",
+     "Dermira, Inc.",
+     "Disarm Therapeutics",
+     "ICOS Corporation",
+     "Lilly Deutschland GmbH Germany",
+     "Lilly USA",
+     "Loxo Oncology, Inc.",
+     "Morphic Therapeutic, Inc. (A Wholly Owned Subsidiary of Eli Lilly and Company)",
+     "POINT Biopharma, a wholly owned subsidiary of Eli Lilly and Company",
+     "Prevail Therapeutics",
+     "Scorpion Therapeutics, a wholly owned subsidiary of Eli Lilly and Company",
+     "Sigilon Therapeutics, Inc.",
+     "Vaccine Company, Inc, a wholly owned subsidiary of Eli Lilly and Company",
+     "Versanis Bio, Inc."
+    ],
+    "reason": "Wholly owned Lilly subsidiaries and affiliates, all strings in the cache. Loxo Oncology (55 studies) and ICOS are in rejected_top. Acquired outright: Dermira, Avid, ARMO, Prevail, Akouos (leads 2024-26 gene-therapy trials with Lilly as collaborator), Sigilon, Versanis, CoLucid (2017, lasmiditan), Applied Molecular Evolution (2004) and Disarm (2020); all their cached trials co-list Lilly. The DICE, Morphic, Vaccine Company (2026 EBV vaccine), Scorpion, POINT and Ajax strings literally say 'wholly owned subsidiary of Eli Lilly and Company'. Lilly Deutschland and Lilly USA are Lilly affiliates. Chugai (Roche) and Harmony were not added.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "LXEO": {
   "listing": "Lexeo Therapeutics Inc. Common Stock",
@@ -1968,78 +2496,41 @@
    "merck"
   ],
   "aliases": [
-   "MERCK S/A",
+   "Acceleron Pharma, Inc., a wholly-owned subsidiary of Merck & Co., Inc., Rahway, NJ USA",
+   "Afferent Pharmaceuticals, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "ArQule, Inc., a subsidiary of Merck Sharp & Dohme LLC, a subsidiary of Merck & Co., Inc. (Rahway, NJ USA)",
+   "Cidara Therapeutics Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Cubist Pharmaceuticals LLC, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Harpoon Therapeutics, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Imago BioSciences, Inc., a subsidiary of Merck & Co., Inc., (Rahway, New Jersey USA)",
+   "Immune Design, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
    "MERCK SHARP & DOHME DE ESPA\u00d1A S.A.",
-   "Merck & Cie",
-   "Merck (Pvt.) Limited, Pakistan",
-   "Merck A.B., Sweden",
-   "Merck A.E., Greece",
-   "Merck A/S, Denmark",
-   "Merck AG Switzerland",
-   "Merck B.V., Netherlands",
+   "MSD France",
+   "MSD Norway AS",
    "Merck Canada Inc.",
-   "Merck Childhood Asthma Network (MCAN)",
-   "Merck Europe B.V.",
    "Merck Frosst Canada Ltd.",
    "Merck Frosst-Schering Pharma, G.P.",
-   "Merck Gesellschaft mbH, Austria",
-   "Merck Healthcare Germany GmbH, an affiliate of Merck KGaA, Darmstadt, Germany",
-   "Merck Healthcare KGaA",
-   "Merck Healthcare KGaA, Darmstadt, Germany, an affiliate of Merck KGaA, Darmstadt, Germany",
-   "Merck Hellas sa., Greece, an affiliate of Merck KGaA, Darmstadt, Germany",
-   "Merck Inc., Philippines",
    "Merck Institute for Therapeutic Research",
-   "Merck KGaA, Darmstadt, Germany",
-   "Merck KGaA, Darmstadt, Germany; Gilead Sciences; Nektar Therapeutics",
-   "Merck Kft., Hungary",
-   "Merck Ltd.",
-   "Merck Ltd., India",
-   "Merck Ltd., Taiwan",
-   "Merck Ltd., Thailand",
-   "Merck Medication Familiale",
-   "Merck N.V.-S.A., Belgium",
-   "Merck OY, Finland",
-   "Merck Pharma, K.S., Slovakia",
-   "Merck Pte. Ltd., Singapore",
-   "Merck Pvt. Ltd, Pakistan",
-   "Merck Quimica Argentina S.A.I.C",
-   "Merck Romania SRL, an affiliate of Merck KGaA, Darmstadt, Germany",
-   "Merck S.A. Columbia",
-   "Merck S.A. de C.V., Mexico",
-   "Merck S.A., Brazil, an affiliate of Merck KGaA, Darmstadt, Germany",
-   "Merck SP. Z.O.O., Poland",
-   "Merck Sant\u00e9 SAS",
    "Merck Schering-Plough",
-   "Merck Serono (GFI)",
-   "Merck Serono Australia Pty Ltd",
-   "Merck Serono Co., Ltd., China",
-   "Merck Serono Co., Ltd., Japan",
-   "Merck Serono Europe Ltd",
-   "Merck Serono GmbH, Germany",
-   "Merck Serono International SA",
-   "Merck Serono Limited, UK",
-   "Merck Serono Middle East FZ LLC",
-   "Merck Serono Middle East FZ-LLC, United Arab Emirates, an affiliate of Merck KGaA, Darmstadt, Germany",
-   "Merck Serono Norway",
-   "Merck Serono S.A., Geneva",
-   "Merck Serono S.A.S, France",
-   "Merck Serono S.A.S., an affiliate of Merck KGaA, Darmstadt, Germany",
-   "Merck Serono S.P.A., Italy",
-   "Merck Serono Vietnam",
-   "Merck Services U.K. Ltd, UK",
    "Merck Sharp & Dhome (Australia) Pty. Ltd.",
    "Merck Sharp & Dohme Corporation",
    "Merck Sharp & Dohme LLC",
    "Merck Sharp and Dohme LLC",
    "Merck Sharp and Dohme LLC, Rahway, NJ, USA",
    "Merck Shering-Plough JV Study",
-   "Merck d.o.o., Serbia",
-   "Merck for Mothers",
-   "Merck spol. s r.o., Slovakia",
-   "Merck spol.s.r.o., Czech Republic",
-   "Merck, S.A., Portugal",
-   "Merck, S.L., Spain",
-   "Merck, Sharp & Dohme, LLC, Rahway, NJ USA"
+   "Merck, Sharp & Dohme, LLC, Rahway, NJ USA",
+   "NovaCardia, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Oncoethix GmbH, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Oncoimmune, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Optimer Pharmaceuticals LLC, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Peloton Therapeutics, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Prometheus Biosciences, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Schering-Plough",
+   "Terns, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Trius Therapeutics LLC, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "VelosBio Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Verona Pharma Inc",
+   "Verona Pharma, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA"
   ],
   "alias_study_counts": {
    "MERCK S/A": 1,
@@ -2129,7 +2620,98 @@
    "Eli Lilly and Company",
    "ArQule, Inc., a subsidiary of Merck Sharp & Dohme LLC, a subsidiary of Merck & Co., Inc. (Rahway, NJ USA)"
   ],
-  "old_query": "Merck"
+  "old_query": "Merck",
+  "audit": [
+   {
+    "removed": [
+     "MERCK S/A",
+     "Merck & Cie",
+     "Merck (Pvt.) Limited, Pakistan",
+     "Merck A.B., Sweden",
+     "Merck A.E., Greece",
+     "Merck A/S, Denmark",
+     "Merck AG Switzerland",
+     "Merck B.V., Netherlands",
+     "Merck Childhood Asthma Network (MCAN)",
+     "Merck Europe B.V.",
+     "Merck Gesellschaft mbH, Austria",
+     "Merck Healthcare Germany GmbH, an affiliate of Merck KGaA, Darmstadt, Germany",
+     "Merck Healthcare KGaA",
+     "Merck Healthcare KGaA, Darmstadt, Germany, an affiliate of Merck KGaA, Darmstadt, Germany",
+     "Merck Hellas sa., Greece, an affiliate of Merck KGaA, Darmstadt, Germany",
+     "Merck Inc., Philippines",
+     "Merck KGaA, Darmstadt, Germany",
+     "Merck KGaA, Darmstadt, Germany; Gilead Sciences; Nektar Therapeutics",
+     "Merck Kft., Hungary",
+     "Merck Ltd.",
+     "Merck Ltd., India",
+     "Merck Ltd., Taiwan",
+     "Merck Ltd., Thailand",
+     "Merck Medication Familiale",
+     "Merck N.V.-S.A., Belgium",
+     "Merck OY, Finland",
+     "Merck Pharma, K.S., Slovakia",
+     "Merck Pte. Ltd., Singapore",
+     "Merck Pvt. Ltd, Pakistan",
+     "Merck Quimica Argentina S.A.I.C",
+     "Merck Romania SRL, an affiliate of Merck KGaA, Darmstadt, Germany",
+     "Merck S.A. Columbia",
+     "Merck S.A. de C.V., Mexico",
+     "Merck S.A., Brazil, an affiliate of Merck KGaA, Darmstadt, Germany",
+     "Merck SP. Z.O.O., Poland",
+     "Merck Sant\u00e9 SAS",
+     "Merck Serono (GFI)",
+     "Merck Serono Australia Pty Ltd",
+     "Merck Serono Co., Ltd., China",
+     "Merck Serono Co., Ltd., Japan",
+     "Merck Serono Europe Ltd",
+     "Merck Serono GmbH, Germany",
+     "Merck Serono International SA",
+     "Merck Serono Limited, UK",
+     "Merck Serono Middle East FZ LLC",
+     "Merck Serono Middle East FZ-LLC, United Arab Emirates, an affiliate of Merck KGaA, Darmstadt, Germany",
+     "Merck Serono Norway",
+     "Merck Serono S.A., Geneva",
+     "Merck Serono S.A.S, France",
+     "Merck Serono S.A.S., an affiliate of Merck KGaA, Darmstadt, Germany",
+     "Merck Serono S.P.A., Italy",
+     "Merck Serono Vietnam",
+     "Merck Services U.K. Ltd, UK",
+     "Merck d.o.o., Serbia",
+     "Merck for Mothers",
+     "Merck spol. s r.o., Slovakia",
+     "Merck spol.s.r.o., Czech Republic",
+     "Merck, S.A., Portugal",
+     "Merck, S.L., Spain"
+    ],
+    "added": [
+     "Acceleron Pharma, Inc., a wholly-owned subsidiary of Merck & Co., Inc., Rahway, NJ USA",
+     "Afferent Pharmaceuticals, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "ArQule, Inc., a subsidiary of Merck Sharp & Dohme LLC, a subsidiary of Merck & Co., Inc. (Rahway, NJ USA)",
+     "Cidara Therapeutics Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Cubist Pharmaceuticals LLC, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Harpoon Therapeutics, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Imago BioSciences, Inc., a subsidiary of Merck & Co., Inc., (Rahway, New Jersey USA)",
+     "Immune Design, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "MSD France",
+     "MSD Norway AS",
+     "NovaCardia, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Oncoethix GmbH, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Oncoimmune, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Optimer Pharmaceuticals LLC, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Peloton Therapeutics, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Prometheus Biosciences, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Schering-Plough",
+     "Terns, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Trius Therapeutics LLC, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "VelosBio Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+     "Verona Pharma Inc",
+     "Verona Pharma, Inc., a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA"
+    ],
+    "reason": "MRK is Merck & Co. (Rahway; 'MSD' outside the US and Canada). REMOVE all Merck KGaA (Darmstadt) strings: the explicit KGaA, 'Merck Healthcare KGaA' and 'affiliate of Merck KGaA' names, every 'Merck Serono' entity, and the KGaA country affiliates that trade as plain 'Merck'. Their cached studies are Rebif, Gonal-f, Pergoveris, Saizen, Erbitux, Glucophage, bisoprolol and cetuximab trials: Brazil MERCK S/A (2026 metformin screening), Merck & Cie (Metafolin), Spain, Mexico, Singapore, Philippines, the Nordics, CEE, Benelux, Austria, Switzerland, Greece, Merck Sant\u00e9, Merck M\u00e9dication Familiale and Merck Europe B.V. Also removed: the Pakistan 'Merck (Pvt.)' generics affiliate (not MSD) and 'Merck Ltd.' (7 of its 8 studies are KGaA Korea; the loss is 1 NCI pembrolizumab study). Grant and philanthropy programmes go too: the Merck Serono GFI grant, Merck for Mothers and the Merck Childhood Asthma Network. KEPT: the MSD / Merck Sharp & Dohme strings, Merck Canada and Frosst, the Schering-Plough JV strings and Merck Institute for Therapeutic Research. ADD: self-identified Merck & Co. subsidiaries (Cubist 89 studies and ArQule are in rejected_top; Terns leads 2026 MK-4208 trials, Acceleron and Cidara have 2025-26 trials), plain 'Verona Pharma Inc' (Merck-owned since 2025), legacy Schering-Plough (merged 2009) and the MSD France/Norway affiliates. Not added: Organon (spun off), EMD Serono and SpringWorks (KGaA), DuPont Merck, and Prometheus Laboratories (a different company).",
+    "source": "adjudicated"
+   }
+  ]
  },
  "MRNA": {
   "listing": "Moderna Inc. Common Stock",
@@ -2140,7 +2722,8 @@
   ],
   "aliases": [
    "Moderna, Inc",
-   "ModernaTX"
+   "ModernaTX",
+   "ModernaTX, Inc."
   ],
   "alias_study_counts": {
    "Moderna, Inc": 1,
@@ -2160,7 +2743,17 @@
    "C&R Research, Inc.",
    "Immatics US, Inc."
   ],
-  "old_query": "Moderna"
+  "old_query": "Moderna",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "ModernaTX, Inc."
+    ],
+    "reason": "Moderna's registered CT.gov sponsor name; 142 of 143 cached Moderna studies use it (top of rejected_top), while the current aliases match 1 study.",
+    "source": "agreed"
+   }
+  ]
  },
  "MRVI": {
   "listing": "Maravai LifeSciences Holdings Inc. Class A Common Stock",
@@ -2182,6 +2775,7 @@
    "myriad"
   ],
   "aliases": [
+   "Myriad Genetic Laboratories, Inc.",
    "Myriad Genetics, Inc."
   ],
   "alias_study_counts": {
@@ -2201,7 +2795,17 @@
    "Sarah Cannon",
    "IQVIA Pty Ltd"
   ],
-  "old_query": "Myriad Genetics"
+  "old_query": "Myriad Genetics",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Myriad Genetic Laboratories, Inc."
+    ],
+    "reason": "Myriad Genetics' wholly owned lab subsidiary. #1 in rejected_top (30 cached studies); it leads Myriad's own Prolaris and EndoPredict registries and the hereditary-cancer registry, and is the BRACAnalysis CDx collaborator on pharma trials. Myriad Therapeutics (became Myrexis) and Myriad Global Solutions (unrelated) were not added.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "NEO": {
   "listing": "NeoGenomics Inc. Common Stock",
@@ -2298,12 +2902,19 @@
    "novartis"
   ],
   "aliases": [
+   "Advanced Accelerator Applications",
+   "Anthos Therapeutics, Inc.",
+   "AveXis, Inc.",
+   "Beijing Novartis Pharma",
+   "Chinook Therapeutics, Inc. (formerly Aduro)",
+   "Corthera, Inc.(formerly BAS Medical, Inc.), a member of the Novartis group of companies",
+   "Endocyte",
+   "Gyroscope Therapeutics Limited",
    "NOVARTIS BIOCIENCIAS S/A",
    "Novartis",
    "Novartis Consumer Health",
    "Novartis Europharm Limited",
    "Novartis Farma S.p.A.",
-   "Novartis Foundation for Medical-Biological Research",
    "Novartis Gene Therapies",
    "Novartis Germany GmbH",
    "Novartis Healthcare A/S",
@@ -2325,7 +2936,9 @@
    "Novartis Vaccines and Diagnostics S.r.l.",
    "Novartis Vaccines and Diagnostics, Inc",
    "Novartis is the Marketing Authorization Holder for Jakavi outside the US.",
-   "Novartis/AAA"
+   "Novartis/AAA",
+   "The Medicines Company",
+   "Tourmaline Bio, Inc., a Novartis Company"
   ],
   "alias_study_counts": {
    "NOVARTIS BIOCIENCIAS S/A": 1,
@@ -2371,7 +2984,28 @@
    "Brigham and Women's Hospital",
    "Amgen"
   ],
-  "old_query": "Novartis"
+  "old_query": "Novartis",
+  "audit": [
+   {
+    "removed": [
+     "Novartis Foundation for Medical-Biological Research"
+    ],
+    "added": [
+     "Advanced Accelerator Applications",
+     "Anthos Therapeutics, Inc.",
+     "AveXis, Inc.",
+     "Beijing Novartis Pharma",
+     "Chinook Therapeutics, Inc. (formerly Aduro)",
+     "Corthera, Inc.(formerly BAS Medical, Inc.), a member of the Novartis group of companies",
+     "Endocyte",
+     "Gyroscope Therapeutics Limited",
+     "The Medicines Company",
+     "Tourmaline Bio, Inc., a Novartis Company"
+    ],
+    "reason": "REMOVE: the Novartis Foundation for Medical-Biological Research is a Swiss grant foundation; its only study is a University Hospital Basel tobacco-cessation trial co-funded with SNSF (NCT06789692). ADD: wholly owned Novartis acquisitions: AAA (2018, radioligands), The Medicines Company (2020, inclisiran), Gyroscope (2022), Corthera and Tourmaline (both strings self-identify as Novartis), AveXis (now Novartis Gene Therapies, already an alias), Endocyte (2018), Chinook (2023) and Anthos (2025, abelacimab). Beijing Novartis Pharma is Novartis' China affiliate. NOT added: Alcon, including 'Alcon, a Novartis Company', which is still used on 2026 Alcon trials (spun off 2019); Sandoz (2023); The Novartis Foundation (philanthropy); MorphoSys and Avidity (ownership or close not confirmed).",
+    "source": "adjudicated"
+   }
+  ]
  },
  "OBX": {
   "listing": "Obsidian Therapeutics Inc. Common Stock",
@@ -2414,7 +3048,9 @@
    "opko"
   ],
   "aliases": [
-   "OPKO Health, Inc."
+   "ModeX Therapeutics, An OPKO Health Company",
+   "OPKO Health, Inc.",
+   "OPKO IP Holdings II, Inc."
   ],
   "alias_study_counts": {
    "OPKO Health, Inc.": 100
@@ -2430,7 +3066,18 @@
    "Eli Lilly and Company",
    "WCCT Global"
   ],
-  "old_query": "OPKO Health"
+  "old_query": "OPKO Health",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "ModeX Therapeutics, An OPKO Health Company",
+     "OPKO IP Holdings II, Inc."
+    ],
+    "reason": "Both are wholly owned OPKO entities in rejected_top: ModeX (acquired 2022; MDX2001/MDX2301 trials) and OPKO IP Holdings II (sponsor of the CTAP101/Rayaldee trials).",
+    "source": "agreed"
+   }
+  ]
  },
  "OSUR": {
   "listing": "OraSure Technologies Inc. Common Stock",
@@ -2491,14 +3138,31 @@
    "pfizer"
   ],
   "aliases": [
+   "Agouron Pharmaceuticals",
+   "Alpharma Pharmaceuticals LLC, a subsidiary of Pfizer Inc.",
+   "Arena is a wholly owned subsidiary of Pfizer",
+   "Array BioPharma",
+   "Array Biopharma, now a wholly owned subsidiary of Pfizer",
+   "Hospira, now a wholly owned subsidiary of Pfizer",
+   "King Pharmaceuticals is now a wholly owned subsidiary of Pfizer",
+   "Lederle-Praxis Biologicals",
+   "Medivation LLC, a wholly owned subsidiary of Pfizer Inc.",
+   "Medivation, Inc.",
+   "Metsera, a wholly owned subsidiary of Pfizer",
    "PFIZER, Bratislava, Slovakia",
+   "Parke-Davis",
    "Pfizer",
-   "Pfizer Grants for Learning and Change",
    "Pfizer Inc. (Provider of study drugs)",
-   "Pfizer Independent Grants for Learning and Change",
    "Pfizer Pharmaceuticals Ltd.",
-   "Pfizer's Upjohn has merged with Mylan to form Viatris Inc.",
-   "Pfizer, Berlin Germany"
+   "Pfizer, Berlin Germany",
+   "Seagen Germany GmbH (a Pfizer company)",
+   "Seagen Inc.",
+   "Seagen, a wholly owned subsidiary of Pfizer",
+   "Seattle Genetics (now a wholly owned subsidiary of Pfizer)",
+   "Vicuron Pharmaceuticals",
+   "Wyeth is now a wholly owned subsidiary of Pfizer",
+   "Wyeth-Lederle Pharma GmbH",
+   "Wyeth-Lederle Vaccines"
   ],
   "alias_study_counts": {
    "PFIZER, Bratislava, Slovakia": 1,
@@ -2524,7 +3188,40 @@
    "Novartis",
    "AstraZeneca"
   ],
-  "old_query": "Pfizer"
+  "old_query": "Pfizer",
+  "audit": [
+   {
+    "removed": [
+     "Pfizer Grants for Learning and Change",
+     "Pfizer Independent Grants for Learning and Change",
+     "Pfizer's Upjohn has merged with Mylan to form Viatris Inc."
+    ],
+    "added": [
+     "Agouron Pharmaceuticals",
+     "Alpharma Pharmaceuticals LLC, a subsidiary of Pfizer Inc.",
+     "Arena is a wholly owned subsidiary of Pfizer",
+     "Array BioPharma",
+     "Array Biopharma, now a wholly owned subsidiary of Pfizer",
+     "Hospira, now a wholly owned subsidiary of Pfizer",
+     "King Pharmaceuticals is now a wholly owned subsidiary of Pfizer",
+     "Lederle-Praxis Biologicals",
+     "Medivation LLC, a wholly owned subsidiary of Pfizer Inc.",
+     "Medivation, Inc.",
+     "Metsera, a wholly owned subsidiary of Pfizer",
+     "Parke-Davis",
+     "Seagen Germany GmbH (a Pfizer company)",
+     "Seagen Inc.",
+     "Seagen, a wholly owned subsidiary of Pfizer",
+     "Seattle Genetics (now a wholly owned subsidiary of Pfizer)",
+     "Vicuron Pharmaceuticals",
+     "Wyeth is now a wholly owned subsidiary of Pfizer",
+     "Wyeth-Lederle Pharma GmbH",
+     "Wyeth-Lederle Vaccines"
+    ],
+    "reason": "REMOVE: the Upjohn string (434 studies) itself says those trials now belong to Viatris, a separate listed company since 2020. The two 'Grants for Learning and Change' strings are Pfizer's independent-grant programme funding outside investigators. ADD: wholly owned Pfizer subsidiaries, most of which say so in their CT.gov strings: Wyeth (626 cached studies, #1 rejected), Hospira, Medivation, Seagen/Seattle Genetics (2023), Array, Arena, King, Metsera (2025), Alpharma and Vicuron (2005). Also legacy Pfizer units: Wyeth-Lederle, Lederle-Praxis (Wyeth vaccines), Parke-Davis and Agouron (via Warner-Lambert). Not added: Pharmacia / Pharmacia and Upjohn / Upjohn (Upjohn went to Viatris), Warner Chilcott, Esperion, Biohaven and Icagen (separate or ambiguous).",
+    "source": "adjudicated"
+   }
+  ]
  },
  "PGEN": {
   "listing": "Precigen Inc. Common Stock",
@@ -2533,6 +3230,8 @@
    "precigen"
   ],
   "aliases": [
+   "Intrexon Actobiotics NV, d/b/a Precigen Actobio",
+   "Intrexon Corporation",
    "Precigen Actobio T1D, LLC",
    "Precigen, Inc"
   ],
@@ -2547,7 +3246,18 @@
    "Triple-Gene, LLC",
    "Intrexon Corporation"
   ],
-  "old_query": "Precigen"
+  "old_query": "Precigen",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Intrexon Actobiotics NV, d/b/a Precigen Actobio",
+     "Intrexon Corporation"
+    ],
+    "reason": "Precigen is the 2020 rename of Intrexon Corporation; Intrexon Actobiotics (d/b/a Precigen Actobio) is its wholly owned subsidiary. Both in rejected_top. Triple-Gene (majority-owned) deliberately not added.",
+    "source": "agreed"
+   }
+  ]
  },
  "PRAX": {
   "listing": "Praxis Precision Medicines Inc. Common Stock",
@@ -2557,8 +3267,7 @@
    "praxis"
   ],
   "aliases": [
-   "Praxis Precision Medicines",
-   "Praxis, Inc."
+   "Praxis Precision Medicines"
   ],
   "alias_study_counts": {
    "Praxis Precision Medicines": 34,
@@ -2578,7 +3287,17 @@
    "Center f\u00fcr Integrative Therapie Christopher Gordon",
    "University Hospital Tuebingen"
   ],
-  "old_query": "Praxis Precision Medicines"
+  "old_query": "Praxis Precision Medicines",
+  "audit": [
+   {
+    "removed": [
+     "Praxis, Inc."
+    ],
+    "added": [],
+    "reason": "'Praxis, Inc.' is an unrelated organisation: its only study is a UMass/NIMH online perinatal-depression training programme. Praxis Precision Medicines registers as 'Praxis Precision Medicines'.",
+    "source": "agreed"
+   }
+  ]
  },
  "PRME": {
   "listing": "Prime Medicine Inc. Common Stock",
@@ -3079,6 +3798,17 @@
    "sanofi"
   ],
   "aliases": [
+   "Ablynx, a Sanofi company",
+   "Aventis Pharmaceuticals",
+   "Bioverativ Therapeutics Inc.",
+   "Bioverativ, a Sanofi company",
+   "Blueprint Medicines Corporation",
+   "Genzyme, a Sanofi Company",
+   "Kadmon, a Sanofi Company",
+   "Kymab Limited",
+   "Principia Biopharma, a Sanofi Company",
+   "Protein Sciences Corporation",
+   "Provention Bio, a Sanofi Company",
    "Sanofi",
    "Sanofi (China) Investment Co., Ltd",
    "Sanofi Pasteur S.A.",
@@ -3089,7 +3819,7 @@
    "Sanofi-Regeneron",
    "Sanofi-Synthelabo",
    "Sanofi-Synth\u00e9labo (Schweiz) AG",
-   "Sanofi-Yale External Research Collaboration"
+   "Synthorx, Inc, a Sanofi company"
   ],
   "alias_study_counts": {
    "Sanofi": 2343,
@@ -3118,7 +3848,30 @@
    "GlaxoSmithKline",
    "Merck Sharp & Dohme LLC"
   ],
-  "old_query": "Sanofi ADS"
+  "old_query": "Sanofi ADS",
+  "audit": [
+   {
+    "removed": [
+     "Sanofi-Yale External Research Collaboration"
+    ],
+    "added": [
+     "Ablynx, a Sanofi company",
+     "Aventis Pharmaceuticals",
+     "Bioverativ Therapeutics Inc.",
+     "Bioverativ, a Sanofi company",
+     "Blueprint Medicines Corporation",
+     "Genzyme, a Sanofi Company",
+     "Kadmon, a Sanofi Company",
+     "Kymab Limited",
+     "Principia Biopharma, a Sanofi Company",
+     "Protein Sciences Corporation",
+     "Provention Bio, a Sanofi Company",
+     "Synthorx, Inc, a Sanofi company"
+    ],
+    "reason": "REMOVE: 'Sanofi-Yale External Research Collaboration' is a funding programme for Yale investigators; its only study is a Yale-led Gaucher trial (NCT07758816), the grant-programme pattern. ADD: wholly owned Sanofi subsidiaries, mostly self-identifying: Genzyme (524 cached studies, #1 rejected, leading trials into 2026), Ablynx, Bioverativ, Kadmon, Principia, Provention, Synthorx, Kymab (2021), Blueprint Medicines (acquired July 2025; 2026 trials), Protein Sciences (2017) and the predecessor Aventis Pharmaceuticals. Deliberately NOT added: Opella (CD&R-controlled since 2025), BioMarin/Genzyme LLC (50/50 JV), Inhibrx Biosciences (separately listed spin-out) and Shantha (full ownership unconfirmed).",
+    "source": "adjudicated"
+   }
+  ]
  },
  "SRPT": {
   "listing": "Sarepta Therapeutics Inc. Common Stock (DE)",
@@ -3330,6 +4083,7 @@
    "veracyte"
   ],
   "aliases": [
+   "GenomeDx Biosciences Corp",
    "Veracyte, Inc."
   ],
   "alias_study_counts": {
@@ -3349,7 +4103,17 @@
    "Singapore General Hospital",
    "University of California, San Diego"
   ],
-  "old_query": "Veracyte"
+  "old_query": "Veracyte",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "GenomeDx Biosciences Corp"
+    ],
+    "reason": "GenomeDx Biosciences renamed itself Decipher Biosciences, which Veracyte bought outright in 2021. Its Decipher GRID registry (NCT02609269) already lists Veracyte, Inc. as collaborator. In rejected_top.",
+    "source": "adjudicated"
+   }
+  ]
  },
  "VIR": {
   "listing": "Vir Biotechnology Inc. Common Stock",
@@ -3387,7 +4151,12 @@
    "vertex"
   ],
   "aliases": [
-   "Vertex Pharmaceuticals Incorporated"
+   "Alpine Immune Sciences Inc, A Subsidiary of Vertex",
+   "Alpine Immune Sciences, Inc.",
+   "VERTEX Pharmaceutical",
+   "Vertex Pharmaceuticals Incorporated",
+   "ViaCyte",
+   "ViroChem Pharma"
   ],
   "alias_study_counts": {
    "Vertex Pharmaceuticals Incorporated": 582
@@ -3406,7 +4175,21 @@
    "National Heart, Lung, and Blood Institute (NHLBI)",
    "Nottingham University Hospitals NHS Trust"
   ],
-  "old_query": "Vertex Pharmaceuticals"
+  "old_query": "Vertex Pharmaceuticals",
+  "audit": [
+   {
+    "removed": [],
+    "added": [
+     "Alpine Immune Sciences Inc, A Subsidiary of Vertex",
+     "Alpine Immune Sciences, Inc.",
+     "VERTEX Pharmaceutical",
+     "ViaCyte",
+     "ViroChem Pharma"
+    ],
+    "reason": "Wholly owned Vertex acquisitions: ViroChem (2009; in rejected_top), ViaCyte (2022; co-listed with Vertex in the vertex cache), Alpine Immune Sciences (2024; one string self-identifies), plus a misspelt Vertex string on an Orkambi study. Alios Biopharma deliberately not added (acquired by J&J in 2014; assigned to JNJ).",
+    "source": "agreed"
+   }
+  ]
  },
  "VYGR": {
   "listing": "Voyager Therapeutics Inc. Common Stock",
