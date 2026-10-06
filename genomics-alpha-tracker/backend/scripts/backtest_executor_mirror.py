@@ -474,7 +474,7 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
     for d in calendar:
         ds = d.isoformat()
         ev = {"commissions": 0.0, "bil_orders": 0, "rebalances": 0, "core_orders": 0,
-              "skipped_zero_qty": 0, "entries": 0, "exits": 0, "carry": 0.0}
+              "skipped_zero_qty": 0, "entries": 0, "exits": 0, "carry": 0.0, "sleeve_band_flow": 0.0}
 
         # 0. carry: yesterday's idle sleeve cash earns today's BIL total return
         if cash_yield is not None and not first:
@@ -553,7 +553,12 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
         core_eq = core_cash + (spy_qty * spy if spy is not None else 0.0)
         equity = sleeve_eq + core_eq
 
-        # 4. 30/70 band rebalance at the close + core buy of idle core cash
+        # 4. 30/70 band rebalance at the close + core buy of idle core cash.
+        # sleeve_band_flow = the band step's net change in sleeve cash (+ core->sleeve
+        # proceeds, - sleeve->core cash incl. its BIL fee): an external flow for the
+        # sleeve, so sleeve_eq - sleeve_band_flow is the pre-transfer sleeve equity
+        # (round 11, counter-agent B1: time-weighted sleeve returns).
+        sleeve_cash_pre_band = sleeve_cash
         if blend and spy is not None and equity > 0:
             w = sleeve_eq / equity
             if abs(w - target) > cfg.band:
@@ -588,6 +593,7 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
             core_eq = core_cash + spy_qty * spy
             equity = sleeve_eq + core_eq
 
+        ev["sleeve_band_flow"] = sleeve_cash - sleeve_cash_pre_band
         curve.append((d, equity))
         sleeve_curve.append((d, sleeve_eq))
         sleeve_eq_by[ds] = sleeve_eq
@@ -787,24 +793,60 @@ def stationary_bootstrap(rets: list[float], horizon_years: float, draws: int = B
             "prob_cagr_negative": sum(1 for c in cagrs if c < 0) / len(cagrs)}
 
 
-def select_capped_exec(rows: list[dict], cap: int | None) -> tuple[list[dict], int]:
+def select_capped_exec(rows: list[dict], cap: int | None, per_symbol_max: int | None = None, *,
+                       return_detail: bool = False, symbol_release: str = "cap",
+                       refusal_log: list | None = None) -> tuple:
     """select_capped with LIVE slot occupancy: the executor counts a pending
     MOO as open from the T+1 sizing cycle (blend.py: open_count = positions -
     exiting + pending_entries), so a lag-2 call holds its cap slot from its
     gate_date (fire+1), not from the fill bar; a slot frees the day after the
     exit, as in select_capped (counter-agent 2026-10-04, MED: the fill-bar
-    rule let ~38 lag-2 calls in that live would have refused)."""
+    rule let ~38 lag-2 calls in that live would have refused).
+
+    per_symbol_max (round 11, docs/VARIANTS_PREREGISTRATION_R11_PER_SYMBOL.md):
+    None (default) = no per-symbol limit, the behaviour above unchanged. With
+    k, a row whose symbol already has >= k HELD taken rows is refused: held
+    uses the cap's own occupancy test (taken earlier in this order, exit_date
+    >= this row's occupy_from, so exit_date == occupy_from is still held). A
+    refused row consumes no slot. The cap is checked first: a row arriving at
+    a full cap counts as skipped_at_cap, so refused_repeat counts only the
+    repeats that would otherwise have taken a slot. "Taken earlier in this
+    order" includes same-gate-date siblings (multi-flag fires of one name).
+
+    symbol_release (per-symbol test only; the cap's occupancy is unchanged):
+    "cap" (default) = the rule above; "live" = a same-symbol call stops
+    counting ON its exit date (exit_date > occupy_from), the sensitivity for
+    the live executor freeing an exiting / stop-filled call in the same
+    cycle (round-11 counter-agent A1). refusal_log: if a list, each refused
+    row is appended as (row, [the same-symbol taken rows that blocked it]).
+
+    Returns (taken, skipped) — skipped = len(rows) - len(taken), as before —
+    or, with return_detail=True, (taken, skipped_at_cap, refused_repeat)."""
+    if symbol_release not in ("cap", "live"):
+        raise ValueError(f"symbol_release must be 'cap' or 'live', not {symbol_release!r}")
     key = lambda t: (t.get("gate_date", t["entry_date"]), t["entry_date"], t["symbol"], t.get("flag", ""))  # noqa: E731
     ordered = sorted(rows, key=key)
     taken: list[dict] = []
-    open_exits: list[str] = []
+    open_held: list[tuple[str, str, dict]] = []     # (exit_date, symbol, row) of taken rows still holding a slot
+    skipped_at_cap = refused_repeat = 0
     for t in ordered:
         occupy_from = t.get("gate_date", t["entry_date"])
-        open_exits = [x for x in open_exits if x >= occupy_from]
-        if cap is not None and len(open_exits) >= cap:
+        open_held = [x for x in open_held if x[0] >= occupy_from]
+        if cap is not None and len(open_held) >= cap:
+            skipped_at_cap += 1
             continue
+        if per_symbol_max is not None:
+            same = [x for x in open_held if x[1] == t["symbol"]
+                    and (symbol_release == "cap" or x[0] > occupy_from)]
+            if len(same) >= per_symbol_max:
+                refused_repeat += 1
+                if refusal_log is not None:
+                    refusal_log.append((t, [x[2] for x in same]))
+                continue
         taken.append(t)
-        open_exits.append(t["exit_date"])
+        open_held.append((t["exit_date"], t["symbol"], t))
+    if return_detail:
+        return taken, skipped_at_cap, refused_repeat
     return taken, len(rows) - len(taken)
 
 

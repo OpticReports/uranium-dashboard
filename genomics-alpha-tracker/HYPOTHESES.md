@@ -404,3 +404,27 @@ and whether the market agreed._
   taken), not a sizing one; the kill ledger's sleeve drawdown lines were set
   on the 1% / cap-10 rules and would need re-deriving with any change.
 - **Status:** closed (null), 2026-10-05.
+
+### H16 — One open call per symbol diversifies the sleeve at no cost (U2 ADOPTED as risk control)
+- **Hypothesis:** refusing repeat entries in a name already held, and
+  handing the slot to the next gated fire, raises book Sharpe (more
+  independent bets) and cuts single-name concentration.
+- **Evidence (round 11, pre-registered two-tier rule, two verifiers + fix +
+  re-verify, 2026-10-05):** U1 (max 1) — NULL: concentration falls hard
+  (p90 40% → 20%) but the replacement fires are weaker (mean R +0.20 →
+  +0.14), sleeve TWR CAGR −4.2 pp/yr, book −0.87 pp/yr, p5 of the Sharpe
+  delta −0.128 (floor −0.10). U2 (max 2) — PROPOSE under the RISK-CONTROL
+  (non-inferiority) tier: book level (CAGR −0.02 pp, max DD −0.2 pp, Sharpe
+  delta p50 +0.027, p5 −0.062), p90 concentration 39.9% → 27.5%, sleeve TWR
+  −1.0 pp/yr with sleeve Sharpe level. The "more independent bets" premise
+  is REFUTED as stated: repeat entries were not worse trades, so refusing
+  them does not raise return; the case is risk control only.
+- **Implement:** executor planner `MAX_PER_SYMBOL = 2` (2026-10-05); the
+  tracker may only tighten it.
+- **Decision record:** Casey, 2026-10-05, "To all next recommendations" —
+  approving the recommendation to run this study and ship the planner check
+  if it passed under the pre-registered rule. It passed under the
+  risk-control tier, so it ships with its cost stated (sleeve ~−1.0 pp/yr
+  time-weighted, book level).
+- **Status:** adopted (risk control), 2026-10-05; the live record is read at
+  R1 reviews (largest-name share of the sleeve vs the replay's 27.5% p90).
