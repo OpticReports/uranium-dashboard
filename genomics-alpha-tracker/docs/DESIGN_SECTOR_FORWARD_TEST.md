@@ -1,6 +1,6 @@
 # Design + pre-registration: forward test of a ranked genomics screen
 
-_Status: DESIGN, revision 4 (after calibration and two counter-agent rounds).
+_Status: DESIGN, revision 4; **gate run on source 1 (FMP press releases): FAIL, so no forward test** (result at the end).
 **Recommendation: do not run a forward test now.** On last year's data the
 trial-date rankings lost to plain volatility across all names. In small and
 mid caps they did no better than a volatility measure that ignores 20%
@@ -252,7 +252,21 @@ Otherwise no forward test is run, and the result is recorded here.
      supersedes it from its own timestamp.
    - **Filtering:** only releases issued by the company count. Law-firm
      alerts and third-party items are excluded.
-   - **Status:** primary source; not yet evaluated.
+   - **Status:** primary source.
+   - **Spot-check (2026-10-06, two independent reviewers, re-drawn sample
+     after the amendment):**
+     - Point in time: 20 of 20 PASS. Each wire page's own publish time
+       matches FMP's timestamp. One Business Wire release was checked on
+       the issuer's investor-relations copy.
+     - Extraction: 15 of 20 correct. Both reviewers flagged the same five
+       errors:
+       - 2 took a superseded date (a release that moves a PDUFA date, and a
+         review extended past its old date);
+       - 3 took a trial start or an IND/CTA filing for the readout that
+         appears later in the sentence.
+     - One duplicate event appears from two releases.
+     - Errors add noise to exposure, which works against the gate passing.
+       The gate is computed as frozen, with no further tuning.
 
 **K = 10** (Casey, 2026-10-06: a shortlist of the roughly 63-name
 universe; top 25 is 40% of it). Recorded before any gate statistic. Top 25
@@ -563,3 +577,46 @@ design does not depend on it.
     - MRNA's under-$10B days are disclosed;
     - check 4's wording is corrected;
     - the desk question is now P1.
+
+## Gate result, source 1 (2026-10-06): FAIL - no forward test
+
+`research/sector_forward/gate.py` -> `gate_source1.json`,
+`charts/gate_source1.png`. The run used the frozen rules, K = 10 and
+source 1 as extracted and spot-checked above.
+
+| condition | result | pass? |
+|---|---|---|
+| 1. Mantel-Haenszel odds-ratio lower 90% bound > 1 | **OR 2.06 (90% CI 1.25-3.36)**, from 15,131 name-days, 90 events, 13 of them exposed | **yes** |
+| 2. H1′ beats B1x at top 10 with 80% power within 12 months | 33.3% vs 32.2% (random 16.7%); discordant 7 vs 6; power on half the edge 4% | no |
+| 3. No worse at top 25 / top 40 | 57.8% vs 58.9% (3 vs 4); 78.9% vs 78.9% (1 vs 1) | no |
+
+**What it means.**
+- **The signal is real.** Dated catalysts from company press releases are
+  the first trial-related signal this study has found. With volatility and
+  size held equal, a name with a PDUFA date or a guided readout within
+  [P-7d, P+30d] had about twice the odds of a 20% move.
+- **The coverage is too thin to change a list.** Headline-and-snippet
+  extraction found catalysts in only 43 names. Just 7% of name-days were
+  exposed, and only 13 of the 90 events. Moving those few names to the top
+  of a list ordered by jump-robust volatility changes almost nothing,
+  because most of them were near the top already.
+- **The verdict under the frozen rule:** no forward test.
+
+**Honesty.**
+- The extraction is 75% correct on the spot-check: superseded dates and
+  non-readout milestones. That is noise, which pushes the odds ratio
+  toward 1.
+- The headline-and-snippet coverage misses guidance deeper in releases.
+- The odds ratio is from one year (the 2025-10 to 2026-09 window), with
+  exposure from releases back to 2024-06.
+
+**What could change it, never tested here.** Full-text extraction would
+reach more names and more guidance, which is the coverage this result says
+is missing. Business Wire refuses direct fetches, so it would need full
+text from FMP or another feed. Under the frozen multiplicity rule it would
+be **source 2**, judged with a Bonferroni bound (lower 95% for m = 2).
+
+**Useful without any test.** The Sector list can carry each name's next
+press-release catalyst date (PDUFA and guided topline) as context. It is
+now evidence-backed context: an exposed name had about twice the odds of a
+big move.
