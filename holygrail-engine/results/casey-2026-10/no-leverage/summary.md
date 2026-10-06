@@ -141,4 +141,4 @@ SPCX: beta 1.62 to QQQ, measured over only 75 days since listing; vol 86%.
   - repair R1, the N1 conditional range
   - the look-through notional
 - ALT-2 reproduces the earlier post-exit figures exactly: vol 7.18%, prior 7.42%, and all four replays.
-- A counter-agent review was run: 2 blocking and 4 non-blocking items, all repaired here. No published number changed; the readings were added alongside. The repair has not been independently re-verified.
+- A counter-agent review was run: 2 blocking and 4 non-blocking items, all repaired here. No published number changed; the readings were added alongside. The repair was then independently re-checked (targeted recheck: both blocking items confirmed fixed, every touched number recomputed).
