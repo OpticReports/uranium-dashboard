@@ -1048,6 +1048,54 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
   claimed (see the agent's CLOSED-AS-CLAIMED list in the session record).
 * **Suite:** 490 before the corrections, 494 after (4 gates added).
 
+## Round 23 — kill-ledger tripwires, distribution reinvest, overnight headroom, per-symbol limit (2026-10-05)
+
+* **The ask.** Casey, 2026-10-05: "To all next recommendations" — build the
+  drawdown tripwire instrument (due 2026-11-05 per ledger.csv), a reinvest
+  path for dividends/distributions, the overnight core-buy headroom, and
+  run the per-symbol study (round 11) and ship its rule if it passed.
+* **Reviewed:** `0b3ccc5b` (tripwires alert-only, reinvest hint, headroom),
+  then `dc828e09` (corrections + `MAX_PER_SYMBOL = 2` from round 11 U2),
+  then `0285ad09` and the commit carrying this entry. Two independent
+  counter-agents throughout (A: indices and money; B: state, concurrency,
+  public safety, tests, docs), each reading the real code, reproducing in
+  scratch copies, B running 45 mutations.
+* **Pass 1 (`0b3ccc5b`): A PASS WITH CORRECTIONS, B PASS WITH CORRECTIONS.**
+  SERIOUS: `TA1` the HWM ratcheted on every 5-minute mark (one glitched
+  quote = a permanent high and a false RED sleeve page); `TA2` the new
+  reinvest hint fired on a parked unreconciled exit's proceeds (adopting
+  them would double-book cash); `TB1` a malformed persisted series 500'd
+  /status and the feed and could page an infinite drawdown; `TB2`
+  reinvested dividends were booked as deposits (index price-return,
+  contributed capital inflated); `TB3` the PROCESS line showed a record
+  count against a sessions level. MINOR: TA3-TA7, TB4-TB10.
+* **Pass 2 (`dc828e09`): A PASS WITH CORRECTIONS, B PASS WITH CORRECTIONS.**
+  SERIOUS `TC1`: the HWM fix did not hold on days with NO session (a Friday
+  after-hours glitch carried through the weekend still set a permanent
+  high; one stale weekend quote made "two consecutive closes"). MINOR:
+  `TC2` bootstrap misses a flow its point excludes when F < V (needs every
+  post-adoption snapshot that day skipped — accepted, documented); `TC3`
+  the unreconciled wait was silent; `TB11` six mutants survived (gates not
+  exercising the new semantics); `TB12` a held mark finalized as the close
+  dropped its flow (unreachable live); `TB13`/`TB14`/`TB16` stale or
+  imprecise docs (interest is not the book's return; the per-symbol cost
+  and decision record missing); `TB15` the tracker could LOOSEN the
+  per-symbol limit; `TB17` junk-state edges.
+* **Status: all closed in `0285ad09` and the commit carrying this entry,
+  except `TC2` (accepted).** Closes are finalized from the day's last
+  IN-SESSION mark on SESSION days only; lines page on two consecutive
+  closes; flows carry across the roll; distributions are return and may
+  name the sleeve's share; adoption waits (and pages) while a record is
+  parked; the per-symbol override only tightens; malformed state is
+  rebuilt or dropped with a WARN; every surviving mutant re-run and caught
+  (M13b, M6, M18, TB12, TC1, TB15).
+* **Per-symbol rule:** verified clean as a money change by A (a refused
+  repeat consumes no cash or pre-fund; recycled ids unaffected; books that
+  never repeat a name are unchanged) and B (counting matches the round-11
+  spec; gates strong: P1-P8 mutants caught). Its cost is stated in the
+  README: sleeve ~-1.0 pp/yr time-weighted, book level.
+* **Final re-review:** see the line appended below.
+
 ## Standing UNKNOWNs
 
 * `mf-6`, `mf-11`, `mf-12`, `mf3-12` — referenced by id in this campaign's

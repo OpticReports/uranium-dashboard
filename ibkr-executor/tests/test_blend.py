@@ -9418,6 +9418,10 @@ def test_gate_tripwire_book_index_is_flow_adjusted_through_adopt_capital(tmp_pat
               ("2026-09-05", _px(60.0))], alerts)
     t = m.tripwire_summary("2026-09-05")
     assert t["book"]["hwm_date"] == "2026-09-02"            # the deposit day is not a high
+    # TB11/M2b: the sleeve's share of the deposit is a flow too (the sleeve
+    # was $0 before it: the base rule holds, then it starts at the deposit)
+    assert t["sleeve"]["drawdown"] == 0.0
+    assert m.state.trip_pending_sleeve == 0.0
     assert t["book"]["drawdown"] == pytest.approx(1 - 100_000 / 122_000, abs=1e-4)
     assert t["book"]["close_date"] == "2026-09-04"
     assert not any("tripwire" in a for a in alerts)          # 18% < 25%
@@ -9450,15 +9454,16 @@ def test_gate_tripwire_intraday_glitch_never_sets_the_high(tmp_path, monkeypatch
     m = _trip_book(tmp_path)
     m.state.spy_qty = 0                                     # sleeve = 150 BIL = 15k
     _rth(monkeypatch, True)
-    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)
+    m.update_tripwires("2026-08-31", PRICES, lambda *_: None)   # day 1: the series' base
+    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)   # day 2 (TB11/M13b)
     m.update_tripwires("2026-09-01", _px(100.0, 200.0), lambda *_: None)   # in-session spike
     m.update_tripwires("2026-09-01", PRICES, lambda *_: None)               # back
     _rth(monkeypatch, False)
     m.update_tripwires("2026-09-01", _px(100.0, 1_000.0), lambda *_: None)  # after-hours glitch
     alerts = []
     _rth(monkeypatch, True)
-    _days(m, [("2026-09-02", PRICES), ("2026-09-03", PRICES)], alerts)
-    t = m.tripwire_summary("2026-09-03")
+    _days(m, [("2026-09-02", PRICES), ("2026-09-03", PRICES), ("2026-09-04", PRICES)], alerts)
+    t = m.tripwire_summary("2026-09-04")
     assert t["sleeve"]["drawdown"] == 0.0 and t["book"]["drawdown"] == 0.0
     assert m.state.trip_sleeve["hwm"] == pytest.approx(1.0) and not alerts
 
@@ -9584,6 +9589,13 @@ def test_gate_tripwire_bootstrap_deposit_inside_a_drawdown(tmp_path, monkeypatch
     assert m.state.trip_pending_book == 0.0
     assert t["sleeve"]["since"] == "2026-10-07"
     assert any("tripwire series trip_sleeve started" in e["msg"] for e in m.state.events)
+    # TB11/M6: the pending deposit the curve already contains is not applied
+    # again on the next days' closes
+    m.update_tripwires("2026-10-08", PRICES, lambda *_: None)
+    m.update_tripwires("2026-10-09", PRICES, lambda *_: None)
+    t2 = m.tripwire_summary("2026-10-09")
+    assert t2["book"]["close_date"] == "2026-10-08"
+    assert t2["book"]["drawdown"] == pytest.approx(1 - (119_500 / 119_000) * 49_000 / 52_000, abs=1e-3)
 
 
 def test_gate_tripwire_runs_after_the_snapshot_with_a_same_day_adoption(tmp_path):
@@ -9638,8 +9650,11 @@ def test_gate_tripwire_pending_flow_survives_a_skipped_snapshot_and_restart(tmp_
     m.state.trip_pending_book += 70_000.0
     assert m.update_tripwires("2026-09-03", {"BIL": 100.0}, lambda *_: None) is None
     m.save()
+    m.state.trip_alerted["book_review"] = True              # TB11/M18: persisted
+    m.save()
     m2 = Blend3070Manager(m.cfg, m.state_path)
     assert m2.state.trip_pending_book == 70_000.0
+    assert m2.state.trip_alerted == {"book_review": True}
     _days(m2, [("2026-09-03", _px(100.0)), ("2026-09-04", _px(100.0))])
     assert m2.tripwire_summary("2026-09-04")["book"]["drawdown"] == 0.0
     assert m2.state.trip_book["closes"][-1][1] == pytest.approx(1.0)
@@ -9869,3 +9884,55 @@ def test_gate_distribution_names_the_sleeve_share(tmp_path):
                 dict(kind="distribution", sleeve_usd=600), dict(kind="distribution", sleeve_usd=True)):
         with pytest.raises(ValueError):
             m.request_capital_adoption(500, "2026-08-20", **bad)
+
+
+def test_gate_tripwire_min_base_and_held_flow_carry(tmp_path, monkeypatch):
+    """TB11/M27: a base under TRIP_MIN_BASE_USD holds the index (a sleeve
+    emptied to cents then refilled is not a 100x gain). TB12/M28: a mark that
+    EXCLUDES a pending flow holds the index, and if that mark is the day's
+    close the flow CARRIES to the next day (no phantom high)."""
+    _rth(monkeypatch, True)
+    m = _trip_book(tmp_path)
+    m.state.spy_qty, m.state.bil_qty, m.state.sleeve_cash = 500, 0, 50.0
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
+    m.state.sleeve_cash = 20_050.0
+    m.state.trip_pending_sleeve = 0.0                        # an unflagged refill
+    _days(m, [("2026-09-03", PRICES), ("2026-09-04", PRICES)])
+    assert m.state.trip_sleeve["hwm"] < 2.0                  # held, not 400x
+    m2 = _trip_book(tmp_path / "b")
+    m2.state.bil_qty, m2.state.spy_qty = 0, 500             # book 50k
+    _days(m2, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(100.0))])
+    m2.state.trip_pending_book = 70_000.0                    # flow the ledger value lacks
+    m2.update_tripwires("2026-09-03", _px(100.0), lambda *_: None)   # held mark = the close
+    m2.state.core_cash = 70_000.0                            # the cash arrives next day
+    _days(m2, [("2026-09-04", _px(100.0)), ("2026-09-05", _px(100.0))])
+    assert m2.state.trip_book["hwm"] == pytest.approx(1.0)
+    assert m2.tripwire_summary("2026-09-05")["book"]["drawdown"] == 0.0
+
+
+def test_gate_per_symbol_tracker_may_only_tighten(tmp_path):
+    """TB15: like max_open, the tracker can lower the per-symbol limit but
+    never raise it past MAX_PER_SYMBOL."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    _held_position(m, call_id=2, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP")], stops=[stop_row(3, "CRSP")])
+    pl["book_params"]["max_per_symbol"] = 99
+    assert _enters(m.step("2026-08-20", pl, _ps_prices("CRSP"))) == []
+
+
+def test_gate_tripwire_junk_record_and_tiny_mark_are_contained(tmp_path):
+    """TB17: one junk unreconciled timestamp does not disable the summary,
+    and a hand-edited tiny index is rejected at load."""
+    m = _trip_book(tmp_path)
+    m.state.unreconciled["x"] = {"ts": 1e18, "symbol": "CRSP"}
+    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)
+    assert "error" not in m.tripwire_summary("2026-09-01")
+    assert m.update_tripwires("2026-09-02", PRICES, lambda *_: None) is not None
+    m.state.unreconciled.clear()
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["trip_book"]["cur"] = {"date": "2026-09-02", "value": 1e-300, "index": 1e-300, "flow": 0.0}
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    assert Blend3070Manager(m.cfg, m.state_path).state.trip_book is None

@@ -235,7 +235,9 @@ def _valid_trip_mark(m, with_flow: bool):
     if not isinstance(m, dict) or not isinstance(m.get("date"), str):
         raise ValueError("mark")
     value, index = _finite(m.get("value")), _finite(m.get("index"))
-    if value is None or index is None or index <= 0:
+    # an index is a ratio of book values: anything outside [1e-6, 1e6] is a
+    # hand edit or corruption, never a market move (TB17)
+    if value is None or index is None or not (1e-6 <= index <= 1e6) or value < 0:
         raise ValueError("mark")
     out = {"date": m["date"], "value": value, "index": index}
     if with_flow:
@@ -1420,6 +1422,17 @@ class Blend3070Manager:
                                    f"the day's flows {ser['day_flow']:,.2f} - "
                                    f"index held until a mark includes them")
             idx = prev_idx
+            # TB12: record only the flow the held index already reflects (the
+            # previous same-day mark's), so a finalize on this mark CARRIES
+            # the unreflected rest into the next day instead of dropping it
+            reflected = (float(cur.get("flow") or 0.0)
+                         if cur.get("date") == today else 0.0)
+            mark = {"date": today, "value": value, "index": idx,
+                    "flow": reflected}
+            ser["cur"] = mark
+            if in_rth:
+                ser["cur_rth"] = dict(mark)
+            return ser
         else:
             idx = float(base["index"]) * (value - ser["day_flow"]) / float(base["value"])
         mark = {"date": today, "value": value, "index": idx,
@@ -1602,10 +1615,16 @@ class Blend3070Manager:
     def _unreconciled_sessions(self, rec: dict, now: datetime | None = None) -> int | None:
         """Sessions whose CLOSE fell after the record was parked and at or
         before now (TA4: counted on session closes in ET, not UTC dates)."""
-        ts = _num_or_none((rec or {}).get("ts"))
+        ts = _finite((rec or {}).get("ts"))
         if ts is None:
             return None
-        born = datetime.fromtimestamp(ts, timezone.utc)
+        try:
+            born = datetime.fromtimestamp(ts, timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None                    # TB17: one junk record never
+                                           # disables the whole summary
+        if born > _now_et(now):
+            return 0
         now_et = _now_et(now)
         d = born.astimezone(_ET).date()
         n = 0
@@ -1778,8 +1797,10 @@ class Blend3070Manager:
         params = payload.get("book_params") or {}
         max_open = min(MAX_OPEN, params.get("max_open", MAX_OPEN))
         _mps = params.get("max_per_symbol", MAX_PER_SYMBOL)
-        max_per_symbol = (_mps if (isinstance(_mps, int) and not isinstance(_mps, bool)
-                                   and _mps >= 1) else MAX_PER_SYMBOL)
+        # like max_open, the tracker may only TIGHTEN this risk control (TB15)
+        max_per_symbol = (min(MAX_PER_SYMBOL, _mps)
+                          if (isinstance(_mps, int) and not isinstance(_mps, bool)
+                              and _mps >= 1) else MAX_PER_SYMBOL)
         risk_frac = params.get("risk_frac", RISK_FRAC)
         band = params.get("band", BAND)
         target = _sleeve_target(self, payload, alerts)
@@ -4936,7 +4957,10 @@ def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
                          "deposit - it sits uninvested until adopted. Reinvest "
                          "it with POST /blend/cash/adopt using the amounts on "
                          "the activity statement (kind \"distribution\" for "
-                         "dividends/interest, \"deposit\" for new money), "
+                         "dividends/distributions on the BOOK's holdings - "
+                         "not the account's credit interest, which is mostly "
+                         "on cash the book does not own - \"deposit\" for "
+                         "new money), "
                          "never this drift figure (it is net of fees and "
                          "interest on cash the book does not own); adoption "
                          "re-baselines by itself")

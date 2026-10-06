@@ -532,7 +532,9 @@ unreconciled venue state. Phases IN ORDER:
    quiet cycle, in `blend.adopt_capital`, only if ALL of: the book is
    seeded and not halted; no journal is in flight, no fresh unreconciled
    record and no fill inside 15 min (the stage-1 quiet rule, shared
-   helper); `BLEND_BUDGET` can hold gross + N (else REFUSED, RED page:
+   helper); NO unreconciled record parked at all (its proceeds may be in
+   the cash; the wait pages once a day and only a hand-resolution clears
+   it - the request may expire meanwhile); `BLEND_BUDGET` can hold gross + N (else REFUSED, RED page:
    raise the cap first, after 16:00 ET); the venue's `TotalCashValue`
    minus the ledger's two buckets is at least N (else REFUSED, RED page -
    it names no figure the account's level could be derived from); and
@@ -543,8 +545,9 @@ unreconciled venue state. Phases IN ORDER:
    re-plans). The halt is re-read after the venue round-trip (a `/kill`
    can land during it). It then credits the two buckets by the book's
    PERSISTED sleeve target (shape-inferred on a pre-field file, as
-   `step()` does), grows `capital_contributed` (seed + every adoption;
-   inferred once from the seed config on a pre-field state file, with a
+   `step()` does; a `distribution` may name `sleeve_usd`), grows
+   `capital_contributed` for a DEPOSIT only (seed + every deposit; a
+   `distribution` is return; inferred once from the seed config on a pre-field state file, with a
    WARN event, an `inferred` capital event and a boot page), appends a
    `capital_events` row, re-baselines the stage-1 clock (the ledger just
    moved by design), pages Telegram BEFORE saving, and the next planning
@@ -557,7 +560,8 @@ unreconciled venue state. Phases IN ORDER:
    per the pre-registered contract - there is no top-up rule). The stage-1
    drift thresholds scale with `capital_contributed`. Dividends and BIL
    distributions are still NOT adopted on their own: they accumulate as
-   unowned cash and can be adopted the same way, by an explicit amount.
+   unowned cash and are adopted by an explicit amount with
+   `"kind": "distribution"` (runbook step 8).
    Runbook: "Resizing the live book after a deposit" under Operating
    rules.
    **At most two open calls per symbol** (round 11, 2026-10-05;
@@ -570,7 +574,11 @@ unreconciled venue state. Phases IN ORDER:
    after the cap. Adopted as RISK CONTROL on non-inferiority (pre-
    registered tier 2): on the replay the p90 largest single name falls
    from 40% to 28% of the sleeve with book Sharpe, CAGR and max DD
-   statistically unchanged - no return improvement is claimed
+   statistically unchanged - no return improvement is claimed. The cost:
+   about -1.0 pp/yr on the SLEEVE time-weighted (sleeve Sharpe level; the
+   book level through the band rebalancing). The tracker may only TIGHTEN
+   the limit. Approved by Casey 2026-10-05 ("To all next recommendations",
+   on the recommendation to run the study and ship it if it passed)
    (docs/BACKTEST_EXECUTOR_MIRROR.md, round 11).
    **Entries are only PLANNED outside the regular session** (2026-09-03):
    a MOO/OPG order is accepted for the next opening auction and REJECTED
@@ -1113,7 +1121,9 @@ THAT boot, no split), `deposit_adopted` and `distribution_adopted`
 to remove before a drawdown read), tripwires (the kill ledger's lines,
 alert-only: flow-adjusted book and sleeve drawdown, high-water-mark date,
 series start date, days under water, each line's level and whether it has
-paged - see "Kill criteria"), positions, trades
+paged; each series carries `drawdown` (last finalized close - what the
+lines read), `drawdown_live`, `close_date`, `hwm_date`, `since`, plus a
+`basis` line - see "Kill criteria"), positions, trades
 (last 200, persisted), equity_curve (one point per cycle day),
 unreconciled (count), last_cycle: {date, ok, error}, marks_age_s}`. Marks
 come from the loop-thread quote cache (adapter review M2 — the feed never
@@ -1293,8 +1303,10 @@ The procedure, in this order:
    dividends and BIL distributions land in the account as cash the book
    does not own, and sit UNINVESTED until adopted (roughly $2k a year on
    a $120k book at 2026 yields). Take the AMOUNT from the activity
-   statement's dividend / distribution / credit-interest lines since the
-   last adoption - never from the drift figure, which is NET of
+   statement's dividend and distribution lines ON THE BOOK'S HOLDINGS
+   (SPY, BIL, the sleeve names) since the last adoption - not the
+   account's credit interest, which is paid mostly on cash the book does
+   not own - and never from the drift figure, which is NET of
    everything else that moves the account's cash (IBKR interest on cash
    the book does not own, market-data fees, unreported commissions,
    deposits, withdrawals); use `blend.cash.drift` on `/status` (or the
@@ -1493,7 +1505,9 @@ deposit that is the wrong number for the feed's contributed-capital line,
 any flow-adjusted drawdown read and the stage-1 drift thresholds (tighter,
 the safe direction) - restore it by hand from the ADOPTED page (Operating
 rules, "Resizing the live book", step 7). A pending request is dropped
-(fail-closed; re-issue).
+(fail-closed; re-issue) - and CANCEL a pending `distribution` request
+before rolling back to a build without the kind: it would execute there
+as a deposit.
 
 **A fourth hinge (2026-10-05): the tripwire series (`trip_book`,
 `trip_sleeve`, `trip_pending_*`, `trip_alerted`).** A build without them

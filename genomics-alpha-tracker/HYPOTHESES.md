@@ -419,6 +419,12 @@ and whether the market agreed._
   −1.0 pp/yr with sleeve Sharpe level. The "more independent bets" premise
   is REFUTED as stated: repeat entries were not worse trades, so refusing
   them does not raise return; the case is risk control only.
-- **Implement:** executor planner `MAX_PER_SYMBOL = 2` (2026-10-05).
+- **Implement:** executor planner `MAX_PER_SYMBOL = 2` (2026-10-05); the
+  tracker may only tighten it.
+- **Decision record:** Casey, 2026-10-05, "To all next recommendations" —
+  approving the recommendation to run this study and ship the planner check
+  if it passed under the pre-registered rule. It passed under the
+  risk-control tier, so it ships with its cost stated (sleeve ~−1.0 pp/yr
+  time-weighted, book level).
 - **Status:** adopted (risk control), 2026-10-05; the live record is read at
   R1 reviews (largest-name share of the sleeve vs the replay's 27.5% p90).
