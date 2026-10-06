@@ -35,6 +35,7 @@ import gzip
 import json
 import math
 import random
+import re
 import sys
 import time
 from collections import Counter
@@ -58,6 +59,7 @@ OUT = HERE / "calibration.json"
 KS = (10, 15, 25, 40)
 WINDOW_BACK, WINDOW_FWD = 120, 30
 SEED = 20261006
+SEARCH_FAILURES: list = []
 
 
 def own_rows(sym: str, aliases: dict) -> list[dict]:
@@ -66,7 +68,16 @@ def own_rows(sym: str, aliases: dict) -> list[dict]:
     # audited aliases are searched too: a subsidiary's own trials (Kite for Gilead,
     # ModernaTX for Moderna) need not mention the parent's name
     for q in list(dict.fromkeys(aliases[sym]["queries"] + aliases[sym]["aliases"])):
-        for st in C.search_name(q):
+        # CT.gov's query parser rejects unbalanced brackets and quotes in a
+        # sponsor string ("... Merck & Co., Inc. (Rahway, New Jersey USA")
+        q = re.sub(r'[()\[\]{}"]', " ", q).strip()
+        try:
+            found = C.search_name(q)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {sym}: search FAILED for {q!r} ({exc})", flush=True)
+            SEARCH_FAILURES.append((sym, q, str(exc)[:120]))
+            continue
+        for st in found:
             r = C.compact(st, q)
             if not r["nct"] or r["nct"] in seen:
                 continue
@@ -189,7 +200,7 @@ def main() -> None:
                        **{k: rk[k][s] for k in ("R1", "R2", "B1")}})
     n = len(events)
     months = 12.0
-    res = {"events": n, "events_per_month": round(n / months, 2),
+    res = {"search_failures": SEARCH_FAILURES, "events": n, "events_per_month": round(n / months, 2),
            "universe_mean": round(sum(e["n"] for e in events) / n, 1) if n else None,
            "hit_rate": {}, "paired_vs_B1": {}, "power": {}}
     for K in KS:
