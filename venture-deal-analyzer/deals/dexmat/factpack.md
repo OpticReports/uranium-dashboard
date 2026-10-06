@@ -570,6 +570,14 @@ ranked format. Clock context: **round closes 2026-09-28.**
    Also from the same reply: focus is milspec wire ("ESG was where they
    started, not where they are going") — matches our specialty/aero
    beachhead base case, not the copper-replacement story.
+   **Sponsor follow-up 2026-10-06 [SPONSOR-CLAIMED]:** production cost
+   $0.34/ft (was $0.40/ft) → at 20% markup sells $0.41/ft (was $0.48/ft).
+   Matches our $1.12/m reconciliation exactly. [DER] Cost-plus pricing
+   passes the saving to customers: gross profit per foot FALLS $0.080 →
+   $0.068 (margin % unchanged at ~16.7%), so this helps adoption/volume,
+   not unit margin. Per-foot comparisons with copper need an equal-
+   conductance basis (Galvorn ~6 MS/m vs copper ~58 MS/m volumetric).
+   Still no document; still no sales until qualification (2–3 months).
 9. ● **Margin plan: 99%-now/50%-later (DD notes) vs 20% markup (memo)**
    (NEW). Moves: unit-economics score; also a candor probe.
 

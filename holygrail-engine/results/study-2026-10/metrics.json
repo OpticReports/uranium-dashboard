@@ -1,0 +1,1859 @@
+{
+ "params": {
+  "declared_at": "2026-10-06, BEFORE any backtest/forward result was computed; not tuned afterwards",
+  "frequency": "monthly total returns: Yahoo adjclose, last observed level per calendar month (engine align_levels freq='M'); partial month 2026-10 dropped; last complete month 2026-09",
+  "covariance": "36-month trailing SAMPLE covariance of MONTHLY returns (window=36, min_periods=36), annualised x12",
+  "rebalance": "monthly, at the month-end close of the estimation month; weights earn from the next month",
+  "cost_bps_on_turnover": 10,
+  "financing": "cash leg earns FRED DTB3 (actual/360, rate known at prior month-end); borrowed fraction pays DTB3 + 50 bp",
+  "leverage_cap_gross": 3.0,
+  "target_vol": 0.1,
+  "universe": [
+   "VFINX US eq",
+   "VGTSX intl eq",
+   "VEIEX EM eq",
+   "VUSTX long UST",
+   "VFITX interm UST",
+   "VIPSX TIPS",
+   "VWESX IG credit",
+   "VWEHX HY",
+   "VGSIX REITs",
+   "GLD gold",
+   "PCRIX commodities (chosen over DBC: longer history so GLD is the binding start)"
+  ],
+  "common_window": "first monthly return 2004-12 (GLD lists 2004-11-18) to 2026-09; walk-forward trading from 2007-11 month-end after 36m warm-up",
+  "sixty_forty": "60% VFINX / 40% VFITX, rebalanced monthly",
+  "quadrant_mapping": {
+   "VFINX": [
+    "growth_up",
+    "inflation_down"
+   ],
+   "VGTSX": [
+    "growth_up",
+    "inflation_down"
+   ],
+   "VEIEX": [
+    "growth_up",
+    "inflation_down"
+   ],
+   "VGSIX": [
+    "growth_up",
+    "inflation_down"
+   ],
+   "VUSTX": [
+    "growth_down",
+    "inflation_down"
+   ],
+   "VFITX": [
+    "growth_down",
+    "inflation_down"
+   ],
+   "VWESX": [
+    "growth_down",
+    "inflation_down"
+   ],
+   "VIPSX": [
+    "growth_down",
+    "inflation_up"
+   ],
+   "GLD": [
+    "inflation_up"
+   ],
+   "PCRIX": [
+    "growth_up",
+    "inflation_up"
+   ],
+   "VWEHX": [
+    "growth_up"
+   ],
+   "basis": "engine CANONICAL_MAP; VWESX (long-duration IG, mostly rate risk) mapped as nominal bond; REITs as equity; HY as credit"
+  },
+  "same_risk_as_stocks": "ERC geared each month to the trailing 36m vol of VFINX (cap 3x)",
+  "stress_rule": "stress month = VFINX month-end total-return level more than 10% below its running peak (expanding max of month-end levels since 1980)",
+  "long_run": "VFINX, VFITX, VUSTX from 1991-11; strategies VFINX B&H, 60/40 VFINX/VFITX, ERC(VFINX,VFITX) geared to 10%; rolling 36m stock-bond correlations",
+  "forward": "stationary block bootstrap (Politis-Romano), mean block 12 months, 10y horizon, 10,000 paths, seed 20261006, constant-mix monthly; history = common-window monthly returns joined with DTB3 cash return (bootstrapped jointly); weights = full-sample-covariance ERC / quadrant geared to 10% ex-ante (cap 3x); 50 bp spread on borrowing; no costs",
+  "corr_stress": "history re-coloured to the correlation C_s = 0.5 C_full + 0.5 C_2022 (vols and means kept; C_2022 = daily-return correlation over calendar 2022), weights NOT re-geared",
+  "live_sanity": "geared quadrant (6) monthly returns vs ALLW (from 2025-04) and RPAR (from 2020-01) on overlapping months"
+ },
+ "sections": {
+  "S1": {
+   "table": [
+    {
+     "n": 1,
+     "rho": 0.0,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.18,
+     "return_to_risk": 0.3333333333333333,
+     "improvement": 1.0,
+     "neff": 1.0,
+     "floor": 0.0
+    },
+    {
+     "n": 5,
+     "rho": 0.0,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.08049844718999243,
+     "return_to_risk": 0.7453559924999299,
+     "improvement": 2.23606797749979,
+     "neff": 5.0,
+     "floor": 0.0
+    },
+    {
+     "n": 10,
+     "rho": 0.0,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.05692099788303083,
+     "return_to_risk": 1.0540925533894596,
+     "improvement": 3.1622776601683795,
+     "neff": 10.0,
+     "floor": 0.0
+    },
+    {
+     "n": 15,
+     "rho": 0.0,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.046475800154488996,
+     "return_to_risk": 1.2909944487358058,
+     "improvement": 3.872983346207417,
+     "neff": 15.0,
+     "floor": 0.0
+    },
+    {
+     "n": 1,
+     "rho": 0.1,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.18,
+     "return_to_risk": 0.3333333333333333,
+     "improvement": 1.0,
+     "neff": 1.0,
+     "floor": 0.05692099788303083
+    },
+    {
+     "n": 5,
+     "rho": 0.1,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.09524704719832525,
+     "return_to_risk": 0.6299407883487121,
+     "improvement": 1.889822365046136,
+     "neff": 3.5714285714285716,
+     "floor": 0.05692099788303083
+    },
+    {
+     "n": 10,
+     "rho": 0.1,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.07846018098373211,
+     "return_to_risk": 0.7647191129018727,
+     "improvement": 2.2941573387056176,
+     "neff": 5.2631578947368425,
+     "floor": 0.05692099788303083
+    },
+    {
+     "n": 15,
+     "rho": 0.1,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.072,
+     "return_to_risk": 0.8333333333333334,
+     "improvement": 2.5,
+     "neff": 6.249999999999999,
+     "floor": 0.05692099788303083
+    },
+    {
+     "n": 1,
+     "rho": 0.2,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.18,
+     "return_to_risk": 0.3333333333333333,
+     "improvement": 1.0,
+     "neff": 1.0,
+     "floor": 0.08049844718999243
+    },
+    {
+     "n": 5,
+     "rho": 0.2,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.108,
+     "return_to_risk": 0.5555555555555556,
+     "improvement": 1.6666666666666667,
+     "neff": 2.7777777777777777,
+     "floor": 0.08049844718999243
+    },
+    {
+     "n": 10,
+     "rho": 0.2,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.09524704719832525,
+     "return_to_risk": 0.6299407883487121,
+     "improvement": 1.889822365046136,
+     "neff": 3.5714285714285716,
+     "floor": 0.08049844718999243
+    },
+    {
+     "n": 15,
+     "rho": 0.2,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.090598013223249,
+     "return_to_risk": 0.6622661785325219,
+     "improvement": 1.9867985355975657,
+     "neff": 3.9473684210526314,
+     "floor": 0.08049844718999243
+    },
+    {
+     "n": 1,
+     "rho": 0.3,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.18,
+     "return_to_risk": 0.3333333333333333,
+     "improvement": 1.0,
+     "neff": 1.0,
+     "floor": 0.09859006035092989
+    },
+    {
+     "n": 5,
+     "rho": 0.3,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.11939849245279441,
+     "return_to_risk": 0.5025189076296059,
+     "improvement": 1.507556722888818,
+     "neff": 2.2727272727272725,
+     "floor": 0.09859006035092989
+    },
+    {
+     "n": 10,
+     "rho": 0.3,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.10948972554536794,
+     "return_to_risk": 0.547996624351191,
+     "improvement": 1.643989873053573,
+     "neff": 2.702702702702703,
+     "floor": 0.09859006035092989
+    },
+    {
+     "n": 15,
+     "rho": 0.3,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.10598113039593417,
+     "return_to_risk": 0.5661385170722978,
+     "improvement": 1.6984155512168937,
+     "neff": 2.8846153846153846,
+     "floor": 0.09859006035092989
+    },
+    {
+     "n": 1,
+     "rho": 0.4,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.18,
+     "return_to_risk": 0.3333333333333333,
+     "improvement": 1.0,
+     "neff": 1.0,
+     "floor": 0.11384199576606166
+    },
+    {
+     "n": 5,
+     "rho": 0.4,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.12979984591670363,
+     "return_to_risk": 0.4622501635210242,
+     "improvement": 1.3867504905630728,
+     "neff": 1.923076923076923,
+     "floor": 0.11384199576606166
+    },
+    {
+     "n": 10,
+     "rho": 0.4,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.12208193969625482,
+     "return_to_risk": 0.49147318718299043,
+     "improvement": 1.4744195615489715,
+     "neff": 2.173913043478261,
+     "floor": 0.11384199576606166
+    },
+    {
+     "n": 15,
+     "rho": 0.4,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.11939849245279441,
+     "return_to_risk": 0.5025189076296059,
+     "improvement": 1.507556722888818,
+     "neff": 2.2727272727272725,
+     "floor": 0.11384199576606166
+    },
+    {
+     "n": 1,
+     "rho": 0.6,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.18,
+     "return_to_risk": 0.3333333333333333,
+     "improvement": 1.0,
+     "neff": 1.0,
+     "floor": 0.139427400463467
+    },
+    {
+     "n": 5,
+     "rho": 0.6,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.14843180252223576,
+     "return_to_risk": 0.40422604172722165,
+     "improvement": 1.212678125181665,
+     "neff": 1.4705882352941178,
+     "floor": 0.139427400463467
+    },
+    {
+     "n": 10,
+     "rho": 0.6,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.144,
+     "return_to_risk": 0.4166666666666667,
+     "improvement": 1.25,
+     "neff": 1.5625000000000002,
+     "floor": 0.139427400463467
+    },
+    {
+     "n": 15,
+     "rho": 0.6,
+     "sigma": 0.18,
+     "mu": 0.06,
+     "sigma_p": 0.142492105044455,
+     "return_to_risk": 0.42107596053325946,
+     "improvement": 1.2632278815997784,
+     "neff": 1.5957446808510638,
+     "floor": 0.139427400463467
+    }
+   ],
+   "dalio_check_rho0": {
+    "1": 0.18,
+    "5": 0.08049844718999243,
+    "10": 0.05692099788303083,
+    "15": 0.046475800154488996
+   },
+   "exact_improvement_15": 3.872983346207417
+  },
+  "S2": {
+   "mean_pairwise_rho_full": 0.4009169286037546,
+   "stress_rule": "stress month = VFINX month-end total-return level more than 10% below its running peak (expanding max of month-end levels since 1980)",
+   "n_stress_months": 69,
+   "n_calm_months": 193,
+   "stress_months": [
+    "2004-12-31",
+    "2005-01-31",
+    "2005-02-28",
+    "2005-03-31",
+    "2005-04-29",
+    "2005-05-31",
+    "2005-06-30",
+    "2005-07-29",
+    "2005-08-31",
+    "2005-09-30",
+    "2005-10-31",
+    "2005-11-30",
+    "2005-12-30",
+    "2008-01-31",
+    "2008-02-29",
+    "2008-03-31",
+    "2008-06-30",
+    "2008-07-31",
+    "2008-08-29",
+    "2008-09-30",
+    "2008-10-31",
+    "2008-11-28",
+    "2008-12-31",
+    "2009-01-30",
+    "2009-02-27",
+    "2009-03-31",
+    "2009-04-30",
+    "2009-05-29",
+    "2009-06-30",
+    "2009-07-31",
+    "2009-08-31",
+    "2009-09-30",
+    "2009-10-30",
+    "2009-11-30",
+    "2009-12-31",
+    "2010-01-29",
+    "2010-02-26",
+    "2010-03-31",
+    "2010-04-30",
+    "2010-05-28",
+    "2010-06-30",
+    "2010-07-30",
+    "2010-08-31",
+    "2010-09-30",
+    "2010-10-29",
+    "2010-11-30",
+    "2010-12-31",
+    "2011-01-31",
+    "2011-08-31",
+    "2011-09-30",
+    "2011-10-31",
+    "2011-11-30",
+    "2011-12-30",
+    "2018-12-31",
+    "2020-03-31",
+    "2022-04-29",
+    "2022-05-31",
+    "2022-06-30",
+    "2022-07-29",
+    "2022-08-31",
+    "2022-09-30",
+    "2022-10-31",
+    "2022-11-30",
+    "2022-12-30",
+    "2023-01-31",
+    "2023-02-28",
+    "2023-03-31",
+    "2023-04-28",
+    "2023-05-31"
+   ],
+   "neff_regimes": [
+    {
+     "sample": "full sample (ERC on full S)",
+     "n_months": 262,
+     "rho_bar": 0.4009169286037546,
+     "dr2": 2.3032790993455077,
+     "equal_rho": 2.195972899271177,
+     "pca_entropy": 2.269453839222241,
+     "prc_inverse_hhi": 11.0,
+     "min_torsion": 10.82995341048884,
+     "dr": 1.517655790798924,
+     "vol": 0.07002031357285715,
+     "pca_ambiguous": false,
+     "min_torsion_regularized": false
+    },
+    {
+     "sample": "calm (ERC re-solved on calm S)",
+     "n_months": 193,
+     "rho_bar": 0.3684081073094923,
+     "dr2": 2.46929554439066,
+     "equal_rho": 2.3483795067475093,
+     "pca_entropy": 2.0335656733951177,
+     "prc_inverse_hhi": 11.0,
+     "min_torsion": 10.827054759217317,
+     "dr": 1.5713992313828653,
+     "vol": 0.05436719039809394,
+     "pca_ambiguous": true,
+     "min_torsion_regularized": false
+    },
+    {
+     "sample": "calm (full-sample ERC weights held)",
+     "n_months": 193,
+     "rho_bar": 0.3684081073094923,
+     "dr2": 2.457907965683004,
+     "equal_rho": 2.3483795067475093,
+     "pca_entropy": 2.396999576424068,
+     "prc_inverse_hhi": 10.344626739990124,
+     "min_torsion": 10.60809325098859,
+     "dr": 1.567771656103976,
+     "vol": 0.05427172791459436,
+     "pca_ambiguous": true,
+     "min_torsion_regularized": false
+    },
+    {
+     "sample": "stress (ERC re-solved on stress S)",
+     "n_months": 69,
+     "rho_bar": 0.43288120262593616,
+     "dr2": 2.2040362092245998,
+     "equal_rho": 2.0642499577380686,
+     "pca_entropy": 2.4316806397069928,
+     "prc_inverse_hhi": 10.999999999999996,
+     "min_torsion": 10.74933150193796,
+     "dr": 1.4845996797873156,
+     "vol": 0.09778527573399758,
+     "pca_ambiguous": false,
+     "min_torsion_regularized": false
+    },
+    {
+     "sample": "stress (full-sample ERC weights held)",
+     "n_months": 69,
+     "rho_bar": 0.43288120262593616,
+     "dr2": 2.110799294034002,
+     "equal_rho": 2.0642499577380686,
+     "pca_entropy": 2.135098510685599,
+     "prc_inverse_hhi": 10.621833288605306,
+     "min_torsion": 10.583116097258594,
+     "dr": 1.452859006935636,
+     "vol": 0.10212629607989233,
+     "pca_ambiguous": false,
+     "min_torsion_regularized": false
+    }
+   ],
+   "erc_weights_full": {
+    "VFINX": 0.0651629777838223,
+    "VGTSX": 0.049420140903767625,
+    "VEIEX": 0.04500321831770508,
+    "VUSTX": 0.10159543337587404,
+    "VFITX": 0.24560494449285397,
+    "VIPSX": 0.14116063683210897,
+    "VWESX": 0.07737165242443547,
+    "VWEHX": 0.10814312713996484,
+    "VGSIX": 0.04206471237650608,
+    "GLD": 0.06687563237548512,
+    "PCRIX": 0.05759752397747664
+   },
+   "neff_bootstrap_90ci": {
+    "dr2": {
+     "point": 2.3032790993455063,
+     "lo": 1.9935951336946127,
+     "hi": 2.7368357139705073,
+     "sd": 0.22343209969360311
+    },
+    "equal_rho": {
+     "point": 2.195972899271177,
+     "lo": 1.9323097405343337,
+     "hi": 2.578628061523918,
+     "sd": 0.1961525748088447
+    },
+    "pca_entropy": {
+     "point": 2.269453839222242,
+     "lo": 1.8198461788794686,
+     "hi": 2.8351231488056605,
+     "sd": 0.3041658860750347
+    },
+    "prc_inverse_hhi": {
+     "point": 11.000000000000004,
+     "lo": 10.485981176184552,
+     "hi": 10.982385056789443,
+     "sd": 0.1664381080108722
+    },
+    "min_torsion": {
+     "point": 10.829953410488844,
+     "lo": 10.524083294766982,
+     "hi": 10.872932020007106,
+     "sd": 0.11005823929119087
+    }
+   },
+   "rolling_summary": {
+    "dr2_min": {
+     "value": 1.5347584910919858,
+     "date": "2025-07-31"
+    },
+    "dr2_max": {
+     "value": 5.5488562686672775,
+     "date": "2012-12-31"
+    },
+    "dr2_median": 2.5436016092274976,
+    "at": {
+     "2008-12-31": {
+      "dr2": 2.2258100914989867,
+      "rho_bar": 0.426220631813764
+     },
+     "2009-02-27": {
+      "dr2": 2.151453649054598,
+      "rho_bar": 0.43328261000780827
+     },
+     "2020-03-31": {
+      "dr2": 3.2936924013642006,
+      "rho_bar": 0.3039240027920526
+     },
+     "2020-12-31": {
+      "dr2": 2.982616953192365,
+      "rho_bar": 0.35179035669651976
+     },
+     "2022-09-30": {
+      "dr2": 2.091637976760162,
+      "rho_bar": 0.47599949139771275
+     },
+     "2022-12-30": {
+      "dr2": 1.9846820509464966,
+      "rho_bar": 0.49564642662231767
+     },
+     "2026-09-30": {
+      "dr2": 2.280758076365717,
+      "rho_bar": 0.5024514562515453
+     }
+    }
+   }
+  },
+  "S3": {
+   "metrics": [
+    {
+     "strategy": "1 US equity",
+     "cagr": 0.11053636377361475,
+     "vol": 0.1563482815393798,
+     "sharpe": 0.66044779396759,
+     "sortino": 0.9884789316193896,
+     "max_dd": -0.48823851791607054,
+     "calmar": 0.2263982863240959,
+     "worst_year": -0.37023049927874085,
+     "p_loss_year": 0.16666666666666666,
+     "ulcer": 0.11482821329157046,
+     "max_days_under_water": 1523,
+     "avg_gross": 1.0,
+     "max_gross": 1.0,
+     "cap_binding_share": 0.0,
+     "turnover_per_year": 0.0,
+     "cost_drag_per_year": 5.3096380287832537e-05,
+     "beta_to_us_eq": 1.0,
+     "corr_to_us_eq": 1.0,
+     "start": "2007-11-30",
+     "end": "2026-09-30",
+     "years": 18.833675564681723
+    },
+    {
+     "strategy": "2 60/40",
+     "cagr": 0.07872415114989462,
+     "vol": 0.09542176880633718,
+     "sharpe": 0.6938784336097307,
+     "sortino": 1.0441106388754768,
+     "max_dd": -0.2962918177228515,
+     "calmar": 0.2656980262058145,
+     "worst_year": -0.1957230023865989,
+     "p_loss_year": 0.16666666666666666,
+     "ulcer": 0.06284912355086068,
+     "max_days_under_water": 1035,
+     "avg_gross": 1.0,
+     "max_gross": 1.0,
+     "cap_binding_share": 0.0,
+     "turnover_per_year": 0.21031534580199415,
+     "cost_drag_per_year": 0.0002634117260898266,
+     "beta_to_us_eq": 0.5986468616740837,
+     "corr_to_us_eq": 0.9808810845001835,
+     "start": "2007-11-30",
+     "end": "2026-09-30",
+     "years": 18.833675564681723
+    },
+    {
+     "strategy": "3 Equal weight",
+     "cagr": 0.05344900123750729,
+     "vol": 0.0982748086727248,
+     "sharpe": 0.43470996868331807,
+     "sortino": 0.6162520871339541,
+     "max_dd": -0.3009085245762865,
+     "calmar": 0.17762541394521666,
+     "worst_year": -0.19963710008061142,
+     "p_loss_year": 0.2777777777777778,
+     "ulcer": 0.06758429764133543,
+     "max_days_under_water": 943,
+     "avg_gross": 1.0,
+     "max_gross": 1.0000000000000002,
+     "cap_binding_share": 0.0,
+     "turnover_per_year": 0.2861532717524395,
+     "cost_drag_per_year": 0.000339249652040272,
+     "beta_to_us_eq": 0.4926317340732772,
+     "corr_to_us_eq": 0.7837423048120201,
+     "start": "2007-11-30",
+     "end": "2026-09-30",
+     "years": 18.833675564681723
+    },
+    {
+     "strategy": "4 ERC unlevered",
+     "cagr": 0.049045978796894873,
+     "vol": 0.0715212393790181,
+     "sharpe": 0.5063117597993264,
+     "sortino": 0.7274230097192851,
+     "max_dd": -0.17229491693872911,
+     "calmar": 0.2846629469303289,
+     "worst_year": -0.13039825892456003,
+     "p_loss_year": 0.2777777777777778,
+     "ulcer": 0.04641716335706554,
+     "max_days_under_water": 943,
+     "avg_gross": 1.0,
+     "max_gross": 1.0000000000000004,
+     "cap_binding_share": 0.0,
+     "turnover_per_year": 0.4244937650492265,
+     "cost_drag_per_year": 0.00047759014533705897,
+     "beta_to_us_eq": 0.2986657699868118,
+     "corr_to_us_eq": 0.6528952839395661,
+     "start": "2007-11-30",
+     "end": "2026-09-30",
+     "years": 18.833675564681723
+    },
+    {
+     "strategy": "5 ERC @10% vol",
+     "cagr": 0.04270225991708476,
+     "vol": 0.12467980867182409,
+     "sharpe": 0.28693848888429735,
+     "sortino": 0.3718177636213293,
+     "max_dd": -0.3887602224033826,
+     "calmar": 0.1098421532251732,
+     "worst_year": -0.2809883759254953,
+     "p_loss_year": 0.2777777777777778,
+     "ulcer": 0.12276816292833492,
+     "max_days_under_water": 1459,
+     "avg_gross": 1.718163929608101,
+     "max_gross": 2.687171641933301,
+     "cap_binding_share": 0.0,
+     "turnover_per_year": 1.0290264721519833,
+     "cost_drag_per_year": 0.0011624461592094416,
+     "beta_to_us_eq": 0.5187739409461257,
+     "corr_to_us_eq": 0.650541695871787,
+     "start": "2007-11-30",
+     "end": "2026-09-30",
+     "years": 18.833675564681723
+    },
+    {
+     "strategy": "6 Quadrant @10% vol",
+     "cagr": 0.040059840686296866,
+     "vol": 0.12427900490342328,
+     "sharpe": 0.2669106479566438,
+     "sortino": 0.3458422150645986,
+     "max_dd": -0.38083037037228273,
+     "calmar": 0.1051907720677218,
+     "worst_year": -0.24958529362581472,
+     "p_loss_year": 0.2777777777777778,
+     "ulcer": 0.11988725973989327,
+     "max_days_under_water": 1400,
+     "avg_gross": 1.8569150542438868,
+     "max_gross": 2.8171934743086875,
+     "cap_binding_share": 0.0,
+     "turnover_per_year": 1.0660381961175087,
+     "cost_drag_per_year": 0.0012060947782162807,
+     "beta_to_us_eq": 0.4498257512282385,
+     "corr_to_us_eq": 0.5658999543112561,
+     "start": "2007-11-30",
+     "end": "2026-09-30",
+     "years": 18.833675564681723
+    },
+    {
+     "strategy": "7 ERC @ equity vol",
+     "cagr": 0.06644309973454221,
+     "vol": 0.17153878707910783,
+     "sharpe": 0.3818832324771185,
+     "sortino": 0.5204896145976108,
+     "max_dd": -0.4424198610081985,
+     "calmar": 0.15018109626256346,
+     "worst_year": -0.3907785924960797,
+     "p_loss_year": 0.2777777777777778,
+     "ulcer": 0.16282400575862502,
+     "max_days_under_water": 1856,
+     "avg_gross": 2.310609420924356,
+     "max_gross": 3.0000000000000013,
+     "cap_binding_share": 0.21238938053097345,
+     "turnover_per_year": 1.4441778392892821,
+     "cost_drag_per_year": 0.0015494493546026186,
+     "beta_to_us_eq": 0.7233875774243639,
+     "corr_to_us_eq": 0.6593284617611072,
+     "start": "2007-11-30",
+     "end": "2026-09-30",
+     "years": 18.833675564681723
+    }
+   ],
+   "worst_windows": [
+    {
+     "strategy": "1 US equity",
+     "GFC 2007-11..2009-02": -0.4882385179160703,
+     "Covid 2020-01..2020-03": -0.19620561611452236,
+     "2022 (Dec-21..Sep-22)": -0.239595815089644,
+     "Calendar 2022": -0.18244454071991534,
+     "worst_12m": -0.43326849527979405,
+     "worst_12m_end": "2009-02-27"
+    },
+    {
+     "strategy": "2 60/40",
+     "GFC 2007-11..2009-02": -0.2962918177228514,
+     "Covid 2020-01..2020-03": -0.10370039786336294,
+     "2022 (Dec-21..Sep-22)": -0.18864857580704908,
+     "Calendar 2022": -0.148468327595059,
+     "worst_12m": -0.26662347143191145,
+     "worst_12m_end": "2009-02-27"
+    },
+    {
+     "strategy": "3 Equal weight",
+     "GFC 2007-11..2009-02": -0.27941100331744073,
+     "Covid 2020-01..2020-03": -0.1008443463336709,
+     "2022 (Dec-21..Sep-22)": -0.18759125534413856,
+     "Calendar 2022": -0.14387127992106064,
+     "worst_12m": -0.2929219653828419,
+     "worst_12m_end": "2009-02-27"
+    },
+    {
+     "strategy": "4 ERC unlevered",
+     "GFC 2007-11..2009-02": -0.1406519352907174,
+     "Covid 2020-01..2020-03": -0.05679845344654977,
+     "2022 (Dec-21..Sep-22)": -0.16239726013014288,
+     "Calendar 2022": -0.13039825892455992,
+     "worst_12m": -0.1586485922334453,
+     "worst_12m_end": "2022-10-31"
+    },
+    {
+     "strategy": "5 ERC @10% vol",
+     "GFC 2007-11..2009-02": -0.34296120254907425,
+     "Covid 2020-01..2020-03": -0.1476207043951464,
+     "2022 (Dec-21..Sep-22)": -0.2683695020653216,
+     "Calendar 2022": -0.2345755491104542,
+     "worst_12m": -0.3604956578858053,
+     "worst_12m_end": "2009-02-27"
+    },
+    {
+     "strategy": "6 Quadrant @10% vol",
+     "GFC 2007-11..2009-02": -0.2941631680489616,
+     "Covid 2020-01..2020-03": -0.13408751595394053,
+     "2022 (Dec-21..Sep-22)": -0.2676691317314991,
+     "Calendar 2022": -0.23753691710239722,
+     "worst_12m": -0.3343351313630194,
+     "worst_12m_end": "2009-02-27"
+    },
+    {
+     "strategy": "7 ERC @ equity vol",
+     "GFC 2007-11..2009-02": -0.3663256129988305,
+     "Covid 2020-01..2020-03": -0.17458335945210612,
+     "2022 (Dec-21..Sep-22)": -0.4363402130811258,
+     "Calendar 2022": -0.3907785924960796,
+     "worst_12m": -0.4323767571336723,
+     "worst_12m_end": "2022-10-31"
+    }
+   ],
+   "first_trade": "2007-11-30",
+   "quadrant_max_box_deviation_from_25pct": 4.85722573273506e-14,
+   "realised_vs_target_vol": {
+    "5 ERC @10% vol": 0.12467980867182409,
+    "6 Quadrant @10% vol": 0.12427900490342328
+   },
+   "ex_ante_vol_7_mean": 0.14398745978500854,
+   "latest_targets": {
+    "4 ERC unlevered": {
+     "VFINX": 0.0647,
+     "VGTSX": 0.0528,
+     "VEIEX": 0.0648,
+     "VUSTX": 0.0527,
+     "VFITX": 0.1503,
+     "VIPSX": 0.1529,
+     "VWESX": 0.0575,
+     "VWEHX": 0.1694,
+     "VGSIX": 0.0411,
+     "GLD": 0.0594,
+     "PCRIX": 0.1343
+    },
+    "5 ERC @10% vol": {
+     "VFINX": 0.1052,
+     "VGTSX": 0.0859,
+     "VEIEX": 0.1055,
+     "VUSTX": 0.0857,
+     "VFITX": 0.2445,
+     "VIPSX": 0.2488,
+     "VWESX": 0.0936,
+     "VWEHX": 0.2757,
+     "VGSIX": 0.0668,
+     "GLD": 0.0967,
+     "PCRIX": 0.2185
+    },
+    "6 Quadrant @10% vol": {
+     "VFINX": 0.0575,
+     "VGTSX": 0.0441,
+     "VEIEX": 0.056,
+     "VUSTX": 0.1004,
+     "VFITX": 0.2799,
+     "VIPSX": 0.4614,
+     "VWESX": 0.1109,
+     "VWEHX": 0.3391,
+     "VGSIX": 0.0332,
+     "GLD": 0.1103,
+     "PCRIX": 0.2371
+    }
+   },
+   "latest_target_date": "2026-08-31",
+   "gearing_decomposition": [
+    {
+     "family": "5 ERC @10% vol",
+     "variant": "unlevered",
+     "cagr": 0.04910170869023234,
+     "vol": 0.0715212393790181,
+     "sharpe": 0.5063117597993264,
+     "max_dd": -0.17229491693872911
+    },
+    {
+     "family": "5 ERC @10% vol",
+     "variant": "walk-forward geared (actual)",
+     "cagr": 0.04284156130934513,
+     "vol": 0.12467980867182409,
+     "sharpe": 0.28693848888429735,
+     "max_dd": -0.3887602224033827
+    },
+    {
+     "family": "5 ERC @10% vol",
+     "variant": "constant 1.72x (hindsight)",
+     "cagr": 0.06738164571131922,
+     "vol": 0.12287712360472941,
+     "sharpe": 0.47711516737146625,
+     "max_dd": -0.29069864435891235,
+     "recon_corr_actual": 0.9999991682459852,
+     "corr_lev_vs_next_excess": -0.17942905572936563
+    },
+    {
+     "family": "6 Quadrant @10% vol",
+     "variant": "unlevered",
+     "cagr": 0.044776154174894556,
+     "vol": 0.06605008040995836,
+     "sharpe": 0.4792888082876584,
+     "max_dd": -0.16109527743496055
+    },
+    {
+     "family": "6 Quadrant @10% vol",
+     "variant": "walk-forward geared (actual)",
+     "cagr": 0.040205710598619326,
+     "vol": 0.12427900490342328,
+     "sharpe": 0.2669106479566438,
+     "max_dd": -0.3808303703722826
+    },
+    {
+     "family": "6 Quadrant @10% vol",
+     "variant": "constant 1.86x (hindsight)",
+     "cagr": 0.0630710367858256,
+     "vol": 0.12266673542812571,
+     "sharpe": 0.4444314908633242,
+     "max_dd": -0.29407527533913846,
+     "recon_corr_actual": 0.9999991397907096,
+     "corr_lev_vs_next_excess": -0.17118419424454515
+    }
+   ],
+   "good_streams": {
+    "streams": [
+     {
+      "asset": "VFINX",
+      "label": "US eq",
+      "cagr": 0.11059536030413053,
+      "vol": 0.1563482815393798,
+      "sharpe": 0.6604477939675901,
+      "max_dd": -0.4882385179160704,
+      "sharpe_se": 0.2543156887719562
+     },
+     {
+      "asset": "VGTSX",
+      "label": "Intl eq",
+      "cagr": 0.043960057113775486,
+      "vol": 0.17720017967491827,
+      "sharpe": 0.25213836113225946,
+      "max_dd": -0.5649338670685932,
+      "sharpe_se": 0.2340601383720423
+     },
+     {
+      "asset": "VEIEX",
+      "label": "EM eq",
+      "cagr": 0.029905939305321372,
+      "vol": 0.1998116289462353,
+      "sharpe": 0.17733947368782207,
+      "max_dd": -0.6112616700076432,
+      "sharpe_se": 0.23223113914843696
+     },
+     {
+      "asset": "VUSTX",
+      "label": "Long UST",
+      "cagr": 0.023350021348196748,
+      "vol": 0.12702579720565735,
+      "sharpe": 0.13119450676130767,
+      "max_dd": -0.45271192874047494,
+      "sharpe_se": 0.2314159192871948
+     },
+     {
+      "asset": "VFITX",
+      "label": "Interm UST",
+      "cagr": 0.024828576979875283,
+      "vol": 0.046434313128894934,
+      "sharpe": 0.2417707286174246,
+      "max_dd": -0.14425616876303715,
+      "sharpe_se": 0.23376955299749957
+     },
+     {
+      "asset": "VIPSX",
+      "label": "TIPS",
+      "cagr": 0.026726067330083314,
+      "vol": 0.05730694807702547,
+      "sharpe": 0.23745719435842078,
+      "max_dd": -0.13552555807118394,
+      "sharpe_se": 0.23365214398959522
+     },
+     {
+      "asset": "VWESX",
+      "label": "IG credit",
+      "cagr": 0.040899194729104194,
+      "vol": 0.10963752265036088,
+      "sharpe": 0.2886226192790964,
+      "max_dd": -0.33805750652840627,
+      "sharpe_se": 0.23517636914815018
+     },
+     {
+      "asset": "VWEHX",
+      "label": "HY",
+      "cagr": 0.05594974478505743,
+      "vol": 0.08176701195588101,
+      "sharpe": 0.5310649478735577,
+      "max_dd": -0.28244879113379673,
+      "sharpe_se": 0.2461376968139806
+     },
+     {
+      "asset": "VGSIX",
+      "label": "REITs",
+      "cagr": 0.059012326572837726,
+      "vol": 0.22233218559501094,
+      "sharpe": 0.30784839856043966,
+      "max_dd": -0.6195470751409192,
+      "sharpe_se": 0.23582274946576795
+     },
+     {
+      "asset": "GLD",
+      "label": "Gold",
+      "cagr": 0.08834509964139503,
+      "vol": 0.17637795640398268,
+      "sharpe": 0.4893670852433633,
+      "max_dd": -0.4291019672092301,
+      "sharpe_se": 0.24383220601391392
+     },
+     {
+      "asset": "PCRIX",
+      "label": "Commod",
+      "cagr": 0.013828873819363485,
+      "vol": 0.19243767436460787,
+      "sharpe": 0.09711032468597769,
+      "max_dd": -0.687345630241374,
+      "sharpe_se": 0.23096913374443054
+     }
+    ],
+    "mean_stream_sharpe": 0.31039649401520536,
+    "erc_realised_sharpe": 0.5063117597993264
+   },
+   "longrun": {
+    "window": [
+     "1991-11-29",
+     "2026-09-30"
+    ],
+    "first_trade": "1994-10-31",
+    "subperiods": [
+     {
+      "strategy": "US equity",
+      "period": "1994-11..1999-12",
+      "cagr": 0.2688177205571505,
+      "vol": 0.13979541785362218,
+      "sharpe": 1.4268157184785808,
+      "max_dd": -0.1537512073441295,
+      "stock_bond_corr": 0.15959623295854264
+     },
+     {
+      "strategy": "US equity",
+      "period": "2000..2021",
+      "cagr": 0.07404583371972917,
+      "vol": 0.15062802208847137,
+      "sharpe": 0.4474051421520404,
+      "max_dd": -0.5096651235619554,
+      "stock_bond_corr": -0.30085039504553046
+     },
+     {
+      "strategy": "US equity",
+      "period": "2022..2026-09",
+      "cagr": 0.119221534040995,
+      "vol": 0.15721996956042034,
+      "sharpe": 0.5467363057343148,
+      "max_dd": -0.239595815089644,
+      "stock_bond_corr": 0.518125361898161
+     },
+     {
+      "strategy": "US equity",
+      "period": "full",
+      "cagr": 0.11017540888322852,
+      "vol": 0.15057451459482796,
+      "sharpe": 0.6089871820149433,
+      "max_dd": -0.5096651235619556,
+      "stock_bond_corr": -0.07017037372586647
+     },
+     {
+      "strategy": "60/40",
+      "period": "1994-11..1999-12",
+      "cagr": 0.18928559263445854,
+      "vol": 0.08904945337718041,
+      "sharpe": 1.4360183118313663,
+      "max_dd": -0.07915999201956414,
+      "stock_bond_corr": 0.15959623295854264
+     },
+     {
+      "strategy": "60/40",
+      "period": "2000..2021",
+      "cagr": 0.06691721796561256,
+      "vol": 0.08669916632849255,
+      "sharpe": 0.6106684101176963,
+      "max_dd": -0.30425092282033406,
+      "stock_bond_corr": -0.30085039504553046
+     },
+     {
+      "strategy": "60/40",
+      "period": "2022..2026-09",
+      "cagr": 0.07024784100750936,
+      "vol": 0.10793634149926988,
+      "sharpe": 0.31769265727409857,
+      "max_dd": -0.1886485758070492,
+      "stock_bond_corr": 0.518125361898161
+     },
+     {
+      "strategy": "60/40",
+      "period": "full",
+      "cagr": 0.08631499325896086,
+      "vol": 0.0910177846583199,
+      "sharpe": 0.6876162604064938,
+      "max_dd": -0.30425092282033384,
+      "stock_bond_corr": -0.07017037372586647
+     },
+     {
+      "strategy": "ERC stock/bond @10%",
+      "period": "1994-11..1999-12",
+      "cagr": 0.18951696512023308,
+      "vol": 0.1010971509218243,
+      "sharpe": 1.2803056574159468,
+      "max_dd": -0.06952593708609744,
+      "stock_bond_corr": 0.15959623295854264
+     },
+     {
+      "strategy": "ERC stock/bond @10%",
+      "period": "2000..2021",
+      "cagr": 0.09908071204774416,
+      "vol": 0.1037433956038427,
+      "sharpe": 0.81726874154369,
+      "max_dd": -0.2894185505821939,
+      "stock_bond_corr": -0.30085039504553046
+     },
+     {
+      "strategy": "ERC stock/bond @10%",
+      "period": "2022..2026-09",
+      "cagr": -0.01844801548255237,
+      "vol": 0.12155582241184201,
+      "sharpe": -0.4257107636339461,
+      "max_dd": -0.3150322070365815,
+      "stock_bond_corr": 0.518125361898161
+     },
+     {
+      "strategy": "ERC stock/bond @10%",
+      "period": "full",
+      "cagr": 0.09463347993192728,
+      "vol": 0.1069915393326644,
+      "sharpe": 0.6725365162616571,
+      "max_dd": -0.32678809298451084,
+      "stock_bond_corr": -0.07017037372586647
+     }
+    ]
+   }
+  },
+  "S4": {
+   "RPAR": {
+    "first_month": "2020-01-31",
+    "last_month": "2026-09-30",
+    "months": 81,
+    "cum_quadrant": 0.22880859753359428,
+    "cum_live": 0.23845994786986213,
+    "vol_quadrant": 0.12556021314614482,
+    "vol_live": 0.13543418201352758,
+    "corr": 0.9170011053763496,
+    "beta_live_on_quadrant": 0.989113442070958,
+    "tracking_error": 0.05403990837642587,
+    "max_dd_quadrant": -0.27045423544586544,
+    "max_dd_live": -0.2858076954910409
+   },
+   "ALLW": {
+    "first_month": "2025-04-30",
+    "last_month": "2026-09-30",
+    "months": 18,
+    "cum_quadrant": 0.1076341248569419,
+    "cum_live": 0.18780408970620588,
+    "vol_quadrant": 0.09951189777847592,
+    "vol_live": 0.10295820668046518,
+    "corr": 0.9725285749231457,
+    "beta_live_on_quadrant": 1.006209310192185,
+    "tracking_error": 0.02397493841744692,
+    "max_dd_quadrant": -0.07321541854721936,
+    "max_dd_live": -0.05209023645048383
+   }
+  },
+  "S5": {
+   "weights": {
+    "US equity": {
+     "VFINX": 1.0,
+     "VGTSX": 0.0,
+     "VEIEX": 0.0,
+     "VUSTX": 0.0,
+     "VFITX": 0.0,
+     "VIPSX": 0.0,
+     "VWESX": 0.0,
+     "VWEHX": 0.0,
+     "VGSIX": 0.0,
+     "GLD": 0.0,
+     "PCRIX": 0.0,
+     "cash": 0.0
+    },
+    "5 ERC @10%": {
+     "VFINX": 0.0931,
+     "VGTSX": 0.0706,
+     "VEIEX": 0.0643,
+     "VUSTX": 0.1451,
+     "VFITX": 0.3508,
+     "VIPSX": 0.2016,
+     "VWESX": 0.1105,
+     "VWEHX": 0.1544,
+     "VGSIX": 0.0601,
+     "GLD": 0.0955,
+     "PCRIX": 0.0823,
+     "cash": -0.4282
+    },
+    "6 Quadrant @10%": {
+     "VFINX": 0.0538,
+     "VGTSX": 0.0392,
+     "VEIEX": 0.0357,
+     "VUSTX": 0.1504,
+     "VFITX": 0.3636,
+     "VIPSX": 0.356,
+     "VWESX": 0.1267,
+     "VWEHX": 0.1979,
+     "VGSIX": 0.0328,
+     "GLD": 0.106,
+     "PCRIX": 0.1011,
+     "cash": -0.5632
+    }
+   },
+   "leverage": {
+    "5": 1.4281569861287262,
+    "6": 1.5631703155253671,
+    "cap_binding": [
+     false,
+     false
+    ]
+   },
+   "corr_stress": {
+    "mean_rho_full": 0.4009169286037546,
+    "mean_rho_2022_daily": 0.4074623998935726,
+    "mean_rho_stressed": 0.40418966424866365,
+    "n_days_2022": 251,
+    "ex_ante_vol_stressed": {
+     "US equity": 0.14802582340890746,
+     "5 ERC @10%": 0.10103549142334182,
+     "6 Quadrant @10%": 0.10155818829100029
+    }
+   },
+   "corr_stress_monthly_posthoc": {
+    "mean_rho_2022_monthly": 0.6236613749468709,
+    "mean_rho_stressed": 0.5122891517753129,
+    "stock_bond_rho": {
+     "full": -0.031100266041271234,
+     "2022_daily": 0.21222849898823617,
+     "2022_monthly": 0.5828711672158498
+    },
+    "ex_ante_vol_stressed": {
+     "US equity": 0.14802582340890746,
+     "5 ERC @10%": 0.11122588929439282,
+     "6 Quadrant @10%": 0.10978735105322457
+    }
+   },
+   "US equity [base]": {
+    "years": 10.0,
+    "n_paths": 10000,
+    "periods_per_year": 12.0,
+    "p_loss_horizon": 0.021,
+    "p_wipeout": 0.0,
+    "mean_cagr": 0.11093047223833628,
+    "cagr_quantiles": {
+     "0.05": 0.023825208808295455,
+     "0.25": 0.07847996385621664,
+     "0.5": 0.11579090352561017,
+     "0.75": 0.1462874541096597,
+     "0.95": 0.1838773872168396
+    },
+    "wealth_quantiles": {
+     "0.05": 1.2654884695971953,
+     "0.25": 2.1287311307759214,
+     "0.5": 2.9910809377856644,
+     "0.75": 3.91683603550749,
+     "0.95": 5.40838072167827
+    },
+    "max_dd_quantiles": {
+     "0.05": -0.5340000969684094,
+     "0.25": -0.4359639994116765,
+     "0.5": -0.239595815089644,
+     "0.75": -0.196609841949838,
+     "0.95": -0.13428779906277935
+    },
+    "median_max_dd": -0.239595815089644,
+    "cvar_0.05_cagr": -0.0020674573015913465,
+    "var_0.05_cagr": 0.023745430031248294,
+    "p_losing_year": 0.16859,
+    "p_any_losing_year": 0.8294,
+    "cvar_0.05_annual": -0.2847231011706255,
+    "annual_return_quantiles": {
+     "0.05": -0.15666281080374614,
+     "0.25": 0.04598105622355764,
+     "0.5": 0.13893354926260137,
+     "0.75": 0.2128188657426595,
+     "0.95": 0.35078990898735285
+    }
+   },
+   "5 ERC @10% [base]": {
+    "years": 10.0,
+    "n_paths": 10000,
+    "periods_per_year": 12.0,
+    "p_loss_horizon": 0.0214,
+    "p_wipeout": 0.0,
+    "mean_cagr": 0.06476189275648932,
+    "cagr_quantiles": {
+     "0.05": 0.012526639523999938,
+     "0.25": 0.043468307714001175,
+     "0.5": 0.0650677749503098,
+     "0.75": 0.08625934639607369,
+     "0.95": 0.1167515190463218
+    },
+    "wealth_quantiles": {
+     "0.05": 1.1325687726619997,
+     "0.25": 1.530356568688404,
+     "0.5": 1.8783323886321743,
+     "0.75": 2.287363899668042,
+     "0.95": 3.0169319817905866
+    },
+    "max_dd_quantiles": {
+     "0.05": -0.34001072630218804,
+     "0.25": -0.25550417146880455,
+     "0.5": -0.23056340981292556,
+     "0.75": -0.11362793965164392,
+     "0.95": -0.08236294514542282
+    },
+    "median_max_dd": -0.23056340981292556,
+    "cvar_0.05_cagr": -0.0017198069505499722,
+    "var_0.05_cagr": 0.012524624391526906,
+    "p_losing_year": 0.22422,
+    "p_any_losing_year": 0.9355,
+    "cvar_0.05_annual": -0.19122993143425746,
+    "annual_return_quantiles": {
+     "0.05": -0.1286835606852203,
+     "0.25": 0.009856184771634302,
+     "0.5": 0.08310262666647761,
+     "0.75": 0.13483390233438042,
+     "0.95": 0.22173406453174463
+    }
+   },
+   "6 Quadrant @10% [base]": {
+    "years": 10.0,
+    "n_paths": 10000,
+    "periods_per_year": 12.0,
+    "p_loss_horizon": 0.0306,
+    "p_wipeout": 0.0,
+    "mean_cagr": 0.060074052214912146,
+    "cagr_quantiles": {
+     "0.05": 0.0075479827510279785,
+     "0.25": 0.0377695491488142,
+     "0.5": 0.06001023940160122,
+     "0.75": 0.08164574355084536,
+     "0.95": 0.11369395063492205
+    },
+    "wealth_quantiles": {
+     "0.05": 1.0780959259149037,
+     "0.25": 1.4488026517312953,
+     "0.5": 1.791020698850118,
+     "0.75": 2.192050000979118,
+     "0.95": 2.9353413114463804
+    },
+    "max_dd_quantiles": {
+     "0.05": -0.34476850848508894,
+     "0.25": -0.2545248895128267,
+     "0.5": -0.23907348837247605,
+     "0.75": -0.12506904105358704,
+     "0.95": -0.08238094893750199
+    },
+    "median_max_dd": -0.23907348837247605,
+    "cvar_0.05_cagr": -0.006523679806650394,
+    "var_0.05_cagr": 0.007386297143225473,
+    "p_losing_year": 0.25294,
+    "p_any_losing_year": 0.9551,
+    "cvar_0.05_annual": -0.18209016043589968,
+    "annual_return_quantiles": {
+     "0.05": -0.12671690124185922,
+     "0.25": -0.0009794754227407387,
+     "0.5": 0.0745378737377912,
+     "0.75": 0.1366783222358105,
+     "0.95": 0.222441676880967
+    }
+   },
+   "5 ERC @10% [corr stress]": {
+    "years": 10.0,
+    "n_paths": 10000,
+    "periods_per_year": 12.0,
+    "p_loss_horizon": 0.0213,
+    "p_wipeout": 0.0,
+    "mean_cagr": 0.06463769804776343,
+    "cagr_quantiles": {
+     "0.05": 0.013031853300555729,
+     "0.25": 0.043503880690275776,
+     "0.5": 0.06494248071214259,
+     "0.75": 0.08593219135460767,
+     "0.95": 0.11610469528300861
+    },
+    "wealth_quantiles": {
+     "0.05": 1.1382325828654827,
+     "0.25": 1.5308783634866592,
+     "0.5": 1.8761238936988525,
+     "0.75": 2.2804842405562873,
+     "0.95": 2.9995034562387777
+    },
+    "max_dd_quantiles": {
+     "0.05": -0.34116247995462246,
+     "0.25": -0.24977323266463347,
+     "0.5": -0.22980066951168848,
+     "0.75": -0.11228653034659197,
+     "0.95": -0.08123698589383843
+    },
+    "median_max_dd": -0.22980066951168848,
+    "cvar_0.05_cagr": -0.0012684690656917042,
+    "var_0.05_cagr": 0.01301715482299004,
+    "p_losing_year": 0.22434,
+    "p_any_losing_year": 0.9354,
+    "cvar_0.05_annual": -0.18889126578679397,
+    "annual_return_quantiles": {
+     "0.05": -0.12942019145614614,
+     "0.25": 0.009288057770107772,
+     "0.5": 0.08080298503860983,
+     "0.75": 0.13534597230335144,
+     "0.95": 0.21825182795361714
+    }
+   },
+   "6 Quadrant @10% [corr stress]": {
+    "years": 10.0,
+    "n_paths": 10000,
+    "periods_per_year": 12.0,
+    "p_loss_horizon": 0.0296,
+    "p_wipeout": 0.0,
+    "mean_cagr": 0.059898565313413234,
+    "cagr_quantiles": {
+     "0.05": 0.007466655321327033,
+     "0.25": 0.037540862610494,
+     "0.5": 0.05983423499391782,
+     "0.75": 0.08175669797477703,
+     "0.95": 0.11337450007024462
+    },
+    "wealth_quantiles": {
+     "0.05": 1.077225959350709,
+     "0.25": 1.4456131851056213,
+     "0.5": 1.7880491242902985,
+     "0.75": 2.1942996268206607,
+     "0.95": 2.926932475499579
+    },
+    "max_dd_quantiles": {
+     "0.05": -0.3425812475289819,
+     "0.25": -0.25441294291948235,
+     "0.5": -0.23222353090683456,
+     "0.75": -0.12378440086970555,
+     "0.95": -0.08236839487796671
+    },
+    "median_max_dd": -0.23222353090683456,
+    "cvar_0.05_cagr": -0.006058614734435576,
+    "var_0.05_cagr": 0.007435795631996367,
+    "p_losing_year": 0.2556,
+    "p_any_losing_year": 0.9586,
+    "cvar_0.05_annual": -0.17939960244008643,
+    "annual_return_quantiles": {
+     "0.05": -0.12806735299871042,
+     "0.25": -0.0016507325136555506,
+     "0.5": 0.07279052100980432,
+     "0.75": 0.13742536978279396,
+     "0.95": 0.22128348533627493
+    }
+   },
+   "5 ERC @10% [stress monthly (post-hoc)]": {
+    "years": 10.0,
+    "n_paths": 10000,
+    "periods_per_year": 12.0,
+    "p_loss_horizon": 0.0349,
+    "p_wipeout": 0.0,
+    "mean_cagr": 0.06376819956116955,
+    "cagr_quantiles": {
+     "0.05": 0.006768942122553934,
+     "0.25": 0.041115496658609973,
+     "0.5": 0.06462867873297606,
+     "0.75": 0.0874061998429157,
+     "0.95": 0.11845204669787883
+    },
+    "wealth_quantiles": {
+     "0.05": 1.0697889189155547,
+     "0.25": 1.4961981336050807,
+     "0.5": 1.8706029256024546,
+     "0.75": 2.3116285426292036,
+     "0.95": 3.063188247389777
+    },
+    "max_dd_quantiles": {
+     "0.05": -0.4079883146275493,
+     "0.25": -0.33505708422510927,
+     "0.5": -0.2524983616715605,
+     "0.75": -0.12691536984061966,
+     "0.95": -0.10130727447482302
+    },
+    "median_max_dd": -0.2524983616715605,
+    "cvar_0.05_cagr": -0.009863293127454585,
+    "var_0.05_cagr": 0.006764680379157895,
+    "p_losing_year": 0.21662,
+    "p_any_losing_year": 0.9272,
+    "cvar_0.05_annual": -0.2325408522777584,
+    "annual_return_quantiles": {
+     "0.05": -0.15563316188910026,
+     "0.25": 0.010951992712002534,
+     "0.5": 0.08112262840685247,
+     "0.75": 0.13998063046531106,
+     "0.95": 0.2291015755627022
+    }
+   },
+   "6 Quadrant @10% [stress monthly (post-hoc)]": {
+    "years": 10.0,
+    "n_paths": 10000,
+    "periods_per_year": 12.0,
+    "p_loss_horizon": 0.0408,
+    "p_wipeout": 0.0,
+    "mean_cagr": 0.05923906449964362,
+    "cagr_quantiles": {
+     "0.05": 0.003000782146457516,
+     "0.25": 0.03673997805869911,
+     "0.5": 0.05996033805400347,
+     "0.75": 0.08207583439109772,
+     "0.95": 0.11336866494859124
+    },
+    "wealth_quantiles": {
+     "0.05": 1.0304162937770072,
+     "0.25": 1.4344930823786373,
+     "0.5": 1.7901777317287153,
+     "0.75": 2.20078178110791,
+     "0.95": 2.9267790794011646
+    },
+    "max_dd_quantiles": {
+     "0.05": -0.39797761345630245,
+     "0.25": -0.30711423388732983,
+     "0.5": -0.25791892957200346,
+     "0.75": -0.12813841886651262,
+     "0.95": -0.09403776343833291
+    },
+    "median_max_dd": -0.25791892957200346,
+    "cvar_0.05_cagr": -0.012258301963752284,
+    "var_0.05_cagr": 0.0029760703306118685,
+    "p_losing_year": 0.24681,
+    "p_any_losing_year": 0.9532,
+    "cvar_0.05_annual": -0.22490916428104896,
+    "annual_return_quantiles": {
+     "0.05": -0.15713121558851617,
+     "0.25": 0.0019335414850739086,
+     "0.5": 0.07682156219060865,
+     "0.75": 0.13370557772309244,
+     "0.95": 0.22213522979021244
+    }
+   }
+  }
+ },
+ "common_window": {
+  "first_return_month": "2004-12-31",
+  "last": "2026-09-30",
+  "months": 262
+ },
+ "provenance": {
+  "VFINX": {
+   "source": "yahoo",
+   "identifier": "VFINX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/VFINX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1980-01-02",
+   "last_date": "2026-10-05",
+   "n_obs": 11785,
+   "fetched_at": "2026-10-06T17:19:32.678446+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "VGTSX": {
+   "source": "yahoo",
+   "identifier": "VGTSX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/VGTSX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1996-04-29",
+   "last_date": "2026-10-05",
+   "n_obs": 7658,
+   "fetched_at": "2026-10-06T17:19:33.725342+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "VEIEX": {
+   "source": "yahoo",
+   "identifier": "VEIEX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/VEIEX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1994-05-04",
+   "last_date": "2026-10-05",
+   "n_obs": 8160,
+   "fetched_at": "2026-10-06T17:19:34.638709+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "VUSTX": {
+   "source": "yahoo",
+   "identifier": "VUSTX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/VUSTX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1986-05-19",
+   "last_date": "2026-10-05",
+   "n_obs": 10173,
+   "fetched_at": "2026-10-06T17:19:35.425979+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "VFITX": {
+   "source": "yahoo",
+   "identifier": "VFITX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/VFITX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1991-10-28",
+   "last_date": "2026-10-05",
+   "n_obs": 8796,
+   "fetched_at": "2026-10-06T17:19:36.205000+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "VIPSX": {
+   "source": "yahoo",
+   "identifier": "VIPSX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/VIPSX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2000-06-29",
+   "last_date": "2026-10-05",
+   "n_obs": 6605,
+   "fetched_at": "2026-10-06T17:19:36.948726+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "VWESX": {
+   "source": "yahoo",
+   "identifier": "VWESX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/VWESX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1980-01-02",
+   "last_date": "2026-10-05",
+   "n_obs": 11785,
+   "fetched_at": "2026-10-06T17:19:37.946646+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "VWEHX": {
+   "source": "yahoo",
+   "identifier": "VWEHX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/VWEHX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1980-01-02",
+   "last_date": "2026-10-05",
+   "n_obs": 11785,
+   "fetched_at": "2026-10-06T17:19:38.810311+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "VGSIX": {
+   "source": "yahoo",
+   "identifier": "VGSIX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/VGSIX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1996-05-13",
+   "last_date": "2026-10-05",
+   "n_obs": 7648,
+   "fetched_at": "2026-10-06T17:19:39.666736+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "GLD": {
+   "source": "yahoo",
+   "identifier": "GLD",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/GLD",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2004-11-18",
+   "last_date": "2026-10-05",
+   "n_obs": 5503,
+   "fetched_at": "2026-10-06T15:39:40.066444+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "PCRIX": {
+   "source": "yahoo",
+   "identifier": "PCRIX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/PCRIX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2002-07-01",
+   "last_date": "2026-10-05",
+   "n_obs": 6105,
+   "fetched_at": "2026-10-06T17:19:40.423903+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "DTB3": {
+   "source": "fred",
+   "identifier": "DTB3",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3",
+   "field": "value",
+   "total_return": null,
+   "first_date": "1954-01-04",
+   "last_date": "2026-10-02",
+   "n_obs": 18180,
+   "fetched_at": "2026-10-06T15:39:35.449726+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": []
+  },
+  "RPAR": {
+   "source": "yahoo",
+   "identifier": "RPAR",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/RPAR",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2019-12-13",
+   "last_date": "2026-10-05",
+   "n_obs": 1710,
+   "fetched_at": "2026-10-06T17:19:41.441931+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "ALLW": {
+   "source": "yahoo",
+   "identifier": "ALLW",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/ALLW",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2025-03-06",
+   "last_date": "2026-10-05",
+   "n_obs": 398,
+   "fetched_at": "2026-10-06T17:19:40.907616+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  }
+ },
+ "charts": [
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/dalio_curve.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/dalio_curve.csv",
+   "caption": "S1 Dalio curve: portfolio vol vs N equal 18%-vol bets for rho in {0,.1,.2,.3,.4,.6} (closed form)"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/neff_vs_rho.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/neff_vs_rho.csv",
+   "caption": "S1 N_eff = N/(1+(N-1)rho) vs rho for N=15 (closed form)"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s2_corr_matrix.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s2_corr_matrix.csv",
+   "caption": "S2 correlation matrix of the 11-asset universe, common window, monthly total returns"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s2_neff_regimes.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s2_neff_regimes.csv",
+   "caption": "S2 N_eff (all five measures) of the ERC portfolio, full sample vs calm vs stress months (stress = US equity >10% below running peak)"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s2_rolling_neff.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s2_rolling_neff.csv",
+   "caption": "S2 rolling 36m N_eff and mean pairwise correlation of the ERC portfolio, 2007-2026"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_equity.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_equity.csv",
+   "caption": "S3 equity curves (log) of the seven walk-forward strategies"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_drawdown.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_drawdown.csv",
+   "caption": "S3 drawdowns from prior peak (month-end marks) for US equity, 60/40 and the geared strategies"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_worst_windows.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_worst_windows.csv",
+   "caption": "S3 worst windows: GFC, 2022 and worst rolling 12 months per strategy"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_leverage.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_leverage.csv",
+   "caption": "S3 gross leverage over time of the geared strategies (5,6,7) vs the 3x cap"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_good_streams.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_good_streams.csv",
+   "caption": "S3 'good stream' screen: realised Sharpe per asset over the walk-forward window with 95% sampling bands"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_longrun_stock_bond_corr.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_longrun_stock_bond_corr.csv",
+   "caption": "S3 long run: rolling 36m correlation of US equity vs long and intermediate Treasuries, 1989-2026"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_longrun_equity.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s3_longrun_equity.csv",
+   "caption": "S3 long run: US equity vs 60/40 vs ERC(US eq, interm UST) geared to 10%, 1994-2026"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s4_live_tracking.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s4_live_tracking.csv",
+   "caption": "S4 live sanity: geared quadrant backtest (6) vs RPAR (2020-01+) and ALLW (2025-04+), monthly"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s5_fan_quadrant.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s5_fan_quadrant.csv",
+   "caption": "S5 forward: 10y stationary-bootstrap wealth bands, quadrant-balanced @10% vol (base)"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s5_cagr_dist.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s5_forward_distributions.csv",
+   "caption": "S5 forward: 10-year CAGR distribution (5/25/50/75/95th pct), base vs correlation-stress"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s5_maxdd_dist.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/study-2026-10/s5_forward_distributions.csv",
+   "caption": "S5 forward: 10-year max drawdown distribution (5/25/50/75/95th pct), base vs correlation-stress"
+  }
+ ]
+}

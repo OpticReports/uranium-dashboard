@@ -1,0 +1,72 @@
+[
+ {
+  "sample": "full sample (ERC on full S)",
+  "n_months": 262,
+  "rho_bar": 0.4009169286037546,
+  "dr2": 2.3032790993455077,
+  "equal_rho": 2.195972899271177,
+  "pca_entropy": 2.269453839222241,
+  "prc_inverse_hhi": 11.0,
+  "min_torsion": 10.82995341048884,
+  "dr": 1.517655790798924,
+  "vol": 0.07002031357285715,
+  "pca_ambiguous": false,
+  "min_torsion_regularized": false
+ },
+ {
+  "sample": "calm (ERC re-solved on calm S)",
+  "n_months": 193,
+  "rho_bar": 0.3684081073094923,
+  "dr2": 2.46929554439066,
+  "equal_rho": 2.3483795067475093,
+  "pca_entropy": 2.0335656733951177,
+  "prc_inverse_hhi": 11.0,
+  "min_torsion": 10.827054759217317,
+  "dr": 1.5713992313828653,
+  "vol": 0.05436719039809394,
+  "pca_ambiguous": true,
+  "min_torsion_regularized": false
+ },
+ {
+  "sample": "calm (full-sample ERC weights held)",
+  "n_months": 193,
+  "rho_bar": 0.3684081073094923,
+  "dr2": 2.457907965683004,
+  "equal_rho": 2.3483795067475093,
+  "pca_entropy": 2.396999576424068,
+  "prc_inverse_hhi": 10.344626739990124,
+  "min_torsion": 10.60809325098859,
+  "dr": 1.567771656103976,
+  "vol": 0.05427172791459436,
+  "pca_ambiguous": true,
+  "min_torsion_regularized": false
+ },
+ {
+  "sample": "stress (ERC re-solved on stress S)",
+  "n_months": 69,
+  "rho_bar": 0.43288120262593616,
+  "dr2": 2.2040362092245998,
+  "equal_rho": 2.0642499577380686,
+  "pca_entropy": 2.4316806397069928,
+  "prc_inverse_hhi": 10.999999999999996,
+  "min_torsion": 10.74933150193796,
+  "dr": 1.4845996797873156,
+  "vol": 0.09778527573399758,
+  "pca_ambiguous": false,
+  "min_torsion_regularized": false
+ },
+ {
+  "sample": "stress (full-sample ERC weights held)",
+  "n_months": 69,
+  "rho_bar": 0.43288120262593616,
+  "dr2": 2.110799294034002,
+  "equal_rho": 2.0642499577380686,
+  "pca_entropy": 2.135098510685599,
+  "prc_inverse_hhi": 10.621833288605306,
+  "min_torsion": 10.583116097258594,
+  "dr": 1.452859006935636,
+  "vol": 0.10212629607989233,
+  "pca_ambiguous": false,
+  "min_torsion_regularized": false
+ }
+]

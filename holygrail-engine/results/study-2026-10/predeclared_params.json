@@ -1,0 +1,20 @@
+{
+ "declared_at": "2026-10-06, BEFORE any backtest/forward result was computed; not tuned afterwards",
+ "frequency": "monthly total returns: Yahoo adjclose, last observed level per calendar month (engine align_levels freq='M'); partial month 2026-10 dropped; last complete month 2026-09",
+ "covariance": "36-month trailing SAMPLE covariance of MONTHLY returns (window=36, min_periods=36), annualised x12",
+ "rebalance": "monthly, at the month-end close of the estimation month; weights earn from the next month",
+ "cost_bps_on_turnover": 10,
+ "financing": "cash leg earns FRED DTB3 (actual/360, rate known at prior month-end); borrowed fraction pays DTB3 + 50 bp",
+ "leverage_cap_gross": 3.0,
+ "target_vol": 0.10,
+ "universe": ["VFINX US eq", "VGTSX intl eq", "VEIEX EM eq", "VUSTX long UST", "VFITX interm UST", "VIPSX TIPS", "VWESX IG credit", "VWEHX HY", "VGSIX REITs", "GLD gold", "PCRIX commodities (chosen over DBC: longer history so GLD is the binding start)"],
+ "common_window": "first monthly return 2004-12 (GLD lists 2004-11-18) to 2026-09; walk-forward trading from 2007-11 month-end after 36m warm-up",
+ "sixty_forty": "60% VFINX / 40% VFITX, rebalanced monthly",
+ "quadrant_mapping": {"VFINX": ["growth_up","inflation_down"], "VGTSX": ["growth_up","inflation_down"], "VEIEX": ["growth_up","inflation_down"], "VGSIX": ["growth_up","inflation_down"], "VUSTX": ["growth_down","inflation_down"], "VFITX": ["growth_down","inflation_down"], "VWESX": ["growth_down","inflation_down"], "VIPSX": ["growth_down","inflation_up"], "GLD": ["inflation_up"], "PCRIX": ["growth_up","inflation_up"], "VWEHX": ["growth_up"], "basis": "engine CANONICAL_MAP; VWESX (long-duration IG, mostly rate risk) mapped as nominal bond; REITs as equity; HY as credit"},
+ "same_risk_as_stocks": "ERC geared each month to the trailing 36m vol of VFINX (cap 3x)",
+ "stress_rule": "stress month = VFINX month-end total-return level more than 10% below its running peak (expanding max of month-end levels since 1980)",
+ "long_run": "VFINX, VFITX, VUSTX from 1991-11; strategies VFINX B&H, 60/40 VFINX/VFITX, ERC(VFINX,VFITX) geared to 10%; rolling 36m stock-bond correlations",
+ "forward": "stationary block bootstrap (Politis-Romano), mean block 12 months, 10y horizon, 10,000 paths, seed 20261006, constant-mix monthly; history = common-window monthly returns joined with DTB3 cash return (bootstrapped jointly); weights = full-sample-covariance ERC / quadrant geared to 10% ex-ante (cap 3x); 50 bp spread on borrowing; no costs",
+ "corr_stress": "history re-coloured to the correlation C_s = 0.5 C_full + 0.5 C_2022 (vols and means kept; C_2022 = daily-return correlation over calendar 2022), weights NOT re-geared",
+ "live_sanity": "geared quadrant (6) monthly returns vs ALLW (from 2025-04) and RPAR (from 2020-01) on overlapping months"
+}
