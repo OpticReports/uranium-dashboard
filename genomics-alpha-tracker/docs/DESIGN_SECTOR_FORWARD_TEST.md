@@ -258,6 +258,17 @@ Otherwise no forward test is run, and the result is recorded here.
 universe; top 25 is 40% of it). Recorded before any gate statistic. Top 25
 and top 40 are reported, and must not lose (condition 3).
 
+**What source 1 actually carries (found 2026-10-06, before any statistic).**
+FMP's `text` field is the first ~500 characters of a release, not the full
+text. Full text can be fetched from GlobeNewswire and PR Newswire, but
+Business Wire refuses (403), and it carries roughly a third of biotech
+releases. Using full text where available would bias exposure by wire
+service. So the extraction reads the **headline plus FMP's snippet** for
+every company alike. PDUFA acceptances, "will present topline results on
+<date>", and earnings-release headline bullets sit there; guidance deeper
+in a release is missed. That understates exposure, which works against the
+gate passing. Releases are paged until FMP returns an empty page.
+
 **Extraction from source 1, frozen before any statistic.**
 - **Releases.** Every FMP press release for each alias-table name,
   published 2024-06-01 to 2026-09-30. It counts only if both hold:
