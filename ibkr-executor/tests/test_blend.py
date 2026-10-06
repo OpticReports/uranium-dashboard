@@ -9401,10 +9401,11 @@ def _days(m, seq, alerts=None):
         m.update_tripwires(d, px, (alerts.append if alerts is not None else (lambda *_: None)))
 
 
-def test_gate_tripwire_book_index_is_flow_adjusted_through_adopt_capital(tmp_path):
+def test_gate_tripwire_book_index_is_flow_adjusted_through_adopt_capital(tmp_path, monkeypatch):
     """A deposit is a STEP in book value, never a new high - driven through the
     REAL adopt_capital (TB9/M2): the README example (50k, HWM 52k, adopt 70k,
     fall to 100k) reads 18.0%; the subtracted-dollar series would read 42.3%."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
     m = _trip_book(tmp_path)
     m.state.bil_qty, m.state.spy_qty = 0, 500
     alerts = []
@@ -9422,10 +9423,11 @@ def test_gate_tripwire_book_index_is_flow_adjusted_through_adopt_capital(tmp_pat
     assert not any("tripwire" in a for a in alerts)          # 18% < 25%
 
 
-def test_gate_tripwire_distribution_is_return_not_a_flow(tmp_path):
+def test_gate_tripwire_distribution_is_return_not_a_flow(tmp_path, monkeypatch):
     """TA6/TB2: a reinvested dividend is RETURN - the index rises by it and
     contributed capital does not grow; a deposit of the same size does not
     move the index."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
     m = _trip_book(tmp_path)
     m.state.bil_qty, m.state.spy_qty = 0, 500
     m.state.capital_contributed = 50_000.0
@@ -9478,7 +9480,8 @@ def test_gate_tripwire_flow_after_the_close_mark_carries_to_the_next_day(tmp_pat
     assert m.state.trip_book["closes"][-1][1] == pytest.approx(1.0)
 
 
-def test_gate_tripwire_sleeve_index_ignores_transfers(tmp_path):
+def test_gate_tripwire_sleeve_index_ignores_transfers(tmp_path, monkeypatch):
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
     m = _trip_book(tmp_path)
     _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
     m.on_transfer(-5_000.0)                  # sleeve -> core
@@ -9492,10 +9495,11 @@ def test_gate_tripwire_sleeve_index_ignores_transfers(tmp_path):
     assert dd == pytest.approx(1 - (3_000.0 + 7_500.0) / 18_000.0, abs=1e-4)
 
 
-def test_gate_tripwire_pages_on_two_consecutive_closes_once_and_rearms(tmp_path):
+def test_gate_tripwire_pages_on_two_consecutive_closes_once_and_rearms(tmp_path, monkeypatch):
     """A line pages only when the LAST TWO finalized closes are over it (one
     glitched close cannot page), once per crossing, and re-arms after a 5 pp
     recovery on a close. Alert-only: nothing on the book moves."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
     m = _trip_book(tmp_path)
     m.state.bil_qty, m.state.spy_qty = 0, 500
     alerts = []
@@ -9514,7 +9518,8 @@ def test_gate_tripwire_pages_on_two_consecutive_closes_once_and_rearms(tmp_path)
     assert len(alerts) == 3 and "REVIEW (book)" in alerts[2]
 
 
-def test_gate_tripwire_sleeve_kill_line_and_two_underwater_episodes(tmp_path):
+def test_gate_tripwire_sleeve_kill_line_and_two_underwater_episodes(tmp_path, monkeypatch):
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
     m = _trip_book(tmp_path)
     m.state.spy_qty = 0
     alerts = []
@@ -9556,14 +9561,15 @@ def test_gate_tripwire_process_line_counts_session_closes(tmp_path, monkeypatch)
     assert "unrec:7" not in m.state.trip_alerted
 
 
-def test_gate_tripwire_bootstrap_deposit_inside_a_drawdown(tmp_path):
+def test_gate_tripwire_bootstrap_deposit_inside_a_drawdown(tmp_path, monkeypatch):
     """TB9/M10: the bootstrap's deposit sits INSIDE a drawdown, so a bootstrap
     that ignored flows would read a new high on the deposit day. Today's point
     (written by the snapshot just before) is the live mark; a pending flow the
     curve already contains is not applied twice."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
     m = _trip_book(tmp_path)
     m.state.equity_curve = [["2026-08-28", 50_000.0], ["2026-09-10", 52_000.0],
-                            ["2026-09-20", 49_000.0], ["2026-10-06", 119_000.0],
+                            ["2026-09-21", 49_000.0], ["2026-10-06", 119_000.0],
                             ["2026-10-07", 119_500.0]]
     m.state.capital_events = [{"date": "2026-08-28", "kind": "inferred", "usd": 50_000.0},
                               {"date": "2026-10-06", "kind": "deposit_adopted",
@@ -9596,10 +9602,11 @@ def test_gate_tripwire_runs_after_the_snapshot_with_a_same_day_adoption(tmp_path
     assert t["book"]["drawdown_live"] == pytest.approx(1 - 50_000 / 52_000, abs=0.002)
 
 
-def test_gate_tripwire_malformed_state_never_500s_and_restarts_loudly(tmp_path):
+def test_gate_tripwire_malformed_state_never_500s_and_restarts_loudly(tmp_path, monkeypatch):
     """TB1: a malformed subfield (hand edit, future schema) is dropped at load
     with a WARN, /status and the feed stay strictly JSON-serializable, and an
     infinite pending flow is never paged."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
     m = _trip_book(tmp_path)
     _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
     m.save()
@@ -9620,9 +9627,10 @@ def test_gate_tripwire_malformed_state_never_500s_and_restarts_loudly(tmp_path):
     assert m.tripwire_summary("2026-09-03")["error"] == "unavailable"
 
 
-def test_gate_tripwire_pending_flow_survives_a_skipped_snapshot_and_restart(tmp_path):
+def test_gate_tripwire_pending_flow_survives_a_skipped_snapshot_and_restart(tmp_path, monkeypatch):
     """TB9/M19: a deposit adopted on a cycle whose snapshot is skipped (missing
     quote) stays pending across a restart and is applied at the next mark."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
     m = _trip_book(tmp_path)
     m.state.bil_qty, m.state.spy_qty = 0, 500
     _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(100.0))])
@@ -9787,3 +9795,77 @@ def test_gate_per_symbol_tracker_override_and_bad_values(tmp_path):
         _held_position(m2, call_id=1, symbol="CRSP")
         pl["book_params"]["max_per_symbol"] = bad
         assert _enters(m2.step("2026-08-20", pl, _ps_prices("CRSP"))) == [("CRSP", 3)]   # default 2
+
+
+def test_gate_tripwire_no_session_day_is_never_a_close(tmp_path, monkeypatch):
+    """TC1: weekend / holiday / missed-session marks are never closes. A Friday
+    after-hours 10x glitch carried through Saturday and Sunday can set no high,
+    and one stale low weekend quote cannot make 'two consecutive closes'."""
+    m = _trip_book(tmp_path)
+    m.state.spy_qty = 0                                     # sleeve = 150 BIL
+    alerts = []
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-10-08", PRICES, alerts.append)               # Thu
+    m.update_tripwires("2026-10-09", PRICES, alerts.append)               # Fri session
+    _rth(monkeypatch, False)
+    m.update_tripwires("2026-10-09", _px(100.0, 1_000.0), alerts.append)  # Fri after-hours glitch
+    m.update_tripwires("2026-10-10", _px(100.0, 1_000.0), alerts.append)  # Sat
+    m.update_tripwires("2026-10-11", _px(100.0, 40.0), alerts.append)     # Sun, stale low
+    _rth(monkeypatch, True)
+    for d in ("2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15"):
+        m.update_tripwires(d, PRICES, alerts.append)
+    assert m.state.trip_sleeve["hwm"] == pytest.approx(1.0)
+    assert [c[0] for c in m.state.trip_sleeve["closes"]][-3:] == ["2026-10-12", "2026-10-13", "2026-10-14"]
+    assert "2026-10-10" not in [c[0] for c in m.state.trip_sleeve["closes"]]
+    assert not alerts
+    # a weekend flow is not lost: it stays in day_flow until the next close
+    _rth(monkeypatch, False)
+    m.update_tripwires("2026-10-17", PRICES, alerts.append)               # Sat
+    m.on_transfer(5_000.0)
+    m.update_tripwires("2026-10-18", PRICES, alerts.append)               # Sun
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-10-19", PRICES, alerts.append)
+    m.update_tripwires("2026-10-20", PRICES, alerts.append)
+    assert m.tripwire_summary("2026-10-20")["sleeve"]["drawdown"] == 0.0
+
+
+def test_gate_capital_unreconciled_wait_pages_and_the_endpoint_says_so(tmp_path, monkeypatch):
+    """TC3: a wait that needs the operator pages (once a day), and the
+    endpoint reports parked records when it journals."""
+    m = _capital_book(tmp_path)
+    m.state.unreconciled["9"] = {"ts": _time.time() - 3_600, "symbol": "CRSP"}
+    m.request_capital_adoption(7_000, "2026-08-20")
+    alerts = []
+    a = _VenueCashAdapter(7_000.0, 7_000.0)
+    for _ in range(2):
+        r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+        assert r["status"] == "deferred"
+    assert len(alerts) == 1 and "resolve them first" in alerts[0]
+    assert m.status_summary(PRICES)["capital"]["request_pending"]["kind"] == "deposit"
+    client, service = _service_client(tmp_path / "svc", monkeypatch)
+    with client as c:
+        assert _wait_until(lambda: service.BLEND is not None and service.LAST["loop_ok"] > 0)
+        B = service.BLEND
+        _seed_initialized(B, sleeve_cash=0.0, spy_qty=70, bil_qty=30)
+        B.state.unreconciled["9"] = {"ts": _time.time(), "symbol": "CRSP"}
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": 7000})
+        assert r.json()["parked_unreconciled"] == ["9"] and "WAITS" in r.json()["warning"]
+        B.state.unreconciled.clear()
+    service.BLEND = None
+
+
+def test_gate_distribution_names_the_sleeve_share(tmp_path):
+    """A distribution is credited to the bucket that earned it when the
+    operator names sleeve_usd (BIL distributions -> sleeve, SPY dividends ->
+    core); omitted, it splits by the target. Deposits cannot name it."""
+    m = _capital_book(tmp_path)
+    m.request_capital_adoption(500, "2026-08-20", kind="distribution", sleeve_usd=120)
+    assert m.status_summary(PRICES)["capital"]["request_pending"]["sleeve_usd"] == 120.0
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(500.0, 500.0), PRICES,
+                                "2026-08-20", lambda *_: None)
+    assert r["sleeve_usd"] == 120.0 and r["core_usd"] == 380.0
+    assert m.state.sleeve_cash == 120.0 and m.state.core_cash == 380.0
+    for bad in (dict(kind="deposit", sleeve_usd=10), dict(kind="distribution", sleeve_usd=-1),
+                dict(kind="distribution", sleeve_usd=600), dict(kind="distribution", sleeve_usd=True)):
+        with pytest.raises(ValueError):
+            m.request_capital_adoption(500, "2026-08-20", **bad)

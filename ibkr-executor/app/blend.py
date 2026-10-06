@@ -1391,7 +1391,17 @@ class Blend3070Manager:
             return ser
         cur = ser.get("cur") or {}
         if cur and cur.get("date") != today:
-            self._trip_finalize(ser)
+            rth = ser.get("cur_rth")
+            if rth and rth.get("date") == cur.get("date"):
+                self._trip_finalize(ser)
+            else:
+                # TC1: a UTC day with NO in-session mark (weekend, holiday,
+                # a session the loop missed) is never a close - its marks are
+                # exactly the after-hours/stale quotes the closes exclude. The
+                # base stays, every flow since it stays in day_flow, no close
+                # is appended and the HWM does not move: "two consecutive
+                # closes" means two SESSIONS.
+                ser["cur_rth"] = None
         ser["day_flow"] = float(ser.get("day_flow") or 0.0) + pending
         base = ser.get("base")
         prev_idx = (cur.get("index") if cur.get("date") == today
@@ -1420,12 +1430,10 @@ class Blend3070Manager:
         return ser
 
     def _trip_finalize(self, ser: dict) -> None:
-        """Close the previous day: its point is the last in-session mark if
-        there was one, else the last mark. Flows that arrived after that mark
-        carry into the new day. The HWM ratchets here and only here."""
-        cur = ser.get("cur") or {}
-        rth = ser.get("cur_rth")
-        fin = rth if (rth and rth.get("date") == cur.get("date")) else cur
+        """Close the previous SESSION day at its last in-session mark (the
+        caller guarantees there was one - TC1). Flows that arrived after that
+        mark carry into the new day. The HWM ratchets here and only here."""
+        fin = ser["cur_rth"]
         carry = float(ser.get("day_flow") or 0.0) - float(fin.get("flow") or 0.0)
         ser["base"] = {"date": fin["date"], "value": fin["value"],
                        "index": fin["index"]}
@@ -1469,7 +1477,11 @@ class Blend3070Manager:
         st = self.state
         curve = [p for p in st.equity_curve
                  if isinstance(p, (list, tuple)) and len(p) == 2
-                 and isinstance(p[0], str) and (_finite(p[1]) or 0.0) > 0]
+                 and isinstance(p[0], str) and (_finite(p[1]) or 0.0) > 0
+                 # only SESSION days are closes (TC1); today's point is the
+                 # live mark whatever day it is
+                 and (p[0] == today or (_parse_date(p[0]) is not None
+                                        and is_trading_day(_parse_date(p[0]))))]
         if not curve:
             return
         first_d, last_d = curve[0][0], curve[-1][0]
@@ -2800,7 +2812,8 @@ class Blend3070Manager:
             book = min(book, budget)
         return book
 
-    def request_capital_adoption(self, usd, today: str, kind: str = "deposit") -> dict:
+    def request_capital_adoption(self, usd, today: str, kind: str = "deposit",
+                                 sleeve_usd=None) -> dict:
         """Journal a stage-2 adoption request (API thread, under BLEND_LOCK).
         VALIDATION ONLY - no ledger write, no venue call: the loop thread
         executes it (adopt_capital) on a quiet cycle, against the venue.
@@ -2812,6 +2825,18 @@ class Blend3070Manager:
         total-return and contributed capital does not grow - TA6/TB2)."""
         if kind not in ("deposit", "distribution"):
             raise ValueError('kind must be "deposit" or "distribution"')
+        # A distribution is credited to the bucket that EARNED it (BIL
+        # distributions -> sleeve, SPY dividends -> core): `sleeve_usd` names
+        # the sleeve's share explicitly; omitted, it splits by the target
+        # (counter-agent note: a 30/70 split of BIL income under-credits the
+        # sleeve index ~1 pp/yr). Deposits always split by the target.
+        if sleeve_usd is not None:
+            if kind != "distribution":
+                raise ValueError("sleeve_usd applies to a distribution only")
+            sv = None if isinstance(sleeve_usd, bool) else _finite(sleeve_usd)
+            if sv is None or sv < 0:
+                raise ValueError("sleeve_usd must be a number >= 0")
+            sleeve_usd = round(sv, 2)
         v = None if isinstance(usd, bool) else _num_or_none(usd)
         if v is not None and math.isfinite(v):
             v = round(v, 2)             # the amount that would be journaled
@@ -2822,8 +2847,12 @@ class Blend3070Manager:
                              f"bound {CAPITAL_REQUEST_MAX_USD:,.0f} - raise "
                              f"CAPITAL_REQUEST_MAX_USD deliberately if real")
         prior = self.state.capital_request
+        if sleeve_usd is not None and sleeve_usd > round(v, 2):
+            raise ValueError("sleeve_usd cannot exceed usd")
         self.state.capital_request = {"usd": round(v, 2), "kind": kind,
                                       "ts": int(time.time()), "date": today}
+        if sleeve_usd is not None:
+            self.state.capital_request["sleeve_usd"] = sleeve_usd
         self._event("WARN", f"capital adoption REQUESTED ({kind}): ${v:,.2f}"
                             + (f" (replaces the pending "
                                f"${_num_or_none(prior.get('usd')) or 0:,.2f})"
@@ -2861,6 +2890,8 @@ class Blend3070Manager:
                             "core_usd": e.get("core_usd")}
                            for e in list(st.capital_events[-CAPITAL_EVENTS_MAX:])],
                 "request_pending": ({"usd": req.get("usd"), "date": req.get("date"),
+                                     "kind": req.get("kind") or "deposit",
+                                     "sleeve_usd": req.get("sleeve_usd"),
                                      "age_s": round(time.time()
                                                     - float(req.get("ts") or 0), 1)}
                                     if req else None)}
@@ -5040,12 +5071,18 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
         if st.unreconciled:
             # TA2: a parked exit's proceeds (or an orphan stop's fill) sit in
             # the account's cash as "unowned" - adopting them now would book
-            # that cash twice once the record is resolved by hand
-            return _defer("capital_wait_unreconciled",
-                          f"${usd:,.2f} waits: unreconciled record(s) "
-                          f"{', '.join(sorted(_snapshot(st.unreconciled)))} are "
-                          f"parked - their proceeds may be in the account's "
-                          f"cash; resolve them first")
+            # that cash twice once the record is resolved by hand. TC3: this
+            # wait needs the operator, so it PAGES (once a day), unlike the
+            # settlement wait that resolves itself.
+            msg = (f"${usd:,.2f} waits: unreconciled record(s) "
+                   f"{', '.join(sorted(_snapshot(st.unreconciled)))} are "
+                   f"parked - their proceeds may be in the account's cash; "
+                   f"resolve them first (the request expires after "
+                   f"{CAPITAL_REQUEST_TTL_S / 86_400:.0f} days)")
+            if mgr._event_once_today("WARN", "capital_wait_unreconciled",
+                                     "capital adoption " + msg):
+                alert("⚠️ blend capital adoption " + msg)
+            return {"status": "deferred", "usd": usd, "reason": msg}
         budget = float(getattr(mgr.cfg, "blend_budget", 0.0) or 0.0)
         if budget > 0:
             spy_px = prices.get(CORE, 0.0) or 0.0
@@ -5111,9 +5148,11 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
                          f"landed while the venue was being read - nothing "
                          f"adopted; re-issue after /resume if still intended")
         target = _persisted_sleeve_target(mgr)
-        sleeve_usd = round(target * usd, 2)
-        core_usd = round(usd - sleeve_usd, 2)
         kind = req.get("kind") if req.get("kind") in ("deposit", "distribution") else "deposit"
+        named = _finite(req.get("sleeve_usd")) if kind == "distribution" else None
+        sleeve_usd = (round(min(max(named, 0.0), usd), 2) if named is not None
+                      else round(target * usd, 2))
+        core_usd = round(usd - sleeve_usd, 2)
         stage = "mutating"
         st.sleeve_cash += sleeve_usd
         st.core_cash += core_usd

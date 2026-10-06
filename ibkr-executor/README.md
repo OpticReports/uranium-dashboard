@@ -1231,7 +1231,10 @@ The book cannot see a deposit: its capital is the ledger, seeded once from
 The procedure, in this order:
 
 1. **Confirm the account is clean**: only the book's positions (SPY, BIL
-   and the sleeve names on `/status`) plus cash. Note the cash. In a CASH
+   and the sleeve names on `/status`) plus cash, and `/status`
+   `blend.unreconciled` EMPTY - while a record is parked the adoption waits
+   (its proceeds may be in the cash) and pages once a day; the adopt
+   endpoint's reply also lists parked records. Note the cash. In a CASH
    account "Buying power" below the cash figure means part of it is not
    yet settled/available - the adoption will wait for it on its own.
 2. **Raise `BLEND_BUDGET` first, after 16:00 ET** (Operating rule 1: an env
@@ -1296,8 +1299,11 @@ The procedure, in this order:
    the book does not own, market-data fees, unreported commissions,
    deposits, withdrawals); use `blend.cash.drift` on `/status` (or the
    feed) only as a cross-check. Then `POST /blend/cash/adopt` with
-   `{"usd": <amount>, "kind": "distribution"}`: credited 30/70, invested
-   by the next planning cycle, the stage-1 clock restarts by itself, and
+   `{"usd": <amount>, "kind": "distribution", "sleeve_usd": <BIL
+   distributions + the sleeve's interest>}` - name the sleeve's share so
+   each bucket gets what it earned (SPY dividends belong to the core);
+   omitted, it splits 30/70. Invested by the next planning cycle, the
+   stage-1 clock restarts by itself, and
    - unlike a deposit - it is RETURN: contributed capital does not grow
    and the tripwire indices credit it, so they stay total-return.
    Monthly BIL distributions (~$70) are below the drift page's threshold
@@ -1430,10 +1436,12 @@ snapshot, `update_tripwires` advances two chain-linked indices: the BOOK
 `on_transfer` and the sleeve share of deposits are flows), so a deposit is
 never a new high and a transfer is never a loss. Adopted DISTRIBUTIONS are
 return, not flows: the indices are total-return once dividends are
-reinvested (runbook step 8). Each UTC day's point is FINALIZED at the day
-roll from its last IN-SESSION mark (else its last mark); the high-water
-mark ratchets on finalized closes only, so a transient intraday or
-after-hours mark (a thin name's ask) can never set a permanent high. A
+reinvested (runbook step 8). Each SESSION day's point is FINALIZED at the
+UTC-day roll from its last IN-SESSION mark; a day with no in-session mark
+(weekend, holiday, a session the loop missed) is never a close - its flows
+stay pending for the next close (re-review TC1). The high-water mark
+ratchets on finalized closes only, so a transient intraday, after-hours or
+weekend mark (a thin name's ask) can never set a permanent high. A
 drawdown line pages only when the LAST TWO finalized closes are both over
 it ("confirm a borderline reading against the next day"), once per
 crossing, and re-arms after a 5 pp recovery on a close; the underwater
