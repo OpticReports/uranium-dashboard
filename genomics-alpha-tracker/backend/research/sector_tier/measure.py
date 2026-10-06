@@ -97,6 +97,15 @@ def _git_versions() -> list[tuple[date, list[SimpleNamespace]]]:
     return out
 
 
+def load_ctgov() -> dict:
+    """ctgov.json is 20 MB; the repo carries ctgov.json.gz (the frozen stage-2 output)."""
+    raw = HERE / "ctgov.json"
+    if raw.exists():
+        return json.loads(raw.read_text())
+    import gzip
+    return json.loads(gzip.decompress((HERE / "ctgov.json.gz").read_bytes()))
+
+
 def load_export() -> dict:
     path = HERE / "prod_export.json"
     return json.loads(path.read_text()) if path.exists() else {}
@@ -325,7 +334,7 @@ class World:
                 if bool(r["ma"]) != bool(m["flag_ma"]):
                     self.ma_overrides.append((m["symbol"], m["date"], m["flag_ma"], r["ma"]))
                 m["flag_ma_auto"], m["flag_ma"] = m["flag_ma"], bool(r["ma"])
-        ctg_all = json.loads((HERE / "ctgov.json").read_text())
+        ctg_all = load_ctgov()
         self.ctg_counters = ctg_all.get("counters", {})
         labels = json.loads((HERE / "labels.json").read_text())
         ctg, pit = ctg_all["names"], ctg_all["pit"]

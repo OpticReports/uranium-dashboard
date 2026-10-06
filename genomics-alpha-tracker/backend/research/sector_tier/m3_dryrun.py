@@ -38,7 +38,7 @@ from research.sector_tier import build_population as P  # noqa: E402
 
 OUT = HERE / "m3.json"
 FMP_LIMIT_PER_MIN = 600
-CTGOV_DELAY = 0.22
+CTGOV_DELAY = 1.25   # CT.gov allows ~50 calls/minute (stage 2 hit 429s faster)
 
 
 def tier0_growth() -> dict:
@@ -81,8 +81,12 @@ def tier1_ctgov_one_weekday(eligible_today: list[dict], census: dict) -> dict:
             params = {"query.spons": q, "fields": C.SEARCH_FIELDS, "pageSize": 1000}
             if token:
                 params["pageToken"] = token
-            r = client.get(C.B.V2_SEARCH, params=params)
-            calls += 1
+            for attempt in range(5):
+                r = client.get(C.B.V2_SEARCH, params=params)
+                calls += 1
+                if r.status_code != 429:
+                    break
+                time.sleep(2 ** (attempt + 1))
             nbytes += len(r.content)
             time.sleep(CTGOV_DELAY)
             if r.status_code != 200:
@@ -106,7 +110,8 @@ def main() -> None:
     t1 = (run.get("m2") or {}).get("tier1_today")
 
     t0 = time.time()
-    ctg = json.loads((HERE / "ctgov.json").read_text())["names"]
+    from research.sector_tier.measure import load_ctgov
+    ctg = load_ctgov()["names"]
     n_eval = 0
     for p in eligible_today:
         e = ctg.get(p["symbol"]) or {}

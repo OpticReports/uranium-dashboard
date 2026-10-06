@@ -61,3 +61,5 @@ frontend/dist/
 .DS_Store
 .idea/
 .vscode/
+# stage-2 output is tracked compressed (ctgov.json.gz); the raw 20 MB file is not
+backend/research/sector_tier/ctgov.json

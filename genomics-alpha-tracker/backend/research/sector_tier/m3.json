@@ -1,0 +1,31 @@
+{
+ "tier0": {
+  "rows_per_day": 7001,
+  "bytes_per_trading_day": 1119846,
+  "mb_per_year_252d": 282.2,
+  "new_calls_per_day": 0,
+  "note": "the download call is already made by the census supplement"
+ },
+ "tier1_ctgov": {
+  "names_this_weekday": 100,
+  "calls": 100,
+  "seconds": 133.3,
+  "mb_downloaded": 2.1,
+  "measured_live": true,
+  "weekly_total_calls_extrapolated": 500
+ },
+ "tier1_classification": {
+  "names": 522,
+  "seconds_incl_load": 0.31
+ },
+ "fmp": {
+  "tier1_size_today": 116,
+  "census_names_needing_monthly_profile": 522,
+  "monthly_profiles_per_weekday": 24.9,
+  "runway_refreshes_per_weekday": 1.8,
+  "one_time_backfill_calls": 116,
+  "minutes_at_our_600_per_min_limiter_per_weekday": 0.044,
+  "extrapolated": true
+ },
+ "quota": "provider quota taken as met on Casey's statement (amendment 2); figures above are against our own client limits"
+}
