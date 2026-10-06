@@ -135,6 +135,13 @@ enthusiasm is real, I know who it is."**
    (sales at price, anchor orders) lands ~Dec 2026–Jan 2027.
    Sizing note (2026-10-06): $50k standing view; moves to $100k if one
    more of {anchor commitment in writing, $0.48/ft live} resolves.
+   Update 2026-10-06: sponsor cost claim ($1.12/m → ≈$0.41/ft) counted as
+   half-resolved → $75k defensible. [LP-VERIFIED] PRO-RATA RIGHTS exist for
+   next rounds. Pro-rata = right to keep ownership %, so the follow-on is
+   capped by the first check: $75k ≈ 0.163% (after 2% fee) → ≈$33k in a
+   $20M raise (illustrative round size). The follow-on is at the NEXT
+   round's price. Open: does the right pass through the SPV to LPs, any
+   major-investor threshold, and fees on a follow-on vehicle.
 
 ### What would move each side
 
