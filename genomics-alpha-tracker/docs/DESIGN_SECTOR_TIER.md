@@ -174,6 +174,161 @@ because measurement 3 needs it.
 | P2 | Should Tier 1 names ever generate calls directly? This design says only after promotion to the core. | scope |
 | P3 | Promote-from-Sector cap: how many per week, separate from the auto cap? | Promote path |
 
+## Amendments before any measurement data (2026-10-05, recorded, not silently edited)
+
+1. **Mandate (Casey: "all of the above").** Genomics for this tier means
+   genetic medicines broadly: gene editing, gene therapy, RNA/mRNA and
+   oligonucleotide medicines, cell therapy (incl. CAR-T, TCR-T, TIL), cancer
+   vaccines, sequencing and genomics tools, genomic and molecular
+   diagnostics, AND large companies with a genomics franchise (Vertex).
+   Kiniksa-type companies with no genetic-medicine, tools or diagnostics
+   activity are out. This is the labelling standard for measurements 1, 2
+   and 4.
+2. **Provider quota (Casey: "a huge amount of allowable API calls").** No
+   number was given; the quota half of measurement 3's gate is taken as met
+   on Casey's statement. Measurement 3 still reports calls per day by
+   provider against our own client-side limiter (600/minute for FMP) and the
+   CT.gov politeness delay, plus runtime and database growth.
+3. **Measurement 3 dry run.** One day, not one week: Casey's quota answer
+   removes the constraint the week was meant to probe, and the Tier 0
+   snapshot has no history to replay. Per-day figures are extrapolated and
+   labelled as such.
+4. **Rule (b) point-in-time method.** Membership signals (GENETIC
+   intervention, title keyword, own-trial therapeutic partner) are read from
+   the company's own interventional phase 2/3 trials whose
+   StudyFirstPostDate is on or before the evaluation date; titles,
+   interventions and sponsors come from the CURRENT record (they rarely
+   change; a later edit is look-ahead and is stated). Catalyst DATES (primary
+   completion, status) are point-in-time from CT.gov record history, the
+   `scripts/build_pit_catalysts.py` method, for phase 2/3 trials of the names
+   whose ranking or funnel replay needs them.
+5. **Labels.** Every name in the measured population, not only sampled
+   ones, is labelled by TWO independent counter-agents who see only the
+   company's name, industry and FMP profile description (never tier,
+   watchlist or queue membership); disagreements go to a third. The
+   pre-registered random-50 samples of measurement 2 are drawn from these
+   labels with a fixed seed (20261005) and reported as specified; the
+   full-population precision and misses are reported beside them as
+   supplementary figures.
+6. **Funnel replay baseline.** The live funnel only existed from
+   2026-09-08; the baseline replays the SHIPPED funnel code's lanes over the
+   whole window as if it had run every weekday (movers: a close-to-close
+   |move| >= 10% with prior-day cap >= $300M queues the name from that day
+   on; catalyst: each name's weekday rotation day, point-in-time phase-3
+   dates and rule-(b) tags). A queued name is visible from its queue date
+   onward. The production export (`security`, `universe_candidate`) supplies
+   the core's discovery promotions and the live queue for 2026-09-08 onward,
+   used to cross-check the replay for those weeks.
+7. **Implementation choices the design left open** (recorded 2026-10-05
+   while only the data was being assembled; no tier membership, label or
+   metric existed yet).
+   - *Core before the tracker existed.* The tracker was created on
+     2026-06-25. Its first committed watchlist is taken to have stood from
+     the start of the window, and later additions are dated by their commit
+     (MRNA 2026-08-19, VRTX 2026-10-05). An empty core before June would
+     count every core name's move as unseen by the baseline and inflate
+     Tier 1's recall. If the production export arrives, its
+     `security.created_at` adds UI and discovery additions.
+   - *Warm-up.* The funnel replay and the weekly Tier 1 evaluation both
+     start on 2025-08-01, two months before the window, so neither starts
+     cold. The replay's queue never expires, as shipped, and dismissals are
+     not modelled. Both choices favour the baseline.
+   - *Weekly evaluation.* Tier 1 is evaluated on Mondays with data as of
+     that day's close. The screen on day P uses the latest evaluation on or
+     before P. "Leaves after four consecutive weekly misses" means a member
+     is any name that was IN at one of the last four evaluations and is
+     still listed.
+   - *Census on a past day.* A name is in the census on day t if it has an
+     FMP bar on or before t and, if delisted, t is before its delisting
+     date. Its cap is FMP's historical cap on the latest date on or before
+     t.
+   - *Dated catalyst on the Sector screen.* The primary completion date of
+     the company's own interventional phase 2/3 trials, as CT.gov showed it
+     on the evaluation date. Only trials with the funnel's active statuses
+     count (recruiting, active-not-recruiting, enrolling-by-invitation), and
+     only dates on or after day P. Month-only dates are read as the 15th,
+     as the shipped parser does. "Within 30 days" means 0 to 30 days after
+     P.
+   - *20-day dollar volume.* The mean of FMP adjusted close times volume
+     over the 20 trading days ending on P.
+   - *Rule (c) in the primary metric.* For the primary figures, Tier 1 is
+     rules (a) and (b) only, for both membership and ranking. A move whose
+     name was in Tier 1 on P only through rule (c) is removed from the
+     denominator. The labelled upper bound adds rule (c) to membership and
+     ranking and keeps every move in the denominator. The enrichment ratio
+     is split the same way.
+   - *Enrichment ratio, by distinct names.* The numerator is the share of
+     names that were ever in Tier 1 in the window which are
+     genomics-labelled and had at least one measured move while in Tier 1.
+     The denominator is the same share for the eligible census (names with
+     a cap of $300M or more on some day of the window). Moves flagged as
+     M&A are left out of every primary figure.
+   - *Measurement 2 samples.* The precision sample is drawn from today's
+     (2026-10-05) non-core Tier 1, all rules; rule (c) has no look-ahead
+     today. The misses sample is drawn from today's census names with a cap
+     of $300M or more that are not in Tier 1; a name below the size floor
+     is not a classification miss. Both use
+     `random.Random(20261005).sample(sorted(symbols), 50)`.
+   - *Titles and descriptions.* Rule (b) reads the full brief title. The
+     funnel replay reads the first 120 characters, as shipped. Rule (c)
+     reads the full FMP description from the cached profile.
+   - *Labels.* Labellers never see Tier 1 status. They see the name, the
+     screener and FMP industries, and the FMP description, and may use what
+     they already know about the company, but no tools. A large company is
+     IN when a marketed product or a phase 3 programme in an amendment-1
+     modality is a material part of its business.
+   - *Posting lag.* CT.gov version dates are quality-control dates; public
+     posting follows. A version counts as visible from its date plus L days.
+     L is measured from the gap between each study's version-0 date and its
+     StudyFirstPostDate (95th percentile) and reported.
+   - *Day before.* P is the prior trading day in FMP's bars, and the funnel
+     replay at P includes P's own close, since the sweep runs at 21:45 UTC.
+   - *Rule (b) title check (the conditional step in Tier 1's rule (b)).*
+     It fires if at least one name in the measurement-2 misses sample is
+     labelled genomics with modality cell therapy, AND the funnel's title
+     behaviour would have caught that name on 2026-10-05. The funnel's
+     title behaviour reads the first 120 characters of the title of every
+     study on the funnel's page that day: active statuses, primary
+     completion on or after the day, the 50 nearest. If it fires, the
+     title half of rule (b) switches to that behaviour for every figure,
+     and both runs are reported. The verdict comes from the switched run.
+   - *M&A days (stage 1, corrected before any metric).* FMP's M&A feed
+     turned out to list S-4 registrations only: stock deals, dated weeks
+     after announcement. It flagged none of the first run's 781 moves. A
+     move is now an M&A day if, within five calendar days, the name filed
+     or was the subject of a tender-offer or merger form (SC TO-C, SC14D9C,
+     SC TO-T, SC 14D9, 425, PREM14A, DEFM14A), OR an FMP stock-news
+     headline from the day before to the day after announces a deal or
+     carries a law-firm "is the sale fair" alert. Every flagged move keeps
+     its evidence, and the flagged list is checked by hand.
+   - *Cap on a past day* has no staleness cut-off: it is FMP's latest cap
+     on or before the day, while the name is listed. The IPO exclusion is
+     by date: the first five trading days on or after the IPO date.
+   - *Data cleaning (stage 1, from the pre-result code review, before any
+     metric).*
+     - Warrants, units, rights, preferreds and when-issued symbols leave
+       the delisted list. FMP files them under the issuer's name, and they
+       borrow the issuer's market cap (WGSWW and TALKW alone made 92 of
+       the first run's 781 moves).
+     - A delisted ticker whose history FMP also backfilled under its new
+       symbol (same CIK, identical closes) is dropped. Where it overlaps
+       only part of that history, just the overlapping days are dropped.
+     - A move whose adjusted price change disagrees with FMP's same-day cap
+       change by more than 50% is an adjustment break, not a move. It is
+       excluded and listed (ESPR +15,949%, ATAI +1,274%).
+     - M&A days are TARGET days. The automatic flag uses only forms the
+       target files, plus headlines that name the company as the one being
+       bought. Every genomics-labelled move, the only moves any metric
+       reads, is then hand-checked by two blind reviewers with a third on
+       disagreements; their call overrides the automatic flag.
+   - *Reporting.* The INCONCLUSIVE floor of 15 applies to the primary
+     denominator, and both counts are printed. The rule-(c) figure is
+     reported as "with rule (c), look-ahead", not as a bound, because
+     adding rule-(c) names to the screen can also push names out of its
+     top 25. If the production export arrives, the live-queue cross-check
+     replays from an empty queue on 2026-09-08, as the live funnel
+     started.
+
 ## Counter-agent verdict
 
 **Round 1 (2026-10-05): not approvable as written - all findings applied in
@@ -211,3 +366,108 @@ measurement 4's consequence - informational; the misses gate's interval -
 reported; the size estimate - re-measured at about 60. The screener
 staleness finding (Friday's close still served on Monday evening) was fixed
 in the funnel code, and Tier 0 already planned for it.
+
+## Results (2026-10-06): INCONCLUSIVE; precision fails on its own
+
+Inputs, code and outputs are in `backend/research/sector_tier/`.
+`results.json` holds every per-move field, `m3.json` the cost dry run,
+`charts/` the figures. Reproduce with `python -m
+research.sector_tier.measure` from `backend/`.
+
+| measurement | result | gate | |
+|---|---|---|---|
+| M1: genomics moves the baseline could not see | **1** in the primary denominator (2 before the rule-(c)-only removal) | at least 15 | **below the floor: INCONCLUSIVE** |
+| M1: Tier 1 surfaced them | 0 of 1 (Wilson 90%: 0-73%); with rule (c), look-ahead: 0 of 2 | at least half | n too small |
+| M1: enrichment ratio (rules a+b) | **3.79** (24 of 64 Tier 1 names vs 68 of 687 eligible) | above 2 | pass |
+| M2: precision, random 50 non-core Tier 1 names | **35/50 = 70%** (Wilson 90%: 59-79%) | at least 80% | **fail** |
+| M2: misses, random 50 census names not in Tier 1 | **2/50 = 4%** (LH, YDES; Wilson 90%: 1-11%) | at most 10% | pass |
+| M3: added calls per weekday | CT.gov about 100 (measured live, 133 s); FMP about 27 (extrapolated); Tier 0 about 1.1 MB per trading day | provider quota | met on Casey's statement |
+| M4: MRNA on 2026-08-18 | not in Tier 1 (a+b): no rule fired; in only with rule (c) (description "mRNA"), at rank 82 with no dated catalyst. The baseline had queued it since 2025-10-30 | informational | miss |
+| M4: VRTX on 2026-03-09 (its largest move, +8.3%) | in Tier 1 through rule (b) (partner CRISPR Therapeutics), rank 22, catalyst in 52 days: surfaced | informational | hit |
+
+- **Verdict under the frozen rule: INCONCLUSIVE.** BUILD was unreachable
+  anyway, because precision fails its gate on its own: the Wilson upper
+  bound is 79%. The rule-(b) title check did not fire, because the misses
+  sample held no cell-therapy names, so the verdict comes from the strict
+  run.
+- **Why there are so few unseen moves.** Of 127 genomics-labelled 20% moves
+  (M&A days excluded), the baseline had already seen 125: 25 through the
+  core, 72 through the funnel's movers lane and 28 through its catalyst
+  lane. The median name had been queued 205 days before its move. The
+  replayed queue never expires, as shipped: it held 333 names at the start
+  of the window and 628 at its end, out of 687 eligible. By the
+  pre-registered definition, being in that queue counts as being seen.
+- **What Tier 1 holds.** Over the window, rules (a)+(b) put the name in
+  Tier 1 for 41 of the 127 moves, and in the top 25 or within 30 days of a
+  dated catalyst for 10. Rule (c) (description keywords) raises membership
+  to 93 of 127, but it carries look-ahead in this test.
+
+**Exploratory, not pre-registered and not decision-grade**
+(`exploratory.py`, `charts/exploratory_coverage.png`). On average over the
+window, the core held about 32 names and covered 25 of the 127 genomics
+moves. Tier 1 (a+b) held about 58 and covered 41. Tier 1 (a+b+c) held about
+114 and covered 93. The core plus the queue held about 537 and covered 125.
+The question this test was built to answer, whether a genomics move is
+visible at all, is already met by the queue. What it does not measure is
+whether a list of about 537 names puts the right one in front of the desk.
+
+**Honesty box.**
+- Basis: adjusted close to close, a one-day move of 20% or more, a prior-day
+  cap of $300M or more, M&A target days excluded. 4 genomics moves were M&A
+  days (Exact Sciences, Arcellx, Standard BioTools, Bio-Techne). 2
+  adjustment breaks were excluded.
+- Point in time: CT.gov record history with a 12-day posting lag (95th
+  percentile of first-post minus version-0 date). Rule (b) and trial titles
+  use current records (amendment 4). Studies over the 60-per-name cap use
+  current records. That is 3,335 studies, all in 15 large caps (MRK, AZN,
+  NVS, BMY, PFE, LLY, ABBV, REGN, INCY, AMGN, GILD, NVO, ONC, BNTX, EXEL).
+  None is a denominator name. Versions were bisected, so a date that
+  changed and changed back between two fetched versions is missed.
+- Not modelled: desk dismissals (none assumed, which favours the baseline);
+  the production export (P1, still not supplied). The export only
+  cross-checks the replay for 2026-09-08 onward and would need 14 more
+  unseen moves to move the verdict.
+- Sensitivities from the re-implementations, none of which changes the
+  verdict:
+  - Excluding core names from the misses frame changes the seeded sample.
+    JNJ then enters it, and its funnel-page title "THRIVE-CAR-T" makes the
+    title check fire. The switched run gives precision 37/50 and misses
+    3/50, still INCONCLUSIVE.
+  - Using only the 2026-10-05 evaluation for today's Tier 1, without the
+    four-week lookback, gives precision 39/50, which still fails.
+- Rule gaps the data showed (for any redesign; nothing here is tuned to
+  them):
+  - The CT.gov sponsor search for "Moderna" finds 1 study, because Moderna
+    registers as "ModernaTX". The core's aliases do not reach census names.
+  - "gene therapy" does not match "gene therapies".
+  - Prefix sponsor matching tagged NHC through a Singapore hospital
+    network.
+  - Trial-title words tag big pharma (EXEL, INCY, JAZZ, ONC).
+  - Rule (b) misses most RNA companies: Alnylam's titles name drugs, not
+    "RNAi".
+
+## Counter-agent verdict on the measurements (stage 5, 2026-10-06)
+
+- **Before any result** (3 reviewers, 1-2 refuters each, 28 agents), the
+  review found:
+  - in the code: production-export adds dated backwards; the rule-(b) title
+    check missing; status ties broken alphabetically; chart and label-gap
+    defects;
+  - in stage 1: warrants and rights borrowing their issuer's market cap (133
+    of 781 first-run moves); M&A flags that were not target-only;
+    ticker-change duplicates; adjustment breaks.
+  
+  All were fixed before the run (amendment 7). One reviewer fuzzed the
+  replay against the shipped catalyst lane: 0 divergences in 18,000 cases.
+- **After the run**, two agents re-implemented the measurements without
+  seeing `measure.py`. They agreed with each other on all 125 per-move calls
+  then in the data. One move differed from this code: OPK. An exact +10.00%
+  move computes to 9.999...% in floating point and fails the shipped lane's
+  `>= 10%` test, while the live screener string "10.00%" passes. The audit
+  traced it, and also two exact +20.00% moves (ALLO, RGNX) that were dropped
+  the same way, and a 6-bar IPO exclusion where amendment 7 says 5. Fixed and
+  re-run: the numbers above now equal both re-implementations (denominator
+  1, enrichment 3.7886, M2 35/50 and 2/50). ALLO and RGNX went through the
+  same two-reviewer M&A check (not M&A).
+- **The audit's label review** found no clear error among the denominator
+  names or either M2 sample. It agrees the verdict follows the frozen rule.

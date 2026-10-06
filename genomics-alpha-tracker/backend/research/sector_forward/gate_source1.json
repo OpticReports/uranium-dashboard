@@ -1,0 +1,57 @@
+{
+ "source": "FMP press releases (headline + snippet)",
+ "catalyst_records": 106,
+ "names_with_catalysts": 43,
+ "panel_name_days": 15131,
+ "events": 90,
+ "exposed_name_days": 1026,
+ "events_exposed": 13,
+ "mh_odds_ratio": 2.058,
+ "mh_ci90": [
+  1.249,
+  3.358
+ ],
+ "per_k": {
+  "10": {
+   "H1p": 0.333,
+   "B1x": 0.322,
+   "random": 0.167,
+   "H1p_only_vs_B1x_only_both": [
+    7,
+    6,
+    23
+   ],
+   "sign_p": 0.5,
+   "months_to_80pct_power_half_edge": null,
+   "power_12mo_half_edge": 0.038
+  },
+  "25": {
+   "H1p": 0.578,
+   "B1x": 0.589,
+   "random": 0.416,
+   "H1p_only_vs_B1x_only_both": [
+    3,
+    4,
+    49
+   ],
+   "sign_p": 0.7734
+  },
+  "40": {
+   "H1p": 0.789,
+   "B1x": 0.789,
+   "random": 0.666,
+   "H1p_only_vs_B1x_only_both": [
+    1,
+    1,
+    70
+   ],
+   "sign_p": 0.75
+  }
+ },
+ "conditions": {
+  "1_or_lower_bound_above_1": true,
+  "2_power_80pct_within_12mo_at_K10": false,
+  "3_no_worse_at_25_40": false
+ },
+ "gate": "FAIL"
+}
