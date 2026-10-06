@@ -1,0 +1,194 @@
+[
+ {
+  "candidate": "PLAN",
+  "sleeve": "SPY (US equity)",
+  "dollar_share": 0.4,
+  "risk_share": 0.3351775329757717,
+  "risk_share_spcx_qqq": 0.401766388578417,
+  "dollar_share_spcx_qqq": 0.4
+ },
+ {
+  "candidate": "PLAN",
+  "sleeve": "Composer sleeve",
+  "dollar_share": 0.24,
+  "risk_share": 0.25549995767320277,
+  "risk_share_spcx_qqq": 0.330692933551035,
+  "dollar_share_spcx_qqq": 0.24
+ },
+ {
+  "candidate": "PLAN",
+  "sleeve": "SPCX sleeve",
+  "dollar_share": 0.2,
+  "risk_share": 0.4091079096277287,
+  "risk_share_spcx_qqq": 0.2673399563508682,
+  "dollar_share_spcx_qqq": 0.2
+ },
+ {
+  "candidate": "PLAN",
+  "sleeve": "Treasury bills",
+  "dollar_share": 0.16,
+  "risk_share": 0.00021459972329689967,
+  "risk_share_spcx_qqq": 0.00020072151967998405,
+  "dollar_share_spcx_qqq": 0.16
+ },
+ {
+  "candidate": "PLAN",
+  "sleeve": "Duration (UST)",
+  "dollar_share": 0.0,
+  "risk_share": 0.0,
+  "risk_share_spcx_qqq": 0.0,
+  "dollar_share_spcx_qqq": 0.0
+ },
+ {
+  "candidate": "PLAN",
+  "sleeve": "TIPS",
+  "dollar_share": 0.0,
+  "risk_share": 0.0,
+  "risk_share_spcx_qqq": 0.0,
+  "dollar_share_spcx_qqq": 0.0
+ },
+ {
+  "candidate": "PLAN",
+  "sleeve": "Gold",
+  "dollar_share": 0.0,
+  "risk_share": 0.0,
+  "risk_share_spcx_qqq": 0.0,
+  "dollar_share_spcx_qqq": 0.0
+ },
+ {
+  "candidate": "PLAN",
+  "sleeve": "Commodities",
+  "dollar_share": 0.0,
+  "risk_share": 0.0,
+  "risk_share_spcx_qqq": 0.0,
+  "dollar_share_spcx_qqq": 0.0
+ },
+ {
+  "candidate": "ALT-1",
+  "sleeve": "SPY (US equity)",
+  "dollar_share": 0.4524414927015233,
+  "risk_share": 0.4279757584577639,
+  "risk_share_spcx_qqq": 0.4276088087017493,
+  "dollar_share_spcx_qqq": 0.4246968425124445
+ },
+ {
+  "candidate": "ALT-1",
+  "sleeve": "Composer sleeve",
+  "dollar_share": 0.27146489562091397,
+  "risk_share": 0.3618816813167882,
+  "risk_share_spcx_qqq": 0.3621759330929936,
+  "dollar_share_spcx_qqq": 0.2548181055074667
+ },
+ {
+  "candidate": "ALT-1",
+  "sleeve": "SPCX sleeve",
+  "dollar_share": 0.09511701459695338,
+  "risk_share": 0.2,
+  "risk_share_spcx_qqq": 0.19999999999999998,
+  "dollar_share_spcx_qqq": 0.150606314975111
+ },
+ {
+  "candidate": "ALT-1",
+  "sleeve": "Treasury bills",
+  "dollar_share": 0.0,
+  "risk_share": 0.0,
+  "risk_share_spcx_qqq": 0.0,
+  "dollar_share_spcx_qqq": 0.0
+ },
+ {
+  "candidate": "ALT-1",
+  "sleeve": "Duration (UST)",
+  "dollar_share": 0.09048829854030466,
+  "risk_share": 0.004650021499369974,
+  "risk_share_spcx_qqq": 0.004654940465064219,
+  "dollar_share_spcx_qqq": 0.0849393685024889
+ },
+ {
+  "candidate": "ALT-1",
+  "sleeve": "TIPS",
+  "dollar_share": 0.09048829854030466,
+  "risk_share": 0.005492538726077722,
+  "risk_share_spcx_qqq": 0.005560317740192975,
+  "dollar_share_spcx_qqq": 0.0849393685024889
+ },
+ {
+  "candidate": "ALT-1",
+  "sleeve": "Gold",
+  "dollar_share": 0.0,
+  "risk_share": 0.0,
+  "risk_share_spcx_qqq": 0.0,
+  "dollar_share_spcx_qqq": 0.0
+ },
+ {
+  "candidate": "ALT-1",
+  "sleeve": "Commodities",
+  "dollar_share": 0.0,
+  "risk_share": 0.0,
+  "risk_share_spcx_qqq": 0.0,
+  "dollar_share_spcx_qqq": 0.0
+ },
+ {
+  "candidate": "ALT-2",
+  "sleeve": "SPY (US equity)",
+  "dollar_share": 0.31518883401563297,
+  "risk_share": 0.24215299545350516,
+  "risk_share_spcx_qqq": 0.24397461060975853,
+  "dollar_share_spcx_qqq": 0.31372273017649477
+ },
+ {
+  "candidate": "ALT-2",
+  "sleeve": "Composer sleeve",
+  "dollar_share": 0.16433026881955748,
+  "risk_share": 0.15000000000000002,
+  "risk_share_spcx_qqq": 0.15,
+  "dollar_share_spcx_qqq": 0.16193685409622416
+ },
+ {
+  "candidate": "ALT-2",
+  "sleeve": "SPCX sleeve",
+  "dollar_share": 0.08939394957435702,
+  "risk_share": 0.14999999999999997,
+  "risk_share_spcx_qqq": 0.14999999999999997,
+  "dollar_share_spcx_qqq": 0.15002554010150485
+ },
+ {
+  "candidate": "ALT-2",
+  "sleeve": "Treasury bills",
+  "dollar_share": 0.0,
+  "risk_share": 0.0,
+  "risk_share_spcx_qqq": 0.0,
+  "dollar_share_spcx_qqq": 0.0
+ },
+ {
+  "candidate": "ALT-2",
+  "sleeve": "Duration (UST)",
+  "dollar_share": 0.3308931596779271,
+  "risk_share": 0.14910069118468935,
+  "risk_share_spcx_qqq": 0.14878072702866418,
+  "dollar_share_spcx_qqq": 0.32935400701960577
+ },
+ {
+  "candidate": "ALT-2",
+  "sleeve": "TIPS",
+  "dollar_share": 0.8456712742423894,
+  "risk_share": 0.15123730285703904,
+  "risk_share_spcx_qqq": 0.15118342153389652,
+  "dollar_share_spcx_qqq": 0.8417376263208576
+ },
+ {
+  "candidate": "ALT-2",
+  "sleeve": "Gold",
+  "dollar_share": 0.0,
+  "risk_share": 0.0,
+  "risk_share_spcx_qqq": 0.0,
+  "dollar_share_spcx_qqq": 0.0
+ },
+ {
+  "candidate": "ALT-2",
+  "sleeve": "Commodities",
+  "dollar_share": 0.3438611487827679,
+  "risk_share": 0.15750901050476646,
+  "risk_share_spcx_qqq": 0.15606124082768077,
+  "dollar_share_spcx_qqq": 0.34226167540061164
+ }
+]

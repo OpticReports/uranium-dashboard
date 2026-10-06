@@ -1,0 +1,62 @@
+[
+ {
+  "sleeve": "crypto_btc",
+  "usd": 281485.12,
+  "dollar_share": 0.11325792062755045,
+  "risk_share": 0.4025584018330886
+ },
+ {
+  "sleeve": "composer_equity_momentum",
+  "usd": 184300.0,
+  "dollar_share": 0.07415466498427181,
+  "risk_share": 0.16747393622085888
+ },
+ {
+  "sleeve": "gold_silver",
+  "usd": 247859.8,
+  "dollar_share": 0.0997284885082399,
+  "risk_share": 0.15747159663105817
+ },
+ {
+  "sleeve": "single_names",
+  "usd": 139774.03999999998,
+  "dollar_share": 0.056239268093858964,
+  "risk_share": 0.15206739158376673
+ },
+ {
+  "sleeve": "equity_beta",
+  "usd": 274481.64,
+  "dollar_share": 0.11044001116947097,
+  "risk_share": 0.11433378545406948
+ },
+ {
+  "sleeve": "cash_like",
+  "usd": 1177616.4000000001,
+  "dollar_share": 0.47382392632655573,
+  "risk_share": 0.009673226409832055
+ },
+ {
+  "sleeve": "composer_vix_harvester",
+  "usd": 37400.0,
+  "dollar_share": 0.015048206567616742,
+  "risk_share": 0.0032592427616624405
+ },
+ {
+  "sleeve": "trend",
+  "usd": 34419.0,
+  "dollar_share": 0.013848775985315526,
+  "risk_share": 0.0008041232224027621
+ },
+ {
+  "sleeve": "eth_carry",
+  "usd": 30110.0,
+  "dollar_share": 0.012115013362324602,
+  "risk_share": 0.0004590038954039848
+ },
+ {
+  "sleeve": "composer_crash_convexity",
+  "usd": 77900.0,
+  "dollar_share": 0.0313437243747953,
+  "risk_share": -0.008100708012143082
+ }
+]

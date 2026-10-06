@@ -1,0 +1,100 @@
+[
+ {
+  "stream": "core_equity",
+  "label": "equity beta core",
+  "usd": 662183.8632498826,
+  "dollar_share": 0.2664352823509816,
+  "risk_share": 0.2169636533561018
+ },
+ {
+  "stream": "DBC",
+  "label": "commodities (DBC)",
+  "usd": 757007.6876519844,
+  "dollar_share": 0.30458845072355495,
+  "risk_share": 0.2006085961308652
+ },
+ {
+  "stream": "TIP",
+  "label": "TIPS (TIP)",
+  "usd": 1961641.3397434035,
+  "dollar_share": 0.7892829971132403,
+  "risk_share": 0.16801681656723508
+ },
+ {
+  "stream": "TLT",
+  "label": "long Treasuries (TLT)",
+  "usd": 767219.1704389192,
+  "dollar_share": 0.3086971272566955,
+  "risk_share": 0.1601866042867173
+ },
+ {
+  "stream": "gold_silver",
+  "label": "gold & silver (phys+PHYS+PSLV)",
+  "usd": 247859.8,
+  "dollar_share": 0.0997284885082399,
+  "risk_share": 0.13546427159460353
+ },
+ {
+  "stream": "composer_momentum",
+  "label": "Composer HG symphony + KMLM switcher",
+  "usd": 91351.92255634366,
+  "dollar_share": 0.03675621927745419,
+  "risk_share": 0.04607331994267996
+ },
+ {
+  "stream": "BTC",
+  "label": "BTC",
+  "usd": 91892.49092908236,
+  "dollar_share": 0.036973721537798904,
+  "risk_share": 0.04471119064261208
+ },
+ {
+  "stream": "single_names",
+  "label": "single names",
+  "usd": 48540.306971539845,
+  "dollar_share": 0.01953060337334916,
+  "risk_share": 0.026515822013357455
+ },
+ {
+  "stream": "composer_crash",
+  "label": "Composer Crash Convexity",
+  "usd": 60261.19847670057,
+  "dollar_share": 0.024246603280469025,
+  "risk_share": -0.005212438795405248
+ },
+ {
+  "stream": "KMLM",
+  "label": "KMLM trend ETF",
+  "usd": 187629.8881967877,
+  "dollar_share": 0.07549447368567101,
+  "risk_share": 0.003815086197264303
+ },
+ {
+  "stream": "composer_vixhyg",
+  "label": "Composer VIX Harvester",
+  "usd": 64994.33178535599,
+  "dollar_share": 0.02615101953022074,
+  "risk_share": 0.0026439332060690366
+ },
+ {
+  "stream": "eth_carry",
+  "label": "HL ETH carry",
+  "usd": 30110.0,
+  "dollar_share": 0.012115013362324602,
+  "risk_share": 0.0002131448578994683
+ },
+ {
+  "stream": "usdc_idle",
+  "label": "HL USDC (idle)",
+  "usd": 67322.59,
+  "dollar_share": 0.027087813930132865,
+  "risk_share": 0.0
+ },
+ {
+  "stream": "margin_loan",
+  "label": "margin_loan",
+  "usd": -2552668.59,
+  "dollar_share": -1.0270878139301327,
+  "risk_share": -0.0
+ }
+]

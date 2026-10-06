@@ -1,0 +1,93 @@
+[
+ {
+  "stream": "TIP",
+  "usd": 2260104.240417905,
+  "dollar_share": 0.9093720715014751,
+  "risk_share": 0.1503618877232028,
+  "budget": 0.14999999999999994
+ },
+ {
+  "stream": "core_equity",
+  "usd": 578278.058716124,
+  "dollar_share": 0.23267507168664808,
+  "risk_share": 0.15035283057326224,
+  "budget": 0.14999999999999997
+ },
+ {
+  "stream": "DBC",
+  "usd": 701068.736968038,
+  "dollar_share": 0.28208094042762577,
+  "risk_share": 0.15019999113395935,
+  "budget": 0.15000000000000002
+ },
+ {
+  "stream": "TLT",
+  "usd": 922618.036965876,
+  "dollar_share": 0.37122317655806314,
+  "risk_share": 0.15018867511689607,
+  "budget": 0.15000000000000005
+ },
+ {
+  "stream": "BTC",
+  "usd": 217777.16210854182,
+  "dollar_share": 0.08762448452189024,
+  "risk_share": 0.12014693337683005,
+  "budget": 0.12
+ },
+ {
+  "stream": "composer_momentum",
+  "usd": 183966.9528262296,
+  "dollar_share": 0.07402066063486919,
+  "risk_share": 0.10001449444630564,
+  "budget": 0.1
+ },
+ {
+  "stream": "single_names",
+  "usd": 111150.55995841793,
+  "dollar_share": 0.04472236861926586,
+  "risk_share": 0.059726003670839724,
+  "budget": 0.06
+ },
+ {
+  "stream": "KMLM",
+  "usd": 846066.9352650765,
+  "dollar_share": 0.3404221928315319,
+  "risk_share": 0.05961373161929224,
+  "budget": 0.06
+ },
+ {
+  "stream": "composer_crash",
+  "usd": 448849.42835292214,
+  "dollar_share": 0.18059836672757923,
+  "risk_share": 0.0393293860582917,
+  "budget": 0.04
+ },
+ {
+  "stream": "composer_vixhyg",
+  "usd": 300173.3457890323,
+  "dollar_share": 0.12077728645791463,
+  "risk_share": 0.019859985068679836,
+  "budget": 0.02
+ },
+ {
+  "stream": "eth_carry",
+  "usd": 30110.0,
+  "dollar_share": 0.012115013362324602,
+  "risk_share": 0.00020608121244015845,
+  "budget": null
+ },
+ {
+  "stream": "usdc_idle",
+  "usd": 67322.59,
+  "dollar_share": 0.027087813930132865,
+  "risk_share": 0.0,
+  "budget": null
+ },
+ {
+  "stream": "margin_loan",
+  "usd": -4182140.0473681632,
+  "dollar_share": -1.6827194472593205,
+  "risk_share": -0.0,
+  "budget": null
+ }
+]

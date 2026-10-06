@@ -1,0 +1,92 @@
+[
+ {
+  "sleeve": "organics_ocean",
+  "usd": 12000000.0,
+  "dollar_share": 0.6099003290717225,
+  "risk_share": 0.9497037271711177
+ },
+ {
+  "sleeve": "venture_basket",
+  "usd": 1548000.0,
+  "dollar_share": 0.0786771424502522,
+  "risk_share": 0.029157359292271166
+ },
+ {
+  "sleeve": "real_estate",
+  "usd": 1500000.0,
+  "dollar_share": 0.07623754113396532,
+  "risk_share": 0.004867570768533852
+ },
+ {
+  "sleeve": "private_credit",
+  "usd": 1532000.0,
+  "dollar_share": 0.07786394201148991,
+  "risk_share": 0.004509684026337764
+ },
+ {
+  "sleeve": "crypto_btc",
+  "usd": 281485.12,
+  "dollar_share": 0.014306488943066109,
+  "risk_share": 0.0030301438110864882
+ },
+ {
+  "sleeve": "em_special_sits",
+  "usd": 410000.0,
+  "dollar_share": 0.020838261243283855,
+  "risk_share": 0.0022483145613798497
+ },
+ {
+  "sleeve": "equity_beta",
+  "usd": 274481.64,
+  "dollar_share": 0.013950536880012174,
+  "risk_share": 0.0020293673705848395
+ },
+ {
+  "sleeve": "composer_equity_momentum",
+  "usd": 184300.0,
+  "dollar_share": 0.009367052553993206,
+  "risk_share": 0.0018203557153587781
+ },
+ {
+  "sleeve": "single_names",
+  "usd": 139774.03999999998,
+  "dollar_share": 0.007104019415973676,
+  "risk_share": 0.0015432542161624599
+ },
+ {
+  "sleeve": "gold_silver",
+  "usd": 247859.8,
+  "dollar_share": 0.012597481131970944,
+  "risk_share": 0.0012642094205517116
+ },
+ {
+  "sleeve": "cash_like",
+  "usd": 1377616.4000000001,
+  "dollar_share": 0.0700173913078835,
+  "risk_share": 8.550744277076578e-05
+ },
+ {
+  "sleeve": "composer_vix_harvester",
+  "usd": 37400.0,
+  "dollar_share": 0.0019008560256068687,
+  "risk_share": 2.156387601456382e-05
+ },
+ {
+  "sleeve": "eth_carry",
+  "usd": 30110.0,
+  "dollar_share": 0.0015303415756957972,
+  "risk_share": 3.2091787946183744e-06
+ },
+ {
+  "sleeve": "trend",
+  "usd": 34419.0,
+  "dollar_share": 0.0017493466188599682,
+  "risk_share": -1.6087473374362485e-05
+ },
+ {
+  "sleeve": "composer_crash_convexity",
+  "usd": 77900.0,
+  "dollar_share": 0.0039592696362239325,
+  "risk_share": -0.00026817937759013115
+ }
+]

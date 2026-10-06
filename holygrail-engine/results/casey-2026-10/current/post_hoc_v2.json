@@ -1,0 +1,12 @@
+{
+ "declared_at": "2026-10-06, AFTER the pre-declared proposal (v1) was computed and BEFORE any v2 number was computed.",
+ "why": "v1 (pre-declared) is infeasible in practice: gross 2.7x NAV, a $4.2M margin loan on a $2.49M book, TIPS at 91% of NAV (no liquid TIPS future), Composer Crash Convexity x5.8 and VIX Harvester x8 their live size (risk budgets on near-zero / negative-correlation streams explode their weights), and gold/silver at $0 (structural: under the canonical map TIP+DBC fill the inflation_up box exactly, so quadrant_balance gives single-box gold a zero budget). v1 is reported unchanged; v2 is a labelled POST-HOC alternative.",
+ "v2_rules": {
+   "alpha_sizing": "standalone vol budget, w_i = b_i x 15% / sigma_i (Bridgewater ETRR 2011: alpha overlays sized by a targeted tracking error), same b_i as v1: BTC 0.12, Composer equity-momentum 0.10, Crash Convexity 0.04, VIX Harvester 0.02, KMLM 0.06, single names 0.06",
+   "gold_silver": "held at today's $ (physical + PHYS + PSLV = $247,859.80), box inflation_up; not re-solved",
+   "fixed": "ETH carry $30,110 and HL USDC $67,322.59 as held",
+   "core": "core_equity / TLT / TIP / DBC: engine quadrant_balance risk budgets, then ONE scalar so total ex-ante vol = 15%",
+   "gross_cap": "2.0x NAV on all non-cash positions (Reg T 50% initial margin); if binding, vol falls short of 15% and is reported",
+   "everything_else": "as predeclared_params.json (window, estimator, financing 0.92%, costs, backtest/stress/forward rules)"
+ }
+}

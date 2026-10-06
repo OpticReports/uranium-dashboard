@@ -1,0 +1,63 @@
+{
+ "declared_at": "2026-10-06, BEFORE any Analysis-B result was computed (only data availability was checked: first/last dates of each Yahoo/FRED series). Not tuned afterwards; any later change is listed under post_hoc in metrics.json.",
+ "nav_usd": 18000000,
+ "plan_source": "PORTFOLIO_FACTS.md 'Post-exit $18M plan': 80% = Composer 30% $4.32M | SPY 50% $7.2M | Treasury 20% $2.88M; 20% = Emerging Tech (SPCX: AI, robotics, space winners, 4-7 names) $3.6M",
+ "streams": {
+  "SPY": "SPDR S&P 500 (Yahoo adjclose, total return)",
+  "BOXX": "Treasury bucket as BOXX (Alpha Architect 1-3m box ETF, T-bill-like) in the 3y window; T-bills (FRED DTB3 accrual, actual/360) in long windows and replays",
+  "IEF": "7-10y UST (ALT-1 duration leg); proxy VFITX before 2002-07-30 (replays only)",
+  "TIP": "iShares TIPS (ALT-1 / ALT-2 ILB leg); proxy VIPSX before 2003-12-05, VFITX before 2000-06-29 (replays only)",
+  "TLT": "20+y UST (ALT-2 nominal-bond leg); proxy VUSTX before 2002-07-30 (replays only)",
+  "GLD": "SPDR Gold (ALT-2 gold leg); proxy GC=F front-month gold futures before 2004-11-18 (price-only); no gold data before 2000-08-30 -> 0% (flagged)",
+  "DBC": "Invesco DB Commodity (ALT-2 commodity leg); proxy ^SPGSCI (price-only index, no collateral yield) before 2006-02-06 (replays only)",
+  "QQQ": "Nasdaq-100 ETF: SPCX proxy (ii) and the 2000-02 / 2008 concentrated-tech analogue",
+  "SPCX_basket": "SPCX proxy (i): equal-weight, monthly-rebalanced NVDA, AVGO, TSLA, ISRG, RKLB. ILLUSTRATIVE, NOT A RECOMMENDATION. Why these: largest listed leader per theme by revenue/market cap as of 2026 - AI compute (NVDA), AI custom silicon/networking (AVGO), autonomy/humanoid robotics (TSLA), surgical robotics, the largest pure-robotics revenue (ISRG), listed space launch + space systems (RKLB). All have the full 3y window. Hindsight selection: these are chosen BECAUSE they won.",
+  "composer": "Composer sleeve = four symphonies at policy targets hg 29 / kmlm 29 / crash 27 / vixhyg 15 (rebalanced to target daily inside the sleeve). Daily returns: Composer backtest series (IN-SAMPLE simulation of today's logic) before each symphony's live start, live deposit-adjusted series after (hg 2025-12-05, kmlm/crash 2026-07-07, vixhyg 2026-07-22). The Composer HG symphony ('The Holy Grail w Sorts & Safe Sectors') is NOT Dalio's Holy Grail."
+ },
+ "candidates": {
+  "PLAN": "Casey as written: Composer 24% ($4.32M), SPY 40% ($7.2M), Treasury/BOXX 16% ($2.88M), SPCX 20% ($3.6M). Unlevered.",
+  "ALT-1": "Minimal change: Treasury 16% split 8% IEF + 8% TIP; SPCX capped so its risk share <= 20% of plan risk (its dollar share), solved by bisection on its dollar weight; freed dollars go pro rata to the other sleeves (Composer, SPY, IEF, TIP). If the cap does not bind, SPCX stays at 20%. Unlevered.",
+  "ALT-2": "Dalio-balanced: beta core = engine quadrant_balance (equal risk to growth-up / growth-down / inflation-up / inflation-down) over SPY, TLT, TIP, GLD, DBC with the engine CANONICAL_MAP; then sleeves [beta core, Composer, SPCX] sized by engine risk_budget_weights with risk budgets 70 / 15 / 15 (Bridgewater All Weather Story: one client's total portfolio 'roughly 70/30 split between beta and alpha'); then the whole book geared (L x every sleeve) to 15% ex-ante vol, gross cap 3.0x, borrowing pays rf + spread."
+ },
+ "spcx_variants": "every candidate is computed with SPCX proxy (i) basket and (ii) QQQ; headline = (i); (ii) reported alongside",
+ "estimation": {
+  "frequency": "daily simple returns, Yahoo adjclose, engine align_levels freq 'D' calendar 'active_intersection'",
+  "window_main": "trailing 3 years: levels 2023-09-29..2026-09-30, returns 2023-10-02..2026-09-30",
+  "window_robustness": "longest common window of every stream used: returns from 2023-04-20 (Composer kmlm/vixhyg backtests start 2023-04-19) to 2026-09-30",
+  "covariance": "engine estimate_cov method 'sample', history 'common', annualised by observed periods per year (engine infer_periods_per_year)",
+  "risk_shares": "Euler percent risk contributions (engine core.percent_risk_contributions), summed per sleeve",
+  "neff": "engine core.effective_bets at stream level (headline DR^2 plus equal-rho, PCA entropy, 1/sum PRC^2, minimum torsion); DR^2 also at sleeve level (each sleeve a composite stream)",
+  "environment_boxes": "engine environments.environment_balance with mapping: SPY/QQQ/basket names/composer_hg/composer_kmlm = equity (growth_up, inflation_down) [canonical / book asset_class]; IEF/TLT = nominal_bond; TIP = ilb; GLD = gold; DBC = commodity; composer_crash = growth_down and composer_vixhyg = growth_up (book manual tags); BOXX = unmapped (cash)",
+  "one_bet": "share of plan variance that is ONE US/AI equity bet = R^2 of the plan's daily returns regressed on QQQ (single factor, trailing 3y); cross-checks: R^2 on SPY, and risk share of streams mapped to the equity boxes"
+ },
+ "expected_returns_PRIOR_DRIVEN": {
+  "rf": "4.01% (FRED DTB3 2026-10-02, the book's rf_now)",
+  "beta_streams": "SPY, QQQ, IEF, TLT, TIP, GLD, DBC: mu = rf + s * vol, s = 0.30 base (Dalio 2026-06-15 '.3'; Bridgewater ETRR 2011: betas 'Sharpe ratios typically ranging from 0.2 to 0.3'; RPAB c.2011 stocks 0.24 / bonds 0.28); sensitivity s = 0.25 and 0.20",
+  "BOXX": "mu = rf",
+  "alpha_streams": "basket names and the four Composer symphonies: ZERO-ALPHA prior, mu = rf + sum_k beta_k (mu_k - rf), betas from OLS of daily excess returns on QQQ, TLT, GLD, DBC over the trailing 3y (Bridgewater All Weather Story: 'once one strips out the return of cash and betas, alpha is a zero sum game'; ETRR: alphas 'risk-adjusted returns slightly negative on average'). This is the haircut on the Composer in-sample backtests: their in-sample excess return over the beta-implied return is set to 0 (100% haircut). Optimistic sensitivity: alpha = IR 0.30 x residual vol for every alpha stream (still a large haircut vs Composer in-sample; reported as such).",
+  "gearing": "a book scaled by L: risky weights x L; BOXX/cash funds extra exposure first; borrowing = max(L*u - 1, 0) pays rf + spread",
+  "spread": "0.75%/yr over rf (IBKR Pro tier $1M-$50M BM+0.75%, recalled, not opened; low confidence; futures financing would be cheaper)",
+  "sharpe_at_15": "each candidate scaled to 15% ex-ante vol (L = 0.15 / vol), prior-driven mean net of spread, Sharpe = (mu - rf) / 0.15"
+ },
+ "backtests": {
+  "A_real": "CONSTANT-MIX (today's weights, hindsight) daily mark-to-market over the longest window with real data for every sleeve: 2023-04-20..2026-09-30; engine run_backtest with a fixed-weight allocator, rebalance monthly, cost 5 bp on turnover, cash/borrowing at DTB3 daily, spread 0.75% on borrowing; benchmark SPY. Composer = in-sample backtests (+live tail); basket = hindsight selection.",
+  "B_proxy": "CONSTANT-MIX over 2006-02-07..2026-09-30 (DBC start binds), same mechanics; Treasury = DTB3 accrual; SPCX = QQQ (proxy ii) throughout; Composer sleeve = BETA PROXY: rf + sum_k beta_k (r_k - rf) on QQQ, TLT, GLD, DBC with the trailing-3y OLS betas of the composite (no timing/switching logic, no residual). Labelled proxy, not the symphonies."
+ },
+ "stress_replays": {
+  "method": "engine forward.replay_scenario, today's weights, buy-and-hold over the window (rebalance 'none'); cash/borrowing at DTB3 (replay borrows at rf, no spread)",
+  "windows": {
+   "tech_2000_02": ["2000-03-10", "2002-10-09", "Nasdaq-100 peak to trough; SPCX sleeve = QQQ (both proxies) - the concentrated-tech analogue"],
+   "gfc_2008": ["2007-10-09", "2009-03-09", "engine SCENARIOS gfc; SPCX = QQQ (basket names mostly not listed)"],
+   "covid_2020": ["2020-02-19", "2020-03-23", "engine SCENARIOS covid; SPCX (i) = equal weight of the 4 basket names listed then (RKLB listed 2020-11), (ii) QQQ"],
+   "inflation_2022": ["2022-01-03", "2022-10-12", "engine SCENARIOS inflation_2022; SPCX (i) basket, (ii) QQQ"]
+  },
+  "composer_in_replays": "beta proxy (as B_proxy) in every window; bound row: Composer sleeve in T-bills (perfect switching); check rows: Composer HG symphony actual backtest vs its own beta proxy in 2020 and 2022"
+ },
+ "forward_bootstrap": {
+  "history": "trailing-3y daily stream returns (window_main), each stream DE-MEANED and RE-CENTRED to its prior-driven mean (base case), so the distribution keeps 2023-26 vols/correlations/tails but not the 2023-26 AI-bull means",
+  "method": "engine run_forward method 'bootstrap' (Politis-Romano stationary), mean block 21 days, 252 periods/yr, 10y horizon, 10,000 paths, seed 20261006, constant mix every day, rf 4.01% const, spread 0.75% on borrowing, no costs/taxes",
+  "corr_stress": "same paths re-coloured to the engine stress_correlation 'floor' at rho = 0.5 (every pairwise correlation raised to at least 0.5, never lowered; vols kept); weights NOT re-geared",
+  "worst_year": "5th percentile of simulated calendar-year returns (pooled over the 10 simulated years), in % and in $ on $18M"
+ },
+ "leverage_cap_gross": 3.0
+}

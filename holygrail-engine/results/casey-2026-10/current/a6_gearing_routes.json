@@ -1,0 +1,57 @@
+[
+ {
+  "route": "IBKR margin (Pro, tiered)",
+  "spread_over_rf": 0.007375240691938005,
+  "cost_basis": "on borrowed $ only, blended by tier at each book's own loan size",
+  "source": "IBKR Pro USD card fetched 2026-10-06 (ibkr.com margin-rates): 5.380% to $100k, 4.880% $100k-1M, 4.630% $1M-50M (BM 3.88% + 1.5/1.0/0.75), blended by tier; blended at v2's $2,552,669: 4.748% = rf + 0.74%; at v1's $4,182,140: 4.702% = rf + 0.69% (rf = DTB3 4.01%)",
+  "confidence": "high",
+  "spread_over_rf_v1": 0.006917336092531846,
+  "annual_cost_usd_on_proposed_borrowing": 18826.54525800001,
+  "exp_return_v2_prior": 0.11513855494543465,
+  "annual_cost_usd_v1_borrowing": 28929.268293682642
+ },
+ {
+  "route": "Futures (ES/MES equity, ZN/ZB/UB Treasuries)",
+  "spread_over_rf": 0.004,
+  "cost_basis": "implied financing on notional; collateral stays in T-bills/BOXX",
+  "source": "CME Group (search snippet, page not opened): equity index roll implied financing +81 bp over 3m SOFR (Q2-2026), +38 bp (Q2-2025); Treasury futures implied repo ~SOFR (judgement). Blend 0.4% = judgement; no TIPS future (TIPS stay cash/margin)",
+  "confidence": "low",
+  "spread_over_rf_v1": null,
+  "annual_cost_usd_on_proposed_borrowing": 10210.674359999999,
+  "exp_return_v2_prior": 0.11860522352920529,
+  "annual_cost_usd_v1_borrowing": 16728.560189472653
+ },
+ {
+  "route": "Levered balanced ETF: ALLW",
+  "spread_over_rf": 0.012770114942528738,
+  "cost_basis": "0.85% fee on the whole position / 0.87 borrowed per $ + embedded futures financing ~0.3%",
+  "source": "SSGA ALLW 497K (0.85%), SSGA page exposures 2026-10-05 gross 1.87x (dalio_canon s6, factcheck C6 CONFIRMED)",
+  "confidence": "medium",
+  "spread_over_rf_v1": null,
+  "annual_cost_usd_on_proposed_borrowing": 32597.871304482764,
+  "exp_return_v2_prior": 0.10959754534496745,
+  "annual_cost_usd_v1_borrowing": 53406.409110644025
+ },
+ {
+  "route": "Levered balanced ETF: UPAR",
+  "spread_over_rf": 0.012558823529411765,
+  "cost_basis": "0.65% fee / ~0.68 borrowed per $ + embedded financing",
+  "source": "AAII/issuer summary via search (not opened): expense 0.65%, targets 1.6-1.8x NAV (1.68x)",
+  "confidence": "low",
+  "spread_over_rf_v1": null,
+  "annual_cost_usd_on_proposed_borrowing": 32058.51435088235,
+  "exp_return_v2_prior": 0.10981456018056797,
+  "annual_cost_usd_v1_borrowing": 52522.75883018252
+ },
+ {
+  "route": "Return-stacked: RSSB (stocks+Treasuries ~2x)",
+  "spread_over_rf": 0.0069,
+  "cost_basis": "0.39% fee per ~1x borrowed + embedded financing",
+  "source": "etfdb/AAII via search (not opened): expense 0.39%, $1 global equity + $1 Treasury futures per $1; no TIPS/commodities",
+  "confidence": "low",
+  "spread_over_rf_v1": null,
+  "annual_cost_usd_on_proposed_borrowing": 17613.413270999998,
+  "exp_return_v2_prior": 0.1156266688688079,
+  "annual_cost_usd_v1_borrowing": 28856.766326840327
+ }
+]

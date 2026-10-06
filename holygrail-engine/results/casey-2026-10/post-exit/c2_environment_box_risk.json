@@ -1,0 +1,62 @@
+[
+ {
+  "candidate": "PLAN",
+  "spcx_proxy": "i",
+  "growth_up": 0.5067627843678607,
+  "growth_down": -0.010265885347659686,
+  "inflation_up": 0.0,
+  "inflation_down": 0.5032885012565022,
+  "unmapped_cash": 0.00021459972329684884,
+  "balance_score": 0.3196425481644113
+ },
+ {
+  "candidate": "PLAN",
+  "spcx_proxy": "ii",
+  "growth_up": 0.5074680943757249,
+  "growth_down": -0.010508710462444117,
+  "inflation_up": 0.0,
+  "inflation_down": 0.5028398945670395,
+  "unmapped_cash": 0.0002007215196797585,
+  "balance_score": 0.31931890638633365
+ },
+ {
+  "candidate": "ALT-1",
+  "spcx_proxy": "i",
+  "growth_up": 0.5022787361169128,
+  "growth_down": -0.004637015798942171,
+  "inflation_up": 0.002746269363038861,
+  "inflation_down": 0.4996120103189904,
+  "unmapped_cash": 2.220446049250313e-16,
+  "balance_score": 0.3308123380854623
+ },
+ {
+  "candidate": "ALT-1",
+  "spcx_proxy": "ii",
+  "growth_up": 0.5025889259009265,
+  "growth_down": -0.005243289096122433,
+  "inflation_up": 0.0027801588700964875,
+  "inflation_down": 0.49987420432509944,
+  "unmapped_cash": 0.0,
+  "balance_score": 0.33004915969863224
+ },
+ {
+  "candidate": "ALT-2",
+  "spcx_proxy": "i",
+  "growth_up": 0.3545555049514893,
+  "growth_down": 0.14223283525480993,
+  "inflation_up": 0.15437315668090273,
+  "inflation_down": 0.34883850311279796,
+  "unmapped_cash": 0.0,
+  "balance_score": 0.7288079892476169
+ },
+ {
+  "candidate": "ALT-2",
+  "spcx_proxy": "ii",
+  "growth_up": 0.3549248920617954,
+  "growth_down": 0.14171578536790794,
+  "inflation_up": 0.15362233118078866,
+  "inflation_down": 0.349736991389508,
+  "unmapped_cash": 0.0,
+  "balance_score": 0.7271174887315954
+ }
+]

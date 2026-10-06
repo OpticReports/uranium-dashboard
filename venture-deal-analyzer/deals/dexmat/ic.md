@@ -142,6 +142,13 @@ enthusiasm is real, I know who it is."**
    $20M raise (illustrative round size). The follow-on is at the NEXT
    round's price. Open: does the right pass through the SPV to LPs, any
    major-investor threshold, and fees on a follow-on vehicle.
+   Answered 2026-10-06 (Casey): (1) passes through the SPV; (2) a major-
+   investor threshold exists and the SPV is too small to meet it; (3) fees
+   continue as is (2% + 20%) on any follow-on. Reading: the follow-on is
+   NOT contractual for this SPV — at best a discretionary allocation — so
+   size the first check as the whole position. $75k stands on evidence
+   (licence signed+exclusive; price half-resolved); do not plan on topping
+   up later.
 
 ### What would move each side
 

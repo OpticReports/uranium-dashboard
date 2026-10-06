@@ -1,0 +1,44 @@
+[
+ {
+  "candidate": "PLAN",
+  "spcx_proxy": "i",
+  "r2_on_QQQ": 0.8292044694001005,
+  "r2_on_SPY": 0.8235086933263607,
+  "equity_stream_risk_share": 1.0065770025130043
+ },
+ {
+  "candidate": "PLAN",
+  "spcx_proxy": "ii",
+  "r2_on_QQQ": 0.8343287380782857,
+  "r2_on_SPY": 0.8436666214386116,
+  "equity_stream_risk_share": 1.005679789134079
+ },
+ {
+  "candidate": "ALT-1",
+  "spcx_proxy": "i",
+  "r2_on_QQQ": 0.7884412809625263,
+  "r2_on_SPY": 0.8137225877249008,
+  "equity_stream_risk_share": 0.9945739991386108
+ },
+ {
+  "candidate": "ALT-1",
+  "spcx_proxy": "ii",
+  "r2_on_QQQ": 0.8033370568050944,
+  "r2_on_SPY": 0.82705348255413,
+  "equity_stream_risk_share": 0.9950934681851347
+ },
+ {
+  "candidate": "ALT-2",
+  "spcx_proxy": "i",
+  "r2_on_QQQ": 0.5247907796296625,
+  "r2_on_SPY": 0.5706026535204753,
+  "equity_stream_risk_share": 0.5485763150409065
+ },
+ {
+  "candidate": "ALT-2",
+  "spcx_proxy": "ii",
+  "r2_on_QQQ": 0.5396021413091637,
+  "r2_on_SPY": 0.584646074865262,
+  "equity_stream_risk_share": 0.5506932557503518
+ }
+]

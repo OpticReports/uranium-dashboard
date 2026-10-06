@@ -1,9 +1,12 @@
 # Cached market/macro data and run outputs are reproducible from the feeds;
 # never commit them.
-data/
+data/*
+# Casey's Composer series are inputs the book references (read-only exports):
+!data/casey/
 results/*
 # Frozen study evidence IS committed (honesty-box numbers must be reproducible from git):
 !results/study-*/
+!results/casey-*/
 __pycache__/
 *.pyc
 .pytest_cache/

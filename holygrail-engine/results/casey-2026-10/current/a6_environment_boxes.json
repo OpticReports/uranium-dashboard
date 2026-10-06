@@ -1,0 +1,38 @@
+[
+ {
+  "book": "liquid now",
+  "growth_up": 0.44764045112630046,
+  "growth_down": -0.008100708012143082,
+  "inflation_up": 0.3415227259563837,
+  "inflation_down": 0.21693755662934755,
+  "unmapped": 0.00199997430011134,
+  "balance_score": 0.6123404719296797
+ },
+ {
+  "book": "after M0-M8",
+  "growth_up": 0.3653101078984786,
+  "growth_down": 0.041393355345823654,
+  "inflation_up": 0.33083785200797977,
+  "inflation_down": 0.2563219407649335,
+  "unmapped": 0.0061367439827844095,
+  "balance_score": 0.7221985923384839
+ },
+ {
+  "book": "proposed v1 @15% (pre-declared)",
+  "growth_up": 0.31008011166927835,
+  "growth_down": 0.18960466747834112,
+  "inflation_up": 0.21035440611699607,
+  "inflation_down": 0.23014100190365186,
+  "unmapped": 0.059819812831732544,
+  "balance_score": 0.8935876818772936
+ },
+ {
+  "book": "proposed v2 @15% (post-hoc)",
+  "growth_up": 0.2700802242488773,
+  "growth_down": 0.15888927163157093,
+  "inflation_up": 0.3421325732649597,
+  "inflation_down": 0.22486969979942822,
+  "unmapped": 0.004028231055163811,
+  "balance_score": 0.8470814580585492
+ }
+]

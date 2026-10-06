@@ -1,0 +1,53 @@
+{
+ "declared_at": "2026-10-06, BEFORE any Analysis-A number was computed; not tuned afterwards. Any later change is logged under 'post_hoc' in metrics.json.",
+ "naming": "'Dalio Holy Grail' = Dalio's diversification framework. 'Composer HG symphony' = Casey's 3x-momentum Composer strategy. Never conflated in any label.",
+ "book": "books/casey-2026-10.yaml, loaded with holygrail.book.book_from_dict; variants are in-memory edits of the parsed YAML (totals re-declared so reconciliation still runs). The book file is NOT modified.",
+ "estimation_base": {"freq": "D", "window": "trailing 3 years ending 2026-09-30 (rows > 2023-09-30)", "estimator": "lw_cc (Ledoit-Wolf constant-correlation)", "history": "common", "annualisation": "engine infer_periods_per_year on the common calendar", "calendar": "engine active-intersection daily calendar (crypto weekends compound into Monday)"},
+ "estimation_robustness": {"R1_longest_common": "daily, lw_cc, every row where all streams of the view have data, ending 2026-09-30 (window_years 20)", "R2_weekly": "weekly (W-FRI), lw_cc, trailing 3y: checks asynchronous closes (China/Mexico/crypto)", "R3_sample": "daily sample covariance, trailing 3y (no shrinkage)"},
+ "composer_series": "IN-SAMPLE backtest levels (data/casey/composer_<slug>_backtest.csv) before each symphony's live start, then LIVE deposit-adjusted returns from the live start (hg 2025-12-05, kmlm 2026-07-07, crash 2026-07-07, vixhyg 2026-07-22). Robustness: backtest only. Composer is NOT called in this analysis (cached files only; read-only rule).",
+ "expected_returns": {"base": "NEUTRAL PRIOR, Dalio/Bridgewater: every risky market/series stream mu = rf + 0.30 x its base-window vol (Dalio 2026 '.3'; Bridgewater ETRR 2011 betas 'Sharpe 0.2 to 0.3'; RPAB stocks 0.24 / bonds 0.28)", "low": "Sharpe 0.25 for the same streams", "alpha_haircut": "Sharpe 0 for Composer symphonies, single names and BTC (Bridgewater ETRR: alphas 'slightly negative on average'), betas at 0.30", "cash": "BOXX/BIL/cash at rf (FRED DTB3 latest); HL USDC 0%", "parametric": "book assumptions unchanged (loans: coupon less expected default; ETH carry: trailing funding; private assets rf + 0.30 x stated vol)", "rule": "every return-dependent number is labelled PRIOR-DRIVEN; results that do not depend on mu (vol, risk shares, N_eff, environment balance) are shown first"},
+ "rf": "FRED DTB3 latest observation (engine resolve_rate)",
+ "views": {
+   "whole_at_mark": "book view 'investable' = sheet net worth minus the 3 RECON (not-an-asset) lines; Organics Ocean at $12.0M",
+   "whole_oo_10m_15m_20m": "same with Organics Ocean position set to $10M / $15M / $20M",
+   "investable_ex_oo": "investable view with the Organics Ocean position removed",
+   "liquid_now": "book view 'liquid' ($2,485,346): Composer looked through to its 4 symphonies (holdings-level look-through impossible: holdings rotate daily)",
+   "liquid_post_revert": "liquid view with the 16% loans ($310,876.30) moved to BOXX"
+ },
+ "environment_mapping": "engine stream_box_mapping: manual 'environments' first (BTC growth_up+inflation_up; Composer Crash Convexity growth_down; Composer VIX Harvester growth_up; real estate growth_up+inflation_up), else engine CANONICAL_MAP by asset_class (Bridgewater 2012). New streams: TLT nominal_bond, TIP ilb, DBC commodity, ALLW-replica all four boxes (manual, by construction), core/gold/single-name/momentum composites by their asset class. KMLM, ETH carry and cash have no canonical box: reported as unmapped.",
+ "sleeves_for_reporting": {"cash_like": ["BOXX", "BIL", "cash", "usdc_idle", "st_loans_16", "evergrande", "margin_loan"], "equity_beta": ["SPY", "AVUV", "AVDV", "AVEM", "QUAL", "core_equity"], "single_names": ["GH", "TWST", "TEM", "LLY", "VIST", "JOINN", "BOT", "FTZFF", "SHAZ", "TSLA", "single_names"], "trend": ["KMLM"], "gold_silver": ["PHYS", "PSLV", "physical_metals", "gold_silver"], "bonds_tips_commod": ["TLT", "TIP", "DBC", "allw_replica"], "crypto_btc": ["BTC"], "composer_equity_momentum": ["composer_hg", "composer_kmlm", "composer_momentum"], "composer_crash_convexity": ["composer_crash"], "composer_vix_harvester": ["composer_vixhyg"], "eth_carry": ["eth_carry"], "organics_ocean": ["organics_ocean"], "venture_basket": ["venture_basket"], "em_special_sits": ["em_special_sits"], "real_estate": ["real_estate"], "private_credit": ["film_gap_loans", "film_father_of_us", "gary_loan", "spirit_fund"]},
+ "A2_grid": {"oo_vol": [0.40, 0.60, 0.80, 1.00], "oo_corr_IWM": [0.2, 0.4, 0.6], "view": "whole_at_mark", "outputs": ["OO risk share", "whole-book DR^2", "whole-book vol"]},
+ "A3_A4": {"corr_basis": "base-window daily stream correlations from the engine Moments (weekly R2 alongside)", "rest_of_book": "corr(stream, liquid-book-ex-stream) = (S w_-i)_i / (sigma_i sigma(w_-i)) using liquid_post_revert weights", "downside": "mean daily return on SPY's worst 5% days in the base window (empirical streams only)", "overlap_set": ["composer_hg", "composer_kmlm", "composer_vixhyg", "KMLM", "TSLA", "BTC", "SPY", "QQQ"]},
+ "funding_rule": "every buy draws BOXX first, then the 'Cash/stables ex-Hyperliquid' and U26 cash lines, then a margin loan (liability cash stream at rf + spread); every sale goes to BOXX",
+ "A5_moves": {
+   "M0": "16% loans revert to BOXX: +$310,876 BOXX (scheduled, not a decision)",
+   "M1": "add long Treasuries: +$250,000 TLT",
+   "M2": "add TIPS: +$200,000 TIP",
+   "M3": "add broad commodities: +$150,000 DBC",
+   "M4": "trim single names: sell half of TSLA, FTZFF and SHAZ",
+   "M5": "cap BTC: sell $139,400 of the sheet BTC position (half)",
+   "M6": "Composer as ONE equity-momentum budget: cut HG symphony + KMLM switcher pro rata from $184,300 to $120,000; +$30,000 to Crash Convexity",
+   "M7": "add trend: +$100,000 KMLM",
+   "M8": "gear the balanced core 1.5x: equity beta (SPY/AVUV/AVDV/AVEM/QUAL) + TLT + TIP + DBC positions x1.5 (margin/futures funded after cash)",
+   "M9_alternative": "+$250,000 ALLW, modelled as a replica composite of its 2026-10-05 published exposures (nominal bonds 69.50% -> IEF, equities 43.65% -> SPY 25/EFA 12/VEIEX 6.65, ILB 41.19% -> TIP, commodities 32.69% -> DBC; gross 1.87x; fee 0.85%; embedded financing spread 0.30%); one-at-a-time only, NOT in the cumulative path (alternative to M1-M3)",
+   "order": "one at a time from liquid_now; cumulatively M0 -> M8",
+   "outputs": ["vol", "DR^2 + the 4 other N_eff", "box risk shares + balance score", "leverage to 15%", "PRIOR-DRIVEN exp return now and at 15% (IBKR spread)"]
+ },
+ "A6_proposed": {
+   "nav": "liquid_post_revert NAV",
+   "fixed_unbudgeted": {"eth_carry": 30110.0, "usdc_idle": 67322.59},
+   "risk_budgets_of_total": {"balanced_beta_core": 0.60, "BTC": 0.12, "composer_momentum (HG symphony + KMLM switcher, current $ split)": 0.10, "composer_crash": 0.04, "composer_vixhyg": 0.02, "KMLM": 0.06, "single_names (current $ mix)": 0.06},
+   "core_streams": {"core_equity": "AVUV/AVDV/AVEM/QUAL/SPY at current $ mix", "TLT": "long Treasuries", "TIP": "TIPS", "DBC": "broad commodities", "gold_silver": "physical metals + PHYS + PSLV at current $ mix (box: inflation_up)"},
+   "core_split": "engine allocate.quadrant_balance on the core sub-covariance (25% of core risk per box, canonical map); core budgets = 0.60 x those",
+   "solve": "engine allocate.risk_budget_weights on the full budgeted covariance, then one scalar L (bisection) so total ex-ante vol incl. fixed sleeves = 15.0%; cash = 1 - sum(w); negative cash = margin loan at rf + spread; gross cap 3.0x",
+   "financing_spread_base": 0.0092,
+   "financing_spread_basis": "IBKR Pro USD blended for a ~$1M loan: first $100k at 5.380%, next $900k at 4.880% => 4.93%, minus DTB3 4.01% = 0.92% (ibkr.com margin-rates page fetched 2026-10-06)",
+   "routes": ["IBKR margin (tiered)", "futures (equity index implied financing over SOFR; Treasury futures implied repo)", "levered balanced ETFs (ALLW, UPAR, RSSB): fee + embedded futures financing"]
+ },
+ "backtests": {
+   "BT_A_real_data": {"window": "common window of every proposed+current stream, real data only (no proxies beyond the book's declared ARKG/BOTZ/IREN), to 2026-09-30", "current": "liquid_post_revert weights held constant, rebalanced monthly (HINDSIGHT: today's mix replayed)", "proposed": "walk-forward: window 252 days, min 252, lw_cc, monthly rebalance at the close, re-solved budgets + gearing each month (start_when all)", "costs_bps": 5, "financing_spread": 0.0092, "max_gross": 3.0, "cash": "DTB3 daily accrual", "basis": "daily mark-to-market"},
+   "BT_B_long_backfilled": {"window": "2006-05-01 (SLV start; DBC/GLD/TLT exist) to 2026-09-30", "natural_proxies": {"AVUV": "IWM", "AVDV": "EFA", "AVEM": "VEIEX", "QUAL": "SPY", "PHYS": "GLD", "PSLV": "SLV", "BOXX": "BIL then DTB3 cash", "BIL": "DTB3 cash before 2007-05-30"}, "replica_backfill": "every other stream before its first real return: r = beta' f, f = daily [SPY, TLT, GLD, DBC] returns, beta = OLS on WEEKLY returns over the stream's full real history to 2026-09-30, no intercept, no residual (idiosyncratic risk NOT backfilled)", "eth_carry": "constant accrual at its book expected return (no history)", "usdc_idle": "0%", "same_rules_as_BT_A": true, "benchmarks": ["SPY", "60/40 SPY/IEF monthly rebalanced"]},
+   "stress": {"scenarios": "engine forward.SCENARIOS: gfc 2007-10-09..2009-03-09, covid 2020-02-19..2020-03-23, inflation_2022 2022-01-03..2022-10-12", "books": ["liquid_now (loans as BOXX-like cash in replay)", "liquid_post_revert", "proposed at 15%", "SPY"], "method": "engine forward.replay_scenario on the BT_B panel, buy-and-hold from the scenario start, borrowing pays DTB3 (spread not charged: windows <= 17 months)", "label": "share of each book's weight that is replica/proxy in each window is reported"},
+   "forward": {"method": "engine run_forward bootstrap (stationary block), WEEKLY returns of the BT_B panel 2006-05..2026-09, mean block 8 weeks, 10 years, 10,000 paths, seed 20261006", "recentring": "each stream's weekly history is demeaned and re-centred on its PRIOR mean (rf_now + 0.30 x vol; cash rf_now) so in-sample means (e.g. Composer backtest CAGRs) do not drive the result; shape (vol clustering within blocks, fat tails, co-movement) is IN-SAMPLE", "books": ["liquid_post_revert", "proposed at 15%", "SPY"], "financing": "rf_now + 0.92% on borrowed share"}
+ }
+}

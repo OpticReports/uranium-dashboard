@@ -1,0 +1,98 @@
+[
+ {
+  "oo_vol": 0.4,
+  "oo_corr_iwm": 0.2,
+  "oo_risk_share": 0.9174292309514654,
+  "whole_dr2": 1.8996112861389773,
+  "whole_vol": 0.25849694643703697,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 0.4,
+  "oo_corr_iwm": 0.4,
+  "oo_risk_share": 0.8962394535912234,
+  "whole_dr2": 1.803182149797616,
+  "whole_vol": 0.2653187778225082,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 0.4,
+  "oo_corr_iwm": 0.6,
+  "oo_risk_share": 0.877097041511865,
+  "whole_dr2": 1.716070037531334,
+  "whole_vol": 0.2719695505257649,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 0.6,
+  "oo_corr_iwm": 0.2,
+  "oo_risk_share": 0.9551703261860509,
+  "whole_dr2": 1.5994751865796648,
+  "whole_vol": 0.3781574339763929,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 0.6,
+  "oo_corr_iwm": 0.4,
+  "oo_risk_share": 0.9387258986801068,
+  "whole_dr2": 1.5416892276977263,
+  "whole_vol": 0.38517933315995245,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 0.6,
+  "oo_corr_iwm": 0.6,
+  "oo_risk_share": 0.9234282512266584,
+  "whole_dr2": 1.4879330707007228,
+  "whole_vol": 0.39207549338804804,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 0.8,
+  "oo_corr_iwm": 0.2,
+  "oo_risk_share": 0.9706595276476988,
+  "whole_dr2": 1.4472534465479714,
+  "whole_vol": 0.49894257318662566,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 0.8,
+  "oo_corr_iwm": 0.4,
+  "oo_risk_share": 0.9575247426537923,
+  "whole_dr2": 1.4068646692356235,
+  "whole_vol": 0.5060538078445863,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 0.8,
+  "oo_corr_iwm": 0.6,
+  "oo_risk_share": 0.9451031639640034,
+  "whole_dr2": 1.3686689640297574,
+  "whole_vol": 0.513066488410537,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 1.0,
+  "oo_corr_iwm": 0.2,
+  "oo_risk_share": 0.9786880836870887,
+  "whole_dr2": 1.356057979727234,
+  "whole_vol": 0.6201956229422425,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 1.0,
+  "oo_corr_iwm": 0.4,
+  "oo_risk_share": 0.9678227403188774,
+  "whole_dr2": 1.3252779455482953,
+  "whole_vol": 0.6273564115290517,
+  "neff_inv_hhi_prc": null
+ },
+ {
+  "oo_vol": 1.0,
+  "oo_corr_iwm": 0.6,
+  "oo_risk_share": 0.9574396964505155,
+  "whole_dr2": 1.2958641999979588,
+  "whole_vol": 0.6344363825132522,
+  "neff_inv_hhi_prc": null
+ }
+]
