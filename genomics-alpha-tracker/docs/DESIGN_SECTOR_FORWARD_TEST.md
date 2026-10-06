@@ -252,8 +252,49 @@ Otherwise no forward test is run, and the result is recorded here.
      supersedes it from its own timestamp.
    - **Filtering:** only releases issued by the company count. Law-firm
      alerts and third-party items are excluded.
-   - **Status:** primary source; not yet evaluated. Extraction method,
-     spot-check and gate results will be logged here.
+   - **Status:** primary source; not yet evaluated.
+
+**K = 10** (Casey, 2026-10-06: a shortlist of the roughly 63-name
+universe; top 25 is 40% of it). Recorded before any gate statistic. Top 25
+and top 40 are reported, and must not lose (condition 3).
+
+**Extraction from source 1, frozen before any statistic.**
+- **Releases.** Every FMP press release for each alias-table name,
+  published 2024-06-01 to 2026-09-30. It counts only if both hold:
+  - its first 600 characters carry "(NASDAQ: SYM)", "(NYSE: SYM)" or the
+    company's alias-table core name;
+  - its title does not match a law-firm or third-party pattern
+    (shareholder / investor alert, class action, investigation, "law
+    firm", "LLP", "deadline", "reminds").
+- **Catalyst sentences.** Sentences that name a catalyst term (PDUFA,
+  target action date, topline / top-line, data, results, readout,
+  approval decision) together with a forward-looking cue (expect,
+  anticipate, on track, plan, will, set for, scheduled, target, by). The
+  sentence must also carry a time expression, mapped by the guided-timing
+  table:
+  - an exact date "Month D, YYYY";
+  - "Month YYYY" (that month);
+  - "Qn YYYY" or "nth quarter of YYYY";
+  - "1H/2H YYYY" or "first/second half of YYYY";
+  - "mid-YYYY";
+  - "early YYYY";
+  - "late / end of / year-end YYYY";
+  - "YYYY" alone only directly after "in" or "during".
+- **Kept windows.** A window counts only if it ends on or after the
+  release's publish date. Past-tense reports of results are the event, not
+  a catalyst.
+- **As-of time.** The release's publish timestamp, under the 16:00 New
+  York cutoff rule.
+- **Staleness.** A window extracted from a release counts for 365 days
+  after publication. A later release that moves a date does not cancel the
+  earlier window (linking statements to programmes is not attempted). This
+  over-states exposure and is stated as a limitation.
+- **Spot-check, as frozen above.** 20 extracted catalyst records,
+  `random.Random(20261006).sample` sorted by (symbol, publish time,
+  sentence). Two independent reviewers check each against the release on
+  its wire service: was the date public at that timestamp, and does the
+  window match the sentence? Any point-in-time failure means no gate. The
+  extraction accuracy is reported.
 
 ## The Sector list (needs no test; Casey's call)
 
@@ -406,7 +447,7 @@ looks at the metric; monitoring is operational only.
 | P | question | what it moves | first asked | status | expires |
 |---|---|---|---|---|---|
 | P1 | Is there a catalyst source with PDUFA dates and guided readout timing AND point-in-time history (vendor vintages or archived snapshots), one you have or one you would pay for? | whether the gate runs at all | 2026-10-06 | answered 2026-10-06: FMP press releases (source 1) | — |
-| P1 | What the desk would do with a ranked screen: a morning glance (top 10) or position preparation (top 25, 5-day lead time) | the list length K and the gating metric; the gate cannot run without it | 2026-10-06 (rev 1, then P3) | open; promoted to P2 (rev 3), then P1 (rev 4) | 2026-12-05 |
+| P1 | What the desk would do with a ranked screen: a morning glance (top 10) or position preparation (top 25, 5-day lead time) | the list length K and the gating metric; the gate cannot run without it | 2026-10-06 (rev 1, then P3) | answered 2026-10-06: K = 10 | — |
 | P2 | Build the reference Sector list (no test needed)? | one dashboard view | 2026-10-06 | open | 2026-12-05 |
 | P3 | Where the snapshot runs (A or B) | the instrument | 2026-10-06 (rev 1) | deferred to the gate (rev 2) | — |
 | — | The end date | — | 2026-10-06 (rev 1) | withdrawn (rev 3): now a formula | — |
