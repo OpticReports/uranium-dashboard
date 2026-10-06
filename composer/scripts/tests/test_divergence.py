@@ -6,8 +6,9 @@ with a BROKEN-INPUT counterpart that must land on the other side of the
 threshold. The broken variants are INPUT transforms only (ex-dates shifted a
 day, weights timed on the same day, amounts zeroed or scaled, a payer left out
 of the distribution data, the raw $ series fed in place of deposit-adjusted,
-the model's holdings edited around an ex-date) — no code switches, so the
-same production path is judged.
+the model's holdings edited around an ex-date, a pay-lag table forced or
+shifted, a Yahoo wire response mutated) — no code switches, so the same
+production path is judged.
 
 What the panel found missing and what now covers it:
   - consumer keys never pinned          -> T8 (per-engine values, tight)
@@ -23,11 +24,22 @@ What the panel found missing and what now covers it:
   - _on_calendar compounding dead       -> T12
   - cumulative/daily consistency        -> T13
   - weight date off the model calendar  -> T14
+Second panel round (open conditions C2/C3, 2026-10-05):
+  - Yahoo parser success path ungated   -> T16 (fixture -> Yahoo wire JSON ->
+    (5/5 mutants survived)                 patched urlopen -> REAL
+                                           fetch_yahoo_chart; 7 wire mutants
+                                           incl. adjclose missing -> INCOMPLETE)
+  - fund-agnostic ex..ex+4 classifier   -> T17 (per-fund PAY_LAG vs the fixture
+                                           cash/recredit days; no cash-trail
+                                           label flips; ZVOL short hold;
+                                           unknown lag -> AMBIGUOUS, strict;
+                                           window-end clip = credit pending)
 
 Fixtures (frozen 2026-10-05, pure JSON, no API):
   divergence-panel-2026-10-05.json   per engine: live dates/raw/adj, model
                                      dates/curve, Composer tdvm_weights (ISO)
-  divergence-yahoo-2026-10-05.json   per ticker: dates/close/adjclose/divs
+  divergence-yahoo-2026-10-05.json   per ticker: dates/close/adjclose/divs/
+                                     splits (open/high/low dropped: unread)
   divergence-account-2026-10-05.json account value history + total_stats
 
 Run from the repo root:
@@ -74,9 +86,16 @@ SECONDARY_KEYS = ["model_total_return_cumulative", "cumulative_gap_total_return_
 # the Op2/Op3 inputs; any change here is a methodology change and must be
 # re-derived, not re-pinned. Tolerances: 0.0015 on corr/beta/vol (keys are
 # rounded to 3 dp), 0.0006 on gaps/returns (4 dp), 0.06 bps on daily gaps.
+#
+# HG re-derived 2026-10-05 for the per-fund PAY_LAG classifier (panel C2):
+# exactly one row flips — HG BIL 2026-04-01 (pre-edit, model-only; the model
+# held BIL ex..ex+3 >= BIL's observed L=3) LEAKED -> HELD_THROUGH, so its
+# 28.8 bps stays in the model. Old (fund-agnostic) HG pins in
+# PINNED_FUND_AGNOSTIC_HG; T17a proves the delta is that row and nothing else.
+# corr/beta/vol (total-return pair) and KMLM/SLEEVE/HARV do not move.
 PINNED = {
     #           corr   beta   volr   maxDD   ann_gap  cum_gap  mean_bps  live_cum  model_cum
-    "HG":     (0.960, 0.979, 1.019, 0.2105, 0.0906, 0.1309, 3.60, 0.8923, 0.7614),
+    "HG":     (0.960, 0.979, 1.019, 0.2105, 0.0871, 0.1258, 3.46, 0.8923, 0.7665),
     "KMLM":   (0.988, 0.990, 1.003, 0.1475, 0.0354, 0.0112, 1.41, 0.3130, 0.3019),
     "SLEEVE": (0.969, 1.036, 1.068, 0.0481, 0.0794, 0.0220, 3.15, 0.1797, 0.1576),
     "HARV":   (0.857, 0.835, 0.974, 0.0403, 0.0308, 0.0059, 1.22, -0.0152, -0.0212),
@@ -85,6 +104,7 @@ PIN_KEYS = ["daily_return_correlation", "live_beta_to_model", "live_model_vol_ra
             "live_max_drawdown", "annualized_gap", "cumulative_gap",
             "mean_daily_gap_bps", "live_cumulative_return", "model_cumulative_return"]
 PIN_TOL = [0.0015, 0.0015, 0.0015, 0.0006, 0.0006, 0.0006, 0.06, 0.0006, 0.0006]
+PINNED_FUND_AGNOSTIC_HG = (0.960, 0.979, 1.019, 0.2105, 0.0906, 0.1309, 3.60, 0.8923, 0.7614)
 
 # add.-36 total-return-basis numbers (the ones that false-failed HARV)
 PINNED_TR = {"HG": (0.960, 0.072), "KMLM": (0.989, -0.0094),
@@ -100,8 +120,33 @@ LENS3_HELD = {("HG", "2026-09-01", "BIL"), ("HG", "2026-09-23", "TQQQ"),
 LENS3_LEAKED = {("HARV", "2026-08-19", "ZVOL"), ("KMLM", "2026-08-19", "ZVOL"),
                 ("HG", "2026-08-03", "BIL"), ("SLEEVE", "2026-09-22", "TMV")}
 # model-only holding: the model held TLT into 09-01, live had sold it on
-# 08-31. No live entitlement, no cash jump. Classified LEAKED (documented miss).
+# 08-31. No live entitlement, no cash jump. Classified LEAKED (documented miss;
+# TLT has no observed lag, but weights[ex] == 0 makes it LEAKED for any lag).
 MODEL_ONLY = {("KMLM", "2026-09-01", "TLT")}
+
+# Labels the add.-38 fund-agnostic rule (ex..ex+4) gave every valid-regime
+# row the cash trail determined (committed results JSON
+# divergence-2026-10-05-distaware.json, eb87d9b). The per-fund table must not
+# flip any of them (panel C2 condition: "nothing flips on the frozen panel").
+OLD_RULE_LABELS = {
+    ("HG", "2026-08-03", "BIL"): "LEAKED",        ("HG", "2026-09-01", "BIL"): "HELD_THROUGH",
+    ("HG", "2026-09-23", "TQQQ"): "HELD_THROUGH", ("KMLM", "2026-07-31", "PULS"): "HELD_THROUGH",
+    ("KMLM", "2026-08-19", "ZVOL"): "LEAKED",     ("KMLM", "2026-08-31", "PULS"): "HELD_THROUGH",
+    ("KMLM", "2026-09-22", "SOXL"): "HELD_THROUGH", ("KMLM", "2026-09-30", "PULS"): "HELD_THROUGH",
+    ("SLEEVE", "2026-09-22", "LABD"): "HELD_THROUGH", ("SLEEVE", "2026-09-22", "TMV"): "LEAKED",
+    ("HARV", "2026-07-31", "PULS"): "HELD_THROUGH", ("HARV", "2026-08-19", "ZVOL"): "LEAKED",
+    ("HARV", "2026-08-31", "PULS"): "HELD_THROUGH", ("HARV", "2026-09-30", "PULS"): "HELD_THROUGH",
+}
+# The one row the per-fund table flips on the whole panel (pre-edit, model-only)
+EXPECTED_FLIPS = {("HG", "2026-04-01", "BIL"): ("LEAKED", "HELD_THROUGH")}
+
+# Physical pay-lag evidence in the fixtures (lens 3), one per table lag:
+# LEAKED rows live held -> account-cash residual jump lands on ex+L;
+# HELD_THROUGH rows on quiet days -> the primary daily gap shows the live-only
+# +w*y recredit on ex+L (model days).
+CASH_CREDITS = [("2026-08-19", "ZVOL"), ("2026-08-03", "BIL"), ("2026-09-22", "TMV")]
+RECREDITS = [("HARV", "2026-08-31", "PULS"), ("HG", "2026-09-01", "BIL"),
+             ("HG", "2026-09-23", "TQQQ"), ("SLEEVE", "2026-09-22", "LABD")]
 
 
 # ---------------------------------------------------------------- helpers
@@ -125,13 +170,30 @@ def dists_all(yahoo):
     return {t: dv.dists_from_chart(c) for t, c in yahoo.items()}
 
 
-def run(engine, panel, dists, weights=None, live=None, live_dates=None):
+def run(engine, panel, dists, weights=None, live=None, live_dates=None, pay_lag=None,
+        end=None):
+    """analyze_series on one engine; `end` truncates live AND model at that
+    date (the window-end clip), `pay_lag` overrides dv.PAY_LAG."""
     v = panel[engine]
-    return dv.analyze_series(live_dates or v["dates"], live if live is not None else v["adj"],
-                             v["model_dates"], v["model"],
+    ld = live_dates or v["dates"]
+    lv = live if live is not None else v["adj"]
+    md, mv, raw = v["model_dates"], v["model"], v["raw"]
+    if end is not None:
+        k = ld.index(end) + 1
+        ld, lv, raw = ld[:k], lv[:k], raw[:k]
+        j = md.index(end) + 1
+        md, mv = md[:j], mv[:j]
+    return dv.analyze_series(ld, lv, md, mv,
                              weights if weights is not None else v["weights"],
-                             dists, live_raw=v["raw"], symphony=engine,
-                             name=engine, detail=True)
+                             dists, live_raw=raw, symphony=engine,
+                             name=engine, detail=True, pay_lag=pay_lag)
+
+
+def shown(result):
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        dv.show(result)
+    return buf.getvalue()
 
 
 def gap_on(result, date, basis="gap_bps"):
@@ -190,21 +252,22 @@ def without(dists, ticker):
     return {t: dd for t, dd in dists.items() if t != ticker}
 
 
-def weights_held_through(weights, ticker, ex, model_dates, k=dv.HELD_THROUGH_DAYS):
-    """The model is edited to KEEP the payer through ex..ex+k."""
+def weights_held_through(weights, ticker, ex, model_dates, n=dv.MAX_PAY_LAG):
+    """The model is edited to KEEP the payer on ex..ex+n-1 (n model days;
+    default the longest observed pay lag, so HELD_THROUGH for any fund)."""
     i = model_dates.index(ex)
     w_prev = weights[ticker][model_dates[i - 1]]
     out = {t: dict(dd) for t, dd in weights.items()}
-    for d in model_dates[i:i + k + 1]:
+    for d in model_dates[i:i + n]:
         out[ticker][d] = w_prev
     return out
 
 
-def weights_exit_at_ex(weights, ticker, ex, model_dates, k=dv.HELD_THROUGH_DAYS):
+def weights_exit_at_ex(weights, ticker, ex, model_dates, n=dv.MAX_PAY_LAG):
     """The model is edited to have SOLD the payer at the ex-date close."""
     i = model_dates.index(ex)
     out = {t: dict(dd) for t, dd in weights.items()}
-    for d in model_dates[i:i + k + 1]:
+    for d in model_dates[i:i + n]:
         out[ticker][d] = 0.0
     return out
 
@@ -213,6 +276,107 @@ def drop_live_date(panel, engine, date):
     v = panel[engine]
     i = v["dates"].index(date)
     return (v["dates"][:i] + v["dates"][i + 1:], v["adj"][:i] + v["adj"][i + 1:])
+
+
+def extend_zvol_hold(weights):
+    """HARV's model is edited to KEEP ZVOL across the 08-19 ex-date (it
+    held it 08-18 and 08-20 but sold for 08-19): ZVOL 0.52 / PULS 0.48 on
+    08-19, weights still sum to 1. ZVOL is then held 2 model days from ex."""
+    out = {t: dict(dd) for t, dd in weights.items()}
+    out["ZVOL"]["2026-08-19"] = 0.52
+    out["PULS"]["2026-08-19"] = out["PULS"]["2026-08-19"] - 0.52
+    return out
+
+
+def rename_ticker(weights, dists, old, new):
+    """The same payer under a ticker absent from PAY_LAG (unknown pay lag)."""
+    return ({(new if t == old else t): dd for t, dd in weights.items()},
+            {(new if t == old else t): dd for t, dd in dists.items()})
+
+
+def lag_table(**override):
+    """dv.PAY_LAG with some entries forced (the broken-input tables)."""
+    return {**dv.PAY_LAG, **{t: (lag, 0) for t, lag in override.items()}}
+
+
+def shifted_lag_table(delta):
+    return {t: (max(1, lag + delta), n) for t, (lag, n) in dv.PAY_LAG.items()}
+
+
+# Yahoo wire format (v8 chart API) built from the parsed fixture: bar and
+# dividend timestamps at the 09:30 ET open (13:30 UTC), as Yahoo sends them.
+def _ts(d):
+    return int(dt.datetime(*map(int, d.split("-")), 13, 30,
+                           tzinfo=dt.timezone.utc).timestamp())
+
+
+def to_wire(chart):
+    divs = {str(_ts(d)): {"amount": a, "date": _ts(d)} for d, a in chart["divs"]}
+    splits = {}
+    for d, ratio in chart.get("splits") or []:
+        num, den = ratio.split(":")
+        splits[str(_ts(d))] = {"date": _ts(d), "numerator": float(num),
+                               "denominator": float(den), "splitRatio": ratio}
+    return {"chart": {"error": None, "result": [{
+        "meta": {"currency": "USD", "dataGranularity": "1d"},
+        "timestamp": [_ts(d) for d in chart["dates"]],
+        "events": {"dividends": divs, "splits": splits},
+        "indicators": {"quote": [{"close": list(chart["close"])}],
+                       "adjclose": [{"adjclose": list(chart["adjclose"])}]}}]}}
+
+
+def _res(w):
+    return w["chart"]["result"][0]
+
+
+def wire_drop_divs(w):
+    _res(w)["events"].pop("dividends")
+    return w
+
+
+def wire_div_date_plus1(w):
+    ev = _res(w)["events"]
+    ev["dividends"] = {str(v["date"] + 86400): dict(v, date=v["date"] + 86400)
+                       for v in ev["dividends"].values()}
+    return w
+
+
+def wire_amount_half(w):
+    for v in _res(w)["events"]["dividends"].values():
+        v["amount"] *= 0.5
+    return w
+
+
+def wire_bar_date_plus1(w):
+    _res(w)["timestamp"] = [t + 86400 for t in _res(w)["timestamp"]]
+    return w
+
+
+def wire_adjclose_is_close(w):
+    ind = _res(w)["indicators"]
+    ind["adjclose"][0]["adjclose"] = list(ind["quote"][0]["close"])
+    return w
+
+
+def wire_adjclose_missing(w):
+    _res(w)["indicators"].pop("adjclose")
+    return w
+
+
+def wire_half_bar(w):
+    """one bar with a close but no adjclose (must refuse, not patch)."""
+    _res(w)["indicators"]["adjclose"][0]["adjclose"][-5] = None
+    return w
+
+
+WIRE_TICKERS = ("BIL", "PULS", "ZVOL")
+WIRE_BROKEN = {"dividends dropped": wire_drop_divs,
+               "dividend date +1 day": wire_div_date_plus1,
+               "amount x0.5": wire_amount_half,
+               "bar date +1 day": wire_bar_date_plus1,
+               "adjclose := close": wire_adjclose_is_close,
+               "adjclose missing": wire_adjclose_missing,
+               "half bar (adjclose None)": wire_half_bar}
 
 
 # --------------------------------------------------- gate predicates (shared)
@@ -235,9 +399,11 @@ def gate_t2(results):
                for e, d in CLEAN)
 
 
-def gate_t8(res):
+def gate_t8(res, engines=None):
     bad = []
     for e, pins in PINNED.items():
+        if engines is not None and e not in engines:
+            continue
         for k, pin, tol in zip(PIN_KEYS, pins, PIN_TOL):
             if abs(res[e][k] - pin) > tol:
                 bad.append((e, k, res[e][k], pin))
@@ -291,6 +457,95 @@ def model_reproduction(panel, yahoo, engine, weights, dists, cost=True):
     res = [(px_ - ((1 + s_px) * (1 - c * turn) - 1)) * 1e4
            for i, tr_, px_, s_adj, s_px, turn in rows]
     return c * 1e4, statistics.pstdev(res), max(abs(x) for x in res)
+
+
+def labels(res, since="2026-07-22"):
+    return {(e, x["date"], x["ticker"]): x["treatment"]
+            for e, r in res.items() for x in r["distribution_ledger"] if x["date"] >= since}
+
+
+def gate_t17_lag_evidence(panel, dists, table):
+    """Every observed credit in the fixtures lands on ex+L for the table's L.
+    Returns the misses ([] = pass)."""
+    acct = load_account()["history"]
+    a = dict(zip(acct["dates"], acct["series"]))
+    dates = [d for d in acct["dates"] if all(d in v["dates"] for v in panel.values())]
+
+    def residual(d):
+        return a[d] - sum(v["raw"][v["dates"].index(d)] for v in panel.values())
+    miss = []
+    for ex, t in CASH_CREDITS:                  # leaked: cash lands on ex+L
+        i = dates.index(ex)
+        jumps = [(residual(dates[k]) - residual(dates[k - 1]), k - i)
+                 for k in range(i + 1, i + 9)]
+        if max(jumps)[1] != table[t][0]:
+            miss.append(("cash", ex, t, max(jumps)[1], table[t][0]))
+    for e, ex, t in RECREDITS:                  # held: live recredit on ex+L
+        r = run(e, panel, dists, pay_lag=table)
+        row = next(x for x in r["distribution_ledger"] if x["date"] == ex and x["ticker"] == t)
+        days = [d["date"] for d in r["daily"]]
+        day = days[days.index(row["applied_on"]) + table[t][0]]
+        if abs(gap_on(r, day) - row["term_bps"]) > 3.0:
+            miss.append(("recredit", e, ex, t, day, round(gap_on(r, day), 1)))
+    return miss
+
+
+def gate_t17b_zvol_short_hold(r):
+    """ZVOL (L=1) held across its ex-date for 2 days: HELD_THROUGH, not
+    subtracted, and (no other leaked row on HARV) the primary model is the
+    total-return model."""
+    z = [x for x in r["distribution_ledger"]
+         if x["ticker"] == "ZVOL" and x["date"] == "2026-08-19"]
+    return (len(z) == 1 and z[0]["treatment"] == "HELD_THROUGH"
+            and z[0]["subtracted_bps"] == 0.0
+            and r["model_cumulative_return"] == r["model_total_return_cumulative"])
+
+
+def gate_t17c_ambiguous(r, out, strict_ref, lenient_ref, ticker="ZZZZ"):
+    """Unknown-lag payer held 1..MAX_PAY_LAG-1 days: AMBIGUOUS, primary ==
+    strict, lenient alternative reported, loud show() line. [] = pass."""
+    bad = []
+    row = [x for x in r["distribution_ledger"] if x["ticker"] == ticker]
+    if len(row) != 1 or row[0]["treatment"] != "AMBIGUOUS":
+        return [("treatment", [x["treatment"] for x in row])]
+    x = row[0]
+    if not (x["subtracted_bps"] == 0.0 and x.get("strict_subtracted_bps") == 0.0
+            and x.get("lenient_subtracted_bps") == x["term_bps"] and x["pay_lag_bd"] is None):
+        bad.append(("row alternatives", x))
+    if [a["ticker"] for a in r["ambiguous_rows"]] != [ticker]:
+        bad.append(("ambiguous_rows", r["ambiguous_rows"]))
+    bad += [("primary != strict", k, r[k], strict_ref[k])
+            for k in CONSUMER_KEYS if r[k] != strict_ref[k]]
+    if (r["annualized_gap_ambiguous_lenient"] != lenient_ref["annualized_gap"]
+            or r["cumulative_gap_ambiguous_lenient"] != lenient_ref["cumulative_gap"]):
+        bad.append(("lenient", r["annualized_gap_ambiguous_lenient"],
+                    lenient_ref["annualized_gap"]))
+    loud = [ln for ln in out.splitlines() if f"AMBIGUOUS: {ticker}" in ln]
+    if not (loud and f"pay lag for {ticker} is MISSING" in loud[0]
+            and "account-cash residual" in loud[0]
+            and f"{lenient_ref['annualized_gap']:+.1%}" in loud[0]):
+        bad.append(("show() loud line", loud))
+    return bad
+
+
+def pending_profile(panel, dists, engine, ex, ticker, table=None, extra=2):
+    """(k, credit_pending, held_days_checked, shown-as-pending) for windows
+    ending ex+0 .. ex+L+extra-1 model days, L = the observed lag."""
+    md = panel[engine]["model_dates"]
+    i = md.index(ex)
+    out = []
+    for k in range(dv.PAY_LAG[ticker][0] + extra):
+        r = run(engine, panel, dists, pay_lag=table, end=md[i + k])
+        x = next(y for y in r["distribution_ledger"] if y["date"] == ex and y["ticker"] == ticker)
+        line = next(ln for ln in shown(r).splitlines()
+                    if ln.strip().startswith(f"{ex} {ticker}"))
+        out.append((k, x["credit_pending"], x["held_days_checked"], "credit pending" in line))
+    return out
+
+
+def expected_pending(ticker, extra=2):
+    lag = dv.PAY_LAG[ticker][0]
+    return [(k, k < lag - 1, min(k + 1, lag), k < lag - 1) for k in range(lag + extra)]
 
 
 REPRO_SD, REPRO_MAX = 0.5, 1.0
@@ -600,8 +855,11 @@ class DivergenceGates(unittest.TestCase):
         jumps = [residual(d) - residual(dates[dates.index(d) - 1]) for d in dates[i + 1:i + 9]]
         self.assertLess(max(jumps), 50.0)
         # the bias the primary removes vs the all-stripped reference
+        # HG re-derived for the per-fund table: BIL 04-01 (28.8 bps) now stays
+        # in the primary model, so the all-stripped reference is lenient by it
+        # too (0.0061 -> 0.0096)
         for e, lo, hi in (("KMLM", 0.009, 0.012), ("SLEEVE", 0.008, 0.011),
-                          ("HARV", 0.040, 0.050), ("HG", 0.005, 0.008)):
+                          ("HARV", 0.040, 0.050), ("HG", 0.008, 0.011)):
             b = self.res[e]["held_through_credit_bias_annualized"]
             self.assertTrue(lo <= b <= hi, (e, b))
 
@@ -829,6 +1087,185 @@ class DivergenceGates(unittest.TestCase):
             dep = (row_on(raw, "2026-08-25")["live_ret"]
                    - row_on(r, "2026-08-25")["live_ret"]) * 1e4
             self.assertGreater(dep, 60.0, (e, dep))
+
+    # T16 (Yahoo wire format: the REAL fetch_yahoo_chart success path) ----
+    def wire_gate(self, mutate=None):
+        """Serve Yahoo-shaped responses (built from the fixture, optionally
+        mutated) through a patched urlopen, run the REAL fetch_yahoo_chart +
+        dists_from_chart and the mocked-Composer analyze(). Returns
+        (failures, harv_result); failures == [] is a pass."""
+        def fake_urlopen(rq, timeout=None):
+            url = rq.full_url if hasattr(rq, "full_url") else rq
+            t = url.split("/chart/")[1].split("?")[0]
+            w = to_wire(self.yahoo[t])
+            return io.BytesIO(json.dumps(mutate(w) if mutate else w).encode())
+        fake_get, fake_bt = self._mock_composer("HARV")
+        saved = (cl.get, cl.backtest_by_id, urllib.request.urlopen, dict(dv._YAHOO_CACHE))
+        cl.get, cl.backtest_by_id, urllib.request.urlopen = fake_get, fake_bt, fake_urlopen
+        dv._YAHOO_CACHE.clear()
+        bad = []
+        try:
+            for t in WIRE_TICKERS:
+                chart = dv.fetch_yahoo_chart(t)
+                if chart is None:
+                    bad.append((t, "fetch -> None (INCOMPLETE)"))
+                    continue
+                got, want = dv.dists_from_chart(chart), self.dists[t]
+                if sorted(got) != sorted(want):
+                    bad.append((t, "ex-dates", sorted(set(got) ^ set(want))[:4]))
+                    continue
+                for ex in want:
+                    for f in ("amount", "prev_close", "adj_ret", "px_ret"):
+                        if abs(got[ex][f] - want[ex][f]) > 1e-12:
+                            bad.append((t, ex, f, got[ex][f], want[ex][f]))
+            dv._YAHOO_CACHE.clear()
+            r = dv.analyze("acct", "HARV", "HARV")
+        finally:
+            cl.get, cl.backtest_by_id, urllib.request.urlopen = saved[:3]
+            dv._YAHOO_CACHE.clear()
+            dv._YAHOO_CACHE.update(saved[3])
+        if r["distribution_data"] != "COMPLETE":
+            bad.append(("HARV", r["distribution_data"], r["distribution_missing_tickers"]))
+        bad += [("HARV pin",) + b for b in gate_t8({"HARV": r}, engines=("HARV",))]
+        return bad, r
+
+    def test_t16_yahoo_wire_round_trip_reproduces_fixture_and_pins(self):
+        bad, r = self.wire_gate()
+        self.assertEqual(bad, [])
+        for k in CONSUMER_KEYS + SECONDARY_KEYS:
+            self.assertEqual(r[k], self.res["HARV"][k], k)
+
+    def test_t16_broken_wire_mutants_fail(self):
+        for name, mutate in WIRE_BROKEN.items():
+            bad, r = self.wire_gate(mutate)
+            print(f"\n  wire mutant {name!r}: {len(bad)} failure(s), HARV "
+                  f"{r['distribution_data']} corr {r.get('daily_return_correlation')} "
+                  f"ann {r.get('annualized_gap')}; first: {bad[:1]}")
+            self.assertNotEqual(bad, [], f"wire mutant {name!r} passed the gate")
+            if name in ("adjclose missing", "half bar (adjclose None)"):
+                # refused, never a price-only COMPLETE
+                self.assertEqual(r["distribution_data"], "INCOMPLETE", name)
+                self.assertEqual(r["distribution_missing_tickers"], ["PULS", "VXZ", "ZVOL"])
+        # the two that silently reproduced the add.-36 false alarm are now caught
+        for name in ("dividends dropped", "dividend date +1 day"):
+            bad, r = self.wire_gate(WIRE_BROKEN[name])
+            self.assertEqual(r["distribution_data"], "COMPLETE", name)
+            self.assertLess(r["daily_return_correlation"], 0.2, name)
+
+    # T17 (per-fund PAY_LAG classifier — panel condition C2) -------------
+    def test_t17_pay_lag_table_matches_fixture_credits(self):
+        """Each observed lag in the table is visible in the fixtures: cash
+        credits (ZVOL ex+1, BIL ex+3, TMV ex+5) in the account residual,
+        in-symphony recredits (PULS ex+2, BIL ex+3, TQQQ ex+4, LABD ex+5) as
+        the live-only +w*y day in the primary gap."""
+        self.assertEqual(dv.MAX_PAY_LAG, 5)
+        self.assertNotIn("TLT", dv.PAY_LAG)         # never observed: not guessed
+        self.assertEqual(gate_t17_lag_evidence(self.panel, self.dists, dv.PAY_LAG), [])
+
+    def test_t17_broken_lag_table_shifted_fails_evidence(self):
+        for delta in (+1, -1):
+            miss = gate_t17_lag_evidence(self.panel, self.dists, shifted_lag_table(delta))
+            self.assertGreaterEqual(len(miss), 5, (delta, miss))
+
+    def test_t17a_no_cash_trail_label_flips_on_frozen_panel(self):
+        new = labels(self.res)
+        for key, old in OLD_RULE_LABELS.items():
+            self.assertEqual(new.get(key), old, key)
+        self.assertEqual(new[("KMLM", "2026-09-01", "TLT")], "LEAKED")
+        self.assertEqual(set(new), set(OLD_RULE_LABELS) | MODEL_ONLY)
+        # the old rule as an INPUT (uniform lag 5 = ex..ex+4) reproduces the
+        # committed add.-38 results; across the WHOLE panel exactly one row
+        # differs, and it is the pre-edit model-only HG BIL 04-01
+        u5 = {t: (5, 0) for t in self.dists}
+        old_res = {e: run(e, self.panel, self.dists, pay_lag=u5) for e in self.panel}
+        a, b = labels(old_res, since=""), labels(self.res, since="")
+        flips = {k: (a[k], b[k]) for k in a if a[k] != b[k]}
+        self.assertEqual(flips, EXPECTED_FLIPS)
+        self.assertEqual(gate_t8(old_res, engines=("KMLM", "SLEEVE", "HARV")), [])
+        for k, pin, tol in zip(PIN_KEYS, PINNED_FUND_AGNOSTIC_HG, PIN_TOL):
+            self.assertLess(abs(old_res["HG"][k] - pin), tol, k)
+        # and the HG re-pin is that one row: force it LEAKED (input: the model
+        # sold BIL at the 04-01 close) and the old HG numbers come back
+        v = self.panel["HG"]
+        hg = run("HG", self.panel, self.dists,
+                 weights=weights_exit_at_ex(v["weights"], "BIL", "2026-04-01", v["model_dates"]))
+        for k in PIN_KEYS:
+            self.assertEqual(hg[k], old_res["HG"][k], k)
+
+    def test_t17a_broken_uniform_lag_1_flips_cash_trail_labels(self):
+        new = labels({e: run(e, self.panel, self.dists,
+                             pay_lag={t: (1, 0) for t in self.dists}) for e in self.panel})
+        flipped = {k for k, old in OLD_RULE_LABELS.items() if new.get(k) != old}
+        self.assertEqual(flipped, {("HG", "2026-08-03", "BIL"),
+                                   ("SLEEVE", "2026-09-22", "TMV")})
+
+    def test_t17b_zvol_short_hold_is_held_through(self):
+        v = self.panel["HARV"]
+        r = run("HARV", self.panel, self.dists, weights=extend_zvol_hold(v["weights"]))
+        self.assertTrue(gate_t17b_zvol_short_hold(r),
+                        [(x["ticker"], x["treatment"], x["subtracted_bps"])
+                         for x in r["distribution_ledger"]])
+        z = next(x for x in r["distribution_ledger"] if x["ticker"] == "ZVOL")
+        self.assertEqual((z["pay_lag_bd"], z["held_days_from_ex"]), (1, 1))
+        self.assertEqual(r["distribution_totals"]["subtracted_bps"], 0.0)
+        self.assertLess(gap_on(r, "2026-08-19"), -350)   # live's dip, re-credited 08-20
+        self.assertEqual(r["ambiguous_rows"], [])
+
+    def test_t17b_broken_zvol_forced_lag_5_is_leaked(self):
+        v = self.panel["HARV"]
+        r = run("HARV", self.panel, self.dists, weights=extend_zvol_hold(v["weights"]),
+                pay_lag=lag_table(ZVOL=5))
+        self.assertFalse(gate_t17b_zvol_short_hold(r))
+        self.assertEqual(next(x["treatment"] for x in r["distribution_ledger"]
+                              if x["ticker"] == "ZVOL"), "LEAKED")
+
+    def _unknown_case(self, pay_lag=None):
+        v = self.panel["HARV"]
+        w, d = rename_ticker(extend_zvol_hold(v["weights"]), self.dists, "ZVOL", "ZZZZ")
+        r = run("HARV", self.panel, d, weights=w, pay_lag=pay_lag)
+        strict = run("HARV", self.panel, self.dists, weights=extend_zvol_hold(v["weights"]))
+        return r, shown(r), strict
+
+    def test_t17c_unknown_lag_short_hold_is_ambiguous_strict(self):
+        r, out, strict = self._unknown_case()
+        self.assertEqual(gate_t17c_ambiguous(r, out, strict, self.res["HARV"]), [])
+        self.assertEqual(r["distribution_data"], "COMPLETE")
+        # strict reads LOWER than lenient (the safe direction for a pass/fail gate)
+        self.assertLess(r["annualized_gap"], r["annualized_gap_ambiguous_lenient"])
+        print("\n" + next(ln for ln in out.splitlines() if "AMBIGUOUS: ZZZZ" in ln).strip())
+        # the 'any lag' sides of the unknown-lag rule are decided, not ambiguous
+        v = self.panel["HARV"]
+        w, d = rename_ticker(v["weights"], self.dists, "ZVOL", "ZZZZ")
+        exited = run("HARV", self.panel, d, weights=w)        # sold for the ex-date
+        self.assertEqual([x["treatment"] for x in exited["distribution_ledger"]
+                          if x["ticker"] == "ZZZZ"], ["LEAKED"])
+        w5 = weights_held_through(w, "ZZZZ", "2026-08-19", v["model_dates"])
+        held = run("HARV", self.panel, d, weights=w5)         # held ex..ex+4
+        self.assertEqual([x["treatment"] for x in held["distribution_ledger"]
+                          if x["ticker"] == "ZZZZ"], ["HELD_THROUGH"])
+        self.assertEqual(exited["ambiguous_rows"] + held["ambiguous_rows"], [])
+
+    def test_t17c_broken_guessed_lag_fails(self):
+        r, out, strict = self._unknown_case(pay_lag=lag_table(ZZZZ=5))
+        bad = gate_t17c_ambiguous(r, out, strict, self.res["HARV"])
+        self.assertNotEqual(bad, [])
+        self.assertEqual(bad[0], ("treatment", ["LEAKED"]))
+        self.assertNotIn("!! AMBIGUOUS", out)
+
+    def test_t17d_window_end_clip_is_credit_pending(self):
+        for e, ex, t in (("HARV", "2026-08-31", "PULS"), ("KMLM", "2026-09-22", "SOXL")):
+            got = pending_profile(self.panel, self.dists, e, ex, t)
+            self.assertEqual(got, expected_pending(t), (e, ex, t))
+            self.assertEqual(got, pending_profile(self.panel, self.dists, e, ex, t))
+        # the frozen panel's 09-30 PULS rows: PULS L=2, credit 10-02 = window end
+        for e in ("HARV", "KMLM"):
+            x = next(y for y in self.res[e]["distribution_ledger"] if y["date"] == "2026-09-30")
+            self.assertEqual((x["held_days_checked"], x["credit_pending"]), (2, False))
+
+    def test_t17d_broken_forced_lag_changes_pending_profile(self):
+        got = pending_profile(self.panel, self.dists, "HARV", "2026-08-31", "PULS",
+                              table=lag_table(PULS=5))
+        self.assertNotEqual(got, expected_pending("PULS"))
 
     # plumbing ----------------------------------------------------------
     def test_weights_to_iso_and_held(self):

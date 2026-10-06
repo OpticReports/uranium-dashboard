@@ -59,6 +59,13 @@ def run_diagnostic(acct, sid, name):
                   f"INCOMPLETE — {r.get('distribution_missing_tickers')}"
                   f"{r.get('weight_dates_off_calendar') or ''})")
             return None
+        # per-fund pay-lag classifier: a payer with no observed lag is kept in
+        # the model (strict, lower gap) — say so rather than let it pass silently
+        for a in r.get("ambiguous_rows") or []:
+            print(f"  (diagnostic for {name[:30]}: {a['ticker']} {a['date']} AMBIGUOUS — "
+                  f"pay lag not observed; gap is the strict read, lenient "
+                  f"{r.get('annualized_gap_ambiguous_lenient', 0):+.1%}/yr; check the "
+                  f"account-cash residual before acting on a gate)")
         return r
     except Exception as e:  # noqa: BLE001
         print(f"  (diagnostic unavailable for {name[:30]}: {e})")

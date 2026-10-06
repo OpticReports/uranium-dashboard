@@ -216,12 +216,20 @@ panel-revised 2026-10-05).** Live deposit-adjusted curve (a price path: it
 drops by `w*D/P` on every ex-date) vs a fresh backtest (total return) over
 the same dates. On each ex-date the distribution the backtest earned
 (`w(t-1) x D/P_prev x (1+r_adj)`, Yahoo) is classified from the model's own
-continuity: LEAKED (model exited within 4 days — where live held the payer
-the cash was observed landing in ACCOUNT unallocated cash and never reaching
-the live curve, 3/3 cases: ZVOL 08-19, BIL 08-03, TMV 09-22) is removed from
-the model; HELD_THROUGH (re-credited inside the symphony on pay date) stays
-in, so the gap is not lenient by the pay-date recredits. Rows whose ex-date
-sits in the last 4 model days are provisional ("credit pending" in the CLI). Corr/beta/vol-ratio are computed on live-plus-income vs model
+continuity against a per-fund pay lag L observed in the add.-38 cash trail
+(`PAY_LAG`: ZVOL 1, PULS 2, BIL 3, ProShares 4, Direxion 5 business days —
+observed, not issuer documentation): HELD_THROUGH (model holds the payer on
+ex..ex+L-1, so it is re-credited inside the symphony on pay date) stays in,
+so the gap is not lenient by the pay-date recredits; LEAKED (model exited
+before the credit — where live held the payer the cash was observed landing
+in ACCOUNT unallocated cash and never reaching the live curve, 3/3 cases:
+ZVOL 08-19, BIL 08-03, TMV 09-22) is removed from the model. A payer with no
+observed lag (TLT, any new holding) is never guessed: exited on the ex-date
+is LEAKED, held 5+ days HELD_THROUGH, anything between AMBIGUOUS — kept in
+the model (strict, the lower gap), with the lenient number in
+`*_ambiguous_lenient` and a loud CLI line to check the account-cash residual
+before acting on a gate. Rows whose ex-date sits within the payer's lag of
+the window end are provisional ("credit pending" in the CLI). Corr/beta/vol-ratio are computed on live-plus-income vs model
 total return so a fat payout (ZVOL, 6%/month) is neither a tracking failure
 nor a manufactured shared outlier. The old total-return-basis numbers stay
 under `*_total_return_basis` keys; `annualized_gap_all_exdates_stripped`
@@ -229,14 +237,16 @@ shows the (lenient) every-ex-date-stripped number and
 `held_through_credit_bias_annualized` the bias it carries; the per-ex-date
 ledger lists each term, its treatment and the MODEL's $ entitlement (live's
 own only where live matched the model that morning — model-only rows such
-as KMLM TLT 09-01 and the four pre-edit HG rows read in live's favour). If
-Yahoo is unreachable for a held ticker, or a model weight
+as KMLM TLT 09-01 and three pre-edit HG rows read in live's favour). If
+Yahoo is unreachable for a held ticker, returns no adjclose series (never a
+price-only fall-back), or a model weight
 is keyed off the backtest calendar, the result is flagged
 `distribution_data: INCOMPLETE` and `monitor.py` treats it as "diagnostic
 unavailable" — never a silent fall-back. Not modeled: pay dates themselves,
 per-symphony live share counts, intraday fill timing. Pure math lives in
-`analyze_series()` (36 gate tests incl. broken-input counterparts, a
-model-reproduction gate at <1 bps and the mocked `analyze()` I/O path:
+`analyze_series()` (48 gate tests incl. broken-input counterparts, a
+model-reproduction gate at <1 bps, the mocked `analyze()` I/O path and the
+Yahoo wire-format parser:
 `python3 -m unittest composer.scripts.tests.test_divergence`); `--all`
 covers every invested symphony.
 

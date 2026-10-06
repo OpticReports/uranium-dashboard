@@ -26,26 +26,41 @@ adversarial panel the same day)
     HELD_THROUGH  the credit is applied INSIDE the symphony on pay date
                   (ex+1..ex+5 bd, fund-specific) and the live curve shows a
                   +income day the model never does (HG 2026-09-04 +30.5 bps).
-  The classifier here is the MODEL's own continuity: a row is HELD_THROUGH
-  when the model holds the payer on every model day from the ex-date through
-  ex+4 (HELD_THROUGH_DAYS; the longest pay lag observed is 5 bd). On the
-  frozen 2026-10-05 panel it reproduces lens 3's cash-trail labels 14/14.
+  The classifier is the MODEL's own continuity against a PER-FUND pay lag L
+  (PAY_LAG below: OBSERVED in the lens-3 cash trail, not issuer
+  documentation — ZVOL 1, PULS 2, BIL 3, ProShares 4, Direxion 5 bd). The
+  credit lands before that day's ~15:50 rebalance (SOXL 09-22: credited
+  ex+5, the model sold on ex+5), so "held at pay-date open" means
+      HELD_THROUGH  iff  weights[ex .. ex+L-1] (model days) are all > 0
+  (weights[d] = holdings shown at the close of d); otherwise LEAKED.
+  A ticker NOT in PAY_LAG (TLT, any new holding) is never given a guessed
+  lag: weights[ex] == 0 -> LEAKED for any lag; held ex..ex+(MAX_PAY_LAG-1)
+  -> HELD_THROUGH for any lag up to the longest observed; anything between
+  (1..MAX_PAY_LAG-1 held days from the ex-date) -> AMBIGUOUS. AMBIGUOUS rows
+  take the STRICT treatment in the primary gap (income kept in the model, so
+  the gap reads LOWER — the safe direction for a pass/fail gate); the row
+  carries both alternatives' bps, the result lists them under
+  ambiguous_rows with the lenient (stripped) gap alongside, and show()
+  names the ticker and the missing lag and says to check the account-cash
+  residual before acting on a gate. On the frozen 2026-10-05 panel the
+  per-fund table reproduces lens 3's cash-trail labels 14/14 (same labels
+  as the earlier fund-agnostic ex..ex+4 rule on every valid-regime row).
+  It flips ONE pre-edit row: HG BIL 2026-04-01 (the model held BIL
+  ex..ex+3 >= BIL's L=3) LEAKED -> HELD_THROUGH, 28.8 bps back in the model.
   It is a proxy for the LIVE book: it is wrong when live holdings differ from
   the model around an ex-date (KMLM TLT 2026-09-01: the model held TLT, live
   had sold it the day before; its 28.5 bps is stripped from the model and
   reads +28.5 bps in live's favour — a model-only holding is not detectable
   without per-symphony live share counts, which Composer does not expose).
-  Known model-only rows on the 2026-10-05 panel: KMLM TLT 09-01 (28.5 bps)
-  and four pre-edit HG rows (TNA 12-23, BIL 02-02/03-02/04-01; live held
-  UDOW/XLV/ANGL/UGE; 91 bps together, ~+1.1 %/yr on HG's full window).
-  The rule is fund-agnostic: a fast payer (ZVOL pays ex+1, PULS ex+2, BIL
-  ex+3) the model holds for fewer than 5 days across an ex-date would be
-  labelled LEAKED although live was credited inside the symphony — no such
-  case exists on the frozen panel; it is the classifier's forward risk.
-  Rows whose ex-date falls in the last HELD_THROUGH_DAYS model days are
-  classified on a clipped span (held_days_checked < 5) and show() marks
-  them "credit pending": the label can flip and the primary gap carries
-  -w*y until the pay date lands inside the window.
+  Known model-only rows on the 2026-10-05 panel: KMLM TLT 09-01 (28.5 bps,
+  stripped) and four pre-edit HG rows (TNA 12-23, BIL 02-02/03-02/04-01;
+  live held UDOW/XLV/ANGL/UGE): the first three are stripped (62.3 bps,
+  ~+0.8 %/yr on HG's full window, in live's favour); BIL 04-01 is now kept.
+  Rows whose ex-date falls within the payer's lag of the window end
+  (fewer than L model days available, all held) are classified on a
+  clipped span (held_days_checked < held_days_required) and flagged
+  credit_pending; show() marks them: the label can flip and the primary gap
+  carries -w*y until the pay date lands inside the window.
 
   PRIMARY GAP (cumulative, mean/annualized, worst/best day — what Op2/Op3 read)
       live price path  vs  model with the LEAKED terms removed.
@@ -65,15 +80,21 @@ adversarial panel the same day)
       return), kept under *_total_return_basis keys. It false-failed HARV.
   REFERENCE  annualized_gap_all_exdates_stripped: the gap with EVERY term
       removed from the model (the first add.-38 build). It is lenient by the
-      held-through credits (+0.6..+1.0 %/yr on HG/KMLM/SLEEVE, +4.6 %/yr on
+      held-through credits (+1.0..+1.1 %/yr on HG/KMLM/SLEEVE, +4.6 %/yr on
       HARV at 2026-10-05) and is kept only so the bias is visible.
+  AMBIGUOUS ALTERNATIVE  *_ambiguous_lenient keys: the primary with the
+      AMBIGUOUS rows stripped as well (equal to the primary when there are
+      none). Never the gate number; read it only to bound the unknown lag.
 
 NOT MODELED (stated so the gap is read correctly)
   - intraday fill timing: live trades ~15:50, the model marks at the close.
     After the fix HARV 2026-08-19 still shows ~-61 bps = ZVOL sold at 7.4502
     vs the 7.55 close; that is the genuine shortfall the gates measure.
   - pay dates themselves: the recredit day is not placed; its +w*y stays in
-    the daily series. Pay lags are inferred (lens 3), not sourced.
+    the daily series. Pay lags are OBSERVED (lens 3; 1-3 events per fund,
+    and SSO/QLD/UDOW/TECL/TNA inherit their issuer family's lag with no own
+    event), not sourced from issuer calendars; a lag that moves (holiday,
+    issuer change) or exceeds MAX_PAY_LAG is not modeled.
   - live share counts: the ledger's expected_income_usd is MODEL entitlement
     (w(t-1) x live $ value x yield) — live's own only where live matched the
     model that morning.
@@ -107,9 +128,28 @@ import urllib.request
 import composerlib as cl
 
 CASH_TICKER = "$USD"           # Composer's cash pseudo-ticker (never a payer)
-HELD_THROUGH_DAYS = 4          # model must hold the payer on ex..ex+4 model
-                               # days to count as HELD_THROUGH (pay lag <=5 bd)
-_YAHOO_CACHE = {}              # ticker -> chart dict; --all must not refetch
+# Pay lag (business days, ex-date -> pay-date credit) per fund, as OBSERVED in
+# the add.-38 lens-3 cash trail (account-cash residual + fills reconciled,
+# 2026-07..10). NOT issuer documentation. {ticker: (lag_bd, n_events_observed)}
+# where n counts this ticker's OWN observed credits; n = 0 means the lag is
+# inherited from the issuer family's observed sibling(s), not seen on the
+# ticker itself. A ticker absent here is never guessed (see AMBIGUOUS).
+PAY_LAG = {
+    "ZVOL": (1, 1),  # ex 08-19 -> account cash +1,969.44 on 08-20
+    "PULS": (2, 3),  # 07-31 -> 08-04 in-symphony; 08-31 -> 09-02; 09-30 -> 10-02
+    "BIL":  (3, 2),  # 08-03 -> 08-06 account cash +230.77; 09-01 -> 09-04 in-symphony +30.5 bps
+    # ProShares: TQQQ 09-23 -> 09-29 (one event); SSO/QLD/UDOW inherit it
+    "TQQQ": (4, 1), "SSO": (4, 0), "QLD": (4, 0), "UDOW": (4, 0),
+    # Direxion ex+5: LABD 09-22 -> 09-29 in-symphony; TMV 09-22 -> 09-29 account
+    # cash +97.10; SOXL 09-22 credited ex+5 BEFORE that day's ~15:50 rebalance
+    # (the model sold on ex+5 and the income was still in-symphony). TECL/TNA
+    # inherit it.
+    "LABD": (5, 1), "TMV": (5, 1), "SOXL": (5, 1), "TECL": (5, 0), "TNA": (5, 0),
+    # TLT (iShares): lag NOT observed (its only panel row was model-only) ->
+    # deliberately absent; its rows classify LEAKED / HELD_THROUGH / AMBIGUOUS.
+}
+MAX_PAY_LAG = max(lag for lag, _ in PAY_LAG.values())   # 5: longest observed
+_YAHOO_CACHE = {}            # ticker -> chart dict; --all must not refetch
 _YAHOO_CHART = ("https://query1.finance.yahoo.com/v8/finance/chart/{t}"
                 "?period1=1680000000&period2=4102444800&interval=1d&events=div")
 
@@ -170,7 +210,13 @@ def fetch_yahoo_chart(ticker):
 
     Cached at module level so `--all` and the monitor's gauge-RED sweep hit
     Yahoo once per ticker. Failures are NOT cached (a retry on the next
-    symphony is cheap and may succeed)."""
+    symphony is cheap and may succeed).
+
+    No price-only fall-back: a response without the adjclose series, or a bar
+    with a close but no adjclose (or vice versa), returns None -> the caller
+    flags INCOMPLETE. Substituting close would make adj_ret == px_ret on every
+    ex-date and silently re-create the add.-36 false alarm (panel C3).
+    The success path is gated by T16 (wire-format round trip + mutants)."""
     if ticker in _YAHOO_CACHE:
         return _YAHOO_CACHE[ticker]
     try:
@@ -178,15 +224,20 @@ def fetch_yahoo_chart(ticker):
                                     headers={"user-agent": "Mozilla/5.0"})
         res = _json.load(urllib.request.urlopen(rq, timeout=30))["chart"]["result"][0]
         q = res["indicators"]["quote"][0]
-        adj = (res["indicators"].get("adjclose") or [{}])[0].get("adjclose") or q["close"]
+        ts_all, close = res["timestamp"], q["close"]
+        adj = ((res["indicators"].get("adjclose") or [{}])[0] or {}).get("adjclose")
+        if not adj or len(adj) != len(ts_all) or len(close) != len(ts_all):
+            return None                    # no adjclose series: never price-only
         chart = {"dates": [], "close": [], "adjclose": [], "divs": []}
-        for i, ts in enumerate(res["timestamp"]):
-            if q["close"][i] is None:
+        for i, ts in enumerate(ts_all):
+            if close[i] is None and adj[i] is None:
                 continue
+            if close[i] is None or adj[i] is None:
+                return None                # half a bar: refuse, don't patch
             chart["dates"].append(_dt.datetime.fromtimestamp(
                 int(ts), tz=_dt.timezone.utc).date().isoformat())
-            chart["close"].append(float(q["close"][i]))
-            chart["adjclose"].append(float(adj[i] if adj[i] is not None else q["close"][i]))
+            chart["close"].append(float(close[i]))
+            chart["adjclose"].append(float(adj[i]))
         for v in ((res.get("events") or {}).get("dividends") or {}).values():
             d = _dt.datetime.fromtimestamp(int(v["date"]),
                                            tz=_dt.timezone.utc).date().isoformat()
@@ -250,8 +301,39 @@ def weight_dates_off_calendar(weights, model_dates):
                    if w and w > 1e-6 and first <= d <= last and d not in md})
 
 
+def classify_hold(ticker, wt, fwd_dates, pay_lag=None):
+    """HELD_THROUGH / LEAKED / AMBIGUOUS for one ledger row.
+
+    wt        : {ISO date: weight} for the payer (holdings at the close of d)
+    fwd_dates : model days from the ex-date's model day onward (clipped at
+                the window end by the caller's calendar)
+    pay_lag   : {ticker: (lag_bd, n_events)}; None -> PAY_LAG
+
+    Returns (treatment, held_days_checked, held_days_required, credit_pending,
+    held_run) where held_run = consecutive held model days from the ex-date
+    within the checked span. Known lag L: HELD_THROUGH iff weights[ex..ex+L-1]
+    all > 0. Unknown lag: LEAKED if weights[ex] == 0, HELD_THROUGH if held
+    ex..ex+MAX_PAY_LAG-1, else AMBIGUOUS (never a guessed lag)."""
+    table = PAY_LAG if pay_lag is None else pay_lag
+    known = ticker in table
+    need = table[ticker][0] if known else MAX_PAY_LAG
+    span = fwd_dates[:need]
+    held = [(wt.get(d) or 0.0) > 1e-9 for d in span]
+    run = next((k for k, h in enumerate(held) if not h), len(held))
+    pending = len(span) < need and run == len(span)       # clipped, not yet exited
+    if run == len(span) and not pending:
+        treatment = "HELD_THROUGH"
+    elif run == 0:
+        treatment = "LEAKED"                               # exited at the ex-date close
+    elif known:
+        treatment = "HELD_THROUGH" if pending else "LEAKED"
+    else:
+        treatment = "AMBIGUOUS"                            # label depends on the unknown lag
+    return treatment, len(span), need, pending, run
+
+
 def price_only_model_returns(model_dates, model_vals, weights, dists, live_raw=None,
-                             held_through_days=HELD_THROUGH_DAYS):
+                             pay_lag=None):
     """Strip distribution income from the model's daily returns.
 
     Returns (ret_tr, ret_px, ledger): lists aligned with model_dates (index 0
@@ -264,10 +346,12 @@ def price_only_model_returns(model_dates, model_vals, weights, dists, live_raw=N
     Timing: Composer's weights shown for date t-1 are the holdings that EARN
     date t's return, so the payer weight on ex-date t is weights[t-1]
     (lag test, add. 38 lens 2: w(t-1) fits to 0.01-0.14 bps, w(t) to 34-372).
-    Classification: HELD_THROUGH when weights[ex..ex+held_through_days] are
-    all > 0 (clipped at the window end; held_days_checked says how many days
-    were available), else LEAKED.
+    Classification: classify_hold() against the per-fund pay lag (pay_lag,
+    default PAY_LAG; clipped at the window end — held_days_checked of
+    held_days_required, credit_pending when the clip decides it). AMBIGUOUS
+    rows are kept in the model (strict) and carry both alternatives' bps.
     live_raw ({date: live $ value}) only feeds expected_income_usd."""
+    table = PAY_LAG if pay_lag is None else pay_lag
     n = len(model_dates)
     ret_tr = [None] + [model_vals[i] / model_vals[i - 1] - 1.0 for i in range(1, n)]
     ret_px = list(ret_tr)
@@ -295,36 +379,49 @@ def price_only_model_returns(model_dates, model_vals, weights, dists, live_raw=N
             term = w_prev * y * (1.0 + row["adj_ret"])
             terms[i] = terms.get(i, 0.0) + term
             prev_val = (live_raw or {}).get(model_dates[i - 1])
-            span = model_dates[i:i + held_through_days + 1]
-            held = all((wt.get(d) or 0.0) > 1e-9 for d in span)
-            ledger.append({
+            treatment, checked, need, pending, run = classify_hold(
+                t, wt, model_dates[i:i + MAX_PAY_LAG], table)
+            lag = table.get(t)
+            out = {
                 "date": ex, "applied_on": model_dates[i], "ticker": t,
                 "amount": row["amount"], "prev_close": row["prev_close"],
                 "yield": y, "adj_ret": row["adj_ret"],
                 "weight": w_prev, "weight_date": model_dates[i - 1],
                 "term_bps": term * 1e4,
-                "treatment": "HELD_THROUGH" if held else "LEAKED",
-                "held_days_checked": len(span),
-                # removed from the PRIMARY model: leaked rows only
-                "subtracted_bps": 0.0 if held else term * 1e4,
+                "treatment": treatment,
+                "pay_lag_bd": lag[0] if lag else None,
+                "pay_lag_events_observed": lag[1] if lag else 0,
+                "held_days_from_ex": run,
+                "held_days_checked": checked,
+                "held_days_required": need,
+                "credit_pending": pending,
+                # removed from the PRIMARY model: leaked rows only (AMBIGUOUS
+                # is kept — the strict treatment)
+                "subtracted_bps": term * 1e4 if treatment == "LEAKED" else 0.0,
                 # MODEL entitlement: shares x D = w x $value / P_prev x D.
                 # Equals live's only where live matched the model that morning.
                 "expected_income_usd": (w_prev * prev_val * y
                                         if prev_val is not None else None),
-            })
+            }
+            if treatment == "AMBIGUOUS":
+                out["strict_subtracted_bps"] = 0.0             # kept (primary)
+                out["lenient_subtracted_bps"] = term * 1e4     # if it leaked
+            ledger.append(out)
     for i, term in terms.items():
         ret_px[i] = ret_tr[i] - term
     ledger.sort(key=lambda r: (r["date"], r["ticker"]))
     return ret_tr, ret_px, ledger
 
 
-def leak_adjusted_returns(ret_tr, model_dates, ledger):
-    """Model daily returns with ONLY the leaked terms removed (the PRIMARY
-    model). Days without a leaked row keep the same float object."""
+def leak_adjusted_returns(ret_tr, model_dates, ledger, strip=("LEAKED",)):
+    """Model daily returns with ONLY the rows whose treatment is in `strip`
+    removed: the PRIMARY model by default (leaked only; AMBIGUOUS kept =
+    strict); strip=("LEAKED", "AMBIGUOUS") gives the lenient alternative.
+    Days without a stripped row keep the same float object."""
     idx = {d: i for i, d in enumerate(model_dates)}
     terms = {}
     for r in ledger:
-        if r["treatment"] == "LEAKED":
+        if r["treatment"] in strip:
             i = idx[r["applied_on"]]
             terms[i] = terms.get(i, 0.0) + r["term_bps"] / 1e4
     out = list(ret_tr)
@@ -386,7 +483,7 @@ def _pair_stats(lr, mr, lr_mom=None, mr_mom=None):
 
 
 def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dists,
-                   live_raw=None, symphony="", name="", detail=False):
+                   live_raw=None, symphony="", name="", detail=False, pay_lag=None):
     """Full divergence result from in-memory series (no I/O).
 
     live_dates/live_vals : live deposit-adjusted curve (ISO dates)
@@ -398,7 +495,8 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
               absent from dists marks the result INCOMPLETE.
     live_raw: optional live raw $ series aligned with live_dates (for the
               ledger's expected_income_usd)
-    detail  : add a per-day table (tests / chart work)."""
+    detail  : add a per-day table (tests / chart work)
+    pay_lag : {ticker: (lag_bd, n_events)} override; None -> PAY_LAG."""
     live = dict(zip(live_dates, live_vals))
     if len(live) < 5:
         return {"symphony": symphony, "name": name,
@@ -414,10 +512,14 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
     missing = sorted(held - set(dists or {}))
     off_cal = weight_dates_off_calendar(weights, model_dates)
     ret_tr, ret_px, ledger = price_only_model_returns(
-        model_dates, model_vals, weights, dists or {}, live_raw=raw_by_date)
+        model_dates, model_vals, weights, dists or {}, live_raw=raw_by_date,
+        pay_lag=pay_lag)
     ledger = [r for r in ledger if common[0] < r["applied_on"] <= common[-1]]
     ret_adj = leak_adjusted_returns(ret_tr, model_dates, ledger)
+    ret_len = leak_adjusted_returns(ret_tr, model_dates, ledger,
+                                    strip=("LEAKED", "AMBIGUOUS"))
     model_adj = dict(zip(model_dates, _rebuild(model_vals[0], ret_adj)))
+    model_len = dict(zip(model_dates, _rebuild(model_vals[0], ret_len)))
     model_px = dict(zip(model_dates, _rebuild(model_vals[0], ret_px)))
 
     lv = [live[d] for d in common]
@@ -425,6 +527,7 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
     mr_adj = _on_calendar(model_dates, ret_adj, common)   # leaked terms removed
     mr_px = _on_calendar(model_dates, ret_px, common)     # every term removed
     mr_tr = _on_calendar(model_dates, ret_tr, common)     # total return
+    mr_len = _on_calendar(model_dates, ret_len, common)   # + AMBIGUOUS removed
     # live total return on an ex-date basis: every term added back to live.
     # Identity: lr - mr_px == lr_tr - mr_tr day by day (side-invariant gaps).
     lr_tr = [a + (b - c) for a, b, c in zip(lr, mr_tr, mr_px)]
@@ -436,9 +539,11 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
     model_cum_adj = mv_adj[-1] / mv_adj[0] - 1.0
     model_cum_px = mv_px[-1] / mv_px[0] - 1.0
     model_cum_tr = mv_tr[-1] / mv_tr[0] - 1.0
+    model_cum_len = model_len[common[-1]] / model_len[common[0]] - 1.0
     prim = _pair_stats(lr, mr_adj, lr_tr, mr_tr)
     allpx = _pair_stats(lr, mr_px, lr_tr, mr_tr)
     sec = _pair_stats(lr, mr_tr)
+    lenient = _pair_stats(lr, mr_len, lr_tr, mr_tr)
 
     ex_dates = sorted((ex, t, float(v["amount"]))
                       for t in held if t in (dists or {})
@@ -447,6 +552,7 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
     inc = [r["expected_income_usd"] for r in ledger]
     leaked = [r for r in ledger if r["treatment"] == "LEAKED"]
     held_rows = [r for r in ledger if r["treatment"] == "HELD_THROUGH"]
+    amb = [r for r in ledger if r["treatment"] == "AMBIGUOUS"]
     n_days = len(lr)
     r = {
         "symphony": symphony, "name": name,
@@ -477,6 +583,20 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
         "annualized_gap_all_exdates_stripped": allpx["annualized_gap"],
         "held_through_credit_bias_annualized": round(
             allpx["annualized_gap"] - prim["annualized_gap"], 4),
+        # ---- AMBIGUOUS rows (payer's pay lag not in PAY_LAG and the model's
+        #      hold across the ex-date is too short to decide): the primary
+        #      keeps them (strict); these keys give the lenient alternative.
+        #      Equal to the primary when there are none. ----
+        "ambiguous_rows": [
+            {"date": x["date"], "ticker": x["ticker"],
+             "term_bps": round(x["term_bps"], 6),
+             "held_days_from_ex": x["held_days_from_ex"],
+             "credit_pending": x["credit_pending"],
+             "missing_input": (f"pay lag for {x['ticker']} not observed "
+                               f"(not in PAY_LAG)")} for x in amb],
+        "cumulative_gap_ambiguous_lenient": round(live_cum - model_cum_len, 4),
+        "annualized_gap_ambiguous_lenient": lenient["annualized_gap"],
+        "mean_daily_gap_bps_ambiguous_lenient": lenient["mean_daily_gap_bps"],
         # ---- SECONDARY (add. 36/37 basis: live price path vs model total return) ----
         "model_total_return_cumulative": round(model_cum_tr, 4),
         "cumulative_gap_total_return_basis": round(live_cum - model_cum_tr, 4),
@@ -496,9 +616,11 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
             "n_rows": len(ledger),
             "n_leaked": len(leaked),
             "n_held_through": len(held_rows),
+            "n_ambiguous": len(amb),
             "term_bps": round(sum(x["term_bps"] for x in ledger), 2),
             "subtracted_bps": round(sum(x["subtracted_bps"] for x in ledger), 2),
             "held_through_bps": round(sum(x["term_bps"] for x in held_rows), 2),
+            "ambiguous_bps": round(sum(x["term_bps"] for x in amb), 2),
             "expected_income_usd": (round(sum(inc), 2)
                                     if ledger and all(x is not None for x in inc)
                                     else None),
@@ -599,32 +721,52 @@ def show(r):
               f"leaked -> {tot['subtracted_bps']:+.1f} bps removed from the model; "
               f"{tot['n_held_through']} held-through -> {tot['held_through_bps']:+.1f} bps "
               f"kept (re-enters live on pay date)"
+              + (f"; {tot['n_ambiguous']} AMBIGUOUS -> {tot['ambiguous_bps']:+.1f} bps "
+                 f"kept (strict)" if tot.get("n_ambiguous") else "")
               + (f"; ~${tot['expected_income_usd']:,.0f} model entitlement"
                  if tot["expected_income_usd"] is not None else "") + "):")
         pending = 0
         for x in r["distribution_ledger"]:
             inc = (f"  ~${x['expected_income_usd']:,.0f}"
                    if x["expected_income_usd"] is not None else "")
+            lag = (f"L={x['pay_lag_bd']}" if x.get("pay_lag_bd") is not None
+                   else "L=?")
             prov = ""
-            if x.get("held_days_checked", HELD_THROUGH_DAYS + 1) < HELD_THROUGH_DAYS + 1:
-                prov = (f"  [credit pending: {x['held_days_checked']}/{HELD_THROUGH_DAYS + 1} "
-                        f"days in window; label provisional]")
+            if x.get("credit_pending"):
+                prov = (f"  [credit pending: {x['held_days_checked']}/"
+                        f"{x['held_days_required']} days in window; label provisional]")
                 pending += 1
             print(f"        {x['date']} {x['ticker']:5s} ${x['amount']:.4f}/sh  "
                   f"yield {x['yield']*1e4:6.1f} bps  w(t-1) {x['weight']:.3f}  "
-                  f"term {x['term_bps']:6.1f} bps  {x['treatment']:12s}"
+                  f"term {x['term_bps']:6.1f} bps  {x['treatment']:12s} {lag}"
                   f"{inc}{prov}")
-        print(f"      note: LEAKED = model exited within {HELD_THROUGH_DAYS} days of the "
-              f"ex-date. Where live held the payer the cash was observed landing in "
+        print(f"      note: LEAKED = model exited before the payer's pay-date credit. "
+              f"Where live held the payer the cash was observed landing in "
               f"ACCOUNT unallocated cash (3/3 cases, lens 3); where live did not "
               f"hold it (model-only rows: KMLM TLT 09-01, pre-edit HG TNA 12-23 / "
-              f"BIL 02-02, 03-02, 04-01) the strip reads in live's favour. "
-              f"Classified from MODEL continuity (fund-agnostic ex..ex+{HELD_THROUGH_DAYS}).")
+              f"BIL 02-02, 03-02) the strip reads in live's favour. "
+              f"Classified from MODEL continuity against the per-fund OBSERVED pay "
+              f"lag L (PAY_LAG: ZVOL 1, PULS 2, BIL 3, ProShares 4, Direxion 5 bd): "
+              f"HELD_THROUGH iff held ex..ex+L-1; a payer with no observed lag is "
+              f"AMBIGUOUS when the label depends on it.")
+        for a in r.get("ambiguous_rows") or []:
+            print(f"      !! AMBIGUOUS: {a['ticker']} {a['date']} — pay lag for "
+                  f"{a['ticker']} is MISSING (not in PAY_LAG; never observed) and the "
+                  f"model held it {a['held_days_from_ex']} day(s) from the ex-date, so "
+                  f"the label depends on it. Primary keeps its {a['term_bps']:.1f} bps "
+                  f"(strict: ann {r['annualized_gap']:+.1%}/yr, cum "
+                  f"{r['cumulative_gap']:+.2%}); if it leaked (lenient) the gap reads "
+                  f"ann {r['annualized_gap_ambiguous_lenient']:+.1%}/yr, cum "
+                  f"{r['cumulative_gap_ambiguous_lenient']:+.2%}. Check the "
+                  f"account-cash residual (account value minus the sum of symphonies, "
+                  f"ex+1..ex+8) before acting on a gate, then add the observed lag "
+                  f"to PAY_LAG.")
         if pending:
             print(f"      !! {pending} ledger row(s) classified on a clipped window span "
-                  f"(ex-date within the last {HELD_THROUGH_DAYS} model days): the "
+                  f"(ex-date within the payer's pay lag of the window end): the "
                   f"primary gap carries -w*y until the pay-date credit lands; re-read "
-                  f"after {HELD_THROUGH_DAYS + 1} trading days before acting on a gate.")
+                  f"once held_days_checked reaches held_days_required before acting "
+                  f"on a gate.")
     skipped = [f"{t} {d}" for d, t, _ in r.get("ex_dates") or []
                if d > r["window"][0]
                and not any(x["date"] == d and x["ticker"] == t
