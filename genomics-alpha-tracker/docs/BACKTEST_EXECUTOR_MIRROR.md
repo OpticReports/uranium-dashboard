@@ -211,6 +211,23 @@ E-vs-mirror guards, sign-aware CI, Bonferroni-8, actionability tags
 per-arm grading counts, basis-clean flag, 10,000 draws, tracker+executor tag
 for ratchet/day-zero, floor-overlap statement. Results pending the host run.
 
+**Round 11 code (one call per symbol, 2026-10-05): PASS WITH CORRECTIONS ×2
+→ applied → re-review PASS WITH CORRECTIONS → applied.** Workflow: one builder,
+two verifiers (arithmetic / statistics), one fixer, one re-verifier. SERIOUS
+(B1): the pre-registered SLEEVE metrics were computed on the sleeve bucket,
+which includes the 30/70 band transfers, so they were not returns (U1's sleeve
+CAGR had the wrong sign; U2's sleeve cost of ~1 pp/yr was hidden) — the book
+now records the band flow and the sleeve metrics are time-weighted; the old
+figures are kept and labelled "bucket incl. transfers". MINOR: the replay
+holds a symbol through its exit date (the cap's test) while live frees it in
+the exiting cycle — recorded with a live-release sensitivity (U2 still
+qualifies); the live port must count same-cycle sibling fires (159 multi-flag
+groups; spec recorded in the results JSON and implemented in the executor);
+decision-clause boundary tests added; the U2 proposal is labelled
+non-inferiority; a generated honesty line said "the book stays level" for U1
+(−0.87 pp/yr) — fixed. Re-verifier recomputed the sleeve TWR metrics with its
+own code to 5 decimals and the selection sets independently.
+
 **Round 10 code (sleeve sizing study, 2026-10-05): PASS WITH CORRECTIONS ×2
 → applied → re-review PASS.** Built and run as a workflow: one builder, two
 independent verifiers with different lenses (arithmetic/implementation;
@@ -358,6 +375,46 @@ changes WHICH calls are taken, so it is a selection study, not a sizing
 one). If Casey wants more of the sleeve working, that is the study to run
 — with the caveat that the sleeve's drawdown lines in the kill ledger were
 set on the 1% / cap-10 rules.
+
+## Round 11 results — one open call per symbol (2026-10-05; 10,000 draws)
+
+Contract: VARIANTS_PREREGISTRATION_R11_PER_SYMBOL.md (committed before the
+code). Live replay at $120k: one name held 2+ times on 87% of open days; 258
+of 674 entries into a name already open; largest single name a median 20% /
+p90 40% / max 64% of the sleeve. Results JSON
+`backend/data/backtest_per_symbol_study_results.json`; script
+`backend/scripts/backtest_per_symbol_study.py`; gates
+`tests/test_per_symbol_study.py` (reduction: A0 reproduces the stored
+mirror book to the cent).
+
+**Verdict: PROPOSE U2 (at most two open calls per symbol) under the
+RISK-CONTROL tier (non-inferiority). U1 (one per symbol): NULL.**
+
+| arm | book CAGR | book max DD | book Sharpe | sleeve TWR CAGR | largest name p90 | ΔSharpe p50 | p5 (one-sided) | verdict |
+|---|---|---|---|---|---|---|---|---|
+| A0 live (no limit) | 14.48% | 28.2% | 0.967 | 11.5% | 39.9% | — | — | anchor |
+| U1 max 1 | 13.61% | 27.2% | 0.958 | 7.3% | 20.4% | −0.005 | −0.128 | NULL (p5 below −0.10; 5y −0.052) |
+| U2 max 2 | 14.46% | 28.0% | 0.989 | 10.4% | 27.5% | +0.027 | −0.062 | PROPOSE (risk control) |
+
+What U2 buys and costs, stated plainly: the book is level (CAGR −0.02 pp/yr,
+max DD −0.2 pp, Sharpe point +0.022 with an interval spanning zero); the p90
+single-name concentration falls 12.4 pp; the SLEEVE gives up ~1.0 pp/yr
+time-weighted with sleeve Sharpe level (+0.008). The proposal rests on the
+concentration cut under the pre-registered non-inferiority tier — no return
+improvement is claimed. U1 cuts concentration further but hands slots to
+lower-R fires (mean R of taken trades +0.20 → +0.14) and fails the floor.
+
+**Implemented in the executor** (`MAX_PER_SYMBOL = 2`, overridable by the
+tracker's `book_params.max_per_symbol`), counted like the cap: held
+positions not exiting this cycle + pending MOOs + entries planned this cycle
+in payload order, checked after the cap; reviewed with the executor's
+tripwire build (ibkr-executor/README.md, docs/verdicts/INDEX.md round 23).
+
+**Honesty:** in-sample, same 10.6 y; survivor-shaped fire set; repeat-fire
+behaviour of the tracker as it was historically; the replay frees a symbol
+on the day after its exit (live frees it in the exiting cycle — U2 still
+qualifies under the live-release sensitivity); sleeve metrics are
+time-weighted with band transfers as external flows.
 
 ## Pending DD questions (ranked)
 

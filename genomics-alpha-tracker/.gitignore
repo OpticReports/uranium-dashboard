@@ -42,6 +42,9 @@ backend/data/*
 # bootstrap per arm and base, the reduction gate). Round-9's ablation results were
 # never allow-listed and are not in the checkout; this one is (counter-agent A1).
 !backend/data/backtest_sizing_study_results.json
+# Round 11's frozen per-symbol study results (A0/U1/U2 at the $120k live base, the paired
+# bootstrap vs A0, the reduction gate and the A0 sanity reproduction).
+!backend/data/backtest_per_symbol_study_results.json
 # The FROZEN campaign price cache (FMP dividend-adjusted lane, segment-normalized,
 # truncated at the registered window end) and the archived Yahoo-basis R2-A sleeve
 # that rounds 4-6 still read. Re-based 2026-10-04; see docs/REBASE_FMP_LANE_2026-10-04.md.
