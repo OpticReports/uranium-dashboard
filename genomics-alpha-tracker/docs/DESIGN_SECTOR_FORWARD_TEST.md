@@ -300,6 +300,26 @@ gate passing. Releases are paged until FMP returns an empty page.
   after publication. A later release that moves a date does not cancel the
   earlier window (linking statements to programmes is not attempted). This
   over-states exposure and is stated as a limitation.
+- **Amendment (2026-10-06, before any statistic).** The first spot-check
+  draw showed about 4 real catalysts in 20; no point-in-time failures. The
+  rest were:
+  - datelines read as dates;
+  - earnings-call dates ("will release financial results on ...");
+  - cash-runway dates;
+  - a nearby but wrong date.
+  
+  The rules were tightened, the extraction re-run, and the sample re-drawn
+  with the same seed:
+  - the wire dateline is stripped;
+  - catalyst terms are clinical or regulatory only: PDUFA, target action
+    date, topline, readout, interim / pivotal / phase 2-3 data or results,
+    primary endpoint, clinical data, FDA / approval decision, advisory
+    committee;
+  - sentences about financial results, earnings, calls, webcasts, runway
+    or fiscal periods are excluded;
+  - the time expression must sit within 100 characters after (or 60
+    before) a catalyst term;
+  - the window must end strictly after the publish date.
 - **Spot-check, as frozen above.** 20 extracted catalyst records,
   `random.Random(20261006).sample` sorted by (symbol, publish time,
   sentence). Two independent reviewers check each against the release on

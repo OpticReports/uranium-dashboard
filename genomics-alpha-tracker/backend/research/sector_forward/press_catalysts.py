@@ -30,7 +30,17 @@ MONTHS.update({m.lower(): i for i, m in enumerate(calendar.month_abbr) if m})
 MON = r"(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?"
 NOT_COMPANY = re.compile(r"(?i)shareholder alert|investor alert|class action|investigat|law firm|\bllp\b|deadline|reminds|"
                          r"securities fraud|lawsuit|losses")
-TERM = re.compile(r"(?i)\b(pdufa|target action date|top-?line|data|results|readout|read-out|approval decision)\b")
+# Amendment (2026-10-06, after the first spot-check sample showed ~4/20 real
+# catalysts; before any statistic): clinical/regulatory terms only, no
+# financial-calendar sentences, dateline stripped, the date must sit near the
+# term, and the window must lie strictly after publication.
+TERM = re.compile(r"(?i)\b(pdufa|target action date|top-?line|data readout|readout|read-out|interim (?:analysis|data|results)|"
+                  r"pivotal (?:data|results)|phase (?:2|3|ii|iii)\w* (?:data|results)|primary endpoint|clinical data|"
+                  r"fda decision|approval decision|advisory committee)\b")
+EXCLUDE = re.compile(r"(?i)financial results|earnings|conference call|webcast|runway|fund (?:its )?operations|quarter ended|"
+                     r"fiscal|annual meeting|investor (?:day|conference)|fireside")
+DATELINE = re.compile(r"^.{0,220}?(?:\(GLOBE NEWSWIRE\)\s*--|/PRNewswire/\s*--|--\(BUSINESS WIRE\)--|\(BUSINESS WIRE\)\s*--|/CNW/\s*--|ACCESSWIRE\s*--)", re.S)
+NEAR = 100
 CUE = re.compile(r"(?i)\b(expect\w*|anticipat\w*|on track|plan\w*|will|set for|scheduled|target\w*|by)\b")
 QW = {"first": 1, "second": 2, "third": 3, "fourth": 4, "1st": 1, "2nd": 2, "3rd": 3, "4th": 4}
 
@@ -124,11 +134,15 @@ def main() -> None:
             pub = str(r.get("publishedDate") or "")
             pub_d = date.fromisoformat(pub[:10])
             got = False
-            for sent in sentences(title + ". " + text):
-                if not (TERM.search(sent) and CUE.search(sent)):
+            body = DATELINE.sub("", text, count=1)
+            for sent in sentences(title + ". " + body):
+                if not (TERM.search(sent) and CUE.search(sent)) or EXCLUDE.search(sent):
                     continue
+                terms = [(m.start(), m.end()) for m in TERM.finditer(sent)]
                 for a, b, phrase in windows(sent):
-                    if b < pub_d:
+                    pos = sent.lower().find(phrase)
+                    near = any(-60 <= pos - te <= NEAR or 0 <= ts - (pos + len(phrase)) <= 60 for ts, te in terms)
+                    if b <= pub_d or not near:
                         continue
                     kind = "pdufa" if re.search(r"(?i)pdufa|target action date|approval decision", sent) else "readout"
                     recs.append({"symbol": sym, "published": pub, "title": title[:200], "url": r.get("url"),
