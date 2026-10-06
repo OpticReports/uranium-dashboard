@@ -522,6 +522,12 @@ ranked format. Clock context: **round closes 2026-09-28.**
    third-party IP in "active discussions." What it moves: the entire
    tail branch — without an exclusive, field-stable license the 5%/
    1144x branch belongs to the whole industry, not DexMat.
+   **UPDATE 2026-10-06 (from Casey): [LP-VERIFIED] the license is
+   EXCLUSIVE.** Settles ownership of the tail branch (concession C2's
+   "belongs to the whole industry" no longer applies). Still open:
+   signed vs term-sheet stage, cost/royalty, and field stability
+   (humidity; "3–5 yrs" per Pasquali) — exclusivity resolves who owns
+   the tail, not whether it works.
 3. ● **Which outcome tree is operative — 25/40/5 or 35/60/5 — and the
    dilution-adjusted version** (NEW, from the memo's internal
    inconsistency; ask via sponsor). What it moves: branch-2's EV 1.5x
@@ -549,7 +555,9 @@ ranked format. Clock context: **round closes 2026-09-28.**
    (~15% larger base), and the Fig-1-vs-workbook vintage split.
 8. ● **October $0.48/ft price milestone** (NEW; falsifiable ~30 days).
    Moves: cost-curve credibility — a hard, near-term check on the
-   whole roadmap.
+   whole roadmap. **UPDATE 2026-10-06: asked the sponsor directly by
+   Casey (did $0.48/ft go live in October; price sheet or invoice).
+   Awaiting reply.**
 9. ● **Margin plan: 99%-now/50%-later (DD notes) vs 20% markup (memo)**
    (NEW). Moves: unit-economics score; also a candor probe.
 

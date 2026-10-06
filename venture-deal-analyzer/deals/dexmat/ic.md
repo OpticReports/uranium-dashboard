@@ -124,6 +124,11 @@ enthusiasm is real, I know who it is."**
    the tail branch belongs to the whole industry (concession C2) and
    this is a specialty business at a full price. Evidence: term-sheet
    status and the exclusivity ask.
+   **2026-10-06: exclusivity answered — [LP-VERIFIED] exclusive (Casey).**
+   Residual: signed or term-sheet stage; field stability unchanged.
+   Crux 2 (October price) asked of the sponsor 2026-10-06, awaiting reply.
+   Sizing note (2026-10-06): $50k standing view; moves to $100k if one
+   more of {anchor commitment in writing, $0.48/ft live} resolves.
 
 ### What would move each side
 
