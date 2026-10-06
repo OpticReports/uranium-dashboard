@@ -5,7 +5,8 @@ constant-mix (rebalanced every period) portfolio:
     r_p = w'r + c rf - b spread + const,   c = 1 - sum w,  b = max(-c, 0) by default.
 Gearing enters through w and the financing terms; for a book, book_terms gears
 the NON-cash streams and charges the spread only on new borrowing b beyond the
-book's own cash (the scorecard's convention).  A per-period return <= -100% wipes the path out (wealth absorbs at 0).
+book's own cash, whose deployed part costs its own stated rate (the scorecard's
+convention).  A per-period return <= -100% wipes the path out (wealth absorbs at 0).
 All simulations are seeded (numpy default_rng(seed)), so a config reproduces
 bit-for-bit.
 """
