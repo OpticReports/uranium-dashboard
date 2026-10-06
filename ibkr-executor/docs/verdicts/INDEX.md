@@ -1087,14 +1087,27 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
   closes; flows carry across the roll; distributions are return and may
   name the sleeve's share; adoption waits (and pages) while a record is
   parked; the per-symbol override only tightens; malformed state is
-  rebuilt or dropped with a WARN; every surviving mutant re-run and caught
-  (M13b, M6, M18, TB12, TC1, TB15).
+  rebuilt or dropped with a WARN; the surviving mutants re-run and caught
+  (M13b, M6, M18, TB12, TC1, TB15, and after the final pass M2b and TC1b);
+  M6b (bootstrap zeroes pending instead of reconciling) is near-equivalent
+  live - only the accepted TC2 edge can trigger it - and stays OPEN as a
+  recorded gap.
 * **Per-symbol rule:** verified clean as a money change by A (a refused
   repeat consumes no cash or pre-fund; recycled ids unaffected; books that
   never repeat a name are unchanged) and B (counting matches the round-11
-  spec; gates strong: P1-P8 mutants caught). Its cost is stated in the
+  spec; gates strong: P1, P2, P4-P8 caught; P3 - the check before the
+  cap - is an equivalent mutant, both branches skip). Its cost is stated in the
   README: sleeve ~-1.0 pp/yr time-weighted, book level.
-* **Final re-review:** see the line appended below.
+* **Final pass (`fb50efa6`): A PASS WITH CORRECTIONS, B PASS WITH
+  CORRECTIONS** - no code defect that touches money. A: `TD1` the
+  unreconciled-wait page repeated only on day one (identical text deduped)
+  - the text now carries the request's age; `TD2` a held mark could become
+  the session close - it no longer touches `cur_rth`. B: `TD1` the
+  adopt-driven gate was vacuous for the sleeve (sleeve $0 before the
+  deposit) - funded; `TD2` this entry overclaimed the mutant record -
+  corrected above; `TD3` runbook step 4 said deferrals never page - fixed;
+  `TD4` the request dict was mutated after publication - now built whole;
+  mirror-doc wording and path fixed. Closed in the merge commit. Suite 521.
 
 ## Standing UNKNOWNs
 

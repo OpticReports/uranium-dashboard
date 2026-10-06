@@ -1269,8 +1269,9 @@ The procedure, in this order:
 4. **Watch `/status`** `blend.capital.request_pending` (with its age) and
    `blend.events`: `ADOPTED ...` with the sleeve/core split, or a `waits:`
    line naming what it is waiting for (settlement is the usual one - a
-   deferral is said once a day on `/status` and NEVER pages: expect
-   silence until it lands), or a `REFUSED` line (venue shortfall / budget
+   deferral is said once a day on `/status` and never pages, EXCEPT the
+   wait on a parked unreconciled record, which pages once a day because
+   it needs you: otherwise expect silence until it lands), or a `REFUSED` line (venue shortfall / budget
    / halted) - the request is dropped on a refusal, re-issue after fixing
    the cause. The Telegram page says the same on ADOPTED and REFUSED. The
    adoption is also a step up in the Execution tab's equity curve,
@@ -1312,7 +1313,7 @@ The procedure, in this order:
    deposits, withdrawals); use `blend.cash.drift` on `/status` (or the
    feed) only as a cross-check. Then `POST /blend/cash/adopt` with
    `{"usd": <amount>, "kind": "distribution", "sleeve_usd": <BIL
-   distributions + the sleeve's interest>}` - name the sleeve's share so
+   distributions + dividends on the sleeve's names>}` - name the sleeve's share so
    each bucket gets what it earned (SPY dividends belong to the core);
    omitted, it splits 30/70. Invested by the next planning cycle, the
    stage-1 clock restarts by itself, and

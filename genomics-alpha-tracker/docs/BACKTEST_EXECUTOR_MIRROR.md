@@ -404,11 +404,11 @@ concentration cut under the pre-registered non-inferiority tier — no return
 improvement is claimed. U1 cuts concentration further but hands slots to
 lower-R fires (mean R of taken trades +0.20 → +0.14) and fails the floor.
 
-**Implemented in the executor** (`MAX_PER_SYMBOL = 2`, overridable by the
-tracker's `book_params.max_per_symbol`), counted like the cap: held
+**Implemented in the executor** (`MAX_PER_SYMBOL = 2`; the tracker's
+`book_params.max_per_symbol` may only TIGHTEN it), counted like the cap: held
 positions not exiting this cycle + pending MOOs + entries planned this cycle
 in payload order, checked after the cap; reviewed with the executor's
-tripwire build (ibkr-executor/README.md, docs/verdicts/INDEX.md round 23).
+tripwire build (ibkr-executor/README.md, ibkr-executor/docs/verdicts/INDEX.md round 23).
 
 **Honesty:** in-sample, same 10.6 y; survivor-shaped fire set; repeat-fire
 behaviour of the tracker as it was historically; the replay frees a symbol

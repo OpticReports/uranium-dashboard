@@ -2871,10 +2871,12 @@ class Blend3070Manager:
         prior = self.state.capital_request
         if sleeve_usd is not None and sleeve_usd > round(v, 2):
             raise ValueError("sleeve_usd cannot exceed usd")
-        self.state.capital_request = {"usd": round(v, 2), "kind": kind,
-                                      "ts": int(time.time()), "date": today}
+        # TD4: built fully, THEN published - save() dumps this dict live
+        req = {"usd": round(v, 2), "kind": kind, "ts": int(time.time()),
+               "date": today}
         if sleeve_usd is not None:
-            self.state.capital_request["sleeve_usd"] = sleeve_usd
+            req["sleeve_usd"] = sleeve_usd
+        self.state.capital_request = req
         self._event("WARN", f"capital adoption REQUESTED ({kind}): ${v:,.2f}"
                             + (f" (replaces the pending "
                                f"${_num_or_none(prior.get('usd')) or 0:,.2f})"

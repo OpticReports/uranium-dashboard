@@ -9407,20 +9407,26 @@ def test_gate_tripwire_book_index_is_flow_adjusted_through_adopt_capital(tmp_pat
     fall to 100k) reads 18.0%; the subtracted-dollar series would read 42.3%."""
     _rth(monkeypatch, True)          # closes finalize from in-session marks
     m = _trip_book(tmp_path)
-    m.state.bil_qty, m.state.spy_qty = 0, 500
+    m.state.bil_qty, m.state.spy_qty = 150, 350              # sleeve 15k BIL, core 350 SPY
     alerts = []
-    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(104.0))], alerts)
+    # book 50,000 -> 52,000 (SPY 100 -> 105.714...): use SPY that makes 52k
+    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(37_000 / 350))], alerts)
     m.request_capital_adoption(70_000, "2026-09-03")
-    r = blend_mod.adopt_capital(m, _VenueCashAdapter(70_000.0, 70_000.0), _px(104.0),
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(70_000.0, 70_000.0), _px(37_000 / 350),
                                 "2026-09-03", alerts.append)
     assert r["status"] == "adopted" and m.state.trip_pending_book == 70_000.0
-    _days(m, [("2026-09-03", _px(104.0)), ("2026-09-04", _px(60.0)),
-              ("2026-09-05", _px(60.0))], alerts)
+    # book 122,000 on the deposit day; then 100,000: the core's SPY falls so
+    # that 350 x SPY + 15,000 BIL + 70,000 cash = 100,000
+    _days(m, [("2026-09-03", _px(37_000 / 350)), ("2026-09-04", _px(15_000 / 350)),
+              ("2026-09-05", _px(15_000 / 350))], alerts)
     t = m.tripwire_summary("2026-09-05")
     assert t["book"]["hwm_date"] == "2026-09-02"            # the deposit day is not a high
-    # TB11/M2b: the sleeve's share of the deposit is a flow too (the sleeve
-    # was $0 before it: the base rule holds, then it starts at the deposit)
+    # TB11/M2b (TD1: the sleeve is FUNDED before the deposit, so a dropped
+    # sleeve flow would read the $21k deposit share as a 2.4x gain and blind
+    # the sleeve line): BIL never moved, so the sleeve is flat
     assert t["sleeve"]["drawdown"] == 0.0
+    assert t["sleeve"]["hwm_date"] == "2026-09-01"
+    assert m.state.trip_sleeve["hwm"] == pytest.approx(1.0)
     assert m.state.trip_pending_sleeve == 0.0
     assert t["book"]["drawdown"] == pytest.approx(1 - 100_000 / 122_000, abs=1e-4)
     assert t["book"]["close_date"] == "2026-09-04"
@@ -9574,6 +9580,7 @@ def test_gate_tripwire_bootstrap_deposit_inside_a_drawdown(tmp_path, monkeypatch
     _rth(monkeypatch, True)          # closes finalize from in-session marks
     m = _trip_book(tmp_path)
     m.state.equity_curve = [["2026-08-28", 50_000.0], ["2026-09-10", 52_000.0],
+                            ["2026-09-12", 156_000.0],            # Saturday glitch (TC1b): never a close
                             ["2026-09-21", 49_000.0], ["2026-10-06", 119_000.0],
                             ["2026-10-07", 119_500.0]]
     m.state.capital_events = [{"date": "2026-08-28", "kind": "inferred", "usd": 50_000.0},
