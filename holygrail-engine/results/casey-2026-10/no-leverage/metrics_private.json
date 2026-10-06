@@ -1,0 +1,486 @@
+{
+ "params_file": "predeclared_params.json (N4)",
+ "post_hoc": [],
+ "film_concentration": {
+  "D": {
+   "total_usd": 1482000.0,
+   "n_loans": 7,
+   "largest": "12 Dates of Christmas gap",
+   "largest_share": 0.37112010796221323,
+   "hhi": 0.21623585591196928,
+   "n_eff_by_usd": 4.6245799327892465,
+   "n_eff_at_rho": 2.2155013799448025,
+   "rho_D": 0.3,
+   "n_eff_grid": {
+    "0.0": 4.6245799327892465,
+    "0.1": 3.3942917547568707,
+    "0.3": 2.2155013799448025,
+    "0.5": 1.6444178900648685,
+    "1.0": 1.0
+   }
+  },
+  "P": {
+   "total_usd": 1411166.0,
+   "n_loans": 7,
+   "largest": "12 Dates of Christmas gap",
+   "largest_share": 0.38974861922693715,
+   "hhi": 0.2267802758788755,
+   "n_eff_by_usd": 4.4095545616767176,
+   "n_eff_at_rho": 2.179854601537484,
+   "rho_D": 0.3,
+   "n_eff_grid": {
+    "0.0": 4.4095545616767176,
+    "0.1": 3.288367664559732,
+    "0.3": 2.179854601537484,
+    "0.5": 1.6302837919098296,
+    "1.0": 1.0
+   }
+  }
+ },
+ "income_t12": {
+  "rows": {
+   "Real Estate": {
+    "planned": 30000,
+    "actual": 22500,
+    "ratio": 0.75
+   },
+   "Stable Yield": {
+    "planned": 4000,
+    "actual": 2500,
+    "ratio": 0.625
+   },
+   "Gary Loan": {
+    "planned": 40000,
+    "actual": 29997,
+    "ratio": 0.749925
+   },
+   "Spirit Fund": {
+    "planned": 31000,
+    "actual": 21000,
+    "ratio": 0.6774193548387096
+   },
+   "Keeta": {
+    "planned": 200000,
+    "actual": 197152,
+    "ratio": 0.98576
+   },
+   "Film Loans": {
+    "planned": 318400,
+    "actual": 60820,
+    "ratio": 0.1910175879396985
+   },
+   "River": {
+    "planned": 75000,
+    "actual": 75000,
+    "ratio": 1.0
+   }
+  },
+  "total": {
+   "planned": 698400,
+   "actual": 408969,
+   "ratio": 0.5855798969072165
+  },
+  "total_ex_keeta_river": {
+   "planned": 423400,
+   "actual": 136817,
+   "ratio": 0.32313887576759565
+  },
+  "film_booked_profits": {
+   "MARX": 3000,
+   "Kate Might Die bridge": 18445,
+   "Dustlands": 10000,
+   "Plus One": 19375,
+   "Father of Us (partial, past due)": 10000
+  },
+  "note": "sheet total $408,969.30 (rows sum to $408,969); film $60,820.30 = the five booked profits; Father of Us $10,000 collected of $50,000 expected; Dominion's $32,000 not booked"
+ },
+ "venture_gain": {
+  "cost": 1733000,
+  "paper": 13982000,
+  "gain": 12249000,
+  "oo_gain": 11900000,
+  "oo_share_of_gain": 0.9715078781941383,
+  "oo_share_of_paper": 0.8582463166928909,
+  "rest_gain": 349000,
+  "realized_total": 307900,
+  "realized_oo": 254900,
+  "oo_share_of_realized": 0.827866190321533,
+  "rows": {
+   "Organics Ocean": {
+    "cost": 100000,
+    "paper": 12000000,
+    "gain": 11900000
+   },
+   "Persona": {
+    "cost": 275000,
+    "paper": 625000,
+    "gain": 350000
+   },
+   "Google X Fund": {
+    "cost": 400000,
+    "paper": 400000,
+    "gain": 0
+   },
+   "Copper Royalty": {
+    "cost": 100000,
+    "paper": 270000,
+    "gain": 170000
+   },
+   "Argentine GDP Warrants": {
+    "cost": 200000,
+    "paper": 230000,
+    "gain": 30000
+   },
+   "Venezuelan Bond": {
+    "cost": 100000,
+    "paper": 180000,
+    "gain": 80000
+   },
+   "Uranium Digital": {
+    "cost": 50000,
+    "paper": 150000,
+    "gain": 100000
+   },
+   "Slip": {
+    "cost": 50000,
+    "paper": 50000,
+    "gain": 0
+   },
+   "BNB Dat": {
+    "cost": 75000,
+    "paper": 28000,
+    "gain": -47000
+   },
+   "Vernius": {
+    "cost": 25000,
+    "paper": 25000,
+    "gain": 0
+   },
+   "RoboStrategy": {
+    "cost": 8000,
+    "paper": 24000,
+    "gain": 16000
+   },
+   "BITS": {
+    "cost": 50000,
+    "paper": 0,
+    "gain": -50000
+   },
+   "Define Fit": {
+    "cost": 125000,
+    "paper": 0,
+    "gain": -125000
+   },
+   "OpenAi": {
+    "cost": 25000,
+    "paper": 0,
+    "gain": -25000
+   },
+   "Schools PR": {
+    "cost": 150000,
+    "paper": 0,
+    "gain": -150000
+   }
+  }
+ },
+ "sleeves": {
+  "D": {
+   "venture_with_oo": {
+    "nav_usd": 13958000.0,
+    "vol": 0.6171058906750477,
+    "dr2": 1.2198224236616748,
+    "neff_inv_hhi_prc": 1.0633959594286686,
+    "exp_return_prior": 0.24456983808568558,
+    "sharpe_prior": 0.3313367141286198,
+    "streams": [
+     {
+      "stream": "organics_ocean",
+      "usd": 12000000.0,
+      "dollar_share": 0.8597220232124946,
+      "risk_share": 0.9693092600155074,
+      "exp_return": 0.2501,
+      "vol": 0.7
+     },
+     {
+      "stream": "venture_basket",
+      "usd": 1548000.0,
+      "dollar_share": 0.1109041409944118,
+      "risk_share": 0.028613458056372217,
+      "exp_return": 0.2201,
+      "vol": 0.6
+     },
+     {
+      "stream": "em_special_sits",
+      "usd": 410000.0,
+      "dollar_share": 0.029373835793093567,
+      "risk_share": 0.002077281928120364,
+      "exp_return": 0.1751,
+      "vol": 0.45
+     }
+    ],
+    "largest_position_share": 0.8597220232124946,
+    "corr_to_rest_of_investable": 0.27204972924336274,
+    "risk_share_of_investable": 0.9811397524478848,
+    "dollar_share_of_investable": 0.7208046600935321
+   },
+   "venture_without_oo": {
+    "nav_usd": 1958000.0,
+    "vol": 0.4900356712868598,
+    "dr2": 1.3463056036494243,
+    "neff_inv_hhi_prc": 1.1048882230152948,
+    "exp_return_prior": 0.21067711950970378,
+    "sharpe_prior": 0.34809122989303853,
+    "streams": [
+     {
+      "stream": "venture_basket",
+      "usd": 1548000.0,
+      "dollar_share": 0.7906026557711952,
+      "risk_share": 0.9500382919232311,
+      "exp_return": 0.2201,
+      "vol": 0.6
+     },
+     {
+      "stream": "em_special_sits",
+      "usd": 410000.0,
+      "dollar_share": 0.2093973442288049,
+      "risk_share": 0.04996170807676868,
+      "exp_return": 0.1751,
+      "vol": 0.45
+     }
+    ],
+    "largest_position_share": 0.3192032686414709,
+    "corr_to_rest_of_investable": 0.2700906714056762,
+    "risk_share_of_investable": 0.729741249067972,
+    "dollar_share_of_investable": 0.26587114616005547
+   },
+   "private_credit": {
+    "nav_usd": 1532000.0,
+    "vol": 0.1769645081821785,
+    "dr2": 1.7101751960372218,
+    "neff_inv_hhi_prc": 1.137849723872174,
+    "exp_return_prior": 0.13901305483028725,
+    "sharpe_prior": 0.5589428967782618,
+    "streams": [
+     {
+      "stream": "film_gap_loans",
+      "usd": 1182000.0,
+      "dollar_share": 0.7715404699738904,
+      "risk_share": 0.9367222882191153,
+      "exp_return": 0.14400000000000002,
+      "vol": 0.22
+     },
+     {
+      "stream": "film_father_of_us",
+      "usd": 100000.0,
+      "dollar_share": 0.06527415143603134,
+      "risk_share": 0.027550859376201525,
+      "exp_return": 0.03,
+      "vol": 0.45
+     },
+     {
+      "stream": "gary_loan",
+      "usd": 100000.0,
+      "dollar_share": 0.06527415143603134,
+      "risk_share": 0.019409029413346452,
+      "exp_return": 0.22000000000000003,
+      "vol": 0.3
+     },
+     {
+      "stream": "spirit_fund",
+      "usd": 150000.0,
+      "dollar_share": 0.097911227154047,
+      "risk_share": 0.016317822991336644,
+      "exp_return": 0.11840000000000002,
+      "vol": 0.13
+     }
+    ],
+    "largest_position_share": 0.35900783289817234,
+    "corr_to_rest_of_investable": 0.1153340662312324,
+    "risk_share_of_investable": 0.0045091188210951835,
+    "dollar_share_of_investable": 0.07911396613148669
+   }
+  },
+  "P": {
+   "venture_with_oo": {
+    "nav_usd": 13958000.0,
+    "vol": 0.6171058906750477,
+    "dr2": 1.2198224236616748,
+    "neff_inv_hhi_prc": 1.0633959594286686,
+    "exp_return_prior": 0.24456983808568558,
+    "sharpe_prior": 0.3313367141286198,
+    "streams": [
+     {
+      "stream": "organics_ocean",
+      "usd": 12000000.0,
+      "dollar_share": 0.8597220232124946,
+      "risk_share": 0.9693092600155074,
+      "exp_return": 0.2501,
+      "vol": 0.7
+     },
+     {
+      "stream": "venture_basket",
+      "usd": 1548000.0,
+      "dollar_share": 0.1109041409944118,
+      "risk_share": 0.028613458056372217,
+      "exp_return": 0.2201,
+      "vol": 0.6
+     },
+     {
+      "stream": "em_special_sits",
+      "usd": 410000.0,
+      "dollar_share": 0.029373835793093567,
+      "risk_share": 0.002077281928120364,
+      "exp_return": 0.1751,
+      "vol": 0.45
+     }
+    ],
+    "largest_position_share": 0.8597220232124946,
+    "corr_to_rest_of_investable": 0.27197362281348203,
+    "risk_share_of_investable": 0.9811585527044215,
+    "dollar_share_of_investable": 0.7234509978852768
+   },
+   "venture_without_oo": {
+    "nav_usd": 1958000.0,
+    "vol": 0.4900356712868598,
+    "dr2": 1.3463056036494243,
+    "neff_inv_hhi_prc": 1.1048882230152948,
+    "exp_return_prior": 0.21067711950970378,
+    "sharpe_prior": 0.34809122989303853,
+    "streams": [
+     {
+      "stream": "venture_basket",
+      "usd": 1548000.0,
+      "dollar_share": 0.7906026557711952,
+      "risk_share": 0.9500382919232311,
+      "exp_return": 0.2201,
+      "vol": 0.6
+     },
+     {
+      "stream": "em_special_sits",
+      "usd": 410000.0,
+      "dollar_share": 0.2093973442288049,
+      "risk_share": 0.04996170807676868,
+      "exp_return": 0.1751,
+      "vol": 0.45
+     }
+    ],
+    "largest_position_share": 0.3192032686414709,
+    "corr_to_rest_of_investable": 0.27000988189877834,
+    "risk_share_of_investable": 0.7299600244445281,
+    "dollar_share_of_investable": 0.2684532214845883
+   },
+   "private_credit": {
+    "nav_usd": 1532000.0,
+    "vol": 0.1769645081821785,
+    "dr2": 1.7101751960372218,
+    "neff_inv_hhi_prc": 1.137849723872174,
+    "exp_return_prior": 0.13901305483028725,
+    "sharpe_prior": 0.5589428967782618,
+    "streams": [
+     {
+      "stream": "film_gap_loans",
+      "usd": 1182000.0,
+      "dollar_share": 0.7715404699738904,
+      "risk_share": 0.9367222882191153,
+      "exp_return": 0.14400000000000002,
+      "vol": 0.22
+     },
+     {
+      "stream": "film_father_of_us",
+      "usd": 100000.0,
+      "dollar_share": 0.06527415143603134,
+      "risk_share": 0.027550859376201525,
+      "exp_return": 0.03,
+      "vol": 0.45
+     },
+     {
+      "stream": "gary_loan",
+      "usd": 100000.0,
+      "dollar_share": 0.06527415143603134,
+      "risk_share": 0.019409029413346452,
+      "exp_return": 0.22000000000000003,
+      "vol": 0.3
+     },
+     {
+      "stream": "spirit_fund",
+      "usd": 150000.0,
+      "dollar_share": 0.097911227154047,
+      "risk_share": 0.016317822991336644,
+      "exp_return": 0.11840000000000002,
+      "vol": 0.13
+     }
+    ],
+    "largest_position_share": 0.35900783289817234,
+    "corr_to_rest_of_investable": 0.11531916525716128,
+    "risk_share_of_investable": 0.004508754984994168,
+    "dollar_share_of_investable": 0.07940442246455395
+   }
+  }
+ },
+ "dalio_tests_variant_D": {
+  "private_credit": {
+   "GOOD": {
+    "prior_sharpe": 0.5589428967782618,
+    "realised_income_vs_plan": 0.28715202876219825,
+    "pass": false
+   },
+   "UNCORRELATED": {
+    "corr_to_rest": 0.1153340662312324,
+    "n_eff_film_rho0.3": 2.2155013799448025,
+    "pass": false
+   },
+   "RISK_BALANCED": {
+    "largest_loan_share_of_film": 0.37112010796221323,
+    "largest_position_share_of_sleeve": 0.35900783289817234,
+    "risk_vs_dollar": 0.05699523158276592,
+    "pass": false
+   }
+  },
+  "venture_with_oo": {
+   "GOOD": {
+    "prior_sharpe": 0.3313367141286198,
+    "realised": "no measured return series; realised $307,900 on $1.733M cost (82.8% from OO)",
+    "pass": false,
+    "why": "no realised-return evidence; marks are a banker indication (OO) and round/cost marks"
+   },
+   "UNCORRELATED": {
+    "corr_to_rest": 0.27204972924336274,
+    "dr2": 1.2198224236616748,
+    "pass": false
+   },
+   "RISK_BALANCED": {
+    "largest_position_share": 0.8597220232124946,
+    "risk_vs_dollar": 1.361172876324872,
+    "pass": false
+   }
+  },
+  "venture_without_oo": {
+   "UNCORRELATED": {
+    "corr_to_rest": 0.2700906714056762,
+    "dr2": 1.3463056036494243,
+    "pass": false
+   },
+   "RISK_BALANCED": {
+    "largest_position_share": 0.3192032686414709,
+    "pass": false
+   }
+  }
+ },
+ "charts": [
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_film_concentration.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_film_concentration.csv",
+   "caption": "N4 film book: loan $ shares (variant D) and n_eff = 1/(rho + (1-rho) HHI) across default correlations"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_income_plan_vs_actual.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_income_plan_vs_actual.csv",
+   "caption": "N4: sheet 'T12 2026' planned vs actual income by line (measured)"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_venture_gain.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_venture_gain.csv",
+   "caption": "N4: venture paper gain by position (sheet 'Venture'); OO marked at a banker/broker indication"
+  }
+ ]
+}

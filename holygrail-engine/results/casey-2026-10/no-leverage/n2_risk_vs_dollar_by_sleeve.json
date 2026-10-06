@@ -1,0 +1,594 @@
+[
+ {
+  "variant": "D",
+  "book": "current as is",
+  "sleeve": "BTC",
+  "usd": 281485.12,
+  "dollar_share": 0.11854652009246526,
+  "risk_share": 0.4069825996574866
+ },
+ {
+  "variant": "D",
+  "book": "current as is",
+  "sleeve": "gold & silver",
+  "usd": 247859.8,
+  "dollar_share": 0.10438532864832935,
+  "risk_share": 0.15881900930174134
+ },
+ {
+  "variant": "D",
+  "book": "current as is",
+  "sleeve": "Composer (one sleeve)",
+  "usd": 299600.0,
+  "dollar_share": 0.1261755414272079,
+  "risk_share": 0.16382296248785558
+ },
+ {
+  "variant": "D",
+  "book": "current as is",
+  "sleeve": "single names",
+  "usd": 139774.03999999998,
+  "dollar_share": 0.058865371076329165,
+  "risk_share": 0.15318589875157912
+ },
+ {
+  "variant": "D",
+  "book": "current as is",
+  "sleeve": "equity beta",
+  "usd": 274481.64,
+  "dollar_share": 0.11559702783320418,
+  "risk_share": 0.1148053780803801
+ },
+ {
+  "variant": "D",
+  "book": "current as is",
+  "sleeve": "cash-like",
+  "usd": 1066740.1,
+  "dollar_share": 0.44925403764891164,
+  "risk_share": 0.0011013110241303288
+ },
+ {
+  "variant": "D",
+  "book": "current as is",
+  "sleeve": "KMLM trend",
+  "usd": 34419.0,
+  "dollar_share": 0.014495447130784612,
+  "risk_share": 0.0008192679369282905
+ },
+ {
+  "variant": "D",
+  "book": "current as is",
+  "sleeve": "HL ETH carry",
+  "usd": 30110.0,
+  "dollar_share": 0.012680726142767792,
+  "risk_share": 0.00046357275989856604
+ },
+ {
+  "variant": "D",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "BTC",
+  "usd": 390576.9992390188,
+  "dollar_share": 0.1644902014285627,
+  "risk_share": 0.4065253056148809
+ },
+ {
+  "variant": "D",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "gold & silver",
+  "usd": 344845.06316286715,
+  "dollar_share": 0.14523034897554898,
+  "risk_share": 0.15923020666782234
+ },
+ {
+  "variant": "D",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "Composer (one sleeve)",
+  "usd": 416830.72819228854,
+  "dollar_share": 0.17554687187302853,
+  "risk_share": 0.1642599800688634
+ },
+ {
+  "variant": "D",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "single names",
+  "usd": 194466.33803597486,
+  "dollar_share": 0.08189885010365675,
+  "risk_share": 0.15359797767185815
+ },
+ {
+  "variant": "D",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "equity beta",
+  "usd": 381883.78463489184,
+  "dollar_share": 0.16082908307269275,
+  "risk_share": 0.11508384435709772
+ },
+ {
+  "variant": "D",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "KMLM trend",
+  "usd": 47886.83856358605,
+  "dollar_share": 0.020167382453263584,
+  "risk_share": 0.0008280268438450247
+ },
+ {
+  "variant": "D",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "HL ETH carry",
+  "usd": 30110.0,
+  "dollar_share": 0.012680726142767792,
+  "risk_share": 0.00031140821472336647
+ },
+ {
+  "variant": "D",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "cash-like",
+  "usd": 567869.9481713726,
+  "dollar_share": 0.2391565359504788,
+  "risk_share": 0.00016325056090913076
+ },
+ {
+  "variant": "D",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "equity beta",
+  "usd": 166846.99729717098,
+  "dollar_share": 0.07026705680732459,
+  "risk_share": 0.15071852181016748
+ },
+ {
+  "variant": "D",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "TIPS",
+  "usd": 692829.9126080028,
+  "dollar_share": 0.29178300847890487,
+  "risk_share": 0.15015904364717786
+ },
+ {
+  "variant": "D",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "long Treasuries",
+  "usd": 283614.0720849106,
+  "dollar_share": 0.11944312116718549,
+  "risk_share": 0.14971014475603023
+ },
+ {
+  "variant": "D",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "commodities",
+  "usd": 225558.31535086964,
+  "dollar_share": 0.09499313271964246,
+  "risk_share": 0.14963235109872539
+ },
+ {
+  "variant": "D",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "BTC",
+  "usd": 65141.72895577952,
+  "dollar_share": 0.027434222031041088,
+  "risk_share": 0.12019459712951157
+ },
+ {
+  "variant": "D",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "Composer (one sleeve)",
+  "usd": 136779.54841323203,
+  "dollar_share": 0.05760425092526218,
+  "risk_share": 0.15949287544939042
+ },
+ {
+  "variant": "D",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "single names",
+  "usd": 33863.36515379842,
+  "dollar_share": 0.01426144336724887,
+  "risk_share": 0.059512170434852345
+ },
+ {
+  "variant": "D",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "KMLM trend",
+  "usd": 262203.17013623635,
+  "dollar_share": 0.11042599117446575,
+  "risk_share": 0.05882345467302273
+ },
+ {
+  "variant": "D",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "HL ETH carry",
+  "usd": 30110.0,
+  "dollar_share": 0.012680726142767792,
+  "risk_share": 0.0010600521739640982
+ },
+ {
+  "variant": "D",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "cash-like",
+  "usd": 477522.58999999997,
+  "dollar_share": 0.20110704718615696,
+  "risk_share": 0.000696788827157846
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "gold & silver",
+  "usd": 247859.8,
+  "dollar_share": 0.10438532864832933,
+  "risk_share": 0.3902539758841842
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "commodities",
+  "usd": 195475.15889854147,
+  "dollar_share": 0.08232371164750658,
+  "risk_share": 0.10555458582538617
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "equity beta",
+  "usd": 144632.27988896443,
+  "dollar_share": 0.06091140261295582,
+  "risk_share": 0.09752998878885569
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "TIPS",
+  "usd": 600487.8839949185,
+  "dollar_share": 0.2528934709063327,
+  "risk_share": 0.08788562268658688
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "long Treasuries",
+  "usd": 245897.76500597634,
+  "dollar_share": 0.10355902415009816,
+  "risk_share": 0.08318037183228259
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "BTC",
+  "usd": 56471.91324587008,
+  "dollar_share": 0.023782958041481884,
+  "risk_share": 0.07356143366530202
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "Composer (one sleeve)",
+  "usd": 118746.05428682863,
+  "dollar_share": 0.050009504979923985,
+  "risk_share": 0.08658133660750501
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "single names",
+  "usd": 29479.99474675874,
+  "dollar_share": 0.012415401530185345,
+  "risk_share": 0.03811702789661665
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "KMLM trend",
+  "usd": 227786.25993214193,
+  "dollar_share": 0.09593142415426144,
+  "risk_share": 0.035844071317006385
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "cash-like",
+  "usd": 477522.58999999997,
+  "dollar_share": 0.20110704718615696,
+  "risk_share": 0.0007958560467849515
+ },
+ {
+  "variant": "D",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "HL ETH carry",
+  "usd": 30110.0,
+  "dollar_share": 0.012680726142767792,
+  "risk_share": 0.0006957294494895126
+ },
+ {
+  "variant": "P",
+  "book": "current as is",
+  "sleeve": "BTC",
+  "usd": 281485.12,
+  "dollar_share": 0.12219168161007402,
+  "risk_share": 0.40704757853213486
+ },
+ {
+  "variant": "P",
+  "book": "current as is",
+  "sleeve": "gold & silver",
+  "usd": 247859.8,
+  "dollar_share": 0.10759505072785595,
+  "risk_share": 0.15883488574198337
+ },
+ {
+  "variant": "P",
+  "book": "current as is",
+  "sleeve": "Composer (one sleeve)",
+  "usd": 299600.0,
+  "dollar_share": 0.13005528608538233,
+  "risk_share": 0.1638378874860417
+ },
+ {
+  "variant": "P",
+  "book": "current as is",
+  "sleeve": "single names",
+  "usd": 139774.03999999998,
+  "dollar_share": 0.06067540974469183,
+  "risk_share": 0.15320679052418584
+ },
+ {
+  "variant": "P",
+  "book": "current as is",
+  "sleeve": "equity beta",
+  "usd": 274481.64,
+  "dollar_share": 0.11915149604601108,
+  "risk_share": 0.11481822678779709
+ },
+ {
+  "variant": "P",
+  "book": "current as is",
+  "sleeve": "cash-like",
+  "usd": 995906.1,
+  "dollar_share": 0.4323192681898444,
+  "risk_share": 0.0009707326833414469
+ },
+ {
+  "variant": "P",
+  "book": "current as is",
+  "sleeve": "KMLM trend",
+  "usd": 34419.0,
+  "dollar_share": 0.014941164525276282,
+  "risk_share": 0.0008202362156301169
+ },
+ {
+  "variant": "P",
+  "book": "current as is",
+  "sleeve": "HL ETH carry",
+  "usd": 30110.0,
+  "dollar_share": 0.013070643070864025,
+  "risk_share": 0.0004636620288855062
+ },
+ {
+  "variant": "P",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "BTC",
+  "usd": 378975.71846019523,
+  "dollar_share": 0.16451200094710947,
+  "risk_share": 0.40660716796135216
+ },
+ {
+  "variant": "P",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "gold & silver",
+  "usd": 334531.24991472135,
+  "dollar_share": 0.14521881646248203,
+  "risk_share": 0.1592086131343861
+ },
+ {
+  "variant": "P",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "Composer (one sleeve)",
+  "usd": 404363.92861791427,
+  "dollar_share": 0.1755329319726701,
+  "risk_share": 0.16423561098398357
+ },
+ {
+  "variant": "P",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "single names",
+  "usd": 188650.13328837615,
+  "dollar_share": 0.08189234664507765,
+  "risk_share": 0.1535800781635952
+ },
+ {
+  "variant": "P",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "equity beta",
+  "usd": 370462.1972092392,
+  "dollar_share": 0.1608163118887414,
+  "risk_share": 0.11507073770883927
+ },
+ {
+  "variant": "P",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "KMLM trend",
+  "usd": 46454.61301435244,
+  "dollar_share": 0.020165780993215393,
+  "risk_share": 0.000828050729161127
+ },
+ {
+  "variant": "P",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "HL ETH carry",
+  "usd": 30110.0,
+  "dollar_share": 0.013070643070864025,
+  "risk_share": 0.0003228292285838511
+ },
+ {
+  "variant": "P",
+  "book": "current, cash deployed pro rata",
+  "sleeve": "cash-like",
+  "usd": 550087.8594952015,
+  "dollar_share": 0.23879116801983988,
+  "risk_share": 0.0001469120900987351
+ },
+ {
+  "variant": "P",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "equity beta",
+  "usd": 160516.2680957637,
+  "dollar_share": 0.06967953661065579,
+  "risk_share": 0.15071123301425735
+ },
+ {
+  "variant": "P",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "TIPS",
+  "usd": 666541.6447313933,
+  "dollar_share": 0.2893433387628926,
+  "risk_share": 0.15013750167814383
+ },
+ {
+  "variant": "P",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "long Treasuries",
+  "usd": 272852.81226505275,
+  "dollar_share": 0.1184444277647949,
+  "risk_share": 0.14968646604618124
+ },
+ {
+  "variant": "P",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "commodities",
+  "usd": 216999.88375339433,
+  "dollar_share": 0.09419887170241124,
+  "risk_share": 0.1496099145072737
+ },
+ {
+  "variant": "P",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "BTC",
+  "usd": 62670.035413725556,
+  "dollar_share": 0.027204837732687313,
+  "risk_share": 0.12019560895741228
+ },
+ {
+  "variant": "P",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "Composer (one sleeve)",
+  "usd": 131589.6780809978,
+  "dollar_share": 0.057122607572455054,
+  "risk_share": 0.15948495559713413
+ },
+ {
+  "variant": "P",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "single names",
+  "usd": 32578.47661453848,
+  "dollar_share": 0.014142199920993791,
+  "risk_share": 0.05950986140777654
+ },
+ {
+  "variant": "P",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "KMLM trend",
+  "usd": 252254.31104513432,
+  "dollar_share": 0.10950269222044715,
+  "risk_share": 0.05880928113474097
+ },
+ {
+  "variant": "P",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "HL ETH carry",
+  "usd": 30110.0,
+  "dollar_share": 0.013070643070864025,
+  "risk_share": 0.001123625853176056
+ },
+ {
+  "variant": "P",
+  "book": "UNLEVERED balanced proposal",
+  "sleeve": "cash-like",
+  "usd": 477522.58999999997,
+  "dollar_share": 0.20729084464179817,
+  "risk_share": 0.0007315518039038276
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "gold & silver",
+  "usd": 247859.8,
+  "dollar_share": 0.10759505072785595,
+  "risk_share": 0.40519634420116374
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "commodities",
+  "usd": 186922.6688050149,
+  "dollar_share": 0.08114246050493786,
+  "risk_share": 0.10343773275189888
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "equity beta",
+  "usd": 138304.283288657,
+  "dollar_share": 0.060037393624633,
+  "risk_share": 0.09533091778547453
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "TIPS",
+  "usd": 574215.1508860795,
+  "dollar_share": 0.24926473872847146,
+  "risk_share": 0.08560463834709288
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "long Treasuries",
+  "usd": 235139.1693302696,
+  "dollar_share": 0.10207307055115944,
+  "risk_share": 0.08085992099677772
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "BTC",
+  "usd": 54001.13649183517,
+  "dollar_share": 0.023441699784317097,
+  "risk_share": 0.07176781971601709
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "Composer (one sleeve)",
+  "usd": 113550.63989936373,
+  "dollar_share": 0.049291925758644786,
+  "risk_share": 0.08408320878024884
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "single names",
+  "usd": 28190.176825906034,
+  "dollar_share": 0.012237254712585861,
+  "risk_share": 0.037229950609372335
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "KMLM trend",
+  "usd": 217820.08447287415,
+  "dollar_share": 0.09455491789473229,
+  "risk_share": 0.034942394200818266
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "cash-like",
+  "usd": 477522.58999999997,
+  "dollar_share": 0.20729084464179817,
+  "risk_share": 0.0008259343508182748
+ },
+ {
+  "variant": "P",
+  "book": "POST-HOC: proposal, metals held",
+  "sleeve": "HL ETH carry",
+  "usd": 30110.0,
+  "dollar_share": 0.013070643070864025,
+  "risk_share": 0.0007211382603174278
+ }
+]

@@ -1,0 +1,1673 @@
+{
+ "params_file": "predeclared_params.json (N3)",
+ "post_hoc": [
+  {
+   "item": "bootstrap: synthetic private/SPCX idiosyncratic draws demeaned (bug fix after the first run)",
+   "why": "a finite Gaussian sample carries a sample-mean drift (venture idio ~50%/yr over 750 days: SE ~29%/yr), which pushed bootstrap medians above the prior means; demeaning restores the declared 're-centred on prior means'"
+  }
+ ],
+ "rf": 0.0401,
+ "nav_usd": 18000000.0,
+ "parametric": {
+  "FILM": {
+   "factor": "HYG",
+   "rho": 0.3,
+   "vol": 0.22,
+   "beta": 1.3162354992963932,
+   "idio": 0.20986662431172803
+  },
+  "VENT": {
+   "factor": "IWM",
+   "rho": 0.4,
+   "vol": 0.524785670536077,
+   "beta": 0.9960508505402481,
+   "idio": 0.480974011771946,
+   "vol_formula": "0.90 x sqrt(0.30 + 0.70/17.5)"
+  },
+  "SPCX": {
+   "factor": "QQQ",
+   "beta": 1.6241170339945536,
+   "idio": 0.7940467926398627,
+   "vol": 0.8605000905521939,
+   "listed_window": [
+    "2026-06-15",
+    "2026-09-30",
+    75
+   ],
+   "measured_total_vol_listed_window": 0.8642088180220666,
+   "corr_qqq_listed_window": 0.408888704957687
+  }
+ },
+ "weights": {
+  "PLAN pre-trigger": {
+   "SPY": 0.4,
+   "BOXX": 0.36,
+   "c_hg": 0.0696,
+   "c_kmlm": 0.0696,
+   "c_crash": 0.0648,
+   "c_vixhyg": 0.036
+  },
+  "PLAN post-trigger": {
+   "SPY": 0.4,
+   "BOXX": 0.3183333333333333,
+   "c_hg": 0.0696,
+   "c_kmlm": 0.0696,
+   "c_crash": 0.0648,
+   "c_vixhyg": 0.036,
+   "SPCX": 0.041666666666666664
+  },
+  "ALT-2 UNLEVERED": {
+   "SPY": 0.15085579174131428,
+   "TLT": 0.15837220167045318,
+   "TIP": 0.4047554857936187,
+   "DBC": 0.16457894522408575,
+   "NVDA": 0.008557152782419879,
+   "AVGO": 0.008557152782419879,
+   "TSLA": 0.008557152782419879,
+   "ISRG": 0.008557152782419879,
+   "RKLB": 0.008557152782419879,
+   "c_hg": 0.022809025380944366,
+   "c_kmlm": 0.022809025380944366,
+   "c_crash": 0.021235989147775792,
+   "c_vixhyg": 0.011797771748764327
+  },
+  "CASEY ROUTE pre-trigger": {
+   "SPY": 0.08137029486227923,
+   "BOXX": 0.05555555555555555,
+   "TLT": 0.08542458064859218,
+   "TIP": 0.2183215695332964,
+   "DBC": 0.08877244384472109,
+   "c_hg": 0.0696,
+   "c_kmlm": 0.0696,
+   "c_crash": 0.0648,
+   "c_vixhyg": 0.036,
+   "FILM": 0.13333333333333333,
+   "VENT": 0.09722222222222222
+  },
+  "CASEY ROUTE post-trigger": {
+   "SPY": 0.08137029486227923,
+   "BOXX": 0.013888888888888888,
+   "TLT": 0.08542458064859218,
+   "TIP": 0.2183215695332964,
+   "DBC": 0.08877244384472109,
+   "c_hg": 0.0696,
+   "c_kmlm": 0.0696,
+   "c_crash": 0.0648,
+   "c_vixhyg": 0.036,
+   "FILM": 0.13333333333333333,
+   "VENT": 0.09722222222222222,
+   "SPCX": 0.041666666666666664
+  }
+ },
+ "construction": {
+  "core_weights": {
+   "SPY": 0.1717075389825353,
+   "TLT": 0.18026288999702922,
+   "TIP": 0.46070202246182124,
+   "GLD": 0.0,
+   "DBC": 0.18732754855861425
+  },
+  "core_box_risk": {
+   "growth_up": 0.25000000000000033,
+   "growth_down": 0.2499999999999997,
+   "inflation_up": 0.24999999999999845,
+   "inflation_down": 0.25000000000000155
+  },
+  "alt2_sleeve_weights": {
+   "beta core": 0.8785624244294717,
+   "Composer": 0.07865181165842884,
+   "SPCX basket": 0.04278576391209939
+  },
+  "casey_route_usd": {
+   "core": 8530000.0,
+   "film_private_lending_usd": 2400000,
+   "venture_new_usd": 1750000,
+   "composer_usd": 4320000,
+   "spacex_reserve_usd": 1000000,
+   "core_usd": "remainder 18,000,000 - 2,400,000 - 1,750,000 - 4,320,000 - 1,000,000 = 8,530,000 at the engine quadrant_balance core weights (same core as ALT-2)"
+  }
+ },
+ "priors": {
+  "basis": "PRIOR-DRIVEN, NOT forecasts: betas rf + 0.30 x vol; Composer/basket zero-alpha beta-implied; film 20% headline or 14.4% = (1-0.08) x 20% - 0.08 x 50%; venture rf + 0.30 x 52.5%; SPCX zero-alpha rf + beta x (mu_QQQ - rf)",
+  "film_20pct_headline": {
+   "SPY": 0.08586828533884208,
+   "QQQ": 0.10134938631854469,
+   "BOXX": 0.0401,
+   "TLT": 0.08011455628775035,
+   "TIP": 0.053759411177685214,
+   "GLD": 0.10460397181750347,
+   "DBC": 0.09176915746213389,
+   "HYG": 0.0401,
+   "IWM": 0.0401,
+   "NVDA": 0.13722025530812698,
+   "AVGO": 0.14635360537142245,
+   "TSLA": 0.1525587953672942,
+   "ISRG": 0.08626780133350304,
+   "RKLB": 0.15756346004236454,
+   "c_hg": 0.143923894451653,
+   "c_kmlm": 0.07447166603079144,
+   "c_crash": 0.020976651762496686,
+   "c_vixhyg": 0.040582754846287664,
+   "FILM": 0.2,
+   "VENT": 0.1975357011608231,
+   "SPCX": 0.13957617164166142
+  },
+  "film_14.4pct_default_adjusted": {
+   "SPY": 0.08586828533884208,
+   "QQQ": 0.10134938631854469,
+   "BOXX": 0.0401,
+   "TLT": 0.08011455628775035,
+   "TIP": 0.053759411177685214,
+   "GLD": 0.10460397181750347,
+   "DBC": 0.09176915746213389,
+   "HYG": 0.0401,
+   "IWM": 0.0401,
+   "NVDA": 0.13722025530812698,
+   "AVGO": 0.14635360537142245,
+   "TSLA": 0.1525587953672942,
+   "ISRG": 0.08626780133350304,
+   "RKLB": 0.15756346004236454,
+   "c_hg": 0.143923894451653,
+   "c_kmlm": 0.07447166603079144,
+   "c_crash": 0.020976651762496686,
+   "c_vixhyg": 0.040582754846287664,
+   "FILM": 0.14400000000000002,
+   "VENT": 0.1975357011608231,
+   "SPCX": 0.13957617164166142
+  }
+ },
+ "risk": {
+  "PLAN pre-trigger": {
+   "vol": 0.10359637187588225,
+   "gross": 0.64,
+   "neff": {
+    "dr2": 2.176325972536081,
+    "equal_rho": 4.037888635785858,
+    "pca_entropy": 2.412116298754906,
+    "prc_inverse_hhi": 2.6448586243424317,
+    "min_torsion": 3.135926445340571
+   },
+   "rho_bar": 0.09718501628920102,
+   "risk_share": {
+    "SPY / equity beta": 0.5090677917809564,
+    "long Treasuries": 0.0,
+    "TIPS": 0.0,
+    "gold": 0.0,
+    "commodities": 0.0,
+    "Composer": 0.49022443093581103,
+    "SPCX basket (5 names)": 0.0,
+    "SpaceX (SPCX)": 0.0,
+    "film / private lending": 0.0,
+    "venture deals": 0.0,
+    "T-bills / BOXX": 0.0007077772832327624
+   },
+   "dollar_share": {
+    "SPY / equity beta": 0.4,
+    "long Treasuries": 0.0,
+    "TIPS": 0.0,
+    "gold": 0.0,
+    "commodities": 0.0,
+    "Composer": 0.24,
+    "SPCX basket (5 names)": 0.0,
+    "SpaceX (SPCX)": 0.0,
+    "film / private lending": 0.0,
+    "venture deals": 0.0,
+    "T-bills / BOXX": 0.36
+   },
+   "env_risk_share": {
+    "growth_up": 0.5053280813493223,
+    "growth_down": -0.004354903719257545,
+    "inflation_up": 0.0,
+    "inflation_down": 0.49831904508670266
+   },
+   "env_unmapped": 0.000707777283232458,
+   "env_balance_score": 0.32752268239425464,
+   "exp_return_prior_film20": 0.06680391135379112,
+   "exp_return_prior_film14": 0.06680391135379112,
+   "sharpe_prior_film20": 0.257768789294907,
+   "sharpe_prior_film14": 0.257768789294907,
+   "film_contrib_to_return_film20": 0.0,
+   "private_risk_share": 0.0
+  },
+  "PLAN post-trigger": {
+   "vol": 0.12003998149667969,
+   "gross": 0.6816666666666666,
+   "neff": {
+    "dr2": 2.466762643989654,
+    "equal_rho": 4.336862202538538,
+    "pca_entropy": 3.3915975021131124,
+    "prc_inverse_hhi": 3.375818424057064,
+    "min_torsion": 4.03275904370463
+   },
+   "rho_bar": 0.10234503169528963,
+   "risk_share": {
+    "SPY / equity beta": 0.43450811019218366,
+    "long Treasuries": 0.0,
+    "TIPS": 0.0,
+    "gold": 0.0,
+    "commodities": 0.0,
+    "Composer": 0.3927248164531956,
+    "SPCX basket (5 names)": 0.0,
+    "SpaceX (SPCX)": 0.17226874461117533,
+    "film / private lending": 0.0,
+    "venture deals": 0.0,
+    "T-bills / BOXX": 0.0004983287434456664
+   },
+   "dollar_share": {
+    "SPY / equity beta": 0.4,
+    "long Treasuries": 0.0,
+    "TIPS": 0.0,
+    "gold": 0.0,
+    "commodities": 0.0,
+    "Composer": 0.24,
+    "SPCX basket (5 names)": 0.0,
+    "SpaceX (SPCX)": 0.041666666666666664,
+    "film / private lending": 0.0,
+    "venture deals": 0.0,
+    "T-bills / BOXX": 0.3183333333333333
+   },
+   "env_risk_share": {
+    "growth_up": 0.506010675275479,
+    "growth_down": -0.006948696357112198,
+    "inflation_up": 0.0,
+    "inflation_down": 0.5004396923381877
+   },
+   "env_unmapped": 0.0004983287434453532,
+   "env_balance_score": 0.3240637855750972,
+   "exp_return_prior_film20": 0.07094875183886033,
+   "exp_return_prior_film14": 0.07094875183886033,
+   "sharpe_prior_film20": 0.25698730918009693,
+   "sharpe_prior_film14": 0.25698730918009693,
+   "film_contrib_to_return_film20": 0.0,
+   "private_risk_share": 0.0
+  },
+  "ALT-2 UNLEVERED": {
+   "vol": 0.07179305330364212,
+   "gross": 1.0000000000000002,
+   "neff": {
+    "dr2": 4.0151461216680655,
+    "equal_rho": 4.587375614491872,
+    "pca_entropy": 4.015011504694904,
+    "prc_inverse_hhi": 6.848965571781549,
+    "min_torsion": 9.691772806608844
+   },
+   "rho_bar": 0.15282202527976999,
+   "risk_share": {
+    "SPY / equity beta": 0.24215299545350513,
+    "long Treasuries": 0.14910069118468933,
+    "TIPS": 0.151237302857039,
+    "gold": 0.0,
+    "commodities": 0.1575090105047664,
+    "Composer": 0.15000000000000005,
+    "SPCX basket (5 names)": 0.14999999999999997,
+    "SpaceX (SPCX)": 0.0,
+    "film / private lending": 0.0,
+    "venture deals": 0.0,
+    "T-bills / BOXX": 0.0
+   },
+   "dollar_share": {
+    "SPY / equity beta": 0.15085579174131428,
+    "long Treasuries": 0.15837220167045318,
+    "TIPS": 0.4047554857936187,
+    "gold": 0.0,
+    "commodities": 0.16457894522408575,
+    "Composer": 0.07865181165842886,
+    "SPCX basket (5 names)": 0.042785763912099394,
+    "SpaceX (SPCX)": 0.0,
+    "film / private lending": 0.0,
+    "venture deals": 0.0,
+    "T-bills / BOXX": 0.0
+   },
+   "env_risk_share": {
+    "growth_up": 0.3545555049514893,
+    "growth_down": 0.14223283525480993,
+    "inflation_up": 0.1543731566809027,
+    "inflation_down": 0.34883850311279796
+   },
+   "env_unmapped": 0.0,
+   "env_balance_score": 0.7288079892476169,
+   "exp_return_prior_film20": 0.0742285255996726,
+   "exp_return_prior_film14": 0.0742285255996726,
+   "sharpe_prior_film20": 0.47537364729884307,
+   "sharpe_prior_film14": 0.47537364729884307,
+   "film_contrib_to_return_film20": 0.0,
+   "private_risk_share": 0.0
+  },
+  "CASEY ROUTE pre-trigger": {
+   "vol": 0.10618801075268669,
+   "gross": 0.9444444444444444,
+   "neff": {
+    "dr2": 4.296431320862495,
+    "equal_rho": 6.27542244943488,
+    "pca_entropy": 2.355835293758244,
+    "prc_inverse_hhi": 5.005157174201783,
+    "min_torsion": 6.459940219054507
+   },
+   "rho_bar": 0.0752870040006722,
+   "risk_share": {
+    "SPY / equity beta": 0.07570742085094093,
+    "long Treasuries": 0.028952189750030152,
+    "TIPS": 0.029975662418107913,
+    "gold": 0.0,
+    "commodities": 0.026551014291661162,
+    "Composer": 0.4075914438663975,
+    "SPCX basket (5 names)": 0.0,
+    "SpaceX (SPCX)": 0.0,
+    "film / private lending": 0.1200695299694009,
+    "venture deals": 0.31110580574524005,
+    "T-bills / BOXX": 4.6933108221340166e-05
+   },
+   "dollar_share": {
+    "SPY / equity beta": 0.08137029486227923,
+    "long Treasuries": 0.08542458064859218,
+    "TIPS": 0.2183215695332964,
+    "gold": 0.0,
+    "commodities": 0.08877244384472109,
+    "Composer": 0.24,
+    "SPCX basket (5 names)": 0.0,
+    "SpaceX (SPCX)": 0.0,
+    "film / private lending": 0.13333333333333333,
+    "venture deals": 0.09722222222222222,
+    "T-bills / BOXX": 0.05555555555555555
+   },
+   "env_risk_share": {
+    "growth_up": 0.5325230026032837,
+    "growth_down": 0.03085364430296626,
+    "inflation_up": 0.028263338354884537,
+    "inflation_down": 0.4083130816306442
+   },
+   "env_unmapped": 4.693310822134755e-05,
+   "env_balance_score": 0.4121596764424261,
+   "exp_return_prior_film20": 0.09983419297283048,
+   "exp_return_prior_film14": 0.09236752630616382,
+   "sharpe_prior_film20": 0.5625323664076562,
+   "sharpe_prior_film14": 0.4922168325376732,
+   "film_contrib_to_return_film20": 0.02666666666666667,
+   "private_risk_share": 0.43117533571464095
+  },
+  "CASEY ROUTE post-trigger": {
+   "vol": 0.11980516223088906,
+   "gross": 0.986111111111111,
+   "neff": {
+    "dr2": 4.559131558188918,
+    "equal_rho": 6.460705578589932,
+    "pca_entropy": 3.7521113404186033,
+    "prc_inverse_hhi": 6.006278299335546,
+    "min_torsion": 7.431362524387652
+   },
+   "rho_bar": 0.07794384282066204,
+   "risk_share": {
+    "SPY / equity beta": 0.07078066399177681,
+    "long Treasuries": 0.023876775306127633,
+    "TIPS": 0.02483341324598616,
+    "gold": 0.0,
+    "commodities": 0.022148182248597915,
+    "Composer": 0.3479187024302187,
+    "SPCX basket (5 names)": 0.0,
+    "SpaceX (SPCX)": 0.1520097576700612,
+    "film / private lending": 0.0999044987361013,
+    "venture deals": 0.25851737870027075,
+    "T-bills / BOXX": 1.0627670859535905e-05
+   },
+   "dollar_share": {
+    "SPY / equity beta": 0.08137029486227923,
+    "long Treasuries": 0.08542458064859218,
+    "TIPS": 0.2183215695332964,
+    "gold": 0.0,
+    "commodities": 0.08877244384472109,
+    "Composer": 0.24,
+    "SPCX basket (5 names)": 0.0,
+    "SpaceX (SPCX)": 0.041666666666666664,
+    "film / private lending": 0.13333333333333333,
+    "venture deals": 0.09722222222222222,
+    "T-bills / BOXX": 0.013888888888888888
+   },
+   "env_risk_share": {
+    "growth_up": 0.5291797800441163,
+    "growth_down": 0.021727132240199894,
+    "inflation_up": 0.023490797747292038,
+    "inflation_down": 0.4255916622975323
+   },
+   "env_unmapped": 1.0627670859575389e-05,
+   "env_balance_score": 0.39362454740516795,
+   "exp_return_prior_film20": 0.10397903345789972,
+   "exp_return_prior_film14": 0.09651236679123305,
+   "sharpe_prior_film20": 0.533190993346278,
+   "sharpe_prior_film14": 0.4708675798336209,
+   "film_contrib_to_return_film20": 0.02666666666666667,
+   "private_risk_share": 0.35842187743637205
+  }
+ },
+ "stress_replays": {
+  "basis": "today's weights buy-and-hold, daily MTM; Composer = beta proxy; film = rf + beta x (HYG - rf) (VWEHX before 2007-04-11); venture = rf + beta x (IWM - rf); SPCX = rf + beta x (QQQ - rf); no idiosyncratic risk in replays (understates single-name / single-loan losses)",
+  "rows": [
+   {
+    "scenario": "tech_2000_02",
+    "start": "2000-03-10",
+    "end": "2002-10-09",
+    "candidate": "PLAN pre-trigger",
+    "basket_used": "QQQ",
+    "cum_return": -0.27763650929526784,
+    "max_drawdown": -0.3081043004668599,
+    "loss_usd": -4997457.167314821,
+    "max_dd_usd": -5545877.408403478,
+    "notes": ""
+   },
+   {
+    "scenario": "tech_2000_02",
+    "start": "2000-03-10",
+    "end": "2002-10-09",
+    "candidate": "PLAN post-trigger",
+    "basket_used": "QQQ",
+    "cum_return": -0.3218886204154958,
+    "max_drawdown": -0.3513861461105666,
+    "loss_usd": -5793995.167478925,
+    "max_dd_usd": -6324950.6299902,
+    "notes": ""
+   },
+   {
+    "scenario": "tech_2000_02",
+    "start": "2000-03-10",
+    "end": "2002-10-09",
+    "candidate": "ALT-2 UNLEVERED",
+    "basket_used": "QQQ",
+    "cum_return": 0.03221281036598467,
+    "max_drawdown": -0.10686450822625904,
+    "loss_usd": 579830.586587724,
+    "max_dd_usd": -1923561.1480726628,
+    "notes": ""
+   },
+   {
+    "scenario": "tech_2000_02",
+    "start": "2000-03-10",
+    "end": "2002-10-09",
+    "candidate": "CASEY ROUTE pre-trigger",
+    "basket_used": "QQQ",
+    "cum_return": -0.11211150546075388,
+    "max_drawdown": -0.1751823159355973,
+    "loss_usd": -2018007.0982935699,
+    "max_dd_usd": -3153281.686840751,
+    "notes": "missing returns set to 0% - stream NOT modelled in this window (understates loss if it fell): {'VENT': 54}"
+   },
+   {
+    "scenario": "tech_2000_02",
+    "start": "2000-03-10",
+    "end": "2002-10-09",
+    "candidate": "CASEY ROUTE post-trigger",
+    "basket_used": "QQQ",
+    "cum_return": -0.1563636165809822,
+    "max_drawdown": -0.20655511178794805,
+    "loss_usd": -2814545.0984576796,
+    "max_dd_usd": -3717992.012183065,
+    "notes": "missing returns set to 0% - stream NOT modelled in this window (understates loss if it fell): {'VENT': 54}"
+   },
+   {
+    "scenario": "tech_2000_02",
+    "start": "2000-03-10",
+    "end": "2002-10-09",
+    "candidate": "SPY 100%",
+    "basket_used": "-",
+    "cum_return": -0.4233661520873946,
+    "max_drawdown": -0.47515853479472425,
+    "loss_usd": -7620590.737573102,
+    "max_dd_usd": -8552853.626305036,
+    "notes": ""
+   },
+   {
+    "scenario": "gfc_2008",
+    "start": "2007-10-09",
+    "end": "2009-03-09",
+    "candidate": "PLAN pre-trigger",
+    "basket_used": "QQQ",
+    "cum_return": -0.29592874022754523,
+    "max_drawdown": -0.29688681088867663,
+    "loss_usd": -5326717.3240958145,
+    "max_dd_usd": -5343962.59599618,
+    "notes": ""
+   },
+   {
+    "scenario": "gfc_2008",
+    "start": "2007-10-09",
+    "end": "2009-03-09",
+    "candidate": "PLAN post-trigger",
+    "basket_used": "QQQ",
+    "cum_return": -0.3270682804999977,
+    "max_drawdown": -0.32924772699012783,
+    "loss_usd": -5887229.048999959,
+    "max_dd_usd": -5926459.085822301,
+    "notes": ""
+   },
+   {
+    "scenario": "gfc_2008",
+    "start": "2007-10-09",
+    "end": "2009-03-09",
+    "candidate": "ALT-2 UNLEVERED",
+    "basket_used": "QQQ",
+    "cum_return": -0.12304128169261652,
+    "max_drawdown": -0.23647744197597254,
+    "loss_usd": -2214743.070467097,
+    "max_dd_usd": -4256593.955567505,
+    "notes": ""
+   },
+   {
+    "scenario": "gfc_2008",
+    "start": "2007-10-09",
+    "end": "2009-03-09",
+    "candidate": "CASEY ROUTE pre-trigger",
+    "basket_used": "QQQ",
+    "cum_return": -0.2347121036618235,
+    "max_drawdown": -0.2744287068410013,
+    "loss_usd": -4224817.865912823,
+    "max_dd_usd": -4939716.723138023,
+    "notes": ""
+   },
+   {
+    "scenario": "gfc_2008",
+    "start": "2007-10-09",
+    "end": "2009-03-09",
+    "candidate": "CASEY ROUTE post-trigger",
+    "basket_used": "QQQ",
+    "cum_return": -0.2658516439342752,
+    "max_drawdown": -0.2995213269392156,
+    "loss_usd": -4785329.590816953,
+    "max_dd_usd": -5391383.884905881,
+    "notes": ""
+   },
+   {
+    "scenario": "gfc_2008",
+    "start": "2007-10-09",
+    "end": "2009-03-09",
+    "candidate": "SPY 100%",
+    "basket_used": "-",
+    "cum_return": -0.5518944215905263,
+    "max_drawdown": -0.5518944215905263,
+    "loss_usd": -9934099.588629473,
+    "max_dd_usd": -9934099.588629473,
+    "notes": ""
+   },
+   {
+    "scenario": "covid_2020",
+    "start": "2020-02-19",
+    "end": "2020-03-23",
+    "candidate": "PLAN pre-trigger",
+    "basket_used": "EW NVDA/AVGO/TSLA/ISRG",
+    "cum_return": -0.17932892063824624,
+    "max_drawdown": -0.17932892063824624,
+    "loss_usd": -3227920.571488432,
+    "max_dd_usd": -3227920.571488432,
+    "notes": ""
+   },
+   {
+    "scenario": "covid_2020",
+    "start": "2020-02-19",
+    "end": "2020-03-23",
+    "candidate": "PLAN post-trigger",
+    "basket_used": "EW NVDA/AVGO/TSLA/ISRG",
+    "cum_return": -0.19733422740145856,
+    "max_drawdown": -0.19733422740145856,
+    "loss_usd": -3552016.093226254,
+    "max_dd_usd": -3552016.093226254,
+    "notes": ""
+   },
+   {
+    "scenario": "covid_2020",
+    "start": "2020-02-19",
+    "end": "2020-03-23",
+    "candidate": "ALT-2 UNLEVERED",
+    "basket_used": "EW NVDA/AVGO/TSLA/ISRG",
+    "cum_return": -0.10512266943589021,
+    "max_drawdown": -0.15553091468607172,
+    "loss_usd": -1892208.0498460238,
+    "max_dd_usd": -2799556.464349291,
+    "notes": ""
+   },
+   {
+    "scenario": "covid_2020",
+    "start": "2020-02-19",
+    "end": "2020-03-23",
+    "candidate": "CASEY ROUTE pre-trigger",
+    "basket_used": "EW NVDA/AVGO/TSLA/ISRG",
+    "cum_return": -0.1607970987653109,
+    "max_drawdown": -0.17456099407186731,
+    "loss_usd": -2894347.7777755964,
+    "max_dd_usd": -3142097.8932936117,
+    "notes": ""
+   },
+   {
+    "scenario": "covid_2020",
+    "start": "2020-02-19",
+    "end": "2020-03-23",
+    "candidate": "CASEY ROUTE post-trigger",
+    "basket_used": "EW NVDA/AVGO/TSLA/ISRG",
+    "cum_return": -0.1788024055285221,
+    "max_drawdown": -0.19122980136137113,
+    "loss_usd": -3218443.299513398,
+    "max_dd_usd": -3442136.4245046806,
+    "notes": ""
+   },
+   {
+    "scenario": "covid_2020",
+    "start": "2020-02-19",
+    "end": "2020-03-23",
+    "candidate": "SPY 100%",
+    "basket_used": "-",
+    "cum_return": -0.3371728189633807,
+    "max_drawdown": -0.3371728189633807,
+    "loss_usd": -6069110.741340852,
+    "max_dd_usd": -6069110.741340852,
+    "notes": ""
+   },
+   {
+    "scenario": "inflation_2022",
+    "start": "2022-01-03",
+    "end": "2022-10-12",
+    "candidate": "PLAN pre-trigger",
+    "basket_used": "EW NVDA/AVGO/TSLA/ISRG/RKLB",
+    "cum_return": -0.13843067746420867,
+    "max_drawdown": -0.13843067746420867,
+    "loss_usd": -2491752.194355756,
+    "max_dd_usd": -2491752.194355756,
+    "notes": ""
+   },
+   {
+    "scenario": "inflation_2022",
+    "start": "2022-01-03",
+    "end": "2022-10-12",
+    "candidate": "PLAN post-trigger",
+    "basket_used": "EW NVDA/AVGO/TSLA/ISRG/RKLB",
+    "cum_return": -0.16050028513211356,
+    "max_drawdown": -0.16050028513211356,
+    "loss_usd": -2889005.132378044,
+    "max_dd_usd": -2889005.132378044,
+    "notes": ""
+   },
+   {
+    "scenario": "inflation_2022",
+    "start": "2022-01-03",
+    "end": "2022-10-12",
+    "candidate": "ALT-2 UNLEVERED",
+    "basket_used": "EW NVDA/AVGO/TSLA/ISRG/RKLB",
+    "cum_return": -0.13624553368357295,
+    "max_drawdown": -0.15919306978997438,
+    "loss_usd": -2452419.606304313,
+    "max_dd_usd": -2865475.256219539,
+    "notes": ""
+   },
+   {
+    "scenario": "inflation_2022",
+    "start": "2022-01-03",
+    "end": "2022-10-12",
+    "candidate": "CASEY ROUTE pre-trigger",
+    "basket_used": "EW NVDA/AVGO/TSLA/ISRG/RKLB",
+    "cum_return": -0.14751272533381965,
+    "max_drawdown": -0.1546882356989281,
+    "loss_usd": -2655229.056008754,
+    "max_dd_usd": -2784388.242580706,
+    "notes": ""
+   },
+   {
+    "scenario": "inflation_2022",
+    "start": "2022-01-03",
+    "end": "2022-10-12",
+    "candidate": "CASEY ROUTE post-trigger",
+    "basket_used": "EW NVDA/AVGO/TSLA/ISRG/RKLB",
+    "cum_return": -0.16958233300172432,
+    "max_drawdown": -0.17608792249658622,
+    "loss_usd": -3052481.9940310377,
+    "max_dd_usd": -3169582.6049385522,
+    "notes": ""
+   },
+   {
+    "scenario": "inflation_2022",
+    "start": "2022-01-03",
+    "end": "2022-10-12",
+    "candidate": "SPY 100%",
+    "basket_used": "-",
+    "cum_return": -0.24496383714802172,
+    "max_drawdown": -0.24496383714802172,
+    "loss_usd": -4409349.068664391,
+    "max_dd_usd": -4409349.068664391,
+    "notes": ""
+   }
+  ]
+ },
+ "forward_bootstrap": {
+  "basis": "IN-SAMPLE resampling of 2023-26 daily returns (private/SPCX synthesised: beta x factor + Gaussian idio), re-centred to PRIOR-DRIVEN means; not a forecast; no default jumps",
+  "results": {
+   "film_20pct_headline": {
+    "PLAN pre-trigger": {
+     "years": 10.0,
+     "n_paths": 10000,
+     "periods_per_year": 252.0,
+     "p_loss_horizon": 0.0104,
+     "p_wipeout": 0.0,
+     "mean_cagr": 0.06403908746676766,
+     "cagr_quantiles": {
+      "0.05": 0.01770834442196988,
+      "0.25": 0.04428812832301715,
+      "0.5": 0.06323118869961486,
+      "0.75": 0.0831280416021773,
+      "0.95": 0.1125388590340724
+     },
+     "wealth_quantiles": {
+      "0.05": 1.191882256756044,
+      "0.25": 1.54242270273181,
+      "0.5": 1.8461929027270139,
+      "0.75": 2.222276013366059,
+      "0.95": 2.9050384911339266
+     },
+     "max_dd_quantiles": {
+      "0.05": -0.254228625396169,
+      "0.25": -0.19127974888092536,
+      "0.5": -0.15874435068184084,
+      "0.75": -0.13404405946948353,
+      "0.95": -0.10835435335952892
+     },
+     "median_max_dd": -0.15874435068184084,
+     "cvar_0.05_cagr": 0.007079459622686127,
+     "var_0.05_cagr": 0.017686320200829497,
+     "p_losing_year": 0.24176,
+     "p_any_losing_year": 0.9362,
+     "cvar_0.05_annual": -0.10112340111988964,
+     "annual_return_quantiles": {
+      "0.05": -0.07254246381679132,
+      "0.25": 0.0022460943631080754,
+      "0.5": 0.060865267701832426,
+      "0.75": 0.12594429393260154,
+      "0.95": 0.229935751280445
+     }
+    },
+    "PLAN post-trigger": {
+     "years": 10.0,
+     "n_paths": 10000,
+     "periods_per_year": 252.0,
+     "p_loss_horizon": 0.0288,
+     "p_wipeout": 0.0,
+     "mean_cagr": 0.0666647609408982,
+     "cagr_quantiles": {
+      "0.05": 0.008168622335860775,
+      "0.25": 0.04117421393702925,
+      "0.5": 0.06589936826408316,
+      "0.75": 0.09078360061891122,
+      "0.95": 0.12827178420853316
+     },
+     "wealth_quantiles": {
+      "0.05": 1.084755262759907,
+      "0.25": 1.4970421806730798,
+      "0.5": 1.8930498435004384,
+      "0.75": 2.3844378072990438,
+      "0.95": 3.343006970846506
+     },
+     "max_dd_quantiles": {
+      "0.05": -0.34819857391855946,
+      "0.25": -0.2599499456287663,
+      "0.5": -0.21471144558896282,
+      "0.75": -0.18040637895054332,
+      "0.95": -0.14306318080288155
+     },
+     "median_max_dd": -0.21471144558896282,
+     "cvar_0.05_cagr": -0.0054758323421455635,
+     "var_0.05_cagr": 0.008163931593711427,
+     "p_losing_year": 0.28235,
+     "p_any_losing_year": 0.964,
+     "cvar_0.05_annual": -0.1443301680069801,
+     "annual_return_quantiles": {
+      "0.05": -0.10660675458611572,
+      "0.25": -0.010585039690466896,
+      "0.5": 0.06455415200931636,
+      "0.75": 0.14657436239069505,
+      "0.95": 0.2789217394941729
+     }
+    },
+    "ALT-2 UNLEVERED": {
+     "years": 10.0,
+     "n_paths": 10000,
+     "periods_per_year": 252.0,
+     "p_loss_horizon": 0.0,
+     "p_wipeout": 0.0,
+     "mean_cagr": 0.07453488531161866,
+     "cagr_quantiles": {
+      "0.05": 0.04340157508424639,
+      "0.25": 0.061628773268472714,
+      "0.5": 0.07409631346381229,
+      "0.75": 0.08750698541690638,
+      "0.95": 0.10651926553104737
+     },
+     "wealth_quantiles": {
+      "0.05": 1.5293781452940127,
+      "0.25": 1.8185565350985609,
+      "0.5": 2.04377112925252,
+      "0.75": 2.313771954040551,
+      "0.95": 2.751628493679892
+     },
+     "max_dd_quantiles": {
+      "0.05": -0.14131711353325177,
+      "0.25": -0.10923012906627691,
+      "0.5": -0.09212424853713203,
+      "0.75": -0.07956892041766273,
+      "0.95": -0.06731425117769256
+     },
+     "median_max_dd": -0.09212424853713203,
+     "cvar_0.05_cagr": 0.035524589946004013,
+     "var_0.05_cagr": 0.04339628776623328,
+     "p_losing_year": 0.10469,
+     "p_any_losing_year": 0.6714,
+     "cvar_0.05_annual": -0.04561246763264601,
+     "annual_return_quantiles": {
+      "0.05": -0.02256861290950285,
+      "0.25": 0.03421401304309751,
+      "0.5": 0.07464582169438516,
+      "0.75": 0.11654266543410774,
+      "0.95": 0.17936080176844868
+     }
+    },
+    "CASEY ROUTE pre-trigger": {
+     "years": 10.0,
+     "n_paths": 10000,
+     "periods_per_year": 252.0,
+     "p_loss_horizon": 0.001,
+     "p_wipeout": 0.0,
+     "mean_cagr": 0.0989105296951758,
+     "cagr_quantiles": {
+      "0.05": 0.04351405869753298,
+      "0.25": 0.07565530515435076,
+      "0.5": 0.0984449988602415,
+      "0.75": 0.1216888321695585,
+      "0.95": 0.1558881397354159
+     },
+     "wealth_quantiles": {
+      "0.05": 1.5310276892678225,
+      "0.25": 2.0736298505779804,
+      "0.5": 2.5573087161873937,
+      "0.75": 3.1529999530157484,
+      "0.95": 4.2575335184906145
+     },
+     "max_dd_quantiles": {
+      "0.05": -0.2399202331544854,
+      "0.25": -0.18187733281210422,
+      "0.5": -0.15144090224909812,
+      "0.75": -0.12869615343776422,
+      "0.95": -0.10403456118588059
+     },
+     "median_max_dd": -0.15144090224909812,
+     "cvar_0.05_cagr": 0.030652569337935996,
+     "var_0.05_cagr": 0.04348841319600294,
+     "p_losing_year": 0.16942,
+     "p_any_losing_year": 0.8441,
+     "cvar_0.05_annual": -0.098249493216668,
+     "annual_return_quantiles": {
+      "0.05": -0.06297468328715075,
+      "0.25": 0.027230367842059455,
+      "0.5": 0.097557848649795,
+      "0.75": 0.17294739393277964,
+      "0.95": 0.29223179119943515
+     }
+    },
+    "CASEY ROUTE post-trigger": {
+     "years": 10.0,
+     "n_paths": 10000,
+     "periods_per_year": 252.0,
+     "p_loss_horizon": 0.004,
+     "p_wipeout": 0.0,
+     "mean_cagr": 0.10188799519475722,
+     "cagr_quantiles": {
+      "0.05": 0.03586602185260477,
+      "0.25": 0.07355743320538843,
+      "0.5": 0.10081483950604064,
+      "0.75": 0.1288008186964244,
+      "0.95": 0.17156636649038753
+     },
+     "wealth_quantiles": {
+      "0.05": 1.422446292227601,
+      "0.25": 2.03354053129877,
+      "0.5": 2.6130201231022,
+      "0.75": 3.35871502741853,
+      "0.95": 4.871570079438713
+     },
+     "max_dd_quantiles": {
+      "0.05": -0.30736534265450555,
+      "0.25": -0.23293976074938236,
+      "0.5": -0.19341520310529764,
+      "0.75": -0.164264776612452,
+      "0.95": -0.13188183101138715
+     },
+     "median_max_dd": -0.19341520310529764,
+     "cvar_0.05_cagr": 0.020704575526753012,
+     "var_0.05_cagr": 0.03584453337123383,
+     "p_losing_year": 0.20723,
+     "p_any_losing_year": 0.9033,
+     "cvar_0.05_annual": -0.13110374068216302,
+     "annual_return_quantiles": {
+      "0.05": -0.09021059027849039,
+      "0.25": 0.01646992337231834,
+      "0.5": 0.09975593980225406,
+      "0.75": 0.19197335915219943,
+      "0.95": 0.3379578105207131
+     }
+    }
+   },
+   "film_14.4pct_default_adjusted": {
+    "PLAN pre-trigger": {
+     "years": 10.0,
+     "n_paths": 10000,
+     "periods_per_year": 252.0,
+     "p_loss_horizon": 0.0104,
+     "p_wipeout": 0.0,
+     "mean_cagr": 0.06403908746676766,
+     "cagr_quantiles": {
+      "0.05": 0.01770834442196988,
+      "0.25": 0.04428812832301715,
+      "0.5": 0.06323118869961486,
+      "0.75": 0.0831280416021773,
+      "0.95": 0.1125388590340724
+     },
+     "wealth_quantiles": {
+      "0.05": 1.191882256756044,
+      "0.25": 1.54242270273181,
+      "0.5": 1.8461929027270139,
+      "0.75": 2.222276013366059,
+      "0.95": 2.9050384911339266
+     },
+     "max_dd_quantiles": {
+      "0.05": -0.254228625396169,
+      "0.25": -0.19127974888092536,
+      "0.5": -0.15874435068184084,
+      "0.75": -0.13404405946948353,
+      "0.95": -0.10835435335952892
+     },
+     "median_max_dd": -0.15874435068184084,
+     "cvar_0.05_cagr": 0.007079459622686127,
+     "var_0.05_cagr": 0.017686320200829497,
+     "p_losing_year": 0.24176,
+     "p_any_losing_year": 0.9362,
+     "cvar_0.05_annual": -0.10112340111988964,
+     "annual_return_quantiles": {
+      "0.05": -0.07254246381679132,
+      "0.25": 0.0022460943631080754,
+      "0.5": 0.060865267701832426,
+      "0.75": 0.12594429393260154,
+      "0.95": 0.229935751280445
+     }
+    },
+    "PLAN post-trigger": {
+     "years": 10.0,
+     "n_paths": 10000,
+     "periods_per_year": 252.0,
+     "p_loss_horizon": 0.0288,
+     "p_wipeout": 0.0,
+     "mean_cagr": 0.0666647609408982,
+     "cagr_quantiles": {
+      "0.05": 0.008168622335860775,
+      "0.25": 0.04117421393702925,
+      "0.5": 0.06589936826408316,
+      "0.75": 0.09078360061891122,
+      "0.95": 0.12827178420853316
+     },
+     "wealth_quantiles": {
+      "0.05": 1.084755262759907,
+      "0.25": 1.4970421806730798,
+      "0.5": 1.8930498435004384,
+      "0.75": 2.3844378072990438,
+      "0.95": 3.343006970846506
+     },
+     "max_dd_quantiles": {
+      "0.05": -0.34819857391855946,
+      "0.25": -0.2599499456287663,
+      "0.5": -0.21471144558896282,
+      "0.75": -0.18040637895054332,
+      "0.95": -0.14306318080288155
+     },
+     "median_max_dd": -0.21471144558896282,
+     "cvar_0.05_cagr": -0.0054758323421455635,
+     "var_0.05_cagr": 0.008163931593711427,
+     "p_losing_year": 0.28235,
+     "p_any_losing_year": 0.964,
+     "cvar_0.05_annual": -0.1443301680069801,
+     "annual_return_quantiles": {
+      "0.05": -0.10660675458611572,
+      "0.25": -0.010585039690466896,
+      "0.5": 0.06455415200931636,
+      "0.75": 0.14657436239069505,
+      "0.95": 0.2789217394941729
+     }
+    },
+    "ALT-2 UNLEVERED": {
+     "years": 10.0,
+     "n_paths": 10000,
+     "periods_per_year": 252.0,
+     "p_loss_horizon": 0.0,
+     "p_wipeout": 0.0,
+     "mean_cagr": 0.07453488531161866,
+     "cagr_quantiles": {
+      "0.05": 0.04340157508424639,
+      "0.25": 0.061628773268472714,
+      "0.5": 0.07409631346381229,
+      "0.75": 0.08750698541690638,
+      "0.95": 0.10651926553104737
+     },
+     "wealth_quantiles": {
+      "0.05": 1.5293781452940127,
+      "0.25": 1.8185565350985609,
+      "0.5": 2.04377112925252,
+      "0.75": 2.313771954040551,
+      "0.95": 2.751628493679892
+     },
+     "max_dd_quantiles": {
+      "0.05": -0.14131711353325177,
+      "0.25": -0.10923012906627691,
+      "0.5": -0.09212424853713203,
+      "0.75": -0.07956892041766273,
+      "0.95": -0.06731425117769256
+     },
+     "median_max_dd": -0.09212424853713203,
+     "cvar_0.05_cagr": 0.035524589946004013,
+     "var_0.05_cagr": 0.04339628776623328,
+     "p_losing_year": 0.10469,
+     "p_any_losing_year": 0.6714,
+     "cvar_0.05_annual": -0.04561246763264601,
+     "annual_return_quantiles": {
+      "0.05": -0.02256861290950285,
+      "0.25": 0.03421401304309751,
+      "0.5": 0.07464582169438516,
+      "0.75": 0.11654266543410774,
+      "0.95": 0.17936080176844868
+     }
+    },
+    "CASEY ROUTE pre-trigger": {
+     "years": 10.0,
+     "n_paths": 10000,
+     "periods_per_year": 252.0,
+     "p_loss_horizon": 0.0021,
+     "p_wipeout": 0.0,
+     "mean_cagr": 0.0907386406873948,
+     "cagr_quantiles": {
+      "0.05": 0.03575252302081751,
+      "0.25": 0.06765568262494798,
+      "0.5": 0.09027652061209845,
+      "0.75": 0.11334819515082029,
+      "0.95": 0.14729421715173874
+     },
+     "wealth_quantiles": {
+      "0.05": 1.4208885004943044,
+      "0.25": 1.9244744976740535,
+      "0.5": 2.3733762679645682,
+      "0.75": 2.9262410545238775,
+      "0.95": 3.951373160715736
+     },
+     "max_dd_quantiles": {
+      "0.05": -0.25214147213841076,
+      "0.25": -0.1902873081667078,
+      "0.5": -0.15782649197548698,
+      "0.75": -0.13378777217075138,
+      "0.95": -0.10751945981981981
+     },
+     "median_max_dd": -0.15782649197548698,
+     "cvar_0.05_cagr": 0.02298633080470376,
+     "var_0.05_cagr": 0.03572707145508036,
+     "p_losing_year": 0.19009,
+     "p_any_losing_year": 0.8776,
+     "cvar_0.05_annual": -0.10496043461670142,
+     "annual_return_quantiles": {
+      "0.05": -0.06994706067818203,
+      "0.25": 0.019589437117517483,
+      "0.5": 0.0893959094635336,
+      "0.75": 0.16422706492694844,
+      "0.95": 0.2826283508895629
+     }
+    },
+    "CASEY ROUTE post-trigger": {
+     "years": 10.0,
+     "n_paths": 10000,
+     "periods_per_year": 252.0,
+     "p_loss_horizon": 0.0074,
+     "p_wipeout": 0.0,
+     "mean_cagr": 0.093694010101846,
+     "cagr_quantiles": {
+      "0.05": 0.028161129320480316,
+      "0.25": 0.06557328278568864,
+      "0.5": 0.0926288024458598,
+      "0.75": 0.12040745031665334,
+      "0.95": 0.1628562754828407
+     },
+     "wealth_quantiles": {
+      "0.05": 1.3201151324778564,
+      "0.25": 1.8872664894532987,
+      "0.5": 2.4250821016706317,
+      "0.75": 3.117165642144395,
+      "0.95": 4.5212696557827154
+     },
+     "max_dd_quantiles": {
+      "0.05": -0.3205119068387222,
+      "0.25": -0.2418501294539345,
+      "0.5": -0.20029540441156596,
+      "0.75": -0.16947262062674978,
+      "0.95": -0.13596551609116242
+     },
+     "median_max_dd": -0.20029540441156596,
+     "cvar_0.05_cagr": 0.01311199744806452,
+     "var_0.05_cagr": 0.0281397597541293,
+     "p_losing_year": 0.2263,
+     "p_any_losing_year": 0.9255,
+     "cvar_0.05_annual": -0.13757115678345103,
+     "annual_return_quantiles": {
+      "0.05": -0.09698113925295582,
+      "0.25": 0.008908677356460615,
+      "0.5": 0.09157764226291609,
+      "0.75": 0.1831122355150812,
+      "0.95": 0.3280159078891768
+     }
+    }
+   }
+  }
+ },
+ "summary": [
+  {
+   "candidate": "PLAN pre-trigger",
+   "vol": 0.10359637187588225,
+   "dr2": 2.176325972536081,
+   "balance_score": 0.32752268239425464,
+   "exp_return_prior_film20": 0.06680391135379112,
+   "exp_return_prior_film14": 0.06680391135379112,
+   "exp_usd_per_year_film14": 1202470.4043682402,
+   "worst_replay": "tech_2000_02",
+   "worst_replay_max_dd": -0.3081043004668599,
+   "worst_replay_max_dd_usd": -5545877.408403478,
+   "boot_p05_year_film14": -0.07254246381679132,
+   "boot_p05_year_usd_film14": -1305764.3487022438,
+   "boot_p05_year_film20": -0.07254246381679132,
+   "boot_p05_year_usd_film20": -1305764.3487022438,
+   "boot_median_cagr10_film14": 0.06323118869961486,
+   "p_losing_year_film14": 0.24176
+  },
+  {
+   "candidate": "PLAN post-trigger",
+   "vol": 0.12003998149667969,
+   "dr2": 2.466762643989654,
+   "balance_score": 0.3240637855750972,
+   "exp_return_prior_film20": 0.07094875183886033,
+   "exp_return_prior_film14": 0.07094875183886033,
+   "exp_usd_per_year_film14": 1277077.533099486,
+   "worst_replay": "tech_2000_02",
+   "worst_replay_max_dd": -0.3513861461105666,
+   "worst_replay_max_dd_usd": -6324950.6299902,
+   "boot_p05_year_film14": -0.10660675458611572,
+   "boot_p05_year_usd_film14": -1918921.582550083,
+   "boot_p05_year_film20": -0.10660675458611572,
+   "boot_p05_year_usd_film20": -1918921.582550083,
+   "boot_median_cagr10_film14": 0.06589936826408316,
+   "p_losing_year_film14": 0.28235
+  },
+  {
+   "candidate": "ALT-2 UNLEVERED",
+   "vol": 0.07179305330364212,
+   "dr2": 4.0151461216680655,
+   "balance_score": 0.7288079892476169,
+   "exp_return_prior_film20": 0.0742285255996726,
+   "exp_return_prior_film14": 0.0742285255996726,
+   "exp_usd_per_year_film14": 1336113.4607941068,
+   "worst_replay": "gfc_2008",
+   "worst_replay_max_dd": -0.23647744197597254,
+   "worst_replay_max_dd_usd": -4256593.955567505,
+   "boot_p05_year_film14": -0.02256861290950285,
+   "boot_p05_year_usd_film14": -406235.0323710513,
+   "boot_p05_year_film20": -0.02256861290950285,
+   "boot_p05_year_usd_film20": -406235.0323710513,
+   "boot_median_cagr10_film14": 0.07409631346381229,
+   "p_losing_year_film14": 0.10469
+  },
+  {
+   "candidate": "CASEY ROUTE pre-trigger",
+   "vol": 0.10618801075268669,
+   "dr2": 4.296431320862495,
+   "balance_score": 0.4121596764424261,
+   "exp_return_prior_film20": 0.09983419297283048,
+   "exp_return_prior_film14": 0.09236752630616382,
+   "exp_usd_per_year_film14": 1662615.4735109487,
+   "worst_replay": "gfc_2008",
+   "worst_replay_max_dd": -0.2744287068410013,
+   "worst_replay_max_dd_usd": -4939716.723138023,
+   "boot_p05_year_film14": -0.06994706067818203,
+   "boot_p05_year_usd_film14": -1259047.0922072765,
+   "boot_p05_year_film20": -0.06297468328715075,
+   "boot_p05_year_usd_film20": -1133544.2991687136,
+   "boot_median_cagr10_film14": 0.09027652061209845,
+   "p_losing_year_film14": 0.19009
+  },
+  {
+   "candidate": "CASEY ROUTE post-trigger",
+   "vol": 0.11980516223088906,
+   "dr2": 4.559131558188918,
+   "balance_score": 0.39362454740516795,
+   "exp_return_prior_film20": 0.10397903345789972,
+   "exp_return_prior_film14": 0.09651236679123305,
+   "exp_usd_per_year_film14": 1737222.602242195,
+   "worst_replay": "gfc_2008",
+   "worst_replay_max_dd": -0.2995213269392156,
+   "worst_replay_max_dd_usd": -5391383.884905881,
+   "boot_p05_year_film14": -0.09698113925295582,
+   "boot_p05_year_usd_film14": -1745660.5065532047,
+   "boot_p05_year_film20": -0.09021059027849039,
+   "boot_p05_year_usd_film20": -1623790.625012827,
+   "boot_median_cagr10_film14": 0.0926288024458598,
+   "p_losing_year_film14": 0.2263
+  }
+ ],
+ "charts": [
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_risk_vs_dollar.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_risk_vs_dollar_by_sleeve.csv",
+   "caption": "N3: $18M, no leverage. Dollar vs Euler risk share by sleeve, trailing-3y daily covariance; private streams = book assumptions"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_environment_boxes.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_environment_boxes.csv",
+   "caption": "N3 environment-box risk shares (film = credit -> growth-up; venture/SPCX = equity)"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_stress_replays.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_stress_replays.csv",
+   "caption": "N3 replays: Composer = beta proxy, private streams = factor betas only (no idio), SPCX = beta x QQQ; $M on $18M"
+  },
+  {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_bootstrap_one_year.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_bootstrap_one_year.csv",
+   "caption": "N3 forward bootstrap of 2023-26 daily returns re-centred on PRIOR means (in-sample shape, not a forecast); film 14.4% (20% rows in CSV)"
+  }
+ ],
+ "provenance": {
+  "SPY": {
+   "source": "yahoo",
+   "identifier": "SPY",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/SPY",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1993-01-29",
+   "last_date": "2026-10-05",
+   "n_obs": 8478,
+   "fetched_at": "2026-10-06T15:39:36.211502+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "QQQ": {
+   "source": "yahoo",
+   "identifier": "QQQ",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/QQQ",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1999-03-10",
+   "last_date": "2026-10-05",
+   "n_obs": 6936,
+   "fetched_at": "2026-10-06T15:39:42.948267+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "BOXX": {
+   "source": "yahoo",
+   "identifier": "BOXX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/BOXX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2022-12-28",
+   "last_date": "2026-10-05",
+   "n_obs": 945,
+   "fetched_at": "2026-10-06T17:58:54.644697+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "TLT": {
+   "source": "yahoo",
+   "identifier": "TLT",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/TLT",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2002-07-30",
+   "last_date": "2026-10-05",
+   "n_obs": 6085,
+   "fetched_at": "2026-10-06T15:39:37.634174+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "TIP": {
+   "source": "yahoo",
+   "identifier": "TIP",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/TIP",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2003-12-05",
+   "last_date": "2026-10-05",
+   "n_obs": 5743,
+   "fetched_at": "2026-10-06T15:39:39.380390+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "GLD": {
+   "source": "yahoo",
+   "identifier": "GLD",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/GLD",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2004-11-18",
+   "last_date": "2026-10-05",
+   "n_obs": 5503,
+   "fetched_at": "2026-10-06T15:39:40.066444+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "DBC": {
+   "source": "yahoo",
+   "identifier": "DBC",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/DBC",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2006-02-06",
+   "last_date": "2026-10-05",
+   "n_obs": 5198,
+   "fetched_at": "2026-10-06T15:39:40.750200+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "HYG": {
+   "source": "yahoo",
+   "identifier": "HYG",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/HYG",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2007-04-11",
+   "last_date": "2026-10-05",
+   "n_obs": 4903,
+   "fetched_at": "2026-10-06T15:39:41.448524+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "IWM": {
+   "source": "yahoo",
+   "identifier": "IWM",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/IWM",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2000-05-26",
+   "last_date": "2026-10-05",
+   "n_obs": 6628,
+   "fetched_at": "2026-10-06T17:59:03.899878+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "NVDA": {
+   "source": "yahoo",
+   "identifier": "NVDA",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/NVDA",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1999-01-22",
+   "last_date": "2026-10-05",
+   "n_obs": 6968,
+   "fetched_at": "2026-10-06T18:24:01.753461+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "AVGO": {
+   "source": "yahoo",
+   "identifier": "AVGO",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/AVGO",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2009-08-06",
+   "last_date": "2026-10-05",
+   "n_obs": 4317,
+   "fetched_at": "2026-10-06T18:24:02.484785+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "TSLA": {
+   "source": "yahoo",
+   "identifier": "TSLA",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/TSLA",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2010-06-29",
+   "last_date": "2026-10-05",
+   "n_obs": 4092,
+   "fetched_at": "2026-10-06T17:58:54.135127+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "ISRG": {
+   "source": "yahoo",
+   "identifier": "ISRG",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/ISRG",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2000-06-16",
+   "last_date": "2026-10-05",
+   "n_obs": 6614,
+   "fetched_at": "2026-10-06T18:24:03.168486+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "RKLB": {
+   "source": "yahoo",
+   "identifier": "RKLB",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/RKLB",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2020-11-24",
+   "last_date": "2026-10-05",
+   "n_obs": 1471,
+   "fetched_at": "2026-10-06T18:24:03.734496+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "SPCX": {
+   "source": "yahoo",
+   "identifier": "SPCX",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/SPCX",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2026-06-12",
+   "last_date": "2026-10-05",
+   "n_obs": 79,
+   "fetched_at": "2026-10-06T18:24:06.582118+00:00",
+   "from_cache": true,
+   "proxies": [],
+   "warnings": [
+    "dropped final bar: session in progress"
+   ]
+  },
+  "IEF+proxies": {
+   "source": "spliced",
+   "identifier": "IEF",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/IEF",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1991-10-28",
+   "last_date": "2026-10-05",
+   "n_obs": 8796,
+   "fetched_at": "2026-10-06T15:39:38.349968+00:00",
+   "from_cache": true,
+   "proxies": [
+    {
+     "proxy": "VFITX",
+     "used_before": "2002-07-30",
+     "proxy_first_date": "1991-10-28",
+     "note": "Vanguard interm. Treasury fund"
+    }
+   ],
+   "warnings": [
+    "dropped final bar: session in progress",
+    "proxy VFITX: dropped final bar: session in progress"
+   ]
+  },
+  "TIP+proxies": {
+   "source": "spliced",
+   "identifier": "TIP",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/TIP",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1991-10-28",
+   "last_date": "2026-10-05",
+   "n_obs": 8796,
+   "fetched_at": "2026-10-06T15:39:39.380390+00:00",
+   "from_cache": true,
+   "proxies": [
+    {
+     "proxy": "VIPSX",
+     "used_before": "2003-12-05",
+     "proxy_first_date": "2000-06-29",
+     "note": "Vanguard Inflation-Protected fund"
+    },
+    {
+     "proxy": "VFITX",
+     "used_before": "2000-06-29",
+     "proxy_first_date": "1991-10-28",
+     "note": "interm. UST before VIPSX"
+    }
+   ],
+   "warnings": [
+    "dropped final bar: session in progress",
+    "proxy VIPSX: dropped final bar: session in progress",
+    "proxy VFITX: dropped final bar: session in progress"
+   ]
+  },
+  "TLT+proxies": {
+   "source": "spliced",
+   "identifier": "TLT",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/TLT",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1986-05-19",
+   "last_date": "2026-10-05",
+   "n_obs": 10173,
+   "fetched_at": "2026-10-06T15:39:37.634174+00:00",
+   "from_cache": true,
+   "proxies": [
+    {
+     "proxy": "VUSTX",
+     "used_before": "2002-07-30",
+     "proxy_first_date": "1986-05-19",
+     "note": "Vanguard long-term Treasury fund"
+    }
+   ],
+   "warnings": [
+    "dropped final bar: session in progress",
+    "proxy VUSTX: dropped final bar: session in progress"
+   ]
+  },
+  "GLD+proxies": {
+   "source": "spliced",
+   "identifier": "GLD",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/GLD",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "2000-08-30",
+   "last_date": "2026-10-05",
+   "n_obs": 6555,
+   "fetched_at": "2026-10-06T15:39:40.066444+00:00",
+   "from_cache": true,
+   "proxies": [
+    {
+     "proxy": "GC=F",
+     "used_before": "2004-11-18",
+     "proxy_first_date": "2000-08-30",
+     "note": "COMEX gold front-month, price only"
+    }
+   ],
+   "warnings": [
+    "dropped final bar: session in progress",
+    "proxy GC=F: dropped final bar: session in progress",
+    "proxy GC=F: dropped 83 null bars"
+   ]
+  },
+  "DBC+proxies": {
+   "source": "spliced",
+   "identifier": "DBC",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/DBC",
+   "field": "adjclose",
+   "total_return": false,
+   "first_date": "1984-01-03",
+   "last_date": "2026-10-05",
+   "n_obs": 10772,
+   "fetched_at": "2026-10-06T15:39:40.750200+00:00",
+   "from_cache": true,
+   "proxies": [
+    {
+     "proxy": "^SPGSCI",
+     "used_before": "2006-02-06",
+     "proxy_first_date": "1984-01-03",
+     "note": "S&P GSCI price index, no collateral yield"
+    }
+   ],
+   "warnings": [
+    "dropped final bar: session in progress",
+    "proxy ^SPGSCI: price index (^SPGSCI, instrumentType INDEX): price-only, NOT total return (Yahoo adjclose of an index equals its close; dividends are missing)",
+    "proxy ^SPGSCI: dropped final bar: session in progress",
+    "proxy ^SPGSCI: dropped 1 null bars"
+   ]
+  },
+  "HYG+proxies": {
+   "source": "spliced",
+   "identifier": "HYG",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/HYG",
+   "field": "adjclose",
+   "total_return": true,
+   "first_date": "1980-01-02",
+   "last_date": "2026-10-05",
+   "n_obs": 11785,
+   "fetched_at": "2026-10-06T15:39:41.448524+00:00",
+   "from_cache": true,
+   "proxies": [
+    {
+     "proxy": "VWEHX",
+     "used_before": "2007-04-11",
+     "proxy_first_date": "1980-01-02",
+     "note": "Vanguard High-Yield Corporate fund"
+    }
+   ],
+   "warnings": [
+    "dropped final bar: session in progress",
+    "proxy VWEHX: dropped final bar: session in progress"
+   ]
+  }
+ }
+}

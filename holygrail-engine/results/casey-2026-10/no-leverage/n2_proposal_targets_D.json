@@ -1,0 +1,38 @@
+[
+ {
+  "stream": "core_equity",
+  "target_usd": 166846.99729717098
+ },
+ {
+  "stream": "TLT",
+  "target_usd": 283614.0720849106
+ },
+ {
+  "stream": "TIP",
+  "target_usd": 692829.9126080028
+ },
+ {
+  "stream": "DBC",
+  "target_usd": 225558.31535086964
+ },
+ {
+  "stream": "gold_silver",
+  "target_usd": 0.0
+ },
+ {
+  "stream": "BTC",
+  "target_usd": 65141.72895577952
+ },
+ {
+  "stream": "composer_all",
+  "target_usd": 136779.54841323203
+ },
+ {
+  "stream": "KMLM",
+  "target_usd": 262203.17013623635
+ },
+ {
+  "stream": "single_names",
+  "target_usd": 33863.36515379842
+ }
+]

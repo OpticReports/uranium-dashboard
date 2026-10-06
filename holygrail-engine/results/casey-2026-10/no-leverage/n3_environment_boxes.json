@@ -1,0 +1,47 @@
+[
+ {
+  "candidate": "PLAN pre-trigger",
+  "growth_up": 0.5053280813493223,
+  "growth_down": -0.004354903719257545,
+  "inflation_up": 0.0,
+  "inflation_down": 0.49831904508670266,
+  "unmapped": 0.000707777283232458,
+  "balance_score": 0.32752268239425464
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "growth_up": 0.506010675275479,
+  "growth_down": -0.006948696357112198,
+  "inflation_up": 0.0,
+  "inflation_down": 0.5004396923381877,
+  "unmapped": 0.0004983287434453532,
+  "balance_score": 0.3240637855750972
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "growth_up": 0.3545555049514893,
+  "growth_down": 0.14223283525480993,
+  "inflation_up": 0.1543731566809027,
+  "inflation_down": 0.34883850311279796,
+  "unmapped": 0.0,
+  "balance_score": 0.7288079892476169
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "growth_up": 0.5325230026032837,
+  "growth_down": 0.03085364430296626,
+  "inflation_up": 0.028263338354884537,
+  "inflation_down": 0.4083130816306442,
+  "unmapped": 4.693310822134755e-05,
+  "balance_score": 0.4121596764424261
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "growth_up": 0.5291797800441163,
+  "growth_down": 0.021727132240199894,
+  "inflation_up": 0.023490797747292038,
+  "inflation_down": 0.4255916622975323,
+  "unmapped": 1.0627670859575389e-05,
+  "balance_score": 0.39362454740516795
+ }
+]

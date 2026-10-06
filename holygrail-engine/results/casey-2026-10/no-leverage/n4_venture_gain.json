@@ -1,0 +1,92 @@
+[
+ {
+  "position": "Organics Ocean",
+  "cost": 100000,
+  "paper": 12000000,
+  "gain": 11900000
+ },
+ {
+  "position": "Persona",
+  "cost": 275000,
+  "paper": 625000,
+  "gain": 350000
+ },
+ {
+  "position": "Copper Royalty",
+  "cost": 100000,
+  "paper": 270000,
+  "gain": 170000
+ },
+ {
+  "position": "Uranium Digital",
+  "cost": 50000,
+  "paper": 150000,
+  "gain": 100000
+ },
+ {
+  "position": "Venezuelan Bond",
+  "cost": 100000,
+  "paper": 180000,
+  "gain": 80000
+ },
+ {
+  "position": "Argentine GDP Warrants",
+  "cost": 200000,
+  "paper": 230000,
+  "gain": 30000
+ },
+ {
+  "position": "RoboStrategy",
+  "cost": 8000,
+  "paper": 24000,
+  "gain": 16000
+ },
+ {
+  "position": "Google X Fund",
+  "cost": 400000,
+  "paper": 400000,
+  "gain": 0
+ },
+ {
+  "position": "Slip",
+  "cost": 50000,
+  "paper": 50000,
+  "gain": 0
+ },
+ {
+  "position": "Vernius",
+  "cost": 25000,
+  "paper": 25000,
+  "gain": 0
+ },
+ {
+  "position": "OpenAi",
+  "cost": 25000,
+  "paper": 0,
+  "gain": -25000
+ },
+ {
+  "position": "BNB Dat",
+  "cost": 75000,
+  "paper": 28000,
+  "gain": -47000
+ },
+ {
+  "position": "BITS",
+  "cost": 50000,
+  "paper": 0,
+  "gain": -50000
+ },
+ {
+  "position": "Define Fit",
+  "cost": 125000,
+  "paper": 0,
+  "gain": -125000
+ },
+ {
+  "position": "Schools PR",
+  "cost": 150000,
+  "paper": 0,
+  "gain": -150000
+ }
+]

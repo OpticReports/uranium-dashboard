@@ -1,0 +1,332 @@
+[
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "SPY / equity beta",
+  "dollar_share": 0.4,
+  "risk_share": 0.5090677917809564
+ },
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "long Treasuries",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "TIPS",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "gold",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "commodities",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "Composer",
+  "dollar_share": 0.24,
+  "risk_share": 0.49022443093581103
+ },
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "SPCX basket (5 names)",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "SpaceX (SPCX)",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "film / private lending",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "venture deals",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN pre-trigger",
+  "sleeve": "T-bills / BOXX",
+  "dollar_share": 0.36,
+  "risk_share": 0.0007077772832327624
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "SPY / equity beta",
+  "dollar_share": 0.4,
+  "risk_share": 0.43450811019218366
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "long Treasuries",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "TIPS",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "gold",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "commodities",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "Composer",
+  "dollar_share": 0.24,
+  "risk_share": 0.3927248164531956
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "SPCX basket (5 names)",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "SpaceX (SPCX)",
+  "dollar_share": 0.041666666666666664,
+  "risk_share": 0.17226874461117533
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "film / private lending",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "venture deals",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "PLAN post-trigger",
+  "sleeve": "T-bills / BOXX",
+  "dollar_share": 0.3183333333333333,
+  "risk_share": 0.0004983287434456664
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "SPY / equity beta",
+  "dollar_share": 0.15085579174131428,
+  "risk_share": 0.24215299545350513
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "long Treasuries",
+  "dollar_share": 0.15837220167045318,
+  "risk_share": 0.14910069118468933
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "TIPS",
+  "dollar_share": 0.4047554857936187,
+  "risk_share": 0.151237302857039
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "gold",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "commodities",
+  "dollar_share": 0.16457894522408575,
+  "risk_share": 0.1575090105047664
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "Composer",
+  "dollar_share": 0.07865181165842886,
+  "risk_share": 0.15000000000000005
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "SPCX basket (5 names)",
+  "dollar_share": 0.042785763912099394,
+  "risk_share": 0.14999999999999997
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "SpaceX (SPCX)",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "film / private lending",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "venture deals",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "ALT-2 UNLEVERED",
+  "sleeve": "T-bills / BOXX",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "SPY / equity beta",
+  "dollar_share": 0.08137029486227923,
+  "risk_share": 0.07570742085094093
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "long Treasuries",
+  "dollar_share": 0.08542458064859218,
+  "risk_share": 0.028952189750030152
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "TIPS",
+  "dollar_share": 0.2183215695332964,
+  "risk_share": 0.029975662418107913
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "gold",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "commodities",
+  "dollar_share": 0.08877244384472109,
+  "risk_share": 0.026551014291661162
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "Composer",
+  "dollar_share": 0.24,
+  "risk_share": 0.4075914438663975
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "SPCX basket (5 names)",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "SpaceX (SPCX)",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "film / private lending",
+  "dollar_share": 0.13333333333333333,
+  "risk_share": 0.1200695299694009
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "venture deals",
+  "dollar_share": 0.09722222222222222,
+  "risk_share": 0.31110580574524005
+ },
+ {
+  "candidate": "CASEY ROUTE pre-trigger",
+  "sleeve": "T-bills / BOXX",
+  "dollar_share": 0.05555555555555555,
+  "risk_share": 4.6933108221340166e-05
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "SPY / equity beta",
+  "dollar_share": 0.08137029486227923,
+  "risk_share": 0.07078066399177681
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "long Treasuries",
+  "dollar_share": 0.08542458064859218,
+  "risk_share": 0.023876775306127633
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "TIPS",
+  "dollar_share": 0.2183215695332964,
+  "risk_share": 0.02483341324598616
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "gold",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "commodities",
+  "dollar_share": 0.08877244384472109,
+  "risk_share": 0.022148182248597915
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "Composer",
+  "dollar_share": 0.24,
+  "risk_share": 0.3479187024302187
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "SPCX basket (5 names)",
+  "dollar_share": 0.0,
+  "risk_share": 0.0
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "SpaceX (SPCX)",
+  "dollar_share": 0.041666666666666664,
+  "risk_share": 0.1520097576700612
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "film / private lending",
+  "dollar_share": 0.13333333333333333,
+  "risk_share": 0.0999044987361013
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "venture deals",
+  "dollar_share": 0.09722222222222222,
+  "risk_share": 0.25851737870027075
+ },
+ {
+  "candidate": "CASEY ROUTE post-trigger",
+  "sleeve": "T-bills / BOXX",
+  "dollar_share": 0.013888888888888888,
+  "risk_share": 1.0627670859535905e-05
+ }
+]

@@ -1,0 +1,146 @@
+[
+ {
+  "variant": "D",
+  "loan": "PING gap",
+  "usd": 50000.0,
+  "share": 0.033738191632928474
+ },
+ {
+  "variant": "D",
+  "loan": "Father of Us bridge (past due)",
+  "usd": 100000.0,
+  "share": 0.06747638326585695
+ },
+ {
+  "variant": "D",
+  "loan": "12 Dates of Christmas gap",
+  "usd": 550000.0,
+  "share": 0.37112010796221323
+ },
+ {
+  "variant": "D",
+  "loan": "Prank Call gap",
+  "usd": 250000.0,
+  "share": 0.16869095816464239
+ },
+ {
+  "variant": "D",
+  "loan": "Kate Might Die gap",
+  "usd": 132000.0,
+  "share": 0.08906882591093117
+ },
+ {
+  "variant": "D",
+  "loan": "MiniWar gap",
+  "usd": 200000.0,
+  "share": 0.1349527665317139
+ },
+ {
+  "variant": "D",
+  "loan": "Dominion bridge (outstanding)",
+  "usd": 200000.0,
+  "share": 0.1349527665317139
+ },
+ {
+  "variant": "P",
+  "loan": "PING gap",
+  "usd": 50000.0,
+  "share": 0.035431692656994286
+ },
+ {
+  "variant": "P",
+  "loan": "Father of Us bridge (past due)",
+  "usd": 100000.0,
+  "share": 0.07086338531398857
+ },
+ {
+  "variant": "P",
+  "loan": "12 Dates of Christmas gap",
+  "usd": 550000.0,
+  "share": 0.38974861922693715
+ },
+ {
+  "variant": "P",
+  "loan": "Prank Call gap",
+  "usd": 250000.0,
+  "share": 0.17715846328497142
+ },
+ {
+  "variant": "P",
+  "loan": "Kate Might Die gap",
+  "usd": 132000.0,
+  "share": 0.09353966861446492
+ },
+ {
+  "variant": "P",
+  "loan": "MiniWar gap",
+  "usd": 200000.0,
+  "share": 0.14172677062797714
+ },
+ {
+  "variant": "P",
+  "loan": "Plus One bridge (outstanding)",
+  "usd": 129166.0,
+  "share": 0.09153140027466648
+ },
+ {
+  "variant": "D",
+  "loan": "n_eff at rho_D=0.0",
+  "usd": null,
+  "share": 4.6245799327892465
+ },
+ {
+  "variant": "D",
+  "loan": "n_eff at rho_D=0.1",
+  "usd": null,
+  "share": 3.3942917547568707
+ },
+ {
+  "variant": "D",
+  "loan": "n_eff at rho_D=0.3",
+  "usd": null,
+  "share": 2.2155013799448025
+ },
+ {
+  "variant": "D",
+  "loan": "n_eff at rho_D=0.5",
+  "usd": null,
+  "share": 1.6444178900648685
+ },
+ {
+  "variant": "D",
+  "loan": "n_eff at rho_D=1.0",
+  "usd": null,
+  "share": 1.0
+ },
+ {
+  "variant": "P",
+  "loan": "n_eff at rho_D=0.0",
+  "usd": null,
+  "share": 4.4095545616767176
+ },
+ {
+  "variant": "P",
+  "loan": "n_eff at rho_D=0.1",
+  "usd": null,
+  "share": 3.288367664559732
+ },
+ {
+  "variant": "P",
+  "loan": "n_eff at rho_D=0.3",
+  "usd": null,
+  "share": 2.179854601537484
+ },
+ {
+  "variant": "P",
+  "loan": "n_eff at rho_D=0.5",
+  "usd": null,
+  "share": 1.6302837919098296
+ },
+ {
+  "variant": "P",
+  "loan": "n_eff at rho_D=1.0",
+  "usd": null,
+  "share": 1.0
+ }
+]

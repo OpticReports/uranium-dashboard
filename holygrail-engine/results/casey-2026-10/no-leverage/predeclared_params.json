@@ -1,0 +1,69 @@
+{
+ "declared_at": "2026-10-06, BEFORE any no-leverage result was computed. Inputs read before declaring: book YAML, prior metrics.json files, PORTFOLIO_FACTS.md, research packs, the sheet PDF's Budget-scenario rows and film-loan rows (filtered text extraction; no credential text read or copied), SPCX first/last dates. Any change after results is logged under post_hoc in metrics.json.",
+ "naming": "'Dalio Holy Grail' = Dalio's framework; 'Composer HG symphony' = Casey's 3x-momentum Composer strategy. Never conflated.",
+ "inputs_casey_2026_10_06": {
+  "leverage": "'I generally don't like leverage... I usually use my private credit book and my venture book to get the alpha, 20-30% yearly type returns' => gross <= 1.0 on every proposal, no margin, no levered funds (ALLW/UPAR/RSSB excluded)",
+  "spacex": "'I would put like $500k-1m into SpaceX after a major stock market crash' => crash-contingent single-stock buy (SPCX, listed 2026-06-12)",
+  "boxx_loans": "Dominion ($200k @16%, out 2026-09-08) and Plus One ($129,166 @15%, out 2026-09-03) are the two ~45-day loans funded from BOXX; one still out, one back; which one not stated",
+  "dexmat": "Casey now sizing DexMat at ~$75k (sheet $100k)",
+  "relayed_answers_unmapped": "'1. Passes thru 2. There is and we are too small on the SPV 3. I'm not sure, but fees would continue as is so yes to fees' - the questions these answer are not in this task's inputs. Recorded verbatim; used in NO number; mapping asked back as P1."
+ },
+ "evidence_read_before_declaring": "Sheet 'Movies': Dominion sits in the OUTSTANDING list (expected profit $32,000) and has no profit booked on the completed list; Plus One's $19,375 profit IS booked: TOTAL EARNINGS $60,820.30 = MARX $3,000 + KMD bridge $18,445 + Dustlands $10,000 + Plus One $19,375 + Father of Us $10,000. The sheet's own rows therefore favour variant D. Casey has not confirmed.",
+ "estimation": {
+  "liquid_N1_N2": "as current/predeclared_params.json: daily, trailing 3y ending 2026-09-30, lw_cc, history common, Composer spliced (IN-SAMPLE backtest before live start, live after); hg_common.score()",
+  "post_exit_N3": "as post-exit/predeclared_params.json: daily simple returns, trailing 3y 2023-10-02..2026-09-30, sample covariance",
+  "priors": "NEUTRAL PRIOR mu = rf (DTB3 4.01%) + 0.30 x daily 3y vol on every market/series stream; BOXX/BIL/cash = rf; variant 'alpha_haircut' = Sharpe 0 on Composer symphonies, single names and BTC (liquid); post-exit alpha streams = zero-alpha beta-implied (OLS on QQQ/TLT/GLD/DBC). Every return-dependent number is PRIOR-DRIVEN and labelled so."
+ },
+ "N1": {
+  "variant_D": "Dominion $200k outstanding (16%, ~45 days, back ~2026-10-23); Plus One returned and inside IBKR BOXX live. Plug 'Short-term 16% loans' $310,876.30 -> $200,000 (stream st_loans_16, coupon 16% x 45/365 + rf x 320/365). 'Film Dominion bridge (returned)' private-credit line $200,000 -> removed: it IS the outstanding loan, now counted once in the liquid line.",
+  "variant_P": "Plus One $129,166 outstanding (15%); Dominion returned and inside IBKR BOXX live. Plug -> $129,166 (coupon 15% x 45/365 + rf x 320/365). Dominion private-credit line removed: double count.",
+  "headline_variant": "D (the sheet's own rows favour it; see evidence_read_before_declaring); P reported alongside everywhere",
+  "views": "whole (all positions incl RECON), investable, liquid now (loan outstanding), liquid post-revert (loan back in BOXX)",
+  "overstatement": "sheet net worth $19,765,406 minus corrected whole view, in $",
+  "commitments": {"Series X uncalled": 215200, "DexMat": 75000, "Jarod Production": 120000, "total": 410200, "sheet_total_alongside": 435200, "rule": "paid from 'Cash/stables ex-Hyperliquid' first, then BOXX; Hyperliquid untouched"},
+  "metrics": "NAV, vol, DR^2 (headline) + (a) equal-rho, (c) PCA entropy + risk-balance family (b) 1/sum PRC^2 and (d) minimum torsion, BTC risk share, cash-like share (reporting sleeve cash_like), environment box risk shares + balance score"
+ },
+ "N2": {
+  "base_book": "liquid post-revert of each variant (loan back in BOXX); headline D",
+  "fixed": "Hyperliquid ETH carry $30,110 and HL spot USDC $67,322.59 unchanged (never move Hyperliquid funds); HL BTC trend notional counted inside BTC",
+  "reserve": "committed cash $410,200 held in BOXX (zero risk) in every N2 book",
+  "deployable": "NAV - reserve - HL USDC - HL ETH carry",
+  "streams": "balanced core: core_equity (SPY/AVUV/AVDV/AVEM/QUAL at current $ mix), TLT, TIP, DBC, gold_silver (physical + PHYS + PSLV at current $ mix); return engines: BTC, composer_all (the 4 symphonies at current $ mix = ONE alpha sleeve), KMLM, single_names (current $ mix)",
+  "risk_budgets_of_budgeted_risk": {"balanced_core": 0.60, "BTC": 0.12, "composer_all": 0.16, "KMLM": 0.06, "single_names": 0.06},
+  "risk_budget_source": "A6 budgets (current/predeclared_params.json) with the three Composer budgets merged (0.10 + 0.04 + 0.02 = 0.16); core split 25% per All Weather box by engine quadrant_balance (canonical map); KMLM has no canonical box (reported unmapped)",
+  "solve": "engine risk_budget_weights on the budgeted daily covariance -> weights sum 1 -> dollars = weight x deployable. Gross = (deployable + ETH carry)/NAV <= 1.0. No margin. Check: BTC <= 20% of TOTAL book risk (reported; fails = flagged, not re-tuned)",
+  "comparators": {"current_as_is": "liquid post-revert as held, reserve inside its cash", "current_cash_deployed_pro_rata": "every non-cash position x L funded from uncommitted cash (BOXX/BIL/IBKR cash/Cash-stables less the $410,200 reserve; HL untouched); L = the scalar reaching 15% vol, capped where uncommitted cash runs out (gross <= 1)"},
+  "prior_driven": "base_0.30 and alpha_haircut, native exposure (no gearing)",
+  "stress": "engine replay_scenario on the A6 backfilled panel (natural proxies, then factor replicas with full-sample betas = look-ahead), SCENARIOS gfc / covid / inflation_2022, buy-and-hold, cash at DTB3; replica/proxy share reported",
+  "backtest": "constant mix (HINDSIGHT, today's weights), monthly rebalance, 5 bp, cash at DTB3: panel A real data 2023-04-20..2026-09-30 (Composer IN-SAMPLE before live) and panel B 2006-05..2026-09 backfilled; benchmarks SPY and 60/40 SPY/IEF. IN-SAMPLE, not a forecast."
+ },
+ "N3": {
+  "nav_usd": 18000000,
+  "PLAN_pre_trigger": "Composer 24% (4 symphonies at policy 29/29/27/15), SPY 40%, BOXX 36% (Treasury 16% + the $3.6M SpaceX money held in BOXX until the trigger)",
+  "PLAN_post_trigger": "Composer 24%, SPY 40%, SPCX $750,000 (4.1667%), BOXX 31.8333%",
+  "ALT2_UNLEVERED": "refresh of post-exit ALT-2 at L = 1: core = engine quadrant_balance over SPY/TLT/TIP/GLD/DBC; sleeves core / Composer / SPCX-basket (proxy i: NVDA/AVGO/TSLA/ISRG/RKLB) at risk budgets 70/15/15; weights sum 1. Definition kept as declared (it still holds the 5-name basket, which is no longer Casey's SpaceX rule)",
+  "CASEY_ROUTE_pre_trigger": {
+   "film_private_lending_usd": 2400000, "film_source": "sheet 'Budget' row Earnings Estimate $20,000,000 (the row nearest $18M): Film Financing and Private Lending $2,400,000 ($10M row: $2,350,000)",
+   "venture_new_usd": 1750000, "venture_source": "sheet 'Venture' footnote: 'Goal is to do about 15-20 more and then stop (allocate $1.5-2m) over next few years' - midpoint $1.75M, 17.5 deals at $100k",
+   "composer_usd": 4320000, "composer_source": "sheet post-exit plan row 'Composer 30% $4.32M' (policy targets 29/29/27/15)",
+   "spacex_reserve_usd": 1000000, "spacex_source": "Casey 2026-10-06 '$500k-1m into SpaceX after a major stock market crash' - the maximum, held in BOXX",
+   "core_usd": "remainder 18,000,000 - 2,400,000 - 1,750,000 - 4,320,000 - 1,000,000 = 8,530,000 at the engine quadrant_balance core weights (same core as ALT-2)"},
+  "CASEY_ROUTE_post_trigger": "SPCX $750,000 from the reserve; $250,000 stays BOXX",
+  "film_stream": "book film_gap_loans assumptions: vol 22%, rho(HYG) 0.30, PD 8%, LGD 50%, coupon 20%. Return HEADLINE = 20% (contract rate, no loss); ADJUSTED = (1-PD) x coupon - PD x LGD = 14.4% (PD 8% sits above Fitch 6.3% TTM Aug-2026, which counts maturity extensions as defaults; Casey ledger ~1 late of ~12; LGD 50% junior-mezz judgement, math B7/B8, factcheck CORRECTED prints)",
+  "venture_stream": "book venture_basket method for 17.5 equal deals: vol = 90% x sqrt(0.30 + 0.70/17.5) = 52.5%; rho(IWM) 0.40; prior mu = rf + 0.30 x vol (neutral prior). Casey's '20-30%' shown alongside, not used",
+  "spcx_stream": "one-factor on QQQ: beta, total vol and idio vol measured on SPCX's listed window (daily, 2026-06-15..2026-09-30, ~75 obs); cov(SPCX, j) = beta x cov(QQQ, j); prior = zero-alpha rf + beta x (mu_QQQ - rf)",
+  "private_cov": "factor model: cov(p, j) = rho x sigma_p / sigma_f x cov(f, j), f = HYG (film) / IWM (venture) on the 3y window; var(p) = sigma_p^2",
+  "boxes": "film credit -> growth_up (canonical 'credit'); venture, SPCX -> equity (growth_up, inflation_down); BOXX unmapped",
+  "replays": "tech_2000_02, gfc_2008, covid_2020, inflation_2022 as post-exit; private streams = rf + beta x (f - rf) with HYG (VWEHX before 2007-04-11) and IWM, no idio; SPCX = rf + beta x (QQQ - rf); Composer beta proxy as post-exit",
+  "bootstrap": "as post-exit (stationary, mean block 21d, 10y, 10,000 paths, seed 20261006, re-centred on prior means); private/SPCX daily histories synthesised = beta x factor + iid normal idio (seed 20261006), no default jump (understates tails)",
+  "outputs": "vol, DR^2 (+family), risk share by sleeve, environment boxes, PRIOR-DRIVEN return (film at 20% headline and 14.4% adjusted), worst replay max drawdown in $ on $18M, bootstrap p5 calendar year in $"
+ },
+ "N4": {
+  "film_book": "outstanding film loans per variant: D = PING 50k, Father of Us 100k, 12 Dates 550k, Prank Call 250k, Kate Might Die gap 132k, MiniWar 200k, Dominion 200k; P = same less Dominion plus Plus One 129,166",
+  "concentration": "largest-loan share; n_eff by $ = 1/HHI; n_eff at the book's default correlation rho_D = 0.30 (venture_basket source, math A11): 1/(rho + (1-rho) HHI); grid rho 0 / 0.1 / 0.3 / 0.5 / 1 for the chart",
+  "income": "sheet 'T12 2026' realised vs planned: film $60,820 vs $318,400; total $408,969.30 vs $698,400; also excl. Keeta + River (no balance-sheet value)",
+  "venture_dr2": "engine score() on the investable view restricted to venture-sleeve positions (organics_ocean, venture_basket, em_special_sits), with and without Organics Ocean; private-credit sleeve likewise",
+  "paper_gain_share": "(OO paper - OO cost) / (total paper - total cost), sheet 'Venture'",
+  "dalio_tests": {"GOOD": "prior Sharpe >= 0.2 (engine good_sharpe; ASSUMPTION-driven) AND realised T12 income >= 50% of plan (measured)", "UNCORRELATED": "corr(sleeve, rest of investable book) <= 0.30 (assumption-driven for parametric) AND within-sleeve n_eff (rho_D 0.3 / DR^2) >= 5", "RISK_BALANCED": "largest position <= 20% of sleeve value AND sleeve risk share <= 2x its dollar share of the investable book"}
+ }
+}

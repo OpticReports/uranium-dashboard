@@ -1,0 +1,5147 @@
+{
+ "analysis": "No-leverage follow-up (Casey 2026-10-06): N1 corrected liquid book, N2 unlevered liquid proposal, N3 $18M post-exit without leverage, N4 private credit / venture as Dalio streams. 'Dalio Holy Grail' = Dalio's framework, never the Composer HG symphony.",
+ "params": {
+  "declared_at": "2026-10-06, BEFORE any no-leverage result was computed. Inputs read before declaring: book YAML, prior metrics.json files, PORTFOLIO_FACTS.md, research packs, the sheet PDF's Budget-scenario rows and film-loan rows (filtered text extraction; no credential text read or copied), SPCX first/last dates. Any change after results is logged under post_hoc in metrics.json.",
+  "naming": "'Dalio Holy Grail' = Dalio's framework; 'Composer HG symphony' = Casey's 3x-momentum Composer strategy. Never conflated.",
+  "inputs_casey_2026_10_06": {
+   "leverage": "'I generally don't like leverage... I usually use my private credit book and my venture book to get the alpha, 20-30% yearly type returns' => gross <= 1.0 on every proposal, no margin, no levered funds (ALLW/UPAR/RSSB excluded)",
+   "spacex": "'I would put like $500k-1m into SpaceX after a major stock market crash' => crash-contingent single-stock buy (SPCX, listed 2026-06-12)",
+   "boxx_loans": "Dominion ($200k @16%, out 2026-09-08) and Plus One ($129,166 @15%, out 2026-09-03) are the two ~45-day loans funded from BOXX; one still out, one back; which one not stated",
+   "dexmat": "Casey now sizing DexMat at ~$75k (sheet $100k)",
+   "relayed_answers_unmapped": "'1. Passes thru 2. There is and we are too small on the SPV 3. I'm not sure, but fees would continue as is so yes to fees' - the questions these answer are not in this task's inputs. Recorded verbatim; used in NO number; mapping asked back as P1."
+  },
+  "evidence_read_before_declaring": "Sheet 'Movies': Dominion sits in the OUTSTANDING list (expected profit $32,000) and has no profit booked on the completed list; Plus One's $19,375 profit IS booked: TOTAL EARNINGS $60,820.30 = MARX $3,000 + KMD bridge $18,445 + Dustlands $10,000 + Plus One $19,375 + Father of Us $10,000. The sheet's own rows therefore favour variant D. Casey has not confirmed.",
+  "estimation": {
+   "liquid_N1_N2": "as current/predeclared_params.json: daily, trailing 3y ending 2026-09-30, lw_cc, history common, Composer spliced (IN-SAMPLE backtest before live start, live after); hg_common.score()",
+   "post_exit_N3": "as post-exit/predeclared_params.json: daily simple returns, trailing 3y 2023-10-02..2026-09-30, sample covariance",
+   "priors": "NEUTRAL PRIOR mu = rf (DTB3 4.01%) + 0.30 x daily 3y vol on every market/series stream; BOXX/BIL/cash = rf; variant 'alpha_haircut' = Sharpe 0 on Composer symphonies, single names and BTC (liquid); post-exit alpha streams = zero-alpha beta-implied (OLS on QQQ/TLT/GLD/DBC). Every return-dependent number is PRIOR-DRIVEN and labelled so."
+  },
+  "N1": {
+   "variant_D": "Dominion $200k outstanding (16%, ~45 days, back ~2026-10-23); Plus One returned and inside IBKR BOXX live. Plug 'Short-term 16% loans' $310,876.30 -> $200,000 (stream st_loans_16, coupon 16% x 45/365 + rf x 320/365). 'Film Dominion bridge (returned)' private-credit line $200,000 -> removed: it IS the outstanding loan, now counted once in the liquid line.",
+   "variant_P": "Plus One $129,166 outstanding (15%); Dominion returned and inside IBKR BOXX live. Plug -> $129,166 (coupon 15% x 45/365 + rf x 320/365). Dominion private-credit line removed: double count.",
+   "headline_variant": "D (the sheet's own rows favour it; see evidence_read_before_declaring); P reported alongside everywhere",
+   "views": "whole (all positions incl RECON), investable, liquid now (loan outstanding), liquid post-revert (loan back in BOXX)",
+   "overstatement": "sheet net worth $19,765,406 minus corrected whole view, in $",
+   "commitments": {
+    "Series X uncalled": 215200,
+    "DexMat": 75000,
+    "Jarod Production": 120000,
+    "total": 410200,
+    "sheet_total_alongside": 435200,
+    "rule": "paid from 'Cash/stables ex-Hyperliquid' first, then BOXX; Hyperliquid untouched"
+   },
+   "metrics": "NAV, vol, DR^2 (headline) + (a) equal-rho, (c) PCA entropy + risk-balance family (b) 1/sum PRC^2 and (d) minimum torsion, BTC risk share, cash-like share (reporting sleeve cash_like), environment box risk shares + balance score"
+  },
+  "N2": {
+   "base_book": "liquid post-revert of each variant (loan back in BOXX); headline D",
+   "fixed": "Hyperliquid ETH carry $30,110 and HL spot USDC $67,322.59 unchanged (never move Hyperliquid funds); HL BTC trend notional counted inside BTC",
+   "reserve": "committed cash $410,200 held in BOXX (zero risk) in every N2 book",
+   "deployable": "NAV - reserve - HL USDC - HL ETH carry",
+   "streams": "balanced core: core_equity (SPY/AVUV/AVDV/AVEM/QUAL at current $ mix), TLT, TIP, DBC, gold_silver (physical + PHYS + PSLV at current $ mix); return engines: BTC, composer_all (the 4 symphonies at current $ mix = ONE alpha sleeve), KMLM, single_names (current $ mix)",
+   "risk_budgets_of_budgeted_risk": {
+    "balanced_core": 0.6,
+    "BTC": 0.12,
+    "composer_all": 0.16,
+    "KMLM": 0.06,
+    "single_names": 0.06
+   },
+   "risk_budget_source": "A6 budgets (current/predeclared_params.json) with the three Composer budgets merged (0.10 + 0.04 + 0.02 = 0.16); core split 25% per All Weather box by engine quadrant_balance (canonical map); KMLM has no canonical box (reported unmapped)",
+   "solve": "engine risk_budget_weights on the budgeted daily covariance -> weights sum 1 -> dollars = weight x deployable. Gross = (deployable + ETH carry)/NAV <= 1.0. No margin. Check: BTC <= 20% of TOTAL book risk (reported; fails = flagged, not re-tuned)",
+   "comparators": {
+    "current_as_is": "liquid post-revert as held, reserve inside its cash",
+    "current_cash_deployed_pro_rata": "every non-cash position x L funded from uncommitted cash (BOXX/BIL/IBKR cash/Cash-stables less the $410,200 reserve; HL untouched); L = the scalar reaching 15% vol, capped where uncommitted cash runs out (gross <= 1)"
+   },
+   "prior_driven": "base_0.30 and alpha_haircut, native exposure (no gearing)",
+   "stress": "engine replay_scenario on the A6 backfilled panel (natural proxies, then factor replicas with full-sample betas = look-ahead), SCENARIOS gfc / covid / inflation_2022, buy-and-hold, cash at DTB3; replica/proxy share reported",
+   "backtest": "constant mix (HINDSIGHT, today's weights), monthly rebalance, 5 bp, cash at DTB3: panel A real data 2023-04-20..2026-09-30 (Composer IN-SAMPLE before live) and panel B 2006-05..2026-09 backfilled; benchmarks SPY and 60/40 SPY/IEF. IN-SAMPLE, not a forecast."
+  },
+  "N3": {
+   "nav_usd": 18000000,
+   "PLAN_pre_trigger": "Composer 24% (4 symphonies at policy 29/29/27/15), SPY 40%, BOXX 36% (Treasury 16% + the $3.6M SpaceX money held in BOXX until the trigger)",
+   "PLAN_post_trigger": "Composer 24%, SPY 40%, SPCX $750,000 (4.1667%), BOXX 31.8333%",
+   "ALT2_UNLEVERED": "refresh of post-exit ALT-2 at L = 1: core = engine quadrant_balance over SPY/TLT/TIP/GLD/DBC; sleeves core / Composer / SPCX-basket (proxy i: NVDA/AVGO/TSLA/ISRG/RKLB) at risk budgets 70/15/15; weights sum 1. Definition kept as declared (it still holds the 5-name basket, which is no longer Casey's SpaceX rule)",
+   "CASEY_ROUTE_pre_trigger": {
+    "film_private_lending_usd": 2400000,
+    "film_source": "sheet 'Budget' row Earnings Estimate $20,000,000 (the row nearest $18M): Film Financing and Private Lending $2,400,000 ($10M row: $2,350,000)",
+    "venture_new_usd": 1750000,
+    "venture_source": "sheet 'Venture' footnote: 'Goal is to do about 15-20 more and then stop (allocate $1.5-2m) over next few years' - midpoint $1.75M, 17.5 deals at $100k",
+    "composer_usd": 4320000,
+    "composer_source": "sheet post-exit plan row 'Composer 30% $4.32M' (policy targets 29/29/27/15)",
+    "spacex_reserve_usd": 1000000,
+    "spacex_source": "Casey 2026-10-06 '$500k-1m into SpaceX after a major stock market crash' - the maximum, held in BOXX",
+    "core_usd": "remainder 18,000,000 - 2,400,000 - 1,750,000 - 4,320,000 - 1,000,000 = 8,530,000 at the engine quadrant_balance core weights (same core as ALT-2)"
+   },
+   "CASEY_ROUTE_post_trigger": "SPCX $750,000 from the reserve; $250,000 stays BOXX",
+   "film_stream": "book film_gap_loans assumptions: vol 22%, rho(HYG) 0.30, PD 8%, LGD 50%, coupon 20%. Return HEADLINE = 20% (contract rate, no loss); ADJUSTED = (1-PD) x coupon - PD x LGD = 14.4% (PD 8% sits above Fitch 6.3% TTM Aug-2026, which counts maturity extensions as defaults; Casey ledger ~1 late of ~12; LGD 50% junior-mezz judgement, math B7/B8, factcheck CORRECTED prints)",
+   "venture_stream": "book venture_basket method for 17.5 equal deals: vol = 90% x sqrt(0.30 + 0.70/17.5) = 52.5%; rho(IWM) 0.40; prior mu = rf + 0.30 x vol (neutral prior). Casey's '20-30%' shown alongside, not used",
+   "spcx_stream": "one-factor on QQQ: beta, total vol and idio vol measured on SPCX's listed window (daily, 2026-06-15..2026-09-30, ~75 obs); cov(SPCX, j) = beta x cov(QQQ, j); prior = zero-alpha rf + beta x (mu_QQQ - rf)",
+   "private_cov": "factor model: cov(p, j) = rho x sigma_p / sigma_f x cov(f, j), f = HYG (film) / IWM (venture) on the 3y window; var(p) = sigma_p^2",
+   "boxes": "film credit -> growth_up (canonical 'credit'); venture, SPCX -> equity (growth_up, inflation_down); BOXX unmapped",
+   "replays": "tech_2000_02, gfc_2008, covid_2020, inflation_2022 as post-exit; private streams = rf + beta x (f - rf) with HYG (VWEHX before 2007-04-11) and IWM, no idio; SPCX = rf + beta x (QQQ - rf); Composer beta proxy as post-exit",
+   "bootstrap": "as post-exit (stationary, mean block 21d, 10y, 10,000 paths, seed 20261006, re-centred on prior means); private/SPCX daily histories synthesised = beta x factor + iid normal idio (seed 20261006), no default jump (understates tails)",
+   "outputs": "vol, DR^2 (+family), risk share by sleeve, environment boxes, PRIOR-DRIVEN return (film at 20% headline and 14.4% adjusted), worst replay max drawdown in $ on $18M, bootstrap p5 calendar year in $"
+  },
+  "N4": {
+   "film_book": "outstanding film loans per variant: D = PING 50k, Father of Us 100k, 12 Dates 550k, Prank Call 250k, Kate Might Die gap 132k, MiniWar 200k, Dominion 200k; P = same less Dominion plus Plus One 129,166",
+   "concentration": "largest-loan share; n_eff by $ = 1/HHI; n_eff at the book's default correlation rho_D = 0.30 (venture_basket source, math A11): 1/(rho + (1-rho) HHI); grid rho 0 / 0.1 / 0.3 / 0.5 / 1 for the chart",
+   "income": "sheet 'T12 2026' realised vs planned: film $60,820 vs $318,400; total $408,969.30 vs $698,400; also excl. Keeta + River (no balance-sheet value)",
+   "venture_dr2": "engine score() on the investable view restricted to venture-sleeve positions (organics_ocean, venture_basket, em_special_sits), with and without Organics Ocean; private-credit sleeve likewise",
+   "paper_gain_share": "(OO paper - OO cost) / (total paper - total cost), sheet 'Venture'",
+   "dalio_tests": {
+    "GOOD": "prior Sharpe >= 0.2 (engine good_sharpe; ASSUMPTION-driven) AND realised T12 income >= 50% of plan (measured)",
+    "UNCORRELATED": "corr(sleeve, rest of investable book) <= 0.30 (assumption-driven for parametric) AND within-sleeve n_eff (rho_D 0.3 / DR^2) >= 5",
+    "RISK_BALANCED": "largest position <= 20% of sleeve value AND sleeve risk share <= 2x its dollar share of the investable book"
+   }
+  }
+ },
+ "post_hoc": [
+  {
+   "item": "N2 'POST-HOC: proposal, metals held' added after seeing the predeclared solve put $0 in gold_silver",
+   "why": "the engine quadrant algebra covers inflation-up with TIP + DBC and gives gold a zero budget, which would mean selling $170,650 of physical bullion (dealer spread, tax not modelled) against Casey's sheet goal 'Gold & Silver ... $600,000 GOAL'. Variant: metals held at today's $, everything else solved as declared."
+  },
+  {
+   "item": "bootstrap: synthetic private/SPCX idiosyncratic draws demeaned (bug fix after the first run)",
+   "why": "a finite Gaussian sample carries a sample-mean drift (venture idio ~50%/yr over 750 days: SE ~29%/yr), which pushed bootstrap medians above the prior means; demeaning restores the declared 're-centred on prior means'"
+  },
+  {
+   "item": "N3 replays: first run used listed basket names in tech_2000_02/gfc_2008; corrected to QQQ as declared ('as post-exit')",
+   "why": "implementation slip vs the predeclared rule; after the fix ALT-2 UNLEVERED replays reproduce post-exit metrics exactly"
+  }
+ ],
+ "counter_agent_review": "NOT RUN by the author; required before these numbers are acted on (CLAUDE.md)",
+ "liquid": {
+  "params_file": "predeclared_params.json",
+  "rf": 0.0401,
+  "N1": {
+   "sheet_net_worth": 19765406.0,
+   "book_as_built": {
+    "whole_usd": 19765406.0,
+    "investable_usd": 19675346.0,
+    "liquid_usd": 2485346.0
+   },
+   "variants": {
+    "D": {
+     "outstanding_loan_usd": 200000.0,
+     "whole_usd": 19454529.7,
+     "investable_usd": 19364469.7,
+     "liquid_usd": 2374469.7,
+     "sheet_overstatement_usd": 310876.30000000075,
+     "investable_vol": 0.45268157263483094,
+     "investable_dr2": 1.4631159767058852,
+     "cases": {
+      "liquid now (loan outstanding)": {
+       "nav_usd": 2374469.7,
+       "vol": 0.10852146902282182,
+       "dr2": 3.9217162514572625,
+       "neff_equal_rho": 5.892707273578183,
+       "neff_pca_entropy": 5.052429346547192,
+       "neff_inv_hhi_prc": 4.967621938113512,
+       "neff_min_torsion": 12.751904665378461,
+       "btc_risk_share": 0.4045104664168435,
+       "btc_dollar_share": 0.11854652009246526,
+       "cash_like_share": 0.44925403764891164,
+       "cash_like_usd": 1066740.1,
+       "box_growth_up": 0.4451807647200124,
+       "box_growth_down": -0.008097373640639388,
+       "box_inflation_up": 0.34313452298589997,
+       "box_inflation_down": 0.21776438259158828,
+       "box_unmapped": 0.002017703343138777,
+       "balance_score": 0.6134545467767807,
+       "exp_return_prior": 0.10271984645956973,
+       "gross": 0.5507459623510884
+      },
+      "liquid post-revert (loan back in BOXX)": {
+       "nav_usd": 2374469.7,
+       "vol": 0.10804177405269873,
+       "dr2": 3.7839922229234073,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.034001242866746,
+       "neff_inv_hhi_prc": 4.913136590023437,
+       "neff_min_torsion": 12.525318865111078,
+       "btc_risk_share": 0.4069825996574866,
+       "btc_dollar_share": 0.11854652009246526,
+       "cash_like_share": 0.44925403764891164,
+       "cash_like_usd": 1066740.1,
+       "box_growth_up": 0.4424716314026317,
+       "box_growth_down": -0.008114072821741753,
+       "box_inflation_up": 0.3449372534296392,
+       "box_inflation_down": 0.2183210362685136,
+       "box_unmapped": 0.002384151720957184,
+       "balance_score": 0.6142791019333993,
+       "exp_return_prior": 0.10188845447823884,
+       "gross": 0.5507459623510884
+      },
+      "post-revert, net of commitments $410,200": {
+       "nav_usd": 1964269.7,
+       "vol": 0.13057542514417686,
+       "dr2": 3.778155277715749,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.033411399747992,
+       "neff_inv_hhi_prc": 4.910419843892166,
+       "neff_min_torsion": 12.513882526191896,
+       "btc_risk_share": 0.4071005058693088,
+       "btc_dollar_share": 0.14330268394406329,
+       "cash_like_share": 0.3342413213419726,
+       "cash_like_usd": 656540.1,
+       "box_growth_up": 0.4425815700003125,
+       "box_growth_down": -0.008124061238264533,
+       "box_inflation_up": 0.3450210038537058,
+       "box_inflation_down": 0.21837204145503053,
+       "box_unmapped": 0.002149445929215621,
+       "balance_score": 0.6142678271264146,
+       "exp_return_prior": 0.11479178645295374,
+       "gross": 0.6657586786580274
+      },
+      "post-revert, net of sheet commitments $435,200": {
+       "nav_usd": 1939269.7,
+       "vol": 0.13225314592574655,
+       "dr2": 3.7770233075303477,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.033323775945256,
+       "neff_inv_hhi_prc": 4.909902447095918,
+       "neff_min_torsion": 12.51169280000625,
+       "btc_risk_share": 0.4071229733653801,
+       "btc_dollar_share": 0.14515006344914275,
+       "cash_like_share": 0.3256587260657969,
+       "cash_like_usd": 631540.1,
+       "box_growth_up": 0.442602465074699,
+       "box_growth_down": -0.008125987238476715,
+       "box_inflation_up": 0.3450369148063932,
+       "box_inflation_down": 0.21838172435605446,
+       "box_unmapped": 0.002104883001329938,
+       "balance_score": 0.614265645805818,
+       "exp_return_prior": 0.11575467194604623,
+       "gross": 0.6743412739342032
+      }
+     }
+    },
+    "P": {
+     "outstanding_loan_usd": 129166.0,
+     "whole_usd": 19383695.7,
+     "investable_usd": 19293635.7,
+     "liquid_usd": 2303635.7,
+     "sheet_overstatement_usd": 381710.30000000075,
+     "investable_vol": 0.4543357352014959,
+     "investable_dr2": 1.4619934832681436,
+     "cases": {
+      "liquid now (loan outstanding)": {
+       "nav_usd": 2303635.7,
+       "vol": 0.11169202201691923,
+       "dr2": 3.868159904164263,
+       "neff_equal_rho": 5.892707273578183,
+       "neff_pca_entropy": 5.025709270807987,
+       "neff_inv_hhi_prc": 4.945003760314358,
+       "neff_min_torsion": 12.669567831841608,
+       "btc_risk_share": 0.4054853303442639,
+       "btc_dollar_share": 0.12219168161007402,
+       "cash_like_share": 0.43231926818984434,
+       "cash_like_usd": 995906.1,
+       "box_growth_up": 0.44398397325135286,
+       "box_growth_down": -0.008089557274227669,
+       "box_inflation_up": 0.3439330630209702,
+       "box_inflation_down": 0.21814480457228552,
+       "box_unmapped": 0.0020277164296190753,
+       "balance_score": 0.6139760602656643,
+       "exp_return_prior": 0.1042732129315492,
+       "gross": 0.5676807318101557
+      },
+      "liquid post-revert (loan back in BOXX)": {
+       "nav_usd": 2303635.7,
+       "vol": 0.11135041934824862,
+       "dr2": 3.780796596041453,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.033650047348094,
+       "neff_inv_hhi_prc": 4.911639064759617,
+       "neff_min_torsion": 12.519027689214276,
+       "btc_risk_share": 0.40704757853213486,
+       "btc_dollar_share": 0.12219168161007402,
+       "cash_like_share": 0.4323192681898444,
+       "cash_like_usd": 995906.1,
+       "box_growth_up": 0.4425322773744528,
+       "box_growth_down": -0.008119553185933943,
+       "box_inflation_up": 0.34498346034478095,
+       "box_inflation_down": 0.21834918453884306,
+       "box_unmapped": 0.0022546309278571597,
+       "balance_score": 0.614272923559529,
+       "exp_return_prior": 0.10378837441111345,
+       "gross": 0.5676807318101555
+      },
+      "post-revert, net of commitments $410,200": {
+       "nav_usd": 1893435.7,
+       "vol": 0.13544412958076532,
+       "dr2": 3.774945492831123,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.033186322439374,
+       "neff_inv_hhi_prc": 4.90896068579542,
+       "neff_min_torsion": 12.507697455532494,
+       "btc_risk_share": 0.4071638794500971,
+       "btc_dollar_share": 0.14866368052530118,
+       "cash_like_share": 0.30933508859054476,
+       "cash_like_usd": 585706.1,
+       "box_growth_up": 0.4426404619694523,
+       "box_growth_down": -0.00812951324978079,
+       "box_inflation_up": 0.3450658424678446,
+       "box_inflation_down": 0.21839932272920368,
+       "box_unmapped": 0.002023886083280302,
+       "balance_score": 0.6142616462087251,
+       "exp_return_prior": 0.11758602868764305,
+       "gross": 0.6906649114094552
+      },
+      "post-revert, net of sheet commitments $435,200": {
+       "nav_usd": 1868435.7,
+       "vol": 0.13725065183533397,
+       "dr2": 3.773810790316872,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.033124267561224,
+       "neff_inv_hhi_prc": 4.908450724547017,
+       "neff_min_torsion": 12.505528803759507,
+       "btc_risk_share": 0.40718603604075726,
+       "btc_dollar_share": 0.15065282685403625,
+       "cash_like_share": 0.30009386996833776,
+       "cash_like_usd": 560706.1,
+       "box_growth_up": 0.4426610173639447,
+       "box_growth_down": -0.008131433747607764,
+       "box_inflation_up": 0.34508148843841263,
+       "box_inflation_down": 0.21840883773260134,
+       "box_unmapped": 0.0019800902126492215,
+       "balance_score": 0.6142594643959192,
+       "exp_return_prior": 0.11862280545078831,
+       "gross": 0.6999061300316622
+      }
+     }
+    }
+   }
+  },
+  "N2": {
+   "D": {
+    "proposal_solve": {
+     "nav_usd": 2374469.7,
+     "deployable_usd": 1866837.11,
+     "usd": {
+      "core_equity": 166846.99729717098,
+      "TLT": 283614.0720849106,
+      "TIP": 692829.9126080028,
+      "DBC": 225558.31535086964,
+      "gold_silver": 0.0,
+      "BTC": 65141.72895577952,
+      "composer_all": 136779.54841323203,
+      "KMLM": 262203.17013623635,
+      "single_names": 33863.36515379842
+     },
+     "budgets": {
+      "core_equity": 0.14999999999999997,
+      "TLT": 0.15000000000000005,
+      "TIP": 0.14999999999999994,
+      "DBC": 0.15000000000000002,
+      "gold_silver": 0.0,
+      "BTC": 0.12,
+      "composer_all": 0.16,
+      "KMLM": 0.06,
+      "single_names": 0.06
+     },
+     "hold_gold": false,
+     "core_quadrant_budgets": {
+      "core_equity": 0.24999999999999994,
+      "TLT": 0.2500000000000001,
+      "TIP": 0.2499999999999999,
+      "DBC": 0.25000000000000006,
+      "gold_silver": 0.0
+     },
+     "core_box_shares": {
+      "growth_up": 0.24999999999999947,
+      "growth_down": 0.25000000000000056,
+      "inflation_up": 0.2499999999999994,
+      "inflation_down": 0.2500000000000006
+     },
+     "gross_of_nav": 0.798892952813843
+    },
+    "proposal_metals_held_solve_POST_HOC": {
+     "nav_usd": 2374469.7,
+     "deployable_usd": 1866837.11,
+     "usd": {
+      "core_equity": 144632.27988896443,
+      "TLT": 245897.76500597634,
+      "TIP": 600487.8839949185,
+      "DBC": 195475.15889854147,
+      "BTC": 56471.91324587008,
+      "composer_all": 118746.05428682863,
+      "KMLM": 227786.25993214193,
+      "single_names": 29479.99474675874,
+      "gold_silver": 247859.8
+     },
+     "budgets": {
+      "core_equity": 0.1499999999999999,
+      "TLT": 0.15000000000000005,
+      "TIP": 0.14999999999999997,
+      "DBC": 0.15000000000000005,
+      "BTC": 0.12,
+      "composer_all": 0.16,
+      "KMLM": 0.06,
+      "single_names": 0.06
+     },
+     "hold_gold": true,
+     "core_quadrant_budgets": {
+      "core_equity": 0.24999999999999986,
+      "TLT": 0.2500000000000001,
+      "TIP": 0.24999999999999994,
+      "DBC": 0.2500000000000001
+     },
+     "core_box_shares": {
+      "growth_up": 0.2499999999999995,
+      "growth_down": 0.25000000000000056,
+      "inflation_up": 0.24999999999999944,
+      "inflation_down": 0.2500000000000006
+     },
+     "gross_of_nav": 0.798892952813843
+    },
+    "pro_rata": {
+     "L": 1.3912908150610432,
+     "L_max_cash": 1.4630474344061979,
+     "cash_binding": false,
+     "risky_usd_before": 1274934.48,
+     "uncommitted_cash_usd": 590355.14,
+     "deployed_usd": 498870.15182862733
+    },
+    "books": {
+     "current as is": {
+      "metrics": {
+       "nav_usd": 2374469.7,
+       "vol": 0.10804177405269873,
+       "dr2": 3.7839922229234073,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.034001242866746,
+       "neff_inv_hhi_prc": 4.913136590023437,
+       "neff_min_torsion": 12.525318865111078,
+       "btc_risk_share": 0.4069825996574866,
+       "btc_dollar_share": 0.11854652009246526,
+       "cash_like_share": 0.44925403764891164,
+       "cash_like_usd": 1066740.1,
+       "box_growth_up": 0.4424716314026317,
+       "box_growth_down": -0.008114072821741753,
+       "box_inflation_up": 0.3449372534296392,
+       "box_inflation_down": 0.2183210362685136,
+       "box_unmapped": 0.002384151720957184,
+       "balance_score": 0.6142791019333993,
+       "gross": 0.5507459623510884,
+       "exp_return_prior_alpha_haircut": 0.055918811704645674,
+       "exp_return_prior_base_0.30": 0.10188845447823884,
+       "btc_cap_20pct_ok": false,
+       "composer_risk_share": 0.16382296248785558
+      },
+      "sleeves": [
+       {
+        "sleeve": "BTC",
+        "usd": 281485.12,
+        "dollar_share": 0.11854652009246526,
+        "risk_share": 0.4069825996574866
+       },
+       {
+        "sleeve": "gold & silver",
+        "usd": 247859.8,
+        "dollar_share": 0.10438532864832935,
+        "risk_share": 0.15881900930174134
+       },
+       {
+        "sleeve": "Composer (one sleeve)",
+        "usd": 299600.0,
+        "dollar_share": 0.1261755414272079,
+        "risk_share": 0.16382296248785558
+       },
+       {
+        "sleeve": "single names",
+        "usd": 139774.03999999998,
+        "dollar_share": 0.058865371076329165,
+        "risk_share": 0.15318589875157912
+       },
+       {
+        "sleeve": "equity beta",
+        "usd": 274481.64,
+        "dollar_share": 0.11559702783320418,
+        "risk_share": 0.1148053780803801
+       },
+       {
+        "sleeve": "cash-like",
+        "usd": 1066740.1,
+        "dollar_share": 0.44925403764891164,
+        "risk_share": 0.0011013110241303288
+       },
+       {
+        "sleeve": "KMLM trend",
+        "usd": 34419.0,
+        "dollar_share": 0.014495447130784612,
+        "risk_share": 0.0008192679369282905
+       },
+       {
+        "sleeve": "HL ETH carry",
+        "usd": 30110.0,
+        "dollar_share": 0.012680726142767792,
+        "risk_share": 0.00046357275989856604
+       }
+      ],
+      "streams": [
+       {
+        "stream": "BTC",
+        "usd": 281485.12,
+        "dollar_share": 0.11854652009246526,
+        "risk_share": 0.4069825996574866,
+        "exp_return": 0.18614967461767357
+       },
+       {
+        "stream": "physical_metals",
+        "usd": 170650.0,
+        "dollar_share": 0.07186867872013696,
+        "risk_share": 0.10944823473642716,
+        "exp_return": 0.13640807008233
+       },
+       {
+        "stream": "composer_hg",
+        "usd": 86900.0,
+        "dollar_share": 0.03659764536056198,
+        "risk_share": 0.09380887675666043,
+        "exp_return": 0.17423961526996973
+       },
+       {
+        "stream": "composer_kmlm",
+        "usd": 97400.0,
+        "dollar_share": 0.041019685363851977,
+        "risk_share": 0.07484191894840753,
+        "exp_return": 0.20815695354411465
+       },
+       {
+        "stream": "TSLA",
+        "usd": 47437.5,
+        "dollar_share": 0.019978145014863738,
+        "risk_share": 0.05511945485431303,
+        "exp_return": 0.21254177163728094
+       },
+       {
+        "stream": "FTZFF",
+        "usd": 39480.0,
+        "dollar_share": 0.01662687041237039,
+        "risk_share": 0.05102057826389211,
+        "exp_return": 0.391798389154954
+       },
+       {
+        "stream": "AVUV",
+        "usd": 109159.29,
+        "dollar_share": 0.04597207115340322,
+        "risk_share": 0.048057973970200514,
+        "exp_return": 0.10101213887154466
+       },
+       {
+        "stream": "PSLV",
+        "usd": 39554.6,
+        "dollar_share": 0.016658287953727098,
+        "risk_share": 0.03474611140169088,
+        "exp_return": 0.16929123897968812
+       },
+       {
+        "stream": "AVDV",
+        "usd": 69817.6,
+        "dollar_share": 0.029403449536542833,
+        "risk_share": 0.02800754437036629,
+        "exp_return": 0.08925939785196607
+       },
+       {
+        "stream": "BOT",
+        "usd": 26312.0,
+        "dollar_share": 0.011081211101577754,
+        "risk_share": 0.02057343462279942,
+        "exp_return": 0.22659144158827002
+       },
+       {
+        "stream": "SHAZ",
+        "usd": 8676.0,
+        "dollar_share": 0.003653868482718478,
+        "risk_share": 0.018470464371431346,
+        "exp_return": 0.3894915858321365
+       },
+       {
+        "stream": "PHYS",
+        "usd": 37655.2,
+        "dollar_share": 0.015858361974465284,
+        "risk_share": 0.014624663163623288,
+        "exp_return": 0.1053660128677465
+       },
+       {
+        "stream": "AVEM",
+        "usd": 28998.0,
+        "dollar_share": 0.012212411049086033,
+        "risk_share": 0.014092220033491778,
+        "exp_return": 0.10007265979287283
+       },
+       {
+        "stream": "SPY",
+        "usd": 34883.55,
+        "dollar_share": 0.014691090814930172,
+        "risk_share": 0.013650583448127411,
+        "exp_return": 0.08558306973437485
+       },
+       {
+        "stream": "QUAL",
+        "usd": 31623.2,
+        "dollar_share": 0.013318005279241929,
+        "risk_share": 0.010997056258194115,
+        "exp_return": 0.08318433802287384
+       },
+       {
+        "stream": "composer_crash",
+        "usd": 77900.0,
+        "dollar_share": 0.03280732535774198,
+        "risk_share": -0.008114072821741753,
+        "exp_return": 0.11433720259612301
+       },
+       {
+        "stream": "composer_vixhyg",
+        "usd": 37400.0,
+        "dollar_share": 0.01575088534505199,
+        "risk_share": 0.003286239604529373,
+        "exp_return": 0.07451548422079447
+       },
+       {
+        "stream": "VIST",
+        "usd": 6598.9,
+        "dollar_share": 0.0027791047407343204,
+        "risk_share": 0.002856891308927438,
+        "exp_return": 0.18379139747560538
+       },
+       {
+        "stream": "JOINN",
+        "usd": 7351.78,
+        "dollar_share": 0.0030961776433702224,
+        "risk_share": 0.002148907416772062,
+        "exp_return": 0.21145719567177435
+       },
+       {
+        "stream": "BOXX",
+        "usd": 635021.8400000001,
+        "dollar_share": 0.26743733137550674,
+        "risk_share": 0.001092359430934981,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "TEM",
+        "usd": 834.0,
+        "dollar_share": 0.0003512363202613198,
+        "risk_share": 0.001081249452923501,
+        "exp_return": 0.3069943559331474
+       },
+       {
+        "stream": "TWST",
+        "usd": 821.0,
+        "dollar_share": 0.0003457614135905798,
+        "risk_share": 0.0009333378166078548,
+        "exp_return": 0.2634097307615366
+       },
+       {
+        "stream": "KMLM",
+        "usd": 34419.0,
+        "dollar_share": 0.014495447130784612,
+        "risk_share": 0.0008192679369282905,
+        "exp_return": 0.07586420720861936
+       },
+       {
+        "stream": "GH",
+        "usd": 1116.0,
+        "dollar_share": 0.0004699996803496797,
+        "risk_share": 0.00067730441734011,
+        "exp_return": 0.22529584154167978
+       },
+       {
+        "stream": "eth_carry",
+        "usd": 30110.0,
+        "dollar_share": 0.012680726142767792,
+        "risk_share": 0.00046357275989856604,
+        "exp_return": 0.048799999999999996
+       },
+       {
+        "stream": "LLY",
+        "usd": 1146.86,
+        "dollar_share": 0.0004829962664926825,
+        "risk_share": 0.0003042762265722474,
+        "exp_return": 0.14724664593629294
+       },
+       {
+        "stream": "BIL",
+        "usd": 11248.35,
+        "dollar_share": 0.00473720511152448,
+        "risk_share": 8.951593195347744e-06,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "cash",
+        "usd": 353043.45999999996,
+        "dollar_share": 0.14868307647808685,
+        "risk_share": 0.0,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "evergrande",
+        "usd": 103.86,
+        "dollar_share": 4.374029283254277e-05,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       },
+       {
+        "stream": "usdc_idle",
+        "usd": 67322.59,
+        "dollar_share": 0.02835268439096106,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       }
+      ]
+     },
+     "current, cash deployed pro rata": {
+      "metrics": {
+       "nav_usd": 2374469.7,
+       "vol": 0.14999999999189106,
+       "dr2": 3.751521921788787,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.031421909275196,
+       "neff_inv_hhi_prc": 4.917152093282867,
+       "neff_min_torsion": 12.49219309011023,
+       "btc_risk_share": 0.4065253056148809,
+       "btc_dollar_share": 0.1644902014285627,
+       "cash_like_share": 0.2391565359504788,
+       "cash_like_usd": 567869.9481713726,
+       "box_growth_up": 0.44286879148756725,
+       "box_growth_down": -0.008153629862749034,
+       "box_inflation_up": 0.3450716652502231,
+       "box_inflation_down": 0.2189104875054812,
+       "box_unmapped": 0.0013026856194774394,
+       "balance_score": 0.6147090209188646,
+       "gross": 0.7608434640495212,
+       "exp_return_prior_alpha_haircut": 0.06251096085273188,
+       "exp_return_prior_base_0.30": 0.12640347809759295,
+       "btc_cap_20pct_ok": false,
+       "composer_risk_share": 0.1642599800688634
+      },
+      "sleeves": [
+       {
+        "sleeve": "BTC",
+        "usd": 390576.9992390188,
+        "dollar_share": 0.1644902014285627,
+        "risk_share": 0.4065253056148809
+       },
+       {
+        "sleeve": "gold & silver",
+        "usd": 344845.06316286715,
+        "dollar_share": 0.14523034897554898,
+        "risk_share": 0.15923020666782234
+       },
+       {
+        "sleeve": "Composer (one sleeve)",
+        "usd": 416830.72819228854,
+        "dollar_share": 0.17554687187302853,
+        "risk_share": 0.1642599800688634
+       },
+       {
+        "sleeve": "single names",
+        "usd": 194466.33803597486,
+        "dollar_share": 0.08189885010365675,
+        "risk_share": 0.15359797767185815
+       },
+       {
+        "sleeve": "equity beta",
+        "usd": 381883.78463489184,
+        "dollar_share": 0.16082908307269275,
+        "risk_share": 0.11508384435709772
+       },
+       {
+        "sleeve": "KMLM trend",
+        "usd": 47886.83856358605,
+        "dollar_share": 0.020167382453263584,
+        "risk_share": 0.0008280268438450247
+       },
+       {
+        "sleeve": "HL ETH carry",
+        "usd": 30110.0,
+        "dollar_share": 0.012680726142767792,
+        "risk_share": 0.00031140821472336647
+       },
+       {
+        "sleeve": "cash-like",
+        "usd": 567869.9481713726,
+        "dollar_share": 0.2391565359504788,
+        "risk_share": 0.00016325056090913076
+       }
+      ],
+      "streams": [
+       {
+        "stream": "BTC",
+        "usd": 390576.9992390188,
+        "dollar_share": 0.1644902014285627,
+        "risk_share": 0.4065253056148809,
+        "exp_return": 0.18614967461767357
+       },
+       {
+        "stream": "physical_metals",
+        "usd": 237423.77759016704,
+        "dollar_share": 0.09999023259389961,
+        "risk_share": 0.10973038894061096,
+        "exp_return": 0.13640807008233
+       },
+       {
+        "stream": "composer_hg",
+        "usd": 120903.17182880465,
+        "dollar_share": 0.05091796784301128,
+        "risk_share": 0.09406116797132585,
+        "exp_return": 0.17423961526996973
+       },
+       {
+        "stream": "composer_kmlm",
+        "usd": 135511.72538694562,
+        "dollar_share": 0.05707031148342116,
+        "risk_share": 0.07507798501068068,
+        "exp_return": 0.20815695354411465
+       },
+       {
+        "stream": "TSLA",
+        "usd": 65999.35803945824,
+        "dollar_share": 0.02779540966113749,
+        "risk_share": 0.05527464632879267,
+        "exp_return": 0.21254177163728094
+       },
+       {
+        "stream": "FTZFF",
+        "usd": 54928.161378609984,
+        "dollar_share": 0.023132812087941143,
+        "risk_share": 0.05117347830132142,
+        "exp_return": 0.391798389154954
+       },
+       {
+        "stream": "AVUV",
+        "usd": 151872.31755558477,
+        "dollar_share": 0.06396052034506262,
+        "risk_share": 0.0481730426398495,
+        "exp_return": 0.10101213887154466
+       },
+       {
+        "stream": "PSLV",
+        "usd": 55031.95167341354,
+        "dollar_share": 0.023176523024662533,
+        "risk_share": 0.03484238845007945,
+        "exp_return": 0.16929123897968812
+       },
+       {
+        "stream": "AVDV",
+        "usd": 97136.5856096059,
+        "dollar_share": 0.04090874927130293,
+        "risk_share": 0.02808181383709158,
+        "exp_return": 0.08925939785196607
+       },
+       {
+        "stream": "BOT",
+        "usd": 36607.64392588617,
+        "dollar_share": 0.015417187225377594,
+        "risk_share": 0.020649466569061397,
+        "exp_return": 0.22659144158827002
+       },
+       {
+        "stream": "SHAZ",
+        "usd": 12070.839111469611,
+        "dollar_share": 0.0050835936594472485,
+        "risk_share": 0.018489840760403223,
+        "exp_return": 0.3894915858321365
+       },
+       {
+        "stream": "PHYS",
+        "usd": 52389.33389928659,
+        "dollar_share": 0.022063593356986863,
+        "risk_share": 0.014657429277131939,
+        "exp_return": 0.1053660128677465
+       },
+       {
+        "stream": "AVEM",
+        "usd": 40344.65105514013,
+        "dollar_share": 0.016991015322343397,
+        "risk_share": 0.014127300326173382,
+        "exp_return": 0.10007265979287283
+       },
+       {
+        "stream": "SPY",
+        "usd": 48533.16271172266,
+        "dollar_share": 0.020439579714040004,
+        "risk_share": 0.01368029473253666,
+        "exp_return": 0.08558306973437485
+       },
+       {
+        "stream": "QUAL",
+        "usd": 43997.06770283839,
+        "dollar_share": 0.01852921841994378,
+        "risk_share": 0.011021392821446598,
+        "exp_return": 0.08318433802287384
+       },
+       {
+        "stream": "composer_crash",
+        "usd": 108381.55449325527,
+        "dollar_share": 0.04564453043694568,
+        "risk_share": -0.008153629862749034,
+        "exp_return": 0.11433720259612301
+       },
+       {
+        "stream": "composer_vixhyg",
+        "usd": 52034.276483283014,
+        "dollar_share": 0.021914062109650426,
+        "risk_share": 0.0032744569496058686,
+        "exp_return": 0.07451548422079447
+       },
+       {
+        "stream": "VIST",
+        "usd": 9180.988959506318,
+        "dollar_share": 0.0038665428998762618,
+        "risk_share": 0.0028604970920884233,
+        "exp_return": 0.18379139747560538
+       },
+       {
+        "stream": "JOINN",
+        "usd": 10228.463988349476,
+        "dollar_share": 0.004307683517018337,
+        "risk_share": 0.0021489604800455533,
+        "exp_return": 0.21145719567177435
+       },
+       {
+        "stream": "TEM",
+        "usd": 1160.33653976091,
+        "dollar_share": 0.0004886718662954132,
+        "risk_share": 0.0010826089983794614,
+        "exp_return": 0.3069943559331474
+       },
+       {
+        "stream": "TWST",
+        "usd": 1142.2497591651165,
+        "dollar_share": 0.00048105467893109626,
+        "risk_share": 0.000935132833075901,
+        "exp_return": 0.2634097307615366
+       },
+       {
+        "stream": "KMLM",
+        "usd": 47886.83856358605,
+        "dollar_share": 0.020167382453263584,
+        "risk_share": 0.0008280268438450247,
+        "exp_return": 0.07586420720861936
+       },
+       {
+        "stream": "GH",
+        "usd": 1552.6805496081242,
+        "dollar_share": 0.0006539062383521357,
+        "risk_share": 0.0006783999822650227,
+        "exp_return": 0.22529584154167978
+       },
+       {
+        "stream": "eth_carry",
+        "usd": 30110.0,
+        "dollar_share": 0.012680726142767792,
+        "risk_share": 0.00031140821472336647,
+        "exp_return": 0.048799999999999996
+       },
+       {
+        "stream": "LLY",
+        "usd": 1595.6157841609079,
+        "dollar_share": 0.0006719882692800451,
+        "risk_share": 0.0003049463264250791,
+        "exp_return": 0.14724664593629294
+       },
+       {
+        "stream": "BOXX",
+        "usd": 136151.68817137275,
+        "dollar_share": 0.05733982967707389,
+        "risk_share": 0.0001571292421169035,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "BIL",
+        "usd": 11248.35,
+        "dollar_share": 0.00473720511152448,
+        "risk_share": 6.12131879222724e-06,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "cash",
+        "usd": 353043.45999999996,
+        "dollar_share": 0.14868307647808685,
+        "risk_share": 0.0,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "evergrande",
+        "usd": 103.86,
+        "dollar_share": 4.374029283254277e-05,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       },
+       {
+        "stream": "usdc_idle",
+        "usd": 67322.59,
+        "dollar_share": 0.02835268439096106,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       }
+      ]
+     },
+     "UNLEVERED balanced proposal": {
+      "metrics": {
+       "nav_usd": 2374469.7,
+       "vol": 0.049381070460152617,
+       "dr2": 5.272078002457289,
+       "neff_equal_rho": 7.209578714549332,
+       "neff_pca_entropy": 4.063191624486088,
+       "neff_inv_hhi_prc": 7.996596262647936,
+       "neff_min_torsion": 8.763158707628719,
+       "btc_risk_share": 0.12019459712951157,
+       "btc_dollar_share": 0.027434222031041088,
+       "cash_like_share": 0.20110704718615696,
+       "cash_like_usd": 477522.58999999997,
+       "box_growth_up": 0.32420830699226605,
+       "box_growth_down": 0.14325867454056176,
+       "box_inflation_up": 0.2099929959377074,
+       "box_inflation_down": 0.26195972685532004,
+       "box_unmapped": 0.0605802956741448,
+       "balance_score": 0.8347090497841169,
+       "gross": 0.7988929528138431,
+       "exp_return_prior_alpha_haircut": 0.06037454083508531,
+       "exp_return_prior_base_0.30": 0.07449082269110892,
+       "btc_cap_20pct_ok": true,
+       "composer_risk_share": 0.15949287544939042
+      },
+      "sleeves": [
+       {
+        "sleeve": "equity beta",
+        "usd": 166846.99729717098,
+        "dollar_share": 0.07026705680732459,
+        "risk_share": 0.15071852181016748
+       },
+       {
+        "sleeve": "TIPS",
+        "usd": 692829.9126080028,
+        "dollar_share": 0.29178300847890487,
+        "risk_share": 0.15015904364717786
+       },
+       {
+        "sleeve": "long Treasuries",
+        "usd": 283614.0720849106,
+        "dollar_share": 0.11944312116718549,
+        "risk_share": 0.14971014475603023
+       },
+       {
+        "sleeve": "commodities",
+        "usd": 225558.31535086964,
+        "dollar_share": 0.09499313271964246,
+        "risk_share": 0.14963235109872539
+       },
+       {
+        "sleeve": "BTC",
+        "usd": 65141.72895577952,
+        "dollar_share": 0.027434222031041088,
+        "risk_share": 0.12019459712951157
+       },
+       {
+        "sleeve": "Composer (one sleeve)",
+        "usd": 136779.54841323203,
+        "dollar_share": 0.05760425092526218,
+        "risk_share": 0.15949287544939042
+       },
+       {
+        "sleeve": "single names",
+        "usd": 33863.36515379842,
+        "dollar_share": 0.01426144336724887,
+        "risk_share": 0.059512170434852345
+       },
+       {
+        "sleeve": "KMLM trend",
+        "usd": 262203.17013623635,
+        "dollar_share": 0.11042599117446575,
+        "risk_share": 0.05882345467302273
+       },
+       {
+        "sleeve": "HL ETH carry",
+        "usd": 30110.0,
+        "dollar_share": 0.012680726142767792,
+        "risk_share": 0.0010600521739640982
+       },
+       {
+        "sleeve": "cash-like",
+        "usd": 477522.58999999997,
+        "dollar_share": 0.20110704718615696,
+        "risk_share": 0.000696788827157846
+       }
+      ],
+      "streams": [
+       {
+        "stream": "core_equity",
+        "usd": 166846.99729717098,
+        "dollar_share": 0.07026705680732459,
+        "risk_share": 0.15071852181016748,
+        "exp_return": 0.09390862549181746
+       },
+       {
+        "stream": "TIP",
+        "usd": 692829.9126080028,
+        "dollar_share": 0.29178300847890487,
+        "risk_share": 0.15015904364717786,
+        "exp_return": 0.05361982550626447
+       },
+       {
+        "stream": "TLT",
+        "usd": 283614.0720849106,
+        "dollar_share": 0.11944312116718549,
+        "risk_share": 0.14971014475603023,
+        "exp_return": 0.07952653305886204
+       },
+       {
+        "stream": "DBC",
+        "usd": 225558.31535086964,
+        "dollar_share": 0.09499313271964246,
+        "risk_share": 0.14963235109872539,
+        "exp_return": 0.09185959273618474
+       },
+       {
+        "stream": "BTC",
+        "usd": 65141.72895577952,
+        "dollar_share": 0.027434222031041088,
+        "risk_share": 0.12019459712951157,
+        "exp_return": 0.18614967461767357
+       },
+       {
+        "stream": "composer_hg",
+        "usd": 39673.3736886177,
+        "dollar_share": 0.016708309096813364,
+        "risk_share": 0.08658936715764212,
+        "exp_return": 0.17423961526996973
+       },
+       {
+        "stream": "composer_kmlm",
+        "usd": 44467.04945076368,
+        "dollar_share": 0.018727149666623952,
+        "risk_share": 0.07738924955194794,
+        "exp_return": 0.20815695354411465
+       },
+       {
+        "stream": "single_names",
+        "usd": 33863.36515379842,
+        "dollar_share": 0.01426144336724887,
+        "risk_share": 0.059512170434852345,
+        "exp_return": 0.27581627940174985
+       },
+       {
+        "stream": "KMLM",
+        "usd": 262203.17013623635,
+        "dollar_share": 0.11042599117446575,
+        "risk_share": 0.05882345467302273,
+        "exp_return": 0.07586420720861936
+       },
+       {
+        "stream": "composer_crash",
+        "usd": 35564.50874963543,
+        "dollar_share": 0.01497787432269,
+        "risk_share": -0.006675919661042284,
+        "exp_return": 0.11433720259612301
+       },
+       {
+        "stream": "composer_vixhyg",
+        "usd": 17074.616524215213,
+        "dollar_share": 0.0071909178391348656,
+        "risk_share": 0.0021901784008426144,
+        "exp_return": 0.07451548422079447
+       },
+       {
+        "stream": "eth_carry",
+        "usd": 30110.0,
+        "dollar_share": 0.012680726142767792,
+        "risk_share": 0.0010600521739640982,
+        "exp_return": 0.048799999999999996
+       },
+       {
+        "stream": "BOXX",
+        "usd": 410200.0,
+        "dollar_share": 0.1727543627951959,
+        "risk_share": 0.000696788827157846,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "usdc_idle",
+        "usd": 67322.59,
+        "dollar_share": 0.02835268439096106,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       }
+      ]
+     },
+     "POST-HOC: proposal, metals held": {
+      "metrics": {
+       "nav_usd": 2374469.7,
+       "vol": 0.06297191996261073,
+       "dr2": 4.254278118393224,
+       "neff_equal_rho": 6.909950659258022,
+       "neff_pca_entropy": 4.31511378669027,
+       "neff_inv_hhi_prc": 5.000606281634074,
+       "neff_min_torsion": 7.630320245389059,
+       "btc_risk_share": 0.07356143366530202,
+       "btc_dollar_share": 0.023782958041481884,
+       "cash_like_share": 0.20110704718615696,
+       "cash_like_usd": 477522.58999999997,
+       "box_growth_up": 0.2038086419536735,
+       "box_growth_down": 0.08063195136736719,
+       "box_inflation_up": 0.5237547969728218,
+       "box_inflation_down": 0.15446895289285678,
+       "box_unmapped": 0.03733565681328077,
+       "balance_score": 0.6079094259874214,
+       "gross": 0.7988929528138431,
+       "exp_return_prior_alpha_haircut": 0.06765359119456058,
+       "exp_return_prior_base_0.30": 0.07991180246026855,
+       "btc_cap_20pct_ok": true,
+       "composer_risk_share": 0.08658133660750501
+      },
+      "sleeves": [
+       {
+        "sleeve": "gold & silver",
+        "usd": 247859.8,
+        "dollar_share": 0.10438532864832933,
+        "risk_share": 0.3902539758841842
+       },
+       {
+        "sleeve": "commodities",
+        "usd": 195475.15889854147,
+        "dollar_share": 0.08232371164750658,
+        "risk_share": 0.10555458582538617
+       },
+       {
+        "sleeve": "equity beta",
+        "usd": 144632.27988896443,
+        "dollar_share": 0.06091140261295582,
+        "risk_share": 0.09752998878885569
+       },
+       {
+        "sleeve": "TIPS",
+        "usd": 600487.8839949185,
+        "dollar_share": 0.2528934709063327,
+        "risk_share": 0.08788562268658688
+       },
+       {
+        "sleeve": "long Treasuries",
+        "usd": 245897.76500597634,
+        "dollar_share": 0.10355902415009816,
+        "risk_share": 0.08318037183228259
+       },
+       {
+        "sleeve": "BTC",
+        "usd": 56471.91324587008,
+        "dollar_share": 0.023782958041481884,
+        "risk_share": 0.07356143366530202
+       },
+       {
+        "sleeve": "Composer (one sleeve)",
+        "usd": 118746.05428682863,
+        "dollar_share": 0.050009504979923985,
+        "risk_share": 0.08658133660750501
+       },
+       {
+        "sleeve": "single names",
+        "usd": 29479.99474675874,
+        "dollar_share": 0.012415401530185345,
+        "risk_share": 0.03811702789661665
+       },
+       {
+        "sleeve": "KMLM trend",
+        "usd": 227786.25993214193,
+        "dollar_share": 0.09593142415426144,
+        "risk_share": 0.035844071317006385
+       },
+       {
+        "sleeve": "cash-like",
+        "usd": 477522.58999999997,
+        "dollar_share": 0.20110704718615696,
+        "risk_share": 0.0007958560467849515
+       },
+       {
+        "sleeve": "HL ETH carry",
+        "usd": 30110.0,
+        "dollar_share": 0.012680726142767792,
+        "risk_share": 0.0006957294494895126
+       }
+      ],
+      "streams": [
+       {
+        "stream": "gold_silver",
+        "usd": 247859.8,
+        "dollar_share": 0.10438532864832933,
+        "risk_share": 0.3902539758841842,
+        "exp_return": 0.13693976469210883
+       },
+       {
+        "stream": "DBC",
+        "usd": 195475.15889854147,
+        "dollar_share": 0.08232371164750658,
+        "risk_share": 0.10555458582538617,
+        "exp_return": 0.09185959273618474
+       },
+       {
+        "stream": "core_equity",
+        "usd": 144632.27988896443,
+        "dollar_share": 0.06091140261295582,
+        "risk_share": 0.09752998878885569,
+        "exp_return": 0.09390862549181746
+       },
+       {
+        "stream": "TIP",
+        "usd": 600487.8839949185,
+        "dollar_share": 0.2528934709063327,
+        "risk_share": 0.08788562268658688,
+        "exp_return": 0.05361982550626447
+       },
+       {
+        "stream": "TLT",
+        "usd": 245897.76500597634,
+        "dollar_share": 0.10355902415009816,
+        "risk_share": 0.08318037183228259,
+        "exp_return": 0.07952653305886204
+       },
+       {
+        "stream": "BTC",
+        "usd": 56471.91324587008,
+        "dollar_share": 0.023782958041481884,
+        "risk_share": 0.07356143366530202,
+        "exp_return": 0.18614967461767357
+       },
+       {
+        "stream": "composer_hg",
+        "usd": 34442.69732151338,
+        "dollar_share": 0.014505427178756324,
+        "risk_share": 0.053566944916357426,
+        "exp_return": 0.17423961526996973
+       },
+       {
+        "stream": "single_names",
+        "usd": 29479.99474675874,
+        "dollar_share": 0.012415401530185345,
+        "risk_share": 0.03811702789661665,
+        "exp_return": 0.27581627940174985
+       },
+       {
+        "stream": "composer_kmlm",
+        "usd": 38604.35810259382,
+        "dollar_share": 0.016258096745809733,
+        "risk_share": 0.03654357235160124,
+        "exp_return": 0.20815695354411465
+       },
+       {
+        "stream": "KMLM",
+        "usd": 227786.25993214193,
+        "dollar_share": 0.09593142415426144,
+        "risk_share": 0.035844071317006385,
+        "exp_return": 0.07586420720861936
+       },
+       {
+        "stream": "composer_crash",
+        "usd": 30875.559509158713,
+        "dollar_share": 0.01300313897842483,
+        "risk_share": -0.004901045892067556,
+        "exp_return": 0.11433720259612301
+       },
+       {
+        "stream": "composer_vixhyg",
+        "usd": 14823.439353562719,
+        "dollar_share": 0.006242842076933101,
+        "risk_share": 0.0013718652316139096,
+        "exp_return": 0.07451548422079447
+       },
+       {
+        "stream": "BOXX",
+        "usd": 410200.0,
+        "dollar_share": 0.1727543627951959,
+        "risk_share": 0.0007958560467849515,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "eth_carry",
+        "usd": 30110.0,
+        "dollar_share": 0.012680726142767792,
+        "risk_share": 0.0006957294494895126,
+        "exp_return": 0.048799999999999996
+       },
+       {
+        "stream": "usdc_idle",
+        "usd": 67322.59,
+        "dollar_share": 0.02835268439096106,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       }
+      ]
+     }
+    }
+   },
+   "P": {
+    "proposal_solve": {
+     "nav_usd": 2303635.7,
+     "deployable_usd": 1796003.11,
+     "usd": {
+      "core_equity": 160516.2680957637,
+      "TLT": 272852.81226505275,
+      "TIP": 666541.6447313933,
+      "DBC": 216999.88375339433,
+      "gold_silver": 0.0,
+      "BTC": 62670.035413725556,
+      "composer_all": 131589.6780809978,
+      "KMLM": 252254.31104513432,
+      "single_names": 32578.47661453848
+     },
+     "budgets": {
+      "core_equity": 0.14999999999999997,
+      "TLT": 0.15000000000000005,
+      "TIP": 0.14999999999999994,
+      "DBC": 0.15000000000000002,
+      "gold_silver": 0.0,
+      "BTC": 0.12,
+      "composer_all": 0.16,
+      "KMLM": 0.06,
+      "single_names": 0.06
+     },
+     "hold_gold": false,
+     "core_quadrant_budgets": {
+      "core_equity": 0.24999999999999994,
+      "TLT": 0.2500000000000001,
+      "TIP": 0.2499999999999999,
+      "DBC": 0.25000000000000006,
+      "gold_silver": 0.0
+     },
+     "core_box_shares": {
+      "growth_up": 0.24999999999999947,
+      "growth_down": 0.25000000000000056,
+      "inflation_up": 0.2499999999999994,
+      "inflation_down": 0.2500000000000006
+     },
+     "gross_of_nav": 0.7927091553582019
+    },
+    "proposal_metals_held_solve_POST_HOC": {
+     "nav_usd": 2303635.7,
+     "deployable_usd": 1796003.11,
+     "usd": {
+      "core_equity": 138304.283288657,
+      "TLT": 235139.1693302696,
+      "TIP": 574215.1508860795,
+      "DBC": 186922.6688050149,
+      "BTC": 54001.13649183517,
+      "composer_all": 113550.63989936373,
+      "KMLM": 217820.08447287415,
+      "single_names": 28190.176825906034,
+      "gold_silver": 247859.8
+     },
+     "budgets": {
+      "core_equity": 0.1499999999999999,
+      "TLT": 0.15000000000000005,
+      "TIP": 0.14999999999999997,
+      "DBC": 0.15000000000000005,
+      "BTC": 0.12,
+      "composer_all": 0.16,
+      "KMLM": 0.06,
+      "single_names": 0.06
+     },
+     "hold_gold": true,
+     "core_quadrant_budgets": {
+      "core_equity": 0.24999999999999986,
+      "TLT": 0.2500000000000001,
+      "TIP": 0.24999999999999994,
+      "DBC": 0.2500000000000001
+     },
+     "core_box_shares": {
+      "growth_up": 0.2499999999999995,
+      "growth_down": 0.25000000000000056,
+      "inflation_up": 0.24999999999999944,
+      "inflation_down": 0.2500000000000006
+     },
+     "gross_of_nav": 0.7927091553582019
+    },
+    "pro_rata": {
+     "L": 1.3496793345057219,
+     "L_max_cash": 1.4074885008992777,
+     "cash_binding": false,
+     "risky_usd_before": 1274934.48,
+     "uncommitted_cash_usd": 519521.14,
+     "deployed_usd": 445818.24050479854
+    },
+    "books": {
+     "current as is": {
+      "metrics": {
+       "nav_usd": 2303635.7,
+       "vol": 0.11135041934824862,
+       "dr2": 3.780796596041453,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.033650047348094,
+       "neff_inv_hhi_prc": 4.911639064759617,
+       "neff_min_torsion": 12.519027689214276,
+       "btc_risk_share": 0.40704757853213486,
+       "btc_dollar_share": 0.12219168161007402,
+       "cash_like_share": 0.4323192681898444,
+       "cash_like_usd": 995906.1,
+       "box_growth_up": 0.4425322773744528,
+       "box_growth_down": -0.008119553185933943,
+       "box_inflation_up": 0.34498346034478095,
+       "box_inflation_down": 0.21834918453884306,
+       "box_unmapped": 0.0022546309278571597,
+       "balance_score": 0.614272923559529,
+       "gross": 0.5676807318101555,
+       "exp_return_prior_alpha_haircut": 0.05640522095255186,
+       "exp_return_prior_base_0.30": 0.10378837441111345,
+       "btc_cap_20pct_ok": false,
+       "composer_risk_share": 0.1638378874860417
+      },
+      "sleeves": [
+       {
+        "sleeve": "BTC",
+        "usd": 281485.12,
+        "dollar_share": 0.12219168161007402,
+        "risk_share": 0.40704757853213486
+       },
+       {
+        "sleeve": "gold & silver",
+        "usd": 247859.8,
+        "dollar_share": 0.10759505072785595,
+        "risk_share": 0.15883488574198337
+       },
+       {
+        "sleeve": "Composer (one sleeve)",
+        "usd": 299600.0,
+        "dollar_share": 0.13005528608538233,
+        "risk_share": 0.1638378874860417
+       },
+       {
+        "sleeve": "single names",
+        "usd": 139774.03999999998,
+        "dollar_share": 0.06067540974469183,
+        "risk_share": 0.15320679052418584
+       },
+       {
+        "sleeve": "equity beta",
+        "usd": 274481.64,
+        "dollar_share": 0.11915149604601108,
+        "risk_share": 0.11481822678779709
+       },
+       {
+        "sleeve": "cash-like",
+        "usd": 995906.1,
+        "dollar_share": 0.4323192681898444,
+        "risk_share": 0.0009707326833414469
+       },
+       {
+        "sleeve": "KMLM trend",
+        "usd": 34419.0,
+        "dollar_share": 0.014941164525276282,
+        "risk_share": 0.0008202362156301169
+       },
+       {
+        "sleeve": "HL ETH carry",
+        "usd": 30110.0,
+        "dollar_share": 0.013070643070864025,
+        "risk_share": 0.0004636620288855062
+       }
+      ],
+      "streams": [
+       {
+        "stream": "BTC",
+        "usd": 281485.12,
+        "dollar_share": 0.12219168161007402,
+        "risk_share": 0.40704757853213486,
+        "exp_return": 0.18614967461767357
+       },
+       {
+        "stream": "physical_metals",
+        "usd": 170650.0,
+        "dollar_share": 0.07407855330597628,
+        "risk_share": 0.10945904998265162,
+        "exp_return": 0.13640807008233
+       },
+       {
+        "stream": "composer_hg",
+        "usd": 86900.0,
+        "dollar_share": 0.03772297850740896,
+        "risk_share": 0.09382221036497272,
+        "exp_return": 0.17423961526996973
+       },
+       {
+        "stream": "composer_kmlm",
+        "usd": 97400.0,
+        "dollar_share": 0.04228099087021441,
+        "risk_share": 0.07485114140073046,
+        "exp_return": 0.20815695354411465
+       },
+       {
+        "stream": "TSLA",
+        "usd": 47437.5,
+        "dollar_share": 0.02059244871053179,
+        "risk_share": 0.055129660146935926,
+        "exp_return": 0.21254177163728094
+       },
+       {
+        "stream": "FTZFF",
+        "usd": 39480.0,
+        "dollar_share": 0.017138126484148513,
+        "risk_share": 0.05102648016879105,
+        "exp_return": 0.391798389154954
+       },
+       {
+        "stream": "AVUV",
+        "usd": 109159.29,
+        "dollar_share": 0.04738565650810151,
+        "risk_share": 0.048063580190835634,
+        "exp_return": 0.10101213887154466
+       },
+       {
+        "stream": "PSLV",
+        "usd": 39554.6,
+        "dollar_share": 0.017170510076745204,
+        "risk_share": 0.03475042932653967,
+        "exp_return": 0.16929123897968812
+       },
+       {
+        "stream": "AVDV",
+        "usd": 69817.6,
+        "dollar_share": 0.03030756989918154,
+        "risk_share": 0.028011214272959897,
+        "exp_return": 0.08925939785196607
+       },
+       {
+        "stream": "BOT",
+        "usd": 26312.0,
+        "dollar_share": 0.011421944884774967,
+        "risk_share": 0.020578962443437286,
+        "exp_return": 0.22659144158827002
+       },
+       {
+        "stream": "SHAZ",
+        "usd": 8676.0,
+        "dollar_share": 0.003766220500923822,
+        "risk_share": 0.018470222575023662,
+        "exp_return": 0.3894915858321365
+       },
+       {
+        "stream": "PHYS",
+        "usd": 37655.2,
+        "dollar_share": 0.016345987345134472,
+        "risk_share": 0.014625406432792079,
+        "exp_return": 0.1053660128677465
+       },
+       {
+        "stream": "AVEM",
+        "usd": 28998.0,
+        "dollar_share": 0.012587927856822152,
+        "risk_share": 0.014093753065591394,
+        "exp_return": 0.10007265979287283
+       },
+       {
+        "stream": "SPY",
+        "usd": 34883.55,
+        "dollar_share": 0.015142824015099263,
+        "risk_share": 0.01365171031319306,
+        "exp_return": 0.08558306973437485
+       },
+       {
+        "stream": "QUAL",
+        "usd": 31623.2,
+        "dollar_share": 0.013727517766806616,
+        "risk_share": 0.010997968945217112,
+        "exp_return": 0.08318433802287384
+       },
+       {
+        "stream": "composer_crash",
+        "usd": 77900.0,
+        "dollar_share": 0.033816110767861424,
+        "risk_share": -0.008119553185933943,
+        "exp_return": 0.11433720259612301
+       },
+       {
+        "stream": "composer_vixhyg",
+        "usd": 37400.0,
+        "dollar_share": 0.016235205939897527,
+        "risk_share": 0.0032840889062724413,
+        "exp_return": 0.07451548422079447
+       },
+       {
+        "stream": "VIST",
+        "usd": 6598.9,
+        "dollar_share": 0.002864558836277802,
+        "risk_share": 0.0028567771101347846,
+        "exp_return": 0.18379139747560538
+       },
+       {
+        "stream": "JOINN",
+        "usd": 7351.78,
+        "dollar_share": 0.003191381345583418,
+        "risk_share": 0.002148431908269979,
+        "exp_return": 0.21145719567177435
+       },
+       {
+        "stream": "TEM",
+        "usd": 834.0,
+        "dollar_share": 0.00036203641053140476,
+        "risk_share": 0.0010812314365941061,
+        "exp_return": 0.3069943559331474
+       },
+       {
+        "stream": "BOXX",
+        "usd": 564187.8400000001,
+        "dollar_share": 0.2449119190156673,
+        "risk_share": 0.0009618388230169082,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "TWST",
+        "usd": 821.0,
+        "dollar_share": 0.0003563931571298361,
+        "risk_share": 0.0009333991444911856,
+        "exp_return": 0.2634097307615366
+       },
+       {
+        "stream": "KMLM",
+        "usd": 34419.0,
+        "dollar_share": 0.014941164525276282,
+        "risk_share": 0.0008202362156301169,
+        "exp_return": 0.07586420720861936
+       },
+       {
+        "stream": "GH",
+        "usd": 1116.0,
+        "dollar_share": 0.00048445159970389413,
+        "risk_share": 0.0006773213540160573,
+        "exp_return": 0.22529584154167978
+       },
+       {
+        "stream": "eth_carry",
+        "usd": 30110.0,
+        "dollar_share": 0.013070643070864025,
+        "risk_share": 0.0004636620288855062,
+        "exp_return": 0.048799999999999996
+       },
+       {
+        "stream": "LLY",
+        "usd": 1146.86,
+        "dollar_share": 0.0004978478150863871,
+        "risk_share": 0.00030430423649177287,
+        "exp_return": 0.14724664593629294
+       },
+       {
+        "stream": "BIL",
+        "usd": 11248.35,
+        "dollar_share": 0.004882868415348833,
+        "risk_share": 8.893860324538689e-06,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "cash",
+        "usd": 353043.45999999996,
+        "dollar_share": 0.1532549005035822,
+        "risk_share": 0.0,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "evergrande",
+        "usd": 103.86,
+        "dollar_share": 4.508525371437853e-05,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       },
+       {
+        "stream": "usdc_idle",
+        "usd": 67322.59,
+        "dollar_share": 0.029224495001531705,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       }
+      ]
+     },
+     "current, cash deployed pro rata": {
+      "metrics": {
+       "nav_usd": 2303635.7,
+       "vol": 0.15000004064594474,
+       "dr2": 3.7516924001483862,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.031575553508599,
+       "neff_inv_hhi_prc": 4.91577962514254,
+       "neff_min_torsion": 12.490298286740089,
+       "btc_risk_share": 0.40660716796135216,
+       "btc_dollar_share": 0.16451200094710947,
+       "cash_like_share": 0.23879116801983988,
+       "cash_like_usd": 550087.8594952015,
+       "box_growth_up": 0.44287984587974205,
+       "box_growth_down": -0.008154535194758556,
+       "box_inflation_up": 0.345093300223528,
+       "box_inflation_down": 0.21888359704364485,
+       "box_unmapped": 0.0012977920478435268,
+       "balance_score": 0.6146705329789779,
+       "gross": 0.7612088319801601,
+       "exp_return_prior_alpha_haircut": 0.062477478310936044,
+       "exp_return_prior_base_0.30": 0.12637001345166837,
+       "btc_cap_20pct_ok": false,
+       "composer_risk_share": 0.16423561098398357
+      },
+      "sleeves": [
+       {
+        "sleeve": "BTC",
+        "usd": 378975.71846019523,
+        "dollar_share": 0.16451200094710947,
+        "risk_share": 0.40660716796135216
+       },
+       {
+        "sleeve": "gold & silver",
+        "usd": 334531.24991472135,
+        "dollar_share": 0.14521881646248203,
+        "risk_share": 0.1592086131343861
+       },
+       {
+        "sleeve": "Composer (one sleeve)",
+        "usd": 404363.92861791427,
+        "dollar_share": 0.1755329319726701,
+        "risk_share": 0.16423561098398357
+       },
+       {
+        "sleeve": "single names",
+        "usd": 188650.13328837615,
+        "dollar_share": 0.08189234664507765,
+        "risk_share": 0.1535800781635952
+       },
+       {
+        "sleeve": "equity beta",
+        "usd": 370462.1972092392,
+        "dollar_share": 0.1608163118887414,
+        "risk_share": 0.11507073770883927
+       },
+       {
+        "sleeve": "KMLM trend",
+        "usd": 46454.61301435244,
+        "dollar_share": 0.020165780993215393,
+        "risk_share": 0.000828050729161127
+       },
+       {
+        "sleeve": "HL ETH carry",
+        "usd": 30110.0,
+        "dollar_share": 0.013070643070864025,
+        "risk_share": 0.0003228292285838511
+       },
+       {
+        "sleeve": "cash-like",
+        "usd": 550087.8594952015,
+        "dollar_share": 0.23879116801983988,
+        "risk_share": 0.0001469120900987351
+       }
+      ],
+      "streams": [
+       {
+        "stream": "BTC",
+        "usd": 378975.71846019523,
+        "dollar_share": 0.16451200094710947,
+        "risk_share": 0.40660716796135216,
+        "exp_return": 0.18614967461767357
+       },
+       {
+        "stream": "physical_metals",
+        "usd": 230322.77843340143,
+        "dollar_share": 0.09998229252715671,
+        "risk_share": 0.1097155105525803,
+        "exp_return": 0.13640807008233
+       },
+       {
+        "stream": "composer_hg",
+        "usd": 117287.13416854723,
+        "dollar_share": 0.05091392452745337,
+        "risk_share": 0.09405061277618951,
+        "exp_return": 0.17423961526996973
+       },
+       {
+        "stream": "composer_kmlm",
+        "usd": 131458.7671808573,
+        "dollar_share": 0.057065779619953495,
+        "risk_share": 0.07506576543866576,
+        "exp_return": 0.20815695354411465
+       },
+       {
+        "stream": "TSLA",
+        "usd": 64025.41343061518,
+        "dollar_share": 0.027793202471473755,
+        "risk_share": 0.05526965891995967,
+        "exp_return": 0.21254177163728094
+       },
+       {
+        "stream": "FTZFF",
+        "usd": 53285.3401262859,
+        "dollar_share": 0.02313097514780045,
+        "risk_share": 0.05116549541643555,
+        "exp_return": 0.391798389154954
+       },
+       {
+        "stream": "AVUV",
+        "usd": 147330.0378823171,
+        "dollar_share": 0.06395544134097118,
+        "risk_share": 0.04816784378274665,
+        "exp_return": 0.10101213887154466
+       },
+       {
+        "stream": "PSLV",
+        "usd": 53386.026204640024,
+        "dollar_share": 0.02317468261350526,
+        "risk_share": 0.03483779378306843,
+        "exp_return": 0.16929123897968812
+       },
+       {
+        "stream": "AVDV",
+        "usd": 94231.37190478669,
+        "dollar_share": 0.04090550077201299,
+        "risk_share": 0.02807851443366176,
+        "exp_return": 0.08925939785196607
+       },
+       {
+        "stream": "BOT",
+        "usd": 35512.76264951455,
+        "dollar_share": 0.01541596297084411,
+        "risk_share": 0.020647453985186213,
+        "exp_return": 0.22659144158827002
+       },
+       {
+        "stream": "SHAZ",
+        "usd": 11709.817906171644,
+        "dollar_share": 0.005083189979288671,
+        "risk_share": 0.018488021785222016,
+        "exp_return": 0.3894915858321365
+       },
+       {
+        "stream": "PHYS",
+        "usd": 50822.44527667986,
+        "dollar_share": 0.02206184132182005,
+        "risk_share": 0.014655308798737395,
+        "exp_return": 0.1053660128677465
+       },
+       {
+        "stream": "AVEM",
+        "usd": 39138.001341996925,
+        "dollar_share": 0.01698966609260176,
+        "risk_share": 0.014125587720295516,
+        "exp_return": 0.10007265979287283
+       },
+       {
+        "stream": "SPY",
+        "usd": 47081.60654919708,
+        "dollar_share": 0.02043795663923644,
+        "risk_share": 0.013678706480803703,
+        "exp_return": 0.08558306973437485
+       },
+       {
+        "stream": "QUAL",
+        "usd": 42681.17953094134,
+        "dollar_share": 0.01852774704391903,
+        "risk_share": 0.011020085291331652,
+        "exp_return": 0.08318433802287384
+       },
+       {
+        "stream": "composer_crash",
+        "usd": 105140.02015799574,
+        "dollar_share": 0.04564090587673898,
+        "risk_share": -0.008154535194758556,
+        "exp_return": 0.11433720259612301
+       },
+       {
+        "stream": "composer_vixhyg",
+        "usd": 50478.007110513994,
+        "dollar_share": 0.021912321948524233,
+        "risk_share": 0.0032737679638868713,
+        "exp_return": 0.07451548422079447
+       },
+       {
+        "stream": "VIST",
+        "usd": 8906.398960469807,
+        "dollar_share": 0.0038662358637999083,
+        "risk_share": 0.002860110569151846,
+        "exp_return": 0.18379139747560538
+       },
+       {
+        "stream": "JOINN",
+        "usd": 9922.545537832475,
+        "dollar_share": 0.0043073414506610026,
+        "risk_share": 0.0021485898786033795,
+        "exp_return": 0.21145719567177435
+       },
+       {
+        "stream": "TEM",
+        "usd": 1125.632564977772,
+        "dollar_share": 0.0004886330616328667,
+        "risk_share": 0.0010824818624432689,
+        "exp_return": 0.3069943559331474
+       },
+       {
+        "stream": "TWST",
+        "usd": 1108.0867336291976,
+        "dollar_share": 0.0004810164791373903,
+        "risk_share": 0.0009350312119622866,
+        "exp_return": 0.2634097307615366
+       },
+       {
+        "stream": "KMLM",
+        "usd": 46454.61301435244,
+        "dollar_share": 0.020165780993215393,
+        "risk_share": 0.000828050729161127,
+        "exp_return": 0.07586420720861936
+       },
+       {
+        "stream": "GH",
+        "usd": 1506.2421373083855,
+        "dollar_share": 0.0006538543126885842,
+        "risk_share": 0.0006783220778571476,
+        "exp_return": 0.22529584154167978
+       },
+       {
+        "stream": "eth_carry",
+        "usd": 30110.0,
+        "dollar_share": 0.013070643070864025,
+        "risk_share": 0.0003228292285838511,
+        "exp_return": 0.048799999999999996
+       },
+       {
+        "stream": "LLY",
+        "usd": 1547.893241571232,
+        "dollar_share": 0.0006719349077509225,
+        "risk_share": 0.00030491245677380027,
+        "exp_return": 0.14724664593629294
+       },
+       {
+        "stream": "BOXX",
+        "usd": 118369.59949520155,
+        "dollar_share": 0.05138381884566277,
+        "risk_share": 0.00014060845554467863,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "BIL",
+        "usd": 11248.35,
+        "dollar_share": 0.004882868415348833,
+        "risk_share": 6.303634554056481e-06,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "cash",
+        "usd": 353043.45999999996,
+        "dollar_share": 0.1532549005035822,
+        "risk_share": 0.0,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "evergrande",
+        "usd": 103.86,
+        "dollar_share": 4.508525371437853e-05,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       },
+       {
+        "stream": "usdc_idle",
+        "usd": 67322.59,
+        "dollar_share": 0.029224495001531705,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       }
+      ]
+     },
+     "UNLEVERED balanced proposal": {
+      "metrics": {
+       "nav_usd": 2303635.7,
+       "vol": 0.04897160323293641,
+       "dr2": 5.277955165289112,
+       "neff_equal_rho": 7.209578714549332,
+       "neff_pca_entropy": 4.0641058524197495,
+       "neff_inv_hhi_prc": 7.998246785455243,
+       "neff_min_torsion": 8.767021629351754,
+       "btc_risk_share": 0.12019560895741228,
+       "btc_dollar_share": 0.027204837732687313,
+       "cash_like_share": 0.20729084464179817,
+       "cash_like_usd": 477522.58999999997,
+       "box_growth_up": 0.3241885135410211,
+       "box_growth_down": 0.1432379480937939,
+       "box_inflation_up": 0.20997151257141491,
+       "box_inflation_down": 0.2619375670019492,
+       "box_unmapped": 0.06066445879182092,
+       "balance_score": 0.8346940579024029,
+       "gross": 0.7927091553582019,
+       "exp_return_prior_alpha_haircut": 0.060164869243460886,
+       "exp_return_prior_base_0.30": 0.07416312138443573,
+       "btc_cap_20pct_ok": true,
+       "composer_risk_share": 0.15948495559713413
+      },
+      "sleeves": [
+       {
+        "sleeve": "equity beta",
+        "usd": 160516.2680957637,
+        "dollar_share": 0.06967953661065579,
+        "risk_share": 0.15071123301425735
+       },
+       {
+        "sleeve": "TIPS",
+        "usd": 666541.6447313933,
+        "dollar_share": 0.2893433387628926,
+        "risk_share": 0.15013750167814383
+       },
+       {
+        "sleeve": "long Treasuries",
+        "usd": 272852.81226505275,
+        "dollar_share": 0.1184444277647949,
+        "risk_share": 0.14968646604618124
+       },
+       {
+        "sleeve": "commodities",
+        "usd": 216999.88375339433,
+        "dollar_share": 0.09419887170241124,
+        "risk_share": 0.1496099145072737
+       },
+       {
+        "sleeve": "BTC",
+        "usd": 62670.035413725556,
+        "dollar_share": 0.027204837732687313,
+        "risk_share": 0.12019560895741228
+       },
+       {
+        "sleeve": "Composer (one sleeve)",
+        "usd": 131589.6780809978,
+        "dollar_share": 0.057122607572455054,
+        "risk_share": 0.15948495559713413
+       },
+       {
+        "sleeve": "single names",
+        "usd": 32578.47661453848,
+        "dollar_share": 0.014142199920993791,
+        "risk_share": 0.05950986140777654
+       },
+       {
+        "sleeve": "KMLM trend",
+        "usd": 252254.31104513432,
+        "dollar_share": 0.10950269222044715,
+        "risk_share": 0.05880928113474097
+       },
+       {
+        "sleeve": "HL ETH carry",
+        "usd": 30110.0,
+        "dollar_share": 0.013070643070864025,
+        "risk_share": 0.001123625853176056
+       },
+       {
+        "sleeve": "cash-like",
+        "usd": 477522.58999999997,
+        "dollar_share": 0.20729084464179817,
+        "risk_share": 0.0007315518039038276
+       }
+      ],
+      "streams": [
+       {
+        "stream": "core_equity",
+        "usd": 160516.2680957637,
+        "dollar_share": 0.06967953661065579,
+        "risk_share": 0.15071123301425735,
+        "exp_return": 0.09390862549181746
+       },
+       {
+        "stream": "TIP",
+        "usd": 666541.6447313933,
+        "dollar_share": 0.2893433387628926,
+        "risk_share": 0.15013750167814383,
+        "exp_return": 0.05361982550626447
+       },
+       {
+        "stream": "TLT",
+        "usd": 272852.81226505275,
+        "dollar_share": 0.1184444277647949,
+        "risk_share": 0.14968646604618124,
+        "exp_return": 0.07952653305886204
+       },
+       {
+        "stream": "DBC",
+        "usd": 216999.88375339433,
+        "dollar_share": 0.09419887170241124,
+        "risk_share": 0.1496099145072737,
+        "exp_return": 0.09185959273618474
+       },
+       {
+        "stream": "BTC",
+        "usd": 62670.035413725556,
+        "dollar_share": 0.027204837732687313,
+        "risk_share": 0.12019560895741228,
+        "exp_return": 0.18614967461767357
+       },
+       {
+        "stream": "composer_hg",
+        "usd": 38168.03412963521,
+        "dollar_share": 0.01656860680255789,
+        "risk_share": 0.08658407261135788,
+        "exp_return": 0.17423961526996973
+       },
+       {
+        "stream": "composer_kmlm",
+        "usd": 42779.82191284775,
+        "dollar_share": 0.018570567348321503,
+        "risk_share": 0.07738350092432536,
+        "exp_return": 0.20815695354411465
+       },
+       {
+        "stream": "single_names",
+        "usd": 32578.47661453848,
+        "dollar_share": 0.014142199920993791,
+        "risk_share": 0.05950986140777654,
+        "exp_return": 0.27581627940174985
+       },
+       {
+        "stream": "KMLM",
+        "usd": 252254.31104513432,
+        "dollar_share": 0.10950269222044715,
+        "risk_share": 0.05880928113474097,
+        "exp_return": 0.07586420720861936
+       },
+       {
+        "stream": "composer_crash",
+        "usd": 34215.07317259589,
+        "dollar_share": 0.014852640620474795,
+        "risk_share": -0.006674035768368635,
+        "exp_return": 0.11433720259612301
+       },
+       {
+        "stream": "composer_vixhyg",
+        "usd": 16426.74886591895,
+        "dollar_share": 0.007130792801100864,
+        "risk_share": 0.0021914178298195076,
+        "exp_return": 0.07451548422079447
+       },
+       {
+        "stream": "eth_carry",
+        "usd": 30110.0,
+        "dollar_share": 0.013070643070864025,
+        "risk_share": 0.001123625853176056,
+        "exp_return": 0.048799999999999996
+       },
+       {
+        "stream": "BOXX",
+        "usd": 410200.0,
+        "dollar_share": 0.17806634964026646,
+        "risk_share": 0.0007315518039038276,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "usdc_idle",
+        "usd": 67322.59,
+        "dollar_share": 0.029224495001531705,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       }
+      ]
+     },
+     "POST-HOC: proposal, metals held": {
+      "metrics": {
+       "nav_usd": 2303635.7,
+       "vol": 0.06318689033698417,
+       "dr2": 4.201204710453769,
+       "neff_equal_rho": 6.909950659258022,
+       "neff_pca_entropy": 4.287075479913095,
+       "neff_inv_hhi_prc": 4.771005848248497,
+       "neff_min_torsion": 7.469116992918751,
+       "btc_risk_share": 0.07176781971601709,
+       "btc_dollar_share": 0.023441699784317097,
+       "cash_like_share": 0.20729084464179817,
+       "cash_like_usd": 477522.58999999997,
+       "box_growth_up": 0.19900156683694417,
+       "box_growth_down": 0.07841794302524578,
+       "box_inflation_up": 0.5356014396086681,
+       "box_inflation_down": 0.1504895837171879,
+       "box_unmapped": 0.036489466811953974,
+       "balance_score": 0.5921527979751573,
+       "gross": 0.7927091553582019,
+       "exp_return_prior_alpha_haircut": 0.067667806817236,
+       "exp_return_prior_base_0.30": 0.07975012676592627,
+       "btc_cap_20pct_ok": true,
+       "composer_risk_share": 0.08408320878024884
+      },
+      "sleeves": [
+       {
+        "sleeve": "gold & silver",
+        "usd": 247859.8,
+        "dollar_share": 0.10759505072785595,
+        "risk_share": 0.40519634420116374
+       },
+       {
+        "sleeve": "commodities",
+        "usd": 186922.6688050149,
+        "dollar_share": 0.08114246050493786,
+        "risk_share": 0.10343773275189888
+       },
+       {
+        "sleeve": "equity beta",
+        "usd": 138304.283288657,
+        "dollar_share": 0.060037393624633,
+        "risk_share": 0.09533091778547453
+       },
+       {
+        "sleeve": "TIPS",
+        "usd": 574215.1508860795,
+        "dollar_share": 0.24926473872847146,
+        "risk_share": 0.08560463834709288
+       },
+       {
+        "sleeve": "long Treasuries",
+        "usd": 235139.1693302696,
+        "dollar_share": 0.10207307055115944,
+        "risk_share": 0.08085992099677772
+       },
+       {
+        "sleeve": "BTC",
+        "usd": 54001.13649183517,
+        "dollar_share": 0.023441699784317097,
+        "risk_share": 0.07176781971601709
+       },
+       {
+        "sleeve": "Composer (one sleeve)",
+        "usd": 113550.63989936373,
+        "dollar_share": 0.049291925758644786,
+        "risk_share": 0.08408320878024884
+       },
+       {
+        "sleeve": "single names",
+        "usd": 28190.176825906034,
+        "dollar_share": 0.012237254712585861,
+        "risk_share": 0.037229950609372335
+       },
+       {
+        "sleeve": "KMLM trend",
+        "usd": 217820.08447287415,
+        "dollar_share": 0.09455491789473229,
+        "risk_share": 0.034942394200818266
+       },
+       {
+        "sleeve": "cash-like",
+        "usd": 477522.58999999997,
+        "dollar_share": 0.20729084464179817,
+        "risk_share": 0.0008259343508182748
+       },
+       {
+        "sleeve": "HL ETH carry",
+        "usd": 30110.0,
+        "dollar_share": 0.013070643070864025,
+        "risk_share": 0.0007211382603174278
+       }
+      ],
+      "streams": [
+       {
+        "stream": "gold_silver",
+        "usd": 247859.8,
+        "dollar_share": 0.10759505072785595,
+        "risk_share": 0.40519634420116374,
+        "exp_return": 0.13693976469210883
+       },
+       {
+        "stream": "DBC",
+        "usd": 186922.6688050149,
+        "dollar_share": 0.08114246050493786,
+        "risk_share": 0.10343773275189888,
+        "exp_return": 0.09185959273618474
+       },
+       {
+        "stream": "core_equity",
+        "usd": 138304.283288657,
+        "dollar_share": 0.060037393624633,
+        "risk_share": 0.09533091778547453,
+        "exp_return": 0.09390862549181746
+       },
+       {
+        "stream": "TIP",
+        "usd": 574215.1508860795,
+        "dollar_share": 0.24926473872847146,
+        "risk_share": 0.08560463834709288,
+        "exp_return": 0.05361982550626447
+       },
+       {
+        "stream": "TLT",
+        "usd": 235139.1693302696,
+        "dollar_share": 0.10207307055115944,
+        "risk_share": 0.08085992099677772,
+        "exp_return": 0.07952653305886204
+       },
+       {
+        "stream": "BTC",
+        "usd": 54001.13649183517,
+        "dollar_share": 0.023441699784317097,
+        "risk_share": 0.07176781971601709,
+        "exp_return": 0.18614967461767357
+       },
+       {
+        "stream": "composer_hg",
+        "usd": 32935.74969043627,
+        "dollar_share": 0.014297290882597569,
+        "risk_share": 0.0522772096649511,
+        "exp_return": 0.17423961526996973
+       },
+       {
+        "stream": "single_names",
+        "usd": 28190.176825906034,
+        "dollar_share": 0.012237254712585861,
+        "risk_share": 0.037229950609372335,
+        "exp_return": 0.27581627940174985
+       },
+       {
+        "stream": "composer_kmlm",
+        "usd": 36915.3281915822,
+        "dollar_share": 0.0160248116451669,
+        "risk_share": 0.035281168377800105,
+        "exp_return": 0.20815695354411465
+       },
+       {
+        "stream": "KMLM",
+        "usd": 217820.08447287415,
+        "dollar_share": 0.09455491789473229,
+        "risk_share": 0.034942394200818266,
+        "exp_return": 0.07586420720861936
+       },
+       {
+        "stream": "composer_crash",
+        "usd": 29524.682403739767,
+        "dollar_share": 0.01281655880039529,
+        "risk_share": -0.00481433664668953,
+        "exp_return": 0.11433720259612301
+       },
+       {
+        "stream": "composer_vixhyg",
+        "usd": 14174.879613605484,
+        "dollar_share": 0.00615326443048503,
+        "risk_share": 0.0013391673841871615,
+        "exp_return": 0.07451548422079447
+       },
+       {
+        "stream": "BOXX",
+        "usd": 410200.0,
+        "dollar_share": 0.17806634964026646,
+        "risk_share": 0.0008259343508182748,
+        "exp_return": 0.0401
+       },
+       {
+        "stream": "eth_carry",
+        "usd": 30110.0,
+        "dollar_share": 0.013070643070864025,
+        "risk_share": 0.0007211382603174278,
+        "exp_return": 0.048799999999999996
+       },
+       {
+        "stream": "usdc_idle",
+        "usd": 67322.59,
+        "dollar_share": 0.029224495001531705,
+        "risk_share": 0.0,
+        "exp_return": 0.0
+       }
+      ]
+     }
+    }
+   }
+  },
+  "N2_backtest": {
+   "basis": "CONSTANT MIX of today's weights (HINDSIGHT), monthly rebalance, 5bp, daily MTM, cash at DTB3. Panel A real data (Composer = IN-SAMPLE backtests before live); panel B 2006-05.. backfilled with natural proxies then factor replicas (full-sample betas: look-ahead). IN-SAMPLE, NOT a forecast.",
+   "weights": {
+    "current as is": {
+     "BTC": 0.11854652009246526,
+     "physical_metals": 0.07186867872013696,
+     "composer_hg": 0.03659764536056198,
+     "composer_kmlm": 0.041019685363851977,
+     "TSLA": 0.019978145014863738,
+     "FTZFF": 0.01662687041237039,
+     "AVUV": 0.04597207115340322,
+     "PSLV": 0.016658287953727098,
+     "AVDV": 0.029403449536542833,
+     "BOT": 0.011081211101577754,
+     "SHAZ": 0.003653868482718478,
+     "PHYS": 0.015858361974465284,
+     "AVEM": 0.012212411049086033,
+     "SPY": 0.014691090814930172,
+     "QUAL": 0.013318005279241929,
+     "composer_crash": 0.03280732535774198,
+     "composer_vixhyg": 0.01575088534505199,
+     "VIST": 0.0027791047407343204,
+     "JOINN": 0.0030961776433702224,
+     "BOXX": 0.26743733137550674,
+     "TEM": 0.0003512363202613198,
+     "TWST": 0.0003457614135905798,
+     "KMLM": 0.014495447130784612,
+     "GH": 0.0004699996803496797,
+     "LLY": 0.0004829962664926825,
+     "BIL": 0.00473720511152448
+    },
+    "current, cash deployed pro rata": {
+     "BTC": 0.1644902014285627,
+     "physical_metals": 0.09999023259389961,
+     "composer_hg": 0.05091796784301128,
+     "composer_kmlm": 0.05707031148342116,
+     "TSLA": 0.02779540966113749,
+     "FTZFF": 0.023132812087941143,
+     "AVUV": 0.06396052034506262,
+     "PSLV": 0.023176523024662533,
+     "AVDV": 0.04090874927130293,
+     "BOT": 0.015417187225377594,
+     "SHAZ": 0.0050835936594472485,
+     "PHYS": 0.022063593356986863,
+     "AVEM": 0.016991015322343397,
+     "SPY": 0.020439579714040004,
+     "QUAL": 0.01852921841994378,
+     "composer_crash": 0.04564453043694568,
+     "composer_vixhyg": 0.021914062109650426,
+     "VIST": 0.0038665428998762618,
+     "JOINN": 0.004307683517018337,
+     "TEM": 0.0004886718662954132,
+     "TWST": 0.00048105467893109626,
+     "KMLM": 0.020167382453263584,
+     "GH": 0.0006539062383521357,
+     "LLY": 0.0006719882692800451,
+     "BOXX": 0.05733982967707389,
+     "BIL": 0.00473720511152448
+    },
+    "UNLEVERED balanced proposal": {
+     "core_equity": 0.07026705680732459,
+     "TIP": 0.29178300847890487,
+     "TLT": 0.11944312116718549,
+     "DBC": 0.09499313271964246,
+     "BTC": 0.027434222031041088,
+     "composer_hg": 0.016708309096813364,
+     "composer_kmlm": 0.018727149666623952,
+     "single_names": 0.01426144336724887,
+     "KMLM": 0.11042599117446575,
+     "composer_crash": 0.01497787432269,
+     "composer_vixhyg": 0.0071909178391348656,
+     "BOXX": 0.1727543627951959
+    },
+    "POST-HOC: proposal, metals held": {
+     "gold_silver": 0.10438532864832933,
+     "DBC": 0.08232371164750658,
+     "core_equity": 0.06091140261295582,
+     "TIP": 0.2528934709063327,
+     "TLT": 0.10355902415009816,
+     "BTC": 0.023782958041481884,
+     "composer_hg": 0.014505427178756324,
+     "single_names": 0.012415401530185345,
+     "composer_kmlm": 0.016258096745809733,
+     "KMLM": 0.09593142415426144,
+     "composer_crash": 0.01300313897842483,
+     "composer_vixhyg": 0.006242842076933101,
+     "BOXX": 0.1727543627951959
+    },
+    "SPY": {
+     "SPY": 1.0
+    },
+    "60/40 SPY/IEF": {
+     "SPY": 0.6,
+     "IEF": 0.4
+    }
+   },
+   "metrics": {
+    "A": {
+     "current as is": {
+      "start": "2023-04-28",
+      "end": "2026-09-30",
+      "years": 3.4113620807665983,
+      "n_periods": 800,
+      "total_return": 1.2956609454920431,
+      "cagr": 0.27583875412871683,
+      "vol": 0.10500922286288271,
+      "mean_excess_annual": 0.20305600874368704,
+      "sharpe": 1.9399625939158147,
+      "sortino": 3.0680911427294926,
+      "max_drawdown": -0.07389388329648616,
+      "calmar": 3.7329037509364955,
+      "worst_year": 0.2369298355469971,
+      "best_year": 0.4044168909569925,
+      "p_loss_year": 0.0,
+      "n_complete_years": 2,
+      "ulcer_index": 0.020175395973389854,
+      "max_days_under_water": 100,
+      "fraction_under_water": 0.7752808988764045,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     },
+     "current, cash deployed pro rata": {
+      "start": "2023-04-28",
+      "end": "2026-09-30",
+      "years": 3.4113620807665983,
+      "n_periods": 800,
+      "total_return": 1.9593213571986645,
+      "cagr": 0.37443541731675944,
+      "vol": 0.1457118252393163,
+      "mean_excess_annual": 0.28244278189749633,
+      "sharpe": 1.942878089777767,
+      "sortino": 3.080781118475813,
+      "max_drawdown": -0.10080566932036539,
+      "calmar": 3.714428165015057,
+      "worst_year": 0.3196380565607819,
+      "best_year": 0.5662321117213092,
+      "p_loss_year": 0.0,
+      "n_complete_years": 2,
+      "ulcer_index": 0.028690869462600185,
+      "max_days_under_water": 100,
+      "fraction_under_water": 0.7865168539325843,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     },
+     "UNLEVERED balanced proposal": {
+      "start": "2023-04-28",
+      "end": "2026-09-30",
+      "years": 3.4113620807665983,
+      "n_periods": 800,
+      "total_return": 0.4208012032176749,
+      "cagr": 0.10844287883374903,
+      "vol": 0.048007329418397006,
+      "mean_excess_annual": 0.058369476363650925,
+      "sharpe": 1.2139419755028382,
+      "sortino": 1.7622474692337384,
+      "max_drawdown": -0.03977779892871891,
+      "calmar": 2.7262161747078237,
+      "worst_year": 0.09318755063229789,
+      "best_year": 0.12103639687629908,
+      "p_loss_year": 0.0,
+      "n_complete_years": 2,
+      "ulcer_index": 0.008739641525374356,
+      "max_days_under_water": 117,
+      "fraction_under_water": 0.7790262172284644,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     },
+     "POST-HOC: proposal, metals held": {
+      "start": "2023-04-28",
+      "end": "2026-09-30",
+      "years": 3.4113620807665983,
+      "n_periods": 800,
+      "total_return": 0.4976970372342673,
+      "cagr": 0.12570200400760934,
+      "vol": 0.062162994808149255,
+      "mean_excess_annual": 0.0745657351286326,
+      "sharpe": 1.200761733020908,
+      "sortino": 1.6821898589476598,
+      "max_drawdown": -0.050385048191811777,
+      "calmar": 2.494827503768023,
+      "worst_year": 0.1323789624901588,
+      "best_year": 0.16712386919587985,
+      "p_loss_year": 0.0,
+      "n_complete_years": 2,
+      "ulcer_index": 0.013643454862874826,
+      "max_days_under_water": 121,
+      "fraction_under_water": 0.8064918851435705,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     },
+     "SPY": {
+      "start": "2023-04-28",
+      "end": "2026-09-30",
+      "years": 3.4113620807665983,
+      "n_periods": 800,
+      "total_return": 0.9150273320147995,
+      "cagr": 0.20980735403071527,
+      "vol": 0.14740475797284788,
+      "mean_excess_annual": 0.15531692463226798,
+      "sharpe": 1.0543243106974547,
+      "sortino": 1.5662762019686667,
+      "max_drawdown": -0.18755229084676583,
+      "calmar": 1.118660577716602,
+      "worst_year": 0.177190512764398,
+      "best_year": 0.24886467926331424,
+      "p_loss_year": 0.0,
+      "n_complete_years": 2,
+      "ulcer_index": 0.03283518259015238,
+      "max_days_under_water": 126,
+      "fraction_under_water": 0.7990012484394506,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     },
+     "60/40 SPY/IEF": {
+      "start": "2023-04-28",
+      "end": "2026-09-30",
+      "years": 3.4113620807665983,
+      "n_periods": 800,
+      "total_return": 0.4930778301431711,
+      "cagr": 0.12468314740943898,
+      "vol": 0.09442020228048986,
+      "mean_excess_annual": 0.07617075356003469,
+      "sharpe": 0.8070114407241775,
+      "sortino": 1.1867999860082286,
+      "max_drawdown": -0.10568856774368696,
+      "calmar": 1.1797221787678793,
+      "worst_year": 0.13928880383151387,
+      "best_year": 0.14115251782837945,
+      "p_loss_year": 0.0,
+      "n_complete_years": 2,
+      "ulcer_index": 0.021625008331908443,
+      "max_days_under_water": 185,
+      "fraction_under_water": 0.8177278401997503,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     }
+    },
+    "B": {
+     "current as is": {
+      "start": "2006-05-31",
+      "end": "2026-09-30",
+      "years": 20.334017796030118,
+      "n_periods": 4960,
+      "total_return": 11.144809461315074,
+      "cagr": 0.13065184375512762,
+      "vol": 0.10331710316483153,
+      "mean_excess_annual": 0.11140388287239629,
+      "sharpe": 1.0791893466299312,
+      "sortino": 1.5775958367392549,
+      "max_drawdown": -0.23186807948181853,
+      "calmar": 0.5634749036914002,
+      "worst_year": -0.14439171868362266,
+      "best_year": 0.5853100884736293,
+      "p_loss_year": 0.21052631578947367,
+      "n_complete_years": 19,
+      "ulcer_index": 0.061090282173939664,
+      "max_days_under_water": 681,
+      "fraction_under_water": 0.8840959483975005,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     },
+     "current, cash deployed pro rata": {
+      "start": "2006-05-31",
+      "end": "2026-09-30",
+      "years": 20.334017796030118,
+      "n_periods": 4960,
+      "total_return": 25.62252343992185,
+      "cagr": 0.17514610213593196,
+      "vol": 0.14367483556377939,
+      "mean_excess_annual": 0.15502048456217937,
+      "sharpe": 1.079606978610638,
+      "sortino": 1.5783323937512919,
+      "max_drawdown": -0.31322148857412413,
+      "calmar": 0.5591765205294448,
+      "worst_year": -0.20242148721771291,
+      "best_year": 0.8762611216150862,
+      "p_loss_year": 0.21052631578947367,
+      "n_complete_years": 19,
+      "ulcer_index": 0.08513049597744626,
+      "max_days_under_water": 711,
+      "fraction_under_water": 0.8891352549889135,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     },
+     "UNLEVERED balanced proposal": {
+      "start": "2006-05-31",
+      "end": "2026-09-30",
+      "years": 20.334017796030118,
+      "n_periods": 4960,
+      "total_return": 2.102122634504623,
+      "cagr": 0.057253508567386424,
+      "vol": 0.04805921720973897,
+      "mean_excess_annual": 0.04006308674612576,
+      "sharpe": 0.8333338243313135,
+      "sortino": 1.185031762569501,
+      "max_drawdown": -0.1670918426036755,
+      "calmar": 0.3426469400016481,
+      "worst_year": -0.06028920857258524,
+      "best_year": 0.1717143444896554,
+      "p_loss_year": 0.3157894736842105,
+      "n_complete_years": 19,
+      "ulcer_index": 0.03878406344692256,
+      "max_days_under_water": 921,
+      "fraction_under_water": 0.8798629308607135,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     },
+     "POST-HOC: proposal, metals held": {
+      "start": "2006-05-31",
+      "end": "2026-09-30",
+      "years": 20.334017796030118,
+      "n_periods": 4960,
+      "total_return": 2.372752467366732,
+      "cagr": 0.06161140419732125,
+      "vol": 0.05791493213784814,
+      "mean_excess_annual": 0.04470160748393169,
+      "sharpe": 0.7720039559668617,
+      "sortino": 1.0862699929418387,
+      "max_drawdown": -0.17900082533491735,
+      "calmar": 0.3441962017887011,
+      "worst_year": -0.057744293105042255,
+      "best_year": 0.18940267044445647,
+      "p_loss_year": 0.3157894736842105,
+      "n_complete_years": 19,
+      "ulcer_index": 0.04642688666700837,
+      "max_days_under_water": 1688,
+      "fraction_under_water": 0.9024390243902439,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     },
+     "SPY": {
+      "start": "2006-05-31",
+      "end": "2026-09-30",
+      "years": 20.334017796030118,
+      "n_periods": 4960,
+      "total_return": 7.6971294700611566,
+      "cagr": 0.11223680291269122,
+      "vol": 0.19180087649671484,
+      "mean_excess_annual": 0.10803616399555582,
+      "sharpe": 0.5632535051231923,
+      "sortino": 0.7949208623482482,
+      "max_drawdown": -0.5518944215905266,
+      "calmar": 0.20336643843804672,
+      "worst_year": -0.367949992541977,
+      "best_year": 0.3237321023409241,
+      "p_loss_year": 0.15789473684210525,
+      "n_complete_years": 19,
+      "ulcer_index": 0.1282847972781106,
+      "max_days_under_water": 1772,
+      "fraction_under_water": 0.8732110461600484,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     },
+     "60/40 SPY/IEF": {
+      "start": "2006-05-31",
+      "end": "2026-09-30",
+      "years": 20.334017796030118,
+      "n_periods": 4960,
+      "total_return": 4.071411759535083,
+      "cagr": 0.08312181221985826,
+      "vol": 0.10758794511650599,
+      "mean_excess_annual": 0.06888024671750867,
+      "sharpe": 0.6400965952679424,
+      "sortino": 0.9077503981985316,
+      "max_drawdown": -0.32601190572904715,
+      "calmar": 0.25496557260378677,
+      "worst_year": -0.18023252671988155,
+      "best_year": 0.22629230636169329,
+      "p_loss_year": 0.15789473684210525,
+      "n_complete_years": 19,
+      "ulcer_index": 0.06653135329949687,
+      "max_days_under_water": 1030,
+      "fraction_under_water": 0.8478129409393268,
+      "basis": "per-period mark-to-market returns; in-sample history, not a forecast"
+     }
+    }
+   }
+  },
+  "N2_stress": [
+   {
+    "scenario": "gfc",
+    "window": "2007-10-09..2009-03-09",
+    "book": "current as is",
+    "cum_return": -0.1618385635845324,
+    "max_drawdown": -0.2046739464407895,
+    "max_dd_usd_on_nav": -485992.0842030776,
+    "weight_on_proxy_or_replica": 0.7184598017822674
+   },
+   {
+    "scenario": "gfc",
+    "window": "2007-10-09..2009-03-09",
+    "book": "current, cash deployed pro rata",
+    "cum_return": -0.23521992525239643,
+    "max_drawdown": -0.2872349002352905,
+    "max_dd_usd_on_nav": -682030.5673912202,
+    "weight_on_proxy_or_replica": 0.6844007670066078
+   },
+   {
+    "scenario": "gfc",
+    "window": "2007-10-09..2009-03-09",
+    "book": "UNLEVERED balanced proposal",
+    "cum_return": -0.057309312709658,
+    "max_drawdown": -0.15818977384918753,
+    "max_dd_usd_on_nav": -375616.8248547482,
+    "weight_on_proxy_or_replica": 0.4437001526158146
+   },
+   {
+    "scenario": "gfc",
+    "window": "2007-10-09..2009-03-09",
+    "book": "POST-HOC: proposal, metals held",
+    "cum_return": -0.038095890416143474,
+    "max_drawdown": -0.1786862887408589,
+    "max_dd_usd_on_nav": -424285.1784206206,
+    "weight_on_proxy_or_replica": 0.44047867564461946
+   },
+   {
+    "scenario": "gfc",
+    "window": "2007-10-09..2009-03-09",
+    "book": "SPY",
+    "cum_return": -0.5518944215905263,
+    "max_drawdown": -0.5518944215905263,
+    "max_dd_usd_on_nav": -1310456.5816657306,
+    "weight_on_proxy_or_replica": 0.0
+   },
+   {
+    "scenario": "gfc",
+    "window": "2007-10-09..2009-03-09",
+    "book": "60/40 SPY/IEF",
+    "cum_return": -0.2505332655075022,
+    "max_drawdown": -0.25055234986131314,
+    "max_dd_usd_on_nav": -594928.9630094873,
+    "weight_on_proxy_or_replica": 0.0
+   },
+   {
+    "scenario": "covid",
+    "window": "2020-02-19..2020-03-23",
+    "book": "current as is",
+    "cum_return": -0.13753367285128526,
+    "max_drawdown": -0.15099088301266916,
+    "max_dd_usd_on_nav": -358523.2766898277,
+    "weight_on_proxy_or_replica": 0.39179141346802615
+   },
+   {
+    "scenario": "covid",
+    "window": "2020-02-19..2020-03-23",
+    "book": "current, cash deployed pro rata",
+    "cum_return": -0.19207387155147837,
+    "max_drawdown": -0.21077697162420395,
+    "max_dd_usd_on_nav": -500483.53257943207,
+    "weight_on_proxy_or_replica": 0.23035252190774308
+   },
+   {
+    "scenario": "covid",
+    "window": "2020-02-19..2020-03-23",
+    "book": "UNLEVERED balanced proposal",
+    "cum_return": -0.060494257317452504,
+    "max_drawdown": -0.10143099497065111,
+    "max_dd_usd_on_nav": -240844.82419866347,
+    "weight_on_proxy_or_replica": 0.3289897551700599
+   },
+   {
+    "scenario": "covid",
+    "window": "2020-02-19..2020-03-23",
+    "book": "POST-HOC: proposal, metals held",
+    "cum_return": -0.06983826521865089,
+    "max_drawdown": -0.11112871496533738,
+    "max_dd_usd_on_nav": -263871.7664851302,
+    "weight_on_proxy_or_replica": 0.3084673119510322
+   },
+   {
+    "scenario": "covid",
+    "window": "2020-02-19..2020-03-23",
+    "book": "SPY",
+    "cum_return": -0.3371728189633807,
+    "max_drawdown": -0.3371728189633807,
+    "max_dd_usd_on_nav": -800606.642292133,
+    "weight_on_proxy_or_replica": 0.0
+   },
+   {
+    "scenario": "covid",
+    "window": "2020-02-19..2020-03-23",
+    "book": "60/40 SPY/IEF",
+    "cum_return": -0.17680000087064662,
+    "max_drawdown": -0.17680000087064662,
+    "max_dd_usd_on_nav": -419806.24502732407,
+    "weight_on_proxy_or_replica": 0.0
+   },
+   {
+    "scenario": "inflation_2022",
+    "window": "2022-01-03..2022-10-12",
+    "book": "current as is",
+    "cum_return": -0.11272174279961866,
+    "max_drawdown": -0.1309927096000102,
+    "max_dd_usd_on_nav": -311038.21986612334,
+    "weight_on_proxy_or_replica": 0.3570152274421527
+   },
+   {
+    "scenario": "inflation_2022",
+    "window": "2022-01-03..2022-10-12",
+    "book": "current, cash deployed pro rata",
+    "cum_return": -0.15929950935799697,
+    "max_drawdown": -0.18189932027694833,
+    "max_dd_usd_on_nav": -431914.42444820947,
+    "weight_on_proxy_or_replica": 0.18196873370709116
+   },
+   {
+    "scenario": "inflation_2022",
+    "window": "2022-01-03..2022-10-12",
+    "book": "UNLEVERED balanced proposal",
+    "cum_return": -0.03177191175899108,
+    "max_drawdown": -0.07843895688370917,
+    "max_dd_usd_on_nav": -186250.92641997384,
+    "weight_on_proxy_or_replica": 0.2136503046236447
+   },
+   {
+    "scenario": "inflation_2022",
+    "window": "2022-01-03..2022-10-12",
+    "book": "POST-HOC: proposal, metals held",
+    "cum_return": -0.04124918454564752,
+    "max_drawdown": -0.09469998044987726,
+    "max_dd_usd_on_nav": -224862.23416882596,
+    "weight_on_proxy_or_replica": 0.20825844059636356
+   },
+   {
+    "scenario": "inflation_2022",
+    "window": "2022-01-03..2022-10-12",
+    "book": "SPY",
+    "cum_return": -0.24059231456591657,
+    "max_drawdown": -0.24471086238335737,
+    "max_dd_usd_on_nav": -581058.5279901519,
+    "weight_on_proxy_or_replica": 0.0
+   },
+   {
+    "scenario": "inflation_2022",
+    "window": "2022-01-03..2022-10-12",
+    "book": "60/40 SPY/IEF",
+    "cum_return": -0.20904279876810716,
+    "max_drawdown": -0.20904279876810716,
+    "max_dd_usd_on_nav": -496365.7916780678,
+    "weight_on_proxy_or_replica": 0.0
+   }
+  ],
+  "charts": [
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n1_corrected_liquid.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n1_corrected_liquid.csv",
+    "caption": "N1: corrected liquid book, variant D (Dominion out) and P (Plus One out), now / post-revert / net of commitments ($410.2k; sheet $435.2k), vs the old plug book"
+   },
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_risk_vs_dollar.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_risk_vs_dollar_by_sleeve.csv",
+    "caption": "N2 (variant D): dollar share vs Euler risk share by sleeve - current, current with cash deployed pro rata, unlevered proposal (no margin)"
+   },
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_environment_boxes.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_environment_boxes.csv",
+    "caption": "N2 (variant D): environment-box risk shares (engine canonical map; KMLM/cash unmapped)"
+   },
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_backtest_B.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_backtest_B.csv",
+    "caption": "N2 constant-mix backtest B (2006-05..2026-09, backfilled (IN-SAMPLE, hindsight weights)); variant-D weights; equity (log) and drawdowns"
+   },
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_backtest_A.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_backtest_A.csv",
+    "caption": "N2 constant-mix backtest A (2023-04..2026-09, real data, Composer IN-SAMPLE); variant-D weights; equity (log) and drawdowns"
+   },
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_stress.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_stress.csv",
+    "caption": "N2 stress replays (variant D weights): 2008 / 2020 / 2022 max drawdown; proxies/replicas where real data is missing (share in CSV)"
+   }
+  ]
+ },
+ "postexit": {
+  "params_file": "predeclared_params.json (N3)",
+  "rf": 0.0401,
+  "nav_usd": 18000000.0,
+  "parametric": {
+   "FILM": {
+    "factor": "HYG",
+    "rho": 0.3,
+    "vol": 0.22,
+    "beta": 1.3162354992963932,
+    "idio": 0.20986662431172803
+   },
+   "VENT": {
+    "factor": "IWM",
+    "rho": 0.4,
+    "vol": 0.524785670536077,
+    "beta": 0.9960508505402481,
+    "idio": 0.480974011771946,
+    "vol_formula": "0.90 x sqrt(0.30 + 0.70/17.5)"
+   },
+   "SPCX": {
+    "factor": "QQQ",
+    "beta": 1.6241170339945536,
+    "idio": 0.7940467926398627,
+    "vol": 0.8605000905521939,
+    "listed_window": [
+     "2026-06-15",
+     "2026-09-30",
+     75
+    ],
+    "measured_total_vol_listed_window": 0.8642088180220666,
+    "corr_qqq_listed_window": 0.408888704957687
+   }
+  },
+  "weights": {
+   "PLAN pre-trigger": {
+    "SPY": 0.4,
+    "BOXX": 0.36,
+    "c_hg": 0.0696,
+    "c_kmlm": 0.0696,
+    "c_crash": 0.0648,
+    "c_vixhyg": 0.036
+   },
+   "PLAN post-trigger": {
+    "SPY": 0.4,
+    "BOXX": 0.3183333333333333,
+    "c_hg": 0.0696,
+    "c_kmlm": 0.0696,
+    "c_crash": 0.0648,
+    "c_vixhyg": 0.036,
+    "SPCX": 0.041666666666666664
+   },
+   "ALT-2 UNLEVERED": {
+    "SPY": 0.15085579174131428,
+    "TLT": 0.15837220167045318,
+    "TIP": 0.4047554857936187,
+    "DBC": 0.16457894522408575,
+    "NVDA": 0.008557152782419879,
+    "AVGO": 0.008557152782419879,
+    "TSLA": 0.008557152782419879,
+    "ISRG": 0.008557152782419879,
+    "RKLB": 0.008557152782419879,
+    "c_hg": 0.022809025380944366,
+    "c_kmlm": 0.022809025380944366,
+    "c_crash": 0.021235989147775792,
+    "c_vixhyg": 0.011797771748764327
+   },
+   "CASEY ROUTE pre-trigger": {
+    "SPY": 0.08137029486227923,
+    "BOXX": 0.05555555555555555,
+    "TLT": 0.08542458064859218,
+    "TIP": 0.2183215695332964,
+    "DBC": 0.08877244384472109,
+    "c_hg": 0.0696,
+    "c_kmlm": 0.0696,
+    "c_crash": 0.0648,
+    "c_vixhyg": 0.036,
+    "FILM": 0.13333333333333333,
+    "VENT": 0.09722222222222222
+   },
+   "CASEY ROUTE post-trigger": {
+    "SPY": 0.08137029486227923,
+    "BOXX": 0.013888888888888888,
+    "TLT": 0.08542458064859218,
+    "TIP": 0.2183215695332964,
+    "DBC": 0.08877244384472109,
+    "c_hg": 0.0696,
+    "c_kmlm": 0.0696,
+    "c_crash": 0.0648,
+    "c_vixhyg": 0.036,
+    "FILM": 0.13333333333333333,
+    "VENT": 0.09722222222222222,
+    "SPCX": 0.041666666666666664
+   }
+  },
+  "construction": {
+   "core_weights": {
+    "SPY": 0.1717075389825353,
+    "TLT": 0.18026288999702922,
+    "TIP": 0.46070202246182124,
+    "GLD": 0.0,
+    "DBC": 0.18732754855861425
+   },
+   "core_box_risk": {
+    "growth_up": 0.25000000000000033,
+    "growth_down": 0.2499999999999997,
+    "inflation_up": 0.24999999999999845,
+    "inflation_down": 0.25000000000000155
+   },
+   "alt2_sleeve_weights": {
+    "beta core": 0.8785624244294717,
+    "Composer": 0.07865181165842884,
+    "SPCX basket": 0.04278576391209939
+   },
+   "casey_route_usd": {
+    "core": 8530000.0,
+    "film_private_lending_usd": 2400000,
+    "venture_new_usd": 1750000,
+    "composer_usd": 4320000,
+    "spacex_reserve_usd": 1000000,
+    "core_usd": "remainder 18,000,000 - 2,400,000 - 1,750,000 - 4,320,000 - 1,000,000 = 8,530,000 at the engine quadrant_balance core weights (same core as ALT-2)"
+   }
+  },
+  "priors": {
+   "basis": "PRIOR-DRIVEN, NOT forecasts: betas rf + 0.30 x vol; Composer/basket zero-alpha beta-implied; film 20% headline or 14.4% = (1-0.08) x 20% - 0.08 x 50%; venture rf + 0.30 x 52.5%; SPCX zero-alpha rf + beta x (mu_QQQ - rf)",
+   "film_20pct_headline": {
+    "SPY": 0.08586828533884208,
+    "QQQ": 0.10134938631854469,
+    "BOXX": 0.0401,
+    "TLT": 0.08011455628775035,
+    "TIP": 0.053759411177685214,
+    "GLD": 0.10460397181750347,
+    "DBC": 0.09176915746213389,
+    "HYG": 0.0401,
+    "IWM": 0.0401,
+    "NVDA": 0.13722025530812698,
+    "AVGO": 0.14635360537142245,
+    "TSLA": 0.1525587953672942,
+    "ISRG": 0.08626780133350304,
+    "RKLB": 0.15756346004236454,
+    "c_hg": 0.143923894451653,
+    "c_kmlm": 0.07447166603079144,
+    "c_crash": 0.020976651762496686,
+    "c_vixhyg": 0.040582754846287664,
+    "FILM": 0.2,
+    "VENT": 0.1975357011608231,
+    "SPCX": 0.13957617164166142
+   },
+   "film_14.4pct_default_adjusted": {
+    "SPY": 0.08586828533884208,
+    "QQQ": 0.10134938631854469,
+    "BOXX": 0.0401,
+    "TLT": 0.08011455628775035,
+    "TIP": 0.053759411177685214,
+    "GLD": 0.10460397181750347,
+    "DBC": 0.09176915746213389,
+    "HYG": 0.0401,
+    "IWM": 0.0401,
+    "NVDA": 0.13722025530812698,
+    "AVGO": 0.14635360537142245,
+    "TSLA": 0.1525587953672942,
+    "ISRG": 0.08626780133350304,
+    "RKLB": 0.15756346004236454,
+    "c_hg": 0.143923894451653,
+    "c_kmlm": 0.07447166603079144,
+    "c_crash": 0.020976651762496686,
+    "c_vixhyg": 0.040582754846287664,
+    "FILM": 0.14400000000000002,
+    "VENT": 0.1975357011608231,
+    "SPCX": 0.13957617164166142
+   }
+  },
+  "risk": {
+   "PLAN pre-trigger": {
+    "vol": 0.10359637187588225,
+    "gross": 0.64,
+    "neff": {
+     "dr2": 2.176325972536081,
+     "equal_rho": 4.037888635785858,
+     "pca_entropy": 2.412116298754906,
+     "prc_inverse_hhi": 2.6448586243424317,
+     "min_torsion": 3.135926445340571
+    },
+    "rho_bar": 0.09718501628920102,
+    "risk_share": {
+     "SPY / equity beta": 0.5090677917809564,
+     "long Treasuries": 0.0,
+     "TIPS": 0.0,
+     "gold": 0.0,
+     "commodities": 0.0,
+     "Composer": 0.49022443093581103,
+     "SPCX basket (5 names)": 0.0,
+     "SpaceX (SPCX)": 0.0,
+     "film / private lending": 0.0,
+     "venture deals": 0.0,
+     "T-bills / BOXX": 0.0007077772832327624
+    },
+    "dollar_share": {
+     "SPY / equity beta": 0.4,
+     "long Treasuries": 0.0,
+     "TIPS": 0.0,
+     "gold": 0.0,
+     "commodities": 0.0,
+     "Composer": 0.24,
+     "SPCX basket (5 names)": 0.0,
+     "SpaceX (SPCX)": 0.0,
+     "film / private lending": 0.0,
+     "venture deals": 0.0,
+     "T-bills / BOXX": 0.36
+    },
+    "env_risk_share": {
+     "growth_up": 0.5053280813493223,
+     "growth_down": -0.004354903719257545,
+     "inflation_up": 0.0,
+     "inflation_down": 0.49831904508670266
+    },
+    "env_unmapped": 0.000707777283232458,
+    "env_balance_score": 0.32752268239425464,
+    "exp_return_prior_film20": 0.06680391135379112,
+    "exp_return_prior_film14": 0.06680391135379112,
+    "sharpe_prior_film20": 0.257768789294907,
+    "sharpe_prior_film14": 0.257768789294907,
+    "film_contrib_to_return_film20": 0.0,
+    "private_risk_share": 0.0
+   },
+   "PLAN post-trigger": {
+    "vol": 0.12003998149667969,
+    "gross": 0.6816666666666666,
+    "neff": {
+     "dr2": 2.466762643989654,
+     "equal_rho": 4.336862202538538,
+     "pca_entropy": 3.3915975021131124,
+     "prc_inverse_hhi": 3.375818424057064,
+     "min_torsion": 4.03275904370463
+    },
+    "rho_bar": 0.10234503169528963,
+    "risk_share": {
+     "SPY / equity beta": 0.43450811019218366,
+     "long Treasuries": 0.0,
+     "TIPS": 0.0,
+     "gold": 0.0,
+     "commodities": 0.0,
+     "Composer": 0.3927248164531956,
+     "SPCX basket (5 names)": 0.0,
+     "SpaceX (SPCX)": 0.17226874461117533,
+     "film / private lending": 0.0,
+     "venture deals": 0.0,
+     "T-bills / BOXX": 0.0004983287434456664
+    },
+    "dollar_share": {
+     "SPY / equity beta": 0.4,
+     "long Treasuries": 0.0,
+     "TIPS": 0.0,
+     "gold": 0.0,
+     "commodities": 0.0,
+     "Composer": 0.24,
+     "SPCX basket (5 names)": 0.0,
+     "SpaceX (SPCX)": 0.041666666666666664,
+     "film / private lending": 0.0,
+     "venture deals": 0.0,
+     "T-bills / BOXX": 0.3183333333333333
+    },
+    "env_risk_share": {
+     "growth_up": 0.506010675275479,
+     "growth_down": -0.006948696357112198,
+     "inflation_up": 0.0,
+     "inflation_down": 0.5004396923381877
+    },
+    "env_unmapped": 0.0004983287434453532,
+    "env_balance_score": 0.3240637855750972,
+    "exp_return_prior_film20": 0.07094875183886033,
+    "exp_return_prior_film14": 0.07094875183886033,
+    "sharpe_prior_film20": 0.25698730918009693,
+    "sharpe_prior_film14": 0.25698730918009693,
+    "film_contrib_to_return_film20": 0.0,
+    "private_risk_share": 0.0
+   },
+   "ALT-2 UNLEVERED": {
+    "vol": 0.07179305330364212,
+    "gross": 1.0000000000000002,
+    "neff": {
+     "dr2": 4.0151461216680655,
+     "equal_rho": 4.587375614491872,
+     "pca_entropy": 4.015011504694904,
+     "prc_inverse_hhi": 6.848965571781549,
+     "min_torsion": 9.691772806608844
+    },
+    "rho_bar": 0.15282202527976999,
+    "risk_share": {
+     "SPY / equity beta": 0.24215299545350513,
+     "long Treasuries": 0.14910069118468933,
+     "TIPS": 0.151237302857039,
+     "gold": 0.0,
+     "commodities": 0.1575090105047664,
+     "Composer": 0.15000000000000005,
+     "SPCX basket (5 names)": 0.14999999999999997,
+     "SpaceX (SPCX)": 0.0,
+     "film / private lending": 0.0,
+     "venture deals": 0.0,
+     "T-bills / BOXX": 0.0
+    },
+    "dollar_share": {
+     "SPY / equity beta": 0.15085579174131428,
+     "long Treasuries": 0.15837220167045318,
+     "TIPS": 0.4047554857936187,
+     "gold": 0.0,
+     "commodities": 0.16457894522408575,
+     "Composer": 0.07865181165842886,
+     "SPCX basket (5 names)": 0.042785763912099394,
+     "SpaceX (SPCX)": 0.0,
+     "film / private lending": 0.0,
+     "venture deals": 0.0,
+     "T-bills / BOXX": 0.0
+    },
+    "env_risk_share": {
+     "growth_up": 0.3545555049514893,
+     "growth_down": 0.14223283525480993,
+     "inflation_up": 0.1543731566809027,
+     "inflation_down": 0.34883850311279796
+    },
+    "env_unmapped": 0.0,
+    "env_balance_score": 0.7288079892476169,
+    "exp_return_prior_film20": 0.0742285255996726,
+    "exp_return_prior_film14": 0.0742285255996726,
+    "sharpe_prior_film20": 0.47537364729884307,
+    "sharpe_prior_film14": 0.47537364729884307,
+    "film_contrib_to_return_film20": 0.0,
+    "private_risk_share": 0.0
+   },
+   "CASEY ROUTE pre-trigger": {
+    "vol": 0.10618801075268669,
+    "gross": 0.9444444444444444,
+    "neff": {
+     "dr2": 4.296431320862495,
+     "equal_rho": 6.27542244943488,
+     "pca_entropy": 2.355835293758244,
+     "prc_inverse_hhi": 5.005157174201783,
+     "min_torsion": 6.459940219054507
+    },
+    "rho_bar": 0.0752870040006722,
+    "risk_share": {
+     "SPY / equity beta": 0.07570742085094093,
+     "long Treasuries": 0.028952189750030152,
+     "TIPS": 0.029975662418107913,
+     "gold": 0.0,
+     "commodities": 0.026551014291661162,
+     "Composer": 0.4075914438663975,
+     "SPCX basket (5 names)": 0.0,
+     "SpaceX (SPCX)": 0.0,
+     "film / private lending": 0.1200695299694009,
+     "venture deals": 0.31110580574524005,
+     "T-bills / BOXX": 4.6933108221340166e-05
+    },
+    "dollar_share": {
+     "SPY / equity beta": 0.08137029486227923,
+     "long Treasuries": 0.08542458064859218,
+     "TIPS": 0.2183215695332964,
+     "gold": 0.0,
+     "commodities": 0.08877244384472109,
+     "Composer": 0.24,
+     "SPCX basket (5 names)": 0.0,
+     "SpaceX (SPCX)": 0.0,
+     "film / private lending": 0.13333333333333333,
+     "venture deals": 0.09722222222222222,
+     "T-bills / BOXX": 0.05555555555555555
+    },
+    "env_risk_share": {
+     "growth_up": 0.5325230026032837,
+     "growth_down": 0.03085364430296626,
+     "inflation_up": 0.028263338354884537,
+     "inflation_down": 0.4083130816306442
+    },
+    "env_unmapped": 4.693310822134755e-05,
+    "env_balance_score": 0.4121596764424261,
+    "exp_return_prior_film20": 0.09983419297283048,
+    "exp_return_prior_film14": 0.09236752630616382,
+    "sharpe_prior_film20": 0.5625323664076562,
+    "sharpe_prior_film14": 0.4922168325376732,
+    "film_contrib_to_return_film20": 0.02666666666666667,
+    "private_risk_share": 0.43117533571464095
+   },
+   "CASEY ROUTE post-trigger": {
+    "vol": 0.11980516223088906,
+    "gross": 0.986111111111111,
+    "neff": {
+     "dr2": 4.559131558188918,
+     "equal_rho": 6.460705578589932,
+     "pca_entropy": 3.7521113404186033,
+     "prc_inverse_hhi": 6.006278299335546,
+     "min_torsion": 7.431362524387652
+    },
+    "rho_bar": 0.07794384282066204,
+    "risk_share": {
+     "SPY / equity beta": 0.07078066399177681,
+     "long Treasuries": 0.023876775306127633,
+     "TIPS": 0.02483341324598616,
+     "gold": 0.0,
+     "commodities": 0.022148182248597915,
+     "Composer": 0.3479187024302187,
+     "SPCX basket (5 names)": 0.0,
+     "SpaceX (SPCX)": 0.1520097576700612,
+     "film / private lending": 0.0999044987361013,
+     "venture deals": 0.25851737870027075,
+     "T-bills / BOXX": 1.0627670859535905e-05
+    },
+    "dollar_share": {
+     "SPY / equity beta": 0.08137029486227923,
+     "long Treasuries": 0.08542458064859218,
+     "TIPS": 0.2183215695332964,
+     "gold": 0.0,
+     "commodities": 0.08877244384472109,
+     "Composer": 0.24,
+     "SPCX basket (5 names)": 0.0,
+     "SpaceX (SPCX)": 0.041666666666666664,
+     "film / private lending": 0.13333333333333333,
+     "venture deals": 0.09722222222222222,
+     "T-bills / BOXX": 0.013888888888888888
+    },
+    "env_risk_share": {
+     "growth_up": 0.5291797800441163,
+     "growth_down": 0.021727132240199894,
+     "inflation_up": 0.023490797747292038,
+     "inflation_down": 0.4255916622975323
+    },
+    "env_unmapped": 1.0627670859575389e-05,
+    "env_balance_score": 0.39362454740516795,
+    "exp_return_prior_film20": 0.10397903345789972,
+    "exp_return_prior_film14": 0.09651236679123305,
+    "sharpe_prior_film20": 0.533190993346278,
+    "sharpe_prior_film14": 0.4708675798336209,
+    "film_contrib_to_return_film20": 0.02666666666666667,
+    "private_risk_share": 0.35842187743637205
+   }
+  },
+  "stress_replays": {
+   "basis": "today's weights buy-and-hold, daily MTM; Composer = beta proxy; film = rf + beta x (HYG - rf) (VWEHX before 2007-04-11); venture = rf + beta x (IWM - rf); SPCX = rf + beta x (QQQ - rf); no idiosyncratic risk in replays (understates single-name / single-loan losses)",
+   "rows": [
+    {
+     "scenario": "tech_2000_02",
+     "start": "2000-03-10",
+     "end": "2002-10-09",
+     "candidate": "PLAN pre-trigger",
+     "basket_used": "QQQ",
+     "cum_return": -0.27763650929526784,
+     "max_drawdown": -0.3081043004668599,
+     "loss_usd": -4997457.167314821,
+     "max_dd_usd": -5545877.408403478,
+     "notes": ""
+    },
+    {
+     "scenario": "tech_2000_02",
+     "start": "2000-03-10",
+     "end": "2002-10-09",
+     "candidate": "PLAN post-trigger",
+     "basket_used": "QQQ",
+     "cum_return": -0.3218886204154958,
+     "max_drawdown": -0.3513861461105666,
+     "loss_usd": -5793995.167478925,
+     "max_dd_usd": -6324950.6299902,
+     "notes": ""
+    },
+    {
+     "scenario": "tech_2000_02",
+     "start": "2000-03-10",
+     "end": "2002-10-09",
+     "candidate": "ALT-2 UNLEVERED",
+     "basket_used": "QQQ",
+     "cum_return": 0.03221281036598467,
+     "max_drawdown": -0.10686450822625904,
+     "loss_usd": 579830.586587724,
+     "max_dd_usd": -1923561.1480726628,
+     "notes": ""
+    },
+    {
+     "scenario": "tech_2000_02",
+     "start": "2000-03-10",
+     "end": "2002-10-09",
+     "candidate": "CASEY ROUTE pre-trigger",
+     "basket_used": "QQQ",
+     "cum_return": -0.11211150546075388,
+     "max_drawdown": -0.1751823159355973,
+     "loss_usd": -2018007.0982935699,
+     "max_dd_usd": -3153281.686840751,
+     "notes": "missing returns set to 0% - stream NOT modelled in this window (understates loss if it fell): {'VENT': 54}"
+    },
+    {
+     "scenario": "tech_2000_02",
+     "start": "2000-03-10",
+     "end": "2002-10-09",
+     "candidate": "CASEY ROUTE post-trigger",
+     "basket_used": "QQQ",
+     "cum_return": -0.1563636165809822,
+     "max_drawdown": -0.20655511178794805,
+     "loss_usd": -2814545.0984576796,
+     "max_dd_usd": -3717992.012183065,
+     "notes": "missing returns set to 0% - stream NOT modelled in this window (understates loss if it fell): {'VENT': 54}"
+    },
+    {
+     "scenario": "tech_2000_02",
+     "start": "2000-03-10",
+     "end": "2002-10-09",
+     "candidate": "SPY 100%",
+     "basket_used": "-",
+     "cum_return": -0.4233661520873946,
+     "max_drawdown": -0.47515853479472425,
+     "loss_usd": -7620590.737573102,
+     "max_dd_usd": -8552853.626305036,
+     "notes": ""
+    },
+    {
+     "scenario": "gfc_2008",
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "candidate": "PLAN pre-trigger",
+     "basket_used": "QQQ",
+     "cum_return": -0.29592874022754523,
+     "max_drawdown": -0.29688681088867663,
+     "loss_usd": -5326717.3240958145,
+     "max_dd_usd": -5343962.59599618,
+     "notes": ""
+    },
+    {
+     "scenario": "gfc_2008",
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "candidate": "PLAN post-trigger",
+     "basket_used": "QQQ",
+     "cum_return": -0.3270682804999977,
+     "max_drawdown": -0.32924772699012783,
+     "loss_usd": -5887229.048999959,
+     "max_dd_usd": -5926459.085822301,
+     "notes": ""
+    },
+    {
+     "scenario": "gfc_2008",
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "candidate": "ALT-2 UNLEVERED",
+     "basket_used": "QQQ",
+     "cum_return": -0.12304128169261652,
+     "max_drawdown": -0.23647744197597254,
+     "loss_usd": -2214743.070467097,
+     "max_dd_usd": -4256593.955567505,
+     "notes": ""
+    },
+    {
+     "scenario": "gfc_2008",
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "candidate": "CASEY ROUTE pre-trigger",
+     "basket_used": "QQQ",
+     "cum_return": -0.2347121036618235,
+     "max_drawdown": -0.2744287068410013,
+     "loss_usd": -4224817.865912823,
+     "max_dd_usd": -4939716.723138023,
+     "notes": ""
+    },
+    {
+     "scenario": "gfc_2008",
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "candidate": "CASEY ROUTE post-trigger",
+     "basket_used": "QQQ",
+     "cum_return": -0.2658516439342752,
+     "max_drawdown": -0.2995213269392156,
+     "loss_usd": -4785329.590816953,
+     "max_dd_usd": -5391383.884905881,
+     "notes": ""
+    },
+    {
+     "scenario": "gfc_2008",
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "candidate": "SPY 100%",
+     "basket_used": "-",
+     "cum_return": -0.5518944215905263,
+     "max_drawdown": -0.5518944215905263,
+     "loss_usd": -9934099.588629473,
+     "max_dd_usd": -9934099.588629473,
+     "notes": ""
+    },
+    {
+     "scenario": "covid_2020",
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "candidate": "PLAN pre-trigger",
+     "basket_used": "EW NVDA/AVGO/TSLA/ISRG",
+     "cum_return": -0.17932892063824624,
+     "max_drawdown": -0.17932892063824624,
+     "loss_usd": -3227920.571488432,
+     "max_dd_usd": -3227920.571488432,
+     "notes": ""
+    },
+    {
+     "scenario": "covid_2020",
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "candidate": "PLAN post-trigger",
+     "basket_used": "EW NVDA/AVGO/TSLA/ISRG",
+     "cum_return": -0.19733422740145856,
+     "max_drawdown": -0.19733422740145856,
+     "loss_usd": -3552016.093226254,
+     "max_dd_usd": -3552016.093226254,
+     "notes": ""
+    },
+    {
+     "scenario": "covid_2020",
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "candidate": "ALT-2 UNLEVERED",
+     "basket_used": "EW NVDA/AVGO/TSLA/ISRG",
+     "cum_return": -0.10512266943589021,
+     "max_drawdown": -0.15553091468607172,
+     "loss_usd": -1892208.0498460238,
+     "max_dd_usd": -2799556.464349291,
+     "notes": ""
+    },
+    {
+     "scenario": "covid_2020",
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "candidate": "CASEY ROUTE pre-trigger",
+     "basket_used": "EW NVDA/AVGO/TSLA/ISRG",
+     "cum_return": -0.1607970987653109,
+     "max_drawdown": -0.17456099407186731,
+     "loss_usd": -2894347.7777755964,
+     "max_dd_usd": -3142097.8932936117,
+     "notes": ""
+    },
+    {
+     "scenario": "covid_2020",
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "candidate": "CASEY ROUTE post-trigger",
+     "basket_used": "EW NVDA/AVGO/TSLA/ISRG",
+     "cum_return": -0.1788024055285221,
+     "max_drawdown": -0.19122980136137113,
+     "loss_usd": -3218443.299513398,
+     "max_dd_usd": -3442136.4245046806,
+     "notes": ""
+    },
+    {
+     "scenario": "covid_2020",
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "candidate": "SPY 100%",
+     "basket_used": "-",
+     "cum_return": -0.3371728189633807,
+     "max_drawdown": -0.3371728189633807,
+     "loss_usd": -6069110.741340852,
+     "max_dd_usd": -6069110.741340852,
+     "notes": ""
+    },
+    {
+     "scenario": "inflation_2022",
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "candidate": "PLAN pre-trigger",
+     "basket_used": "EW NVDA/AVGO/TSLA/ISRG/RKLB",
+     "cum_return": -0.13843067746420867,
+     "max_drawdown": -0.13843067746420867,
+     "loss_usd": -2491752.194355756,
+     "max_dd_usd": -2491752.194355756,
+     "notes": ""
+    },
+    {
+     "scenario": "inflation_2022",
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "candidate": "PLAN post-trigger",
+     "basket_used": "EW NVDA/AVGO/TSLA/ISRG/RKLB",
+     "cum_return": -0.16050028513211356,
+     "max_drawdown": -0.16050028513211356,
+     "loss_usd": -2889005.132378044,
+     "max_dd_usd": -2889005.132378044,
+     "notes": ""
+    },
+    {
+     "scenario": "inflation_2022",
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "candidate": "ALT-2 UNLEVERED",
+     "basket_used": "EW NVDA/AVGO/TSLA/ISRG/RKLB",
+     "cum_return": -0.13624553368357295,
+     "max_drawdown": -0.15919306978997438,
+     "loss_usd": -2452419.606304313,
+     "max_dd_usd": -2865475.256219539,
+     "notes": ""
+    },
+    {
+     "scenario": "inflation_2022",
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "candidate": "CASEY ROUTE pre-trigger",
+     "basket_used": "EW NVDA/AVGO/TSLA/ISRG/RKLB",
+     "cum_return": -0.14751272533381965,
+     "max_drawdown": -0.1546882356989281,
+     "loss_usd": -2655229.056008754,
+     "max_dd_usd": -2784388.242580706,
+     "notes": ""
+    },
+    {
+     "scenario": "inflation_2022",
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "candidate": "CASEY ROUTE post-trigger",
+     "basket_used": "EW NVDA/AVGO/TSLA/ISRG/RKLB",
+     "cum_return": -0.16958233300172432,
+     "max_drawdown": -0.17608792249658622,
+     "loss_usd": -3052481.9940310377,
+     "max_dd_usd": -3169582.6049385522,
+     "notes": ""
+    },
+    {
+     "scenario": "inflation_2022",
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "candidate": "SPY 100%",
+     "basket_used": "-",
+     "cum_return": -0.24496383714802172,
+     "max_drawdown": -0.24496383714802172,
+     "loss_usd": -4409349.068664391,
+     "max_dd_usd": -4409349.068664391,
+     "notes": ""
+    }
+   ]
+  },
+  "forward_bootstrap": {
+   "basis": "IN-SAMPLE resampling of 2023-26 daily returns (private/SPCX synthesised: beta x factor + Gaussian idio), re-centred to PRIOR-DRIVEN means; not a forecast; no default jumps",
+   "results": {
+    "film_20pct_headline": {
+     "PLAN pre-trigger": {
+      "years": 10.0,
+      "n_paths": 10000,
+      "periods_per_year": 252.0,
+      "p_loss_horizon": 0.0104,
+      "p_wipeout": 0.0,
+      "mean_cagr": 0.06403908746676766,
+      "cagr_quantiles": {
+       "0.05": 0.01770834442196988,
+       "0.25": 0.04428812832301715,
+       "0.5": 0.06323118869961486,
+       "0.75": 0.0831280416021773,
+       "0.95": 0.1125388590340724
+      },
+      "wealth_quantiles": {
+       "0.05": 1.191882256756044,
+       "0.25": 1.54242270273181,
+       "0.5": 1.8461929027270139,
+       "0.75": 2.222276013366059,
+       "0.95": 2.9050384911339266
+      },
+      "max_dd_quantiles": {
+       "0.05": -0.254228625396169,
+       "0.25": -0.19127974888092536,
+       "0.5": -0.15874435068184084,
+       "0.75": -0.13404405946948353,
+       "0.95": -0.10835435335952892
+      },
+      "median_max_dd": -0.15874435068184084,
+      "cvar_0.05_cagr": 0.007079459622686127,
+      "var_0.05_cagr": 0.017686320200829497,
+      "p_losing_year": 0.24176,
+      "p_any_losing_year": 0.9362,
+      "cvar_0.05_annual": -0.10112340111988964,
+      "annual_return_quantiles": {
+       "0.05": -0.07254246381679132,
+       "0.25": 0.0022460943631080754,
+       "0.5": 0.060865267701832426,
+       "0.75": 0.12594429393260154,
+       "0.95": 0.229935751280445
+      }
+     },
+     "PLAN post-trigger": {
+      "years": 10.0,
+      "n_paths": 10000,
+      "periods_per_year": 252.0,
+      "p_loss_horizon": 0.0288,
+      "p_wipeout": 0.0,
+      "mean_cagr": 0.0666647609408982,
+      "cagr_quantiles": {
+       "0.05": 0.008168622335860775,
+       "0.25": 0.04117421393702925,
+       "0.5": 0.06589936826408316,
+       "0.75": 0.09078360061891122,
+       "0.95": 0.12827178420853316
+      },
+      "wealth_quantiles": {
+       "0.05": 1.084755262759907,
+       "0.25": 1.4970421806730798,
+       "0.5": 1.8930498435004384,
+       "0.75": 2.3844378072990438,
+       "0.95": 3.343006970846506
+      },
+      "max_dd_quantiles": {
+       "0.05": -0.34819857391855946,
+       "0.25": -0.2599499456287663,
+       "0.5": -0.21471144558896282,
+       "0.75": -0.18040637895054332,
+       "0.95": -0.14306318080288155
+      },
+      "median_max_dd": -0.21471144558896282,
+      "cvar_0.05_cagr": -0.0054758323421455635,
+      "var_0.05_cagr": 0.008163931593711427,
+      "p_losing_year": 0.28235,
+      "p_any_losing_year": 0.964,
+      "cvar_0.05_annual": -0.1443301680069801,
+      "annual_return_quantiles": {
+       "0.05": -0.10660675458611572,
+       "0.25": -0.010585039690466896,
+       "0.5": 0.06455415200931636,
+       "0.75": 0.14657436239069505,
+       "0.95": 0.2789217394941729
+      }
+     },
+     "ALT-2 UNLEVERED": {
+      "years": 10.0,
+      "n_paths": 10000,
+      "periods_per_year": 252.0,
+      "p_loss_horizon": 0.0,
+      "p_wipeout": 0.0,
+      "mean_cagr": 0.07453488531161866,
+      "cagr_quantiles": {
+       "0.05": 0.04340157508424639,
+       "0.25": 0.061628773268472714,
+       "0.5": 0.07409631346381229,
+       "0.75": 0.08750698541690638,
+       "0.95": 0.10651926553104737
+      },
+      "wealth_quantiles": {
+       "0.05": 1.5293781452940127,
+       "0.25": 1.8185565350985609,
+       "0.5": 2.04377112925252,
+       "0.75": 2.313771954040551,
+       "0.95": 2.751628493679892
+      },
+      "max_dd_quantiles": {
+       "0.05": -0.14131711353325177,
+       "0.25": -0.10923012906627691,
+       "0.5": -0.09212424853713203,
+       "0.75": -0.07956892041766273,
+       "0.95": -0.06731425117769256
+      },
+      "median_max_dd": -0.09212424853713203,
+      "cvar_0.05_cagr": 0.035524589946004013,
+      "var_0.05_cagr": 0.04339628776623328,
+      "p_losing_year": 0.10469,
+      "p_any_losing_year": 0.6714,
+      "cvar_0.05_annual": -0.04561246763264601,
+      "annual_return_quantiles": {
+       "0.05": -0.02256861290950285,
+       "0.25": 0.03421401304309751,
+       "0.5": 0.07464582169438516,
+       "0.75": 0.11654266543410774,
+       "0.95": 0.17936080176844868
+      }
+     },
+     "CASEY ROUTE pre-trigger": {
+      "years": 10.0,
+      "n_paths": 10000,
+      "periods_per_year": 252.0,
+      "p_loss_horizon": 0.001,
+      "p_wipeout": 0.0,
+      "mean_cagr": 0.0989105296951758,
+      "cagr_quantiles": {
+       "0.05": 0.04351405869753298,
+       "0.25": 0.07565530515435076,
+       "0.5": 0.0984449988602415,
+       "0.75": 0.1216888321695585,
+       "0.95": 0.1558881397354159
+      },
+      "wealth_quantiles": {
+       "0.05": 1.5310276892678225,
+       "0.25": 2.0736298505779804,
+       "0.5": 2.5573087161873937,
+       "0.75": 3.1529999530157484,
+       "0.95": 4.2575335184906145
+      },
+      "max_dd_quantiles": {
+       "0.05": -0.2399202331544854,
+       "0.25": -0.18187733281210422,
+       "0.5": -0.15144090224909812,
+       "0.75": -0.12869615343776422,
+       "0.95": -0.10403456118588059
+      },
+      "median_max_dd": -0.15144090224909812,
+      "cvar_0.05_cagr": 0.030652569337935996,
+      "var_0.05_cagr": 0.04348841319600294,
+      "p_losing_year": 0.16942,
+      "p_any_losing_year": 0.8441,
+      "cvar_0.05_annual": -0.098249493216668,
+      "annual_return_quantiles": {
+       "0.05": -0.06297468328715075,
+       "0.25": 0.027230367842059455,
+       "0.5": 0.097557848649795,
+       "0.75": 0.17294739393277964,
+       "0.95": 0.29223179119943515
+      }
+     },
+     "CASEY ROUTE post-trigger": {
+      "years": 10.0,
+      "n_paths": 10000,
+      "periods_per_year": 252.0,
+      "p_loss_horizon": 0.004,
+      "p_wipeout": 0.0,
+      "mean_cagr": 0.10188799519475722,
+      "cagr_quantiles": {
+       "0.05": 0.03586602185260477,
+       "0.25": 0.07355743320538843,
+       "0.5": 0.10081483950604064,
+       "0.75": 0.1288008186964244,
+       "0.95": 0.17156636649038753
+      },
+      "wealth_quantiles": {
+       "0.05": 1.422446292227601,
+       "0.25": 2.03354053129877,
+       "0.5": 2.6130201231022,
+       "0.75": 3.35871502741853,
+       "0.95": 4.871570079438713
+      },
+      "max_dd_quantiles": {
+       "0.05": -0.30736534265450555,
+       "0.25": -0.23293976074938236,
+       "0.5": -0.19341520310529764,
+       "0.75": -0.164264776612452,
+       "0.95": -0.13188183101138715
+      },
+      "median_max_dd": -0.19341520310529764,
+      "cvar_0.05_cagr": 0.020704575526753012,
+      "var_0.05_cagr": 0.03584453337123383,
+      "p_losing_year": 0.20723,
+      "p_any_losing_year": 0.9033,
+      "cvar_0.05_annual": -0.13110374068216302,
+      "annual_return_quantiles": {
+       "0.05": -0.09021059027849039,
+       "0.25": 0.01646992337231834,
+       "0.5": 0.09975593980225406,
+       "0.75": 0.19197335915219943,
+       "0.95": 0.3379578105207131
+      }
+     }
+    },
+    "film_14.4pct_default_adjusted": {
+     "PLAN pre-trigger": {
+      "years": 10.0,
+      "n_paths": 10000,
+      "periods_per_year": 252.0,
+      "p_loss_horizon": 0.0104,
+      "p_wipeout": 0.0,
+      "mean_cagr": 0.06403908746676766,
+      "cagr_quantiles": {
+       "0.05": 0.01770834442196988,
+       "0.25": 0.04428812832301715,
+       "0.5": 0.06323118869961486,
+       "0.75": 0.0831280416021773,
+       "0.95": 0.1125388590340724
+      },
+      "wealth_quantiles": {
+       "0.05": 1.191882256756044,
+       "0.25": 1.54242270273181,
+       "0.5": 1.8461929027270139,
+       "0.75": 2.222276013366059,
+       "0.95": 2.9050384911339266
+      },
+      "max_dd_quantiles": {
+       "0.05": -0.254228625396169,
+       "0.25": -0.19127974888092536,
+       "0.5": -0.15874435068184084,
+       "0.75": -0.13404405946948353,
+       "0.95": -0.10835435335952892
+      },
+      "median_max_dd": -0.15874435068184084,
+      "cvar_0.05_cagr": 0.007079459622686127,
+      "var_0.05_cagr": 0.017686320200829497,
+      "p_losing_year": 0.24176,
+      "p_any_losing_year": 0.9362,
+      "cvar_0.05_annual": -0.10112340111988964,
+      "annual_return_quantiles": {
+       "0.05": -0.07254246381679132,
+       "0.25": 0.0022460943631080754,
+       "0.5": 0.060865267701832426,
+       "0.75": 0.12594429393260154,
+       "0.95": 0.229935751280445
+      }
+     },
+     "PLAN post-trigger": {
+      "years": 10.0,
+      "n_paths": 10000,
+      "periods_per_year": 252.0,
+      "p_loss_horizon": 0.0288,
+      "p_wipeout": 0.0,
+      "mean_cagr": 0.0666647609408982,
+      "cagr_quantiles": {
+       "0.05": 0.008168622335860775,
+       "0.25": 0.04117421393702925,
+       "0.5": 0.06589936826408316,
+       "0.75": 0.09078360061891122,
+       "0.95": 0.12827178420853316
+      },
+      "wealth_quantiles": {
+       "0.05": 1.084755262759907,
+       "0.25": 1.4970421806730798,
+       "0.5": 1.8930498435004384,
+       "0.75": 2.3844378072990438,
+       "0.95": 3.343006970846506
+      },
+      "max_dd_quantiles": {
+       "0.05": -0.34819857391855946,
+       "0.25": -0.2599499456287663,
+       "0.5": -0.21471144558896282,
+       "0.75": -0.18040637895054332,
+       "0.95": -0.14306318080288155
+      },
+      "median_max_dd": -0.21471144558896282,
+      "cvar_0.05_cagr": -0.0054758323421455635,
+      "var_0.05_cagr": 0.008163931593711427,
+      "p_losing_year": 0.28235,
+      "p_any_losing_year": 0.964,
+      "cvar_0.05_annual": -0.1443301680069801,
+      "annual_return_quantiles": {
+       "0.05": -0.10660675458611572,
+       "0.25": -0.010585039690466896,
+       "0.5": 0.06455415200931636,
+       "0.75": 0.14657436239069505,
+       "0.95": 0.2789217394941729
+      }
+     },
+     "ALT-2 UNLEVERED": {
+      "years": 10.0,
+      "n_paths": 10000,
+      "periods_per_year": 252.0,
+      "p_loss_horizon": 0.0,
+      "p_wipeout": 0.0,
+      "mean_cagr": 0.07453488531161866,
+      "cagr_quantiles": {
+       "0.05": 0.04340157508424639,
+       "0.25": 0.061628773268472714,
+       "0.5": 0.07409631346381229,
+       "0.75": 0.08750698541690638,
+       "0.95": 0.10651926553104737
+      },
+      "wealth_quantiles": {
+       "0.05": 1.5293781452940127,
+       "0.25": 1.8185565350985609,
+       "0.5": 2.04377112925252,
+       "0.75": 2.313771954040551,
+       "0.95": 2.751628493679892
+      },
+      "max_dd_quantiles": {
+       "0.05": -0.14131711353325177,
+       "0.25": -0.10923012906627691,
+       "0.5": -0.09212424853713203,
+       "0.75": -0.07956892041766273,
+       "0.95": -0.06731425117769256
+      },
+      "median_max_dd": -0.09212424853713203,
+      "cvar_0.05_cagr": 0.035524589946004013,
+      "var_0.05_cagr": 0.04339628776623328,
+      "p_losing_year": 0.10469,
+      "p_any_losing_year": 0.6714,
+      "cvar_0.05_annual": -0.04561246763264601,
+      "annual_return_quantiles": {
+       "0.05": -0.02256861290950285,
+       "0.25": 0.03421401304309751,
+       "0.5": 0.07464582169438516,
+       "0.75": 0.11654266543410774,
+       "0.95": 0.17936080176844868
+      }
+     },
+     "CASEY ROUTE pre-trigger": {
+      "years": 10.0,
+      "n_paths": 10000,
+      "periods_per_year": 252.0,
+      "p_loss_horizon": 0.0021,
+      "p_wipeout": 0.0,
+      "mean_cagr": 0.0907386406873948,
+      "cagr_quantiles": {
+       "0.05": 0.03575252302081751,
+       "0.25": 0.06765568262494798,
+       "0.5": 0.09027652061209845,
+       "0.75": 0.11334819515082029,
+       "0.95": 0.14729421715173874
+      },
+      "wealth_quantiles": {
+       "0.05": 1.4208885004943044,
+       "0.25": 1.9244744976740535,
+       "0.5": 2.3733762679645682,
+       "0.75": 2.9262410545238775,
+       "0.95": 3.951373160715736
+      },
+      "max_dd_quantiles": {
+       "0.05": -0.25214147213841076,
+       "0.25": -0.1902873081667078,
+       "0.5": -0.15782649197548698,
+       "0.75": -0.13378777217075138,
+       "0.95": -0.10751945981981981
+      },
+      "median_max_dd": -0.15782649197548698,
+      "cvar_0.05_cagr": 0.02298633080470376,
+      "var_0.05_cagr": 0.03572707145508036,
+      "p_losing_year": 0.19009,
+      "p_any_losing_year": 0.8776,
+      "cvar_0.05_annual": -0.10496043461670142,
+      "annual_return_quantiles": {
+       "0.05": -0.06994706067818203,
+       "0.25": 0.019589437117517483,
+       "0.5": 0.0893959094635336,
+       "0.75": 0.16422706492694844,
+       "0.95": 0.2826283508895629
+      }
+     },
+     "CASEY ROUTE post-trigger": {
+      "years": 10.0,
+      "n_paths": 10000,
+      "periods_per_year": 252.0,
+      "p_loss_horizon": 0.0074,
+      "p_wipeout": 0.0,
+      "mean_cagr": 0.093694010101846,
+      "cagr_quantiles": {
+       "0.05": 0.028161129320480316,
+       "0.25": 0.06557328278568864,
+       "0.5": 0.0926288024458598,
+       "0.75": 0.12040745031665334,
+       "0.95": 0.1628562754828407
+      },
+      "wealth_quantiles": {
+       "0.05": 1.3201151324778564,
+       "0.25": 1.8872664894532987,
+       "0.5": 2.4250821016706317,
+       "0.75": 3.117165642144395,
+       "0.95": 4.5212696557827154
+      },
+      "max_dd_quantiles": {
+       "0.05": -0.3205119068387222,
+       "0.25": -0.2418501294539345,
+       "0.5": -0.20029540441156596,
+       "0.75": -0.16947262062674978,
+       "0.95": -0.13596551609116242
+      },
+      "median_max_dd": -0.20029540441156596,
+      "cvar_0.05_cagr": 0.01311199744806452,
+      "var_0.05_cagr": 0.0281397597541293,
+      "p_losing_year": 0.2263,
+      "p_any_losing_year": 0.9255,
+      "cvar_0.05_annual": -0.13757115678345103,
+      "annual_return_quantiles": {
+       "0.05": -0.09698113925295582,
+       "0.25": 0.008908677356460615,
+       "0.5": 0.09157764226291609,
+       "0.75": 0.1831122355150812,
+       "0.95": 0.3280159078891768
+      }
+     }
+    }
+   }
+  },
+  "summary": [
+   {
+    "candidate": "PLAN pre-trigger",
+    "vol": 0.10359637187588225,
+    "dr2": 2.176325972536081,
+    "balance_score": 0.32752268239425464,
+    "exp_return_prior_film20": 0.06680391135379112,
+    "exp_return_prior_film14": 0.06680391135379112,
+    "exp_usd_per_year_film14": 1202470.4043682402,
+    "worst_replay": "tech_2000_02",
+    "worst_replay_max_dd": -0.3081043004668599,
+    "worst_replay_max_dd_usd": -5545877.408403478,
+    "boot_p05_year_film14": -0.07254246381679132,
+    "boot_p05_year_usd_film14": -1305764.3487022438,
+    "boot_p05_year_film20": -0.07254246381679132,
+    "boot_p05_year_usd_film20": -1305764.3487022438,
+    "boot_median_cagr10_film14": 0.06323118869961486,
+    "p_losing_year_film14": 0.24176
+   },
+   {
+    "candidate": "PLAN post-trigger",
+    "vol": 0.12003998149667969,
+    "dr2": 2.466762643989654,
+    "balance_score": 0.3240637855750972,
+    "exp_return_prior_film20": 0.07094875183886033,
+    "exp_return_prior_film14": 0.07094875183886033,
+    "exp_usd_per_year_film14": 1277077.533099486,
+    "worst_replay": "tech_2000_02",
+    "worst_replay_max_dd": -0.3513861461105666,
+    "worst_replay_max_dd_usd": -6324950.6299902,
+    "boot_p05_year_film14": -0.10660675458611572,
+    "boot_p05_year_usd_film14": -1918921.582550083,
+    "boot_p05_year_film20": -0.10660675458611572,
+    "boot_p05_year_usd_film20": -1918921.582550083,
+    "boot_median_cagr10_film14": 0.06589936826408316,
+    "p_losing_year_film14": 0.28235
+   },
+   {
+    "candidate": "ALT-2 UNLEVERED",
+    "vol": 0.07179305330364212,
+    "dr2": 4.0151461216680655,
+    "balance_score": 0.7288079892476169,
+    "exp_return_prior_film20": 0.0742285255996726,
+    "exp_return_prior_film14": 0.0742285255996726,
+    "exp_usd_per_year_film14": 1336113.4607941068,
+    "worst_replay": "gfc_2008",
+    "worst_replay_max_dd": -0.23647744197597254,
+    "worst_replay_max_dd_usd": -4256593.955567505,
+    "boot_p05_year_film14": -0.02256861290950285,
+    "boot_p05_year_usd_film14": -406235.0323710513,
+    "boot_p05_year_film20": -0.02256861290950285,
+    "boot_p05_year_usd_film20": -406235.0323710513,
+    "boot_median_cagr10_film14": 0.07409631346381229,
+    "p_losing_year_film14": 0.10469
+   },
+   {
+    "candidate": "CASEY ROUTE pre-trigger",
+    "vol": 0.10618801075268669,
+    "dr2": 4.296431320862495,
+    "balance_score": 0.4121596764424261,
+    "exp_return_prior_film20": 0.09983419297283048,
+    "exp_return_prior_film14": 0.09236752630616382,
+    "exp_usd_per_year_film14": 1662615.4735109487,
+    "worst_replay": "gfc_2008",
+    "worst_replay_max_dd": -0.2744287068410013,
+    "worst_replay_max_dd_usd": -4939716.723138023,
+    "boot_p05_year_film14": -0.06994706067818203,
+    "boot_p05_year_usd_film14": -1259047.0922072765,
+    "boot_p05_year_film20": -0.06297468328715075,
+    "boot_p05_year_usd_film20": -1133544.2991687136,
+    "boot_median_cagr10_film14": 0.09027652061209845,
+    "p_losing_year_film14": 0.19009
+   },
+   {
+    "candidate": "CASEY ROUTE post-trigger",
+    "vol": 0.11980516223088906,
+    "dr2": 4.559131558188918,
+    "balance_score": 0.39362454740516795,
+    "exp_return_prior_film20": 0.10397903345789972,
+    "exp_return_prior_film14": 0.09651236679123305,
+    "exp_usd_per_year_film14": 1737222.602242195,
+    "worst_replay": "gfc_2008",
+    "worst_replay_max_dd": -0.2995213269392156,
+    "worst_replay_max_dd_usd": -5391383.884905881,
+    "boot_p05_year_film14": -0.09698113925295582,
+    "boot_p05_year_usd_film14": -1745660.5065532047,
+    "boot_p05_year_film20": -0.09021059027849039,
+    "boot_p05_year_usd_film20": -1623790.625012827,
+    "boot_median_cagr10_film14": 0.0926288024458598,
+    "p_losing_year_film14": 0.2263
+   }
+  ],
+  "charts": [
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_risk_vs_dollar.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_risk_vs_dollar_by_sleeve.csv",
+    "caption": "N3: $18M, no leverage. Dollar vs Euler risk share by sleeve, trailing-3y daily covariance; private streams = book assumptions"
+   },
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_environment_boxes.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_environment_boxes.csv",
+    "caption": "N3 environment-box risk shares (film = credit -> growth-up; venture/SPCX = equity)"
+   },
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_stress_replays.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_stress_replays.csv",
+    "caption": "N3 replays: Composer = beta proxy, private streams = factor betas only (no idio), SPCX = beta x QQQ; $M on $18M"
+   },
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_bootstrap_one_year.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n3_bootstrap_one_year.csv",
+    "caption": "N3 forward bootstrap of 2023-26 daily returns re-centred on PRIOR means (in-sample shape, not a forecast); film 14.4% (20% rows in CSV)"
+   }
+  ],
+  "provenance": {
+   "SPY": {
+    "source": "yahoo",
+    "identifier": "SPY",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/SPY",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "1993-01-29",
+    "last_date": "2026-10-05",
+    "n_obs": 8478,
+    "fetched_at": "2026-10-06T15:39:36.211502+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "QQQ": {
+    "source": "yahoo",
+    "identifier": "QQQ",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/QQQ",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "1999-03-10",
+    "last_date": "2026-10-05",
+    "n_obs": 6936,
+    "fetched_at": "2026-10-06T15:39:42.948267+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "BOXX": {
+    "source": "yahoo",
+    "identifier": "BOXX",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/BOXX",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2022-12-28",
+    "last_date": "2026-10-05",
+    "n_obs": 945,
+    "fetched_at": "2026-10-06T17:58:54.644697+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "TLT": {
+    "source": "yahoo",
+    "identifier": "TLT",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/TLT",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2002-07-30",
+    "last_date": "2026-10-05",
+    "n_obs": 6085,
+    "fetched_at": "2026-10-06T15:39:37.634174+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "TIP": {
+    "source": "yahoo",
+    "identifier": "TIP",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/TIP",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2003-12-05",
+    "last_date": "2026-10-05",
+    "n_obs": 5743,
+    "fetched_at": "2026-10-06T15:39:39.380390+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "GLD": {
+    "source": "yahoo",
+    "identifier": "GLD",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/GLD",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2004-11-18",
+    "last_date": "2026-10-05",
+    "n_obs": 5503,
+    "fetched_at": "2026-10-06T15:39:40.066444+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "DBC": {
+    "source": "yahoo",
+    "identifier": "DBC",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/DBC",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2006-02-06",
+    "last_date": "2026-10-05",
+    "n_obs": 5198,
+    "fetched_at": "2026-10-06T15:39:40.750200+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "HYG": {
+    "source": "yahoo",
+    "identifier": "HYG",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/HYG",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2007-04-11",
+    "last_date": "2026-10-05",
+    "n_obs": 4903,
+    "fetched_at": "2026-10-06T15:39:41.448524+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "IWM": {
+    "source": "yahoo",
+    "identifier": "IWM",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/IWM",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2000-05-26",
+    "last_date": "2026-10-05",
+    "n_obs": 6628,
+    "fetched_at": "2026-10-06T17:59:03.899878+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "NVDA": {
+    "source": "yahoo",
+    "identifier": "NVDA",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/NVDA",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "1999-01-22",
+    "last_date": "2026-10-05",
+    "n_obs": 6968,
+    "fetched_at": "2026-10-06T18:24:01.753461+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "AVGO": {
+    "source": "yahoo",
+    "identifier": "AVGO",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/AVGO",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2009-08-06",
+    "last_date": "2026-10-05",
+    "n_obs": 4317,
+    "fetched_at": "2026-10-06T18:24:02.484785+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "TSLA": {
+    "source": "yahoo",
+    "identifier": "TSLA",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/TSLA",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2010-06-29",
+    "last_date": "2026-10-05",
+    "n_obs": 4092,
+    "fetched_at": "2026-10-06T17:58:54.135127+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "ISRG": {
+    "source": "yahoo",
+    "identifier": "ISRG",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/ISRG",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2000-06-16",
+    "last_date": "2026-10-05",
+    "n_obs": 6614,
+    "fetched_at": "2026-10-06T18:24:03.168486+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "RKLB": {
+    "source": "yahoo",
+    "identifier": "RKLB",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/RKLB",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2020-11-24",
+    "last_date": "2026-10-05",
+    "n_obs": 1471,
+    "fetched_at": "2026-10-06T18:24:03.734496+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "SPCX": {
+    "source": "yahoo",
+    "identifier": "SPCX",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/SPCX",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2026-06-12",
+    "last_date": "2026-10-05",
+    "n_obs": 79,
+    "fetched_at": "2026-10-06T18:24:06.582118+00:00",
+    "from_cache": true,
+    "proxies": [],
+    "warnings": [
+     "dropped final bar: session in progress"
+    ]
+   },
+   "IEF+proxies": {
+    "source": "spliced",
+    "identifier": "IEF",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/IEF",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "1991-10-28",
+    "last_date": "2026-10-05",
+    "n_obs": 8796,
+    "fetched_at": "2026-10-06T15:39:38.349968+00:00",
+    "from_cache": true,
+    "proxies": [
+     {
+      "proxy": "VFITX",
+      "used_before": "2002-07-30",
+      "proxy_first_date": "1991-10-28",
+      "note": "Vanguard interm. Treasury fund"
+     }
+    ],
+    "warnings": [
+     "dropped final bar: session in progress",
+     "proxy VFITX: dropped final bar: session in progress"
+    ]
+   },
+   "TIP+proxies": {
+    "source": "spliced",
+    "identifier": "TIP",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/TIP",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "1991-10-28",
+    "last_date": "2026-10-05",
+    "n_obs": 8796,
+    "fetched_at": "2026-10-06T15:39:39.380390+00:00",
+    "from_cache": true,
+    "proxies": [
+     {
+      "proxy": "VIPSX",
+      "used_before": "2003-12-05",
+      "proxy_first_date": "2000-06-29",
+      "note": "Vanguard Inflation-Protected fund"
+     },
+     {
+      "proxy": "VFITX",
+      "used_before": "2000-06-29",
+      "proxy_first_date": "1991-10-28",
+      "note": "interm. UST before VIPSX"
+     }
+    ],
+    "warnings": [
+     "dropped final bar: session in progress",
+     "proxy VIPSX: dropped final bar: session in progress",
+     "proxy VFITX: dropped final bar: session in progress"
+    ]
+   },
+   "TLT+proxies": {
+    "source": "spliced",
+    "identifier": "TLT",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/TLT",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "1986-05-19",
+    "last_date": "2026-10-05",
+    "n_obs": 10173,
+    "fetched_at": "2026-10-06T15:39:37.634174+00:00",
+    "from_cache": true,
+    "proxies": [
+     {
+      "proxy": "VUSTX",
+      "used_before": "2002-07-30",
+      "proxy_first_date": "1986-05-19",
+      "note": "Vanguard long-term Treasury fund"
+     }
+    ],
+    "warnings": [
+     "dropped final bar: session in progress",
+     "proxy VUSTX: dropped final bar: session in progress"
+    ]
+   },
+   "GLD+proxies": {
+    "source": "spliced",
+    "identifier": "GLD",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/GLD",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "2000-08-30",
+    "last_date": "2026-10-05",
+    "n_obs": 6555,
+    "fetched_at": "2026-10-06T15:39:40.066444+00:00",
+    "from_cache": true,
+    "proxies": [
+     {
+      "proxy": "GC=F",
+      "used_before": "2004-11-18",
+      "proxy_first_date": "2000-08-30",
+      "note": "COMEX gold front-month, price only"
+     }
+    ],
+    "warnings": [
+     "dropped final bar: session in progress",
+     "proxy GC=F: dropped final bar: session in progress",
+     "proxy GC=F: dropped 83 null bars"
+    ]
+   },
+   "DBC+proxies": {
+    "source": "spliced",
+    "identifier": "DBC",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/DBC",
+    "field": "adjclose",
+    "total_return": false,
+    "first_date": "1984-01-03",
+    "last_date": "2026-10-05",
+    "n_obs": 10772,
+    "fetched_at": "2026-10-06T15:39:40.750200+00:00",
+    "from_cache": true,
+    "proxies": [
+     {
+      "proxy": "^SPGSCI",
+      "used_before": "2006-02-06",
+      "proxy_first_date": "1984-01-03",
+      "note": "S&P GSCI price index, no collateral yield"
+     }
+    ],
+    "warnings": [
+     "dropped final bar: session in progress",
+     "proxy ^SPGSCI: price index (^SPGSCI, instrumentType INDEX): price-only, NOT total return (Yahoo adjclose of an index equals its close; dividends are missing)",
+     "proxy ^SPGSCI: dropped final bar: session in progress",
+     "proxy ^SPGSCI: dropped 1 null bars"
+    ]
+   },
+   "HYG+proxies": {
+    "source": "spliced",
+    "identifier": "HYG",
+    "url": "https://query1.finance.yahoo.com/v8/finance/chart/HYG",
+    "field": "adjclose",
+    "total_return": true,
+    "first_date": "1980-01-02",
+    "last_date": "2026-10-05",
+    "n_obs": 11785,
+    "fetched_at": "2026-10-06T15:39:41.448524+00:00",
+    "from_cache": true,
+    "proxies": [
+     {
+      "proxy": "VWEHX",
+      "used_before": "2007-04-11",
+      "proxy_first_date": "1980-01-02",
+      "note": "Vanguard High-Yield Corporate fund"
+     }
+    ],
+    "warnings": [
+     "dropped final bar: session in progress",
+     "proxy VWEHX: dropped final bar: session in progress"
+    ]
+   }
+  }
+ },
+ "private": {
+  "params_file": "predeclared_params.json (N4)",
+  "film_concentration": {
+   "D": {
+    "total_usd": 1482000.0,
+    "n_loans": 7,
+    "largest": "12 Dates of Christmas gap",
+    "largest_share": 0.37112010796221323,
+    "hhi": 0.21623585591196928,
+    "n_eff_by_usd": 4.6245799327892465,
+    "n_eff_at_rho": 2.2155013799448025,
+    "rho_D": 0.3,
+    "n_eff_grid": {
+     "0.0": 4.6245799327892465,
+     "0.1": 3.3942917547568707,
+     "0.3": 2.2155013799448025,
+     "0.5": 1.6444178900648685,
+     "1.0": 1.0
+    }
+   },
+   "P": {
+    "total_usd": 1411166.0,
+    "n_loans": 7,
+    "largest": "12 Dates of Christmas gap",
+    "largest_share": 0.38974861922693715,
+    "hhi": 0.2267802758788755,
+    "n_eff_by_usd": 4.4095545616767176,
+    "n_eff_at_rho": 2.179854601537484,
+    "rho_D": 0.3,
+    "n_eff_grid": {
+     "0.0": 4.4095545616767176,
+     "0.1": 3.288367664559732,
+     "0.3": 2.179854601537484,
+     "0.5": 1.6302837919098296,
+     "1.0": 1.0
+    }
+   }
+  },
+  "income_t12": {
+   "rows": {
+    "Real Estate": {
+     "planned": 30000,
+     "actual": 22500,
+     "ratio": 0.75
+    },
+    "Stable Yield": {
+     "planned": 4000,
+     "actual": 2500,
+     "ratio": 0.625
+    },
+    "Gary Loan": {
+     "planned": 40000,
+     "actual": 29997,
+     "ratio": 0.749925
+    },
+    "Spirit Fund": {
+     "planned": 31000,
+     "actual": 21000,
+     "ratio": 0.6774193548387096
+    },
+    "Keeta": {
+     "planned": 200000,
+     "actual": 197152,
+     "ratio": 0.98576
+    },
+    "Film Loans": {
+     "planned": 318400,
+     "actual": 60820,
+     "ratio": 0.1910175879396985
+    },
+    "River": {
+     "planned": 75000,
+     "actual": 75000,
+     "ratio": 1.0
+    }
+   },
+   "total": {
+    "planned": 698400,
+    "actual": 408969,
+    "ratio": 0.5855798969072165
+   },
+   "total_ex_keeta_river": {
+    "planned": 423400,
+    "actual": 136817,
+    "ratio": 0.32313887576759565
+   },
+   "film_booked_profits": {
+    "MARX": 3000,
+    "Kate Might Die bridge": 18445,
+    "Dustlands": 10000,
+    "Plus One": 19375,
+    "Father of Us (partial, past due)": 10000
+   },
+   "note": "sheet total $408,969.30 (rows sum to $408,969); film $60,820.30 = the five booked profits; Father of Us $10,000 collected of $50,000 expected; Dominion's $32,000 not booked"
+  },
+  "venture_gain": {
+   "cost": 1733000,
+   "paper": 13982000,
+   "gain": 12249000,
+   "oo_gain": 11900000,
+   "oo_share_of_gain": 0.9715078781941383,
+   "oo_share_of_paper": 0.8582463166928909,
+   "rest_gain": 349000,
+   "realized_total": 307900,
+   "realized_oo": 254900,
+   "oo_share_of_realized": 0.827866190321533,
+   "rows": {
+    "Organics Ocean": {
+     "cost": 100000,
+     "paper": 12000000,
+     "gain": 11900000
+    },
+    "Persona": {
+     "cost": 275000,
+     "paper": 625000,
+     "gain": 350000
+    },
+    "Google X Fund": {
+     "cost": 400000,
+     "paper": 400000,
+     "gain": 0
+    },
+    "Copper Royalty": {
+     "cost": 100000,
+     "paper": 270000,
+     "gain": 170000
+    },
+    "Argentine GDP Warrants": {
+     "cost": 200000,
+     "paper": 230000,
+     "gain": 30000
+    },
+    "Venezuelan Bond": {
+     "cost": 100000,
+     "paper": 180000,
+     "gain": 80000
+    },
+    "Uranium Digital": {
+     "cost": 50000,
+     "paper": 150000,
+     "gain": 100000
+    },
+    "Slip": {
+     "cost": 50000,
+     "paper": 50000,
+     "gain": 0
+    },
+    "BNB Dat": {
+     "cost": 75000,
+     "paper": 28000,
+     "gain": -47000
+    },
+    "Vernius": {
+     "cost": 25000,
+     "paper": 25000,
+     "gain": 0
+    },
+    "RoboStrategy": {
+     "cost": 8000,
+     "paper": 24000,
+     "gain": 16000
+    },
+    "BITS": {
+     "cost": 50000,
+     "paper": 0,
+     "gain": -50000
+    },
+    "Define Fit": {
+     "cost": 125000,
+     "paper": 0,
+     "gain": -125000
+    },
+    "OpenAi": {
+     "cost": 25000,
+     "paper": 0,
+     "gain": -25000
+    },
+    "Schools PR": {
+     "cost": 150000,
+     "paper": 0,
+     "gain": -150000
+    }
+   }
+  },
+  "sleeves": {
+   "D": {
+    "venture_with_oo": {
+     "nav_usd": 13958000.0,
+     "vol": 0.6171058906750477,
+     "dr2": 1.2198224236616748,
+     "neff_inv_hhi_prc": 1.0633959594286686,
+     "exp_return_prior": 0.24456983808568558,
+     "sharpe_prior": 0.3313367141286198,
+     "streams": [
+      {
+       "stream": "organics_ocean",
+       "usd": 12000000.0,
+       "dollar_share": 0.8597220232124946,
+       "risk_share": 0.9693092600155074,
+       "exp_return": 0.2501,
+       "vol": 0.7
+      },
+      {
+       "stream": "venture_basket",
+       "usd": 1548000.0,
+       "dollar_share": 0.1109041409944118,
+       "risk_share": 0.028613458056372217,
+       "exp_return": 0.2201,
+       "vol": 0.6
+      },
+      {
+       "stream": "em_special_sits",
+       "usd": 410000.0,
+       "dollar_share": 0.029373835793093567,
+       "risk_share": 0.002077281928120364,
+       "exp_return": 0.1751,
+       "vol": 0.45
+      }
+     ],
+     "largest_position_share": 0.8597220232124946,
+     "corr_to_rest_of_investable": 0.27204972924336274,
+     "risk_share_of_investable": 0.9811397524478848,
+     "dollar_share_of_investable": 0.7208046600935321
+    },
+    "venture_without_oo": {
+     "nav_usd": 1958000.0,
+     "vol": 0.4900356712868598,
+     "dr2": 1.3463056036494243,
+     "neff_inv_hhi_prc": 1.1048882230152948,
+     "exp_return_prior": 0.21067711950970378,
+     "sharpe_prior": 0.34809122989303853,
+     "streams": [
+      {
+       "stream": "venture_basket",
+       "usd": 1548000.0,
+       "dollar_share": 0.7906026557711952,
+       "risk_share": 0.9500382919232311,
+       "exp_return": 0.2201,
+       "vol": 0.6
+      },
+      {
+       "stream": "em_special_sits",
+       "usd": 410000.0,
+       "dollar_share": 0.2093973442288049,
+       "risk_share": 0.04996170807676868,
+       "exp_return": 0.1751,
+       "vol": 0.45
+      }
+     ],
+     "largest_position_share": 0.3192032686414709,
+     "corr_to_rest_of_investable": 0.2700906714056762,
+     "risk_share_of_investable": 0.729741249067972,
+     "dollar_share_of_investable": 0.26587114616005547
+    },
+    "private_credit": {
+     "nav_usd": 1532000.0,
+     "vol": 0.1769645081821785,
+     "dr2": 1.7101751960372218,
+     "neff_inv_hhi_prc": 1.137849723872174,
+     "exp_return_prior": 0.13901305483028725,
+     "sharpe_prior": 0.5589428967782618,
+     "streams": [
+      {
+       "stream": "film_gap_loans",
+       "usd": 1182000.0,
+       "dollar_share": 0.7715404699738904,
+       "risk_share": 0.9367222882191153,
+       "exp_return": 0.14400000000000002,
+       "vol": 0.22
+      },
+      {
+       "stream": "film_father_of_us",
+       "usd": 100000.0,
+       "dollar_share": 0.06527415143603134,
+       "risk_share": 0.027550859376201525,
+       "exp_return": 0.03,
+       "vol": 0.45
+      },
+      {
+       "stream": "gary_loan",
+       "usd": 100000.0,
+       "dollar_share": 0.06527415143603134,
+       "risk_share": 0.019409029413346452,
+       "exp_return": 0.22000000000000003,
+       "vol": 0.3
+      },
+      {
+       "stream": "spirit_fund",
+       "usd": 150000.0,
+       "dollar_share": 0.097911227154047,
+       "risk_share": 0.016317822991336644,
+       "exp_return": 0.11840000000000002,
+       "vol": 0.13
+      }
+     ],
+     "largest_position_share": 0.35900783289817234,
+     "corr_to_rest_of_investable": 0.1153340662312324,
+     "risk_share_of_investable": 0.0045091188210951835,
+     "dollar_share_of_investable": 0.07911396613148669
+    }
+   },
+   "P": {
+    "venture_with_oo": {
+     "nav_usd": 13958000.0,
+     "vol": 0.6171058906750477,
+     "dr2": 1.2198224236616748,
+     "neff_inv_hhi_prc": 1.0633959594286686,
+     "exp_return_prior": 0.24456983808568558,
+     "sharpe_prior": 0.3313367141286198,
+     "streams": [
+      {
+       "stream": "organics_ocean",
+       "usd": 12000000.0,
+       "dollar_share": 0.8597220232124946,
+       "risk_share": 0.9693092600155074,
+       "exp_return": 0.2501,
+       "vol": 0.7
+      },
+      {
+       "stream": "venture_basket",
+       "usd": 1548000.0,
+       "dollar_share": 0.1109041409944118,
+       "risk_share": 0.028613458056372217,
+       "exp_return": 0.2201,
+       "vol": 0.6
+      },
+      {
+       "stream": "em_special_sits",
+       "usd": 410000.0,
+       "dollar_share": 0.029373835793093567,
+       "risk_share": 0.002077281928120364,
+       "exp_return": 0.1751,
+       "vol": 0.45
+      }
+     ],
+     "largest_position_share": 0.8597220232124946,
+     "corr_to_rest_of_investable": 0.27197362281348203,
+     "risk_share_of_investable": 0.9811585527044215,
+     "dollar_share_of_investable": 0.7234509978852768
+    },
+    "venture_without_oo": {
+     "nav_usd": 1958000.0,
+     "vol": 0.4900356712868598,
+     "dr2": 1.3463056036494243,
+     "neff_inv_hhi_prc": 1.1048882230152948,
+     "exp_return_prior": 0.21067711950970378,
+     "sharpe_prior": 0.34809122989303853,
+     "streams": [
+      {
+       "stream": "venture_basket",
+       "usd": 1548000.0,
+       "dollar_share": 0.7906026557711952,
+       "risk_share": 0.9500382919232311,
+       "exp_return": 0.2201,
+       "vol": 0.6
+      },
+      {
+       "stream": "em_special_sits",
+       "usd": 410000.0,
+       "dollar_share": 0.2093973442288049,
+       "risk_share": 0.04996170807676868,
+       "exp_return": 0.1751,
+       "vol": 0.45
+      }
+     ],
+     "largest_position_share": 0.3192032686414709,
+     "corr_to_rest_of_investable": 0.27000988189877834,
+     "risk_share_of_investable": 0.7299600244445281,
+     "dollar_share_of_investable": 0.2684532214845883
+    },
+    "private_credit": {
+     "nav_usd": 1532000.0,
+     "vol": 0.1769645081821785,
+     "dr2": 1.7101751960372218,
+     "neff_inv_hhi_prc": 1.137849723872174,
+     "exp_return_prior": 0.13901305483028725,
+     "sharpe_prior": 0.5589428967782618,
+     "streams": [
+      {
+       "stream": "film_gap_loans",
+       "usd": 1182000.0,
+       "dollar_share": 0.7715404699738904,
+       "risk_share": 0.9367222882191153,
+       "exp_return": 0.14400000000000002,
+       "vol": 0.22
+      },
+      {
+       "stream": "film_father_of_us",
+       "usd": 100000.0,
+       "dollar_share": 0.06527415143603134,
+       "risk_share": 0.027550859376201525,
+       "exp_return": 0.03,
+       "vol": 0.45
+      },
+      {
+       "stream": "gary_loan",
+       "usd": 100000.0,
+       "dollar_share": 0.06527415143603134,
+       "risk_share": 0.019409029413346452,
+       "exp_return": 0.22000000000000003,
+       "vol": 0.3
+      },
+      {
+       "stream": "spirit_fund",
+       "usd": 150000.0,
+       "dollar_share": 0.097911227154047,
+       "risk_share": 0.016317822991336644,
+       "exp_return": 0.11840000000000002,
+       "vol": 0.13
+      }
+     ],
+     "largest_position_share": 0.35900783289817234,
+     "corr_to_rest_of_investable": 0.11531916525716128,
+     "risk_share_of_investable": 0.004508754984994168,
+     "dollar_share_of_investable": 0.07940442246455395
+    }
+   }
+  },
+  "dalio_tests_variant_D": {
+   "private_credit": {
+    "GOOD": {
+     "prior_sharpe": 0.5589428967782618,
+     "realised_income_vs_plan": 0.28715202876219825,
+     "pass": false
+    },
+    "UNCORRELATED": {
+     "corr_to_rest": 0.1153340662312324,
+     "n_eff_film_rho0.3": 2.2155013799448025,
+     "pass": false
+    },
+    "RISK_BALANCED": {
+     "largest_loan_share_of_film": 0.37112010796221323,
+     "largest_position_share_of_sleeve": 0.35900783289817234,
+     "risk_vs_dollar": 0.05699523158276592,
+     "pass": false
+    }
+   },
+   "venture_with_oo": {
+    "GOOD": {
+     "prior_sharpe": 0.3313367141286198,
+     "realised": "no measured return series; realised $307,900 on $1.733M cost (82.8% from OO)",
+     "pass": false,
+     "why": "no realised-return evidence; marks are a banker indication (OO) and round/cost marks"
+    },
+    "UNCORRELATED": {
+     "corr_to_rest": 0.27204972924336274,
+     "dr2": 1.2198224236616748,
+     "pass": false
+    },
+    "RISK_BALANCED": {
+     "largest_position_share": 0.8597220232124946,
+     "risk_vs_dollar": 1.361172876324872,
+     "pass": false
+    }
+   },
+   "venture_without_oo": {
+    "UNCORRELATED": {
+     "corr_to_rest": 0.2700906714056762,
+     "dr2": 1.3463056036494243,
+     "pass": false
+    },
+    "RISK_BALANCED": {
+     "largest_position_share": 0.3192032686414709,
+     "pass": false
+    }
+   }
+  },
+  "charts": [
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_film_concentration.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_film_concentration.csv",
+    "caption": "N4 film book: loan $ shares (variant D) and n_eff = 1/(rho + (1-rho) HHI) across default correlations"
+   },
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_income_plan_vs_actual.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_income_plan_vs_actual.csv",
+    "caption": "N4: sheet 'T12 2026' planned vs actual income by line (measured)"
+   },
+   {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_venture_gain.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n4_venture_gain.csv",
+    "caption": "N4: venture paper gain by position (sheet 'Venture'); OO marked at a banker/broker indication"
+   }
+  ]
+ }
+}

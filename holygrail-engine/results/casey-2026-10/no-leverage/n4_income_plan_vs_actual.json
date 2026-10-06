@@ -1,0 +1,44 @@
+[
+ {
+  "line": "Real Estate",
+  "planned": 30000,
+  "actual": 22500,
+  "actual_over_plan": 0.75
+ },
+ {
+  "line": "Stable Yield",
+  "planned": 4000,
+  "actual": 2500,
+  "actual_over_plan": 0.625
+ },
+ {
+  "line": "Gary Loan",
+  "planned": 40000,
+  "actual": 29997,
+  "actual_over_plan": 0.749925
+ },
+ {
+  "line": "Spirit Fund",
+  "planned": 31000,
+  "actual": 21000,
+  "actual_over_plan": 0.6774193548387096
+ },
+ {
+  "line": "Keeta",
+  "planned": 200000,
+  "actual": 197152,
+  "actual_over_plan": 0.98576
+ },
+ {
+  "line": "Film Loans",
+  "planned": 318400,
+  "actual": 60820,
+  "actual_over_plan": 0.1910175879396985
+ },
+ {
+  "line": "River",
+  "planned": 75000,
+  "actual": 75000,
+  "actual_over_plan": 1.0
+ }
+]

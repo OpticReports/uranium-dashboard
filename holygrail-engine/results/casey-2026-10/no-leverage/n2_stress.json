@@ -1,0 +1,164 @@
+[
+ {
+  "scenario": "gfc",
+  "window": "2007-10-09..2009-03-09",
+  "book": "current as is",
+  "cum_return": -0.1618385635845324,
+  "max_drawdown": -0.2046739464407895,
+  "max_dd_usd_on_nav": -485992.0842030776,
+  "weight_on_proxy_or_replica": 0.7184598017822674
+ },
+ {
+  "scenario": "gfc",
+  "window": "2007-10-09..2009-03-09",
+  "book": "current, cash deployed pro rata",
+  "cum_return": -0.23521992525239643,
+  "max_drawdown": -0.2872349002352905,
+  "max_dd_usd_on_nav": -682030.5673912202,
+  "weight_on_proxy_or_replica": 0.6844007670066078
+ },
+ {
+  "scenario": "gfc",
+  "window": "2007-10-09..2009-03-09",
+  "book": "UNLEVERED balanced proposal",
+  "cum_return": -0.057309312709658,
+  "max_drawdown": -0.15818977384918753,
+  "max_dd_usd_on_nav": -375616.8248547482,
+  "weight_on_proxy_or_replica": 0.4437001526158146
+ },
+ {
+  "scenario": "gfc",
+  "window": "2007-10-09..2009-03-09",
+  "book": "POST-HOC: proposal, metals held",
+  "cum_return": -0.038095890416143474,
+  "max_drawdown": -0.1786862887408589,
+  "max_dd_usd_on_nav": -424285.1784206206,
+  "weight_on_proxy_or_replica": 0.44047867564461946
+ },
+ {
+  "scenario": "gfc",
+  "window": "2007-10-09..2009-03-09",
+  "book": "SPY",
+  "cum_return": -0.5518944215905263,
+  "max_drawdown": -0.5518944215905263,
+  "max_dd_usd_on_nav": -1310456.5816657306,
+  "weight_on_proxy_or_replica": 0.0
+ },
+ {
+  "scenario": "gfc",
+  "window": "2007-10-09..2009-03-09",
+  "book": "60/40 SPY/IEF",
+  "cum_return": -0.2505332655075022,
+  "max_drawdown": -0.25055234986131314,
+  "max_dd_usd_on_nav": -594928.9630094873,
+  "weight_on_proxy_or_replica": 0.0
+ },
+ {
+  "scenario": "covid",
+  "window": "2020-02-19..2020-03-23",
+  "book": "current as is",
+  "cum_return": -0.13753367285128526,
+  "max_drawdown": -0.15099088301266916,
+  "max_dd_usd_on_nav": -358523.2766898277,
+  "weight_on_proxy_or_replica": 0.39179141346802615
+ },
+ {
+  "scenario": "covid",
+  "window": "2020-02-19..2020-03-23",
+  "book": "current, cash deployed pro rata",
+  "cum_return": -0.19207387155147837,
+  "max_drawdown": -0.21077697162420395,
+  "max_dd_usd_on_nav": -500483.53257943207,
+  "weight_on_proxy_or_replica": 0.23035252190774308
+ },
+ {
+  "scenario": "covid",
+  "window": "2020-02-19..2020-03-23",
+  "book": "UNLEVERED balanced proposal",
+  "cum_return": -0.060494257317452504,
+  "max_drawdown": -0.10143099497065111,
+  "max_dd_usd_on_nav": -240844.82419866347,
+  "weight_on_proxy_or_replica": 0.3289897551700599
+ },
+ {
+  "scenario": "covid",
+  "window": "2020-02-19..2020-03-23",
+  "book": "POST-HOC: proposal, metals held",
+  "cum_return": -0.06983826521865089,
+  "max_drawdown": -0.11112871496533738,
+  "max_dd_usd_on_nav": -263871.7664851302,
+  "weight_on_proxy_or_replica": 0.3084673119510322
+ },
+ {
+  "scenario": "covid",
+  "window": "2020-02-19..2020-03-23",
+  "book": "SPY",
+  "cum_return": -0.3371728189633807,
+  "max_drawdown": -0.3371728189633807,
+  "max_dd_usd_on_nav": -800606.642292133,
+  "weight_on_proxy_or_replica": 0.0
+ },
+ {
+  "scenario": "covid",
+  "window": "2020-02-19..2020-03-23",
+  "book": "60/40 SPY/IEF",
+  "cum_return": -0.17680000087064662,
+  "max_drawdown": -0.17680000087064662,
+  "max_dd_usd_on_nav": -419806.24502732407,
+  "weight_on_proxy_or_replica": 0.0
+ },
+ {
+  "scenario": "inflation_2022",
+  "window": "2022-01-03..2022-10-12",
+  "book": "current as is",
+  "cum_return": -0.11272174279961866,
+  "max_drawdown": -0.1309927096000102,
+  "max_dd_usd_on_nav": -311038.21986612334,
+  "weight_on_proxy_or_replica": 0.3570152274421527
+ },
+ {
+  "scenario": "inflation_2022",
+  "window": "2022-01-03..2022-10-12",
+  "book": "current, cash deployed pro rata",
+  "cum_return": -0.15929950935799697,
+  "max_drawdown": -0.18189932027694833,
+  "max_dd_usd_on_nav": -431914.42444820947,
+  "weight_on_proxy_or_replica": 0.18196873370709116
+ },
+ {
+  "scenario": "inflation_2022",
+  "window": "2022-01-03..2022-10-12",
+  "book": "UNLEVERED balanced proposal",
+  "cum_return": -0.03177191175899108,
+  "max_drawdown": -0.07843895688370917,
+  "max_dd_usd_on_nav": -186250.92641997384,
+  "weight_on_proxy_or_replica": 0.2136503046236447
+ },
+ {
+  "scenario": "inflation_2022",
+  "window": "2022-01-03..2022-10-12",
+  "book": "POST-HOC: proposal, metals held",
+  "cum_return": -0.04124918454564752,
+  "max_drawdown": -0.09469998044987726,
+  "max_dd_usd_on_nav": -224862.23416882596,
+  "weight_on_proxy_or_replica": 0.20825844059636356
+ },
+ {
+  "scenario": "inflation_2022",
+  "window": "2022-01-03..2022-10-12",
+  "book": "SPY",
+  "cum_return": -0.24059231456591657,
+  "max_drawdown": -0.24471086238335737,
+  "max_dd_usd_on_nav": -581058.5279901519,
+  "weight_on_proxy_or_replica": 0.0
+ },
+ {
+  "scenario": "inflation_2022",
+  "window": "2022-01-03..2022-10-12",
+  "book": "60/40 SPY/IEF",
+  "cum_return": -0.20904279876810716,
+  "max_drawdown": -0.20904279876810716,
+  "max_dd_usd_on_nav": -496365.7916780678,
+  "weight_on_proxy_or_replica": 0.0
+ }
+]
