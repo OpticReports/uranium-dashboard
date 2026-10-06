@@ -9856,6 +9856,11 @@ def test_gate_capital_unreconciled_wait_pages_and_the_endpoint_says_so(tmp_path,
         r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
         assert r["status"] == "deferred"
     assert len(alerts) == 1 and "resolve them first" in alerts[0]
+    # TD1: the NEXT day pages again (quiet book, nothing logged in between)
+    m._notice_day = {}                                       # the UTC day rolled
+    m.state.capital_request["ts"] -= 86_400
+    blend_mod.adopt_capital(m, a, PRICES, "2026-08-21", alerts.append)
+    assert len(alerts) == 2 and "waiting 1.0 d of 5" in alerts[1]
     assert m.status_summary(PRICES)["capital"]["request_pending"]["kind"] == "deposit"
     client, service = _service_client(tmp_path / "svc", monkeypatch)
     with client as c:

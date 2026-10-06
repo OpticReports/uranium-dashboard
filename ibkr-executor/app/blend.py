@@ -1430,8 +1430,9 @@ class Blend3070Manager:
             mark = {"date": today, "value": value, "index": idx,
                     "flow": reflected}
             ser["cur"] = mark
-            if in_rth:
-                ser["cur_rth"] = dict(mark)
+            # TD2: cur_rth is left alone - the day's close is its last GOOD
+            # in-session mark (the carry then picks up the unreflected flow);
+            # a day with none is never finalized (TC1)
             return ser
         else:
             idx = float(base["index"]) * (value - ser["day_flow"]) / float(base["value"])
@@ -5101,8 +5102,8 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
             msg = (f"${usd:,.2f} waits: unreconciled record(s) "
                    f"{', '.join(sorted(_snapshot(st.unreconciled)))} are "
                    f"parked - their proceeds may be in the account's cash; "
-                   f"resolve them first (the request expires after "
-                   f"{CAPITAL_REQUEST_TTL_S / 86_400:.0f} days)")
+                   f"resolve them first (waiting {age / 86_400:.1f} d of "
+                   f"{CAPITAL_REQUEST_TTL_S / 86_400:.0f}; it expires then)")
             if mgr._event_once_today("WARN", "capital_wait_unreconciled",
                                      "capital adoption " + msg):
                 alert("⚠️ blend capital adoption " + msg)
