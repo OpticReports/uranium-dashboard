@@ -1,0 +1,3503 @@
+{
+ "A": {
+  "listing": "Agilent Technologies Inc. Common Stock",
+  "core": "agilent technologies",
+  "queries": [
+   "agilent technologies",
+   "agilent"
+  ],
+  "aliases": [
+   "Agilent Technologies, Inc."
+  ],
+  "alias_study_counts": {
+   "Agilent Technologies, Inc.": 2
+  },
+  "rejected_top": [
+   "Cristina Gasparetto"
+  ],
+  "old_query": "Agilent Technologies"
+ },
+ "ABEO": {
+  "listing": "Abeona Therapeutics Inc. Common Stock",
+  "core": "abeona therapeutics",
+  "queries": [
+   "abeona therapeutics",
+   "abeona"
+  ],
+  "aliases": [
+   "Abeona Therapeutics, Inc"
+  ],
+  "alias_study_counts": {
+   "Abeona Therapeutics, Inc": 26
+  },
+  "rejected_top": [
+   "Genaera Corporation",
+   "Ultragenyx Pharmaceutical Inc",
+   "National Institute of Arthritis and Musculoskeletal and Skin Diseases (NIAMS)",
+   "Stanford University"
+  ],
+  "old_query": "Abeona Therapeutics"
+ },
+ "ABT": {
+  "listing": "Abbott Laboratories Common Stock",
+  "core": "abbott laboratories",
+  "queries": [
+   "abbott laboratories",
+   "abbott"
+  ],
+  "aliases": [
+   "Abbott",
+   "Abbott Laboratories (Pak) Ltd."
+  ],
+  "alias_study_counts": {
+   "Abbott": 783,
+   "Abbott Laboratories (Pak) Ltd.": 2
+  },
+  "rejected_top": [
+   "Abbott Medical Devices",
+   "AbbVie (prior sponsor, Abbott)",
+   "Abbott Nutrition",
+   "Abbott Diabetes Care",
+   "Abbott Medical Optics",
+   "Abbott RDx Cardiometabolic",
+   "Boston Scientific Corporation",
+   "Abbott Diagnostics Division",
+   "Medtronic",
+   "Genentech, Inc.",
+   "Quintiles, Inc.",
+   "Merck Sharp & Dohme LLC"
+  ],
+  "old_query": "Abbott Laboratories"
+ },
+ "ABUS": {
+  "listing": "Arbutus Biopharma Corporation Common Stock",
+  "core": "arbutus biopharma",
+  "queries": [
+   "arbutus biopharma",
+   "arbutus"
+  ],
+  "aliases": [
+   "Arbutus Biopharma Corporation"
+  ],
+  "alias_study_counts": {
+   "Arbutus Biopharma Corporation": 26
+  },
+  "rejected_top": [
+   "United States Department of Defense",
+   "University of Maryland, Baltimore",
+   "Assembly Biosciences"
+  ],
+  "old_query": "Arbutus Biopharma"
+ },
+ "ACLX": {
+  "listing": "Arcellx, Inc.",
+  "core": "arcellx",
+  "queries": [
+   "arcellx"
+  ],
+  "aliases": [
+   "Arcellx, Inc."
+  ],
+  "alias_study_counts": {
+   "Arcellx, Inc.": 5
+  },
+  "rejected_top": [
+   "Kite, A Gilead Company"
+  ],
+  "old_query": "Arcellx"
+ },
+ "ADPT": {
+  "listing": "Adaptive Biotechnologies Corporation Common Stock",
+  "core": "adaptive biotechnologies",
+  "queries": [
+   "adaptive biotechnologies",
+   "adaptive"
+  ],
+  "aliases": [
+   "Adaptive Biotechnologies"
+  ],
+  "alias_study_counts": {
+   "Adaptive Biotechnologies": 28
+  },
+  "rejected_top": [
+   "Global Coalition for Adaptive Research",
+   "Adaptive Phage Therapeutics, Inc.",
+   "Berry Consultants",
+   "U.S. Army Medical Research and Development Command",
+   "PPD Development, LP",
+   "Idorsia Pharmaceuticals Ltd.",
+   "Cambridge Cognition Ltd",
+   "Citeline",
+   "Covance",
+   "Memorial Sloan Kettering Cancer Center",
+   "Genentech, Inc.",
+   "Stanford University"
+  ],
+  "old_query": "Adaptive Biotechnologies"
+ },
+ "ADRX": {
+  "listing": "ADARx Pharmaceuticals Inc. Common Stock",
+  "core": "adarx pharmaceuticals",
+  "queries": [
+   "adarx pharmaceuticals",
+   "adarx"
+  ],
+  "aliases": [
+   "ADARx Pharmaceuticals, Inc."
+  ],
+  "alias_study_counts": {
+   "ADARx Pharmaceuticals, Inc.": 18
+  },
+  "rejected_top": [
+   "ADARx Australia Pty Ltd",
+   "Avance Clinical Pty Ltd.",
+   "Novotech (Australia) Pty Limited"
+  ],
+  "old_query": "ADARx Pharmaceuticals"
+ },
+ "ALLO": {
+  "listing": "Allogene Therapeutics Inc. Common Stock",
+  "core": "allogene therapeutics",
+  "queries": [
+   "allogene therapeutics",
+   "allogene"
+  ],
+  "aliases": [
+   "Allogene Therapeutics"
+  ],
+  "alias_study_counts": {
+   "Allogene Therapeutics": 18
+  },
+  "rejected_top": [
+   "Foresight Diagnostics, Inc.",
+   "Natera, Inc."
+  ],
+  "old_query": "Allogene Therapeutics"
+ },
+ "ALNY": {
+  "listing": "Alnylam Pharmaceuticals Inc. Common Stock",
+  "core": "alnylam pharmaceuticals",
+  "queries": [
+   "alnylam pharmaceuticals",
+   "alnylam"
+  ],
+  "aliases": [
+   "Alnylam Pharmaceuticals"
+  ],
+  "alias_study_counts": {
+   "Alnylam Pharmaceuticals": 190
+  },
+  "rejected_top": [
+   "Vir Biotechnology, Inc.",
+   "Hoffmann-La Roche",
+   "Regeneron Pharmaceuticals",
+   "Yale University",
+   "CENTOGENE GmbH Rostock",
+   "Charite University, Berlin, Germany",
+   "Austin Neuromuscular Center",
+   "Massachusetts General Hospital",
+   "Akcea Therapeutics",
+   "Pfizer",
+   "Eidos Therapeutics, a BridgeBio company",
+   "Brii Biosciences Limited"
+  ],
+  "old_query": "Alnylam Pharmaceuticals"
+ },
+ "AMGN": {
+  "listing": "Amgen Inc. Common Stock",
+  "core": "amgen",
+  "queries": [
+   "amgen"
+  ],
+  "aliases": [
+   "Amgen",
+   "Amgen Astellas Biopharma K.K.",
+   "Amgen Europe B.V",
+   "Amgen Ltd., United Kingdom",
+   "Amgen Research (Munich) GmbH"
+  ],
+  "alias_study_counts": {
+   "Amgen": 1581,
+   "Amgen Astellas Biopharma K.K.": 1,
+   "Amgen Europe B.V": 1,
+   "Amgen Ltd., United Kingdom": 1,
+   "Amgen Research (Munich) GmbH": 10
+  },
+  "rejected_top": [
+   "AstraZeneca",
+   "M.D. Anderson Cancer Center",
+   "Bayer",
+   "Merck Sharp & Dohme LLC",
+   "Novartis",
+   "Pfizer",
+   "Sanofi",
+   "Memorial Sloan Kettering Cancer Center",
+   "Bristol-Myers Squibb",
+   "Immunex Corporation",
+   "Eli Lilly and Company",
+   "Wyeth is now a wholly owned subsidiary of Pfizer"
+  ],
+  "old_query": "Amgen"
+ },
+ "ARCT": {
+  "listing": "Arcturus Therapeutics Holdings Inc. Common Stock",
+  "core": "arcturus therapeutics",
+  "queries": [
+   "arcturus therapeutics",
+   "arcturus"
+  ],
+  "aliases": [
+   "Arcturus Therapeutics, Inc."
+  ],
+  "alias_study_counts": {
+   "Arcturus Therapeutics, Inc.": 30
+  },
+  "rejected_top": [
+   "Seqirus",
+   "Novotech (Australia) Pty Limited",
+   "Vinbiocare Biotechnology Joint Stock Company",
+   "Biomedical Advanced Research and Development Authority",
+   "Novotech CRO",
+   "Fred Hutchinson Cancer Center",
+   "University of Texas Southwestern Medical Center",
+   "Arcturus Star Products"
+  ],
+  "old_query": "Arcturus Therapeutics"
+ },
+ "ARTV": {
+  "listing": "Artiva Biotherapeutics Inc. Common Stock",
+  "core": "artiva biotherapeutics",
+  "queries": [
+   "artiva biotherapeutics",
+   "artiva"
+  ],
+  "aliases": [
+   "Artiva Biotherapeutics, Inc."
+  ],
+  "alias_study_counts": {
+   "Artiva Biotherapeutics, Inc.": 14
+  },
+  "rejected_top": [
+   "Affimed GmbH",
+   "GC Cell Corporation",
+   "IRIS Research and Development, LLC"
+  ],
+  "old_query": "Artiva Biotherapeutics"
+ },
+ "ARWR": {
+  "listing": "Arrowhead Pharmaceuticals Inc. Common Stock",
+  "core": "arrowhead pharmaceuticals",
+  "queries": [
+   "arrowhead pharmaceuticals",
+   "arrowhead"
+  ],
+  "aliases": [
+   "Arrowhead Pharmaceuticals"
+  ],
+  "alias_study_counts": {
+   "Arrowhead Pharmaceuticals": 104
+  },
+  "rejected_top": [
+   "Arrowhead Regional Medical Center",
+   "Visirna Therapeutics HK Limited",
+   "University of Utah",
+   "Stanford University",
+   "ICON Clinical Research",
+   "University of Alabama at Birmingham",
+   "Columbia University",
+   "Lehigh Valley Hospital",
+   "University of Pennsylvania",
+   "Intermountain Health Care, Inc.",
+   "University of California, San Francisco",
+   "Johns Hopkins University"
+  ],
+  "old_query": "Arrowhead Pharmaceuticals"
+ },
+ "AUTL": {
+  "listing": "Autolus Therapeutics plc American Depositary Share",
+  "core": "autolus therapeutics",
+  "queries": [
+   "autolus therapeutics",
+   "autolus"
+  ],
+  "aliases": [
+   "Autolus Limited",
+   "Autolus, Ltd"
+  ],
+  "alias_study_counts": {
+   "Autolus Limited": 12,
+   "Autolus, Ltd": 1
+  },
+  "rejected_top": [
+   "M.D. Anderson Cancer Center",
+   "Memorial Sloan Kettering Cancer Center",
+   "PPD Development, LP",
+   "IQVIA Pty Ltd"
+  ],
+  "old_query": "Autolus Therapeutics"
+ },
+ "AZN": {
+  "listing": "AstraZeneca PLC Ordinary Shares",
+  "core": "astrazeneca",
+  "queries": [
+   "astrazeneca"
+  ],
+  "aliases": [
+   "AstraZeneca",
+   "AstraZeneca Global R&D (Beijing) Co., Ltd.",
+   "AstraZeneca Global R&D (China) Co., Ltd.",
+   "AstraZeneca Turkey"
+  ],
+  "alias_study_counts": {
+   "AstraZeneca": 4806,
+   "AstraZeneca Global R&D (Beijing) Co., Ltd.": 1,
+   "AstraZeneca Global R&D (China) Co., Ltd.": 2,
+   "AstraZeneca Turkey": 3
+  },
+  "rejected_top": [
+   "Parexel",
+   "Eli Lilly and Company",
+   "Bristol-Myers Squibb",
+   "Daiichi Sankyo",
+   "Merck Sharp & Dohme LLC",
+   "MedImmune LLC",
+   "Amgen",
+   "M.D. Anderson Cancer Center",
+   "Pfizer",
+   "Massachusetts General Hospital",
+   "Cancer Research UK",
+   "Dana-Farber Cancer Institute"
+  ],
+  "old_query": "AstraZeneca"
+ },
+ "BDSX": {
+  "listing": "Biodesix Inc. Common Stock",
+  "core": "biodesix",
+  "queries": [
+   "biodesix"
+  ],
+  "aliases": [
+   "Biodesix, Inc."
+  ],
+  "alias_study_counts": {
+   "Biodesix, Inc.": 10
+  },
+  "rejected_top": [
+   "AVEO Pharmaceuticals, Inc.",
+   "Addario Lung Cancer Medical Institute",
+   "ETOP IBCSG Partners Foundation",
+   "Muhammad Furqan"
+  ],
+  "old_query": "Biodesix"
+ },
+ "BEAM": {
+  "listing": "Beam Therapeutics Inc. Common Stock",
+  "core": "beam therapeutics",
+  "queries": [
+   "beam therapeutics",
+   "beam"
+  ],
+  "aliases": [
+   "Beam",
+   "Beam Therapeutics Inc."
+  ],
+  "alias_study_counts": {
+   "Beam": 2,
+   "Beam Therapeutics Inc.": 16
+  },
+  "rejected_top": [
+   "Ion Beam Applications",
+   "Stephan Grupp MD PhD",
+   "National Alliance for Sickle Cell Centers",
+   "Citruslabs",
+   "Baptist Health South Florida"
+  ],
+  "old_query": "Beam Therapeutics"
+ },
+ "BIIB": {
+  "listing": "Biogen Inc. Common Stock",
+  "core": "biogen",
+  "queries": [
+   "biogen"
+  ],
+  "aliases": [
+   "Biogen",
+   "Biogen Extracts Pvt Ltd",
+   "Biogen Idec A/S",
+   "Biogen Netherlands B.V",
+   "Biogen-Domp\u00e9 AG"
+  ],
+  "alias_study_counts": {
+   "Biogen": 671,
+   "Biogen Extracts Pvt Ltd": 1,
+   "Biogen Idec A/S": 1,
+   "Biogen Netherlands B.V": 1,
+   "Biogen-Domp\u00e9 AG": 1
+  },
+  "rejected_top": [
+   "Elan Pharmaceuticals",
+   "Genentech, Inc.",
+   "AbbVie",
+   "M.D. Anderson Cancer Center",
+   "Hoffmann-La Roche",
+   "Stanford University",
+   "CardioKine Inc.",
+   "Cardiokine Biopharma, LLC",
+   "HI-Bio, A Biogen Company",
+   "Massachusetts General Hospital",
+   "Astellas Pharma Inc",
+   "Denali Therapeutics Inc."
+  ],
+  "old_query": "Biogen"
+ },
+ "BIO": {
+  "listing": "Bio-Rad Laboratories Inc. Class A Common Stock",
+  "core": "bio rad laboratories",
+  "queries": [
+   "bio rad laboratories"
+  ],
+  "aliases": [
+   "Bio-Rad Laboratories"
+  ],
+  "alias_study_counts": {
+   "Bio-Rad Laboratories": 4
+  },
+  "rejected_top": [
+   "American National Red Cross",
+   "Centers for Disease Control and Prevention",
+   "Centre Hospitalier Universitaire de Nice",
+   "Piti\u00e9-Salp\u00eatri\u00e8re Hospital",
+   "Institut Pasteur"
+  ],
+  "old_query": "Bio-Rad Laboratories"
+ },
+ "BLLN": {
+  "listing": "BillionToOne Inc. Class A Common Stock",
+  "core": "billiontoone",
+  "queries": [
+   "billiontoone"
+  ],
+  "aliases": [
+   "BillionToOne Inc."
+  ],
+  "alias_study_counts": {
+   "BillionToOne Inc.": 3
+  },
+  "rejected_top": [
+   "University of California, Irvine",
+   "University of Miami",
+   "National Cancer Institute (NCI)"
+  ],
+  "old_query": "BillionToOne"
+ },
+ "BMRN": {
+  "listing": "BioMarin Pharmaceutical Inc. Common Stock",
+  "core": "biomarin pharmaceutical",
+  "queries": [
+   "biomarin pharmaceutical",
+   "biomarin"
+  ],
+  "aliases": [
+   "BioMarin Pharmaceutical"
+  ],
+  "alias_study_counts": {
+   "BioMarin Pharmaceutical": 342
+  },
+  "rejected_top": [
+   "Genzyme, a Sanofi Company",
+   "Inozyme Pharma",
+   "Emory University",
+   "University of Missouri-Columbia",
+   "BioMarin/Genzyme LLC",
+   "Washington University School of Medicine",
+   "The University of Texas Health Science Center, Houston",
+   "Johns Hopkins University",
+   "Boston Children's Hospital",
+   "Pfizer",
+   "The Children's Health Council",
+   "Greenwood Genetic Center"
+  ],
+  "old_query": "BioMarin Pharmaceutical"
+ },
+ "BMY": {
+  "listing": "Bristol-Myers Squibb Company Common Stock",
+  "core": "bristol myers squibb",
+  "queries": [
+   "bristol myers squibb",
+   "bristol"
+  ],
+  "aliases": [
+   "Bristol Myers Squibb Co. and Ono Pharmaceutical Co., Ltd",
+   "Bristol Myers Squibb Company (BMS)",
+   "Bristol Myers Squibb Pharmaceuticals Limited",
+   "Bristol Myers Squibb Srl Italia",
+   "Bristol-Myers Squibb",
+   "Bristol-Myers Squibb Services Unlimited Company"
+  ],
+  "alias_study_counts": {
+   "Bristol Myers Squibb Co. and Ono Pharmaceutical Co., Ltd": 2,
+   "Bristol Myers Squibb Company (BMS)": 4,
+   "Bristol Myers Squibb Pharmaceuticals Limited": 2,
+   "Bristol Myers Squibb Srl Italia": 2,
+   "Bristol-Myers Squibb": 5750,
+   "Bristol-Myers Squibb Services Unlimited Company": 2
+  },
+  "rejected_top": [
+   "AstraZeneca",
+   "Sanofi",
+   "National Cancer Institute (NCI)",
+   "Pfizer",
+   "Ono Pharmaceutical Co., Ltd.",
+   "University of Bristol",
+   "Eli Lilly and Company",
+   "National Institute of Allergy and Infectious Diseases (NIAID)",
+   "M.D. Anderson Cancer Center",
+   "Dana-Farber Cancer Institute",
+   "Sidney Kimmel Comprehensive Cancer Center at Johns Hopkins",
+   "Memorial Sloan Kettering Cancer Center"
+  ],
+  "old_query": "Bristol-Myers Squibb"
+ },
+ "BNTC": {
+  "listing": "Benitec Biopharma Inc. Common Stock",
+  "core": "benitec biopharma",
+  "queries": [
+   "benitec biopharma",
+   "benitec"
+  ],
+  "aliases": [
+   "Benitec Biopharma, Inc."
+  ],
+  "alias_study_counts": {
+   "Benitec Biopharma, Inc.": 4
+  },
+  "rejected_top": [],
+  "old_query": "Benitec Biopharma"
+ },
+ "BNTX": {
+  "listing": "BioNTech SE American Depositary Share",
+  "core": "biontech",
+  "queries": [
+   "biontech"
+  ],
+  "aliases": [
+   "BioNTech (Shanghai) Pharmaceuticals Co., Ltd.",
+   "BioNTech Cell & Gene Therapies GmbH",
+   "BioNTech Diagnostics GmbH",
+   "BioNTech RNA Pharmaceuticals GmbH",
+   "BioNTech Research & Development, Inc.",
+   "BioNTech SE",
+   "BioNTech US Inc."
+  ],
+  "alias_study_counts": {
+   "BioNTech (Shanghai) Pharmaceuticals Co., Ltd.": 9,
+   "BioNTech Cell & Gene Therapies GmbH": 1,
+   "BioNTech Diagnostics GmbH": 2,
+   "BioNTech RNA Pharmaceuticals GmbH": 3,
+   "BioNTech Research & Development, Inc.": 3,
+   "BioNTech SE": 108,
+   "BioNTech US Inc.": 4
+  },
+  "rejected_top": [
+   "Pfizer",
+   "Biotheus Inc.",
+   "Bristol-Myers Squibb",
+   "DualityBio Inc.",
+   "Genmab",
+   "Genentech, Inc.",
+   "Merck Sharp & Dohme LLC",
+   "MediLink Therapeutics (Suzhou) Co., Ltd.",
+   "Biotheus (Hengqin) Co., Ltd.",
+   "Shanghai Fosun Pharmaceutical Industrial Development Co. Ltd.",
+   "Regeneron Pharmaceuticals",
+   "Boehringer Ingelheim"
+  ],
+  "old_query": "BioNTech SE"
+ },
+ "BRKR": {
+  "listing": "Bruker Corporation Common Stock",
+  "core": "bruker",
+  "queries": [
+   "bruker"
+  ],
+  "aliases": [
+   "Bruker Daltonics"
+  ],
+  "alias_study_counts": {
+   "Bruker Daltonics": 3
+  },
+  "rejected_top": [
+   "Andrew Penn",
+   "Genome Canada",
+   "Genome British Columbia",
+   "Genome Alberta",
+   "Heart and Stroke Foundation of Canada",
+   "Stroke Services BC",
+   "LifeLabs",
+   "Vancouver Island Health Authority",
+   "British Columbia Centre for Disease Control"
+  ],
+  "old_query": "Bruker"
+ },
+ "CABA": {
+  "listing": "Cabaletta Bio Inc. Common Stock",
+  "core": "cabaletta bio",
+  "queries": [
+   "cabaletta bio",
+   "cabaletta"
+  ],
+  "aliases": [
+   "Cabaletta Bio"
+  ],
+  "alias_study_counts": {
+   "Cabaletta Bio": 14
+  },
+  "rejected_top": [],
+  "old_query": "Cabaletta Bio"
+ },
+ "CADL": {
+  "listing": "Candel Therapeutics Inc. Common Stock",
+  "core": "candel therapeutics",
+  "queries": [
+   "candel therapeutics",
+   "candel"
+  ],
+  "aliases": [
+   "Candel Therapeutics, Inc."
+  ],
+  "alias_study_counts": {
+   "Candel Therapeutics, Inc.": 28
+  },
+  "rejected_top": [
+   "University of Pennsylvania",
+   "Mayo Clinic",
+   "Dana-Farber Cancer Institute",
+   "National Institutes of Health (NIH)",
+   "Boston Children's Hospital",
+   "National Cancer Institute (NCI)",
+   "Bristol-Myers Squibb",
+   "NYU Langone Health"
+  ],
+  "old_query": "Candel Therapeutics"
+ },
+ "CAI": {
+  "listing": "Caris Life Sciences Inc. Common Stock",
+  "core": "caris life sciences",
+  "queries": [
+   "caris life sciences",
+   "caris"
+  ],
+  "aliases": [
+   "Caris Life Sciences"
+  ],
+  "alias_study_counts": {
+   "Caris Life Sciences": 8
+  },
+  "rejected_top": [
+   "Caris Science, Inc.",
+   "Georgetown University",
+   "Thomas Jefferson University",
+   "Sinai Health System",
+   "Virginia Mason Hospital/Medical Center",
+   "Cedars-Sinai Medical Center",
+   "George Mason University",
+   "Theranostics Health, Inc",
+   "Guardant Health, Inc.",
+   "Companion Diagnostics, Inc.",
+   "Arbeitsgemeinschaft medikamentoese Tumortherapie",
+   "Hoffmann-La Roche"
+  ],
+  "old_query": "Caris Life Sciences"
+ },
+ "CAMP": {
+  "listing": "CAMP4 Therapeutics Corporation Common Stock",
+  "core": "camp4 therapeutics",
+  "queries": [
+   "camp4 therapeutics",
+   "camp4"
+  ],
+  "aliases": [
+   "CAMP4 Therapeutics Corporation"
+  ],
+  "alias_study_counts": {
+   "CAMP4 Therapeutics Corporation": 2
+  },
+  "rejected_top": [],
+  "old_query": "CAMP4 Therapeutics"
+ },
+ "CAPR": {
+  "listing": "Capricor Therapeutics Inc. Common Stock",
+  "core": "capricor therapeutics",
+  "queries": [
+   "capricor therapeutics",
+   "capricor"
+  ],
+  "aliases": [
+   "Capricor Inc."
+  ],
+  "alias_study_counts": {
+   "Capricor Inc.": 13
+  },
+  "rejected_top": [
+   "Jett Foundation, Inc.",
+   "Engage Health Inc.",
+   "Hyman, Phelps, & McNamara, P.C.",
+   "Ryans Quest Inc.",
+   "Michaels Cause Inc.",
+   "Nationwide Children's Hospital",
+   "Solid Biosciences Inc.",
+   "Santhera Pharmaceuticals",
+   "Italfarmaco",
+   "Catabasis Pharmaceuticals",
+   "Wave Life Sciences USA, Inc.",
+   "Sarepta Therapeutics, Inc."
+  ],
+  "old_query": "Capricor Therapeutics"
+ },
+ "CDNA": {
+  "listing": "CareDx Inc. Common Stock",
+  "core": "caredx",
+  "queries": [
+   "caredx"
+  ],
+  "aliases": [
+   "CareDx",
+   "CareDx, Inc."
+  ],
+  "alias_study_counts": {
+   "CareDx": 29,
+   "CareDx, Inc.": 1
+  },
+  "rejected_top": [
+   "Duke University",
+   "Massachusetts General Hospital",
+   "Washington University School of Medicine",
+   "University of Texas",
+   "Transplant Genomics, Inc.",
+   "University of Texas Southwestern Medical Center",
+   "Paris Translational Research Center for Organ Transplantation",
+   "OrganX",
+   "Universit\u00e9 Paris Cit\u00e9",
+   "Arkana Labs",
+   "Cedars-Sinai Medical Center",
+   "University of Alberta"
+  ],
+  "old_query": "CareDx"
+ },
+ "CGON": {
+  "listing": "CG Oncology Inc. Common stock",
+  "core": "cg oncology",
+  "queries": [
+   "cg oncology"
+  ],
+  "aliases": [
+   "CG Oncology, Inc."
+  ],
+  "alias_study_counts": {
+   "CG Oncology, Inc.": 9
+  },
+  "rejected_top": [
+   "H. Lee Moffitt Cancer Center and Research Institute",
+   "Richard M. Shulze Family Foundation",
+   "Merck Sharp & Dohme LLC"
+  ],
+  "old_query": "CG Oncology"
+ },
+ "CLLS": {
+  "listing": "Cellectis S.A. American Depositary Shares",
+  "core": "cellectis",
+  "queries": [
+   "cellectis"
+  ],
+  "aliases": [
+   "Cellectis S.A."
+  ],
+  "alias_study_counts": {
+   "Cellectis S.A.": 6
+  },
+  "rejected_top": [],
+  "old_query": "Cellectis S A"
+ },
+ "CRSP": {
+  "listing": "CRISPR Therapeutics AG Common Shares",
+  "core": "crispr therapeutics",
+  "queries": [
+   "crispr therapeutics",
+   "crispr"
+  ],
+  "aliases": [
+   "CRISPR Therapeutics",
+   "CRISPR Therapeutics AG"
+  ],
+  "alias_study_counts": {
+   "CRISPR Therapeutics": 18,
+   "CRISPR Therapeutics AG": 24
+  },
+  "rejected_top": [
+   "Vertex Pharmaceuticals Incorporated",
+   "ViaCyte"
+  ],
+  "old_query": "CRISPR Therapeutics AG Common Shares"
+ },
+ "CSTL": {
+  "listing": "Castle Biosciences Inc. Common Stock",
+  "core": "castle biosciences",
+  "queries": [
+   "castle biosciences",
+   "castle"
+  ],
+  "aliases": [
+   "Castle Biosciences Incorporated"
+  ],
+  "alias_study_counts": {
+   "Castle Biosciences Incorporated": 10
+  },
+  "rejected_top": [
+   "Castle Creek Biosciences, LLC.",
+   "Castle Peak Hospital",
+   "Castle Creek Pharmaceuticals, LLC",
+   "The University of Hong Kong",
+   "Kwai Chung Hospital",
+   "Kowloon Hospital, Hong Kong",
+   "Chinese University of Hong Kong",
+   "The Hong Kong Polytechnic University",
+   "Queen Mary Hospital, Hong Kong",
+   "United Christian Hospital",
+   "Prosoft Clinical",
+   "SciBase AB"
+  ],
+  "old_query": "Castle Biosciences"
+ },
+ "CVAC": {
+  "listing": "CureVac N.V.",
+  "core": "curevac",
+  "queries": [
+   "curevac"
+  ],
+  "aliases": [
+   "CureVac"
+  ],
+  "alias_study_counts": {
+   "CureVac": 26
+  },
+  "rejected_top": [
+   "GlaxoSmithKline",
+   "German Federal Ministry of Education and Research",
+   "Bayer",
+   "National Cancer Institute, Naples",
+   "Immatics Biotechnologies GmbH",
+   "European Commission",
+   "University of Florida",
+   "Ludwig Institute for Cancer Research",
+   "Cancer Research Institute, New York City",
+   "Boehringer Ingelheim",
+   "MedImmune LLC",
+   "PharmaJet, Inc."
+  ],
+  "old_query": "CureVac N V"
+ },
+ "DGX": {
+  "listing": "Quest Diagnostics Incorporated Common Stock",
+  "core": "quest diagnostics",
+  "queries": [
+   "quest diagnostics",
+   "quest"
+  ],
+  "aliases": [
+   "Quest Diagnostics-Nichols Insitute"
+  ],
+  "alias_study_counts": {
+   "Quest Diagnostics-Nichols Insitute": 30
+  },
+  "rejected_top": [
+   "Scripps Translational Science Institute",
+   "Brigham and Women's Hospital",
+   "Illumina, Inc.",
+   "University of Illinois at Urbana-Champaign",
+   "Covance",
+   "University of California, Los Angeles",
+   "Montefiore Medical Center",
+   "Pfizer",
+   "Massachusetts Institute of Technology",
+   "American Pistachio Growers",
+   "Boston Children's Hospital, Boston, MA, USA",
+   "Optum, Inc."
+  ],
+  "old_query": "Quest Diagnostics"
+ },
+ "DNA": {
+  "listing": "Ginkgo Bioworks Holdings Inc. Class A Common Stock",
+  "core": "ginkgo bioworks",
+  "queries": [
+   "ginkgo bioworks",
+   "ginkgo"
+  ],
+  "aliases": [],
+  "alias_study_counts": {},
+  "rejected_top": [
+   "Ginkgo Leaf Center for Rare Disorders"
+  ],
+  "old_query": "Ginkgo Bioworks"
+ },
+ "DYN": {
+  "listing": "Dyne Therapeutics Inc. Common Stock",
+  "core": "dyne therapeutics",
+  "queries": [
+   "dyne therapeutics",
+   "dyne"
+  ],
+  "aliases": [
+   "Dyne Therapeutics"
+  ],
+  "alias_study_counts": {
+   "Dyne Therapeutics": 14
+  },
+  "rejected_top": [
+   "University of Kansas Medical Center",
+   "Friends Research Institute, Inc.",
+   "University of Rochester",
+   "Virginia Commonwealth University",
+   "Myotonic Dystrophy Clinical Research Network (DMCRN)",
+   "Vertex Pharmaceuticals Incorporated",
+   "FSHD Society, Inc.",
+   "University of Nevada, Reno",
+   "FSHD Canada",
+   "Avidity Biosciences, Inc.",
+   "AMRA Medical",
+   "Seattle Children's Hospital"
+  ],
+  "old_query": "Dyne Therapeutics"
+ },
+ "EDIT": {
+  "listing": "Editas Medicine Inc. Common Stock",
+  "core": "editas medicine",
+  "queries": [
+   "editas medicine",
+   "editas"
+  ],
+  "aliases": [
+   "Editas Medicine, Inc."
+  ],
+  "alias_study_counts": {
+   "Editas Medicine, Inc.": 10
+  },
+  "rejected_top": [],
+  "old_query": "Editas Medicine"
+ },
+ "ENGN": {
+  "listing": "enGene Therapeutics Inc. Common Stock",
+  "core": "engene therapeutics",
+  "queries": [
+   "engene therapeutics",
+   "engene"
+  ],
+  "aliases": [
+   "enGene, Inc."
+  ],
+  "alias_study_counts": {
+   "enGene, Inc.": 1
+  },
+  "rejected_top": [],
+  "old_query": "enGene Therapeutics"
+ },
+ "ENLV": {
+  "listing": "Enlivex Ltd. Ordinary Shares",
+  "core": "enlivex",
+  "queries": [
+   "enlivex"
+  ],
+  "aliases": [
+   "Enlivex Therapeutics Ltd.",
+   "Enlivex Therapeutics RDO Ltd."
+  ],
+  "alias_study_counts": {
+   "Enlivex Therapeutics Ltd.": 8,
+   "Enlivex Therapeutics RDO Ltd.": 2
+  },
+  "rejected_top": [
+   "Nordic Bioscience Clinical Development",
+   "Amir Oron"
+  ],
+  "old_query": "Enlivex"
+ },
+ "EXAS": {
+  "listing": "Exact Sciences Corporation",
+  "core": "exact sciences",
+  "queries": [
+   "exact sciences",
+   "exact"
+  ],
+  "aliases": [
+   "Exact Sciences Corporation"
+  ],
+  "alias_study_counts": {
+   "Exact Sciences Corporation": 72
+  },
+  "rejected_top": [
+   "Exact Imaging",
+   "Mayo Clinic",
+   "NSABP Foundation Inc",
+   "Region Skane",
+   "University of Utah",
+   "American Cancer Society, Inc.",
+   "F!ght Colorectal Cancer",
+   "University of Colorado, Denver",
+   "American Society for Gastrointestinal Endoscopy",
+   "University of California, Los Angeles",
+   "University of Michigan",
+   "VA Medical Center-West Los Angeles"
+  ],
+  "old_query": "Exact Sciences"
+ },
+ "FATE": {
+  "listing": "Fate Therapeutics Inc. Common Stock",
+  "core": "fate therapeutics",
+  "queries": [
+   "fate therapeutics",
+   "fate"
+  ],
+  "aliases": [
+   "Fate Therapeutics"
+  ],
+  "alias_study_counts": {
+   "Fate Therapeutics": 52
+  },
+  "rejected_top": [
+   "Masonic Cancer Center, University of Minnesota",
+   "Dana-Farber Cancer Institute",
+   "IRCCS SYNLAB SDN",
+   "UNINA",
+   "UNITO",
+   "Ospedale Fate bene Fratelli di Brescia"
+  ],
+  "old_query": "Fate Therapeutics"
+ },
+ "FDMT": {
+  "listing": "4D Molecular Therapeutics Inc. Common Stock",
+  "core": "4d molecular therapeutics",
+  "queries": [
+   "4d molecular therapeutics"
+  ],
+  "aliases": [
+   "4D Molecular Therapeutics"
+  ],
+  "alias_study_counts": {
+   "4D Molecular Therapeutics": 10
+  },
+  "rejected_top": [],
+  "old_query": "4D Molecular Therapeutics"
+ },
+ "FLGT": {
+  "listing": "Fulgent Genetics Inc. Common Stock",
+  "core": "fulgent genetics",
+  "queries": [
+   "fulgent genetics",
+   "fulgent"
+  ],
+  "aliases": [
+   "Fulgent Genetics"
+  ],
+  "alias_study_counts": {
+   "Fulgent Genetics": 2
+  },
+  "rejected_top": [
+   "Parkinson's Foundation",
+   "Indiana University",
+   "The Parkinson Study Group",
+   "Fulgent Pharma LLC.",
+   "Fulgent Laboratories",
+   "Navitas Clinical Research, Inc"
+  ],
+  "old_query": "Fulgent Genetics"
+ },
+ "FRNM": {
+  "listing": "Freenome Inc. Common stock",
+  "core": "freenome",
+  "queries": [
+   "freenome"
+  ],
+  "aliases": [
+   "Freenome Holdings Inc."
+  ],
+  "alias_study_counts": {
+   "Freenome Holdings Inc.": 5
+  },
+  "rejected_top": [],
+  "old_query": "Freenome"
+ },
+ "GERN": {
+  "listing": "Geron Corporation Common Stock",
+  "core": "geron",
+  "queries": [
+   "geron"
+  ],
+  "aliases": [
+   "Geron Corporation"
+  ],
+  "alias_study_counts": {
+   "Geron Corporation": 22
+  },
+  "rejected_top": [
+   "MAHAN Trust",
+   "Caring Friends, Mumbai",
+   "Stitching Geron and Cordaid, The Netherlands.",
+   "Stitchting Geron, The Netherland",
+   "Mastek Foundation",
+   "Tribal Development Department, Government of India",
+   "M.D. Anderson Cancer Center",
+   "Children's Oncology Group",
+   "National Cancer Institute (NCI)",
+   "Douglas Tremblay",
+   "NCIC Clinical Trials Group",
+   "GCP-Service International West GmbH"
+  ],
+  "old_query": "Geron"
+ },
+ "GH": {
+  "listing": "Guardant Health Inc. Common Stock",
+  "core": "guardant health",
+  "queries": [
+   "guardant health",
+   "guardant"
+  ],
+  "aliases": [
+   "Guardant Health AMEA, Inc.",
+   "Guardant Health, Inc."
+  ],
+  "alias_study_counts": {
+   "Guardant Health AMEA, Inc.": 2,
+   "Guardant Health, Inc.": 54
+  },
+  "rejected_top": [
+   "AstraZeneca",
+   "SOLTI Breast Cancer Research Group",
+   "Thomas Jefferson University",
+   "Ohio State University Comprehensive Cancer Center",
+   "Glendale Adventist Medical Center d/b/a Adventist Health Glendale",
+   "Milton S. Hershey Medical Center",
+   "HealthLinc, Inc",
+   "PCC Community Wellness Center",
+   "IFOM ETS - The AIRC Institute of Molecular Oncology",
+   "MedSIR",
+   "Novartis",
+   "Roche Pharma AG"
+  ],
+  "old_query": "Guardant Health"
+ },
+ "GILD": {
+  "listing": "Gilead Sciences Inc. Common Stock",
+  "core": "gilead sciences",
+  "queries": [
+   "gilead sciences",
+   "gilead"
+  ],
+  "aliases": [
+   "Gilead Sciences",
+   "Gilead Sciences, Inc., GlaxoSmithKline plc, Seattle Genetics and Astellas"
+  ],
+  "alias_study_counts": {
+   "Gilead Sciences": 2410,
+   "Gilead Sciences, Inc., GlaxoSmithKline plc, Seattle Genetics and Astellas": 2
+  },
+  "rejected_top": [
+   "Kite, A Gilead Company",
+   "Merck Sharp & Dohme LLC",
+   "National Institute of Allergy and Infectious Diseases (NIAID)",
+   "Lakefront Biotherapeutics NV",
+   "Bristol-Myers Squibb",
+   "Arcus Biosciences, Inc.",
+   "Duke University",
+   "Pfizer",
+   "ViiV Healthcare",
+   "Abbott",
+   "ANRS, Emerging Infectious Diseases",
+   "French National Agency for Research on AIDS and Viral Hepatitis"
+  ],
+  "old_query": "Gilead Sciences"
+ },
+ "GLSI": {
+  "listing": "Greenwich LifeSciences Inc. Common Stock",
+  "core": "greenwich lifesciences",
+  "queries": [
+   "greenwich lifesciences",
+   "greenwich"
+  ],
+  "aliases": [
+   "Greenwich LifeSciences, Inc."
+  ],
+  "alias_study_counts": {
+   "Greenwich LifeSciences, Inc.": 2
+  },
+  "rejected_top": [
+   "University of Greenwich",
+   "Lewisham and Greenwich NHS Trust",
+   "King's College Hospital NHS Trust",
+   "Guy's and St Thomas' NHS Foundation Trust",
+   "Imperial College Healthcare NHS Trust",
+   "Crown Sport Nutrition",
+   "Greenwich Hospital",
+   "University College London Hospitals",
+   "Epsom and St Helier University Hospitals NHS Trust",
+   "Go Fit Spain",
+   "Royal Marsden NHS Foundation Trust",
+   "Royal Brompton & Harefield NHS Foundation Trust"
+  ],
+  "old_query": "Greenwich LifeSciences"
+ },
+ "GNLX": {
+  "listing": "Genelux Corporation Common Stock",
+  "core": "genelux",
+  "queries": [
+   "genelux"
+  ],
+  "aliases": [
+   "Genelux Corporation",
+   "Genelux GmbH"
+  ],
+  "alias_study_counts": {
+   "Genelux Corporation": 8,
+   "Genelux GmbH": 2
+  },
+  "rejected_top": [
+   "Andrew Lowy",
+   "Newsoara HYK Biopharmaceutical (Shanghai) Co., Ltd.",
+   "Newsoara Biopharma Co., Ltd.",
+   "GOG Foundation",
+   "Memorial Sloan Kettering Cancer Center"
+  ],
+  "old_query": "Genelux"
+ },
+ "GRAL": {
+  "listing": "GRAIL Inc. Common Stock ",
+  "core": "grail",
+  "queries": [
+   "grail"
+  ],
+  "aliases": [
+   "GRAIL, Inc."
+  ],
+  "alias_study_counts": {
+   "GRAIL, Inc.": 10
+  },
+  "rejected_top": [
+   "University College, London",
+   "University College London Hospitals",
+   "Memorial Sloan Kettering Cancer Center",
+   "The Cancer Research UK Cancer Prevention Trials Unit at Queen Mary University of London (CPTU)"
+  ],
+  "old_query": "GRAIL"
+ },
+ "GSK": {
+  "listing": "GSK plc American Depositary Shares (Each representing two Ordinary Shares)",
+  "core": "gsk",
+  "queries": [
+   "gsk"
+  ],
+  "aliases": [
+   "GSK Pharma",
+   "GSK Vaccines Institute For Global Health S.r.l.",
+   "GSK/TESARO"
+  ],
+  "alias_study_counts": {
+   "GSK Pharma": 1,
+   "GSK Vaccines Institute For Global Health S.r.l.": 2,
+   "GSK/TESARO": 1
+  },
+  "rejected_top": [
+   "GlaxoSmithKline",
+   "Stiefel, a GSK Company",
+   "Sierra Oncology LLC - a GSK company",
+   "Bellus Health Inc. - a GSK company",
+   "Human Genome Sciences Inc., a GSK Company",
+   "Sirtris, a GSK Company",
+   "RAPT Therapeutics, Inc., a member of the GSK plc group of companies",
+   "Basilea Pharmaceutica",
+   "Derm Research @ 888 Inc.",
+   "FDA Office of Orphan Products Development",
+   "Rho, Inc.",
+   "Quintiles, Inc."
+  ],
+  "old_query": "GSK"
+ },
+ "GUTS": {
+  "listing": "Fractyl Health Inc. Common Stock",
+  "core": "fractyl health",
+  "queries": [
+   "fractyl health",
+   "fractyl"
+  ],
+  "aliases": [
+   "Fractyl Health Inc."
+  ],
+  "alias_study_counts": {
+   "Fractyl Health Inc.": 18
+  },
+  "rejected_top": [
+   "Academisch Medisch Centrum - Universiteit van Amsterdam (AMC-UvA)",
+   "Erasme University Hospital"
+  ],
+  "old_query": "Fractyl Health"
+ },
+ "HOLX": {
+  "listing": "Hologic, Inc.",
+  "core": "hologic",
+  "queries": [
+   "hologic"
+  ],
+  "aliases": [
+   "Hologic B.V.",
+   "Hologic Deutschland GmbH",
+   "Hologic, Inc."
+  ],
+  "alias_study_counts": {
+   "Hologic B.V.": 1,
+   "Hologic Deutschland GmbH": 3,
+   "Hologic, Inc.": 49
+  },
+  "rejected_top": [
+   "HealthPartners Institute",
+   "Performance Plus, LLC (DBA Health Strategies)",
+   "Rose Imaging Specialists, P.A.",
+   "AHS Cancer Control Alberta",
+   "Dartmouth-Hitchcock Medical Center",
+   "Birmingham Women's NHS Foundation Trust",
+   "Radboud University Medical Center",
+   "Erasmus Medical Center",
+   "UMC Utrecht",
+   "LRCB Dutch Expert Centre for Screening",
+   "Dutch Breast Cancer Association",
+   "University of Sydney"
+  ],
+  "old_query": "Hologic"
+ },
+ "IBRX": {
+  "listing": "ImmunityBio Inc. Common Stock",
+  "core": "immunitybio",
+  "queries": [
+   "immunitybio"
+  ],
+  "aliases": [
+   "ImmunityBio, Inc."
+  ],
+  "alias_study_counts": {
+   "ImmunityBio, Inc.": 92
+  },
+  "rejected_top": [
+   "Washington University School of Medicine",
+   "National Cancer Institute (NCI)",
+   "Dana-Farber Cancer Institute",
+   "Eli Lilly and Company",
+   "National Institutes of Health (NIH)",
+   "The V Foundation for Cancer Research",
+   "University of Utah",
+   "Dendreon",
+   "National Institute of Allergy and Infectious Diseases (NIAID)",
+   "Rockefeller University",
+   "The Foundation for Barnes-Jewish Hospital",
+   "Noah Hahn, M.D."
+  ],
+  "old_query": "ImmunityBio"
+ },
+ "ILMN": {
+  "listing": "Illumina Inc. Common Stock",
+  "core": "illumina",
+  "queries": [
+   "illumina"
+  ],
+  "aliases": [
+   "Illumina, Inc."
+  ],
+  "alias_study_counts": {
+   "Illumina, Inc.": 26
+  },
+  "rejected_top": [
+   "Innervate Radiopharmaceuticals LLC (Formerly: Illumina Radiopharmaceuticals LLC)",
+   "Quest Diagnostics-Nichols Insitute",
+   "GeneDx",
+   "Scripps Translational Science Institute",
+   "Helix OpCo, LLC",
+   "University of Cambridge",
+   "The Belgian Society of Medical Oncology",
+   "OncoDNA",
+   "PierianDx",
+   "Skyline Diagnostics BV",
+   "Columbia University",
+   "New York State Department of Health"
+  ],
+  "old_query": "Illumina"
+ },
+ "IMMX": {
+  "listing": "Immix Biopharma Inc. Common Stock",
+  "core": "immix biopharma",
+  "queries": [
+   "immix biopharma",
+   "immix"
+  ],
+  "aliases": [
+   "Immix Biopharma Australia Pty Ltd",
+   "Immix Biopharma, Inc."
+  ],
+  "alias_study_counts": {
+   "Immix Biopharma Australia Pty Ltd": 2,
+   "Immix Biopharma, Inc.": 6
+  },
+  "rejected_top": [
+   "Nexcella Inc.",
+   "BeiGene",
+   "Novartis"
+  ],
+  "old_query": "Immix Biopharma"
+ },
+ "IMTX": {
+  "listing": "Immatics N.V. Ordinary Shares",
+  "core": "immatics",
+  "queries": [
+   "immatics"
+  ],
+  "aliases": [
+   "Immatics Biotechnologies GmbH",
+   "Immatics US, Inc."
+  ],
+  "alias_study_counts": {
+   "Immatics Biotechnologies GmbH": 11,
+   "Immatics US, Inc.": 7
+  },
+  "rejected_top": [
+   "National Cancer Institute, Naples",
+   "CureVac",
+   "European Commission",
+   "Philogen S.p.A.",
+   "ModernaTX, Inc.",
+   "National Cancer Institute (NCI)",
+   "M.D. Anderson Cancer Center",
+   "BioNTech SE",
+   "University Hospital Tuebingen",
+   "BCN Peptides",
+   "EU-funded GAPVAC Consortium",
+   "Cancer Research UK"
+  ],
+  "old_query": "Immatics N V"
+ },
+ "IONS": {
+  "listing": "Ionis Pharmaceuticals Inc. Common Stock",
+  "core": "ionis pharmaceuticals",
+  "queries": [
+   "ionis pharmaceuticals",
+   "ionis"
+  ],
+  "aliases": [
+   "Ionis Pharmaceuticals, Inc."
+  ],
+  "alias_study_counts": {
+   "Ionis Pharmaceuticals, Inc.": 316
+  },
+  "rejected_top": [
+   "Kastle Therapeutics, LLC",
+   "Akcea Therapeutics",
+   "AstraZeneca",
+   "Biogen",
+   "GlaxoSmithKline",
+   "Bayer",
+   "University of Pennsylvania",
+   "Children's Hospital of Philadelphia",
+   "Brigham and Women's Hospital",
+   "Muscular Dystrophy Association",
+   "ALS Association",
+   "The Emmes Company, LLC"
+  ],
+  "old_query": "Ionis Pharmaceuticals"
+ },
+ "IOVA": {
+  "listing": "Iovance Biotherapeutics Inc. Common Stock",
+  "core": "iovance biotherapeutics",
+  "queries": [
+   "iovance biotherapeutics",
+   "iovance"
+  ],
+  "aliases": [
+   "Iovance Biotherapeutics",
+   "Iovance Biotherapeutics, Inc."
+  ],
+  "alias_study_counts": {
+   "Iovance Biotherapeutics": 2,
+   "Iovance Biotherapeutics, Inc.": 70
+  },
+  "rejected_top": [
+   "National Cancer Institute (NCI)",
+   "H. Lee Moffitt Cancer Center and Research Institute",
+   "Bristol-Myers Squibb",
+   "Christian Hinrichs",
+   "Memorial Sloan Kettering Cancer Center",
+   "Prometheus Inc.",
+   "M.D. Anderson Cancer Center",
+   "University of Kansas Medical Center",
+   "Stand Up To Cancer",
+   "Richard Wu",
+   "Karam Khaddour, MD, MS",
+   "James Isaacs, MD"
+  ],
+  "old_query": "Iovance Biotherapeutics"
+ },
+ "IPSC": {
+  "listing": "Century Therapeutics Inc. Common Stock",
+  "core": "century therapeutics",
+  "queries": [
+   "century therapeutics",
+   "century"
+  ],
+  "aliases": [
+   "Century Therapeutics, Inc."
+  ],
+  "alias_study_counts": {
+   "Century Therapeutics, Inc.": 6
+  },
+  "rejected_top": [
+   "22nd Century Group, Inc.",
+   "University of Calgary",
+   "Ward of the 21st Century",
+   "Vince & Associates Clinical Research, Inc.",
+   "Celerion",
+   "22nd Century Limited, LLC",
+   "Chinese Academy of Medical Sciences, Fuwai Hospital",
+   "Beijing heart century medical technology Co., Ltd",
+   "Christian Medical College and Hospital, Ludhiana, India",
+   "Indian Council of Medical Research",
+   "St. Stephen's Hospital, Delhi",
+   "Amrita Institute of Medical Sciences & Research Center"
+  ],
+  "old_query": "Century Therapeutics"
+ },
+ "IRD": {
+  "listing": "Opus Genetics Inc. Common Stock",
+  "core": "opus genetics",
+  "queries": [
+   "opus genetics",
+   "opus"
+  ],
+  "aliases": [
+   "Opus Genetics, Inc"
+  ],
+  "alias_study_counts": {
+   "Opus Genetics, Inc": 6
+  },
+  "rejected_top": [
+   "University of Pennsylvania"
+  ],
+  "old_query": "Opus Genetics"
+ },
+ "JNJ": {
+  "listing": "Johnson & Johnson Common Stock",
+  "core": "johnson johnson",
+  "queries": [
+   "johnson johnson",
+   "johnson"
+  ],
+  "aliases": [
+   "Johnson & Johnson",
+   "Johnson & Johnson (China) Investment Ltd.",
+   "Johnson & Johnson (Hong Kong) Ltd.",
+   "Johnson & Johnson Citizenship Trust, in cooperation with Johnson & Johnson GmbHInitiative R\u00fcckenwirbel e.V., Gmund",
+   "Johnson & Johnson Consumer Inc. (J&JCI)",
+   "Johnson & Johnson Consumer Inc., McNeil Consumer Healthcare Division",
+   "Johnson & Johnson Consumer Products Company Division of Johnson & Johnson Consumer Companies, Inc.",
+   "Johnson & Johnson Consumer and Personal Products Worldwide",
+   "Johnson & Johnson Enterprise Innovation Inc.",
+   "Johnson & Johnson GmbH",
+   "Johnson & Johnson Health and Wellness Solutions, Inc.",
+   "Johnson & Johnson Healthcare Products Division of McNEIL-PPC, Inc.",
+   "Johnson & Johnson International (Singapore) Pte. Ltd.",
+   "Johnson & Johnson K.K. Medical Company",
+   "Johnson & Johnson Medical (Shanghai) Ltd.",
+   "Johnson & Johnson Medical (Suzhou) Ltd.",
+   "Johnson & Johnson Medical BV, The Netherlands",
+   "Johnson & Johnson Medical Companies",
+   "Johnson & Johnson Medical Korea Ltd",
+   "Johnson & Johnson Medical, China",
+   "Johnson & Johnson Pharmaceutical Research & Development, L.L.C.",
+   "Johnson & Johnson Private Limited",
+   "Johnson & Johnson Pte Ltd",
+   "Johnson & Johnson Surgical Vision, Inc.",
+   "Johnson & Johnson Taiwan Ltd",
+   "Johnson & Johnson Vision Care, Inc."
+  ],
+  "alias_study_counts": {
+   "Johnson & Johnson": 276,
+   "Johnson & Johnson (China) Investment Ltd.": 6,
+   "Johnson & Johnson (Hong Kong) Ltd.": 2,
+   "Johnson & Johnson Citizenship Trust, in cooperation with Johnson & Johnson GmbHInitiative R\u00fcckenwirbel e.V., Gmund": 2,
+   "Johnson & Johnson Consumer Inc. (J&JCI)": 114,
+   "Johnson & Johnson Consumer Inc., McNeil Consumer Healthcare Division": 18,
+   "Johnson & Johnson Consumer Products Company Division of Johnson & Johnson Consumer Companies, Inc.": 12,
+   "Johnson & Johnson Consumer and Personal Products Worldwide": 130,
+   "Johnson & Johnson Enterprise Innovation Inc.": 14,
+   "Johnson & Johnson GmbH": 4,
+   "Johnson & Johnson Health and Wellness Solutions, Inc.": 6,
+   "Johnson & Johnson Healthcare Products Division of McNEIL-PPC, Inc.": 10,
+   "Johnson & Johnson International (Singapore) Pte. Ltd.": 2,
+   "Johnson & Johnson K.K. Medical Company": 24,
+   "Johnson & Johnson Medical (Shanghai) Ltd.": 12,
+   "Johnson & Johnson Medical (Suzhou) Ltd.": 6,
+   "Johnson & Johnson Medical BV, The Netherlands": 2,
+   "Johnson & Johnson Medical Companies": 12,
+   "Johnson & Johnson Medical Korea Ltd": 4,
+   "Johnson & Johnson Medical, China": 22,
+   "Johnson & Johnson Pharmaceutical Research & Development, L.L.C.": 1032,
+   "Johnson & Johnson Private Limited": 18,
+   "Johnson & Johnson Pte Ltd": 2,
+   "Johnson & Johnson Surgical Vision, Inc.": 88,
+   "Johnson & Johnson Taiwan Ltd": 48,
+   "Johnson & Johnson Vision Care, Inc.": 464
+  },
+  "rejected_top": [
+   "Robert Wood Johnson Foundation",
+   "Mead Johnson Nutrition",
+   "McNeil AB",
+   "PriCara, Unit of Ortho-McNeil, Inc.",
+   "Ralph H. Johnson VA Medical Center",
+   "Gr\u00fcnenthal GmbH",
+   "Ortho Biotech Products, L.P.",
+   "Massachusetts General Hospital",
+   "Millennium Pharmaceuticals, Inc.",
+   "University of North Carolina, Chapel Hill",
+   "Bayer",
+   "University of Pennsylvania"
+  ],
+  "old_query": "Johnson & Johnson"
+ },
+ "KRRO": {
+  "listing": "Korro Bio Inc. Common Stock",
+  "core": "korro bio",
+  "queries": [
+   "korro bio",
+   "korro"
+  ],
+  "aliases": [
+   "Korro Bio, Inc."
+  ],
+  "alias_study_counts": {
+   "Korro Bio, Inc.": 4
+  },
+  "rejected_top": [],
+  "old_query": "Korro Bio"
+ },
+ "KRYS": {
+  "listing": "Krystal Biotech Inc. Common Stock",
+  "core": "krystal biotech",
+  "queries": [
+   "krystal biotech",
+   "krystal"
+  ],
+  "aliases": [
+   "Krystal Biotech, Inc."
+  ],
+  "alias_study_counts": {
+   "Krystal Biotech, Inc.": 36
+  },
+  "rejected_top": [
+   "Andrew Krystal",
+   "Novotech (Australia) Pty Limited",
+   "Stanford University",
+   "Yale University",
+   "Krystal Parker, PhD",
+   "Julie Krystal",
+   "Janssen Pharmaceuticals"
+  ],
+  "old_query": "Krystal Biotech"
+ },
+ "KYTX": {
+  "listing": "Kyverna Therapeutics Inc. Common Stock",
+  "core": "kyverna therapeutics",
+  "queries": [
+   "kyverna therapeutics",
+   "kyverna"
+  ],
+  "aliases": [
+   "Kyverna Therapeutics"
+  ],
+  "alias_study_counts": {
+   "Kyverna Therapeutics": 24
+  },
+  "rejected_top": [
+   "Charite University, Berlin, Germany",
+   "David Porter",
+   "Bruce Cree",
+   "Stanford University",
+   "David Simon"
+  ],
+  "old_query": "Kyverna Therapeutics"
+ },
+ "LAB": {
+  "listing": "Standard BioTools Inc. Common Stock",
+  "core": "standard biotools",
+  "queries": [
+   "standard biotools",
+   "standard"
+  ],
+  "aliases": [],
+  "alias_study_counts": {},
+  "rejected_top": [
+   "Standard Process Inc.",
+   "University of Washington",
+   "Standard Homeopathic Company",
+   "Standard Bariatrics",
+   "KGK Science Inc.",
+   "Standard Chem. & Pharm. Co., Ltd.",
+   "Nutrasource Pharmaceutical and Nutraceutical Services, Inc.",
+   "University of Wisconsin, Madison",
+   "Gold Standard Phantoms",
+   "Bioxydyn Ltd, Manchester",
+   "National Cancer Imaging Translational Accelerator",
+   "University College London Hospitals"
+  ],
+  "old_query": "Standard BioTools"
+ },
+ "LCTX": {
+  "listing": "Lineage Cell Therapeutics Inc. Common Stock",
+  "core": "lineage cell therapeutics",
+  "queries": [
+   "lineage cell therapeutics",
+   "lineage"
+  ],
+  "aliases": [
+   "Lineage Cell Therapeutics, Inc."
+  ],
+  "alias_study_counts": {
+   "Lineage Cell Therapeutics, Inc.": 10
+  },
+  "rejected_top": [],
+  "old_query": "Lineage Cell Therapeutics"
+ },
+ "LEGN": {
+  "listing": "Legend Biotech Corporation American Depositary Shares",
+  "core": "legend biotech",
+  "queries": [
+   "legend biotech",
+   "legend"
+  ],
+  "aliases": [
+   "Legend Biotech",
+   "Legend Biotech USA Inc"
+  ],
+  "alias_study_counts": {
+   "Legend Biotech": 2,
+   "Legend Biotech USA Inc": 6
+  },
+  "rejected_top": [
+   "Nanjing Legend Biotech Co.",
+   "The First Affiliated Hospital with Nanjing Medical University",
+   "Second Affiliated Hospital of Xi'an Jiaotong University",
+   "Institute of Hematology & Blood Diseases Hospital, China",
+   "Beijing Boren Hospital",
+   "Union Hospital, Tongji Medical College, Huazhong University of Science and Technology",
+   "Shanghai Changzheng Hospital",
+   "Ruijin Hospital",
+   "Shanghai East Hospital",
+   "Peking University",
+   "First Affiliated Hospital of Wenzhou Medical University",
+   "Zhejiang Provincial People's Hospital"
+  ],
+  "old_query": "Legend Biotech"
+ },
+ "LH": {
+  "listing": "Labcorp Holdings Inc. Common Stock",
+  "core": "labcorp",
+  "queries": [
+   "labcorp"
+  ],
+  "aliases": [
+   "Labcorp Central Laboratory",
+   "Labcorp Corporation of America Holdings, Inc"
+  ],
+  "alias_study_counts": {
+   "Labcorp Central Laboratory": 2,
+   "Labcorp Corporation of America Holdings, Inc": 16
+  },
+  "rejected_top": [
+   "Pharming Technologies B.V.",
+   "CMIC Co, Ltd. Japan",
+   "Fortrea",
+   "Aixial Group",
+   "Shanghai EpimAb Biotherapeutics Co., Ltd.",
+   "Vifor (International) Inc.",
+   "Sequenom, Inc.",
+   "Helsinn Healthcare SA",
+   "Adam Howe, MD",
+   "4D pharma plc",
+   "ICON plc",
+   "Dent Neuroscience Research Center"
+  ],
+  "old_query": "Labcorp"
+ },
+ "LLY": {
+  "listing": "Eli Lilly and Company Common Stock",
+  "core": "eli lilly and",
+  "queries": [
+   "eli lilly and"
+  ],
+  "aliases": [
+   "Eli Lilly and Company"
+  ],
+  "alias_study_counts": {
+   "Eli Lilly and Company": 2884
+  },
+  "rejected_top": [
+   "Boehringer Ingelheim",
+   "AstraZeneca",
+   "Loxo Oncology, Inc.",
+   "Bristol-Myers Squibb",
+   "Genentech, Inc.",
+   "Merck Sharp & Dohme LLC",
+   "Pfizer",
+   "Dana-Farber Cancer Institute",
+   "ICOS Corporation",
+   "Incyte Corporation",
+   "Daiichi Sankyo",
+   "M.D. Anderson Cancer Center"
+  ],
+  "old_query": "Eli Lilly"
+ },
+ "LXEO": {
+  "listing": "Lexeo Therapeutics Inc. Common Stock",
+  "core": "lexeo therapeutics",
+  "queries": [
+   "lexeo therapeutics",
+   "lexeo"
+  ],
+  "aliases": [
+   "Lexeo Therapeutics"
+  ],
+  "alias_study_counts": {
+   "Lexeo Therapeutics": 16
+  },
+  "rejected_top": [
+   "Alzheimer's Drug Discovery Foundation",
+   "Weill Medical College of Cornell University"
+  ],
+  "old_query": "Lexeo Therapeutics"
+ },
+ "LYEL": {
+  "listing": "Lyell Immunopharma Inc. Common Stock",
+  "core": "lyell immunopharma",
+  "queries": [
+   "lyell immunopharma",
+   "lyell"
+  ],
+  "aliases": [
+   "Lyell Immunopharma, Inc."
+  ],
+  "alias_study_counts": {
+   "Lyell Immunopharma, Inc.": 14
+  },
+  "rejected_top": [
+   "Lyell McEwin Hospital",
+   "ICON plc",
+   "University of Adelaide",
+   "The Queen Elizabeth Hospital",
+   "Flinders University",
+   "Flinders Medical Centre",
+   "Peter MacCallum Cancer Centre, Australia",
+   "Hunter Medical Research Institute (HMRI)",
+   "Royal Melbourne Hospital, Australia",
+   "Monash Health",
+   "Eastern Health",
+   "Mater Hospital Sydney"
+  ],
+  "old_query": "Lyell Immunopharma"
+ },
+ "MESO": {
+  "listing": "Mesoblast Limited American Depositary Shares",
+  "core": "mesoblast",
+  "queries": [
+   "mesoblast"
+  ],
+  "aliases": [
+   "Mesoblast International S\u00e0rl",
+   "Mesoblast, Inc.",
+   "Mesoblast, Ltd."
+  ],
+  "alias_study_counts": {
+   "Mesoblast International S\u00e0rl": 5,
+   "Mesoblast, Inc.": 22,
+   "Mesoblast, Ltd.": 15
+  },
+  "rejected_top": [
+   "Quintiles, Inc.",
+   "The Cleveland Clinic",
+   "PPD Development, LP",
+   "National Cancer Institute (NCI)",
+   "University of Southern California",
+   "Midwest Orthopedics at Rush - Chicago, IL",
+   "Unlimited Research - San Antonio, TX",
+   "Triangle Orthopaedic Associates, P.A.",
+   "Orthopedic Center of Vero Beach - Vero Beach, FL",
+   "OrthoIndy",
+   "TRIA Orthopaedic Center",
+   "Greater Chesapeake Orthopaedic Associates, LLC"
+  ],
+  "old_query": "Mesoblast"
+ },
+ "MGTX": {
+  "listing": "MeiraGTx Holdings plc Ordinary Shares",
+  "core": "meiragtx",
+  "queries": [
+   "meiragtx"
+  ],
+  "aliases": [
+   "MeiraGTx Ocular UK Ltd",
+   "MeiraGTx UK II Ltd",
+   "MeiraGTx, LLC"
+  ],
+  "alias_study_counts": {
+   "MeiraGTx Ocular UK Ltd": 5,
+   "MeiraGTx UK II Ltd": 10,
+   "MeiraGTx, LLC": 6
+  },
+  "rejected_top": [
+   "Janssen Research & Development, LLC",
+   "Janssen, LP",
+   "Syne Qua Non Limited",
+   "Bionical Emas",
+   "National Institute of Dental and Craniofacial Research (NIDCR)"
+  ],
+  "old_query": "MeiraGTx"
+ },
+ "MRK": {
+  "listing": "Merck & Company Inc. Common Stock (new)",
+  "core": "merck",
+  "queries": [
+   "merck"
+  ],
+  "aliases": [
+   "MERCK S/A",
+   "MERCK SHARP & DOHME DE ESPA\u00d1A S.A.",
+   "Merck & Cie",
+   "Merck (Pvt.) Limited, Pakistan",
+   "Merck A.B., Sweden",
+   "Merck A.E., Greece",
+   "Merck A/S, Denmark",
+   "Merck AG Switzerland",
+   "Merck B.V., Netherlands",
+   "Merck Canada Inc.",
+   "Merck Childhood Asthma Network (MCAN)",
+   "Merck Europe B.V.",
+   "Merck Frosst Canada Ltd.",
+   "Merck Frosst-Schering Pharma, G.P.",
+   "Merck Gesellschaft mbH, Austria",
+   "Merck Healthcare Germany GmbH, an affiliate of Merck KGaA, Darmstadt, Germany",
+   "Merck Healthcare KGaA",
+   "Merck Healthcare KGaA, Darmstadt, Germany, an affiliate of Merck KGaA, Darmstadt, Germany",
+   "Merck Hellas sa., Greece, an affiliate of Merck KGaA, Darmstadt, Germany",
+   "Merck Inc., Philippines",
+   "Merck Institute for Therapeutic Research",
+   "Merck KGaA, Darmstadt, Germany",
+   "Merck KGaA, Darmstadt, Germany; Gilead Sciences; Nektar Therapeutics",
+   "Merck Kft., Hungary",
+   "Merck Ltd.",
+   "Merck Ltd., India",
+   "Merck Ltd., Taiwan",
+   "Merck Ltd., Thailand",
+   "Merck Medication Familiale",
+   "Merck N.V.-S.A., Belgium",
+   "Merck OY, Finland",
+   "Merck Pharma, K.S., Slovakia",
+   "Merck Pte. Ltd., Singapore",
+   "Merck Pvt. Ltd, Pakistan",
+   "Merck Quimica Argentina S.A.I.C",
+   "Merck Romania SRL, an affiliate of Merck KGaA, Darmstadt, Germany",
+   "Merck S.A. Columbia",
+   "Merck S.A. de C.V., Mexico",
+   "Merck S.A., Brazil, an affiliate of Merck KGaA, Darmstadt, Germany",
+   "Merck SP. Z.O.O., Poland",
+   "Merck Sant\u00e9 SAS",
+   "Merck Schering-Plough",
+   "Merck Serono (GFI)",
+   "Merck Serono Australia Pty Ltd",
+   "Merck Serono Co., Ltd., China",
+   "Merck Serono Co., Ltd., Japan",
+   "Merck Serono Europe Ltd",
+   "Merck Serono GmbH, Germany",
+   "Merck Serono International SA",
+   "Merck Serono Limited, UK",
+   "Merck Serono Middle East FZ LLC",
+   "Merck Serono Middle East FZ-LLC, United Arab Emirates, an affiliate of Merck KGaA, Darmstadt, Germany",
+   "Merck Serono Norway",
+   "Merck Serono S.A., Geneva",
+   "Merck Serono S.A.S, France",
+   "Merck Serono S.A.S., an affiliate of Merck KGaA, Darmstadt, Germany",
+   "Merck Serono S.P.A., Italy",
+   "Merck Serono Vietnam",
+   "Merck Services U.K. Ltd, UK",
+   "Merck Sharp & Dhome (Australia) Pty. Ltd.",
+   "Merck Sharp & Dohme Corporation",
+   "Merck Sharp & Dohme LLC",
+   "Merck Sharp and Dohme LLC",
+   "Merck Sharp and Dohme LLC, Rahway, NJ, USA",
+   "Merck Shering-Plough JV Study",
+   "Merck d.o.o., Serbia",
+   "Merck for Mothers",
+   "Merck spol. s r.o., Slovakia",
+   "Merck spol.s.r.o., Czech Republic",
+   "Merck, S.A., Portugal",
+   "Merck, S.L., Spain",
+   "Merck, Sharp & Dohme, LLC, Rahway, NJ USA"
+  ],
+  "alias_study_counts": {
+   "MERCK S/A": 1,
+   "MERCK SHARP & DOHME DE ESPA\u00d1A S.A.": 1,
+   "Merck & Cie": 1,
+   "Merck (Pvt.) Limited, Pakistan": 1,
+   "Merck A.B., Sweden": 2,
+   "Merck A.E., Greece": 4,
+   "Merck A/S, Denmark": 1,
+   "Merck AG Switzerland": 1,
+   "Merck B.V., Netherlands": 4,
+   "Merck Canada Inc.": 15,
+   "Merck Childhood Asthma Network (MCAN)": 1,
+   "Merck Europe B.V.": 1,
+   "Merck Frosst Canada Ltd.": 30,
+   "Merck Frosst-Schering Pharma, G.P.": 1,
+   "Merck Gesellschaft mbH, Austria": 5,
+   "Merck Healthcare Germany GmbH, an affiliate of Merck KGaA, Darmstadt, Germany": 1,
+   "Merck Healthcare KGaA": 1,
+   "Merck Healthcare KGaA, Darmstadt, Germany, an affiliate of Merck KGaA, Darmstadt, Germany": 75,
+   "Merck Hellas sa., Greece, an affiliate of Merck KGaA, Darmstadt, Germany": 1,
+   "Merck Inc., Philippines": 1,
+   "Merck Institute for Therapeutic Research": 3,
+   "Merck KGaA, Darmstadt, Germany": 461,
+   "Merck KGaA, Darmstadt, Germany; Gilead Sciences; Nektar Therapeutics": 1,
+   "Merck Kft., Hungary": 2,
+   "Merck Ltd.": 8,
+   "Merck Ltd., India": 3,
+   "Merck Ltd., Taiwan": 2,
+   "Merck Ltd., Thailand": 1,
+   "Merck Medication Familiale": 2,
+   "Merck N.V.-S.A., Belgium": 1,
+   "Merck OY, Finland": 2,
+   "Merck Pharma, K.S., Slovakia": 1,
+   "Merck Pte. Ltd., Singapore": 5,
+   "Merck Pvt. Ltd, Pakistan": 3,
+   "Merck Quimica Argentina S.A.I.C": 3,
+   "Merck Romania SRL, an affiliate of Merck KGaA, Darmstadt, Germany": 1,
+   "Merck S.A. Columbia": 1,
+   "Merck S.A. de C.V., Mexico": 3,
+   "Merck S.A., Brazil, an affiliate of Merck KGaA, Darmstadt, Germany": 1,
+   "Merck SP. Z.O.O., Poland": 1,
+   "Merck Sant\u00e9 SAS": 1,
+   "Merck Schering-Plough": 1,
+   "Merck Serono (GFI)": 1,
+   "Merck Serono Australia Pty Ltd": 2,
+   "Merck Serono Co., Ltd., China": 11,
+   "Merck Serono Co., Ltd., Japan": 4,
+   "Merck Serono Europe Ltd": 1,
+   "Merck Serono GmbH, Germany": 8,
+   "Merck Serono International SA": 39,
+   "Merck Serono Limited, UK": 8,
+   "Merck Serono Middle East FZ LLC": 3,
+   "Merck Serono Middle East FZ-LLC, United Arab Emirates, an affiliate of Merck KGaA, Darmstadt, Germany": 1,
+   "Merck Serono Norway": 3,
+   "Merck Serono S.A., Geneva": 10,
+   "Merck Serono S.A.S, France": 8,
+   "Merck Serono S.A.S., an affiliate of Merck KGaA, Darmstadt, Germany": 1,
+   "Merck Serono S.P.A., Italy": 8,
+   "Merck Serono Vietnam": 1,
+   "Merck Services U.K. Ltd, UK": 1,
+   "Merck Sharp & Dhome (Australia) Pty. Ltd.": 1,
+   "Merck Sharp & Dohme Corporation": 1,
+   "Merck Sharp & Dohme LLC": 4256,
+   "Merck Sharp and Dohme LLC": 1,
+   "Merck Sharp and Dohme LLC, Rahway, NJ, USA": 1,
+   "Merck Shering-Plough JV Study": 1,
+   "Merck d.o.o., Serbia": 1,
+   "Merck for Mothers": 3,
+   "Merck spol. s r.o., Slovakia": 2,
+   "Merck spol.s.r.o., Czech Republic": 2,
+   "Merck, S.A., Portugal": 1,
+   "Merck, S.L., Spain": 12,
+   "Merck, Sharp & Dohme, LLC, Rahway, NJ USA": 1
+  },
+  "rejected_top": [
+   "Cubist Pharmaceuticals LLC, a subsidiary of Merck & Co., Inc. (Rahway, New Jersey USA)",
+   "Pfizer",
+   "EMD Serono Research & Development Institute, Inc.",
+   "National Cancer Institute (NCI)",
+   "Daiichi Sankyo",
+   "AstraZeneca",
+   "M.D. Anderson Cancer Center",
+   "GlaxoSmithKline",
+   "Eisai Inc.",
+   "Gilead Sciences",
+   "Eli Lilly and Company",
+   "ArQule, Inc., a subsidiary of Merck Sharp & Dohme LLC, a subsidiary of Merck & Co., Inc. (Rahway, NJ USA)"
+  ],
+  "old_query": "Merck"
+ },
+ "MRNA": {
+  "listing": "Moderna Inc. Common Stock",
+  "core": "moderna",
+  "queries": [
+   "moderna",
+   "ModernaTX"
+  ],
+  "aliases": [
+   "Moderna, Inc",
+   "ModernaTX"
+  ],
+  "alias_study_counts": {
+   "Moderna, Inc": 1,
+   "ModernaTX": 0
+  },
+  "rejected_top": [
+   "ModernaTX, Inc.",
+   "Merck Sharp & Dohme LLC",
+   "National Institute of Allergy and Infectious Diseases (NIAID)",
+   "Biomedical Advanced Research and Development Authority",
+   "International AIDS Vaccine Initiative",
+   "Tor Biering-S\u00f8rensen",
+   "Vertex Pharmaceuticals Incorporated",
+   "Aetion, Inc.",
+   "The Scripps Research Institute",
+   "Bill and Melinda Gates Foundation",
+   "C&R Research, Inc.",
+   "Immatics US, Inc."
+  ],
+  "old_query": "Moderna"
+ },
+ "MRVI": {
+  "listing": "Maravai LifeSciences Holdings Inc. Class A Common Stock",
+  "core": "maravai lifesciences",
+  "queries": [
+   "maravai lifesciences",
+   "maravai"
+  ],
+  "aliases": [],
+  "alias_study_counts": {},
+  "rejected_top": [],
+  "old_query": "Maravai LifeSciences"
+ },
+ "MYGN": {
+  "listing": "Myriad Genetics Inc. Common Stock",
+  "core": "myriad genetics",
+  "queries": [
+   "myriad genetics",
+   "myriad"
+  ],
+  "aliases": [
+   "Myriad Genetics, Inc."
+  ],
+  "alias_study_counts": {
+   "Myriad Genetics, Inc.": 36
+  },
+  "rejected_top": [
+   "Myriad Genetic Laboratories, Inc.",
+   "AstraZeneca",
+   "Merck Sharp & Dohme LLC",
+   "Foundation Medicine",
+   "European Network of Gynaecological Oncological Trial Groups (ENGOT)",
+   "Tesaro, Inc.",
+   "Facing Our Risk of Cancer Empowered",
+   "pharmaand GmbH",
+   "BeiGene",
+   "US Oncology Research",
+   "Sarah Cannon",
+   "IQVIA Pty Ltd"
+  ],
+  "old_query": "Myriad Genetics"
+ },
+ "NEO": {
+  "listing": "NeoGenomics Inc. Common Stock",
+  "core": "neogenomics",
+  "queries": [
+   "neogenomics"
+  ],
+  "aliases": [
+   "NeoGenomics",
+   "NeoGenomics Laboratories, Inc."
+  ],
+  "alias_study_counts": {
+   "NeoGenomics": 1,
+   "NeoGenomics Laboratories, Inc.": 1
+  },
+  "rejected_top": [
+   "University Health Network, Toronto",
+   "AstraZeneca",
+   "Personalis Inc.",
+   "IO Biotech",
+   "Theradex",
+   "Almac",
+   "Merck Sharp & Dohme LLC"
+  ],
+  "old_query": "NeoGenomics"
+ },
+ "NGNE": {
+  "listing": "Neurogene Inc. Common Stock ",
+  "core": "neurogene",
+  "queries": [
+   "neurogene"
+  ],
+  "aliases": [
+   "Neurogene Inc."
+  ],
+  "alias_study_counts": {
+   "Neurogene Inc.": 6
+  },
+  "rejected_top": [
+   "Merck Sharp & Dohme LLC"
+  ],
+  "old_query": "Neurogene"
+ },
+ "NTLA": {
+  "listing": "Intellia Therapeutics Inc. Common Stock",
+  "core": "intellia therapeutics",
+  "queries": [
+   "intellia therapeutics",
+   "intellia"
+  ],
+  "aliases": [
+   "Intellia Therapeutics"
+  ],
+  "alias_study_counts": {
+   "Intellia Therapeutics": 20
+  },
+  "rejected_top": [
+   "Regeneron Pharmaceuticals"
+  ],
+  "old_query": "Intellia Therapeutics"
+ },
+ "NTRA": {
+  "listing": "Natera Inc. Common Stock",
+  "core": "natera",
+  "queries": [
+   "natera"
+  ],
+  "aliases": [
+   "Natera, Inc."
+  ],
+  "alias_study_counts": {
+   "Natera, Inc.": 77
+  },
+  "rejected_top": [
+   "AstraZeneca",
+   "University of Alberta",
+   "One Lambda",
+   "UNICANCER",
+   "University of Oklahoma",
+   "Genentech, Inc.",
+   "Montefiore Medical Center",
+   "Columbia University",
+   "George Washington University",
+   "Foresight Diagnostics, Inc.",
+   "Jonsson Comprehensive Cancer Center",
+   "The Joseph Drown Foundation"
+  ],
+  "old_query": "Natera"
+ },
+ "NVS": {
+  "listing": "Novartis AG Common Stock",
+  "core": "novartis",
+  "queries": [
+   "novartis"
+  ],
+  "aliases": [
+   "NOVARTIS BIOCIENCIAS S/A",
+   "Novartis",
+   "Novartis Consumer Health",
+   "Novartis Europharm Limited",
+   "Novartis Farma S.p.A.",
+   "Novartis Foundation for Medical-Biological Research",
+   "Novartis Gene Therapies",
+   "Novartis Germany GmbH",
+   "Novartis Healthcare A/S",
+   "Novartis Institute for Tropical Medicine",
+   "Novartis Institutes for BioMedical Research",
+   "Novartis Korea Ltd.",
+   "Novartis Medical Nutrition",
+   "Novartis Pharma AG, Basel, Switzerland",
+   "Novartis Pharma AG, Switzerland",
+   "Novartis Pharma B.V.",
+   "Novartis Pharma GmbH, N\u00fcrnberg, Germany",
+   "Novartis Pharmaceuticals",
+   "Novartis Pharmaceuticals Corporation (Financial supporter)",
+   "Novartis Pharmaceuticals UK Limited",
+   "Novartis Slovakia, s.r.o.",
+   "Novartis Sverige AB",
+   "Novartis Vaccines",
+   "Novartis Vaccines and Diagnostics (formerly Chiron Vaccines)",
+   "Novartis Vaccines and Diagnostics S.r.l.",
+   "Novartis Vaccines and Diagnostics, Inc",
+   "Novartis is the Marketing Authorization Holder for Jakavi outside the US.",
+   "Novartis/AAA"
+  ],
+  "alias_study_counts": {
+   "NOVARTIS BIOCIENCIAS S/A": 1,
+   "Novartis": 1664,
+   "Novartis Consumer Health": 2,
+   "Novartis Europharm Limited": 1,
+   "Novartis Farma S.p.A.": 1,
+   "Novartis Foundation for Medical-Biological Research": 1,
+   "Novartis Gene Therapies": 9,
+   "Novartis Germany GmbH": 1,
+   "Novartis Healthcare A/S": 2,
+   "Novartis Institute for Tropical Medicine": 1,
+   "Novartis Institutes for BioMedical Research": 6,
+   "Novartis Korea Ltd.": 10,
+   "Novartis Medical Nutrition": 1,
+   "Novartis Pharma AG, Basel, Switzerland": 1,
+   "Novartis Pharma AG, Switzerland": 2,
+   "Novartis Pharma B.V.": 1,
+   "Novartis Pharma GmbH, N\u00fcrnberg, Germany": 1,
+   "Novartis Pharmaceuticals": 3186,
+   "Novartis Pharmaceuticals Corporation (Financial supporter)": 1,
+   "Novartis Pharmaceuticals UK Limited": 1,
+   "Novartis Slovakia, s.r.o.": 3,
+   "Novartis Sverige AB": 1,
+   "Novartis Vaccines": 234,
+   "Novartis Vaccines and Diagnostics (formerly Chiron Vaccines)": 1,
+   "Novartis Vaccines and Diagnostics S.r.l.": 1,
+   "Novartis Vaccines and Diagnostics, Inc": 1,
+   "Novartis is the Marketing Authorization Holder for Jakavi outside the US.": 1,
+   "Novartis/AAA": 1
+  },
+  "rejected_top": [
+   "M.D. Anderson Cancer Center",
+   "Dana-Farber Cancer Institute",
+   "GlaxoSmithKline",
+   "Genentech, Inc.",
+   "National Cancer Institute (NCI)",
+   "Pfizer",
+   "Memorial Sloan Kettering Cancer Center",
+   "SCRI Development Innovations, LLC",
+   "Massachusetts General Hospital",
+   "Merck Sharp & Dohme LLC",
+   "Brigham and Women's Hospital",
+   "Amgen"
+  ],
+  "old_query": "Novartis"
+ },
+ "OBX": {
+  "listing": "Obsidian Therapeutics Inc. Common Stock",
+  "core": "obsidian therapeutics",
+  "queries": [
+   "obsidian therapeutics",
+   "obsidian"
+  ],
+  "aliases": [
+   "Obsidian Therapeutics, Inc."
+  ],
+  "alias_study_counts": {
+   "Obsidian Therapeutics, Inc.": 2
+  },
+  "rejected_top": [],
+  "old_query": "Obsidian Therapeutics"
+ },
+ "OCGN": {
+  "listing": "Ocugen Inc. Common Stock",
+  "core": "ocugen",
+  "queries": [
+   "ocugen"
+  ],
+  "aliases": [
+   "Ocugen"
+  ],
+  "alias_study_counts": {
+   "Ocugen": 13
+  },
+  "rejected_top": [
+   "Sandeep Jain, MD"
+  ],
+  "old_query": "Ocugen"
+ },
+ "OPK": {
+  "listing": "OPKO Health Inc. Common Stock",
+  "core": "opko health",
+  "queries": [
+   "opko health",
+   "opko"
+  ],
+  "aliases": [
+   "OPKO Health, Inc."
+  ],
+  "alias_study_counts": {
+   "OPKO Health, Inc.": 100
+  },
+  "rejected_top": [
+   "ModeX Therapeutics, An OPKO Health Company",
+   "OPKO IP Holdings II, Inc.",
+   "Elan Pharmaceuticals",
+   "Tel-Aviv Sourasky Medical Center",
+   "Osteoarthritis Foundation International (OAFI)",
+   "National Institute of Allergy and Infectious Diseases (NIAID)",
+   "Sanofi",
+   "Eli Lilly and Company",
+   "WCCT Global"
+  ],
+  "old_query": "OPKO Health"
+ },
+ "OSUR": {
+  "listing": "OraSure Technologies Inc. Common Stock",
+  "core": "orasure technologies",
+  "queries": [
+   "orasure technologies",
+   "orasure"
+  ],
+  "aliases": [],
+  "alias_study_counts": {},
+  "rejected_top": [],
+  "old_query": "OraSure Technologies"
+ },
+ "PACB": {
+  "listing": "Pacific Biosciences of California Inc. Common Stock",
+  "core": "pacific biosciences of california",
+  "queries": [
+   "pacific biosciences of california",
+   "pacific"
+  ],
+  "aliases": [],
+  "alias_study_counts": {},
+  "rejected_top": [
+   "California Pacific Medical Center Research Institute",
+   "Danone Asia Pacific Holdings Pte, Ltd.",
+   "Pacific Institute for Research and Evaluation",
+   "University of the Pacific",
+   "Pacific University",
+   "University of California, San Francisco",
+   "California Pacific Medical Center",
+   "Pacific Northwest University of Health Sciences",
+   "Pacific Pediatric Neuro-Oncology Consortium",
+   "Hawaii Pacific Health",
+   "Pacific Northwest National Laboratory",
+   "Pacific Edge Limited"
+  ],
+  "old_query": "Pacific Biosciences of California"
+ },
+ "PEPG": {
+  "listing": "PepGen Inc. Common Stock",
+  "core": "pepgen",
+  "queries": [
+   "pepgen"
+  ],
+  "aliases": [
+   "PepGen Inc"
+  ],
+  "alias_study_counts": {
+   "PepGen Inc": 5
+  },
+  "rejected_top": [],
+  "old_query": "PepGen"
+ },
+ "PFE": {
+  "listing": "Pfizer Inc. Common Stock",
+  "core": "pfizer",
+  "queries": [
+   "pfizer"
+  ],
+  "aliases": [
+   "PFIZER, Bratislava, Slovakia",
+   "Pfizer",
+   "Pfizer Grants for Learning and Change",
+   "Pfizer Inc. (Provider of study drugs)",
+   "Pfizer Independent Grants for Learning and Change",
+   "Pfizer Pharmaceuticals Ltd.",
+   "Pfizer's Upjohn has merged with Mylan to form Viatris Inc.",
+   "Pfizer, Berlin Germany"
+  ],
+  "alias_study_counts": {
+   "PFIZER, Bratislava, Slovakia": 1,
+   "Pfizer": 4895,
+   "Pfizer Grants for Learning and Change": 1,
+   "Pfizer Inc. (Provider of study drugs)": 1,
+   "Pfizer Independent Grants for Learning and Change": 1,
+   "Pfizer Pharmaceuticals Ltd.": 2,
+   "Pfizer's Upjohn has merged with Mylan to form Viatris Inc.": 434,
+   "Pfizer, Berlin Germany": 1
+  },
+  "rejected_top": [
+   "Wyeth is now a wholly owned subsidiary of Pfizer",
+   "Merck Sharp & Dohme LLC",
+   "Hospira, now a wholly owned subsidiary of Pfizer",
+   "Bristol-Myers Squibb",
+   "ViiV Healthcare",
+   "Boehringer Ingelheim",
+   "Astellas Pharma Inc",
+   "Amgen",
+   "Eli Lilly and Company",
+   "Medivation, Inc.",
+   "Novartis",
+   "AstraZeneca"
+  ],
+  "old_query": "Pfizer"
+ },
+ "PGEN": {
+  "listing": "Precigen Inc. Common Stock",
+  "core": "precigen",
+  "queries": [
+   "precigen"
+  ],
+  "aliases": [
+   "Precigen Actobio T1D, LLC",
+   "Precigen, Inc"
+  ],
+  "alias_study_counts": {
+   "Precigen Actobio T1D, LLC": 1,
+   "Precigen, Inc": 7
+  },
+  "rejected_top": [
+   "National Cancer Institute (NCI)",
+   "Intrexon Actobiotics NV, d/b/a Precigen Actobio",
+   "H. Lee Moffitt Cancer Center and Research Institute",
+   "Triple-Gene, LLC",
+   "Intrexon Corporation"
+  ],
+  "old_query": "Precigen"
+ },
+ "PRAX": {
+  "listing": "Praxis Precision Medicines Inc. Common Stock",
+  "core": "praxis precision medicines",
+  "queries": [
+   "praxis precision medicines",
+   "praxis"
+  ],
+  "aliases": [
+   "Praxis Precision Medicines",
+   "Praxis, Inc."
+  ],
+  "alias_study_counts": {
+   "Praxis Precision Medicines": 34,
+   "Praxis, Inc.": 1
+  },
+  "rejected_top": [
+   "Praxis Spinal Cord Institute",
+   "Charite University, Berlin, Germany",
+   "University of Alberta",
+   "University of British Columbia",
+   "Ludwig-Maximilians - University of Munich",
+   "National Institute of Allergy and Infectious Diseases (NIAID)",
+   "Lederle-Praxis Biologicals",
+   "National Institute of Mental Health (NIMH)",
+   "Praxis Medical Devices Ltd",
+   "ARCIM Institute Academic Research in Complementary and Integrative Medicine",
+   "Center f\u00fcr Integrative Therapie Christopher Gordon",
+   "University Hospital Tuebingen"
+  ],
+  "old_query": "Praxis Precision Medicines"
+ },
+ "PRME": {
+  "listing": "Prime Medicine Inc. Common Stock",
+  "core": "prime medicine",
+  "queries": [
+   "prime medicine",
+   "prime"
+  ],
+  "aliases": [
+   "Prime Medicine, Inc."
+  ],
+  "alias_study_counts": {
+   "Prime Medicine, Inc.": 6
+  },
+  "rejected_top": [
+   "Five Prime Therapeutics, Inc.",
+   "Prime Foundation",
+   "Prime Gene Therapeutics Co., Ltd.",
+   "Cwm Taf University Health Board (NHS)",
+   "PRIME Centre Wales",
+   "Brigham and Women's Hospital",
+   "FBRI LLC (F-Prime Capital)",
+   "Bristol-Myers Squibb",
+   "Worldwide Clinical Trials",
+   "Zai Lab (Shanghai) Co., Ltd.",
+   "Parexel",
+   "Radboud University Medical Center"
+  ],
+  "old_query": "Prime Medicine"
+ },
+ "PROK": {
+  "listing": "ProKidney Corp. Class A Ordinary Shares",
+  "core": "prokidney",
+  "queries": [
+   "prokidney"
+  ],
+  "aliases": [
+   "Prokidney"
+  ],
+  "alias_study_counts": {
+   "Prokidney": 10
+  },
+  "rejected_top": [
+   "CTI Clinical Trial and Consulting Services"
+  ],
+  "old_query": "ProKidney"
+ },
+ "PRQR": {
+  "listing": "ProQR Therapeutics N.V. Ordinary Shares",
+  "core": "proqr therapeutics",
+  "queries": [
+   "proqr therapeutics",
+   "proqr"
+  ],
+  "aliases": [
+   "ProQR Therapeutics"
+  ],
+  "alias_study_counts": {
+   "ProQR Therapeutics": 14
+  },
+  "rejected_top": [
+   "European Commission"
+  ],
+  "old_query": "ProQR Therapeutics N V"
+ },
+ "PSNL": {
+  "listing": "Personalis Inc. Common Stock",
+  "core": "personalis",
+  "queries": [
+   "personalis"
+  ],
+  "aliases": [
+   "Personalis Inc."
+  ],
+  "alias_study_counts": {
+   "Personalis Inc.": 7
+  },
+  "rejected_top": [
+   "University of Baghdad",
+   "Duke University",
+   "Yale University",
+   "Johns Hopkins University",
+   "Stemline Therapeutics, Inc.",
+   "University College, London",
+   "Merck Sharp & Dohme LLC",
+   "Sharp",
+   "Foundation Medicine",
+   "University College London (UCL) Cancer Institute",
+   "University of Leeds",
+   "University College London Hospitals"
+  ],
+  "old_query": "Personalis"
+ },
+ "PTCT": {
+  "listing": "PTC Therapeutics Inc. Common Stock",
+  "core": "ptc therapeutics",
+  "queries": [
+   "ptc therapeutics"
+  ],
+  "aliases": [
+   "PTC Therapeutics"
+  ],
+  "alias_study_counts": {
+   "PTC Therapeutics": 76
+  },
+  "rejected_top": [
+   "Genzyme, a Sanofi Company",
+   "Cystic Fibrosis Foundation",
+   "United States Department of Defense",
+   "National Cancer Institute (NCI)",
+   "National Taiwan University Hospital",
+   "NYU Langone Health",
+   "Medical University of South Carolina",
+   "Hoffmann-La Roche",
+   "Nationwide Children's Hospital",
+   "Academisch Medisch Centrum - Universiteit van Amsterdam (AMC-UvA)",
+   "Merck Sharp & Dohme LLC",
+   "The John Walton Muscular Dystrophy Research Centre (TREAT-NMD)"
+  ],
+  "old_query": "PTC Therapeutics"
+ },
+ "QGEN": {
+  "listing": "Qiagen N.V. Common Shares",
+  "core": "qiagen",
+  "queries": [
+   "qiagen"
+  ],
+  "aliases": [
+   "QIAGEN Gaithersburg, Inc",
+   "QIAGEN GmbH, Germany",
+   "Qiagen Manchester Limited",
+   "Qiagen Manchester Ltd"
+  ],
+  "alias_study_counts": {
+   "QIAGEN Gaithersburg, Inc": 36,
+   "QIAGEN GmbH, Germany": 1,
+   "Qiagen Manchester Limited": 1,
+   "Qiagen Manchester Ltd": 1
+  },
+  "rejected_top": [
+   "Amgen",
+   "Assistance Publique - H\u00f4pitaux de Paris",
+   "Barretos Cancer Hospital",
+   "Universidad de Antioquia",
+   "International Agency for Research on Cancer",
+   "Barts and the London School of Medicine and Dentistry",
+   "Instituto Colombiano para el Desarrollo de la Ciencia y la Tecnolog\u00eda (COLCIENCIAS)",
+   "EPS SURA",
+   "EPS COMFAMA",
+   "EPS COMFENALCO",
+   "DINAMICA IPS",
+   "Laboratorio Cl\u00ednico Escuela de Microbiolog\u00eda (Universidad de Antioquia)"
+  ],
+  "old_query": "Qiagen N V Common Shares"
+ },
+ "QURE": {
+  "listing": "uniQure N.V. Ordinary Shares",
+  "core": "uniqure",
+  "queries": [
+   "uniqure"
+  ],
+  "aliases": [
+   "UniQure Biopharma B.V.",
+   "UniQure N.V."
+  ],
+  "alias_study_counts": {
+   "UniQure Biopharma B.V.": 9,
+   "UniQure N.V.": 2
+  },
+  "rejected_top": [
+   "Digna Biotech S.L.",
+   "Porphyria Centre Sweden",
+   "University of Navarra",
+   "Chiesi Farmaceutici S.p.A.",
+   "Venn Life Sciences",
+   "Institut Pasteur",
+   "Nationales Centrum f\u00fcr Tumorerkrankungen",
+   "Haemnet"
+  ],
+  "old_query": "uniQure N V"
+ },
+ "RARE": {
+  "listing": "Ultragenyx Pharmaceutical Inc. Common Stock",
+  "core": "ultragenyx pharmaceutical",
+  "queries": [
+   "ultragenyx pharmaceutical",
+   "ultragenyx"
+  ],
+  "aliases": [
+   "Ultragenyx Pharmaceutical Inc"
+  ],
+  "alias_study_counts": {
+   "Ultragenyx Pharmaceutical Inc": 182
+  },
+  "rejected_top": [
+   "Mereo BioPharma",
+   "Jerry Vockley, MD, PhD",
+   "Novartis",
+   "Copenhagen University Hospital, Rigshospitalet",
+   "Abeona Therapeutics, Inc",
+   "Institut National de la Sant\u00e9 Et de la Recherche M\u00e9dicale, France",
+   "Groupe Hospitalier Pitie-Salpetriere",
+   "University of Texas Southwestern Medical Center",
+   "Children's Hospital of Orange County",
+   "University of Wisconsin, Madison",
+   "University of Alabama at Birmingham",
+   "University Medical Center Groningen"
+  ],
+  "old_query": "Ultragenyx Pharmaceutical"
+ },
+ "RCKT": {
+  "listing": "Rocket Pharmaceuticals Inc. Common Stock",
+  "core": "rocket pharmaceuticals",
+  "queries": [
+   "rocket pharmaceuticals",
+   "rocket"
+  ],
+  "aliases": [
+   "Rocket Pharmaceuticals Inc."
+  ],
+  "alias_study_counts": {
+   "Rocket Pharmaceuticals Inc.": 40
+  },
+  "rejected_top": [
+   "PLA Rocket Force Characteristic Medical Center",
+   "Rocket Medical plc",
+   "California Institute for Regenerative Medicine (CIRM)",
+   "Zhongnan Hospital",
+   "Beijing Friendship Hospital",
+   "First Affiliated Hospital of Chongqing Medical University",
+   "Changhai Hospital",
+   "The First Hospital of Jilin University",
+   "The First Affiliated Hospital of Zhengzhou University",
+   "Beijing Chao Yang Hospital",
+   "Huashan Hospital",
+   "University of California, San Diego"
+  ],
+  "old_query": "Rocket Pharmaceuticals"
+ },
+ "REGN": {
+  "listing": "Regeneron Pharmaceuticals Inc. Common Stock",
+  "core": "regeneron pharmaceuticals",
+  "queries": [
+   "regeneron pharmaceuticals",
+   "regeneron"
+  ],
+  "aliases": [
+   "Regeneron Pharmaceuticals"
+  ],
+  "alias_study_counts": {
+   "Regeneron Pharmaceuticals": 1588
+  },
+  "rejected_top": [
+   "Sanofi",
+   "Bayer",
+   "National Institute of Allergy and Infectious Diseases (NIAID)",
+   "Teva Pharmaceutical Industries, Ltd.",
+   "National Cancer Institute (NCI)",
+   "M.D. Anderson Cancer Center",
+   "Bristol-Myers Squibb",
+   "H. Lee Moffitt Cancer Center and Research Institute",
+   "Northwestern University",
+   "University of Michigan",
+   "Sidney Kimmel Comprehensive Cancer Center at Johns Hopkins",
+   "Memorial Sloan Kettering Cancer Center"
+  ],
+  "old_query": "Regeneron Pharmaceuticals"
+ },
+ "REPL": {
+  "listing": "Replimune Group Inc. Common Stock",
+  "core": "replimune",
+  "queries": [
+   "replimune"
+  ],
+  "aliases": [
+   "Replimune, Inc."
+  ],
+  "alias_study_counts": {
+   "Replimune, Inc.": 17
+  },
+  "rejected_top": [
+   "Bristol-Myers Squibb",
+   "Roche Pharma AG",
+   "Varun Monga, MBBS",
+   "Institut Curie",
+   "Yana Najjar",
+   "Regeneron Pharmaceuticals",
+   "Abramson Cancer Center at Penn Medicine",
+   "Glenn J. Hanna"
+  ],
+  "old_query": "Replimune Group"
+ },
+ "RGNX": {
+  "listing": "REGENXBIO Inc. Common Stock",
+  "core": "regenxbio",
+  "queries": [
+   "regenxbio"
+  ],
+  "aliases": [
+   "REGENXBIO Inc."
+  ],
+  "alias_study_counts": {
+   "REGENXBIO Inc.": 25
+  },
+  "rejected_top": [
+   "AbbVie",
+   "National Heart, Lung, and Blood Institute (NHLBI)",
+   "Sierra Eye Associates"
+  ],
+  "old_query": "REGENXBIO"
+ },
+ "RNAC": {
+  "listing": "Cartesian Therapeutics Inc. Common Stock",
+  "core": "cartesian therapeutics",
+  "queries": [
+   "cartesian therapeutics",
+   "cartesian"
+  ],
+  "aliases": [
+   "Cartesian Therapeutics"
+  ],
+  "alias_study_counts": {
+   "Cartesian Therapeutics": 24
+  },
+  "rejected_top": [
+   "National Cancer Institute (NCI)",
+   "National Heart, Lung, and Blood Institute (NHLBI)"
+  ],
+  "old_query": "Cartesian Therapeutics"
+ },
+ "RNAM": {
+  "listing": "Avidity Biosciences Inc",
+  "core": "avidity biosciences",
+  "queries": [
+   "avidity biosciences",
+   "avidity"
+  ],
+  "aliases": [
+   "Avidity Biosciences, Inc."
+  ],
+  "alias_study_counts": {
+   "Avidity Biosciences, Inc.": 24
+  },
+  "rejected_top": [
+   "University of Kansas Medical Center",
+   "FSHD Society, Inc.",
+   "Friends Research Institute, Inc.",
+   "University of Rochester",
+   "University of Nevada, Reno",
+   "FSHD Canada",
+   "AMRA Medical",
+   "Seattle Children's Hospital",
+   "Dyne Therapeutics",
+   "Hoffmann-La Roche",
+   "Springbok Analytics",
+   "Novartis Pharmaceuticals"
+  ],
+  "old_query": "Avidity Biosciences"
+ },
+ "RVTY": {
+  "listing": "Revvity Inc. Common Stock",
+  "core": "revvity",
+  "queries": [
+   "revvity"
+  ],
+  "aliases": [],
+  "alias_study_counts": {},
+  "rejected_top": [],
+  "old_query": "Revvity"
+ },
+ "SANA": {
+  "listing": "Sana Biotechnology Inc. Common Stock",
+  "core": "sana biotechnology",
+  "queries": [
+   "sana biotechnology",
+   "sana"
+  ],
+  "aliases": [
+   "Sana Biotechnology"
+  ],
+  "alias_study_counts": {
+   "Sana Biotechnology": 10
+  },
+  "rejected_top": [
+   "Sana Klinikum Offenbach",
+   "Charite University, Berlin, Germany",
+   "University of Pennsylvania",
+   "Sana Health",
+   "University Hospital, Bonn",
+   "Wuerzburg University Hospital",
+   "Sana-Klinikum Lichtenberg",
+   "Per-Ola Carlsson",
+   "Children's Hospital of Philadelphia",
+   "National Institutes of Health (NIH)",
+   "National Institute of Neurological Disorders and Stroke (NINDS)",
+   "National Center for Advancing Translational Sciences (NCATS)"
+  ],
+  "old_query": "Sana Biotechnology"
+ },
+ "SCTX": {
+  "listing": "Scribe Therapeutics Inc. Common Stock",
+  "core": "scribe therapeutics",
+  "queries": [
+   "scribe therapeutics",
+   "scribe"
+  ],
+  "aliases": [
+   "Scribe Therapeutics Inc."
+  ],
+  "alias_study_counts": {
+   "Scribe Therapeutics Inc.": 2
+  },
+  "rejected_top": [
+   "Monash University"
+  ],
+  "old_query": "Scribe Therapeutics"
+ },
+ "SLDB": {
+  "listing": "Solid Biosciences Inc. Common Stock",
+  "core": "solid biosciences",
+  "queries": [
+   "solid biosciences",
+   "solid"
+  ],
+  "aliases": [
+   "Solid Biosciences Inc."
+  ],
+  "alias_study_counts": {
+   "Solid Biosciences Inc.": 14
+  },
+  "rejected_top": [
+   "Clinical Research Center for Solid Tumor, Korea",
+   "EBMT Solid Tumors Working Party",
+   "Seoul National University Hospital",
+   "Jett Foundation, Inc.",
+   "Engage Health Inc.",
+   "Hyman, Phelps, & McNamara, P.C.",
+   "Ryans Quest Inc.",
+   "Michaels Cause Inc.",
+   "Nationwide Children's Hospital",
+   "Santhera Pharmaceuticals",
+   "Italfarmaco",
+   "Catabasis Pharmaceuticals"
+  ],
+  "old_query": "Solid Biosciences"
+ },
+ "SLN": {
+  "listing": "Silence Therapeutics Plc American Depository Share",
+  "core": "silence therapeutics",
+  "queries": [
+   "silence therapeutics",
+   "silence"
+  ],
+  "aliases": [
+   "Silence Therapeutics GmbH",
+   "Silence Therapeutics plc"
+  ],
+  "alias_study_counts": {
+   "Silence Therapeutics GmbH": 4,
+   "Silence Therapeutics plc": 12
+  },
+  "rejected_top": [
+   "Medpace, Inc.",
+   "Granzer Regulatory Consulting & Services",
+   "FGK Clinical Research GmbH"
+  ],
+  "old_query": "Silence Therapeutics Plc American Depository Share"
+ },
+ "SLS": {
+  "listing": "SELLAS Life Sciences Group Inc. Common Stock",
+  "core": "sellas life sciences",
+  "queries": [
+   "sellas life sciences",
+   "sellas"
+  ],
+  "aliases": [
+   "Sellas Life Sciences Group"
+  ],
+  "alias_study_counts": {
+   "Sellas Life Sciences Group": 18
+  },
+  "rejected_top": [
+   "Memorial Sloan Kettering Cancer Center",
+   "Genentech, Inc.",
+   "Cancer Insight, LLC",
+   "United States Department of Defense",
+   "PPD Development, LP",
+   "Merck Sharp & Dohme LLC",
+   "LumaBridge",
+   "George E. Peoples"
+  ],
+  "old_query": "SELLAS Life Sciences Group"
+ },
+ "SNY": {
+  "listing": "Sanofi ADS",
+  "core": "sanofi",
+  "queries": [
+   "sanofi"
+  ],
+  "aliases": [
+   "Sanofi",
+   "Sanofi (China) Investment Co., Ltd",
+   "Sanofi Pasteur S.A.",
+   "Sanofi Pasteur, a Sanofi Company",
+   "Sanofi Taiwan Co. Ltd",
+   "Sanofi US Services, Inc",
+   "Sanofi Winthrop Industrie",
+   "Sanofi-Regeneron",
+   "Sanofi-Synthelabo",
+   "Sanofi-Synth\u00e9labo (Schweiz) AG",
+   "Sanofi-Yale External Research Collaboration"
+  ],
+  "alias_study_counts": {
+   "Sanofi": 2343,
+   "Sanofi (China) Investment Co., Ltd": 1,
+   "Sanofi Pasteur S.A.": 1,
+   "Sanofi Pasteur, a Sanofi Company": 431,
+   "Sanofi Taiwan Co. Ltd": 1,
+   "Sanofi US Services, Inc": 1,
+   "Sanofi Winthrop Industrie": 1,
+   "Sanofi-Regeneron": 2,
+   "Sanofi-Synthelabo": 50,
+   "Sanofi-Synth\u00e9labo (Schweiz) AG": 1,
+   "Sanofi-Yale External Research Collaboration": 1
+  },
+  "rejected_top": [
+   "Genzyme, a Sanofi Company",
+   "Regeneron Pharmaceuticals",
+   "Bristol-Myers Squibb",
+   "M.D. Anderson Cancer Center",
+   "Hoffmann-La Roche",
+   "Dana-Farber Cancer Institute",
+   "Brigham and Women's Hospital",
+   "Pfizer",
+   "Ablynx, a Sanofi company",
+   "Amgen",
+   "GlaxoSmithKline",
+   "Merck Sharp & Dohme LLC"
+  ],
+  "old_query": "Sanofi ADS"
+ },
+ "SRPT": {
+  "listing": "Sarepta Therapeutics Inc. Common Stock (DE)",
+  "core": "sarepta therapeutics",
+  "queries": [
+   "sarepta therapeutics",
+   "sarepta"
+  ],
+  "aliases": [
+   "Sarepta Therapeutics, Inc."
+  ],
+  "alias_study_counts": {
+   "Sarepta Therapeutics, Inc.": 118
+  },
+  "rejected_top": [
+   "Hoffmann-La Roche",
+   "United States Department of Defense",
+   "University College, London",
+   "Nationwide Children's Hospital",
+   "Kevin Flanigan",
+   "Institut de Myologie, France",
+   "Consultants for Research in Imaging and Spectroscopy",
+   "Great Ormond Street Hospital for Children NHS Foundation Trust",
+   "Catholic University of the Sacred Heart",
+   "Royal Holloway University",
+   "SYSNAV",
+   "University of Newcastle Upon-Tyne"
+  ],
+  "old_query": "Sarepta Therapeutics"
+ },
+ "STOK": {
+  "listing": "Stoke Therapeutics Inc. Common Stock",
+  "core": "stoke therapeutics",
+  "queries": [
+   "stoke therapeutics",
+   "stoke"
+  ],
+  "aliases": [
+   "Stoke Therapeutics, Inc"
+  ],
+  "alias_study_counts": {
+   "Stoke Therapeutics, Inc": 6
+  },
+  "rejected_top": [
+   "University of Aarhus",
+   "Coloplast A/S",
+   "Montecatone Rehabilitation Institute S.p.A.",
+   "National Spinal Injuries Centre, Stoke Mandeville Hospital, United Kingdom,",
+   "University Hospital Heidelberg",
+   "Karolinska University Hospital",
+   "Central Jutland Regional Hospital",
+   "University of Liverpool",
+   "Robert Jones and Agnes Hunt Orthopaedic and District NHS Trust",
+   "The Queen Elizabeth National Spinal Injuries Unit, Scotland",
+   "Stoke Mandeville Spinal Research",
+   "University of Birmingham"
+  ],
+  "old_query": "Stoke Therapeutics"
+ },
+ "TCRX": {
+  "listing": "TScan Therapeutics Inc. Common Stock",
+  "core": "tscan therapeutics",
+  "queries": [
+   "tscan therapeutics",
+   "tscan"
+  ],
+  "aliases": [
+   "TScan Therapeutics, Inc."
+  ],
+  "alias_study_counts": {
+   "TScan Therapeutics, Inc.": 18
+  },
+  "rejected_top": [
+   "Washington University School of Medicine"
+  ],
+  "old_query": "TScan Therapeutics"
+ },
+ "TECH": {
+  "listing": "Bio-Techne Corp Common Stock",
+  "core": "bio techne",
+  "queries": [
+   "bio techne"
+  ],
+  "aliases": [
+   "Bio-Techne Corporation"
+  ],
+  "alias_study_counts": {
+   "Bio-Techne Corporation": 1
+  },
+  "rejected_top": [
+   "Icahn School of Medicine at Mount Sinai"
+  ],
+  "old_query": "Bio-Techne"
+ },
+ "TNYA": {
+  "listing": "Tenaya Therapeutics Inc. Common Stock",
+  "core": "tenaya therapeutics",
+  "queries": [
+   "tenaya therapeutics",
+   "tenaya"
+  ],
+  "aliases": [
+   "Tenaya Therapeutics"
+  ],
+  "alias_study_counts": {
+   "Tenaya Therapeutics": 8
+  },
+  "rejected_top": [
+   "University of California, San Francisco",
+   "Brigham and Women's Hospital",
+   "New York University",
+   "University of Colorado, Denver",
+   "Johns Hopkins University",
+   "The Cleveland Clinic",
+   "Mayo Clinic",
+   "Medical University of South Carolina",
+   "Hopital Louis Pradel",
+   "Istituti Clinici Scientifici Maugeri SpA",
+   "The Queen Elizabeth Hospital",
+   "St George's University Hospitals NHS Foundation Trust"
+  ],
+  "old_query": "Tenaya Therapeutics"
+ },
+ "TRDA": {
+  "listing": "Entrada Therapeutics Inc. Common Stock",
+  "core": "entrada therapeutics",
+  "queries": [
+   "entrada therapeutics",
+   "entrada"
+  ],
+  "aliases": [
+   "Entrada Therapeutics, Inc."
+  ],
+  "alias_study_counts": {
+   "Entrada Therapeutics, Inc.": 8
+  },
+  "rejected_top": [],
+  "old_query": "Entrada Therapeutics"
+ },
+ "TSHA": {
+  "listing": "Taysha Gene Therapies Inc. Common Stock",
+  "core": "taysha gene therapies",
+  "queries": [
+   "taysha gene therapies",
+   "taysha"
+  ],
+  "aliases": [
+   "Taysha Gene Therapies, Inc."
+  ],
+  "alias_study_counts": {
+   "Taysha Gene Therapies, Inc.": 10
+  },
+  "rejected_top": [
+   "Dr. Anupam Sehgal",
+   "GlycoNet"
+  ],
+  "old_query": "Taysha Gene Therapies"
+ },
+ "TWST": {
+  "listing": "Twist Bioscience Corporation Common Stock",
+  "core": "twist bioscience",
+  "queries": [
+   "twist bioscience",
+   "twist"
+  ],
+  "aliases": [],
+  "alias_study_counts": {},
+  "rejected_top": [
+   "Clare Twist",
+   "National Institutes of Health (NIH)",
+   "Charite University, Berlin, Germany",
+   "Bayer",
+   "Health Twist GmbH"
+  ],
+  "old_query": "Twist Bioscience"
+ },
+ "TXG": {
+  "listing": "10x Genomics Inc. Class A Common Stock",
+  "core": "10x genomics",
+  "queries": [
+   "10x genomics"
+  ],
+  "aliases": [],
+  "alias_study_counts": {},
+  "rejected_top": [],
+  "old_query": "10x Genomics"
+ },
+ "VCEL": {
+  "listing": "Vericel Corporation Common Stock",
+  "core": "vericel",
+  "queries": [
+   "vericel"
+  ],
+  "aliases": [
+   "Vericel Corporation"
+  ],
+  "alias_study_counts": {
+   "Vericel Corporation": 15
+  },
+  "rejected_top": [
+   "University of Michigan"
+  ],
+  "old_query": "Vericel"
+ },
+ "VCYT": {
+  "listing": "Veracyte Inc. Common Stock",
+  "core": "veracyte",
+  "queries": [
+   "veracyte"
+  ],
+  "aliases": [
+   "Veracyte, Inc."
+  ],
+  "alias_study_counts": {
+   "Veracyte, Inc.": 8
+  },
+  "rejected_top": [
+   "Gustave Roussy, Cancer Campus, Grand Paris",
+   "BeiGene",
+   "University of Michigan Rogel Cancer Center",
+   "National Institutes of Health (NIH)",
+   "Myrexis Inc.",
+   "MDx Health",
+   "National Cancer Institute (NCI)",
+   "Cancer Research Antwerp",
+   "Bayer",
+   "GenomeDx Biosciences Corp",
+   "Singapore General Hospital",
+   "University of California, San Diego"
+  ],
+  "old_query": "Veracyte"
+ },
+ "VIR": {
+  "listing": "Vir Biotechnology Inc. Common Stock",
+  "core": "vir biotechnology",
+  "queries": [
+   "vir biotechnology"
+  ],
+  "aliases": [
+   "Vir Biotechnology, Inc."
+  ],
+  "alias_study_counts": {
+   "Vir Biotechnology, Inc.": 35
+  },
+  "rejected_top": [
+   "GlaxoSmithKline",
+   "Brii Biosciences Limited",
+   "Eli Lilly and Company",
+   "Alnylam Pharmaceuticals",
+   "Bill and Melinda Gates Foundation",
+   "National Institute of Allergy and Infectious Diseases (NIAID)",
+   "International Network for Strategic Initiatives in Global HIV Trials (INSIGHT)",
+   "University of Copenhagen",
+   "Medical Research Council",
+   "Kirby Institute",
+   "Washington D.C. Veterans Affairs Medical Center",
+   "Advancing Clinical Therapeutics Globally for HIV/AIDS and Other Infections"
+  ],
+  "old_query": "Vir Biotechnology"
+ },
+ "VRTX": {
+  "listing": "Vertex Pharmaceuticals Incorporated Common Stock",
+  "core": "vertex pharmaceuticals",
+  "queries": [
+   "vertex pharmaceuticals",
+   "vertex"
+  ],
+  "aliases": [
+   "Vertex Pharmaceuticals Incorporated"
+  ],
+  "alias_study_counts": {
+   "Vertex Pharmaceuticals Incorporated": 582
+  },
+  "rejected_top": [
+   "Cystic Fibrosis Foundation",
+   "Tanabe Pharma Corporation",
+   "CRISPR Therapeutics",
+   "Tibotec Pharmaceutical Limited",
+   "Tibotec BVBA",
+   "Children's Hospital of Philadelphia",
+   "Alios Biopharma Inc.",
+   "ViroChem Pharma",
+   "Parion Sciences",
+   "Janssen Infectious Diseases BVBA",
+   "National Heart, Lung, and Blood Institute (NHLBI)",
+   "Nottingham University Hospitals NHS Trust"
+  ],
+  "old_query": "Vertex Pharmaceuticals"
+ },
+ "VYGR": {
+  "listing": "Voyager Therapeutics Inc. Common Stock",
+  "core": "voyager therapeutics",
+  "queries": [
+   "voyager therapeutics",
+   "voyager"
+  ],
+  "aliases": [
+   "Voyager Therapeutics"
+  ],
+  "alias_study_counts": {
+   "Voyager Therapeutics": 14
+  },
+  "rejected_top": [
+   "Neurocrine Biosciences",
+   "Voyager Pharmaceutical Corporation",
+   "University of California, San Francisco",
+   "Veristat, Inc.",
+   "Feinstein Institute for Medical Research",
+   "Oregon Health and Science University",
+   "Voyager Biomedical"
+  ],
+  "old_query": "Voyager Therapeutics"
+ },
+ "WGS": {
+  "listing": "GeneDx Holdings Corp. Class A Common Stock",
+  "core": "genedx",
+  "queries": [
+   "genedx"
+  ],
+  "aliases": [
+   "GeneDx"
+  ],
+  "alias_study_counts": {
+   "GeneDx": 5
+  },
+  "rejected_top": [
+   "Illumina, Inc.",
+   "Columbia University",
+   "New York State Department of Health",
+   "University of Washington",
+   "RTI International",
+   "University of North Carolina, Chapel Hill",
+   "The John Merck Fund",
+   "Duke University",
+   "Wake Forest University",
+   "North Carolina Department of Health and Human Services",
+   "National Center for Advancing Translational Sciences (NCATS)",
+   "Cure SMA"
+  ],
+  "old_query": "GeneDx"
+ },
+ "WVE": {
+  "listing": "Wave Life Sciences Inc. Common Stock",
+  "core": "wave life sciences",
+  "queries": [
+   "wave life sciences",
+   "wave"
+  ],
+  "aliases": [
+   "Wave Life Sciences USA, Inc."
+  ],
+  "alias_study_counts": {
+   "Wave Life Sciences USA, Inc.": 30
+  },
+  "rejected_top": [
+   "Wave Neuroscience",
+   "V-Wave Ltd",
+   "Third Wave Therapeutics",
+   "Wholesome Wave",
+   "University of Calgary",
+   "Jett Foundation, Inc.",
+   "Engage Health Inc.",
+   "Hyman, Phelps, & McNamara, P.C.",
+   "Ryans Quest Inc.",
+   "Michaels Cause Inc.",
+   "Nationwide Children's Hospital",
+   "Solid Biosciences Inc."
+  ],
+  "old_query": "Wave Life Sciences"
+ },
+ "YDES": {
+  "listing": "YD Bio Limited Ordinary Shares",
+  "core": "yd bio",
+  "queries": [
+   "yd bio"
+  ],
+  "aliases": [],
+  "alias_study_counts": {},
+  "rejected_top": [],
+  "old_query": "YD Bio"
+ }
+}
