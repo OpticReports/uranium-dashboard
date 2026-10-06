@@ -236,6 +236,25 @@ not cover count as unexposed.
 
 Otherwise no forward test is run, and the result is recorded here.
 
+### Source declarations (logged before any gate statistic)
+
+1. **FMP press releases** (`/stable/news/press-releases`), declared
+   2026-10-06 on Casey's pointer to a news API we already have.
+   - **Content:** company releases from GlobeNewswire, PR Newswire and
+     others, full text with a publish timestamp, going back to at least
+     2023.
+   - **Catalysts in them:** PDUFA target action dates ("PDUFA target
+     action date set for April 10, 2026", Replimune) and guided readouts
+     ("topline data ... on track for December 2026", Kodiak; "in 1H
+     2027", Taysha).
+   - **Point in time:** a release is never backfilled. Its publish
+     timestamp is the as-of time, and a later release that revises a date
+     supersedes it from its own timestamp.
+   - **Filtering:** only releases issued by the company count. Law-firm
+     alerts and third-party items are excluded.
+   - **Status:** primary source; not yet evaluated. Extraction method,
+     spot-check and gate results will be logged here.
+
 ## The Sector list (needs no test; Casey's call)
 
 A reference view: every genomics-labelled name that is listed with a cap
@@ -386,7 +405,7 @@ looks at the metric; monitoring is operational only.
 
 | P | question | what it moves | first asked | status | expires |
 |---|---|---|---|---|---|
-| P1 | Is there a catalyst source with PDUFA dates and guided readout timing AND point-in-time history (vendor vintages or archived snapshots), one you have or one you would pay for? | whether the gate runs at all | 2026-10-06 | open | 2026-12-05 |
+| P1 | Is there a catalyst source with PDUFA dates and guided readout timing AND point-in-time history (vendor vintages or archived snapshots), one you have or one you would pay for? | whether the gate runs at all | 2026-10-06 | answered 2026-10-06: FMP press releases (source 1) | — |
 | P1 | What the desk would do with a ranked screen: a morning glance (top 10) or position preparation (top 25, 5-day lead time) | the list length K and the gating metric; the gate cannot run without it | 2026-10-06 (rev 1, then P3) | open; promoted to P2 (rev 3), then P1 (rev 4) | 2026-12-05 |
 | P2 | Build the reference Sector list (no test needed)? | one dashboard view | 2026-10-06 | open | 2026-12-05 |
 | P3 | Where the snapshot runs (A or B) | the instrument | 2026-10-06 (rev 1) | deferred to the gate (rev 2) | — |
