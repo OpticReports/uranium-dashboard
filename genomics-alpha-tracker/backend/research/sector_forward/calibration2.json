@@ -1,0 +1,96 @@
+{
+ "panel_name_days": 21770,
+ "panel_events": 102,
+ "days": 251,
+ "rankings_all": {
+  "events": 102,
+  "10": {
+   "R1": 0.0,
+   "B1": 0.304,
+   "H1": 0.167,
+   "random": 0.116,
+   "H1_only_vs_B1_only_both": [
+    12,
+    26,
+    5
+   ]
+  },
+  "25": {
+   "R1": 0.196,
+   "B1": 0.48,
+   "H1": 0.245,
+   "random": 0.289,
+   "H1_only_vs_B1_only_both": [
+    14,
+    38,
+    11
+   ]
+  },
+  "40": {
+   "R1": 0.412,
+   "B1": 0.755,
+   "H1": 0.539,
+   "random": 0.463,
+   "H1_only_vs_B1_only_both": [
+    7,
+    29,
+    48
+   ]
+  }
+ },
+ "rankings_small_mid": {
+  "events": 100,
+  "10": {
+   "R1": 0.2,
+   "B1": 0.31,
+   "H1": 0.2,
+   "random": 0.158,
+   "H1_only_vs_B1_only_both": [
+    13,
+    24,
+    7
+   ]
+  },
+  "25": {
+   "R1": 0.48,
+   "B1": 0.49,
+   "H1": 0.55,
+   "random": 0.396,
+   "H1_only_vs_B1_only_both": [
+    14,
+    8,
+    41
+   ]
+  },
+  "40": {
+   "R1": 0.69,
+   "B1": 0.76,
+   "H1": 0.76,
+   "random": 0.634,
+   "H1_only_vs_B1_only_both": [
+    7,
+    7,
+    69
+   ]
+  }
+ },
+ "readout_window_mh": {
+  "odds_ratio": 1.202,
+  "ci90_name_bootstrap": [
+   0.723,
+   1.828
+  ],
+  "name_days_in_window": 7174,
+  "events_in_window": 25,
+  "event_rate_in_window": 0.00348,
+  "event_rate_outside": 0.00528,
+  "strata": "vol60 quintile x cap tercile (pooled over the panel)"
+ },
+ "event_rate_by_vol_quintile": {
+  "1": 0.00046,
+  "2": 0.00276,
+  "3": 0.00505,
+  "4": 0.00597,
+  "5": 0.00919
+ }
+}
