@@ -283,6 +283,51 @@ because measurement 3 needs it.
      StudyFirstPostDate (95th percentile) and reported.
    - *Day before.* P is the prior trading day in FMP's bars, and the funnel
      replay at P includes P's own close, since the sweep runs at 21:45 UTC.
+   - *Rule (b) title check (the conditional step in Tier 1's rule (b)).*
+     It fires if at least one name in the measurement-2 misses sample is
+     labelled genomics with modality cell therapy, AND the funnel's title
+     behaviour would have caught that name on 2026-10-05. The funnel's
+     title behaviour reads the first 120 characters of the title of every
+     study on the funnel's page that day: active statuses, primary
+     completion on or after the day, the 50 nearest. If it fires, the
+     title half of rule (b) switches to that behaviour for every figure,
+     and both runs are reported. The verdict comes from the switched run.
+   - *M&A days (stage 1, corrected before any metric).* FMP's M&A feed
+     turned out to list S-4 registrations only: stock deals, dated weeks
+     after announcement. It flagged none of the first run's 781 moves. A
+     move is now an M&A day if, within five calendar days, the name filed
+     or was the subject of a tender-offer or merger form (SC TO-C, SC14D9C,
+     SC TO-T, SC 14D9, 425, PREM14A, DEFM14A), OR an FMP stock-news
+     headline from the day before to the day after announces a deal or
+     carries a law-firm "is the sale fair" alert. Every flagged move keeps
+     its evidence, and the flagged list is checked by hand.
+   - *Cap on a past day* has no staleness cut-off: it is FMP's latest cap
+     on or before the day, while the name is listed. The IPO exclusion is
+     by date: the first five trading days on or after the IPO date.
+   - *Data cleaning (stage 1, from the pre-result code review, before any
+     metric).*
+     - Warrants, units, rights, preferreds and when-issued symbols leave
+       the delisted list. FMP files them under the issuer's name, and they
+       borrow the issuer's market cap (WGSWW and TALKW alone made 92 of
+       the first run's 781 moves).
+     - A delisted ticker whose history FMP also backfilled under its new
+       symbol (same CIK, identical closes) is dropped. Where it overlaps
+       only part of that history, just the overlapping days are dropped.
+     - A move whose adjusted price change disagrees with FMP's same-day cap
+       change by more than 50% is an adjustment break, not a move. It is
+       excluded and listed (ESPR +15,949%, ATAI +1,274%).
+     - M&A days are TARGET days. The automatic flag uses only forms the
+       target files, plus headlines that name the company as the one being
+       bought. Every genomics-labelled move, the only moves any metric
+       reads, is then hand-checked by two blind reviewers with a third on
+       disagreements; their call overrides the automatic flag.
+   - *Reporting.* The INCONCLUSIVE floor of 15 applies to the primary
+     denominator, and both counts are printed. The rule-(c) figure is
+     reported as "with rule (c), look-ahead", not as a bound, because
+     adding rule-(c) names to the screen can also push names out of its
+     top 25. If the production export arrives, the live-queue cross-check
+     replays from an empty queue on 2026-09-08, as the live funnel
+     started.
 
 ## Counter-agent verdict
 

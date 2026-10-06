@@ -11,8 +11,9 @@ and database growth. Per-day figures that are extrapolated say so.
   Tier 1: one weekday's fifth of the weekly CT.gov evaluation run LIVE (no
           cache) for the names >= $300M in today's census; calls, seconds,
           bytes. Classification runtime for every eligible name, timed.
-  FMP:    Tier 1 size from results.json -> monthly profiles, weekly
-          runway checks (2 statements), one-time 60-day backfill.
+  FMP:    monthly profiles for every census name >= $300M (rule (c)),
+          runway refreshes on filings (~4 a year per Tier 1 name), one-time
+          60-day backfill per Tier 1 name (Tier 1 size from results.json).
 
     cd genomics-alpha-tracker/backend && python -m research.sector_tier.m3_dryrun
 """
@@ -101,7 +102,8 @@ def main() -> None:
     caps_today = {p["symbol"]: (census.get(p["symbol"]) or {}).get("mcap_now") or 0 for p in pop}
     eligible_today = [p for p in pop if p["source"] != "delisted" and caps_today[p["symbol"]] >= P.MCAP_MIN]
     res = json.loads((HERE / "results.json").read_text()) if (HERE / "results.json").exists() else {}
-    t1 = (res.get("m2") or {}).get("tier1_today")
+    run = res.get(res.get("verdict_from") == "funnel" and "funnel_titles" or "strict") or {}
+    t1 = (run.get("m2") or {}).get("tier1_today")
 
     t0 = time.time()
     ctg = json.loads((HERE / "ctgov.json").read_text())["names"]
@@ -117,12 +119,15 @@ def main() -> None:
         "tier0": tier0_growth(),
         "tier1_ctgov": tier1_ctgov_one_weekday(eligible_today, census),
         "tier1_classification": {"names": n_eval, "seconds_incl_load": round(classify_secs, 2)},
+        # Rule (c) needs a monthly profile for EVERY census name >= $300M (that is how
+        # a name outside Tier 1 gets in); runway figures refresh on filings, ~4 a year.
         "fmp": None if not t1 else {
             "tier1_size_today": t1,
-            "monthly_profiles_per_weekday": round(t1 / 21, 1),
-            "weekly_runway_checks_per_weekday": round(2 * t1 / 5, 1),
+            "census_names_needing_monthly_profile": len(eligible_today),
+            "monthly_profiles_per_weekday": round(len(eligible_today) / 21, 1),
+            "runway_refreshes_per_weekday": round(t1 * 4 / 252, 1),
             "one_time_backfill_calls": t1,
-            "peak_minute_share_of_our_600_limit": round((t1 / 21 + 2 * t1 / 5) / FMP_LIMIT_PER_MIN, 3),
+            "minutes_at_our_600_per_min_limiter_per_weekday": round((len(eligible_today) / 21 + t1 * 4 / 252) / FMP_LIMIT_PER_MIN, 3),
             "extrapolated": True},
         "quota": "provider quota taken as met on Casey's statement (amendment 2); figures above are against our own client limits",
     }

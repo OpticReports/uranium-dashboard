@@ -1,0 +1,2195 @@
+{
+ "TSHA|2025-10-02": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "TSHA|2025-10-02",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA Breakthrough Therapy Designation and regulatory update for TSHA-102 in Rett syndrome; no deal filings."
+  },
+  "b": {
+   "id": "TSHA|2025-10-02",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA Breakthrough Therapy Designation for TSHA-102 in Rett syndrome."
+  },
+  "adj": null
+ },
+ "LXEO|2025-10-07": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "LXEO|2025-10-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA accelerated approval pathway progress and positive interim LX2006 data; clinical/regulatory news."
+  },
+  "b": {
+   "id": "LXEO|2025-10-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA accelerated-approval pathway progress and positive interim LX2006 data."
+  },
+  "adj": null
+ },
+ "NGNE|2025-10-09": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "NGNE|2025-10-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive regulatory update for NGN-401 in Rett syndrome; registrational trial plans."
+  },
+  "b": {
+   "id": "NGNE|2025-10-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive regulatory update for NGN-401 Rett gene therapy; registrational dosing plan."
+  },
+  "adj": null
+ },
+ "RCKT|2025-10-14": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "RCKT|2025-10-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA acceptance of KRESLADI BLA resubmission; regulatory news."
+  },
+  "b": {
+   "id": "RCKT|2025-10-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA accepted KRESLADI BLA resubmission; regulatory."
+  },
+  "adj": null
+ },
+ "SANA|2025-10-15": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "SANA|2025-10-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only opinion/speculative articles ('next 100-bagger'); no deal filings or bid news."
+  },
+  "b": {
+   "id": "SANA|2025-10-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only speculative '100-bagger' commentary; no filings, no deal news."
+  },
+  "adj": null
+ },
+ "PRAX|2025-10-16": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "PRAX|2025-10-16",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive Essential3 tremor trial topline results, followed by $525M public offering."
+  },
+  "b": {
+   "id": "PRAX|2025-10-16",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive Essential3 essential tremor topline results, then $525M offering."
+  },
+  "adj": null
+ },
+ "PSNL|2025-10-16": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "PSNL|2025-10-16",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "New lung cancer trial data using MRD testing; clinical data news."
+  },
+  "b": {
+   "id": "PSNL|2025-10-16",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "New MRD data from a lung cancer trial; clinical data."
+  },
+  "adj": null
+ },
+ "PACB|2025-10-20": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "PACB|2025-10-20",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Product/multiomic innovation news only; no deal filings or bid reports."
+  },
+  "b": {
+   "id": "PACB|2025-10-20",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Product/multiomic innovation headline only; no deal news or M&A filings."
+  },
+  "adj": null
+ },
+ "REPL|2025-10-20": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "REPL|2025-10-20",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA acceptance of RP1 BLA resubmission for advanced melanoma."
+  },
+  "b": {
+   "id": "REPL|2025-10-20",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA accepted RP1 BLA resubmission for advanced melanoma; regulatory."
+  },
+  "adj": null
+ },
+ "ARCT|2025-10-22": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "ARCT|2025-10-22",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Underwhelming interim Phase 2 cystic fibrosis data; stock crashed."
+  },
+  "b": {
+   "id": "ARCT|2025-10-22",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Underwhelming interim Phase 2 cystic fibrosis data; clinical."
+  },
+  "adj": null
+ },
+ "DYN|2025-10-27": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "DYN|2025-10-27",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Rallied as 'next buyout target' after Novartis-Avidity deal read-across; speculation, no bid for Dyne."
+  },
+  "b": {
+   "id": "DYN|2025-10-27",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Rose as 'investors look for next buyout target' after Novartis-Avidity deal; read-across speculation, no bid for Dyne."
+  },
+  "adj": null
+ },
+ "NTLA|2025-10-27": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "NTLA|2025-10-27",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "MAGNITUDE trials paused after serious liver safety event; clinical news."
+  },
+  "b": {
+   "id": "NTLA|2025-10-27",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Paused MAGNITUDE nex-z trials after serious liver safety event."
+  },
+  "adj": null
+ },
+ "GH|2025-10-30": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "GH|2025-10-30",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 2025 results beat and raised revenue guidance; earnings."
+  },
+  "b": {
+   "id": "GH|2025-10-30",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 results beat and raised 2025 revenue guidance."
+  },
+  "adj": null
+ },
+ "ILMN|2025-10-31": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "ILMN|2025-10-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 earnings and revenue beat; clinical market momentum."
+  },
+  "b": {
+   "id": "ILMN|2025-10-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 earnings beat and clinical market momentum drove the move."
+  },
+  "adj": null
+ },
+ "PACB|2025-10-31": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "PACB|2025-10-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No deal filings or bid news; only institutional position headline."
+  },
+  "b": {
+   "id": "PACB|2025-10-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only an institutional position-trim headline; no deal, no M&A filings."
+  },
+  "adj": null
+ },
+ "QURE|2025-11-03": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "QURE|2025-11-03",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA says AMT-130 Huntington's data not adequate; securities-fraud (not sale) investigations."
+  },
+  "b": {
+   "id": "QURE|2025-11-03",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA said AMT-130 Huntington's data not adequate; securities-fraud alerts, not merger alerts."
+  },
+  "adj": null
+ },
+ "CSTL|2025-11-04": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CSTL|2025-11-04",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 2025 results and AdvanceAD-Tx launch; earnings."
+  },
+  "b": {
+   "id": "CSTL|2025-11-04",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 2025 results and AdvanceAD-Tx launch; earnings-driven rally."
+  },
+  "adj": null
+ },
+ "MYGN|2025-11-04": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "MYGN|2025-11-04",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Break-even Q3 earnings; downgrade."
+  },
+  "b": {
+   "id": "MYGN|2025-11-04",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Break-even Q3 earnings, downgrade to Hold; earnings-driven."
+  },
+  "adj": null
+ },
+ "SRPT|2025-11-04": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "SRPT|2025-11-04",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "ESSENCE confirmatory Duchenne study missed primary goal; Q3 results."
+  },
+  "b": {
+   "id": "SRPT|2025-11-04",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "ESSENCE confirmatory Duchenne study missed primary endpoint alongside Q3 results."
+  },
+  "adj": null
+ },
+ "VCYT|2025-11-05": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "VCYT|2025-11-05",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 2025 earnings and revenue beat."
+  },
+  "b": {
+   "id": "VCYT|2025-11-05",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 earnings and revenue beat estimates; no deal."
+  },
+  "adj": null
+ },
+ "BNTC|2025-11-06": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "BNTC|2025-11-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "$100M common stock public offering priced; dilution."
+  },
+  "b": {
+   "id": "BNTC|2025-11-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Priced a $100M common stock offering; dilution, not M&A."
+  },
+  "adj": null
+ },
+ "IOVA|2025-11-06": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IOVA|2025-11-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Narrower-than-expected Q3 loss, revenue up y/y; earnings."
+  },
+  "b": {
+   "id": "IOVA|2025-11-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "IOVA soars 28% on narrower-than-expected Q3 loss; earnings-driven."
+  },
+  "adj": null
+ },
+ "DNA|2025-11-07": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "DNA|2025-11-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 2025 financial results; earnings."
+  },
+  "b": {
+   "id": "DNA|2025-11-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Ginkgo Q3 2025 earnings release and call drove the drop."
+  },
+  "adj": null
+ },
+ "NTLA|2025-11-07": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "NTLA|2025-11-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 loss, pipeline trouble after nex-z safety pause; earnings/clinical."
+  },
+  "b": {
+   "id": "NTLA|2025-11-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 earnings and pipeline trouble after nex-z safety pause; no acquisition news."
+  },
+  "adj": null
+ },
+ "PSNL|2025-11-10": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "PSNL|2025-11-10",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Medicare coverage for ultrasensitive MRD test in breast cancer; reimbursement news."
+  },
+  "b": {
+   "id": "PSNL|2025-11-10",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Medicare coverage for ultrasensitive MRD test in breast cancer; reimbursement news, no deal."
+  },
+  "adj": null
+ },
+ "ENGN|2025-11-11": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "ENGN|2025-11-11",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Pivotal LEGEND detalimogene data (62% CR rate) drove the move; follow-on offering after."
+  },
+  "b": {
+   "id": "ENGN|2025-11-11",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "LEGEND pivotal detalimogene data, 62% CR rate at 6 months."
+  },
+  "adj": null
+ },
+ "PGEN|2025-11-14": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "PGEN|2025-11-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 results and analyst upgrade; no deal filings or headlines."
+  },
+  "b": {
+   "id": "PGEN|2025-11-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q3 results and analyst upgrade."
+  },
+  "adj": null
+ },
+ "YDES|2025-11-14": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "YDES|2025-11-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines; no evidence of M&A."
+  },
+  "b": {
+   "id": "YDES|2025-11-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines; no M&A evidence."
+  },
+  "adj": null
+ },
+ "EXAS|2025-11-19": {
+  "ma": true,
+  "source": "agreed",
+  "a": {
+   "id": "EXAS|2025-11-19",
+   "ma_target_day": true,
+   "kind": "confirmed-talks-or-bid",
+   "evidence": "Bloomberg: Abbott weighing takeover of Exact Sciences (Nov 19); deal announced next day at $21B."
+  },
+  "b": {
+   "id": "EXAS|2025-11-19",
+   "ma_target_day": true,
+   "kind": "confirmed-talks-or-bid",
+   "evidence": "Bloomberg: Abbott weighing takeover of Exact Sciences; deal ($21B) announced next morning."
+  },
+  "adj": null
+ },
+ "ARWR|2025-11-26": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "ARWR|2025-11-26",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Fiscal year-end results and pipeline updates; no deal filings."
+  },
+  "b": {
+   "id": "ARWR|2025-11-26",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Fiscal year-end results/earnings call; no deal news or M&A filings."
+  },
+  "adj": null
+ },
+ "CAPR|2025-12-03": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CAPR|2025-12-03",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive Phase 3 HOPE-3 deramiocel topline results."
+  },
+  "b": {
+   "id": "CAPR|2025-12-03",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive Phase 3 HOPE-3 deramiocel results in Duchenne."
+  },
+  "adj": null
+ },
+ "PRAX|2025-12-05": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "PRAX|2025-12-05",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive EMBOLD relutrigine results and pre-NDA FDA meeting."
+  },
+  "b": {
+   "id": "PRAX|2025-12-05",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive EMBOLD relutrigine results and pre-NDA FDA meeting."
+  },
+  "adj": null
+ },
+ "WVE|2025-12-08": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "WVE|2025-12-08",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive interim WVE-007 obesity data; public offering followed."
+  },
+  "b": {
+   "id": "WVE|2025-12-08",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive interim WVE-007 obesity Phase 1 data; follow-on offering."
+  },
+  "adj": null
+ },
+ "KYTX|2025-12-15": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "KYTX|2025-12-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive registrational KYSA-8 topline data in stiff person syndrome."
+  },
+  "b": {
+   "id": "KYTX|2025-12-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive topline KYSA-8 registrational data in stiff person syndrome."
+  },
+  "adj": null
+ },
+ "FDMT|2025-12-17": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "FDMT|2025-12-17",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Interim 4D-710 AEROW cystic fibrosis data."
+  },
+  "b": {
+   "id": "FDMT|2025-12-17",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Interim 4D-710 AEROW Phase 1 cystic fibrosis data."
+  },
+  "adj": null
+ },
+ "KYTX|2025-12-17": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "KYTX|2025-12-17",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Pricing of $100M public offering after data rally."
+  },
+  "b": {
+   "id": "KYTX|2025-12-17",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Pricing of $100M public offering of common stock."
+  },
+  "adj": null
+ },
+ "RARE|2025-12-29": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "RARE|2025-12-29",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Phase 3 Orbit/Cosmic setrusumab trials failed."
+  },
+  "b": {
+   "id": "RARE|2025-12-29",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Setrusumab Phase 3 Orbit/Cosmic trials failed primary endpoint."
+  },
+  "adj": null
+ },
+ "LAB|2026-01-08": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "LAB|2026-01-08",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Preliminary Q4/FY2025 revenue announcement; no deal filings."
+  },
+  "b": {
+   "id": "LAB|2026-01-08",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Preliminary Q4 and FY2025 revenue announcement."
+  },
+  "adj": null
+ },
+ "CGON|2026-01-09": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CGON|2026-01-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Updated PIVOT-006 Phase 3 topline timeline."
+  },
+  "b": {
+   "id": "CGON|2026-01-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Updated PIVOT-006 Phase 3 topline data timeline."
+  },
+  "adj": null
+ },
+ "BEAM|2026-01-12": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "BEAM|2026-01-12",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Strategic priorities update and FDA sign-off on gene-editing plan."
+  },
+  "b": {
+   "id": "BEAM|2026-01-12",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Strategic priorities and FDA sign-off on gene-editing plan."
+  },
+  "adj": null
+ },
+ "CDNA|2026-01-12": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CDNA|2026-01-12",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Preliminary Q4/FY2025 financial results."
+  },
+  "b": {
+   "id": "CDNA|2026-01-12",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Preliminary Q4 and FY2025 financial results."
+  },
+  "adj": null
+ },
+ "LXEO|2026-01-12": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "LXEO|2026-01-12",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Interim Phase I/II LX2020 PKP2 data."
+  },
+  "b": {
+   "id": "LXEO|2026-01-12",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Interim Phase I/II LX2020 data in PKP2 cardiomyopathy."
+  },
+  "adj": null
+ },
+ "IBRX|2026-01-15": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IBRX|2026-01-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Preliminary $113M Anktiva revenue (700% YoY growth)."
+  },
+  "b": {
+   "id": "IBRX|2026-01-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Preliminary $113M net product revenue, 700% YoY increase."
+  },
+  "adj": null
+ },
+ "IBRX|2026-01-16": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IBRX|2026-01-16",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "CAR-NK Waldenstrom data and BCG-naive NMIBC interim analysis."
+  },
+  "b": {
+   "id": "IBRX|2026-01-16",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "CAR-NK Waldenstrom data, NMIBC interim analysis, and 700% revenue growth."
+  },
+  "adj": null
+ },
+ "CAMP|2026-01-20": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CAMP|2026-01-20",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines; no evidence of M&A."
+  },
+  "b": {
+   "id": "CAMP|2026-01-20",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines; 21% drop with no M&A evidence."
+  },
+  "adj": null
+ },
+ "GLSI|2026-01-26": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "GLSI|2026-01-26",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only headline is FLAMINGO-01 cash burn/financing update; no deal evidence."
+  },
+  "b": {
+   "id": "GLSI|2026-01-26",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only headline is FLAMINGO-01 cash burn/financing update; no M&A filings."
+  },
+  "adj": null
+ },
+ "DNA|2026-02-06": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "DNA|2026-02-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "OpenAI GPT-5 autonomous lab benchmark news; no deal filings."
+  },
+  "b": {
+   "id": "DNA|2026-02-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only headline is autonomous lab/OpenAI benchmark result; no deal news."
+  },
+  "adj": null
+ },
+ "IBRX|2026-02-18": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IBRX|2026-02-18",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "European Commission authorization of Anktiva for NMIBC."
+  },
+  "b": {
+   "id": "IBRX|2026-02-18",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "European Commission authorization of ANKTIVA for NMIBC."
+  },
+  "adj": null
+ },
+ "GRAL|2026-02-20": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "GRAL|2026-02-20",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "NHS-Galleri trial missed primary endpoint; earnings."
+  },
+  "b": {
+   "id": "GRAL|2026-02-20",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "NHS-Galleri cancer screening trial missed main goal; Q4 earnings."
+  },
+  "adj": null
+ },
+ "ACLX|2026-02-23": {
+  "ma": true,
+  "source": "agreed",
+  "a": {
+   "id": "ACLX|2026-02-23",
+   "ma_target_day": true,
+   "kind": "acquisition-announced",
+   "evidence": "Gilead to acquire Arcellx for $7.8B; SC14D9C and SC TO-C filed same day."
+  },
+  "b": {
+   "id": "ACLX|2026-02-23",
+   "ma_target_day": true,
+   "kind": "acquisition-announced",
+   "evidence": "Gilead Sciences to acquire Arcellx for $7.8B announced 2026-02-23; SC TO-C and SC14D9C filed same day."
+  },
+  "adj": null
+ },
+ "IOVA|2026-02-24": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IOVA|2026-02-24",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive TIL sarcoma trial results plus Q4 earnings beat; 10-K/8-K only, no merger forms."
+  },
+  "b": {
+   "id": "IOVA|2026-02-24",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive TIL sarcoma trial results and Q4 earnings."
+  },
+  "adj": null
+ },
+ "VIR|2026-02-24": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "VIR|2026-02-24",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Astellas licensing collaboration for VIR-5500 plus Phase 1 data and earnings; a licensing deal, not an acquisition."
+  },
+  "b": {
+   "id": "VIR|2026-02-24",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Astellas licensing collaboration for VIR-5500 plus Phase 1 data; licensing deal, not acquisition."
+  },
+  "adj": null
+ },
+ "QURE|2026-02-26": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "QURE|2026-02-26",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Fresh FDA controversy over AMT-130 and securities class action alerts; no deal forms."
+  },
+  "b": {
+   "id": "QURE|2026-02-26",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Shares tumble on fresh FDA controversy; class-action reminders, no deal filings."
+  },
+  "adj": null
+ },
+ "DNA|2026-02-27": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "DNA|2026-02-27",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q4 results, AI/autonomous-lab pivot and divestiture of its own biosecurity unit; Ginkgo is the seller, not a target."
+  },
+  "b": {
+   "id": "DNA|2026-02-27",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q4 results, pivot to autonomous labs, divestiture of biosecurity unit (company is seller, not target)."
+  },
+  "adj": null
+ },
+ "FLGT|2026-02-27": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "FLGT|2026-02-27",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q4 2025 earnings release and call; 10-K/8-K only."
+  },
+  "b": {
+   "id": "FLGT|2026-02-27",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q4 and FY2025 earnings results."
+  },
+  "adj": null
+ },
+ "QURE|2026-03-02": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "QURE|2026-03-02",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA says study data insufficient for AMT-130 application; Q4 results."
+  },
+  "b": {
+   "id": "QURE|2026-03-02",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA says study data insufficient for AMT-130 application; Q4 results."
+  },
+  "adj": null
+ },
+ "QURE|2026-03-06": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "QURE|2026-03-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA official calls AMT-130 a failure; regulatory news and class-action alerts, no deal."
+  },
+  "b": {
+   "id": "QURE|2026-03-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA official calls AMT-130 a failure; regulatory controversy and class actions."
+  },
+  "adj": null
+ },
+ "SLDB|2026-03-06": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "SLDB|2026-03-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Oversubscribed $240M private placement; 13D/A filings are holder updates, not a bid."
+  },
+  "b": {
+   "id": "SLDB|2026-03-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Oversubscribed $240M private placement; 13D/A from holders."
+  },
+  "adj": null
+ },
+ "QURE|2026-03-09": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "QURE|2026-03-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Stock soared after a polarizing FDA official stepped down; regulatory news."
+  },
+  "b": {
+   "id": "QURE|2026-03-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Stock soars after polarizing FDA official steps down; regulatory news."
+  },
+  "adj": null
+ },
+ "OCGN|2026-03-11": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "OCGN|2026-03-11",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Oppenheimer initiates at Outperform on gene therapy pipeline; no deal forms."
+  },
+  "b": {
+   "id": "OCGN|2026-03-11",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Oppenheimer initiates at Outperform; analyst coverage, not M&A."
+  },
+  "adj": null
+ },
+ "IBRX|2026-03-24": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IBRX|2026-03-24",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA warning letter over Anktiva advertising claims."
+  },
+  "b": {
+   "id": "IBRX|2026-03-24",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA warning letter over Anktiva advertising claims."
+  },
+  "adj": null
+ },
+ "SRPT|2026-03-25": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "SRPT|2026-03-25",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "First clinical data from siRNA FSHD1/DM1 pipeline."
+  },
+  "b": {
+   "id": "SRPT|2026-03-25",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "First clinical data from siRNA pipeline (FSHD1, DM1)."
+  },
+  "adj": null
+ },
+ "PGEN|2026-03-26": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "PGEN|2026-03-26",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FY2025 results and analyst forecast boosts/upgrade."
+  },
+  "b": {
+   "id": "PGEN|2026-03-26",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FY2025 results and analyst forecast boosts/upgrade."
+  },
+  "adj": null
+ },
+ "WVE|2026-03-26": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "WVE|2026-03-26",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Disappointing high-dose WVE-007 obesity interim data."
+  },
+  "b": {
+   "id": "WVE|2026-03-26",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Disappointing high-dose WVE-007 obesity interim data."
+  },
+  "adj": null
+ },
+ "REPL|2026-04-08": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "REPL|2026-04-08",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No deal news or merger forms; only insider-sale headline. No evidence of M&A."
+  },
+  "b": {
+   "id": "REPL|2026-04-08",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only an insider-sale headline; no merger/tender filings."
+  },
+  "adj": null
+ },
+ "REPL|2026-04-13": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "REPL|2026-04-13",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Second FDA CRL rejecting melanoma drug BLA."
+  },
+  "b": {
+   "id": "REPL|2026-04-13",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Second FDA CRL for melanoma drug BLA; shares plunge."
+  },
+  "adj": null
+ },
+ "ALLO|2026-04-14": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "ALLO|2026-04-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "ALPHA3 interim futility analysis followed by $175M public offering."
+  },
+  "b": {
+   "id": "ALLO|2026-04-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "ALPHA3 interim futility data and $175M public offering."
+  },
+  "adj": null
+ },
+ "TSHA|2026-04-15": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "TSHA|2026-04-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC deal forms and no headlines; no evidence of any acquisition of Taysha."
+  },
+  "b": {
+   "id": "TSHA|2026-04-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines; no merger/tender filings indicating a deal."
+  },
+  "adj": null
+ },
+ "CDNA|2026-04-16": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CDNA|2026-04-16",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "CareDx divests Lab Products business to EuroBio for $170M plus preliminary Q1; an asset sale, not acquisition of CareDx."
+  },
+  "b": {
+   "id": "CDNA|2026-04-16",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "CareDx divests Lab Products business to EuroBio for $170M; asset sale, company not the target."
+  },
+  "adj": null
+ },
+ "CADL|2026-04-17": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CADL|2026-04-17",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC deal forms and no headlines; no evidence of any acquisition of Candel."
+  },
+  "b": {
+   "id": "CADL|2026-04-17",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines; no tender/merger filings indicating a deal."
+  },
+  "adj": null
+ },
+ "CABA|2026-05-04": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CABA|2026-05-04",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Pricing of $150M underwritten offering."
+  },
+  "b": {
+   "id": "CABA|2026-05-04",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Pricing of $150M underwritten offering (424B5); no M&A evidence."
+  },
+  "adj": null
+ },
+ "WGS|2026-05-05": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "WGS|2026-05-05",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q1 revenue miss and lowered outlook; DEF 14A is the annual proxy, not a merger proxy."
+  },
+  "b": {
+   "id": "WGS|2026-05-05",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q1 results and guidance update; stock plummeted ~45%, securities-fraud investigation alerts."
+  },
+  "adj": null
+ },
+ "VCYT|2026-05-06": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "VCYT|2026-05-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q1 2026 earnings and revenue beat."
+  },
+  "b": {
+   "id": "VCYT|2026-05-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q1 2026 earnings beat; no M&A forms or headlines."
+  },
+  "adj": null
+ },
+ "CSTL|2026-05-07": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CSTL|2026-05-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q1 2026 results."
+  },
+  "b": {
+   "id": "CSTL|2026-05-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q1 2026 earnings results; no deal filings or headlines."
+  },
+  "adj": null
+ },
+ "ENGN|2026-05-07": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "ENGN|2026-05-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Updated interim LEGEND pivotal cohort results; durability concerns. DEF 14A is the annual proxy."
+  },
+  "b": {
+   "id": "ENGN|2026-05-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Updated interim LEGEND pivotal cohort results; clinical data drove the 80% drop."
+  },
+  "adj": null
+ },
+ "TRDA|2026-05-07": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "TRDA|2026-05-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Topline Cohort 1 ENTR-601-44 Duchenne data plus Q1 results; selloff driven by clinical data."
+  },
+  "b": {
+   "id": "TRDA|2026-05-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "ENTR-601-44 Cohort 1 topline Duchenne data triggered selloff; clinical news."
+  },
+  "adj": null
+ },
+ "MRVI|2026-05-08": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "MRVI|2026-05-08",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q1 2026 earnings and revenue beat; no deal filings or headlines."
+  },
+  "b": {
+   "id": "MRVI|2026-05-08",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q1 2026 earnings and revenue beat estimates; earnings-driven surge."
+  },
+  "adj": null
+ },
+ "REPL|2026-05-08": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "REPL|2026-05-08",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only a Pomerantz securities-claims investigation alert; no deal forms or bid news."
+  },
+  "b": {
+   "id": "REPL|2026-05-08",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only a Pomerantz securities-claims alert; no deal filings or bid reports."
+  },
+  "adj": null
+ },
+ "REPL|2026-05-13": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "REPL|2026-05-13",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA-shakeup speculation about RP1 path and securities-claims alerts; regulatory, not M&A."
+  },
+  "b": {
+   "id": "REPL|2026-05-13",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA shakeup speculation for RP1; Pomerantz alerts are securities claims, not sale-fairness."
+  },
+  "adj": null
+ },
+ "SLS|2026-05-13": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "SLS|2026-05-13",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q1 results and pivotal leukemia trial readout approaching; no deal filings."
+  },
+  "b": {
+   "id": "SLS|2026-05-13",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q1 results and corporate update ahead of pivotal readout; no deal news."
+  },
+  "adj": null
+ },
+ "RGNX|2026-05-14": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "RGNX|2026-05-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Pivotal Phase III AFFINITY DUCHENNE topline results plus Q1 earnings."
+  },
+  "b": {
+   "id": "RGNX|2026-05-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "RGX-202 pivotal Duchenne topline results plus Q1 earnings; clinical news."
+  },
+  "adj": null
+ },
+ "REPL|2026-05-29": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "REPL|2026-05-29",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Agreement with FDA to resubmit RP1 BLA; regulatory news."
+  },
+  "b": {
+   "id": "REPL|2026-05-29",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Agreement with FDA to resubmit RP1 BLA; regulatory news."
+  },
+  "adj": null
+ },
+ "LEGN|2026-06-02": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "LEGN|2026-06-02",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "In vivo CAR-T LB2501 data at EHA; 'Jumps 42% On New Data'."
+  },
+  "b": {
+   "id": "LEGN|2026-06-02",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "In vivo CAR-T LB2501 Phase 1 data at EHA; 'Jumps 42% On New Data'."
+  },
+  "adj": null
+ },
+ "PRAX|2026-06-02": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "PRAX|2026-06-02",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Vormatrigine pivotal epilepsy study missed primary endpoint."
+  },
+  "b": {
+   "id": "PRAX|2026-06-02",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Vormatrigine pivotal epilepsy study missed primary endpoint; clinical news."
+  },
+  "adj": null
+ },
+ "LAB|2026-06-08": {
+  "ma": true,
+  "source": "agreed",
+  "a": {
+   "id": "LAB|2026-06-08",
+   "ma_target_day": true,
+   "kind": "merger-of-company",
+   "evidence": "Standard BioTools and Treeline Biosciences announce merger agreement; 425 filed same day (reverse-merger style, control passes to Treeline)."
+  },
+  "b": {
+   "id": "LAB|2026-06-08",
+   "ma_target_day": true,
+   "kind": "merger-of-company",
+   "evidence": "Standard BioTools and Treeline Biosciences announce merger agreement; 425 filed same day."
+  },
+  "adj": null
+ },
+ "NTLA|2026-06-15": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "NTLA|2026-06-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Additional Phase III HAE gene-editing data; clinical news."
+  },
+  "b": {
+   "id": "NTLA|2026-06-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Additional Phase III HAE data for gene editing therapy; clinical news."
+  },
+  "adj": null
+ },
+ "QURE|2026-06-17": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "QURE|2026-06-17",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA green light for AMT-130 Huntington's BLA submission; regulatory news."
+  },
+  "b": {
+   "id": "QURE|2026-06-17",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA cleared BLA submission path for AMT-130 in Huntington's; regulatory news."
+  },
+  "adj": null
+ },
+ "SLN|2026-06-24": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "SLN|2026-06-24",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Analyst note calling stock deeply mispriced; no deal filings or bid news."
+  },
+  "b": {
+   "id": "SLN|2026-06-24",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Analyst 'deeply mispriced' note only; no deal filings or bid reports."
+  },
+  "adj": null
+ },
+ "TECH|2026-06-25": {
+  "ma": true,
+  "source": "agreed",
+  "a": {
+   "id": "TECH|2026-06-25",
+   "ma_target_day": true,
+   "kind": "acquisition-announced",
+   "evidence": "Merck KGaA agrees to acquire Bio-Techne for $73/share cash (~$11.3B); fair-price law-firm alerts, DEFA14A."
+  },
+  "b": {
+   "id": "TECH|2026-06-25",
+   "ma_target_day": true,
+   "kind": "acquisition-announced",
+   "evidence": "Merck KGaA agrees to acquire Bio-Techne for $73/share cash (~$11.3B); DEFA14A filed."
+  },
+  "adj": null
+ },
+ "SLS|2026-06-29": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "SLS|2026-06-29",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No deal headlines or forms; only an 8-K and unrelated move commentary."
+  },
+  "b": {
+   "id": "SLS|2026-06-29",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No deal filings or acquisition headlines; only an unrelated 8-K and a move article."
+  },
+  "adj": null
+ },
+ "IONS|2026-07-09": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IONS|2026-07-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Eplontersen CARDIO-TTRansform Phase 3 trial failure."
+  },
+  "b": {
+   "id": "IONS|2026-07-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Eplontersen CARDIO-TTRansform Phase 3 failed primary endpoint; clinical news."
+  },
+  "adj": null
+ },
+ "IOVA|2026-07-15": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IOVA|2026-07-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only an analyst upgrade article; no deal filings or bid news."
+  },
+  "b": {
+   "id": "IOVA|2026-07-15",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No deal filings or headlines; only an analyst upgrade article the next day."
+  },
+  "adj": null
+ },
+ "CDNA|2026-07-16": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CDNA|2026-07-16",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Finalized transplant molecular testing Local Coverage Determination; reimbursement news."
+  },
+  "b": {
+   "id": "CDNA|2026-07-16",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Finalized transplant molecular testing Local Coverage Determination; reimbursement news."
+  },
+  "adj": null
+ },
+ "CAPR|2026-07-27": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CAPR|2026-07-27",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA briefing documents raised concerns over deramiocel before advisory committee."
+  },
+  "b": {
+   "id": "CAPR|2026-07-27",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA briefing documents flagged concerns for Duchenne therapy ahead of AdCom."
+  },
+  "adj": null
+ },
+ "OPK|2026-07-28": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "OPK|2026-07-28",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 earnings and revenue beat; 'Stock Up as Q2 Earnings Beat'."
+  },
+  "b": {
+   "id": "OPK|2026-07-28",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 earnings and revenue beat; earnings-driven surge."
+  },
+  "adj": null
+ },
+ "REPL|2026-07-28": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "REPL|2026-07-28",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA staff briefing doubts on RP1 efficacy ahead of panel."
+  },
+  "b": {
+   "id": "REPL|2026-07-28",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA briefing documents raised efficacy doubts on RP1; regulatory news."
+  },
+  "adj": null
+ },
+ "ALNY|2026-07-30": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "ALNY|2026-07-30",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 earnings miss and lowered 2026 outlook."
+  },
+  "b": {
+   "id": "ALNY|2026-07-30",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 earnings miss and lowered 2026 outlook; earnings-driven drop."
+  },
+  "adj": null
+ },
+ "CAPR|2026-07-30": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CAPR|2026-07-30",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA advisory panel voted against deramiocel."
+  },
+  "b": {
+   "id": "CAPR|2026-07-30",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA panel voted against deramiocel Duchenne therapy; regulatory news."
+  },
+  "adj": null
+ },
+ "MYGN|2026-07-31": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "MYGN|2026-07-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 loss and revenue miss; earnings-driven."
+  },
+  "b": {
+   "id": "MYGN|2026-07-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 2026 results missed revenue estimates; earnings-driven drop."
+  },
+  "adj": null
+ },
+ "REPL|2026-07-31": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "REPL|2026-07-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA advisory panel voted 10-3 backing RP1 melanoma data."
+  },
+  "b": {
+   "id": "REPL|2026-07-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA advisory panel voted 10-3 for RP1 melanoma therapy; regulatory news."
+  },
+  "adj": null
+ },
+ "VCYT|2026-07-31": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "VCYT|2026-07-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 2026 earnings release (8-K 7/30, 10-Q); no merger filings or deal headlines."
+  },
+  "b": {
+   "id": "VCYT|2026-07-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 2026 earnings release and call; earnings-driven decline."
+  },
+  "adj": null
+ },
+ "AUTL|2026-08-03": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "AUTL|2026-08-03",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Preliminary Q2 product revenue plus $250M Perceptive credit facility; financing, not a sale."
+  },
+  "b": {
+   "id": "AUTL|2026-08-03",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Preliminary Q2 product revenue and $250M Perceptive credit facility; not an acquisition."
+  },
+  "adj": null
+ },
+ "BRKR|2026-08-04": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "BRKR|2026-08-04",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 2026 earnings results drove the drop; no tender/merger filings."
+  },
+  "b": {
+   "id": "BRKR|2026-08-04",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 2026 financial results; earnings-driven decline."
+  },
+  "adj": null
+ },
+ "GERN|2026-08-05": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "GERN|2026-08-05",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 2026 results and business highlights; only 10-Q/S-8/8-K filed."
+  },
+  "b": {
+   "id": "GERN|2026-08-05",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 2026 financial results beat revenue estimates; earnings."
+  },
+  "adj": null
+ },
+ "BLLN|2026-08-06": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "BLLN|2026-08-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 results, 'softer quarter after heightened expectations'; earnings-driven drop."
+  },
+  "b": {
+   "id": "BLLN|2026-08-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Softer Q2 results after heightened expectations; earnings."
+  },
+  "adj": null
+ },
+ "CAI|2026-08-06": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CAI|2026-08-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 results with raised 2026 revenue guidance; earnings-driven."
+  },
+  "b": {
+   "id": "CAI|2026-08-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 results and raised 2026 revenue guidance; earnings."
+  },
+  "adj": null
+ },
+ "IOVA|2026-08-06": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IOVA|2026-08-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Record Q2 revenue, strong Amtagvi uptake; stock jumped 43% on earnings."
+  },
+  "b": {
+   "id": "IOVA|2026-08-06",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Record Q2 revenue, strong Amtagvi uptake; earnings-driven."
+  },
+  "adj": null
+ },
+ "NTRA|2026-08-07": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "NTRA|2026-08-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 2026 earnings beat sent shares to all-time high; no deal filings."
+  },
+  "b": {
+   "id": "NTRA|2026-08-07",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Q2 2026 results beat revenue estimates; earnings-driven move to all-time high."
+  },
+  "adj": null
+ },
+ "SLN|2026-08-10": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "SLN|2026-08-10",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive Phase 2 SANRECO divesiran topline data, followed by public offering; clinical news."
+  },
+  "b": {
+   "id": "SLN|2026-08-10",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive Phase 2 SANRECO divesiran topline results, followed by public offering; clinical news."
+  },
+  "adj": null
+ },
+ "SCTX|2026-08-18": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "SCTX|2026-08-18",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines in window; no M&A evidence found."
+  },
+  "b": {
+   "id": "SCTX|2026-08-18",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines; no evidence of an acquisition of Scribe."
+  },
+  "adj": null
+ },
+ "BNTX|2026-08-19": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "BNTX|2026-08-19",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Read-across rally from Moderna/Merck melanoma cancer vaccine Phase 3 data; peer clinical news."
+  },
+  "b": {
+   "id": "BNTX|2026-08-19",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Surged on read-across from Moderna's cancer vaccine Phase 3 win; no deal."
+  },
+  "adj": null
+ },
+ "MRNA|2026-08-19": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "MRNA|2026-08-19",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive Phase 3 melanoma cancer vaccine data with Merck; clinical news, short squeeze."
+  },
+  "b": {
+   "id": "MRNA|2026-08-19",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive Phase 3 melanoma cancer vaccine data with Merck; clinical news."
+  },
+  "adj": null
+ },
+ "MRVI|2026-08-19": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "MRVI|2026-08-19",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines in window; likely sector rally on Moderna mRNA data, no M&A evidence."
+  },
+  "b": {
+   "id": "MRVI|2026-08-19",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No forms or headlines; same-day mRNA sector rally on Moderna data suggests read-across."
+  },
+  "adj": null
+ },
+ "TWST|2026-08-19": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "TWST|2026-08-19",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Resilient despite Scorpion short report; AI-rally/short-squeeze commentary, 424B7 resale; no deal."
+  },
+  "b": {
+   "id": "TWST|2026-08-19",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Rally despite Scorpion Capital short report; AI-driven/short squeeze, 424B7 resale; no deal."
+  },
+  "adj": null
+ },
+ "MRNA|2026-08-20": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "MRNA|2026-08-20",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Pullback after 177% cancer-vaccine rally on valuation concerns; no deal filings."
+  },
+  "b": {
+   "id": "MRNA|2026-08-20",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Pullback after record rally on valuation concerns; no deal for Moderna."
+  },
+  "adj": null
+ },
+ "ARCT|2026-08-21": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "ARCT|2026-08-21",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No headlines; only an 8-K on 8/25; likely mRNA sector read-across, no M&A evidence."
+  },
+  "b": {
+   "id": "ARCT|2026-08-21",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No headlines or deal forms; likely mRNA read-across from Moderna data; no acquisition evidence."
+  },
+  "adj": null
+ },
+ "RGNX|2026-08-24": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "RGNX|2026-08-24",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA clinical hold on RGX-121 Hunter syndrome gene therapy; regulatory news."
+  },
+  "b": {
+   "id": "RGNX|2026-08-24",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA clinical hold on RGX-121 for Hunter syndrome; Johnson Fistel alerts concern the hold, not a sale."
+  },
+  "adj": null
+ },
+ "CAPR|2026-08-25": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CAPR|2026-08-25",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA extended deramiocel PDUFA date by three months; regulatory news amid class-action alerts."
+  },
+  "b": {
+   "id": "CAPR|2026-08-25",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA PDUFA extension for deramiocel BLA plus class-action notices; regulatory, not M&A."
+  },
+  "adj": null
+ },
+ "YDES|2026-08-31": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "YDES|2026-08-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Six-month unaudited financial results release; no merger filings."
+  },
+  "b": {
+   "id": "YDES|2026-08-31",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only headline is unaudited six-month financial results; no deal filings."
+  },
+  "adj": null
+ },
+ "RARE|2026-09-03": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "RARE|2026-09-03",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Phase 3 Aspire Angelman trial failure; Shkreli 'should be M&A target' is speculation only."
+  },
+  "b": {
+   "id": "RARE|2026-09-03",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Phase 3 Aspire Angelman trial failure; Shkreli 'should be M&A target' is speculation only."
+  },
+  "adj": null
+ },
+ "IRD|2026-09-09": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IRD|2026-09-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive OPGx-BEST1 Cohort 1 data and FDA Type C meeting; clinical news."
+  },
+  "b": {
+   "id": "IRD|2026-09-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Positive OPGx-BEST1 Cohort 1 data and FDA Type C meeting; clinical news."
+  },
+  "adj": null
+ },
+ "CLLS|2026-09-14": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "CLLS|2026-09-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Strategic transformation to in vivo gene editing company; restructuring, not a sale."
+  },
+  "b": {
+   "id": "CLLS|2026-09-14",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Cellectis announced strategic transformation to in vivo gene editing; shares plunged; no deal."
+  },
+  "adj": null
+ },
+ "GRAL|2026-09-21": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "GRAL|2026-09-21",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA briefing documents flagged no major concerns for multi-cancer blood test; regulatory news."
+  },
+  "b": {
+   "id": "GRAL|2026-09-21",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "FDA briefing documents flagged no major concerns for multi-cancer test; regulatory news."
+  },
+  "adj": null
+ },
+ "YDES|2026-09-25": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "YDES|2026-09-25",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines in window; no M&A evidence found."
+  },
+  "b": {
+   "id": "YDES|2026-09-25",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines; no evidence of any deal for YD Bio."
+  },
+  "adj": null
+ },
+ "YDES|2026-09-28": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "YDES|2026-09-28",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only headline is a short-interest increase; no deal filings or news."
+  },
+  "b": {
+   "id": "YDES|2026-09-28",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only headline is a short-interest increase; no merger forms or deal news."
+  },
+  "adj": null
+ },
+ "IOVA|2026-09-29": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "IOVA|2026-09-29",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Raised FY2026 revenue guidance to $410-420M on Amtagvi demand; only an 8-K filed, no merger forms or deal headlines."
+  },
+  "b": {
+   "id": "IOVA|2026-09-29",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Raised FY2026 revenue guidance to $410-420M on Amtagvi demand; 8-K is guidance, not a deal."
+  },
+  "adj": null
+ },
+ "QURE|2026-09-29": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "QURE|2026-09-29",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "AMT-130 Huntington's Phase I/II data disappointed and the stock fell 37%; the law-firm alerts are securities-fraud probes, not sale-fairness alerts. No merger forms."
+  },
+  "b": {
+   "id": "QURE|2026-09-29",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "AMT-130 Huntington's Phase I/II data drove the plunge; law-firm alerts are securities-fraud probes, not sale-fairness alerts."
+  },
+  "adj": null
+ },
+ "PACB|2026-09-30": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "PACB|2026-09-30",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms. Headlines mention only heavy call-option buying and the share price; no bid, talks or deal announced."
+  },
+  "b": {
+   "id": "PACB|2026-09-30",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC merger forms; headlines only cover share price climb and call-option buying, with no reported bid, talks or agreement."
+  },
+  "adj": null
+ },
+ "SCTX|2026-09-30": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "SCTX|2026-09-30",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines. A 20% drop with no deal evidence does not fit an M&A target day."
+  },
+  "b": {
+   "id": "SCTX|2026-09-30",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "No SEC forms or headlines; no evidence of any deal to acquire Scribe on a -20.1% day."
+  },
+  "adj": null
+ }
+}
