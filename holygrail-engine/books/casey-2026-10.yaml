@@ -3,6 +3,13 @@
 # the research packs (dalio_canon, math_literature, factcheck - fact-check corrections applied).
 # Assumptions, reconciliation and FLAGS: casey-2026-10.assumptions.md (same folder).
 #   python -m holygrail score --book books/casey-2026-10.yaml --view liquid
+#   ^ LOAD / SMOKE CHECK ONLY (weekly, 5y, Composer backtest-only, priors on weekly vol). It does NOT reproduce
+#     the analysis. The analysis numbers come from results/casey-2026-10/current/{a1_a4,a5_a6,make_metrics}.py and
+#     results/casey-2026-10/post-exit/analysis.py: daily, trailing 3y to 2026-09-30, Composer spliced (backtest
+#     before live, live after), priors re-derived (rf + 0.30 x daily-3y vol). Those settings and priors OVERRIDE
+#     the settings and expected_return priors in this file.
+# OPEN P1 (2026-10-06): the 16% loan plug ($310,876) may double count the Film Dominion $200k (flags F4/F5);
+#     the liquid headlines are HELD until Casey answers.
 # Views: whole = sheet net worth $19,765,406 (incl. not-an-asset RECON lines that tie to the sheet);
 #        investable = whole minus RECON lines; liquid = live-sourced liquid sub-book ($2,485,346).
 # Expected returns on risky market/series streams are a NEUTRAL PRIOR (rf + 0.30 x vol), NOT forecasts;
@@ -22,8 +29,8 @@ assumptions:
     confidence: low
   spread_ibkr:
     value: 0.01
-    source: IBKR Pro margin tier benchmark + ~1.0% on the $100k-$1M band (published rate card, recalled; not opened this pass)
-    confidence: low
+    source: 'book default for the engine CLI only. IBKR Pro USD card fetched 2026-10-06 (ibkr.com margin-rates): 5.380% to $100k / 4.880% $100k-1M / 4.630% $1M-50M = BM 3.88% + 1.5 / 1.0 / 0.75; over DTB3 4.01% the tier-blended spread is +1.37% at $100k, +0.97% at $500k, +0.92% at $1M, +0.74% at $2.55M, +0.64% at $20M. 1.0% ~ the blend for a $0.4-0.5M loan. The analysis scripts (results/casey-2026-10) declare their own spread'
+    confidence: medium
   oo_mark_low_usd:
     value: 10000000.0
     source: 'Casey 2026-10-06: banks/brokers indicate shares worth ~$10-15M (low end)'
@@ -725,7 +732,7 @@ positions:
   - {name: U84 PSLV, value_usd: 39554.6, stream: PSLV, sleeve: stocks, liquidity: liquid, mark_basis: market, tags: [ibkr, ibkr_U8421887, paper_metals], investable: true, note: 'IBKR screenshot 2026-10-06 ~20:25 AST; 2,000 @19.79'}
   - {name: U84 settled cash, value_usd: 3282.63, stream: cash, sleeve: stocks, liquidity: liquid, mark_basis: market, tags: [ibkr, ibkr_U8421887], investable: true, note: 'IBKR screenshot 2026-10-06 ~20:25 AST'}
   - {name: U84 NAV residual, value_usd: -1241.49, stream: cash, sleeve: stocks, liquidity: liquid, mark_basis: market, tags: [ibkr, ibkr_U8421887], investable: true, liability: true, note: 'NAV $924,249.91 minus listed MVs + cash: listed marks exceed NAV (mark timing / FX)'}
-  - {name: Short-term 16% loans (out of BOXX), value_usd: 310876.3, stream: st_loans_16, sleeve: stocks, liquidity: liquid, mark_basis: cost, tags: [private_loan, reverts_to_boxx], investable: true, note: 'sheet Equities&Bonds $1,355,230 - IBKR $1,044,353.70 (Casey: ~$300k, 2 loans ~45d, 1 repaid, other due ~20d)'}
+  - {name: Short-term 16% loans (out of BOXX), value_usd: 310876.3, stream: st_loans_16, sleeve: stocks, liquidity: liquid, mark_basis: cost, tags: [private_loan, reverts_to_boxx], investable: true, note: 'sheet Equities&Bonds $1,355,230 - IBKR $1,044,353.70 (Casey: ~$300k, 2 loans ~45d, 1 repaid, other due ~20d). OPEN P1 (flags F4/F5): if Dominion ($200k @16%, returned 9/25) and Plus One ($129,166 @15%, returned 9/29) are these two loans, the plug double counts $200k-$311k; if the paper gold is outside E&B (F1), the plug is ~$388k'}
   - {name: Composer kmlm, value_usd: 97400.0, stream: composer_kmlm, sleeve: stocks, liquidity: liquid, mark_basis: market, tags: [composer], investable: true, note: composer-book-summary-2026-10-06.pdf (REST raw value 2026-10-05 close agrees within $0.2k)}
   - {name: Composer hg, value_usd: 86900.0, stream: composer_hg, sleeve: stocks, liquidity: liquid, mark_basis: market, tags: [composer], investable: true, note: composer-book-summary-2026-10-06.pdf (REST raw value 2026-10-05 close agrees within $0.2k)}
   - {name: Composer crash, value_usd: 77900.0, stream: composer_crash, sleeve: stocks, liquidity: liquid, mark_basis: market, tags: [composer], investable: true, note: composer-book-summary-2026-10-06.pdf (REST raw value 2026-10-05 close agrees within $0.2k)}
@@ -739,22 +746,22 @@ positions:
   - {name: Physical metals, value_usd: 170650.0, stream: physical_metals, sleeve: metals, liquidity: liquid, mark_basis: market, tags: [physical], investable: true, note: sheet 'Metals (Phys)'; gold/silver split not supplied}
   - {name: RECON Gold & Silver paper (dup of IBKR PHYS+PSLV), value_usd: 68660.0, stream: sheet_recon, sleeve: metals, liquidity: illiquid, mark_basis: cost, tags: [reconciliation, not_an_asset, suspected_duplicate], investable: false, note: 'sheet ''Gold & Silver (liquid/paper)'' $68,660; IBKR PHYS+PSLV = $77,209.80 live -> carried once, in IBKR (flag F1)'}
   - {name: Film PING gap, value_usd: 50000.0, stream: film_gap_loans, sleeve: private_credit, liquidity: illiquid, mark_basis: cost, tags: [film, private_credit], investable: true, note: performing (Casey 2026-10-06)}
-  - {name: Film 12 Dates of Christmas gap, value_usd: 550000.0, stream: film_gap_loans, sleeve: private_credit, liquidity: illiquid, mark_basis: cost, tags: [film, private_credit], investable: true, note: performing (Casey 2026-10-06)}
+  - {name: Film 12 Dates of Christmas gap, value_usd: 550000.0, stream: film_gap_loans, sleeve: private_credit, liquidity: illiquid, mark_basis: cost, tags: [film, private_credit], investable: true, note: performing (Casey 2026-10-06); ALSO on the sheet's completed list (no return date) - flag F18}
   - {name: Film Prank Call gap, value_usd: 250000.0, stream: film_gap_loans, sleeve: private_credit, liquidity: illiquid, mark_basis: cost, tags: [film, private_credit], investable: true, note: performing (Casey 2026-10-06)}
   - {name: Film Kate Might Die gap, value_usd: 132000.0, stream: film_gap_loans, sleeve: private_credit, liquidity: illiquid, mark_basis: cost, tags: [film, private_credit], investable: true, note: performing (Casey 2026-10-06)}
   - {name: Film MiniWar gap, value_usd: 200000.0, stream: film_gap_loans, sleeve: private_credit, liquidity: illiquid, mark_basis: cost, tags: [film, private_credit], investable: true, note: performing (Casey 2026-10-06)}
-  - {name: Film Father of Us bridge, value_usd: 100000.0, stream: film_father_of_us, sleeve: private_credit, liquidity: illiquid, mark_basis: cost, tags: [film, private_credit, past_due], investable: true, note: 'past due, paying late (Casey 2026-10-06)'}
-  - {name: Film Dominion bridge (returned 2026-09-25), value_usd: 200000.0, stream: cash, sleeve: private_credit, liquidity: semi, mark_basis: cost, tags: [film, private_credit, returned_capital], investable: true, note: 'listed outstanding AND completed 9/8->9/25/26: modelled as returned cash, counted once here (flag F4)'}
+  - {name: Film Father of Us bridge, value_usd: 100000.0, stream: film_father_of_us, sleeve: private_credit, liquidity: illiquid, mark_basis: cost, tags: [film, private_credit, past_due], investable: true, note: 'past due, paying late (Casey 2026-10-06); ALSO on the sheet''s completed list (no return date) - flag F18'}
+  - {name: Film Dominion bridge (returned 2026-09-25), value_usd: 200000.0, stream: cash, sleeve: private_credit, liquidity: semi, mark_basis: cost, tags: [film, private_credit, returned_capital], investable: true, note: 'listed outstanding AND completed 9/8->9/25/26: modelled as returned cash (flag F4). OPEN P1: likely one of the two ''16% loans out of BOXX'' (16%, $200k, returned) - if so it is ALSO in the 16% loan plug (and maybe in Cash/Stables)'}
   - {name: Gary loan, value_usd: 100000.0, stream: gary_loan, sleeve: private_credit, liquidity: illiquid, mark_basis: cost, tags: [private_credit], investable: true}
   - {name: Spirit Fund, value_usd: 150000.0, stream: spirit_fund, sleeve: private_credit, liquidity: illiquid, mark_basis: cost, tags: [private_credit], investable: true}
   - {name: Real estate (type unknown), value_usd: 1500000.0, stream: real_estate, sleeve: real_estate, liquidity: illiquid, mark_basis: appraisal, tags: [real_estate, type_unknown], investable: true, note: sheet value; property type and mark basis not supplied (flag F6)}
   - {name: Organics Ocean, value_usd: 12000000.0, stream: organics_ocean, sleeve: venture, liquidity: illiquid, mark_basis: appraisal, tags: [venture, single_name], investable: true, note: 'banker/broker indication $10-15M; cost $100k; realized $254,900'}
   - {name: Venture Persona, value_usd: 625000.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: round, tags: [venture], investable: true, note: sheet 'Venture' paper mark}
-  - {name: Venture Google X Fund, value_usd: 400000.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: cost, tags: [venture], investable: true, note: sheet 'Venture' paper mark}
+  - {name: Venture Google X Fund, value_usd: 400000.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: cost, tags: [venture], investable: true, note: 'sheet ''Venture'' paper mark; = Series X Capital Fund I (deal record series-x-capital): $400k COMMITMENT carried in full, but the sheet H2 roll-out shows $184,800 funded + $215,200 upcoming (uncalled, still in cash). Fund NAV/called 0.905x (N-CSR 2026-03-31). Flag F17'}
   - {name: Venture Copper Royalty, value_usd: 270000.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: round, tags: [venture], investable: true, note: sheet 'Venture' paper mark}
   - {name: Venture Uranium Digital, value_usd: 150000.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: round, tags: [venture], investable: true, note: sheet 'Venture' paper mark}
   - {name: Venture Slip, value_usd: 50000.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: cost, tags: [venture], investable: true, note: sheet 'Venture' paper mark}
-  - {name: Venture BNB Dat, value_usd: 28000.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: model, tags: [venture], investable: true, note: sheet 'Venture' paper mark}
+  - {name: Venture BNB Dat, value_usd: 28000.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: model, tags: [venture], investable: true, note: 'sheet ''Venture'' paper mark; sheet paper $28k = realized $28k: possibly realized AND still marked - flag F19'}
   - {name: Venture Vernius, value_usd: 25000.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: cost, tags: [venture], investable: true, note: sheet 'Venture' paper mark}
   - {name: Venture BITS, value_usd: 0.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: round, tags: [venture, written_to_zero], investable: true, note: sheet 'Venture' paper mark ($0)}
   - {name: Venture Define Fit, value_usd: 0.0, stream: venture_basket, sleeve: venture, liquidity: illiquid, mark_basis: round, tags: [venture, written_to_zero], investable: true, note: sheet 'Venture' paper mark ($0)}
