@@ -1,0 +1,204 @@
+{
+ "item": "repair 2 (POST-HOC, counter-agent): embedded leverage under 'no leverage'",
+ "rule_scope": "Casey's 'no leverage' rule as applied here = no borrowing / margin and no levered balanced funds (ALLW/UPAR/RSSB). It does NOT remove the daily-reset 3x ETFs inside Casey's own Composer strategy, which every book keeps (sized per his plan: N2 risk budget 16%; N3 $4.32M = 24%).",
+ "assumptions": {
+  "composer_max_multiple": {
+   "value": 3.0,
+   "source": "symphony holdings (Composer book summary 2026-10-06): HG rotates 3x UPRO/TQQQ/SOXL/LABU/TNA; KMLM switcher risk-on 3x SPXL/TQQQ/SOXL/TECL; Crash sleeve holds TMF (3x); daily-reset 3x is the largest multiple held -> UPPER BOUND (the sleeve is never all 3x at once: PULS/BIL/IEF/SHY legs)",
+   "confidence": "high"
+  },
+  "other_positions_multiple": {
+   "value": 1.0,
+   "source": "ETFs, single names, BTC, private loans and venture at face; KMLM and DBC are fully collateralised futures funds (notional ~1x NAV) - NOTE only",
+   "confidence": "medium"
+  },
+  "hl_eth_carry": {
+   "value": 0.0,
+   "source": "UETH spot long + perp short is a delta-hedge; the perp short leg (~$30k) is reported as a separate column, not added to the headline",
+   "confidence": "medium"
+  }
+ },
+ "composer_measured_3y": {
+  "hg": {
+   "beta_to_spy": 2.025618385153088,
+   "vol": 0.44824087594187,
+   "vol_ratio_to_spy": 2.930719270316005,
+   "share_of_window_in_sample": 0.7273936170212766
+  },
+  "kmlm": {
+   "beta_to_spy": 1.0509071199490814,
+   "vol": 0.5684258215622809,
+   "vol_ratio_to_spy": 3.716520733405458,
+   "share_of_window_in_sample": 0.9188829787234043
+  },
+  "crash": {
+   "beta_to_spy": -0.4665224778954368,
+   "vol": 0.24620769698526127,
+   "vol_ratio_to_spy": 1.609772068508105,
+   "share_of_window_in_sample": 0.9188829787234043
+  },
+  "vixhyg": {
+   "beta_to_spy": 0.06869757883737587,
+   "vol": 0.11187438938647243,
+   "vol_ratio_to_spy": 0.7314648137362001,
+   "share_of_window_in_sample": 0.9335106382978723
+  },
+  "policy_mix_29_29_27_15": {
+   "beta_to_spy": 0.7765359642734687,
+   "vol": 0.24799010008184297,
+   "vol_ratio_to_spy": 1.6214258988100518
+  }
+ },
+ "composer_measured_basis": "daily, 2023-10-02..2026-09-30, spliced series: IN-SAMPLE backtest before each live start ({'hg': '2025-12-05', 'kmlm': '2026-07-07', 'crash': '2026-07-07', 'vixhyg': '2026-07-22'}), live after",
+ "rows": [
+  {
+   "section": "N2 liquid, variant D",
+   "book": "current as is",
+   "nav_usd": 2374469.7,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.5507459623510884,
+   "composer_usd": 299600.0,
+   "composer_share": 0.12617554142720794,
+   "lookthrough_upper_3x": 0.8030970452055043,
+   "eth_perp_short_leg_share": 0.012680726142767792
+  },
+  {
+   "section": "N2 liquid, variant D",
+   "book": "current, cash deployed pro rata",
+   "nav_usd": 2374469.7,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.7608434640495212,
+   "composer_usd": 416830.72819228854,
+   "composer_share": 0.17554687187302853,
+   "lookthrough_upper_3x": 1.1119372077955783,
+   "eth_perp_short_leg_share": 0.012680726142767792
+  },
+  {
+   "section": "N2 liquid, variant D",
+   "book": "UNLEVERED balanced proposal",
+   "nav_usd": 2374469.7,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.7988929528138431,
+   "composer_usd": 136779.54841323203,
+   "composer_share": 0.05760425092526218,
+   "lookthrough_upper_3x": 0.9141014546643674,
+   "eth_perp_short_leg_share": 0.012680726142767792
+  },
+  {
+   "section": "N2 liquid, variant D",
+   "book": "POST-HOC: proposal, metals held",
+   "nav_usd": 2374469.7,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.7988929528138431,
+   "composer_usd": 118746.05428682863,
+   "composer_share": 0.050009504979923985,
+   "lookthrough_upper_3x": 0.898911962773691,
+   "eth_perp_short_leg_share": 0.012680726142767792
+  },
+  {
+   "section": "N2 liquid, variant P",
+   "book": "current as is",
+   "nav_usd": 2303635.7,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.5676807318101555,
+   "composer_usd": 299600.0,
+   "composer_share": 0.13005528608538233,
+   "lookthrough_upper_3x": 0.8277913039809202,
+   "eth_perp_short_leg_share": 0.013070643070864025
+  },
+  {
+   "section": "N2 liquid, variant P",
+   "book": "current, cash deployed pro rata",
+   "nav_usd": 2303635.7,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.7612088319801601,
+   "composer_usd": 404363.92861791427,
+   "composer_share": 0.1755329319726701,
+   "lookthrough_upper_3x": 1.1122746959255003,
+   "eth_perp_short_leg_share": 0.013070643070864025
+  },
+  {
+   "section": "N2 liquid, variant P",
+   "book": "UNLEVERED balanced proposal",
+   "nav_usd": 2303635.7,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.7927091553582019,
+   "composer_usd": 131589.6780809978,
+   "composer_share": 0.057122607572455054,
+   "lookthrough_upper_3x": 0.906954370503112,
+   "eth_perp_short_leg_share": 0.013070643070864025
+  },
+  {
+   "section": "N2 liquid, variant P",
+   "book": "POST-HOC: proposal, metals held",
+   "nav_usd": 2303635.7,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.7927091553582019,
+   "composer_usd": 113550.63989936373,
+   "composer_share": 0.049291925758644786,
+   "lookthrough_upper_3x": 0.8912930068754914,
+   "eth_perp_short_leg_share": 0.013070643070864025
+  },
+  {
+   "section": "N3 $18M post-exit",
+   "book": "PLAN pre-trigger",
+   "nav_usd": 18000000.0,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.64,
+   "composer_usd": 4320000.0,
+   "composer_share": 0.24,
+   "lookthrough_upper_3x": 1.12,
+   "eth_perp_short_leg_share": 0.0
+  },
+  {
+   "section": "N3 $18M post-exit",
+   "book": "PLAN post-trigger",
+   "nav_usd": 18000000.0,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.6816666666666666,
+   "composer_usd": 4320000.0,
+   "composer_share": 0.24,
+   "lookthrough_upper_3x": 1.1616666666666666,
+   "eth_perp_short_leg_share": 0.0
+  },
+  {
+   "section": "N3 $18M post-exit",
+   "book": "ALT-2 UNLEVERED",
+   "nav_usd": 18000000.0,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 1.0000000000000002,
+   "composer_usd": 1415732.6098517193,
+   "composer_share": 0.07865181165842886,
+   "lookthrough_upper_3x": 1.1573036233168579,
+   "eth_perp_short_leg_share": 0.0
+  },
+  {
+   "section": "N3 $18M post-exit",
+   "book": "CASEY ROUTE pre-trigger",
+   "nav_usd": 18000000.0,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.9444444444444444,
+   "composer_usd": 4320000.0,
+   "composer_share": 0.24,
+   "lookthrough_upper_3x": 1.4244444444444444,
+   "eth_perp_short_leg_share": 0.0
+  },
+  {
+   "section": "N3 $18M post-exit",
+   "book": "CASEY ROUTE post-trigger",
+   "nav_usd": 18000000.0,
+   "borrowing_usd": 0.0,
+   "gross_at_face": 0.9861111111111112,
+   "composer_usd": 4320000.0,
+   "composer_share": 0.24,
+   "lookthrough_upper_3x": 1.4661111111111111,
+   "eth_perp_short_leg_share": 0.0
+  }
+ ],
+ "numbers_changed_in_N1_N4": "none",
+ "chart": {
+  "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/lookthrough_notional.png",
+  "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/lookthrough_notional.csv",
+  "caption": "Gross at face vs look-through notional upper bound (every Composer dollar at 3x), N2 variant D and N3"
+ }
+}

@@ -1,0 +1,145 @@
+[
+ {
+  "section": "N2 liquid, variant D",
+  "book": "current as is",
+  "nav_usd": 2374469.7,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.5507459623510884,
+  "composer_usd": 299600.0,
+  "composer_share": 0.12617554142720794,
+  "lookthrough_upper_3x": 0.8030970452055043,
+  "eth_perp_short_leg_share": 0.012680726142767792
+ },
+ {
+  "section": "N2 liquid, variant D",
+  "book": "current, cash deployed pro rata",
+  "nav_usd": 2374469.7,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.7608434640495212,
+  "composer_usd": 416830.72819228854,
+  "composer_share": 0.17554687187302853,
+  "lookthrough_upper_3x": 1.1119372077955783,
+  "eth_perp_short_leg_share": 0.012680726142767792
+ },
+ {
+  "section": "N2 liquid, variant D",
+  "book": "UNLEVERED balanced proposal",
+  "nav_usd": 2374469.7,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.7988929528138431,
+  "composer_usd": 136779.54841323203,
+  "composer_share": 0.05760425092526218,
+  "lookthrough_upper_3x": 0.9141014546643674,
+  "eth_perp_short_leg_share": 0.012680726142767792
+ },
+ {
+  "section": "N2 liquid, variant D",
+  "book": "POST-HOC: proposal, metals held",
+  "nav_usd": 2374469.7,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.7988929528138431,
+  "composer_usd": 118746.05428682863,
+  "composer_share": 0.050009504979923985,
+  "lookthrough_upper_3x": 0.898911962773691,
+  "eth_perp_short_leg_share": 0.012680726142767792
+ },
+ {
+  "section": "N2 liquid, variant P",
+  "book": "current as is",
+  "nav_usd": 2303635.7,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.5676807318101555,
+  "composer_usd": 299600.0,
+  "composer_share": 0.13005528608538233,
+  "lookthrough_upper_3x": 0.8277913039809202,
+  "eth_perp_short_leg_share": 0.013070643070864025
+ },
+ {
+  "section": "N2 liquid, variant P",
+  "book": "current, cash deployed pro rata",
+  "nav_usd": 2303635.7,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.7612088319801601,
+  "composer_usd": 404363.92861791427,
+  "composer_share": 0.1755329319726701,
+  "lookthrough_upper_3x": 1.1122746959255003,
+  "eth_perp_short_leg_share": 0.013070643070864025
+ },
+ {
+  "section": "N2 liquid, variant P",
+  "book": "UNLEVERED balanced proposal",
+  "nav_usd": 2303635.7,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.7927091553582019,
+  "composer_usd": 131589.6780809978,
+  "composer_share": 0.057122607572455054,
+  "lookthrough_upper_3x": 0.906954370503112,
+  "eth_perp_short_leg_share": 0.013070643070864025
+ },
+ {
+  "section": "N2 liquid, variant P",
+  "book": "POST-HOC: proposal, metals held",
+  "nav_usd": 2303635.7,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.7927091553582019,
+  "composer_usd": 113550.63989936373,
+  "composer_share": 0.049291925758644786,
+  "lookthrough_upper_3x": 0.8912930068754914,
+  "eth_perp_short_leg_share": 0.013070643070864025
+ },
+ {
+  "section": "N3 $18M post-exit",
+  "book": "PLAN pre-trigger",
+  "nav_usd": 18000000.0,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.64,
+  "composer_usd": 4320000.0,
+  "composer_share": 0.24,
+  "lookthrough_upper_3x": 1.12,
+  "eth_perp_short_leg_share": 0.0
+ },
+ {
+  "section": "N3 $18M post-exit",
+  "book": "PLAN post-trigger",
+  "nav_usd": 18000000.0,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.6816666666666666,
+  "composer_usd": 4320000.0,
+  "composer_share": 0.24,
+  "lookthrough_upper_3x": 1.1616666666666666,
+  "eth_perp_short_leg_share": 0.0
+ },
+ {
+  "section": "N3 $18M post-exit",
+  "book": "ALT-2 UNLEVERED",
+  "nav_usd": 18000000.0,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 1.0000000000000002,
+  "composer_usd": 1415732.6098517193,
+  "composer_share": 0.07865181165842886,
+  "lookthrough_upper_3x": 1.1573036233168579,
+  "eth_perp_short_leg_share": 0.0
+ },
+ {
+  "section": "N3 $18M post-exit",
+  "book": "CASEY ROUTE pre-trigger",
+  "nav_usd": 18000000.0,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.9444444444444444,
+  "composer_usd": 4320000.0,
+  "composer_share": 0.24,
+  "lookthrough_upper_3x": 1.4244444444444444,
+  "eth_perp_short_leg_share": 0.0
+ },
+ {
+  "section": "N3 $18M post-exit",
+  "book": "CASEY ROUTE post-trigger",
+  "nav_usd": 18000000.0,
+  "borrowing_usd": 0.0,
+  "gross_at_face": 0.9861111111111112,
+  "composer_usd": 4320000.0,
+  "composer_share": 0.24,
+  "lookthrough_upper_3x": 1.4661111111111111,
+  "eth_perp_short_leg_share": 0.0
+ }
+]

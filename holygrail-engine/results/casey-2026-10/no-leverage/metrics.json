@@ -96,6 +96,10 @@
  },
  "post_hoc": [
   {
+   "item": "N1 repair R1 (counter-agent item N1): premise 'repaid loan capital already in IBKR BOXX live' tested against IBKR's BOXX cost basis and found CONTRADICTED; published N1/N2 numbers relabelled reading (a) 'in the sheet's Cash/Stables line'; reading (b) 'off-sheet, counted nowhere' added as a CONDITIONAL RANGE (n1_conditional_range)",
+   "why": "the location of the repaid principal + fee is an unanswered P1 input that moves NAV and the overstatement; per CLAUDE.md it is ASKED, not analysed around. No published number changed."
+  },
+  {
    "item": "N2 'POST-HOC: proposal, metals held' added after seeing the predeclared solve put $0 in gold_silver",
    "why": "the engine quadrant algebra covers inflation-up with TIP + DBC and gives gold a zero budget, which would mean selling $170,650 of physical bullion (dealer spread, tax not modelled) against Casey's sheet goal 'Gold & Silver ... $600,000 GOAL'. Variant: metals held at today's $, everything else solved as declared."
   },
@@ -106,9 +110,19 @@
   {
    "item": "N3 replays: first run used listed basket names in tech_2000_02/gfc_2008; corrected to QQQ as declared ('as post-exit')",
    "why": "implementation slip vs the predeclared rule; after the fix ALT-2 UNLEVERED replays reproduce post-exit metrics exactly"
+  },
+  {
+   "item": "repair 2 (counter-agent): look-through notional added (repair_lookthrough.py, lookthrough_notional.*)",
+   "why": "'no leverage' was applied as no borrowing / no levered balanced funds; the 3x ETFs inside Casey's Composer strategy were kept and not disclosed. Disclosure only; no N1-N4 number changed."
   }
  ],
- "counter_agent_review": "NOT RUN by the author; required before these numbers are acted on (CLAUDE.md)",
+ "relayed_answers_resolution": {
+  "verbatim": "'1. Passes thru 2. There is and we are too small on the SPV 3. I'm not sure, but fees would continue as is so yes to fees'",
+  "mapping": "DexMat pro-rata follow-up questions, recorded in venture-deal-analyzer/deals/dexmat/ic.md (Answered 2026-10-06): (1) the pro-rata right passes through the SPV; (2) a major-investor threshold exists and the SPV is too small to meet it; (3) fees continue as is on any follow-on (Casey: 'I'm not sure, but...' - medium confidence)",
+  "effect": "no number in N1-N4 changes; DexMat $75k commitment stands; item CLOSED, not to be asked again",
+  "supersedes": "params.inputs_casey_2026_10_06.relayed_answers_unmapped (predeclared file left frozen)"
+ },
+ "counter_agent_review": "RUN 2026-10-06: 2 blocking (N1 repaid-capital premise; undisclosed embedded 3x leverage) + 4 non-blocking items; repair pass applied (N1 conditional range + P1 ask, look-through notional, F17 scope label, DexMat answers closed). The repair itself has NOT been independently re-verified.",
  "liquid": {
   "params_file": "predeclared_params.json",
   "rf": 0.0401,
@@ -307,6 +321,681 @@
        "balance_score": 0.6142594643959192,
        "exp_return_prior": 0.11862280545078831,
        "gross": 0.6999061300316622
+      }
+     }
+    }
+   },
+   "repair_R1": {
+    "premise_tested": "repaid loan capital already inside IBKR BOXX live (both variants)",
+    "verdict": "CONTRADICTED by IBKR's own BOXX cost basis; location of the repaid capital is OPEN P1 (ask Casey)",
+    "boxx_ibkr": {
+     "shares": {
+      "value": 3672.0,
+      "source": "IBKR U8421887 screenshot 2026-10-06 ~20:25 AST (orchestrator transcription)",
+      "confidence": "high"
+     },
+     "price": {
+      "value": 118.47,
+      "source": "same screenshot",
+      "confidence": "high"
+     },
+     "cost_basis_usd": {
+      "value": 371732.0,
+      "source": "same screenshot, cost column",
+      "confidence": "high"
+     }
+    },
+    "boxx_avg_cost_per_share": 101.23420479302833,
+    "boxx_min_close_cached": {
+     "value": 99.76154327392578,
+     "source": "Yahoo adjclose cache (HG_OFFLINE), min on 2022-12-28 (launch week)",
+     "confidence": "high"
+    },
+    "basis_check": {
+     "D": {
+      "loan_repaid": "Plus One",
+      "returned": "2026-09-29",
+      "boxx_close_on_return": 118.36000061035156,
+      "shares_rebought_if_in_boxx": 1091.2977300939906,
+      "implied_basis_per_old_share": 93.99224499028878,
+      "lowest_possible_total_cost_if_in_boxx": 386620.8411763469,
+      "excess_over_reported_cost": 14888.841176346876,
+      "max_repaid_capital_that_fits_in_boxx": 34413.88057187836
+     },
+     "P": {
+      "loan_repaid": "Dominion",
+      "returned": "2026-09-25",
+      "boxx_close_on_return": 118.34500122070312,
+      "shares_rebought_if_in_boxx": 1689.9742104613056,
+      "implied_basis_per_old_share": 86.64468490088097,
+      "lowest_possible_total_cost_if_in_boxx": 397729.95157310134,
+      "excess_over_reported_cost": 25997.951573101338,
+      "max_repaid_capital_that_fits_in_boxx": 34437.292592898964
+     }
+    },
+    "readings": {
+     "D": {
+      "a": {
+       "desc": "in the sheet's Cash/Stables line already (= published numbers)",
+       "added_cash_usd": 0.0,
+       "whole_usd": 19454529.7,
+       "investable_usd": 19364469.7,
+       "liquid_usd": 2374469.7,
+       "sheet_overstatement_usd": 310876.30000000075,
+       "cases": {
+        "liquid now (loan outstanding)": {
+         "nav_usd": 2374469.7,
+         "vol": 0.10852146902282182,
+         "dr2": 3.9217162514572625,
+         "neff_equal_rho": 5.892707273578183,
+         "neff_pca_entropy": 5.052429346547192,
+         "neff_inv_hhi_prc": 4.967621938113512,
+         "neff_min_torsion": 12.751904665378461,
+         "btc_risk_share": 0.4045104664168435,
+         "btc_dollar_share": 0.11854652009246526,
+         "cash_like_share": 0.44925403764891164,
+         "cash_like_usd": 1066740.1,
+         "box_growth_up": 0.4451807647200124,
+         "box_growth_down": -0.008097373640639388,
+         "box_inflation_up": 0.34313452298589997,
+         "box_inflation_down": 0.21776438259158828,
+         "box_unmapped": 0.002017703343138777,
+         "balance_score": 0.6134545467767807,
+         "exp_return_prior": 0.10271984645956973,
+         "gross": 0.5507459623510884
+        },
+        "liquid post-revert (loan back in BOXX)": {
+         "nav_usd": 2374469.7,
+         "vol": 0.10804177405269873,
+         "dr2": 3.7839922229234073,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.034001242866746,
+         "neff_inv_hhi_prc": 4.913136590023437,
+         "neff_min_torsion": 12.525318865111078,
+         "btc_risk_share": 0.4069825996574866,
+         "btc_dollar_share": 0.11854652009246526,
+         "cash_like_share": 0.44925403764891164,
+         "cash_like_usd": 1066740.1,
+         "box_growth_up": 0.4424716314026317,
+         "box_growth_down": -0.008114072821741753,
+         "box_inflation_up": 0.3449372534296392,
+         "box_inflation_down": 0.2183210362685136,
+         "box_unmapped": 0.002384151720957184,
+         "balance_score": 0.6142791019333993,
+         "exp_return_prior": 0.10188845447823884,
+         "gross": 0.5507459623510884
+        },
+        "post-revert, net of commitments $410,200": {
+         "nav_usd": 1964269.7,
+         "vol": 0.13057542514417686,
+         "dr2": 3.778155277715749,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.033411399747992,
+         "neff_inv_hhi_prc": 4.910419843892166,
+         "neff_min_torsion": 12.513882526191896,
+         "btc_risk_share": 0.4071005058693088,
+         "btc_dollar_share": 0.14330268394406329,
+         "cash_like_share": 0.3342413213419726,
+         "cash_like_usd": 656540.1,
+         "box_growth_up": 0.4425815700003125,
+         "box_growth_down": -0.008124061238264533,
+         "box_inflation_up": 0.3450210038537058,
+         "box_inflation_down": 0.21837204145503053,
+         "box_unmapped": 0.002149445929215621,
+         "balance_score": 0.6142678271264146,
+         "exp_return_prior": 0.11479178645295374,
+         "gross": 0.6657586786580274
+        }
+       }
+      },
+      "b1": {
+       "desc": "off-sheet, principal $129,166 counted nowhere",
+       "added_cash_usd": 129166.0,
+       "whole_usd": 19583695.7,
+       "investable_usd": 19493635.7,
+       "liquid_usd": 2503635.7,
+       "sheet_overstatement_usd": 181710.30000000075,
+       "cases": {
+        "liquid now (loan outstanding)": {
+         "nav_usd": 2503635.7,
+         "vol": 0.10292269757703928,
+         "dr2": 3.9217162514572625,
+         "neff_equal_rho": 5.892707273578183,
+         "neff_pca_entropy": 5.052429346547192,
+         "neff_inv_hhi_prc": 4.967621938113513,
+         "neff_min_torsion": 12.751904665378461,
+         "btc_risk_share": 0.40451046641684346,
+         "btc_dollar_share": 0.11243054251063762,
+         "cash_like_share": 0.4776677773048212,
+         "cash_like_usd": 1195906.1,
+         "box_growth_up": 0.44518076472001233,
+         "box_growth_down": -0.008097373640639387,
+         "box_inflation_up": 0.3431345229858999,
+         "box_inflation_down": 0.21776438259158826,
+         "box_unmapped": 0.002017703343138777,
+         "balance_score": 0.6134545467767809,
+         "exp_return_prior": 0.0994892026850794,
+         "gross": 0.5223322226951788
+        },
+        "liquid post-revert (loan back in BOXX)": {
+         "nav_usd": 2503635.7,
+         "vol": 0.1024677507284224,
+         "dr2": 3.7839922229234055,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.034001242866746,
+         "neff_inv_hhi_prc": 4.913136590023439,
+         "neff_min_torsion": 12.525318865111073,
+         "btc_risk_share": 0.40698259965748673,
+         "btc_dollar_share": 0.11243054251063762,
+         "cash_like_share": 0.4776677773048212,
+         "cash_like_usd": 1195906.1,
+         "box_growth_up": 0.4424716314026318,
+         "box_growth_down": -0.008114072821741754,
+         "box_inflation_up": 0.34493725342963927,
+         "box_inflation_down": 0.21832103626851357,
+         "box_unmapped": 0.002384151720957073,
+         "balance_score": 0.6142791019333991,
+         "exp_return_prior": 0.09870070335648573,
+         "gross": 0.5223322226951788
+        },
+        "post-revert, net of commitments $410,200": {
+         "nav_usd": 2093435.7,
+         "vol": 0.12251885795934633,
+         "dr2": 3.77815527771575,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.033411399747992,
+         "neff_inv_hhi_prc": 4.910419843892167,
+         "neff_min_torsion": 12.513882526191896,
+         "btc_risk_share": 0.4071005058693087,
+         "btc_dollar_share": 0.1344608387064384,
+         "cash_like_share": 0.3753189553421679,
+         "cash_like_usd": 785706.1,
+         "box_growth_up": 0.4425815700003124,
+         "box_growth_down": -0.00812406123826453,
+         "box_inflation_up": 0.3450210038537057,
+         "box_inflation_down": 0.21837204145503047,
+         "box_unmapped": 0.002149445929215843,
+         "balance_score": 0.6142678271264146,
+         "exp_return_prior": 0.11018326693215724,
+         "gross": 0.6246810446578321
+        }
+       }
+      },
+      "b2": {
+       "desc": "off-sheet, principal + fee $148,541 counted nowhere",
+       "added_cash_usd": 148541.0,
+       "whole_usd": 19603070.7,
+       "investable_usd": 19513010.7,
+       "liquid_usd": 2523010.7,
+       "sheet_overstatement_usd": 162335.30000000075,
+       "cases": {
+        "liquid now (loan outstanding)": {
+         "nav_usd": 2523010.7,
+         "vol": 0.10213232151341214,
+         "dr2": 3.9217162514572617,
+         "neff_equal_rho": 5.892707273578183,
+         "neff_pca_entropy": 5.052429346547192,
+         "neff_inv_hhi_prc": 4.967621938113512,
+         "neff_min_torsion": 12.751904665378467,
+         "btc_risk_share": 0.40451046641684346,
+         "btc_dollar_share": 0.11156715268785819,
+         "cash_like_share": 0.48167893223758423,
+         "cash_like_usd": 1215281.1,
+         "box_growth_up": 0.44518076472001233,
+         "box_growth_down": -0.008097373640639388,
+         "box_inflation_up": 0.34313452298589997,
+         "box_inflation_down": 0.21776438259158826,
+         "box_unmapped": 0.002017703343138777,
+         "balance_score": 0.6134545467767809,
+         "exp_return_prior": 0.09903313414679557,
+         "gross": 0.5183210677624157
+        },
+        "liquid post-revert (loan back in BOXX)": {
+         "nav_usd": 2523010.7,
+         "vol": 0.10168086834605154,
+         "dr2": 3.7839922229234055,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.034001242866744,
+         "neff_inv_hhi_prc": 4.913136590023437,
+         "neff_min_torsion": 12.525318865111073,
+         "btc_risk_share": 0.4069825996574867,
+         "btc_dollar_share": 0.11156715268785819,
+         "cash_like_share": 0.48167893223758423,
+         "cash_like_usd": 1215281.1,
+         "box_growth_up": 0.4424716314026317,
+         "box_growth_down": -0.008114072821741753,
+         "box_inflation_up": 0.3449372534296392,
+         "box_inflation_down": 0.21832103626851357,
+         "box_unmapped": 0.002384151720957295,
+         "balance_score": 0.6142791019333991,
+         "exp_return_prior": 0.0982506899548256,
+         "gross": 0.5183210677624157
+        },
+        "post-revert, net of commitments $410,200": {
+         "nav_usd": 2112810.7,
+         "vol": 0.12139532953677522,
+         "dr2": 3.778155277715749,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.033411399747992,
+         "neff_inv_hhi_prc": 4.910419843892166,
+         "neff_min_torsion": 12.51388252619189,
+         "btc_risk_share": 0.4071005058693088,
+         "btc_dollar_share": 0.1332277993480438,
+         "cash_like_share": 0.3810474360055068,
+         "cash_like_usd": 805081.1,
+         "box_growth_up": 0.4425815700003125,
+         "box_growth_down": -0.008124061238264531,
+         "box_inflation_up": 0.3450210038537058,
+         "box_inflation_down": 0.2183720414550305,
+         "box_unmapped": 0.002149445929215843,
+         "balance_score": 0.6142678271264144,
+         "exp_return_prior": 0.10954058593058408,
+         "gross": 0.6189525639944933
+        }
+       }
+      }
+     },
+     "P": {
+      "a": {
+       "desc": "in the sheet's Cash/Stables line already (= published numbers)",
+       "added_cash_usd": 0.0,
+       "whole_usd": 19383695.7,
+       "investable_usd": 19293635.7,
+       "liquid_usd": 2303635.7,
+       "sheet_overstatement_usd": 381710.30000000075,
+       "cases": {
+        "liquid now (loan outstanding)": {
+         "nav_usd": 2303635.7,
+         "vol": 0.11169202201691923,
+         "dr2": 3.868159904164263,
+         "neff_equal_rho": 5.892707273578183,
+         "neff_pca_entropy": 5.025709270807987,
+         "neff_inv_hhi_prc": 4.945003760314358,
+         "neff_min_torsion": 12.669567831841608,
+         "btc_risk_share": 0.4054853303442639,
+         "btc_dollar_share": 0.12219168161007402,
+         "cash_like_share": 0.43231926818984434,
+         "cash_like_usd": 995906.1,
+         "box_growth_up": 0.44398397325135286,
+         "box_growth_down": -0.008089557274227669,
+         "box_inflation_up": 0.3439330630209702,
+         "box_inflation_down": 0.21814480457228552,
+         "box_unmapped": 0.0020277164296190753,
+         "balance_score": 0.6139760602656643,
+         "exp_return_prior": 0.1042732129315492,
+         "gross": 0.5676807318101557
+        },
+        "liquid post-revert (loan back in BOXX)": {
+         "nav_usd": 2303635.7,
+         "vol": 0.11135041934824862,
+         "dr2": 3.780796596041453,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.033650047348094,
+         "neff_inv_hhi_prc": 4.911639064759617,
+         "neff_min_torsion": 12.519027689214276,
+         "btc_risk_share": 0.40704757853213486,
+         "btc_dollar_share": 0.12219168161007402,
+         "cash_like_share": 0.4323192681898444,
+         "cash_like_usd": 995906.1,
+         "box_growth_up": 0.4425322773744528,
+         "box_growth_down": -0.008119553185933943,
+         "box_inflation_up": 0.34498346034478095,
+         "box_inflation_down": 0.21834918453884306,
+         "box_unmapped": 0.0022546309278571597,
+         "balance_score": 0.614272923559529,
+         "exp_return_prior": 0.10378837441111345,
+         "gross": 0.5676807318101555
+        },
+        "post-revert, net of commitments $410,200": {
+         "nav_usd": 1893435.7,
+         "vol": 0.13544412958076532,
+         "dr2": 3.774945492831123,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.033186322439374,
+         "neff_inv_hhi_prc": 4.90896068579542,
+         "neff_min_torsion": 12.507697455532494,
+         "btc_risk_share": 0.4071638794500971,
+         "btc_dollar_share": 0.14866368052530118,
+         "cash_like_share": 0.30933508859054476,
+         "cash_like_usd": 585706.1,
+         "box_growth_up": 0.4426404619694523,
+         "box_growth_down": -0.00812951324978079,
+         "box_inflation_up": 0.3450658424678446,
+         "box_inflation_down": 0.21839932272920368,
+         "box_unmapped": 0.002023886083280302,
+         "balance_score": 0.6142616462087251,
+         "exp_return_prior": 0.11758602868764305,
+         "gross": 0.6906649114094552
+        }
+       }
+      },
+      "b1": {
+       "desc": "off-sheet, principal $200,000 counted nowhere",
+       "added_cash_usd": 200000.0,
+       "whole_usd": 19583695.7,
+       "investable_usd": 19493635.7,
+       "liquid_usd": 2503635.7,
+       "sheet_overstatement_usd": 181710.30000000075,
+       "cases": {
+        "liquid now (loan outstanding)": {
+         "nav_usd": 2503635.7,
+         "vol": 0.1027696359032431,
+         "dr2": 3.868159904164264,
+         "neff_equal_rho": 5.892707273578183,
+         "neff_pca_entropy": 5.025709270807987,
+         "neff_inv_hhi_prc": 4.945003760314358,
+         "neff_min_torsion": 12.669567831841608,
+         "btc_risk_share": 0.4054853303442639,
+         "btc_dollar_share": 0.11243054251063762,
+         "cash_like_share": 0.47766777730482113,
+         "cash_like_usd": 1195906.1,
+         "box_growth_up": 0.4439839732513529,
+         "box_growth_down": -0.008089557274227667,
+         "box_inflation_up": 0.3439330630209702,
+         "box_inflation_down": 0.21814480457228555,
+         "box_unmapped": 0.0020277164296190753,
+         "balance_score": 0.6139760602656643,
+         "exp_return_prior": 0.09914681112065084,
+         "gross": 0.5223322226951789
+        },
+        "liquid post-revert (loan back in BOXX)": {
+         "nav_usd": 2503635.7,
+         "vol": 0.10245532176290513,
+         "dr2": 3.780796596041456,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.033650047348094,
+         "neff_inv_hhi_prc": 4.9116390647596155,
+         "neff_min_torsion": 12.519027689214271,
+         "btc_risk_share": 0.40704757853213497,
+         "btc_dollar_share": 0.11243054251063762,
+         "cash_like_share": 0.4776677773048212,
+         "cash_like_usd": 1195906.1,
+         "box_growth_up": 0.44253227737445283,
+         "box_growth_down": -0.008119553185933947,
+         "box_inflation_up": 0.34498346034478106,
+         "box_inflation_down": 0.21834918453884306,
+         "box_unmapped": 0.0022546309278569376,
+         "balance_score": 0.614272923559529,
+         "exp_return_prior": 0.09870070335648573,
+         "gross": 0.5223322226951788
+        },
+        "post-revert, net of commitments $410,200": {
+         "nav_usd": 2093435.7,
+         "vol": 0.12250424042336103,
+         "dr2": 3.7749454928311246,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.033186322439372,
+         "neff_inv_hhi_prc": 4.908960685795422,
+         "neff_min_torsion": 12.507697455532494,
+         "btc_risk_share": 0.407163879450097,
+         "btc_dollar_share": 0.1344608387064384,
+         "cash_like_share": 0.3753189553421679,
+         "cash_like_usd": 785706.1,
+         "box_growth_up": 0.4426404619694522,
+         "box_growth_down": -0.008129513249780788,
+         "box_inflation_up": 0.34506584246784455,
+         "box_inflation_down": 0.21839932272920368,
+         "box_unmapped": 0.002023886083280302,
+         "balance_score": 0.6142616462087251,
+         "exp_return_prior": 0.11018326693215724,
+         "gross": 0.6246810446578321
+        }
+       }
+      },
+      "b2": {
+       "desc": "off-sheet, principal + fee $232,000 counted nowhere",
+       "added_cash_usd": 232000.0,
+       "whole_usd": 19615695.7,
+       "investable_usd": 19525635.7,
+       "liquid_usd": 2535635.7,
+       "sheet_overstatement_usd": 149710.30000000075,
+       "cases": {
+        "liquid now (loan outstanding)": {
+         "nav_usd": 2535635.7,
+         "vol": 0.10147267185241206,
+         "dr2": 3.868159904164262,
+         "neff_equal_rho": 5.892707273578183,
+         "neff_pca_entropy": 5.025709270807986,
+         "neff_inv_hhi_prc": 4.94500376031436,
+         "neff_min_torsion": 12.669567831841608,
+         "btc_risk_share": 0.40548533034426376,
+         "btc_dollar_share": 0.11101165676126108,
+         "cash_like_share": 0.4842596671122748,
+         "cash_like_usd": 1227906.1,
+         "box_growth_up": 0.44398397325135286,
+         "box_growth_down": -0.008089557274227667,
+         "box_inflation_up": 0.3439330630209701,
+         "box_inflation_down": 0.21814480457228552,
+         "box_unmapped": 0.0020277164296191863,
+         "balance_score": 0.6139760602656643,
+         "exp_return_prior": 0.09840163390301629,
+         "gross": 0.5157403328877253
+        },
+        "liquid post-revert (loan back in BOXX)": {
+         "nav_usd": 2535635.7,
+         "vol": 0.10116232439091949,
+         "dr2": 3.780796596041454,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.033650047348094,
+         "neff_inv_hhi_prc": 4.9116390647596155,
+         "neff_min_torsion": 12.519027689214276,
+         "btc_risk_share": 0.40704757853213486,
+         "btc_dollar_share": 0.11101165676126108,
+         "cash_like_share": 0.4842596671122748,
+         "cash_like_usd": 1227906.1,
+         "box_growth_up": 0.4425322773744528,
+         "box_growth_down": -0.008119553185933945,
+         "box_inflation_up": 0.34498346034478095,
+         "box_inflation_down": 0.21834918453884306,
+         "box_unmapped": 0.0022546309278570487,
+         "balance_score": 0.614272923559529,
+         "exp_return_prior": 0.09796115606765102,
+         "gross": 0.5157403328877253
+        },
+        "post-revert, net of commitments $410,200": {
+         "nav_usd": 2125435.7,
+         "vol": 0.12065984885058958,
+         "dr2": 3.7749454928311246,
+         "neff_equal_rho": 5.602253622669161,
+         "neff_pca_entropy": 5.033186322439372,
+         "neff_inv_hhi_prc": 4.908960685795419,
+         "neff_min_torsion": 12.507697455532488,
+         "btc_risk_share": 0.4071638794500971,
+         "btc_dollar_share": 0.1324364317396193,
+         "cash_like_share": 0.3847239885920802,
+         "cash_like_usd": 817706.1,
+         "box_growth_up": 0.4426404619694523,
+         "box_growth_down": -0.00812951324978079,
+         "box_inflation_up": 0.3450658424678446,
+         "box_inflation_down": 0.2183993227292037,
+         "box_unmapped": 0.002023886083280191,
+         "balance_score": 0.6142616462087251,
+         "exp_return_prior": 0.10912811172711903,
+         "gross": 0.6152760114079199
+        }
+       }
+      }
+     }
+    },
+    "N2_knock_on_b2": {
+     "D": {
+      "proposal_solve": {
+       "nav_usd": 2523010.7,
+       "deployable_usd": 2015378.11,
+       "gross_of_nav": 0.8107330301849295
+      },
+      "proposal_target_scale_vs_published": 1.0795682704207654,
+      "proposal_targets_usd": {
+       "core_equity": 180122.72429700498,
+       "TLT": 306180.7532676972,
+       "TIP": 747957.1904499915,
+       "DBC": 243505.60038235987,
+       "gold_silver": 0.0,
+       "BTC": 70324.94366100918,
+       "composer_all": 147662.86050940622,
+       "KMLM": 283066.2228828184,
+       "single_names": 36557.81454971297
+      },
+      "pro_rata": {
+       "L": 1.478790208112844,
+       "L_max_cash": 1.5795561666823852,
+       "cash_binding": false,
+       "risky_usd_before": 1274934.48,
+       "uncommitted_cash_usd": 738896.1400000001,
+       "deployed_usd": 610426.1450094404
+      },
+      "UNLEVERED balanced proposal": {
+       "nav_usd": 2523010.7,
+       "vol": 0.05016522364628029,
+       "dr2": 5.261070299608837,
+       "neff_equal_rho": 7.209578714549332,
+       "neff_pca_entropy": 4.061593088113814,
+       "neff_inv_hhi_prc": 7.993604645876798,
+       "neff_min_torsion": 8.75608833328803,
+       "btc_risk_share": 0.12019198880276649,
+       "btc_dollar_share": 0.027873422677521412,
+       "cash_like_share": 0.18926696981507052,
+       "cash_like_usd": 477522.58999999997,
+       "box_growth_up": 0.3242433777191715,
+       "box_growth_down": 0.14329656849354483,
+       "box_inflation_up": 0.21003190702458305,
+       "box_inflation_down": 0.26199959276506546,
+       "box_unmapped": 0.06042855399763525,
+       "balance_score": 0.8347370701418535,
+       "exp_return_prior": 0.0751182702835389,
+       "gross": 0.8107330301849295
+      },
+      "current, cash deployed pro rata": {
+       "nav_usd": 2523010.7,
+       "vol": 0.14999996941726665,
+       "dr2": 3.7465644209898015,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.031524004829169,
+       "neff_inv_hhi_prc": 4.917879815532382,
+       "neff_min_torsion": 12.487551952118997,
+       "btc_risk_share": 0.40645083410069943,
+       "btc_dollar_share": 0.16447485935032335,
+       "cash_like_share": 0.23973539033764685,
+       "cash_like_usd": 604854.9549905596,
+       "box_growth_up": 0.44292341103006466,
+       "box_growth_down": -0.008159530480519768,
+       "box_inflation_up": 0.3450876810106163,
+       "box_inflation_down": 0.2189970980894042,
+       "box_unmapped": 0.0011513403504346265,
+       "balance_score": 0.614774124284059,
+       "exp_return_prior": 0.12648163794934617,
+       "gross": 0.7602646096623531
+      },
+      "current as is": {
+       "nav_usd": 2523010.7,
+       "vol": 0.10168086834605154,
+       "dr2": 3.7839922229234055,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.034001242866744,
+       "neff_inv_hhi_prc": 4.913136590023437,
+       "neff_min_torsion": 12.525318865111073,
+       "btc_risk_share": 0.4069825996574867,
+       "btc_dollar_share": 0.11156715268785819,
+       "cash_like_share": 0.48167893223758423,
+       "cash_like_usd": 1215281.1,
+       "box_growth_up": 0.4424716314026317,
+       "box_growth_down": -0.008114072821741753,
+       "box_inflation_up": 0.3449372534296392,
+       "box_inflation_down": 0.21832103626851357,
+       "box_unmapped": 0.002384151720957295,
+       "balance_score": 0.6142791019333991,
+       "exp_return_prior": 0.0982506899548256,
+       "gross": 0.5183210677624157
+      }
+     },
+     "P": {
+      "proposal_solve": {
+       "nav_usd": 2535635.7,
+       "deployable_usd": 2028003.11,
+       "gross_of_nav": 0.8116753956414164
+      },
+      "proposal_target_scale_vs_published": 1.1291757228638652,
+      "proposal_targets_usd": {
+       "core_equity": 181251.07305844396,
+       "TLT": 308098.77152482944,
+       "TIP": 752642.6435084407,
+       "DBC": 245031.00059861375,
+       "gold_silver": 0.0,
+       "BTC": 70765.48254019758,
+       "composer_all": 148587.869868534,
+       "KMLM": 284839.4440199159,
+       "single_names": 36786.824881025015
+      },
+      "pro_rata": {
+       "L": 1.4818279560089278,
+       "L_max_cash": 1.5894586363371395,
+       "cash_binding": false,
+       "risky_usd_before": 1274934.48,
+       "uncommitted_cash_usd": 751521.1400000001,
+       "deployed_usd": 614299.0745437052
+      },
+      "UNLEVERED balanced proposal": {
+       "nav_usd": 2535635.7,
+       "vol": 0.05022764350069611,
+       "dr2": 5.260207719147525,
+       "neff_equal_rho": 7.209578714549332,
+       "neff_pca_entropy": 4.0614741774605285,
+       "neff_inv_hhi_prc": 7.993375692087567,
+       "neff_min_torsion": 8.755543465475883,
+       "btc_risk_share": 0.12019174528818254,
+       "btc_dollar_share": 0.02790837916511334,
+       "cash_like_share": 0.1883246043585835,
+       "cash_like_usd": 477522.58999999997,
+       "box_growth_up": 0.32424601611736353,
+       "box_growth_down": 0.14329948713324236,
+       "box_inflation_up": 0.2100348833970354,
+       "box_inflation_down": 0.2620026268330129,
+       "box_unmapped": 0.060416986519345794,
+       "balance_score": 0.8347392626456883,
+       "exp_return_prior": 0.07516820956335356,
+       "gross": 0.8116753956414164
+      },
+      "current, cash deployed pro rata": {
+       "nav_usd": 2535635.7,
+       "vol": 0.15000002874028556,
+       "dr2": 3.724172353705358,
+       "neff_equal_rho": 5.035277441198933,
+       "neff_pca_entropy": 4.962512839932181,
+       "neff_inv_hhi_prc": 4.936718594775496,
+       "neff_min_torsion": 12.439593606382637,
+       "btc_risk_share": 0.405378790846607,
+       "btc_dollar_share": 0.163989943088153,
+       "cash_like_share": 0.24199336894345463,
+       "cash_like_usd": 613607.0254562948,
+       "box_growth_up": 0.4427886366633593,
+       "box_growth_down": -0.008049869655789146,
+       "box_inflation_up": 0.344776144384196,
+       "box_inflation_down": 0.21933878179472305,
+       "box_unmapped": 0.0011463068135108,
+       "balance_score": 0.6153751893531625,
+       "exp_return_prior": 0.12622976456499044,
+       "gross": 0.7580066310565454
+      },
+      "current as is": {
+       "nav_usd": 2535635.7,
+       "vol": 0.10116232439091949,
+       "dr2": 3.780796596041454,
+       "neff_equal_rho": 5.602253622669161,
+       "neff_pca_entropy": 5.033650047348094,
+       "neff_inv_hhi_prc": 4.9116390647596155,
+       "neff_min_torsion": 12.519027689214276,
+       "btc_risk_share": 0.40704757853213486,
+       "btc_dollar_share": 0.11101165676126108,
+       "cash_like_share": 0.4842596671122748,
+       "cash_like_usd": 1227906.1,
+       "box_growth_up": 0.4425322773744528,
+       "box_growth_down": -0.008119553185933945,
+       "box_inflation_up": 0.34498346034478095,
+       "box_inflation_down": 0.21834918453884306,
+       "box_unmapped": 0.0022546309278570487,
+       "balance_score": 0.614272923559529,
+       "exp_return_prior": 0.09796115606765102,
+       "gross": 0.5157403328877253
       }
      }
     }
@@ -2966,6 +3655,11 @@
     "caption": "N1: corrected liquid book, variant D (Dominion out) and P (Plus One out), now / post-revert / net of commitments ($410.2k; sheet $435.2k), vs the old plug book"
    },
    {
+    "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n1_boxx_basis_check.png",
+    "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n1_boxx_basis_check.csv ; /home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n1_conditional_range.csv",
+    "caption": "N1 repair R1: IBKR BOXX cost basis vs BOXX price (the repaid capital is not in BOXX) and the conditional range by reading (a = in sheet Cash/Stables = published; b1/b2 = off-sheet principal / principal+fee)"
+   },
+   {
     "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_risk_vs_dollar.png",
     "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/n2_risk_vs_dollar_by_sleeve.csv",
     "caption": "N2 (variant D): dollar share vs Euler risk share by sleeve - current, current with cash deployed pro rata, unlevered proposal (no margin)"
@@ -5143,5 +5837,209 @@
     "caption": "N4: venture paper gain by position (sheet 'Venture'); OO marked at a banker/broker indication"
    }
   ]
+ },
+ "repair": {
+  "item": "repair 2 (POST-HOC, counter-agent): embedded leverage under 'no leverage'",
+  "rule_scope": "Casey's 'no leverage' rule as applied here = no borrowing / margin and no levered balanced funds (ALLW/UPAR/RSSB). It does NOT remove the daily-reset 3x ETFs inside Casey's own Composer strategy, which every book keeps (sized per his plan: N2 risk budget 16%; N3 $4.32M = 24%).",
+  "assumptions": {
+   "composer_max_multiple": {
+    "value": 3.0,
+    "source": "symphony holdings (Composer book summary 2026-10-06): HG rotates 3x UPRO/TQQQ/SOXL/LABU/TNA; KMLM switcher risk-on 3x SPXL/TQQQ/SOXL/TECL; Crash sleeve holds TMF (3x); daily-reset 3x is the largest multiple held -> UPPER BOUND (the sleeve is never all 3x at once: PULS/BIL/IEF/SHY legs)",
+    "confidence": "high"
+   },
+   "other_positions_multiple": {
+    "value": 1.0,
+    "source": "ETFs, single names, BTC, private loans and venture at face; KMLM and DBC are fully collateralised futures funds (notional ~1x NAV) - NOTE only",
+    "confidence": "medium"
+   },
+   "hl_eth_carry": {
+    "value": 0.0,
+    "source": "UETH spot long + perp short is a delta-hedge; the perp short leg (~$30k) is reported as a separate column, not added to the headline",
+    "confidence": "medium"
+   }
+  },
+  "composer_measured_3y": {
+   "hg": {
+    "beta_to_spy": 2.025618385153088,
+    "vol": 0.44824087594187,
+    "vol_ratio_to_spy": 2.930719270316005,
+    "share_of_window_in_sample": 0.7273936170212766
+   },
+   "kmlm": {
+    "beta_to_spy": 1.0509071199490814,
+    "vol": 0.5684258215622809,
+    "vol_ratio_to_spy": 3.716520733405458,
+    "share_of_window_in_sample": 0.9188829787234043
+   },
+   "crash": {
+    "beta_to_spy": -0.4665224778954368,
+    "vol": 0.24620769698526127,
+    "vol_ratio_to_spy": 1.609772068508105,
+    "share_of_window_in_sample": 0.9188829787234043
+   },
+   "vixhyg": {
+    "beta_to_spy": 0.06869757883737587,
+    "vol": 0.11187438938647243,
+    "vol_ratio_to_spy": 0.7314648137362001,
+    "share_of_window_in_sample": 0.9335106382978723
+   },
+   "policy_mix_29_29_27_15": {
+    "beta_to_spy": 0.7765359642734687,
+    "vol": 0.24799010008184297,
+    "vol_ratio_to_spy": 1.6214258988100518
+   }
+  },
+  "composer_measured_basis": "daily, 2023-10-02..2026-09-30, spliced series: IN-SAMPLE backtest before each live start ({'hg': '2025-12-05', 'kmlm': '2026-07-07', 'crash': '2026-07-07', 'vixhyg': '2026-07-22'}), live after",
+  "rows": [
+   {
+    "section": "N2 liquid, variant D",
+    "book": "current as is",
+    "nav_usd": 2374469.7,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.5507459623510884,
+    "composer_usd": 299600.0,
+    "composer_share": 0.12617554142720794,
+    "lookthrough_upper_3x": 0.8030970452055043,
+    "eth_perp_short_leg_share": 0.012680726142767792
+   },
+   {
+    "section": "N2 liquid, variant D",
+    "book": "current, cash deployed pro rata",
+    "nav_usd": 2374469.7,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.7608434640495212,
+    "composer_usd": 416830.72819228854,
+    "composer_share": 0.17554687187302853,
+    "lookthrough_upper_3x": 1.1119372077955783,
+    "eth_perp_short_leg_share": 0.012680726142767792
+   },
+   {
+    "section": "N2 liquid, variant D",
+    "book": "UNLEVERED balanced proposal",
+    "nav_usd": 2374469.7,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.7988929528138431,
+    "composer_usd": 136779.54841323203,
+    "composer_share": 0.05760425092526218,
+    "lookthrough_upper_3x": 0.9141014546643674,
+    "eth_perp_short_leg_share": 0.012680726142767792
+   },
+   {
+    "section": "N2 liquid, variant D",
+    "book": "POST-HOC: proposal, metals held",
+    "nav_usd": 2374469.7,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.7988929528138431,
+    "composer_usd": 118746.05428682863,
+    "composer_share": 0.050009504979923985,
+    "lookthrough_upper_3x": 0.898911962773691,
+    "eth_perp_short_leg_share": 0.012680726142767792
+   },
+   {
+    "section": "N2 liquid, variant P",
+    "book": "current as is",
+    "nav_usd": 2303635.7,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.5676807318101555,
+    "composer_usd": 299600.0,
+    "composer_share": 0.13005528608538233,
+    "lookthrough_upper_3x": 0.8277913039809202,
+    "eth_perp_short_leg_share": 0.013070643070864025
+   },
+   {
+    "section": "N2 liquid, variant P",
+    "book": "current, cash deployed pro rata",
+    "nav_usd": 2303635.7,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.7612088319801601,
+    "composer_usd": 404363.92861791427,
+    "composer_share": 0.1755329319726701,
+    "lookthrough_upper_3x": 1.1122746959255003,
+    "eth_perp_short_leg_share": 0.013070643070864025
+   },
+   {
+    "section": "N2 liquid, variant P",
+    "book": "UNLEVERED balanced proposal",
+    "nav_usd": 2303635.7,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.7927091553582019,
+    "composer_usd": 131589.6780809978,
+    "composer_share": 0.057122607572455054,
+    "lookthrough_upper_3x": 0.906954370503112,
+    "eth_perp_short_leg_share": 0.013070643070864025
+   },
+   {
+    "section": "N2 liquid, variant P",
+    "book": "POST-HOC: proposal, metals held",
+    "nav_usd": 2303635.7,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.7927091553582019,
+    "composer_usd": 113550.63989936373,
+    "composer_share": 0.049291925758644786,
+    "lookthrough_upper_3x": 0.8912930068754914,
+    "eth_perp_short_leg_share": 0.013070643070864025
+   },
+   {
+    "section": "N3 $18M post-exit",
+    "book": "PLAN pre-trigger",
+    "nav_usd": 18000000.0,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.64,
+    "composer_usd": 4320000.0,
+    "composer_share": 0.24,
+    "lookthrough_upper_3x": 1.12,
+    "eth_perp_short_leg_share": 0.0
+   },
+   {
+    "section": "N3 $18M post-exit",
+    "book": "PLAN post-trigger",
+    "nav_usd": 18000000.0,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.6816666666666666,
+    "composer_usd": 4320000.0,
+    "composer_share": 0.24,
+    "lookthrough_upper_3x": 1.1616666666666666,
+    "eth_perp_short_leg_share": 0.0
+   },
+   {
+    "section": "N3 $18M post-exit",
+    "book": "ALT-2 UNLEVERED",
+    "nav_usd": 18000000.0,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 1.0000000000000002,
+    "composer_usd": 1415732.6098517193,
+    "composer_share": 0.07865181165842886,
+    "lookthrough_upper_3x": 1.1573036233168579,
+    "eth_perp_short_leg_share": 0.0
+   },
+   {
+    "section": "N3 $18M post-exit",
+    "book": "CASEY ROUTE pre-trigger",
+    "nav_usd": 18000000.0,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.9444444444444444,
+    "composer_usd": 4320000.0,
+    "composer_share": 0.24,
+    "lookthrough_upper_3x": 1.4244444444444444,
+    "eth_perp_short_leg_share": 0.0
+   },
+   {
+    "section": "N3 $18M post-exit",
+    "book": "CASEY ROUTE post-trigger",
+    "nav_usd": 18000000.0,
+    "borrowing_usd": 0.0,
+    "gross_at_face": 0.9861111111111112,
+    "composer_usd": 4320000.0,
+    "composer_share": 0.24,
+    "lookthrough_upper_3x": 1.4661111111111111,
+    "eth_perp_short_leg_share": 0.0
+   }
+  ],
+  "numbers_changed_in_N1_N4": "none",
+  "chart": {
+   "png": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/lookthrough_notional.png",
+   "rows_csv": "/home/user/uranium-dashboard/holygrail-engine/results/casey-2026-10/no-leverage/lookthrough_notional.csv",
+   "caption": "Gross at face vs look-through notional upper bound (every Composer dollar at 3x), N2 variant D and N3"
+  }
  }
 }

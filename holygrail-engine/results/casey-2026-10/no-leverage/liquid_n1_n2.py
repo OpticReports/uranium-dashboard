@@ -47,8 +47,9 @@ ALPHA_HAIRCUT = {"composer_hg", "composer_kmlm", "composer_crash", "composer_vix
                  "VIST", "JOINN", "BOT", "FTZFF", "SHAZ", "TSLA"}
 CASHLIKE = {"BOXX", "BIL", "cash", "usdc_idle", "st_loans_16", "evergrande", "margin_loan"}
 HL_NAMES = {"HL ETH carry (UETH spot + perp short)", "HL spot USDC", "HL BTC trend long (notional)"}
+REPAID_NAME = "Repaid loan capital (location UNCONFIRMED, reading b)"   # N1 repair R1; absent from every published book
 CASH_FUND_ORDER = ["U84 BOXX", "U26 BIL", "U26 settled cash", "U84 settled cash", "U358 cash", "Cash/stables ex-Hyperliquid",
-                   "U26 NAV residual"]
+                   "U26 NAV residual", REPAID_NAME]
 M: dict = {"params_file": "predeclared_params.json", "post_hoc": [], "rf": RF}
 CHARTS: list = []
 
@@ -80,7 +81,8 @@ def apply_variant(raw, v):
     out, rate = (200_000.0, 0.16) if v == "D" else (129_166.0, 0.15)
     p = pos(r, PLUG)
     p["value_usd"] = out
-    p["note"] = f"variant {v}: {'Dominion' if v == 'D' else 'Plus One'} outstanding (~45d), the other already in IBKR BOXX live"
+    p["note"] = (f"variant {v}: {'Dominion' if v == 'D' else 'Plus One'} outstanding (~45d); the repaid loan's capital is NOT in IBKR "
+                 "BOXX (cost-basis check, N1 repair R1) - reading (a): already inside the sheet's Cash/Stables line; location open P1")
     st = r["streams"]["st_loans_16"]
     st["default"]["coupon"] = A(rate * 45 / 365 + RF * 320 / 365,
                                 f"variant {v}: {rate:.0%} p.a. x 45/365 + rf x 320/365 (loan then BOXX); 'annualised' reading kept (flag)", "medium")
@@ -154,6 +156,85 @@ for v in ("D", "P"):
     N1["variants"][v] = d
 M["N1"] = N1
 report.write_rows(pd.DataFrame(rows_n1), HERE / "n1_corrected_liquid")
+
+# ------------------------------------------------------------------ N1 REPAIR R1 (POST-HOC, counter-agent item N1, 2026-10-06)
+# Both predeclared variants said the REPAID loan's capital is 'already in IBKR BOXX live'. IBKR's own BOXX cost basis rules
+# that out (check below), and Casey's words are future tense ('Then I'll return the capital to BOXX'). Where the capital sits
+# is open P1 and decides NAV / overstatement. Published N1/N2 numbers = reading (a): it is already inside the sheet's
+# Cash/Stables line (the model's 'Cash/stables ex-Hyperliquid'), so the model counts it once. Reading (b): it sits off-sheet
+# (bank), counted nowhere -> added here as cash, principal only (b1) or principal + fee (b2). Reading (c): redeployed -
+# not computable without the target. A CONDITIONAL RANGE, not a result.
+BOXX_IBKR = {"shares": A(3672, "IBKR U8421887 screenshot 2026-10-06 ~20:25 AST (orchestrator transcription)", "high"),
+             "price": A(118.47, "same screenshot", "high"),
+             "cost_basis_usd": A(371_732, "same screenshot, cost column", "high")}
+REPAID = {"D": {"loan": "Plus One", "returned": "2026-09-29",
+                "principal": A(129_166, "sheet 'Movies' completed list (predeclared_params N1)", "high"),
+                "fee": A(19_375, "sheet 'Movies' TOTAL EARNINGS: Plus One profit $19,375 booked", "high")},
+          "P": {"loan": "Dominion", "returned": "2026-09-25",
+                "principal": A(200_000, "sheet 'Movies' (predeclared_params N1)", "high"),
+                "fee": A(32_000, "sheet 'Movies' outstanding list: Dominion expected profit $32,000 (not booked)", "medium")}}
+bxs = loader.market_levels("BOXX").values.loc[:"2026-10-05"]
+sh_, cost_ = BOXX_IBKR["shares"]["value"], BOXX_IBKR["cost_basis_usd"]["value"]
+atl, atl_dt = float(bxs.min()), str(bxs.idxmin().date())
+R1 = {"premise_tested": "repaid loan capital already inside IBKR BOXX live (both variants)",
+      "verdict": "CONTRADICTED by IBKR's own BOXX cost basis; location of the repaid capital is OPEN P1 (ask Casey)",
+      "boxx_ibkr": BOXX_IBKR, "boxx_avg_cost_per_share": cost_ / sh_,
+      "boxx_min_close_cached": A(atl, f"Yahoo adjclose cache (HG_OFFLINE), min on {atl_dt} (launch week)", "high"),
+      "basis_check": {}, "readings": {}}
+for v, d in REPAID.items():
+    X = d["principal"]["value"]
+    px = float(bxs.loc[:d["returned"]].iloc[-1])           # earliest re-buy date = highest implied basis (BOXX only accretes)
+    n_new = X / px
+    R1["basis_check"][v] = {
+        "loan_repaid": d["loan"], "returned": d["returned"], "boxx_close_on_return": px, "shares_rebought_if_in_boxx": n_new,
+        "implied_basis_per_old_share": (cost_ - X) / (sh_ - n_new),
+        "lowest_possible_total_cost_if_in_boxx": atl * (sh_ - n_new) + X,
+        "excess_over_reported_cost": atl * (sh_ - n_new) + X - cost_,
+        "max_repaid_capital_that_fits_in_boxx": (cost_ - atl * sh_) / (1.0 - atl / px)}
+rows_r1 = []
+
+
+def add_repaid(raw, usd):
+    r = copy.deepcopy(raw)
+    r["positions"].append({"name": REPAID_NAME, "value_usd": float(usd), "stream": "cash", "sleeve": "cash", "liquidity": "liquid",
+                           "mark_basis": "cost", "tags": ["repair_R1", "conditional"], "investable": True,
+                           "note": "N1 repair R1 reading (b): repaid capital off-sheet, counted nowhere in the published book"})
+    return r
+
+
+for v, d in REPAID.items():
+    P_, F_ = d["principal"]["value"], d["fee"]["value"]
+    R1["readings"][v] = {}
+    for rd, extra, desc in (("a", 0.0, "in the sheet's Cash/Stables line already (= published numbers)"),
+                            ("b1", P_, f"off-sheet, principal ${P_:,.0f} counted nowhere"),
+                            ("b2", P_ + F_, f"off-sheet, principal + fee ${P_ + F_:,.0f} counted nowhere")):
+        rv = apply_variant(base, v)
+        if extra:
+            rv = add_repaid(rv, extra)
+        t = totals(rv)
+        out = {"desc": desc, "added_cash_usd": extra, **t, "sheet_overstatement_usd": SHEET_NW - t["whole_usd"], "cases": {}}
+        pr = copy.deepcopy(rv); revert_loans(pr)
+        cs = {"liquid now (loan outstanding)": rv, "liquid post-revert (loan back in BOXX)": pr}
+        r2 = copy.deepcopy(pr); pay_commitments(r2, COMMIT_USD); cs["post-revert, net of commitments $410,200"] = r2
+        for k, r in cs.items():
+            mtr = liquid_metrics(score(r, "liquid"))
+            out["cases"][k] = mtr
+            rows_r1.append({"variant": v, "reading": rd, "reading_desc": desc, "case": k, "added_cash_usd": extra,
+                            "whole_usd": t["whole_usd"], "sheet_overstatement_usd": out["sheet_overstatement_usd"], **mtr})
+        R1["readings"][v][rd] = out
+        print("N1-R1", v, rd, round(out["sheet_overstatement_usd"]), {a: round(b, 4) for a, b in out["cases"]["liquid now (loan outstanding)"].items()
+                                                                       if a in ("nav_usd", "vol", "dr2", "btc_risk_share", "cash_like_share")})
+# the (a) rows must reproduce the published N1 rows exactly
+for v in REPAID:
+    for k, mtr in N1["variants"][v]["cases"].items():
+        if k in R1["readings"][v]["a"]["cases"]:
+            assert abs(R1["readings"][v]["a"]["cases"][k]["vol"] - mtr["vol"]) < 1e-12, (v, k)
+M["N1"]["repair_R1"] = R1   # rows written after the N2 knock-on below
+M["post_hoc"].append({"item": "N1 repair R1 (counter-agent item N1): premise 'repaid loan capital already in IBKR BOXX live' tested against "
+                              "IBKR's BOXX cost basis and found CONTRADICTED; published N1/N2 numbers relabelled reading (a) 'in the sheet's "
+                              "Cash/Stables line'; reading (b) 'off-sheet, counted nowhere' added as a CONDITIONAL RANGE (n1_conditional_range)",
+                      "why": "the location of the repaid principal + fee is an unanswered P1 input that moves NAV and the overstatement; "
+                             "per CLAUDE.md it is ASKED, not analysed around. No published number changed."})
 
 # ------------------------------------------------------------------ N2 proposal
 BUD = PP["N2"]["risk_budgets_of_budgeted_risk"]
@@ -321,6 +402,31 @@ report.write_rows(pd.DataFrame(rows_env), HERE / "n2_environment_boxes")
 trade = pd.DataFrame([{"stream": n, "target_usd": u} for n, u in N2["D"]["proposal_solve"]["usd"].items()])
 report.write_rows(trade, HERE / "n2_proposal_targets_D")
 
+# N1 repair R1 knock-on (CONDITIONAL, reading b2 only): if the repaid capital + fee sit off-sheet, the extra cash is uncommitted;
+# proposal weights are unchanged (the solve does not depend on NAV), so its targets scale with the deployable amount
+R1["N2_knock_on_b2"] = {}
+for v, d in REPAID.items():
+    vb = f"{v}_b2"
+    VAR_RAW[vb] = {k: add_repaid(r, d["principal"]["value"] + d["fee"]["value"]) for k, r in VAR_RAW[v].items()}
+    PRb, PROPb, infob = proposal(vb)
+    makeb, Lb, prb = pro_rata(PRb["base_0.30"])
+    kn = {"proposal_solve": {k: infob[k] for k in ("nav_usd", "deployable_usd", "gross_of_nav")},
+          "proposal_target_scale_vs_published": infob["deployable_usd"] / N2[v]["proposal_solve"]["deployable_usd"],
+          "proposal_targets_usd": infob["usd"], "pro_rata": prb}
+    for bk, rr in (("UNLEVERED balanced proposal", PROPb["base_0.30"]), ("current, cash deployed pro rata", makeb(Lb)),
+                   ("current as is", PRb["base_0.30"])):
+        mtr = liquid_metrics(score(rr, "liquid"))
+        kn[bk] = mtr
+        rows_r1.append({"variant": v, "reading": "b2", "reading_desc": f"N2 knock-on: {bk}", "case": f"N2 {bk}",
+                        "added_cash_usd": d["principal"]["value"] + d["fee"]["value"], **mtr,
+                        **({"pro_rata_L": prb["L"], "pro_rata_deployed_usd": prb["deployed_usd"],
+                            "uncommitted_cash_usd": prb["uncommitted_cash_usd"]} if "pro rata" in bk else {}),
+                        **({"deployable_usd": infob["deployable_usd"]} if "proposal" in bk else {})})
+    R1["N2_knock_on_b2"][v] = kn
+    print("N1-R1 N2 b2", v, round(prb["L"], 4), round(prb["deployed_usd"]), round(prb["uncommitted_cash_usd"]), round(kn["UNLEVERED balanced proposal"]["vol"], 4),
+          round(kn["current, cash deployed pro rata"]["vol"], 4), round(kn["proposal_target_scale_vs_published"], 4))
+report.write_rows(pd.DataFrame(rows_r1), HERE / "n1_conditional_range")
+
 # ------------------------------------------------------------------ N2 stress + constant-mix backtests (variant D)
 PR_D, PROP_D, _ = proposal("D")
 book_u = build(PROP_D["base_0.30"])
@@ -453,6 +559,37 @@ for ax, col, ttl in zip(axs, ("vol", "cash_like_share", "btc_risk_share"), ("Liq
 axs[0].set_yticks(y, df.label, fontsize=7.5); axs[0].invert_yaxis()
 chart(save(fig, "n1_corrected_liquid"), str(HERE / "n1_corrected_liquid.csv"),
       "N1: corrected liquid book, variant D (Dominion out) and P (Plus One out), now / post-revert / net of commitments ($410.2k; sheet $435.2k), vs the old plug book")
+
+# N1 repair R1: the BOXX cost-basis check, then the conditional range (one axis per panel)
+fig, axs = plt.subplots(1, 3, figsize=(15, 4.6), gridspec_kw={"width_ratios": [1.5, 1, 1]})
+ax = axs[0]
+ax.plot(bxs.index, bxs.to_numpy(), color=SER[0], lw=2, label="BOXX close (cached adjclose)")
+lv = [("IBKR reported avg cost", cost_ / sh_, INK)] + [(f"{v}: basis the other shares would need", R1["basis_check"][v]["implied_basis_per_old_share"], SER[i + 1])
+                                                      for i, v in enumerate(("D", "P"))] + [("BOXX all-time low", atl, INK2)]
+for lbl, y_, c in lv:
+    ax.axhline(y_, color=c, lw=1.1, ls="-" if "IBKR" in lbl else "--")
+    ax.text(bxs.index[int(len(bxs) * 0.40)], y_ + (-1.3 if "low" in lbl else 0.5), f"{lbl} ${y_:,.2f}", fontsize=7, color=INK2)
+report._style(ax, "Repaid capital cannot be inside IBKR BOXX", "", "$ per share")
+ax.legend(frameon=False, fontsize=7, labelcolor=INK2, loc="upper left")
+r1df = pd.DataFrame([r for r in rows_r1 if r["case"] == "liquid now (loan outstanding)"])
+r1df["label"] = r1df["variant"] + " (" + r1df["reading"] + ")"
+yy = np.arange(len(r1df)); colr = [SER[1] if v_ == "D" else SER[2] for v_ in r1df.variant]   # same hue per variant as the left panel
+for ax, col, ttl, scale, fmt in ((axs[1], "sheet_overstatement_usd", "Sheet overstatement (BOXX-loan correction alone)", 1e3, "${:,.0f}k"),
+                                  (axs[2], "vol", "Liquid vol now", 100, "{:.1f}%")):
+    ax.barh(yy, r1df[col] * (1 / scale if scale > 100 else scale), color=colr, height=0.6)
+    for yi, x_ in zip(yy, r1df[col]):
+        val = x_ / scale if scale > 100 else x_ * scale
+        ax.text(val * 1.01, yi, fmt.format(val), va="center", fontsize=7, color=INK2)
+    ax.set_yticks(yy, r1df.label, fontsize=8); ax.invert_yaxis()
+    report._style(ax, ttl, "$k" if scale > 100 else "%", "")
+axs[2].set_xlim(0, max(r1df["vol"]) * 100 * 1.25)
+bxrows = pd.DataFrame({"date": bxs.index.strftime("%Y-%m-%d"), "boxx_close": bxs.to_numpy(), "ibkr_avg_cost": cost_ / sh_,
+                       "implied_basis_D": R1["basis_check"]["D"]["implied_basis_per_old_share"],
+                       "implied_basis_P": R1["basis_check"]["P"]["implied_basis_per_old_share"], "all_time_low": atl})
+report.write_rows(bxrows, HERE / "n1_boxx_basis_check")
+chart(save(fig, "n1_boxx_basis_check"), str(HERE / "n1_boxx_basis_check.csv") + " ; " + str(HERE / "n1_conditional_range.csv"),
+      "N1 repair R1: IBKR BOXX cost basis vs BOXX price (the repaid capital is not in BOXX) and the conditional range by reading "
+      "(a = in sheet Cash/Stables = published; b1/b2 = off-sheet principal / principal+fee)")
 
 # N2: dollars vs risk by sleeve, three books (variant D)
 dfs = pd.DataFrame(rows_sleeve)
