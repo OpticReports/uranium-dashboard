@@ -1,0 +1,7 @@
+# Cached market/macro data and run outputs are reproducible from the feeds;
+# never commit them.
+data/
+results/
+__pycache__/
+*.pyc
+.pytest_cache/
