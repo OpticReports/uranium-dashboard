@@ -184,18 +184,22 @@ def book_terms(moments, weights, *, leverage: float = 1.0, spread: float = 0.0, 
       cash streams  = streams with no leaf exposure (Moments.A row = 0); they
                       fund the extra exposure first and are not scaled
       x             = L A'w_nc                      (leaf exposures)
-      const         = L (c_nc + d_nc) + (w_cash'mu_cash - sum(w_cash) rf)
+      const         = L (c_nc + d_nc) + P - D(L) d  (cash premium still held)
       cash_weight   = 1 - L u,  u = sum(w_nc)        (earns rf)
       spread_weight = new_borrowing(L, 1 - u)        (pays the spread)
-    with c_nc = w_nc'(rf_coef rf + const) (composite cash/financing/fees) and
+    with c_nc = w_nc'(rf_coef rf + const) (composite cash/financing/fees),
     d_nc = w_nc'(mu - A base_mu - rf_coef rf - const): a stream's OWN
     expected_return assumption over its look-through mean (e.g. a composite
-    with a stated return), so the simulated drift x'base_mu + const +
-    cash_weight rf - spread_weight spread (``expected_return``, annual) equals
-    the scorecard's book mean exactly, geared or not.  include_own_mu=False
-    drops d_nc (bootstrap: history only) and lists the affected streams in
-    ``own_mu_ignored``."""
-    from .core import new_borrowing
+    with a stated return), and (P, d) = core.cash_premium_terms: P =
+    w_cash'(mu_cash - rf) is the cash's premium over rf as held and d the
+    blended premium of the book's positive cash, forgone on the cash deployed
+    D(L) = core.cash_deployed(L, 1 - u) so deployed cash costs its own rate
+    (liabilities and net-liability books keep P at every L).  The simulated
+    drift x'base_mu + const + cash_weight rf - spread_weight spread
+    (``expected_return``, annual) equals the scorecard's book mean exactly,
+    geared or not.  include_own_mu=False drops d_nc (bootstrap: history only)
+    and lists the affected streams in ``own_mu_ignored``."""
+    from .core import cash_deployed, cash_premium_terms, new_borrowing
 
     w = np.asarray(weights, float)
     if w.shape != (len(moments.names),):
@@ -203,7 +207,6 @@ def book_terms(moments, weights, *, leverage: float = 1.0, spread: float = 0.0, 
     L = float(leverage)
     cash = np.all(moments.A == 0, axis=1)
     wn = np.where(cash, 0.0, w)
-    wc = np.where(cash, w, 0.0)
     x, c_nc = moments.look_through(wn)
     lt = moments.A @ moments.base_mu + moments.rf_coef * moments.rf + moments.const
     own = moments.mu - lt
@@ -211,13 +214,14 @@ def book_terms(moments, weights, *, leverage: float = 1.0, spread: float = 0.0, 
     d_nc = float(wn @ own) if include_own_mu else 0.0
     u = float(wn.sum())
     rf = float(moments.rf)
-    cash_prem = float(wc @ moments.mu) - float(wc.sum()) * rf
+    prem, prem_rate = cash_premium_terms(w[cash], np.asarray(moments.mu, float)[cash], rf, 1.0 - u)
+    cash_prem = prem - cash_deployed(L, 1.0 - u) * prem_rate
     const = L * (c_nc + d_nc) + cash_prem
     cw = 1.0 - L * u
     sw = new_borrowing(L, 1.0 - u)
     exp = float(L * x @ moments.base_mu) + const + cw * rf - sw * float(spread)
     return {"x": L * x, "const": float(const), "cash_weight": float(cw), "spread_weight": float(sw),
-            "cash_share": 1.0 - u, "leverage": L, "expected_return": exp,
+            "cash_share": 1.0 - u, "leverage": L, "expected_return": exp, "cash_premium": float(cash_prem),
             "own_mu_ignored": [] if include_own_mu else own_names, "own_mu_streams": own_names}
 
 

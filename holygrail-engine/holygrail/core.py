@@ -669,42 +669,100 @@ def new_borrowing(leverage: float, cash_share: float = 0.0) -> float:
     return float(max(max(leverage * u - 1.0, 0.0) - max(u - 1.0, 0.0), 0.0))
 
 
-def geared_return(mu_p: float, rf: float, leverage: float, spread: float = 0.0, *, cash_share: float = 0.0) -> float:
+def cash_deployed(leverage: float, cash_share: float = 0.0) -> float:
+    """Fraction of NAV of the book's OWN cash put into extra exposure when the
+    non-cash part u = 1 - cash_share is geared L x:
+        D(L) = min(L u, 1) - u        for a book holding net cash (u < 1),
+    negative when de-gearing (L < 1) adds the freed exposure to the cash; 0
+    for a net-liability book (cash_share <= 0), which borrows all of its extra
+    exposure and keeps its cash/liabilities as held.  D(L) + B(L) = (L - 1) u
+    for L >= 1 (B = new_borrowing)."""
+    if leverage < 0:
+        raise ValidationError("leverage must be >= 0")
+    u = _noncash_share(cash_share)
+    if u >= 1.0:
+        return 0.0
+    return float(min(leverage * u, 1.0) - u)
+
+
+def cash_premium_terms(cash_weights, cash_rates, rf: float, cash_share: float) -> tuple[float, float]:
+    """(premium, premium_rate) of a book's explicit cash streams (weights w_c,
+    stated rates r_c; any implicit remainder cash_share - sum(w_c) earns rf):
+
+      premium      = w_c'(r_c - rf), the cash's return over rf AS HELD (L = 1);
+      premium_rate = r_bar - rf, the blended premium of the book's POSITIVE
+                     cash (w_c > 0 plus a positive implicit remainder at rf).
+
+    Gearing deploys positive cash pro rata, so cash put to work forgoes
+    premium_rate per unit (cash_deployed) and stays costed at its own rate;
+    liabilities (w_c < 0) keep their premium at every L."""
+    wc = np.asarray(cash_weights, float).ravel()
+    rc = np.asarray(cash_rates, float).ravel()
+    if wc.shape != rc.shape:
+        raise ValidationError("cash weights and rates differ in length")
+    if not (np.all(np.isfinite(wc)) and np.all(np.isfinite(rc)) and math.isfinite(rf) and math.isfinite(cash_share)):
+        raise ValidationError("cash weights, rates, rf and cash_share must be finite")
+    pos = wc > 0
+    positive_cash = float(wc[pos].sum()) + max(float(cash_share) - float(wc.sum()), 0.0)
+    premium = float(wc @ (rc - rf))
+    rate = float(wc[pos] @ (rc[pos] - rf)) / positive_cash if positive_cash > 0 else 0.0
+    return premium, rate
+
+
+def geared_return(mu_p: float, rf: float, leverage: float, spread: float = 0.0, *, cash_share: float = 0.0,
+                  cash_premium_rate: float = 0.0) -> float:
     """Expected return of the book with its NON-CASH part geared L x:
-        r(L) = rf + L (mu_p - rf) - B(L) * spread,   B(L) = new_borrowing(L, cash_share).
+        r(L) = rf + L (mu_p - rf) - B(L) spread - D(L) cash_premium_rate,
+    B(L) = new_borrowing(L, cash_share), D(L) = cash_deployed(L, cash_share).
     ``mu_p`` is the book's expected return with its cash earning rf (cash adds
     no excess return, so the geared excess is L (mu_p - rf)); ``cash_share`` is
     the share of NAV in cash.  The financing spread applies ONLY to new
     borrowing: the book's own cash funds the first cash_share/(1-cash_share)
-    of extra exposure spread-free.  For L < 1 the freed exposure earns rf."""
-    return float(rf + leverage * (mu_p - rf) - new_borrowing(leverage, cash_share) * spread)
+    of extra exposure spread-free.  ``cash_premium_rate`` (r_bar - rf of the
+    book's positive cash, cash_premium_terms) is forgone on the cash deployed,
+    so deployed cash costs its own rate r_bar; for L < 1 the freed exposure
+    joins the cash and earns r_bar.  The book's full geared mean is
+    r(L) + w_c'(r_c - rf) (the cash premium as held; it is 0 for cash at rf)."""
+    return float(rf + leverage * (mu_p - rf) - new_borrowing(leverage, cash_share) * spread
+                 - cash_deployed(leverage, cash_share) * cash_premium_rate)
 
 
 def log_growth(mu_p: float, sigma_p: float, rf: float, leverage: float, spread: float = 0.0, *,
-               cash_share: float = 0.0) -> float:
+               cash_share: float = 0.0, cash_premium_rate: float = 0.0) -> float:
     """Expected log-growth (continuous approximation)
-        g(L) = rf + L (mu_p - rf) - B(L) spread - L^2 sigma_p^2 / 2   (B as in geared_return)."""
-    return float(geared_return(mu_p, rf, leverage, spread, cash_share=cash_share) - 0.5 * leverage ** 2 * sigma_p ** 2)
+        g(L) = r(L) - L^2 sigma_p^2 / 2   (r as in geared_return)."""
+    return float(geared_return(mu_p, rf, leverage, spread, cash_share=cash_share,
+                               cash_premium_rate=cash_premium_rate) - 0.5 * leverage ** 2 * sigma_p ** 2)
 
 
-def kelly_leverage(mu_p: float, sigma_p: float, rf: float, spread: float = 0.0, *, cash_share: float = 0.0) -> float:
+def kelly_leverage(mu_p: float, sigma_p: float, rf: float, spread: float = 0.0, *, cash_share: float = 0.0,
+                   cash_premium_rate: float = 0.0) -> float:
     """Growth-optimal leverage L* = argmax_{L>=0} g(L) (g as in log_growth).
 
-    g is concave with a kink where new borrowing starts, L_k = max(1, 1/u)
-    (u = 1 - cash_share; L_k = 1/u when the book holds cash).  Below it the
-    slope of the mean is mu_p - rf, above it mu_p - rf - u spread:
-        a = (mu_p - rf)/sigma_p^2,  b = (mu_p - rf - u spread)/sigma_p^2,
-        L* = max(a, 0) if a <= L_k, b if b >= L_k, else L_k.
+    g has a kink where new borrowing starts, L_k = max(1, 1/u) (u = 1 -
+    cash_share; L_k = 1/u when the book holds cash).  With d =
+    cash_premium_rate (ignored for a net-liability book, cash_share <= 0) the
+    slope of the mean is mu_p - rf - u d below the kink (deployed cash costs
+    its own rate) and mu_p - rf - u spread above it:
+        a = (mu_p - rf - u d)/sigma_p^2,  b = (mu_p - rf - u spread)/sigma_p^2,
+        L* = the better of clip(a, 0, L_k) and max(b, L_k).
+    When d <= spread g is concave and this is the usual L* = max(a, 0) if
+    a <= L_k, b if b >= L_k, else L_k; when cash out-yields new borrowing
+    (d > spread) the kink is convex and L* is never at it.
     cash_share = 0 gives the textbook kink at L = 1 and b = (mu_p - rf - spread)/sigma_p^2."""
     if sigma_p <= 0:
         raise ValidationError("sigma_p must be > 0")
     u = _noncash_share(cash_share)
     kink = max(1.0, 1.0 / u)
-    a = (mu_p - rf) / sigma_p ** 2
-    if a <= kink:
-        return float(max(a, 0.0))
+    d = cash_premium_rate if u < 1.0 else 0.0
+    a = (mu_p - rf - u * d) / sigma_p ** 2
     b = (mu_p - rf - u * spread) / sigma_p ** 2
-    return float(b if b >= kink else kink)
+    lo, hi = min(max(a, 0.0), kink), max(b, kink)
+
+    def g(L):
+        return log_growth(mu_p, sigma_p, rf, L, spread, cash_share=cash_share, cash_premium_rate=cash_premium_rate)
+
+    return float(hi if g(hi) > g(lo) else lo)
 
 
 def prob_loss(mu: float, sigma: float, years: float = 1.0, model: str = "normal") -> float:

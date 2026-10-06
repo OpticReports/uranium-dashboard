@@ -30,8 +30,9 @@ desired risk level."* Four operations, each a module:
   portfolio Sharpe = `s * DR`, `DR = w'sigma / sigma_p`. So `DR^2` is the headline N_eff:
   it equals `N/(1+(N-1)rho)` in Dalio's equal case and Dalio's improvement factor is `sqrt(N_eff)`.
 - Gearing: `L = sigma*/sigma_p`; `r(L) = rf + L(mu_p - rf) - max(L-1, 0) spread` (spread on the
-  borrowed part only); `g(L) = r(L) - L^2 sigma_p^2/2`; Kelly `L* = (mu_p - rf)/sigma_p^2`
-  (kinked at L=1 when there is a spread); `P(losing year) = Phi(-mu/sigma)`.
+  borrowed part only; a book holding cash: see "Timing and honesty" below);
+  `g(L) = r(L) - L^2 sigma_p^2/2`; Kelly `L* = (mu_p - rf)/sigma_p^2` (kinked at L=1 when there
+  is a spread); `P(losing year) = Phi(-mu/sigma)`.
 
 ### Effective number of bets: five measures, two families
 
@@ -100,7 +101,14 @@ Proxies are declared per stream with an explicit splice date (`proxies: [{symbol
   (hindsight), not walk-forward, and is labelled so.
 - Gearing: leverage L scales the NON-cash streams. The book's own cash funds the extra exposure
   first; only new borrowing, max(L(1 - cash) - 1, 0), pays rf + spread (scorecard, Kelly, forward
-  and backtest use the same rule). `max_leverage` caps gross non-cash exposure.
+  and backtest use the same rule). Deployed cash costs its OWN rate: positive cash at a stated
+  rate is deployed pro rata and forgoes its blended premium over rf on the amount put to work
+  (`core.cash_deployed`, `core.cash_premium_terms`), so the geared mean is
+  `L u m_nc + max(1 - L u, 0) r_cash - max(L u - 1, 0)(rf + spread)` and Kelly's slope below the
+  kink 1/u is `u(m_nc - r_cash)`. Liabilities (a margin loan as a negative cash stream) and every
+  cash line of a net-liability book keep their own rate at every L. Scorecard, Kelly and forward
+  apply this; the backtest's cash leg earns rf for every cash stream (stated cash rates are not
+  used there, and it says so). `max_leverage` caps gross non-cash exposure.
 - Calendars: daily data is annualised on the observed periods per year (~252 exchange days,
   ~365 for crypto-only), measured on the rows where every stream has data (a crypto-only stretch
   before a later business-day stream starts does not count), and constant rates, fees and spreads accrue by calendar days. A stream

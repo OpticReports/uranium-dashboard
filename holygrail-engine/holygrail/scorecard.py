@@ -18,8 +18,8 @@ from dataclasses import asdict, dataclass
 import numpy as np
 import pandas as pd
 
-from .core import (effective_bets, geared_return, kelly_leverage, log_growth, new_borrowing,
-                   percent_risk_contributions, prob_loss, risk_contributions, sharpe_ratio)
+from .core import (cash_deployed, cash_premium_terms, effective_bets, geared_return, kelly_leverage, log_growth,
+                   new_borrowing, percent_risk_contributions, prob_loss, risk_contributions, sharpe_ratio)
 from .environments import BOXES, environment_balance, exposures_from_mapping, stream_box_mapping
 from .errors import ValidationError
 from .estimate import FREQ_PPY, aligned_returns, infer_periods_per_year
@@ -240,17 +240,20 @@ def scorecard(book, view, moments, settings: ScoreSettings, *, rf_info: dict, sp
     # with no leaf exposure: CashStream) funds the extra exposure first and
     # only the excess is borrowed at rf + spread (core.new_borrowing).  A
     # composite's internal cash remainder is part of that instrument and is
-    # geared with it.  Cash held at a stated rate keeps its premium over rf on
-    # the balance actually held; deployed cash is charged at rf.
+    # geared with it.  Deployed cash costs its OWN rate: positive cash is
+    # deployed pro rata and forgoes its blended premium over rf on the amount
+    # put to work (core.cash_deployed / cash_premium_terms); liabilities, and
+    # every cash line of a net-liability book, keep their premium at every L.
     cash = np.array([not book.universe.exposure(n).coefs for n in names])
     u = float(w[~cash].sum())
     cash_share = 1.0 - u
-    cash_premium = float(w[cash] @ (mu[cash] - rf)) if cash.any() else 0.0
+    cash_premium, cash_prem_rate = cash_premium_terms(w[cash], mu[cash], rf, cash_share)
     mu_rf_cash = port_mu - cash_premium            # book mean with its cash at rf
     tv = settings.target_vol
     L_need = tv / port_vol
-    L_star = kelly_leverage(mu_rf_cash, port_vol, rf, spread, cash_share=cash_share)
-    g_mu = geared_return(mu_rf_cash, rf, L_need, spread, cash_share=cash_share) + cash_premium
+    gk = {"cash_share": cash_share, "cash_premium_rate": cash_prem_rate}
+    L_star = kelly_leverage(mu_rf_cash, port_vol, rf, spread, **gk)
+    g_mu = geared_return(mu_rf_cash, rf, L_need, spread, **gk) + cash_premium
     gross_now = float(np.abs(w[~cash]).sum())
     gearing = {
         "current_vol": port_vol, "target_vol": tv, "vol_gap": port_vol - tv,
@@ -258,17 +261,22 @@ def scorecard(book, view, moments, settings: ScoreSettings, *, rf_info: dict, sp
         "gross_exposure_now": gross_now, "gross_exposure_at_target": L_need * gross_now,
         "look_through_gross_at_target": L_need * float(np.abs(x).sum()),
         "new_borrowing_at_target": new_borrowing(L_need, cash_share),
+        "cash_deployed_at_target": cash_deployed(L_need, cash_share),
+        "cash_premium_rate": cash_prem_rate,
         "exceeds_max_leverage": bool(L_need * gross_now > settings.max_leverage),
         "kelly_leverage": L_star, "fraction_of_kelly_at_target": (L_need / L_star) if L_star > 0 else None,
         "fraction_of_kelly_now": (1.0 / L_star) if L_star > 0 else None,
         "exp_return_now": port_mu, "exp_return_at_target": g_mu,
-        "log_growth_now": log_growth(mu_rf_cash, port_vol, rf, 1.0, spread, cash_share=cash_share) + cash_premium,
-        "log_growth_at_target": log_growth(mu_rf_cash, port_vol, rf, L_need, spread, cash_share=cash_share) + cash_premium,
+        "log_growth_now": log_growth(mu_rf_cash, port_vol, rf, 1.0, spread, **gk) + cash_premium,
+        "log_growth_at_target": log_growth(mu_rf_cash, port_vol, rf, L_need, spread, **gk) + cash_premium,
         "p_loss_year_now": {"normal": prob_loss(port_mu, port_vol), "lognormal": prob_loss(port_mu, port_vol, model="lognormal")},
         "p_loss_year_at_target": {"normal": prob_loss(g_mu, tv), "lognormal": prob_loss(g_mu, tv, model="lognormal")},
         "financing_spread": spread_info,
-        "note": ("leverage L scales the non-cash streams; geared return = rf + L(mu - rf) - B(L) spread with "
-                 "B(L) = new borrowing beyond the book's own cash (max(L(1-cash_share) - 1, 0)); max_leverage "
+        "note": ("leverage L scales the non-cash streams; geared return = rf + L(mu_rf - rf) - B(L) spread "
+                 "- D(L) d + cash premium, with mu_rf the book mean with its cash at rf, B(L) = new borrowing "
+                 "beyond the book's own cash (max(L(1-cash_share) - 1, 0)), D(L) = own cash deployed "
+                 "(min(L(1-cash_share), 1) - (1-cash_share); 0 for a net-liability book) and d = the blended "
+                 "premium over rf of the book's positive cash, so deployed cash costs its own rate; max_leverage "
                  "caps gross non-cash exposure L x sum|w_noncash|"),
     }
     # ---- honesty --------------------------------------------------------

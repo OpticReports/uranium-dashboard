@@ -96,10 +96,160 @@ def test_hg_m1_scorecard_cash_with_stated_rate():
     sc = scorecard(book, v, m, ScoreSettings.from_book(book), rf_info=RF_INFO, spread_info=SP_INFO)
     g, pm, pv = sc["gearing"], sc["portfolio"]["exp_return"], sc["portfolio"]["vol"]
     L = 0.15 / pv
-    e_u = 0.6 * float(m.mu[0]) - 0.6 * 0.04          # excess of the non-cash part
-    assert pm == pytest.approx(0.6 * float(m.mu[0]) + 0.4 * 0.05)
-    # the cash's premium over rf is carried unchanged; extra exposure costs rf (+ spread past the kink)
-    assert g["exp_return_at_target"] == pytest.approx(pm + (L - 1) * e_u - max(L * 0.6 - 1, 0) * 0.01, rel=1e-12)
+    m_nc = float(m.mu[0])
+    assert pm == pytest.approx(0.6 * m_nc + 0.4 * 0.05)
+    # deployed cash costs its OWN rate (5%): the 0.4 cash held drops to max(1 - 0.6 L, 0) and only the
+    # excess exposure beyond it is borrowed at rf + spread (HG-M1-residual: the premium was kept whole)
+    true = L * 0.6 * m_nc + max(1 - 0.6 * L, 0) * 0.05 - max(0.6 * L - 1, 0) * (0.04 + 0.01)
+    assert g["exp_return_at_target"] == pytest.approx(true, rel=1e-12)
+    assert g["cash_premium_rate"] == pytest.approx(0.01)
+    assert g["cash_deployed_at_target"] == pytest.approx(min(0.6 * L, 1) - 0.6)
+
+
+# --------------------------------------------------------------------------- #
+# HG-M1-residual: cash at a stated rate r_c != rf costs its own rate when deployed.
+# Brute force = explicit holdings at L: risky L u at m_nc, cash max(1 - L u, 0) at r_c,
+# new borrowing max(L u - 1, 0) at rf + spread; Kelly = grid argmax of that mean - L^2 s^2/2.
+# --------------------------------------------------------------------------- #
+RF, SPREAD = 0.04, 0.01
+RC_GRID = (0.0, RF, RF + 0.01)
+U_GRID = (0.4, 0.8, 1.0)
+KELLY_GRID = np.linspace(0, 14, 280001)
+
+
+def _brute_mean(L, u, m_nc, r_c, rf=RF, spread=SPREAD):
+    L = np.asarray(L, float)
+    return L * u * m_nc + np.maximum(1 - L * u, 0) * r_c - np.maximum(L * u - 1, 0) * (rf + spread)
+
+
+def _brute_kelly(u, m_nc, r_c, sig_p, rf=RF, spread=SPREAD):
+    g = _brute_mean(KELLY_GRID, u, m_nc, r_c, rf, spread) - 0.5 * KELLY_GRID ** 2 * sig_p ** 2
+    return float(KELLY_GRID[int(np.argmax(g))])
+
+
+def _rated_book(u, r_c, eq_mu):
+    rng = np.random.default_rng(0)
+    idx = pd.date_range("2018-01-05", periods=400, freq="W-FRI")
+    eq = pd.DataFrame({"EQ": rng.normal(0.0012, 0.15 / math.sqrt(52), 400)}, index=idx)
+    streams = {"EQ": {"type": "market", "symbol": "EQ", "expected_return": A(eq_mu), "asset_class": "equity"}}
+    pos = [{"name": "eq", "value_usd": 1e5 * u, "stream": "EQ"}]
+    if u < 1:
+        streams["cash"] = {"type": "cash", "rate": A(r_c)}
+        pos.append({"name": "cash", "value_usd": 1e5 * (1 - u), "stream": "cash"})
+    raw = {"name": "rated", "settings": {"risk_free": A(RF), "financing_spread": A(SPREAD), "max_leverage": 20},
+           "streams": streams, "positions": pos, "totals": {"total_usd": 1e5}}
+    book = book_from_dict(raw)
+    v = book.view("investable")
+    m = build_moments(book.universe, v.streams, returns=eq, periods_per_year=52, rf=RF, method="sample")
+    return book, v, m
+
+
+_CASES = [(u, rc) for u in U_GRID for rc in (RC_GRID if u < 1 else (RF,))]
+
+
+@pytest.mark.parametrize("u,r_c", _CASES)
+@pytest.mark.parametrize("side", [0.7, 1.6])          # L as a multiple of the kink 1/u (below / above)
+@pytest.mark.parametrize("eq_mu", [0.06, 0.10])       # Kelly at/below the kink and above it
+def test_hg_m1r_scorecard_and_forward_match_brute_force(u, r_c, side, eq_mu):
+    book, v, m = _rated_book(u, r_c, eq_mu)
+    m_nc = float(m.mu[0])
+    pv0 = u * math.sqrt(float(m.cov[0, 0]))
+    kink = 1.0 / u
+    st = ScoreSettings.from_book(book, target_vol=pv0 * kink * side)
+    sc = scorecard(book, v, m, st, rf_info=RF_INFO, spread_info=SP_INFO)
+    g, pv = sc["gearing"], sc["portfolio"]["vol"]
+    L = g["leverage_to_target"]
+    assert (L < kink) if side < 1 else (L > kink)
+    true = float(_brute_mean(L, u, m_nc, r_c))
+    assert sc["portfolio"]["exp_return"] == pytest.approx(float(_brute_mean(1.0, u, m_nc, r_c)), rel=1e-12)
+    assert g["exp_return_at_target"] == pytest.approx(true, rel=1e-12, abs=1e-15)
+    assert g["log_growth_at_target"] == pytest.approx(true - 0.5 * L ** 2 * pv ** 2, rel=1e-12, abs=1e-15)
+    assert g["kelly_leverage"] == pytest.approx(_brute_kelly(u, m_nc, r_c, pv), abs=1e-4)
+    # the forward's simulated drift is the same number
+    w = np.array([v.weights()[n] for n in m.names])
+    t = F.book_terms(m, w, leverage=L, spread=SPREAD)
+    assert t["expected_return"] == pytest.approx(true, rel=1e-12, abs=1e-15)
+    drift = float(t["x"] @ m.base_mu) + t["const"] + t["cash_weight"] * RF - t["spread_weight"] * SPREAD
+    assert drift == pytest.approx(true, rel=1e-12, abs=1e-15)
+
+
+def test_hg_m1r_grid_covers_both_kelly_regimes():
+    """The brute-force gate above must exercise Kelly below/at AND above the kink."""
+    below = above = 0
+    for u, rc in _CASES:
+        for eq_mu in (0.06, 0.10):
+            _, _, m = _rated_book(u, rc, eq_mu)
+            k = _brute_kelly(u, float(m.mu[0]), rc, u * math.sqrt(float(m.cov[0, 0])))
+            below += k <= 1 / u + 1e-4
+            above += k > 1 / u + 1e-4
+    assert below >= 3 and above >= 3
+
+
+def test_hg_m1r_finding_measured_case():
+    """The finding's numbers: 60% equity at 8%, 40% cash, rf 4%, spread 1%, L = 1.673."""
+    for r_c, wrong in ((0.0, 0.0641), (0.05, 0.0841)):
+        book, v, m = _cashy_book(cash_rate=r_c)
+        g = scorecard(book, v, m, ScoreSettings.from_book(book), rf_info=RF_INFO, spread_info=SP_INFO)["gearing"]
+        assert g["leverage_to_target"] == pytest.approx(1.673, abs=1e-3)
+        assert g["exp_return_at_target"] == pytest.approx(0.0801, abs=5e-5)
+        assert abs(g["exp_return_at_target"] - wrong) > 3e-3
+    book, v, m = _rated_book(0.6, 0.0, 0.06)
+    sc = scorecard(book, v, m, ScoreSettings.from_book(book, target_vol=0.15), rf_info=RF_INFO, spread_info=SP_INFO)
+    assert sc["gearing"]["kelly_leverage"] == pytest.approx(1 / 0.6, abs=1e-4)   # was 1.48-1.49
+
+
+@pytest.mark.parametrize("u", U_GRID)
+@pytest.mark.parametrize("r_c", RC_GRID)
+@pytest.mark.parametrize("spread", [0.005, 0.01, 0.02])   # 0.005: cash out-yields borrowing -> convex kink
+@pytest.mark.parametrize("m_nc,sig_nc", [(0.06, 0.15), (0.10, 0.15), (0.05, 0.08), (0.035, 0.10)])
+def test_hg_m1r_core_geared_mean_and_kelly_brute_force(u, r_c, spread, m_nc, sig_nc):
+    cs = 1.0 - u
+    prem, d = core.cash_premium_terms([cs] if cs > 0 else [], [r_c] if cs > 0 else [], RF, cs)
+    r_c_eff = r_c if cs > 0 else RF
+    assert prem == pytest.approx(cs * (r_c_eff - RF), abs=1e-15)
+    mu_rf = u * m_nc + cs * RF
+    sig = u * sig_nc
+    kink = 1.0 / u
+    for L in (0.0, 0.5 * kink, 0.9 * kink, kink, 1.3 * kink, 2.5 * kink):
+        r = core.geared_return(mu_rf, RF, L, spread, cash_share=cs, cash_premium_rate=d) + prem
+        assert r == pytest.approx(float(_brute_mean(L, u, m_nc, r_c_eff, RF, spread)), rel=1e-12, abs=1e-15)
+    k = core.kelly_leverage(mu_rf, sig, RF, spread, cash_share=cs, cash_premium_rate=d)
+    assert k == pytest.approx(_brute_kelly(u, m_nc, r_c_eff, sig, RF, spread), abs=1e-4)
+
+
+def test_hg_m1r_liabilities_keep_their_rate_and_scorecard_matches_forward():
+    """A margin loan (cash stream, negative weight, own rate) is carried unchanged at every L;
+    only the positive cash is deployed, down to the amount paired with the loan (net-cash kink
+    1/u of new_borrowing); scorecard and forward agree."""
+    rng = np.random.default_rng(0)
+    idx = pd.date_range("2018-01-05", periods=400, freq="W-FRI")
+    eq = pd.DataFrame({"EQ": rng.normal(0.0012, 0.15 / math.sqrt(52), 400)}, index=idx)
+    raw = {"name": "mixed", "settings": {"risk_free": A(RF), "financing_spread": A(SPREAD), "max_leverage": 20},
+           "streams": {"EQ": {"type": "market", "symbol": "EQ", "expected_return": A(0.08)},
+                       "cash": {"type": "cash", "rate": A(0.0)},
+                       "loan": {"type": "cash", "rate": A(0.06)}},
+           "positions": [{"name": "eq", "value_usd": 70000, "stream": "EQ"},
+                         {"name": "cash", "value_usd": 50000, "stream": "cash"},
+                         {"name": "loan", "value_usd": -20000, "stream": "loan", "liability": True}],
+           "totals": {"total_usd": 100000}}
+    book = book_from_dict(raw)
+    v = book.view("investable")
+    m = build_moments(book.universe, v.streams, returns=eq, periods_per_year=52, rf=RF, method="sample")
+    w = np.array([v.weights()[n] for n in m.names])
+    m_nc = float(m.mu[list(m.names).index("EQ")])
+    for tv in (0.08, 0.20):
+        sc = scorecard(book, v, m, ScoreSettings.from_book(book, target_vol=tv), rf_info=RF_INFO, spread_info=SP_INFO)
+        L = sc["gearing"]["leverage_to_target"]
+        true = (L * 0.7 * m_nc - 0.2 * 0.06 + (0.2 + max(1 - 0.7 * L, 0)) * 0.0
+                - max(0.7 * L - 1, 0) * (RF + SPREAD))
+        assert sc["gearing"]["exp_return_at_target"] == pytest.approx(true, rel=1e-12)
+        t = F.book_terms(m, w, leverage=L, spread=SPREAD)
+        assert t["expected_return"] == pytest.approx(true, rel=1e-12)
+    # a net-liability book keeps every cash line's premium unchanged (it borrows all extra exposure)
+    prem, d = core.cash_premium_terms([0.1, -0.3], [0.0, 0.06], RF, -0.2)
+    for L in (0.5, 1.0, 2.0):
+        r = core.geared_return(0.09, RF, L, SPREAD, cash_share=-0.2, cash_premium_rate=d)
+        assert r == pytest.approx(core.geared_return(0.09, RF, L, SPREAD, cash_share=-0.2), rel=1e-15)
 
 
 def test_hg_m1_forward_terms_match_scorecard_geared_mean():
