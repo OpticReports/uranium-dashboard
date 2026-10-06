@@ -17,7 +17,7 @@ backend/data/sector_tier_cache/ (gitignored) so a rerun costs nothing.
 
 Moves = every single-day adjusted close-to-close move with |r| >= 20% on a
 trading day in the window, with the PRIOR day's historical market cap >=
-$300M, excluding the IPO day and the five trading days after it (by date).
+$300M, excluding the first five trading days on or after the IPO date (by date).
 Flags, never silent drops: M&A (the name is the target of an FMP M&A filing
 within 5 calendar days), possible bad print (the next day reverses the move
 to within 2%), and moves >= 100% (checked by hand in the report).
@@ -97,6 +97,9 @@ def target_headline(title: str, symbol: str, name: str) -> bool:
         rf"\bwhether\b.{{0,40}}\b{n}\b.{{0,80}}\b(fair|obtaining)\b",
     ]
     return any(re.search(x, title, re.I) for x in pats)
+
+
+_last_call = [0.0]
 
 
 def _key() -> str:
@@ -232,7 +235,7 @@ def main() -> None:
             "is_actively_trading": p.get("isActivelyTrading"), "mcap_now": r.get("mcap_now"),
             "mcap_max_window": max(win_caps) if win_caps else None, "n_bars": len(bars),
         })
-        # IPO exclusion by DATE (the IPO-day bar and the five trading days after it),
+        # IPO exclusion by DATE (the first five trading days on or after the IPO date),
         # for any IPO from two weeks before the bar history starts: bars begin at
         # HIST_FROM for older names, so a bar index is not days since IPO, and an
         # uplisting can have bars before its FMP ipoDate.
@@ -240,10 +243,10 @@ def main() -> None:
         if ipo and ipo >= (HIST_FROM - timedelta(days=14)).isoformat():
             k = next((j for j, b in enumerate(bars) if b["date"][:10] >= ipo), None)
             if k is not None:
-                ipo_skip = {b["date"][:10] for b in bars[k:k + 6]}
+                ipo_skip = {b["date"][:10] for b in bars[k:k + 5]}   # amendment 7: first five on or after
         if bars and bars[0]["date"][:10] > (HIST_FROM + timedelta(days=7)).isoformat():
             # listing began inside the history (when-issued trading, spin-offs, uplistings)
-            ipo_skip |= {b["date"][:10] for b in bars[:6]}
+            ipo_skip |= {b["date"][:10] for b in bars[:5]}
         closes[sym] = {b["date"][:10]: float(b["adjClose"]) for b in bars}
         ciks[sym] = p.get("cik")
         sorted_cap_dates = sorted(mcap)
@@ -255,7 +258,7 @@ def main() -> None:
             if not prev or not cur:
                 continue
             ret = cur / prev - 1.0
-            if abs(ret) < MOVE_MIN:
+            if round(abs(ret), 9) < MOVE_MIN:   # an exact 20.00% is 0.19999... in floating point
                 continue
             prior_day = bars[j - 1]["date"][:10]
             prior_caps = [c for c in sorted_cap_dates if c <= prior_day]

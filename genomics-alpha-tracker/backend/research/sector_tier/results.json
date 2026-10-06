@@ -2,10 +2,10 @@
  "inputs": {
   "population": 1158,
   "eligible_labelled": 705,
-  "moves_all": 641,
+  "moves_all": 645,
   "moves_ma_flagged": 34,
   "ma_hand_check_overrides": [],
-  "ma_hand_checked": 129,
+  "ma_hand_checked": 131,
   "artifacts_excluded": [
    [
     "ESPR",
@@ -55,7 +55,7 @@
   "prod_export_used": false,
   "prod_adds": [],
   "live_queue_cross_check": null,
-  "funnel_catalyst_checks": 3349,
+  "funnel_catalyst_checks": 3345,
   "queued_by_lane": {
    "mover": 519,
    "catalyst": 79
@@ -77,28 +77,28 @@
  "strict": {
   "title_mode": "own",
   "m1": {
-   "genomics_moves": 125,
-   "genomics_moves_baseline_visible": 122,
-   "invisible_to_baseline": 3,
+   "genomics_moves": 127,
+   "genomics_moves_baseline_visible": 125,
+   "invisible_to_baseline": 2,
    "rule_c_only_removed": 1,
-   "denominator": 2,
+   "denominator": 1,
    "surfaced": 0,
    "share": 0.0,
    "wilson90": [
     0.0,
-    0.5749693909936536
+    0.7301340512159458
    ],
    "with_rule_c_lookahead": {
-    "n": 3,
+    "n": 2,
     "surfaced": 0,
     "share": 0.0,
     "wilson90": [
      0.0,
-     0.4741955741575128
+     0.5749693909936536
     ]
    },
    "per_move_union_bound": {
-    "n": 3,
+    "n": 2,
     "surfaced": 0,
     "share": 0.0
    },
@@ -500,8 +500,8 @@
    "m2_pass": false,
    "verdict": "INCONCLUSIVE",
    "floor_counts": {
-    "primary_denominator": 2,
-    "all_invisible": 3
+    "primary_denominator": 1,
+    "all_invisible": 2
    }
   },
   "sizes_by_week": [
@@ -767,55 +767,55 @@
     "monday": "2026-06-01",
     "ab": 59,
     "abc": 114,
-    "baseline": 586
+    "baseline": 587
    },
    {
     "monday": "2026-06-08",
     "ab": 59,
     "abc": 114,
-    "baseline": 588
+    "baseline": 589
    },
    {
     "monday": "2026-06-15",
     "ab": 59,
     "abc": 114,
-    "baseline": 589
+    "baseline": 590
    },
    {
     "monday": "2026-06-22",
     "ab": 59,
     "abc": 114,
-    "baseline": 590
+    "baseline": 591
    },
    {
     "monday": "2026-06-29",
     "ab": 59,
     "abc": 115,
-    "baseline": 591
+    "baseline": 592
    },
    {
     "monday": "2026-07-06",
     "ab": 60,
     "abc": 116,
-    "baseline": 592
+    "baseline": 593
    },
    {
     "monday": "2026-07-13",
     "ab": 60,
     "abc": 116,
-    "baseline": 594
+    "baseline": 595
    },
    {
     "monday": "2026-07-20",
     "ab": 60,
     "abc": 116,
-    "baseline": 595
+    "baseline": 596
    },
    {
     "monday": "2026-07-27",
     "ab": 60,
     "abc": 117,
-    "baseline": 596
+    "baseline": 597
    },
    {
     "monday": "2026-08-03",
@@ -10767,6 +10767,39 @@
     "pit_no_timeline": {}
    },
    {
+    "symbol": "PLYX",
+    "date": "2026-02-09",
+    "prior_date": "2026-02-06",
+    "ret": -0.33446,
+    "prior_mcap": 420724221.0,
+    "flag_reversal": false,
+    "flag_ge_100pct": false,
+    "price_cap_mismatch": 0.0,
+    "flag_artifact": false,
+    "ma_forms": [],
+    "ma_headlines": [],
+    "ma_s4": false,
+    "flag_ma": false,
+    "genomics": false,
+    "baseline_visible": true,
+    "baseline_via": "mover",
+    "queued_on": "2026-02-03",
+    "tier1_ab": false,
+    "tier1_abc": false,
+    "surfaced_ab": false,
+    "rank_ab": null,
+    "days_ab": null,
+    "surfaced_abc": false,
+    "rank_abc": null,
+    "days_abc": null,
+    "rule_a": false,
+    "rule_b_why": null,
+    "rule_c_why": [],
+    "pit_no_timeline": {
+     "missing": 2
+    }
+   },
+   {
     "symbol": "EVMN",
     "date": "2026-02-10",
     "prior_date": "2026-02-09",
@@ -11120,6 +11153,43 @@
     "pit_no_timeline": {
      "missing": 4
     }
+   },
+   {
+    "symbol": "ALLO",
+    "date": "2026-02-17",
+    "prior_date": "2026-02-13",
+    "ret": 0.2,
+    "prior_mcap": 432523407.0,
+    "flag_reversal": false,
+    "flag_ge_100pct": false,
+    "price_cap_mismatch": 0.0,
+    "flag_artifact": false,
+    "ma_forms": [],
+    "ma_headlines": [],
+    "ma_s4": false,
+    "flag_ma": false,
+    "flag_ma_auto": false,
+    "genomics": true,
+    "baseline_visible": true,
+    "baseline_via": "catalyst",
+    "queued_on": "2025-10-06",
+    "tier1_ab": true,
+    "tier1_abc": true,
+    "surfaced_ab": false,
+    "rank_ab": 47,
+    "days_ab": 557,
+    "surfaced_abc": false,
+    "rank_abc": 64,
+    "days_abc": 557,
+    "rule_a": false,
+    "rule_b_why": [
+     "genetic-intervention",
+     "title:cell-therapy"
+    ],
+    "rule_c_why": [
+     "desc:cell-therapy"
+    ],
+    "pit_no_timeline": {}
    },
    {
     "symbol": "CMPS",
@@ -12777,6 +12847,43 @@
     "days_abc": null,
     "rule_a": false,
     "rule_b_why": null,
+    "rule_c_why": [
+     "desc:gene-therapy"
+    ],
+    "pit_no_timeline": {}
+   },
+   {
+    "symbol": "RGNX",
+    "date": "2026-03-09",
+    "prior_date": "2026-03-06",
+    "ret": 0.2,
+    "prior_mcap": 453502200.0,
+    "flag_reversal": false,
+    "flag_ge_100pct": false,
+    "price_cap_mismatch": 0.0,
+    "flag_artifact": false,
+    "ma_forms": [],
+    "ma_headlines": [],
+    "ma_s4": false,
+    "flag_ma": false,
+    "flag_ma_auto": false,
+    "genomics": true,
+    "baseline_visible": true,
+    "baseline_via": "catalyst",
+    "queued_on": "2025-08-04",
+    "tier1_ab": true,
+    "tier1_abc": true,
+    "surfaced_ab": false,
+    "rank_ab": 29,
+    "days_ab": 101,
+    "surfaced_abc": false,
+    "rank_abc": 35,
+    "days_abc": 101,
+    "rule_a": false,
+    "rule_b_why": [
+     "genetic-intervention",
+     "title:gene-therapy"
+    ],
     "rule_c_why": [
      "desc:gene-therapy"
     ],
@@ -17303,6 +17410,37 @@
     "pit_no_timeline": {}
    },
    {
+    "symbol": "VRXA",
+    "date": "2026-06-16",
+    "prior_date": "2026-06-15",
+    "ret": -0.55503,
+    "prior_mcap": 2898269500.0,
+    "flag_reversal": false,
+    "flag_ge_100pct": false,
+    "price_cap_mismatch": 0.0,
+    "flag_artifact": false,
+    "ma_forms": [],
+    "ma_headlines": [],
+    "ma_s4": false,
+    "flag_ma": false,
+    "genomics": false,
+    "baseline_visible": true,
+    "baseline_via": "mover",
+    "queued_on": "2026-06-11",
+    "tier1_ab": false,
+    "tier1_abc": false,
+    "surfaced_ab": false,
+    "rank_ab": null,
+    "days_ab": null,
+    "surfaced_abc": false,
+    "rank_abc": null,
+    "days_abc": null,
+    "rule_a": false,
+    "rule_b_why": null,
+    "rule_c_why": [],
+    "pit_no_timeline": {}
+   },
+   {
     "symbol": "CLPT",
     "date": "2026-06-17",
     "prior_date": "2026-06-16",
@@ -18766,9 +18904,9 @@
     "flag_ma": false,
     "flag_ma_auto": false,
     "genomics": true,
-    "baseline_visible": false,
-    "baseline_via": null,
-    "queued_on": "2026-07-28",
+    "baseline_visible": true,
+    "baseline_via": "mover",
+    "queued_on": "2026-05-28",
     "tier1_ab": false,
     "tier1_abc": false,
     "surfaced_ab": false,
@@ -18780,8 +18918,7 @@
     "rule_a": false,
     "rule_b_why": null,
     "rule_c_why": [],
-    "pit_no_timeline": {},
-    "c_only": false
+    "pit_no_timeline": {}
    },
    {
     "symbol": "REPL",

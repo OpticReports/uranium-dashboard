@@ -366,3 +366,108 @@ measurement 4's consequence - informational; the misses gate's interval -
 reported; the size estimate - re-measured at about 60. The screener
 staleness finding (Friday's close still served on Monday evening) was fixed
 in the funnel code, and Tier 0 already planned for it.
+
+## Results (2026-10-06): INCONCLUSIVE; precision fails on its own
+
+Inputs, code and outputs are in `backend/research/sector_tier/`.
+`results.json` holds every per-move field, `m3.json` the cost dry run,
+`charts/` the figures. Reproduce with `python -m
+research.sector_tier.measure` from `backend/`.
+
+| measurement | result | gate | |
+|---|---|---|---|
+| M1: genomics moves the baseline could not see | **1** in the primary denominator (2 before the rule-(c)-only removal) | at least 15 | **below the floor: INCONCLUSIVE** |
+| M1: Tier 1 surfaced them | 0 of 1 (Wilson 90%: 0-73%); with rule (c), look-ahead: 0 of 2 | at least half | n too small |
+| M1: enrichment ratio (rules a+b) | **3.79** (24 of 64 Tier 1 names vs 68 of 687 eligible) | above 2 | pass |
+| M2: precision, random 50 non-core Tier 1 names | **35/50 = 70%** (Wilson 90%: 59-79%) | at least 80% | **fail** |
+| M2: misses, random 50 census names not in Tier 1 | **2/50 = 4%** (LH, YDES; Wilson 90%: 1-11%) | at most 10% | pass |
+| M3: added calls per weekday | CT.gov about 100 (measured live, 133 s); FMP about 27 (extrapolated); Tier 0 about 1.1 MB per trading day | provider quota | met on Casey's statement |
+| M4: MRNA on 2026-08-18 | not in Tier 1 (a+b): no rule fired; in only with rule (c) (description "mRNA"), at rank 82 with no dated catalyst. The baseline had queued it since 2025-10-30 | informational | miss |
+| M4: VRTX on 2026-03-09 (its largest move, +8.3%) | in Tier 1 through rule (b) (partner CRISPR Therapeutics), rank 22, catalyst in 52 days: surfaced | informational | hit |
+
+- **Verdict under the frozen rule: INCONCLUSIVE.** BUILD was unreachable
+  anyway, because precision fails its gate on its own: the Wilson upper
+  bound is 79%. The rule-(b) title check did not fire, because the misses
+  sample held no cell-therapy names, so the verdict comes from the strict
+  run.
+- **Why there are so few unseen moves.** Of 127 genomics-labelled 20% moves
+  (M&A days excluded), the baseline had already seen 125: 25 through the
+  core, 72 through the funnel's movers lane and 28 through its catalyst
+  lane. The median name had been queued 205 days before its move. The
+  replayed queue never expires, as shipped: it held 333 names at the start
+  of the window and 628 at its end, out of 687 eligible. By the
+  pre-registered definition, being in that queue counts as being seen.
+- **What Tier 1 holds.** Over the window, rules (a)+(b) put the name in
+  Tier 1 for 41 of the 127 moves, and in the top 25 or within 30 days of a
+  dated catalyst for 10. Rule (c) (description keywords) raises membership
+  to 93 of 127, but it carries look-ahead in this test.
+
+**Exploratory, not pre-registered and not decision-grade**
+(`exploratory.py`, `charts/exploratory_coverage.png`). On average over the
+window, the core held about 32 names and covered 25 of the 127 genomics
+moves. Tier 1 (a+b) held about 58 and covered 41. Tier 1 (a+b+c) held about
+114 and covered 93. The core plus the queue held about 537 and covered 125.
+The question this test was built to answer, whether a genomics move is
+visible at all, is already met by the queue. What it does not measure is
+whether a list of about 537 names puts the right one in front of the desk.
+
+**Honesty box.**
+- Basis: adjusted close to close, a one-day move of 20% or more, a prior-day
+  cap of $300M or more, M&A target days excluded. 4 genomics moves were M&A
+  days (Exact Sciences, Arcellx, Standard BioTools, Bio-Techne). 2
+  adjustment breaks were excluded.
+- Point in time: CT.gov record history with a 12-day posting lag (95th
+  percentile of first-post minus version-0 date). Rule (b) and trial titles
+  use current records (amendment 4). Studies over the 60-per-name cap use
+  current records. That is 3,335 studies, all in 15 large caps (MRK, AZN,
+  NVS, BMY, PFE, LLY, ABBV, REGN, INCY, AMGN, GILD, NVO, ONC, BNTX, EXEL).
+  None is a denominator name. Versions were bisected, so a date that
+  changed and changed back between two fetched versions is missed.
+- Not modelled: desk dismissals (none assumed, which favours the baseline);
+  the production export (P1, still not supplied). The export only
+  cross-checks the replay for 2026-09-08 onward and would need 14 more
+  unseen moves to move the verdict.
+- Sensitivities from the re-implementations, none of which changes the
+  verdict:
+  - Excluding core names from the misses frame changes the seeded sample.
+    JNJ then enters it, and its funnel-page title "THRIVE-CAR-T" makes the
+    title check fire. The switched run gives precision 37/50 and misses
+    3/50, still INCONCLUSIVE.
+  - Using only the 2026-10-05 evaluation for today's Tier 1, without the
+    four-week lookback, gives precision 39/50, which still fails.
+- Rule gaps the data showed (for any redesign; nothing here is tuned to
+  them):
+  - The CT.gov sponsor search for "Moderna" finds 1 study, because Moderna
+    registers as "ModernaTX". The core's aliases do not reach census names.
+  - "gene therapy" does not match "gene therapies".
+  - Prefix sponsor matching tagged NHC through a Singapore hospital
+    network.
+  - Trial-title words tag big pharma (EXEL, INCY, JAZZ, ONC).
+  - Rule (b) misses most RNA companies: Alnylam's titles name drugs, not
+    "RNAi".
+
+## Counter-agent verdict on the measurements (stage 5, 2026-10-06)
+
+- **Before any result** (3 reviewers, 1-2 refuters each, 28 agents), the
+  review found:
+  - in the code: production-export adds dated backwards; the rule-(b) title
+    check missing; status ties broken alphabetically; chart and label-gap
+    defects;
+  - in stage 1: warrants and rights borrowing their issuer's market cap (133
+    of 781 first-run moves); M&A flags that were not target-only;
+    ticker-change duplicates; adjustment breaks.
+  
+  All were fixed before the run (amendment 7). One reviewer fuzzed the
+  replay against the shipped catalyst lane: 0 divergences in 18,000 cases.
+- **After the run**, two agents re-implemented the measurements without
+  seeing `measure.py`. They agreed with each other on all 125 per-move calls
+  then in the data. One move differed from this code: OPK. An exact +10.00%
+  move computes to 9.999...% in floating point and fails the shipped lane's
+  `>= 10%` test, while the live screener string "10.00%" passes. The audit
+  traced it, and also two exact +20.00% moves (ALLO, RGNX) that were dropped
+  the same way, and a 6-bar IPO exclusion where amendment 7 says 5. Fixed and
+  re-run: the numbers above now equal both re-implementations (denominator
+  1, enrichment 3.7886, M2 35/50 and 2/50). ALLO and RGNX went through the
+  same two-reviewer M&A check (not M&A).
+- **The audit's label review** found no clear error among the denominator
+  names or either M2 sample. It agrees the verdict follows the frozen rule.

@@ -2191,5 +2191,41 @@
    "evidence": "No SEC forms or headlines; no evidence of any deal to acquire Scribe on a -20.1% day."
   },
   "adj": null
+ },
+ "ALLO|2026-02-17": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "ALLO|2026-02-17",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only an SC 13D/A (holder filing) and an oncology conference presentation; no merger proxy, tender filing, or deal headline."
+  },
+  "b": {
+   "id": "ALLO|2026-02-17",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only SC 13D/A and an oncology conference presentation headline; no tender, merger proxy, or bid news."
+  },
+  "adj": null,
+  "note": "added 2026-10-06 after the float fix admitted this exact +20.00% move"
+ },
+ "RGNX|2026-03-09": {
+  "ma": false,
+  "source": "agreed",
+  "a": {
+   "id": "RGNX|2026-03-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Headlines are securities class-action alerts; filings are 10-K/8-K. No acquisition, bid, or merger-sale-fairness alert."
+  },
+  "b": {
+   "id": "RGNX|2026-03-09",
+   "ma_target_day": false,
+   "kind": "not-ma",
+   "evidence": "Only securities class-action law-firm alerts and 10-K/8-K; no merger filings or acquisition headlines."
+  },
+  "adj": null,
+  "note": "added 2026-10-06 after the float fix admitted this exact +20.00% move"
  }
 }

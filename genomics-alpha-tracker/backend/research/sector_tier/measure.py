@@ -391,7 +391,8 @@ class World:
                     continue
                 r = ser.close[i] / ser.close[i - 1] - 1.0
                 cap = ser.cap(ser.bdates[i - 1])
-                if abs(r) >= MOVER_MIN and cap is not None and cap >= CAP_MIN and s not in self.core.symbols(t):
+                # rounded: an exact 10.00% is 0.0999... in floating point; the shipped lane reads "10.00%"
+                if round(abs(r), 9) >= MOVER_MIN and cap is not None and cap >= CAP_MIN and s not in self.core.symbols(t):
                     queued[s] = (t, "mover")
                     break
         self.n_cat_checks = 0

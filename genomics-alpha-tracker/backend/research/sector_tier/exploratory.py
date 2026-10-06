@@ -1,7 +1,7 @@
 """Sector-tier measurements: EXPLORATORY figure (not pre-registered, not decision-grade).
 
 The pre-registered verdict is INCONCLUSIVE because the shipped baseline had
-already queued all but 3 of 125 genomics moves. "Queued" is a weak sense of
+already queued nearly every genomics move. "Queued" is a weak sense of
 "seen": the queue held ~540 names on average. This figure puts every list on
 one axis - how many names it holds vs how many genomics moves it held the
 name of the day before - so the trade-off is visible. It reads results.json
@@ -50,7 +50,7 @@ def main() -> None:
     ax.set_xlabel("names on the list (average over the window, log scale)")
     ax.set_ylabel("genomics moves whose name was on the list the day before, %")
     ax.set_ylim(0, 105)
-    ax.set_title("EXPLORATORY - list size vs genomics moves covered (125 moves, M&A days excluded)")
+    ax.set_title(f"EXPLORATORY - list size vs genomics moves covered ({n} moves, M&A days excluded)")
     ax.grid(alpha=0.3)
     fig.tight_layout()
     (HERE / "charts").mkdir(exist_ok=True)
