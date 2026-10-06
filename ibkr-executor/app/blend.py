@@ -90,6 +90,14 @@ CASH_VEHICLE = "BIL"
 TARGET_SLEEVE = 0.30
 BAND = 0.05
 MAX_OPEN = 10
+# Per-symbol limit (round 11, 2026-10-05; VARIANTS_PREREGISTRATION_R11_PER_SYMBOL.md):
+# at most this many open calls in one name. A repeat fire beyond it is
+# skipped and consumes no cap slot, so the slot goes to the next gated fire.
+# Adopted as RISK CONTROL on non-inferiority (U2): p90 largest-name share of
+# the sleeve 39.9% -> 27.5% on the replay, book Sharpe delta interval spans
+# zero (no return improvement is claimed). The tracker may override it via
+# book_params.max_per_symbol (an int >= 1).
+MAX_PER_SYMBOL = 2
 RISK_FRAC = 0.01
 TIME_STOP_DAYS = 90
 MIN_ORDER_USD = 50.0        # dust guard: never emit orders smaller than this
@@ -164,7 +172,10 @@ CAPITAL_REQUEST_TTL_S = 5 * 86_400.0   # a request older than this expires
 CAPITAL_REQUEST_MAX_USD = 5_000_000.0  # endpoint sanity bound - a typo
                                        # guard, not a limit (raise it
                                        # deliberately, with a review)
-CAPITAL_EVENTS_MAX = 100               # persisted capital events kept
+CAPITAL_EVENTS_MAX = 1000              # persisted capital events kept (the
+                                       # deposit rows are the tripwire
+                                       # bootstrap's flows: never truncate
+                                       # them in a book's lifetime)
 # KILL-LEDGER TRIPWIRES (2026-10-05; ibkr-executor/ledger.csv). ALERT-ONLY:
 # nothing here halts, sells or blocks - every line in the ledger names a
 # human action, and the code's only job is to make the line OBSERVABLE and
@@ -178,6 +189,7 @@ TRIP_SLEEVE_KILL_DD = 0.45        # ledger: MODEL-RISK KILL, sleeve (level =
                                   # Casey's call at arming; 0.52 ~ p95)
 TRIP_UNDERWATER_DAYS = 913        # ledger: >= 30 calendar months under water
 TRIP_UNRECONCILED_SESSIONS = 3    # ledger: PROCESS KILL, record age (sessions)
+TRIP_MIN_BASE_USD = 100.0         # a series base below this holds the index
 TRIP_REARM_PP = 0.05              # a DD line re-arms once the drawdown has
                                   # recovered this far below its level (or at
                                   # a new high) - one page per crossing
@@ -212,16 +224,57 @@ def _parse_date(v) -> date | None:
         return None
 
 
+def _finite(v, default=None):
+    f = _num_or_none(v)
+    return f if (f is not None and math.isfinite(f)) else default
+
+
+def _valid_trip_mark(m, with_flow: bool):
+    if m is None:
+        return None
+    if not isinstance(m, dict) or not isinstance(m.get("date"), str):
+        raise ValueError("mark")
+    value, index = _finite(m.get("value")), _finite(m.get("index"))
+    if value is None or index is None or index <= 0:
+        raise ValueError("mark")
+    out = {"date": m["date"], "value": value, "index": index}
+    if with_flow:
+        out["flow"] = _finite(m.get("flow"), 0.0)
+    return out
+
+
 def _valid_trip(t):
-    """A persisted tripwire series must carry a positive finite HWM; anything
-    else restarts the series (loudly, via the INFO the first snapshot logs)
-    rather than paging off garbage."""
-    if not isinstance(t, dict):
+    """A persisted tripwire series is rebuilt as a NEW dict with the full key
+    set, every number finite (counter-agent TB1: a malformed subfield - a hand
+    edit, a future build's schema - used to 500 /status and the feed and
+    could page an infinite drawdown). Anything malformed -> None: the series
+    restarts (the book re-bootstraps from the equity curve) and the load
+    says so with a WARN."""
+    if t is None:
         return None
-    hwm = _num_or_none(t.get("hwm"))
-    if hwm is None or hwm <= 0 or not math.isfinite(hwm):
-        return None
-    return t
+    try:
+        if not isinstance(t, dict):
+            raise ValueError("series")
+        hwm = _finite(t.get("hwm"))
+        if hwm is None or hwm <= 0:
+            raise ValueError("hwm")
+        if not isinstance(t.get("hwm_date"), str) or not isinstance(t.get("since"), str):
+            raise ValueError("dates")
+        closes = []
+        for c in (t.get("closes") or []):
+            if (not isinstance(c, (list, tuple)) or len(c) != 2
+                    or not isinstance(c[0], str) or _finite(c[1]) is None
+                    or _finite(c[1]) <= 0):
+                raise ValueError("closes")
+            closes.append([c[0], _finite(c[1])])
+        return {"base": _valid_trip_mark(t.get("base"), False),
+                "cur": _valid_trip_mark(t.get("cur"), True),
+                "cur_rth": _valid_trip_mark(t.get("cur_rth"), True),
+                "day_flow": _finite(t.get("day_flow"), 0.0),
+                "hwm": hwm, "hwm_date": t["hwm_date"], "since": t["since"],
+                "closes": closes[-5:]}
+    except (ValueError, TypeError):
+        return "REJECTED"
 
 
 def _valid_capital_request(r):
@@ -729,8 +782,8 @@ class BlendState:
     # kill-ledger tripwires (alert-only): per series {"base": {date, value,
     # index} | None, "cur": {...} | None, "day_flow": float, "hwm": float,
     # "hwm_date": str, "since": str}; flows land in trip_pending_* until
-    # the next snapshot consumes them; trip_alerted: line -> bool (armed
-    # = False) plus "unrec:<key>" -> date paged
+    # the next snapshot consumes them; trip_alerted: line -> bool (True =
+    # paged, re-arms to False) plus "unrec:<key>" -> True once paged
     trip_book: dict | None = None
     trip_sleeve: dict | None = None
     trip_pending_book: float = 0.0
@@ -764,7 +817,12 @@ class Blend3070Manager:
         # ZF-7: did the archive/preserve rename actually SUCCEED? The Z-J
         # boot save below is conditional on it.
         self._evidence_preserved = False
+        self._trip_rejected: list[str] = []     # set by _load (TB8)
         self.state = self._load()
+        for _k in self._trip_rejected:
+            self._event("WARN", f"tripwire series {_k} in the state file was "
+                                f"MALFORMED and was dropped: it restarts "
+                                f"(the book re-bootstraps from the equity curve)")
         # Set when this boot had to INFER capital_contributed (a state file
         # with no capital fields): service startup turns it into a Telegram
         # page, the archived_state pattern (counter-agents A3/B3: a rollback
@@ -922,8 +980,8 @@ class Blend3070Manager:
                 capital_request=_valid_capital_request(raw.get("capital_request")),
                 trip_book=_valid_trip(raw.get("trip_book")),
                 trip_sleeve=_valid_trip(raw.get("trip_sleeve")),
-                trip_pending_book=float(_num_or_none(raw.get("trip_pending_book")) or 0.0),
-                trip_pending_sleeve=float(_num_or_none(raw.get("trip_pending_sleeve")) or 0.0),
+                trip_pending_book=_finite(raw.get("trip_pending_book"), 0.0),
+                trip_pending_sleeve=_finite(raw.get("trip_pending_sleeve"), 0.0),
                 trip_alerted=(raw.get("trip_alerted")
                               if isinstance(raw.get("trip_alerted"), dict) else {}),
                 mode=stored_mode,
@@ -1015,6 +1073,10 @@ class Blend3070Manager:
             for k in st.stand_in_rows:
                 st.positions[k].history_gap = True
             st.events = raw.get("events", [])[-300:]
+            for _k in ("trip_book", "trip_sleeve"):
+                if getattr(st, _k) == "REJECTED":
+                    setattr(st, _k, None)
+                    self._trip_rejected.append(_k)
             return st
         except FileNotFoundError:
             return BlendState(mode=self._current_mode())
@@ -1130,8 +1192,10 @@ class Blend3070Manager:
                    "capital_contributed": self.state.capital_contributed,
                    "capital_events": list(self.state.capital_events[-CAPITAL_EVENTS_MAX:]),
                    "capital_request": self.state.capital_request,
-                   "trip_book": self.state.trip_book,
-                   "trip_sleeve": self.state.trip_sleeve,
+                   "trip_book": (_snapshot(self.state.trip_book)
+                                 if self.state.trip_book else None),
+                   "trip_sleeve": (_snapshot(self.state.trip_sleeve)
+                                   if self.state.trip_sleeve else None),
                    "trip_pending_book": self.state.trip_pending_book,
                    "trip_pending_sleeve": self.state.trip_pending_sleeve,
                    "trip_alerted": _snapshot(self.state.trip_alerted),
@@ -1299,98 +1363,177 @@ class Blend3070Manager:
         self.save()
 
     # ---------- kill-ledger tripwires (alert-only, 2026-10-05) ----------
+    #
+    # Each series chain-links one value per cycle. The DAY's point is
+    # FINALIZED at the UTC-day roll from the last mark taken in the REGULAR
+    # SESSION that day (else the day's last mark): the high-water mark and
+    # every ledger line read FINALIZED points only, so a transient intraday
+    # or after-hours mark (a thin name's ask) can neither set a permanent
+    # high nor page a drawdown (counter-agent TA1). Flows are attributed to
+    # the mark they arrive before; flows that land after the finalized mark
+    # (an after-hours adoption) carry into the next day.
 
     def _trip_series_update(self, key: str, today: str, value: float,
                             pending_attr: str) -> dict | None:
-        """Chain-link one series to today's snapshot. The index moves by
-        today's return net of the day's flows: index = base.index *
-        (value - day_flow) / base.value, where base is the previous DAY's
-        last point (same-day cycles update today's point in place, as the
-        equity curve does). Returns the series dict, or None when it cannot
-        be computed (a non-positive base value: never page off it)."""
         st = self.state
         ser = getattr(st, key)
         pending = getattr(st, pending_attr)
         setattr(st, pending_attr, 0.0)
+        in_rth = regular_session_open()
         if ser is None:
-            ser = {"base": None, "cur": {"date": today, "value": value,
-                                         "index": 1.0},
+            mark = {"date": today, "value": value, "index": 1.0, "flow": 0.0}
+            ser = {"base": None, "cur": mark,
+                   "cur_rth": dict(mark) if in_rth else None,
                    "day_flow": 0.0, "hwm": 1.0, "hwm_date": today,
-                   "since": today}
+                   "since": today, "closes": []}
             setattr(st, key, ser)
+            self._event("INFO", f"tripwire series {key} started {today}")
             return ser
         cur = ser.get("cur") or {}
-        if cur.get("date") != today:
-            ser["base"] = cur or None
-            ser["day_flow"] = 0.0
+        if cur and cur.get("date") != today:
+            self._trip_finalize(ser)
         ser["day_flow"] = float(ser.get("day_flow") or 0.0) + pending
         base = ser.get("base")
-        if not base or (_num_or_none(base.get("value")) or 0.0) <= 0:
-            # no previous day yet (first day of the series): today's point
-            # restarts at the base index, flows absorbed
-            idx = (cur.get("index") if cur.get("date") == today
-                   else (base or {}).get("index", 1.0)) or 1.0
-            ser["cur"] = {"date": today, "value": value, "index": idx}
-            return ser
-        idx = float(base["index"]) * (value - ser["day_flow"]) / float(base["value"])
-        ser["cur"] = {"date": today, "value": value, "index": idx}
-        if idx > float(ser["hwm"]):
-            ser["hwm"], ser["hwm_date"] = idx, today
+        prev_idx = (cur.get("index") if cur.get("date") == today
+                    else (base or {}).get("index", 1.0)) or 1.0
+        if not base or (_num_or_none(base.get("value")) or 0.0) < TRIP_MIN_BASE_USD:
+            # first day, or a base too small to divide by (a sleeve emptied to
+            # cents then refilled by a transfer would explode the index -
+            # TB10): hold the index, absorb the day's flows
+            idx = prev_idx
+        elif value - ser["day_flow"] <= 0:
+            # the mark EXCLUDES a flow already counted (TA3: a deposit whose
+            # snapshot was skipped): never move the index off it - the flow
+            # stays in day_flow for the next mark
+            self._event_once_today("WARN", f"trip_flow_{key}",
+                                   f"tripwire {key}: mark {value:,.2f} is below "
+                                   f"the day's flows {ser['day_flow']:,.2f} - "
+                                   f"index held until a mark includes them")
+            idx = prev_idx
+        else:
+            idx = float(base["index"]) * (value - ser["day_flow"]) / float(base["value"])
+        mark = {"date": today, "value": value, "index": idx,
+                "flow": ser["day_flow"]}
+        ser["cur"] = mark
+        if in_rth:
+            ser["cur_rth"] = dict(mark)
         return ser
 
+    def _trip_finalize(self, ser: dict) -> None:
+        """Close the previous day: its point is the last in-session mark if
+        there was one, else the last mark. Flows that arrived after that mark
+        carry into the new day. The HWM ratchets here and only here."""
+        cur = ser.get("cur") or {}
+        rth = ser.get("cur_rth")
+        fin = rth if (rth and rth.get("date") == cur.get("date")) else cur
+        carry = float(ser.get("day_flow") or 0.0) - float(fin.get("flow") or 0.0)
+        ser["base"] = {"date": fin["date"], "value": fin["value"],
+                       "index": fin["index"]}
+        ser["day_flow"] = carry if abs(carry) > 1e-9 else 0.0
+        ser["cur_rth"] = None
+        if float(fin["index"]) > float(ser.get("hwm") or 0.0):
+            ser["hwm"], ser["hwm_date"] = float(fin["index"]), fin["date"]
+        closes = list(ser.get("closes") or [])
+        closes.append([fin["date"], float(fin["index"])])
+        ser["closes"] = closes[-5:]
+
     @staticmethod
-    def _trip_dd(ser: dict | None) -> float | None:
+    def _trip_dd_close(ser: dict | None, back: int = 1) -> float | None:
+        """Drawdown of the `back`-th most recent FINALIZED close vs the HWM."""
+        if not ser:
+            return None
+        closes = ser.get("closes") or []
+        hwm = float(ser.get("hwm") or 0.0)
+        if len(closes) < back or hwm <= 0:
+            return None
+        return max(0.0, 1.0 - float(closes[-back][1]) / hwm)
+
+    @staticmethod
+    def _trip_dd_live(ser: dict | None) -> float | None:
         if not ser or not ser.get("cur"):
             return None
         hwm = float(ser.get("hwm") or 0.0)
-        idx = float(ser["cur"].get("index") or 0.0)
-        return max(0.0, 1.0 - idx / hwm) if hwm > 0 else None
+        return max(0.0, 1.0 - float(ser["cur"]["index"]) / hwm) if hwm > 0 else None
 
-    def _trip_bootstrap_book(self) -> None:
-        """First run on a book with history: replay the persisted equity
-        curve into the book index, with ADOPTED deposits as flows on their
-        dates, so the HWM and the underwater clock start at go-live, not at
-        this build's first boot. (The sleeve has no persisted history: its
-        series starts at the first snapshot after this build - said on
-        /status as trip.sleeve.since.)"""
+    def _trip_bootstrap_book(self, today: str) -> None:
+        """First run on a book with history: replay the persisted equity curve
+        (one point per UTC cycle day; earlier days are finalized closes, a
+        point dated `today` is the open day's live mark) into the book index,
+        with ADOPTED deposits as flows. A flow is applied at the first curve
+        point on or after its date whose value covers it (TA3: a deposit whose
+        day has no point, or whose point excludes it, carries forward - never
+        a phantom gain or a negative index). Pending flows already contained
+        in the curve are removed from the pending total (no double count);
+        any not yet in it stay pending. The sleeve has no persisted history
+        and starts at its first snapshot."""
         st = self.state
         curve = [p for p in st.equity_curve
                  if isinstance(p, (list, tuple)) and len(p) == 2
-                 and (_num_or_none(p[1]) or 0.0) > 0]
-        if len(curve) < 1:
+                 and isinstance(p[0], str) and (_finite(p[1]) or 0.0) > 0]
+        if not curve:
             return
-        flows: dict[str, float] = {}
-        for e in st.capital_events:
-            if e.get("kind") == "deposit_adopted" and e.get("date"):
-                flows[e["date"]] = flows.get(e["date"], 0.0) + float(e.get("usd") or 0.0)
-        first_d, first_v = curve[0]
-        ser = {"base": None, "cur": {"date": first_d, "value": float(first_v),
-                                     "index": 1.0},
-               "day_flow": 0.0, "hwm": 1.0, "hwm_date": first_d,
-               "since": first_d}
-        for d, v in curve[1:]:
-            prev = ser["cur"]
-            idx = prev["index"] * (float(v) - flows.get(d, 0.0)) / prev["value"]
-            ser["base"] = prev
-            ser["day_flow"] = flows.get(d, 0.0)
-            ser["cur"] = {"date": d, "value": float(v), "index": idx}
+        first_d, last_d = curve[0][0], curve[-1][0]
+        flows = sorted((e["date"], float(_finite(e.get("usd"), 0.0)))
+                       for e in st.capital_events
+                       if e.get("kind") == "deposit_adopted"
+                       and isinstance(e.get("date"), str))
+        in_curve = sum(f for d, f in flows if first_d < d <= last_d)
+        ser = {"base": None, "cur": None, "cur_rth": None, "day_flow": 0.0,
+               "hwm": 1.0, "hwm_date": first_d, "since": first_d, "closes": []}
+        prev = None
+        owed = 0.0
+        fi = 0
+        while fi < len(flows) and flows[fi][0] <= first_d:
+            fi += 1                         # in the first point already
+        open_day = False
+        for d, v in curve:
+            v = float(v)
+            while fi < len(flows) and flows[fi][0] <= d:
+                owed += flows[fi][1]
+                fi += 1
+            if d == today and prev is not None:
+                # the open day: its flows sit in day_flow, the live update
+                # recomputes the index off the base
+                ser["base"] = {"date": prev["date"], "value": prev["value"],
+                               "index": prev["index"]}
+                ser["day_flow"] = owed
+                idx = (prev["index"] * (v - owed) / prev["value"]
+                       if v - owed > 0 else prev["index"])
+                ser["cur"] = {"date": d, "value": v, "index": idx, "flow": owed}
+                owed = 0.0
+                open_day = True
+                break
+            if prev is None:
+                idx = 1.0
+            elif v - owed <= 0:
+                idx = prev["index"]         # point excludes the flow: carry it
+            else:
+                idx = prev["index"] * (v - owed) / prev["value"]
+                owed = 0.0
+            point = {"date": d, "value": v, "index": idx}
+            ser["closes"] = (ser["closes"] + [[d, idx]])[-5:]
             if idx > ser["hwm"]:
                 ser["hwm"], ser["hwm_date"] = idx, d
+            prev = point
+        if not open_day:
+            # no point for today yet: the last (already finalized) close is the
+            # base for today; no live mark, so the next update neither
+            # re-finalizes it nor double-counts it
+            ser["base"] = dict(prev) if prev else None
+            ser["cur"] = None
+            ser["day_flow"] = 0.0
+        consumed = in_curve - owed          # owed = carried, not yet applied
+        st.trip_pending_book = max(0.0, st.trip_pending_book - consumed) + owed
         st.trip_book = ser
-        # flows already folded into the replayed history must not be applied
-        # again at the next snapshot
-        st.trip_pending_book = 0.0
         self._event("INFO", f"tripwire book index bootstrapped from the equity "
                             f"curve: {len(curve)} cycle days since {first_d}, "
-                            f"HWM {ser['hwm_date']}, drawdown "
-                            f"{self._trip_dd(ser):.1%}")
+                            f"HWM {ser['hwm_date']}")
 
     def update_tripwires(self, today: str, prices: dict[str, float],
                          alert) -> dict | None:
-        """Advance both indices to this cycle's marks and page any ledger
-        line crossed. Same skip rule as the equity snapshot (M4: no point on
-        a missing SPY/BIL quote). Never raises - reporting must never fail a
-        cycle closed. Returns the tripwire summary (tests)."""
+        """Advance both indices to this cycle's marks and page any ledger line
+        crossed on FINALIZED closes. Same skip rule as the equity snapshot
+        (M4). Never raises; a failure is said once a day (TA7)."""
         st = self.state
         try:
             if not st.initialized or not prices:
@@ -1398,7 +1541,7 @@ class Blend3070Manager:
             if prices.get(CORE, 0.0) <= 0 or prices.get(CASH_VEHICLE, 0.0) <= 0:
                 return None
             if st.trip_book is None:
-                self._trip_bootstrap_book()
+                self._trip_bootstrap_book(today)
             self._trip_series_update("trip_book", today, self.book_value(prices),
                                      "trip_pending_book")
             self._trip_series_update("trip_sleeve", today,
@@ -1409,6 +1552,13 @@ class Blend3070Manager:
             return self.tripwire_summary(today)
         except Exception as exc:  # noqa: BLE001
             logger.warning("update_tripwires failed (ignored): %s", exc)
+            try:
+                self._event_once_today("WARN", "tripwire_failed",
+                                       f"tripwire update FAILED ({exc}) - the "
+                                       f"kill-ledger lines are not being "
+                                       f"watched this cycle")
+            except Exception:  # noqa: BLE001
+                pass
             return None
 
     def _trip_page(self, key: str, level: str, msg: str, alert) -> None:
@@ -1418,29 +1568,52 @@ class Blend3070Manager:
               + " ALERT-ONLY: the code does nothing; ibkr-executor/ledger.csv "
                 "names the action.")
 
-    def _trip_dd_line(self, key: str, dd: float | None, level_dd: float,
+    def _trip_dd_line(self, key: str, ser: dict | None, level_dd: float,
                       page_level: str, what: str, alert) -> None:
-        if dd is None:
+        """Pages when the LAST TWO finalized closes are both at/over the level
+        (one glitched close cannot page: the ledger's 'confirm a borderline
+        reading against the next day'); re-arms once the last close has
+        recovered TRIP_REARM_PP below the level."""
+        d1, d2 = self._trip_dd_close(ser, 1), self._trip_dd_close(ser, 2)
+        if d1 is None:
             return
         fired = bool(self.state.trip_alerted.get(key))
-        if dd >= level_dd and not fired:
+        if (not fired and d2 is not None and d1 >= level_dd and d2 >= level_dd):
             self._trip_page(key, page_level,
-                            f"{what}: drawdown {dd:.1%} >= {level_dd:.0%} "
-                            f"(flow-adjusted, from the high-water mark).", alert)
-        elif fired and dd < level_dd - TRIP_REARM_PP:
+                            f"{what}: drawdown {d1:.1%} >= {level_dd:.0%} on two "
+                            f"consecutive closes (flow-adjusted, from the "
+                            f"high-water mark of {ser.get('hwm_date')}).", alert)
+        elif fired and d1 < level_dd - TRIP_REARM_PP:
             self.state.trip_alerted[key] = False
-            self._event("INFO", f"tripwire {what} re-armed (drawdown "
-                                f"{dd:.1%})")
+            self._event("INFO", f"tripwire {what} re-armed (drawdown {d1:.1%})")
+
+    def _unreconciled_sessions(self, rec: dict, now: datetime | None = None) -> int | None:
+        """Sessions whose CLOSE fell after the record was parked and at or
+        before now (TA4: counted on session closes in ET, not UTC dates)."""
+        ts = _num_or_none((rec or {}).get("ts"))
+        if ts is None:
+            return None
+        born = datetime.fromtimestamp(ts, timezone.utc)
+        now_et = _now_et(now)
+        d = born.astimezone(_ET).date()
+        n = 0
+        while d <= now_et.date():
+            if is_trading_day(d):
+                h, mi = session_close_et(d)
+                close = datetime(d.year, d.month, d.day, h, mi, tzinfo=_ET)
+                if born < close <= now_et:
+                    n += 1
+            d += timedelta(days=1)
+        return n
 
     def _trip_check_lines(self, today: str, alert) -> None:
         st = self.state
-        bdd, sdd = self._trip_dd(st.trip_book), self._trip_dd(st.trip_sleeve)
-        self._trip_dd_line("book_review", bdd, TRIP_BOOK_REVIEW_DD, "WARN",
-                           "REVIEW (book)", alert)
-        self._trip_dd_line("book_regime", bdd, TRIP_BOOK_REGIME_DD, "RED",
-                           "REGIME REVIEW (book)", alert)
-        self._trip_dd_line("sleeve_kill", sdd, TRIP_SLEEVE_KILL_DD, "RED",
-                           "MODEL-RISK KILL line (sleeve)", alert)
+        self._trip_dd_line("book_review", st.trip_book, TRIP_BOOK_REVIEW_DD,
+                           "WARN", "REVIEW (book)", alert)
+        self._trip_dd_line("book_regime", st.trip_book, TRIP_BOOK_REGIME_DD,
+                           "RED", "REGIME REVIEW (book)", alert)
+        self._trip_dd_line("sleeve_kill", st.trip_sleeve, TRIP_SLEEVE_KILL_DD,
+                           "RED", "MODEL-RISK KILL line (sleeve)", alert)
         uw = self._trip_underwater_days(today)
         fired = bool(st.trip_alerted.get("underwater"))
         if uw is not None and uw >= TRIP_UNDERWATER_DAYS and not fired:
@@ -1450,52 +1623,62 @@ class Blend3070Manager:
                             f"{st.trip_book['hwm_date']}.", alert)
         elif fired and (uw or 0) < TRIP_UNDERWATER_DAYS:
             st.trip_alerted["underwater"] = False      # a new high re-arms
-        # PROCESS KILL line: an unreconciled record older than N sessions
-        today_d = _parse_date(today)
         for k, rec in _snapshot(st.unreconciled).items():
             ak = f"unrec:{k}"
             if st.trip_alerted.get(ak):
                 continue
-            ts = _num_or_none((rec or {}).get("ts"))
-            if ts is None or today_d is None:
-                continue
-            born = datetime.fromtimestamp(ts, timezone.utc).date()
-            sessions = sum(1 for i in range(1, (today_d - born).days + 1)
-                           if is_trading_day(born + timedelta(days=i)))
-            if sessions >= TRIP_UNRECONCILED_SESSIONS:
+            n = self._unreconciled_sessions(rec)
+            if n is not None and n >= TRIP_UNRECONCILED_SESSIONS:
                 self._trip_page(ak, "RED",
                                 f"PROCESS KILL line: unreconciled record {k} "
-                                f"is {sessions} sessions old (>= "
-                                f"{TRIP_UNRECONCILED_SESSIONS}).", alert)
+                                f"has been parked through {n} session closes "
+                                f"(>= {TRIP_UNRECONCILED_SESSIONS}).", alert)
         for ak in [a for a in st.trip_alerted if a.startswith("unrec:")]:
             if ak[len("unrec:"):] not in st.unreconciled:
                 st.trip_alerted.pop(ak, None)      # record resolved: forget
 
     def _trip_underwater_days(self, today: str) -> int | None:
         ser = self.state.trip_book
-        if not ser or not ser.get("cur"):
+        if not ser or not (ser.get("closes") or ser.get("cur")):
             return None
         hd, td = _parse_date(ser.get("hwm_date")), _parse_date(today)
         if hd is None or td is None:
             return None
-        if float(ser["cur"]["index"]) >= float(ser["hwm"]) - 1e-12:
+        d1 = self._trip_dd_close(ser, 1)
+        if d1 is None or d1 <= 1e-12:
             return 0
         return (td - hd).days
 
     def tripwire_summary(self, today: str | None = None) -> dict:
-        """Public-safe: drawdowns, dates and line states only."""
+        """Public-safe: drawdowns, dates and line states only. `drawdown` is
+        the last FINALIZED close (what the lines read); `drawdown_live` the
+        current mark (informational). Never raises (TB1): /status and the
+        feed must not 500 on a malformed series."""
+        try:
+            return self._tripwire_summary(today)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("tripwire_summary failed: %s", exc)
+            return {"error": "unavailable", "alert_only": True}
+
+    def _tripwire_summary(self, today: str | None = None) -> dict:
         st = self.state
         today = today or _utc_today()
 
         def ser_view(ser):
             if not ser:
                 return None
-            return {"drawdown": (round(self._trip_dd(ser), 4)
-                                 if self._trip_dd(ser) is not None else None),
-                    "hwm_date": ser.get("hwm_date"), "since": ser.get("since"),
-                    "as_of": (ser.get("cur") or {}).get("date")}
-        bdd, sdd = self._trip_dd(st.trip_book), self._trip_dd(st.trip_sleeve)
+            d1 = self._trip_dd_close(ser, 1)
+            dl = self._trip_dd_live(ser)
+            closes = ser.get("closes") or []
+            return {"drawdown": round(d1, 4) if d1 is not None else None,
+                    "drawdown_live": round(dl, 4) if dl is not None else None,
+                    "close_date": closes[-1][0] if closes else None,
+                    "hwm_date": ser.get("hwm_date"), "since": ser.get("since")}
+        bdd = self._trip_dd_close(st.trip_book, 1)
+        sdd = self._trip_dd_close(st.trip_sleeve, 1)
         uw = self._trip_underwater_days(today)
+        ages = [self._unreconciled_sessions(r) for r in _snapshot(st.unreconciled).values()]
+        ages = [a for a in ages if a is not None]
         lines = [
             {"line": "REVIEW: book drawdown", "level": TRIP_BOOK_REVIEW_DD,
              "value": bdd, "paged": bool(st.trip_alerted.get("book_review"))},
@@ -1505,9 +1688,9 @@ class Blend3070Manager:
              "value": sdd, "paged": bool(st.trip_alerted.get("sleeve_kill"))},
             {"line": "REVIEW: days under water", "level": TRIP_UNDERWATER_DAYS,
              "value": uw, "paged": bool(st.trip_alerted.get("underwater"))},
-            {"line": "PROCESS KILL: unreconciled sessions",
+            {"line": "PROCESS KILL: oldest unreconciled record (sessions)",
              "level": TRIP_UNRECONCILED_SESSIONS,
-             "value": len(st.unreconciled),
+             "value": max(ages) if ages else 0,
              "paged": any(a.startswith("unrec:") and v
                           for a, v in _snapshot(st.trip_alerted).items())},
         ]
@@ -1515,7 +1698,10 @@ class Blend3070Manager:
             if isinstance(ln["value"], float):
                 ln["value"] = round(ln["value"], 4)
         return {"book": ser_view(st.trip_book), "sleeve": ser_view(st.trip_sleeve),
-                "underwater_days": uw, "lines": lines, "alert_only": True}
+                "underwater_days": uw, "lines": lines, "alert_only": True,
+                "basis": "finalized daily closes (last in-session mark), "
+                         "flow-adjusted; a line pages on two consecutive "
+                         "closes"}
 
     # ---------- the decision step ----------
 
@@ -1579,6 +1765,9 @@ class Blend3070Manager:
 
         params = payload.get("book_params") or {}
         max_open = min(MAX_OPEN, params.get("max_open", MAX_OPEN))
+        _mps = params.get("max_per_symbol", MAX_PER_SYMBOL)
+        max_per_symbol = (_mps if (isinstance(_mps, int) and not isinstance(_mps, bool)
+                                   and _mps >= 1) else MAX_PER_SYMBOL)
         risk_frac = params.get("risk_frac", RISK_FRAC)
         band = params.get("band", BAND)
         target = _sleeve_target(self, payload, alerts)
@@ -1765,6 +1954,18 @@ class Blend3070Manager:
         st.last_gate = gate_on          # feed display; persisted on next save
         sleeve_eq = self.sleeve_value(prices)
         open_count = len(st.positions) - len(exiting) + len(st.pending_entries)
+        # Per-symbol occupancy, counted exactly like open_count (round 11 /
+        # verifier A2): held positions not exiting this cycle + pending MOOs
+        # + entries already planned THIS cycle (same-day sibling fires of one
+        # name - multi-flag - are counted in payload order).
+        held_by_symbol: dict[str, int] = {}
+        for _k, _p in self.positions_view().items():
+            if _k not in exiting:
+                held_by_symbol[_p.symbol] = held_by_symbol.get(_p.symbol, 0) + 1
+        for _rec in _snapshot(st.pending_entries).values():
+            _sym = ((_rec or {}).get("intent") or {}).get("symbol")
+            if _sym:
+                held_by_symbol[_sym] = held_by_symbol.get(_sym, 0) + 1
         projected_gross = self.gross_exposure(prices)
         for it in exit_intents:      # exits convert holdings back to cash
             pos = st.positions[str(it["call_id"])]
@@ -1847,6 +2048,16 @@ class Blend3070Manager:
                 if open_count + len(entry_intents) >= max_open:
                     self._event("INFO", f"cap {max_open} open: skipping "
                                         f"{e['symbol']} (call {e['call_id']})")
+                    continue
+                n_sym = held_by_symbol.get(e["symbol"], 0)
+                if n_sym >= max_per_symbol:
+                    # checked AFTER the cap, as the replay does: a refused
+                    # repeat takes no slot, the next fire in another name may
+                    self._event_once_today(
+                        "INFO", f"per_symbol_{e['call_id']}",
+                        f"per-symbol limit {max_per_symbol}: skipping "
+                        f"{e['symbol']} (call {e['call_id']}) - {n_sym} "
+                        f"already open or planned in that name")
                     continue
                 entry_ref = e.get("entry_ref")
                 srow = stops_by_id.get(e["call_id"])
@@ -1964,6 +2175,7 @@ class Blend3070Manager:
                 projected_gross += from_cash
                 projected_cash -= cost
                 funds -= cost
+                held_by_symbol[e["symbol"]] = held_by_symbol.get(e["symbol"], 0) + 1
 
         prefund_usd = 0.0
         prefund_now = False
@@ -2588,12 +2800,18 @@ class Blend3070Manager:
             book = min(book, budget)
         return book
 
-    def request_capital_adoption(self, usd, today: str) -> dict:
+    def request_capital_adoption(self, usd, today: str, kind: str = "deposit") -> dict:
         """Journal a stage-2 adoption request (API thread, under BLEND_LOCK).
         VALIDATION ONLY - no ledger write, no venue call: the loop thread
         executes it (adopt_capital) on a quiet cycle, against the venue.
         A second request replaces the first (the operator's latest number
-        wins; nothing accumulates). Raises ValueError on a bad amount."""
+        wins; nothing accumulates). Raises ValueError on a bad amount.
+        kind: "deposit" (new money: a FLOW - grows contributed capital, never
+        a gain) or "distribution" (dividends / BIL distributions / interest
+        the book earned: credited as RETURN, so the tripwire indices stay
+        total-return and contributed capital does not grow - TA6/TB2)."""
+        if kind not in ("deposit", "distribution"):
+            raise ValueError('kind must be "deposit" or "distribution"')
         v = None if isinstance(usd, bool) else _num_or_none(usd)
         if v is not None and math.isfinite(v):
             v = round(v, 2)             # the amount that would be journaled
@@ -2604,9 +2822,9 @@ class Blend3070Manager:
                              f"bound {CAPITAL_REQUEST_MAX_USD:,.0f} - raise "
                              f"CAPITAL_REQUEST_MAX_USD deliberately if real")
         prior = self.state.capital_request
-        self.state.capital_request = {"usd": round(v, 2),
+        self.state.capital_request = {"usd": round(v, 2), "kind": kind,
                                       "ts": int(time.time()), "date": today}
-        self._event("WARN", f"capital adoption REQUESTED: ${v:,.2f}"
+        self._event("WARN", f"capital adoption REQUESTED ({kind}): ${v:,.2f}"
                             + (f" (replaces the pending "
                                f"${_num_or_none(prior.get('usd')) or 0:,.2f})"
                                if prior else "")
@@ -2714,6 +2932,7 @@ class Blend3070Manager:
             "spy_qty": st.spy_qty,
             "core_cash": round(st.core_cash, 2),
             "budget_cap": getattr(self.cfg, "blend_budget", 0.0) or None,
+            "cash": self.cash_summary(),     # public-safe by design (deltas)
             "capital": self.capital_summary(),
             "tripwires": self.tripwire_summary(),
             "gate": st.last_gate,
@@ -4672,21 +4891,40 @@ def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
             st.cash_alerted_drift = round(drift, 4)
             st.cash_alerted_level = level
             b_day = time.strftime("%Y-%m-%d", time.gmtime(float(b.get("ts") or 0)))
+            parked = sorted(_snapshot(st.unreconciled))
+            if drift > 0 and parked:
+                # TA2: a parked exit's proceeds (or an orphan stop's fill)
+                # show up here as positive drift - adopting them would book
+                # the same cash twice once the record is resolved
+                cause = (f"UNRECONCILED record(s) {', '.join(parked)} are "
+                         f"parked: this drift may be their proceeds. RESOLVE "
+                         f"THEM FIRST - do NOT adopt this amount")
+                tail = ""
+            elif drift > 0:
+                cause = ("Dividends/interest the ledger cannot see, or a "
+                         "deposit - it sits uninvested until adopted. Reinvest "
+                         "it with POST /blend/cash/adopt using the amounts on "
+                         "the activity statement (kind \"distribution\" for "
+                         "dividends/interest, \"deposit\" for new money), "
+                         "never this drift figure (it is net of fees and "
+                         "interest on cash the book does not own); adoption "
+                         "re-baselines by itself")
+                tail = (" Rebaseline (POST /blend/cash/rebaseline, EXEC_TOKEN) "
+                        "only if this is NOT the book's money - it erases the "
+                        "drift the next reinvestment would read.")
+            else:
+                cause = "Fees, slippage the ledger did not charge, or a withdrawal"
+                tail = (" Once accounted for, POST /blend/cash/rebaseline "
+                        "(EXEC_TOKEN) restarts the delta clock and touches "
+                        "nothing else.")
             msg = (f"cash drift {drift:+,.2f}: the account's cash moved "
                    f"{drift:+,.2f} more than the book's ledger since the "
                    f"baseline of {b_day} ({st.cash_drift_cycles} quiet cycles). "
-                   + ("Dividends/interest the ledger cannot see, or a deposit"
-                      " - it sits uninvested until adopted: once confirmed on "
-                      "TWS, POST /blend/cash/adopt with that amount (rounded "
-                      "down) to reinvest it through the book"
-                      if drift > 0 else
-                      "Fees, slippage the ledger did not charge, or a withdrawal")
+                   + cause
                    + ". Stage 1 is alert-only: nothing adopted."
                    + (f" NOTE: the book is HALTED ({st.halted}) - that is "
                       f"separate; do not /resume for this." if st.halted else "")
-                   + " Once accounted for, POST /blend/cash/rebaseline "
-                     "(EXEC_TOKEN) restarts the delta clock and touches "
-                     "nothing else.")
+                   + tail)
             mgr._event(level, msg)
             alert(("🚨🚨 " if level == "RED" else "⚠️ ") + "blend " + msg)
             fired = level
@@ -4799,6 +5037,15 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
         if quiet:
             return _defer("capital_wait_quiet",
                           f"${usd:,.2f} waits: not a quiet cycle ({quiet})")
+        if st.unreconciled:
+            # TA2: a parked exit's proceeds (or an orphan stop's fill) sit in
+            # the account's cash as "unowned" - adopting them now would book
+            # that cash twice once the record is resolved by hand
+            return _defer("capital_wait_unreconciled",
+                          f"${usd:,.2f} waits: unreconciled record(s) "
+                          f"{', '.join(sorted(_snapshot(st.unreconciled)))} are "
+                          f"parked - their proceeds may be in the account's "
+                          f"cash; resolve them first")
         budget = float(getattr(mgr.cfg, "blend_budget", 0.0) or 0.0)
         if budget > 0:
             spy_px = prices.get(CORE, 0.0) or 0.0
@@ -4866,15 +5113,19 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
         target = _persisted_sleeve_target(mgr)
         sleeve_usd = round(target * usd, 2)
         core_usd = round(usd - sleeve_usd, 2)
+        kind = req.get("kind") if req.get("kind") in ("deposit", "distribution") else "deposit"
         stage = "mutating"
         st.sleeve_cash += sleeve_usd
         st.core_cash += core_usd
-        # flows for the tripwire indices: a deposit is never a new high
-        st.trip_pending_book += usd
-        st.trip_pending_sleeve += sleeve_usd
-        st.capital_contributed = round((st.capital_contributed or 0.0) + usd, 2)
+        if kind == "deposit":
+            # flows for the tripwire indices: a deposit is never a new high
+            st.trip_pending_book += usd
+            st.trip_pending_sleeve += sleeve_usd
+            st.capital_contributed = round((st.capital_contributed or 0.0) + usd, 2)
+        # a distribution is RETURN the book earned: no flow, no contribution
         st.capital_events.append({
-            "date": today, "ts": int(now), "kind": "deposit_adopted",
+            "date": today, "ts": int(now),
+            "kind": "deposit_adopted" if kind == "deposit" else "distribution_adopted",
             "usd": round(usd, 2), "sleeve_usd": sleeve_usd,
             "core_usd": core_usd, "sleeve_target": target})
         del st.capital_events[:-CAPITAL_EVENTS_MAX]
@@ -4882,10 +5133,14 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
         # the ledger just moved by design: the stage-1 delta clock would
         # read it as a -usd drift against the unchanged account
         mgr.rebaseline_cash("capital adopted", save=False)
-        msg = (f"ADOPTED ${usd:,.2f} of account cash into the book: sleeve "
+        msg = (f"ADOPTED ${usd:,.2f} of account cash into the book as a "
+               f"{kind}: sleeve "
                f"+${sleeve_usd:,.2f} / core +${core_usd:,.2f} at the book's "
                f"{target:.0%} sleeve target; contributed capital now "
-               f"${st.capital_contributed:,.2f}. The next planning cycle "
+               f"${(st.capital_contributed or 0.0):,.2f}"
+               + (" (a distribution is return, not a contribution)"
+                  if kind == "distribution" else "")
+               + ". The next planning cycle "
                f"(this one, when a tracker payload is present) buys the "
                f"{CORE} core and sweeps the sleeve's idle cash to "
                f"{CASH_VEHICLE} (MKT; placed outside the session they rest "

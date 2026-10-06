@@ -9388,147 +9388,261 @@ def _px(spy, bil=100.0):
     return {"SPY": spy, "BIL": bil}
 
 
-def test_gate_tripwire_book_index_is_flow_adjusted(tmp_path):
-    """A deposit is a STEP in book value, never a new high: the README /
-    ledger example (A4) - 50k, HWM 52k, adopt 70k, fall to 100k - reads an
-    18.0% drawdown (the subtracted-dollar series would read 42.3%)."""
-    m = _trip_book(tmp_path)
-    alerts = []
-    m.state.bil_qty, m.state.spy_qty = 0, 500                 # book = 500 x SPY
-    m.update_tripwires("2026-09-01", _px(100.0), alerts.append)   # 50,000
-    m.update_tripwires("2026-09-02", _px(104.0), alerts.append)   # 52,000 = HWM
-    # adopt 70k (the flow) and invest it: book 122,000 at the same SPY
-    m.state.trip_pending_book += 70_000.0
-    m.state.core_cash = 70_000.0
-    m.update_tripwires("2026-09-03", _px(104.0), alerts.append)
-    t = m.tripwire_summary("2026-09-03")
-    assert t["book"]["drawdown"] == 0.0 and t["book"]["hwm_date"] == "2026-09-02"
-    # same-day re-mark updates in place, never compounds
-    m.update_tripwires("2026-09-03", _px(104.0), alerts.append)
-    assert m.tripwire_summary("2026-09-03")["book"]["drawdown"] == 0.0
-    # fall to 100,000 total: 100,000 - 70,000 cash = 30,000 in SPY
-    m.state.spy_qty = 300
-    m.update_tripwires("2026-09-04", _px(100.0), alerts.append)
-    dd = m.tripwire_summary("2026-09-04")["book"]["drawdown"]
-    assert dd == pytest.approx(1 - 100_000 / 122_000, abs=1e-4)   # 18.0%
-    assert alerts == []                                       # under 25%
+def _rth(monkeypatch, on: bool):
+    """Pin the clock inside (11:00 ET) or outside (07:00 ET) the session."""
+    h = 15 if on else 11
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 20, h, 0, tzinfo=_tz.utc))
 
 
-def test_gate_tripwire_sleeve_index_ignores_transfers(tmp_path):
-    """A rebalance transfer moves sleeve value without being a gain or a loss:
-    on_transfer is a flow for the sleeve index."""
-    m = _trip_book(tmp_path)
-    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)     # sleeve 15,000
-    m.update_tripwires("2026-09-02", PRICES, lambda *_: None)
-    m.on_transfer(-5_000.0)                  # sleeve -> core: sleeve 10,000
-    m.update_tripwires("2026-09-03", PRICES, lambda *_: None)
-    assert m.tripwire_summary("2026-09-03")["sleeve"]["drawdown"] == 0.0
-    m.on_transfer(8_000.0)                   # core -> sleeve: sleeve 18,000
-    m.update_tripwires("2026-09-04", PRICES, lambda *_: None)
-    t = m.tripwire_summary("2026-09-04")
-    assert t["sleeve"]["drawdown"] == 0.0 and t["sleeve"]["hwm_date"] == "2026-09-01"
-    # a real loss still shows: BIL halves
-    m.update_tripwires("2026-09-05", _px(100.0, 50.0), lambda *_: None)
-    dd = m.tripwire_summary("2026-09-05")["sleeve"]["drawdown"]
-    sleeve_before = 3_000.0 + 15_000.0        # 3,000 cash after transfers + BIL
-    assert dd == pytest.approx(1 - (3_000.0 + 7_500.0) / sleeve_before, abs=1e-4)
+def _days(m, seq, alerts=None):
+    """One mark per day: [(date, prices), ...]. Each new day finalizes the
+    previous one (the lines read finalized closes)."""
+    for d, px in seq:
+        m.update_tripwires(d, px, (alerts.append if alerts is not None else (lambda *_: None)))
 
 
-def test_gate_tripwire_pages_once_per_crossing_and_rearms(tmp_path):
-    """REVIEW (25%) pages WARN once, REGIME (35%) pages RED once, nothing
-    repeats while below, and a recovery of 5 pp re-arms the line."""
+def test_gate_tripwire_book_index_is_flow_adjusted_through_adopt_capital(tmp_path):
+    """A deposit is a STEP in book value, never a new high - driven through the
+    REAL adopt_capital (TB9/M2): the README example (50k, HWM 52k, adopt 70k,
+    fall to 100k) reads 18.0%; the subtracted-dollar series would read 42.3%."""
     m = _trip_book(tmp_path)
     m.state.bil_qty, m.state.spy_qty = 0, 500
     alerts = []
-    for d, spy in [("2026-09-01", 100.0), ("2026-09-02", 74.0), ("2026-09-03", 73.0)]:
-        m.update_tripwires(d, _px(spy), alerts.append)
+    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(104.0))], alerts)
+    m.request_capital_adoption(70_000, "2026-09-03")
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(70_000.0, 70_000.0), _px(104.0),
+                                "2026-09-03", alerts.append)
+    assert r["status"] == "adopted" and m.state.trip_pending_book == 70_000.0
+    _days(m, [("2026-09-03", _px(104.0)), ("2026-09-04", _px(60.0)),
+              ("2026-09-05", _px(60.0))], alerts)
+    t = m.tripwire_summary("2026-09-05")
+    assert t["book"]["hwm_date"] == "2026-09-02"            # the deposit day is not a high
+    assert t["book"]["drawdown"] == pytest.approx(1 - 100_000 / 122_000, abs=1e-4)
+    assert t["book"]["close_date"] == "2026-09-04"
+    assert not any("tripwire" in a for a in alerts)          # 18% < 25%
+
+
+def test_gate_tripwire_distribution_is_return_not_a_flow(tmp_path):
+    """TA6/TB2: a reinvested dividend is RETURN - the index rises by it and
+    contributed capital does not grow; a deposit of the same size does not
+    move the index."""
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    m.state.capital_contributed = 50_000.0
+    _days(m, [("2026-09-01", _px(100.0))])
+    m.request_capital_adoption(500, "2026-09-02", kind="distribution")
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(500.0, 500.0), _px(100.0),
+                                "2026-09-02", lambda *_: None)
+    assert r["status"] == "adopted" and m.state.trip_pending_book == 0.0
+    assert m.state.capital_contributed == 50_000.0
+    assert m.state.capital_events[-1]["kind"] == "distribution_adopted"
+    _days(m, [("2026-09-02", _px(100.0)), ("2026-09-03", _px(100.0))])
+    assert m.state.trip_book["closes"][-1][1] == pytest.approx(50_500 / 50_000)
+    with pytest.raises(ValueError):
+        m.request_capital_adoption(500, "2026-09-03", kind="gift")
+
+
+def test_gate_tripwire_intraday_glitch_never_sets_the_high(tmp_path, monkeypatch):
+    """TA1: a transient mark (a thin name's after-hours ask) can set neither a
+    permanent high nor a page. The day's close is its LAST IN-SESSION mark."""
+    m = _trip_book(tmp_path)
+    m.state.spy_qty = 0                                     # sleeve = 150 BIL = 15k
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)
+    m.update_tripwires("2026-09-01", _px(100.0, 200.0), lambda *_: None)   # in-session spike
+    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)               # back
+    _rth(monkeypatch, False)
+    m.update_tripwires("2026-09-01", _px(100.0, 1_000.0), lambda *_: None)  # after-hours glitch
+    alerts = []
+    _rth(monkeypatch, True)
+    _days(m, [("2026-09-02", PRICES), ("2026-09-03", PRICES)], alerts)
+    t = m.tripwire_summary("2026-09-03")
+    assert t["sleeve"]["drawdown"] == 0.0 and t["book"]["drawdown"] == 0.0
+    assert m.state.trip_sleeve["hwm"] == pytest.approx(1.0) and not alerts
+
+
+def test_gate_tripwire_flow_after_the_close_mark_carries_to_the_next_day(tmp_path, monkeypatch):
+    """A deposit adopted AFTER the day's last in-session mark is not in that
+    close: it carries into the next day's flows (no false gain, no loss)."""
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-09-01", _px(100.0), lambda *_: None)
+    _rth(monkeypatch, False)
+    m.state.core_cash += 70_000.0
+    m.state.trip_pending_book += 70_000.0                   # after-hours adoption
+    m.update_tripwires("2026-09-01", _px(100.0), lambda *_: None)
+    _days(m, [("2026-09-02", _px(100.0)), ("2026-09-03", _px(100.0))])
+    t = m.tripwire_summary("2026-09-03")
+    assert t["book"]["drawdown"] == 0.0
+    assert m.state.trip_book["closes"][-1][1] == pytest.approx(1.0)
+
+
+def test_gate_tripwire_sleeve_index_ignores_transfers(tmp_path):
+    m = _trip_book(tmp_path)
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
+    m.on_transfer(-5_000.0)                  # sleeve -> core
+    _days(m, [("2026-09-03", PRICES)])
+    m.on_transfer(8_000.0)                   # core -> sleeve
+    _days(m, [("2026-09-04", PRICES), ("2026-09-05", PRICES)])
+    t = m.tripwire_summary("2026-09-05")
+    assert t["sleeve"]["drawdown"] == 0.0 and t["sleeve"]["hwm_date"] == "2026-09-01"
+    _days(m, [("2026-09-06", _px(100.0, 50.0)), ("2026-09-07", _px(100.0, 50.0))])
+    dd = m.tripwire_summary("2026-09-07")["sleeve"]["drawdown"]
+    assert dd == pytest.approx(1 - (3_000.0 + 7_500.0) / 18_000.0, abs=1e-4)
+
+
+def test_gate_tripwire_pages_on_two_consecutive_closes_once_and_rearms(tmp_path):
+    """A line pages only when the LAST TWO finalized closes are over it (one
+    glitched close cannot page), once per crossing, and re-arms after a 5 pp
+    recovery on a close. Alert-only: nothing on the book moves."""
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    alerts = []
+    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(74.0)),
+              ("2026-09-03", _px(100.0)), ("2026-09-04", _px(100.0))], alerts)
+    assert alerts == []                                     # one close at 26%: no page
+    _days(m, [("2026-09-05", _px(74.0)), ("2026-09-06", _px(73.0)),
+              ("2026-09-07", _px(73.0))], alerts)
     assert len(alerts) == 1 and alerts[0].startswith("⚠️") and "REVIEW (book)" in alerts[0]
-    assert "ALERT-ONLY" in alerts[0]
-    m.update_tripwires("2026-09-04", _px(64.0), alerts.append)
+    assert "two consecutive closes" in alerts[0] and "ALERT-ONLY" in alerts[0]
+    _days(m, [("2026-09-08", _px(64.0)), ("2026-09-09", _px(63.0)), ("2026-09-10", _px(63.0))], alerts)
     assert len(alerts) == 2 and alerts[1].startswith("🚨🚨") and "REGIME" in alerts[1]
-    m.update_tripwires("2026-09-05", _px(63.0), alerts.append)
-    assert len(alerts) == 2
-    assert m.state.halted is None and m.state.spy_qty == 500   # nothing acted
-    m.update_tripwires("2026-09-08", _px(81.0), alerts.append)  # dd 19%: both re-arm
-    m.update_tripwires("2026-09-09", _px(74.0), alerts.append)  # 26%: REVIEW again
+    assert m.state.halted is None and m.state.spy_qty == 500
+    _days(m, [("2026-09-11", _px(81.0)), ("2026-09-12", _px(81.0))], alerts)   # close 19%: re-arm both
+    _days(m, [("2026-09-13", _px(74.0)), ("2026-09-14", _px(74.0)), ("2026-09-15", _px(74.0))], alerts)
     assert len(alerts) == 3 and "REVIEW (book)" in alerts[2]
-    lines = {ln["line"]: ln for ln in m.tripwire_summary("2026-09-09")["lines"]}
-    assert lines["REVIEW: book drawdown"]["paged"] is True
-    assert lines["REGIME REVIEW: book drawdown"]["paged"] is False
 
 
-def test_gate_tripwire_sleeve_kill_line_and_underwater_clock(tmp_path):
+def test_gate_tripwire_sleeve_kill_line_and_two_underwater_episodes(tmp_path):
     m = _trip_book(tmp_path)
     m.state.spy_qty = 0
     alerts = []
-    m.update_tripwires("2026-09-01", PRICES, alerts.append)        # sleeve 15,000
-    m.update_tripwires("2026-09-02", _px(100.0, 54.0), alerts.append)   # -46%
-    assert any("MODEL-RISK KILL line (sleeve)" in a and a.startswith("🚨🚨") for a in alerts)
-    # underwater clock: 913 days after the HWM date
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", _px(100.0, 54.0)),
+              ("2026-09-03", _px(100.0, 54.0)), ("2026-09-04", _px(100.0, 54.0))], alerts)
+    assert sum("MODEL-RISK KILL line (sleeve)" in a for a in alerts) == 1
     m2 = _trip_book(tmp_path / "b")
     a2 = []
-    m2.update_tripwires("2024-01-02", PRICES, a2.append)
-    m2.update_tripwires("2024-01-03", _px(95.0), a2.append)
-    m2.update_tripwires("2026-07-02", _px(95.0), a2.append)        # 912 days
-    assert not any("under water" in a for a in a2)
-    m2.update_tripwires("2026-07-04", _px(95.0), a2.append)        # 914 days
+    _days(m2, [("2024-01-02", PRICES), ("2024-01-03", _px(95.0)), ("2026-07-02", _px(95.0))], a2)
+    assert not any("under water" in a for a in a2)          # 912 days (2024 is a leap year)
+    _days(m2, [("2026-07-03", _px(95.0))], a2)               # 913 days
     assert sum("under water" in a for a in a2) == 1
-    assert m2.tripwire_summary("2026-07-04")["underwater_days"] == 914
+    # a new high re-arms the clock (TB9: second episode)
+    _days(m2, [("2026-07-05", _px(120.0)), ("2026-07-06", _px(120.0)), ("2026-07-07", _px(110.0))], a2)
+    assert m2.state.trip_alerted["underwater"] is False
+    _days(m2, [("2028-12-31", _px(110.0)), ("2029-01-05", _px(110.0))], a2)
+    assert sum("under water" in a for a in a2) == 2
 
 
-def test_gate_tripwire_process_line_unreconciled_sessions(tmp_path):
-    """PROCESS KILL line: an unreconciled record older than 3 SESSIONS pages
-    RED once; a resolved record is forgotten (a new one with the same key
-    can page again)."""
+def test_gate_tripwire_process_line_counts_session_closes(tmp_path, monkeypatch):
+    """TA4: sessions are counted on session CLOSES in ET after the record was
+    parked, not on UTC dates: born Thu 11:00 ET -> closes Thu, Fri, Mon; the
+    page lands after Monday's 16:00 ET close, not at Monday's UTC roll."""
     m = _trip_book(tmp_path)
     alerts = []
-    born = _dt(2026, 8, 20, 15, 0, tzinfo=_tz.utc).timestamp()   # Thu
+    born = _dt(2026, 8, 20, 15, 0, tzinfo=_tz.utc).timestamp()          # Thu 11:00 ET
     m.state.unreconciled["7"] = {"ts": born, "symbol": "CRSP"}
-    m.update_tripwires("2026-08-24", PRICES, alerts.append)   # Fri, Mon = 2 sessions
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 24, 19, 0, tzinfo=_tz.utc))
+    m.update_tripwires("2026-08-24", PRICES, alerts.append)             # Mon 15:00 ET: 2
     assert not alerts
-    m.update_tripwires("2026-08-25", PRICES, alerts.append)   # Tue = 3 sessions
+    assert m.tripwire_summary("2026-08-24")["lines"][4]["value"] == 2   # TA5/TB3: an AGE
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 24, 20, 30, tzinfo=_tz.utc))
+    m.update_tripwires("2026-08-24", PRICES, alerts.append)             # Mon 16:30 ET: 3
     assert len(alerts) == 1 and "PROCESS KILL" in alerts[0] and alerts[0].startswith("🚨🚨")
-    m.update_tripwires("2026-08-26", PRICES, alerts.append)
+    m.update_tripwires("2026-08-25", PRICES, alerts.append)
     assert len(alerts) == 1
     del m.state.unreconciled["7"]
-    m.update_tripwires("2026-08-27", PRICES, alerts.append)
+    m.update_tripwires("2026-08-26", PRICES, alerts.append)
     assert "unrec:7" not in m.state.trip_alerted
 
 
-def test_gate_tripwire_bootstraps_the_book_from_the_equity_curve(tmp_path):
-    """First run on a live book: the HWM and the underwater clock start at
-    go-live (the persisted curve), deposits on the curve are flows."""
+def test_gate_tripwire_bootstrap_deposit_inside_a_drawdown(tmp_path):
+    """TB9/M10: the bootstrap's deposit sits INSIDE a drawdown, so a bootstrap
+    that ignored flows would read a new high on the deposit day. Today's point
+    (written by the snapshot just before) is the live mark; a pending flow the
+    curve already contains is not applied twice."""
     m = _trip_book(tmp_path)
     m.state.equity_curve = [["2026-08-28", 50_000.0], ["2026-09-10", 52_000.0],
-                            ["2026-10-06", 122_500.0]]
-    m.state.capital_events = [{"date": "2026-10-06", "kind": "deposit_adopted",
-                               "usd": 70_000.0, "sleeve_usd": 21_000.0,
-                               "core_usd": 49_000.0}]
-    m.state.trip_pending_book = 70_000.0      # must not be applied twice
-    m.state.bil_qty, m.state.spy_qty = 0, 0
-    m.state.core_cash = 120_000.0             # book 120,000 at the next mark
+                            ["2026-09-20", 49_000.0], ["2026-10-06", 119_000.0],
+                            ["2026-10-07", 119_500.0]]
+    m.state.capital_events = [{"date": "2026-08-28", "kind": "inferred", "usd": 50_000.0},
+                              {"date": "2026-10-06", "kind": "deposit_adopted",
+                               "usd": 70_000.0, "sleeve_usd": 21_000.0, "core_usd": 49_000.0}]
+    m.state.trip_pending_book = 70_000.0
+    m.state.bil_qty, m.state.spy_qty, m.state.core_cash = 0, 0, 119_500.0
     m.update_tripwires("2026-10-07", PRICES, lambda *_: None)
     t = m.tripwire_summary("2026-10-07")
-    assert t["book"]["since"] == "2026-08-28" and t["book"]["hwm_date"] == "2026-10-06"
-    assert t["book"]["drawdown"] == pytest.approx(1 - 120_000 / 122_500, abs=1e-4)
+    assert t["book"]["since"] == "2026-08-28" and t["book"]["hwm_date"] == "2026-09-10"
+    assert t["book"]["close_date"] == "2026-10-06"
+    assert t["book"]["drawdown"] == pytest.approx(1 - 49_000 / 52_000, abs=1e-4)   # 5.77%, not 0
+    assert m.state.trip_pending_book == 0.0
     assert t["sleeve"]["since"] == "2026-10-07"
-    assert any("bootstrapped from the equity curve" in e["msg"] for e in m.state.events)
+    assert any("tripwire series trip_sleeve started" in e["msg"] for e in m.state.events)
 
 
-def test_gate_tripwire_skips_missing_quotes_persists_and_never_raises(tmp_path, monkeypatch):
+def test_gate_tripwire_runs_after_the_snapshot_with_a_same_day_adoption(tmp_path):
+    """TB9/M5: in run_cycle the tripwire runs AFTER the equity snapshot, so on
+    the bootstrap day a same-day adoption is a flow, not a new high."""
     m = _trip_book(tmp_path)
-    assert m.update_tripwires("2026-09-01", {"BIL": 100.0}, lambda *_: None) is None
-    assert m.state.trip_book is None
-    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)
-    m.update_tripwires("2026-09-02", _px(60.0), lambda *_: None)   # 28%: pages REVIEW
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    m.state.equity_curve = [["2026-08-18", 52_000.0], ["2026-08-19", 50_000.0]]
+    m.request_capital_adoption(70_000, "2026-08-20")
+    a = _VenueCashAdapter(70_000.0, 70_000.0)
+    a.seed_position("SPY", 500)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.capital_request is None
+    t = m.tripwire_summary("2026-08-20")
+    assert t["book"]["hwm_date"] == "2026-08-18"
+    assert t["book"]["drawdown_live"] == pytest.approx(1 - 50_000 / 52_000, abs=0.002)
+
+
+def test_gate_tripwire_malformed_state_never_500s_and_restarts_loudly(tmp_path):
+    """TB1: a malformed subfield (hand edit, future schema) is dropped at load
+    with a WARN, /status and the feed stay strictly JSON-serializable, and an
+    infinite pending flow is never paged."""
+    m = _trip_book(tmp_path)
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
+    m.save()
+    for bad in ({"cur": "x"}, {"cur": {"date": "2026-09-02", "value": 1.0, "index": "abc"}},
+                {"hwm": float("inf")}, {"closes": [["d", -1]]}):
+        raw = json.load(open(m.state_path))
+        raw["trip_sleeve"] = dict(raw["trip_sleeve"], **bad)
+        raw["trip_pending_book"] = float("inf")
+        with open(m.state_path, "w") as fh:
+            json.dump(raw, fh)
+        m2 = Blend3070Manager(m.cfg, m.state_path)
+        assert m2.state.trip_sleeve is None and m2.state.trip_pending_book == 0.0
+        assert any("MALFORMED" in e["msg"] for e in m2.state.events)
+        json.dumps(m2.status_summary(PRICES), allow_nan=False)
+        json.dumps(m2.feed(PRICES, "2026-09-03"), allow_nan=False)
+    # a summary that cannot be computed degrades, never raises
+    m.state.trip_book = {"hwm": 1.0, "closes": [["2026-09-02", "junk"]]}
+    assert m.tripwire_summary("2026-09-03")["error"] == "unavailable"
+
+
+def test_gate_tripwire_pending_flow_survives_a_skipped_snapshot_and_restart(tmp_path):
+    """TB9/M19: a deposit adopted on a cycle whose snapshot is skipped (missing
+    quote) stays pending across a restart and is applied at the next mark."""
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(100.0))])
+    m.state.core_cash += 70_000.0
+    m.state.trip_pending_book += 70_000.0
+    assert m.update_tripwires("2026-09-03", {"BIL": 100.0}, lambda *_: None) is None
+    m.save()
     m2 = Blend3070Manager(m.cfg, m.state_path)
-    assert m2.state.trip_book == m.state.trip_book
-    assert m2.state.trip_alerted.get("book_review") is True
-    m2.state.trip_book = {"hwm": "junk"}
-    m2.save()
-    assert Blend3070Manager(m.cfg, m.state_path).state.trip_book is None
+    assert m2.state.trip_pending_book == 70_000.0
+    _days(m2, [("2026-09-03", _px(100.0)), ("2026-09-04", _px(100.0))])
+    assert m2.tripwire_summary("2026-09-04")["book"]["drawdown"] == 0.0
+    assert m2.state.trip_book["closes"][-1][1] == pytest.approx(1.0)
+
+
+def test_gate_tripwire_failure_is_said_once_a_day(tmp_path, monkeypatch):
+    m = _trip_book(tmp_path)
     monkeypatch.setattr(m, "book_value", lambda *_: 1 / 0)
     assert m.update_tripwires("2026-09-03", PRICES, lambda *_: None) is None
+    assert m.update_tripwires("2026-09-03", PRICES, lambda *_: None) is None
+    assert sum("tripwire update FAILED" in e["msg"] for e in m.state.events) == 1
 
 
 def test_gate_tripwire_runs_in_the_cycle_and_is_public_safe(tmp_path):
@@ -9538,15 +9652,20 @@ def test_gate_tripwire_runs_in_the_cycle_and_is_public_safe(tmp_path):
     a.seed_position("BIL", 150)
     blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
     assert m.state.trip_book is not None and m.state.trip_sleeve is not None
-    feed = m.feed(PRICES, "2026-08-20")
-    tw = feed["tripwires"]
+    tw = m.feed(PRICES, "2026-08-20")["tripwires"]
     assert tw["alert_only"] is True and len(tw["lines"]) == 5
-    assert set(tw["book"]) == {"drawdown", "hwm_date", "since", "as_of"}
-    assert "index" not in json.dumps(tw) and "value\": 3" not in json.dumps(tw)
-    assert m.status_summary(PRICES)["tripwires"]["book"]["since"] == "2026-08-20"
+    assert set(tw["book"]) == {"drawdown", "drawdown_live", "close_date", "hwm_date", "since"}
+    assert "index" not in json.dumps(tw)
+    st = m.status_summary(PRICES)
+    assert st["tripwires"]["book"]["since"] == "2026-08-20"
+    assert "drift" in st["cash"] and "venue" not in st["cash"]          # TB4
 
 
-def test_gate_positive_drift_page_names_the_reinvest_path(tmp_path):
+def test_gate_drift_page_reinvest_path_and_parked_records(tmp_path):
+    """TA2/TB5: positive drift names the reinvest path (statement amounts,
+    never the drift figure; adoption re-baselines itself); with an
+    unreconciled record parked it says RESOLVE FIRST and gives no adopt
+    instruction; and adoption itself waits while a record is parked."""
     m = mk(tmp_path)
     _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
     alerts = []
@@ -9556,7 +9675,115 @@ def test_gate_positive_drift_page_names_the_reinvest_path(tmp_path):
     blend_mod.reconcile_cash(m, a, alerts.append)
     blend_mod.reconcile_cash(m, a, alerts.append)
     assert len(alerts) == 1 and "POST /blend/cash/adopt" in alerts[0]
-    assert "reinvest" in alerts[0]
+    assert "never this drift figure" in alerts[0] and "only if this is NOT the book's money" in alerts[0]
     a.cash = 43_142.0 - 500.0                 # a withdrawal: no reinvest hint
     blend_mod.reconcile_cash(m, a, alerts.append)
     assert "/blend/cash/adopt" not in alerts[-1]
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    m2.state.unreconciled["9"] = {"ts": _time.time() - 3_600, "symbol": "CRSP"}
+    a2, al2 = _CashAdapter(43_100.0), []
+    blend_mod.reconcile_cash(m2, a2, al2.append)
+    a2.cash = 47_000.0
+    blend_mod.reconcile_cash(m2, a2, al2.append)
+    blend_mod.reconcile_cash(m2, a2, al2.append)
+    assert al2 and "RESOLVE THEM FIRST" in al2[-1] and "/blend/cash/adopt" not in al2[-1]
+    m2.request_capital_adoption(3_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, _VenueCashAdapter(47_000.0, 47_000.0), PRICES,
+                                "2026-08-20", lambda *_: None)
+    assert r["status"] == "deferred" and "resolve them first" in r["reason"]
+
+
+def test_gate_overnight_core_buy_then_in_session_residual(tmp_path, monkeypatch):
+    """TB9: production headroom ON through run_cycle - the overnight plan buys
+    at the headroom size; the next in-session cycle buys the residual."""
+    monkeypatch.setattr(blend_mod, "CORE_BUY_OVERNIGHT_HEADROOM", 0.01)
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=0, bil_qty=30, core_cash=7_000.0)
+    m.state.sleeve_target = 0.30
+    px = {"SPY": 99.5, "BIL": 100.0}
+    a = DryAdapter()
+    a.seed_position("BIL", 30)
+    a.seed_price("SPY", 99.5)
+    a.seed_price("BIL", 100.0)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.spy_qty == 69                            # 7000 / (99.5 x 1.01)
+    _rth(monkeypatch, True)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.spy_qty == 70 and m.state.core_cash < 99.5
+
+
+# --- per-symbol limit (round 11, U2: at most 2 open calls per symbol) ---------
+
+def _ps_book(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=20_000.0, spy_qty=70, bil_qty=0)
+    m.state.sleeve_target = 0.30
+    return m
+
+
+def _ps_prices(*syms):
+    p = dict(PRICES)
+    for s_ in syms:
+        p[s_] = 50.0
+    return p
+
+
+def _enters(intents):
+    return [(i["symbol"], i["call_id"]) for i in intents if i["action"] == "ENTER"]
+
+
+def test_gate_per_symbol_limit_skips_a_third_open_call_in_one_name(tmp_path):
+    """Two CRSP held: a third CRSP fire is skipped and takes no cap slot; a
+    fire in another name in the same payload is still planned.
+    MUTATION-VERIFIED: removing the check plans CRSP call 3."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    _held_position(m, call_id=2, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP"), entry(4, "NTLA")],
+                 stops=[stop_row(3, "CRSP"), stop_row(4, "NTLA")])
+    out = m.step("2026-08-20", pl, _ps_prices("CRSP", "NTLA"))
+    assert _enters(out) == [("NTLA", 4)]
+    assert any("per-symbol limit 2: skipping CRSP (call 3)" in e["msg"] for e in m.state.events)
+
+
+def test_gate_per_symbol_counts_pending_moos_and_same_cycle_siblings(tmp_path):
+    """Verifier A2: a pending MOO counts as held, and same-cycle sibling fires
+    of one name (multi-flag) count in payload order."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    m.state.pending_entries["2"] = {"intent": {"symbol": "CRSP", "call_id": 2, "qty": 5,
+                                               "entry_ref": 50.0, "size_ref": 50.0},
+                                    "date": "2026-08-19"}
+    pl = payload(entries=[entry(3, "CRSP")], stops=[stop_row(3, "CRSP")])
+    assert _enters(m.step("2026-08-20", pl, _ps_prices("CRSP"))) == []
+    m2 = _ps_book(tmp_path / "b")
+    pl = payload(entries=[entry(5, "CRSP"), entry(6, "CRSP"), entry(7, "CRSP")],
+                 stops=[stop_row(5, "CRSP"), stop_row(6, "CRSP"), stop_row(7, "CRSP")])
+    assert _enters(m2.step("2026-08-20", pl, _ps_prices("CRSP"))) == [("CRSP", 5), ("CRSP", 6)]
+
+
+def test_gate_per_symbol_an_exiting_position_frees_its_name(tmp_path):
+    """Counted like open_count: a position exiting THIS cycle frees its name."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    _held_position(m, call_id=2, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP")],
+                 exits=[{"call_id": 1, "symbol": "CRSP", "reason": "time_stop"}],
+                 stops=[stop_row(2, "CRSP"), stop_row(3, "CRSP")])
+    out = m.step("2026-08-20", pl, _ps_prices("CRSP"))
+    assert any(i["action"] == "EXIT" and i["call_id"] == 1 for i in out)
+    assert _enters(out) == [("CRSP", 3)]
+
+
+def test_gate_per_symbol_tracker_override_and_bad_values(tmp_path):
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP")], stops=[stop_row(3, "CRSP")])
+    pl["book_params"]["max_per_symbol"] = 1
+    assert _enters(m.step("2026-08-20", pl, _ps_prices("CRSP"))) == []
+    for bad in (0, -1, "2", True, 1.5, None):
+        m2 = _ps_book(tmp_path / f"b{abs(hash(str(bad)))}")
+        _held_position(m2, call_id=1, symbol="CRSP")
+        pl["book_params"]["max_per_symbol"] = bad
+        assert _enters(m2.step("2026-08-20", pl, _ps_prices("CRSP"))) == [("CRSP", 3)]   # default 2

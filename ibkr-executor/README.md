@@ -560,6 +560,18 @@ unreconciled venue state. Phases IN ORDER:
    unowned cash and can be adopted the same way, by an explicit amount.
    Runbook: "Resizing the live book after a deposit" under Operating
    rules.
+   **At most two open calls per symbol** (round 11, 2026-10-05;
+   `MAX_PER_SYMBOL = 2`, overridable by the tracker's
+   `book_params.max_per_symbol`): a repeat fire in a name already held
+   twice is skipped and takes no cap slot, so the slot goes to the next
+   gated fire in another name. Counted like the cap: held positions not
+   exiting this cycle + pending MOOs + entries already planned this cycle
+   (same-day sibling fires of one name count in payload order); checked
+   after the cap. Adopted as RISK CONTROL on non-inferiority (pre-
+   registered tier 2): on the replay the p90 largest single name falls
+   from 40% to 28% of the sleeve with book Sharpe, CAGR and max DD
+   statistically unchanged - no return improvement is claimed
+   (docs/BACKTEST_EXECUTOR_MIRROR.md, round 11).
    **Entries are only PLANNED outside the regular session** (2026-09-03):
    a MOO/OPG order is accepted for the next opening auction and REJECTED
    once the session is open, so a fire first seen mid-session is held for
@@ -1096,7 +1108,8 @@ equity_estimate, budget_utilization, initial_book_usd,
 capital_contributed}, capital_events (date, kind, usd and the sleeve/core
 split; kinds: `seed` (the curve's first point), `inferred` (the seed
 backfilled at the stage-2 build's first boot on a pre-field file - dated by
-THAT boot, no split) and `deposit_adopted` - only the last kind is a FLOW
+THAT boot, no split), `deposit_adopted` and `distribution_adopted`
+(reinvested dividends: RETURN, not a flow) - only `deposit_adopted` is a FLOW
 to remove before a drawdown read), tripwires (the kill ledger's lines,
 alert-only: flow-adjusted book and sleeve drawdown, high-water-mark date,
 series start date, days under water, each line's level and whether it has
@@ -1276,13 +1289,24 @@ The procedure, in this order:
 8. **Reinvest dividends and distributions at every monthly review.** SPY
    dividends and BIL distributions land in the account as cash the book
    does not own, and sit UNINVESTED until adopted (roughly $2k a year on
-   a $120k book at 2026 yields). The stage-1 drift pages them ("...it sits
-   uninvested until adopted"); `blend.cash.drift` on `/status` is the
-   amount accumulated since the last baseline. Confirm it on TWS (the
-   activity statement's dividend lines), then `POST /blend/cash/adopt`
-   with that amount rounded down: it is credited 30/70 and invested by
-   the next planning cycle, and the stage-1 clock restarts. Nothing adopts
-   it automatically - only an amount the operator typed is ever adopted.
+   a $120k book at 2026 yields). Take the AMOUNT from the activity
+   statement's dividend / distribution / credit-interest lines since the
+   last adoption - never from the drift figure, which is NET of
+   everything else that moves the account's cash (IBKR interest on cash
+   the book does not own, market-data fees, unreported commissions,
+   deposits, withdrawals); use `blend.cash.drift` on `/status` (or the
+   feed) only as a cross-check. Then `POST /blend/cash/adopt` with
+   `{"usd": <amount>, "kind": "distribution"}`: credited 30/70, invested
+   by the next planning cycle, the stage-1 clock restarts by itself, and
+   - unlike a deposit - it is RETURN: contributed capital does not grow
+   and the tripwire indices credit it, so they stay total-return.
+   Monthly BIL distributions (~$70) are below the drift page's threshold
+   (max($25, 0.1% of contributed capital)), so expect no page; do not
+   rebaseline before adopting (it erases the drift the cross-check
+   reads). While an UNRECONCILED record is parked, the drift may be its
+   proceeds: the page says "resolve first" and the adoption waits.
+   Nothing adopts automatically - only an amount the operator typed is
+   ever adopted.
 
 The original staged rehearsal, kept for the record and for any FUTURE
 strategy's cutover (the per-leg discipline still applies):
@@ -1365,7 +1389,7 @@ a ~45-50% SPY event and would have sold the sleeve into an index trough.
 | REGIME REVIEW | book drawdown ≥ 35% | same; RED page | review the CORE weight decision; explicitly not a sleeve flatten |
 | MODEL-RISK KILL (sleeve) | sleeve drawdown ≥ 45%, transfer-adjusted | `tripwires.sleeve` (transfers and the sleeve share of deposits are flows); RED page. The sleeve series STARTS at the instrument's first boot (no sleeve history was persisted) | `/kill` as coded, then a human review before `/resume` |
 | REVIEW | ≥ 30 months under water | `tripwires.underwater_days` (913 days); WARN page | written review; the sleeve weight is the only lever, via a new study |
-| PROCESS KILL | a POSITION row unreconciled for 3 sessions | `/status` blend.unreconciled; RED page when a record is 3 trading sessions old | `/kill`, reconcile by hand, then `/resume` |
+| PROCESS KILL | a POSITION row unreconciled for 3 sessions | `/status` blend.unreconciled; `tripwires` shows the oldest record's age in session closes; RED page at 3 session closes (ET) after it was parked | `/kill`, reconcile by hand, then `/resume` |
 
 Basis (executor-fidelity replay, committed results JSON): the live 30/70
 rules realized a 28.3% max DD (SPY-led, 2020), bootstrap p50 26.3% / p95
@@ -1399,20 +1423,36 @@ enforces no review. There is no entries-only halt. And `/kill`'s flatten
 path has never run against a real venue (Operating rules): the first live
 `/kill` is its own test.
 
-**The tripwire instrument (built 2026-10-05, alert-only).** Every cycle,
-after the equity snapshot, `update_tripwires` advances two chain-linked
-indices: the BOOK (adopted deposits are flows) and the SLEEVE (rebalance
-transfers via `on_transfer` and the sleeve share of deposits are flows),
-so a deposit is never a new high and a transfer is never a loss. Same-day
-cycles update the day's point in place; a missing SPY/BIL quote skips the
-update (the equity curve's M4 rule). Each line pages ONCE per crossing
-and re-arms after a 5 pp recovery or a new high; the PROCESS line pages
-once per record. NOTHING here halts, sells or blocks: every page ends
+**The tripwire instrument (built 2026-10-05, alert-only; corrected after
+two counter-agent reviews the same night).** Every cycle, after the equity
+snapshot, `update_tripwires` advances two chain-linked indices: the BOOK
+(adopted DEPOSITS are flows) and the SLEEVE (rebalance transfers via
+`on_transfer` and the sleeve share of deposits are flows), so a deposit is
+never a new high and a transfer is never a loss. Adopted DISTRIBUTIONS are
+return, not flows: the indices are total-return once dividends are
+reinvested (runbook step 8). Each UTC day's point is FINALIZED at the day
+roll from its last IN-SESSION mark (else its last mark); the high-water
+mark ratchets on finalized closes only, so a transient intraday or
+after-hours mark (a thin name's ask) can never set a permanent high. A
+drawdown line pages only when the LAST TWO finalized closes are both over
+it ("confirm a borderline reading against the next day"), once per
+crossing, and re-arms after a 5 pp recovery on a close; the underwater
+line pages at 913 days and re-arms at a new high; the PROCESS line counts
+session CLOSES (ET) since a record was parked and pages once per record.
+A flow the mark does not yet contain carries to the next mark (never a
+negative index); a base under $100 holds the index. A missing SPY/BIL
+quote skips the update (the equity curve's M4 rule); a failure is said
+once a day; a malformed persisted series is dropped with a WARN and
+restarts. NOTHING here halts, sells or blocks: every page ends
 "ALERT-ONLY: the code does nothing; ibkr-executor/ledger.csv names the
 action". The book index is bootstrapped from the persisted equity curve
-on first run (deposits on their dates as flows); the sleeve index starts
-at the first snapshot after this build, so a sleeve drawdown already in
-progress at that moment is under-read. The sleeve line pages at 45% as
+on first run (deposits on their dates as flows; the curve's points are
+UTC-day last marks, i.e. after-hours, before this build); the sleeve
+index starts at the first snapshot after this build, so a sleeve
+drawdown already in progress at that moment is under-read. A deposit
+adopted in session is treated as arriving at the day's close (the day's
+return on the invested deposit is credited to the old base - about 1 pp
+of book index per 1% SPY move that day). The sleeve line pages at 45% as
 written; the level itself is Casey's call at the first R1 review
 (2026-11-05) - 45% is a ~13%-per-decade false page on the replay, 52%
 (p95) about 5%. The venue-vs-book position check stays a named manual TWS
@@ -1446,6 +1486,18 @@ any flow-adjusted drawdown read and the stage-1 drift thresholds (tighter,
 the safe direction) - restore it by hand from the ADOPTED page (Operating
 rules, "Resizing the live book", step 7). A pending request is dropped
 (fail-closed; re-issue).
+
+**A fourth hinge (2026-10-05): the tripwire series (`trip_book`,
+`trip_sleeve`, `trip_pending_*`, `trip_alerted`).** A build without them
+loads the file un-halted (measured on `bf89294b`) and its first save drops
+all five keys. Rolling forward, the book series re-bootstraps from the
+equity curve and `capital_events` (correct as long as the
+`deposit_adopted` rows survived - after a rollback to a PRE-stage-2
+build they did not: restore those rows in the state file BEFORE the
+roll-forward boots, or the deposit reads as a gain and masks a drawdown);
+the sleeve series restarts (its high-water mark is lost, a drawdown in
+progress is under-read); `trip_alerted` resets, so a line that had paged
+pages once more.
 
 **The same door now has a second hinge: `stand_in_rows` (MF-C).** A book this
 build wrote after a drifted load carries the STAND-IN register — the record of

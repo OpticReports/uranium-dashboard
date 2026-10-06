@@ -203,9 +203,23 @@ export default function Execution() {
             })}
           </div>
           <div className="text-[11px] text-gray-500 mt-2">
-            book series since {feed.tripwires.book?.since ?? "n/a"} (high-water mark{" "}
-            {feed.tripwires.book?.hwm_date ?? "n/a"}); sleeve series since{" "}
-            {feed.tripwires.sleeve?.since ?? "n/a"} (high-water mark {feed.tripwires.sleeve?.hwm_date ?? "n/a"})
+            {feed.tripwires.error ? (
+              <span className="text-amber-400">tripwire summary unavailable on the executor — see its events</span>
+            ) : (
+              <>
+                Lines read finalized daily closes and page on two consecutive closes. Book: since{" "}
+                {feed.tripwires.book?.since ?? "n/a"}, high-water mark {feed.tripwires.book?.hwm_date ?? "n/a"},
+                last close {feed.tripwires.book?.close_date ?? "n/a"}
+                {feed.tripwires.book?.drawdown_live != null &&
+                  ` (live ${(feed.tripwires.book.drawdown_live * 100).toFixed(1)}%)`}
+                . Sleeve: since {feed.tripwires.sleeve?.since ?? "n/a"}, high-water mark{" "}
+                {feed.tripwires.sleeve?.hwm_date ?? "n/a"}, last close {feed.tripwires.sleeve?.close_date ?? "n/a"}.
+                {lastCycle.date && feed.tripwires.book?.close_date &&
+                  (new Date(lastCycle.date) - new Date(feed.tripwires.book.close_date)) / 86400000 > 4 && (
+                    <span className="text-amber-400"> Last close is more than 4 days old — the series may be stale.</span>
+                  )}
+              </>
+            )}
           </div>
         </div>
       )}

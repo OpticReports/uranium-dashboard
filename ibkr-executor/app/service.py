@@ -1860,7 +1860,8 @@ def blend_cash_adopt(body: dict | None = Body(default=None),
                      x_exec_token: str | None = Header(default=None),
                      token: str | None = Query(default=None)):
     """Stage-2 cash adoption (2026-10-05): journal a request to adopt
-    `{"usd": <amount>}` of the ACCOUNT's cash into the book's ledger. This
+    `{"usd": <amount>, "kind": "deposit" | "distribution"}` (default
+    deposit) of the ACCOUNT's cash into the book's ledger. This
     thread only validates and journals (under BLEND_LOCK, so it never
     interleaves with a cycle); the LOOP thread executes it on a quiet
     cycle after the venue confirms that much unowned, available cash and
@@ -1872,6 +1873,7 @@ def blend_cash_adopt(body: dict | None = Body(default=None),
     if BLEND is None:
         return {"ok": False, "reason": "blend disabled"}
     usd = body.get("usd") if isinstance(body, dict) else None
+    kind = (body.get("kind") or "deposit") if isinstance(body, dict) else "deposit"
     today = datetime.now(timezone.utc).date().isoformat()
     try:
         with BLEND_LOCK:
@@ -1885,7 +1887,7 @@ def blend_cash_adopt(body: dict | None = Body(default=None),
                     detail=f"blend book is halted ({BLEND.state.halted}) or "
                            f"has a flatten queued: nothing journaled; "
                            f"/resume first, then re-issue")
-            req = BLEND.request_capital_adoption(usd, today)
+            req = BLEND.request_capital_adoption(usd, today, kind=kind)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     LOOP_WAKE.set()      # run the cycle now rather than at the next poll
