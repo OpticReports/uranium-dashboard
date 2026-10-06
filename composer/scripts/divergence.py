@@ -18,25 +18,35 @@ adversarial panel the same day)
   reconciled against account cash and fills):
     LEAKED        the position was closed before the credit -> where live held
                   the payer, the cash was observed landing in ACCOUNT
-                  unallocated cash and never reaching the live curve (3/3
-                  observed cases: ZVOL 2026-08-19, BIL 2026-08-03, TMV
-                  2026-09-22); where live did NOT hold it (model-only rows,
+                  unallocated cash and never reaching the live curve (4/4
+                  identified cases: ZVOL 2026-08-19, BIL 2026-08-03, TMV
+                  2026-09-22, SSO 2025-12-24; a 5th, TNA 2026-06-23, was held
+                  live but its credit is masked by ~$50k of account flows on
+                  ex+5..ex+8); where live did NOT hold it (model-only rows,
                   below) there was no income at all and the strip reads in
                   live's favour.
     HELD_THROUGH  the credit is applied INSIDE the symphony on pay date
                   (ex+1..ex+5 bd, fund-specific) and the live curve shows a
                   +income day the model never does (HG 2026-09-04 +30.5 bps).
   The classifier is the MODEL's own continuity against a PER-FUND pay lag L
-  (PAY_LAG below: OBSERVED in the lens-3 cash trail, not issuer
-  documentation — ZVOL 1, PULS 2, BIL 3, ProShares 4, Direxion 5 bd). The
-  credit lands before that day's ~15:50 rebalance (SOXL 09-22: credited
-  ex+5, the model sold on ex+5), so "held at pay-date open" means
+  (PAY_LAG below: OBSERVED on the fund's OWN credit in the lens-3 cash trail
+  — account-cash residual + fills — not issuer documentation and never
+  inherited from an issuer family: ZVOL 1, PULS 2, BIL 3, TQQQ 4, SSO 4,
+  LABD 5, TMV 5 trading days). The credit lands at the open of model day
+  ex+L, before that day's ~15:50 rebalance (HG BIL 09-04: the pay-date 15:53
+  reinvestment buy $227.33 vs the $227.61 credit), so "held at pay-date
+  open" means
       HELD_THROUGH  iff  weights[ex .. ex+L-1] (model days) are all > 0
   (weights[d] = holdings shown at the close of d); otherwise LEAKED.
-  A ticker NOT in PAY_LAG (TLT, any new holding) is never given a guessed
-  lag: weights[ex] == 0 -> LEAKED for any lag; held ex..ex+(MAX_PAY_LAG-1)
-  -> HELD_THROUGH for any lag up to the longest observed; anything between
-  (1..MAX_PAY_LAG-1 held days from the ex-date) -> AMBIGUOUS. AMBIGUOUS rows
+  A ticker NOT in PAY_LAG (SOXL and TNA — held live into an ex-date but the
+  credit is not identified; QLD/UDOW/TECL — never held live into an
+  ex-date; TLT, SQQQ, any new holding) is never given a guessed lag: weights[ex] == 0 -> LEAKED
+  for any lag; held ex..ex+(MAX_PAY_LAG-1) -> HELD_THROUGH for any lag up to
+  the longest observed; anything between (1..MAX_PAY_LAG-1 held days from
+  the ex-date) -> AMBIGUOUS. Removing those five entries (2026-10-05, panel)
+  flipped no label, no AMBIGUOUS status and no primary key on the frozen
+  panel (KMLM SOXL 09-22 held ex..ex+4; HG TNA sold at both ex-date closes;
+  QLD/UDOW/TECL ex-dates never held into). AMBIGUOUS rows
   take the STRICT treatment in the primary gap (income kept in the model, so
   the gap reads LOWER — the safe direction for a pass/fail gate); the row
   carries both alternatives' bps, the result lists them under
@@ -56,11 +66,17 @@ adversarial panel the same day)
   stripped) and four pre-edit HG rows (TNA 12-23, BIL 02-02/03-02/04-01;
   live held UDOW/XLV/ANGL/UGE): the first three are stripped (62.3 bps,
   ~+0.8 %/yr on HG's full window, in live's favour); BIL 04-01 is now kept.
-  Rows whose ex-date falls within the payer's lag of the window end
-  (fewer than L model days available, all held) are classified on a
-  clipped span (held_days_checked < held_days_required) and flagged
-  credit_pending; show() marks them: the label can flip and the primary gap
-  carries -w*y until the pay date lands inside the window.
+  CREDIT PENDING: the credit lands on model day ex+L, so a row with no exit
+  inside its checked span is flagged credit_pending while the window ends
+  before ex+L — fewer than L+1 model days from ex inclusive in the window
+  (days_in_window_from_ex < L+1; unknown lag: L := MAX_PAY_LAG). The primary
+  gap then carries live's -w*y dip with no recredit (HARV PULS 08-31, L=2:
+  a window ending 09-01 reads -3.66 %/yr, -0.61 %/yr once 09-02 is in), and
+  a span clipped below L (held_days_checked < held_days_required) also has a
+  provisional label. show() marks every pending row. A row that already
+  shows an exit inside the span is never pending (LEAKED: the income left
+  the symphony; AMBIGUOUS: its held-through reading puts the credit on or
+  before the exit day, inside the window).
 
   PRIMARY GAP (cumulative, mean/annualized, worst/best day — what Op2/Op3 read)
       live price path  vs  model with the LEAKED terms removed.
@@ -91,10 +107,10 @@ NOT MODELED (stated so the gap is read correctly)
     After the fix HARV 2026-08-19 still shows ~-61 bps = ZVOL sold at 7.4502
     vs the 7.55 close; that is the genuine shortfall the gates measure.
   - pay dates themselves: the recredit day is not placed; its +w*y stays in
-    the daily series. Pay lags are OBSERVED (lens 3; 1-3 events per fund,
-    and SSO/QLD/UDOW/TECL/TNA inherit their issuer family's lag with no own
-    event), not sourced from issuer calendars; a lag that moves (holiday,
-    issuer change) or exceeds MAX_PAY_LAG is not modeled.
+    the daily series. Pay lags are OBSERVED on each fund's own credit (lens
+    3; 1-3 events per fund), not sourced from issuer calendars; a lag that
+    moves (holiday, issuer change) or exceeds MAX_PAY_LAG is not modeled,
+    and every unlisted payer takes the unknown-lag path.
   - live share counts: the ledger's expected_income_usd is MODEL entitlement
     (w(t-1) x live $ value x yield) — live's own only where live matched the
     model that morning.
@@ -106,6 +122,41 @@ NOT MODELED (stated so the gap is read correctly)
     remain in every statistic.
   - strategy edits: the backtest is the CURRENT version; HG/SLEEVE were edited
     live on 2026-07-30/31, so their full-window numbers mix two strategies.
+    --start restricts the comparison (POLICY Op2 reads the sleeve with
+    --start 2026-08-01).
+  - pre-window credits (--start only): a held-through row whose ex-date
+    return is at or before the base close has its term outside the window,
+    but its pay-date recredit (+w*y on live) can land inside it with no model
+    counterpart, so the gap reads HIGH. Not modeled; flagged instead
+    (pre_window_credit_rows, the bound pre_window_credit_bias_annualized_max
+    and annualized_gap_pre_window_credits_offset; show() prints a !! line).
+    HARV/KMLM from 2026-08-01: PULS 07-31 (credit 08-04), +2.0 / +0.5 %/yr.
+    SLEEVE (Op2) has none.
+
+--start YYYY-MM-DD (every target; default = full live window, bit-for-bit):
+  live and the backtest are still fetched over the FULL live window, so the
+  model path, w(t-1) and hold continuity across the start are exactly what
+  the full-window read sees (a backtest refetched from start would be a
+  different path: fresh buy-in from cash, no pre-start holding). The window
+  BASE is the last common close BEFORE start, so the first counted return
+  is the one dated on the first trading day >= start. Op2 (--start
+  2026-08-01): base 07-31, first return 08-03. That return is earned on the
+  07-31 close holdings, which are already the edited strategy (fills: BOXX
+  bought 07-31 15:53 to 0.75 of the sleeve = the model's BOXX 0.75 / LABD
+  0.25; LABD -> BOXX on 08-03 15:53 = the model's move), so it belongs in
+  the read; its -9.3 bps is mostly LABD fill timing (~-12 bps: sold 9.245
+  at 15:53 vs the 9.29 close, w 0.25; ~+2.7 bps unexplained) — the shortfall
+  Op2 measures.
+  Every statistic (gap, corr, beta, vol-ratio, live maxDD, cumulative
+  returns), the ledger and ex_dates are computed from the base close on.
+  window = [base, end]; window_first_return_date; window_start_requested
+  echoes the flag; n_trading_days = trading days on/after start (Op2's
+  ">= 120 trading days": 08-03 = day 1, 2027-01-22 = day 120) = n_days.
+  Without a common date before start the first date >= start is the base,
+  as in the full-window read (n_days = n_trading_days - 1). distribution_data
+  completeness is still judged over every ticker the model held in the full
+  fetched window (conservative). A non-ISO start raises (ValueError in
+  analyze_series, an error exit in the CLI).
 
 HONEST FAILURE: if Yahoo cannot be fetched for a ticker the model held, or a
 model weight is keyed on a date that is not on the backtest calendar (the term
@@ -116,7 +167,9 @@ unavailable". Never a silent fall-back to the old number.
 
 Read-only. Usage:
   divergence.py <symphony-id> [--account UUID] [--name divergence-<x>]
-  divergence.py --all          # every invested symphony
+                [--start YYYY-MM-DD]
+  divergence.py --all [--start YYYY-MM-DD]   # every invested symphony
+  divergence.py nNdBk7hc5NiBzeRvbI5T --start 2026-08-01   # POLICY Op2
 """
 
 import argparse
@@ -128,25 +181,44 @@ import urllib.request
 import composerlib as cl
 
 CASH_TICKER = "$USD"           # Composer's cash pseudo-ticker (never a payer)
-# Pay lag (business days, ex-date -> pay-date credit) per fund, as OBSERVED in
-# the add.-38 lens-3 cash trail (account-cash residual + fills reconciled,
-# 2026-07..10). NOT issuer documentation. {ticker: (lag_bd, n_events_observed)}
-# where n counts this ticker's OWN observed credits; n = 0 means the lag is
-# inherited from the issuer family's observed sibling(s), not seen on the
-# ticker itself. A ticker absent here is never guessed (see AMBIGUOUS).
+# Pay lag (TRADING days, ex-date -> pay-date credit) per fund, as OBSERVED on
+# that ticker's OWN credit in the add.-38 lens-3 cash trail (account-cash
+# residual = account value minus the sum of symphonies, reconciled with the
+# fills; 2025-12..2026-10). NOT issuer documentation, and NO family
+# inheritance: {ticker: (lag_td, n_own_events_observed)}, n >= 1 always (a
+# merge-blocking test pins this and finds each event below in the fixtures).
+# A ticker absent here is never guessed (unknown-lag path, see AMBIGUOUS).
 PAY_LAG = {
-    "ZVOL": (1, 1),  # ex 08-19 -> account cash +1,969.44 on 08-20
-    "PULS": (2, 3),  # 07-31 -> 08-04 in-symphony; 08-31 -> 09-02; 09-30 -> 10-02
-    "BIL":  (3, 2),  # 08-03 -> 08-06 account cash +230.77; 09-01 -> 09-04 in-symphony +30.5 bps
-    # ProShares: TQQQ 09-23 -> 09-29 (one event); SSO/QLD/UDOW inherit it
-    "TQQQ": (4, 1), "SSO": (4, 0), "QLD": (4, 0), "UDOW": (4, 0),
-    # Direxion ex+5: LABD 09-22 -> 09-29 in-symphony; TMV 09-22 -> 09-29 account
-    # cash +97.10; SOXL 09-22 credited ex+5 BEFORE that day's ~15:50 rebalance
-    # (the model sold on ex+5 and the income was still in-symphony). TECL/TNA
-    # inherit it.
-    "LABD": (5, 1), "TMV": (5, 1), "SOXL": (5, 1), "TECL": (5, 0), "TNA": (5, 0),
-    # TLT (iShares): lag NOT observed (its only panel row was model-only) ->
-    # deliberately absent; its rows classify LEAKED / HELD_THROUGH / AMBIGUOUS.
+    "ZVOL": (1, 1),  # ex 2026-08-19 -> account cash +1,969.44 on 08-20 (ex+1)
+    "PULS": (2, 3),  # 3 live-held events; IDENTIFIED (gate standard: the
+                     # unique +term day within 3 bps) only 08-31 -> 09-02
+                     # in-symphony on HARV (+34.8 vs 35.6 bps) and KMLM
+                     # (+8.6 vs 8.9), ex+2. 07-31 is consistent with ex+2 but
+                     # not identified (HARV +42.5 vs 34.4); 09-30 is noisy
+                     # (HARV ex+1 +60.1; KMLM ex+2 the wrong sign)
+    "BIL":  (3, 2),  # 08-03 -> 08-06 account cash +230.77; 09-01 -> 09-04
+                     # in-symphony +30.5 bps on HG (fills: pay-date 15:53
+                     # reinvestment buy $227.33 vs credit $227.61)
+    "TQQQ": (4, 1),  # 09-23 -> 09-29 in-symphony recredit on HG (ex+4)
+    "SSO":  (4, 1),  # 2025-12-24 -> 2025-12-31 account cash +2.00: live held
+                     # 17.393 sh at the 12-24 open (bought 12-23 15:53, sold
+                     # 12-24 12:52), 17.393 x $0.116 = $2.02; ex+4 trading days
+                     # across Christmas (12-26, 12-29, 12-30, 12-31)
+    "LABD": (5, 1),  # 09-22 -> 09-29 in-symphony +$184.18 vs $184.87 (SLEEVE)
+    "TMV":  (5, 1),  # 09-22 -> 09-29 account cash +97.10 vs $96.97
+    # NOT here (unknown-lag path):
+    #  SOXL — 09-22 held live, credit not identified: its 2.6 bps term is
+    #    inside the 3-bps match tolerance of quiet days (KMLM ex+2 and ex+3
+    #    both 'match'; ex+4 misses by 0.03 bps), and the candidate days ex+1
+    #    (+6.8 bps) and ex+5 = 09-29 (+7.5 bps, unexplained) are noisy. The
+    #    model's SOXL -> TECL swap was at the 09-29 CLOSE, so it earns the
+    #    09-30 return, not 09-29's.
+    #  TNA — 2026-06-23 held live (bought 3,068.76 sh 06-18, sold 06-23
+    #    15:52; entitlement ~$270), credit not identified: ex+5..ex+8 carry
+    #    ~$50k of account flows (largest residual jump +51,696.77 on ex+8).
+    #    Start here if TNA's lag is ever added.
+    #  QLD, UDOW, TECL — never held live into an ex-date (an issuer-family
+    #    lag is a guess). TLT, SQQQ and any new holding — never observed.
 }
 MAX_PAY_LAG = max(lag for lag, _ in PAY_LAG.values())   # 5: longest observed
 _YAHOO_CACHE = {}            # ticker -> chart dict; --all must not refetch
@@ -158,7 +230,13 @@ _YAHOO_CHART = ("https://query1.finance.yahoo.com/v8/finance/chart/{t}"
 # I/O: Composer live + backtest + Yahoo, then hand off to the pure math
 # --------------------------------------------------------------------------
 
-def analyze(acct, sym_id, sym_name, detail=False):
+def analyze(acct, sym_id, sym_name, detail=False, start=None):
+    """start ('YYYY-MM-DD' or None): restrict the COMPARISON window to the
+    trading days >= start, read from the last close before start (see
+    analyze_series). Live and the backtest are still fetched over the full
+    live window and sliced afterwards — never a backtest refetched
+    from start, which would be a different model path (fresh buy-in from
+    cash, no pre-start holding for w(t-1) on the first window day)."""
     pos = cl.get(f"/portfolio/accounts/{acct}/symphonies/{sym_id}")
     dates = [cl.epoch_ms_to_date(ms).isoformat() for ms in pos["epoch_ms"]]
     live_vals = pos.get("deposit_adjusted_series")
@@ -189,7 +267,7 @@ def analyze(acct, sym_id, sym_name, detail=False):
 
     return analyze_series(dates, live_vals, model_dates, vals, weights, dists,
                           live_raw=live_raw, symphony=sym_id, name=sym_name,
-                          detail=detail)
+                          detail=detail, start=start)
 
 
 def weights_to_iso(tdvm_weights):
@@ -305,31 +383,48 @@ def classify_hold(ticker, wt, fwd_dates, pay_lag=None):
     """HELD_THROUGH / LEAKED / AMBIGUOUS for one ledger row.
 
     wt        : {ISO date: weight} for the payer (holdings at the close of d)
-    fwd_dates : model days from the ex-date's model day onward (clipped at
-                the window end by the caller's calendar)
-    pay_lag   : {ticker: (lag_bd, n_events)}; None -> PAY_LAG
+    fwd_dates : model days from the ex-date's model day onward, clipped at
+                the window end (the caller passes up to MAX_PAY_LAG + 1)
+    pay_lag   : {ticker: (lag_td, n_events)}; None -> PAY_LAG
 
     Returns (treatment, held_days_checked, held_days_required, credit_pending,
-    held_run) where held_run = consecutive held model days from the ex-date
-    within the checked span. Known lag L: HELD_THROUGH iff weights[ex..ex+L-1]
-    all > 0. Unknown lag: LEAKED if weights[ex] == 0, HELD_THROUGH if held
-    ex..ex+MAX_PAY_LAG-1, else AMBIGUOUS (never a guessed lag)."""
+    held_run, days_in_window_from_ex) where held_run = consecutive held model
+    days from the ex-date within the checked span and days_in_window_from_ex
+    = model days from ex inclusive inside the window (capped at L + 1).
+
+    Label. Known lag L: HELD_THROUGH iff weights[ex..ex+L-1] all > 0 (the
+    credit lands at the open of model day ex+L, before that day's ~15:50
+    rebalance). Unknown lag (L := MAX_PAY_LAG for the checks): LEAKED if
+    weights[ex] == 0, HELD_THROUGH if held ex..ex+MAX_PAY_LAG-1, else
+    AMBIGUOUS (never a guessed lag). A span clipped by the window end with no
+    exit seen is provisionally HELD_THROUGH (known lag) / AMBIGUOUS (unknown).
+
+    credit_pending. The CREDIT lands on model day ex+L, so a row with no
+    exit inside the checked span is pending while the window ends before
+    ex+L, i.e. while fewer than L + 1 model days from ex inclusive are in the
+    window; the primary gap still carries live's -w*y dip with no recredit.
+    A row that shows an exit inside the checked span is never pending: a
+    LEAKED row's income left the symphony, and an AMBIGUOUS row's
+    held-through reading (true lag <= the observed hold) puts the credit on
+    or before the exit day, which is inside the window."""
     table = PAY_LAG if pay_lag is None else pay_lag
     known = ticker in table
     need = table[ticker][0] if known else MAX_PAY_LAG
     span = fwd_dates[:need]
     held = [(wt.get(d) or 0.0) > 1e-9 for d in span]
     run = next((k for k, h in enumerate(held) if not h), len(held))
-    pending = len(span) < need and run == len(span)       # clipped, not yet exited
-    if run == len(span) and not pending:
+    exited = run < len(span)
+    if not exited and len(span) == need:
         treatment = "HELD_THROUGH"
     elif run == 0:
         treatment = "LEAKED"                               # exited at the ex-date close
     elif known:
-        treatment = "HELD_THROUGH" if pending else "LEAKED"
+        treatment = "LEAKED" if exited else "HELD_THROUGH"  # clipped: provisional
     else:
         treatment = "AMBIGUOUS"                            # label depends on the unknown lag
-    return treatment, len(span), need, pending, run
+    avail = min(len(fwd_dates), need + 1)
+    pending = not exited and avail < need + 1              # credit day ex+L not in window
+    return treatment, len(span), need, pending, run, avail
 
 
 def price_only_model_returns(model_dates, model_vals, weights, dists, live_raw=None,
@@ -347,9 +442,10 @@ def price_only_model_returns(model_dates, model_vals, weights, dists, live_raw=N
     date t's return, so the payer weight on ex-date t is weights[t-1]
     (lag test, add. 38 lens 2: w(t-1) fits to 0.01-0.14 bps, w(t) to 34-372).
     Classification: classify_hold() against the per-fund pay lag (pay_lag,
-    default PAY_LAG; clipped at the window end — held_days_checked of
-    held_days_required, credit_pending when the clip decides it). AMBIGUOUS
-    rows are kept in the model (strict) and carry both alternatives' bps.
+    default PAY_LAG; the window end is the model calendar's last day —
+    held_days_checked of held_days_required, credit_pending while the credit
+    day ex+L is not yet in the window). AMBIGUOUS rows are kept in the model
+    (strict) and carry both alternatives' bps.
     live_raw ({date: live $ value}) only feeds expected_income_usd."""
     table = PAY_LAG if pay_lag is None else pay_lag
     n = len(model_dates)
@@ -379,8 +475,8 @@ def price_only_model_returns(model_dates, model_vals, weights, dists, live_raw=N
             term = w_prev * y * (1.0 + row["adj_ret"])
             terms[i] = terms.get(i, 0.0) + term
             prev_val = (live_raw or {}).get(model_dates[i - 1])
-            treatment, checked, need, pending, run = classify_hold(
-                t, wt, model_dates[i:i + MAX_PAY_LAG], table)
+            treatment, checked, need, pending, run, avail = classify_hold(
+                t, wt, model_dates[i:i + MAX_PAY_LAG + 1], table)
             lag = table.get(t)
             out = {
                 "date": ex, "applied_on": model_dates[i], "ticker": t,
@@ -394,6 +490,7 @@ def price_only_model_returns(model_dates, model_vals, weights, dists, live_raw=N
                 "held_days_from_ex": run,
                 "held_days_checked": checked,
                 "held_days_required": need,
+                "days_in_window_from_ex": avail,
                 "credit_pending": pending,
                 # removed from the PRIMARY model: leaked rows only (AMBIGUOUS
                 # is kept — the strict treatment)
@@ -427,6 +524,35 @@ def leak_adjusted_returns(ret_tr, model_dates, ledger, strip=("LEAKED",)):
     out = list(ret_tr)
     for i, term in terms.items():
         out[i] = ret_tr[i] - term
+    return out
+
+
+def pre_window_credit_rows(ledger, model_dates, common, pay_lag=None):
+    """Ledger rows (full-window ledger) whose ex-date return is NOT in the
+    window (applied_on <= the base close common[0]) but whose pay-date
+    credit can land inside it (common[0] < day <= common[-1]): known lag L ->
+    model day ex+L; unknown lag -> any of ex+1..ex+MAX_PAY_LAG (never a
+    guessed day). LEAKED rows are excluded: their income left the symphony.
+    The live curve shows the +w*y recredit in the window; the model side has
+    no counterpart, so the gap reads high by up to term_bps."""
+    table = PAY_LAG if pay_lag is None else pay_lag
+    idx = {d: i for i, d in enumerate(model_dates)}
+    out = []
+    for r in ledger:
+        if r["treatment"] == "LEAKED" or r["applied_on"] > common[0]:
+            continue
+        i = idx[r["applied_on"]]
+        lag = table.get(r["ticker"])
+        steps = [lag[0]] if lag else list(range(1, MAX_PAY_LAG + 1))
+        days = [model_dates[i + k] for k in steps if i + k < len(model_dates)
+                and common[0] < model_dates[i + k] <= common[-1]]
+        if days:
+            out.append({"date": r["date"], "ticker": r["ticker"],
+                        "treatment": r["treatment"],
+                        "term_bps": round(r["term_bps"], 6),
+                        "pay_lag_bd": lag[0] if lag else None,
+                        "credit_day": days[0] if lag else None,
+                        "credit_days_possible": days})
     return out
 
 
@@ -483,7 +609,8 @@ def _pair_stats(lr, mr, lr_mom=None, mr_mom=None):
 
 
 def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dists,
-                   live_raw=None, symphony="", name="", detail=False, pay_lag=None):
+                   live_raw=None, symphony="", name="", detail=False, pay_lag=None,
+                   start=None):
     """Full divergence result from in-memory series (no I/O).
 
     live_dates/live_vals : live deposit-adjusted curve (ISO dates)
@@ -496,16 +623,41 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
     live_raw: optional live raw $ series aligned with live_dates (for the
               ledger's expected_income_usd)
     detail  : add a per-day table (tests / chart work)
-    pay_lag : {ticker: (lag_bd, n_events)} override; None -> PAY_LAG."""
+    pay_lag : {ticker: (lag_td, n_events)} override; None -> PAY_LAG.
+    start   : 'YYYY-MM-DD' or None (anything else raises ValueError). The
+              inputs stay the FULL live window (model path, w(t-1) and hold
+              continuity exactly as the full-window read sees them). The
+              window's BASE is the last common close BEFORE start, so the
+              first counted daily return is the one dated on the first
+              trading day >= start (with --start 2026-08-01: base 07-31, first
+              return 08-03 — the edit-day close holdings are already the new
+              strategy). Every statistic, the ledger and ex_dates are computed
+              from the base close on. No common date before start -> the
+              first date >= start is the base (= the full-window rule).
+              None = the full window, bit-for-bit."""
+    if start is not None:
+        try:
+            ok = _dt.date.fromisoformat(start).isoformat() == start
+        except (TypeError, ValueError):
+            ok = False
+        if not ok:
+            raise ValueError(f"start {start!r} is not YYYY-MM-DD")
     live = dict(zip(live_dates, live_vals))
     if len(live) < 5:
         return {"symphony": symphony, "name": name,
                 "error": f"only {len(live)} live days — too new to compare"}
     model = dict(zip(model_dates, model_vals))
     common = sorted(set(live) & set(model))
+    in_window = len(common)                  # trading days on/after start
+    if start is not None:
+        pre = [d for d in common if d < start]
+        common = pre[-1:] + [d for d in common if d >= start]   # base + window
+        in_window = len(common) - len(pre[-1:])
     if len(common) < 5:
         return {"symphony": symphony, "name": name,
-                "error": f"only {len(common)} overlapping days"}
+                "error": (f"only {len(common)} overlapping days"
+                          + (f" from the last close before {start}"
+                             if start is not None else ""))}
 
     raw_by_date = dict(zip(live_dates, live_raw)) if live_raw else None
     held = _held_tickers(weights)
@@ -514,6 +666,7 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
     ret_tr, ret_px, ledger = price_only_model_returns(
         model_dates, model_vals, weights, dists or {}, live_raw=raw_by_date,
         pay_lag=pay_lag)
+    pre_credit = pre_window_credit_rows(ledger, model_dates, common, pay_lag)
     ledger = [r for r in ledger if common[0] < r["applied_on"] <= common[-1]]
     ret_adj = leak_adjusted_returns(ret_tr, model_dates, ledger)
     ret_len = leak_adjusted_returns(ret_tr, model_dates, ledger,
@@ -556,7 +709,16 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
     n_days = len(lr)
     r = {
         "symphony": symphony, "name": name,
-        "window": [common[0], common[-1]], "n_days": n_days,
+        # window = [base close, last close]; every return and cumulative is
+        # read from the base. requested --start (None = full live window);
+        # n_trading_days = live trading days on/after start, what Op2's
+        # ">= 120 trading days" reads (start=None: every live day, the first
+        # being the base, so n_days = n_trading_days - 1; with a pre-start
+        # base, n_days = n_trading_days)
+        "window": [common[0], common[-1]],
+        "window_start_requested": start,
+        "window_first_return_date": common[1],
+        "n_trading_days": in_window, "n_days": n_days,
         "measurement_basis": (
             "gap: live deposit-adjusted PRICE path vs model with LEAKED "
             "distribution terms removed (w(t-1) x D/P_prev x (1+r_adj) on the "
@@ -597,6 +759,20 @@ def analyze_series(live_dates, live_vals, model_dates, model_vals, weights, dist
         "cumulative_gap_ambiguous_lenient": round(live_cum - model_cum_len, 4),
         "annualized_gap_ambiguous_lenient": lenient["annualized_gap"],
         "mean_daily_gap_bps_ambiguous_lenient": lenient["mean_daily_gap_bps"],
+        # ---- PRE-WINDOW CREDITS (--start only): a held-through / ambiguous
+        #      row whose ex-date return is at or before the base close (term
+        #      not in the window) but whose pay-date credit can land inside
+        #      it. Live's +w*y recredit is then in the window with nothing
+        #      on the model side: the primary gap is biased UP (live's
+        #      favour) by up to the listed bps. Not modeled; the offset key
+        #      is the gap with that bound removed (strict). [] without
+        #      --start on these inputs. ----
+        "pre_window_credit_rows": pre_credit,
+        "pre_window_credit_bias_annualized_max": round(
+            sum(x["term_bps"] for x in pre_credit) / 1e4 / n_days * 252, 4),
+        "annualized_gap_pre_window_credits_offset": round(
+            prim["annualized_gap"]
+            - sum(x["term_bps"] for x in pre_credit) / 1e4 / n_days * 252, 4),
         # ---- SECONDARY (add. 36/37 basis: live price path vs model total return) ----
         "model_total_return_cumulative": round(model_cum_tr, 4),
         "cumulative_gap_total_return_basis": round(live_cum - model_cum_tr, 4),
@@ -680,7 +856,16 @@ def show(r):
     if "error" in r:
         print(f"      {r['error']}")
         return
-    print(f"      window {r['window'][0]} .. {r['window'][1]} ({r['n_days']} days)")
+    if r.get("window_start_requested"):
+        print(f"      window {r['window'][0]} (base close) .. {r['window'][1]}: "
+              f"{r['n_trading_days']} trading days on/after "
+              f"{r['window_start_requested']}, first counted return "
+              f"{r['window_first_return_date']}, {r['n_days']} daily returns  "
+              f"[--start {r['window_start_requested']}: base = last close before "
+              f"start; model path and holds read over the full live window]")
+    else:
+        print(f"      window {r['window'][0]} .. {r['window'][1]} "
+              f"({r['n_trading_days']} trading days, {r['n_days']} daily returns)")
     print(f"      basis: live PRICE path vs model with LEAKED distributions removed "
           f"(held-through income re-enters live; corr/beta/vol on the "
           f"total-return pair) — add. 38, panel-revised")
@@ -733,8 +918,11 @@ def show(r):
                    else "L=?")
             prov = ""
             if x.get("credit_pending"):
-                prov = (f"  [credit pending: {x['held_days_checked']}/"
-                        f"{x['held_days_required']} days in window; label provisional]")
+                prov = (f"  [credit pending: window ends ex+"
+                        f"{x['days_in_window_from_ex'] - 1}, credit lands ex+"
+                        f"{x['held_days_required']}"
+                        + ("" if x.get("pay_lag_bd") is not None else " at the latest")
+                        + "; gap carries -w*y, label provisional]")
                 pending += 1
             print(f"        {x['date']} {x['ticker']:5s} ${x['amount']:.4f}/sh  "
                   f"yield {x['yield']*1e4:6.1f} bps  w(t-1) {x['weight']:.3f}  "
@@ -742,16 +930,20 @@ def show(r):
                   f"{inc}{prov}")
         print(f"      note: LEAKED = model exited before the payer's pay-date credit. "
               f"Where live held the payer the cash was observed landing in "
-              f"ACCOUNT unallocated cash (3/3 cases, lens 3); where live did not "
+              f"ACCOUNT unallocated cash (4/4 identified cases; TNA 06-23 masked "
+              f"by account flows); where live did not "
               f"hold it (model-only rows: KMLM TLT 09-01, pre-edit HG TNA 12-23 / "
               f"BIL 02-02, 03-02) the strip reads in live's favour. "
-              f"Classified from MODEL continuity against the per-fund OBSERVED pay "
-              f"lag L (PAY_LAG: ZVOL 1, PULS 2, BIL 3, ProShares 4, Direxion 5 bd): "
-              f"HELD_THROUGH iff held ex..ex+L-1; a payer with no observed lag is "
-              f"AMBIGUOUS when the label depends on it.")
+              f"Classified from MODEL continuity against the pay lag L OBSERVED "
+              f"on the fund's own credit (PAY_LAG: ZVOL 1, PULS 2, BIL 3, TQQQ 4, "
+              f"SSO 4, LABD 5, TMV 5 trading days): HELD_THROUGH iff held "
+              f"ex..ex+L-1. Any other payer (no observed lag, never guessed): "
+              f"LEAKED if sold at the ex-date close, HELD_THROUGH if held "
+              f"ex..ex+{MAX_PAY_LAG - 1}, else AMBIGUOUS (kept = strict).")
         for a in r.get("ambiguous_rows") or []:
             print(f"      !! AMBIGUOUS: {a['ticker']} {a['date']} — pay lag for "
-                  f"{a['ticker']} is MISSING (not in PAY_LAG; never observed) and the "
+                  f"{a['ticker']} is MISSING (not in PAY_LAG; no identified own "
+                  f"credit) and the "
                   f"model held it {a['held_days_from_ex']} day(s) from the ex-date, so "
                   f"the label depends on it. Primary keeps its {a['term_bps']:.1f} bps "
                   f"(strict: ann {r['annualized_gap']:+.1%}/yr, cum "
@@ -762,11 +954,11 @@ def show(r):
                   f"ex+1..ex+8) before acting on a gate, then add the observed lag "
                   f"to PAY_LAG.")
         if pending:
-            print(f"      !! {pending} ledger row(s) classified on a clipped window span "
-                  f"(ex-date within the payer's pay lag of the window end): the "
-                  f"primary gap carries -w*y until the pay-date credit lands; re-read "
-                  f"once held_days_checked reaches held_days_required before acting "
-                  f"on a gate.")
+            print(f"      !! {pending} ledger row(s) credit pending (the window ends "
+                  f"before model day ex+L, the pay-date credit): the primary gap "
+                  f"carries live's -w*y dip with no recredit yet and the label is "
+                  f"provisional; re-read once ex+L is inside the window "
+                  f"(days_in_window_from_ex = L+1) before acting on a gate.")
     skipped = [f"{t} {d}" for d, t, _ in r.get("ex_dates") or []
                if d > r["window"][0]
                and not any(x["date"] == d and x["ticker"] == t
@@ -774,6 +966,23 @@ def show(r):
     if skipped:
         print(f"      ex-dates the model did NOT hold into (nothing to remove): "
               + ", ".join(skipped))
+    on_base = [f"{t} {d}" for d, t, _ in r.get("ex_dates") or [] if d <= r["window"][0]]
+    if on_base:
+        print(f"      ex-dates on the base close (their return is not in the window): "
+              + ", ".join(on_base))
+    pre = r.get("pre_window_credit_rows") or []
+    if pre:
+        rows = "; ".join(
+            f"{x['ticker']} {x['date']} {x['treatment']} {x['term_bps']:.1f} bps, credit "
+            + (f"{x['credit_day']} (L={x['pay_lag_bd']})" if x["pay_lag_bd"] is not None
+               else f"one of {', '.join(x['credit_days_possible'])} (L unknown)")
+            for x in pre)
+        print(f"      !! PRE-WINDOW CREDIT: {rows} — the ex-date return is before the "
+              f"window but the pay-date credit lands inside it; live's +w*y recredit "
+              f"has no model counterpart, so the gap reads HIGH by up to "
+              f"{r['pre_window_credit_bias_annualized_max']:+.1%}/yr (offset: ann "
+              f"{r['annualized_gap_pre_window_credits_offset']:+.1%}/yr). Not modeled; "
+              f"read a gate on the offset number or move --start.")
 
 
 def main():
@@ -783,9 +992,19 @@ def main():
     p.add_argument("--all", action="store_true")
     p.add_argument("--account")
     p.add_argument("--name", default="divergence")
+    p.add_argument("--start", metavar="YYYY-MM-DD", default=None,
+                   help="restrict the comparison window to trading days >= start, "
+                        "read from the last close before start (every target); "
+                        "live and backtest are still fetched over the full live "
+                        "window")
     a = p.parse_args()
     if not a.all and not a.symphony_id:
         raise SystemExit("error: pass a symphony id or --all")
+    if a.start is not None:
+        try:
+            a.start = _dt.date.fromisoformat(a.start).isoformat()
+        except ValueError:
+            raise SystemExit(f"error: --start {a.start!r} is not YYYY-MM-DD")
 
     acct = a.account or cl.default_account()
     meta = {s["id"]: s["name"] for s in
@@ -793,11 +1012,12 @@ def main():
     targets = list(meta) if a.all else [a.symphony_id]
 
     results = []
-    print("live vs backtest divergence (deposit-adjusted; distribution-aware, add. 38)\n")
+    print("live vs backtest divergence (deposit-adjusted; distribution-aware, add. 38)"
+          + (f" — comparison window from {a.start}" if a.start else "") + "\n")
     for sid in targets:
         if sid not in meta:
             raise SystemExit(f"error: {sid} is not an invested symphony in this account")
-        r = analyze(acct, sid, meta[sid])
+        r = analyze(acct, sid, meta[sid], start=a.start)
         results.append(r)
         show(r)
 

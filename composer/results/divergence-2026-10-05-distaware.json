@@ -7,6 +7,9 @@
         "2025-12-05",
         "2026-10-02"
       ],
+      "window_start_requested": null,
+      "window_first_return_date": "2025-12-08",
+      "n_trading_days": 207,
       "n_days": 206,
       "measurement_basis": "gap: live deposit-adjusted PRICE path vs model with LEAKED distribution terms removed (w(t-1) x D/P_prev x (1+r_adj) on the ex-date; held-through rows stay in the model because their income re-enters live on pay date); corr/beta/vol: live + every term vs model total return; add. 38 (panel-revised)",
       "live_cumulative_return": 0.8923,
@@ -29,6 +32,9 @@
       "cumulative_gap_ambiguous_lenient": 0.1258,
       "annualized_gap_ambiguous_lenient": 0.0871,
       "mean_daily_gap_bps_ambiguous_lenient": 3.46,
+      "pre_window_credit_rows": [],
+      "pre_window_credit_bias_annualized_max": 0.0,
+      "annualized_gap_pre_window_credits_offset": 0.0871,
       "model_total_return_cumulative": 0.7886,
       "cumulative_gap_total_return_basis": 0.1037,
       "mean_daily_gap_bps_total_return_basis": 2.86,
@@ -52,11 +58,12 @@
           "weight_date": "2025-12-22",
           "term_bps": 5.895274,
           "treatment": "LEAKED",
-          "pay_lag_bd": 5,
+          "pay_lag_bd": null,
           "pay_lag_events_observed": 0,
           "held_days_from_ex": 0,
           "held_days_checked": 5,
           "held_days_required": 5,
+          "days_in_window_from_ex": 6,
           "credit_pending": false,
           "subtracted_bps": 5.895274,
           "expected_income_usd": 0.615457
@@ -74,10 +81,11 @@
           "term_bps": 19.752755,
           "treatment": "LEAKED",
           "pay_lag_bd": 4,
-          "pay_lag_events_observed": 0,
+          "pay_lag_events_observed": 1,
           "held_days_from_ex": 0,
           "held_days_checked": 4,
           "held_days_required": 4,
+          "days_in_window_from_ex": 5,
           "credit_pending": false,
           "subtracted_bps": 19.752755,
           "expected_income_usd": 2.019612
@@ -99,6 +107,7 @@
           "held_days_from_ex": 0,
           "held_days_checked": 3,
           "held_days_required": 3,
+          "days_in_window_from_ex": 4,
           "credit_pending": false,
           "subtracted_bps": 29.900923,
           "expected_income_usd": 3.336133
@@ -120,6 +129,7 @@
           "held_days_from_ex": 2,
           "held_days_checked": 3,
           "held_days_required": 3,
+          "days_in_window_from_ex": 4,
           "credit_pending": false,
           "subtracted_bps": 26.526365,
           "expected_income_usd": 3.304158
@@ -141,6 +151,7 @@
           "held_days_from_ex": 3,
           "held_days_checked": 3,
           "held_days_required": 3,
+          "days_in_window_from_ex": 4,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 3.582092
@@ -157,11 +168,12 @@
           "weight_date": "2026-06-22",
           "term_bps": 11.581597,
           "treatment": "LEAKED",
-          "pay_lag_bd": 5,
+          "pay_lag_bd": null,
           "pay_lag_events_observed": 0,
           "held_days_from_ex": 0,
           "held_days_checked": 5,
           "held_days_required": 5,
+          "days_in_window_from_ex": 6,
           "credit_pending": false,
           "subtracted_bps": 11.581597,
           "expected_income_usd": 270.305619
@@ -183,6 +195,7 @@
           "held_days_from_ex": 1,
           "held_days_checked": 3,
           "held_days_required": 3,
+          "days_in_window_from_ex": 4,
           "credit_pending": false,
           "subtracted_bps": 29.78172,
           "expected_income_usd": 231.210215
@@ -204,6 +217,7 @@
           "held_days_from_ex": 3,
           "held_days_checked": 3,
           "held_days_required": 3,
+          "days_in_window_from_ex": 4,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 227.832899
@@ -225,6 +239,7 @@
           "held_days_from_ex": 4,
           "held_days_checked": 4,
           "held_days_required": 4,
+          "days_in_window_from_ex": 5,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 162.788168
@@ -422,6 +437,9 @@
         "2026-07-22",
         "2026-10-02"
       ],
+      "window_start_requested": null,
+      "window_first_return_date": "2026-07-23",
+      "n_trading_days": 52,
       "n_days": 51,
       "measurement_basis": "gap: live deposit-adjusted PRICE path vs model with LEAKED distribution terms removed (w(t-1) x D/P_prev x (1+r_adj) on the ex-date; held-through rows stay in the model because their income re-enters live on pay date); corr/beta/vol: live + every term vs model total return; add. 38 (panel-revised)",
       "live_cumulative_return": -0.0152,
@@ -444,6 +462,9 @@
       "cumulative_gap_ambiguous_lenient": 0.0059,
       "annualized_gap_ambiguous_lenient": 0.0308,
       "mean_daily_gap_bps_ambiguous_lenient": 1.22,
+      "pre_window_credit_rows": [],
+      "pre_window_credit_bias_annualized_max": 0.0,
+      "annualized_gap_pre_window_credits_offset": 0.0308,
       "model_total_return_cumulative": 0.0116,
       "cumulative_gap_total_return_basis": -0.0269,
       "mean_daily_gap_bps_total_return_basis": -5.2,
@@ -472,6 +493,7 @@
           "held_days_from_ex": 2,
           "held_days_checked": 2,
           "held_days_required": 2,
+          "days_in_window_from_ex": 3,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 129.617074
@@ -493,6 +515,7 @@
           "held_days_from_ex": 0,
           "held_days_checked": 1,
           "held_days_required": 1,
+          "days_in_window_from_ex": 2,
           "credit_pending": false,
           "subtracted_bps": 327.617302,
           "expected_income_usd": 1194.821391
@@ -514,6 +537,7 @@
           "held_days_from_ex": 2,
           "held_days_checked": 2,
           "held_days_required": 2,
+          "days_in_window_from_ex": 3,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 131.959823
@@ -535,6 +559,7 @@
           "held_days_from_ex": 2,
           "held_days_checked": 2,
           "held_days_required": 2,
+          "days_in_window_from_ex": 3,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 82.544518
@@ -592,6 +617,9 @@
         "2026-07-07",
         "2026-10-02"
       ],
+      "window_start_requested": null,
+      "window_first_return_date": "2026-07-08",
+      "n_trading_days": 63,
       "n_days": 62,
       "measurement_basis": "gap: live deposit-adjusted PRICE path vs model with LEAKED distribution terms removed (w(t-1) x D/P_prev x (1+r_adj) on the ex-date; held-through rows stay in the model because their income re-enters live on pay date); corr/beta/vol: live + every term vs model total return; add. 38 (panel-revised)",
       "live_cumulative_return": 0.313,
@@ -614,6 +642,9 @@
       "cumulative_gap_ambiguous_lenient": 0.0112,
       "annualized_gap_ambiguous_lenient": 0.0354,
       "mean_daily_gap_bps_ambiguous_lenient": 1.41,
+      "pre_window_credit_rows": [],
+      "pre_window_credit_bias_annualized_max": 0.0,
+      "annualized_gap_pre_window_credits_offset": 0.0354,
       "model_total_return_cumulative": 0.3163,
       "cumulative_gap_total_return_basis": -0.0033,
       "mean_daily_gap_bps_total_return_basis": -0.37,
@@ -642,6 +673,7 @@
           "held_days_from_ex": 2,
           "held_days_checked": 2,
           "held_days_required": 2,
+          "days_in_window_from_ex": 3,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 81.354027
@@ -663,6 +695,7 @@
           "held_days_from_ex": 0,
           "held_days_checked": 1,
           "held_days_required": 1,
+          "days_in_window_from_ex": 2,
           "credit_pending": false,
           "subtracted_bps": 81.904326,
           "expected_income_usd": 778.788724
@@ -684,6 +717,7 @@
           "held_days_from_ex": 2,
           "held_days_checked": 2,
           "held_days_required": 2,
+          "days_in_window_from_ex": 3,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 82.410468
@@ -705,6 +739,7 @@
           "held_days_from_ex": 0,
           "held_days_checked": 5,
           "held_days_required": 5,
+          "days_in_window_from_ex": 6,
           "credit_pending": false,
           "subtracted_bps": 28.47474,
           "expected_income_usd": 263.406113
@@ -721,11 +756,12 @@
           "weight_date": "2026-09-21",
           "term_bps": 2.632396,
           "treatment": "HELD_THROUGH",
-          "pay_lag_bd": 5,
-          "pay_lag_events_observed": 1,
+          "pay_lag_bd": null,
+          "pay_lag_events_observed": 0,
           "held_days_from_ex": 5,
           "held_days_checked": 5,
           "held_days_required": 5,
+          "days_in_window_from_ex": 6,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 22.421439
@@ -747,6 +783,7 @@
           "held_days_from_ex": 2,
           "held_days_checked": 2,
           "held_days_required": 2,
+          "days_in_window_from_ex": 3,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 51.235209
@@ -834,6 +871,9 @@
         "2026-07-07",
         "2026-10-02"
       ],
+      "window_start_requested": null,
+      "window_first_return_date": "2026-07-08",
+      "n_trading_days": 63,
       "n_days": 62,
       "measurement_basis": "gap: live deposit-adjusted PRICE path vs model with LEAKED distribution terms removed (w(t-1) x D/P_prev x (1+r_adj) on the ex-date; held-through rows stay in the model because their income re-enters live on pay date); corr/beta/vol: live + every term vs model total return; add. 38 (panel-revised)",
       "live_cumulative_return": 0.1797,
@@ -856,6 +896,9 @@
       "cumulative_gap_ambiguous_lenient": 0.022,
       "annualized_gap_ambiguous_lenient": 0.0794,
       "mean_daily_gap_bps_ambiguous_lenient": 3.15,
+      "pre_window_credit_rows": [],
+      "pre_window_credit_bias_annualized_max": 0.0,
+      "annualized_gap_pre_window_credits_offset": 0.0794,
       "model_total_return_cumulative": 0.1592,
       "cumulative_gap_total_return_basis": 0.0205,
       "mean_daily_gap_bps_total_return_basis": 2.94,
@@ -884,6 +927,7 @@
           "held_days_from_ex": 5,
           "held_days_checked": 5,
           "held_days_required": 5,
+          "days_in_window_from_ex": 6,
           "credit_pending": false,
           "subtracted_bps": 0.0,
           "expected_income_usd": 184.977627
@@ -905,6 +949,7 @@
           "held_days_from_ex": 2,
           "held_days_checked": 5,
           "held_days_required": 5,
+          "days_in_window_from_ex": 6,
           "credit_pending": false,
           "subtracted_bps": 13.147922,
           "expected_income_usd": 97.086522

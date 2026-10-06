@@ -2164,3 +2164,67 @@ against the account-cash residual before acting, until a per-fund lag table
 ships with its gate test; (3) Yahoo wire-format test + INCOMPLETE on the
 adjclose fall-back before the next Yahoo shape change. Conditions (2) and (3)
 are code work, scheduled as add. 38b. No threshold changed; owner to confirm.
+
+
+## Addendum 38b — divergence.py: add.-38 conditions closed; Op 2 reads the
+## sleeve from 2026-08-01 (2026-10-06)
+
+RESULTS (frozen 2026-10-05 fixtures):
+  Op 2 SLEEVE, --start 2026-08-01 (owner decision 2026-10-05):
+    base close 07-31, first return 08-03, 44 of 120 trading days
+    ann gap +6.71%/yr | cum +1.25% (live +9.38% vs model +8.13%)
+    corr 0.992 | beta 1.017 | vol-ratio 1.025 | live maxDD 4.81%
+    -> every criterion met except length; day 120 = 2027-01-22 (POLICY).
+  Full window vs add. 38: KMLM / SLEEVE / HARV primary keys unchanged.
+    HG ann gap +9.1% -> +8.7%/yr, cum +13.09% -> +12.58%: one pre-edit row
+    (BIL 2026-04-01, model-only, held ex..ex+3) is now HELD_THROUGH under
+    BIL's observed lag of 3 — the stricter read. HG is not gated.
+
+WHAT CHANGED
+- Per-fund pay lags, OBSERVED only (cash-trail event, ex -> credit day):
+  ZVOL ex+1 (1), PULS ex+2 (3; identified on 08-31 in HARV and KMLM), BIL
+  ex+3 (2), TQQQ ex+4 (1; pay-date reinvest buy $161.83 vs $162.63), SSO
+  ex+4 (1; account cash +$2.00 vs $2.02 across Christmas, 50x the noise
+  floor), LABD ex+5 (1), TMV ex+5 (1). HELD_THROUGH iff the model holds the
+  payer on ex..ex+L-1 (credit lands at the pay-date open, before the
+  rebalance — pay-date 15:53 reinvestment fills).
+- No guessed lags: SOXL, TNA, QLD, UDOW, TECL, SQQQ, TLT and any new holding
+  take the unknown-lag path — LEAKED if the model exited on the ex-date,
+  HELD_THROUGH if it held ex..ex+4, otherwise AMBIGUOUS: the primary keeps the
+  income (strict, gap reads lower) and show() prints the lenient number with
+  a check-the-cash-residual line. None on the frozen panel.
+- credit_pending until the credit day ex+L is INSIDE the window (part 1 was
+  one day early: HARV PULS 08-31 read on 09-01 = -3.66%/yr unflagged vs
+  -0.61%/yr once 09-02 is in).
+- Yahoo parser refuses a response without adjclose (INCOMPLETE, was a silent
+  fall-back to close). Wire-format gate runs the real parser: dropped or
+  mis-dated dividends (the add.-36 false alarm, corr 0.118) now fail.
+- --start: live and backtest fetched over the full live window, comparison
+  sliced; base = last close BEFORE start. Pre-window held-through credits
+  landing inside the window are flagged (HARV/KMLM from 08-01: PULS 07-31,
+  credit 08-04, gap high by <= 2.0 / 0.5 pp/yr; SLEEVE none).
+- Chart generator moved into the repo (research/divergence/make_fix_chart.py)
+  and cross-checks every number against the results JSONs.
+- Tests 36 -> 63, each gate paired with a broken input that fails it.
+
+COUNTER-AGENT LOG
+- Part 1 (2 lenses): gate power CONFIRMED (17/17 mutants killed); math/cash
+  REFUTED on two narrow points — pending off by one, family-inherited lags
+  are guesses (SOXL's own event not identifiable; SSO's real event missed).
+  Both fixed in part 2.
+- Part 2 round 1 (3 lenses): Op-2-window lens BLOCKING — the first build
+  based the window on 08-03 and dropped the 07-31 -> 08-03 return (lenient
+  by 0.70 pp/yr). Fixed (base = 07-31; that day's -9.3 bps is mostly LABD
+  fill timing, ~-12 bps).
+- Part 2 round 2: gate power, math/cash, Op-2 window all CONFIRMED, none
+  refuted. Independent stdlib recompute of the sleeve read matches to the
+  printed digit. Low items closed by the orchestrator: KMLM PULS 08-31 added
+  as evidence, SOXL comment corrected, unknown-lag pre-window branch now
+  tested (its surviving mutant is killed).
+
+ADD.-38 STANDING CONDITIONS: (1) provisional reads — now flagged by the code,
+correctly; (2) fast-payer hand-check — superseded by the observed-lag table;
+for unknown-lag funds the AMBIGUOUS line does it; (3) parser test — done.
+NOT MODELED: lags rest on 1-3 events each; a lag over 5 business days or a
+holiday-shifted pay date; a real Composer backtest started at --start (we
+slice the full-window run instead — a fresh start would buy in from cash).

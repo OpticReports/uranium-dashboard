@@ -7,6 +7,30 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-10-06 — divergence.py — add.-38 conditions closed; Op 2 window from 2026-08-01 (add. 38b)
+
+- Change (instrument + POLICY Op 2 wording; no symphony mutated):
+  per-fund OBSERVED pay lags (ZVOL 1, PULS 2, BIL 3, TQQQ/SSO 4,
+  LABD/TMV 5 business days); funds with no observed credit take an
+  unknown-lag path (AMBIGUOUS when the label depends on the lag: primary
+  strict, lenient printed). credit_pending until the credit day is in the
+  window. Yahoo parser refuses a missing adjclose (INCOMPLETE). New
+  `--start` flag (base = last close before start; full-window fetch,
+  sliced). Chart generator moved into `research/divergence/`.
+- Why: add.-38 panel conditions (fund-agnostic ex+4 rule, untested parser)
+  and the owner's decision to read Op 2 from 2026-08-01 (sleeve edited live
+  2026-07-31). POLICY Op 2 review date 2027-01-06 -> 2027-01-22, the day the
+  08-01 window reaches 120 trading days (committed afa705a).
+- Before / after (frozen 2026-10-05 fixtures): KMLM, SLEEVE, HARV
+  unchanged. HG ann gap +9.1% -> +8.7%/yr (one pre-edit BIL row now held
+  through). Op 2 SLEEVE from 08-01: ann gap +6.71%/yr, corr 0.992, beta
+  1.017, vol-ratio 1.025, 44/120 days.
+- Counter-agent: part 1 — 2 lenses, 2 narrow refutations fixed in part 2;
+  part 2 — 3 lenses, round-1 blocking start-boundary bug fixed, round 2
+  all confirmed. 63 gate tests (`python3 -m unittest
+  composer.scripts.tests.test_divergence`).
+- No service redeploy (local CLI; monitor.py picks it up on the next run).
+
 ## 2026-10-05 — divergence.py — distribution-aware rebuild, RATIFIED (add. 38)
 
 - Change (instrument only; no symphony mutated): `scripts/divergence.py` split

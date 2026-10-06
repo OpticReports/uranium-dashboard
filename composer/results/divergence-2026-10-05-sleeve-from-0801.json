@@ -1,0 +1,125 @@
+{
+  "results": [
+    {
+      "symphony": "nNdBk7hc5NiBzeRvbI5T",
+      "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
+      "window": [
+        "2026-07-31",
+        "2026-10-02"
+      ],
+      "window_start_requested": "2026-08-01",
+      "window_first_return_date": "2026-08-03",
+      "n_trading_days": 44,
+      "n_days": 44,
+      "measurement_basis": "gap: live deposit-adjusted PRICE path vs model with LEAKED distribution terms removed (w(t-1) x D/P_prev x (1+r_adj) on the ex-date; held-through rows stay in the model because their income re-enters live on pay date); corr/beta/vol: live + every term vs model total return; add. 38 (panel-revised)",
+      "live_cumulative_return": 0.0938,
+      "model_cumulative_return": 0.0813,
+      "cumulative_gap": 0.0125,
+      "mean_daily_gap_bps": 2.66,
+      "annualized_gap": 0.0671,
+      "worst_daily_gap_bps": -24.3,
+      "worst_daily_gap_date": "2026-09-30",
+      "best_daily_gap_bps": 69.8,
+      "best_daily_gap_date": "2026-08-12",
+      "daily_return_correlation": 0.992,
+      "live_beta_to_model": 1.017,
+      "live_model_vol_ratio": 1.025,
+      "live_max_drawdown": 0.0481,
+      "model_cumulative_return_all_exdates_stripped": 0.0787,
+      "annualized_gap_all_exdates_stripped": 0.0804,
+      "held_through_credit_bias_annualized": 0.0133,
+      "ambiguous_rows": [],
+      "cumulative_gap_ambiguous_lenient": 0.0125,
+      "annualized_gap_ambiguous_lenient": 0.0671,
+      "mean_daily_gap_bps_ambiguous_lenient": 2.66,
+      "pre_window_credit_rows": [],
+      "pre_window_credit_bias_annualized_max": 0.0,
+      "annualized_gap_pre_window_credits_offset": 0.0671,
+      "model_total_return_cumulative": 0.0827,
+      "cumulative_gap_total_return_basis": 0.0111,
+      "mean_daily_gap_bps_total_return_basis": 2.36,
+      "annualized_gap_total_return_basis": 0.0595,
+      "daily_return_correlation_total_return_basis": 0.991,
+      "live_beta_to_model_total_return_basis": 1.028,
+      "live_model_vol_ratio_total_return_basis": 1.037,
+      "distribution_data": "COMPLETE",
+      "distribution_missing_tickers": [],
+      "weight_dates_off_calendar": [],
+      "distribution_ledger": [
+        {
+          "date": "2026-09-22",
+          "applied_on": "2026-09-22",
+          "ticker": "LABD",
+          "amount": 0.071,
+          "prev_close": 7.1,
+          "yield": 0.01,
+          "adj_ret": -0.066724,
+          "weight": 0.25,
+          "weight_date": "2026-09-21",
+          "term_bps": 23.331911,
+          "treatment": "HELD_THROUGH",
+          "pay_lag_bd": 5,
+          "pay_lag_events_observed": 1,
+          "held_days_from_ex": 5,
+          "held_days_checked": 5,
+          "held_days_required": 5,
+          "days_in_window_from_ex": 6,
+          "credit_pending": false,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 184.977627
+        },
+        {
+          "date": "2026-09-22",
+          "applied_on": "2026-09-22",
+          "ticker": "TMV",
+          "amount": 0.227,
+          "prev_close": 43.25,
+          "yield": 0.005249,
+          "adj_ret": 0.002022,
+          "weight": 0.25,
+          "weight_date": "2026-09-21",
+          "term_bps": 13.147922,
+          "treatment": "LEAKED",
+          "pay_lag_bd": 5,
+          "pay_lag_events_observed": 1,
+          "held_days_from_ex": 2,
+          "held_days_checked": 5,
+          "held_days_required": 5,
+          "days_in_window_from_ex": 6,
+          "credit_pending": false,
+          "subtracted_bps": 13.147922,
+          "expected_income_usd": 97.086522
+        }
+      ],
+      "distribution_totals": {
+        "n_rows": 2,
+        "n_leaked": 1,
+        "n_held_through": 1,
+        "n_ambiguous": 0,
+        "term_bps": 36.48,
+        "subtracted_bps": 13.15,
+        "held_through_bps": 23.33,
+        "ambiguous_bps": 0,
+        "expected_income_usd": 282.06,
+        "expected_income_usd_basis": "MODEL entitlement (w(t-1) x live $ x yield); live's own only where live matched the model that morning"
+      },
+      "ex_dates": [
+        [
+          "2026-09-22",
+          "LABD",
+          0.071
+        ],
+        [
+          "2026-09-22",
+          "SOXL",
+          0.093
+        ],
+        [
+          "2026-09-22",
+          "TMV",
+          0.227
+        ]
+      ]
+    }
+  ]
+}
