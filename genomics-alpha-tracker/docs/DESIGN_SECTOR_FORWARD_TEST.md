@@ -1,11 +1,11 @@
 # Design + pre-registration: forward test of a ranked genomics screen
 
-_Status: DESIGN, revision 3 (after calibration and one counter-agent round).
+_Status: DESIGN, revision 4 (after calibration and two counter-agent rounds).
 **Recommendation: do not run a forward test now.** On last year's data the
 trial-date rankings lost to plain volatility across all names. In small and
 mid caps they did no better than a volatility measure that ignores 20%
-days. The best hybrid's edge would need about 16 years of forward data to
-confirm. The protocol below is complete. It runs only if a better catalyst
+days. Against volatility, the best hybrid's edge would need about 16 years
+of forward data to confirm; against jump-robust volatility it has none. The protocol below is complete. It runs only if a better catalyst
 source passes the gate first (P1). No production code until Casey approves
 this document._
 
@@ -16,7 +16,8 @@ this document._
 2. **The gate.** A catalyst source with FDA decision (PDUFA) dates and
    company-guided readout timing, and with point-in-time history, must pass
    a retrospective check first. The check takes days, not months, and is
-   frozen below.
+   frozen below. It takes days if the source has vintage history; without
+   it there is no gate.
 3. **No-test option.** A reference Sector list of the genomics names, with
    no ranking claim (scope below). It needs no test, because no decision
    depends on it beating anything.
@@ -40,6 +41,22 @@ this document._
   - **B1x:** 60-day volatility excluding days with a move of 20% or more
     (jump-robust).
   - **Random:** K divided by the universe size.
+- **Rankings tested:**
+  - **R1:** days to the nearest completion date on or after P among own
+    phase 2/3 trials with an active status, nearest first.
+  - **R2:** names with an own phase 2/3 trial (active or COMPLETED) whose
+    completion falls in [P-120d, P+30d] come first; phase 3 before phase
+    2, then nearest.
+  - **H1:** names in that readout window first, each group ordered by B1.
+  
+  Trial data are as of the Monday on or before P, with the 12-day lag. The
+  gate's window ([P-7d, P+30d], sourced catalysts) and its ordering (by
+  B1x) differ from these on purpose.
+- **De-clustering in the panel:** the 10-trading-day window runs from the
+  last COUNTED event. Anchors are the name's non-M&A, non-artifact
+  genomics-labelled 20% moves. Name-days whose next trading day falls
+  within the 10 trading days after a counted event leave the odds-ratio
+  panel.
 
 | top-K hit rate, de-clustered | R1 trial date | R2 readout window | H1 hybrid | B1 volatility | **B1x jump-robust** | random |
 |---|---|---|---|---|---|---|
@@ -53,7 +70,7 @@ this document._
 1. **Across all names, trial dates lose to random.** Big pharma always has
    a trial completing within days and almost never moves 20%, so it fills
    the top of any trial-date list. Of R1's top 25, 61% are names over
-   $10B (the robustness reviewer's count).
+   $10B (`calibrate2.py`, all-cap event days).
 2. **Under $10B, trial dates only match volatility, and B1x beats them
    all.**
    - **Hybrid H1 vs B1, by list length:**
@@ -64,6 +81,12 @@ this document._
      
      The top-25 edge is the only positive one, and top 25 was looked at
      after check 1.
+   - **Hybrid H1 vs B1x:** H1 trails at every list length:
+     - top 10: 10 vs 19;
+     - top 25: 14 vs 16 (p = 0.71);
+     - top 40: 6 vs 9.
+     
+     There is no edge to power.
    - **Power:** at half the top-25 edge and 7.5 events a month, a forward
      test has 11% power after 12 months, 19% after two years and 38% after
      five. 80% power needs 189 months, about 16 years (exact sign test,
@@ -71,7 +94,7 @@ this document._
 3. **The readout window carries no reliable signal once volatility and
    size are known.**
    - Mantel-Haenszel odds ratio of a next-day 20% move inside a readout
-     window: **1.34** (90% CI 0.83-2.06), over 21,046 de-clustered
+     window: **1.34** (90% CI 0.82-2.07), over 20,968 de-clustered
      name-days. Under $10B it is 1.43 (0.90-2.11). Without de-clustering it
      is 1.20 (0.72-1.83).
    - Strata are volatility quintile by cap tercile, with the interval from a
@@ -84,7 +107,8 @@ this document._
      P.
    - 18 events come from 10 names with no own phase 2/3 trial: tools and
      diagnostics companies, plus phase-1 companies such as Sana and CAMP4.
-   - 5 events come from 4 names whose trials were all past.
+   - 5 events come from 4 names with own trials but no active trial with
+     a dated upcoming completion.
 5. **Plain volatility partly re-surfaces recent movers.** Under $10B at top
    25:
    - On 16 events whose name had moved 20% in the prior 60 trading days, B1
@@ -126,8 +150,9 @@ random.
   own studies, beyond the 60-per-name history cap, use their current
   record. They sit in 12 large caps (MRK, AZN, BMY, NVS, PFE, JNJ, SNY, GSK,
   LLY, REGN, AMGN, GILD) and MRNA, plus 1 each in AUTL, BNTX, CRSP, IMTX, LH
-  and RCKT. The under-$10B analysis is therefore close to fully point in
-  time; the all-cap one is not.
+  and RCKT. MRNA was under $10B and non-core on 22 name-days, so its 21
+  current-record studies touch that panel. The under-$10B analysis is
+  otherwise close to fully point in time; the all-cap one is not.
 - **(c) Stale trial data.** The 12-day lag is the 95th percentile of
   first-post minus version-0 gaps, applied to every version. A live
   snapshot would see fresher records. That biases the calibration against
@@ -141,21 +166,34 @@ random.
 - **(f) Different definition in the first pass.** `calibrate.py` was not
   de-clustered. `calibration2.json` carries both versions, with the
   de-clustered one primary.
+- **(g) Reviewer-only figure.** The robustness reviewer's 27 alternatives
+  exist only in its scratch scripts (the session scratchpad,
+  `review_cal/`). They are cited, not reproduced here.
 
 ## The gate (frozen now)
 
 Run the forward test only if a better catalyst source passes all of the
 following on the past year (2025-10-01 to 2026-09-30).
 
-**Point in time, or no gate.** Each catalyst record must carry a first-seen
-or as-of timestamp, from vendor history or archived snapshots. On day P,
-only catalyst dates known by P's close count. Later revisions are
-invisible, so a date first shown on P+1 does not count on P. Records
-without provenance count as no catalyst. Before any statistic is computed,
-20 randomly drawn sourced catalysts (seed 20261006) are checked by hand for
-point-in-time correctness. If the source has no vintage history, the gate
-cannot run retrospectively. It then becomes a three-month forward logging
-period of the source, followed by this same check.
+**Point in time, or no gate.**
+- Each catalyst record must carry a first-seen or as-of timestamp, from
+  vendor history or archived snapshots.
+- On day P, only records whose as-of timestamp is at or before **16:00
+  America/New_York on P** count. That is P's close, the same cutoff in the
+  gate and in the protocol. Later revisions are invisible, and records
+  without provenance count as no catalyst.
+- **Spot-check, frozen.** The sample is `random.Random(20261006).sample`
+  of 20 records, sorted by vendor record ID, drawn from all sourced records
+  with an as-of date in the gate year. Two reviewers check each record
+  against an archived snapshot. ANY failure means the source is treated as
+  having no vintage history. The 20 IDs and the verdicts are logged here.
+- **No vintage history means no gate and no forward test.** The data
+  cannot show what was known on each day, and a short logging period
+  would yield too few events to pass condition 1.
+- **More than one source.** Every source evaluated is logged here with its
+  gate result. If m sources are evaluated, condition 1 uses the lower
+  bound of a (1 - 0.10/m) interval, and the first source declared is
+  primary.
 
 **Guided timing, frozen mapping.**
 
@@ -177,15 +215,22 @@ not cover count as unexposed.
 - **Events:** de-clustered, M&A excluded, cap under $10B on P.
 - **Odds ratio:** the Mantel-Haenszel odds ratio of exposure on the
   de-clustered panel, strata and bootstrap as in check 3, seed 20261006.
-- **H1′:** exposed names first, each group ordered by B1x.
+- **H1′:** exposed names first, each group ordered by B1x; ties go to
+  higher 20-day dollar volume.
+- **K:** comes from the P2 answer and is recorded in this document BEFORE
+  any gate statistic is computed. If P2 is unanswered when a source
+  arrives, the gate is not run until it is answered. No default K is
+  chosen after seeing data.
 
 **Pass if ALL of these hold:**
 1. the odds ratio's lower 90% bound is above 1.0;
 2. at the desk's list length K (P2), H1′ beats B1x with an exact one-sided
    sign-test power of at least 80% within 12 months. Power is computed on
    half the in-sample paired edge, with discordance held fixed, at the
-   de-clustered event rate. For reference, at last year's 22% discordance
-   this needs an in-sample edge of roughly 25 percentage points;
+   de-clustered event rate. For reference, with discordance held fixed,
+   80% power within 12 months needs discordance of about 30% or more and an
+   in-sample edge of about 30 percentage points or more. At last year's
+   H1-vs-B1x discordance (33% at top 25) no positive edge was observed;
 3. H1′ is no worse than B1x at the other two list lengths of 10, 25 and 40
    (point estimates).
 
@@ -224,9 +269,9 @@ makes no ranking claim, and nothing is generated from it.
 **Universe on day P:** genomics-labelled names that are listed, not in the
 core, with a prior-day cap of at least $300M and under $10B, evaluated
 daily. A name that crosses $10B leaves the universe while it is above it.
-Names that become eligible during the test (IPOs, a cap crossing $300M)
-are outside the frozen labels; their moves are counted and reported
-separately.
+A labelled name that crosses $300M joins it that day. Only names absent
+from `labels.json` (IPOs, new listings) are outside the frozen labels;
+their moves are counted and reported separately.
 
 ### The instrument: one ranked snapshot per weekday
 
@@ -247,14 +292,20 @@ test as an operational failure.
 
 - **H1′ (R\*).** Names with a sourced catalyst window overlapping
   [P-7d, P+30d] first, then the rest. Each group is ordered by B1x, with
-  ties broken by 20-day dollar volume. Catalyst data are as known at the
-  snapshot.
-- **B1x (the baseline H1′ must beat).** 60-day volatility of daily log
-  returns over the last 61 closes, excluding returns of 20% or more.
-- **B1.** Plain 60-day volatility (secondary).
+  ties broken by 20-day dollar volume. Catalyst data are as known at 16:00
+  America/New_York on P, using the stored as-of timestamps; records after
+  that cutoff are excluded and counted.
+- **B1x (the baseline H1′ must beat).** The sample standard deviation of
+  daily log returns over the last 61 closes through P. Days whose simple
+  close-to-close return is 20% or more in absolute value (rounded to 9
+  decimals) are excluded. Fewer than 20 remaining returns gives B1x = 0,
+  ranked last.
+- **B1.** The same, without the exclusion (secondary).
 - **B2.** The live Discovery queue in candidate-score order, as the
   Discovery tab shows it. It is logged in the snapshot before the sweep's
-  upserts of that day (secondary).
+  upserts of that day and restricted to universe names. A universe name not
+  in the queue is unranked, so its event is a miss, and the list is not
+  padded (secondary).
 - **Random.** K divided by the universe size.
 
 ### Events (the outcome)
@@ -268,7 +319,8 @@ These are measured after the fact from FMP dividend-adjusted bars:
 - M&A target days are excluded, decided by two blind reviewers from filings
   and headlines with a third on disagreement (the sector-tier prompt);
 - events are de-clustered: a name's further 20% moves within the next 10
-  of its trading days are not counted. Sector-wide days are reported.
+  of its trading days are not counted. The window runs from the last
+  counted event. Sector-wide days are reported.
 
 ### Metric and decision rule (frozen; formulas fixed now)
 
@@ -277,8 +329,12 @@ the top K on P's snapshot. It is compared paired between H1′ and B1x with
 a one-sided exact sign test on the discordant events, alpha 0.05.
 
 **Formulas fixed now:**
-- **DELTA** is half the gated in-sample edge, in percentage points.
-- **N_min** is the event count at which the gate's power reaches 80%.
+- **N_min** is the event count at which the gate's exact sign-test power
+  reaches 80%, on half the in-sample edge with discordance held fixed.
+- There is no separate observed-edge threshold. Requiring the observed
+  edge to reach the assumed edge halves the power, to about 49% (round-2
+  finding). A significant one-sided sign test already means a positive
+  edge.
 - **The end date** is T0 plus the months the gate's power calculation needs
   (12 or fewer). There is no extension. Fewer than N_min events at the end
   date makes the result INCONCLUSIVE.
@@ -286,10 +342,9 @@ a one-sided exact sign test on the discordant events, alpha 0.05.
 **BUILD** a ranked screen (the top K with each name's catalyst evidence;
 no calls generated) only if ALL of these hold:
 1. at least N_min events;
-2. hit@K(H1′) minus hit@K(B1x) is at least DELTA;
-3. the sign test gives p < 0.05;
-4. hit@K(H1′) is above random;
-5. hit@K(H1′) is at least hit@K(B2).
+2. the sign test of H1′ over B1x gives p < 0.05;
+3. hit@K(H1′) is above random;
+4. hit@K(H1′) is at least hit@K(B2).
 
 Otherwise the result is DO NOT BUILD, with the reason. There are no interim
 looks at the metric; monitoring is operational only.
@@ -332,7 +387,7 @@ looks at the metric; monitoring is operational only.
 | P | question | what it moves | first asked | status | expires |
 |---|---|---|---|---|---|
 | P1 | Is there a catalyst source with PDUFA dates and guided readout timing AND point-in-time history (vendor vintages or archived snapshots), one you have or one you would pay for? | whether the gate runs at all | 2026-10-06 | open | 2026-12-05 |
-| P2 | What the desk would do with a ranked screen: a morning glance (top 10) or position preparation (top 25, 5-day lead time) | the list length K and the gating metric, needed before the gate | 2026-10-06 (rev 1, then P3) | open; promoted 2026-10-06 (rev 3) | 2026-12-05 |
+| P1 | What the desk would do with a ranked screen: a morning glance (top 10) or position preparation (top 25, 5-day lead time) | the list length K and the gating metric; the gate cannot run without it | 2026-10-06 (rev 1, then P3) | open; promoted to P2 (rev 3), then P1 (rev 4) | 2026-12-05 |
 | P2 | Build the reference Sector list (no test needed)? | one dashboard view | 2026-10-06 | open | 2026-12-05 |
 | P3 | Where the snapshot runs (A or B) | the instrument | 2026-10-06 (rev 1) | deferred to the gate (rev 2) | — |
 | — | The end date | — | 2026-10-06 (rev 1) | withdrawn (rev 3): now a formula | — |
@@ -387,3 +442,33 @@ design does not depend on it.
     list's scope; the order of declaration.
 - **B1x** (jump-robust volatility) came from the robustness review. It beat
   every list at every K, and it is now the baseline H1′ must beat.
+
+**Round 2 (2026-10-06, 17 agents).**
+- **Round-1 findings:** 20 of 22 confirmed fully addressed, 2 partly. Both
+  are now completed (the spot-check rule and the after-close cutoff).
+- **New findings, confirmed and applied in revision 4:**
+  - SERIOUS: the BUILD rule's extra "observed edge at least DELTA" halved
+    the real power, to about 49%. It is dropped, and the sign test carries
+    the bar.
+  - SERIOUS: the forward snapshot could see after-hours catalyst updates
+    that drive the next day's move. There is now one 16:00 New York cutoff
+    in the gate and the protocol.
+  - SERIOUS: the point-in-time spot-check had no pass/fail rule. Any
+    failure now means no vintage, and no vintage means no gate.
+  - MINOR:
+    - K is now fixed before any gate statistic, with no default if P2 is
+      unanswered.
+    - The impossible "25 pp at 22% discordance" reference is replaced.
+    - The no-vintage fallback is removed.
+    - The panel window was off by one. It is fixed and re-run, and the
+      odds ratio is unchanged at 1.34.
+    - B1x, B2 and the universe are now fully specified.
+    - R1, R2 and H1 are defined in the doc again.
+    - The headline power is now also stated against B1x, where H1 has no
+      edge.
+    - A multiplicity rule now covers testing several catalyst sources.
+  - NOTES applied:
+    - the 61% figure is now computed in `calibrate2.py`;
+    - MRNA's under-$10B days are disclosed;
+    - check 4's wording is corrected;
+    - the desk question is now P1.

@@ -162,7 +162,7 @@ def main() -> None:
                 continue
             last_idx = i
             # name-days whose next day falls in (event, event + 10 trading days] leave the panel
-            lo, hi = i, min(len(bd) - 1, i + DECLUSTER - 1)
+            lo, hi = i + 1, min(len(bd) - 1, i + DECLUSTER)   # next day in (event, event + 10]
             if lo < len(bd):
                 quiet[s].append((bd[lo], bd[hi]))
     ev_all = {(m["symbol"], m["prior_date"]) for m in gm}
@@ -213,6 +213,8 @@ def main() -> None:
         names = ("R1", "R2", "B1", "B1x", "H1")
         hits = {k: defaultdict(int) for k in KS}
         pair = {k: [0, 0, 0] for k in KS}
+        pairx = {k: [0, 0, 0] for k in KS}   # H1 vs B1x
+        big_in_r1 = [0, 0]                    # R1 top-25 slots held by names >= $10B
         rnd = {k: 0.0 for k in KS}
         split = {"recent": defaultdict(int), "fresh": defaultdict(int)}
         n_split = {"recent": 0, "fresh": 0}
@@ -234,6 +236,9 @@ def main() -> None:
                 "H1": sorted(u, key=lambda r: (not r["ro"], -r["vol"])),
             }
             rk = {nm: {r["s"]: i + 1 for i, r in enumerate(lst)} for nm, lst in order.items()}
+            top = order["R1"][:25]
+            big_in_r1[0] += sum(r["cap"] >= BIG for r in top)
+            big_in_r1[1] += len(top)
             for e in evs:
                 n += 1
                 grp = "recent" if e["recent"] else "fresh"
@@ -249,7 +254,12 @@ def main() -> None:
                     pair[k][0] += a and not b
                     pair[k][1] += b and not a
                     pair[k][2] += a and b
-        out = {"events": n, "events_per_month": round(n / 12, 2)}
+                    bx = rk["B1x"][e["s"]] <= k
+                    pairx[k][0] += a and not bx
+                    pairx[k][1] += bx and not a
+                    pairx[k][2] += a and bx
+        out = {"events": n, "events_per_month": round(n / 12, 2),
+               "R1_top25_share_over_10B_on_event_days": round(big_in_r1[0] / max(1, big_in_r1[1]), 3)}
         for k in KS:
             b, c, both = pair[k]
             blk = {nm: round(hits[k][nm] / n, 3) for nm in names}
@@ -261,6 +271,12 @@ def main() -> None:
                 hb, hc = half_edge(b / n, c / n)
                 blk["power_half_edge"] = {f"{mo}mo": round(power(hb, hc, round(n / 12 * mo)), 3) for mo in (12, 24, 60)}
                 blk["months_to_80pct_power_half_edge"] = months_to_power(hb, hc, n / 12)
+            bx_b, bx_c, _ = pairx[k]
+            blk["H1_only_vs_B1x_only_both"] = pairx[k]
+            blk["sign_test_p_H1_over_B1x"] = round(sign_p(bx_b, bx_c), 4)
+            if bx_b > bx_c:
+                hb, hc = half_edge(bx_b / n, bx_c / n)
+                blk["months_to_80pct_power_half_edge_vs_B1x"] = months_to_power(hb, hc, n / 12)
             out[str(k)] = blk
         out["top25_by_recent_20pct_move"] = {g: {"events": n_split[g], **{nm: round(split[g][nm] / max(1, n_split[g]), 3) for nm in names},
                                                  "random": round(rnd_split[g] / max(1, n_split[g]), 3)} for g in ("recent", "fresh")}
