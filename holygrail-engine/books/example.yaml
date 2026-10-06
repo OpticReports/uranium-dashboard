@@ -1,0 +1,96 @@
+# EXAMPLE BOOK - illustrative schema and numbers only, NOT a real portfolio.
+# Every assumption carries {value, source, confidence}; a bare number where an
+# assumption is expected fails validation.  Run:
+#   cd holygrail-engine && python -m holygrail score --book books/example.yaml --view investable
+name: Example Holy Grail book
+as_of: 2026-10-06
+
+assumptions:
+  equity_mu:   {value: 0.065, source: "illustrative: ~4% ERP over ~2.5% real + inflation", confidence: low}
+  bond_mu:     {value: 0.042, source: "illustrative: ~current 10y Treasury yield", confidence: medium}
+  spread_ibkr: {value: 0.005, source: "illustrative broker margin spread over T-bills", confidence: medium}
+
+settings:
+  risk_free: "fred:DTB3"          # measured: latest 3m T-bill; or {value, source, confidence}
+  financing_spread: "@spread_ibkr"
+  target_vol: 0.10
+  freq: W                          # weekly returns tame asynchronous closes (crypto vs equities)
+  window_years: 5
+  estimator: lw_cc                 # Ledoit-Wolf constant-correlation shrinkage
+  position_flag: 0.10              # flag any position > 10% of view NAV
+  stream_risk_flag: 0.25           # flag any stream > 25% of portfolio risk
+  good_sharpe: 0.20
+  max_leverage: 3.0
+
+streams:
+  SPY:  {type: market, symbol: SPY, asset_class: equity, expected_return: "@equity_mu"}
+  EFA:  {type: market, symbol: EFA, asset_class: equity}
+  QQQ:  {type: market, symbol: QQQ, asset_class: equity}
+  TLT:  {type: market, symbol: TLT, asset_class: nominal_bond, expected_return: "@bond_mu"}
+  IEF:  {type: market, symbol: IEF, asset_class: nominal_bond}
+  TIP:  {type: market, symbol: TIP, asset_class: ilb}
+  GLD:  {type: market, symbol: GLD, asset_class: gold}
+  DBC:  {type: market, symbol: DBC, asset_class: commodity}
+  HYG:  {type: market, symbol: HYG, asset_class: credit}
+  BTC:
+    type: market
+    symbol: BTC-USD
+    environments: [growth_up, inflation_up]   # manual mapping: no canonical box for crypto
+  # A 3x daily-reset Nasdaq fund modelled by look-through (financed at rf + spread, minus fee)
+  QQQ3X:
+    type: composite
+    components: {QQQ: 1.0}
+    leverage: 3.0
+    financing_spread: {value: 0.004, source: "illustrative swap financing spread", confidence: low}
+    fee: {value: 0.0084, source: "illustrative expense ratio", confidence: high}
+    asset_class: equity
+  # A private loan: assumptions only, correlated to high yield
+  private_credit:
+    type: parametric
+    vol: {value: 0.10, source: "illustrative: de-smoothed BDC-like vol", confidence: low}
+    factor_correlations:
+      HYG: {value: 0.6, source: "illustrative", confidence: low}
+    default:
+      prob:   {value: 0.02, source: "illustrative annual default rate", confidence: low}
+      lgd:    {value: 0.40, source: "illustrative senior-secured LGD", confidence: medium}
+      coupon: {value: 0.11, source: "illustrative contractual coupon", confidence: high}
+    asset_class: credit
+    liquidity: illiquid
+    mark_basis: model
+  # A venture SPV: standalone (assumed uncorrelated - stated, not measured)
+  venture_spv:
+    type: parametric
+    expected_return: {value: 0.12, source: "illustrative venture target", confidence: placeholder}
+    vol: {value: 0.45, source: "illustrative venture vol", confidence: low}
+    liquidity: illiquid
+    mark_basis: round
+  # A user NAV series (e.g. a Composer symphony export) - schema shown, not used here:
+  # symphony:
+  #   type: series
+  #   path: symphony_nav.csv        # relative to this file
+  #   date_col: date
+  #   value_col: nav
+  #   kind: levels
+  #   source: "Composer export 2026-10-06"
+  cash: {type: cash}
+
+positions:
+  - {name: Brokerage SPY,    value_usd: 60000, stream: SPY,  sleeve: core,  tags: [taxable]}
+  - {name: IRA EFA,          value_usd: 15000, stream: EFA,  sleeve: core,  tags: [ira]}
+  - {name: IRA TLT,          value_usd: 25000, stream: TLT,  sleeve: core,  tags: [ira]}
+  - {name: Brokerage IEF,    value_usd: 10000, stream: IEF,  sleeve: core,  tags: [taxable]}
+  - {name: IRA TIP,          value_usd: 15000, stream: TIP,  sleeve: core,  tags: [ira]}
+  - {name: Brokerage GLD,    value_usd: 12000, stream: GLD,  sleeve: core,  tags: [taxable]}
+  - {name: Brokerage DBC,    value_usd:  8000, stream: DBC,  sleeve: core,  tags: [taxable]}
+  - {name: Brokerage HYG,    value_usd:  5000, stream: HYG,  sleeve: core,  tags: [taxable]}
+  - {name: Exchange BTC,     value_usd: 10000, stream: BTC,  sleeve: satellite, tags: [crypto]}
+  - {name: Brokerage TQQQ,   value_usd:  6000, stream: QQQ3X, sleeve: satellite, tags: [taxable, levered]}
+  - {name: Private loan A,   value_usd: 20000, stream: private_credit, sleeve: private, tags: [private]}
+  - {name: Venture SPV B,    value_usd: 10000, stream: venture_spv,    sleeve: private, tags: [private]}
+  - {name: Checking (spend), value_usd: 30000, stream: cash, sleeve: cash, investable: false, tags: [spending]}
+  - {name: Brokerage cash,   value_usd:  4000, stream: cash, sleeve: cash, tags: [taxable]}
+
+totals:
+  total_usd: 230000
+  sleeves: {core: 150000, satellite: 16000, private: 30000, cash: 34000}
+  tolerance_usd: 1.0
