@@ -1,0 +1,179 @@
+{
+ "basis": "The book Casey controls: whole book minus Organics Ocean (sale-pending), with the verified BOXX-loan correction\n(variant D, reading (a): Dominion outstanding $200k; repaid capital assumed inside the sheet's Cash/Stables line) and a\nsensitivity on the one soft input that dominates it, the venture-basket volatility.\n\nRun: cd holygrail-engine && HG_OFFLINE=1 python results/casey-2026-10/controllable/ex_oo_view.py\nBasis: the current-book helpers and estimation settings (daily, trailing 3y to 2026-09-30, lw_cc); risk shares are Euler\ncontributions and do not depend on any expected-return input.\n",
+ "venture_vols_declared": [
+  0.3,
+  0.45,
+  0.6,
+  0.8
+ ],
+ "base_summary_venture_vol_0.60": {
+  "view": "ex_oo_venture_vol_0.6",
+  "nav_usd": 7364469.7,
+  "vol": 0.16312638357255657,
+  "dr2": 3.36344728651459,
+  "n_risky_streams": 35,
+  "implied_avg_corr": 0.10357794617863302,
+  "neff_(e) Diversification ratio squared DR^2 [headline Holy Grail N_eff]": 3.36344728651459,
+  "neff_(a) Equal-rho closed form N/(1+(N-1)rho_bar), rho_bar=0.119": 6.926283962019222,
+  "neff_(c) Meucci 2009 PCA risk entropy": 7.522360715477447,
+  "neff_(b) 1/sum(PRC^2) inverse HHI of risk shares": 2.0509958635537124,
+  "neff_(d) Minimum-torsion bets (Meucci-Santangelo-Deguest 2015)": 5.832460370582259,
+  "top1": "venture_basket",
+  "top1_risk": 0.6874509005123464,
+  "top2": "film_gap_loans",
+  "top2_risk": 0.07611026566721021,
+  "top3": "real_estate",
+  "top3_risk": 0.07272122220372292,
+  "box_growth_up": 0.5378724957981798,
+  "box_growth_down": -0.002524201268641331,
+  "box_inflation_up": 0.0913296831348061,
+  "box_inflation_down": 0.3733397646023348,
+  "box_unmapped": -1.7742266679166008e-05,
+  "balance_score": 0.45173854171143624,
+  "leverage_to_15": 0.919532430713649,
+  "cash_share": 0.05709439065245936,
+  "exp_return_prior": 0.13538684909497387,
+  "sharpe_prior": 0.5841289864223066,
+  "exp_return_at_15_prior": 0.1272019072129769
+ },
+ "sleeves_base": [
+  {
+   "sleeve": "Other venture (13 names)",
+   "usd": 1548000.0,
+   "dollar_share": 0.21019843424707144,
+   "risk_share": 0.6874509005123464
+  },
+  {
+   "sleeve": "Private credit (film, Gary, Spirit)",
+   "usd": 1532000.0,
+   "dollar_share": 0.2080258406114428,
+   "risk_share": 0.08506756230975428
+  },
+  {
+   "sleeve": "Real estate",
+   "usd": 1500000.0,
+   "dollar_share": 0.2036806533401855,
+   "risk_share": 0.07272122220372292
+  },
+  {
+   "sleeve": "Venezuela bond + Argentina warrants",
+   "usd": 410000.0,
+   "dollar_share": 0.055672711912984035,
+   "risk_share": 0.0422903485556256
+  },
+  {
+   "sleeve": "BTC",
+   "usd": 281485.12,
+   "dollar_share": 0.03822204876476035,
+   "risk_share": 0.0384261991305703
+  },
+  {
+   "sleeve": "Composer HG symphony + KMLM switcher",
+   "usd": 184300.0,
+   "dollar_share": 0.025025562940397462,
+   "risk_share": 0.020912541334897068
+  },
+  {
+   "sleeve": "Equity ETFs (SPY, B.5 factor funds)",
+   "usd": 274481.64,
+   "dollar_share": 0.03727106651005707,
+   "risk_share": 0.020567760129555298
+  },
+  {
+   "sleeve": "Single stocks",
+   "usd": 139774.03999999998,
+   "dollar_share": 0.018979511858131484,
+   "risk_share": 0.01774832722787086
+  },
+  {
+   "sleeve": "Gold and silver",
+   "usd": 247859.8,
+   "dollar_share": 0.03365616400051181,
+   "risk_share": 0.016427983767830397
+  },
+  {
+   "sleeve": "Cash, BOXX, T-bills, 16% loan",
+   "usd": 1066740.1,
+   "dollar_share": 0.14484954700811656,
+   "risk_share": 0.0007086869645642108
+  },
+  {
+   "sleeve": "Composer VIX Harvester",
+   "usd": 37400.0,
+   "dollar_share": 0.005078437623281959,
+   "risk_share": 0.00031543045144822213
+  },
+  {
+   "sleeve": "ETH carry",
+   "usd": 30110.0,
+   "dollar_share": 0.004088549648048657,
+   "risk_share": 4.236690308305963e-05
+  },
+  {
+   "sleeve": "KMLM trend",
+   "usd": 34419.0,
+   "dollar_share": 0.004673656271543897,
+   "risk_share": -0.00015512822262728096
+  },
+  {
+   "sleeve": "Composer Crash Convexity",
+   "usd": 77900.0,
+   "dollar_share": 0.010577815263466968,
+   "risk_share": -0.002524201268641331
+  }
+ ],
+ "sensitivity": [
+  {
+   "venture_vol": 0.3,
+   "nav_usd": 7364469.7,
+   "vol": 0.11087607372364545,
+   "dr2": 4.534725052976116,
+   "venture_dollar_share": 0.21019843424707144,
+   "venture_risk_share": 0.4205558141328661,
+   "balance_score": 0.553459457354254,
+   "box_growth_up": 0.5741690395622507,
+   "box_growth_down": -0.004057336109889368,
+   "box_inflation_up": 0.16915356041185534,
+   "box_inflation_down": 0.2607446170546291
+  },
+  {
+   "venture_vol": 0.45,
+   "nav_usd": 7364469.7,
+   "vol": 0.1358592443719523,
+   "dr2": 3.880797805029394,
+   "venture_dollar_share": 0.21019843424707144,
+   "venture_risk_share": 0.5817363499855602,
+   "balance_score": 0.491990349139528,
+   "box_growth_up": 0.5519996838999068,
+   "box_growth_down": -0.0031707147353052523,
+   "box_inflation_up": 0.12216538998049052,
+   "box_inflation_down": 0.32902172074505853
+  },
+  {
+   "venture_vol": 0.6,
+   "nav_usd": 7364469.7,
+   "vol": 0.16312638357255657,
+   "dr2": 3.36344728651459,
+   "venture_dollar_share": 0.21019843424707144,
+   "venture_risk_share": 0.6874509005123464,
+   "balance_score": 0.45173854171143624,
+   "box_growth_up": 0.5378724957981798,
+   "box_growth_down": -0.002524201268641331,
+   "box_inflation_up": 0.0913296831348061,
+   "box_inflation_down": 0.3733397646023348
+  },
+  {
+   "venture_vol": 0.8,
+   "nav_usd": 7364469.7,
+   "vol": 0.20142748253944717,
+   "dr2": 2.8694759446553553,
+   "venture_dollar_share": 0.21019843424707144,
+   "venture_risk_share": 0.7753992588242292,
+   "balance_score": 0.4182973658876613,
+   "box_growth_up": 0.5264164140193365,
+   "box_growth_down": -0.0019396296867919079,
+   "box_inflation_up": 0.06566376276453423,
+   "box_inflation_down": 0.4098768510412956
+  }
+ ]
+}
