@@ -2,6 +2,9 @@
 (variant D, reading (a): Dominion outstanding $200k; repaid capital assumed inside the sheet's Cash/Stables line) and a
 sensitivity on the one soft input that dominates it, the venture-basket volatility.
 
+Independent check 2026-10-06: PASS WITH FIXES (labels; coupon line added). Series X note: at the funded $184.8k
+(flag F17) the 0.60 case is NAV $7.149M, vol 15.2%, DR^2 3.63, venture 63.4% of risk.
+
 Run: cd holygrail-engine && HG_OFFLINE=1 python results/casey-2026-10/controllable/ex_oo_view.py
 Basis: the current-book helpers and estimation settings (daily, trailing 3y to 2026-09-30, lw_cc); risk shares are Euler
 contributions and do not depend on any expected-return input.
@@ -26,11 +29,11 @@ PLUG = "Short-term 16% loans (out of BOXX)"
 DOMINION = "Film Dominion bridge (returned 2026-09-25)"
 VENTURE_VOLS = [0.30, 0.45, 0.60, 0.80]   # declared before running; 0.60 is the book's own assumption (low confidence)
 
-SLEEVE_NAMES = {"venture_basket": "Other venture (13 names)", "private_credit": "Private credit (film, Gary, Spirit)",
+SLEEVE_NAMES = {"venture_basket": "Other venture (7 marked names + 4 at $0)", "private_credit": "Private credit (film, Gary, Spirit)",
                 "real_estate": "Real estate", "em_special_sits": "Venezuela bond + Argentina warrants",
                 "crypto_btc": "BTC", "composer_equity_momentum": "Composer HG symphony + KMLM switcher",
                 "equity_beta": "Equity ETFs (SPY, B.5 factor funds)", "single_names": "Single stocks",
-                "gold_silver": "Gold and silver", "cash_like": "Cash, BOXX, T-bills, 16% loan",
+                "gold_silver": "Gold and silver", "cash_like": "Cash, BOXX, T-bills, USDC, 16% Dominion loan",
                 "composer_vix_harvester": "Composer VIX Harvester", "eth_carry": "ETH carry", "trend": "KMLM trend",
                 "composer_crash_convexity": "Composer Crash Convexity"}
 
@@ -39,6 +42,7 @@ def corrected_raw():
     r = base_raw(spliced=True)
     set_prior(r, VOLS, RF, 0.30, None)
     pos(r, PLUG)["value_usd"] = 200_000.0          # variant D: Dominion outstanding
+    r["streams"]["st_loans_16"]["default"]["coupon"]["value"] = 0.16 * 45 / 365 + RF * 320 / 365   # as apply_variant (D)
     r["positions"] = [q for q in r["positions"] if q["name"] != DOMINION]
     return r
 

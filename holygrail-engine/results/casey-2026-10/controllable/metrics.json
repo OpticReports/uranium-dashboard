@@ -1,5 +1,5 @@
 {
- "basis": "The book Casey controls: whole book minus Organics Ocean (sale-pending), with the verified BOXX-loan correction\n(variant D, reading (a): Dominion outstanding $200k; repaid capital assumed inside the sheet's Cash/Stables line) and a\nsensitivity on the one soft input that dominates it, the venture-basket volatility.\n\nRun: cd holygrail-engine && HG_OFFLINE=1 python results/casey-2026-10/controllable/ex_oo_view.py\nBasis: the current-book helpers and estimation settings (daily, trailing 3y to 2026-09-30, lw_cc); risk shares are Euler\ncontributions and do not depend on any expected-return input.\n",
+ "basis": "The book Casey controls: whole book minus Organics Ocean (sale-pending), with the verified BOXX-loan correction\n(variant D, reading (a): Dominion outstanding $200k; repaid capital assumed inside the sheet's Cash/Stables line) and a\nsensitivity on the one soft input that dominates it, the venture-basket volatility.\n\nIndependent check 2026-10-06: PASS WITH FIXES (labels; coupon line added). Series X note: at the funded $184.8k\n(flag F17) the 0.60 case is NAV $7.149M, vol 15.2%, DR^2 3.63, venture 63.4% of risk.\n\nRun: cd holygrail-engine && HG_OFFLINE=1 python results/casey-2026-10/controllable/ex_oo_view.py\nBasis: the current-book helpers and estimation settings (daily, trailing 3y to 2026-09-30, lw_cc); risk shares are Euler\ncontributions and do not depend on any expected-return input.\n",
  "venture_vols_declared": [
   0.3,
   0.45,
@@ -32,13 +32,13 @@
   "balance_score": 0.45173854171143624,
   "leverage_to_15": 0.919532430713649,
   "cash_share": 0.05709439065245936,
-  "exp_return_prior": 0.13538684909497387,
-  "sharpe_prior": 0.5841289864223066,
-  "exp_return_at_15_prior": 0.1272019072129769
+  "exp_return_prior": 0.1353836737228888,
+  "sharpe_prior": 0.5841095207048945,
+  "exp_return_at_15_prior": 0.12719898735536508
  },
  "sleeves_base": [
   {
-   "sleeve": "Other venture (13 names)",
+   "sleeve": "Other venture (7 marked names + 4 at $0)",
    "usd": 1548000.0,
    "dollar_share": 0.21019843424707144,
    "risk_share": 0.6874509005123464
@@ -92,7 +92,7 @@
    "risk_share": 0.016427983767830397
   },
   {
-   "sleeve": "Cash, BOXX, T-bills, 16% loan",
+   "sleeve": "Cash, BOXX, T-bills, USDC, 16% Dominion loan",
    "usd": 1066740.1,
    "dollar_share": 0.14484954700811656,
    "risk_share": 0.0007086869645642108
