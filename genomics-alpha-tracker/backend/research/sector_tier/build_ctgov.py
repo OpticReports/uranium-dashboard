@@ -29,6 +29,21 @@ for every "Study Status" version from the one in force on 2025-08-01 through
 MAX_PIT_PER_NAME studies per name (phase 3 first, then most recently updated);
 every drop is counted in the output.
 
+Only DECISION-RELEVANT names get history (measured 2026-10-06: 165 of 705,
+1,810 of 3,040 studies): names with a genomics-labelled move (their baseline
+visibility is measured) and every name that could be in Tier 1 under either
+rule-(b) title mode (their catalysts rank the screen). Every other name's
+queue status changes no metric, only the size chart; it keeps current
+records. Versions are bisected: the version in force on 2025-08-01 and the
+last one in the span are fetched (the last is the current record when no
+later status version exists); intermediate versions only where the primary
+completion date or phases differ between fetched neighbours. A date that
+changed and changed back between two equal fetched versions is missed;
+stated in the report.
+
+CT.gov's API allows about 50 calls a minute: a global limiter spaces calls
+1.25 s apart across workers.
+
 Studies outside that set keep their current record. For the funnel's 50-row
 page that is an approximation only for sponsors with more than 50 active
 future-dated studies on a day (large pharma); it is stated in the report.
@@ -62,8 +77,52 @@ SEARCH_FIELDS = ("NCTId|BriefTitle|Phase|StudyType|PrimaryCompletionDate|Overall
 PIT_FROM = "2025-08-01"     # replay warm-up start
 PIT_TO = "2026-09-30"       # window end
 MAX_PIT_PER_NAME = 60
-WORKERS = 3
+WORKERS = 2
+MIN_INTERVAL = 1.25
 _lock = threading.Lock()
+_rate_lock = threading.Lock()
+_next_slot = [0.0]
+_orig_get_json = B._get_json
+
+
+def _limited_get_json(url, params=None):
+    with _rate_lock:
+        wait = _next_slot[0] - time.time()
+        _next_slot[0] = max(time.time(), _next_slot[0]) + MIN_INTERVAL
+    if wait > 0:
+        time.sleep(wait)
+    return _orig_get_json(url, params)
+
+
+B._get_json = _limited_get_json
+B.SLEEP_BETWEEN_CALLS = 0.0
+
+
+def relevant_names(names: list[dict], census: dict) -> set[str]:
+    """Names whose point-in-time trial record can change a metric (see docstring)."""
+    from research.sector_tier import measure as M   # lazy: measure imports this module
+    labels = json.loads((HERE / "labels.json").read_text())
+    moves = json.loads(P.OUT_MOVES.read_text())
+    g_movers = {m["symbol"] for m in moves if (labels.get(m["symbol"]) or {}).get("genomics")}
+    core = M.Core({})
+    partners = set().union(*(core.partners(t) for t, _ in core.hist))
+    out = set()
+    for p in names:
+        s = p["symbol"]
+        raw = (census.get(s) or {}).get("screener_name") or p["name"]
+        q = D.clean_company_name(raw)
+        rows = [compact(x, q) for x in search_name(q)]
+        prof_path = P.CACHE / "fmp" / "profile" / f"{s}.json"
+        prof = (json.loads(prof_path.read_text()) or [{}])[0] if prof_path.exists() else {}
+        own = [r for r in rows if r.get("own_p23")]
+        if (s in g_movers or D.genomics_tags_for([raw])
+                or (census.get(s) or {}).get("screener_industry") == M.LAB_INDUSTRY
+                or D.genomics_tags_for([(prof or {}).get("description") or ""])
+                or any(r.get("genetic") for r in own) or D.genomics_tags_for([r["title"] for r in own])
+                or D.genomics_partner_hits([x for r in own for x in r.get("partners") or []], partners, q)
+                or D.genomics_tags_for([r["title"][:120] for r in rows])):
+            out.add(s)
+    return out
 
 
 def eligible(pop: list[dict], census: dict[str, dict]) -> list[dict]:
@@ -131,7 +190,24 @@ def needs_pit(row: dict) -> bool:
             and row["last_update"] >= PIT_FROM)
 
 
-def pit_history(nct: str, counters: Counter) -> dict | None:
+def _snap(nct: str, c: dict, counters: Counter, current: dict | None) -> dict | None:
+    if current is not None:
+        return {"from": c["date"], "version": c["version"], "status": c.get("status"),
+                "pcd": current["pcd"], "phases": current["phases"], "from_current_record": True}
+    try:
+        snap = B.extract_snapshot(B.fetch_version(nct, c["version"]))
+    except Exception as exc:  # noqa: BLE001
+        with _lock:
+            counters["version_failed"] += 1
+        print(f"    {nct} v{c['version']}: version FAILED ({exc})", flush=True)
+        return None
+    with _lock:
+        counters["versions_fetched"] += 1
+    return {"from": c["date"], "version": c["version"], "status": snap["status"] or c.get("status"),
+            "pcd": snap["pcd"], "phases": snap["phases"]}
+
+
+def pit_history(nct: str, counters: Counter, current: dict | None = None) -> dict | None:
     """Version list -> [{from, status, pcd, phases}] over the needed span, plus
     the posting-lag probes (v0 date, last version date)."""
     try:
@@ -150,19 +226,37 @@ def pit_history(nct: str, counters: Counter) -> dict | None:
     before = [c for c in status_versions if (c.get("date") or "") <= PIT_FROM]
     span = ([before[-1]] if before else []) + [c for c in status_versions
                                                if PIT_FROM < (c.get("date") or "") <= PIT_TO]
-    rows = []
-    for c in span:
-        try:
-            snap = B.extract_snapshot(B.fetch_version(nct, c["version"]))
-        except Exception as exc:  # noqa: BLE001
-            with _lock:
-                counters["version_failed"] += 1
-            print(f"    {nct} v{c['version']}: version FAILED ({exc})", flush=True)
-            continue
-        rows.append({"from": c["date"], "version": c["version"], "status": snap["status"] or c.get("status"),
-                     "pcd": snap["pcd"], "phases": snap["phases"]})
-        with _lock:
-            counters["versions_fetched"] += 1
+    # Bisection over the span's status versions (see docstring). The last span
+    # version IS the current record when no later status version exists.
+    latest_status_version = status_versions[-1]["version"] if status_versions else None
+    got: dict[int, dict | None] = {}
+
+    def snap_at(k: int) -> dict | None:
+        if k not in got:
+            c = span[k]
+            cur = current if (current is not None and c["version"] == latest_status_version) else None
+            got[k] = _snap(nct, c, counters, cur)
+        return got[k]
+
+    def same(a: dict | None, b: dict | None) -> bool:
+        return bool(a and b and a["pcd"] == b["pcd"] and list(a["phases"] or []) == list(b["phases"] or []))
+
+    def bisect_span(lo: int, hi: int) -> None:
+        if hi - lo <= 1 or same(snap_at(lo), snap_at(hi)):
+            return
+        mid = (lo + hi) // 2
+        snap_at(mid)
+        bisect_span(lo, mid)
+        bisect_span(mid, hi)
+
+    if span:
+        snap_at(0)
+        if len(span) > 1:
+            snap_at(len(span) - 1)
+            bisect_span(0, len(span) - 1)
+    rows = [got[k] for k in sorted(got) if got[k] is not None]
+    with _lock:
+        counters["versions_skipped_by_bisection"] += max(0, len(span) - len(got))
     # The version list carries each version's overall status, so status needs
     # no extra fetch: every version from the one in force on PIT_FROM onward.
     in_force = [c for c in changes if (c.get("date") or "") <= PIT_FROM]
@@ -208,6 +302,11 @@ def main() -> None:
             print(f"  search {i}/{len(names)}: {sum(len(v) for v in want.values())} studies need history, "
                   f"{time.time() - t0:.0f}s", flush=True)
 
+    relevant = relevant_names(names, census)
+    print(f"decision-relevant names: {len(relevant)} of {len(want)}", flush=True)
+    want = {s: v for s, v in want.items() if s in relevant}
+    current = {r["nct"]: {"pcd": r["pcd"], "phases": r["phases"]}
+               for e in out_names.values() for r in e.get("studies") or []}
     ncts = sorted({n for v in want.values() for n in v})
     print(f"searches done: {len(out_names)} names, {len(ncts)} distinct studies need history, "
           f"{sum(v.get('n_pit_dropped_by_cap', 0) for v in out_names.values())} dropped by the per-name cap; "
@@ -215,7 +314,7 @@ def main() -> None:
 
     pit_out: dict[str, dict] = {}
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:
-        futs = {ex.submit(pit_history, n, counters): n for n in ncts}
+        futs = {ex.submit(pit_history, n, counters, current.get(n)): n for n in ncts}
         for k, f in enumerate(as_completed(futs)):
             res = f.result()
             if res is not None:
@@ -229,6 +328,7 @@ def main() -> None:
         "built": date.today().isoformat(),
         "pit_span": [PIT_FROM, PIT_TO],
         "max_pit_per_name": MAX_PIT_PER_NAME,
+        "pit_names": sorted(want),
         "counters": dict(counters),
         "names": out_names,
         "pit": pit_out,
