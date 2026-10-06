@@ -102,7 +102,8 @@ Proxies are declared per stream with an explicit splice date (`proxies: [{symbol
   first; only new borrowing, max(L(1 - cash) - 1, 0), pays rf + spread (scorecard, Kelly, forward
   and backtest use the same rule). `max_leverage` caps gross non-cash exposure.
 - Calendars: daily data is annualised on the observed periods per year (~252 exchange days,
-  ~365 for crypto-only), and constant rates, fees and spreads accrue by calendar days. A stream
+  ~365 for crypto-only), measured on the rows where every stream has data (a crypto-only stretch
+  before a later business-day stream starts does not count), and constant rates, fees and spreads accrue by calendar days. A stream
   marked more coarsely than the analysis frequency (e.g. month-end NAVs at weekly) is refused
   rather than forward-filled into fake zero returns. Benchmarks are aligned as-of by level.
 - Correlation stress (`stress --corr-rho`) floors every leaf correlation at rho; it never lowers

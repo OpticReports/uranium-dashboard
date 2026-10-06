@@ -99,9 +99,14 @@ def prepare_moments(book, view, loader, settings: ScoreSettings):
         start = end - pd.DateOffset(months=int(round(settings.window_years * 12)))
         rets = rets.loc[(rets.index > start) & (rets.index <= end)]
     ppy = FREQ_PPY[settings.freq.upper()]
-    if settings.freq.upper() == "D" and rets is not None and len(rets) >= 3:
-        # daily: annualise on the observed calendar (~252 exchange days, ~365 crypto-only)
-        ppy = infer_periods_per_year(rets.index)
+    if settings.freq.upper() == "D" and rets is not None:
+        # daily: annualise on the observed calendar (~252 exchange days, ~365
+        # crypto-only), measured on the rows the estimator uses (history
+        # 'common' = every stream present), so a 7-day crypto stretch before a
+        # business-day stream starts does not inflate it
+        cal = rets.dropna(how="any").index if settings.history == "common" else rets.index
+        if len(cal) >= 3:
+            ppy = infer_periods_per_year(cal)
     m = build_moments(book.universe, names, returns=rets, periods_per_year=ppy, rf=rf_info["value"],
                       method=settings.estimator, history=settings.history, mu_mode=settings.mu_mode,
                       min_periods=settings.min_obs, halflife=settings.halflife)

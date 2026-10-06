@@ -158,8 +158,12 @@ def cmd_backtest(a) -> int:
         R = R.loc[R.index <= pd.Timestamp(a.end)]
     rf_d = rf_d.reindex(R.index)
     # annualise on the calendar actually used: ~252/yr for exchange days,
-    # ~365/yr for a crypto-only 7-day calendar (vol, Sharpe, vol targeting)
-    ppy = infer_periods_per_year(R.index)
+    # ~365/yr for a crypto-only 7-day calendar (vol, Sharpe, vol targeting).
+    # Infer it on the rows where EVERY stream has started (the backtest trades
+    # only there, start_when='all'): a 7-day crypto history before a later
+    # business-day stream starts would otherwise inflate it (e.g. 305 vs 261).
+    active = R.dropna(how="any").index
+    ppy = infer_periods_per_year(active if len(active) >= 3 else R.index)
     if ppy < 180:
         raise ValidationError(f"the aligned daily calendar has only {ppy:.0f} periods/yr: a stream prints too rarely "
                               "for a daily backtest")

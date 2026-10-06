@@ -291,6 +291,33 @@ def test_hg_m4_constant_rf_and_composite_constants_accrue_by_calendar_days(offli
     assert drag == pytest.approx(-0.02, rel=0.01)  # a 2% fee costs 2% a year, not 2% x 365/252
 
 
+def test_hg_m4_mixed_calendar_backtest_annualises_on_the_traded_segment(tmp_path, offline_loader):
+    # CRYX trades 7 days from 2014; LATE (business days) starts 2019-06, so the
+    # calendar is 7-day then 5-day.  Trading starts only once both streams have
+    # history: ppy must be the 5-day segment's (~261), not the whole index's (~305).
+    args = ["backtest", "--tickers", "CRYX,LATE", "--allocator", "erc", "--target-vol", "0.20",
+            "--max-leverage", "3", "--rf", "0.04", "--cost-bps", "0", *_common(tmp_path, offline_loader)]
+    assert main(args) == 0
+    bt = json.loads((tmp_path / "o" / "backtest.json").read_text())
+    eq = pd.read_csv(tmp_path / "o" / "equity.csv", parse_dates=[0], index_col=0).iloc[:, 0]
+    r = eq.pct_change().dropna()
+    obs = len(r) / ((r.index[-1] - r.index[0]).days / 365.25)
+    assert bt["config"]["periods_per_year"] == pytest.approx(obs, rel=0.01)
+    assert bt["metrics"]["vol"] == pytest.approx(r.std() * math.sqrt(obs), rel=0.01)
+
+
+def test_hg_m4_scorecard_daily_mixed_calendar_uses_common_rows(offline_loader):
+    from holygrail.scorecard import prepare_moments
+    raw = {"name": "c", "settings": {"risk_free": A(0.04)},
+           "streams": {"CRYX": {"type": "market", "symbol": "CRYX"}, "LATE": {"type": "market", "symbol": "LATE"}},
+           "positions": [{"name": "c", "value_usd": 1, "stream": "CRYX"}, {"name": "l", "value_usd": 1, "stream": "LATE"}],
+           "totals": {"total_usd": 2}}
+    book = book_from_dict(raw)
+    m, *_ = prepare_moments(book, book.view("investable"), offline_loader,
+                            ScoreSettings(freq="D", window_years=10, estimator="sample"))
+    assert m.estimate.periods_per_year == pytest.approx(260.9, rel=0.01)  # business days, not ~300
+
+
 def test_hg_m4_scorecard_daily_freq_uses_observed_periods(offline_loader):
     from holygrail.scorecard import prepare_moments
     raw = {"name": "c", "settings": {"risk_free": A(0.04)},
