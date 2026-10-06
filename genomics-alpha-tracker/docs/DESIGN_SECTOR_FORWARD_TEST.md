@@ -620,3 +620,39 @@ be **source 2**, judged with a Bonferroni bound (lower 95% for m = 2).
 press-release catalyst date (PDUFA and guided topline) as context. It is
 now evidence-backed context: an exposed name had about twice the odds of a
 big move.
+
+## Source 2 ceiling (2026-10-06, exploratory): not worth running
+
+**Question.** Could any catalyst source, full text included, pass condition 2?
+
+**Method.** Take the gate's 90 de-clustered events. For each one, list the
+company's own releases published from 16:00 on P through 16:00 on the event
+day. Hand-classify each move as trial/regulatory news or not, then find each
+one's B1x rank on P.
+
+**Result.**
+- 34 of the 90 moves were trial/regulatory news. The other 56 were
+  earnings, raises, law-firm noise, or moves with no release.
+- Of the 34, 6 were already exposed in source 1. Another 4 were already
+  in B1x's top 10, so flagging them gains nothing. That leaves at most 24
+  winnable moves (2 of them are current B1x-only losses).
+- Best case, with a perfect source:
+  - with window-based displacement, the pair is (30, 7) and power at 12
+    months is 0.547;
+  - with an impossible zero-displacement oracle that flags only the move
+    day, it is (30, 4) and 0.683.
+- Both fall short of 0.80. Full-text source 2 is therefore not run: its
+  result could not change the decision.
+
+**Counter-agent (1 reviewer): CONFIRMED-WITH-CORRECTIONS.**
+- My first pass missed 3 trial-news moves. Their titles were hidden behind
+  law-firm alerts, or the release came out just after 16:00 on P (QURE
+  2025-11-03, SRPT 2025-11-04, GRAL 2026-02-20).
+- It overstated the c floor: 6, corrected to 4.
+- The corrected numbers are the ones above.
+- The reviewer found that only a zero-displacement oracle, with every
+  unexplained move also counted as a catalyst, passes (0.911). No dated
+  source can be that oracle.
+- The gate's Bonferroni rule only makes source 2 harder.
+- Chart: `charts/source2_ceiling.png`. The scripts stayed in the session
+  scratchpad. This section is exploratory and changes no frozen rule.
