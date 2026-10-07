@@ -41,7 +41,7 @@ def vix_etp(name, src='^VIX'):
     M = json.load(open(f'{SP}/vix_models.json'))[name]
     vix = yh('^VIX'); v3 = yh('^VIX3M'); v6 = yh('^VIX6M') if M['kind'] == 'mid' else {}
     rv = rets_of(vix); rv3 = rets_of(v3); rv6 = rets_of(v6) if v6 else {}
-    lev_of = lambda d: next((L for a_, b_, L in M['eras'] if a_ <= d <= b_), M['eras'][-1][2])
+    lev_of = lambda d: next((L for a_, b_, L in M['eras'] if a_ <= d <= b_), M['eras'][0][2] if d < M['eras'][0][0] else M['eras'][-1][2])
     bp = M['beta_plain']; plain = curve_from({d: lev_of(d)*(bp[0]*r + bp[1]) for d, r in rv.items()})
     ds = sorted(set(rv) & set(rv3)); prev = {ds[i]: ds[i-1] for i in range(1, len(ds))}
     b = M['beta']; out = {}

@@ -15,11 +15,12 @@ def ols(y, x):
     return a, b, math.sqrt(sum(r*r for r in res)/(n-2))
 
 def turnover(hold, days):
-    """sum |dw| per day between consecutive holdings (weights that earn d)."""
-    out = {}; prev = {}
-    for d in days[1:]:
-        w = hold.get(d, {}); keys = set(w) | set(prev)
-        out[d] = sum(abs(w.get(k, 0) - prev.get(k, 0)) for k in keys); prev = w
+    """sum|dw| of the trade EXECUTED at close d (from hold[d] to hold[d+1]); charged on day d."""
+    out = {}
+    for i in range(1, len(days)):
+        d = days[i]; nxt = days[i+1] if i+1 < len(days) else None
+        w, wn = hold.get(d, {}), (hold.get(nxt, {}) if nxt else hold.get(d, {}))
+        out[d] = sum(abs(wn.get(k, 0)-w.get(k, 0)) for k in set(w) | set(wn))
     return out
 
 # ---- (A) cost per unit sum|dw| in the real era, real tickers ---------------
@@ -32,11 +33,11 @@ for eng in ('HG', 'KMLM', 'SLEEVE', 'HARV'):
     y = [cr[d] - r[d] for d in com]; x = [to[d] for d in com]
     a, b, se = ols(y, x)
     zero = [y[i] for i in range(len(com)) if x[i] < 1e-9]
-    cost[eng] = {'bps_per_unit_sum_abs_dw': round(b*1e4, 2), 'intercept_bps': round(a*1e4, 3), 'resid_sd_bps': round(se*1e4, 2),
+    cost[eng] = {'cost_bps_per_unit_sum_abs_dw': round(-b*1e4, 3), 'intercept_bps': round(a*1e4, 3), 'resid_sd_bps': round(se*1e4, 2),
                  'n': len(com), 'zero_turnover_days': len(zero), 'zero_turnover_mean_bps': round(sum(zero)/len(zero)*1e4, 3) if zero else None,
                  'mean_sum_abs_dw_per_day': round(sum(x)/len(x), 4)}
     # check: apply cost and compare cumulative
-    adj = {d: r[d] - b*to[d] - a for d in com}
+    adj = {d: r[d] + b*to[d] + a for d in com}
     ca = math.prod(1+adj[d] for d in com); cc = math.prod(1+cr[d] for d in com)
     cost[eng]['cum_sim_costed'] = round(ca, 3); cost[eng]['cum_composer'] = round(cc, 3)
     print(eng, cost[eng])

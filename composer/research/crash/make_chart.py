@@ -98,7 +98,7 @@ def pct(x): return f'{x:+.0%}' if abs(x) >= 0.1 else f'{x:+.1%}'
 def money(x): return f'${x/1000:,.0f}k'
 
 # ---------------- COVID ----------------
-prox = ['AQMIX', 'FMF', 'DBMF', 'DBC']
+prox = ['AQMIX', 'WTMF', 'FMF', 'DBMF', 'RYMFX', 'DBC']
 cov = {p: B['covid'][f'{p}|from_today|composer|guards'] for p in prox}
 n_cov = min(len(cov[p]['path']) for p in prox)
 book_band = [(i, min(cov[p]['path'][i][1] for p in prox), max(cov[p]['path'][i][1] for p in prox)) for i in range(n_cov)]
@@ -117,26 +117,26 @@ days_c = [d for d in C['covid']['DBMF']['HG']['days'] if '2020-02-19' <= d <= '2
 strips = '\n'.join(strip(C['covid']['DBMF'][e]['hold'], days_c, f'{e} holdings, 2020-02-19 .. 04-30 (hover for exact weights)') for e in ('HG', 'KMLM', 'SLEEVE', 'HARV'))
 
 # ---------------- GFC ----------------
-gk = 'from_peak|KMLM=HG(conservative)|HARV=exhibit|SLEEVE=recon|guards'; ge = 'from_peak|KMLM=exhibit|HARV=exhibit|SLEEVE=recon|guards'
+gk = 'from_peak|KMLM=HG(conservative)|HARV=T-bill|SLEEVE=recon|guards'; ge = 'from_peak|KMLM=exhibit|HARV=exhibit|SLEEVE=recon|guards'; gkb = 'from_peak|KMLM=HG(conservative)|HARV=T-bill|SLEEVE=recon,vol-legs->BIL|guards'
 gp = B['gfc'][gk]['path']; gpe = B['gfc'][ge]['path']; n_g = min(len(gp), len(gpe))
-ser = [('book, KMLM=HG (conservative lens)', PAL['book'], [(i, gp[i][1]) for i in range(n_g)], 2.2, False),
-       ('book, KMLM=mechanism exhibit', '#60a5fa', [(i, gpe[i][1]) for i in range(n_g)], 1.6, True),
+ser = [('book, conservative (KMLM=HG, HARV=T-bill)', PAL['book'], [(i, gp[i][1]) for i in range(n_g)], 2.2, False),
+       ('book, mechanism exhibits (KMLM, HARV modelled)', '#60a5fa', [(i, gpe[i][1]) for i in range(n_g)], 1.2, True),
        ('HG (recon)', PAL['HG'], [(i, gp[i][2]/gp[0][2]*START) for i in range(n_g)], 1.2, False),
        ('SLEEVE (recon)', PAL['SLEEVE'], [(i, gp[i][4]/gp[0][4]*START) for i in range(n_g)], 1.2, False),
-       ('HARV (exhibit)', PAL['HARV'], [(i, gp[i][5]/gp[0][5]*START) for i in range(n_g)], 1.0, True),
+       ('book, sleeve vol legs -> BIL', '#0f766e', [(i, B['gfc'][gkb]['path'][i][1]) for i in range(min(n_g, len(B['gfc'][gkb]['path'])))], 1.2, True),
        ('S&P 500', PAL['SPX'], spx_path('2007-10-09', n_g-1), 1.4, True)]
-gfc_svg = '<h2>B. 2008-type crash from today: daily hybrid replay from the 2007-10-09 peak</h2><p class="note">HG and the sleeve replayed on leveraged ETFs reconstructed from their real indices; KMLM = HG (conservative lens) or the mechanism exhibit; HARV = mechanism exhibit (vol legs modelled from the VIX term structure).</p>' + svg_lines(ser, title='')
+gfc_svg = '<h2>B. 2008-type crash from today: daily hybrid replay from the 2007-10-09 peak</h2><p class="note">HG replayed on leveraged ETFs reconstructed from their real indices (fit 0.995-0.999). The sleeve is replayed the same way for its equity/bond legs, but its UVXY/SVXY legs come from a VIX term-structure model and carry most of its 2008 gain — the dashed line sets those legs to cash. Conservative book: KMLM = HG (house lens), HARV = T-bill. The light dashed line uses the KMLM/HARV mechanism exhibits (vol legs modelled before they existed; artefact-grade).</p>' + svg_lines(ser, title='')
 gfc_dd = svg_dd([('book (conservative)', PAL['book'], dd_series([p[1] for p in gp[:n_g]]), 2, False), ('HG', PAL['HG'], dd_series([p[2] for p in gp[:n_g]]), 1.2, False),
                  ('SLEEVE', PAL['SLEEVE'], dd_series([p[4] for p in gp[:n_g]]), 1.2, False), ('S&P 500', PAL['SPX'], dd_series([y for _, y in spx_path('2007-10-09', n_g-1)]), 1.2, True)])
 # ---------------- dotcom ----------------
-dk = 'from_ndx_peak|KMLM=HG(conservative)|SLEEVE,HARV=cash6%|guards'; dp = B['dotcom'][dk]['path']; n_d = len(dp)
+dk = 'from_ndx_peak|KMLM=HG(conservative)|SLEEVE,HARV=T-bill|guards'; dp = B['dotcom'][dk]['path']; n_d = len(dp)
 hgd = H['runs']['HG_dotcom']['rets']; dsd = [d for d in sorted(hgd) if d >= '2000-03-10']
 hg_curve = [START];
 for d in dsd[:n_d-1]: hg_curve.append(hg_curve[-1]*(1+hgd[d]))
-ser = [('book (HG recon + KMLM=HG, sleeve/HARV = 6% cash)', PAL['book'], [(i, dp[i][1]) for i in range(n_d)], 2.2, False),
+ser = [('book (HG recon + KMLM=HG, sleeve/HARV = T-bill)', PAL['book'], [(i, dp[i][1]) for i in range(n_d)], 2.2, False),
        ('HG (recon)', PAL['HG'], [(i, v) for i, v in enumerate(hg_curve)], 1.3, False),
        ('S&P 500', PAL['SPX'], spx_path('2000-03-10', n_d-1), 1.4, True)]
-dot_svg = '<h2>C. 2000-type crash from today: HG reconstructed through the dotcom bust (NDX peak 2000-03-10)</h2><p class="note">Only HG is replayable in kind (credit/vol ETFs did not exist). Book assumption: KMLM = HG (conservative), sleeve and HARV = 6% T-bill cash.</p>' + svg_lines(ser, title='')
+dot_svg = '<h2>C. 2000-type crash from today: HG reconstructed through the dotcom bust (NDX peak 2000-03-10)</h2><p class="note">Only HG is replayable in kind (credit/vol ETFs did not exist). Book assumption: KMLM = HG (conservative), sleeve and HARV at the actual 13-week T-bill (~5.7%).</p>' + svg_lines(ser, title='')
 dot_dd = svg_dd([('book', PAL['book'], dd_series([p[1] for p in dp]), 2, False), ('HG', PAL['HG'], dd_series(hg_curve), 1.2, False), ('S&P 500', PAL['SPX'], dd_series([y for _, y in spx_path('2000-03-10', n_d-1)]), 1.2, True)])
 
 # ---------------- bootstrap fans ----------------
@@ -166,13 +166,18 @@ for key, lab in (('from_today|composer|guards', 'COVID-type, from today\'s holdi
         v = [s[f'm{h}']['value'] for s in ss if f'm{h}' in s]; cells.append(f"{money(min(v))} – {money(max(v))} ({pct(min(v)/START-1)} to {pct(max(v)/START-1)})")
     cells += [f"{min(s['maxdd'] for s in ss):.0%} – {max(s['maxdd'] for s in ss):.0%}", f"{min(s['worst_5d'] for s in ss):+.0%} to {max(s['worst_5d'] for s in ss):+.0%}"]
     rows.append(cells)
-for key, lab in ((gk, '2008-type from the Oct-2007 peak, KMLM=HG (conservative), guards on'), (ge, '2008-type from peak, KMLM=mechanism exhibit, guards on'),
-                 ('from_lehman|KMLM=HG(conservative)|HARV=exhibit|SLEEVE=recon|guards', '2008-type from Lehman (acute phase), KMLM=HG, guards on'),
-                 ('from_lehman|KMLM=exhibit|HARV=exhibit|SLEEVE=recon|guards', '2008-type from Lehman, KMLM=exhibit, guards on'),
-                 ('from_peak|KMLM=HG(conservative)|HARV=exhibit|SLEEVE=recon|noguards', '2008-type from peak, KMLM=HG, guards OFF')):
+for key, lab in ((gk, '2008-type from the Oct-2007 peak — conservative: KMLM=HG, HARV=T-bill, sleeve recon, guards on'),
+                 (gkb, '2008-type from peak — conservative, sleeve vol legs (UVXY/SVXY) set to cash'),
+                 ('from_lehman|KMLM=HG(conservative)|HARV=T-bill|SLEEVE=recon|guards', '2008-type from Lehman (acute) — conservative, guards on'),
+                 ('from_lehman|KMLM=HG(conservative)|HARV=T-bill|SLEEVE=recon,vol-legs->BIL|guards', '2008-type from Lehman — conservative, sleeve vol legs to cash'),
+                 ('from_peak|KMLM=HG(conservative)|HARV=T-bill|SLEEVE=recon|noguards', '2008-type from peak — conservative, guards OFF')):
     rows.append(row_from_summary(B['gfc'][key]['summary'], lab))
-for key, lab in ((dk, '2000-type from the NDX peak: HG recon, KMLM=HG, sleeve/HARV=cash, guards on'), ('acute|KMLM=HG(conservative)|SLEEVE,HARV=cash6%|guards', '2000-type from Sep-2000 (acute), same assumptions')):
+for key, lab in ((dk, '2000-type from the NDX peak — HG recon, KMLM=HG, sleeve/HARV = T-bill, guards on'), ('acute|KMLM=HG(conservative)|SLEEVE,HARV=T-bill|guards', '2000-type from Sep-2000 (acute) — same assumptions')):
     rows.append(row_from_summary(B['dotcom'][key]['summary'], lab))
+exh_rows = []
+for key, lab in ((ge, '2008 from peak — KMLM and HARV mechanism exhibits'), ('from_lehman|KMLM=exhibit|HARV=exhibit|SLEEVE=recon|guards', '2008 from Lehman — KMLM and HARV mechanism exhibits'),
+                 ('from_peak|KMLM=HG(conservative)|HARV=exhibit|SLEEVE=recon|guards', '2008 from peak — KMLM=HG, HARV exhibit')):
+    exh_rows.append(row_from_summary(B['gfc'][key]['summary'], lab))
 boot_rows = []
 for name, r in S['scenarios'].items():
     for lens in ('conservative', 'as_measured'):
@@ -203,10 +208,12 @@ h1{{font-size:20px;margin:6px 0}}h2{{font-size:15px;margin:22px 0 6px}}p,li{{fon
 <div><span>House lens (55y regime bootstrap, conservative), 12m p05 / p50</span><br><b>{money(S['scenarios']['GFC from peak (2007-10)']['conservative']['balance']['12']['0.05'])} / {money(S['scenarios']['GFC from peak (2007-10)']['conservative']['balance']['12']['0.5'])}</b><br><span>GFC sequence; max DD p95 {S['scenarios']['GFC from peak (2007-10)']['conservative']['maxdd']['0.95']:.0%} (monthly)</span></div></div>
 <h2>Balances at 3 / 6 / 9 / 12 months (start $303,140)</h2>
 {table(['scenario', '+3m', '+6m', '+9m', '+12m', 'max DD', 'worst 5d'], rows)}
-<p class="note">COVID rows: range across four managed-futures proxies for KMLM's regime flag (AQMIX/FMF/DBMF/DBC, 79-90% day-agreement with the real flag). The 12-month multiples are the engines' in-sample reaction to the 2020 melt-up (HG and the sleeve were authored after 2020); the first 3-6 weeks are the stress-test part. 2008/2000 rows: HG and the sleeve replayed daily on reconstructed leveraged ETFs (fit 0.995-0.999 to their indices; HG recon vs real 2015-26 corr 0.96, DD within 6pp, level pessimistic ~10%/yr); KMLM has no measurable 2008/2000 behaviour (its vol legs did not exist) so it is set equal to HG (the house conservative lens) or to a mechanism exhibit; HARV likewise.</p>
+<p class="note">COVID rows: range across six stand-ins for KMLM's regime flag (five managed-futures funds AQMIX/WTMF/FMF/DBMF/RYMFX, 78-84% day-agreement with the real flag, plus DBC — a long-only commodity index kept as the wrong-sign stress case). The flag is a coin-flip in a crash; the range is the honest answer. The 12-month multiples are the engines' in-sample reaction to the 2020 melt-up (HG and the sleeve were authored after 2020); the first 3-6 weeks are the stress-test part. Sims start from the live split (29/32/26/12), not the 29/29/27/15 targets. 2008/2000 rows: HG replayed daily on leveraged ETFs reconstructed from their real indices (fit 0.995-0.999; HG with every leg reconstructed vs real tickers 2015-26: corr 0.96, maxDD 42% vs 36%, level ~10%/yr pessimistic on average with ±15pp errors in single windows). The sleeve's equity/bond legs are reconstructed the same way; its UVXY/SVXY legs are a VIX term-structure model and carry most of its 2008 gain, hence the vol-legs-to-cash rows. KMLM and HARV have no measurable 2008/2000 behaviour (their vol legs did not exist): conservative rows set KMLM = HG (house lens) and HARV = T-bill; the mechanism exhibits are in the appendix table. The HG 12-month number from 2000-03-10 is window-fragile (+22% at 2001-03-09, −12% one session later when a biotech dip-buy lost 28%).</p>
+<h3>Appendix: mechanism exhibits (artefact-grade — KMLM/HARV vol legs modelled before they existed)</h3>
+{table(['scenario', '+3m', '+6m', '+9m', '+12m', 'max DD', 'worst 5d'], exh_rows)}
 <h2>Regime bootstrap along each crash's actual month sequence (house method, add. 13)</h2>
 {table(['sequence — lens', '12m p05 / p50 / p95', 'p50 at 3m · 6m · 9m', 'max DD p50 / p95 (monthly)', 'P(loss at 12m)', 'S&P over sequence'], boot_rows)}
-<p class="note">Why the bootstrap is kinder than the daily replays: it draws each month independently from the engines' measured crash/chop buckets (short sharp 2018/2020/2022/2025 episodes that mean-reverted within weeks), so a 12-18 month crash sequence compounds spike-months with no give-back, and monthly resolution hides intra-month drawdowns (COVID replay DD 14-21% vs bootstrap p95 6%). Use it as the house ranking lens, not as the stress number.</p>
+<p class="note">Why the bootstrap is kinder than the daily replays: it draws each month independently from the engines' measured crash/chop buckets (short sharp 2018/2020/2022/2025 episodes that mean-reverted within weeks), so a 12-18 month crash sequence compounds spike-months with no give-back, and monthly resolution hides intra-month drawdowns (COVID replay DD 14-21% vs bootstrap monthly p95 6% as-measured / 23% conservative). Use it as the house ranking lens, not as the stress number.</p>
 {covid_svg}{covid_dd}
 <h2>Holdings through the COVID crash (what the gates actually did)</h2>{strips}
 {gfc_svg}{gfc_dd}
@@ -216,8 +223,9 @@ h1{{font-size:20px;margin:6px 0}}h2{{font-size:15px;margin:22px 0 6px}}p,li{{fon
 {table(['candidate', 'window', 'base cum / maxDD', 'gated cum / maxDD', 'Δ cum', 'placebo'], imp_rows)}
 <h2>Fidelity of the instruments used</h2>
 <ul><li>Tree simulator vs Composer's own engine, real era 2023-26, real tickers: daily corr HG {fid['HG_real_realtickers']['corr']}, KMLM {fid['KMLM_real_realtickers']['corr']}, SLEEVE {fid['SLEEVE_real_realtickers']['corr']}, HARV {fid['HARV_real_realtickers']['corr']} (level gap = Composer's 5-bps slippage setting, ~3 bps/day, fitted and applied).</li>
-<li>COVID window: HG sim vs Composer backtest corr {fid['HG_covid_vs_composer']['corr']}; sleeve (BOXX→BIL, KMLM→DBMF) {fid['SLEEVE_covid_vs_composer_DBMF']['corr']}.</li>
-<li>Synthetic SVIX (from SVXY) corr 0.993 with the real product; synthetic ZVOL (from VXZ) 0.973 incl. backwardation days; KMLM regime-flag proxies 79-90% day agreement — the one unresolved input (KMLM real-era with a proxy flag: corr 0.75-0.84, i.e. the engine's edge is concentrated on exact flag timing).</li>
-<li>VIX-ETP term-structure models (2008 exhibits): OOS 2019-26 corr 0.96-0.97 short-term, 0.89-0.90 mid-term; COVID spike captured ~77%.</li></ul>
-<p class="note">Prepared 2026-10-07. Scripts: composer/research/crash/. Counter-agent review logged in results.md addendum 39.</p></body></html>'''
+<li>COVID window: HG sim vs Composer backtest corr {fid['HG_covid_vs_composer']['corr']}; sleeve (BOXX→BIL, KMLM→DBMF) {fid['SLEEVE_covid_vs_composer_DBMF']['corr']}. Composer's cost is its 5-bps slippage setting: 5.1 bps per unit sum|dw| charged on the trade day (10.2 bps per full switch, zero on no-trade days — addendum 38 confirmed), fitted per engine and applied to every replay.</li>
+<li>Synthetic SVIX (from SVXY) corr 0.993 with the real product; synthetic ZVOL (from VXZ) 0.973 incl. backwardation days; KMLM regime-flag stand-ins 78-84% day agreement — the one unresolved input (KMLM real-era with a proxy flag: corr 0.75-0.84, i.e. the engine's edge is concentrated on exact flag timing).</li>
+<li>VIX-ETP term-structure models (2008 sleeve vol legs and the exhibits): OOS 2019-26 corr 0.96-0.97 short-term, 0.89-0.90 mid-term; COVID spike captured ~77%. In 2008 the model runs mostly in backwardation (74% of Lehman-to-trough days vs 7% of its fit days), so the sleeve's 2008 vol-leg gain is model-driven — read the vol-legs-to-cash rows as the floor.</li>
+<li>Improvement placebos: 60 random gate draws of matched size on scattered days — a weak null for a clustered gate; "no measurable effect" means inside that band, not "free".</li></ul>
+<p class="note">Prepared 2026-10-07; corrected after the adversarial counter-agent review (two blocking defects fixed: a cold-start gap in the from-today sleeve, and a one-day misalignment in the cost model). Scripts: composer/research/crash/. Review log: results.md addendum 39.</p></body></html>'''
 open(OUT, 'w').write(page); print('wrote', OUT, len(page))

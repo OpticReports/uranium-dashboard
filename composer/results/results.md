@@ -2228,3 +2228,161 @@ for unknown-lag funds the AMBIGUOUS line does it; (3) parser test — done.
 NOT MODELED: lags rest on 1-3 events each; a lag over 5 business days or a
 holiday-shifted pay date; a real Composer backtest started at --start (we
 slice the full-window run instead — a fresh start would buy in from cash).
+
+
+## Addendum 39 — Crash simulations: COVID-type, 2008-type, 2000-type applied to
+## the live book; what the gates did; three candidate changes measured (2026-10-07)
+
+Owner question: run a COVID-like, a 2008 and a 1999/2000 crash against the
+book as built (trees, guards, live split), from today's $303,140: balances at
+3/6/9/12 months, drawdowns, and what to learn or change for a meltdown.
+Chart: results/crash-sim-2026-10-07.html (+ .json); code research/crash/.
+Counter-agent reviewed (two blocking defects fixed before these numbers).
+
+RESULTS (start $303,140 at the live split 29/32/26/12; Composer-equivalent
+costs; guards on; day 0 = onset; "crash" = first 23 sessions)
+
+  scenario                                +3m      +6m        +9m        +12m       maxDD  worst 5d
+  COVID-type, today's holdings (6 stand-ins
+    for KMLM's regime flag)                $424-544k $739k-1.02M $883k-1.36M $898k-1.52M 15-21% -14..-19%
+    same, guards OFF                       $505-585k $716-982k  $845k-1.32M $935k-1.43M 15-21% -14..-19%
+  2008-type, Oct-07 peak, CONSERVATIVE
+    (KMLM=HG, HARV=T-bill, sleeve recon)   $291k    $289k      $281k      $265k      44%    -16%
+    same, sleeve vol legs set to cash      $291k    $275k      $268k      $241k      47%    -16%
+    same, guards OFF                       $291k    $288k      $282k      $273k      39%
+  2008-type, from Lehman, conservative     $321k    $253k      $308k      $353k      47%    -16%
+    same, sleeve vol legs set to cash      $306k    $238k      $289k      $333k      47%    -14%
+  2000-type, NDX peak (HG recon; KMLM=HG;
+    sleeve/HARV = T-bill)                  $273k    $218k      $247k      $287k      49%    -22%
+  2000-type, from Sep-2000 (acute)         $335k    $505k      $372k      $332k      46%    -20%
+  House lens (55y regime bootstrap, CONSERVATIVE, 12m p05 / p50 / p95):
+    COVID $337k/$624k/$1.37M; GFC-peak $289k/$477k/$964k; Lehman $306k/
+    $606k/$1.57M; dotcom-peak $307k/$539k/$1.14M; monthly maxDD p95 23-34%.
+  Mechanism exhibits (KMLM/HARV vol legs modelled before they existed —
+    artefact-grade, appendix of the chart): 2008 from peak $240k (DD 32%),
+    from Lehman $422k (DD 24%).
+
+READ IT THIS WAY
+- COVID-type (in-kind: real tickers, validated simulator). The book loses
+  15% in the first six sessions: HG -$31.6k (100% TQQQ into the gap), KMLM
+  -$13.4k (37% SOXL / 38% SVIX), HARV -$2.1k, sleeve +$0.3k. HG is in BIL
+  by session three and re-enters on dips (-6% over the crash); the sleeve's
+  UVXY leg pays +80pp of its +144..+180% crash gain and the band sells that
+  pop into the engines; HARV loses 10% (ZVOL entries, and PULS -5%). The
+  12-month multiples (3-5x) are the engines' IN-SAMPLE reaction to the 2020
+  melt-up (HG and the sleeve were authored after 2020); the first 3-6 weeks
+  are the stress test, the rest is the easiest tape these rules ever saw.
+- KMLM in a sharp crash is UNRESOLVED. Its risk-on/off flag (RSI10 XLK vs
+  RSI10 KMLM) cannot be reconstructed for 2020: five managed-futures funds
+  and one commodity index (DBC, wrong-sign stress case) agree with the real
+  flag on 78-84% of days, and give KMLM crash-window results of +51% (AQMIX),
+  +14% (WTMF), -13% (DBMF), -36% (FMF), -48% (RYMFX), -58% (DBC). Mechanism:
+  with the flag risk-on, the "lowest-2-RSI of TECL/SOXL/SVIX" leg buys a -1x
+  VIX product while VIX explodes (SVIX -50pp of KMLM under DBC). With a proxy
+  flag the real-era engine drops from 61x to 9-23x: its edge is concentrated
+  on exact flag timing. The flag is a coin-flip in a crash; the range is the
+  honest answer and the fragility is a design fact, not a modelling artefact.
+- 2008-type and 2000-type (reconstructed). The book goes nowhere to -20%
+  over a year and sits in a 44-49% drawdown doing it. HG takes ~70% peak-
+  to-trough in BOTH long bears (vs 36% in its 2015-26 record and a 40%
+  anomaly alarm) and the losses come from the TREND baskets (10d>20d MA
+  and the price>20d else-branch whipsaw into 3x longs on every failed rally:
+  TQQQ -68pp/-85pp of HG in 2008/2000-02; trend days -66%/-69%), NOT the
+  dip-buys (TECL/QLD/USD/LABU net +79pp/+195pp). The sleeve's 2008 (+36%
+  peak-to-trough, +24% calendar, -13% in the 12 months after Lehman, maxDD
+  43%) is carried by its UVXY/SVXY legs, which are a VIX term-structure
+  MODEL in 2008 — with those legs in cash it is -1% / -14% / -29%: read
+  that as the floor. Its SOXS/LABD whipsaws in the 2009 V-rebound are real
+  mechanism on real indices. The guards made 2008 slightly WORSE (DD 44%
+  vs 39%: band re-entries into a falling sleeve) and 2000-acute better
+  (46% vs 54%): they are not a crash tool, they are a drift tool.
+- Alerts: every engine's tier-2 and the book-17% alarm fire in all three
+  scenarios; in a long bear HG's 40% anomaly alarm fires early and often.
+
+INSTRUMENTS AND THEIR FIDELITY (each verified against something real)
+- Tree simulator vs Composer's engine, 2023-26, real tickers: daily corr
+  .9999/.9997/.9985/.9992 (HG/KMLM/SLEEVE/HARV); counter-agent's own HG
+  implementation vs a no-fee Composer backtest: corr 1.00000, holdings
+  869/869. COVID window: HG 1.000, sleeve .999 (BOXX->BIL, KMLM->DBMF run
+  through Composer too).
+- Composer's cost is its 5-bps slippage SETTING: 5.1 bps per unit sum|dw|
+  charged on the trade day (10.2 bps per full switch), intercept 0.000,
+  residual 0.2 bps (HG; KMLM 5.9, HARV 5.2, SLEEVE 2.2) — ADDENDUM 38
+  CONFIRMED. (My first pass in this study put the cost on the wrong day,
+  read a 2.6 bps/day "no-trade drag" into the intercept and drafted a
+  retraction of add. 38; the counter-agent caught it. Nothing in add. 38
+  changes.) Live has run above the model on every engine, so Composer-
+  equivalent is the conservative level.
+- Synthetic SVIX = 0.953 x 2 x SVXY - 3.6bp/d (corr .993 vs real 2022-26);
+  ZVOL = 0.971 x (-VXZ) (corr .973; backwardation-day beta .98-1.00, n=48).
+- Leveraged-ETF reconstructions on their own indices: 0.995-0.999 daily
+  (LABU/LABD on XBI .998, FAS on XLF .989); crisis-day bias within +-10 bps/d
+  for the 3x names. HG with EVERY leg reconstructed vs real tickers 2015-26:
+  corr .964, maxDD 41.8% vs 35.8%, 2022 DD identical, level ~10%/yr
+  PESSIMISTIC on average but +-15pp in single windows (COVID window +12%
+  vs -5%). The 2000/2008 HG drawdown conclusion survives either sign.
+- VIX-ETP term-structure models (dVIX, dVIX3M, prior-close slope; fit
+  <2019): OOS 2019-26 corr .96-.97 short-term, .89-.90 mid-term; COVID spike
+  captured 77% (plain dVIX regression 41%). In 2008 they run mostly in
+  backwardation (74% of Lehman-to-trough days vs 7% of fit days) — used only
+  where the ETPs did not exist, and bounded by the vol-legs-to-cash rows.
+- Regime bootstrap: the house method (add. 13) along each crash's ACTUAL
+  month sequence (labels, buckets, HARV stitching and quantiles reproduced
+  by the counter-agent within MC noise). It is kinder than the daily
+  replays because months are drawn independently from the engines' measured
+  crash buckets (short spikes that mean-reverted within weeks, so a 12-18
+  month crash compounds spikes with no give-back) and monthly resolution
+  hides intra-month DD (COVID replay 14-21% vs monthly p95 6% as-measured /
+  23% conservative). Ranking lens, not the stress number.
+- HG "+22% twelve months from 2000-03-10" is window-fragile: one session
+  later a biotech dip-buy lost 28% and the read is -12%. Quote the path, not
+  the point.
+
+CANDIDATE CHANGES, MEASURED THE HOUSE WAY (real era + replays + placebo of
+60 matched random gates — a weak null for a clustered gate)
+  C1 short-vol termination: SVIX (KMLM) / ZVOL (HARV) -> PULS when VIX >
+     VIX3M at the decision close.
+     KMLM: real era 60.7x -> 61.3x (+1%, 48 gate days, placebo pct .82 =
+     NO MEASURABLE EFFECT); COVID crash window improves under every stand-in
+     (DBC 0.45 -> 0.72x, FMF 0.68 -> 0.99x, DBMF 0.93 -> 1.16x, AQMIX 1.62 ->
+     1.69x), maxDD -10 to -22pp, 12m up in all. Deterministic mechanism (do
+     not hold a -1x VIX product while the curve is inverted). OWNER DECISION.
+     HARV: real era 2.11x -> 2.00x (-5%, pct .25); COVID crash 0.89 -> 0.93x
+     but 12m 1.36 -> 1.24x (pct .03): its backwardation entries ARE the
+     edge. KILLED.
+  C2 HG trend-long baskets -> BIL when SPY < 200d MA (dip-buys untouched):
+     real era 7.73x -> 6.36x (pct .33); 2015-23 418x -> 183x (~-10%/yr);
+     2022 bear 1.48x -> 1.17x (WORSE: HG's 2022 gains were bear rallies);
+     COVID 12m 6.0x -> 4.4x; dotcom 0.76x -> 1.86x (DD 71 -> 60%); GFC
+     0.40x -> 1.65x (DD 71 -> 29%). A pure trade: ~10%/yr of bull-market
+     return for 2000/2008-style protection, worse in V-recoveries. NOT
+     recommended as-is; recorded as the measured price of HG's bear risk.
+     (TQQQ<200d variant mis-built pre-2010 — 0 gate days — not reported.)
+  C3 HARV cash leg PULS -> BIL: real era 2.113x -> 2.082x (-0.5%/yr); COVID
+     crash 0.89x -> 0.94x, maxDD 11.5% -> 6.0% (PULS, an ultra-short IG
+     fund, fell ~5% in March 2020; BIL did not). Cheap, mechanical; KMLM's
+     12% PULS leg negligible either way. OWNER DECISION.
+
+NOT MODELED: IBKR equities held at $346k in the band denominator (they fall
+too, so the band trims earlier in reality); execution at the open of a
+limit-down day; KMLM's true 2020/2008 flag; HARV/KMLM vol legs before 2018
+(exhibits only); inverse-fund borrow in 2008 (makes the sleeve's whipsaws
+worse); the engines' rules are in-sample for 2015-26 and out-of-sample for
+2000/2008 — the ~70% HG drawdown is the honest OOS evidence.
+
+COUNTER-AGENT (one hostile reviewer, full report in the session transcript;
+verification scripts under scratchpad/crash/verify/): sixteen findings.
+BLOCKING, fixed: (F1) the from-today variant cold-started the sleeve's
+filter sub-trees, dropping its InverseHold branch for 20 sessions (sleeve
+crash +219..+263% -> +144..+180%; book 3m +55..+91% -> +40..+79%); (F2) the
+cost model was aligned one day off (see above). MEDIUM, fixed: (F3) the
+"conservative" 2008 row used the HARV exhibit -> HARV = T-bill; (F4) the KMLM
+exhibit ran SVIX at half leverage (era default) -> fixed and moved to the
+appendix; (F5) the sleeve's 2008 gain is model-driven -> labelled, vol-legs-
+to-cash rows added. LOW, fixed in text: F6 window fragility, F7 DBC label,
+F8 "free" -> "no measurable effect", F11 live split, F14 bootstrap p95
+lens. CONFIRMED independently: simulator (corr 1.00000), SVIX/ZVOL fits,
+leveraged fits and splices, VIX-model build, bootstrap, book arithmetic to
+4 decimals, attribution, gate counts, no signal look-ahead. Reviewer's
+verdict after edits: the headline table can be shown with the caveats
+above; qualitative conclusions unchanged.

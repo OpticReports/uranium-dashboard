@@ -112,3 +112,33 @@ Owner starts building the IBKR execution project (or equivalent
 higher-frequency capable stack). At that point: pick idea #1 (per-
 instrument regime gating) first — it is the cheapest to falsify with a
 survivorship-clean universe and honest costs.
+
+## From the crash simulations (addendum 39, 2026-10-07)
+
+Measured, not adopted — each is an owner decision; the house rule on
+overlays stands (nine failures), so only mechanical changes with a
+deterministic rationale are listed.
+
+1. **C1 — KMLM short-vol termination** (SVIX leg -> PULS when VIX > VIX3M
+   at the decision close). Real era: no measurable effect (+1%, 48 gate
+   days, inside the placebo band). COVID replay: better under every
+   regime-flag stand-in (crash-window maxDD -10 to -22pp). Deterministic
+   mechanism, not a signal. KILLED for HARV (its backwardation entries are
+   the edge: real era -5%, COVID 12m -9%, placebo p03).
+2. **C3 — HARV cash leg PULS -> BIL.** Costs ~0.5%/yr; PULS fell ~5% in
+   March 2020, BIL did not (COVID crash maxDD 11.5% -> 6.0%). BOXX would do
+   the same job (did not exist in 2020). KMLM's 12% PULS leg: negligible.
+3. **C2 — HG bear gate (trend baskets -> BIL when SPY < 200d MA).** The
+   measured price of HG's long-bear risk: ~-10%/yr in 2015-23, worse in
+   2022 and in V-recoveries; +1.1x/+1.2x and DD 71% -> 60%/29% in the
+   2000/2008 reconstructions. Not recommended as-is. Reopen only if the
+   owner wants to pay bull-market return for grinding-bear protection.
+4. **HG long-bear calibration.** Reconstructed HG draws down ~70% in both
+   2000-02 and 2007-09 (36% in its real record; 40% anomaly alarm). The
+   alarm will fire early and often in a multi-year bear; that is
+   informational, not a trade. KMLM's crash behaviour is unresolvable
+   (regime flag not reconstructible; results span -58% to +51% in the
+   COVID window across six stand-ins) — the engine's edge is concentrated
+   on exact flag timing, a fragility to keep in mind at any weight above
+   the current 29%.
+

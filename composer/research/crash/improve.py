@@ -6,9 +6,10 @@ C2  HG bear-market dip gate: the HG dip-buy branch (TQQQ RSI<30 -> leveraged dip
     basket) goes to BIL when SPY < its 200d MA at the decision close.
 Each: effect on the 2023-26 real era (real tickers), on the COVID replay (4 KMLM
 proxies), on the HG dotcom/GFC reconstructions (C2), and a placebo: the same
-number of block-days drawn at random (200 draws) -> percentile of the real gate.
+number of block-days drawn at random (60 draws, scattered days — a weak null for a
+clustered gate) -> percentile of the real gate.  improve.json is authoritative.
 """
-import os, json, math, sys, random
+import json, math, sys, random
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from replay import *
 from hist_replay import build_prices

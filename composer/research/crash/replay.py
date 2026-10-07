@@ -6,6 +6,7 @@ accepts as few as 60 when a series is young (DBMF, 2019-05+).  Missing data ->
 condition False (never flat-filled).
 """
 import json, math, sys, copy, datetime as dt
+import os, sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _paths import SP
 sys.path.insert(0, '/home/user/uranium-dashboard/composer/research/synth')
 from tree_sim import Sim
@@ -40,7 +41,7 @@ def synth_zvol(alpha=ZVOL_ALPHA):
 
 def load_prices(kmlm_proxy='DBMF', zvol_alpha=ZVOL_ALPHA, real_synth=False):
     """real_synth=True keeps real SVIX/ZVOL/KMLM/BOXX (real-era fidelity check)."""
-    tick = ['BIL','LABU','QLD','SMH','SSO','TECL','TNA','TQQQ','UDOW','UPRO','USD','UVXY','VIXM','VIXY',
+    tick = ['WTMF','RYMFX','AQMIX','FMF','BIL','LABU','QLD','SMH','SSO','TECL','TNA','TQQQ','UDOW','UPRO','USD','UVXY','VIXM','VIXY',
             'PULS','SOXL','SPXL','SQQQ','TLT','VXZ','QQQE','VTV','VOX','VOOG','VOOV','XLP','XLY','FAS','SPY','XLK',
             'KIE','LABD','SOXS','SVXY','TMF','TMV','UGL','IEF','PSQ','HYG','SHY','CORP','PEJ','LQD','DBMF','DBC','KMLM','BOXX','SVIX','ZVOL']
     P = {t: yh(t) for t in tick}
@@ -85,9 +86,12 @@ def tree_tickers(tree):
         for c in n.get('children') or []: walk(c)
     walk(tree); return s
 
-def run_tree(sim, tree, days, w0=None):
+def run_tree(sim, tree, days, w0=None, w0_day=None):
     """Daily returns + holdings.  holdings[d1] = weights that EARN d1's return
-    (decided at close d0).  w0 overrides the day-0 holdings (from-today variant)."""
+    (decided at close d0).  w0 overrides the holdings decided at close w0_day
+    (from-today variant); the tree still runs from days[0] so filter sub-trees
+    are warmed up (counter-agent F1: a cold start dropped the sleeve's
+    InverseHold branch for 20 sessions)."""
     rets, hold = {}, {}
     subs = sim._find_filter_groups(tree)
     sim.sub = {sid: [(days[0], 1.0)] for sid in subs}
@@ -99,7 +103,7 @@ def run_tree(sim, tree, days, w0=None):
                 p0, p1 = sim.p[t].get(d0), sim.p[t].get(d1)
                 if p0 and p1: sr += (x/tot if tot else 0)*(p1/p0-1)
             sim.sub[sid].append((d1, sim.sub[sid][-1][1]*(1+sr)))
-        w = sim.weights(tree, d0) if not (w0 and i == 1) else dict(w0)
+        w = dict(w0) if (w0 and (d0 == w0_day if w0_day else i == 1)) else sim.weights(tree, d0)
         tot = sum(w.values()); r = 0.0
         for t, x in w.items():
             p0, p1 = sim.p[t].get(d0), sim.p[t].get(d1)
@@ -120,17 +124,21 @@ def fidelity(sim_rets, comp_curve):
             'window': [com[0], com[-1]] if com else None}
 
 def composer_equiv(rets, hold, days, eng):
-    """Composer-equivalent daily returns: frictionless sim minus Composer's 5bps
-    slippage-setting drag, fitted per engine in the real era (cost_fit.json:
-    intercept bps/day + slope bps per unit sum|dw|).  Live has run ABOVE the
-    Composer model on every engine (add. 38), so this is the conservative level."""
+    """Composer-equivalent daily returns: frictionless sim minus Composer's slippage
+    SETTING (5 bps per side): cost on day d = c x sum|w(d+1) - w(d)|, i.e. the trade
+    executed at close d (hold[d+1] are the weights decided at close d).  c fitted per
+    engine in the real era (cost_fit.json, ~5.1 bps per unit sum|dw| = 10.2 bps per
+    full switch, intercept 0 — add. 38 confirmed; counter-agent F2).  Live has run
+    ABOVE the Composer model on every engine, so this is the conservative level."""
     import os
     cf = json.load(open(f'{SP}/cost_fit.json')) if os.path.exists(f'{SP}/cost_fit.json') else {}
-    c = cf.get(eng, {}); a = c.get('intercept_bps', -2.7)/1e4; b = c.get('bps_per_unit_sum_abs_dw', -0.7)/1e4
-    out = {}; prev = {}
-    for d in days[1:]:
-        w = hold.get(d, {}); to = sum(abs(w.get(k, 0)-prev.get(k, 0)) for k in set(w) | set(prev)); prev = w
-        out[d] = rets[d] + a + b*to          # a, b are negative (composer - sim)
+    c = cf.get(eng, {}).get('cost_bps_per_unit_sum_abs_dw', 5.12)/1e4
+    out = {}
+    for i in range(1, len(days)):
+        d = days[i]; nxt = days[i+1] if i+1 < len(days) else None
+        w, wn = hold.get(d, {}), (hold.get(nxt, {}) if nxt else hold.get(d, {}))
+        to = sum(abs(wn.get(k, 0)-w.get(k, 0)) for k in set(w) | set(wn))
+        out[d] = rets[d] - c*to
     return out
 
 LIVE_W0 = {'HG': {'TQQQ': 1.0}, 'KMLM': {'VXZ': .13, 'PULS': .12, 'SOXL': .37, 'SVIX': .38},
@@ -168,7 +176,7 @@ if __name__ == '__main__':
             print(eng, f'real era, synthetics ({proxy}):', out['fidelity'][f'{eng}_real_synth_{proxy}'])
     # ---- COVID window, all four, two KMLM proxies --------------------------
     out['covid'] = {}
-    for proxy in ('AQMIX', 'FMF', 'DBMF', 'DBC'):
+    for proxy in ('AQMIX', 'WTMF', 'FMF', 'DBMF', 'RYMFX', 'DBC'):
         P = load_prices(kmlm_proxy=proxy)
         sim = SimW(P, rsi_method='wilder')
         res = {}
@@ -177,11 +185,12 @@ if __name__ == '__main__':
             days = common_days(P, tk, '2019-09-03', '2021-03-31')
             r, h = run_tree(sim, trees[eng], days)
             res[eng] = {'rets': r, 'hold': h, 'days': days, 'rets_costed': composer_equiv(r, h, days, eng)}
-            # from-today variant: live 2026-10-06 holdings earn the first crash day (2020-02-20)
-            d0 = days.index('2020-02-19'); days2 = days[d0:]
-            r2, h2 = run_tree(sim, trees[eng], days2, w0=LIVE_W0[eng])
-            res[eng]['from_today'] = {'rets': r2, 'hold_day1': h2[days2[1]], 'natural_hold_day1': h[days2[1]],
-                                      'rets_costed': composer_equiv(r2, h2, days2, eng)}
+            # from-today variant: live 2026-10-06 holdings earn the first crash day (2020-02-20);
+            # the tree runs from days[0] (warm sub-trees), override at close 2020-02-19 only
+            r2, h2 = run_tree(sim, trees[eng], days, w0=LIVE_W0[eng], w0_day='2020-02-19')
+            rc2 = composer_equiv(r2, h2, days, eng)
+            res[eng]['from_today'] = {'rets': {d: v for d, v in r2.items() if d >= '2020-02-20'}, 'hold_day1': h2['2020-02-20'], 'natural_hold_day1': h['2020-02-20'],
+                                      'rets_costed': {d: v for d, v in rc2.items() if d >= '2020-02-20'}}
             if eng == 'HG' and proxy == 'DBMF':
                 out['fidelity']['HG_covid_vs_composer'] = fidelity(r, bt['HG_covid']['curve']); print('HG covid fidelity', out['fidelity']['HG_covid_vs_composer'])
             if eng == 'SLEEVE':

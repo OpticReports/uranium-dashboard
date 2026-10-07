@@ -97,12 +97,13 @@ if __name__ == '__main__':
     # ---- GFC hybrid: HG + SLEEVE daily recon; KMLM conservative (= HG path) or exhibit; HARV exhibit or flat ----
     hg = H['runs']['HG_gfc']['rets']; sl = H['runs']['SLEEVE_gfc']['rets']; hv = H['runs']['HARV_gfc_exhibit']['rets']; km = H['runs']['KMLM_gfc_exhibit']['rets']
     sl_bil = A['SLEEVE_gfc_vixlegs_to_BIL']['rets']
-    cashish = {d: 0.02/252 for d in hg}
+    irx = json.load(open(f'{SP}/yh/_IRX.json')); tbill = {d: (c/100)/252 for d, c in zip(irx['dates'], irx['close']) if c is not None}
+    cashish = {d: tbill.get(d, 0.0) for d in hg}          # HARV at the actual 13-week T-bill (counter-agent F3)
     for start, label in (('2007-10-09', 'from_peak'), ('2008-09-12', 'from_lehman')):
         days = [d for d in sorted(hg) if d >= start and d in sl and d in hv and d in km][:400]
         days = [start] + [d for d in days if d > start] if start in hg else days
         for kml, kname in ((hg, 'KMLM=HG(conservative)'), (km, 'KMLM=exhibit')):
-            for hvv, hname in ((hv, 'HARV=exhibit'), (cashish, 'HARV=cash2%')):
+            for hvv, hname in ((cashish, 'HARV=T-bill'), (hv, 'HARV=exhibit')):
                 for slv, sname in ((sl, 'SLEEVE=recon'), (sl_bil, 'SLEEVE=recon,vol-legs->BIL')):
                     rets = {'HG': hg, 'KMLM': kml, 'SLEEVE': slv, 'HARV': hvv}
                     for g in (True, False):
@@ -111,16 +112,16 @@ if __name__ == '__main__':
                         out['gfc'][key] = {'summary': summarize(path, start), 'fires': fires, 'alerts': alerts,
                                            'path': [(p['day'], round(p['book']), round(p['HG']), round(p['KMLM']), round(p['SLEEVE']), round(p['HARV'])) for p in path]}
                         s = out['gfc'][key]['summary']
-                        if g and hname == 'HARV=exhibit' and sname == 'SLEEVE=recon':
+                        if g and sname == 'SLEEVE=recon':
                             print(f"GFC {key:75s} 3m {s.get('m3',{}).get('ret',0):+7.1%} 6m {s.get('m6',{}).get('ret',0):+7.1%} 9m {s.get('m9',{}).get('ret',0):+7.1%} 12m {s.get('m12',{}).get('ret',0):+7.1%} maxDD {s['maxdd']:.1%} fires {len(fires)} alerts {alerts}")
     # ---- dotcom: HG daily recon + conservative companions (KMLM=HG, SLEEVE=cash, HARV=cash) and bootstrap for the rest ----
     hgd = H['runs']['HG_dotcom']['rets']
     for start, label in (('2000-03-10', 'from_ndx_peak'), ('2000-09-01', 'acute')):
         days = [d for d in sorted(hgd) if d >= start][:400]
-        rets = {'HG': hgd, 'KMLM': hgd, 'SLEEVE': {d: 0.06/252 for d in hgd}, 'HARV': {d: 0.06/252 for d in hgd}}
+        rets = {'HG': hgd, 'KMLM': hgd, 'SLEEVE': {d: tbill.get(d, 0.0) for d in hgd}, 'HARV': {d: tbill.get(d, 0.0) for d in hgd}}
         for g in (True, False):
             path, fires, alerts = simulate(rets, days, guards=g)
-            key = f'{label}|KMLM=HG(conservative)|SLEEVE,HARV=cash6%|{"guards" if g else "noguards"}'
+            key = f'{label}|KMLM=HG(conservative)|SLEEVE,HARV=T-bill|{"guards" if g else "noguards"}'
             out['dotcom'][key] = {'summary': summarize(path, start), 'fires': fires, 'alerts': alerts,
                                   'path': [(p['day'], round(p['book']), round(p['HG']), round(p['KMLM']), round(p['SLEEVE']), round(p['HARV'])) for p in path]}
             s = out['dotcom'][key]['summary']
