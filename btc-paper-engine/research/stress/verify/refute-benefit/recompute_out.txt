@@ -1,0 +1,108 @@
+=== CRASH: recompute from run files vs candidates.json (12m | maxDD close | maxDD intrabar) ===
+COVID baseline | off-28:   103,701 -22.04% -22.21% | off-14:   127,699 -15.66% -15.81% | off+0:   115,987 -21.02% -21.17% | off+14:   123,311 -17.57% -17.72% | off+28:   122,956 -15.83% -15.99% | range-worst -22.04%
+COVID C1       | off-28:   106,950 -19.52% -19.69% | off-14:   124,429 -14.42% -14.57% | off+0:   119,147 -18.62% -18.77% | off+14:   120,669 -16.37% -16.52% | off+28:   118,933 -15.09% -15.25% | range-worst -19.52%
+COVID C2       | off-28:   103,010 -21.66% -21.83% | off-14:   120,588 -17.58% -17.74% | off+0:   118,178 -20.13% -20.28% | off+14:   117,434 -19.38% -19.53% | off+28:   114,304 -18.16% -18.32% | range-worst -21.66%
+COVID C1+C2    | off-28:   106,876 -18.84% -19.01% | off-14:   119,047 -16.07% -16.23% | off+0:   121,390 -17.63% -17.77% | off+14:   115,934 -18.01% -18.16% | off+28:   112,382 -17.06% -17.22% | range-worst -18.84%
+2008  baseline | off-28:   121,954  -8.87%  -9.64% | off-14:   119,767  -8.51%  -8.69% | off+0:   125,924  -8.19%  -9.57% | off+14:   119,573 -10.17% -10.33% | off+28:   119,630  -8.73% -10.20% | range-worst -10.17%
+2008  C1       | off-28:   119,601  -9.44% -10.16% | off-14:   118,259  -8.80%  -8.98% | off+0:   124,214  -8.50%  -9.90% | off+14:   118,573  -9.20% -10.70% | off+28:   119,222  -8.93% -10.40% | range-worst  -9.44%
+2008  C2       | off-28:   117,236  -9.94% -10.72% | off-14:   117,665  -8.48%  -9.24% | off+0:   126,799  -7.79%  -8.51% | off+14:   116,462 -10.38% -10.60% | off+28:   118,486  -8.43%  -8.98% | range-worst -10.38%
+2008  C1+C2    | off-28:   115,164 -10.32% -11.05% | off-14:   116,158  -8.39%  -9.27% | off+0:   125,089  -7.71%  -8.63% | off+14:   115,461  -9.33%  -9.65% | off+28:   118,043  -7.71%  -9.21% | range-worst -10.32%
+1999  baseline | off-28:   110,656 -16.91% -17.98% | off-14:   122,356 -16.69% -17.10% | off+0:   116,600 -13.61% -13.68% | off+14:   121,468 -13.39% -13.46% | off+28:   123,023 -16.65% -16.73% | range-worst -16.69%
+1999  C1       | off-28:   114,561 -13.98% -14.15% | off-14:   127,982 -12.92% -13.09% | off+0:   123,092 -11.23% -11.42% | off+14:   127,618  -9.86%  -9.92% | off+28:   124,487 -14.24% -14.33% | range-worst -14.24%
+1999  C2       | off-28:   109,857 -18.83% -19.00% | off-14:   119,489 -17.71% -17.88% | off+0:   120,556 -13.14% -13.32% | off+14:   125,023 -11.07% -11.14% | off+28:   126,259 -13.93% -14.02% | range-worst -17.71%
+1999  C1+C2    | off-28:   114,751 -15.07% -15.24% | off-14:   125,520 -13.51% -13.69% | off+0:   125,803 -11.09% -11.27% | off+14:   129,511  -8.63%  -8.69% | off+28:   127,016 -12.10% -12.19% | range-worst -13.51%
+mismatches: 0
+
+=== CRASH offset 0: candidate delta decomposed into resized pullback trades (saved trades) ===
+COVID C1     d12m    +3,161 | closed pb delta    +3,161 open/other      +0 | resized 7/8: losers 5 saved   +4,058, winners 2 forgone     -897 | pb exposure ratio 0.749 (trend 1.000)
+      2026-10-08 04:00 L STOP   mult 1.00->0.91 (live 1.00 fast 0.91 damp 1.00) pnl   -2,973 ->   -2,710
+      2026-10-17 20:00 S SIGNAL mult 0.97->0.87 (live 0.97 fast 0.87 damp 1.00) pnl   +1,121 ->   +1,001
+      2026-10-28 16:00 S STOP   mult 0.92->0.79 (live 0.92 fast 0.79 damp 1.00) pnl   -2,778 ->   -2,371
+      2026-11-12 04:00 S STOP   mult 0.50->0.25 (live 0.50 fast 0.25 damp 1.00) pnl   -5,577 ->   -2,788
+      2026-11-13 00:00 S SIGNAL mult 0.50->0.25 (live 0.50 fast 0.25 damp 1.00) pnl   +1,555 ->     +777
+      2026-11-25 12:00 S STOP   mult 0.50->0.47 (live 0.50 fast 0.47 damp 1.00) pnl   -2,705 ->   -2,518
+      2026-11-26 08:00 S STOP   mult 0.50->0.43 (live 0.50 fast 0.43 damp 1.00) pnl   -2,964 ->   -2,552
+COVID C2     d12m    +2,191 | closed pb delta    +2,191 open/other      +0 | resized 3/8: losers 2 saved   +2,968, winners 1 forgone     -777 | pb exposure ratio 0.677 (trend 1.000)
+      2026-10-08 04:00 L STOP   mult 1.00->0.50 (live 1.00 fast 1.00 damp 0.50) pnl   -2,973 ->   -1,486
+      2026-11-13 00:00 S SIGNAL mult 0.50->0.25 (live 0.50 fast 1.00 damp 0.50) pnl   +1,555 ->     +777
+      2026-11-26 08:00 S STOP   mult 0.50->0.25 (live 0.50 fast 1.00 damp 0.50) pnl   -2,964 ->   -1,482
+COVID C1+C2  d12m    +5,403 | closed pb delta    +5,403 open/other      +0 | resized 7/8: losers 5 saved   +6,689, winners 2 forgone   -1,286 | pb exposure ratio 0.525 (trend 1.000)
+      2026-10-08 04:00 L STOP   mult 1.00->0.46 (live 1.00 fast 0.91 damp 0.50) pnl   -2,973 ->   -1,355
+      2026-10-17 20:00 S SIGNAL mult 0.97->0.87 (live 0.97 fast 0.87 damp 1.00) pnl   +1,121 ->   +1,001
+      2026-10-28 16:00 S STOP   mult 0.92->0.79 (live 0.92 fast 0.79 damp 1.00) pnl   -2,778 ->   -2,371
+      2026-11-12 04:00 S STOP   mult 0.50->0.25 (live 0.50 fast 0.25 damp 1.00) pnl   -5,577 ->   -2,788
+      2026-11-13 00:00 S SIGNAL mult 0.50->0.12 (live 0.50 fast 0.25 damp 0.50) pnl   +1,555 ->     +389
+      2026-11-25 12:00 S STOP   mult 0.50->0.47 (live 0.50 fast 0.47 damp 1.00) pnl   -2,705 ->   -2,518
+      2026-11-26 08:00 S STOP   mult 0.50->0.22 (live 0.50 fast 0.43 damp 0.50) pnl   -2,964 ->   -1,276
+2008  C1     d12m    -1,710 | closed pb delta    -1,710 open/other      -0 | resized 7/42: losers 0 saved       +0, winners 7 forgone   -1,710 | pb exposure ratio 0.960 (trend 1.000)
+      2026-10-27 12:00 S SIGNAL mult 0.75->0.60 (live 0.75 fast 0.60 damp 1.00) pnl   +1,016 ->     +809
+      2026-12-11 04:00 S SIGNAL mult 0.71->0.62 (live 0.71 fast 0.62 damp 1.00) pnl   +1,936 ->   +1,677
+      2027-01-24 04:00 S SIGNAL mult 0.64->0.51 (live 0.64 fast 0.51 damp 1.00) pnl   +2,346 ->   +1,879
+      2027-04-17 04:00 S SIGNAL mult 0.65->0.58 (live 0.65 fast 0.58 damp 1.00) pnl   +2,049 ->   +1,824
+      2027-05-22 12:00 S SIGNAL mult 0.59->0.52 (live 0.59 fast 0.52 damp 1.00) pnl     +750 ->     +665
+      2027-06-22 16:00 L SIGNAL mult 0.82->0.77 (live 0.82 fast 0.77 damp 1.00) pnl   +2,720 ->   +2,548
+      2027-08-29 04:00 S SIGNAL mult 1.00->0.86 (live 1.00 fast 0.86 damp 1.00) pnl   +2,143 ->   +1,848
+2008  C2     d12m      +876 | closed pb delta      +876 open/other      -0 | resized 8/42: losers 4 saved   +6,132, winners 4 forgone   -5,256 | pb exposure ratio 0.834 (trend 1.000)
+      2026-10-07 16:00 L STOP   mult 1.00->0.50 (live 1.00 fast 1.00 damp 0.50) pnl   -2,088 ->   -1,044
+      2026-10-08 04:00 L STOP   mult 1.00->0.25 (live 1.00 fast 1.00 damp 0.25) pnl   -2,505 ->     -626
+      2026-11-21 08:00 S SIGNAL mult 0.55->0.27 (live 0.55 fast 1.00 damp 0.50) pnl   +1,577 ->     +788
+      2027-03-05 04:00 L STOP   mult 0.77->0.39 (live 0.77 fast 1.00 damp 0.50) pnl   -2,798 ->   -1,399
+      2027-03-19 00:00 S SIGNAL mult 0.90->0.45 (live 0.90 fast 1.00 damp 0.50) pnl   +2,645 ->   +1,322
+      2027-04-28 12:00 S SIGNAL mult 0.67->0.34 (live 0.67 fast 1.00 damp 0.50) pnl   +3,189 ->   +1,595
+      2027-06-05 08:00 S SIGNAL mult 0.62->0.31 (live 0.62 fast 1.00 damp 0.50) pnl   +3,102 ->   +1,551
+      2027-08-08 00:00 S STOP   mult 1.00->0.50 (live 1.00 fast 1.00 damp 0.50) pnl   -3,620 ->   -1,810
+2008  C1+C2  d12m      -834 | closed pb delta      -834 open/other      -0 | resized 15/42: losers 4 saved   +6,132, winners 11 forgone   -6,966 | pb exposure ratio 0.794 (trend 1.000)
+      2026-10-07 16:00 L STOP   mult 1.00->0.50 (live 1.00 fast 1.00 damp 0.50) pnl   -2,088 ->   -1,044
+      2026-10-08 04:00 L STOP   mult 1.00->0.25 (live 1.00 fast 1.00 damp 0.25) pnl   -2,505 ->     -626
+      2026-10-27 12:00 S SIGNAL mult 0.75->0.60 (live 0.75 fast 0.60 damp 1.00) pnl   +1,016 ->     +809
+      2026-11-21 08:00 S SIGNAL mult 0.55->0.27 (live 0.55 fast 0.70 damp 0.50) pnl   +1,577 ->     +788
+      2026-12-11 04:00 S SIGNAL mult 0.71->0.62 (live 0.71 fast 0.62 damp 1.00) pnl   +1,936 ->   +1,677
+      2027-01-24 04:00 S SIGNAL mult 0.64->0.51 (live 0.64 fast 0.51 damp 1.00) pnl   +2,346 ->   +1,879
+      2027-03-05 04:00 L STOP   mult 0.77->0.39 (live 0.77 fast 0.85 damp 0.50) pnl   -2,798 ->   -1,399
+      2027-03-19 00:00 S SIGNAL mult 0.90->0.45 (live 0.90 fast 1.00 damp 0.50) pnl   +2,645 ->   +1,322
+      2027-04-17 04:00 S SIGNAL mult 0.65->0.58 (live 0.65 fast 0.58 damp 1.00) pnl   +2,049 ->   +1,824
+      2027-04-28 12:00 S SIGNAL mult 0.67->0.34 (live 0.67 fast 0.90 damp 0.50) pnl   +3,189 ->   +1,595
+      2027-05-22 12:00 S SIGNAL mult 0.59->0.52 (live 0.59 fast 0.52 damp 1.00) pnl     +750 ->     +665
+      2027-06-05 08:00 S SIGNAL mult 0.62->0.31 (live 0.62 fast 0.81 damp 0.50) pnl   +3,102 ->   +1,551
+      2027-06-22 16:00 L SIGNAL mult 0.82->0.77 (live 0.82 fast 0.77 damp 1.00) pnl   +2,720 ->   +2,548
+      2027-08-08 00:00 S STOP   mult 1.00->0.50 (live 1.00 fast 1.00 damp 0.50) pnl   -3,620 ->   -1,810
+      2027-08-29 04:00 S SIGNAL mult 1.00->0.86 (live 1.00 fast 0.86 damp 1.00) pnl   +2,143 ->   +1,848
+1999  C1     d12m    +6,492 | closed pb delta    +6,492 open/other      +0 | resized 6/7: losers 5 saved   +7,362, winners 1 forgone     -870 | pb exposure ratio 0.624 (trend 1.000)
+      2026-10-08 08:00 L STOP   mult 1.00->0.79 (live 1.00 fast 0.79 damp 1.00) pnl   -3,369 ->   -2,647
+      2026-10-08 20:00 L STOP   mult 1.00->0.60 (live 1.00 fast 0.60 damp 1.00) pnl   -4,595 ->   -2,758
+      2026-10-24 08:00 S STOP   mult 0.50->0.25 (live 0.50 fast 0.25 damp 1.00) pnl   -3,985 ->   -2,021
+      2026-11-18 20:00 S SIGNAL mult 0.50->0.32 (live 0.50 fast 0.32 damp 1.00) pnl   +2,416 ->   +1,546
+      2026-12-04 00:00 S STOP   mult 0.50->0.26 (live 0.50 fast 0.26 damp 1.00) pnl   -4,605 ->   -2,418
+      2026-12-06 20:00 S STOP   mult 0.50->0.40 (live 0.50 fast 0.40 damp 1.00) pnl   -3,317 ->   -2,665
+1999  C2     d12m    +3,956 | closed pb delta    +3,956 open/other      +0 | resized 2/7: losers 2 saved   +3,956, winners 0 forgone       +0 | pb exposure ratio 0.831 (trend 1.000)
+      2026-10-08 20:00 L STOP   mult 1.00->0.50 (live 1.00 fast 1.00 damp 0.50) pnl   -4,595 ->   -2,297
+      2026-12-06 20:00 S STOP   mult 0.50->0.25 (live 0.50 fast 1.00 damp 0.50) pnl   -3,317 ->   -1,658
+1999  C1+C2  d12m    +9,204 | closed pb delta    +9,204 open/other      -0 | resized 6/7: losers 5 saved  +10,073, winners 1 forgone     -870 | pb exposure ratio 0.506 (trend 1.000)
+      2026-10-08 08:00 L STOP   mult 1.00->0.79 (live 1.00 fast 0.79 damp 1.00) pnl   -3,369 ->   -2,647
+      2026-10-08 20:00 L STOP   mult 1.00->0.30 (live 1.00 fast 0.60 damp 0.50) pnl   -4,595 ->   -1,379
+      2026-10-24 08:00 S STOP   mult 0.50->0.25 (live 0.50 fast 0.25 damp 1.00) pnl   -3,985 ->   -2,021
+      2026-11-18 20:00 S SIGNAL mult 0.50->0.32 (live 0.50 fast 0.32 damp 1.00) pnl   +2,416 ->   +1,546
+      2026-12-04 00:00 S STOP   mult 0.50->0.26 (live 0.50 fast 0.26 damp 1.00) pnl   -4,605 ->   -2,418
+      2026-12-06 20:00 S STOP   mult 0.50->0.20 (live 0.50 fast 0.40 damp 0.50) pnl   -3,317 ->   -1,332
+
+=== ERAS: recompute $/yr and maxDD from run files; decomposition of candidate delta; exposure ratio ===
+E2 2017-19                       baseline $/yr    16,416 (json    16,416) maxDD -17.34% | pb trades 15 realised   -12,182 | trend trades 78 realised   +61,395 | S3 halt 2017-06-15 12:00 dropped 94
+   C1     $/yr    17,283 ( +5.3%; json    17,283) maxDD -16.65% | pb realised    -9,583 (delta   +2,599 = +21.3% of |pb P&L|) | resized 12: losers 6 saved   +7,503, winners 6 forgone   -4,904 | pb exposure ratio 0.755
+   C2     $/yr    17,939 ( +9.3%; json    17,939) maxDD -16.39% | pb realised    -7,613 (delta   +4,568 = +37.5% of |pb P&L|) | resized 3: losers 3 saved   +4,568, winners 0 forgone       +0 | pb exposure ratio 0.933
+   C1+C2  $/yr    18,402 (+12.1%; json    18,402) maxDD -16.21% | pb realised    -6,227 (delta   +5,955 = +48.9% of |pb P&L|) | resized 12: losers 6 saved  +10,859, winners 6 forgone   -4,904 | pb exposure ratio 0.693
+E3 2020-21                       baseline $/yr    32,465 (json    32,465) maxDD -15.81% | pb trades 69 realised   +18,909 | trend trades 48 realised   +46,065 | S3 halt None dropped 0
+   C1     $/yr    29,272 ( -9.8%; json    29,272) maxDD -16.43% | pb realised   +12,518 (delta   -6,392 = -33.8% of |pb P&L|) | resized 23: losers 7 saved   +5,568, winners 16 forgone  -11,960 | pb exposure ratio 0.934
+   C2     $/yr    25,421 (-21.7%; json    25,421) maxDD -18.37% | pb realised    +4,812 (delta  -14,098 = -74.6% of |pb P&L|) | resized 14: losers 1 saved   +1,482, winners 13 forgone  -15,580 | pb exposure ratio 0.849
+   C1+C2  $/yr    23,248 (-28.4%; json    23,248) maxDD -18.82% | pb realised      +463 (delta  -18,446 = -97.5% of |pb P&L|) | resized 32: losers 8 saved   +7,050, winners 24 forgone  -25,496 | pb exposure ratio 0.795
+E4 2022-24H1                     baseline $/yr    31,638 (json    31,638) maxDD -10.41% | pb trades 101 realised   +36,611 | trend trades 68 realised   +42,386 | S3 halt None dropped 0
+   C1     $/yr    31,159 ( -1.5%; json    31,159) maxDD -11.06% | pb realised   +35,416 (delta   -1,195 =  -3.3% of |pb P&L|) | resized 26: losers 8 saved   +5,003, winners 18 forgone   -6,198 | pb exposure ratio 0.949
+   C2     $/yr    27,820 (-12.1%; json    27,820) maxDD -10.41% | pb realised   +27,080 (delta   -9,532 = -26.0% of |pb P&L|) | resized 14: losers 3 saved   +4,534, winners 11 forgone  -14,066 | pb exposure ratio 0.895
+   C1+C2  $/yr    27,639 (-12.6%; json    27,639) maxDD -11.06% | pb realised   +26,627 (delta   -9,985 = -27.3% of |pb P&L|) | resized 38: losers 11 saved   +9,537, winners 27 forgone  -19,522 | pb exposure ratio 0.850
+E5 2024H2-26                     baseline $/yr    17,204 (json    17,204) maxDD -16.76% | pb trades 95 realised   +27,001 | trend trades 64 realised    +8,842 | S3 halt None dropped 0
+   C1     $/yr    15,093 (-12.3%; json    15,093) maxDD -16.83% | pb realised   +22,603 (delta   -4,398 = -16.3% of |pb P&L|) | resized 36: losers 16 saved   +4,054, winners 20 forgone   -8,452 | pb exposure ratio 0.932
+   C2     $/yr    16,547 ( -3.8%; json    16,547) maxDD -19.41% | pb realised   +25,632 (delta   -1,369 =  -5.1% of |pb P&L|) | resized 14: losers 6 saved   +8,011, winners 8 forgone   -9,380 | pb exposure ratio 0.908
+   C1+C2  $/yr    14,315 (-16.8%; json    14,315) maxDD -19.29% | pb realised   +20,984 (delta   -6,018 = -22.3% of |pb P&L|) | resized 45: losers 19 saved  +11,558, winners 26 forgone  -17,576 | pb exposure ratio 0.841
+2019+ (2019-01-01..2026-10-07)   baseline $/yr    14,364 (json    14,364) maxDD -18.73% | pb trades 42 realised    -4,179 | trend trades 209 realised  +115,726 | S3 halt 2020-03-20 08:00 dropped 266
+   C1     $/yr    13,783 ( -4.0%; json    13,783) maxDD -20.72% | pb realised    -8,689 (delta   -4,510 = -107.9% of |pb P&L|) | resized 18: losers 3 saved   +2,407, winners 15 forgone   -6,917 | pb exposure ratio 0.889
+   C2     $/yr    14,467 ( +0.7%; json    14,467) maxDD -17.08% | pb realised    -3,381 (delta     +799 = +19.1% of |pb P&L|) | resized 7: losers 3 saved   +4,358, winners 4 forgone   -3,559 | pb exposure ratio 0.876
+   C1+C2  $/yr    13,915 ( -3.1%; json    13,915) maxDD -19.05% | pb realised    -7,667 (delta   -3,488 = -83.5% of |pb P&L|) | resized 23: losers 6 saved   +6,765, winners 17 forgone  -10,253 | pb exposure ratio 0.768

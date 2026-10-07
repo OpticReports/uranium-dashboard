@@ -1,0 +1,63 @@
+carry_sleeve smoke: COVID analogue 2020-02-13 .. 2021-02-13, real ETHUSD BitMEX funding, real Bitstamp ETH 4h closes scaled to 2,574, live start
+
+=== A: funding exactly the window (gate frozen ARMED for its first 15 days) ===
+bars 2196  2020-02-13 00:00 .. 2021-02-13 00:00 (close)  scale 9.5400 (raw first close 269.81)
+funding stamps 1099  2020-02-13 04:00 .. 2021-02-13 04:00
+start: on=True qty=11.096 entry=2703.9 -> held notional at first close 28,561
+first gate reading (bar 0): nan%/yr; gate readings: min 19.54  max 251.14
+events (bar-close UTC, kind, px, qty, gate %, sleeve value):
+2020-04-01 04:00  resize        px   1,271.40  qty  23.5960  gate  69.63%  value  32,118.18  drift -53.0% -> qty 23.5960
+2020-05-01 04:00  resize        px   1,993.49  qty  15.0490  gate  63.32%  value  34,125.55  drift +56.8% -> qty 15.0490
+2020-08-01 04:00  resize        px   3,361.91  qty   8.9235  gate  51.00%  value  38,725.08  drift +68.6% -> qty 8.9235
+2020-09-01 04:00  resize        px   4,234.73  qty   7.0843  gate  75.09%  value  40,925.46  drift +26.0% -> qty 7.0843
+2020-12-01 04:00  resize        px   5,777.45  qty   5.1926  gate  21.48%  value  43,124.65  drift +36.4% -> qty 5.1926
+2021-02-01 04:00  resize        px  12,568.25  qty   2.3870  gate 249.90%  value  56,964.86  drift +117.5% -> qty 2.3870
+flips 0  bars ON 2196/2196 (100%)
+total funding +29,068.97  fees 123.63  final value 58,945.34  (start 30,000.00; net +28,945.34)
+liq_px while on: min 4,243  max ETH close 17,610  min 993  margin_guard events 0
+  month  3 (2020-05-13 04:00): value 34,654.71  funding +4,692.58  fees 37.87  on=True
+  month  6 (2020-08-11 04:00): value 39,757.90  funding +9,819.45  fees 61.55  on=True
+  month  9 (2020-11-09 04:00): value 42,737.94  funding +12,808.45  fees 70.51  on=True
+  month 12 (2021-02-13 00:00): value 58,945.34  funding +29,068.97  fees 123.63  on=True
+
+=== B: + real 30d of funding before the window (gate reads a full window from day 1) ===
+bars 2196  2020-02-13 00:00 .. 2021-02-13 00:00 (close)  scale 9.5400 (raw first close 269.81)
+funding stamps 1189  2020-01-14 04:00 .. 2021-02-13 04:00
+start: on=True qty=11.096 entry=2703.9 -> held notional at first close 28,561
+first gate reading (bar 0): 60.29%/yr; gate readings: min 19.54  max 251.14
+events (bar-close UTC, kind, px, qty, gate %, sleeve value):
+2020-04-01 04:00  resize        px   1,271.40  qty  23.5960  gate  69.63%  value  32,118.18  drift -53.0% -> qty 23.5960
+2020-05-01 04:00  resize        px   1,993.49  qty  15.0490  gate  63.32%  value  34,125.55  drift +56.8% -> qty 15.0490
+2020-08-01 04:00  resize        px   3,361.91  qty   8.9235  gate  51.00%  value  38,725.08  drift +68.6% -> qty 8.9235
+2020-09-01 04:00  resize        px   4,234.73  qty   7.0843  gate  75.09%  value  40,925.46  drift +26.0% -> qty 7.0843
+2020-12-01 04:00  resize        px   5,777.45  qty   5.1926  gate  21.48%  value  43,124.65  drift +36.4% -> qty 5.1926
+2021-02-01 04:00  resize        px  12,568.25  qty   2.3870  gate 249.90%  value  56,964.86  drift +117.5% -> qty 2.3870
+flips 0  bars ON 2196/2196 (100%)
+total funding +29,068.97  fees 123.63  final value 58,945.34  (start 30,000.00; net +28,945.34)
+liq_px while on: min 4,243  max ETH close 17,610  min 993  margin_guard events 0
+  month  3 (2020-05-13 04:00): value 34,654.71  funding +4,692.58  fees 37.87  on=True
+  month  6 (2020-08-11 04:00): value 39,757.90  funding +9,819.45  fees 61.55  on=True
+  month  9 (2020-11-09 04:00): value 42,737.94  funding +12,808.45  fees 70.51  on=True
+  month 12 (2021-02-13 00:00): value 58,945.34  funding +29,068.97  fees 123.63  on=True
+
+=== C: XBTUSD funding (+30d) as the LINEAR-perp proxy - BitMEX ETHUSD is a quanto (XBT-settled) whose funding ran structurally rich in 2020; HL ETH is a linear USDC perp ===
+bars 2196  2020-02-13 00:00 .. 2021-02-13 00:00 (close)  scale 9.5400 (raw first close 269.81)
+funding stamps 1189  2020-01-14 04:00 .. 2021-02-13 04:00
+start: on=True qty=11.096 entry=2703.9 -> held notional at first close 28,561
+first gate reading (bar 0): 31.74%/yr; gate readings: min -66.56  max 50.49
+events (bar-close UTC, kind, px, qty, gate %, sleeve value):
+2020-03-14 04:00  gate_off      px   1,279.42  qty   0.0000  gate   3.36%  value  30,222.99  close: gate disarmed
+2020-06-02 16:00  gate_on       px   2,229.99  qty  13.4530  gate   8.26%  value  30,188.49  open
+2020-08-01 04:00  resize        px   3,361.91  qty   8.9235  gate  17.38%  value  30,938.90  drift +50.8% -> qty 8.9235
+2020-09-01 04:00  resize        px   4,234.73  qty   7.0843  gate  15.85%  value  31,415.51  drift +26.0% -> qty 7.0843
+2020-09-22 20:00  gate_off      px   3,277.29  qty   0.0000  gate   4.98%  value  31,437.07  close: gate disarmed
+2020-11-16 08:00  gate_on       px   4,341.87  qty   6.9095  gate   8.06%  value  31,402.57  open
+2020-12-01 04:00  resize        px   5,777.45  qty   5.1926  gate  14.03%  value  31,664.10  drift +33.1% -> qty 5.1926
+2021-02-01 04:00  resize        px  12,568.25  qty   2.3870  gate  41.90%  value  34,378.99  drift +117.5% -> qty 2.3870
+flips 4  bars ON 1386/2196 (63%)
+total funding +5,263.15  fees 190.45  final value 35,072.70  (start 30,000.00; net +5,072.70)
+liq_px while on: min 7,301  max ETH close 17,610  min 993  margin_guard events 0
+  month  3 (2020-05-13 04:00): value 30,222.99  funding +239.31  fees 16.33  on=False
+  month  6 (2020-08-11 04:00): value 31,104.46  funding +1,172.80  fees 68.34  on=True
+  month  9 (2020-11-09 04:00): value 31,437.07  funding +1,541.07  fees 103.99  on=False
+  month 12 (2021-02-13 00:00): value 35,072.70  funding +5,263.15  fees 190.45  on=True

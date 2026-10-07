@@ -1,0 +1,17 @@
+COVID: history 33174 real bars (seam index 33174 vs builder seam 33174), path 2196, scale 8.039669025 vs 8.039669025
+
+pullback: my full-history trades 561, touching the path 33; builder saved 33
+  trade lists IDENTICAL
+  first: {'leg': 'pullback', 'side': 'L', 'entry_ts': 1791345600, 'entry_price': 84121.28, 'exit_ts': 1791403200, 'exit_price': 82214.86595550396, 'reason': 'STOP'}
+
+trend: my full-history trades 423, touching the path 26; builder saved 26
+  trade lists IDENTICAL
+  first: {'leg': 'trend', 'side': 'L', 'entry_ts': 1789747200, 'entry_price': 80702.77, 'exit_ts': 1791374400, 'exit_price': 83200.76600842326, 'reason': 'STOP'}
+
+TREND book at the seam (after the last real bar 2026-10-07 08:00): position ('L', '2026-09-18 16:00', 80702.77, 'trail', 83274.67, 'signal', '2026-09-18 12:00')
+   live snapshot: LONG from 80,702.77 trail 83,274.67 -> MATCH
+PULLBACK book at the seam: position ('L', '2026-10-07 04:00', 84121.28, 'stop', 82214.87, 'signal', '2026-10-07 00:00') pending None
+   real 00:00 bar close (the limit) 84121.28; real 04:00 bar low 84010.77 -> fill rule bar.low < limit: True
+   live snapshot said S3 PENDING a long limit; the CSV path says LONG from 84121.28 entered 04:00 (seam discrepancy the builder flagged)
+
+first path bar open 83200.77 (trail 83,274.67 -> stopped at the open)

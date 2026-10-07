@@ -1,0 +1,73 @@
+=== CRASH paths: candidate vs exposure-matched UNIFORM pullback cut (U) and K-matched both-leg cut (Kм) ===
+cols: 12m base | cand | U | K   ||  maxDD base | cand | U | K   (U = baseline x r_pb on the pullback leg; cand beats U only if its number is better)
+COVID C1    
+    off-28 r_pb 0.716 | 12m 103,701 106,950 U 108,227 K 103,748 U>=cand | dd -22.0% -19.5% U -19.1% K -21.0% U>=cand
+    off-14 r_pb 0.872 | 12m 127,699 124,429 U 127,470 K 126,748 U>=cand | dd -15.7% -14.4% U -15.2% K -15.0% cand>U
+    off_0  r_pb 0.749 | 12m 115,987 119,147 U 119,846 K 115,711 U>=cand | dd -21.0% -18.6% U -18.6% K -20.6% cand>U
+    off_14 r_pb 0.871 | 12m 123,311 120,669 U 123,620 K 122,575 U>=cand | dd -17.6% -16.4% U -17.0% K -16.8% cand>U
+    off_28 r_pb 0.862 | 12m 122,956 118,933 U 122,779 K 122,204 U>=cand | dd -15.8% -15.1% U -15.6% K -15.2% cand>U
+COVID C2    
+    off-28 r_pb 0.847 | 12m 103,701 103,010 U 106,135 K 103,726 U>=cand | dd -22.0% -21.7% U -20.5% K -21.5% U>=cand
+    off-14 r_pb 0.764 | 12m 127,699 120,588 U 127,277 K 125,949 U>=cand | dd -15.7% -17.6% U -14.8% K -14.5% U>=cand
+    off_0  r_pb 0.677 | 12m 115,987 118,178 U 120,947 K 115,632 U>=cand | dd -21.0% -20.1% U -18.0% K -20.4% U>=cand
+    off_14 r_pb 0.763 | 12m 123,311 117,434 U 123,878 K 121,963 U>=cand | dd -17.6% -19.4% U -16.6% K -16.2% U>=cand
+    off_28 r_pb 0.779 | 12m 122,956 114,304 U 122,672 K 121,749 U>=cand | dd -15.8% -18.2% U -15.5% K -14.7% U>=cand
+COVID C1+C2 
+    off-28 r_pb 0.618 | 12m 103,701 106,876 U 109,786 K 103,764 U>=cand | dd -22.0% -18.8% U -18.1% K -20.7% U>=cand
+    off-14 r_pb 0.672 | 12m 127,699 119,047 U 127,113 K 125,269 U>=cand | dd -15.7% -16.1% U -14.4% K -14.0% U>=cand
+    off_0  r_pb 0.525 | 12m 115,987 121,390 U 123,282 K 115,465 U>=cand | dd -21.0% -17.6% U -16.6% K -20.1% U>=cand
+    off_14 r_pb 0.669 | 12m 123,311 115,934 U 124,104 K 121,423 U>=cand | dd -17.6% -18.0% U -16.2% K -15.7% U>=cand
+    off_28 r_pb 0.679 | 12m 122,956 112,382 U 122,543 K 121,204 U>=cand | dd -15.8% -17.1% U -15.3% K -14.3% U>=cand
+2008  C1    
+    off-28 r_pb 0.936 | 12m 121,954 119,601 U 120,692 K 121,551 U>=cand | dd  -8.9%  -9.4% U  -8.8% K  -8.7% U>=cand
+    off-14 r_pb 0.961 | 12m 119,767 118,259 U 119,210 K 119,575 U>=cand | dd  -8.5%  -8.8% U  -8.4% K  -8.4% U>=cand
+    off_0  r_pb 0.960 | 12m 125,924 124,214 U 125,468 K 125,657 U>=cand | dd  -8.2%  -8.5% U  -8.1% K  -8.1% U>=cand
+    off_14 r_pb 0.959 | 12m 119,573 118,573 U 118,993 K 119,370 U>=cand | dd -10.2%  -9.2% U -10.0% K -10.1% cand>U
+    off_28 r_pb 0.956 | 12m 119,630 119,222 U 119,171 K 119,407 cand>U  | dd  -8.7%  -8.9% U  -8.6% K  -8.7% U>=cand
+2008  C2    
+    off-28 r_pb 0.855 | 12m 121,954 117,236 U 119,104 K 121,043 U>=cand | dd  -8.9%  -9.9% U  -8.7% K  -8.5% U>=cand
+    off-14 r_pb 0.852 | 12m 119,767 117,665 U 117,631 K 119,032 cand>U  | dd  -8.5%  -8.5% U  -8.1% K  -8.3% U>=cand
+    off_0  r_pb 0.834 | 12m 125,924 126,799 U 124,037 K 124,818 cand>U  | dd  -8.2%  -7.8% U  -7.8% K  -7.9% U>=cand
+    off_14 r_pb 0.846 | 12m 119,573 116,462 U 117,378 K 118,805 U>=cand | dd -10.2% -10.4% U  -9.5% K  -9.8% U>=cand
+    off_28 r_pb 0.871 | 12m 119,630 118,486 U 118,291 K 118,979 cand>U  | dd  -8.7%  -8.4% U  -8.4% K  -8.5% U>=cand
+2008  C1+C2 
+    off-28 r_pb 0.792 | 12m 121,954 115,164 U 117,870 K 120,649 U>=cand | dd  -8.9% -10.3% U  -8.7% K  -8.3% U>=cand
+    off-14 r_pb 0.813 | 12m 119,767 116,158 U 117,074 K 118,840 U>=cand | dd  -8.5%  -8.4% U  -8.0% K  -8.2% U>=cand
+    off_0  r_pb 0.794 | 12m 125,924 125,089 U 123,581 K 124,551 cand>U  | dd  -8.2%  -7.7% U  -7.7% K  -7.9% U>=cand
+    off_14 r_pb 0.805 | 12m 119,573 115,461 U 116,798 K 118,602 U>=cand | dd -10.2%  -9.3% U  -9.4% K  -9.7% cand>U
+    off_28 r_pb 0.827 | 12m 119,630 118,043 U 117,838 K 118,758 cand>U  | dd  -8.7%  -7.7% U  -8.3% K  -8.4% cand>U
+1999  C1    
+    off-28 r_pb 0.614 | 12m 110,656 114,561 U 113,451 K 110,500 cand>U  | dd -16.9% -14.0% U -14.6% K -16.4% cand>U
+    off-14 r_pb 0.558 | 12m 122,356 127,982 U 125,764 K 121,909 cand>U  | dd -16.7% -12.9% U -13.4% K -16.2% cand>U
+    off_0  r_pb 0.624 | 12m 116,600 123,092 U 122,842 K 116,349 cand>U  | dd -13.6% -11.2% U -11.7% K -13.4% cand>U
+    off_14 r_pb 0.587 | 12m 121,468 127,618 U 126,570 K 120,997 cand>U  | dd -13.4%  -9.9% U  -9.6% K -13.1% U>=cand
+    off_28 r_pb 0.765 | 12m 123,023 124,487 U 125,959 K 122,542 U>=cand | dd -16.6% -14.2% U -14.4% K -16.3% cand>U
+1999  C2    
+    off-28 r_pb 0.767 | 12m 110,656 109,857 U 112,346 K 110,562 U>=cand | dd -16.9% -18.8% U -15.4% K -16.6% U>=cand
+    off-14 r_pb 0.768 | 12m 122,356 119,489 U 124,145 K 122,121 U>=cand | dd -16.7% -17.7% U -15.0% K -16.4% U>=cand
+    off_0  r_pb 0.831 | 12m 116,600 120,556 U 119,410 K 116,487 cand>U  | dd -13.6% -13.1% U -12.6% K -13.5% U>=cand
+    off_14 r_pb 0.721 | 12m 121,468 125,023 U 124,917 K 121,149 cand>U  | dd -13.4% -11.1% U -10.6% K -13.2% U>=cand
+    off_28 r_pb 0.935 | 12m 123,023 126,259 U 123,835 K 122,890 cand>U  | dd -16.6% -13.9% U -16.0% K -16.6% cand>U
+1999  C1+C2 
+    off-28 r_pb 0.479 | 12m 110,656 114,751 U 114,431 K 110,445 cand>U  | dd -16.9% -15.1% U -13.8% K -16.2% U>=cand
+    off-14 r_pb 0.430 | 12m 122,356 125,520 U 126,750 K 121,779 U>=cand | dd -16.7% -13.5% U -12.4% K -16.0% U>=cand
+    off_0  r_pb 0.506 | 12m 116,600 125,803 U 124,802 K 116,270 cand>U  | dd -13.6% -11.1% U -11.1% K -13.3% cand>U
+    off_14 r_pb 0.415 | 12m 121,468 129,511 U 128,697 K 120,800 cand>U  | dd -13.4%  -8.6% U  -8.3% K -12.9% U>=cand
+    off_28 r_pb 0.714 | 12m 123,023 127,016 U 126,596 K 122,438 cand>U  | dd -16.6% -12.1% U -13.9% K -16.3% cand>U
+
+=== ERAS: $/yr and maxDD, candidate vs exposure-matched uniform cut ===
+E2 2017-19   C1     r_pb 0.755 | $/yr base  16,416 cand  17,283 ( +5.3%) U  17,410 ( +6.1%) -> cand vs U    -127/yr U>=cand | maxDD base -17.3% cand -16.6% U -16.6% U>=cand
+E2 2017-19   C2     r_pb 0.933 | $/yr base  16,416 cand  17,939 ( +9.3%) U  16,690 ( +1.7%) -> cand vs U  +1,250/yr cand>U | maxDD base -17.3% cand -16.4% U -16.9% cand>U
+E2 2017-19   C1+C2  r_pb 0.693 | $/yr base  16,416 cand  18,402 (+12.1%) U  17,662 ( +7.6%) -> cand vs U    +740/yr cand>U | maxDD base -17.3% cand -16.2% U -16.5% cand>U
+E3 2020-21   C1     r_pb 0.934 | $/yr base  32,465 cand  29,272 ( -9.8%) U  31,839 ( -1.9%) -> cand vs U  -2,567/yr U>=cand | maxDD base -15.8% cand -16.4% U -15.7% U>=cand
+E3 2020-21   C2     r_pb 0.849 | $/yr base  32,465 cand  25,421 (-21.7%) U  31,037 ( -4.4%) -> cand vs U  -5,616/yr U>=cand | maxDD base -15.8% cand -18.4% U -15.6% U>=cand
+E3 2020-21   C1+C2  r_pb 0.795 | $/yr base  32,465 cand  23,248 (-28.4%) U  30,524 ( -6.0%) -> cand vs U  -7,275/yr U>=cand | maxDD base -15.8% cand -18.8% U -15.5% U>=cand
+E4 2022-24H1 C1     r_pb 0.949 | $/yr base  31,638 cand  31,159 ( -1.5%) U  30,896 ( -2.3%) -> cand vs U    +263/yr cand>U | maxDD base -10.4% cand -11.1% U -10.4% U>=cand
+E4 2022-24H1 C2     r_pb 0.895 | $/yr base  31,638 cand  27,820 (-12.1%) U  30,093 ( -4.9%) -> cand vs U  -2,272/yr U>=cand | maxDD base -10.4% cand -10.4% U -10.3% U>=cand
+E4 2022-24H1 C1+C2  r_pb 0.850 | $/yr base  31,638 cand  27,639 (-12.6%) U  29,431 ( -7.0%) -> cand vs U  -1,792/yr U>=cand | maxDD base -10.4% cand -11.1% U -10.3% U>=cand
+E5 2024H2-26 C1     r_pb 0.932 | $/yr base  17,204 cand  15,093 (-12.3%) U  16,323 ( -5.1%) -> cand vs U  -1,230/yr U>=cand | maxDD base -16.8% cand -16.8% U -16.3% U>=cand
+E5 2024H2-26 C2     r_pb 0.908 | $/yr base  17,204 cand  16,547 ( -3.8%) U  16,012 ( -6.9%) -> cand vs U    +535/yr cand>U | maxDD base -16.8% cand -19.4% U -16.2% U>=cand
+E5 2024H2-26 C1+C2  r_pb 0.841 | $/yr base  17,204 cand  14,315 (-16.8%) U  15,148 (-12.0%) -> cand vs U    -832/yr U>=cand | maxDD base -16.8% cand -19.3% U -15.8% U>=cand
+2019+        C1     r_pb 0.889 | $/yr base  14,364 cand  13,783 ( -4.0%) U  14,423 ( +0.4%) -> cand vs U    -640/yr U>=cand | maxDD base -18.7% cand -20.7% U -18.1% U>=cand
+2019+        C2     r_pb 0.876 | $/yr base  14,364 cand  14,467 ( +0.7%) U  14,430 ( +0.5%) -> cand vs U     +36/yr cand>U | maxDD base -18.7% cand -17.1% U -18.0% cand>U
+2019+        C1+C2  r_pb 0.768 | $/yr base  14,364 cand  13,915 ( -3.1%) U  14,488 ( +0.9%) -> cand vs U    -574/yr U>=cand | maxDD base -18.7% cand -19.1% U -17.4% U>=cand

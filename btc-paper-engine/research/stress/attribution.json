@@ -1,0 +1,1430 @@
+{
+ "COVID": {
+  "scenario": "COVID",
+  "label": "COVID-like",
+  "K": 0.75,
+  "offset": 0,
+  "btc": {
+   "low_pct": -0.5602,
+   "low_date": "2026-11-08",
+   "end_pct": 3.5522
+  },
+  "balance_12m": 115986.66,
+  "balance_12m_exact": true,
+  "pnl_12m": 15986.66,
+  "decomposition_12m": {
+   "pullback_mtm": -15358.58,
+   "trend_mtm": 27168.93,
+   "carry": 4176.32,
+   "identity_err": 0.01
+  },
+  "pullback": {
+   "groups": {
+    "before_halt|remirror|L|STOP": {
+     "n": 1,
+     "pnl": -1037.72,
+     "gross": -933.16,
+     "fees": 67.64,
+     "funding": -36.92
+    },
+    "before_halt|engine|L|STOP": {
+     "n": 1,
+     "pnl": -2972.94,
+     "gross": -2670.6,
+     "fees": 66.89,
+     "funding": -235.45
+    },
+    "before_halt|engine|S|SIGNAL": {
+     "n": 2,
+     "pnl": 2676.0,
+     "gross": 2984.26,
+     "fees": 98.68,
+     "funding": -209.58
+    },
+    "before_halt|engine|S|STOP": {
+     "n": 4,
+     "pnl": -14023.92,
+     "gross": -13787.86,
+     "fees": 170.72,
+     "funding": -65.35
+    }
+   },
+   "n_trades": 8,
+   "realised": -15358.58,
+   "stops": {
+    "n": 6,
+    "pnl": -18034.58
+   },
+   "signals": {
+    "n": 2,
+    "pnl": 2676.0
+   },
+   "by_side": {
+    "L": -4010.66,
+    "S": -11347.92
+   },
+   "mult_at_entry": [
+    1.0,
+    1.0,
+    0.9693,
+    0.9216,
+    0.5,
+    0.5,
+    0.5,
+    0.5
+   ],
+   "s3_halt": {
+    "halted": true,
+    "date": "2026-11-30 04:00",
+    "margin": -1015.55,
+    "dropped": 25
+   },
+   "forgone_by_halt": {
+    "no_halt_12m": 128193.33,
+    "halt_12m": 115986.66,
+    "pullback_mtm_no_halt": -3151.92,
+    "pullback_mtm_halt": -15358.58,
+    "d_pullback": 12206.66,
+    "d_trend": 0.0,
+    "dropped_trades": 25,
+    "no_halt_max_dd": -0.1613,
+    "halt_max_dd": -0.2102
+   },
+   "trades": [
+    {
+     "side": "L",
+     "entry_date": "2026-10-07 12:00",
+     "exit_date": "2026-10-07 20:00",
+     "pnl": -1037.72,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "remirror",
+     "notional": 78750.0
+    },
+    {
+     "side": "L",
+     "entry_date": "2026-10-08 04:00",
+     "exit_date": "2026-10-10 00:00",
+     "pnl": -2972.94,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-10-17 20:00",
+     "exit_date": "2026-10-18 16:00",
+     "pnl": 1121.42,
+     "mult": 0.9693,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 76332.38
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-10-28 16:00",
+     "exit_date": "2026-10-31 04:00",
+     "pnl": -2778.41,
+     "mult": 0.9216,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 72576.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-11-12 04:00",
+     "exit_date": "2026-11-12 20:00",
+     "pnl": -5576.55,
+     "mult": 0.5,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 39375.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-11-13 00:00",
+     "exit_date": "2026-11-20 12:00",
+     "pnl": 1554.58,
+     "mult": 0.5,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 39375.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-11-25 12:00",
+     "exit_date": "2026-11-26 04:00",
+     "pnl": -2705.26,
+     "mult": 0.5,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 39375.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-11-26 08:00",
+     "exit_date": "2026-11-30 04:00",
+     "pnl": -2963.7,
+     "mult": 0.5,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 39375.0
+    }
+   ]
+  },
+  "trend": {
+   "n_closed": 25,
+   "n_open": 1,
+   "open_mtm": 4287.2,
+   "winners": {
+    "n": 6,
+    "pnl": 50348.85
+   },
+   "losers": {
+    "n": 19,
+    "pnl": -27602.18
+   },
+   "stop_losers": {
+    "n": 19,
+    "pnl": -27602.18
+   },
+   "crash_phase": {
+    "n": 2,
+    "pnl": 11356.84,
+    "to": "2026-11-08"
+   },
+   "after_low": {
+    "n": 23,
+    "pnl": 11389.83
+   },
+   "longest_losing_streak": {
+    "n": 5,
+    "pnl": -5782.17,
+    "from_date": "2027-01-02 16:00",
+    "to_date": "2027-03-03 00:00",
+    "followed_by": {
+     "entry_date": "2027-03-03 04:00",
+     "pnl": 4698.3,
+     "side": "L"
+    }
+   },
+   "crash_short_give_back": {
+    "entry_date": "2026-10-08 00:00",
+    "exit_date": "2026-11-12 20:00",
+    "realised_gross": 11661.63,
+    "mtm_peak": 18520.71,
+    "mtm_peak_date": "2026-11-08",
+    "give_back": 6859.08
+   },
+   "top3": [
+    {
+     "side": "L",
+     "entry_date": "2027-05-23 16:00",
+     "exit_date": "2027-07-21 12:00",
+     "pnl": 17366.21,
+     "mult": 0.9046
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-08-11 00:00",
+     "exit_date": "2027-08-29 20:00",
+     "pnl": 11806.61,
+     "mult": 0.7865
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-10-08 00:00",
+     "exit_date": "2026-11-12 20:00",
+     "pnl": 11386.0,
+     "mult": 1.0
+    }
+   ]
+  },
+  "daily_loss_halts": {
+   "n": 0,
+   "cost": 0.0,
+   "reentry_cost": 0.0,
+   "rail_used_pct": 0.5923,
+   "closest_margin": 6115.99,
+   "closest_date": "2026-11-12 20:00",
+   "worst_intrabar_day": {
+    "date": "2026-11-12",
+    "pct": -0.08134056457748916,
+    "usd": -8884.012098429448,
+    "from_equity": 109219.94634013249,
+    "to_equity": 100335.93424170304
+   }
+  },
+  "drawdown_halt": {
+   "n": 0,
+   "cost": 0.0,
+   "rail_used_pct": 0.8983,
+   "closest_margin": 3051.45,
+   "closest_date": "2027-05-27 20:00"
+  },
+  "carry": {
+   "start": 30013.33,
+   "at_12m": 34176.32,
+   "change_12m": 4176.32,
+   "funding_received": 4376.48,
+   "fees": 200.15,
+   "flips": 4,
+   "bars_on_pct": 63.0,
+   "worst_dip_from_start": 0.0,
+   "worst_dip_date": "2026-10-07",
+   "max_dd": -0.0075,
+   "funding_source": "XBTUSD"
+  },
+  "fees": {
+   "total": 993.39,
+   "by_leg": {
+    "pullback": 403.93,
+    "trend": 589.44
+   },
+   "n_fills": 67
+  },
+  "btc_funding": {
+   "total": -2820.12,
+   "by_leg": {
+    "pullback": -547.31,
+    "trend": -2272.81
+   }
+  },
+  "max_dd_window": {
+   "max_dd": -0.2102,
+   "peak_equity": 112972.48,
+   "peak_date": "2026-11-08 20:00",
+   "trough_equity": 89222.99,
+   "trough_date": "2027-05-27 20:00",
+   "fall": -23749.49,
+   "d_pullback": -9690.93,
+   "d_trend": -15289.05,
+   "d_carry": 1230.5,
+   "of_which_btc_funding": -913.18,
+   "of_which_fees_closed": 531.35,
+   "closed_in_window": {
+    "trend": {
+     "n": 17,
+     "pnl": 4467.27,
+     "winners": 4,
+     "losers": 13
+    },
+    "pullback": {
+     "n": 4,
+     "pnl": -9690.93,
+     "winners": 1,
+     "losers": 3
+    }
+   },
+   "identity_err": 0.01
+  },
+  "earned": {
+   "top3": [
+    {
+     "leg": "trend",
+     "side": "L",
+     "entry_date": "2027-05-23 16:00",
+     "exit_date": "2027-07-21 12:00",
+     "pnl": 17366.21
+    },
+    {
+     "leg": "trend",
+     "side": "L",
+     "entry_date": "2027-08-11 00:00",
+     "exit_date": "2027-08-29 20:00",
+     "pnl": 11806.61
+    },
+    {
+     "leg": "trend",
+     "side": "S",
+     "entry_date": "2026-10-08 00:00",
+     "exit_date": "2026-11-12 20:00",
+     "pnl": 11386.0
+    }
+   ],
+   "positive_by_leg": {
+    "pullback": 2676.0,
+    "trend": 54636.05
+   },
+   "negative_by_leg": {
+    "pullback": -18034.58,
+    "trend": -27602.18
+   }
+  }
+ },
+ "2008": {
+  "scenario": "2008",
+  "label": "2008-like",
+  "K": 0.75,
+  "offset": 0,
+  "btc": {
+   "low_pct": -0.7366,
+   "low_date": "2027-05-17",
+   "end_pct": -0.7293
+  },
+  "balance_12m": 125923.63,
+  "balance_12m_exact": false,
+  "pnl_12m": 25923.63,
+  "decomposition_12m": {
+   "pullback_mtm": 11389.2,
+   "trend_mtm": 14351.77,
+   "carry": 182.66,
+   "identity_err": 0.0
+  },
+  "pullback": {
+   "groups": {
+    "before_halt|remirror|L|STOP": {
+     "n": 1,
+     "pnl": -357.39,
+     "gross": -289.48,
+     "fees": 67.91,
+     "funding": 0.0
+    },
+    "before_halt|engine|L|STOP": {
+     "n": 7,
+     "pnl": -18364.03,
+     "gross": -17797.88,
+     "fees": 410.16,
+     "funding": -156.0
+    },
+    "before_halt|engine|S|SIGNAL": {
+     "n": 18,
+     "pnl": 40042.04,
+     "gross": 40904.19,
+     "fees": 845.28,
+     "funding": -16.8
+    },
+    "before_halt|engine|S|STOP": {
+     "n": 9,
+     "pnl": -24736.57,
+     "gross": -24284.47,
+     "fees": 478.87,
+     "funding": 26.78
+    },
+    "before_halt|engine|L|SIGNAL": {
+     "n": 7,
+     "pnl": 14805.16,
+     "gross": 15223.35,
+     "fees": 397.38,
+     "funding": -20.8
+    }
+   },
+   "n_trades": 42,
+   "realised": 11389.21,
+   "stops": {
+    "n": 17,
+    "pnl": -43457.99
+   },
+   "signals": {
+    "n": 25,
+    "pnl": 54847.2
+   },
+   "by_side": {
+    "L": -3916.26,
+    "S": 15305.47
+   },
+   "mult_at_entry": [
+    1.0,
+    1.0,
+    1.0,
+    0.7488,
+    0.5515,
+    0.5461,
+    0.5494,
+    0.7145,
+    0.7712,
+    0.6041,
+    0.5851,
+    0.6106,
+    0.5946,
+    0.6399,
+    0.5775,
+    0.5726,
+    0.7477,
+    0.7669,
+    0.7719,
+    0.7748,
+    0.9069,
+    0.897,
+    0.8382,
+    0.6534,
+    0.6551,
+    0.6779,
+    0.6706,
+    0.5879,
+    0.6033,
+    0.5953,
+    0.6209,
+    0.82,
+    0.8515,
+    0.9471,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "s3_halt": {
+    "halted": false,
+    "date": null,
+    "margin": null,
+    "dropped": 0
+   },
+   "forgone_by_halt": {
+    "no_halt_12m": 125923.63,
+    "halt_12m": 125923.63,
+    "pullback_mtm_no_halt": 11389.2,
+    "pullback_mtm_halt": 11389.2,
+    "d_pullback": 0.0,
+    "d_trend": 0.0,
+    "dropped_trades": 0,
+    "no_halt_max_dd": -0.0819,
+    "halt_max_dd": -0.0819
+   },
+   "trades": [
+    {
+     "side": "L",
+     "entry_date": "2026-10-07 12:00",
+     "exit_date": "2026-10-07 12:00",
+     "pnl": -357.39,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "remirror",
+     "notional": 78750.0
+    },
+    {
+     "side": "L",
+     "entry_date": "2026-10-07 16:00",
+     "exit_date": "2026-10-08 00:00",
+     "pnl": -2087.5,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "L",
+     "entry_date": "2026-10-08 04:00",
+     "exit_date": "2026-10-09 08:00",
+     "pnl": -2505.42,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-10-27 12:00",
+     "exit_date": "2026-10-30 16:00",
+     "pnl": 1016.08,
+     "mult": 0.7488,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 58968.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-11-10 08:00",
+     "exit_date": "2026-11-10 16:00",
+     "pnl": 1150.33,
+     "mult": 0.5515,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 43430.62
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-11-18 16:00",
+     "exit_date": "2026-11-21 04:00",
+     "pnl": -2230.02,
+     "mult": 0.5461,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 43005.38
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-11-21 08:00",
+     "exit_date": "2026-11-25 20:00",
+     "pnl": 1576.83,
+     "mult": 0.5494,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 43265.25
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-12-11 04:00",
+     "exit_date": "2026-12-13 00:00",
+     "pnl": 1936.41,
+     "mult": 0.7145,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 56266.88
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-12-19 04:00",
+     "exit_date": "2026-12-19 12:00",
+     "pnl": 3678.55,
+     "mult": 0.7712,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 60732.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-12-30 08:00",
+     "exit_date": "2027-01-01 04:00",
+     "pnl": 1198.01,
+     "mult": 0.6041,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 47572.88
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-01-03 04:00",
+     "exit_date": "2027-01-03 08:00",
+     "pnl": -2614.26,
+     "mult": 0.5851,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 46076.62
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-01-13 00:00",
+     "exit_date": "2027-01-13 16:00",
+     "pnl": 1647.69,
+     "mult": 0.6106,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 48084.75
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-01-16 04:00",
+     "exit_date": "2027-01-17 00:00",
+     "pnl": -2362.16,
+     "mult": 0.5946,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 46824.75
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-01-24 04:00",
+     "exit_date": "2027-01-26 08:00",
+     "pnl": 2346.3,
+     "mult": 0.6399,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 50392.12
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-02-10 12:00",
+     "exit_date": "2027-02-10 20:00",
+     "pnl": 1371.72,
+     "mult": 0.5775,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 45478.12
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-02-11 08:00",
+     "exit_date": "2027-02-11 12:00",
+     "pnl": -2240.81,
+     "mult": 0.5726,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 45092.25
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-02-27 16:00",
+     "exit_date": "2027-02-28 04:00",
+     "pnl": 2491.92,
+     "mult": 0.7477,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 58881.38
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-03-03 04:00",
+     "exit_date": "2027-03-03 16:00",
+     "pnl": 1326.91,
+     "mult": 0.7669,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 60393.38
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-03-04 04:00",
+     "exit_date": "2027-03-05 00:00",
+     "pnl": -2376.97,
+     "mult": 0.7719,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 60787.12
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-03-05 04:00",
+     "exit_date": "2027-03-07 08:00",
+     "pnl": -2797.51,
+     "mult": 0.7748,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 61015.5
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-03-17 16:00",
+     "exit_date": "2027-03-18 20:00",
+     "pnl": -2709.38,
+     "mult": 0.9069,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 71418.38
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-03-19 00:00",
+     "exit_date": "2027-03-20 12:00",
+     "pnl": 2644.63,
+     "mult": 0.897,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 70638.75
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-04-02 08:00",
+     "exit_date": "2027-04-03 04:00",
+     "pnl": 4838.4,
+     "mult": 0.8382,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 66008.25
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-04-17 04:00",
+     "exit_date": "2027-04-18 04:00",
+     "pnl": 2048.75,
+     "mult": 0.6534,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 51455.25
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-04-20 20:00",
+     "exit_date": "2027-04-21 08:00",
+     "pnl": 2305.64,
+     "mult": 0.6551,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 51589.12
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-04-27 16:00",
+     "exit_date": "2027-04-28 08:00",
+     "pnl": -2150.19,
+     "mult": 0.6779,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 53384.62
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-04-28 12:00",
+     "exit_date": "2027-04-30 12:00",
+     "pnl": 3189.17,
+     "mult": 0.6706,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 52809.75
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-05-22 12:00",
+     "exit_date": "2027-05-26 04:00",
+     "pnl": 749.65,
+     "mult": 0.5879,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 46297.12
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-06-02 12:00",
+     "exit_date": "2027-06-03 00:00",
+     "pnl": 1640.64,
+     "mult": 0.6033,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 47509.87
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-06-03 08:00",
+     "exit_date": "2027-06-05 04:00",
+     "pnl": -2736.94,
+     "mult": 0.5953,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 46879.88
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-06-05 08:00",
+     "exit_date": "2027-06-08 20:00",
+     "pnl": 3101.85,
+     "mult": 0.6209,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 48895.88
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-06-22 16:00",
+     "exit_date": "2027-06-25 08:00",
+     "pnl": 2719.85,
+     "mult": 0.82,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 64575.0
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-07-02 12:00",
+     "exit_date": "2027-07-04 00:00",
+     "pnl": 1646.47,
+     "mult": 0.8515,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 67055.62
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-07-08 16:00",
+     "exit_date": "2027-07-09 04:00",
+     "pnl": 3693.97,
+     "mult": 0.9471,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 74584.12
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-07-15 20:00",
+     "exit_date": "2027-07-17 12:00",
+     "pnl": -3222.47,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-08-07 16:00",
+     "exit_date": "2027-08-07 20:00",
+     "pnl": -3617.54,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-08-08 00:00",
+     "exit_date": "2027-08-10 12:00",
+     "pnl": -3620.42,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-08-26 04:00",
+     "exit_date": "2027-08-26 12:00",
+     "pnl": 3105.83,
+     "mult": 1.0,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-08-29 04:00",
+     "exit_date": "2027-08-31 00:00",
+     "pnl": 2143.25,
+     "mult": 1.0,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-09-01 08:00",
+     "exit_date": "2027-09-02 00:00",
+     "pnl": -2817.01,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-10-01 08:00",
+     "exit_date": "2027-10-02 20:00",
+     "pnl": 1278.35,
+     "mult": 1.0,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "L",
+     "entry_date": "2027-10-06 16:00",
+     "exit_date": "2027-10-07 00:00",
+     "pnl": -3012.0,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 78750.0
+    }
+   ]
+  },
+  "trend": {
+   "n_closed": 26,
+   "n_open": 1,
+   "open_mtm": 2660.88,
+   "winners": {
+    "n": 10,
+    "pnl": 31756.56
+   },
+   "losers": {
+    "n": 16,
+    "pnl": -20065.66
+   },
+   "stop_losers": {
+    "n": 16,
+    "pnl": -20065.66
+   },
+   "crash_phase": {
+    "n": 15,
+    "pnl": 18856.17,
+    "to": "2027-05-17"
+   },
+   "after_low": {
+    "n": 11,
+    "pnl": -7165.27
+   },
+   "longest_losing_streak": {
+    "n": 5,
+    "pnl": -7398.93,
+    "from_date": "2027-06-05 04:00",
+    "to_date": "2027-07-17 12:00",
+    "followed_by": {
+     "entry_date": "2027-07-17 16:00",
+     "pnl": 3537.4,
+     "side": "S"
+    }
+   },
+   "crash_short_give_back": {
+    "entry_date": "2026-10-08 04:00",
+    "exit_date": "2026-11-21 04:00",
+    "realised_gross": 8073.88,
+    "mtm_peak": 10529.34,
+    "mtm_peak_date": "2026-11-18",
+    "give_back": 2455.46
+   },
+   "top3": [
+    {
+     "side": "S",
+     "entry_date": "2026-10-08 04:00",
+     "exit_date": "2026-11-21 04:00",
+     "pnl": 8305.99,
+     "mult": 1.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-05-09 08:00",
+     "exit_date": "2027-06-05 00:00",
+     "pnl": 6821.14,
+     "mult": 0.7371
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-03-21 04:00",
+     "exit_date": "2027-04-28 08:00",
+     "pnl": 6055.68,
+     "mult": 0.8784
+    }
+   ]
+  },
+  "daily_loss_halts": {
+   "n": 0,
+   "cost": 0.0,
+   "reentry_cost": 0.0,
+   "rail_used_pct": 0.3351,
+   "closest_margin": 9974.24,
+   "closest_date": "2027-08-07 20:00",
+   "worst_intrabar_day": {
+    "date": "2027-08-07",
+    "pct": -0.0373690387872863,
+    "usd": -5025.757063093028,
+    "from_equity": 134489.86717857167,
+    "to_equity": 129464.11011547864
+   }
+  },
+  "drawdown_halt": {
+   "n": 0,
+   "cost": 0.0,
+   "rail_used_pct": 0.4421,
+   "closest_margin": 16736.95,
+   "closest_date": "2027-10-07 04:00"
+  },
+  "carry": {
+   "start": 30013.96,
+   "at_12m": 30182.66,
+   "change_12m": 182.66,
+   "funding_received": 208.5,
+   "fees": 25.83,
+   "flips": 1,
+   "bars_on_pct": 9.6,
+   "worst_dip_from_start": 0.0,
+   "worst_dip_date": "2026-10-07",
+   "max_dd": -0.0022,
+   "funding_source": "XBTUSD"
+  },
+  "fees": {
+   "total": 2794.32,
+   "by_leg": {
+    "pullback": 2199.6,
+    "trend": 594.68
+   },
+   "n_fills": 137
+  },
+  "btc_funding": {
+   "total": -482.07,
+   "by_leg": {
+    "pullback": -166.88,
+    "trend": -315.19
+   }
+  },
+  "max_dd_window": {
+   "max_dd": -0.0819,
+   "peak_equity": 135342.13,
+   "peak_date": "2027-08-05 20:00",
+   "trough_equity": 124259.86,
+   "trough_date": "2027-09-11 12:00",
+   "fall": -11082.27,
+   "d_pullback": -4805.89,
+   "d_trend": -6276.38,
+   "d_carry": 0.0,
+   "of_which_btc_funding": -78.63,
+   "of_which_fees_closed": 456.32,
+   "closed_in_window": {
+    "trend": {
+     "n": 4,
+     "pnl": 1428.59,
+     "winners": 1,
+     "losers": 3
+    },
+    "pullback": {
+     "n": 5,
+     "pnl": -4805.89,
+     "winners": 2,
+     "losers": 3
+    }
+   },
+   "identity_err": 0.0
+  },
+  "earned": {
+   "top3": [
+    {
+     "leg": "trend",
+     "side": "S",
+     "entry_date": "2026-10-08 04:00",
+     "exit_date": "2026-11-21 04:00",
+     "pnl": 8305.99
+    },
+    {
+     "leg": "trend",
+     "side": "S",
+     "entry_date": "2027-05-09 08:00",
+     "exit_date": "2027-06-05 00:00",
+     "pnl": 6821.14
+    },
+    {
+     "leg": "trend",
+     "side": "S",
+     "entry_date": "2027-03-21 04:00",
+     "exit_date": "2027-04-28 08:00",
+     "pnl": 6055.68
+    }
+   ],
+   "positive_by_leg": {
+    "pullback": 54847.2,
+    "trend": 34417.44
+   },
+   "negative_by_leg": {
+    "pullback": -43457.99,
+    "trend": -20065.66
+   }
+  }
+ },
+ "1999": {
+  "scenario": "1999",
+  "label": "1999/2000-like",
+  "K": 0.75,
+  "offset": 0,
+  "btc": {
+   "low_pct": -0.8353,
+   "low_date": "2027-10-06",
+   "end_pct": -0.8325
+  },
+  "balance_12m": 116599.72,
+  "balance_12m_exact": false,
+  "pnl_12m": 16599.72,
+  "decomposition_12m": {
+   "pullback_mtm": -16618.04,
+   "trend_mtm": 30576.72,
+   "carry": 2641.03,
+   "identity_err": 0.01
+  },
+  "pullback": {
+   "groups": {
+    "before_halt|remirror|L|SIGNAL": {
+     "n": 1,
+     "pnl": 837.31,
+     "gross": 1199.28,
+     "fees": 68.56,
+     "funding": -293.41
+    },
+    "before_halt|engine|L|STOP": {
+     "n": 2,
+     "pnl": -7964.16,
+     "gross": -7404.01,
+     "fees": 132.88,
+     "funding": -427.27
+    },
+    "before_halt|engine|S|STOP": {
+     "n": 3,
+     "pnl": -11906.95,
+     "gross": -12514.2,
+     "fees": 107.47,
+     "funding": 714.71
+    },
+    "before_halt|engine|S|SIGNAL": {
+     "n": 1,
+     "pnl": 2415.75,
+     "gross": 2040.1,
+     "fees": 33.14,
+     "funding": 408.79
+    }
+   },
+   "n_trades": 7,
+   "realised": -16618.05,
+   "stops": {
+    "n": 5,
+    "pnl": -19871.11
+   },
+   "signals": {
+    "n": 2,
+    "pnl": 3253.06
+   },
+   "by_side": {
+    "L": -7126.85,
+    "S": -9491.2
+   },
+   "mult_at_entry": [
+    1.0,
+    1.0,
+    1.0,
+    0.5,
+    0.5,
+    0.5,
+    0.5
+   ],
+   "s3_halt": {
+    "halted": true,
+    "date": "2026-12-08 16:00",
+    "margin": -3415.57,
+    "dropped": 30
+   },
+   "forgone_by_halt": {
+    "no_halt_12m": 105439.41,
+    "halt_12m": 116599.72,
+    "pullback_mtm_no_halt": -27778.35,
+    "pullback_mtm_halt": -16618.04,
+    "d_pullback": -11160.31,
+    "d_trend": 0.0,
+    "dropped_trades": 30,
+    "no_halt_max_dd": -0.1737,
+    "halt_max_dd": -0.1361
+   },
+   "trades": [
+    {
+     "side": "L",
+     "entry_date": "2026-10-07 12:00",
+     "exit_date": "2026-10-07 20:00",
+     "pnl": 837.31,
+     "mult": 1.0,
+     "reason": "SIGNAL",
+     "kind": "remirror",
+     "notional": 78750.0
+    },
+    {
+     "side": "L",
+     "entry_date": "2026-10-08 08:00",
+     "exit_date": "2026-10-08 12:00",
+     "pnl": -3369.4,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "L",
+     "entry_date": "2026-10-08 20:00",
+     "exit_date": "2026-10-09 20:00",
+     "pnl": -4594.76,
+     "mult": 1.0,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 78750.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-10-24 08:00",
+     "exit_date": "2026-10-27 08:00",
+     "pnl": -3984.79,
+     "mult": 0.5,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 39375.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-11-18 20:00",
+     "exit_date": "2026-11-19 20:00",
+     "pnl": 2415.75,
+     "mult": 0.5,
+     "reason": "SIGNAL",
+     "kind": "engine",
+     "notional": 39375.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-12-04 00:00",
+     "exit_date": "2026-12-06 12:00",
+     "pnl": -4605.35,
+     "mult": 0.5,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 39375.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-12-06 20:00",
+     "exit_date": "2026-12-08 16:00",
+     "pnl": -3316.81,
+     "mult": 0.5,
+     "reason": "STOP",
+     "kind": "engine",
+     "notional": 39375.0
+    }
+   ]
+  },
+  "trend": {
+   "n_closed": 24,
+   "n_open": 1,
+   "open_mtm": 15124.14,
+   "winners": {
+    "n": 12,
+    "pnl": 30382.7
+   },
+   "losers": {
+    "n": 12,
+    "pnl": -14930.13
+   },
+   "stop_losers": {
+    "n": 12,
+    "pnl": -14930.13
+   },
+   "crash_phase": {
+    "n": 24,
+    "pnl": 15452.57,
+    "to": "2027-10-06"
+   },
+   "after_low": {
+    "n": 0,
+    "pnl": 0
+   },
+   "longest_losing_streak": {
+    "n": 3,
+    "pnl": -2024.69,
+    "from_date": "2027-08-05 20:00",
+    "to_date": "2027-08-31 00:00",
+    "followed_by": null
+   },
+   "crash_short_give_back": {
+    "entry_date": "2026-10-30 04:00",
+    "exit_date": "2026-12-01 12:00",
+    "realised_gross": 6504.31,
+    "mtm_peak": 9936.11,
+    "mtm_peak_date": "2026-11-27",
+    "give_back": 3431.8
+   },
+   "top3": [
+    {
+     "side": "S",
+     "entry_date": "2027-09-05 00:00",
+     "exit_date": null,
+     "pnl": 15124.14,
+     "mult": 1.0
+    },
+    {
+     "side": "S",
+     "entry_date": "2026-10-30 04:00",
+     "exit_date": "2026-12-01 12:00",
+     "pnl": 6298.26,
+     "mult": 0.5
+    },
+    {
+     "side": "S",
+     "entry_date": "2027-03-01 16:00",
+     "exit_date": "2027-04-20 12:00",
+     "pnl": 5760.71,
+     "mult": 0.6353
+    }
+   ]
+  },
+  "daily_loss_halts": {
+   "n": 0,
+   "cost": 0.0,
+   "reentry_cost": 0.0,
+   "rail_used_pct": 0.47,
+   "closest_margin": 7949.32,
+   "closest_date": "2026-10-26 20:00",
+   "worst_intrabar_day": {
+    "date": "2026-10-26",
+    "pct": -0.07019458957309326,
+    "usd": -7050.681071387313,
+    "from_equity": 100444.79374076938,
+    "to_equity": 93394.11266938207
+   }
+  },
+  "drawdown_halt": {
+   "n": 0,
+   "cost": 0.0,
+   "rail_used_pct": 0.5896,
+   "closest_margin": 12312.91,
+   "closest_date": "2026-12-27 00:00"
+  },
+  "carry": {
+   "start": 30107.25,
+   "at_12m": 32641.03,
+   "change_12m": 2641.03,
+   "funding_received": 2944.46,
+   "fees": 303.43,
+   "flips": 9,
+   "bars_on_pct": 39.1,
+   "worst_dip_from_start": -19.1,
+   "worst_dip_date": "2026-10-16",
+   "max_dd": -0.031,
+   "funding_source": "XBTUSD"
+  },
+  "fees": {
+   "total": 897.01,
+   "by_leg": {
+    "pullback": 342.05,
+    "trend": 554.99
+   },
+   "n_fills": 63
+  },
+  "btc_funding": {
+   "total": -5007.97,
+   "by_leg": {
+    "pullback": 402.83,
+    "trend": -5410.8
+   }
+  },
+  "max_dd_window": {
+   "max_dd": -0.1361,
+   "peak_equity": 102382.23,
+   "peak_date": "2026-10-21 00:00",
+   "trough_equity": 88447.84,
+   "trough_date": "2026-12-27 00:00",
+   "fall": -13934.39,
+   "d_pullback": -9491.2,
+   "d_trend": -5535.76,
+   "d_carry": 1092.56,
+   "of_which_btc_funding": 980.66,
+   "of_which_fees_closed": 238.77,
+   "closed_in_window": {
+    "trend": {
+     "n": 6,
+     "pnl": 4036.2,
+     "winners": 3,
+     "losers": 3
+    },
+    "pullback": {
+     "n": 4,
+     "pnl": -9491.2,
+     "winners": 1,
+     "losers": 3
+    }
+   },
+   "identity_err": 0.01
+  },
+  "earned": {
+   "top3": [
+    {
+     "leg": "trend",
+     "side": "S",
+     "entry_date": "2027-09-05 00:00",
+     "exit_date": null,
+     "pnl": 15124.14
+    },
+    {
+     "leg": "trend",
+     "side": "S",
+     "entry_date": "2026-10-30 04:00",
+     "exit_date": "2026-12-01 12:00",
+     "pnl": 6298.26
+    },
+    {
+     "leg": "trend",
+     "side": "S",
+     "entry_date": "2027-03-01 16:00",
+     "exit_date": "2027-04-20 12:00",
+     "pnl": 5760.71
+    }
+   ],
+   "positive_by_leg": {
+    "pullback": 3253.06,
+    "trend": 45506.84
+   },
+   "negative_by_leg": {
+    "pullback": -19871.11,
+    "trend": -14930.13
+   }
+  }
+ }
+}

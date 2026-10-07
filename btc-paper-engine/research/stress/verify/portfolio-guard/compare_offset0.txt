@@ -1,0 +1,198 @@
+=== COVID_K0.75  (run file COVID_K0.75_off_0_A_intra_eh_first_cross_carry.json; close rebuild max rel err 1.11e-09; BTC scale 8.039669 ETH scale 9.553204 funding ETHUSD)
+  balance 91d            mine     101,595.85  theirs     101,595.85  OK
+  balance 182d           mine     106,116.22  theirs     106,116.22  OK
+  balance 273d           mine     116,329.61  theirs     116,329.61  OK
+  balance 365d           mine     138,629.33  theirs     138,629.33  OK
+  final_equity           mine     138,573.93  theirs     138,573.93  OK
+  max_dd                 mine        -0.1559  theirs        -0.1559  OK
+  max_dd_intrabar        mine        -0.1562  theirs        -0.1562  OK
+  max_dd_btc_book        mine        -0.2899  theirs        -0.2899  OK
+  max_dd_bench           mine        -0.5602  theirs        -0.5602  OK
+  fees                   mine         993.39  theirs         993.39  OK
+  n_entries              mine             34  theirs             34  OK
+  n_trades(closed)       mine             33  theirs             33  OK
+  hw_end                 mine     138,714.10  theirs     139,254.92  MISMATCH
+  halts                  mine             []  theirs             []  
+  eng halt pullback      mine True 2026-11-30 04:00 eq 74486.45 drop 25  theirs True 2026-11-30 04:00 eq 74486.45 drop 25  
+  eng eq_end pullback    mine      74,486.45  theirs      74,486.45  OK
+  eng halt trend         mine False None eq None drop 0  theirs False None eq None drop 0  
+  eng eq_end trend       mine     153,465.71  theirs     153,465.71  OK
+  curve total maxabs     mine           0.01  theirs           0.00  OK
+  curve btc maxabs       mine           0.01  theirs           0.00  OK
+  curve carry maxabs     mine           0.00  theirs           0.00  OK
+  curve worst maxabs     mine           0.01  theirs           0.00  OK
+  worst day (mine: worst-vs-daystart) mine 2026-11-12 -8,785  theirs 2026-11-12 -8,785  
+  carry final/funding/fees mine 54,079/24,197/118  theirs         54,079  
+  carry flips / on-frac  mine        0 / 1.0  theirs                 
+  carry max close/liq    mine          0.508  theirs           None  
+  cap clamps             mine           0.00  theirs           None  
+  min margin to DD line  mine 12,089 at 2026-12-14 08:00 (worst 96,780, HW 114,691)  theirs                 
+  min margin to DAILY line mine 6,215 at 2026-11-12 20:00 (worst 102,412, day start 111,197)  theirs                 
+  max_dd_intrabar(own peak) mine        -0.1472  theirs           None  
+   event: 2026-10-07 12:00 REMIRROR pullback L 0.94651 BTC at open 83201 (t0) mult 1.0 99981.88
+   event: 2026-10-07 12:00 REMIRROR trend L 0.40565 BTC at open 83201 (t0) mult 1.0 99967.3
+=== COVID_K0.3  (run file COVID_K0.3_off_0_A_intra_eh_first_cross_carry.json; close rebuild max rel err 1.11e-09; BTC scale 8.039669 ETH scale 9.553204 funding ETHUSD)
+  balance 91d            mine     103,211.29  theirs     103,211.29  OK
+  balance 182d           mine     108,278.34  theirs     108,278.34  OK
+  balance 273d           mine     114,173.28  theirs     114,173.28  OK
+  balance 365d           mine     129,869.68  theirs     129,869.68  OK
+  final_equity           mine     129,876.70  theirs     129,876.69  OK
+  max_dd                 mine        -0.0600  theirs        -0.0600  OK
+  max_dd_intrabar        mine        -0.0601  theirs        -0.0601  OK
+  max_dd_btc_book        mine        -0.1280  theirs        -0.1280  OK
+  max_dd_bench           mine        -0.5602  theirs        -0.5602  OK
+  fees                   mine         397.36  theirs         397.36  OK
+  n_entries              mine             34  theirs             34  OK
+  n_trades(closed)       mine             33  theirs             33  OK
+  hw_end                 mine     129,916.59  theirs     130,119.91  OK
+  halts                  mine             []  theirs             []  
+  eng halt pullback      mine True 2026-11-30 04:00 eq 74486.45 drop 25  theirs True 2026-11-30 04:00 eq 74486.45 drop 25  
+  eng eq_end pullback    mine      74,486.45  theirs      74,486.45  OK
+  eng halt trend         mine False None eq None drop 0  theirs False None eq None drop 0  
+  eng eq_end trend       mine     153,465.71  theirs     153,465.71  OK
+  curve total maxabs     mine           0.01  theirs           0.00  OK
+  curve btc maxabs       mine           0.01  theirs           0.00  OK
+  curve carry maxabs     mine           0.00  theirs           0.00  OK
+  curve worst maxabs     mine           0.01  theirs           0.00  OK
+  worst day (mine: worst-vs-daystart) mine 2026-11-12 -3,476  theirs 2026-11-12 -3,476  
+  carry final/funding/fees mine 54,079/24,197/118  theirs         54,079  
+  carry flips / on-frac  mine        0 / 1.0  theirs                 
+  carry max close/liq    mine          0.508  theirs           None  
+  cap clamps             mine           0.00  theirs           None  
+  min margin to DD line  mine 23,576 at 2026-12-14 08:00 (worst 100,463, HW 106,887)  theirs                 
+  min margin to DAILY line mine 2,524 at 2026-11-12 20:00 (worst 102,046, day start 105,522)  theirs                 
+  max_dd_intrabar(own peak) mine        -0.0558  theirs           None  
+   event: 2026-10-07 12:00 REMIRROR pullback L 0.37860 BTC at open 83201 (t0) mult 1.0 100002.29
+   event: 2026-10-07 12:00 REMIRROR trend L 0.16226 BTC at open 83201 (t0) mult 1.0 99996.46
+=== 2008_K0.75  (run file 2008_K0.75_off_0_A_intra_eh_first_cross_carry.json; close rebuild max rel err 2.13e-09; BTC scale 1.221632 ETH scale 0.535196 funding ETHUSD)
+  balance 91d            mine     114,953.42  theirs     114,953.42  OK
+  balance 182d           mine     125,146.70  theirs     125,146.70  OK
+  balance 273d           mine     140,213.13  theirs     140,213.13  OK
+  balance 365d           mine     137,687.54  theirs     137,687.54  OK
+  final_equity           mine     137,687.54  theirs     137,687.54  OK
+  max_dd                 mine        -0.0731  theirs        -0.0731  OK
+  max_dd_intrabar        mine        -0.0835  theirs        -0.0835  OK
+  max_dd_btc_book        mine        -0.1043  theirs        -0.1043  OK
+  max_dd_bench           mine        -0.7366  theirs        -0.7366  OK
+  fees                   mine       2,794.32  theirs       2,794.32  OK
+  n_entries              mine             69  theirs             69  OK
+  n_trades(closed)       mine             68  theirs             68  OK
+  hw_end                 mine     146,376.97  theirs     146,673.62  OK
+  halts                  mine             []  theirs             []  
+  eng halt pullback      mine False None eq None drop 0  theirs False None eq None drop 0  
+  eng eq_end pullback    mine     125,126.56  theirs     125,126.56  OK
+  eng halt trend         mine False None eq None drop 0  theirs False None eq None drop 0  
+  eng eq_end trend       mine     139,732.72  theirs     139,732.72  OK
+  curve total maxabs     mine           0.01  theirs           0.00  OK
+  curve btc maxabs       mine           0.01  theirs           0.00  OK
+  curve carry maxabs     mine           0.00  theirs           0.00  OK
+  curve worst maxabs     mine           0.01  theirs           0.00  OK
+  worst day (mine: worst-vs-daystart) mine 2027-08-07 -5,014  theirs 2027-08-07 -4,497  
+  carry final/funding/fees mine 41,465/11,544/79  theirs         41,465  
+  carry flips / on-frac  mine        0 / 1.0  theirs                 
+  carry max close/liq    mine          0.463  theirs           None  
+  cap clamps             mine           0.00  theirs           None  
+  min margin to DD line  mine 17,774 at 2027-10-07 04:00 (worst 134,151, HW 146,377)  theirs                 
+  min margin to DAILY line mine 9,986 at 2027-08-07 20:00 (worst 140,521, day start 145,535)  theirs                 
+  max_dd_intrabar(own peak) mine        -0.0826  theirs           None  
+   event: 2026-10-07 12:00 REMIRROR pullback L 0.95433 BTC at open 82518 (t0) mult 1.0 99977.59
+   event: 2026-10-07 12:00 REMIRROR trend L 0.40900 BTC at open 82518 (t0) mult 1.0 99963.01
+=== 2008_K0.3  (run file 2008_K0.3_off_0_A_intra_eh_first_cross_carry.json; close rebuild max rel err 2.13e-09; BTC scale 1.221632 ETH scale 0.535196 funding ETHUSD)
+  balance 91d            mine     107,508.13  theirs     107,508.13  OK
+  balance 182d           mine     112,744.17  theirs     112,744.17  OK
+  balance 273d           mine     122,158.88  theirs     122,158.88  OK
+  balance 365d           mine     121,953.72  theirs     121,953.72  OK
+  final_equity           mine     121,953.72  theirs     121,953.72  OK
+  max_dd                 mine        -0.0328  theirs        -0.0328  OK
+  max_dd_intrabar        mine        -0.0361  theirs        -0.0361  OK
+  max_dd_btc_book        mine        -0.0523  theirs        -0.0523  OK
+  max_dd_bench           mine        -0.7366  theirs        -0.7366  OK
+  fees                   mine       1,117.73  theirs       1,117.73  OK
+  n_entries              mine             69  theirs             69  OK
+  n_trades(closed)       mine             68  theirs             68  OK
+  hw_end                 mine     125,051.49  theirs     125,168.47  OK
+  halts                  mine             []  theirs             []  
+  eng halt pullback      mine False None eq None drop 0  theirs False None eq None drop 0  
+  eng eq_end pullback    mine     125,126.56  theirs     125,126.56  OK
+  eng halt trend         mine False None eq None drop 0  theirs False None eq None drop 0  
+  eng eq_end trend       mine     139,732.72  theirs     139,732.72  OK
+  curve total maxabs     mine           0.01  theirs           0.00  OK
+  curve btc maxabs       mine           0.01  theirs           0.00  OK
+  curve carry maxabs     mine           0.00  theirs           0.00  OK
+  curve worst maxabs     mine           0.01  theirs           0.00  OK
+  worst day (mine: worst-vs-daystart) mine 2027-08-07 -1,999  theirs 2027-08-07 -1,792  
+  carry final/funding/fees mine 41,465/11,544/79  theirs         41,465  
+  carry flips / on-frac  mine        0 / 1.0  theirs                 
+  carry max close/liq    mine          0.463  theirs           None  
+  cap clamps             mine           0.00  theirs           None  
+  min margin to DD line  mine 25,488 at 2027-10-07 04:00 (worst 120,539, HW 125,051)  theirs                 
+  min margin to DAILY line mine 4,001 at 2027-08-07 20:00 (worst 122,721, day start 124,720)  theirs                 
+  max_dd_intrabar(own peak) mine        -0.0356  theirs           None  
+   event: 2026-10-07 12:00 REMIRROR pullback L 0.38173 BTC at open 82518 (t0) mult 1.0 99998.0
+   event: 2026-10-07 12:00 REMIRROR trend L 0.16360 BTC at open 82518 (t0) mult 1.0 99992.17
+=== 1999_K0.75  (run file 1999_K0.75_off_0_A_intra_eh_first_cross_carry.json; close rebuild max rel err 3.41e-09; BTC scale 4.390752 ETH scale 3.632552 funding XBTUSD)
+  balance 91d            mine      93,091.31  theirs      93,091.31  OK
+  balance 182d           mine     100,263.63  theirs     100,263.63  OK
+  balance 273d           mine     110,694.05  theirs     110,694.05  OK
+  balance 365d           mine     121,607.69  theirs     121,607.69  OK
+  final_equity           mine     121,607.69  theirs     121,607.69  OK
+  max_dd                 mine        -0.1445  theirs        -0.1445  OK
+  max_dd_intrabar        mine        -0.1452  theirs        -0.1452  OK
+  max_dd_btc_book        mine        -0.2214  theirs        -0.2214  OK
+  max_dd_bench           mine        -0.8394  theirs        -0.8394  OK
+  fees                   mine         897.01  theirs         897.01  OK
+  n_entries              mine             32  theirs             32  OK
+  n_trades(closed)       mine             31  theirs             31  OK
+  hw_end                 mine     121,901.39  theirs     121,996.43  OK
+  halts                  mine             []  theirs             []  
+  eng halt pullback      mine True 2026-12-08 16:00 eq 72086.43 drop 30  theirs True 2026-12-08 16:00 eq 72086.43 drop 30  
+  eng eq_end pullback    mine      72,086.43  theirs      72,086.43  OK
+  eng halt trend         mine False None eq None drop 0  theirs False None eq None drop 0  
+  eng eq_end trend       mine     240,056.36  theirs     240,056.36  OK
+  curve total maxabs     mine           0.01  theirs           0.00  OK
+  curve btc maxabs       mine           0.01  theirs           0.00  OK
+  curve carry maxabs     mine           0.00  theirs           0.00  OK
+  curve worst maxabs     mine           0.01  theirs           0.00  OK
+  worst day (mine: worst-vs-daystart) mine 2026-10-26 -7,196  theirs 2026-10-26 -6,498  
+  carry final/funding/fees mine 32,641/2,944/303  theirs         32,641  
+  carry flips / on-frac  mine      9 / 0.391  theirs                 
+  carry max close/liq    mine          0.542  theirs           None  
+  cap clamps             mine           0.00  theirs           None  
+  min margin to DD line  mine 15,013 at 2026-12-27 00:00 (worst 88,241, HW 103,228)  theirs                 
+  min margin to DAILY line mine 7,804 at 2026-10-26 20:00 (worst 93,421, day start 100,617)  theirs                 
+  max_dd_intrabar(own peak) mine        -0.1359  theirs           None  
+   event: 2026-10-07 12:00 REMIRROR pullback L 0.93473 BTC at open 84249 (t0) mult 1.0 100073.23
+   event: 2026-10-07 12:00 REMIRROR trend L 0.40060 BTC at open 84249 (t0) mult 1.0 100058.65
+=== 1999_K0.3  (run file 1999_K0.3_off_0_A_intra_eh_first_cross_carry.json; close rebuild max rel err 3.41e-09; BTC scale 4.390752 ETH scale 3.632552 funding XBTUSD)
+  balance 91d            mine      98,230.42  theirs      98,230.42  OK
+  balance 182d           mine     101,580.97  theirs     101,580.97  OK
+  balance 273d           mine     105,753.40  theirs     105,753.40  OK
+  balance 365d           mine     110,227.70  theirs     110,227.70  OK
+  final_equity           mine     110,227.70  theirs     110,227.70  OK
+  max_dd                 mine        -0.0523  theirs        -0.0523  OK
+  max_dd_intrabar        mine        -0.0526  theirs        -0.0526  OK
+  max_dd_btc_book        mine        -0.0906  theirs        -0.0906  OK
+  max_dd_bench           mine        -0.8394  theirs        -0.8394  OK
+  fees                   mine         358.81  theirs         358.81  OK
+  n_entries              mine             32  theirs             32  OK
+  n_trades(closed)       mine             31  theirs             31  OK
+  hw_end                 mine     110,345.18  theirs     110,383.19  OK
+  halts                  mine             []  theirs             []  
+  eng halt pullback      mine True 2026-12-08 16:00 eq 72086.43 drop 30  theirs True 2026-12-08 16:00 eq 72086.43 drop 30  
+  eng eq_end pullback    mine      72,086.43  theirs      72,086.43  OK
+  eng halt trend         mine False None eq None drop 0  theirs False None eq None drop 0  
+  eng eq_end trend       mine     240,056.36  theirs     240,056.36  OK
+  curve total maxabs     mine           0.01  theirs           0.00  OK
+  curve btc maxabs       mine           0.01  theirs           0.00  OK
+  curve carry maxabs     mine           0.00  theirs           0.00  OK
+  curve worst maxabs     mine           0.01  theirs           0.00  OK
+  worst day (mine: worst-vs-daystart) mine 2026-10-26 -2,785  theirs 2026-10-26 -2,506  
+  carry final/funding/fees mine 32,641/2,944/303  theirs         32,641  
+  carry flips / on-frac  mine      9 / 0.391  theirs                 
+  carry max close/liq    mine          0.542  theirs           None  
+  cap clamps             mine           0.00  theirs           None  
+  min margin to DD line  mine 24,654 at 2026-12-27 00:00 (worst 96,290, HW 101,636)  theirs                 
+  min margin to DAILY line mine 3,215 at 2026-10-26 20:00 (worst 97,958, day start 100,743)  theirs                 
+  max_dd_intrabar(own peak) mine        -0.0503  theirs           None  
+   event: 2026-10-07 12:00 REMIRROR pullback L 0.37389 BTC at open 84249 (t0) mult 1.0 100093.64
+   event: 2026-10-07 12:00 REMIRROR trend L 0.16024 BTC at open 84249 (t0) mult 1.0 100087.81

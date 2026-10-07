@@ -1,0 +1,27 @@
+crash-path offsets used for the range: {'COVID': [-28, -14, 0, 14, 28], '2008': [-28, -14, 0, 14, 28], '1999': [-14, 0, 14, 28]}
+
+=== +-30% SWEEP: registered decision test per variant (offset-0 maxDD and range-worst vs baseline; 2019+ and ACTIVE-era $/yr) ===
+C1 (registered)              DO NOT PROPOSE  | COVID dd0 -21.0%->-18.6% rng -22.0%->-19.5% worse@0/5 offs, 12m worse@3/5 ok | 2008  dd0  -8.2%-> -8.5% rng -10.2%-> -9.4% worse@4/5 offs, 12m worse@5/5 FAIL | 1999  dd0 -13.6%->-11.2% rng -16.7%->-14.2% worse@0/5 offs, 12m worse@0/5 ok | 2019+  96.0% | active-era pooled  93.3% (E3 90% E4 98% E5 88%) -> with active-era cost test: fail
+C2 (registered)              DO NOT PROPOSE  | COVID dd0 -21.0%->-20.1% rng -22.0%->-21.7% worse@3/5 offs, 12m worse@4/5 ok | 2008  dd0  -8.2%-> -7.8% rng -10.2%->-10.4% worse@2/5 offs, 12m worse@4/5 FAIL | 1999  dd0 -13.6%->-13.1% rng -16.7%->-17.7% worse@2/5 offs, 12m worse@2/5 FAIL | 2019+ 100.7% | active-era pooled  86.1% (E3 78% E4 88% E5 96%) -> with active-era cost test: fail
+C1+C2 (registered)           DO NOT PROPOSE  | COVID dd0 -21.0%->-17.6% rng -22.0%->-18.8% worse@3/5 offs, 12m worse@3/5 ok | 2008  dd0  -8.2%-> -7.7% rng -10.2%->-10.3% worse@1/5 offs, 12m worse@5/5 FAIL | 1999  dd0 -13.6%->-11.1% rng -16.7%->-13.5% worse@0/5 offs, 12m worse@0/5 ok | 2019+  96.9% | active-era pooled  80.8% (E3 72% E4 87% E5 83%) -> with active-era cost test: fail
+C1 floor 0.175 (-30%)        DO NOT PROPOSE  | COVID dd0 -21.0%->-18.5% rng -22.0%->-19.4% worse@0/5 offs, 12m worse@3/5 ok | 2008  dd0  -8.2%-> -8.5% rng -10.2%-> -9.4% worse@4/5 offs, 12m worse@5/5 FAIL | 1999  dd0 -13.6%->-11.2% rng -16.7%->-14.2% worse@0/5 offs, 12m worse@0/5 ok | 2019+  96.0% | active-era pooled  93.3% (E3 90% E4 98% E5 88%) -> with active-era cost test: fail
+C1 floor 0.325 (+30%)        DO NOT PROPOSE  | COVID dd0 -21.0%->-19.1% rng -22.0%->-20.1% worse@0/5 offs, 12m worse@3/5 ok | 2008  dd0  -8.2%-> -8.5% rng -10.2%-> -9.4% worse@4/5 offs, 12m worse@5/5 FAIL | 1999  dd0 -13.6%->-11.8% rng -16.7%->-14.7% worse@0/5 offs, 12m worse@0/5 ok | 2019+  96.2% | active-era pooled  93.8% (E3 92% E4 98% E5 88%) -> with active-era cost test: fail
+C1 ref 1533 (-30%)           DO NOT PROPOSE  | COVID dd0 -21.0%->-18.4% rng -22.0%->-19.3% worse@0/5 offs, 12m worse@3/5 ok | 2008  dd0  -8.2%-> -8.4% rng -10.2%-> -9.5% worse@4/5 offs, 12m worse@5/5 FAIL | 1999  dd0 -13.6%->-11.2% rng -16.7%->-14.1% worse@0/5 offs, 12m worse@0/5 ok | 2019+  95.4% | active-era pooled  92.4% (E3 90% E4 99% E5 84%) -> with active-era cost test: fail
+C1 ref 2847 (+30%)           DO NOT PROPOSE  | COVID dd0 -21.0%->-18.4% rng -22.0%->-19.5% worse@0/5 offs, 12m worse@3/5 ok | 2008  dd0  -8.2%-> -8.7% rng -10.2%-> -9.6% worse@4/5 offs, 12m worse@5/5 FAIL | 1999  dd0 -13.6%->-11.2% rng -16.7%->-14.0% worse@0/5 offs, 12m worse@0/5 ok | 2019+  96.7% | active-era pooled  93.5% (E3 89% E4 100% E5 87%) -> with active-era cost test: fail
+C2 window 3.5d (-30%)        DO NOT PROPOSE  | COVID dd0 -21.0%->-20.1% rng -22.0%->-21.7% worse@3/5 offs, 12m worse@4/5 ok | 2008  dd0  -8.2%-> -7.8% rng -10.2%->-10.4% worse@2/5 offs, 12m worse@4/5 FAIL | 1999  dd0 -13.6%->-13.1% rng -16.7%->-17.7% worse@2/5 offs, 12m worse@2/5 FAIL | 2019+ 100.7% | active-era pooled  86.6% (E3 80% E4 88% E5 96%) -> with active-era cost test: fail
+C2 window 6.5d (+30%)        DO NOT PROPOSE  | COVID dd0 -21.0%->-20.1% rng -22.0%->-21.7% worse@3/5 offs, 12m worse@4/5 ok | 2008  dd0  -8.2%-> -7.8% rng -10.2%->-10.4% worse@2/5 offs, 12m worse@4/5 FAIL | 1999  dd0 -13.6%->-13.1% rng -16.7%->-17.7% worse@2/5 offs, 12m worse@2/5 FAIL | 2019+  99.9% | active-era pooled  85.1% (E3 78% E4 88% E5 91%) -> with active-era cost test: fail
+C2 mults 0.35/0.175 (-30%)   DO NOT PROPOSE  | COVID dd0 -21.0%->-19.9% rng -22.0%->-21.6% worse@3/5 offs, 12m worse@4/5 ok | 2008  dd0  -8.2%-> -8.2% rng -10.2%->-10.7% worse@3/5 offs, 12m worse@4/5 FAIL | 1999  dd0 -13.6%->-13.1% rng -16.7%->-17.2% worse@2/5 offs, 12m worse@1/5 FAIL | 2019+ 100.9% | active-era pooled  82.2% (E3 72% E4 84% E5 96%) -> with active-era cost test: fail
+C2 mults 0.65/0.325 (+30%)   DO NOT PROPOSE  | COVID dd0 -21.0%->-20.4% rng -22.0%->-21.8% worse@3/5 offs, 12m worse@4/5 ok | 2008  dd0  -8.2%-> -7.4% rng -10.2%->-10.2% worse@2/5 offs, 12m worse@4/5 FAIL | 1999  dd0 -13.6%->-13.2% rng -16.7%->-18.2% worse@2/5 offs, 12m worse@2/5 FAIL | 2019+ 100.5% | active-era pooled  90.0% (E3 85% E4 92% E5 96%) -> with active-era cost test: fail
+
+baseline pooled active-era $/yr (E3+E4+E5, 6.58 yrs): 27,320; 2019+ baseline 14,364
+
+=== uniform cut at the registered C1/C2/C1+C2 exposure ratios: pooled active-era $/yr ===
+C1     pooled $/yr base 27,320 cand 25,499 (93.3%) uniform-cut 26,569 (97.3%)
+C2     pooled $/yr base 27,320 cand 23,522 (86.1%) uniform-cut 25,923 (94.9%)
+C1+C2  pooled $/yr base 27,320 cand 22,086 (80.8%) uniform-cut 25,242 (92.4%)
+
+=== 2019+ C1 decomposition: gross vs net, vs the proposal's '15 winners -5.6k / 3 stops +2.2k' ===
+  by pnl  : winners 15 forgone   -6,917 | losers 3 saved   +2,407 | net   -4,510
+  by gross: winners 15 forgone   -7,066 | losers 3 saved   +2,372 | net   -4,694
+  resized trades with reason STOP: 3 saved   +2,407; non-STOP resized: 15 delta   -6,917
+  total pullback realised delta   -4,510; $/yr delta x years   -4,510

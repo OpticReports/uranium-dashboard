@@ -1,0 +1,5 @@
+  HEADLINE xbt carry + funding                       {'rail_intrabar': 3051.45, 'close_vs_closeHW': 6251.0, 'worst_vs_closeHW': 6083.0, 'hw_end': 121392.97, 'dd': -0.2102}  12m 115,987
+  xbt carry, no funding                              {'rail_intrabar': 4457.81, 'close_vs_closeHW': 7164.0, 'worst_vs_closeHW': 7003.0, 'hw_end': 123766.42, 'dd': -0.2017}  12m 118,776
+  no carry income + funding                          {'rail_intrabar': 1940.05, 'close_vs_closeHW': 5020.0, 'worst_vs_closeHW': 4853.0, 'hw_end': 118856.47, 'dd': -0.2216}  12m 111,810
+  no carry income, no funding (pre-fix 'no-carry')   {'rail_intrabar': 3346.42, 'close_vs_closeHW': 5933.0, 'worst_vs_closeHW': 5772.0, 'hw_end': 121229.92, 'dd': -0.213}  12m 114,599
+  quanto carry, no funding (pre-fix headline)        {'rail_intrabar': 9680.62, 'close_vs_closeHW': 12115.0, 'worst_vs_closeHW': 12089.0, 'hw_end': 139254.92, 'dd': -0.1559}  12m 138,629
