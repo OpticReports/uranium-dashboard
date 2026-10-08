@@ -142,3 +142,32 @@ deterministic rationale are listed.
    on exact flag timing, a fragility to keep in mind at any weight above
    the current 29%.
 
+## From the gate study (addendum 40, 2026-10-08)
+
+5. **HG 200d-family gate — the simplest member only.** In the 1990-2026
+   proxy every 200d-family gate on HG's trend baskets raises Sharpe
+   (1.00 -> 1.11-1.19), Sortino and Calmar and cuts max DD 72% -> 60-65%,
+   beating 200 re-dated placebos and its own inverse; the return edge is
+   five bear episodes and the cost is every V-recovery (2015-26: every
+   gate costs 5-28pp/yr, nothing beats as-built). The members (binary,
+   vote, hysteresis, G6) cannot be told apart (block-bootstrap P 0.45-0.80;
+   best-of-7 edge = +0.03 Sharpe = selection effect). If the owner wants
+   the insurance, build the binary 200d gate (or G6) as a draft and run
+   the standard gate tests; do not tune the shape.
+6. **CLOSED again: macro conditioning of the gate** (CAPE level, CAPE
+   high-for-long, yield-curve inversion, credit-spread percentile, oil
+   +50% yoy, and their count). None beats a level-matched placebo in both
+   panels; CAPE and credit lose to their mirror inverses; the curve loses
+   on all three metrics in the long panel; oil's four episodes are not
+   evidence. Literature agrees (curve: 24/24 loser as an equity exit,
+   Fama-French 2019; CAPE: Sharpe = buy-and-hold, AIM 2017). Reopen only
+   with a refereed result showing a macro conditioner improving a trend
+   rule out of sample — the one such hint (Neely et al. 2014) puts macro
+   on the RE-ENTRY side.
+7. **Reopen condition for a graded gate:** the state-conditional slow/fast
+   blend of Goulding-Harvey-Mazzoleni (FAJ 2024; Sharpe 0.64 -> 0.80 after
+   costs, weights shrunk to 0.5). HG already carries both legs (SPY vs
+   200d = slow; TQQQ 10>20d = fast). Not built: it is a fitted blend with
+   <=5 bear episodes to fit on; it would need the full placebo/inverse
+   treatment and a pre-registered spec before any live test.
+

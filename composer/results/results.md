@@ -2386,3 +2386,181 @@ leveraged fits and splices, VIX-model build, bootstrap, book arithmetic to
 4 decimals, attribution, gate counts, no signal look-ahead. Reviewer's
 verdict after edits: the headline table can be shown with the caveats
 above; qualitative conclusions unchanged.
+
+
+## Addendum 40 — HG bear gate revisited: risk-adjusted, graded shapes, macro
+## conditioning (CAPE / curve / credit / oil), 1990-2026 (2026-10-08)
+
+Owner question (after add. 39): is "a tenth of the upside for a 70% -> 30%
+drawdown" a good trade on Sharpe/Sortino; can the gate tighten gradually as
+CAPE stays high (or as oil, yields, credit deteriorate) and widen as they
+improve; deep-research it.
+Chart: results/hg-gate-variants-2026-10-08.html; code research/crash/
+gate_study.py, gate_extra.py, placebo2.py, boot_gate.py; macro data under
+research/crash/macro/. Counter-agent reviewed; its edits are applied below.
+
+METHOD. The HG tree is run once per panel (its decisions never depend on
+the gate); each gate is a per-day allow in [0,1] applied at the decision
+close to the TREND baskets only (TQQQ/UPRO/UDOW/SSO/TNA x allow, rest to
+BIL); dip-buys, long-vol and cash defaults untouched; Composer-equivalent
+cost on each variant's own turnover; Sharpe/Sortino over T-bills. Panels:
+A = real tickers 2015-06..2026-10 (in sample for HG's rules); B = 1990-01..
+2026-10 proxy (leveraged legs reconstructed from their indices, within
+1.2%/yr of the real ETFs over their overlap; pre-1999 bases are index
+proxies with the S&P dividend yield accrued; VIX ETPs modelled) — out of
+sample for the rules. Tests: every gate vs its INVERSE (trend: 1-allow;
+macro: flag ON -> 200d, OFF -> the variant's own level) and vs 200
+PLACEBOS (the variant's monthly pattern randomly re-dated); block
+bootstrap for the within-family ranking. Book level: the 55y regime
+bootstrap with HG swapped for the variant (boot_scen method: drift +
+cap-40; raw monthly Sharpe).
+
+RESULTS — HG alone, full windows (CAGR / Sharpe / Sortino / Calmar / maxDD)
+  Panel B 1990-2026 (proxy, OOS for the rules)       vs placebo (200)
+    as built              +49.6% / 1.00 / 1.55 / 0.69 / 72%   worst yr -42% (1994)
+    B1 binary SPY<200d    +55.5% / 1.16 / 1.88 / 0.93 / 60%   p100 CAGR / p100 Sharpe / DD better than 100%
+    G2 vote 50/100/200d   +55.4% / 1.17 / 1.92 / 0.85 / 65%   p100 / p100 / 97%
+    G6 off<200d, vote>    +55.2% / 1.19 / 1.95 / 0.92 / 60%
+    G4 drawdown ramp      +51.9% / 1.11 / 1.80 / 0.86 / 60%   p94 / p99 / 100%
+    G3 persistence ramp   +51.7% / 1.09 / 1.72 / 0.79 / 65%   p93 / p97 / 98%
+    G7 slow re-entry      +52.3% / 1.14 / 1.86 / 0.86 / 61%
+    M4 oil +50% yoy       +56.2% / 1.17 / 1.90 / 0.94 / 60%   p62 / p69 / 77%; mirror inverse +55.0% / 1.15 / 74%
+    M1b CAPE high-long    +53.8% / 1.15 / 1.85 / 0.82 / 66%   p38 / p53 / 28%; mirror inverse +54.1% / 1.12 / 60%
+    inverse of B1         +24.6% / 0.70 / 1.17 / 0.34 / 72%
+  Panel A 2015-2026 (real tickers, in sample)
+    as built              +104.1% / 1.69 / 2.93 / 2.90 / 36%
+    B1 binary             +86.5% / 1.57 / 2.80 / 2.41 / 36%   p14 / p17 / 11%
+    G2 vote               +92.5% / 1.67 / 3.04 / 2.76 / 34%   p50 / p47 / 74%
+    G6 off<200d, vote>    +89.1% / 1.64 / 3.00 / 2.66 / 34%
+    G3 persistence ramp   +89.2% / 1.59 / 2.82 / 2.49 / 36%
+    G7 slow re-entry      +77.9% / 1.50 / 2.69 / 2.17 / 36%
+    M1 CAPE level         +91.0% / 1.65 / 2.99 / 2.67 / 34%   p56 / p71 / 86%; mirror inverse +85.3% / 1.55 / 36%
+    M5 macro count        +95.6% / 1.68 / 3.04 / 2.76 / 35%   p60 / p57 / 47% (flagged 112/137 months — a near-permanent 50d gate, not a macro signal)
+  Panel B by window, as built -> B1 (CAGR/yr): 1990-99 +38 -> +45 (77% of
+  the gain is ONE session, 1998-08-31, NDX -9.9% with the gate in cash;
+  ex-1998 the gate COST 2.4pp/yr); 2000-02 -10 -> +28; 2003-07 +34 -> +39;
+  2007-09 -47 -> +43; 2009-19 +55 -> +52 (a cost); 2020-26 +128 -> +100.
+
+READ IT THIS WAY
+1. ON RISK-ADJUSTED TERMS THE 200d FAMILY IS ROBUST IN THE LONG HISTORY.
+   Over 36 years every member raises Sharpe (1.00 -> 1.11-1.19), Sortino
+   (1.55 -> 1.72-1.95) and Calmar (0.69 -> 0.79-0.94), cuts the worst
+   drawdown from 72% to 60-65%, beats 200 randomly re-dated versions of
+   itself (p93-p100 on CAGR and Sharpe, DD better than 97-100% of them) and beats its inverse by ~30pp of CAGR; block
+   bootstrap: B1-vs-as-built Sharpe +0.16 [+0.04, +0.29], P(>0) 0.98. The
+   return edge is five bear episodes (1998 one session, 2000-01, 2003 Q1,
+   2008-09, 2011); the cost is every V-shaped recovery. In 2015-26 — the
+   tape HG's rules were selected on — every gate costs 5-28pp/yr, nothing
+   beats as-built, and the trend gates sit at placebo p05-p40: the days
+   they skip (the first weeks after a 200d break) were HG's best days in
+   that regime. Both statements are true; they describe different regimes.
+   The bull-market cost is 2-5pp/yr in the long history and 10-28pp/yr in
+   the post-2015 regime.
+2. SHAPE: THE FAMILY IS INDISTINGUISHABLE; ONLY SLOW RE-ENTRY IS WORSE
+   EVERYWHERE. Block bootstrap (panel B, 400 resamples): G2 - B1 CAGR -0.1pp
+   median [-3.8, +3.4], P 0.48; G6 - B1 -0.3pp, Sharpe +0.02 (P 0.80); the
+   best-of-7 trend shapes beat B1 by +0.03 Sharpe on median — exactly the
+   printed G2/G6 edge, i.e. a selection effect. G2's edge over B1 exists
+   only in 2015-26 (+5.5pp, P 0.96), where no gate beats as-built; G2 is
+   worse than B1 in both long bears (2000-02 +21 vs +28; 2007-09 +34 vs +43)
+   and on maxDD (65 vs 60%). Where the damage sits is panel-specific: in
+   1990-2009 the trend basket lost 0.76 in the first 10 sessions below the
+   average (fast exit paid) and MADE 0.67 in sessions 21-80 (bear rallies);
+   in 2015-26 the first 10 sessions contributed nothing (HG's own 10/20
+   cross is already out) and sessions 21-80 made 0.98 (V-recoveries) — so
+   the owner's "tighten slowly with persistence" (G3) is the worst trend
+   shape in the long history and the best in 2015-26. Slow RE-ENTRY (G7)
+   is worse than binary in both panels: HG earns +5.6% (B) / +13.4% (A) in
+   the 20 sessions after a recross. Decision rule from the data: pick the
+   simplest member (binary 200d, or G6 which equals it in the long history
+   and gives back ~3pp of panel A's cost); the data cannot rank them.
+3. MACRO CONDITIONING: NOTHING MEASURABLE. Under the rebuilt placebo (the
+   variant's own flag-level pattern randomly re-dated, 200 draws) no macro
+   conditioner is significant in either panel (panel B: CAPE p19-p38, curve p37, credit p06, oil p62-p69, count p81; panel A: p45-p76 for all of them). CAPE level and
+   "high for long" sit near placebo median in the long panel and lose to or
+   tie their mirror inverse there; credit spreads lose to their inverse in
+   both panels; the yield curve loses on all three metrics in the long
+   panel (its tighter 100d gate whipsaws inside 2000-02: maxDD 74%); oil
+   (+50% yoy -> 100d) beats its mirror in the long panel (56.2/1.17/60 vs
+   55.0/1.15/74) on four bears with an oil spike in front of them (1990,
+   2000, 2008, 2022) and loses in 2015-26 (the 2021 rebound was a false
+   alarm) — four episodes, not evidence. Add. 26's verdict on CAPE stands,
+   now at the gate level over 36 years.
+4. BOOK LEVEL (55y bootstrap, HG swapped, conservative lens): as built CAGR
+   p50 +73.6% / DD p95 36% / Sharpe 1.81; binary +70.2% / 34% / 1.79; vote
+   +72.0% / 32% / 1.84; drawdown ramp +69.5% / 33% / 1.88 (constant-mix
+   variant: -2pp CAGR, same order). The bootstrap only knows HG's 2015-26
+   months, so this is panel A's cost (1.5-4pp CAGR for 2-4pp of tail DD);
+   the 2000/2008-type benefit lives outside its buckets. In the daily 2008
+   hybrid (add. 39 method, KMLM = ungated HG) the binary gate moved the
+   book's 12 months from -12.7% to -1.0% and its max DD from 44% to 24%.
+
+NOT MODELED / CAVEATS: panel B is a proxy (index-based legs before 1999,
+VIX ETPs modelled); the 200d rule reads a total-return SPY series — on the
+price-only close B1 is 80.0%/1.50 in A and 53.8%/1.14 in B (6pp of
+convention sensitivity); CAPE enters with a two-month lag; "worst year"
+includes partial years; the gate made 1990 worse (-37 -> -49%); 15
+variants plus inverses were examined and the family is reported whole; a
+200d gate does nothing for a gap crash (COVID-type DD unchanged); Composer
+cannot express a fractional allow directly — a vote gate is three nested
+conditions with three sub-baskets (buildable).
+
+LITERATURE (agent pass with citations, research/crash/macro/literature.md):
+- 200-day filters on the S&P: Sharpe ~0.3 -> ~0.6 and max DD -85% -> -50%
+  over a century, but the CAGR edge is small, not significant net of costs
+  (Zakamulin 2014/15), concentrated in 4-5 deep bears, and the rule loses
+  in ~80% of exit-to-re-entry intervals and throughout 1975-99. On a
+  simulated daily-3x S&P the 200d rotation still carries a -92% max DD and
+  a LOWER Sharpe than the unlevered filter (Gayed & Bilello 2016). Our
+  panel-B result (Sharpe 1.00 -> 1.16, five episodes, V-recoveries as the
+  cost) is the textbook shape.
+- Graded rules: the only refereed graded rule that beats binary after
+  costs is STATE-conditional — blend slow and fast signals only when they
+  disagree, weights shrunk to 0.5 (Goulding-Harvey-Mazzoleni "Breaking Bad
+  Trends", FAJ 2024: Sharpe 0.64 -> 0.80). A fixed average of lookbacks is
+  WORSE than the single slow rule (0.59 vs 0.64) — consistent with our vote
+  gate being indistinguishable from binary; ramps by depth or duration have
+  no support; slow models only pay for >=20%, >=6-month declines.
+- CAPE timing: same Sharpe as buy-and-hold 1900-2015 and 1958-2015, -32%
+  relative drawdown, fights momentum (Asness-Ilmanen-Maloney 2017); the
+  10-year R^2 collapses under effective-sample arithmetic (Boudoukh-
+  Israel-Richardson 2019); no primary evidence that "high for longer" adds
+  to the level. Our inverse tests agree.
+- Macro: the yield curve is the best recession predictor (4-6 quarter
+  lead, no false positives on 10y-3m) and a 24/24 LOSER as an equity-exit
+  trigger (Fama & French 2019); oil preceded 10 of 11 recessions with a
+  1-15 month lead and one false positive (Hamilton 2011); credit spreads
+  forecast activity, untested as a trend conditioner; the one refereed
+  complementarity (Neely et al. 2014) is that technical signals catch
+  PEAKS and macro signals catch TROUGHS — i.e. macro, if used at all,
+  belongs on the re-entry side, not the tightening side the owner asked
+  about.
+- Volatility: scaling a daily-3x sleeve by realized variance is the one
+  graded rule with mechanical (not statistical) support (variance drag is
+  arithmetic; Moreira-Muir 2017 Sharpe +25%, but 72/103 strategies fail in
+  real time, Cederburg et al. 2020). The house already measured vol
+  targeting on HG (add. 20b: CAGR 105 -> 78%, Sharpe flat) — it stays shut.
+- Multiple testing: best-of-7,846 rules fell from 17.2%/yr to 2.8%/yr in a
+  10-year holdout (Sullivan-Timmermann-White 1999); published predictors
+  lose 26% OOS (McLean-Pontiff 2016); t>3 is the hurdle (Harvey-Liu-Zhu
+  2016). Every conditioner here is fitted to <=5 bears; read the family
+  table that way.
+
+COUNTER-AGENT (one hostile reviewer, 17 findings, scripts under
+scratchpad/crash/verify2/): every printed metric, the proxy build (splice
+seams exact; synthetic legs within 1.2%/yr of the real ETFs; dividend
+accrual reproduces SPY total return within 0.06%/yr), the macro flags (0
+mismatches, real-time), the trend placebos and the bootstrap reproduced
+independently. REFUTED and fixed in this text: "adds return in every
+sub-window 1990-2019" (2009-19 is a cost; the 1990s edge is one session);
+the first macro placebo (tightened at the wrong level, under-counted flag
+months — all panel-A macro percentiles collapsed from p90-p100 to p45-p73)
+and the macro inverses (were 50d gates, not mirrors; two verdict words
+changed: CAPE level beats its mirror in A, the curve loses on all three in
+B); "G2/G6 are the best shapes" (selection effect); "damage in the first
+weeks" (panel B only). Verdict after edits: showable; the long-history
+family effect survives three nulls, inverses and block bootstrap.
+
+DECISION (owner): the only live candidate is the simplest 200d-family gate
+(binary, or G6) as a draft symphony for the standard gate tests; CAPE,
+credit and curve conditioning are closed again; oil is noted, not adopted.
