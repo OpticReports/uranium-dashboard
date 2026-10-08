@@ -129,7 +129,7 @@ def gates_trend(spy):
     return G, ma50, ma100, ma200
 
 def monthly_prev(series_m, d):
-    """value of a monthly series known at decision date d (prior month, 1-month publication lag)."""
+    """value of a monthly series known at decision date d: the month BEFORE the prior month (two-month lag — multpl posts a month's CAPE after it ends and Shiller earnings arrive later still; counter-agent F7)."""
     y, m = int(d[:4]), int(d[5:7]); m -= 2
     if m <= 0: m += 12; y -= 1
     return series_m.get(f'{y:04d}-{m:02d}')
@@ -185,10 +185,11 @@ def build_macro_allows(spy, ma50, ma100, ma200, days):
         if level <= -1: return 1.0
         ma = {0: ma200, 1: ma100, 2: ma50}[min(level, 2)]
         return 0.0 if (d in ma and spy[d] < ma[d]) else 1.0
-    out = {}
+    out = {}; LEVELS = {}
     names = ['M1 CAPE level (pct>=.8 -> 100d, >=.95 -> 50d)', 'M1b CAPE high-for-long (>=12m at pct>=.8 -> 50d)', 'M2 curve inverted within 12m -> 100d',
-             'M3 credit spread pct>=.8 (5y) -> 100d', 'M4 oil +50% yoy -> 100d', 'M5 count of M1-M4 flags -> 200/100/50/50d']
-    for n in names: out[n] = {}; out['INV ' + n] = {}
+             'M3 credit spread pct>=.8 (5y) -> 100d', 'M4 oil +50% yoy -> 100d', 'M5 count of M1-M4 flags -> 200/100/50/50d (near-permanent 50d gate)']
+    OWN = {names[0]: 1, names[1]: 2, names[2]: 1, names[3]: 1, names[4]: 1, names[5]: 1}   # the variant's own tightening level, for the mirror inverse
+    for n in names: out[n] = {}; out['INV ' + n] = {}; LEVELS[n] = {}
     baa_hist = []
     for d in days:
         if d not in ma200: continue
@@ -206,8 +207,9 @@ def build_macro_allows(spy, ma50, ma100, ma200, days):
         cnt = (1 if f1 else 0) + (1 if f1b else 0) + f2 + f3 + f4
         f5 = min(cnt, 2) if cnt else 0
         for n, lvl in zip(names, (f1, f1b, f2, f3, f4, f5)):
-            out[n][d] = thr_allow(d, lvl)
-            out['INV ' + n][d] = thr_allow(d, 0 if lvl else 2)      # inverse: tighten when the flag is OFF
+            out[n][d] = thr_allow(d, lvl); LEVELS[n][d] = lvl
+            out['INV ' + n][d] = thr_allow(d, 0 if lvl else OWN[n])  # mirror image: flag ON -> 200d, flag OFF -> the variant's own level (counter-agent F4)
+    build_macro_allows.levels = LEVELS
     return out
 from bisect import bisect_left
 
@@ -247,22 +249,6 @@ if __name__ == '__main__':
             r, to, hold = variant_returns(days, h, px, al)
             share = sum(al.get(d, 1.0) for d in days)/len(days)
             res[name] = {'turnover_per_year': round(to, 2), 'mean_allow': round(share, 3), 'windows': {w: metrics(r, days, a, b) for w, (a, b) in WIN[pan].items()}}
-        # placebo for macro: shuffle month pattern (20 draws) of M5 and M1 -> distribution of full-window Sharpe/CAGR
-        for mname in ('M5 count of M1-M4 flags -> 200/100/50/50d', 'M1 CAPE level (pct>=.8 -> 100d, >=.95 -> 50d)'):
-            al = allows[mname]; ds = [d for d in days if d in al]
-            months = sorted({d[:7] for d in ds}); lvl = {}
-            # recover the level pattern as 'tight' months (any allow difference vs B1)
-            b1 = allows['B1 binary SPY<200d']; tight = {m: False for m in months}
-            for d in ds:
-                if al[d] != b1.get(d, 1.0): tight[d[:7]] = True
-            n_t = sum(tight.values()); sh = []; cg = []; md = []
-            for _ in range(20):
-                perm = months[:]; rng.shuffle(perm); tset = set(perm[:n_t])
-                pal = {d: (0.0 if (d[:7] in tset and d in ma50 and spy[d] < ma50[d]) else b1.get(d, 1.0)) for d in ds}
-                r, to, hold = variant_returns(days, h, px, pal); m = metrics(r, days)
-                sh.append(m['sharpe']); cg.append(m['cagr']); md.append(m['maxdd'])
-            res[mname]['placebo_full_window'] = {'tight_months': n_t, 'of': len(months), 'sharpe_p05_p50_p95': [round(x, 3) for x in (sorted(sh)[1], sorted(sh)[10], sorted(sh)[18])],
-                                                 'cagr_p05_p50_p95': [round(x, 4) for x in (sorted(cg)[1], sorted(cg)[10], sorted(cg)[18])], 'maxdd_p05_p50_p95': [round(x, 4) for x in (sorted(md)[1], sorted(md)[10], sorted(md)[18])]}
         out['panels'][pan] = {'days': [days[0], days[-1], len(days)], 'results': res}
         print(f"\n=== panel {pan} ({days[0]}..{days[-1]}) full window: name | CAGR | vol | Sharpe | Sortino | Calmar | maxDD | worst yr | allow")
         full = list(WIN[pan])[0]
