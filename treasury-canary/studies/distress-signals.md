@@ -352,8 +352,9 @@ on what they contain are fixed below, before their content is known.
   NSA, $ millions, Dun & Bradstreet. Validation done before v1: all 408 months
   read from the page image; printed quarterly (136/136) and annual (34/34) totals
   tie; FRED M0933C overlap 181/181 within 0.05 (7 x.x5 ties print half-down);
-  ERP-2004 B-96 annual totals within ±0.1 in 1955–1984 (1985 −23, 1986 −1,575:
-  preliminary prints, outside the window). Real = deflated by CPI-U NSA;
+  ERP-2004 B-96 annual totals: printed totals within ±0.1, monthly sums within
+  ±0.2 in 1955–1984 (1985 −23 vintage, 1986 −1,575 preliminary; both outside
+  the window). Independent verifier: PASS (408/408 months re-read). Real = deflated by CPI-U NSA;
   robustness PCEPI (1959+) and nominal. 1987 BCD vintage, not real-time.
 - **Rule:** g = 12-month sum / its value 12 months earlier − 1; ON when g ≥ θ_H;
   θ_H = 25%, grid {15, 25, 40, 60%}; Q = 6 months; L = 24 months.
