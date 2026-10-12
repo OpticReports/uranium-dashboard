@@ -76,7 +76,9 @@ def test_the_panel_cannot_alert_and_carries_the_study_roles():
     roles = {b["id"]: b["role"] for b in p["bank"]}
     assert roles["CORALACBS"] == "confirms"
     assert all(r in ("confirms", "does not lead") for r in roles.values())   # nothing 'leads'
-    assert p["states"]["role"] == "no evidence of a lead"
+    assert p["states"]["role"] == "no evidence of a lead"            # consumer filings
+    assert p["states"]["business_role"] == "confirms"                # business Ch 7: same-window only
+    assert "transform-sensitive" in {q for b in p["bank"] for q in b["qualifiers"]}
 
 
 def test_current_readings_on_the_frozen_history():
@@ -110,3 +112,6 @@ def test_record_matches_the_study_results():
         assert rec["false_alarms"] == s["grade"]["primary"]["false_alarms"], sid
     assert not r["Q_N"]["N1_ALERT"] and not r["Q_N"]["N2_ALERT"] and not r["Q_H"]["SHIP"]
     assert all(v["verdict"] != "REGIONAL ALERT" for v in r["Q_R"]["ship"].values())
+    assert HIST["record"]["bank"]["CORALACBS"]["qualifiers"] == r["Q_C"]["series"]["CORALACBS"]["qualifiers"]
+    assert (HIST["record"]["states"]["business_role"] == "confirms") == \
+        r["Q_R"]["ship"]["S2"]["verdict"].startswith("confirms")

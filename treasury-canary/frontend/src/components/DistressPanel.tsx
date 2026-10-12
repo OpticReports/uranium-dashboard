@@ -245,7 +245,16 @@ export default function DistressPanel() {
           <span className="text-xs text-slate-300">
             Consumer filings per 1,000 by state, 12 months to {data.states.asof} (and change vs a year earlier)
           </span>
-          <RoleChip role={data.states.role} />
+          <span className="flex items-center gap-1.5">
+            <span className="text-[10px] text-slate-500">consumer</span>
+            <RoleChip role={data.states.role} />
+            {data.states.business_role && (
+              <>
+                <span className="text-[10px] text-slate-500">business Ch 7</span>
+                <RoleChip role={data.states.business_role} />
+              </>
+            )}
+          </span>
         </div>
         <StateMap data={data.states} />
         <p className="mt-1 text-[10px] leading-snug text-slate-500">{data.states.summary}</p>

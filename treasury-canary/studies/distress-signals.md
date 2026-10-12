@@ -570,7 +570,11 @@ classified against both with a 12-month LEAD window.
 
 ---
 
-## RESULTS — scored once, 2026-10-12 (`distress_signals/results.json`, SPEC v1.1)
+## RESULTS — scored 2026-10-12 (`distress_signals/results.json`, SPEC v1.1)
+
+First run committed unedited (9128927); this is the correction run after two
+independent verifiers (fixes listed in the counter-agent log — none changed an
+alert decision).
 
 **Verdict: no bankruptcy or credit-distress series earns an alert.** Filings
 rise with or after recessions, not before; the one historical leader fails out
@@ -583,40 +587,48 @@ since 2002. The dashboard shows them as context with their measured roles.
 | Q-N | consumer filings (national, annual) | 1990, 2001 | already rising since 1987 (no fresh signal); missed 2001 | 3 (1986, 1996, 2002) | 0.71 | does not lead |
 | Q-H | D&B failing-firm liabilities, out of sample 1967–83 | 1969, 1973, 1980, 1981 | late (1970-04), late (1974-10), missed, missed — the 1980-11 onset is one giant month and is discounted | 0 | 0.20 | fails ship rule |
 | Q-R | state consumer filings → own unemployment / job losses | 1981–2000 ; 2002–25 | β > 0, p 0.036 / 0.012 ; p 0.22 / 0.42 | — | Holm 0.59 | no evidence of a lead |
-| Q-R | state business filings → own unemployment / job losses | 1981–2000 ; 2002–25 | p 0.006 / 0.0006 ; p 0.29 / 0.047 | — | Holm 0.59 | no evidence of a lead |
-| Q-C | all-loan charge-offs (CORALACBS) | 1990, 2001, 2007 | led by 2m, at the start, led by 1m | 2 (1988, 1996) | 0.016 (Holm 0.11) | confirms |
+| Q-R | state business filings → own unemployment / job losses | 1981–2000 ; 2002–25 | p 0.007 / 0.0001 ; p 0.29 / 0.047 — moves with the state's unemployment (same-window p 0.046) | — | Holm 0.59 | confirms (coincident) |
+| Q-C | all-loan charge-offs (CORALACBS) | 1990, 2001, 2007 | led by 2m, at the start, led by 1m | 2 (1988, 1996) | 0.016 (Holm 0.11) | confirms (transform-sensitive) |
 | Q-C | 8 other bank delinquency / charge-off rates | 2–3 each | each led at most one recession (mortgages 2007 by 13m, CRE 2007 by 7m, C&I loans 2001 by 16m) and was late or missed the other | 0–3 | 0.009–0.50 | does not lead |
 
 - **National filings follow.** Every onset of either series came when no
   recession followed — two of them right after one ended. Robustness
   (single-quarter growth, 12-month tables, the trend-adjusted rule, last-month
-  dating, mask carry-over, all 12 Chapter-12 × 1995 variants) changes nothing.
-  Business-filing growth peaks with the unemployment change, not before it
-  (cross-correlation 0.62 at lag 0, outside the 90% rotation band; ≤ 0.10 at
-  leads beyond 3 quarters).
+  dating, mask carry-over, all 12 Chapter-12 × 1995 variants, 2020 excluded)
+  changes nothing. Business-filing growth peaks with the unemployment change,
+  not before it (cross-correlation 0.62 at lag 0, outside the 90% rotation
+  band; ≤ 0.10 at leads beyond 3 quarters).
 - **Failing-firm liabilities lead only as turning points.** Liabilities
   bottomed 8–31 months before each peak 1957–80 (31, 8, 15, 8, 22 months) —
   the long, erratic lead that got the series dropped from the leading index in
-  1966. As an alert (+25% a year) it fired after the 1969 and 1973 recessions
+  1966 (with a 15-month minimum phase only the 1969 and 1980 turns survive).
+  As an alert (+25% a year) it fired after the 1969 and 1973 recessions
   began; every variant (winsorized, PCE or no deflator, +1 month release)
   fails the same way. Context runs: 1896–1938 late at 8 of 10 peaks; 1948–66
   led 1957 by 8 months, late 1953 and 1960.
-- **States: an era effect, not a usable signal.** In 1981–2000 a state whose
+- **States: an era effect, then coincident.** In 1981–2000 a state whose
   filings grew faster than other states' saw unemployment rise and payrolls
   fall faster the next year, beyond its coincident payroll and unemployment
   changes — every bias and regional check positive (in-sample; this design's
   p-values run ~7% at a nominal 5%). In 2002–25 the same test finds little
-  (business filings → job losses p 0.047 is the only hit), the event study
-  around 9 state-only upturns (2014–19) shows consumer filings rising before
-  them but not significantly earlier than jobless claims (p 0.18; 3
-  independent episodes), and there is no out-of-sample gain (Clark–West p 0.30
-  / 0.44). The reverse runs: a state's rising unemployment predicted its later
-  consumer filings (p 0.04).
+  (business filings → job losses p 0.047 is the only hit) although it had the
+  power to: against effects the size of the 1981–2000 estimates its power is
+  0.97–1.00 for three of the four tests (0.44 for consumer filings →
+  unemployment). The event study around 9 state-only upturns (2014–19) shows
+  consumer filings rising before them but not significantly earlier than
+  jobless claims (p 0.18; 3 independent episodes; dated by publication month:
+  8 events, p 0.27); there is no out-of-sample gain (Clark–West p 0.30 /
+  0.27). The reverse runs: a state's rising unemployment predicted its later
+  filings (consumer p 0.038, business p 0.042), and business Ch 7 filings move
+  with the state's unemployment over the same year (p 0.046 — borderline).
 - **Bank stress confirms.** All-loan charge-offs turned up around each of the
   last three recessions (2 months before, at the start, 1 month before) with 2
-  false alarms — a confirming gauge, not an early warning. No bank series
-  passes the Holm-adjusted size test with leads at every recession; 16% of
-  joint rotations would let at least one of the nine look ALERT-like by chance.
+  false alarms — a confirming gauge, not an early warning. On point-in-time
+  year-on-year growth instead of the pre-registered 4-quarter average it led all
+  three (5, 1 and 7 months; 3 false alarms) — a variant, so it is capped at
+  "confirms" and labelled transform-sensitive. No bank series passes the
+  Holm-adjusted size test with leads at every recession; 16% of joint rotations
+  would let at least one of the nine look ALERT-like by chance.
 - **Not a market signal either (report-only):** none of the three business-
   filing onsets was followed by a bear market or a Baa–Treasury blowout within
   12 months.
@@ -642,7 +654,7 @@ Figures: `distress_signals/figs/` — `fig_national_filings.png`,
   sits in the BAPCPA mask). The national rule would catch a true 12-month lead
   about 1 time in 4 at best (0.27 / 0.16 / 0.05 by noise level, synthetic), so
   a fail alone is weak evidence; the after-the-fact timing and the reverse-
-  direction result are the positive evidence that filings follow.
+  direction results are the positive evidence that filings follow.
 - **In-sample.** Only Q-H is a true out-of-sample test (1967–83 data the
   classic studies never saw). Everything else is in-sample with the rule
   fixed before scoring; windows, thresholds and masks were chosen with the
@@ -653,15 +665,39 @@ Figures: `distress_signals/figs/` — `fig_national_filings.png`,
   estimates (smoothed).
 - **Masks remove the biggest regional episode.** The 2005 law change hides
   2005–10 filings growth, including the 2007–09 housing bust; the 2020–21
-  support hides 2019–23. Panel B's power rests on 55 quarters and three
-  independent regional episodes.
+  support hides 2019–23. Onsets the masks suppressed (present without them,
+  absent with them): N1 2006-01, 2008-01, 2023-07; N2 2006-01, 2008-01, 2024-01; DRALACBS 2024-05; DRBLACBS 2020-08, 2024-11; DRCLACBS 2023-02; DRCCLACBS 2023-02; DRSFRMACBS 2021-05; DRCRELEXFACBS 2020-11, 2023-11; CORALACBS 2020-08, 2023-05; CORBLACBS 2023-05; CORCCACBS 2008-02, 2023-05. Panel B rests on 55 quarters; the event study
+  on 3 independent episodes, with placebo pools of only 2–14 dates per event
+  (so the placebo p for D_F overstates the evidence; the episode-clustered t is
+  1.24).
+- **Readings of rules the spec left open** (verifier A tested the
+  alternatives; none changes a decision): a single-month-driven Q-H LEAD is
+  dropped, not counted as a false alarm (alternative: 1 false alarm, p 0.63,
+  still fails); a false alarm counts even when the next peak is unscored
+  (alternative: N1 and N2 2 false alarms each, p 0.42 / 0.57); rotations do not
+  apply the single-month discount; event-study events are dated by the onset
+  month as the Q-R bullet says (the publication-month variant is reported
+  above); the descriptive family statistic is the joint-rotation share, not a
+  Westfall–Young min-p; Driscoll–Kraay SEs (reported only) treat masked gaps as
+  adjacent.
 - **Data repaired.** The ABI 1980–2000 district tables carried 38 transcription
   errors (fixed from independent ABI printings; independent check: PASS). The
   1953–86 D&B liabilities were read from page images (the OCR layer was wrong
-  in 52 months, silently in three); independent check: PASS.
+  in 52 months, silently in three); independent check: PASS. Vermont 1989's
+  business/consumer split (59% business) looks odd but is corroborated by
+  independent tables; dropping Vermont strengthens Panel A.
 - **Not covered.** Large-company bankruptcies and spec-grade default rates (no
   open data), Subchapter V separately, WARN layoff notices (the only state
   history needs an ICPSR login — asked of Casey), Challenger bankruptcy job
   cuts (open only from Dec-2024: display candidate).
 - **Multiple shots.** 14 series had a shot at an alert; none passed, so no
   multiplicity correction changes the verdict.
+
+### Counter-agent log (data and results)
+
+| review | verdict | adopted |
+|---|---|---|
+| BCD series-14 extraction (2026-10-12) | PASS — 408/408 months re-read from the page image, own OCR 578/578 cells, all control totals tie | two wording fixes to the manifest |
+| ABI 1980–2000 district reconciliation (2026-10-12) | PASS — all 35 reconciled rows re-derived, 5,970/5,970 printed cells re-parsed, calendar years confirmed | `pct_consumer_printed` flagged unusable |
+| results A: national, bank, liabilities (2026-10-12) | PASS_WITH_FIXES — every headline grade, count and p-value reproduced with exact arithmetic | robustness qualifiers implemented (CORALACBS transform-sensitive); exact-tie rounding; y/y masks span t−4..t; literal Call Report drop; suppressed-onset list; 2020-excluded sensitivity; turning-point pruning, censoring and phase-15 run; rule readings stated |
+| results B: state panels (2026-10-12) | PASS_WITH_FIXES — all 8 betas, counts and p-values reproduced with an independent full-refit bootstrap | S2 same-window, reverse and out-of-sample fits weighted as the spec says (S2 → "confirms", p 0.046); Panel A S2 also masks 1989 (β 0.47 → 0.35); power against 1981–2000-sized effects added; publication-dated event study reported; exact 0.5pp onsets; 2002Q4 restored in the first-print robustness |

@@ -823,8 +823,8 @@ def build_panel_a(signal: str, target: str, cache: dict) -> Panel:
     W = np.full((nU, nT), np.nan)
     for i, s in enumerate(units):
         for j, y in enumerate(years):
-            if signal == "S2" and y in (1987, 1988):
-                continue                                  # Chapter 12 ramp (SPEC v1)
+            if signal == "S2" and y in (1987, 1988, 1989):
+                continue          # Chapter 12 ramp: raw 1987-88 masked, so g(1987..1989) (SPEC v1 s.0)
             G[i, j] = logg(S[s][y], S[s][y - 1])
             W[i, j] = 1 / (1 / max(S[s][y], 0.5) + 1 / max(S[s][y - 1], 0.5))
     G = winsorize_cols(G)
@@ -889,7 +889,7 @@ def sahm_onsets(ur_m: dict[int, float]) -> list[int]:
     for m in sorted(a3):
         prior = [a3[k] for k in range(m - 12, m) if k in a3]
         if len(prior) >= 10:
-            lit[m] = a3[m] - min(prior) >= 0.5
+            lit[m] = round(a3[m] - min(prior), 9) >= 0.5        # UR is in tenths: 0.5 exactly counts
     out, unlit = [], 0
     for m in sorted(lit):
         if lit[m]:
@@ -901,8 +901,26 @@ def sahm_onsets(ur_m: dict[int, float]) -> list[int]:
     return out
 
 
-def event_study(pn: Panel, cache: dict) -> dict:
-    """Panel B event study (SPEC v1) with the claims benchmark."""
+def sahm_troughs(ur_m: dict[int, float]) -> dict[int, int]:
+    """For each state Sahm-style onset: the month of the minimum 3-month average
+    in the prior 12 months (the unemployment trough; descriptive anchor)."""
+    a3 = {}
+    for m in sorted(ur_m):
+        v = [ur_m[k] for k in (m - 2, m - 1, m) if k in ur_m]
+        if len(v) >= 2 and m in ur_m:
+            a3[m] = sum(v) / len(v)
+    out = {}
+    for m in sahm_onsets(ur_m):
+        prior = [(a3[k], k) for k in range(m - 12, m) if k in a3]
+        if prior:
+            out[m] = min(prior)[1]
+    return out
+
+
+def event_study(pn: Panel, cache: dict, lag_months: int = 0, descriptive: bool = True) -> dict:
+    """Panel B event study (SPEC v1) with the claims benchmark. Events are dated
+    to the quarter of the onset month (the Q-R bullet); lag_months=1 is the
+    release-dated sensitivity (state UR is published about a month later)."""
     units, periods = pn.units, pn.qperiods
     S = pn.raw_S
     pidx = {t: j for j, t in enumerate(periods)}
@@ -934,7 +952,8 @@ def event_study(pn: Panel, cache: dict) -> dict:
     for i, s in enumerate(units):
         ons = sahm_onsets(urm[s])
         onset_info[s] = [mstr(m) for m in ons]
-        for m in ons:
+        for m0 in ons:
+            m = m0 + lag_months
             q = (m // 12) * 4 + (m % 12) // 3
             if q not in pidx:
                 continue
@@ -956,9 +975,12 @@ def event_study(pn: Panel, cache: dict) -> dict:
         return float(np.mean([np.mean(r[e["i"], e["j"] - 4:e["j"]]) - np.mean(r[e["i"], e["j"] - 12:e["j"] - 8])
                               for e in evs]))
 
+    pool_sizes: list[list[int]] = []
+
     def placebo(evs, draws):
         g = rng()
-        all_on = {s: [((m // 12) * 4 + (m % 12) // 3) for m in sahm_onsets(urm[s])] for s in units}
+        all_on = {s: [(((m + lag_months) // 12) * 4 + ((m + lag_months) % 12) // 3)
+                      for m in sahm_onsets(urm[s])] for s in units}
         pools = []
         for e in evs:
             s = e["state"]
@@ -966,6 +988,7 @@ def event_study(pn: Panel, cache: dict) -> dict:
                     if all(abs(periods[j] - q) >= 8 for q in all_on[s])
                     and not any(np.isnan(rF[e["i"], k]) or np.isnan(rC[e["i"], k]) for k in range(j - 12, j + 5))]
             pools.append(cand)
+        pool_sizes.append([len(p) for p in pools])
         if any(not p for p in pools):
             return None
         dF, dC = np.empty(draws), np.empty(draws)
@@ -1015,6 +1038,38 @@ def event_study(pn: Panel, cache: dict) -> dict:
     reg = res.get("regional") or {}
     res["criterion_met"] = bool(testable and reg.get("p_D_F", 1) <= 0.05 and reg.get("D_F_minus_D_C", -1) > 0
                                 and reg.get("p_diff", 1) <= 0.10)
+    if descriptive and regional:
+        res["placebo_pool_sizes"] = pool_sizes[-1] if pool_sizes else None
+        # unemployment's own relative path (descriptive): 4-quarter UR change vs other states, in state SDs
+        urq = cache["urq"]
+        A = np.full((len(units), len(periods)), np.nan)
+        for i, s in enumerate(units):
+            for j, t in enumerate(periods):
+                if t in urq[s] and t - 4 in urq[s] and not any(in_any(k, RAW_POLICY) for k in range(t - 4, t + 1)):
+                    A[i, j] = urq[s][t] - urq[s][t - 4]
+        rel = np.full_like(A, np.nan)
+        for j in range(A.shape[1]):
+            ok = ~np.isnan(A[:, j])
+            for i in np.nonzero(ok)[0]:
+                rel[i, j] = A[i, j] - (A[ok, j].sum() - A[i, j]) / (ok.sum() - 1)
+        rU = rel / np.nanstd(rel, axis=1, keepdims=True)
+        res["regional"]["path_unemployment"] = {k: float(np.nanmean([rU[e["i"], e["j"] + k] for e in regional
+                                                                     if 0 <= e["j"] + k < len(periods)]))
+                                                for k in range(-12, 5)}
+        # trough-anchored filings path (descriptive)
+        tro = []
+        for e in regional:
+            m0 = M(int(e["onset"][:4]), int(e["onset"][5:]))
+            tm = sahm_troughs(urm[e["state"]]).get(m0)
+            if tm is None:
+                continue
+            qt = (tm // 12) * 4 + (tm % 12) // 3
+            if qt in pidx and pidx[qt] - 12 >= 0 and pidx[qt] + 4 < len(periods):
+                tro.append({"i": e["i"], "j": pidx[qt]})
+        if tro:
+            res["regional"]["trough_anchored"] = {
+                "n": len(tro), "D_F": D_stat(rF, tro), "D_C": D_stat(rC, tro),
+                "path_filings": {k: float(np.nanmean([rF[e["i"], e["j"] + k] for e in tro])) for k in range(-12, 5)}}
     return res
 
 
@@ -1037,8 +1092,9 @@ def oos_clark_west(pn: Panel) -> dict:
         u, tt = np.nonzero(train)
         X1 = np.column_stack([P.dummies(u)] + [c[u, tt] for c in C] + [g[u, tt]])
         X0 = X1[:, :-1]
-        b1 = np.linalg.lstsq(X1, y[u, tt], rcond=None)[0]
-        b0 = np.linalg.lstsq(X0, y[u, tt], rcond=None)[0]
+        sw = np.ones(len(u)) if pn.w is None else np.sqrt(pn.w[u, tt])     # S2: WLS (SPEC v1)
+        b1 = np.linalg.lstsq(X1 * sw[:, None], y[u, tt] * sw, rcond=None)[0]
+        b0 = np.linalg.lstsq(X0 * sw[:, None], y[u, tt] * sw, rcond=None)[0]
         nU = len(pn.units)
         units_present = np.unique(u)
         for i in np.nonzero(ok[:, j])[0]:
@@ -1075,15 +1131,39 @@ def reverse_and_confirms(pn: Panel) -> dict:
                 gfwd[i, j] = logg(S[s][u], S[s][t])
     dur_past = pn.ctrls[0]
     out = {}
-    rev = Panel(pn.units, pn.periods, dur_past, gfwd, [pn.g], None, h=4)
+    rev = Panel(pn.units, pn.periods, dur_past, gfwd, [pn.g], pn.w, h=4)      # S2: WLS (SPEC v1)
     m, u, t = rev.fit()
     out["reverse_beta_dUR_on_future_g"] = m.beta
     out["reverse_wcb"] = P.wild_cluster_bootstrap(m, div_ids(pn.units)[u], DRAWS, rng())
-    same = Panel(pn.units, pn.periods, pn.g, dur_past, [], None, h=4)
+    same = Panel(pn.units, pn.periods, pn.g, dur_past, [], pn.w, h=4)
     m2, u2, _ = same.fit()
     out["same_window_beta"] = m2.beta
     out["same_window_wcb"] = P.wild_cluster_bootstrap(m2, div_ids(pn.units)[u2], DRAWS, rng())
     return out
+
+
+def qr_power(pn: Panel, beta_alt: float, sims: int = 200, draws: int = 999) -> float:
+    """P(primary p <= 0.05) if the true beta were beta_alt: y* = restricted fit
+    + beta_alt*g + division wild-cluster resampled restricted residuals."""
+    g_ = np.random.default_rng(SEED + 7)
+    ok = pn.usable()
+    u, t = np.nonzero(ok)
+    m, _, _ = pn.fit()
+    sw = np.ones(len(u)) if pn.w is None else np.sqrt(pn.w[u, t])
+    y_fit = pn.y[u, t] - m.yt / sw                      # restricted fitted values (unweighted scale)
+    resid = m.yt / sw
+    divs = div_ids(pn.units)[u]
+    labels = np.unique(divs)
+    hits = 0
+    for _ in range(sims):
+        wc = dict(zip(labels, g_.choice(P.WEBB, size=len(labels))))
+        ystar = y_fit + beta_alt * pn.g[u, t] + resid * np.array([wc[d] for d in divs])
+        Y = np.full(pn.y.shape, np.nan)
+        Y[u, t] = ystar
+        p2 = Panel(pn.units, pn.periods, pn.g, Y, pn.ctrls, pn.w, h=pn.h)
+        m2, u2, _ = p2.fit()
+        hits += P.wild_cluster_bootstrap(m2, div_ids(pn.units)[u2], draws, g_)["p"] <= 0.05
+    return hits / sims
 
 
 def q_r() -> dict:
@@ -1103,13 +1183,17 @@ def q_r() -> dict:
                            us_target=us_change_panel_b(pn.qperiods, cache))
             if target == "a":
                 rp["event_study"] = event_study(pn, cache)
+                rp["event_study_release_dated"] = {k: v for k, v in event_study(pn, cache, lag_months=1,
+                                                                                descriptive=False).items()
+                                                   if k != "events"}
                 rp["oos_clark_west"] = oos_clark_west(pn)
                 rp["reverse_and_confirms"] = reverse_and_confirms(pn)
                 # robustness: summed 3-month first prints
                 s3 = D.f2_state("3month", "nb_all" if signal == "S1" else "bus_ch7")
                 alt = {}
                 for s in pn.units:
-                    alt[s] = {t: sum(s3[s].get(k, 0) for k in range(t - 3, t + 1)) for t in pn.qperiods
+                    alt[s] = {t: sum(s3[s].get(k, 0) for k in range(t - 3, t + 1))
+                              for t in range(D.qi(2001, 4), max(pn.qperiods) + 1)
                               if all(k in s3[s] for k in range(t - 3, t + 1))}
                 G2 = np.full(pn.g.shape, np.nan)
                 for i, s in enumerate(pn.units):
@@ -1142,6 +1226,14 @@ def q_r() -> dict:
             ra["robust_claims_1988_2000"] = {"beta": mc.beta,
                                              "wcb": P.wild_cluster_bootstrap(mc, div_ids(pa.units)[uc], DRAWS, rng())}
             out["panel_A"][f"{signal}/{target}"] = ra
+    # power of each Panel B test against an effect the size of its Panel A estimate
+    out["power_panelB_vs_panelA_beta"] = {}
+    for signal in ("S1", "S2"):
+        for target in ("a", "b"):
+            pb = build_panel_b(signal, target, cache)
+            out["power_panelB_vs_panelA_beta"][f"{signal}/{target}"] = {
+                "beta_alt": out["panel_A"][f"{signal}/{target}"]["beta"],
+                "power": qr_power(pb, out["panel_A"][f"{signal}/{target}"]["beta"])}
     # ship logic per signal
     ship = {}
     decisive = {}

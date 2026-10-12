@@ -3371,16 +3371,23 @@
 },
 "states":{
 "role":"no evidence of a lead",
-"summary":"A state's filing growth predicted its own next-year job losses in 1981-2000 but not in 2002-2025 (the test needed both eras, and showed no out-of-sample gain).",
+"business_role":"confirms",
+"summary":"A state's filing growth predicted its own next-year job losses in 1981-2000 but not in 2002-2025 (the test needed both eras, and showed no out-of-sample gain); since 2002 a state's rising unemployment predicts its later filings. Business Ch 7 filings move with the state's unemployment (confirm, p 0.05); consumer filings show no evidence of a lead.",
 "decisive_p":{
 "S1":0.424,
 "S2":0.2942
 },
+"power_vs_1981_2000_effect":{
+"S1/a":0.435,
+"S1/b":1.0,
+"S2/a":0.965,
+"S2/b":1.0
+},
 "panel_A_p":{
 "S1/a":0.0356,
 "S1/b":0.012,
-"S2/a":0.0064,
-"S2/b":0.0006
+"S2/a":0.0074,
+"S2/b":0.0001
 },
 "panel_B_p":{
 "S1/a":0.215,
@@ -3403,7 +3410,8 @@
 ],
 "rotation_p":0.024390243902439025,
 "holm_p":0.14634146341463417,
-"floor_pp":0.1
+"floor_pp":0.1,
+"qualifiers":[]
 },
 "DRBLACBS":{
 "label":"Business (C&I) loans - delinquency",
@@ -3418,7 +3426,8 @@
 ],
 "rotation_p":0.04065040650406504,
 "holm_p":0.2032520325203252,
-"floor_pp":0.1
+"floor_pp":0.1,
+"qualifiers":[]
 },
 "DRCLACBS":{
 "label":"Consumer loans - delinquency",
@@ -3433,7 +3442,8 @@
 ],
 "rotation_p":0.4260869565217391,
 "holm_p":0.8521739130434782,
-"floor_pp":0.1
+"floor_pp":0.1,
+"qualifiers":[]
 },
 "DRCCLACBS":{
 "label":"Credit cards - delinquency",
@@ -3448,7 +3458,8 @@
 ],
 "rotation_p":0.494949494949495,
 "holm_p":0.8521739130434782,
-"floor_pp":0.1
+"floor_pp":0.1,
+"qualifiers":[]
 },
 "DRSFRMACBS":{
 "label":"Home mortgages - delinquency",
@@ -3460,7 +3471,8 @@
 "false_alarms":[],
 "rotation_p":0.009345794392523364,
 "holm_p":0.08411214953271028,
-"floor_pp":0.1
+"floor_pp":0.1,
+"qualifiers":[]
 },
 "DRCRELEXFACBS":{
 "label":"Commercial real estate - delinquency",
@@ -3472,7 +3484,8 @@
 "false_alarms":[],
 "rotation_p":0.009345794392523364,
 "holm_p":0.08411214953271028,
-"floor_pp":0.1
+"floor_pp":0.1,
+"qualifiers":[]
 },
 "CORALACBS":{
 "label":"All loans - charge-offs",
@@ -3488,7 +3501,11 @@
 ],
 "rotation_p":0.016260162601626018,
 "holm_p":0.11382113821138212,
-"floor_pp":0.05
+"floor_pp":0.05,
+"qualifiers":[
+"transform-sensitive"
+],
+"variant_note":"on point-in-time year-on-year growth (not the pre-registered 4-quarter average) it led every recession: 1990: led by 5m, 2001: led by 1m, 2007: led by 7m (size p 0.038)"
 },
 "CORBLACBS":{
 "label":"Business (C&I) loans - charge-offs",
@@ -3505,7 +3522,8 @@
 ],
 "rotation_p":0.22137404580152673,
 "holm_p":0.7636363636363637,
-"floor_pp":0.05
+"floor_pp":0.05,
+"qualifiers":[]
 },
 "CORCCACBS":{
 "label":"Credit cards - charge-offs",
@@ -3521,7 +3539,8 @@
 ],
 "rotation_p":0.19090909090909092,
 "holm_p":0.7636363636363637,
-"floor_pp":0.05
+"floor_pp":0.05,
+"qualifiers":[]
 }
 },
 "headline":"No bankruptcy or credit-distress series passed the pre-registered test as a recession warning. Filings confirm or follow recessions; all-loan charge-offs confirm."

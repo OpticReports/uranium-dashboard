@@ -110,9 +110,13 @@ def main():
             "rotation_p": qh["primary_real_cpi"]["rotation"]["p"]},
         "states": {
             "role": "no evidence of a lead",
+            "business_role": "confirms" if ship["S2"]["verdict"].startswith("confirms") else "no evidence of a lead",
             "summary": "A state's filing growth predicted its own next-year job losses in 1981-2000 but not in "
-                       "2002-2025 (the test needed both eras, and showed no out-of-sample gain).",
-            "decisive_p": {s: ship[s]["decisive_p"] for s in ship},
+                       "2002-2025 (the test needed both eras, and showed no out-of-sample gain); since 2002 a "
+                       "state's rising unemployment predicts its later filings. Business Ch 7 filings move with "
+                       "the state's unemployment (confirm, p 0.05); consumer filings show no evidence of a lead.",
+            "decisive_p": {s_: ship[s_]["decisive_p"] for s_ in ship},
+            "power_vs_1981_2000_effect": {k: v["power"] for k, v in qr["power_panelB_vs_panelA_beta"].items()},
             "panel_A_p": {k: v["wcb_division"]["p"] for k, v in qr["panel_A"].items()},
             "panel_B_p": {k: v["wcb_division"]["p"] for k, v in qr["panel_B"].items()}},
         "bank": rec_bank,

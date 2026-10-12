@@ -1010,7 +1010,7 @@ export interface Distress {
     chapter11: { rule: DistressRuleState; note: string };
   };
   bank: DistressBank[];
-  states: { asof: string; rows: DistressStateRow[]; role: string; summary: string };
+  states: { asof: string; rows: DistressStateRow[]; role: string; business_role: string | null; summary: string };
   failure_liabilities: DistressRecord;
   alert: null;
 }
