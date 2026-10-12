@@ -532,6 +532,33 @@ classified against both with a 12-month LEAD window.
 4. Two independent verifiers, honesty box, charts; the Distress panel labels each
    series leads / confirms / lags per its grade; alerts only for what ships.
 
+### v1.1 — errata and data branches, fixed 2026-10-12 BEFORE the run
+
+- **Erratum (transcription):** the Q-R event-study onset rule reads "≥ 12 months
+  since the last onset" in v1; the rule carried from v0 and intended by both
+  reviews is "onset = first lit month after ≥ 12 unlit months". The code uses the
+  v0 wording.
+- **Panel B S1 extension not used:** ABI's quarterly non-business-by-district
+  page for 1998–2000 is truncated at source (42–43 districts, no US row), so the
+  pre-registered tie-out cannot pass; S1 g starts 2002Q1 like S2.
+- **Panel A S2 = all-chapter business filings** (DE excluded, 1987–88 masked):
+  no ABI-hosted table splits business filings by chapter before 2001 (data agent:
+  132 ABI stats items scanned). The 1980–2000 district panel ties exactly to
+  ABI's national totals after 38 transcription errors in the ABI pages were
+  corrected from independent ABI printings (independent check pending).
+- **Power/size of the v1 code** (`distress_signals/power.py`, synthetic only):
+  engine identical to the reviewer's replica on 300/300 series;
+  perfect-rule min p N1 0.0078 (R=128), N2 0.0286 (R=34),
+  Q-H 0.0063 (R=157). N1 ALERT under the null 0.003 / 0.025 /
+  0.018 (SD of g ≈ 0.05 / 0.10 / 0.20); power against a true 12-month lead
+  (+30% log ramp) 0.27 / 0.16 / 0.05 — lower than the
+  reviewer's 0.50 because release dating moves the last pre-peak quarter to
+  COINCIDENT. Q-R: division wild-cluster bootstrap size 0.050 and
+  within-division Freedman–Lane 0.050 with regional shocks; Panel A
+  design when filings only track TRUE unemployment measured with 0.2/0.4pp
+  noise: 0.075/0.065 with the coincident payroll control, 0.99/1.00
+  without it — so Panel A p-values run slightly optimistic (≈ 7% at a nominal 5%).
+
 ### Counter-agent log
 
 | review | verdict | adopted |

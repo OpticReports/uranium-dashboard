@@ -725,3 +725,22 @@ Sources:
 | challenger/challenger_report_pdf_index.csv | 08be36020942e4ceca35117c7768e0f055982f04e58a8ba04e1aeadd1d233f9e | 39 rows; 2013-01..2026-09 |
 | warn/icpsr_e155161_metadata/datacite_10.3886_icpsr155161.v111.json | e8fc52cc6c37f7ebe84cf9fe71921a32526f9b01a6af6d5b5a97fa734cddccc3 |  |
 | warn/icpsr_e155161_metadata/e155161_versions_from_datacite.csv | 920dc41c9442f81b54350c51ca95c6aeb95c42fa30aa0b81788a87e672f063ec | 144 rows; 10.3886/e155161..10.3886/icpsr155161.v111 |
+
+
+### 8b. ABI-hosted AO district/state tables (2026-10-12)
+
+Source: abi.org/newsroom/stats pages (found via the stats taxonomy RSS feeds; 132 items, 29.7 MB raw HTML/RSS in `abi_district/`, not committed — page chrome differs between fetches, tables are cell-identical across URL copies). **Calendar years** (US rows equal ABI's national series, which equals the AO 12-month-ending-December tables 2001–2025). `abi_district_annual_1980_2000.csv` is the analysis file: 94 districts × 21 years + US rows; `total/business/nonbusiness` are RECONCILED (printed 1,960 cells; corrected 29 and filled 1 from independent ABI printings — circuit, state, chapter and quarterly pages — with the evidence in `note`; 5 implied Virgin Islands rows for 1980–84, which the 1980–84 page omits); `printed_*` keep the cells as printed. After reconciliation every year ties exactly to ABI's national totals on total, business and non-business. **No business-by-chapter table exists before 2001.** Other files are as printed and serve as checks only (several source pages are truncated on abi.org). `abi_chapter12_annual_1986_2025.csv` is parsed from `abi/Chapter12AnnualFilings.pdf`.
+
+| file | sha256 | rows |
+|---|---|---|
+| derived/abi_chapter12_annual_1986_2025.csv | 53c11b147e67e166e2c7d257647918f0bee8c9ec7d8f8d91ca389cc794c63771 | 40 rows |
+| derived/abi_district_annual_1980_2000.csv | b7324a88873754ccd61af045f980edaa8213d30212e8b52911e69c0d9b94f43a | 1995 rows |
+| derived/abi_district_annual_2001_2004.csv | f277262786cf31b514003cf400aae981105862e769b293700d4504802e0c16bc | 380 rows |
+| derived/abi_district_business_annual_1990_2006.csv | 1c6d7e7f7c01eea953181dbe32b36a81d4a3676becdc0aec073aa020eb6fec23 | 1615 rows |
+| derived/abi_state_annual_1980_2006.csv | cd79f2d0494423978c2ca9dd0d99aa6a68fa0cb1017a5693cae8f9b075f9520b | 1480 rows |
+| derived/abi_state_nonbusiness_by_chapter_1980_1999.csv | 95c8c9793b3b1403305a7f6fd655ef7e66623cffc4b5f80976bd5b667b599650 | 1085 rows |
+| derived/abi_district_nonbusiness_quarterly_1996_2005.csv | fe0c9db0a84a582b1b81b19cdbbd8112933b8ccf71962512446023186516a2c0 | 3176 rows |
+| derived/abi_state_nonbusiness_quarterly_1996_2000.csv | 2d0f6a450bdba8115d166774616f3687015ad9314088ae04c34fb833bcb2bf4f | 1120 rows |
+| derived/abi_state_total_quarterly_1980_2005.csv | cdac7e33df6b36adddae7f9690671ff13f07354674c1363efe715595b47799f0 | 5540 rows |
+| derived/abi_district_total_quarterly_1990_2005.csv | 1d5aadcacf0f645a6d8ad64c71a59bb7fcd1dd9eb0ce9808faa714012f89f976 | 4484 rows |
+| derived/abi_district_nonbusiness_by_chapter_partial_1990_1994_2000_2004.csv | 1de2f28d3693c72fca6e3260901cfb5ec82039dc7a34cf9d0153ef1d5a95136d | 565 rows |
