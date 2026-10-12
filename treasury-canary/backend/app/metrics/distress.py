@@ -80,15 +80,17 @@ def _state(path: list[dict]) -> dict:
             "onset_quarters": [qstr(o) for o in ons]}
 
 
-def _pop_k(hist: dict, year: float) -> float:
-    """US population (thousands) at a fractional year: Census July-1 estimates
-    interpolated, extrapolated at the last year's growth rate."""
-    pop = {int(y): v for y, v in hist["us_pop_k"].items()}
-    ys = sorted(pop)
+def _pop_k(hist: dict, year: float, state: str | None = None) -> float:
+    """Population (thousands) of the 50 states + DC, or of one state, at a
+    fractional year. Census July-1 estimates sit at year + 0.5: linear between
+    them, extrapolated at the last year's growth rate (the study's load.pop_at)."""
+    src = hist["us_pop_k"] if state is None else hist["state_pop_k"][state]
+    pop = {int(y): v for y, v in src.items()}
     y0 = int(year - 0.5)
-    if y0 + 1 in pop and y0 in pop:
+    if y0 in pop and y0 + 1 in pop:
         w = year - 0.5 - y0
         return pop[y0] * (1 - w) + pop[y0 + 1] * w
+    ys = sorted(pop)
     last, prev = ys[-1], ys[-2]
     return pop[last] * (pop[last] / pop[prev]) ** (year - 0.5 - last)
 
@@ -136,15 +138,19 @@ def build_distress(hist: dict, live: dict[str, dict] | None = None,
     bus_path = rule_path(m["bus"], court)
     nb_path = rule_path(m["nb"], court)
     ch11_path = rule_path(m["ch11"], court)
-    last_nb12 = max(m["nb12"])
-    yq = last_nb12 // 4 + (last_nb12 % 4 + 1) * 0.25          # quarter end as a fractional year
-    per_1000 = m["nb12"][last_nb12] / _pop_k(hist, yq)
-    yoy = (m["nb12"][last_nb12] / m["nb12"][last_nb12 - 4] - 1) if last_nb12 - 4 in m["nb12"] else None
-    annual = {int(y): v["nonbusiness"] / hist["us_pop_k"][y]
-              for y, v in hist["national_annual"].items() if y in hist["us_pop_k"]}
+    # one per-capita basis (studies/distress-signals.md): 50 states + DC filings over
+    # 50 states + DC population at the 12-month window's midpoint
+    t12 = max(m["st12"])
+    mid = t12 // 4 + (t12 % 4 + 1) * 0.25 - 0.5               # window midpoint as a fractional year
+    nb50 = sum(v["nb_all"] for v in m["st12"][t12].values())
+    prev50 = sum(v["nb_all"] for v in m["st12"][t12 - 4].values()) if t12 - 4 in m["st12"] else None
+    per_1000 = nb50 / _pop_k(hist, mid)
+    yoy = nb50 / prev50 - 1 if prev50 else None
+    annual = {int(y): v / hist["us_pop_k"][y]
+              for y, v in hist["nonbusiness_annual_50dc"].items() if y in hist["us_pop_k"]}
     national = {
         "consumer": {
-            "asof": qstr(last_nb12), "filings_12m": m["nb12"][last_nb12],
+            "asof": qstr(t12), "filings_12m": m["nb12"].get(t12), "filings_12m_50dc": nb50,
             "per_1000": round(per_1000, 3), "yoy_12m": round(yoy, 4) if yoy is not None else None,
             "per_1000_by_year": {str(y): round(v, 3) for y, v in sorted(annual.items())},
             "rule": _state(nb_path), "role": rec["consumer_filings"]["role"],
@@ -159,8 +165,8 @@ def build_distress(hist: dict, live: dict[str, dict] | None = None,
                        for p in bus_path if p["q"] >= qidx("1981Q4")],
         },
         "chapter11": {"rule": _state(ch11_path),
-                      "note": "Business Chapter 11 is display-only: large cases file where they choose "
-                              "(DE, SDTX, NJ), and the series starts in 2001."},
+                      "note": "Business Chapter 11 is display-only and untested: large cases file where they "
+                              "choose (DE, SDTX, SDNY, NJ), and the series starts in 2001."},
     }
     bank = []
     for sid, label in hist["bank_labels"].items():
@@ -173,12 +179,12 @@ def build_distress(hist: dict, live: dict[str, dict] | None = None,
                      "false_alarms": r["false_alarms"], "rotation_p": r["rotation_p"],
                      "qualifiers": r.get("qualifiers", []), "variant_note": r.get("variant_note")})
     # state map: latest 12-month consumer and business Ch 7 filings vs a year earlier
-    t = max(m["st12"])
-    pop = hist["state_pop_k"]
+    t = t12
     rows = []
     for s, v in sorted(m["st12"][t].items()):
         prev = m["st12"].get(t - 4, {}).get(s)
-        rows.append({"state": s, "per_1000": round(v["nb_all"] / pop[s], 3) if s in pop else None,
+        rows.append({"state": s,
+                     "per_1000": round(v["nb_all"] / _pop_k(hist, mid, s), 3) if s in hist["state_pop_k"] else None,
                      "consumer_yoy": round(v["nb_all"] / prev["nb_all"] - 1, 4) if prev and prev["nb_all"] else None,
                      "business_ch7_yoy": (round(v["bus_ch7"] / prev["bus_ch7"] - 1, 4)
                                           if prev and prev["bus_ch7"] else None),

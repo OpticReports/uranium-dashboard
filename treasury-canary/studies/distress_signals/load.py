@@ -148,6 +148,42 @@ def state_pop() -> dict[str, dict[int, float]]:
     return {s: {int(d[:4]): v for d, v in fred(f"{s}POP", "fred_state_pop").items()} for s in STATES}
 
 
+def us_pop(pop: dict[str, dict[int, float]] | None = None) -> dict[int, float]:
+    """50 states + DC population (thousands) by year."""
+    pop = pop or state_pop()
+    years = set.intersection(*(set(v) for v in pop.values()))
+    return {y: sum(pop[s][y] for s in STATES) for y in sorted(years)}
+
+
+def pop_at(pop_by_year: dict[int, float], year: float) -> float:
+    """Population at a fractional year. July-1 estimates sit at year + 0.5:
+    linear between them, extrapolated at the last year's growth rate. The
+    per-capita basis everywhere is 50 states + DC filings over this population
+    at the filing window's midpoint (12 months to Jun-2026 -> 2026.0)."""
+    y0 = int(year - 0.5)
+    if y0 in pop_by_year and y0 + 1 in pop_by_year:
+        w = year - 0.5 - y0
+        return pop_by_year[y0] * (1 - w) + pop_by_year[y0 + 1] * w
+    ys = sorted(pop_by_year)
+    last, prev = ys[-1], ys[-2]
+    return pop_by_year[last] * (pop_by_year[last] / pop_by_year[prev]) ** (year - 0.5 - last)
+
+
+def nonbusiness_annual_50dc() -> dict[int, int]:
+    """Calendar-year consumer filings in the 50 states + DC (territories
+    dropped): ABI district tables 1980-2000, AO F-2 12-month tables (December)
+    2001+."""
+    out: dict[int, int] = defaultdict(int)
+    for r in _rows(os.path.join(DER, "abi_district_annual_1980_2000.csv")):
+        if r["row_kind"] == "district" and r["is_territory"] == "0":
+            out[int(r["year"])] += int(r["nonbusiness"])
+    s12 = f2_state("12month", "nb_all")
+    for t in sorted(next(iter(s12.values()))):
+        if t % 4 == 3:
+            out[t // 4] = sum(s12[s][t] for s in STATES)
+    return dict(sorted(out.items()))
+
+
 def state_claims_weekly() -> dict[str, dict[dt.date, int]]:
     """DOL ETA 539 column c3 (state UI initial claims) by week-ending date."""
     out: dict[str, dict[dt.date, int]] = defaultdict(dict)

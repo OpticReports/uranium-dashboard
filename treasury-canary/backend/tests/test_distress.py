@@ -79,13 +79,24 @@ def test_the_panel_cannot_alert_and_carries_the_study_roles():
     assert p["states"]["role"] == "no evidence of a lead"            # consumer filings
     assert p["states"]["business_role"] == "confirms"                # business Ch 7: same-window only
     assert "transform-sensitive" in {q for b in p["bank"] for q in b["qualifiers"]}
+    # the variant's record carries its false alarms and its Holm-adjusted size p
+    note = next(b["variant_note"] for b in p["bank"] if b["id"] == "CORALACBS")
+    assert "3 false alarms" in note and "after Holm" in note
+    assert "untested" in p["national"]["chapter11"]["note"]
 
 
 def test_current_readings_on_the_frozen_history():
     p = Dm.build_distress(HIST)
     c = p["national"]["consumer"]
     assert c["asof"] == "2026Q2" and c["filings_12m"] == 581_570      # AO F-2 12-month national row, Jun-2026
-    assert 1.6 < c["per_1000"] < 1.8 and abs(c["yoy_12m"] - 0.12) < 0.01
+    # one per-capita basis: 50 states + DC filings over their population at the
+    # window's midpoint (2026.0) - reproduced by the study's load.pop_at
+    assert c["filings_12m_50dc"] == 575_614
+    assert round(c["per_1000"], 2) == 1.68 and abs(c["yoy_12m"] - 0.12) < 0.01
+    assert round(c["per_1000_by_year"]["2010"], 1) == 4.9 and round(c["per_1000_by_year"]["2019"], 1) == 2.3
+    assert min(v for y, v in c["per_1000_by_year"].items() if 1986 <= int(y) <= 2019) > c["per_1000"]
+    st = {r["state"]: r["per_1000"] for r in p["states"]["rows"]}
+    assert round(st["TN"], 1) == 3.0 and round(st["AL"], 1) == 4.1
     b = p["national"]["business"]["rule"]
     # above +10% since 2026Q1 but only 3 quarters off before it: not a fresh onset
     assert b["asof"] == "2026Q2" and b["on"] is True and b["fresh_onset"] is False

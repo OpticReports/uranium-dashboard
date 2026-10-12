@@ -16,6 +16,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import engine as E  # noqa: E402
 import load as D  # noqa: E402
 
 OUT = os.path.join(HERE, "..", "..", "backend", "app", "sources", "distress_history.json")
@@ -64,7 +65,8 @@ def main():
     s12_nb, s12_b7 = D.f2_state("12month", "nb_all"), D.f2_state("12month", "bus_ch7")
     nat12_nb = D.f2_national("12month", "nb_all")
     pop = D.state_pop()
-    ann = D.abi_annual()
+    us_pop = D.us_pop(pop)
+    nb_annual = D.nonbusiness_annual_50dc()
     last = D.qi(2026, 2)
     state_12m = {qs(t): {s: {"nb_all": s12_nb[s][t], "bus_ch7": s12_b7[s][t]} for s in D.STATES}
                  for t in range(last - 4, last + 1)}
@@ -83,48 +85,60 @@ def main():
                          "qualifiers": v.get("qualifiers", [])}
         if "transform-sensitive" in v.get("qualifiers", []):
             rr = v["robust_qyoy_record"]
-            rec_bank[sid]["variant_note"] = ("on point-in-time year-on-year growth (not the pre-registered "
-                                             "4-quarter average) it led every recession: "
-                                             + ", ".join(peaks_text(rr["per_peak"]))
-                                             + f" (size p {rr['rotation_p']:.3f})")
+            leads = [x["lead_months"] for x in rr["per_peak"] if x["outcome"] == "LEAD"]
+            assert len(leads) == len(rr["per_peak"]), sid
+            # the variant's size p, Holm-adjusted as if it stood in the nine-series family
+            holm_v = E.holm({k: (rr["rotation_p"] if k == sid else qc["series"][k]["grade"]["rotation"]["p"])
+                             for k in BANK})[sid]
+            rec_bank[sid]["variant_note"] = (
+                "on point-in-time year-on-year growth (not the pre-registered 4-quarter average) it led all "
+                f"{len(leads)} scored recessions ({', '.join(map(str, leads[:-1]))} and {leads[-1]} months) with "
+                f"{len(rr['false_alarms'])} false alarms ({', '.join(x[:4] for x in rr['false_alarms'])}); "
+                f"raw size p {rr['rotation_p']:.3f}, about {holm_v:.2f} after Holm across the nine")
     ship = qr["ship"]
     record = {
         "business_filings": {
             "role": "does not lead",
-            "summary": "Rose after the 1990-91 and 2001 recessions ended, never before them; 3 false alarms "
-                       "(1986, 1992, 2002) in 33 scored years.",
+            "summary": "No +10% onset before the 1990-91 or 2001 recessions: onsets came just after each ended "
+                       "(1992-01, 2002-01); 3 false alarms (1986, 1992, 2002) in 33 scored years.",
             "per_peak": peaks_text(n1c["primary"]["per_peak"]), "false_alarms": n1c["primary"]["false_alarms"],
             "rotation_p": qn["N1_rotation_p_worst"]},
         "consumer_filings": {
             "role": "does not lead",
-            "summary": "Already rising through 1987-91 (no fresh warning before 1990); rose after 2001 began; "
-                       "3 false alarms (1986, 1996, 2002).",
+            "summary": "Rising from 1985 through 1990-91 with no fresh warning (its Jan-1986 onset is a false "
+                       "alarm); the 2001 rise was published Jan-2002, after the recession ended (missed). 3 false "
+                       "alarms (1986, 1996, 2002); tested on annual data.",
             "per_peak": peaks_text(n2["primary"]["per_peak"]), "false_alarms": n2["primary"]["false_alarms"],
             "rotation_p": n2["rotation"]["p"]},
         "failure_liabilities": {
             "role": "does not lead (alert rule)",
-            "summary": "D&B liabilities of failing firms, tested out of sample 1967-83: the +25% rule fired after "
-                       "the 1969 and 1973 recessions began and missed 1980 and 1981. As turning points, "
-                       "liabilities bottomed 8-31 months before peaks 1957-80 - too long and erratic to time.",
+            "summary": "D&B liabilities of failing firms only ever led as turning points: a +25%-growth alert "
+                       "fired late both in 1896-1938 (8 of 10 peaks) and out of sample in 1967-83 (after the 1969 "
+                       "and 1973 recessions began; missed 1980 and 1981). Liabilities bottomed 8-31 months before "
+                       "the 1957-80 peaks, dated after the fact - too long and erratic to time.",
             "per_peak": peaks_text(qh["primary_real_cpi"]["primary"]["per_peak"]),
             "rotation_p": qh["primary_real_cpi"]["rotation"]["p"]},
         "states": {
             "role": "no evidence of a lead",
             "business_role": "confirms" if ship["S2"]["verdict"].startswith("confirms") else "no evidence of a lead",
-            "summary": "A state's filing growth predicted its own next-year job losses in 1981-2000 but not in "
-                       "2002-2025 (the test needed both eras, and showed no out-of-sample gain); since 2002 a "
-                       "state's rising unemployment predicts its later filings. Business Ch 7 filings move with "
-                       "the state's unemployment (confirm, p 0.05); consumer filings show no evidence of a lead.",
+            "summary": "A state's filing growth predicted its own next-year job losses mainly in the 1980s "
+                       "(1981-90; with the pre-registered claims control, 1988-2000, no test is significant). "
+                       "Since 2002 the only hit is business filings -> job losses (p 0.047), the out-of-sample "
+                       "check is uninformative, and a state's rising unemployment predicts its later filings. "
+                       "Business Ch 7 filings move with the state's unemployment over the same year (confirm, "
+                       "p 0.046); consumer filings show no evidence of a lead.",
             "decisive_p": {s_: ship[s_]["decisive_p"] for s_ in ship},
             "power_vs_1981_2000_effect": {k: v["power"] for k, v in qr["power_panelB_vs_panelA_beta"].items()},
             "panel_A_p": {k: v["wcb_division"]["p"] for k, v in qr["panel_A"].items()},
             "panel_B_p": {k: v["wcb_division"]["p"] for k, v in qr["panel_B"].items()}},
         "bank": rec_bank,
         "headline": "No bankruptcy or credit-distress series passed the pre-registered test as a recession "
-                    "warning. Filings confirm or follow recessions; all-loan charge-offs confirm.",
+                    "warning. Filings do not lead recessions (they rose with them or after); state business "
+                    "Ch 7 filings move with state unemployment; all-loan charge-offs confirm.",
     }
     out = {
-        "study": {"doc": "treasury-canary/studies/distress-signals.md", "run": "2026-10-12", "spec": "SPEC v1.1"},
+        "study": {"doc": "treasury-canary/studies/distress-signals.md",
+                  "run": "2026-10-12, pre-registered run + one correction run", "spec": "SPEC v1.1"},
         "rules": {"theta": 0.10, "quiet_quarters": 4, "lead_months": 18,
                   "court_raw_masks": [["2005Q2", "2008Q4"], ["2020Q2", "2021Q4"]],
                   "bank_raw_masks": {"all": [["2020Q2", "2021Q4"]],
@@ -136,11 +150,11 @@ def main():
         "national_nonbusiness_q": {qs(t): v for t, v in sorted(nbq.items())},
         "national_bus_ch11_q": {qs(t): v for t, v in sorted(ch11.items())},
         "national_nonbusiness_12m": {qs(t): v for t, v in sorted(nat12_nb.items())},
-        "national_annual": {str(y): {"business": v["business"], "nonbusiness": v["nonbusiness"]}
-                            for y, v in sorted(ann.items())},
+        # one per-capita basis: 50 states + DC filings over 50 states + DC population
+        "nonbusiness_annual_50dc": {str(y): v for y, v in nb_annual.items()},
         "state_12m": state_12m,
-        "us_pop_k": {str(y): round(sum(pop[s][y] for s in D.STATES), 3) for y in range(1980, 2026)},
-        "state_pop_k": {s: pop[s][2025] for s in D.STATES},
+        "us_pop_k": {str(y): round(v, 3) for y, v in us_pop.items() if y >= 1980},
+        "state_pop_k": {s: {str(y): pop[s][y] for y in (2023, 2024, 2025)} for s in D.STATES},
         "bank_history": bank_hist,
         "bank_labels": BANK,
         "record": record,

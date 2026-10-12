@@ -96,7 +96,12 @@ function BankRow({ b }: { b: DistressBank }) {
     <tr className="border-b border-panelborder/50 align-top last:border-0">
       <td className="py-1.5 pr-3 text-slate-300">
         {b.label}
-        <div className="text-[10px] leading-snug text-slate-500">{b.per_peak.join(" · ")}</div>
+        <div className="text-[10px] leading-snug text-slate-500">
+          {b.per_peak.join(" · ")} ·{" "}
+          {b.false_alarms.length
+            ? `false alarms ${b.false_alarms.map((x) => x.slice(0, 4)).join(", ")}`
+            : "no false alarms"}
+        </div>
         {b.variant_note && (
           <div className="text-[10px] leading-snug text-slate-500">Variant: {b.variant_note}.</div>
         )}
@@ -150,11 +155,13 @@ export default function DistressPanel() {
   return (
     <Panel
       title={title}
-      subtitle="Do rising bankruptcies warn before recessions? Tested 1980-2026: they confirm or follow — no alert"
+      subtitle="Do rising bankruptcies warn before recessions? In the tested record, no: filings rose with them or after"
     >
       <div className="rounded-lg border border-slate-600/60 bg-slate-500/5 px-4 py-3">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-sm font-bold tracking-wide text-slate-300">NO ALERT — by design</span>
+          <span className="text-sm font-bold tracking-wide text-slate-300">
+            NO ALERT — no series passed the pre-registered test
+          </span>
           <span className="text-xs text-slate-400">{data.headline}</span>
           <span className="ml-auto font-mono text-[11px] text-slate-500">
             court data {c.asof}
@@ -167,7 +174,7 @@ export default function DistressPanel() {
         <div>
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-xs text-slate-300">
-              Consumer filings per 1,000 residents
+              Consumer filings per 1,000 residents (50 states + DC)
               <span className="ml-2 font-mono text-slate-200">{c.per_1000.toFixed(2)}</span>
               <span className="ml-2 font-mono text-slate-400">{pct(c.yoy_12m)} y/y</span>
             </span>
@@ -216,7 +223,7 @@ export default function DistressPanel() {
           </div>
           <p className="text-[10px] leading-snug text-slate-500">
             {b.record.summary} Now: {ruleText(b.rule)} ({b.rule.asof}). Gaps = masked (2005 law change,
-            2020-21 support). Business Chapter 11: {pct(data.national.chapter11.rule.g)} (display only).
+            2020-21 support). Business Chapter 11: {pct(data.national.chapter11.rule.g)} (display only, untested).
           </p>
         </div>
       </div>

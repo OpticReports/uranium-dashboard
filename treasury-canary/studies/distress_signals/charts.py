@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from decimal import ROUND_HALF_UP, Decimal
 import math
 import os
 import sys
@@ -32,15 +33,25 @@ plt.rcParams.update({"font.size": 9, "axes.edgecolor": GRID, "axes.labelcolor": 
                      "xtick.color": INK2, "ytick.color": INK2})
 RES = json.load(open(os.path.join(HERE, "results.json")))
 TITLES = {
-    "national": "National bankruptcy filings lag: the +10% rule never warned before the 1990 or 2001 recessions;\n"
-                "each series' three onsets all came when no recession followed, two of them just after one ended",
-    "liabilities": "Liabilities of failing firms, 1967-83 out of sample: the alert rule fired after the 1969 and 1973 "
-                   "recessions began;\nits only early signal (1980-11) came from one giant failure month and is discounted",
-    "states": "A state's filing growth predicted its own job losses in 1981-2000 but not in 2002-2025;\n"
-              "the pre-registered test needs both eras (plus out-of-sample), so no state alert",
+    "national": "National bankruptcy filings did not lead: no +10% onset came before the 1990 or 2001 recessions.\n"
+                "Business filings' onsets came just after both ended (1992-01, 2002-01), consumer filings' after 2001 "
+                "(2002-01); the 1986 and 1996 onsets were years early",
+    "liabilities": "Liabilities of failing firms, 1967-83 out of sample: the +25% alert fired after the 1969 and 1973 "
+                   "recessions began\n(as it did at 8 of 10 peaks in 1896-1938); its only early signal (1980-11) came "
+                   "from one giant failure month and is discounted",
+    "states": "A state's filing growth predicted its own job losses in 1981-2000, mostly from the 1980s; since 2002 only\n"
+              "business filings -> job losses (p 0.047). The pre-registered test needs both eras plus out-of-sample: "
+              "no state alert",
     "bank": "Bank loan stress: no series warned before every recession; all-loan charge-offs confirm "
             "(2 months before 1990, at the 2001 start, 1 month before 2007)",
 }
+
+
+def fmt_p(p: float) -> str:
+    """p as printed in distress-signals.md: 3 decimals rounded half-up, p<0.001 below that."""
+    if p < 0.001:
+        return "p<0.001"
+    return "p=" + str(Decimal(str(p)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
 
 
 def style(ax):
@@ -80,9 +91,8 @@ def mark_onsets(ax, onsets, yfun, size=46):
 # ------------------------------------------------------------------ national
 def fig_national():
     qn = RES["Q_N"]
-    pop = D.state_pop()
-    us_pop = {y: sum(pop[s][y] for s in D.STATES) for y in range(1980, 2026)}
-    ann = D.abi_annual()
+    us_pop = D.us_pop()
+    ann = D.nonbusiness_annual_50dc()          # 50 states + DC, the study's one per-capita basis
     fig, axes = plt.subplots(3, 1, figsize=(12, 9.6), sharex=True,
                              gridspec_kw={"height_ratios": [1.15, 1, 1]})
     fig.patch.set_facecolor(SURF)
@@ -91,10 +101,10 @@ def fig_national():
         shade(ax, 1979)
     ax = axes[0]
     ys = sorted(y for y in ann if y in us_pop)
-    nb = [ann[y]["nonbusiness"] / us_pop[y] for y in ys]           # per 1,000 (pop in thousands)
+    nb = [ann[y] / us_pop[y] for y in ys]                          # per 1,000 (pop in thousands)
     ax.plot([dt.date(y, 7, 1) for y in ys], nb, color=S1, lw=2, marker="o", ms=3)
-    cur = RES["current"]
-    nb12 = D.f2_national("12month", "nb_all")[D.qi(2026, 2)] / us_pop[2025]
+    s12 = D.f2_state("12month", "nb_all")
+    nb12 = sum(s12[s][D.qi(2026, 2)] for s in D.STATES) / D.pop_at(us_pop, 2026.0)
     ax.plot([dt.date(2026, 6, 30)], [nb12], "o", color=CRIT, ms=7, mec=SURF, mew=1.5)
     ax.annotate(f"{nb12:.2f} per 1,000\n(12 months to Jun-2026)", (dt.date(2026, 6, 30), nb12),
                 xytext=(-120, 38), textcoords="offset points", fontsize=8.5, color=INK,
@@ -103,7 +113,7 @@ def fig_national():
         ax.axvline(when, color=INK2, lw=0.8, ls=":")
         ax.text(when, ax.get_ylim()[1] * 0.92 if ax.get_ylim()[1] else 6, lab, fontsize=7.5, color=INK2, ha="left")
     ax.set_ylabel("consumer filings\nper 1,000 residents")
-    ax.set_title("Consumer (non-business) bankruptcy filings per 1,000 residents, 1980-2026",
+    ax.set_title("Consumer (non-business) bankruptcy filings per 1,000 residents (50 states + DC), 1980-2026",
                  loc="left", fontsize=10, color=INK)
     # N1 and N2 growth with onsets
     for ax, key, title in ((axes[1], "N1", "Business filings: growth of the 4-quarter sum vs a year earlier"),
@@ -191,7 +201,7 @@ def fig_states():
     for i, (lab, t, p) in enumerate(rows[::-1]):
         c = S3 if p <= 0.05 else (S2 if p <= 0.10 else BASE)
         ax.barh([i], [t], color=c, height=0.6)
-        ax.text(max(t, 0) + 0.15, i, f"p={p:.3f}", va="center", fontsize=7.5, color=INK2)
+        ax.text(max(t, 0) + 0.15, i, fmt_p(p), va="center", fontsize=7.5, color=INK2)
     ax.set_yticks(range(len(rows)))
     ax.set_yticklabels([r[0] for r in rows[::-1]], fontsize=7.5)
     ax.axvline(0, color=INK2, lw=0.8)
@@ -252,7 +262,8 @@ def fig_bank():
     fig.suptitle(TITLES["bank"],
                  x=0.01, ha="left", fontsize=11, color=INK)
     fig.text(0.01, 0.005, "Vertical lines = rule onsets at their publication date: green before a recession, "
-             "orange at its start, red inside it, dark grey no recession followed, light grey too recent.",
+             "orange at its start, red inside it, dark grey no recession followed, light grey too recent or neutral "
+             "(at the exogenous 2020 recession).",
              fontsize=7.5, color=INK2)
     fig.tight_layout(rect=(0, 0.02, 1, 0.95))
     fig.savefig(os.path.join(OUT, "fig_bank_rates.png"), dpi=150, facecolor=SURF)
@@ -271,7 +282,11 @@ GRIDPOS = {  # tile-grid cartogram (row, col)
 
 
 def fig_map():
-    rows = {r["state"]: r for r in RES["current"]["state_12m_to_2026Q2"]}
+    # per 1,000 on the one basis (population at the window's midpoint); results.json's
+    # descriptive `current` block divides by the 2025 population instead
+    pop = D.state_pop()
+    rows = {r["state"]: dict(r, nonbusiness_per_1000=r["nonbusiness_12m"] / D.pop_at(pop[r["state"]], 2026.0))
+            for r in RES["current"]["state_12m_to_2026Q2"]}
     vals = [rows[s]["nonbusiness_per_1000"] for s in rows]
     lo, hi = min(vals), max(vals)
     cmap = plt.get_cmap("Oranges")

@@ -992,7 +992,8 @@ export interface Distress {
   national: {
     consumer: {
       asof: string;
-      filings_12m: number;
+      filings_12m: number | null; // AO national row (incl. territories)
+      filings_12m_50dc: number; // 50 states + DC: the per-capita numerator
       per_1000: number;
       yoy_12m: number | null;
       per_1000_by_year: Record<string, number>;
