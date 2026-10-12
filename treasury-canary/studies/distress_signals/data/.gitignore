@@ -1,0 +1,10 @@
+# Bulky raw downloads kept out of git. Every one is listed in MANIFEST with its
+# source URL and sha256, so it can be re-fetched and checked; the parsed files
+# in derived/ are what the study reads.
+uscourts/
+dol_ar539/ar539.csv
+# being written by data-completion agents; committed once verified
+abi_district/
+bcd/
+warn/
+challenger/
