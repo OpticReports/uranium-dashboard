@@ -579,3 +579,149 @@ The same table is available in machine-readable form in `MANIFEST.csv`.
 | uscourts/f5a_county/2024-12-31__bf_f5a_1231.2024.xlsx | https://www.uscourts.gov/sites/default/files/2025-01/bf_f5a_1231.2024.xlsx | 2026-10-12 | 392e2d88c7fa19eda9a7a8cc6a35e78a507ff67ecc9ddae8fdafffcb17e1eb86 | county table (not parsed) | 12 months ending (county) 2024-12-31 | AO Table F-5A |
 | uscourts/f5a_county/2025-12-31__bf_f5a_1231.2025.xlsx | https://www.uscourts.gov/sites/default/files/document/bf_f5a_1231.2025.xlsx | 2026-10-12 | 2da6659951d9fceb9c0bccfa2108511342f46c866867454d276138f9f23b71d4 | county table (not parsed) | 12 months ending (county) 2025-12-31 | AO Table F-5A |
 | uscourts/f5a_county/2026-06-30__bf_f5a_0630.2026.xlsx | https://www.uscourts.gov/sites/default/files/document/bf_f5a_0630.2026.xlsx | 2026-10-12 | 446a3571f56fedeb7e5106c63c452031de77f4a2b9a5b61117d69f9ad13f0b7f | county table (not parsed) | 12 months ending (county) 2026-06-30 | AO Table F-5A |
+
+
+## 8. Additions after SPEC v0 (2026-10-12, data completion for SPEC v1)
+
+Sources:
+* **BCD series 14** (current liabilities of business failures, D&B, $ millions, monthly, NSA — circled-u): BCD June 1987, App. C p.97 (PDF p.103), https://fraser.stlouisfed.org/files/docs/publications/BusConD/80-89/BCD_061987.pdf (PDF sha256 6c916c6842249d6b65e37c716a063c81f6a3908416691b726763187c11905513, not committed). All 408 months read from the page image (text layer unusable for 52 months and silently wrong for three: 1970-05, 1977-05, 1968 I Q). Checks: printed quarterly 136/136 and annual 34/34 totals; FRED M0933CUSM144NNBR 181/181 within 0.05 (7 x.x5 ties print half-down); ERP-2004 B-96 annual totals within ±0.1 in 1955–1984 (1985 −23.3 and 1986 −1,575.4: preliminary prints, flagged r/p in the source). 1987-01..1988-10 from BCD Jan 1989 p.72 (preliminary flags kept). Evidence crops in `bcd/` (index `bcd/crops_index.csv`).
+* **FRED** (keyless fredgraph CSV, cosd=1700-01-01; curl's default User-Agent — FRED's edge rejected a bare browser UA on this date): {ST}POP (Census July-1 estimates dated Jan 1), {ST}NAN (state nonfarm payrolls, NSA), CPIAUCNS, PCEPI, DRBLT100S, CORBLT100S.
+* **DOL ETA 539** weekly state claims, https://oui.doleta.gov/unemploy/csv/ar539.csv (not committed; 13 MB). c3 = state UI initial claims by report week (`rptdate`, week-ending Saturday); the 53 units' c3 sum tracks FRED ICNSA within ~0.1–0.4% (revision differences). Coverage 1986-02 (some states 1984) to 2026-10-03. Layout/edit checks: `dol_ar539/eta539_layout.pdf`.
+* **WARN / Challenger access audit:** the only state WARN history (Krolikowski–Lunsford, ICPSR 155161, v111 2026-09-30) needs an ICPSR login and terms acceptance — not done; asked of Casey. Downloaded but not committed (third-party terms): WARN Feed (github.com/APVentureEngine/warn-act-notices, CC BY 4.0; warn_notices.csv sha256 b06804306278b3be795fa9e9790cf1655c6eed4fd1f185da310b6d1a72836345; coverage too thin before 2010 for a test), Cleveland Fed EC 2019-21 replication zip (national WARN factor 1996-07..2019-10, Kalman-smoothed, sha256 59c6c60fe671b481a05d09dd90c04e2a03c130ed54a44686926d48f29598d749), 8 Challenger report PDFs (index committed: `challenger/challenger_report_pdf_index.csv`; the live site holds a continuous monthly 'Bankruptcy'-reason table only for 2024-12..2026-09; the Dec-2019 PDF's annual bankruptcy '% of total' column fails arithmetic in 12 of 15 years — use counts).
+
+| file | sha256 | rows / range |
+|---|---|---|
+| derived/bcd_series14_liabilities_monthly_1953_1986.csv | 07b4d6f1c1f8fc15b0030bffe9c76f88fa725735dc7c211f7bc6814c7558c7e9 | 408 rows; 1953-01..1986-12 |
+| derived/bcd_series14_liabilities_monthly_1987_1988_bcd011989.csv | 12d3f2d9596dce850d605c77fe922f8149fbf0f31d589cb9d29a37a41e1a38f1 | 22 rows; 1987-01..1988-10 |
+| bcd/bcd011989_finding_guide_s14_historical_6-87_400dpi.png | 905b540c7162b5664cbf46e97bec0028e61e0e8834b4f9dde4b7562fade1d860 |  |
+| bcd/bcd011989_new_features_appendix_c_series_400dpi.png | 0598bec3e7d5844f15616c7ee327d41910c843bbfd180e45578030968caa8362 |  |
+| bcd/bcd011989_p72_footnote1_s14_low_value_400dpi.png | 8e1f7c39b0d1f7d0cc8a2d93b4e6bd6eff8a3aee96ca13029420b9f6702599b7 |  |
+| bcd/bcd011989_p72_s14_header_1987-1988_values_400dpi.png | 37438e70ed89b4b3be3839ec896b3b37835211ddd12b2cc621ad82f435782454 |  |
+| bcd/bcd061987_p114_titles_sources_s12-14_400dpi.png | 5bff8bf858013714d02cc9145651521c38d7207fcba3f08d6394ca52ecbcb466 |  |
+| bcd/bcd061987_p33_chart_title_s14_400dpi.png | 876aaf753c324cabc67d0f5d7f79f1d46e097b06477a78a807ca6159bcc00fda |  |
+| bcd/bcd061987_p60_note_u_symbol_not_seasonally_adjusted_400dpi.png | a8594abb06a7119225261d51339b5d8d6591af48d0f1ee498fd3d22c8aaa512b |  |
+| bcd/bcd061987_p72_footnote1_s14_low_value_400dpi.png | 25f421a816de5371ae9a6b3b19394f8a3f654a4c6d216020089e4e805ef7d2b6 |  |
+| bcd/bcd061987_p72_s14_header_1985-1987_values_400dpi.png | 30bde4acbc1f31417ce2babffff02c2a3fe3aa208b06a4ba7e476d7e1341ca78 |  |
+| bcd/bcd061987_p97_s14_1953-1969_year_jan-jun_x2.png | 983afd09788b8806a9238abbc03918d5a93522cf2e08051aa03764771f88e5b6 |  |
+| bcd/bcd061987_p97_s14_1953-1969_year_jul-dec_x2.png | 486514a3a6382c3cfc82ab0e6043386c61035b7b91fb02035085a9958f4e8021 |  |
+| bcd/bcd061987_p97_s14_1953-1969_year_quarters_annual_x2.png | 96a0447320aa945c0e20c2da24ff59780e4d2a87009233031923c99ef5eb29c2 |  |
+| bcd/bcd061987_p97_s14_1970-1986_year_jan-jun_x2.png | de711f1933d2e77cac36ca6d54ab6af23f8b8fb578952c5cf01ae04b78edebb7 |  |
+| bcd/bcd061987_p97_s14_1970-1986_year_jul-dec_x2.png | 48645eea7713a72b963a2e08bcd068db01d38151aac4e784f29b85a617e55ebb |  |
+| bcd/bcd061987_p97_s14_1970-1986_year_quarters_annual_x2.png | ffc44d21928d02857e9418c83b96937f8f54f93cbd17131df2b46cbb304bde64 |  |
+| bcd/bcd061987_p97_s14_closeup_1968_q1_q2_year_quarters_x3.png | 847e722941206f8881a44cf72eac4516dd35c065a985eb08351e968032cf55c9 |  |
+| bcd/bcd061987_p97_s14_closeup_may_1970_1977_year_apr-jun_x4.png | d921c9e073d3638452aca9832efb17ceda86243af33e0f521616ef3832fc18bc |  |
+| bcd/bcd061987_p97_s14_footnotes_x2.png | 7a932978e7e7b17dab098dddb921cfeb51d8d91a474e547aa18dc1f203a974eb |  |
+| bcd/bcd061987_p97_s14_header_title_units_x2.png | 253623487fb74a15fc554fb1d08b88978c5f5ab95a319b4bf934d5a53de5427c |  |
+| bcd/bcd061987_p97_s14_table_overview_native300.png | cd1eae13a11c1f69806ad1ae85b5518bcd2dc0bd446c2e6522b9df77202b7f6b |  |
+| bcd/crops_index.csv | 4d154db6f0075fab1e1904425a272f49eead84312be27753edb06bca00d1a61f | 20 rows; bcd061987_p97_s14_table_overview_native300.png..bcd011989_finding_guide_s14_historical_6-87_400dpi.png |
+| fred_state_pop/AKPOP.csv | c392cfbf63d79b79c69b32cf569f9ba888f1951ace9efbcc654fa4604273be0a | 76 rows; 1950-01-01..2025-01-01 |
+| fred_state_pop/ALPOP.csv | 3d675199a7a6b2a89df797b15c74a81e96f32a1304018acda2f6cf6661d86168 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/ARPOP.csv | a88e91b7d009fdb2f27211efb90632fa34beadac3251d2d18a52890fc5d5ad57 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/AZPOP.csv | 41d3bf695dda27d980e140412eb0e791a35d14bdaf53d9e3c413aa30fe08972c | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/CAPOP.csv | fa10df7be18598bd2f52269a0957965c50915be383920be0f9826420f8476f35 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/COPOP.csv | 2a26b44a3323f6e7ec083edbf7d1fd58dc8946cd846875255754ef72c4f2cbab | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/CTPOP.csv | 7dcab46b8e385d45322afbb7ecea2baf3db200625b13bcba25503b1b86b8118f | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/DCPOP.csv | 461e8e2e351323d190c215e8036adc0405dbbc5c96f9675bc2dcbcece4d8f4f8 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/DEPOP.csv | 581889112e0c311d2629544e496d0bd49156b46a211128bde7eeeef6bfbd0c1d | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/FLPOP.csv | 9f46b12a9daaf4061c08cb13aad68876ada621d941373a527d1ebd51a1203874 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/GAPOP.csv | e48162b3f2444826e38b90f757b78bd7cddf62284f46a76477aaae70cfc5897c | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/HIPOP.csv | bf8f6ee1aaaa5f39239d1530210e0f511eac6385b5803fb62a3a638833377069 | 76 rows; 1950-01-01..2025-01-01 |
+| fred_state_pop/IAPOP.csv | 9a40a5102c6b29fdc9b0a5d3ebc12c8f442c9464705ca3b804640aa5648df0e1 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/IDPOP.csv | 6e070a4d477eba860fa03d024cd8619e6c2d75d8728eeea9b7ae27e9ec6d5946 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/ILPOP.csv | 2f48a37c714d7e88b0f4839a4e9a13892a9b9c0f528eb8d33cba671816a9fa5a | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/INPOP.csv | ff011195e77a30b00cc6e7f6c7506b37151e5c0184e879bdf9d7843ae5e136ca | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/KSPOP.csv | b58fb2bcc6a04bf2b20a9389cdf875abc12ab3c9d927d4d8dd4bc0ec28e55cd8 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/KYPOP.csv | a058f78fc30ed631af8afc74faa267bd4c683b64488ee48528d1b17eda1cc12e | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/LAPOP.csv | e35c331bcea5fcd0b174c05f8ae8a00fcdfb15fed35831efeefa1109bc56153b | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/MAPOP.csv | 5a78181c207e26708fbe42e0d173f8d47d04abfb7ee6823ad3e8f05073d329aa | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/MDPOP.csv | 03300048c6289d9f356f04c6c329485148f82c0db40896b9adbb3d8a1aefa80c | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/MEPOP.csv | 57d8eb21fea4886eb6e7b5d7bb65fbd7fc91d0118246aca29994290dfd37d646 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/MIPOP.csv | fb34c0d0444d677d509e2e207c4ce2c9e153499372455ba437b9cf9583adb0ce | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/MNPOP.csv | 8cee646296181004a13d6519c8d4effaea79c229d8c8d641cb8dace4a74dd809 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/MOPOP.csv | 46656134b18512784fb210129a2f370b8df1c92dcb4f0bf27293d0b767e34e2d | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/MSPOP.csv | 75c4c1af12b4a10599350ff1c521a8bffa85423b452222c426a15fe6e7d88277 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/MTPOP.csv | 88c92fd50d5920ef632cd721cbe5b11ff0cc3caccd1ee22166b88670337577d9 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/NCPOP.csv | 32e463172a8490f12219b827fc2f27747748828c4ec2fce55aefe0d3a31b8c18 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/NDPOP.csv | 4c67e825227726c4c9bc69f8d3850228ada256351c1876453ae5f402534ea4e7 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/NEPOP.csv | 2b0b594afe31a5d0b363aeac8a4fba0eb47b080647a0a104422d194396656c70 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/NHPOP.csv | 14fb09acdd5b7052c5827444c0c96084aaa8c6f46cdadbd5b82fc288d19c50f6 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/NJPOP.csv | 16479c6592e9fd0568ffa3a41d2c6be59dc18e6f0bd3ce9d9c6ed9744a9a45a2 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/NMPOP.csv | 4d1ff8335747162be7d13583ffb17d19a00efca034afa130d920c823ee50b626 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/NVPOP.csv | 926a616d8c002f32d3a878141539ef901bb453f9479f71fb2ebad4263e22ba57 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/NYPOP.csv | 327834754a39b2e691334edacfafa6d22c98423407706612a1db71d45a98498e | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/OHPOP.csv | 491f5bea19702ee3bc7f5703064a5a222c40167bbfb793d7597b7c3c80972949 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/OKPOP.csv | 3962d434e07c177f0a18fdc2c1c72ded3afbfdacb092d3c39b0b411eac95e025 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/ORPOP.csv | 0a363c9674b157e79fc03407fb223854f1716360a448b6f07641f5b62a6dbfda | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/PAPOP.csv | 8807b2a498c3813c515b5369ae4e64b52c2bc615b1db2b4cd658e34665ea1c32 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/RIPOP.csv | 711f015614784c50aa931c0d161640231580563191401328062cd22a1dc4ed49 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/SCPOP.csv | 048671040dfb548f78fd33ab06f37eb8dd3780468a146be9e4b44590f613c884 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/SDPOP.csv | 1d9ce7945912dcc392deae64d2f34b0af5dee0190386005ce4e6e8be52ab41e0 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/TNPOP.csv | 5b0a1714f406f3d614ffc8dfe144658d0f3e314ac00cef55d8c5ccd5fea56404 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/TXPOP.csv | 08398c9d5210ed88f2dbb0a5770f759c43ec21a143c047df0549a39f94bdcade | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/UTPOP.csv | 0c1140c3bcc0f696a7fcff656393228d03ed5ac6aeb9f89d3a81b88649a366bf | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/VAPOP.csv | 467fda48c4083a86ea1c1a305918534640432606b9bd6c040c7700a9c14a0958 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/VTPOP.csv | e755b61e779f3381d5ea488f0cc3ee3aa8ed618aaec1e56ba4cf30182fab65df | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/WAPOP.csv | 74498e803575e54885b1100af61580a7350bf5264faffb7eb6a53348ff798362 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/WIPOP.csv | 4e8bcce968c02588176eb6cf6b5ab2cb5e48f7ab571db08024741c81a2020ab7 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/WVPOP.csv | 7dccf02037942bc67dcb69db96a337085ef3508d8a6b3f24ed140b33751bc206 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_pop/WYPOP.csv | c56d124026486d1b6dc31870d7585ebba04988fd597ae1c37b9fdb3fc276a2e8 | 126 rows; 1900-01-01..2025-01-01 |
+| fred_state_payroll_nsa/AKNAN.csv | 77ad2a6774595ef69c833500a606762ca37c126de4278ea1365d96f6642cdf0b | 800 rows; 1960-01-01..2026-08-01 |
+| fred_state_payroll_nsa/ALNAN.csv | 635d833e8107020debf27ac3314d6150aa4119bb97f50f06544f8a3e03ffbb29 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/ARNAN.csv | e9c7ba8b862d0e927da99b3268192bbaa496e7b3296fa50025271257cc15e157 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/AZNAN.csv | b276b3db724ab60fa84fbc5da5310fb17f007aae91a1e538b6827831365dd248 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/CANAN.csv | 45e27e888a6866bf69ff2ba65963ca60a61644bbdc244a62e5a2ce09b9eb32e3 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/CONAN.csv | 313edec95e61ce27276dac24a77f451829d63103d13678aa065061f26c149610 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/CTNAN.csv | 3a04390b64d58ac6c6d8278539f6a26aa0c091316f435fbc4afb43942738b770 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/DCNAN.csv | 5433ab67ca809ca4d5077b3d6364fe78df61e229d14c08a3948e9b301ba14647 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/DENAN.csv | 582bd7deb187f5a2f4ff3372717a03a3e2bb7fb4dfab7f15437e5907b0901e54 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/FLNAN.csv | a643c283088f9bce122adb1a41161e4a990141fce0f003f33a07eb36516d404b | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/GANAN.csv | 86fc6c7d594eff1a6a6e1ab1bc27bcd8163b3f040d0e5511103986cfe707d194 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/HINAN.csv | 74850f4f6520cd087854d4f51a014c1aa089d13cd4ec7d695b6e0f74986f4a55 | 824 rows; 1958-01-01..2026-08-01 |
+| fred_state_payroll_nsa/IANAN.csv | 58485851528b098e8dfcad02deb80b73c6bb40e574d8dccd50c1597bd8241c09 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/IDNAN.csv | a354a55eca80ea4547a7c4cc06d55cb1d644f2882a3ee955790bb3fc26441792 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/ILNAN.csv | 2b174a34c78588b78473613244ef88164ad54602a50047d2aaad3663c2acc967 | 956 rows; 1947-01-01..2026-08-01 |
+| fred_state_payroll_nsa/INNAN.csv | 47851ebb049e69c5874f765f328f8a72abccad3475beedacd575a3f2705a23de | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/KSNAN.csv | 9611ed4eb2e694cc7195e8c5bf7b2680204048990b30baa669e2da72b0feba5f | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/KYNAN.csv | a64efe175e0f2d1bfe56d56c24a7f538d12a03ebcec6000b3040270a522d5cee | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/LANAN.csv | 6ab96629c7605a8d520a4eabeed134ec499eb375ab7b28ea6a815c0cf97d078d | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/MANAN.csv | d6fc421f00b01c7e551c5d626e593a758f1e5f73e6c220fd35ebf3aaa503de6b | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/MDNAN.csv | e706531f9897cfd7dd6dd072196fcb20f41863ab97c2c4d5ec60208392d6761f | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/MENAN.csv | 666bbf8db07e81d6eb939a5f03464ed06f4f5e48c8d95b688b0c4a4be886f374 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/MINAN.csv | be1cde8c6da71edb062b0bb790c5b621e3cb1fd21163ad8f43c5e8517ba0c54e | 848 rows; 1956-01-01..2026-08-01 |
+| fred_state_payroll_nsa/MNNAN.csv | 8bfedc1d83c149a742fe9b87b75f634fca7c679c68d78fc990754954b1f068f3 | 920 rows; 1950-01-01..2026-08-01 |
+| fred_state_payroll_nsa/MONAN.csv | f9f498823bdaa5d8704a117f8550a426e46e1f3bdc74b5c8706858a19b3bb11f | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/MSNAN.csv | 7a2feaa1733a3751204c482881709a9eeebed938050dba8fbb6ee90bb976e1b3 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/MTNAN.csv | 80b599434cab66054bf50318995ff6fa88a225cb61766b38399e844a409c4262 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/NCNAN.csv | d6e76d3c28401c764f3ac584ae0f56973e250b13fe2115652e9ec94621ceb1f9 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/NDNAN.csv | 7beae81a623c9a35daa6aa1aace5f55eff2e46773e0401320eba9f07348324c6 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/NENAN.csv | c2a8f465f05c229b1bf2d61ea32bd64a68ba7c84907dc9cfa73cb292ebfeebd2 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/NHNAN.csv | 8ba2b6f68ef510ed73a296c65e72f8f803f7c9c45c53adc224c36c2949b6e0e3 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/NJNAN.csv | 459fa12ff7dee0bd41fc0f9f33e852a7eaab033c6f566aead7abafa46bf3611e | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/NMNAN.csv | 5a9ae48f1e4091cf3f2f4e529f9d04c9e690bdb15790797513a984fe39df0d3c | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/NVNAN.csv | 2930205a38508c22093c401a2021fe0090b9bbca65a067ec15508d066f8d8313 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/NYNAN.csv | c43dcb39090e15b87df610eca46dc6a24f9ccb6e2930dd30c6758a940de6dc96 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/OHNAN.csv | 316f97873ca0238dc89707ffb189798fc2db978b549969b7f767086f010a20d5 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/OKNAN.csv | 24e1349715f11550e965cbe97c21e477e012e69dc2ebbeb2e6fc43126053fafb | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/ORNAN.csv | 3d716451f84204fc29adcdec6a4bc2646711edd4b5fc03786a7b88c32d6c7ebc | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/PANAN.csv | 4f1dfb7cdcb5f24a02fe85d98f883f9701358ced5f445776cce13568093201e4 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/RINAN.csv | e36a2e5cd1d975d4db3b691867db0163dd6cc72155933e93097e1052fce1c375 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/SCNAN.csv | 4e81433ebb3991d182d13a1427014e4e62043044b5f410ab2f86d56f7540c925 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/SDNAN.csv | 4416fbafb0412f35a68b2f83334cb1789e386f0072cd10c26269cd52a0ab1ff3 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/TNNAN.csv | 0ea7965a5bc398b3450f12a2d64612792d10509dc8a4604c447e1d66bd96a300 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/TXNAN.csv | 981ef8e4980fca5c3552d9326b5cc91c2ce9cf4a4907f95e259858e9a5af2d88 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/UTNAN.csv | cd7d2e1c1cc8e06ff7251bf8ccbc26d0e2176c8c1797d68edf6fb81f617743c7 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/VANAN.csv | da82001fcb326ae69645d60cf0c38dd2e25579b529cf0963de2490f3c311053c | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/VTNAN.csv | d753abe85f65c58b186b2a8a75ec2b67c9eb29c06b59f815b0b4e8d1aeb4f850 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/WANAN.csv | fed76f36d6fc3aad51a6f8f86a75a087869b394e993aeab99fbd33aa4007c2f4 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/WINAN.csv | e6ffc7fd17c8a8f964c88a712ce9c0fafa39ddff4eb26b81e56cf754dc1a05db | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/WVNAN.csv | 6c3e2d6c1dbbe0b06ce97eaa0bc836c86efd9930b3c38c5c19dbc6473b8a7475 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_state_payroll_nsa/WYNAN.csv | e97384eae3388e1c010760fc6c9efc752ea63464b96f24826938afb2799191c5 | 1052 rows; 1939-01-01..2026-08-01 |
+| fred_targets/CPIAUCNS.csv | f79e3a78837142293449cee4a1a9b1da7be677fb3e989ffb2ef48e8e7cf4cdd7 | 1364 rows; 1913-01-01..2026-08-01 |
+| fred_targets/PCEPI.csv | 0f416a343a73a3b723af3315679596eecd7300abb433e8999c6a161d46c22e4f | 812 rows; 1959-01-01..2026-08-01 |
+| fred/DRBLT100S.csv | 753c9a5f64e4c89022be7929e46025deb890deda4372ad4c0c1df41a275c520a | 158 rows; 1987-01-01..2026-04-01 |
+| fred/CORBLT100S.csv | 5eec74d194f0e28c4a23f2927a2782057642738c9fd7e67d10e584f8cbbe8660 | 166 rows; 1985-01-01..2026-04-01 |
+| dol_ar539/ar539.csv | db7dc790662f7feed975651f2f44d44c86b7541d30b776c9621db8b5e8d81ffb | 112498 rows; AK..WY |
+| dol_ar539/eta539_layout.pdf | fba2219a2d81b2a67afa1d55cb37ce95b1c8c9e871a098aeaf4192dbdb386cb2 |  |
+| challenger/challenger_report_pdf_index.csv | 08be36020942e4ceca35117c7768e0f055982f04e58a8ba04e1aeadd1d233f9e | 39 rows; 2013-01..2026-09 |
+| warn/icpsr_e155161_metadata/datacite_10.3886_icpsr155161.v111.json | e8fc52cc6c37f7ebe84cf9fe71921a32526f9b01a6af6d5b5a97fa734cddccc3 |  |
+| warn/icpsr_e155161_metadata/e155161_versions_from_datacite.csv | 920dc41c9442f81b54350c51ca95c6aeb95c42fa30aa0b81788a87e672f063ec | 144 rows; 10.3886/e155161..10.3886/icpsr155161.v111 |

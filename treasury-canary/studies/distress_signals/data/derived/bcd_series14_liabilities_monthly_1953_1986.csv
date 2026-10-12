@@ -1,0 +1,409 @@
+month,value_mil_usd,source,fred_value,check_notes
+1953-01,23.3,text+image,23.31,txt=clean; ocr2=agree; Q1 printed 81.7 sum 81.7 d+0.0 ok; FRED 23.31 rounds to 23.3 match
+1953-02,27.3,text+image,27.27,txt=clean; ocr2=agree; Q1 printed 81.7 sum 81.7 d+0.0 ok; FRED 27.27 rounds to 27.3 match
+1953-03,31.1,text+image,31.08,txt=clean; ocr2=agree; Q1 printed 81.7 sum 81.7 d+0.0 ok; FRED 31.08 rounds to 31.1 match
+1953-04,27.5,text+image,27.52,txt=clean; ocr2=agree; Q2 printed 92.7 sum 92.7 d+0.0 ok; FRED 27.52 rounds to 27.5 match
+1953-05,32.8,image,32.79,txt=garbled'32.{'; ocr2=agree; Q2 printed 92.7 sum 92.7 d+0.0 ok; FRED 32.79 rounds to 32.8 match
+1953-06,32.4,image,32.38,txt=missing; ocr2=agree; Q2 printed 92.7 sum 92.7 d+0.0 ok; FRED 32.38 rounds to 32.4 match
+1953-07,39.8,image,39.83,txt=missing; ocr2=agree; Q3 printed 102.2 sum 102.1 d-0.1 ok; FRED 39.83 rounds to 39.8 match
+1953-08,28.5,image,28.53,txt=missing; ocr2=agree; Q3 printed 102.2 sum 102.1 d-0.1 ok; FRED 28.53 rounds to 28.5 match
+1953-09,33.8,image,33.82,txt=missing; ocr2=agree; Q3 printed 102.2 sum 102.1 d-0.1 ok; FRED 33.82 rounds to 33.8 match
+1953-10,37.1,image,37.08,txt=missing; ocr2=agree; Q4 printed 117.6 sum 117.7 d+0.1 ok; FRED 37.08 rounds to 37.1 match
+1953-11,36.8,text+image,36.80,txt=clean; ocr2=agree; Q4 printed 117.6 sum 117.7 d+0.1 ok; FRED 36.80 rounds to 36.8 match
+1953-12,43.8,text+image,43.75,txt=clean; ocr2=agree; Q4 printed 117.6 sum 117.7 d+0.1 ok; ANNUAL printed 394.2 sum 394.2 d+0.0 ok; FRED 43.75 rounds to 43.8 match (x.x5 tie)
+1954-01,29.6,text+image,29.59,txt=clean; ocr2=agree; Q1 printed 134.6 sum 134.7 d+0.1 ok; FRED 29.59 rounds to 29.6 match
+1954-02,47.8,text+image,47.77,txt=clean; ocr2=agree; Q1 printed 134.6 sum 134.7 d+0.1 ok; FRED 47.77 rounds to 47.8 match
+1954-03,57.3,text+image,57.28,txt=clean; ocr2=agree; Q1 printed 134.6 sum 134.7 d+0.1 ok; FRED 57.28 rounds to 57.3 match
+1954-04,42.5,text+image,42.51,txt=clean; ocr2=agree; Q2 printed 122.6 sum 122.6 d+0.0 ok; FRED 42.51 rounds to 42.5 match
+1954-05,38.5,text+image,38.49,txt=clean; ocr2=agree; Q2 printed 122.6 sum 122.6 d+0.0 ok; FRED 38.49 rounds to 38.5 match
+1954-06,41.6,text+image,41.61,txt=split'41 . 6'; ocr2=agree; Q2 printed 122.6 sum 122.6 d+0.0 ok; FRED 41.61 rounds to 41.6 match
+1954-07,32.2,text+image,32.23,txt=clean; ocr2=agree; Q3 printed 101.2 sum 101.2 d+0.0 ok; FRED 32.23 rounds to 32.2 match
+1954-08,32.6,text+image,32.58,txt=clean; ocr2=agree; Q3 printed 101.2 sum 101.2 d+0.0 ok; FRED 32.58 rounds to 32.6 match
+1954-09,36.4,text+image,36.38,txt=clean; ocr2=agree; Q3 printed 101.2 sum 101.2 d+0.0 ok; FRED 36.38 rounds to 36.4 match
+1954-10,29.0,text+image,29.00,txt=clean; ocr2=agree; Q4 printed 104.2 sum 104.2 d+0.0 ok; FRED 29.00 rounds to 29.0 match
+1954-11,35.1,text+image,35.07,txt=clean; ocr2=agree; Q4 printed 104.2 sum 104.2 d+0.0 ok; FRED 35.07 rounds to 35.1 match
+1954-12,40.1,text+image,40.10,txt=clean; ocr2=agree; Q4 printed 104.2 sum 104.2 d+0.0 ok; ANNUAL printed 462.6 sum 462.7 d+0.1 ok; FRED 40.10 rounds to 40.1 match
+1955-01,37.9,image,37.87,txt=missing; ocr2=agree; Q1 printed 121.1 sum 121.2 d+0.1 ok; FRED 37.87 rounds to 37.9 match
+1955-02,42.1,image,42.06,txt=missing; ocr2=agree; Q1 printed 121.1 sum 121.2 d+0.1 ok; FRED 42.06 rounds to 42.1 match
+1955-03,41.2,image,41.21,txt=missing; ocr2=agree; Q1 printed 121.1 sum 121.2 d+0.1 ok; FRED 41.21 rounds to 41.2 match
+1955-04,36.0,image,35.97,txt=missing; ocr2=agree; Q2 printed 107.4 sum 107.4 d+0.0 ok; FRED 35.97 rounds to 36.0 match
+1955-05,34.7,image,34.71,txt=missing; ocr2=agree; Q2 printed 107.4 sum 107.4 d+0.0 ok; FRED 34.71 rounds to 34.7 match
+1955-06,36.7,image,36.67,txt=missing; ocr2=agree; Q2 printed 107.4 sum 107.4 d+0.0 ok; FRED 36.67 rounds to 36.7 match
+1955-07,32.5,image,32.54,txt=missing; ocr2=agree; Q3 printed 101.7 sum 101.6 d-0.1 ok; FRED 32.54 rounds to 32.5 match
+1955-08,36.0,text+image,36.03,txt=clean; ocr2=agree; Q3 printed 101.7 sum 101.6 d-0.1 ok; FRED 36.03 rounds to 36.0 match
+1955-09,33.1,text+image,33.12,txt=clean; ocr2=agree; Q3 printed 101.7 sum 101.6 d-0.1 ok; FRED 33.12 rounds to 33.1 match
+1955-10,34.8,text+image,34.78,txt=clean; ocr2=agree; Q4 printed 119.2 sum 119.2 d+0.0 ok; FRED 34.78 rounds to 34.8 match
+1955-11,42.8,text+image,42.78,txt=clean; ocr2=agree; Q4 printed 119.2 sum 119.2 d+0.0 ok; FRED 42.78 rounds to 42.8 match
+1955-12,41.6,image,41.64,txt=missing; ocr2=agree; Q4 printed 119.2 sum 119.2 d+0.0 ok; ANNUAL printed 449.4 sum 449.4 d+0.0 ok; FRED 41.64 rounds to 41.6 match
+1956-01,42.9,text+image,42.89,txt=clean; ocr2=agree; Q1 printed 134.7 sum 134.7 d+0.0 ok; FRED 42.89 rounds to 42.9 match
+1956-02,49.2,text+image,49.19,txt=clean; ocr2=agree; Q1 printed 134.7 sum 134.7 d+0.0 ok; FRED 49.19 rounds to 49.2 match
+1956-03,42.6,text+image,42.62,txt=clean; ocr2=agree; Q1 printed 134.7 sum 134.7 d+0.0 ok; FRED 42.62 rounds to 42.6 match
+1956-04,41.9,text+image,41.87,txt=clean; ocr2=agree; Q2 printed 144.8 sum 144.8 d+0.0 ok; FRED 41.87 rounds to 41.9 match
+1956-05,59.9,image,59.90,txt=garbled'59.«'; ocr2=agree; Q2 printed 144.8 sum 144.8 d+0.0 ok; FRED 59.90 rounds to 59.9 match
+1956-06,43.0,text+image,43.01,txt=clean; ocr2=agree; Q2 printed 144.8 sum 144.8 d+0.0 ok; FRED 43.01 rounds to 43.0 match
+1956-07,48.7,text+image,48.69,txt=clean; ocr2=agree; Q3 printed 143.0 sum 143.0 d+0.0 ok; FRED 48.69 rounds to 48.7 match
+1956-08,55.0,text+image,55.04,txt=clean; ocr2=agree; Q3 printed 143.0 sum 143.0 d+0.0 ok; FRED 55.04 rounds to 55.0 match
+1956-09,39.3,text+image,39.31,txt=clean; ocr2=agree; Q3 printed 143.0 sum 143.0 d+0.0 ok; FRED 39.31 rounds to 39.3 match
+1956-10,50.0,text+image,50.00,txt=clean; ocr2=agree; Q4 printed 140.2 sum 140.2 d+0.0 ok; FRED 50.00 rounds to 50.0 match
+1956-11,39.9,text+image,39.89,txt=clean; ocr2=agree; Q4 printed 140.2 sum 140.2 d+0.0 ok; FRED 39.89 rounds to 39.9 match
+1956-12,50.3,image,50.28,txt=garbled'5o!3'; ocr2=agree; Q4 printed 140.2 sum 140.2 d+0.0 ok; ANNUAL printed 562.7 sum 562.7 d+0.0 ok; FRED 50.28 rounds to 50.3 match
+1957-01,54.1,text+image,54.06,txt=clean; ocr2=agree; Q1 printed 175.3 sum 175.3 d+0.0 ok; FRED 54.06 rounds to 54.1 match
+1957-02,65.4,text+image,65.41,txt=clean; ocr2=agree; Q1 printed 175.3 sum 175.3 d+0.0 ok; FRED 65.41 rounds to 65.4 match
+1957-03,55.8,text+image,55.83,txt=clean; ocr2=agree; Q1 printed 175.3 sum 175.3 d+0.0 ok; FRED 55.83 rounds to 55.8 match
+1957-04,57.1,text+image,57.10,txt=clean; ocr2=agree; Q2 printed 161.1 sum 161.1 d+0.0 ok; FRED 57.10 rounds to 57.1 match
+1957-05,52.6,text+image,52.55,txt=clean; ocr2=agree; Q2 printed 161.1 sum 161.1 d+0.0 ok; FRED 52.55 rounds to 52.6 match (x.x5 tie)
+1957-06,51.4,text+image,51.45,txt=clean; ocr2=agree; Q2 printed 161.1 sum 161.1 d+0.0 ok; FRED 51.45 is an x.x5 tie; BCD 51.4 = round-half-down (strict half-up 51.5 differs)
+1957-07,44.3,text+image,44.30,txt=clean; ocr2=agree; Q3 printed 133.2 sum 133.2 d+0.0 ok; FRED 44.30 rounds to 44.3 match
+1957-08,43.5,text+image,43.51,txt=clean; ocr2=agree; Q3 printed 133.2 sum 133.2 d+0.0 ok; FRED 43.51 rounds to 43.5 match
+1957-09,45.4,text+image,45.42,txt=clean; ocr2=agree; Q3 printed 133.2 sum 133.2 d+0.0 ok; FRED 45.42 rounds to 45.4 match
+1957-10,47.4,text+image,47.43,txt=split'47 . 4'; ocr2=agree; Q4 printed 145.6 sum 145.6 d+0.0 ok; FRED 47.43 rounds to 47.4 match
+1957-11,52.9,text+image,52.90,txt=clean; ocr2=agree; Q4 printed 145.6 sum 145.6 d+0.0 ok; FRED 52.90 rounds to 52.9 match
+1957-12,45.3,image,45.32,txt=garbled'45^'; ocr2=agree; Q4 printed 145.6 sum 145.6 d+0.0 ok; ANNUAL printed 615.3 sum 615.2 d-0.1 ok; FRED 45.32 rounds to 45.3 match
+1958-01,64.4,text+image,64.44,txt=clean; ocr2=agree; Q1 printed 201.3 sum 201.3 d+0.0 ok; FRED 64.44 rounds to 64.4 match
+1958-02,65.3,text+image,65.30,txt=clean; ocr2=agree; Q1 printed 201.3 sum 201.3 d+0.0 ok; FRED 65.30 rounds to 65.3 match
+1958-03,71.6,text+image,71.56,txt=clean; ocr2=agree; Q1 printed 201.3 sum 201.3 d+0.0 ok; FRED 71.56 rounds to 71.6 match
+1958-04,84.0,text+image,83.98,txt=clean; ocr2=agree; Q2 printed 201.6 sum 201.6 d+0.0 ok; FRED 83.98 rounds to 84.0 match
+1958-05,56.2,text+image,56.25,txt=clean; ocr2=agree; Q2 printed 201.6 sum 201.6 d+0.0 ok; FRED 56.25 is an x.x5 tie; BCD 56.2 = round-half-down (strict half-up 56.3 differs)
+1958-06,61.4,text+image,61.44,txt=clean; ocr2=agree; Q2 printed 201.6 sum 201.6 d+0.0 ok; FRED 61.44 rounds to 61.4 match
+1958-07,65.4,text+image,65.38,txt=clean; ocr2=agree; Q3 printed 164.2 sum 164.3 d+0.1 ok; FRED 65.38 rounds to 65.4 match
+1958-08,50.8,text+image,50.76,txt=clean; ocr2=agree; Q3 printed 164.2 sum 164.3 d+0.1 ok; FRED 50.76 rounds to 50.8 match
+1958-09,48.1,text+image,48.10,txt=clean; ocr2=agree; Q3 printed 164.2 sum 164.3 d+0.1 ok; FRED 48.10 rounds to 48.1 match
+1958-10,47.3,text+image,47.27,txt=split'47 . 3'; ocr2=agree; Q4 printed 161.1 sum 161.1 d+0.0 ok; FRED 47.27 rounds to 47.3 match
+1958-11,56.7,text+image,56.72,txt=clean; ocr2=agree; Q4 printed 161.1 sum 161.1 d+0.0 ok; FRED 56.72 rounds to 56.7 match
+1958-12,57.1,text+image,57.07,txt=clean; ocr2=agree; Q4 printed 161.1 sum 161.1 d+0.0 ok; ANNUAL printed 728.2 sum 728.3 d+0.1 ok; FRED 57.07 rounds to 57.1 match
+1959-01,73.6,text+image,73.56,txt=clean; ocr2=agree; Q1 printed 197.2 sum 197.2 d+0.0 ok; FRED 73.56 rounds to 73.6 match
+1959-02,58.6,text+image,58.59,txt=clean; ocr2=agree; Q1 printed 197.2 sum 197.2 d+0.0 ok; FRED 58.59 rounds to 58.6 match
+1959-03,65.0,text+image,65.05,txt=clean; ocr2=agree; Q1 printed 197.2 sum 197.2 d+0.0 ok; FRED 65.05 is an x.x5 tie; BCD 65.0 = round-half-down (strict half-up 65.1 differs)
+1959-04,71.9,text+image,71.91,txt=clean; ocr2=agree; Q2 printed 172.0 sum 172.0 d+0.0 ok; FRED 71.91 rounds to 71.9 match
+1959-05,50.9,image,50.92,txt=garbled'50. c'; ocr2=agree; Q2 printed 172.0 sum 172.0 d+0.0 ok; FRED 50.92 rounds to 50.9 match
+1959-06,49.2,text+image,49.20,txt=clean; ocr2=agree; Q2 printed 172.0 sum 172.0 d+0.0 ok; FRED 49.20 rounds to 49.2 match
+1959-07,51.2,text+image,51.20,txt=split'51 . 2'; ocr2=agree; Q3 printed 160.4 sum 160.4 d+0.0 ok; FRED 51.20 rounds to 51.2 match
+1959-08,54.5,text+image,54.50,txt=clean; ocr2=agree; Q3 printed 160.4 sum 160.4 d+0.0 ok; FRED 54.50 rounds to 54.5 match
+1959-09,54.7,text+image,54.74,txt=clean; ocr2=agree; Q3 printed 160.4 sum 160.4 d+0.0 ok; FRED 54.74 rounds to 54.7 match
+1959-10,50.4,text+image,50.38,txt=clean; ocr2=agree; Q4 printed 163.2 sum 163.2 d+0.0 ok; FRED 50.38 rounds to 50.4 match
+1959-11,53.2,text+image,53.21,txt=clean; ocr2=agree; Q4 printed 163.2 sum 163.2 d+0.0 ok; FRED 53.21 rounds to 53.2 match
+1959-12,59.6,text+image,59.56,txt=clean; ocr2=agree; Q4 printed 163.2 sum 163.2 d+0.0 ok; ANNUAL printed 692.8 sum 692.8 d+0.0 ok; FRED 59.56 rounds to 59.6 match
+1960-01,53.7,text+image,53.67,txt=clean; ocr2=agree; Q1 printed 184.8 sum 184.8 d+0.0 ok; FRED 53.67 rounds to 53.7 match
+1960-02,60.9,text+image,60.94,txt=clean; ocr2=agree; Q1 printed 184.8 sum 184.8 d+0.0 ok; FRED 60.94 rounds to 60.9 match
+1960-03,70.2,text+image,70.19,txt=clean; ocr2=agree; Q1 printed 184.8 sum 184.8 d+0.0 ok; FRED 70.19 rounds to 70.2 match
+1960-04,69.2,image,69.19,txt=missing; ocr2=agree; Q2 printed 269.0 sum 268.9 d-0.1 ok; FRED 69.19 rounds to 69.2 match
+1960-05,73.3,image,73.31,txt=garbled'73.;'(displaced line); ocr2=agree; Q2 printed 269.0 sum 268.9 d-0.1 ok; FRED 73.31 rounds to 73.3 match
+1960-06,126.4,image,126.45,txt=missing; ocr2=agree; Q2 printed 269.0 sum 268.9 d-0.1 ok; FRED 126.45 is an x.x5 tie; BCD 126.4 = round-half-down (strict half-up 126.5 differs)
+1960-07,61.7,image,61.73,txt=displaced-OCR-line'61.7'(agrees once re-assigned); ocr2=agree; Q3 printed 239.9 sum 239.9 d+0.0 ok; FRED 61.73 rounds to 61.7 match
+1960-08,97.6,image,97.59,txt=displaced-OCR-line'97.6'(agrees once re-assigned); ocr2=agree; Q3 printed 239.9 sum 239.9 d+0.0 ok; FRED 97.59 rounds to 97.6 match
+1960-09,80.6,image,80.60,txt=displaced-OCR-line'80 . 6'(agrees once re-assigned); ocr2=agree; Q3 printed 239.9 sum 239.9 d+0.0 ok; FRED 80.60 rounds to 80.6 match
+1960-10,81.5,image,81.51,txt=displaced-OCR-line'81.5'(agrees once re-assigned); ocr2=agree; Q4 printed 244.9 sum 245.0 d+0.1 ok; FRED 81.51 rounds to 81.5 match
+1960-11,84.5,image,84.46,txt=displaced-OCR-line'84.5'(agrees once re-assigned); ocr2=agree; Q4 printed 244.9 sum 245.0 d+0.1 ok; FRED 84.46 rounds to 84.5 match
+1960-12,79.0,image,78.97,txt=displaced-OCR-line'7 9.0'(agrees once re-assigned); ocr2=agree; Q4 printed 244.9 sum 245.0 d+0.1 ok; ANNUAL printed 938.6 sum 938.6 d+0.0 ok; FRED 78.97 rounds to 79.0 match
+1961-01,81.5,text+image,81.52,txt=clean; ocr2=agree; Q1 printed 296.2 sum 296.2 d+0.0 ok; FRED 81.52 rounds to 81.5 match
+1961-02,88.1,text+image,88.08,txt=clean; ocr2=agree; Q1 printed 296.2 sum 296.2 d+0.0 ok; FRED 88.08 rounds to 88.1 match
+1961-03,126.6,text+image,126.62,txt=clean; ocr2=agree; Q1 printed 296.2 sum 296.2 d+0.0 ok; FRED 126.62 rounds to 126.6 match
+1961-04,86.1,text+image,86.11,txt=clean; ocr2=agree; Q2 printed 250.4 sum 250.4 d+0.0 ok; FRED 86.11 rounds to 86.1 match
+1961-05,80.5,image,80.47,txt=displaced-OCR-line'80.5'(agrees once re-assigned); ocr2=agree; Q2 printed 250.4 sum 250.4 d+0.0 ok; FRED 80.47 rounds to 80.5 match
+1961-06,83.8,image,83.83,txt=garbled'83.'8'; ocr2=agree; Q2 printed 250.4 sum 250.4 d+0.0 ok; FRED 83.83 rounds to 83.8 match
+1961-07,69.2,image,69.17,txt=displaced-OCR-line'69.2'(agrees once re-assigned); ocr2=agree; Q3 printed 288.5 sum 288.6 d+0.1 ok; FRED 69.17 rounds to 69.2 match
+1961-08,102.7,image,102.69,txt=displaced-OCR-line'102.7'(agrees once re-assigned); ocr2=agree; Q3 printed 288.5 sum 288.6 d+0.1 ok; FRED 102.69 rounds to 102.7 match
+1961-09,116.7,image,116.66,txt=displaced-OCR-line'116.7'(agrees once re-assigned); ocr2=agree; Q3 printed 288.5 sum 288.6 d+0.1 ok; FRED 116.66 rounds to 116.7 match
+1961-10,70.3,image,70.26,txt=displaced-OCR-line'70.3'(agrees once re-assigned); ocr2=agree; Q4 printed 255.0 sum 255.0 d+0.0 ok; FRED 70.26 rounds to 70.3 match
+1961-11,119.2,image,119.21,txt=displaced-OCR-line'119.2'(agrees once re-assigned); ocr2=agree; Q4 printed 255.0 sum 255.0 d+0.0 ok; FRED 119.21 rounds to 119.2 match
+1961-12,65.5,image,65.49,txt=displaced-OCR-line'65.5'(agrees once re-assigned); ocr2=agree; Q4 printed 255.0 sum 255.0 d+0.0 ok; ANNUAL printed 1090.1 sum 1090.2 d+0.1 ok; FRED 65.49 rounds to 65.5 match
+1962-01,106.6,text+image,106.61,txt=split'106 .6'; ocr2=agree; Q1 printed 278.0 sum 278.0 d+0.0 ok; FRED 106.61 rounds to 106.6 match
+1962-02,90.5,text+image,90.50,txt=clean; ocr2=agree; Q1 printed 278.0 sum 278.0 d+0.0 ok; FRED 90.50 rounds to 90.5 match
+1962-03,80.9,text+image,80.88,txt=clean; ocr2=agree; Q1 printed 278.0 sum 278.0 d+0.0 ok; FRED 80.88 rounds to 80.9 match
+1962-04,121.8,text+image,121.83,txt=clean; ocr2=agree; Q2 printed 301.8 sum 301.8 d+0.0 ok; FRED 121.83 rounds to 121.8 match
+1962-05,91.5,text+image,91.51,txt=split'91 .5'; ocr2=agree; Q2 printed 301.8 sum 301.8 d+0.0 ok; FRED 91.51 rounds to 91.5 match
+1962-06,88.5,text+image,88.49,txt=clean; ocr2=agree; Q2 printed 301.8 sum 301.8 d+0.0 ok; FRED 88.49 rounds to 88.5 match
+1962-07,91.6,text+image,91.57,txt=clean; ocr2=agree; Q3 printed 334.6 sum 334.6 d+0.0 ok; FRED 91.57 rounds to 91.6 match
+1962-08,146.8,text+image,146.83,txt=clean; ocr2=agree; Q3 printed 334.6 sum 334.6 d+0.0 ok; FRED 146.83 rounds to 146.8 match
+1962-09,96.2,text+image,96.16,txt=clean; ocr2=agree; Q3 printed 334.6 sum 334.6 d+0.0 ok; FRED 96.16 rounds to 96.2 match
+1962-10,119.1,text+image,119.09,txt=clean; ocr2=agree; Q4 printed 299.2 sum 299.2 d+0.0 ok; FRED 119.09 rounds to 119.1 match
+1962-11,98.8,text+image,98.84,txt=clean; ocr2=agree; Q4 printed 299.2 sum 299.2 d+0.0 ok; FRED 98.84 rounds to 98.8 match
+1962-12,81.3,text+image,81.28,txt=split'81 . 3'; ocr2=agree; Q4 printed 299.2 sum 299.2 d+0.0 ok; ANNUAL printed 1213.6 sum 1213.6 d+0.0 ok; FRED 81.28 rounds to 81.3 match
+1963-01,161.0,text+image,160.96,txt=clean; ocr2=agree; Q1 printed 353.4 sum 353.4 d+0.0 ok; FRED 160.96 rounds to 161.0 match
+1963-02,94.7,text+image,94.72,txt=clean; ocr2=agree; Q1 printed 353.4 sum 353.4 d+0.0 ok; FRED 94.72 rounds to 94.7 match
+1963-03,97.7,text+image,97.70,txt=clean; ocr2=agree; Q1 printed 353.4 sum 353.4 d+0.0 ok; FRED 97.70 rounds to 97.7 match
+1963-04,100.8,image,100.76,txt=missing; ocr2=agree; Q2 printed 305.2 sum 305.3 d+0.1 ok; FRED 100.76 rounds to 100.8 match
+1963-05,118.3,image,118.27,txt=missing; ocr2=agree; Q2 printed 305.2 sum 305.3 d+0.1 ok; FRED 118.27 rounds to 118.3 match
+1963-06,86.2,image,86.15,txt=missing; ocr2=agree; Q2 printed 305.2 sum 305.3 d+0.1 ok; FRED 86.15 rounds to 86.2 match (x.x5 tie)
+1963-07,120.5,text+image,120.51,txt=clean; ocr2=agree; Q3 printed 271.7 sum 271.6 d-0.1 ok; FRED 120.51 rounds to 120.5 match
+1963-08,65.2,text+image,65.23,txt=clean; ocr2=agree; Q3 printed 271.7 sum 271.6 d-0.1 ok; FRED 65.23 rounds to 65.2 match
+1963-09,85.9,text+image,85.92,txt=clean; ocr2=agree; Q3 printed 271.7 sum 271.6 d-0.1 ok; FRED 85.92 rounds to 85.9 match
+1963-10,91.8,text+image,91.83,txt=split'91 . 8'; ocr2=agree; Q4 printed 422.4 sum 422.3 d-0.1 ok; FRED 91.83 rounds to 91.8 match
+1963-11,262.1,text+image,262.11,txt=clean; ocr2=agree; Q4 printed 422.4 sum 422.3 d-0.1 ok; FRED 262.11 rounds to 262.1 match
+1963-12,68.4,text+image,68.43,txt=clean; ocr2=agree; Q4 printed 422.4 sum 422.3 d-0.1 ok; ANNUAL printed 1352.6 sum 1352.6 d+0.0 ok; FRED 68.43 rounds to 68.4 match
+1964-01,96.7,text+image,96.73,txt=clean; ocr2=agree; Q1 printed 331.7 sum 331.6 d-0.1 ok; FRED 96.73 rounds to 96.7 match
+1964-02,123.9,text+image,123.94,txt=clean; ocr2=agree; Q1 printed 331.7 sum 331.6 d-0.1 ok; FRED 123.94 rounds to 123.9 match
+1964-03,111.0,text+image,111.00,txt=clean; ocr2=agree; Q1 printed 331.7 sum 331.6 d-0.1 ok; FRED 111.00 rounds to 111.0 match
+1964-04,112.9,text+image,112.88,txt=clean; ocr2=agree; Q2 printed 350.8 sum 350.8 d+0.0 ok; FRED 112.88 rounds to 112.9 match
+1964-05,93.4,image,93.42,txt=garbled'93 !4'; ocr2=agree; Q2 printed 350.8 sum 350.8 d+0.0 ok; FRED 93.42 rounds to 93.4 match
+1964-06,144.5,image,144.50,txt=garbled'144! 5'; ocr2=agree; Q2 printed 350.8 sum 350.8 d+0.0 ok; FRED 144.50 rounds to 144.5 match
+1964-07,125.6,text+image,125.64,txt=clean; ocr2=agree; Q3 printed 335.4 sum 335.4 d+0.0 ok; FRED 125.64 rounds to 125.6 match
+1964-08,95.2,text+image,95.18,txt=clean; ocr2=agree; Q3 printed 335.4 sum 335.4 d+0.0 ok; FRED 95.18 rounds to 95.2 match
+1964-09,114.6,text+image,114.56,txt=clean; ocr2=agree; Q3 printed 335.4 sum 335.4 d+0.0 ok; FRED 114.56 rounds to 114.6 match
+1964-10,93.8,text+image,93.77,txt=clean; ocr2=agree; Q4 printed 311.4 sum 311.4 d+0.0 ok; FRED 93.77 rounds to 93.8 match
+1964-11,119.3,text+image,119.32,txt=clean; ocr2=agree; Q4 printed 311.4 sum 311.4 d+0.0 ok; FRED 119.32 rounds to 119.3 match
+1964-12,98.3,text+image,98.28,txt=clean; ocr2=agree; Q4 printed 311.4 sum 311.4 d+0.0 ok; ANNUAL printed 1329.2 sum 1329.2 d+0.0 ok; FRED 98.28 rounds to 98.3 match
+1965-01,89.3,text+image,89.27,txt=clean; ocr2=agree; Q1 printed 347.8 sum 347.9 d+0.1 ok; FRED 89.27 rounds to 89.3 match
+1965-02,112.0,text+image,111.98,txt=clean; ocr2=agree; Q1 printed 347.8 sum 347.9 d+0.1 ok; FRED 111.98 rounds to 112.0 match
+1965-03,146.6,text+image,146.58,txt=clean; ocr2=agree; Q1 printed 347.8 sum 347.9 d+0.1 ok; FRED 146.58 rounds to 146.6 match
+1965-04,83.2,text+image,83.25,txt=clean; ocr2=agree; Q2 printed 360.9 sum 360.9 d+0.0 ok; FRED 83.25 is an x.x5 tie; BCD 83.2 = round-half-down (strict half-up 83.3 differs)
+1965-05,133.1,text+image,133.11,txt=clean; ocr2=agree; Q2 printed 360.9 sum 360.9 d+0.0 ok; FRED 133.11 rounds to 133.1 match
+1965-06,144.6,text+image,144.61,txt=clean; ocr2=agree; Q2 printed 360.9 sum 360.9 d+0.0 ok; FRED 144.61 rounds to 144.6 match
+1965-07,121.5,text+image,121.48,txt=clean; ocr2=agree; Q3 printed 361.5 sum 361.5 d+0.0 ok; FRED 121.48 rounds to 121.5 match
+1965-08,135.0,text+image,135.04,txt=clean; ocr2=agree; Q3 printed 361.5 sum 361.5 d+0.0 ok; FRED 135.04 rounds to 135.0 match
+1965-09,105.0,text+image,104.98,txt=clean; ocr2=agree; Q3 printed 361.5 sum 361.5 d+0.0 ok; FRED 104.98 rounds to 105.0 match
+1965-10,82.1,text+image,82.07,txt=clean; ocr2=agree; Q4 printed 251.4 sum 251.4 d+0.0 ok; FRED 82.07 rounds to 82.1 match
+1965-11,71.7,text+image,71.72,txt=clean; ocr2=agree; Q4 printed 251.4 sum 251.4 d+0.0 ok; FRED 71.72 rounds to 71.7 match
+1965-12,97.6,text+image,97.58,txt=clean; ocr2=agree; Q4 printed 251.4 sum 251.4 d+0.0 ok; ANNUAL printed 1321.6 sum 1321.7 d+0.1 ok; FRED 97.58 rounds to 97.6 match
+1966-01,103.2,text+image,103.18,txt=clean; ocr2=agree; Q1 printed 302.2 sum 302.2 d+0.0 ok; FRED 103.18 rounds to 103.2 match
+1966-02,95.5,text+image,95.54,txt=clean; ocr2=agree; Q1 printed 302.2 sum 302.2 d+0.0 ok; FRED 95.54 rounds to 95.5 match
+1966-03,103.5,text+image,103.47,txt=clean; ocr2=agree; Q1 printed 302.2 sum 302.2 d+0.0 ok; FRED 103.47 rounds to 103.5 match
+1966-04,110.1,text+image,110.14,txt=clean; ocr2=agree; Q2 printed 330.1 sum 330.1 d+0.0 ok; FRED 110.14 rounds to 110.1 match
+1966-05,96.4,text+image,96.38,txt=split'96 .4'; ocr2=agree; Q2 printed 330.1 sum 330.1 d+0.0 ok; FRED 96.38 rounds to 96.4 match
+1966-06,123.6,text+image,123.58,txt=split'123 . 6'; ocr2=agree; Q2 printed 330.1 sum 330.1 d+0.0 ok; FRED 123.58 rounds to 123.6 match
+1966-07,69.9,text+image,69.88,txt=clean; ocr2=agree; Q3 printed 377.1 sum 377.2 d+0.1 ok; FRED 69.88 rounds to 69.9 match
+1966-08,178.1,text+image,178.09,txt=clean; ocr2=agree; Q3 printed 377.1 sum 377.2 d+0.1 ok; FRED 178.09 rounds to 178.1 match
+1966-09,129.2,text+image,129.16,txt=clean; ocr2=agree; Q3 printed 377.1 sum 377.2 d+0.1 ok; FRED 129.16 rounds to 129.2 match
+1966-10,108.0,text+image,108.05,txt=clean; ocr2=agree; Q4 printed 376.2 sum 376.2 d+0.0 ok; FRED 108.05 is an x.x5 tie; BCD 108.0 = round-half-down (strict half-up 108.1 differs)
+1966-11,106.7,text+image,106.73,txt=clean; ocr2=agree; Q4 printed 376.2 sum 376.2 d+0.0 ok; FRED 106.73 rounds to 106.7 match
+1966-12,161.5,text+image,161.48,txt=split'161 . 5'; ocr2=agree; Q4 printed 376.2 sum 376.2 d+0.0 ok; ANNUAL printed 1385.6 sum 1385.7 d+0.1 ok; FRED 161.48 rounds to 161.5 match
+1967-01,108.2,image,108.17,txt=missing; ocr2=agree; Q1 printed 340.9 sum 340.9 d+0.0 ok; FRED 108.17 rounds to 108.2 match
+1967-02,113.4,text+image,113.45,txt=clean; ocr2=agree; Q1 printed 340.9 sum 340.9 d+0.0 ok; FRED 113.45 is an x.x5 tie; BCD 113.4 = round-half-down (strict half-up 113.5 differs)
+1967-03,119.3,text+image,119.32,txt=clean; ocr2=agree; Q1 printed 340.9 sum 340.9 d+0.0 ok; FRED 119.32 rounds to 119.3 match
+1967-04,103.8,text+image,103.82,txt=clean; ocr2=agree; Q2 printed 301.8 sum 301.8 d+0.0 ok; FRED 103.82 rounds to 103.8 match
+1967-05,93.4,image,93.37,txt=missing; ocr2=agree; Q2 printed 301.8 sum 301.8 d+0.0 ok; FRED 93.37 rounds to 93.4 match
+1967-06,104.6,image,104.64,txt=missing; ocr2=agree; Q2 printed 301.8 sum 301.8 d+0.0 ok; FRED 104.64 rounds to 104.6 match
+1967-07,72.6,image,72.55,txt=missing; ocr2=agree; Q3 printed 275.4 sum 275.4 d+0.0 ok; FRED 72.55 rounds to 72.6 match (x.x5 tie)
+1967-08,108.9,image,108.90,txt=missing; ocr2=agree; Q3 printed 275.4 sum 275.4 d+0.0 ok; FRED 108.90 rounds to 108.9 match
+1967-09,93.9,image,93.94,txt=missing; ocr2=agree; Q3 printed 275.4 sum 275.4 d+0.0 ok; FRED 93.94 rounds to 93.9 match
+1967-10,81.6,image,81.63,txt=missing; ocr2=agree; Q4 printed 347.1 sum 347.1 d+0.0 ok; FRED 81.63 rounds to 81.6 match
+1967-11,70.0,text+image,69.98,txt=split'70 .0'; ocr2=agree; Q4 printed 347.1 sum 347.1 d+0.0 ok; FRED 69.98 rounds to 70.0 match
+1967-12,195.5,text+image,195.45,txt=clean; ocr2=agree; Q4 printed 347.1 sum 347.1 d+0.0 ok; ANNUAL printed 1265.2 sum 1265.2 d+0.0 ok; FRED 195.45 rounds to 195.5 match (x.x5 tie)
+1968-01,104.5,text+image,104.49,txt=clean; ocr2=agree; Q1 printed 272.7 sum 272.7 d+0.0 ok; FRED 104.49 rounds to 104.5 match
+1968-02,79.6,text+image,,txt=clean; ocr2=agree; Q1 printed 272.7 sum 272.7 d+0.0 ok
+1968-03,88.6,text+image,,txt=clean; ocr2=agree; Q1 printed 272.7 sum 272.7 d+0.0 ok
+1968-04,80.1,text+image,,txt=clean; ocr2=agree; Q2 printed 246.2 sum 246.2 d+0.0 ok
+1968-05,91.4,text+image,,txt=clean; ocr2=agree; Q2 printed 246.2 sum 246.2 d+0.0 ok
+1968-06,74.7,text+image,,txt=clean; ocr2=agree; Q2 printed 246.2 sum 246.2 d+0.0 ok
+1968-07,90.3,text+image,,txt=clean; ocr2=agree; Q3 printed 214.7 sum 214.8 d+0.1 ok
+1968-08,65.8,text+image,,txt=clean; ocr2=agree; Q3 printed 214.7 sum 214.8 d+0.1 ok
+1968-09,58.7,text+image,,txt=clean; ocr2=agree; Q3 printed 214.7 sum 214.8 d+0.1 ok
+1968-10,65.4,image,,txt=garbled'65^'; ocr2=agree; Q4 printed 207.5 sum 207.5 d+0.0 ok
+1968-11,58.7,text+image,,txt=clean; ocr2=agree; Q4 printed 207.5 sum 207.5 d+0.0 ok
+1968-12,83.4,text+image,,txt=clean; ocr2=agree; Q4 printed 207.5 sum 207.5 d+0.0 ok; ANNUAL printed 941.1 sum 941.2 d+0.1 ok
+1969-01,75.0,text+image,,txt=clean; ocr2=agree; Q1 printed 249.1 sum 249.1 d+0.0 ok
+1969-02,90.0,text+image,,txt=clean; ocr2=agree; Q1 printed 249.1 sum 249.1 d+0.0 ok
+1969-03,84.1,text+image,,txt=clean; ocr2=agree; Q1 printed 249.1 sum 249.1 d+0.0 ok
+1969-04,118.8,text+image,,txt=clean; ocr2=agree; Q2 printed 303.3 sum 303.3 d+0.0 ok
+1969-05,92.6,text+image,,txt=clean; ocr2=agree; Q2 printed 303.3 sum 303.3 d+0.0 ok
+1969-06,91.9,text+image,,txt=clean; ocr2=agree; Q2 printed 303.3 sum 303.3 d+0.0 ok
+1969-07,112.7,text+image,,txt=clean; ocr2=agree; Q3 printed 249.3 sum 249.2 d-0.1 ok
+1969-08,62.8,text+image,,txt=clean; ocr2=agree; Q3 printed 249.3 sum 249.2 d-0.1 ok
+1969-09,73.7,text+image,,txt=clean; ocr2=agree; Q3 printed 249.3 sum 249.2 d-0.1 ok
+1969-10,116.4,text+image,,txt=clean; ocr2=agree; Q4 printed 340.4 sum 340.3 d-0.1 ok
+1969-11,127.1,text+image,,txt=split'127 .1'; ocr2=agree; Q4 printed 340.4 sum 340.3 d-0.1 ok
+1969-12,96.8,text+image,,txt=clean; ocr2=agree; Q4 printed 340.4 sum 340.3 d-0.1 ok; ANNUAL printed 1142.1 sum 1141.9 d-0.2 ok
+1970-01,137.3,text+image,,txt=clean; ocr2=agree; Q1 printed 396.7 sum 396.7 d+0.0 ok
+1970-02,139.4,text+image,,txt=clean; ocr2=agree; Q1 printed 396.7 sum 396.7 d+0.0 ok
+1970-03,120.0,text+image,,txt=clean; ocr2=agree; Q1 printed 396.7 sum 396.7 d+0.0 ok
+1970-04,131.9,text+image,,txt=clean; ocr2=agree; Q2 printed 450.3 sum 450.3 d+0.0 ok
+1970-05,147.9,image,,txt=CONFLICT'147.5'; ocr2=agree; Q2 printed 450.3 sum 450.3 d+0.0 ok; with text value 147.5 the Q2 sum would be off by -0.4
+1970-06,170.5,text+image,,txt=clean; ocr2=agree; Q2 printed 450.3 sum 450.3 d+0.0 ok
+1970-07,251.9,text+image,,txt=clean; ocr2=agree; Q3 printed 654.4 sum 654.4 d+0.0 ok
+1970-08,169.6,text+image,,txt=clean; ocr2=agree; Q3 printed 654.4 sum 654.4 d+0.0 ok
+1970-09,232.9,text+image,,txt=clean; ocr2=agree; Q3 printed 654.4 sum 654.4 d+0.0 ok
+1970-10,144.8,text+image,,txt=clean; ocr2=agree; Q4 printed 386.3 sum 386.3 d+0.0 ok
+1970-11,119.8,text+image,,txt=clean; ocr2=agree; Q4 printed 386.3 sum 386.3 d+0.0 ok
+1970-12,121.7,text+image,,txt=clean; ocr2=agree; Q4 printed 386.3 sum 386.3 d+0.0 ok; ANNUAL printed 1887.8 sum 1887.7 d-0.1 ok
+1971-01,168.8,text+image,,txt=clean; ocr2=agree; Q1 printed 544.4 sum 544.3 d-0.1 ok
+1971-02,150.9,text+image,,txt=clean; ocr2=agree; Q1 printed 544.4 sum 544.3 d-0.1 ok
+1971-03,224.6,text+image,,txt=clean; ocr2=agree; Q1 printed 544.4 sum 544.3 d-0.1 ok
+1971-04,153.8,text+image,,txt=clean; ocr2=agree; Q2 printed 569.1 sum 569.1 d+0.0 ok
+1971-05,249.5,text+image,,txt=clean; ocr2=agree; Q2 printed 569.1 sum 569.1 d+0.0 ok
+1971-06,165.8,text+image,,txt=clean; ocr2=agree; Q2 printed 569.1 sum 569.1 d+0.0 ok
+1971-07,147.0,text+image,,txt=clean; ocr2=agree; Q3 printed 418.4 sum 418.4 d+0.0 ok
+1971-08,155.6,text+image,,txt=clean; ocr2=agree; Q3 printed 418.4 sum 418.4 d+0.0 ok
+1971-09,115.8,text+image,,txt=clean; ocr2=agree; Q3 printed 418.4 sum 418.4 d+0.0 ok
+1971-10,144.7,text+image,,txt=clean; ocr2=agree; Q4 printed 385.0 sum 385.0 d+0.0 ok
+1971-11,129.0,text+image,,txt=clean; ocr2=agree; Q4 printed 385.0 sum 385.0 d+0.0 ok
+1971-12,111.3,text+image,,txt=clean; ocr2=agree; Q4 printed 385.0 sum 385.0 d+0.0 ok; ANNUAL printed 1916.9 sum 1916.8 d-0.1 ok
+1972-01,101.6,text+image,,txt=clean; ocr2=agree; Q1 printed 513.6 sum 513.6 d+0.0 ok
+1972-02,191.3,text+image,,txt=clean; ocr2=agree; Q1 printed 513.6 sum 513.6 d+0.0 ok
+1972-03,220.7,text+image,,txt=clean; ocr2=agree; Q1 printed 513.6 sum 513.6 d+0.0 ok
+1972-04,148.5,text+image,,txt=clean; ocr2=agree; Q2 printed 466.5 sum 466.5 d+0.0 ok
+1972-05,190.1,text+image,,txt=clean; ocr2=agree; Q2 printed 466.5 sum 466.5 d+0.0 ok
+1972-06,127.9,text+image,,txt=clean; ocr2=agree; Q2 printed 466.5 sum 466.5 d+0.0 ok
+1972-07,204.6,text+image,,txt=clean; ocr2=agree; Q3 printed 571.8 sum 571.7 d-0.1 ok
+1972-08,253.6,text+image,,txt=clean; ocr2=agree; Q3 printed 571.8 sum 571.7 d-0.1 ok
+1972-09,113.5,text+image,,txt=clean; ocr2=agree; Q3 printed 571.8 sum 571.7 d-0.1 ok
+1972-10,153.0,text+image,,txt=clean; ocr2=agree; Q4 printed 448.3 sum 448.4 d+0.1 ok
+1972-11,208.6,text+image,,txt=clean; ocr2=agree; Q4 printed 448.3 sum 448.4 d+0.1 ok
+1972-12,86.8,text+image,,txt=clean; ocr2=agree; Q4 printed 448.3 sum 448.4 d+0.1 ok; ANNUAL printed 2000.2 sum 2000.2 d+0.0 ok
+1973-01,205.8,text+image,,txt=clean; ocr2=agree; Q1 printed 595.3 sum 595.3 d+0.0 ok
+1973-02,137.2,text+image,,txt=clean; ocr2=agree; Q1 printed 595.3 sum 595.3 d+0.0 ok
+1973-03,252.3,text+image,,txt=clean; ocr2=agree; Q1 printed 595.3 sum 595.3 d+0.0 ok
+1973-04,119.3,text+image,,txt=clean; ocr2=agree; Q2 printed 467.4 sum 467.4 d+0.0 ok
+1973-05,167.9,image,,txt=garbled'167. <'; ocr2=agree; Q2 printed 467.4 sum 467.4 d+0.0 ok
+1973-06,180.2,text+image,,txt=clean; ocr2=agree; Q2 printed 467.4 sum 467.4 d+0.0 ok
+1973-07,206.2,text+image,,txt=clean; ocr2=agree; Q3 printed 585.8 sum 585.8 d+0.0 ok
+1973-08,190.1,text+image,,txt=clean; ocr2=agree; Q3 printed 585.8 sum 585.8 d+0.0 ok
+1973-09,189.5,text+image,,txt=clean; ocr2=agree; Q3 printed 585.8 sum 585.8 d+0.0 ok
+1973-10,185.7,text+image,,txt=clean; ocr2=agree; Q4 printed 650.0 sum 650.0 d+0.0 ok
+1973-11,218.7,text+image,,txt=clean; ocr2=agree; Q4 printed 650.0 sum 650.0 d+0.0 ok
+1973-12,245.6,text+image,,txt=clean; ocr2=agree; Q4 printed 650.0 sum 650.0 d+0.0 ok; ANNUAL printed 2298.5 sum 2298.5 d+0.0 ok
+1974-01,337.3,text+image,,txt=clean; ocr2=MISREAD'332.3'(template-OCR error; image and text agree); Q1 printed 755.0 sum 755.0 d+0.0 ok
+1974-02,213.1,text+image,,txt=clean; ocr2=agree; Q1 printed 755.0 sum 755.0 d+0.0 ok
+1974-03,204.6,text+image,,txt=clean; ocr2=agree; Q1 printed 755.0 sum 755.0 d+0.0 ok
+1974-04,209.8,text+image,,txt=clean; ocr2=agree; Q2 printed 801.0 sum 801.0 d+0.0 ok
+1974-05,375.7,text+image,,txt=clean; ocr2=agree; Q2 printed 801.0 sum 801.0 d+0.0 ok
+1974-06,215.5,text+image,,txt=clean; ocr2=agree; Q2 printed 801.0 sum 801.0 d+0.0 ok
+1974-07,153.4,text+image,,txt=clean; ocr2=agree; Q3 printed 603.1 sum 603.1 d+0.0 ok
+1974-08,232.7,text+image,,txt=clean; ocr2=agree; Q3 printed 603.1 sum 603.1 d+0.0 ok
+1974-09,217.0,text+image,,txt=clean; ocr2=agree; Q3 printed 603.1 sum 603.1 d+0.0 ok
+1974-10,306.8,text+image,,txt=clean; ocr2=agree; Q4 printed 894.1 sum 894.1 d+0.0 ok
+1974-11,344.7,text+image,,txt=clean; ocr2=agree; Q4 printed 894.1 sum 894.1 d+0.0 ok
+1974-12,242.6,text+image,,txt=clean; ocr2=agree; Q4 printed 894.1 sum 894.1 d+0.0 ok; ANNUAL printed 3053.1 sum 3053.2 d+0.1 ok
+1975-01,391.1,text+image,,txt=clean; ocr2=agree; Q1 printed 1119.2 sum 1119.2 d+0.0 ok
+1975-02,384.8,text+image,,txt=clean; ocr2=agree; Q1 printed 1119.2 sum 1119.2 d+0.0 ok
+1975-03,343.3,text+image,,txt=clean; ocr2=agree; Q1 printed 1119.2 sum 1119.2 d+0.0 ok
+1975-04,372.1,text+image,,txt=clean; ocr2=agree; Q2 printed 905.8 sum 905.8 d+0.0 ok
+1975-05,357.8,image,,txt=garbled'357.£'; ocr2=agree; Q2 printed 905.8 sum 905.8 d+0.0 ok
+1975-06,175.9,text+image,,txt=clean; ocr2=agree; Q2 printed 905.8 sum 905.8 d+0.0 ok
+1975-07,242.0,text+image,,txt=clean; ocr2=agree; Q3 printed 670.0 sum 669.9 d-0.1 ok
+1975-08,222.4,text+image,,txt=clean; ocr2=agree; Q3 printed 670.0 sum 669.9 d-0.1 ok
+1975-09,205.5,text+image,,txt=clean; ocr2=agree; Q3 printed 670.0 sum 669.9 d-0.1 ok
+1975-10,1295.4,text+image,,txt=clean; ocr2=agree; Q4 printed 1685.1 sum 1685.2 d+0.1 ok
+1975-11,252.9,text+image,,txt=clean; ocr2=agree; Q4 printed 1685.1 sum 1685.2 d+0.1 ok
+1975-12,136.9,text+image,,txt=clean; ocr2=agree; Q4 printed 1685.1 sum 1685.2 d+0.1 ok; ANNUAL printed 4380.2 sum 4380.1 d-0.1 ok
+1976-01,257.1,text+image,,txt=clean; ocr2=agree; Q1 printed 716.5 sum 716.6 d+0.1 ok
+1976-02,211.8,text+image,,txt=clean; ocr2=agree; Q1 printed 716.5 sum 716.6 d+0.1 ok
+1976-03,247.7,text+image,,txt=clean; ocr2=agree; Q1 printed 716.5 sum 716.6 d+0.1 ok
+1976-04,206.4,text+image,,txt=clean; ocr2=agree; Q2 printed 813.3 sum 813.3 d+0.0 ok
+1976-05,233.3,text+image,,txt=clean; ocr2=agree; Q2 printed 813.3 sum 813.3 d+0.0 ok
+1976-06,373.6,text+image,,txt=clean; ocr2=agree; Q2 printed 813.3 sum 813.3 d+0.0 ok
+1976-07,305.6,text+image,,txt=clean; ocr2=agree; Q3 printed 819.9 sum 819.9 d+0.0 ok
+1976-08,264.0,text+image,,txt=clean; ocr2=agree; Q3 printed 819.9 sum 819.9 d+0.0 ok
+1976-09,250.3,text+image,,txt=clean; ocr2=agree; Q3 printed 819.9 sum 819.9 d+0.0 ok
+1976-10,183.6,text+image,,txt=clean; ocr2=agree; Q4 printed 661.6 sum 661.6 d+0.0 ok
+1976-11,277.6,text+image,,txt=clean; ocr2=agree; Q4 printed 661.6 sum 661.6 d+0.0 ok
+1976-12,200.4,text+image,,txt=clean; ocr2=agree; Q4 printed 661.6 sum 661.6 d+0.0 ok; ANNUAL printed 3011.4 sum 3011.4 d+0.0 ok
+1977-01,168.5,text+image,,txt=clean; ocr2=agree; Q1 printed 610.9 sum 610.9 d+0.0 ok
+1977-02,194.2,text+image,,txt=clean; ocr2=agree; Q1 printed 610.9 sum 610.9 d+0.0 ok
+1977-03,248.2,text+image,,txt=clean; ocr2=agree; Q1 printed 610.9 sum 610.9 d+0.0 ok
+1977-04,207.3,text+image,,txt=clean; ocr2=agree; Q2 printed 987.0 sum 987.1 d+0.1 ok
+1977-05,473.9,image,,txt=CONFLICT'473.5'; ocr2=agree; Q2 printed 987.0 sum 987.1 d+0.1 ok; with text value 473.5 the Q2 sum would be off by -0.3
+1977-06,305.9,text+image,,txt=clean; ocr2=agree; Q2 printed 987.0 sum 987.1 d+0.1 ok
+1977-07,577.8,text+image,,txt=clean; ocr2=agree; Q3 printed 1013.1 sum 1013.1 d+0.0 ok
+1977-08,338.3,text+image,,txt=clean; ocr2=agree; Q3 printed 1013.1 sum 1013.1 d+0.0 ok
+1977-09,97.0,text+image,,txt=clean; ocr2=agree; Q3 printed 1013.1 sum 1013.1 d+0.0 ok
+1977-10,115.7,text+image,,txt=clean; ocr2=agree; Q4 printed 484.3 sum 484.3 d+0.0 ok
+1977-11,200.3,text+image,,txt=clean; ocr2=agree; Q4 printed 484.3 sum 484.3 d+0.0 ok
+1977-12,168.3,text+image,,txt=clean; ocr2=agree; Q4 printed 484.3 sum 484.3 d+0.0 ok; ANNUAL printed 3095.4 sum 3095.4 d+0.0 ok
+1978-01,168.3,text+image,,txt=clean; ocr2=agree; Q1 printed 697.7 sum 697.7 d+0.0 ok
+1978-02,205.0,text+image,,txt=clean; ocr2=agree; Q1 printed 697.7 sum 697.7 d+0.0 ok
+1978-03,324.4,text+image,,txt=clean; ocr2=agree; Q1 printed 697.7 sum 697.7 d+0.0 ok
+1978-04,203.0,text+image,,txt=clean; ocr2=agree; Q2 printed 542.2 sum 542.2 d+0.0 ok
+1978-05,160.4,text+image,,txt=clean; ocr2=agree; Q2 printed 542.2 sum 542.2 d+0.0 ok
+1978-06,178.8,text+image,,txt=clean; ocr2=agree; Q2 printed 542.2 sum 542.2 d+0.0 ok
+1978-07,231.8,text+image,,txt=clean; ocr2=agree; Q3 printed 565.2 sum 565.2 d+0.0 ok
+1978-08,206.4,text+image,,txt=clean; ocr2=agree; Q3 printed 565.2 sum 565.2 d+0.0 ok
+1978-09,127.0,text+image,,txt=clean; ocr2=agree; Q3 printed 565.2 sum 565.2 d+0.0 ok
+1978-10,475.3,text+image,,txt=clean; ocr2=agree; Q4 printed 850.8 sum 850.7 d-0.1 ok
+1978-11,178.9,text+image,,txt=clean; ocr2=agree; Q4 printed 850.8 sum 850.7 d-0.1 ok
+1978-12,196.5,text+image,,txt=clean; ocr2=agree; Q4 printed 850.8 sum 850.7 d-0.1 ok; ANNUAL printed 2656.0 sum 2655.8 d-0.2 ok
+1979-01,182.2,text+image,,txt=clean; ocr2=MISREAD'132.2'(template-OCR error; image and text agree); Q1 printed 547.1 sum 547.1 d+0.0 ok
+1979-02,177.1,text+image,,txt=clean; ocr2=agree; Q1 printed 547.1 sum 547.1 d+0.0 ok
+1979-03,187.8,text+image,,txt=clean; ocr2=agree; Q1 printed 547.1 sum 547.1 d+0.0 ok
+1979-04,242.8,text+image,,txt=split'242 .8'; ocr2=agree; Q2 printed 716.3 sum 716.4 d+0.1 ok
+1979-05,200.4,text+image,,txt=clean; ocr2=agree; Q2 printed 716.3 sum 716.4 d+0.1 ok
+1979-06,273.2,text+image,,txt=clean; ocr2=agree; Q2 printed 716.3 sum 716.4 d+0.1 ok
+1979-07,212.2,text+image,,txt=clean; ocr2=agree; Q3 printed 685.8 sum 685.8 d+0.0 ok
+1979-08,287.4,text+image,,txt=clean; ocr2=agree; Q3 printed 685.8 sum 685.8 d+0.0 ok
+1979-09,186.2,text+image,,txt=clean; ocr2=agree; Q3 printed 685.8 sum 685.8 d+0.0 ok
+1979-10,395.8,text+image,,txt=clean; ocr2=agree; Q4 printed 718.1 sum 718.1 d+0.0 ok
+1979-11,184.3,text+image,,txt=clean; ocr2=agree; Q4 printed 718.1 sum 718.1 d+0.0 ok
+1979-12,138.0,text+image,,txt=clean; ocr2=agree; Q4 printed 718.1 sum 718.1 d+0.0 ok; ANNUAL printed 2667.3 sum 2667.4 d+0.1 ok
+1980-01,243.1,text+image,,txt=clean; ocr2=agree; Q1 printed 708.1 sum 708.1 d+0.0 ok
+1980-02,190.8,text+image,,txt=clean; ocr2=agree; Q1 printed 708.1 sum 708.1 d+0.0 ok
+1980-03,274.2,text+image,,txt=clean; ocr2=agree; Q1 printed 708.1 sum 708.1 d+0.0 ok
+1980-04,428.2,text+image,,txt=clean; ocr2=agree; Q2 printed 1245.9 sum 1246.0 d+0.1 ok
+1980-05,381.1,text+image,,txt=clean; ocr2=agree; Q2 printed 1245.9 sum 1246.0 d+0.1 ok
+1980-06,436.7,text+image,,txt=clean; ocr2=agree; Q2 printed 1245.9 sum 1246.0 d+0.1 ok
+1980-07,445.7,text+image,,txt=clean; ocr2=agree; Q3 printed 1794.0 sum 1794.0 d+0.0 ok
+1980-08,345.4,text+image,,txt=clean; ocr2=agree; Q3 printed 1794.0 sum 1794.0 d+0.0 ok
+1980-09,1002.9,text+image,,txt=clean; ocr2=agree; Q3 printed 1794.0 sum 1794.0 d+0.0 ok
+1980-10,359.2,text+image,,txt=clean; ocr2=agree; Q4 printed 886.9 sum 886.8 d-0.1 ok
+1980-11,239.3,text+image,,txt=clean; ocr2=agree; Q4 printed 886.9 sum 886.8 d-0.1 ok
+1980-12,288.3,text+image,,txt=clean; ocr2=agree; Q4 printed 886.9 sum 886.8 d-0.1 ok; ANNUAL printed 4635.0 sum 4634.9 d-0.1 ok
+1981-01,341.4,text+image,,txt=clean; ocr2=agree; Q1 printed 1615.9 sum 1615.9 d+0.0 ok
+1981-02,789.2,text+image,,txt=clean; ocr2=agree; Q1 printed 1615.9 sum 1615.9 d+0.0 ok
+1981-03,485.3,text+image,,txt=clean; ocr2=agree; Q1 printed 1615.9 sum 1615.9 d+0.0 ok
+1981-04,536.9,text+image,,txt=clean; ocr2=agree; Q2 printed 1373.6 sum 1373.6 d+0.0 ok
+1981-05,428.2,text+image,,txt=clean; ocr2=agree; Q2 printed 1373.6 sum 1373.6 d+0.0 ok
+1981-06,408.5,text+image,,txt=split'40 8 . 5'; ocr2=agree; Q2 printed 1373.6 sum 1373.6 d+0.0 ok
+1981-07,619.5,text+image,,txt=clean; ocr2=agree; Q3 printed 1822.2 sum 1822.2 d+0.0 ok
+1981-08,450.4,text+image,,txt=clean; ocr2=agree; Q3 printed 1822.2 sum 1822.2 d+0.0 ok
+1981-09,752.3,text+image,,txt=clean; ocr2=agree; Q3 printed 1822.2 sum 1822.2 d+0.0 ok
+1981-10,897.9,text+image,,txt=clean; ocr2=agree; Q4 printed 2143.4 sum 2143.4 d+0.0 ok
+1981-11,618.8,text+image,,txt=clean; ocr2=agree; Q4 printed 2143.4 sum 2143.4 d+0.0 ok
+1981-12,626.7,text+image,,txt=clean; ocr2=agree; Q4 printed 2143.4 sum 2143.4 d+0.0 ok; ANNUAL printed 6955.2 sum 6955.1 d-0.1 ok
+1982-01,645.1,text+image,,txt=clean; ocr2=agree; Q1 printed 2394.6 sum 2394.6 d+0.0 ok
+1982-02,913.5,text+image,,txt=clean; ocr2=agree; Q1 printed 2394.6 sum 2394.6 d+0.0 ok
+1982-03,836.0,text+image,,txt=clean; ocr2=agree; Q1 printed 2394.6 sum 2394.6 d+0.0 ok
+1982-04,1309.3,text+image,,txt=clean; ocr2=agree; Q2 printed 5180.1 sum 5180.1 d+0.0 ok
+1982-05,2850.5,text+image,,txt=clean; ocr2=agree; Q2 printed 5180.1 sum 5180.1 d+0.0 ok
+1982-06,1020.3,text+image,,txt=clean; ocr2=agree; Q2 printed 5180.1 sum 5180.1 d+0.0 ok
+1982-07,1425.6,text+image,,txt=clean; ocr2=agree; Q3 printed 5209.8 sum 5209.9 d+0.1 ok
+1982-08,2759.6,text+image,,txt=clean; ocr2=agree; Q3 printed 5209.8 sum 5209.9 d+0.1 ok
+1982-09,1024.7,text+image,,txt=clean; ocr2=agree; Q3 printed 5209.8 sum 5209.9 d+0.1 ok
+1982-10,1299.0,text+image,,txt=clean; ocr2=agree; Q4 printed 2826.3 sum 2826.3 d+0.0 ok
+1982-11,733.3,text+image,,txt=clean; ocr2=agree; Q4 printed 2826.3 sum 2826.3 d+0.0 ok
+1982-12,794.0,text+image,,txt=clean; ocr2=agree; Q4 printed 2826.3 sum 2826.3 d+0.0 ok; ANNUAL printed 15610.8 sum 15610.9 d+0.1 ok
+1983-01,2158.1,text+image,,txt=clean; ocr2=MISREAD'3133.1'(template-OCR error; image and text agree); Q1 printed 4399.2 sum 4399.2 d+0.0 ok
+1983-02,1086.4,text+image,,txt=clean; ocr2=agree; Q1 printed 4399.2 sum 4399.2 d+0.0 ok
+1983-03,1154.7,text+image,,txt=clean; ocr2=agree; Q1 printed 4399.2 sum 4399.2 d+0.0 ok
+1983-04,1125.6,text+image,,txt=clean; ocr2=agree; Q2 printed 4234.2 sum 4234.2 d+0.0 ok
+1983-05,920.0,text+image,,txt=clean; ocr2=agree; Q2 printed 4234.2 sum 4234.2 d+0.0 ok
+1983-06,2188.6,text+image,,txt=clean; ocr2=agree; Q2 printed 4234.2 sum 4234.2 d+0.0 ok
+1983-07,829.2,text+image,,txt=clean; ocr2=agree; Q3 printed 3129.5 sum 3129.5 d+0.0 ok
+1983-08,1353.1,text+image,,txt=clean; ocr2=agree; Q3 printed 3129.5 sum 3129.5 d+0.0 ok
+1983-09,947.2,text+image,,txt=clean; ocr2=agree; Q3 printed 3129.5 sum 3129.5 d+0.0 ok
+1983-10,1816.8,text+image,,txt=clean; ocr2=agree; Q4 printed 4309.9 sum 4309.8 d-0.1 ok
+1983-11,1624.5,text+image,,txt=clean; ocr2=agree; Q4 printed 4309.9 sum 4309.8 d-0.1 ok
+1983-12,868.5,text+image,,txt=clean; ocr2=agree; Q4 printed 4309.9 sum 4309.8 d-0.1 ok; ANNUAL printed 16072.9 sum 16072.7 d-0.2 ok
+1984-01,1783.3,text+image,,txt=split'17 8 3 . 3'; ocr2=agree; Q1 printed 6976.1 sum 6976.1 d+0.0 ok
+1984-02,1713.1,text+image,,txt=clean; ocr2=agree; Q1 printed 6976.1 sum 6976.1 d+0.0 ok
+1984-03,3479.7,text+image,,txt=clean; ocr2=agree; Q1 printed 6976.1 sum 6976.1 d+0.0 ok
+1984-04,2429.4,text+image,,txt=clean; ocr2=agree; Q2 printed 8931.1 sum 8931.1 d+0.0 ok
+1984-05,3074.3,text+image,,txt=clean; ocr2=agree; Q2 printed 8931.1 sum 8931.1 d+0.0 ok
+1984-06,3427.4,text+image,,txt=clean; ocr2=agree; Q2 printed 8931.1 sum 8931.1 d+0.0 ok
+1984-07,2783.7,text+image,,txt=clean; ocr2=agree; Q3 printed 6798.0 sum 6798.0 d+0.0 ok
+1984-08,1968.7,text+image,,txt=clean; ocr2=agree; Q3 printed 6798.0 sum 6798.0 d+0.0 ok
+1984-09,2045.6,text+image,,txt=clean; ocr2=agree; Q3 printed 6798.0 sum 6798.0 d+0.0 ok
+1984-10,1471.3,text+image,,txt=clean; ocr2=agree; Q4 printed 6563.4 sum 6563.4 d+0.0 ok
+1984-11,2763.7,text+image,,txt=clean; ocr2=agree; Q4 printed 6563.4 sum 6563.4 d+0.0 ok
+1984-12,2328.4,text+image,,txt=clean; ocr2=agree; Q4 printed 6563.4 sum 6563.4 d+0.0 ok; ANNUAL printed 29268.6 sum 29268.6 d+0.0 ok
+1985-01,1821.0,text+image,,"txt=clean; ocr2=agree; Q1 printed 7716.6 sum 7716.6 d+0.0 ok; BCD 6/87 p.72 prints 1,821.0 match"
+1985-02,2409.8,text+image,,"txt=clean; ocr2=agree; Q1 printed 7716.6 sum 7716.6 d+0.0 ok; BCD 6/87 p.72 prints 2,409.8 match"
+1985-03,3485.8,text+image,,"txt=clean; ocr2=agree; Q1 printed 7716.6 sum 7716.6 d+0.0 ok; BCD 6/87 p.72 prints 3,485.8 match"
+1985-04,3289.2,text+image,,"txt=clean; ocr2=agree; Q2 printed 9251.6 sum 9251.6 d+0.0 ok; BCD 6/87 p.72 prints 3,289.2 match"
+1985-05,3048.3,text+image,,"txt=clean; ocr2=agree; Q2 printed 9251.6 sum 9251.6 d+0.0 ok; BCD 6/87 p.72 prints 3,048.3 match"
+1985-06,2914.1,text+image,,"txt=clean; ocr2=agree; Q2 printed 9251.6 sum 9251.6 d+0.0 ok; BCD 6/87 p.72 prints 2,914.1 match"
+1985-07,2173.9,text+image,,"txt=clean; ocr2=agree; Q3 printed 7392.4 sum 7392.4 d+0.0 ok; BCD 6/87 p.72 prints 2,173.9 match"
+1985-08,3018.4,text+image,,"txt=clean; ocr2=agree; Q3 printed 7392.4 sum 7392.4 d+0.0 ok; BCD 6/87 p.72 prints 3,018.4 match"
+1985-09,2200.1,text+image,,"txt=clean; ocr2=agree; Q3 printed 7392.4 sum 7392.4 d+0.0 ok; BCD 6/87 p.72 prints 2,200.1 match"
+1985-10,6844.3,text+image,,"txt=clean; ocr2=agree; Q4 printed 12553.5 sum 12553.5 d+0.0 ok; BCD 6/87 p.72 prints 6,844.3 match"
+1985-11,4160.4,text+image,,"txt=clean; ocr2=agree; Q4 printed 12553.5 sum 12553.5 d+0.0 ok; BCD 6/87 p.72 prints 4,160.4 match"
+1985-12,1548.8,text+image,,"txt=clean; ocr2=agree; Q4 printed 12553.5 sum 12553.5 d+0.0 ok; ANNUAL printed 36914.1 sum 36914.1 d+0.0 ok; BCD 6/87 p.72 prints 1,548.8 match"
+1986-01,3238.9,text+image,,"txt=clean; ocr2=agree; Q1 printed 9769.9 sum 9769.9 d+0.0 ok; BCD 6/87 p.72 prints 3,238.9 match"
+1986-02,3252.2,text+image,,"txt=clean; ocr2=agree; Q1 printed 9769.9 sum 9769.9 d+0.0 ok; BCD 6/87 p.72 prints 3,252.2 match"
+1986-03,3278.8,text+image,,"txt=clean; ocr2=agree; Q1 printed 9769.9 sum 9769.9 d+0.0 ok; BCD 6/87 p.72 prints 3,278.8 match"
+1986-04,1766.8,text+image,,"txt=clean; ocr2=agree; Q2 printed 8766.2 sum 8766.2 d+0.0 ok; BCD 6/87 p.72 prints 1,766.8 match"
+1986-05,3572.8,text+image,,"txt=clean; ocr2=agree; Q2 printed 8766.2 sum 8766.2 d+0.0 ok; BCD 6/87 p.72 prints r3,572.8 match flag r=revised"
+1986-06,3426.6,text+image,,"txt=clean; ocr2=agree; Q2 printed 8766.2 sum 8766.2 d+0.0 ok; BCD 6/87 p.72 prints p3,426.6 match flag p=preliminary"
+1986-07,7609.1,text+image,,"txt=clean; ocr2=agree; Q3 printed 14671.3 sum 14671.3 d+0.0 ok; BCD 6/87 p.72 prints p7,609.1 match flag p=preliminary"
+1986-08,3685.0,text+image,,"txt=clean; ocr2=agree; Q3 printed 14671.3 sum 14671.3 d+0.0 ok; BCD 6/87 p.72 prints p3,685.0 match flag p=preliminary"
+1986-09,3377.2,text+image,,"txt=clean; ocr2=agree; Q3 printed 14671.3 sum 14671.3 d+0.0 ok; BCD 6/87 p.72 prints p3,377.2 match flag p=preliminary"
+1986-10,4099.5,text+image,,"txt=clean; ocr2=agree; Q4 printed 9941.2 sum 9941.2 d+0.0 ok; BCD 6/87 p.72 prints p4,099.5 match flag p=preliminary"
+1986-11,1973.8,text+image,,"txt=clean; ocr2=agree; Q4 printed 9941.2 sum 9941.2 d+0.0 ok; BCD 6/87 p.72 prints p1,973.8 match flag p=preliminary"
+1986-12,3867.9,text+image,,"txt=clean; ocr2=MISREAD'3467.4'(template-OCR error; image and text agree); Q4 printed 9941.2 sum 9941.2 d+0.0 ok; ANNUAL printed 43148.6 sum 43148.6 d+0.0 ok; BCD 6/87 p.72 prints p3,867.9 match flag p=preliminary"
