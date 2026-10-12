@@ -92,11 +92,12 @@ def test_current_readings_on_the_frozen_history():
     # one per-capita basis: 50 states + DC filings over their population at the
     # window's midpoint (2026.0) - reproduced by the study's load.pop_at
     assert c["filings_12m_50dc"] == 575_614
-    assert round(c["per_1000"], 2) == 1.68 and abs(c["yoy_12m"] - 0.12) < 0.01
+    # 3 decimals pin the midpoint: 2025.75 would give 1.682, 2026.25 1.678
+    assert c["per_1000"] == 1.68 and abs(c["yoy_12m"] - 0.12) < 0.01
     assert round(c["per_1000_by_year"]["2010"], 1) == 4.9 and round(c["per_1000_by_year"]["2019"], 1) == 2.3
     assert min(v for y, v in c["per_1000_by_year"].items() if 1986 <= int(y) <= 2019) > c["per_1000"]
     st = {r["state"]: r["per_1000"] for r in p["states"]["rows"]}
-    assert round(st["TN"], 1) == 3.0 and round(st["AL"], 1) == 4.1
+    assert st["TN"] == 3.043                                          # 3.056 on the 2025-population basis
     b = p["national"]["business"]["rule"]
     # above +10% since 2026Q1 but only 3 quarters off before it: not a fresh onset
     assert b["asof"] == "2026Q2" and b["on"] is True and b["fresh_onset"] is False
@@ -109,6 +110,10 @@ def test_a_newly_published_quarter_is_merged():
     p = Dm.build_distress(HIST, live={"2026Q3": {"3month": t3, "12month": t12}})
     assert p["live_quarters"] == ["2026Q3"]
     assert p["national"]["consumer"]["asof"] == "2026Q3"
+    # the fixture is the Jun-2026 table relabelled: same numerator, population at
+    # the 2026.25 midpoint, growth against the frozen 2025Q3 state rows
+    assert p["national"]["consumer"]["per_1000"] == 1.678
+    assert p["national"]["consumer"]["yoy_12m"] == 0.0915
     assert p["states"]["asof"] == "2026Q3"
     assert p["national"]["business"]["rule"]["asof"] == "2026Q3"
 

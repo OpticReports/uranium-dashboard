@@ -33,7 +33,8 @@ plt.rcParams.update({"font.size": 9, "axes.edgecolor": GRID, "axes.labelcolor": 
                      "xtick.color": INK2, "ytick.color": INK2})
 RES = json.load(open(os.path.join(HERE, "results.json")))
 TITLES = {
-    "national": "National bankruptcy filings did not lead: no +10% onset came before the 1990 or 2001 recessions.\n"
+    "national": "National bankruptcy filings did not lead: no +10% onset came in the 18 months before the 1990 or "
+                "2001 recessions.\n"
                 "Business filings' onsets came just after both ended (1992-01, 2002-01), consumer filings' after 2001 "
                 "(2002-01); the 1986 and 1996 onsets were years early",
     "liabilities": "Liabilities of failing firms, 1967-83 out of sample: the +25% alert fired after the 1969 and 1973 "

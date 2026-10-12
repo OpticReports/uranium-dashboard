@@ -99,8 +99,9 @@ def main():
     record = {
         "business_filings": {
             "role": "does not lead",
-            "summary": "No +10% onset before the 1990-91 or 2001 recessions: onsets came just after each ended "
-                       "(1992-01, 2002-01); 3 false alarms (1986, 1992, 2002) in 33 scored years.",
+            "summary": "No +10% onset in the 18 months before the 1990-91 or 2001 recessions: two came just "
+                       "after each ended (1992-01, 2002-01), one years early (1986-01) - 3 false alarms in 33 "
+                       "scored years.",
             "per_peak": peaks_text(n1c["primary"]["per_peak"]), "false_alarms": n1c["primary"]["false_alarms"],
             "rotation_p": qn["N1_rotation_p_worst"]},
         "consumer_filings": {
@@ -112,9 +113,10 @@ def main():
             "rotation_p": n2["rotation"]["p"]},
         "failure_liabilities": {
             "role": "does not lead (alert rule)",
-            "summary": "D&B liabilities of failing firms only ever led as turning points: a +25%-growth alert "
-                       "fired late both in 1896-1938 (8 of 10 peaks) and out of sample in 1967-83 (after the 1969 "
-                       "and 1973 recessions began; missed 1980 and 1981). Liabilities bottomed 8-31 months before "
+            "summary": "D&B liabilities of failing firms led reliably only as turning points: a +25%-growth "
+                       "alert fired late at 8 of 10 peaks in 1896-1938 and at both clean peaks out of sample in "
+                       "1967-83 (after the 1969 and 1973 recessions began; missed 1980 and 1981); it led once "
+                       "(1957, by 8 months) in the 1948-66 context run. Liabilities bottomed 8-31 months before "
                        "the 1957-80 peaks, dated after the fact - too long and erratic to time.",
             "per_peak": peaks_text(qh["primary_real_cpi"]["primary"]["per_peak"]),
             "rotation_p": qh["primary_real_cpi"]["rotation"]["p"]},
@@ -122,7 +124,8 @@ def main():
             "role": "no evidence of a lead",
             "business_role": "confirms" if ship["S2"]["verdict"].startswith("confirms") else "no evidence of a lead",
             "summary": "A state's filing growth predicted its own next-year job losses mainly in the 1980s "
-                       "(1981-90; with the pre-registered claims control, 1988-2000, no test is significant). "
+                       "(1981-90; with the pre-registered claims control, 1988-2000, none is significant at 5% - "
+                       "the job-loss tests are borderline, p 0.055 / 0.062). "
                        "Since 2002 the only hit is business filings -> job losses (p 0.047), the out-of-sample "
                        "check is uninformative, and a state's rising unemployment predicts its later filings. "
                        "Business Ch 7 filings move with the state's unemployment over the same year (confirm, "
