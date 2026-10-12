@@ -79,7 +79,14 @@ def main():
         role = "leads" if v["ALERT"] else ("confirms" if v["PANEL"] else "does not lead")
         rec_bank[sid] = {"label": label, "role": role, "per_peak": peaks_text(g["primary"]["per_peak"]),
                          "false_alarms": g["primary"]["false_alarms"], "rotation_p": g["rotation"]["p"],
-                         "holm_p": qc["holm"][sid], "floor_pp": FLOOR[sid]}
+                         "holm_p": qc["holm"][sid], "floor_pp": FLOOR[sid],
+                         "qualifiers": v.get("qualifiers", [])}
+        if "transform-sensitive" in v.get("qualifiers", []):
+            rr = v["robust_qyoy_record"]
+            rec_bank[sid]["variant_note"] = ("on point-in-time year-on-year growth (not the pre-registered "
+                                             "4-quarter average) it led every recession: "
+                                             + ", ".join(peaks_text(rr["per_peak"]))
+                                             + f" (size p {rr['rotation_p']:.3f})")
     ship = qr["ship"]
     record = {
         "business_filings": {

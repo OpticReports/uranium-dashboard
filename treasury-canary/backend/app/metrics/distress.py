@@ -170,7 +170,8 @@ def build_distress(hist: dict, live: dict[str, dict] | None = None,
         last = max(vals)
         bank.append({"id": sid, "label": label, "asof": qstr(last), "latest": vals[last],
                      "rule": _state(path), "role": r["role"], "per_peak": r["per_peak"],
-                     "false_alarms": r["false_alarms"], "rotation_p": r["rotation_p"]})
+                     "false_alarms": r["false_alarms"], "rotation_p": r["rotation_p"],
+                     "qualifiers": r.get("qualifiers", []), "variant_note": r.get("variant_note")})
     # state map: latest 12-month consumer and business Ch 7 filings vs a year earlier
     t = max(m["st12"])
     pop = hist["state_pop_k"]

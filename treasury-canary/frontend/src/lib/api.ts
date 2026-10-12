@@ -974,6 +974,8 @@ export interface DistressBank {
   per_peak: string[];
   false_alarms: string[];
   rotation_p: number;
+  qualifiers: string[];
+  variant_note?: string;
 }
 export interface DistressStateRow {
   state: string;

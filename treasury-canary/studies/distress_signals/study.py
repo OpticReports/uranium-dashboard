@@ -48,11 +48,16 @@ def fmt_q(i):
 
 
 # ====================================================================== shared
+TIE = 12          # round ratios before comparing: 2.34/1.95 - 1 is 0.2 exactly, not 0.19999...
+
+
 def quarterly(values: dict[int, float], raws, rule, *, transform="sum4", release_lag=1,
-              trend_window=None, start=None, end=None):
+              trend_window=None, start=None, end=None, drop_g=()):
     """Quarterly Period list over [start, end] (quarter indices).
     transform sum4: g = sum(t-3..t)/sum(t-7..t-4) - 1 (also d = avg change);
-    qyoy: g = v(t)/v(t-4) - 1. rule(g, d) -> bool. Footprint masking."""
+    qyoy: g = v(t)/v(t-4) - 1. rule(g, d) -> bool. Footprint masking over the
+    whole input span (a break inside it contaminates the comparison); drop_g:
+    quarters whose g is dropped without footprint expansion (Call Report flag)."""
     ks = sorted(values)
     start = ks[0] if start is None else start
     end = ks[-1] if end is None else end
@@ -63,25 +68,24 @@ def quarterly(values: dict[int, float], raws, rule, *, transform="sum4", release
             if all(k in values for k in fp):
                 a1 = sum(values[k] for k in range(t - 3, t + 1))
                 a0 = sum(values[k] for k in range(t - 7, t - 3))
-                gvals[t] = (a1 / a0 - 1, (a1 - a0) / 4)
+                gvals[t] = (round(a1 / a0 - 1, TIE), round((a1 - a0) / 4, TIE))
         elif transform == "qyoy":
             fp = [t - 4, t]
             if all(k in values for k in fp):
-                gvals[t] = (values[t] / values[t - 4] - 1, values[t] - values[t - 4])
+                gvals[t] = (round(values[t] / values[t - 4] - 1, TIE), round(values[t] - values[t - 4], TIE))
         else:
             raise ValueError(transform)
     span = 7 if transform == "sum4" else 4
     out, hist = [], []
     for t in range(start, end + 1):
-        fp_masked = any(in_any(k, raws) for k in range(t - span, t + 1)) if transform == "sum4" \
-            else any(in_any(k, raws) for k in (t - 4, t))
+        fp_masked = any(in_any(k, raws) for k in range(t - span, t + 1)) or in_any(t, drop_g)
         on = None
         if t in gvals and not fp_masked:
             g, d = gvals[t]
             if trend_window:
                 if len(hist) >= trend_window:
                     med = statistics.median(hist[-trend_window:])
-                    on = bool(rule(g - med, d))
+                    on = bool(rule(round(g - med, TIE), d))
                 hist.append(g)
             else:
                 on = bool(rule(g, d))
@@ -142,8 +146,8 @@ def q_n() -> dict:
     n1s = dict(n1x)
     n1s[D.qi(1987, 2)] = (n1x[D.qi(1987, 1)] + n1x[D.qi(1987, 3)]) / 2
     out["n1_1995_quarters"] = {fmt_q(D.qi(1995, q)): abi_b[D.qi(1995, q)] for q in range(1, 5)}
-    out["n1_1995_quarter_sum_vs_annual"] = [sum(abi_b[D.qi(1995, q)] for q in range(1, 5)),
-                                            D.abi_annual()[1995]["business"]]
+    out["n1_1995_quarter_sum_vs_printed_total_vs_annual_table"] = [
+        sum(abi_b[D.qi(1995, q)] for q in range(1, 5)), 51878, D.abi_annual()[1995]["business"]]
 
     def n1_series(base, theta, k95, transform="sum4"):
         v = dict(base)
@@ -200,16 +204,16 @@ def q_n() -> dict:
     ann = D.abi_annual()
     years = sorted(ann)
 
-    def n2_series(theta, trend=False):
-        g = {y: ann[y]["nonbusiness"] / ann[y - 1]["nonbusiness"] - 1 for y in years if y - 1 in ann}
+    def n2_series(theta, trend=False, masks=True):
+        g = {y: round(ann[y]["nonbusiness"] / ann[y - 1]["nonbusiness"] - 1, TIE) for y in years if y - 1 in ann}
         out_s, hist = [], []
         for y in years[1:]:
-            masked = any(2005 <= yy <= 2008 or 2020 <= yy <= 2021 for yy in (y - 1, y))
+            masked = masks and any(2005 <= yy <= 2008 or 2020 <= yy <= 2021 for yy in (y - 1, y))
             on = None
             if not masked:
                 if trend:
                     if len(hist) >= 5:
-                        on = bool(g[y] - statistics.median(hist[-5:]) >= theta)
+                        on = bool(round(g[y] - statistics.median(hist[-5:]), TIE) >= theta)
                     hist.append(g[y])
                 else:
                     on = bool(g[y] >= theta)
@@ -237,6 +241,25 @@ def q_n() -> dict:
                          "onsets": onset_table(n3s, E.onsets(n3s, 4))}
 
     # Holm across the family {N1 (worst combo), N2 annual}
+    # robustness qualifiers (SPEC v1 s.0): LEAD at every scored peak only under a variant
+    n1_variant_leads = any(out[k]["lead_all_primary"] for k in ("N1_robust_qyoy", "N1_robust_12month_tables"))
+    out["N1_qualifiers"] = (["transform-sensitive"] if n1_variant_leads
+                            and not combos["N1|1995Q4"]["lead_all_primary"] else [])
+    out["N2_qualifiers"] = (["trend-sensitive"] if out["N2_annual_robust_trend"]["lead_all_primary"]
+                            and not out["N2_annual"]["lead_all_primary"] else [])
+    # onsets suppressed by the masks (present without masks, absent with them), primary theta
+    def ons(series, quiet):
+        return {mstr(series[i].release) for i in E.onsets(series, quiet)}
+    n1m = quarterly(n1_q4, RAW_COURT, lambda g, d: g >= 0.10)[0]
+    n1u = quarterly(n1_q4, [], lambda g, d: g >= 0.10)[0]
+    n2m, n2u = n2_series(0.10)[0], n2_series(0.10, masks=False)[0]
+    out["suppressed_onsets"] = {"N1": sorted(ons(n1u, 4) - ons(n1m, 4)),
+                                "N2": sorted(ons(n2u, 1) - ons(n2m, 1))}
+    # sensitivity: onsets leading the exogenous 2020-02 peak excluded instead of FALSE
+    out["sens_2020_excluded"] = {
+        "N1": grade(by_c, 18, 4, 8, 4, exo_policy="excluded")["primary"]["false_alarms"],
+        "N2": grade({th: n2_series(th)[0] for th in THETAS}, 18, 1, 2, 1,
+                    exo_policy="excluded")["primary"]["false_alarms"]}
     hp = E.holm({"N1": worst_p, "N2": out["N2_annual"]["rotation"]["p"]})
     out["holm"] = hp
     out["N1_ALERT"] = out["N1_alert_pre_holm_all_combos"] and hp["N1"] <= 0.10
@@ -322,10 +345,25 @@ def q_c() -> dict:
         res["robust_pp"] = pp
         res["pp_passes"] = sum(v["lead_all_fa_ok"] for v in pp.values()) >= 2
         if sid in TYPE_SPECIFIC:
-            s = mk(0.10, extra=[(D.qi(2001, 1), D.qi(2002, 3))])
+            s = quarterly(r, raws, (lambda g, d: g >= 0.10 and d >= floor), release_lag=2,
+                          drop_g=[(D.qi(2001, 1), D.qi(2002, 3))])[0]
             S = E.scored_peaks(s, 18)
             sc = E.score(s, 18, 4, S)
             res["callreport_2001_without_2001Q1_2002Q3"] = [x for x in sc["per_peak"] if x["peak"] == "2001-03"]
+        res["qualifiers"] = ((["transform-sensitive"] if res["robust_qyoy"]["lead_all_primary"] else [])
+                             + (["scale-sensitive"] if res["pp_passes"] else [])
+                             ) if not gr["lead_all_primary"] else []
+        res["robust_qyoy_record"] = {"per_peak": res["robust_qyoy"]["primary"]["per_peak"],
+                                     "false_alarms": res["robust_qyoy"]["primary"]["false_alarms"],
+                                     "rotation_p": res["robust_qyoy"]["rotation"]["p"],
+                                     "lead_all_by_theta": {th: len(res["robust_qyoy"]["scored_peaks"]) >= 2 and all(
+                                         x["outcome"] == "LEAD" for x in v["per_peak"])
+                                         for th, v in res["robust_qyoy"]["by_theta"].items()}}
+        sm = quarterly(r, raws, (lambda g, d: g >= 0.10 and d >= floor), release_lag=2)[0]
+        su = quarterly(r, [], (lambda g, d: g >= 0.10 and d >= floor), release_lag=2)[0]
+        res["suppressed_onsets"] = sorted({mstr(su[i].release) for i in E.onsets(su, 4)} -
+                                          {mstr(sm[i].release) for i in E.onsets(sm, 4)})
+        res["sens_2020_excluded_false_alarms"] = grade(by, 18, 4, 8, 4, exo_policy="excluded")["primary"]["false_alarms"]
         out["series"][sid] = res
         pvals[sid] = gr["rotation"]["p"]
         joint[sid] = by[0.10]
@@ -380,7 +418,7 @@ def g12(vals: dict[int, float], t: int):
     a0 = [vals.get(m) for m in range(t - 23, t - 11)]
     if any(v is None for v in a1 + a0):
         return None
-    return sum(a1) / sum(a0) - 1
+    return round(sum(a1) / sum(a0) - 1, TIE)
 
 
 def capped(vals: dict[int, float], mult: float) -> dict[int, float]:
@@ -413,7 +451,7 @@ def qh_grade(vals, *, lag=2, attribution=True) -> dict:
             others = window[:j] + window[j + 1:]
             w2 = list(window)
             w2[j] = statistics.median(others)
-            return sum(w2[12:]) / sum(w2[:12]) - 1 < theta
+            return round(sum(w2[12:]) / sum(w2[:12]) - 1, TIE) < theta
         return disc if attribution else None
     S = E.scored_peaks(by[0.25], 24, lo=lo, hi=hi)
     sc = {th: E.score(by[th], 24, 6, S, lo=lo, hi=hi, discount=disc_for(th)) for th in QH_THETAS}
@@ -436,42 +474,48 @@ def qh_grade(vals, *, lag=2, attribution=True) -> dict:
             "criteria": crit, "passes": all(crit.values())}
 
 
-def harding_pagan(x: dict[int, float], k=5, min_phase=6, min_cycle=15):
-    """Bry-Boschan-style monthly turning points (Harding-Pagan rules) on x."""
+def harding_pagan(x: dict[int, float], k=5, min_phase=6, min_cycle=15, censor=6):
+    """Bry-Boschan-style monthly turning points (Harding-Pagan rules) on x:
+    local extrema within +/-k months, alternation (keep the more extreme),
+    then the weaker pair (smaller amplitude) is removed while a phase is
+    shorter than min_phase or a peak-to-peak / trough-to-trough cycle shorter
+    than min_cycle; turning points within `censor` months of either end are
+    dropped."""
     ms = sorted(x)
-    pk = [m for m in ms if all(x[m] >= x.get(m + j, -1e18) and x[m] >= x.get(m - j, -1e18) for j in range(1, k + 1))
-          and all((m + j) in x and (m - j) in x for j in range(1, k + 1))]
-    tr = [m for m in ms if all(x[m] <= x.get(m + j, 1e18) and x[m] <= x.get(m - j, 1e18) for j in range(1, k + 1))
-          and all((m + j) in x and (m - j) in x for j in range(1, k + 1))]
-    tps = sorted([(m, "P") for m in pk] + [(m, "T") for m in tr])
+    lo, hi = ms[0], ms[-1]
+
+    def ext(m, sign):
+        nb = [m + j for j in range(-k, k + 1) if j and (m + j) in x]
+        return len(nb) == 2 * k and all(sign * x[m] >= sign * x[n] for n in nb)
+    tps = sorted([(m, "P") for m in ms if ext(m, 1)] + [(m, "T") for m in ms if ext(m, -1)])
+    tps = [tp for tp in tps if lo + censor <= tp[0] <= hi - censor]
+    amp = lambda a, b: abs(x[a[0]] - x[b[0]])  # noqa: E731
     changed = True
-    while changed:
+    while changed and len(tps) > 2:
         changed = False
-        # alternation
-        for i in range(len(tps) - 1):
-            (m1, t1), (m2, t2) = tps[i], tps[i + 1]
-            if t1 == t2:
-                keep = (m1 if (x[m1] >= x[m2]) == (t1 == "P") else m2)
-                tps = [tp for tp in tps if tp[0] != (m2 if keep == m1 else m1) or tp[1] != t1]
+        for i in range(len(tps) - 1):                     # alternation
+            a, b = tps[i], tps[i + 1]
+            if a[1] == b[1]:
+                drop = b if (x[a[0]] >= x[b[0]]) == (a[1] == "P") else a
+                tps.remove(drop)
                 changed = True
                 break
         if changed:
             continue
-        for i in range(len(tps) - 1):
-            if tps[i + 1][0] - tps[i][0] < min_phase:
-                # drop the weaker pair member
-                a, b = tps[i], tps[i + 1]
-                amp = abs(x[a[0]] - x[b[0]])
-                tps = tps[:i] + tps[i + 2:] if amp < 1e18 else tps
-                changed = True
-                break
-        if changed:
+        pairs = [(i, amp(tps[i], tps[i + 1])) for i in range(len(tps) - 1)
+                 if tps[i + 1][0] - tps[i][0] < min_phase]
+        if pairs:                                         # shortest phases: drop the weakest pair
+            i = min(pairs, key=lambda z: z[1])[0]
+            del tps[i:i + 2]
+            changed = True
             continue
-        for i in range(len(tps) - 2):
-            if tps[i + 2][0] - tps[i][0] < min_cycle:
-                tps = tps[:i + 1] + tps[i + 3:]
-                changed = True
-                break
+        cyc = [i for i in range(len(tps) - 2) if tps[i + 2][0] - tps[i][0] < min_cycle]
+        if cyc:
+            i = cyc[0]
+            # remove whichever adjacent pair inside the short cycle has the smaller amplitude
+            j = i if amp(tps[i], tps[i + 1]) <= amp(tps[i + 1], tps[i + 2]) else i + 1
+            del tps[j:j + 2]
+            changed = True
     return tps
 
 
@@ -518,6 +562,13 @@ def q_h() -> dict:
                     "liabilities_trough_trailing": mstr(cand_tr[-1]) if cand_tr else None,
                     "lead_months_trailing": p - cand_tr[-1] if cand_tr else None})
     out["replication_turning_points"] = rep
+    tps15 = harding_pagan(cma, min_phase=15)
+    rep15 = []
+    for r_ in rep:
+        pk = E.M(int(r_["peak"][:4]), int(r_["peak"][5:]))
+        cand = [m for m, t in tps15 if t == "T" and pk - 36 <= m <= pk]
+        rep15.append({"peak": r_["peak"], "lead_months_cma": pk - cand[-1] if cand else None})
+    out["replication_phase15"] = rep15
     # context runs (not decisive)
     ma = D.nber_monthly("M0933AUSM144NNBR")
     mc = D.nber_monthly("M0933CUSM144NNBR")
@@ -1192,7 +1243,7 @@ def main():
     R["Q_R"] = q_r()
     R["secondary"] = secondary(qn, qc)
     R["current"] = current(qn)
-    with open(os.path.join(HERE, "results.json"), "w") as f:
+    with open(os.environ.get("DISTRESS_OUT", os.path.join(HERE, "results.json")), "w") as f:
         json.dump(R, f, indent=1, default=lambda o: o.item() if hasattr(o, "item") else str(o))
     print("wrote results.json")
 

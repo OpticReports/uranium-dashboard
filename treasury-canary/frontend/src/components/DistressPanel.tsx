@@ -97,6 +97,9 @@ function BankRow({ b }: { b: DistressBank }) {
       <td className="py-1.5 pr-3 text-slate-300">
         {b.label}
         <div className="text-[10px] leading-snug text-slate-500">{b.per_peak.join(" · ")}</div>
+        {b.variant_note && (
+          <div className="text-[10px] leading-snug text-slate-500">Variant: {b.variant_note}.</div>
+        )}
       </td>
       <td className="px-2 py-1.5 text-right font-mono tabular-nums text-slate-200">
         {b.latest.toFixed(2)}%
@@ -105,6 +108,9 @@ function BankRow({ b }: { b: DistressBank }) {
       <td className="px-2 py-1.5 text-right font-mono tabular-nums text-slate-300">{pct(b.rule.g)}</td>
       <td className="pl-2 py-1.5 text-right">
         <RoleChip role={b.role} />
+        {b.qualifiers.length > 0 && (
+          <div className="mt-0.5 text-[9px] uppercase tracking-wide text-slate-500">{b.qualifiers.join(", ")}</div>
+        )}
       </td>
     </tr>
   );
