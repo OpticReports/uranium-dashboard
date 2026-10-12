@@ -151,6 +151,14 @@ FRED_SEVERITY: dict[str, str] = {
     "capex_soft": "B985RC1Q027SBEA",   # software investment, $bn
     "cpi": "CPIAUCSL",                 # CPI (real-housing deflator; impact study)
 }
+# Distress panel (studies/distress-signals.md, Q-C): bank delinquency and
+# charge-off rates, quarterly, seasonally adjusted. Display + the study's rule;
+# none passed as a recession warning (all-loan charge-offs 'confirm').
+FRED_DISTRESS: dict[str, str] = {
+    "dq_all": "DRALACBS", "dq_ci": "DRBLACBS", "dq_consumer": "DRCLACBS",
+    "dq_card": "DRCCLACBS", "dq_mortgage": "DRSFRMACBS", "dq_cre": "DRCRELEXFACBS",
+    "co_all": "CORALACBS", "co_ci": "CORBLACBS", "co_card": "CORCCACBS",
+}
 # Pin board (trigger channels) — the measurable proxies for what historically
 # "pricks the bubble". (Oil/EFFR/HY/term premium/SOFR-IORB already in bundle.)
 FRED_PINS: dict[str, str] = {

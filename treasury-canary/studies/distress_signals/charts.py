@@ -31,6 +31,16 @@ CLS = {"LEAD": S3, "COINCIDENT": S2, "LATE": CRIT, "FALSE": INK2, "PENDING": BAS
 plt.rcParams.update({"font.size": 9, "axes.edgecolor": GRID, "axes.labelcolor": INK2,
                      "xtick.color": INK2, "ytick.color": INK2})
 RES = json.load(open(os.path.join(HERE, "results.json")))
+TITLES = {
+    "national": "National bankruptcy filings lag: the +10% rule never warned before the 1990 or 2001 recessions;\n"
+                "each series' three onsets all came when no recession followed, two of them just after one ended",
+    "liabilities": "Liabilities of failing firms, 1967-83 out of sample: the alert rule fired after the 1969 and 1973 "
+                   "recessions began;\nits only early signal (1980-11) came from one giant failure month and is discounted",
+    "states": "A state's filing growth predicted its own job losses in 1981-2000 but not in 2002-2025;\n"
+              "the pre-registered test needs both eras (plus out-of-sample), so no state alert",
+    "bank": "Bank loan stress: no series warned before every recession; all-loan charge-offs confirm "
+            "(2 months before 1990, at the 2001 start, 1 month before 2007)",
+}
 
 
 def style(ax):
@@ -84,7 +94,7 @@ def fig_national():
     nb = [ann[y]["nonbusiness"] / us_pop[y] for y in ys]           # per 1,000 (pop in thousands)
     ax.plot([dt.date(y, 7, 1) for y in ys], nb, color=S1, lw=2, marker="o", ms=3)
     cur = RES["current"]
-    nb12 = sum(r["nonbusiness_12m"] for r in cur["state_12m_to_2026Q2"]) / us_pop[2025]
+    nb12 = D.f2_national("12month", "nb_all")[D.qi(2026, 2)] / us_pop[2025]
     ax.plot([dt.date(2026, 6, 30)], [nb12], "o", color=CRIT, ms=7, mec=SURF, mew=1.5)
     ax.annotate(f"{nb12:.2f} per 1,000\n(12 months to Jun-2026)", (dt.date(2026, 6, 30), nb12),
                 xytext=(-120, 38), textcoords="offset points", fontsize=8.5, color=INK,
@@ -123,7 +133,7 @@ def fig_national():
         axes[2].scatter([], [], color=c, s=40, label=lab)
     axes[2].legend(loc="lower left", fontsize=7.5, frameon=False, ncol=3)
     axes[2].set_xlim(dt.date(1979, 6, 1), dt.date(2027, 3, 1))
-    fig.suptitle(RES.get("_figtitles", {}).get("national", "National bankruptcy filings and the pre-registered warning rule"),
+    fig.suptitle(TITLES["national"],
                  x=0.01, ha="left", fontsize=11, color=INK)
     fig.text(0.01, 0.005, "Grey bands = NBER recessions; hatched = masked (2005 law change, 2020-21 support, and the "
              "quarters whose growth still compares against them). Dots sit on the +10% line at the date each "
@@ -139,25 +149,28 @@ def fig_liabilities():
     fig, ax = plt.subplots(figsize=(12, 4.6))
     fig.patch.set_facecolor(SURF)
     style(ax)
-    shade(ax, 1955)
     ax.axvspan(dt.date(1967, 1, 1), dt.date(1983, 12, 31), color="#eef4fb", lw=0, zorder=0)
+    for p, tau in [(E.M(1957, 8), E.M(1958, 4)), (E.M(1960, 4), E.M(1961, 2))] + list(E.PEAKS):
+        if 1955 <= p // 12 <= 1986:
+            ax.axvspan(d_of(p), d_of(tau), color=REC, lw=0, zorder=1, alpha=0.9)
     xs = sorted(g)
     ax.plot(xs, [100 * g[x] for x in xs], color=S1, lw=1.4)
     ax.axhline(25, color=CRIT, lw=1, ls="--")
     ax.text(dt.date(1955, 6, 1), 30, "rule: on above +25%", fontsize=7.5, color=CRIT)
     ons = [o for o in qh["primary_real_cpi"]["primary"]["onsets"]]
+    notes = {"LATE": "fired {r}:\nrecession had begun {p}", "LEAD": "{r}: one giant month\n(Sep-1980), discounted"}
     for o in ons:
-        c = CLS.get(o["class"], BASE)
-        if o.get("discounted"):
-            c = BASE
-        ax.scatter([d_str(o["release"])], [25], s=52, color=c, edgecolor=SURF, lw=1.2, zorder=5)
+        c = BASE if o.get("discounted") else CLS.get(o["class"], BASE)
+        d = d_str(o["release"])
+        ax.scatter([d], [25], s=52, color=c, edgecolor=SURF, lw=1.2, zorder=5)
+        txt = notes.get(o["class"], "").format(r=o["release"], p=o.get("peak"))
+        if txt:
+            ax.annotate(txt, (d, 25), xytext=(6, -38), textcoords="offset points", fontsize=7.5, color=INK2)
     ax.text(dt.date(1967, 3, 1), ax.get_ylim()[1] * 0.9, "out-of-sample test window 1967-1983",
             fontsize=8, color=S1)
     ax.set_ylabel("real liabilities, 12-month sum, % vs a year earlier")
     ax.set_xlim(dt.date(1955, 1, 1), dt.date(1987, 1, 1))
-    ax.set_title(RES.get("_figtitles", {}).get("liabilities",
-                 "Dollar liabilities of failing businesses (D&B, deflated) and the warning rule"),
-                 loc="left", fontsize=10.5, color=INK)
+    ax.set_title(TITLES["liabilities"], loc="left", fontsize=10.5, color=INK)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, "fig_failure_liabilities.png"), dpi=150, facecolor=SURF)
 
@@ -170,21 +183,22 @@ def fig_states():
     ax = axes[0]
     style(ax)
     rows = []
-    for pan, plab in (("panel_A", "1981-2000 annual"), ("panel_B", "2002-2025 quarterly")):
+    for pan, plab in (("panel_A", "1981-2000"), ("panel_B", "2002-2025")):
         for sig, slab in (("S1", "consumer"), ("S2", "business")):
-            for tgt, tlab in (("a", "unemployment rate"), ("b", "job losses")):
+            for tgt, tlab in (("a", "unemployment"), ("b", "job losses")):
                 r = qr[pan][f"{sig}/{tgt}"]
-                rows.append((f"{slab} -> {tlab}, {plab}", r["beta"], r["se"]["division_cr1"],
-                             r["wcb_division"]["p"]))
-    for i, (lab, b, se, p) in enumerate(rows[::-1]):
-        c = S3 if p <= 0.05 and b > 0 else (S2 if p <= 0.10 else BASE)
-        ax.errorbar([b], [i], xerr=[[1.96 * se], [1.96 * se]], fmt="o", color=c, ms=6, capsize=3)
-        ax.text(ax.get_xlim()[1] if False else 0, i + 0.28, f"{lab}   p={p:.3f}", fontsize=7.5, color=INK2,
-                ha="center")
+                rows.append((f"{plab}: {slab} filings -> {tlab}", r["wcb_division"]["t"], r["wcb_division"]["p"]))
+    for i, (lab, t, p) in enumerate(rows[::-1]):
+        c = S3 if p <= 0.05 else (S2 if p <= 0.10 else BASE)
+        ax.barh([i], [t], color=c, height=0.6)
+        ax.text(max(t, 0) + 0.15, i, f"p={p:.3f}", va="center", fontsize=7.5, color=INK2)
+    ax.set_yticks(range(len(rows)))
+    ax.set_yticklabels([r[0] for r in rows[::-1]], fontsize=7.5)
     ax.axvline(0, color=INK2, lw=0.8)
-    ax.set_yticks([])
-    ax.set_xlabel("effect of a state's filing growth on its next-year deterioration (beta, 95% band)")
-    ax.set_title("Does a state's filing growth predict its own job losses?", loc="left", fontsize=10, color=INK)
+    ax.axvline(1.645, color=CRIT, lw=0.8, ls="--")
+    ax.set_xlabel("t-statistic (division-clustered); bootstrap p shown")
+    ax.set_title("Does a state's filing growth predict its own deterioration next year?", loc="left",
+                 fontsize=10, color=INK)
     ax = axes[1]
     style(ax)
     for sig, col in (("S1", S1), ("S2", S2)):
@@ -205,7 +219,7 @@ def fig_states():
     ax.legend(fontsize=8, frameon=False, loc="upper left")
     n = qr["panel_B"]["S1/a"]["event_study"]["n_regional"]
     ax.set_title(f"Around {n} state-only unemployment upturns (2014-19)", loc="left", fontsize=10, color=INK)
-    fig.suptitle(RES.get("_figtitles", {}).get("states", "State panels"), x=0.01, ha="left", fontsize=11, color=INK)
+    fig.suptitle(TITLES["states"], x=0.01, ha="left", fontsize=11, color=INK)
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     fig.savefig(os.path.join(OUT, "fig_state_panels.png"), dpi=150, facecolor=SURF)
 
@@ -235,7 +249,7 @@ def fig_bank():
         g = v["grade"]
         tag = "ALERT" if v["ALERT"] else ("confirms" if v["PANEL"] else "")
         ax.set_title(f"{NAMES[sid]} {('- ' + tag) if tag else ''}", loc="left", fontsize=8.5, color=INK)
-    fig.suptitle(RES.get("_figtitles", {}).get("bank", "Bank delinquency and charge-off rates (%), with warning onsets"),
+    fig.suptitle(TITLES["bank"],
                  x=0.01, ha="left", fontsize=11, color=INK)
     fig.text(0.01, 0.005, "Vertical lines = rule onsets at their publication date: green before a recession, "
              "orange at its start, red inside it, dark grey no recession followed, light grey too recent.",

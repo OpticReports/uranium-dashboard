@@ -949,6 +949,70 @@ export interface SqueezeRadarData {
   honesty: string[];
 }
 
+// ── Distress panel (studies/distress-signals.md) ────────────────────────────
+export interface DistressRuleState {
+  asof: string | null;
+  g: number | null;
+  on: boolean | null;
+  fresh_onset?: boolean;
+  onset_quarters: string[];
+}
+export interface DistressRecord {
+  role: string;
+  summary: string;
+  per_peak?: string[];
+  false_alarms?: string[];
+  rotation_p?: number;
+}
+export interface DistressBank {
+  id: string;
+  label: string;
+  asof: string;
+  latest: number;
+  rule: DistressRuleState;
+  role: string;
+  per_peak: string[];
+  false_alarms: string[];
+  rotation_p: number;
+}
+export interface DistressStateRow {
+  state: string;
+  per_1000: number | null;
+  consumer_yoy: number | null;
+  business_ch7_yoy: number | null;
+  business_ch7_12m: number;
+}
+export interface Distress {
+  headline: string;
+  study: { doc: string; run: string; spec: string };
+  history_end: string;
+  live_quarters: string[];
+  national: {
+    consumer: {
+      asof: string;
+      filings_12m: number;
+      per_1000: number;
+      yoy_12m: number | null;
+      per_1000_by_year: Record<string, number>;
+      rule: DistressRuleState;
+      role: string;
+      record: DistressRecord;
+      g_path: { q: string; g: number | null }[];
+    };
+    business: {
+      rule: DistressRuleState;
+      role: string;
+      record: DistressRecord;
+      g_path: { q: string; g: number | null }[];
+    };
+    chapter11: { rule: DistressRuleState; note: string };
+  };
+  bank: DistressBank[];
+  states: { asof: string; rows: DistressStateRow[]; role: string; summary: string };
+  failure_liabilities: DistressRecord;
+  alert: null;
+}
+
 export const api = {
   squeezeRadar: () => getJson<SqueezeRadarData>("/squeeze/radar"),
   cycle: () => getJson<any>("/cycle"),
@@ -967,6 +1031,7 @@ export const api = {
   recessionModel: () => getJson<RecessionModel>("/recession-model"),
   laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
   laborBoard: () => getJson<LaborBoard>("/labor/board"),
+  distress: () => getJson<Distress>("/distress"),
   marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
   marginFast: () => getJson<MarginFast>("/margin/fast"),
   ratesShock: () => getJson<RateShock>("/rates/shock"),

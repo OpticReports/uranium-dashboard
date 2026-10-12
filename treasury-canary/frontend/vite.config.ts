@@ -20,6 +20,7 @@ const proxied = [
   "/severity",
   "/cycle",
   "/labor",
+  "/distress",
   "/flows",
   "/crossasset",
   "/stat-regime",
