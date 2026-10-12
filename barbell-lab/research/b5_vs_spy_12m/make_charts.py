@@ -105,10 +105,10 @@ ax5.set_title(f"Monthly return (%) — B.5 beat SPY in {b5['months_beating_spy']
 fig.suptitle("B.5 Enhanced sleeve vs SPY — trailing 12 months  (buy 2025-10-09 close → mark 2026-10-09 close)",
              x=0.06, y=0.985, ha="left", color=INK, fontsize=13, fontweight="bold")
 fig.text(0.06, 0.012,
-         f"Simulated from v1.0 target weights (barbell-lab config/portfolio.yaml, tail=TAIL) via the platform's simulate(): ±20% relative bands "
-         f"checked month-end, platform cost model (incl. entry). Total return (Yahoo adjclose; FMP cross-check ≤6bp/ticker). "
+         f"Simulated from v1.0 target weights (register LIVE since 2026-07-17; earlier months are hypothetical) via the platform's simulate(): "
+         f"±20% relative bands checked month-end, platform cost model (incl. entry). Total return (Yahoo adjclose; FMP cross-check within 6.2bp/ticker). "
          f"NOT the live account's fills/timing; bot sleeve not included.  Vol {b5['ann_vol']:.1%} vs {spy['ann_vol']:.1%} · "
-         f"beta {b5['beta_to_spy_daily']:.2f} · corr {b5['corr_to_spy_daily']:.2f}.",
+         f"beta {b5['beta_to_spy_daily']:.2f} daily / 0.58 weekly · corr {b5['corr_to_spy_daily']:.2f}.",
          color=MUTED, fontsize=7.5, wrap=True)
 fig.subplots_adjust(left=0.06, right=0.97, top=0.92, bottom=0.09)
 fig.savefig(sys.argv[2], dpi=150, facecolor=SURF)

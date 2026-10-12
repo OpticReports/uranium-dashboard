@@ -24,6 +24,9 @@ import pandas as pd
 
 from barbell.backtest.engine import resolve_targets, simulate
 from barbell.backtest.metrics import TRADING_DAYS
+from barbell.config import load
+
+BAND = float(load("backtest")["rebalance"]["band_relative"])
 
 T0, T1 = "2025-10-09", "2026-10-09"          # buy close -> mark close
 ALT_T0, ALT_T1 = "2025-09-30", "2026-09-30"  # month-end TTM (window sensitivity)
@@ -44,7 +47,7 @@ def window_returns(px: pd.DataFrame, t0: str, t1: str, src: str = SRC) -> pd.Dat
     return p.pct_change().iloc[1:]          # first return = day after the buy close
 
 
-def replay_weights(r: pd.DataFrame, targets: dict, band: float = 0.20) -> pd.DataFrame:
+def replay_weights(r: pd.DataFrame, targets: dict, band: float = BAND) -> pd.DataFrame:
     """Zero-cost replay of engine.simulate(threshold) that also records each
     day's PRE-return weights (the engine only keeps month-end weights). Used
     for attribution only; asserted equal to the engine's zero-cost path."""
@@ -78,8 +81,8 @@ def carino(pre: pd.DataFrame, r: pd.DataFrame) -> dict:
     return contrib
 
 
-def stats(ret: pd.Series, spy: pd.Series, rf: pd.Series) -> dict:
-    wealth = pd.concat([pd.Series([1.0], index=[ret.index[0] - pd.Timedelta(days=1)]),
+def stats(ret: pd.Series, spy: pd.Series, rf: pd.Series, t0: str) -> dict:
+    wealth = pd.concat([pd.Series([1.0], index=[pd.Timestamp(t0)]),
                         (1 + ret).cumprod()])          # include the t0 base as a peak
     dd = wealth / wealth.cummax() - 1
     trough = dd.idxmin()
@@ -87,7 +90,9 @@ def stats(ret: pd.Series, spy: pd.Series, rf: pd.Series) -> dict:
     ex = ret - rf
     m = (1 + ret).groupby(ret.index.to_period("M")).prod() - 1
     ms = (1 + spy).groupby(spy.index.to_period("M")).prod() - 1
-    up, dn = ms > 0, ms < 0
+    full = m.index[1:-1]                    # first/last months are partial windows
+    up, dn = ms[full] > 0, ms[full] < 0
+    gm = lambda x: float((1 + x).prod() ** (1 / len(x)) - 1)
     cov = np.cov(ret, spy, ddof=1)
     return {
         "total_return": float(wealth.iloc[-1] - 1),
@@ -99,11 +104,12 @@ def stats(ret: pd.Series, spy: pd.Series, rf: pd.Series) -> dict:
         "corr_to_spy_daily": float(np.corrcoef(ret, spy)[0, 1]),
         "worst_day": float(ret.min()), "worst_day_date": str(ret.idxmin().date()),
         "best_month": float(m.max()), "worst_month": float(m.min()),
-        "up_capture_monthly": float((1 + m[up]).prod() ** (1 / up.sum()) - 1) /
-                              float((1 + ms[up]).prod() ** (1 / up.sum()) - 1) if up.any() else None,
-        "down_capture_monthly": float((1 + m[dn]).prod() ** (1 / dn.sum()) - 1) /
-                                float((1 + ms[dn]).prod() ** (1 / dn.sum()) - 1) if dn.any() else None,
+        # FRAGILE on one year: n_down is tiny; read with the n's (counter-agent MINOR-2)
+        "up_capture_full_months": gm(m[full][up]) / gm(ms[full][up]) if up.any() else None,
+        "down_capture_full_months": gm(m[full][dn]) / gm(ms[full][dn]) if dn.any() else None,
+        "n_up_full_months": int(up.sum()), "n_down_full_months": int(dn.sum()),
         "months_beating_spy": f"{int((m > ms).sum())}/{len(m)}",
+        "full_months_beating_spy": f"{int((m[full] > ms[full]).sum())}/{len(full)}",
         "monthly": {str(k): float(v) for k, v in m.items()},
     }
 
@@ -119,11 +125,11 @@ def run(px: pd.DataFrame, t0: str, t1: str, src: str = SRC) -> dict:
         "B5_thesis_page_bands": (THESIS_PAGE, "threshold"),
     }
     out = {"window": {"buy_close": t0, "mark_close": t1, "n_return_days": len(r), "price_source": src},
-           "SPY": stats(spy, spy, rf),
+           "SPY": stats(spy, spy, rf, t0),
            "per_ticker_total_return": {t: float((1 + r[t]).prod() - 1) for t in r.columns}}
     for name, (tg, mode) in variants.items():
         sim = simulate(r, tg, mode=mode)
-        s = stats(sim.returns, spy, rf)
+        s = stats(sim.returns, spy, rf, t0)
         s.update(targets=tg, mode=mode, n_rebalances=sim.n_rebalances,
                  cost_drag_bp=float(sim.cost_drag_annual * 1e4),
                  excess_vs_spy=s["total_return"] - out["SPY"]["total_return"])
@@ -136,7 +142,7 @@ def run(px: pd.DataFrame, t0: str, t1: str, src: str = SRC) -> dict:
             s["rebalance_dates"] = [str(d.date()) for d in pre.index
                                     if d in set(sim.weights_path.index)
                                     and (np.abs(sim.weights_path.loc[d].values /
-                                                np.array([tg[t] for t in sim.weights_path.columns]) - 1) > 0.20).any()]
+                                                np.array([tg[t] for t in sim.weights_path.columns]) - 1) > BAND).any()]
             s["month_end_weights"] = {str(d.date()): {t: round(float(v), 4) for t, v in row.items()}
                                       for d, row in sim.weights_path.iterrows()}
         s["daily_returns"] = {str(d.date()): float(v) for d, v in sim.returns.items()}
@@ -165,7 +171,8 @@ if __name__ == "__main__":
     for k in [k for k in p if k.startswith("B5")]:
         d = p[k]
         print(f"{k:20s}", fmt(d), f"| xs {d['excess_vs_spy']:+.2%} reb {d['n_rebalances']} cost {d['cost_drag_bp']:.1f}bp",
-              f"| up/down cap {d['up_capture_monthly']:.2f}/{d['down_capture_monthly']:.2f}")
+              f"| full-month up/down cap {d['up_capture_full_months']:.2f}/{d['down_capture_full_months']:.2f}"
+              f" (n {d['n_up_full_months']}/{d['n_down_full_months']}) full months beat {d['full_months_beating_spy']}")
     print("attribution pp (zero-cost):", {t: round(v, 2) for t, v in p["B5_v1.0_TAIL_bands"]["attribution_pp_zero_cost"].items()})
     print("rebalance dates:", p["B5_v1.0_TAIL_bands"]["rebalance_dates"])
     for k in ("window_sensitivity_month_end", "provider_sensitivity_fmp"):
