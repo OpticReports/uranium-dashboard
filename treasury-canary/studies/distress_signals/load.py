@@ -192,3 +192,40 @@ def state_claims_weekly() -> dict[str, dict[dt.date, int]]:
             if r["st"] in STATES and r["c3"] not in ("", None):
                 out[r["st"]][dt.date.fromisoformat(r["rptdate"])] = int(r["c3"])
     return dict(out)
+
+
+# ------------------------------------------------------------ bottoms study (distress-bottoms.md)
+DNB_COUNT_SEGMENTS = ("M0929AUSM155NNBR", "M0929BUSM155NNBR", "M0929CUSM474NNBR")
+DNB_LIAB_SEGMENTS = ("M0933AUSM144NNBR", "M0933BUSM144NNBR", "M0933CUSM144NNBR")
+
+
+def dnb_count_segments() -> list[dict[int, float]]:
+    """D&B number of commercial failures, monthly NSA, as its three separately
+    defined segments (1894-01..1938-08, 1934-06..1939-12, 1939-01..1965-06).
+    Never spliced: in their overlaps the second runs ~5% above the first and the
+    third 24-38% above the second, so growth is computed within a segment only."""
+    return [nber_monthly(sid) for sid in DNB_COUNT_SEGMENTS]
+
+
+def dnb_liability_segments() -> list[dict[int, float]]:
+    """D&B liabilities of commercial failures ($m, monthly NSA) in three
+    segments; the third (1939-01..) continues with BCD series 14 from 1968-02
+    to 1986-12 (the two agree within 0.05 over 1953-01..1968-01)."""
+    a, b, c = (nber_monthly(sid) for sid in DNB_LIAB_SEGMENTS)
+    bcd = bcd14()
+    c = dict(c)
+    c.update({m: v for m, v in bcd.items() if m > max(c)})
+    return [a, b, c]
+
+
+def equity_monthly() -> tuple[dict[int, float], dict[int, float]]:
+    """Monthly-average stock price levels as two sources, never compared across
+    the seam: Cowles/S&P all-common-stocks index 1871-01..1956-12 (NYSE closed
+    Aug-Nov 1914) and OECD US share prices 1957-01 onward."""
+    return (fred_monthly("M1125AUSM343NNBR", "fred_targets"),
+            fred_monthly("SPASTT01USM661N", "fred_targets"))
+
+
+def claims_weekly(sa: bool = True) -> dict[dt.date, float]:
+    """Initial jobless claims by week-ending Saturday, 1967-01-07 onward."""
+    return {dt.date.fromisoformat(d): v for d, v in fred("ICSA" if sa else "ICNSA", "fred_targets").items()}
