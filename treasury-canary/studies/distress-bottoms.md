@@ -382,37 +382,41 @@ within 12 months, and the share of the b_r → b_r + 12 rebound already missed.
   clock (level peak at p_r + U(−6, 3) + U[12, 30], no trough information) and
   under a random circular shift.
 
-### 6b. Calibration and power — results (bottoms_power.json, 2026-10-13, synthetic only)
+### 6b. Calibration and power — results (bottoms_power.json, re-frozen 2026-10-13, synthetic only)
 
-- **Arming:** θ_A = 20%, floor 5 pp — the smallest setting with ≤ 1 roll-over a
-  decade on no-recession series at the pre-1914 noise (0.46 a decade; 0.002 at
-  the post-1914 noise). At θ_A = 10% noise alone gives 3.5 a decade before 1914.
+A first freeze (commit e825e53) used a pre-1914 noise of 0.116 that counted
+seasonal drift as noise (data re-review, BLOCKING); it gave θ_A = 20% and no
+reachable shot. Re-measured drift-robustly (`bottoms_noise.py`, 0.085) and
+re-run with 2,000 replications in the deciding cells, before any real roll-over
+was scored:
+
+- **Arming:** θ_A = 15%, floor 5 pp — 0.54 noise roll-overs a decade at the
+  pre-1914 noise (0.12 after 1914); 10% would give 2.1.
 - **Mechanical lag:** a noise-free roll-over is released 9, 7, 5 and 4 months
   after the level peak for rises of 12, 18, 24 and 30 months.
-- **Size:** P(grade) = 0 for every shot under a calibrated clock and under a
-  random shift; the lag-permutation p ≤ 0.10 in 1–6.5% of null replications.
-- **Power, P(grade) at σ = 4** (400 replications; σ = 2 / 8 in the JSON):
+- **Size:** P(grade) = 0 for every shot under the broad clock and the random
+  shift; the lag-permutation p ≤ 0.10 in 1.3–8% of null replications.
+- **Power, P(grade) at σ = 4** (2,000 replications at μ = 0 and −3, 400
+  elsewhere; σ = 2 / 8 in the JSON):
 
   | shot | μ = −6 | μ = −3 | μ = 0 | μ = +3 |
   |---|---|---|---|---|
-  | MARKS-trough | 0.26 | 0.03 | 0.00 | 0.00 |
-  | CONFIRMS-trough | 0.00 | 0.13 | 0.185 | 0.03 |
+  | MARKS-trough | 0.36 | 0.047 | 0.0005 | 0.00 |
+  | CONFIRMS-trough | 0.005 | 0.164 | **0.237** | 0.035 |
   | MARKS-equity | 0.00 | 0.00 | 0.00 | 0.00 |
 
-  The lag-permutation test alone would detect timing information in 84–89% of
-  CONFIRMS replications at μ ∈ {−3, 0}; the 2/3-HIT bar (mean ≈ 10 of 16 HITs),
-  the w-grid and the without-war condition are what bind. At the literature's
-  dispersion (counts' average deviation 6.7 months at troughs, σ ≈ 8) every
-  shot is near zero. Robustness (v1 reviewer, same code): Holm over CONFIRMS
-  alone gives identical numbers; with the literature's rise lengths (pre-1945
-  U[18, 36], postwar U[40, 70]) every shot is ≤ 0.023 at σ = 4 and CONFIRMS
-  0.000–0.007 — so CONFIRMS's 0.185 (SE 0.019) is borderline but robust.
-- **Reachability decision (frozen before the run):** all three shots are below
-  0.2 at σ = 4 for both μ = 0 and μ = −3, so **no grade is tested**. The run
-  delivers, per shot, the median e with its order-statistic interval
-  [e(5), e(12)], the hindsight g-peak timing, the false bottoms, the claims
-  benchmark (R episodes) and the trader's view — all descriptive. No
-  "bottoming" line can reach the panel from this run.
+  Noise sensitivities for CONFIRMS at μ = 0: 0.2225 at the top of the pre-1914
+  range (0.0975), 0.21 at the superseded 0.116, 0.06 at Moore's 0.134 (the
+  liabilities figure). At the literature's dispersion (σ ≈ 8) every shot is
+  ≤ 0.01.
+- **Reachability decision (final, frozen before the run): CONFIRMS-trough is
+  tested** (0.237 ≥ 0.2 at μ = 0); MARKS-trough and MARKS-equity are out of
+  reach and descriptive only. Holm runs over the one tested shot. Power is
+  low (~0.24 at the plausible μ = 0, σ = 4), so a fail is weak evidence of no
+  confirmation; a pass would mean the roll-over lands 0–9 months after each
+  recession's own trough, tracking it beyond a clock, at least 2 times in 3.
+  A "bottoming" line reaches the panel only if CONFIRMS passes AND the §2 live
+  conditions hold.
 
 ### 7. Honesty, stated now (additions to v0 §7)
 
