@@ -87,7 +87,7 @@ The same table is available in machine-readable form in `MANIFEST.csv`.
    * 1940 SIC reclassification.
    * **1984 expanded coverage and new methodology** (ERP: "not generally comparable").
    * Series discontinued after 1997.
-   * Monthly liabilities from 1894 include **bank** failures (m09033a).
+   * ~~Monthly liabilities from 1894 include **bank** failures (m09033a).~~ Corrected 2026-10-13: they do not. The m09033a sentence contradicts the same note's quarterly description; monthly sums equal HSUS V27 (which excludes banks and railroads) within ±0.5% for 1895–1933, including 1907 and 1930–33, and the 1894–1900 monthly sums equal NBER's bank-free quarterly series exactly (distress-bottoms data review). The NUMBER series (m09029a) never included banks.
 9. **Call Report reform, Mar-2001.** Before it, small banks could use internal loan classes, so the Fed imputes those splits. **FAS 166/167 in 2010Q1** brought securitized card loans back onto balance sheets, which breaks the card rates.
 10. **District changes.** Arkansas E and W are reported combined as `AR` from Jul-2018 (2018Q3), which takes the count from 94 to 93 districts. `GUAM` was relabelled `GU` in 2021. The F-2 column layout also changed in 2018Q3: a "Chapter 12" column became "other chapters (9, 12, 15, 304)". Before 2018Q3, Ch 9/15/304 appear only in the total.
 11. **Units.**
@@ -744,3 +744,30 @@ Source: abi.org/newsroom/stats pages (found via the stats taxonomy RSS feeds; 13
 | derived/abi_state_total_quarterly_1980_2005.csv | cdac7e33df6b36adddae7f9690671ff13f07354674c1363efe715595b47799f0 | 5540 rows |
 | derived/abi_district_total_quarterly_1990_2005.csv | 1d5aadcacf0f645a6d8ad64c71a59bb7fcd1dd9eb0ce9808faa714012f89f976 | 4484 rows |
 | derived/abi_district_nonbusiness_by_chapter_partial_1990_1994_2000_2004.csv | 1de2f28d3693c72fca6e3260901cfb5ec82039dc7a34cf9d0153ef1d5a95136d | 565 rows |
+
+## 9. Additions for the bottoms study (2026-10-13, `distress-bottoms.md`)
+
+* **D&B failure counts, 1898-06 typo.** M0929A (FRED and the NBER .dat file) prints 1,449 for 1898-06;
+  the 1898 monthly sum is 12,486 against HSUS V24's 12,186 (exactly +300), and the month's
+  manufacturing (245) + trading (872) leave 332 "other" against 18–44 in the other months of 1898.
+  Corrected to 1,149 in `load.dnb_count_segments` (`DNB_COUNT_FIXES`; `fix=False` gives the raw file).
+  Every other year 1894–1932 matches HSUS within 0.5% except 1909 (+0.8%, no single-month outlier).
+* **Segment choices.** Counts: A 1894-01..1938-08, B 1934-06..1939-12 (official basis 1935–38; A runs
+  3–6% below it), C 1939-01..1965-06; the 1933 reclassification dates to 1933-01 (HSUS "beginning
+  1933"; m09029a "for 1933"; published in Dun's Review Mar/Aug-1936). Liabilities: A to 1938-08 and C
+  1939-01..1983-12 (BCD series 14 from 1968-02), ending before D&B's 1984 coverage/method change; the
+  1934–39 liabilities segment is dominated by Section 77-B reorganisations (B/A 1.05–2.66) and is unused.
+* **Noise.** Irregular log-SD of the counts (seasonally adjusted, Spencer-15 trend-cycle): 0.116 for
+  1897–1913, 0.053 for 1914–31 and 1947–62 (I/C 7.3, 2.5, 3.3). Moore 1961 Table 3.8's I/C 4.9 is the
+  liabilities row, not the counts.
+* **Equity.** Shiller S&P composite (P, D) monthly 1871-01..2024-09 for equity lows and returns
+  (`load.shiller_monthly`, `load.equity_total_return`); Aug–Nov 1914 dropped (exchange closed, the file
+  repeats July). Shiller equals Cowles through 1925 and M1125B over 1945–68; the equity-low month agrees
+  across sources in 22 of 25 recession windows (the rest differ by one month).
+* **Claims.** `load.claims_monthly_nsa`: mean weekly ICNSA of the weeks ending in each month; release =
+  last week-end + 5 days. UI coverage expansions 1972-01 and 1978-01; GM strike Sep–Nov 1970.
+
+| file | sha256 | rows | source |
+|---|---|---|---|
+| derived/hsus_v24_v27_dnb_failures_annual_1893_1965.csv | 3739a47d1308b36c568f892e0e44950df49e3f40ac06ada86ca7dde5795c035a | 73 | HSUS Colonial Times to 1970 (Bicentennial ed.), Series V 24 (number of failures) and V 27 (current liabilities, $m), transcribed from the page images by the data counter-agent; the monthly files agree within 0.5% in every year but 1909 (counts) and 1894, 1943–46 (liabilities) |
+| derived/romer1994_prewar_peaks_troughs.csv | c19fb1ca3a98d6fdcdeedd22e8d5e8fc8494986b8df6932a2b2cc9d6a3f52cbf | 17 | Romer, C. D. (1994), "Remeasuring Business Cycles", JEH 54(3), Table 3 p.592 (Berkeley reprint PDF, eml.berkeley.edu/~cromer/Reprints): NBER reference dates and Romer's algorithmic dates from industrial production, 1884–1940; 1890–91 is not a cycle on her dates; 1916–17 and 1939–40 are hers only. Used for a descriptive sensitivity of the trough timing |

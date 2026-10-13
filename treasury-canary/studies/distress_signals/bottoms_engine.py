@@ -51,39 +51,55 @@ def growth(values: dict[int, float], rule: Rule, bad: Iterable[int] = (),
 TIE = 1e-12   # a decimal tie (0.07 vs 0.12 - 0.05) counts as reaching the line
 
 
-def trailing_high(g: dict[int, float], t: int, look: int) -> float | None:
-    vals = [g[s] for s in range(t - look + 1, t + 1) if s in g]
-    return max(vals) if vals else None
+def trailing_high(g: dict[int, float], t: int, look: int, start: int | None = None) -> tuple[float, int] | None:
+    """(H, month it was set): max g over max(start, t - look + 1) .. t, defined
+    only when every g in that window is computable (SPEC v1 s.0)."""
+    lo = t - look + 1 if start is None else max(start, t - look + 1)
+    win = range(lo, t + 1)
+    if not all(s in g for s in win):
+        return None
+    at = max(win, key=lambda s: (g[s], -s))       # earliest month of the high
+    return g[at], at
 
 
 def armed(g: dict[int, float], t: int, rule: Rule) -> bool:
+    """Plain arming (no signal state): the full trailing high is >= theta."""
     h = trailing_high(g, t, rule.look)
-    return h is not None and h >= rule.theta - TIE
+    return h is not None and h[0] >= rule.theta - TIE
+
+
+def drop(h: float, rule: Rule) -> float:
+    return max(rule.floor, rule.frac * h)
 
 
 def signals(g: dict[int, float], periods: Iterable[int], rule: Rule) -> list[dict]:
-    """Roll-over signals in period order. A signal fires at the first t where
-    the series is armed, g(t) is computable and g(t) <= H(t) - max(floor,
-    frac*H(t)) for k consecutive periods (an uncomputable period breaks the
-    run). After a signal, the series re-arms only when it sets a new trailing
-    high >= theta (g(s) = H(s) >= theta, s > signal): `rearmed_at` records it."""
+    """Roll-over signals in period order (SPEC v1 s.0). A signal fires at the
+    first t where H(t) is defined, H >= theta, g(t) is computable and
+    g(t) <= H - max(floor, frac*H) for k consecutive periods (an uncomputable
+    period breaks the run). After a signal at t0 the series re-arms only when
+    some later g(s) has risen by d(t0) from its lowest value since the signal
+    (a re-acceleration); H then restarts at s."""
     out: list[dict] = []
-    run, live = 0, True
+    run, live, start, low = 0, True, None, None
     for t in periods:
         gt = g.get(t)
-        h = trailing_high(g, t, rule.look)
         if not live:
-            if gt is not None and h is not None and gt >= rule.theta - TIE and gt >= h:
-                live = True
-                out[-1]["rearmed_at"] = t
+            sig = out[-1]
+            if gt is not None:
+                low = gt if low is None else min(low, gt)
+                if gt >= low + sig["d"] - TIE:
+                    live, start = True, t
+                    sig["rearmed_at"] = t
             run = 0
             continue
-        cond = (gt is not None and h is not None and h >= rule.theta - TIE
-                and gt <= h - max(rule.floor, rule.frac * h) + TIE)
+        hh = trailing_high(g, t, rule.look, start)
+        cond = (gt is not None and hh is not None and hh[0] >= rule.theta - TIE
+                and gt <= hh[0] - drop(hh[0], rule) + TIE)
         run = run + 1 if cond else 0
         if run >= rule.k:
-            out.append({"t": t, "g": gt, "high": h, "rearmed_at": None})
-            live, run = False, 0
+            out.append({"t": t, "g": gt, "high": hh[0], "high_at": hh[1], "d": drop(hh[0], rule),
+                        "rearmed_at": None})
+            live, run, low = False, 0, gt
     return out
 
 

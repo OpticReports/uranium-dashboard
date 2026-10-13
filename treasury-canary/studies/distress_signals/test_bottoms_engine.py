@@ -32,24 +32,60 @@ def test_growth_matches_hand_computation_and_respects_masks_and_span():
     assert min(gs) == 22
 
 
-def test_rollover_fires_after_k_periods_below_the_drop_and_rearms_on_a_new_high():
-    path = [0.0] * 5 + [0.05, 0.15, 0.30, 0.28, 0.21, 0.19, 0.18, 0.10, 0.12, 0.25, 0.40, 0.20, 0.19]
+LEAD = [0.0] * 12          # a computable lead-in so the 12-period trailing high is defined
+
+
+def test_rollover_fires_after_k_periods_below_the_drop_and_rearms_on_a_reacceleration():
+    path = LEAD + [0.05, 0.15, 0.30, 0.28, 0.21, 0.19, 0.18, 0.10, 0.12, 0.25, 0.40, 0.20, 0.19]
     g = dict(enumerate(path))
     sig = B.signals(g, range(len(path)), R)
-    # high 0.30 -> drop needs g <= 0.20 (0.30 - max(0.05, 0.10)); 0.19 at t=10, 0.18 at t=11 -> fires at 11
-    assert sig[0]["t"] == 11 and sig[0]["high"] == pytest.approx(0.30)
-    # 0.25 at t=14 is below the trailing high 0.30 (no re-arm); 0.40 at t=15 is a new high -> re-armed
-    assert sig[0]["rearmed_at"] == 15
-    # after the re-arm the high is 0.40 -> drop needs g <= 0.2667; 0.20, 0.19 -> fires at t=17
-    assert sig[1]["t"] == 17 and sig[1]["rearmed_at"] is None
+    # high 0.30 (t=14) -> drop needs g <= 0.20; 0.19 at t=17, 0.18 at t=18 -> fires at 18
+    assert sig[0]["t"] == 18 and sig[0]["high"] == pytest.approx(0.30) and sig[0]["high_at"] == 14
+    # re-arm needs a rise of d = 0.10 from the lowest g since the signal (0.10 at t=19):
+    # 0.12 at t=20 is not enough, 0.25 at t=21 is
+    assert sig[0]["rearmed_at"] == 21
+    # H restarts at 21 (0.25, then 0.40 at t=22) -> drop needs g <= 0.2667: 0.20, 0.19 -> fires at t=24
+    assert sig[1]["t"] == 24 and sig[1]["rearmed_at"] is None
+
+
+def test_the_next_cycle_rearms_from_the_post_signal_low():
+    # a roll-over while growth is still high (0.18), a slump to -0.20, then a milder
+    # second rise to +0.20: re-arms on the way up (rise of d from the low), then fires again
+    path = LEAD + [0.10, 0.30, 0.25, 0.18, 0.18] + [-0.20] * 6 + [-0.05, 0.10, 0.20, 0.13, 0.12]
+    g = dict(enumerate(path))
+    sig = B.signals(g, range(len(path)), R)
+    # re-arms at t=23 (-0.05 >= -0.20 + 0.10); H restarts there, peaks at 0.20 (t=25);
+    # 0.13 and 0.12 are both <= 0.20 - 0.0667 -> fires at t=27
+    assert [x["t"] for x in sig] == [16, 27] and sig[0]["rearmed_at"] == 23
+
+
+def test_a_stale_high_rolling_off_does_not_rearm():
+    # g rises to 0.40, falls to 0.25 and stays flat: one signal, and no re-arm when
+    # the 0.40 leaves the trailing window (re-arm needs a rise of d = 0.133 from 0.25)
+    path = LEAD + [0.10, 0.20, 0.30, 0.40] + [0.25] * 30
+    g = dict(enumerate(path))
+    sig = B.signals(g, range(len(path)), R)
+    assert len(sig) == 1 and sig[0]["t"] == 17 and sig[0]["rearmed_at"] is None
+    assert sig[0]["high_at"] == 15 and sig[0]["d"] == pytest.approx(0.40 / 3)
+
+
+def test_the_trailing_high_needs_a_full_window():
+    g = {t: 0.30 for t in range(0, 20)}
+    del g[15]
+    g.update({16: 0.15, 17: 0.15, 18: 0.15, 19: 0.15})
+    # the gap at 15 leaves H undefined for t = 15..26, so no signal can fire at 16..19
+    assert B.signals(g, range(20), R) == []
+    assert B.trailing_high(g, 14, 12) == (0.30, 3)
 
 
 def test_floor_and_uncomputable_break():
-    g = {0: 0.12, 1: 0.08, 2: 0.07, 3: 0.07}
-    assert B.signals(g, range(4), R)[0]["t"] == 3          # floor: 0.12 - 0.05 = 0.07, needs two at <= 0.07
-    g2 = {0: 0.12, 1: 0.07, 3: 0.07, 4: 0.07}              # t=2 uncomputable breaks the run
-    assert B.signals(g2, range(5), R)[0]["t"] == 4
-    assert B.signals({0: 0.09, 1: 0.0, 2: 0.0}, range(3), R) == []   # never armed
+    g = dict(enumerate(LEAD + [0.12, 0.08, 0.07, 0.07]))
+    assert B.signals(g, range(16), R)[0]["t"] == 15       # floor: 0.12 - 0.05 = 0.07, two periods at <= 0.07
+    # an uncomputable period breaks the run and leaves H undefined for 11 periods
+    g2 = dict(enumerate(LEAD + [0.12, 0.07]))
+    g2.update({15: 0.07, 16: 0.07})
+    assert B.signals(g2, range(17), R) == []
+    assert B.signals(dict(enumerate(LEAD + [0.09, 0.0, 0.0])), range(15), R) == []   # never armed
 
 
 def test_classify_windows_and_first_released():

@@ -585,7 +585,7 @@ def q_h() -> dict:
         sc = E.score(ser, 24, 6, S, peaks=pk, exogenous=frozenset(), t_n=b)
         ctx[name] = {"scored_peaks": [mstr(p) for p in S], "per_peak": sc["per_peak"],
                      "n_false": sc["n_false"], "false_alarms": sc["false_alarms"],
-                     "flags": "1907 and 1930-33 include bank failures (M0933A)" if "1894" in name else ""}
+                     "flags": ""}   # (an earlier flag said M0933A includes bank failures: it does not)
     out["context_runs"] = ctx
     out["_series"] = {"real_12m_g": {mstr(m): round(g12(real, m), 4) for m in range(M(1955, 1), M(1986, 13))
                                      if g12(real, m) is not None}}

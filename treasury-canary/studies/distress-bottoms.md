@@ -64,7 +64,7 @@ roll-over date, any timing of our series against troughs or equity lows.
 
 ---
 
-## SPEC v0 — pre-registered 2026-10-13, BEFORE any roll-over is scored
+## SPEC v0 — pre-registered 2026-10-13, BEFORE any roll-over is scored (SUPERSEDED by SPEC v1 below; kept for the record)
 
 ### 0. Shared definitions
 
@@ -203,3 +203,164 @@ Spec reviews (statistics; data and measurement) → SPEC v1 → power → one ru
 two independent verifiers → honesty box with frozen numbers → charts → panel
 (only what ships; otherwise context) → commit/push → note the redeploy
 (treasury-canary).
+
+---
+
+## SPEC v1 — OPERATIVE. Amended 2026-10-13 after the statistics and data reviews (both BLOCK), before any roll-over is scored
+
+What changed and why (one line each; details in the counter-agent log):
+the rule fires 2–9 months after the level peak by construction, so "near the
+bottom" may be unreachable — reachability is now decided before the run, and a
+CONFIRMS window is added; the armed-month null is replaced by a lag permutation
+(a clock beat the old one); arming is calibrated so noise alone gives ≤ 1
+roll-over a decade; every roll-over is scored (false bottoms), not only those
+inside recessions; the equity low needs a real decline and an unambiguous
+month; edges, gaps and censoring are defined; the 1898-06 typo is corrected.
+
+### 0. Definitions
+
+- **Dates.** Month index m. NBER chronology as v0 (25 cycles, verified against
+  FRED USREC). Excluded (context only): 1945 and 2020. War-flagged: 1918–19 and
+  1948–49 (every grade also reported without them).
+- **Growth.** g(t) = S_w(t) / S_w(t−12) − 1, S_w the trailing w-month sum (never
+  centred); quarterly series use w quarters against 4 quarters earlier. Primary
+  w = 6 months (a plain choice); grid w ∈ {3, 6, 12}. g is computable when all
+  2w input months are present and unmasked and the whole span t − 12 − w + 1 … t
+  lies inside one data segment.
+- **Trailing high.** H(t) = max g over t − 11 … t (4 quarters) — defined only
+  when every g in that window is computable; after a re-arm at s, the window is
+  max(s, t − 11) … t.
+- **Arming.** Armed when H(t) ≥ θ_A. θ_A and the floor are fixed by the §6
+  calibration before the run: the smallest θ_A in {10, 15, 20, 25%}, then the
+  smallest floor in {5, 7.5, 10 pp}, giving ≤ 1 roll-over per decade on
+  synthetic no-recession series at the pre-1914 count noise.
+- **Roll-over.** The first t with H(t) defined, armed, g(t) computable and
+  g(t) ≤ H(t) − d(t), d(t) = max(floor, H(t)/3), for k consecutive periods
+  (k = 2 monthly, 1 quarterly); an uncomputable period breaks the run; exact
+  decimal ties count.
+- **Re-arming.** After a signal at t0, no further signal until g has risen by
+  d(t0) from its lowest value since the signal (a re-acceleration, at some
+  s > t0); H then restarts at s. A signal is a "false start" when that re-arm is
+  released inside the same episode window. (Amended before the run: the
+  reviewers' "g(s) ≥ g(t0) + d(t0)" blocked the next cycle whenever the previous
+  roll-over fired while growth was still high — 10 of 16 synthetic episodes went
+  MISS in the smoke test. The stale-high case they flagged still does not
+  re-arm.)
+- **Release.** D&B counts: data month + 1 (sensitivity + 2; a HIT present only
+  at + 1 is "lag-sensitive"). Court quarterly: quarter end + 1 (sensitivity + 2,
+  all years). Claims: last week-end of the month + 5 days. D&B liabilities: + 2.
+- **Episode windows.** Trough shots: releases in [p_r, min(τ_r + 24, p_{r+1} − 1)].
+  Equity shot: [min(p_r, b_r − 3), same end]. The episode signal is the first
+  roll-over released in the window. CENSORED: no signal released before an
+  uncomputable stretch inside the window (a non-HIT, listed). Flags:
+  "pre-armed" (armed at p_r − 12), "carry-over" (its high was released before
+  p_r − 12; sensitivity without these episodes).
+- **Targets.** Trough τ_r. Equity low b_r: the month of the lowest Shiller S&P
+  composite monthly price in [p_r − 6, min(τ_r + 12, p_{r+1} − 1)] (Aug–Nov 1914
+  dropped; Cowles/OECD cross-check). b_r is valid only if it is not the window's
+  first or last month and the price is ≥ 10% below its highest level of the
+  prior 12 months; otherwise the episode has no equity low (excluded from the
+  equity shot, listed). Low zone: months within 3% of the minimum; a zone month
+  more than 3 months from b_r makes the episode AMBIGUOUS; 1913–14 is CENSORED
+  (exchange closed). The equity grade must also hold without ambiguous and
+  censored episodes.
+- **Shots and windows** (e = release − T): **MARKS-trough** HIT −6 … +3;
+  **CONFIRMS-trough** HIT 0 … +9 (the rule's mechanical lag after a level peak
+  at the trough, from the reviewers' noise-free simulation; set before any real
+  roll-over is seen); **MARKS-equity** HIT −3 … +3. Below the window EARLY,
+  above LATE; MISS = no signal (a non-HIT with |e| = ∞). Window centre c (rounded
+  half up): −1, 5, 0.
+
+### 1. Primary — D&B failure counts, monthly, 1895–1965 (P)
+
+- **Data.** Segments A/B/C, never spliced. 1898-06 corrected 1,449 → 1,149
+  (HSUS V24 annual identity; sensitivity: month masked). Hard break at 1933-01
+  inside A (sensitivity: straight across — the counts show no detectable step;
+  1934–35 signals flagged as resting on the 1936 restatement). 1937–38 on B
+  (primary) and on A (releases ≤ 1938-09, censored after; "basis-sensitive" if
+  they classify differently). Gate test: annual sums against HSUS V24 within
+  0.5% (exception 1909, +0.8%).
+- **Episodes (16)** as v0. 1929–33: HIT window partly uncomputable (the break).
+  1895–97: clocks start at the first month with H defined (flagged).
+- **Test.** HITS = number of HIT episodes. Null: hold each episode's observed
+  release fixed and permute the lags L_r = T_r − p_r across the shot's episodes
+  (10,000 permutations, seed 20261012); p = (1 + #{HITS_π ≥ HITS_obs}) / 10,001.
+  Holm across the shots that are tested, at 0.10.
+- **Clocks** (leave-one-out, aimed at T + c): arm clock = arm_r + median over the
+  other episodes of (T + c − arm), arm_r = first armed release in
+  [p_r − 12, window end] (none → MISS); peak clock = p_r + median over the other
+  episodes of (T + c − p). Medians rounded half up.
+- **Grade** for a shot: HITS ≥ 2/3 of its episodes, EARLY ≤ 1 per 6, Holm p ≤
+  0.10, median |e − c| strictly smaller than both clocks' (MISS = ∞; ties fail),
+  HITS ≥ 2/3 at ≥ 2 of the 3 w values (w = 3 and w = 12 scored against the window
+  shifted by −2 and +3 months, their noise-free offsets), and HITS ≥ 2/3 without
+  the war-flagged episodes. MARKS-trough / MARKS-equity passing → "MARKS THE
+  BOTTOM"; CONFIRMS-trough passing → "CONFIRMS THE BOTTOM".
+- **Reachability, decided in §6 before the run.** A shot whose P(grade) is < 0.2
+  at σ = 4 for both μ = 0 and μ = −3 is declared out of reach and not tested;
+  its deliverable is the timing estimate: median e with the order-statistic
+  interval [e(5), e(12)] (≈ 92% for 16 episodes).
+- **Hindsight diagnostic (report-only):** g-peak = the month of the highest g
+  (w = 12) in the episode window; e_gpk = g-peak + 1 − T. It separates "growth
+  starts slowing near the bottom" from the rule's detection lag.
+- **False bottoms:** every roll-over released 1895–1965 is a TRUE BOTTOM if
+  −6 ≤ release − τ ≤ +9 for some trough τ (the union of the trough windows),
+  else a FALSE BOTTOM; those released in [p_r − 12, p_r − 1] are listed.
+  Precision and false bottoms per decade reported.
+
+### 2. Context — business filings (court), quarterly, 1981–2026 (R)
+
+- Masks as `distress-signals.md` SPEC v1. Scored: 1990–91 and 2001. 1981–82
+  flagged (left-censored; its base includes the new-Code ramp — sensitivity with
+  1980Q1 masked). 2007–09 unscorable (no sensitivity). 2020 excluded. Context,
+  not replication: ≥ 2 of 3 HITs happens 17–34% of the time with no information.
+- **Live readout:** a "bottoming" line on the panel only if a P shot grades
+  AND P's precision ≥ 1/2 with ≤ 1 false bottom per decade AND R has no false
+  bottom 1981–2026. Otherwise the panel shows the current roll-over status as
+  context with the measured timing.
+
+### 3. Benchmarks — initial claims (report-only; they overlap R only)
+
+- C1 as v0. C2: monthly value = mean weekly ICNSA of the weeks ending in the
+  month; release = last week-end + 5 days; the identical rule. Flags: inputs
+  straddling 1972-01 or 1978-01 (coverage), 1970 (GM strike). C1 uses
+  current-vintage seasonal factors.
+
+### 4. Secondary — D&B liabilities (report-only)
+
+- Nominal (the 1920–21 and 1929–33 deflations flagged); banks not included
+  (confirmed: annual sums equal HSUS V27, which excludes banks); segment A
+  through 1938-08 (used for 1937–38), C 1939-01 … 1983-12 (ends before the 1984
+  methodology change); w = 12; release + 2.
+
+### 5. Trader's view (report-only)
+
+Shiller S&P composite total return (P plus D/12; Aug–Nov 1914 dropped), entered
+the month after release, on a common episode set with "no entry" recorded. Rules:
+the roll-over (P, R, C1, C2), the arm month, NBER peak + 6, the first month
+≥ 20% below the trailing 12-month high, and a random armed month (median of
+1,000 draws). Returns to + 6, + 12 and + 24 months, the worst further drawdown
+within 12 months, and the share of the b_r → b_r + 12 rebound already missed.
+
+### 6. Calibration and power (synthetic, before the run)
+
+- Generator (log level): AR(1) background (ρ 0.98, innovation SD 0.012;
+  sensitivity 0.008 and 0.016) + a raised-cosine rise of U[12, 30] months and
+  decline of U[12, 30] months, amplitude U(0.3, 0.8) log points, level peak at
+  τ_r + δ_r, δ_r ~ N(μ, σ) (rises may start before p_r) + iid irregular at the
+  measured count noise (log-SD 0.116 for 1895–1913, 0.053 for 1914–65;
+  sensitivity 0.134 throughout); real NBER chronology, real segments, the 1933
+  break, release + 1; equity lows at their real dates.
+- Calibration of θ_A and the floor as §0. Power cells μ ∈ {−6, −3, 0, +3},
+  σ ∈ {2, 4, 8}, 400 replications, the full grade per shot. Size under a
+  calibrated clock (level peak at p_r + U[R_lo, R_hi], no trough information) and
+  under a random circular shift.
+
+### 7. Honesty, stated now (additions to v0 §7)
+
+- Pre-1927 NBER dates were set on detrended data (Romer 1994): troughs too late,
+  biasing e toward EARLY; e on Romer's dates reported where obtainable.
+- The 1894–1938 monthly counts are a year-end vintage; real-time monthly
+  publication before 1933 is unverified (+ 2 sensitivity).
+- Pre-1914 counts are about twice as noisy as later ones.
+- Claims overlap only R (3 episodes); P ends in 1965.

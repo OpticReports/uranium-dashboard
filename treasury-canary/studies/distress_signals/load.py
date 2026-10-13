@@ -199,23 +199,91 @@ DNB_COUNT_SEGMENTS = ("M0929AUSM155NNBR", "M0929BUSM155NNBR", "M0929CUSM474NNBR"
 DNB_LIAB_SEGMENTS = ("M0933AUSM144NNBR", "M0933BUSM144NNBR", "M0933CUSM144NNBR")
 
 
-def dnb_count_segments() -> list[dict[int, float]]:
+DNB_COUNT_FIXES = {12 * 1898 + 5: 1149.0}   # 1898-06 printed 1,449: HSUS V24 annual and the
+#                                            mfg + trade + other identity give 1,149 (+300 typo)
+
+
+def dnb_count_segments(fix: bool = True) -> list[dict[int, float]]:
     """D&B number of commercial failures, monthly NSA, as its three separately
     defined segments (1894-01..1938-08, 1934-06..1939-12, 1939-01..1965-06).
     Never spliced: in their overlaps the second runs ~5% above the first and the
-    third 24-38% above the second, so growth is computed within a segment only."""
-    return [nber_monthly(sid) for sid in DNB_COUNT_SEGMENTS]
+    third 24-38% above the second, so growth is computed within a segment only.
+    `fix` applies DNB_COUNT_FIXES to the first segment."""
+    segs = [dict(nber_monthly(sid)) for sid in DNB_COUNT_SEGMENTS]
+    if fix:
+        segs[0].update(DNB_COUNT_FIXES)
+    return segs
 
 
 def dnb_liability_segments() -> list[dict[int, float]]:
-    """D&B liabilities of commercial failures ($m, monthly NSA) in three
-    segments; the third (1939-01..) continues with BCD series 14 from 1968-02
-    to 1986-12 (the two agree within 0.05 over 1953-01..1968-01)."""
-    a, b, c = (nber_monthly(sid) for sid in DNB_LIAB_SEGMENTS)
-    bcd = bcd14()
+    """D&B liabilities of commercial failures ($m, nominal, monthly NSA; banks
+    and railroads excluded) as two segments: 1894-01..1938-08 (the 1934-39
+    segment is dominated by Section 77-B reorganisations and is not used) and
+    1939-01..1983-12, continued with BCD series 14 from 1968-02 (the two agree
+    within 0.05 over 1953-01..1968-01) and ended before D&B's 1984 change of
+    coverage and method."""
+    a, _, c = (nber_monthly(sid) for sid in DNB_LIAB_SEGMENTS)
     c = dict(c)
-    c.update({m: v for m, v in bcd.items() if m > max(c)})
-    return [a, b, c]
+    c.update({m: v for m, v in bcd14().items() if max(c) < m <= 12 * 1983 + 11})
+    return [a, c]
+
+
+def hsus_dnb_annual() -> dict[int, dict[str, float]]:
+    """HSUS (Bicentennial ed.) Series V 24 (number of failures) and V 27
+    (liabilities, $m) annual totals 1893-1965: the gate for the monthly files."""
+    return {int(r["year"]): {"number": int(r["failures_number"]), "liabilities": float(r["liabilities_mil_usd"])}
+            for r in _rows(os.path.join(DER, "hsus_v24_v27_dnb_failures_annual_1893_1965.csv"))}
+
+
+def shiller_monthly() -> tuple[dict[int, float], dict[int, float]]:
+    """Shiller S&P composite monthly price P (average of daily closes; Cowles
+    before 1926) and annualised dividend D, 1871-01..2024-09. Aug-Nov 1914 are
+    dropped: the exchange was closed and the file repeats July."""
+    import xlrd
+    sh = xlrd.open_workbook(os.path.join(DATA, "shiller", "ie_data.xls")).sheet_by_name("Data")
+    P: dict[int, float] = {}
+    Dv: dict[int, float] = {}
+    for r in range(8, sh.nrows):
+        d = sh.cell_value(r, 0)
+        if not isinstance(d, float):
+            continue
+        y = int(d)
+        mo = int(round((d - y) * 100))
+        m = 12 * y + mo - 1
+        if 12 * 1914 + 7 <= m <= 12 * 1914 + 10:
+            continue
+        if isinstance(sh.cell_value(r, 1), float):
+            P[m] = sh.cell_value(r, 1)
+        if isinstance(sh.cell_value(r, 2), float):
+            Dv[m] = sh.cell_value(r, 2)
+    return P, Dv
+
+
+def equity_total_return() -> dict[int, float]:
+    """Total-return index from Shiller P and D: TR(m) = TR(m-1) * (P(m) + D(m)/12)
+    / P(m-1); a missing month (1914 closure) carries the price return across it."""
+    P, Dv = shiller_monthly()
+    ms = sorted(m for m in P if m in Dv)
+    tr = {ms[0]: 1.0}
+    for prev, m in zip(ms, ms[1:]):
+        tr[m] = tr[prev] * (P[m] + Dv[m] / 12 * (m - prev)) / P[prev]
+    return tr
+
+
+def claims_monthly_nsa() -> tuple[dict[int, float], dict[int, int]]:
+    """Initial claims (ICNSA): mean weekly claims over the weeks ending
+    (Saturday) in each month, and each month's release month = the month of
+    its last week-end + 5 days."""
+    w = claims_weekly(sa=False)
+    by: dict[int, list] = defaultdict(list)
+    for d, v in w.items():
+        by[12 * d.year + d.month - 1].append((d, v))
+    val = {m: sum(v for _, v in xs) / len(xs) for m, xs in by.items()}
+    rel = {}
+    for m, xs in by.items():
+        r = max(d for d, _ in xs) + dt.timedelta(days=5)
+        rel[m] = 12 * r.year + r.month - 1
+    return val, rel
 
 
 def equity_monthly() -> tuple[dict[int, float], dict[int, float]]:
