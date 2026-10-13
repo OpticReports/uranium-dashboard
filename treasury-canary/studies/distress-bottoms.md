@@ -8,30 +8,50 @@ economy's (NBER trough) and the stock market's (the equity low).
 
 ## Research pass (2026-10-13; literature only, blind to our data)
 
-Full report: scratchpad `bottoms_research.md` (summarised here; counter-agent
-check in progress — numbers below are as reported, pending verification).
+Full report: scratchpad `bottoms_research.md`. Counter-agent check: PASS_WITH_FIXES
+— every primary-source number re-read from the page images; the fixes are applied
+below.
 
 - **Failure counts turned roughly with the trough:** −0.5 months on average
-  1879–1938 (7 leads, 8 lags at 16 troughs; Zarnowitz & Lerner 1961, Table
-  12.2). **Liabilities** (dollar-weighted) led troughs by −7.5 (14 of 16 led),
-  fading to about −3 in 1948–75 (Moore 1983, Table 24-5); dropped from the NBER
-  short list in 1966.
+  1879–1938 (7 leads, 8 lags; 15 of 16 troughs matched; Zarnowitz & Lerner 1961,
+  "Cyclical Changes in Business Failures and Corporate Profits", Table 12.2).
+  **Liabilities** led troughs by −7.5 (14 of 16 led) on Dun's basis, fading to
+  about −3 in 1948–75 (Moore 1983, Table 24-5); dropped from the NBER short list
+  in 1966.
+- **Rises were long:** pre-1938 rises in failure counts averaged 26.8 months
+  (declines 21.8; Zarnowitz & Lerner p.354); the postwar rises ran 47 and 68
+  months (Dec-45 → Nov-49, Aug-52 → Apr-58).
 - **Business filing levels** peaked in or at the trough year (1982, 1991, 2001,
-  mid-2009); consumer filings 1–2 years later (1992, 2003, 2010).
+  Q2-2009); consumer filings 1–2 years later (1992, 2003, 2010).
 - **Equity lows** led troughs by a median ~4–5 months (17 of 23 troughs
-  1873–1970, Moore 1983 Table 9-2; daily closing lows 1949–2020 median −4.5),
-  except 2002 (+11). Only 7 of 12 postwar recessions had a ≥ 20% bear market.
+  1873–1970, median −6 before 1945 and −4 after; Moore 1983 Table 9-2; daily
+  closing lows 1949–2020 median −4.5), except 2002 (+11). 8 of 12 postwar
+  recessions had a ≥ 20% decline.
 - **Initial claims** peak at about the trough (median 0, BCD); stocks bottomed
-  *before* claims peaked at every comparable trough 1949–82 (by 2–12 months),
-  except 2001–02.
+  *before* claims peaked at every comparable trough 1949–82 (by 2–12 months,
+  median 4), except 2001–02.
 - **No study tests failure or filing growth roll-overs** against troughs or
   equity lows. Growth-rate recovery signals lag troughs (Zarnowitz & Moore 1982:
   first signal +1 month on average at 1949–80 troughs).
-- **Mechanics:** y/y growth of a smooth rise lasting R months peaks about
-  (R − 12)/2 months before the level peaks.
-- **Prior:** a release-dated roll-over in failure counts or business filings
-  should land near the trough (roughly −6 to +2 months), *after* the typical
-  equity low, with little room to beat claims.
+- **Mechanics (verified by simulation):** y/y growth of a rise lasting R months
+  peaks somewhere in [−(R − 12), 0] months before the level peaks — −(R − 12)/2
+  for a symmetric S-shape, earlier for front-loaded rises, at the peak for
+  back-loaded ones; a level that plateaus instead of falling can roll over after
+  its peak.
+- **Prior (corrected):** pre-1938 counts — rise ~27 months, level peak ~−0.5 →
+  roll-over around −8 (data month), −6 to −7 release-dated: *at or before the
+  pre-1945 median equity low (−6)*. Postwar counts — 4–6-year rises: the
+  roll-over could come very early (mid-expansion) or near the level peak.
+  Business filings (levels peak at the trough year): near the trough, after the
+  typical equity low. Little room to beat claims after 1967.
+- **Data caveats from the check:** the 1933 D&B reclassification is dated
+  "1933" by NBER/HSUS but "available only from January 1934" by the Survey of
+  Current Business (old-basis figures published through Apr-1936; step −3.8% in
+  1934); the Jun-1934 Section 77-B inclusion and the 1939 coverage change are
+  confirmed; the NUMBER series excludes banks; the 1894–1938 monthly file is a
+  year-end (January annual issue) vintage, not first prints — monthly figures
+  were published the following month in real time; Moore 1950's liabilities
+  row is Bradstreet's basis (use Zarnowitz & Lerner's −7.5 for Dun's).
 
 **Already seen by the authors (the test is not fully blind):** the court
 business-filing growth path 1981–2026 and the D&B real-liabilities growth path
