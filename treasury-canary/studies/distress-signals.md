@@ -60,6 +60,9 @@ all re-verified). Full research + verification record:
 - **Side finding (dashboard):** the severity index's "CRE delinquency" input is
   FRED DRSREACBS = ALL real-estate-secured loans, residential included. True CRE
   is DRCRELEXFACBS (from 1991Q1; switching loses the 1987–90 run-up).
+  *2026-10-13:* relabelled "Real-estate loan delinquency" (label only, score
+  unchanged) when the distress panel moved to the Severity tab beside it; the
+  series switch stays open.
 
 ---
 

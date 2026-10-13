@@ -135,7 +135,7 @@ FRED_SEVERITY: dict[str, str] = {
     "med_income": "MEHOINUSA672N",     # real median household income (a)
     # C. amplification (adds to SLOOS/HY/discount-window already live)
     "delinq_cc": "DRCCLACBS",          # credit-card delinquency rate
-    "delinq_cre": "DRSREACBS",         # CRE delinquency rate
+    "delinq_cre": "DRSREACBS",         # ALL real-estate-secured loans (not CRE-only: DRCRELEXFACBS)
     # D. policy space (adds to EFFR / interest_gdp already live)
     "fed_debt_gdp": "GFDEGDQ188S",     # federal debt / GDP
     "deficit_gdp": "FYFSGDA188S",      # federal surplus/deficit % GDP (a; negative=deficit)

@@ -185,8 +185,10 @@ def build_severity(bundle: dict) -> dict:
     C = Block("C", "Amplification", [
         _level_comp("delinq_cc", "Credit-card delinquency", g("delinq_cc", ([], [])), "%",
                     "Cracks already forming at the marginal borrower."),
-        _level_comp("delinq_cre", "CRE delinquency", g("delinq_cre", ([], [])), "%",
-                    "The 1990-recession channel; banks' concentrated exposure."),
+        _level_comp("delinq_cre", "Real-estate loan delinquency", g("delinq_cre", ([], [])), "%",
+                    "All real-estate-secured bank loans, home mortgages included (FRED DRSREACBS), "
+                    "not commercial real estate alone; the channel in 1990 (commercial) and 2008 "
+                    "(residential). The CRE-only rate is in the distress panel below."),
         Component("hy_complacency", "HY spread complacency",
                   round(hy[-1] * 100, 0) if hy else None, "bps",
                   _pctile(hy, hy[-1] if hy else None, invert=True),

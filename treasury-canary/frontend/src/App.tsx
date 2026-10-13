@@ -9,7 +9,6 @@ import ReSteepenAlert from "./components/ReSteepenAlert";
 import SahmChart from "./components/SahmChart";
 import LaborStressBoard from "./components/LaborStressBoard";
 import CycleTracker from "./components/CycleTracker";
-import DistressPanel from "./components/DistressPanel";
 import LaborPanel from "./components/LaborPanel";
 import FlightToQuality from "./components/FlightToQuality";
 import FlowCompass from "./components/FlowCompass";
@@ -161,7 +160,6 @@ export default function App() {
           <CycleTracker />
           <SahmChart />
           <LaborStressBoard />
-          <DistressPanel />
 
           {metrics ? (
             <LeadingStack metrics={metrics.metrics} />
