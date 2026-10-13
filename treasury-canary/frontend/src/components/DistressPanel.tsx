@@ -228,6 +228,25 @@ export default function DistressPanel() {
         </div>
       </div>
 
+      {data.bottoming_watch?.record && (
+        <div className="mt-3 rounded border border-panelborder/60 px-3 py-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-xs text-slate-300">
+              Bottoming watch: business filings growth
+              <span className="ml-2 font-mono text-slate-200">{pct(data.bottoming_watch.g)}</span>
+              <span className="ml-2 text-slate-400">
+                ({data.bottoming_watch.status}; {data.bottoming_watch.asof})
+              </span>
+            </span>
+            <RoleChip role={data.bottoming_watch.record.role} />
+          </div>
+          <p className="mt-1 text-[10px] leading-snug text-slate-500">
+            Context, not a signal: {data.bottoming_watch.record.summary} Past roll-overs:{" "}
+            {(data.bottoming_watch.signals ?? []).join(", ")} (1987 and 2024 with no recession).
+          </p>
+        </div>
+      )}
+
       <div className="mt-4">
         <div className="mb-1 text-xs text-slate-300">Bank loan stress (Fed, all commercial banks)</div>
         <table className="w-full text-xs">

@@ -3609,6 +3609,12 @@
 "qualifiers":[]
 }
 },
+"bottoms":{
+"role":"does not mark the bottom",
+"grade":"tested 'confirms the trough': fails (5 of 16, needs 11)",
+"summary":"Tested on 16 recessions 1895-1961 (D&B failures): the slowing came after the economic bottom when it came at all (5 of 7 signals 0-9 months after the trough; with a post-hoc re-arm fix 8 of 11, median +5 months) and never at the stock-market low (0 of 13; signals came months after it). Jobless claims mark troughs sooner.",
+"doc":"treasury-canary/studies/distress-bottoms.md"
+},
 "headline":"No bankruptcy or credit-distress series passed the pre-registered test as a recession warning. Filings do not lead recessions (they rose with them or after); state business Ch 7 filings move with state unemployment; all-loan charge-offs confirm."
 }
 }

@@ -984,6 +984,16 @@ export interface DistressStateRow {
   business_ch7_yoy: number | null;
   business_ch7_12m: number;
 }
+export interface DistressBottomingWatch {
+  asof?: string;
+  g?: number;
+  high?: number | null;
+  armed?: boolean;
+  rolled_over_now?: boolean;
+  signals?: string[];
+  status: string;
+  record?: { role: string; grade: string; summary: string; doc: string } | null;
+}
 export interface Distress {
   headline: string;
   study: { doc: string; run: string; spec: string };
@@ -1013,6 +1023,7 @@ export interface Distress {
   bank: DistressBank[];
   states: { asof: string; rows: DistressStateRow[]; role: string; business_role: string | null; summary: string };
   failure_liabilities: DistressRecord;
+  bottoming_watch?: DistressBottomingWatch;
   alert: null;
 }
 

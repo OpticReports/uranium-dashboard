@@ -50,6 +50,30 @@ def peaks_text(per_peak):
     return out
 
 
+def bottoms_record() -> dict | None:
+    """The distress-bottoms study's record (context for the panel's bottoming watch)."""
+    path = os.path.join(HERE, "bottoms_results.json")
+    if not os.path.exists(path):
+        return None
+    br = json.load(open(path))
+    bp = json.load(open(os.path.join(HERE, "bottoms_posthoc.json")))
+    conf = br["P"]["shots"]["CONFIRMS-trough"]
+    eq = br["P"]["shots"]["MARKS-equity"]
+    fired = [e for e in conf["episodes"] if e["e"] is not None]
+    after = sum(1 for e in fired if 0 <= e["e"] <= 9)
+    return {
+        "role": "does not mark the bottom",
+        "grade": f"tested 'confirms the trough': fails ({conf['hits']} of {conf['n']}, needs {conf['need_hits']})",
+        "summary": (f"Tested on {conf['n']} recessions 1895-1961 (D&B failures): the slowing came after the economic "
+                    f"bottom when it came at all ({after} of {len(fired)} signals 0-9 months after the trough; with "
+                    f"a post-hoc re-arm fix {bp['confirms_hits']} of {bp['fired']}, median "
+                    f"+{bp['median_e_trough_of_signals']:.0f} months) and never at the stock-market low "
+                    f"({eq['hits']} of {eq['n']}; signals came months after it). Jobless claims mark troughs "
+                    f"sooner."),
+        "doc": "treasury-canary/studies/distress-bottoms.md",
+    }
+
+
 def main():
     qn, qc, qh, qr = RES["Q_N"], RES["Q_C"], RES["Q_H"], RES["Q_R"]
     abi_b = D.abi_quarterly_business()
@@ -135,6 +159,7 @@ def main():
             "panel_A_p": {k: v["wcb_division"]["p"] for k, v in qr["panel_A"].items()},
             "panel_B_p": {k: v["wcb_division"]["p"] for k, v in qr["panel_B"].items()}},
         "bank": rec_bank,
+        "bottoms": bottoms_record(),
         "headline": "No bankruptcy or credit-distress series passed the pre-registered test as a recession "
                     "warning. Filings do not lead recessions (they rose with them or after); state business "
                     "Ch 7 filings move with state unemployment; all-loan charge-offs confirm.",
