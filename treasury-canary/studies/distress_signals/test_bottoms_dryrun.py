@@ -54,13 +54,15 @@ def test_the_run_completes_on_synthetic_inputs(synthetic):
         assert set(r["grid"]) == {"3", "12"}
     assert set(res["P"]["sensitivities"]) == {"release_plus2", "1898_06_masked", "1933_straight_across",
                                              "1937_on_A", "theta10_from_1918", "theta10_from_1918_timing",
-                                             "theta20_from_1918_timing"}
-    # nothing is graded: every shot was out of reach before the run
-    assert res["P"]["grade"]["tested"] == [] and res["P"]["grade"]["status"].startswith("NOT TESTED")
+                                             "theta_primary_from_1918_timing"}
+    # exactly the shots frozen as reachable before the run are graded (bottoms_power.json)
+    reach = json.load(open(os.path.join(HERE, "bottoms_power.json")))["reachability"]["reachable"]
+    assert res["P"]["grade"]["tested"] == [s for s in BT.SHOTS if reach[s]] == ["CONFIRMS-trough"]
+    assert res["P"]["grade"]["status"] == "graded"
     for s, t in res["P"]["timing"].items():
         assert {"n", "median", "n_miss", "n_censored", "by_era"} <= set(t)
         assert t["n"] + t["n_censored"] == res["P"]["shots"][s]["n"]
-    assert "n_peaked_before_p" in res["P"]["g_peak"]
+    assert {"n_peaked_before_window", "equity_valid_only"} <= set(res["P"]["g_peak"])
     assert set(res["P"]["romer"]) == {"MARKS-trough", "CONFIRMS-trough"}
     assert res["P"]["false_bottoms"]["decades_observed"] > 5
     assert {"primary", "mask_1980Q1", "release_plus2", "1995_in_Q1", "1995_in_Q2", "1995_in_Q3"} == set(res["R"])

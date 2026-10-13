@@ -431,7 +431,10 @@ was scored:
 
 ## RESULTS — scored 2026-10-13 (`distress_signals/bottoms_results.json`, SPEC v1, one run)
 
-Pre-registration frozen at f7be0cd; the run (59bfe06) committed unedited.
+Pre-registration frozen at f7be0cd; the run (59bfe06) committed unedited; one
+correction run after verifier A fixed descriptive items only (the g-peak against
+the equity window, labels, flags, the Cowles/OECD cross-check) — no tested or
+headline number changed.
 
 **Verdict: the slowing of bankruptcy growth does not mark the bottom.** In 16
 recessions 1895–1961 it rolled over in only 7; 5 of those came 0–8 months *after*
@@ -441,7 +444,7 @@ sooner and in every recession.
 
 | series | recessions | rolled over | vs the economic trough | vs the stock low | grade |
 |---|---|---|---|---|---|
-| D&B failure counts, monthly (primary) | 16 (1895–1961) | 7 (8 never; 1929–33 censored) | −22 (false start), −2, 0, +5, +5, +6, +8 | 0 of 13 at the low; +4 to +13 after | CONFIRMS-trough: **fails** (5 of 16 in 0…+9, needs 11; lag-permutation p 0.057) |
+| D&B failure counts, monthly (primary) | 16 (1895–1961) | 7 (8 never; 1929–33 censored) | −22 (false start), −2, 0, +5, +5, +6, +8 | 0 of 13 at the low; +4 to +13 after | CONFIRMS-trough: **fails** (5 of 16 in 0…+9, needs 11; lag-permutation p ≈ 0.06) |
 | court business filings, quarterly (context) | 1982, 1991, 2001 (2008–09 masked) | 2 of 3 | +5, +5 | +9 (1982); −6 (2001, before the Oct-2002 low) | context |
 | jobless claims (benchmark) | 7 (1970–2009) | 7 of 7 | peak rule −4 to +3 (median +1); same roll-over rule +3 to +7 | peak rule +1 to +7 after (2001: −10) | benchmark |
 
@@ -463,16 +466,18 @@ sooner and in every recession.
 - **When it fires, it confirms — late.** 5 of 7 signals landed 0–8 months after
   the trough; the other two were early (1897 by 2 months; 1913 by 22 months, a
   false start that reversed). In hindsight, failure growth peaked a median 4
-  months after the trough (interval +1…+7) and 7.5 months after the stock low
-  (+5…+12): the slowing begins after the economy has turned.
+  months after the trough (interval +1…+7) and 6 months after the stock low
+  (valid lows; +4…+11; 7 on all lows): the slowing begins after the economy has
+  turned.
 - **Against the stock market: never.** 0 of 13 equity lows; the signals came a
   median 10 months after the low.
 - **The tested grade fails** on the hit count (the misses), the clocks (a
   leave-one-out "peak + median lag" clock has median |error| 5 months; the
   roll-over's is unbounded because of the misses) and robustness — and would
   still fail with the post-hoc re-arm (8 of 16). Its
-  lag-permutation p (0.057) says that when it does fire, its timing tracks each
-  recession's own trough beyond a clock — a modest positive, not a signal.
+  lag-permutation p (≈ 0.06; exactly 0.060 by enumeration) says that when it does
+  fire, its timing tracks each recession's own trough beyond a clock — a modest
+  positive, not a signal.
 - **False bottoms:** 9 roll-overs 1895–1965, 3 with no trough nearby (1913, 1915,
   1948): precision 2/3, 0.46 a decade (0.36 excluding the war years).
 - **Modern filings:** 1982 and 2001 rolled over 5 months after the trough (2001
@@ -507,14 +512,33 @@ Figures: `distress_signals/figs/` — `fig_bottoms_timing.png`,
   before the run; the court filings were seen (context only).
 - **Data.** 1894–1938 monthly counts are a year-end vintage (real-time monthly
   publication before 1933 unverified; + 2-month release changes no HIT count);
-  definition breaks 1933, 1934, 1939 (straight across 1933: same 5 HITs); the
-  1898-06 typo fixed (masked instead: 4 HITs); 1937–38 on segment A: 4 HITs.
+  definition breaks 1933, 1934, 1939 (straight across 1933: same 5 HITs; 1929–33
+  is CENSORED by the break but a MISS in substance — unbroken, the series only
+  re-arms in 1937-12). The 1898-06 typo is fixed; masking the month instead
+  censors 1899–1900 by rule (its signal is unchanged at +5), so the result does
+  not depend on the fix. 1937–38 is basis-sensitive: a HIT on segment B,
+  CENSORED on segment A (A ends 1938-08).
 - **Dates.** Pre-1927 NBER troughs are set late (Romer 1994): on Romer's dates the
-  hits rise from 5 to 6. Equity lows use monthly averages; flat bottoms flagged
-  (1910 ambiguous, 1913 censored), lows < 10% excluded (1899, 1926, 1960).
+  hits rise from 5 to 6. Equity lows use Shiller monthly averages; flat bottoms
+  flagged (1910 ambiguous, 1913 censored), lows < 10% excluded (1899, 1926,
+  1960). On Cowles/OECD the low month agrees in 23 of 25 cycles; 1953, 1957 and
+  1960 change validity, all MISS either way.
 - **Calibration.** θ_A = 15% was chosen on synthetic noise (≤ 1 noise roll-over a
   decade); the generator's raised-cosine rises are a simplification.
 - **Trader's view.** Monthly-average prices, no costs or taxes; each rule's
-  medians cover the recessions where it fired (different sets).
+  medians cover the recessions where it fired (different sets). "Peak + 6"
+  enters at p + 6; the −20% trigger is searched from p − 6, so 1918 enters
+  before the peak.
 - **Not covered.** Monthly D&B counts after 1965 (none published monthly);
   WARN layoff notices (pending Casey's ICPSR decision).
+
+### Counter-agent log
+
+| review | verdict | adopted |
+|---|---|---|
+| research check (2026-10-13) | PASS_WITH_FIXES — primary sources re-read from page images; the pre-1938 count rise was 26.8 months (not 21.8), the y/y-peak rule is a band, 8 (not 7) of 12 postwar recessions had a 20% decline, the 1933 break month ambiguous | all, in the research section |
+| statistics, SPEC v0 (2026-10-13) | BLOCK — the rule fires 2–9 months after the level peak (grade near-unreachable); the armed-month null loses to a clock; arming at 1.3 noise SDs; false bottoms unscored; equity-low edge cases | all: reachability rule, lag permutation, calibrated arming, false bottoms, equity validity, w-grid shifts, re-arm and carry-over rules |
+| data, SPEC v0 (2026-10-13) | BLOCK — the 1898-06 typo (+300) inside a scored window; edges and gaps; noise figure from liabilities, not counts; flat equity bottoms; 1933/1937/1948/R/claims/liabilities details | all: HSUS gate test, censoring, era noise, low zone, segment and release sensitivities, bank-failure correction |
+| statistics, SPEC v1 | PASS_WITH_FIXES — the prior described the g-peak, not the rule; MISS dropped from timing; false-start label; θ_A 10% sensitivity; g-peak edge | all |
+| data, SPEC v1 | NOT PASS — the frozen pre-1914 noise (0.116) counted seasonal drift as noise | re-measured (0.085, `bottoms_noise.py`), re-frozen θ_A = 15% and reachability (CONFIRMS tested) before the run; left-censoring; liabilities 1933 break; exclusions |
+| results A, independent recompute (2026-10-13) | PASS_WITH_FIXES — every number reproduced with exact arithmetic from the spec text; 5 MINOR (g-peak equity window, a label, basis flag, Cowles/OECD cross-check, mask-sensitivity wording), 3 NOTE; flagged that 6 of 8 misses are re-arm lockouts | all; correction run (no tested number changed); post-hoc re-arm diagnostic added and labelled |

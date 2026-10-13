@@ -429,8 +429,12 @@ def run() -> dict:
     t10 = score_p(segs, replace(rule, theta=0.10), 1, eqt, rng, PERMS, episodes=from_1918, grid=False)
     sens["theta10_from_1918"] = summarize(t10)
     sens["theta10_from_1918_timing"] = {shot: timing_summary(r["episodes"]) for shot, r in t10.items()}
-    t20 = score_p(segs, rule, 1, eqt, rng, PERMS, episodes=from_1918, grid=False)
-    sens["theta20_from_1918_timing"] = {shot: timing_summary(r["episodes"]) for shot, r in t20.items()}
+    tp = score_p(segs, rule, 1, eqt, rng, PERMS, episodes=from_1918, grid=False)
+    sens["theta_primary_from_1918_timing"] = {shot: timing_summary(r["episodes"]) for shot, r in tp.items()}
+    a37 = sens["1937_on_A"]["CONFIRMS-trough"]["outcomes"]["1937-05"][0]
+    b37 = next(e["outcome"] for e in prim["CONFIRMS-trough"]["episodes"] if e["peak"] == "1937-05")
+    out["P"]["flags"] = {"1937-05": "basis-sensitive" if a37 != b37 else "same on A and B",
+                         "1929-08": "CENSORED by the 1933 break; unbroken, segment A only re-arms in 1937-12"}
     out["P"]["sensitivities"] = sens
     # false bottoms over the whole P record
     spans = spans_p(segs)
@@ -451,6 +455,7 @@ def run() -> dict:
     fb["excluding_war_years"] = {"n": len(keep), "n_false": nf, "decades_observed": round(dec, 2),
                                  "false_per_decade": nf / dec if dec else None,
                                  "precision": (len(keep) - nf) / len(keep) if keep else None}
+    out["equity_crosscheck"] = cowles_oecd_crosscheck(eqt)
     out["R"] = score_r(rule, eqt)
     out["claims"] = score_claims(rule, eqt)
     out["liabilities"] = score_liabilities(rule, eqt)
@@ -494,39 +499,72 @@ def romer_view(shots: dict) -> dict:
     return out
 
 
+def _gpeak(G: dict, spans: list[dict], p: int, lo: int, hi: int) -> tuple[int | None, int | None]:
+    """(release month of the highest w = 12 growth released in [lo, hi], or None;
+    release month of the earlier, higher peak when the maximum sits at the
+    window's first month and g was higher in the 36 months before it)."""
+    best, first_rel, before = None, None, None
+    for s in episode_span(spans, p):
+        g = G[s["name"]]["g"]
+        for t, v in g.items():
+            if lo <= t + 1 <= hi:
+                first_rel = t + 1 if first_rel is None else min(first_rel, t + 1)
+                if best is None or v > best[1]:
+                    best = (t, v)
+        back = [(t, v) for t, v in g.items() if lo - 36 <= t + 1 < lo]
+        if back:
+            bt = max(back, key=lambda x: x[1])
+            before = bt if before is None or bt[1] > before[1] else before
+    if not best:
+        return None, None
+    if best[0] + 1 == first_rel and before is not None and before[1] > best[1]:
+        return None, before[0] + 1
+    return best[0] + 1, None
+
+
 def g_peak_diagnostic(segs, rule, eqt) -> dict:
-    """Hindsight: the month of the highest w = 12 growth in each trough window."""
+    """Hindsight: the month of the highest w = 12 growth in each target's own
+    episode window (trough: [p, end]; equity: [min(p, b - 3), end])."""
     r12 = replace(rule, w=12)
     spans = spans_p(segs)
     G = growth_by_span(spans, r12)
     rows = []
     for p, tau in P_EPISODES:
         hi = window_end(p, tau)
-        best, first_rel, before = None, None, None
-        for s in episode_span(spans, p):
-            g = G[s["name"]]["g"]
-            for t, v in g.items():
-                if p <= t + 1 <= hi:
-                    first_rel = t + 1 if first_rel is None else min(first_rel, t + 1)
-                    if best is None or v > best[1]:
-                        best = (t, v)
-            back = [(t, v) for t, v in g.items() if p - 36 <= t + 1 < p]
-            if back:
-                bt = max(back, key=lambda x: x[1])
-                before = bt if before is None or bt[1] > before[1] else before
-        if not best:
-            continue
-        eq_b = eqt[p]["b"] if eqt[p]["status"] != "no equity low" else None
-        if best[0] + 1 == first_rel and before is not None and before[1] > best[1]:
-            rows.append({"peak": mstr(p), "g_peaked_before_peak": mstr(before[0] + 1),
-                         "e_trough": None, "e_equity": None})
-            continue
-        rows.append({"peak": mstr(p), "g_peak_release": mstr(best[0] + 1), "e_trough": best[0] + 1 - tau,
-                     "e_equity": (best[0] + 1 - eq_b) if eq_b is not None else None})
+        rel, before = _gpeak(G, spans, p, p, hi)
+        row = {"peak": mstr(p)}
+        if rel is not None:
+            row.update({"g_peak_release": mstr(rel), "e_trough": rel - tau})
+        else:
+            row.update({"g_peaked_before_window": mstr(before) if before else None, "e_trough": None})
+        b = eqt[p]
+        if b["b"] is not None and b["status"] != "no equity low":
+            rel_e, before_e = _gpeak(G, spans, p, min(p, b["b"] - 3), hi)
+            row["equity_status"] = b["status"]
+            row["e_equity"] = rel_e - b["b"] if rel_e is not None else None
+            if rel_e is None:
+                row["g_peaked_before_equity_window"] = mstr(before_e) if before_e else None
+        rows.append(row)
     return {"episodes": rows,
             "trough": os_ci([r["e_trough"] for r in rows if r["e_trough"] is not None]),
-            "equity": os_ci([r["e_equity"] for r in rows if r["e_equity"] is not None]),
-            "n_peaked_before_p": sum("g_peaked_before_peak" in r for r in rows)}
+            "equity_valid_only": os_ci([r["e_equity"] for r in rows
+                                        if r.get("equity_status") == "valid" and r.get("e_equity") is not None]),
+            "equity_all_lows": os_ci([r["e_equity"] for r in rows if r.get("e_equity") is not None]),
+            "n_peaked_before_window": sum(r["e_trough"] is None for r in rows)}
+
+
+def cowles_oecd_crosscheck(eqt: dict) -> dict:
+    """SPEC v1: b_r on Cowles/S&P (to 1956) and OECD (from 1957) vs Shiller."""
+    cowles, oecd = D.equity_monthly()
+    alt = equity_targets({**cowles, **oecd})
+    rows = {}
+    for p in eqt:
+        a, s0 = alt[p], eqt[p]
+        if a["b"] is None or s0["b"] is None:
+            continue
+        rows[mstr(p)] = {"shiller": [mstr(s0["b"]), s0["status"]], "cowles_oecd": [mstr(a["b"]), a["status"]],
+                         "month_diff": a["b"] - s0["b"], "status_same": a["status"] == s0["status"]}
+    return {"episodes": rows, "same_month": sum(r["month_diff"] == 0 for r in rows.values()), "n": len(rows)}
 
 
 # ------------------------------------------------------------------ R: court business filings
@@ -629,6 +667,7 @@ def score_claims(rule: B.Rule, eqt: dict) -> dict:
     g = B.growth(val, rule)
     sig = B.signals(g, range(min(val), max(val) + 1), rule)
     c2 = [rel[s["t"]] for s in sig]
+    c2_inputs = {rel[s["t"]]: (s["t"] - rule.look + 1 - (rule.lag + rule.w - 1), s["t"]) for s in sig}
     c1 = c1_signals()
     out = {}
     for p, tau in CHRON:
@@ -646,10 +685,15 @@ def score_claims(rule: B.Rule, eqt: dict) -> dict:
                 row[f"{name}/{shot}"] = ({"release": mstr(first), "e": first - T,
                                           "outcome": B.classify(first - T, wlo, whi)} if first is not None
                                          else {"outcome": "MISS"})
-        row["flags"] = [f for f, cond in (("GM strike Sep-Nov 1970", p == M(1969, 12)),
-                                          ("UI coverage change (1972-01 / 1978-01) inside the inputs",
-                                           p in (M(1969, 12), M(1973, 11), M(1980, 1))))
-                        if cond]
+        flags = []
+        c2r = row.get("C2/CONFIRMS-trough", {}).get("release")
+        if c2r:
+            a, b = c2_inputs[M(int(c2r[:4]), int(c2r[5:]))]
+            if any(a < brk <= b for brk in (M(1972, 1), M(1978, 1))):
+                flags.append("C2: a UI coverage change (1972-01 / 1978-01) falls inside its inputs")
+            if a <= M(1970, 11) and b >= M(1970, 9):
+                flags.append("C2: the Sep-Nov 1970 GM strike falls inside its inputs")
+        row["flags"] = flags
         out[mstr(p)] = row
     return out
 

@@ -1769,97 +1769,107 @@
      "peak": "1895-12",
      "g_peak_release": "1897-01",
      "e_trough": -5,
+     "equity_status": "valid",
      "e_equity": 5
     },
     {
      "peak": "1899-06",
      "g_peak_release": "1901-05",
-     "e_trough": 5,
-     "e_equity": null
+     "e_trough": 5
     },
     {
      "peak": "1902-09",
      "g_peak_release": "1904-10",
      "e_trough": 2,
+     "equity_status": "valid",
      "e_equity": 12
     },
     {
      "peak": "1907-05",
      "g_peak_release": "1908-10",
      "e_trough": 4,
+     "equity_status": "valid",
      "e_equity": 11
     },
     {
      "peak": "1910-01",
      "g_peak_release": "1912-10",
      "e_trough": 9,
+     "equity_status": "ambiguous",
      "e_equity": 27
     },
     {
      "peak": "1913-01",
      "g_peak_release": "1915-07",
      "e_trough": 7,
+     "equity_status": "censored",
      "e_equity": 7
     },
     {
      "peak": "1918-08",
-     "g_peaked_before_peak": "1915-08",
+     "g_peaked_before_window": "1915-08",
      "e_trough": null,
-     "e_equity": null
+     "equity_status": "valid",
+     "e_equity": 1
     },
     {
      "peak": "1920-01",
      "g_peak_release": "1921-10",
      "e_trough": 3,
+     "equity_status": "valid",
      "e_equity": 2
     },
     {
      "peak": "1923-05",
      "g_peak_release": "1925-02",
      "e_trough": 7,
+     "equity_status": "valid",
      "e_equity": 16
     },
     {
      "peak": "1926-10",
      "g_peak_release": "1927-10",
-     "e_trough": -1,
-     "e_equity": null
+     "e_trough": -1
     },
     {
      "peak": "1929-08",
      "g_peak_release": "1932-10",
      "e_trough": -5,
+     "equity_status": "valid",
      "e_equity": 4
     },
     {
      "peak": "1937-05",
      "g_peak_release": "1938-10",
      "e_trough": 4,
+     "equity_status": "valid",
      "e_equity": 6
     },
     {
      "peak": "1948-11",
      "g_peak_release": "1949-12",
      "e_trough": 2,
+     "equity_status": "valid",
      "e_equity": 6
     },
     {
      "peak": "1953-07",
      "g_peak_release": "1954-06",
      "e_trough": 1,
+     "equity_status": "valid",
      "e_equity": 9
     },
     {
      "peak": "1957-08",
      "g_peak_release": "1958-08",
      "e_trough": 4,
+     "equity_status": "valid",
      "e_equity": 8
     },
     {
      "peak": "1960-04",
      "g_peak_release": "1961-09",
-     "e_trough": 7,
-     "e_equity": null
+     "e_trough": 7
     }
    ],
    "trough": {
@@ -1871,16 +1881,25 @@
     ],
     "coverage": 0.965
    },
-   "equity": {
-    "n": 12,
-    "median": 7.5,
+   "equity_valid_only": {
+    "n": 11,
+    "median": 6.0,
+    "ci": [
+     4,
+     11
+    ],
+    "coverage": 0.935
+   },
+   "equity_all_lows": {
+    "n": 13,
+    "median": 7.0,
     "ci": [
      5,
-     12
+     11
     ],
-    "coverage": 0.961
+    "coverage": 0.908
    },
-   "n_peaked_before_p": 1
+   "n_peaked_before_window": 1
   },
   "romer": {
    "MARKS-trough": {
@@ -2063,6 +2082,10 @@
     "hits_nber": 5,
     "hits_romer": 6
    }
+  },
+  "flags": {
+   "1937-05": "basis-sensitive",
+   "1929-08": "CENSORED by the 1933 break; unbroken, segment A only re-arms in 1937-12"
   },
   "sensitivities": {
    "release_plus2": {
@@ -3198,7 +3221,7 @@
      }
     }
    },
-   "theta20_from_1918_timing": {
+   "theta_primary_from_1918_timing": {
     "MARKS-trough": {
      "n": 9,
      "median": "MISS",
@@ -3395,6 +3418,312 @@
     "precision": 0.75
    }
   }
+ },
+ "equity_crosscheck": {
+  "episodes": {
+   "1895-12": {
+    "shiller": [
+     "1896-08",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1896-08",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1899-06": {
+    "shiller": [
+     "1898-12",
+     "no equity low"
+    ],
+    "cowles_oecd": [
+     "1898-12",
+     "no equity low"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1902-09": {
+    "shiller": [
+     "1903-10",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1903-10",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1907-05": {
+    "shiller": [
+     "1907-11",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1907-11",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1910-01": {
+    "shiller": [
+     "1910-07",
+     "ambiguous"
+    ],
+    "cowles_oecd": [
+     "1910-07",
+     "ambiguous"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1913-01": {
+    "shiller": [
+     "1914-12",
+     "censored"
+    ],
+    "cowles_oecd": [
+     "1914-12",
+     "censored"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1918-08": {
+    "shiller": [
+     "1918-04",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1918-04",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1920-01": {
+    "shiller": [
+     "1921-08",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1921-08",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1923-05": {
+    "shiller": [
+     "1923-10",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1923-10",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1926-10": {
+    "shiller": [
+     "1926-04",
+     "no equity low"
+    ],
+    "cowles_oecd": [
+     "1926-04",
+     "no equity low"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1929-08": {
+    "shiller": [
+     "1932-06",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1932-06",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1937-05": {
+    "shiller": [
+     "1938-04",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1938-04",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1945-02": {
+    "shiller": [
+     "1944-09",
+     "no equity low"
+    ],
+    "cowles_oecd": [
+     "1944-09",
+     "no equity low"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1948-11": {
+    "shiller": [
+     "1949-06",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1949-06",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1953-07": {
+    "shiller": [
+     "1953-09",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1953-09",
+     "no equity low"
+    ],
+    "month_diff": 0,
+    "status_same": false
+   },
+   "1957-08": {
+    "shiller": [
+     "1957-12",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1957-11",
+     "ambiguous"
+    ],
+    "month_diff": -1,
+    "status_same": false
+   },
+   "1960-04": {
+    "shiller": [
+     "1960-10",
+     "no equity low"
+    ],
+    "cowles_oecd": [
+     "1960-10",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": false
+   },
+   "1969-12": {
+    "shiller": [
+     "1970-06",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1970-07",
+     "valid"
+    ],
+    "month_diff": 1,
+    "status_same": true
+   },
+   "1973-11": {
+    "shiller": [
+     "1974-12",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1974-12",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1980-01": {
+    "shiller": [
+     "1979-07",
+     "no equity low"
+    ],
+    "cowles_oecd": [
+     "1979-07",
+     "no equity low"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1981-07": {
+    "shiller": [
+     "1982-07",
+     "ambiguous"
+    ],
+    "cowles_oecd": [
+     "1982-07",
+     "ambiguous"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1990-07": {
+    "shiller": [
+     "1990-10",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1990-10",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "2001-03": {
+    "shiller": [
+     "2002-10",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "2002-10",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "2007-12": {
+    "shiller": [
+     "2009-03",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "2009-03",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "2020-02": {
+    "shiller": [
+     "2020-03",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "2020-03",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   }
+  },
+  "same_month": 23,
+  "n": 25
  },
  "R": {
   "primary": {
@@ -4013,8 +4342,7 @@
     "outcome": "LATE"
    },
    "flags": [
-    "GM strike Sep-Nov 1970",
-    "UI coverage change (1972-01 / 1978-01) inside the inputs"
+    "C2: the Sep-Nov 1970 GM strike falls inside its inputs"
    ]
   },
   "1973-11": {
@@ -4048,9 +4376,7 @@
     "e": 10,
     "outcome": "LATE"
    },
-   "flags": [
-    "UI coverage change (1972-01 / 1978-01) inside the inputs"
-   ]
+   "flags": []
   },
   "1980-01": {
    "C1/MARKS-trough": {
@@ -4073,9 +4399,7 @@
     "e": 7,
     "outcome": "HIT"
    },
-   "flags": [
-    "UI coverage change (1972-01 / 1978-01) inside the inputs"
-   ]
+   "flags": []
   },
   "1981-07": {
    "C1/MARKS-trough": {
@@ -4551,10 +4875,10 @@
      "worst_dd_12m": -0.11115528905104066
     },
     "random_armed_P": {
-     "ret_12m": 0.1832002162567694,
-     "worst_dd_12m": -0.02396860729116801,
      "ret_24m": 0.4479773240093823,
      "ret_6m": 0.0797085065133023,
+     "ret_12m": 0.1832002162567694,
+     "worst_dd_12m": -0.02396860729116801,
      "rebound_missed": 0.7232607074771215,
      "entry": "random"
     }
@@ -4585,10 +4909,10 @@
      "worst_dd_12m": -0.007657986348707957
     },
     "random_armed_P": {
-     "ret_12m": 0.12765320738203445,
-     "worst_dd_12m": 0.0,
      "ret_24m": -0.08526886988143445,
      "ret_6m": 0.07971779348043206,
+     "ret_12m": 0.12765320738203445,
+     "worst_dd_12m": 0.0,
      "entry": "random"
     }
    },
@@ -4623,10 +4947,10 @@
      "worst_dd_12m": -0.2026522909551568
     },
     "random_armed_P": {
-     "ret_12m": 0.1983722541031061,
-     "worst_dd_12m": 0.0,
      "ret_24m": 0.28418577783874244,
      "ret_6m": 0.11497230355271171,
+     "ret_12m": 0.1983722541031061,
+     "worst_dd_12m": 0.0,
      "rebound_missed": 1.30794504071888,
      "entry": "random"
     }
@@ -4663,10 +4987,10 @@
      "worst_dd_12m": 0.0
     },
     "random_armed_P": {
-     "ret_12m": 0.16592649610397725,
-     "worst_dd_12m": 0.0,
      "ret_24m": 0.14715645384146891,
      "ret_6m": 0.11713789164011912,
+     "ret_12m": 0.16592649610397725,
+     "worst_dd_12m": 0.0,
      "rebound_missed": 1.0771156729337517,
      "entry": "random"
     }
@@ -4693,10 +5017,10 @@
      "worst_dd_12m": 0.0
     },
     "random_armed_P": {
-     "ret_12m": -0.09312687746489057,
-     "worst_dd_12m": -0.11177502738042289,
      "ret_24m": -0.09943802445953798,
      "ret_6m": -0.08302330538007385,
+     "ret_12m": -0.09312687746489057,
+     "worst_dd_12m": -0.11177502738042289,
      "rebound_missed": 1.327924374581,
      "entry": "random"
     }
@@ -4727,10 +5051,10 @@
      "worst_dd_12m": -0.012208433114086703
     },
     "random_armed_P": {
-     "ret_12m": 0.0705674742258342,
-     "worst_dd_12m": -0.009385683760683716,
      "ret_24m": 0.041066020489034294,
      "ret_6m": 0.037963307037655936,
+     "ret_12m": 0.0705674742258342,
+     "worst_dd_12m": -0.009385683760683716,
      "rebound_missed": 0.9175565148525853,
      "entry": "random"
     }
@@ -4789,10 +5113,10 @@
      "worst_dd_12m": -0.11718518150003787
     },
     "random_armed_P": {
-     "ret_12m": 0.10082543417413903,
-     "worst_dd_12m": -0.037665262819679746,
      "ret_24m": 0.33903845377978015,
      "ret_6m": 0.02058832711254044,
+     "ret_12m": 0.10082543417413903,
+     "worst_dd_12m": -0.037665262819679746,
      "rebound_missed": 1.0,
      "entry": "random"
     }
@@ -4820,10 +5144,10 @@
      "rebound_missed": 0.16963635244909964
     },
     "random_armed_P": {
-     "ret_12m": 0.2175924114080401,
-     "worst_dd_12m": 0.0,
      "ret_24m": 0.5487849316559283,
      "ret_6m": 0.12984504504860306,
+     "ret_12m": 0.2175924114080401,
+     "worst_dd_12m": 0.0,
      "rebound_missed": 2.0123694898147977,
      "entry": "random"
     }
@@ -4872,10 +5196,10 @@
      "worst_dd_12m": -0.3002081159817763
     },
     "random_armed_P": {
-     "ret_12m": -0.17328378124086075,
-     "worst_dd_12m": -0.4042064305426133,
      "ret_24m": 0.1961455487047905,
      "ret_6m": -0.1669400149523984,
+     "ret_12m": -0.17328378124086075,
+     "worst_dd_12m": -0.4042064305426133,
      "rebound_missed": 0.3989484156723128,
      "entry": "random"
     }
@@ -4911,10 +5235,10 @@
      "worst_dd_12m": -0.08961301832456947
     },
     "random_armed_P": {
-     "ret_12m": 0.013628338302071885,
-     "worst_dd_12m": -0.12238812886736605,
      "ret_24m": -0.06885808237850854,
      "ret_6m": 0.045542336975563646,
+     "ret_12m": 0.013628338302071885,
+     "worst_dd_12m": -0.12238812886736605,
      "rebound_missed": 2.027518059181979,
      "entry": "random"
     }
@@ -4941,10 +5265,10 @@
      "worst_dd_12m": -0.04905277401894448
     },
     "random_armed_P": {
-     "ret_12m": 0.27520881436450595,
-     "worst_dd_12m": 0.0,
      "ret_24m": 0.5786154370421448,
      "ret_6m": 0.12362664218054253,
+     "ret_12m": 0.27520881436450595,
+     "worst_dd_12m": 0.0,
      "rebound_missed": 0.929905201862769,
      "entry": "random"
     }
@@ -4973,10 +5297,10 @@
      "rebound_missed": 0.27161318710589405
     },
     "random_armed_P": {
-     "ret_12m": 0.3505626594576221,
-     "worst_dd_12m": 0.0,
      "ret_24m": 0.37807757707284395,
      "ret_6m": 0.18636029332335213,
+     "ret_12m": 0.3505626594576221,
+     "worst_dd_12m": 0.0,
      "rebound_missed": 1.498924926490633,
      "entry": "random"
     }
@@ -5004,10 +5328,10 @@
      "rebound_missed": 0.08057727609910166
     },
     "random_armed_P": {
-     "ret_12m": 0.3529331708935992,
-     "worst_dd_12m": 0.0,
      "ret_24m": 0.5111117408395827,
      "ret_6m": 0.10617162469818386,
+     "ret_12m": 0.3529331708935992,
+     "worst_dd_12m": 0.0,
      "rebound_missed": 0.06160318362317214,
      "entry": "random"
     }
@@ -5038,10 +5362,10 @@
      "worst_dd_12m": 0.0
     },
     "random_armed_P": {
-     "ret_12m": -0.028801759170621444,
-     "worst_dd_12m": -0.15394317609939356,
      "ret_24m": 0.14537107355840995,
      "ret_6m": 0.04816813024550193,
+     "ret_12m": -0.028801759170621444,
+     "worst_dd_12m": -0.15394317609939356,
      "entry": "random"
     }
    },
