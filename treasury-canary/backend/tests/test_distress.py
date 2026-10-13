@@ -131,3 +131,25 @@ def test_record_matches_the_study_results():
     assert HIST["record"]["bank"]["CORALACBS"]["qualifiers"] == r["Q_C"]["series"]["CORALACBS"]["qualifiers"]
     assert (HIST["record"]["states"]["business_role"] == "confirms") == \
         r["Q_R"]["ship"]["S2"]["verdict"].startswith("confirms")
+
+
+def test_the_bottoming_watch_reproduces_the_study_and_cannot_alert():
+    # studies/distress-bottoms.md, R (court business filings): roll-overs released
+    # 1983-04 (5 months after the 1982 trough), 1987-10 (no recession), 2002-04
+    # (5 after 2001) and 2024-10 (no recession); 2026Q2 armed, not rolled over
+    p = Dm.build_distress(HIST)
+    w = p["bottoming_watch"]
+    assert w["signals"] == ["1983-04", "1987-10", "2002-04", "2024-10"]
+    assert w["asof"] == "2026Q2" and abs(w["g"] - 0.1917) < 0.0005 and w["armed"] and not w["rolled_over_now"]
+    assert w["status"] == "armed, not rolled over"
+    assert p["alert"] is None
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(os.path.dirname(RESULTS), "bottoms_results.json")),
+                    reason="bottoms study results not in this checkout")
+def test_the_bottoming_watch_matches_the_bottoms_results():
+    r = json.load(open(os.path.join(os.path.dirname(RESULTS), "bottoms_results.json")))
+    w = Dm.build_distress(HIST)["bottoming_watch"]
+    assert w["signals"] == [x["release"] for x in r["R"]["primary"]["signals"]]
+    assert r["P"]["grade"]["tested"] == ["CONFIRMS-trough"]
+    assert not r["P"]["grade"]["conditions_descriptive"]["CONFIRMS-trough"]["pass"]   # nothing passed

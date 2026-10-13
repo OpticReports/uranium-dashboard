@@ -1,0 +1,147 @@
+{
+ "note": "After the run, 6 of the 8 missed or censored recessions traced to the pre-registered re-arming rule: after the 1920-21 (+184%) and 1946-48 (+260%) surges the drop d = high/3 was 61 and 87 points, and re-arming needed growth to rise that far above its post-signal low \u2014 it never did, so 1923-24, 1929-33 and all four postwar recessions could not fire. This script re-scores the same series with a re-arm that does not scale with the surge (re-arm once growth has turned negative, i.e. the failure wave is over), to show where roll-overs land when the rule can fire. Everything else is SPEC v1.",
+ "episodes": [
+  {
+   "peak": "1895-12",
+   "release": "1897-04",
+   "outcome_confirms": "EARLY",
+   "e_trough": -2,
+   "e_equity": 8
+  },
+  {
+   "peak": "1899-06",
+   "release": "1901-05",
+   "outcome_confirms": "HIT",
+   "e_trough": 5,
+   "e_equity": null
+  },
+  {
+   "peak": "1902-09",
+   "release": "1904-08",
+   "outcome_confirms": "HIT",
+   "e_trough": 0,
+   "e_equity": 10
+  },
+  {
+   "peak": "1907-05",
+   "release": "1908-12",
+   "outcome_confirms": "HIT",
+   "e_trough": 6,
+   "e_equity": 13
+  },
+  {
+   "peak": "1910-01",
+   "release": null,
+   "outcome_confirms": "MISS",
+   "e_trough": null,
+   "e_equity": null
+  },
+  {
+   "peak": "1913-01",
+   "release": "1913-02",
+   "outcome_confirms": "EARLY",
+   "e_trough": -22,
+   "e_equity": -22
+  },
+  {
+   "peak": "1918-08",
+   "release": null,
+   "outcome_confirms": "MISS",
+   "e_trough": null,
+   "e_equity": null
+  },
+  {
+   "peak": "1920-01",
+   "release": "1921-12",
+   "outcome_confirms": "HIT",
+   "e_trough": 5,
+   "e_equity": 4
+  },
+  {
+   "peak": "1923-05",
+   "release": "1925-01",
+   "outcome_confirms": "HIT",
+   "e_trough": 6,
+   "e_equity": 15
+  },
+  {
+   "peak": "1926-10",
+   "release": null,
+   "outcome_confirms": "MISS",
+   "e_trough": null,
+   "e_equity": null
+  },
+  {
+   "peak": "1929-08",
+   "release": "1931-08",
+   "outcome_confirms": "EARLY",
+   "e_trough": -19,
+   "e_equity": -10
+  },
+  {
+   "peak": "1937-05",
+   "release": "1939-02",
+   "outcome_confirms": "HIT",
+   "e_trough": 8,
+   "e_equity": 10
+  },
+  {
+   "peak": "1948-11",
+   "release": null,
+   "outcome_confirms": "MISS",
+   "e_trough": null,
+   "e_equity": null
+  },
+  {
+   "peak": "1953-07",
+   "release": "1954-12",
+   "outcome_confirms": "HIT",
+   "e_trough": 7,
+   "e_equity": 15
+  },
+  {
+   "peak": "1957-08",
+   "release": null,
+   "outcome_confirms": "MISS",
+   "e_trough": null,
+   "e_equity": null
+  },
+  {
+   "peak": "1960-04",
+   "release": "1961-11",
+   "outcome_confirms": "HIT",
+   "e_trough": 9,
+   "e_equity": null
+  }
+ ],
+ "confirms_hits": 8,
+ "fired": 11,
+ "median_e_trough_of_signals": 5.0,
+ "e_equity_of_signals": [
+  -22,
+  -10,
+  4,
+  8,
+  10,
+  10,
+  13,
+  15,
+  15
+ ],
+ "all_signals": [
+  "1897-04",
+  "1901-05",
+  "1904-08",
+  "1908-12",
+  "1913-02",
+  "1915-11",
+  "1921-12",
+  "1925-01",
+  "1931-08",
+  "1939-02",
+  "1948-03",
+  "1954-12",
+  "1957-04",
+  "1961-11"
+ ]
+}

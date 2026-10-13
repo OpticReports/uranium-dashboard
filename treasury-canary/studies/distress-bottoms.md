@@ -426,3 +426,95 @@ was scored:
   publication before 1933 is unverified (+ 2 sensitivity).
 - Pre-1914 counts are about 1.5 times as noisy as later ones (0.085 vs 0.056).
 - Claims overlap only R (3 episodes); P ends in 1965.
+
+---
+
+## RESULTS — scored 2026-10-13 (`distress_signals/bottoms_results.json`, SPEC v1, one run)
+
+Pre-registration frozen at f7be0cd; the run (59bfe06) committed unedited.
+
+**Verdict: the slowing of bankruptcy growth does not mark the bottom.** In 16
+recessions 1895–1961 it rolled over in only 7; 5 of those came 0–8 months *after*
+the economic trough and none came at a stock-market low (all 4–13 months after
+it). The one tested grade (CONFIRMS-trough) fails. Jobless claims do the same job
+sooner and in every recession.
+
+| series | recessions | rolled over | vs the economic trough | vs the stock low | grade |
+|---|---|---|---|---|---|
+| D&B failure counts, monthly (primary) | 16 (1895–1961) | 7 (8 never; 1929–33 censored) | −22 (false start), −2, 0, +5, +5, +6, +8 | 0 of 13 at the low; +4 to +13 after | CONFIRMS-trough: **fails** (5 of 16 in 0…+9, needs 11; lag-permutation p 0.057) |
+| court business filings, quarterly (context) | 1982, 1991, 2001 (2008–09 masked) | 2 of 3 | +5, +5 | +9 (1982); −6 (2001, before the Oct-2002 low) | context |
+| jobless claims (benchmark) | 7 (1970–2009) | 7 of 7 | peak rule −4 to +3 (median +1); same roll-over rule +3 to +7 | peak rule +1 to +7 after (2001: −10) | benchmark |
+
+- **It often didn't fire — mostly because of the rule's own re-arming.** 8 of 16
+  recessions produced no roll-over (and 1929–33 is censored). Only three are
+  genuine misses: failures fell in WWI (1918–19), peaked near +10% in 1926–27, and
+  rolled over after the window in 1910–12. The other six (1923–24, 1929–33 and all
+  four postwar recessions) were blocked by the pre-registered re-arm rule: the
+  1920–21 (+184%) and 1946–48 (+260%) surges set a drop of 61 and 87 points, and
+  re-arming needed growth to climb that far above its later low, which never
+  happened. (A +10% line from 1918, the pre-registered sensitivity, cannot fix
+  that: 7 of 10 still miss.)
+- **Post-hoc diagnostic (`bottoms_posthoc.py`, not pre-registered, not graded):**
+  re-arming once growth has turned negative lets the rule fire in 11 of 16. Then
+  8 land 0–9 months after the trough (median +5), still short of the 11 the grade
+  needed, and two are false dawns mid-crash — Feb-1913 and Aug-1931, 19 months
+  before the 1933 trough, after which failures surged again. Against the stock
+  low the signals come +4 to +15 months after it, except those two.
+- **When it fires, it confirms — late.** 5 of 7 signals landed 0–8 months after
+  the trough; the other two were early (1897 by 2 months; 1913 by 22 months, a
+  false start that reversed). In hindsight, failure growth peaked a median 4
+  months after the trough (interval +1…+7) and 7.5 months after the stock low
+  (+5…+12): the slowing begins after the economy has turned.
+- **Against the stock market: never.** 0 of 13 equity lows; the signals came a
+  median 10 months after the low.
+- **The tested grade fails** on the hit count (the misses), the clocks (a
+  leave-one-out "peak + median lag" clock has median |error| 5 months; the
+  roll-over's is unbounded because of the misses) and robustness — and would
+  still fail with the post-hoc re-arm (8 of 16). Its
+  lag-permutation p (0.057) says that when it does fire, its timing tracks each
+  recession's own trough beyond a clock — a modest positive, not a signal.
+- **False bottoms:** 9 roll-overs 1895–1965, 3 with no trough nearby (1913, 1915,
+  1948): precision 2/3, 0.46 a decade (0.36 excluding the war years).
+- **Modern filings:** 1982 and 2001 rolled over 5 months after the trough (2001
+  six months *before* that cycle's late stock low); 1991 never; false bottoms in
+  Oct-1987 and Oct-2024. Never earlier than claims.
+- **Trader's view** (Shiller total return, entry the month after the signal):
+  after a bankruptcy roll-over, median 12-month return +16% (n = 7) with a −2%
+  worst further drop, but 75% of the first-year rebound already gone. "Six months
+  after the recession began" earned +21% (n = 20, −1%); buying 20% off the high
+  +12% over 12 months and +36% over 24 (−9% worst drop).
+
+**Now (October 2026).** Court business filings +19% on a 2-quarter sum vs a year
+earlier and at their 4-quarter high: armed, not rolling over, with no recession.
+The last roll-over (Oct-2024) was a false bottom. If one comes now, the record
+says it would not mark a market bottom; in a recession it would arrive months
+after the economic trough, if at all.
+
+Figures: `distress_signals/figs/` — `fig_bottoms_timing.png`,
+`fig_bottoms_series.png`, `fig_bottoms_trader.png`.
+
+### Honesty box
+
+- **Power.** The tested grade had ~24% power at plausible settings, so its
+  failure alone is weak evidence. Most misses are a re-arming artifact (a rule
+  defect found after the run; the synthetic generator never produced +184% or
+  +260% surges), so the robust evidence is the timing: the hindsight growth peak
+  (+4 months after the trough, +7.5 after the stock low) and, when the rule fires,
+  a median of +5 months after the trough.
+- **Look-ahead.** Episode windows use NBER dates: the results are conditional on
+  knowing a recession is under way.
+- **What was blind.** The D&B counts' growth path and every roll-over were unseen
+  before the run; the court filings were seen (context only).
+- **Data.** 1894–1938 monthly counts are a year-end vintage (real-time monthly
+  publication before 1933 unverified; + 2-month release changes no HIT count);
+  definition breaks 1933, 1934, 1939 (straight across 1933: same 5 HITs); the
+  1898-06 typo fixed (masked instead: 4 HITs); 1937–38 on segment A: 4 HITs.
+- **Dates.** Pre-1927 NBER troughs are set late (Romer 1994): on Romer's dates the
+  hits rise from 5 to 6. Equity lows use monthly averages; flat bottoms flagged
+  (1910 ambiguous, 1913 censored), lows < 10% excluded (1899, 1926, 1960).
+- **Calibration.** θ_A = 15% was chosen on synthetic noise (≤ 1 noise roll-over a
+  decade); the generator's raised-cosine rises are a simplification.
+- **Trader's view.** Monthly-average prices, no costs or taxes; each rule's
+  medians cover the recessions where it fired (different sets).
+- **Not covered.** Monthly D&B counts after 1965 (none published monthly);
+  WARN layoff notices (pending Casey's ICPSR decision).

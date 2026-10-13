@@ -200,8 +200,85 @@ def build_distress(hist: dict, live: dict[str, dict] | None = None,
                    "business_role": rec["states"].get("business_role"),
                    "summary": rec["states"]["summary"]},
         "failure_liabilities": rec["failure_liabilities"],
+        "bottoming_watch": bottoming_watch(m["bus"], court, rec.get("bottoms")),
         "alert": None,
     }
+
+
+# ------------------------------------------------------------------ bottoming watch
+# studies/distress-bottoms.md: does the SLOWING of bankruptcy growth mark the
+# bottom? Tested record: no (the one tested grade failed). The panel shows the
+# court-filings roll-over status as context, recomputed with the study's rule
+# (2-quarter sums vs 4 quarters earlier; armed when the 4-quarter trailing high
+# >= +15%; roll-over when growth falls max(5pp, high/3) below it; re-armed when
+# growth rises by that drop from its post-signal low). Gate tests pin it to the
+# study's signals (tests/test_distress.py).
+BOTTOM_RULE = {"w": 2, "lag": 4, "look": 4, "theta": 0.15, "floor": 0.05, "frac": 1 / 3, "k": 1}
+_TIE = 1e-12
+
+
+def bottoms_growth(values: dict[int, float], raws: list[tuple[int, int]], w: int = 2, lag: int = 4) -> dict[int, float]:
+    out = {}
+    for t in sorted(values):
+        cur = range(t - w + 1, t + 1)
+        base = range(t - lag - w + 1, t - lag + 1)
+        if all(i in values and not _masked(i, raws) for i in list(cur) + list(base)):
+            s0 = sum(values[i] for i in base)
+            if s0 > 0:
+                out[t] = sum(values[i] for i in cur) / s0 - 1
+    return out
+
+
+def _trailing_high(g: dict[int, float], t: int, look: int, start: int | None) -> float | None:
+    lo = t - look + 1 if start is None else max(start, t - look + 1)
+    win = range(lo, t + 1)
+    return max(g[s] for s in win) if all(s in g for s in win) else None
+
+
+def bottoms_signals(g: dict[int, float], periods, rule: dict = BOTTOM_RULE) -> list[dict]:
+    """Roll-over signals (the study's bottoms_engine.signals, quarterly)."""
+    out: list[dict] = []
+    run, live, start, low = 0, True, None, None
+    for t in periods:
+        gt = g.get(t)
+        if not live:
+            if gt is not None:
+                low = gt if low is None else min(low, gt)
+                if gt >= low + out[-1]["d"] - _TIE:
+                    live, start = True, t
+                    out[-1]["rearmed_at"] = t
+            run = 0
+            continue
+        h = _trailing_high(g, t, rule["look"], start)
+        d = max(rule["floor"], rule["frac"] * h) if h is not None else None
+        cond = gt is not None and h is not None and h >= rule["theta"] - _TIE and gt <= h - d + _TIE
+        run = run + 1 if cond else 0
+        if run >= rule["k"]:
+            out.append({"t": t, "g": gt, "high": h, "d": d, "rearmed_at": None})
+            live, run, low = False, 0, gt
+    return out
+
+
+def _q_release(q: int) -> str:
+    m = 12 * (q // 4) + 3 * (q % 4 + 1)        # quarter-end month + 1, as a 0-based month index
+    return f"{m // 12}-{m % 12 + 1:02d}"
+
+
+def bottoming_watch(bus: dict[int, float], court: list[tuple[int, int]], record: dict | None) -> dict:
+    g = bottoms_growth(bus, court)
+    if not g:
+        return {"status": "no data"}
+    sigs = bottoms_signals(g, range(min(bus), max(bus) + 1))
+    last = max(g)
+    h = _trailing_high(g, last, BOTTOM_RULE["look"], None)
+    armed = h is not None and h >= BOTTOM_RULE["theta"]
+    latest = sigs[-1] if sigs else None
+    rolled = bool(latest and latest["rearmed_at"] is None and last - latest["t"] < 4)
+    return {"asof": qstr(last), "g": round(g[last], 4), "high": round(h, 4) if h is not None else None,
+            "armed": armed, "rolled_over_now": rolled,
+            "signals": [_q_release(x["t"]) for x in sigs],
+            "status": ("rolled over" if rolled else ("armed, not rolled over" if armed else "not armed")),
+            "record": record}
 
 
 def bank_from_bundle(bundle: dict, hist: dict) -> dict[str, dict[int, float]]:
