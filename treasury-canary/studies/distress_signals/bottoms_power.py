@@ -6,8 +6,10 @@ synthetic series only (no project failure data), scored with bottoms.score_p.
 
 Generator (log level): AR(1) background + a raised-cosine rise/decline per
 recession on the real NBER chronology (level peak at trough + N(mu, sigma)) +
-iid irregular at the measured count noise (0.116 before 1914, 0.053 after).
-Equity lows are the real Shiller dates (targets, not the signal).
+iid irregular at the measured count noise (bottoms_noise.json: drift-robust,
+method-matched 0.085 before 1914 and 0.056 after; the superseded 0.116 and
+Moore's 0.134 are sensitivities). Equity lows are the real Shiller dates
+(targets, not the signal).
 """
 from __future__ import annotations
 
@@ -28,9 +30,13 @@ from engine import M  # noqa: E402
 
 SEED = 20261012
 REPS = int(os.environ.get("BOTTOMS_POWER_REPS", 400))
+REPS_REACH = int(os.environ.get("BOTTOMS_POWER_REPS_REACH", 2000))   # the two cells that decide reachability
 PERMS = int(os.environ.get("BOTTOMS_POWER_PERMS", 999))
 T0, T1 = M(1890, 1), M(1965, 6)
-NOISE_PRE, NOISE_POST, NOISE_MOORE = 0.116, 0.053, 0.134
+_NOISE = json.load(open(os.path.join(HERE, "bottoms_noise.json")))["primary"]
+NOISE_PRE, NOISE_POST = _NOISE["pre1914"], _NOISE["post1914"]
+NOISE_PRE_HI = _NOISE["pre1914_range_local_1_3y"][1]
+NOISE_OLD, NOISE_MOORE = 0.116, 0.134
 CAL_THETAS = (0.10, 0.15, 0.20, 0.25)
 CAL_FLOORS = (0.05, 0.075, 0.10)
 
@@ -162,22 +168,29 @@ def main():
     for mu in (-6, -3, 0, 3):
         for sig in (2, 4, 8):
             seed += 1000
-            cells[f"mu{mu}_sigma{sig}"] = cell("inf", mu, sig, th, fl, eqt, (NOISE_PRE, NOISE_POST), seed)
-            print("cell", mu, sig, {s: v["p_grade"] for s, v in cells[f"mu{mu}_sigma{sig}"].items()}, flush=True)
+            reps = REPS_REACH if (sig == 4 and mu in (0, -3)) else REPS
+            cells[f"mu{mu}_sigma{sig}"] = cell("inf", mu, sig, th, fl, eqt, (NOISE_PRE, NOISE_POST), seed, reps)
+            cells[f"mu{mu}_sigma{sig}"]["reps"] = reps
+            print("cell", mu, sig, {s: v["p_grade"] for s, v in cells[f"mu{mu}_sigma{sig}"].items()
+                                    if isinstance(v, dict)}, flush=True)
     moore = {}
-    for mu in (0, -3):
-        seed += 1000
-        moore[f"mu{mu}_sigma4"] = cell("inf", mu, 4, th, fl, eqt, (NOISE_MOORE, NOISE_MOORE), seed, reps=200)
+    for name, noise in (("pre1914_noise_upper_range", (NOISE_PRE_HI, NOISE_POST)),
+                        ("superseded_0.116", (NOISE_OLD, NOISE_POST)), ("moore_0.134", (NOISE_MOORE, NOISE_MOORE))):
+        for mu in (0, -3):
+            seed += 1000
+            moore[f"{name}_mu{mu}_sigma4"] = cell("inf", mu, 4, th, fl, eqt, noise, seed, reps=400)
     size = {}
     for scen in ("clock", "shift"):
         seed += 1000
         size[scen] = cell(scen, 0, 4, th, fl, eqt, (NOISE_PRE, NOISE_POST), seed)
     reach = {s: (cells["mu0_sigma4"][s]["p_grade"] >= 0.2 or cells["mu-3_sigma4"][s]["p_grade"] >= 0.2)
              for s in BT.SHOTS}
-    out = {"seed": SEED, "reps": REPS, "perms": PERMS, "calibration": cal,
-           "noise": {"pre1914": NOISE_PRE, "post1914": NOISE_POST, "moore_sensitivity": NOISE_MOORE},
+    out = {"seed": SEED, "reps": REPS, "reps_reachability_cells": REPS_REACH, "perms": PERMS, "calibration": cal,
+           "noise": {"pre1914": NOISE_PRE, "post1914": NOISE_POST, "pre1914_upper_range": NOISE_PRE_HI,
+                     "superseded_pre1914": NOISE_OLD, "moore_sensitivity": NOISE_MOORE,
+                     "source": "bottoms_noise.json (local +-2y seasonal, method-matched)"},
            "mechanical_lag_months_after_level_peak": mechanical_lag(th, fl),
-           "cells": cells, "moore_noise_cells": moore, "size": size,
+           "cells": cells, "noise_sensitivity_cells": moore, "size": size,
            "reachability": {"rule": "reachable if P(grade) >= 0.2 at sigma 4 for mu = 0 or mu = -3",
                             "reachable": reach}}
     with open(os.path.join(HERE, "bottoms_power.json"), "w") as f:

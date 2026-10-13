@@ -256,7 +256,10 @@ month; edges, gaps and censoring are defined; the 1898-06 typo is corrected.
 - **Episode windows.** Trough shots: releases in [p_r, min(τ_r + 24, p_{r+1} − 1)].
   Equity shot: [min(p_r, b_r − 3), same end]. The episode signal is the first
   roll-over released in the window. CENSORED: no signal released before an
-  uncomputable stretch inside the window (a non-HIT, listed). Flags:
+  uncomputable stretch inside the window (a non-HIT, listed). LEFT-CENSORED (also
+  a non-HIT, listed): the window opens before H is defined and the first signal
+  fires within k periods of H becoming defined — it may stand in for an earlier,
+  unobservable roll-over (P 1895–97; R 1981–82). Flags:
   "pre-armed" (armed at p_r − 12), "carry-over" (its high was released before
   p_r − 12; sensitivity without these episodes).
 - **Targets.** Trough τ_r. Equity low b_r: the month of the lowest Shiller S&P
@@ -320,13 +323,16 @@ month; edges, gaps and censoring are defined; the 1898-06 typo is corrected.
 - **False bottoms:** every roll-over released 1895–1965 is a TRUE BOTTOM if
   −6 ≤ release − τ ≤ +9 for some trough τ (the union of the trough windows),
   else a FALSE BOTTOM; those released in [p_r − 12, p_r − 1] are listed.
-  Precision and false bottoms per decade reported.
+  Precision and false bottoms per decade reported, also excluding the war years
+  (1917–19, 1942–48). Timing is also reported without the war-flagged episodes
+  and, for the equity shot, on valid lows only.
 
 ### 2. Context — business filings (court), quarterly, 1981–2026 (R)
 
 - Masks as `distress-signals.md` SPEC v1. Scored: 1990–91 and 2001. 1981–82
   flagged (left-censored; its base includes the new-Code ramp — sensitivity with
-  1980Q1 masked). 2007–09 unscorable (no sensitivity). 2020 excluded. Context,
+  1980Q1 masked). ABI's missing 1,000 business filings of 1995 are placed in Q4,
+  with Q1–Q3 placements as sensitivities. 2007–09 unscorable (no sensitivity). 2020 excluded. Context,
   not replication: ≥ 2 of 3 HITs happens 17–34% of the time with no information.
 - **Live readout:** a "bottoming" line on the panel only if a P shot grades
   AND P's precision ≥ 1/2 with ≤ 1 false bottom per decade AND R has no false
@@ -344,8 +350,10 @@ month; edges, gaps and censoring are defined; the 1898-06 typo is corrected.
 
 - Nominal (the 1920–21 and 1929–33 deflations flagged); banks not included
   (confirmed: annual sums equal HSUS V27, which excludes banks); segment A
-  through 1938-08 (used for 1937–38), C 1939-01 … 1983-12 (ends before the 1984
-  methodology change); w = 12; release + 2.
+  through 1938-08 (used for 1937–38) with a hard break at 1933-01 (the
+  agents/brokers share of liabilities falls from 15–18% to ~10%), C 1939-01 …
+  1983-12 (ends before the 1984 methodology change); w = 12; release + 2; θ_A and
+  the floor were calibrated on the counts, a series 2–4 times less noisy.
 
 ### 5. Trader's view (report-only)
 
@@ -362,9 +370,13 @@ within 12 months, and the share of the b_r → b_r + 12 rebound already missed.
   sensitivity 0.008 and 0.016) + a raised-cosine rise of U[12, 30] months and
   decline of U[12, 30] months, amplitude U(0.3, 0.8) log points, level peak at
   τ_r + δ_r, δ_r ~ N(μ, σ) (rises may start before p_r) + iid irregular at the
-  measured count noise (log-SD 0.116 for 1895–1913, 0.053 for 1914–65;
-  sensitivity 0.134 throughout); real NBER chronology, real segments, the 1933
-  break, release + 1; equity lows at their real dates.
+  measured count noise (`bottoms_noise.py`: ±2-year local seasonal,
+  method-matched — 0.085 for 1895–1913, range 0.083–0.098 across ±1–3-year
+  seasonals, 0.056 for 1914–65; the superseded fixed-seasonal 0.116, which
+  counted seasonal drift as noise, and Moore's 0.134 are sensitivities); real
+  NBER chronology, real segments, the 1933 break, release + 1; equity lows at
+  their real dates. The two reachability cells (σ = 4, μ ∈ {0, −3}) use 2,000
+  replications (SE ≈ 0.009).
 - Calibration of θ_A and the floor as §0. Power cells μ ∈ {−6, −3, 0, +3},
   σ ∈ {2, 4, 8}, 400 replications, the full grade per shot. Size under a broad
   clock (level peak at p_r + U(−6, 3) + U[12, 30], no trough information) and
@@ -408,5 +420,5 @@ within 12 months, and the share of the b_r → b_r + 12 rebound already missed.
   biasing e toward EARLY; e on Romer's dates reported where obtainable.
 - The 1894–1938 monthly counts are a year-end vintage; real-time monthly
   publication before 1933 is unverified (+ 2 sensitivity).
-- Pre-1914 counts are about twice as noisy as later ones.
+- Pre-1914 counts are about 1.5 times as noisy as later ones (0.085 vs 0.056).
 - Claims overlap only R (3 episodes); P ends in 1965.

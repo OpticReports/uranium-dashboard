@@ -757,9 +757,11 @@ Source: abi.org/newsroom/stats pages (found via the stats taxonomy RSS feeds; 13
   1933"; m09029a "for 1933"; published in Dun's Review Mar/Aug-1936). Liabilities: A to 1938-08 and C
   1939-01..1983-12 (BCD series 14 from 1968-02), ending before D&B's 1984 coverage/method change; the
   1934–39 liabilities segment is dominated by Section 77-B reorganisations (B/A 1.05–2.66) and is unused.
-* **Noise.** Irregular log-SD of the counts (seasonally adjusted, Spencer-15 trend-cycle): 0.116 for
-  1897–1913, 0.053 for 1914–31 and 1947–62 (I/C 7.3, 2.5, 3.3). Moore 1961 Table 3.8's I/C 4.9 is the
-  liabilities row, not the counts.
+* **Noise.** iid-equivalent irregular SD of the log counts (`bottoms_noise.py`: ±2-year local seasonal,
+  Spencer-15 trend-cycle, method-matched by simulation): 0.085 for 1897–1913 (0.083–0.098 across ±1–3-year
+  seasonals), 0.055 for 1914–31 and 0.058 for 1947–62. The earlier 0.116 used a fixed seasonal pattern
+  and counted the pre-1914 seasonal drift as noise (irregular lag-12 autocorrelation +0.38); superseded.
+  Moore 1961 Table 3.8's I/C 4.9 is the liabilities row, not the counts.
 * **Equity.** Shiller S&P composite (P, D) monthly 1871-01..2024-09 for equity lows and returns
   (`load.shiller_monthly`, `load.equity_total_return`); Aug–Nov 1914 dropped (exchange closed, the file
   repeats July). Shiller equals Cowles through 1925 and M1125B over 1945–68; the equity-low month agrees

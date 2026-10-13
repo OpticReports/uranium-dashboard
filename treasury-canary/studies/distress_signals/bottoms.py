@@ -148,6 +148,15 @@ def score_episode(gs: list[dict], lag: int, lo: int, hi: int, T: int | None, wlo
     status = None
     if first is not None and gap is not None and first["release"] > gap:
         first, status = None, "CENSORED"
+    # left-censoring: the window opens before H is defined and the first signal
+    # comes as soon as it is -> possibly an earlier, unobservable roll-over
+    h_first = min((t for s in gs for t in sorted(s["g"]) if B.trailing_high(s["g"], t, rule.look) is not None),
+                  default=None)
+    if (first is not None and h_first is not None and lo - lag < h_first
+            and first["t"] <= h_first + rule.k):
+        return {"signal": {"data_month": mstr(first["t"]), "release": mstr(first["release"])}, "e": None,
+                "outcome": "CENSORED", "left_censored": True,
+                "gap_from": mstr(gap) if gap is not None else None}
     if first is None and status is None:
         status = "CENSORED" if gap is not None else "MISS"
     if first is None or T is None:
@@ -157,6 +166,8 @@ def score_episode(gs: list[dict], lag: int, lo: int, hi: int, T: int | None, wlo
     flags = []
     if first["high_at"] + lag < p - 12:
         flags.append("carry-over")
+    if M(1933, 1) <= first["t"] <= M(1935, 12) or M(1933, 1) <= first["high_at"] <= M(1935, 12):
+        flags.append("rests on the 1936 restatement of 1933-35")
     s0 = first["rearmed_at"]
     false_start = s0 is not None and any(
         (hh := B.trailing_high(first_g, t, rule.look, s0)) is not None and hh[0] >= rule.theta - B.TIE
@@ -397,7 +408,14 @@ def run() -> dict:
                                      "NOT TESTED: every shot out of reach before the run (SPEC v1 s.6b)"),
                           "conditions_descriptive": grade(prim, holm)}}
     # timing estimates (the deliverable for shots out of reach) and the hindsight g-peak
-    out["P"]["timing"] = {shot: timing_summary(r["episodes"]) for shot, r in prim.items()}
+    out["P"]["timing"] = {}
+    for shot, r in prim.items():
+        eps = r["episodes"]
+        t = timing_summary(eps)
+        t["without_war"] = timing_summary([e for e in eps if not e["war"]])
+        if SHOTS[shot][0] == "equity":
+            t["valid_only"] = timing_summary([e for e in eps if e.get("equity_status") == "valid"])
+        out["P"]["timing"][shot] = t
     out["P"]["g_peak"] = g_peak_diagnostic(segs, rule, eqt)
     out["P"]["romer"] = romer_view(prim)
     # sensitivities
@@ -421,6 +439,18 @@ def run() -> dict:
     periods = {"A1": (spans[0]["range"][0], M(1932, 12)), "A2": (M(1933, 1), b_first_h - 1),
                "B": (b_first_h, M(1939, 12)), "C": (M(1940, 1), spans[3]["range"][1])}
     out["P"]["false_bottoms"] = false_bottoms(G, periods, 1, rule)
+    fb = out["P"]["false_bottoms"]
+    war_years = [(M(1917, 1), M(1919, 12)), (M(1942, 1), M(1948, 12))]
+    in_war = lambda r: any(a <= M(int(r[:4]), int(r[5:])) <= b for a, b in war_years)   # noqa: E731
+    keep = [x for x in fb["signals"] if not in_war(x["release"])]
+    war_months = sum(1 for name, (a, b) in periods.items() for t in range(a, b + 1)
+                     if any(x <= t + 1 <= y for x, y in war_years)
+                     and B.trailing_high(G[name]["g"], t, rule.look) is not None)
+    dec = fb["decades_observed"] - war_months / 120
+    nf = sum(x["kind"] == "FALSE BOTTOM" for x in keep)
+    fb["excluding_war_years"] = {"n": len(keep), "n_false": nf, "decades_observed": round(dec, 2),
+                                 "false_per_decade": nf / dec if dec else None,
+                                 "precision": (len(keep) - nf) / len(keep) if keep else None}
     out["R"] = score_r(rule, eqt)
     out["claims"] = score_claims(rule, eqt)
     out["liabilities"] = score_liabilities(rule, eqt)
@@ -500,10 +530,10 @@ def g_peak_diagnostic(segs, rule, eqt) -> dict:
 
 
 # ------------------------------------------------------------------ R: court business filings
-def court_series(mask_1980q1: bool = False) -> tuple[dict[int, float], set[int]]:
+def court_series(mask_1980q1: bool = False, q1995: int = 4) -> tuple[dict[int, float], set[int]]:
     vals = dict(D.abi_quarterly_business())
     vals.update({t: v for t, v in D.f2_national("3month", "bus_all").items() if t >= D.qi(2026, 1)})
-    vals[D.qi(1995, 4)] += 1000          # ABI's 1995 quarters sum 1,000 below its printed total
+    vals[D.qi(1995, q1995)] += 1000      # ABI's 1995 quarters sum 1,000 below its printed total
     bad = set(range(D.qi(2005, 2), D.qi(2008, 4) + 1)) | set(range(D.qi(2020, 2), D.qi(2021, 4) + 1))
     if mask_1980q1:
         bad.add(D.qi(1980, 1))
@@ -517,8 +547,10 @@ def q_release(q: int, lag_months: int = 1) -> int:
 def score_r(rule: B.Rule, eqt: dict) -> dict:
     rq = B.Rule(w=2, lag=4, look=4, theta=rule.theta, frac=rule.frac, floor=rule.floor, k=1)
     out = {}
-    for name, m80, lagm in (("primary", False, 1), ("mask_1980Q1", True, 1), ("release_plus2", False, 2)):
-        vals, bad = court_series(m80)
+    for name, m80, lagm, q95 in (("primary", False, 1, 4), ("mask_1980Q1", True, 1, 4),
+                                 ("release_plus2", False, 2, 4), ("1995_in_Q1", False, 1, 1),
+                                 ("1995_in_Q2", False, 1, 2), ("1995_in_Q3", False, 1, 3)):
+        vals, bad = court_series(m80, q95)
         g = B.growth(vals, rq, bad=bad)
         qs = range(min(vals), max(vals) + 1)
         sig = B.signals(g, qs, rq)
@@ -538,7 +570,13 @@ def score_r(rule: B.Rule, eqt: dict) -> dict:
                 gap = next((q_release(q, lagm) for q in inwin if q not in g), None)
                 if first is not None and gap is not None and first["release"] > gap:
                     first = None
-                if first is None:
+                h_first = min((q for q in sorted(g) if B.trailing_high(g, q, rq.look) is not None), default=None)
+                left = (first is not None and h_first is not None and q_release(h_first, lagm) > lo
+                        and first["t"] <= h_first + rq.k)
+                if left:
+                    row[shot] = {"outcome": "CENSORED", "left_censored": True,
+                                 "release": mstr(first["release"])}
+                elif first is None:
                     row[shot] = {"outcome": "CENSORED" if gap is not None else "MISS"}
                 else:
                     e = first["release"] - T
@@ -601,7 +639,7 @@ def score_claims(rule: B.Rule, eqt: dict) -> dict:
         for name, rels in (("C1", c1), ("C2", c2)):
             for shot, (kind, wlo, whi) in SHOTS.items():
                 T = tau if kind == "trough" else eqt[p]["b"]
-                if T is None:
+                if T is None or (kind == "equity" and eqt[p]["status"] == "no equity low"):
                     continue
                 lo = p if kind == "trough" else min(p, T - 3)
                 first = next((r for r in rels if lo <= r <= hi), None)
@@ -620,15 +658,18 @@ def score_claims(rule: B.Rule, eqt: dict) -> dict:
 def score_liabilities(rule: B.Rule, eqt: dict) -> dict:
     rl = replace(rule, w=12)
     la, lc = D.dnb_liability_segments()
-    spans = [{"name": "A", "values": la}, {"name": "C", "values": lc}]
+    spans = [{"name": "A1", "values": {m: v for m, v in la.items() if m < M(1933, 1)}},
+             {"name": "A2", "values": {m: v for m, v in la.items() if m >= M(1933, 1)}},
+             {"name": "C", "values": lc}]
     for s in spans:
         s["range"] = (min(s["values"]), max(s["values"]))
     G = growth_by_span(spans, rl)
-    out = {}
+    out = {"_note": "nominal; theta and floor were calibrated on the counts and are applied to a series "
+                    "2-4x noisier; the 1920-21 and 1929-33 deflations move nominal growth by tens of points"}
     for p, tau in CHRON:
         if p < M(1895, 12) or p > M(1981, 7) or p in EXCLUDED:
             continue
-        gs = [G["A"]] if p < M(1939, 1) else [G["C"]]
+        gs = [G["A1"], G["A2"]] if p < M(1939, 1) else [G["C"]]
         hi = window_end(p, tau)
         row = {}
         for shot, (kind, wlo, whi) in SHOTS.items():
@@ -638,6 +679,8 @@ def score_liabilities(rule: B.Rule, eqt: dict) -> dict:
             lo = p if kind == "trough" else min(p, T - 3)
             ep = score_episode(gs, 2, lo, hi, T, wlo, whi, p, rl)
             row[shot] = {k: ep[k] for k in ("e", "outcome")}
+        if p in (M(1920, 1), M(1929, 8)):
+            row["flags"] = ["deflation: nominal liabilities growth distorted"]
         out[mstr(p)] = row
     return out
 

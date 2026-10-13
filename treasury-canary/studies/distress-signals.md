@@ -382,7 +382,10 @@ on what they contain are fixed below, before their content is known.
 - **Context runs (not decisive):** the same rule on 1894–1938 (M0933A) and
   1948–1966, masking any g whose 24 input months touch a D&B break (1933
   redefinition, Jun-1934–1939 77-B segment, 1939–40 coverage expansion); 1907
-  and 1930–33 flagged (bank failures included).
+  and 1930–33 flagged (bank failures included). [Correction 2026-10-13
+  (distress-bottoms data review): M0933A does NOT include bank failures — its
+  annual sums equal HSUS V27, which excludes banks and railroads; the flag was
+  wrong and changes no result. The frozen results.json keeps the old flag text.]
 - **Modern analogue:** only if Q-H ships. FJC IDB Ch 11 scheduled liabilities,
   scored for false alarms (same rule, attribution check) from its first computable
   g (2009-09) to T_N − 24m with the 2020 convention: WARN only if ≤ 2 false alarms

@@ -273,11 +273,14 @@ def equity_total_return() -> dict[int, float]:
 def claims_monthly_nsa() -> tuple[dict[int, float], dict[int, int]]:
     """Initial claims (ICNSA): mean weekly claims over the weeks ending
     (Saturday) in each month, and each month's release month = the month of
-    its last week-end + 5 days."""
+    its last week-end + 5 days. The latest month is dropped while incomplete."""
     w = claims_weekly(sa=False)
     by: dict[int, list] = defaultdict(list)
     for d, v in w.items():
         by[12 * d.year + d.month - 1].append((d, v))
+    last = max(w)
+    if (last + dt.timedelta(days=7)).month == last.month:     # the latest month is still incomplete
+        by.pop(12 * last.year + last.month - 1, None)
     val = {m: sum(v for _, v in xs) / len(xs) for m, xs in by.items()}
     rel = {}
     for m, xs in by.items():

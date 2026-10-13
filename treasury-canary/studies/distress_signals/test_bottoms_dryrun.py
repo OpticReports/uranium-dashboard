@@ -63,7 +63,10 @@ def test_the_run_completes_on_synthetic_inputs(synthetic):
     assert "n_peaked_before_p" in res["P"]["g_peak"]
     assert set(res["P"]["romer"]) == {"MARKS-trough", "CONFIRMS-trough"}
     assert res["P"]["false_bottoms"]["decades_observed"] > 5
-    assert {"primary", "mask_1980Q1", "release_plus2"} == set(res["R"])
+    assert {"primary", "mask_1980Q1", "release_plus2", "1995_in_Q1", "1995_in_Q2", "1995_in_Q3"} == set(res["R"])
+    assert "excluding_war_years" in res["P"]["false_bottoms"]
+    assert "without_war" in res["P"]["timing"]["CONFIRMS-trough"]
+    assert "valid_only" in res["P"]["timing"]["MARKS-equity"]
     assert res["R"]["primary"]["live"]["asof"] == "2026Q2"
     assert "1990-07" in res["claims"] and "1981-07" in res["liabilities"] and "1990-07" not in res["liabilities"]
     assert res["trader"]["median"]["rollover_P"]["episodes"] == 16
