@@ -992,7 +992,13 @@ export interface DistressBottomingWatch {
   rolled_over_now?: boolean;
   signals?: string[];
   status: string;
-  record?: { role: string; grade: string; summary: string; doc: string } | null;
+  record?: {
+    role: string;
+    grade: string;
+    summary: string;
+    doc: string;
+    court_signals?: { release: string; kind: string }[];
+  } | null;
 }
 export interface Distress {
   headline: string;

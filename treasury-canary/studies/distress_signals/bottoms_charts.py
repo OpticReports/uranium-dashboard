@@ -65,7 +65,8 @@ def fig_timing():
         tau = dict(BT.CHRON)[p]
         x = r.get("CONFIRMS-trough", {})
         b = RES["equity_targets"][pk]
-        rows.append({"label": f"{pk[:4]}–{BT.mstr(tau)[2:4]}", "sig": x.get("e"), "outcome": x.get("outcome"),
+        lab = f"{pk[:4]}–{BT.mstr(tau)[2:4]}" if tau // 12 != p // 12 else pk[:4]
+        rows.append({"label": lab, "sig": x.get("e"), "outcome": x.get("outcome"),
                      "eq": (mi(b["b"]) - tau) if b["b"] and b["status"] != "no equity low" else None,
                      "eq_status": b["status"], "gpk": None, "src": "court filings",
                      "claims": RES["claims"].get(pk, {}).get("C1/CONFIRMS-trough", {}).get("e")})
@@ -116,17 +117,18 @@ def fig_timing():
     ax.set_xlim(-30, 28)
     ax.set_ylim(-1.5, n - 0.4)
     ax.set_xlabel("months relative to the NBER trough (release-dated)")
-    for lab, kw in (("roll-over signal (released)", dict(marker="o", color=ORANGE, s=62)),
+    for lab, kw in (("roll-over signal (released): D&B failures", dict(marker="o", color=ORANGE, s=62)),
+                    ("roll-over signal: court filings", dict(marker="s", color=ORANGE, s=62)),
                     ("post-hoc: re-armed after growth turns negative (not tested)",
                      dict(marker="o", facecolor=SURF, edgecolor=ORANGE, s=62)),
                     ("equity low (hollow: ambiguous/censored)", dict(marker="D", color=BLUE, s=46)),
-                    ("growth peak, in hindsight", dict(marker="o", facecolor=SURF, edgecolor=MUTED, s=46)),
+                    ("growth peak in hindsight (12-month sums; ~3 months later than on 6-month sums)",
+                     dict(marker="o", facecolor=SURF, edgecolor=MUTED, s=46)),
                     ("jobless-claims peak (benchmark)", dict(marker="^", color=GREEN, s=54))):
         ax.scatter([], [], label=lab, **kw)
     ax.legend(loc="lower left", fontsize=7.5, frameon=False, ncol=2, bbox_to_anchor=(0.0, 1.0))
-    fig.suptitle("Bankruptcy growth slows AFTER the bottom: it confirmed the economic trough months later "
-                 "(when it fired) and never marked the stock-market low", x=0.01, ha="left", fontsize=11,
-                 color=INK, y=0.995)
+    fig.suptitle("The bankruptcy roll-over comes after the bottom: 5 of 7 signals 0–8 months after the economic "
+                 "trough, none at a recession stock low", x=0.01, ha="left", fontsize=11, color=INK, y=0.995)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     fig.savefig(os.path.join(OUT, "fig_bottoms_timing.png"), dpi=150, facecolor=SURF)
 
@@ -168,8 +170,8 @@ def fig_series():
         ax.set_xlim(d_of(lo), d_of(hi))
     axes[0].set_title("Dun & Bradstreet business failures (number), 1895–1940: growth and its roll-overs",
                       loc="left", fontsize=10, color=INK)
-    axes[1].set_title("1940–1965 (wartime record lows, then multi-year rises: no roll-over in any postwar "
-                      "recession)", loc="left", fontsize=10, color=INK)
+    axes[1].set_title("1940–1965: no roll-over in any postwar recession — the rule stayed locked out after "
+                      "rolling over from the +260% postwar surge (1948)", loc="left", fontsize=10, color=INK)
     # court filings
     ax = axes[2]
     style(ax)
@@ -182,7 +184,7 @@ def fig_series():
         if p >= M(1980, 1):
             ax.axvspan(d_of(p), d_of(tau), color=REC, lw=0, zorder=0)
     for a, b in ((M(2005, 4), M(2010, 12)), (M(2020, 4), M(2023, 6))):
-        ax.axvspan(d_of(a), d_of(b), color="#f3efe6", lw=0, zorder=0, hatch="///", edgecolor=GRID)
+        ax.axvspan(d_of(a), d_of(b), facecolor="#f3efe6", lw=0, zorder=0, hatch="///", edgecolor="#d6d3cb")
     xs = [d_of(BT.q_release(q) - 1) for q in qs]
     # break the line across the masks
     seg = []
@@ -208,55 +210,49 @@ def fig_series():
     ax.set_title("Court business bankruptcy filings, 1981–2026 (context): roll-overs 5 months after the 1982 "
                  "and 2001 troughs; two with no recession", loc="left", fontsize=10, color=INK)
     fig.text(0.01, 0.005, "Grey bands = NBER recessions; hatched = masked (2005 law change, 2020-21 support). "
-             "Orange lines = roll-over released within -6..+9 months of a trough; dark grey = no recession "
-             "nearby. Blue triangles = equity lows.", fontsize=7.5, color=INK2)
+             "Orange lines = roll-over released within -6..+9 months of a trough; dark grey = no trough within "
+             "-6..+9. Blue triangles = equity lows.", fontsize=7.5, color=INK2)
     fig.tight_layout(rect=(0, 0.02, 1, 1))
     fig.savefig(os.path.join(OUT, "fig_bottoms_series.png"), dpi=150, facecolor=SURF)
 
 
 # ------------------------------------------------------------------ 3. trader's view
 def fig_trader():
-    med = RES["trader"]["median"]
-    order = [("rollover_P", "bankruptcy roll-over (D&B)"), ("rollover_R", "bankruptcy roll-over (court)"),
-             ("arm_P", "first month failures +15%"), ("random_armed_P", "random month while armed"),
-             ("peak_plus_6", "6 months after recession start"), ("minus_20pct", "stocks 20% off their high"),
-             ("claims_C1", "jobless-claims peak"), ("claims_C2", "claims roll-over")]
-    rows = [(lab, med[k]) for k, lab in order if k in med]
-    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.6), sharey=True)
+    """Matched comparison: the 7 recessions where the D&B roll-over fired (frozen trader rows,
+    summarised in bottoms_posthoc.json)."""
+    ph = json.load(open(os.path.join(HERE, "bottoms_posthoc.json")))["trader_on_rollover_recessions"]
+    order = [("rollover_P", "bankruptcy growth rolls over"), ("arm_P", "first month failures +15%"),
+             ("random_armed_P", "random month while armed"), ("peak_plus_6", "6 months after recession start"),
+             ("minus_20pct", "stocks 20% off their high")]
+    rows = [(lab, ph["rules"][k]) for k, lab in order]
+    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.4), sharey=True)
     fig.patch.set_facecolor(SURF)
     stats = (("ret_12m", "median 12-month total return"), ("worst_dd_12m", "median worst further drop (12 m)"),
-             ("rebound_missed", "median share of the low-to-+12m rebound\nalready missed at entry"))
+             ("ret_24m", "median 24-month total return"))
     for ax, (k, title) in zip(axes, stats):
         style(ax)
         ax.grid(color=GRID, lw=0.8, axis="x")
-        ys = range(len(rows))
-        vals = [100 * r[1].get(k, float("nan")) for r in rows]
-        cols = [ORANGE if "roll-over (" in r[0] else (GREEN if "claims" in r[0] else BLUE) for r in rows]
-        ax.barh(list(ys), vals, color=cols, height=0.55)
-        span = max(abs(x) for x in vals if x == x)
-        for y, v, r in zip(ys, vals, rows):
-            if v != v:
-                continue
-            txt = f"{v:.0f}%" if k == "rebound_missed" else f"{v:+.0f}%".replace("+0%", "0%").replace("-0%", "0%")
-            if k == "worst_dd_12m":           # drops point left: label just right of zero
-                ax.text(0.02 * span, y, txt, va="center", ha="left", fontsize=7.5, color=INK2)
-            elif v < 0:                       # a negative return: label right of zero
-                ax.text(0.02 * span, y, txt, va="center", ha="left", fontsize=7.5, color=INK2)
-            else:
-                ax.text(v + 0.02 * span, y, txt, va="center", ha="left", fontsize=7.5, color=INK2)
-        if k == "worst_dd_12m":
-            ax.set_xlim(right=0.18 * span)
+        vals = [100 * r[1][k]["median"] for r in rows]
+        ax.barh(range(len(rows)), vals, color=[ORANGE] + [BLUE] * (len(rows) - 1), height=0.55)
+        span = max(abs(v) for v in vals)
+        for y, v in enumerate(vals):
+            txt = f"{v:+.0f}%".replace("-0%", "0%")
+            x = 0.02 * span if (k == "worst_dd_12m" or v < 0) else v + 0.02 * span
+            ax.text(x, y, txt, va="center", ha="left", fontsize=7.5, color=INK2)
         ax.axvline(0, color=INK2, lw=0.8)
+        if k == "worst_dd_12m":
+            ax.set_xlim(right=0.2 * span)
         ax.set_title(title, loc="left", fontsize=9, color=INK)
-    axes[0].set_yticks(list(range(len(rows))))
-    axes[0].set_yticklabels([f"{r[0]}  (n={r[1]['entries']})" for r in rows], fontsize=8)
+    axes[0].set_yticks(range(len(rows)))
+    axes[0].set_yticklabels([f"{lab}  (n={r['ret_12m']['n']})" for lab, r in rows], fontsize=8)
     axes[0].invert_yaxis()
-    fig.suptitle("Buying when bankruptcy growth rolls over: little downside left, but most of the rebound "
-                 "already gone", x=0.01, ha="left", fontsize=11, color=INK)
-    fig.text(0.01, 0.005, "Shiller S&P composite total return, entry the month after each rule fires; medians "
-             "over the recessions where the rule fired (n; the episode sets differ by rule).\nRebound missed > 100% = "
-             "entered after the first-year rebound was complete. Price data end 2024-06.", fontsize=7.5, color=INK2)
-    fig.tight_layout(rect=(0, 0.06, 1, 0.93))
+    fig.suptitle("Buying when bankruptcy growth rolled over (the 7 recessions where it fired, 1895–1938): "
+                 "little further downside, but late", x=0.01, ha="left", fontsize=11, color=INK)
+    fig.text(0.01, 0.005, "Shiller S&P composite total return, entry the month after each rule fires, matched on the "
+             "same 7 recessions. At the roll-over ~75% of the first-year rebound from the low\nwas already gone "
+             "(5 entries after a scorable low). The two court-filing roll-overs (1983, 2002) returned -6% over 12 "
+             "months with an -11% worst drop.", fontsize=7.5, color=INK2)
+    fig.tight_layout(rect=(0, 0.07, 1, 0.92))
     fig.savefig(os.path.join(OUT, "fig_bottoms_trader.png"), dpi=150, facecolor=SURF)
 
 

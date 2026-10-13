@@ -153,3 +153,15 @@ def test_the_bottoming_watch_matches_the_bottoms_results():
     assert w["signals"] == [x["release"] for x in r["R"]["primary"]["signals"]]
     assert r["P"]["grade"]["tested"] == ["CONFIRMS-trough"]
     assert not r["P"]["grade"]["conditions_descriptive"]["CONFIRMS-trough"]["pass"]   # nothing passed
+
+
+def test_the_bottoming_watch_reports_an_old_unrearmed_roll_over():
+    # a surge, a roll-over, then flat growth for years: the rule cannot fire again
+    # until it re-arms, so the status must not read "armed, not rolled over"
+    q0 = Dm.qidx("2000Q1")
+    vals = {q0 + i: 100.0 for i in range(8)}
+    vals.update({q0 + 8: 160.0, q0 + 9: 170.0, q0 + 10: 175.0, q0 + 11: 176.0})
+    vals.update({q0 + 12 + i: 176.0 for i in range(16)})
+    w = Dm.bottoming_watch(vals, [], None)
+    assert w["signals"] and w["status"].startswith("rolled over") and w["status"].endswith("not yet re-armed")
+    assert not w["armed"] and not w["rolled_over_now"]

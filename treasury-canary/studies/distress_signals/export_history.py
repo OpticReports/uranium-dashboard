@@ -61,15 +61,23 @@ def bottoms_record() -> dict | None:
     eq = br["P"]["shots"]["MARKS-equity"]
     fired = [e for e in conf["episodes"] if e["e"] is not None]
     after = sum(1 for e in fired if 0 <= e["e"] <= 9)
+    lows = [m for m in (br["equity_targets"][e["peak"]] for e in conf["episodes"]) if m["status"] == "valid"]
+    lead = sorted(int(m["b"][:4]) * 12 + int(m["b"][5:]) - (int(e["trough"][:4]) * 12 + int(e["trough"][5:]))
+                  for e, m in ((e, br["equity_targets"][e["peak"]]) for e in conf["episodes"])
+                  if m["status"] == "valid")
+    lead_med = lead[len(lead) // 2] if len(lead) % 2 else (lead[len(lead) // 2 - 1] + lead[len(lead) // 2]) / 2
+    g6 = bp["g_peak_vs_trough_by_w"]["6"]["median"]
     return {
         "role": "does not mark the bottom",
         "grade": f"tested 'confirms the trough': fails ({conf['hits']} of {conf['n']}, needs {conf['need_hits']})",
-        "summary": (f"Tested on {conf['n']} recessions 1895-1961 (D&B failures): the slowing came after the economic "
-                    f"bottom when it came at all ({after} of {len(fired)} signals 0-9 months after the trough; with "
-                    f"a post-hoc re-arm fix {bp['confirms_hits']} of {bp['fired']}, median "
-                    f"+{bp['median_e_trough_of_signals']:.0f} months) and never at the stock-market low "
-                    f"({eq['hits']} of {eq['n']}; signals came months after it). Jobless claims mark troughs "
+        "summary": (f"Tested on {conf['n']} recessions 1895-1961 (D&B failures): failure growth turns at about the "
+                    f"economic bottom (6-month sums, median {g6:+.0f} months) - after the stock market had already "
+                    f"bottomed (a median {abs(lead_med):.0f} months earlier). A rule that confirms the slowing fired in "
+                    f"{len(fired)}, {after} of them 0-9 months after the trough ({len(fired) - after} early), and in "
+                    f"none at a recession stock low ({eq['hits']} of {eq['n']}). The tested grade fails; a post-hoc "
+                    f"variant (not graded) fires more often with the same timing. Jobless claims mark troughs "
                     f"sooner."),
+        "court_signals": br["R"]["primary"]["signals"],
         "doc": "treasury-canary/studies/distress-bottoms.md",
     }
 

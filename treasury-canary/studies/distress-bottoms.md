@@ -41,7 +41,8 @@ below.
 - **Prior (for this rule; corrected by the v1 review):** g itself peaks ~5
   months before the level peak for a 27-month rise, but a noise-free roll-over
   under SPEC v1 is *released ~4 months after* the level peak (+2 for a 36-month
-  rise, 0 for 47; a 68-month rise of ≤ 0.6 log points never arms). With count
+  rise, 0 for 47; at the final θ_A = 15% a 68-month rise of 0.6 log points arms
+  and fires ~4 months before the level peak). With count
   levels turning ~−0.5 at troughs, expect e ≈ +3 to +4 against the trough —
   the MARKS edge or CONFIRMS — and ~9–10 months after the pre-1945 median
   equity low. Postwar 4–6-year rises may never reach θ_A (MISS). Business
@@ -436,64 +437,91 @@ correction run after verifier A fixed descriptive items only (the g-peak against
 the equity window, labels, flags, the Cowles/OECD cross-check) — no tested or
 headline number changed.
 
-**Verdict: the slowing of bankruptcy growth does not mark the bottom.** In 16
-recessions 1895–1961 it rolled over in only 7; 5 of those came 0–8 months *after*
-the economic trough and none came at a stock-market low (all 4–13 months after
-it). The one tested grade (CONFIRMS-trough) fails. Jobless claims do the same job
-sooner and in every recession.
+**Verdict: the slowing of bankruptcy growth does not mark the bottom in time to
+use.** Failure growth itself turns at about the economic trough (6-month sums:
+median 0 months; monthly data: ~2 months before) — and the stock market had
+bottomed a median 8 months before the trough in these recessions. A rule that
+waits to confirm the slowing fires later still: in 16 recessions 1895–1961 it
+fired in 7, five of them 0–8 months after the trough, and none at a recession
+stock low. The one tested grade (CONFIRMS-trough) fails. Jobless claims mark the
+economic trough sooner.
 
 | series | recessions | rolled over | vs the economic trough | vs the stock low | grade |
 |---|---|---|---|---|---|
-| D&B failure counts, monthly (primary) | 16 (1895–1961) | 7 (8 never; 1929–33 censored) | −22 (false start), −2, 0, +5, +5, +6, +8 | 0 of 13 at the low; +4 to +13 after | CONFIRMS-trough: **fails** (5 of 16 in 0…+9, needs 11; lag-permutation p ≈ 0.06) |
-| court business filings, quarterly (context) | 1982, 1991, 2001 (2008–09 masked) | 2 of 3 | +5, +5 | +9 (1982); −6 (2001, before the Oct-2002 low) | context |
-| jobless claims (benchmark) | 7 (1970–2009) | 7 of 7 | peak rule −4 to +3 (median +1); same roll-over rule +3 to +7 | peak rule +1 to +7 after (2001: −10) | benchmark |
+| D&B failure counts, monthly (primary) | 16 (1895–1961) | 7 (8 never; 1929–33 censored) | −22 (false start), −2, 0, +5, +5, +6, +8 | 0 of 13 recession lows; the 5 with a scorable low came +4 to +13 after it | CONFIRMS-trough: **fails** (5 of 16 in 0…+9, needs 11; lag-permutation p ≈ 0.06) |
+| court business filings, quarterly (context) | 1982, 1991, 2001 (2008–09 masked) | 2 of 3 (1 of 2 with 1980Q1 masked) | +5, +5 | +9 (1982, an ambiguous low); −6 (2001, before the Oct-2002 low) | context |
+| jobless claims (benchmark) | 7 (1970–2009) | 7 of 7 | claims-peak rule −4 to +3 (median +1); the same roll-over rule +3 to +7 (median +6) | claims-peak rule +1 to +7 after (2001: −10) | benchmark |
 
-- **It often didn't fire — mostly because of the rule's own re-arming.** 8 of 16
-  recessions produced no roll-over (and 1929–33 is censored). Only three are
-  genuine misses: failures fell in WWI (1918–19), peaked near +10% in 1926–27, and
-  rolled over after the window in 1910–12. The other six (1923–24, 1929–33 and all
-  four postwar recessions) were blocked by the pre-registered re-arm rule: the
-  1920–21 (+184%) and 1946–48 (+260%) surges set a drop of 61 and 87 points, and
-  re-arming needed growth to climb that far above its later low, which never
-  happened. (A +10% line from 1918, the pre-registered sensitivity, cannot fix
-  that: 7 of 10 still miss.)
-- **Post-hoc diagnostic (`bottoms_posthoc.py`, not pre-registered, not graded):**
-  re-arming once growth has turned negative lets the rule fire in 11 of 16. Then
-  8 land 0–9 months after the trough (median +5), still short of the 11 the grade
-  needed, and two are false dawns mid-crash — Feb-1913 and Aug-1931, 19 months
-  before the 1933 trough, after which failures surged again. Against the stock
-  low the signals come +4 to +15 months after it, except those two.
-- **When it fires, it confirms — late.** 5 of 7 signals landed 0–8 months after
-  the trough; the other two were early (1897 by 2 months; 1913 by 22 months, a
-  false start that reversed). In hindsight, failure growth peaked a median 4
-  months after the trough (interval +1…+7) and 6 months after the stock low
-  (valid lows; +4…+11; 7 on all lows): the slowing begins after the economy has
-  turned.
-- **Against the stock market: never.** 0 of 13 equity lows; the signals came a
-  median 10 months after the low.
+- **Bankruptcy growth turns at about the economic bottom — not before it.** On
+  the rule's own 6-month sums, growth peaked a median 0 months from the trough
+  (interval −3…+3); on monthly data −2 (−5…+1), on 3-month sums −2. The
+  pre-registered hindsight diagnostic uses 12-month sums, which date the peak ~3
+  months later by construction: +4 (+1…+7). (Post-hoc w-sensitivity:
+  `bottoms_posthoc.py`.) Against the stock low the 12-month peak came +6 months
+  after it (valid lows; +4…+11). So the slowing Casey described is real and
+  roughly coincident with the economic bottom — but it arrives after the market
+  has turned, and confirming it takes months more.
+- **The roll-over rule then fires late, when it fires.** 5 of its 7 signals
+  landed 0–8 months after the trough (median of the signals +5); two came early —
+  Feb-1913, a month into the 1913–14 recession and 22 months before its trough (a
+  false start), and 1897 by 2 months.
+- **It often didn't fire — mostly because of its own re-arming.** 9 of 16
+  recessions produced no scored roll-over (8 MISS, 1929–33 censored). Three are
+  genuine: failures fell in WWI (1918–19), peaked near +10% in 1926–27, and
+  rolled over after the window in 1910–12. Six were locked out by the
+  pre-registered re-arm rule: the 1920–21 (+184%) and 1946–48 (+260%) surges set
+  a drop of 61 and 87 points, and re-arming needed growth to climb that far above
+  its later low, which never happened (1923–24 and 1929–33; all four postwar
+  recessions). A +10% line from 1918 (the pre-registered sensitivity) cannot fix
+  that: 7 of 10 still miss.
+- **Post-hoc variant (`bottoms_posthoc.py`, not pre-registered, not graded):**
+  re-arming once growth has turned negative lets the rule fire in 11 of 16. Of
+  the six locked-out recessions, four then fire (three 6–9 months after the
+  trough; Aug-1931, 19 months before the 1933 trough, a false dawn after which
+  failures surged again) and two still miss (1948–49 and 1957–58 rolled over
+  before their peaks). Overall 8 of 16 land 0–9 months after the trough (median
+  of all 11 signals +5; of the 8 hits +6) — still short of the 11 the grade
+  needed.
+- **Against the stock market:** none of the primary-rule signals came within 3
+  months of a recession stock low (0 of 13); the post-hoc signals do not either.
+  (On 3-month sums, a grid row, the 1920–21 roll-over came 1 month after the
+  Aug-1921 low; the deflation-flagged liabilities series also hit 1920–21.) The
+  court filings' Oct-1987 roll-over — no recession — came 2 months before that
+  year's December low, a non-recession low the study did not score.
 - **The tested grade fails** on the hit count (the misses), the clocks (a
   leave-one-out "peak + median lag" clock has median |error| 5 months; the
-  roll-over's is unbounded because of the misses) and robustness — and would
-  still fail with the post-hoc re-arm (8 of 16). Its
-  lag-permutation p (≈ 0.06; exactly 0.060 by enumeration) says that when it does
-  fire, its timing tracks each recession's own trough beyond a clock — a modest
-  positive, not a signal.
-- **False bottoms:** 9 roll-overs 1895–1965, 3 with no trough nearby (1913, 1915,
-  1948): precision 2/3, 0.46 a decade (0.36 excluding the war years).
+  roll-over's is unbounded because of the misses) and robustness, and would
+  still fail with the post-hoc variant (8 of 16). Its lag-permutation p (≈ 0.06;
+  exactly 0.060 by enumeration) says that when it fires, its timing tracks each
+  recession's own trough beyond a clock — but that p is fragile: 0.15 with the
+  1898-06 month masked, 0.13 with 1937–38 on segment A.
+- **False bottoms:** 9 roll-overs 1895–1965, 3 with no trough within −6…+9
+  (1913, 1915, 1948): precision 2/3, 0.46 a decade (0.36 excluding the war
+  years).
 - **Modern filings:** 1982 and 2001 rolled over 5 months after the trough (2001
   six months *before* that cycle's late stock low); 1991 never; false bottoms in
-  Oct-1987 and Oct-2024. Never earlier than claims.
-- **Trader's view** (Shiller total return, entry the month after the signal):
-  after a bankruptcy roll-over, median 12-month return +16% (n = 7) with a −2%
-  worst further drop, but 75% of the first-year rebound already gone. "Six months
-  after the recession began" earned +21% (n = 20, −1%); buying 20% off the high
-  +12% over 12 months and +36% over 24 (−9% worst drop).
+  Oct-1987 and Oct-2024. Never earlier than the claims-peak rule; the same
+  roll-over rule on claims tied it in 2001.
+- **Liabilities (secondary, nominal, noisier):** in the 0…+9 window in 1899,
+  1902, 1907, 1913 and 1920; early in 1910 (−9) and 1981–82 (−13); no postwar
+  roll-over 1948–80.
+- **Trader's view** (Shiller total return, entry the month after the signal).
+  On the 7 recessions where the D&B roll-over fired: buying at the roll-over
+  returned a median +16% over 12 months with a −2.5% worst further drop — better
+  than at the first sign of distress (+13%, −6%) or 6 months after the recession
+  began (+3%, −9%) — but ~75% of the first-year rebound from the low was already
+  gone. Safe but late. (Over all recessions, different sets: "6 months after the
+  start" +21%; 20% off the high +12%, +36% over 24 months, −9% worst drop. The two
+  court roll-overs: −6% over 12 months, −11% worst drop.)
 
-**Now (October 2026).** Court business filings +19% on a 2-quarter sum vs a year
-earlier and at their 4-quarter high: armed, not rolling over, with no recession.
-The last roll-over (Oct-2024) was a false bottom. If one comes now, the record
-says it would not mark a market bottom; in a recession it would arrive months
-after the economic trough, if at all.
+**Now (October 2026; court data through 2026Q2).** Business filings +19% on a
+2-quarter sum vs a year earlier and at their 4-quarter high: armed, not rolling
+over, with no recession. The last roll-over (Oct-2024) was a false bottom. In
+past recessions, 5 of 7 D&B roll-overs and both scored court roll-overs came
+0–8 months after the economic trough (two D&B signals came early), and none
+marked a recession stock low. A roll-over now, without a recession, would be a
+non-recession case the study did not score; the one precedent (Oct-1987) came 2
+months before that year's low.
 
 Figures: `distress_signals/figs/` — `fig_bottoms_timing.png`,
 `fig_bottoms_series.png`, `fig_bottoms_trader.png`.
@@ -501,11 +529,11 @@ Figures: `distress_signals/figs/` — `fig_bottoms_timing.png`,
 ### Honesty box
 
 - **Power.** The tested grade had ~24% power at plausible settings, so its
-  failure alone is weak evidence. Most misses are a re-arming artifact (a rule
+  failure alone is weak evidence. Most misses are a re-arming lockout (a rule
   defect found after the run; the synthetic generator never produced +184% or
-  +260% surges), so the robust evidence is the timing: the hindsight growth peak
-  (+4 months after the trough, +7.5 after the stock low) and, when the rule fires,
-  a median of +5 months after the trough.
+  +260% surges). The timing evidence carries the conclusion: growth turns at
+  about the trough (6-month sums, median 0), after the stock low, and the
+  confirmed roll-over comes ~5 months after the trough.
 - **Look-ahead.** Episode windows use NBER dates: the results are conditional on
   knowing a recession is under way.
 - **What was blind.** The D&B counts' growth path and every roll-over were unseen
@@ -515,22 +543,26 @@ Figures: `distress_signals/figs/` — `fig_bottoms_timing.png`,
   definition breaks 1933, 1934, 1939 (straight across 1933: same 5 HITs; 1929–33
   is CENSORED by the break but a MISS in substance — unbroken, the series only
   re-arms in 1937-12). The 1898-06 typo is fixed; masking the month instead
-  censors 1899–1900 by rule (its signal is unchanged at +5), so the result does
-  not depend on the fix. 1937–38 is basis-sensitive: a HIT on segment B,
-  CENSORED on segment A (A ends 1938-08).
+  censors 1899–1900 by rule (its signal is unchanged at +5): the grade fails
+  either way, but the hit count falls to 4 and p rises to 0.15. 1937–38 is
+  basis-sensitive: a HIT on segment B, CENSORED on segment A (A ends 1938-08).
 - **Dates.** Pre-1927 NBER troughs are set late (Romer 1994): on Romer's dates the
   hits rise from 5 to 6. Equity lows use Shiller monthly averages; flat bottoms
   flagged (1910 ambiguous, 1913 censored), lows < 10% excluded (1899, 1926,
   1960). On Cowles/OECD the low month agrees in 23 of 25 cycles; 1953, 1957 and
-  1960 change validity, all MISS either way.
+  1960 change validity, all MISS either way. The 1918–19 equity g-peak (+1) is
+  the least-negative month of a falling series, not a failure wave.
 - **Calibration.** θ_A = 15% was chosen on synthetic noise (≤ 1 noise roll-over a
-  decade); the generator's raised-cosine rises are a simplification.
-- **Trader's view.** Monthly-average prices, no costs or taxes; each rule's
-  medians cover the recessions where it fired (different sets). "Peak + 6"
-  enters at p + 6; the −20% trigger is searched from p − 6, so 1918 enters
-  before the peak.
+  decade); the generator's raised-cosine rises are a simplification and never
+  produced surges of +184% or +260%.
+- **Trader's view.** Monthly-average prices, no costs or taxes; medians on
+  matched recessions where stated, otherwise over each rule's own set (different
+  sets). "Peak + 6" enters at p + 6; the −20% trigger is searched from p − 6, so
+  1918 enters before the peak. The 75% rebound-missed figure covers 5 of the 7
+  entries (those after a scorable low).
 - **Not covered.** Monthly D&B counts after 1965 (none published monthly);
-  WARN layoff notices (pending Casey's ICPSR decision).
+  WARN layoff notices (pending Casey's ICPSR decision); non-recession market
+  lows.
 
 ### Counter-agent log
 
@@ -541,4 +573,5 @@ Figures: `distress_signals/figs/` — `fig_bottoms_timing.png`,
 | data, SPEC v0 (2026-10-13) | BLOCK — the 1898-06 typo (+300) inside a scored window; edges and gaps; noise figure from liabilities, not counts; flat equity bottoms; 1933/1937/1948/R/claims/liabilities details | all: HSUS gate test, censoring, era noise, low zone, segment and release sensitivities, bank-failure correction |
 | statistics, SPEC v1 | PASS_WITH_FIXES — the prior described the g-peak, not the rule; MISS dropped from timing; false-start label; θ_A 10% sensitivity; g-peak edge | all |
 | data, SPEC v1 | NOT PASS — the frozen pre-1914 noise (0.116) counted seasonal drift as noise | re-measured (0.085, `bottoms_noise.py`), re-frozen θ_A = 15% and reachability (CONFIRMS tested) before the run; left-censoring; liabilities 1933 break; exclusions |
-| results A, independent recompute (2026-10-13) | PASS_WITH_FIXES — every number reproduced with exact arithmetic from the spec text; 5 MINOR (g-peak equity window, a label, basis flag, Cowles/OECD cross-check, mask-sensitivity wording), 3 NOTE; flagged that 6 of 8 misses are re-arm lockouts | all; correction run (no tested number changed); post-hoc re-arm diagnostic added and labelled |
+| results A, independent recompute (2026-10-13) | PASS_WITH_FIXES — every number reproduced with exact arithmetic from the spec text; 5 MINOR (g-peak equity window, a label, basis flag, Cowles/OECD cross-check, mask-sensitivity wording), 3 NOTE; flagged that 6 of the 9 non-firing recessions are re-arm lockouts | all; correction run (no tested number changed); post-hoc re-arm diagnostic added and labelled |
+| claims & wording B (2026-10-13) | PASS_WITH_FIXES — numbers match (exact lag-permutation p 0.05998); 2 SERIOUS: "slows AFTER the bottom" is a 12-month-smoothing artefact (6-month sums: median 0; monthly −2), and the trader comparison reverses on matched recessions (roll-over +16% vs peak + 6 +3%); minor scoping fixes ("never at the stock low" = recession lows on the primary rule; 1987 precedent; 6 of 9 lockouts; fragile p; chart and panel text; backend status edge) | all; w-sensitivity and matched trader medians computed in `bottoms_posthoc.py` and matching the verifier's own figures |

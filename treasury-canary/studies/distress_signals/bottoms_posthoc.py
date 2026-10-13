@@ -2,14 +2,17 @@
 """POST-HOC diagnostic for studies/distress-bottoms.md — not pre-registered,
 not graded.
 
-After the run, 6 of the 8 missed or censored recessions traced to the
-pre-registered re-arming rule: after the 1920-21 (+184%) and 1946-48 (+260%)
-surges the drop d = high/3 was 61 and 87 points, and re-arming needed growth to
-rise that far above its post-signal low — it never did, so 1923-24, 1929-33
-and all four postwar recessions could not fire. This script re-scores the same
-series with a re-arm that does not scale with the surge (re-arm once growth
-has turned negative, i.e. the failure wave is over), to show where roll-overs
-land when the rule can fire. Everything else is SPEC v1.
+After the run, 6 of the 9 non-firing recessions (8 MISS and the censored
+1929-33) traced to the pre-registered re-arming rule: after the 1920-21 (+184%)
+and 1946-48 (+260%) surges the drop d = high/3 was 61 and 87 points, and
+re-arming needed growth to rise that far above its post-signal low - it never
+did, so 1923-24, 1929-33 and all four postwar recessions could not fire. This
+script (1) re-scores the same series with a re-arm that does not scale with the
+surge (re-arm once growth has turned negative, i.e. the failure wave is over);
+(2) reports the hindsight growth peak at other smoothing windows (the
+pre-registered diagnostic uses w = 12, which dates the peak ~3 months later by
+construction); (3) summarises the frozen trader's-view rows on matched episode
+sets. Everything else is SPEC v1.
 
     python3 bottoms_posthoc.py      # -> bottoms_posthoc.json
 """
@@ -82,10 +85,36 @@ def main():
            "fired": len(es), "median_e_trough_of_signals": float(np.median(es)),
            "e_equity_of_signals": sorted(r["e_equity"] for r in rows if r["e_equity"] is not None),
            "all_signals": [mstr(s["t"] + 1) for nm in G for s in G[nm]["signals"]]}
+    # (2) hindsight growth peak vs the trough at other smoothing windows
+    from dataclasses import replace
+    gpk = {}
+    for w in (1, 3, 6, 12):
+        Gw = BT.growth_by_span(spans, replace(rule, w=w))
+        es_w, before = [], 0
+        for p, tau in BT.P_EPISODES:
+            rel, _ = BT._gpeak(Gw, spans, p, p, BT.window_end(p, tau))
+            if rel is not None:
+                es_w.append(rel - tau)
+                before += rel < tau
+        gpk[str(w)] = {**BT.os_ci(es_w), "n_before_trough": before}
+    out["g_peak_vs_trough_by_w"] = gpk
+    # (3) trader's view on matched episode sets (frozen rows, no recomputation)
+    rows = res["trader"]["episodes"]
+    fired = [pk for pk, r in rows.items() if r.get("rollover_P", {}).get("entry")]
+    def med(keys, rule_name, stat):
+        xs = [rows[k][rule_name][stat] for k in keys if rows[k].get(rule_name, {}).get("entry")
+              and stat in rows[k][rule_name]]
+        return {"n": len(xs), "median": float(np.median(xs)) if xs else None}
+    out["trader_on_rollover_recessions"] = {
+        "episodes": fired,
+        "rules": {rn: {st: med(fired, rn, st) for st in ("ret_12m", "ret_24m", "worst_dd_12m", "rebound_missed")}
+                  for rn in ("rollover_P", "arm_P", "peak_plus_6", "minus_20pct", "random_armed_P")}}
     with open(os.path.join(HERE, "bottoms_posthoc.json"), "w") as f:
         json.dump(out, f, indent=1)
     print(json.dumps({k: out[k] for k in ("confirms_hits", "fired", "median_e_trough_of_signals",
                                           "e_equity_of_signals")}))
+    print(json.dumps(out["g_peak_vs_trough_by_w"]))
+    print(json.dumps(out["trader_on_rollover_recessions"]["rules"], indent=0)[:1500])
 
 
 if __name__ == "__main__":

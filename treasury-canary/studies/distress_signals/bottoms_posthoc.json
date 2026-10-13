@@ -1,5 +1,5 @@
 {
- "note": "After the run, 6 of the 8 missed or censored recessions traced to the pre-registered re-arming rule: after the 1920-21 (+184%) and 1946-48 (+260%) surges the drop d = high/3 was 61 and 87 points, and re-arming needed growth to rise that far above its post-signal low \u2014 it never did, so 1923-24, 1929-33 and all four postwar recessions could not fire. This script re-scores the same series with a re-arm that does not scale with the surge (re-arm once growth has turned negative, i.e. the failure wave is over), to show where roll-overs land when the rule can fire. Everything else is SPEC v1.",
+ "note": "After the run, 6 of the 9 non-firing recessions (8 MISS and the censored 1929-33) traced to the pre-registered re-arming rule: after the 1920-21 (+184%) and 1946-48 (+260%) surges the drop d = high/3 was 61 and 87 points, and re-arming needed growth to rise that far above its post-signal low - it never did, so 1923-24, 1929-33 and all four postwar recessions could not fire. This script (1) re-scores the same series with a re-arm that does not scale with the surge (re-arm once growth has turned negative, i.e. the failure wave is over); (2) reports the hindsight growth peak at other smoothing windows (the pre-registered diagnostic uses w = 12, which dates the peak ~3 months later by construction); (3) summarises the frozen trader's-view rows on matched episode sets. Everything else is SPEC v1.",
  "episodes": [
   {
    "peak": "1895-12",
@@ -143,5 +143,150 @@
   "1954-12",
   "1957-04",
   "1961-11"
- ]
+ ],
+ "g_peak_vs_trough_by_w": {
+  "1": {
+   "n": 16,
+   "median": -2.0,
+   "ci": [
+    -5,
+    1
+   ],
+   "coverage": 0.923,
+   "n_before_trough": 10
+  },
+  "3": {
+   "n": 16,
+   "median": -2.0,
+   "ci": [
+    -4,
+    1
+   ],
+   "coverage": 0.923,
+   "n_before_trough": 9
+  },
+  "6": {
+   "n": 15,
+   "median": 0.0,
+   "ci": [
+    -3,
+    3
+   ],
+   "coverage": 0.965,
+   "n_before_trough": 6
+  },
+  "12": {
+   "n": 15,
+   "median": 4.0,
+   "ci": [
+    1,
+    7
+   ],
+   "coverage": 0.965,
+   "n_before_trough": 3
+  }
+ },
+ "trader_on_rollover_recessions": {
+  "episodes": [
+   "1895-12",
+   "1899-06",
+   "1902-09",
+   "1907-05",
+   "1913-01",
+   "1920-01",
+   "1937-05"
+  ],
+  "rules": {
+   "rollover_P": {
+    "ret_12m": {
+     "n": 7,
+     "median": 0.16188184333815503
+    },
+    "ret_24m": {
+     "n": 7,
+     "median": 0.1226167319168514
+    },
+    "worst_dd_12m": {
+     "n": 7,
+     "median": -0.02495676968359084
+    },
+    "rebound_missed": {
+     "n": 5,
+     "median": 0.7463847982446141
+    }
+   },
+   "arm_P": {
+    "ret_12m": {
+     "n": 7,
+     "median": 0.12599309070176368
+    },
+    "ret_24m": {
+     "n": 7,
+     "median": 0.31439237330363334
+    },
+    "worst_dd_12m": {
+     "n": 7,
+     "median": -0.05628014883061594
+    },
+    "rebound_missed": {
+     "n": 2,
+     "median": 0.37873259718587365
+    }
+   },
+   "peak_plus_6": {
+    "ret_12m": {
+     "n": 7,
+     "median": 0.0326970457060658
+    },
+    "ret_24m": {
+     "n": 7,
+     "median": 0.26154832714545084
+    },
+    "worst_dd_12m": {
+     "n": 7,
+     "median": -0.08961301832456947
+    },
+    "rebound_missed": {
+     "n": 0,
+     "median": null
+    }
+   },
+   "minus_20pct": {
+    "ret_12m": {
+     "n": 5,
+     "median": 0.1134037962994281
+    },
+    "ret_24m": {
+     "n": 5,
+     "median": 0.4206730977361046
+    },
+    "worst_dd_12m": {
+     "n": 5,
+     "median": -0.05395059552979342
+    },
+    "rebound_missed": {
+     "n": 1,
+     "median": 0.18772743551702406
+    }
+   },
+   "random_armed_P": {
+    "ret_12m": {
+     "n": 7,
+     "median": 0.12765320738203445
+    },
+    "ret_24m": {
+     "n": 7,
+     "median": 0.14715645384146891
+    },
+    "worst_dd_12m": {
+     "n": 7,
+     "median": -0.009385683760683716
+    },
+    "rebound_missed": {
+     "n": 6,
+     "median": 1.0385578364668757
+    }
+   }
+  }
+ }
 }

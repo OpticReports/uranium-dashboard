@@ -273,12 +273,15 @@ def bottoming_watch(bus: dict[int, float], court: list[tuple[int, int]], record:
     h = _trailing_high(g, last, BOTTOM_RULE["look"], None)
     armed = h is not None and h >= BOTTOM_RULE["theta"]
     latest = sigs[-1] if sigs else None
-    rolled = bool(latest and latest["rearmed_at"] is None and last - latest["t"] < 4)
+    waiting = bool(latest and latest["rearmed_at"] is None)     # rolled over, not yet re-armed: cannot fire
+    rolled = waiting and last - latest["t"] < 4
+    if waiting:
+        status = f"rolled over {_q_release(latest['t'])}" + ("" if rolled else ", not yet re-armed")
+    else:
+        status = "armed, not rolled over" if armed else "not armed"
     return {"asof": qstr(last), "g": round(g[last], 4), "high": round(h, 4) if h is not None else None,
-            "armed": armed, "rolled_over_now": rolled,
-            "signals": [_q_release(x["t"]) for x in sigs],
-            "status": ("rolled over" if rolled else ("armed, not rolled over" if armed else "not armed")),
-            "record": record}
+            "armed": armed and not waiting, "rolled_over_now": rolled,
+            "signals": [_q_release(x["t"]) for x in sigs], "status": status, "record": record}
 
 
 def bank_from_bundle(bundle: dict, hist: dict) -> dict[str, dict[int, float]]:
