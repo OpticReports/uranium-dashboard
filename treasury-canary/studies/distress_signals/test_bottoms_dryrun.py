@@ -53,9 +53,17 @@ def test_the_run_completes_on_synthetic_inputs(synthetic):
         assert r["n"] == (16 if "trough" in s else r["n"]) and len(r["episodes"]) == r["n"]
         assert set(r["grid"]) == {"3", "12"}
     assert set(res["P"]["sensitivities"]) == {"release_plus2", "1898_06_masked", "1933_straight_across",
-                                             "1937_on_A"}
+                                             "1937_on_A", "theta10_from_1918", "theta10_from_1918_timing",
+                                             "theta20_from_1918_timing"}
+    # nothing is graded: every shot was out of reach before the run
+    assert res["P"]["grade"]["tested"] == [] and res["P"]["grade"]["status"].startswith("NOT TESTED")
+    for s, t in res["P"]["timing"].items():
+        assert {"n", "median", "n_miss", "n_censored", "by_era"} <= set(t)
+        assert t["n"] + t["n_censored"] == res["P"]["shots"][s]["n"]
+    assert "n_peaked_before_p" in res["P"]["g_peak"]
+    assert set(res["P"]["romer"]) == {"MARKS-trough", "CONFIRMS-trough"}
     assert res["P"]["false_bottoms"]["decades_observed"] > 5
     assert {"primary", "mask_1980Q1", "release_plus2"} == set(res["R"])
     assert res["R"]["primary"]["live"]["asof"] == "2026Q2"
-    assert "1990-07" in res["claims"] and "1990-07" in res["liabilities"] or True
+    assert "1990-07" in res["claims"] and "1981-07" in res["liabilities"] and "1990-07" not in res["liabilities"]
     assert res["trader"]["median"]["rollover_P"]["episodes"] == 16

@@ -140,11 +140,11 @@ def score_episode(gs: list[dict], lag: int, lo: int, hi: int, T: int | None, wlo
         dm = d - lag
         comp[d] = any(dm in s["g"] for s in gs)
     gap = next((d for d in months if not comp[d]), None)
-    first = None
+    first, first_g = None, None
     for s in gs:
         hit = B.first_released(s["signals"], lambda t: t + lag, lo, hi)
         if hit is not None and (first is None or hit["release"] < first["release"]):
-            first = hit
+            first, first_g = hit, s["g"]
     status = None
     if first is not None and gap is not None and first["release"] > gap:
         first, status = None, "CENSORED"
@@ -157,12 +157,16 @@ def score_episode(gs: list[dict], lag: int, lo: int, hi: int, T: int | None, wlo
     flags = []
     if first["high_at"] + lag < p - 12:
         flags.append("carry-over")
+    s0 = first["rearmed_at"]
+    false_start = s0 is not None and any(
+        (hh := B.trailing_high(first_g, t, rule.look, s0)) is not None and hh[0] >= rule.theta - B.TIE
+        for t in range(s0, hi - lag + 1))
     return {"signal": {"data_month": mstr(first["t"]), "release": mstr(first["release"]),
                        "g": round(first["g"], 4), "high": round(first["high"], 4),
                        "high_set": mstr(first["high_at"]), "rearmed_at": (mstr(first["rearmed_at"])
                                                                           if first["rearmed_at"] else None)},
             "release_m": first["release"], "e": e, "outcome": B.classify(e, wlo, whi), "flags": flags,
-            "false_start": first["rearmed_at"] is not None and first["rearmed_at"] + lag <= hi,
+            "false_start": false_start,
             "gap_from": mstr(gap) if gap is not None else None}
 
 
@@ -204,6 +208,30 @@ def clock_errors(anchors: list[int | None], targets: list[int], c: int) -> list[
     return out
 
 
+ERAS = {"1895-1914": (M(1895, 1), M(1914, 12)), "1918-38": (M(1918, 1), M(1938, 12)),
+        "1948-61": (M(1948, 1), M(1961, 12))}
+
+
+def _fmt(x):
+    return "MISS" if x == math.inf else x
+
+
+def timing_summary(eps: list[dict]) -> dict:
+    """Median e and its order-statistic interval with MISS as +inf ('no roll-over
+    by the window end'); CENSORED excluded and listed; by era too."""
+    def one(rows):
+        miss = [e for e in rows if e["outcome"] == "MISS"]
+        cens = [e for e in rows if e["outcome"] == "CENSORED"]
+        vals = [e["e"] for e in rows if e["e"] is not None] + [math.inf] * len(miss)
+        o = os_ci(vals)
+        o = {k: ([_fmt(v) for v in val] if isinstance(val, list) else _fmt(val)) for k, val in o.items()}
+        o.update({"n_miss": len(miss), "n_censored": len(cens), "censored": [e["peak"] for e in cens]})
+        return o
+    out = one(eps)
+    out["by_era"] = {name: one([e for e in eps if lo <= e["p"] <= hi]) for name, (lo, hi) in ERAS.items()}
+    return out
+
+
 def os_ci(es: list[int], conf: float = 0.90) -> dict:
     """Median and the order-statistic interval [e(j), e(n-j+1)] with the
     largest j whose two-sided coverage is >= conf (n = 16 -> j = 5, 92.3%)."""
@@ -217,7 +245,8 @@ def os_ci(es: list[int], conf: float = 0.90) -> dict:
         cov = 1 - 2 * binom.cdf(j - 1, n, 0.5)
         if cov >= conf:
             j_best = (j, cov)
-    out = {"n": n, "median": float(np.median(es))}
+    mid = es[(n - 1) // 2] if n % 2 else (es[n // 2 - 1] + es[n // 2]) / 2
+    out = {"n": n, "median": float(mid)}
     if j_best:
         j, cov = j_best
         out.update({"ci": [es[j - 1], es[n - j]], "coverage": round(cov, 3)})
@@ -246,6 +275,8 @@ def score_p(segs: list[dict[int, float]], rule: B.Rule, lag: int, targets_eq: di
             hi = window_end(p, tau)
             gs = [G[s["name"]] for s in episode_span(spans, p, use_b)]
             ep = score_episode(gs, lag, lo, hi, T, wlo, whi, p, rule)
+            if all(B.trailing_high(s["g"], lo - lag, rule.look) is None for s in gs):
+                ep.setdefault("flags", []).append("left-censored (H undefined at the window start)")
             if kind == "equity" and targets_eq[p]["status"] == "censored":
                 ep.update({"outcome": "CENSORED", "e": None, "release_m": None})
             arm, h_undef = first_armed(gs, lag, p - 12, hi, rule)
@@ -357,12 +388,16 @@ def run() -> dict:
     prim = score_p(segs, rule, 1, eqt, rng, PERMS)
     tested = [s for s in SHOTS if prm["reachable"].get(s)]
     holm = E.holm({s: prim[s]["p_lagperm"] for s in tested})
-    out["P"] = {"shots": prim, "holm": holm, "grade": grade(prim, holm)}
+    for shot in prim:
+        prim[shot]["p_lagperm_note"] = ("tested" if shot in tested else
+                                        "descriptive only: shot out of reach, not tested (SPEC v1 s.6b)")
+    out["P"] = {"shots": prim, "holm": holm,
+                "grade": {"tested": tested,
+                          "status": ("graded" if tested else
+                                     "NOT TESTED: every shot out of reach before the run (SPEC v1 s.6b)"),
+                          "conditions_descriptive": grade(prim, holm)}}
     # timing estimates (the deliverable for shots out of reach) and the hindsight g-peak
-    timing = {}
-    for shot, r in prim.items():
-        timing[shot] = os_ci([e["e"] for e in r["episodes"] if e["e"] is not None])
-    out["P"]["timing"] = timing
+    out["P"]["timing"] = {shot: timing_summary(r["episodes"]) for shot, r in prim.items()}
     out["P"]["g_peak"] = g_peak_diagnostic(segs, rule, eqt)
     out["P"]["romer"] = romer_view(prim)
     # sensitivities
@@ -372,6 +407,12 @@ def run() -> dict:
                                                mask={M(1898, 6)}, grid=False))
     sens["1933_straight_across"] = summarize(score_p(segs, rule, 1, eqt, rng, PERMS, hard_1933=False, grid=False))
     sens["1937_on_A"] = summarize(score_p(segs, rule, 1, eqt, rng, PERMS, use_b=False, grid=False))
+    from_1918 = [ep for ep in P_EPISODES if ep[0] >= M(1918, 1)]
+    t10 = score_p(segs, replace(rule, theta=0.10), 1, eqt, rng, PERMS, episodes=from_1918, grid=False)
+    sens["theta10_from_1918"] = summarize(t10)
+    sens["theta10_from_1918_timing"] = {shot: timing_summary(r["episodes"]) for shot, r in t10.items()}
+    t20 = score_p(segs, rule, 1, eqt, rng, PERMS, episodes=from_1918, grid=False)
+    sens["theta20_from_1918_timing"] = {shot: timing_summary(r["episodes"]) for shot, r in t20.items()}
     out["P"]["sensitivities"] = sens
     # false bottoms over the whole P record
     spans = spans_p(segs)
@@ -389,7 +430,7 @@ def run() -> dict:
 
 def summarize(res: dict) -> dict:
     return {s: {k: r[k] for k in ("n", "hits", "early", "late", "miss", "censored", "p_lagperm")}
-            | {"outcomes": {e["peak"]: e["outcome"] for e in r["episodes"]}} for s, r in res.items()}
+            | {"outcomes": {e["peak"]: [e["outcome"], e["e"]] for e in r["episodes"]}} for s, r in res.items()}
 
 
 def romer_troughs() -> dict[int, int]:
@@ -431,16 +472,31 @@ def g_peak_diagnostic(segs, rule, eqt) -> dict:
     rows = []
     for p, tau in P_EPISODES:
         hi = window_end(p, tau)
-        best = None
+        best, first_rel, before = None, None, None
         for s in episode_span(spans, p):
-            for t, v in G[s["name"]]["g"].items():
-                if p <= t + 1 <= hi and (best is None or v > best[1]):
-                    best = (t, v)
-        if best:
-            rows.append({"peak": mstr(p), "g_peak_release": mstr(best[0] + 1), "e_trough": best[0] + 1 - tau,
-                         "e_equity": (best[0] + 1 - eqt[p]["b"]) if eqt[p]["b"] is not None else None})
-    return {"episodes": rows, "trough": os_ci([r["e_trough"] for r in rows]),
-            "equity": os_ci([r["e_equity"] for r in rows if r["e_equity"] is not None])}
+            g = G[s["name"]]["g"]
+            for t, v in g.items():
+                if p <= t + 1 <= hi:
+                    first_rel = t + 1 if first_rel is None else min(first_rel, t + 1)
+                    if best is None or v > best[1]:
+                        best = (t, v)
+            back = [(t, v) for t, v in g.items() if p - 36 <= t + 1 < p]
+            if back:
+                bt = max(back, key=lambda x: x[1])
+                before = bt if before is None or bt[1] > before[1] else before
+        if not best:
+            continue
+        eq_b = eqt[p]["b"] if eqt[p]["status"] != "no equity low" else None
+        if best[0] + 1 == first_rel and before is not None and before[1] > best[1]:
+            rows.append({"peak": mstr(p), "g_peaked_before_peak": mstr(before[0] + 1),
+                         "e_trough": None, "e_equity": None})
+            continue
+        rows.append({"peak": mstr(p), "g_peak_release": mstr(best[0] + 1), "e_trough": best[0] + 1 - tau,
+                     "e_equity": (best[0] + 1 - eq_b) if eq_b is not None else None})
+    return {"episodes": rows,
+            "trough": os_ci([r["e_trough"] for r in rows if r["e_trough"] is not None]),
+            "equity": os_ci([r["e_equity"] for r in rows if r["e_equity"] is not None]),
+            "n_peaked_before_p": sum("g_peaked_before_peak" in r for r in rows)}
 
 
 # ------------------------------------------------------------------ R: court business filings
@@ -636,17 +692,23 @@ def trader_view(res: dict, rule: B.Rule, eqt: dict) -> dict:
             x = cl.get(f"{c}/CONFIRMS-trough", {}).get("release")
             ent[f"claims_{c}"] = (M(int(x[:4]), int(x[5:])) + 1) if x else None
         rows[pk] = _stats_row(tr, P, p, hi, b, ent)
-    summary = {}
+    def med(rows_, names):
+        summary = {}
+        for k in names:
+            vals = [r[k] for r in rows_.values() if k in r]
+            got = [v for v in vals if v.get("entry")]
+            summary[k] = {"episodes": len(vals), "entries": len(got)}
+            for stat in ("ret_6m", "ret_12m", "ret_24m", "worst_dd_12m", "rebound_missed"):
+                xs = [v[stat] for v in got if stat in v]
+                if xs:
+                    summary[k][stat] = float(np.median(xs))
+        return summary
     names = sorted({k for r in rows.values() for k in r})
-    for k in names:
-        vals = [r[k] for r in rows.values() if k in r]
-        got = [v for v in vals if v.get("entry")]
-        summary[k] = {"episodes": len(vals), "entries": len(got)}
-        for stat in ("ret_6m", "ret_12m", "ret_24m", "worst_dd_12m", "rebound_missed"):
-            xs = [v[stat] for v in got if stat in v]
-            if xs:
-                summary[k][stat] = float(np.median(xs))
-    return {"episodes": rows, "median": summary}
+    p_rules = ["rollover_P", "arm_P", "peak_plus_6", "minus_20pct", "random_armed_P"]
+    common_p = {pk: r for pk, r in rows.items()
+                if all(k in r and r[k].get("entry") and "ret_12m" in r[k] for k in p_rules)}
+    return {"episodes": rows, "median": med(rows, names),
+            "median_common_subset_P": {"episodes": sorted(common_p), "median": med(common_p, p_rules)}}
 
 
 if __name__ == "__main__":

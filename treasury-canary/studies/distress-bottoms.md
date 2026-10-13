@@ -38,12 +38,15 @@ below.
   for a symmetric S-shape, earlier for front-loaded rises, at the peak for
   back-loaded ones; a level that plateaus instead of falling can roll over after
   its peak.
-- **Prior (corrected):** pre-1938 counts — rise ~27 months, level peak ~−0.5 →
-  roll-over around −8 (data month), −6 to −7 release-dated: *at or before the
-  pre-1945 median equity low (−6)*. Postwar counts — 4–6-year rises: the
-  roll-over could come very early (mid-expansion) or near the level peak.
-  Business filings (levels peak at the trough year): near the trough, after the
-  typical equity low. Little room to beat claims after 1967.
+- **Prior (for this rule; corrected by the v1 review):** g itself peaks ~5
+  months before the level peak for a 27-month rise, but a noise-free roll-over
+  under SPEC v1 is *released ~4 months after* the level peak (+2 for a 36-month
+  rise, 0 for 47; a 68-month rise of ≤ 0.6 log points never arms). With count
+  levels turning ~−0.5 at troughs, expect e ≈ +3 to +4 against the trough —
+  the MARKS edge or CONFIRMS — and ~9–10 months after the pre-1945 median
+  equity low. Postwar 4–6-year rises may never reach θ_A (MISS). Business
+  filings (levels peak at the trough year): after the trough, later still
+  against the equity low. Little room to beat claims after 1967.
 - **Data caveats from the check:** the 1933 D&B reclassification is dated
   "1933" by NBER/HSUS but "available only from January 1934" by the Survey of
   Current Business (old-basis figures published through Apr-1936; step −3.8% in
@@ -240,8 +243,9 @@ month; edges, gaps and censoring are defined; the 1898-06 typo is corrected.
   decimal ties count.
 - **Re-arming.** After a signal at t0, no further signal until g has risen by
   d(t0) from its lowest value since the signal (a re-acceleration, at some
-  s > t0); H then restarts at s. A signal is a "false start" when that re-arm is
-  released inside the same episode window. (Amended before the run: the
+  s > t0); H then restarts at s. A signal is a "false start" when, after that
+  re-arm, H ≥ θ_A again (growth back above the arming line) at a month released
+  inside the same episode window. (Amended before the run: the
   reviewers' "g(s) ≥ g(t0) + d(t0)" blocked the next cycle whenever the previous
   roll-over fired while growth was still high — 10 of 16 synthetic episodes went
   MISS in the smoke test. The stale-high case they flagged still does not
@@ -299,10 +303,20 @@ month; edges, gaps and censoring are defined; the 1898-06 typo is corrected.
 - **Reachability, decided in §6 before the run.** A shot whose P(grade) is < 0.2
   at σ = 4 for both μ = 0 and μ = −3 is declared out of reach and not tested;
   its deliverable is the timing estimate: median e with the order-statistic
-  interval [e(5), e(12)] (≈ 92% for 16 episodes).
+  interval (≈ 92%; [e(5), e(12)] for 16 episodes, indices from the n used). A
+  MISS enters as +∞ ("no roll-over by the window end"); CENSORED episodes are
+  excluded and listed; n, n_MISS and n_CENSORED are reported; medians also by
+  era (1895–1914, 1918–38, 1948–61).
+- **Sensitivity (pre-registered):** θ_A = 10% for the episodes from 1918 (the
+  post-1914 noise gives 0.78 noise roll-overs a decade at 10%, inside the bar;
+  20% may leave slow postwar rises unarmed). 1895–97 is left-censored (H is
+  undefined until 1896-05): its outcome is flagged, not only its clocks.
 - **Hindsight diagnostic (report-only):** g-peak = the month of the highest g
   (w = 12) in the episode window; e_gpk = g-peak + 1 − T. It separates "growth
-  starts slowing near the bottom" from the rule's detection lag.
+  starts slowing near the bottom" from the rule's detection lag. If the maximum
+  sits at the window's first month and g was higher before it, the episode is
+  reported as "g peaked before p_r" (the month found by searching back to
+  p_r − 36 inside the span), with no timing value.
 - **False bottoms:** every roll-over released 1895–1965 is a TRUE BOTTOM if
   −6 ≤ release − τ ≤ +9 for some trough τ (the union of the trough windows),
   else a FALSE BOTTOM; those released in [p_r − 12, p_r − 1] are listed.
@@ -352,8 +366,8 @@ within 12 months, and the share of the b_r → b_r + 12 rebound already missed.
   sensitivity 0.134 throughout); real NBER chronology, real segments, the 1933
   break, release + 1; equity lows at their real dates.
 - Calibration of θ_A and the floor as §0. Power cells μ ∈ {−6, −3, 0, +3},
-  σ ∈ {2, 4, 8}, 400 replications, the full grade per shot. Size under a
-  calibrated clock (level peak at p_r + U[R_lo, R_hi], no trough information) and
+  σ ∈ {2, 4, 8}, 400 replications, the full grade per shot. Size under a broad
+  clock (level peak at p_r + U(−6, 3) + U[12, 30], no trough information) and
   under a random circular shift.
 
 ### 6b. Calibration and power — results (bottoms_power.json, 2026-10-13, synthetic only)
@@ -374,9 +388,13 @@ within 12 months, and the share of the b_r → b_r + 12 rebound already missed.
   | MARKS-equity | 0.00 | 0.00 | 0.00 | 0.00 |
 
   The lag-permutation test alone would detect timing information in 84–89% of
-  CONFIRMS replications at μ ∈ {−3, 0}; the 2/3-HIT bar (mean ≈ 10 of 16 HITs)
-  is what binds. At the literature's dispersion (counts' average deviation 6.7
-  months at troughs, σ ≈ 8) every shot is near zero.
+  CONFIRMS replications at μ ∈ {−3, 0}; the 2/3-HIT bar (mean ≈ 10 of 16 HITs),
+  the w-grid and the without-war condition are what bind. At the literature's
+  dispersion (counts' average deviation 6.7 months at troughs, σ ≈ 8) every
+  shot is near zero. Robustness (v1 reviewer, same code): Holm over CONFIRMS
+  alone gives identical numbers; with the literature's rise lengths (pre-1945
+  U[18, 36], postwar U[40, 70]) every shot is ≤ 0.023 at σ = 4 and CONFIRMS
+  0.000–0.007 — so CONFIRMS's 0.185 (SE 0.019) is borderline but robust.
 - **Reachability decision (frozen before the run):** all three shots are below
   0.2 at σ = 4 for both μ = 0 and μ = −3, so **no grade is tested**. The run
   delivers, per shot, the median e with its order-statistic interval
