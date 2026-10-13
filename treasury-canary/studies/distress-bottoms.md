@@ -356,6 +356,34 @@ within 12 months, and the share of the b_r → b_r + 12 rebound already missed.
   calibrated clock (level peak at p_r + U[R_lo, R_hi], no trough information) and
   under a random circular shift.
 
+### 6b. Calibration and power — results (bottoms_power.json, 2026-10-13, synthetic only)
+
+- **Arming:** θ_A = 20%, floor 5 pp — the smallest setting with ≤ 1 roll-over a
+  decade on no-recession series at the pre-1914 noise (0.46 a decade; 0.002 at
+  the post-1914 noise). At θ_A = 10% noise alone gives 3.5 a decade before 1914.
+- **Mechanical lag:** a noise-free roll-over is released 9, 7, 5 and 4 months
+  after the level peak for rises of 12, 18, 24 and 30 months.
+- **Size:** P(grade) = 0 for every shot under a calibrated clock and under a
+  random shift; the lag-permutation p ≤ 0.10 in 1–6.5% of null replications.
+- **Power, P(grade) at σ = 4** (400 replications; σ = 2 / 8 in the JSON):
+
+  | shot | μ = −6 | μ = −3 | μ = 0 | μ = +3 |
+  |---|---|---|---|---|
+  | MARKS-trough | 0.26 | 0.03 | 0.00 | 0.00 |
+  | CONFIRMS-trough | 0.00 | 0.13 | 0.185 | 0.03 |
+  | MARKS-equity | 0.00 | 0.00 | 0.00 | 0.00 |
+
+  The lag-permutation test alone would detect timing information in 84–89% of
+  CONFIRMS replications at μ ∈ {−3, 0}; the 2/3-HIT bar (mean ≈ 10 of 16 HITs)
+  is what binds. At the literature's dispersion (counts' average deviation 6.7
+  months at troughs, σ ≈ 8) every shot is near zero.
+- **Reachability decision (frozen before the run):** all three shots are below
+  0.2 at σ = 4 for both μ = 0 and μ = −3, so **no grade is tested**. The run
+  delivers, per shot, the median e with its order-statistic interval
+  [e(5), e(12)], the hindsight g-peak timing, the false bottoms, the claims
+  benchmark (R episodes) and the trader's view — all descriptive. No
+  "bottoming" line can reach the panel from this run.
+
 ### 7. Honesty, stated now (additions to v0 §7)
 
 - Pre-1927 NBER dates were set on detrended data (Romer 1994): troughs too late,
