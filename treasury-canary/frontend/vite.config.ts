@@ -26,6 +26,7 @@ const proxied = [
   "/stat-regime",
   "/track-record",
   "/recession-model",
+  "/ai-debt",
 ];
 
 export default defineConfig({

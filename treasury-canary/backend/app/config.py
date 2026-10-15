@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     http_timeout_seconds: float = 30.0
     cache_dir: str = "./data/cache"
     cache_ttl_seconds: int = 3600            # respect FRED etc.; daily data is stable
+    # EDGAR refuses requests without a descriptive User-Agent; the SEC asks for a
+    # contact address in it. Set EDGAR_USER_AGENT on Render to add one — never
+    # hard-code an email here.
+    edgar_user_agent: str = "treasury-canary/1.0 (research dashboard)"
 
     # --- Scheduling ---
     run_scheduler: bool = True

@@ -54,10 +54,12 @@ no alert fires from this tab. Status language is "watch", never "warning".
 CIK whitelist (EDGAR poll): Meta 1326801, Alphabet 1652044, Amazon 1018724,
 Oracle 1341439, Microsoft 789019, Nvidia 1045810, Broadcom 1730168, AMD 2488,
 Intel 50863, Micron 723125, Equinix 1101239, Digital Realty 1297996, GE Vernova
-1996810, Vistra 1692819, Constellation 1868941, CoreWeave 1769628, Core
+1996810, Vistra 1692819, Constellation 1868275, CoreWeave 1769628, Core
 Scientific 1839341, Cipher 1819989, Hut 8 1964789, Galaxy 1859392, TeraWulf
-1083301, Applied Digital 1144879, IREN 1878848, Nebius 1662684. Verify each CIK
+1083301, Applied Digital 1144879, IREN 1878848, Nebius 1513845. Verify each CIK
 against the submissions JSON `name` field; a wrong CIK is a test failure.
+(Corrected 2026-10-15 from the live `name` fields: the first draft's 1868941
+is Fluence Energy and 1662684 is KULR Technology; the gate test asserts both.)
 
 ## Payload: GET /ai-debt (route `app/api/routes_ai_debt.py`, TTL 6h, warmed by the scheduler like severity)
 
@@ -111,7 +113,9 @@ came from cache or failed. Missing data is `null`, never 0.
 - EDGAR: the whitelist CIKs resolve to the expected names on the fixture submissions JSON; the extractor on the Meta 2026-04-30 FWP fixture returns 6 tranches summing to 25.0.
 - Breaking: CCC−B gap computed from the same dates; BDC p_nav == price / nav; every event has a provenance tag and a URL.
 - Payload: `json.dumps` succeeds; every block has `status`; no number without a source tag; no "0" where the fixture is missing (null instead).
-- Frontend: tsc clean; the tab renders with an all-null payload without throwing.
+- Frontend: tsc clean; the tab renders with an all-null payload without throwing
+  (`cd frontend && npm run smoke:aidebt` — server-renders the fixture, the all-null
+  payload, the backend's own key vocabulary, malformed shapes and null deal rows).
 
 ## Honesty box text (ship verbatim, edit only for accuracy)
 

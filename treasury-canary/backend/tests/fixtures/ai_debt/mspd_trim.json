@@ -1,0 +1,1561 @@
+{
+ "data": [
+  {
+   "record_date": "2023-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5260406.9244"
+  },
+  {
+   "record_date": "2023-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "13729486.2761"
+  },
+  {
+   "record_date": "2023-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4246926.2789"
+  },
+  {
+   "record_date": "2023-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "1935814.80458101"
+  },
+  {
+   "record_date": "2023-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "575556.1608"
+  },
+  {
+   "record_date": "2023-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "5492.206"
+  },
+  {
+   "record_date": "2023-09-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "25753682.650781"
+  },
+  {
+   "record_date": "2023-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5456998.4133"
+  },
+  {
+   "record_date": "2023-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "13762307.1879"
+  },
+  {
+   "record_date": "2023-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4292925.4729"
+  },
+  {
+   "record_date": "2023-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "1966291.28045936"
+  },
+  {
+   "record_date": "2023-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "519452.3749"
+  },
+  {
+   "record_date": "2023-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "5492.206"
+  },
+  {
+   "record_date": "2023-10-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "26003466.9354593"
+  },
+  {
+   "record_date": "2023-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5671149.2182"
+  },
+  {
+   "record_date": "2023-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "13729610.5661"
+  },
+  {
+   "record_date": "2023-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4333565.4224"
+  },
+  {
+   "record_date": "2023-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "1986656.11196305"
+  },
+  {
+   "record_date": "2023-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "545452.4346"
+  },
+  {
+   "record_date": "2023-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "5492.206"
+  },
+  {
+   "record_date": "2023-11-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "26271925.959263"
+  },
+  {
+   "record_date": "2023-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5675781.0635"
+  },
+  {
+   "record_date": "2023-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "13758204.841"
+  },
+  {
+   "record_date": "2023-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4354552.9642"
+  },
+  {
+   "record_date": "2023-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2006224.10422602"
+  },
+  {
+   "record_date": "2023-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "571452.618"
+  },
+  {
+   "record_date": "2023-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "5492.206"
+  },
+  {
+   "record_date": "2023-12-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "26371707.796926"
+  },
+  {
+   "record_date": "2024-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5780243.7895"
+  },
+  {
+   "record_date": "2024-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "13831182.6937"
+  },
+  {
+   "record_date": "2024-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4401548.0275"
+  },
+  {
+   "record_date": "2024-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "1966305.04439499"
+  },
+  {
+   "record_date": "2024-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "525565.7939"
+  },
+  {
+   "record_date": "2024-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "5492.206"
+  },
+  {
+   "record_date": "2024-01-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "26510337.554995"
+  },
+  {
+   "record_date": "2024-02-29",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6011236.3775"
+  },
+  {
+   "record_date": "2024-02-29",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "13829792.0693"
+  },
+  {
+   "record_date": "2024-02-29",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4445076.9741"
+  },
+  {
+   "record_date": "2024-02-29",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "1973686.85187236"
+  },
+  {
+   "record_date": "2024-02-29",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "553565.6081"
+  },
+  {
+   "record_date": "2024-02-29",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "5492.206"
+  },
+  {
+   "record_date": "2024-02-29",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "26818850.0868723"
+  },
+  {
+   "record_date": "2024-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6062865.3366"
+  },
+  {
+   "record_date": "2024-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "13863195.0028"
+  },
+  {
+   "record_date": "2024-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4467056.3456"
+  },
+  {
+   "record_date": "2024-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "1999333.4030269"
+  },
+  {
+   "record_date": "2024-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "553565.6081"
+  },
+  {
+   "record_date": "2024-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "5492.206"
+  },
+  {
+   "record_date": "2024-03-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "26951507.9021269"
+  },
+  {
+   "record_date": "2024-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5866762.4481"
+  },
+  {
+   "record_date": "2024-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "13994853.4997"
+  },
+  {
+   "record_date": "2024-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4515268.1728"
+  },
+  {
+   "record_date": "2024-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "1995638.81432017"
+  },
+  {
+   "record_date": "2024-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "540349.4249"
+  },
+  {
+   "record_date": "2024-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "5492.206"
+  },
+  {
+   "record_date": "2024-04-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "26918364.5658202"
+  },
+  {
+   "record_date": "2024-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5866780.3757"
+  },
+  {
+   "record_date": "2024-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14013772.2025"
+  },
+  {
+   "record_date": "2024-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4560357.9355"
+  },
+  {
+   "record_date": "2024-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2025751.59943381"
+  },
+  {
+   "record_date": "2024-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "570011.8652"
+  },
+  {
+   "record_date": "2024-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "5492.206"
+  },
+  {
+   "record_date": "2024-05-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "27042166.1843338"
+  },
+  {
+   "record_date": "2024-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5765830.0899"
+  },
+  {
+   "record_date": "2024-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14046707.3817"
+  },
+  {
+   "record_date": "2024-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4581064.9061"
+  },
+  {
+   "record_date": "2024-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2053866.28733401"
+  },
+  {
+   "record_date": "2024-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "598011.418"
+  },
+  {
+   "record_date": "2024-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2024-06-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "27049994.207134"
+  },
+  {
+   "record_date": "2024-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5915782.1837"
+  },
+  {
+   "record_date": "2024-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14226985.2226"
+  },
+  {
+   "record_date": "2024-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4631803.5488"
+  },
+  {
+   "record_date": "2024-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2023712.63271607"
+  },
+  {
+   "record_date": "2024-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "559579.3834"
+  },
+  {
+   "record_date": "2024-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2024-07-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "27362377.095316"
+  },
+  {
+   "record_date": "2024-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6121801.8453"
+  },
+  {
+   "record_date": "2024-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14192205.4659"
+  },
+  {
+   "record_date": "2024-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4657558.2077"
+  },
+  {
+   "record_date": "2024-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2032197.52993104"
+  },
+  {
+   "record_date": "2024-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "587578.3708"
+  },
+  {
+   "record_date": "2024-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2024-08-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "27595855.543731"
+  },
+  {
+   "record_date": "2024-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2051742.89076141"
+  },
+  {
+   "record_date": "2024-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6004760.6777"
+  },
+  {
+   "record_date": "2024-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14343433.8238"
+  },
+  {
+   "record_date": "2024-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4708307.828"
+  },
+  {
+   "record_date": "2024-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "615578.116"
+  },
+  {
+   "record_date": "2024-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2024-09-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "27728337.4603614"
+  },
+  {
+   "record_date": "2024-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6186777.7925"
+  },
+  {
+   "record_date": "2024-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14443632.6176"
+  },
+  {
+   "record_date": "2024-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4743828.2596"
+  },
+  {
+   "record_date": "2024-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2033908.2920246"
+  },
+  {
+   "record_date": "2024-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "578109.9211"
+  },
+  {
+   "record_date": "2024-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2024-10-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "27990771.0069246"
+  },
+  {
+   "record_date": "2024-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6389763.232"
+  },
+  {
+   "record_date": "2024-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14409501.9226"
+  },
+  {
+   "record_date": "2024-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4759296.1254"
+  },
+  {
+   "record_date": "2024-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2053874.52451167"
+  },
+  {
+   "record_date": "2024-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "606109.7427"
+  },
+  {
+   "record_date": "2024-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2024-11-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "28223059.6713116"
+  },
+  {
+   "record_date": "2024-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6186882.0707"
+  },
+  {
+   "record_date": "2024-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14565431.0631"
+  },
+  {
+   "record_date": "2024-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4811667.7061"
+  },
+  {
+   "record_date": "2024-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2078065.72117458"
+  },
+  {
+   "record_date": "2024-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "634107.9724"
+  },
+  {
+   "record_date": "2024-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2024-12-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "28280668.6575746"
+  },
+  {
+   "record_date": "2025-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6379924.9602"
+  },
+  {
+   "record_date": "2025-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14691030.3768"
+  },
+  {
+   "record_date": "2025-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4850208.2672"
+  },
+  {
+   "record_date": "2025-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "1995389.58415207"
+  },
+  {
+   "record_date": "2025-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "597785.7588"
+  },
+  {
+   "record_date": "2025-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2025-01-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "28518853.0712521"
+  },
+  {
+   "record_date": "2025-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6367951.7093"
+  },
+  {
+   "record_date": "2025-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14736013.5853"
+  },
+  {
+   "record_date": "2025-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4886175.8747"
+  },
+  {
+   "record_date": "2025-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2005288.48556551"
+  },
+  {
+   "record_date": "2025-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "628607.368"
+  },
+  {
+   "record_date": "2025-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2025-02-28",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "28628551.1469655"
+  },
+  {
+   "record_date": "2025-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6155950.4395"
+  },
+  {
+   "record_date": "2025-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14813886.5171"
+  },
+  {
+   "record_date": "2025-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4919912.8173"
+  },
+  {
+   "record_date": "2025-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2036180.70123004"
+  },
+  {
+   "record_date": "2025-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "656605.8719"
+  },
+  {
+   "record_date": "2025-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2025-03-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "28587050.47113"
+  },
+  {
+   "record_date": "2025-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6060018.6605"
+  },
+  {
+   "record_date": "2025-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14907753.1978"
+  },
+  {
+   "record_date": "2025-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4957464.5207"
+  },
+  {
+   "record_date": "2025-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2027647.81301112"
+  },
+  {
+   "record_date": "2025-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "618359.8221"
+  },
+  {
+   "record_date": "2025-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2025-04-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "28575758.1382111"
+  },
+  {
+   "record_date": "2025-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6003024.2416"
+  },
+  {
+   "record_date": "2025-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "14897646.6432"
+  },
+  {
+   "record_date": "2025-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "4987268.9904"
+  },
+  {
+   "record_date": "2025-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2049667.61424379"
+  },
+  {
+   "record_date": "2025-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "646349.6801"
+  },
+  {
+   "record_date": "2025-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4514.1241"
+  },
+  {
+   "record_date": "2025-05-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "28588471.2936438"
+  },
+  {
+   "record_date": "2025-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5784061.0518"
+  },
+  {
+   "record_date": "2025-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15073596.7044"
+  },
+  {
+   "record_date": "2025-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5040146.4794"
+  },
+  {
+   "record_date": "2025-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2081041.52868874"
+  },
+  {
+   "record_date": "2025-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "674349.5412"
+  },
+  {
+   "record_date": "2025-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2025-06-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "28657287.9807887"
+  },
+  {
+   "record_date": "2025-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "5995910.2789"
+  },
+  {
+   "record_date": "2025-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15206990.3684"
+  },
+  {
+   "record_date": "2025-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5076632.5811"
+  },
+  {
+   "record_date": "2025-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2051825.04328797"
+  },
+  {
+   "record_date": "2025-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "634513.5914"
+  },
+  {
+   "record_date": "2025-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2025-07-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "28969964.538388"
+  },
+  {
+   "record_date": "2025-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6369006.639"
+  },
+  {
+   "record_date": "2025-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15211301.9838"
+  },
+  {
+   "record_date": "2025-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5094927.924"
+  },
+  {
+   "record_date": "2025-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2065002.26017429"
+  },
+  {
+   "record_date": "2025-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "662513.5691"
+  },
+  {
+   "record_date": "2025-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2025-08-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "29406845.0513743"
+  },
+  {
+   "record_date": "2025-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6397045.0501"
+  },
+  {
+   "record_date": "2025-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15392478.8812"
+  },
+  {
+   "record_date": "2025-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5142560.5762"
+  },
+  {
+   "record_date": "2025-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2088024.44534558"
+  },
+  {
+   "record_date": "2025-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "690511.6904"
+  },
+  {
+   "record_date": "2025-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2025-09-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "29714713.3185456"
+  },
+  {
+   "record_date": "2025-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6593194.1855"
+  },
+  {
+   "record_date": "2025-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15505681.5835"
+  },
+  {
+   "record_date": "2025-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5172699.2598"
+  },
+  {
+   "record_date": "2025-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2078662.32425947"
+  },
+  {
+   "record_date": "2025-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "644233.8327"
+  },
+  {
+   "record_date": "2025-10-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2025-10-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "29998563.8610595"
+  },
+  {
+   "record_date": "2025-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6723293.4315"
+  },
+  {
+   "record_date": "2025-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15497852.4891"
+  },
+  {
+   "record_date": "2025-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5198797.6404"
+  },
+  {
+   "record_date": "2025-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2101718.74278206"
+  },
+  {
+   "record_date": "2025-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "672233.7657"
+  },
+  {
+   "record_date": "2025-11-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2025-11-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "30197988.744782"
+  },
+  {
+   "record_date": "2025-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6547260.1224"
+  },
+  {
+   "record_date": "2025-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15636873.5906"
+  },
+  {
+   "record_date": "2025-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5249001.4798"
+  },
+  {
+   "record_date": "2025-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2133881.76884172"
+  },
+  {
+   "record_date": "2025-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "700233.4843"
+  },
+  {
+   "record_date": "2025-12-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2025-12-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "30271343.1212417"
+  },
+  {
+   "record_date": "2026-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6595659.6707"
+  },
+  {
+   "record_date": "2026-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15719111.7584"
+  },
+  {
+   "record_date": "2026-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5271405.0137"
+  },
+  {
+   "record_date": "2026-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2055021.57803035"
+  },
+  {
+   "record_date": "2026-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "700232.6443"
+  },
+  {
+   "record_date": "2026-01-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2026-01-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "30345524.3404303"
+  },
+  {
+   "record_date": "2026-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6808105.8252"
+  },
+  {
+   "record_date": "2026-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15767155.1195"
+  },
+  {
+   "record_date": "2026-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5298564.1847"
+  },
+  {
+   "record_date": "2026-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2062155.49799229"
+  },
+  {
+   "record_date": "2026-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "676346.1759"
+  },
+  {
+   "record_date": "2026-02-28",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2026-02-28",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "30616419.4785923"
+  },
+  {
+   "record_date": "2026-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6819563.1112"
+  },
+  {
+   "record_date": "2026-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15879393.8119"
+  },
+  {
+   "record_date": "2026-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5348623.8583"
+  },
+  {
+   "record_date": "2026-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2090275.61333811"
+  },
+  {
+   "record_date": "2026-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "704341.0021"
+  },
+  {
+   "record_date": "2026-03-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2026-03-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "30846290.0721381"
+  },
+  {
+   "record_date": "2026-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6621986.4025"
+  },
+  {
+   "record_date": "2026-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15937917.6745"
+  },
+  {
+   "record_date": "2026-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5383160.7773"
+  },
+  {
+   "record_date": "2026-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2079725.68665115"
+  },
+  {
+   "record_date": "2026-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "650320.9842"
+  },
+  {
+   "record_date": "2026-04-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2026-04-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "30677204.2004511"
+  },
+  {
+   "record_date": "2026-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6758778.5857"
+  },
+  {
+   "record_date": "2026-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "15942721.4171"
+  },
+  {
+   "record_date": "2026-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5412096.5247"
+  },
+  {
+   "record_date": "2026-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2118028.27552178"
+  },
+  {
+   "record_date": "2026-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "678316.5054"
+  },
+  {
+   "record_date": "2026-05-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "4092.6753"
+  },
+  {
+   "record_date": "2026-05-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "30914033.9837218"
+  },
+  {
+   "record_date": "2026-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6690688.6431"
+  },
+  {
+   "record_date": "2026-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "16060855.8302"
+  },
+  {
+   "record_date": "2026-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5459454.6399"
+  },
+  {
+   "record_date": "2026-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2164939.04533828"
+  },
+  {
+   "record_date": "2026-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "706302.1231"
+  },
+  {
+   "record_date": "2026-06-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "3590.9655"
+  },
+  {
+   "record_date": "2026-06-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "31085831.2471383"
+  },
+  {
+   "record_date": "2026-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "6988890.9629"
+  },
+  {
+   "record_date": "2026-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "16171712.2023"
+  },
+  {
+   "record_date": "2026-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5488717.203"
+  },
+  {
+   "record_date": "2026-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2150190.98064321"
+  },
+  {
+   "record_date": "2026-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "651976.0048"
+  },
+  {
+   "record_date": "2026-07-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "3590.9655"
+  },
+  {
+   "record_date": "2026-07-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "31455078.3191432"
+  },
+  {
+   "record_date": "2026-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "7248070.0207"
+  },
+  {
+   "record_date": "2026-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "16218420.9377"
+  },
+  {
+   "record_date": "2026-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5525284.0943"
+  },
+  {
+   "record_date": "2026-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2152659.84411264"
+  },
+  {
+   "record_date": "2026-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "679975.6013"
+  },
+  {
+   "record_date": "2026-08-31",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "3590.9655"
+  },
+  {
+   "record_date": "2026-08-31",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "31828001.4636126"
+  },
+  {
+   "record_date": "2026-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bills",
+   "total_mil_amt": "7118145.3141"
+  },
+  {
+   "record_date": "2026-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Notes",
+   "total_mil_amt": "16281507.3155"
+  },
+  {
+   "record_date": "2026-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Bonds",
+   "total_mil_amt": "5551017.8251"
+  },
+  {
+   "record_date": "2026-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Treasury Inflation-Protected Securities",
+   "total_mil_amt": "2172641.57170234"
+  },
+  {
+   "record_date": "2026-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Floating Rate Notes",
+   "total_mil_amt": "707975.4515"
+  },
+  {
+   "record_date": "2026-09-30",
+   "security_type_desc": "Marketable",
+   "security_class_desc": "Federal Financing Bank",
+   "total_mil_amt": "3590.9655"
+  },
+  {
+   "record_date": "2026-09-30",
+   "security_type_desc": "Total Marketable",
+   "security_class_desc": "_",
+   "total_mil_amt": "31834878.4434023"
+  }
+ ],
+ "meta": {
+  "count": 259
+ }
+}

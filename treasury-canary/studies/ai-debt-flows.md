@@ -52,7 +52,7 @@ Date 2026-10-15. Inputs: five finders (A issuance data, B holders/flows, C deal 
 
 | Bucket | 2024 | 2025 | 2026 YTD | Note |
 |---|---|---|---|---|
-| Hyperscaler straight bonds (Meta, Alphabet, Amazon, Oracle) | 16.8 | 108.4 | 217.5 | 2026 incl. $54.7bn non-USD legs (EUR/GBP/CAD/JPY); Microsoft issued nothing 2024-26 [EDGAR-SUB]; matches JPM AM $17bn/$109bn [JPMAM] |
+| Hyperscaler straight bonds (Meta, Alphabet, Amazon, Oracle) | 16.8 | 108.4 | 217.5 | 2026 incl. $60.5bn non-USD legs (EUR/GBP/CAD/JPY; erratum 2026-10-15: printed $54.7bn, re-derived 217.5 − 157.0 USD legs = 60.5); Microsoft issued nothing 2024-26 [EDGAR-SUB]; matches JPM AM $17bn/$109bn [JPMAM] |
 | Chips / memory (Nvidia, Broadcom, AMD, Intel, Micron) | 13.6 | 18.2 | 40.8 | Only Nvidia's $25bn is clearly AI-growth funding; Broadcom $28.5bn is VMware refi; Micron net negative after $5.4bn tender |
 | Neocloud / miner (CoreWeave, Nebius, IREN, TeraWulf, Cipher, Applied Digital) | 8.0 | 21.5 | 49.5 | +~$18.5bn missed 8-K deals not yet in file: Hut 8 $7.5bn [8K-HUT8-1][8K-HUT8-2], Galaxy $4.8bn [8K-GLXY-1][8K-GLXY-2], Core Scientific $5.4bn [8K-CORZ], Cipher Stingray $0.81bn [8K-CIFR-STING]; CoreWeave alone $43.8bn |
 | AI lab (SpaceX $25bn) | 0 | 5.0 | 25.0 | SpaceX tranches/ratings UNVERIFIABLE (press only) |
@@ -110,7 +110,7 @@ Other countries, 2026 Jan-Jul (Treasuries / corporates, $bn): UK +126.4 / +32.9;
 
 | Ratio | Value | Basis | Source |
 |---|---|---|---|
-| Tally / net marketable UST | 2025: $240.8bn / $1,991bn = 12.1%; FY2026: $389.9bn / $2,120bn = 18.4% | finder tally (corrected tally nudges both up ~0.5pp); MSPD change in marketable outstanding (gross of Fed) | [MSPD] |
+| Tally / net marketable UST | 2025: $240.8bn / $1,991bn = 12.1%; FY2026: $389.9bn / $2,120bn = 18.4% — erratum 2026-10-15: that FY2026 cell pairs a CY-2026-YTD numerator with an FY2026 (Oct-25..Sep-26) denominator. Consistently paired on the corrected tally: FY2026 $551.5bn / $2,120bn = 26.0%; CY2026 to Sep $398.0bn / $1,564bn = 25.5%; CY2025 $242.8bn / $1,991bn = 12.2% (the tab's `vs_treasury` rows) | finder tally (corrected tally nudges both up ~0.5pp); MSPD change in marketable outstanding (gross of Fed); numerator GROSS over denominator NET | [MSPD] |
 | Hyperscaler bonds / net marketable UST, 2026 | 13-19% gross all-currency (JPM $279bn / MS $400bn forecasts vs ~$2,085bn run-rate); ~10-14% USD-only; ~15-22% of net coupon issuance USD-only (21-30% all-currency); 2025: 5.5-6.1% | CORRECTED: numerator is gross and ~28% non-USD, denominator is net — state the basis | [MSPD][JPMAM] |
 | Duration-supply view | ~1/8 of Treasury duration supply (up to $360bn 10y-equivalents on $300bn) | Dallas Fed | [DALLAS] |
 | UST supply detail | CY2025 +$1,991bn (coupons +1,631, bills +360); 2026 Jan-Sep +$1,564bn (coupons +993, bills +571); outstanding $31.835tn; privately-held net borrowing Apr-Jun-26 $190bn actual, Jul-Sep est $739bn, Oct-Dec est $628bn | | [MSPD][TSY-SB0584] |
