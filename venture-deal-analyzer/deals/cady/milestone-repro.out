@@ -1,0 +1,11 @@
+TEST 1 climbs the hierarchy: given ['4+ wheels', 'enclosed cabin', 'wheels']
+  -> car. Because: '4+ wheels' (from car); 'enclosed cabin' (from car); 'wheels' (from vehicle). Inferred, not given: ['motor']. not motorcycle: lacks ['4+ wheels', 'enclosed cabin']; not bicycle: lacks ['4+ wheels', 'enclosed cabin'].
+TEST 2 discriminates siblings: given ['2 wheels', 'pedal-powered', 'wheels']
+  -> bicycle. Because: '2 wheels' (from bicycle); 'pedal-powered' (from bicycle); 'wheels' (from vehicle). Inferred, not given: []. not car: lacks ['2 wheels', 'pedal-powered']; not motorcycle: lacks ['pedal-powered'].
+TEST 3 supplies missing knowledge: given ['bowl-end', 'elongated', 'utensil']
+  -> spoon. Because: 'bowl-end' (from spoon); 'elongated' (from spoon); 'utensil' (from spoon). Inferred, not given: ['used for eating']. not fork: lacks ['bowl-end'].
+TEST 4 refuses to guess: given ['2 wheels', 'wheels']
+  -> it is a vehicle, but I cannot say which kind: consistent with ['bicycle', 'motorcycle']. Deciding traits: ['motor', 'pedal-powered'].
+TEST 5 graded certainty (headline): given ['wheels']
+  -> it is a vehicle, but I cannot say which kind: consistent with ['bicycle', 'car', 'motorcycle']. Deciding traits: ['2 wheels', '4+ wheels', 'enclosed cabin', 'motor', 'pedal-powered'].
+LADDER rung 3: tool removed, recalled 60/60 labels

@@ -1,0 +1,75 @@
+CADI · MILESTONE
+
+
+Hierarchical Reasoning & Graded Recognition
+Recognition by reasoning — transparent, auditable, and honest about uncertainty.
+CADI · INTELAVATION LLC AND WESAVE                                                                                                                                                      Proven June 30, 2026 · Confidential / Diligence
+
+
+
+THE RESULT
+CADY reasons within a structured hierarchy of knowledge — and knows the limits of her own certainty. Given an object’s properties, she climbs her own taxonomy to assemble what it is, classifies it,
+and shows her work; and when the evidence only reaches a general category, she says so honestly (“it is a vehicle, but I cannot say which kind”) instead of guessing.
+
+HOW IT WAS PROVEN
+CADY was taught a two-branch, three-level taxonomy of everyday objects — vehicles and tableware — with shared traits at the parent level and distinguishing traits at each item. She was then given
+objects described only by their properties, never told what they were, and asked to reason out their identity. The demonstration ran live over her saved knowledge graph; her FPGA reasoning core
+was untouched throughout — her learned-pattern count held constant at every step, a verifiable sign the demonstration rode her knowledge layer without disturbing her cognition core.
+
+WHAT WAS PROVEN — FIVE TESTS, ALL PASSED
+
+1     Climbs the hierarchy to know an object’s full nature. Told an item has wheels, four-plus wheels, and an enclosed cabin, she concludes car — showing that “wheels” is inherited from the
+      broader category vehicle, while “enclosed cabin” is the car’s own distinguishing trait. She reasoned upward through the taxonomy, not off a flat list.
+2     Discriminates on the right trait among near-identical siblings. A motorcycle and a bicycle share almost everything. She separates them on the one trait that differs — motor vs. pedal-powered
+      — and states that distinction explicitly.
+3     Supplies missing knowledge by reasoning. Told only “utensil, elongated, bowl-end,” she concludes spoon — supplying a fact she was never given (“used for eating”) by recognizing the traits
+      belong to tableware and inheriting the category’s properties.
+4     Refuses to guess when the evidence is insufficient. Given traits that fit either a motorcycle or a bicycle but without the deciding one, she does not pick. She reports it is consistent with both
+      and names the exact missing trait that would decide it.
+5     Places things at the right level of certainty — the headline result. Told only that something “has wheels,” she concludes: it is a vehicle, but the specific kind cannot be determined — and
+      names exactly what she would need to narrow it down.
+
+WHAT IT MEANS
+
+1     Recognition by reasoning, not memorization. A neural net abstracts objects into opaque weights nobody can inspect. CADY reaches the same kind of conclusion by reasoning over named,
+      readable properties — every step auditable. Ask her why she concluded “car” and you get a real answer that traces to specific facts. The capability a black box hides, made transparent.
+2     Graded, honest confidence — a differentiator and a safety property. A conventional AI forced to classify outputs “motorcycle, 41%” and buries the fact that it is really only sure the thing is a
+      vehicle. CADY tells you precisely how far her certainty reaches. A system that knows the limit of its own evidence — and says so — is exactly what high-stakes domains (finance, security,
+      infrastructure, defense) require. It does not bluff.
+3     It mirrors how reasoning actually works. People recognize hierarchically: wheels → vehicle → car → sedan as detail arrives. CADY demonstrably does the first stages of this — in plain logic you
+      can read. Structured cognition, not pattern lookup.
+4     It builds on everything proven before it. This is the fourth proven rung in a coherent progression, each step adding capability on the same untouched reasoning core. Not a one-off demo — a
+      system getting provably more capable along a deliberate path.
+
+THE PROVEN LADDER
+Each rung was proven live, on the same reasoning core, each auditable and built additively on the last.
+1     The cognition loop. She learns a fact, retains it after the source is removed, refines it with new information, and reasons across her memories to a conclusion no one handed her.
+2     Reasoning to a verdict. She applies a learned rule to classify something by its properties, explains which rule fired, and refuses to guess when the evidence is insufficient.
+3     Learning from tools, at scale. A real perception tool labeled 60 distinct objects; she learned all 60 as her own knowledge; the tool was removed; she retained and recalled all 60.
+4     Hierarchical reasoning & graded recognition. This milestone — she reasons within a multi-level taxonomy, assembles an object’s full nature from inherited and specific traits, and honestly
+      places things at the right level of certainty.
+
+The shape of the story: from “learns a fact” to “reasons within a structured hierarchy of knowledge, and knows what it does not know” — every step transparent, every step on owned silicon, every step proven.
+
+
+THE BOUNDARY — PRESERVED
+What this milestone is: transparent, auditable reasoning over properties — from an object’s traits to its identity, or honestly to its category, within a taught hierarchy, showing every step.
+
+What it is not: it is not “she sees an object and identifies it on her own.” The properties were provided. Perceiving them directly from raw vision — looking at a spoon and extracting “elongated,
+bowl-end” herself — is the genuine frontier and the next major build. Nor is it a neural-net-style learned abstraction: the reasoning is over named facts, by design.
+
+CADY reasons transparently over an object’s properties to identify it and to know the limits of her certainty; perceiving those properties directly from raw vision is the next frontier, and the focus of
+the funded roadmap.
+Proven 2026-06-30, live on CADY’s reasoning system; standalone read-only verification over her knowledge graph; reasoning core untouched. The full technical detail — taxonomy, rules, classifier logic, and exact test outputs — is recorded
+separately and available as a verifiable appendix.
+
+
+LEADERSHIP
+
+
+Brad Hanson                                                 Richard Stewart                                         RJ Stewart                                                      John Wilson
+CHIEF EXECUTIVE OFFICER                                     CHAIRMAN                                                CHIEF OPERATING OFFICER                                         CHIEF TECHNOLOGY OFFICER
+
+
+                                                                        INTELAVATION LLC AND WESAVE · A SOVEREIGN THOUGHT.™ · CONFIDENTIAL
+

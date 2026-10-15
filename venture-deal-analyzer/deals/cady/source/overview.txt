@@ -1,0 +1,104 @@
+                  CADY™ Compute Accelerator
+Upgrade Existing Data Centers. Don't Build New Ones.
+
+Intelligence Where Performance Matters.
+
+A Practical Solution for Today's Infrastructure
+The world's demand for computing power continues to accelerate while organizations
+face increasing challenges in expanding existing data center capacity. New facilities
+often require significant capital investment, additional electrical infrastructure, lengthy
+permitting processes, extended construction timelines, and increasing community
+concerns surrounding large-scale AI data center development.
+
+The CADY™ Compute Accelerator was created to address a different opportunity.
+
+Rather than replacing existing infrastructure or waiting years to build new facilities, our
+mission is to help organizations improve the performance and value of the data centers
+they already own. By integrating intelligent hardware acceleration into existing
+compute environments, organizations can evaluate opportunities to increase
+infrastructure performance, improve operational efficiency, extend infrastructure life,
+and delay or reduce the need for costly infrastructure expansion.
+
+The future of computing is not simply building more infrastructure. It is making today's
+infrastructure significantly more intelligent.
+
+
+Why Existing Data Centers?
+• Existing infrastructure investment
+• Power availability
+• Permitting delays
+• Community resistance
+• Construction timelines
+• Faster modernization
+• Lower capital requirements
+
+
+CADY™ Direct Pilot Partner Program
+Limited to five strategic organizations. Offered directly through CADY™, ICH and
+WeSave. This is not a general commercial release. It is a collaborative validation
+program providing early access, operational reporting, product feedback, and
+engineering collaboration.
+
+
+What the Direct Pilot Program Includes
+Offering                            Direct Pilot Program         Future Commercial Program
+
+CADY™ Compute Accelerator           Starting at $50,000          $150,000 MSRP
+CADY™ Platform Subscription         $200/month                   $500/month MSRP
+
+• One CADY™ Compute Accelerator integrated into one existing compute/server
+station
+• Engineering collaboration
+• Installation support
+• Performance benchmarking
+• Operational reporting
+• Product feedback
+• Joint review
+
+
+Platform Highlights
+Current Pilot Platform
+• High-performance FPGA accelerator architecture
+• Approximately 2.6 million FPGA logic units
+• Designed for AI inference acceleration
+• Ultra-high inference throughput
+• Existing server integration
+• Continuous optimization during pilot
+
+Additional benchmark metrics will be published following pilot validation.
+
+
+Why Become a Direct Pilot Partner?
+• Preferred Direct Pilot Partner Pricing
+• Early access to the CADY™ Compute Accelerator
+• Engineering collaboration
+• Executive collaboration
+• Existing infrastructure validation
+• Product feedback
+• Future implementation opportunities
+• Future reseller consideration
+
+
+Commercial Roadmap
+Direct Pilot Program → Performance Validation → Commercial Launch → Regional
+Integrators → Distribution Partners → Enterprise Deployment
+
+
+Confidentiality & Intellectual Property
+All Direct Pilot Partners will execute Confidentiality, Intellectual Property, and Pilot
+Evaluation Agreements prior to deployment.
+
+
+Apply for Consideration
+Request Direct Pilot Partner Pricing
+
+Participation is limited to five strategic organizations.
+
+www.internationalclearinghouse.com/team-3-1
+
+
+Executive Leadership
+Richard G. Stewart – Chief Executive Officer (CEO)
+RJ Stewart – Chief Operating Officer (COO)
+John Wilson – Chief Technology Officer (CTO)
+

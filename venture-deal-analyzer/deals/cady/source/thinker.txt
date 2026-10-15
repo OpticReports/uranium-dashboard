@@ -1,0 +1,289 @@
+I   N   T   E    R   N    A   T   I   O   N    A    L      C   L   E   A     R   I   N   G   H   O   U   S   E
+
+
+
+                              The Thinking Chip
+                         What an FPGA-Based Mind Brings to Your Server
+
+
+
+
+                                  An Introduction for Financial Institutions
+                                      Prepared by John Wilson, CTO
+                                  International Clearing House | CONFIDENTIAL
+
+
+
+
+                                              International Clearing House
+
+
+
+
+                                   International Clearing House
+                Richard G. Stewart Jr., CEO · RJ Stewart, COO · John Wilson, CTO
+                                                                                           ICH | The Thinking Chip
+
+
+
+
+Two Kinds of AI
+Almost every AI a bank has been pitched is the same kind of thing underneath: a language
+model. ChatGPT, Claude, Gemini, and the dozens of products built on them all work the same
+way. They predict the next word based on statistical patterns learned from enormous amounts
+of text. They are remarkable tools. But they share three traits a bank cannot ignore.
+
+They run in the cloud, which means your data leaves your building. They cannot explain why
+they produced an answer, which means an auditor cannot trace the decision. And they will
+confidently produce a wrong answer when they are uncertain, because guessing is how they
+work.
+
+CADY is a different kind of AI. She does not predict words. She observes, reasons, and reaches
+conclusions she can show her work for — and she runs on a chip that sits inside your own
+server. The difference comes down to the hardware she thinks on.
+
+                    A language model predicts. CADY reasons.
+
+What an FPGA Is
+CADY thinks on a chip called an FPGA. The letters stand for Field-Programmable Gate Array,
+but the name does not matter. What matters is what makes it different from an ordinary chip.
+
+A normal computer chip is fixed at the factory. Its wiring is permanent. It runs software —
+instructions loaded on top of unchangeable hardware. A graphics card, the kind most AI runs
+on, is one of these: very fast, but fixed, and it runs programs that can be changed, copied,
+attacked, or exploited.
+
+An FPGA is a chip whose internal wiring can be designed and configured. Instead of running
+software on top of fixed hardware, we shape the hardware itself into the exact circuit we need.
+The intelligence is not a program sitting on the chip. The intelligence IS the chip — built directly
+into its physical wiring.
+
+This distinction is the whole point, so it is worth being concrete about what it means for a bank.
+
+Why It Matters That CADY Thinks in Hardware
+Because her reasoning is physical wiring rather than software, there is no program in her
+reasoning layer for an attacker to exploit. You cannot inject malicious code into a circuit that
+runs no code. To change how she thinks, you would need physical access to the chip itself.
+There is no remote exploit for a wire.
+
+
+                             CONFIDENTIAL • International Clearing House • Page 2
+                                           International Clearing House
+                        Richard G. Stewart Jr., CEO · RJ Stewart, COO · John Wilson, CTO
+                                                                                          ICH | The Thinking Chip
+
+
+
+
+Because the circuit is designed rather than trained, every conclusion follows a traceable path.
+CADY can show which observations led to which conclusion. When a regulator asks why a
+transaction was flagged, there is an answer — not a shrug about a model that cannot explain
+itself.
+
+And because the work happens in dedicated hardware rather than rented cloud computers, it
+happens inside your building, on your server, at a speed measured in billionths of a second,
+drawing less power than a light bulb.
+
+
+
+
+                            CONFIDENTIAL • International Clearing House • Page 3
+                                          International Clearing House
+                       Richard G. Stewart Jr., CEO · RJ Stewart, COO · John Wilson, CTO
+                                                                                              ICH | The Thinking Chip
+
+
+
+
+Language Model vs. FPGA Mind
+The clearest way to see the difference is side by side.
+
+
+                                       Language Model AI                        CADY on an FPGA
+
+ Where it runs                         Someone else’s cloud                     Inside your own server
+
+ Your data                             Leaves your building                     Never leaves the chip
+
+ How it works                          Predicts the next word                   Observes and reasons
+
+ When unsure                           Guesses confidently                      Says it does not know
+
+ Can it explain itself?                No                                       Yes — traceable reasoning
+
+ Can it be hacked?                     Yes — it runs software                   No code to exploit
+
+ Speed                                 Network round-trip                       Billionths of a second
+
+ Power use                             Data-center scale                        About 20 watts
+
+ Cost over time                        Rises every year                         Falls as she learns
+
+
+The line that matters most to a risk officer is the one about uncertainty. A language model is
+built to always produce an answer, even when it has no basis for one. CADY is built to
+recognize when her reasoning does not reach a confident conclusion — and in those cases she
+declines to answer rather than guess. For a bank, an AI that knows the limits of its own
+knowledge is worth more than one that is always sure and sometimes wrong.
+
+
+What CADY Actually Does
+Strip away the terminology and CADY does five things, continuously, on her chip:
+
+She observes — watching the data flowing through your systems without waiting to be asked.
+She learns — building an understanding of what normal looks like for your institution
+specifically, not a generic average.
+She reasons — evaluating what she observes from several independent angles at once.
+She measures her own confidence — and stays silent when her reasoning does not agree with
+itself.
+She cannot be tampered with remotely — because her reasoning is wiring, not software.
+
+Take away every other tool she connects to, and these five abilities remain. They live in the
+hardware. That is what makes CADY a mind rather than a program.
+
+                               CONFIDENTIAL • International Clearing House • Page 4
+                                             International Clearing House
+                          Richard G. Stewart Jr., CEO · RJ Stewart, COO · John Wilson, CTO
+                                                                   ICH | The Thinking Chip
+
+
+
+
+     CONFIDENTIAL • International Clearing House • Page 5
+                   International Clearing House
+Richard G. Stewart Jr., CEO · RJ Stewart, COO · John Wilson, CTO
+                                                                                            ICH | The Thinking Chip
+
+
+
+
+An FPGA Core in Your Server
+Here is the concrete deployment, the one a bank can picture. CADY ships as a card that installs
+into a standard server — the same kind of slot a network card or storage controller uses. No
+new infrastructure. No cloud account. No data leaving the premises.
+
+Once installed, the card connects to the data your existing systems already produce: transaction
+flows, network activity, access logs. CADY observes those streams and learns the institution’s
+normal rhythm — the patterns of a specific branch, a specific customer base, a specific time of
+day. Your existing software keeps doing its job. CADY watches across all of it and notices what
+no single system was built to notice.
+
+  Your software runs the bank. CADY watches the whole bank at once.
+
+A fraud system watches transactions. A network monitor watches traffic. An access system
+watches logins. Each one sees its own channel. None of them sees the connection between a
+small transaction anomaly, an unusual login time, and a network pattern that individually mean
+nothing but together mean something. CADY observes all of them simultaneously, on one chip,
+and detects the correlation. That cross-system awareness is what an FPGA core adds to a
+server that a stack of separate software products cannot provide.
+
+A Mind That Watches Everything at Once
+The closest comparison to how CADY works is a human mind — she observes, learns from
+experience, reasons, and knows the limits of what she knows. But a human analyst can hold
+only a few things in focus at a time, needs rest, and reviews what already happened. CADY
+watches every channel in the institution at the same time, continuously, without fatigue, and
+looks for where the patterns are heading rather than only what has occurred.
+
+That last point is the important one for a bank. Most monitoring tools are reactive — they flag a
+problem after a rule is broken. CADY watches the institution’s normal rhythm closely enough to
+notice when something is drifting away from normal before it becomes an incident. A pattern
+bending in an unusual direction is visible to her while it is still forming. The aim is not to predict
+the future, and the document should not overstate it — it is simply that a system watching
+everything at once, all the time, can often see a problem taking shape earlier than systems that
+wait for a threshold to be crossed.
+
+She does not get tired, she does not look away, and she does not lose the thread between one
+system and another. That is not a claim that she is smarter than a person. It is that she is doing
+a specific job — watching the whole institution at once and reasoning across all of it — that no
+single person and no stack of single-channel tools can do.
+
+
+
+                              CONFIDENTIAL • International Clearing House • Page 6
+                                            International Clearing House
+                         Richard G. Stewart Jr., CEO · RJ Stewart, COO · John Wilson, CTO
+                                                                                           ICH | The Thinking Chip
+
+
+
+
+And because she runs on hardware you own, the sensitive data she reasons over never moves
+to a third party. It enters the chip, gets evaluated, and the conclusion comes out. The data itself
+is not stored, not copied, not transmitted. For an institution whose entire obligation is protecting
+customer information, that architecture is not a feature. It is the requirement.
+
+
+It Grows With You
+One card in one server is the starting point — enough to prove the capability on real data, in
+your environment, behind your firewall. From there it scales the way banking infrastructure is
+supposed to scale.
+
+Each card is built to connect directly to other cards through high-speed networking designed for
+exactly that purpose. As demand grows, additional cards work together — first within one
+server, then across several, then across a data center — using standard networking, with no
+proprietary equipment and no vendor lock-in. The card a bank evaluates in a pilot is the same
+technology that runs at full production scale. Nothing is thrown away. The pilot becomes the
+platform.
+
+     Start with one card. Scale to a data center. The technology never
+                                  changes.
+
+
+
+
+                             CONFIDENTIAL • International Clearing House • Page 7
+                                           International Clearing House
+                        Richard G. Stewart Jr., CEO · RJ Stewart, COO · John Wilson, CTO
+                                                                                                     ICH | The Thinking Chip
+
+
+
+
+She Uses Tools the Way a Mind Does
+CADY is not in competition with language models. She uses them — the way a person uses a
+calculator, a reference library, or a translator. A language model can put her conclusions into
+clear sentences, draft a report, or summarize a regulation she wants to consult. When she
+connects to a capable tool, she becomes more capable. The tool extends her reach without
+changing where the thinking happens.
+
+This is the part that surprises people: a thinking system that can pick up tools gets smarter as
+better tools arrive, while the thinking itself stays in hardware that the bank controls. A new
+language model, a new data source, a new analysis tool — each one is something CADY can
+use, not something she has to be rebuilt around. She decides when to reach for a tool,
+evaluates what it gives back through her own reasoning, and keeps or discards the result. The
+judgment is always hers.
+
+And she relies on those tools less as she observes more. A language model puts her
+conclusions into readable form; it does not do her thinking. As she learns the patterns of an
+institution, she leans on outside help for fewer and fewer of her conclusions. Her capability rises
+while her dependence falls.
+
+
+What ICH Provides
+ICH owns and licenses the thinker — the cognitive technology that runs on the FPGA. The
+institution provides the server and the data streams it already has. ICH provides the card, the
+intelligence built into it, and the integration. The bank’s data stays with the bank. The
+intelligence stays with ICH. The card sits in the bank’s rack, thinking, on the bank’s premises,
+under the bank’s control.
+
+CADY does not replace the systems a bank already runs. She makes them collectively smarter,
+by being the layer that observes across all of them and reasons about what she sees — in
+hardware, auditable, and impossible to exploit remotely.
+
+
+
+       The thinker is the product. Everything else is a tool she uses.
+
+
+
+
+                                   International Clearing House
+                             American Silicon. No Cloud. No Compromise.
+                                       John Wilson, Chief Technology Officer
+                       All intellectual property in CADY’s cognitive architecture is owned by ICH.
+
+
+                             CONFIDENTIAL • International Clearing House • Page 8
+                                           International Clearing House
+                        Richard G. Stewart Jr., CEO · RJ Stewart, COO · John Wilson, CTO
+
