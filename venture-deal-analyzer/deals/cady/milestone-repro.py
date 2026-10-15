@@ -2,12 +2,14 @@
 milestone (sheet dated "Proven June 30, 2026") in plain Python, no FPGA.
 
 Purpose: an independent check on how much capability the milestone
-demonstrates. Every one of the five tests, and the ladder rungs 1-3, is
-passed below by a frame/semantic-network classifier with property
-inheritance and candidate elimination: textbook symbolic AI (Quillian
-1968, Minsky 1974, Mitchell 1977). The taxonomy is our reconstruction from
-the sheet's wording; their exact taxonomy sits in an appendix that was
-not supplied.
+demonstrates. The five tests and ladder rung 3 are reproduced below by a
+frame/semantic-network classifier that descends the taxonomy top-down,
+attributes each trait to the level it is inherited from, and stops at the
+deepest level the evidence supports: textbook symbolic AI (Quillian 1968,
+Minsky 1974, Mitchell 1977). The taxonomy is our reconstruction from the
+sheet's wording; their exact taxonomy sits in an appendix that was not
+supplied. Rung 3's "perception tool" is unnamed, so it is stood in for by
+60 synthetic labels. Rungs 1-2 are not reproduced here.
 
 Run: python3 -I milestone-repro.py
 """
@@ -26,48 +28,68 @@ TAXONOMY = {
 }
 
 
-def lineage(node):
-    while node:
-        yield node
-        node = TAXONOMY[node]["parent"]
+def children(node):
+    return [n for n, v in TAXONOMY.items() if v["parent"] == node]
 
 
 def traits(node):
     """All traits of a node, each tagged with the ancestor it is inherited from."""
-    return {t: anc for anc in lineage(node) for t in TAXONOMY[anc]["has"]}
+    out = {}
+    while node:
+        out.update({t: node for t in TAXONOMY[node]["has"]})
+        node = TAXONOMY[node]["parent"]
+    return out
 
 
-def leaves():
-    return [n for n in TAXONOMY if not any(v["parent"] == n for v in TAXONOMY.values())]
+def explains(node, observed):
+    """Can this node, or something below it, carry every observed trait?"""
+    return observed <= traits(node).keys() or any(explains(c, observed) for c in children(node))
 
 
-def common_ancestor(nodes):
-    paths = [list(lineage(n)) for n in nodes]
-    return next(a for a in paths[0] if all(a in p for p in paths[1:]))
+def deciders(cands):
+    """Per candidate, the fewest of its own traits that rule out every other candidate."""
+    out = {}
+    for c in cands:
+        others = [o for o in cands if o != c]
+        unique = sorted(t for t in TAXONOMY[c]["has"] if not any(t in traits(o) for o in others))
+        if unique:
+            out[c] = " or ".join(unique)
+            continue
+        pick, left = [], others
+        for t in sorted(TAXONOMY[c]["has"], key=lambda t: -sum(t not in traits(o) for o in left)):
+            if left:
+                pick.append(t)
+                left = [o for o in left if t in traits(o)]
+        out[c] = " + ".join(pick)
+    return "; ".join(f"{c} if {d}" for c, d in out.items())
 
 
 def identify(observed):
-    observed = set(observed)
-    matches = [leaf for leaf in leaves() if observed <= traits(leaf).keys()]
-    if not matches:
+    observed, node, path = set(observed), "thing", []
+    while True:  # descend while exactly one child can explain the evidence
+        viable = [c for c in children(node) if explains(c, observed)]
+        if len(viable) != 1:
+            break
+        node = viable[0]
+        path.append(node)
+    if not path:
         return "no known object has all of these traits - I cannot classify it."
-    if len(matches) == 1:
-        leaf, t = matches[0], traits(matches[0])
-        why = "; ".join(f"'{x}' (from {t[x]})" for x in sorted(observed))
-        inferred = sorted(set(t) - observed)
-        parent = TAXONOMY[leaf]["parent"]
-        ruled_out = [f"not {s}: lacks {sorted(observed - traits(s).keys())}" for s in leaves()
-                     if s != leaf and TAXONOMY[s]["parent"] == parent]
-        return f"{leaf}. Because: {why}. Inferred, not given: {inferred}. {'; '.join(ruled_out)}."
-    # Several candidates: report the level certainty reaches, and the traits that would decide it.
-    level = common_ancestor(matches)
-    deciders = sorted(set().union(*(TAXONOMY[m]["has"] for m in matches))
-                      - set.intersection(*(set(TAXONOMY[m]["has"]) for m in matches)))
-    return (f"it is a {level}, but I cannot say which kind: consistent with {sorted(matches)}. "
-            f"Deciding traits: {deciders}.")
+    t = traits(node)
+    why = "; ".join(f"'{x}' (from {t[x] if x in t else ' / '.join(c for c in viable if x in traits(c))})"
+                    for x in sorted(observed))
+    route = " -> ".join(path)
+    if viable:  # stopped above the leaves: graded certainty
+        return (f"it is a {node}, but I cannot say which kind ({route}). Because: {why}. "
+                f"Consistent with {sorted(viable)}. To decide: {deciders(viable)}.")
+    inferred = sorted(set(t) - observed)
+    contrast = "; ".join(
+        f"vs {s}: {sorted(TAXONOMY[node]['has'] - TAXONOMY[s]['has'])} "
+        f"not {sorted(TAXONOMY[s]['has'] - TAXONOMY[node]['has'])}"
+        for s in children(TAXONOMY[node]["parent"]) if s != node)
+    return f"{node} ({route}). Because: {why}. Inferred, not given: {inferred}. Differs {contrast}."
 
 
-MEMORY = {}  # ladder rungs 1 and 3: "learns a fact, retains it after the source is removed"
+MEMORY = {}  # ladder rung 3: labels kept after their source is gone
 
 
 def learn(label, source):
@@ -78,6 +100,7 @@ if __name__ == "__main__":
     tests = [
         ("1 climbs the hierarchy", {"wheels", "4+ wheels", "enclosed cabin"}),
         ("2 discriminates siblings", {"wheels", "2 wheels", "pedal-powered"}),
+        ("2b discriminates siblings", {"wheels", "2 wheels", "motor"}),
         ("3 supplies missing knowledge", {"utensil", "elongated", "bowl-end"}),
         ("4 refuses to guess", {"wheels", "2 wheels"}),
         ("5 graded certainty (headline)", {"wheels"}),
@@ -91,4 +114,5 @@ if __name__ == "__main__":
     for label, src in tool.items():
         learn(label, src)
     del tool
-    print(f"LADDER rung 3: tool removed, recalled {len(MEMORY)}/60 labels")
+    recalled = [label for label in (f"object_{i:02d}" for i in range(60)) if label in MEMORY]
+    print(f"LADDER rung 3: tool removed, recalled {len(recalled)}/60 labels")

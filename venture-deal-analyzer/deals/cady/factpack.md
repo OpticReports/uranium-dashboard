@@ -8,13 +8,15 @@ gets the full S1 treatment.
 
 Tags: [VERIFIED] primary source · [SECONDARY] third-party · [CLAIMED] their docs
 only · [CONFLICT] · [NOT FOUND] searched, absent · [REFUTED] · [ANALYST].
-Sweep files with every source URL: `sweeps/`. Counter-agent verdicts: `sweeps/counter.md`.
+Sweep files with every source URL: `sweeps/`. **Counter-agent verdict: APPROVED
+WITH CORRECTIONS — all applied below** (`sweeps/counter.md`; it re-checked every
+load-bearing item against primary sources and softened four of them).
 
 ## Documents
 
 | document | read | notes |
 |---|---|---|
-| CADY Accelerator Overview "Oct 1st 2026" (2 pp) | **YES** | PDF carries an OpenAI-signed C2PA content credential: made in ChatGPT 2026-10-06 (see §1) |
+| CADY Accelerator Overview "Oct 1st 2026" (2 pp) | **YES** | The PDF file was rendered by ChatGPT on 2026-10-06; its OpenAI-signed C2PA credential validates (see §1) |
 | "The Thinking Chip", June 2026 (8 pp, CTO John Wilson; file author RJ Stewart) | **YES** | p.5 is blank in the PDF as supplied |
 | "Hierarchical Reasoning & Graded Recognition" milestone, "Proven June 30, 2026" | **YES** | File created 2026-07-01, **re-edited 2026-10-15** (filename "UPDATED") |
 | Pilot flyer (2 pages, one image sent 4×) | **YES** | Same content as the Overview |
@@ -29,8 +31,9 @@ Source files: `source/` (PDFs, extracted text, flyer).
 
 **A family-run loyalty-rewards group relabelling itself as an AI-chip company,
 selling what looks like a stock AMD/Altera FPGA card at 5–30× its price, with a
-"proven" reasoning demo that is textbook 1970s AI and — by the sheet's own words —
-did not run on the chip.** No evidence of fraud was found; no evidence of anything
+"proven" reasoning demo that is textbook 1970s AI and that offers no evidence it
+ran on the chip at all** (by the sheet's own account the FPGA core was "untouched"
+and the capability came from a saved knowledge graph). No evidence of fraud was found; no evidence of anything
 proprietary either. Casey's prior ("nothing they have is proprietary") is
 supported, not proven: the one place IP could hide (unseen FPGA design files) has
 not been shown, and a one-hour demo would settle it (§6, P1 #1).
@@ -43,17 +46,17 @@ not been shown, and a one-hour demo would settle it (§6, P1 #1).
 
 | finding | tag |
 |---|---|
-| **ICH = International Clearinghouse, Inc.** — Nevada corp (2019), Newhall CA, a **loyalty-rewards processor**. Its website has zero CADY/FPGA/AI content; the CADY "apply" link `/team-3-1` is a loyalty "Strategic Partners" page with a generic contact form. ICH's own homepage calls it "cloud-based" (vs. CADY's "No Cloud"). | VERIFIED |
+| **ICH = International Clearinghouse, Inc.** — Nevada corp (2019), Newhall CA, a **loyalty-rewards processor**. Its website has no CADY or FPGA content; the CADY "apply" link `/team-3-1` is a loyalty "Strategic Partners" page with a generic contact form. ICH's own homepage calls it "cloud-based" (vs. CADY's "No Cloud"). | VERIFIED |
 | **Ownership:** Source Clearinghouse 68% / WeSave 20% / MetaBank 12% (stated in WeSave's SEC offering circular). Stewart family controls Source and WeSave. | CLAIMED (in an SEC filing) |
 | **The tech sits elsewhere: Intelavation LLC** — Oregon LLC formed **2025-05-22**, office a Phoenix apartment, registered agent **John D Wilson**, Eugene OR; 5 members, names behind a captcha. Link to "CTO John Wilson" rests on the milestone header only. **No public FPGA/hardware/AI work by him found** (no papers, patents, code, talks). | VERIFIED (entity) / SECONDARY (identity link) |
-| **IP ownership conflicts:** Thinker says "All IP… owned by ICH"; milestone brands the work "Intelavation LLC and WeSave". No assignment on record. **No patents** (any entity/person, FPGA/cognitive), **no trademark** for CADY or slogans; "CADI" (milestone spelling) is pending in Class 42 AI-as-a-service by an unrelated Cadi.me LLC (SN 99577584). Post-Apr-2025 patent filings and provisionals would be invisible. | VERIFIED / NOT FOUND |
-| **25 years of private raises for one loyalty concept:** Source Form Ds 2001/2006/2014 ($4.6M, 82 investors)/2015–19 ($3.05M of a $50M 506(c)); Help International S-1 (2015–16, never effective); **WeSave Reg A Tier 2, $74.25M, qualified 2024-07-08 — FY2023 revenue $939**; no 1-K/1-SA/1-Z filed since. 2023: SEC staff told WeSave its first structure was security-based swaps → withdraw. | VERIFIED |
-| ICH and WeSave show **"Default"** status in Nevada (OpenCorporates mirror; primary registry unreachable). | SECONDARY |
+| **IP ownership conflicts:** Thinker says "All IP… owned by ICH"; milestone brands the work "Intelavation LLC and WeSave". No assignment on record. **No patents** (any entity/person, FPGA/cognitive), **no trademark** for CADY or slogans; "CADI" (milestone spelling) is a pending stylized mark in Class 42 AI-as-a-service by an unrelated Cadi.me LLC (SN 99577584, suspended 2026-09-01; confirmed on USPTO). Post-Apr-2025 patent filings and provisionals would be invisible. | VERIFIED / NOT FOUND |
+| **25 years of private raises for one loyalty concept:** Source Form Ds 2001/2006/2014 ($4.6M, 82 investors)/2015–19 ($3.05M of a $50M 506(c)); Help International S-1 (2015–16, never effective); **WeSave Reg A Tier 2, $74.25M, qualified 2024-07-08 — FY2023 revenue $939**; no 1-K or 1-SA filed since — **delinquent**: Rule 257(b) ties reporting to qualification, not to sales, and a 1-Z exit is barred until the FY2024 1-K is filed. A Reg CF closing report (C-U) also appears to have been required and is absent. 2023: SEC staff told WeSave its first structure was security-based swaps → withdraw. | VERIFIED |
+| ICH and WeSave show **"Default"** status in Nevada — an administrative lapse in filing the annual list/fees (NRS 78.170), curable for ~$75, leading to revocation after ~12 months; dates from after 2026-03 (ICH) and 2025-10 (WeSave). OpenCorporates copy; the state registry was unreachable. | SECONDARY |
 | **In their favour:** people are real and connected. **Brad Hanson** = ex-CEO of MetaBank; MoneyLion's 10-K lists him on the Source/Help/WeSave/ICH boards. RJ Stewart = Richard Jr.'s son. **No SEC enforcement, FINRA or federal-court record** against any principal or entity. WeSave did get through SEC review with counsel + auditor. | VERIFIED |
-| **Titles conflict:** CEO = Richard G. Stewart Jr. (Thinker Jun, Overview Oct) vs **Brad Hanson** (milestone, edited today; also ICH's own leadership page). Hanson has been **CEO of Maxwell State Bank since July 2025**. | CONFLICT |
-| **Stewart credentials:** claimed Ph.D. (U. Miami "Spectrum Center", "ISBN 00095" — not a valid ISBN) not found and absent from his 2016 S-1 bio; real-estate capital raised "$150M" (2016 S-1) vs "$300M" (sites today). | NOT FOUND / CONFLICT |
+| **Titles conflict:** CEO = Richard G. Stewart Jr. (Thinker Jun, Overview Oct) vs **Brad Hanson** (milestone, edited today; also ICH's own leadership page). Hanson has been **CEO of Maxwell State Bank since July 2025** — a ~$32M-asset, one-office bank, so a dual role is plausible; his CADY role is **unconfirmed**. Flag: a sitting bank CEO fronting a product sold to banks. | CONFLICT |
+| **Stewart credentials:** claimed Ph.D. (U. Miami "Spectrum Center", "ISBN 00095" — not a valid ISBN) is **unverified** and absent from his 2016 S-1 bio; real-estate capital raised "over $150M" (2016 S-1) vs "$300M" (sites today) — drift, not a strict contradiction. | NOT FOUND |
 | **Pattern:** since 2019 ICH has marketed a defense partner's "virtually unhackable" radio network ("Spectrum") as its own future — same rhetoric as "no remote exploit for a wire". | VERIFIED (page) |
-| **Docs:** "Oct 1st" Overview embeds a C2PA manifest — claim generator **ChatGPT**, agent `gpt-5-5-instant`, created **2026-10-06T17:27:54Z**, signed by an "OpenAI OpCo, LLC" certificate. Three pitches in four months: bank anomaly-watcher (Jun) → symbolic reasoner (Jun 30) → data-center AI-inference card (Oct). | VERIFIED (manifest read; signature chain not validated) |
+| **Docs:** the "Oct 1st" Overview **PDF file was rendered by ChatGPT** (`claim_generator_info` "ChatGPT", agent `gpt-5-5-instant`, 2026-10-06T17:27:54Z). The counter-agent validated the OpenAI-signed C2PA manifest cryptographically: the file is byte-identical to what ChatGPT emitted. It proves who produced the file, not who drafted the words. Three pitches in four months: bank anomaly-watcher (Jun) → symbolic reasoner (Jun 30) → data-center AI-inference card (Oct). | VERIFIED |
 
 ## 2 · THE PRODUCT CLAIMS
 
@@ -62,7 +65,8 @@ not been shown, and a one-hour demo would settle it (§6, P1 #1).
 | "~2.6 million FPGA logic units" | **COTS-consistent** | AMD Alveo V80 datasheet: "2.6M LUTs" (2,574,208). Also fits VU9P cards (U200/AWS F1, 2.586M "system logic cells") and Altera Agilex 7 AGF027 (2.69M LEs). No part number, photo or PCI ID anywhere. |
 | $50k pilot / $150k MSRP per card | **5–30× the card** | V80 $9,495 new; Agilex card $5,491; U55C $4,747; used U200 ~$1.7k. Priciest single accelerator card found: H200 NVL ~$31.5k. Customer supplies the server. |
 | "American Silicon" | **REFUTED for AMD parts** | Versal/UltraScale+ are TSMC Taiwan; only an Intel/Altera part could fit. |
-| "No program to exploit… no remote exploit for a wire… need physical access" | **REFUTED** | PCIe FPGA cards are reprogrammed from the host (AMD: platform "remotely loads kernels"); V80 runs Arm cores + firmware; AMD's Alveo host stack had 5 CVEs in 2025 (up to CVSS 8.0). |
+| "To change how she thinks, you would need physical access to the chip" | **REFUTED** | On every candidate card the FPGA logic is (re)loaded by host software over PCIe — changing it needs privileged access to the host server, not the chip. The V80 also runs Arm cores + firmware. |
+| "No program to exploit… no remote exploit for a wire" | **UNSUPPORTED** | Reduces to the host's own network attack surface plus any network-facing logic on the card's ports; not disproven. (AMD's 2025 Alveo CVEs are local host-driver bugs in XRT, which the V80 doesn't use.) Whether CADY disables host reprogramming: ask. |
 | "About 20 watts" | **CONFLICT** | Candidate cards rated 115–225 W; ~20 W ≈ idle — incompatible with "ultra-high inference throughput". |
 | "Billionths of a second" | **per clock only** | One clock ≈ 2–3 ns; a PCIe round trip ≈ 1 µs; best audited FPGA inference on a V80 ≈ 2–3 µs p99. |
 | "Data never leaves the chip / not stored" | **CONFLICT** | vs. "saved knowledge graph", "learns normal", LLM tool calls; on-chip RAM is volatile and ~35–94 MB. |
@@ -72,18 +76,24 @@ not been shown, and a one-hour demo would settle it (§6, P1 #1).
 
 ## 3 · THE "PROVEN" MILESTONE
 
-- **Reproduced in ~50 lines of plain Python, no FPGA** — all 5 tests plus ladder
-  rung 3 (`milestone-repro.py`, output `milestone-repro.out`). An IP-sweep agent
-  independently did the same (56 lines). Caveat: their taxonomy isn't disclosed,
-  so this matches the described behaviour, not their exact outputs. [VERIFIED]
+- **Reproduced in ~80 lines of plain Python, no FPGA** — the observable outputs
+  of all 5 tests plus ladder rung 3 (`milestone-repro.py`, output
+  `milestone-repro.out`): top-down descent, trait provenance, explicit sibling
+  contrast, minimal deciding traits at the "it is a vehicle" stop. An IP-sweep
+  agent independently did the same (56 lines). Caveats: their taxonomy isn't
+  disclosed (ours is reconstructed); rung 3's unnamed "perception tool" is
+  stood in for by 60 synthetic labels; rungs 1–2 not reproduced. [VERIFIED]
 - **Every test is textbook:** Collins & Quillian 1969 inheritance, Minsky 1974
   frames, description-logic classification, Mitchell 1977 candidate elimination,
   MYCIN-style explanations. Below an intro-AI homework. [VERIFIED]
-- **The FPGA's role is undemonstrated by their own sheet:** "ran live over her
+- **No evidence the FPGA executed any step.** The sheet: "ran live over her
   saved knowledge graph; her FPGA reasoning core was untouched throughout… rode
-  her knowledge layer without disturbing her cognition core." The
-  "learned-pattern count held constant" check cannot fail on read-only queries,
-  so it verifies nothing. [VERIFIED — reading per counter-agent, `sweeps/counter.md`]
+  her knowledge layer without disturbing her cognition core." Read fairly,
+  "untouched" means *not modified* (not necessarily *unused*) — but the new
+  capability is credited to the knowledge layer, and the only "verification"
+  (a constant learned-pattern count) reads the same whether the core was used
+  or idle. Still conflicts with the Thinker's "these five abilities… live in the
+  hardware". [VERIFIED — reading per counter-agent]
 - Hardware reasoning is old and crowded: Berkeley PLM (1987), SNAP semantic-net
   hardware (1993), Exegy's Rete-in-FPGA for financial streams (US8374986, 2008),
   FPGA knowledge-graph accelerators 2024–25.
@@ -96,14 +106,16 @@ not been shown, and a one-hour demo would settle it (§6, P1 #1).
 - Abstention + traceable reasoning is genuinely what bank model-risk regimes want;
   repackaging sound symbolic AI as an on-prem card could be a *product* even if it
   isn't *science*. Then the moat is distribution (Hanson's banking network), not IP.
-- The milestone states honestly what it did NOT show (raw-vision perception).
+- The milestone limits its own claims (raw-vision perception NOT shown) and
+  offers a "verifiable appendix" — **not yet requested**. That is the strongest
+  point in their favour and the cheapest next step (P1 #1, P2 #7).
 
 ## 5 · GATE READ (rubric v1.1)
 
 - **G1 Verification — PROVISIONAL FAIL, pending query.** Several material
   technical claims are contradicted by vendor documents and by the company's own
-  sheet ("no remote exploit", "intelligence IS the chip" vs "core untouched",
-  "American Silicon", 20 W). G1 formally trips only if they persist after being
+  sheet ("need physical access", "intelligence IS the chip" vs a demo credited
+  to the knowledge graph, "American Silicon" on AMD parts, 20 W). G1 formally trips only if they persist after being
   asked — so it's a provisional call, not a final one.
 - G2/G4 — not assessable: **no terms supplied.**
 - Scores: not run (light-touch scope).
