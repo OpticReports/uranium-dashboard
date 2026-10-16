@@ -29,8 +29,10 @@ def main():
     S = json.load(open(f'{OUT}/levgate.json'))
     B = S['panels']['B']['HG']
     A = S['panels']['A']
-    rowsB = {k: v for k, v in B['rows'].items() if '[' not in k}          # class-application rows go to the table only
-    pts = [{'name': k, 'fam': fam(k), 'allow': v['mean_allow'], **{m: v['full'][m] for m in ('cagr', 'sharpe', 'sortino', 'calmar', 'maxdd', 'worst_year', 'vol')}, 'to': v['turnover']}
+    # scatter: the sweep on every leveraged long, plus the trend-baskets-only version of each gate (dip-buys left levered)
+    rowsB = {k: v for k, v in B['rows'].items() if '[' not in k or k.endswith('[trend only]')}
+    pts = [{'name': k, 'fam': ('trend baskets only' if k.endswith('[trend only]') else fam(k)), 'allow': v['mean_allow'],
+            **{m: v['full'][m] for m in ('cagr', 'sharpe', 'sortino', 'calmar', 'maxdd', 'worst_year', 'vol')}, 'to': v['turnover']}
            for k, v in rowsB.items() if v['full']]
     blends = [p for p in pts if p['fam'] == 'constant blend']
     blends.sort(key=lambda p: p['allow'])
@@ -70,7 +72,9 @@ def main():
         f"<td>{pct(v['inverse']['cagr'])} / {v['inverse']['sharpe']:.2f} / {pct(v['inverse']['maxdd'], False)}</td>"
         f"<td>{v['placebo_pct']['cagr']:.2f} / {v['placebo_pct']['sharpe']:.2f} / {v['placebo_pct']['dd_better']:.2f}</td>"
         f"<td>{v['sharpe_gap_ci90'][0]:+.2f} to {v['sharpe_gap_ci90'][1]:+.2f} (P {v['p_gap_gt0']:.2f})</td></tr>" for n, v in nulls.items())
-    allB = ''.join(row(n, v) for n, v in B['rows'].items() if v['full'])
+    allB = ''.join(row(n, v) for n, v in B['rows'].items() if v['full'] and '[' not in n)
+    allBt = ''.join(row(n, v) for n, v in B['rows'].items() if v['full'] and n.endswith('[trend only]'))
+    appB = ''.join(row(n, v) for n, v in B['rows'].items() if v['full'] and ('[' in n and not n.endswith('[trend only]')))
     eng_rows = ''
     for e in ('HG', 'KMLM', 'SLEEVE', 'HARV'):
         if e not in A:
@@ -88,7 +92,7 @@ def main():
             'bookwin': ' to '.join(S.get('book_A', {}).get('window', ['', '']))}
     html = (TEMPLATE.replace('__PTS__', json.dumps(pts)).replace('__BLENDS__', json.dumps(blends)).replace('__CURVES__', json.dumps(cdata))
             .replace('__WINROWS__', ''.join(win_rows)).replace('__NULLROWS__', null_rows).replace('__ALLB__', allB).replace('__ENG__', eng_rows)
-            .replace('__BOOK__', book_rows).replace('__META_B__', meta['B']).replace('__META_A__', meta['A']).replace('__BOOKWIN__', meta['bookwin'])
+            .replace('__BOOK__', book_rows).replace('__ALLBT__', allBt).replace('__APPB__', appB).replace('__META_B__', meta['B']).replace('__META_A__', meta['A']).replace('__BOOKWIN__', meta['bookwin'])
             .replace('__WINHEAD__', ''.join(f'<th>{w}</th>' for w in WINDOWS_B)))
     open(PAGE, 'w').write(html)
     print('wrote', os.path.normpath(PAGE))
@@ -149,7 +153,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px}
 
 <section class="card">
 <h2>Every gate against the constant-blend line (HG, 1990 to 2026)</h2>
-<p class="sub-h">The line joins fixed blends from never levered to always levered. A gate earns its keep only if it sits above and to the left of that line: more Sharpe, or less drawdown, than simply holding less leverage all the time. Hover a dot for its name.</p>
+<p class="sub-h">The line joins fixed blends from never levered to always levered. A gate earns its keep only if it sits above and to the left of that line: more Sharpe, or less drawdown, than simply holding less leverage all the time. Blue, orange and grey dots gate every leveraged long leg; yellow dots gate only the five trend baskets and leave HG's oversold dip-buys at full leverage. Hover a dot for its name.</p>
 <div class="legend" id="lg-sc"></div>
 <div class="grid2">
 <svg id="sc1" role="img" aria-label="Sharpe against maximum drawdown for every gate variant, with the constant-blend line"></svg>
@@ -196,10 +200,20 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px}
 </section>
 
 <section class="card">
-<details><summary>Table view: every variant, HG 1990 to 2026</summary>
+<details><summary>Table view: every variant on every leveraged long, HG 1990 to 2026</summary>
 <div class="tablewrap"><table>
 <thead><tr><th></th><th>allow</th><th>CAGR</th><th>Sharpe</th><th>Sortino</th><th>Max DD</th><th>Worst yr</th><th>TO/yr</th></tr></thead>
 <tbody>__ALLB__</tbody></table></div>
+</details>
+<details><summary>Table view: the same gates on the trend baskets only (dip-buys stay levered)</summary>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>allow</th><th>CAGR</th><th>Sharpe</th><th>Sortino</th><th>Max DD</th><th>Worst yr</th><th>TO/yr</th></tr></thead>
+<tbody>__ALLBT__</tbody></table></div>
+</details>
+<details><summary>Table view: which legs the gate touches (dip-buys only, all legs, long-vol only)</summary>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>allow</th><th>CAGR</th><th>Sharpe</th><th>Sortino</th><th>Max DD</th><th>Worst yr</th><th>TO/yr</th></tr></thead>
+<tbody>__APPB__</tbody></table></div>
 </details>
 </section>
 
@@ -225,7 +239,7 @@ function showTT(x, y, title, rows){tt.textContent='';const d=document.createElem
   for(const r of rows){const row=document.createElement('div');row.className='r';const n=document.createElement('span');n.className='n';if(r.cls){const k=document.createElement('i');k.className='key';k.style.background=`var(--${r.cls})`;n.appendChild(k);}n.appendChild(document.createTextNode(r.name));const b=document.createElement('b');b.textContent=r.val;row.appendChild(n);row.appendChild(b);tt.appendChild(row);}
   tt.style.display='block';const w=tt.offsetWidth,h=tt.offsetHeight;let left=x+14,top=y-h-10;if(left+w>innerWidth-8)left=x-w-14;if(top<8)top=y+14;tt.style.left=left+'px';tt.style.top=top+'px';}
 function hideTT(){tt.style.display='none';}
-const FAMCLS = {'trend':'s1','realized vol':'s2','vol target':'s2','cash fallback':'s3','constant blend':'b2'};
+const FAMCLS = {'trend':'s1','realized vol':'s2','vol target':'s2','cash fallback':'s3','trend baskets only':'s4','constant blend':'b2'};
 const famCls = f => FAMCLS[f] || 'b1';
 function legendDots(id, items){const lg=document.getElementById(id);lg.textContent='';for(const [name,cls,line] of items){const s=document.createElement('span');const k=document.createElement('i');k.className=line?'key':'dot';k.style.background=`var(--${cls})`;s.appendChild(k);s.appendChild(document.createTextNode(name));lg.appendChild(s);}}
 
@@ -244,7 +258,7 @@ function scatter(id, ykey, ylab, yfmt){
   const yl=el('text',{x:m.l,y:m.t-1,class:'lbl'},svg); yl.textContent=ylab;
   let p='';BLENDS.forEach((b,i)=>p+=(i?'L':'M')+X(b.maxdd).toFixed(1)+','+Y(b[ykey]).toFixed(1));
   el('path',{d:p,fill:'none',stroke:css('--b2'),'stroke-width':1.5,'stroke-linejoin':'round'},svg);
-  const order=['other','drawdown','financing','credit','curve','CAPE','per-leg vol','own equity / own vol','VIX','combination','literature shapes','realized vol','vol target','trend','cash fallback','constant blend'];
+  const order=['other','drawdown','financing','credit','curve','CAPE','per-leg vol','own equity / own vol','VIX','combination','literature shapes','realized vol','vol target','trend','trend baskets only','cash fallback','constant blend'];
   const sorted=PTS.slice().sort((a,b)=>order.indexOf(a.fam)-order.indexOf(b.fam));
   for(const q of sorted){
     const isB=q.fam==='constant blend';
@@ -255,8 +269,7 @@ function scatter(id, ykey, ylab, yfmt){
     hit.addEventListener('pointermove',e=>show(e.clientX,e.clientY));hit.addEventListener('pointerleave',hide);
     c.addEventListener('focus',()=>{const b=c.getBoundingClientRect();show(b.right,b.top);});c.addEventListener('blur',hide);
   }
-  for(const q of PTS){ if(['A0 always levered (as built)','A1 never levered','T200h hysteresis +-2%','VT16 vol target 16% on SPY vol','T200 SPY>200d -> cash'].includes(q.name)){
-    const short={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200h hysteresis +-2%':'200d, hysteresis','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash':'200d, to cash'}[q.name];
+  for(const q of PTS){ const short={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200h hysteresis +-2%':'200d band, all longs','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash':'200d, to cash, all longs','T200h hysteresis +-2% [trend only]':'200d band, trend only','A1 never levered [trend only]':'trend baskets at 1x'}[q.name]; if(short){
     const t=el('text',{x:X(q.maxdd)+8,y:Y(q[ykey])-7,class:'lbl'},svg);t.textContent=short;}}
 }
 
@@ -287,10 +300,10 @@ function lineChart(id, keys, opts){
 }
 
 function draw(){
-  legendDots('lg-sc',[['trend gates','s1'],['realized-vol and vol-target gates','s2'],['same gate, cash instead of 1x','s3'],['other factors','b1'],['constant blends (line)','b2',true]]);
+  legendDots('lg-sc',[['trend gates','s1'],['realized-vol and vol-target gates','s2'],['same gate, cash instead of 1x','s3'],['gate on the trend baskets only','s4'],['other factors','b1'],['constant blends (line)','b2',true]]);
   scatter('sc1','sharpe','Sharpe',v=>v.toFixed(2)); scatter('sc2','cagr','CAGR',v=>(v*100).toFixed(0)+'%');
-  const names={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200h hysteresis +-2%':'200d gate, hysteresis','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash':'200d gate, to cash'};
-  const cls={'A0 always levered (as built)':'b2','A1 never levered':'b1','T200h hysteresis +-2%':'s1','VT16 vol target 16% on SPY vol':'s2','T200 SPY>200d -> cash':'s3'};
+  const names={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200h hysteresis +-2%':'200d band, all longs','T200h hysteresis +-2% [trend only]':'200d band, trend only','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash [trend only]':'200d to cash, trend only'};
+  const cls={'A0 always levered (as built)':'b2','A1 never levered':'b1','T200h hysteresis +-2%':'s1','T200h hysteresis +-2% [trend only]':'s4','VT16 vol target 16% on SPY vol':'s2','T200 SPY>200d -> cash [trend only]':'s3'};
   const keys=Object.keys(names).filter(k=>C.curves[k]);
   legendDots('lg-eq',keys.map(k=>[names[k],cls[k],true]));
   lineChart('eq',keys,{h:340,log:true,names,cls,base:1,ticks:(lo,hi)=>[1,10,100,1000,10000,100000,1e6,1e7].filter(t=>t>=lo/2&&t<=hi*2),fmt:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v.toFixed(0)),endfmt:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v.toFixed(0)),ttfmt:v=>'$'+(v>=1000?(v/1000).toFixed(1)+'k':v.toFixed(2))});

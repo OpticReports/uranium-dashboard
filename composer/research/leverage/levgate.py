@@ -78,17 +78,30 @@ def one_x_A(P):
 
 
 # ------------------------------------------------------------------ the gate engine
-def gate_run(days, hold, P, P1, lam, classes, cost):
-    """lam: {d0: float} or {d0: {ticker: float}} (missing -> 1).  Returns (costed daily returns,
-    turnover/yr, mean allowance over leveraged-leg weight)."""
+HG_DIP = {'QLD', 'TECL', 'USD', 'LABU', 'SOXL'}      # HG's RSI dip-buy legs; its trend baskets are TQQQ/UPRO/UDOW/SSO/TNA (add. 40)
+
+
+def leg_sets(e, legs_held):
+    """Per-engine leg roles: trend (leveraged longs on the momentum branch), dip (HG's oversold buys),
+    inverse, longvol, bond, gold.  Other engines' leveraged longs are all 'trend' (regime-on legs)."""
+    longs = {t for t in legs_held if LEG[t][0] == 'trend'}
+    dip = (longs & HG_DIP) if e == 'HG' else set()
+    out = {'trend': longs - dip, 'dip': dip}
+    for c in ('inverse', 'longvol', 'bond', 'gold'):
+        out[c] = {t for t in legs_held if LEG[t][0] == c}
+    return out
+
+
+def gate_run(days, hold, P, P1, lam, gated, cost):
+    """lam: {d0: float} or {d0: {ticker: float}} (missing -> 1); gated: the set of tickers the gate
+    applies to.  Returns (costed daily returns, turnover/yr, mean allowance over the gated legs' weight)."""
     rets, eff, lsum, lw = {}, {}, 0.0, 0.0
     for i in range(1, len(days)):
         d0, d1 = days[i - 1], days[i]
         L = lam.get(d0, 1.0)
         h, r = {}, 0.0
         for t, x in hold[d1].items():
-            leg = LEG.get(t)
-            if leg and leg[0] in classes and t in P1 and d0 in P1[t] and d1 in P1[t]:
+            if t in gated and t in P1 and d0 in P1[t] and d1 in P1[t]:
                 lt = L.get(t, 1.0) if isinstance(L, dict) else L
                 h[t] = h.get(t, 0.0) + x * lt
                 h['1x:' + t] = h.get('1x:' + t, 0.0) + x * (1 - lt)
@@ -338,65 +351,80 @@ def main(seed=11, n_placebo=100, n_boot=400):
         res['panels'][panel] = {}
         for e, (days, h) in runs.items():
             legs_held = sorted({t for d in h for t in h[d] if t in LEG})
-            base, to0, _ = gate_run(days, h, P, P1, {}, ALL_CLASSES, COST[e])
+            sets = leg_sets(e, legs_held)
+            ALLLONG = sets['trend'] | sets['dip']
+            EVERY = set().union(*sets.values())
+            base, to0, _ = gate_run(days, h, P, P1, {}, EVERY, COST[e])
             F = build_factors(P, P1, days, base, legs_held)
-            rows, series = {}, {}
+            rows, series, gated_of = {}, {}, {}
+            KEY = ('A1 never levered', 'A3 fixed 1/2 (~2x)', 'T200 SPY>200d', 'T200h hysteresis +-2%', 'V20<25 SPY 20d vol',
+                   'VT16 vol target 16% on SPY vol', 'ET40 vol target 40% on own vol')
+
+            def add(name, lam, gated, P1x=None):
+                r, to, mean_l = gate_run(days, h, P, P1x or P1, lam, gated, COST[e])
+                rows[name] = {'full': metrics(r, days), 'turnover': round(to, 1), 'mean_allow': round(mean_l, 3)}
+                series[name], gated_of[name] = r, (gated, P1x)
             for name, lam in F.items():
-                cls = ('inverse',) if name.startswith('R4') else ('trend',)
-                r, to, mean_l = gate_run(days, h, P, P1, lam, cls, COST[e])
-                m = metrics(r, days)
-                rows[name] = {'full': m, 'turnover': round(to, 1), 'mean_allow': round(mean_l, 3)}
-                series[name] = r
-                if panel == 'B':
-                    rows[name]['windows'] = {w: gs.metrics(r, days, a, b) for w, (a, b) in WINDOWS_B.items()}
-            # class application blends for a few shapes
-            for name in ('A1 never levered', 'T200 SPY>200d', 'V20<25 SPY 20d vol', 'VT16 vol target 16% on SPY vol'):
-                for cls_name, cls in (('all legs', ALL_CLASSES), ('trend+inverse', ('trend', 'inverse')), ('longvol only', ('longvol',))):
-                    r, to, mean_l = gate_run(days, h, P, P1, F[name], cls, COST[e])
-                    rows[f'{name} [{cls_name}]'] = {'full': metrics(r, days), 'turnover': round(to, 1), 'mean_allow': round(mean_l, 3)}
-                    series[f'{name} [{cls_name}]'] = r
+                add(name, lam, sets['inverse'] if name.startswith('R4') else ALLLONG)
+            if sets['dip']:
+                for name, lam in F.items():
+                    if not name.startswith('R4'):
+                        add(f'{name} [trend only]', lam, sets['trend'])
+            for name in KEY:
+                if sets['dip']:
+                    add(f'{name} [dip only]', F[name], sets['dip'])
+                add(f'{name} [all legs]', F[name], EVERY)
+                if sets['longvol']:
+                    add(f'{name} [longvol only]', F[name], sets['longvol'])
             P1cash = {t: P['BIL'] for t in P1}
-            for name in ('A1 never levered', 'T200 SPY>200d', 'T200h hysteresis +-2%', 'V20<25 SPY 20d vol', 'VT16 vol target 16% on SPY vol'):
-                r, to, mean_l = gate_run(days, h, P, P1cash, F[name], ('trend',), COST[e])
-                rows[f'{name} -> cash'] = {'full': metrics(r, days), 'turnover': round(to, 1), 'mean_allow': round(mean_l, 3)}
-                series[f'{name} -> cash'] = r
+            for name in KEY:
+                add(f'{name} -> cash', F[name], ALLLONG, P1cash)
+                if sets['dip']:
+                    add(f'{name} -> cash [trend only]', F[name], sets['trend'], P1cash)
             if panel == 'B':
                 for name in rows:
-                    if 'windows' not in rows[name]:
-                        rows[name]['windows'] = {w: gs.metrics(series[name], days, a, b) for w, (a, b) in WINDOWS_B.items()}
-            res['panels'][panel][e] = {'rows': rows, 'legs_held': legs_held, 'n_days': len(days), 'first': days[0], 'last': days[-1]}
-            print(f"\n== panel {panel} / {e}: {days[0]}..{days[-1]} ({len(days)} d); leveraged legs held: {' '.join(legs_held)}")
-            print(f"   {'variant':40s} {'allow':>5s} {'TO/yr':>5s}  CAGR     vol   Sharpe Sortino Calmar  maxDD  worst yr")
+                    rows[name]['windows'] = {w: gs.metrics(series[name], days, a, b) for w, (a, b) in WINDOWS_B.items()}
+            res['panels'][panel][e] = {'rows': rows, 'legs_held': legs_held, 'n_days': len(days), 'first': days[0], 'last': days[-1],
+                                       'sets': {k: sorted(v) for k, v in sets.items()}}
+            print(f"\n== panel {panel} / {e}: {days[0]}..{days[-1]} ({len(days)} d); legs: trend {sorted(sets['trend'])} dip {sorted(sets['dip'])} "
+                  f"inverse {sorted(sets['inverse'])} longvol {sorted(sets['longvol'])}")
+            print(f"   {'variant (gate on every leveraged long unless marked)':52s} {'allow':>5s} {'TO/yr':>5s}  CAGR     vol   Sharpe Sortino Calmar  maxDD  worst yr")
+            top_t = sorted((n for n in rows if n.endswith('[trend only]')), key=lambda n: -rows[n]['full']['sharpe'])[:8]
             for name, row in rows.items():
+                if name.endswith('[trend only]') and name not in top_t and not any(name.startswith(k) for k in KEY):
+                    continue
                 m = row['full']
-                print(f"   {name[:40]:40s} {row['mean_allow']:5.2f} {row['turnover']:5.0f} {fmt(m)}")
+                print(f"   {name[:52]:52s} {row['mean_allow']:5.2f} {row['turnover']:5.0f} {fmt(m)}")
             if panel == 'B':
                 base_sh = rows['A0 always levered (as built)']['full']['sharpe']
                 cands = [n for n in F if not n.startswith('A') and rows[n]['full']['sharpe'] > base_sh]
                 cands.sort(key=lambda n: -rows[n]['full']['sharpe'])
                 shortlist_B = cands[:8]
-                for must in ('T200 SPY>200d', 'VT16 vol target 16% on SPY vol', 'V20<25 SPY 20d vol', 'A1 never levered'):
-                    if must not in shortlist_B:
+                for must in ('T200 SPY>200d', 'VT16 vol target 16% on SPY vol', 'V20<25 SPY 20d vol', 'A1 never levered',
+                             'T200 SPY>200d [trend only]', 'T200h hysteresis +-2% [trend only]', 'T200 SPY>200d -> cash [trend only]', 'VT16 vol target 16% on SPY vol [trend only]'):
+                    if must not in shortlist_B and must in rows:
                         shortlist_B.append(must)
-                print('\n   by window (CAGR/yr), panel B:')
-                print(f"   {'variant':40s} " + ' '.join(f'{w:>13s}' for w in WINDOWS_B))
-                for name in ['A0 always levered (as built)'] + shortlist_B + [n for n in rows if n.endswith('-> cash')]:
-                    print(f"   {name[:40]:40s} " + ' '.join(f"{rows[name]['windows'][w]['cagr']:+8.1%} {rows[name]['windows'][w]['maxdd']:4.0%}" for w in WINDOWS_B))
-                # inverse + placebo + paired bootstrap for the shortlist
+                print('\n   by window (CAGR/yr, maxDD), panel B:')
+                print(f"   {'variant':52s} " + ' '.join(f'{w:>13s}' for w in WINDOWS_B))
+                shown = ['A0 always levered (as built)'] + shortlist_B + [n for n in rows if '-> cash' in n]
+                for name in dict.fromkeys(shown):
+                    print(f"   {name[:52]:52s} " + ' '.join(f"{rows[name]['windows'][w]['cagr']:+8.1%} {rows[name]['windows'][w]['maxdd']:4.0%}" for w in WINDOWS_B))
                 print(f'\n   nulls, panel B ({n_placebo} placebos; paired {n_boot}x 20d-block bootstrap of Sharpe vs as built):')
                 base_r = series['A0 always levered (as built)']
                 ds = days[1:]
                 nb = len(ds) // 20
                 for name in shortlist_B:
-                    lam = F[name]
+                    fname = name.split(' [')[0].split(' -> ')[0]
+                    lam = F[fname]
+                    gated, P1x = gated_of[name]
                     if any(isinstance(v, dict) for v in lam.values()):
-                        print(f"   {name[:40]:40s} per-leg gate: inverse/placebo skipped")
+                        print(f"   {name[:52]:52s} per-leg gate: inverse/placebo skipped")
                         continue
-                    inv_r, _, _ = gate_run(days, h, P, P1, inverse(lam, days), ('trend',), COST[e])
+                    inv_r, _, _ = gate_run(days, h, P, P1x or P1, inverse(lam, days), gated, COST[e])
                     mi = metrics(inv_r, days)
                     draws = []
                     for _ in range(n_placebo):
-                        pr, _, _ = gate_run(days, h, P, P1, placebo(lam, days, rng), ('trend',), COST[e])
+                        pr, _, _ = gate_run(days, h, P, P1x or P1, placebo(lam, days, rng), gated, COST[e])
                         draws.append(metrics(pr, days))
                     real = rows[name]['full']
                     pct = {k: sum(1 for x in draws if x[k] < real[k]) / n_placebo for k in ('cagr', 'sharpe', 'sortino')}
@@ -405,7 +433,7 @@ def main(seed=11, n_placebo=100, n_boot=400):
                     gaps = []   # paired block bootstrap (20-day blocks)
                     for _ in range(n_boot):
                         blocks = [rng.randrange(0, len(ds) - 20) for _ in range(nb)]
-                        sel = [ds[s + k] for s in blocks for k in range(20)]
+                        sel = [ds[s0 + k] for s0 in blocks for k in range(20)]
                         a = [r_v[d] - cash.get(d, 0.0) for d in sel]
                         b = [base_r[d] - cash.get(d, 0.0) for d in sel]
                         sh = lambda x: (sum(x) / len(x)) / math.sqrt(sum((v - sum(x) / len(x)) ** 2 for v in x) / (len(x) - 1)) * math.sqrt(252)   # noqa: E731
@@ -414,10 +442,11 @@ def main(seed=11, n_placebo=100, n_boot=400):
                     ci = (gaps[int(0.05 * n_boot)], gaps[int(0.95 * n_boot)])
                     p_gt = sum(1 for x in gaps if x > 0) / n_boot
                     rows[name]['nulls'] = {'inverse': mi, 'placebo_pct': pct, 'sharpe_gap_ci90': [round(ci[0], 3), round(ci[1], 3)], 'p_gap_gt0': p_gt}
-                    print(f"   {name[:40]:40s} inverse {mi['cagr']:+6.1%}/Sh {mi['sharpe']:4.2f}/DD {mi['maxdd']:4.0%} | placebo pct CAGR {pct['cagr']:.2f} Sh {pct['sharpe']:.2f} DD-better {pct['dd_better']:.2f} | Sharpe gap vs built 90% [{ci[0]:+.2f},{ci[1]:+.2f}] P>0 {p_gt:.2f}")
-            res['panels'][panel][e]['series_keep'] = {k: series[k] for k in ('A0 always levered (as built)', 'A1 never levered', 'A3 fixed 1/2 (~2x)', 'T200 SPY>200d', 'T200h hysteresis +-2%',
-                                                                             'V20<25 SPY 20d vol', 'VT16 vol target 16% on SPY vol', 'ET40 vol target 40% on own vol',
-                                                                             'T200 SPY>200d -> cash', 'T200h hysteresis +-2% -> cash', 'A1 never levered -> cash') if k in series}
+                    print(f"   {name[:52]:52s} inverse {mi['cagr']:+6.1%}/Sh {mi['sharpe']:4.2f}/DD {mi['maxdd']:4.0%} | placebo pct CAGR {pct['cagr']:.2f} Sh {pct['sharpe']:.2f} DD-better {pct['dd_better']:.2f} | Sharpe gap vs built 90% [{ci[0]:+.2f},{ci[1]:+.2f}] P>0 {p_gt:.2f}")
+            keepers = ('A0 always levered (as built)', 'A1 never levered', 'A3 fixed 1/2 (~2x)', 'T200 SPY>200d', 'T200h hysteresis +-2%', 'V20<25 SPY 20d vol',
+                       'VT16 vol target 16% on SPY vol', 'ET40 vol target 40% on own vol', 'T200 SPY>200d -> cash', 'T200h hysteresis +-2% -> cash', 'A1 never levered -> cash',
+                       'T200h hysteresis +-2% [trend only]', 'T200 SPY>200d -> cash [trend only]', 'VT16 vol target 16% on SPY vol [trend only]', 'A1 never levered [trend only]')
+            res['panels'][panel][e]['series_keep'] = {k: series[k] for k in keepers if k in series}
         if panel == 'A':
             # book-level application blends: which engines get the gate
             days_all = sorted(set.intersection(*[set(runs[e][0][1:]) for e in runs]))
