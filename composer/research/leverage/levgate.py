@@ -242,7 +242,7 @@ def build_factors(P, P1, days, eng_rets, legs_held):
         F[f'X{k} VIX<{k}'] = g(lambda d, k=k: sv(vix, d) is None or vix[d] < k)
     F['Xma VIX<50d MA'] = g(lambda d: sv(vixma, d) is None or vix[d] < vixma[d])
     F['Xts VIX<VIX3M (pre-06: VIX<50d)'] = g(lambda d: (vix[d] < vix3m[d]) if (d in vix3m and d in vix) else (sv(vixma, d) is None or vix[d] < vixma[d]))
-    F['R4 T-bill<4%'] = g(lambda d: rf(d) < 0.04)
+    F['F4 T-bill<4% (financing)'] = g(lambda d: rf(d) < 0.04)
     F['C80 credit spread 1y pct<80'] = g(lambda d: sv(baa_rank, d) is None or baa_rank[d] < 0.8)
     F['Y curve not inverted in 1y'] = g(lambda d: not curve_inv_recent(d))
     F['K80 CAPE 20y pct<80'] = g(lambda d: (cape_pct(d) or 0) < 0.8)
@@ -355,6 +355,15 @@ def main(seed=11, n_placebo=100, n_boot=400):
                     r, to, mean_l = gate_run(days, h, P, P1, F[name], cls, COST[e])
                     rows[f'{name} [{cls_name}]'] = {'full': metrics(r, days), 'turnover': round(to, 1), 'mean_allow': round(mean_l, 3)}
                     series[f'{name} [{cls_name}]'] = r
+            P1cash = {t: P['BIL'] for t in P1}
+            for name in ('A1 never levered', 'T200 SPY>200d', 'T200h hysteresis +-2%', 'V20<25 SPY 20d vol', 'VT16 vol target 16% on SPY vol'):
+                r, to, mean_l = gate_run(days, h, P, P1cash, F[name], ('trend',), COST[e])
+                rows[f'{name} -> cash'] = {'full': metrics(r, days), 'turnover': round(to, 1), 'mean_allow': round(mean_l, 3)}
+                series[f'{name} -> cash'] = r
+            if panel == 'B':
+                for name in rows:
+                    if 'windows' not in rows[name]:
+                        rows[name]['windows'] = {w: gs.metrics(series[name], days, a, b) for w, (a, b) in WINDOWS_B.items()}
             res['panels'][panel][e] = {'rows': rows, 'legs_held': legs_held, 'n_days': len(days), 'first': days[0], 'last': days[-1]}
             print(f"\n== panel {panel} / {e}: {days[0]}..{days[-1]} ({len(days)} d); leveraged legs held: {' '.join(legs_held)}")
             print(f"   {'variant':40s} {'allow':>5s} {'TO/yr':>5s}  CAGR     vol   Sharpe Sortino Calmar  maxDD  worst yr")
@@ -371,7 +380,7 @@ def main(seed=11, n_placebo=100, n_boot=400):
                         shortlist_B.append(must)
                 print('\n   by window (CAGR/yr), panel B:')
                 print(f"   {'variant':40s} " + ' '.join(f'{w:>13s}' for w in WINDOWS_B))
-                for name in ['A0 always levered (as built)'] + shortlist_B:
+                for name in ['A0 always levered (as built)'] + shortlist_B + [n for n in rows if n.endswith('-> cash')]:
                     print(f"   {name[:40]:40s} " + ' '.join(f"{rows[name]['windows'][w]['cagr']:+8.1%} {rows[name]['windows'][w]['maxdd']:4.0%}" for w in WINDOWS_B))
                 # inverse + placebo + paired bootstrap for the shortlist
                 print(f'\n   nulls, panel B ({n_placebo} placebos; paired {n_boot}x 20d-block bootstrap of Sharpe vs as built):')
@@ -406,7 +415,9 @@ def main(seed=11, n_placebo=100, n_boot=400):
                     p_gt = sum(1 for x in gaps if x > 0) / n_boot
                     rows[name]['nulls'] = {'inverse': mi, 'placebo_pct': pct, 'sharpe_gap_ci90': [round(ci[0], 3), round(ci[1], 3)], 'p_gap_gt0': p_gt}
                     print(f"   {name[:40]:40s} inverse {mi['cagr']:+6.1%}/Sh {mi['sharpe']:4.2f}/DD {mi['maxdd']:4.0%} | placebo pct CAGR {pct['cagr']:.2f} Sh {pct['sharpe']:.2f} DD-better {pct['dd_better']:.2f} | Sharpe gap vs built 90% [{ci[0]:+.2f},{ci[1]:+.2f}] P>0 {p_gt:.2f}")
-            res['panels'][panel][e]['series_keep'] = {k: series[k] for k in ('A0 always levered (as built)', 'A1 never levered', 'T200 SPY>200d', 'V20<25 SPY 20d vol', 'VT16 vol target 16% on SPY vol') if k in series}
+            res['panels'][panel][e]['series_keep'] = {k: series[k] for k in ('A0 always levered (as built)', 'A1 never levered', 'A3 fixed 1/2 (~2x)', 'T200 SPY>200d', 'T200h hysteresis +-2%',
+                                                                             'V20<25 SPY 20d vol', 'VT16 vol target 16% on SPY vol', 'ET40 vol target 40% on own vol',
+                                                                             'T200 SPY>200d -> cash', 'T200h hysteresis +-2% -> cash', 'A1 never levered -> cash') if k in series}
         if panel == 'A':
             # book-level application blends: which engines get the gate
             days_all = sorted(set.intersection(*[set(runs[e][0][1:]) for e in runs]))
