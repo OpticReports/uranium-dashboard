@@ -207,6 +207,8 @@ services:
         sync: false            # <- enter your free FRED key on THIS service
       - key: FMP_API_KEY
         sync: false            # optional: enables gold (GLD) in the flow compass
+      - key: EDGAR_USER_AGENT
+        sync: false            # AI-debt tab EDGAR poll: "treasury-canary/1.0 (<contact address>)" — the SEC asks for a contact; never commit one
       - key: DATABASE_URL
         value: sqlite:////app/data/canary.db   # on the persistent disk
       - key: CACHE_DIR

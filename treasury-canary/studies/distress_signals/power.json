@@ -1,0 +1,113 @@
+{
+ "seed": 20261012,
+ "scale": 1.0,
+ "engine_crosscheck": {
+  "series": 300,
+  "agree": 300,
+  "mismatches": []
+ },
+ "perfect_rule": {
+  "N1": {
+   "scored": [
+    "1990-07",
+    "2001-03"
+   ],
+   "R": 128,
+   "p": 0.007751937984496124,
+   "min_p": 0.007751937984496124
+  },
+  "N2_annual": {
+   "scored": [
+    "1990-07",
+    "2001-03"
+   ],
+   "R": 34,
+   "p": 0.02857142857142857,
+   "min_p": 0.02857142857142857
+  },
+  "QH": {
+   "scored": [
+    "1969-12",
+    "1973-11",
+    "1980-01",
+    "1981-07"
+   ],
+   "R": 157,
+   "p": 0.006329113924050633,
+   "min_p": 0.006329113924050633,
+   "observed": {
+    "leads": 3,
+    "false": 0
+   }
+  }
+ },
+ "n1_alert_rates": {
+  "sd0.05_A0.0_lead0": {
+   "alert": 0.0025,
+   "panel": 0.0075,
+   "n": 400
+  },
+  "sd0.05_A0.3_lead12": {
+   "alert": 0.27,
+   "panel": 0.9425,
+   "n": 400
+  },
+  "sd0.05_A0.3_lead6": {
+   "alert": 0.035,
+   "panel": 0.635,
+   "n": 400
+  },
+  "sd0.1_A0.0_lead0": {
+   "alert": 0.025,
+   "panel": 0.0575,
+   "n": 400
+  },
+  "sd0.1_A0.3_lead12": {
+   "alert": 0.1625,
+   "panel": 0.4525,
+   "n": 400
+  },
+  "sd0.1_A0.3_lead6": {
+   "alert": 0.0325,
+   "panel": 0.285,
+   "n": 400
+  },
+  "sd0.2_A0.0_lead0": {
+   "alert": 0.0175,
+   "panel": 0.02,
+   "n": 400
+  },
+  "sd0.2_A0.3_lead12": {
+   "alert": 0.0525,
+   "panel": 0.1025,
+   "n": 400
+  },
+  "sd0.2_A0.3_lead6": {
+   "alert": 0.0175,
+   "panel": 0.0825,
+   "n": 400
+  }
+ },
+ "qr_size": {
+  "panelB_regional=False": {
+   "wcb_size": 0.055,
+   "fl_size": 0.05,
+   "sims": 200
+  },
+  "panelB_regional=True": {
+   "wcb_size": 0.05,
+   "fl_size": 0.05,
+   "sims": 200
+  },
+  "panelA_noise0.2": {
+   "primary_size": 0.075,
+   "without_coincident_control": 0.99,
+   "sims": 200
+  },
+  "panelA_noise0.4": {
+   "primary_size": 0.065,
+   "without_coincident_control": 1.0,
+   "sims": 200
+  }
+ }
+}
