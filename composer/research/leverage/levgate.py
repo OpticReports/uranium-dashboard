@@ -248,6 +248,17 @@ def build_factors(P, P1, days, eng_rets, legs_held):
     F['K80 CAPE 20y pct<80'] = g(lambda d: (cape_pct(d) or 0) < 0.8)
     for k in (25, 35, 45):
         F[f'L{k} leg base vol<{k}%'] = {d: {t: (1.0 if (d not in legvol[t] or legvol[t][d] < k / 100) else 0.0) for t in legvol} for d in days}
+    legma = {t: ma_series(P1[t], 200) for t in legs_held if t in P1}
+    F['R1 leg base>200d (per leg)'] = {d: {t: (1.0 if (d not in legma[t] or P1[t][d] > legma[t][d]) else 0.0) for t in legma} for d in days}
+    legma100 = {t: ma_series(P1[t], 100) for t in legs_held if t in P1}
+    F['R1b leg base>100d (per leg)'] = {d: {t: (1.0 if (d not in legma100[t] or P1[t][d] > legma100[t][d]) else 0.0) for t in legma100} for d in days}
+    train = [v20[d] for d in days[:2520] if d in v20]          # first ten years of the panel = training window, frozen
+    if len(train) > 250:
+        q50, q85 = sorted(train)[len(train) // 2], sorted(train)[int(len(train) * 0.85)]
+        F[f'R2 RV buckets q50/q85 frozen ({q50:.0%}/{q85:.0%})'] = {d: (1.0 if d not in v20 or v20[d] < q50 else (0.5 if v20[d] < q85 else 0.0)) for d in days}
+    legdd = {t: dd_series(P1[t]) for t in legs_held if t in P1}
+    legvr = {t: rank_series(legvol[t], 252) for t in legvol}
+    F['R4 inverse-leg panic (base DD>10% & vol pct>80)'] = {d: {t: (0.0 if (LEG[t][0] == 'inverse' and legdd[t].get(d, 0) < -0.10 and legvr[t].get(d, 0) > 0.8) else 1.0) for t in legvol} for d in days}
     F['T200&V25 both on'] = {d: min(F['T200 SPY>200d'][d], F['V20<25 SPY 20d vol'][d]) for d in days}
     F['T200|V25 either on'] = {d: max(F['T200 SPY>200d'][d], F['V20<25 SPY 20d vol'][d]) for d in days}
     F['vote2of3 T200,V25,X25'] = {d: (1.0 if F['T200 SPY>200d'][d] + F['V20<25 SPY 20d vol'][d] + F['X25 VIX<25'][d] >= 2 else 0.0) for d in days}
@@ -279,20 +290,30 @@ def fmt(m, extra=''):
 
 
 def engine_runs(panel):
-    """Base holdings per engine: B -> HG on the long proxy panel; A -> four engines on build_prices."""
+    """Base holdings per engine: B -> HG on the long proxy panel; A -> four engines on build_prices.
+    The tree runs are cached in OUT/base_<panel>.json (delete to force a rerun)."""
+    cache = f'{OUT}/base_{panel}.json'
     if panel == 'B':
         P = gs.build_lh_prices()
-        days, h, px = gs.base_run(P, *B_WIN)
-        return P, one_x_B(P), {'HG': (days, h)}
-    P, _ = build_prices()
-    P1 = one_x_A(P)
-    sim = SimW(P, rsi_method='wilder')
+        P1 = one_x_B(P)
+    else:
+        P, _ = build_prices()
+        P1 = one_x_A(P)
+    if os.path.exists(cache):
+        runs = {e: (v['days'], v['hold']) for e, v in json.load(open(cache)).items()}
+        return P, P1, runs
     runs = {}
-    for e in ('HG', 'KMLM', 'SLEEVE', 'HARV'):
-        tk = tree_tickers(trees[e])
-        days = common_days(P, tk, *A_WIN)
-        _, h = run_tree(sim, trees[e], days)
-        runs[e] = (days, h)
+    if panel == 'B':
+        days, h, px = gs.base_run(P, *B_WIN)
+        runs['HG'] = (days, h)
+    else:
+        sim = SimW(P, rsi_method='wilder')
+        for e in ('HG', 'KMLM', 'SLEEVE', 'HARV'):
+            tk = tree_tickers(trees[e])
+            days = common_days(P, tk, *A_WIN)
+            _, h = run_tree(sim, trees[e], days)
+            runs[e] = (days, h)
+    json.dump({e: {'days': d, 'hold': h} for e, (d, h) in runs.items()}, open(cache, 'w'))
     return P, P1, runs
 
 
@@ -321,7 +342,8 @@ def main(seed=11, n_placebo=100, n_boot=400):
             F = build_factors(P, P1, days, base, legs_held)
             rows, series = {}, {}
             for name, lam in F.items():
-                r, to, mean_l = gate_run(days, h, P, P1, lam, ('trend',), COST[e])
+                cls = ('inverse',) if name.startswith('R4') else ('trend',)
+                r, to, mean_l = gate_run(days, h, P, P1, lam, cls, COST[e])
                 m = metrics(r, days)
                 rows[name] = {'full': m, 'turnover': round(to, 1), 'mean_allow': round(mean_l, 3)}
                 series[name] = r

@@ -2564,3 +2564,75 @@ family effect survives three nulls, inverses and block bootstrap.
 DECISION (owner): the only live candidate is the simplest 200d-family gate
 (binary, or G6) as a draft symphony for the standard gate tests; CAPE,
 credit and curve conditioning are closed again; oil is noted, not adopted.
+
+## Addendum 41 — How much of YTD 2026 came from leverage (2026-10-16)
+
+Owner question: share of this year's return that is leverage; YTD return, Sharpe,
+Sortino and max drawdown without it, against actual.
+Method: the SAME signals, trades and days; every |L|>1 ETF swapped at the holding
+step for its same-direction 1x version (TQQQ->QQQ, UDOW->DIA, TNA->IWM, TECL->XLK,
+SOXL->SOXX, SQQQ->PSQ, TMV->TBF, UVXY->VIXY; USD/LABD/SOXS self-de-levered). Account
+view = Composer's own time-weighted return minus each day's leverage contribution
+from the holdings of the version live that day, weighted on Composer's start-of-day
+base (deposit days included); HG's live holding read from its return where it
+differs from the model (14 days), 22 days unresolved -> range. Window 2025-12-31 ->
+2026-10-15 close, 198 sessions. Code research/leverage/ (lev_study.py, infer_live.py,
+sharpe_boot.py, make_chart.py); exhibit results/leverage-ytd-2026-10-16.html.
+
+RESULTS (live account)
+                     TW return  money-wtd  $ gain   Sharpe  Sortino  maxDD   vol
+  actual              +76.8%     +35.0%    $46.0k    2.01    3.22    20.1%  37.8%
+  same trades, 1x     +27.2%     +10.1%    $13.2k    1.85    2.98     7.9%  15.2%
+    range             +24.2 .. +27.2% (model holdings on unresolved days 25.5; best-fit
+                      leaf 26.5; no deposit intraday effect 24.2; all self-de-levered 26.4)
+  SPY / QQQ / UPRO    +14.1 / +18.9 / +31.7%; $18.8k / $19.6k / $44.0k; Sharpe 1.07 /
+                      1.00 / 1.00; DD 8.9 / 11.7 / 26.8%
+  since the money arrived (04-07): account +43.4% (Sh 1.90, DD 20.1) | 1x +13.0 (1.40,
+                      7.9) | SPY +17.7 (2.25, 4.5) | QQQ +24.0 (1.83, 11.2) | UPRO +51.0 (2.19, 13.4)
+- Leverage = ~50 pts of the 76.8 (two-thirds; 63% in logs); $32.8k of the $46.0k gain
+  (71%). By engine (sum of daily, not compounded): HG 33.7 pts, KMLM 4.2, SLEEVE 2.5,
+  ORIG -2.7, HARV 0. H1 (HG only) +57.9 vs +20.7; Jul-Oct15 +12.0 vs +5.4.
+- Risk vs placement: the 1x path scaled to the account's vol (a constant 2.48x) makes
+  +68.3% with a 19.4% drawdown -> ~41 pts from running more risk, ~9 from the leverage
+  sitting on the better days.
+- Sharpe 2.01 vs 1.85: paired block bootstrap gap +0.17 [-0.47, +0.93], P(>0) 0.65 ->
+  about the same, not firm. In the Composer model (HG, current version) costed Sharpe
+  2.04 -> 1.44 but frictionless 2.23 -> 1.96: half the model's drop is the same
+  slippage dollars on a smaller return; the rest is placement (3x days carry 86% of
+  HG's variance and +85%/yr of excess return levered, 71% and +26.5%/yr unlevered;
+  the hedge/bond days' variance share rises 14 -> 29%).
+- Engines (Composer backtest, current versions, full YTD, partly in sample; levered ->
+  1x): HG +82.5 -> +20.7 (Sh 2.04 -> 1.44, DD 22 -> 9); KMLM +88.8 -> +30.6 (1.58 ->
+  1.25, DD 21 -> 8); SLEEVE +23.8 -> +8.6 (1.48 -> 1.23, DD 10 -> 3); HARV +5.2 (no
+  leverage); book 29/29/27/15 cap-40 +60.9 -> +18.0 (2.52 -> 1.87, DD 8.8 -> 2.8).
+
+NOT MODELED / CAVEATS: signals not re-run on 1x prices (a different strategy); costs
+held equal (1x spreads tighter, +1-2 pts to the 1x side); the 1x path still holds 1x
+VIX-futures funds (VIXY/SVIX/ZVOL, 50-55% vol); Composer's TWR counts a deposit at the
+start of its day, so the 04-28 deposit's intraday -7.5% is in the return (the other
+convention reads +84.7%, same leverage share); 9.5 months -> actual Sharpe 90% band
+0.3-3.8; Composer account only, no IBKR; pre-tax = after-tax (Act 60); 10-16's +3.2%
+intraday excluded.
+
+FINDINGS WORTH KEEPING: (1) HG's 06-30 edit was never deployed: on 07-02 live HG
+earned XLV's return to 1 bp, a leaf only the original version has; the original ran
+until the 07-30/31 update (lev_study.py SCHEDULE corrected). (2) Composer's costed
+backtest at live weights reads +62.5% vs live +76.8% because of 13 flow-day artifacts
+in the live series and the 5 bp slippage charged on HG's 162x turnover (HG frictionless
++94.6% / costed +79.2% / live +89.3%), not leverage. (3) ORIG was cash at the 06-30
+close and held SOXL/TECL through the 07-07 liquidation window.
+
+COUNTER-AGENT (three reviewers: numerical reproduction from scratch, instrument audit,
+method/claims). Instrument map PASS (every L, direction and index verified against
+issuer documents; ZVOL is -1x, VBF has no structural leverage). The reproduction
+matched the draft to the decimal, then REFUTED four pieces of the estimator: deposit
+days weighted on the wrong base (Composer's base includes the day's deposit; 04-06
+subtracted UGE leverage at 99% weight on a 96%-cash account), ORIG off by one session,
+the 06-30 HG withdrawal treated as invested all day, and a dollar replay that credited
+deposits at the levered day return; plus one disclosure gap (unresolved HG days
+hard-coded to the model holding; 07-02 UDOW accepted at 41 bp over XLV at 1 bp). The
+method review added: the benchmark comparison reverses on money-weighted terms (UPRO
+$44.0k vs the account's $46.0k; 1x $13.2k vs SPY $18.8k), "because" -> "partly
+because" on the Sharpe mechanism, the cost wording, in-sample labels. All applied:
+unlevered +23.7 -> +27.2 (range 24-27), Sharpe gap +0.45 -> +0.17, leverage 53 -> 50
+pts, dollars $35.0k -> $32.8k. Verdict after edits: showable.

@@ -54,8 +54,9 @@ COST_BPS = {'HG': 5.12, 'KMLM': 5.86, 'ORIG': 5.86, 'SLEEVE': 2.25, 'HARV': 5.21
 
 # version live for each decision date (created_at vs the ~15:50 ET rebalance; see versions.json)
 SCHEDULE = {
-    'HG': [('0000-00-00', 'HG:0DeB193gVf6uIq2osLmL'),          # 2025-12-05 original
-           ('2026-06-30', 'HG:6jq2MZNfQcEWZjQFq5v9'),          # saved 06-30 12:42 ET, before the close
+    'HG': [('0000-00-00', 'HG:0DeB193gVf6uIq2osLmL'),          # 2025-12-05 original, live until the 07-30 update:
+           # the 06-30 saves (6jq2...) were never deployed — on 2026-07-02 live HG earned XLV's +2.63% to 1 bp,
+           # a leaf the 06-30 version no longer has (counter-agent, 2026-10-16)
            ('2026-07-31', 'HG:bP4mvRy6YHHejuPGUBNY')],         # saved 07-30 23:30 ET, after the close
     'ORIG': [('0000-00-00', 'ORIG:wt3G61qcuOZ8MVYJ64v4')],
     'KMLM': [('0000-00-00', 'KMLM:MVfHI8OgKae5EaC3W9oE')],
@@ -213,36 +214,90 @@ def main():
         resid = A[d] - sum(V[s].get(d, 0.0) for s in V)
         ORIG_V[d] = resid - HG_WITHDRAWAL_CASH.get(d, 0.0)
     out['orig_value_used'] = {d: round(v, 2) for d, v in ORIG_V.items()}
+    # ORIG was cash at the 06-30 close (bought at the 07-01 window) and still held its 07-02 basket on 07-07
+    # until the 15:50 liquidation (live -10.2% vs the basket -10.8%; the model had rotated to UVXY)
+    ORIG_HOLD = {'2026-07-01': {}, '2026-07-07': B['ORIG:wt3G61qcuOZ8MVYJ64v4']['holdings']['2026-07-02']}
+    # Composer's deposit-adjusted series per symphony: V1 = (V0 + F) * (1 + r), deposit counted at the start of the day
+    DA = {s: {epoch_ms_to_iso(ms): v for ms, v in zip(p['epoch_ms'], p['deposit_adjusted_series'])} for s, p in live.items() if p['epoch_ms']}
     # HG's live holdings where they differ from the model (infer_live.py; run it first)
     inf_path = f'{D}/hg_inferred.json'
     HG_INF = json.load(open(inf_path))['rows'] if os.path.exists(inf_path) else {}
     out['hg_inference_counts'] = json.load(open(inf_path))['counts'] if HG_INF else None
 
+    def hold_of(s, d0, d1, method):
+        """holdings that earned d1's return (decided at d0)"""
+        if s == 'ORIG' and d1 in ORIG_HOLD:
+            return ORIG_HOLD[d1]
+        if s == 'HG' and d1 in HG_INF and method != 'real_no_inference':
+            row = HG_INF[d1]
+            if method == 'real_openbest' and row['class'] == 'open' and row.get('best_hold'):
+                return row['best_hold']
+            return row['inferred_hold']
+        return B[version_for(s, d0)]['holdings'][d0]
+
+    def ret_of(h, d1):
+        return sum(w * R(t)[d1] for t, w in h.items())
+
     def c_of(h, d1, method):
         return sum(w * (R(t)[d1] - r1x(t, d1, method)) for t, w in h.items())
 
-    acct = {}
-    for method in ('real', 'self', 'real_no_inference'):
-        mth = 'real' if method == 'real_no_inference' else method
+    def lev_share(h, d1):
+        """share of a return earned by holdings h that is leverage: sum_i a_i (1 - 1/|L_i|), a_i = the leg's
+        share of the day's close-to-close move (weight x |L| when the day is flat); clipped to [0, 1]."""
+        contrib = {t: w * R(t)[d1] for t, w in h.items()}
+        tot = sum(contrib.values())
+        if abs(tot) >= 0.001:
+            a = {t: c / tot for t, c in contrib.items()}
+        else:
+            z = sum(w * (abs(MAP[t][0]) if t in MAP else 1.0) for t, w in h.items())
+            a = {t: w * (abs(MAP[t][0]) if t in MAP else 1.0) / z for t, w in h.items()} if z else {}
+        return max(0.0, min(1.0, sum(a[t] * (1 - 1 / abs(MAP[t][0])) for t in a if t in MAP)))
+
+    # methods: real (central: real 1x twins, inferred HG holdings), self (every ETF self-de-levered),
+    # real_no_inference (model holdings throughout), real_openbest (unresolved HG days -> best-fitting leaf),
+    # real_nodeposit (no intraday leverage effect on deposit dollars)
+    acct, flows, FS, bys = {}, {}, {}, {}
+    for method in ('real', 'self', 'real_no_inference', 'real_openbest', 'real_nodeposit'):
+        mth = 'self' if method == 'self' else 'real'
         rA, rAU, cA, wsum = {}, {}, {}, {}
         for d1 in YTD:
             d0 = DAYS[DAYS.index(d1) - 1]
             r = (1 + TW[d1]) / (1 + TW[d0]) - 1
-            c = 0.0
-            ws = 0.0
+            F = A[d1] / (1 + r) - A[d0]                  # external flow, Composer's start-of-day convention
+            F = F if abs(F) > 100 else 0.0
+            base = A[d0] + F
+            flows[d1] = F
+            c, ws = 0.0, 0.0
             for s in ('HG', 'KMLM', 'SLEEVE', 'HARV', 'ORIG'):
-                val_s = ORIG_V.get(d0, 0.0) if s == 'ORIG' else V.get(s, {}).get(d0, 0.0)
-                if val_s <= 0:
-                    continue
-                w = val_s / A[d0]
-                key = version_for(s, d0)
-                if s == 'HG' and method != 'real_no_inference' and d1 in HG_INF:
-                    c += w * c_of(HG_INF[d1]['inferred_hold'], d1, mth)
+                if s == 'ORIG':
+                    v0, fs, rl = ORIG_V.get(d0, 0.0), 0.0, None
                 else:
-                    c += w * paths[(key, mth)][2][d1]
-                ws += w
+                    v0 = V.get(s, {}).get(d0, 0.0)
+                    da0, da1 = DA.get(s, {}).get(d0), DA.get(s, {}).get(d1)
+                    rl = (da1 / da0 - 1) if (da0 and da1) else None
+                    fs = (V[s][d1] / (1 + rl) - v0) if (rl is not None and d1 in V[s]) else 0.0
+                    fs = fs if abs(fs) > 100 else 0.0
+                    FS.setdefault(s, {})[d1] = fs
+                if v0 <= 0 and fs <= 0:
+                    continue
+                h = hold_of(s, d0, d1, method)
+                if not h:
+                    continue
+                w_hold = max(v0 + min(fs, 0.0), 0.0) / base      # a withdrawal leaves at the open
+                cs = w_hold * c_of(h, d1, mth)
+                ws += w_hold
+                if fs > 0 and rl is not None and method != 'real_nodeposit':
+                    # the deposit's own return from fill to close, from the symphony's deposit-adjusted return
+                    rF = ((v0 + fs) * (1 + rl) - v0 * (1 + ret_of(h, d1))) / fs - 1
+                    rF = max(-0.15, min(0.15, rF))
+                    cs += fs / base * rF * lev_share(h, d1)
+                    ws += fs / base
+                c += cs
+                if method == 'real':
+                    bys[s] = bys.get(s, 0.0) + cs
             rA[d1], rAU[d1], cA[d1], wsum[d1] = r, r - c, c, ws
         acct[method] = {'actual': rA, 'unlevered': rAU, 'contribution': cA, 'invested_share': wsum}
+    out['flows_recovered'] = {d: round(f, 2) for d, f in flows.items() if f}
     # E2: the model (Composer backtests of the live versions) at the live weights; cash earns 0
     mod = {}
     for d1 in YTD:
@@ -251,7 +306,7 @@ def main():
         for s in ('HG', 'KMLM', 'SLEEVE', 'HARV', 'ORIG'):
             val_s = ORIG_V.get(d0, 0.0) if s == 'ORIG' else V.get(s, {}).get(d0, 0.0)
             if val_s > 0:
-                r += val_s / A[d0] * paths[(version_for(s, d0), 'real')][0][d1]
+                r += val_s / (A[d0] + flows[d1]) * paths[(version_for(s, d0), 'real')][0][d1]
         mod[d1] = r
     acct['real']['model_levered'] = mod
     acct['real']['model_unlevered'] = {d: mod[d] - acct['real']['contribution'][d] for d in YTD}
@@ -295,6 +350,11 @@ def main():
         m['ACCOUNT unlevered'] = metrics(acct[method]['unlevered'], YTD)
         if method == 'real':
             m['ACCOUNT unlevered, model holdings (no HG inference)'] = metrics(acct['real_no_inference']['unlevered'], YTD)
+            m['ACCOUNT unlevered, unresolved HG days -> best-fit leaf'] = metrics(acct['real_openbest']['unlevered'], YTD)
+            m['ACCOUNT unlevered, no deposit-day intraday effect'] = metrics(acct['real_nodeposit']['unlevered'], YTD)
+            ku = metrics(acct['real']['unlevered'], YTD)
+            k = m['ACCOUNT actual (live)']['vol'] / ku['vol']
+            m['ACCOUNT unlevered scaled to actual vol (constant %.2fx)' % k] = metrics({d: RF[d] + k * (acct['real']['unlevered'][d] - RF[d]) for d in YTD}, YTD)
             m['DIAG costed Composer model at live weights, levered'] = metrics(acct['real']['model_levered'], YTD)
             m['DIAG costed Composer model at live weights, unlevered'] = metrics(acct['real']['model_unlevered'], YTD)
         m['BOOK as built, levered (model)'] = metrics(bookv[method]['levered'], YTD)
@@ -302,21 +362,18 @@ def main():
         for e in CURRENT:
             m[f'{e} levered (model)'] = metrics(bookv[method]['eng_L'][e], YTD)
             m[f'{e} unlevered (model)'] = metrics(bookv[method]['eng_U'][e], YTD)
+            if method == 'real' and e in ('HG', 'KMLM'):   # same holdings with no trading cost: how much of the Sharpe drop is cost
+                fl, c_ = paths[(CURRENT[e], 'real')][3], paths[(CURRENT[e], 'real')][2]
+                m[f'{e} levered (frictionless)'] = metrics({d: fl[d] for d in YTD}, YTD)
+                m[f'{e} unlevered (frictionless)'] = metrics({d: fl[d] - c_[d] for d in YTD}, YTD)
         M[method] = m
     for t, r in bench.items():
         M['real'][f'{t} buy & hold'] = metrics(r, YTD)
     out['metrics'] = M
     out['book_resets'] = {m: {'levered': bookv[m]['resets_levered'], 'unlevered': bookv[m]['resets_unlevered']} for m in bookv}
 
-    # leverage contribution by symphony (account view, real method): sum of weighted daily c
-    by_sym = {}
-    for d1 in YTD:
-        d0 = DAYS[DAYS.index(d1) - 1]
-        for s in ('HG', 'KMLM', 'SLEEVE', 'HARV', 'ORIG'):
-            val_s = ORIG_V.get(d0, 0.0) if s == 'ORIG' else V.get(s, {}).get(d0, 0.0)
-            if val_s > 0:
-                by_sym[s] = by_sym.get(s, 0.0) + val_s / A[d0] * paths[(version_for(s, d0), 'real')][2][d1]
-    out['account_contribution_by_symphony_sum_of_daily'] = {s: round(v, 4) for s, v in by_sym.items()}
+    # leverage contribution by symphony: sum of the weighted daily contributions (not compounded)
+    out['account_contribution_by_symphony_sum_of_daily'] = {s_: round(v, 4) for s_, v in bys.items()}
     # contribution by half: H1 (HG only) vs Jul-Oct
     for lab, (a, b) in {'Jan-Jun': ('2026-01-02', '2026-06-30'), 'Jul-Oct15': ('2026-07-01', YTD1)}.items():
         ds = [d for d in YTD if a <= d <= b]
@@ -358,31 +415,25 @@ def main():
         tiers_out[e] = res
     out['tiers'] = tiers_out
 
-    # dollar view: replay the account's actual deposits/withdrawals through the unlevered returns
-    # (flow_t = V_t - V_t-1 * (1 + r_t), the flow implied by Composer's own TWR; same flows both legs)
+    # dollar view: the recovered external flows (start-of-day) replayed through each path (same deposits)
+    T = len(YTD)
+    paths_d = {'actual': acct['real']['actual'], 'unlevered': acct['real']['unlevered'], 'SPY': bench['SPY'], 'QQQ': bench['QQQ'], 'UPRO': bench['UPRO']}
     dollars = {}
-    for lab, rr in (('actual', acct['real']['actual']), ('unlevered', acct['real']['unlevered'])):
-        v, flows, wsum, ds_ = A[YTD0], 0.0, 0.0, YTD
-        T = len(ds_)
-        for k, d1 in enumerate(ds_):
-            d0 = DAYS[DAYS.index(d1) - 1]
-            f = A[d1] - A[d0] * (1 + acct['real']['actual'][d1])
-            v = v * (1 + rr[d1]) + f
-            flows += f
-            wsum += f * (T - 1 - k) / T          # modified Dietz weight: share of the window the flow was invested
-        pnl = v - A[YTD0] - flows
-        dollars[lab] = {'end_value': round(v, 2), 'pnl_implied_flows': round(pnl, 2), 'implied_net_flows': round(flows, 2),
-                        'modified_dietz_implied': round(pnl / (A[YTD0] + wsum), 4)}
-    # Recorded 2026 deposits: Composer total-stats net_deposits less the 2025-12-05 opening deposit (HG's
-    # deposit-adjusted series starts at exactly 1000.0).  The TWR-implied flows sum ~$2.2k lower (Composer's
-    # deposit-day return timing), so the gain is read as end value - start value - recorded deposits, and the
-    # leverage dollars as the END-VALUE difference, which does not depend on that split.
+    for lab, rr in paths_d.items():
+        v, fsum, wsum = A[YTD0], 0.0, 0.0
+        for k_, d1 in enumerate(YTD):
+            f = flows[d1]
+            v = (v + f) * (1 + rr[d1])
+            fsum += f
+            wsum += f * (T - k_) / T
+        pnl = v - A[YTD0] - fsum
+        dollars[lab] = {'end_value': round(v, 2), 'gain': round(pnl, 2), 'modified_dietz': round(pnl / (A[YTD0] + wsum), 4)}
+    dollars['recovered_net_flows'] = round(sum(flows.values()), 2)
     ts = json.load(open(f'{D}/total_stats.json'))
-    dep26 = ts['net_deposits'] - live['HG']['deposit_adjusted_series'][0]
-    for lab in dollars:
-        dollars[lab]['gain_recorded_deposits'] = round(dollars[lab]['end_value'] - A[YTD0] - dep26, 2)
-    dollars['recorded_2026_deposits'] = dep26
-    dollars['leverage_dollars_end_value_gap'] = round(dollars['actual']['end_value'] - dollars['unlevered']['end_value'], 2)
+    dollars['recorded_2026_deposits'] = ts['net_deposits'] - live['HG']['deposit_adjusted_series'][0]
+    dollars['leverage_dollars'] = round(dollars['actual']['gain'] - dollars['unlevered']['gain'], 2)
+    since = [d for d in YTD if d >= '2026-04-07']
+    out['since_money_arrived'] = {'window': [since[0], since[-1]], **{lab: metrics(rr, since) for lab, rr in paths_d.items()}}
     out['dollars'] = dollars
 
     # daily series for the chart
@@ -416,7 +467,8 @@ def main():
             print(f"  {k:36s} YTD {m['ytd']:+8.2%}  vol {m['vol']:6.1%}  Sharpe {m['sharpe']:5.2f}  Sortino {m['sortino']:5.2f}  maxDD {m['maxdd']:6.1%}")
     print('\nbook cap-40 resets:', out['book_resets'])
     print('account leverage contribution by symphony (sum of daily, real):', out['account_contribution_by_symphony_sum_of_daily'])
-    print('dollars (same deposits through both paths):', out['dollars'])
+    print('dollars (recovered flows through each path):', out['dollars'])
+    print('since money arrived:', {k: (v if k == 'window' else f"{v['ytd']:+.1%}/Sh {v['sharpe']:.2f}/DD {v['maxdd']:.1%}") for k, v in out['since_money_arrived'].items()})
     print('drawdown dates:', out['dd_dates'])
     for e, res in out['tiers'].items():
         print(f'{e} by leverage tier:', res)

@@ -50,18 +50,38 @@ def main():
         f"<tr><th scope=row>{g}</th><td>{tiers['levered'][g]['days']}</td><td>{pct(tiers['levered'][g]['ann_excess_contrib'])}</td>"
         f"<td>{tiers['levered'][g]['variance_share'] * 100:.0f}%</td><td>{pct(tiers['unlevered'][g]['ann_excess_contrib'])}</td>"
         f"<td>{tiers['unlevered'][g]['variance_share'] * 100:.0f}%</td></tr>" for g in ('3x', '2x', '1.5x', 'no leverage'))
-    A, U, SP, UP = M['ACCOUNT actual (live)'], M['ACCOUNT unlevered'], M['SPY buy & hold'], M['UPRO buy & hold']
-    kpi = [('YTD return', pct(A['ytd']), pct(U['ytd']), pct(SP['ytd']), pct(UP['ytd'])),
-           ('Sharpe', f"{A['sharpe']:.2f}", f"{U['sharpe']:.2f}", f"{SP['sharpe']:.2f}", f"{UP['sharpe']:.2f}"),
-           ('Sortino', f"{A['sortino']:.2f}", f"{U['sortino']:.2f}", f"{SP['sortino']:.2f}", f"{UP['sortino']:.2f}"),
-           ('Max drawdown', pct(A['maxdd'], False), pct(U['maxdd'], False), pct(SP['maxdd'], False), pct(UP['maxdd'], False)),
-           ('Volatility', pct(A['vol'], False), pct(U['vol'], False), pct(SP['vol'], False), pct(UP['vol'], False))]
-    Dl = S['dollars']
-    kpi.insert(1, ('Dollar gain YTD', f"${Dl['actual']['gain_recorded_deposits'] / 1000:,.1f}k", f"${Dl['unlevered']['gain_recorded_deposits'] / 1000:,.1f}k", '', ''))
-    kpi_rows = '\n'.join(f"<tr><th scope=row>{a}</th><td class=em>{b}</td><td class=em>{c}</td><td>{d}</td><td>{e}</td></tr>" for a, b, c, d, e in kpi)
+    A, U, SP, QQ, UP = M['ACCOUNT actual (live)'], M['ACCOUNT unlevered'], M['SPY buy & hold'], M['QQQ buy & hold'], M['UPRO buy & hold']
+    Dl, SM = S['dollars'], S['since_money_arrived']
+    cols = [('actual', A), ('unlevered', U), ('SPY', SP), ('QQQ', QQ), ('UPRO', UP)]
+    kpi = [('Return, time-weighted', [pct(m['ytd']) for _, m in cols]),
+           ('Return on your money (money-weighted)', [pct(Dl[k]['modified_dietz']) for k, _ in cols]),
+           ('Dollar gain on $246k deposited', [f"${Dl[k]['gain'] / 1000:,.1f}k" for k, _ in cols]),
+           ('Sharpe', [f"{m['sharpe']:.2f}" for _, m in cols]), ('Sortino', [f"{m['sortino']:.2f}" for _, m in cols]),
+           ('Max drawdown', [pct(m['maxdd'], False) for _, m in cols]), ('Volatility', [pct(m['vol'], False) for _, m in cols])]
+    kpi_rows = '\n'.join(f"<tr><th scope=row>{a}</th>" + ''.join(f"<td class={'em' if i < 2 else 'x'}>{v}</td>" for i, v in enumerate(vals)) + '</tr>' for a, vals in kpi)
+    since_rows = '\n'.join(f"<tr><th scope=row>{lab}</th><td>{pct(SM[k]['ytd'])}</td><td>{SM[k]['sharpe']:.2f}</td><td>{pct(SM[k]['maxdd'], False)}</td></tr>"
+                           for k, lab in (('actual', 'Actual'), ('unlevered', 'No leverage'), ('SPY', 'SPY'), ('QQQ', 'QQQ'), ('UPRO', 'UPRO')))
+    rng_lo = min(M['ACCOUNT unlevered, no deposit-day intraday effect']['ytd'], M['ACCOUNT unlevered, model holdings (no HG inference)']['ytd'], Ms['ACCOUNT unlevered']['ytd'], U['ytd'])
+    rng_hi = max(M['ACCOUNT unlevered, unresolved HG days -> best-fit leaf']['ytd'], M['ACCOUNT unlevered, model holdings (no HG inference)']['ytd'], U['ytd'])
+    sc_key = next(k for k in M if k.startswith('ACCOUNT unlevered scaled'))
+    SC = M[sc_key]
+    BS = json.load(open(f'{D}/sharpe_boot.json'))
+    hgf = (M['HG levered (frictionless)']['sharpe'], M['HG unlevered (frictionless)']['sharpe'])
     lev_pp = (A['ytd'] - U['ytd']) * 100
-    html = TEMPLATE.replace('__DATA__', json.dumps(data)).replace('__ROWS__', trs).replace('__TIERS__', tier_rows) \
-        .replace('__KPI__', kpi_rows).replace('__LEVPP__', f"{lev_pp:.0f}").replace('__ACT__', pct(A['ytd'])).replace('__UNL__', pct(U['ytd']))
+    rep = {'__DATA__': json.dumps(data), '__ROWS__': trs, '__TIERS__': tier_rows, '__KPI__': kpi_rows, '__SINCE__': since_rows,
+           '__LEVPP__': f"{lev_pp:.0f}", '__LEVSHARE__': f"{lev_pp / (A['ytd'] * 100) * 100:.0f}", '__ACT__': pct(A['ytd']), '__UNL__': pct(U['ytd']),
+           '__ACTMW__': pct(Dl['actual']['modified_dietz']), '__UNLMW__': pct(Dl['unlevered']['modified_dietz']),
+           '__RNGLO__': pct(rng_lo), '__RNGHI__': pct(rng_hi), '__LEVUSD__': f"${Dl['leverage_dollars'] / 1000:,.1f}k",
+           '__GAINUSD__': f"${Dl['actual']['gain'] / 1000:,.1f}k", '__UNLUSD__': f"${Dl['unlevered']['gain'] / 1000:,.1f}k",
+           '__LEVUSDSHARE__': f"{Dl['leverage_dollars'] / Dl['actual']['gain'] * 100:.0f}",
+           '__SCK__': sc_key.split('constant ')[1].rstrip(')'), '__SCYTD__': pct(SC['ytd']), '__SCDD__': pct(SC['maxdd'], False),
+           '__SCRISK__': f"{(SC['ytd'] - U['ytd']) * 100:.0f}", '__SCPLACE__': f"{(A['ytd'] - SC['ytd']) * 100:.0f}",
+           '__SHGAP__': f"{BS['sharpe_gap']:+.2f}", '__SHLO__': f"{BS['sharpe_gap_ci90'][0]:+.2f}", '__SHHI__': f"{BS['sharpe_gap_ci90'][1]:+.2f}",
+           '__SHP__': f"{BS['p_sharpe_gap_gt0'] * 100:.0f}", '__SHACTLO__': f"{BS['sharpe_actual_ci90'][0]:.1f}", '__SHACTHI__': f"{BS['sharpe_actual_ci90'][1]:.1f}",
+           '__HGFL__': f"{hgf[0]:.2f}", '__HGFU__': f"{hgf[1]:.2f}", '__HGCL__': f"{M['HG levered (model)']['sharpe']:.2f}", '__HGCU__': f"{M['HG unlevered (model)']['sharpe']:.2f}"}
+    html = TEMPLATE
+    for k, v in rep.items():
+        html = html.replace(k, v)
     open(OUT, 'w').write(html)
     print('wrote', os.path.normpath(OUT))
 
@@ -94,6 +114,7 @@ th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--grid);font-
 th[scope=row]{text-align:left;font-weight:500}
 thead th{color:var(--ink2);font-weight:600;font-size:13px}
 td.em{font-weight:650}
+td.x{color:var(--ink2)}
 tr.sub th{padding-left:22px;color:var(--ink2);font-weight:400}
 tr.sub td{color:var(--ink2)}
 .tablewrap{overflow-x:auto}
@@ -117,15 +138,20 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 <body>
 <main class="viz-root">
 <h1>How much of this year's return came from leverage</h1>
-<p class="sub-h">Composer account, 2025-12-31 close to 2026-10-15 close (198 sessions), time-weighted. "No leverage" keeps every signal, trade and day, and swaps each 2x/3x ETF for its 1x version at the holding step (TQQQ to QQQ, UDOW to DIA, SQQQ to PSQ, UVXY to VIXY, and so on).</p>
-<p class="lede">The account made <b>__ACT__</b>. The same trades without leverage made about <b>__UNL__</b>. Leverage added roughly <b>__LEVPP__ points</b>. It also lifted Sharpe this year, because the 3x positions sat on the strategy's best signals, but nine and a half months is too short to call that gap firm.</p>
+<p class="sub-h">Composer account only, 2025-12-31 close to 2026-10-15 close (198 sessions; today's intraday move is excluded). "No leverage" keeps every signal, trade and day, and swaps each 2x/3x ETF for its 1x version at the holding step (TQQQ to QQQ, UDOW to DIA, SQQQ to PSQ, UVXY to VIXY, and so on). Pre-tax, which under Act 60 is also after tax.</p>
+<p class="lede">Time-weighted, the account made <b>__ACT__</b>; the same trades without leverage would have made about <b>__UNL__</b> (range __RNGLO__ to __RNGHI__ across the holding and deposit-fill assumptions). Leverage added about <b>__LEVPP__ points, roughly two-thirds</b> of the return. On your money, which mostly arrived April to July, it is <b>__ACTMW__ against __UNLMW__</b>: <b>__LEVUSD__ of the __GAINUSD__ gain</b>. Sharpe came out about the same either way (__SHGAP__, not firm).</p>
 
 <section class="card">
 <h2>Actual vs no leverage, with the market for scale</h2>
-<p class="sub-h">UPRO is plain 3x S&amp;P at about the same volatility as the account: leverage with no signals. Returns are time-weighted, which counts every day equally; most of the money arrived April to July, so the dollar row is the truer read of what you made ($246k deposited this year, the same deposits replayed through both paths).</p>
+<p class="sub-h">UPRO is plain 3x S&amp;P at about the account's volatility. Time-weighted returns count every day equally, and the account's lead over the market was earned January to March on about $1k. The money-weighted and dollar rows replay your actual deposits through each path.</p>
 <div class="tablewrap"><table>
-<thead><tr><th></th><th>Actual</th><th>No leverage</th><th>SPY</th><th>UPRO (3x SPY)</th></tr></thead>
+<thead><tr><th></th><th>Actual</th><th>No leverage</th><th>SPY</th><th>QQQ</th><th>UPRO (3x SPY)</th></tr></thead>
 <tbody>__KPI__</tbody></table></div>
+<h2 style="margin-top:14px">Since the money arrived, Apr 7 to Oct 15</h2>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>Return</th><th>Sharpe</th><th>Max drawdown</th></tr></thead>
+<tbody>__SINCE__</tbody></table></div>
+<p class="sub-h" style="margin:10px 0 0">Risk taken vs where it sat: the no-leverage path scaled to the account's volatility (a constant __SCK__) would have made __SCYTD__ with a __SCDD__ drawdown. Of the __LEVPP__ points, about __SCRISK__ came from running more risk and about __SCPLACE__ from the leverage sitting on the better days.</p>
 </section>
 
 <section class="card">
@@ -143,21 +169,21 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 <div class="grid2">
 <section class="card">
 <h2>By engine: YTD return</h2>
-<p class="sub-h">Current versions, Composer model, full year to date. Book = 29/29/27/15 with the 40% cap.</p>
+<p class="sub-h">Current versions, Composer backtest, full year to date; partly in sample (KMLM, SLEEVE and HARV were designed in July; HG's July edits are in), not a forecast. Book = 29/29/27/15 with the 40% cap, diversified from Jan 1 although the live account was HG-only until July.</p>
 <div class="legend"><span><i class="keyb" style="background:var(--s1)"></i>Levered (as built)</span><span><i class="keyb" style="background:var(--s2)"></i>No leverage</span></div>
 <svg id="engret" role="img" aria-label="Year-to-date return by engine, levered vs no leverage"></svg>
 </section>
 <section class="card">
 <h2>By engine: max drawdown</h2>
-<p class="sub-h">Same runs. HARV holds nothing leveraged, so its two bars are equal.</p>
+<p class="sub-h">Same backtests. HARV holds nothing leveraged, so its two bars are equal.</p>
 <div class="legend"><span><i class="keyb" style="background:var(--s1)"></i>Levered (as built)</span><span><i class="keyb" style="background:var(--s2)"></i>No leverage</span></div>
 <svg id="engdd" role="img" aria-label="Maximum drawdown by engine, levered vs no leverage"></svg>
 </section>
 </div>
 
 <section class="card">
-<h2>Why Sharpe falls when leverage comes off (HG, current version)</h2>
-<p class="sub-h">Leverage is concentrated on HG's best signal. Taking it off shrinks the 3x days about threefold, but the hedge and bond days barely shrink, so they become a bigger share of the risk.</p>
+<h2>Why the model's Sharpe falls when leverage comes off (HG, current version)</h2>
+<p class="sub-h">Partly placement: leverage sits on HG's best signal, so taking it off shrinks the 3x days about threefold while the hedge and bond days barely shrink and become a bigger share of the risk. Partly cost: the backtest charges the same slippage dollars to both legs, and they eat a bigger share of the smaller return. With costs the model's Sharpe goes __HGCL__ to __HGCU__; without them __HGFL__ to __HGFU__. In the live account the gap is __SHGAP__ (90% band __SHLO__ to __SHHI__, __SHP__% chance it is above zero).</p>
 <div class="tablewrap"><table>
 <thead><tr><th>Days holding</th><th>Days</th><th>Excess return/yr, levered</th><th>Share of variance</th><th>Excess return/yr, no leverage</th><th>Share of variance</th></tr></thead>
 <tbody>__TIERS__</tbody></table></div>
@@ -173,13 +199,14 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 <section class="card notes">
 <h2 style="color:var(--ink)">Basis and limits</h2>
 <ul>
-<li>Actual = Composer's own time-weighted account return. No leverage = that return minus each day's leverage contribution, computed from the holdings of the symphony version that was live that day. Fills, cash drag and deposit timing stay as they happened.</li>
-<li>HG holds one asset at a time. On the 10 days its live return matched a different holding than the model's (a switch made a session early or late at the 15:50 rebalance), the live holding was used.</li>
-<li>Sharpe and Sortino are annualised from daily returns over T-bills. On nine and a half months the levels are loose: a block bootstrap puts the actual Sharpe's 90% band at 0.3 to 3.8. The gap between the columns is tighter but not firm: +0.45, with a 90% band of -0.30 to +1.34.</li>
-<li>Trading costs are held equal. 1x ETFs trade at tighter spreads, which would add perhaps a point or two to the no-leverage side.</li>
-<li>Signals were not re-run on 1x prices. The thresholds are tuned to the leveraged tickers, so that would be a different strategy.</li>
-<li>Engine rows use the Composer model. KMLM, SLEEVE and HARV were designed in July on data that includes this year, so their first half is in sample. The account rows are entirely live.</li>
-<li>Composer's backtest charges about 8 points this year on HG's 162x turnover. Live paid about 5. That gap is why the costed model reads lower than live. It does not depend on leverage.</li>
+<li>Actual = Composer's own time-weighted account return. It counts each deposit as arriving at the start of its day, so the 04-28 deposit's intraday loss is in the return. No leverage = that return minus each day's leverage contribution, from the holdings of the symphony version live that day, weighted on the same base. Fills, cash drag and deposit timing stay as they happened.</li>
+<li>HG holds one asset at a time. On the 14 days its live return matched a different holding than the model's (a switch made a session early or late at the 15:50 rebalance, or a different branch), that holding was used. On 22 further days nothing fits cleanly; the model holding is kept and the range above spans the alternatives. The 06-30 edit of HG was never deployed: on 07-02 live HG earned exactly XLV's return, a leaf only the original version has.</li>
+<li>Deposits that were invested before the close carry their own intraday leverage effect, read from the symphony's deposit-adjusted return (04-28: a $50k deposit bought TQQQ intraday and lost 7.5% by the close; two-thirds of that is leverage). The liquidated July symphony was cash on 07-01 and still held its SOXL/TECL basket through 07-07.</li>
+<li>Sharpe and Sortino are annualised from daily returns over T-bills. Nine and a half months is short: the actual Sharpe's 90% band is __SHACTLO__ to __SHACTHI__. The gap between the two columns is measured on the same days and is still not firm.</li>
+<li>Trading costs are held equal. 1x ETFs trade at tighter spreads, which would add perhaps a point or two to the no-leverage side. USD, LABD and SOXS have no 1x twin; their own return divided by the leverage is used. "No leverage" still holds 1x VIX-futures funds (VIXY, SVIX, ZVOL at 50 to 55% volatility), so it is not a low-risk portfolio on those days.</li>
+<li>Signals were not re-run on 1x prices. The thresholds are tuned to the leveraged tickers, so that would be a different strategy. For KMLM and the sleeve "same trades" means the same weights.</li>
+<li>Composer's costed backtest of the live versions at live weights reads +62.5%, below live, because of the 13 deposit and withdrawal days in the live series and the 5 bp slippage it charges on HG's 162x turnover (frictionless +94.6% against costed +79.2% for HG), not because of leverage. Composer's dashboard Sharpe of 2.11 is lifetime and includes today.</li>
+<li>Composer account only; the IBKR book is not included. ZVOL is a -1x mid-term VIX fund.</li>
 </ul>
 </section>
 </main>
