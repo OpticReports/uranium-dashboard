@@ -2,7 +2,7 @@
 actual fund, or rebuilt from its 1x ETF or index), the 1990-2026 curves with those eras marked, and the
 gate's effect inside each era.  Reads the ratified gate-lab output (LEVGATE_DATA/levgate.json, base_B.json)
 and the price files' first dates; writes results/hg-gate-backtest-coverage-2026-10-17.html and prints the
-era table."""
+era table.  Counter-agent reviewed (prices and daily returns rebuilt independently); fixes applied."""
 import json
 import math
 import os
@@ -15,8 +15,9 @@ import levgate as lg   # noqa: E402
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'results', 'hg-gate-backtest-coverage-2026-10-17.html')
 K = {'as built': 'A0 always levered (as built)', '200d -> 1x': 'T200 SPY>200d [trend only]',
      '200d -> half': 'T200 SPY>200d -> half 1x half cash [trend only]', '200d -> cash': 'T200 SPY>200d -> cash [trend only]'}
-HG_LIVE = '2025-12-05'   # first HG version (0DeB193g) created 2025-12-05 11:46 ET; see lev_study.SCHEDULE
-# price layers per held ticker, oldest first, as gate_study.build_lh_prices splices them:
+HG_LIVE = '2025-12-05'     # first HG version (0DeB193g) created 2025-12-05 11:46 ET; see lev_study.SCHEDULE
+RULES_LIVE = '2026-07-31'  # bP4mvRy6, the version trees.json holds and this backtest runs (saved 07-30 after the close)
+# price layers per ticker, oldest first, as gate_study.build_lh_prices splices them:
 # (kind, label, ticker whose first date opens the layer; None = the panel start)
 LAYERS = {
     'TQQQ': [('index', 'Nasdaq-100 x3', None), ('etf1x', 'QQQ x3', 'QQQ'), ('actual', 'TQQQ', 'TQQQ')],
@@ -25,7 +26,7 @@ LAYERS = {
     'SSO': [('index', 'S&P 500 x2', None), ('etf1x', 'SPY x2', 'SPY'), ('actual', 'SSO', 'SSO')],
     'UPRO': [('index', 'S&P 500 x3', None), ('etf1x', 'SPY x3', 'SPY'), ('actual', 'UPRO', 'UPRO')],
     'TECL': [('standin', 'Nasdaq-100 x3', None), ('etf1x', 'XLK x3', 'XLK'), ('actual', 'TECL', 'TECL')],
-    'LABU': [('standin', 'Nasdaq-100 x3', None), ('index', 'Nasdaq Biotech x3', '^NBI'), ('etf1x', 'XBI x3', 'XBI'), ('actual', 'LABU', 'LABU')],
+    'LABU': [('standin', 'Nasdaq-100 x3', None), ('standin', 'Nasdaq Biotech x3', '^NBI'), ('etf1x', 'XBI x3', 'XBI'), ('actual', 'LABU', 'LABU')],
     'QLD': [('index', 'Nasdaq-100 x2', None), ('etf1x', 'QQQ x2', 'QQQ'), ('actual', 'QLD', 'QLD')],
     'USD': [('standin', 'Nasdaq-100 x2', None), ('index', 'PHLX Semis x2', '^SOX'), ('actual', 'USD', 'USD')],
     'SMH': [('standin', 'Nasdaq-100', None), ('index', 'PHLX Semis', '^SOX'), ('actual', 'SMH', 'SMH')],
@@ -33,20 +34,35 @@ LAYERS = {
     'VIXM': [('model', 'modelled from VIX', None), ('actual', 'VIXM', 'VIXM')],
     'VIXY': [('model', 'modelled from VIX', None), ('actual', 'VIXY', 'VIXY')],
     'BIL': [('index', '3-month T-bill', None), ('actual', 'BIL', 'BIL')],
+    'SOXL': [('standin', 'Nasdaq-100 x3', None), ('index', 'PHLX Semis x3', '^SOX'), ('actual', 'SOXL', 'SOXL')],
     'SPY': [('index', 'S&P 500 + dividends', None), ('actual', 'SPY', 'SPY')],
 }
 GROUPS = [('Switched by the gate (trend baskets)', ['TQQQ', 'TNA', 'UDOW', 'SSO', 'UPRO']),
           ('Dip-buys (stay leveraged)', ['TECL', 'LABU', 'QLD', 'USD']),
           ('Other holdings', ['SMH', 'UVXY', 'VIXM', 'VIXY', 'BIL']),
-          ('Gate signal', ['SPY'])]
+          ('Signals only (SOXL triggers the dip-buys; SPY drives the gate)', ['SOXL', 'SPY'])]
+
+
+def met(r, ds):
+    """CAGR (sessions / 252, the house convention), Sharpe over T-bills, max drawdown; unrounded."""
+    x = [r[d] for d in ds]
+    ex = [v - lg.gs.cash.get(d, 0.0) for v, d in zip(x, ds)]
+    mu = sum(ex) / len(ex)
+    sd = math.sqrt(sum((e - mu) ** 2 for e in ex) / (len(ex) - 1))
+    w = pk = 1.0
+    mdd = 0.0
+    for v in x:
+        w *= 1 + v
+        pk = max(pk, w)
+        mdd = max(mdd, 1 - w / pk)
+    return {'cagr': w ** (252 / len(x)) - 1, 'sharpe': mu / sd * math.sqrt(252), 'maxdd': mdd}
 
 
 def main():
     J = json.load(open(os.path.join(lg.OUT, 'levgate.json')))
-    B = J['panels']['B']['HG']
-    S = {lab: B['series_keep'][k] for lab, k in K.items()}
-    days = json.load(open(os.path.join(lg.OUT, 'base_B.json')))['HG']['days']
-    hold = json.load(open(os.path.join(lg.OUT, 'base_B.json')))['HG']['hold']
+    S = {lab: J['panels']['B']['HG']['series_keep'][k] for lab, k in K.items()}
+    base = json.load(open(os.path.join(lg.OUT, 'base_B.json')))['HG']
+    days, hold = base['days'], base['hold']
     first = {t: min(lg.gs.yh(t)) for t in {x for L in LAYERS.values() for _, _, x in L if x}}
     p0, p1 = days[0], days[-1]
 
@@ -69,7 +85,6 @@ def main():
     # eras by what the five gated legs were made of
     trend = GROUPS[0][1]
     e2, e3, e4 = first['QQQ'], max(first[t] for t in trend), J['panels']['A']['HG']['first']
-    prev = {days[i]: days[i - 1] for i in range(1, len(days))}
     nxt_day = lambda d: next(x for x in days if x >= d)   # noqa: E731
     bounds = [p0, nxt_day(e2), nxt_day(e3), nxt_day(e4)]
     ERAS = [('1990 to 1999', 'Rebuilt from index levels (SPY- and DIA-based once those exist)'),
@@ -78,38 +93,44 @@ def main():
             ('2015 to 2026', "Actual funds; the stretch HG's rules were built on (in sample)")]
     spy = lg.gs.build_lh_prices()['SPY']
     ma = lg.ma_series(spy, 200)
+    rd = sorted(S['as built'])
+
+    def block(a, b):
+        ds = [d for d in rd if a <= d <= b]
+        lw = {k: sum(math.log1p(S[k][d]) for d in ds) for k in K}
+        return {k: met(S[k], ds) for k in K}, {k: math.exp(lw[k] - lw['as built']) for k in K}
     eras = []
     for i, (lab, basis) in enumerate(ERAS):
         a = bounds[i]
-        b = prev[bounds[i + 1]] if i + 1 < len(bounds) else p1
-        ds = [d for d in days if a <= d <= b]
-        off = sum(1 for d in ds if spy[d] <= ma[d]) / len(ds)
-        m = {k: lg.gs.metrics(S[k], ['x'] + sorted(S[k]), a, b) for k in K}
-        lw = {k: sum(math.log1p(S[k][d]) for d in ds if d in S[k]) for k in K}
-        eras.append({'label': lab, 'basis': basis, 'a': a, 'b': b, 'years': len(ds) / 252, 'off': off, 'm': m,
-                     'vs': {k: math.exp(lw[k] - lw['as built']) for k in K}})
-    full = {k: B['rows'][K[k]]['full'] for k in K}
+        b = days[days.index(bounds[i + 1]) - 1] if i + 1 < len(bounds) else p1
+        sess = [d for d in days if a <= d <= b]
+        m, vs = block(a, b)
+        eras.append({'label': lab, 'basis': basis, 'a': a, 'b': b, 'years': len(sess) / 252,
+                     'off': sum(1 for d in sess if spy[d] <= ma[d]) / len(sess), 'm': m, 'vs': vs})
+    full, fullvs = block(p0, p1)
+    yrs = lambda d: sum(1 for x in days if x >= d) / 252   # noqa: E731
+    spans = {'all': len(days) / 252, 'e3': yrs(e3), 'e4': yrs(e4), 'live': yrs(HG_LIVE), 'rules': yrs(RULES_LIVE)}
 
     # curves: daily wealth and drawdown, thinned to 5-session buckets (last wealth, deepest drawdown)
-    cd = sorted(S['as built'])
     curves, dds = {}, {}
     for k in K:
         v, pk, w, dd = 1.0, 1.0, [], []
-        for d in cd:
+        for d in rd:
             v *= 1 + S[k][d]
             pk = max(pk, v)
             w.append(v)
             dd.append(v / pk - 1)
         curves[k] = [round(w[min(i + 4, len(w) - 1)], 4) for i in range(0, len(w), 5)]
         dds[k] = [round(min(dd[i:i + 5]), 4) for i in range(0, len(dd), 5)]
-    cdates = [cd[min(i + 4, len(cd) - 1)] for i in range(0, len(cd), 5)]
+    cdates = [rd[min(i + 4, len(rd) - 1)] for i in range(0, len(rd), 5)]
 
-    print(f'panel B {p0}..{p1}: {len(days)} sessions, {len(days) / 252:.1f} yrs; trend legs all actual from {e3}; every leg actual from {e4}')
-    for e in eras:
+    print(f'panel B {p0}..{p1}: {len(days)} sessions, {spans["all"]:.1f} yrs; gated legs all actual from {e3} ({spans["e3"]:.1f} yrs); '
+          f'every leg actual from {e4} ({spans["e4"]:.1f} yrs); HG live {spans["live"]:.1f} yrs, these rules {spans["rules"]:.1f} yrs')
+    for e in eras + [{'label': 'whole panel', 'a': p0, 'b': p1, 'years': spans['all'], 'off': float('nan'), 'm': full, 'vs': fullvs}]:
         print(f"{e['label']:13s} {e['a']}..{e['b']} {e['years']:5.1f}y below200 {e['off']:4.0%}  " +
               '  '.join(f"{k} {e['m'][k]['cagr']:+.1%}/{e['m'][k]['sharpe']:.2f}/{e['m'][k]['maxdd']:.0%} x{e['vs'][k]:.2f}" for k in K))
-    D = {'rows': rows, 'eras': eras, 'full': full, 'p0': p0, 'p1': p1, 'n': len(days), 'live': HG_LIVE, 'e3': e3, 'e4': e4,
-         'dates': cdates, 'curves': curves, 'dds': dds}
+    D = {'rows': rows, 'eras': eras, 'full': full, 'fullvs': fullvs, 'p0': p0, 'p1': p1, 'n': len(days), 'live': HG_LIVE,
+         'rules': RULES_LIVE, 'e3': e3, 'e4': e4, 'spans': spans, 'dates': cdates, 'curves': curves, 'dds': dds}
     open(PAGE, 'w').write(TEMPLATE.replace('__DATA__', json.dumps(D)))
     print('wrote', os.path.normpath(PAGE))
 
@@ -141,8 +162,9 @@ h2{font-size:16px;margin:0 0 2px;font-weight:600}
 .kpi span{color:var(--ink2);font-size:13px}
 table{border-collapse:collapse;width:100%;font-size:13.5px}
 th,td{padding:5px 7px;text-align:right;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums;white-space:nowrap}
-th[scope=row]{text-align:left;font-weight:500;white-space:normal;min-width:190px}
+th[scope=row]{text-align:left;font-weight:500;white-space:normal;min-width:220px}
 thead th{color:var(--ink2);font-weight:600;font-size:12.5px}
+thead th:first-child{text-align:left}
 td.pos{color:var(--s3)} td.neg{color:var(--s2)}
 .dim{color:var(--muted);font-size:12px;font-weight:400}
 .tablewrap{overflow-x:auto}
@@ -171,9 +193,9 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 
 <section class="card">
 <h2>What each leg's prices were made of</h2>
-<p class="sub-h">One row per fund HG holds, with the share of sessions it held that fund. A rebuilt leg is 2x or 3x the daily return of its 1x ETF or index, minus financing at the T-bill rate and a fee drag (fitted where the fund and its base overlap; a fixed 1.8% a year on the index and IWM rebuilds).</p>
+<p class="sub-h">One row per fund HG holds or reads, with the share of sessions it held that fund. A rebuilt leg is 2x or 3x the daily return of its 1x ETF or index, minus financing at the T-bill rate, plus a cost term: fitted on the overlap years for the QQQ, SPY, DIA, XLK and semiconductor-index rebuilds; a fixed 1.8% a year for the IWM, XBI and other index rebuilds.</p>
 <div class="legend" id="lg-g"></div>
-<svg id="gantt" role="img" aria-label="Timeline from 1990 to 2026 of where each held fund's prices come from: actual fund, rebuilt from its 1x ETF, rebuilt from an index, a stand-in index, or a VIX model"></svg>
+<svg id="gantt" role="img" aria-label="Timeline from 1990 to 2026 of where each fund's prices come from: actual fund, rebuilt from its 1x ETF, rebuilt from an index, a stand-in index, or a VIX model"></svg>
 </section>
 
 <section class="card">
@@ -185,18 +207,21 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 
 <section class="card">
 <h2>The gate inside each data era</h2>
-<p class="sub-h">CAGR / Sharpe / max drawdown inside each stretch; "x" is the gated version's ending wealth over the stretch divided by as built's (above 1 means the gate added money).</p>
+<p class="sub-h">CAGR / Sharpe / max drawdown inside each stretch. The last column is the gated version's ending wealth over the stretch divided by as built's: above 1 means the gate added money.</p>
 <div class="tablewrap"><table>
-<thead><tr><th>Era</th><th>Years</th><th>SPY below 200d</th><th>As built</th><th>200d, 1x below</th><th>200d, cash below</th><th>Gate vs as built (1x / cash)</th></tr></thead>
+<thead><tr><th>Era</th><th>As built</th><th>200d, 1x below</th><th>200d, cash below</th><th>Gate vs as built<br><span class="dim">1x / cash</span></th></tr></thead>
 <tbody id="eras"></tbody></table></div>
 </section>
 
 <section class="card notes">
 <h2 style="color:var(--ink)">Basis and limits</h2>
 <ul>
-<li>Engine and numbers: the add. 42 gate lab (levgate.py; counter-agent reviewed). Trades at the close on the prior close's signal; Composer trades at about 15:50. Costed at HG's measured 5.1 bp per unit of turnover, including the gate's switches.</li>
-<li>Rebuilt legs track the actual funds within 1.2% a year where both exist (add. 40 counter-agent check). Index rebuilds add a dividend yield (the S&amp;P's monthly yield; 0.5% a year for the Nasdaq-100, 1.5% for the Russell 2000; none for the biotech and semiconductor indices). Where a sector index did not exist yet, the Nasdaq-100 or S&amp;P 500 stands in. VIX funds before 2011 are a regression on the VIX index, cruder before mid-2006. T-bills stand in for BIL before 2007.</li>
-<li>HG's rules were built on 2015 to 2026 data, so that stretch is in sample; 1990 to 2015 is out of sample for the rules. The 200-day shape was fixed from the literature in add. 40, not fitted here.</li>
+<li>Engine and numbers: the add. 42 gate lab (levgate.py). A counter-agent rebuilt the panel prices and the three variants' daily returns independently (match to 1e-15) and reproduced every era figure. Signal and trade at the same daily close; Composer trades at about 15:50. Costed at HG's measured 5.1 bp per unit of turnover, including the gate's switches.</li>
+<li>Tracking where rebuild and fund overlap: every rebuilt layer of the five gated legs, QLD, TECL and SOXL is within 1.2% a year of the actual fund. Looser: USD's semiconductor x2 (+1.6% a year), LABU's XBI x3 (+1.5%) and its Nasdaq Biotech stand-in (+14%), and the VIX-fund models (UVXY +13%, VIXY +5.6%, VIXM -2.2%). Each of those funds is held 2% of sessions or less, identically with and without the gate.</li>
+<li>Index rebuilds add a dividend yield (the S&amp;P's monthly yield; 0.5% a year for the Nasdaq-100, 1.5% for the Russell 2000; none for the biotech and semiconductor indices). Where a fund's own index is not available, the Nasdaq-100 or S&amp;P 500 stands in. VIX funds before 2011 are a regression on the VIX index, cruder before mid-2006. T-bills stand in for BIL before mid-2007.</li>
+<li>The panel skips 30 bond-market holidays before 2007 (no T-bill price). Returns span those days but CAGR counts sessions, so pre-2007 CAGRs read about 0.4 points a year high, for every variant alike.</li>
+<li>HG's rules were built on 2015 to 2026 data, so that stretch is in sample for them and 1990 to 2015 is not. The gate is in sample on the whole panel: add. 40 chose it (the textbook 200-day rule, the simplest of its family) after testing 15 shapes here.</li>
+<li>The backtest runs HG's current version (saved 2026-07-30, live from 2026-07-31). The December 2025 version differed in its defensive branch (a 10-fund RSI filter where this one holds BIL); the trend and dip-buy logic the gate touches is the same.</li>
 <li>Research only. Nothing live changes.</li>
 </ul>
 </section>
@@ -208,7 +233,7 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const tt = document.getElementById('tt');
 const pct = (x, s=true) => (s && x >= 0 ? '+' : '') + (x*100).toFixed(1) + '%';
 const yr = d => +d.slice(0,4) + ((+d.slice(5,7)-1)*30.44 + (+d.slice(8,10)-1))/365.25;
-const KIND = {actual:['actual fund','s1'], etf1x:['rebuilt from its 1x ETF','s3'], index:['rebuilt from an index','s4'], standin:['stand-in index (sector index not published yet)','s2'], model:['modelled from the VIX index','b1']};
+const KIND = {actual:['actual fund','s1'], etf1x:['rebuilt from its 1x ETF','s3'], index:['rebuilt from an index','s4'], standin:["stand-in index (the fund's own index not available)",'s2'], model:['modelled from the VIX index','b1']};
 const SER = [['as built','b2','as built'],['200d -> 1x','s4','200d, 1x below'],['200d -> cash','s3','200d, cash below']];
 function el(tag, attrs, parent){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
 function txt(parent, x, y, s, cls, anchor){const t=el('text',{x,y,class:cls||'lbl','text-anchor':anchor||'start'},parent);t.textContent=s;return t;}
@@ -218,31 +243,30 @@ function showTT(x, y, title, rows){tt.textContent='';const d=document.createElem
 function hideTT(){tt.style.display='none';}
 function legend(id, items, sw){const lg=document.getElementById(id);lg.textContent='';for(const [name,cls] of items){const s=document.createElement('span');const k=document.createElement('i');k.className=sw?'sw':'key';k.style.background=`var(--${cls})`;s.appendChild(k);s.appendChild(document.createTextNode(name));lg.appendChild(s);}}
 const X0 = yr(D.p0), X1 = yr(D.p1);
-function xaxis(svg, g, X, H, m, W){for(let y=1990;y<=2026;y+=(W<600?6:2)){const x=X(y);if(x<m.l-1||x>W-m.r+1)continue;el('line',{x1:x,x2:x,y1:m.t,y2:H-m.b,stroke:css('--grid'),'stroke-width':1},g);txt(g,x,H-8,String(y),null,'middle');}}
+function xaxis(g, X, H, m, W){for(let y=1990;y<=2026;y+=(W<600?6:2)){const x=X(y);if(x<m.l-1||x>W-m.r+1)continue;el('line',{x1:x,x2:x,y1:m.t,y2:H-m.b,stroke:css('--grid'),'stroke-width':1},g);txt(g,x,H-8,String(y),null,'middle');}}
 
 function kpis(){
-  const k=document.getElementById('kpis'); k.textContent='';
-  const ys=(a,b)=>((yr(b)-yr(a))).toFixed(1);
-  const items=[[ys(D.p0,D.p1)+' years',`${D.p0} to ${D.p1}, ${D.n.toLocaleString()} sessions`],
-               [ys(D.e3,D.p1)+' years',`on the actual 3x/2x funds for all five gated legs (from ${D.e3})`],
-               [ys(D.e4,D.p1)+' years',`with every leg actual (from ${D.e4}); the stretch HG's rules were built on`],
-               [ys(D.live,D.p1)+' years','HG live since '+D.live+'; the gate itself has not run live']];
+  const k=document.getElementById('kpis'); k.textContent=''; const S=D.spans, f=v=>v.toFixed(1)+' years';
+  const items=[[f(S.all),`${D.p0} to ${D.p1}, ${D.n.toLocaleString()} sessions`],
+               [f(S.e3),`on the actual funds for all five gated legs (from ${D.e3})`],
+               [f(S.e4),`with every leg actual (from ${D.e4}); the stretch HG's rules were built on`],
+               [f(S.live),`HG live since ${D.live}; these exact rules since ${D.rules} (${S.rules.toFixed(1)} years); the gate has not run live`]];
   for(const [b,s] of items){const d=document.createElement('div');d.className='kpi';const bb=document.createElement('b');bb.textContent=b;const ss=document.createElement('span');ss.textContent=s;d.appendChild(bb);d.appendChild(ss);k.appendChild(d);}
 }
 
 function gantt(){
   const svg=document.getElementById('gantt'); svg.textContent='';
-  const W=Math.max(320, svg.parentElement.clientWidth-32), narrow=W<600, rowH=20, gapH=22, m={l:narrow?56:70,r:narrow?38:46,t:30,b:26};
+  const W=Math.max(320, svg.parentElement.clientWidth-32), narrow=W<600, rowH=20, gapH=22, m={l:narrow?56:70,r:narrow?40:48,t:30,b:26};
   const groups=[...new Set(D.rows.map(r=>r.group))];
   const H=m.t+D.rows.length*rowH+groups.length*gapH+m.b;
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   const X=v=>m.l+(v-X0)*(W-m.l-m.r)/(X1-X0);
-  const g=el('g',{class:'axis'},svg); xaxis(svg,g,X,H,m,W);
+  const g=el('g',{class:'axis'},svg); xaxis(g,X,H,m,W);
   let y=m.t, cur='';
   for(const r of D.rows){
-    if(r.group!==cur){cur=r.group;y+=gapH;txt(svg,m.l,y-6,r.group,'grp');}
+    if(r.group!==cur){cur=r.group;y+=gapH;txt(svg,m.l,y-6,narrow?r.group.split(' (')[0]:r.group,'grp');}
     txt(svg,m.l-8,y+rowH/2+4,r.t,'lbl','end');
-    txt(svg,W-m.r+6,y+rowH/2+4,(r.held*100).toFixed(r.held<0.01?1:0)+'%','lbl');
+    if(r.held>0)txt(svg,W-m.r+6,y+rowH/2+4,(r.held*100).toFixed(r.held<0.1?1:0)+'%','lbl');
     for(const s of r.segs){
       const x1=X(yr(s.a)), x2=X(yr(s.b));
       const rc=el('rect',{x:x1,y:y+3,width:Math.max(1,x2-x1-1),height:rowH-6,rx:2,fill:`var(--${KIND[s.kind][1]})`,tabindex:0},svg);
@@ -252,9 +276,9 @@ function gantt(){
     }
     y+=rowH;
   }
-  for(const [d,lab,anchor] of [[D.e4,narrow?'all actual':'every leg actual','end'],[D.live,'HG live','start']]){
+  for(const [d,lab] of [[D.e4,narrow?'all actual':'every leg actual'],[D.live,'HG live']]){
     const x=X(yr(d)); el('line',{x1:x,x2:x,y1:m.t-4,y2:H-m.b,stroke:css('--ink2'),'stroke-width':1.5,'stroke-dasharray':'4 3'},svg);
-    txt(svg,anchor==='end'?x-4:x+4,m.t-8,lab,'lbl',anchor);
+    txt(svg,x-4,m.t-8,lab,'lbl','end');
   }
   txt(svg,W-m.r+6,m.t-8,'held','lbl');
 }
@@ -266,7 +290,7 @@ function eraBands(svg, X, H, m, labels, narrow){
 
 function lines(id, dd){
   const svg=document.getElementById(id); svg.textContent='';
-  const W=Math.max(320, svg.parentElement.clientWidth-32), narrow=W<600, H=dd?220:330, m={l:52,r:dd?16:(narrow?70:150),t:dd?8:20,b:26};
+  const W=Math.max(320, svg.parentElement.clientWidth-32), narrow=W<600, H=dd?220:330, m={l:52,r:narrow?70:150,t:dd?8:20,b:26};
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   const n=D.dates.length, xs=D.dates.map(yr), X=v=>m.l+(v-X0)*(W-m.l-m.r)/(X1-X0);
   const src=dd?D.dds:D.curves; let lo=Infinity,hi=-Infinity;
@@ -274,7 +298,7 @@ function lines(id, dd){
   if(dd)hi=0;
   const tr=dd?(v=>v):Math.log10, Y=v=>m.t+(tr(hi)-tr(v))*(H-m.t-m.b)/(tr(hi)-tr(lo));
   eraBands(svg,X,H,m,!dd,narrow);
-  const g=el('g',{class:'axis'},svg); xaxis(svg,g,X,H,m,W);
+  const g=el('g',{class:'axis'},svg); xaxis(g,X,H,m,W);
   const ticks=dd?[0,-0.2,-0.4,-0.6,-0.8]:[0.1,1,10,100,1000,1e4,1e5,1e6,1e7].filter(t=>t>=lo/1.01&&t<=hi*1.01);
   const money=v=>v>=1e6?'$'+(v/1e6).toFixed(v>=1e7?0:1)+'M':(v>=1000?'$'+(v/1000).toFixed(0)+'k':'$'+v.toFixed(v<10?2:0));
   const fmt=dd?(v=>(v*100).toFixed(0)+'%'):money;
@@ -298,14 +322,14 @@ function lines(id, dd){
 function table(){
   const tb=document.getElementById('eras'); tb.textContent='';
   const cell=(tr,s,cls)=>{const td=document.createElement('td');td.textContent=s;if(cls)td.className=cls;tr.appendChild(td);};
-  const trip=m=>`${pct(m.cagr)} / ${m.sharpe.toFixed(2)} / ${pct(m.maxdd,false)}`;
-  const rows=D.eras.map(e=>({lab:e.label,basis:e.basis,years:e.years.toFixed(1),off:pct(e.off,false),m:e.m,vs:e.vs}));
-  rows.push({lab:'Whole panel',basis:`${D.p0} to ${D.p1}`,years:(D.n/252).toFixed(1),off:'',m:D.full,vs:null});
+  const trip=m=>`${pct(m.cagr)} / ${m.sharpe.toFixed(2)} / ${(m.maxdd*100).toFixed(0)}%`;
+  const rows=D.eras.map(e=>({lab:e.label,basis:`${e.basis}. ${e.years.toFixed(1)} years; SPY below its 200d on ${Math.round(e.off*100)}% of sessions.`,m:e.m,vs:e.vs}));
+  rows.push({lab:'Whole panel',basis:`${D.p0} to ${D.p1}. ${D.spans.all.toFixed(1)} years.`,m:D.full,vs:D.fullvs});
   for(const r of rows){
-    const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=r.lab+' ';
+    const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=r.lab;
     const sp=document.createElement('span');sp.className='dim';sp.textContent=r.basis;th.appendChild(document.createElement('br'));th.appendChild(sp);tr.appendChild(th);
-    cell(tr,r.years);cell(tr,r.off);cell(tr,trip(r.m['as built']));cell(tr,trip(r.m['200d -> 1x']));cell(tr,trip(r.m['200d -> cash']));
-    if(r.vs){const a=r.vs['200d -> 1x'],b=r.vs['200d -> cash'];cell(tr,`x${a.toFixed(2)} / x${b.toFixed(2)}`,(a>=1&&b>=1)?'pos':((a<1&&b<1)?'neg':''));}else cell(tr,'');
+    cell(tr,trip(r.m['as built']));cell(tr,trip(r.m['200d -> 1x']));cell(tr,trip(r.m['200d -> cash']));
+    const a=r.vs['200d -> 1x'],b=r.vs['200d -> cash'];cell(tr,`x${a.toFixed(2)} / x${b.toFixed(2)}`,(a>=1&&b>=1)?'pos':((a<1&&b<1)?'neg':''));
     tb.appendChild(tr);
   }
 }

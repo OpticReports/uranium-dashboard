@@ -2796,3 +2796,48 @@ DECISION (owner): no change. The 200d gate on the trend baskets (add. 42) remain
 only gate with robust evidence. Optional: a pre-registered forward watch on
 "CAPE >= 35 with the 200d" (log its live stretches against the 200d; revisit after a
 completed episode).
+
+## Addendum 44 — How far the HG 200-day gate was backtested (2026-10-17)
+
+Owner question: how far was this strategy backtested? Exhibit:
+results/hg-gate-backtest-coverage-2026-10-17.html (research/leverage/make_coverage_chart.py on the
+add. 42 gate lab).
+
+SPANS. Panel B 1990-01-03..2026-10-07, 9,228 sessions (36.6 yrs; the start is bound by the VIX
+index, 1990-01-02, which HG's volatility legs are modelled from). The five gated legs are actual
+fund prices from 2010-02-11 (16.6 yrs); every HG leg from 2015-06-01 (11.3 yrs; LABU the last
+launch; = panel A, the stretch HG's rules were built on). HG live since 2025-12-05 (0.8 yrs); the
+backtested version since 2026-07-31 (0.2 yrs; the December version differed in its defensive
+branch, not in the trend or dip-buy logic); the gate: never live.
+
+THE GATE BY DATA ERA (HG, panel B; CAGR / Sharpe / maxDD; x = ending wealth vs as built, 1x / cash)
+  1990-99    rebuilt from indices          as built +36.9/0.84/66   1x +41.7/0.95/59   cash +43.9/0.99/59   x1.36 / x1.57
+  1999-2010  rebuilt from QQQ/SPY/DIA/IWM  +21.8/0.58/72            +35.8/0.80/65      +43.7/0.93/60        x3.29 / x6.06
+  2010-15    actual, rules not fitted      +36.4/0.94/55            +40.2/1.05/51      +41.6/1.08/49        x1.16 / x1.22
+  2015-26    actual, in sample             +104.0/1.69/36           +92.5/1.64/36      +86.5/1.57/36        x0.52 / x0.36
+  whole      1990-2026                     +49.5/1.00/72            +53.6/1.12/65      +55.5/1.16/60        x2.68 / x4.18
+
+READ IT THIS WAY: the 36-year edge was earned in 1999-2010 (121-126% of the whole-panel log edge;
+the dot-com and 2008 windows each give 53-62% of that era's edge; ~95% of it on days the held leg
+was rebuilt from a 1x ETF, mostly QQQ x3). The 1990s gain is one session (1998-08-31: 78-80% of
+the era's edge; without it x1.06 / x1.10 in nine years). On actual fund prices the gate helped in
+2010-15 (5.3 yrs, the only stretch that is both actual and out of sample for HG's rules) and cost
+11.5-17.5pp a year in 2015-26. The gate itself is in sample everywhere on this panel (add. 40
+chose it after 15 shapes). It is insurance against a 2000/2008-type bear, about two episodes deep.
+
+CAVEATS: rebuilt layers of the gated legs track the funds within 1.2%/yr where both exist (looser
+for USD, LABU and the VIX models, each held <=2% of sessions and identically in both runs); 30
+bond-market holidays skipped before 2007 lift pre-2007 CAGRs ~0.4pp/yr for every variant alike;
+signal and trade at the same close vs Composer's 15:50.
+
+COUNTER-AGENT (one hostile reviewer; scratchpad/verify_cov/): panel prices and the three variants'
+daily returns rebuilt independently from base_B.json holdings (max diff 3e-16); every era number
+reproduced. REFUTED and fixed: era-1 as-built CAGR +37.0 -> +36.9 (double rounding); "HG live 0.8
+yrs" (these exact rules: 0.2); the fee-drag wording (USD's SOX rebuild carries a fitted premium;
+the IWM and XBI layers use the fixed 1.8%); "within 1.2%/yr" as a blanket claim (holds for the
+gated legs); "the 200d was fixed from the literature" (chosen on this panel); LABU's NBI layer is a
+stand-in, not its index; SOXL (a signal input) was missing; three layout defects. The exhibit was
+committed (5037b81) before the review finished; the fixes are in the next commit. Verdict after
+fixes: showable.
+
+DECISION: none; answers a question. The draft build still waits on the owner.
