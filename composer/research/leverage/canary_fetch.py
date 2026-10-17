@@ -25,12 +25,14 @@ DIR = os.path.join(OUT, 'canary')
 RAW = os.path.join(DIR, 'raw')
 os.makedirs(RAW, exist_ok=True)
 FRED = ['DGS2', 'DGS10', 'DFII10', 'THREEFYTP10', 'T10Y3M', 'PERMIT', 'TEMPHELPS', 'HTRUCKSSAAR', 'NEWORDER', 'CFNAI', 'IC4WSA', 'SAHMREALTIME']
+LEADS = ['PERMIT', 'TEMPHELPS', 'HTRUCKSSAAR', 'NEWORDER', 'CFNAI', 'IC4WSA', 'SAHMREALTIME']   # the canary's leading stack
 FINRA = 'https://www.finra.org/sites/default/files/2021-03/margin-statistics.xlsx'
 OFR = 'https://www.financialresearch.gov/financial-stress-index/data/fsi.csv'
 
 
 def curl(url, path):
-    r = subprocess.run(['curl', '-sSL', '--http1.1', '--retry', '2', '--retry-delay', '3', '--retry-all-errors', '--connect-timeout', '20', '--max-time', '90', '-A', 'Mozilla/5.0', '-o', path, url], capture_output=True, text=True)
+    ua = [] if 'stlouisfed.org' in url else ['-A', 'Mozilla/5.0']   # the St. Louis Fed hosts drop the bare browser UA (2026-10-17)
+    r = subprocess.run(['curl', '-sSL', '--http1.1', '--retry', '2', '--retry-delay', '3', '--retry-all-errors', '--connect-timeout', '20', '--max-time', '90'] + ua + ['-o', path, url], capture_output=True, text=True)
     if r.returncode != 0 or not os.path.exists(path) or os.path.getsize(path) < 200:
         raise RuntimeError(f'fetch failed {url}: {r.stderr.strip()[:200]}')
 
@@ -176,6 +178,8 @@ def main(only=None):
             fetch_treasury('daily_treasury_yield_curve', range(1990, 2027)), fetch_treasury('daily_treasury_real_yield_curve', range(2003, 2027))),
         'ACM': lambda: {'ACM_TP10': fetch_acm()},
         'FRED': lambda: {s_: parse_fred((curl(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={s_}', os.path.join(RAW, f'{s_}.csv')), os.path.join(RAW, f'{s_}.csv'))[1]) for s_ in FRED},
+        # ALFRED serves the same latest-vintage series keylessly when fredgraph is unreachable (2026-10-17)
+        'ALFRED': lambda: {s_: parse_fred((curl(f'https://alfred.stlouisfed.org/graph/alfredgraph.csv?id={s_}', os.path.join(RAW, f'alfred_{s_}.csv')), os.path.join(RAW, f'alfred_{s_}.csv'))[1]) for s_ in LEADS},
     }
     for name, job in jobs.items():
         if only and name not in only:

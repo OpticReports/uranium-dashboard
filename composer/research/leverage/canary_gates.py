@@ -126,23 +126,27 @@ def build(P, days):
         F[f'dY2<+{bp:.1f}pp 2y 12m change (Fed pace)'] = flag(days, lambda d, bp=bp: (chg(y2, d, 252) is None) or chg(y2, d, 252) < bp)
     F['TIPS10<2% real yield'] = flag(days, lambda d: on(tips, d) or tips[d] < 2.0)
     F['dTP<+0.5pp ACM term premium 6m change'] = flag(days, lambda d: (chg(acm, d, 126) is None) or chg(acm, d, 126) < 0.5)
-    # 4. curve: the canary's headline re-steepening window (monthly 3m10y, sustained inversion = 3+ months)
-    u3 = load('UST_3M')
-    sp_m = {}
-    for d, v in load('UST_10Y').items():
-        if d in u3:
-            sp_m.setdefault(d[:7], []).append(v - u3[d])
-    sp_m = {k: sum(v) / len(v) for k, v in sp_m.items()}
+    # 4. curve: the canary's headline re-steepening window, on the canary's own series (monthly GS10 - TB3MS,
+    #    BACKTEST.md part A; sustained inversion = 3+ consecutive months below zero).  The month's average is
+    #    published early the next month, so the window opens the second month after the dis-inversion month.
+    gs10 = json.load(open(os.path.join(lg.MAC, 'fred_GS10.json')))
+    tb3 = json.load(open(os.path.join(lg.MAC, 'fred_TB3MS.json')))
+    sp_m = {k[:7]: gs10[k] - tb3[k] for k in gs10 if k in tb3}
     months = sorted(sp_m)
     off_rs, off_rsi, run = set(), set(), 0
+
+    def add_mo(k, n):
+        y, m = int(k[:4]), int(k[5:7]) + n
+        while m > 12:
+            y, m = y + 1, m - 12
+        return f'{y:04d}-{m:02d}'
     for i, k in enumerate(months):
         run = run + 1 if sp_m[k] < 0 else 0
         if run >= 3:
-            for j in range(i + 1, min(i + 2, len(months))):
-                off_rsi.add(months[j])          # inversion known at month end -> off next month
+            off_rsi.add(add_mo(k, 2))
         if sp_m[k] >= 0 and i >= 3 and all(sp_m[months[i - q]] < 0 for q in (1, 2, 3)):
-            for j in range(i + 1, min(i + 13, len(months))):
-                off_rs.add(months[j]); off_rsi.add(months[j])
+            for j in range(2, 14):
+                off_rs.add(add_mo(k, j)); off_rsi.add(add_mo(k, j))
     F['RS12 not in 12m after a dis-inversion (canary headline)'] = flag(days, lambda d: d[:7] not in off_rs)
     F['RSinv not inverted and not in 12m after'] = flag(days, lambda d: d[:7] not in off_rsi)
     # 5. retail leverage: FINRA margin debt (1997+), month m from m+2
