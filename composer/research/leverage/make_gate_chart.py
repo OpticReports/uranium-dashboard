@@ -14,7 +14,7 @@ FAMILY = [('A', 'constant blend'), ('T', 'trend'), ('V', 'realized vol'), ('E', 
 
 
 def fam(name):
-    if name.endswith('-> cash'):
+    if ' -> ' in name:
         return 'cash fallback'
     if name.startswith('vote') or '&' in name or '|' in name or name.startswith('VT16x') or name.startswith('VT20 floor'):
         return 'combination'
@@ -315,7 +315,7 @@ function lineChart(id, keys, opts){
 }
 
 function draw(){
-  legendDots('lg-sc',[['trend gates','s1'],['realized-vol and vol-target gates','s2'],['same gate, cash instead of 1x','s3'],['gate on the trend baskets only','s4'],['other factors','b1'],['constant blends (line)','b2',true]]);
+  legendDots('lg-sc',[['trend gates','s1'],['realized-vol and vol-target gates','s2'],['same gate, cash or half-cash instead of 1x','s3'],['gate on the trend baskets only','s4'],['other factors','b1'],['constant blends (line)','b2',true]]);
   scatter('sc1','sharpe','Sharpe',v=>v.toFixed(2)); scatter('sc2','cagr','CAGR',v=>(v*100).toFixed(0)+'%');
   const names={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200 SPY>200d':'200d, all longs','T200 SPY>200d [trend only]':'200d, trend only','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash [trend only]':'200d to cash, trend only'};
   const cls={'A0 always levered (as built)':'b2','A1 never levered':'b1','T200 SPY>200d':'s1','T200 SPY>200d [trend only]':'s4','VT16 vol target 16% on SPY vol':'s2','T200 SPY>200d -> cash [trend only]':'s3'};
