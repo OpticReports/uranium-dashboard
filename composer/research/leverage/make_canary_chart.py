@@ -135,10 +135,14 @@ def main():
         E = J.get('episodes', {}).get(key)
         if not E:
             continue
-        cells = '; '.join(f"{e['from'][:7]} to {e['to'][:7]}: {(2.718281828 ** e['gain'] - 1) * 100:+.0f}%" for e in E['episodes'] if abs(e['gain']) >= 0.01)
+        big = [e for e in E['episodes'] if abs(e['gain']) >= 0.03]
+        cells = '; '.join(f"{e['from'][:7]} to {e['to'][:7]}: {(2.718281828 ** e['gain'] - 1) * 100:+.0f}%" for e in big)
+        if len(E['episodes']) > len(big):
+            cells += f" (plus {len(E['episodes']) - len(big)} smaller)"
+
         ep_rows += (f"<tr><th scope=row>{_html.escape(lab)}</th><td>{len(E['episodes'])}</td><td>{(2.718281828 ** E['total_log_gain'] - 1) * 100:+.0f}%</td>"
                     f"<td>{(2.718281828 ** E['peak_lead'][0] - 1) * 100:+.0f}% ({E['peak_lead'][1][:7]})</td><td class=wrap>{_html.escape(cells)}</td></tr>")
-    page = (TEMPLATE.replace('__FOREST__', json.dumps(forest)).replace('__EPISODES__', ep_rows).replace('__TL__', json.dumps(tl)).replace('__READS__', read_rows)
+    page = (TEMPLATE.replace('__NSIG__', str(len(sigs))).replace('__FOREST__', json.dumps(forest)).replace('__EPISODES__', ep_rows).replace('__TL__', json.dumps(tl)).replace('__READS__', read_rows)
             .replace('__ALL__', all_rows).replace('__WINS__', wins).replace('__WINHEAD__', ''.join(f'<th>{w}</th>' for w in lg.WINDOWS_B))
             .replace('__LAST__', last))
     open(PAGE, 'w').write(page)
@@ -170,6 +174,7 @@ table{border-collapse:collapse;width:100%;font-size:13.5px}
 th,td{padding:5px 7px;text-align:right;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums;white-space:nowrap}
 th[scope=row]{text-align:left;font-weight:500;white-space:normal}
 td.wrap{white-space:normal;text-align:left;font-size:12.5px;color:var(--ink2);min-width:260px}
+.ep th[scope=row]{min-width:180px}
 thead th{color:var(--ink2);font-weight:600;font-size:12.5px}
 td.on{color:var(--good);font-weight:600} td.off{color:var(--warn);font-weight:600}
 .dim{color:var(--muted);font-size:12px}
@@ -190,8 +195,8 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px}
 <body>
 <main>
 <h1>Canary signals as a leverage gate</h1>
-<p class="sub-h">EMAs, CAPE levels, bond yields, the curve's re-steepening window, retail leverage (FINRA margin debt) and OFR stress, each tested as the switch that holds HG's five trend baskets at 1x instead of 3x. HG on the 1990 to 2026 proxy panel, out of sample for its rules; the dip-buys stay levered (addendum 42). Every signal is read with its publication lag.</p>
-<p class="lede">None of them beats the plain 200-day gate. Used alone, the best (EMAs, CAPE below 35, OFR stress) tie it at best; bond yields, the curve window and margin growth do no better than staying levered. On top of the 200-day, CAPE and margin excess add a little, and all of it comes from one episode: they stepped down before the 2000 top. One episode out of about ninety tests is what chance alone produces, so no EV+ gate beyond the 200-day is established.</p>
+<p class="sub-h">EMAs, CAPE levels, bond yields, the curve's re-steepening window, retail leverage (FINRA margin debt), OFR stress and the canary's seven-indicator leading stack, each tested as the switch that holds HG's five trend baskets at 1x instead of 3x. HG on the 1990 to 2026 proxy panel, out of sample for its rules; the dip-buys stay levered (addendum 42). Every signal is read with its publication lag.</p>
+<p class="lede">None of these beats the plain 200-day gate on its own. The canary's leading stack, its curve window, bond yields and margin growth do no better than staying levered. Added on top of the 200-day, four lift Sharpe slightly: CAPE below 35 or 30, the 100-day EMA, and margin growth under 25 points over the S&amp;P. Only CAPE below 35 clears its own bootstrap band, and its timing is real (it beats 209 of 210 random re-datings of itself). But it is four episodes with a threshold picked in hindsight: +38% against the 200-day in 1998 to 2000, then +3% and +14%, and −25% in the stretch it has been running since July 2025. That is a watch, not an established EV+ gate.</p>
 
 <section class="card">
 <h2>Sharpe gain over the 200-day gate, with the 90% band</h2>
@@ -208,8 +213,8 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px}
 
 <section class="card">
 <h2>Episode by episode: where the add-ons won and lost against the 200-day</h2>
-<p class="sub-h">Each stretch where the add-on held the trend baskets at 1x while the 200-day alone stayed levered, and what that did to wealth relative to the 200-day gate alone. Stretches less than three months apart are merged. Only stretches that moved wealth by 1% or more are listed.</p>
-<div class="tablewrap"><table>
+<p class="sub-h">Each stretch where the add-on held the trend baskets at 1x while the 200-day alone stayed levered, and what that did to wealth relative to the 200-day gate alone. Stretches less than three months apart are merged; those that moved wealth by 3% or more are listed.</p>
+<div class="tablewrap"><table class="ep">
 <thead><tr><th></th><th>episodes</th><th>net vs 200-day</th><th>peak lead</th><th>stretches</th></tr></thead>
 <tbody>__EPISODES__</tbody></table></div>
 </section>
@@ -228,7 +233,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px}
 <div class="tablewrap"><table>
 <thead><tr><th>Signal</th><th>Reading</th><th>Gate</th></tr></thead>
 <tbody>__READS__</tbody></table></div>
-<p class="sub-h" style="margin:8px 0 0">The valuation and yield signals all say de-lever; the trend, margin, stress and curve signals all say stay levered. The one combination with a weak long-history edge (CAPE below 35 with the 200-day) would hold the trend baskets at 1x today, on the strength of a single episode.</p>
+<p class="sub-h" style="margin:8px 0 0">Valuation and yield signals say de-lever; trend, margin, stress, curve and the leading stack say stay levered. The one combination that clears its band, CAPE below 35 with the 200-day, has held the trend baskets at 1x since July 2025 and is 25% behind the 200-day alone over that stretch.</p>
 </section>
 
 <section class="card">

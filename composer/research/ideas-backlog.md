@@ -182,3 +182,8 @@ deterministic rationale are listed.
 10. Negative result worth keeping (add. 42): de-levering HG's RSI dip-buys hurts on every
     metric in both panels; they are the engine's bear-market return source (+77%/+84%/yr
     in 2000-02 / 2007-09 on the proxy panel, 3x by construction).
+
+11. Forward watch, not a gate (add. 43, 2026-10-17): "CAPE >= 35 with the 200d" on HG's
+    trend baskets. Sharpe 1.19 vs 1.12 over 1990-2026, timing beats 209/210 re-datings,
+    but four episodes and a hindsight threshold; de-levered since 2025-07 and 25% behind
+    the 200d over that stretch. Log the live stretch; revisit after it completes.

@@ -2731,3 +2731,68 @@ SPY>200d gate on HG's five trend baskets only, with the fallback (1x, half, or c
 the owner's regime call; KMLM's long legs would take a vol gate on in-sample evidence
 only. Build path as add. 40: draft symphony -> fidelity gate -> counter-agent -> owner
 approval of the swap.
+
+## Addendum 43 — Canary signals as a leverage gate (2026-10-17)
+
+Owner question: EMAs, CAPE levels, bond yields, retail leverage — the things the
+treasury-canary tracks — is any of them an EV+ gate for when to turn leverage off?
+Method (research/leverage/canary_gates.py on the add.-42 engine): each signal switches
+HG's five trend baskets between 3x and 1x (dip-buys stay levered), used four ways: alone,
+together with the 200d gate, as a condition on when the 200d applies, and its mirror.
+Signals (24): SPY vs EMA50/100/200 and the EMA50/200 cross; CAPE < 25/30/35; 10y yield
+< 5%/6%; 10y and 2y 12-month change; real 10y < 2%; ACM term premium 6-month change; the
+canary's re-steepening window (its own GS10-TB3MS series, 12 months after a dis-inversion
+that follows 3+ inverted months) with and without the inversion itself; FINRA margin debt
+YoY > 40%, excess growth over the S&P > 25pp / > 15pp, excess with positive stock-bond
+correlation, deleveraging; OFR stress > 0 / > 1; the canary's seven-indicator leading
+stack in alarm. Publication lags: Treasury/ACM one session, OFR two, FINRA and the
+leading stack month m from m+2, CAPE two months. Data: Treasury par and real curves,
+NY Fed ACM, FINRA workbook, OFR FSI, FRED/ALFRED (keyless; canary_fetch.py). Margin
+numbers reproduce the canary's (June 2026 +49.0% YoY, +28.2pp excess); leading-stack
+alarm onsets reproduce its BACKTEST.md replay (2001-01, 2007-10, 2023-11, 2025-11).
+Panel B HG 1990-2026; nulls: inverse, 100 re-dated placebos, paired 20d-block bootstrap
+of the Sharpe gap vs as built and vs the 200d. Exhibit:
+results/leverage-gate-canary-2026-10-17.html.
+
+RESULTS (HG trend baskets, 1990-2026; as built +49.5 / Sharpe 1.00 / DD 72%; 200d gate
++53.6 / 1.12 / 65%)
+- Alone, nothing beats the 200d. Best: EMA50/100/200 (+52.5..52.8 / 1.10 / DD 66-72),
+  CAPE<35 (+52.6 / 1.09 / 71), OFR stress<1 (+51.8 / 1.10 / 66). Yields, the curve
+  window, margin growth, the leading stack: ~as built (Sharpe 0.95-1.03) and worse than
+  the 200d (P(gap>0) 0.00-0.05).
+- On top of the 200d, four lift Sharpe by 0.03 or more: CAPE<35 +54.4 / 1.19 (gap
+  +0.01..+0.13, P 0.97), CAPE<30 +51.2 / 1.17 (P 0.83, but -44% wealth vs the 200d),
+  EMA100 +54.8 / 1.15 (P 0.89), margin excess<25pp +54.8 / 1.15 (P 0.94).
+- Episodes vs the 200d alone: CAPE<35 +38% (1998-05..2000-09), +3% (2021-04..2022-04),
+  +14% (2024-09..2025-03), -25% (2025-07..now, running); net +22%, peak lead +68% on
+  2025-08-01. Margin excess: +32% (2000), then -3%, -3%, +5%. EMA100: many small
+  stretches, net +33%.
+- Conditioning the 200d on any canary regime never beats the plain 200d (P <= 0.35);
+  the mirrors do as well or better. Same verdict as add. 40.
+- Today: 200d and EMAs leveraged; CAPE 41.1 (Aug, the gate's input) -> every CAPE gate
+  de-levered; 10y 5.09% and +1.1pp in 12m -> de-lever; real 10y 2.74% -> de-lever;
+  margin +37% YoY / +18pp excess (Aug input) -> leveraged at 25pp, de-lever at 15pp;
+  OFR stress, curve window, leading stack -> leveraged.
+
+READ IT THIS WAY: no canary signal is an EV+ gate by itself. CAPE >= 35 on top of the
+200d is the one combination that clears its band, and its timing beats 209 of 210
+re-datings of itself, so it is not noise; but it is four valuation episodes with a
+threshold chosen in hindsight (any cut from 30 to 42 gives a similar result from the
+same 1998-2001 / 2021+ regime), its result depends on the end date, and it is 25%
+behind the 200d in the stretch it is running now. Margin excess is "the powder, not the
+pin" (the canary's own phrase): one winning episode. Watch, not gate.
+
+COUNTER-AGENT (one hostile reviewer, before the leading stack was added): every number
+reproduced; no look-ahead (0 mismatches on the lagged lookups, monthly lags and the curve
+window). REFUTED: "the add-ons differ from the 200d only in 2000-02" (CAPE differs in
+four episodes and is losing the current one), "best P 0.97 is what chance produces"
+(the real CAPE flag beats 209 of 210 re-datings; the right caution is too few episodes
+and a hindsight threshold), the quoted current values (the gate reads August's CAPE and
+margin, not October's and September's), the curve series (now the canary's own GS10-
+TB3MS), and the untested leading stack (now tested; its alarm months reproduce the
+canary's replay). All applied. Verdict after edits: showable; no change from add. 42.
+
+DECISION (owner): no change. The 200d gate on the trend baskets (add. 42) remains the
+only gate with robust evidence. Optional: a pre-registered forward watch on
+"CAPE >= 35 with the 200d" (log its live stretches against the 200d; revisit after a
+completed episode).
