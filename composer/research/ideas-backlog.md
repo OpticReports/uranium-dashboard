@@ -171,3 +171,14 @@ deterministic rationale are listed.
    <=5 bear episodes to fit on; it would need the full placebo/inverse
    treatment and a pre-registered spec before any live test.
 
+
+8. HG leverage gate on the trend baskets (add. 42, 2026-10-17). Plain SPY>200d on
+   {TQQQ,UPRO,UDOW,SSO,TNA} only; fallback 1x (+53.6%/1.12/DD 65% over 1990-2026), half
+   cash (+54.6/1.14/62) or cash (+55.5/1.16/60 = add. 40 B1); costs 11pp/yr and 0.06
+   Sharpe in 2015-26. Owner decision open (extends entry 5). Never gate the dip-buys.
+9. KMLM long-leg vol gate (add. 42). V20<25 / VT16 on SOXL/TECL/SPXL/LABU: DD 55 -> 45-48,
+   Sharpe 2.15 -> 2.21, CAGR -11pp, 2015-26 in sample only. Needs a long-history KMLM
+   stand-in before it can be a candidate.
+10. Negative result worth keeping (add. 42): de-levering HG's RSI dip-buys hurts on every
+    metric in both panels; they are the engine's bear-market return source (+77%/+84%/yr
+    in 2000-02 / 2007-09 on the proxy panel, 3x by construction).

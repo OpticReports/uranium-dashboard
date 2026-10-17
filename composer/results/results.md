@@ -2636,3 +2636,98 @@ $44.0k vs the account's $46.0k; 1x $13.2k vs SPY $18.8k), "because" -> "partly
 because" on the Sharpe mechanism, the cost wording, in-sample labels. All applied:
 unlevered +23.7 -> +27.2 (range 24-27), Sharpe gap +0.45 -> +0.17, leverage 53 -> 50
 pts, dollars $35.0k -> $32.8k. Verdict after edits: showable.
+
+## Addendum 42 — Leverage gate lab: timing leveraged vs 1x legs (2026-10-17)
+
+Owner question (10-16): is there a factor, or a few, that gate WHEN a leg is held
+leveraged and when as its 1x version (same trades, only the leverage switches), and
+how should such a gate be blended and applied across the engines? Research pass;
+nothing changes live.
+Method (research/leverage/levgate.py): every leveraged leg has a 1x twin (TQQQ->QQQ,
+UDOW->DIA, SQQQ->PSQ, UVXY->VIXY ...); a gate is a per-day allowance in [0,1] read at
+the prior close; switching is costed at the engine's measured bps on the effective
+holdings. Leg roles: HG trend baskets {TQQQ,UPRO,UDOW,SSO,TNA} (add. 40's set), HG
+dip-buys {QLD,TECL,USD,LABU}, inverse, long-vol. Panel B = HG on the 1990-2026 proxy
+panel (out of sample for the rules); panel A = four engines 2015-06..2026-10 (in
+sample for all four). ~50 factor shapes x {every leveraged long, trend baskets only},
+plus application rows (dip only / all legs / long-vol only) and three fallbacks (1x,
+half 1x half cash, cash). Nulls: inverse, 100 re-dated placebos, paired 20d-block
+bootstrap vs as built. Book: 29/29/27/15 drift, cap-40 at the next close. Literature
+and forward-dynamics brief: research/leverage/literature.md. Exhibit:
+results/leverage-gate-2026-10-17.html. Counter-agent reviewed; fixes applied.
+
+RESULTS — HG, panel B 1990-2026 (CAGR / Sharpe / Sortino / maxDD)
+  as built                            +49.5 / 1.00 / 1.55 / 72%
+  never levered (all longs -> 1x)     +22.9 / 0.89 / 1.58 / 38%   constant blends between: Sharpe 0.89-1.00
+  200d gate, trend baskets only       +53.6 / 1.12 / 1.80 / 65%   inverse +30.9/0.81; placebo p1.00 (CAGR, Sharpe, DD);
+                                                                  bootstrap Sharpe gap +0.04..+0.20, P(>0) 0.99
+  200d gate, every leveraged long     +43.2 / 1.04 / 1.59 / 58%   with a 2% band +44.7 / 1.07 / 52% (P 0.85)
+  200d gate, dip-buys only            +39.4 / 0.91 / 1.34 / 78%   dip-buys never levered: +36.1 / 0.86 / 78%
+  fallback below the 200d (trend baskets): 1x +53.6/1.12/65 | half 1x half cash +54.6/1.14/62 |
+                                           cash +55.5/1.16/60 (= add. 40's B1, reproduced exactly)
+  by window (CAGR/yr) as built | 1x | half | cash: 1990-99 +38 | +43 | +44 | +45; 2000-02 -10 | +12 |
+    +20 | +28; 2003-07 +34 | +37 | +38 | +39; 2007-09 -47 | +2 | +21 | +43; 2009-19 +55 | +54 | +53 |
+    +52; 2020-26 +127 | +109 | +105 | +100.
+  dip-buys alone (trend baskets always in cash, dip-buys at 3x): +30.2 / 0.94 / 60%; 2000-02 +77%/yr
+    (in-window DD 60%), 2007-09 +84%/yr.
+  factor ranking on the trend baskets (B Sharpe / A Sharpe / B 2007-09 CAGR): 200d 1.12 / 1.63 / +2;
+    vol<25% 1.10 / 1.67 / -13; vol-rank 1.09 / 1.78 / -23; own-vol target 1.06 / 1.72 / -20; VIX<50d
+    MA 1.06 / 1.88 / -22; VIX term 1.04 / 1.76 / -28; CAPE 1.03 / 1.88 / -47; credit 1.03 / 1.59 / +1;
+    curve 1.03 / 1.59 / -23; fixed 1/3..2/3 1.03 / 1.72 / -7..-29. Several trend-only families clear
+    the CAGR/Sharpe nulls; only the 200d family also cuts the long-bear drawdown (DD-better 1.00; the
+    vol families ~0).
+Panel A 2015-26 (in sample): HG as built +103.9 / 1.69 / 36; 200d trend-only +92.4 / 1.63 / 36 (half
+  +89.4 / 1.61; cash +86.4 / 1.57); fixed 1/2 trend-only +86.1 / 1.72 / 26; trend baskets never
+  levered +67.4 / 1.66 / 22; VIX<50d trend-only +107.2 / 1.88 / 28 (B: 1.06, no 2008 protection).
+  HG's 36% DD (the 2020 gap) is cut only by vol/VIX/CAPE gates (28-33%), never by trend gates. KMLM:
+  vol gates +186-188 / 2.21 / DD 45-48 vs as built +198.8 / 2.15 / 55; trend gate +165.7 / 2.15 / 52;
+  inverse-leg panic gate neutral. SLEEVE: nothing moves. Book (as built +111.9 / 2.77 / 22.3): 200d
+  trend-only on HG +107.7 / 2.76 / 20.5; on HG+KMLM +97.3 / 2.77 / 17.0; vol-target trend-only on
+  HG+KMLM +105.0 / 2.79 / 19.9; cash gate on HG +104.9 / 2.72 / 19.8; never levered everywhere
+  +62.0 / 2.52 / 10.7.
+
+READ IT THIS WAY
+1. WHERE the gate applies matters more than WHICH factor drives it. The trend baskets are
+   what lose in long bears; the RSI dip-buys at 3x are HG's bear-market engine. Gate the
+   baskets; never de-lever the dip-buys (worse on every metric in both panels).
+2. The factor is the 200d, as in add. 40. Vol, VIX and CAPE gates look better in 2015-26 and
+   worse over 36 years; the 200d is the only family with both the long-history edge and the
+   2008 drawdown cut. Macro (credit, curve, T-bill, CAPE) adds nothing robust.
+3. 1x vs cash below the 200d is a regime call: cash wins the long bears (2007-09 +43 vs
+   +2%/yr), 1x wins the post-2015 whipsaw regime (+109 vs +100/yr; panel A +92 vs +86);
+   over 36 years cash leads by 2pp CAGR, 0.04 Sharpe and 5pp DD, not significant. Half
+   and half sits between them on every number.
+4. Blends: running the baskets at a constant 2x buys Sharpe in 2015-26 (1.72 vs 1.69) and
+   cuts DD (26 vs 36%) for 18pp of CAGR; over 36 years it is a wash (1.03 vs 1.00).
+5. Book level, live-era regime: a gate trims 2-6pp of book DD for 4-15pp of CAGR at an
+   unchanged Sharpe; the payoff lives in 2000/2008-type regimes (HG 2007-09: -47 -> +2%/yr
+   at 1x, +43%/yr in cash).
+6. Forward dynamics (brief): leveraged-ETF decay scales with variance (3x at 30% vol ~
+   27%/yr; -3x decays twice as fast as 3x), so a gate's job is to predict variance and
+   chop, not direction; financing at today's rates (~2x SOFR ~ 8%/yr on a 3x) lowers the
+   cost of sitting in 1x; V-shaped recoveries since 2015 make re-entry lag the dominant
+   cost; gap days (Aug 2024, Apr 2025, Mar 2026) are not avoidable at a daily cadence.
+   Opinion, flagged as such: the post-2015 regime favours the 1x fallback; a 2000/2008-type
+   bear favours cash.
+
+NOT MODELED / CAVEATS: ~50 shapes x 2 leg sets, all shown (the best of a hundred reads
+better than it is; the TREND set and the 200d shape were fixed in add. 40 before this
+study); panel B legs are synthetic before the ETFs exist; signals read at the prior close
+vs Composer's 15:50; hysteresis needs state Composer lacks (the plain 200d gives the same
+numbers); FRED read same-day; KMLM's flag via RYMFX before 2020-12; per-leg gates skip
+the placebo; the trend-only gate's 65% max DD is the 2001 dip-buy episode, which no basket
+gate touches; costs equal for 1x and 3x trades plus the switching turnover.
+
+COUNTER-AGENT (one hostile reviewer): reproduced every headline row to the decimal;
+REFUTED the cash-fallback costing (BIL->BIL rotations charged as trades: fixed, cash rows
++1 to +8pp, add. 40's B1 now reproduces exactly), the cap-40 reset timing (a day early:
+fixed), "only the 200d improves both panels' Sharpe" (false in 2015-26: reworded), "a 0.5
+blend is the middle" (the true middle is the half-cash fallback: added), hysteresis as a
+Composer-buildable rule (dropped), and the undisclosed in-window drawdown of the dip-buy
+engine (added). Verdict after edits: showable; the core result is unchanged.
+
+DECISION (owner): nothing changes live. If a leverage gate is wanted it is the plain
+SPY>200d gate on HG's five trend baskets only, with the fallback (1x, half, or cash) as
+the owner's regime call; KMLM's long legs would take a vol gate on in-sample evidence
+only. Build path as add. 40: draft symphony -> fidelity gate -> counter-agent -> owner
+approval of the swap.
