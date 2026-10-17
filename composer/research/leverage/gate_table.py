@@ -72,6 +72,31 @@ def main():
         m = book.get(bk)
         if m:
             lines.append(f"| {lab} | {pct(m['cagr'])} | {m['sharpe']:.2f} | {m['sortino']:.2f} | {pct(m['maxdd'], False)} | {pct(m['worst_year'])} |")
+    # full metric set per period (owner request: Sharpe, Sortino, max DD for every period)
+    V4 = V[:4]
+    hdr = '| Variant | CAGR | Vol | Sharpe | Sortino | Calmar | Max DD | Worst year | Longest underwater |'
+    sep = '|---|---|---|---|---|---|---|---|---|'
+
+    def row(lab, m):
+        cal = f"{m['calmar']:.2f}" if m.get('calmar') is not None else ''
+        tuw = f"{m['tuw_days'] / 21:.0f} mo" if m.get('tuw_days') is not None else ''
+        return (f"| {lab} | {pct(m['cagr'])} | {pct(m['vol'], False)} | {m['sharpe']:.2f} | {m['sortino']:.2f} | {cal} | "
+                f"{pct(m['maxdd'], False)} | {pct(m['worst_year'])} | {tuw} |")
+    lines += ['', '## Full metrics by period', '']
+    periods = [('1990-2026, full history', lambda k: B['rows'][k]['full'])]
+    for w in ('1990-99', '2000-02 bear', '2003-07', '2007-09 bear', '2009-19', '2020-26'):
+        periods.append((f'{w} (1990-2026 panel)', lambda k, w=w: B['rows'][k]['windows'][w]))
+    periods.append(('2015-2026, real tickers (in sample)', lambda k: A['rows'][k]['full']))
+
+    def live(k):
+        s_ = A['series_keep'][k]
+        ds = sorted(s_)
+        return lg.gs.metrics(s_, ['x'] + ds, '2023-04-19')
+    periods.append(('Live era, 2023-04-19 to 2026-10-07', live))
+    for title, get in periods:
+        lines += [f'### {title}', '', hdr, sep] + [row(lab, get(k)) for lab, k, _ in V4] + ['']
+    lines += ['### Book 2015-2026 (29/29/27/15, 40% cap; gate on HG only)', '', hdr, sep]
+    lines += [row(lab, book[bk]) for lab, _, bk in V4 if bk in book] + ['']
     PB, _, rb = lg.engine_runs('B')
     PA, _, ra = lg.engine_runs('A')
     sb, bb, _ = switches(PB, rb['HG'][0])
