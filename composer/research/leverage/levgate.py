@@ -452,9 +452,12 @@ def main(seed=11, n_placebo=100, n_boot=400):
             days_all = sorted(set.intersection(*[set(runs[e][0][1:]) for e in runs]))
             S = {e: res['panels']['A'][e]['series_keep'] for e in runs}
             combos = {}
-            for gate in ('A1 never levered', 'T200 SPY>200d', 'V20<25 SPY 20d vol', 'VT16 vol target 16% on SPY vol'):
+            def pick(e, gate):   # HG keeps its dip-buys levered under the [trend only] tag; other engines have no dip legs
+                return S[e].get(gate) or S[e].get(gate.replace(' [trend only]', '')) or S[e]['A0 always levered (as built)']
+            for gate in ('A1 never levered', 'T200 SPY>200d', 'V20<25 SPY 20d vol', 'VT16 vol target 16% on SPY vol',
+                         'T200h hysteresis +-2% [trend only]', 'T200 SPY>200d -> cash [trend only]', 'A1 never levered [trend only]', 'VT16 vol target 16% on SPY vol [trend only]'):
                 for app, engs in (('HG only', {'HG'}), ('HG+KMLM', {'HG', 'KMLM'}), ('all engines', set(runs))):
-                    eng = {e: (S[e][gate] if e in engs else S[e]['A0 always levered (as built)']) for e in runs}
+                    eng = {e: (pick(e, gate) if e in engs else S[e]['A0 always levered (as built)']) for e in runs}
                     combos[f'{gate} -> {app}'] = metrics(book(eng, days_all), ['x'] + days_all)
             combos['as built'] = metrics(book({e: S[e]['A0 always levered (as built)'] for e in runs}, days_all), ['x'] + days_all)
             res['book_A'] = {'window': [days_all[0], days_all[-1]], 'rows': combos}
