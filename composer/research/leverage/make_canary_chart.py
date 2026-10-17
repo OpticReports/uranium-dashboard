@@ -92,17 +92,30 @@ def main():
         return a - b
     spy = P['SPY']
     ma200 = lg.ma_series(spy, 200)
+
+    def back(d, n):
+        y, m = int(d[:4]), int(d[5:7]) - n
+        while m < 1:
+            y, m = y - 1, m + 12
+        return f'{y:04d}-{m:02d}'
+    cm, gm = back(last, 2), back(last, 2)
+    rs_sp = strips.get('12 months after a curve dis-inversion') or []
+    rs_last = rs_sp[-1] if rs_sp else None
+    cm = max(k for k in cape if k <= cm)
+    ls_state = cur.get('LS50 canary leading stack not in alarm')
     reads = [('SPY vs its 200-day average', f"{(spy[last] / ma200[last] - 1) * 100:+.1f}% above", cur['T200 SPY>200d (reference)']),
              ('SPY vs its 200-day EMA', 'above', cur['EMA200 SPY>EMA200']),
-             ('CAPE (latest month)', f"{cape[max(cape)]:.1f} ({max(cape)})", cur['CAPE<35']),
+             ('CAPE (gate reads the month two back)', f"{cape[cm]:.1f} for {cm} (latest {cape[max(cape)]:.1f}, {max(cape)})", cur['CAPE<35']),
              ('10-year Treasury yield', f"{lk(y10):.2f}% ({max(y10)})", cur['Y10<5% 10y yield level']),
              ('10-year change over 12 months', f"{chg12(y10):+.2f}pp", cur['dY10<+1.0pp 10y 12m change']),
              ('2-year change over 12 months', f"{chg12(y2):+.2f}pp", cur['dY2<+1.5pp 2y 12m change (Fed pace)']),
              ('Real 10-year yield (TIPS)', f"{lk(tips):.2f}%", cur['TIPS10<2% real yield']),
-             ('Margin debt growth (FINRA)', f"{mgy[km] * 100:+.1f}% YoY ({km})", cur['MG40 margin YoY<40%']),
-             ('Margin growth over the S&P', f"{(mgy[km] - spx[km]) * 100:+.1f}pp ({km})", cur['MX25 margin excess growth<25pp (canary cell)']),
+             ('Margin debt growth (FINRA; gate reads m+2)', f"{mgy[gm] * 100:+.1f}% YoY for {gm} (latest {mgy[km] * 100:+.1f}%, {km})", cur['MG40 margin YoY<40%']),
+             ('Margin growth over the S&P', f"{(mgy[gm] - spx[gm]) * 100:+.1f}pp for {gm} (latest {(mgy[km] - spx[km]) * 100:+.1f}pp)", cur['MX25 margin excess growth<25pp (canary cell)']),
              ('OFR financial stress index', f"{lk(fsi):+.2f} ({max(fsi)})", cur['FSI<0 OFR stress below average']),
-             ('Curve re-steepening window', 'closed Sep 2026 (dis-inversion Dec 2024)', cur['RS12 not in 12m after a dis-inversion (canary headline)'])]
+             ('Curve re-steepening window (GS10 minus TB3MS)', (f"last window {rs_last[0][:7]} to {rs_last[1][:7]}" if rs_last else 'none'), cur['RS12 not in 12m after a dis-inversion (canary headline)'])]
+    if ls_state is not None:
+        reads.append(('Canary leading stack (7 indicators)', 'alarm' if ls_state < 1 else 'no alarm', ls_state))
     read_rows = ''.join(f"<tr><th scope=row>{_html.escape(a)}</th><td>{_html.escape(b)}</td><td class='{'on' if c >= 1 else 'off'}'>{'leveraged' if c >= 1 else 'de-lever'}</td></tr>" for a, b, c in reads)
 
     def pct(x, s=True):
@@ -116,7 +129,16 @@ def main():
         for n, k in (('As built', 'as built'), ('200-day gate (trend baskets)', 'T200 SPY>200d (reference)'), ('CAPE below 35, with the 200-day', 'CAPE<35 [& 200d]'),
                      ('Margin growth under 25pp over the S&P, with the 200-day', 'MX25 margin excess growth<25pp (canary cell) [& 200d]'),
                      ('SPY above 100-day EMA, with the 200-day', 'EMA100 SPY>EMA100 [& 200d]')))
-    page = (TEMPLATE.replace('__FOREST__', json.dumps(forest)).replace('__TL__', json.dumps(tl)).replace('__READS__', read_rows)
+    ep_rows = ''
+    for key, lab in (('CAPE<35', 'CAPE below 35, with the 200-day'), ('CAPE<30', 'CAPE below 30, with the 200-day'),
+                     ('MX25 margin excess growth<25pp (canary cell)', 'Margin growth under 25pp over the S&P, with the 200-day'), ('EMA100 SPY>EMA100', 'SPY above 100-day EMA, with the 200-day')):
+        E = J.get('episodes', {}).get(key)
+        if not E:
+            continue
+        cells = '; '.join(f"{e['from'][:7]} to {e['to'][:7]}: {(2.718281828 ** e['gain'] - 1) * 100:+.0f}%" for e in E['episodes'] if abs(e['gain']) >= 0.01)
+        ep_rows += (f"<tr><th scope=row>{_html.escape(lab)}</th><td>{len(E['episodes'])}</td><td>{(2.718281828 ** E['total_log_gain'] - 1) * 100:+.0f}%</td>"
+                    f"<td>{(2.718281828 ** E['peak_lead'][0] - 1) * 100:+.0f}% ({E['peak_lead'][1][:7]})</td><td class=wrap>{_html.escape(cells)}</td></tr>")
+    page = (TEMPLATE.replace('__FOREST__', json.dumps(forest)).replace('__EPISODES__', ep_rows).replace('__TL__', json.dumps(tl)).replace('__READS__', read_rows)
             .replace('__ALL__', all_rows).replace('__WINS__', wins).replace('__WINHEAD__', ''.join(f'<th>{w}</th>' for w in lg.WINDOWS_B))
             .replace('__LAST__', last))
     open(PAGE, 'w').write(page)
@@ -147,6 +169,7 @@ h2{font-size:16px;margin:0 0 2px;font-weight:600}
 table{border-collapse:collapse;width:100%;font-size:13.5px}
 th,td{padding:5px 7px;text-align:right;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums;white-space:nowrap}
 th[scope=row]{text-align:left;font-weight:500;white-space:normal}
+td.wrap{white-space:normal;text-align:left;font-size:12.5px;color:var(--ink2);min-width:260px}
 thead th{color:var(--ink2);font-weight:600;font-size:12.5px}
 td.on{color:var(--good);font-weight:600} td.off{color:var(--warn);font-weight:600}
 .dim{color:var(--muted);font-size:12px}
@@ -184,7 +207,15 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px}
 </section>
 
 <section class="card">
-<h2>By market regime: the only place the add-ons differ is 2000 to 2002</h2>
+<h2>Episode by episode: where the add-ons won and lost against the 200-day</h2>
+<p class="sub-h">Each stretch where the add-on held the trend baskets at 1x while the 200-day alone stayed levered, and what that did to wealth relative to the 200-day gate alone. Stretches less than three months apart are merged. Only stretches that moved wealth by 1% or more are listed.</p>
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>episodes</th><th>net vs 200-day</th><th>peak lead</th><th>stretches</th></tr></thead>
+<tbody>__EPISODES__</tbody></table></div>
+</section>
+
+<section class="card">
+<h2>By market regime</h2>
 <div class="tablewrap"><table>
 <thead><tr><th></th>__WINHEAD__</tr></thead>
 <tbody>__WINS__</tbody></table></div>
@@ -214,8 +245,10 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px}
 <li>Each signal is used three ways: alone, together with the 200-day (leveraged only when both agree), and as a condition on when the 200-day applies (and its mirror). The conditional use never beat the plain 200-day, the same verdict as addendum 40.</li>
 <li>Publication lags: Treasury yields and the New York Fed term premium one session; OFR stress two sessions; FINRA margin month m from the start of month m+2; CAPE two months. Before a series exists the gate stays on.</li>
 <li>Margin growth reproduces the canary's own numbers (June 2026: +49.0% a year, +28.2 points over the S&amp;P). It has cooled since: +31.4% and +17.0 points in September.</li>
-<li>About 90 variants were run (22 signals, four uses each) and all are shown. The best result, CAPE below 35 with the 200-day, has a 97% chance of beating the 200-day alone on its own bootstrap; across 90 correlated tries that is expected by chance.</li>
-<li>Not tested: the canary's seven-indicator leading stack. Its data comes from FRED, which did not respond from this session; it is retried in the background and will be added when it does.</li>
+<li>All variants are shown (__NSIG__ signals, four uses each). The timing of the CAPE flag is not random: it beats 209 of 210 random re-datings of itself. But its edge rests on four or five valuation episodes with a threshold chosen in hindsight (any cut from 30 to 42 gives a similar result from the same 1998 to 2001 and 2021 onward regime), and the result moves with the end date.</li>
+<li>The curve signal uses the canary's own series (monthly 10-year minus 3-month bill, as in its backtest). The leading stack uses today's revised data, which flatters it; the canary's own replay has the same bias.</li>
+<li>The margin cut of 25 points was chosen in the canary's July 2026 study with 1999 to 2000 in view. The stock-bond variant needs TLT, which starts in mid-2002, so it could not act in 2000. OFR stress and the term premium are current-vintage model estimates.</li>
+<li>Consistent with addendum 40: the CAPE percentile flags there fired through most of 1995 to 2001 and 2013 onward and landed at the placebo median; the absolute cut at 35 acts like a dummy for the 1998 to 2001 and 2021 onward regime.</li>
 <li>Research only. Nothing here changes a live symphony.</li>
 </ul>
 </section>
