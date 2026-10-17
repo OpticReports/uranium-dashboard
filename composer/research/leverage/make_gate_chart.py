@@ -33,7 +33,7 @@ def main():
     rowsB = {k: v for k, v in B['rows'].items() if '[' not in k or k.endswith('[trend only]')}
     pts = [{'name': k, 'fam': ('trend baskets only' if k.endswith('[trend only]') else fam(k)), 'allow': v['mean_allow'],
             **{m: v['full'][m] for m in ('cagr', 'sharpe', 'sortino', 'calmar', 'maxdd', 'worst_year', 'vol')}, 'to': v['turnover']}
-           for k, v in rowsB.items() if v['full']]
+           for k, v in rowsB.items() if v['full'] and not k.startswith('A1 never levered -> cash')]
     blends = [p for p in pts if p['fam'] == 'constant blend']
     blends.sort(key=lambda p: p['allow'])
     keep = B['series_keep']
@@ -269,13 +269,16 @@ function scatter(id, ykey, ylab, yfmt){
     hit.addEventListener('pointermove',e=>show(e.clientX,e.clientY));hit.addEventListener('pointerleave',hide);
     c.addEventListener('focus',()=>{const b=c.getBoundingClientRect();show(b.right,b.top);});c.addEventListener('blur',hide);
   }
-  for(const q of PTS){ const short={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200h hysteresis +-2%':'200d band, all longs','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash':'200d, to cash, all longs','T200h hysteresis +-2% [trend only]':'200d band, trend only','A1 never levered [trend only]':'trend baskets at 1x'}[q.name]; if(short){
-    const t=el('text',{x:X(q.maxdd)+8,y:Y(q[ykey])-7,class:'lbl'},svg);t.textContent=short;}}
+  const LAB={'A0 always levered (as built)':['as built',8,14,'start'],'A1 never levered':['never levered',8,-8,'start'],'T200h hysteresis +-2%':['200d band, all longs',-8,-8,'end'],
+             'T200h hysteresis +-2% [trend only]':['200d band, trend only',0,-9,'middle'],'T200 SPY>200d -> cash [trend only]':['200d to cash, trend only',8,14,'start'],'A1 never levered [dip only]':['dip-buys at 1x',-8,14,'end']};
+  const narrow=W<520, SHOW=narrow?['A0 always levered (as built)','A1 never levered','T200h hysteresis +-2% [trend only]']:Object.keys(LAB);
+  for(const q of PTS){ const L=LAB[q.name]; if(L&&SHOW.includes(q.name)){const anc=narrow&&q.name.includes('trend only')?'end':L[3], dx=narrow&&q.name.includes('trend only')?-8:L[1];
+    const t=el('text',{x:X(q.maxdd)+dx,y:Y(q[ykey])+L[2],class:'lbl','text-anchor':anc},svg);t.textContent=L[0];}}
 }
 
 function lineChart(id, keys, opts){
   const svg=document.getElementById(id); svg.textContent='';
-  const W=Math.max(320, svg.parentElement.clientWidth-32), H=opts.h, m={l:52,r:120,t:10,b:26};
+  const W=Math.max(320, svg.parentElement.clientWidth-32), H=opts.h, m={l:52,r:opts.dd?16:(W<600?96:170),t:10,b:26};
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   const n=C.dates.length, xs=i=>m.l+i*(W-m.l-m.r)/(n-1);
   const series=keys.map(k=>({k, name:opts.names[k], cls:opts.cls[k], v:opts.dd?(()=>{let pk=-1;return C.curves[k].map(v=>{pk=Math.max(pk,v);return v/pk-1;});})():C.curves[k]}));
@@ -286,9 +289,16 @@ function lineChart(id, keys, opts){
   for(const t of ticks){if(t<lo||t>hi)continue;el('line',{x1:m.l,x2:W-m.r,y1:ys(t),y2:ys(t),stroke:css(t===opts.base?'--axis':'--grid'),'stroke-width':1},g);const tx=el('text',{x:m.l-6,y:ys(t)+4,'text-anchor':'end'},g);tx.textContent=opts.fmt(t);}
   let last='';C.dates.forEach((d,i)=>{const y=d.slice(0,4);if(y!==last&&(+y)%(innerWidth>820?3:6)===0){last=y;const tx=el('text',{x:xs(i),y:H-8,'text-anchor':'middle'},g);tx.textContent=y;}else if(y!==last)last=y;});
   for(const s of series.slice().reverse()){let p='';s.v.forEach((v,i)=>p+=(i?'L':'M')+xs(i).toFixed(1)+','+ys(v).toFixed(1));el('path',{d:p,fill:'none',stroke:`var(--${s.cls})`,'stroke-width':s.cls==='b1'?1.5:2,'stroke-linejoin':'round','stroke-linecap':'round'},svg);}
-  const labs=series.map(s=>({s,y:ys(s.v[n-1])})).sort((a,b)=>a.y-b.y);
-  for(let i=1;i<labs.length;i++)if(labs[i].y-labs[i-1].y<14)labs[i].y=labs[i-1].y+14;
-  for(const L of labs){el('circle',{cx:xs(n-1),cy:ys(L.s.v[n-1]),r:4,fill:`var(--${L.s.cls})`,stroke:css('--surface'),'stroke-width':2},svg);const tx=el('text',{x:xs(n-1)+8,y:L.y+4,class:'lbl'},svg);tx.textContent=`${L.s.name} ${opts.endfmt(L.s.v[n-1])}`;}
+  if(!opts.dd){
+    const labs=series.map(s=>({s,y:ys(s.v[n-1])})).sort((a,b)=>a.y-b.y);
+    for(let i=1;i<labs.length;i++)if(labs[i].y-labs[i-1].y<14)labs[i].y=labs[i-1].y+14;
+    for(const L of labs){el('circle',{cx:xs(n-1),cy:ys(L.s.v[n-1]),r:4,fill:`var(--${L.s.cls})`,stroke:css('--surface'),'stroke-width':2},svg);const tx=el('text',{x:xs(n-1)+8,y:L.y+4,class:'lbl'},svg);tx.textContent=(W<600?opts.endfmt(L.s.v[n-1]):`${(opts.shortNames||{})[L.s.k]||L.s.name} ${opts.endfmt(L.s.v[n-1])}`);}
+  } else {
+    for(const s of series.filter(s=>opts.troughs.includes(s.k))){let j=0;s.v.forEach((v,i)=>{if(v<s.v[j])j=i;});
+      el('circle',{cx:xs(j),cy:ys(s.v[j]),r:4,fill:`var(--${s.cls})`,stroke:css('--surface'),'stroke-width':2},svg);
+      const txt=`${(opts.shortNames||{})[s.k]||s.name} worst ${opts.endfmt(s.v[j])}`, right=xs(j)+8+txt.length*6.6>W-2, low=ys(s.v[j])>H-m.b-28;
+      const tx=el('text',{x:right?xs(j)-8:xs(j)+8,y:ys(s.v[j])+(low?-8:14),class:'lbl','text-anchor':right?'end':'start'},svg);tx.textContent=txt;}
+  }
   const cross=el('line',{y1:m.t,y2:H-m.b,stroke:css('--axis'),'stroke-width':1,visibility:'hidden'},svg);
   const hit=el('rect',{x:m.l,y:m.t,width:W-m.l-m.r,height:H-m.t-m.b,fill:'transparent',tabindex:0},svg);
   const move=(cx,cy,i)=>{cross.setAttribute('x1',xs(i));cross.setAttribute('x2',xs(i));cross.setAttribute('visibility','visible');showTT(cx,cy,C.dates[i],series.map(s=>({name:s.name,cls:s.cls,val:opts.ttfmt(s.v[i])})));};
@@ -306,8 +316,10 @@ function draw(){
   const cls={'A0 always levered (as built)':'b2','A1 never levered':'b1','T200h hysteresis +-2%':'s1','T200h hysteresis +-2% [trend only]':'s4','VT16 vol target 16% on SPY vol':'s2','T200 SPY>200d -> cash [trend only]':'s3'};
   const keys=Object.keys(names).filter(k=>C.curves[k]);
   legendDots('lg-eq',keys.map(k=>[names[k],cls[k],true]));
-  lineChart('eq',keys,{h:340,log:true,names,cls,base:1,ticks:(lo,hi)=>[1,10,100,1000,10000,100000,1e6,1e7].filter(t=>t>=lo/2&&t<=hi*2),fmt:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v.toFixed(0)),endfmt:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v.toFixed(0)),ttfmt:v=>'$'+(v>=1000?(v/1000).toFixed(1)+'k':v.toFixed(2))});
-  lineChart('dd',keys,{h:230,dd:true,names,cls,base:0,ticks:(lo,hi)=>[0,-0.2,-0.4,-0.6,-0.8],fmt:v=>(v*100).toFixed(0)+'%',endfmt:v=>(v*100).toFixed(0)+'%',ttfmt:v=>(v*100).toFixed(1)+'%'});
+  const money=v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':(v>=1000?'$'+(v/1000).toFixed(0)+'k':'$'+v.toFixed(v<10?2:0));
+  const shortNames={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200h hysteresis +-2%':'200d, all longs','T200h hysteresis +-2% [trend only]':'200d, trend only','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash [trend only]':'200d to cash, trend'};
+  lineChart('eq',keys,{h:340,log:true,names,cls,shortNames,base:1,ticks:(lo,hi)=>[1,10,100,1000,10000,100000,1e6,1e7].filter(t=>t>=lo/2&&t<=hi*2),fmt:money,endfmt:money,ttfmt:money});
+  lineChart('dd',keys,{h:230,dd:true,names,cls,shortNames,base:0,troughs:['A0 always levered (as built)','T200h hysteresis +-2%'],ticks:(lo,hi)=>[0,-0.2,-0.4,-0.6,-0.8],fmt:v=>(v*100).toFixed(0)+'%',endfmt:v=>(v*100).toFixed(0)+'%',ttfmt:v=>(v*100).toFixed(1)+'%'});
   const byName=Object.fromEntries(PTS.map(p=>[p.name,p]));
   const a0=byName['A0 always levered (as built)'], a1=byName['A1 never levered'], th=byName['T200h hysteresis +-2%'], tt_=byName['T200h hysteresis +-2% [trend only]'], tc=byName['T200 SPY>200d -> cash [trend only]'], dip=byName['A1 never levered [dip only]'];
   const L=document.getElementById('lede');
