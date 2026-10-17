@@ -1,4 +1,5 @@
 """Render results/leverage-gate-2026-10-17.html from LEVGATE_DATA/levgate.json (self-contained page)."""
+import html as _html
 import json
 import math
 import os
@@ -56,6 +57,7 @@ def main():
 
     def row(name, v, win=False):
         m = v['full']
+        name = _html.escape(name)
         cells = f"<th scope=row>{name}</th><td>{v['mean_allow']:.2f}</td><td>{pct(m['cagr'])}</td><td>{m['sharpe']:.2f}</td><td>{m['sortino']:.2f}</td><td>{pct(m['maxdd'], False)}</td><td>{pct(m['worst_year'])}</td><td>{v['turnover']:.0f}</td>"
         if win:
             cells += ''.join(f"<td>{pct(v['windows'][w]['cagr'])} <span class=dim>{pct(v['windows'][w]['maxdd'], False)}</span></td>" for w in WINDOWS_B)
@@ -68,7 +70,7 @@ def main():
             seen.add(n)
             win_rows.append(row(n, B['rows'][n], win=True))
     null_rows = ''.join(
-        f"<tr><th scope=row>{n}</th><td>{pct(B['rows'][n]['full']['cagr'])} / {B['rows'][n]['full']['sharpe']:.2f} / {pct(B['rows'][n]['full']['maxdd'], False)}</td>"
+        f"<tr><th scope=row>{_html.escape(n)}</th><td>{pct(B['rows'][n]['full']['cagr'])} / {B['rows'][n]['full']['sharpe']:.2f} / {pct(B['rows'][n]['full']['maxdd'], False)}</td>"
         f"<td>{pct(v['inverse']['cagr'])} / {v['inverse']['sharpe']:.2f} / {pct(v['inverse']['maxdd'], False)}</td>"
         f"<td>{v['placebo_pct']['cagr']:.2f} / {v['placebo_pct']['sharpe']:.2f} / {v['placebo_pct']['dd_better']:.2f}</td>"
         f"<td>{v['sharpe_gap_ci90'][0]:+.2f} to {v['sharpe_gap_ci90'][1]:+.2f} (P {v['p_gap_gt0']:.2f})</td></tr>" for n, v in nulls.items())
@@ -80,14 +82,16 @@ def main():
         if e not in A:
             continue
         R = A[e]['rows']
-        for n in ('A0 always levered (as built)', 'A1 never levered', 'A3 fixed 1/2 (~2x)', 'T200 SPY>200d', 'T200h hysteresis +-2%', 'V20<25 SPY 20d vol',
+        for n in ('A0 always levered (as built)', 'A1 never levered', 'A3 fixed 1/2 (~2x)', 'T200 SPY>200d', 'V20<25 SPY 20d vol',
                   'VT16 vol target 16% on SPY vol', 'ET40 vol target 40% on own vol', 'R4 inverse-leg panic (base DD>10% & vol pct>80)', 'T200 SPY>200d -> cash',
+                  'T200 SPY>200d -> half 1x half cash', 'A1 never levered [trend only]', 'A3 fixed 1/2 (~2x) [trend only]', 'T200 SPY>200d [trend only]',
+                  'T200 SPY>200d -> cash [trend only]', 'T200 SPY>200d -> half 1x half cash [trend only]', 'A1 never levered [dip only]',
                   'A1 never levered [all legs]', 'T200 SPY>200d [all legs]', 'V20<25 SPY 20d vol [all legs]'):
             if n in R and R[n]['full']:
                 m = R[n]['full']
-                eng_rows += f"<tr><th scope=row>{e}: {n}</th><td>{R[n]['mean_allow']:.2f}</td><td>{pct(m['cagr'])}</td><td>{m['sharpe']:.2f}</td><td>{m['sortino']:.2f}</td><td>{pct(m['maxdd'], False)}</td><td>{pct(m['worst_year'])}</td></tr>"
+                eng_rows += f"<tr><th scope=row>{e}: {_html.escape(n)}</th><td>{R[n]['mean_allow']:.2f}</td><td>{pct(m['cagr'])}</td><td>{m['sharpe']:.2f}</td><td>{m['sortino']:.2f}</td><td>{pct(m['maxdd'], False)}</td><td>{pct(m['worst_year'])}</td></tr>"
     book = S.get('book_A', {}).get('rows', {})
-    book_rows = ''.join(f"<tr><th scope=row>{k}</th><td>{pct(m['cagr'])}</td><td>{m['sharpe']:.2f}</td><td>{m['sortino']:.2f}</td><td>{pct(m['maxdd'], False)}</td><td>{pct(m['worst_year'])}</td></tr>" for k, m in book.items() if m)
+    book_rows = ''.join(f"<tr><th scope=row>{_html.escape(k)}</th><td>{pct(m['cagr'])}</td><td>{m['sharpe']:.2f}</td><td>{m['sortino']:.2f}</td><td>{pct(m['maxdd'], False)}</td><td>{pct(m['worst_year'])}</td></tr>" for k, m in book.items() if m)
     meta = {'B': f"{B['first']} to {B['last']}, {B['n_days']} sessions", 'A': (f"{A['HG']['first']} to {A['HG']['last']}" if 'HG' in A else ''),
             'bookwin': ' to '.join(S.get('book_A', {}).get('window', ['', '']))}
     html = (TEMPLATE.replace('__PTS__', json.dumps(pts)).replace('__BLENDS__', json.dumps(blends)).replace('__CURVES__', json.dumps(cdata))
@@ -223,7 +227,8 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px}
 <li>allow = the share of the leveraged legs' weight that stayed leveraged, averaged over the window. TO/yr = total turnover including the leverage switches, costed at 5.1 bp per unit for HG.</li>
 <li>Decisions are the engines' own; the gate only changes which share class of a leg is held. Signals are read at the prior close; Composer trades at 15:50, so live switches lag these by one session in the worst case.</li>
 <li>Before 1999 the leveraged legs are index reconstructions (3x index minus financing, S&amp;P dividend yield accrued) and the 1x twins are the same indices; VIX funds are modelled. Out of sample for HG's rules, which were set on 2015 to 2026 data.</li>
-<li>Fifty variants were examined and are all shown. The placebo and inverse tests are per variant; the best of fifty is expected to beat its own placebo even when nothing works, so read the family, not the top row.</li>
+<li>About fifty factor shapes, each run on every leveraged long and on the trend baskets only, are all shown. The placebo and inverse tests are per variant; the best of a hundred is expected to beat its own placebo even when nothing works, so read the family, not the top row. On the trend baskets several families pass the long-history nulls; only the 200-day family also keeps its edge in the 2007 to 2009 window.</li>
+<li>Panel A is in sample for all four engines (HG's rules were set on 2015 to 2026 data; KMLM, SLEEVE and HARV were designed in July 2026). FRED series are read on their calendar date, a one-day publication lag ignored. Composer conditions are stateless, so the hysteresis variants are shown for information only; the plain 200-day gate gives the same numbers.</li>
 <li>Research pass only. Nothing here changes a live symphony.</li>
 </ul>
 </section>
@@ -269,9 +274,9 @@ function scatter(id, ykey, ylab, yfmt){
     hit.addEventListener('pointermove',e=>show(e.clientX,e.clientY));hit.addEventListener('pointerleave',hide);
     c.addEventListener('focus',()=>{const b=c.getBoundingClientRect();show(b.right,b.top);});c.addEventListener('blur',hide);
   }
-  const LAB={'A0 always levered (as built)':['as built',8,14,'start'],'A1 never levered':['never levered',8,-8,'start'],'T200h hysteresis +-2%':['200d band, all longs',-8,-8,'end'],
-             'T200h hysteresis +-2% [trend only]':['200d band, trend only',0,-9,'middle'],'T200 SPY>200d -> cash [trend only]':['200d to cash, trend only',8,14,'start'],'A1 never levered [dip only]':['dip-buys at 1x',-8,14,'end']};
-  const narrow=W<520, SHOW=narrow?['A0 always levered (as built)','A1 never levered','T200h hysteresis +-2% [trend only]']:Object.keys(LAB);
+  const LAB={'A0 always levered (as built)':['as built',8,14,'start'],'A1 never levered':['never levered',8,-8,'start'],'T200 SPY>200d':['200d, all longs',-8,-8,'end'],
+             'T200 SPY>200d [trend only]':['200d, trend only',0,-9,'middle'],'T200 SPY>200d -> cash [trend only]':['200d to cash, trend only',8,14,'start'],'A1 never levered [dip only]':['dip-buys at 1x',-8,14,'end']};
+  const narrow=W<520, SHOW=narrow?['A0 always levered (as built)','A1 never levered','T200 SPY>200d [trend only]']:Object.keys(LAB);
   for(const q of PTS){ const L=LAB[q.name]; if(L&&SHOW.includes(q.name)){const anc=narrow&&q.name.includes('trend only')?'end':L[3], dx=narrow&&q.name.includes('trend only')?-8:L[1];
     const t=el('text',{x:X(q.maxdd)+dx,y:Y(q[ykey])+L[2],class:'lbl','text-anchor':anc},svg);t.textContent=L[0];}}
 }
@@ -312,18 +317,18 @@ function lineChart(id, keys, opts){
 function draw(){
   legendDots('lg-sc',[['trend gates','s1'],['realized-vol and vol-target gates','s2'],['same gate, cash instead of 1x','s3'],['gate on the trend baskets only','s4'],['other factors','b1'],['constant blends (line)','b2',true]]);
   scatter('sc1','sharpe','Sharpe',v=>v.toFixed(2)); scatter('sc2','cagr','CAGR',v=>(v*100).toFixed(0)+'%');
-  const names={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200h hysteresis +-2%':'200d band, all longs','T200h hysteresis +-2% [trend only]':'200d band, trend only','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash [trend only]':'200d to cash, trend only'};
-  const cls={'A0 always levered (as built)':'b2','A1 never levered':'b1','T200h hysteresis +-2%':'s1','T200h hysteresis +-2% [trend only]':'s4','VT16 vol target 16% on SPY vol':'s2','T200 SPY>200d -> cash [trend only]':'s3'};
+  const names={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200 SPY>200d':'200d, all longs','T200 SPY>200d [trend only]':'200d, trend only','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash [trend only]':'200d to cash, trend only'};
+  const cls={'A0 always levered (as built)':'b2','A1 never levered':'b1','T200 SPY>200d':'s1','T200 SPY>200d [trend only]':'s4','VT16 vol target 16% on SPY vol':'s2','T200 SPY>200d -> cash [trend only]':'s3'};
   const keys=Object.keys(names).filter(k=>C.curves[k]);
   legendDots('lg-eq',keys.map(k=>[names[k],cls[k],true]));
   const money=v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':(v>=1000?'$'+(v/1000).toFixed(0)+'k':'$'+v.toFixed(v<10?2:0));
-  const shortNames={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200h hysteresis +-2%':'200d, all longs','T200h hysteresis +-2% [trend only]':'200d, trend only','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash [trend only]':'200d to cash, trend'};
+  const shortNames={'A0 always levered (as built)':'as built','A1 never levered':'never levered','T200 SPY>200d':'200d, all longs','T200 SPY>200d [trend only]':'200d, trend only','VT16 vol target 16% on SPY vol':'vol target 16%','T200 SPY>200d -> cash [trend only]':'200d to cash, trend'};
   lineChart('eq',keys,{h:340,log:true,names,cls,shortNames,base:1,ticks:(lo,hi)=>[1,10,100,1000,10000,100000,1e6,1e7].filter(t=>t>=lo/2&&t<=hi*2),fmt:money,endfmt:money,ttfmt:money});
-  lineChart('dd',keys,{h:230,dd:true,names,cls,shortNames,base:0,troughs:['A0 always levered (as built)','T200h hysteresis +-2%'],ticks:(lo,hi)=>[0,-0.2,-0.4,-0.6,-0.8],fmt:v=>(v*100).toFixed(0)+'%',endfmt:v=>(v*100).toFixed(0)+'%',ttfmt:v=>(v*100).toFixed(1)+'%'});
+  lineChart('dd',keys,{h:230,dd:true,names,cls,shortNames,base:0,troughs:['A0 always levered (as built)','T200 SPY>200d'],ticks:(lo,hi)=>[0,-0.2,-0.4,-0.6,-0.8],fmt:v=>(v*100).toFixed(0)+'%',endfmt:v=>(v*100).toFixed(0)+'%',ttfmt:v=>(v*100).toFixed(1)+'%'});
   const byName=Object.fromEntries(PTS.map(p=>[p.name,p]));
-  const a0=byName['A0 always levered (as built)'], a1=byName['A1 never levered'], th=byName['T200h hysteresis +-2%'], tt_=byName['T200h hysteresis +-2% [trend only]'], tc=byName['T200 SPY>200d -> cash [trend only]'], dip=byName['A1 never levered [dip only]'];
+  const a0=byName['A0 always levered (as built)'], a1=byName['A1 never levered'], th=byName['T200 SPY>200d'], tt_=byName['T200 SPY>200d [trend only]'], tc=byName['T200 SPY>200d -> cash [trend only]'], dip=byName['A1 never levered [dip only]'];
   const L=document.getElementById('lede');
-  if(a0&&a1&&th&&tt_){L.textContent=`Over 36 years, as built HG compounds at ${pct(a0.cagr)} with a ${pct(a0.maxdd,false)} worst drawdown and Sharpe ${a0.sharpe.toFixed(2)}; never levered, ${pct(a1.cagr)}, ${pct(a1.maxdd,false)} and ${a1.sharpe.toFixed(2)}. Where the gate is applied matters more than which factor drives it. Gating only the five trend baskets below the 200-day average (dip-buys left at 3x) gives ${pct(tt_.cagr)}, ${pct(tt_.maxdd,false)} and ${tt_.sharpe.toFixed(2)}: more return and more Sharpe than as built, confirmed against inverse, placebo and bootstrap. Gating every leveraged long with the same signal gives ${pct(th.cagr)}, ${pct(th.maxdd,false)} and ${th.sharpe.toFixed(2)}: the biggest drawdown cut, paid for in the bull years.`+(dip?` De-levering only the dip-buys is the one thing that hurts everywhere (${pct(dip.cagr)}, ${pct(dip.maxdd,false)}, ${dip.sharpe.toFixed(2)}).`:'')+(tc?` Cash instead of 1x below the 200-day (addendum 40's gate) is ${pct(tc.cagr)}, ${pct(tc.maxdd,false)}, ${tc.sharpe.toFixed(2)}: better in the two long bears, worse since 2015, a tie over the whole history.`:'');}
+  if(a0&&a1&&th&&tt_){L.textContent=`Over 36 years, as built HG compounds at ${pct(a0.cagr)} with a ${pct(a0.maxdd,false)} worst drawdown and Sharpe ${a0.sharpe.toFixed(2)}; never levered, ${pct(a1.cagr)}, ${pct(a1.maxdd,false)} and ${a1.sharpe.toFixed(2)}. Where the gate is applied matters more than which factor drives it. Gating only the five trend baskets below the 200-day average (dip-buys left at 3x) gives ${pct(tt_.cagr)}, ${pct(tt_.maxdd,false)} and ${tt_.sharpe.toFixed(2)}: more return and more Sharpe than as built over the long history, the one family that clears the inverse, placebo and bootstrap tests, at a cost of about 0.06 Sharpe and 11 points a year in 2015 to 2026. Its remaining ${pct(tt_.maxdd,false)} drawdown is the 2001 dip-buy episode, which no trend-leg gate touches. Gating every leveraged long with the same signal gives ${pct(th.cagr)}, ${pct(th.maxdd,false)} and ${th.sharpe.toFixed(2)}: the biggest drawdown cut, paid for in the bull years.`+(dip?` De-levering only the dip-buys hurts everywhere (${pct(dip.cagr)}, ${pct(dip.maxdd,false)}, ${dip.sharpe.toFixed(2)}).`:'')+(tc?` Cash instead of 1x below the 200-day (addendum 40's gate) is ${pct(tc.cagr)}, ${pct(tc.maxdd,false)}, ${tc.sharpe.toFixed(2)}: ahead over the whole history and far ahead in the two long bears, behind since 2015; a half-cash fallback sits between them.`:'');}
 }
 draw(); let rt; addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(draw,120);});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);

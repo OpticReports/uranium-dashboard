@@ -78,7 +78,7 @@ def one_x_A(P):
 
 
 # ------------------------------------------------------------------ the gate engine
-HG_DIP = {'QLD', 'TECL', 'USD', 'LABU', 'SOXL'}      # HG's RSI dip-buy legs; its trend baskets are TQQQ/UPRO/UDOW/SSO/TNA (add. 40)
+HG_DIP = {'QLD', 'TECL', 'USD', 'LABU'}      # HG's RSI dip-buy legs (SOXL is a condition ticker only); its trend baskets are TQQQ/UPRO/UDOW/SSO/TNA (add. 40)
 
 
 def leg_sets(e, legs_held):
@@ -92,10 +92,13 @@ def leg_sets(e, legs_held):
     return out
 
 
-def gate_run(days, hold, P, P1, lam, gated, cost):
+def gate_run(days, hold, P, P1, lam, gated, cost, pool=None):
     """lam: {d0: float} or {d0: {ticker: float}} (missing -> 1); gated: the set of tickers the gate
-    applies to.  Returns (costed daily returns, turnover/yr, mean allowance over the gated legs' weight)."""
+    applies to; pool = (key, fraction): that fraction of the fallback weight is one pooled holding (e.g.
+    ('BIL', 1.0) for a cash fallback: rotating between gated legs while in cash is not a trade).
+    Returns (costed daily returns, turnover/yr, mean allowance over the gated legs' weight)."""
     rets, eff, lsum, lw = {}, {}, 0.0, 0.0
+    pkey, pfrac = pool if pool else (None, 0.0)
     for i in range(1, len(days)):
         d0, d1 = days[i - 1], days[i]
         L = lam.get(d0, 1.0)
@@ -104,7 +107,10 @@ def gate_run(days, hold, P, P1, lam, gated, cost):
             if t in gated and t in P1 and d0 in P1[t] and d1 in P1[t]:
                 lt = L.get(t, 1.0) if isinstance(L, dict) else L
                 h[t] = h.get(t, 0.0) + x * lt
-                h['1x:' + t] = h.get('1x:' + t, 0.0) + x * (1 - lt)
+                if pkey:
+                    h[pkey] = h.get(pkey, 0.0) + x * (1 - lt) * pfrac
+                if pfrac < 1.0:
+                    h['1x:' + t] = h.get('1x:' + t, 0.0) + x * (1 - lt) * (1 - pfrac)
                 r += x * (lt * (P[t][d1] / P[t][d0] - 1) + (1 - lt) * (P1[t][d1] / P1[t][d0] - 1))
                 lsum += x * lt
                 lw += x
@@ -331,14 +337,16 @@ def engine_runs(panel):
 
 
 def book(eng, days):
-    """29/29/27/15, drifting, reset to target the close after any engine >40% (POLICY Op 5)."""
-    w, out = dict(TARGET), {}
+    """29/29/27/15, drifting; an engine >40% at a close is reset to target at the NEXT close (POLICY Op 5, book_sim)."""
+    w, out, pending = dict(TARGET), {}, False
     for d in days:
         r = sum(w[e] * eng[e].get(d, 0.0) for e in w)
         out[d] = r
         w = {e: w[e] * (1 + eng[e].get(d, 0.0)) / (1 + r) for e in w}
+        if pending:                      # breach seen at the prior close: reset trades at this close
+            w, pending = dict(TARGET), False
         if max(w.values()) > 0.40:
-            w = dict(TARGET)
+            pending = True
     return out
 
 
@@ -360,10 +368,10 @@ def main(seed=11, n_placebo=100, n_boot=400):
             KEY = ('A1 never levered', 'A3 fixed 1/2 (~2x)', 'T200 SPY>200d', 'T200h hysteresis +-2%', 'V20<25 SPY 20d vol',
                    'VT16 vol target 16% on SPY vol', 'ET40 vol target 40% on own vol')
 
-            def add(name, lam, gated, P1x=None):
-                r, to, mean_l = gate_run(days, h, P, P1x or P1, lam, gated, COST[e])
+            def add(name, lam, gated, P1x=None, pool=None):
+                r, to, mean_l = gate_run(days, h, P, P1x or P1, lam, gated, COST[e], pool)
                 rows[name] = {'full': metrics(r, days), 'turnover': round(to, 1), 'mean_allow': round(mean_l, 3)}
-                series[name], gated_of[name] = r, (gated, P1x)
+                series[name], gated_of[name] = r, (gated, P1x, pool)
             for name, lam in F.items():
                 add(name, lam, sets['inverse'] if name.startswith('R4') else ALLLONG)
             if sets['dip']:
@@ -377,10 +385,14 @@ def main(seed=11, n_placebo=100, n_boot=400):
                 if sets['longvol']:
                     add(f'{name} [longvol only]', F[name], sets['longvol'])
             P1cash = {t: P['BIL'] for t in P1}
+            rb = rets_of(P['BIL'])
+            P1mid = {t: curve_from({d: 0.5 * r + 0.5 * rb[d] for d, r in rets_of(P1[t]).items() if d in rb}) for t in P1}   # fallback = half 1x, half cash
             for name in KEY:
-                add(f'{name} -> cash', F[name], ALLLONG, P1cash)
+                add(f'{name} -> cash', F[name], ALLLONG, P1cash, ('BIL', 1.0))
+                add(f'{name} -> half 1x half cash', F[name], ALLLONG, P1mid, ('BIL', 0.5))
                 if sets['dip']:
-                    add(f'{name} -> cash [trend only]', F[name], sets['trend'], P1cash)
+                    add(f'{name} -> cash [trend only]', F[name], sets['trend'], P1cash, ('BIL', 1.0))
+                    add(f'{name} -> half 1x half cash [trend only]', F[name], sets['trend'], P1mid, ('BIL', 0.5))
             if panel == 'B':
                 for name in rows:
                     rows[name]['windows'] = {w: gs.metrics(series[name], days, a, b) for w, (a, b) in WINDOWS_B.items()}
@@ -400,8 +412,11 @@ def main(seed=11, n_placebo=100, n_boot=400):
                 cands = [n for n in F if not n.startswith('A') and rows[n]['full']['sharpe'] > base_sh]
                 cands.sort(key=lambda n: -rows[n]['full']['sharpe'])
                 shortlist_B = cands[:8]
+                top_t = sorted((n for n in rows if n.endswith('[trend only]') and ' -> ' not in n and not n.startswith('A')), key=lambda n: -rows[n]['full']['sharpe'])[:12]
+                shortlist_B += top_t
                 for must in ('T200 SPY>200d', 'VT16 vol target 16% on SPY vol', 'V20<25 SPY 20d vol', 'A1 never levered',
-                             'T200 SPY>200d [trend only]', 'T200h hysteresis +-2% [trend only]', 'T200 SPY>200d -> cash [trend only]', 'VT16 vol target 16% on SPY vol [trend only]'):
+                             'T200 SPY>200d [trend only]', 'T200h hysteresis +-2% [trend only]', 'T200 SPY>200d -> cash [trend only]',
+                             'T200 SPY>200d -> half 1x half cash [trend only]', 'VT16 vol target 16% on SPY vol [trend only]', 'A3 fixed 1/2 (~2x) [trend only]'):
                     if must not in shortlist_B and must in rows:
                         shortlist_B.append(must)
                 print('\n   by window (CAGR/yr, maxDD), panel B:')
@@ -416,15 +431,15 @@ def main(seed=11, n_placebo=100, n_boot=400):
                 for name in shortlist_B:
                     fname = name.split(' [')[0].split(' -> ')[0]
                     lam = F[fname]
-                    gated, P1x = gated_of[name]
+                    gated, P1x, pool = gated_of[name]
                     if any(isinstance(v, dict) for v in lam.values()):
                         print(f"   {name[:52]:52s} per-leg gate: inverse/placebo skipped")
                         continue
-                    inv_r, _, _ = gate_run(days, h, P, P1x or P1, inverse(lam, days), gated, COST[e])
+                    inv_r, _, _ = gate_run(days, h, P, P1x or P1, inverse(lam, days), gated, COST[e], pool)
                     mi = metrics(inv_r, days)
                     draws = []
                     for _ in range(n_placebo):
-                        pr, _, _ = gate_run(days, h, P, P1x or P1, placebo(lam, days, rng), gated, COST[e])
+                        pr, _, _ = gate_run(days, h, P, P1x or P1, placebo(lam, days, rng), gated, COST[e], pool)
                         draws.append(metrics(pr, days))
                     real = rows[name]['full']
                     pct = {k: sum(1 for x in draws if x[k] < real[k]) / n_placebo for k in ('cagr', 'sharpe', 'sortino')}
@@ -445,7 +460,8 @@ def main(seed=11, n_placebo=100, n_boot=400):
                     print(f"   {name[:52]:52s} inverse {mi['cagr']:+6.1%}/Sh {mi['sharpe']:4.2f}/DD {mi['maxdd']:4.0%} | placebo pct CAGR {pct['cagr']:.2f} Sh {pct['sharpe']:.2f} DD-better {pct['dd_better']:.2f} | Sharpe gap vs built 90% [{ci[0]:+.2f},{ci[1]:+.2f}] P>0 {p_gt:.2f}")
             keepers = ('A0 always levered (as built)', 'A1 never levered', 'A3 fixed 1/2 (~2x)', 'T200 SPY>200d', 'T200h hysteresis +-2%', 'V20<25 SPY 20d vol',
                        'VT16 vol target 16% on SPY vol', 'ET40 vol target 40% on own vol', 'T200 SPY>200d -> cash', 'T200h hysteresis +-2% -> cash', 'A1 never levered -> cash',
-                       'T200h hysteresis +-2% [trend only]', 'T200 SPY>200d -> cash [trend only]', 'VT16 vol target 16% on SPY vol [trend only]', 'A1 never levered [trend only]')
+                       'T200h hysteresis +-2% [trend only]', 'T200 SPY>200d [trend only]', 'T200 SPY>200d -> cash [trend only]',
+                       'T200 SPY>200d -> half 1x half cash [trend only]', 'VT16 vol target 16% on SPY vol [trend only]', 'A1 never levered [trend only]')
             res['panels'][panel][e]['series_keep'] = {k: series[k] for k in keepers if k in series}
         if panel == 'A':
             # book-level application blends: which engines get the gate
@@ -455,7 +471,8 @@ def main(seed=11, n_placebo=100, n_boot=400):
             def pick(e, gate):   # HG keeps its dip-buys levered under the [trend only] tag; other engines have no dip legs
                 return S[e].get(gate) or S[e].get(gate.replace(' [trend only]', '')) or S[e]['A0 always levered (as built)']
             for gate in ('A1 never levered', 'T200 SPY>200d', 'V20<25 SPY 20d vol', 'VT16 vol target 16% on SPY vol',
-                         'T200h hysteresis +-2% [trend only]', 'T200 SPY>200d -> cash [trend only]', 'A1 never levered [trend only]', 'VT16 vol target 16% on SPY vol [trend only]'):
+                         'T200 SPY>200d [trend only]', 'T200 SPY>200d -> cash [trend only]', 'T200 SPY>200d -> half 1x half cash [trend only]',
+                         'A1 never levered [trend only]', 'VT16 vol target 16% on SPY vol [trend only]'):
                 for app, engs in (('HG only', {'HG'}), ('HG+KMLM', {'HG', 'KMLM'}), ('all engines', set(runs))):
                     eng = {e: (pick(e, gate) if e in engs else S[e]['A0 always levered (as built)']) for e in runs}
                     combos[f'{gate} -> {app}'] = metrics(book(eng, days_all), ['x'] + days_all)
