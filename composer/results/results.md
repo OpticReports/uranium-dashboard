@@ -2841,3 +2841,13 @@ committed (5037b81) before the review finished; the fixes are in the next commit
 fixes: showable.
 
 DECISION: none; answers a question. The draft build still waits on the owner.
+
+Follow-up (2026-10-18), owner: "did you test as if the 3x ETFs existed?" Yes: before each fund
+launched, panel B prices it as L x its 1x ETF's or index's daily return minus T-bill financing and
+a fee term, and HG's rules run on those prices as if the fund were tradable (2x ETFs from 2006, 3x
+from late 2008). Fidelity where both exist (exhibit results/leverage-sim-vs-actual-2026-10-18.html,
+research/leverage/make_fidelity_chart.py): 1x-ETF simulations drift +0.02..+0.77%/yr (fee term
+fitted on those years except TNA's), index simulations -1.16..+0.35%/yr (not fitted); daily
+correlation 0.995-0.999. All ten pairs match the add. 44 counter-agent's independent tracking
+script exactly. Worst index day since 1990: -14.3% (Russell 2000, 2020-03-16); a 3x fund needs
+about -33% to be wiped out. Not modeled: closures and halts.
