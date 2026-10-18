@@ -57,7 +57,8 @@ SCHEDULE = {
     'HG': [('0000-00-00', 'HG:0DeB193gVf6uIq2osLmL'),          # 2025-12-05 original, live until the 07-30 update:
            # the 06-30 saves (6jq2...) were never deployed — on 2026-07-02 live HG earned XLV's +2.63% to 1 bp,
            # a leaf the 06-30 version no longer has (counter-agent, 2026-10-16)
-           ('2026-07-31', 'HG:bP4mvRy6YHHejuPGUBNY')],         # saved 07-30 23:30 ET, after the close
+           ('2026-07-31', 'HG:bP4mvRy6YHHejuPGUBNY'),          # saved 07-30 23:30 ET, after the close
+           ('2026-10-19', 'HG:2oyXahw1VWpFtV15dhIi')],         # SPY 200d gate, saved Sunday 10-18 15:35 ET; live from 10-19 (add. 45)
     'ORIG': [('0000-00-00', 'ORIG:wt3G61qcuOZ8MVYJ64v4')],
     'KMLM': [('0000-00-00', 'KMLM:MVfHI8OgKae5EaC3W9oE')],
     'SLEEVE': [('0000-00-00', 'SLEEVE:GtCP9qywDB4E5kxj6ScN'),  # 07-06 13:11 ET; live from 07-07

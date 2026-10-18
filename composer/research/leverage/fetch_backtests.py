@@ -5,7 +5,7 @@ sys.path.insert(0, '/home/user/uranium-dashboard/composer/scripts')
 import composerlib as cl
 OUT = '/tmp/claude-0/-home-user-uranium-dashboard/6d96d78e-807c-545a-8c5b-9d9d8e765587/scratchpad/lev'
 VT = json.load(open(f'{OUT}/version_trees.json'))
-WANT = {'HG': ['0DeB193gVf6uIq2osLmL', '6jq2MZNfQcEWZjQFq5v9', 'bP4mvRy6YHHejuPGUBNY'], 'ORIG': ['wt3G61qcuOZ8MVYJ64v4'],
+WANT = {'HG': ['0DeB193gVf6uIq2osLmL', '6jq2MZNfQcEWZjQFq5v9', 'bP4mvRy6YHHejuPGUBNY', '2oyXahw1VWpFtV15dhIi'], 'ORIG': ['wt3G61qcuOZ8MVYJ64v4'],
         'KMLM': ['MVfHI8OgKae5EaC3W9oE'], 'SLEEVE': ['GtCP9qywDB4E5kxj6ScN', 'yHJkdePZUWBT6eMCgO9m'], 'HARV': ['XVtsDTV1R6iuYDEg8XZK']}
 res = {}
 for k, vids in WANT.items():
