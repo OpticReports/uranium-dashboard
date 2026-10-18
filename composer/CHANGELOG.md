@@ -546,3 +546,7 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   `fixtures/hg-live-pre-gate-2026-10-18.raw.json` (rollback),
   `results/results.md` addendum 45 (decision updated),
   `research/leverage/lev_study.py` SCHEDULE entry for the new version.
+- Post-deploy counter-check (read-only, independent): all claims above
+  reproduced from the API; nothing traded or queued; monitor/divergence
+  follow the live version automatically. Two doc fixes applied (results.md
+  addendum 45 SPY distance; lev_study.py CURRENT/SCHEDULE on the new version).

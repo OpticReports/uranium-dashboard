@@ -2889,7 +2889,7 @@ THE SWAP (not done): edit HG's own logic in place to the gated version — PUT o
 mbkiXcuNDjueXpiox5Av with the gated logic and HG's own root id/name/description, verified
 after the edit as on 2026-07-30 (VBF->VCIT). HG keeps its id and capital; applies at the
 next rebalance; no capital moves. Today HG holds USD (a dip-buy, untouched by the gate) and
-SPY is +8% above its 200d, so the edit would trade nothing. In 2026 SPY sat at or below the
+SPY is +5.7% above its 200d (10-16 close; +8.1% on 10-07), so the edit would trade nothing. In 2026 SPY sat at or below the
 line on 12 days (03-20..04-07) while HG held BIL/QLD: no holding would have changed this year.
 
 COUNTER-AGENT (one hostile reviewer, read-only; scratchpad/verify_draft/): live HG unchanged
@@ -2909,3 +2909,13 @@ before and after (Sunday, nothing traded); Composer backtest of HG now == the dr
 last digit. First evaluation under the new logic Monday 2026-10-19. Rollback = PUT
 fixtures/hg-live-pre-gate-2026-10-18.raw.json back onto HG. The draft symphony is kept
 uninvested as the archive copy (renamed ARCHIVE...). Details: CHANGELOG 2026-10-18 EXECUTED.
+
+POST-DEPLOY COUNTER-CHECK (second hostile reviewer, read-only, scratchpad/verify_deploy/): all
+eight claims reproduced from the API — version head and root fields, own tree diff (51 -> 63,
+the twelve gate nodes and nothing else), HG value/cash/holdings and the other three engines
+unchanged (no queued deploy), fresh backtest by id identical to the draft's, archive copy
+uninvested, monitor.py/divergence.py read the live symphony's current backtest (no stored
+tree or version; the gated and pre-gate models hold identical positions on all 217 live-
+window days, so the live-vs-model record does not shift), rollback fixture content-identical
+to the pre-swap tree. Fixed on its report: this paragraph's SPY distance (was quoted from
+10-07) and lev_study.CURRENT (was still the July version). Verdict: deploy verified clean.

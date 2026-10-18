@@ -65,7 +65,7 @@ SCHEDULE = {
                ('2026-07-31', 'SLEEVE:yHJkdePZUWBT6eMCgO9m')], # 07-30 23:31 ET
     'HARV': [('0000-00-00', 'HARV:XVtsDTV1R6iuYDEg8XZK')],     # 07-21 17:34 ET; live from 07-22
 }
-CURRENT = {'HG': 'HG:bP4mvRy6YHHejuPGUBNY', 'KMLM': 'KMLM:MVfHI8OgKae5EaC3W9oE',
+CURRENT = {'HG': 'HG:2oyXahw1VWpFtV15dhIi', 'KMLM': 'KMLM:MVfHI8OgKae5EaC3W9oE',
            'SLEEVE': 'SLEEVE:yHJkdePZUWBT6eMCgO9m', 'HARV': 'HARV:XVtsDTV1R6iuYDEg8XZK'}
 TARGET = {'HG': 0.29, 'KMLM': 0.29, 'SLEEVE': 0.27, 'HARV': 0.15}
 # ORIG (KMLM switcher original, liquidated 2026-07-07) has no live series left; its value is the
