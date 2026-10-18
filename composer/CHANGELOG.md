@@ -509,3 +509,40 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   `research/leverage/build_gate_draft.py`, `fidelity_check.py`,
   `make_draft_chart.py`; `results/hg-200d-gate-draft-2026-10-18.html`;
   `results/results.md` addendum 45.
+
+
+## 2026-10-18 — EXECUTED: SPY 200d gate on live HG (owner: "okay, deploy this")
+
+- Owner go in-session after addendum 45 (draft built, Composer-verified,
+  counter-agent reviewed) and the trade-off tables. Applied the gated logic
+  to live HG [mbkiXcuNDjueXpiox5Av] by in-place PUT: new version
+  `2oyXahw1VWpFtV15dhIi` (2026-10-18 15:35 ET; previous `bP4mvRy6`). HG's
+  id, name, description and daily rebalance unchanged; no capital moved.
+- The change: each of HG's two trend-basket filters (top-1 RSI of TQQQ/
+  UPRO/UDOW/SSO/TNA) now sits behind "SPY current price > SPY 200-day
+  moving average", else BIL. Dip-buys (still 3x), the long-vol branch and
+  both existing BIL defaults untouched. 51 -> 63 nodes; every pre-existing
+  node keeps its id.
+- Pre-checks (abort before the PUT): live tree byte-equal to the tree the
+  draft was built from; the swap logic rebuilt from the live tree equals
+  the saved draft's logic. Post-checks: saved tree equals the swap tree;
+  versions list heads at the new version; HG value $83,933.04, cash
+  $81.90, holdings USD 99.9%, not paused — identical to before (nothing
+  traded; Sunday, market closed); Composer backtest by id of HG now equals
+  the draft's to the last digit (CAGR 85.8%, Sharpe 1.62, maxDD 35.8%,
+  2015-06-11..2026-10-16).
+- Zero-cost timing: HG holds USD, a dip-buy leg the gate does not touch,
+  and SPY is above its 200d. First evaluation under the new logic: Monday
+  2026-10-19 ~15:50 ET, doing whatever HG's own rules do that day.
+- Expected effect (addenda 42/44/45): in a 2015-type regime ~17pp/yr less
+  HG CAGR (103 -> 86), Sharpe 1.73 -> 1.62, max DD unchanged; in 2000/2008-
+  type bears the trend baskets sit in cash (2007-09 modelled: -47 -> +43%/yr).
+  Book 2015-26: CAGR 111.9 -> 104.9, max DD 22.3 -> 19.8.
+- Rollback: PUT `fixtures/hg-live-pre-gate-2026-10-18.raw.json` back onto
+  HG (one edit, no capital move). The uninvested draft `hZ6NSYPMQi3N0otU6lY6`
+  is kept as the archive copy, renamed "ARCHIVE: HG 200d gate draft
+  (executed on HG 2026-10-18), do not invest".
+- Artifacts: `fixtures/hg-live-gated-2026-10-18.raw.json` (new live tree),
+  `fixtures/hg-live-pre-gate-2026-10-18.raw.json` (rollback),
+  `results/results.md` addendum 45 (decision updated),
+  `research/leverage/lev_study.py` SCHEDULE entry for the new version.

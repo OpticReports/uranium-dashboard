@@ -2,7 +2,8 @@
 
 - Symphony ID: `hZ6NSYPMQi3N0otU6lY6` (version `NyvFccHtb3Bc1mikyuNk`, created 2026-10-18 14:46 ET)
 - Built from: live HG `mbkiXcuNDjueXpiox5Av` version `bP4mvRy6YHHejuPGUBNY` (unchanged)
-- Capital: none. Status: draft awaiting the owner's decision on the swap.
+- Capital: none. Status: EXECUTED on live HG 2026-10-18 (HG version `2oyXahw1VWpFtV15dhIi`); this symphony
+  is kept uninvested as the archive copy, renamed "ARCHIVE: HG 200d gate draft (executed on HG 2026-10-18), do not invest".
 - Builder: `research/leverage/build_gate_draft.py`; fidelity: `research/leverage/fidelity_check.py`;
   exhibit: `results/hg-200d-gate-draft-2026-10-18.html`; research: results.md addenda 40, 42, 44, 45.
 - Raw definition: [`hg-200d-gate-draft.raw.json`](hg-200d-gate-draft.raw.json) (volatile

@@ -2901,6 +2901,11 @@ wording ("a PUT of this tree" would carry the draft's id and name; cite the 07-3
 stretch count (22 merged -> 25 strict runs), a dangling add. 45 reference (this addendum).
 Verdict after fixes: showable.
 
-DECISION: the owner's. (a) swap HG to the gated logic (one in-place edit, no capital move);
-(b) keep HG as built; (c) leave the draft uninvested as a forward watch. Nothing changes
-without an explicit go.
+DECISION (owner, 2026-10-18, after the trade-off tables): "okay, deploy this." EXECUTED the
+same day: live HG edited in place to the gated logic by PUT, new version 2oyXahw1VWpFtV15dhIi
+(15:35 ET; previous bP4mvRy6); id, name, description, daily rebalance unchanged; no capital
+moved. Verified: saved tree == swap tree; HG value $83,933 / holdings USD 99.9% identical
+before and after (Sunday, nothing traded); Composer backtest of HG now == the draft's to the
+last digit. First evaluation under the new logic Monday 2026-10-19. Rollback = PUT
+fixtures/hg-live-pre-gate-2026-10-18.raw.json back onto HG. The draft symphony is kept
+uninvested as the archive copy (renamed ARCHIVE...). Details: CHANGELOG 2026-10-18 EXECUTED.

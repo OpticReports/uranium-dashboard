@@ -1,0 +1,366 @@
+{
+ "description": "(Created with Composer AI)",
+ "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
+ "rebalance": "daily",
+ "id": "mbkiXcuNDjueXpiox5Av",
+ "step": "root",
+ "children": [
+  {
+   "id": "461a2ac7-8e56-4154-9150-5753e25631d7",
+   "step": "wt-cash-equal",
+   "children": [
+    {
+     "id": "ff9c27d0-97a9-4511-8223-de19d58aae0e",
+     "step": "if",
+     "children": [
+      {
+       "lhs-fn-params": {
+        "window": 10
+       },
+       "rhs-fn": "moving-average-price",
+       "is-else-condition?": false,
+       "lhs-fn": "moving-average-price",
+       "lhs-val": "TQQQ",
+       "id": "acb10ef3-5eef-4760-98bd-f5f1d4ecbab1",
+       "rhs-fn-params": {
+        "window": 20
+       },
+       "comparator": "gt",
+       "rhs-val": "TQQQ",
+       "step": "if-child",
+       "children": [
+        {
+         "id": "0eb3e3c8-1b91-4927-9a32-3bd35fbe6fc9",
+         "step": "wt-cash-equal",
+         "children": [
+          {
+           "id": "80d5424c-c087-4ab2-85dd-98e135e85729",
+           "step": "if",
+           "children": [
+            {
+             "lhs-fn-params": {
+              "window": 10
+             },
+             "is-else-condition?": false,
+             "rhs-fixed-value?": true,
+             "lhs-fn": "relative-strength-index",
+             "lhs-val": "TQQQ",
+             "id": "2b44d1db-0cf2-4c86-bf29-eb8c0f24fba0",
+             "comparator": "gt",
+             "rhs-val": "80",
+             "step": "if-child",
+             "children": [
+              {
+               "id": "f9fbfd35-3eef-4f82-b275-0ad2e458aa3f",
+               "step": "wt-cash-equal",
+               "children": [
+                {
+                 "select-fn": "bottom",
+                 "select-n": "1",
+                 "sort-by-fn": "relative-strength-index",
+                 "id": "90346e25-4669-4715-afd9-68c03898e7ec",
+                 "step": "filter",
+                 "sort-by-fn-params": {
+                  "window": 10
+                 },
+                 "children": [
+                  {
+                   "ticker": "UVXY",
+                   "id": "5fc6abfa-8bfe-4d52-99b9-b5c4c9e24037",
+                   "step": "asset"
+                  },
+                  {
+                   "ticker": "VIXY",
+                   "id": "013ce6cc-5ab9-4481-bc6e-81356a0e9c72",
+                   "step": "asset"
+                  },
+                  {
+                   "ticker": "VIXM",
+                   "id": "c8cb5887-c88e-4d1c-8245-8256b1434937",
+                   "step": "asset"
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "is-else-condition?": true,
+             "id": "3099dacd-7051-4fee-8887-711048092d89",
+             "step": "if-child",
+             "children": [
+              {
+               "id": "0e0721ea-67bf-468c-a6e4-5eb64051457d",
+               "step": "wt-cash-equal",
+               "children": [
+                {
+                 "select-fn": "top",
+                 "select-n": "1",
+                 "sort-by-fn": "relative-strength-index",
+                 "id": "94df875f-6ba8-44e6-89a8-9f574f0ec5dd",
+                 "step": "filter",
+                 "sort-by-fn-params": {
+                  "window": 10
+                 },
+                 "children": [
+                  {
+                   "ticker": "TQQQ",
+                   "id": "276dba02-33e1-409e-8e5e-6e651efb5c2c",
+                   "step": "asset"
+                  },
+                  {
+                   "ticker": "UPRO",
+                   "id": "d81d537d-bae9-407f-940f-df06bcb300a7",
+                   "step": "asset"
+                  },
+                  {
+                   "ticker": "UDOW",
+                   "id": "c9b65a4f-7fcc-4393-a47a-4fd10b461345",
+                   "step": "asset"
+                  },
+                  {
+                   "ticker": "SSO",
+                   "id": "6f2c799f-3796-4d57-801a-5ca9f23bc140",
+                   "step": "asset"
+                  },
+                  {
+                   "ticker": "TNA",
+                   "id": "4a76bdf7-04b2-4cf5-88a4-3b921f2c1c2a",
+                   "step": "asset"
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "is-else-condition?": true,
+       "id": "a834ca96-37ea-4223-bb1a-733617973f7b",
+       "step": "if-child",
+       "children": [
+        {
+         "id": "33d9dda6-59fe-4fca-ad51-7274bc827ab8",
+         "step": "wt-cash-equal",
+         "children": [
+          {
+           "id": "87fd66f1-18ad-41af-841c-a5a20477e976",
+           "step": "if",
+           "children": [
+            {
+             "lhs-fn-params": {
+              "window": 10
+             },
+             "is-else-condition?": false,
+             "rhs-fixed-value?": true,
+             "lhs-fn": "relative-strength-index",
+             "lhs-val": "TQQQ",
+             "id": "281cec14-1adf-4b16-8692-1dbbcff0564b",
+             "comparator": "lt",
+             "rhs-val": "30",
+             "step": "if-child",
+             "children": [
+              {
+               "id": "2075c95b-8914-4988-85b6-796fec661eae",
+               "step": "wt-cash-equal",
+               "children": [
+                {
+                 "select-fn": "bottom",
+                 "select-n": "1",
+                 "sort-by-fn": "relative-strength-index",
+                 "id": "b145efa1-39a2-4c42-99ba-62cc1647ff79",
+                 "step": "filter",
+                 "sort-by-fn-params": {
+                  "window": 10
+                 },
+                 "children": [
+                  {
+                   "ticker": "TECL",
+                   "id": "fb65d988-023c-4160-86a2-33742db0d4da",
+                   "step": "asset"
+                  },
+                  {
+                   "ticker": "QLD",
+                   "id": "56343875-5486-48c5-8211-11333b8ac8c3",
+                   "step": "asset"
+                  },
+                  {
+                   "ticker": "LABU",
+                   "id": "18f046cb-b378-43ea-aa31-2701443725c8",
+                   "step": "asset"
+                  },
+                  {
+                   "ticker": "USD",
+                   "id": "82f8b746-dda3-46bf-b2fa-943c1a62c1ea",
+                   "step": "asset"
+                  },
+                  {
+                   "ticker": "SMH",
+                   "id": "83750d98-2593-4b8b-9ba8-207d41e43101",
+                   "step": "asset"
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "is-else-condition?": true,
+             "id": "a14d9a88-ecff-497c-a45d-462617880a0d",
+             "step": "if-child",
+             "children": [
+              {
+               "id": "76e87af9-db0e-4630-a32b-bf79a696f345",
+               "step": "wt-cash-equal",
+               "children": [
+                {
+                 "id": "1f5206f9-5051-4dd7-bdc0-c052ae1be837",
+                 "step": "if",
+                 "children": [
+                  {
+                   "lhs-fn-params": {
+                    "window": 10
+                   },
+                   "is-else-condition?": false,
+                   "rhs-fixed-value?": true,
+                   "lhs-fn": "relative-strength-index",
+                   "lhs-val": "SOXL",
+                   "id": "539fadbf-2b53-41ca-aaab-10f16b6e0274",
+                   "comparator": "lt",
+                   "rhs-val": "30",
+                   "step": "if-child",
+                   "children": [
+                    {
+                     "id": "1e4c7f92-2d78-4910-bf67-cf6321cd05d1",
+                     "step": "wt-cash-equal",
+                     "children": [
+                      {
+                       "ticker": "BIL",
+                       "id": "a2283acf-c6af-424a-9bff-9726c96343e8",
+                       "step": "asset"
+                      }
+                     ]
+                    }
+                   ]
+                  },
+                  {
+                   "is-else-condition?": true,
+                   "id": "31cd3b41-93f2-4613-9dda-80d4d9d414fe",
+                   "step": "if-child",
+                   "children": [
+                    {
+                     "id": "9795f03b-4301-46b5-b6a2-d28aa204796f",
+                     "step": "wt-cash-equal",
+                     "children": [
+                      {
+                       "id": "6179bf64-0b95-4752-a2bc-572663c36f4e",
+                       "step": "if",
+                       "children": [
+                        {
+                         "rhs-fn": "moving-average-price",
+                         "is-else-condition?": false,
+                         "lhs-fn": "current-price",
+                         "lhs-val": "TQQQ",
+                         "id": "6b57f3b5-94bf-41ca-a446-44f1a87b3f92",
+                         "rhs-fn-params": {
+                          "window": 20
+                         },
+                         "comparator": "lt",
+                         "rhs-val": "TQQQ",
+                         "step": "if-child",
+                         "children": [
+                          {
+                           "id": "0d11283a-b9a2-4d8b-9dbd-36f5ee581bd0",
+                           "step": "wt-cash-equal",
+                           "children": [
+                            {
+                             "ticker": "BIL",
+                             "id": "cdd9b04e-40dd-4e26-be15-6fc82521c14f",
+                             "step": "asset"
+                            }
+                           ]
+                          }
+                         ]
+                        },
+                        {
+                         "is-else-condition?": true,
+                         "id": "9f015dee-3bec-447d-832a-54691e700a1c",
+                         "step": "if-child",
+                         "children": [
+                          {
+                           "id": "ed9ba81f-c2cf-4916-bab6-9edaa2b9ee9f",
+                           "step": "wt-cash-equal",
+                           "children": [
+                            {
+                             "select-fn": "top",
+                             "select-n": "1",
+                             "sort-by-fn": "relative-strength-index",
+                             "id": "8cb6e834-738e-4d58-b842-6e79d0c2be51",
+                             "step": "filter",
+                             "sort-by-fn-params": {
+                              "window": 10
+                             },
+                             "children": [
+                              {
+                               "ticker": "TQQQ",
+                               "id": "5d540115-25ec-46f2-bf38-eb6d71983c92",
+                               "step": "asset"
+                              },
+                              {
+                               "ticker": "UPRO",
+                               "id": "e75711e9-760c-461f-a43a-8a9dde639e6e",
+                               "step": "asset"
+                              },
+                              {
+                               "ticker": "UDOW",
+                               "id": "50671759-c37d-4074-af2d-41b20c675f3d",
+                               "step": "asset"
+                              },
+                              {
+                               "ticker": "SSO",
+                               "id": "3978da6a-61f5-44dd-b951-0e65005809fe",
+                               "step": "asset"
+                              },
+                              {
+                               "ticker": "TNA",
+                               "id": "0d082328-3a5b-4cbe-ba50-74df993e3d18",
+                               "step": "asset"
+                              }
+                             ]
+                            }
+                           ]
+                          }
+                         ]
+                        }
+                       ]
+                      }
+                     ]
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
