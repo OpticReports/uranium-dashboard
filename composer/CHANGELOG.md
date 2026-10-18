@@ -550,3 +550,33 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   reproduced from the API; nothing traded or queued; monitor/divergence
   follow the live version automatically. Two doc fixes applied (results.md
   addendum 45 SPY distance; lev_study.py CURRENT/SCHEDULE on the new version).
+
+
+## 2026-10-18 — gate watch added to the daily monitor (owner request; reporting only)
+
+- Change: `scripts/gate_watch.py`, hooked into `monitor.py` after the accident
+  gauge, with 23 merge-blocking tests (`scripts/tests/test_gate_watch.py`,
+  each behaviour paired with a broken-input counterpart). Event-driven
+  reports on HG's SPY 200-day gate: APPROACH (within 3%), IMMINENT (1.5%),
+  CLOSED (cross), STILL CLOSED (Mondays while closed), REOPENED (with the
+  count of sessions below), APPROACH ENDED, and OVERRIDE START/END (live HG
+  in BIL where the archived pre-gate logic holds a trend basket). Hysteresis
+  (re-arm above 4% / 2.5%) stops repeats. Silent otherwise.
+- Why: owner (2026-10-18): reports "when it starts to get close to
+  switching ... more descriptions on impending change", not a daily line.
+  Each report gives the distance and its five-session change, the one-day
+  move that would cross, the line's 20-session slope, the 1993-2026 base
+  rate for that distance band, and what a cross would do to HG's holding.
+- Cadence if replayed on SPY history (watch logic only, no holdings):
+  1993-2026 ~2.6 approaches, 2.0 imminent, 3.3 closes/re-opens and ~10
+  Monday notes a year; 2023-26: 1.4 / 1.4 / 1.2 / 3.2. Half of all closures
+  last three sessions or fewer (whipsaw, reported as such).
+- Data: two ad-hoc Composer backtests per run (single-asset SPY path for the
+  adjusted 200-day distance; the pre-gate HG tree from `fixtures/` for the
+  would-be holding). Any failure degrades to a printed note, never an alert.
+  Nothing here trades or edits a symphony; GATE lines are informational
+  (POLICY.md standing cadence).
+- Today's reading: SPY +5.7% above its 200-day (10-16), zone far, HG in its
+  dip-buy (USD): no report. The first one comes when SPY closes within 3%.
+- Artifacts: results.md addendum 46; README (monitor section); POLICY.md
+  standing cadence; monitor.py docstring.

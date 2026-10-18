@@ -280,3 +280,16 @@ hours) per-symphony trade previews.
 drawdown from tracked peak (`--dd-alert`), large moves (`--move-alert`),
 holding rotations, and queued deploys. Exit code 2 when alerts fire, so a
 scheduled session/cron can decide whether to notify.
+
+**`gate_watch.py` — HG's SPY 200-day gate, event-driven (addendum 46).** Called
+by `monitor.py`; speaks only when something is about to change or has changed:
+SPY within 3% of its 200-day average (APPROACH), within 1.5% (IMMINENT), a
+close at or below it (CLOSED, then a Monday note while closed), a close back
+above (REOPENED), and OVERRIDE START/END when live HG sits in BIL where the
+archived pre-gate logic would hold a trend basket. Hysteresis (re-arm above 4%
+/ 2.5%) stops repeats. Each report gives the distance, the one-day move that
+would cross, the line's slope, the 1993-2026 base rate for that distance, and
+what a cross would do to HG's holding. Data: two ad-hoc Composer backtests
+(single-asset SPY; the pre-gate HG tree in `fixtures/`). Reporting only.
+`python3 composer/scripts/gate_watch.py` prints today's reading without
+writing state. Tests: `python3 -m unittest composer.scripts.tests.test_gate_watch`.

@@ -11,6 +11,8 @@ compares against the previous snapshot. Alerts on:
     a measured pins->market configuration: 44% vs 20% base odds of a >=15%
     drawdown starting within 12m, in-sample over ~11 signal clusters; see
     treasury-canary/studies/pin-rule-hindcast v2)
+  - HG's SPY 200-day gate approaching, crossing, overriding or re-opening
+    (gate_watch.py; event-driven with hysteresis, never daily)
 
 Exit code: 0 = quiet, 2 = alerts fired (easy to wire into cron/CI/triggers).
 Read-only. State lives in composer/results/monitor/state.json (tracked peaks
@@ -272,6 +274,14 @@ def main():
                           f"re-enter: top {band['name'][:30]} back up to target")
 
     check_accident_gauge(state, alerts, a.canary_url.rstrip("/"), now)
+
+    # HG's SPY 200-day gate (live 2026-10-19, addendum 45): event-driven
+    # reports on approach / cross / override / re-open; silent otherwise
+    try:
+        import gate_watch
+        gate_watch.check_gate(state, alerts, snap, meta, now)
+    except Exception as e:  # noqa: BLE001
+        print(f"  (gate watch unavailable: {e})")
 
     # ops-tempo conditioning (addendum 28): when the accident composite is
     # RED, escalate DIAGNOSTIC tempo (never trades): run live-vs-model

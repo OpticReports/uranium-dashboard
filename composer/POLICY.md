@@ -145,6 +145,11 @@ unchanged vs disciplined manual resets).
   2026-07-29: +2.9bps/side on $10.0M). Report the trend, especially the
   thin names (ZVOL/VBF/VXZ/VIXM), against the scale gates in
   research/ideas-backlog.md. Analysis only — no trades.
+- EVENT-DRIVEN (every daily check, speaks rarely): the HG 200-day gate watch
+  (`scripts/gate_watch.py`, addendum 46). GATE APPROACH / IMMINENT / CLOSED /
+  STILL CLOSED / REOPENED / OVERRIDE lines are informational: relay the full
+  description to the owner (it is written to be read), send the push, and do
+  nothing else. The gate acts inside HG's own logic; no operation here.
 
 ## Standing exclusions
 

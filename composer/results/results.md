@@ -2919,3 +2919,37 @@ tree or version; the gated and pre-gate models hold identical positions on all 2
 window days, so the live-vs-model record does not shift), rollback fixture content-identical
 to the pre-swap tree. Fixed on its report: this paragraph's SPY distance (was quoted from
 10-07) and lev_study.CURRENT (was still the July version). Verdict: deploy verified clean.
+
+## Addendum 46 — Gate watch: event-driven reports on HG's 200-day gate (2026-10-18)
+
+Owner: not a daily line; reports when the gate is getting close to switching, with description.
+Built: scripts/gate_watch.py, called by monitor.py after the accident gauge; 23 gate tests
+(scripts/tests/test_gate_watch.py), each paired with a broken-input counterpart. Reporting only.
+
+MECHANICS. distance = SPY close / 200-day SMA - 1 on Composer's adjusted data (one ad-hoc
+single-asset backtest per run; the convention HG's condition reads). Zones: far > 3%, near
+(0, 3%], tight (0, 1.5%], closed <= 0 (equality is cash, as Composer's "gt"). Hysteresis: near
+re-arms only above 4%, tight only above 2.5%. Events: APPROACH, IMMINENT, CLOSED, STILL CLOSED
+(Mondays while closed), REOPENED (with sessions below), APPROACH ENDED, OVERRIDE START/END
+(live HG in BIL where the archived pre-gate tree, fixtures/hg-live-pre-gate-2026-10-18,
+backtested ad hoc, holds a trend basket). Each report: distance and five-session change, the
+one-day move that would cross, the line's 20-session slope, the base rate for the band, and
+HG's branch (what a cross would do to its holding). Failures degrade to notes.
+
+BASE RATES (SPY adjusted closes, 200-day SMA, 1993-11-11..2026-10-07, 8,281 sessions, 22.6%
+at or below the line): closing within 1.5% above -> at/below within 10 / 20 sessions 62% /
+69%; 1.5-3% above 28% / 41%; 3-5% above 11% / 20%; 5-8% above 3% / 9%. Within 1.5% below ->
+back above within 10 / 20 sessions 78% / 85%; 1.5-3% below 46% / 66%; 3-5% below 26% / 47%.
+107 stretches at/below the line: median 3 sessions, mean 18, 52% last <= 3, longest 313
+(2008-09). Daily sd of the distance 1.1%, five-session 2.3%; the line itself moves ~1%/20d.
+
+CADENCE (watch logic replayed on SPY history): 1993-2026 ~2.6 APPROACH, 2.0 IMMINENT, 3.3
+CLOSED/REOPENED and ~10 Monday notes a year; 2015-26 2.4 / 2.1 / 2.7 / 7.9; 2023-26 1.4 /
+1.4 / 1.2 / 3.2. About two report-days a month on average, clustered in corrections, silent
+in trends. Today: +5.7% (10-16), zone far, HG in its dip-buy (USD) -> no report.
+
+NOT MODELED / CAVEATS: base rates are unconditional (no regime split) and descriptive; the
+routine fires 17:35 ET, and if Composer's same-day close is not yet in, the report carries
+the prior session's date (labelled); a Monday holiday skips that week's STILL CLOSED note; a
+watch started while already below the line initialises silently (no CLOSED event for a
+pre-existing closure).
