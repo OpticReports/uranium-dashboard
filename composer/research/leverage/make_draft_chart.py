@@ -8,13 +8,12 @@ D = '/tmp/claude-0/-home-user-uranium-dashboard/6d96d78e-807c-545a-8c5b-9d9d8e76
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'results', 'hg-200d-gate-draft-2026-10-18.html')
 
 
-def episodes(days):
-    """consecutive off days grouped into stretches (first, last, count), 'consecutive' = within 4 calendar days"""
-    from datetime import date
+def episodes(days, calendar):
+    """off days grouped into runs of consecutive trading days (first, last, count)"""
+    pos = {d: i for i, d in enumerate(calendar)}
     out = []
     for d in days:
-        dd = date.fromisoformat(d)
-        if out and (dd - date.fromisoformat(out[-1][1])).days <= 4:
+        if out and pos[d] == pos[out[-1][1]] + 1:
             out[-1][1] = d
             out[-1][2] += 1
         else:
@@ -25,7 +24,7 @@ def episodes(days):
 def main():
     F = json.load(open(os.path.join(D, 'fidelity.json')))
     ident = json.load(open(os.path.join(D, 'draft_id.json')))
-    ep = episodes(F['gate']['composer_off'])
+    ep = episodes(F['gate']['composer_off'], F['chart']['dates'])
     print(f"{len(F['gate']['composer_off'])} off days in {len(ep)} stretches:")
     for a, b, n in ep:
         print(f'  {a}..{b} {n}d')
@@ -204,7 +203,7 @@ function fill(){
   const lg=document.getElementById('lg-eq'); lg.textContent='';
   for(const [,cls,dash,name] of SER){const s=document.createElement('span');const i=document.createElement('i');i.className='key'+(dash?' dash':'');i.style.borderColor=`var(--${cls})`;s.appendChild(i);s.appendChild(document.createTextNode(name));lg.appendChild(s);}
   const s2=document.createElement('span');const i2=document.createElement('i');i2.className='sw';s2.appendChild(i2);s2.appendChild(document.createTextNode('draft in cash'));lg.appendChild(s2);
-  document.getElementById('gatesub').textContent=`Above zero the trend baskets are held at 3x; below zero (shaded) the draft holds BIL on the days it would otherwise hold a trend basket. Each dot is such a day: ${D.n_off} of them in ${D.episodes.length} stretches since 2015, the same days in Composer and in the model (a gate on unadjusted prices would give ${D.close_off}; Composer uses adjusted prices).`;
+  document.getElementById('gatesub').textContent=`Above zero the trend baskets are held at 3x; below zero (shaded) the draft holds BIL on the days it would otherwise hold a trend basket. Each dot is such a day: ${D.n_off} of them in ${D.episodes.length} runs of consecutive trading days since 2015, the same days in Composer and in the model (a gate on unadjusted prices would give ${D.close_off}; Composer uses adjusted prices).`;
   const tb=document.getElementById('tbl'); tb.textContent='';
   const row=(lab,m,extra)=>{const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=lab;tr.appendChild(th);
     for(const v of [pct(m.cagr),m.sharpe.toFixed(2),pct(m.maxdd,false),...extra]){const td=document.createElement('td');td.textContent=v;tr.appendChild(td);}tb.appendChild(tr);};
@@ -214,8 +213,8 @@ function fill(){
   row('gated draft, model',dr.model,['','','']);
   document.getElementById('tblnote').textContent=`Sharpe here is in the house convention (daily excess over T-bills, annualised), computed from each equity curve on the common days; Composer's own Sharpe field reads ${live.composer_stats.sharpe_ratio.toFixed(2)} and ${dr.composer_stats.sharpe_ratio.toFixed(2)}. The two days the holdings differ (both trees) are 2017-05-10 and 2017-05-12, VIXY against UVXY in the long-vol filter, a near-tie in RSI.`;
   const notes=[`Built from the live tree (version bP4mvRy6) on 2026-10-18: 51 nodes became 63. The twelve new nodes are two copies of the gate; every original node keeps its id and settings. Dip-buys, the long-vol branch and the existing cash defaults are untouched.`,
-    `The draft holds no money and nothing live has changed. Putting it live would mean replacing HG's tree with this one (same symphony, same capital; it applies at the next rebalance), as the July edits were done. That needs the owner's approval and has not been done.`,
-    `The gate is open today (SPY above its 200-day average), so the swap itself would trade nothing.`,
+    `The draft holds no money and nothing live has changed. Putting it live would mean editing HG's own logic in place to this gated version (HG keeps its id, name and capital; the change applies at the next rebalance), as the 2026-07-30 edit was done and verified afterwards. That needs the owner's approval and has not been done.`,
+    `Today HG holds USD, a dip-buy the gate does not touch, and SPY is above its 200-day average, so the swap itself would trade nothing. In 2026 SPY sat at or below the line on 12 days (2026-03-20 to 04-07) while HG held BIL or QLD, so the gate would not have changed a holding this year.`,
     `Composer backtest: v2 engine, regulatory and TAF fees, 0.05% slippage, $10,000, from 2015-06-01 (Composer starts LABU's window functions on 2015-06-11). The +0.2% a year drift of Composer over the model is the same for the live tree and the draft: it is the engine, not the gate.`,
     `In sample: HG's rules were built on these years; add. 44 has the 1990-2026 picture.`];
   const ul=document.getElementById('notes'); ul.textContent='';for(const t of notes){const li=document.createElement('li');li.textContent=t;ul.appendChild(li);}

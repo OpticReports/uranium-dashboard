@@ -473,3 +473,39 @@ Per addenda 21/21b (dual-agent QA + full-regime recalibration):
 Expected effect on returns when engines are healthy: ZERO (identical
 trades). Value is conditional: breakage-injection MC measured ~4-5% of
 terminal wealth preserved per breakage event (addendum 21 discussion).
+
+
+## 2026-10-18 — HG 200d gate draft saved (uninvested; owner: "build the draft")
+
+- Change: created saved symphony `hZ6NSYPMQi3N0otU6lY6` "HG + SPY 200d gate
+  (cash below) | DRAFT, do not invest" (version `NyvFccHtb3Bc1mikyuNk`,
+  14:46 ET): the live HG tree (`bP4mvRy6`, unchanged) with one condition in
+  front of each of its two trend-basket filters (top-1 RSI of TQQQ/UPRO/
+  UDOW/SSO/TNA) — SPY price above its 200-day moving average -> the basket;
+  else -> BIL. 51 -> 63 nodes; every original node keeps its id; dip-buys
+  (still 3x), long-vol branch, both BIL defaults and the daily rebalance
+  untouched. Nothing invested; live HG untouched; no capital moved.
+- Why:    addenda 40/42/44 — the one leverage gate with robust long-history
+  evidence (HG 1990-2026: CAGR +49.5 -> +55.5%, Sharpe 1.00 -> 1.16, maxDD
+  72 -> 60%, earned in 2000-02 and 2008; in-sample 2015-26 cost ~17pp/yr).
+- Composer backtest (v2, reg+TAF, 5 bp, 2015-06-11..2026-10-16): CAGR
+  103.3% -> 85.8%, Sharpe (Composer's field) 1.73 -> 1.62, maxDD 35.8%
+  unchanged (the 2020 gap).
+- Fidelity vs the gate-lab model (research/leverage/fidelity_check.py):
+  corr 0.9999, drift +0.20%/yr (the live tree shows the same drift), same
+  holding on 2,845/2,847 days (the two misses are an exact RSI tie in the
+  long-vol filter, in both trees), the gate's 204 cash days identical.
+  Composer evaluates the gate on adjusted prices.
+- Counter-agent: every number and the tree reproduced read-only; wording
+  fixes applied (results.md addendum 45).
+- The swap, if approved: edit HG's own logic in place to the gated version
+  (PUT on `mbkiXcuNDjueXpiox5Av` with the gated logic and HG's own root
+  id/name/description, verified after the edit as on 2026-07-30); HG keeps
+  its id and capital; applies at the next rebalance; no capital moves.
+  Today HG holds USD (a dip-buy the gate does not touch) and SPY is above
+  its 200d, so the edit itself would trade nothing. NOT done — awaiting the
+  owner's decision.
+- Artifacts: `fixtures/hg-200d-gate-draft.raw.json` + `.summary.md`;
+  `research/leverage/build_gate_draft.py`, `fidelity_check.py`,
+  `make_draft_chart.py`; `results/hg-200d-gate-draft-2026-10-18.html`;
+  `results/results.md` addendum 45.

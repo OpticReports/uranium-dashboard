@@ -2851,3 +2851,56 @@ fitted on those years except TNA's), index simulations -1.16..+0.35%/yr (not fit
 correlation 0.995-0.999. All ten pairs match the add. 44 counter-agent's independent tracking
 script exactly. Worst index day since 1990: -14.3% (Russell 2000, 2020-03-16); a 3x fund needs
 about -33% to be wiped out. Not modeled: closures and halts.
+
+## Addendum 45 — HG 200-day gate: draft built and checked against Composer (2026-10-18)
+
+Owner instruction: "build the draft" (after add. 42-44). Built, saved uninvested, fidelity-
+checked, counter-agent reviewed. Nothing live changed; the swap waits on the owner.
+
+DRAFT. Composer symphony hZ6NSYPMQi3N0otU6lY6 "HG + SPY 200d gate (cash below) | DRAFT, do
+not invest" (version NyvFccHtb3Bc1mikyuNk, 14:46 ET) = live HG (bP4mvRy6) with one condition
+in front of each of its two trend-basket filters (top-1 RSI of TQQQ/UPRO/UDOW/SSO/TNA): SPY
+current price > SPY 200-day moving average -> the basket; else -> BIL. 51 -> 63 nodes; every
+original node keeps its id; dip-buys (still 3x), the long-vol branch, both BIL defaults and
+the daily rebalance untouched. Builder research/leverage/build_gate_draft.py; snapshot
+fixtures/hg-200d-gate-draft.raw.json (+ .summary.md); exhibit
+results/hg-200d-gate-draft-2026-10-18.html.
+
+FIDELITY (research/leverage/fidelity_check.py; Composer v2, reg+TAF fees, 5 bp slippage,
+$10k, 2015-06-11 (LABU clamp)..2026-10-16, against the gate lab's panel-A model on 2,847
+common days 2015-06-12..2026-10-07; CAGR / Sharpe / maxDD):
+  live HG  Composer +104.4 / 1.69 / 35.8  model +104.0 / 1.69 / 35.9  corr 0.9999  drift +0.20%/yr  same holding 2,845/2,847
+  draft    Composer  +86.7 / 1.58 / 35.8  model  +86.3 / 1.57 / 35.9  corr 0.9999  drift +0.20%/yr  same holding 2,845/2,847
+  Composer's own stats fields: live 103.3% / 1.73 / 35.8%; draft 85.8% / 1.62 / 35.8%
+  (Sortino 2.88, Calmar 2.39). Gate days: the draft holds BIL instead of a trend basket on
+  204 of 2,004 trend days, in 25 runs; the model's 204 days are the same set (Composer reads
+  adjusted prices; an unadjusted-close gate would give 234). The two holding misses
+  (2017-05-10/12) are an exact RSI tie (29.50 / 29.50) between VIXY and UVXY in the long-vol
+  filter, present in both trees. The +0.20%/yr drift is the engine's, identical with and
+  without the gate. Saved-symphony backtest == ad-hoc backtest == exhibit.
+
+READ IT THIS WAY: the draft does in Composer exactly what add. 42 modelled. The decision is
+the one already on the table: the 2015-26 cost (CAGR 103 -> 86, Sharpe 1.73 -> 1.62, DD
+unchanged) against the long-history case (add. 42/44: 1990-2026 +49.5 -> +55.5%, 1.00 -> 1.16,
+DD 72 -> 60%, earned in 2000-02 and 2008). Live-era costs, in cash days: 34 after the April
+2020 bottom, 36 in Jul-Aug 2022, 24 in Oct-Nov 2022, 12 in Apr-May 2025.
+
+THE SWAP (not done): edit HG's own logic in place to the gated version — PUT on
+mbkiXcuNDjueXpiox5Av with the gated logic and HG's own root id/name/description, verified
+after the edit as on 2026-07-30 (VBF->VCIT). HG keeps its id and capital; applies at the
+next rebalance; no capital moves. Today HG holds USD (a dip-buy, untouched by the gate) and
+SPY is +8% above its 200d, so the edit would trade nothing. In 2026 SPY sat at or below the
+line on 12 days (03-20..04-07) while HG held BIL/QLD: no holding would have changed this year.
+
+COUNTER-AGENT (one hostile reviewer, read-only; scratchpad/verify_draft/): live HG unchanged
+(score byte-equal, versions head bP4mvRy6); draft absent from invested stats and holdings;
+tree diff, gate semantics, the 204 days, every fidelity number, the RSI tie and the page's
+numbers reproduced independently; rendering clean at 1100/390 px. REFUTED and fixed: "the gate
+fired on no day in 2026" (SPY was below the line on 12 days; it changed no holding), the swap
+wording ("a PUT of this tree" would carry the draft's id and name; cite the 07-30 edit), the
+stretch count (22 merged -> 25 strict runs), a dangling add. 45 reference (this addendum).
+Verdict after fixes: showable.
+
+DECISION: the owner's. (a) swap HG to the gated logic (one in-place edit, no capital move);
+(b) keep HG as built; (c) leave the draft uninvested as a forward watch. Nothing changes
+without an explicit go.
