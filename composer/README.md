@@ -276,7 +276,8 @@ Composer's `/dry-run` simulation, and (with `--previews`, during market
 hours) per-symphony trade previews.
 
 **`monitor.py` — scheduled monitoring.** Snapshots per-symphony state to
-`results/monitor/` (git-ignored), compares to the previous run, and alerts on
+`results/monitor/` (`state.json` and `last-snapshot.json` are git-tracked and
+committed by the routine; dated snapshots rotate), compares to the previous run, and alerts on
 drawdown from tracked peak (`--dd-alert`), large moves (`--move-alert`),
 holding rotations, and queued deploys. Exit code 2 when alerts fire, so a
 scheduled session/cron can decide whether to notify.

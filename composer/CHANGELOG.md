@@ -578,5 +578,9 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   (POLICY.md standing cadence).
 - Today's reading: SPY +5.7% above its 200-day (10-16), zone far, HG in its
   dip-buy (USD): no report. The first one comes when SPY closes within 3%.
+- Counter-agent (35 mutants): numbers, transitions, integration and API
+  surface reproduced; fixed before the first run: SystemExit containment
+  (an HTTP error would have killed the whole monitor run), override under
+  missing data, duplicate-session skip, 2000-02 attribution; 31 tests.
 - Artifacts: results.md addendum 46; README (monitor section); POLICY.md
   standing cadence; monitor.py docstring.

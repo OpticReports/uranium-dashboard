@@ -280,7 +280,7 @@ def main():
     try:
         import gate_watch
         gate_watch.check_gate(state, alerts, snap, meta, now)
-    except Exception as e:  # noqa: BLE001
+    except (Exception, SystemExit) as e:  # composerlib exits on HTTP errors; the run must go on
         print(f"  (gate watch unavailable: {e})")
 
     # ops-tempo conditioning (addendum 28): when the accident composite is

@@ -4,8 +4,9 @@
 Event-driven, not daily: it speaks when SPY is getting close to its 200-day average, when it
 crosses, when the gate is actually overriding what HG would otherwise hold, and when the gate
 re-opens. Reporting only — nothing here trades or edits a symphony. Called from monitor.py
-(alerts -> exit 2 -> the daily routine summarises and pushes); degrades to a printed note when
-Composer is unreachable, never a false alarm.
+(alerts -> exit 2 -> the daily routine summarises and pushes). When Composer is unreachable, or
+re-serves a session already assessed (holiday, same-day close not in yet), it prints a note and
+changes nothing: no event is ever inferred from missing data.
 
 Distance = SPY close / 200-day SMA - 1 on adjusted prices (what Composer's condition reads).
 Zones above the line: far (> 3%), near (0..3%), tight (0..1.5%); at or below: closed.
@@ -23,11 +24,13 @@ closes, 200-day SMA; research/leverage data, 2026-10-18):
   closing within 1.5% above the line  -> below it within 10 / 20 sessions: 62% / 69%
   1.5%..3% above                       -> 28% / 41%
   3%..5% above                         -> 11% / 20%
+  5%..8% above                         -> 3% / 9%
   within 1.5% below                    -> back above within 10 / 20 sessions: 78% / 85%
   1.5%..3% below                       -> 46% / 66%
   3%..5% below                         -> 26% / 47%
   107 stretches below the line: median 3 sessions, mean 18, half last <= 3 sessions, longest 313
-  (2008-09). The gate pays in the long stretches and whipsaws in the short ones (add. 42).
+  (2000-09..2002-01; 2008-09 was 257). The gate pays in the long stretches and whipsaws in the
+  short ones (add. 42).
 
 Usage: gate_watch.py            # print today's assessment, no state written
 """
@@ -75,9 +78,12 @@ def base_rate(dist):
 def hg_context(hg_holding, ungated_holding, gate_open):
     """one sentence on what the gate means for HG right now"""
     h, u = hg_holding, ungated_holding
-    if h in TREND:
+    if h in TREND and gate_open:
         return (f"HG holds {h} through its trend branch: a close below the line would move it to BIL at the "
                 f"next rebalance, and keep it there until SPY closes back above.")
+    if h in TREND:
+        return (f"HG still holds {h} from its trend branch; with SPY at or below the line it moves to BIL at "
+                f"the next rebalance and stays there until SPY closes back above.")
     if h == "BIL" and u in TREND:
         return f"The gate is overriding: HG sits in BIL where its pre-gate logic would hold {u}."
     if h in DIP:
@@ -124,7 +130,7 @@ def assess(date, dist, dist_5d, slope20, hg_holding, ungated_holding, state, wee
         alerts.append("GATE CLOSED — SPY closed at or below its 200-day average; HG's trend baskets are gated to "
                       "cash until it closes back above. " + core() + " Half of all stretches below the line since "
                       "1993 lasted three sessions or fewer (whipsaw); the gate's payoff is the long ones (median 3, "
-                      "mean 18, longest 313 sessions in 2008-09).")
+                      "mean 18; longest 313 sessions in 2000-02, 257 in 2008-09).")
         state["closed_since"] = date
     elif prev == "closed" and zone != "closed":
         n = state.get("closed_days", 0)
@@ -137,7 +143,7 @@ def assess(date, dist, dist_5d, slope20, hg_holding, ungated_holding, state, wee
     elif prev in ("far", "near") and zone == "tight":
         alerts.append("GATE IMMINENT — SPY is within 1.5% of its 200-day average. " + core())
     elif prev in ("near", "tight") and zone == "far":
-        alerts.append(f"GATE APPROACH ENDED — SPY is back more than 4% above its 200-day average without crossing. "
+        alerts.append(f"GATE APPROACH ENDED — SPY is back more than 4% above its 200-day average. "
                       f"SPY closed {dist:.1%} above the line on {date}.")
     if zone == "closed" and not first:
         if prev == "closed":
@@ -146,9 +152,13 @@ def assess(date, dist, dist_5d, slope20, hg_holding, ungated_holding, state, wee
             state["closed_days"] = 1
         if prev == "closed" and weekday == 0:
             alerts.append(f"GATE STILL CLOSED — session {state['closed_days']} below the line (weekly note). " + core())
-    # override: live HG in BIL where the pre-gate logic holds a trend basket
-    ov = bool(hg_holding == "BIL" and ungated_holding in TREND)
+    # override: live HG in BIL where the pre-gate logic holds a trend basket; missing data keeps the
+    # previous answer (no start or end is inferred from an outage)
     was = bool(state.get("override"))
+    if hg_holding is None or ungated_holding is None:
+        ov = was
+    else:
+        ov = bool(hg_holding == "BIL" and ungated_holding in TREND)
     if ov and not was:
         alerts.append(f"GATE OVERRIDE START — HG is in BIL where its pre-gate logic would hold {ungated_holding}; "
                       f"from here the two diverge until SPY closes back above the line or HG's own rules leave the "
@@ -218,13 +228,18 @@ def check_gate(state, alerts, snap, meta, now):
     today = now.date()
     try:
         date, dist, dist5, slope20 = spy_distance(today)
+        g = state.setdefault("gate", {})
+        if g.get("last_date") == date:
+            # holiday, or today's close not in Composer yet: the same session must not be counted twice
+            print(f"  (gate watch: no session newer than {date}; nothing re-assessed)")
+            snap["gate"] = {"date": date, "spy_vs_200d": g.get("last_dist"), "zone": g.get("zone"), "stale": True}
+            return
         reb_date, hg = live_holding(meta)
         try:
             ug_date, ug = ungated_holding(today)
-        except Exception as e:  # noqa: BLE001
+        except (Exception, SystemExit) as e:  # composerlib exits on HTTP errors
             ug_date, ug = None, None
             print(f"  (gate watch: pre-gate model unavailable: {e})")
-        g = state.setdefault("gate", {})
         new_alerts, notes, g = assess(date, dist, dist5, slope20, hg, ug, g, now.weekday())
         state["gate"] = g
         if ug_date and date and ug_date != date:
@@ -236,7 +251,7 @@ def check_gate(state, alerts, snap, meta, now):
         snap["gate"] = {"date": date, "spy_vs_200d": round(dist, 5), "zone": g["zone"], "hg_holding": hg,
                         "ungated_holding": ug, "override": g.get("override", False),
                         "closed_days": g.get("closed_days", 0)}
-    except Exception as e:  # noqa: BLE001
+    except (Exception, SystemExit) as e:  # composerlib exits on HTTP errors; never take the monitor down
         print(f"  (gate watch unavailable: {e})")
 
 

@@ -2941,7 +2941,7 @@ at or below the line): closing within 1.5% above -> at/below within 10 / 20 sess
 69%; 1.5-3% above 28% / 41%; 3-5% above 11% / 20%; 5-8% above 3% / 9%. Within 1.5% below ->
 back above within 10 / 20 sessions 78% / 85%; 1.5-3% below 46% / 66%; 3-5% below 26% / 47%.
 107 stretches at/below the line: median 3 sessions, mean 18, 52% last <= 3, longest 313
-(2008-09). Daily sd of the distance 1.1%, five-session 2.3%; the line itself moves ~1%/20d.
+(2000-09..2002-01; 2008-09 was 257). Daily sd of the distance 1.1%, five-session 2.3%; the line itself moves ~1%/20d.
 
 CADENCE (watch logic replayed on SPY history): 1993-2026 ~2.6 APPROACH, 2.0 IMMINENT, 3.3
 CLOSED/REOPENED and ~10 Monday notes a year; 2015-26 2.4 / 2.1 / 2.7 / 7.9; 2023-26 1.4 /
@@ -2950,6 +2950,20 @@ in trends. Today: +5.7% (10-16), zone far, HG in its dip-buy (USD) -> no report.
 
 NOT MODELED / CAVEATS: base rates are unconditional (no regime split) and descriptive; the
 routine fires 17:35 ET, and if Composer's same-day close is not yet in, the report carries
-the prior session's date (labelled); a Monday holiday skips that week's STILL CLOSED note; a
-watch started while already below the line initialises silently (no CLOSED event for a
-pre-existing closure).
+the prior session's date (labelled); a run that sees no session newer than the last one assessed
+(holiday, or the close not yet in Composer) skips, so a Monday holiday defers that week's STILL
+CLOSED note; a watch started while already below the line initialises silently (no CLOSED event
+for a pre-existing closure, closed-day counts start at the watch).
+
+COUNTER-AGENT (one hostile reviewer, 35 mutants; scratchpad/verify_watch/): base rates and edge
+conventions, the Composer SPY path (equal to Yahoo adjclose to 1e-7 over 310 days), every
+transition, the monitor integration (temp-dir runs, alert path, state persistence) and the API
+surface (GET + POST /backtest only) reproduced. REFUTED and fixed before the first run: an HTTP
+error inside the watch would have exited the whole monitor run (composerlib raises SystemExit,
+which 'except Exception' misses; now caught in both guards); a data outage during an override
+produced a false OVERRIDE END (missing data now keeps the prior state); a re-served session was
+assessed twice, double-counting closed days and repeating the Monday note (same-date runs now
+skip); the longest closure is 2000-02 (313), not 2008-09 (257); 'without crossing' wording;
+13 surviving mutants covered by 8 new tests (31 in all). Open: whether Composer's ad-hoc
+backtest carries the same-day close at 21:35 UTC; the first weekday run prints the date it
+used. Verdict after fixes: enable.

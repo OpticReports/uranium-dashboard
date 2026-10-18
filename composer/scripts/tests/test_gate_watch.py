@@ -23,6 +23,7 @@ mocked in the real wire formats (both tdvm_weights orientations) and with each f
 Run: python3 -m unittest composer.scripts.tests.test_gate_watch -v
 """
 import datetime
+import json
 import os
 import sys
 import unittest
@@ -239,6 +240,89 @@ class T10Wire(unittest.TestCase):
             self.assertEqual(gw.ungated_holding(datetime.date(2026, 10, 18)), ("2026-10-16", "TQQQ"))
         finally:
             cl.backtest_tree = orig
+
+
+class T11Review(unittest.TestCase):
+    """counter-agent round (2026-10-18): surviving mutants and the three behavioural fixes"""
+
+    def test_monday_close_day_emits_closed_only(self):
+        out, _ = run_path([0.02, -0.01], weekdays=[TUE, MON])
+        self.assertEqual(out[1], ["GATE CLOSED"])
+
+    def test_tight_rearm_to_near_is_silent_then_far_ends(self):
+        out, _ = run_path([0.05, 0.012, 0.026, 0.02, 0.045])
+        self.assertEqual(out, [[], ["GATE IMMINENT"], [], [], ["GATE APPROACH ENDED"]])
+
+    def test_closed_days_and_closed_since_from_a_path(self):
+        dists = [0.01, -0.01, -0.02, -0.01, 0.01]
+        state, texts = {}, []
+        for i, d in enumerate(dists):
+            a, _, state = gw.assess(f"2026-11-{i + 1:02d}", d, None, None, "SSO", "SSO", state, TUE)
+            texts.append(a)
+            if i == 1:
+                self.assertEqual(state["closed_since"], "2026-11-02")
+            if i in (1, 2, 3):
+                self.assertEqual(state["closed_days"], i)
+        self.assertIn("after 3 session(s) below", texts[4][0])
+
+    def test_base_rate_edges_and_rise(self):
+        self.assertEqual(gw.base_rate(0.015), (0.62, 0.69))
+        self.assertEqual(gw.base_rate(0.03), (0.28, 0.41))
+        self.assertEqual(gw.base_rate(-0.015), (0.78, 0.85))
+        self.assertIn("rise of 11.1%", gw.describe("d", -0.10, None, None, "BIL", "BIL", False))
+        self.assertIn("moves to BIL", gw.hg_context("TQQQ", "TQQQ", False))
+
+    def test_override_missing_data_keeps_state(self):
+        st = {"zone": "closed", "closed_days": 3, "override": True, "override_since": "d0"}
+        for hg, ug in ((None, "TQQQ"), ("BIL", None), (None, None)):
+            a, _, st = gw.assess("d1", -0.01, None, None, hg, ug, dict(st), TUE)
+            self.assertTrue(st["override"], (hg, ug))
+            self.assertEqual(a, [], (hg, ug))
+        a, _, st2 = gw.assess("d2", -0.01, None, None, "BIL", "BIL", dict(st), TUE)   # real end still reported
+        self.assertEqual([x.split(" — ")[0] for x in a], ["GATE OVERRIDE END"])
+
+    def test_spy_distance_window_includes_today(self):
+        import composerlib as cl
+        orig = cl.backtest_tree
+        d0 = (datetime.date(2025, 10, 1) - datetime.date(1970, 1, 1)).days
+        vals = [100.0 + i for i in range(230)]
+        try:
+            cl.backtest_tree = lambda tree, **kw: {"dvm_capital": {"x": {str(d0 + i): v for i, v in enumerate(vals)}}}
+            date, dist, dist5, slope20 = gw.spy_distance(datetime.date(2026, 10, 20))
+        finally:
+            cl.backtest_tree = orig
+        L = len(vals) - 1
+        sma = lambda i: sum(vals[i - 199:i + 1]) / 200  # noqa: E731
+        self.assertAlmostEqual(dist, vals[L] / sma(L) - 1, places=12)
+        self.assertAlmostEqual(dist5, vals[L - 5] / sma(L - 5) - 1, places=12)
+        self.assertAlmostEqual(slope20, sma(L) / sma(L - 20) - 1, places=12)
+        self.assertNotAlmostEqual(dist, vals[L] / (sum(vals[L - 200:L]) / 200) - 1, places=6)  # window ending yesterday
+        self.assertEqual(date, (datetime.date(1970, 1, 1) + datetime.timedelta(days=d0 + L)).isoformat())
+
+    def test_duplicate_session_is_skipped(self):
+        orig = gw.spy_distance
+        gw.spy_distance = lambda today: ("2026-10-20", -0.01, 0.0, 0.0)
+        try:
+            state = {"gate": {"zone": "closed", "closed_days": 2, "last_date": "2026-10-20", "last_dist": -0.01, "override": False}}
+            before = json.dumps(state, sort_keys=True)
+            alerts, snap = [], {}
+            gw.check_gate(state, alerts, snap, T9Hook.META, datetime.datetime(2026, 10, 21, 21, 35, tzinfo=datetime.timezone.utc))
+            self.assertEqual(alerts, [])
+            self.assertEqual(json.dumps(state, sort_keys=True), before)
+            self.assertTrue(snap["gate"]["stale"])
+        finally:
+            gw.spy_distance = orig
+
+    def test_systemexit_from_composerlib_is_contained(self):
+        orig = gw.spy_distance
+        gw.spy_distance = lambda today: (_ for _ in ()).throw(SystemExit("error: HTTP 500"))
+        try:
+            state, alerts, snap = {"gate": {"zone": "far"}}, [], {}
+            gw.check_gate(state, alerts, snap, T9Hook.META, datetime.datetime(2026, 10, 21, 21, 35, tzinfo=datetime.timezone.utc))
+            self.assertEqual(alerts, [])
+            self.assertEqual(state["gate"], {"zone": "far"})
+        finally:
+            gw.spy_distance = orig
 
 
 if __name__ == "__main__":
