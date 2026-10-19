@@ -2964,6 +2964,9 @@ which 'except Exception' misses; now caught in both guards); a data outage durin
 produced a false OVERRIDE END (missing data now keeps the prior state); a re-served session was
 assessed twice, double-counting closed days and repeating the Monday note (same-date runs now
 skip); the longest closure is 2000-02 (313), not 2008-09 (257); 'without crossing' wording;
-13 surviving mutants covered by 8 new tests (31 in all). Open: whether Composer's ad-hoc
-backtest carries the same-day close at 21:35 UTC; the first weekday run prints the date it
-used. Verdict after fixes: enable.
+13 surviving mutants covered by 8 new tests (31 in all). Resolved on the first
+run (Mon 2026-10-19, 21:36 UTC): Composer's ad-hoc backtest still ended at the prior session
+(10-16), so the watch runs one session late and each line carries its data date; the override
+check now requires the pre-gate model's date to equal HG's last rebalance date, else it keeps
+the prior state (a live holding must not be compared with yesterday's model). Verdict after
+fixes: enable.

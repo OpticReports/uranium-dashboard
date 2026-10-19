@@ -240,6 +240,11 @@ def check_gate(state, alerts, snap, meta, now):
         except (Exception, SystemExit) as e:  # composerlib exits on HTTP errors
             ug_date, ug = None, None
             print(f"  (gate watch: pre-gate model unavailable: {e})")
+        if ug_date and reb_date and ug_date != reb_date:
+            # Composer's backtest lags the live rebalance by a session at 21:35 UTC: comparing today's live
+            # holding with yesterday's model would invent overrides, so the override check waits
+            print(f"  (gate watch: pre-gate model to {ug_date}, live rebalance {reb_date}; override check deferred)")
+            ug = None
         new_alerts, notes, g = assess(date, dist, dist5, slope20, hg, ug, g, now.weekday())
         state["gate"] = g
         if ug_date and date and ug_date != date:

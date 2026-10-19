@@ -313,6 +313,24 @@ class T11Review(unittest.TestCase):
         finally:
             gw.spy_distance = orig
 
+    def test_override_check_deferred_when_model_lags_live(self):
+        orig = (gw.spy_distance, gw.ungated_holding)
+        gw.spy_distance = lambda today: ("2026-10-16", -0.01, 0.0, 0.0)
+        gw.ungated_holding = lambda today: ("2026-10-16", "TQQQ")          # model a session behind the live rebalance
+        meta = [{"id": gw.HG, "last_rebalance_on": "2026-10-19", "holdings": [{"ticker": "BIL", "allocation": 1.0}]}]
+        try:
+            state, alerts, snap = {"gate": {"zone": "closed", "closed_days": 1, "override": False, "last_date": "2026-10-15"}}, [], {}
+            gw.check_gate(state, alerts, snap, meta, datetime.datetime(2026, 10, 19, 21, 35, tzinfo=datetime.timezone.utc))
+            self.assertNotIn("GATE OVERRIDE START", [a.split(" — ")[0] for a in alerts])
+            self.assertFalse(state["gate"]["override"])
+            self.assertIsNone(snap["gate"]["ungated_holding"])
+            meta[0]["last_rebalance_on"] = "2026-10-16"                     # same session: the check runs
+            state, alerts, snap = {"gate": {"zone": "closed", "closed_days": 1, "override": False, "last_date": "2026-10-15"}}, [], {}
+            gw.check_gate(state, alerts, snap, meta, datetime.datetime(2026, 10, 19, 21, 35, tzinfo=datetime.timezone.utc))
+            self.assertIn("GATE OVERRIDE START", [a.split(" — ")[0] for a in alerts])
+        finally:
+            gw.spy_distance, gw.ungated_holding = orig
+
     def test_systemexit_from_composerlib_is_contained(self):
         orig = gw.spy_distance
         gw.spy_distance = lambda today: (_ for _ in ()).throw(SystemExit("error: HTTP 500"))
