@@ -6,9 +6,15 @@ Correction 2026-10-20 (data/timing review DT-17): `alfred_first_vintage_2026.csv
 
 Not committed (size): the ADS all-vintages workbook (203 MB) — re-download from the ADS page; the 371 ALFRED battery vintages of the research pass (re-pulled by the study's cached fetcher).
 
+Review fixes 2026-10-20 (B1/B2 counter-agent passes), files added or changed in this directory:
+
+- `vintages_raw.tar.xz` — F6 raw ALFRED vintage cache frozen in git (SERIOUS-1, DT-4): 1,589 served CSV bodies + 1,589 `.meta.json` sidecars (3,178 members, 50.5 MB raw, 392,944 bytes xz; `tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='2026-10-20 00:00:00Z' --format=gnu | xz -T1 -6`). sha256 `acb7f966fbac2e08fdded085cea567f526b6e18f8a6d09b33bfa1c3add17b17a`, recorded in `vintages_panel/build_summary.json` (`raw_tarball`). `vintages.py build|calendar` and `as_of()` read it when no `--cache` is given; every row of `vintages_panel/vintage_table.csv` re-hashes identically from the extracted files (test_pipelines). Includes the four earliest listed T10Y3M / BAA10YM vintages (2014-01-27, 2026-01-02 / 2014-05-16, 2026-01-02) fetched for the extended §4.1 unrevised check (MINOR-2) and not in `vintage_table.csv` (not replay series). results.json must record this hash as part of F6.
+- `alfred_shutdown/alf_ICSA_2025-11-20.csv`, `alf_ICSA_2025-12-11.csv`, `alf_ICSA_2026-02-05.csv` — the ICSA vintages v1 §2.4 says F4 gains (D3), at the latest LISTED vintage date <= each issue date (2025-11-20, 2025-12-16 -> 2025-12-11, 2026-02-06 -> 2026-02-05; §4.4 fetch-by-list). Copied byte-for-byte from the F6 cache (hashes equal the `vintage_table.csv` rows; a fresh 2025-11-20 pull on 2026-10-20 was byte-identical). `alf_ICSA_2026-01-09.csv` (research pass) is the listed 2026-01-08 vintage with the requested date echoed in its header (body identical to the cache's `ICSA_2026-01-08.csv`); it stays and is used for 2026-01-09. T10Y3M on the three dates is taken current (the 2026-10-20 pull, days <= the issue date) per v1 §4.1; the 2026-01-09 vintage file is used where it exists.
+- `DATA_MANIFEST.csv` — `local_file` column scrubbed from absolute session paths to paths relative to the scratchpad (NOTE-5; no other column changed, CRLF kept).
+
 | file | bytes | sha256[:16] |
 |---|---|---|
-| DATA_MANIFEST.csv | 12057 | 44d8fa32f6426339 |
+| DATA_MANIFEST.csv | 9418 | 3f442ff77ac609c0 |
 | alfred_cmrmtspl_m3d10.json | 1772 | 6ef40d80a3136ad1 |
 | alfred_first_vintage_2026.csv | 3564 | 90a83cf232782900 |
 | alfred_lag_table_1st_of_month.txt | 4046 | 7ef1c738e8eb809f |
@@ -37,6 +43,9 @@ Not committed (size): the ADS all-vintages workbook (203 MB) — re-download fro
 | alfred_shutdown/alf_CMRMTSPL_2026-02-06.csv | 15890 | cd4b686b34711fc4 |
 | alfred_shutdown/alf_ICNSA_2026-01-09.csv | 55475 | acf65ef7bde76b96 |
 | alfred_shutdown/alf_ICSA_2026-01-09.csv | 55473 | 0d5309d58a9ce673 |
+| alfred_shutdown/alf_ICSA_2025-11-20.csv | 55347 | dc42a4a6a184cd6d |
+| alfred_shutdown/alf_ICSA_2025-12-11.csv | 55401 | cd0515896159d2ef |
+| alfred_shutdown/alf_ICSA_2026-02-05.csv | 55545 | ca4d9c513eaaaf79 |
 | alfred_shutdown/alf_INDPRO_2025-11-20.csv | 24211 | f3ed61d59622a4df |
 | alfred_shutdown/alf_INDPRO_2025-12-16.csv | 24229 | 9c490e0fa4b09d07 |
 | alfred_shutdown/alf_INDPRO_2026-01-09.csv | 24269 | 1904361fc2bc40ef |

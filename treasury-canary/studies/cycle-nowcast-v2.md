@@ -677,3 +677,67 @@ the comparator reproduction gate, and the hashes into results.json.
 |---|---|---|
 | statistics, SPEC v0 (2026-10-20) | BLOCK — Q2 criterion vacuous (IS-C identity) / knife-edge (0.126); comparator decision undefined over part of the outcome space and untestable with 2020 in (94.7% of 2013+ persistence SSE is 2020; minimum detectable MSE gap ~30% ex-2020); band keyed to the IS label not the displayed month's bridged pattern (2× wrong at IS-B, zero-width at IS-C); no consequence on a primary miss; reproduction gate did not pin the estimator (scoring mode fails the exact transition count at 1980-11 by 0.003); ADS calibration asymmetric and errors-in-variables; directional and DM conventions unpinned; 14 more | all 21 (F01–F21) |
 | data/timing, SPEC v0 (2026-10-20) | BLOCK — regime (i) silently trained and calibrated on final-vintage targets and z-histories; row admission encoded the 2026 calendar (fails on 22 of 56 IS-C days 2013–17 and in shutdown states); ADS calibrated on smoothed in-vintage values but scored on filtered end-points; nothing frozen for the real-time run (F6–F8 added); served-vintage identification unsound (fetch by vintage list); shutdown expected outputs unwritten; pseudo regime's lag table anachronistic (PI-vintage IS-C dates); first-print target undefined; 1959 start would shift the leading composite and could fire a spurious phase alert; 14 more | all 24 (DT-1–DT-24); the AWHMAN 2026-04 row in `data/alfred_first_vintage_2026.csv` corrected to 2026-05-08 (binary-search artifact) |
+
+---
+
+## SPEC v1.1 — amendments 2026-10-20 after the engine build and its three adversarial reviews (still nothing scored)
+
+The engine and pipelines are built (`cycle_nowcast_v2/`: engine.py, metrics.py,
+gates.py, vintages.py, ads.py, piger.py, nber.py; 150 tests pass offline, 6
+known misses as strict xfails, one deliberately red test that lists the hard
+misses below until they are ruled on). The reproduction gate on F1 passes on
+every August number (PERS 0.467416 / 0.531598 / 0.258044 to ±0.0001; BRIDGE,
+CLAIMS, ENS_BC RMSEs, directional, phase, 29/114 transitions, DM −1.6335 /
+−5.3379, every onset month and false alarm; the identity gates to 0.0; the
+legacy and spec-form live outputs; F3 and all four F4 shutdown cases produce
+the pre-written outputs). Six rows missed and are RULED here — none by
+widening a tolerance; each ruling is a definition correction with both values
+kept on record:
+
+| miss | computed vs target | ruling |
+|---|---|---|
+| G04 ENS_GRID_REPRO 50/50 count | 361 of 630 vs 354 ± 5 (361–370 under every convention; RMSE row 0.331865 passes; 97 of 630 selections within 1% MSE of a runner-up) | A hindsight-selector count with near-ties is not reproducible to ±5 without the August harness; ENS_GRID_REPRO is gate-only and feeds nothing scored. Row becomes DESCRIPTIVE (reported, not gated) **pending Casey Q5**; if the August harness is found, the count is re-gated against its selector tie-break. |
+| S01/S04 scoring-mode delta row, literal D2 reading (CLAIMS rows t ≤ K = M−2) | ΔCLAIMS −0.0307 (0.3930 → 0.3623; 2020-only 2.33 → 2.02; ex-2020 +0.0037), ΔENS −0.0118; four transition flips, 1980-02 crossing 1979-10 → 1979-12 | The v1 expectation ("1980-11 only, |Δ| ≤ 0.003") was derived under the D1+D6 reading, which passes exactly as written. The literal D2 row is the honest cost of training only on published targets and is kept as a RECORDED row (DESCRIPTIVE), not a gate; the D1+D6 row stays the gate that pins the estimator. The scored member CLAIMS_HH uses rows t ≤ K(d) by construction (§2.3). |
+| Q01/Q04 soft ENS_BC_S | −22.09% vs −24.2 ± 1 pp; onsets 4-2-1 vs 5-1-1 (ex-2020 −7.88% passes; DM −3.07) | The QA harness's S construction is not recoverable (A16). Recorded as a soft miss; **Casey Q5** decides whether to hunt further or accept; it enters no decision. |
+| Q05 soft ENS_BC_HH | NOT_RUN | Correct by the pre-registration: ENS_HH at IS-A is the D-1 quantity. It is computed once, in the scored run, on F5 (decision) and on F1 (honesty box, beside the August −29.8% / −12.5% / 30.7% / 4-1-2). |
+| §5 ADS comparator reproduction gate | every-vintage sample 0.8083 / 0.9253 (n = 176) vs 0.866 / 0.956 ± 0.01; the cited note's own IP-release-day sample reproduces 0.8655 / 0.9560 (n = 24) | The gate is redefined to the note's own sampling (IP-release-day vintages, Nov-2008..Oct-2010, vs the 2010-12-03 vintage), which is what the note computed; PASS. The every-vintage correlations are reported beside it as DESCRIPTIVE. |
+| §6 Chauvet–Piger 2008 peak month | rule as written → 2008-01 (Feb-2008 = 51.98% is the first ≥ 50% month); the text said 2008-02 | The rule stands; the text is corrected: under the 3×80% rule declared at the 2009-01-01 release, the model dates the peak 2008-01 (NBER: 2007-12). |
+
+Other v1.1 amendments from the build notes (definitions the builders had to
+choose; all recorded in `notes_B1.md` §2 and `notes_B2.md` §5):
+- §2.2 skip rule (< 120 g observations through M−L) applies in both modes;
+  touches 1977-06/07 only.
+- ENS_GRID_REPRO uses a 1959-start leading composite in its LEADREG member
+  (pinned by the August LEADREG row to 4 dp); the board's leading composite
+  keeps 1960. ENS_GRID_D3 member forms (PERS_HH, AR2_HH with realized
+  COIN(M−2), LEADREG_HH) are implemented and must be confirmed against §2.3
+  before the scored run.
+- §4.4 validation: a missing value in an ALFRED CSV is an empty field or ".",
+  both read as None (the T10Y3M vintages have hundreds of empty fields and no
+  "." rows).
+- F4's twelve member files were fetched at non-listed dates (header echo);
+  content verified (lags reproduce); they are re-pulled at listed dates in the
+  run-day re-pull (F8). The ICSA vintages for the four F4 dates were added at
+  listed dates; the claims half of all four shutdown cases now gates.
+- Raw ALFRED vintage CSVs (57 MB) are not in git; `data/vintages_panel/`
+  carries the vintage table with per-file sha256 and the per-issue-date panel
+  (1,571 vintages; 1,568 requests, 0 validation failures, one transient
+  timeout retried); the ADS derived panel carries the archive hashes. A fresh
+  container re-pulls by list (~2.5 min) and re-converts (~3.5 min) and must
+  reproduce the committed hashes before scoring.
+- Bands are plumbing until the scored lag simulation supplies the per-pattern
+  p10/p90; `issue()` returns band = None with basis "pending" until then.
+- One ALFRED RECPROUSM156N vintage (2023-02-01) carries a back-history load
+  glitch (Mar/Apr-2020 at 0.14/0.04% vs Piger's 100/100); no rule outcome
+  changes; a chart from ALFRED vectors must mark that release. Seven Piger
+  releases have no matching ALFRED vintage and use the Piger-column fallback
+  §6 allows.
+
+### Counter-agent log (continued)
+
+| review | verdict | adopted |
+|---|---|---|
+| build B1 engine, correctness lens | PASS_WITH_FIXES (9) — cache-key aliasing between row-admission designs; absent/empty/short member silently dropped as "not existing"; hard-gate misses hidden behind strict xfails | all applied: keyed caches, explicit member-state classification with reasons, a red test that lists hard misses until ruled |
+| build B1 engine, look-ahead lens | PASS_WITH_FIXES (11) — same aliasing seen from the look-ahead side; no look-ahead found in the shifted-input, synthetic-AR and row-admission attacks | applied |
+| build B2 pipelines, integrity lens | PASS_WITH_FIXES (10) — the frozen inputs for the real-time run were not fully in git (F6 round trip); empty-field handling; AWHMAN calendar row | applied: F6 round-trip test from the committed table + tar; validation rule corrected; calendar check byte-identical |
+| fix pass | 21 applied, 7 rejected with evidence (the six rulings above plus one tested retry-sequence change) | — |

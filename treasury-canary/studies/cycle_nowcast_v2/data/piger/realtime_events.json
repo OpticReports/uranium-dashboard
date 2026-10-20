@@ -1,0 +1,449 @@
+{
+ "alfred_anomalies_gt_1pp": [
+  {
+   "alfred_vintage_date": "2023-02-01",
+   "max_abs_diff_pct": "99.96",
+   "release_date": "2023-01-27"
+  }
+ ],
+ "alfred_coverage": {
+  "fallback_releases_after_first_alfred": [
+   "2012-11-01",
+   "2012-12-01",
+   "2013-01-01",
+   "2013-04-01",
+   "2013-05-01",
+   "2014-08-04",
+   "2026-03-02"
+  ],
+  "first_alfred_release": "2012-09-01",
+  "max_abs_diff_pct_overall": 99.96,
+  "n_fallback": 80,
+  "n_with_alfred": 160
+ },
+ "all_known_events_pass": false,
+ "built": "2026-10-20T19:35:48Z",
+ "first_release": "2006-08-01",
+ "header_corrections": [
+  {
+   "as_in_file": "2025-01-30",
+   "corrected": "2026-01-30"
+  }
+ ],
+ "known_event_checks": {
+  "1m50_sensitivity_catches_Mar-2020_at_2020-04-30": {
+   "computed": [
+    {
+     "episode": 3,
+     "latest_month": "2020-03",
+     "latest_pct": 100.0,
+     "release_date": "2020-04-30"
+    }
+   ],
+   "expected": {
+    "latest_month": "2020-03",
+    "release_date": "2020-04-30"
+   },
+   "pass": true
+  },
+  "2008_declared_at_2009-01-01": {
+   "computed": [
+    {
+     "release_date": "2009-01-01",
+     "trigger_months": [
+      "2008-07",
+      "2008-08",
+      "2008-09"
+     ],
+     "trigger_pct": [
+      88.26,
+      97.68,
+      98.04
+     ]
+    }
+   ],
+   "expected": {
+    "n_declarations": 1,
+    "release_date": "2009-01-01"
+   },
+   "pass": true
+  },
+  "2008_first_recession_month_2008-02_Hamilton": {
+   "computed": [
+    {
+     "chain_values_pct": {
+      "2008-01": 39.28,
+      "2008-02": 51.98,
+      "2008-03": 58.28,
+      "2008-04": 64.52,
+      "2008-05": 70.44,
+      "2008-06": 78.52,
+      "2008-07": 88.26
+     },
+     "first_recession_month": "2008-02"
+    }
+   ],
+   "expected": {
+    "basis": "Hamilton (2011) w16162: 'would have announced on January 1, 2009 that a recession had started in February 2008'",
+    "first_recession_month": "2008-02"
+   },
+   "pass": true
+  },
+  "2008_peak_dated_2008-02_as_task_text": {
+   "computed": [
+    {
+     "first_half_month": "2008-02",
+     "peak_month": "2008-01",
+     "rule": "peak = month before the first >= 50% month of the chain preceding the trigger (\u00a76)"
+    }
+   ],
+   "expected": {
+    "basis": "SPEC v1 \u00a71 row 7 / task text 'peak dated 2008-02'",
+    "peak_month": "2008-02"
+   },
+   "note": "reported as computed; a miss here means the spec text names the first recession month, not the peak, under its own rule",
+   "pass": false
+  },
+  "2020_never_declared_by_3x80": {
+   "computed": [],
+   "expected": [],
+   "pass": true
+  },
+  "2021-10-29_release_Sep-2021_44.4pct_no_fire": {
+   "computed": {
+    "fires_1m50": false,
+    "latest_month": "2021-09",
+    "pct": 44.4
+   },
+   "expected": {
+    "fires_1m50": false,
+    "latest_month": "2021-09",
+    "pct": 44.4
+   },
+   "pass": true
+  },
+  "no_other_3x80_declarations_2006-08..2026-09": {
+   "computed": [],
+   "expected": [],
+   "pass": true
+  }
+ },
+ "last_latest_month": "2026-08",
+ "last_latest_pct": 0.62,
+ "last_release": "2026-09-30",
+ "n_releases": 240,
+ "realtime_path_sha256": "6d4b2e2d5ff4b31d9aa2ea43a82ae30d1d74905ff6bfec03f1e7f40bb614e985",
+ "release_lag_days": {
+  "max": 69,
+  "median": 60.0,
+  "min": 20
+ },
+ "rule_1m50": {
+  "firing_releases": [
+   {
+    "episode": 1,
+    "latest_month": "2008-08",
+    "latest_pct": 51.62,
+    "release_date": "2008-11-01"
+   },
+   {
+    "episode": 1,
+    "latest_month": "2008-09",
+    "latest_pct": 99.17,
+    "release_date": "2008-12-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2008-11",
+    "latest_pct": 75.38,
+    "release_date": "2009-02-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2008-12",
+    "latest_pct": 98.18,
+    "release_date": "2009-03-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-01",
+    "latest_pct": 98.78,
+    "release_date": "2009-04-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-02",
+    "latest_pct": 98.32,
+    "release_date": "2009-05-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-03",
+    "latest_pct": 97.94,
+    "release_date": "2009-06-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-04",
+    "latest_pct": 94.32,
+    "release_date": "2009-07-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-05",
+    "latest_pct": 96.48,
+    "release_date": "2009-08-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-06",
+    "latest_pct": 96.12,
+    "release_date": "2009-09-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-07",
+    "latest_pct": 53.34,
+    "release_date": "2009-10-01"
+   },
+   {
+    "episode": 3,
+    "latest_month": "2020-03",
+    "latest_pct": 100.0,
+    "release_date": "2020-04-30"
+   },
+   {
+    "episode": 3,
+    "latest_month": "2020-04",
+    "latest_pct": 100.0,
+    "release_date": "2020-05-29"
+   },
+   {
+    "episode": 4,
+    "latest_month": "2020-07",
+    "latest_pct": 87.85,
+    "release_date": "2020-08-28"
+   },
+   {
+    "episode": 4,
+    "latest_month": "2020-08",
+    "latest_pct": 100.0,
+    "release_date": "2020-10-01"
+   },
+   {
+    "episode": 4,
+    "latest_month": "2020-09",
+    "latest_pct": 100.0,
+    "release_date": "2020-10-30"
+   }
+  ],
+  "firing_releases_on_spec_vectors": [
+   {
+    "episode": 1,
+    "latest_month": "2008-08",
+    "latest_pct": 51.62,
+    "release_date": "2008-11-01"
+   },
+   {
+    "episode": 1,
+    "latest_month": "2008-09",
+    "latest_pct": 99.17,
+    "release_date": "2008-12-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2008-11",
+    "latest_pct": 75.38,
+    "release_date": "2009-02-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2008-12",
+    "latest_pct": 98.18,
+    "release_date": "2009-03-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-01",
+    "latest_pct": 98.78,
+    "release_date": "2009-04-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-02",
+    "latest_pct": 98.32,
+    "release_date": "2009-05-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-03",
+    "latest_pct": 97.94,
+    "release_date": "2009-06-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-04",
+    "latest_pct": 94.32,
+    "release_date": "2009-07-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-05",
+    "latest_pct": 96.48,
+    "release_date": "2009-08-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-06",
+    "latest_pct": 96.12,
+    "release_date": "2009-09-01"
+   },
+   {
+    "episode": 2,
+    "latest_month": "2009-07",
+    "latest_pct": 53.34,
+    "release_date": "2009-10-01"
+   },
+   {
+    "episode": 3,
+    "latest_month": "2020-03",
+    "latest_pct": 100.0,
+    "release_date": "2020-04-30"
+   },
+   {
+    "episode": 3,
+    "latest_month": "2020-04",
+    "latest_pct": 100.0,
+    "release_date": "2020-05-29"
+   },
+   {
+    "episode": 4,
+    "latest_month": "2020-07",
+    "latest_pct": 87.85,
+    "release_date": "2020-08-28"
+   },
+   {
+    "episode": 4,
+    "latest_month": "2020-08",
+    "latest_pct": 100.0,
+    "release_date": "2020-10-01"
+   },
+   {
+    "episode": 4,
+    "latest_month": "2020-09",
+    "latest_pct": 100.0,
+    "release_date": "2020-10-30"
+   }
+  ],
+  "n_episodes": 4,
+  "same_on_spec_vectors": true,
+  "threshold": 0.5
+ },
+ "rule_3x80": {
+  "events": [
+   {
+    "chain_pct": {
+     "2008-01": 39.28,
+     "2008-02": 51.98,
+     "2008-03": 58.28,
+     "2008-04": 64.52,
+     "2008-05": 70.44,
+     "2008-06": 78.52,
+     "2008-07": 88.26
+    },
+    "first_half_month": "2008-02",
+    "first_recession_month": "2008-02",
+    "kind": "recession_start",
+    "latest_month": "2008-10",
+    "months_after_peak": 12,
+    "peak_month": "2008-01",
+    "release_date": "2009-01-01",
+    "trigger_months": [
+     "2008-07",
+     "2008-08",
+     "2008-09"
+    ],
+    "trigger_pct": [
+     88.26,
+     97.68,
+     98.04
+    ]
+   },
+   {
+    "first_below_half_month": "2009-07",
+    "kind": "recession_end",
+    "latest_month": "2009-10",
+    "release_date": "2010-01-01",
+    "trigger_months": [
+     "2009-08",
+     "2009-09",
+     "2009-10"
+    ],
+    "trigger_pct": [
+     15.32,
+     14.46,
+     15.06
+    ],
+    "trough_month": "2009-06"
+   }
+  ],
+  "events_on_spec_vectors": [
+   {
+    "chain_pct": {
+     "2008-01": 39.28,
+     "2008-02": 51.98,
+     "2008-03": 58.28,
+     "2008-04": 64.52,
+     "2008-05": 70.44,
+     "2008-06": 78.52,
+     "2008-07": 88.26
+    },
+    "first_half_month": "2008-02",
+    "first_recession_month": "2008-02",
+    "kind": "recession_start",
+    "latest_month": "2008-10",
+    "months_after_peak": 12,
+    "peak_month": "2008-01",
+    "release_date": "2009-01-01",
+    "trigger_months": [
+     "2008-07",
+     "2008-08",
+     "2008-09"
+    ],
+    "trigger_pct": [
+     88.26,
+     97.68,
+     98.04
+    ]
+   },
+   {
+    "first_below_half_month": "2009-07",
+    "kind": "recession_end",
+    "latest_month": "2009-10",
+    "release_date": "2010-01-01",
+    "trigger_months": [
+     "2009-08",
+     "2009-09",
+     "2009-10"
+    ],
+    "trigger_pct": [
+     15.32,
+     14.46,
+     15.06
+    ],
+    "trough_month": "2009-06"
+   }
+  ],
+  "half": 0.5,
+  "hi": 0.8,
+  "lo": 0.2,
+  "same_on_spec_vectors": true,
+  "scan_from": "2001-12",
+  "strict_gt": true
+ },
+ "source_bytes": 850125,
+ "source_file": "History_of_Real_Time_Recession_Probabilities.xlsx",
+ "source_sha256": "297de74203772a44374dc66247b1bb9d11f4b9de52f066ca0bceca786a11cb64",
+ "source_url": "https://jeremypiger.com/assets/files/History_of_Real_Time_Recession_Probabilities.xlsx",
+ "units": "Piger file DECIMAL; x100 = percent (FRED/ALFRED units); all *_pct columns are percent"
+}
