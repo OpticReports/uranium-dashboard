@@ -38,22 +38,78 @@ def crossings(E):
     return {f'{int(m):,}': out.get(m) for m in marks}
 
 
+def harvester_alternatives(E):
+    """the book with the harvester's 15% in T-bills, and with its share spread over the other three engines"""
+    import sens1997 as sv
+    eng = {e: E[e]['rets'] for e in bk.ENGINES}
+    days = [d for d in sorted(set().union(*[set(E[e]['days']) for e in bk.ENGINES])) if d >= bk.BOOK0]
+    out = {}
+    for lab, mod in (('as is', None), ('harvester share in T-bills', 'bills'), ('harvester share spread over the other three', 'spread')):
+        e2 = dict(eng)
+        tgt = dict(sv.TARGET)
+        if mod == 'bills':
+            e2['HARV'] = {d: lp.cash.get(d, 0.0) for d in days}
+        elif mod == 'spread':
+            k = 1 / (1 - tgt['HARV'])
+            tgt = {e: (0.0 if e == 'HARV' else w * k) for e, w in tgt.items()}
+        sv.TARGET = tgt
+        b = sv.book(e2, days, 0.40, 1)
+        sv.TARGET = dict(lg.TARGET)
+        s = bk.stats(b, days)
+        out[lab] = {'final': bk.START_VALUE * s['final_multiple'], 'sharpe': s['sharpe'], 'maxdd': s['maxdd'], 'cagr': s['cagr']}
+    return out
+
+
+def cap_resets(E):
+    eng = {e: E[e]['rets'] for e in bk.ENGINES}
+    days = [d for d in sorted(set().union(*[set(E[e]['days']) for e in bk.ENGINES])) if d >= bk.BOOK0]
+    w, pending, n, by = dict(lg.TARGET), False, 0, {}
+    for d in days:
+        r = sum(w[e] * eng[e].get(d, 0.0) for e in w)
+        w = {e: w[e] * (1 + eng[e].get(d, 0.0)) / (1 + r) for e in w}
+        if pending:
+            w, pending = dict(lg.TARGET), False
+        if max(w.values()) > 0.40:
+            pending = True
+            n += 1
+            top = max(w, key=w.get)
+            by[top] = by.get(top, 0) + 1
+    return {'n': n, 'by_engine': by}
+
+
 def main():
     R = {m: json.load(open(os.path.join(OUT, f'book1997_{m}.json'))) for m in ('ts_synth', 'plain', 'level')}
     F = json.load(open(os.path.join(OUT, 'fidelity1997.json')))
     E = json.load(open(os.path.join(OUT, 'engines_ts_synth.json')))
+    S = json.load(open(os.path.join(OUT, 'sens1997.json')))
     P, meta = lp.build_long_prices('ts_synth')
     splices = lp.fidelity(P, meta)
     main_r = R['ts_synth']
     eras = {m: era_split(R[m]) for m in R}
     cross = crossings(E)
-    print('eras', json.dumps(eras, indent=0)[:900])
-    print('crossings', cross)
+    harv = harvester_alternatives(E)
+    resets = cap_resets(E)
+    MAINRULE = 'cap 40%, reset next close (main)'
+    rows = [('Main case', eras['ts_synth'], R['ts_synth']['book']['maxdd']),
+            ('VIX funds before 2006: constant carry', eras['plain'], R['plain']['book']['maxdd']),
+            ('VIX funds before 2006: carry linear in the VIX level', eras['level'], R['level']['book']['maxdd'])]
+    LAB = {'pregate': 'HG without its 200-day gate', 'const50': "Switcher's managed-futures RSI pinned at 50 before 2007",
+           'mfall': 'Trend proxy instead of RYMFX, 2007-2020', 'uvxy15pre': "UVXY at today's 1.5x before its 2011 launch",
+           'uvxy15': "UVXY at today's 1.5x through 2018"}
+    for v, lab in LAB.items():
+        m = S[v]['rules'][MAINRULE]
+        rows.append((lab, {'end2014': m['end2014'], 'cagr_9714': m['cagr_9714'], 'final': m['final']}, m['maxdd']))
+    sens_rows = [{'label': lab, 'end2014': e['end2014'], 'cagr_9714': e['cagr_9714'], 'final': e['final'], 'maxdd': dd} for lab, e, dd in rows]
+    rule_rows = [{'label': lab, **S['baseline']['rules'][lab]} for lab in S['baseline']['rules']]
+    finals = [r['final'] for r in sens_rows] + [r['final'] for r in rule_rows if not r['label'].startswith('no cap') and not r['label'].startswith('daily')]
+    c9714 = [r['cagr_9714'] for r in sens_rows]
+    rng = {'final_lo': min(finals), 'final_hi': max(finals), 'cagr_lo': min(c9714), 'cagr_hi': max(c9714),
+           'end2014_lo': min(r['end2014'] for r in sens_rows), 'end2014_hi': max(r['end2014'] for r in sens_rows)}
+    print('eras', json.dumps(eras, indent=0)[:600])
+    print('crossings', cross, '\nharvester', harv, '\nresets', resets, '\nrange', rng)
     D = {'main': {k: main_r[k] for k in ('first', 'last', 'n', 'book', 'engines', 'bench', 'paths')},
-         'eras': eras, 'cross': cross, 'fid': F, 'splices': splices, 'capacity': CAPACITY,
-         'sens': {m: {'final': eras[m]['final'], 'cagr': R[m]['book']['cagr'], 'maxdd': R[m]['book']['maxdd'], 'sharpe': R[m]['book']['sharpe'],
-                      'end2014': eras[m]['end2014'], 'cagr_9714': eras[m]['cagr_9714'], 'kmlm_cagr': R[m]['engines']['KMLM']['cagr'],
-                      'harv_cagr': R[m]['engines']['HARV']['cagr']} for m in R}}
+         'eras': eras, 'cross': cross, 'fid': F, 'splices': splices, 'capacity': CAPACITY, 'harv': harv, 'resets': resets,
+         'sens_rows': sens_rows, 'rule_rows': rule_rows, 'range': rng, 'pregate': S['pregate']['rules'][MAINRULE]}
     open(PAGE, 'w').write(TEMPLATE.replace('__DATA__', json.dumps(D)))
     print('wrote', os.path.normpath(PAGE))
 
@@ -140,21 +196,22 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 </section>
 
 <section class="card">
-<h2>How much of this is the proxies</h2>
-<div class="grid2">
-<div>
-<p class="sub-h">VIX funds before mid-2006 (no VIX futures before 2004): three models of the missing futures curve.</p>
+<h2>How much of this is the proxies and the rules</h2>
+<p class="sub-h">One change at a time against the main case. The first group changes a proxy or a rule; the second changes only how the book's 40% cap is applied.</p>
 <div class="tablewrap"><table>
-<thead><tr><th>Model</th><th>End 2014</th><th>1997-2014</th><th>Final</th><th>Max DD</th></tr></thead>
+<thead><tr><th>Change</th><th>End 2014</th><th>1997-2014 a year</th><th>Final (paper)</th><th>Max DD</th></tr></thead>
 <tbody id="sens"></tbody></table></div>
-</div>
-<div>
+<div class="tablewrap" style="margin-top:10px"><table>
+<thead><tr><th>Book rule (main case)</th><th>End 2014</th><th>1997-2014 a year</th><th>Final (paper)</th><th>Max DD</th></tr></thead>
+<tbody id="rules"></tbody></table></div>
+</section>
+
+<section class="card">
+<h2>Checks against Composer and the earlier study</h2>
 <p class="sub-h">Composer's own backtest of each live symphony against this simulator, real-fund years only.</p>
 <div class="tablewrap"><table>
 <thead><tr><th>Engine</th><th>Window</th><th>Correlation</th><th>CAGR Composer / here</th></tr></thead>
 <tbody id="fid"></tbody></table></div>
-</div>
-</div>
 <ul class="notes" id="fidnotes"></ul>
 </section>
 
@@ -171,13 +228,15 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const tt = document.getElementById('tt');
 const pct = (x, s=true, dp=1) => (s && x >= 0 ? '+' : '') + (x*100).toFixed(dp) + '%';
 const yr = d => +d.slice(0,4) + ((+d.slice(5,7)-1)*30.44 + (+d.slice(8,10)-1))/365.25;
-const money = v => v >= 1e12 ? '$' + (v/1e12).toFixed(1) + 'T' : v >= 1e9 ? '$' + (v/1e9).toFixed(v >= 1e10 ? 0 : 1) + 'B' : v >= 1e6 ? '$' + (v/1e6).toFixed(v >= 1e7 ? 0 : 1) + 'M' : v >= 1e3 ? '$' + (v/1e3).toFixed(0) + 'k' : '$' + v.toFixed(0);
+const money = v => v >= 1e12 ? '$' + (v/1e12).toFixed(1) + 'T' : v >= 1e9 ? '$' + (v/1e9).toFixed(v >= 1e11 ? 0 : 1) + 'B' : v >= 1e6 ? '$' + (v/1e6).toFixed(v >= 1e8 ? 0 : 1) + 'M' : v >= 1e3 ? '$' + (v/1e3).toFixed(0) + 'k' : '$' + v.toFixed(0);
+const pctY = v => Math.abs(v) < 0.005 ? '0%' : pct(v, true, 0);
+const span = (a, b) => a.slice(0,4) === b.slice(0,4) ? a.slice(0,4) : `${a.slice(0,4)}-${b.slice(0,4)}`;
 const longMoney = v => '$' + Math.round(v).toLocaleString();
 function el(tag, attrs, parent){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
 function txt(p,x,y,s,cls,anchor){const t=el('text',{x,y,class:cls||'lbl','text-anchor':anchor||'start'},p);t.textContent=s;return t;}
 function showTT(x,y,title,rows){tt.textContent='';const d=document.createElement('div');d.className='d';d.textContent=title;tt.appendChild(d);
   for(const r of rows){const row=document.createElement('div');row.className='r';const n=document.createElement('span');n.className='n';const k=document.createElement('i');k.className='key';k.style.background=`var(--${r.cls})`;n.appendChild(k);n.appendChild(document.createTextNode(r.name));const b=document.createElement('b');b.textContent=r.val;row.appendChild(n);row.appendChild(b);tt.appendChild(row);}
-  tt.style.display='block';const w=tt.offsetWidth,h=tt.offsetHeight;let left=x+14,top=y-h-10;if(left+w>innerWidth-8)left=x-w-14;if(top<8)top=y+14;tt.style.left=left+'px';tt.style.top=top+'px';}
+  tt.style.display='block';const w=tt.offsetWidth,h=tt.offsetHeight;let left=x+14,top=y-h-10;if(left+w>innerWidth-8)left=x-w-14;left=Math.max(8,Math.min(left,innerWidth-w-8));if(top<8)top=y+14;tt.style.left=left+'px';tt.style.top=top+'px';}
 const hide=()=>{tt.style.display='none';};
 const SER=[['book','s1','book (4 engines)'],['QQQ','b1','QQQ'],['SPY','b2','SPY']];
 const dates=M.paths.dates, xs=dates.map(yr), X0=xs[0], X1=xs[xs.length-1], n=dates.length;
@@ -214,12 +273,12 @@ function lines(id, dd){
 }
 
 function fill(){
-  const B=M.book, E=D.eras.ts_synth;
+  const B=M.book, E=D.eras.ts_synth, R=D.range, PG=D.pregate;
   document.getElementById('sub').textContent=`The four live symphonies at 29/29/27/15 (HG with today's 200-day gate, the KMLM switcher with its VIX sleeve, the crash sleeve, the VIX harvester), drifting, with the 40% cap. $100,000 invested at the 1996-12-31 close, run to ${M.last}. Every fund before its launch is a proxy or a model (see below); costs at each engine's measured Composer rate. A paper result, not a forecast.`;
   const k=document.getElementById('kpis');k.textContent='';
-  const items=[[money(E.final),`on paper by ${M.last}: ${pct(B.cagr)} a year, Sharpe ${B.sharpe.toFixed(2)}, Sortino ${B.sortino.toFixed(2)}`],
-    [money(E.end2014),`by end-2014, the years no engine's rules were built on: ${pct(E.cagr_9714)} a year`],
-    [`${pct(B.maxdd,false,0)} / ${pct(B.worst_year[0],true,0)}`,`book max drawdown (${B.maxdd_peak.slice(0,7)} to ${B.maxdd_trough.slice(0,7)}) / worst year (${B.worst_year[1]})`],
+  const items=[[`~${money(E.final)}`,`on paper by ${M.last} in the main case (${pct(B.cagr)} a year, Sharpe ${B.sharpe.toFixed(2)}, Sortino ${B.sortino.toFixed(2)}); ${money(R.final_lo)} to ${money(R.final_hi)} across the proxy and rule choices below`],
+    [`${money(R.end2014_lo)}-${money(R.end2014_hi)}`,`by end-2014, before the years the rules were built on: ${pct(R.cagr_lo,true,0)} to ${pct(R.cagr_hi,true,0)} a year (the low end without HG's 200-day gate)`],
+    [`${pct(B.maxdd,false,0)} / ${pct(B.worst_year[0],true,0)}`,`book max drawdown (${B.maxdd_peak.slice(0,7)} to ${B.maxdd_trough.slice(0,7)}) / worst calendar year (${B.worst_year[1]})`],
     [money(M.bench.SPY.final_multiple*1e5),`SPY over the same years (${pct(M.bench.SPY.cagr)} a year, max DD ${pct(M.bench.SPY.maxdd,false,0)}); QQQ ${money(M.bench.QQQ.final_multiple*1e5)}`]];
   for(const [b,s] of items){const d=document.createElement('div');d.className='kpi';const bb=document.createElement('b');bb.textContent=b;const ss=document.createElement('span');ss.textContent=s;d.appendChild(bb);d.appendChild(ss);k.appendChild(d);}
   const lg=document.getElementById('lg-eq');lg.textContent='';
@@ -228,32 +287,34 @@ function fill(){
   const ty=document.getElementById('years');ty.textContent='';
   const cell=(tr,v,cls)=>{const td=document.createElement('td');td.textContent=v;if(cls)td.className=cls;tr.appendChild(td);};
   for(const y of Object.keys(B.by_year)){const tr=document.createElement('tr');if(y>='2015')tr.className='insample';const th=document.createElement('th');th.scope='row';th.textContent=y;tr.appendChild(th);
-    for(const v of [B.by_year[y],M.engines.HG.by_year[y],M.engines.KMLM.by_year[y],M.engines.SLEEVE.by_year[y],M.engines.HARV.by_year[y],M.bench.SPY.by_year[y]])cell(tr,pct(v,true,0),v>=0?'pos':'neg');
+    for(const v of [B.by_year[y],M.engines.HG.by_year[y],M.engines.KMLM.by_year[y],M.engines.SLEEVE.by_year[y],M.engines.HARV.by_year[y],M.bench.SPY.by_year[y]])cell(tr,pctY(v),Math.abs(v)<0.005?'':(v>=0?'pos':'neg'));
     ty.appendChild(tr);}
   const te=document.getElementById('engines');te.textContent='';
   const rows=[['Book (29/29/27/15, 40% cap)',B],['HG (with the 200-day gate)',M.engines.HG],['KMLM switcher + VIX sleeve',M.engines.KMLM],['Crash sleeve',M.engines.SLEEVE],['VIX harvester',M.engines.HARV],['SPY',M.bench.SPY],['QQQ',M.bench.QQQ]];
   for(const [lab,s] of rows){const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=lab;tr.appendChild(th);
-    for(const v of [money(s.final_multiple*1e5),pct(s.cagr),s.sharpe.toFixed(2),s.sortino.toFixed(2),`${pct(s.maxdd,false,0)} (${s.maxdd_peak.slice(0,4)}-${s.maxdd_trough.slice(2,4)})`,`${pct(s.worst_year[0],true,0)} (${s.worst_year[1]})`,`${(s.longest_underwater_sessions/252).toFixed(1)} yrs`])cell(tr,v);
+    for(const v of [money(s.final_multiple*1e5),pct(s.cagr),s.sharpe.toFixed(2),s.sortino.toFixed(2),`${pct(s.maxdd,false,0)} (${span(s.maxdd_peak,s.maxdd_trough)})`,`${pct(s.worst_year[0],true,0)} (${s.worst_year[1]})`,`${(s.longest_underwater_sessions/252).toFixed(1)} yrs`])cell(tr,v);
     te.appendChild(tr);}
-  const ts=document.getElementById('sens');ts.textContent='';
-  const LAB={ts_synth:'term-structure model on a synthetic curve (main)',plain:'constant carry (the reviewed 1990-2026 study)',level:'carry linear in the VIX level'};
-  for(const m of ['ts_synth','plain','level']){const s=D.sens[m];if(!s)continue;const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=LAB[m];tr.appendChild(th);
-    for(const v of [money(s.end2014),pct(s.cagr_9714),money(s.final),pct(s.maxdd,false,0)])cell(tr,v);ts.appendChild(tr);}
+  const fillRows=(id,list)=>{const t=document.getElementById(id);t.textContent='';for(const r of list){const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=r.label;tr.appendChild(th);
+    for(const v of [money(r.end2014),pct(r.cagr_9714),money(r.final),pct(r.maxdd,false,0)])cell(tr,v);t.appendChild(tr);}};
+  fillRows('sens',D.sens_rows);fillRows('rules',D.rule_rows);
   const tf=document.getElementById('fid');tf.textContent='';
   const NM={HG:'HG',KMLM:'KMLM switcher',SLEEVE:'Crash sleeve',HARV:'VIX harvester'};
   for(const e of ['HG','KMLM','SLEEVE','HARV']){const f=D.fid.real_era[e];const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=NM[e];tr.appendChild(th);
     for(const v of [`${f.from.slice(0,7)} to ${f.to.slice(0,7)}`,f.corr.toFixed(4),`${pct(f.composer_cagr,true,0)} / ${pct(f.model_cagr,true,0)}`])cell(tr,v);tf.appendChild(tr);}
-  const k2=D.fid.kmlm_signal.KMLM, hb=D.fid.hg_vs_panel_b, S=D.splices;
-  const fn=[`The KMLM switcher's main decision (XLK's 10-day RSI against the managed-futures fund's) uses a trend proxy before 2007 (12-month moving-average signs on Treasuries, the dollar index and the S&P GSCI). It matches the real decision on ${(S['KMLM flag agreement, proxy vs real, 2007-16']*100).toFixed(0)}% of days in 2007-16 and ${(S['KMLM flag agreement, proxy vs real, 2017-26']*100).toFixed(0)}% in 2017-26 (a constant gets ${(S['KMLM flag agreement, constant 50 vs real, 2007-16']*100).toFixed(0)}% and ${(S['KMLM flag agreement, constant 50 vs real, 2017-26']*100).toFixed(0)}%; RYMFX standing in for KMLM 84%). Swapping it in for 2007-26 moves that engine from ${pct(k2.main_cagr,true,0)} to ${pct(k2.proxy_cagr,true,0)} a year: read the switcher's pre-2007 years with roughly that much uncertainty.`,
-    `HG on this panel reproduces the reviewed 1990-2026 gate study exactly (correlation ${hb.corr.toFixed(4)}, ${pct(hb.long_panel_cagr)} a year both).`,
-    `Bond ETFs before launch: Vanguard Treasury, investment-grade and high-yield funds scaled on the overlap (TLT correlation ${S['TLT <- VUSTX x1.109'].corr}). Sector ETFs before 1998: Ken French's CRSP industry portfolios (correlations 0.84-0.98 where both exist). Leveraged funds: 2x/3x the daily return of their 1x base, financed at T-bills.`];
+  const k2=D.fid.kmlm_signal.KMLM, hb=D.fid.hg_vs_panel_b, S=D.splices, H=D.harv, RS=D.resets;
+  const fn=[`The KMLM switcher's main decision (XLK's 10-day RSI against the managed-futures fund's) uses a trend proxy before 2007 (12-month moving-average signs on Treasuries, the dollar index and the S&P GSCI). It matches the RYMFX/KMLM-based decision on ${(S['KMLM flag agreement, proxy vs real, 2007-16']*100).toFixed(0)}% of days in 2007-16 and ${(S['KMLM flag agreement, proxy vs real, 2017-26']*100).toFixed(0)}% in 2017-26, barely better than a constant RSI of 50 (${(S['KMLM flag agreement, constant 50 vs real, 2007-16']*100).toFixed(0)}% and ${(S['KMLM flag agreement, constant 50 vs real, 2017-26']*100).toFixed(0)}%): the switcher's pre-2007 decisions are close to unknowable, which is why the table carries both. Over 2007-26 the proxy changes that engine by ${pct(k2.proxy_cagr-k2.main_cagr,true,0)} a year overall, with large offsetting errors by sub-period.`,
+    `HG on this panel, with the constant-carry VIX funds of the earlier study, reproduces the reviewed 1990-2026 gate study exactly (correlation ${hb.corr.toFixed(4)}, ${pct(hb.long_panel_cagr)} a year in both).`,
+    `Bond ETFs before launch: Vanguard Treasury, investment-grade and high-yield funds scaled on the overlap (TLT correlation ${S['TLT <- VUSTX x1.109'].corr}). Sector and style ETFs before their launch (1998-2005): Ken French's CRSP industry and size/value portfolios (correlations 0.84-0.98 where both exist). Leveraged funds: 2x/3x the daily return of their 1x base, financed at T-bills. UVXY before its 2011 launch is modelled at its original 2x; today's fund is 1.5x (both in the table).`,
+    `Known modelling limits: the switcher is simulated with a daily rebalance where Composer uses a 10% corridor; the book's ${RS.n} cap resets (${Object.entries(RS.by_engine).map(([e,n])=>`${e} ${n}`).join(', ')}) are not costed (about -0.6% of the final at 5 bp); before 2007 the sleeve's HYG signal reads a stale-NAV mutual fund (correlation 0.52); gold before 2000 is a miners index (gold is held on 0.0% of days).`];
   const ul=document.getElementById('fidnotes');ul.textContent='';for(const t of fn){const li=document.createElement('li');li.textContent=t;ul.appendChild(li);}
   const c=D.cross;
-  const hn=[`In sample: all four engines' rules were built on 2015-2026 data (HG's by its author; the switcher, sleeve and harvester in July 2026). Those years turn $${(E.end2014/1e6).toFixed(1)}M into $${(E.final/1e9).toFixed(0)}B (${pct(E.cagr_1526,true,0)} a year). The out-of-sample years, 1997-2014, compound at ${pct(E.cagr_9714,true,0)} a year.`,
+  const hb2=H['harvester share in T-bills'], hs=H['harvester share spread over the other three'];
+  const hn=[`In sample: HG's rules were set by its author on 2015-2026 data; the KMLM switcher (2022) and the sleeve's components (2023-25) were written by community authors on recent data; the four were combined in July 2026 on 2015-2026 backtests; HG's 200-day gate was chosen on 1990-2026 (add. 40). The years from 2015 turn $${(E.end2014/1e6).toFixed(1)}M into ~$${(E.final/1e9).toFixed(0)}B (${pct(E.cagr_1526,true,0)} a year). Before 2015 the book compounds at ${pct(R.cagr_lo,true,0)} to ${pct(R.cagr_hi,true,0)} a year; the low end drops the in-sample gate.`,
     `Capacity: the book passes $1M on ${c['1,000,000']}, $10M on ${c['10,000,000']} and $1B on ${c['1,000,000,000']}. The current strategy set's practical ceiling is about $5-10M (addendum 15: ZVOL, VXZ and VIXM run out of daily volume first). Nothing above that line could have been done.`,
     `Proxies: before each fund existed its prices are rebuilt (leveraged funds from their 1x base; VIX funds from a model of a futures curve that did not trade before 2004; the switcher's managed-futures signal from a trend proxy). HG's 2x/3x funds launched 2006-2010 (LABU 2015) and the VIX funds 2009-2023; VIX futures first traded in 2004.`,
-    `The 200-day gate on HG was chosen after testing on this same history (add. 40). Costs are Composer's measured rate per unit of turnover; no market impact, no taxes, no withdrawals. Signals and trades at the same close.`,
-    `What survives as a statement: in 1997-2014 the book's rules, run on rebuilt prices, compound at about ${pct(E.cagr_9714,true,0)} a year with a ${pct(M.book.maxdd,false,0)} worst drawdown. The VIX harvester is a drag over the long history (${pct(M.engines.HARV.cagr,true,1)} a year, ${(M.engines.HARV.longest_underwater_sessions/252).toFixed(1)} years underwater from ${M.engines.HARV.underwater_from.slice(0,4)}).`];
+    `The 40% cap: it trades terminal wealth for drawdown. Without it the paper path ends near ${money(D.rule_rows.find(r=>r.label.startsWith('no cap')).final)} with a ${pct(D.rule_rows.find(r=>r.label.startsWith('no cap')).maxdd,false,0)} drawdown; small changes to its timing move the final by tens of billions, so read the headline as an order of magnitude.`,
+    `The VIX harvester earns little alone (${pct(M.engines.HARV.cagr,true,1)} a year, ${(M.engines.HARV.longest_underwater_sessions/252).toFixed(1)} years underwater from ${M.engines.HARV.underwater_from.slice(0,4)}), but holding its 15% in T-bills instead would end lower (${money(hb2.final)}, Sharpe ${hb2.sharpe.toFixed(2)} vs ${B.sharpe.toFixed(2)}); spreading its share over the other three ends higher (${money(hs.final)}) with a deeper drawdown (${pct(hs.maxdd,false,0)}).`,
+    `Costs are Composer's measured rate per unit of turnover; no market impact, no taxes, no withdrawals; signals and trades at the same close.`];
   const uh=document.getElementById('honest');uh.textContent='';for(const t of hn){const li=document.createElement('li');li.textContent=t;uh.appendChild(li);}
 }
 function draw(){fill();lines('eq',false);lines('dd',true);}
