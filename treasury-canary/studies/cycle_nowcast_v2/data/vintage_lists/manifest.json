@@ -84,6 +84,19 @@
   "url": "https://alfred.stlouisfed.org/series/downloaddata?seid=PAYEMS"
  },
  {
+  "bytes": 8041,
+  "file": "vd_PI.txt",
+  "first": "1966-01-18",
+  "last": "2026-09-30",
+  "n": 731,
+  "page_bytes": 89640,
+  "page_sha256": "159a4b2ecc44ddbf4d33ad1b93276f16c304839db1cf294ac13295fa69da26cf",
+  "retrieved": "2026-10-20T21:20:18Z",
+  "series": "PI",
+  "sha256": "a5c04cafdb9c2555a82eb3d1d730e858b7744f85db32479e9c88be376479f1e1",
+  "url": "https://alfred.stlouisfed.org/series/downloaddata?seid=PI"
+ },
+ {
   "bytes": 1837,
   "elapsed_s": 0.446,
   "file": "vd_RECPROUSM156N.txt",

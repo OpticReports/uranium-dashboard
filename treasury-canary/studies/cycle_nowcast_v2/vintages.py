@@ -856,6 +856,51 @@ def key_dict(key):
     return {"series": key[0], "month": key[1]}
 
 
+# ----------------------------------------------------------------------------- regime (ii) issue points from LISTS ONLY (v1 §4.2; task B3)
+
+PI_SERIES = "PI"                      # BEA Personal Income: the IS-C (PI&O day) proxy before W875RX1's 2010-05-28
+# Earliest calendar day of M+1 on which the release that first carries month M can be listed.
+# A content-free rule over the listed vintage dates (values are never fetched for this): the
+# earliest listed vintage dated >= that day of M+1 and before the first day of M+3. PAYEMS:
+# the first Friday of M+1 is always the first PAYEMS vintage of M+1; INDPRO: the G.17 lands
+# on the 14th-18th of M+1 (annual revisions are listed in late March / Nov-Dec, outside the
+# window); PI: the PI&O release lands in the last ~8 days of M+1 (or slips into M+2), the
+# annual revision shares its release date. Labelled "list-only proxy" wherever it is used.
+LIST_PROXY_MIN_DAY = {"PAYEMS": 1, "INDPRO": 14, PI_SERIES: 20, "W875RX1": 20}
+
+
+def fetch_pi_vintage_list(lists_dir: str, fetch_fn=None, *, tries: int = DEFAULT_TRIES,
+                          sleep=time.sleep) -> dict:
+    """Fetch-by-list for BEA Personal Income (ALFRED id PI): the vintage DATE list only, saved
+    as data/vintage_lists/vd_PI.txt with its hash in manifest.json / SHA256SUMS (F8). No PI
+    vintage CSV is ever requested: regime (ii) needs the PI&O release dates, not the values."""
+    retrieved = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    dates, raw = fetch_vintage_list(PI_SERIES, fetch_fn, tries=tries, sleep=sleep)
+    rec = save_vintage_list(lists_dir, PI_SERIES, dates, raw, retrieved)
+    write_lists_manifest(lists_dir, [rec])
+    return rec
+
+
+def list_proxy_issue_dates(dates: list[str], months: list[str], series: str,
+                           min_day: int | None = None) -> dict[str, str | None]:
+    """Regime (ii) issue point for each month M from a vintage-date LIST alone: the earliest
+    listed date d with '<M+1>-<min_day>' <= d <= '<M+3>-01' (None when no such date). The
+    upper bound is INCLUSIVE (fix pass M1): a release slipping to exactly the 1st of M+3 is a
+    real issue date (W875RX1 2018-12 was released 2019-03-01 after the shutdown). Content is
+    not consulted (the lists carry no observation months); every consumer labels the result
+    'list-only proxy' and scoring.section_regime_ii records the agreement table against the
+    content-decided F6 issue dates. Deterministic."""
+    if min_day is None:
+        min_day = LIST_PROXY_MIN_DAY[series]
+    ds = sorted(dates)
+    out: dict[str, str | None] = {}
+    for M in months:
+        lo = f"{add_months(M, 1)}-{min_day:02d}"
+        hi = f"{add_months(M, 3)}-01"
+        out[M] = next((d for d in ds if lo <= d <= hi), None)
+    return out
+
+
 # ----------------------------------------------------------------------------- CLI
 
 def _default_paths():
@@ -870,6 +915,8 @@ def main(argv=None) -> int:
     import argparse
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
+    pl = sub.add_parser("pi-list", help="fetch the BEA PI vintage DATE list only (regime (ii) IS-C proxy, F8)")
+    pl.add_argument("--lists", default=_default_paths()["lists"])
     for name in ("pull", "build", "check", "calendar"):
         q = sub.add_parser(name)
         q.add_argument("--cache", default=None,
@@ -885,6 +932,10 @@ def main(argv=None) -> int:
         q.add_argument("--fred", default=_default_paths()["fred"])
         q.add_argument("--allow-missing", action="store_true")
     a = p.parse_args(argv)
+    if a.cmd == "pi-list":
+        rec = fetch_pi_vintage_list(a.lists)
+        print(json.dumps(rec, indent=1, sort_keys=True))
+        return 0
     series = [s for s in a.series.split(",") if s]
     os.makedirs(a.out, exist_ok=True)
     if a.cmd in ("pull", "check") and not a.cache:

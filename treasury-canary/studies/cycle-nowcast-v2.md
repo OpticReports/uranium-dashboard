@@ -667,6 +667,15 @@ three shutdown windows are flagged. The rest as v0 §9.
 comparator reading, the last point descriptive); Q13 a P3 convenience (~2.5k
 keyless requests); Q10's sensitivity decided (not run). Q1–Q5 remain asked.
 
+Added 2026-10-20 by the B3 fix pass (run-script reviews, findings S1/D1 and D6); both
+are carried in `freeze_template.json` and `run_study.py --real` refuses a freeze that
+does not answer them (expiry 2026-12-19):
+
+| Pri | # | Question | Default carried by the harness (NOT an answer) | What it moves | Status |
+|---|---|---|---|---|---|
+| P1 | Q16 | §5 calibration store. As built, both sides are calibrated on the STORED regime-(i) real-time readings at the same IS on identical rows (§5 Symmetry), so the first calibrated reading comes ≥ 24 stored regime-(i) months after the first row: on the real panel IS-A rows start 2013-06, the first calibrated reading is ~2015 and the D-3 decisive sample is ~120 ex-2020 months — not "first scored month ≥ 2011 on the 2008-12+ archive" (§5) and not "n ≈ 145" (§8 D-3). The clauses cannot all hold. Keep the symmetric store (record the gap), or seed the ADS side from the 2008-12+ archive at list-proxy IS points against vintage-consistent COIN(t) with a labelled pseudo ENS side (asymmetric rows; engine change + SPEC v1.2)? | `regime_i_stored_readings_symmetric_rows` (the seeded store is not implemented and refuses) | the D-3 decisive sample (~24 months) and the §8 power note; whether the scored run may start | asked |
+| P1 | Q17 | §8 D-3 "target_first must agree in sign or the decision is deferred": the literal reading sign(r_first − 1) == sign(r_latest − 1) defers e.g. r_latest 1.05 / r_first 0.98 although both are SUCCESS; the alternative reading "same outcome class under target_first (same X/Y thresholds, one-sided DM on target_first errors)" defers only when the classes differ. The synthetic dry run shows the two readings CAN differ (KILL vs DEFERRED). Which reading? | `sign_of_r_minus_1` (both readings implemented; both classes always recorded) | whether D-3 is decided or DEFERRED at the margin | asked |
+
 ### 11. Run order — as v0 §11, with step 3 = the vintage-list pull (F6), the ADS
 archive conversion (F7), the run-day re-pull of lists and Piger's file (F8),
 the comparator reproduction gate, and the hashes into results.json.
@@ -741,3 +750,36 @@ choose; all recorded in `notes_B1.md` §2 and `notes_B2.md` §5):
 | build B1 engine, look-ahead lens | PASS_WITH_FIXES (11) — same aliasing seen from the look-ahead side; no look-ahead found in the shifted-input, synthetic-AR and row-admission attacks | applied |
 | build B2 pipelines, integrity lens | PASS_WITH_FIXES (10) — the frozen inputs for the real-time run were not fully in git (F6 round trip); empty-field handling; AWHMAN calendar row | applied: F6 round-trip test from the committed table + tar; validation rule corrected; calendar check byte-identical |
 | fix pass | 21 applied, 7 rejected with evidence (the six rulings above plus one tested retry-sequence change) | — |
+| build B3 run script + synthetic dry run, contract lens (16: 2 SERIOUS, 7 MINOR, 8 NOTE) and look-ahead lens (12: 1 SERIOUS, 2 MINOR, 9 NOTE) (2026-10-20) | SERIOUS: the D-3 decisive sample loses the calibration warm-up unflagged (S1/D1); the §4.1 run-day unrevised re-check cannot execute in --real (S2). MINOR: one-scored-run per --out only, correction runs not hash-checked, --cache bypass, --ads-matrix / --f1 unpinned, no committed-state check, pass/fail booleans in DESCRIPTIVE DM records, list-proxy boundary, raw tracebacks on a missing manifest | fix pass: every SERIOUS / MINOR and the NOTE items applied (notes_B3 §8); Q16 and Q17 opened above; rejected with evidence: requiring an identical spec hash for a correction run (the results are written into this file after the run), and the ENS_GRID_D3 form confirmation (spec-owner item, now a --real blocker) |
+
+---
+
+## SPEC v1.2 — rulings 2026-10-20 on the run-script reviewers' two questions (spec owner; still nothing scored)
+
+- **Q16 (§5 calibration store) — RULED: keep the symmetric regime-(i) store as
+  built.** Both sides are calibrated on STORED real-time readings at the same IS
+  on identical rows, so the first calibrated reading arrives ≥ 24 stored months
+  after the first regime-(i) row (~2015 on the real panel) and the D-3 decisive
+  sample is ~120 ex-2020 months, not the ~145 the spec expected. The ~145 was an
+  expectation, not a requirement; symmetry is the requirement. The harness
+  records the actual n, the first calibrated month and the warm-up in
+  `decision_D3.calibration_warmup` and the honesty box. Seeding ADS from the
+  2008-12+ archive against a pseudo-real-time ENS side is NOT done (it would
+  compare a real-time ADS with a final-vintage ENS — the asymmetry §5 forbids).
+  The minimum-detectable-difference caveat in §8 D-3 is restated for n ≈ 120.
+- **Q17 (§8 D-3 "target_first must agree") — RULED: outcome-class agreement.**
+  D-3 is evaluated twice with identical thresholds and tests: on target_latest
+  (PRIMARY) and on target_first. The decision stands only if both land in the
+  same class (SUCCESS / MIDDLE / KILL); if the classes differ the decision is
+  deferred to the next R2 calibration and both classes are reported. The literal
+  sign(r − 1) reading is rejected because it would defer two SUCCESS outcomes
+  that straddle r = 1.
+- **ENS_GRID_D3 member forms — CONFIRMED** as implemented (PERS_HH; AR2_HH on
+  realized COIN(M−2) and the completed COIN(M−1); LEADREG_HH on the completed
+  COIN(M−1) and LEAD(M−1)); the "pending confirmation" flag is dropped. It is
+  DESCRIPTIVE only.
+- **Run-day F8 re-pull** must also fetch one LISTED 2026 vintage each of T10Y3M
+  and BAA10YM into the raw cache (the §4.1 unrevised re-check refuses without
+  them) and rebuild the F6 tarball and build_summary so the hashes match.
+- Casey's Q1–Q5 remain the only open inputs; `run_study.py --real` refuses a
+  freeze file that does not answer them.
