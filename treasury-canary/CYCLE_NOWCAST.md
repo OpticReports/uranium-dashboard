@@ -228,21 +228,25 @@ Corrections applied to the shipped module/panel:
 
 1. **The nowcast only exists ~1 week a month.** `nowcast()` requires every bridge
    input at its trained lag (INDPRO/W875RX1 at M−1, CMRMTSPL at M−2) and returns
-   None otherwise; once INDPRO for M prints (~day 15 of M+1) the gate fails and the
-   amber point vanishes until the next payrolls Friday. Fix: fit a bridge per
+   None otherwise; once INDPRO for M or manufacturing-and-trade sales for M−1 print
+   (both ~mid M+1) the gate fails and the amber point vanishes until the next
+   payrolls Friday — a window of ~8–13 days a month; a 2-month INDPRO delay (a
+   shutdown) blocks it even inside the window. Fix: fit a bridge per
    (component, observed lag ∈ {0,1,2,3}), use the actual z when a component has
    published (lag 0), and train the COIN(M−1) regressor on bridge-completed values
    (the ENS_BC_HH form the QA panel named best: RMSE −29.8% vs −24.2%). Test: the
    existing walk-forward harness at every calendar day of the month, not just
    payrolls day.
 2. **The headline coincident reading is a partial average.** `coin[-1]` is the mean
-   of whichever of the four members has published (2 of 4 for most of the month);
+   of whichever of the four members has published (2 or 3 of 4 depending on the
+   day of the month; 3 on the test fixture; 4 of 4 only briefly, if ever);
    the panel now says so, but the honest number is the bridge-COMPLETED composite
    for the latest month. Same fix as (1), displayed as the solid line's last point
    with a band.
 3. **Real-time precision/recall.** `stats` is scored on revised data; the ALFRED
-   panel (160 as-of dates) already exists, so score the −0.75 rule on first prints
-   and show that precision beside the revised one. If real-time precision is
+   study (160 as-of dates, 2026-08-11) was run outside the repo — its vintage pulls
+   must be re-run and checked in before this can be gated; then score the −0.75
+   rule on first prints and show that precision beside the revised one. If real-time precision is
    materially lower, the threshold or the provisional band should move.
 4. **Trend-growth drift in the z-scores.** Expanding z since 1960 standardises
    today's growth against an era of ~2%/yr payroll trend; a structurally slower
@@ -251,10 +255,13 @@ Corrections applied to the shipped module/panel:
    gates; keep whichever has the better post-2000 precision at equal recall.
 5. **A probability line next to the labels.** The academic standard for exactly
    these four series is the dynamic-factor Markov-switching model (Chauvet–Piger);
-   FRED serves the smoothed version free (RECPROUSM156N, monthly). Cheap first
-   step: plot it as a cross-check (caveat: smoothed = two-sided in history, so the
-   back-history overstates real-time skill; Piger's real-time file is the honest
-   one). Full step: fit the MS-DFM walk-forward in this repo.
+   FRED serves the smoothed version free (RECPROUSM156N, monthly, 1967-06→; UNITS
+   ARE PERCENT — 2026-08 reads 0.62 = 0.6%). Cheap first step: plot it as a
+   cross-check with Piger's signal rule (three consecutive months above 80% =
+   recession start, below 20% = expansion). Caveat: smoothed = two-sided in
+   history, so the back-history overstates real-time skill; Piger publishes the
+   real-time history of every release since 2006-08, which is the honest series
+   to score. Full step: fit the MS-DFM walk-forward in this repo.
 6. **Leading-composite false spells (2023-04/05, 2024-07).** The inverted curve
    dominated the leading z for 2022–24. Test a breadth rule (≥4 of 6 members below
    their own median) plus 2-month persistence, and candidate members already on
@@ -265,8 +272,9 @@ Corrections applied to the shipped module/panel:
    coincident points so PROVISIONAL is visible, not a badge.
 8. **Benchmark-revision risk (the 2022 failure).** Payrolls benchmark revisions
    turned a live EXPANSION into a 10-month STALL. The BLS preliminary benchmark
-   (each August) and QCEW allow a pre-adjustment of the latest 12 months; at
-   minimum flag the months a large preliminary benchmark would re-label.
+   (each August, covering the 12 months to March) and QCEW (which lags ~5–6
+   months) allow a pre-adjustment of the months they cover; at minimum flag the
+   months a large preliminary benchmark would re-label.
 9. **Alert hygiene.** `phase_change` fires on any confirmed label flip, including
    EXPANSION↔STALL inside the provisional band; gate STALL/EXPANSION flips on
    |coin| ≥ 0.5 (or on the bridge-completed value) and keep SLOWDOWN/CONTRACTION

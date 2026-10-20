@@ -210,7 +210,8 @@ def compute(raw_override: dict | None = None) -> dict:
     stats = {"precision": round(tp / (tp + fp), 3) if tp + fp else None,
              "precision_post1990": round(tp90 / (tp90 + fp90), 3) if tp90 + fp90 else None,
              "recall": round(tp / (tp + fn), 3) if tp + fn else None,
-             "threshold": COIN_RECESSION}
+             "threshold": COIN_RECESSION,
+             "scored_from": next((m for m, c in zip(months, coin) if c is not None), None)}
 
     rec_spans = []
     on = None
@@ -249,7 +250,10 @@ def compute(raw_override: dict | None = None) -> dict:
     members_in_latest = sum(1 for c in components["coincident"] if c["in_latest"])
     current = {"month": months[-1], "coincident": rnd(coin[-1]),
                "leading": rnd(lead[-1]), "phase": phases[-1],
-               "members_in_latest": members_in_latest}
+               "members_in_latest": members_in_latest,
+               "leading_3m_change": (rnd(lead[-1] - lead[-4])
+                                     if len(lead) > 3 and lead[-1] is not None
+                                     and lead[-4] is not None else None)}
     return {"months": months,
             "nowcast": nc,
             "components": components,
@@ -294,47 +298,62 @@ def _components(months, coin_z: dict, lead_z: dict) -> dict:
 
 
 def _sz(z) -> str:
-    return "n/a" if z is None else f"{z:+.2f}σ"
+    return "n/a" if z is None else f"{z + 0.0:+.2f}\u03c3"     # + 0.0 kills "-0.00"
+
+
+def _dir(d) -> str:
+    """3-month direction of the leading composite (level says where, this says
+    which way): counter-agent 2026-10-20 - direction words were computed from
+    the level before."""
+    if d is None:
+        return ""
+    return ("rising over 3 months" if d > 0.05 else "falling over 3 months" if d < -0.05
+            else "flat over 3 months")
 
 
 def build_read(current: dict, provisional: bool, components: dict,
                stats: dict, nc: dict | None) -> dict:
     """Six short strings the panel shows above the chart. Every number comes
     from the board itself; the frozen reliability figures are the ALFRED
-    study's (module docstring). Wording is 'watch', never 'alert'."""
+    study's (module docstring). Wording is 'watch', never 'alert'. The
+    revision-noise tiers use the vintage study's p90 edge error so the
+    headline and the 'from here' gaps agree with the provisional band."""
     coin, lead, phase = current["coincident"], current["leading"], current["phase"]
     k, month = current["members_in_latest"], current["month"]
+    ldir = _dir(current.get("leading_3m_change"))
     prov = " (provisional)" if provisional else ""
     if coin is None or lead is None or phase is None:
         return {"headline": "No phase: the composites are not computable for the latest month.",
                 "drivers": "", "calculation": "", "reliability": "", "next": "", "nowcast": ""}
-    lead_dir = ("pointing up" if lead > 0 else
-                f"soft but above the {SLOWDOWN_LEAD} slowdown line" if lead > SLOWDOWN_LEAD
-                else "falling")
+    p, p90, r = stats.get("precision"), stats.get("precision_post1990"), stats.get("recall")
+    pct = lambda x: f"{round(100 * x)}%" if x is not None else "n/a"
+    lead_level = ("above zero" if lead >= 0 else
+                  f"below zero but above the {SLOWDOWN_LEAD} slowdown line" if lead >= SLOWDOWN_LEAD
+                  else f"below the {SLOWDOWN_LEAD} slowdown line")
+    lead_txt = f"{_sz(lead)} ({lead_level}{', ' + ldir if ldir else ''})"
     if phase == "CONTRACTION":
-        head = (f"CONTRACTION: coincident growth is {_sz(coin)}, below the {COIN_RECESSION} line "
-                f"that has coincided with NBER recession months "
-                f"{round(100 * (stats.get('precision') or 0))}% of the time; the leading composite is "
-                f"{_sz(lead)}.")
+        head = (f"CONTRACTION: coincident growth is {_sz(coin)}, below the {COIN_RECESSION} line, "
+                f"which has coincided with NBER recession months {pct(p90)} of the time since 1990 "
+                f"({pct(p)} over the full sample); the leading composite is {lead_txt}.")
     elif phase == "SLOWDOWN":
         head = (f"SLOWDOWN: growth is below its long-run average ({_sz(coin)}) AND the leading "
-                f"composite is falling ({_sz(lead)}, under {SLOWDOWN_LEAD}); historically this "
-                f"combination has rarely stayed a false alarm for long.")
+                f"composite is {lead_txt}; in real time this label matched the later revised label "
+                f"{RT_BY_PHASE['SLOWDOWN']}% of the time.")
     elif phase == "STALL":
-        size = "a hair" if abs(coin) < 0.1 else "modestly" if abs(coin) < 0.35 else "clearly"
+        size = "a hair" if abs(coin) < 0.1 else "modestly" if abs(coin) < 0.5 else "clearly"
         gap = coin - COIN_RECESSION
-        dist = ("well above" if gap >= RT_EDGE_P90 else "above" if gap >= RT_EDGE_MAE
+        dist = ("well above" if gap >= 2 * RT_EDGE_P90 else "above" if gap >= RT_EDGE_P90
                 else "within revision noise of")
         head = (f"STALL{prov}: coincident growth is {size} below its long-run average "
                 f"({_sz(coin)}) and {dist} the recession line ({COIN_RECESSION}); the leading "
-                f"composite is {_sz(lead)} and {lead_dir}.")
+                f"composite is {lead_txt}.")
     elif phase == "LATE_CYCLE":
         head = (f"LATE CYCLE: growth is still above average ({_sz(coin)}) but the leading "
-                f"composite has rolled over ({_sz(lead)}, below {LEAD_WARN}); this crossing "
-                f"came strictly early on 4 of 7 recessions, and 3 of 15 such spells were false.")
+                f"composite is {lead_txt}, under {LEAD_WARN}; this crossing came strictly early "
+                f"on 4 of 7 recessions, and about 3 of 15 such spells were false (two knife-edge).")
     else:
         head = (f"EXPANSION{prov}: coincident growth is above its long-run average ({_sz(coin)}) "
-                f"and the leading composite is {_sz(lead)}.")
+                f"and the leading composite is {lead_txt}.")
     if k < 4:
         head += (f" The {month} reading rests on {k} of 4 coincident members; the others "
                  f"publish later and will move it.")
@@ -352,47 +371,63 @@ def build_read(current: dict, provisional: bool, components: dict,
         f"moving average. Phase rules: CONTRACTION if coincident < {COIN_RECESSION}; SLOWDOWN if "
         f"< 0 with leading < {SLOWDOWN_LEAD}; STALL if < 0; LATE CYCLE if leading < {LEAD_WARN}; "
         "otherwise EXPANSION.")
-    p, p90, r = stats.get("precision"), stats.get("precision_post1990"), stats.get("recall")
+    since = stats.get("scored_from") or "1970"
     reliability = (
-        f"Scored against NBER monthly labels since 1960: coincident < {COIN_RECESSION} has "
-        f"{round(100 * (p or 0))}% precision ({round(100 * (p90 or 0))}% since 1990) and "
-        f"{round(100 * (r or 0))}% recall; every recession since 1970 bottomed below -1.5. In real "
-        f"time (ALFRED vintages, 160 as-of dates 2000-2026) the live label matched the later revised "
-        f"label {RT_AGREEMENT_PCT:.0f}% of the time - CONTRACTION {RT_BY_PHASE['CONTRACTION']}%, "
+        f"Scored against NBER monthly labels from {since} (the z-scores need a 10-year warm-up): "
+        f"coincident < {COIN_RECESSION} has {pct(p)} precision ({pct(p90)} since 1990) and "
+        f"{pct(r)} recall; every recession since 1970 bottomed below -1.5. In real time (ALFRED "
+        f"vintages, 160 as-of dates 2000-2026) the live label matched the later revised label "
+        f"{RT_AGREEMENT_PCT:.0f}% of the time - CONTRACTION {RT_BY_PHASE['CONTRACTION']}%, "
         f"SLOWDOWN {RT_BY_PHASE['SLOWDOWN']}%, STALL {RT_BY_PHASE['STALL']}%, EXPANSION "
         f"{RT_BY_PHASE['EXPANSION']}%; a typical revision moves the latest coincident reading by "
-        f"{RT_EDGE_MAE}σ (p90 {RT_EDGE_P90}), which is why labels within 0.5 of zero are marked "
-        "provisional.")
+        f"{RT_EDGE_MAE}\u03c3 (p90 {RT_EDGE_P90}), which is why EXPANSION/STALL labels within 0.5 "
+        "of zero are marked provisional.")
+    # the 'from here' gaps: each names the phase phase_of() actually returns
+    # when only that variable crosses its line
     steps = []
-    if phase != "CONTRACTION":
-        gap = coin - COIN_RECESSION
-        scale = ("inside revision noise" if gap < RT_EDGE_P90
-                 else f"about {gap / RT_EDGE_MAE:.0f}x a typical revision")
-        steps.append(f"CONTRACTION needs the coincident line to fall {gap:.2f}σ ({scale})")
+    noise = lambda g: ("inside revision noise" if g < RT_EDGE_P90
+                       else f"about {g / RT_EDGE_MAE:.0f}x a typical revision")
+    below_zero_phase = "SLOWDOWN" if lead < SLOWDOWN_LEAD else "STALL"
+    if phase == "CONTRACTION":
+        g = COIN_RECESSION - coin
+        steps.append(f"exit to {below_zero_phase} needs the coincident line to rise {abs(g):.2f}\u03c3 "
+                     f"to {COIN_RECESSION} ({noise(g)})")
+    else:
+        g = coin - COIN_RECESSION
+        steps.append(f"CONTRACTION needs the coincident line to fall {abs(g):.2f}\u03c3 ({noise(g)})")
     if phase in ("STALL", "SLOWDOWN"):
-        steps.append(f"EXPANSION needs +{-coin:.2f}σ"
-                     f"{' (within revision noise)' if -coin < RT_EDGE_MAE else ''}")
+        steps.append(f"EXPANSION needs the coincident line to rise {abs(coin):.2f}\u03c3 to zero"
+                     f"{' (inside revision noise)' if abs(coin) < RT_EDGE_P90 else ''}")
     if phase == "STALL":
-        steps.append(f"SLOWDOWN needs the leading line to fall {lead - SLOWDOWN_LEAD:.2f}σ "
+        steps.append(f"SLOWDOWN needs the leading line to fall {abs(lead - SLOWDOWN_LEAD):.2f}\u03c3 "
+                     f"to {SLOWDOWN_LEAD}")
+    if phase == "SLOWDOWN":
+        steps.append(f"STALL needs the leading line to rise {abs(SLOWDOWN_LEAD - lead):.2f}\u03c3 "
                      f"to {SLOWDOWN_LEAD}")
     if phase in ("EXPANSION", "LATE_CYCLE"):
-        steps.append(f"STALL needs the coincident line to fall {coin:.2f}σ below zero")
+        steps.append(f"{below_zero_phase} needs the coincident line to fall {abs(coin):.2f}\u03c3 "
+                     f"below zero")
     if phase == "EXPANSION":
-        steps.append(f"LATE CYCLE needs the leading line to fall {lead - LEAD_WARN:.2f}σ "
+        steps.append(f"LATE CYCLE needs the leading line to fall {abs(lead - LEAD_WARN):.2f}\u03c3 "
+                     f"to {LEAD_WARN}")
+    if phase == "LATE_CYCLE":
+        steps.append(f"EXPANSION needs the leading line to rise {abs(LEAD_WARN - lead):.2f}\u03c3 "
                      f"to {LEAD_WARN}")
     nxt = ("From here: " + "; ".join(steps) + ". A phase change raises a canary event only after "
            "an 8-hour confirmation on fresh data.")
     if nc:
+        st = nc.get("stats", {})
         now = (f"Nowcast for {nc['month']} (payrolls, claims and rates for that month are already "
-               f"published; the composite is not): {nc['value']:+.2f}σ -> {nc['phase']} "
+               f"published; the composite is not): {nc['value']:+.2f}\u03c3 -> {nc['phase']} "
                f"(bridge {nc['bridge']:+.2f}, claims member {nc['claims']:+.2f}"
                f"{'; claims member below -0.75' if nc.get('claims_trigger') else ''}). Walk-forward "
-               f"1972-2026: RMSE {nc['stats']['rmse_vs_persistence_pct']}% vs persistence.")
+               f"1972-2026: RMSE {st.get('rmse_vs_persistence_pct')}% vs persistence "
+               f"({st.get('rmse_ex2020_pct')}% ex-2020; final-vintage data).")
     else:
-        now = ("No nowcast at the moment: the one-month-ahead model only runs between the payrolls "
-               "release and the industrial-production release each month (its bridge is fitted at "
-               "fixed publication lags), so for most of the month the chart ends at the last "
-               "published composite.")
+        now = ("No nowcast at the moment: the one-month-ahead model only runs in the window between "
+               "the payrolls release and the mid-month industrial-production and manufacturing-and-"
+               "trade-sales prints (its bridge is fitted at fixed publication lags), so for most of "
+               "the month the chart ends at the last published composite.")
     return {"headline": head, "drivers": drivers, "calculation": calculation,
             "reliability": reliability, "next": nxt, "nowcast": now}
 

@@ -171,7 +171,9 @@ export default function CycleTracker() {
           {/* 5y view: tighter band so the lines are not a flat strip around zero;
               full view keeps [-3, 2] so the recession troughs stay in frame. */}
           <YAxis tick={{ fontSize: 9, fill: "#64748b" }}
-            domain={view === "composite" ? (range === "5y" ? [-1.6, 1.6] : [-3, 2]) : ["auto", "auto"]}
+            domain={view === "composite"
+              ? (range === "5y" ? [(dataMin: number) => Math.min(-1.6, dataMin - 0.1), 1.6] : [-3, 2])
+              : ["auto", "auto"]}
             allowDataOverflow={view === "composite"} />
           <Tooltip contentStyle={{ background: "#111a2e", border: "1px solid #26334e",
             fontSize: 11 }} labelStyle={{ color: "#93a4bd" }}
