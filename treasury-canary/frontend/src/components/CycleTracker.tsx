@@ -16,9 +16,40 @@ interface CycleBoard {
   rec_spans: [string, string][];
   zeberg_check: { holds: boolean; current_ma_k: number | null;
                   min_at_recession_starts_k: number | null };
-  stats: { precision: number | null; recall: number | null; threshold: number };
-  current: { month: string; coincident: number; leading: number; phase: string };
+  stats: { precision: number | null; precision_post1990?: number | null; recall: number | null; threshold: number };
+  current: { month: string; coincident: number; leading: number; phase: string; members_in_latest?: number };
+  components?: { coincident: CycleMember[]; leading: CycleMember[] };
+  read?: { headline: string; drivers: string; calculation: string; reliability: string;
+           next: string; nowcast: string };
   basis: string;
+}
+
+interface CycleMember { label: string; z: number | null; month: string | null; in_latest: boolean }
+
+function zColor(z: number | null): string {
+  if (z == null) return "#64748b";
+  if (z <= -0.75) return "#f87171";
+  if (z < 0) return "#fbbf24";
+  return "#34d399";
+}
+
+/* One chip per composite member: the sign/size of its latest z, dimmed with its
+   own month when it has not yet published for the headline month. */
+function MemberStrip({ title, members, month }: { title: string; members: CycleMember[]; month: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <span className="mr-1 text-[10px] uppercase tracking-wide text-slate-500">{title}</span>
+      {members.map((c) => (
+        <span key={c.label}
+          title={c.in_latest ? `${c.label}: ${c.month}` : `${c.label}: last published ${c.month} (not yet in ${month})`}
+          className={`rounded border border-panelborder px-1.5 py-0.5 font-mono text-[10px] ${c.in_latest ? "" : "opacity-60"}`}>
+          <span className="text-slate-400">{c.label} </span>
+          <span style={{ color: zColor(c.z) }}>{c.z == null ? "n/a" : `${c.z >= 0 ? "+" : ""}${c.z.toFixed(2)}σ`}</span>
+          {!c.in_latest && c.month && <span className="text-slate-500"> {c.month}</span>}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 const PHASE_COLOR: Record<string, string> = {
@@ -35,6 +66,7 @@ export default function CycleTracker() {
   const [analogErr, setAnalogErr] = useState<string | null>(null);
   const [range, setRange] = useState<"5y" | "full">(
     () => (localStorage.getItem("cycleRange") as any) || "5y");
+  const [more, setMore] = useState(false);
 
   useEffect(() => {
     api.cycle()                     // getJson: 4-retry cold-boot handling
@@ -107,6 +139,28 @@ export default function CycleTracker() {
           <InfoTip term="cycle_phase" />
         </span>
       </div>
+      {board.read && (
+        <div className="mb-2 rounded border border-panelborder bg-slate-900/50 px-3 py-2 text-[11px] leading-relaxed text-slate-300">
+          <div><span className="font-semibold text-slate-100">Read: </span>{board.read.headline}</div>
+          {board.components && (
+            <div className="mt-1.5 flex flex-col gap-1">
+              <MemberStrip title="coincident" members={board.components.coincident} month={cur.month} />
+              <MemberStrip title="leading" members={board.components.leading} month={cur.month} />
+            </div>
+          )}
+          <div className="mt-1.5 text-[10px] text-slate-400">{board.read.nowcast}</div>
+          <button onClick={() => setMore(!more)} className="mt-1 text-[10px] text-sky-400 hover:text-sky-300">
+            {more ? "hide the method" : "how it's calculated · how reliable · what would change the phase"}
+          </button>
+          {more && (
+            <div className="mt-1 space-y-1 text-[10px] leading-relaxed text-slate-400">
+              <p><span className="text-slate-300">Calculation.</span> {board.read.calculation}</p>
+              <p><span className="text-slate-300">Reliability.</span> {board.read.reliability}</p>
+              <p><span className="text-slate-300">What would change it.</span> {board.read.next}</p>
+            </div>
+          )}
+        </div>
+      )}
       {view === "analogs" ? (
         <AnalogView analog={analog} err={analogErr} />
       ) : (
@@ -114,8 +168,10 @@ export default function CycleTracker() {
         <ComposedChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -14 }}>
           <CartesianGrid stroke="#1e293b" strokeWidth={0.5} />
           <XAxis dataKey="m" tick={{ fontSize: 9, fill: "#64748b" }} minTickGap={40} />
+          {/* 5y view: tighter band so the lines are not a flat strip around zero;
+              full view keeps [-3, 2] so the recession troughs stay in frame. */}
           <YAxis tick={{ fontSize: 9, fill: "#64748b" }}
-            domain={view === "composite" ? [-3, 2] : ["auto", "auto"]}
+            domain={view === "composite" ? (range === "5y" ? [-1.6, 1.6] : [-3, 2]) : ["auto", "auto"]}
             allowDataOverflow={view === "composite"} />
           <Tooltip contentStyle={{ background: "#111a2e", border: "1px solid #26334e",
             fontSize: 11 }} labelStyle={{ color: "#93a4bd" }}
@@ -133,8 +189,8 @@ export default function CycleTracker() {
                 label={{ value: "recession-consistent", fontSize: 8, fill: "#f87171",
                          position: "insideBottomLeft" }} />
               <ReferenceLine y={-0.5} stroke="#fbbf24" strokeDasharray="2 3"
-                label={{ value: "leading warn", fontSize: 8, fill: "#fbbf24",
-                         position: "insideTopLeft" }} />
+                label={{ value: "leading warn (−0.5)", fontSize: 8, fill: "#fbbf24",
+                         position: "insideTopRight" }} />
               <Line dataKey="coin" stroke="#38bdf8" dot={false} strokeWidth={1.8} />
               <Line dataKey="lead" stroke="#c084fc" dot={false} strokeWidth={1.4} />
               <Line dataKey="proj" stroke="#fbbf24" strokeWidth={1.6}

@@ -155,11 +155,13 @@ export default function App() {
         <div className="flex flex-col gap-5">
           <StressGauge composite={composite} />
 
+          {/* Where we are in the cycle sits right under the stress gauge (Casey, 2026-10-20). */}
+          <CycleTracker />
+
           <RateEnsemble />
 
           <ReSteepenAlert />
 
-          <CycleTracker />
           <SahmChart />
           <LaborStressBoard />
 

@@ -159,3 +159,36 @@ def test_gate_realtime_block_and_provisional_rule():
         assert "1-in-3" in rt["provisional_note"]
     assert "MEASURED on ALFRED vintages" in __import__(
         "app.sources.business_cycle", fromlist=["x"]).__doc__
+
+
+def test_gate_read_box_and_components_match_the_board():
+    """The panel's plain-English read is generated from the board itself:
+    the headline names the phase, the member strip carries one entry per
+    composite member at its own last month, and the 'from here' gaps are
+    the arithmetic of the current reading against the phase thresholds."""
+    b = board()
+    cur, rd, comps = b["current"], b["read"], b["components"]
+    assert [c["label"] for c in comps["coincident"]] == [l for _, l in business_cycle.COIN_MEMBERS]
+    assert [c["label"] for c in comps["leading"]] == business_cycle.LEAD_MEMBERS
+    assert 1 <= cur["members_in_latest"] <= 4
+    assert cur["members_in_latest"] == sum(c["in_latest"] for c in comps["coincident"])
+    for c in comps["coincident"] + comps["leading"]:
+        assert c["z"] is not None and c["month"] <= cur["month"]
+        assert c["in_latest"] == (c["month"] == cur["month"])
+    assert rd["headline"].startswith(cur["phase"].replace("_", " "))
+    if cur["members_in_latest"] < 4:
+        assert f"{cur['members_in_latest']} of 4" in rd["headline"]
+    assert f"{cur['coincident']:+.2f}" in rd["headline"]
+    for c in comps["coincident"] + comps["leading"]:
+        assert c["label"] in rd["drivers"]
+    assert str(business_cycle.COIN_RECESSION) in rd["calculation"]
+    p90 = b["stats"]["precision_post1990"]
+    assert p90 is not None and 0.4 <= p90 <= 0.8        # ~58% per the QA panel
+    assert f"{round(100 * p90)}% since 1990" in rd["reliability"]
+    if cur["phase"] != "CONTRACTION":
+        gap = cur["coincident"] - business_cycle.COIN_RECESSION
+        assert f"fall {gap:.2f}" in rd["next"]
+    assert ("Nowcast for" in rd["nowcast"]) == (b["nowcast"] is not None)
+    # a degenerate current block must not raise
+    degenerate = {**cur, "coincident": None, "leading": None, "phase": None}
+    assert business_cycle.build_read(degenerate, False, comps, b["stats"], None)["headline"].startswith("No phase")

@@ -221,3 +221,53 @@ Corrections applied to the shipped module/panel:
    (pre-fix it silently applied coefficients at unfitted lags); dedup
    keys off board fields, CONTRACTION alerts at RED; gate bounds
    tightened ±0.05 so the stale-lag failure mode can't pass again.
+
+---
+
+# ROBUSTNESS BACKLOG (2026-10-20, Casey's ask; NOT implemented — ranked, each with the test that would decide it)
+
+1. **The nowcast only exists ~1 week a month.** `nowcast()` requires every bridge
+   input at its trained lag (INDPRO/W875RX1 at M−1, CMRMTSPL at M−2) and returns
+   None otherwise; once INDPRO for M prints (~day 15 of M+1) the gate fails and the
+   amber point vanishes until the next payrolls Friday. Fix: fit a bridge per
+   (component, observed lag ∈ {0,1,2,3}), use the actual z when a component has
+   published (lag 0), and train the COIN(M−1) regressor on bridge-completed values
+   (the ENS_BC_HH form the QA panel named best: RMSE −29.8% vs −24.2%). Test: the
+   existing walk-forward harness at every calendar day of the month, not just
+   payrolls day.
+2. **The headline coincident reading is a partial average.** `coin[-1]` is the mean
+   of whichever of the four members has published (2 of 4 for most of the month);
+   the panel now says so, but the honest number is the bridge-COMPLETED composite
+   for the latest month. Same fix as (1), displayed as the solid line's last point
+   with a band.
+3. **Real-time precision/recall.** `stats` is scored on revised data; the ALFRED
+   panel (160 as-of dates) already exists, so score the −0.75 rule on first prints
+   and show that precision beside the revised one. If real-time precision is
+   materially lower, the threshold or the provisional band should move.
+4. **Trend-growth drift in the z-scores.** Expanding z since 1960 standardises
+   today's growth against an era of ~2%/yr payroll trend; a structurally slower
+   economy reads persistently "below average". Test a trailing-20y window or a
+   trend-gap transform (growth minus a 10y trailing mean) against the same NBER
+   gates; keep whichever has the better post-2000 precision at equal recall.
+5. **A probability line next to the labels.** The academic standard for exactly
+   these four series is the dynamic-factor Markov-switching model (Chauvet–Piger);
+   FRED serves the smoothed version free (RECPROUSM156N, monthly). Cheap first
+   step: plot it as a cross-check (caveat: smoothed = two-sided in history, so the
+   back-history overstates real-time skill; Piger's real-time file is the honest
+   one). Full step: fit the MS-DFM walk-forward in this repo.
+6. **Leading-composite false spells (2023-04/05, 2024-07).** The inverted curve
+   dominated the leading z for 2022–24. Test a breadth rule (≥4 of 6 members below
+   their own median) plus 2-month persistence, and candidate members already on
+   the dashboard (Sahm unemployment change, excess bond premium), walk-forward,
+   scored on strictly-early onsets vs false spells like the nowcast study.
+7. **A revision band on the chart.** The QA panel computed next-month 90% bands
+   and the vintage study gives p90 edge error 0.46σ: draw it around the last three
+   coincident points so PROVISIONAL is visible, not a badge.
+8. **Benchmark-revision risk (the 2022 failure).** Payrolls benchmark revisions
+   turned a live EXPANSION into a 10-month STALL. The BLS preliminary benchmark
+   (each August) and QCEW allow a pre-adjustment of the latest 12 months; at
+   minimum flag the months a large preliminary benchmark would re-label.
+9. **Alert hygiene.** `phase_change` fires on any confirmed label flip, including
+   EXPANSION↔STALL inside the provisional band; gate STALL/EXPANSION flips on
+   |coin| ≥ 0.5 (or on the bridge-completed value) and keep SLOWDOWN/CONTRACTION
+   as they are.
