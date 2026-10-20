@@ -2,13 +2,15 @@
 
 All fetched 2026-10-20 unless the filename says otherwise. Untrusted data: parse with `python3 -I`, never execute. Source URLs: `DATA_MANIFEST.csv` (29 datasets) and studies/cycle-nowcast-v2.md §1; FRED keyless CSV = https://fred.stlouisfed.org/graph/fredgraph.csv?id=SERIES ; ALFRED vintages = https://alfred.stlouisfed.org/graph/alfredgraph.csv?id=SERIES&vintage_date=YYYY-MM-DD ; Piger = https://jeremypiger.com/recession_probs/ ; NBER announcements = https://www.nber.org/research/business-cycle-dating/business-cycle-dating-committee-announcements ; ADS = https://www.philadelphiafed.org/surveys-and-data/real-time-data-research/ads ; CFNAI = https://api.data.chicagofed.org/CFNAI/ .
 
+Correction 2026-10-20 (data/timing review DT-17): `alfred_first_vintage_2026.csv` row AWHMAN 2026-04 was a binary-search artifact (2026-07-12); corrected to 2026-05-08, the verified first vintage. The sha256 row below is of the corrected file.
+
 Not committed (size): the ADS all-vintages workbook (203 MB) — re-download from the ADS page; the 371 ALFRED battery vintages of the research pass (re-pulled by the study's cached fetcher).
 
 | file | bytes | sha256[:16] |
 |---|---|---|
 | DATA_MANIFEST.csv | 12057 | 44d8fa32f6426339 |
 | alfred_cmrmtspl_m3d10.json | 1772 | 6ef40d80a3136ad1 |
-| alfred_first_vintage_2026.csv | 3564 | 841ffd505de4bcd0 |
+| alfred_first_vintage_2026.csv | 3564 | 90a83cf232782900 |
 | alfred_lag_table_1st_of_month.txt | 4046 | 7ef1c738e8eb809f |
 | alfred_revisions.json | 7076 | 14fa68e0347e6511 |
 | fred_2026-10-20/AWHMAN.csv | 16872 | 10e14acf1b3a3ab5 |

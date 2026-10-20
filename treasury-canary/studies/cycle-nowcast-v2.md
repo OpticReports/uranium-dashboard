@@ -1,8 +1,9 @@
 # Cycle nowcast v2 — a reading every day, a completed coincident, and the Chauvet–Piger cross-check
 
 Casey, 2026-10-20: "pre-register 1+2 and 5 as the next study" (ROBUSTNESS
-BACKLOG in `CYCLE_NOWCAST.md`). Status: **SPEC v0 pre-registered 2026-10-20 —
-nothing scored.** Process: research pass (done, counter-verified) → SPEC v0
+BACKLOG in `CYCLE_NOWCAST.md`). Status: **SPEC v1 (below, after the two
+reviews) is the operative pre-registration — nothing scored.** SPEC v0 is kept
+for the record. Process: research pass (done, counter-verified) → SPEC v0
 (this file) → two independent reviews (statistics; data/timing, hunting
 look-ahead) → SPEC v1 → engine + merge-blocking gate tests + synthetic dry run
 → ONE scored run → two independent verifiers → results, honesty box, charts,
@@ -74,7 +75,7 @@ shutdown claims-only ADS updates). 31 findings; 17 confirmed, 8 corrected,
 
 ---
 
-## SPEC v0 — pre-registered 2026-10-20, before any v2 number is computed
+## SPEC v0 — pre-registered 2026-10-20 (SUPERSEDED by SPEC v1 below after two BLOCK reviews; kept for the record)
 
 ### 1. Target and composites (exact reconstruction of the August study)
 
@@ -340,3 +341,339 @@ Deterministic throughout; no seeds.
 | review | verdict | adopted |
 |---|---|---|
 | research pass R1/R2/R3 (2026-10-20) | PASS_WITH_FIXES ×3 — see §1 | all, in §1 and the spec defaults |
+
+---
+
+## SPEC v1 — OPERATIVE. Amended 2026-10-20 after the statistics review (BLOCK, 21 findings) and the data/timing review (BLOCK, 24 findings), before any v2 number is computed
+
+Every amendment below is the reviewers' text adopted (ids F01–F21 statistics,
+DT-1–DT-24 data/timing; their notes are in the session scratchpad; the
+counter-agent log at the end records verdicts). Where v0 is not restated it
+stands. Defaults for Casey's open questions are unchanged (both reviewers kept
+Q1–Q4, Q6–Q10, Q12, Q14; Q15 is redefined per F06/DT-3; Q13 becomes a P3
+convenience per DT-24).
+
+### 1. Target, composites and conventions (v0 §1 plus)
+
+- **Directional accuracy (A8, F07):** share of targets with
+  sign(ŷ(M) − COIN_real(M−1)) == sign(COIN_real(M) − COIN_real(M−1)), realized
+  COIN(M−1) on both sides, every method and every IS; ties wrong, n reported;
+  no directional statistic against the available-members or HH-completed
+  reference.
+- **Diebold–Mariano (F08):** d_t = e_candidate(t)² − e_baseline(t)²; DM =
+  mean(d) / NW-6 s.e. (Bartlett 1 − j/7); negative = candidate better. Primary
+  criterion: two-sided |t| ≥ 1.645 with the required sign. Comparator kill:
+  one-sided t ≥ 1.282 in the stated direction. Ex-2020 statistics drop the 12
+  rows of 2020 and concatenate the remaining series (gap closed) for RMSE, DM
+  and percentiles alike.
+- **PERS (F08):** in every criterion PERS = realized COIN(M−1). The
+  available-members and HH-completed persistence forms are reported in a table
+  headed BASELINES (descriptive) and enter no criterion.
+- **z form of training-row regressors (DT-11):** z_claims6(t) and z_curve(t) in
+  row t are the series values with statistics through t (population sd,
+  120-month warm-up inclusive of t); the forecast row uses statistics through
+  M. Bridged members: projection z against history through M−L, projection
+  excluded; actual members: through their own month.
+- **ICSA weeks (DT-23):** a week belongs to the month of its week-ending
+  Saturday; the week ending the first Saturday of M+1 belongs to M+1; month M's
+  mean never contains it.
+- **Windows (F17):** reproduction gate 1972-01..2026-06 on F1. Scored window =
+  1972-01..the last month in which all four members are published in F5 (the
+  harness computes and logs it; expected 2026-07 or 2026-08); n reported; every
+  bar applies to that window; the F1-vs-F5 realized-target differences (RMS,
+  max, label flips) are tabulated in the honesty box.
+- **ENS_GRID (F21, DT-22):** ENS_GRID_REPRO (August member forms; selector
+  errors through M−1; 354/630) is a gate only. ENS_GRID_D3 (members in their
+  HH/available forms at IS-A/IS-B; selector errors through M−2) is the reported
+  no-hindsight check. Only the latter appears outside §7.1.
+
+### 2. The v2 engine (v0 §2 plus)
+
+**2.1 Lag-generalized bridge.** As v0. The 1959 z start is applied to the
+COINCIDENT members only (DT-10); the leading composite keeps its 1960 start and
+its frozen claims (3 of 15 spells false, strictly early 4 of 7, 82.5% real-time
+agreement) are annotated in the docstring as measured on 1960-start labels.
+
+**2.2 Completed coincident and its band (F03, F12, DT-19).**
+- COIN_HH(M−1 | d) completes each member at lag L_c − 1 (floored at 0); the
+  §2.4 drop rule applies there too.
+- The band is keyed to the **bridged pattern P of the displayed month** (the
+  set of {member: lag} actually bridged for that month at that issue date),
+  never to the IS label. For every pattern that can occur on the board —
+  {CMRMTSPL: 1}, {W875RX1: 1, CMRMTSPL: 2}, {INDPRO: 1, W875RX1: 1, CMRMTSPL: 2}
+  and the lag-3 / dropped-member variants — the lag simulation stores the
+  walk-forward error distribution e = realized − COIN_HH(P) over targets
+  1990-01+ ex-2020 where ≥ 1 member is bridged (PRIMARY band); 1977-07+ full
+  and with-2020 as sensitivities. The board draws [completed + p10(e),
+  completed + p90(e)] (asymmetric if the data are) and names P.
+- A bridged member whose g history through M−L has < 120 observations is
+  skipped and the mean re-taken, flagged members_bridged / members_skipped.
+- The band around any historical point is estimated from completion errors
+  dated before that point (expanding); the live band uses all history; any
+  reported coverage is walk-forward. Label: "completion error only,
+  final-vintage data; first-print revision not included" until the real-time
+  replay band is scored.
+- Reviewer's fixture estimates for the record (not gates): 1 bridged p10/p90
+  −0.123/+0.117 (RMSE 0.126); 2 bridged −0.219/+0.216 (0.257); 3 bridged
+  −0.293/+0.276 (0.335).
+
+**2.3 CLAIMS_HH, row admission and the IS label (DT-2, DT-7, DT-16).**
+- ROW ADMISSION (D2, all information sets, both regimes): with P_c(d) the
+  latest month of member c in the vintage ≤ d, M = P_PAYEMS(d), L_c = M −
+  P_c(d) and K(d) = min_c P_c(d) = M − max_c L_c, a training or calibration row
+  t is admissible at d iff t ≤ K(d) and its target is not a partial-member mean
+  (D6; the 1969-06..1977-05 three-member months count as complete). Canonical
+  values K = M−2 (IS-A, IS-B), M−1 (IS-C); the vintage, never the calendar,
+  decides (IS-A: M−3 when CMRMTSPL(M−2) is not in hand; IS-C: M−2 on the 24 of
+  160 W875RX1 days 2013–2026 when CMRMTSPL(M−1) is not in hand; shutdown
+  states: whatever max_c L_c gives).
+- IS LABEL at any date d: A if P_INDPRO < M; B if P_INDPRO = M and P_W875RX1 <
+  M; C if P_W875RX1 = M. The CMRMTSPL state is carried as a lag, never in the
+  label; the CLAIMS_HH fit used is the labelled IS's. Every scorecard row
+  carries the lag pattern in hand; IS-C rows with L_CMRMTSPL = 2 are flagged.
+- Identity gates: IS-C completed COIN(M−1) == realized only on rows with
+  L_CMRMTSPL = 1; IS-C CLAIMS_HH coefficients == the original CLAIMS to 1e-9
+  when both fits are restricted to rows t ≤ 2026-05 (no partial targets); the
+  n = 587 reproduction is a separate gate on the original form.
+- Spec-alignment changes to the deployed module (DT-10): the commit writes a
+  schema key into `cycle_phase.json` and `phase_change()` re-adopts the baseline
+  quietly when the key is missing or differs (no alert from re-standardisation
+  alone); the counter-agent records the current label before/after on F1 and
+  F3; the frontend renders `nowcast.reason` as display text.
+
+**2.4 Shutdown / over-lag rule (DT-7, F13).** The target is always the last
+PAYEMS month in hand; the nowcast is None only when no PAYEMS observation exists
+for a month later than the last complete COIN, and every None carries a reason.
+Lags 1–3 bridged with their own fit; lag ≥ 4 dropped and the mean re-taken,
+flagged. Dropped-member band = p10–p90 of (realized 4-member COIN − k-member
+mean of the remaining actual/bridged members) over targets 1977-07+ ex-2020 for
+that exact dropped set, from the lag simulation (the deployed partial 3-member
+error — fixture RMSE 0.143, p10/p90 −0.12/+0.21, bias +0.03 on 1990+ ex-2020 —
+is the {CMRMTSPL dropped} case). Expected F4 outputs, written now: 2025-11-20 →
+value, IS-A, lags {0,1,1,2}; 2025-12-16 → value, IS-A, lags {0,2,2,4},
+dropped = [CMRMTSPL], wide band; 2026-01-09 → value, IS-A, lags {0,1,3,3};
+2026-02-06 → value for 2025-12, IS-B, lags {0,0,1,2} (an engine gate, not an
+issue date). F4 gains the ICSA vintages at 2025-11-20, 2025-12-16 and
+2026-02-06 (T10Y3M may be current).
+
+**2.5 Board contract.** As v0; alerts and the provisional rule stay on the
+partial `coincident` until the real-time replay band (which includes first-
+print revision) is scored; the band shown is keyed to the displayed month's
+pattern (§2.2).
+
+### 3. Lag simulation (v0 §3 plus F11, F15)
+
+RMSE_A ≥ RMSE_B ≥ RMSE_C is a DIAGNOSTIC evaluated on the full-sample, 1990+
+and ex-2020 aggregates only: a violation halts the read-out and triggers a bug
+hunt (training-row admission, z history, lag keying) before any result is
+quoted; it is neither pass nor fail. Availability is a descriptive table: days
+per calendar month (2013-06+ and the 2025-10..2026-04 shutdown window
+separately) with a reading for the latest PAYEMS month — deployed gate vs v2 vs
+ADS — plus the frequency of each lag pattern and of dropped members.
+
+### 4. Real-time replay (v0 §4 rewritten per DT-1, DT-5, DT-8, DT-9, DT-13, DT-14, DT-20)
+
+**4.1 Regime (i), true real-time 2013-06-14..2026-10.** EVERY quantity entering
+a nowcast issued at d is computed from the vintages dated ≤ d: the month axis,
+the expanding-z histories (mean, sd, warm-up) of every member and regressor,
+the bridge fits, the CLAIMS_HH training TARGETS COIN(t) for t ≤ K(d), the ADS
+calibration targets, and the persistence baselines. The only objects carried
+across issue dates are the stored completions COIN_HH(t−1 | IS) (D4): for t
+with an issue date in regime (i) they are the values stored at t's own issue
+date; for earlier t they are the canonical-lag completions recomputed
+walk-forward on the vintage in hand at d (fits through t−1−L only), labelled
+`spliced history` in results.json. No final-vintage value enters any
+regime-(i) number except the latest scoring target of §4.2(b). Series pulled:
+PAYEMS, INDPRO, W875RX1, CMRMTSPL, ICSA; T10Y3M and BAA10YM taken current
+(basis: 0 changed values in six ALFRED vintages 2015–2026; re-checked on the
+run day against one 2026 vintage and recorded in results.json). Leading-set
+vintages (PERMIT, AWHMAN, UMCSENT) are NOT pulled for the scored run; a
+real-time 5-phase label, if charted, is labelled unscored. Regime (i) contains
+three shutdown windows (2013-10, 2018-12..2019-02, 2025-10..2026-01); rows with
+a dropped member or any lag ≥ 3 are flagged and counted per IS.
+
+**4.2 Regime (ii), pseudo-real-time 2000-01..2013-05** = the §3 lag simulation
+(canonical patterns on final-vintage data) evaluated at ACTUAL issue dates:
+IS-A and IS-B from the ALFRED first-vintage dates of PAYEMS and INDPRO; IS-C
+from the first-vintage dates of BEA Personal Income (PI, ALFRED from
+≤ 1998-01-09) as the PI&O-day proxy, W875RX1's own dates from 2010-05-28. The
+1st-of-month lag table is evidence only, not an emulation source. CMRMTSPL did
+not exist before 2013-06; regime (ii) is the same computation as §3 with dated
+issue points, used only to align the ADS (2009-01+), Chauvet–Piger and
+NBER-announcement comparisons. The two regimes are never pooled.
+
+**4.3 Issue dates and scoring targets (DT-9, DT-17, F19).** Issue date for
+(series, M) = the earliest listed vintage whose last observation month is M
+(content-decided; revision-only vintages are not issue dates). Each (issue
+date, IS) scores exactly one target: the latest month of the trigger series in
+that vintage; months that were never the latest month of a trigger series
+(e.g. 2025-10 at IS-A/IS-B) have no row at that IS and are never back-filled;
+n per IS is reported. (a) target_first(M) = COIN(M) computed wholly from the
+vintage dated v*(M) = max over the four members of the first vintage date
+containing M, with expanding-z statistics from that vintage (regime (i) only,
+M ≥ 2013-04). (b) target_latest(M) = COIN(M) on F5. Both stored in
+results.json.
+
+**4.4 Pull engineering (DT-5, DT-24).** Fetch ONLY exact dates from each
+series' vintage list (`alfred.stlouisfed.org/series/downloaddata?seid=<ID>`,
+frozen as F8, ICSA included), never a snapped date; for issue date d use the
+latest listed vintage ≤ d. Validate before caching: HTTP 200; first line
+exactly `observation_date,<ID>_<YYYYMMDD>` with YYYYMMDD equal to the listed
+date; ≥ 1 data row; last observation month recorded. A 404 with empty body is
+allowed only for dates before the list's first entry. 5xx, timeouts and any
+non-CSV body: retry with backoff, then hard-fail; never cached, never read as
+"no vintage". Cache key = (series, listed vintage date). ~2.5k requests;
+concurrency ≤ 8. Q13 (FRED key) is a P3 convenience.
+
+### 5. Comparator: calibrated real-time ADS (v0 §5 rewritten per F06, DT-3, DT-6, DT-18, DT-21)
+
+- **Readings.** ADS_last(d) = last daily value in the latest vintage dated ≤ d
+  (descriptive only). ADS_avg(M | d) = mean of the daily values dated within
+  target month M present in that vintage (at IS-A the payrolls-day vintage
+  already extends to the last calendar day of M). The ADS vintage is the latest
+  dated ≤ d, same-day vintages included (information parity with the release
+  that defines d); the "< d" choice is a sensitivity.
+- **Calibration, PRIMARY.** Vintage-consistent COIN(t) (§4.1) regressed on the
+  STORED real-time ADS reading issued for target t at the same IS (one
+  calibration for ADS_avg, one for ADS_last), walk-forward, rows t ≤ K(d), at
+  least 24 rows else no calibrated reading (first scored month ≥ 2011 on the
+  2008-12+ archive). SENSITIVITY: the same regression on the issue-date
+  vintage's own monthly averages, labelled "smoothed-fit, filtered-apply".
+- **Symmetry.** The identical walk-forward affine step, same rows, is applied
+  to ENS_HH; the comparator number is calibrated-vs-calibrated; raw ENS_HH is
+  also reported.
+- **Months.** All comparator metrics are computed on the intersection of
+  months where both sides have a calibrated reading; n reported. ADS
+  claims-only vintages (2025-10-16 → first full update) are flagged in the
+  availability count and excluded from the accuracy comparison as a
+  sensitivity. The ADS post-2023-09-28 parameter regime is stated; it does not
+  touch the pre-2023 real-time end-points that are scored.
+- **Comparator reproduction gate.** From the archive: correlations of the
+  real-time last point (0.866) and the previous-complete-month average (0.956)
+  with the 2010-12-03 vintage over every vintage dated 2008-11..2010-10, each
+  within ±0.01; the right-line figure (0.916) is quoted, not gated.
+
+### 6. Chauvet–Piger cross-check (v0 §6 plus F09, DT-15)
+
+- Value vector for Piger release r at date d_r with latest month m_r = the
+  first ALFRED vintage dated ≥ d_r whose latest observation month is m_r
+  (fallback: Piger's column); timestamp d_r. The FRED smoothed series enters no
+  scored number.
+- Peak dating under the 3×80% rule = the month before the first ≥ 50% month
+  preceding the trigger (Chauvet–Piger 2008).
+- All comparisons on a calendar-date clock: Piger = release date; our realized
+  crossing of m_c = regime (ii) the IS-C issue date (PI proxy) of the month on
+  which COIN(m_c) first printed in full, regime (i) v*(m_c); ENS_HH crossing of
+  m_n = the payrolls day of m_n+1; 2001 and 2008 are pseudo-real-time on our
+  side and labelled so.
+- False declarations: none under either rule in 2006-08..2026-09; the
+  2021-10-29 release (Sep-2021 44.4%, reversed to 2.4% a month later) is
+  reported as the largest non-recession real-time print. Descriptive
+  throughout; no grade.
+
+### 7. Gates, fixtures and the freeze (v0 §7 plus F05, F10, F17, DT-4, DT-10, DT-16)
+
+**7.1 Reproduction gate.** Runs the harness in `reproduction_mode` = {bridge
+training rows t < M for every lag; CLAIMS rows t ≤ M−1 including the 2026-07
+PAYEMS-only partial target; selector errors through M−1}, on F1 only, targets
+1972-01..2026-06, the v0 §7.1 table with PERS tolerances tightened to ±0.0001
+(deterministic arithmetic; pins population vs n−1). A second gate row runs
+`scoring_mode` (D1 rows t ≤ M−L; D2/D6; D3) on the same fixture and RECORDS the
+deltas: required |ΔRMSE| ≤ 0.003 for BRIDGE/CLAIMS/ENS, |Δdir| ≤ 1 pp, and any
+change in an exact count (transitions, onsets, false alarms) is logged with the
+month, both values and the realized value (expected: 1980-11, one transition).
+The scored run uses scoring_mode only. An exact-count gate that misses emits
+the month-level diff and blocks; it is never widened; it is raised to Casey.
+
+**7.2 Engine gates.** As v0 §7.2 with the §2.4 expected outputs.
+
+**7.3 Fixtures.** F1–F5 as v0 (F1 remains the fixture for the composite /
+nowcast / read-box gates with bounds unchanged; F3/F4/F5 carry their own
+bounds, any F5 bound written into the test with its deterministic value logged
+BEFORE results.json is read). Added: **F6** = the ALFRED vintage panel — a
+committed table (series, listed vintage date, sha256, bytes, last observation
+month) plus the derived per-issue-date panel (issue date, IS, series, month,
+value); raw CSVs may stay out of git if every row carries its hash. **F7** =
+the ADS derived panel per vintage (vintage date, last date, last value, monthly
+averages for the last three months) with the sha256 of the zip and the xlsx.
+**F8** = the vintage lists vd_*.txt (ICSA included) and Piger's history file
+re-pulled on the run day and committed with hashes. results.json records the
+sha256 of F1–F8 and the first/last vintage date used per series; a correction
+run that changes any hash is a new run.
+
+### 8. Pre-registered decisions (v0 §8 rewritten per F01, F02, F04, F16, F18, F20)
+
+Three decisions, each resolved by exactly one number; every column of every
+results table carries the tag DECISION or DESCRIPTIVE; no descriptive number is
+quoted as a pass or fail in the honesty box or on the panel. Every decision
+ratio is reported with its deterministic leave-one-calendar-year-out min/max
+and the year that produces each; no bootstrap, no seed.
+
+**D-1 Primary (lag simulation, IS-A, scored window).** ENS_HH RMSE ≤ −25% vs
+PERS (realized COIN(M−1)) full-sample AND ≤ −8% ex-2020 AND DM ex-2020 ≤ −1.645
+— all three (conjunction). PASS → ENS_HH at the IS in force is the one-month-
+ahead reading on the board with the v2 numbers in its stats block. FAIL → the
+v2 engine still ships for availability (no better candidate exists; the
+deployed fixed-lag gate is strictly worse), the panel text drops the August
+accuracy claim and shows the v2 numbers with the missed bar named; no
+re-tuning, no alternative ensemble is tried in this study. Secondary
+(DESCRIPTIVE): transitions per IS, missed onsets per IS, each IS vs PERS,
+onset calendar advantage, false alarms.
+
+**D-2 Completed vs partial headline.** On targets 1977-07+ (months where the
+pattern bridges ≥ 1 member), RMSE of (realized − COIN_HH) for the 1-bridged
+completion [PAYEMS, INDPRO, W875RX1 actual; CMRMTSPL L1] must be lower than
+RMSE of (realized − partial 3-member mean) on the SAME months, both full and
+ex-2020, both computed by the v2 harness; p10/p50/p90 and bias of both
+reported. The QA gap 0.126 is context only. PASS → `coincident_completed` is
+shown as the headline value with its band (Q6 default keeps the partial as the
+gate/alert quantity). FAIL → the completed value is shown as a secondary line.
+
+**D-3 Comparator.** IS-A; regime (i) 2013-06+ true vintages; scoring target =
+target_latest (PRIMARY), target_first must agree in sign or the decision is
+deferred to the next R2; ADS reading = ADS_avg(M | d) after the §5
+calibration; ENS_HH calibrated identically; months = the intersection; ex-2020
+targets are DECISIVE, with-2020 numbers are reported and never decide. Let r =
+RMSE_ENS / RMSE_ADS (ex-2020). SUCCESS: r ≤ 1.10 (point estimate, with its
+leave-one-year-out range). KILL: r > 1.25 AND one-sided DM on d_t = e_ENS² −
+e_ADS² (H1: mean d > 0, NW-6, p < 0.10) → calibrated ADS becomes the headline
+and ENS_HH the cross-check. MIDDLE (1.10 < r ≤ 1.25, or r > 1.25 without DM
+significance): keep the home-built headline, add calibrated ADS as a second
+line labelled with the measured gap, re-decide at the next R2 calibration.
+This is a tracking-accuracy decision on expansion-dominated months and says
+nothing about recession-timing skill; the real-time regime cannot establish
+v2's edge over persistence ex-2020 (fixture: ratio 0.915, DM −0.89) and no such
+claim is made; onset timing on 2013-06+ (one event, expected tie at
+2020-04-03) is reported. X = 10% and Y = 25% stay pending Casey (Q1) — with
+these definitions, 10% RMSE ≈ 21% MSE is below the ~30% MSE minimum detectable
+difference ex-2020 on n ≈ 145, so success is a point-estimate statement and
+only the kill is a tested one.
+
+The ICNSA + frozen-SA sensitivity (Q10) is NOT run in this study; it goes to the
+robustness backlog (F14).
+
+### 9. Honesty, stated now (v0 §9 plus DT-12, DT-20)
+
+Final-vintage leakage in §3 and regime (ii) includes, beyond level revisions:
+two-sided seasonal factors (all members, ICSA), annual/comprehensive revisions
+and base-year changes (CES benchmarks each February; the 2013/2018/2023 NIPA
+revisions; chained-dollar bases for W875RX1; IP rebasings), series definition
+changes (CMRMTSPL built 2013-06 with an HMRMT back-cast before 1997; the
+W875RX1 code change 2017-10-30; the CES sample redesign), and final-data
+z-score histories; regime (i) removes these from 2013-06 only. Regime (i)'s
+three shutdown windows are flagged. The rest as v0 §9.
+
+### 10. Pending questions — as v0 §10, with: Q15 redefined (ADS_avg(M | d) is THE
+comparator reading, the last point descriptive); Q13 a P3 convenience (~2.5k
+keyless requests); Q10's sensitivity decided (not run). Q1–Q5 remain asked.
+
+### 11. Run order — as v0 §11, with step 3 = the vintage-list pull (F6), the ADS
+archive conversion (F7), the run-day re-pull of lists and Piger's file (F8),
+the comparator reproduction gate, and the hashes into results.json.
+
+### Counter-agent log (continued)
+
+| review | verdict | adopted |
+|---|---|---|
+| statistics, SPEC v0 (2026-10-20) | BLOCK — Q2 criterion vacuous (IS-C identity) / knife-edge (0.126); comparator decision undefined over part of the outcome space and untestable with 2020 in (94.7% of 2013+ persistence SSE is 2020; minimum detectable MSE gap ~30% ex-2020); band keyed to the IS label not the displayed month's bridged pattern (2× wrong at IS-B, zero-width at IS-C); no consequence on a primary miss; reproduction gate did not pin the estimator (scoring mode fails the exact transition count at 1980-11 by 0.003); ADS calibration asymmetric and errors-in-variables; directional and DM conventions unpinned; 14 more | all 21 (F01–F21) |
+| data/timing, SPEC v0 (2026-10-20) | BLOCK — regime (i) silently trained and calibrated on final-vintage targets and z-histories; row admission encoded the 2026 calendar (fails on 22 of 56 IS-C days 2013–17 and in shutdown states); ADS calibrated on smoothed in-vintage values but scored on filtered end-points; nothing frozen for the real-time run (F6–F8 added); served-vintage identification unsound (fetch by vintage list); shutdown expected outputs unwritten; pseudo regime's lag table anachronistic (PI-vintage IS-C dates); first-print target undefined; 1959 start would shift the leading composite and could fire a spurious phase alert; 14 more | all 24 (DT-1–DT-24); the AWHMAN 2026-04 row in `data/alfred_first_vintage_2026.csv` corrected to 2026-05-08 (binary-search artifact) |
