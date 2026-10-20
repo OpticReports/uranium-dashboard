@@ -3,6 +3,10 @@
 Committed BEFORE any round-12 code exists. Nothing here is a live change;
 the output is a proposal for the open-position cap, or a null.
 
+**STATUS (2026-10-20): PAUSED. Counter-agent round 1 = FAIL (2 blocking,
+3 serious; see the end of this file). No study code was written and no arm
+was run. The study waits on live evidence from Casey and a re-scope.**
+
 ## Question (Casey, 2026-10-20)
 
 "I still feel like the amount we're allocating to these positions are pretty
@@ -133,3 +137,95 @@ per-symbol limit, the risk rule and the 30/70 target stay as they are.
 - Occupancy basis, measurement basis (daily MTM on adjusted closes, CAGR
   calendar-day, Sharpe √252 with rf = 0), and the conditional-interval
   caveats are rounds 10–11's, unchanged.
+
+## Counter-agent review, round 1 (2026-10-20): FAIL
+
+The reviewer computed mechanics only; no arm's CAGR, Sharpe, drawdown or
+deployment was computed, so the contract is still blind. Its scratch engine
+reproduces the stored U2 end value to within 4e-6.
+
+**BLOCKING**
+
+1. **The arms vary a limit that may barely bind live.** The tracker's
+   `generate_calls` (app/calls/manager.py, run hourly from
+   app/scheduler.py) does all of the following, and the replay's raw fire
+   stream applies none of it:
+   - no new call while the name has an open call;
+   - a 14-day cooldown per name;
+   - one call per symbol per run;
+   - a creation cap of 10 open calls, counted on the tracker's own call
+     lifecycle (45-day time stop), with no 200dma gate check.
+
+   The reviewer's scratch simulation applied those rules to the same 5,008
+   fires (a reviewer estimate, not a frozen number):
+   - gated calls fall from ~24 to ~4 a month;
+   - the executor's 10-cap skips 53 calls in 10.6 years, not 2,210;
+   - removing the executor cap adds about 52 entries.
+
+   The live call record runs higher, about 9 a month (H14, from the host
+   DB). The live triggers (analyst_revision_cluster,
+   unusual_options_social_spike) are not in the replay at all.
+
+   Code check on 2026-10-20: the rules above are confirmed in
+   manager.py, which has no gate test.
+2. **The engine is biased above cap 10.**
+   - Phantom slots: a call the cash clip cuts to zero shares still holds
+     its cap slot and its per-symbol slot from gate date to exit. Live
+     never records such a call.
+
+     | | C10 | C15 | C20 | CU |
+     |---|---|---|---|---|
+     | zero-share calls | 4 | 11 | 87 | 340 |
+     | phantom slot-days | 80 | 294 | 2,090 | 7,496 |
+
+   - Exit cash: the clip counts exit proceeds from the fill day (T+2).
+     Live sizes the order at T+1 without that cash. Entries that depend on
+     it: 0 / 21 / 58 / 189 for C10 / C15 / C20 / CU.
+
+**SERIOUS**
+
+3. **Slot release timing favours the arms.** The replay frees a slot the
+   day after an exit; live frees it in the exit cycle. Live release would
+   admit 7.6% more entries at C10 but only 2.2% more at CU.
+4. **No sleeve-level guard.** The book's max DD is one SPY-led episode
+   (2020), while the cap changes only the sleeve. The kill-line
+   re-derivation must be fixed in the contract before any results.
+5. **The leave-one-year-out clause is too lax.** Round-10 D1 passes it at
+   $100k (weakest +0.002 against +0.055). Fix: each deletion must keep at
+   least 50% of the full-window delta.
+
+**MINOR**
+
+6. Arm family: C20 lands within 7% of CU once phantom slots are released.
+7. Tie-break: "within 0.01" can chain across arms.
+8. Leverage: add a levered C10 control.
+9. Gate tests: add them for "no cap" and "at own cap" (deployment_stats
+   hard-codes CAP=10).
+10. Honesty gaps above cap 10:
+    - negative cash carries no interest;
+    - same-day duplicate fires in one name are both taken;
+    - within a day, entries are processed in alphabetical order.
+
+**NOTE**
+
+11. Facts: all seven numbers in the Question section match the JSON. H17c's
+    "+0.14 vs +0.20" compares U1's whole taken set with A0's, not the
+    replacement fires. Round 10 named "the cap (and the fire rate)".
+12. H17d: the numbers depend on the series used. On U2's sleeve they read
+    0.28 / 0.29 overall and 0.40 / 0.59 on open days.
+
+**Disposition:** paused before any code, per CLAUDE.md ("never build a
+phase whose result cannot change the decision"; "missing key inputs: ask").
+The decisive live inputs come before a re-scope:
+- how often the tracker's creation cap has bound since go-live (its "Call
+  cap (10 open) reached" log lines);
+- how often the executor's cap has bound (its "cap 10 open: skipping"
+  events);
+- the tracker's open auto-call count compared with the executor's held
+  positions.
+
+If the tracker side binds, the re-scoped study varies the call-generation
+rules (creation cap counted on executor-held or gate-on calls, cap levels)
+together with MAX_OPEN. It would run on a stream that applies the tracker's
+rules, with all of findings 2–10 fixed in a revised contract committed
+before any code.
