@@ -2970,3 +2970,53 @@ run (Mon 2026-10-19, 21:36 UTC): Composer's ad-hoc backtest still ended at the p
 check now requires the pre-gate model's date to equal HG's last rebalance date, else it keeps
 the prior state (a live holding must not be compared with yesterday's model). Verdict after
 fixes: enable.
+
+## Addendum 47 — $100k in today's four-engine book from 1997 (2026-10-20)
+
+Owner: "if I invested $100k in 1997 in the Composer set-up I have now, how much would I have today?
+... just make proxies/synthetics of these ETFs." Research only. Exhibit:
+results/book-since-1997-2026-10-20.html; code research/longrun/ (long_panel.py, book1997.py,
+fidelity1997.py, sens1997.py, make_book1997_chart.py).
+
+METHOD. The four live trees (HG with the 200-day gate = live 2oyXahw1; switcher, sleeve, harvester =
+live scores) simulated daily from 1995-06 (warm-up) to 2026-10-07 on a long proxy panel: panel B for
+HG's legs (add. 40/42/44); other funds rebuilt before launch from Vanguard bond funds (excess-return beta
+on the overlap), Ken French CRSP industry/style portfolios, 1x bases x2/x3 financed at T-bills; the
+switcher's managed-futures signal from RYMFX (2007) and before that an unfitted MLM-style trend proxy
+(Treasuries / dollar index / GSCI); VIX funds from the term-structure model on the real VIX3M/VIX6M from
+2006-07 and, before that, on a synthetic curve fitted from the VIX (main case). Composer-equivalent costs;
+book 29/29/27/15 drifting with the 40% cap (Op 5); $100k at the 1996-12-31 close.
+
+RESULTS (main case; CAGR on calendar time; Sharpe/Sortino over T-bills)
+  book     ~$49.5B on paper, +55.4%/yr, Sharpe 1.63, Sortino 2.77, max DD 33.4% (2010-04..2011-08),
+           worst year -8.8% (2011); $1M 2002-03, $10M 2014-01, $1B 2021-10
+  1997-2014 $13.3M at end-2014 (+31.2%/yr); 2015-2026 x3,715 (+101%/yr; in sample)
+  engines  HG +64.7% (DD 60%, 2001); switcher +79.0% (DD 83%, 2006-08); sleeve +21.2% (DD 51%);
+           harvester +5.6% (DD 68%, 14.6 yrs underwater from 2009)
+  SPY $1.73M (+10.1%, DD 55%); QQQ $4.05M (+13.2%, DD 83%)
+SENSITIVITY (one change each; end-2014 / 1997-2014 per yr / final): HG without its gate $5.7M / +25.2% /
+$27.2B; switcher signal pinned at RSI 50 pre-2007 $9.4M / +28.7% / $34.9B; trend proxy instead of RYMFX
+2007-20 $25.0M / +35.9% / $145B; UVXY at today's 1.5x pre-launch $9.2M / +28.6% / $34.3B, through 2018
+$7.6M / +27.2% / $26.0B; VIX carry constant / level-linear $50.3B / $36.9B; cap timing (next-but-one
+close, 39.5%, 41%) $39-56B; no cap $1.1T (DD 48%); daily rebalance $30.9B. Max DD 26-36% throughout.
+FIDELITY: daily correlation with Composer's own backtests 0.9999 (HG 2015-26), 0.9998 / 0.9992 / 0.9993
+(switcher / sleeve / harvester, 2023-26); HG with the constant-carry VIX legs equals the reviewed panel-B
+gate series exactly. The switcher's pre-2007 signal proxy is barely better than a constant (77-80% vs
+72-79% decision agreement; below a constant against KMLM itself, 2021-26).
+
+READ IT THIS WAY: the paper figure (~$26-145B, ~$50B central) is not an answer to "how much would I
+have": everything above ~$10M (passed in 2014) exceeds the strategy set's capacity (add. 15), and the
+2015-26 multiple is the years the rules were built on. What survives: before 2015, on rebuilt prices,
+the book's rules compound at ~25-36% a year (25% without HG's in-sample gate) with a ~33% worst
+drawdown, against SPY's 10%. The harvester earns little alone but lowers the book's risk (its 15% in
+T-bills ends lower, $36.5B, Sharpe 1.61 vs 1.63).
+
+COUNTER-AGENT (one hostile reviewer; scratchpad/verify_1997/): rebuilt the book, metrics, every year
+cell, crossings, VIX modes and fidelity from primitives (all match); no look-ahead in any series; the
+first ~57% proxy score was an inverted trend sign. REFUTED and fixed: headline precision (cap timing
+moves it $39-56B: now a range), undisclosed UVXY 2x pre-launch, the switcher-signal stand-in missing
+from the sensitivity, "all rules built on 2015-26" (HG's gate was chosen on 1990-2026: ~6 of the 31
+points), "harvester is a drag" (it lowers risk), page formatting. Its sensitivity numbers reproduced
+exactly by sens1997.py. Verdict after fixes: showable.
+
+DECISION: none; answers a question.

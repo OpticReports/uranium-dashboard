@@ -137,7 +137,7 @@ h2{font-size:16px;margin:0 0 2px;font-weight:600}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0 16px}
 @media (max-width:820px){.kpis{grid-template-columns:1fr 1fr}}
 .kpi{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:12px 14px}
-.kpi b{display:block;font-size:22px;font-weight:650;font-variant-numeric:tabular-nums}
+.kpi b{display:block;font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .kpi span{color:var(--ink2);font-size:13px}
 table{border-collapse:collapse;width:100%;font-size:13.5px}
 th,td{padding:5px 7px;text-align:right;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -277,7 +277,7 @@ function fill(){
   document.getElementById('sub').textContent=`The four live symphonies at 29/29/27/15 (HG with today's 200-day gate, the KMLM switcher with its VIX sleeve, the crash sleeve, the VIX harvester), drifting, with the 40% cap. $100,000 invested at the 1996-12-31 close, run to ${M.last}. Every fund before its launch is a proxy or a model (see below); costs at each engine's measured Composer rate. A paper result, not a forecast.`;
   const k=document.getElementById('kpis');k.textContent='';
   const items=[[`~${money(E.final)}`,`on paper by ${M.last} in the main case (${pct(B.cagr)} a year, Sharpe ${B.sharpe.toFixed(2)}, Sortino ${B.sortino.toFixed(2)}); ${money(R.final_lo)} to ${money(R.final_hi)} across the proxy and rule choices below`],
-    [`${money(R.end2014_lo)}-${money(R.end2014_hi)}`,`by end-2014, before the years the rules were built on: ${pct(R.cagr_lo,true,0)} to ${pct(R.cagr_hi,true,0)} a year (the low end without HG's 200-day gate)`],
+    [`${money(R.end2014_lo)} to ${money(R.end2014_hi)}`,`by end-2014, before the years the rules were built on: ${pct(R.cagr_lo,true,0)} to ${pct(R.cagr_hi,true,0)} a year (the low end without HG's 200-day gate)`],
     [`${pct(B.maxdd,false,0)} / ${pct(B.worst_year[0],true,0)}`,`book max drawdown (${B.maxdd_peak.slice(0,7)} to ${B.maxdd_trough.slice(0,7)}) / worst calendar year (${B.worst_year[1]})`],
     [money(M.bench.SPY.final_multiple*1e5),`SPY over the same years (${pct(M.bench.SPY.cagr)} a year, max DD ${pct(M.bench.SPY.maxdd,false,0)}); QQQ ${money(M.bench.QQQ.final_multiple*1e5)}`]];
   for(const [b,s] of items){const d=document.createElement('div');d.className='kpi';const bb=document.createElement('b');bb.textContent=b;const ss=document.createElement('span');ss.textContent=s;d.appendChild(bb);d.appendChild(ss);k.appendChild(d);}
