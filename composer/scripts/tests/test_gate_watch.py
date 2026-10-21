@@ -308,26 +308,71 @@ class T11Review(unittest.TestCase):
             alerts, snap = [], {}
             gw.check_gate(state, alerts, snap, T9Hook.META, datetime.datetime(2026, 10, 21, 21, 35, tzinfo=datetime.timezone.utc))
             self.assertEqual(alerts, [])
-            self.assertEqual(json.dumps(state, sort_keys=True), before)
+            hist = state["gate"].pop("live_hist")                         # the live holding is still recorded
+            self.assertEqual(hist, {"2026-10-16": "USD"})
+            self.assertEqual(json.dumps(state, sort_keys=True), before)   # the assessment state is untouched
             self.assertTrue(snap["gate"]["stale"])
         finally:
             gw.spy_distance = orig
 
-    def test_override_check_deferred_when_model_lags_live(self):
+    def test_override_compares_like_dates(self):
+        """the pre-gate model lags a session: its date is matched to live HG's holding of THAT date, recorded by
+        decision date (last_rebalance_attempted_on), never to today's holding; last_rebalance_on only moves on trades"""
         orig = (gw.spy_distance, gw.ungated_holding)
         gw.spy_distance = lambda today: ("2026-10-16", -0.01, 0.0, 0.0)
-        gw.ungated_holding = lambda today: ("2026-10-16", "TQQQ")          # model a session behind the live rebalance
-        meta = [{"id": gw.HG, "last_rebalance_on": "2026-10-19", "holdings": [{"ticker": "BIL", "allocation": 1.0}]}]
+        gw.ungated_holding = lambda today: ("2026-10-16", "TQQQ")
+        now = datetime.datetime(2026, 10, 19, 21, 35, tzinfo=datetime.timezone.utc)
+        meta = [{"id": gw.HG, "last_rebalance_on": "2026-10-09", "last_rebalance_attempted_on": "2026-10-19",
+                 "holdings": [{"ticker": "BIL", "allocation": 1.0}]}]
         try:
+            # no live record for the model's date: unknown, state kept, the gap is reported
             state, alerts, snap = {"gate": {"zone": "closed", "closed_days": 1, "override": False, "last_date": "2026-10-15"}}, [], {}
-            gw.check_gate(state, alerts, snap, meta, datetime.datetime(2026, 10, 19, 21, 35, tzinfo=datetime.timezone.utc))
+            gw.check_gate(state, alerts, snap, meta, now)
             self.assertNotIn("GATE OVERRIDE START", [a.split(" — ")[0] for a in alerts])
             self.assertFalse(state["gate"]["override"])
-            self.assertIsNone(snap["gate"]["ungated_holding"])
-            meta[0]["last_rebalance_on"] = "2026-10-16"                     # same session: the check runs
-            state, alerts, snap = {"gate": {"zone": "closed", "closed_days": 1, "override": False, "last_date": "2026-10-15"}}, [], {}
-            gw.check_gate(state, alerts, snap, meta, datetime.datetime(2026, 10, 19, 21, 35, tzinfo=datetime.timezone.utc))
+            self.assertEqual(state["gate"]["live_hist"], {"2026-10-19": "BIL"})       # recorded by decision date
+            # live record for the model's date: BIL where the pre-gate logic holds TQQQ -> START
+            state, alerts, snap = {"gate": {"zone": "closed", "closed_days": 1, "override": False, "last_date": "2026-10-15",
+                                            "live_hist": {"2026-10-16": "BIL"}}}, [], {}
+            gw.check_gate(state, alerts, snap, meta, now)
             self.assertIn("GATE OVERRIDE START", [a.split(" — ")[0] for a in alerts])
+            # broken: same model date, but live HG that day held TQQQ (no override) -> nothing
+            state, alerts, snap = {"gate": {"zone": "closed", "closed_days": 1, "override": False, "last_date": "2026-10-15",
+                                            "live_hist": {"2026-10-16": "TQQQ"}}}, [], {}
+            gw.check_gate(state, alerts, snap, meta, now)
+            self.assertNotIn("GATE OVERRIDE START", [a.split(" — ")[0] for a in alerts])
+        finally:
+            gw.spy_distance, gw.ungated_holding = orig
+
+    def test_override_persists_while_hg_does_not_trade_and_ends(self):
+        """a real override: HG sits in BIL for days without trading; the check must keep running and end it"""
+        orig = (gw.spy_distance, gw.ungated_holding)
+        try:
+            state = {"gate": {"zone": "closed", "closed_days": 3, "override": True, "override_since": "2026-11-02",
+                              "last_date": "2026-11-04", "live_hist": {"2026-11-04": "BIL"}}}
+            for day, model_hold, live_hold, expect in (("2026-11-05", "UPRO", "BIL", []), ("2026-11-06", "BIL", "BIL", ["GATE OVERRIDE END"])):
+                gw.spy_distance = lambda today, d=day: (d, -0.01, 0.0, 0.0)
+                gw.ungated_holding = lambda today, d=day, m=model_hold: (d, m)
+                state["gate"]["live_hist"][day] = live_hold                       # yesterday's run recorded it
+                meta = [{"id": gw.HG, "last_rebalance_on": "2026-11-02", "last_rebalance_attempted_on": day,
+                         "holdings": [{"ticker": live_hold, "allocation": 1.0}]}]
+                alerts, snap = [], {}
+                gw.check_gate(state, alerts, snap, meta, datetime.datetime(2026, 11, int(day[-2:]), 21, 35, tzinfo=datetime.timezone.utc))
+                self.assertEqual([a.split(" — ")[0] for a in alerts if "OVERRIDE" in a], expect, day)
+            self.assertFalse(state["gate"]["override"])
+        finally:
+            gw.spy_distance, gw.ungated_holding = orig
+
+    def test_live_hist_is_pruned(self):
+        orig = (gw.spy_distance, gw.ungated_holding)
+        gw.spy_distance = lambda today: ("2026-10-30", 0.05, 0.05, 0.01)
+        gw.ungated_holding = lambda today: ("2026-10-30", "BIL")
+        try:
+            state = {"gate": {"zone": "far", "last_date": "2026-10-29", "live_hist": {f"2026-10-{d:02d}": "BIL" for d in range(1, 15)}}}
+            meta = [{"id": gw.HG, "last_rebalance_attempted_on": "2026-10-30", "holdings": [{"ticker": "BIL", "allocation": 1.0}]}]
+            gw.check_gate(state, [], {}, meta, datetime.datetime(2026, 10, 30, 21, 35, tzinfo=datetime.timezone.utc))
+            self.assertEqual(len(state["gate"]["live_hist"]), 10)
+            self.assertIn("2026-10-30", state["gate"]["live_hist"])
         finally:
             gw.spy_distance, gw.ungated_holding = orig
 

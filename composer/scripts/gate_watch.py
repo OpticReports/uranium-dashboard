@@ -115,9 +115,10 @@ def describe(date, dist, dist_5d, slope20, hg_holding, ungated_holding, gate_ope
     return s + hg_context(hg_holding, ungated_holding, gate_open)
 
 
-def assess(date, dist, dist_5d, slope20, hg_holding, ungated_holding, state, weekday):
+def assess(date, dist, dist_5d, slope20, hg_holding, ungated_holding, state, weekday, ov_hg="same"):
     """Pure state machine. state is the persisted gate dict (mutated and returned).
-    Returns (alerts, notes, state)."""
+    ov_hg: live HG's holding on the pre-gate model's date, for the override check ("same" = hg_holding;
+    None = unknown, the previous override state is kept). Returns (alerts, notes, state)."""
     alerts, notes = [], []
     prev = state.get("zone")
     zone = zone_of(dist, prev)
@@ -155,17 +156,18 @@ def assess(date, dist, dist_5d, slope20, hg_holding, ungated_holding, state, wee
     # override: live HG in BIL where the pre-gate logic holds a trend basket; missing data keeps the
     # previous answer (no start or end is inferred from an outage)
     was = bool(state.get("override"))
-    if hg_holding is None or ungated_holding is None:
+    hg_o = hg_holding if ov_hg == "same" else ov_hg
+    if hg_o is None or ungated_holding is None:
         ov = was
     else:
-        ov = bool(hg_holding == "BIL" and ungated_holding in TREND)
+        ov = bool(hg_o == "BIL" and ungated_holding in TREND)
     if ov and not was:
         alerts.append(f"GATE OVERRIDE START — HG is in BIL where its pre-gate logic would hold {ungated_holding}; "
                       f"from here the two diverge until SPY closes back above the line or HG's own rules leave the "
                       f"trend branch. " + (core() if first or not alerts else ""))
         state["override_since"] = date
     elif was and not ov:
-        alerts.append(f"GATE OVERRIDE END — HG and its pre-gate logic hold the same again ({hg_holding}); the override "
+        alerts.append(f"GATE OVERRIDE END — HG and its pre-gate logic hold the same again ({hg_o}); the override "
                       f"ran from {state.get('override_since')} to {date}.")
         state["override_since"] = None
     state.update({"override": ov, "zone": zone, "last_dist": round(dist, 5), "last_date": date})
@@ -215,11 +217,13 @@ def ungated_holding(today):
 
 
 def live_holding(meta):
+    """(decision date, ticker): the holding reflects the last rebalance ATTEMPT (daily), not the last
+    trade; last_rebalance_on only moves when HG trades, so a held position would look stale"""
     s = next((x for x in meta if x["id"] == HG), None)
     if not s or not s.get("holdings"):
         return None, None
     h = max(s["holdings"], key=lambda x: x["allocation"])
-    return s.get("last_rebalance_on"), h["ticker"]
+    return s.get("last_rebalance_attempted_on") or s.get("last_rebalance_on"), h["ticker"]
 
 
 def check_gate(state, alerts, snap, meta, now):
@@ -229,29 +233,33 @@ def check_gate(state, alerts, snap, meta, now):
     try:
         date, dist, dist5, slope20 = spy_distance(today)
         g = state.setdefault("gate", {})
+        reb_date, hg = live_holding(meta)
+        if reb_date and hg:
+            # live HG's holding by decision date: the pre-gate model lags a session, so the override
+            # check compares like dates (the model's latest date against the live holding of that date)
+            hist = g.setdefault("live_hist", {})
+            hist[reb_date] = hg
+            for k in sorted(hist)[:-10]:
+                del hist[k]
         if g.get("last_date") == date:
             # holiday, or today's close not in Composer yet: the same session must not be counted twice
             print(f"  (gate watch: no session newer than {date}; nothing re-assessed)")
             snap["gate"] = {"date": date, "spy_vs_200d": g.get("last_dist"), "zone": g.get("zone"), "stale": True}
             return
-        reb_date, hg = live_holding(meta)
         try:
             ug_date, ug = ungated_holding(today)
         except (Exception, SystemExit) as e:  # composerlib exits on HTTP errors
             ug_date, ug = None, None
             print(f"  (gate watch: pre-gate model unavailable: {e})")
-        if ug_date and reb_date and ug_date != reb_date:
-            # Composer's backtest lags the live rebalance by a session at 21:35 UTC: comparing today's live
-            # holding with yesterday's model would invent overrides, so the override check waits
-            print(f"  (gate watch: pre-gate model to {ug_date}, live rebalance {reb_date}; override check deferred)")
-            ug = None
-        new_alerts, notes, g = assess(date, dist, dist5, slope20, hg, ug, g, now.weekday())
+        ov_hg = g.get("live_hist", {}).get(ug_date) if ug_date else None
+        new_alerts, notes, g = assess(date, dist, dist5, slope20, hg, ug, g, now.weekday(), ov_hg=ov_hg)
         state["gate"] = g
-        if ug_date and date and ug_date != date:
-            notes.append(f"gate watch: SPY data to {date}, pre-gate model to {ug_date}, live rebalance {reb_date}")
+        if ug_date and ov_hg is None:
+            notes.append(f"gate watch: no live HG record for {ug_date} (the pre-gate model's latest date); override state kept")
         for n in notes:
             print(f"  ({n})")
-        print(f"  gate watch: SPY {dist:+.2%} vs 200d on {date}, zone {g['zone']}; HG {hg} (pre-gate logic: {ug})")
+        print(f"  gate watch: SPY {dist:+.2%} vs 200d on {date}, zone {g['zone']}; HG {hg} on {reb_date}; "
+              f"on {ug_date}: HG {ov_hg}, pre-gate logic {ug}")
         alerts.extend(new_alerts)
         snap["gate"] = {"date": date, "spy_vs_200d": round(dist, 5), "zone": g["zone"], "hg_holding": hg,
                         "ungated_holding": ug, "override": g.get("override", False),

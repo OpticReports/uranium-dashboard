@@ -1,21 +1,24 @@
 {
   "peaks": {
     "mbkiXcuNDjueXpiox5Av": 1967.9,
-    "nNdBk7hc5NiBzeRvbI5T": 26248.01,
+    "nNdBk7hc5NiBzeRvbI5T": 26257.95,
     "YPTSJFJwD2ZKfAeYJUbW": 40378.17,
     "ORQNCfZnA18wmsMWVhf8": 35223.93
   },
   "accident_gauge": "YELLOW",
   "peak_dates": {
     "YPTSJFJwD2ZKfAeYJUbW": "2026-08-17",
-    "nNdBk7hc5NiBzeRvbI5T": "2026-10-20",
+    "nNdBk7hc5NiBzeRvbI5T": "2026-10-21",
     "mbkiXcuNDjueXpiox5Av": "2026-10-06"
   },
   "book_peak": 100006.18,
   "gate": {
     "override": false,
     "zone": "far",
-    "last_dist": 0.06113,
-    "last_date": "2026-10-19"
+    "last_dist": 0.06401,
+    "last_date": "2026-10-20",
+    "live_hist": {
+      "2026-10-21": "BIL"
+    }
   }
 }
