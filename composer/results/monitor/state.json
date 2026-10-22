@@ -15,10 +15,11 @@
   "gate": {
     "override": false,
     "zone": "far",
-    "last_dist": 0.06401,
-    "last_date": "2026-10-20",
+    "last_dist": 0.06893,
+    "last_date": "2026-10-21",
     "live_hist": {
-      "2026-10-21": "BIL"
+      "2026-10-21": "BIL",
+      "2026-10-22": "BIL"
     }
   }
 }
