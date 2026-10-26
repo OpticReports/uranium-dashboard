@@ -348,6 +348,12 @@ class IBAdapter:
         # errorEvent (emitted unconditionally) so a rejection's REASON reaches
         # the operator even when trade.log carries only a status change.
         self._order_errors: dict[int, str] = {}
+        # IB's REPLY to a cancel this client sent (161: not cancellable - the
+        # order was already final), kept apart so it never overwrites or
+        # poses as the rejection reason above, yet stays on the reconcile
+        # page as a labelled trace (2026-10-26 counter-agent B6: on a WORKING
+        # order a 161 can also mean the cancel lost a race with a fill).
+        self._cancel_replies: dict[int, str] = {}
         self._completed_orders_unavailable = False
         ev = getattr(self.ib, "errorEvent", None)
         if ev is not None:
@@ -399,8 +405,6 @@ class IBAdapter:
             code = int(errorCode or 0)
             if code in _IB_WARNING_CODES or 2100 <= code < 2200:
                 return                       # a warning is not a reason
-            if code in _IB_CANCEL_REPLY_CODES:
-                return                       # nor is the reply to our own cancel
             # reqId shares its namespace with market-data / contract
             # requests (same counter) and the sequence restarts at the
             # gateway's nextValidId after a reconnect: record ONLY ids that
@@ -413,10 +417,13 @@ class IBAdapter:
                 order_ids = set()
             if int(reqId) not in order_ids:
                 return
-            self._order_errors[int(reqId)] = f"[{code}] {errorString}"
-            if len(self._order_errors) > 512:
-                for k in list(self._order_errors)[:-256]:
-                    self._order_errors.pop(k, None)
+            # the reply to our own cancel is never the reason: kept apart
+            store = (self._cancel_replies if code in _IB_CANCEL_REPLY_CODES
+                     else self._order_errors)
+            store[int(reqId)] = f"[{code}] {errorString}"
+            if len(store) > 512:
+                for k in list(store)[:-256]:
+                    store.pop(k, None)
         except Exception:  # noqa: BLE001
             pass
 
@@ -424,6 +431,13 @@ class IBAdapter:
         oid = getattr(getattr(trade, "order", None), "orderId", None)
         try:
             return self._order_errors.get(int(oid), "") if oid is not None else ""
+        except (TypeError, ValueError):
+            return ""
+
+    def _cancel_reply(self, trade) -> str:
+        oid = getattr(getattr(trade, "order", None), "orderId", None)
+        try:
+            return self._cancel_replies.get(int(oid), "") if oid is not None else ""
         except (TypeError, ValueError):
             return ""
 
@@ -968,7 +982,11 @@ class IBAdapter:
             # Surface the venue's reason on the reconcile path too (the
             # async MOO/OPG outcome is only ever read from here).
             why = _trade_errors(trade, dead=True, venue=self._venue_error(trade))
-            out["reason"] = why or "no venue reason recorded"
+            reply = self._cancel_reply(trade)
+            out["reason"] = why or (
+                f"IBKR gave no rejection reason (its {reply.split(']')[0]}] "
+                f"reply to the executor's cancel: the order was already final)"
+                if reply else "no venue reason recorded")
             # ... and any EXECUTIONS the cancelled order carries (a partial
             # fill before the cancel): the caller must not treat "cancelled"
             # as "nothing happened" (round 19 review, CASH-3).

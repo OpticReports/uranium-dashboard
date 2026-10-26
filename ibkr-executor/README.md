@@ -483,47 +483,89 @@ unreconciled venue state. Phases IN ORDER:
    ledger never goes negative and a short-BIL order cannot exist. Under a
    BLEND_BUDGET the idle-cash BIL sweep is clamped to the remaining gross
    headroom.
-   **Market buys never spend the last dollar (2026-10-26).** From
-   2026-10-07 the BIL sweep was left `Inactive` by IBKR on every cycle,
-   with no error code, message or hold reason (Render log 2026-10-19, BIL
-   x56, permId 2127961299: PendingSubmit -> Inactive in 0.8 s). It was a
-   market BUY sized to every whole share of idle sleeve cash. The first
-   failure was the first sweep after the stage-2 adoption, which turned the
-   account's spare (un-owned) cash into book cash, so nothing outside the
-   book was left to absorb the cash-account credit check's margin on a
-   market order. Each re-plan asked for the same 56 shares and the SWEEP
-   breaker paged daily. IBKR does not publish that margin to us; forum
-   reports put it at ~5%. Two constants in `app/blend.py` handle it:
+   **Market buys never spend the last dollar (2026-10-26).**
+   *Observed:* from 2026-10-07 IBKR killed every BIL sweep, a market BUY
+   sized to every whole share of idle sleeve cash.
+   - Render log, 2026-10-19 (BIL x56, permId 2127961299): PendingSubmit ->
+     Inactive in 0.8 s, with errorCode 0, no message and no hold reason.
+     IBKR then cancelled the order itself.
+   - The first failure was the first sweep after the stage-2 adoption,
+     which turned the account's spare (un-owned) cash into book cash.
+   - Each re-plan asked for the same 56 shares, and the SWEEP breaker paged
+     daily.
+
+   *Hypothesis, not confirmed:* the cash-account credit check wants a
+   margin above a market order's value (forum reports say about 5%), which
+   the spare cash used to absorb. Against it: IBKR usually names a funds
+   refusal (error 201 with text), and none arrived. The decisive input is
+   that order's own message in the IBKR app or the TWS audit trail.
+
+   The change only makes buys smaller, so it is safe either way. Two
+   constants in `app/blend.py`:
    - `MKT_BUY_CUSHION = 0.05` sizes every SPY/BIL market buy 5% above the
      price it is sized on, in both the planner and the execution clamp. The
-     core buy compounds it with the overnight headroom.
-   - `SLEEVE_CASH_RESERVE_FRAC = 0.02` takes 2% of sleeve equity out of
-     the plan's reach. It is never swept and never used to fund entries
-     before BIL is sold, so the account keeps headroom for the MOO entries
-     the planner funds with an exact BIL sale.
-   - A sleeve whose cash sits below the reserve is topped up by the single
-     per-cycle BIL sale. A top-up blocked this cycle (a book order in
-     flight, no BIL held) is not an overdraw: the "still negative" belt
-     ignores the reserve.
-   - Cost: about 2% of the sleeve plus the last cushion slice earn no
-     T-bill yield, a few dollars a month at the live book's size.
+     core buy compounds it with the overnight headroom. A buy over about 20
+     shares leaves a 5% tail that the next cycle buys (46 then 2 BIL; 28
+     then 1 SPY), about $1 of commission each.
+   - `SLEEVE_CASH_RESERVE_FRAC = 0.02` holds 2% of sleeve equity back from
+     the sweep. It lives in the planner's `projected_cash` only.
+     - The single per-cycle BIL raise restores it IN SESSION, so an
+       in-session pre-fund leaves its MOO that headroom.
+     - Off hours the raise covers only what the plan spends beyond the cash
+       on hand. A resting top-up would hold back an evening MOO for a
+       session.
+     - `funds` stays gross, so the reserve never shrinks or drops an entry
+       and never defers a rebalance.
+     - A shortfall the raise cannot restore (a book order in flight, no BIL
+       held) is not an overdraw: the "still negative" belt ignores the
+       reserve.
+     - The SWEEP execution clamp also nets out cash that a resting MOO or a
+       pending sweep will debit.
+   - *Not covered:*
+     - a fire first funded off hours, which spends the reserve;
+     - a night's MOOs larger than about 40% of the sleeve at a 5% margin;
+     - unsettled same-day proceeds;
+     - a fixed gap between the ledger and AvailableFunds. Stage 1 sees
+       deltas only, so such a gap stays invisible to it; those refusals
+       continue, now labelled.
+   - *Cost:* the reserve and the last cushion slice of the sleeve earn no
+     T-bill yield, and a core cushion slice forgoes SPY's return until the
+     next buy. A few dollars a month at the live book's size.
 
-   A reasonless `Inactive` on a SPY/BIL market buy now carries a YES/NO:
-   does the account's AvailableFunds cover the order at the 5% margin?
-   - **No:** most likely a credit refusal.
-   - **Yes:** the margin is wider than assumed, or the cause is another one;
-     read the order's message in the IBKR app.
+   A REASONLESS `Inactive` on a SPY/BIL market buy now carries one of three
+   fixed sentences:
+   - the account's AvailableFunds does NOT cover the order at the 5% margin
+     (most likely a credit refusal);
+   - it DOES (the margin is wider than assumed, or the cause is another
+     one: read the order's message in the IBKR app);
+   - or there is no figure to check against.
 
-   It never carries a figure, because the account's cash LEVEL stays off
-   every surface. IB's 161 ("cancel attempted when not cancellable"), its
-   reply to the executor's own cleanup cancel, is no longer reported as
-   the venue's reason. The legacy suite pins both constants to 0
-   (conftest, the overnight-headroom pattern), where the code reduces to
-   the pre-change planner exactly. `tests/test_buy_cushion.py` gates the
-   shipped values, including a 5%-margin venue that refuses the old sizing
-   and accepts the new one. The research replay
-   (genomics-alpha-tracker's executor mirror) still sweeps every idle
-   dollar; the difference is a few hundredths of a percent a year of carry.
+   A sentence never carries a figure: the account's cash LEVEL stays off
+   every surface. A reasoned refusal is left as IBKR worded it.
+
+   IB's 161 ("cancel attempted when not cancellable") is IB's reply to the
+   executor's own cleanup cancel. It no longer overwrites or poses as the
+   reason; the reconcile page names it as that reply.
+
+   *Open follow-up (pre-existing, not changed here):* ib_async marks a
+   WORKING order Cancelled on any non-warning error. A 161 on a cancel that
+   lost a race with a fill can therefore make `cancel_stock_order` return
+   True. That path should fail closed (UNKNOWN) instead.
+
+   *Tests:* the legacy suite pins both constants to 0 (conftest, the
+   overnight-headroom pattern). There the planner reduces to the pre-change
+   code, except that the SWEEP clamp now also nets out reserved cash.
+   `tests/test_buy_cushion.py` gates the shipped values, including a
+   5%-margin venue that refuses the old sizing and accepts the new one.
+
+   *Deploy:* after 16:00 ET (Operating rule 1). Between 16:00 and 20:00 ET
+   the first sweep is placed as a market order resting for the open, and a
+   fire that evening that needs a BIL sale waits a session. A weekend
+   restart avoids that.
+
+   The research replay (genomics-alpha-tracker's executor mirror) still
+   sweeps every idle dollar. The difference is a few hundredths of a
+   percent a year of carry.
 4. **Execute in order**: exits (stop cancel is non-fatal; a RAISING cancel
    defers the sell; after ANY non-raising cancel queued fills are ingested
    FIRST so a PARTIALLY-filled stop books its filled shares and the MKT

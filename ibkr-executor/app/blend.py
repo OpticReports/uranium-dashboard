@@ -200,25 +200,30 @@ TRIP_REARM_PP = 0.05              # a DD line re-arms once the drawdown has
 # than the bucket holds (a cash account may reject it). Size it at this
 # much above the quote; the next in-session cycle buys what is left.
 CORE_BUY_OVERNIGHT_HEADROOM = 0.01
-# MARKET-BUY CREDIT CUSHION + SLEEVE CASH RESERVE (2026-10-26). In a CASH
-# account IBKR's pre-trade credit check refuses a market-type BUY that would
-# spend (nearly) all of the available cash, and says nothing: the order goes
-# PendingSubmit -> Inactive in under a second with no error code, no message
-# and no hold reason (Render log 2026-10-19, BIL x56, permId 2127961299).
-# The BIL sweep - sized to every whole share of idle sleeve cash, under one
-# share of slack - was refused every cycle from 2026-10-07, the first sweep
-# after the stage-2 adoption turned the account's spare (un-owned) cash into
-# book cash: nothing outside the book was left to absorb the check's margin,
-# and each re-plan asked for the same 56 shares. IBKR does not publish the
-# margin to us; forum reports put it at ~5% of a market order's value. So:
+# MARKET-BUY CUSHION + SLEEVE CASH RESERVE (2026-10-26).
+# OBSERVED: from 2026-10-07 every BIL sweep - a MKT BUY sized to every whole
+# share of idle sleeve cash, under one share of slack - was killed by IBKR:
+# PendingSubmit -> Inactive in 0.8 s with errorCode 0, no message, no hold
+# reason, then Cancelled by IBKR itself (Render log 2026-10-19, BIL x56,
+# permId 2127961299); each re-plan asked for the same 56 shares. The first
+# failure was the first sweep after the stage-2 adoption had turned the
+# account's spare (un-owned) cash into book cash.
+# HYPOTHESIS, NOT CONFIRMED: a cash-account credit check that wants a margin
+# above a market order's value (forum reports: ~5%), which the spare cash
+# used to absorb. Against it: IBKR usually names a funds refusal (error 201
+# with text) and none arrived. The order's own message in the IBKR app
+# (permId 2127961299) is the decisive input. These constants only make
+# buys SMALLER, so they are safe either way, and the refusal note below
+# (a yes/no on AvailableFunds at this margin) separates the causes next time:
 #   * every market BUY of SPY or BIL is sized MKT_BUY_CUSHION above the price
-#     it is sized on (that slice of cash is left unspent by the order); and
-#   * the last SLEEVE_CASH_RESERVE_FRAC of sleeve equity is never spent by
-#     the plan - not swept, not used to fund entries before BIL is sold - so
-#     the account keeps headroom for the next market-type buy (the MOO
-#     entries the planner funds with an exact BIL sale).
-# Cost: ~2% of the sleeve plus the last cushion slice earn no T-bill yield
-# (single-digit dollars a month on the live book).
+#     it is sized on; and
+#   * SLEEVE_CASH_RESERVE_FRAC of sleeve equity is held back from the sweep
+#     and restored by the in-session BIL raise, so an in-session pre-fund
+#     leaves headroom for its MOO. It does not cover a fire first funded off
+#     hours (that raise rests for the open and the entry spends the reserve),
+#     nor a night's MOOs larger than ~40% of the sleeve at a 5% margin.
+# Cost: the reserve plus the last cushion slice of the sleeve earn no T-bill
+# yield, and a core cushion slice forgoes SPY's return until the next buy.
 MKT_BUY_CUSHION = 0.05
 SLEEVE_CASH_RESERVE_FRAC = 0.02
 
@@ -2008,13 +2013,14 @@ class Blend3070Manager:
         gate_on = (payload.get("gate") or {}).get("xbi_above_200dma_prior") is not False
         st.last_gate = gate_on          # feed display; persisted on next save
         sleeve_eq = self.sleeve_value(prices)
-        # The sleeve cash reserve (MKT_BUY_CUSHION note) is out of this
-        # plan's reach: entries are funded past it with BIL, the sweep stops
-        # at it, and a sleeve whose cash sits below it is topped up from BIL
-        # by the single cash-raise below.
+        # The sleeve cash reserve (MKT_BUY_CUSHION note) lives in
+        # projected_cash ONLY: the sweep stops at it, and the single cash
+        # raise below restores it in session (an in-session pre-fund is
+        # funded past it with BIL). `funds` stays GROSS, so sizing, the
+        # rebalance deferral and the entry drops are exactly as before: the
+        # reserve never shrinks or drops an entry (counter-agents A2/B3).
         cash_reserve = SLEEVE_CASH_RESERVE_FRAC * max(sleeve_eq, 0.0)
         projected_cash -= cash_reserve
-        funds -= cash_reserve
         open_count = len(st.positions) - len(exiting) + len(st.pending_entries)
         # Per-symbol occupancy, counted exactly like open_count (round 11 /
         # verifier A2): held positions not exiting this cycle + pending MOOs
@@ -2220,7 +2226,7 @@ class Blend3070Manager:
                 # Budget binds on projected gross; the BIL-funded slice of an
                 # entry swaps one holding for another (gross-neutral) — only
                 # the cash-funded slice adds exposure.
-                from_cash = min(max(projected_cash, 0.0), cost)
+                from_cash = min(max(projected_cash + cash_reserve, 0.0), cost)
                 if budget > 0 and projected_gross + from_cash > budget:
                     self._event("WARN", f"BLEND_BUDGET ${budget:,.0f} would be "
                                         f"exceeded: {e['symbol']} entry blocked")
@@ -2254,7 +2260,8 @@ class Blend3070Manager:
                 f"${prefund_usd:,.0f} reserved in sleeve cash for the "
                 f"MOO placed after extended hours (20:00 ET)"
                 + (" (BIL sold now to cover the shortfall)"
-                                     if projected_cash < -CASH_EPS else ""))
+                   if projected_cash + (0.0 if regular_session_open()
+                                        else cash_reserve) < -CASH_EPS else ""))
             entry_intents = []          # placed post-close from settled cash
             st.prefund_usd, st.prefund_date = round(prefund_usd, 2), _et_today()
             prefund_now = True
@@ -2359,7 +2366,14 @@ class Blend3070Manager:
                                 f"(call {dropped['call_id']}) skipped: cycle "
                                 f"cash ledger cannot fund it")
         bil_sell = 0
-        if (not pending_book and projected_cash < -CASH_EPS
+        # The raise restores the cash reserve only IN SESSION: outside
+        # regular hours a BIL sell rests until the open and its journal
+        # (pending_book) would hold back an evening MOO for a session
+        # (counter-agent A1). Off-hours it raises only what the plan
+        # actually spends beyond the cash on hand.
+        need = (-projected_cash if regular_session_open()
+                else -(projected_cash + cash_reserve))
+        if (not pending_book and need > CASH_EPS
                 and bil_px > 0 and st.bil_qty > 0):
             # the sell's own commission is netted out of the proceeds:
             # when the raise funds a pre-fund, add headroom so the post-
@@ -2367,8 +2381,7 @@ class Blend3070Manager:
             # dollar (which would cost a full day). A rebalance raise
             # stays exact (counter-agent round 2, LOW).
             reserve = FUNDING_FEE_RESERVE_USD if prefund_now else 0.0
-            bil_sell = min(st.bil_qty, math.ceil(
-                (-projected_cash + reserve) / bil_px))
+            bil_sell = min(st.bil_qty, math.ceil((need + reserve) / bil_px))
             projected_cash += bil_sell * bil_px
         if projected_cash + cash_reserve < -CASH_EPS:
             # Belt (should be unreachable): refuse rather than overdraw. The
@@ -5971,8 +5984,8 @@ def _place_market_buy(adapter, symbol: str, qty: int, px: float, cid: str) -> di
                                          ref_price=px or None,
                                          client_order_id=cid)
     except RuntimeError as exc:
-        if "status Inactive" not in str(exc):
-            raise
+        if not str(exc).endswith("(status Inactive): IBKR gave no reason"):
+            raise                       # a reasoned refusal speaks for itself
         raise RuntimeError(f"{exc}{_buy_refusal_note(adapter, qty, px)}") from exc
 
 
@@ -6250,7 +6263,10 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                     # the market buy MKT_BUY_CUSHION above the quote.
                     px = prices.get(CASH_VEHICLE) or 0.0
                     if px > 0:
+                        # net of cash a resting MOO / pending sweep will
+                        # debit (the planner's own basis; counter-agent A4)
                         spendable = (max(mgr.state.sleeve_cash, 0.0)
+                                     - mgr.reserved_sleeve_cash()
                                      - float(it.get("reserve_usd") or 0.0))
                         qty = min(qty, int(max(spendable, 0.0)
                                            // (px * (1.0 + MKT_BUY_CUSHION))))
