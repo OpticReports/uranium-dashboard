@@ -202,25 +202,29 @@ TRIP_REARM_PP = 0.05              # a DD line re-arms once the drawdown has
 CORE_BUY_OVERNIGHT_HEADROOM = 0.01
 # MARKET-BUY CUSHION + SLEEVE CASH RESERVE (2026-10-26).
 # OBSERVED: from 2026-10-07 every BIL sweep - a MKT BUY sized to every whole
-# share of idle sleeve cash, under one share of slack - was killed by IBKR:
+# share of idle sleeve cash, under one share of slack - came back from IBKR
 # PendingSubmit -> Inactive in 0.8 s with errorCode 0, no message, no hold
-# reason, then Cancelled by IBKR itself (Render log 2026-10-19, BIL x56,
-# permId 2127961299); each re-plan asked for the same 56 shares. The first
-# failure was the first sweep after the stage-2 adoption had turned the
-# account's spare (un-owned) cash into book cash.
-# HYPOTHESIS, NOT CONFIRMED: a cash-account credit check that wants a margin
-# above a market order's value (forum reports: ~5%), which the spare cash
-# used to absorb. Against it: IBKR usually names a funds refusal (error 201
-# with text) and none arrived. The order's own message in the IBKR app
-# (permId 2127961299) is the decisive input. These constants only make
-# buys SMALLER, so they are safe either way, and the refusal note below
-# (a yes/no on AvailableFunds at this margin) separates the causes next time:
+# reason; the status then read Cancelled and IB answered the executor's
+# cleanup cancel with 161 (Render log 2026-10-19, BIL x56, permId
+# 2127961299). INFERRED (ib_async 2.1 treats Inactive as done, so the client
+# could not have set Cancelled): IBKR killed the order itself. Each re-plan
+# asked for the same 56 shares. The first failure was the first sweep after
+# the stage-2 adoption of a deposit.
+# HYPOTHESIS, NOT CONFIRMED: the adoption turned the account's spare
+# (un-owned) cash into book cash, and a cash-account credit check wants a
+# margin above a market order's value (forum reports: ~5%) that the spare
+# cash used to absorb. Against it: IBKR usually names a funds refusal (error
+# 201 with text) and none appears in the 2026-10-19 Render log. The order's
+# own message in the IBKR app (permId 2127961299) is the decisive input.
+# These constants make buys SMALLER (and in session sell 1-2 BIL to restore
+# the reserve), so they are safe either way, and the refusal note below (a
+# yes/no on AvailableFunds at this margin) separates the causes next time:
 #   * every market BUY of SPY or BIL is sized MKT_BUY_CUSHION above the price
 #     it is sized on; and
 #   * SLEEVE_CASH_RESERVE_FRAC of sleeve equity is held back from the sweep
 #     and restored by the in-session BIL raise, so an in-session pre-fund
 #     leaves headroom for its MOO. It does not cover a fire first funded off
-#     hours (that raise rests for the open and the entry spends the reserve),
+#     hours (the entry spends the reserve; any raise rests for the open),
 #     nor a night's MOOs larger than ~40% of the sleeve at a 5% margin.
 # Cost: the reserve plus the last cushion slice of the sleeve earn no T-bill
 # yield, and a core cushion slice forgoes SPY's return until the next buy.

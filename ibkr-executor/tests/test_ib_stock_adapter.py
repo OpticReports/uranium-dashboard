@@ -542,7 +542,7 @@ def test_gate_cancel_reply_161_is_never_the_reason_and_a_reasonless_inactive_say
     # the 161 stays on the page as a LABELLED trace, never as the reason
     # (counter-agent B6: on a working order it can mean a cancel lost a fill race)
     assert o["reason"] == ("IBKR gave no rejection reason (its [161] reply to the "
-                           "executor's cancel: the order was already final)")
+                           "executor's cancel: the order was normally already final)")
 
 
 def test_gate_a_real_reason_survives_a_later_161(ib_adapter):

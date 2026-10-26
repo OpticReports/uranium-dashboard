@@ -747,6 +747,8 @@ class IBAdapter:
         self._apply_market_data_type()
         if hasattr(self, "_order_errors"):
             self._order_errors.clear()  # order ids restart at nextValidId
+        if hasattr(self, "_cancel_replies"):
+            self._cancel_replies.clear()    # same: a stale 161 must label nothing
         down_s = now - self._disconnected_since
         logger.info("IB gateway reconnected after %.0fs (same clientId: "
                     "orderIds stay monotone, drain-once keys persist)",
@@ -985,7 +987,8 @@ class IBAdapter:
             reply = self._cancel_reply(trade)
             out["reason"] = why or (
                 f"IBKR gave no rejection reason (its {reply.split(']')[0]}] "
-                f"reply to the executor's cancel: the order was already final)"
+                f"reply to the executor's cancel: the order was normally "
+                f"already final)"
                 if reply else "no venue reason recorded")
             # ... and any EXECUTIONS the cancelled order carries (a partial
             # fill before the cancel): the caller must not treat "cancelled"

@@ -419,3 +419,16 @@ def test_place_market_buy_annotates_only_a_reasonless_inactive(shipped):
     with pytest.raises(ExecutorConnectionError) as ei2:
         blend_mod._place_market_buy(_Raising(down), "BIL", 56, 100.0, "c3")
     assert ei2.value is down
+
+
+def test_budget_counts_an_entry_paid_from_the_reserve_as_new_gross(tmp_path, shipped):
+    """Counter-agent B probe P4: the budget's from_cash must count the
+    reserve as cash again - money that leaves the reserve for a stock adds
+    gross. $280 cash, gross $10,000, budget $10,230: a $250 entry would take
+    gross to $10,250, so it is blocked (dropping `+ cash_reserve` from
+    from_cash would admit it against $220 of 'cash')."""
+    m = mk(tmp_path, blend_budget=10_230.0)
+    _seed_initialized(m, sleeve_cash=280.0, bil_qty=30, spy_qty=70)
+    out = m.step("2026-08-20", payload(entries=[entry()], stops=[stop_row()]), PRICES)
+    assert not [o for o in out if o["action"] == "ENTER"]
+    assert any("BLEND_BUDGET" in e["msg"] for e in m.state.events)

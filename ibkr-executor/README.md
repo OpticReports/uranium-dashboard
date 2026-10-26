@@ -484,24 +484,30 @@ unreconciled venue state. Phases IN ORDER:
    BLEND_BUDGET the idle-cash BIL sweep is clamped to the remaining gross
    headroom.
    **Market buys never spend the last dollar (2026-10-26).**
-   *Observed:* from 2026-10-07 IBKR killed every BIL sweep, a market BUY
-   sized to every whole share of idle sleeve cash.
+   *Observed:* from 2026-10-07 every BIL sweep failed. The sweep is a
+   market BUY sized to every whole share of idle sleeve cash.
    - Render log, 2026-10-19 (BIL x56, permId 2127961299): PendingSubmit ->
      Inactive in 0.8 s, with errorCode 0, no message and no hold reason.
-     IBKR then cancelled the order itself.
-   - The first failure was the first sweep after the stage-2 adoption,
-     which turned the account's spare (un-owned) cash into book cash.
+   - The status then read Cancelled, and IB answered the executor's cleanup
+     cancel with 161.
+   - The first failure was the first sweep after the stage-2 adoption of a
+     deposit.
    - Each re-plan asked for the same 56 shares, and the SWEEP breaker paged
      daily.
 
-   *Hypothesis, not confirmed:* the cash-account credit check wants a
-   margin above a market order's value (forum reports say about 5%), which
-   the spare cash used to absorb. Against it: IBKR usually names a funds
-   refusal (error 201 with text), and none arrived. The decisive input is
-   that order's own message in the IBKR app or the TWS audit trail.
+   *Inferred:* ib_async 2.1 treats Inactive as done, so the client could
+   not have set Cancelled. IBKR killed the order itself.
 
-   The change only makes buys smaller, so it is safe either way. Two
-   constants in `app/blend.py`:
+   *Hypothesis, not confirmed:* the adoption turned the account's spare
+   (un-owned) cash into book cash. The cash-account credit check wants a
+   margin above a market order's value (forum reports say about 5%), and
+   that spare cash used to absorb it. Against it: IBKR usually names a
+   funds refusal (error 201 with text), and none appears in the 2026-10-19
+   Render log. The decisive input is that order's own message in the IBKR
+   app or the TWS audit trail.
+
+   The change makes buys smaller and, in session, sells 1-2 BIL to restore
+   the reserve, so it is safe either way. Two constants in `app/blend.py`:
    - `MKT_BUY_CUSHION = 0.05` sizes every SPY/BIL market buy 5% above the
      price it is sized on, in both the planner and the execution clamp. The
      core buy compounds it with the overnight headroom. A buy over about 20
@@ -550,7 +556,13 @@ unreconciled venue state. Phases IN ORDER:
    *Open follow-up (pre-existing, not changed here):* ib_async marks a
    WORKING order Cancelled on any non-warning error. A 161 on a cancel that
    lost a race with a fill can therefore make `cancel_stock_order` return
-   True. That path should fail closed (UNKNOWN) instead.
+   True. That reaches every caller of `cancel_stock_order`.
+   - In reconcile 2b's stuck-order cancel, a fill that won the race is never
+     booked. The journal is cleared and the order re-planned, so the order
+     is bought twice.
+   - The cancel wait should fail closed (UNKNOWN) on a 161 instead.
+   - 161 means "not cancellable", which is normally a final state. The page
+     says so; it is not proof.
 
    *Tests:* the legacy suite pins both constants to 0 (conftest, the
    overnight-headroom pattern). There the planner reduces to the pre-change
