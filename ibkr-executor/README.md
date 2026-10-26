@@ -483,6 +483,47 @@ unreconciled venue state. Phases IN ORDER:
    ledger never goes negative and a short-BIL order cannot exist. Under a
    BLEND_BUDGET the idle-cash BIL sweep is clamped to the remaining gross
    headroom.
+   **Market buys never spend the last dollar (2026-10-26).** From
+   2026-10-07 the BIL sweep was left `Inactive` by IBKR on every cycle,
+   with no error code, message or hold reason (Render log 2026-10-19, BIL
+   x56, permId 2127961299: PendingSubmit -> Inactive in 0.8 s). It was a
+   market BUY sized to every whole share of idle sleeve cash. The first
+   failure was the first sweep after the stage-2 adoption, which turned the
+   account's spare (un-owned) cash into book cash, so nothing outside the
+   book was left to absorb the cash-account credit check's margin on a
+   market order. Each re-plan asked for the same 56 shares and the SWEEP
+   breaker paged daily. IBKR does not publish that margin to us; forum
+   reports put it at ~5%. Two constants in `app/blend.py` handle it:
+   - `MKT_BUY_CUSHION = 0.05` sizes every SPY/BIL market buy 5% above the
+     price it is sized on, in both the planner and the execution clamp. The
+     core buy compounds it with the overnight headroom.
+   - `SLEEVE_CASH_RESERVE_FRAC = 0.02` takes 2% of sleeve equity out of
+     the plan's reach. It is never swept and never used to fund entries
+     before BIL is sold, so the account keeps headroom for the MOO entries
+     the planner funds with an exact BIL sale.
+   - A sleeve whose cash sits below the reserve is topped up by the single
+     per-cycle BIL sale. A top-up blocked this cycle (a book order in
+     flight, no BIL held) is not an overdraw: the "still negative" belt
+     ignores the reserve.
+   - Cost: about 2% of the sleeve plus the last cushion slice earn no
+     T-bill yield, a few dollars a month at the live book's size.
+
+   A reasonless `Inactive` on a SPY/BIL market buy now carries a YES/NO:
+   does the account's AvailableFunds cover the order at the 5% margin?
+   - **No:** most likely a credit refusal.
+   - **Yes:** the margin is wider than assumed, or the cause is another one;
+     read the order's message in the IBKR app.
+
+   It never carries a figure, because the account's cash LEVEL stays off
+   every surface. IB's 161 ("cancel attempted when not cancellable"), its
+   reply to the executor's own cleanup cancel, is no longer reported as
+   the venue's reason. The legacy suite pins both constants to 0
+   (conftest, the overnight-headroom pattern), where the code reduces to
+   the pre-change planner exactly. `tests/test_buy_cushion.py` gates the
+   shipped values, including a 5%-margin venue that refuses the old sizing
+   and accepts the new one. The research replay
+   (genomics-alpha-tracker's executor mirror) still sweeps every idle
+   dollar; the difference is a few hundredths of a percent a year of carry.
 4. **Execute in order**: exits (stop cancel is non-fatal; a RAISING cancel
    defers the sell; after ANY non-raising cancel queued fills are ingested
    FIRST so a PARTIALLY-filled stop books its filled shares and the MKT

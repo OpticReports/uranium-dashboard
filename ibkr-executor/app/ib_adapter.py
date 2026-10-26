@@ -88,6 +88,14 @@ _IB_WARNING_CODES = {105, 110, 165, 321, 329, 399, 404, 434, 492, 10167}
 # still not why it was cancelled. Add to this set when a new code is
 # OBSERVED killing an order, never on a guess.
 _IB_DEAD_REASON_CODES = {110, 321, 404}
+# ... and these are the venue's REPLY to a cancel this client sent, never why
+# an order died. 2026-10-19 (live, BIL x56, permId 2127961299): the order went
+# PendingSubmit -> Inactive with no error at all, the placement path cancelled
+# it, IB answered 161 "Cancel attempted when order is not in a cancellable
+# state", and _order_errors kept only that last message - so every reconcile
+# page quoted our own cancel's reply as "venue: [161] ..." and hid that IBKR
+# had given no reason. Kept out of every reason surface; observed codes only.
+_IB_CANCEL_REPLY_CODES = {161}
 RECONNECT_BACKOFF_S = 15.0   # first retry delay after the gateway drops
 RECONNECT_BACKOFF_MAX_S = 300.0  # backoff cap (~one attempt per blend cycle)
 OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
@@ -213,6 +221,8 @@ def _trade_errors(trade, dead: bool = False, venue: str = "") -> str:
         code = getattr(entry, "errorCode", 0) or 0
         msg = str(getattr(entry, "message", "") or "").strip()
         status = str(getattr(entry, "status", "") or "")
+        if code in _IB_CANCEL_REPLY_CODES:
+            continue                # our cancel's reply, never the reason
         if (dead and code and code not in _IB_DEAD_REASON_CODES
                 and (code in _IB_WARNING_CODES or 2100 <= code < 2200)):
             # the wrapper logs warnings into trade.log too: a warning is
@@ -389,6 +399,8 @@ class IBAdapter:
             code = int(errorCode or 0)
             if code in _IB_WARNING_CODES or 2100 <= code < 2200:
                 return                       # a warning is not a reason
+            if code in _IB_CANCEL_REPLY_CODES:
+                return                       # nor is the reply to our own cancel
             # reqId shares its namespace with market-data / contract
             # requests (same counter) and the sequence restarts at the
             # gateway's nextValidId after a reconnect: record ONLY ids that
@@ -1021,7 +1033,7 @@ class IBAdapter:
                                        "%s", _order_ref(trade), exc)
                 raise RuntimeError(
                     f"order rejected by venue (status {s})"
-                    + (f": {why}" if why else ""))
+                    + (f": {why}" if why else ": IBKR gave no reason"))
             # 'ValidationError' = ib_async's warning overlay: the order may
             # be live and may yet transition to Submitted/Filled. Neither an
             # ack nor a death - keep waiting; the ack timeout below raises

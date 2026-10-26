@@ -513,6 +513,56 @@ def test_gate_r21_an_inactive_order_is_cancelled_on_sight(ib_adapter):
     assert cancelled == ["blend-18-stp-137.2000"], "Inactive order left at the venue"
 
 
+def test_gate_cancel_reply_161_is_never_the_reason_and_a_reasonless_inactive_says_so(ib_adapter):
+    """2026-10-19 (live, BIL x56, permId 2127961299): PendingSubmit ->
+    Inactive with errorCode 0 and no message; the cleanup cancel drew IB's
+    161 'not in a cancellable state', which then posed as the venue's reason
+    on every reconcile page. The placement must say IBKR gave no reason and
+    the reconcile must not quote the 161."""
+    fake = ib_adapter.ib
+
+    def go_inactive(t):
+        t.orderStatus.status = "Inactive"
+        t.log = [types.SimpleNamespace(errorCode=0, status="Inactive", message="")]
+
+    def reply_161(t):
+        ib_adapter._on_ib_error(t.order.orderId, 161,
+                                "Cancel attempted when order is not in a cancellable "
+                                "state.  Order permId =2127961299")
+        t.log.append(types.SimpleNamespace(errorCode=161, status="Cancelled",
+                                           message="Error 161: Cancel attempted"))
+        t.orderStatus.status = "Cancelled"
+    fake.on_place, fake.on_cancel = go_inactive, reply_161
+    with pytest.raises(RuntimeError) as ei:
+        ib_adapter.place_stock_order("BIL", 56, "MKT", ref_price=91.7,
+                                     client_order_id="blend-sweep-2026-10-19-75")
+    assert str(ei.value) == "order rejected by venue (status Inactive): IBKR gave no reason"
+    o = ib_adapter.find_stock_order("blend-sweep-2026-10-19-75")
+    assert o["status"] == "cancelled"
+    assert "161" not in o["reason"] and o["reason"] == "no venue reason recorded"
+
+
+def test_gate_a_real_reason_survives_a_later_161(ib_adapter):
+    fake = ib_adapter.ib
+
+    def rejected(t):
+        t.orderStatus.status = "Inactive"
+        t.log = [types.SimpleNamespace(errorCode=201, status="Inactive",
+                                       message="Order rejected - reason: test")]
+        ib_adapter._on_ib_error(t.order.orderId, 201, "Order rejected - reason: test")
+
+    def reply_161(t):
+        ib_adapter._on_ib_error(t.order.orderId, 161, "Cancel attempted ...")
+        t.log.append(types.SimpleNamespace(errorCode=161, status="Cancelled",
+                                           message="Error 161"))
+        t.orderStatus.status = "Cancelled"
+    fake.on_place, fake.on_cancel = rejected, reply_161
+    with pytest.raises(RuntimeError, match=r"\[201\] Order rejected - reason: test"):
+        ib_adapter.place_stock_order("BIL", 56, "MKT", ref_price=91.7, client_order_id="c201")
+    o = ib_adapter.find_stock_order("c201")
+    assert "[201]" in o["reason"] and "161" not in o["reason"]
+
+
 def test_mkt_is_day_market_order_and_signed_qty_maps_sides(ib_adapter):
     ib_adapter.place_stock_order("SPY", 70, "MKT")
     ib_adapter.place_stock_order("SPY", -30, "MKT")
