@@ -1,5 +1,9 @@
 # Clone Robotics — intake brief (read once, pass down)
 
+> **UPDATE 2026-10-27 (Casey): "valuation is $200m post money."** This supersedes the
+> illegible "$3?0M" reading below — the upscaled digit was misread. All price math uses
+> **$200M post-money**.
+
 Date 2026-10-27. LP (Casey) is considering a ~$50k check via a Delta4 Capital
 SPV into Clone Robotics' bridge round. Casey's questions:
 1. Where can Clone win the market, and how does it HONESTLY shape up vs the
