@@ -198,7 +198,9 @@ class Venue(Protocol):
     def place_stop(self, side: str, qty: float, trigger_px: float,
                    cloid: str) -> None: ...
     def place_market(self, side: str, qty: float, cloid: str,
-                     reduce_only: bool = False) -> None: ...
+                     reduce_only: bool = False) -> dict | None: ...
+    # ^ the exchange's own answer to the order when the adapter has one
+    #   ({"filled_qty", "avg_px", "resting"}; hl.py), else None
     def cancel(self, cloid: str) -> None: ...
     def cancel_all(self) -> None: ...
 
@@ -309,6 +311,16 @@ class LegLedger:
     # consecutive "never happened" verdicts on this leg (survives clear_close):
     # past CLOSE_NEVER_MAX no further close is sent and close_stuck pages
     close_never_n: int = 0
+    # the OTHER legs' ledger sum at the send: the position tiebreak reads
+    # this leg's own exposure as (net - others), before and now, so a change
+    # another leg booked in the window (its stop absorbed, an entry, an R
+    # fill) is never attributed to this close (round-3 review, 2026-10-27)
+    close_others_before: float | None = None
+    close_affirm_polls: int = 0         # consecutive tiebreak polls reading CANCELLED/0
+    close_moved_polls: int = 0          # consecutive tiebreak polls showing the FULL move
+    # the poll seq of a never-happened verdict: nothing is sent or re-armed
+    # for this leg in that poll (per-process; reset at boot)
+    close_verdict_seq: int = -1
     # The size this leg's entry ASKED for (panel F4): a leg that ends up
     # holding less with nothing in flight - a consumed partial re-opened at
     # its partial size - is topped up toward THIS, never toward a fresh
@@ -341,6 +353,8 @@ class LegLedger:
         self.close_why, self.close_mode = None, None
         self.close_sent_ts, self.close_unknown_polls = 0.0, 0
         self.close_last_seq, self.close_unmoved_polls = -1, 0
+        self.close_others_before = None
+        self.close_affirm_polls, self.close_moved_polls = 0, 0
 
     def clear_stop(self) -> None:
         self.stop_cloid, self.stop_px = None, None
@@ -539,11 +553,13 @@ class Executor:
         self._check_product_tradable()
         self._check_network()
         for _l in self.state.legs.values():
+            _l.close_verdict_seq = -1
             if _l.close_cloid and _l.close_mode == "single":
                 # per-process counters restart; the age rule (wall clock,
                 # persisted) still gates the tiebreak after a restart
                 _l.close_unknown_polls, _l.close_last_seq = 0, -1
                 _l.close_unmoved_polls = 0
+                _l.close_affirm_polls, _l.close_moved_polls = 0, 0
         self._reconcile_boot()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
@@ -1502,6 +1518,9 @@ class Executor:
                         "leg_unmirrored", "unbooked_fill_unprotected",
                         "book_stop_under_floor", "netting_inconsistent",
                         "close_unconfirmed", "close_rejected", "stop_residue",
+                        # true every poll once the retry budget is spent
+                        # (round-3 review: it paged every 20 s)
+                        "close_stuck",
                         "close_deferred_under_floor", "reest_unsettled",
                         "position_drift", "entries_blocked", "sub_min_size",
                         # a persistent accept-then-cancel venue condition
@@ -2050,6 +2069,12 @@ class Executor:
         # a stop the operator now believes is cancelled is still armed.
         if adopt_venue and not self._adopt_venue_locked():
             return False
+        if adopt_venue and self.state.halted is None:
+            # an adopt on a RUNNING book (a close_stuck recovery): there is
+            # no halt to clear, so no resume event or coverage tick either
+            # (round-3 review)
+            self._save_state()
+            return True
         if self.state.halted == "VENUE_CHANGED":
             # ExecState documents this as the one halt /resume must never
             # clear, and then /resume cleared it like any other (2026-08-29
@@ -2201,6 +2226,7 @@ class Executor:
                 l.clear_netting()
                 l.clear_reest()
                 l.clear_close()
+                l.close_never_n = 0        # a flat leg starts its next close cycle clean
             self._event("RED", "adopt_venue",
                         f"operator adopted venue truth: venue is FLAT, ledger "
                         f"claimed {before} (sum {want}) - all legs zeroed, "
@@ -2221,13 +2247,22 @@ class Executor:
             # book is the one combination that cannot be made safe, so the
             # halt stands until the venue is genuinely flat and adopt is run
             # again (the message already asks for exactly that).
+            if self.state.halted:
+                tail = (f"the HALT STANDS and no stop was cancelled. Flatten "
+                        f"manually on {self._venue_label()}, then run adopt "
+                        f"again to go clean and resume.")
+            else:
+                # a running book (a close_stuck recovery, round-3 review):
+                # adopt fits only a FLAT venue; the old text told the
+                # operator to flatten a leg the book still manages
+                tail = (f"nothing was adopted and no stop was cancelled; "
+                        f"the book keeps running on its ledger. Adopt fits "
+                        f"only a FLAT venue - do not flatten a leg this "
+                        f"book still manages to make it fit.")
             self._event("RED", "adopt_venue_partial",
                         f"operator adopted: venue holds {net} but the ledger "
                         f"claimed {before} (sum {want}) - the ledger cannot "
-                        f"be attributed to legs, so the HALT STANDS and no "
-                        f"stop was cancelled. Flatten manually on "
-                        f"{self._venue_label()}, "
-                        f"then run adopt again to go clean and resume.")
+                        f"be attributed to legs, so " + tail)
             self._boot_mismatch = True
             self._save_state()
             return False
@@ -2494,6 +2529,13 @@ class Executor:
         led: LegLedger = self.state.legs[leg]
         pend, pos = tl.get("pending"), tl.get("position")
         halted = led.engine_halted      # tracked in _track_engine_halts
+        if led.qty == 0.0 and not led.close_cloid and led.close_never_n:
+            # the never-happened budget belongs to ONE close cycle: a leg
+            # taken flat by any path (hand close, adopt, halt, phantom
+            # clear) starts the next one with its retries intact (round-3
+            # review: a stale count sent the next trade straight to
+            # close_stuck with zero re-sends)
+            led.close_never_n = 0
         # AN UNRESOLVED DIVERGENCE BLOCKS NEW RISK, EVERYWHERE (verification
         # round 2, GRACE-A). A leg whose diverged verdict earned grace has
         # NOT been corroborated - the halt is merely deferred while an order
@@ -3345,7 +3387,8 @@ class Executor:
         others = {n: l for n, l in self.state.legs.items()
                   if n != leg and abs(l.qty) > 1e-9}
         d_pos = led.qty > 0
-        plan = {"consumed": [], "stopped_same": [], "qty": {}}
+        plan = {"consumed": [], "stopped_same": [], "closed_single": [],
+                "qty": {}}
         if abs(net) <= 1e-9:
             plan["qty"][leg] = 0.0
             for n, l in others.items():
@@ -3360,6 +3403,19 @@ class Executor:
                         if l.stop_cloid else None
                     if st and st.get("status") == "FILLED":
                         plan["stopped_same"].append(n)
+                        plan["qty"][n] = 0.0
+                    elif l.close_cloid and l.close_mode == "single" \
+                            and abs(l.qty) <= l.close_qty + 1e-9:
+                        # a same-sign leg whose OWN single-leg close is in
+                        # flight for all of it: a flat venue says that close
+                        # filled - the only order of ours that could have
+                        # removed it. Without this the two legs deadlocked
+                        # (round-3 review): this absorb returned None every
+                        # poll while the other leg's tiebreak kept its ref
+                        # because THIS stop read FILLED - three polls to a
+                        # false LEDGER_DIVERGENCE on a venue that did
+                        # exactly what was asked
+                        plan["closed_single"].append(n)
                         plan["qty"][n] = 0.0
                     else:
                         return None
@@ -3479,6 +3535,11 @@ class Executor:
             l.clear_stop()
             l.stopped_entry_ts = pos.get("entry_ts") or l.stopped_entry_ts
             self._release_entry_ref(n, l, "closed by its stop")
+        for n in plan.get("closed_single", ()):
+            l = self.state.legs[n]
+            self._book_close_fill(n, l, l.close_qty,
+                                  f"position change (venue flat after "
+                                  f"{leg}'s {via})")
         for n in plan["consumed"]:
             l = self.state.legs[n]
             consumed = l.qty
@@ -3744,6 +3805,11 @@ class Executor:
             # reduce-only stop that, once the close booked, rested on the
             # OTHER leg's exposure with no ref pointing at it (round-2
             # review probe f, 2026-10-27)
+            return
+        if led.close_verdict_seq == self._poll_seq:
+            # a never-happened verdict was rendered THIS poll off the same
+            # reads a re-arm would corroborate against: nothing for this
+            # leg until the next poll looks afresh (round-3 review)
             return
         bumped = False                      # this poll already counted a miss
         cancelled = False                   # own stop read CANCELLED this poll
@@ -4400,7 +4466,10 @@ class Executor:
         if led.qty == 0.0:
             if led.stop_cloid:
                 # a stop re-armed while the ref was open would rest on the
-                # OTHER leg's exposure: cancel on the venue, never just forget
+                # OTHER leg's exposure: cancel on the venue, never just
+                # forget. Unreachable today (every single-leg send cancels
+                # the stop first and _maintain_stop refuses to re-arm in
+                # the window) - kept as defence for a future caller
                 try:
                     self.venue.cancel(led.stop_cloid)
                 except Exception:  # noqa: BLE001
@@ -4420,10 +4489,18 @@ class Executor:
                         f"remainder is re-closed next poll")
         self._save_state()
 
-    def _close_fill_from_position(self, led: LegLedger) -> float | None:
+    def _close_fill_from_position(self, leg: str, led: LegLedger) -> float | None:
         """How much of the in-flight close the venue's position says has
-        left this leg, against the net recorded BEFORE the send. None when
-        the venue cannot be read or no baseline was recorded."""
+        left THIS leg: its exposure is (net - the other legs' ledger sum),
+        read before the send and now, so a change another leg has booked
+        in the window - its stop absorbed, an entry, an R fill - is never
+        attributed to this close (round-3 review: a frozen net baseline
+        booked the trend's absorbed stop fill as the pullback's close and
+        left the trend's size orphaned on the venue). A change another leg
+        has NOT yet booked still shows as a move; the caller treats a
+        partial move as ambiguous and books a full one only when it holds
+        on two polls. None when the venue cannot be read or no baseline
+        was recorded."""
         if led.close_net_before is None:
             return None
         try:
@@ -4431,8 +4508,14 @@ class Executor:
         except Exception:  # noqa: BLE001
             return None
         self.state.last_venue_read_ts = int(time.time())
+        others_now = sum(l.qty for n, l in self.state.legs.items() if n != leg)
+        others_before = led.close_others_before
+        if others_before is None:           # a ref persisted before this field
+            others_before = others_now
         sgn = 1.0 if led.qty > 0 else -1.0
-        reduced = sgn * (led.close_net_before - net)
+        mine_before = led.close_net_before - others_before
+        mine_now = net - others_now
+        reduced = sgn * (mine_before - mine_now)
         return max(0.0, min(reduced, led.close_qty))
 
     def _settle_close_single(self, leg: str, led: LegLedger) -> bool:
@@ -4448,14 +4531,19 @@ class Executor:
         send can be transitional, and unknownOid reads as CANCELLED/0);
         then, only after CLOSE_SETTLE_MIN_AGE_S AND CLOSE_UNKNOWN_MAX_POLLS
         polls of unusable reads, the venue's own fills for the cloid; then
-        the POSITION's change since the send - a FULL move books, a partial
-        move waits (the other leg could explain it), an UNMOVED position
-        clears the ref only on an affirmative CANCELLED/0 record repeated
-        on two polls, or after CLOSE_UNKNOWN_HARD_POLLS with the position
-        unmoved twice. The verdict poll never re-sends (the caller returns);
+        the change in THIS LEG'S OWN exposure since the send (net minus the
+        other legs' ledger, _close_fill_from_position) - a FULL move books
+        once it holds on two consecutive polls, a PARTIAL move never books
+        from the position (the record or the fills settle it), an UNMOVED
+        position clears the ref only on an affirmative CANCELLED/0 record
+        on two consecutive tiebreak polls, or after CLOSE_UNKNOWN_HARD_POLLS
+        with the position unmoved twice. Any other leg's order in flight,
+        or a stop of theirs not reading OPEN, keeps the ref. The verdict
+        poll never sends or re-arms for this leg (close_verdict_seq);
         CLOSE_NEVER_MAX verdicts in a row stop re-sending for good and page
-        close_stuck. Polls are counted by _poll_seq, not by settle calls
-        (there are several per poll). Round-2 review, 2026-10-27."""
+        close_stuck (rate-limited). Polls are counted by _poll_seq, not by
+        settle calls (there are several per poll; only the first read of a
+        poll feeds the verdict). Rounds 2-3 of review, 2026-10-27."""
         cloid = led.close_cloid
         now = time.time()
         age = now - led.close_sent_ts if led.close_sent_ts else 1e9
@@ -4490,6 +4578,9 @@ class Executor:
         # ---- tiebreak, once per poll ------------------------------------
         if not new_poll:
             return False
+        # an affirmative record is counted per POLL and must repeat: one
+        # CANCELLED/0 read after unusable ones used to be enough (round 3)
+        led.close_affirm_polls = led.close_affirm_polls + 1 if affirmative_zero else 0
         fp = getattr(self.venue, "fill_pnl", None)
         if callable(fp):
             try:
@@ -4500,8 +4591,22 @@ class Executor:
             if q > 0.0:
                 self._book_close_fill(leg, led, q, "venue fills")
                 return True
+        # another leg's order in flight, or a stop of theirs that does not
+        # read OPEN, makes any position move ambiguous: ref kept
         for n_, l in self.state.legs.items():
-            if n_ == leg or abs(l.qty) <= 1e-9 or not l.stop_cloid:
+            if n_ == leg or abs(l.qty) <= 1e-9:
+                continue
+            if l.close_cloid or l.reest_cloid:
+                self._event("RED", "close_unconfirmed",
+                            f"{leg} close {cloid} unconfirmed for {n} poll(s) "
+                            f"and {n_} has an order in flight "
+                            f"({l.close_cloid or l.reest_cloid}): a position "
+                            f"move could be its fill, not this close's - "
+                            f"ref kept; settling next poll")
+                led.close_moved_polls = 0
+                self._save_state()
+                return False
+            if not l.stop_cloid:
                 continue
             st_o = self.venue.order_status(l.stop_cloid)
             if (st_o or {}).get("status") != "OPEN":
@@ -4511,10 +4616,12 @@ class Executor:
                             f"{(st_o or {}).get('status') or 'unreadable'}: a "
                             f"position move could be its fill, not this "
                             f"close's - ref kept; settling next poll")
+                led.close_moved_polls = 0
                 self._save_state()
                 return False
-        moved = self._close_fill_from_position(led)
+        moved = self._close_fill_from_position(leg, led)
         if moved is None:
+            led.close_moved_polls = 0
             self._event("RED", "close_unconfirmed",
                         f"{leg} close {cloid} unconfirmed for {n} poll(s) and "
                         f"the venue position is unreadable - ref kept; "
@@ -4522,31 +4629,48 @@ class Executor:
             self._save_state()
             return False
         if moved >= led.close_qty - 1e-9:
+            led.close_unmoved_polls = 0
+            led.close_moved_polls += 1
+            if led.close_moved_polls < 2:
+                # another leg's stop fires in the instant it still reads
+                # OPEN ('triggered'): one look cannot tell its fill from
+                # this close's when the sizes match. Two polls cannot both
+                # sit inside that instant, and by the second its record
+                # reads FILLED (round-3 review)
+                self._event("RED", "close_unconfirmed",
+                            f"{leg} close {cloid} unconfirmed for {n} poll(s); "
+                            f"this leg's venue exposure moved the full "
+                            f"{led.close_qty} since the send - booked on the "
+                            f"next poll's look if it still holds")
+                self._save_state()
+                return False
             self._event("WARN", "close_settled_by_position",
                         f"{leg} close {cloid}: status {status or 'unreadable'} "
-                        f"filled {filled} after {age:.0f}s; the venue net "
-                        f"moved {moved} of {led.close_qty} in our direction "
-                        f"since the send - booking the full close")
+                        f"filled {filled} after {age:.0f}s; this leg's venue "
+                        f"exposure moved {moved} of {led.close_qty} in our "
+                        f"direction since the send, on two polls - booking "
+                        f"the full close")
             self._book_close_fill(leg, led, moved, "position change")
             return True
+        led.close_moved_polls = 0
         if moved > 1e-9:
             led.close_unmoved_polls = 0
-            if n >= CLOSE_UNKNOWN_HARD_POLLS:
-                self._event("RED", "close_settled_by_position",
-                            f"{leg} close {cloid}: {n} polls unusable; the "
-                            f"venue net moved {moved} of {led.close_qty} - "
-                            f"booking that as the fill (bounded tiebreak)")
-                self._book_close_fill(leg, led, moved, "position change")
-                return True
+            # NEVER a partial from the position alone (round-3 review): a
+            # partial move is also what another leg's not-yet-booked change
+            # looks like, and booking it re-closed the remainder into that
+            # leg's exposure. The record or the venue's fills settle a
+            # partial; until then the ref stays and this pages every poll
             self._event("RED", "close_unconfirmed",
                         f"{leg} close {cloid} unconfirmed for {n} poll(s); "
-                        f"the venue net moved {moved} of {led.close_qty} - "
-                        f"ambiguous, ref kept; settling next poll")
+                        f"this leg's venue exposure moved {moved} of "
+                        f"{led.close_qty} - a partial move is ambiguous, ref "
+                        f"kept; the order record or the venue's fills settle "
+                        f"it")
             self._save_state()
             return False
         # unmoved
         led.close_unmoved_polls += 1
-        verdict = (affirmative_zero and led.close_unmoved_polls >= 2) or \
+        verdict = (led.close_affirm_polls >= 2 and led.close_unmoved_polls >= 2) or \
             (n >= CLOSE_UNKNOWN_HARD_POLLS and led.close_unmoved_polls >= 2)
         if not verdict:
             self._event("RED", "close_unconfirmed",
@@ -4558,14 +4682,21 @@ class Executor:
             return False
         led.close_never_n += 1
         if led.close_never_n > CLOSE_NEVER_MAX:
+            # recovery (round-3 review): a hand close alone is booked from
+            # the position change on the next two polls and resets this
+            # budget; a restart does NOT (the count is persisted on
+            # purpose), and /resume?adopt_venue=1 refuses while another
+            # leg is held - the old text sent the operator to flatten the
+            # healthy leg
             self._event("RED", "close_stuck",
                         f"{leg} close {cloid}: {led.close_never_n} consecutive "
                         f"closes the venue reports as never happened "
                         f"(status {status or 'unreadable'}, net unmoved) - NO "
                         f"further close is sent; the leg is stopless. Close "
-                        f"{led.qty} by hand on {self._venue_label()} and "
-                        f"/resume?adopt_venue=1, or restart once the venue "
-                        f"answers")
+                        f"{led.qty} by hand on {self._venue_label()}: the "
+                        f"next polls book it from the position change, no "
+                        f"/resume needed. /resume?adopt_venue=1 fits only a "
+                        f"FLAT venue (it refuses while another leg is held)")
             self._save_state()
             return False
         self._event("RED", "close_never_happened",
@@ -4573,10 +4704,17 @@ class Executor:
                     f"{status or 'unreadable'}, no venue fill, net unmoved on "
                     f"{led.close_unmoved_polls} polls - treated as never "
                     f"placed ({led.close_never_n}/{CLOSE_NEVER_MAX}); ref "
-                    f"cleared, re-sent next poll after a fresh corroboration")
+                    f"cleared; nothing is sent for this leg until the next "
+                    f"poll corroborates afresh")
         led.clear_close()
+        # the verdict poll never sends or re-arms for this leg: _close_leg
+        # and _maintain_stop check this seq. The old `return False` bound
+        # only the head-guard caller; the top-of-leg settle in _sync_leg
+        # discards the return and _close_leg then sent against the very
+        # read just judged unmoved (round-3 review)
+        led.close_verdict_seq = self._poll_seq
         self._save_state()
-        return False                     # never re-send in the verdict poll
+        return False
 
     def _under_mirrored(self, leg: str, led: LegLedger, blend: dict,
                         equity: float) -> bool:
@@ -4682,8 +4820,11 @@ class Executor:
             self._event("RED", "close_backing_blind",
                         f"{leg} exit requested but the venue position is "
                         f"UNREADABLE - cancelling nothing and closing "
-                        f"nothing; the stop stays armed and this retries "
-                        f"next poll")
+                        f"nothing; "
+                        + ("the stop stays armed" if led.stop_cloid else
+                           f"the {led.qty} residue is STOPLESS until the "
+                           f"venue answers")
+                        + " and this retries next poll")
             return
         if verdict == "diverged":
             # SECOND LOOK BEFORE HALTING ON WHAT IS ONLY A STOP-OUT (round 2,
@@ -4859,9 +5000,14 @@ class Executor:
         if led.qty != 0.0:
             # ONE CLOSE IN FLIGHT AT A TIME (2026-10-27, the 10-07 halt;
             # docs/HALT_2026-10-07.md). An unsettled close ref is resolved
-            # from the venue's POSITION before anything else is sent off
-            # ledger belief - the rule the opposed-book path already keeps.
+            # from the venue's own answers (record, fills, the bounded
+            # position tiebreak) before anything else is sent off ledger
+            # belief - the rule the opposed-book path already keeps.
             if led.close_cloid and not self._settle_close(leg, led):
+                return
+            if led.close_verdict_seq == self._poll_seq:
+                # a never-happened verdict this poll: the next poll
+                # corroborates afresh before any new order (round 3)
                 return
             if led.qty == 0.0:
                 return
@@ -4929,9 +5075,12 @@ class Executor:
             # leg's sign cannot be resized by the venue.
             led.close_cloid, led.close_qty = cloid, qty
             led.close_net_before, led.close_why = net, why
+            led.close_others_before = round(sum(
+                l.qty for n_, l in self.state.legs.items() if n_ != leg), 8)
             led.close_mode, led.close_sent_ts = "single", time.time()
             led.close_unknown_polls, led.close_last_seq = 0, -1
             led.close_unmoved_polls = 0      # the send poll counts as poll 1
+            led.close_affirm_polls, led.close_moved_polls = 0, 0
             self._save_state()
             # the fill watch is queued BEFORE the send: a response that
             # raises after the venue accepted the order still gets its
@@ -4949,19 +5098,26 @@ class Executor:
                             f"{exc}) - it may still have filled; ref kept, "
                             f"settling from the record next poll; the stop "
                             f"was already cancelled")
+                # the send poll counts as poll 1 on this path too (no
+                # settle runs after a raise; round-3 review)
+                led.close_last_seq, led.close_unknown_polls = self._poll_seq, 1
+                self._save_state()
                 return
             fill = (resp or {}).get("filled_qty") if isinstance(resp, dict) else None
             try:
                 fill = float(fill) if fill is not None else None
             except (TypeError, ValueError):
                 fill = None
-            if fill is not None and 0.0 <= fill <= qty + 1e-9 \
+            if fill is not None and fill > 0.0 and fill <= qty + 1e-9 \
                     and not (resp or {}).get("resting"):
                 self._book_close_fill(leg, led, fill, "send response")
                 return
-            # no usable answer (the Coinbase adapter, a parse failure): the
-            # order record settles a FULL fill in this same poll; anything
-            # less waits (_settle_close_single pages and bounds it)
+            # no usable answer (the Coinbase adapter, a parse failure, or an
+            # explicit ZERO - never an affirmative answer on its own, round
+            # 3: booking it cleared the ref and re-sent every poll with no
+            # RED and no bound): the order record settles a FULL fill in
+            # this same poll; anything less waits (_settle_close_single
+            # pages and bounds it)
             self._settle_close(leg, led)
             return
 

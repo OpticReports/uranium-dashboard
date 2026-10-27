@@ -346,6 +346,11 @@ def test_gate_unknown_streak_is_settled_from_the_position_change(tmp_path, clock
     for _ in range(1 + mirror.CLOSE_UNKNOWN_MAX_POLLS):   # ages 0, 20, 40
         _poll(ex, clock, target(trend=trend_tl))
     p = ex.state.legs["pullback"]
+    # round 3: a full move books only when it holds on TWO tiebreak polls
+    # (another leg's stop reads OPEN in the instant it fires)
+    assert p.qty == PULL and p.close_cloid and p.close_moved_polls == 1
+    assert "close_settled_by_position" not in _kinds(ex, n0)
+    _poll(ex, clock, target(trend=trend_tl))      # age 60: the second look
     assert p.qty == 0.0 and p.close_cloid is None
     assert "close_settled_by_position" in _kinds(ex, n0)
     reds = [e for e in ex.state.events[n0:] if e["kind"] == "close_unconfirmed"]
@@ -463,15 +468,42 @@ def test_gate_exit_flag_branch_leaves_no_orphan_stop(tmp_path, clock):
     """The send raises after the venue accepted and filled. On the engine's
     exit_flag branch stop maintenance runs before the close each poll: with
     the ref open it must NOT re-arm a stop that would rest on the other
-    leg's exposure once the close books (round 2, probe f)."""
-    v = RaiseAfterAcceptVenue()
+    leg's exposure once the close books (round 2, probe f). Round 3: the
+    window is only exercised when the position read is STALE (a fresh read
+    diverges and the second look books the close first), so the record is
+    unusable and the position lags for three polls here."""
+    class StaleRaise(RaiseAfterAcceptVenue):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            self._pre, self.stale_left = None, 0
+
+        def place_market(self, side, qty, cloid, reduce_only=False):
+            if cloid.endswith("-X"):
+                self._pre, self.stale_left = self._true_position(), 3
+            return super().place_market(side, qty, cloid, reduce_only=reduce_only)
+
+        def order_status(self, cloid):
+            if cloid.endswith("-X") and self.stale_left > 0:
+                return {"status": "UNKNOWN", "filled_qty": 0.0, "avg_price": None}
+            return super().order_status(cloid)
+
+        def position(self):
+            if self.stale_left > 0:
+                return self._pre
+            return super().position()
+    v = StaleRaise()
     flagged = _pos(side="L", stop=STOP, flag="SIGNAL")
     ex, trend_tl = _book(tmp_path, v, pull_tl=_pos(side="L", stop=STOP))
     n0 = len(ex.state.events)
-    _poll(ex, clock, target(pull=flagged, trend=trend_tl))
     p = ex.state.legs["pullback"]
-    assert "close_rejected" in _kinds(ex, n0) and p.close_cloid
-    _poll(ex, clock, target(pull=flagged, trend=trend_tl))
+    placed0 = len([c for c in v.calls if c[0] == "STOP" and c[3].startswith("P-")])
+    for k in range(5):
+        _poll(ex, clock, target(pull=flagged, trend=trend_tl))
+        if k == 0:
+            assert "close_rejected" in _kinds(ex, n0) and p.close_cloid
+        placed = len([c for c in v.calls if c[0] == "STOP" and c[3].startswith("P-")])
+        assert placed == placed0, "a stop was re-armed with the close in flight"
+        v.stale_left -= 1
     assert p.qty == 0.0 and p.close_cloid is None and p.stop_cloid is None
     orphans = [c for c, o in v.orders.items()
                if c.startswith("P-") and o["type"] == "STOP" and o["status"] == "OPEN"]
