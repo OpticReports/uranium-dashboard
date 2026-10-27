@@ -187,9 +187,14 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
 - **Hypothesis:** the combined-flag call book with a 200dma prior-close XBI
   regime gate and 3.0xATR trailing exits (no fixed target, 90d time stop)
   produces materially better risk-adjusted results than the live fixed
-  3:1-target engine — replay: $430,406 / +14.73% CAGR / 35.6% maxDD /
-  0.73 Sharpe vs V0's 0.42 and V2's 0.58 (double-baseline survivor, 2/3
-  sub-periods; its one miss is 2023-2026 vs V2).
+  3:1-target engine — replay: $469,242 / +15.67% CAGR / 35.6% maxDD /
+  0.76 Sharpe vs V0's 0.42 and V2's 0.58 (double-baseline survivor).
+  Re-based 2026-10-04 on the committed FMP cache; the Yahoo-basis replay
+  read $430,406 / +14.73% / 0.73 and beat both baselines in 2/3
+  sub-periods (its miss was 2023-2026 vs V2); on the re-based cache it
+  beats them in 3/3, because the +9% move landed in that window. The
+  full-period verdict is unchanged; that sub-period cell is the one place
+  the re-basing flattered R2-A (docs/REBASE_FMP_LANE_2026-10-04.md).
 - **Prediction:** live observe-only tracking of the same construction shows
   higher R expectancy and shallower book drawdown than the production
   engine's graded record over the same window.
@@ -230,6 +235,11 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
 - **Implement:** no action until H11's shadow-graded live record exists; then
   an allocation memo, not an engine change. Weights were swept post-hoc —
   the claim is the plateau, never a point weight.
+- **Re-based 2026-10-04:** the 30/70 baseline on the committed FMP cache is
+  +16.17% trading-day CAGR / 29.4% maxDD / 1.04 Sharpe (was +15.89% / 29.3%
+  / 1.02 on the Yahoo basis); the correlation and blend numbers below were
+  measured on the Yahoo-basis sleeve, which rounds 4-6 still read
+  (archived as `r2a_daily_yahoo_2026-08.json`). Plateau claim unchanged.
 - **Source:** docs/BACKTEST_VARIANTS_R2.md (R2-A) + correlation/blend
   analysis 2026-08-20 (this entry). Inherits every replay caveat.
 - **Status:** proposed (blocked on H11). Round-3 notes: BIL-on-idle-cash is
@@ -299,3 +309,122 @@ and whether the market agreed._
   whether the $100k is new money, and rho(R2-A, barbell) measured on the
   Render host where bars are cached. Standing: no money moves on this
   study; it is an allocation memo, not an engine change.
+  KILL CRITERIA for the live book (2026-10-05, 38 days after go-live):
+  ibkr-executor/ledger.csv — book-level REVIEW lines at 25% and 35%
+  drawdown (the 35% is a SPY-regime event, P = 12.4% per decade under the
+  replay) and at 30 months under water; a SLEEVE model-risk KILL at 45%
+  transfer-adjusted sleeve drawdown, written but NOT ARMED until the
+  executor can measure it; a process kill on an unreconciled position row.
+  Basis = the committed executor-fidelity replay (book 28.3% realized,
+  p50 26.3% / p95 40.1%; sleeve 29.4%, p50 33.4% / p95 52.2%).
+
+### H14 — The ratchet-up-only trail, not execution, is the executor-vs-paper gap
+- **Hypothesis:** the live stop rule (trail never lowered after an ATR
+  expansion — the tracker's shadow grader AND the executor's guard) costs
+  the R2-A book most of the 5.5 pp/yr gap the executor-fidelity replay
+  measured against the paper engine, whose trail is recomputed from the
+  peak and the prior-bar ATR every day and FALLS when ATR expands.
+- **Evidence (round 9 exit-rule ablation, pre-registered, two counter-agent
+  rounds, 2026-10-04):** flipping only the ratchet explains 1.02 of the gap
+  forward and 0.76 backward (3/3 sub-periods both ways); paired Sharpe
+  interval of record (10,000 draws) forward [−0.397, −0.019], backward
+  [−0.009, +0.357] — the backward side spans zero by 0.009; removing the
+  ratchet from the executor adds 2.8 pp of max DD (> the 2 pp bar).
+  **Null under the contract: no proposal.** Mechanism: the ratchet pins the
+  stop at the pre-expansion distance exactly as a catalyst approaches and
+  the stock starts swinging; it trims the right tail, not the left (gap
+  fills land wherever the stop sits), and earlier exits churn cap slots
+  (658 vs 600 trades). Docs: BACKTEST_EXECUTOR_MIRROR.md (round 9),
+  VARIANTS_PREREGISTRATION_R9_EXIT_ABLATION.md.
+- **Implement:** observe-only. Every live auto-call is now ALSO graded under
+  the identical trailing engine with the ratchet removed
+  (`ShadowGrade.engine = trailing_3atr_noratchet`); the paired record is
+  `h14_ratchet` on `GET /shadow/track-record`. Nothing reads those rows for
+  a level (the executor intents filter on `trailing_3atr`); the live stop
+  rule is unchanged, and so is its data-bug guard.
+- **What the live record tests (pre-registered 2026-10-04):** the EXIT
+  MECHANISM on the same calls, i.e. round 9's BACKWARD arm (executor minus
+  the ratchet: share 0.76, Sharpe CI [−0.009, +0.357]) — not the 5.5 pp CAGR
+  gap, whose slot-churn channel and counterfactual trade set are invisible
+  to a per-call comparison. A positive paired ΔR is NECESSARY, not
+  sufficient, for any rule change. The shadow engine reproduces only the
+  campaign's ratchet convention; entry, entry-bar stop and time-stop anchor
+  stay the shadow book's (shared by both engines, so they do not bias the
+  pair).
+- **Statistic and reading rule:** matured, integrity-checked pairs only
+  (`h14_ratchet` on `GET /shadow/track-record`: call_date + 97 days < as-of,
+  ratchet grade reproduced from current bars). Primary statistic: mean
+  paired ΔR on DIVERGENT pairs with a one-sided bootstrap interval, plus
+  the sign count (no-ratchet better vs ratchet better). The record says
+  NOTHING below ~30 divergent pairs (≈300 matured pairs at the replay's
+  ≳10% exit-divergence rate; at 100 matured pairs it is a mechanism check,
+  not a test). An early read is biased AGAINST the no-ratchet rule with a
+  definite sign; never read `paired_delta_r` from an immature cohort.
+- **Fire rate (host DB, 2026-10-05):** 27 auto-calls since the book went
+  live — Jul 9, Aug 6, Sep 12 — about 9 a month. Horizon at that rate:
+  ~100 matured pairs (a mechanism check) by about Sep 2027, ~300 matured
+  pairs (the first real test, ~30 divergent) by about mid-2029. The 27
+  existing calls mature between Oct 2026 and Jan 2027 and give the first
+  look at whether live divergent pairs resemble the replay's (same-day lower
+  fill vs a later, higher exit). A faster fire rate shortens this; nothing
+  else does.
+- **Prediction:** on matured divergent pairs the no-ratchet grade shows a
+  higher mean R and wins the sign count; the live paired record, not the
+  replay, decides whether the rule is ever changed (a change would land in
+  BOTH the tracker's shadow grader and the executor, whose ratchet guard is
+  also a data-bug safety).
+- **Status:** observing (second shadow engine live as of 2026-10-04).
+
+### H15 — The 30% sleeve's idle cash is the cap and the gate, not the 1% sizing rule (NULL on sizing)
+- **Hypothesis (Casey, 2026-10-05: "so much of that cash is sitting around
+  doing nothing? dynamically increase the trade size based on how many open
+  trades there are?"):** H15a the live rules keep the sleeve well under
+  full deployment; H15b raising risk per entry is leverage, not edge; H15c
+  sizing by free slots does not improve Sharpe because open count is a
+  regime signal.
+- **Evidence (round 10 sizing study, pre-registered, two counter-agent
+  verifiers + re-review, 2026-10-05):** S0 (1%) deploys 37% of the sleeve
+  on average (p50 42%, p90 74%), is AT the 10-cap on 27% of days and at 0
+  open on 29% (gate off); 78% of gated fires are skipped at the cap — the
+  binding constraint is cap × notional-per-slot (≈ 74% deployed at a full
+  cap) and the gate, so H15a's "cap on a small minority of days" half was
+  REFUTED. Uniform risk 1.5/2/3%: CAGR +1.4/+1.3/+1.8 pp with max DD
+  +1.0/+2.0/+2.8 pp and Sharpe 0.966 → 0.965/0.922/0.902 (H15b CONFIRMED).
+  Slot-fill (D1): best point Sharpe 1.021 and +4.8 pp CAGR, but the
+  Bonferroni-5 interval is [−0.197, +0.276], DD +2.0 pp (at the bar), the 5y
+  sign flips at the $120k base, and 47% of the edge is four CDNA entries in
+  2017 each sized at ~30% of the sleeve (slot-fill concentrates in one name
+  when few slots are open). Inverse-occupancy (D2, Casey's form): below S0
+  on every statistic (H15c CONFIRMED). The idle cash earned $9,789 of BIL
+  carry on a $30k sleeve over 10.6 y (+0.43 pp CAGR). **NULL on all ten
+  cells under the contract: keep risk 1%.** Docs:
+  BACKTEST_EXECUTOR_MIRROR.md (round 10), VARIANTS_PREREGISTRATION_R10_SIZING.md.
+- **Implement:** nothing. The lever that moves deployment is the cap (and
+  the fire rate), which is a selection study (it changes which calls are
+  taken), not a sizing one; the kill ledger's sleeve drawdown lines were set
+  on the 1% / cap-10 rules and would need re-deriving with any change.
+- **Status:** closed (null), 2026-10-05.
+
+### H16 — One open call per symbol diversifies the sleeve at no cost (U2 ADOPTED as risk control)
+- **Hypothesis:** refusing repeat entries in a name already held, and
+  handing the slot to the next gated fire, raises book Sharpe (more
+  independent bets) and cuts single-name concentration.
+- **Evidence (round 11, pre-registered two-tier rule, two verifiers + fix +
+  re-verify, 2026-10-05):** U1 (max 1) — NULL: concentration falls hard
+  (p90 40% → 20%) but the replacement fires are weaker (mean R +0.20 →
+  +0.14), sleeve TWR CAGR −4.2 pp/yr, book −0.87 pp/yr, p5 of the Sharpe
+  delta −0.128 (floor −0.10). U2 (max 2) — PROPOSE under the RISK-CONTROL
+  (non-inferiority) tier: book level (CAGR −0.02 pp, max DD −0.2 pp, Sharpe
+  delta p50 +0.027, p5 −0.062), p90 concentration 39.9% → 27.5%, sleeve TWR
+  −1.0 pp/yr with sleeve Sharpe level. The "more independent bets" premise
+  is REFUTED as stated: repeat entries were not worse trades, so refusing
+  them does not raise return; the case is risk control only.
+- **Implement:** executor planner `MAX_PER_SYMBOL = 2` (2026-10-05); the
+  tracker may only tighten it.
+- **Decision record:** Casey, 2026-10-05, "To all next recommendations" —
+  approving the recommendation to run this study and ship the planner check
+  if it passed under the pre-registered rule. It passed under the
+  risk-control tier, so it ships with its cost stated (sleeve ~−1.0 pp/yr
+  time-weighted, book level).
+- **Status:** adopted (risk control), 2026-10-05; the live record is read at
+  R1 reviews (largest-name share of the sleeve vs the replay's 27.5% p90).

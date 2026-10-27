@@ -42,13 +42,16 @@ calls:
   # Only these flag types auto-generate a call. Long-side setups only for now
   # (the desk is usually long). A flag type may require extra conditions.
   triggers:
-    pre_catalyst_sentiment_ramp: {}
     analyst_revision_cluster:
       direction: upward            # downward clusters never generate a long call
     unusual_options_social_spike: {}
     # pullback_into_catalyst and insider_buying_cluster are OBSERVE-ONLY:
     # they fire flags whose forward returns are tracked (/flags/track-record),
     # and get promoted to call triggers only once the evidence supports it.
+    # pre_catalyst_sentiment_ramp was DEMOTED to observe-only on 2026-10-04
+    # (TUNING.md demotion gate: 1m avg excess -3.6% at n=212, hit 53.8%,
+    # Wilson 90% 0.48-0.59). The flag still fires and is still graded; it
+    # earns the trigger back only by passing the promotion gate.
 
   # Gates that a triggering flag must ALSO pass before a call is made.
   # Conservative on purpose: false positives are the main failure mode.

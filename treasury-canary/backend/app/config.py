@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     http_timeout_seconds: float = 30.0
     cache_dir: str = "./data/cache"
     cache_ttl_seconds: int = 3600            # respect FRED etc.; daily data is stable
+    # EDGAR refuses requests without a descriptive User-Agent; the SEC asks for a
+    # contact address in it. Set EDGAR_USER_AGENT on Render to add one — never
+    # hard-code an email here.
+    edgar_user_agent: str = "treasury-canary/1.0 (research dashboard)"
 
     # --- Scheduling ---
     run_scheduler: bool = True
@@ -135,7 +139,7 @@ FRED_SEVERITY: dict[str, str] = {
     "med_income": "MEHOINUSA672N",     # real median household income (a)
     # C. amplification (adds to SLOOS/HY/discount-window already live)
     "delinq_cc": "DRCCLACBS",          # credit-card delinquency rate
-    "delinq_cre": "DRSREACBS",         # CRE delinquency rate
+    "delinq_cre": "DRSREACBS",         # ALL real-estate-secured loans (not CRE-only: DRCRELEXFACBS)
     # D. policy space (adds to EFFR / interest_gdp already live)
     "fed_debt_gdp": "GFDEGDQ188S",     # federal debt / GDP
     "deficit_gdp": "FYFSGDA188S",      # federal surplus/deficit % GDP (a; negative=deficit)
@@ -150,6 +154,14 @@ FRED_SEVERITY: dict[str, str] = {
     "capex_info": "Y033RC1Q027SBEA",   # equip: information processing, $bn
     "capex_soft": "B985RC1Q027SBEA",   # software investment, $bn
     "cpi": "CPIAUCSL",                 # CPI (real-housing deflator; impact study)
+}
+# Distress panel (studies/distress-signals.md, Q-C): bank delinquency and
+# charge-off rates, quarterly, seasonally adjusted. Display + the study's rule;
+# none passed as a recession warning (all-loan charge-offs 'confirm').
+FRED_DISTRESS: dict[str, str] = {
+    "dq_all": "DRALACBS", "dq_ci": "DRBLACBS", "dq_consumer": "DRCLACBS",
+    "dq_card": "DRCCLACBS", "dq_mortgage": "DRSFRMACBS", "dq_cre": "DRCRELEXFACBS",
+    "co_all": "CORALACBS", "co_ci": "CORBLACBS", "co_card": "CORCCACBS",
 }
 # Pin board (trigger channels) — the measurable proxies for what historically
 # "pricks the bubble". (Oil/EFFR/HY/term premium/SOFR-IORB already in bundle.)

@@ -12,6 +12,18 @@ must earn a LIVE track record first. This module builds that record:
   - the XBI regime-gate state is logged daily (RegimeLog rows) on the
     PRIOR-CLOSE convention (the counter-agent-corrected form).
 
+  - H14 (round 9 exit-rule ablation, 2026-10-04): every live auto-call is
+    graded a SECOND time under the identical trailing engine with the
+    ratchet removed (the trail may FALL when ATR expands — the campaign
+    grader's RATCHET convention; its other conventions — entry at the next
+    open, no stop on the entry bar, time stop from the entry bar — are NOT
+    reproduced, so the live test is round 9's BACKWARD arm, executor minus
+    the ratchet, on the same calls). The replay said the ratchet-up-only rule carries
+    the whole executor-vs-paper gap on point estimates but did not clear the
+    pre-registered interval and drawdown bars; the live paired record
+    decides. Rows are tagged ENGINE_NORATCHET and are read by NOTHING that
+    publishes a level: the executor intents filter on ENGINE_TRAILING.
+
 NOTHING here touches the live book: call generation, live grading, the
 paper account, and every level on every call are bit-identical with this
 module present. The trailing parameters are the R2-A REGISTERED values and
@@ -37,6 +49,8 @@ logger = logging.getLogger(__name__)
 
 # R2-A registered exit parameters (docs/VARIANTS_PREREGISTRATION_R2.md).
 ENGINE_TRAILING = "trailing_3atr"
+ENGINE_NORATCHET = "trailing_3atr_noratchet"      # H14: same engine, trail may fall
+SHADOW_ENGINES = (ENGINE_TRAILING, ENGINE_NORATCHET)
 TRAIL_MULT = 3.0
 TIME_STOP_DAYS = 90  # CALENDAR days, matching the campaign contract
 
@@ -57,16 +71,24 @@ def grade_trailing(
     trail_mult: float = TRAIL_MULT,
     time_stop_days: int = TIME_STOP_DAYS,
     atr_window: int = 14,
+    ratchet: bool = True,
 ) -> CallExit | None:
     """Grade a LONG call under the R2-A trailing-stop exit engine.
+
+    `ratchet=True` (the default, and what every live level is driven by) is
+    the shadow book's rule: the trail never falls. `ratchet=False` is the
+    campaign grader's RATCHET convention only (backtest_variants_10y.
+    grade_trailing): the level is recomputed from the peak and the prior-bar
+    ATR every day and FALLS when ATR expands; the entry, the entry-bar stop
+    and the time-stop anchor stay the shadow book's. Only the H14
+    observe-only grading passes False.
 
     Conventions (campaign contract, counter-agent-verified):
     - trail = (max close since entry through the PRIOR bar)
               - trail_mult * ATR14 recomputed daily THROUGH THE PRIOR BAR —
       no same-bar information ever sets the level that grades the bar.
       `bars` should therefore include pre-entry history so the daily ATR is
-      computable; where it is not, `atr_at_entry` seeds the trail. The trail
-      RATCHETS UP ONLY — an ATR blowout never lowers a level already earned.
+      computable; where it is not, `atr_at_entry` seeds the trail. With ratchet=True (the live rule) the trail RATCHETS UP ONLY — an ATR blowout never lowers a level already earned; with ratchet=False (H14 shadow only) the level may fall.
     - Open-first gap-aware fills, exactly grade_call's philosophy: a bar that
       opens through the trail fills at the OPEN, not the level.
     - Time stop: exit at the close of the LAST bar at-or-before
@@ -84,7 +106,7 @@ def grade_trailing(
     )
     history: list[BarLike] = []   # every clean bar STRICTLY BEFORE the bar being graded
     peak = entry                  # max close since entry through the prior bar
-    trail: float | None = None    # ratchets up only
+    trail: float | None = None    # ratchets up only when ratchet=True (the live rule)
     prev: BarLike | None = None   # last post-entry bar processed
     for b in clean:
         if b.date <= entry_date:
@@ -101,7 +123,7 @@ def grade_trailing(
             atr_prior = atr_at_entry
         if atr_prior is not None and atr_prior > 0:
             level = peak - trail_mult * atr_prior
-            trail = level if trail is None else max(trail, level)
+            trail = level if (trail is None or not ratchet) else max(trail, level)
         if trail is not None:
             if b.open is not None and b.open <= trail:
                 return CallExit("stopped", b.date, b.open)
@@ -192,18 +214,22 @@ def evaluate_shadow_calls(session: Session, asof: date | None = None) -> list[Sh
     atr_window = risk_cfg.get("atr_window", 14)
     stop_atr_mult = risk_cfg.get("stop_atr_mult", 3.0)
 
-    graded_ids = {
-        g.call_id
-        for g in session.exec(
-            select(ShadowGrade).where(ShadowGrade.engine == ENGINE_TRAILING)
-        ).all()
+    graded: dict[str, set[int]] = {
+        eng: {
+            g.call_id
+            for g in session.exec(select(ShadowGrade).where(ShadowGrade.engine == eng)).all()
+        }
+        for eng in SHADOW_ENGINES
     }
     calls = session.exec(select(TradeCall).where(TradeCall.source == "auto_flag")).all()
 
     made: list[ShadowGrade] = []
     dirty = False
     for call in calls:
-        if call.id in graded_ids or call.direction != "long":
+        if call.direction != "long":
+            continue
+        todo = [eng for eng in SHADOW_ENGINES if call.id not in graded[eng]]
+        if not todo:
             continue
         if call.atr_at_entry is None:
             value = _backfill_atr_at_entry(session, call, atr_window, stop_atr_mult)
@@ -212,38 +238,40 @@ def evaluate_shadow_calls(session: Session, asof: date | None = None) -> list[Sh
                 session.add(call)
                 dirty = True
         bars = _bars_for(session, call.symbol, call.call_date - timedelta(days=atr_window * 3))
-        exit_ = grade_trailing(
-            bars, call.entry_price, call.call_date, call.atr_at_entry,
-            TRAIL_MULT, TIME_STOP_DAYS, atr_window,
-        )
-        if exit_ is None:
-            # Same data-gap failsafe as evaluate_calls: a long gap past the
-            # time-stop must not leave the shadow position open forever.
-            deadline = call.call_date + timedelta(days=TIME_STOP_DAYS)
-            post = [b for b in bars if b.date > call.call_date and b.close is not None]
-            if asof > deadline + timedelta(days=7) and post:
-                exit_ = CallExit("expired", post[-1].date, post[-1].close)
+        for eng in todo:
+            exit_ = grade_trailing(
+                bars, call.entry_price, call.call_date, call.atr_at_entry,
+                TRAIL_MULT, TIME_STOP_DAYS, atr_window,
+                ratchet=(eng == ENGINE_TRAILING),
+            )
             if exit_ is None:
-                continue
-        made.append(ShadowGrade(
-            call_id=call.id,
-            engine=ENGINE_TRAILING,
-            status=exit_.status,
-            exit_date=exit_.exit_date,
-            exit_price=round(exit_.exit_price, 4),
-            r_multiple=call_r_multiple(
-                call.direction, call.entry_price, call.stop_price, exit_.exit_price
-            ),
-        ))
-        session.add(made[-1])
+                # Same data-gap failsafe as evaluate_calls: a long gap past the
+                # time-stop must not leave the shadow position open forever.
+                deadline = call.call_date + timedelta(days=TIME_STOP_DAYS)
+                post = [b for b in bars if b.date > call.call_date and b.close is not None]
+                if asof > deadline + timedelta(days=7) and post:
+                    exit_ = CallExit("expired", post[-1].date, post[-1].close)
+                if exit_ is None:
+                    continue
+            made.append(ShadowGrade(
+                call_id=call.id,
+                engine=eng,
+                status=exit_.status,
+                exit_date=exit_.exit_date,
+                exit_price=round(exit_.exit_price, 4),
+                r_multiple=call_r_multiple(
+                    call.direction, call.entry_price, call.stop_price, exit_.exit_price
+                ),
+            ))
+            session.add(made[-1])
     if made or dirty:
         session.commit()
         for g in made:
             session.refresh(g)
     if made:
         logger.info(
-            "Shadow-graded %d call(s) under %s: %s",
-            len(made), ENGINE_TRAILING, [(g.call_id, g.status) for g in made],
+            "Shadow-graded %d call(s): %s",
+            len(made), [(g.call_id, g.engine, g.status) for g in made],
         )
     return made
 
@@ -280,7 +308,84 @@ def log_regime(session: Session) -> RegimeLog | None:
     return row
 
 
-def shadow_track_record(session: Session) -> dict:
+def _h14_block(session: Session, calls: list, grades: dict, asof: date, side) -> dict:
+    """H14: the SAME calls graded with and without the ratchet, on MATURED
+    calls only. The no-ratchet engine never exits earlier than the ratchet
+    engine (its level is <= the ratcheted level every day), so pairs that
+    exist while a cohort is young are enriched for same-day lower fills and
+    quick follow-through — a read before maturity is biased AGAINST the
+    no-ratchet rule with a definite sign (counter-agent, 2026-10-04). A call
+    is matured once the time stop plus the data-gap failsafe has passed:
+    both engines are then necessarily graded. Each matured pair is also
+    checked for INTEGRITY: the ratchet grade is recomputed from today's bars
+    and the pair counts only if it reproduces the stored row (the ingester
+    revises bars inside a 7-day lookback, and the no-ratchet cohort was
+    back-filled from later bars than the ratchet rows). Observe-only;
+    nothing reads these rows for a level."""
+    risk_cfg = calls_config().get("risk", {})
+    atr_window = risk_cfg.get("atr_window", 14)
+    noratchet = {
+        g.call_id: g
+        for g in session.exec(
+            select(ShadowGrade).where(ShadowGrade.engine == ENGINE_NORATCHET)
+        ).all()
+    }
+    by_id = {c.id: c for c in calls if c.direction == "long"}
+    matured = {i for i, c in by_id.items()
+               if c.call_date + timedelta(days=TIME_STOP_DAYS + 7) < asof}
+    stable: list[tuple] = []
+    unstable = 0
+    for i in sorted(matured):
+        if i not in grades or i not in noratchet:
+            continue
+        c, r, n = by_id[i], grades[i], noratchet[i]
+        bars = _bars_for(session, c.symbol, c.call_date - timedelta(days=atr_window * 3))
+        again = grade_trailing(bars, c.entry_price, c.call_date, c.atr_at_entry,
+                               TRAIL_MULT, TIME_STOP_DAYS, atr_window)
+        if (again is not None and again.exit_date == r.exit_date
+                and abs(round(again.exit_price, 4) - r.exit_price) < 1e-9):
+            stable.append((r, n))
+        else:
+            unstable += 1
+    deltas = [(n.r_multiple - r.r_multiple)
+              for r, n in stable if r.r_multiple is not None and n.r_multiple is not None]
+    divergent = [(r, n) for r, n in stable
+                 if not (r.exit_date == n.exit_date and abs(r.exit_price - n.exit_price) < 1e-9)]
+    div_deltas = [(n.r_multiple - r.r_multiple) for r, n in divergent
+                  if r.r_multiple is not None and n.r_multiple is not None]
+    return {
+        "engines": [ENGINE_TRAILING, ENGINE_NORATCHET],
+        "as_of": asof,
+        "maturity_rule": f"call_date + {TIME_STOP_DAYS} + 7 days < as_of",
+        "n_pairs": len(stable),
+        "n_divergent_pairs": len(divergent),
+        "n_identical_exit": len(stable) - len(divergent),
+        "unstable_pairs": unstable,
+        "n_immature": sum(1 for i in by_id if i not in matured),
+        "matured_unpaired": sum(1 for i in matured if i not in grades or i not in noratchet),
+        "invariant_violations": sum(1 for i in noratchet if i not in grades),
+        ENGINE_TRAILING: side([r.r_multiple for r, _ in stable], [r.status for r, _ in stable]),
+        ENGINE_NORATCHET: side([n.r_multiple for _, n in stable], [n.status for _, n in stable]),
+        "paired_delta_r": {
+            "avg": (sum(deltas) / len(deltas)) if deltas else None,
+            "total": sum(deltas) if deltas else None,
+            "avg_on_divergent": (sum(div_deltas) / len(div_deltas)) if div_deltas else None,
+            "n_noratchet_better": sum(1 for d in div_deltas if d > 0),
+            "n_ratchet_better": sum(1 for d in div_deltas if d < 0),
+        },
+        "reading_rule": (
+            "matured, integrity-checked pairs only; the record says nothing below ~30 "
+            "divergent pairs (HYPOTHESES.md H14); this is round 9's BACKWARD arm (executor "
+            "minus the ratchet) and tests the exit mechanism, not the CAGR gap"
+        ),
+        "note": (
+            "H14 (round 9 ablation): same calls, same engine, trail allowed to FALL "
+            "when ATR expands vs ratchet-up-only; observe-only, decides nothing by itself"
+        ),
+    }
+
+
+def shadow_track_record(session: Session, asof: date | None = None) -> dict:
     """Per-engine comparison on the SAME calls — the H11 live evidence.
 
     Only CLOSED PAIRS (live call closed AND shadow graded) enter the
@@ -288,6 +393,7 @@ def shadow_track_record(session: Session) -> dict:
     Hit = R > 0 on both sides (same basis both engines). Pending buckets
     make the independence visible; regime carries H8's gate log summary.
     """
+    asof = asof or date.today()
     calls = session.exec(select(TradeCall).where(TradeCall.source == "auto_flag")).all()
     grades = {
         g.call_id: g
@@ -309,10 +415,13 @@ def shadow_track_record(session: Session) -> dict:
             "by_status": counts,
         }
 
+    h14 = _h14_block(session, calls, grades, asof, _side)
+
     regime_rows = session.exec(select(RegimeLog)).all()
     latest_regime = max(regime_rows, key=lambda r: r.date) if regime_rows else None
     return {
         "engine": ENGINE_TRAILING,
+        "h14_ratchet": h14,
         "params": {"trail_mult": TRAIL_MULT, "time_stop_days": TIME_STOP_DAYS},
         "closed_pairs": {
             "n": len(pairs),

@@ -76,7 +76,7 @@ import os
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field, fields
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -90,6 +90,14 @@ CASH_VEHICLE = "BIL"
 TARGET_SLEEVE = 0.30
 BAND = 0.05
 MAX_OPEN = 10
+# Per-symbol limit (round 11, 2026-10-05; VARIANTS_PREREGISTRATION_R11_PER_SYMBOL.md):
+# at most this many open calls in one name. A repeat fire beyond it is
+# skipped and consumes no cap slot, so the slot goes to the next gated fire.
+# Adopted as RISK CONTROL on non-inferiority (U2): p90 largest-name share of
+# the sleeve 39.9% -> 27.5% on the replay, book Sharpe delta interval spans
+# zero (no return improvement is claimed). The tracker may override it via
+# book_params.max_per_symbol (an int >= 1).
+MAX_PER_SYMBOL = 2
 RISK_FRAC = 0.01
 TIME_STOP_DAYS = 90
 MIN_ORDER_USD = 50.0        # dust guard: never emit orders smaller than this
@@ -143,6 +151,85 @@ CASH_SKIP_WARN_S = 6 * 3600.0   # the cash reconcile skipped this long for
                                 # one reason -> say so once a day (round 3:
                                 # a parked unreconciled exit had suspended it
                                 # forever, silently)
+# CASH ADOPTION, stage 2 (2026-10-05, Casey: "resize the positions and the
+# strategy" after a deposit). The book's capital is its LEDGER, seeded once
+# from BLEND_BOOK_USD; cash that lands in the account later is invisible to
+# it (stage 1 only alerts) and BLEND_BOOK_USD is read only at the seed, so
+# a live book had no way to grow. Adoption is CONFIRM-ONLY: the operator
+# journals an AMOUNT (POST /blend/cash/adopt, EXEC_TOKEN); the LOOP thread
+# executes it on a quiet cycle, only after the venue confirms the account
+# holds at least that much cash the book does not own, only when
+# BLEND_BUDGET can hold the larger book, and only once the venue says that
+# much is available to trade (a cash account's T+1 settlement, a deposit
+# hold). A drift measurement alone never moves the ledger: a number the
+# operator never typed is never adopted. The adopted cash is split by the
+# book's PERSISTED sleeve target and the same cycle's step() deploys it
+# through the existing core-buy / BIL-sweep path - no new order kinds.
+CAPITAL_ADOPT_TOL_USD = 1.0        # venue-vs-request tolerance (rounding)
+CAPITAL_REQUEST_TTL_S = 5 * 86_400.0   # a request older than this expires
+                                       # unexecuted (covers a T+1 settlement
+                                       # across a long weekend): re-issue it
+CAPITAL_REQUEST_MAX_USD = 5_000_000.0  # endpoint sanity bound - a typo
+                                       # guard, not a limit (raise it
+                                       # deliberately, with a review)
+CAPITAL_EVENTS_MAX = 1000              # persisted capital events kept (the
+                                       # deposit rows are the tripwire
+                                       # bootstrap's flows: never truncate
+                                       # them in a book's lifetime)
+# KILL-LEDGER TRIPWIRES (2026-10-05; ibkr-executor/ledger.csv). ALERT-ONLY:
+# nothing here halts, sells or blocks - every line in the ledger names a
+# human action, and the code's only job is to make the line OBSERVABLE and
+# to page when it is crossed. Drawdowns are read on FLOW-ADJUSTED indices
+# (chain-linked across adopted deposits for the book; across rebalance
+# transfers and the sleeve share of deposits for the sleeve), so a deposit
+# is never a new high and a transfer is never a loss.
+TRIP_BOOK_REVIEW_DD = 0.25        # ledger: REVIEW, book drawdown
+TRIP_BOOK_REGIME_DD = 0.35        # ledger: REGIME REVIEW, book drawdown
+TRIP_SLEEVE_KILL_DD = 0.45        # ledger: MODEL-RISK KILL, sleeve (level =
+                                  # Casey's call at arming; 0.52 ~ p95)
+TRIP_UNDERWATER_DAYS = 913        # ledger: >= 30 calendar months under water
+TRIP_UNRECONCILED_SESSIONS = 3    # ledger: PROCESS KILL, record age (sessions)
+TRIP_MIN_BASE_USD = 100.0         # a series base below this holds the index
+TRIP_REARM_PP = 0.05              # a DD line re-arms once the drawdown has
+                                  # recovered this far below its level (or at
+                                  # a new high) - one page per crossing
+# Overnight core buy (2026-10-05): a CORE_BUY planned while the regular
+# session is CLOSED rests as a MKT order for the open and fills at the
+# opening price, not at the quote it was sized on. Sized to the core cash
+# with under one share of slack, a gap-up at the open makes it cost more
+# than the bucket holds (a cash account may reject it). Size it at this
+# much above the quote; the next in-session cycle buys what is left.
+CORE_BUY_OVERNIGHT_HEADROOM = 0.01
+# MARKET-BUY CUSHION + SLEEVE CASH RESERVE (2026-10-26).
+# OBSERVED: from 2026-10-07 every BIL sweep - a MKT BUY sized to every whole
+# share of idle sleeve cash, under one share of slack - came back from IBKR
+# PendingSubmit -> Inactive in 0.8 s with errorCode 0, no message, no hold
+# reason; the status then read Cancelled and IB answered the executor's
+# cleanup cancel with 161 (Render log 2026-10-19, BIL x56, permId
+# 2127961299). INFERRED (ib_async 2.1 treats Inactive as done, so the client
+# could not have set Cancelled): IBKR killed the order itself. Each re-plan
+# asked for the same 56 shares. The first failure was the first sweep after
+# the stage-2 adoption of a deposit.
+# HYPOTHESIS, NOT CONFIRMED: the adoption turned the account's spare
+# (un-owned) cash into book cash, and a cash-account credit check wants a
+# margin above a market order's value (forum reports: ~5%) that the spare
+# cash used to absorb. Against it: IBKR usually names a funds refusal (error
+# 201 with text) and none appears in the 2026-10-19 Render log. The order's
+# own message in the IBKR app (permId 2127961299) is the decisive input.
+# These constants make buys SMALLER (and in session sell 1-2 BIL to restore
+# the reserve), so they are safe either way, and the refusal note below (a
+# yes/no on AvailableFunds at this margin) separates the causes next time:
+#   * every market BUY of SPY or BIL is sized MKT_BUY_CUSHION above the price
+#     it is sized on; and
+#   * SLEEVE_CASH_RESERVE_FRAC of sleeve equity is held back from the sweep
+#     and restored by the in-session BIL raise, so an in-session pre-fund
+#     leaves headroom for its MOO. It does not cover a fire first funded off
+#     hours (the entry spends the reserve; any raise rests for the open),
+#     nor a night's MOOs larger than ~40% of the sleeve at a 5% margin.
+# Cost: the reserve plus the last cushion slice of the sleeve earn no T-bill
+# yield, and a core cushion slice forgoes SPY's return until the next buy.
+MKT_BUY_CUSHION = 0.05
+SLEEVE_CASH_RESERVE_FRAC = 0.02
 
 
 def _num_or_none(v):
@@ -158,6 +245,80 @@ def _valid_baseline(b):
             and _num_or_none(b.get("ledger")) is not None):
         return b
     return None
+
+
+def _parse_date(v) -> date | None:
+    try:
+        return date.fromisoformat(str(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def _finite(v, default=None):
+    f = _num_or_none(v)
+    return f if (f is not None and math.isfinite(f)) else default
+
+
+def _valid_trip_mark(m, with_flow: bool):
+    if m is None:
+        return None
+    if not isinstance(m, dict) or not isinstance(m.get("date"), str):
+        raise ValueError("mark")
+    value, index = _finite(m.get("value")), _finite(m.get("index"))
+    # an index is a ratio of book values: anything outside [1e-6, 1e6] is a
+    # hand edit or corruption, never a market move (TB17)
+    if value is None or index is None or not (1e-6 <= index <= 1e6) or value < 0:
+        raise ValueError("mark")
+    out = {"date": m["date"], "value": value, "index": index}
+    if with_flow:
+        out["flow"] = _finite(m.get("flow"), 0.0)
+    return out
+
+
+def _valid_trip(t):
+    """A persisted tripwire series is rebuilt as a NEW dict with the full key
+    set, every number finite (counter-agent TB1: a malformed subfield - a hand
+    edit, a future build's schema - used to 500 /status and the feed and
+    could page an infinite drawdown). Anything malformed -> None: the series
+    restarts (the book re-bootstraps from the equity curve) and the load
+    says so with a WARN."""
+    if t is None:
+        return None
+    try:
+        if not isinstance(t, dict):
+            raise ValueError("series")
+        hwm = _finite(t.get("hwm"))
+        if hwm is None or hwm <= 0:
+            raise ValueError("hwm")
+        if not isinstance(t.get("hwm_date"), str) or not isinstance(t.get("since"), str):
+            raise ValueError("dates")
+        closes = []
+        for c in (t.get("closes") or []):
+            if (not isinstance(c, (list, tuple)) or len(c) != 2
+                    or not isinstance(c[0], str) or _finite(c[1]) is None
+                    or _finite(c[1]) <= 0):
+                raise ValueError("closes")
+            closes.append([c[0], _finite(c[1])])
+        return {"base": _valid_trip_mark(t.get("base"), False),
+                "cur": _valid_trip_mark(t.get("cur"), True),
+                "cur_rth": _valid_trip_mark(t.get("cur_rth"), True),
+                "day_flow": _finite(t.get("day_flow"), 0.0),
+                "hwm": hwm, "hwm_date": t["hwm_date"], "since": t["since"],
+                "closes": closes[-5:]}
+    except (ValueError, TypeError):
+        return "REJECTED"
+
+
+def _valid_capital_request(r):
+    """A journaled adoption request must carry a positive, finite amount and
+    a numeric timestamp; anything else is dropped at load (a malformed
+    request must never be executed, and never 500 the feed)."""
+    if not isinstance(r, dict):
+        return None
+    usd, ts = _num_or_none(r.get("usd")), _num_or_none(r.get("ts"))
+    if usd is None or ts is None or usd <= 0 or not math.isfinite(usd):
+        return None
+    return r
 
 # ENTRY SESSION WINDOW (2026-09-03). Entries are MOO orders with TIF=OPG:
 # the venue accepts them only for the NEXT opening auction and REJECTS them
@@ -640,6 +801,31 @@ class BlendState:
     last_reconcile_ts: float = 0.0   # wall clock of the last SUCCESSFUL
                                      # reconcile pass (venue-history horizon
                                      # guard, adapter review m2)
+    # Capital (stage-2 cash adoption, 2026-10-05): what the operator has put
+    # INTO the book - the seed plus every adopted deposit. The flow-adjusted
+    # basis the kill ledger's HWM lines need (a deposit is not a gain). None
+    # on a file from before the field: inferred ONCE at load from the seed
+    # config (the only capital a pre-field book can have been given).
+    capital_contributed: float | None = None
+    capital_events: list = field(default_factory=list)   # [{date, ts, kind,
+                                                         #   usd, sleeve_usd,
+                                                         #   core_usd,
+                                                         #   sleeve_target}]
+    # kill-ledger tripwires (alert-only): per series {"base": {date, value,
+    # index} | None, "cur": {...} | None, "day_flow": float, "hwm": float,
+    # "hwm_date": str, "since": str}; flows land in trip_pending_* until
+    # the next snapshot consumes them; trip_alerted: line -> bool (True =
+    # paged, re-arms to False) plus "unrec:<key>" -> True once paged
+    trip_book: dict | None = None
+    trip_sleeve: dict | None = None
+    trip_pending_book: float = 0.0
+    trip_pending_sleeve: float = 0.0
+    trip_alerted: dict = field(default_factory=dict)
+    capital_request: dict | None = None   # journaled adoption request
+                                          # {usd, ts, date}: written by the
+                                          # API thread, EXECUTED by the loop
+                                          # thread (adopt_capital), cleared
+                                          # by /kill
     mode: str = ""      # "dry:paper" | "real:paper" | "real:live" — the mode
                         # this book's fills belong to. A book built in one
                         # mode is FICTION in another (DryAdapter fills at
@@ -663,7 +849,45 @@ class Blend3070Manager:
         # ZF-7: did the archive/preserve rename actually SUCCEED? The Z-J
         # boot save below is conditional on it.
         self._evidence_preserved = False
+        self._trip_rejected: list[str] = []     # set by _load (TB8)
         self.state = self._load()
+        for _k in self._trip_rejected:
+            self._event("WARN", f"tripwire series {_k} in the state file was "
+                                f"MALFORMED and was dropped: it restarts "
+                                f"(the book re-bootstraps from the equity curve)")
+        # Set when this boot had to INFER capital_contributed (a state file
+        # with no capital fields): service startup turns it into a Telegram
+        # page, the archived_state pattern (counter-agents A3/B3: a rollback
+        # to a pre-stage-2 build drops the capital keys, and the roll-
+        # forward would otherwise re-infer the seed in silence while the
+        # book carries an adopted deposit).
+        self.capital_inferred: float | None = None
+        if self.state.initialized and self.state.capital_contributed is None:
+            # A book written before the field existed: adoptions did not
+            # exist either, so the seed (BLEND_BOOK_USD clamped by
+            # BLEND_BUDGET, exactly as step's seed branch computed it) is
+            # the only capital it was ever given. Inferred ONCE - the
+            # loop's first save persists it, so a later change to the env
+            # var cannot rewrite history. Deliberately NOT the first
+            # equity-curve point: that is a VALUE (post-commission marks),
+            # not a contribution. Recorded as a capital event of its own
+            # kind, so the record never claims it was a seed.
+            inferred = round(self._seed_book_usd(), 2)
+            self.state.capital_contributed = inferred
+            self.capital_inferred = inferred
+            self.state.capital_events.append({
+                "date": _utc_today(), "ts": int(time.time()),
+                "kind": "inferred", "usd": inferred,
+                "sleeve_usd": None, "core_usd": None,
+                "sleeve_target": self.state.sleeve_target})
+            del self.state.capital_events[:-CAPITAL_EVENTS_MAX]
+            self._event("WARN", f"capital contributed INFERRED from the seed "
+                                f"config: ${inferred:,.2f} (the state file "
+                                f"carried no capital fields - a pre-stage-2 "
+                                f"file, or a rollback dropped them). If a "
+                                f"deposit was adopted before, restore "
+                                f"capital_contributed by hand from the "
+                                f"ADOPTED page")
         if self.archived_state and self._evidence_preserved:
             # Z-J: the archive/drift branches set `halted` and rebuild the
             # book IN MEMORY only — a crash before the loop's first save()
@@ -782,6 +1006,16 @@ class Blend3070Manager:
                 prefund_date=raw.get("prefund_date", "") or "",
                 sleeve_target=_num_or_none(raw.get("sleeve_target")),
                 sleeve_target_seen=list(raw.get("sleeve_target_seen") or []),
+                capital_contributed=_num_or_none(raw.get("capital_contributed")),
+                capital_events=[e for e in (raw.get("capital_events") or [])
+                                if isinstance(e, dict)][-CAPITAL_EVENTS_MAX:],
+                capital_request=_valid_capital_request(raw.get("capital_request")),
+                trip_book=_valid_trip(raw.get("trip_book")),
+                trip_sleeve=_valid_trip(raw.get("trip_sleeve")),
+                trip_pending_book=_finite(raw.get("trip_pending_book"), 0.0),
+                trip_pending_sleeve=_finite(raw.get("trip_pending_sleeve"), 0.0),
+                trip_alerted=(raw.get("trip_alerted")
+                              if isinstance(raw.get("trip_alerted"), dict) else {}),
                 mode=stored_mode,
             )
             try:
@@ -871,6 +1105,10 @@ class Blend3070Manager:
             for k in st.stand_in_rows:
                 st.positions[k].history_gap = True
             st.events = raw.get("events", [])[-300:]
+            for _k in ("trip_book", "trip_sleeve"):
+                if getattr(st, _k) == "REJECTED":
+                    setattr(st, _k, None)
+                    self._trip_rejected.append(_k)
             return st
         except FileNotFoundError:
             return BlendState(mode=self._current_mode())
@@ -983,6 +1221,16 @@ class Blend3070Manager:
                    "prefund_date": self.state.prefund_date,
                    "sleeve_target": self.state.sleeve_target,
                    "sleeve_target_seen": self.state.sleeve_target_seen,
+                   "capital_contributed": self.state.capital_contributed,
+                   "capital_events": list(self.state.capital_events[-CAPITAL_EVENTS_MAX:]),
+                   "capital_request": self.state.capital_request,
+                   "trip_book": (_snapshot(self.state.trip_book)
+                                 if self.state.trip_book else None),
+                   "trip_sleeve": (_snapshot(self.state.trip_sleeve)
+                                   if self.state.trip_sleeve else None),
+                   "trip_pending_book": self.state.trip_pending_book,
+                   "trip_pending_sleeve": self.state.trip_pending_sleeve,
+                   "trip_alerted": _snapshot(self.state.trip_alerted),
                    "mode": self.state.mode,
                    "events": self.state.events[-300:]}
         fd, tmp_path = tempfile.mkstemp(
@@ -1146,6 +1394,377 @@ class Blend3070Manager:
             del curve[:-EQUITY_CURVE_MAX]
         self.save()
 
+    # ---------- kill-ledger tripwires (alert-only, 2026-10-05) ----------
+    #
+    # Each series chain-links one value per cycle. The DAY's point is
+    # FINALIZED at the UTC-day roll from the last mark taken in the REGULAR
+    # SESSION that day (else the day's last mark): the high-water mark and
+    # every ledger line read FINALIZED points only, so a transient intraday
+    # or after-hours mark (a thin name's ask) can neither set a permanent
+    # high nor page a drawdown (counter-agent TA1). Flows are attributed to
+    # the mark they arrive before; flows that land after the finalized mark
+    # (an after-hours adoption) carry into the next day.
+
+    def _trip_series_update(self, key: str, today: str, value: float,
+                            pending_attr: str) -> dict | None:
+        st = self.state
+        ser = getattr(st, key)
+        pending = getattr(st, pending_attr)
+        setattr(st, pending_attr, 0.0)
+        in_rth = regular_session_open()
+        if ser is None:
+            mark = {"date": today, "value": value, "index": 1.0, "flow": 0.0}
+            ser = {"base": None, "cur": mark,
+                   "cur_rth": dict(mark) if in_rth else None,
+                   "day_flow": 0.0, "hwm": 1.0, "hwm_date": today,
+                   "since": today, "closes": []}
+            setattr(st, key, ser)
+            self._event("INFO", f"tripwire series {key} started {today}")
+            return ser
+        cur = ser.get("cur") or {}
+        if cur and cur.get("date") != today:
+            rth = ser.get("cur_rth")
+            if rth and rth.get("date") == cur.get("date"):
+                self._trip_finalize(ser)
+            else:
+                # TC1: a UTC day with NO in-session mark (weekend, holiday,
+                # a session the loop missed) is never a close - its marks are
+                # exactly the after-hours/stale quotes the closes exclude. The
+                # base stays, every flow since it stays in day_flow, no close
+                # is appended and the HWM does not move: "two consecutive
+                # closes" means two SESSIONS.
+                ser["cur_rth"] = None
+        ser["day_flow"] = float(ser.get("day_flow") or 0.0) + pending
+        base = ser.get("base")
+        prev_idx = (cur.get("index") if cur.get("date") == today
+                    else (base or {}).get("index", 1.0)) or 1.0
+        if not base or (_num_or_none(base.get("value")) or 0.0) < TRIP_MIN_BASE_USD:
+            # first day, or a base too small to divide by (a sleeve emptied to
+            # cents then refilled by a transfer would explode the index -
+            # TB10): hold the index, absorb the day's flows
+            idx = prev_idx
+        elif value - ser["day_flow"] <= 0:
+            # the mark EXCLUDES a flow already counted (TA3: a deposit whose
+            # snapshot was skipped): never move the index off it - the flow
+            # stays in day_flow for the next mark
+            self._event_once_today("WARN", f"trip_flow_{key}",
+                                   f"tripwire {key}: mark {value:,.2f} is below "
+                                   f"the day's flows {ser['day_flow']:,.2f} - "
+                                   f"index held until a mark includes them")
+            idx = prev_idx
+            # TB12: record only the flow the held index already reflects (the
+            # previous same-day mark's), so a finalize on this mark CARRIES
+            # the unreflected rest into the next day instead of dropping it
+            reflected = (float(cur.get("flow") or 0.0)
+                         if cur.get("date") == today else 0.0)
+            mark = {"date": today, "value": value, "index": idx,
+                    "flow": reflected}
+            ser["cur"] = mark
+            # TD2: cur_rth is left alone - the day's close is its last GOOD
+            # in-session mark (the carry then picks up the unreflected flow);
+            # a day with none is never finalized (TC1)
+            return ser
+        else:
+            idx = float(base["index"]) * (value - ser["day_flow"]) / float(base["value"])
+        mark = {"date": today, "value": value, "index": idx,
+                "flow": ser["day_flow"]}
+        ser["cur"] = mark
+        if in_rth:
+            ser["cur_rth"] = dict(mark)
+        return ser
+
+    def _trip_finalize(self, ser: dict) -> None:
+        """Close the previous SESSION day at its last in-session mark (the
+        caller guarantees there was one - TC1). Flows that arrived after that
+        mark carry into the new day. The HWM ratchets here and only here."""
+        fin = ser["cur_rth"]
+        carry = float(ser.get("day_flow") or 0.0) - float(fin.get("flow") or 0.0)
+        ser["base"] = {"date": fin["date"], "value": fin["value"],
+                       "index": fin["index"]}
+        ser["day_flow"] = carry if abs(carry) > 1e-9 else 0.0
+        ser["cur_rth"] = None
+        if float(fin["index"]) > float(ser.get("hwm") or 0.0):
+            ser["hwm"], ser["hwm_date"] = float(fin["index"]), fin["date"]
+        closes = list(ser.get("closes") or [])
+        closes.append([fin["date"], float(fin["index"])])
+        ser["closes"] = closes[-5:]
+
+    @staticmethod
+    def _trip_dd_close(ser: dict | None, back: int = 1) -> float | None:
+        """Drawdown of the `back`-th most recent FINALIZED close vs the HWM."""
+        if not ser:
+            return None
+        closes = ser.get("closes") or []
+        hwm = float(ser.get("hwm") or 0.0)
+        if len(closes) < back or hwm <= 0:
+            return None
+        return max(0.0, 1.0 - float(closes[-back][1]) / hwm)
+
+    @staticmethod
+    def _trip_dd_live(ser: dict | None) -> float | None:
+        if not ser or not ser.get("cur"):
+            return None
+        hwm = float(ser.get("hwm") or 0.0)
+        return max(0.0, 1.0 - float(ser["cur"]["index"]) / hwm) if hwm > 0 else None
+
+    def _trip_bootstrap_book(self, today: str) -> None:
+        """First run on a book with history: replay the persisted equity curve
+        (one point per UTC cycle day; earlier days are finalized closes, a
+        point dated `today` is the open day's live mark) into the book index,
+        with ADOPTED deposits as flows. A flow is applied at the first curve
+        point on or after its date whose value covers it (TA3: a deposit whose
+        day has no point, or whose point excludes it, carries forward - never
+        a phantom gain or a negative index). Pending flows already contained
+        in the curve are removed from the pending total (no double count);
+        any not yet in it stay pending. The sleeve has no persisted history
+        and starts at its first snapshot."""
+        st = self.state
+        curve = [p for p in st.equity_curve
+                 if isinstance(p, (list, tuple)) and len(p) == 2
+                 and isinstance(p[0], str) and (_finite(p[1]) or 0.0) > 0
+                 # only SESSION days are closes (TC1); today's point is the
+                 # live mark whatever day it is
+                 and (p[0] == today or (_parse_date(p[0]) is not None
+                                        and is_trading_day(_parse_date(p[0]))))]
+        if not curve:
+            return
+        first_d, last_d = curve[0][0], curve[-1][0]
+        flows = sorted((e["date"], float(_finite(e.get("usd"), 0.0)))
+                       for e in st.capital_events
+                       if e.get("kind") == "deposit_adopted"
+                       and isinstance(e.get("date"), str))
+        in_curve = sum(f for d, f in flows if first_d < d <= last_d)
+        ser = {"base": None, "cur": None, "cur_rth": None, "day_flow": 0.0,
+               "hwm": 1.0, "hwm_date": first_d, "since": first_d, "closes": []}
+        prev = None
+        owed = 0.0
+        fi = 0
+        while fi < len(flows) and flows[fi][0] <= first_d:
+            fi += 1                         # in the first point already
+        open_day = False
+        for d, v in curve:
+            v = float(v)
+            while fi < len(flows) and flows[fi][0] <= d:
+                owed += flows[fi][1]
+                fi += 1
+            if d == today and prev is not None:
+                # the open day: its flows sit in day_flow, the live update
+                # recomputes the index off the base
+                ser["base"] = {"date": prev["date"], "value": prev["value"],
+                               "index": prev["index"]}
+                ser["day_flow"] = owed
+                idx = (prev["index"] * (v - owed) / prev["value"]
+                       if v - owed > 0 else prev["index"])
+                ser["cur"] = {"date": d, "value": v, "index": idx, "flow": owed}
+                owed = 0.0
+                open_day = True
+                break
+            if prev is None:
+                idx = 1.0
+            elif v - owed <= 0:
+                idx = prev["index"]         # point excludes the flow: carry it
+            else:
+                idx = prev["index"] * (v - owed) / prev["value"]
+                owed = 0.0
+            point = {"date": d, "value": v, "index": idx}
+            ser["closes"] = (ser["closes"] + [[d, idx]])[-5:]
+            if idx > ser["hwm"]:
+                ser["hwm"], ser["hwm_date"] = idx, d
+            prev = point
+        if not open_day:
+            # no point for today yet: the last (already finalized) close is the
+            # base for today; no live mark, so the next update neither
+            # re-finalizes it nor double-counts it
+            ser["base"] = dict(prev) if prev else None
+            ser["cur"] = None
+            ser["day_flow"] = 0.0
+        consumed = in_curve - owed          # owed = carried, not yet applied
+        st.trip_pending_book = max(0.0, st.trip_pending_book - consumed) + owed
+        st.trip_book = ser
+        self._event("INFO", f"tripwire book index bootstrapped from the equity "
+                            f"curve: {len(curve)} cycle days since {first_d}, "
+                            f"HWM {ser['hwm_date']}")
+
+    def update_tripwires(self, today: str, prices: dict[str, float],
+                         alert) -> dict | None:
+        """Advance both indices to this cycle's marks and page any ledger line
+        crossed on FINALIZED closes. Same skip rule as the equity snapshot
+        (M4). Never raises; a failure is said once a day (TA7)."""
+        st = self.state
+        try:
+            if not st.initialized or not prices:
+                return None
+            if prices.get(CORE, 0.0) <= 0 or prices.get(CASH_VEHICLE, 0.0) <= 0:
+                return None
+            if st.trip_book is None:
+                self._trip_bootstrap_book(today)
+            self._trip_series_update("trip_book", today, self.book_value(prices),
+                                     "trip_pending_book")
+            self._trip_series_update("trip_sleeve", today,
+                                     self.sleeve_value(prices),
+                                     "trip_pending_sleeve")
+            self._trip_check_lines(today, alert)
+            self.save()
+            return self.tripwire_summary(today)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("update_tripwires failed (ignored): %s", exc)
+            try:
+                self._event_once_today("WARN", "tripwire_failed",
+                                       f"tripwire update FAILED ({exc}) - the "
+                                       f"kill-ledger lines are not being "
+                                       f"watched this cycle")
+            except Exception:  # noqa: BLE001
+                pass
+            return None
+
+    def _trip_page(self, key: str, level: str, msg: str, alert) -> None:
+        self.state.trip_alerted[key] = True
+        self._event(level, "tripwire " + msg)
+        alert(("🚨🚨 " if level == "RED" else "⚠️ ") + "blend tripwire " + msg
+              + " ALERT-ONLY: the code does nothing; ibkr-executor/ledger.csv "
+                "names the action.")
+
+    def _trip_dd_line(self, key: str, ser: dict | None, level_dd: float,
+                      page_level: str, what: str, alert) -> None:
+        """Pages when the LAST TWO finalized closes are both at/over the level
+        (one glitched close cannot page: the ledger's 'confirm a borderline
+        reading against the next day'); re-arms once the last close has
+        recovered TRIP_REARM_PP below the level."""
+        d1, d2 = self._trip_dd_close(ser, 1), self._trip_dd_close(ser, 2)
+        if d1 is None:
+            return
+        fired = bool(self.state.trip_alerted.get(key))
+        if (not fired and d2 is not None and d1 >= level_dd and d2 >= level_dd):
+            self._trip_page(key, page_level,
+                            f"{what}: drawdown {d1:.1%} >= {level_dd:.0%} on two "
+                            f"consecutive closes (flow-adjusted, from the "
+                            f"high-water mark of {ser.get('hwm_date')}).", alert)
+        elif fired and d1 < level_dd - TRIP_REARM_PP:
+            self.state.trip_alerted[key] = False
+            self._event("INFO", f"tripwire {what} re-armed (drawdown {d1:.1%})")
+
+    def _unreconciled_sessions(self, rec: dict, now: datetime | None = None) -> int | None:
+        """Sessions whose CLOSE fell after the record was parked and at or
+        before now (TA4: counted on session closes in ET, not UTC dates)."""
+        ts = _finite((rec or {}).get("ts"))
+        if ts is None:
+            return None
+        try:
+            born = datetime.fromtimestamp(ts, timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None                    # TB17: one junk record never
+                                           # disables the whole summary
+        if born > _now_et(now):
+            return 0
+        now_et = _now_et(now)
+        d = born.astimezone(_ET).date()
+        n = 0
+        while d <= now_et.date():
+            if is_trading_day(d):
+                h, mi = session_close_et(d)
+                close = datetime(d.year, d.month, d.day, h, mi, tzinfo=_ET)
+                if born < close <= now_et:
+                    n += 1
+            d += timedelta(days=1)
+        return n
+
+    def _trip_check_lines(self, today: str, alert) -> None:
+        st = self.state
+        self._trip_dd_line("book_review", st.trip_book, TRIP_BOOK_REVIEW_DD,
+                           "WARN", "REVIEW (book)", alert)
+        self._trip_dd_line("book_regime", st.trip_book, TRIP_BOOK_REGIME_DD,
+                           "RED", "REGIME REVIEW (book)", alert)
+        self._trip_dd_line("sleeve_kill", st.trip_sleeve, TRIP_SLEEVE_KILL_DD,
+                           "RED", "MODEL-RISK KILL line (sleeve)", alert)
+        uw = self._trip_underwater_days(today)
+        fired = bool(st.trip_alerted.get("underwater"))
+        if uw is not None and uw >= TRIP_UNDERWATER_DAYS and not fired:
+            self._trip_page("underwater", "WARN",
+                            f"REVIEW (time under water): {uw} days below the "
+                            f"book's high-water mark of "
+                            f"{st.trip_book['hwm_date']}.", alert)
+        elif fired and (uw or 0) < TRIP_UNDERWATER_DAYS:
+            st.trip_alerted["underwater"] = False      # a new high re-arms
+        for k, rec in _snapshot(st.unreconciled).items():
+            ak = f"unrec:{k}"
+            if st.trip_alerted.get(ak):
+                continue
+            n = self._unreconciled_sessions(rec)
+            if n is not None and n >= TRIP_UNRECONCILED_SESSIONS:
+                self._trip_page(ak, "RED",
+                                f"PROCESS KILL line: unreconciled record {k} "
+                                f"has been parked through {n} session closes "
+                                f"(>= {TRIP_UNRECONCILED_SESSIONS}).", alert)
+        for ak in [a for a in st.trip_alerted if a.startswith("unrec:")]:
+            if ak[len("unrec:"):] not in st.unreconciled:
+                st.trip_alerted.pop(ak, None)      # record resolved: forget
+
+    def _trip_underwater_days(self, today: str) -> int | None:
+        ser = self.state.trip_book
+        if not ser or not (ser.get("closes") or ser.get("cur")):
+            return None
+        hd, td = _parse_date(ser.get("hwm_date")), _parse_date(today)
+        if hd is None or td is None:
+            return None
+        d1 = self._trip_dd_close(ser, 1)
+        if d1 is None or d1 <= 1e-12:
+            return 0
+        return (td - hd).days
+
+    def tripwire_summary(self, today: str | None = None) -> dict:
+        """Public-safe: drawdowns, dates and line states only. `drawdown` is
+        the last FINALIZED close (what the lines read); `drawdown_live` the
+        current mark (informational). Never raises (TB1): /status and the
+        feed must not 500 on a malformed series."""
+        try:
+            return self._tripwire_summary(today)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("tripwire_summary failed: %s", exc)
+            return {"error": "unavailable", "alert_only": True}
+
+    def _tripwire_summary(self, today: str | None = None) -> dict:
+        st = self.state
+        today = today or _utc_today()
+
+        def ser_view(ser):
+            if not ser:
+                return None
+            d1 = self._trip_dd_close(ser, 1)
+            dl = self._trip_dd_live(ser)
+            closes = ser.get("closes") or []
+            return {"drawdown": round(d1, 4) if d1 is not None else None,
+                    "drawdown_live": round(dl, 4) if dl is not None else None,
+                    "close_date": closes[-1][0] if closes else None,
+                    "hwm_date": ser.get("hwm_date"), "since": ser.get("since")}
+        bdd = self._trip_dd_close(st.trip_book, 1)
+        sdd = self._trip_dd_close(st.trip_sleeve, 1)
+        uw = self._trip_underwater_days(today)
+        ages = [self._unreconciled_sessions(r) for r in _snapshot(st.unreconciled).values()]
+        ages = [a for a in ages if a is not None]
+        lines = [
+            {"line": "REVIEW: book drawdown", "level": TRIP_BOOK_REVIEW_DD,
+             "value": bdd, "paged": bool(st.trip_alerted.get("book_review"))},
+            {"line": "REGIME REVIEW: book drawdown", "level": TRIP_BOOK_REGIME_DD,
+             "value": bdd, "paged": bool(st.trip_alerted.get("book_regime"))},
+            {"line": "MODEL-RISK KILL: sleeve drawdown", "level": TRIP_SLEEVE_KILL_DD,
+             "value": sdd, "paged": bool(st.trip_alerted.get("sleeve_kill"))},
+            {"line": "REVIEW: days under water", "level": TRIP_UNDERWATER_DAYS,
+             "value": uw, "paged": bool(st.trip_alerted.get("underwater"))},
+            {"line": "PROCESS KILL: oldest unreconciled record (sessions)",
+             "level": TRIP_UNRECONCILED_SESSIONS,
+             "value": max(ages) if ages else 0,
+             "paged": any(a.startswith("unrec:") and v
+                          for a, v in _snapshot(st.trip_alerted).items())},
+        ]
+        for ln in lines:
+            if isinstance(ln["value"], float):
+                ln["value"] = round(ln["value"], 4)
+        return {"book": ser_view(st.trip_book), "sleeve": ser_view(st.trip_sleeve),
+                "underwater_days": uw, "lines": lines, "alert_only": True,
+                "basis": "finalized daily closes (last in-session mark), "
+                         "flow-adjusted; a line pages on two consecutive "
+                         "closes"}
+
     # ---------- the decision step ----------
 
     def _note_quote_health(self, prices: dict[str, float],
@@ -1208,6 +1827,11 @@ class Blend3070Manager:
 
         params = payload.get("book_params") or {}
         max_open = min(MAX_OPEN, params.get("max_open", MAX_OPEN))
+        _mps = params.get("max_per_symbol", MAX_PER_SYMBOL)
+        # like max_open, the tracker may only TIGHTEN this risk control (TB15)
+        max_per_symbol = (min(MAX_PER_SYMBOL, _mps)
+                          if (isinstance(_mps, int) and not isinstance(_mps, bool)
+                              and _mps >= 1) else MAX_PER_SYMBOL)
         risk_frac = params.get("risk_frac", RISK_FRAC)
         band = params.get("band", BAND)
         target = _sleeve_target(self, payload, alerts)
@@ -1218,14 +1842,21 @@ class Blend3070Manager:
             # a fresh seed's own fills must never straddle a cash baseline
 
             self.rebaseline_cash('seed', save=False)
-            book = getattr(self.cfg, "blend_book_usd", 10_000.0)
-            if budget > 0:
-                book = min(book, budget)
+            book = self._seed_book_usd()
             st.sleeve_cash = target * book
             st.core_cash = (1.0 - target) * book
             st.sleeve_target = target
             st.initialized = True
             st.bootstrap_ack = False    # one-shot: consumed by this seed
+            # the seed is the book's first capital event (stage 2)
+            st.capital_contributed = round(float(book), 2)
+            st.capital_events.append({
+                "date": today, "ts": int(time.time()), "kind": "seed",
+                "usd": round(float(book), 2),
+                "sleeve_usd": round(target * book, 2),
+                "core_usd": round((1.0 - target) * book, 2),
+                "sleeve_target": target})
+            del st.capital_events[:-CAPITAL_EVENTS_MAX]
             self._event("INFO", f"book initialized: ${book:,.0f} "
                                 f"({target:.0%} sleeve / {1 - target:.0%} core)")
 
@@ -1386,7 +2017,27 @@ class Blend3070Manager:
         gate_on = (payload.get("gate") or {}).get("xbi_above_200dma_prior") is not False
         st.last_gate = gate_on          # feed display; persisted on next save
         sleeve_eq = self.sleeve_value(prices)
+        # The sleeve cash reserve (MKT_BUY_CUSHION note) lives in
+        # projected_cash ONLY: the sweep stops at it, and the single cash
+        # raise below restores it in session (an in-session pre-fund is
+        # funded past it with BIL). `funds` stays GROSS, so sizing, the
+        # rebalance deferral and the entry drops are exactly as before: the
+        # reserve never shrinks or drops an entry (counter-agents A2/B3).
+        cash_reserve = SLEEVE_CASH_RESERVE_FRAC * max(sleeve_eq, 0.0)
+        projected_cash -= cash_reserve
         open_count = len(st.positions) - len(exiting) + len(st.pending_entries)
+        # Per-symbol occupancy, counted exactly like open_count (round 11 /
+        # verifier A2): held positions not exiting this cycle + pending MOOs
+        # + entries already planned THIS cycle (same-day sibling fires of one
+        # name - multi-flag - are counted in payload order).
+        held_by_symbol: dict[str, int] = {}
+        for _k, _p in self.positions_view().items():
+            if _k not in exiting:
+                held_by_symbol[_p.symbol] = held_by_symbol.get(_p.symbol, 0) + 1
+        for _rec in _snapshot(st.pending_entries).values():
+            _sym = ((_rec or {}).get("intent") or {}).get("symbol")
+            if _sym:
+                held_by_symbol[_sym] = held_by_symbol.get(_sym, 0) + 1
         projected_gross = self.gross_exposure(prices)
         for it in exit_intents:      # exits convert holdings back to cash
             pos = st.positions[str(it["call_id"])]
@@ -1469,6 +2120,16 @@ class Blend3070Manager:
                 if open_count + len(entry_intents) >= max_open:
                     self._event("INFO", f"cap {max_open} open: skipping "
                                         f"{e['symbol']} (call {e['call_id']})")
+                    continue
+                n_sym = held_by_symbol.get(e["symbol"], 0)
+                if n_sym >= max_per_symbol:
+                    # checked AFTER the cap, as the replay does: a refused
+                    # repeat takes no slot, the next fire in another name may
+                    self._event_once_today(
+                        "INFO", f"per_symbol_{e['call_id']}",
+                        f"per-symbol limit {max_per_symbol}: skipping "
+                        f"{e['symbol']} (call {e['call_id']}) - {n_sym} "
+                        f"already open or planned in that name")
                     continue
                 entry_ref = e.get("entry_ref")
                 srow = stops_by_id.get(e["call_id"])
@@ -1569,7 +2230,7 @@ class Blend3070Manager:
                 # Budget binds on projected gross; the BIL-funded slice of an
                 # entry swaps one holding for another (gross-neutral) — only
                 # the cash-funded slice adds exposure.
-                from_cash = min(max(projected_cash, 0.0), cost)
+                from_cash = min(max(projected_cash + cash_reserve, 0.0), cost)
                 if budget > 0 and projected_gross + from_cash > budget:
                     self._event("WARN", f"BLEND_BUDGET ${budget:,.0f} would be "
                                         f"exceeded: {e['symbol']} entry blocked")
@@ -1586,6 +2247,7 @@ class Blend3070Manager:
                 projected_gross += from_cash
                 projected_cash -= cost
                 funds -= cost
+                held_by_symbol[e["symbol"]] = held_by_symbol.get(e["symbol"], 0) + 1
 
         prefund_usd = 0.0
         prefund_now = False
@@ -1602,7 +2264,8 @@ class Blend3070Manager:
                 f"${prefund_usd:,.0f} reserved in sleeve cash for the "
                 f"MOO placed after extended hours (20:00 ET)"
                 + (" (BIL sold now to cover the shortfall)"
-                                     if projected_cash < -CASH_EPS else ""))
+                   if projected_cash + (0.0 if regular_session_open()
+                                        else cash_reserve) < -CASH_EPS else ""))
             entry_intents = []          # placed post-close from settled cash
             st.prefund_usd, st.prefund_date = round(prefund_usd, 2), _et_today()
             prefund_now = True
@@ -1707,7 +2370,14 @@ class Blend3070Manager:
                                 f"(call {dropped['call_id']}) skipped: cycle "
                                 f"cash ledger cannot fund it")
         bil_sell = 0
-        if (not pending_book and projected_cash < -CASH_EPS
+        # The raise restores the cash reserve only IN SESSION: outside
+        # regular hours a BIL sell rests until the open and its journal
+        # (pending_book) would hold back an evening MOO for a session
+        # (counter-agent A1). Off-hours it raises only what the plan
+        # actually spends beyond the cash on hand.
+        need = (-projected_cash if regular_session_open()
+                else -(projected_cash + cash_reserve))
+        if (not pending_book and need > CASH_EPS
                 and bil_px > 0 and st.bil_qty > 0):
             # the sell's own commission is netted out of the proceeds:
             # when the raise funds a pre-fund, add headroom so the post-
@@ -1715,11 +2385,13 @@ class Blend3070Manager:
             # dollar (which would cost a full day). A rebalance raise
             # stays exact (counter-agent round 2, LOW).
             reserve = FUNDING_FEE_RESERVE_USD if prefund_now else 0.0
-            bil_sell = min(st.bil_qty, math.ceil(
-                (-projected_cash + reserve) / bil_px))
+            bil_sell = min(st.bil_qty, math.ceil((need + reserve) / bil_px))
             projected_cash += bil_sell * bil_px
-        if projected_cash < -CASH_EPS:
-            # Belt (should be unreachable): refuse rather than overdraw.
+        if projected_cash + cash_reserve < -CASH_EPS:
+            # Belt (should be unreachable): refuse rather than overdraw. The
+            # reserve is venue headroom, not a liability: a reserve the BIL
+            # raise could not restore this cycle (a book order in flight, no
+            # BIL held) is not an overdraw and drops nothing.
             self._event("RED", "cash ledger still negative after BIL funding: "
                                "dropping remaining sleeve actions")
             for dropped in entry_intents:
@@ -1739,9 +2411,18 @@ class Blend3070Manager:
         core_buy = None
         if (not pending_book and spy_px > 0 and target < 1.0 - 1e-9
                 and core_cash_proj > max(MIN_ORDER_USD, spy_px)):
-            core_buy = {"action": "CORE_BUY", "symbol": CORE,
-                        "qty": int(core_cash_proj // spy_px),
-                        "reason": "invest idle core cash"}
+            overnight = not regular_session_open()
+            px_for_size = (spy_px * (1.0 + (CORE_BUY_OVERNIGHT_HEADROOM
+                                            if overnight else 0.0))
+                           * (1.0 + MKT_BUY_CUSHION))   # the credit check's margin
+            qty = int(core_cash_proj // px_for_size)
+            if qty > 0:
+                core_buy = {"action": "CORE_BUY", "symbol": CORE, "qty": qty,
+                            "reason": ("invest idle core cash"
+                                       + (f" (rests for the open: sized "
+                                          f"{CORE_BUY_OVERNIGHT_HEADROOM:.0%} "
+                                          f"above the quote)" if overnight
+                                          else ""))}
 
         # 8) BIL sweep of idle sleeve cash (buy) from the resolved ledger.
         #    Under a budget cap, the sweep is clamped to the remaining gross
@@ -1755,10 +2436,12 @@ class Blend3070Manager:
         # re-sweep it; when the sizing loop already reserved the cost in
         # projected_cash this double-counts and simply means no sweep.
         held_back = st.prefund_usd          # already reduced by what was spent
-        sweepable = projected_cash - held_back
+        sweepable = projected_cash - held_back      # net of the cash reserve
         if (not pending_book and bil_px > 0
                 and sweepable > max(MIN_ORDER_USD, bil_px)):
-            sweep_qty = int(sweepable // bil_px)
+            # a market BUY: sized MKT_BUY_CUSHION above the quote, never to
+            # the last dollar (the 2026-10-07..26 refusals, see the note)
+            sweep_qty = int(sweepable // (bil_px * (1.0 + MKT_BUY_CUSHION)))
             if budget > 0:
                 gross_proj = projected_gross
                 if (rebalance_intent is not None
@@ -1771,6 +2454,7 @@ class Blend3070Manager:
             if sweep_qty > 0:
                 sweep_buy = {"action": "SWEEP", "symbol": CASH_VEHICLE,
                              "qty": sweep_qty,
+                             "reserve_usd": round(cash_reserve, 2),
                              "reason": "sweep idle sleeve cash to BIL"}
 
         # Assemble in EXECUTION order (cash raised before it is spent).
@@ -2090,6 +2774,9 @@ class Blend3070Manager:
         """+usd moves core -> sleeve; -usd moves sleeve -> core."""
         self.state.sleeve_cash += usd
         self.state.core_cash -= usd
+        # a transfer is a FLOW for the sleeve's tripwire index, never a
+        # gain or a loss (the book's index does not see it: internal)
+        self.state.trip_pending_sleeve += usd
         self.save()
 
     # ---------- control ----------
@@ -2114,6 +2801,15 @@ class Blend3070Manager:
         # means "undo my kill", never "seed a second book" (re-review).
         self.state.bootstrap_ack = False
         self.state.bootstrap_ack_date = ""
+        # ...and any standing capital-adoption request, for the same reason:
+        # a /kill then /resume must never adopt cash into a book the
+        # operator just stopped (stage 2). Re-issue it after the review.
+        if self.state.capital_request is not None:
+            usd = _num_or_none(self.state.capital_request.get("usd"))
+            self.state.capital_request = None
+            self._event("WARN", f"kill: pending capital adoption request "
+                                f"(${(usd or 0.0):,.2f}) CANCELLED - re-issue "
+                                f"it after /resume if still intended")
         self.state.halted = "KILL"
         self._event("RED", "kill: halt engaged; flatten queued for the "
                            "execution loop")
@@ -2176,6 +2872,105 @@ class Blend3070Manager:
         self._event("INFO", f"cash reconcile re-baselined ({reason})")
         if save:
             self.save()
+
+    # ---------- capital (stage-2 cash adoption, 2026-10-05) ----------
+
+    def _seed_book_usd(self) -> float:
+        """What a FRESH book seeds with: BLEND_BOOK_USD clamped by
+        BLEND_BUDGET. One definition for the seed branch, the feed's
+        `initial_book_usd` and the pre-field inference of
+        `capital_contributed` (they used to compute it separately)."""
+        book = float(getattr(self.cfg, "blend_book_usd", 10_000.0) or 0.0)
+        budget = float(getattr(self.cfg, "blend_budget", 0.0) or 0.0)
+        if budget > 0 and book > 0:
+            book = min(book, budget)
+        return book
+
+    def request_capital_adoption(self, usd, today: str, kind: str = "deposit",
+                                 sleeve_usd=None) -> dict:
+        """Journal a stage-2 adoption request (API thread, under BLEND_LOCK).
+        VALIDATION ONLY - no ledger write, no venue call: the loop thread
+        executes it (adopt_capital) on a quiet cycle, against the venue.
+        A second request replaces the first (the operator's latest number
+        wins; nothing accumulates). Raises ValueError on a bad amount.
+        kind: "deposit" (new money: a FLOW - grows contributed capital, never
+        a gain) or "distribution" (dividends / BIL distributions / interest
+        the book earned: credited as RETURN, so the tripwire indices stay
+        total-return and contributed capital does not grow - TA6/TB2)."""
+        if kind not in ("deposit", "distribution"):
+            raise ValueError('kind must be "deposit" or "distribution"')
+        # A distribution is credited to the bucket that EARNED it (BIL
+        # distributions -> sleeve, SPY dividends -> core): `sleeve_usd` names
+        # the sleeve's share explicitly; omitted, it splits by the target
+        # (counter-agent note: a 30/70 split of BIL income under-credits the
+        # sleeve index ~1 pp/yr). Deposits always split by the target.
+        if sleeve_usd is not None:
+            if kind != "distribution":
+                raise ValueError("sleeve_usd applies to a distribution only")
+            sv = None if isinstance(sleeve_usd, bool) else _finite(sleeve_usd)
+            if sv is None or sv < 0:
+                raise ValueError("sleeve_usd must be a number >= 0")
+            sleeve_usd = round(sv, 2)
+        v = None if isinstance(usd, bool) else _num_or_none(usd)
+        if v is not None and math.isfinite(v):
+            v = round(v, 2)             # the amount that would be journaled
+        if v is None or not math.isfinite(v) or v < 0.01:
+            raise ValueError("usd must be a positive number (at least 0.01)")
+        if v > CAPITAL_REQUEST_MAX_USD:
+            raise ValueError(f"usd {v:,.2f} exceeds the endpoint's sanity "
+                             f"bound {CAPITAL_REQUEST_MAX_USD:,.0f} - raise "
+                             f"CAPITAL_REQUEST_MAX_USD deliberately if real")
+        prior = self.state.capital_request
+        if sleeve_usd is not None and sleeve_usd > round(v, 2):
+            raise ValueError("sleeve_usd cannot exceed usd")
+        # TD4: built fully, THEN published - save() dumps this dict live
+        req = {"usd": round(v, 2), "kind": kind, "ts": int(time.time()),
+               "date": today}
+        if sleeve_usd is not None:
+            req["sleeve_usd"] = sleeve_usd
+        self.state.capital_request = req
+        self._event("WARN", f"capital adoption REQUESTED ({kind}): ${v:,.2f}"
+                            + (f" (replaces the pending "
+                               f"${_num_or_none(prior.get('usd')) or 0:,.2f})"
+                               if prior else "")
+                            + " - executes on the next QUIET cycle once the "
+                              "venue confirms that much unowned, available "
+                              "cash and BLEND_BUDGET can hold it; expires "
+                              f"unexecuted after {CAPITAL_REQUEST_TTL_S / 86_400:.0f} "
+                              "days")
+        self.save()
+        return dict(self.state.capital_request)
+
+    def clear_capital_request(self, reason: str = "operator") -> dict | None:
+        """Withdraw a journaled request (never executed). Returns it."""
+        prior = self.state.capital_request
+        self.state.capital_request = None
+        if prior is not None:
+            self._event("INFO", f"capital adoption request "
+                                f"(${_num_or_none(prior.get('usd')) or 0:,.2f}) "
+                                f"cleared ({reason})")
+            self.save()
+        return prior
+
+    def capital_summary(self) -> dict:
+        """Public-safe: contributed capital, the capital events (dates and
+        amounts the OPERATOR supplied - never a venue level) and whether a
+        request is pending."""
+        st = self.state
+        req = st.capital_request
+        return {"contributed": (round(st.capital_contributed, 2)
+                                if st.capital_contributed is not None else None),
+                "events": [{"date": e.get("date"), "kind": e.get("kind"),
+                            "usd": e.get("usd"),
+                            "sleeve_usd": e.get("sleeve_usd"),
+                            "core_usd": e.get("core_usd")}
+                           for e in list(st.capital_events[-CAPITAL_EVENTS_MAX:])],
+                "request_pending": ({"usd": req.get("usd"), "date": req.get("date"),
+                                     "kind": req.get("kind") or "deposit",
+                                     "sleeve_usd": req.get("sleeve_usd"),
+                                     "age_s": round(time.time()
+                                                    - float(req.get("ts") or 0), 1)}
+                                    if req else None)}
 
     def cash_summary(self) -> dict:
         """Public-safe: ledger cash, the delta drift and its age, commissions.
@@ -2244,6 +3039,9 @@ class Blend3070Manager:
             "spy_qty": st.spy_qty,
             "core_cash": round(st.core_cash, 2),
             "budget_cap": getattr(self.cfg, "blend_budget", 0.0) or None,
+            "cash": self.cash_summary(),     # public-safe by design (deltas)
+            "capital": self.capital_summary(),
+            "tripwires": self.tripwire_summary(),
             "gate": st.last_gate,
             "budget_utilization": None,
             # A list SLICE is a C-level copy; the encoder never sees the
@@ -2287,10 +3085,8 @@ class Blend3070Manager:
                               "unprotected": _is_unprotected(pos),
                               "unverified_cycles": pos.unverified_cycles})
         util = self.budget_utilization(prices)
-        book_usd = getattr(self.cfg, "blend_book_usd", 0.0) or 0.0
-        budget = getattr(self.cfg, "blend_budget", 0.0) or 0.0
-        if budget > 0 and book_usd > 0:
-            book_usd = min(book_usd, budget)    # same clamp as first boot
+        book_usd = self._seed_book_usd()        # same clamp as first boot
+        capital = self.capital_summary()
         return {
             "halted": st.halted,
             "gate": st.last_gate,
@@ -2303,7 +3099,13 @@ class Blend3070Manager:
                 "budget_utilization": (round(util, 4)
                                        if util is not None else None),
                 "initial_book_usd": book_usd or None,
+                # stage 2: seed + adopted deposits - the flow-adjusted basis
+                # for any drawdown read off the curve (a deposit is a step
+                # in the curve, not a gain)
+                "capital_contributed": capital["contributed"],
             },
+            "capital_events": capital["events"],
+            "tripwires": self.tripwire_summary(today),
             "positions": positions,
             "trades": list(st.trades[-TRADE_LOG_MAX:]),
             "equity_curve": list(st.equity_curve),
@@ -2491,16 +3293,7 @@ def _sleeve_target(mgr: "Blend3070Manager", payload: dict,
       consecutive polls agree, with a Telegram page naming the move (a
       mid-deploy blip of one poll never sells or buys the core)."""
     st = mgr.state
-    if st.sleeve_target is None and st.initialized:
-        # state file from before the field existed: infer the weight from
-        # the book's SHAPE, never from the file's age - a sleeve-only book
-        # loaded as 0.30 would rebuild its core (counter-agent 2026-10-01)
-        st.sleeve_target = (1.0 if (st.spy_qty == 0 and not any(
-            r.get("kind") == "core-buy" for r in st.pending_book_orders.values()))
-            else TARGET_SLEEVE)
-        mgr._event("INFO", f"sleeve target inferred from the book: "
-                           f"{st.sleeve_target:.0%}")
-    current = st.sleeve_target if st.sleeve_target is not None else TARGET_SLEEVE
+    current = _persisted_sleeve_target(mgr)
     reb = payload.get("rebalance") or {}
     raw = reb.get("target")
     if raw is None:
@@ -2544,6 +3337,23 @@ def _sleeve_target(mgr: "Blend3070Manager", payload: dict,
     if alerts is not None:
         alerts.append("⚠️ blend " + msg)
     return t
+
+
+def _persisted_sleeve_target(mgr: Blend3070Manager) -> float:
+    """The weight the book is RUN at. A state file from before the field
+    existed infers it from the book's SHAPE, never from the file's age - a
+    sleeve-only book loaded as 0.30 would rebuild its core (counter-agent
+    2026-10-01). One definition for the tracker-target pass and the stage-2
+    split (counter-agent B6: the split used TARGET_SLEEVE while step()
+    inferred 1.0 on the same cycle)."""
+    st = mgr.state
+    if st.sleeve_target is None and st.initialized:
+        st.sleeve_target = (1.0 if (st.spy_qty == 0 and not any(
+            r.get("kind") == "core-buy" for r in st.pending_book_orders.values()))
+            else TARGET_SLEEVE)
+        mgr._event("INFO", f"sleeve target inferred from the book: "
+                           f"{st.sleeve_target:.0%}")
+    return st.sleeve_target if st.sleeve_target is not None else TARGET_SLEEVE
 
 
 def payload_is_stale(payload: dict, today: str) -> bool:
@@ -2716,6 +3526,12 @@ def _ingest_one_fill(mgr: Blend3070Manager, adapter, f: dict, alert) -> None:
     pos = next((p for p in st.positions.values()
                 if p.stop_order_ref == ref), None)
     if pos is not None:
+        # /kill tracks the stop as an orphan when its cancel raises, and the
+        # stop stays the position's: once its fill is booked here nothing
+        # rests, so the orphan goes too - left, pass 3 re-cancelled a filled
+        # stop forever ("already FILLED", "two stops may rest" every 4th
+        # cycle; verifier B, 2026-10-26)
+        st.orphan_stop_refs.pop(ref, None)
         fill = f.get("fill_price")
         held = pos.qty
         gap_note = _UNVERIFIABLE_FILL_NOTE if pos.history_gap else ""
@@ -4025,6 +4841,22 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                     mgr._event("WARN",
                                f"stuck {rec['kind']} {rec['symbol']} cancel "
                                f"unresolved ({exc}) — retrying next cycle")
+                    if ("REFUSED by IBKR" in str(exc)
+                            and not rec.get("refusal_alerted")):
+                        # once per journal: a refused cancel keeps the order
+                        # and blocks its kind (M1) until the venue settles
+                        # it - for an order dead at IBKR unseen, until the
+                        # next reconnect resyncs the session. WARN events
+                        # alone never page (verifiers A and B, round 2).
+                        rec["refusal_alerted"] = True
+                        mgr.save()
+                        alert(f"⚠️ blend {rec['kind']} {rec['symbol']} "
+                              f"x{rec['qty']}: IBKR REFUSED the cancel of "
+                              f"this stuck order ({exc}). It stays journaled "
+                              f"and no new {rec['kind']} is placed until the "
+                              f"venue settles it (a fill is booked; the next "
+                              f"gateway reconnect resyncs it). If it persists, "
+                              f"check the order in the IBKR app.")
                 else:
                     mgr.clear_pending_book_order(cid)
                     mgr._event("RED",
@@ -4143,16 +4975,7 @@ def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
         if not st.initialized:
             return None            # a seed's own fills must never straddle a baseline
         now = time.time()
-        # A parked unreconciled record used to suspend the reconcile FOREVER
-        # (nothing ever pops it): round 3 gates on its AGE - once the park is
-        # older than the quiet window its proceeds simply show as drift,
-        # which is what the alert is for.
-        fresh_unrec = [k for k, r in st.unreconciled.items()
-                       if now - float((r or {}).get("ts") or 0) < CASH_QUIET_S]
-        skip = ("pending journals" if (st.pending_entries or st.pending_book_orders)
-                else "fresh unreconciled record" if fresh_unrec
-                else "recent fill" if (st.last_fill_ts and now - st.last_fill_ts < CASH_QUIET_S)
-                else None)
+        skip = _cash_quiet_reason(st, now)
         if skip:
             st.cash_drift_cycles = 0     # persistence = CONSECUTIVE quiet cycles
             _note_cash_skip(mgr, skip, now)
@@ -4177,7 +5000,10 @@ def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
         b = st.cash_baseline
         drift = (float(venue["total_cash"]) - b["venue"]) - (ledger - b["ledger"])
         st.cash_drift, st.cash_drift_ts = round(drift, 4), time.time()
-        book = float(getattr(mgr.cfg, "blend_book_usd", 0.0) or 0.0)
+        # the thresholds scale with the book's CAPITAL: contributed (seed +
+        # adopted deposits, stage 2) once known, else the seed config
+        book = float(st.capital_contributed
+                     or getattr(mgr.cfg, "blend_book_usd", 0.0) or 0.0)
         warn_at = max(CASH_WARN_USD, CASH_WARN_FRAC * book)
         red_at = max(warn_at, CASH_RED_FRAC * book)
         if abs(drift) > warn_at:
@@ -4194,18 +5020,43 @@ def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
             st.cash_alerted_drift = round(drift, 4)
             st.cash_alerted_level = level
             b_day = time.strftime("%Y-%m-%d", time.gmtime(float(b.get("ts") or 0)))
+            parked = sorted(_snapshot(st.unreconciled))
+            if drift > 0 and parked:
+                # TA2: a parked exit's proceeds (or an orphan stop's fill)
+                # show up here as positive drift - adopting them would book
+                # the same cash twice once the record is resolved
+                cause = (f"UNRECONCILED record(s) {', '.join(parked)} are "
+                         f"parked: this drift may be their proceeds. RESOLVE "
+                         f"THEM FIRST - do NOT adopt this amount")
+                tail = ""
+            elif drift > 0:
+                cause = ("Dividends/interest the ledger cannot see, or a "
+                         "deposit - it sits uninvested until adopted. Reinvest "
+                         "it with POST /blend/cash/adopt using the amounts on "
+                         "the activity statement (kind \"distribution\" for "
+                         "dividends/distributions on the BOOK's holdings - "
+                         "not the account's credit interest, which is mostly "
+                         "on cash the book does not own - \"deposit\" for "
+                         "new money), "
+                         "never this drift figure (it is net of fees and "
+                         "interest on cash the book does not own); adoption "
+                         "re-baselines by itself")
+                tail = (" Rebaseline (POST /blend/cash/rebaseline, EXEC_TOKEN) "
+                        "only if this is NOT the book's money - it erases the "
+                        "drift the next reinvestment would read.")
+            else:
+                cause = "Fees, slippage the ledger did not charge, or a withdrawal"
+                tail = (" Once accounted for, POST /blend/cash/rebaseline "
+                        "(EXEC_TOKEN) restarts the delta clock and touches "
+                        "nothing else.")
             msg = (f"cash drift {drift:+,.2f}: the account's cash moved "
                    f"{drift:+,.2f} more than the book's ledger since the "
                    f"baseline of {b_day} ({st.cash_drift_cycles} quiet cycles). "
-                   + ("Dividends/interest the ledger cannot see, or a deposit"
-                      if drift > 0 else
-                      "Fees, slippage the ledger did not charge, or a withdrawal")
+                   + cause
                    + ". Stage 1 is alert-only: nothing adopted."
                    + (f" NOTE: the book is HALTED ({st.halted}) - that is "
                       f"separate; do not /resume for this." if st.halted else "")
-                   + " Once accounted for, POST /blend/cash/rebaseline "
-                     "(EXEC_TOKEN) restarts the delta clock and touches "
-                     "nothing else.")
+                   + tail)
             mgr._event(level, msg)
             alert(("🚨🚨 " if level == "RED" else "⚠️ ") + "blend " + msg)
             fired = level
@@ -4214,6 +5065,256 @@ def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
                 "cycles": st.cash_drift_cycles}
     except Exception as exc:  # noqa: BLE001
         logger.warning("reconcile_cash failed (ignored): %s", exc)
+        return None
+
+
+def _cash_quiet_reason(st: BlendState, now: float) -> str | None:
+    """Why the account's cash cannot be compared to the ledger right now
+    (None = quiet). Shared by the stage-1 reconcile and the stage-2
+    adoption: both read TotalCashValue, and both must wait out IB's
+    account-push lag after a fill and any journal whose cash is in flight.
+    A parked unreconciled record used to suspend the reconcile FOREVER
+    (nothing ever pops it): round 3 gates on its AGE - once the park is
+    older than the quiet window its proceeds simply show as drift, which
+    is what the alert is for."""
+    fresh_unrec = [k for k, r in st.unreconciled.items()
+                   if now - float((r or {}).get("ts") or 0) < CASH_QUIET_S]
+    return ("pending journals" if (st.pending_entries or st.pending_book_orders)
+            else "fresh unreconciled record" if fresh_unrec
+            else "recent fill" if (st.last_fill_ts and now - st.last_fill_ts < CASH_QUIET_S)
+            else None)
+
+
+def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
+                  today: str, alert) -> dict | None:
+    """Stage-2 cash adoption (2026-10-05): execute a journaled operator
+    request on the LOOP thread. Returns a record for tests - {status:
+    adopted | deferred | refused | expired, ...} - or None when no request
+    is pending. Never raises (a failing adoption must not fail the cycle
+    closed; the request stays journaled and is retried next cycle).
+
+    What it checks, in order - each a different failure with a different
+    remedy, so each has its own message:
+      expired   - older than CAPITAL_REQUEST_TTL_S: dropped, re-issue.
+      refused   - the book is not initialized, is halted or has a flatten
+                  queued; BLEND_BUDGET cannot hold the larger book; or the
+                  venue holds LESS unowned cash than requested. Dropped
+                  with a RED event + page: the operator must act first.
+      deferred  - not a quiet cycle (journals in flight, a fill inside
+                  CASH_QUIET_S); missing SPY/BIL quote while a budget cap
+                  needs gross exposure; the adapter has no cash claim; or
+                  the venue says less than the request is AVAILABLE to
+                  trade (settlement, a deposit hold). Kept, retried every
+                  cycle, said once a day.
+      adopted   - the ledger's two buckets are credited by the PERSISTED
+                  sleeve target, capital_contributed grows by the amount,
+                  a capital event is recorded, the stage-1 clock is
+                  re-baselined (the ledger just moved by design), and the
+                  SAME cycle's step() plans the SPY core buy and the BIL
+                  sweep from the idle cash.
+    Venue LEVELS are never written into events or pages (the stage-1
+    rule): every number here is the operator's own amount or a shortfall
+    against it."""
+    st = mgr.state
+    req = st.capital_request
+    if req is None:
+        return None
+    stage = "checking"      # for the honest log on an exception (A2)
+    try:
+        usd = _num_or_none(req.get("usd"))
+        now = time.time()
+
+        def _drop(level: str, status: str, msg: str) -> dict:
+            # The page goes out BEFORE the save (A2): a failing save must
+            # not also silence the operator; the in-memory state is the
+            # truth of this process either way and the next successful
+            # save persists it.
+            nonlocal stage
+            if st.capital_request is req:
+                st.capital_request = None
+            mgr._event(level, "capital adoption " + msg)
+            alert(("🚨🚨 " if level == "RED" else "⚠️ ")
+                  + "blend capital adoption " + msg)
+            stage = "dropped"
+            mgr.save()
+            return {"status": status, "usd": usd, "reason": msg}
+
+        def _defer(key: str, msg: str) -> dict:
+            # request KEPT; said once a day per reason (a stuck request is
+            # visible on /status as capital.request_pending with its age)
+            mgr._event_once_today("WARN", key, "capital adoption " + msg)
+            return {"status": "deferred", "usd": usd, "reason": msg}
+
+        if usd is None or usd <= 0 or not math.isfinite(usd):
+            return _drop("RED", "refused", f"request malformed ({req!r}): "
+                                           f"dropped, nothing adopted")
+        age = now - float(req.get("ts") or 0)
+        if age > CAPITAL_REQUEST_TTL_S:
+            return _drop("WARN", "expired",
+                         f"request for ${usd:,.2f} EXPIRED unexecuted after "
+                         f"{age / 86_400:.1f} days (it waited on the "
+                         f"conditions the events above name): nothing "
+                         f"adopted; re-issue it if still intended")
+        if not st.initialized:
+            return _drop("RED", "refused",
+                         f"${usd:,.2f} REFUSED: the book is not seeded - a "
+                         f"fresh book takes its capital from BLEND_BOOK_USD "
+                         f"at the seed, there is nothing to adopt into")
+        if st.halted or st.flatten_request is not None:
+            return _drop("WARN", "refused",
+                         f"${usd:,.2f} REFUSED: the book is halted "
+                         f"({st.halted}) or a flatten is queued - nothing "
+                         f"adopted; re-issue after /resume if still intended")
+        quiet = _cash_quiet_reason(st, now)
+        if quiet:
+            return _defer("capital_wait_quiet",
+                          f"${usd:,.2f} waits: not a quiet cycle ({quiet})")
+        if st.unreconciled:
+            # TA2: a parked exit's proceeds (or an orphan stop's fill) sit in
+            # the account's cash as "unowned" - adopting them now would book
+            # that cash twice once the record is resolved by hand. TC3: this
+            # wait needs the operator, so it PAGES (once a day), unlike the
+            # settlement wait that resolves itself.
+            msg = (f"${usd:,.2f} waits: unreconciled record(s) "
+                   f"{', '.join(sorted(_snapshot(st.unreconciled)))} are "
+                   f"parked - their proceeds may be in the account's cash; "
+                   f"resolve them first (waiting {age / 86_400:.1f} d of "
+                   f"{CAPITAL_REQUEST_TTL_S / 86_400:.0f}; it expires then)")
+            if mgr._event_once_today("WARN", "capital_wait_unreconciled",
+                                     "capital adoption " + msg):
+                alert("⚠️ blend capital adoption " + msg)
+            return {"status": "deferred", "usd": usd, "reason": msg}
+        budget = float(getattr(mgr.cfg, "blend_budget", 0.0) or 0.0)
+        if budget > 0:
+            spy_px = prices.get(CORE, 0.0) or 0.0
+            bil_px = prices.get(CASH_VEHICLE, 0.0) or 0.0
+            if spy_px <= 0 or bil_px <= 0:
+                # r7's rule: gross exposure computes LOW on a missing quote
+                return _defer("capital_wait_quotes",
+                              f"${usd:,.2f} waits: missing {CORE}/"
+                              f"{CASH_VEHICLE} quote - the BLEND_BUDGET "
+                              f"basis (gross exposure) is not computable")
+            gross = mgr.gross_exposure(prices)
+            if gross + usd > budget + CAPITAL_ADOPT_TOL_USD:
+                return _drop("RED", "refused",
+                             f"${usd:,.2f} REFUSED: BLEND_BUDGET "
+                             f"${budget:,.0f} cannot hold the book after it "
+                             f"(gross ${gross:,.0f} deployed + ${usd:,.0f} = "
+                             f"${gross + usd:,.0f}) - the sweep would be "
+                             f"clamped and entries blocked. Raise "
+                             f"BLEND_BUDGET first (after 16:00 ET: an env "
+                             f"change restarts the service) and re-issue")
+        venue = adapter.account_cash()
+        if not venue or venue.get("total_cash") is None:
+            return _defer("capital_wait_venue",
+                          f"${usd:,.2f} waits: the adapter returned no "
+                          f"account cash this cycle (no claim)")
+        ledger = st.sleeve_cash + st.core_cash
+        unowned = float(venue["total_cash"]) - ledger
+        # B2: the messages below carry NO figure the account's cash level
+        # could be derived from (usd is known, so a shortfall would hand it
+        # over by one subtraction) - the stage-1 rule holds on every
+        # surface: the operator reads the account's cash off TWS.
+        if unowned + CAPITAL_ADOPT_TOL_USD < usd:
+            return _drop("RED", "refused",
+                         f"${usd:,.2f} REFUSED: the account holds LESS cash "
+                         f"the book does not own than that - nothing "
+                         f"adopted. Read the account's cash off TWS, check "
+                         f"the deposit has landed, and re-issue an amount "
+                         f"the account actually holds")
+        avail = _num_or_none(venue.get("available_funds"))
+        if avail is not None and avail + CAPITAL_ADOPT_TOL_USD < usd:
+            # the cash is THERE but not yet usable (a cash account's T+1
+            # settlement, a deposit hold): adopting it now would plan a
+            # core buy the venue rejects. Wait; retried every cycle. An
+            # absent AvailableFunds claim does NOT block (fail-open on
+            # this guard only: the worst case is a venue-rejected MKT
+            # buy that reconcile 2b clears and re-plans).
+            return _defer("capital_wait_settle",
+                          f"${usd:,.2f} waits: the venue's available-to-"
+                          f"trade funds do not cover it yet (settlement / "
+                          f"deposit hold) - retried every cycle for "
+                          f"{CAPITAL_REQUEST_TTL_S / 86_400:.0f} days from "
+                          f"the request; no page while waiting, the age "
+                          f"is on /status")
+        # A1/B1 (MF2-5's rule): /kill takes no lock a cycle holds, so it can
+        # land DURING the venue round-trip above - cancelling the request
+        # and halting the book after the first check passed. Re-read
+        # immediately before the credit; the window is now a few
+        # statements, and the consequence past it is ledger-only.
+        if (st.capital_request is not req or st.halted
+                or st.flatten_request is not None):
+            return _drop("WARN", "refused",
+                         f"${usd:,.2f} REFUSED: a /kill (or a cancel) "
+                         f"landed while the venue was being read - nothing "
+                         f"adopted; re-issue after /resume if still intended")
+        target = _persisted_sleeve_target(mgr)
+        kind = req.get("kind") if req.get("kind") in ("deposit", "distribution") else "deposit"
+        named = _finite(req.get("sleeve_usd")) if kind == "distribution" else None
+        sleeve_usd = (round(min(max(named, 0.0), usd), 2) if named is not None
+                      else round(target * usd, 2))
+        core_usd = round(usd - sleeve_usd, 2)
+        stage = "mutating"
+        st.sleeve_cash += sleeve_usd
+        st.core_cash += core_usd
+        if kind == "deposit":
+            # flows for the tripwire indices: a deposit is never a new high
+            st.trip_pending_book += usd
+            st.trip_pending_sleeve += sleeve_usd
+            st.capital_contributed = round((st.capital_contributed or 0.0) + usd, 2)
+        # a distribution is RETURN the book earned: no flow, no contribution
+        st.capital_events.append({
+            "date": today, "ts": int(now),
+            "kind": "deposit_adopted" if kind == "deposit" else "distribution_adopted",
+            "usd": round(usd, 2), "sleeve_usd": sleeve_usd,
+            "core_usd": core_usd, "sleeve_target": target})
+        del st.capital_events[:-CAPITAL_EVENTS_MAX]
+        st.capital_request = None
+        # the ledger just moved by design: the stage-1 delta clock would
+        # read it as a -usd drift against the unchanged account
+        mgr.rebaseline_cash("capital adopted", save=False)
+        msg = (f"ADOPTED ${usd:,.2f} of account cash into the book as a "
+               f"{kind}: sleeve "
+               f"+${sleeve_usd:,.2f} / core +${core_usd:,.2f} at the book's "
+               f"{target:.0%} sleeve target; contributed capital now "
+               f"${(st.capital_contributed or 0.0):,.2f}"
+               + (" (a distribution is return, not a contribution)"
+                  if kind == "distribution" else "")
+               + ". The next planning cycle "
+               f"(this one, when a tracker payload is present) buys the "
+               f"{CORE} core and sweeps the sleeve's idle cash to "
+               f"{CASH_VEHICLE} (MKT; placed outside the session they rest "
+               f"for the open). New entries size off the larger sleeve from "
+               f"now on; open positions keep the size they were entered at")
+        mgr._event("WARN", "capital adoption " + msg)
+        stage = "mutated"
+        # page BEFORE the save (A2): the ledger is credited in this process
+        # whether or not the disk takes it; the operator must hear it
+        alert("💰 blend capital adoption " + msg)
+        mgr.save()
+        return {"status": "adopted", "usd": round(usd, 2),
+                "sleeve_usd": sleeve_usd, "core_usd": core_usd,
+                "contributed": st.capital_contributed}
+    except Exception as exc:  # noqa: BLE001
+        if stage == "checking":
+            logger.exception("adopt_capital failed before any ledger change "
+                             "(request kept, retried next cycle): %s", exc)
+        elif stage == "dropped":
+            # C2: the request is cleared in memory and the page went out,
+            # but the save failed - the on-disk file still carries the
+            # request, so a RESTART re-evaluates it once against the venue
+            # (the venue checks make a double credit impossible)
+            logger.exception("adopt_capital: request dropped in memory and "
+                             "paged, but the save failed - the on-disk copy "
+                             "still carries it; a restart re-evaluates it "
+                             "once: %s", exc)
+        else:
+            # the credit is in memory and the request is cleared; the next
+            # successful save persists both (nothing was placed: every
+            # placement journals with its own save first)
+            logger.exception("adopt_capital failed AFTER crediting the ledger "
+                             "in memory (stage %s): persisted by the next "
+                             "successful save: %s", stage, exc)
         return None
 
 
@@ -4872,6 +5973,48 @@ def intent_breaker_clear() -> None:
     _intent_alerted_reason.clear()
 
 
+def _buy_refusal_note(adapter, qty: int, px: float) -> str:
+    """For a market BUY the venue left `Inactive` without a reason: a YES/NO
+    on whether the account's AvailableFunds covers the order at the
+    MKT_BUY_CUSHION margin. Never a figure - the stage-1 rule: the account's
+    cash LEVEL is published on no surface (adopt_capital's DEFERRED wording
+    is the precedent for a bound, not a level). Never raises."""
+    try:
+        venue = adapter.account_cash()
+    except Exception:  # noqa: BLE001
+        venue = None
+    avail = _num_or_none((venue or {}).get("available_funds"))
+    if avail is None or not (px and px > 0):
+        return (" - the venue reported no available-funds figure, so a "
+                "cash-account credit refusal can be neither confirmed nor "
+                "ruled out")
+    if avail < qty * px * (1.0 + MKT_BUY_CUSHION):
+        return (f" - the account's available funds do NOT cover it at a "
+                f"{MKT_BUY_CUSHION:.0%} market-order margin: most likely a "
+                f"cash-account credit refusal (unsettled proceeds, or the "
+                f"book's cash ledger ahead of the account)")
+    return (f" - the account's available funds DO cover it at a "
+            f"{MKT_BUY_CUSHION:.0%} margin: either IBKR's margin is wider "
+            f"than the {MKT_BUY_CUSHION:.0%} the sizing assumes, or the "
+            f"refusal has another cause - the order's message is in the "
+            f"IBKR app (Orders, Inactive)")
+
+
+def _place_market_buy(adapter, symbol: str, qty: int, px: float, cid: str) -> dict:
+    """A book-level market BUY (CORE_BUY, the BIL sweep): the plain adapter
+    call, plus the funds note on a reasonless `Inactive` refusal (the
+    2026-10-07..26 BIL x56 pages said only 'status Inactive'). Anything
+    else - a reasoned rejection, a connection error - propagates unchanged."""
+    try:
+        return adapter.place_stock_order(symbol, qty, "MKT",
+                                         ref_price=px or None,
+                                         client_order_id=cid)
+    except RuntimeError as exc:
+        if not str(exc).endswith("(status Inactive): IBKR gave no reason"):
+            raise                       # a reasoned refusal speaks for itself
+        raise RuntimeError(f"{exc}{_buy_refusal_note(adapter, qty, px)}") from exc
+
+
 def _intent_failure_alert(mgr, it, exc, alert) -> None:
     """Alert ONCE per (action, reason) - not per cycle. The read-only-mode
     incident paged every 5 minutes with the identical [321] text, ~48
@@ -5000,6 +6143,13 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                       f"/resume acknowledges and allows it once.")
             return []
 
+    # STAGE-2 CAPITAL ADOPTION (2026-10-05): a journaled operator request is
+    # executed HERE - on the loop thread (it reads the venue), after the
+    # reconcile passes (the quiet-cycle rule needs their journals settled)
+    # and BEFORE the plan, so the same cycle's step() deploys what it
+    # adopts through the ordinary core-buy / sweep path.
+    adopt_capital(mgr, adapter, prices, today, alert)
+
     intents = mgr.step(today, payload, prices)
     exit_unsettled = False     # a funding exit deferred/UNRECONCILED (N5)
     for i, it in enumerate(intents):
@@ -5094,8 +6244,11 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                     continue
                 px = prices.get(CORE, 0.0)
                 qty = it["qty"]
-                if px > 0:   # never overdraw core cash on a short transfer
-                    qty = min(qty, int(max(mgr.state.core_cash, 0.0) // px))
+                if px > 0:   # never overdraw core cash on a short transfer,
+                    # and never size a market buy to the last dollar
+                    # (MKT_BUY_CUSHION note)
+                    qty = min(qty, int(max(mgr.state.core_cash, 0.0)
+                                       // (px * (1.0 + MKT_BUY_CUSHION))))
                 if qty > 0:
                     # Write-ahead journal + deterministic client id: a crash
                     # between placement and booking is adopted by reconcile
@@ -5103,9 +6256,7 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                     cid = mgr.record_pending_book_order("core-buy", CORE,
                                                         qty, today,
                                                         ref_price=px or None)
-                    r = adapter.place_stock_order(CORE, qty, "MKT",
-                                                  ref_price=px or None,
-                                                  client_order_id=cid)
+                    r = _place_market_buy(adapter, CORE, qty, px, cid)
                     if r.get("status") != "filled":
                         alert(f"🧬 blend CORE buy {CORE} x{qty} accepted, "
                               f"awaiting fill — reconciled next cycle")
@@ -5134,16 +6285,28 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                     # A buy planned on proceeds that never booked (e.g. an
                     # UNRECONCILED exit earlier this cycle) is clamped to
                     # the cash actually held — the ledger never goes negative.
+                    # The same clamp keeps the plan's cash reserve and sizes
+                    # the market buy MKT_BUY_CUSHION above the quote.
                     px = prices.get(CASH_VEHICLE) or 0.0
                     if px > 0:
-                        qty = min(qty, int(max(mgr.state.sleeve_cash, 0.0) // px))
+                        # net of cash a resting MOO / pending sweep will
+                        # debit (the planner's own basis; counter-agent A4)
+                        spendable = (max(mgr.state.sleeve_cash, 0.0)
+                                     - mgr.reserved_sleeve_cash()
+                                     - float(it.get("reserve_usd") or 0.0))
+                        qty = min(qty, int(max(spendable, 0.0)
+                                           // (px * (1.0 + MKT_BUY_CUSHION))))
                 if qty != 0:
                     cid = mgr.record_pending_book_order(
                         "sweep", CASH_VEHICLE, qty, today,
                         ref_price=prices.get(CASH_VEHICLE))
-                    r = adapter.place_stock_order(CASH_VEHICLE, qty, "MKT",
-                                                  ref_price=prices.get(CASH_VEHICLE),
-                                                  client_order_id=cid)
+                    if qty > 0:
+                        r = _place_market_buy(adapter, CASH_VEHICLE, qty,
+                                              prices.get(CASH_VEHICLE) or 0.0, cid)
+                    else:
+                        r = adapter.place_stock_order(CASH_VEHICLE, qty, "MKT",
+                                                      ref_price=prices.get(CASH_VEHICLE),
+                                                      client_order_id=cid)
                     if r.get("status") != "filled":
                         alert(f"🧬 blend SWEEP {CASH_VEHICLE} "
                               f"{'+' if qty > 0 else ''}{qty} accepted, "
@@ -5181,6 +6344,7 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
     # serve — they must NEVER touch the adapter/ib_async loop themselves.
     mgr.mark_cache = {"prices": post_prices, "ts": time.time()}
     mgr.record_equity_snapshot(today, post_prices)  # daily equity point
+    mgr.update_tripwires(today, post_prices, alert)  # kill-ledger lines (alert-only)
     mgr.check_budget_alarm(post_prices, alert)      # 85% one-shot / 75% re-arm
     mgr.save()
     return intents

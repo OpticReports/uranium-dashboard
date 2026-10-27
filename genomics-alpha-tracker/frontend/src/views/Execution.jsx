@@ -62,6 +62,13 @@ export default function Execution() {
   const positions = feed.positions || [];
   const util = book.budget_utilization; // fraction of BLEND_BUDGET or null
   const lastCycle = feed.last_cycle || {};
+  // Contributed capital (seed + adopted deposits, executor stage-2 cash
+  // adoption 2026-10-05) is the flow-adjusted basis: a deposit is a STEP in
+  // the curve, not a gain, so the dashed line sits at what was put in and
+  // each adoption is marked where it landed. Older executors publish only
+  // initial_book_usd; fall back to it.
+  const contributed = book.capital_contributed ?? book.initial_book_usd ?? null;
+  const deposits = (feed.capital_events || []).filter((e) => e.kind === "deposit_adopted");
 
   return (
     <div className="space-y-4">
@@ -112,7 +119,9 @@ export default function Execution() {
       {/* equity curve */}
       <div className="bg-panel border border-edge rounded-xl p-4">
         <div className="text-xs text-gray-400 mb-1">
-          Book equity (daily cycle snapshots; dashed line = initial BLEND_BOOK_USD)
+          Book equity (daily cycle snapshots; dashed line = contributed capital
+          {contributed != null ? ` ${fmtMoney(contributed)}` : ""}: seed + adopted deposits
+          {deposits.length > 0 ? `; ${deposits.length} deposit${deposits.length > 1 ? "s" : ""} marked` : ""})
         </div>
         {curve.length > 1 ? (
           <ResponsiveContainer width="100%" height={180}>
@@ -123,9 +132,13 @@ export default function Execution() {
                 tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`} width={46} />
               <Tooltip contentStyle={{ background: "#121826", border: "1px solid #1f2937", fontSize: 12 }}
                 formatter={(v) => fmtMoney(v)} />
-              {book.initial_book_usd != null && (
-                <ReferenceLine y={book.initial_book_usd} stroke="#4b5563" strokeDasharray="3 3" />
+              {contributed != null && (
+                <ReferenceLine y={contributed} stroke="#4b5563" strokeDasharray="3 3" />
               )}
+              {deposits.map((e, i) => (
+                <ReferenceLine key={`dep-${i}`} x={e.date} stroke="#a78bfa" strokeDasharray="2 2"
+                  label={{ value: `+${fmtMoney(e.usd)}`, fontSize: 9, fill: "#a78bfa", position: "insideTopRight" }} />
+              ))}
               <Line type="stepAfter" dataKey="value" stroke="#38bdf8" dot={false} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
@@ -158,6 +171,58 @@ export default function Execution() {
           </div>
         )}
       </div>
+
+      {/* kill-ledger tripwires (alert-only; executor 2026-10-05) */}
+      {feed.tripwires && (
+        <div className="bg-panel border border-edge rounded-xl p-4">
+          <div className="text-xs text-gray-400 mb-2">
+            Kill-ledger tripwires — ALERT-ONLY (the executor pages; ibkr-executor/ledger.csv names the
+            action). Drawdowns are flow-adjusted: a deposit is not a new high, a rebalance transfer is
+            not a loss.
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            {(feed.tripwires.lines || []).map((ln) => {
+              const isDD = typeof ln.level === "number" && ln.level < 1;
+              const val = ln.value == null ? "n/a" : isDD ? `${(ln.value * 100).toFixed(1)}%` : String(ln.value);
+              const lvl = isDD ? `${(ln.level * 100).toFixed(0)}%` : String(ln.level);
+              const frac = ln.value == null || !ln.level ? 0 : Math.min(ln.value / ln.level, 1);
+              return (
+                <div key={ln.line} className="border border-edge rounded-lg px-3 py-2">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-gray-300">{ln.line}</span>
+                    <span className={ln.paged ? "text-rose-300 font-semibold" : "text-gray-400"}>
+                      {val} / {lvl}{ln.paged ? " — PAGED" : ""}
+                    </span>
+                  </div>
+                  <div className="h-1.5 mt-1 bg-ink rounded overflow-hidden">
+                    <div className={`h-full ${frac >= 1 ? "bg-rose-600/80" : frac >= 0.7 ? "bg-amber-500/70" : "bg-sky-600/60"}`}
+                      style={{ width: `${frac * 100}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-[11px] text-gray-500 mt-2">
+            {feed.tripwires.error ? (
+              <span className="text-amber-400">tripwire summary unavailable on the executor — see its events</span>
+            ) : (
+              <>
+                Lines read finalized daily closes and page on two consecutive closes. Book: since{" "}
+                {feed.tripwires.book?.since ?? "n/a"}, high-water mark {feed.tripwires.book?.hwm_date ?? "n/a"},
+                last close {feed.tripwires.book?.close_date ?? "n/a"}
+                {feed.tripwires.book?.drawdown_live != null &&
+                  ` (live ${(feed.tripwires.book.drawdown_live * 100).toFixed(1)}%)`}
+                . Sleeve: since {feed.tripwires.sleeve?.since ?? "n/a"}, high-water mark{" "}
+                {feed.tripwires.sleeve?.hwm_date ?? "n/a"}, last close {feed.tripwires.sleeve?.close_date ?? "n/a"}.
+                {lastCycle.date && feed.tripwires.book?.close_date &&
+                  (new Date(lastCycle.date) - new Date(feed.tripwires.book.close_date)) / 86400000 > 4 && (
+                    <span className="text-amber-400"> Last close is more than 4 days old — the series may be stale.</span>
+                  )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* open positions */}
       <div className="overflow-x-auto bg-panel border border-edge rounded-xl">

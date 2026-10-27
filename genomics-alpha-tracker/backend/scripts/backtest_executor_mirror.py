@@ -28,7 +28,8 @@ Everything that already exists is IMPORTED, never re-implemented: the bars
 loader, the cap selector, the R2-A book, seg_stats, downsample, the BIL
 yield loader, the R3 blend helpers. Two machinery checks run before any
 number is reported: (1) the reused R2-A recipe reproduces the stored
-$430,406.29 within the repo's V0 machinery tolerance (+/-1%, the gate
+R2-A end value (469,241.76 since the 2026-10-04 re-basing on the committed
+FMP cache; 430,406.29 on the old Yahoo basis) within the repo's V0 machinery tolerance (+/-1%, the gate
 backtest_variants_10y.py and backtest_summary.py apply) — cache_exact says
 whether it also lands to $1; a miss means the bars are not on the campaign
 basis (abort, or --allow-cache-drift to publish with cache_verified=false);
@@ -168,14 +169,21 @@ class ExecCfg:
     bil_order_cost: bool = True          # +$1 BIL sell at entry (pre-fund), +$1 re-sweep at exit
     carry: bool = True                   # idle sleeve cash earns BIL total return (needs a yield series)
     paper_arith: bool = False            # run_call_book P&L arithmetic (reduction check only)
+    # ROUND 10 sizing levers (docs/VARIANTS_PREREGISTRATION_R10_SIZING.md); defaults = the live rule
+    sizing: str = "risk"                 # 'risk' | 'slot_fill' (spendable cash / free slots) | 'inverse_occupancy'
+    risk_frac_max: float = 0.03          # inverse_occupancy clamp ceiling (floor = risk_frac)
+    start_equity: float | None = None    # None -> START_EQUITY; the live book's base is 120_000
 
     @property
     def label(self) -> str:
-        return (f"lag={self.entry_lag} seed={self.peak_seed} ratchet={self.ratchet} "
+        base = (f"lag={self.entry_lag} seed={self.peak_seed} ratchet={self.ratchet} "
                 f"dz_stop={self.day_zero_stop} cap={self.risk_cap} ts={self.time_stop_anchor}/"
                 f"{self.time_stop_fill} target={self.sleeve_target} int={self.integer_shares} "
                 f"clip={self.cash_clip} comm={self.commission_model} bil$={self.bil_order_cost} "
                 f"carry={self.carry}")
+        if self.sizing != "risk":
+            base += f" sizing={self.sizing}"
+        return base
 
 
 EXEC_T2 = ExecCfg()
@@ -304,6 +312,13 @@ def grade_executor(bars: list[BarLike], atrs: list[float | None], i_fire: int,
             exit_px = eb.close
         return {**core, "status": "prefill_exit", "exit_date": eb.date, "exit": exit_px}
 
+    # day_zero_stop = the executor's resting STP at the PUBLISHED level L0
+    # (blend.py _ensure_stop right after the fill): a floor the trail can
+    # only replace with a higher level, in force from the fill bar itself.
+    # Under the executor's own settings (fire-close seed + ratchet) the
+    # trail already starts at L0, so this is identical; on the paper side
+    # it is the mechanism the round-9 ablation flips (addendum 1, item 2).
+    floor = L0 if (cfg.day_zero_stop and L0 is not None and L0 > 0) else None
     prev: BarLike | None = None
     for k in range(j, n):
         b = bars[k]
@@ -322,11 +337,12 @@ def grade_executor(bars: list[BarLike], atrs: list[float | None], i_fire: int,
             trail = level if (trail is None or not cfg.ratchet) else max(trail, level)
         elif not cfg.ratchet:
             trail = None                               # grade_trailing: no level, no stop
-        if trail is not None and (k > j or cfg.day_zero_stop):
-            if b.open is not None and b.open <= trail:
+        stop = trail if floor is None else (floor if trail is None else max(floor, trail))
+        if stop is not None and (k > j or floor is not None):
+            if b.open is not None and b.open <= stop:
                 return {**core, "status": "stopped", "exit_date": b.date, "exit": b.open}
-            if b.low <= trail:
-                return {**core, "status": "stopped", "exit_date": b.date, "exit": trail}
+            if b.low <= stop:
+                return {**core, "status": "stopped", "exit_date": b.date, "exit": stop}
         if cfg.time_stop_fill == "deadline_close" and b.date == deadline:
             return {**core, "status": "expired", "exit_date": b.date, "exit": b.close}
         peak = b.close if peak is None else max(peak, b.close)
@@ -417,7 +433,8 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
     today in select_capped order, sized at risk_frac of the SLEEVE equity at
     the close of the FIRE day (= the prior close for lag 1 — run_call_book's
     prev_equity; the nearest daily proxy to the T+1 ~10:30 marks for lag 2),
-    qty = min(floor(risk$/risk), floor(spendable cash/entry_ref)), cost at the
+    qty = min(floor(risk$/risk), floor(spendable cash/entry_ref)) (cfg.sizing
+    'slot_fill' / 'inverse_occupancy' replace the risk$ leg, round 10), cost at the
     actual fill (cash may dip below zero by the fill-vs-entry_ref gap, as the
     executor's ledger does — never clipped at the fill); (3) MTM on adjusted
     closes; (4) 30/70 band rebalance + core buy.
@@ -434,8 +451,9 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
     blend = target < 1.0 - 1e-9
     bil_fee = cfg.commission_usd if cfg.bil_order_cost else 0.0
 
-    sleeve_cash = target * START_EQUITY
-    core_cash = (1.0 - target) * START_EQUITY
+    start_eq = START_EQUITY if cfg.start_equity is None else cfg.start_equity
+    sleeve_cash = target * start_eq
+    core_cash = (1.0 - target) * start_eq
     spy_qty = 0
     positions: list[dict] = []
     curve: list[tuple[date, float]] = []
@@ -456,7 +474,7 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
     for d in calendar:
         ds = d.isoformat()
         ev = {"commissions": 0.0, "bil_orders": 0, "rebalances": 0, "core_orders": 0,
-              "skipped_zero_qty": 0, "entries": 0, "exits": 0, "carry": 0.0}
+              "skipped_zero_qty": 0, "entries": 0, "exits": 0, "carry": 0.0, "sleeve_band_flow": 0.0}
 
         # 0. carry: yesterday's idle sleeve cash earns today's BIL total return
         if cash_yield is not None and not first:
@@ -479,9 +497,22 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
                 size_eq = prev_sleeve_eq
             else:
                 size_eq = sleeve_eq_by.get(t["fire_date"], prev_sleeve_eq)
-            risk_usd = cfg.risk_frac * size_eq
             risk = t["risk"]
-            qty = risk_usd / risk
+            # `positions` is the OPEN list at this moment: today's exits are
+            # already applied, earlier same-day entries already appended.
+            if cfg.sizing == "slot_fill":
+                free_slots = max(CAP - len(positions), 1)
+                qty = (max(sleeve_cash, 0.0) / free_slots) / t["entry_ref"]
+            else:
+                if cfg.sizing == "inverse_occupancy":
+                    risk_frac = min(cfg.risk_frac_max,
+                                    max(cfg.risk_frac, cfg.risk_frac * CAP / (len(positions) + 1)))
+                elif cfg.sizing == "risk":
+                    risk_frac = cfg.risk_frac
+                else:
+                    raise ValueError(f"unknown sizing {cfg.sizing!r}")
+                risk_usd = risk_frac * size_eq
+                qty = risk_usd / risk
             if cfg.integer_shares:
                 qty = math.floor(qty)
             if cfg.cash_clip:
@@ -502,7 +533,8 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
             ev["entries"] += 1
             trades.append({"entry_date": ds, "exit_date": t["exit_date"], "status": t["status"],
                            "hold_days": t["hold_days"], "qty": qty, "r_net": t["r_net"],
-                           "prefill_exit": t.get("prefill_exit", False), "symbol": t["symbol"]})
+                           "prefill_exit": t.get("prefill_exit", False), "symbol": t["symbol"],
+                           "fill": t["entry"], "exit": t["exit"]})
             if t["exit_date"] <= ds:                    # same-bar exit: realize now
                 sleeve_cash += _exit_proceeds(cfg, p, ev)
             else:
@@ -521,7 +553,12 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
         core_eq = core_cash + (spy_qty * spy if spy is not None else 0.0)
         equity = sleeve_eq + core_eq
 
-        # 4. 30/70 band rebalance at the close + core buy of idle core cash
+        # 4. 30/70 band rebalance at the close + core buy of idle core cash.
+        # sleeve_band_flow = the band step's net change in sleeve cash (+ core->sleeve
+        # proceeds, - sleeve->core cash incl. its BIL fee): an external flow for the
+        # sleeve, so sleeve_eq - sleeve_band_flow is the pre-transfer sleeve equity
+        # (round 11, counter-agent B1: time-weighted sleeve returns).
+        sleeve_cash_pre_band = sleeve_cash
         if blend and spy is not None and equity > 0:
             w = sleeve_eq / equity
             if abs(w - target) > cfg.band:
@@ -556,6 +593,7 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
             core_eq = core_cash + spy_qty * spy
             equity = sleeve_eq + core_eq
 
+        ev["sleeve_band_flow"] = sleeve_cash - sleeve_cash_pre_band
         curve.append((d, equity))
         sleeve_curve.append((d, sleeve_eq))
         sleeve_eq_by[ds] = sleeve_eq
@@ -755,24 +793,60 @@ def stationary_bootstrap(rets: list[float], horizon_years: float, draws: int = B
             "prob_cagr_negative": sum(1 for c in cagrs if c < 0) / len(cagrs)}
 
 
-def select_capped_exec(rows: list[dict], cap: int | None) -> tuple[list[dict], int]:
+def select_capped_exec(rows: list[dict], cap: int | None, per_symbol_max: int | None = None, *,
+                       return_detail: bool = False, symbol_release: str = "cap",
+                       refusal_log: list | None = None) -> tuple:
     """select_capped with LIVE slot occupancy: the executor counts a pending
     MOO as open from the T+1 sizing cycle (blend.py: open_count = positions -
     exiting + pending_entries), so a lag-2 call holds its cap slot from its
     gate_date (fire+1), not from the fill bar; a slot frees the day after the
     exit, as in select_capped (counter-agent 2026-10-04, MED: the fill-bar
-    rule let ~38 lag-2 calls in that live would have refused)."""
+    rule let ~38 lag-2 calls in that live would have refused).
+
+    per_symbol_max (round 11, docs/VARIANTS_PREREGISTRATION_R11_PER_SYMBOL.md):
+    None (default) = no per-symbol limit, the behaviour above unchanged. With
+    k, a row whose symbol already has >= k HELD taken rows is refused: held
+    uses the cap's own occupancy test (taken earlier in this order, exit_date
+    >= this row's occupy_from, so exit_date == occupy_from is still held). A
+    refused row consumes no slot. The cap is checked first: a row arriving at
+    a full cap counts as skipped_at_cap, so refused_repeat counts only the
+    repeats that would otherwise have taken a slot. "Taken earlier in this
+    order" includes same-gate-date siblings (multi-flag fires of one name).
+
+    symbol_release (per-symbol test only; the cap's occupancy is unchanged):
+    "cap" (default) = the rule above; "live" = a same-symbol call stops
+    counting ON its exit date (exit_date > occupy_from), the sensitivity for
+    the live executor freeing an exiting / stop-filled call in the same
+    cycle (round-11 counter-agent A1). refusal_log: if a list, each refused
+    row is appended as (row, [the same-symbol taken rows that blocked it]).
+
+    Returns (taken, skipped) — skipped = len(rows) - len(taken), as before —
+    or, with return_detail=True, (taken, skipped_at_cap, refused_repeat)."""
+    if symbol_release not in ("cap", "live"):
+        raise ValueError(f"symbol_release must be 'cap' or 'live', not {symbol_release!r}")
     key = lambda t: (t.get("gate_date", t["entry_date"]), t["entry_date"], t["symbol"], t.get("flag", ""))  # noqa: E731
     ordered = sorted(rows, key=key)
     taken: list[dict] = []
-    open_exits: list[str] = []
+    open_held: list[tuple[str, str, dict]] = []     # (exit_date, symbol, row) of taken rows still holding a slot
+    skipped_at_cap = refused_repeat = 0
     for t in ordered:
         occupy_from = t.get("gate_date", t["entry_date"])
-        open_exits = [x for x in open_exits if x >= occupy_from]
-        if cap is not None and len(open_exits) >= cap:
+        open_held = [x for x in open_held if x[0] >= occupy_from]
+        if cap is not None and len(open_held) >= cap:
+            skipped_at_cap += 1
             continue
+        if per_symbol_max is not None:
+            same = [x for x in open_held if x[1] == t["symbol"]
+                    and (symbol_release == "cap" or x[0] > occupy_from)]
+            if len(same) >= per_symbol_max:
+                refused_repeat += 1
+                if refusal_log is not None:
+                    refusal_log.append((t, [x[2] for x in same]))
+                continue
         taken.append(t)
-        open_exits.append(t["exit_date"])
+        open_held.append((t["exit_date"], t["symbol"], t))
+    if return_detail:
+        return taken, skipped_at_cap, refused_repeat
     return taken, len(rows) - len(taken)
 
 
@@ -1337,6 +1411,35 @@ def load_inputs(fetch_missing: bool = False, refresh_bars_if_missing: bool = Fal
     import scripts.backtest_variants_r2 as _r2
     # 1) decide on a rebuild BEFORE any path is resolved (a seed_data copy
     #    must never shadow a freshly written data/ cache - counter-agent MED)
+    # 0) the committed FROZEN cache (image copy under seed_data on Render,
+    #    where the disk mount hides data/): copy it in before deciding on any
+    #    refetch, so the machinery check runs against the record the stored
+    #    numbers were produced from, not against whatever FMP serves today.
+    #    The disk may already hold a cache an earlier run refetched (the
+    #    2026-10-04 Render run wrote one with the pre-segment ATAI fix), which
+    #    would otherwise shadow the committed record forever. A disk cache is
+    #    kept only when its sidecar proves it IS a frozen-lane cache (carries
+    #    the window `end` and per-symbol `segment`s); anything else is
+    #    replaced by the seed, all three files together, atomically.
+    seed_files = [(CACHE, SEED_DATA / CACHE.name), (SPY_RAW, SEED_DATA / SPY_RAW.name),
+                  (BASIS_SIDECAR, SEED_DATA / BASIS_SIDECAR.name)]
+    if not force_refresh and all(alt.exists() for _p, alt in seed_files):
+        disk_is_frozen = False
+        try:
+            sc = json.loads(BASIS_SIDECAR.read_text()) if BASIS_SIDECAR.exists() else {}
+            disk_is_frozen = (CACHE.exists() and SPY_RAW.exists() and bool(sc.get("end"))
+                              and all("segment" in v for v in (sc.get("normalized") or {}).values()))
+        except (OSError, ValueError):
+            disk_is_frozen = False
+        if not disk_is_frozen:
+            for path, alt in seed_files:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = path.with_suffix(path.suffix + ".seed.tmp")
+                tmp.write_bytes(alt.read_bytes())
+                tmp.replace(path)
+            print(f"seeded the committed frozen cache from seed_data (disk cache was "
+                  f"{'absent' if not CACHE.exists() else 'not a frozen-lane cache'}): "
+                  f"{[p.name for p, _a in seed_files]}")
     incomplete = _cache_incomplete() if (force_refresh or refresh_bars_if_missing) else None
     if force_refresh or (refresh_bars_if_missing and incomplete):
         print(f"bars cache {'refresh requested' if force_refresh else incomplete}: rebuilding on the "

@@ -1,0 +1,566 @@
+year,district,district_code,district_harmonized,state,is_territory,nonbusiness,nb_ch7,nb_ch11,nb_ch13,pct_ch7_printed,flag,source_page
+1990,District of Alaska,AK,AK,AK,0,989,861,6,122,87.06,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Middle District of Alabama,ALM,ALM,AL,0,4865,1718,3,3144,35.31,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Northern District of Alabama,ALN,ALN,AL,0,17028,6682,22,10324,39.24,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Southern District of Alabama,ALS,ALS,AL,0,2604,2007,20,577,77.07,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Eastern District of Arkansas,ARE,AR,AR,0,4261,1933,11,2317,45.36,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Western District of Arkansas,ARW,AR,AR,0,2334,1732,4,598,74.21,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Arizona,AZ,AZ,AZ,0,16008,12225,154,3629,76.37,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Central District of California,CAC,CAC,CA,0,56520,46098,503,9919,81.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Eastern District of California,CAE,CAE,CA,0,16617,13454,41,3122,80.97,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Northern District of California,CAN,CAN,CA,0,17140,12064,119,4957,70.39,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Southern District of California,CAS,CAS,CA,0,10739,6620,42,4077,61.64,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Colorado,CO,CO,CO,0,15583,11487,19,4077,73.71,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Connecticut,CT,CT,CT,0,5163,4421,64,678,85.63,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Columbia,DC,DC,DC,0,958,505,9,444,52.71,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Delaware,DE,DE,DE,0,954,715,11,228,74.95,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Middle District of Florida,FLM,FLM,FL,0,22398,19650,123,2625,87.73,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Northern District of Florida,FLN,FLN,FL,0,2250,2124,8,118,94.4,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Southern District of Florida,FLS,FLS,FL,0,9064,7971,67,1026,87.94,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Middle District of Georgia,GAM,GAM,GA,0,8584,4211,8,4365,49.06,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Northern District of Georgia,GAN,GAN,GA,0,24197,10962,54,13181,45.3,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Southern District of Georgia,GAS,GAS,GA,0,7259,2283,9,4967,31.45,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Hawaii,HI,HI,HI,0,808,722,8,78,89.36,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Northern District of Iowa,IAN,IAN,IA,0,1703,1645,0,58,96.59,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Southern District of Iowa,IAS,IAS,IA,0,3057,2708,3,346,88.58,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Idaho,ID,ID,ID,0,3735,2501,5,1229,66.96,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Central District of Illinois,ILC,ILC,IL,0,7004,6233,3,768,88.99,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Northern District of Illinois,ILN,ILN,IL,0,25649,18301,14,7334,71.35,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Southern District of Illinois,ILS,ILS,IL,0,3138,2468,0,670,78.65,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Northern District of Indiana,INN,INN,IN,0,7881,6922,3,956,87.83,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Southern District of Indiana,INS,INS,IN,0,15135,13830,11,1294,91.38,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Kansas,KS,KS,KS,0,8251,6709,3,1539,81.31,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Eastern District of Kentucky,KYE,KYE,KY,0,6121,4815,0,1306,78.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Western District of Kentucky,KYW,KYW,KY,0,7273,5693,4,1576,78.28,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Eastern District of Louisiana,LAE,LAE,LA,0,4813,3680,29,1104,76.46,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Middle District of Louisiana,LAM,LAM,LA,0,1508,1115,5,388,73.94,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Western District of Louisiana,LAW,LAW,LA,0,5259,3556,1,1702,67.62,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Massachusetts,MA,MA,MA,0,8316,6738,97,1481,81.02,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Maryland,MD,MD,MD,0,8955,5938,7,3010,66.31,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Maine,ME,ME,ME,0,1493,1145,0,348,76.69,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Eastern District of Michigan,MIE,MIE,MI,0,13442,10453,12,2977,77.76,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Western District of Michigan,MIW,MIW,MI,0,5449,3861,12,1576,70.86,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Minnesota,MN,MN,MN,0,13329,9505,1,3823,71.31,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Eastern District of Missouri,MOE,MOE,MO,0,7595,4645,0,2950,61.16,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Western District of Missouri,MOW,MOW,MO,0,5933,5131,1,801,86.48,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Northern District of Mississippi,MSN,MSN,MS,0,3639,2337,2,1300,64.22,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Southern District of Mississippi,MSS,MSS,MS,0,7301,4369,30,2902,59.84,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Montana,MT,MT,MT,0,1728,1557,2,169,90.1,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Eastern District of North Carolina,NCE,NCE,NC,0,3920,2231,8,1681,56.91,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Middle District of North Carolina,NCM,NCM,NC,0,3867,858,0,3009,22.19,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Western District of North Carolina,NCW,NCW,NC,0,3592,1118,4,2470,31.12,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of North Dakota,ND,ND,ND,0,873,838,0,35,95.99,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Nebraska,NE,NE,NE,0,3633,2352,2,1279,64.74,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of New Hampshire,NH,NH,NH,0,2078,1872,13,193,90.09,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of New Jersey,NJ,NJ,NJ,0,14277,10270,159,3848,71.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of New Mexico,NM,NM,NM,0,3852,3410,24,418,88.53,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,District of Nevada,NV,NV,NV,0,6114,4381,31,1702,71.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Easter District of New York,NYE,NYE,NY,0,11349,9071,90,2188,79.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1990,Northern District of New York,NYN,NYN,NY,0,6370,5386,8,976,,pct_ch7:truncated_at_source,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Alaska,AK,AK,AK,0,894,808,6,80,90.38,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Middle District of Alabama,ALM,ALM,AL,0,5510,1892,2,3616,34.34,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Northern District of Alabama,ALN,ALN,AL,0,19028,7364,21,11643,38.7,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Southern District of Alabama,ALS,ALS,AL,0,2642,1888,18,736,71.46,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Eastern District of Arkansas,ARE,AR,AR,0,4904,2464,5,2435,50.24,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Western District of Arkansas,ARW,AR,AR,0,2914,2092,2,820,71.79,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Arizona,AZ,AZ,AZ,0,17794,13538,162,4094,76.08,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Central District of California,CAC,CAC,CA,0,71665,59413,644,11608,82.9,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Eastern District of California,CAE,CAE,CA,0,19533,15868,33,3632,81.24,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Northern District of California,CAN,CAN,CA,0,21769,15724,240,5805,72.23,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Southern District of California,CAS,CAS,CA,0,14110,8986,81,5043,63.69,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Colorado,CO,CO,CO,0,16460,12728,11,3721,77.33,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Connecticut,CT,CT,CT,0,7527,6498,129,900,86.33,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Columbia,DC,DC,DC,0,1187,722,16,449,60.83,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Delaware,DE,DE,DE,0,1092,809,11,272,74.08,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Middle District of Florida,FLM,FLM,FL,0,28775,24935,141,3699,86.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Northern District of Florida,FLN,FLN,FL,0,2865,2678,14,173,93.47,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Southern District of Florida,FLS,FLS,FL,0,14456,12527,93,1836,86.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Middle District of Georgia,GAM,GAM,GA,0,10286,4473,14,5799,43.49,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Northern District of Georgia,GAN,GAN,GA,0,30297,12402,44,17851,40.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Southern District of Georgia,GAS,GAS,GA,0,7923,2321,5,5597,29.29,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Hawaii,HI,HI,HI,0,1024,953,2,69,93.07,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Northern District of Iowa,IAN,IAN,IA,0,1848,1787,0,61,96.7,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Southern District of Iowa,IAS,IAS,IA,0,3611,3148,3,460,87.18,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Idaho,ID,ID,ID,0,3948,2703,3,1242,68.47,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Central District of Illinois,ILC,ILC,IL,0,7345,6521,1,823,88.78,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Northern District of Illinois,ILN,ILN,IL,0,29185,21251,10,7924,72.81,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Southern District of Illinois,ILS,ILS,IL,0,3826,2774,0,1052,72.5,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Northern District of Indiana,INN,INN,IN,0,9054,7942,6,1106,87.72,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Southern District of Indiana,INS,INS,IN,0,17877,16146,16,1715,90.32,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Kansas,KS,KS,KS,0,9181,7577,6,1597,82.53,ch7+ch11+ch13=9180 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Eastern District of Kentucky,KYE,KYE,KY,0,6490,5525,3,962,85.13,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Western District of Kentucky,KYW,KYW,KY,0,8039,6245,2,1792,77.68,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Eastern District of Louisiana,LAE,LAE,LA,0,5323,3797,27,1499,71.33,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Middle District of Louisiana,LAM,LAM,LA,0,1498,1101,2,395,73.5,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Western District of Louisiana,LAW,LAW,LA,0,5868,3691,2,2175,62.9,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Massachusetts,MA,MA,MA,0,12398,10518,124,1756,84.84,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Maryland,MD,MD,MD,0,13074,8989,23,4062,68.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Maine,ME,ME,ME,0,1952,1530,1,421,78.38,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Eastern District of Michigan,MIE,MIE,MI,0,17097,13096,10,3991,76.6,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Western District of Michigan,MIW,MIW,MI,0,6755,5149,5,1601,76.23,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Minnesota,MN,MN,MN,0,15783,11514,5,4264,72.95,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Eastern District of Missouri,MOE,MOE,MO,0,9850,5719,3,4128,58.06,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Western District of Missouri,MOW,MOW,MO,0,7669,6719,0,950,87.61,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Northern District of Mississippi,MSN,MSN,MS,0,4076,2470,1,1605,60.6,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Southern District of Mississippi,MSS,MSS,MS,0,8296,4807,19,3470,57.94,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Montana,MT,MT,MT,0,1910,1738,2,170,90.99,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Eastern District of North Carolina,NCE,NCE,NC,0,5054,2714,11,2329,53.7,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Middle District of North Carolina,NCM,NCM,NC,0,5417,1372,0,4045,25.33,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Western District of North Carolina,NCW,NCW,NC,0,5076,1679,0,3397,33.08,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of North Dakota,ND,ND,ND,0,1057,1038,0,19,98.2,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Nebraska,NE,NE,NE,0,4167,2869,0,1298,68.85,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of New Hampshire,NH,NH,NH,0,3281,2996,26,259,91.31,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of New Jersey,NJ,NJ,NJ,0,21035,15477,256,5302,73.58,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of New Mexico,NM,NM,NM,0,4117,3579,11,527,86.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,District of Nevada,NV,NV,NV,0,6788,4998,29,1761,73.63,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Easter District of New York,NYE,NYE,NY,0,16652,13237,131,3284,79.49,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1991,Northern District of New York,NYN,NYN,NY,0,,,,,,ch11:cell_missing_in_row;ch13:cell_missing_in_row;ch7:cell_missing_in_row;nb_total:cell_missing_in_row;pct_ch7:cell_missing_in_row,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Alaska,AK,AK,AK,0,843,771,3,69,91.46,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Middle District of Alabama,ALM,ALM,AL,0,4723,1760,2,2961,37.26,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Northern District of Alabama,ALN,ALN,AL,0,18312,6598,19,11695,36.03,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Southern District of Alabama,ALS,ALS,AL,0,2512,1752,5,755,69.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Eastern District of Arkansas,ARE,AR,AR,0,4677,2519,2,2156,53.86,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Western District of Arkansas,ARW,AR,AR,0,2999,2135,3,861,71.19,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Arizona,AZ,AZ,AZ,0,18184,14238,102,3844,78.3,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Central District of California,CAC,CAC,CA,0,88265,73866,851,13548,83.69,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Eastern District of California,CAE,CAE,CA,0,21377,17309,37,4031,80.97,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Northern District of California,CAN,CAN,CA,0,25154,18541,303,6310,73.71,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Southern District of California,CAS,CAS,CA,0,14847,10021,80,4746,67.5,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Colorado,CO,CO,CO,0,14936,11077,4,3855,74.16,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Connecticut,CT,CT,CT,0,9093,7646,122,1325,84.09,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Columbia,DC,DC,DC,0,1311,821,24,466,62.62,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Delaware,DE,DE,DE,0,1363,951,9,403,69.77,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Middle District of Florida,FLM,FLM,FL,0,29846,25671,126,4049,86.01,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Northern District of Florida,FLN,FLN,FL,0,2774,2524,13,237,90.99,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Southern District of Florida,FLS,FLS,FL,0,16397,14068,73,2256,85.8,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Middle District of Georgia,GAM,GAM,GA,0,9381,4033,10,5338,42.99,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Northern District of Georgia,GAN,GAN,GA,0,27017,11318,33,15666,41.89,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Southern District of Georgia,GAS,GAS,GA,0,7016,2030,1,4985,28.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Hawaii,HI,HI,HI,0,1268,1185,7,76,93.45,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Northern District of Iowa,IAN,IAN,IA,0,1968,1914,1,53,97.26,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Southern District of Iowa,IAS,IAS,IA,0,3627,3228,0,399,89.0,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Idaho,ID,ID,ID,0,3590,2542,8,1040,70.81,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Central District of Illinois,ILC,ILC,IL,0,6925,6155,3,767,88.88,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Northern District of Illinois,ILN,ILN,IL,0,29993,22032,17,7944,73.46,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Southern District of Illinois,ILS,ILS,IL,0,3494,2554,1,939,73.1,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Northern District of Indiana,INN,INN,IN,0,9249,8096,5,1148,87.53,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Southern District of Indiana,INS,INS,IN,0,16801,15039,11,1751,89.51,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Kansas,KS,KS,KS,0,8464,7022,5,1437,82.96,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Eastern District of Kentucky,KYE,KYE,KY,0,6362,5505,2,855,86.53,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Western District of Kentucky,KYW,KYW,KY,0,7424,5808,4,1612,78.23,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Eastern District of Louisiana,LAE,LAE,LA,0,5328,3544,35,1749,66.52,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Middle District of Louisiana,LAM,LAM,LA,0,1332,982,2,348,73.72,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Western District of Louisiana,LAW,LAW,LA,0,6576,3630,0,2946,55.2,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Massachusetts,MA,MA,MA,0,14752,12165,59,2528,82.46,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Maryland,MD,MD,MD,0,15148,11156,30,3962,73.65,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Maine,ME,ME,ME,0,1827,1509,3,315,82.59,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Eastern District of Michigan,MIE,MIE,MI,0,18353,13958,20,4375,76.05,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Western District of Michigan,MIW,MIW,MI,0,6853,5382,6,1465,78.53,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Minnesota,MN,MN,MN,0,15281,11304,5,3972,73.97,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Eastern District of Missouri,MOE,MOE,MO,0,9851,5438,5,4408,55.2,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Western District of Missouri,MOW,MOW,MO,0,7647,6666,3,978,87.17,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Northern District of Mississippi,MSN,MSN,MS,0,3835,2513,1,1321,65.53,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Southern District of Mississippi,MSS,MSS,MS,0,7821,4522,15,3284,57.82,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Montana,MT,MT,MT,0,1786,1591,1,194,89.08,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Eastern District of North Carolina,NCE,NCE,NC,0,4972,2585,10,2377,51.99,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Middle District of North Carolina,NCM,NCM,NC,0,4545,1253,0,3292,27.57,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Western District of North Carolina,NCW,NCW,NC,0,4322,1671,0,2651,38.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of North Dakota,ND,ND,ND,0,1078,1053,0,25,97.68,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Nebraska,NE,NE,NE,0,3879,2890,1,988,74.5,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of New Hampshire,NH,NH,NH,0,3676,3350,32,294,91.13,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of New Jersey,NJ,NJ,NJ,0,23782,17657,277,5848,74.25,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of New Mexico,NM,NM,NM,0,4068,3430,7,631,84.32,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,District of Nevada,NV,NV,NV,0,7507,5748,13,1746,76.57,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Easter District of New York,NYE,NYE,NY,0,20981,16651,163,4167,79.36,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1992,Northern District of New York,NYN,NYN,NY,0,,,,,,ch11:cell_missing_in_row;ch13:cell_missing_in_row;ch7:cell_missing_in_row;nb_total:cell_missing_in_row;pct_ch7:cell_missing_in_row,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Alaska,AK,AK,AK,0,756,691,4,61,91.4,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Middle District of Alabama,ALM,ALM,AL,0,4508,1508,1,2999,33.45,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Northern District of Alabama,ALN,ALN,AL,0,16631,5524,16,11091,33.22,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Southern District of Alabama,ALS,ALS,AL,0,2144,1414,4,726,65.95,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Eastern District of Arkansas,ARE,AR,AR,0,3961,2113,2,1846,53.35,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Western District of Arkansas,ARW,AR,AR,0,2595,1759,2,834,67.78,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Arizona,AZ,AZ,AZ,0,15988,12796,73,3119,80.04,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Central District of California,CAC,CAC,CA,0,85461,70298,623,14540,82.26,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Eastern District of California,CAE,CAE,CA,0,20664,16557,38,4069,80.12,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Northern District of California,CAN,CAN,CA,0,23347,17410,278,5659,74.57,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Southern District of California,CAS,CAS,CA,0,13987,10102,122,3763,72.22,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Colorado,CO,CO,CO,0,12763,9525,7,3231,74.63,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Connecticut,CT,CT,CT,0,8761,7326,98,1337,83.62,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Columbia,DC,DC,DC,0,1165,703,21,441,60.34,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Delaware,DE,DE,DE,0,1329,957,6,366,72.01,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Middle District of Florida,FLM,FLM,FL,0,24340,20677,107,3556,84.95,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Northern District of Florida,FLN,FLN,FL,0,2325,2093,6,226,90.02,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Southern District of Florida,FLS,FLS,FL,0,13447,11207,91,2149,83.34,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Middle District of Georgia,GAM,GAM,GA,0,8370,3217,11,5142,38.43,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Northern District of Georgia,GAN,GAN,GA,0,24171,9058,51,15062,37.47,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Southern District of Georgia,GAS,GAS,GA,0,6408,1731,5,4672,27.01,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Hawaii,HI,HI,HI,0,1307,1233,5,69,94.34,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Northern District of Iowa,IAN,IAN,IA,0,1888,1838,0,50,97.35,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Southern District of Iowa,IAS,IAS,IA,0,3034,2690,0,344,88.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Idaho,ID,ID,ID,0,3253,2318,4,931,71.26,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Central District of Illinois,ILC,ILC,IL,0,6055,5366,1,688,88.62,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Northern District of Illinois,ILN,ILN,IL,0,28501,20924,12,7565,73.41,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Southern District of Illinois,ILS,ILS,IL,0,2975,2199,0,776,73.92,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Northern District of Indiana,INN,INN,IN,0,8006,6876,11,1118,85.89,ch7+ch11+ch13=8005 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Southern District of Indiana,INS,INS,IN,0,14052,11988,9,2055,85.31,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Kansas,KS,KS,KS,0,7385,5900,9,1476,79.89,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Eastern District of Kentucky,KYE,KYE,KY,0,5188,4310,4,874,83.08,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Western District of Kentucky,KYW,KYW,KY,0,6450,5016,2,1432,77.77,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Eastern District of Louisiana,LAE,LAE,LA,0,4643,2947,18,1678,63.47,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Middle District of Louisiana,LAM,LAM,LA,0,1339,901,0,438,67.29,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Western District of Louisiana,LAW,LAW,LA,0,5841,2910,5,2926,49.82,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Massachusetts,MA,MA,MA,0,13353,10948,25,2380,81.99,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Maryland,MD,MD,MD,0,14215,10319,2,3894,72.59,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Maine,ME,ME,ME,0,1562,1360,0,202,87.07,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Eastern District of Michigan,MIE,MIE,MI,0,16254,11786,27,4441,72.51,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Western District of Michigan,MIW,MIW,MI,0,6111,4724,4,1383,77.3,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Minnesota,MN,MN,MN,0,12672,8939,1,3732,70.54,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Eastern District of Missouri,MOE,MOE,MO,0,7593,4283,7,3303,56.41,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Western District of Missouri,MOW,MOW,MO,0,6694,5683,6,1005,84.9,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Northern District of Mississippi,MSN,MSN,MS,0,3442,2196,0,1246,63.8,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Southern District of Mississippi,MSS,MSS,MS,0,6557,3774,7,2776,57.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Montana,MT,MT,MT,0,1684,1451,4,229,86.16,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Eastern District of North Carolina,NCE,NCE,NC,0,4870,2193,2,2675,45.03,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Middle District of North Carolina,NCM,NCM,NC,0,3832,991,0,2841,25.86,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Western District of North Carolina,NCW,NCW,NC,0,3400,1375,6,2019,40.44,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of North Dakota,ND,ND,ND,0,936,920,1,15,98.29,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Nebraska,NE,NE,NE,0,3460,2673,3,784,77.25,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of New Hampshire,NH,NH,NH,0,3469,3170,7,292,91.38,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of New Jersey,NJ,NJ,NJ,0,22425,16042,322,6061,71.54,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of New Mexico,NM,NM,NM,0,3463,2859,11,593,82.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,District of Nevada,NV,NV,NV,0,7427,5674,12,1741,76.4,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Easter District of New York,NYE,NYE,NY,0,21321,16367,203,4751,76.76,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1993,Northern District of New York,NYN,NYN,NY,0,,,,,,ch11:cell_missing_in_row;ch13:cell_missing_in_row;ch7:cell_missing_in_row;nb_total:cell_missing_in_row;pct_ch7:cell_missing_in_row,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Alaska,AK,AK,AK,0,730,672,2,56,92.05,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Middle District of Alabama,ALM,ALM,AL,0,4543,1435,2,3106,31.59,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Northern District of Alabama,ALN,ALN,AL,0,15548,5028,27,10493,32.34,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Southern District of Alabama,ALS,ALS,AL,0,2743,1407,7,1329,51.29,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Eastern District of Arkansas,ARE,AR,AR,0,3923,1890,2,2031,48.18,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Western District of Arkansas,ARW,AR,AR,0,2544,1672,3,869,65.72,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Arizona,AZ,AZ,AZ,0,14392,11250,63,3079,78.17,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Central District of California,CAC,CAC,CA,0,76159,61648,415,14096,80.95,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Eastern District of California,CAE,CAE,CA,0,19297,15201,43,4053,78.77,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Northern District of California,CAN,CAN,CA,0,22325,16645,171,5509,74.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Southern District of California,CAS,CAS,CA,0,13267,9698,75,3494,73.1,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Colorado,CO,CO,CO,0,12208,9636,3,2569,78.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Connecticut,CT,CT,CT,0,8207,6944,110,1153,84.61,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Columbia,DC,DC,DC,0,1272,800,16,456,62.89,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Delaware,DE,DE,DE,0,1115,813,4,298,72.91,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Middle District of Florida,FLM,FLM,FL,0,23955,20138,80,3737,84.07,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Northern District of Florida,FLN,FLN,FL,0,2160,1908,12,240,88.33,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Southern District of Florida,FLS,FLS,FL,0,14142,11594,72,2476,81.98,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Middle District of Georgia,GAM,GAM,GA,0,8476,2966,5,5505,34.99,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Northern District of Georgia,GAN,GAN,GA,0,24314,8240,30,16044,33.89,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Southern District of Georgia,GAS,GAS,GA,0,6658,1649,0,5009,24.77,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Hawaii,HI,HI,HI,0,1443,1347,6,90,93.35,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Northern District of Iowa,IAN,IAN,IA,0,1941,1893,3,45,97.53,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Southern District of Iowa,IAS,IAS,IA,0,3053,2651,0,402,86.83,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Idaho,ID,ID,ID,0,3027,2158,3,866,71.29,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Central District of Illinois,ILC,ILC,IL,0,6029,5347,0,682,88.69,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Northern District of Illinois,ILN,ILN,IL,0,27091,20208,19,6864,74.59,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Southern District of Illinois,ILS,ILS,IL,0,3050,2158,0,892,70.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Northern District of Indiana,INN,INN,IN,0,7540,6497,2,1041,86.17,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Southern District of Indiana,INS,INS,IN,0,13312,11316,7,1989,85.01,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Kansas,KS,KS,KS,0,7533,5940,6,1587,78.85,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Eastern District of Kentucky,KYE,KYE,KY,0,5226,4454,2,770,85.23,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Western District of Kentucky,KYW,KYW,KY,0,6347,4870,2,1475,76.73,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Eastern District of Louisiana,LAE,LAE,LA,0,4390,2582,15,1793,58.82,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Middle District of Louisiana,LAM,LAM,LA,0,1459,1036,1,422,71.01,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Western District of Louisiana,LAW,LAW,LA,0,6110,2825,5,3280,46.24,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Massachusetts,MA,MA,MA,0,12892,10558,11,2323,81.9,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Maryland,MD,MD,MD,0,14100,10285,14,3801,72.94,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Maine,ME,ME,ME,0,1456,1254,0,202,86.13,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Eastern District of Michigan,MIE,MIE,MI,0,15084,10870,24,4190,72.06,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Western District of Michigan,MIW,MIW,MI,0,5872,4339,2,1531,73.89,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Minnesota,MN,MN,MN,0,11742,8139,0,3603,69.32,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Eastern District of Missouri,MOE,MOE,MO,0,7799,4651,4,3144,59.64,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Western District of Missouri,MOW,MOW,MO,0,6268,5301,11,956,84.57,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Northern District of Mississippi,MSN,MSN,MS,0,3242,2011,1,1230,62.03,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Southern District of Mississippi,MSS,MSS,MS,0,6434,3759,7,2668,58.42,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Montana,MT,MT,MT,0,1730,1449,2,279,83.76,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Eastern District of North Carolina,NCE,NCE,NC,0,5178,2082,7,3089,40.21,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Middle District of North Carolina,NCM,NCM,NC,0,4166,1040,0,3126,24.96,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Western District of North Carolina,NCW,NCW,NC,0,3252,1359,0,1893,41.79,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of North Dakota,ND,ND,ND,0,1056,1014,0,42,96.02,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Nebraska,NE,NE,NE,0,3285,2702,1,582,82.25,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of New Hampshire,NH,NH,NH,0,2943,2679,2,262,91.03,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of New Jersey,NJ,NJ,NJ,0,22334,15566,287,6481,69.7,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of New Mexico,NM,NM,NM,0,3227,2629,4,594,81.47,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,District of Nevada,NV,NV,NV,0,6779,5104,11,1664,75.29,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Easter District of New York,NYE,NYE,NY,0,20548,15118,171,5259,73.57,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+1994,Northern District of New York,NYN,NYN,NY,0,,,,,,ch11:cell_missing_in_row;ch13:cell_missing_in_row;ch7:cell_missing_in_row;nb_total:cell_missing_in_row;pct_ch7:cell_missing_in_row,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-chapter-1990-1994
+2000,District of Alaska,AK,AK,AK,0,1301,1179,0,122,90.62,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Middle District of Alabama,ALM,ALM,AL,0,7147,3043,0,4104,42.58,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Northern District of Alabama,ALN,ALN,AL,0,20073,7650,16,12407,38.11,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Southern District of Alabama,ALS,ALS,AL,0,5323,2303,2,3018,43.27,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Eastern District of Arkansas,ARE,AR,AR,0,10415,5196,2,5217,49.89,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Western District of Arkansas,ARW,AR,AR,0,6108,4083,0,2025,66.85,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Arizona,AZ,AZ,AZ,0,20190,16475,21,3694,81.6,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Central District of California,CAC,CAC,CA,0,78550,62647,52,15851,79.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Eastern District of California,CAE,CAE,CA,0,28617,24223,14,4380,84.65,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Northern District of California,CAN,CAN,CA,0,18499,13088,14,5397,70.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Southern District of California,CAS,CAS,CA,0,12458,9707,9,2742,77.92,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Colorado,CO,CO,CO,0,15185,12870,0,2315,84.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Connecticut,CT,CT,CT,0,10504,9054,17,1433,86.2,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Columbia,DC,DC,DC,0,2288,1479,5,804,64.64,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Delaware,DE,DE,DE,0,2375,1527,6,842,64.29,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Middle District of Florida,FLM,FLM,FL,0,39774,28073,15,11686,70.58,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Northern District of Florida,FLN,FLN,FL,0,5082,3949,3,1130,77.71,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Southern District of Florida,FLS,FLS,FL,0,26428,18423,26,7979,69.71,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Middle District of Georgia,GAM,GAM,GA,0,14720,6035,1,8684,41.0,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Northern District of Georgia,GAN,GAN,GA,0,31515,12460,6,19049,39.54,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Southern District of Georgia,GAS,GAS,GA,0,12680,3024,5,9651,23.85,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Hawaii,HI,HI,HI,0,4486,3995,13,478,89.05,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Northern District of Iowa,IAN,IAN,IA,0,3236,3115,1,120,96.26,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Southern District of Iowa,IAS,IAS,IA,0,4843,4392,0,451,90.69,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Idaho,ID,ID,ID,0,6850,5577,10,1263,81.42,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Central District of Illinois,ILC,ILC,IL,0,11272,9541,1,1730,84.64,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Northern District of Illinois,ILN,ILN,IL,0,41792,27867,11,13914,66.68,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Southern District of Illinois,ILS,ILS,IL,0,6828,4836,4,1988,70.83,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Northern District of Indiana,INN,INN,IN,0,13976,11773,5,2198,84.24,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Southern District of Indiana,INS,INS,IN,0,23150,17840,7,5303,77.06,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Kansas,KS,KS,KS,0,11146,9101,1,2044,81.65,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Eastern District of Kentucky,KYE,KYE,KY,0,8837,7723,1,1113,87.39,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Western District of Kentucky,KYW,KYW,KY,0,11826,9458,0,2368,79.98,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Eastern District of Louisiana,LAE,LAE,LA,0,8143,5087,6,3050,62.47,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Middle District of Louisiana,LAM,LAM,LA,0,2795,2035,1,759,72.81,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Western District of Louisiana,LAW,LAW,LA,0,11578,5838,1,5739,50.42,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Massachusetts,MA,MA,MA,0,15208,13028,0,2180,85.67,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Maryland,MD,MD,MD,0,29658,20156,13,9489,67.96,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Maine,ME,ME,ME,0,3880,3592,0,288,92.58,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Eastern District of Michigan,MIE,MIE,MI,0,24789,17651,3,7135,71.2,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Western District of Michigan,MIW,MIW,MI,0,11046,8198,1,2847,74.22,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Minnesota,MN,MN,MN,0,13822,11018,0,2804,79.71,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Eastern District of Missouri,MOE,MOE,MO,0,14934,9312,2,5620,62.35,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Western District of Missouri,MOW,MOW,MO,0,10717,8811,5,1901,82.22,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Northern District of Mississippi,MSN,MSN,MS,0,6215,3772,1,2442,60.69,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Southern District of Mississippi,MSS,MSS,MS,0,12040,7080,2,4958,58.8,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Montana,MT,MT,MT,0,3195,2830,0,365,88.58,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Eastern District of North Carolina,NCE,NCE,NC,0,10575,4802,5,5768,45.41,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Middle District of North Carolina,NCM,NCM,NC,0,9283,3136,0,6147,33.78,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,Western District of North Carolina,NCW,NCW,NC,0,6788,3102,2,3684,45.7,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of North Dakota,ND,ND,ND,0,1841,1782,0,59,96.8,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Nebraska,NE,NE,NE,0,5514,4663,2,849,84.57,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of Nevada,NV,NV,NV,0,13678,10051,7,3620,73.48,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of New Hampshire,NH,NH,NH,0,3313,3018,0,295,91.1,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2000,District of New Jersey,NJ,NJ,NJ,0,36645,,,,,ch11:cell_missing_in_row;ch13:cell_missing_in_row;ch7:truncated_at_source;pct_ch7:cell_missing_in_row,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Alaska,AK,AK,AK,0,1369,1249,2,118,91.23,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Middle District of Alabama,ALM,ALM,AL,0,8101,3736,5,4360,46.12,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Northern District of Alabama,ALN,ALN,AL,0,23699,10510,21,13168,44.35,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Southern District of Alabama,ALS,ALS,AL,0,6621,2943,2,3676,44.45,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Eastern District of Arkansas,ARE,AR,AR,0,13528,7204,2,6322,53.25,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Western District of Arkansas,ARW,AR,AR,0,7666,5289,2,2375,68.99,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Arizona,AZ,AZ,AZ,0,24736,20041,39,4654,81.02,ch7+ch11+ch13=24734 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Central District of California,CAC,CAC,CA,0,85642,71307,49,14286,83.26,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Eastern District of California,CAE,CAE,CA,0,30986,26729,8,4249,86.26,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Northern District of California,CAN,CAN,CA,0,18618,13336,16,5265,71.63,ch7+ch11+ch13=18617 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Southern District of California,CAS,CAS,CA,0,13175,10470,10,2695,79.47,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Colorado,CO,CO,CO,0,18333,15963,3,2367,87.07,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Connecticut,CT,CT,CT,0,11457,9912,16,1529,86.51,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Columbia,DC,DC,DC,0,2510,1774,4,732,70.68,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Delaware,DE,DE,DE,0,2885,1883,0,1002,65.27,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Middle District of Florida,FLM,FLM,FL,0,48139,35302,26,12811,73.33,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Northern District of Florida,FLN,FLN,FL,0,6091,4862,4,1225,79.82,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Southern District of Florida,FLS,FLS,FL,0,30986,21992,26,8968,70.97,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Middle District of Georgia,GAM,GAM,GA,0,16992,7261,3,9728,42.73,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Northern District of Georgia,GAN,GAN,GA,0,37529,16485,15,21029,43.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Southern District of Georgia,GAS,GAS,GA,0,14412,3830,3,10578,26.58,ch7+ch11+ch13=14411 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Hawaii,HI,HI,HI,0,4971,4464,2,505,89.8,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Northern District of Iowa,IAN,IAN,IA,0,4192,4046,0,146,96.52,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Southern District of Iowa,IAS,IAS,IA,0,6595,6170,0,425,93.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Idaho,ID,ID,ID,0,7962,6838,7,1117,85.88,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Central District of Illinois,ILC,ILC,IL,0,14270,12250,2,2018,85.84,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Northern District of Illinois,ILN,ILN,IL,0,50578,35377,19,15182,69.95,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Southern District of Illinois,ILS,ILS,IL,0,8188,5875,3,2310,71.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Northern District of Indiana,INN,INN,IN,0,18701,15728,6,2967,84.1,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Southern District of Indiana,INS,INS,IN,0,28761,22582,8,6171,78.52,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Kansas,KS,KS,KS,0,13717,11351,5,2361,82.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Eastern District of Kentucky,KYE,KYE,KY,0,11251,9863,3,1385,87.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Western District of Kentucky,KYW,KYW,KY,0,14458,11776,0,2682,81.45,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Eastern District of Louisiana,LAE,LAE,LA,0,10067,6902,6,3159,68.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Middle District of Louisiana,LAM,LAM,LA,0,3310,2348,2,960,70.94,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Western District of Louisiana,LAW,LAW,LA,0,12926,6934,2,5990,53.64,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Massachusetts,MA,MA,MA,0,17227,14902,4,2321,86.5,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Maryland,MD,MD,MD,0,34630,23877,22,10731,68.95,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Maine,ME,ME,ME,0,4397,4095,0,302,93.13,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Eastern District of Michigan,MIE,MIE,MI,0,32384,22999,6,9379,71.02,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Western District of Michigan,MIW,MIW,MI,0,13754,10471,0,3283,76.13,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Minnesota,MN,MN,MN,0,16817,13930,0,2887,82.83,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Eastern District of Missouri,MOE,MOE,MO,0,16572,10982,8,5582,66.27,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Western District of Missouri,MOW,MOW,MO,0,13627,10998,5,2624,80.71,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Northern District of Mississippi,MSN,MSN,MS,0,7745,5010,2,2733,64.69,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Southern District of Mississippi,MSS,MSS,MS,0,14082,9105,8,4969,64.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Montana,MT,MT,MT,0,3853,3417,4,432,88.68,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Eastern District of North Carolina,NCE,NCE,NC,0,13686,6707,6,6973,49.01,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Middle District of North Carolina,NCM,NCM,NC,0,10651,4141,0,6510,38.88,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,Western District of North Carolina,NCW,NCW,NC,0,8762,4352,5,4405,49.67,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of North Dakota,ND,ND,ND,0,2117,2066,0,51,97.59,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Nebraska,NE,NE,NE,0,7058,5954,1,1103,84.36,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of Nevada,NV,NV,NV,0,17683,13255,11,4417,74.96,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of New Hampshire,NH,NH,NH,0,3597,3288,0,309,91.41,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2001,District of New Jersey,NJ,NJ,NJ,0,,,,,,ch11:cell_missing_in_row;ch13:cell_missing_in_row;ch7:cell_missing_in_row;nb_total:cell_missing_in_row;pct_ch7:cell_missing_in_row,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Alaska,AK,AK,AK,0,1359,1249,0,110,91.91,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Middle District of Alabama,ALM,ALM,AL,0,9714,5098,0,4616,52.48,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Northern District of Alabama,ALN,ALN,AL,0,24407,11525,28,12854,47.22,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Southern District of Alabama,ALS,ALS,AL,0,7357,3131,6,4220,42.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Eastern District of Arkansas,ARE,AR,AR,0,14595,7903,10,7046,54.15,ch7+ch11+ch13=14959 differs from printed nonbusiness; nonbusiness differs from AO_F2_12m_Dec (14959),https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Western District of Arkansas,ARW,AR,AR,0,8305,5641,1,2663,67.92,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Arizona,AZ,AZ,AZ,0,28960,23148,45,5767,79.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Central District of California,CAC,CAC,CA,0,81702,68151,53,13497,83.41,ch7+ch11+ch13=81701 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Eastern District of California,CAE,CAE,CA,0,30265,25896,15,4354,85.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Northern District of California,CAN,CAN,CA,0,20139,14374,21,5767,71.37,ch7+ch11+ch13=20162 differs from printed nonbusiness; ch13 differs from AO F-2 (5743),https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Southern District of California,CAS,CAS,CA,0,12660,10318,14,2328,81.5,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Colorado,CO,CO,CO,0,20769,18193,4,2572,87.6,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Connecticut,CT,CT,CT,0,11570,9680,13,1877,83.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Columbia,DC,DC,DC,0,2451,1724,5,722,70.34,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Delaware,DE,DE,DE,0,3140,1952,2,1186,62.17,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Middle District of Florida,FLM,FLM,FL,0,52071,37540,22,14508,72.09,ch7+ch11+ch13=52070 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Northern District of Florida,FLN,FLN,FL,0,6525,5201,3,1321,79.71,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Southern District of Florida,FLS,FLS,FL,0,31778,22566,26,9185,71.01,ch7+ch11+ch13=31777 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Middle District of Georgia,GAM,GAM,GA,0,17767,7757,3,10007,43.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Northern District of Georgia,GAN,GAN,GA,0,41382,19575,28,21779,47.3,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Southern District of Georgia,GAS,GAS,GA,0,15205,4144,3,10007,27.25,ch7+ch11+ch13=14154 differs from printed nonbusiness; ch13 differs from AO F-2 (11058),https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Hawaii,HI,HI,HI,0,4432,3967,2,461,89.51,ch7+ch11+ch13=4430 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Northern District of Iowa,IAN,IAN,IA,0,4439,4281,1,157,96.44,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Southern District of Iowa,IAS,IAS,IA,0,7015,6596,0,419,94.03,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Idaho,ID,ID,ID,0,8653,7480,9,1164,86.44,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Central District of Illinois,ILC,ILC,IL,0,15461,13249,1,2211,85.69,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Northern District of Illinois,ILN,ILN,IL,0,56723,40251,27,16445,70.96,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Southern District of Illinois,ILS,ILS,IL,0,8907,6446,3,2458,72.37,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Northern District of Indiana,INN,INN,IN,0,20662,17322,4,3336,83.84,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Southern District of Indiana,INS,INS,IN,0,32197,25262,7,6928,78.46,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Kansas,KS,KS,KS,0,14731,11945,2,2784,81.09,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Eastern District of Kentucky,KYE,KYE,KY,0,11887,10382,3,1502,87.34,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Western District of Kentucky,KYW,KYW,KY,0,14936,11871,6,3059,79.48,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Eastern District of Louisiana,LAE,LAE,LA,0,9585,6443,9,3133,67.22,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Middle District of Louisiana,LAM,LAM,LA,0,3624,2612,3,1009,72.08,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Western District of Louisiana,LAW,LAW,LA,0,13252,7123,4,6125,53.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Massachusetts,MA,MA,MA,0,17019,14464,5,2550,84.99,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Maryland,MD,MD,MD,0,34700,23047,23,11630,66.42,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Maine,ME,ME,ME,0,4321,3955,0,366,91.53,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Eastern District of Michigan,MIE,MIE,MI,0,39487,26916,8,12563,68.16,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Western District of Michigan,MIW,MIW,MI,0,15318,11668,3,3647,76.17,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Minnesota,MN,MN,MN,0,17758,14795,2,2961,83.31,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Eastern District of Missouri,MOE,MOE,MO,0,18083,12090,8,5985,66.86,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Western District of Missouri,MOW,MOW,MO,0,15814,12792,3,3019,80.89,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Northern District of Mississippi,MSN,MSN,MS,0,8038,5439,2,2597,67.67,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Southern District of Mississippi,MSS,MSS,MS,0,14050,9083,13,4954,64.65,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Montana,MT,MT,MT,0,3942,3474,4,464,88.13,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Eastern District of North Carolina,NCE,NCE,NC,0,14847,7410,9,7428,49.91,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Middle District of North Carolina,NCM,NCM,NC,0,11575,4814,0,6761,41.59,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,Western District of North Carolina,NCW,NCW,NC,0,9384,4872,8,4504,51.92,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of North Dakota,ND,ND,ND,0,1958,1879,0,79,95.97,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Nebraska,NE,NE,NE,0,7569,5923,8,1638,78.25,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of Nevada,NV,NV,NV,0,19274,14458,36,4780,75.01,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of New Hampshire,NH,NH,NH,0,3822,3459,2,361,90.5,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2002,District of New Jersey,NJ,NJ,NJ,0,,,,,,ch11:cell_missing_in_row;ch13:cell_missing_in_row;ch7:cell_missing_in_row;nb_total:cell_missing_in_row;pct_ch7:cell_missing_in_row,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Alaska,AK,AK,AK,0,1389,1275,1,113,91.79,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Middle District of Alabama,ALM,ALM,AL,0,8751,4372,4,4375,49.96,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Northern District of Alabama,ALN,ALN,AL,0,25869,12977,39,12853,50.16,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Southern District of Alabama,ALS,ALS,AL,0,7514,3123,5,4386,41.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Eastern District of Arkansas,ARE,AR,AR,0,15387,8384,4,6999,54.49,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Western District of Arkansas,ARW,AR,AR,0,8491,5891,2,2598,69.38,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Arizona,AZ,AZ,AZ,0,31110,25069,44,5997,80.58,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Central District of California,CAC,CAC,CA,0,73671,63688,32,9951,86.45,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Eastern District of California,CAE,CAE,CA,0,30055,25465,7,4583,84.73,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Northern District of California,CAN,CAN,CA,0,21869,15785,39,6045,72.18,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Southern District of California,CAS,CAS,CA,0,11563,9577,8,1978,82.82,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Colorado,CO,CO,CO,0,25404,22801,3,2600,89.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Connecticut,CT,CT,CT,0,12059,9961,16,2081,82.6,ch7+ch11+ch13=12058 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Columbia,DC,DC,DC,0,2256,1638,5,613,72.61,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Delaware,DE,DE,DE,0,3413,1998,0,1415,58.54,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Middle District of Florida,FLM,FLM,FL,0,54865,39486,45,15333,71.97,ch7+ch11+ch13=54864 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Northern District of Florida,FLN,FLN,FL,0,7049,5650,9,1390,80.15,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Southern District of Florida,FLS,FLS,FL,0,30976,22103,26,8846,71.36,ch7+ch11+ch13=30975 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Middle District of Georgia,GAM,GAM,GA,0,17949,8332,2,9615,46.42,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Northern District of Georgia,GAN,GAN,GA,0,45517,23552,15,21950,51.74,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Southern District of Georgia,GAS,GAS,GA,0,16154,4473,3,11678,27.69,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Hawaii,HI,HI,HI,0,3723,3259,4,460,87.54,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Northern District of Iowa,IAN,IAN,IA,0,4729,4553,1,175,96.29,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Southern District of Iowa,IAS,IAS,IA,0,7530,7078,0,452,94.0,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Idaho,ID,ID,ID,0,9435,8234,8,1193,87.27,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Central District of Illinois,ILC,ILC,IL,0,16201,13878,0,2323,85.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Northern District of Illinois,ILN,ILN,IL,0,58387,42423,26,15938,72.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Southern District of Illinois,ILS,ILS,IL,0,9932,7205,9,2718,72.54,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Northern District of Indiana,INN,INN,IN,0,20952,17533,3,3416,83.68,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Southern District of Indiana,INS,INS,IN,0,34203,26756,6,7441,78.23,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Kansas,KS,KS,KS,0,15889,12807,6,3076,80.6,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Eastern District of Kentucky,KYE,KYE,KY,0,13230,11311,1,1918,85.5,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Western District of Kentucky,KYW,KYW,KY,0,16340,12990,4,3346,79.5,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Eastern District of Louisiana,LAE,LAE,LA,0,10011,6760,14,3327,67.53,ch7+ch11+ch13=10101 differs from printed nonbusiness; ch13 differs from AO F-2 (3237),https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Middle District of Louisiana,LAM,LAM,LA,0,4017,2883,5,1129,71.77,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Western District of Louisiana,LAW,LAW,LA,0,15048,8162,4,6882,54.24,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Massachusetts,MA,MA,MA,0,17864,15389,6,2469,86.15,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Maryland,MD,MD,MD,0,33708,22561,19,11128,66.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Maine,ME,ME,ME,0,4555,4163,0,392,91.39,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Eastern District of Michigan,MIE,MIE,MI,0,45365,30689,22,14654,67.65,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Western District of Michigan,MIW,MIW,MI,0,16705,12956,6,3743,77.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Minnesota,MN,MN,MN,0,19608,16414,0,3194,83.71,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Eastern District of Missouri,MOE,MOE,MO,0,20049,13299,4,6746,66.33,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Western District of Missouri,MOW,MOW,MO,0,17403,14009,2,3392,80.5,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Northern District of Mississippi,MSN,MSN,MS,0,8264,5812,1,2451,70.33,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Southern District of Mississippi,MSS,MSS,MS,0,13700,9170,8,4522,66.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Montana,MT,MT,MT,0,4287,3814,1,472,88.97,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Eastern District of North Carolina,NCE,NCE,NC,0,15666,7882,11,7773,50.31,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Middle District of North Carolina,NCM,NCM,NC,0,12499,5638,0,6861,45.11,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,Western District of North Carolina,NCW,NCW,NC,0,10472,5538,12,4922,52.88,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of North Dakota,ND,ND,ND,0,2188,2095,0,93,95.75,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Nebraska,NE,NE,NE,0,8387,6512,5,1870,77.64,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of Nevada,NV,NV,NV,0,20240,15195,14,5030,75.07,ch7+ch11+ch13=20239 differs from printed nonbusiness; ch11:html_artifact_stripped:14TD>,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of New Hampshire,NH,NH,NH,0,4248,3793,3,452,89.29,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2003,District of New Jersey,NJ,NJ,NJ,0,,,,,,ch11:cell_missing_in_row;ch13:cell_missing_in_row;ch7:cell_missing_in_row;nb_total:cell_missing_in_row;pct_ch7:cell_missing_in_row,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Alaska,AK,AK,AK,0,1444,1307,1,136,90.51,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Middle District of Alabama,ALM,ALM,AL,0,8544,3969,3,4572,46.45,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Northern District of Alabama,ALN,ALN,AL,0,25748,13323,14,12411,51.74,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Southern District of Alabama,ALS,ALS,AL,0,7355,2924,4,4427,39.76,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Eastern District of Arkansas,ARE,AR,AR,0,15424,8256,1,7167,53.53,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Western District of Arkansas,ARW,AR,AR,0,8463,5705,3,2755,67.41,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Arizona,AZ,AZ,AZ,0,30907,25536,35,5335,82.62,ch7+ch11+ch13=30906 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Central District of California,CAC,CAC,CA,0,59020,53655,36,5329,90.91,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Eastern District of California,CAE,CAE,CA,0,28021,23905,2,4114,85.31,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Northern District of California,CAN,CAN,CA,0,20847,15498,43,5306,74.34,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Southern District of California,CAS,CAS,CA,0,11060,9319,9,1732,84.26,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Colorado,CO,CO,CO,0,27383,24524,7,2852,89.56,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Connecticut,CT,CT,CT,0,11291,9313,22,1956,82.48,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Columbia,DC,DC,DC,0,1892,1418,3,471,74.95,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Delaware,DE,DE,DE,0,3392,2020,2,1370,59.55,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Middle District of Florida,FLM,FLM,FL,0,51665,37525,29,14111,72.63,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Northern District of Florida,FLN,FLN,FL,0,6568,5232,6,1330,79.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Southern District of Florida,FLS,FLS,FL,0,26473,20562,16,5894,77.67,ch7+ch11+ch13=26472 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Middle District of Georgia,GAM,GAM,GA,0,17530,7953,2,9575,45.37,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Northern District of Georgia,GAN,GAN,GA,0,43290,23231,32,20027,53.66,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Southern District of Georgia,GAS,GAS,GA,0,15050,3976,1,11073,26.42,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Hawaii,HI,HI,HI,0,3065,2704,8,352,88.22,ch7+ch11+ch13=3064 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Northern District of Iowa,IAN,IAN,IA,0,4836,4660,0,176,96.36,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Southern District of Iowa,IAS,IAS,IA,0,7886,7446,0,440,94.42,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Idaho,ID,ID,ID,0,9328,8099,4,1225,86.82,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Central District of Illinois,ILC,ILC,IL,0,15438,13227,5,2206,85.68,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Northern District of Illinois,ILN,ILN,IL,0,54254,39737,28,14489,73.24,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Southern District of Illinois,ILS,ILS,IL,0,9628,6692,8,2928,69.51,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Northern District of Indiana,INN,INN,IN,0,20547,17014,3,3530,82.81,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Southern District of Indiana,INS,INS,IN,0,33394,25364,12,8018,75.95,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Kansas,KS,KS,KS,0,16021,12968,3,3050,80.94,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Eastern District of Kentucky,KYE,KYE,KY,0,12805,10678,0,2127,83.39,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Western District of Kentucky,KYW,KYW,KY,0,14994,11575,10,3409,77.2,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Eastern District of Louisiana,LAE,LAE,LA,0,9716,6585,9,3122,67.77,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Middle District of Louisiana,LAM,LAM,LA,0,4219,2964,5,1250,42.34,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Western District of Louisiana,LAW,LAW,LA,0,15266,8377,3,6886,54.87,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Massachusetts,MA,MA,MA,0,18129,15674,21,2434,86.46,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Maryland,MD,MD,MD,0,29050,20114,9,8927,69.24,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Maine,ME,ME,ME,0,4370,3954,2,412,90.48,ch7+ch11+ch13=4368 differs from printed nonbusiness,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Eastern District of Michigan,MIE,MIE,MI,0,46592,31807,13,14772,68.27,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Western District of Michigan,MIW,MIW,MI,0,16939,13670,4,3265,80.7,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Minnesota,MN,MN,MN,0,16596,13047,0,3549,78.62,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Eastern District of Missouri,MOE,MOE,MO,0,19378,13281,4,6093,68.54,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Western District of Missouri,MOW,MOW,MO,0,17873,14584,4,3285,81.6,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Northern District of Mississippi,MSN,MSN,MS,0,8357,5547,0,2810,66.38,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Southern District of Mississippi,MSS,MSS,MS,0,12650,8260,4,4386,65.3,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Montana,MT,MT,MT,0,4223,3812,1,410,90.27,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Eastern District of North Carolina,NCE,NCE,NC,0,14544,7286,11,7247,50.1,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Middle District of North Carolina,NCM,NCM,NC,0,11539,5399,2,6138,46.79,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,Western District of North Carolina,NCW,NCW,NC,0,10035,5713,8,4314,56.93,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of North Dakota,ND,ND,ND,0,2203,2088,0,115,94.78,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Nebraska,NE,NE,NE,0,8785,6915,7,1863,78.71,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of Nevada,NV,NV,NV,0,16655,13127,5,3523,78.82,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of New Hampshire,NH,NH,NH,0,4493,4063,2,428,90.43,,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004
+2004,District of New Jersey,NJ,NJ,NJ,0,,,,,,ch11:cell_missing_in_row;ch13:cell_missing_in_row;ch7:cell_missing_in_row;nb_total:cell_missing_in_row;pct_ch7:cell_missing_in_row,https://www.abi.org/newsroom/stats/annual-non-business-filings-by-district-2000-2004

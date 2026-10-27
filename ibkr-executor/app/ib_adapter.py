@@ -88,6 +88,28 @@ _IB_WARNING_CODES = {105, 110, 165, 321, 329, 399, 404, 434, 492, 10167}
 # still not why it was cancelled. Add to this set when a new code is
 # OBSERVED killing an order, never on a guess.
 _IB_DEAD_REASON_CODES = {110, 321, 404}
+# ... and these are the venue's REPLY to a cancel this client sent, never why
+# an order died. 2026-10-19 (live, BIL x56, permId 2127961299): the order went
+# PendingSubmit -> Inactive with no error at all, the placement path cancelled
+# it, IB answered 161 "Cancel attempted when order is not in a cancellable
+# state", and _order_errors kept only that last message - so every reconcile
+# page quoted our own cancel's reply as "venue: [161] ..." and hid that IBKR
+# had given no reason. Kept out of every reason surface, and both are a
+# REFUSAL of the cancel whose ib_async overlay is undone
+# (_undo_refusal_overlay). 161 is observed; 10148 ("cannot be cancelled,
+# state: <state>", usually a cancel already pending) is IB's documented
+# explicit refusal, added on both verifiers' advice (2026-10-26): left as
+# ib_async's Cancelled, a partially filled stop's remaining fill was never
+# emitted and the book sold the shares again. 10147 ("not found": IB holds no
+# such order) stays out - ib_async's Cancelled is the truth there.
+_IB_CANCEL_REPLY_CODES = {161, 10148}
+# IB's CONFIRMATION that an order is cancelled ("Order Canceled - reason:").
+# ib_async 2.1 marks a not-done trade Cancelled CLIENT-SIDE on ANY non-warning
+# order error (wrapper.error), so a Cancelled that arrived through an error is
+# the venue's ack only when the error is this one. Through any other - 161
+# above, IB REFUSING the cancel - it is ib_async's overlay on an order that
+# may still be working or may have filled (_cancel_refusal).
+_IB_CANCEL_CONFIRMED_CODE = 202
 RECONNECT_BACKOFF_S = 15.0   # first retry delay after the gateway drops
 RECONNECT_BACKOFF_MAX_S = 300.0  # backoff cap (~one attempt per blend cycle)
 OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
@@ -213,6 +235,8 @@ def _trade_errors(trade, dead: bool = False, venue: str = "") -> str:
         code = getattr(entry, "errorCode", 0) or 0
         msg = str(getattr(entry, "message", "") or "").strip()
         status = str(getattr(entry, "status", "") or "")
+        if code in _IB_CANCEL_REPLY_CODES:
+            continue                # our cancel's reply, never the reason
         if (dead and code and code not in _IB_DEAD_REASON_CODES
                 and (code in _IB_WARNING_CODES or 2100 <= code < 2200)):
             # the wrapper logs warnings into trade.log too: a warning is
@@ -338,6 +362,12 @@ class IBAdapter:
         # errorEvent (emitted unconditionally) so a rejection's REASON reaches
         # the operator even when trade.log carries only a status change.
         self._order_errors: dict[int, str] = {}
+        # IB's REPLY to a cancel this client sent (161: not in a cancellable
+        # state - usually already final), kept apart so it never overwrites
+        # or poses as the rejection reason above, yet stays on the reconcile
+        # page as a labelled trace. On a WORKING order a 161 can also mean
+        # the cancel lost a race with a fill (_undo_refusal_overlay).
+        self._cancel_replies: dict[int, str] = {}
         self._completed_orders_unavailable = False
         ev = getattr(self.ib, "errorEvent", None)
         if ev is not None:
@@ -395,23 +425,79 @@ class IBAdapter:
             # are this client's orders, else a stale quote error becomes a
             # later order's "reason" (round 3, HIGH)
             try:
-                order_ids = {getattr(t.order, "orderId", None)
-                             for t in (self.ib.trades() or [])}
+                trades = [t for t in (self.ib.trades() or [])
+                          if getattr(t.order, "orderId", None) == int(reqId)]
             except Exception:  # noqa: BLE001
-                order_ids = set()
-            if int(reqId) not in order_ids:
+                trades = []
+            if not trades:
                 return
-            self._order_errors[int(reqId)] = f"[{code}] {errorString}"
-            if len(self._order_errors) > 512:
-                for k in list(self._order_errors)[:-256]:
-                    self._order_errors.pop(k, None)
+            # the reply to our own cancel is never the reason: kept apart
+            store = (self._cancel_replies if code in _IB_CANCEL_REPLY_CODES
+                     else self._order_errors)
+            store[int(reqId)] = f"[{code}] {errorString}"
+            if len(store) > 512:
+                for k in list(store)[:-256]:
+                    store.pop(k, None)
+            if code in _IB_CANCEL_REPLY_CODES:
+                for t in trades:
+                    self._undo_refusal_overlay(t, code)
         except Exception:  # noqa: BLE001
             pass
+
+    def _undo_refusal_overlay(self, trade, code: int) -> None:
+        """Undo ib_async's client-side Cancelled on an order whose cancel IB
+        REFUSED (161 "not in a cancellable state", or 10148).
+
+        ib_async 2.1 (wrapper.error) marks a not-done trade Cancelled on ANY
+        non-warning order error, logs it, and only then emits errorEvent, so
+        this handler finds the overlay as the trade's last log entry. A
+        refusal says nothing about the order's state: it may be filling,
+        locked for an auction, or already cancelling, and the venue's own
+        next orderStatus (Filled, Cancelled) says which. Left in place, the
+        overlay read as dead to every reader of the session (2026-10-26,
+        verifiers A and B): cancel_stock_order took it as the ack and its
+        pre-check as "already gone", find_stock_order as "cancelled"
+        (reconcile 2b re-planned a stuck order: bought twice), and
+        poll_stock_fills as a done stop with no fills (its later fill was
+        swallowed). The status goes back to the one the venue last reported
+        before any cancel - skipping the PendingCancel that ib_async's own
+        IB.cancelOrder logs client-side the moment a cancel is sent - so the
+        session believes no more than the venue said. Cost: an order that
+        died without the session hearing reads working until the next
+        reconnect resyncs it, and every cancel of it raises meanwhile (fail
+        closed)."""
+        log = list(getattr(trade, "log", None) or [])
+        if (not log or trade.orderStatus.status != "Cancelled"
+                or str(getattr(log[-1], "status", "") or "") != "Cancelled"
+                or int(getattr(log[-1], "errorCode", 0) or 0) != code):
+            return                  # not ib_async's overlay of this reply
+        prior = ""
+        for e in reversed(log[:-1]):
+            st = str(getattr(e, "status", "") or "")
+            if not st or st == "PendingCancel" or (st == "Cancelled" and int(
+                    getattr(e, "errorCode", 0) or 0) in _IB_CANCEL_REPLY_CODES):
+                continue            # a cancel in flight, or an earlier overlay
+            prior = st
+            break
+        if not prior or prior in _IB_CANCELLED or prior == "Filled":
+            prior = "Submitted"     # not done before the overlay: working
+        trade.orderStatus.status = prior
+        logger.warning("order %s: IBKR refused the executor's cancel ([%d]); "
+                       "ib_async's client-side Cancelled undone, status back "
+                       "to %s until the venue says otherwise",
+                       _order_ref(trade), code, prior)
 
     def _venue_error(self, trade) -> str:
         oid = getattr(getattr(trade, "order", None), "orderId", None)
         try:
             return self._order_errors.get(int(oid), "") if oid is not None else ""
+        except (TypeError, ValueError):
+            return ""
+
+    def _cancel_reply(self, trade) -> str:
+        oid = getattr(getattr(trade, "order", None), "orderId", None)
+        try:
+            return self._cancel_replies.get(int(oid), "") if oid is not None else ""
         except (TypeError, ValueError):
             return ""
 
@@ -721,6 +807,8 @@ class IBAdapter:
         self._apply_market_data_type()
         if hasattr(self, "_order_errors"):
             self._order_errors.clear()  # order ids restart at nextValidId
+        if hasattr(self, "_cancel_replies"):
+            self._cancel_replies.clear()    # same: a stale 161 must label nothing
         down_s = now - self._disconnected_since
         logger.info("IB gateway reconnected after %.0fs (same clientId: "
                     "orderIds stay monotone, drain-once keys persist)",
@@ -956,7 +1044,12 @@ class IBAdapter:
             # Surface the venue's reason on the reconcile path too (the
             # async MOO/OPG outcome is only ever read from here).
             why = _trade_errors(trade, dead=True, venue=self._venue_error(trade))
-            out["reason"] = why or "no venue reason recorded"
+            reply = self._cancel_reply(trade)
+            out["reason"] = why or (
+                f"IBKR gave no rejection reason (its {reply.split(']')[0]}] "
+                f"reply to the executor's cancel: the order was normally "
+                f"already final)"
+                if reply else "no venue reason recorded")
             # ... and any EXECUTIONS the cancelled order carries (a partial
             # fill before the cancel): the caller must not treat "cancelled"
             # as "nothing happened" (round 19 review, CASH-3).
@@ -1021,7 +1114,7 @@ class IBAdapter:
                                        "%s", _order_ref(trade), exc)
                 raise RuntimeError(
                     f"order rejected by venue (status {s})"
-                    + (f": {why}" if why else ""))
+                    + (f": {why}" if why else ": IBKR gave no reason"))
             # 'ValidationError' = ib_async's warning overlay: the order may
             # be live and may yet transition to Submitted/Filled. Neither an
             # ack nor a death - keep waiting; the ack timeout below raises
@@ -1131,7 +1224,9 @@ class IBAdapter:
         cancel; an ambiguous ack timeout RAISES (fail closed) — the blend
         exit path defers the dependent sell and the next reconcile settles
         the truth (a silent False on a filled stop would be the double-sell
-        race, counter-agent N2/N14)."""
+        race, counter-agent N2/N14). A cancel IB REFUSES is no ack: unless the
+        venue's own Filled or Cancelled follows inside the window, it RAISES
+        (_undo_refusal_overlay, _cancel_refusal)."""
         self._require_connected()
         self._pump()
         trade = self._find_trade_by_ref(order_ref)
@@ -1154,26 +1249,85 @@ class IBAdapter:
                 f"cannot cancel {order_ref}: order already FILLED")
         if s in _IB_CANCELLED:
             return False
+        since = len(getattr(trade, "log", None) or [])
+        self._cancel_replies.pop(int(trade.order.orderId), None)  # THIS cancel's
         self.ib.cancelOrder(trade.order)
         deadline = time.monotonic() + CANCEL_ACK_TIMEOUT_S
         while True:
             self._pump()
             s = trade.orderStatus.status
             if s in ("Cancelled", "ApiCancelled"):
-                return True
+                refused = self._cancel_refusal(trade, since)
+                if not refused:
+                    return True
+                # an error-set Cancelled _undo_refusal_overlay does not undo
+                # (10147 "not found", or a code not yet seen on this book)
+                raise RuntimeError(
+                    f"cancel of {order_ref} REFUSED by IBKR ({refused}): "
+                    f"ib_async marks the order Cancelled, but a refused cancel "
+                    f"is not a cancel - it may have FILLED or may still be "
+                    f"working — state UNKNOWN (fail closed)")
+            refused = self._cancel_reply(trade)
             if s == "Filled":
                 # The fill won the race with the cancel: surface it exactly
                 # like a cancel-of-filled (the caller's raising path books
                 # the fill via reconcile before any market sell).
                 raise RuntimeError(
                     f"cannot cancel {order_ref}: order FILLED before the "
-                    f"cancel landed")
+                    f"cancel landed"
+                    + (f" (IBKR refused the cancel: {refused})" if refused
+                       else ""))
             if time.monotonic() >= deadline:
+                if refused:
+                    raise RuntimeError(
+                        f"cancel of {order_ref} REFUSED by IBKR ({refused}) "
+                        f"and neither a fill nor a cancel followed within "
+                        f"{CANCEL_ACK_TIMEOUT_S:.0f}s - the order may still be "
+                        f"working or may have filled — state UNKNOWN (fail "
+                        f"closed)")
                 raise RuntimeError(
                     f"cancel of {order_ref} not acknowledged within "
                     f"{CANCEL_ACK_TIMEOUT_S:.0f}s — state UNKNOWN "
                     f"(fail closed)")
             self.ib.sleep(WAIT_TICK_S)
+
+    def _cancel_refusal(self, trade, since: int) -> str:
+        """Why `trade` reads Cancelled, when that is ib_async's word rather
+        than the venue's: the text of the error that set the latest
+        Cancelled in trade.log since this client's cancel was sent (entries
+        from index `since`), unless it is IB's cancel confirmation (202). ""
+        when the venue said it: an orderStatus (errorCode 0) or a 202.
+
+        ib_async 2.1 sets a not-done trade Cancelled CLIENT-SIDE on any
+        non-warning order error. Read as an ack, IB's REFUSAL of the cancel
+        (161, "not in a cancellable state") made cancel_stock_order return
+        True for an order that may still be working or may have FILLED - the
+        fill that won the race reaches the session AFTER the refusal - and
+        every caller acted on "cancelled": reconcile 2b re-planned a stuck
+        order (bought twice), the exit and /kill paths market-sold beside a
+        stop that filled, the ratchet placed a second stop, park and pass 3
+        stopped tracking a stop still resting. A 161 or 10148 is undone
+        where it lands (_undo_refusal_overlay); this is the belt for an
+        error code that is not. Only the LATEST Cancelled counts: a refusal
+        followed by the venue's own cancel in the same window is a cancel."""
+        latest = None
+        for e in (getattr(trade, "log", None) or [])[since:]:
+            if str(getattr(e, "message", "") or "").startswith("Fill "):
+                # ib_async's execDetails entry copies the CURRENT status: a
+                # fill landing on an overlay reads (Cancelled, 0) and is no
+                # venue status (verifier A, round 3)
+                continue
+            # ApiCancelled only ever comes from the venue (errorCode 0): it
+            # counts as the venue's word after an undone refusal (verifier A)
+            if str(getattr(e, "status", "") or "") in ("Cancelled", "ApiCancelled"):
+                latest = e
+        code = int(getattr(latest, "errorCode", 0) or 0) if latest else 0
+        if not code or code == _IB_CANCEL_CONFIRMED_CODE:
+            return ""
+        stored = self._cancel_reply(trade) or self._venue_error(trade)
+        if stored.startswith(f"[{code}]"):
+            return stored
+        return f"[{code}] {str(getattr(latest, 'message', '') or '').strip()}"
 
     def poll_stock_fills(self) -> list[dict]:
         """Drain-once fill events for resting protective stops, derived from
@@ -1202,11 +1356,15 @@ class IBAdapter:
                 keys.add(str(perm))
             if keys & self._emitted_fill_keys:
                 continue                      # never re-emit
-            self._emitted_fill_keys |= keys
             fills = list(getattr(trade, "fills", []) or [])
             shares = sum(int(f.execution.shares) for f in fills)
             if shares <= 0:
-                continue                      # cancelled untouched: no event
+                # cancelled untouched: no event, and NOT marked emitted - a
+                # status that later proves wrong (ib_async's Cancelled after
+                # a refused cancel, verifier B 2026-10-26) must not swallow
+                # the fill that lands afterwards
+                continue
+            self._emitted_fill_keys |= keys
             side = fills[0].execution.side    # 'BOT' | 'SLD'
             out.append({
                 "order_ref": _order_ref(trade),
@@ -1251,7 +1409,11 @@ class IBAdapter:
         the book's order-derived cash ledger never had (dividends, interest,
         commissions and anything a human does are invisible to the ledger).
         TotalCashValue, not AvailableFunds: the latter moves with margin and
-        open orders."""
+        open orders. AvailableFunds is returned ALONGSIDE it (never instead,
+        stage 2, 2026-10-05) as `available_funds`, None when the venue does
+        not report it: the capital adoption waits on it so a deposit that
+        has landed but not settled is not spent before the venue would let
+        it be."""
         try:
             self._require_connected()
             self._pump()
@@ -1289,7 +1451,8 @@ class IBAdapter:
                 tag = getattr(row, "tag", "")
                 cur = getattr(row, "currency", "") or ""
                 acct = getattr(row, "account", "") or ""
-                if tag not in ("TotalCashValue", "NetLiquidation"):
+                if tag not in ("TotalCashValue", "NetLiquidation",
+                               "AvailableFunds"):
                     continue
                 if cur not in ("USD", ""):      # BASE may not be USD
                     continue
@@ -1304,8 +1467,12 @@ class IBAdapter:
                 return None
             if "TotalCashValue" not in vals or vals["TotalCashValue"] != vals["TotalCashValue"]:
                 return None
+            avail = vals.get("AvailableFunds")
+            if avail is not None and avail != avail:      # NaN -> no claim
+                avail = None
             return {"total_cash": vals["TotalCashValue"],
                     "net_liq": vals.get("NetLiquidation"),
+                    "available_funds": avail,
                     "ts": time.time()}
         except Exception as exc:  # noqa: BLE001
             logger.warning("account_cash unavailable (no claim): %s", exc)

@@ -949,6 +949,90 @@ export interface SqueezeRadarData {
   honesty: string[];
 }
 
+// ── Distress panel (studies/distress-signals.md) ────────────────────────────
+export interface DistressRuleState {
+  asof: string | null;
+  g: number | null;
+  on: boolean | null;
+  fresh_onset?: boolean;
+  onset_quarters: string[];
+}
+export interface DistressRecord {
+  role: string;
+  summary: string;
+  per_peak?: string[];
+  false_alarms?: string[];
+  rotation_p?: number;
+}
+export interface DistressBank {
+  id: string;
+  label: string;
+  asof: string;
+  latest: number;
+  rule: DistressRuleState;
+  role: string;
+  per_peak: string[];
+  false_alarms: string[];
+  rotation_p: number;
+  qualifiers: string[];
+  variant_note?: string;
+}
+export interface DistressStateRow {
+  state: string;
+  per_1000: number | null;
+  consumer_yoy: number | null;
+  business_ch7_yoy: number | null;
+  business_ch7_12m: number;
+}
+export interface DistressBottomingWatch {
+  asof?: string;
+  g?: number;
+  high?: number | null;
+  armed?: boolean;
+  rolled_over_now?: boolean;
+  signals?: string[];
+  status: string;
+  record?: {
+    role: string;
+    grade: string;
+    summary: string;
+    doc: string;
+    court_signals?: { release: string; kind: string }[];
+  } | null;
+}
+export interface Distress {
+  headline: string;
+  study: { doc: string; run: string; spec: string };
+  history_end: string;
+  live_quarters: string[];
+  national: {
+    consumer: {
+      asof: string;
+      filings_12m: number | null; // AO national row (incl. territories)
+      filings_12m_50dc: number; // 50 states + DC: the per-capita numerator
+      per_1000: number;
+      yoy_12m: number | null;
+      per_1000_by_year: Record<string, number>;
+      rule: DistressRuleState;
+      role: string;
+      record: DistressRecord;
+      g_path: { q: string; g: number | null }[];
+    };
+    business: {
+      rule: DistressRuleState;
+      role: string;
+      record: DistressRecord;
+      g_path: { q: string; g: number | null }[];
+    };
+    chapter11: { rule: DistressRuleState; note: string };
+  };
+  bank: DistressBank[];
+  states: { asof: string; rows: DistressStateRow[]; role: string; business_role: string | null; summary: string };
+  failure_liabilities: DistressRecord;
+  bottoming_watch?: DistressBottomingWatch;
+  alert: null;
+}
+
 export const api = {
   squeezeRadar: () => getJson<SqueezeRadarData>("/squeeze/radar"),
   cycle: () => getJson<any>("/cycle"),
@@ -967,6 +1051,7 @@ export const api = {
   recessionModel: () => getJson<RecessionModel>("/recession-model"),
   laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
   laborBoard: () => getJson<LaborBoard>("/labor/board"),
+  distress: () => getJson<Distress>("/distress"),
   marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
   marginFast: () => getJson<MarginFast>("/margin/fast"),
   ratesShock: () => getJson<RateShock>("/rates/shock"),
@@ -994,4 +1079,349 @@ export const api = {
   severityHistory: () => getJson<SeverityHistory>("/severity/history"),
   refresh: () =>
     getJson<unknown>("/refresh", { method: "POST" }),
+  aiDebt: () => getJson<AiDebt>("/ai-debt"),
 };
+
+// ---------------------------------------------------------------------------
+// AI debt (studies/ai-debt-flows.md; spec studies/ai_debt_flows/BUILD.md).
+// Context, not a signal: every block may be null or carry status "stale" /
+// "error" and the tab renders an "unavailable" state instead of throwing.
+// Missing numbers are null, never 0. Declared after `api` on purpose (append
+// only); TypeScript hoists type declarations.
+// ---------------------------------------------------------------------------
+
+export type AiDebtBlockStatus = "ok" | "stale" | "error";
+export type AiDebtVerif = "P" | "R" | "S";
+export type AiDebtProvenance = "primary" | "press" | "aggregator";
+export type AiDebtFlag = "refi" | "spv" | "convert" | "non_usd";
+
+// A dated series, either as parallel arrays or as a list of points.
+export type AiDebtSeries =
+  | { dates: string[]; values: Array<number | null> }
+  | Array<{ date: string; value: number | null }>;
+
+// A scalar reading with its as-of and source, optionally with history. `src`
+// is a map when the reading derives from several series (the CCC−B gap).
+export interface AiDebtReading {
+  latest: number | null;
+  asof: string | null;
+  series?: AiDebtSeries | null;
+  src?: string | Record<string, string | null> | null;
+  unit?: string | null;
+  note?: string | null;
+  hi_2026?: number | null;
+  lo_2026?: number | null;
+  end_2025?: number | null;
+}
+
+export interface AiDebtDeal {
+  date: string;
+  issuer: string;
+  bucket: string;
+  instrument?: string | null;
+  size_bn: number | null;
+  ccy: string | null;
+  size_usd_bn: number | null;
+  rating_bucket: string | null;
+  rating_at_issue?: string | null;
+  tranches?: string | null;
+  pricing?: string | null;
+  verif: AiDebtVerif | null;
+  src: string | null;
+  included: boolean;
+  flags?: AiDebtFlag[] | null;
+  note?: string | null;
+}
+
+export interface AiDebtShareYear {
+  hyperscaler_usd_bn: number | null;
+  all_ai_usd_bn: number | null;
+  sifma_us_corp_bn: number | null;
+  pct_hyperscaler: number | null;
+  pct_all: number | null;
+  src: string | null;
+}
+
+export interface AiDebtVsTreasury {
+  ai_bn: number | null;
+  net_marketable_ust_bn: number | null;
+  pct: number | null;
+  basis: string | null;
+}
+
+export interface AiDebtFiling {
+  filed: string;
+  issuer: string;
+  form: string;
+  url: string | null;
+  extracted: {
+    size_bn?: number | null;
+    ccy?: string | null;
+    partial?: boolean | null;
+    coupons?: Array<number | string | null> | null;
+    maturities?: Array<number | string> | null;
+    spreads?: Array<number | string | null> | null;
+    // per-tranche benchmark: UST, Bund, Gilt, GoC, swap, SOFR … (null = not stated)
+    tranches?: Array<{ maturity?: number | null; spread_bp?: number | null; benchmark?: string | null }> | null;
+  } | null;
+  status: string;
+}
+
+// {month, <bucket or rating>: $bn}; a key absent for a month means no deal.
+export type AiDebtMonthRow = { month: string } & Record<string, number | string | null | undefined>;
+
+export interface AiDebtIssuance {
+  status?: AiDebtBlockStatus;
+  seed_rev: string | null;
+  asof?: string | null;
+  deals: AiDebtDeal[] | null;
+  totals_by_year: Record<string, number | null> | null;
+  by_bucket_year: Record<string, Record<string, number | null>> | null;
+  by_rating_year: Record<string, Record<string, number | null>> | null;
+  by_month: AiDebtMonthRow[] | null;
+  by_month_rating?: AiDebtMonthRow[] | null;
+  share: Record<string, AiDebtShareYear> | null;
+  vs_treasury: Record<string, AiDebtVsTreasury> | null;
+  new_filings: AiDebtFiling[] | null;
+}
+
+export interface AiDebtPensionCell {
+  level: number | null;
+  flow_saar: number | null;
+  asof?: string | null;
+}
+
+export interface AiDebtHolders {
+  status?: AiDebtBlockStatus;
+  asof: string | null;
+  z1: {
+    levels: Record<string, number | null> | null;
+    flows_saar_last4: Record<string, Array<number | null> | null> | null;
+    flows_quarters?: string[] | null;
+    pensions: {
+      private?: AiDebtPensionCell | null;
+      state_local?: AiDebtPensionCell | null;
+    } | null;
+    labels?: Record<string, string> | null;
+    src?: string | null;
+  } | null;
+  note: string | null;
+}
+
+export interface AiDebtCountry {
+  name: string;
+  code: string | null;
+  treas_net_12m: number | null;
+  corp_net_12m: number | null;
+  treas_pos: number | null;
+  corp_pos: number | null;
+  corp_share_of_lt: number | null;
+  custody_centre: boolean;
+  treas_spark?: Array<number | null> | null;
+  corp_spark?: Array<number | null> | null;
+}
+
+export interface AiDebtTicPair {
+  treas: Array<number | null>;
+  corp: Array<number | null>;
+}
+
+export interface AiDebtForeignBid {
+  status?: AiDebtBlockStatus;
+  asof: string | null;
+  countries: AiDebtCountry[] | null;
+  series: {
+    months: string[];
+    grand_total?: AiDebtTicPair | null;
+    official?: AiDebtTicPair | null;
+    non_official?: AiDebtTicPair | null;
+    japan?: AiDebtTicPair | null;
+    all_countries?: AiDebtTicPair | null;
+  } | null;
+  bills_inclusive: {
+    japan_12m: number | null;
+    all_12m: number | null;
+    note: string | null;
+    asof?: string | null;
+    src?: string | null;
+  } | null;
+  src?: string | null;
+}
+
+export interface AiDebtJapan {
+  status?: AiDebtBlockStatus;
+  boj: {
+    months: string[];
+    total: Array<number | null>;
+    sovereign: Array<number | null>;
+    nonsovereign: Array<number | null>;
+    unit?: string | null;
+    asof?: string | null;
+    sum_12m?: { total: number | null; sovereign: number | null; nonsovereign: number | null } | null;
+    src?: string | null;
+  } | null;
+  mof_by_type: {
+    months: string[];
+    banks: Array<number | null>;
+    life: Array<number | null>;
+    trust_accounts: Array<number | null>;
+    inv_trusts: Array<number | null>;
+    all: Array<number | null>;
+    unit?: string | null;
+    asof?: string | null;
+    src?: string | null;
+  } | null;
+  mof_weekly: {
+    weeks: string[];
+    net: Array<number | null>;
+    unit?: string | null;
+    asof?: string | null;
+    src?: string | null;
+  } | null;
+  jgb: {
+    dates: string[];
+    y10: Array<number | null>;
+    y30: Array<number | null>;
+    asof?: string | null;
+    src?: string | null;
+  } | null;
+  read: string | null;
+}
+
+export interface AiDebtGpifIssuer {
+  issuer: string;
+  jpy_bn: number | null;
+  lines: number | null;
+}
+
+export interface AiDebtPublicFunds {
+  status?: AiDebtBlockStatus;
+  trust_accounts_12m_jpy_trn: number | null;
+  trust_accounts_asof?: string | null;
+  trust_accounts_src?: string | null;
+  // MOF investor-type view: monthly series plus `<key>_12m` sums (JPY trn)
+  mof_by_type?: ({ months?: string[] | null } & Record<string, unknown>) | null;
+  z1_pensions: {
+    private?: AiDebtPensionCell | null;
+    state_local?: AiDebtPensionCell | null;
+    src?: string | null;
+  } | null;
+  gpif: {
+    asof: string | null;
+    foreign_bonds_jpy_trn: number | null;
+    ai_issuers: AiDebtGpifIssuer[] | null;
+    ai_share_pct: number | null;
+    ust_jpy_trn: number | null;
+    ust_share_pct?: number | null;
+    lines_total?: number | null;
+    src: string | null;
+  } | null;
+  tic_official_corp: {
+    net_12m: number | null;
+    pos: number | null;
+    share_of_foreign_held: number | null;
+    asof?: string | null;
+    src?: string | null;
+  } | null;
+  imf_pip_japan: Record<string, unknown> | null;
+  can_see: string[] | null;
+  cannot_see: string[] | null;
+}
+
+export interface AiDebtUstFy {
+  net_marketable: number | null;
+  coupons: number | null;
+  bills: number | null;
+  basis?: string | null;
+}
+
+export interface AiDebtAuction {
+  date: string;
+  tenor: string;
+  high_yield: number | null;
+  btc: number | null;
+  indirect_pct: number | null;
+  reopening?: boolean | null;
+}
+
+export interface AiDebtCrowding {
+  status?: AiDebtBlockStatus;
+  ust: Record<string, AiDebtUstFy> | null;
+  ust_monthly?: {
+    months: string[];
+    marketable: Array<number | null>;
+    coupons: Array<number | null>;
+    bills: Array<number | null>;
+    unit?: string | null;
+    src?: string | null;
+  } | null;
+  term_premium: { kw10: AiDebtReading | null; acm10: AiDebtReading | null } | null;
+  yields: {
+    dgs10: AiDebtReading | null;
+    dgs30: AiDebtReading | null;
+    t10yie: AiDebtReading | null;
+  } | null;
+  fed_treast: AiDebtReading | null;
+  auctions: AiDebtAuction[] | null;
+  auctions_src?: string | null;
+}
+
+export interface AiDebtBdc {
+  ticker: string;
+  price: number | null;
+  asof: string | null;
+  nav: number | null;
+  nav_asof: string | null;
+  p_nav: number | null;
+  nav_src: string | null;
+  nav_note?: string | null;
+  px_src?: string | null;
+}
+
+export interface AiDebtSpreadAtIssue {
+  issuer: string;
+  date: string;
+  bp: number | null;
+  maturity?: number | string | null;
+  src: string | null;
+}
+
+export interface AiDebtEvent {
+  date: string;
+  text: string;
+  provenance: AiDebtProvenance | string;
+  src: string | null;
+  retrieved: string | null;
+  note?: string | null;
+}
+
+export interface AiDebtBreaking {
+  status?: AiDebtBlockStatus;
+  asof?: string | null;
+  spreads: Record<string, AiDebtReading> | null;
+  ccc_b_gap: AiDebtReading | null;
+  yields: { ig: AiDebtReading | null; hy: AiDebtReading | null } | null;
+  baa10y: AiDebtReading | null;
+  ebp: AiDebtReading | null;
+  ofr_fsi: AiDebtReading | null;
+  move: AiDebtReading | null;
+  bdc: AiDebtBdc[] | null;
+  spread_at_issue_30y: AiDebtSpreadAtIssue[] | null;
+  events: AiDebtEvent[] | null;
+}
+
+export interface AiDebt {
+  asof: string | null;
+  generated: string | null;
+  basis: Record<string, string | null> | null;
+  issuance: AiDebtIssuance | null;
+  holders: AiDebtHolders | null;
+  foreign_bid: AiDebtForeignBid | null;
+  japan: AiDebtJapan | null;
+  public_funds: AiDebtPublicFunds | null;
+  crowding: AiDebtCrowding | null;
+  breaking: AiDebtBreaking | null;
+  honesty: string[] | null;
+  sources: Record<string, string> | null;
+  status: Record<string, AiDebtBlockStatus | string> | null;
+}

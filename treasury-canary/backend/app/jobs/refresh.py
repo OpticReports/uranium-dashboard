@@ -72,14 +72,37 @@ def compute_all(bundle: dict, auctions: list[dict] | None = None):
     return metrics, analyses, composite, recession_starts
 
 
+# A failed read: a metric or squeeze condition with no data (STALE), or the
+# composite with none at all (NO_DATA).
+_NO_DATA = ("STALE", "NO_DATA")
+
+
 def _prev_status_map(session: Session) -> dict[str, str]:
-    rows = session.execute(select(MetricSnapshot).order_by(MetricSnapshot.asof.asc())).scalars().all()
+    """Flip baseline per metric: the status of its latest NON-STALE row.
+
+    A failed fetch persists a STALE row dated the refresh day (asof falls
+    back to today), and that row sorts AFTER the metric's real rows - a
+    daily series' last print, a weekly one's print day, a monthly one's
+    month start - until a newer print overtakes its date. As the baseline it
+    made every metric still RED on its real data "flip" STALE -> RED on
+    every refresh: one failed refresh (~04:28 UTC 2026-10-22) left STALE
+    rows that re-paged 21 RED alerts over five days. The squeeze radar's law
+    (below) applies here too: a STALE interlude is not a state, however long
+    it lasts - a metric RED before an outage and RED after it has not
+    flipped."""
+    rows = session.execute(
+        select(MetricSnapshot).where(MetricSnapshot.status.not_in(_NO_DATA))
+        .order_by(MetricSnapshot.asof.asc())).scalars().all()
     return {r.metric_id: r.status for r in rows}
 
 
 def _prev_band(session: Session) -> str | None:
+    """The composite's band at the last refresh that had data: a NO_DATA row
+    (a full outage) is skipped like a STALE metric row, or the first good
+    refresh after an outage pages "NO_DATA -> LOW"."""
     rows = session.execute(
         select(MetricSnapshot).where(MetricSnapshot.metric_id == "composite")
+        .where(MetricSnapshot.status.not_in(_NO_DATA))
         .order_by(MetricSnapshot.asof.asc())
     ).scalars().all()
     return rows[-1].status if rows else None
@@ -91,6 +114,14 @@ def _upsert_snapshot(session: Session, **kw) -> None:
         .where(MetricSnapshot.asof == kw["asof"])
     ).scalars().first()
     if existing:
+        if kw.get("status") in _NO_DATA and existing.status not in _NO_DATA:
+            # A failed read never erases a real one. A metric with no asof
+            # (vol.move_vix) is dated the refresh day, so an outage at the
+            # day's second refresh overwrote that day's reading; builders that
+            # keep the data's asof with no value overwrote the print itself.
+            # The flip baseline then fell back to an older state and could
+            # swallow a real RED re-entry (counter-agent, 2026-10-26).
+            return
         for k, v in kw.items():
             setattr(existing, k, v)
     else:

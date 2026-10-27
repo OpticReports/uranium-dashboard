@@ -20,11 +20,13 @@ const proxied = [
   "/severity",
   "/cycle",
   "/labor",
+  "/distress",
   "/flows",
   "/crossasset",
   "/stat-regime",
   "/track-record",
   "/recession-model",
+  "/ai-debt",
 ];
 
 export default defineConfig({

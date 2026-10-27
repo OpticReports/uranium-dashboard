@@ -219,8 +219,9 @@ def test_graded_exits_echo_for_late_pollers(session, client):
                          open=103.0, high=103.0, low=100.0, close=101.0))
     session.commit()
     # The scheduler's shadow pass grades the exit BEFORE the executor polls.
-    assert len(evaluate_shadow_calls(session)) == 1
-    g = session.exec(select(ShadowGrade)).one()
+    made = evaluate_shadow_calls(session)
+    assert len([g for g in made if g.engine == "trailing_3atr"]) == 1   # H14's second engine also grades
+    g = session.exec(select(ShadowGrade).where(ShadowGrade.engine == "trailing_3atr")).one()
 
     out = client.get("/blend3070/intents").json()
     (ex,) = out["exits"]

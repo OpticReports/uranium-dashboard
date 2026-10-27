@@ -1,0 +1,25 @@
+{
+ "lane": "fmp dividend-adjusted",
+ "start": "2015-07-23",
+ "end": "2026-08-19",
+ "normalized": {
+  "ATAI": {
+   "factor": 0.0728,
+   "n": 160,
+   "spread": 0.003738,
+   "segment": "rows before 2026-08-10",
+   "rows_divided": 1289,
+   "rows_total": 1297,
+   "note": "segment divided by a constant factor to match the frozen entry basis; returns inside the segment unchanged"
+  },
+  "ILMN": {
+   "factor": 0.99905,
+   "n": 194,
+   "spread": 0.000993,
+   "segment": "whole series",
+   "rows_divided": 2785,
+   "rows_total": 2785,
+   "note": "segment divided by a constant factor to match the frozen entry basis; returns inside the segment unchanged"
+  }
+ }
+}

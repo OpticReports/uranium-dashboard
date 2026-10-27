@@ -8844,3 +8844,1107 @@ def test_sleeve_target_is_inferred_from_the_book_shape(tmp_path):
     alerts = []
     run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=alerts.append)
     assert any("abort" in a for a in alerts) and m2.state.spy_qty == 70
+
+
+# --- stage 2: capital adoption (2026-10-05) ---------------------------------
+# Casey added funds to the account and asked for the book to be resized. The
+# book's capital is its LEDGER (seeded once from BLEND_BOOK_USD); stage 1
+# only ALERTS on a deposit. These gates pin the confirm-only adoption: the
+# operator journals an amount, the loop thread checks it against the venue
+# (unowned cash, available funds, BLEND_BUDGET, a quiet cycle) and credits
+# the ledger by the PERSISTED sleeve target, and the same cycle deploys it
+# through the ordinary core-buy / sweep path. Nothing is adopted from a
+# drift measurement; a venue LEVEL is never written into an event.
+
+class _VenueCashAdapter(DryAdapter):
+    """DryAdapter that also answers the account's cash: `total` and the
+    available-to-trade funds (`available`, None = the venue does not report
+    it). `total=None` = no claim."""
+
+    def __init__(self, total, available=None):
+        super().__init__()
+        self.total, self.available = total, available
+
+    def account_cash(self):
+        if self.total is None:
+            return None
+        return {"total_cash": self.total, "net_liq": None,
+                "available_funds": self.available, "ts": _time.time()}
+
+
+def _capital_book(tmp_path, **cfg):
+    """A seeded 30/70 book worth $10,000 at PRICES (SPY 100, BIL 100): core
+    70 SPY, sleeve 30 BIL, both cash buckets EMPTY - so the account's
+    TotalCashValue IS the unowned cash."""
+    m = mk(tmp_path, **cfg)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=70, bil_qty=30, core_cash=0.0)
+    m.state.sleeve_target = 0.30
+    m.state.capital_contributed = 10_000.0
+    return m
+
+
+def test_gate_capital_adopt_credits_the_ledger_by_the_persisted_target_and_deploys(tmp_path):
+    """MUTATION-VERIFIED: splitting by TARGET_SLEEVE instead of the persisted
+    target (set the book to 0.5 below) turns this red; skipping the
+    rebaseline leaves cash_baseline set; dropping the run_cycle hook leaves
+    the ledger unchanged after the cycle."""
+    m = _capital_book(tmp_path)
+    m.state.sleeve_target = 0.50                       # the book's OWN weight
+    m.state.spy_qty, m.state.bil_qty = 50, 50          # ...and held AT it
+    m.state.cash_baseline = {"venue": 0.0, "ledger": 0.0, "ts": _time.time()}
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    req = m.request_capital_adoption(7_000, "2026-08-20")
+    assert req["usd"] == 7_000.0 and m.state.capital_request == req
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "adopted" and r["usd"] == 7_000.0
+    assert m.state.sleeve_cash == pytest.approx(3_500.0)
+    assert m.state.core_cash == pytest.approx(3_500.0)
+    assert m.state.capital_contributed == pytest.approx(17_000.0)
+    assert m.state.capital_request is None
+    assert m.state.cash_baseline is None               # stage-1 clock restarted
+    ev = m.state.capital_events[-1]
+    assert ev["kind"] == "deposit_adopted" and ev["usd"] == 7_000.0
+    assert ev["sleeve_usd"] == 3_500.0 and ev["core_usd"] == 3_500.0
+    assert ev["sleeve_target"] == 0.5 and ev["date"] == "2026-08-20"
+    assert len(alerts) == 1 and "ADOPTED $7,000.00" in alerts[0]
+    assert "open positions keep the size" in alerts[0]
+    # the plan deploys it: idle core cash -> SPY, idle sleeve cash -> BIL
+    intents = m.step("2026-08-20", payload(), PRICES)
+    kinds = {i["action"]: i for i in intents}
+    assert kinds["CORE_BUY"]["qty"] == 35 and kinds["SWEEP"]["qty"] == 35
+    # persisted and reloaded intact
+    m.save()
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.capital_contributed == pytest.approx(17_000.0)
+    assert m2.state.capital_events[-1] == ev and m2.state.capital_request is None
+
+
+def test_gate_capital_adopt_end_to_end_through_run_cycle(tmp_path):
+    """The whole path: journal -> run_cycle adopts on the loop thread's
+    cycle -> the SAME cycle buys the core and sweeps the sleeve."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=alerts.append)
+    assert m.state.capital_request is None
+    assert m.state.capital_contributed == pytest.approx(17_000.0)
+    assert m.state.spy_qty == 70 + 49 and m.state.bil_qty == 30 + 21
+    assert m.state.core_cash == pytest.approx(0.0, abs=1e-6)
+    assert m.state.sleeve_cash == pytest.approx(0.0, abs=1e-6)
+    kinds = [(t["kind"], t["side"], t["qty"]) for t in m.state.trades]
+    assert ("core", "BUY", 49) in kinds and ("sweep", "BUY", 21) in kinds
+    assert any("ADOPTED $7,000.00" in x for x in alerts)
+    # a second cycle with no request is a no-op (nothing adopts twice)
+    before = (m.state.spy_qty, m.state.bil_qty, m.state.capital_contributed)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=alerts.append)
+    assert (m.state.spy_qty, m.state.bil_qty, m.state.capital_contributed) == before
+
+
+def test_gate_capital_adopt_refuses_more_than_the_venue_holds(tmp_path):
+    """The venue is the only ground truth for the amount: a request the
+    account cannot back is DROPPED with a RED page naming the shortfall
+    (a delta - never the account's cash level), ledger untouched."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=5_000.0, available=5_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "holds LESS cash" in r["reason"]
+    assert m.state.capital_request is None
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    assert m.state.capital_contributed == 10_000.0 and not m.state.capital_events
+    assert alerts[0].startswith("🚨🚨") and "5,000" not in alerts[0]
+    # B2: not even DERIVABLE - no shortfall figure either (usd is known)
+    assert "2,000" not in alerts[0] and "2,000" not in r["reason"]
+    assert m.state.events[-1]["level"] == "RED"
+    # a book order the ledger owns is NOT unowned cash: ledger cash counts
+    m2 = _capital_book(tmp_path / "b")
+    m2.state.core_cash = 2_000.0                       # the book's own cash
+    a2 = _VenueCashAdapter(total=8_000.0, available=8_000.0)   # 6,000 unowned
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r2 = blend_mod.adopt_capital(m2, a2, PRICES, "2026-08-20", alerts.append)
+    assert r2["status"] == "refused" and "holds LESS cash" in r2["reason"]
+    # within the rounding tolerance it adopts
+    m3 = _capital_book(tmp_path / "c")
+    a3 = _VenueCashAdapter(total=6_999.50, available=6_999.50)
+    m3.request_capital_adoption(7_000, "2026-08-20")
+    assert blend_mod.adopt_capital(m3, a3, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_waits_for_settlement_then_adopts(tmp_path):
+    """A deposit that has LANDED but is not AVAILABLE (a cash account's T+1,
+    a deposit hold) is deferred - request kept, said once a day - and
+    adopted once the venue says it is usable. No available-funds claim at
+    all (None) does not block."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=3_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "do not cover it yet" in r["reason"]
+    assert "4,000" not in r["reason"] and "3,000" not in r["reason"]   # B2
+    assert m.state.capital_request is not None and alerts == []
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    n_events = len(m.state.events)
+    blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert len(m.state.events) == n_events          # said once a day
+    assert m.status_summary(PRICES)["capital"]["request_pending"]["usd"] == 7_000.0
+    a.available = 7_000.0
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+    m2 = _capital_book(tmp_path / "b")
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    assert blend_mod.adopt_capital(m2, _VenueCashAdapter(7_000.0, None), PRICES,
+                                   "2026-08-20", alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_waits_for_a_quiet_cycle_and_a_venue_claim(tmp_path):
+    """Same quiet rule as the stage-1 reconcile (shared helper): journals in
+    flight, a fill inside CASH_QUIET_S, a fresh unreconciled record and an
+    adapter with no cash claim all DEFER (request kept, ledger untouched)."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    m.state.pending_book_orders["x"] = {"kind": "sweep", "date": "2026-08-20"}
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "pending journals" in r["reason"]
+    m.state.pending_book_orders.clear()
+    m.state.last_fill_ts = _time.time()
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "recent fill" in r["reason"]
+    m.state.last_fill_ts = _time.time() - blend_mod.CASH_QUIET_S - 1
+    m.state.unreconciled["7"] = {"ts": _time.time(), "symbol": "CRSP"}
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "unreconciled" in r["reason"]
+    m.state.unreconciled.clear()
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(None), PRICES,
+                                "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "no claim" in r["reason"]
+    assert m.state.capital_request is not None and alerts == []
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    # the stage-1 reconcile uses the same helper and still skips the same way
+    m.state.pending_entries["9"] = {"intent": {}, "date": "2026-08-20"}
+    assert blend_mod.reconcile_cash(m, a, alerts.append) is None
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "deferred"
+    m.state.pending_entries.clear()
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_respects_blend_budget(tmp_path):
+    """BLEND_BUDGET must hold the larger book BEFORE the cash is adopted,
+    or the sweep is clamped and entries blocked for no reason: refused
+    with a RED page naming the cap. A missing SPY/BIL quote (gross reads
+    LOW, r7) defers rather than passes. No cap = no check."""
+    alerts = []
+    m = _capital_book(tmp_path, blend_budget=12_000.0)  # gross 10,000 + 7,000
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "BLEND_BUDGET $12,000" in r["reason"]
+    assert m.state.capital_request is None and alerts[0].startswith("🚨🚨")
+    assert m.state.core_cash == 0.0
+    m2 = _capital_book(tmp_path / "b", blend_budget=20_000.0)
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, a, {"BIL": 100.0}, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "missing SPY/BIL quote" in r["reason"]
+    assert m2.state.capital_request is not None
+    assert blend_mod.adopt_capital(m2, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+    # exactly at the cap (within tolerance) adopts
+    m3 = _capital_book(tmp_path / "c", blend_budget=17_000.0)
+    m3.request_capital_adoption(7_000, "2026-08-20")
+    assert blend_mod.adopt_capital(m3, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_refused_on_a_halted_or_unseeded_book(tmp_path):
+    alerts = []
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    m.halt("KILL")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "halted (KILL)" in r["reason"]
+    assert m.state.capital_request is None and m.state.core_cash == 0.0
+    m2 = mk(tmp_path / "b")                          # never seeded
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "not seeded" in r["reason"]
+    assert m2.state.capital_request is None and m2.state.sleeve_cash == 0.0
+    # and a queued flatten on an un-halted book refuses too
+    m3 = _capital_book(tmp_path / "c")
+    m3.request_capital_adoption(7_000, "2026-08-20")
+    m3.state.flatten_request = {"ts": 1, "date": "2026-08-20"}
+    assert blend_mod.adopt_capital(m3, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "refused"
+
+
+def test_gate_capital_request_validation_replacement_and_expiry(tmp_path):
+    m = _capital_book(tmp_path)
+    for bad in ("abc", None, -5, 0, float("nan"), float("inf"), 6_000_000,
+                True, False, 0.004, "0.001"):
+        with pytest.raises(ValueError):
+            m.request_capital_adoption(bad, "2026-08-20")
+    assert m.state.capital_request is None
+    assert m.request_capital_adoption(0.005, "2026-08-20")["usd"] == 0.01
+    m.request_capital_adoption("7000", "2026-08-20")         # a string number is fine
+    m.request_capital_adoption(7_500, "2026-08-20")          # the latest wins
+    assert m.state.capital_request["usd"] == 7_500.0
+    assert "replaces the pending $7,000.00" in m.state.events[-1]["msg"]
+    # a request older than the TTL expires unexecuted
+    m.state.capital_request["ts"] = _time.time() - blend_mod.CAPITAL_REQUEST_TTL_S - 1
+    alerts = []
+    a = _VenueCashAdapter(total=8_000.0, available=8_000.0)
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "expired" and m.state.capital_request is None
+    assert m.state.core_cash == 0.0 and alerts[0].startswith("⚠️")
+    # the operator can withdraw one
+    m.request_capital_adoption(7_500, "2026-08-20")
+    assert m.clear_capital_request("operator")["usd"] == 7_500.0
+    assert m.state.capital_request is None and m.clear_capital_request() is None
+    # a malformed journaled request is dropped at LOAD, never executed
+    m.state.capital_request = {"usd": "junk", "ts": _time.time()}
+    m.save()
+    assert Blend3070Manager(m.cfg, m.state_path).state.capital_request is None
+
+
+def test_gate_kill_cancels_a_pending_capital_request(tmp_path):
+    """A /kill then /resume must never adopt cash into a book the operator
+    just stopped - the bootstrap-ack rule, applied to capital."""
+    m = _capital_book(tmp_path)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    m.request_flatten("2026-08-20")
+    assert m.state.capital_request is None and m.state.halted == "KILL"
+    assert any("CANCELLED" in e["msg"] for e in m.state.events)
+    m.resume("2026-08-20")
+    assert m.state.capital_request is None           # resume grants nothing
+
+
+def test_gate_capital_contributed_seed_and_pre_field_inference(tmp_path):
+    """A fresh seed records itself as the first capital event; a state file
+    from before the field infers the seed (BLEND_BOOK_USD clamped by
+    BLEND_BUDGET) ONCE and persists it, so a later env change cannot
+    rewrite it."""
+    m = mk(tmp_path, blend_budget=8_000.0)           # seed = min(10k, 8k)
+    a = DryAdapter()
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.initialized and m.state.capital_contributed == 8_000.0
+    (ev,) = [e for e in m.state.capital_events if e["kind"] == "seed"]
+    assert ev["usd"] == 8_000.0 and ev["sleeve_usd"] == 2_400.0
+    assert ev["core_usd"] == 5_600.0 and ev["sleeve_target"] == 0.30
+    # pre-field file: strip the fields and reload
+    raw = json.load(open(m.state_path))
+    for k in ("capital_contributed", "capital_events", "capital_request"):
+        raw.pop(k, None)
+    json.dump(raw, open(m.state_path, "w"))
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.capital_contributed == 8_000.0 and m2.capital_inferred == 8_000.0
+    (iev,) = m2.state.capital_events
+    assert iev["kind"] == "inferred" and iev["usd"] == 8_000.0
+    assert iev["sleeve_usd"] is None and iev["core_usd"] is None
+    (wev,) = [e for e in m2.state.events if "INFERRED from the seed config" in e["msg"]]
+    assert wev["level"] == "WARN"
+    m2.save()
+    m2.cfg.blend_book_usd = 999_999.0                # env changed later
+    m3 = Blend3070Manager(m2.cfg, m2.state_path)
+    assert m3.state.capital_contributed == 8_000.0   # persisted, not re-inferred
+    assert m3.capital_inferred is None               # nothing to page
+    # an UNSEEDED pre-field file infers nothing
+    m4 = mk(tmp_path / "u")
+    assert m4.state.capital_contributed is None and m4.capital_inferred is None
+
+
+def test_gate_capital_sleeve_only_book_adopts_everything_to_the_sleeve(tmp_path):
+    m = _capital_book(tmp_path)
+    m.state.sleeve_target, m.state.spy_qty = 1.0, 0
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", lambda *_: None)
+    assert r["status"] == "adopted"
+    assert m.state.sleeve_cash == 7_000.0 and m.state.core_cash == 0.0
+    pl = payload()
+    pl["rebalance"]["target"] = 1.0
+    intents = m.step("2026-08-20", pl, PRICES)
+    assert not any(i["action"] == "CORE_BUY" for i in intents)
+    (sweep,) = [i for i in intents if i["action"] == "SWEEP"]
+    assert sweep["qty"] == 70
+
+
+def test_gate_capital_feed_and_status_are_public_safe(tmp_path):
+    """The feed carries contributed capital and the capital events (the
+    operator's own amounts and dates); /status adds the pending request.
+    Neither ever carries the account's cash level."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_123.45, available=7_123.45)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    st = m.status_summary(PRICES)
+    assert st["capital"]["request_pending"]["usd"] == 7_000.0
+    assert st["capital"]["contributed"] == 10_000.0
+    blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", lambda *_: None)
+    feed = m.feed(PRICES, "2026-08-20")
+    assert feed["book"]["capital_contributed"] == 17_000.0
+    (ev,) = feed["capital_events"]
+    assert set(ev) == {"date", "kind", "usd", "sleeve_usd", "core_usd"}
+    assert ev["kind"] == "deposit_adopted" and ev["usd"] == 7_000.0
+    blob = json.dumps(feed) + json.dumps(m.status_summary(PRICES))
+    assert "7123" not in blob and "7,123" not in blob
+    assert "total_cash" not in blob and "available_funds" not in blob
+    assert m.status_summary(PRICES)["capital"]["request_pending"] is None
+
+
+def test_gate_capital_adopt_endpoint_journals_and_wakes_the_loop(tmp_path, monkeypatch):
+    """POST /blend/cash/adopt: EXEC_TOKEN-gated, POST only, validates the
+    amount, journals it under BLEND_LOCK and wakes the loop - which, with
+    the DryAdapter's no-claim cash, DEFERS it (request kept, nothing
+    adopted) and says so on /status."""
+    client, service = _service_client(tmp_path, monkeypatch)
+    with client as c:
+        assert _wait_until(lambda: service.BLEND is not None
+                           and service.LAST["loop_ok"] > 0)
+        B = service.BLEND
+        _seed_initialized(B, sleeve_cash=0.0, spy_qty=70, bil_qty=30)
+        B.state.sleeve_target = 0.30
+        B.state.capital_contributed = 10_000.0      # a seeded book carries it
+        assert c.post("/blend/cash/adopt", json={"usd": 7000}).status_code == 401
+        assert c.get("/blend/cash/adopt", params={"token": "sekrit"}).status_code == 405
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": -1})
+        assert r.status_code == 400 and "positive" in r.json()["detail"]
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": 7000})
+        assert r.status_code == 200 and r.json()["ok"] is True
+        assert r.json()["capital_request"]["usd"] == 7_000.0
+        assert B.state.capital_request["usd"] == 7_000.0
+        # the loop ran a cycle on the wake and deferred it (no venue claim)
+        assert _wait_until(lambda: any("no claim" in e["msg"]
+                                       for e in B.state.events), timeout=20.0)
+        assert B.state.capital_request is not None
+        assert B.state.sleeve_cash == 0.0 and B.state.core_cash == 0.0
+        st = c.get("/status", params={"token": "sekrit"}).json()["blend"]
+        assert st["capital"]["request_pending"]["usd"] == 7_000.0
+        assert st["capital"]["contributed"] == 10_000.0
+        # B5: the operator can WITHDRAW it without /kill
+        assert c.post("/blend/cash/adopt/cancel").status_code == 401
+        assert c.get("/blend/cash/adopt/cancel", params={"token": "sekrit"}).status_code == 405
+        r = c.post("/blend/cash/adopt/cancel", params={"token": "sekrit"})
+        assert r.status_code == 200 and r.json()["cancelled"]["usd"] == 7_000.0
+        assert B.state.capital_request is None
+        assert r.json()["capital"]["request_pending"] is None
+        assert c.post("/blend/cash/adopt/cancel",
+                      params={"token": "sekrit"}).json()["cancelled"] is None
+        # B8e: a halted book answers 409 up front, journals nothing
+        B.halt("KILL")
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": 7000})
+        assert r.status_code == 409 and "halted (KILL)" in r.json()["detail"]
+        assert B.state.capital_request is None
+        B.resume("2026-08-20")
+    service.BLEND = None
+
+
+def test_gate_capital_adopt_rechecks_the_halt_after_the_venue_read(tmp_path):
+    """A1/B1 (MF2-5's rule): /kill takes no lock a cycle holds, so it can
+    land DURING adapter.account_cash() - after the first halted check
+    passed. The credit must re-read the halt (and whether the request it
+    holds is still the journaled one) immediately before mutating."""
+    m = _capital_book(tmp_path)
+    alerts = []
+
+    class _KillDuringRead(_VenueCashAdapter):
+        def account_cash(self):
+            m.request_flatten("2026-08-20")        # /kill lands mid-read
+            return super().account_cash()
+
+    a = _KillDuringRead(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "landed while the venue" in r["reason"]
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    assert m.state.capital_contributed == 10_000.0 and not m.state.capital_events
+    assert m.state.capital_request is None and m.state.halted == "KILL"
+    # a cancel landing mid-read is honoured the same way
+    m2 = _capital_book(tmp_path / "b")
+
+    class _CancelDuringRead(_VenueCashAdapter):
+        def account_cash(self):
+            m2.clear_capital_request("operator")
+            return super().account_cash()
+
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, _CancelDuringRead(7_000.0, 7_000.0), PRICES,
+                                "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and m2.state.core_cash == 0.0
+
+
+def test_gate_capital_adopt_pages_before_it_saves(tmp_path, monkeypatch):
+    """A2: a save that fails after the credit must not also silence the
+    operator - the ADOPTED page goes out first, the request is cleared in
+    memory, and the next successful save persists the credited ledger."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    real_save = m.save
+    calls = {"n": 0}
+
+    def _flaky_save():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("disk full")
+        real_save()
+
+    monkeypatch.setattr(m, "save", _flaky_save)
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append) is None
+    assert any("ADOPTED $7,000.00" in x for x in alerts)      # paged anyway
+    assert m.state.core_cash == 4_900.0 and m.state.capital_request is None
+    m.save()                                                  # the next save lands it
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.core_cash == 4_900.0 and m2.state.capital_request is None
+
+
+def test_gate_stage1_thresholds_scale_with_contributed_capital(tmp_path):
+    """B7: warn at max($25, 0.1%) / RED at 1% of CONTRIBUTED capital once
+    known (120k -> 120 / 1,200), else of the seed config (50k -> 50 / 500)."""
+    m = mk(tmp_path, blend_book_usd=50_000.0)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=70, bil_qty=30)
+    m.state.capital_contributed = 120_000.0
+    a = _CashAdapter(1_000.0)
+    alerts = []
+    blend_mod.reconcile_cash(m, a, alerts.append)             # baseline
+    a.cash = 1_100.0                                          # +100: under 120
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    r = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r["drift"] == 100.0 and r["cycles"] == 0 and r["fired"] is None
+    a.cash = 1_000.0 + 700.0                                  # +700: WARN, not RED
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    r = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r["fired"] == "WARN"
+    m.rebaseline_cash("test")
+    m.state.capital_contributed = None                        # seed config basis
+    a.cash = 2_000.0
+    blend_mod.reconcile_cash(m, a, alerts.append)             # baseline
+    a.cash = 2_700.0                                          # +700 of 50k = 1.4%: RED
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    assert blend_mod.reconcile_cash(m, a, alerts.append)["fired"] == "RED"
+
+
+def test_gate_capital_split_uses_the_shape_inferred_target(tmp_path):
+    """B6: a sleeve-only book whose file predates sleeve_target infers 1.0
+    from its SHAPE in step(); the stage-2 split must use the same
+    inference, or the capital event records a 30/70 split the book never
+    ran."""
+    m = _capital_book(tmp_path)
+    m.state.sleeve_target, m.state.spy_qty = None, 0
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", lambda *_: None)
+    assert r["status"] == "adopted" and r["sleeve_usd"] == 7_000.0
+    assert m.state.sleeve_target == 1.0 and m.state.core_cash == 0.0
+    assert m.state.capital_events[-1]["sleeve_target"] == 1.0
+
+
+# --- overnight core buy headroom + kill-ledger tripwires (2026-10-05) --------
+# The suite pins CORE_BUY_OVERNIGHT_HEADROOM to 0 (conftest, same pattern as
+# the clock pin); these gates set it explicitly.
+
+def test_gate_overnight_core_buy_is_sized_with_headroom(tmp_path, monkeypatch):
+    """A CORE_BUY planned while the regular session is closed rests for the
+    open and fills at the opening price: sized 1% above the quote so a gap-up
+    cannot make it cost more than the core bucket holds. In session it is
+    sized at the quote (it fills now). MUTATION-VERIFIED: dropping the
+    session test sizes 69 in session; dropping the headroom sizes 70 overnight."""
+    monkeypatch.setattr(blend_mod, "CORE_BUY_OVERNIGHT_HEADROOM", 0.01)
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=0, bil_qty=30, core_cash=7_000.0)
+    m.state.sleeve_target = 0.30
+    out = m.step("2026-08-20", payload(), PRICES)            # 07:00 ET: closed
+    (core,) = [i for i in out if i["action"] == "CORE_BUY"]
+    assert core["qty"] == 69 and "rests for the open" in core["reason"]
+    assert 69 * 100.0 * 1.01 <= 7_000.0 < 70 * 100.0 * 1.01
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: _dt(2026, 8, 20, 15, 0, tzinfo=_tz.utc))  # 11:00 ET
+    out = m.step("2026-08-20", payload(), PRICES)
+    (core,) = [i for i in out if i["action"] == "CORE_BUY"]
+    assert core["qty"] == 70 and "rests" not in core["reason"]
+    # a bucket that cannot buy one share with headroom plans nothing (no dust)
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=0.0, spy_qty=70, bil_qty=30, core_cash=100.5)
+    m2.state.sleeve_target = 0.30
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 20, 11, 0, tzinfo=_tz.utc))
+    assert not [i for i in m2.step("2026-08-20", payload(), PRICES) if i["action"] == "CORE_BUY"]
+
+
+def _trip_book(tmp_path, **cfg):
+    m = mk(tmp_path, **cfg)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=350, bil_qty=150, core_cash=0.0)
+    m.state.sleeve_target = 0.30
+    return m
+
+
+def _px(spy, bil=100.0):
+    return {"SPY": spy, "BIL": bil}
+
+
+def _rth(monkeypatch, on: bool):
+    """Pin the clock inside (11:00 ET) or outside (07:00 ET) the session."""
+    h = 15 if on else 11
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 20, h, 0, tzinfo=_tz.utc))
+
+
+def _days(m, seq, alerts=None):
+    """One mark per day: [(date, prices), ...]. Each new day finalizes the
+    previous one (the lines read finalized closes)."""
+    for d, px in seq:
+        m.update_tripwires(d, px, (alerts.append if alerts is not None else (lambda *_: None)))
+
+
+def test_gate_tripwire_book_index_is_flow_adjusted_through_adopt_capital(tmp_path, monkeypatch):
+    """A deposit is a STEP in book value, never a new high - driven through the
+    REAL adopt_capital (TB9/M2): the README example (50k, HWM 52k, adopt 70k,
+    fall to 100k) reads 18.0%; the subtracted-dollar series would read 42.3%."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 150, 350              # sleeve 15k BIL, core 350 SPY
+    alerts = []
+    # book 50,000 -> 52,000 (SPY 100 -> 105.714...): use SPY that makes 52k
+    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(37_000 / 350))], alerts)
+    m.request_capital_adoption(70_000, "2026-09-03")
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(70_000.0, 70_000.0), _px(37_000 / 350),
+                                "2026-09-03", alerts.append)
+    assert r["status"] == "adopted" and m.state.trip_pending_book == 70_000.0
+    # book 122,000 on the deposit day; then 100,000: the core's SPY falls so
+    # that 350 x SPY + 15,000 BIL + 70,000 cash = 100,000
+    _days(m, [("2026-09-03", _px(37_000 / 350)), ("2026-09-04", _px(15_000 / 350)),
+              ("2026-09-05", _px(15_000 / 350))], alerts)
+    t = m.tripwire_summary("2026-09-05")
+    assert t["book"]["hwm_date"] == "2026-09-02"            # the deposit day is not a high
+    # TB11/M2b (TD1: the sleeve is FUNDED before the deposit, so a dropped
+    # sleeve flow would read the $21k deposit share as a 2.4x gain and blind
+    # the sleeve line): BIL never moved, so the sleeve is flat
+    assert t["sleeve"]["drawdown"] == 0.0
+    assert t["sleeve"]["hwm_date"] == "2026-09-01"
+    assert m.state.trip_sleeve["hwm"] == pytest.approx(1.0)
+    assert m.state.trip_pending_sleeve == 0.0
+    assert t["book"]["drawdown"] == pytest.approx(1 - 100_000 / 122_000, abs=1e-4)
+    assert t["book"]["close_date"] == "2026-09-04"
+    assert not any("tripwire" in a for a in alerts)          # 18% < 25%
+
+
+def test_gate_tripwire_distribution_is_return_not_a_flow(tmp_path, monkeypatch):
+    """TA6/TB2: a reinvested dividend is RETURN - the index rises by it and
+    contributed capital does not grow; a deposit of the same size does not
+    move the index."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    m.state.capital_contributed = 50_000.0
+    _days(m, [("2026-09-01", _px(100.0))])
+    m.request_capital_adoption(500, "2026-09-02", kind="distribution")
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(500.0, 500.0), _px(100.0),
+                                "2026-09-02", lambda *_: None)
+    assert r["status"] == "adopted" and m.state.trip_pending_book == 0.0
+    assert m.state.capital_contributed == 50_000.0
+    assert m.state.capital_events[-1]["kind"] == "distribution_adopted"
+    _days(m, [("2026-09-02", _px(100.0)), ("2026-09-03", _px(100.0))])
+    assert m.state.trip_book["closes"][-1][1] == pytest.approx(50_500 / 50_000)
+    with pytest.raises(ValueError):
+        m.request_capital_adoption(500, "2026-09-03", kind="gift")
+
+
+def test_gate_tripwire_intraday_glitch_never_sets_the_high(tmp_path, monkeypatch):
+    """TA1: a transient mark (a thin name's after-hours ask) can set neither a
+    permanent high nor a page. The day's close is its LAST IN-SESSION mark."""
+    m = _trip_book(tmp_path)
+    m.state.spy_qty = 0                                     # sleeve = 150 BIL = 15k
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-08-31", PRICES, lambda *_: None)   # day 1: the series' base
+    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)   # day 2 (TB11/M13b)
+    m.update_tripwires("2026-09-01", _px(100.0, 200.0), lambda *_: None)   # in-session spike
+    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)               # back
+    _rth(monkeypatch, False)
+    m.update_tripwires("2026-09-01", _px(100.0, 1_000.0), lambda *_: None)  # after-hours glitch
+    alerts = []
+    _rth(monkeypatch, True)
+    _days(m, [("2026-09-02", PRICES), ("2026-09-03", PRICES), ("2026-09-04", PRICES)], alerts)
+    t = m.tripwire_summary("2026-09-04")
+    assert t["sleeve"]["drawdown"] == 0.0 and t["book"]["drawdown"] == 0.0
+    assert m.state.trip_sleeve["hwm"] == pytest.approx(1.0) and not alerts
+
+
+def test_gate_tripwire_flow_after_the_close_mark_carries_to_the_next_day(tmp_path, monkeypatch):
+    """A deposit adopted AFTER the day's last in-session mark is not in that
+    close: it carries into the next day's flows (no false gain, no loss)."""
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-09-01", _px(100.0), lambda *_: None)
+    _rth(monkeypatch, False)
+    m.state.core_cash += 70_000.0
+    m.state.trip_pending_book += 70_000.0                   # after-hours adoption
+    m.update_tripwires("2026-09-01", _px(100.0), lambda *_: None)
+    _days(m, [("2026-09-02", _px(100.0)), ("2026-09-03", _px(100.0))])
+    t = m.tripwire_summary("2026-09-03")
+    assert t["book"]["drawdown"] == 0.0
+    assert m.state.trip_book["closes"][-1][1] == pytest.approx(1.0)
+
+
+def test_gate_tripwire_sleeve_index_ignores_transfers(tmp_path, monkeypatch):
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
+    m.on_transfer(-5_000.0)                  # sleeve -> core
+    _days(m, [("2026-09-03", PRICES)])
+    m.on_transfer(8_000.0)                   # core -> sleeve
+    _days(m, [("2026-09-04", PRICES), ("2026-09-05", PRICES)])
+    t = m.tripwire_summary("2026-09-05")
+    assert t["sleeve"]["drawdown"] == 0.0 and t["sleeve"]["hwm_date"] == "2026-09-01"
+    _days(m, [("2026-09-06", _px(100.0, 50.0)), ("2026-09-07", _px(100.0, 50.0))])
+    dd = m.tripwire_summary("2026-09-07")["sleeve"]["drawdown"]
+    assert dd == pytest.approx(1 - (3_000.0 + 7_500.0) / 18_000.0, abs=1e-4)
+
+
+def test_gate_tripwire_pages_on_two_consecutive_closes_once_and_rearms(tmp_path, monkeypatch):
+    """A line pages only when the LAST TWO finalized closes are over it (one
+    glitched close cannot page), once per crossing, and re-arms after a 5 pp
+    recovery on a close. Alert-only: nothing on the book moves."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    alerts = []
+    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(74.0)),
+              ("2026-09-03", _px(100.0)), ("2026-09-04", _px(100.0))], alerts)
+    assert alerts == []                                     # one close at 26%: no page
+    _days(m, [("2026-09-05", _px(74.0)), ("2026-09-06", _px(73.0)),
+              ("2026-09-07", _px(73.0))], alerts)
+    assert len(alerts) == 1 and alerts[0].startswith("⚠️") and "REVIEW (book)" in alerts[0]
+    assert "two consecutive closes" in alerts[0] and "ALERT-ONLY" in alerts[0]
+    _days(m, [("2026-09-08", _px(64.0)), ("2026-09-09", _px(63.0)), ("2026-09-10", _px(63.0))], alerts)
+    assert len(alerts) == 2 and alerts[1].startswith("🚨🚨") and "REGIME" in alerts[1]
+    assert m.state.halted is None and m.state.spy_qty == 500
+    _days(m, [("2026-09-11", _px(81.0)), ("2026-09-12", _px(81.0))], alerts)   # close 19%: re-arm both
+    _days(m, [("2026-09-13", _px(74.0)), ("2026-09-14", _px(74.0)), ("2026-09-15", _px(74.0))], alerts)
+    assert len(alerts) == 3 and "REVIEW (book)" in alerts[2]
+
+
+def test_gate_tripwire_sleeve_kill_line_and_two_underwater_episodes(tmp_path, monkeypatch):
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.spy_qty = 0
+    alerts = []
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", _px(100.0, 54.0)),
+              ("2026-09-03", _px(100.0, 54.0)), ("2026-09-04", _px(100.0, 54.0))], alerts)
+    assert sum("MODEL-RISK KILL line (sleeve)" in a for a in alerts) == 1
+    m2 = _trip_book(tmp_path / "b")
+    a2 = []
+    _days(m2, [("2024-01-02", PRICES), ("2024-01-03", _px(95.0)), ("2026-07-02", _px(95.0))], a2)
+    assert not any("under water" in a for a in a2)          # 912 days (2024 is a leap year)
+    _days(m2, [("2026-07-03", _px(95.0))], a2)               # 913 days
+    assert sum("under water" in a for a in a2) == 1
+    # a new high re-arms the clock (TB9: second episode)
+    _days(m2, [("2026-07-05", _px(120.0)), ("2026-07-06", _px(120.0)), ("2026-07-07", _px(110.0))], a2)
+    assert m2.state.trip_alerted["underwater"] is False
+    _days(m2, [("2028-12-31", _px(110.0)), ("2029-01-05", _px(110.0))], a2)
+    assert sum("under water" in a for a in a2) == 2
+
+
+def test_gate_tripwire_process_line_counts_session_closes(tmp_path, monkeypatch):
+    """TA4: sessions are counted on session CLOSES in ET after the record was
+    parked, not on UTC dates: born Thu 11:00 ET -> closes Thu, Fri, Mon; the
+    page lands after Monday's 16:00 ET close, not at Monday's UTC roll."""
+    m = _trip_book(tmp_path)
+    alerts = []
+    born = _dt(2026, 8, 20, 15, 0, tzinfo=_tz.utc).timestamp()          # Thu 11:00 ET
+    m.state.unreconciled["7"] = {"ts": born, "symbol": "CRSP"}
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 24, 19, 0, tzinfo=_tz.utc))
+    m.update_tripwires("2026-08-24", PRICES, alerts.append)             # Mon 15:00 ET: 2
+    assert not alerts
+    assert m.tripwire_summary("2026-08-24")["lines"][4]["value"] == 2   # TA5/TB3: an AGE
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 24, 20, 30, tzinfo=_tz.utc))
+    m.update_tripwires("2026-08-24", PRICES, alerts.append)             # Mon 16:30 ET: 3
+    assert len(alerts) == 1 and "PROCESS KILL" in alerts[0] and alerts[0].startswith("🚨🚨")
+    m.update_tripwires("2026-08-25", PRICES, alerts.append)
+    assert len(alerts) == 1
+    del m.state.unreconciled["7"]
+    m.update_tripwires("2026-08-26", PRICES, alerts.append)
+    assert "unrec:7" not in m.state.trip_alerted
+
+
+def test_gate_tripwire_bootstrap_deposit_inside_a_drawdown(tmp_path, monkeypatch):
+    """TB9/M10: the bootstrap's deposit sits INSIDE a drawdown, so a bootstrap
+    that ignored flows would read a new high on the deposit day. Today's point
+    (written by the snapshot just before) is the live mark; a pending flow the
+    curve already contains is not applied twice."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.equity_curve = [["2026-08-28", 50_000.0], ["2026-09-10", 52_000.0],
+                            ["2026-09-12", 156_000.0],            # Saturday glitch (TC1b): never a close
+                            ["2026-09-21", 49_000.0], ["2026-10-06", 119_000.0],
+                            ["2026-10-07", 119_500.0]]
+    m.state.capital_events = [{"date": "2026-08-28", "kind": "inferred", "usd": 50_000.0},
+                              {"date": "2026-10-06", "kind": "deposit_adopted",
+                               "usd": 70_000.0, "sleeve_usd": 21_000.0, "core_usd": 49_000.0}]
+    m.state.trip_pending_book = 70_000.0
+    m.state.bil_qty, m.state.spy_qty, m.state.core_cash = 0, 0, 119_500.0
+    m.update_tripwires("2026-10-07", PRICES, lambda *_: None)
+    t = m.tripwire_summary("2026-10-07")
+    assert t["book"]["since"] == "2026-08-28" and t["book"]["hwm_date"] == "2026-09-10"
+    assert t["book"]["close_date"] == "2026-10-06"
+    assert t["book"]["drawdown"] == pytest.approx(1 - 49_000 / 52_000, abs=1e-4)   # 5.77%, not 0
+    assert m.state.trip_pending_book == 0.0
+    assert t["sleeve"]["since"] == "2026-10-07"
+    assert any("tripwire series trip_sleeve started" in e["msg"] for e in m.state.events)
+    # TB11/M6: the pending deposit the curve already contains is not applied
+    # again on the next days' closes
+    m.update_tripwires("2026-10-08", PRICES, lambda *_: None)
+    m.update_tripwires("2026-10-09", PRICES, lambda *_: None)
+    t2 = m.tripwire_summary("2026-10-09")
+    assert t2["book"]["close_date"] == "2026-10-08"
+    assert t2["book"]["drawdown"] == pytest.approx(1 - (119_500 / 119_000) * 49_000 / 52_000, abs=1e-3)
+
+
+def test_gate_tripwire_runs_after_the_snapshot_with_a_same_day_adoption(tmp_path):
+    """TB9/M5: in run_cycle the tripwire runs AFTER the equity snapshot, so on
+    the bootstrap day a same-day adoption is a flow, not a new high."""
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    m.state.equity_curve = [["2026-08-18", 52_000.0], ["2026-08-19", 50_000.0]]
+    m.request_capital_adoption(70_000, "2026-08-20")
+    a = _VenueCashAdapter(70_000.0, 70_000.0)
+    a.seed_position("SPY", 500)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.capital_request is None
+    t = m.tripwire_summary("2026-08-20")
+    assert t["book"]["hwm_date"] == "2026-08-18"
+    assert t["book"]["drawdown_live"] == pytest.approx(1 - 50_000 / 52_000, abs=0.002)
+
+
+def test_gate_tripwire_malformed_state_never_500s_and_restarts_loudly(tmp_path, monkeypatch):
+    """TB1: a malformed subfield (hand edit, future schema) is dropped at load
+    with a WARN, /status and the feed stay strictly JSON-serializable, and an
+    infinite pending flow is never paged."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
+    m.save()
+    for bad in ({"cur": "x"}, {"cur": {"date": "2026-09-02", "value": 1.0, "index": "abc"}},
+                {"hwm": float("inf")}, {"closes": [["d", -1]]}):
+        raw = json.load(open(m.state_path))
+        raw["trip_sleeve"] = dict(raw["trip_sleeve"], **bad)
+        raw["trip_pending_book"] = float("inf")
+        with open(m.state_path, "w") as fh:
+            json.dump(raw, fh)
+        m2 = Blend3070Manager(m.cfg, m.state_path)
+        assert m2.state.trip_sleeve is None and m2.state.trip_pending_book == 0.0
+        assert any("MALFORMED" in e["msg"] for e in m2.state.events)
+        json.dumps(m2.status_summary(PRICES), allow_nan=False)
+        json.dumps(m2.feed(PRICES, "2026-09-03"), allow_nan=False)
+    # a summary that cannot be computed degrades, never raises
+    m.state.trip_book = {"hwm": 1.0, "closes": [["2026-09-02", "junk"]]}
+    assert m.tripwire_summary("2026-09-03")["error"] == "unavailable"
+
+
+def test_gate_tripwire_pending_flow_survives_a_skipped_snapshot_and_restart(tmp_path, monkeypatch):
+    """TB9/M19: a deposit adopted on a cycle whose snapshot is skipped (missing
+    quote) stays pending across a restart and is applied at the next mark."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(100.0))])
+    m.state.core_cash += 70_000.0
+    m.state.trip_pending_book += 70_000.0
+    assert m.update_tripwires("2026-09-03", {"BIL": 100.0}, lambda *_: None) is None
+    m.save()
+    m.state.trip_alerted["book_review"] = True              # TB11/M18: persisted
+    m.save()
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.trip_pending_book == 70_000.0
+    assert m2.state.trip_alerted == {"book_review": True}
+    _days(m2, [("2026-09-03", _px(100.0)), ("2026-09-04", _px(100.0))])
+    assert m2.tripwire_summary("2026-09-04")["book"]["drawdown"] == 0.0
+    assert m2.state.trip_book["closes"][-1][1] == pytest.approx(1.0)
+
+
+def test_gate_tripwire_failure_is_said_once_a_day(tmp_path, monkeypatch):
+    m = _trip_book(tmp_path)
+    monkeypatch.setattr(m, "book_value", lambda *_: 1 / 0)
+    assert m.update_tripwires("2026-09-03", PRICES, lambda *_: None) is None
+    assert m.update_tripwires("2026-09-03", PRICES, lambda *_: None) is None
+    assert sum("tripwire update FAILED" in e["msg"] for e in m.state.events) == 1
+
+
+def test_gate_tripwire_runs_in_the_cycle_and_is_public_safe(tmp_path):
+    m = _trip_book(tmp_path)
+    a = DryAdapter()
+    a.seed_position("SPY", 350)
+    a.seed_position("BIL", 150)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.trip_book is not None and m.state.trip_sleeve is not None
+    tw = m.feed(PRICES, "2026-08-20")["tripwires"]
+    assert tw["alert_only"] is True and len(tw["lines"]) == 5
+    assert set(tw["book"]) == {"drawdown", "drawdown_live", "close_date", "hwm_date", "since"}
+    assert "index" not in json.dumps(tw)
+    st = m.status_summary(PRICES)
+    assert st["tripwires"]["book"]["since"] == "2026-08-20"
+    assert "drift" in st["cash"] and "venue" not in st["cash"]          # TB4
+
+
+def test_gate_drift_page_reinvest_path_and_parked_records(tmp_path):
+    """TA2/TB5: positive drift names the reinvest path (statement amounts,
+    never the drift figure; adoption re-baselines itself); with an
+    unreconciled record parked it says RESOLVE FIRST and gives no adopt
+    instruction; and adoption itself waits while a record is parked."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    alerts = []
+    a = _CashAdapter(43_100.0)
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    a.cash = 43_142.0
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    assert len(alerts) == 1 and "POST /blend/cash/adopt" in alerts[0]
+    assert "never this drift figure" in alerts[0] and "only if this is NOT the book's money" in alerts[0]
+    a.cash = 43_142.0 - 500.0                 # a withdrawal: no reinvest hint
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    assert "/blend/cash/adopt" not in alerts[-1]
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    m2.state.unreconciled["9"] = {"ts": _time.time() - 3_600, "symbol": "CRSP"}
+    a2, al2 = _CashAdapter(43_100.0), []
+    blend_mod.reconcile_cash(m2, a2, al2.append)
+    a2.cash = 47_000.0
+    blend_mod.reconcile_cash(m2, a2, al2.append)
+    blend_mod.reconcile_cash(m2, a2, al2.append)
+    assert al2 and "RESOLVE THEM FIRST" in al2[-1] and "/blend/cash/adopt" not in al2[-1]
+    m2.request_capital_adoption(3_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, _VenueCashAdapter(47_000.0, 47_000.0), PRICES,
+                                "2026-08-20", lambda *_: None)
+    assert r["status"] == "deferred" and "resolve them first" in r["reason"]
+
+
+def test_gate_overnight_core_buy_then_in_session_residual(tmp_path, monkeypatch):
+    """TB9: production headroom ON through run_cycle - the overnight plan buys
+    at the headroom size; the next in-session cycle buys the residual."""
+    monkeypatch.setattr(blend_mod, "CORE_BUY_OVERNIGHT_HEADROOM", 0.01)
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=0, bil_qty=30, core_cash=7_000.0)
+    m.state.sleeve_target = 0.30
+    px = {"SPY": 99.5, "BIL": 100.0}
+    a = DryAdapter()
+    a.seed_position("BIL", 30)
+    a.seed_price("SPY", 99.5)
+    a.seed_price("BIL", 100.0)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.spy_qty == 69                            # 7000 / (99.5 x 1.01)
+    _rth(monkeypatch, True)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.spy_qty == 70 and m.state.core_cash < 99.5
+
+
+# --- per-symbol limit (round 11, U2: at most 2 open calls per symbol) ---------
+
+def _ps_book(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=20_000.0, spy_qty=70, bil_qty=0)
+    m.state.sleeve_target = 0.30
+    return m
+
+
+def _ps_prices(*syms):
+    p = dict(PRICES)
+    for s_ in syms:
+        p[s_] = 50.0
+    return p
+
+
+def _enters(intents):
+    return [(i["symbol"], i["call_id"]) for i in intents if i["action"] == "ENTER"]
+
+
+def test_gate_per_symbol_limit_skips_a_third_open_call_in_one_name(tmp_path):
+    """Two CRSP held: a third CRSP fire is skipped and takes no cap slot; a
+    fire in another name in the same payload is still planned.
+    MUTATION-VERIFIED: removing the check plans CRSP call 3."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    _held_position(m, call_id=2, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP"), entry(4, "NTLA")],
+                 stops=[stop_row(3, "CRSP"), stop_row(4, "NTLA")])
+    out = m.step("2026-08-20", pl, _ps_prices("CRSP", "NTLA"))
+    assert _enters(out) == [("NTLA", 4)]
+    assert any("per-symbol limit 2: skipping CRSP (call 3)" in e["msg"] for e in m.state.events)
+
+
+def test_gate_per_symbol_counts_pending_moos_and_same_cycle_siblings(tmp_path):
+    """Verifier A2: a pending MOO counts as held, and same-cycle sibling fires
+    of one name (multi-flag) count in payload order."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    m.state.pending_entries["2"] = {"intent": {"symbol": "CRSP", "call_id": 2, "qty": 5,
+                                               "entry_ref": 50.0, "size_ref": 50.0},
+                                    "date": "2026-08-19"}
+    pl = payload(entries=[entry(3, "CRSP")], stops=[stop_row(3, "CRSP")])
+    assert _enters(m.step("2026-08-20", pl, _ps_prices("CRSP"))) == []
+    m2 = _ps_book(tmp_path / "b")
+    pl = payload(entries=[entry(5, "CRSP"), entry(6, "CRSP"), entry(7, "CRSP")],
+                 stops=[stop_row(5, "CRSP"), stop_row(6, "CRSP"), stop_row(7, "CRSP")])
+    assert _enters(m2.step("2026-08-20", pl, _ps_prices("CRSP"))) == [("CRSP", 5), ("CRSP", 6)]
+
+
+def test_gate_per_symbol_an_exiting_position_frees_its_name(tmp_path):
+    """Counted like open_count: a position exiting THIS cycle frees its name."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    _held_position(m, call_id=2, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP")],
+                 exits=[{"call_id": 1, "symbol": "CRSP", "reason": "time_stop"}],
+                 stops=[stop_row(2, "CRSP"), stop_row(3, "CRSP")])
+    out = m.step("2026-08-20", pl, _ps_prices("CRSP"))
+    assert any(i["action"] == "EXIT" and i["call_id"] == 1 for i in out)
+    assert _enters(out) == [("CRSP", 3)]
+
+
+def test_gate_per_symbol_tracker_override_and_bad_values(tmp_path):
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP")], stops=[stop_row(3, "CRSP")])
+    pl["book_params"]["max_per_symbol"] = 1
+    assert _enters(m.step("2026-08-20", pl, _ps_prices("CRSP"))) == []
+    for bad in (0, -1, "2", True, 1.5, None):
+        m2 = _ps_book(tmp_path / f"b{abs(hash(str(bad)))}")
+        _held_position(m2, call_id=1, symbol="CRSP")
+        pl["book_params"]["max_per_symbol"] = bad
+        assert _enters(m2.step("2026-08-20", pl, _ps_prices("CRSP"))) == [("CRSP", 3)]   # default 2
+
+
+def test_gate_tripwire_no_session_day_is_never_a_close(tmp_path, monkeypatch):
+    """TC1: weekend / holiday / missed-session marks are never closes. A Friday
+    after-hours 10x glitch carried through Saturday and Sunday can set no high,
+    and one stale low weekend quote cannot make 'two consecutive closes'."""
+    m = _trip_book(tmp_path)
+    m.state.spy_qty = 0                                     # sleeve = 150 BIL
+    alerts = []
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-10-08", PRICES, alerts.append)               # Thu
+    m.update_tripwires("2026-10-09", PRICES, alerts.append)               # Fri session
+    _rth(monkeypatch, False)
+    m.update_tripwires("2026-10-09", _px(100.0, 1_000.0), alerts.append)  # Fri after-hours glitch
+    m.update_tripwires("2026-10-10", _px(100.0, 1_000.0), alerts.append)  # Sat
+    m.update_tripwires("2026-10-11", _px(100.0, 40.0), alerts.append)     # Sun, stale low
+    _rth(monkeypatch, True)
+    for d in ("2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15"):
+        m.update_tripwires(d, PRICES, alerts.append)
+    assert m.state.trip_sleeve["hwm"] == pytest.approx(1.0)
+    assert [c[0] for c in m.state.trip_sleeve["closes"]][-3:] == ["2026-10-12", "2026-10-13", "2026-10-14"]
+    assert "2026-10-10" not in [c[0] for c in m.state.trip_sleeve["closes"]]
+    assert not alerts
+    # a weekend flow is not lost: it stays in day_flow until the next close
+    _rth(monkeypatch, False)
+    m.update_tripwires("2026-10-17", PRICES, alerts.append)               # Sat
+    m.on_transfer(5_000.0)
+    m.update_tripwires("2026-10-18", PRICES, alerts.append)               # Sun
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-10-19", PRICES, alerts.append)
+    m.update_tripwires("2026-10-20", PRICES, alerts.append)
+    assert m.tripwire_summary("2026-10-20")["sleeve"]["drawdown"] == 0.0
+
+
+def test_gate_capital_unreconciled_wait_pages_and_the_endpoint_says_so(tmp_path, monkeypatch):
+    """TC3: a wait that needs the operator pages (once a day), and the
+    endpoint reports parked records when it journals."""
+    m = _capital_book(tmp_path)
+    m.state.unreconciled["9"] = {"ts": _time.time() - 3_600, "symbol": "CRSP"}
+    m.request_capital_adoption(7_000, "2026-08-20")
+    alerts = []
+    a = _VenueCashAdapter(7_000.0, 7_000.0)
+    for _ in range(2):
+        r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+        assert r["status"] == "deferred"
+    assert len(alerts) == 1 and "resolve them first" in alerts[0]
+    # TD1: the NEXT day pages again (quiet book, nothing logged in between)
+    m._notice_day = {}                                       # the UTC day rolled
+    m.state.capital_request["ts"] -= 86_400
+    blend_mod.adopt_capital(m, a, PRICES, "2026-08-21", alerts.append)
+    assert len(alerts) == 2 and "waiting 1.0 d of 5" in alerts[1]
+    assert m.status_summary(PRICES)["capital"]["request_pending"]["kind"] == "deposit"
+    client, service = _service_client(tmp_path / "svc", monkeypatch)
+    with client as c:
+        assert _wait_until(lambda: service.BLEND is not None and service.LAST["loop_ok"] > 0)
+        B = service.BLEND
+        _seed_initialized(B, sleeve_cash=0.0, spy_qty=70, bil_qty=30)
+        B.state.unreconciled["9"] = {"ts": _time.time(), "symbol": "CRSP"}
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": 7000})
+        assert r.json()["parked_unreconciled"] == ["9"] and "WAITS" in r.json()["warning"]
+        B.state.unreconciled.clear()
+    service.BLEND = None
+
+
+def test_gate_distribution_names_the_sleeve_share(tmp_path):
+    """A distribution is credited to the bucket that earned it when the
+    operator names sleeve_usd (BIL distributions -> sleeve, SPY dividends ->
+    core); omitted, it splits by the target. Deposits cannot name it."""
+    m = _capital_book(tmp_path)
+    m.request_capital_adoption(500, "2026-08-20", kind="distribution", sleeve_usd=120)
+    assert m.status_summary(PRICES)["capital"]["request_pending"]["sleeve_usd"] == 120.0
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(500.0, 500.0), PRICES,
+                                "2026-08-20", lambda *_: None)
+    assert r["sleeve_usd"] == 120.0 and r["core_usd"] == 380.0
+    assert m.state.sleeve_cash == 120.0 and m.state.core_cash == 380.0
+    for bad in (dict(kind="deposit", sleeve_usd=10), dict(kind="distribution", sleeve_usd=-1),
+                dict(kind="distribution", sleeve_usd=600), dict(kind="distribution", sleeve_usd=True)):
+        with pytest.raises(ValueError):
+            m.request_capital_adoption(500, "2026-08-20", **bad)
+
+
+def test_gate_tripwire_min_base_and_held_flow_carry(tmp_path, monkeypatch):
+    """TB11/M27: a base under TRIP_MIN_BASE_USD holds the index (a sleeve
+    emptied to cents then refilled is not a 100x gain). TB12/M28: a mark that
+    EXCLUDES a pending flow holds the index, and if that mark is the day's
+    close the flow CARRIES to the next day (no phantom high)."""
+    _rth(monkeypatch, True)
+    m = _trip_book(tmp_path)
+    m.state.spy_qty, m.state.bil_qty, m.state.sleeve_cash = 500, 0, 50.0
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
+    m.state.sleeve_cash = 20_050.0
+    m.state.trip_pending_sleeve = 0.0                        # an unflagged refill
+    _days(m, [("2026-09-03", PRICES), ("2026-09-04", PRICES)])
+    assert m.state.trip_sleeve["hwm"] < 2.0                  # held, not 400x
+    m2 = _trip_book(tmp_path / "b")
+    m2.state.bil_qty, m2.state.spy_qty = 0, 500             # book 50k
+    _days(m2, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(100.0))])
+    m2.state.trip_pending_book = 70_000.0                    # flow the ledger value lacks
+    m2.update_tripwires("2026-09-03", _px(100.0), lambda *_: None)   # held mark = the close
+    m2.state.core_cash = 70_000.0                            # the cash arrives next day
+    _days(m2, [("2026-09-04", _px(100.0)), ("2026-09-05", _px(100.0))])
+    assert m2.state.trip_book["hwm"] == pytest.approx(1.0)
+    assert m2.tripwire_summary("2026-09-05")["book"]["drawdown"] == 0.0
+
+
+def test_gate_per_symbol_tracker_may_only_tighten(tmp_path):
+    """TB15: like max_open, the tracker can lower the per-symbol limit but
+    never raise it past MAX_PER_SYMBOL."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    _held_position(m, call_id=2, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP")], stops=[stop_row(3, "CRSP")])
+    pl["book_params"]["max_per_symbol"] = 99
+    assert _enters(m.step("2026-08-20", pl, _ps_prices("CRSP"))) == []
+
+
+def test_gate_tripwire_junk_record_and_tiny_mark_are_contained(tmp_path):
+    """TB17: one junk unreconciled timestamp does not disable the summary,
+    and a hand-edited tiny index is rejected at load."""
+    m = _trip_book(tmp_path)
+    m.state.unreconciled["x"] = {"ts": 1e18, "symbol": "CRSP"}
+    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)
+    assert "error" not in m.tripwire_summary("2026-09-01")
+    assert m.update_tripwires("2026-09-02", PRICES, lambda *_: None) is not None
+    m.state.unreconciled.clear()
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["trip_book"]["cur"] = {"date": "2026-09-02", "value": 1e-300, "index": 1e-300, "flow": 0.0}
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    assert Blend3070Manager(m.cfg, m.state_path).state.trip_book is None

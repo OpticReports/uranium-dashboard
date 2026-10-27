@@ -75,6 +75,19 @@ CONSTANT_TOL = 1.005          # max/min ratio inside this = "a constant factor"
 # day, held a cap slot, and the path-dependent book ended 8.7% away from
 # the stored R2-A while the drawdown matched (first Render run, 2026-10-04).
 UNITY_TOL = 0.0001
+# A basis break INSIDE the lane: FMP applied ATAI's 2026-08 split factor to
+# history only, so rows before 2026-08-10 sit at 0.0728x the frozen basis and
+# rows from that day on sit AT it. Dividing the whole series by the factor
+# (the first draft) put the post-break rows 13.7x too high, and V7 - the one
+# book holding ATAI that week - printed a +95% day, a -48% day, lost a fifth
+# of its Sharpe and flipped its survival verdict (2026-10-04). The factor is
+# therefore applied only to the SEGMENT the frozen entries sit in: a one-day
+# jump of ~1/factor (or ~factor) in the adjusted closes marks the break.
+BREAK_TOL = 0.25              # on the LOG jump: the split day's own move may be large
+# The campaign's registered window end. Bars after it must not be in the
+# frozen cache: with them present, round 2 graded exits that fall outside the
+# window (5,002 rows regraded vs the stored 4,964) and R2-A moved 6%.
+END = "2026-08-19"
 
 
 def _input(path: Path) -> Path:
@@ -141,22 +154,78 @@ def basis_factor(by_date: dict[str, dict], entries: list[tuple[str, float]]) -> 
             "spread": round(max(ratios) / min(ratios) - 1.0, 6)}
 
 
+def basis_breaks(rows: list[dict], factor: float) -> list[int]:
+    """Indices i where adj_close[i] / adj_close[i-1] is ~factor or ~1/factor:
+    the lane changed basis between those two bars. A factor within the
+    break tolerance of 1 (ILMN: 0.999) cannot be told from an ordinary daily
+    move, so no break is inferred and the factor applies to the whole
+    series, as it did before segments existed."""
+    import math
+    target = abs(math.log(factor))
+    if target <= 2 * BREAK_TOL:
+        return []
+    out = []
+    for i in range(1, len(rows)):
+        a, b = rows[i - 1].get("adj_close"), rows[i].get("adj_close")
+        if not a or not b:
+            continue
+        if abs(abs(math.log(b / a)) - target) <= BREAK_TOL:
+            out.append(i)
+    return out
+
+
+def residual_cliff(rows: list[dict], factor: float) -> str | None:
+    """After normalization no one-day jump of ~factor or ~1/factor may remain
+    anywhere in the series; if one does, the segment choice was wrong and the
+    series must be left alone for the gate to refuse."""
+    hit = basis_breaks(rows, factor)
+    return rows[hit[0]]["date"] if hit else None
+
+
 def normalize_basis(bars: dict[str, list[dict]]) -> dict[str, dict]:
     entries = frozen_entries()
     applied: dict[str, dict] = {}
     for sym, rows in bars.items():
-        f = basis_factor({r["date"]: r for r in rows}, entries.get(sym, []))
+        sym_entries = entries.get(sym, [])
+        f = basis_factor({r["date"]: r for r in rows}, sym_entries)
         if not f:
             continue
         k = f["factor"]
-        for r in rows:
+        breaks = basis_breaks(rows, k)
+        if not breaks:
+            lo, hi = 0, len(rows)                     # one basis throughout: whole series
+            segment = "whole series"
+        elif len(breaks) == 1:
+            b = breaks[0]
+            entry_dates = {d for d, _ in sym_entries}
+            before = sum(1 for r in rows[:b] if r["date"] in entry_dates)
+            after = sum(1 for r in rows[b:] if r["date"] in entry_dates)
+            if before and after:
+                print(f"  basis: {sym} entries straddle the break at {rows[b]['date']} - left alone")
+                continue
+            lo, hi = (0, b) if before else (b, len(rows))
+            segment = f"rows {'before' if before else 'from'} {rows[b]['date']}"
+        else:
+            print(f"  basis: {sym} has {len(breaks)} basis breaks - left alone for the gate to see")
+            continue
+        for r in rows[lo:hi]:
             for key in ("open", "high", "low", "close", "adj_close"):
                 if r.get(key) is not None:
                     r[key] = r[key] / k
-        applied[sym] = {**f, "note": ("series divided by a constant factor to match the "
-                                      "frozen entry basis; returns unchanged")}
+        cliff = residual_cliff(rows, k)
+        if cliff:
+            for r in rows[lo:hi]:                     # undo: the gate must see the raw lane
+                for key in ("open", "high", "low", "close", "adj_close"):
+                    if r.get(key) is not None:
+                        r[key] = r[key] * k
+            print(f"  basis: {sym} would still have a {1 / k:.1f}x cliff at {cliff} after "
+                  f"normalizing {segment} - left alone for the gate to see")
+            continue
+        applied[sym] = {**f, "segment": segment, "rows_divided": hi - lo, "rows_total": len(rows),
+                        "note": ("segment divided by a constant factor to match the frozen entry "
+                                 "basis; returns inside the segment unchanged")}
         print(f"  basis: {sym} normalized by {k:.4f} over {f['n']} entries "
-              f"(spread {f['spread']:.2%})")
+              f"(spread {f['spread']:.2%}), {segment} ({hi - lo}/{len(rows)} rows)")
     return applied
 
 
@@ -189,18 +258,20 @@ def main() -> None:
     # the unadjusting app provider instead (counter-agent 2026-10-04, MED).
     bars: dict[str, list[dict]] = {}
     for sym in universe():
-        rows = to_cache_rows(fmp_bars(sym, start=START, cache_dir=LANE_CACHE))
+        rows = [r for r in to_cache_rows(fmp_bars(sym, start=START, cache_dir=LANE_CACHE))
+                if r["date"] <= END]
         if not rows:
             raise SystemExit(f"{sym}: the FMP lane returned no bars - nothing written")
         bars[sym] = rows
         print(f"  {sym}: {len(rows)} bars {rows[0]['date']}..{rows[-1]['date']}")
-    spy = [r for r in fmp_bars("SPY", start=START, cache_dir=LANE_CACHE) if r.get("adjClose")]
+    spy = [r for r in fmp_bars("SPY", start=START, cache_dir=LANE_CACHE)
+           if r.get("adjClose") and r["date"] <= END]
     if not spy:
         raise SystemExit("SPY: the FMP lane returned no bars - nothing written")
     applied = normalize_basis(bars)
     _write_atomic(SPY_RAW, json.dumps({"data": [{"t": r["date"], "a": r["adjClose"]} for r in spy]}))
     _write_atomic(BASIS_SIDECAR, json.dumps({"lane": "fmp dividend-adjusted", "start": START,
-                                             "normalized": applied}, indent=1))
+                                             "end": END, "normalized": applied}, indent=1))
     _write_atomic(BARS_CACHE, json.dumps(bars))      # last: its presence means "complete"
     print(f"wrote {_rel(BARS_CACHE)} ({len(bars)} symbols) and "
           f"{_rel(SPY_RAW)} ({len(spy)} rows), dividend-adjusted basis")

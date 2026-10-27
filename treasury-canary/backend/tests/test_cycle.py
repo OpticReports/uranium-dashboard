@@ -159,3 +159,77 @@ def test_gate_realtime_block_and_provisional_rule():
         assert "1-in-3" in rt["provisional_note"]
     assert "MEASURED on ALFRED vintages" in __import__(
         "app.sources.business_cycle", fromlist=["x"]).__doc__
+
+
+def test_gate_read_box_and_components_match_the_board():
+    """The panel's plain-English read is generated from the board itself:
+    the headline names the phase, the member strip carries one entry per
+    composite member at its own last month, and the 'from here' gaps are
+    the arithmetic of the current reading against the phase thresholds."""
+    b = board()
+    cur, rd, comps = b["current"], b["read"], b["components"]
+    assert [c["label"] for c in comps["coincident"]] == [l for _, l in business_cycle.COIN_MEMBERS]
+    assert [c["label"] for c in comps["leading"]] == business_cycle.LEAD_MEMBERS
+    assert 1 <= cur["members_in_latest"] <= 4
+    assert cur["members_in_latest"] == sum(c["in_latest"] for c in comps["coincident"])
+    for c in comps["coincident"] + comps["leading"]:
+        assert c["z"] is not None and c["month"] <= cur["month"]
+        assert c["in_latest"] == (c["month"] == cur["month"])
+    assert rd["headline"].startswith(cur["phase"].replace("_", " "))
+    if cur["members_in_latest"] < 4:
+        assert f"{cur['members_in_latest']} of 4" in rd["headline"]
+    assert f"{cur['coincident']:+.2f}" in rd["headline"]
+    for c in comps["coincident"] + comps["leading"]:
+        assert c["label"] in rd["drivers"]
+    assert str(business_cycle.COIN_RECESSION) in rd["calculation"]
+    p90 = b["stats"]["precision_post1990"]
+    assert p90 is not None and 0.4 <= p90 <= 0.8        # ~58% per the QA panel
+    assert f"{round(100 * p90)}% since 1990" in rd["reliability"]
+    if cur["phase"] != "CONTRACTION":
+        gap = cur["coincident"] - business_cycle.COIN_RECESSION
+        assert f"fall {gap:.2f}" in rd["next"]
+    assert ("Nowcast for" in rd["nowcast"]) == (b["nowcast"] is not None)
+    # a degenerate current block must not raise
+    degenerate = {**cur, "coincident": None, "leading": None, "phase": None}
+    assert business_cycle.build_read(degenerate, False, comps, b["stats"], None)["headline"].startswith("No phase")
+
+
+def test_gate_read_box_every_phase_is_self_consistent():
+    """Counter-agent 2026-10-20: the fixture only exercises STALL. Sweep
+    synthetic (coin, lead) states through every phase and the threshold
+    edges: each 'X needs' names the phase phase_of() actually returns when
+    only that variable crosses, no empty 'From here', 'clearly' never pairs
+    with '(provisional)', and the headline's revision tier agrees with the
+    gaps (both keyed to the p90 edge error)."""
+    b = board()
+    comps, stats = b["components"], b["stats"]
+    states = [(-1.2, -0.6), (-0.751, 0.1), (-0.4, -0.8), (-0.2, -0.3), (-0.45, 0.1), (-0.0, 0.2),
+              (0.3, -0.8), (0.2, -0.4), (0.9, 0.5), (0.1, -0.5), (-0.49, 0.14), (-0.3, -0.31)]
+    seen = set()
+    for coin, lead in states:
+        phase = business_cycle.phase_of(coin, lead)
+        seen.add(phase)
+        cur = {**b["current"], "coincident": coin, "leading": lead, "phase": phase,
+               "leading_3m_change": -0.1}
+        prov = phase in ("EXPANSION", "STALL") and abs(coin) < 0.5
+        rd = business_cycle.build_read(cur, prov, comps, stats, None)
+        assert rd["headline"].startswith(phase.replace("_", " "))
+        assert "From here: ." not in rd["next"] and "-0.00" not in rd["next"] + rd["headline"]
+        assert not ("clearly" in rd["headline"] and "(provisional)" in rd["headline"])
+        if phase == "STALL":
+            gap = coin - business_cycle.COIN_RECESSION
+            assert ("within revision noise" in rd["headline"]) == (gap < business_cycle.RT_EDGE_P90)
+            assert ("inside revision noise" in rd["next"].split(";")[0]) == (gap < business_cycle.RT_EDGE_P90)
+        # the phase named for a coincident drop below zero is the one phase_of returns
+        if phase in ("EXPANSION", "LATE_CYCLE"):
+            expect = business_cycle.phase_of(-0.01, lead)
+            assert f"{expect} needs the coincident line to fall" in rd["next"]
+        if phase == "CONTRACTION":
+            expect = business_cycle.phase_of(business_cycle.COIN_RECESSION + 0.01, lead)
+            assert f"exit to {expect}" in rd["next"]
+        if phase == "SLOWDOWN":
+            assert "STALL needs the leading line to rise" in rd["next"]
+        if phase == "LATE_CYCLE":
+            assert "EXPANSION needs the leading line to rise" in rd["next"]
+    assert seen == {"CONTRACTION", "SLOWDOWN", "STALL", "LATE_CYCLE", "EXPANSION"}
+    assert "No nowcast at the moment" in rd["nowcast"]

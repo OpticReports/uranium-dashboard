@@ -1,8 +1,9 @@
 """Shadow-book API — the H11/H8 observe-only live evidence (see calls/shadow.py).
 
 GET /shadow/track-record answers "on the SAME calls, how does the R2-A
-trailing exit engine compare to the production fixed-3:1 engine, and what has
-the XBI regime gate been doing?" — the record that decides whether R2-A ever
+trailing exit engine compare to the production fixed-3:1 engine, what has
+the XBI regime gate been doing, and (H14) what does the ratchet-up-only rule
+cost against the same trail allowed to fall?" — the record that decides whether R2-A ever
 earns a calls.yaml change. Nothing here mutates the live book.
 """
 from __future__ import annotations
@@ -51,8 +52,8 @@ def evaluate_now(session: Session = Depends(get_session)):
     regime = log_regime(session)
     return {
         "shadow_graded": [
-            {"call_id": g.call_id, "status": g.status, "exit_date": g.exit_date,
-             "exit_price": g.exit_price, "r_multiple": g.r_multiple}
+            {"call_id": g.call_id, "engine": g.engine, "status": g.status,
+             "exit_date": g.exit_date, "exit_price": g.exit_price, "r_multiple": g.r_multiple}
             for g in made
         ],
         "regime_logged": regime.date if regime else None,

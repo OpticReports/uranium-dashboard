@@ -1,0 +1,81 @@
+{
+ "method": "(after the v1 data review): log counts; 2x12 moving average; seasonal\nfactors from same-calendar-month residuals within +-L years (local, because the\npre-1914 seasonal pattern drifts; a fixed pattern counts the drift as noise);\nSpencer-15 trend-cycle on the seasonally adjusted series; irregular = SA - TC.\nThe iid sigma is then method-matched: synthetic AR(1) background + a fixed\nseasonal + iid noise of known sigma, run through the same decomposition; the\nsigma whose mean irregular SD equals the real one is reported. Primary: L = 2.",
+ "seed": 20261012,
+ "eras": {
+  "1897-1913": {
+   "stable": {
+    "irregular_sd": 0.0938,
+    "lag12_autocorr": 0.384,
+    "iid_sigma": 0.1125
+   },
+   "local_1y": {
+    "irregular_sd": 0.057,
+    "lag12_autocorr": -0.628,
+    "iid_sigma": 0.0825
+   },
+   "local_2y": {
+    "irregular_sd": 0.0663,
+    "lag12_autocorr": -0.148,
+    "iid_sigma": 0.085
+   },
+   "local_3y": {
+    "irregular_sd": 0.0753,
+    "lag12_autocorr": 0.026,
+    "iid_sigma": 0.0975
+   }
+  },
+  "1914-1931": {
+   "stable": {
+    "irregular_sd": 0.0491,
+    "lag12_autocorr": 0.101,
+    "iid_sigma": 0.0575
+   },
+   "local_1y": {
+    "irregular_sd": 0.0368,
+    "lag12_autocorr": -0.639,
+    "iid_sigma": 0.0525
+   },
+   "local_2y": {
+    "irregular_sd": 0.0421,
+    "lag12_autocorr": -0.24,
+    "iid_sigma": 0.055
+   },
+   "local_3y": {
+    "irregular_sd": 0.0445,
+    "lag12_autocorr": -0.127,
+    "iid_sigma": 0.055
+   }
+  },
+  "1947-1962": {
+   "stable": {
+    "irregular_sd": 0.0477,
+    "lag12_autocorr": 0.116,
+    "iid_sigma": 0.0575
+   },
+   "local_1y": {
+    "irregular_sd": 0.033,
+    "lag12_autocorr": -0.511,
+    "iid_sigma": 0.0475
+   },
+   "local_2y": {
+    "irregular_sd": 0.0434,
+    "lag12_autocorr": -0.127,
+    "iid_sigma": 0.0575
+   },
+   "local_3y": {
+    "irregular_sd": 0.0466,
+    "lag12_autocorr": 0.03,
+    "iid_sigma": 0.06
+   }
+  }
+ },
+ "primary": {
+  "pre1914": 0.085,
+  "post1914": 0.0563,
+  "pre1914_range_local_1_3y": [
+   0.0825,
+   0.0975
+  ],
+  "superseded_stable_seasonal_figure": 0.116
+ }
+}

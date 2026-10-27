@@ -26,15 +26,17 @@ import RateEnsemble from "./components/RateEnsemble";
 import PlaybookTab from "./components/PlaybookTab";
 import SeverityTab from "./components/SeverityTab";
 import TrackRecordTab from "./components/TrackRecordTab";
+import AiDebtTab from "./components/AiDebtTab";
 
 const POLL_MS = 60_000;
 
-type Tab = "monitor" | "playbook" | "severity" | "track";
+type Tab = "monitor" | "playbook" | "severity" | "aidebt" | "track";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "monitor", label: "Monitor" },
   { id: "playbook", label: "Playbook" },
   { id: "severity", label: "Severity" },
+  { id: "aidebt", label: "AI debt" },
   { id: "track", label: "Track record" },
 ];
 
@@ -153,11 +155,13 @@ export default function App() {
         <div className="flex flex-col gap-5">
           <StressGauge composite={composite} />
 
+          {/* Where we are in the cycle sits right under the stress gauge (Casey, 2026-10-20). */}
+          <CycleTracker />
+
           <RateEnsemble />
 
           <ReSteepenAlert />
 
-          <CycleTracker />
           <SahmChart />
           <LaborStressBoard />
 
@@ -224,6 +228,7 @@ export default function App() {
 
         {tab === "playbook" && <PlaybookTab />}
         {tab === "severity" && <SeverityTab />}
+        {tab === "aidebt" && <AiDebtTab />}
         {tab === "track" && <TrackRecordTab />}
 
         <footer className="mt-8 border-t border-panelborder pt-4 text-center text-[10px] text-slate-600">
