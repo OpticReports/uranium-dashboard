@@ -53,7 +53,24 @@ panel + red team + completeness critic** on the corrected fact pack (results in
 
 `factpack.md` (provenance-tagged, ranked DD ledger, tripwires) and
 `exhibits.html` (four exhibits: the crux, force vs touch, muscle life, return
-math). Published to /deals the same day.
+math; artifact https://claude.ai/artifact/XkMqzPuCNqC5TpaqWioK4a). Dashboard card,
+tiles, ledger table row and mirror updated the same day; `ledger.csv` row logged.
+
+**Headline (rev 1.1, pre-DD):** W **2.18** (band 1.92–2.28) — second-lowest in the
+ledger. Panel **5× PASS-REVISIT**, red team PASS-REVISIT; IQR 0 on six of seven
+dimensions (the tightest panel logged — an S2 flag in itself). Forecasts, all
+seed-anchored: P(priced round ≤24mo) **0.45** · P(<1x) **0.85** · P(≥10x) **0.025**
+(red team 0.40 / 0.86 / 0.025). House EV **1.08x** net capped@20x (red 1.05x).
+**Separate forecast, never averaged:** the hurdle ledger implies P(≥10x) ≈ 0.011 →
+EV ≈ 0.93x. Gates: G1 pending (at risk), G2 pass, G3 at risk, **G4 pending — if the
+instrument and SPV documents stay undisclosed after request, the verdict is
+automatically "conditional: pass until disclosed".**
+
+**Rev 1.1 finding (gap pass):** the memo's licence/acquisition counterparty reads as
+**Adaract Technologies** (Reno, NV; founder Joseph Hill; 3 granted US McKibben-muscle
+patents). If confirmed, Clone's "patented" rests on licensed outside IP, bought after
+its own muscle inventor left — and the licence becomes a US freedom-to-operate
+dependency.
 
 **The answer to Casey's question:** partly true. No touch sensing, by published
 design ("only proprioceptive and visual feedback"). But there is a grip-force

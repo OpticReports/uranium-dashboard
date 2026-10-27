@@ -132,13 +132,13 @@ insertion, slip recovery, ≥20 trials each.
 | **Clone Inc.**, Delaware, incorporated 2021-10-12 (CIK 1958550); owns 100% of **CLONE sp. z o.o.**, KRS 0000947589, Wrocław. Mountain View office rests on CEO remarks. | VERIFIED / SECONDARY |
 | **Co-founder Łukasz Koźlik** — credited in Clone's own Form C with designing the hydraulic valves and McKibben muscles; largest holder Feb 2023 (3.0M shares, 43.54% of issued voting stock). **KRS entry 16 (2026-03-18) removed him from the Polish subsidiary's board**; Radhakrishnan is now its sole member. Departure from Clone Inc. is ANALYST (consistent with the memo's "co-founder who has since left"). Caplight still lists him as CTO. | VERIFIED / ANALYST |
 | **IP origin is not all his:** the same Form C credits **Michał Baran** (Chief Designer, since 2022) with "5X miniaturized fast valves" and mass-production technology for hands; Clone names its own "Aquajet valve technology". | VERIFIED (in their favour) |
-| **Patents:** Form C (Feb 2023) "does not have any registered patents" — IP held as trade secrets under assignment agreements — yet its risk factors cite "our pending patents" (self-contradiction). **No published Clone patent found** (incomplete: Espacenet/WIPO/UPRP blocked; Baran/Wieczorek not yet searched). Memo: "Clone says its technology is patented; confirming IP assignment." | VERIFIED / NOT FOUND (incomplete) |
-| **Financing record:** 2021–22 SAFEs $525K at a **$50M post cap**; 2023 Reg CF Crowd SAFE at a **$30M cap** (a down-cap) — **withdrawn**; $74,275 cash on 2023-01-31 (~3 months runway). Then a **2023 seed (~$6–6.5M, Initialized lead with Pioneer, Tango, Lux, Wikus, Access VC — SECONDARY)**, a Jan/Feb-2025 round and a 2026-03-10 VC round (Caplight) — instruments and caps unknown, so **the last institutional mark is UNKNOWN (P1)**. Since then: "~$17M raised" (CEO, via Robozaps, Mar 2026) vs **$7.14M (Caplight)** — CONFLICT; a "$50M round" announced ~Apr 2026 with no reported close, now a bridge. An Echo-platform SPV, **Clone Red Beard Ventures Ltd** (BVI, CIK 2145276), sold $146,629 to 57 investors from 2026-03-12. | VERIFIED / CONFLICT |
+| **Patents:** Form C (Feb 2023) "does not have any registered patents" — IP held as trade secrets under assignment agreements — yet its risk factors cite "our pending patents" (self-contradiction). **No Clone-owned patent under any team name** (rev 1.1: Google Patents for all six people and both entities; Espacenet/WIPO/UPRP direct blocked; filings after ~Apr 2025 would not yet be public). Memo: "Clone says its technology is patented" — **literally defensible only if it means licensed Adaract patents**; false for Clone-owned IP. The licence is also a **US freedom-to-operate dependency** if Clone practises those claims (no claim mapping done). | VERIFIED / NOT FOUND |
+| **Financing record:** 2021–22 SAFEs $525K at a **$50M post cap**; 2023 Reg CF Crowd SAFE at a **$30M cap** (a down-cap) — **withdrawn**; $74,275 cash on 2023-01-31 (~3 months runway). Then a **2023 seed (~$6–6.5M, Initialized lead with Pioneer, Tango, Lux, Wikus, Access VC — SECONDARY)**, a Jan/Feb-2025 round and a 2026-03-10 VC round (Caplight) — instruments and caps unknown, so **the last mark is UNKNOWN (P1)**; rev 1.1: **no priced round found** (lean: none ever), the last *public* mark is the 2021–22 $50M SAFE cap (bought by angels), Initialized lists Clone on its own portfolio page (VERIFIED), and Pioneer, Tango and Wikus appear in the 2025 round (SECONDARY). Polish R&D spend ~$0.47M (2022), $0.69M (2023), $2.55M (2024) — consistent with the CEO's ~$17M; the subsidiary's "revenue" is cost-plus R&D billed to the parent (FY2023 zł2.9M, ~14% margin), not customers. Since then: "~$17M raised" (CEO, via Robozaps, Mar 2026) vs **$7.14M (Caplight)** — CONFLICT; a "$50M round" announced ~Apr 2026 with no reported close, now a bridge. An Echo-platform SPV, **Clone Red Beard Ventures Ltd** (BVI, CIK 2145276), sold $146,629 to 57 investors from 2026-03-12. | VERIFIED / CONFLICT |
 | **Polish subsidiary's FY2025 statements not filed** with the KRS (deadline 2026-07-15; FY2022–24 were filed). No arrears, enforcement or insolvency entries. | VERIFIED |
 | **Product timeline:** water-hydraulic hand 2022–23 (36 valves, 145 psi pump, 200 W peak); the Form C names lab "customers" (UC Berkeley, NYU, Stanford, ETH, Meta AI, Google AI) and press reports 16 AI labs pre-ordered — CLAIMED; **no delivery found**, and the hand page still invites requests for "access to a Clone Hand prototype"; Torso and Torso 2 (2024) **pneumatic**, off-the-shelf valves; Protoclone (Feb 2025) hung in a frame, "cannot yet walk"; Torso 3 (~Apr 2026) teleop; **Torso 4 promised Nov 2026** (X post). **No legs or biped hardware ever shown.** | VERIFIED |
 | **Clone Alpha:** "279 units", no price, no checkout, **still says "Pre-orders available in 2025"** on 2026-10-27; the page claims "A robot that walks naturally". No deliveries found. | VERIFIED |
 | **Pilots (Mercedes?, VW?, AST SpaceMobile, a hotel group, P&G?):** no public confirmation from either side; the memo itself says "no signed customers yet". Mercedes-Benz has invested in Apptronik ("low double-digit million") and runs <10 Apollos in Kecskemét and Berlin (SECONDARY) — and the memo's names are illegible anyway. | NOT FOUND / CLAIMED |
-| **Licence + acquisition** ("exclusive licence… $1.5M, Mar 2025"(?); an unclosed acquisition requiring a minimum cash balance): no public trace — expected for an unclosed private deal; verifiable only from documents. | NOT FOUND (uninformative) |
+| **Licence + acquisition — likely Adaract Technologies (rev 1.1).** The memo's illegible "Adlated?" and team-card "Joseph Hill" read as **Adaract Technologies, Ltd.** (Reno, NV; founded 2022; 5–9 staff), founded by **Joseph Daniel Hill** (UNR mechanical engineering). Adaract makes hydraulic artificial muscles, micro-hydraulic valves and pumps, holds **three granted US patents** (US11719263B2, US12378979B2, US12416318B2 — the last on the McKibben muscle termination itself, expiring 2044) plus a pending continuation, **no EP/DE coverage**, and won an Air Force SBIR Phase I (2024, $109,940) for an artificial-muscle **gripper**. Recorded assignments run inventors → Adaract only; no public Clone link. So Clone appears to be **licensing and buying outside muscle IP** after its own muscle inventor left. | ANALYST (identification) on VERIFIED Adaract facts |
 | **Three of four co-founders are gone.** Amadeusz Świerk and Juliusz Tarnowski left in 2022 (2,930,000 founder shares repurchased at par; Form C Note 5, KRS entry 5); Koźlik left the Polish board in 2026. Only the CEO remains. | VERIFIED |
 | CEO **Dhanush Radhakrishnan**: co-founded Symplex (YC S19, RL symptom checker, raised $1.5M per Form C, "acquired by Scale AI" — terms not public, possibly an acqui-hire). | VERIFIED |
 
@@ -323,7 +323,7 @@ week. Gating asks: countersigned allocation, SPV docs, bridge instrument, extens
 
 | gate | status | why |
 |---|---|---|
-| **G1 Verification** | **PENDING — at risk** | Nothing queried yet, so it cannot trip at intake. Trips if any persists after query: "Clone says its technology is patented" vs Form C "no registered patents" and none found (the sharpest test: ask for numbers); "~1/10 the cost" (CONFLICT); "walks naturally" and "Pre-orders available in 2025" still live on Clone's site; ~$17M raised (CEO) vs $7.14M (Caplight); 2% fee quoted vs ~5% on Delta4's Form Ds. |
+| **G1 Verification** | **PENDING — at risk** | Nothing queried yet, so it cannot trip at intake. Trips if any persists after query: "Clone says its technology is patented" vs Form C "no registered patents" and none Clone-owned found — the ask becomes *which patents, who owns them, exclusive or not* (true only via a licence, e.g. Adaract's); "~1/10 the cost" (CONFLICT); "walks naturally" and "Pre-orders available in 2025" still live on Clone's site; ~$17M raised (CEO) vs $7.14M (Caplight); 2% fee quoted vs ~5% on Delta4's Form Ds. |
 | **G2 Vehicle math** | PASS | ~0.024% can return the vehicle in the evidenced tail (sector exits of $5B+ exist). |
 | **G3 Horizon fit** | **AT RISK** | Pre-A humanoid: 7–10+ years to liquidity. SPV term unknown; Delta4's last Form D shows "1%/yr × 5". Ask who bears costs in years 6–10. |
 | **G4 Price visibility** | **PENDING** | Price known ($200M post); class, instrument, raise, SPV documents and fee base unread or undisclosed. **If still undisclosed after request → automatically "conditional: pass until disclosed", never a buy.** |
@@ -400,6 +400,12 @@ Uncapped-tail premium: +0.65x riding on 1.41% of outcomes (disclosed, not headli
 **Read it honestly:** ~1.05–1.08x over a 7–10 year hold is ~1%/yr before the time
 value of money — below any hurdle — with ~85% of the probability mass a loss.
 (Panelist 5's hand estimate was ~0.9x net or less.)
+
+**Second forecast, logged separately — never averaged (rubric §4.5).** The hurdle
+ledger (§11) implies **P(≥10x) ≈ 0.011** (band 0.007–0.022) against the panel's
+0.025. At 0.011 the same model gives **EV ≈ 0.93x**; EV crosses 1.0x at P(≥10x) =
+0.018. The hurdle verifier recommends the panel either name a path that supports
+2.5% at S2 or cut it to ~0.015 (EV 0.97x). Either way **EV sits at or below 1x.**
 
 ### 8.4 · Verdicts: **5× PASS-REVISIT, red team PASS-REVISIT**
 
@@ -479,6 +485,77 @@ the risk — a step-up costs less than a zero.
   size any exposure as one manager bet; neither earlier SPV has a filed Form D. Sixth
   deep-tech/hardware exposure; first humanoid.
 
+## 11 · GAP-CLOSING PASS (rev 1.1, same day) — founder sweep, records, hurdle ledger
+
+Third workflow: three passes, each adversarially verified (all APPROVED WITH
+CORRECTIONS, applied). **No panel score moves; the panel forecasts stand; one
+separate forecast is logged.** Files: `sweeps/gap-*.md`.
+
+**Founder sweep (templates/founder-sweep.md).** CEO's bio checks out (PPPL plasma
+paper, *Nuclear Fusion* 2019; Symplex YC S19 "Acquired" — acquirer CLAIMED).
+**Koźlik:** no new venture, dispute or statement found (weak: LinkedIn and US courts
+blocked); Clone's YouTube channel dates to 2016 — his pre-company "Automaton
+Robotics" channel, absorbed. **Świerk / Tarnowski** (left 2022): Tarnowski is an
+inventor at an unrelated Wrocław crane-automation firm; no IP-claim signal from
+either. **Baran and Wieczorek:** no 2024–26 evidence they are still at Clone. The
+memo's team page appears to show three cards — Radhakrishnan, an unidentified
+executive, and Joseph Hill (Adaract) — and none of Koźlik, Baran or Wieczorek (low
+confidence, 310 px). Team stays 2 (band 1.5–2.5).
+
+**Records pass.** No priced round found; no pilot confirmed by either side (AST is
+hiring human soldering technicians for its Midland expansion); no grants found; the
+"$50M round" did not close in H1 2026 on The Recursive's Poland arithmetic. Torso 4
+launches in November after a "six-month ground-up redesign". **Data-integrity
+hazards logged:** search summarisers repeatedly attributed Caplight's own $16M
+Series A to Clone; Tracxn's "Clone" ($80M) is a different company; Robozaps' "$17M
+round" is the cumulative figure re-entered.
+
+**Duty cycle, reconciled.** Two bars, by segment:
+
+| bar | segment | contractions/yr | 650K lasts | ≥1M lasts |
+|---|---|---|---|---|
+| A: 8 grasps/min, 8 h, 250 d | bench assembly, data factories | 0.96M (1 shift) – 1.92M (2) | 0.34–0.68 yr | 0.52–1.04 yr |
+| B: 84 s line-rate cycle, 2×10 h | automotive line work | 214K | 3.0 yr (1 contraction/cycle) – 1.0 yr (3) | 1.6–4.7 yr |
+
+**The durability bar is hardest exactly where Clone's best segment is** (bench
+assembly). The 650K figure is a lower bound "with 1 kg load" at unknown pressure;
+the >1M figure is a test capped at 1M — both censored, neither at a known working
+pressure.
+
+**Bottom-up SAM (ANALYST).** Research/data torsos ~11.9K/yr × $23–25K = $274–338M;
+high-DoF hands ≤~75K/yr × $1.2–7K = $90–525M (Linkerbot: >80% share, ~5,000/month,
+$3B Series B+, $6B target — Reuters 2026-05-04); Western bench assembly 500–2,000
+torsos × ~$90K = $45–180M; home ~$0 before 2028. **Pools ~$0.4–1.0B/yr; Clone's band,
+if the core pair passes, $3–46M/yr by 2027–28.** Market stays 3, re-anchored to this
+SAM (anchor 3: "real market, bottom-up possible but thin").
+
+**Hurdle ledger (templates/hurdle-ledger.md) — HYBRID, venture-binding (Quaise-type).**
+
+| hurdle | type | resolves by | P |
+|---|---|---|---|
+| E4 autonomous Torso 4 grasp suite | execution | 2027-03-31 | 0.30 |
+| V1a Myofiber ≥2M cycles at working pressure, bent | venture | 2027-06-30 | 0.35 given E4 |
+| E5 clean IP chain of title | execution | 2027-06-30 | 0.80 |
+| E3 priced Series A ≥$200M by mid-2027 | execution | 2027-06-30 | 0.22 |
+| V2 paid demand ≥$10M ARR | venture | 2029-12-31 | 0.55 conditional |
+
+**The core pair (E4 × V1a) = ~10.5%, resolving within ~8 months.** P(Series A by
+mid-2027) is ~0.70 if both pass, ~0.25 if one, ~0.10 if neither — the red team's
+common-mode point, quantified. Diligence should be a technical review plus a live
+demo, not team meetings. Implied P(≥10x) ≈ 0.011 (§8.3); P(priced round ≤24mo)
+≈ 0.39, inside the panel's spread. Methodology note for R2: the template has no term
+for a venture hurdle driving an execution hurdle (here V1a and E4 drive E3); adding
+one raises P(all pass) ~1.26x. Not applied mid-deal.
+
+**Exit map.** Modal positive exit: a strategic sale at $0.3–1B after the core pair
+passes (a humanoid OEM without a differentiated hand) → **~0.3–2.1x net** at 50–80%
+dilution. Acqui-hire or IP sale under $150M (~0.2 unconditional) → ~0x after
+preferences. Comps: SoftBank–ABB Robotics $5.375B (~2.4x revenue); Samsung 35% of
+Rainbow for ~$181M; LG control of Bear via a call option; Sanctuary ~$140M raised,
+$393–425M (2024), new CEO Jun 2026. **Mentee's $900M sale was related-party** (~51%
+to two of the buyer's executives) — a ceiling, not an arm's-length comp, which
+weakens the "$200M ≈ 1.23x Mentee" mitigation.
+
 ---
 
 ## PENDING DD QUESTIONS — RANKED (rev 1, 2026-10-27)
@@ -549,6 +626,17 @@ is itself the datapoint.
   Advisers Act exemption Delta4/Golding rely on (no ERA Form ADV); direct investment or
   SPV-of-SPV, and if the latter, the stacked fees; are the 2% and admin inside or on top
   of the $50K?
+- ○ (C) **Adaract (rev 1.1):** is the licensor/target Adaract Technologies? Exclusivity,
+  field of use, territory (no EP/DE coverage), term and termination; which claims
+  Myofiber practises (a lapse would be a US freedom-to-operate problem); acquisition
+  price, closing conditions and the minimum cash it locks up; is Joseph Hill joining,
+  and in what role? Does the 2023 NIDILRR or 2024 Air Force SBIR create government
+  rights in any licensed invention?
+- ○ (C) **Polish-entity IP:** does the cost-plus R&D agreement between CLONE sp. z o.o.
+  and Clone Inc. assign IP created in Wrocław to the parent? Without it, title sits in
+  Poland — chain of title and the US onshoring plan both depend on it.
+- ○ (C) **Who is on the leadership slide** shown to investors, and why are Koźlik, Baran
+  and Wieczorek absent from it?
 
 ### P2 — score-moving
 
