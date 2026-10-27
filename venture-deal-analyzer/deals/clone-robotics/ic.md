@@ -90,6 +90,23 @@ sensors than the spec, and there are no wrist or palm cameras.
 3. **The vehicle repeats Quaise** — Delta4 has filed nothing since May; the Quaise
    SPV shows no sign of having invested; no evidence of a Clone allocation.
 
+### Rev 2 — same day: the memo became legible
+
+After a direct ask, Casey supplied memo pages 1–5 and 7 at full resolution (page 6 and
+the deck still missing). **Process failure owned:** at intake the unreadable memo was
+flagged but the pipeline ran anyway and the ask was buried in progress updates,
+against the standing rule. A fourth workflow (3 passes, each counter-checked, 61
+corrections) verified what the pages changed: `factpack.md` §12.
+
+**Material changes:** terms now read ($9M bridge, $6.5M committed, close Nov 3; $2.5M
+cash, $750–900K/month burn, so 2.8–3.3 months standalone); a CLAIMED $150M Mar-2025
+mark (→ 1.33x if documented) alongside a financing table the Form C refutes; Adaract
+confirmed as a related-party $4M acquisition; Torso 4 muscles rated 100K cycles; first
+VLA Q4 2028 on Clone's own roadmap; 0/7 prospects confirmed, one related-party and one
+refuted label; the CEO's public $20K price vs the deck's $178K list; the FCC rule
+excludes the stationary industrial torso. **Scores and forecasts not yet re-run — held
+for page 6.** Privacy breach logged (Casey's email in 6 EDGAR request headers).
+
 ---
 
 ## THE GAP — chase the data

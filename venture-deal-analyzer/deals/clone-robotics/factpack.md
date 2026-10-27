@@ -1,4 +1,11 @@
-# Clone Robotics — grounded fact pack (2026-10-27, rev 1 — PRE-DD)
+# Clone Robotics — grounded fact pack (2026-10-27, rev 2 — PRE-DD)
+
+> **REV 2 (same day): the memo is now legible** (pages 1–5 and 7 at full resolution;
+> transcript `source/memo-transcript.md`). Everything it changed, verified by a fourth
+> workflow (3 passes, each adversarially checked), is in **§12** — read §12 first.
+> Sections 1–11 are corrected where the memo overturned them. **Panel scores and
+> forecasts are NOT yet re-run**: held for memo page 6 (Risks) per the house rule.
+> Page 6 and the deck are still not supplied.
 
 Provenance tags: [VERIFIED] primary source · [SECONDARY] third-party · [CLAIMED]
 company or sponsor statement, unverified · [CONFLICT] · [REFUTED] contradicted by a
@@ -20,10 +27,10 @@ an incomplete search it is tagged NOT FOUND (incomplete); §11 records the re-ru
 
 | document | read | notes |
 |---|---|---|
-| Delta4 Capital memo "Clone Robotics — Bridge round", Alex Golding, dated 2026-10-27 | **PARTLY — fragments only** | Supplied as a 310 px-wide screenshot of a multi-page DocSend/Dropbox PDF. Headings and a few phrases legible at 4x upscale (`source/legible-fragments.md`); **body text and nearly every number UNREAD**. Never used as fact below except where marked (?) as a lead. |
+| Delta4 Capital memo "Clone Robotics — Bridge round", Alex Golding, dated 2026-10-27 | **YES — pages 1–5, 7 (rev 2)**; **page 6 NOT SUPPLIED** | First arrived as a 310 px screenshot (`source/legible-fragments.md`, rev 1); full-resolution pages supplied by Casey later the same day (`source/memo-p1..p5.webp`, transcript `source/memo-transcript.md`). Page 6 (end of "What could go right", start of Risks) known only from the rev-1 fragments. |
 | Clone deck (same viewer) | **NOT READ** | 121 px wide; only some slide titles legible |
 | **Valuation $200M post-money** | **YES — LP, 2026-10-27** | Supersedes our misread "$3?0M" — proof that the screenshot's numbers cannot be trusted |
-| Raise size, committed, instrument, exact SPV fees, cash, burn, Series A size | **NOT READ** | P1 asks; a native PDF closes most of them |
+| Raise size, committed, SPV fees, cash, burn, Series A size | **YES (rev 2)** | $9M target, $6.5M committed, close Nov 3; 2% one-time + 20% carry + pro-rata SPV fees; $2.5M cash, $750–900K/mo burn; Series A $70–100M. **Instrument still not stated.** |
 
 ---
 
@@ -48,10 +55,11 @@ On Casey's crux: **partly right.** Clone has no touch sensing *by published desi
 | Round | Pre-Series A **bridge** (memo heading) |
 | Price | **$200M post-money** (LP) |
 | Check | ~$50K via **Delta4 Capital SPV** |
-| SPV terms | "2% one-time fee, 20% carried interest, plus a pro-rata share of SPV fees" (approx., legible fragment). Delta4's three filed Form Ds instead disclose ~5% related-person fees ("1%/yr × 5") [VERIFIED] — CONFLICT |
-| Raise / committed / instrument | **UNREAD** |
-| Close | "The bridge closes next week" (memo) |
-| Next round | Series A, "$75–100M" target (?) |
+| SPV terms | "2% one-time fee, 20% carried interest, plus a pro-rata share of SPV fees" (memo p.1, CLAIMED; the SPV-fee share is uncapped as written). Delta4's three filed Form Ds instead disclose ~5% related-person fees ("1%/yr × 5") [VERIFIED] — CONFLICT |
+| Raise / committed | **$9M target; $6.5M committed** (memo p.1, CLAIMED) |
+| Instrument | **NOT STATED** — SAFE, note or priced? (G4) |
+| Close | **November 3, 2026** (memo p.1); Series A investor demos from the week of Nov 9; Delta4's in-person visit Nov 12 — **after** the close |
+| Next round | Series A, **$70–100M** target; Series B "$1–2B target" Q4 2027 (memo) |
 | Entry ownership | $50K ÷ $200M = 0.025% gross; **~0.024% net** of the 2% fee and admin share |
 | Filing of record | **None.** Clone has never filed a Form D (its SAFEs went under §4(a)(2)); no Delta4 Form D for any Clone series [VERIFIED, EDGAR] |
 
@@ -138,7 +146,7 @@ insertion, slip recovery, ≥20 trials each.
 | **Product timeline:** water-hydraulic hand 2022–23 (36 valves, 145 psi pump, 200 W peak); the Form C names lab "customers" (UC Berkeley, NYU, Stanford, ETH, Meta AI, Google AI) and press reports 16 AI labs pre-ordered — CLAIMED; **no delivery found**, and the hand page still invites requests for "access to a Clone Hand prototype"; Torso and Torso 2 (2024) **pneumatic**, off-the-shelf valves; Protoclone (Feb 2025) hung in a frame, "cannot yet walk"; Torso 3 (~Apr 2026) teleop; **Torso 4 promised Nov 2026** (X post). **No legs or biped hardware ever shown.** | VERIFIED |
 | **Clone Alpha:** "279 units", no price, no checkout, **still says "Pre-orders available in 2025"** on 2026-10-27; the page claims "A robot that walks naturally". No deliveries found. | VERIFIED |
 | **Pilots (Mercedes?, VW?, AST SpaceMobile, a hotel group, P&G?):** no public confirmation from either side; the memo itself says "no signed customers yet". Mercedes-Benz has invested in Apptronik ("low double-digit million") and runs <10 Apollos in Kecskemét and Berlin (SECONDARY) — and the memo's names are illegible anyway. | NOT FOUND / CLAIMED |
-| **Licence + acquisition — likely Adaract Technologies (rev 1.1).** The memo's illegible "Adlated?" and team-card "Joseph Hill" read as **Adaract Technologies, Ltd.** (Reno, NV; founded 2022; 5–9 staff), founded by **Joseph Daniel Hill** (UNR mechanical engineering). Adaract makes hydraulic artificial muscles, micro-hydraulic valves and pumps, holds **three granted US patents** (US11719263B2, US12378979B2, US12416318B2 — the last on the McKibben muscle termination itself, expiring 2044) plus a pending continuation, **no EP/DE coverage**, and won an Air Force SBIR Phase I (2024, $109,940) for an artificial-muscle **gripper**. Recorded assignments run inventors → Adaract only; no public Clone link. So Clone appears to be **licensing and buying outside muscle IP** after its own muscle inventor left. | ANALYST (identification) on VERIFIED Adaract facts |
+| **Licence + acquisition — Adaract Technologies (identified rev 1.1, CONFIRMED by the legible memo, rev 2):** "an exclusive license to Adaract's technology for $1.5M in **March 2026**, credited toward a **$4M acquisition**" (memo p.5; not closed). **Adaract Technologies, Ltd.** (Reno, NV; founded 2022; 5–9 staff), founded by **Joseph Daniel Hill** (UNR mechanical engineering). Adaract makes hydraulic artificial muscles, micro-hydraulic valves and pumps, holds **three granted US patents** (US11719263B2, US12378979B2, US12416318B2 — the last on the McKibben muscle termination itself, expiring 2044) plus a pending continuation, **no EP/DE coverage**, and won an Air Force SBIR Phase I (2024, $109,940) for an artificial-muscle **gripper**. Recorded assignments run inventors → Adaract only; no public Clone link. So Clone appears to be **licensing and buying outside muscle IP** after its own muscle inventor left. | ANALYST (identification) on VERIFIED Adaract facts |
 | **Three of four co-founders are gone.** Amadeusz Świerk and Juliusz Tarnowski left in 2022 (2,930,000 founder shares repurchased at par; Form C Note 5, KRS entry 5); Koźlik left the Polish board in 2026. Only the CEO remains. | VERIFIED |
 | CEO **Dhanush Radhakrishnan**: co-founded Symplex (YC S19, RL symptom checker, raised $1.5M per Form C, "acquired by Scale AI" — terms not public, possibly an acqui-hire). | VERIFIED |
 
@@ -259,9 +267,14 @@ win on measured performance per dollar.
 **Policy cuts both ways [VERIFIED].** On 2026-07-28 the FCC Covered-Listed **all
 foreign-produced mobile robots, humanoids included, "regardless of the nationality
 of origin"** — the trigger is where it is made. Polish-built Clone robots need US
-production or a Conditional Approval tied to an onshoring plan (2 robot approvals as
-of 2026-09-18, open-ended while the plan holds). A **stationary** torso may sit
-outside "mobile robot" (ANALYST — verify with counsel).
+production or a Conditional Approval tied to an onshoring plan. **Rev 2 [VERIFIED, FCC
+DA 26-786 App. C]:** "foreign-produced" = not a FAR "domestic end product" (US
+manufacture **plus** domestic components >65% of cost for 2024–28 deliveries, 75% from
+2029); the definition covers devices "capable of locomotion", and **(B)(vi) excludes "a
+fixed, stationary, non-mobile robot… intended for industrial or medical use" — Clone's
+first product, the stationary industrial torso, is outside the rule; the biped is
+inside it.** Robot Conditional Approvals now number 7 (none a humanoid; 5 in 44 days) —
+the onshoring route works. The memo's "US policy *may* require…" is the wrong tense.
 
 **Timing.** By Clone's Sept 2027 biped MVP: Chinese vendors will have shipped tens of
 thousands, Agility will be delivering its Digit 5 order, Figure's BotQ (12K/yr
@@ -473,9 +486,14 @@ the risk — a step-up costs less than a zero.
 
 ## 10 · PROCESS NOTES
 
-- **The memo is functionally unread.** Every number in §1 except the $200M (LP) is a
-  fragment or UNREAD; a native PDF is the first ask. Our misread "$3?0M" vs Casey's
-  $200M is the reason.
+- **Rev 1 process failure, owned:** the memo arrived as an unreadable screenshot and the
+  pipeline ran anyway, with the ask buried in progress updates — against the house rule
+  (missing key inputs: ask, don't analyze around them). Casey supplied the pages within
+  hours of a clear ask. Rev 2 (§12) re-verifies everything they changed.
+- **Privacy breach, disclosed:** a rev-2 research agent put Casey's email address in the
+  HTTP User-Agent of 6 requests to sec.gov (SEC's fair-access policy asks for a contact
+  string); an earlier verifier used a fragment of his name. No copy is stored anywhere.
+  All future agent prompts specify a neutral contact string.
 - The competition sweep priced comps at $300–360M; its verifier recomputed at $200M
   (multiples above).
 - The tactile verifiers corrected 32 items, mostly in Clone's favour (the RDP and
@@ -558,7 +576,156 @@ weakens the "$200M ≈ 1.23x Mentee" mitigation.
 
 ---
 
-## PENDING DD QUESTIONS — RANKED (rev 1, 2026-10-27)
+## 12 · REV 2 — WHAT THE LEGIBLE MEMO CHANGED (verified, same day)
+
+Fourth workflow: three passes (people & money · technical & unit economics ·
+customers & roadmap), each adversarially counter-checked; all APPROVED WITH
+CORRECTIONS (61 corrections, applied). Files: `sweeps/rev2-*.md`. **No verifier
+supports a panel score move on the corrected record; the technical verifier
+recommends lowering three hurdle and forecast inputs (§12.6).** Panel re-run held for
+page 6.
+
+### 12.1 · In Clone's favour
+
+- **A priced $150M mark, if documented.** Memo: Mar 2025, $10M at $150M post from
+  Access Industries [CLAIMED; no public confirmation; Access's portfolio page lists
+  mega-caps only, so its silence means little]. It sizes a 2025 round already in our
+  record. **If documented, $200M is a 1.33x step-up, not the 4.0x we scored.** Ask for
+  the instrument and documents.
+- **The funding total reconciles.** $0.6M + $6M + $10M = $16.6M ≈ the CEO's ~$17M;
+  the memo's "about $24M" counts the $6.5M of committed, unclosed bridge (a minor
+  overstatement). Caplight's $7.14M is the outlier.
+- **A named, real CTO.** Damian Lickindorf: a Wrocław legged-robot builder (GitHub,
+  Hackaday since 2018; Politechnika Wrocławska; capstan quadruped "Stanley", 2021).
+- **Adaract is real and active.** Datasheets re-issued 2025-08 and 2026-01; valves
+  going into a prosthetics maker's products. **Its muscle datasheet rates the AM70 at
+  "~1.5 million cycles to failure"** (2,750 psi, 20% contraction, 4 Hz; "life is strongly
+  dependent on test conditions"), working pressure 150–3,000 psi, burst >9,000–10,000
+  psi — ~15x Clone's own Torso 4 rating. [VERIFIED, adaract.com]
+- **The FCC rule excludes Clone's first product** (stationary industrial robots, §6).
+- **Capital is available for pre-customer manipulation stories:** Eka raised a $150M
+  Series A at $1.45B (Oct 2026) with no named customers; Humanoid $152M at $1.35B (Jul
+  2026). Counter-example: Cartwheel Robotics shut down after failing to raise a bridge.
+- **The $9-muscle steelman partly survives:** at automotive line duty (~214K
+  contractions/yr) 100K-cycle muscles with swaps of ≤7 minutes keep payback at
+  12.6–14.9 months. A full re-muscle (182 muscles) is ~$1.6K of parts.
+- **The paybacks re-derive exactly** (12.4 / 19.8 / 42.3 months).
+
+### 12.2 · Against Clone
+
+- **Runway.** $2.5M cash, $750–900K/month burn = **2.8–3.3 months standalone** (cash-out
+  Jan–Feb 2027). The bridge gives 10–12 months on the $6.5M committed (Sep–Nov 2027)
+  and 12.8–15.3 months on the full $9M. Adaract "in practice closes with the Series A"
+  (p.6 fragment). **The Series A is binary for survival.**
+- **The rated muscle life is now legible: Torso 4 = 100K cycles** (Q3 2026); production
+  10M only in Q4 2028 (100x in ~2 years). 100K is 20x below the ≥2M bar. At bench duty
+  it lasts **13–26 working days** per muscle; at line rate ~5.6 months. The steelman
+  degrades at bench or pick duty with fast swaps (3PL payback 23–28 months) and breaks
+  with slow ones (0.5 h swaps: 34–112 months).
+- **A new, undemonstrated operating point.** Memo: 2 kW pump, water at **10–40 bar**,
+  306 proportional valves. Clone's site (Dec 2024 spec): 500 W, 100 psi (6.9 bar). Fatigue
+  scales with fibre load ∝ pressure; "survives 10x operating pressure" is burst
+  strength, not life; no public cycle-life data for hydraulic McKibben muscles at 1–5
+  MPa. **Adaract's patents and datasheet are for oil at ~3,000 psi — water appears in
+  none of them**, so the durability does not transfer automatically. 40 bar is ~5.7x
+  HSE's anecdotal injection threshold (leak: ~5–9 mL per 100 ms through a muscle's own
+  valve).
+- **Autonomy is a 2028 item on Clone's own roadmap.** Torso 4's milestone is "low-level
+  joint control and teleoperation"; customer torsos ship Jan 2027; **"Clone's first VLA
+  model" is Q4 2028** — 21–23 months later. 2027–28 deployments are teleoperated or
+  scripted (sector-normal: 1X expert mode, Apptronik teleop), so pre-VLA the $178K torso
+  competes with conventional automation, not with a human — and the 85%-capture
+  paybacks are unsupported until then.
+- **Customers: 0 of 7 confirmed** (memo: "Nothing is signed yet, but the inbound is
+  real"). Mercedes and VW "reached out" (Mercedes invests in Apptronik — $935M Series A
+  at ~$5.3B, Feb 2026 — and runs Apollos in Berlin and Kecskemét; VW's only humanoid
+  activity found is FAW-VW with UBTech in China). **Moxy Hotels came through Greg Racz,
+  a bridge investor and "a friend of Delta4 Capital's"** — a related-party channel; Racz
+  is a private-credit financier (MGG founder, Volley Capital) with no hospitality role
+  found, and NYC Moxys are owner-operated (Lightstone), so pilots are an owner decision.
+  **"Ranpak, a key 3PL for Walmart and Amazon" is REFUTED:** Ranpak (NYSE: PACK) makes
+  paper packaging and packing machines; it supplies Walmart and Amazon, it is not a 3PL.
+  The Taiwanese bike maker is unidentified (Giant is the only Taiwanese Tour brand in 2026).
+- **Price list vs the CEO's public price.** Memo: Industrial Torso $178K, biped $214K
+  list. CEO in April 2026 (Humanoids Daily): Clone "aims to maintain a **mass-market price
+  of $20,000**". 8.9x apart; at $20K on the memo's BOMs, margin is 20% / 4%, not 91%.
+- **Competitor hand "BOMs" are Clone's own estimates and are inflated 2–4x:** Wuji at
+  62–103% of its retail price; Sharpa ~90% of its ~$50K price; Tesla per-hand 2–4x
+  Morgan Stanley's teardown (~$9.5K per pair); "Apptronik's $50K hand" NOT FOUND (Apollo
+  has been shown with PSYONIC's 6-DoF hand). **Like for like, Clone's $1.1K hand is ~2–5x
+  cheaper than $6–7K-retail 20–30 DoF hands — not 9–45x.** Hand DoF: 25 incl. wrist,
+  same convention as 1X's 22 + 3 → parity.
+- **The financing table contradicts the filing.** Pre-seed "Nov 2021, $0.6M at $20M
+  post" is **REFUTED** by the Form C ($525K of SAFEs at a **$50M** post-money cap). The
+  memo's ladder ($20M → $33.8M → $150M → $200M) omits that the $33.8M seed priced below
+  the 2021–22 cap.
+- **Bridge composition:** Early Game Ventures (European, Romania-based; broad thesis),
+  will.i.am, Matt Bellamy (Muse), Greg Racz "and others" — **no existing institution
+  named** (Initialized, Pioneer, Tango absent; Access "plans to take its pro-rata in the
+  Series A"). $6.5M of $9M committed (72%).
+- **CTO bio inflated:** "Stanley" was co-developed with Ahead, benchmarked against MIT's
+  mini cheetah, not Spot; offered as a kit, **no units sold found**; it uses motors with
+  a cable reduction (relevant to legs, not to fluidic muscles). His HYPR role (Zoox
+  co-founder Kentley-Klay's startup) is NOT FOUND. Not a co-founder; no published patents.
+- **Related-party acquisition.** Chief Engineer Joseph Hill founded the $4M target. The
+  licence is dated **March 2026** — the same month Koźlik was struck from the Polish
+  board (2026-03-18). Adaract's co-founders (Marcus D'Ambrosio, Clay Payson) and
+  co-inventor (Budu-Manuel) also hold interests to clear. Hill's Clone employment has no
+  public trace. **"Adaract's valves are rated for 100 million cycles": NOT FOUND** in any
+  of Adaract's four datasheets (100M was Clone's own 2023 Form C target).
+- **Clone is not a YC company** (the CEO card's "Y Combinator" refers to Symplex).
+- **Wire before visit.** Bridge closes Nov 3; Series A demos from Nov 9; Delta4 visits
+  Nov 12. Delta4's pre-close checks: Torso 4 over Zoom, IP assignment and patents,
+  Adaract terms.
+- **Execution record:** 3 public dated commitments missed (one on a single snippet), the
+  internal Torso 4 date slipped ~1–2 months, and the "$50M round" became this bridge.
+- **"$1B on 10,000 Clones by Q1 2030"** = $100K a robot (44–53% under list) and 1.8x
+  Unitree's entire 2025 volume.
+
+### 12.3 · Reconciled (no longer conflicts)
+
+Torso 3's "164 DoF, 182 muscles, 251 sensors" = the Torso 2 architecture counted per
+5-fibre muscle (910 / 182 = 5.0; 251 = 182 pressure + 69 other) — not new actuation,
+but "182 sensors" was one per muscle. Headcount 65 vs Caplight's 46 is a time lag.
+
+### 12.4 · Gates after rev 2
+
+- **G1 — more at risk (no query yet).** New trip items: the pre-seed table vs the Form C;
+  the CEO's public $20K price vs the $178K / $214K list; "Ranpak, a key 3PL" (REFUTED);
+  "Adaract valves rated 100M cycles" (not in any datasheet); competitor figures presented
+  as BOMs; the CTO's "Spot-comparable… sold" line. Plus the carried items ("patented",
+  "1/10 the cost").
+- **G4 — partly cleared:** raise, committed amount, close date, fees and cash now read;
+  **instrument still undisclosed**.
+
+### 12.5 · What it does to the record's numbers
+
+| item | rev 1.1 | rev 2 |
+|---|---|---|
+| Last mark | $50M SAFE cap (public) → $200M = 4.0x | **$150M (Mar 2025, CLAIMED)** → 1.33x if documented; $33.8M seed (CLAIMED) → 5.9x |
+| Cash / runway | unread | $2.5M; 2.8–3.3 months standalone; 10–15 months with the bridge |
+| Muscle life | 650K (2023 press) / 100K (?) | **100K (Torso 4, memo)**; 10M target Q4 2028; Adaract AM70 ~1.5M on oil |
+| Operating pressure | 0.69–1.0 MPa | **1–4 MPa (memo, undemonstrated)** |
+| Autonomy timing | "no autonomous grasp shown" | **first VLA Q4 2028 on Clone's own roadmap** |
+| Customers | none signed | 0/7 confirmed; 1 related-party; 1 refuted label |
+| FCC | stationary "may" be exempt | **stationary industrial robots excluded (VERIFIED)** |
+| Hand cost edge | "~1/10" CONFLICT | ~2–5x like for like |
+
+### 12.6 · Recommended for the re-score (not applied — held for page 6)
+
+From the technical verifier: E4 (autonomous grasp by Mar 2027) 0.30 → **0.22** (Clone's
+roadmap sets no autonomy target before Q3 2027); V1a|E4 0.35 → **0.28**; core pair
+10.5% → **~6%**; P(priced round ≤24mo) 0.45 → **0.42**; P(≥10x) 0.025 → **0.020**; EV
+≈1.02x (interpolated). The people-and-money and customers verifiers see no score move:
+the claimed $150M mark (better price) roughly offsets the refuted table, unnamed
+insiders and related-party seller. **Deal IQR widens to 1.0–2.0.** Downside leans: Demand
+1.0 if the 7-name ask returns no NDA or LOI; Delivery 1.0–1.25 if Torso 4 is teleop-only
+in November with no life data at working pressure; Team 1.5 if the price and pre-seed
+conflicts persist after query.
+
+---
+
+## PENDING DD QUESTIONS — RANKED (rev 2, 2026-10-27)
 
 Statuses: ○ not yet asked · ● asked · ✓ answered · ✗ refused · ⌛ expired (60 days from
 first ask). (S) = to the sponsor; (C) = to the company. Chosen so that answer quality
@@ -566,17 +733,17 @@ is itself the datapoint.
 
 ### P0 — from Casey himself (zero cost, today)
 
-- ○ (LP) **The native memo.** You read "$200M post" where our screenshot read "$3?0M" —
-  if you have the DocSend/PDF, forward or export it. It closes raise, committed,
-  instrument, SPV fees, cash, burn and Series A size today.
+- ◐ (LP) **The native memo** — pages 1–5 and 7 ✓ (rev 2). **Page 6 and the deck still
+  open.** Page 6 should carry the cash Clone must hold to close Adaract and the sponsor's
+  full risk list.
 - ○ (LP) **Did the Delta4 DexMat SPV close on 2026-09-28, and did you wire?** If so:
   what subscription documents, closing confirmation, custodian and Form D entity name
   did Delta4 provide? It is the best available test of this vehicle.
 
 ### P1 — decision-gating
 
-1. ○ (S) **Native memo PDF + deck.** Closes raise size, committed, instrument, SPV
-   fees, cash, burn, Series A size. *Moves:* every term in §1.
+1. ◐ (S) **Native memo PDF + deck.** Raise, committed, fees, cash, burn, Series A size ✓
+   (rev 2). **Still open: the bridge instrument, memo page 6, the deck.**
 2. ○ (C) **A live AUTONOMOUS (not teleoperated) Torso 4 demo** — egg, paper cup,
    grape, plug insertion, slip recovery, ≥20 trials each, with logged grip force.
    *Moves:* Casey's crux, the "hand leads" thesis, pilot readiness. Decisive.
@@ -637,6 +804,21 @@ is itself the datapoint.
   Poland — chain of title and the US onshoring plan both depend on it.
 - ○ (C) **Who is on the leadership slide** shown to investors, and why are Koźlik, Baran
   and Wieczorek absent from it?
+- ○ (C, rev 2) **The $150M round:** instrument, documents and lead for "Mar 2025, $10M at
+  $150M, Access Industries". Were the 2021–22 SAFE caps amended (memo $20M vs Form C
+  $50M)?
+- ○ (C, rev 2) **Price:** the deck's $178K / $214K list vs the CEO's public "$20,000
+  mass-market price" — which is the plan, and at what margin?
+- ○ (C, rev 2) **Muscle life at the NEW operating point:** test logs for Torso 4 muscles
+  at 10–40 bar on water (cycles, stroke, bend radius, failure mode), and the path from
+  100K to 10M. Does Torso 4 use Adaract hardware, and on water or oil?
+- ○ (C, rev 2) **Pre-VLA deployment model:** how do the Jan-2027 industrial torsos
+  operate — scripted cells, teleop (what supervision ratio), or learned policies? Who
+  pays for teleop labour?
+- ○ (C, rev 2) **Prospects:** NDA, LOI or pilot terms for each of the 7 names; who at
+  Moxy (owner/operator) is engaged; what the Ranpak relationship actually is.
+- ○ (C, rev 2) **Adaract:** the $4M split (cash vs equity), Hill's and his co-founders'
+  stakes, how much cash Clone must hold to close, and Hill's employment status today.
 
 ### P2 — score-moving
 
