@@ -4,12 +4,17 @@ Provenance tags: [VERIFIED] primary source · [SECONDARY] third-party · [CLAIME
 company or sponsor statement, unverified · [CONFLICT] · [REFUTED] contradicted by a
 primary source · [NOT FOUND] searched, absent · [ANALYST] our own estimate.
 
-Tenth vehicle in the ledger. **Pipeline (process v1.2, cost-discipline rules):
+Ninth ledger row; **third Delta4 vehicle** (after DexMat and Quaise). **Pipeline (process v1.2, cost-discipline rules):
 13 agents in one workflow — 6 evidence sweeps, each adversarially verified (2
 independent verifiers on Casey's tactile crux). Every verifier returned APPROVED
 WITH CORRECTIONS; all 92 corrections are applied below** (2.54M tokens, 995 tool
-calls, 0 agent errors). Panel + red team: §8. Sweep and verifier files with every
-source URL: `sweeps/`.
+calls, 0 agent errors). **Scoring: 5-scorer panel + red team + completeness critic**
+(§8); the critic's 13 errors are corrected below and its gaps went to a third
+workflow (§11). Sweep and verifier files with every source URL: `sweeps/`.
+
+**Search-coverage caveat (critic):** the intake sweeps exhausted their web-search
+budget partway, and the verifiers ran few searches. Where an absence below rests on
+an incomplete search it is tagged NOT FOUND (incomplete); §11 records the re-run.
 
 ### Documents
 
@@ -27,8 +32,9 @@ source URL: `sweeps/`.
 **A genuinely different actuator (water-hydraulic artificial muscles) attached to
 a company that has not yet shown the things a $200M price assumes: no walking
 robot, no autonomous grasp, no signed customer, no cycle-life data at working
-pressure, no patents found, and its muscle inventor has left the operating
-board — offered through a sponsor whose last SPV appears never to have invested.**
+pressure, no patents found, and three of its four co-founders gone — offered
+through a sponsor with no SEC-visible close on any of its three 2026 pitches to
+this LP (Quaise, DexMat, Clone).**
 On Casey's crux: **partly right.** Clone has no touch sensing *by published design*
 ("only proprioceptive and visual feedback"), but it does have a grip-force channel
 (muscle pressure). The bigger gap is that no autonomous grasp has ever been shown.
@@ -76,7 +82,8 @@ palm" in Interesting Engineering (2025-11-24) trace to no first-party source →
 - The only clean ablation separating them (RDP, https://arxiv.org/abs/2503.02881):
   intrinsic force from joint-torque sensors **beat** GelSight fingertip touch on all
   three contact-rich tasks (peel 0.95 vs 0.90; wipe 0.87 vs 0.77; lift 0.70 vs 0.48).
-  MoDE-VLA: removing proprioceptive force cost −11 pp, removing touch −8 pp.
+  MoDE-VLA: removing proprioceptive force cost −11 pp, removing touch −8 pp
+  (n = 20 per task, full-model success only 34% — the difference is within noise).
 
 **Where Casey is right [VERIFIED].**
 - **Accuracy at light grips is unproven.** Geometry-only force models for water
@@ -126,12 +133,13 @@ insertion, slip recovery, ≥20 trials each.
 | **Co-founder Łukasz Koźlik** — credited in Clone's own Form C with designing the hydraulic valves and McKibben muscles; largest holder Feb 2023 (3.0M shares, 43.54% of issued voting stock). **KRS entry 16 (2026-03-18) removed him from the Polish subsidiary's board**; Radhakrishnan is now its sole member. Departure from Clone Inc. is ANALYST (consistent with the memo's "co-founder who has since left"). Caplight still lists him as CTO. | VERIFIED / ANALYST |
 | **IP origin is not all his:** the same Form C credits **Michał Baran** (Chief Designer, since 2022) with "5X miniaturized fast valves" and mass-production technology for hands; Clone names its own "Aquajet valve technology". | VERIFIED (in their favour) |
 | **Patents:** Form C (Feb 2023) "does not have any registered patents" — IP held as trade secrets under assignment agreements — yet its risk factors cite "our pending patents" (self-contradiction). **No published Clone patent found** (incomplete: Espacenet/WIPO/UPRP blocked; Baran/Wieczorek not yet searched). Memo: "Clone says its technology is patented; confirming IP assignment." | VERIFIED / NOT FOUND (incomplete) |
-| **Financing record:** 2021–22 SAFEs $525K at a **$50M post cap**; 2023 Reg CF Crowd SAFE at a **$30M cap** (a down-cap) — **withdrawn**; $74,275 cash on 2023-01-31 (~3 months runway). Since then: "~$17M raised" (CEO, via Robozaps, Mar 2026) vs **$7.14M (Caplight)** — CONFLICT; a "$50M round" announced ~Apr 2026 with no reported close, now a bridge. An Echo-platform SPV, **Clone Red Beard Ventures Ltd** (BVI, CIK 2145276), sold $146,629 to 57 investors from 2026-03-12. | VERIFIED / CONFLICT |
+| **Financing record:** 2021–22 SAFEs $525K at a **$50M post cap**; 2023 Reg CF Crowd SAFE at a **$30M cap** (a down-cap) — **withdrawn**; $74,275 cash on 2023-01-31 (~3 months runway). Then a **2023 seed (~$6–6.5M, Initialized lead with Pioneer, Tango, Lux, Wikus, Access VC — SECONDARY)**, a Jan/Feb-2025 round and a 2026-03-10 VC round (Caplight) — instruments and caps unknown, so **the last institutional mark is UNKNOWN (P1)**. Since then: "~$17M raised" (CEO, via Robozaps, Mar 2026) vs **$7.14M (Caplight)** — CONFLICT; a "$50M round" announced ~Apr 2026 with no reported close, now a bridge. An Echo-platform SPV, **Clone Red Beard Ventures Ltd** (BVI, CIK 2145276), sold $146,629 to 57 investors from 2026-03-12. | VERIFIED / CONFLICT |
 | **Polish subsidiary's FY2025 statements not filed** with the KRS (deadline 2026-07-15; FY2022–24 were filed). No arrears, enforcement or insolvency entries. | VERIFIED |
-| **Product timeline:** water-hydraulic hand 2022–23 (36 valves, 145 psi pump, 200 W peak); hand kits sold to labs per Form C (UC Berkeley, NYU, Stanford, ETH, Meta AI, Google AI named as customers); Torso and Torso 2 (2024) **pneumatic**, off-the-shelf valves; Protoclone (Feb 2025) hung in a frame, "cannot yet walk"; Torso 3 (~Apr 2026) teleop; **Torso 4 promised Nov 2026** (X post). **No legs or biped hardware ever shown.** | VERIFIED |
+| **Product timeline:** water-hydraulic hand 2022–23 (36 valves, 145 psi pump, 200 W peak); the Form C names lab "customers" (UC Berkeley, NYU, Stanford, ETH, Meta AI, Google AI) and press reports 16 AI labs pre-ordered — CLAIMED; **no delivery found**, and the hand page still invites requests for "access to a Clone Hand prototype"; Torso and Torso 2 (2024) **pneumatic**, off-the-shelf valves; Protoclone (Feb 2025) hung in a frame, "cannot yet walk"; Torso 3 (~Apr 2026) teleop; **Torso 4 promised Nov 2026** (X post). **No legs or biped hardware ever shown.** | VERIFIED |
 | **Clone Alpha:** "279 units", no price, no checkout, **still says "Pre-orders available in 2025"** on 2026-10-27; the page claims "A robot that walks naturally". No deliveries found. | VERIFIED |
 | **Pilots (Mercedes?, VW?, AST SpaceMobile, a hotel group, P&G?):** no public confirmation from either side; the memo itself says "no signed customers yet". Mercedes-Benz has invested in Apptronik ("low double-digit million") and runs <10 Apollos in Kecskemét and Berlin (SECONDARY) — and the memo's names are illegible anyway. | NOT FOUND / CLAIMED |
 | **Licence + acquisition** ("exclusive licence… $1.5M, Mar 2025"(?); an unclosed acquisition requiring a minimum cash balance): no public trace — expected for an unclosed private deal; verifiable only from documents. | NOT FOUND (uninformative) |
+| **Three of four co-founders are gone.** Amadeusz Świerk and Juliusz Tarnowski left in 2022 (2,930,000 founder shares repurchased at par; Form C Note 5, KRS entry 5); Koźlik left the Polish board in 2026. Only the CEO remains. | VERIFIED |
 | CEO **Dhanush Radhakrishnan**: co-founded Symplex (YC S19, RL symptom checker, raised $1.5M per Form C, "acquired by Scale AI" — terms not public, possibly an acqui-hire). | VERIFIED |
 
 ---
@@ -154,7 +162,7 @@ hydraulics has not been shown publicly. Pump spec on Clone's site: "500 W… 40 
 A hand muscle at 8 grasps/min sees **0.96M cycles/yr on one shift, 1.92M on two,
 4.03M at 24/7.**
 
-| rating | source | life at 1 shift | at 2 shifts | at 24/7 |
+| rating | source | life at 1 shift | at 2 shifts | at 24 h × 350 d |
 |---|---|---|---|---|
 | 100K cycles (?) | memo (illegible) | 26 working days | 13 working days | 9 days |
 | 650K cycles | 2023 press (not on Clone's site) | 0.68 yr | 0.34 yr | 0.16 yr |
@@ -163,7 +171,7 @@ A hand muscle at 8 grasps/min sees **0.96M cycles/yr on one shift, 1.92M on two,
 
 Against Clone: at **0.7 MPa** (≈ Clone's 100 psi rating), "all the normal artificial
 muscles failed" when bent around a joint-like radius, and damage rises with pressure
-(Kobayashi et al., IEEE RA-L 2024). Clone runs 0.69–1.0 MPa. With hundreds of fibres
+(Kobayashi et al., IEEE RA-L 2024). Clone's pump ratings are 0.69–1.0 MPa (100–145 psi); its operating pressure is undisclosed (P1 #6). With hundreds of fibres
 per robot, first failure arrives well before median life (Weibull) — though fibre
 redundancy (~5.5 per DoF in Torso 2) may give graceful degradation, and a ruptured
 *water* fibre leaks.
@@ -234,7 +242,7 @@ does not need a dexterous hand.
    soldering is the named lead): rewards DoF and compliance, needs no legs, no walking
    race. Gated by autonomy and cycle life.
 2. **Hands/muscles as a component** to other humanoid makers — if the BOM and cycle
-   life hold. Hand volume leader Linkerbot (motors, ~$3B) shows the component market
+   life hold. Hand volume leader Linkerbot (~$3B) shows the component market
    is real.
 3. **Research and data-collection torsos** — the biggest current segment (27% of
    H1 2026 units), **but** Unitree is entrenched there at ~$23–25K average price and
@@ -293,27 +301,161 @@ In the sector's range; full for a robot that cannot walk and has no customer.
 
 | dilution to exit | 1x net needs | 3x net | **10x net** |
 |---|---|---|---|
-| 30% | $0.30B | $1.04B | **$3.6B** |
+| 30% (best case: no rounds after the A) | $0.30B | $1.04B | $3.6B |
 | 50% | $0.41B | $1.45B | **$5.1B** |
-| 65% | $0.59B | $2.07B | **$7.3B** |
+| **65%** | $0.59B | $2.07B | **$7.3B** |
+| **80%** | $1.04B | $3.63B | **$12.7B** |
 
-A $75–100M Series A alone dilutes 20–40%. **10x needs an Apptronik/1X-tier outcome.**
+If the A is $75–100M (?): 27–33% dilution flat, 20–25% at a 1.5x step-up, 33–40%
+in a down round, plus a 5–10% pool refresh — and a pre-revenue humanoid company will
+need rounds after it, so **65–80% is the realistic band. 10x net needs $7.3–12.7B
+of exit equity: above Apptronik's (~$5B) and 1X's (~$6B, in talks) current marks.**
+An Agility-like $2.5B exit returns ~2.1x / 3.6x / 5.0x net at 80 / 65 / 50% dilution.
 
 **Process flags.** Third Delta4 pitch on a fixed close clock; 2 of 3 with under a
 week. Gating asks: countersigned allocation, SPV docs, bridge instrument, extension.
 
 ---
 
-## 8 · SCORING — 5-scorer panel + red team
+## 8 · GATES, SCORING, FORECASTS, EV — rev 1, pre-DD
 
-*Pending — filled in from the panel workflow (below).*
+### 8.0 · Gates first (rubric v1.1 §0)
+
+| gate | status | why |
+|---|---|---|
+| **G1 Verification** | **PENDING — at risk** | Nothing queried yet, so it cannot trip at intake. Trips if any persists after query: "Clone says its technology is patented" vs Form C "no registered patents" and none found (the sharpest test: ask for numbers); "~1/10 the cost" (CONFLICT); "walks naturally" and "Pre-orders available in 2025" still live on Clone's site; ~$17M raised (CEO) vs $7.14M (Caplight); 2% fee quoted vs ~5% on Delta4's Form Ds. |
+| **G2 Vehicle math** | PASS | ~0.024% can return the vehicle in the evidenced tail (sector exits of $5B+ exist). |
+| **G3 Horizon fit** | **AT RISK** | Pre-A humanoid: 7–10+ years to liquidity. SPV term unknown; Delta4's last Form D shows "1%/yr × 5". Ask who bears costs in years 6–10. |
+| **G4 Price visibility** | **PENDING** | Price known ($200M post); class, instrument, raise, SPV documents and fee base unread or undisclosed. **If still undisclosed after request → automatically "conditional: pass until disclosed", never a buy.** |
+
+### 8.1 · Panel (median · IQR · raw) — 5 independent scorers + red team
+
+| dimension | median | IQR | raw | red |
+|---|---|---|---|---|
+| Market (30) | **3** | 0 | 2.5, 3, 3, 3, 3 | 2.5 |
+| Team (30) | **2** | 0 | 2, 2, 2, 2, 2 | 1.5 |
+| Moat (15) | **2** | 0 | 2, 2, 2, 2, 2 | 2 |
+| Traction — demand (10) | **1.5** | 0 | 1, 1.5, 1.5, 1.5, 1.5 | 1 |
+| Traction — delivery | **1.5** | 0 | 1.5 ×5 | 1.5 |
+| Competition (10) | **1.5** | 0 | 1.5 ×5 | 1.5 |
+| Deal & price (5) | **1.5** | 0.5 | 1.5, 2, 1.5, 1, 1 | 1.5 |
+| **W** | **2.18** | | 2.00, 2.20, 2.17, 2.15, 2.15 | 1.85 |
+
+**W = 2.18** (2.175; house formula; traction enters as the demand/delivery average —
+both are 1.5, so min-vs-average does not matter). **Sensitivity band [1.92, 2.28]**
+across unit weights and ±50% on each weight; ex-price 2.21. Second-lowest W in the
+ledger (floor: Vernius 2.05). No band crosses a decision threshold; **no dimension
+reaches 5, so there is no outlier thesis to underwrite.**
+
+Reported separately, never averaged (rubric v1.1): **demand 1.5** — no signed
+customer (memo), no confirmed pilot, Alpha's "279" is a production cap with no
+price or checkout. **Delivery 1.5 — gap multiple not computable:** 0 robots
+delivered, no autonomous grasp, no walking, no cycle-life data at working pressure;
+real hardware has been built (hands, three torsos), which keeps it off a hard 1.
+
+Score anchors, compressed:
+- **Market 3 (one at 2.5):** a real, fast-growing category (13,317 units in 2025);
+  Clone's addressable slice (paid dexterous work) is near zero today, and timing
+  hurts (FCC, Sept 2027 biped).
+- **Team 2, unanimous:** an RL CEO who kept the company alive from three months of
+  cash to real prototypes; against it, no shipping history, three of four
+  co-founders gone, the muscle inventor's status and IP unresolved, and claim hygiene
+  (stale site, missed dates, unfiled FY2025 statements).
+- **Moat 2, unanimous:** a real but feature-level edge — no patents, title through a
+  departed inventor, DoF parity, the cost lead a CONFLICT; trade-secret know-how
+  (braiding, valves) is the only cornered-resource candidate.
+- **Competition 1.5, unanimous:** 0 units against thousands; 1/8–1/110 of rivals'
+  capital; the only leader without touch or walking. The high-DoF stationary niche is
+  less contested.
+- **Deal 1.5 (IQR 0.5):** 4.0x the last verified cap, 11.8–28x paid-in, through a
+  vehicle whose documents are unread; mitigated by sector comps ($200M ≈ 1.23x Mentee).
+
+**Unanimity is itself a flag.** IQR 0 on six of seven dimensions and six identical
+verdicts is the tightest panel this ledger has logged. It can mean the evidence is
+doing the work — or that every scorer read one framing. Per the S2 rule, if we agree
+inside ten minutes, swap sides and run it again.
+
+### 8.2 · Forecasts — all six anchored to the SEED base (81.2% / 6.1%)
+
+| forecast | panel median | raw | red team | seed base |
+|---|---|---|---|---|
+| P(priced round ≤24mo) | **0.45** | 0.45, 0.38, 0.45, 0.40, 0.45 | 0.40 | — |
+| P(<1x) | **0.85** | 0.85, 0.86, 0.84, 0.85, 0.85 | 0.86 | 81.2% |
+| P(≥10x) | **0.025** | 0.025, 0.025, 0.03, 0.025, 0.03 | 0.025 | 6.1% |
+
+Why seed and not Series A (all six agree): the Series A base conditions on having
+closed a priced A — exactly the hurdle Clone has not cleared; the bridge follows an
+announced "$50M round" with no reported close. Adjusted for an A-level price: P(<1x)
+above base, P(≥10x) cut to under half of base.
+
+### 8.3 · EV at these terms (house exit-curve model, seed calibration, SPV 2/20)
+
+| basis | EV net (capped @20x) | P(gross ≥1x) | ≥3x | ≥10x | ≥20x |
+|---|---|---|---|---|---|
+| panel (0.85 / 0.025) | **1.08x** | 15.0% | 8.7% | 2.50% | 1.41% |
+| red team (0.86 / 0.025) | **1.05x** | 14.0% | 8.2% | 2.50% | 1.41% |
+| *seed base, for reference* | *1.58x* | *18.8%* | *12.4%* | *6.10%* | *3.43%* |
+
+Uncapped-tail premium: +0.65x riding on 1.41% of outcomes (disclosed, not headlined).
+**Read it honestly:** ~1.05–1.08x over a 7–10 year hold is ~1%/yr before the time
+value of money — below any hurdle — with ~85% of the probability mass a loss.
+(Panelist 5's hand estimate was ~0.9x net or less.)
+
+### 8.4 · Verdicts: **5× PASS-REVISIT, red team PASS-REVISIT**
+
+**Strongest pass reason (consensus):** $200M prices in what the record does not
+show — walking, an autonomous grasp, a signed customer, cycle life at working
+pressure — needs $7.3–12.7B for 10x at realistic dilution, and the money must move
+"next week" through a vehicle whose documents and allocation are unseen.
+
+**Strongest tail reason (consensus):** the one genuinely different actuator in a
+field converging on near-identical electric tendon hands; force-by-pressure is the
+channel the leaders call primary, and the clean ablation favours it over touch.
+If Myofiber survives ≥2M cycles at working pressure and Torso 4 grasps autonomously,
+Clone is a credible hand supplier or acquisition in a sector with $5–39B marks.
+
+**Red team kill case (dated, rough probabilities):** Nov 2026 bridge closes; Torso 4
+launches teleoperated (P(autonomous grasp with logged force by Q1 2027) ~0.30) →
+Dec 2026–Q2 2027 the Series A lead diligences exactly the four holes (autonomy,
+Myofiber life, a paying customer, Koźlik's title) plus the FCC onshoring cost; the
+market already passed once when the "$50M round" became this bridge (P(priced A at
+≥$200M by mid-2027) ~0.25) → Q2–Q3 2027 runway ends: insider recap or down-bridge
+~0.30, acqui-hire under ~$150M ~0.25, wind-down ~0.45 → Sept 2027 biped date missed
+(P(untethered biped) ~0.20). **P(<1x) ~0.86, of which this one chain carries ~0.57.**
+
+**The red team's key structural point:** the hydraulics risk and the financing risk
+are **common-mode** — the A lead tests the same durability and autonomy evidence,
+the runway can't absorb a muscle redesign, and the FCC fix costs money only the A
+supplies. One failure kills both. The flip side: if the evidence arrives, the A
+likely follows — **so waiting for it is cheap.** The single datum that most cuts
+P(<1x): a signed Series A term sheet from an institutional lead who has diligenced
+Torso 4 and Myofiber cycle life. Fastest partial proxy before next week: Initialized
+and Pioneer taking full pro rata in this bridge.
+
+**Kill arguments that FAILED, recorded honestly (red team):** "no grip feedback"
+(there is a force channel); "hydraulics is dead" (BD left because electric became
+sufficient; Sanctuary still develops hydraulic hands); "price is outrageous"
+($200M ≈ 1.23x Mentee); "fees eat it" (0.90–0.98x net at 1x gross); "the sponsor
+is a shell" (Golding is a real investor). **None of these is the kill.**
+
+### 8.5 · What would flip it — before money moves
+
+**To CONDITIONAL (all needed):** (1) G4 cleared — native memo and deck, the bridge
+instrument (cap/discount, MFN, preference seniority), SPV operating agreement with
+the 2% vs ~5% fee base reconciled, a countersigned Clone→Delta4 allocation confirmed
+by Clone, the entity/platform the Form D will file under; (2) a 2–3 week extension
+so diligence precedes the wire; (3) at least one of: a live autonomous Torso 4 grasp
+suite with logged force, cycle life ≥2M at working pressure and bent routing, or
+Koźlik's exit and IP-assignment documents. **To INVEST** would need all three of (3).
+**Otherwise:** re-enter at the priced Series A, where an institutional lead prices
+the risk — a step-up costs less than a zero.
 
 ---
 
 ## 9 · WHAT THE BULLS GET RIGHT — recorded deliberately
 
 - **A real, different actuator that has worked.** Water-hydraulic hands ran in
-  2022–23 and sold to top labs; muscles are cheap to make; force-by-pressure is a
+  2022–23 and drew top-lab interest; muscles are cheap to make; force-by-pressure is a
   genuine control advantage over stiff geared hands.
 - **The leaders agree proprioceptive force is the primary channel**; touch is
   complementary. Clone's no-touch choice is defensible *if* its pressure estimate is
@@ -333,8 +475,9 @@ week. Gating asks: countersigned allocation, SPV docs, bridge instrument, extens
 - The tactile verifiers corrected 32 items, mostly in Clone's favour (the RDP and
   MoDE-VLA force-vs-touch evidence; ACT mean 74%, not 80–90%; geometry-only force
   error is pessimistic). The panel scores on the corrected record.
-- **Book flags:** second Delta4 vehicle in the ledger (after Quaise; DexMat's SPV also
-  unfiled); sixth deep-tech/hardware exposure; first humanoid.
+- **Book flags:** **third Delta4 vehicle in the ledger** (DexMat LIVE, Quaise PASS) —
+  size any exposure as one manager bet; neither earlier SPV has a filed Form D. Sixth
+  deep-tech/hardware exposure; first humanoid.
 
 ---
 
@@ -343,6 +486,15 @@ week. Gating asks: countersigned allocation, SPV docs, bridge instrument, extens
 Statuses: ○ not yet asked · ● asked · ✓ answered · ✗ refused · ⌛ expired (60 days from
 first ask). (S) = to the sponsor; (C) = to the company. Chosen so that answer quality
 is itself the datapoint.
+
+### P0 — from Casey himself (zero cost, today)
+
+- ○ (LP) **The native memo.** You read "$200M post" where our screenshot read "$3?0M" —
+  if you have the DocSend/PDF, forward or export it. It closes raise, committed,
+  instrument, SPV fees, cash, burn and Series A size today.
+- ○ (LP) **Did the Delta4 DexMat SPV close on 2026-09-28, and did you wire?** If so:
+  what subscription documents, closing confirmation, custodian and Form D entity name
+  did Delta4 provide? It is the best available test of this vehicle.
 
 ### P1 — decision-gating
 
@@ -377,10 +529,30 @@ is itself the datapoint.
 10. ○ (S+C) **Timeline:** can Casey commit after Delta4's own pre-close checks, or get
     a 2–3 week extension? *Moves:* whether diligence precedes money.
 
+**P1 — added by the completeness critic:**
+
+- ○ (C) **Licence + acquisition, promoted from P2 and merged with #5 and #9:**
+  counterparty; is it connected to Koźlik or his pre-2021 "Automaton Robotics" work
+  (i.e. does closing it complete the chain of title)? IP covered, closing conditions,
+  and how much bridge cash the minimum-cash condition locks up.
+- ○ (C) **G1 test:** patent application numbers, jurisdictions and inventors behind
+  "Clone says its technology is patented". No numbers = a material misstatement.
+- ○ (C) **Insider signal:** are Initialized, Pioneer and the other seed investors
+  taking pro rata in this bridge, how much is committed by insiders, and who set the
+  $200M price?
+- ○ (C) **Prior rounds:** cap/price and instrument of the 2023 seed, the Jan/Feb-2025
+  round and the 2026-03-10 round (incl. the Echo "Clone Red Beard Ventures" SPV). Has
+  Clone ever closed a priced round? What became of the "$50M round" — partial close or
+  abandoned — and is there a Series A lead or term sheet now?
+- ○ (S) **Vehicle mechanics:** the legal entity and platform/administrator the Clone
+  series will file its Form D under (makes tripwire #6 checkable); bank/custodian; which
+  Advisers Act exemption Delta4/Golding rely on (no ERA Form ADV); direct investment or
+  SPV-of-SPV, and if the latter, the stacked fees; are the 2% and admin inside or on top
+  of the $50K?
+
 ### P2 — score-moving
 
-11. ○ (C) Licence + acquisition: counterparty, IP covered, terms, closing conditions,
-    any relation to the departed founder.
+11. ○ (C) Licence + acquisition (promoted to P1 above).
 12. ○ (C) Pilots: for each named site, status (LOI / signed / paid), scope, price,
     start; what exactly the Mercedes engagement is, given Apptronik.
 13. ○ (C) Itemised BOM for hand and android at stated volume (pump, valves, reservoir,
@@ -397,19 +569,33 @@ is itself the datapoint.
     statements for both entities.
 19. ○ (S) Golding's own commitment to this SPV; any compensation from Clone or the
     lead; information rights and Series A pro rata for the SPV.
+- ○ (C) Are Baran and Wieczorek still at Clone? Current roster and headcount by site;
+  who runs business and finance. Did Świerk and Tarnowski sign IP assignments?
+- ○ (C) Design duty cycle for Torso 4 (grasps/min, contractions per grasp per muscle)
+  and the cycle-life target that follows — reconciles the 8 grasps/min vs 84 s bars.
+- ○ (C) Hand-level BOM and price vs Linkerbot's ~$1.2K O7 and ~$7K 25–30 DoF hands;
+  which competitor price is the "1/10" denominator.
+- ○ (C) Grants (NCBR/PARP/EU) and any revenue — do they explain $17M vs $7.14M?
+- ○ (S) Is the "robotics OEM" on Golding's site Clone or a competitor? His RoboStrategy
+  holding is ~28% of NAV in Figure and Apptronik — disclose.
+- ○ (S) Did the Quaise SPV enter through a co-invest vehicle or a secondary? Name the
+  holder of record (tests the ordinary explanation for the unchanged investor count).
 20. ○ (C) Teleop operator feedback: are muscle-pressure channels logged and fed to
     the policy (can Clone learn force-aware behaviour)?
 
 ### P3 — completeness
 
-21. ○ (C) Alpha's 279 reservations and the 2023 hand/torso pre-orders: deposits,
-    refunds owed, deliveries.
+21. ○ (C) Alpha's 279-unit run (a production cap, not a reservation count): how many
+    reservations or deposits were received, refunds owed, deliveries; same for the
+    2023 hand/torso pre-orders.
 22. ○ (C) Reconcile sensor counts ("over 200" / 394 / "500") and hand DoF (26 incl.
     wrist and elbow vs 27 in the hand).
 23. ○ (C) Was Protoclone pneumatic or water? Is the Alpha page's "walks naturally"
     current?
 24. ○ (C) Safety certification path for work near people.
 25. ○ (C) Why the 2023 Reg CF was withdrawn; why no Form D for later rounds.
+26. ○ (S) SPV term and fees after year 5/7; who bears costs if the holding runs 8–10
+    years (G3).
 
 ---
 

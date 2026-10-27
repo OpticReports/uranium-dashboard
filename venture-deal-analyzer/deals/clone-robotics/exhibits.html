@@ -132,14 +132,14 @@
 
   <section aria-labelledby="h-price">
     <h2 id="h-price">What a 10x needs at $200M post</h2>
-    <p>A $50K check through the SPV owns about 0.024% after fees. Bars show the exit equity value Clone needs for the LP to get 1x, 3x and 10x net, after dilution from the Series A and later rounds. Dashed lines mark where the leaders are valued today. A 10x needs an Agility-to-Apptronik outcome or better, for a company that has not yet shown a walking robot or a customer.</p>
+    <p>A $50K check through the SPV owns about 0.024% after fees. Bars show the exit equity value Clone needs for the LP to get 1x, 3x and 10x net, after dilution from the Series A and later rounds. Dashed lines mark where the leaders are valued today. A pre-revenue humanoid company will need rounds after the A, so 65–80% dilution is the realistic band, where 10x needs $7.3–12.7B: above where Apptronik and 1X are valued today. An Agility-like $2.5B exit returns about 2–5x net.</p>
     <div class="legend"><span><i style="background:var(--d1)"></i>1x net</span><span><i style="background:var(--d2)"></i>3x net</span><span><i style="background:var(--d3)"></i>10x net</span></div>
     <div id="c-exit" role="img" aria-label="Grouped horizontal bars on a log scale: exit value needed for 1x, 3x and 10x at 30, 50 and 65 percent dilution, with reference lines for Agility, Apptronik and Figure"></div>
     <details><summary>Data table</summary>
       <table><thead><tr><th>Dilution to exit</th><th class="num">1x</th><th class="num">3x</th><th class="num">10x</th></tr></thead>
-      <tbody><tr><td>30%</td><td class="num">$0.30B</td><td class="num">$1.04B</td><td class="num">$3.63B</td></tr><tr><td>50%</td><td class="num">$0.41B</td><td class="num">$1.45B</td><td class="num">$5.08B</td></tr><tr><td>65%</td><td class="num">$0.59B</td><td class="num">$2.07B</td><td class="num">$7.25B</td></tr></tbody></table>
+      <tbody><tr><td>50%</td><td class="num">$0.41B</td><td class="num">$1.45B</td><td class="num">$5.08B</td></tr><tr><td>65%</td><td class="num">$0.59B</td><td class="num">$2.07B</td><td class="num">$7.25B</td></tr><tr><td>80%</td><td class="num">$1.04B</td><td class="num">$3.63B</td><td class="num">$12.69B</td></tr></tbody></table>
     </details>
-    <p class="src">2% one-time fee and 20% carry (approx., from the memo; Delta4's filed Form Ds show ~5%). Ignores any liquidation-preference stack. Reference marks: Agility $2.5B (SPAC), Apptronik ~$5B (reported), Figure $39B.</p>
+    <p class="src">2% one-time fee and 20% carry (approx., from the memo; Delta4's filed Form Ds show ~5%). Ignores any liquidation-preference stack. 30% dilution (no rounds after the A) would need $3.6B. Reference marks: Agility $2.5B (SPAC), Apptronik ~$5B (reported), Figure $39B.</p>
   </section>
 </main>
 
@@ -219,9 +219,9 @@
 
   var mult = [["1x net", "var(--d1)"], ["3x net", "var(--d2)"], ["10x net", "var(--d3)"]];
   hlog("c-exit", [
-    ["30% dilution", [0.296, 1.036, 3.627]],
     ["50% dilution", [0.415, 1.451, 5.078]],
-    ["65% dilution", [0.592, 2.073, 7.254]]
+    ["65% dilution", [0.592, 2.073, 7.254]],
+    ["80% dilution", [1.036, 3.627, 12.694]]
   ], mult, {
     L: 110, min: 0.1, max: 60, axis: "exit equity value, $B (log scale)",
     ticks: [[0.1, "$0.1B"], [1, "$1B"], [10, "$10B"]],
