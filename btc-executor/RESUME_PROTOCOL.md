@@ -1,4 +1,4 @@
-# DRAWDOWN halt — resume protocol (v1.1, 2026-10-27, counter-agent reviewed)
+# DRAWDOWN halt — resume protocol (v1.2, 2026-10-27, counter-agent reviewed)
 
 Casey's call (2026-10-27): the downside threat is treated as DIFFUSE — no
 pre-emptive size cut, no dated revert. The control point is therefore what
@@ -120,7 +120,7 @@ The monitor routine fires T2 and messages Casey with the numbers. Then:
 |---|---|---|
 | **B1 strategy loss, mechanics sound** | every live fill matches an engine paper trade (engine `/books/S3,S4/trades`) within slippage; stops were placed and filled where the engine's levels were; no RED kind other than `halt`, `halt_pending` and the known `unbooked_fill_unprotected` window | proceed to Stage C |
 | **B2 mechanics fault** | any of: `position_drift`, `netting_inconsistent`, `stop_vanished`, `stop_unplaceable`, `entry_unconfirmed`, a fill with no engine counterpart, a stop that did not fire, slippage > 100 bp on an exit | NO resume. Root cause → fix → gate test → review, exactly as for `LEDGER_DIVERGENCE`. The loss is still real: when the fix ships, resume via Stage C |
-| **B3 non-BTC cause** | the equity drop was not BTC P&L: UETH depeg, carry hedge gap, a withdrawal, a bad equity read (compare `portfolio` accountValue with the executor's) | fix the cause. If the money is NOT really gone, the recovery is usually ABSORBED while halted: a flat-book jump ≥ $200 between polls shifts high_water by the same amount (`transfer_reconciled` INFO), the gap to the line is unchanged and a plain `/resume` stays refused. Not absorbed, and the gap closes instead: a recovery landing on the FIRST flat poll after the halt (the baseline is only seeded there), or across any restart — C4 step 1's own redeploy included (`_last_flat_equity` is not persisted). So check `/status high_water − equity`: under $30,000 the plain form works and keeps the drawdown room; otherwise, after confirming on `portfolio` that the money is back, use `?reanchor=1` — it forgives nothing real in this case — and record the `transfer_reconciled` events. SIZE in this class (DEFAULT, Casey confirms): with the money intact and the old high water kept, nothing was falsified — resume at the size in force (0.75 does not page while high_water stays ~100k); if the money IS gone, Stage C applies in full |
+| **B3 non-BTC cause** | the equity drop was not BTC P&L: UETH depeg, carry hedge gap, a withdrawal, a bad equity read (compare `portfolio` accountValue with the executor's) | fix the cause. If the money is NOT really gone, the recovery is usually ABSORBED while halted: a flat-book jump ≥ $200 between polls shifts high_water by the same amount (`transfer_reconciled` INFO), the gap to the line is unchanged and a plain `/resume` stays refused. Not absorbed, and the gap closes instead: a recovery landing on the FIRST flat poll after the halt (the baseline is only seeded there), or across any restart — C4 step 1's own redeploy included (`_last_flat_equity` is not persisted). So check `/status high_water − equity`: under $30,000 the plain form works and keeps the drawdown room; otherwise, after confirming on `portfolio` that the money is back, use `?reanchor=1` — it forgives nothing real in this case — and record the `transfer_reconciled` events. SIZE in this class (DEFAULT, Casey confirms): with the money intact and the old high water kept, nothing was falsified — resume at the size in force (0.75 does not page while max(equity, high_water) ≥ $99,010; the high water is $100,239 today); if the money IS gone, Stage C applies in full |
 
 Keep the diagnosis to one page in `btc-executor/docs/` with the fills table
 and the classification; the counter-agent rule applies (one independent
@@ -150,9 +150,9 @@ and would also lower a high water that equity has already climbed back
 above; the plain form is right only in B3 with the gap under $30k and a few
 thousand dollars of room (a few hundred dollars above the line re-halts
 inside the 3-poll debounce on the next dip). If a plain `/resume` is
-accepted after C4 step 1 on a B1/B2 resume, the recovery landed across the
-redeploy and was not absorbed — that is fine, it keeps the old high water;
-record it.
+accepted after C4 step 1 on a B1/B2 resume, the recovery landed in an
+un-absorbed window (across the step-1 redeploy, or on the first flat poll
+after the halt) and the old high water is kept — that is fine; record it.
 
 **C3. Kill criterion (written now, before money moves): a SECOND DRAWDOWN
 halt within 180 days of a resume is not resumed.** DRY_RUN=true, book stays
@@ -163,23 +163,29 @@ unaffected and keeps running on its own gate.
 **C4a. If the engine's S3 (pullback) paper book is itself halted at resume
 — the LIKELY case** (it halted one-way on two of the three crash analogues,
 at both K: COVID 11-30, 1999 12-08; not on 2008): DEFAULT = resume
-TREND-ONLY at 0.30. The executor blocks pullback entries while
-`books.S3.halted` is true and pages `engine_leg_halted`; the book is then
-$13,500 × m of trend exposure with the same rails. This is the MEASURED
-case, not an untested one: after those S3 halts the study's COVID and 1999
-paths were trend-only books. At 0.75 the trend-only COVID stretch produced
-the study's closest approach to this very halt (90% of the budget used on
-05-27, from the trend leg's 13 whipsaw losses in the Dec–May chop, −$15,289
-in the drawdown window); at 0.30 the same stretch held maxDD −8.3% with 34%
-of the budget used. The size step is what makes trend-only tolerable, not
-the leg mix. The pullback leg was the crash loser on COVID and 1999
-(−$15.4k / −$16.6k before its halt) and an earner on 2008 (+$11.4k); keeping
-it armed through the halt would have been worth +$12.2k on COVID and
-−$11.2k on 1999, which is why the re-arm rule is the `#2` study and not a
-default here. Casey's alternatives: resume the engine's book by hand
-(`POST btc-paper-engine/books/S3/resume`, `x-exec-token`; it also resets the
-paper book's peak), a separate decision with its own review, or hold the
-resume until `#2` ships. Decide the default here, like C1–C3.
+TREND-ONLY at 0.30. The executor blocks pullback entries while the engine
+publishes `legs.pullback.halted` (the public `/status` `books.S3.halted`)
+and pages `engine_leg_halted`; the book is then $13,500 × m of trend
+exposure with the same rails. This is a MEASURED case: after those S3 halts
+the study's COVID and 1999 paths ran trend-only to the horizon. What the
+numbers say (results.json curves, offset 0, intrabar rail; recomputed
+independently twice): the crash drawdowns were mostly built BEFORE the S3
+halt with both legs on — 63% / 69% of the COVID fall at 0.75 / 0.30 and
+63% / 61% of the 1999 fall — and the trend-only tail added the rest (COVID
+−$8.7k / −$2.7k; 1999 −$5.1k / −$2.0k). The 90% rail reading on 05-27 was
+taken inside the trend-only stretch, but the rail was already 62% used when
+S3 halted. Measured from its own peak, the trend-only stretch used 44% / 17%
+of a fresh $30k budget on COVID and 25% / 9% on 1999 at 0.75 / 0.30. So the
+size step is the sign-certain lever (rail 90% → 34% on COVID, 59% → 22% on
+1999); the leg mix is worth ±12–19 rail points with the sign set by the
+path (two legs better on COVID: the halt forwent +$12.2k; worse on 1999: it
+saved $11.2k), which is why the re-arm rule is the `#2` study and not a
+default here. The pullback leg lost on COVID and 1999 (−$15.4k / −$16.6k
+before its halt) and earned on 2008 (+$11.4k). Casey's alternatives: resume
+the engine's book by hand (`POST btc-paper-engine/books/S3/resume`,
+`x-exec-token`; it also resets the paper book's peak), a separate decision
+with its own review, or hold the resume until `#2` ships. Decide the default
+here, like C1–C3.
 
 **C4. Order of operations** (each step has a check; do not skip the check):
 
@@ -234,9 +240,12 @@ All of, measured from the resume timestamp:
   runs) are in-sample analogues scaled onto today's prices with fills at
   the line and no slippage — upper bounds on the book, lower bounds on the
   drawdown. They motivate the 0.30 default; they do not forecast it. The
-  COVID and 1999 maxDD figures at both K are mostly trend-only numbers (S3
-  halted at 11-30 / 12-08 on those paths); 2008's include both legs. No
-  path in the study had S3 re-armed after its halt.
+  COVID and 1999 maxDD figures at both K are two-leg drawdowns deepened by a
+  trend-only tail: 61–69% of each fall was in before S3 halted (11-30 /
+  12-08). Measured from its own peak, the trend-only stretch used 44% / 17%
+  (COVID) and 25% / 9% (1999) of a fresh $30k budget at 0.75 / 0.30; 2008's
+  figures include both legs throughout. No path in the study had S3
+  re-armed after its halt.
 - The late-join risk R in C4.2 is defined for every held engine leg (each
   publishes a stop) and is an upper bound on an opposed book. The
   `unbooked_fill_unprotected` window opens only AFTER our own maker fill,
@@ -257,9 +266,13 @@ All of, measured from the resume timestamp:
 Figure: `docs/resume_protocol_rails.png` (rails before the halt and after a
 reanchored resume at 0.30; script `docs/resume_protocol_rails.py`).
 
-Review record: two independent verifiers (code-truth lens; operator/risk
-lens), 2026-10-27, both PASS_WITH_FIXES — 6 SERIOUS (B3 recovery absorbed as
-a transfer; $3,051 inverted; current LEDGER_DIVERGENCE halt unstated; K
-change timing vs the frozen daily line; S3-halted branch missing ×2), 18
-MINOR, 8 NOTE; all folded into v1.1. One re-verifier on the SERIOUS fixes
-follows in the same commit's note.
+Review record (staffing per CLAUDE.md: two readers on every SERIOUS item;
+no agent verified text it wrote):
+- Round 1, two independent verifiers (code-truth; operator/risk): 6 SERIOUS,
+  18 MINOR, 8 NOTE, no BLOCKING — folded into v1.1.
+- Round 2, one re-verifier on the six SERIOUS fixes: all six FIXED; 1 new
+  SERIOUS (C4a misread the stress attribution), 3 MINOR, 5 NOTE — folded in.
+- Round 3, one narrow checker on the rewritten C4a: 2 SERIOUS (the drawdown
+  share before vs after the S3 halt; the honesty bullet's basis), 3 MINOR,
+  1 NOTE. Its numbers were recomputed independently from results.json
+  (match to the dollar) and are what v1.2 states.
