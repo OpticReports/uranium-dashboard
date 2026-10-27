@@ -43,6 +43,14 @@ class Engine:
         self.bars: list[Bar] = []
         self.last_processed: int = 0
         self.last_data_ok: float = 0.0
+        # wall-clock time each bar in the window was LAST fetched from REST.
+        # A bar is FINAL only when fetched >= bar_final_grace_s after its
+        # end; catch_up never evaluates a bar that is not final (the
+        # forming-bar snapshot of 2026-10-07, docs in btc-executor/docs/
+        # HALT_2026-10-07.md). Bars loaded from the DB are final by
+        # construction (persisted only when closed, from a post-close fetch).
+        self._bar_fetched_at: dict[int, float] = {}
+        self._not_final_logged: int = 0
         self.degraded = False
         self.data_halt = False            # price-sanity halt (manual resume)
         self.cur_price: float | None = None
@@ -145,6 +153,8 @@ class Engine:
                            close=r.close, volume=r.volume)
                        for r in s.query(BarRow).order_by(BarRow.ts_open).all()]
             self.bars = db_bars[-settings.history_bars:]
+            for b in self.bars:
+                self._bar_fetched_at[b.ts] = float("inf")
             for name, b in self.books.items():
                 row = s.get(BookStateRow, name)
                 if row is not None:
@@ -192,9 +202,15 @@ class Engine:
         if not fetched:
             return
         self.last_data_ok = time.time()
+        fetched_at = time.time()
+        for b in fetched:
+            self._bar_fetched_at[b.ts] = fetched_at
         by_ts = {b.ts: b for b in self.bars}
         by_ts.update({b.ts: b for b in fetched})
         self.bars = [by_ts[t] for t in sorted(by_ts)][-max(settings.history_bars, 400):]
+        keep = {b.ts for b in self.bars}
+        self._bar_fetched_at = {t: v for t, v in self._bar_fetched_at.items()
+                                if t in keep}
         with session_scope() as s:
             now = time.time()
             for b in fetched:
@@ -202,13 +218,44 @@ class Engine:
                     s.merge(BarRow(ts_open=b.ts, open=b.open, high=b.high,
                                    low=b.low, close=b.close, volume=b.volume))
 
+    def bar_final(self, bar: Bar, now: float | None = None) -> bool:
+        """Closed AND fetched at least bar_final_grace_s after its end.
+        A bar kept in memory from a fetch taken while it was forming is NOT
+        final, however long ago its end was: the 2026-10-07 shape."""
+        now = time.time() if now is None else now
+        end = bar.ts + BAR_SECONDS + settings.bar_final_grace_s
+        return end <= now and self._bar_fetched_at.get(bar.ts, 0.0) >= end
+
+    def closed_unprocessed(self, now: float | None = None) -> list[Bar]:
+        """Closed bars catch_up has not processed yet (final or not)."""
+        now = time.time() if now is None else now
+        return [b for b in self.bars
+                if b.ts > self.last_processed and b.ts + BAR_SECONDS <= now]
+
     def catch_up(self, s) -> None:
-        """Process every fetched bar that is closed and newer than last_processed."""
+        """Process every fetched bar that is closed and newer than last_processed.
+
+        STRICTLY IN ORDER, and only FINAL bars: the first bar that is closed
+        but not yet confirmed by a post-close fetch stops the pass (a WARN
+        `bar_not_final`, once per bar); poll() keeps refreshing until it is.
+        Late REST data therefore delays processing, as the module docstring
+        promised and the code did not keep before 2026-10-27."""
         now = time.time()
         inds = None
         for i, bar in enumerate(self.bars):
             if bar.ts <= self.last_processed or bar.ts + BAR_SECONDS > now:
                 continue
+            if not self.bar_final(bar, now):
+                if self._not_final_logged != bar.ts:
+                    self._not_final_logged = bar.ts
+                    fa = self._bar_fetched_at.get(bar.ts, 0.0)
+                    log_event(s, "WARN", "bar_not_final",
+                              f"bar {bar.ts} closed {now - bar.ts - BAR_SECONDS:.0f}s "
+                              f"ago but its last fetch was "
+                              f"{'never' if not fa else f'{fa - bar.ts - BAR_SECONDS:.0f}s after its end'} "
+                              f"(grace {settings.bar_final_grace_s}s) - "
+                              f"deferring until a post-close fetch")
+                break
             if i < 1:
                 continue
             if inds is None:
@@ -340,8 +387,14 @@ class Engine:
                             log_event(s, "INFO", "stop_fill_live", b.cfg.name)
                     self._announce_halts(s)
                     self._persist(s)
-            # bar boundary: refresh + process newly closed bars
-            if not self.bars or time.time() >= self.bars[-1].ts + BAR_SECONDS:
+            # bar boundary: refresh + process newly closed bars. ALSO while a
+            # closed bar is still unprocessed (its boundary fetch failed, or
+            # landed inside the grace): retry every poll, not once per bar
+            # (2026-10-07: one failed fetch at 08:00 left the 04:00 bar's
+            # forming snapshot to be evaluated as the closed bar).
+            now = time.time()
+            if not self.bars or now >= self.bars[-1].ts + BAR_SECONDS \
+                    or self.closed_unprocessed(now):
                 self.refresh_bars()
                 with session_scope() as s:
                     self.catch_up(s)
@@ -388,6 +441,9 @@ class Engine:
                                      last_processed_bar=0))
                 self.books = res.books
                 self.bars = all_bars[-max(settings.history_bars, 400):]
+                # fixture + DB rows are closed bars from post-close fetches:
+                # final by construction (the next refresh records the rest)
+                self._bar_fetched_at = {b.ts: float("inf") for b in self.bars}
                 self.last_processed = closed[-1].ts if closed else 0
                 self._persisted_trades = {n: 0 for n in self.books}
                 self._blend_state = {}

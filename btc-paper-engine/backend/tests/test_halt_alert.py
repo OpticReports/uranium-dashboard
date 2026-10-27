@@ -55,10 +55,20 @@ def _losing_engine(dd_halt=0.10, exit_flag=None, name="T"):
     return eng, b
 
 
+def _final(eng):
+    """Bars assigned by hand are FINAL (fetched after their close): since
+    2026-10-27 catch_up refuses a bar with no post-close fetch on record."""
+    eng._bar_fetched_at = {b.ts: float("inf") for b in eng.bars}
+
+
 def _arm_poll(eng, monkeypatch, px=85_000.0):
     now = int(time.time())
     cur_open = now // BAR_SECONDS * BAR_SECONDS
     eng.bars = [_bar(cur_open - BAR_SECONDS, 100_000.0), _bar(cur_open, 100_000.0)]
+    _final(eng)
+    # the closed bar counts as processed: poll() now refreshes whenever a
+    # closed bar is unprocessed, and these tests must not reach the network
+    eng.last_processed = cur_open - BAR_SECONDS
     eng.last_data_ok = time.time()
     monkeypatch.setattr("app.live.last_price", lambda: px)
     monkeypatch.setattr("app.live.kraken_price", lambda: px)
@@ -90,6 +100,7 @@ def test_resolve_open_exit_halt_pages_through_catch_up(tmpdb):
     now = int(time.time())
     t1 = now // BAR_SECONDS * BAR_SECONDS - BAR_SECONDS
     eng.bars = [_bar(t1 - BAR_SECONDS, 100_000.0), _bar(t1, 85_000.0)]
+    _final(eng)
     eng.last_processed = t1 - BAR_SECONDS
     with db.session_scope() as s:
         eng.catch_up(s)
@@ -102,6 +113,7 @@ def test_halt_pages_once_across_bars(tmpdb):
     t1 = now // BAR_SECONDS * BAR_SECONDS - 2 * BAR_SECONDS
     eng.bars = [_bar(t1 - BAR_SECONDS, 100_000.0), _bar(t1, 85_000.0),
                 _bar(t1 + BAR_SECONDS, 85_000.0)]
+    _final(eng)
     eng.last_processed = t1 - BAR_SECONDS
     with db.session_scope() as s:
         eng.catch_up(s)

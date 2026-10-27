@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     warmup_bars: int = 210
     cash_apy: float = 0.04           # idle capital earns T-bill-ish yield
     history_bars: int = 800              # indicator window kept in memory/DB
+    # A just-closed 4h bar is processed only from a fetch taken at least this
+    # long after its end. A forming-bar snapshot taken at the open must never
+    # be evaluated as the closed bar: on 2026-10-07 the 04:00Z bar was kept
+    # in memory from its first seconds, the one boundary fetch at 08:00 did
+    # not replace it, and the stale snapshot was processed - no paper fill on
+    # a limit the venue had filled (btc-executor/docs/HALT_2026-10-07.md).
+    # The grace also covers Bitstamp finalizing the candle server-side.
+    # Cost: up to this + one poll of signal latency on a 4h bar.
+    bar_final_grace_s: int = 30
 
     # Funding-regime monitor (RESEARCH_CARRY.md deployment policy): 30d
     # trailing mean annualized BTC perp funding, ARM >= arm_pct with
