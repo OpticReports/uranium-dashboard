@@ -94,9 +94,15 @@ _IB_DEAD_REASON_CODES = {110, 321, 404}
 # it, IB answered 161 "Cancel attempted when order is not in a cancellable
 # state", and _order_errors kept only that last message - so every reconcile
 # page quoted our own cancel's reply as "venue: [161] ..." and hid that IBKR
-# had given no reason. Kept out of every reason surface; observed codes only.
-# A 161 is also a REFUSAL of the cancel: _undo_refusal_overlay.
-_IB_CANCEL_REPLY_CODES = {161}
+# had given no reason. Kept out of every reason surface, and both are a
+# REFUSAL of the cancel whose ib_async overlay is undone
+# (_undo_refusal_overlay). 161 is observed; 10148 ("cannot be cancelled,
+# state: <state>", usually a cancel already pending) is IB's documented
+# explicit refusal, added on both verifiers' advice (2026-10-26): left as
+# ib_async's Cancelled, a partially filled stop's remaining fill was never
+# emitted and the book sold the shares again. 10147 ("not found": IB holds no
+# such order) stays out - ib_async's Cancelled is the truth there.
+_IB_CANCEL_REPLY_CODES = {161, 10148}
 # IB's CONFIRMATION that an order is cancelled ("Order Canceled - reason:").
 # ib_async 2.1 marks a not-done trade Cancelled CLIENT-SIDE on ANY non-warning
 # order error (wrapper.error), so a Cancelled that arrived through an error is
@@ -440,7 +446,7 @@ class IBAdapter:
 
     def _undo_refusal_overlay(self, trade, code: int) -> None:
         """Undo ib_async's client-side Cancelled on an order whose cancel IB
-        REFUSED (161, "not in a cancellable state").
+        REFUSED (161 "not in a cancellable state", or 10148).
 
         ib_async 2.1 (wrapper.error) marks a not-done trade Cancelled on ANY
         non-warning order error, logs it, and only then emits errorEvent, so
@@ -1255,7 +1261,7 @@ class IBAdapter:
                 if not refused:
                     return True
                 # an error-set Cancelled _undo_refusal_overlay does not undo
-                # (a refusal code not yet observed on this book, e.g. 10148)
+                # (10147 "not found", or a code not yet seen on this book)
                 raise RuntimeError(
                     f"cancel of {order_ref} REFUSED by IBKR ({refused}): "
                     f"ib_async marks the order Cancelled, but a refused cancel "
@@ -1300,13 +1306,15 @@ class IBAdapter:
         every caller acted on "cancelled": reconcile 2b re-planned a stuck
         order (bought twice), the exit and /kill paths market-sold beside a
         stop that filled, the ratchet placed a second stop, park and pass 3
-        stopped tracking a stop still resting. A 161 is undone where it lands
-        (_undo_refusal_overlay); this is the belt for a refusal code that
-        is not. Only the LATEST Cancelled counts: a refusal followed by the
-        venue's own cancel in the same window is a cancel."""
+        stopped tracking a stop still resting. A 161 or 10148 is undone
+        where it lands (_undo_refusal_overlay); this is the belt for an
+        error code that is not. Only the LATEST Cancelled counts: a refusal
+        followed by the venue's own cancel in the same window is a cancel."""
         latest = None
         for e in (getattr(trade, "log", None) or [])[since:]:
-            if str(getattr(e, "status", "") or "") == "Cancelled":
+            # ApiCancelled only ever comes from the venue (errorCode 0): it
+            # counts as the venue's word after an undone refusal (verifier A)
+            if str(getattr(e, "status", "") or "") in ("Cancelled", "ApiCancelled"):
                 latest = e
         code = int(getattr(latest, "errorCode", 0) or 0) if latest else 0
         if not code or code == _IB_CANCEL_CONFIRMED_CODE:

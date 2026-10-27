@@ -129,7 +129,7 @@ def test_real_a_fill_after_the_refusal_raises_filled(monkeypatch):
 @pytest.mark.parametrize("replies", [
     "pending_202_cancelled", "cancelled_then_202", "202_only",
     "warning_then_cancelled", "api_cancelled", "202_and_cancelled_one_pump",
-    "refusal_then_cancelled"])
+    "refusal_then_cancelled", "refusal_then_api_cancelled"])
 def test_real_every_ack_order_is_an_ack(monkeypatch, replies):
     """The venue's own word, in every order it arrives - and a refusal
     followed by the venue's Cancelled (a cancel already pending completes)."""
@@ -149,6 +149,8 @@ def test_real_every_ack_order_is_an_ack(monkeypatch, replies):
                                                     v.status(t, "Cancelled")]],
         "refusal_then_cancelled": lambda oid: [[v.err(oid, 161, R161)],
                                                [v.status(t, "Cancelled")]],
+        "refusal_then_api_cancelled": lambda oid: [[v.err(oid, 161, R161)],
+                                                   [v.status(t, "ApiCancelled")]],
     }[replies]
     v.on_cancel = seq
     assert v.a.cancel_stock_order("7") is True
@@ -170,14 +172,40 @@ def test_real_a_late_refusal_is_undone(monkeypatch):
     assert v.a.cancel_stock_order("7") is True
 
 
-def test_real_an_unknown_refusal_code_and_a_fill_that_follows(monkeypatch):
-    """10148 is not undone (documented, never seen here): the wait still
-    refuses it as the ack, and the fill poll does not mark the fill-less
-    'Cancelled' stop emitted, so the fill that lands afterwards is booked."""
+def test_real_a_10148_refusal_is_undone(monkeypatch):
     v = Venue(monkeypatch)
     t = v.stop()
     v.on_cancel = lambda oid: [[v.err(oid, 10148, R10148)]]
     with pytest.raises(RuntimeError, match=r"REFUSED by IBKR \(\[10148\] OrderId 7"):
+        v.a.cancel_stock_order("7")
+    assert t.orderStatus.status == "Submitted"
+
+
+@pytest.mark.parametrize("confirm", ["orderstatus", "202"])
+def test_real_a_refusal_after_a_real_cancel_is_not_undone(monkeypatch, confirm):
+    """The undo's guard (verifier A, round 2): a 161 that lands AFTER the
+    venue's own Cancelled or 202 - a duplicate cancel's reply - must leave
+    the order cancelled. Without the guard it flipped back to Submitted."""
+    v = Venue(monkeypatch)
+    t = v.stop()
+    first = (v.status(t, "Cancelled") if confirm == "orderstatus"
+             else v.err(7, 202, CONFIRM_202))
+    v.on_cancel = lambda oid: [[first]]
+    assert v.a.cancel_stock_order("7") is True
+    v.batches.append([v.err(7, 161, R161)])          # the late duplicate reply
+    assert v.a.find_stock_order("blend-1-stp-44.0000")["status"] == "cancelled"
+    assert t.orderStatus.status == "Cancelled"
+
+
+def test_real_an_error_the_undo_leaves_and_a_fill_that_follows(monkeypatch):
+    """10147 ("not found") is not undone: the wait still refuses it as the
+    ack, and the fill poll does not mark the fill-less 'Cancelled' stop
+    emitted, so a fill that lands afterwards is booked."""
+    v = Venue(monkeypatch)
+    t = v.stop()
+    v.on_cancel = lambda oid: [[v.err(oid, 10147, "OrderId 7 that needs to be "
+                                                  "cancelled is not found.")]]
+    with pytest.raises(RuntimeError, match=r"REFUSED by IBKR \(\[10147\] OrderId 7"):
         v.a.cancel_stock_order("7")
     assert t.orderStatus.status == "Cancelled"
     assert v.a.poll_stock_fills() == []

@@ -587,34 +587,71 @@ unreconciled venue state. Phases IN ORDER:
      /kill recorded for that stop. Before, pass 3 re-cancelled a filled stop
      forever.
 
+   Refusal codes: 161 (observed) and 10148 ("cannot be cancelled, state:
+   ...", IB's documented explicit refusal, added in round 2 on both
+   verifiers' advice) are undone. Left as ib_async's Cancelled, a stop that
+   was partly filled when 10148 refused its cancel had the rest of its fill
+   never emitted, and the book then sold those shares again. 10147 ("not
+   found": IB holds no such order) is not undone. The wait still refuses it
+   as the ack, and the next pre-check reads it as already gone.
+
    Residuals:
-   - An order that died without the session hearing reads working until
-     the next reconnect resyncs it, and every cancel of it raises meanwhile
-     (fail closed).
-   - Refusal codes not yet seen on this book (10148 "cannot be cancelled,
-     state: ...", 10147 "not found") are not undone. The wait still refuses
-     them as the ack, but the next cycle's pre-check reads ib_async's
-     Cancelled as "already gone". 10148 names the state; 10147 means IB has
-     no such order.
+   - A "phantom": an order that died at IBKR without the session hearing
+     reads working until the next reconnect resyncs it. The gateway
+     restarts daily around 20:30 ET. Every cancel of a phantom waits the
+     full 10 s and raises, which fails closed against duplicates but costs
+     this:
+     - /kill parks the position instead of flattening it;
+     - exits and ratchets defer every cycle, with an alert each time;
+     - pass 3b trusts a dead stop, so the position can sit without a real
+       stop until the resync;
+     - reconcile 2b blocks that order's kind. It now pages once per journal
+       when IBKR refuses the cancel; before, it logged WARN events, and those
+       never page.
+     Follow-up (both verifiers): force a resync after a second refused
+     cancel of the same order with no venue status in between.
    - 161 still never appears as a rejection REASON; the reconcile page names
      it as the reply to the executor's cancel. "Normally already final" is
      what it usually means, not proof.
    - Open, not changed here: reconcile 2b clears a stuck order's journal on
      an ACKed cancel without booking the partial fill the adapter reports
      (`filled_qty`).
+   - **Open, SERIOUS, pre-existing (verifier A, round 2; not changed
+     here):**
+     - After a reconnect or restart, orders that finished during the gap
+       come back from `reqCompletedOrders` with orderId 0. ib_async never
+       reads one and keys them by permId.
+     - A stop that FILLED while disconnected is then not found by the
+       book's orderId, and `cancel_stock_order` returns False where law #8
+       says it must raise.
+     - Its fill polls out as unknown order "0", is never booked, and leaves
+       "0" in the emitted set.
+     - In a replay, the next exit market-sold shares the venue no longer
+       held: a naked short. `_execute_exit` does not check venue holdings
+       the way /kill does.
+     - Fix pending:
+       - match completed orders by permId, client id and executions;
+       - never key on "0";
+       - check executions on the not-found cancel path;
+       - check holdings before an exit's market sell.
 
    Gates:
    - `tests/test_ib_stock_adapter.py`, refused-cancel section:
      - the ib_async behaviour, pinned against the installed library;
-     - the undo, a late refusal, a fill after the refusal, refusal then
-       Cancelled, a warning, an unknown code, 202;
+     - the undo, including for 10148;
+     - a late refusal, a fill after the refusal, refusal then Cancelled;
+     - a warning, an error the undo leaves (10147), 202;
      - a fill-less stop is never marked emitted;
+     - a partly filled stop whose cancel is refused is emitted once, whole;
      - verifier B's replays: two exits in one cycle, /kill and the ratchet;
-     - reconcile 2b keeps the SAME journal ids through a no-fill cycle and
-       books 70 SPY + 30 BIL once.
+     - reconcile 2b keeps the SAME journal ids through a no-fill cycle,
+       pages once per journal, and books 70 SPY + 30 BIL once.
    - `tests/test_refused_cancel_real_ib.py`: the same flows on the REAL
      ib_async (real placeOrder, cancelOrder, error, orderStatus,
-     execDetails), with only the socket stubbed.
+     execDetails), with only the socket stubbed. Also:
+     - the undo's guard: a 161 after the venue's own Cancelled or 202 leaves
+       the order cancelled;
+     - a refusal followed by ApiCancelled is a cancel.
 
    *Tests:* the legacy suite pins both constants to 0 (conftest, the
    overnight-headroom pattern). There the planner reduces to the pre-change

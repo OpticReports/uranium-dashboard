@@ -4841,6 +4841,22 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                     mgr._event("WARN",
                                f"stuck {rec['kind']} {rec['symbol']} cancel "
                                f"unresolved ({exc}) — retrying next cycle")
+                    if ("REFUSED by IBKR" in str(exc)
+                            and not rec.get("refusal_alerted")):
+                        # once per journal: a refused cancel keeps the order
+                        # and blocks its kind (M1) until the venue settles
+                        # it - for an order dead at IBKR unseen, until the
+                        # next reconnect resyncs the session. WARN events
+                        # alone never page (verifiers A and B, round 2).
+                        rec["refusal_alerted"] = True
+                        mgr.save()
+                        alert(f"⚠️ blend {rec['kind']} {rec['symbol']} "
+                              f"x{rec['qty']}: IBKR REFUSED the cancel of "
+                              f"this stuck order ({exc}). It stays journaled "
+                              f"and no new {rec['kind']} is placed until the "
+                              f"venue settles it (a fill is booked; the next "
+                              f"gateway reconnect resyncs it). If it persists, "
+                              f"check the order in the IBKR app.")
                 else:
                     mgr.clear_pending_book_order(cid)
                     mgr._event("RED",
