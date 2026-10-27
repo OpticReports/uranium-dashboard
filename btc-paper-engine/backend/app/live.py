@@ -203,6 +203,12 @@ class Engine:
         anchor = self.bars[-1].ts if self.bars else None
         for b in self.closed_unprocessed():
             anchor = b.ts if anchor is None else min(anchor, b.ts)
+        if self.last_processed:
+            # and the bar we EXPECT next, even when it is not in memory at
+            # all (dropped by the venue, or a restart loaded a DB with a
+            # hole): it is re-requested every poll until it arrives
+            nxt = self.last_processed + BAR_SECONDS
+            anchor = nxt if anchor is None else min(anchor, nxt)
         start = (anchor - BAR_SECONDS if anchor is not None
                  else int(time.time()) - settings.history_bars * BAR_SECONDS)
         # stamp BEFORE the request: the candle reflects the venue's state at
@@ -244,50 +250,68 @@ class Engine:
         return [b for b in self.bars
                 if b.ts > self.last_processed and b.ts + BAR_SECONDS <= now]
 
+    def _defer_event(self, s, ts: int, now: float, reason: str) -> None:
+        """Graded, once per (bar, level): INFO when the boundary poll merely
+        landed inside the grace (the expected case, about half of all bars),
+        WARN a poll later, RED `bar_stuck` plus a page three polls later.
+        `reason` is 'not_final' (the bar is in memory from an in-grace or
+        forming fetch), 'missing' (the expected bar is not in memory at all)
+        or 'gap' (a later bar is in memory but the expected one is not: RED
+        at once, never processed over)."""
+        late = now - (ts + BAR_SECONDS)
+        grace = settings.bar_final_grace_s
+        if reason == "gap":
+            level, kind = "RED", "bar_gap"
+        elif late < grace + settings.poll_seconds:
+            level, kind = "INFO", "bar_not_final"
+        elif late < grace + 3 * settings.poll_seconds:
+            level, kind = "WARN", "bar_not_final"
+        else:
+            level, kind = "RED", "bar_stuck"
+        key = (ts, level, kind)
+        if self._not_final_logged == key:
+            return
+        self._not_final_logged = key
+        fa = self._bar_fetched_at.get(ts, 0.0)
+        detail = (f"bar {ts} closed {late:.0f}s ago; "
+                  + ("a LATER bar is in memory but this one is not - never "
+                     "processing over the hole; " if reason == "gap" else
+                     "not in memory - " if reason == "missing" else
+                     f"its last fetch was "
+                     f"{'never' if not fa else f'{fa - ts - BAR_SECONDS:.0f}s after its end'} "
+                     f"(grace {grace}s) - ")
+                  + "re-requesting it every poll until it is final")
+        log_event(s, level, kind, detail)
+        if level == "RED":
+            try:
+                self.alert_fn(f"btc-paper-engine: {kind.upper()} - {detail}; no "
+                              f"signal or exit evaluates until it finalizes "
+                              f"(intrabar stops still run)")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("%s page failed: %s", kind, exc)
+
     def catch_up(self, s) -> None:
         """Process every fetched bar that is closed and newer than last_processed.
 
-        STRICTLY IN ORDER, and only FINAL bars: the first bar that is closed
-        but not yet confirmed by a post-close fetch stops the pass (a WARN
-        `bar_not_final`, once per bar); poll() keeps refreshing until it is.
-        Late REST data therefore delays processing, as the module docstring
-        promised and the code did not keep before 2026-10-27."""
+        STRICTLY IN ORDER, CONTIGUOUS, and only FINAL bars: the pass stops at
+        the first bar that is closed but not confirmed by a post-close fetch,
+        and REFUSES to process over a hole (a later bar present while the
+        expected next one is not - a restart can load a DB with such a hole
+        when the venue dropped a candle it once served forming). poll() keeps
+        re-requesting the expected bar until it is final. Late REST data
+        therefore delays processing, as the module docstring promised and the
+        code did not keep before 2026-10-27."""
         now = time.time()
         inds = None
+        expected = self.last_processed + BAR_SECONDS if self.last_processed else None
         for i, bar in enumerate(self.bars):
             if bar.ts <= self.last_processed or bar.ts + BAR_SECONDS > now:
                 continue
+            if expected is not None and bar.ts != expected:
+                self._defer_event(s, expected, now, "gap")
+                break
             if not self.bar_final(bar, now):
-                # graded: a boundary poll that lands inside the grace is the
-                # EXPECTED case (~half of all bars) and is INFO; a bar still
-                # non-final a poll later is WARN; three polls later it is
-                # stuck (the venue dropped the candle, or the fetch keeps
-                # failing) and pages RED once - the executor's own stale
-                # guard (3 bars) would otherwise be the first to notice
-                late = now - (bar.ts + BAR_SECONDS)
-                grace = settings.bar_final_grace_s
-                if late < grace + settings.poll_seconds:
-                    level, kind = "INFO", "bar_not_final"
-                elif late < grace + 3 * settings.poll_seconds:
-                    level, kind = "WARN", "bar_not_final"
-                else:
-                    level, kind = "RED", "bar_stuck"
-                if self._not_final_logged != (bar.ts, kind):
-                    self._not_final_logged = (bar.ts, kind)
-                    fa = self._bar_fetched_at.get(bar.ts, 0.0)
-                    detail = (f"bar {bar.ts} closed {late:.0f}s ago but its "
-                              f"last fetch was "
-                              f"{'never' if not fa else f'{fa - bar.ts - BAR_SECONDS:.0f}s after its end'} "
-                              f"(grace {grace}s) - deferring until a "
-                              f"post-close fetch")
-                    log_event(s, level, kind, detail)
-                    if kind == "bar_stuck":
-                        try:
-                            self.alert_fn(f"btc-paper-engine: BAR STUCK - {detail}; "
-                                          f"no signal or exit evaluates until it "
-                                          f"finalizes (intrabar stops still run)")
-                        except Exception as exc:  # noqa: BLE001
-                            logger.warning("bar_stuck page failed: %s", exc)
+                self._defer_event(s, bar.ts, now, "not_final")
                 break
             if i < 1:
                 continue
@@ -318,6 +342,13 @@ class Engine:
             self.last_processed = bar.ts
             self._persist(s, snapshot_ts=bar.ts + BAR_SECONDS)
             self._blend_step(bar.ts + BAR_SECONDS, s)
+            expected = bar.ts + BAR_SECONDS
+        # the expected next bar is closed but not in memory at all (the
+        # fetch has been failing since before it formed, or a restart loaded
+        # a DB that ends before it): say so on the same graded scale
+        if expected is not None and expected + BAR_SECONDS <= now \
+                and all(b.ts != expected for b in self.bars):
+            self._defer_event(s, expected, now, "missing")
 
     BLEND_INGREDIENTS = ("S3", "S4")     # the books the live blends trade
 
@@ -458,6 +489,12 @@ class Engine:
             all_bars = [by_ts[t] for t in sorted(by_ts)]
             now = time.time()
             closed = [b for b in all_bars if b.ts + BAR_SECONDS <= now]
+            tail = [b for b in closed if b.ts >= start_ts - BAR_SECONDS]
+            for prev, cur in zip(tail, tail[1:]):
+                if cur.ts != prev.ts + BAR_SECONDS:
+                    raise ValueError(
+                        f"bar gap between {prev.ts} and {cur.ts}: refusing to "
+                        f"replay over a hole (the live loop re-requests it)")
             if capital:
                 self._apply_capital(capital)
             res = run_replay(closed, self.books_cfg, self.scfg, self.tcfg,

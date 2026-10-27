@@ -301,7 +301,10 @@ def books_reset(window: str = "2y", start: str | None = None,
         t0 = int(datetime.now(timezone.utc).timestamp()) - spans.get(window, 730) * 86400
     if capital is not None:
         capital = max(1_000.0, min(100_000_000.0, capital))
-    return ENGINE.reset_books(t0, capital=capital)
+    try:
+        return ENGINE.reset_books(t0, capital=capital)
+    except ValueError as exc:            # a hole in the bar series
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @app.post("/resume-data")

@@ -155,11 +155,17 @@ NETTING_REREAD_SLEEP_S = 2.0       # between position re-reads on a mismatch
 # Single-leg close settlement (2026-10-27, docs/HALT_2026-10-07.md). A status
 # read younger than this after the send may answer unknownOid for an order
 # the venue accepted a moment ago: it is UNKNOWN, not "never existed".
-CLOSE_SETTLE_MIN_AGE_S = 10.0
-# consecutive unusable status reads before the position is consulted as the
-# tiebreak (below the netting second look's 3-poll grace, so an unsettled
-# close is resolved before an unexplained divergence would halt)
+CLOSE_SETTLE_MIN_AGE_S = 40.0        # two poll periods, wall clock
+# consecutive POLLS (not settle calls: there are several per poll) with an
+# unusable status read before the position is consulted as the tiebreak;
+# the age rule above also has to hold
 CLOSE_UNKNOWN_MAX_POLLS = 2
+# unusable streak after which an UNMOVED position (twice) may clear the ref
+# without an affirmative CANCELLED record
+CLOSE_UNKNOWN_HARD_POLLS = 6
+# "never happened" verdicts in a row before the leg stops re-sending and
+# pages close_stuck every poll (fail loud, no more orders)
+CLOSE_NEVER_MAX = 3
 # Hyperliquid agent (API) wallets expire on a date the venue tells us.
 # Expiry is a TOTAL loss of write access, protective orders included, so the
 # halt must fire while the key still WORKS - a halt at T-0 cannot flatten.
@@ -297,7 +303,12 @@ class LegLedger:
     # 2026-09-16 design) - also what an older state file reads as
     close_mode: str | None = None
     close_sent_ts: float = 0.0          # wall clock of the send
-    close_unknown_polls: int = 0        # consecutive polls the status read was unusable
+    close_unknown_polls: int = 0        # consecutive POLLS the status read was unusable
+    close_last_seq: int = -1            # poll seq last counted (calls != polls)
+    close_unmoved_polls: int = 0        # consecutive tiebreak polls with the position unmoved
+    # consecutive "never happened" verdicts on this leg (survives clear_close):
+    # past CLOSE_NEVER_MAX no further close is sent and close_stuck pages
+    close_never_n: int = 0
     # The size this leg's entry ASKED for (panel F4): a leg that ends up
     # holding less with nothing in flight - a consumed partial re-opened at
     # its partial size - is topped up toward THIS, never toward a fresh
@@ -329,6 +340,7 @@ class LegLedger:
         self.close_cloid, self.close_qty, self.close_net_before = None, 0.0, None
         self.close_why, self.close_mode = None, None
         self.close_sent_ts, self.close_unknown_polls = 0.0, 0
+        self.close_last_seq, self.close_unmoved_polls = -1, 0
 
     def clear_stop(self) -> None:
         self.stop_cloid, self.stop_px = None, None
@@ -526,6 +538,12 @@ class Executor:
         self._check_venue_continuity()
         self._check_product_tradable()
         self._check_network()
+        for _l in self.state.legs.values():
+            if _l.close_cloid and _l.close_mode == "single":
+                # per-process counters restart; the age rule (wall clock,
+                # persisted) still gates the tiebreak after a restart
+                _l.close_unknown_polls, _l.close_last_seq = 0, -1
+                _l.close_unmoved_polls = 0
         self._reconcile_boot()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
@@ -3720,6 +3738,13 @@ class Executor:
         trigger = pos.get("stop")
         if not trigger or led.qty == 0.0:
             return
+        if led.close_cloid and led.close_mode == "single":
+            # a single-leg close is in flight: the leg is stopless for that
+            # bounded window BY DESIGN. Re-arming off belief here placed a
+            # reduce-only stop that, once the close booked, rested on the
+            # OTHER leg's exposure with no ref pointing at it (round-2
+            # review probe f, 2026-10-27)
+            return
         bumped = False                      # this poll already counted a miss
         cancelled = False                   # own stop read CANCELLED this poll
         st = None
@@ -4354,25 +4379,42 @@ class Executor:
         Residue (a genuine partial IOC) stays on the leg and is re-closed
         next poll - stopless for that poll, the disclosed limit."""
         cloid, why, before = led.close_cloid, led.close_why, led.qty
+        if before == 0.0:
+            led.clear_close()                # nothing to book, no event
+            self._save_state()
+            return
         filled = max(0.0, min(float(filled), abs(before)))
         residue = round(abs(before) - filled, 8)
+        dust = ""
         if residue <= 1e-9:
+            residue = 0.0
+        elif filled > 0.0 and self._below_venue_floor(residue):
+            # a remainder no order can close is ledger dust, not a position
+            dust = f" (+{residue} under the venue floor, cleared as dust)"
             residue = 0.0
         sgn = 1.0 if before > 0 else -1.0
         led.qty = sgn * residue
+        if filled > 0.0:
+            led.close_never_n = 0
         led.clear_close()
         if led.qty == 0.0:
+            if led.stop_cloid:
+                # a stop re-armed while the ref was open would rest on the
+                # OTHER leg's exposure: cancel on the venue, never just forget
+                try:
+                    self.venue.cancel(led.stop_cloid)
+                except Exception:  # noqa: BLE001
+                    pass
             led.clear_stop()
             self._release_entry_ref(leg, led, "closed")
             self._event("INFO", "leg_closed",
-                        f"{leg} {why} qty={before}" if why else
-                        f"{leg} close {cloid} confirmed qty={before}")
+                        (f"{leg} {why} qty={before}" if why else
+                         f"{leg} close {cloid} confirmed qty={before}")
+                        + f" via {source}" + dust)
             self._cov("signal_exit")
         else:
             led.target_qty = abs(led.qty)
-            self._event("RED" if filled <= 0.0 else "INFO",
-                        "close_never_happened" if filled <= 0.0 else
-                        "leg_partially_closed",
+            self._event("INFO", "leg_partially_closed",
                         f"{leg} close {cloid} filled {filled} of {abs(before)} "
                         f"per the {source} - ledger keeps {led.qty}; the "
                         f"remainder is re-closed next poll")
@@ -4395,64 +4437,146 @@ class Executor:
 
     def _settle_close_single(self, leg: str, led: LegLedger) -> bool:
         """Settle a same-side / single-leg close ref on a LATER poll (the
-        send poll books from the exchange's own answer; this runs only when
-        that answer was unusable, after a restart, or on every poll while
-        the venue is still not answering). Sources, in order of trust:
-        the order record (FILLED / CANCELLED with filled = origSz - sz);
-        then, for a zero-fill or unusable record, the change in the
-        position since the send - a CANCELLED/0 read younger than
-        CLOSE_SETTLE_MIN_AGE_S is an info node that does not yet know the
-        order (unknownOid), not an order that never existed, and a
-        position read can lag, so neither alone clears a ref. Returns True
-        when no close is in flight afterwards."""
+        send poll books from the exchange's own answer; this runs when that
+        answer was unusable, after a restart, and on every poll while the
+        venue is still not answering). Returns True when no close is in
+        flight afterwards.
+
+        Sources, in order of trust: the ORDER RECORD (a full fill books at
+        any age; a partial only once the record is older than
+        CLOSE_SETTLE_MIN_AGE_S, because a terminal read seconds after the
+        send can be transitional, and unknownOid reads as CANCELLED/0);
+        then, only after CLOSE_SETTLE_MIN_AGE_S AND CLOSE_UNKNOWN_MAX_POLLS
+        polls of unusable reads, the venue's own fills for the cloid; then
+        the POSITION's change since the send - a FULL move books, a partial
+        move waits (the other leg could explain it), an UNMOVED position
+        clears the ref only on an affirmative CANCELLED/0 record repeated
+        on two polls, or after CLOSE_UNKNOWN_HARD_POLLS with the position
+        unmoved twice. The verdict poll never re-sends (the caller returns);
+        CLOSE_NEVER_MAX verdicts in a row stop re-sending for good and page
+        close_stuck. Polls are counted by _poll_seq, not by settle calls
+        (there are several per poll). Round-2 review, 2026-10-27."""
         cloid = led.close_cloid
+        now = time.time()
+        age = now - led.close_sent_ts if led.close_sent_ts else 1e9
+        if led.close_last_seq != self._poll_seq:
+            led.close_last_seq = self._poll_seq
+            led.close_unknown_polls += 1
+            new_poll = True
+        else:
+            new_poll = False
         st = self.venue.order_status(cloid)
         status = (st or {}).get("status")
         filled = float((st or {}).get("filled_qty") or 0.0)
-        age = time.time() - led.close_sent_ts if led.close_sent_ts else 1e9
         terminal = status in ("FILLED", "CANCELLED")
         if terminal and filled >= led.close_qty - 1e-9:
-            # a FULL fill on the record is certain at any age: no lag or
-            # transitional shape over-reports an IOC sized <= |net|
             self._book_close_fill(leg, led, filled, "order record")
             return True
         if terminal and filled > 0.0 and age >= CLOSE_SETTLE_MIN_AGE_S:
-            # a settled record (old enough to be indexed everywhere) that
-            # shows a partial: a genuine partial IOC
             self._book_close_fill(leg, led, filled, "order record")
             return True
-        # everything else is not yet usable: OPEN/UNKNOWN, a terminal read
-        # seconds after the send that shows a partial (transitional) or
-        # nothing (unknownOid), or a zero-fill record of any age (which
-        # needs the position to agree before "never existed")
-        led.close_unknown_polls += 1
+        affirmative_zero = status == "CANCELLED" and filled <= 0.0 \
+            and age >= CLOSE_SETTLE_MIN_AGE_S
         n = led.close_unknown_polls
-        if n < CLOSE_UNKNOWN_MAX_POLLS:
+        if age < CLOSE_SETTLE_MIN_AGE_S or n < CLOSE_UNKNOWN_MAX_POLLS:
+            if new_poll:
+                self._event("RED", "close_unconfirmed",
+                            f"{leg} close {cloid} unconfirmed for {n} poll(s) "
+                            f"(status {status or 'unreadable'}, filled "
+                            f"{filled}, sent {age:.0f}s ago) - ref kept, stop "
+                            f"down for the window; settling next poll")
+                self._save_state()
+            return False
+        # ---- tiebreak, once per poll ------------------------------------
+        if not new_poll:
+            return False
+        fp = getattr(self.venue, "fill_pnl", None)
+        if callable(fp):
+            try:
+                r = fp(cloid)
+            except Exception:  # noqa: BLE001
+                r = None
+            q = float((r or {}).get("qty") or 0.0)
+            if q > 0.0:
+                self._book_close_fill(leg, led, q, "venue fills")
+                return True
+        for n_, l in self.state.legs.items():
+            if n_ == leg or abs(l.qty) <= 1e-9 or not l.stop_cloid:
+                continue
+            st_o = self.venue.order_status(l.stop_cloid)
+            if (st_o or {}).get("status") != "OPEN":
+                self._event("RED", "close_unconfirmed",
+                            f"{leg} close {cloid} unconfirmed for {n} poll(s) "
+                            f"and {n_}'s stop reads "
+                            f"{(st_o or {}).get('status') or 'unreadable'}: a "
+                            f"position move could be its fill, not this "
+                            f"close's - ref kept; settling next poll")
+                self._save_state()
+                return False
+        moved = self._close_fill_from_position(led)
+        if moved is None:
             self._event("RED", "close_unconfirmed",
-                        f"{leg} close {cloid} unconfirmed for {n} poll(s) "
-                        f"(status {status or 'unreadable'}, filled {filled}, "
-                        f"sent {age:.0f}s ago) - ref kept, stop already "
-                        f"down; settling next poll")
+                        f"{leg} close {cloid} unconfirmed for {n} poll(s) and "
+                        f"the venue position is unreadable - ref kept; "
+                        f"retrying next poll")
             self._save_state()
             return False
-        # tiebreak: the position's change since the send
-        reduced = self._close_fill_from_position(led)
-        if reduced is None:
+        if moved >= led.close_qty - 1e-9:
+            self._event("WARN", "close_settled_by_position",
+                        f"{leg} close {cloid}: status {status or 'unreadable'} "
+                        f"filled {filled} after {age:.0f}s; the venue net "
+                        f"moved {moved} of {led.close_qty} in our direction "
+                        f"since the send - booking the full close")
+            self._book_close_fill(leg, led, moved, "position change")
+            return True
+        if moved > 1e-9:
+            led.close_unmoved_polls = 0
+            if n >= CLOSE_UNKNOWN_HARD_POLLS:
+                self._event("RED", "close_settled_by_position",
+                            f"{leg} close {cloid}: {n} polls unusable; the "
+                            f"venue net moved {moved} of {led.close_qty} - "
+                            f"booking that as the fill (bounded tiebreak)")
+                self._book_close_fill(leg, led, moved, "position change")
+                return True
             self._event("RED", "close_unconfirmed",
-                        f"{leg} close {cloid} unconfirmed for "
-                        f"{led.close_unknown_polls} poll(s) and the venue "
-                        f"position is unreadable - ref kept; retrying next "
-                        f"poll")
+                        f"{leg} close {cloid} unconfirmed for {n} poll(s); "
+                        f"the venue net moved {moved} of {led.close_qty} - "
+                        f"ambiguous, ref kept; settling next poll")
             self._save_state()
             return False
-        self._event("RED" if reduced <= 1e-9 else "WARN",
-                    "close_settled_by_position",
-                    f"{leg} close {cloid}: status {status or 'unreadable'} "
-                    f"filled {filled} after {age:.0f}s; the venue net moved "
-                    f"{reduced} of {led.close_qty} in our direction since the "
-                    f"send - booking that")
-        self._book_close_fill(leg, led, reduced, "position change")
-        return True
+        # unmoved
+        led.close_unmoved_polls += 1
+        verdict = (affirmative_zero and led.close_unmoved_polls >= 2) or \
+            (n >= CLOSE_UNKNOWN_HARD_POLLS and led.close_unmoved_polls >= 2)
+        if not verdict:
+            self._event("RED", "close_unconfirmed",
+                        f"{leg} close {cloid} unconfirmed for {n} poll(s), "
+                        f"status {status or 'unreadable'}, venue net unmoved "
+                        f"since the send ({led.close_unmoved_polls}x) - ref "
+                        f"kept; a repeat verdict clears it")
+            self._save_state()
+            return False
+        led.close_never_n += 1
+        if led.close_never_n > CLOSE_NEVER_MAX:
+            self._event("RED", "close_stuck",
+                        f"{leg} close {cloid}: {led.close_never_n} consecutive "
+                        f"closes the venue reports as never happened "
+                        f"(status {status or 'unreadable'}, net unmoved) - NO "
+                        f"further close is sent; the leg is stopless. Close "
+                        f"{led.qty} by hand on {self._venue_label()} and "
+                        f"/resume?adopt_venue=1, or restart once the venue "
+                        f"answers")
+            self._save_state()
+            return False
+        self._event("RED", "close_never_happened",
+                    f"{leg} close {cloid} after {age:.0f}s: status "
+                    f"{status or 'unreadable'}, no venue fill, net unmoved on "
+                    f"{led.close_unmoved_polls} polls - treated as never "
+                    f"placed ({led.close_never_n}/{CLOSE_NEVER_MAX}); ref "
+                    f"cleared, re-sent next poll after a fresh corroboration")
+        led.clear_close()
+        self._save_state()
+        return False                     # never re-send in the verdict poll
 
     def _under_mirrored(self, leg: str, led: LegLedger, blend: dict,
                         equity: float) -> bool:
@@ -4512,6 +4636,7 @@ class Executor:
                             f"{leg} qty {led.qty} below venue minimum - "
                             f"cleared without an order (verify flat on venue)")
                 led.qty = 0.0
+                led.clear_close()
                 return
         # ABSORB A FIRED STOP BEFORE ASKING _stop_backing ANYTHING (counter-
         # agent round 2, 2026-09-09). A stop that has just filled leaves the
@@ -4805,22 +4930,26 @@ class Executor:
             led.close_cloid, led.close_qty = cloid, qty
             led.close_net_before, led.close_why = net, why
             led.close_mode, led.close_sent_ts = "single", time.time()
-            led.close_unknown_polls = 0
+            led.close_unknown_polls, led.close_last_seq = 0, -1
+            led.close_unmoved_polls = 0      # the send poll counts as poll 1
             self._save_state()
+            # the fill watch is queued BEFORE the send: a response that
+            # raises after the venue accepted the order still gets its
+            # price sampled when the record settles
+            self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
             try:
                 resp = self.venue.place_market(_close_side(led.qty), qty, cloid,
                                                reduce_only=True)
             except Exception as exc:  # noqa: BLE001
-                # the order may or may not exist: keep the ref, the next
-                # poll settles it (a CANCELLED/0 record older than
-                # CLOSE_SETTLE_MIN_AGE_S with an unmoved position = never
-                # existed, cleared and retried); the stop is already down
+                # the order may or may not exist (a response can raise after
+                # the venue accepted it): keep the ref, _settle_close_single
+                # resolves it on later polls; the stop is already down
                 self._event("RED", "close_rejected",
-                            f"{leg} close raised ({type(exc).__name__}: "
-                            f"{exc}) - ref kept, settling and retrying next "
-                            f"poll; the stop was already cancelled")
+                            f"{leg} close send raised ({type(exc).__name__}: "
+                            f"{exc}) - it may still have filled; ref kept, "
+                            f"settling from the record next poll; the stop "
+                            f"was already cancelled")
                 return
-            self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
             fill = (resp or {}).get("filled_qty") if isinstance(resp, dict) else None
             try:
                 fill = float(fill) if fill is not None else None

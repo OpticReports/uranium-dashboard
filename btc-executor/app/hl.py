@@ -841,7 +841,7 @@ class HyperliquidVenue:
                                            "tpsl": "sl"}})
 
     def place_market(self, side: str, qty: float, cloid: str,
-                     reduce_only: bool = False) -> None:
+                     reduce_only: bool = False) -> dict | None:
         """Aggressive IOC. Hyperliquid has no market type; crossing by
         DEFAULT_SLIPPAGE is what market_open does internally, done here so
         the cloid and rejection handling stay on one path.
@@ -878,8 +878,10 @@ class HyperliquidVenue:
             s0 = statuses[0] if statuses else None
             if isinstance(s0, dict) and isinstance(s0.get("filled"), dict):
                 f = s0["filled"]
+                if f.get("totalSz") in (None, ""):
+                    return None          # never an affirmative zero
                 avg = f.get("avgPx")
-                return {"filled_qty": float(f.get("totalSz") or 0.0),
+                return {"filled_qty": float(f["totalSz"]),
                         "avg_px": float(avg) if avg else None,
                         "resting": False}
             if isinstance(s0, dict) and "resting" in s0:
