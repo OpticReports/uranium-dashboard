@@ -280,6 +280,9 @@ class LegLedger:
     close_cloid: str | None = None
     close_qty: float = 0.0
     close_net_before: float | None = None
+    # the reason the close was sent (engine_exit, orphan_fill, ...): carried
+    # to the leg_closed event by _settle_close, which may run polls later
+    close_why: str | None = None
     # The size this leg's entry ASKED for (panel F4): a leg that ends up
     # holding less with nothing in flight - a consumed partial re-opened at
     # its partial size - is topped up toward THIS, never toward a fresh
@@ -455,6 +458,11 @@ class Executor:
         # postcondition (N6); reset on any clean attribution
         self._netting_mismatch_polls: int = 0
         self._poll_seq: int = 0            # bumped per step
+        # per-send counter inside the close cloid: two closes on one leg in
+        # the same second (a settle, then a retry) must never share an id
+        # (2026-10-27; the fake venue overwrote the first fill, and a venue
+        # that rejects duplicate cloids would refuse the retry)
+        self._close_seq = 0
         self._mismatch_seq: int = -1       # the poll last counted
         # the most recent successful position read (any reader): the stop
         # door's "did the venue move" reference (panel TI-2)
@@ -981,7 +989,7 @@ class Executor:
                 l.target_qty = 0.0
                 l.clear_netting()
                 l.clear_reest()
-                l.close_cloid, l.close_qty = None, 0.0
+                l.close_cloid, l.close_qty, l.close_why = None, 0.0, None
             self._save_state()
         elif abs(net - ledger_net) > 1e-9:
             # BLOCK ENTRIES, not just page (N3): a stale opposed ledger that
@@ -1970,7 +1978,7 @@ class Executor:
                 l.target_qty = 0.0         # a later re-entry sizes itself
                 l.clear_netting()          # nothing is owed on a flat book
                 l.clear_reest()            # every order verified terminal above
-                l.close_cloid, l.close_qty = None, 0.0
+                l.close_cloid, l.close_qty, l.close_why = None, 0.0, None
                 # stop_px MUST die with the order (live find 2026-08-23):
                 # leaving it set made _maintain_stop's churn guard read the
                 # stale price as "the stop is already where it belongs" and
@@ -2153,7 +2161,7 @@ class Executor:
                 l.target_qty = 0.0
                 l.clear_netting()
                 l.clear_reest()
-                l.close_cloid, l.close_qty = None, 0.0
+                l.close_cloid, l.close_qty, l.close_why = None, 0.0, None
             self._event("RED", "adopt_venue",
                         f"operator adopted venue truth: venue is FLAT, ledger "
                         f"claimed {before} (sum {want}) - all legs zeroed, "
@@ -4296,9 +4304,12 @@ class Executor:
                                       confirmed_fill=filled)
         if not ok:
             return False                 # ledger untouched; retry next poll
+        why = led.close_why
         led.close_cloid, led.close_qty, led.close_net_before = None, 0.0, None
+        led.close_why = None
         if led.qty == 0.0:
             self._event("INFO", "leg_closed",
+                        f"{leg} {why} qty={before}" if why else
                         f"{leg} close {cloid} confirmed qty={before}")
             self._cov("signal_exit")
         elif abs(led.qty - before) <= 1e-9:
@@ -4539,7 +4550,8 @@ class Executor:
                             f"the venue minimum order value - no order can; "
                             f"deferring until the net changes")
                 return
-            cloid = f"{leg[0].upper()}-{int(time.time())}-X"
+            self._close_seq += 1
+            cloid = f"{leg[0].upper()}-{int(time.time())}-{self._close_seq}-X"
             try:
                 ref = self.venue.mid()
             except Exception:  # noqa: BLE001
@@ -4574,6 +4586,14 @@ class Executor:
             return
         # ---- single leg / same-side book: today's path ----------------------
         if led.qty != 0.0:
+            # ONE CLOSE IN FLIGHT AT A TIME (2026-10-27, the 10-07 halt;
+            # docs/HALT_2026-10-07.md). An unsettled close ref is resolved
+            # from the venue's POSITION before anything else is sent off
+            # ledger belief - the rule the opposed-book path already keeps.
+            if led.close_cloid and not self._settle_close(leg, led):
+                return
+            if led.qty == 0.0:
+                return
             # Quantize the close: a stale sub-contract residue (old-format
             # persisted state) would make place_market raise AFTER the stop
             # was already cancelled - a permanent naked, stopless loop
@@ -4611,31 +4631,48 @@ class Executor:
             if led.stop_cloid:
                 self.venue.cancel(led.stop_cloid)
                 led.clear_stop()
-            cloid = f"{leg[0].upper()}-{int(time.time())}-X"
+            self._close_seq += 1
+            cloid = f"{leg[0].upper()}-{int(time.time())}-{self._close_seq}-X"
             try:
                 ref = self.venue.mid()
             except Exception:  # noqa: BLE001
                 ref = 0.0
-            self.venue.place_market(_close_side(led.qty), qty, cloid,
-                                reduce_only=True)
-            self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
-            self._event("INFO", "leg_closed", f"{leg} {why} qty={led.qty}")
-            self._cov("signal_exit")
-            # BOOK BY THE CONFIRMED FILL (N9e): a partial IOC keeps its
-            # residue in the ledger instead of vanishing behind an intent
-            # of zero. UNKNOWN books the intent, as every close did before.
-            st_x = self.venue.order_status(cloid)
-            filled = float((st_x or {}).get("filled_qty") or 0.0)
-            if (st_x or {}).get("status") in ("FILLED", "CANCELLED") \
-                    and 0.0 < filled + 1e-9 < qty:
-                sgn = 1.0 if led.qty > 0 else -1.0
-                led.qty = round(sgn * (abs(led.qty) - filled), 8)
-                led.target_qty = abs(led.qty)
-                self._event("RED", "close_partial",
-                            f"{leg} close {cloid} filled {filled} of {qty} - "
-                            f"ledger keeps {led.qty}; retrying next poll")
+            # BELIEF BEFORE THE SEND, SETTLE FROM THE POSITION (I7 on this
+            # path too, 2026-10-27; docs/HALT_2026-10-07.md). The 10-07
+            # LEDGER_DIVERGENCE halt came from here: ONE order_status read on
+            # a fully filled IOC close returned a partial filled_qty, the
+            # old N9e block booked the difference as a residue "retrying
+            # next poll" - and nothing retried, because this path never set
+            # close_cloid, so _settle_close never ran for it. Three polls of
+            # belief-vs-venue mismatch halted the book and the halt
+            # flattened the trend leg the engine still held. Now the ref is
+            # persisted first and the fill is booked from the venue's
+            # POSITION read (_settle_close -> _absorb_netted_fill),
+            # immediately and on every later poll; the netting second look
+            # treats the open ref as in flight. A transient read is a
+            # one-poll grace; a genuine partial IOC keeps exactly the
+            # residue the venue shows.
+            led.close_cloid, led.close_qty = cloid, qty
+            led.close_net_before, led.close_why = net, why
+            self._save_state()
+            try:
+                self.venue.place_market(_close_side(led.qty), qty, cloid,
+                                        reduce_only=True)
+            except Exception as exc:  # noqa: BLE001
+                # the order may or may not exist: keep the ref, the next
+                # poll settles it (unknownOid reads CANCELLED and clears it)
+                # and retries the close; the stop is already down
+                self._event("RED", "close_rejected",
+                            f"{leg} close raised ({type(exc).__name__}: "
+                            f"{exc}) - ref kept, settling and retrying next "
+                            f"poll; the stop was already cancelled")
                 return
-            led.qty = 0.0
+            self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
+            if not self._settle_close(leg, led):
+                self._event("RED", "close_unconfirmed",
+                            f"{leg} close sent but not yet confirmed by the "
+                            f"venue - ref kept; settling next poll")
+            return
 
     def _report_post_only_crosses(self) -> None:
         """The engine prices signals off SPOT but we trade a FUTURE; at a
@@ -5221,6 +5258,16 @@ class Executor:
             self._boot_mismatch = False
             self._event("INFO", "boot_mismatch_resolved",
                         "venue and ledger agree exactly - entries unblocked")
+        if any(l.close_cloid or l.reest_cloid for l in self.state.legs.values()):
+            # An order of ours is in flight and unsettled: the ledger is
+            # belief-before-send by design (the close / R ref is persisted
+            # BEFORE the send and booked from the venue's position read when
+            # the venue answers), so venue-vs-ledger is EXPECTED to differ
+            # until _settle_close / _settle_reest run. Paging drift here
+            # would page every UNKNOWN read as an incident; the state is
+            # already announced (close_unconfirmed / reest_unsettled) and
+            # bounded by the netting second look (grace, then halt).
+            return
         if abs(net - want) * px > self.cfg.drift_tol_frac * max(equity, 1.0):
             self._event("RED", "position_drift",
                         f"venue={net:.5f} ledger={want:.5f} BTC - investigate")
