@@ -857,10 +857,36 @@ class HyperliquidVenue:
         mid = self.mid()
         bound = mid * (1 + DEFAULT_SLIPPAGE) if side == "BUY" \
             else mid * (1 - DEFAULT_SLIPPAGE)
-        self._send(cloid, is_buy=(side == "BUY"), sz=self._sz(qty),
-                   limit_px=self._px(bound, "up" if side == "BUY" else "down"),
-                   reduce_only=bool(reduce_only),
-                   order_type={"limit": {"tif": "Ioc"}})
+        r = self._send(cloid, is_buy=(side == "BUY"), sz=self._sz(qty),
+                       limit_px=self._px(bound, "up" if side == "BUY" else "down"),
+                       reduce_only=bool(reduce_only),
+                       order_type={"limit": {"tif": "Ioc"}})
+        # THE VENUE'S OWN ANSWER TO THE ORDER (2026-10-27, the 10-07 halt):
+        # an IOC is matched atomically and the exchange response carries
+        # what it did - statuses[0].filled.totalSz (and avgPx), or
+        # `resting`. Unlike a later orderStatus query (an info node may not
+        # know the order for a moment: unknownOid) or a position read (can
+        # lag its own fill), this read cannot lag. The mirror books a
+        # same-side close from it; None = no usable answer, settle later.
+        return self._fill_from_response(r)
+
+    @staticmethod
+    def _fill_from_response(r) -> dict | None:
+        try:
+            statuses = (((r.get("response") or {}).get("data") or {})
+                        .get("statuses") or [])
+            s0 = statuses[0] if statuses else None
+            if isinstance(s0, dict) and isinstance(s0.get("filled"), dict):
+                f = s0["filled"]
+                avg = f.get("avgPx")
+                return {"filled_qty": float(f.get("totalSz") or 0.0),
+                        "avg_px": float(avg) if avg else None,
+                        "resting": False}
+            if isinstance(s0, dict) and "resting" in s0:
+                return {"filled_qty": 0.0, "avg_px": None, "resting": True}
+        except (TypeError, ValueError, AttributeError, IndexError):
+            pass
+        return None
 
     def cancel(self, cloid: str) -> None:
         from hyperliquid.utils.types import Cloid

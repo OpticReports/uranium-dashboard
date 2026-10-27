@@ -152,6 +152,14 @@ REEST_MAX = 3
 # miss is a read racing its own fill; three in a row is a real divergence.
 NETTING_MISMATCH_HALT_POLLS = 3
 NETTING_REREAD_SLEEP_S = 2.0       # between position re-reads on a mismatch
+# Single-leg close settlement (2026-10-27, docs/HALT_2026-10-07.md). A status
+# read younger than this after the send may answer unknownOid for an order
+# the venue accepted a moment ago: it is UNKNOWN, not "never existed".
+CLOSE_SETTLE_MIN_AGE_S = 10.0
+# consecutive unusable status reads before the position is consulted as the
+# tiebreak (below the netting second look's 3-poll grace, so an unsettled
+# close is resolved before an unexplained divergence would halt)
+CLOSE_UNKNOWN_MAX_POLLS = 2
 # Hyperliquid agent (API) wallets expire on a date the venue tells us.
 # Expiry is a TOTAL loss of write access, protective orders included, so the
 # halt must fire while the key still WORKS - a halt at T-0 cannot flatten.
@@ -283,6 +291,13 @@ class LegLedger:
     # the reason the close was sent (engine_exit, orphan_fill, ...): carried
     # to the leg_closed event by _settle_close, which may run polls later
     close_why: str | None = None
+    # "single" = a same-side / single-leg close, booked from the venue's
+    # answer to the order (or its order record), never from a position
+    # read; None = the opposed-book dominant exit (position-attributed, the
+    # 2026-09-16 design) - also what an older state file reads as
+    close_mode: str | None = None
+    close_sent_ts: float = 0.0          # wall clock of the send
+    close_unknown_polls: int = 0        # consecutive polls the status read was unusable
     # The size this leg's entry ASKED for (panel F4): a leg that ends up
     # holding less with nothing in flight - a consumed partial re-opened at
     # its partial size - is topped up toward THIS, never toward a fresh
@@ -308,6 +323,12 @@ class LegLedger:
         self.entry_cloid = self.entry_side = None
         self.entry_qty, self.entry_booked = 0.0, 0.0
         self.entry_accounted = False
+
+
+    def clear_close(self) -> None:
+        self.close_cloid, self.close_qty, self.close_net_before = None, 0.0, None
+        self.close_why, self.close_mode = None, None
+        self.close_sent_ts, self.close_unknown_polls = 0.0, 0
 
     def clear_stop(self) -> None:
         self.stop_cloid, self.stop_px = None, None
@@ -989,7 +1010,7 @@ class Executor:
                 l.target_qty = 0.0
                 l.clear_netting()
                 l.clear_reest()
-                l.close_cloid, l.close_qty, l.close_why = None, 0.0, None
+                l.clear_close()
             self._save_state()
         elif abs(net - ledger_net) > 1e-9:
             # BLOCK ENTRIES, not just page (N3): a stale opposed ledger that
@@ -1978,7 +1999,7 @@ class Executor:
                 l.target_qty = 0.0         # a later re-entry sizes itself
                 l.clear_netting()          # nothing is owed on a flat book
                 l.clear_reest()            # every order verified terminal above
-                l.close_cloid, l.close_qty, l.close_why = None, 0.0, None
+                l.clear_close()
                 # stop_px MUST die with the order (live find 2026-08-23):
                 # leaving it set made _maintain_stop's churn guard read the
                 # stale price as "the stop is already where it belongs" and
@@ -2161,7 +2182,7 @@ class Executor:
                 l.target_qty = 0.0
                 l.clear_netting()
                 l.clear_reest()
-                l.close_cloid, l.close_qty, l.close_why = None, 0.0, None
+                l.clear_close()
             self._event("RED", "adopt_venue",
                         f"operator adopted venue truth: venue is FLAT, ledger "
                         f"claimed {before} (sum {want}) - all legs zeroed, "
@@ -4281,9 +4302,13 @@ class Executor:
         read (panel R3/F2). FILLED/CANCELLED -> re-attribute off the
         position with the confirmed fill and drop the ref; OPEN/UNKNOWN ->
         keep everything, including the stop. Returns True when no close is
-        in flight afterwards."""
+        in flight afterwards. A `single`-mode ref (same-side / single-leg
+        close) is settled by _settle_close_single instead - from the order
+        record, never from a position read."""
         if not led.close_cloid:
             return True
+        if led.close_mode == "single":
+            return self._settle_close_single(leg, led)
         st = self.venue.order_status(led.close_cloid)
         status = (st or {}).get("status")
         if status not in ("FILLED", "CANCELLED"):
@@ -4305,8 +4330,7 @@ class Executor:
         if not ok:
             return False                 # ledger untouched; retry next poll
         why = led.close_why
-        led.close_cloid, led.close_qty, led.close_net_before = None, 0.0, None
-        led.close_why = None
+        led.clear_close()
         if led.qty == 0.0:
             self._event("INFO", "leg_closed",
                         f"{leg} {why} qty={before}" if why else
@@ -4317,6 +4341,117 @@ class Executor:
                         f"{leg} close confirmed terminal but the venue did "
                         f"not move - re-arming and retrying next poll")
         self._save_state()
+        return True
+
+    def _book_close_fill(self, leg: str, led: LegLedger, filled: float,
+                         source: str) -> None:
+        """Book a same-side / single-leg close of `filled` BTC against leg D
+        and drop the close ref. The fill comes from the venue's answer to
+        the order (send response, or its order record, or - as a last
+        resort - the change in the position since the send); a reduce-only
+        IOC sized <= |net| with D's sign cannot be resized by the venue, so
+        its filled size IS what left D (unlike a stop at trigger, N6).
+        Residue (a genuine partial IOC) stays on the leg and is re-closed
+        next poll - stopless for that poll, the disclosed limit."""
+        cloid, why, before = led.close_cloid, led.close_why, led.qty
+        filled = max(0.0, min(float(filled), abs(before)))
+        residue = round(abs(before) - filled, 8)
+        if residue <= 1e-9:
+            residue = 0.0
+        sgn = 1.0 if before > 0 else -1.0
+        led.qty = sgn * residue
+        led.clear_close()
+        if led.qty == 0.0:
+            led.clear_stop()
+            self._release_entry_ref(leg, led, "closed")
+            self._event("INFO", "leg_closed",
+                        f"{leg} {why} qty={before}" if why else
+                        f"{leg} close {cloid} confirmed qty={before}")
+            self._cov("signal_exit")
+        else:
+            led.target_qty = abs(led.qty)
+            self._event("RED" if filled <= 0.0 else "INFO",
+                        "close_never_happened" if filled <= 0.0 else
+                        "leg_partially_closed",
+                        f"{leg} close {cloid} filled {filled} of {abs(before)} "
+                        f"per the {source} - ledger keeps {led.qty}; the "
+                        f"remainder is re-closed next poll")
+        self._save_state()
+
+    def _close_fill_from_position(self, led: LegLedger) -> float | None:
+        """How much of the in-flight close the venue's position says has
+        left this leg, against the net recorded BEFORE the send. None when
+        the venue cannot be read or no baseline was recorded."""
+        if led.close_net_before is None:
+            return None
+        try:
+            net = self.venue.position()
+        except Exception:  # noqa: BLE001
+            return None
+        self.state.last_venue_read_ts = int(time.time())
+        sgn = 1.0 if led.qty > 0 else -1.0
+        reduced = sgn * (led.close_net_before - net)
+        return max(0.0, min(reduced, led.close_qty))
+
+    def _settle_close_single(self, leg: str, led: LegLedger) -> bool:
+        """Settle a same-side / single-leg close ref on a LATER poll (the
+        send poll books from the exchange's own answer; this runs only when
+        that answer was unusable, after a restart, or on every poll while
+        the venue is still not answering). Sources, in order of trust:
+        the order record (FILLED / CANCELLED with filled = origSz - sz);
+        then, for a zero-fill or unusable record, the change in the
+        position since the send - a CANCELLED/0 read younger than
+        CLOSE_SETTLE_MIN_AGE_S is an info node that does not yet know the
+        order (unknownOid), not an order that never existed, and a
+        position read can lag, so neither alone clears a ref. Returns True
+        when no close is in flight afterwards."""
+        cloid = led.close_cloid
+        st = self.venue.order_status(cloid)
+        status = (st or {}).get("status")
+        filled = float((st or {}).get("filled_qty") or 0.0)
+        age = time.time() - led.close_sent_ts if led.close_sent_ts else 1e9
+        terminal = status in ("FILLED", "CANCELLED")
+        if terminal and filled >= led.close_qty - 1e-9:
+            # a FULL fill on the record is certain at any age: no lag or
+            # transitional shape over-reports an IOC sized <= |net|
+            self._book_close_fill(leg, led, filled, "order record")
+            return True
+        if terminal and filled > 0.0 and age >= CLOSE_SETTLE_MIN_AGE_S:
+            # a settled record (old enough to be indexed everywhere) that
+            # shows a partial: a genuine partial IOC
+            self._book_close_fill(leg, led, filled, "order record")
+            return True
+        # everything else is not yet usable: OPEN/UNKNOWN, a terminal read
+        # seconds after the send that shows a partial (transitional) or
+        # nothing (unknownOid), or a zero-fill record of any age (which
+        # needs the position to agree before "never existed")
+        led.close_unknown_polls += 1
+        n = led.close_unknown_polls
+        if n < CLOSE_UNKNOWN_MAX_POLLS:
+            self._event("RED", "close_unconfirmed",
+                        f"{leg} close {cloid} unconfirmed for {n} poll(s) "
+                        f"(status {status or 'unreadable'}, filled {filled}, "
+                        f"sent {age:.0f}s ago) - ref kept, stop already "
+                        f"down; settling next poll")
+            self._save_state()
+            return False
+        # tiebreak: the position's change since the send
+        reduced = self._close_fill_from_position(led)
+        if reduced is None:
+            self._event("RED", "close_unconfirmed",
+                        f"{leg} close {cloid} unconfirmed for "
+                        f"{led.close_unknown_polls} poll(s) and the venue "
+                        f"position is unreadable - ref kept; retrying next "
+                        f"poll")
+            self._save_state()
+            return False
+        self._event("RED" if reduced <= 1e-9 else "WARN",
+                    "close_settled_by_position",
+                    f"{leg} close {cloid}: status {status or 'unreadable'} "
+                    f"filled {filled} after {age:.0f}s; the venue net moved "
+                    f"{reduced} of {led.close_qty} in our direction since the "
+                    f"send - booking that")
+        self._book_close_fill(leg, led, reduced, "position change")
         return True
 
     def _under_mirrored(self, leg: str, led: LegLedger, blend: dict,
@@ -4395,6 +4530,17 @@ class Executor:
         # lets branch 3's orphan-flatten re-close it into a naked reverse.
         if self._absorb_fired_stop(leg, led):
             return
+        # AN UNSETTLED SINGLE-LEG CLOSE IS RESOLVED BEFORE ANY CORROBORATION
+        # (2026-10-27): while its ref is open the ledger is belief-before-
+        # send by design, so asking the venue to back the ledger here would
+        # read the close's own fill as a divergence and spend the netting
+        # grace on it. _settle_close_single books it from the order record,
+        # or waits (bounded), or falls back to the position's change.
+        if led.close_cloid and led.close_mode == "single":
+            if not self._settle_close(leg, led):
+                return
+            if led.qty == 0.0:
+                return
         # CORROBORATE BEFORE TOUCHING ANYTHING (re-gate 2026-08-27 B2). This
         # was the one write path that never asked the venue: side AND size
         # came straight off the ledger, and the only reads were
@@ -4637,41 +4783,57 @@ class Executor:
                 ref = self.venue.mid()
             except Exception:  # noqa: BLE001
                 ref = 0.0
-            # BELIEF BEFORE THE SEND, SETTLE FROM THE POSITION (I7 on this
-            # path too, 2026-10-27; docs/HALT_2026-10-07.md). The 10-07
-            # LEDGER_DIVERGENCE halt came from here: ONE order_status read on
-            # a fully filled IOC close returned a partial filled_qty, the
+            # BELIEF BEFORE THE SEND, BOOK FROM THE VENUE'S ANSWER (2026-10-27,
+            # docs/HALT_2026-10-07.md). The 10-07 LEDGER_DIVERGENCE halt
+            # came from here: ONE order_status read right after a fully
+            # filled IOC close answered as if partial (a terminal zero-fill
+            # read - unknownOid from an info node that did not yet know the
+            # order - satisfied the old `0.0 < filled + 1e-9 < qty`), the
             # old N9e block booked the difference as a residue "retrying
-            # next poll" - and nothing retried, because this path never set
-            # close_cloid, so _settle_close never ran for it. Three polls of
-            # belief-vs-venue mismatch halted the book and the halt
-            # flattened the trend leg the engine still held. Now the ref is
-            # persisted first and the fill is booked from the venue's
-            # POSITION read (_settle_close -> _absorb_netted_fill),
-            # immediately and on every later poll; the netting second look
-            # treats the open ref as in flight. A transient read is a
-            # one-poll grace; a genuine partial IOC keeps exactly the
-            # residue the venue shows.
+            # next poll", and nothing retried: this path never set a close
+            # ref, so _settle_close never ran for it. Three polls of belief
+            # vs venue mismatch halted the book and the halt flattened the
+            # trend leg the engine still held.
+            # Now: the ref is persisted FIRST; the fill is booked from the
+            # exchange's own response to the order (atomic IOC: it cannot
+            # lag); when that answer is unusable the ref is kept and
+            # _settle_close_single resolves it on later polls from the
+            # order record, with the position's change since the send as
+            # the bounded tiebreak. No position read is needed to book a
+            # same-side close: a reduce-only IOC sized <= |net| with this
+            # leg's sign cannot be resized by the venue.
             led.close_cloid, led.close_qty = cloid, qty
             led.close_net_before, led.close_why = net, why
+            led.close_mode, led.close_sent_ts = "single", time.time()
+            led.close_unknown_polls = 0
             self._save_state()
             try:
-                self.venue.place_market(_close_side(led.qty), qty, cloid,
-                                        reduce_only=True)
+                resp = self.venue.place_market(_close_side(led.qty), qty, cloid,
+                                               reduce_only=True)
             except Exception as exc:  # noqa: BLE001
                 # the order may or may not exist: keep the ref, the next
-                # poll settles it (unknownOid reads CANCELLED and clears it)
-                # and retries the close; the stop is already down
+                # poll settles it (a CANCELLED/0 record older than
+                # CLOSE_SETTLE_MIN_AGE_S with an unmoved position = never
+                # existed, cleared and retried); the stop is already down
                 self._event("RED", "close_rejected",
                             f"{leg} close raised ({type(exc).__name__}: "
                             f"{exc}) - ref kept, settling and retrying next "
                             f"poll; the stop was already cancelled")
                 return
             self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
-            if not self._settle_close(leg, led):
-                self._event("RED", "close_unconfirmed",
-                            f"{leg} close sent but not yet confirmed by the "
-                            f"venue - ref kept; settling next poll")
+            fill = (resp or {}).get("filled_qty") if isinstance(resp, dict) else None
+            try:
+                fill = float(fill) if fill is not None else None
+            except (TypeError, ValueError):
+                fill = None
+            if fill is not None and 0.0 <= fill <= qty + 1e-9 \
+                    and not (resp or {}).get("resting"):
+                self._book_close_fill(leg, led, fill, "send response")
+                return
+            # no usable answer (the Coinbase adapter, a parse failure): the
+            # order record settles a FULL fill in this same poll; anything
+            # less waits (_settle_close_single pages and bounds it)
+            self._settle_close(leg, led)
             return
 
     def _report_post_only_crosses(self) -> None:
@@ -5258,16 +5420,6 @@ class Executor:
             self._boot_mismatch = False
             self._event("INFO", "boot_mismatch_resolved",
                         "venue and ledger agree exactly - entries unblocked")
-        if any(l.close_cloid or l.reest_cloid for l in self.state.legs.values()):
-            # An order of ours is in flight and unsettled: the ledger is
-            # belief-before-send by design (the close / R ref is persisted
-            # BEFORE the send and booked from the venue's position read when
-            # the venue answers), so venue-vs-ledger is EXPECTED to differ
-            # until _settle_close / _settle_reest run. Paging drift here
-            # would page every UNKNOWN read as an incident; the state is
-            # already announced (close_unconfirmed / reest_unsettled) and
-            # bounded by the netting second look (grace, then halt).
-            return
         if abs(net - want) * px > self.cfg.drift_tol_frac * max(equity, 1.0):
             self._event("RED", "position_drift",
                         f"venue={net:.5f} ledger={want:.5f} BTC - investigate")
