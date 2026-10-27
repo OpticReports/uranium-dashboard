@@ -50,7 +50,7 @@ class Engine:
         # HALT_2026-10-07.md). Bars loaded from the DB are final by
         # construction (persisted only when closed, from a post-close fetch).
         self._bar_fetched_at: dict[int, float] = {}
-        self._not_final_logged: int = 0
+        self._not_final_logged: tuple | None = None
         self.degraded = False
         self.data_halt = False            # price-sanity halt (manual resume)
         self.cur_price: float | None = None
@@ -196,13 +196,23 @@ class Engine:
 
     def refresh_bars(self) -> None:
         """Top up the bar window from REST (persist any new finalized bars)."""
-        start = (self.bars[-1].ts - BAR_SECONDS if self.bars
+        # the window starts at the OLDEST closed-but-unprocessed bar when
+        # there is one, so a bar the venue once served while forming and
+        # then dropped keeps being re-requested instead of sliding out of
+        # the window (review 2026-10-27)
+        anchor = self.bars[-1].ts if self.bars else None
+        for b in self.closed_unprocessed():
+            anchor = b.ts if anchor is None else min(anchor, b.ts)
+        start = (anchor - BAR_SECONDS if anchor is not None
                  else int(time.time()) - settings.history_bars * BAR_SECONDS)
+        # stamp BEFORE the request: the candle reflects the venue's state at
+        # the request, and a 30 s timeout could otherwise stamp an in-grace
+        # read as if taken after the grace
+        fetched_at = time.time()
         fetched = fetch_4h_bars(start)
         if not fetched:
             return
         self.last_data_ok = time.time()
-        fetched_at = time.time()
         for b in fetched:
             self._bar_fetched_at[b.ts] = fetched_at
         by_ts = {b.ts: b for b in self.bars}
@@ -248,15 +258,36 @@ class Engine:
             if bar.ts <= self.last_processed or bar.ts + BAR_SECONDS > now:
                 continue
             if not self.bar_final(bar, now):
-                if self._not_final_logged != bar.ts:
-                    self._not_final_logged = bar.ts
+                # graded: a boundary poll that lands inside the grace is the
+                # EXPECTED case (~half of all bars) and is INFO; a bar still
+                # non-final a poll later is WARN; three polls later it is
+                # stuck (the venue dropped the candle, or the fetch keeps
+                # failing) and pages RED once - the executor's own stale
+                # guard (3 bars) would otherwise be the first to notice
+                late = now - (bar.ts + BAR_SECONDS)
+                grace = settings.bar_final_grace_s
+                if late < grace + settings.poll_seconds:
+                    level, kind = "INFO", "bar_not_final"
+                elif late < grace + 3 * settings.poll_seconds:
+                    level, kind = "WARN", "bar_not_final"
+                else:
+                    level, kind = "RED", "bar_stuck"
+                if self._not_final_logged != (bar.ts, kind):
+                    self._not_final_logged = (bar.ts, kind)
                     fa = self._bar_fetched_at.get(bar.ts, 0.0)
-                    log_event(s, "WARN", "bar_not_final",
-                              f"bar {bar.ts} closed {now - bar.ts - BAR_SECONDS:.0f}s "
-                              f"ago but its last fetch was "
+                    detail = (f"bar {bar.ts} closed {late:.0f}s ago but its "
+                              f"last fetch was "
                               f"{'never' if not fa else f'{fa - bar.ts - BAR_SECONDS:.0f}s after its end'} "
-                              f"(grace {settings.bar_final_grace_s}s) - "
-                              f"deferring until a post-close fetch")
+                              f"(grace {grace}s) - deferring until a "
+                              f"post-close fetch")
+                    log_event(s, level, kind, detail)
+                    if kind == "bar_stuck":
+                        try:
+                            self.alert_fn(f"btc-paper-engine: BAR STUCK - {detail}; "
+                                          f"no signal or exit evaluates until it "
+                                          f"finalizes (intrabar stops still run)")
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("bar_stuck page failed: %s", exc)
                 break
             if i < 1:
                 continue

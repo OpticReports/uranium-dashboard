@@ -11,6 +11,8 @@ Nothing in this document modifies a file. Sources: the two reconstructions, `btc
 
 ---
 
+> 2026-10-27: close cloids are now `P-<ts>-<n>-X` (a per-send counter before the suffix); every reader keys on the `-X` suffix, unchanged. The single-leg close is booked from the exchange's own answer to the order (docs/HALT_2026-10-07.md), not from a position read; the dominant-exit path below is unchanged.
+
 ## 1. What actually happened (corrections to the brief)
 
 | Brief said | True mechanism | Evidence |

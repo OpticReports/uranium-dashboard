@@ -200,10 +200,9 @@ def test_gate_bars_without_a_post_close_fetch_are_not_final(tmpdb, monkeypatch):
     with db.session_scope() as s:
         eng.catch_up(s)
     assert eng.last_processed == t0 and b.pending is not None
+    # four hours late is 'stuck': RED once (and paged once), not a repeat
     with db.session_scope() as s:
-        n = len([e for e in s.query(db.EventRow).all()
-                 if e.event == "bar_not_final"])
+        n = len([e for e in s.query(db.EventRow).all() if e.event == "bar_stuck"])
         eng.catch_up(s)                       # logged once per bar
-        n2 = len([e for e in s.query(db.EventRow).all()
-                  if e.event == "bar_not_final"])
-    assert n == 1 and n2 == 1
+        n2 = len([e for e in s.query(db.EventRow).all() if e.event == "bar_stuck"])
+    assert n == 1 and n2 == 1 and len(eng.sent) == 1 and "STUCK" in eng.sent[0]
