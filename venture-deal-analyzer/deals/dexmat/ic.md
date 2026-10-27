@@ -135,6 +135,27 @@ enthusiasm is real, I know who it is."**
 
 ---
 
+## Position — logged 2026-10-27
+
+**Casey: "I invested $75k into DexMat"** — through the Delta4 Capital SPV (2% one-time +
+20% carry + pro-rata admin; target close 2026-09-28). Wire date not recorded.
+
+- **S3 was never run in this record.** The decision was made outside the process, so
+  no pre-mortem or kill criteria were written before the money moved. Write the
+  tripwires now (post hoc, labelled as such) so R1 can track them.
+- **Deployment is not yet confirmed on EDGAR (checked 2026-10-27):** Delta4 Capital
+  Master SPV LLC (CIK 2113791) has filed nothing since 2026-05-27; the only DexMat-named
+  SPV Form D is "DexMat Feb 2026 a Series of CGF2021 LLC" (2026-03-18, a different
+  vehicle); DexMat, Inc. (CIK 2104722) last filed a Form D on 2026-08-19, before the
+  close. A Form D is due 15 days after first sale, and Delta4's earlier ones were 7–11
+  days late, so this is a hygiene flag, not evidence of a problem.
+- **Confirm deployment:** the countersigned subscription agreement; a closing notice or
+  capital-account statement showing the $75K and units held; the SPV series' legal
+  name, bank or custodian and administrator; written confirmation from DexMat that the
+  Delta4 series is on its cap table, and for how much; the series' Form D.
+- **Book:** with the Clone bridge, Delta4 exposure would be $125K across two SPVs from a
+  manager with no Form ADV and no filed Form D for either. Size it as one manager bet.
+
 ## Track
 
-☐ HELD  ☑ LIVE  ☐ PASSED
+☑ HELD ($75K via Delta4 SPV, logged 2026-10-27)  ☐ LIVE  ☐ PASSED

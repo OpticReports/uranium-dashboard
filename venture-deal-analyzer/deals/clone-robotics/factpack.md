@@ -736,9 +736,12 @@ is itself the datapoint.
 - ◐ (LP) **The native memo** — pages 1–5 and 7 ✓ (rev 2). **Page 6 and the deck still
   open.** Page 6 should carry the cash Clone must hold to close Adaract and the sponsor's
   full risk list.
-- ○ (LP) **Did the Delta4 DexMat SPV close on 2026-09-28, and did you wire?** If so:
-  what subscription documents, closing confirmation, custodian and Form D entity name
-  did Delta4 provide? It is the best available test of this vehicle.
+- ◐ (LP) **Did the Delta4 DexMat SPV close, and did you wire?** ✓ Casey invested **$75K**
+  (2026-10-27). **Deployment not yet visible on EDGAR:** Delta4 has filed nothing since
+  2026-05-27, and DexMat's last Form D (2026-08-19) predates the close. Still open: the
+  closing notice, a capital-account statement, the series' legal name and custodian,
+  and DexMat's cap-table confirmation. **Get these before any Clone wire.** Book: Delta4
+  exposure would be $125K across two SPVs.
 
 ### P1 — decision-gating
 
