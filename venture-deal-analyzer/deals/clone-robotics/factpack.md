@@ -1,0 +1,428 @@
+# Clone Robotics — grounded fact pack (2026-10-27, rev 1 — PRE-DD)
+
+Provenance tags: [VERIFIED] primary source · [SECONDARY] third-party · [CLAIMED]
+company or sponsor statement, unverified · [CONFLICT] · [REFUTED] contradicted by a
+primary source · [NOT FOUND] searched, absent · [ANALYST] our own estimate.
+
+Tenth vehicle in the ledger. **Pipeline (process v1.2, cost-discipline rules):
+13 agents in one workflow — 6 evidence sweeps, each adversarially verified (2
+independent verifiers on Casey's tactile crux). Every verifier returned APPROVED
+WITH CORRECTIONS; all 92 corrections are applied below** (2.54M tokens, 995 tool
+calls, 0 agent errors). Panel + red team: §8. Sweep and verifier files with every
+source URL: `sweeps/`.
+
+### Documents
+
+| document | read | notes |
+|---|---|---|
+| Delta4 Capital memo "Clone Robotics — Bridge round", Alex Golding, dated 2026-10-27 | **PARTLY — fragments only** | Supplied as a 310 px-wide screenshot of a multi-page DocSend/Dropbox PDF. Headings and a few phrases legible at 4x upscale (`source/legible-fragments.md`); **body text and nearly every number UNREAD**. Never used as fact below except where marked (?) as a lead. |
+| Clone deck (same viewer) | **NOT READ** | 121 px wide; only some slide titles legible |
+| **Valuation $200M post-money** | **YES — LP, 2026-10-27** | Supersedes our misread "$3?0M" — proof that the screenshot's numbers cannot be trusted |
+| Raise size, committed, instrument, exact SPV fees, cash, burn, Series A size | **NOT READ** | P1 asks; a native PDF closes most of them |
+
+---
+
+## 0 · THE ONE-LINE READ
+
+**A genuinely different actuator (water-hydraulic artificial muscles) attached to
+a company that has not yet shown the things a $200M price assumes: no walking
+robot, no autonomous grasp, no signed customer, no cycle-life data at working
+pressure, no patents found, and its muscle inventor has left the operating
+board — offered through a sponsor whose last SPV appears never to have invested.**
+On Casey's crux: **partly right.** Clone has no touch sensing *by published design*
+("only proprioceptive and visual feedback"), but it does have a grip-force channel
+(muscle pressure). The bigger gap is that no autonomous grasp has ever been shown.
+
+---
+
+## 1 · THE ASK
+
+| | |
+|---|---|
+| Round | Pre-Series A **bridge** (memo heading) |
+| Price | **$200M post-money** (LP) |
+| Check | ~$50K via **Delta4 Capital SPV** |
+| SPV terms | "2% one-time fee, 20% carried interest, plus a pro-rata share of SPV fees" (approx., legible fragment). Delta4's three filed Form Ds instead disclose ~5% related-person fees ("1%/yr × 5") [VERIFIED] — CONFLICT |
+| Raise / committed / instrument | **UNREAD** |
+| Close | "The bridge closes next week" (memo) |
+| Next round | Series A, "$75–100M" target (?) |
+| Entry ownership | $50K ÷ $200M = 0.025% gross; **~0.024% net** of the 2% fee and admin share |
+| Filing of record | **None.** Clone has never filed a Form D (its SAFEs went under §4(a)(2)); no Delta4 Form D for any Clone series [VERIFIED, EDGAR] |
+
+---
+
+## 2 · CASEY'S CRUX — does the hand know how hard it is gripping?
+
+**Verdict: PARTLY TRUE. No touch; yes force; and the decisive gap is elsewhere.**
+
+**What Clone has [VERIFIED, first-party].** Clone's live android page (bundle
+`/_nuxt/D8GOK2Ld.js` on https://clonerobotics.com/android/, prerendered 2026-07-02):
+the robot is "designed for instantaneous neural control of the valves… **with only
+proprioceptive and visual feedback**": **4 depth cameras** (in the skull), **70
+inertial sensors** (joint angles/velocities) and **320 pressure sensors "for
+muscle-level force feedback."** Zero hits for tactile / fingertip / touch sensor /
+haptic / slip across 6 pages and 22 JS bundles, nor in the 2023 SEC Form C. **No
+touch is a published design choice, not an omission.** The "pressure pads in the
+palm" in Interesting Engineering (2025-11-24) trace to no first-party source → CONFLICT.
+
+**Why "no feedback" is still wrong [VERIFIED / ANALYST].**
+- A pressure-regulated McKibben muscle **commands and caps its own force** via
+  its pressure setpoint — force control without touch, which stiff geared hands
+  can't match (1X: at 100–200:1 gearing "friction swallows the contact forces",
+  https://www.1x.tech/discover/neos-hands).
+- The leaders' *primary* force channel is the same kind. Boston Dynamics' new
+  Atlas hand relies "on proprioception for agile dexterous behaviors", with touch
+  "complementary" (https://www.therobotreport.com/boston-dynamics-drops-pinkie-on-new-humanoid-hand/).
+- The only clean ablation separating them (RDP, https://arxiv.org/abs/2503.02881):
+  intrinsic force from joint-torque sensors **beat** GelSight fingertip touch on all
+  three contact-rich tasks (peel 0.95 vs 0.90; wipe 0.87 vs 0.77; lift 0.70 vs 0.48).
+  MoDE-VLA: removing proprioceptive force cost −11 pp, removing touch −8 pp.
+
+**Where Casey is right [VERIFIED].**
+- **Accuracy at light grips is unproven.** Geometry-only force models for water
+  McKibben muscles err ~9–10% (calibration could do better — pessimistic, not a
+  floor). Clone has published **no** measured grip-force accuracy. Rivals' fingertips
+  detect 3 g (Figure 03), 5 mN (Sanctuary, CEO claim), 0.005 N (Sharpa).
+- **Touch measurably helps on the hard tasks:** like-for-like gains of **+14 to
+  +35 pp** on fragile, slippery, occluded and insertion tasks (Calandra 2018 +24–31 pp
+  averaged; 3D-ViTac +20–35 pp). It is not free: naive fusion can hurt (ResTacVLA −5;
+  3D-ViTac hex-key 0.65 → 0.50).
+- **Every leader now ships or announces touch:** Figure 03, 1X NEO, Atlas, Tesla,
+  Sanctuary, Sharpa, Unitree Dex5-1P (the base Dex5-1 has none). **Clone is the
+  outlier.** 1X: "vision alone is insufficient for many tasks."
+
+**The bigger gaps nobody asked about [VERIFIED].**
+1. **No autonomous learned grasp has ever been shown.** Public hand demos are
+   teleoperated (Torso 3 hand, X 2026-10-01: "Teleoperation of the Hand of
+   Torso 3" — "an older hand design") or scripted (Torso 2 "hardcoded sequences";
+   V19 "manually preprogrammed").
+2. **Shipped hardware carries far fewer sensors than the spec.** Torso 2 (Dec 2024):
+   182 sensors for 910 fibres and 164 DoF. Protoclone (Feb 2025): "over 200 sensors"
+   for ">1,000 Myofibers". Hand joint-angle feedback was re-added ~Apr 2026 (2022
+   hands had 16 magnetic encoders; torso-era hands dropped them). The 4/70/320 is the
+   **Alpha pre-order spec**, not demonstrated hardware.
+3. **No close-range cameras.** The no-touch successes in the literature (ACT, Gemini
+   Robotics) run on ALOHA with **wrist cameras**; Figure 03 added a palm camera per
+   hand. Clone discloses only 4 depth cameras in the skull — it lacks both of the
+   things that substitute for each other.
+
+**Human evidence, read carefully.** Augurelle 2003: numbed fingertips → 36% drops,
+but during 30 s of 1 Hz, 20 cm oscillation; in static holds subjects raised their
+safety margin. The failure mode (a decaying human set-point) transfers only weakly
+to a pressure-held robot grip.
+
+**What would settle it (P1):** a per-hand Torso 4 sensor sheet; measured fingertip
+force estimated from pressure vs a load cell (N, % FS, hysteresis, smallest
+detectable contact); and a live **autonomous** demo — egg, paper cup, grape, plug
+insertion, slip recovery, ≥20 trials each.
+
+---
+
+## 3 · THE COMPANY
+
+| finding | tag |
+|---|---|
+| **Clone Inc.**, Delaware, incorporated 2021-10-12 (CIK 1958550); owns 100% of **CLONE sp. z o.o.**, KRS 0000947589, Wrocław. Mountain View office rests on CEO remarks. | VERIFIED / SECONDARY |
+| **Co-founder Łukasz Koźlik** — credited in Clone's own Form C with designing the hydraulic valves and McKibben muscles; largest holder Feb 2023 (3.0M shares, 43.54% of issued voting stock). **KRS entry 16 (2026-03-18) removed him from the Polish subsidiary's board**; Radhakrishnan is now its sole member. Departure from Clone Inc. is ANALYST (consistent with the memo's "co-founder who has since left"). Caplight still lists him as CTO. | VERIFIED / ANALYST |
+| **IP origin is not all his:** the same Form C credits **Michał Baran** (Chief Designer, since 2022) with "5X miniaturized fast valves" and mass-production technology for hands; Clone names its own "Aquajet valve technology". | VERIFIED (in their favour) |
+| **Patents:** Form C (Feb 2023) "does not have any registered patents" — IP held as trade secrets under assignment agreements — yet its risk factors cite "our pending patents" (self-contradiction). **No published Clone patent found** (incomplete: Espacenet/WIPO/UPRP blocked; Baran/Wieczorek not yet searched). Memo: "Clone says its technology is patented; confirming IP assignment." | VERIFIED / NOT FOUND (incomplete) |
+| **Financing record:** 2021–22 SAFEs $525K at a **$50M post cap**; 2023 Reg CF Crowd SAFE at a **$30M cap** (a down-cap) — **withdrawn**; $74,275 cash on 2023-01-31 (~3 months runway). Since then: "~$17M raised" (CEO, via Robozaps, Mar 2026) vs **$7.14M (Caplight)** — CONFLICT; a "$50M round" announced ~Apr 2026 with no reported close, now a bridge. An Echo-platform SPV, **Clone Red Beard Ventures Ltd** (BVI, CIK 2145276), sold $146,629 to 57 investors from 2026-03-12. | VERIFIED / CONFLICT |
+| **Polish subsidiary's FY2025 statements not filed** with the KRS (deadline 2026-07-15; FY2022–24 were filed). No arrears, enforcement or insolvency entries. | VERIFIED |
+| **Product timeline:** water-hydraulic hand 2022–23 (36 valves, 145 psi pump, 200 W peak); hand kits sold to labs per Form C (UC Berkeley, NYU, Stanford, ETH, Meta AI, Google AI named as customers); Torso and Torso 2 (2024) **pneumatic**, off-the-shelf valves; Protoclone (Feb 2025) hung in a frame, "cannot yet walk"; Torso 3 (~Apr 2026) teleop; **Torso 4 promised Nov 2026** (X post). **No legs or biped hardware ever shown.** | VERIFIED |
+| **Clone Alpha:** "279 units", no price, no checkout, **still says "Pre-orders available in 2025"** on 2026-10-27; the page claims "A robot that walks naturally". No deliveries found. | VERIFIED |
+| **Pilots (Mercedes?, VW?, AST SpaceMobile, a hotel group, P&G?):** no public confirmation from either side; the memo itself says "no signed customers yet". Mercedes-Benz has invested in Apptronik ("low double-digit million") and runs <10 Apollos in Kecskemét and Berlin (SECONDARY) — and the memo's names are illegible anyway. | NOT FOUND / CLAIMED |
+| **Licence + acquisition** ("exclusive licence… $1.5M, Mar 2025"(?); an unclosed acquisition requiring a minimum cash balance): no public trace — expected for an unclosed private deal; verifiable only from documents. | NOT FOUND (uninformative) |
+| CEO **Dhanush Radhakrishnan**: co-founded Symplex (YC S19, RL symptom checker, raised $1.5M per Form C, "acquired by Scale AI" — terms not public, possibly an acqui-hire). | VERIFIED |
+
+---
+
+## 4 · THE TECHNOLOGY — water-hydraulic artificial muscles
+
+**Physics [VERIFIED].** Myofiber is a McKibben-type braided fluidic muscle. Force
+falls toward zero at full contraction; Festo's datasheet puts the "most effective"
+range below 9% of a 20–25% maximum. Friction hysteresis is high. Clone's headline
+specs (1 kg from a 3 g fibre, <50 ms, >30% contraction) are spec-sheet ends, **none
+is a working point**.
+
+**Which fluid [VERIFIED].** Water hydraulics **was** shown at hand/forearm scale
+(2022–23). The 2024 torsos were **pneumatic**; Clone calls that a stopgap ("our
+biped brings back our hydraulic design with custom liquid valves"). Whole-body water
+hydraulics has not been shown publicly. Pump spec on Clone's site: "500 W… 40 SLPM…
+100 psi rating" (a maximum, not an operating point); 2022 press said 145 psi — CONFLICT.
+
+**Durability — the binding constraint [VERIFIED arithmetic; ratings CLAIMED].**
+A hand muscle at 8 grasps/min sees **0.96M cycles/yr on one shift, 1.92M on two,
+4.03M at 24/7.**
+
+| rating | source | life at 1 shift | at 2 shifts | at 24/7 |
+|---|---|---|---|---|
+| 100K cycles (?) | memo (illegible) | 26 working days | 13 working days | 9 days |
+| 650K cycles | 2023 press (not on Clone's site) | 0.68 yr | 0.34 yr | 0.16 yr |
+| >1M cycles | best public thin McKibben (s-muscle) — **air, 0.3 MPa, straight** | 1.04 yr | 0.52 yr | 0.25 yr |
+| 10M cycles (?) | memo target (illegible) | 10.4 yr | 5.2 yr | 2.5 yr |
+
+Against Clone: at **0.7 MPa** (≈ Clone's 100 psi rating), "all the normal artificial
+muscles failed" when bent around a joint-like radius, and damage rises with pressure
+(Kobayashi et al., IEEE RA-L 2024). Clone runs 0.69–1.0 MPa. With hundreds of fibres
+per robot, first failure arrives well before median life (Weibull) — though fibre
+redundancy (~5.5 per DoF in Torso 2) may give graceful degradation, and a ruptured
+*water* fibre leaks.
+
+**Energy [VERIFIED / ANALYST].** No untethered shift has been shown. The only
+measured Clone power figure is 200 W peak for a 2022 hand+forearm. Valve throttling
+wastes ~43% of input in hydraulic servo systems (Meller 2017, general). Figure 03
+runs ~5 h on 2.3 kWh.
+
+**Precedent [VERIFIED].** Boston Dynamics retired hydraulic Atlas (Apr 2024) because
+electric actuators had become "sufficient". Shadow moved from air muscles to motors;
+Sarcos went electric then left hardware. **Sanctuary still develops hydraulic hands**
+(RL and in-hand manipulation results) — what it scaled back was the humanoid and the
+company (CEO reportedly ousted, ~30 jobs cut, Nov 2024): a commercial precedent, not
+a technical retreat.
+
+**The steelman [VERIFIED].** Compliance and backdrivability; strength-to-weight of
+hydraulic McKibben actuators 5–10x motors (developer claim, oil at 5 MPa, actuator
+only); force-by-pressure; very cheap muscle parts; working water hands in 2022–23;
+in-house valves.
+
+---
+
+## 5 · COMPETITION — honestly
+
+| | **Clone** | Tesla Optimus | Figure | Unitree | AgiBot | 1X | BD Atlas |
+|---|---|---|---|---|---|---|---|
+| Hand | 26 DoF "in the hand, wrist, and elbow" → **~20–23 hand-only (ANALYST): parity, not a lead**; water-hydraulic muscles | 22 DoF, tendon | 5-finger electric | Dex5-1 20 DoF (16 active) | n/f | 25 DoF incl. wrist, tendon | 13 DoF, backdrivable direct actuation |
+| Touch | **none (published design)**; muscle-pressure force | all fingers | fingertip 3 g + palm camera | Dex5-1P: 94 sensors | n/f | normal, shear, contact | dense fingertip + palm |
+| Walks | **never shown**; biped MVP Sept 2027 (memo) | yes | yes | yes | yes | yes | yes |
+| Autonomy shown | **none** (teleop/scripted) | early | Helix VLA, BMW pilot | research buyers | thousands deployed | unproven | Gemini integration |
+| Units | **0** | ~150 (2025) | ~150 (2025) | 5,500 (2025) | 5,168 (2025) | 0 to paying customers | 2026 fleet |
+| Capital | ~$17M (claimed) / $7.1M (Caplight) | Tesla | ~$1.9B; $39B | public, ~$30B mkt cap | ~RMB 50B | ~$6B (talks) | Hyundai |
+
+**The memo's two load-bearing competitive claims.**
+1. **"~1/10 the cost": CONFLICT.** The CEO's own number is "<$20K" per android
+   **"by producing Myofiber muscles at scale"** (Apr 2026). Against BofA's China BOM
+   (<$17K by 2030) Clone's *at-scale* target is ~1.2x **above** it. The 1/10 ratio
+   holds only against a sale price like Agility's ~$200K. Unitree's G1 at $13.5K has
+   **no hand** and R1 has none either — not like-for-like, but the floor is the floor.
+2. **"Price so competitors never reach scale": REFUTED as literal.** Unitree sold
+   5,500 humanoids in 2025 at ~60% company gross margin (>70% to research/education);
+   AgiBot ~5,168; Tesla's Fremont line is designed for ~1M/yr. Softening: rivals'
+   volume is mostly research and low-DoF hands, so this does not prove Clone can't
+   win a high-DoF enterprise niche.
+
+**Capital gap:** Sanctuary ~$140M raised, Agility ~$641M, Apptronik ~$1B, Figure
+~$1.9B — Clone's ~$17M is 1/8 to 1/110 of the field.
+
+---
+
+## 6 · WHERE CLONE CAN WIN — market and timing
+
+**Demand is real, small, Chinese, and mostly not productive work [VERIFIED].**
+13,317 humanoids shipped in 2025 (Omdia), 87% Chinese. H1 2026: 19,100 (SAG) vs
+>22,000 (Counterpoint) — CONFLICT. **>60% of H1 2026 units went to entertainment &
+performance and data production & research**; manufacturing + logistics ~17.7%.
+
+**Paid humanoid work is tiny even for the US leader.** Agility (SEC S-4/A): FY2025
+revenue $1.78M; H1 2026 $0.17M, unaudited, **all services, $0 robot sales**; a
+$300M / 1,000-robot Digit 5 order from **one related-party customer**,
+milestone-conditional. BMW–Figure "successfully completed a pilot" (logistics
+sequencing, no count or commitment). And the work that pays today — moving totes —
+does not need a dexterous hand.
+
+**Clone's best honest shots (ANALYST, in order):**
+1. **High-mix stationary bench assembly** (aerospace/electronics — AST SpaceMobile
+   soldering is the named lead): rewards DoF and compliance, needs no legs, no walking
+   race. Gated by autonomy and cycle life.
+2. **Hands/muscles as a component** to other humanoid makers — if the BOM and cycle
+   life hold. Hand volume leader Linkerbot (motors, ~$3B) shows the component market
+   is real.
+3. **Research and data-collection torsos** — the biggest current segment (27% of
+   H1 2026 units), **but** Unitree is entrenched there at ~$23–25K average price and
+   the segment is forecast to lose share to service/industrial.
+4. Housekeeping/home: 2028+, contested, needs the biped, safety certification and
+   battery life.
+
+**The memo's data thesis is weaker than presented.** Physical Intelligence's
+human-to-robot transfer works at arm/task level on a 1-D gripper and explicitly did
+not transfer grasps; EgoScale pretrains in a 22-DoF human-like action space (modest
+support). **No study shows a more anatomical hand transfers better.** The hand has to
+win on measured performance per dollar.
+
+**Policy cuts both ways [VERIFIED].** On 2026-07-28 the FCC Covered-Listed **all
+foreign-produced mobile robots, humanoids included, "regardless of the nationality
+of origin"** — the trigger is where it is made. Polish-built Clone robots need US
+production or a Conditional Approval tied to an onshoring plan (2 robot approvals as
+of 2026-09-18, open-ended while the plan holds). A **stationary** torso may sit
+outside "mobile robot" (ANALYST — verify with counsel).
+
+**Timing.** By Clone's Sept 2027 biped MVP: Chinese vendors will have shipped tens of
+thousands, Agility will be delivering its Digit 5 order, Figure's BotQ (12K/yr
+initial capacity) and Tesla Fremont will be ramping.
+
+---
+
+## 7 · VEHICLE AND PRICE
+
+**Sponsor — unchanged since Quaise [VERIFIED].** Delta4 Capital Master SPV LLC
+(CIK 2113791): 3 Form Ds lifetime, **$886,861** from 13 investor slots, nothing filed
+since 2026-05-27. **No Form D for the Quaise or DexMat SPVs, or any Clone series.**
+Quaise's own filings: sold amount rose **$45.5M between July and September with the
+investor count unchanged at 49** — no new holder appeared during Delta4's raising
+window, so **no evidence the Quaise SPV ever invested**. No Form ADV or exempt-adviser
+filing; domain registered 2025-10-10, site login-gated. Form Ds filed 7–11 days late
+(two were first filings on new CIKs — hygiene, not pattern).
+**In Golding's favour [VERIFIED]:** a real investor with his own money in robotics —
+~$200K in Forward Industries' PIPE (424B5, 2025-11-03, same San Juan ZIP) and 10,000
+RoboStrategy (BOT) shares. Platform SPVs (Echo, Sydecar) file under the platform's
+name, so an EDGAR absence is not conclusive.
+
+**Allocation: NOT FOUND.** No evidence Clone has allocated to Delta4; the memo says he
+will "probably invest" **after** diligence he has not yet done (live Torso 4, IP
+assignment, acquisition terms) — while the bridge "closes next week".
+
+**Fees are not the problem [ANALYST, verified arithmetic].** On $50K: net invested
+$44.8–48.8K. Net multiple 0.90–0.98x at 1x gross; 7.4–8.0x at 10x; 21.7–23.6x at 30x.
+At Delta4's historical ~5% fee: 0.87 / 7.13 / 21.0x.
+
+**Price [VERIFIED marks / ANALYST].** $200M post = **4.0x** the 2021–22 $50M SAFE cap,
+**6.7x** the 2023 $30M crowd cap, **~11.8x** the ~$17M raised; **1.23x** Mentee's $162M
+(the only other verified pre-product humanoid mark; Figure ~$400M on the other side).
+In the sector's range; full for a robot that cannot walk and has no customer.
+
+**Return math (ignores any liquidation-preference stack):**
+
+| dilution to exit | 1x net needs | 3x net | **10x net** |
+|---|---|---|---|
+| 30% | $0.30B | $1.04B | **$3.6B** |
+| 50% | $0.41B | $1.45B | **$5.1B** |
+| 65% | $0.59B | $2.07B | **$7.3B** |
+
+A $75–100M Series A alone dilutes 20–40%. **10x needs an Apptronik/1X-tier outcome.**
+
+**Process flags.** Third Delta4 pitch on a fixed close clock; 2 of 3 with under a
+week. Gating asks: countersigned allocation, SPV docs, bridge instrument, extension.
+
+---
+
+## 8 · SCORING — 5-scorer panel + red team
+
+*Pending — filled in from the panel workflow (below).*
+
+---
+
+## 9 · WHAT THE BULLS GET RIGHT — recorded deliberately
+
+- **A real, different actuator that has worked.** Water-hydraulic hands ran in
+  2022–23 and sold to top labs; muscles are cheap to make; force-by-pressure is a
+  genuine control advantage over stiff geared hands.
+- **The leaders agree proprioceptive force is the primary channel**; touch is
+  complementary. Clone's no-touch choice is defensible *if* its pressure estimate is
+  accurate — a measurable, cheap-to-test claim.
+- **Capital efficiency.** ~$17M against hundreds of millions for rivals, for a
+  26-DoF arm-hand system.
+- **IP depth beyond the departed founder** (Baran's valves, in-house Aquajet valves).
+- **A stationary torso can be a product** without winning the walking race.
+
+## 10 · PROCESS NOTES
+
+- **The memo is functionally unread.** Every number in §1 except the $200M (LP) is a
+  fragment or UNREAD; a native PDF is the first ask. Our misread "$3?0M" vs Casey's
+  $200M is the reason.
+- The competition sweep priced comps at $300–360M; its verifier recomputed at $200M
+  (multiples above).
+- The tactile verifiers corrected 32 items, mostly in Clone's favour (the RDP and
+  MoDE-VLA force-vs-touch evidence; ACT mean 74%, not 80–90%; geometry-only force
+  error is pessimistic). The panel scores on the corrected record.
+- **Book flags:** second Delta4 vehicle in the ledger (after Quaise; DexMat's SPV also
+  unfiled); sixth deep-tech/hardware exposure; first humanoid.
+
+---
+
+## PENDING DD QUESTIONS — RANKED (rev 1, 2026-10-27)
+
+Statuses: ○ not yet asked · ● asked · ✓ answered · ✗ refused · ⌛ expired (60 days from
+first ask). (S) = to the sponsor; (C) = to the company. Chosen so that answer quality
+is itself the datapoint.
+
+### P1 — decision-gating
+
+1. ○ (S) **Native memo PDF + deck.** Closes raise size, committed, instrument, SPV
+   fees, cash, burn, Series A size. *Moves:* every term in §1.
+2. ○ (C) **A live AUTONOMOUS (not teleoperated) Torso 4 demo** — egg, paper cup,
+   grape, plug insertion, slip recovery, ≥20 trials each, with logged grip force.
+   *Moves:* Casey's crux, the "hand leads" thesis, pilot readiness. Decisive.
+3. ○ (C) **Per-hand Torso 4 sensor sheet + measured grip-force accuracy** (pressure-
+   estimated fingertip force vs load cell: N, % FS, hysteresis, smallest detectable
+   contact, latency), and whether touch or wrist/palm cameras are on the BOM or
+   roadmap. *Moves:* the crux, quantified.
+4. ○ (C) **Koźlik:** has he left Clone Inc., on what terms, what happened to his ~3M
+   shares, is he building anything competing? *Moves:* key-person, cap table, IP.
+5. ○ (C) **IP chain of title:** Koźlik's signed assignment covering his 2014–21 muscle
+   and valve work; the IP transfer between the Polish and US entities; assignments
+   from Baran and the other inventors; patent schedule with numbers. *Moves:* whether
+   the company owns its core technology.
+6. ○ (C) **Cycle life at working pressure:** Myofiber and valve life (cycles) at
+   stated load, stroke, pressure and bend radius; failure and leak modes; maintenance
+   interval in hours. *Moves:* the binding technical risk (§4).
+7. ○ (S+C) **Allocation proof:** a countersigned Clone→Delta4 allocation (amount,
+   instrument, deadline), confirmed by Clone directly. *Moves:* whether the deal
+   exists as offered.
+8. ○ (S) **SPV documents before wiring:** operating agreement, fee base, carry basis,
+   admin budget, what happens to wired funds if the SPV or bridge fails to close; why
+   the Form Ds show ~5% fees vs 2% quoted; did the Quaise and DexMat SPVs close?
+   *Moves:* vehicle verdict.
+9. ○ (C) **Cash, burn, runway** with and without the Series A; how much of the bridge
+   the acquisition's minimum-cash condition locks up; what happened to the "$50M round"
+   of Mar–Apr 2026. *Moves:* P(survival), P(Series A).
+10. ○ (S+C) **Timeline:** can Casey commit after Delta4's own pre-close checks, or get
+    a 2–3 week extension? *Moves:* whether diligence precedes money.
+
+### P2 — score-moving
+
+11. ○ (C) Licence + acquisition: counterparty, IP covered, terms, closing conditions,
+    any relation to the departed founder.
+12. ○ (C) Pilots: for each named site, status (LOI / signed / paid), scope, price,
+    start; what exactly the Mercedes engagement is, given Apptronik.
+13. ○ (C) Itemised BOM for hand and android at stated volume (pump, valves, reservoir,
+    battery, compute); which competitor cost is the "1/10" denominator.
+14. ○ (C) Fluid and power: is Torso 4 water or air; untethered runtime per charge;
+    W per kg payload; leak data.
+15. ○ (C) Fully diluted post-bridge cap table incl. all SAFEs, the Red Beard SPV,
+    option pool, preference stack.
+16. ○ (C) Torso-only go-to-market: price and BOM at 100 / 1K / 10K units; named
+    research or bench-assembly buyers; any paid hand or torso orders since 2023.
+17. ○ (C) Policy plan: US production vs FCC Conditional Approval; does a stationary
+    torso fall outside the mobile-robot listing (counsel's view)?
+18. ○ (C) Why are the Polish subsidiary's FY2025 statements unfiled; FY2022–25
+    statements for both entities.
+19. ○ (S) Golding's own commitment to this SPV; any compensation from Clone or the
+    lead; information rights and Series A pro rata for the SPV.
+20. ○ (C) Teleop operator feedback: are muscle-pressure channels logged and fed to
+    the policy (can Clone learn force-aware behaviour)?
+
+### P3 — completeness
+
+21. ○ (C) Alpha's 279 reservations and the 2023 hand/torso pre-orders: deposits,
+    refunds owed, deliveries.
+22. ○ (C) Reconcile sensor counts ("over 200" / 394 / "500") and hand DoF (26 incl.
+    wrist and elbow vs 27 in the hand).
+23. ○ (C) Was Protoclone pneumatic or water? Is the Alpha page's "walks naturally"
+    current?
+24. ○ (C) Safety certification path for work near people.
+25. ○ (C) Why the 2023 Reg CF was withdrawn; why no Form D for later rounds.
+
+---
+
+## TRIPWIRES / FALSIFIABLE CHECKS — written before any money moves
+
+1. **Torso 4 live in November 2026**, and an **autonomous** grasp with logged force by
+   Q1 2027. Teleop-only through Q1 2027 → the hand thesis is unproven at Series A.
+2. **Series A closes by ~Q2 2027** at ≥ the bridge price. Slip past mid-2027 with
+   short runway → distressed financing.
+3. **A paid pilot** (not an LOI) from a named counterparty by mid-2027.
+4. **Published cycle-life data ≥2M cycles at working pressure** before any fleet
+   deployment; anything near 100–650K → a maintenance business, not a product.
+5. **The biped walking untethered by Sept 2027** (Clone's own date).
+6. **Delta4 files a Form D for the Clone series** within 15 days of first sale; no
+   filing → treat the position as unverified.
+7. **Koźlik:** any competing venture, or any IP claim from him.

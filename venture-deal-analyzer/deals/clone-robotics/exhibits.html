@@ -1,0 +1,232 @@
+<title>Clone Robotics Exhibits</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+  /* Layout: one reading column of four exhibits; each opens with its takeaway, then the chart, then sources. */
+  :root {
+    --bg: #f5f6f7; --panel: #ffffff; --ink: #121518; --ink-2: #4b5259; --ink-3: #737b83;
+    --rule: #dfe2e5; --grid: #e7e9ec;
+    --touch: #2a78d6; --force: #eb6834;
+    --d1: #86b6ef; --d2: #2a78d6; --d3: #104281;
+    --yes: #0b7a3e; --yes-bg: #e3f3e9; --no: #b4232a; --no-bg: #fbe6e6; --part: #8a5a00; --part-bg: #fbf0d9;
+    --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+    --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #131619; --panel: #1b1f23; --ink: #eef0f2; --ink-2: #b9c0c7; --ink-3: #8b939b;
+      --rule: #30363c; --grid: #2a2f35;
+      --touch: #3987e5; --force: #d95926;
+      --d1: #184f95; --d2: #3987e5; --d3: #86b6ef;
+      --yes: #5fd08f; --yes-bg: #173826; --no: #ff8a8a; --no-bg: #3f1d1f; --part: #f2c063; --part-bg: #3a2f17;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #131619; --panel: #1b1f23; --ink: #eef0f2; --ink-2: #b9c0c7; --ink-3: #8b939b;
+    --rule: #30363c; --grid: #2a2f35;
+    --touch: #3987e5; --force: #d95926;
+    --d1: #184f95; --d2: #3987e5; --d3: #86b6ef;
+    --yes: #5fd08f; --yes-bg: #173826; --no: #ff8a8a; --no-bg: #3f1d1f; --part: #f2c063; --part-bg: #3a2f17;
+    color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body); }
+  main { max-width: 920px; margin: 0 auto; padding-block: 28px 56px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+         display: grid; gap: 22px; }
+  header { display: grid; gap: 6px; }
+  .eyebrow { font: 500 12px/1.3 var(--f-data); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+  h1 { font: 700 34px/1.1 var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+  h2 { font: 600 22px/1.2 var(--f-display); margin: 0; text-wrap: balance; }
+  p { margin: 0; max-width: 68ch; }
+  .lede { color: var(--ink-2); }
+  section { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 20px; display: grid; gap: 14px; min-width: 0; }
+  .verdict { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .verdict div { border-top: 3px solid var(--rule); padding-top: 8px; display: grid; gap: 4px; min-width: 0; }
+  .verdict b { font: 600 15px/1.3 var(--f-display); }
+  .verdict .y { border-color: var(--yes); } .verdict .n { border-color: var(--no); } .verdict .p { border-color: var(--part); }
+  .verdict span { color: var(--ink-2); font-size: 14px; }
+  @media (max-width: 640px) { .verdict { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font: 600 12px/1.3 var(--f-data); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+  td.num, th.num { font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+  tr.clone td { font-weight: 600; }
+  .chip { display: inline-block; font: 500 12px/1.2 var(--f-data); padding: 3px 7px; border-radius: 3px; white-space: nowrap; }
+  .chip.yes { color: var(--yes); background: var(--yes-bg); } .chip.no { color: var(--no); background: var(--no-bg); } .chip.part { color: var(--part); background: var(--part-bg); }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--ink-2); }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { fill: var(--ink); font-family: var(--f-body); font-size: 12px; }
+  svg text.mute { fill: var(--ink-3); font-family: var(--f-data); font-size: 11px; }
+  svg text.val { font-family: var(--f-data); font-size: 11px; fill: var(--ink-2); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }
+  svg .grid { stroke: var(--grid); stroke-width: 1; }
+  svg .ref { stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  svg rect.m:hover { opacity: .8; }
+  .src { font-size: 12.5px; color: var(--ink-3); }
+  details summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
+  details[open] summary { margin-bottom: 8px; }
+  a { color: var(--touch); }
+  :focus-visible { outline: 2px solid var(--touch); outline-offset: 2px; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">Deal analyzer · intake 2026-10-27 · rev 1, pre-diligence</div>
+    <h1>Clone Robotics: does the hand know how hard it is gripping?</h1>
+    <p class="lede">Clone builds humanoids on water-hydraulic artificial muscles. These exhibits cover the sensing question, the muscle durability question, and the price. Everything here passed an adversarial check; figures marked (?) come from an unreadable memo and are leads, not facts.</p>
+  </header>
+
+  <section aria-labelledby="h-crux">
+    <h2 id="h-crux">The crux, answered</h2>
+    <div class="verdict">
+      <div class="n"><b>No touch sensing</b><span>By published design: "only proprioceptive and visual feedback." No fingertip, contact or slip sensors anywhere in Clone's disclosures.</span></div>
+      <div class="p"><b>Yes, a grip-force channel</b><span>320 muscle-pressure sensors "for muscle-level force feedback" (Alpha spec). Pressure sets and caps each muscle's force. Accuracy is unmeasured.</span></div>
+      <div class="n"><b>The bigger gap</b><span>No autonomous grasp has ever been shown. Demos are teleoperated or scripted, and there are no wrist or palm cameras.</span></div>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Hand</th><th>Fingertip touch</th><th>Published sensitivity / detail</th></tr></thead>
+        <tbody>
+          <tr class="clone"><td>Clone (Alpha spec)</td><td><span class="chip no">none</span></td><td>4 skull depth cameras, 70 IMUs, 320 muscle-pressure sensors. Shipped torsos carried fewer: 182 sensors for 910 fibres (Torso 2).</td></tr>
+          <tr><td>Figure 03</td><td><span class="chip yes">yes</span></td><td>Fingertip sensors detect 3 g; a palm camera in each hand.</td></tr>
+          <tr><td>1X NEO</td><td><span class="chip yes">yes</span></td><td>Normal force, shear and contact location (Jul 2026). "Vision alone is insufficient for many tasks."</td></tr>
+          <tr><td>Boston Dynamics Atlas</td><td><span class="chip yes">yes</span></td><td>Dense fingertip and palm sensing; actuator proprioception is the primary force channel, touch "complementary".</td></tr>
+          <tr><td>Tesla Optimus</td><td><span class="chip yes">yes</span></td><td>Tactile on all fingers since Gen 2 (secondary source).</td></tr>
+          <tr><td>Sanctuary</td><td><span class="chip yes">yes</span></td><td>7-cell pads, 5 mN (CEO claim). Also a hydraulic hand.</td></tr>
+          <tr><td>Sharpa</td><td><span class="chip yes">yes</span></td><td>More than 1,000 taxels per fingertip, 0.005 N.</td></tr>
+          <tr><td>Unitree Dex5-1P</td><td><span class="chip part">P model only</span></td><td>94 tactile sensors, 10 g to 2,500 g. The base Dex5-1 has none.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src">Sources: clonerobotics.com/android (live bundle, 2026-10-27); figure.ai/news/introducing-figure-03; 1x.tech/discover/neos-hands; therobotreport.com (Atlas hand, Sanctuary tactile); Unitree product pages; Clone YouTube feed (Torso 2).</p>
+  </section>
+
+  <section aria-labelledby="h-force">
+    <h2 id="h-force">Force sensing can beat fingertip touch, if it is accurate</h2>
+    <p>Same policy (RDP), two sensing channels, three contact-rich tasks. Force estimated from the arm's own joint-torque sensors, with no skin, scored above GelSight fingertip touch every time. That is the case for Clone's design choice. The catch: Clone has never published how accurate its pressure-based force estimate is, and geometry-only models for water McKibben muscles are off by about 9–10%.</p>
+    <div class="legend"><span><i style="background:var(--touch)"></i>fingertip touch (GelSight)</span><span><i style="background:var(--force)"></i>force from joint torque (no skin)</span></div>
+    <div id="c-force" role="img" aria-label="Grouped bars: success rate with touch vs force sensing on peel, wipe and lift tasks"></div>
+    <details><summary>Data table</summary>
+      <table><thead><tr><th>Task</th><th class="num">Touch</th><th class="num">Force</th></tr></thead>
+      <tbody><tr><td>Peel</td><td class="num">0.90</td><td class="num">0.95</td></tr><tr><td>Wipe</td><td class="num">0.77</td><td class="num">0.87</td></tr><tr><td>Bimanual lift</td><td class="num">0.48</td><td class="num">0.70</td></tr></tbody></table>
+    </details>
+    <p class="src">arxiv.org/abs/2503.02881 (RDP). Elsewhere, touch adds +14 to +35 points on fragile, slippery and insertion tasks (Calandra 2018; 3D-ViTac), and naive touch fusion can hurt. The no-touch successes in the literature (ACT, Gemini Robotics) used wrist cameras, which Clone does not disclose.</p>
+  </section>
+
+  <section aria-labelledby="h-life">
+    <h2 id="h-life">Muscle life is the binding constraint</h2>
+    <p>A hand muscle doing 8 grasps a minute sees 0.96M cycles a year on one shift, 1.92M on two and 4.03M around the clock. Bars show how long one muscle lasts at each published rating. At two shifts, only the memo's unreadable 10M target lasts more than a year, and the best public durability figure was measured on air at 0.3 MPa, well below Clone's ~0.7–1.0 MPa.</p>
+    <div class="legend"><span><i style="background:var(--d1)"></i>1 shift</span><span><i style="background:var(--d2)"></i>2 shifts</span><span><i style="background:var(--d3)"></i>24/7</span></div>
+    <div id="c-life" role="img" aria-label="Grouped horizontal bars on a log scale: years of muscle life by rating and duty"></div>
+    <details><summary>Data table</summary>
+      <table><thead><tr><th>Rating</th><th class="num">1 shift (yr)</th><th class="num">2 shifts</th><th class="num">24/7</th></tr></thead>
+      <tbody><tr><td>100K (?) memo</td><td class="num">0.10</td><td class="num">0.05</td><td class="num">0.02</td></tr><tr><td>650K, 2023 press</td><td class="num">0.68</td><td class="num">0.34</td><td class="num">0.16</td></tr><tr><td>&gt;1M, s-muscle (air, 0.3 MPa)</td><td class="num">1.04</td><td class="num">0.52</td><td class="num">0.25</td></tr><tr><td>10M (?) memo target</td><td class="num">10.4</td><td class="num">5.2</td><td class="num">2.48</td></tr></tbody></table>
+    </details>
+    <p class="src">Duty arithmetic: 8 grasps/min × 60 × 8 h × 250 days = 0.96M; 24/7 = 350 days. At 0.7 MPa, "all the normal artificial muscles failed" when bent around a joint radius (Kobayashi et al., IEEE RA-L 2024).</p>
+  </section>
+
+  <section aria-labelledby="h-price">
+    <h2 id="h-price">What a 10x needs at $200M post</h2>
+    <p>A $50K check through the SPV owns about 0.024% after fees. Bars show the exit equity value Clone needs for the LP to get 1x, 3x and 10x net, after dilution from the Series A and later rounds. Dashed lines mark where the leaders are valued today. A 10x needs an Agility-to-Apptronik outcome or better, for a company that has not yet shown a walking robot or a customer.</p>
+    <div class="legend"><span><i style="background:var(--d1)"></i>1x net</span><span><i style="background:var(--d2)"></i>3x net</span><span><i style="background:var(--d3)"></i>10x net</span></div>
+    <div id="c-exit" role="img" aria-label="Grouped horizontal bars on a log scale: exit value needed for 1x, 3x and 10x at 30, 50 and 65 percent dilution, with reference lines for Agility, Apptronik and Figure"></div>
+    <details><summary>Data table</summary>
+      <table><thead><tr><th>Dilution to exit</th><th class="num">1x</th><th class="num">3x</th><th class="num">10x</th></tr></thead>
+      <tbody><tr><td>30%</td><td class="num">$0.30B</td><td class="num">$1.04B</td><td class="num">$3.63B</td></tr><tr><td>50%</td><td class="num">$0.41B</td><td class="num">$1.45B</td><td class="num">$5.08B</td></tr><tr><td>65%</td><td class="num">$0.59B</td><td class="num">$2.07B</td><td class="num">$7.25B</td></tr></tbody></table>
+    </details>
+    <p class="src">2% one-time fee and 20% carry (approx., from the memo; Delta4's filed Form Ds show ~5%). Ignores any liquidation-preference stack. Reference marks: Agility $2.5B (SPAC), Apptronik ~$5B (reported), Figure $39B.</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  var NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function svg(w, h) { return el("svg", { viewBox: "0 0 " + w + " " + h, preserveAspectRatio: "xMinYMin meet" }); }
+  function tip(node, s) { node.appendChild(el("title", {}, s)); return node; }
+
+  // Exhibit 2: grouped vertical bars, linear 0..1
+  (function () {
+    var data = [["Peel", 0.90, 0.95], ["Wipe", 0.77, 0.87], ["Bimanual lift", 0.48, 0.70]];
+    var W = 640, H = 250, L = 44, R = 12, T = 12, B = 34, ph = H - T - B, s = svg(W, H);
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
+      var y = T + ph * (1 - v);
+      s.appendChild(el("line", { x1: L, x2: W - R, y1: y, y2: y, class: "grid" }));
+      s.appendChild(el("text", { x: L - 8, y: y + 4, "text-anchor": "end", class: "mute" }, Math.round(v * 100) + "%"));
+    });
+    var gw = (W - L - R) / data.length, bw = 54;
+    data.forEach(function (d, i) {
+      var cx = L + gw * i + gw / 2;
+      [[d[1], "var(--touch)", "touch", -bw - 2], [d[2], "var(--force)", "force", 2]].forEach(function (b) {
+        var h = ph * b[0], x = cx + b[3], y = T + ph - h;
+        s.appendChild(tip(el("rect", { x: x, y: y, width: bw, height: h, rx: 3, fill: b[1], class: "m" }), d[0] + ", " + b[2] + ": " + Math.round(b[0] * 100) + "%"));
+        s.appendChild(el("text", { x: x + bw / 2, y: y - 5, "text-anchor": "middle", class: "val" }, Math.round(b[0] * 100) + "%"));
+      });
+      s.appendChild(el("text", { x: cx, y: H - 12, "text-anchor": "middle" }, d[0]));
+    });
+    document.getElementById("c-force").appendChild(s);
+  })();
+
+  // Horizontal grouped bars on a log axis
+  function hlog(id, rows, series, opts) {
+    var W = 720, L = opts.L, R = 20, T = opts.refs ? 26 : 10, gh = 3 * 15 + 14, H = T + rows.length * gh + 34, s = svg(W, H);
+    var lo = Math.log10(opts.min), hi = Math.log10(opts.max), pw = W - L - R;
+    function X(v) { return L + pw * (Math.log10(v) - lo) / (hi - lo); }
+    var axisY = T + rows.length * gh;
+    opts.ticks.forEach(function (t) {
+      s.appendChild(el("line", { x1: X(t[0]), x2: X(t[0]), y1: T, y2: axisY, class: "grid" }));
+      s.appendChild(el("text", { x: X(t[0]), y: axisY + 16, "text-anchor": "middle", class: "mute" }, t[1]));
+    });
+    (opts.refs || []).forEach(function (rf) {
+      var x = X(rf[0]);
+      s.appendChild(el("line", { x1: x, x2: x, y1: T - 4, y2: axisY, class: "ref" }));
+      s.appendChild(el("text", { x: x, y: T - 10, "text-anchor": "middle", class: "mute" }, rf[1]));
+    });
+    rows.forEach(function (r, i) {
+      var y0 = T + i * gh + 4;
+      s.appendChild(el("text", { x: L - 10, y: y0 + 26, "text-anchor": "end" }, r[0]));
+      r[1].forEach(function (v, j) {
+        var y = y0 + j * 15, x0 = X(opts.min);
+        s.appendChild(tip(el("rect", { x: x0, y: y, width: Math.max(2, X(v) - x0), height: 12, rx: 2, fill: series[j][1], class: "m" }), r[0] + ", " + series[j][0] + ": " + opts.fmt(v)));
+        s.appendChild(el("text", { x: X(v) + 5, y: y + 10, class: "val" }, opts.fmt(v)));
+      });
+    });
+    s.appendChild(el("text", { x: L + pw / 2, y: H - 2, "text-anchor": "middle", class: "mute" }, opts.axis));
+    document.getElementById(id).appendChild(s);
+  }
+
+  var duty = [["1 shift", "var(--d1)"], ["2 shifts", "var(--d2)"], ["24/7", "var(--d3)"]];
+  hlog("c-life", [
+    ["100K (?) memo", [0.104, 0.052, 0.0248]],
+    ["650K, 2023 press", [0.677, 0.339, 0.161]],
+    [">1M, air 0.3 MPa", [1.04, 0.52, 0.248]],
+    ["10M (?) target", [10.4, 5.2, 2.48]]
+  ], duty, {
+    L: 150, min: 0.01, max: 20, axis: "years of operation per muscle (log scale)",
+    ticks: [[0.01, "0.01"], [0.1, "0.1"], [1, "1 yr"], [10, "10"]],
+    fmt: function (v) { return v < 1 ? (v * 12).toFixed(1) + " mo" : v.toFixed(1) + " yr"; }
+  });
+
+  var mult = [["1x net", "var(--d1)"], ["3x net", "var(--d2)"], ["10x net", "var(--d3)"]];
+  hlog("c-exit", [
+    ["30% dilution", [0.296, 1.036, 3.627]],
+    ["50% dilution", [0.415, 1.451, 5.078]],
+    ["65% dilution", [0.592, 2.073, 7.254]]
+  ], mult, {
+    L: 110, min: 0.1, max: 60, axis: "exit equity value, $B (log scale)",
+    ticks: [[0.1, "$0.1B"], [1, "$1B"], [10, "$10B"]],
+    refs: [[2.5, "Agility"], [5, "Apptronik"], [39, "Figure"]],
+    fmt: function (v) { return "$" + (v < 1 ? v.toFixed(2) : v.toFixed(1)) + "B"; }
+  });
+})();
+</script>

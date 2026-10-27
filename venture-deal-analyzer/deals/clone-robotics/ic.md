@@ -1,0 +1,99 @@
+# IC record — Clone Robotics
+
+Protocol: `templates/ic-process.md` (v1.2 — full report at intake).
+Tenth vehicle in the ledger; second via Delta4 Capital (after Quaise).
+
+---
+
+## S1 · INTAKE — 2026-10-27
+
+### Blind prior — optional, not blocking
+
+Not supplied. Casey's framing: "run analysis on this company as potential
+investment, exploring where it can win the market and how it honestly shapes up
+to leading competition. Maybe $50k check." And his crux, verbatim: *"for a robot
+to be full autonomous the hand must have sensor feedback to know how hard it's
+gripping objects etc, but these guys, I believe don't have that in their system,
+is that true?"* His stated prior is sceptical of the method ("struggling to see
+how this method ultimately wins").
+
+### The ask
+
+| | |
+|---|---|
+| Round | Pre-Series A bridge |
+| Valuation | **$200M post-money** (Casey, 2026-10-27) |
+| Check | ~$50K via Delta4 Capital SPV |
+| Fees | ~2% one-time + 20% carry + pro-rata SPV costs (illegible fragment; Delta4's Form Ds show ~5%) |
+| Raise / committed / instrument | **UNREAD** |
+| Close | "next week" per the memo |
+| Source | Alex Golding, Delta4 Capital — the Quaise sponsor |
+
+### Documents
+
+| document | supplied | read | notes |
+|---|---|---|---|
+| Delta4 memo (DocSend/Dropbox PDF) | screenshot only | **PARTLY — fragments** | 310 px wide; numbers illegible; we misread $200M as "$3?0M" — fragments are leads only (`source/legible-fragments.md`) |
+| Clone deck | screenshot only | **NO** | 121 px wide |
+| Valuation | Casey, in chat | YES | $200M post |
+
+Logged the same day per the standing rule; the native PDF is P1 #1.
+
+### Pipeline run
+
+Two workflows. **Intake: 13 agents, 0 errors, 2.54M tokens, 995 tool calls** —
+6 evidence sweeps (tactile crux · company · competition · actuation · market ·
+vehicle), each with an adversarial counter-agent; the tactile crux got two
+independent verifiers (evidence lens and engineering steelman). All seven
+returned APPROVED WITH CORRECTIONS; 92 corrections applied. **Scoring: 5-scorer
+panel + red team + completeness critic** on the corrected fact pack (results in
+`factpack.md` §8).
+
+### Output
+
+`factpack.md` (provenance-tagged, ranked DD ledger, tripwires) and
+`exhibits.html` (four exhibits: the crux, force vs touch, muscle life, return
+math). Published to /deals the same day.
+
+**The answer to Casey's question:** partly true. No touch sensing, by published
+design ("only proprioceptive and visual feedback"). But there is a grip-force
+channel: 320 muscle-pressure sensors in the Alpha spec, and the leaders treat
+actuator proprioception as their primary force channel. The bigger gap is that
+**no autonomous grasp has ever been shown**, shipped hardware carries far fewer
+sensors than the spec, and there are no wrist or palm cameras.
+
+**The three findings that carry the file:**
+1. **Muscle life at working pressure is the binding technical risk** — industrial
+   duty needs 1–4M cycles a year per muscle; the only public figures are 650K
+   (press) and >1M on air at 0.3 MPa, and at ~0.7 MPa bent muscles failed in the
+   literature.
+2. **The cost moat is overstated** — the CEO's own "<$20K" is an at-scale target,
+   about level with China's projected 2030 BOM; "deny rivals scale" is refuted by
+   Unitree and AgiBot volumes.
+3. **The vehicle repeats Quaise** — Delta4 has filed nothing since May; the Quaise
+   SPV shows no sign of having invested; no evidence of a Clone allocation.
+
+---
+
+## THE GAP — chase the data
+
+25 ranked DD questions (10× P1, 10× P2, 5× P3), split sponsor/company. 60-day
+clocks run from the day they ship. **The three that decide it:** an autonomous
+Torso 4 grasp demo with logged force · cycle life at working pressure · a
+countersigned allocation and the SPV documents (plus an extension past "next week").
+
+## S2 · THE CASE — target T+3
+
+*Not yet run.*
+
+## S3 · THE DECISION — target T+10
+
+*Not yet run.* The bridge "closes next week" — inside the S2/S3 window. Per the
+guard table, a close date inside the window is itself a flag; the ask is an
+extension, not a faster process.
+
+---
+
+## Track
+
+☐ HELD  ☑ LIVE  ☐ PASSED
