@@ -483,6 +483,190 @@ unreconciled venue state. Phases IN ORDER:
    ledger never goes negative and a short-BIL order cannot exist. Under a
    BLEND_BUDGET the idle-cash BIL sweep is clamped to the remaining gross
    headroom.
+   **Market buys never spend the last dollar (2026-10-26).**
+   *Observed:* from 2026-10-07 every BIL sweep failed. The sweep is a
+   market BUY sized to every whole share of idle sleeve cash.
+   - Render log, 2026-10-19 (BIL x56, permId 2127961299): PendingSubmit ->
+     Inactive in 0.8 s, with errorCode 0, no message and no hold reason.
+   - The status then read Cancelled, and IB answered the executor's cleanup
+     cancel with 161.
+   - The first failure was the first sweep after the stage-2 adoption of a
+     deposit.
+   - Each re-plan asked for the same 56 shares, and the SWEEP breaker paged
+     daily.
+
+   *Inferred:* ib_async 2.1 treats Inactive as done, so the client could
+   not have set Cancelled. IBKR killed the order itself.
+
+   *Hypothesis, not confirmed:* the adoption turned the account's spare
+   (un-owned) cash into book cash. The cash-account credit check wants a
+   margin above a market order's value (forum reports say about 5%), and
+   that spare cash used to absorb it. Against it: IBKR usually names a
+   funds refusal (error 201 with text), and none appears in the 2026-10-19
+   Render log. The decisive input is that order's own message in the IBKR
+   app or the TWS audit trail.
+
+   The change makes buys smaller and, in session, sells 1-2 BIL to restore
+   the reserve, so it is safe either way. Two constants in `app/blend.py`:
+   - `MKT_BUY_CUSHION = 0.05` sizes every SPY/BIL market buy 5% above the
+     price it is sized on, in both the planner and the execution clamp. The
+     core buy compounds it with the overnight headroom. A buy over about 20
+     shares leaves a 5% tail that the next cycle buys (46 then 2 BIL; 28
+     then 1 SPY), about $1 of commission each.
+   - `SLEEVE_CASH_RESERVE_FRAC = 0.02` holds 2% of sleeve equity back from
+     the sweep. It lives in the planner's `projected_cash` only.
+     - The single per-cycle BIL raise restores it IN SESSION, so an
+       in-session pre-fund leaves its MOO that headroom.
+     - Off hours the raise covers only what the plan spends beyond the cash
+       on hand. A resting top-up would hold back an evening MOO for a
+       session.
+     - `funds` stays gross, so the reserve never shrinks or drops an entry
+       and never defers a rebalance.
+     - A shortfall the raise cannot restore (a book order in flight, no BIL
+       held) is not an overdraw: the "still negative" belt ignores the
+       reserve.
+     - The SWEEP execution clamp also nets out cash that a resting MOO or a
+       pending sweep will debit.
+   - *Not covered:*
+     - a fire first funded off hours, which spends the reserve;
+     - a night's MOOs larger than about 40% of the sleeve at a 5% margin;
+     - unsettled same-day proceeds;
+     - a fixed gap between the ledger and AvailableFunds. Stage 1 sees
+       deltas only, so such a gap stays invisible to it; those refusals
+       continue, now labelled.
+   - *Cost:* the reserve and the last cushion slice of the sleeve earn no
+     T-bill yield, and a core cushion slice forgoes SPY's return until the
+     next buy. A few dollars a month at the live book's size.
+
+   A REASONLESS `Inactive` on a SPY/BIL market buy now carries one of three
+   fixed sentences:
+   - the account's AvailableFunds does NOT cover the order at the 5% margin
+     (most likely a credit refusal);
+   - it DOES (the margin is wider than assumed, or the cause is another
+     one: read the order's message in the IBKR app);
+   - or there is no figure to check against.
+
+   A sentence never carries a figure: the account's cash LEVEL stays off
+   every surface. A reasoned refusal is left as IBKR worded it.
+
+   IB's 161 ("cancel attempted when not cancellable") is IB's reply to the
+   executor's own cleanup cancel. It no longer overwrites or poses as the
+   reason; the reconcile page names it as that reply.
+
+   *A refused cancel is not an ack (fixed 2026-10-26, same branch).*
+   ib_async 2.1 marks a working order Cancelled CLIENT-SIDE on any
+   non-warning order error, and IB's 161 refusal of a cancel is one. So a
+   cancel refused because the order was filling made `cancel_stock_order`
+   return True: the fill reaches the session AFTER the refusal. Every caller
+   then acted on "cancelled":
+   - reconcile 2b's stuck-order cancel cleared the journal and re-planned the
+     order, so it was bought twice and the first fill was never booked;
+   - the exit and /kill paths market-sold beside a stop that had filled;
+   - the stop ratchet placed a second stop;
+   - park and pass 3 stopped tracking a stop that was still resting.
+
+   The overlay was also read as dead OUTSIDE the cancel: the next cycle's
+   lookups, and the fill poll. The poll marked a done stop with no fills as
+   emitted, so the fill that landed afterwards was never booked; the /kill
+   path then paged "CLOSE ... BY HAND" for shares the venue had already sold.
+
+   Now (two verifiers, two rounds):
+   - The 161 is undone where it lands (`_undo_refusal_overlay`, on
+     errorEvent, which ib_async fires after its overlay). The status goes
+     back to the one the venue last reported before the cancel, so every
+     reader sees a working order until the venue's own next status (Filled,
+     Cancelled) arrives. This holds for a 161 that lands after the wait too.
+   - During the wait, a Cancelled is the ack only when the latest Cancelled
+     since the cancel came from the venue: an orderStatus or a 202. A
+     refusal followed by the venue's own Cancelled is a cancel.
+   - With neither a fill nor a cancel inside the window, the cancel RAISES
+     UNKNOWN and names the refusal; with the fill, it RAISES FILLED. Every
+     caller already treats a raise as "defer, the next reconcile settles it".
+   - The fill poll marks a stop emitted only once it emits a fill.
+   - A stop fill booked against its position also clears the orphan entry
+     /kill recorded for that stop. Before, pass 3 re-cancelled a filled stop
+     forever.
+
+   Refusal codes: 161 (observed) and 10148 ("cannot be cancelled, state:
+   ...", IB's documented explicit refusal, added in round 2 on both
+   verifiers' advice) are undone. Left as ib_async's Cancelled, a stop that
+   was partly filled when 10148 refused its cancel had the rest of its fill
+   never emitted, and the book then sold those shares again. 10147 ("not
+   found": IB holds no such order) is not undone. The wait still refuses it
+   as the ack, and the next pre-check reads it as already gone.
+
+   Residuals:
+   - A "phantom": an order that died at IBKR without the session hearing
+     reads working until the next reconnect resyncs it. The gateway
+     restarts daily around 20:30 ET. Every cancel of a phantom waits the
+     full 10 s and raises, which fails closed against duplicates but costs
+     this:
+     - /kill parks the position instead of flattening it;
+     - exits and ratchets defer every cycle, with an alert each time;
+     - pass 3b trusts a dead stop, so the position can sit without a real
+       stop until the resync;
+     - reconcile 2b blocks that order's kind. It now pages once per journal
+       when IBKR refuses the cancel; before, it logged WARN events, and those
+       never page.
+     Follow-up (both verifiers): force a resync after a second refused
+     cancel of the same order with no venue status in between.
+   - 161 still never appears as a rejection REASON; the reconcile page names
+     it as the reply to the executor's cancel. "Normally already final" is
+     what it usually means, not proof.
+   - Open, not changed here: reconcile 2b clears a stuck order's journal on
+     an ACKed cancel without booking the partial fill the adapter reports
+     (`filled_qty`).
+   - **Open, SERIOUS, pre-existing (verifier A, round 2; not changed
+     here):**
+     - After a reconnect or restart, orders that finished during the gap
+       come back from `reqCompletedOrders` with orderId 0. ib_async never
+       reads one and keys them by permId.
+     - A stop that FILLED while disconnected is then not found by the
+       book's orderId, and `cancel_stock_order` returns False where law #8
+       says it must raise.
+     - Its fill polls out as unknown order "0", is never booked, and leaves
+       "0" in the emitted set.
+     - In a replay, the next exit market-sold shares the venue no longer
+       held: a naked short. `_execute_exit` does not check venue holdings
+       the way /kill does.
+     - Fix pending:
+       - match completed orders by permId, client id and executions;
+       - never key on "0";
+       - check executions on the not-found cancel path;
+       - check holdings before an exit's market sell.
+
+   Gates:
+   - `tests/test_ib_stock_adapter.py`, refused-cancel section:
+     - the ib_async behaviour, pinned against the installed library;
+     - the undo, including for 10148;
+     - a late refusal, a fill after the refusal, refusal then Cancelled;
+     - a warning, an error the undo leaves (10147), 202;
+     - a fill-less stop is never marked emitted;
+     - a partly filled stop whose cancel is refused is emitted once, whole;
+     - verifier B's replays: two exits in one cycle, /kill and the ratchet;
+     - reconcile 2b keeps the SAME journal ids through a no-fill cycle,
+       pages once per journal, and books 70 SPY + 30 BIL once.
+   - `tests/test_refused_cancel_real_ib.py`: the same flows on the REAL
+     ib_async (real placeOrder, cancelOrder, error, orderStatus,
+     execDetails), with only the socket stubbed. Also:
+     - the undo's guard: a 161 after the venue's own Cancelled or 202 leaves
+       the order cancelled;
+     - a refusal followed by ApiCancelled is a cancel.
+
+   *Tests:* the legacy suite pins both constants to 0 (conftest, the
+   overnight-headroom pattern). There the planner reduces to the pre-change
+   code, except that the SWEEP clamp now also nets out reserved cash.
+   `tests/test_buy_cushion.py` gates the shipped values, including a
+   5%-margin venue that refuses the old sizing and accepts the new one.
+
+   *Deploy:* after 16:00 ET (Operating rule 1). Between 16:00 and 20:00 ET
+   the first sweep is placed as a market order resting for the open, and a
+   fire that evening that needs a BIL sale waits a session. A weekend
+   restart avoids that.
+
+   The research replay (genomics-alpha-tracker's executor mirror) still
+   sweeps every idle dollar. The difference is a few hundredths of a
+   percent a year of carry.
 4. **Execute in order**: exits (stop cancel is non-fatal; a RAISING cancel
    defers the sell; after ANY non-raising cancel queued fills are ingested
    FIRST so a PARTIALLY-filled stop books its filled shares and the MKT
@@ -897,7 +1081,9 @@ El Nino combo reads):
   the fill wins the race mid-cancel), not-found/already-cancelled →
   False, venue-acked cancel → True; an ambiguous ack timeout (10s)
   RAISES — fail closed, the blend defers the dependent sell and the next
-  reconcile settles the truth.
+  reconcile settles the truth. A cancel IB REFUSES (161) is no ack: unless
+  the venue's own fill or cancel follows inside the window it RAISES, and
+  ib_async's client-side Cancelled is undone (2026-10-26, above).
 - `poll_stock_fills` — drain-once events for DONE protective stops,
   derived from venue order history; partial fills are aggregated per
   order at the share-weighted average price (qty signed by side); an
