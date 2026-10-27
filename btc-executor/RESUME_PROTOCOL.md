@@ -14,14 +14,18 @@ relabelled `DRAWDOWN` (mirror.py L1644-1657, L1780-1787). Not covered:
 first, EXECUTOR.md "Halt automation"), `KILL`, `VENUE_CHANGED`, `AGENT_EXPIRED`.
 
 **Status at writing.** btc-executor has been halted `LEDGER_DIVERGENCE` since
-2026-10-07 08:01Z (root cause open; the engine's S4 book still holds the
-trend position the halt flattened). This protocol does NOT apply to that halt
-and does not authorise resuming it. Stage A below cannot even be reached
-until it is closed by its own process (`_check_halts` returns on any existing
-halt, L1789). Two things carry over when it IS resumed: C4.2's late-join
-check applies to the S4 leg, and `?reanchor=1` on a non-loss halt moves
-nothing — the reanchor branch lives inside the DAILY_LOSS/DRAWDOWN test
-(L2030) and the response's `reanchor_requested` only echoes the request.
+2026-10-07 08:01Z (root cause open). The halt flattened an S4 long; the
+engine's S4 book is now in a different trend position (short since
+2026-10-24 16:00Z). This protocol does NOT apply to that halt and does not
+authorise resuming it. Stage A below cannot even be reached until it is
+closed by its own process (`_check_halts` returns on any existing halt,
+L1789). Three things carry over when it IS resumed: C4.2's late-join check
+applies to the S4 leg; a plain `/resume` of a non-loss halt performs NO
+breach check and the 3-poll debounce lets entries out first, so confirm
+`/status high_water − equity` < $30,000 and the day inside its daily line
+before pressing; and `?reanchor=1` on a non-loss halt moves nothing — the
+reanchor branch lives inside the DAILY_LOSS/DRAWDOWN test (L2030) and the
+response's `reanchor_requested` only echoes the request.
 
 ## 0. What the code does (facts, with line refs in btc-executor/app/)
 
@@ -38,10 +42,10 @@ nothing — the reanchor branch lives inside the DAILY_LOSS/DRAWDOWN test
 | /resume?reanchor=1 | moves high_water AND day_start_equity to current equity, pages RED `resume_reanchored`, clears the halt, re-verifies stop refs, re-checks agent-key expiry. FORGIVES the drawdown: the next line is new equity − $30k. UNCONDITIONAL: it lowers high_water to equity even when equity is already back above the old line. Does not touch the frozen daily pct | L2052-2075 |
 | after resume | the next poll mirrors the engine: a leg the engine HOLDS and we do not is joined by a market chase at the venue mid, sized at the CURRENT KELLY_M (`_enter_from_fill`); a pending PULLBACK entry is placed post-only at the engine's limit, a pending TREND entry is a market IOC booked by intent; stops follow. Entries are blocked by: engine stale, `degraded`, `data_halt`, a boot venue-vs-ledger mismatch (`position_drift` at boot), a netting mismatch, or that leg's engine book halted | L2344-2348, L2458-2470; join L2612-2625; pending L2634-2826; L2863+ |
 | daily line after a K change | the scaled DAILY_LOSS pct is FROZEN at each 00:00 UTC rollover from the KELLY_M in force THEN; `_roll_day` runs before the halted return, so a rollover re-freezes it while halted. 15% of base at 0.75, 6% at ≤ 0.30. `daily_loss_line_pending` is only emitted when NOT halted (after a resume) | L1729-1748, L1680-1684, L1789-1797 |
-| exposure guard | pages `exposure_over_cap` every poll when K_eff × lev × base > 1.125 × max(equity, high_water) × 1.01. Page-only, never clamps. At base 100k and the engine's lev 1.5: K 0.75 needs max(equity, HW) ≥ $99,010; K 0.30 needs ≥ $39,604 | L107, L574-610 |
+| exposure guard | once trading (it sits after the halted return), pages `exposure_over_cap` every poll when K_eff × lev × base > 1.125 × max(equity, high_water) × 1.01. Page-only, never clamps. At base 100k and the engine's lev 1.5: K 0.75 needs max(equity, HW) ≥ $99,010; K 0.30 needs ≥ $39,604 | L107, L574-610 |
 | persistence | `halted`, `high_water`, `day_start_equity`, `day_loss_pct` live in /app/data/executor_state.json (Render disk) and SURVIVE a redeploy; an env change restarts the container but does not clear the halt; `config_change` pages within one poll even while halted | L1201-1206, L1262-1267, L2302-2316 |
 | engine books | the engine's own paper books halt one-way at dd_halt (S3 −30%, S4 −50% of their paper peak); a halted book is FLAT; the executor pages `engine_leg_halted` and opens no new entry for that leg. Public engine `/status` shows `books.<S>.halted` and `state`; the reason (`dd_halt` / `manual`) is on `/exec/target` (token) | L2404-2443, L2470; engine config.py L66/L73 |
-| stale references | EXECUTOR.md said 35% in two places (fixed in this commit to 0.30). Still stale, left for a code commit: hl.py L516 docstring "35% drawdown", render.yaml L605 "MAX_EXPOSURE_FRAC (0.45 …)". Live is DD_HALT_PCT 0.30 and MAX_EXPOSURE_FRAC 1.125 | render.yaml L611, mirror.py L107 |
+| stale references | EXECUTOR.md said 35% in two places (fixed in this commit to 0.30). Still stale, left for a code commit: hl.py L516 docstring "35% drawdown", mirror.py L2027 comment "the NEXT 35%", render.yaml L605 "MAX_EXPOSURE_FRAC (0.45 …)". Live is DD_HALT_PCT 0.30 and MAX_EXPOSURE_FRAC 1.125 | render.yaml L611, mirror.py L107 |
 
 ## 1. Where the lines are today (2026-10-27 12:25Z, K 0.75)
 
@@ -101,8 +105,10 @@ The monitor routine fires T2 and messages Casey with the numbers. Then:
    `events[-50:]` (the `halt_pending` → `halt` sequence, or the relabel
    sequence, and any failure mode), `fills` since the last flat, realized
    BTC P&L of the episode (HL `userFillsByTime`, coin == BTC, closedPnl −
-   fee), and `/pulse agent_days_left` (the expiry check sleeps while halted
-   and fires again at `/resume`; under 1 day means renew the agent key first).
+   fee), and `/pulse agent_days_left` (the expiry rail keeps reading hourly while
+   halted and can page `agent_expiring`, but will not halt again until
+   `/resume`, which re-checks immediately; under 1 day means renew the agent
+   key first).
 4. **No /resume for 24 hours.** Nothing is at risk while flat: the BTC book
    is out, the sleeve is price-neutral and keeps earning. A plain `/resume`
    is refused by the code anyway, and the halt page's "hit /resume" line is
@@ -114,7 +120,7 @@ The monitor routine fires T2 and messages Casey with the numbers. Then:
 |---|---|---|
 | **B1 strategy loss, mechanics sound** | every live fill matches an engine paper trade (engine `/books/S3,S4/trades`) within slippage; stops were placed and filled where the engine's levels were; no RED kind other than `halt`, `halt_pending` and the known `unbooked_fill_unprotected` window | proceed to Stage C |
 | **B2 mechanics fault** | any of: `position_drift`, `netting_inconsistent`, `stop_vanished`, `stop_unplaceable`, `entry_unconfirmed`, a fill with no engine counterpart, a stop that did not fire, slippage > 100 bp on an exit | NO resume. Root cause → fix → gate test → review, exactly as for `LEDGER_DIVERGENCE`. The loss is still real: when the fix ships, resume via Stage C |
-| **B3 non-BTC cause** | the equity drop was not BTC P&L: UETH depeg, carry hedge gap, a withdrawal, a bad equity read (compare `portfolio` accountValue with the executor's) | fix the cause. If the money is NOT really gone, note that the recovery is usually ABSORBED while halted: a flat-book jump ≥ $200 between polls shifts high_water by the same amount (`transfer_reconciled` INFO), the gap to the line is unchanged and a plain `/resume` stays refused. Check `/status high_water − equity`: if it is under $30,000 the plain form works and keeps the drawdown room; otherwise, after confirming on `portfolio` that the money is back, use `?reanchor=1` — it forgives nothing real in this case — and record the `transfer_reconciled` events in the diagnosis |
+| **B3 non-BTC cause** | the equity drop was not BTC P&L: UETH depeg, carry hedge gap, a withdrawal, a bad equity read (compare `portfolio` accountValue with the executor's) | fix the cause. If the money is NOT really gone, the recovery is usually ABSORBED while halted: a flat-book jump ≥ $200 between polls shifts high_water by the same amount (`transfer_reconciled` INFO), the gap to the line is unchanged and a plain `/resume` stays refused. Not absorbed, and the gap closes instead: a recovery landing on the FIRST flat poll after the halt (the baseline is only seeded there), or across any restart — C4 step 1's own redeploy included (`_last_flat_equity` is not persisted). So check `/status high_water − equity`: under $30,000 the plain form works and keeps the drawdown room; otherwise, after confirming on `portfolio` that the money is back, use `?reanchor=1` — it forgives nothing real in this case — and record the `transfer_reconciled` events. SIZE in this class (DEFAULT, Casey confirms): with the money intact and the old high water kept, nothing was falsified — resume at the size in force (0.75 does not page while high_water stays ~100k); if the money IS gone, Stage C applies in full |
 
 Keep the diagnosis to one page in `btc-executor/docs/` with the fills table
 and the classification; the counter-agent rule applies (one independent
@@ -143,7 +149,10 @@ account, i.e. −43% of what is left). That is why C3 exists. Read
 and would also lower a high water that equity has already climbed back
 above; the plain form is right only in B3 with the gap under $30k and a few
 thousand dollars of room (a few hundred dollars above the line re-halts
-inside the 3-poll debounce on the next dip).
+inside the 3-poll debounce on the next dip). If a plain `/resume` is
+accepted after C4 step 1 on a B1/B2 resume, the recovery landed across the
+redeploy and was not absorbed — that is fine, it keeps the old high water;
+record it.
 
 **C3. Kill criterion (written now, before money moves): a SECOND DRAWDOWN
 halt within 180 days of a resume is not resumed.** DRY_RUN=true, book stays
@@ -152,26 +161,32 @@ $30k budget; two is outside anything modelled). The carry sleeve is
 unaffected and keeps running on its own gate.
 
 **C4a. If the engine's S3 (pullback) paper book is itself halted at resume
-— the LIKELY case** (it halted one-way in two of the three crash analogues,
-at both K: COVID 11-30, 1999 12-08): DEFAULT = resume TREND-ONLY at 0.30.
-The executor blocks pullback entries while `books.S3.halted` is true and
-pages `engine_leg_halted`; the book is then $13,500 × m of trend exposure
-with the same rails. Record in the diagnosis that the 0.30 stress numbers
-in C1 include S3's recovery longs and do not describe a trend-only book. The
-trend leg was the crash earner on all three paths (+$27k / +$14k / +$31k),
-the pullback leg the crash loser, so trading S4 alone through the recovery
-is the conservative half, not the risky one. Re-arming S3 is the `#2`
-study's question; Casey's alternatives are to resume the engine's book by
-hand (`POST btc-paper-engine/books/S3/resume`, `x-exec-token`), which is a
-separate decision with its own review, or to hold the resume until `#2`
-ships. Decide the default here, like C1–C3.
+— the LIKELY case** (it halted one-way on two of the three crash analogues,
+at both K: COVID 11-30, 1999 12-08; not on 2008): DEFAULT = resume
+TREND-ONLY at 0.30. The executor blocks pullback entries while
+`books.S3.halted` is true and pages `engine_leg_halted`; the book is then
+$13,500 × m of trend exposure with the same rails. This is the MEASURED
+case, not an untested one: after those S3 halts the study's COVID and 1999
+paths were trend-only books. At 0.75 the trend-only COVID stretch produced
+the study's closest approach to this very halt (90% of the budget used on
+05-27, from the trend leg's 13 whipsaw losses in the Dec–May chop, −$15,289
+in the drawdown window); at 0.30 the same stretch held maxDD −8.3% with 34%
+of the budget used. The size step is what makes trend-only tolerable, not
+the leg mix. The pullback leg was the crash loser on COVID and 1999
+(−$15.4k / −$16.6k before its halt) and an earner on 2008 (+$11.4k); keeping
+it armed through the halt would have been worth +$12.2k on COVID and
+−$11.2k on 1999, which is why the re-arm rule is the `#2` study and not a
+default here. Casey's alternatives: resume the engine's book by hand
+(`POST btc-paper-engine/books/S3/resume`, `x-exec-token`; it also resets the
+paper book's peak), a separate decision with its own review, or hold the
+resume until `#2` ships. Decide the default here, like C1–C3.
 
 **C4. Order of operations** (each step has a check; do not skip the check):
 
 | # | action | check before moving on |
 |---|---|---|
 | 1 | Render → btc-executor env: `KELLY_M` 0.30. Nothing else. Do it BEFORE a 00:00 UTC rollover, so the rollover re-freezes the daily line at 6% while the book is still halted (a change just AFTER 00:00 would leave the 0.75 line, $15k, on a 0.30 book for the first live day) | Render redeploys (same build sha). `/pulse`: `build` unchanged, `halted: "DRAWDOWN"` still set, `red_kinds_24h` gains `config_change` (expected, fires while halted) |
-| 2 | Which legs will JOIN: btc-executor `/status.last_target` (token) is the payload the mirror consumes; the engine's public `/status` books are the same in-process books as a cross-check. Late-join risk R = Σ over legs with `position != null` of (leg notional at 0.30 × m) × |mid − stop| / mid, with pullback $31,500 × m and trend $13,500 × m; for the trend leg the stop is `position.trail`. Every held position carries a stop, so R is defined for every joinable leg. A PENDING pullback is the normal state: it is placed post-only at resume and its fill carries the disclosed unbooked window (B1) — not a wait condition. On an opposed book R is an upper bound (the venue nets the two legs; one stop sized to the net) | if R > $6,000 (the 0.30 daily line in force after step 1's rollover) wait for that leg to go flat or for its trail to tighten; otherwise proceed |
+| 2 | Which legs will JOIN: btc-executor `/status.last_target` (token) is the payload the mirror consumes; the engine's public `/status` books are the same in-process books as a cross-check. Late-join risk R = Σ over legs with `position != null` of (leg notional at 0.30 × m) × |mid − stop| / mid, with pullback $31,500 × m and trend $13,500 × m; the stop is `position.stop` on `last_target` (the trail already folded in for the trend leg; `trail` on the engine's public `/status`). Every held position carries a stop, so R is defined for every joinable leg. A PENDING pullback is the normal state: it is placed post-only at resume and its fill carries the disclosed unbooked window (B1) — not a wait condition. On an opposed book R is an upper bound (the venue nets the two legs; one stop sized to the net) | if R > $6,000 (the 0.30 daily line in force after step 1's rollover) wait for that leg to go flat or for its trail to tighten; otherwise proceed |
 | 3 | Engine health: `/status` `vol_size.basis == "vol_target"`; `/events` no `degraded` without a later `recovered`; `/exec/target` (token) `data_halt` false; no boot `position_drift` event in btc-executor `/status` since the step-1 redeploy; `books.S3.halted` / `books.S4.halted` on the public `/status` | `entries_blocked` for staleness is not a reason to wait — the mirror enters later — but a `degraded` engine is. `books.S3.halted: true` → apply C4a (trend-only) and re-derive R for the trend leg alone |
 | 4 | Carry sleeve as in Stage A step 2; `/pulse agent_days_left` > 1 | `on` as expected, gap < $50, liq > 2 × mid; a key under 1 day would hand the halt straight back as `AGENT_EXPIRED` |
 | 5 | PRECONDITION: one 00:00 UTC rollover has passed since step 1 — `/status sizing_config.daily_loss_halt_pct_effective` reads 0.06. (If resuming on the same UTC day as step 1 is unavoidable, the first live day runs on $15k: say so and test R against $15k.) Then `GET https://btc-executor.onrender.com/resume?reanchor=1&token=<EXEC_TOKEN>` (or POST with `x-exec-token`). If Stage A found a failed flatten and the venue was cleaned by hand: `?reanchor=1&adopt_venue=1` — ONLY after looking at the HL UI yourself; the adopt never clears the halt by itself, so the reanchor branch still runs | response keys: `ok`, `halted`, `adopt_requested`, `adopted`, `reanchor_requested` (echo only — not a confirmation). PASS = `halted: null` AND `/status` events show RED `resume_reanchored` and INFO `resume cleared DRAWDOWN` AND `high_water == day_start_equity ==` current equity. If `halted` is non-null for ANY value, stop: `resume_refused` = the breach is still live; a `halt` / `halt_*` event of another kind = the resume ran and something else halted it (`LEDGER_DIVERGENCE` from stop-ref hygiene, `AGENT_EXPIRED`) |
@@ -219,8 +234,9 @@ All of, measured from the resume timestamp:
   runs) are in-sample analogues scaled onto today's prices with fills at
   the line and no slippage — upper bounds on the book, lower bounds on the
   drawdown. They motivate the 0.30 default; they do not forecast it. The
-  K 0.30 figures include S3's recovery longs; a trend-only book (C4a) has no
-  stress number of its own.
+  COVID and 1999 maxDD figures at both K are mostly trend-only numbers (S3
+  halted at 11-30 / 12-08 on those paths); 2008's include both legs. No
+  path in the study had S3 re-armed after its halt.
 - The late-join risk R in C4.2 is defined for every held engine leg (each
   publishes a stop) and is an upper bound on an opposed book. The
   `unbooked_fill_unprotected` window opens only AFTER our own maker fill,
