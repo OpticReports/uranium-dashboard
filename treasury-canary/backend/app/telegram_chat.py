@@ -42,6 +42,13 @@ max). No preamble.
 - Relational questions are the point: connect metrics, explain WHY a reading \
 matters, what historically follows, what would change the picture.
 - You are analysis, not advice; skip disclaimers unless genuinely warranted.
+- Each metric line carries asof = the date of the data itself, not of the \
+fetch. Monthly series (unemployment, Sahm, V/U, job openings) publish one to \
+two months after the month they measure and weekly ones (claims, custody) \
+within about a week, so an older asof on those is the normal release lag, \
+not staleness. A DAILY market series more than a few business days old is \
+lagging: say so. Squeeze rows carry the refresh day as asof, so an old one \
+means the radar stopped refreshing. Status STALE means no usable data.
 """
 
 
@@ -76,28 +83,62 @@ def register_webhook() -> bool:
 
 # ---------- context snapshot ----------
 
+def _num(v) -> str:
+    """Compact number for the snapshot: a raw 912.7735510823914 costs tokens
+    and invites false precision."""
+    if v is None:
+        return "n/a"
+    return f"{v:.6g}" if isinstance(v, float) else str(v)
+
+
 def build_context() -> str:
-    """Compact text snapshot of the canary's current state for grounding."""
+    """Compact text snapshot of the canary's current state for grounding.
+
+    The composite and the metric matrix are computed LIVE from the cached
+    bundle, exactly as GET /metrics renders the dashboard - not read back
+    from metric_snapshot. A failed fetch persists a STALE row dated the
+    refresh day, which sorts after the metric's real rows (a monthly
+    series' month start, a weekly one's print day), so "latest row per
+    metric" answered STALE for metrics the dashboard showed live: on
+    2026-10-19 the bot called the labor block (unrate, Sahm, V/U, openings)
+    stale while the tiles showed the September and August prints. Each
+    line carries the data's own date so release lag is read, not guessed."""
     parts: list[str] = []
+    try:
+        from .jobs.refresh import compute_all
+        from .sources.fred import fetch_bundle
+        metrics, _, comp, _ = compute_all(fetch_bundle())
+        # one decimal: the bands cut at 25/50/75, and 24.7 rounded to "25"
+        # beside band=LOW contradicts itself
+        score = "n/a" if comp.score is None else f"{comp.score:.1f}"
+        parts.append(f"COMPOSITE STRESS: {score}/100 band={comp.band} "
+                     f"coverage={comp.coverage:.0%}")
+        parts.append("METRICS (id value status asof d1d d5d d20d; asof = the "
+                     "data's own date):")
+        for m in sorted(metrics, key=lambda m: m.metric_id):
+            parts.append(f"  {m.metric_id}: {_num(m.value)} {m.status.value} "
+                         f"asof={m.asof or 'n/a'} {_num(m.delta_1d)} "
+                         f"{_num(m.delta_5d)} {_num(m.delta_20d)}")
+    except Exception as exc:  # noqa: BLE001
+        parts.append(f"(live metrics unavailable: {exc})")
     try:
         from .store.db import session_scope
         from .store.models import EventLog, MetricSnapshot
         from sqlalchemy import select
         with session_scope() as s:
-            rows = s.execute(select(MetricSnapshot).order_by(
-                MetricSnapshot.asof.desc(), MetricSnapshot.metric_id)).scalars().all()
-            seen: dict[str, object] = {}
-            for r in rows:
-                if r.metric_id not in seen:
-                    seen[r.metric_id] = r
-            comp = seen.pop("composite", None)
-            if comp is not None:
-                parts.append(f"COMPOSITE STRESS: {comp.value:.0f}/100 "
-                             f"band={comp.status} asof={comp.asof}")
-            parts.append("METRICS (id value status d1d d5d d20d):")
-            for mid, r in sorted(seen.items()):
-                parts.append(f"  {mid}: {r.value} {r.status} "
-                             f"{r.delta_1d} {r.delta_5d} {r.delta_20d}")
+            # squeeze conditions are persisted per refresh with asof = the
+            # refresh day, so the latest row is the latest state read (a
+            # failed read never overwrites a real one the same day)
+            sq = s.execute(select(MetricSnapshot).where(
+                MetricSnapshot.metric_id.like("squeeze.%")).order_by(
+                MetricSnapshot.asof.desc())).scalars().all()
+            latest: dict[str, object] = {}
+            for r in sq:
+                latest.setdefault(r.metric_id, r)
+            if latest:
+                parts.append("DURATION SQUEEZE RADAR (id value state asof):")
+                for mid, r in sorted(latest.items()):
+                    parts.append(f"  {mid}: {_num(r.value)} {r.status} asof={r.asof}")
             evs = s.execute(select(EventLog).order_by(
                 EventLog.created_at.desc()).limit(12)).scalars().all()
             if evs:
@@ -106,7 +147,7 @@ def build_context() -> str:
                     parts.append(f"  [{e.severity}] {e.asof} {e.event_type}: "
                                  f"{e.rationale[:200]}")
     except Exception as exc:  # noqa: BLE001
-        parts.append(f"(metric store unavailable: {exc})")
+        parts.append(f"(event store unavailable: {exc})")
     try:
         from .sources.rate_markets import ensemble
         ens = ensemble()
