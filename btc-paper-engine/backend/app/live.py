@@ -212,9 +212,11 @@ class Engine:
         self._bar_fetched_at = {t: v for t, v in self._bar_fetched_at.items()
                                 if t in keep}
         with session_scope() as s:
-            now = time.time()
+            # persist only FINAL bars: boot() trusts every DB row as final,
+            # so a candle read inside the grace must not reach the DB (a
+            # restart would otherwise launder it into a processed bar)
             for b in fetched:
-                if b.ts + BAR_SECONDS <= now:
+                if self.bar_final(b, fetched_at):
                     s.merge(BarRow(ts_open=b.ts, open=b.open, high=b.high,
                                    low=b.low, close=b.close, volume=b.volume))
 

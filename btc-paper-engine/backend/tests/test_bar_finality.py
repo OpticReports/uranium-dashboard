@@ -168,6 +168,8 @@ def test_gate_boundary_fetch_inside_the_grace_is_deferred_then_processed(
     assert b.pending is not None and b.position is None
     assert eng.closed_unprocessed(clock.now) and eng.bars[-1].ts == t2
     assert not eng.bar_final(eng.bars[-2], clock.now)
+    with db.session_scope() as s:        # the early read never reaches the DB
+        assert s.get(db.BarRow, t1) is None
     # 08:01:05: past the grace, re-fetched final -> processed
     clock.now = t2 + 65
     answers.append([bar_t0, Bar(ts=t1, **T1_FINAL),
@@ -176,6 +178,8 @@ def test_gate_boundary_fetch_inside_the_grace_is_deferred_then_processed(
     eng.poll()
     assert b.position is not None and b.position.entry_price == LIMIT
     assert not eng.closed_unprocessed(clock.now)
+    with db.session_scope() as s:        # the final bar does, as fetched
+        assert s.get(db.BarRow, t1).low == T1_FINAL["low"]
 
 
 def test_gate_bars_without_a_post_close_fetch_are_not_final(tmpdb, monkeypatch):
