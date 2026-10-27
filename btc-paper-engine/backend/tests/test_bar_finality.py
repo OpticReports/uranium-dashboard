@@ -209,65 +209,76 @@ def test_gate_bars_without_a_post_close_fetch_are_not_final(tmpdb, monkeypatch):
 
 
 def test_gate_restart_never_processes_over_a_hole(tmpdb, monkeypatch):
-    """Round-2 review: a bar the venue served forming and then dropped is
-    never persisted, while the NEXT bar is persisted when final. A restart
+    """Round-2/3 review: bars the venue served forming and then dropped are
+    never persisted, while a LATER bar is persisted when final. A restart
     then loads a DB with a hole; the old code processed the later bar over
     it (the pending resolved against the wrong bar's range). Now: the gap
-    is refused and paged, last_processed stays put, and every refresh
-    re-requests the expected bar until it arrives."""
+    is refused and paged ONCE, last_processed stays put, and every refresh
+    starts at the EXPECTED next bar (a two-bar hole and a start-aware fetch
+    bind that anchor: the old window started one bar below the oldest
+    closed-unprocessed bar and would never ask for t1)."""
     t0 = 1_791_331_200
-    t1, t2, t3 = (t0 + k * BAR_SECONDS for k in (1, 2, 3))
+    t1, t2, t3, t4 = (t0 + k * BAR_SECONDS for k in (1, 2, 3, 4))
     clock = Clock(t1 + 5)
     monkeypatch.setattr(live.time, "time", clock)
     eng, b = _engine(monkeypatch, t0)
-    answers = _script(monkeypatch, eng)
-    starts = []
-    real_fake = live.fetch_4h_bars
+    answers, starts = [], []
 
-    def fake(start_unix):
+    def fake(start_unix):                    # start-aware, like Bitstamp
         starts.append(start_unix)
-        return real_fake(start_unix)
+        ans = list(answers.pop(0)) if answers else []
+        return [x for x in ans if x.ts >= start_unix]
     monkeypatch.setattr(live, "fetch_4h_bars", fake)
     bar_t0 = eng.bars[-1]
-    B = Bar(ts=t2, open=84_104.7, high=84_146.34, low=83_404.49, close=83_706.22,
-            volume=229.4)
-    answers.append([bar_t0, Bar(ts=t1, **T1_FORMING)])     # A served forming
+
+    def flat(ts, px, vol=0.1):
+        return Bar(ts=ts, open=px, high=px, low=px, close=px, volume=vol)
+    C = Bar(ts=t3, open=83_706.0, high=83_800.0, low=83_600.0, close=83_700.0,
+            volume=200.0)
+    answers.append([bar_t0, Bar(ts=t1, **T1_FORMING)])      # t1 served forming
     eng.poll()
     clock.now = t2 + 5
-    answers.append([bar_t0, Bar(ts=t2, **dict(open=84_104.7, high=84_104.7,
-                                             low=84_104.7, close=84_104.7,
-                                             volume=0.1))])  # A gone
+    answers.append([bar_t0, flat(t2, 84_104.7)])             # t1 gone, t2 forming
+    eng.poll()
+    clock.now = t3 + 5
+    answers.append([bar_t0, flat(t3, 83_706.0)])             # t1, t2 gone
     eng.poll()
     assert b.pending is not None and eng.last_processed == t0
-    clock.now = t3 + 65
-    answers.append([bar_t0, B])                               # B final, A gone
+    clock.now = t4 + 65
+    answers.append([bar_t0, C, flat(t4, 83_700.0)])          # t3 final, hole t1-t2
     eng.poll()
     assert eng.last_processed == t0 and b.pending is not None
     with db.session_scope() as s:
-        assert s.get(db.BarRow, t2) is not None and s.get(db.BarRow, t1) is None
-        kinds = [e.event for e in s.query(db.EventRow).all()]
-    assert "bar_stuck" in kinds and len(eng.sent) == 1
-    # restart: the DB has a hole at t1
+        assert s.get(db.BarRow, t3) is not None
+        assert s.get(db.BarRow, t1) is None and s.get(db.BarRow, t2) is None
+    # restart: the DB has a two-bar hole
     eng2 = Engine()
     eng2.sent = []
     eng2.alert_fn = lambda m: eng2.sent.append(m)
     monkeypatch.setattr(live, "fetch_4h_bars", fake)
-    answers.append([bar_t0, B, Bar(ts=t3, open=83_706.0, high=83_706.0,
-                                   low=83_706.0, close=83_706.0, volume=0.1)])
+    answers.append([bar_t0, C, flat(t4, 83_700.0)])          # still no t1/t2
     eng2.boot()
     b2 = eng2.books["S3"]
     assert eng2.last_processed == t0, "processed over the hole"
     assert b2.pending is not None and b2.position is None
+    assert starts[-1] <= t1, "the expected bar was not re-requested"
+    assert len(eng2.sent) == 1 and "BAR_GAP" in eng2.sent[0]
+    # the hole persists for three more polls: ONE page, ONE bar_gap row
+    for k in range(3):
+        clock.now = t4 + 125 + 60 * k
+        answers.append([bar_t0, C, flat(t4, 83_700.0)])
+        eng2.poll()
+        assert starts[-1] <= t1
     with db.session_scope() as s:
         kinds = [e.event for e in s.query(db.EventRow).all()]
-    assert "bar_gap" in kinds and any("BAR_GAP" in m for m in eng2.sent)
-    # the next refresh re-requests the expected bar; when it arrives final,
-    # it is processed first and the pending fills at the limit
-    clock.now = t3 + 125
-    answers.append([bar_t0, Bar(ts=t1, **T1_FINAL), B,
-                    Bar(ts=t3, open=83_706.0, high=83_706.0, low=83_706.0,
-                        close=83_706.0, volume=0.1)])
+    assert kinds.count("bar_gap") == 1 and len(eng2.sent) == 1, kinds
+    # the venue serves the hole: processed IN ORDER, the pending fills on
+    # t1 at the limit, and the engine catches up through t3
+    clock.now = t4 + 400
+    answers.append([bar_t0, Bar(ts=t1, **T1_FINAL),
+                    Bar(ts=t2, open=84_104.7, high=84_146.34, low=83_404.49,
+                        close=83_706.22, volume=229.4), C, flat(t4, 83_700.0)])
     eng2.poll()
     assert starts[-1] <= t1
     assert b2.position is not None and b2.position.entry_ts == t1
-    assert eng2.last_processed == t2
+    assert eng2.last_processed == t3

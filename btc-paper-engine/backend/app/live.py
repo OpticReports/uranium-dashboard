@@ -286,7 +286,12 @@ class Engine:
             try:
                 self.alert_fn(f"btc-paper-engine: {kind.upper()} - {detail}; no "
                               f"signal or exit evaluates until it finalizes "
-                              f"(intrabar stops still run)")
+                              f"(intrabar stops still run). If the venue never "
+                              f"serves it: RECOVERY in "
+                              f"btc-executor/docs/HALT_2026-10-07.md section 2 "
+                              f"(build the bar from minute candles, insert the "
+                              f"BarRow, restart) - never reset the books over "
+                              f"an open pending")
             except Exception as exc:  # noqa: BLE001
                 logger.warning("%s page failed: %s", kind, exc)
 
@@ -303,15 +308,18 @@ class Engine:
         code did not keep before 2026-10-27."""
         now = time.time()
         inds = None
+        deferred = False
         expected = self.last_processed + BAR_SECONDS if self.last_processed else None
         for i, bar in enumerate(self.bars):
             if bar.ts <= self.last_processed or bar.ts + BAR_SECONDS > now:
                 continue
             if expected is not None and bar.ts != expected:
                 self._defer_event(s, expected, now, "gap")
+                deferred = True
                 break
             if not self.bar_final(bar, now):
                 self._defer_event(s, bar.ts, now, "not_final")
+                deferred = True
                 break
             if i < 1:
                 continue
@@ -346,7 +354,11 @@ class Engine:
         # the expected next bar is closed but not in memory at all (the
         # fetch has been failing since before it formed, or a restart loaded
         # a DB that ends before it): say so on the same graded scale
-        if expected is not None and expected + BAR_SECONDS <= now \
+        # (never after a gap/not_final break: that ts already has its event,
+        # and two keys alternating would defeat the once-per-key dedupe and
+        # page twice per poll - round-3 review)
+        if not deferred and expected is not None \
+                and expected + BAR_SECONDS <= now \
                 and all(b.ts != expected for b in self.bars):
             self._defer_event(s, expected, now, "missing")
 
@@ -494,7 +506,10 @@ class Engine:
                 if cur.ts != prev.ts + BAR_SECONDS:
                     raise ValueError(
                         f"bar gap between {prev.ts} and {cur.ts}: refusing to "
-                        f"replay over a hole (the live loop re-requests it)")
+                        f"replay over a hole. Recovery: build the missing bar "
+                        f"from Bitstamp minute candles, insert the BarRow, "
+                        f"restart (btc-executor/docs/HALT_2026-10-07.md "
+                        f"section 2); do not reset over an open pending")
             if capital:
                 self._apply_capital(capital)
             res = run_replay(closed, self.books_cfg, self.scfg, self.tcfg,
