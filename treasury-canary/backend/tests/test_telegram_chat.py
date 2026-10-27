@@ -127,11 +127,12 @@ def test_gate_context_reads_the_live_board_not_a_shadowing_stale_row(tmp_path, m
     ctx = telegram_chat.build_context()
     assert _line(ctx, "labor.unrate") == "labor.unrate: 4.2 GREEN asof=2026-09-01 n/a n/a n/a"
     assert _line(ctx, "vol.move") == "vol.move: 912.774 RED asof=2026-10-23 n/a n/a n/a"
-    # the model is told that an old asof on a monthly print is lag, not
-    # staleness - and that on a daily series it is
+    # the model is told that an old asof is usually release lag, and to call
+    # a series lagging only when sure of its cadence (counter-agent: the
+    # lines carry no frequency, so a weekly or quarterly series is easy to
+    # misread as lagging)
     assert "the normal release lag, not staleness" in telegram_chat.SYSTEM_PROMPT
-    assert "A DAILY market series more than a few business days old is lagging" \
-        in telegram_chat.SYSTEM_PROMPT
+    assert "Call a series lagging only when you are sure" in telegram_chat.SYSTEM_PROMPT
 
 
 def test_gate_context_reports_a_live_stale_metric_as_stale(tmp_path, monkeypatch):

@@ -213,3 +213,56 @@ def test_gate_a_full_outage_does_not_page_a_band_cross(tmp_path, monkeypatch):
     assert _band_events(SL) == []
     _run(SL, monkeypatch, _at(23), [], _comp(30.0, "ELEVATED"))
     assert _band_events(SL) == ["LOW->ELEVATED:2026-10-23"]
+
+
+def test_gate_a_same_day_no_data_keeps_a_real_band_downgrade(tmp_path, monkeypatch):
+    """The composite half of the guard (counter-agent re-review): ELEVATED at
+    10-21's first refresh, a full outage at its second, LOW on 10-22. The
+    outage must not erase ELEVATED, or the downgrade is swallowed."""
+    SL = _session_factory(tmp_path)
+    _offline_refresh(monkeypatch, [])
+    _run(SL, monkeypatch, _at(20), [], _comp(20.0, "LOW"))
+    _run(SL, monkeypatch, _at(21), [], _comp(30.0, "ELEVATED"))
+    _run(SL, monkeypatch, _at(21, 16), [], _comp(None, "NO_DATA"))
+    _run(SL, monkeypatch, _at(22), [], _comp(21.0, "LOW"))
+    assert _band_events(SL) == ["LOW->ELEVATED:2026-10-21", "ELEVATED->LOW:2026-10-22"]
+
+
+def _radar(monkeypatch, state):
+    cond = {"id": "T1", "label": "probe", "state": state, "value": 1.0, "detail": "d"}
+    monkeypatch.setattr("app.api.routes_squeeze.assemble_radar", lambda: {
+        "fuel": [], "triggers": [cond], "fuel_score": 0.0, "trigger_score": 0.0,
+        "calendar": []})
+
+
+def _squeeze_events(SL):
+    with SL() as s:
+        return [e.dedup_key for e in s.execute(select(EventLog)).scalars()
+                if e.event_type == "squeeze_condition_flip"]
+
+
+def test_gate_a_same_day_stale_keeps_a_squeeze_downgrade(tmp_path, monkeypatch):
+    """The squeeze half (counter-agent re-review): MET at 10-21's first
+    refresh, STALE at its second, NOT_MET on 10-22 - the MET -> NOT_MET
+    transition the radar's own law says a STALE interlude must never swallow.
+    Squeeze rows are dated the refresh day, so the STALE read used to erase
+    the MET and the baseline fell back to 10-20's NOT_MET."""
+    SL = _session_factory(tmp_path)
+    _offline_refresh(monkeypatch, [])
+    for when, st in ((_at(20), "NOT_MET"), (_at(21), "MET"), (_at(21, 16), "STALE"),
+                     (_at(22), "NOT_MET")):
+        _radar(monkeypatch, st)
+        _run(SL, monkeypatch, when, [], _comp(20.0, "LOW"))
+    assert _squeeze_events(SL) == ["T1:MET:2026-W43", "T1:NOT_MET:2026-W43"]
+
+
+def test_squeeze_stale_first_then_real_same_day_is_quiet(tmp_path, monkeypatch):
+    """Control: a STALE read replaced the same day by a real one that matches
+    the baseline is no flip."""
+    SL = _session_factory(tmp_path)
+    _offline_refresh(monkeypatch, [])
+    for when, st in ((_at(20), "NOT_MET"), (_at(21), "STALE"), (_at(21, 16), "NOT_MET"),
+                     (_at(22), "NOT_MET")):
+        _radar(monkeypatch, st)
+        _run(SL, monkeypatch, when, [], _comp(20.0, "LOW"))
+    assert _squeeze_events(SL) == []

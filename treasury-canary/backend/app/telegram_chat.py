@@ -43,12 +43,14 @@ max). No preamble.
 matters, what historically follows, what would change the picture.
 - You are analysis, not advice; skip disclaimers unless genuinely warranted.
 - Each metric line carries asof = the date of the data itself, not of the \
-fetch. Monthly series (unemployment, Sahm, V/U, job openings) publish one to \
-two months after the month they measure and weekly ones (claims, custody) \
-within about a week, so an older asof on those is the normal release lag, \
-not staleness. A DAILY market series more than a few business days old is \
-lagging: say so. Squeeze rows carry the refresh day as asof, so an old one \
-means the radar stopped refreshing. Status STALE means no usable data.
+fetch. Every series publishes on its own cadence: daily market data within a \
+day or two, weekly series within about a week, monthly ones (unemployment, \
+Sahm, V/U, job openings) one to two months after the month they measure, \
+quarterly ones a quarter or more later. An older asof is therefore usually \
+the normal release lag, not staleness. Call a series lagging only when you \
+are sure its asof is older than its cadence allows, and quote the asof when \
+you do. Squeeze rows carry the refresh day as asof, so an old one means the \
+radar stopped refreshing. Status STALE means no usable data.
 """
 
 
