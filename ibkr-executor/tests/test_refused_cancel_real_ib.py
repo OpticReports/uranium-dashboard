@@ -214,6 +214,23 @@ def test_real_an_error_the_undo_leaves_and_a_fill_that_follows(monkeypatch):
     assert v.a.poll_stock_fills() == []
 
 
+def test_real_a_fill_logged_on_an_overlay_is_not_the_venues_cancel(monkeypatch):
+    """Verifier A, round 3: ib_async's execDetails log entry copies the
+    current status. An error the undo leaves (10147) and a fill in the same
+    pump logged the fill as (Cancelled, 0), which read as the venue's cancel:
+    True for an order that had just FILLED. A fill entry is no status."""
+    v = Venue(monkeypatch)
+    t = v.stop()
+    v.on_cancel = lambda oid: [[v.err(oid, 10147, "OrderId 7 that needs to be "
+                                                  "cancelled is not found."),
+                                v.execd(t, 5, 44.0)],
+                               [v.status(t, "Filled", 5, 44.0)]]
+    with pytest.raises(RuntimeError, match=r"REFUSED by IBKR \(\[10147\]"):
+        v.a.cancel_stock_order("7")
+    assert [(e.status, e.errorCode) for e in t.log][-1] == ("Cancelled", 0)
+    assert [f["qty"] for f in v.a.poll_stock_fills()] == [-5]
+
+
 def test_real_a_partial_fill_then_the_cancel(monkeypatch):
     v = Venue(monkeypatch)
     t = v.stop()

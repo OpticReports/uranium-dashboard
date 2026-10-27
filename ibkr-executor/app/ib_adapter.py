@@ -1312,6 +1312,11 @@ class IBAdapter:
         followed by the venue's own cancel in the same window is a cancel."""
         latest = None
         for e in (getattr(trade, "log", None) or [])[since:]:
+            if str(getattr(e, "message", "") or "").startswith("Fill "):
+                # ib_async's execDetails entry copies the CURRENT status: a
+                # fill landing on an overlay reads (Cancelled, 0) and is no
+                # venue status (verifier A, round 3)
+                continue
             # ApiCancelled only ever comes from the venue (errorCode 0): it
             # counts as the venue's word after an undone refusal (verifier A)
             if str(getattr(e, "status", "") or "") in ("Cancelled", "ApiCancelled"):
