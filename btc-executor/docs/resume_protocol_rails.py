@@ -59,7 +59,7 @@ for (lab, x), rails, eq in zip(cols.items(), (rails_today, rails_after),
                 ha="right", fontsize=9, color=INK)
 ax.axhline(112_500 / (1.125 * 1.01), color=VIOLET, lw=1.6, ls="-.")
 ax.text(1.5 + W + 0.03, 112_500 / (1.125 * 1.01) + 600,
-        "0.75 allowed only above $99,000\n(exposure guard, base 100k)",
+        "0.75 allowed only above $99,010\n(exposure guard, base 100k)",
         fontsize=9, color=VIOLET, va="bottom")
 ax.set_xlim(-0.75, 2.95); ax.set_ylim(33_000, 108_000)
 ax.set_xticks(list(cols.values())); ax.set_xticklabels(list(cols.keys()),
