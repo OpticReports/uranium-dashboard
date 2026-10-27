@@ -120,13 +120,13 @@ The monitor routine fires T2 and messages Casey with the numbers. Then:
 |---|---|---|
 | **B1 strategy loss, mechanics sound** | every live fill matches an engine paper trade (engine `/books/S3,S4/trades`) within slippage; stops were placed and filled where the engine's levels were; no RED kind other than `halt`, `halt_pending` and the known `unbooked_fill_unprotected` window | proceed to Stage C |
 | **B2 mechanics fault** | any of: `position_drift`, `netting_inconsistent`, `stop_vanished`, `stop_unplaceable`, `entry_unconfirmed`, a fill with no engine counterpart, a stop that did not fire, slippage > 100 bp on an exit | NO resume. Root cause → fix → gate test → review, exactly as for `LEDGER_DIVERGENCE`. The loss is still real: when the fix ships, resume via Stage C |
-| **B3 non-BTC cause** | the equity drop was not BTC P&L: UETH depeg, carry hedge gap, a withdrawal, a bad equity read (compare `portfolio` accountValue with the executor's) | fix the cause. If the money is NOT really gone, the recovery is usually ABSORBED while halted: a flat-book jump ≥ $200 between polls shifts high_water by the same amount (`transfer_reconciled` INFO), the gap to the line is unchanged and a plain `/resume` stays refused. Not absorbed, and the gap closes instead: a recovery landing on the FIRST flat poll after the halt (the baseline is only seeded there), or across any restart — C4 step 1's own redeploy included (`_last_flat_equity` is not persisted). So check `/status high_water − equity`: under $30,000 the plain form works and keeps the drawdown room; otherwise, after confirming on `portfolio` that the money is back, use `?reanchor=1` — it forgives nothing real in this case — and record the `transfer_reconciled` events. SIZE in this class (DEFAULT, Casey confirms): with the money intact and the old high water kept, nothing was falsified — resume at the size in force (0.75 does not page while max(equity, high_water) ≥ $99,010; the high water is $100,239 today); if the money IS gone, Stage C applies in full |
+| **B3 non-BTC cause** | the equity drop was not BTC P&L: UETH depeg, carry hedge gap, a withdrawal, a bad equity read (compare `portfolio` accountValue with the executor's) | fix the cause. If the money is NOT really gone, the recovery is usually ABSORBED while halted: a flat-book jump ≥ $200 between polls shifts high_water by the same amount (`transfer_reconciled` INFO), the gap to the line is unchanged and a plain `/resume` stays refused. Not absorbed, and the gap closes instead: a recovery landing on the FIRST flat poll after the halt (the baseline is only seeded there), or across any restart — C4 step 1's own redeploy included (`_last_flat_equity` is not persisted). So check `/status high_water − equity`: under $30,000 the plain form works and keeps the drawdown room; otherwise, after confirming on `portfolio` that the money is back, use `?reanchor=1` — it forgives nothing real in this case — and record the `transfer_reconciled` events. SIZE in this class (CONFIRMED by Casey 2026-10-27): with the money intact and the old high water kept, nothing was falsified — resume at the size in force (0.75 does not page while max(equity, high_water) ≥ $99,010; the high water is $100,239 today); if the money IS gone, Stage C applies in full |
 
 Keep the diagnosis to one page in `btc-executor/docs/` with the fills table
 and the classification; the counter-agent rule applies (one independent
 reader for B1, two for B2 — the fix touches live money).
 
-### Stage C — resume (B1 or fixed B2/B3). DEFAULTS — Casey confirms once, here, not at the time.
+### Stage C — resume (B1 or fixed B2/B3). DEFAULTS — CONFIRMED by Casey 2026-10-27 (C1, C3, C4a and B3's size rule).
 
 **C1. Size: KELLY_M 0.30. SIZING_BASE_USD and MAX_NOTIONAL_USD unchanged.**
 Why 0.30 and not 0.75: once the high water is forgiven, the exposure guard
@@ -184,8 +184,7 @@ default here. The pullback leg lost on COVID and 1999 (−$15.4k / −$16.6k
 before its halt) and earned on 2008 (+$11.4k). Casey's alternatives: resume
 the engine's book by hand (`POST btc-paper-engine/books/S3/resume`,
 `x-exec-token`; it also resets the paper book's peak), a separate decision
-with its own review, or hold the resume until `#2` ships. Decide the default
-here, like C1–C3.
+with its own review, or hold the resume until `#2` ships. Default CONFIRMED by Casey 2026-10-27.
 
 **C4. Order of operations** (each step has a check; do not skip the check):
 
@@ -199,7 +198,7 @@ here, like C1–C3.
 | 6 | First mirror poll: WARN `entry_chase` (normal) on any joined leg; fresh entries thereafter at $31,500 × m / $13,500 × m | `/pulse legs.<leg>.stop_placed: true` (or `stop_mode: "engine"` on the subordinate leg of an opposed book); no `stop_unconfirmed` / `stop_place_failed` / `stop_backing_blind` event; `daily_loss_line_pending` appears only if step 5 ran on the same day as step 1. Monitor routine: "fresh BTC entry — say which size it matches" must read the 0.30 sizes, never 0.75's |
 | 7 | Re-base the monitor (my action, `update_trigger` on trig_0192jctE7J8ocbFmUSjBnvDA): T4 high water := the reanchor mark (trip 90% of it); T1 realized counter restarts at the resume timestamp with the 0.30 budget (−$1,500 = the 0.30-scaled equivalent of −$3,750 at 0.75); expected sizes 0.30; trend-only if C4a applied; record the halt and resume as REPORTED | routine prompt diff shows the new HW/trip and the resume timestamp |
 
-### Stage D — the way back to 0.75 (DEFAULT — Casey confirms)
+### Stage D — the way back to 0.75 (DEFAULT — follows from C1; not separately confirmed)
 
 All of, measured from the resume timestamp:
 
