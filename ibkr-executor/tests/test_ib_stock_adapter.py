@@ -704,34 +704,55 @@ def test_cancel_ack_timeout_raises_fail_closed(ib_adapter):
 
 
 # --- a refused cancel is not an ack (2026-10-26) ------------------------------
+# IB's 161 REFUSES the executor's cancel; ib_async 2.1 marks the order
+# Cancelled client-side anyway. The adapter undoes that where the 161 lands
+# (_undo_refusal_overlay) and never reads an error-set Cancelled as the ack
+# (_cancel_refusal). The same flows run against the INSTALLED ib_async in
+# tests/test_refused_cancel_real_ib.py.
 
 REFUSAL_161 = ("Cancel attempted when order is not in a cancellable state.  "
                "Order permId =2127961299")
+REFUSAL_10148 = ("OrderId 1 that needs to be cancelled cannot be cancelled, "
+                 "state: PendingCancel.")
+_DONE = ("Filled", "Cancelled", "ApiCancelled", "Inactive")
 
 
-def _refuse_cancel(adapter, code=161, text=REFUSAL_161, cancels=None):
-    """The venue answers the cancel with an error, delivered the way ib_async
-    2.1's wrapper.error delivers one on a not-done trade (pinned against the
-    installed library in test_ib_async_marks_a_refused_cancel_cancelled):
-    status -> Cancelled, a log entry carrying the code, then errorEvent."""
-    def on_cancel(t):
-        if cancels is not None:
-            cancels.append(t)
+def _venue_error(adapter, t, code, text):
+    """One venue error, delivered as ib_async 2.1's wrapper.error delivers it:
+    a not-done trade is marked Cancelled with a log entry carrying the code,
+    THEN errorEvent fires (pinned in test_ib_async_marks_a_refused_cancel_cancelled)."""
+    if t.orderStatus.status not in _DONE:
         t.orderStatus.status = "Cancelled"
         t.log.append(types.SimpleNamespace(
             errorCode=code, status="Cancelled",
             message=f"Error {code}, reqId {t.order.orderId}: {text}"))
-        adapter._on_ib_error(t.order.orderId, code, text)
+    adapter._on_ib_error(t.order.orderId, code, text)
+
+
+def _venue_status(t, status):
+    """A venue orderStatus as ib_async's handler applies one that changes
+    anything: the status, and a log entry with no error code."""
+    t.orderStatus.status = status
+    t.log.append(types.SimpleNamespace(errorCode=0, status=status, message=""))
+
+
+def _refuse_cancel(adapter, code=161, text=REFUSAL_161, cancels=None):
+    """The venue answers every cancel with an error (default: the 161 refusal)."""
+    def on_cancel(t):
+        if cancels is not None:
+            cancels.append(t)
+        _venue_error(adapter, t, code, text)
     return on_cancel
 
 
 def test_ib_async_marks_a_refused_cancel_cancelled():
-    """What the gates below stand on, against the INSTALLED ib_async (not the
-    fake): IB's 161 refusal of a cancel marks a working order Cancelled
-    client-side with the code in its log, exactly like its 202 confirmation;
-    a re-sent orderStatus (reqAllOpenOrders' reply for an order still open)
-    restores the real status; a later Filled overwrites the overlay. An
-    upgrade that changes any of this re-opens the refused-cancel handling."""
+    """What the handling stands on, against the INSTALLED ib_async (not the
+    fake): IB's 161 refusal marks a working order Cancelled client-side with
+    the code in its log, exactly like its 202 confirmation, and errorEvent
+    fires only AFTER that (the adapter's handler sees the overlay); an
+    openOrder alone never changes an existing trade's status; a venue
+    orderStatus overwrites it. An upgrade that changes any of this re-opens
+    the refused-cancel handling."""
     real = pytest.importorskip("ib_async")
     ib = real.IB()
     cid = ib.client.clientId
@@ -744,12 +765,20 @@ def test_ib_async_marks_a_refused_cancel_cancelled():
         ib.wrapper.trades[(cid, oid)] = t
         return t
 
+    seen = []
+    ib.errorEvent += lambda req, code, msg, contract: seen.append(
+        (code, ib.wrapper.trades[(cid, req)].orderStatus.status))
     refused, confirmed = trade(123630), trade(123631)
     ib.wrapper.error(123630, 161, REFUSAL_161, "")
     ib.wrapper.error(123631, 202, "Order Canceled - reason:", "")
-    assert refused.orderStatus.status == confirmed.orderStatus.status == "Cancelled"
+    assert seen == [(161, "Cancelled"), (202, "Cancelled")]
     assert [(e.status, e.errorCode) for e in refused.log] == [("Cancelled", 161)]
     assert [(e.status, e.errorCode) for e in confirmed.log] == [("Cancelled", 202)]
+    ib.wrapper.openOrder(123630, refused.contract,
+                         real.Order(orderId=123630, clientId=cid, action="BUY",
+                                    totalQuantity=56, orderType="MKT"),
+                         real.OrderState(status="Submitted"))
+    assert refused.orderStatus.status == "Cancelled"      # openOrder: no effect
     ib.wrapper.orderStatus(123630, "Submitted", 0.0, 56.0, 0.0, 2127961299, 0,
                            0.0, cid, "", 0.0)
     assert refused.orderStatus.status == "Submitted"
@@ -758,55 +787,106 @@ def test_ib_async_marks_a_refused_cancel_cancelled():
     assert refused.orderStatus.status == "Filled"
 
 
-def test_gate_a_refused_cancel_raises_and_is_never_an_ack(ib_adapter):
-    """THE race: IB refuses the cancel (161) and ib_async marks the order
-    Cancelled; read as an ack, cancel_stock_order returned True for an order
-    whose fill lands AFTER the refusal. It raises UNKNOWN instead."""
-    fake = ib_adapter.ib
-    fake.on_cancel = _refuse_cancel(ib_adapter)
-    r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0)
-    with pytest.raises(RuntimeError) as ei:
-        ib_adapter.cancel_stock_order(r["order_ref"])
-    assert str(ei.value) == (
-        f"cancel of {r['order_ref']} REFUSED by IBKR ([161] {REFUSAL_161}); the "
-        f"session still shows it Cancelled after re-reading the venue's open "
-        f"orders. A refused cancel is not a cancel: the order may have FILLED or "
-        f"may still be working — state UNKNOWN (fail closed)")
-
-
-def test_gate_a_fill_after_the_refusal_is_reported_filled(ib_adapter):
-    """The fill that won the race arrives while the venue is re-read: the
-    raise says FILLED, the message every caller's raising path expects."""
-    fake = ib_adapter.ib
-    fake.on_cancel = _refuse_cancel(ib_adapter)
-    r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0)
-    t = fake.trade_by_ref(r["order_ref"])
-    fake.reqAllOpenOrders = lambda: (fake.fill(t, [(5, 44.0)]), [])[1]
-    with pytest.raises(RuntimeError, match=r"FILLED before the cancel landed "
-                                           r"\(IBKR refused the cancel: \[161\]"):
-        ib_adapter.cancel_stock_order(r["order_ref"])
-
-
-def test_gate_a_refused_cancel_on_a_still_open_order_restores_it(ib_adapter):
-    """reqAllOpenOrders re-sends a still-open order's real status over the
-    overlay, so the NEXT cycle's lookups do not read a live order as dead:
-    find_stock_order says working, and the next cancel is sent and ACKed
-    rather than answered 'already cancelled' (False) while the order rests."""
+def test_gate_a_refused_cancel_is_undone_and_never_an_ack(ib_adapter):
+    """THE race (verifiers A and B): IB refuses the cancel (161) and ib_async
+    marks the order Cancelled; read as the ack, cancel_stock_order returned
+    True for an order whose fill lands AFTER the refusal. Now the overlay is
+    undone where it lands - the order reads working to EVERY reader, the
+    cancel's pre-check, find_stock_order and the fill poll included - and
+    with neither a fill nor a cancel inside the window the cancel raises."""
     fake = ib_adapter.ib
     fake.on_cancel = _refuse_cancel(ib_adapter)
     r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
                                      client_order_id="blend-1-stp-44.0000")
-    t = fake.trade_by_ref(r["order_ref"])
-
-    def open_orders():
-        t.orderStatus.status = "Submitted"    # the re-sent orderStatus
-        return [t]
-    fake.reqAllOpenOrders = open_orders
-    with pytest.raises(RuntimeError, match="still open, status Submitted"):
+    with pytest.raises(RuntimeError) as ei:
         ib_adapter.cancel_stock_order(r["order_ref"])
+    msg = str(ei.value)
+    assert msg.startswith(f"cancel of {r['order_ref']} REFUSED by IBKR ([161] "
+                          f"{REFUSAL_161}) and neither a fill nor a cancel "
+                          f"followed within"), msg
+    assert msg.endswith("state UNKNOWN (fail closed)"), msg
+    assert fake.trade_by_ref(r["order_ref"]).orderStatus.status == "Submitted"
     assert ib_adapter.find_stock_order("blend-1-stp-44.0000")["status"] == "working"
-    fake.on_cancel = None                     # the venue ACKs this time; the
-    assert ib_adapter.cancel_stock_order(r["order_ref"]) is True   # old 161 is not this cancel's
+    assert ib_adapter.poll_stock_fills() == []
+    fake.on_cancel = None                 # next cycle: the cancel is SENT and ACKed,
+    assert ib_adapter.cancel_stock_order(r["order_ref"]) is True   # not "already gone"
+
+
+def test_gate_a_fill_after_the_refusal_is_reported_filled(ib_adapter):
+    """The fill that won the race reaches the session a pump after the
+    refusal: the raise says FILLED - the message every caller's raising path
+    expects - and names the refusal."""
+    fake = ib_adapter.ib
+    refused: list = []
+    fake.on_cancel = _refuse_cancel(ib_adapter, cancels=refused)
+    r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0)
+    t = fake.trade_by_ref(r["order_ref"])
+    fake.on_sleep = lambda ib: (refused and t.orderStatus.status != "Filled"
+                                and fake.fill(t, [(5, 44.0)]))
+    with pytest.raises(RuntimeError, match=r"^cannot cancel \d+: order FILLED "
+                                           r"before the cancel landed \(IBKR "
+                                           r"refused the cancel: \[161\] Cancel"):
+        ib_adapter.cancel_stock_order(r["order_ref"])
+
+
+def test_gate_a_late_refusal_is_undone_too(ib_adapter):
+    """Verifier A: a 161 landing AFTER the wait timed out is pumped by a later
+    call. With the re-read design it left the overlay for good - the pre-check
+    answered 'already gone' (False) and find_stock_order 'cancelled' for an
+    order still resting. The undo happens wherever the refusal lands."""
+    fake = ib_adapter.ib
+    fake.on_cancel = lambda t: None               # nothing inside the window
+    r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                     client_order_id="blend-1-stp-44.0000")
+    t = fake.trade_by_ref(r["order_ref"])
+    with pytest.raises(RuntimeError, match="not acknowledged"):
+        ib_adapter.cancel_stock_order(r["order_ref"])
+    _venue_error(ib_adapter, t, 161, REFUSAL_161)  # the refusal lands late
+    assert t.orderStatus.status == "Submitted"
+    assert ib_adapter.find_stock_order("blend-1-stp-44.0000")["status"] == "working"
+    fake.on_cancel = None
+    assert ib_adapter.cancel_stock_order(r["order_ref"]) is True
+
+
+def test_gate_a_refusal_then_the_venues_own_cancel_is_an_ack(ib_adapter):
+    """Verifier A: a refusal followed inside the window by the venue's own
+    Cancelled (a cancel already pending completes) is a cancel - only the
+    LATEST Cancelled counts."""
+    fake = ib_adapter.ib
+    refused: list = []
+    fake.on_cancel = _refuse_cancel(ib_adapter, cancels=refused)
+    r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0)
+    t = fake.trade_by_ref(r["order_ref"])
+    fake.on_sleep = lambda ib: (refused and t.orderStatus.status != "Cancelled"
+                                and _venue_status(t, "Cancelled"))
+    assert ib_adapter.cancel_stock_order(r["order_ref"]) is True
+
+
+def test_gate_a_warning_is_not_a_refusal(ib_adapter):
+    """Verifier A: only an error that SETS Cancelled is a refusal. A warning
+    (ib_async logs it with status ValidationError) and then the venue's ack is
+    a cancel."""
+    fake = ib_adapter.ib
+
+    def warn_then_ack(t):
+        t.log.append(types.SimpleNamespace(errorCode=2109, status="ValidationError",
+                                           message="Warning 2109: Order Event"))
+        t.orderStatus.status = "Cancelled"
+    fake.on_cancel = warn_then_ack
+    r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0)
+    assert ib_adapter.cancel_stock_order(r["order_ref"]) is True
+
+
+def test_gate_an_unknown_refusal_code_is_still_never_an_ack(ib_adapter):
+    """The belt: a refusal code the undo does not cover (10148 is documented
+    but not yet seen on this book) keeps ib_async's Cancelled, and the wait
+    still refuses to call it the ack."""
+    fake = ib_adapter.ib
+    fake.on_cancel = _refuse_cancel(ib_adapter, code=10148, text=REFUSAL_10148)
+    r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0)
+    with pytest.raises(RuntimeError, match=r"REFUSED by IBKR \(\[10148\] OrderId "
+                                           r".*state UNKNOWN \(fail closed\)$"):
+        ib_adapter.cancel_stock_order(r["order_ref"])
 
 
 def test_gate_ibs_cancel_confirmation_202_is_still_an_ack(ib_adapter):
@@ -817,6 +897,23 @@ def test_gate_ibs_cancel_confirmation_202_is_still_an_ack(ib_adapter):
                                     text="Order Canceled - reason:")
     r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0)
     assert ib_adapter.cancel_stock_order(r["order_ref"]) is True
+
+
+def test_gate_the_poll_never_marks_a_fillless_stop_emitted(ib_adapter):
+    """Verifier B (SERIOUS): the fill poll marked a stop emitted the first time
+    it read done without fills. A Cancelled that later proves wrong (ib_async's
+    word after a refusal it does not undo) then swallowed the stop's fill for
+    good - the /kill went on to ask the operator to close by hand shares the
+    venue had already sold. Only an emitted fill is marked."""
+    fake = ib_adapter.ib
+    r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0)
+    t = fake.trade_by_ref(r["order_ref"])
+    _venue_error(ib_adapter, t, 10148, REFUSAL_10148)  # an overlay not undone
+    assert t.orderStatus.status == "Cancelled"
+    assert ib_adapter.poll_stock_fills() == []
+    fake.fill(t, [(5, 44.0)])                          # the venue's truth lands
+    assert [f["qty"] for f in ib_adapter.poll_stock_fills()] == [-5]
+    assert ib_adapter.poll_stock_fills() == []         # still exactly once
 
 
 # --- poll drain-once ----------------------------------------------------------
@@ -1314,11 +1411,13 @@ def test_gate_m1_working_rebalance_core_sell_not_duplicated(tmp_path,
 
 def test_gate_a_refused_stuck_cancel_keeps_the_journal_and_books_the_fill_once(
         tmp_path, ib_adapter, monkeypatch):
-    """Reconcile 2b's stuck-order cancel (README open follow-up, 2026-10-26):
-    IB refuses the cancel (161) and the order fills after the refusal. Read
-    as an ack, the journal was cleared and the buy re-planned - bought
-    twice, the first fill never booked. Now the cancel raises, the journal
-    stays, and the fill is adopted exactly once."""
+    """Reconcile 2b's stuck-order cancel (README, 2026-10-26): IB refuses the
+    cancel (161) and the order fills after the refusal. Read as an ack, the
+    journal was cleared and the buy re-planned - bought twice, the first fill
+    never booked. Now the refusal is undone (the orders read working), the
+    cancel raises, the journals stay under the SAME ids through a further
+    cycle with no fill (verifier B: assert the ids, not the count - the old
+    code re-journaled two new ones), and the late fills are adopted once."""
     from datetime import datetime, timezone
 
     import app.blend as blend_mod
@@ -1332,22 +1431,169 @@ def test_gate_a_refused_stuck_cancel_keeps_the_journal_and_books_the_fill_once(
     fake.on_cancel = _refuse_cancel(ib_adapter, cancels=cancels)
     m = Blend3070Manager(_Cfg(), str(tmp_path / "blend.json"))  # fresh boot
     sent: list[str] = []
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=sent.append)
+    cids = set(m.state.pending_book_orders)       # CORE_BUY 70 SPY + SWEEP 30 BIL
+    assert len(cids) == 2
     for _ in range(BOOK_ORDER_STUCK_CYCLES + 3):
         run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=sent.append)
         if cancels:
             break
-    # boot planned CORE_BUY 70 SPY + SWEEP 30 BIL; both stuck, both refused
-    assert {t.contract.symbol for t in cancels} == {"SPY", "BIL"}
-    assert len(m.state.pending_book_orders) == 2          # journals kept
+    assert {t.contract.symbol for t in cancels} == {"SPY", "BIL"}   # both refused
+    assert set(m.state.pending_book_orders) == cids
     assert not any("cancel-confirmed" in s for s in sent), sent
     assert any("stuck" in e["msg"] and "REFUSED by IBKR" in e["msg"]
                for e in m.state.events)
-    for t in cancels:                                    # the fills land after
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=sent.append)
+    assert set(m.state.pending_book_orders) == cids        # a cycle, no fill:
+    mkts = [t for t in fake.trades() if t.order.orderType == "MKT"]
+    assert len(mkts) == 2                                  # nothing re-planned
+    for t in mkts:                                         # the fills land after
         fake.fill(t, [(t.order.totalQuantity, fake.prices[t.contract.symbol])])
     run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=sent.append)
     assert m.state.pending_book_orders == {}
     assert m.state.spy_qty == 70 and m.state.bil_qty == 30   # booked once
     assert len([t for t in fake.trades() if t.order.orderType == "MKT"]) == 2
+
+
+# Verifier B's caller replays: a refused stop cancel whose fill lands later.
+E_CRSP = {"symbol": "CRSP", "call_id": 1, "fire_date": "2026-08-20",
+          "flag_type": "pre_catalyst_sentiment_ramp", "risk_frac": 0.01,
+          "entry_ref": 50.0, "note": "t"}
+E_NTLA = {"symbol": "NTLA", "call_id": 2, "fire_date": "2026-08-20",
+          "flag_type": "pre_catalyst_sentiment_ramp", "risk_frac": 0.01,
+          "entry_ref": 50.0, "note": "t"}
+S_CRSP = {"symbol": "CRSP", "call_id": 1, "trail_level": 44.0}
+S_NTLA = {"symbol": "NTLA", "call_id": 2, "trail_level": 44.0}
+EXIT_CRSP = {"symbol": "CRSP", "call_id": 1, "reason": "trail", "trail_level": 47.0}
+EXIT_NTLA = {"symbol": "NTLA", "call_id": 2, "reason": "trail", "trail_level": 47.0}
+
+
+def _two_positions(tmp_path, ib_adapter):
+    """CRSP (call 1) and NTLA (call 2) held, each with a resting stop."""
+    fake = ib_adapter.ib
+    fake.prices["NTLA"] = 50.0
+    m = _mgr(tmp_path)
+    m.state.sleeve_cash = 6_000.0
+    run_cycle(m, ib_adapter, _payload(entries=[E_CRSP, E_NTLA],
+                                      stops=[S_CRSP, S_NTLA]),
+              "2026-08-20", alert=lambda _: None)
+    for cid in ("blend-1-entry", "blend-2-entry"):
+        t = fake.trade_by_ref(ib_adapter.find_stock_order(cid)["order_ref"])
+        fake.fill(t, [(t.order.totalQuantity, 50.0)])
+    _fill_working_mkt(fake)
+    run_cycle(m, ib_adapter, _payload(stops=[S_CRSP, S_NTLA]), "2026-08-21",
+              alert=lambda _: None)
+    assert set(m.state.positions) == {"1", "2"}
+    return fake, m
+
+
+def _refuse_only(adapter, victim):
+    """IB refuses (161) the cancel of `victim` alone; every other is ACKed."""
+    def on_cancel(t):
+        if t is victim:
+            _venue_error(adapter, t, 161, REFUSAL_161)
+        else:
+            t.orderStatus.status = "Cancelled"
+    return on_cancel
+
+
+def _fill_mkt_on_place(fake):
+    def on_place(t):
+        if t.order.orderType == "MKT" and t.order.tif == "DAY":
+            fake.fill(t, [(t.order.totalQuantity,
+                           fake.prices.get(t.contract.symbol, 100.0))])
+    return on_place
+
+
+def _sells(fake, symbol):
+    return [t.order.orderType for t in fake.trades()
+            if t.contract.symbol == symbol and t.order.action == "SELL"]
+
+
+def test_gate_a_refused_stop_cancel_in_a_two_exit_cycle_books_the_late_fill(
+        tmp_path, ib_adapter):
+    """Verifier B (SERIOUS), the two-exit replay: CRSP's stop cancel is
+    refused, NTLA's exit runs the fill poll in the same cycle, CRSP's stop
+    fill lands after it. The poll marked the refused stop emitted on sight
+    (Cancelled, no fills), so the fill was never booked and CRSP's exit
+    re-deferred every cycle. Now CRSP defers, nothing is sold beside its
+    stop, and the late fill books exactly once."""
+    fake, m = _two_positions(tmp_path, ib_adapter)
+    crsp = m.state.positions["1"]
+    stop, qty = fake.trade_by_ref(crsp.stop_order_ref), crsp.qty
+    fake.on_cancel = _refuse_only(ib_adapter, stop)
+    fake.on_place = _fill_mkt_on_place(fake)
+    run_cycle(m, ib_adapter, _payload(exits=[EXIT_CRSP, EXIT_NTLA]),
+              "2026-08-22", alert=lambda _: None)
+    assert set(m.state.positions) == {"1"}          # NTLA out, CRSP deferred
+    assert _sells(fake, "CRSP") == ["STP"]          # nothing sold beside the stop
+    total_before = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    fake.fill(stop, [(qty, 44.0)])                  # the stop's fill lands late
+    fake.on_cancel = None
+    run_cycle(m, ib_adapter, _payload(exits=[EXIT_CRSP]), "2026-08-23",
+              alert=lambda _: None)
+    assert "1" not in m.state.positions and not m.state.unreconciled
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0 - total_before
+            == pytest.approx(qty * 44.0))          # booked once
+    assert _sells(fake, "CRSP") == ["STP"]
+
+
+def test_gate_a_refused_kill_stop_cancel_books_the_late_fill_and_clears_the_orphan(
+        tmp_path, ib_adapter):
+    """Verifier B (SERIOUS + its B2), the /kill replay: the flatten's stop
+    cancel is refused and the stop's fill lands after the flatten's own poll.
+    The fill was swallowed and the orphan never cleared: the page ended
+    'NO LONGER RETRYING - CLOSE CRSP BY HAND' while the venue held 0 CRSP -
+    a hand sale would have opened a real short. Now the fill books, the
+    orphan clears, and nothing tells the operator to sell."""
+    fake, m = _two_positions(tmp_path, ib_adapter)
+    crsp = m.state.positions["1"]
+    stop, qty = fake.trade_by_ref(crsp.stop_order_ref), crsp.qty
+    stop_ref = crsp.stop_order_ref
+    fake.on_cancel = _refuse_only(ib_adapter, stop)
+    fake.on_place = _fill_mkt_on_place(fake)
+    fake.position_rows = [FakePosition("CRSP", qty),
+                          FakePosition("NTLA", m.state.positions["2"].qty)]
+    m.request_flatten("2026-08-22")
+    alerts: list[str] = []
+    run_cycle(m, ib_adapter, None, "2026-08-22", alert=alerts.append)
+    assert "1" in m.state.positions                 # parked: its cancel was refused
+    assert _sells(fake, "CRSP") == ["STP"]
+    fake.fill(stop, [(qty, 44.0)])                  # lands after the flatten's poll
+    fake.position_rows = [FakePosition("CRSP", 0)]
+    fake.on_cancel = None
+    n0 = len(alerts)
+    for day in range(23, 31):
+        run_cycle(m, ib_adapter, None, f"2026-08-{day}", alert=alerts.append)
+    assert "1" not in m.state.positions and not m.state.unreconciled
+    assert stop_ref not in m.state.orphan_stop_refs
+    assert not any("BY HAND" in a for a in alerts[n0:]), alerts[n0:]
+    assert _sells(fake, "CRSP") == ["STP"]          # never sold twice
+
+
+def test_gate_a_refused_ratchet_cancel_places_no_second_stop(tmp_path, ib_adapter):
+    """Verifier B's ratchet replay: the old stop's cancel is refused. Read as
+    an ack, a second stop went in beside a stop that had filled - a short on
+    its trigger. Now the ratchet defers, one stop rests, and when the refused
+    stop's fill lands the position closes with no stop left behind."""
+    fake, m = _two_positions(tmp_path, ib_adapter)
+    crsp = m.state.positions["1"]
+    stop, qty, old_ref = fake.trade_by_ref(crsp.stop_order_ref), crsp.qty, crsp.stop_order_ref
+    fake.on_cancel = _refuse_only(ib_adapter, stop)
+    up = _payload(stops=[{"symbol": "CRSP", "call_id": 1, "trail_level": 47.0},
+                         S_NTLA])
+
+    def crsp_stops():
+        return [t for t in fake.trades()
+                if t.order.orderType == "STP" and t.contract.symbol == "CRSP"]
+    run_cycle(m, ib_adapter, up, "2026-08-22", alert=lambda _: None)
+    assert len(crsp_stops()) == 1                   # no second stop
+    assert m.state.positions["1"].stop_order_ref == old_ref
+    fake.fill(stop, [(qty, 44.0)])                  # the refused stop had filled
+    fake.on_cancel = None
+    run_cycle(m, ib_adapter, up, "2026-08-23", alert=lambda _: None)
+    assert "1" not in m.state.positions
+    assert len(crsp_stops()) == 1
 
 
 def test_gate_m1_ack_timeout_retry_adopts_same_intent_not_a_new_order(

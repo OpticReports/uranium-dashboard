@@ -562,27 +562,59 @@ unreconciled venue state. Phases IN ORDER:
    - reconcile 2b's stuck-order cancel cleared the journal and re-planned the
      order, so it was bought twice and the first fill was never booked;
    - the exit and /kill paths market-sold beside a stop that had filled;
-   - the stop ratchet placed a second stop.
+   - the stop ratchet placed a second stop;
+   - park and pass 3 stopped tracking a stop that was still resting.
 
-   Now, during the cancel wait, a Cancelled is an ack only when no error
-   other than IB's 202 cancel confirmation came with it. Otherwise
-   `cancel_stock_order` re-reads the venue's open orders and RAISES: FILLED
-   if the fill has landed, else UNKNOWN. The re-read matters for the next
-   cycle: for an order still open, IB re-sends its real status over
-   ib_async's Cancelled, so the next lookup sees it working rather than
-   "already cancelled". Every caller already treats a raise as "defer, the
-   next reconcile settles it".
+   The overlay was also read as dead OUTSIDE the cancel: the next cycle's
+   lookups, and the fill poll. The poll marked a done stop with no fills as
+   emitted, so the fill that landed afterwards was never booked; the /kill
+   path then paged "CLOSE ... BY HAND" for shares the venue had already sold.
+
+   Now (two verifiers, two rounds):
+   - The 161 is undone where it lands (`_undo_refusal_overlay`, on
+     errorEvent, which ib_async fires after its overlay). The status goes
+     back to the one the venue last reported before the cancel, so every
+     reader sees a working order until the venue's own next status (Filled,
+     Cancelled) arrives. This holds for a 161 that lands after the wait too.
+   - During the wait, a Cancelled is the ack only when the latest Cancelled
+     since the cancel came from the venue: an orderStatus or a 202. A
+     refusal followed by the venue's own Cancelled is a cancel.
+   - With neither a fill nor a cancel inside the window, the cancel RAISES
+     UNKNOWN and names the refusal; with the fill, it RAISES FILLED. Every
+     caller already treats a raise as "defer, the next reconcile settles it".
+   - The fill poll marks a stop emitted only once it emits a fill.
+   - A stop fill booked against its position also clears the orphan entry
+     /kill recorded for that stop. Before, pass 3 re-cancelled a filled stop
+     forever.
+
+   Residuals:
+   - An order that died without the session hearing reads working until
+     the next reconnect resyncs it, and every cancel of it raises meanwhile
+     (fail closed).
+   - Refusal codes not yet seen on this book (10148 "cannot be cancelled,
+     state: ...", 10147 "not found") are not undone. The wait still refuses
+     them as the ack, but the next cycle's pre-check reads ib_async's
+     Cancelled as "already gone". 10148 names the state; 10147 means IB has
+     no such order.
    - 161 still never appears as a rejection REASON; the reconcile page names
      it as the reply to the executor's cancel. "Normally already final" is
      what it usually means, not proof.
-   - Residual: if the open-orders re-read itself fails without a timeout
-     (`_all_trades` logs that at debug), the session keeps ib_async's
-     Cancelled, and the next cycle reads a still-working order as gone.
-   - Gates (`tests/test_ib_stock_adapter.py`): the ib_async behaviour pinned
-     against the installed library; refusal → UNKNOWN; a fill during the
-     re-read → FILLED; a still-open order is restored and its next cancel
-     ACKs; a 202 is still an ack; and the reconcile 2b replay keeps both
-     journals and books 70 SPY + 30 BIL once.
+   - Open, not changed here: reconcile 2b clears a stuck order's journal on
+     an ACKed cancel without booking the partial fill the adapter reports
+     (`filled_qty`).
+
+   Gates:
+   - `tests/test_ib_stock_adapter.py`, refused-cancel section:
+     - the ib_async behaviour, pinned against the installed library;
+     - the undo, a late refusal, a fill after the refusal, refusal then
+       Cancelled, a warning, an unknown code, 202;
+     - a fill-less stop is never marked emitted;
+     - verifier B's replays: two exits in one cycle, /kill and the ratchet;
+     - reconcile 2b keeps the SAME journal ids through a no-fill cycle and
+       books 70 SPY + 30 BIL once.
+   - `tests/test_refused_cancel_real_ib.py`: the same flows on the REAL
+     ib_async (real placeOrder, cancelOrder, error, orderStatus,
+     execDetails), with only the socket stubbed.
 
    *Tests:* the legacy suite pins both constants to 0 (conftest, the
    overnight-headroom pattern). There the planner reduces to the pre-change
@@ -1012,8 +1044,9 @@ El Nino combo reads):
   the fill wins the race mid-cancel), not-found/already-cancelled →
   False, venue-acked cancel → True; an ambiguous ack timeout (10s)
   RAISES — fail closed, the blend defers the dependent sell and the next
-  reconcile settles the truth. A cancel IB REFUSES (161) RAISES too, even
-  though ib_async then shows the order Cancelled (2026-10-26, below).
+  reconcile settles the truth. A cancel IB REFUSES (161) is no ack: unless
+  the venue's own fill or cancel follows inside the window it RAISES, and
+  ib_async's client-side Cancelled is undone (2026-10-26, above).
 - `poll_stock_fills` — drain-once events for DONE protective stops,
   derived from venue order history; partial fills are aggregated per
   order at the share-weighted average price (qty signed by side); an

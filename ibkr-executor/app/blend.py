@@ -3526,6 +3526,12 @@ def _ingest_one_fill(mgr: Blend3070Manager, adapter, f: dict, alert) -> None:
     pos = next((p for p in st.positions.values()
                 if p.stop_order_ref == ref), None)
     if pos is not None:
+        # /kill tracks the stop as an orphan when its cancel raises, and the
+        # stop stays the position's: once its fill is booked here nothing
+        # rests, so the orphan goes too - left, pass 3 re-cancelled a filled
+        # stop forever ("already FILLED", "two stops may rest" every 4th
+        # cycle; verifier B, 2026-10-26)
+        st.orphan_stop_refs.pop(ref, None)
         fill = f.get("fill_price")
         held = pos.qty
         gap_note = _UNVERIFIABLE_FILL_NOTE if pos.history_gap else ""
