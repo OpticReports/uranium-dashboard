@@ -123,9 +123,9 @@ axB.text(0, -0.30, "FIX B: the close is booked from the exchange's own order ans
 axC.set_title("C  merge-blocking gates: pre-fix tree vs fixed tree")
 axC.axis("off")
 tiles = [
-    ("executor  tests/test_close_settle_gates.py", "17 / 17 pass", "15 fail pre-fix (2 are design probes)"),
+    ("executor  test_close_settle_gates.py + _r3.py", "35 / 35 pass", "13 of 17 fail pre-fix; 16 of 18 fail on the round-3 tree"),
     ("engine  tests/test_bar_finality.py", "4 / 4 pass", "4 fail pre-fix"),
-    ("full suites, fixed tree", "557 + 136 pass", "executor + engine, no skips"),
+    ("full suites, fixed tree", "575 + 136 pass", "executor + engine, no skips"),
 ]
 for i, (name, big, sub) in enumerate(tiles):
     x0 = 0.015 + i * 0.33
