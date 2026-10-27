@@ -331,6 +331,9 @@ so it is measured identically regardless of how fast the size ramps).
 
 - `GET /status` — mode, halts, per-leg ledger, last 50 events, dry-run intents
 - `POST /kill` / `POST /resume` — emergency stop / manual restart
+- A `DRAWDOWN` halt is resumed by RESUME_PROTOCOL.md (2026-10-27): 24h
+  cooling, classify the loss, then `KELLY_M` 0.30 and `/resume?reanchor=1`;
+  a second DRAWDOWN halt inside 180 days is the kill criterion.
 - Executor state: `/app/data/executor_state.json` (persistent disk)
 - The engine's `/exec/target` is token-protected; set EXEC_TOKEN on BOTH
   services or the feed 401s.
