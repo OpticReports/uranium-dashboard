@@ -68,8 +68,8 @@ CAL_STORE_IMPLEMENTED = "regime_i_stored_readings_symmetric_rows"
 CAL_STORE_NOTE = ("calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), "
                   "identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored "
                   "regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is "
-                  "resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the ADS side is NOT seeded from the 2008-12+ archive) "
-                  "at list-proxy IS points against vintage-consistent COIN(t), with a labelled pseudo ENS side")
+                  "resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the rejected alternative - seeding the ADS side from "
+                  "the 2008-12+ archive at list-proxy IS points against a labelled pseudo ENS side - is NOT implemented)")
 TARGET_FIRST_READINGS = ("sign_of_r_minus_1", "same_outcome_class")   # Q17 (P1): v1 §8 D-3 "target_first must agree in sign"
 DIAG_TOL = 1e-6                                        # numerical tie tolerance for RMSE_A >= RMSE_B >= RMSE_C
 # patterns that can occur on the board (v1 §2.2 / §2.4): canonical targets and completions,
@@ -438,9 +438,11 @@ def section_lag_simulation(inp: StudyInputs, win: dict) -> dict:
             b = block[name]
             tag = DECISION if (IS == "A" and name == "ENS_HH") else DESCRIPTIVE
             sec[name] = {
-                "rmse_full_1990_ex2020": T([b["rmse"], b["rmse_1990"], b["rmse_ex2020"]], tag, f"population RMSE vs realized COIN(M) on the rows where the candidate and PERS are both finite; 2020-only {r6(b['rmse_2020_only'])}", b["n"], W, "v0 §3"),
+                "rmse_full_1990_ex2020": T([b["rmse"], b["rmse_1990"], b["rmse_ex2020"]], tag, f"population RMSE vs realized COIN(M) on the rows where the candidate and PERS are both finite; 2020-only {r6(b['rmse_2020_only'])}"
+                                            + ("; D-1 bars use the full and ex-2020 PERCENT rows (decision_D1), the 1990+ element enters no bar" if tag == DECISION else ""), b["n"], W, "v0 §3"),
                 "pct_vs_pers_full_1990_ex2020": T([b["pct_vs_pers"], b["pct_vs_pers_1990"], b["pct_vs_pers_ex2020"]], tag, f"100*(RMSE/RMSE_PERS - 1) on one common finite mask (n {b['n_common_rows']} full, {b['n_common_ex2020']} ex-2020); {PERS_NAME}", b["n"], W, "v1 §8 D-1" if tag == DECISION else "v1 §8 secondary"),
-                "dm_vs_pers_t_full_ex2020": T([b["dm_vs_pers"]["t"], b["dm_vs_pers_ex2020"]["t"]], tag, "DM NW-6 Bartlett, d = e_cand^2 - e_PERS^2, negative = better; primary two-sided |t| >= 1.645", [b["dm_vs_pers"]["n"], b["dm_vs_pers_ex2020"]["n"]], W, "v1 §1 F08"),
+                "dm_vs_pers_t_full_ex2020": T([b["dm_vs_pers"]["t"], b["dm_vs_pers_ex2020"]["t"]], tag, "DM NW-6 Bartlett, d = e_cand^2 - e_PERS^2, negative = better; primary two-sided |t| >= 1.645"
+                                               + ("; only the ex-2020 t (second element) is a D-1 bar - the full-sample t is reported, no bar (v1 §8 D-1)" if tag == DECISION else ""), [b["dm_vs_pers"]["n"], b["dm_vs_pers_ex2020"]["n"]], W, "v1 §1 F08"),
                 "loyo_ratio_full": D(b["loyo_vs_pers"], "leave-one-calendar-year-out RMSE ratio vs PERS", b["n"], W, "v1 §8"),
                 "loyo_ratio_ex2020": D(b["loyo_vs_pers_ex2020"], "leave-one-calendar-year-out RMSE ratio vs PERS, ex-2020", None, W, "v1 §8"),
                 "directional_pct": D(b["directional"]["accuracy_pct"], f"sign(yhat - COIN_real(M-1)) == sign(COIN_real(M) - COIN_real(M-1)); ties wrong ({b['directional']['ties']})", b["directional"]["n"], W, "v1 §1 A8/F07"),
@@ -1083,7 +1085,9 @@ def decide_d3(comp: dict, freeze: dict) -> dict:
                                     "n_intersection", "n_ex2020", "spec_expected_n_ex2020", "calibration_store")}
     warm_txt = (f"calibration warm-up (S1/D1): first IS-A row {warm['first_row_month']}, first calibrated reading {warm['first_calibrated_month']}, "
                 f"{warm['n_rows_without_calibration']} regime-(i) IS-A rows without a calibrated reading; decisive n_ex2020 = {n} vs the v1 §8 "
-                f"power-note expectation n ≈ {SPEC_D3_EXPECTED_N_EX2020} (the ~30% MSE minimum detectable difference quoted there gets worse); "
+                f"power-note expectation n ≈ {SPEC_D3_EXPECTED_N_EX2020} (the ~30% MSE minimum detectable difference quoted there "
+                f"scales by sqrt({SPEC_D3_EXPECTED_N_EX2020}/{n}) = {math.sqrt(SPEC_D3_EXPECTED_N_EX2020 / max(n, 1)):.2f}, i.e. ~{30 * math.sqrt(SPEC_D3_EXPECTED_N_EX2020 / max(n, 1)):.0f}% MSE: "
+                f"SUCCESS remains a point-estimate statement with its LOYO range, v1 §8); "
                 + CAL_STORE_NOTE)
     if not rf_ok:
         first_txt = "target_first check: n/a (no target_first rows in the intersection: the agreement condition could not be evaluated)"   # N4
@@ -1123,7 +1127,10 @@ def decide_d3(comp: dict, freeze: dict) -> dict:
             "r_vs_target_first": D(blk.get("vs_target_first"), f"agreement check under the frozen reading ({reading}); DEFERRED on disagreement; n/a when target_first is unavailable", None, W, "v1 §8 D-3"),
             "raw_ens_rmse_ex2020": D((blk.get("rmse_ens_raw") or {}).get("ex2020"), "uncalibrated ENS_HH on the same months", n, W, "v1 §5 Symmetry"),
             "onset_timing_2013plus": D(blk.get("onset_timing"), "one event (2020): calibrated crossings on the issue-date clock; expected tie", None, W, "v1 §8 D-3"),
-            "consequence": T(cons[outcome], DECISION, "pre-registered consequence text", None, W, "v1 §8 D-3"),
+            "consequence": T(cons[outcome], DECISION,
+                             ("pre-registered consequence text" if outcome in ("KILL", "MIDDLE", "DEFERRED")
+                              else "consequence inferred from v1 §8 D-3 (the spec pre-registers consequence text for KILL and MIDDLE only; "
+                                   "SUCCESS pre-registers 'r <= 1 + X/100 (point estimate, with its LOYO range)')"), None, W, "v1 §8 D-3"),
             "scope_note": D("tracking-accuracy decision on expansion-dominated months; says nothing about recession-timing skill; no claim of an edge over persistence ex-2020 in the real-time regime", "v1 §8 D-3 text", None, W, "v1 §8")}
 
 
@@ -1397,7 +1404,9 @@ def section_honesty(inp: StudyInputs, win: dict, lag: dict, reg1: dict, comp: di
                            "Chauvet-Piger shares the inputs; its real-time record is two recessions, one declared 13 months late, one never",
                            "The QA variants' numbers are soft; their harness is not recoverable",
                            "UMCSENT is ~M-2 on the live board since September 2026 (FRED delay); the replay is unaffected",
-                           "Bands: completion error only, final-vintage data; first-print revision not included until the real-time band is scored"],
+                           "Bands: completion error only, final-vintage data; first-print revision not included until the real-time band is scored",
+                           "2000-2013 is pseudo-real-time with emulated lags (list-proxy issue points); publication calendars are not modeled in the lag simulation (v0 §9)",
+                           "The mid-2026 'STALL near -0.5' on the August fixture was largely pre-revision W875RX1 (2026-03: F1 -0.469 vs F5 -0.249; honesty.f1_vs_f5_realized_drift.last_months) (v0 §9)"],
                           "v1 §9 honesty statements carried verbatim into results", None, None, "v1 §9")
     return out
 

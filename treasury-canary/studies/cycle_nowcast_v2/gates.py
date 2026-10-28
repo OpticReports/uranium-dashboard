@@ -368,12 +368,24 @@ def run_identity(rows, diag, ds):
                     None, None, "info", "v1 §2.3 D4", {"first": ds.months[int(np.flatnonzero(np.isfinite(histA))[0])]}))
 
 
+# Once the deployed module carries cycle-nowcast-v2 (panel wiring after the scored run, 2026-10-28),
+# the August fixed-lag form is no longer importable from it: the legacy rows L01-L03 / F3_01 go
+# NOT_RUN with this reason; the engine-emulation rows (L04-L06, F3_02, F4_*_h) keep the August pins.
+LEGACY_RETIRED = ("deployed module carries cycle-nowcast-v2 (wired 2026-10-28 after the scored run); the August "
+                  "fixed-lag form is pinned by the engine emulation rows L04-L06 / F3_02 / F4_*_h")
+
+
+def deployed_is_v2(bc) -> bool:
+    return bc is not None and getattr(bc, "NOWCAST_STATS", None) is not None
+
+
 def run_legacy(rows, diag, ds, series, bc):
     S = "legacy_deployed"
     sp = "v0 §7.1 'Legacy deployed output on the fixture'"
-    if bc is None:
+    if bc is None or deployed_is_v2(bc):
+        why = "deployed module not imported" if bc is None else LEGACY_RETIRED
         for rid, q in (("L01", "deployed bridge"), ("L02", "deployed claims"), ("L03", "deployed ens")):
-            rows.append(row(rid, S, q, None, None, 0.005, "abs", sp, not_run_reason="deployed module not imported"))
+            rows.append(row(rid, S, q, None, None, 0.005, "abs", sp, not_run_reason=why))
     else:
         FIX = json.load(open(F1_PATH))
         b = bc.compute(raw_override=FIX)
@@ -381,6 +393,9 @@ def run_legacy(rows, diag, ds, series, bc):
         rows.append(row("L01", S, "deployed nowcast bridge on F1", nc["bridge"], -0.347, 0.005, "abs", sp, {"month": nc["month"]}))
         rows.append(row("L02", S, "deployed nowcast claims on F1 (full-sample z, rows from 1970-07)", nc["claims"], -0.449, 0.005, "abs", sp))
         rows.append(row("L03", S, "deployed nowcast ens on F1", nc["value"], -0.398, 0.005, "abs", sp, {"phase": nc["phase"]}))
+    if bc is not None:
+        FIX = json.load(open(F1_PATH))
+        b = bc.compute(raw_override=FIX)
         lm, lead, _ = E.leading_composite(series)
         dep = dict(zip(b["months"], b["leading"]))
         dmax = max(abs(round(float(v), 3) - dep[mm]) for mm, v in zip(lm, lead) if dep.get(mm) is not None and np.isfinite(v))
@@ -432,8 +447,9 @@ def run_f3(rows, diag, bc):
     S = "engine_F3"
     sp = "v1 §7.2 / v1 §1 row 2 (F3 = 2026-10-20 pull)"
     S3, raw3 = _f3_state_and_raw()
-    if bc is None:
-        rows.append(row("F3_01", S, "deployed compute(F3) nowcast is None", None, True, None, "bool", sp, not_run_reason="deployed module not imported"))
+    if bc is None or deployed_is_v2(bc):
+        rows.append(row("F3_01", S, "deployed compute(F3) nowcast is None", None, True, None, "bool", sp,
+                        not_run_reason="deployed module not imported" if bc is None else LEGACY_RETIRED))
     else:
         b3 = bc.compute(raw_override=raw3)
         rows.append(row("F3_01", S, "deployed compute(F3) nowcast is None", b3["nowcast"] is None, True, None, "bool", sp,

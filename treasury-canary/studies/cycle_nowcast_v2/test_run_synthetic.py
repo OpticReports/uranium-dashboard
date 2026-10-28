@@ -469,6 +469,15 @@ def test_refusal_paths(bundles, tmp_path):
         RS.write_once(str(p), {"a": 2})
     path, rec = RS.resolve_output(str(p), "re-labelled a basis string")
     assert path.endswith("once.correction-1.json") and rec["k"] == 1 and rec["supersedes"] == "once.json"
+    # a later correction supersedes the LATEST file, and still does so once the original is retired from the tree
+    RS.write_once(path, {"a": 1, "correction": rec})
+    path2, rec2 = RS.resolve_output(str(p), "second")
+    assert path2.endswith("once.correction-2.json") and rec2["k"] == 2 and rec2["supersedes"] == "once.correction-1.json"
+    p.unlink()
+    path3, rec3 = RS.resolve_output(str(p), "third")
+    assert path3.endswith("once.correction-2.json") and rec3["supersedes"] == "once.correction-1.json"
+    with pytest.raises(RS.Refusal):
+        RS.resolve_output(str(p), None)                                    # a correction exists: never a fresh original
 
 
 def test_fix_pass_guards_and_helpers(bundles, tmp_path):
@@ -528,6 +537,12 @@ def test_fix_pass_guards_and_helpers(bundles, tmp_path):
     with pytest.raises(RS.Refusal) as ei:
         RS.check_correction_inputs({"k": 1}, str(orig), hashes, {"sha256": "OTHER"})
     assert "freeze.sha256" in str(ei.value)
+    # the F6/F7/F8 set is compared by hash VALUES: a relabelled key (correction 1) is the same input, a changed hash is not
+    rec = RS.check_correction_inputs({"k": 1}, str(orig), {**hashes, "F6_F7_F8_verified": {"relabelled": "3"}}, {"sha256": "F"})
+    assert rec["inputs_identical"]
+    with pytest.raises(RS.Refusal) as ei:
+        RS.check_correction_inputs({"k": 1}, str(orig), {**hashes, "F6_F7_F8_verified": {"x": "changed"}}, {"sha256": "F"})
+    assert "F6_F7_F8_verified" in str(ei.value)
     # M6: the committed-state check reads HEAD and the porcelain status (read-only git); the paths cover the spec, every .py and data/
     st = RS.git_state([RS.SPEC_MD, os.path.join(HERE, "run_study.py")])
     assert st["head"] and len(st["head"]) == 40 and isinstance(st["dirty"], list)
@@ -644,8 +659,13 @@ def test_committed_dry_run_is_current(bundles):
     assert d["decisions"] == a["decisions"]
     assert "gate_report_F1.json" in d["statement"] and "no study metric" in d["statement"] and "synthetic" in d["statement"]   # N1/D10
     assert d["git"] is None and d["correction"] is None
-    for fn in os.listdir(HERE):                                            # M2: no scored run, no correction, no halt record here
-        assert not (fn.startswith("results") and fn.endswith(".json")) and fn != "corrections.log", fn
+    # M2 (post-scored state, 2026-10-28): the scored files here are results*.json + corrections.log only;
+    # every correction file is logged, and no halt record exists
+    scored = sorted(fn for fn in os.listdir(HERE) if fn.startswith("results") and fn.endswith(".json"))
+    logged = [json.loads(ln)["file"] for ln in open(os.path.join(HERE, "corrections.log"))] if os.path.exists(os.path.join(HERE, "corrections.log")) else []
+    for fn in scored:
+        assert fn == "results.json" or fn in logged, fn
+    assert not any(fn.startswith("halt") for fn in os.listdir(HERE))
 
 
 def test_freeze_template_documents_every_field():

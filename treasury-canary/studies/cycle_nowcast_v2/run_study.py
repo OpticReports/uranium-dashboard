@@ -94,6 +94,16 @@ EXIT = {"guard": 2, "exists": 3, "hash": 4, "gate": 5, "diagnostic": 6, "freeze"
 # that is what a correction is; spec_md is recorded, not required: the results section is written into the
 # spec file after the run and must not turn a correction into a 'new run')
 CORRECTION_INPUT_KEYS = ("F1", "F5", "F6_F7_F8_verified", "piger_history", "nber_turning_points", "ads_matrix")
+ADS_MATRIX_LABEL = "ads_monthly_matrix.npz (--ads-matrix, outside the repo; hash also under hashes.ads_matrix)"
+
+
+def _hash_view(key: str, v):
+    """What a correction compares for one CORRECTION_INPUT_KEYS entry: the verified F6/F7/F8 SET is
+    compared by its hash VALUES (the keys are labels/paths and may be relabelled by a correction;
+    the matrix entry was a scratch path before correction 1), everything else by equality."""
+    if key == "F6_F7_F8_verified" and isinstance(v, dict):
+        return sorted(v.values())
+    return v
 UNREVISED_RUN_YEAR = "2026"                              # v1 §4.1: "re-checked on the run day against one 2026 vintage"
 
 
@@ -407,7 +417,10 @@ def input_hashes(mode: str, paths: dict, expected: dict) -> dict:
     """sha256 of every input file: F1, F5 (per file), F6/F7/F8 (the verified set), Piger, NBER."""
     h = {"F1": {os.path.basename(paths["f1"]): sha256(paths["f1"])} if paths.get("f1") and os.path.exists(paths["f1"]) else None,
          "F5": {fn: sha256(os.path.join(paths["f5"], fn)) for fn in sorted(os.listdir(paths["f5"])) if fn.endswith(".csv")},
-         "F6_F7_F8_verified": {os.path.relpath(p, HERE if mode == "real" else os.path.dirname(paths["manifest"]) if mode == "synthetic" else HERE): v
+         # the --ads-matrix file lives outside the repo (scratch): a STABLE label, never its path
+         # (correction 1, 2026-10-28: a session path leaked into results.json through this key)
+         "F6_F7_F8_verified": {(ADS_MATRIX_LABEL if paths.get("ads_matrix") and os.path.abspath(p) == os.path.abspath(paths["ads_matrix"])
+                                else os.path.relpath(p, HERE if mode == "real" else os.path.dirname(paths["manifest"]) if mode == "synthetic" else HERE)): v
                                for p, v in sorted(expected.items())},
          "piger_history": sha256(paths["piger_xlsx"]) if os.path.exists(paths["piger_xlsx"]) else None,
          "nber_turning_points": sha256(paths["nber_csv"]) if os.path.exists(paths["nber_csv"]) else None,
@@ -419,17 +432,21 @@ def input_hashes(mode: str, paths: dict, expected: dict) -> dict:
 
 # ----------------------------------------------------------------------------- output
 def resolve_output(out: str, correction: str | None) -> tuple[str, dict | None]:
-    if not os.path.exists(out):
-        if correction:
-            raise Refusal("usage", f"--correction given but {out} does not exist: a correction run needs an original results.json")
-        return out, None
-    if not correction:
-        raise Refusal("exists", f"{out} exists: results.json is written once; a correction run needs --correction \"<reason>\"")
+    """The original (`out`) is written once. A correction run writes `<base>.correction-<k>` and
+    supersedes the LATEST results file present (the original, or the previous correction when the
+    superseded original has been retired from the tree with its sha256 on record)."""
     base, ext = os.path.splitext(out)
     k = 1
     while os.path.exists(f"{base}.correction-{k}{ext}"):
         k += 1
-    rec = {"k": k, "reason": correction, "supersedes": os.path.basename(out), "supersedes_sha256": sha256(out), "logged": utc_now()}
+    latest = f"{base}.correction-{k - 1}{ext}" if k > 1 else (out if os.path.exists(out) else None)
+    if latest is None:
+        if correction:
+            raise Refusal("usage", f"--correction given but neither {out} nor a previous correction exists: a correction run needs an original")
+        return out, None
+    if not correction:
+        raise Refusal("exists", f"{os.path.basename(latest)} exists: results are written once; a correction run needs --correction \"<reason>\"")
+    rec = {"k": k, "reason": correction, "supersedes": os.path.basename(latest), "supersedes_sha256": sha256(latest), "logged": utc_now()}
     return f"{base}.correction-{k}{ext}", rec
 
 
@@ -458,7 +475,7 @@ def check_correction_inputs(correction: dict, original_path: str, hashes: dict, 
     except (OSError, ValueError) as exc:
         raise Refusal("usage", f"correction run: cannot read the superseded {original_path}: {exc}")
     oh = (orig.get("inputs") or {}).get("hashes") or {}
-    diffs = [k for k in CORRECTION_INPUT_KEYS if oh.get(k) != hashes.get(k)]
+    diffs = [k for k in CORRECTION_INPUT_KEYS if _hash_view(k, oh.get(k)) != _hash_view(k, hashes.get(k))]
     fz_same = (orig.get("freeze") or {}).get("sha256") == freeze.get("sha256")
     if diffs or not fz_same:
         raise Refusal("usage", f"correction run refused: inputs differ from {os.path.basename(original_path)} in "
@@ -603,7 +620,7 @@ def run(argv=None) -> int:
             gates["ADS_comparator"] = {"not_applicable": "synthetic archive: the §5 targets (0.866 / 0.956 vs the 2010-12-03 vintage) are properties of the real archive; run in --real only"}
         hashes = input_hashes(mode, paths, expected)
         if correction:                                                # M3: same inputs and freeze as the superseded file
-            correction = check_correction_inputs(correction, out, hashes, freeze)
+            correction = check_correction_inputs(correction, os.path.join(os.path.dirname(out), correction["supersedes"]), hashes, freeze)
         log("loading inputs")
         inp, spans = load_inputs(mode, paths, freeze, hashes)
         if inp.piger_releases:
@@ -619,7 +636,7 @@ def run(argv=None) -> int:
         R = res["results"]
         payload = {
             "study": "cycle nowcast v2 — " + ("SCORED RUN (real data)" if mode == "real" else "SYNTHETIC DRY RUN (no real number scored)"),
-            "spec": {"file": os.path.relpath(SPEC_MD, REPO), "version": "SPEC v1 (2026-10-20) + v1.1 amendments", "sha256": hashes["spec_md"]},
+            "spec": {"file": os.path.relpath(SPEC_MD, REPO), "version": "SPEC v1 (2026-10-20) with the v1.1 and v1.2 amendments", "sha256": hashes["spec_md"]},
             "generated": utc_now(),
             "mode": mode, "scored_real_data": mode == "real",
             "run_id": run_id(hashes, freeze, mode),

@@ -88,8 +88,14 @@ def test_no_hard_gate_failures(report):
     the information; this test stays red until Casey rules on every id in
     hard_fail_ids (the ruling is then recorded here and in notes_B1.md §3)."""
     hard = report["summary"]["hard_fail_ids"]
-    assert hard == [], ("HARD gate misses raised to Casey, not widened: "
-                        + "; ".join(f"{k}: {KNOWN_MISSES.get(k, 'unlisted miss')}" for k in hard))
+    # RULED (SPEC v1.1, spec owner, 2026-10-20; freeze.json harness_status not_retrievable, 2026-10-28):
+    # G04 / S01_claims / S01_ens / S04 are DESCRIPTIVE - recorded, never gated, never widened.
+    # run_study.RULED_DESCRIPTIVE carries the same ruling for --real. Any OTHER hard miss stays red.
+    from run_study import RULED_DESCRIPTIVE
+    unruled = [k for k in hard if k not in RULED_DESCRIPTIVE]
+    assert unruled == [], ("HARD gate misses raised to Casey, not widened: "
+                           + "; ".join(f"{k}: {KNOWN_MISSES.get(k, 'unlisted miss')}" for k in unruled))
+    assert set(hard) == {"G04", "S01_claims", "S01_ens", "S04"}, hard   # the ruled set, exactly
 
 
 def test_report_shape_and_nothing_scored(report):
