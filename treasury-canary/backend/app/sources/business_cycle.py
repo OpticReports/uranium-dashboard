@@ -38,6 +38,15 @@ vintage, ~9 months before NBER announced). Worst real-time failure:
 2022 printed EXPANSION live all year but is a 10-month STALL after
 benchmark revisions - the optimistic direction. Pre-2010 income/sales/
 claims vintages are spliced approximations (lower-bound degradation).
+
+Nowcast and completed coincident (2026-10-28): the pre-registered study
+studies/cycle-nowcast-v2.md (ONE scored run, two independent verifiers)
+replaced the fixed-lag ENS_BC_S form with the lag-aware ENS_HH engine
+(cycle_engine.py, vendored byte-for-byte from the study) and added the
+bridge-COMPLETED coincident with completion bands (cycle_bands.json). The
+frozen numbers are in NOWCAST_STATS; the comments above `nowcast` carry
+the decisions and the honesty caveats (final-vintage bands; the real-time
+edge over persistence-in-hand is small and rests on one recession).
 """
 from __future__ import annotations
 
@@ -226,6 +235,9 @@ def compute(raw_override: dict | None = None) -> dict:
 
     rnd = lambda x: round(x, 3) if x is not None else None
     nc = nowcast(M, months, coin)
+    completed = completed_headline(nc, months[-1])
+    piger = piger_line(raw_override)
+    flags = member_flags(M, months[-1])
     # ALFRED vintage study 2026-08-11: the EXPANSION<->STALL boundary flips
     # ~1-in-3 on revision when |coin| < 0.5, and the p90 edge error (0.46)
     # exceeds a sub-0.5 gap to the -0.75 contraction line - render such
@@ -251,13 +263,19 @@ def compute(raw_override: dict | None = None) -> dict:
     current = {"month": months[-1], "coincident": rnd(coin[-1]),
                "leading": rnd(lead[-1]), "phase": phases[-1],
                "members_in_latest": members_in_latest,
+               "coincident_completed": completed["value"] if completed else None,
+               "completed_band": completed["band"] if completed else None,
                "leading_3m_change": (rnd(lead[-1] - lead[-4])
                                      if len(lead) > 3 and lead[-1] is not None
                                      and lead[-4] is not None else None)}
     return {"months": months,
             "nowcast": nc,
+            "completed": completed,
+            "piger": piger,
+            "flags": flags,
             "components": components,
-            "read": build_read(current, provisional, components, stats, nc),
+            "read": build_read(current, provisional, components, stats, nc,
+                               completed, piger, flags),
             "coincident": [rnd(x) for x in coin],
             "leading": [rnd(x) for x in lead],
             "phase": phases,
@@ -312,7 +330,8 @@ def _dir(d) -> str:
 
 
 def build_read(current: dict, provisional: bool, components: dict,
-               stats: dict, nc: dict | None) -> dict:
+               stats: dict, nc: dict | None, completed: dict | None = None,
+               piger: dict | None = None, flags: dict | None = None) -> dict:
     """Six short strings the panel shows above the chart. Every number comes
     from the board itself; the frozen reliability figures are the ALFRED
     study's (module docstring). Wording is 'watch', never 'alert'. The
@@ -357,6 +376,12 @@ def build_read(current: dict, provisional: bool, components: dict,
     if k < 4:
         head += (f" The {month} reading rests on {k} of 4 coincident members; the others "
                  f"publish later and will move it.")
+        if completed and completed.get("value") is not None:
+            lo, hi = (completed.get("band") or [None, None])
+            band = f" (80% band {lo:+.2f} to {hi:+.2f})" if lo is not None and hi is not None else ""
+            head += (f" Bridging the lagging member{'s' if len(completed.get('pattern') or {}) != 1 else ''} "
+                     f"gives {_sz(completed['value'])}{band}: the completed value in the header; the "
+                     f"partial mean is the phase/alert quantity.")
     cm = "; ".join(f"{c['label']} {_sz(c['z'])}" + ("" if c["in_latest"] else f" ({c['month']})")
                    for c in components["coincident"])
     lm = "; ".join(f"{c['label']} {_sz(c['z'])}" for c in components["leading"])
@@ -415,21 +440,69 @@ def build_read(current: dict, provisional: bool, components: dict,
                      f"to {LEAD_WARN}")
     nxt = ("From here: " + "; ".join(steps) + ". A phase change raises a canary event only after "
            "an 8-hour confirmation on fresh data.")
-    if nc:
-        st = nc.get("stats", {})
-        now = (f"Nowcast for {nc['month']} (payrolls, claims and rates for that month are already "
-               f"published; the composite is not): {nc['value']:+.2f}\u03c3 -> {nc['phase']} "
-               f"(bridge {nc['bridge']:+.2f}, claims member {nc['claims']:+.2f}"
-               f"{'; claims member below -0.75' if nc.get('claims_trigger') else ''}). Walk-forward "
-               f"1972-2026: RMSE {st.get('rmse_vs_persistence_pct')}% vs persistence "
-               f"({st.get('rmse_ex2020_pct')}% ex-2020; final-vintage data).")
-    else:
-        now = ("No nowcast at the moment: the one-month-ahead model only runs in the window between "
-               "the payrolls release and the mid-month industrial-production and manufacturing-and-"
-               "trade-sales prints (its bridge is fitted at fixed publication lags), so for most of "
-               "the month the chart ends at the last published composite.")
+    now = _nowcast_read(nc, completed)
     return {"headline": head, "drivers": drivers, "calculation": calculation,
-            "reliability": reliability, "next": nxt, "nowcast": now}
+            "reliability": reliability, "next": nxt, "nowcast": now,
+            "completed": _completed_read(current, completed),
+            "piger": _piger_read(piger), "flags": _flags_read(flags)}
+
+
+def _nowcast_read(nc: dict | None, completed: dict | None) -> str:
+    """v2 nowcast sentence: value, information set and lags, or the reason
+    there is none (v1 §2.4: every None carries a reason)."""
+    if not nc:
+        return "No nowcast: the engine did not run."
+    lags = nc.get("lags") or {}
+    lag_txt = ", ".join(f"{c} {L}" for c, L in lags.items() if L) or "all four members published"
+    dropped = nc.get("dropped") or []
+    if nc.get("value") is None:
+        return (f"No nowcast for {nc.get('month')}: {nc.get('reason')}. Members lagging the payrolls "
+                f"month: {lag_txt}.")
+    st = nc.get("stats", {})
+    return (f"Nowcast for {nc['month']} (information set {nc.get('info_set')}: payrolls for that month "
+            f"are published; members lagging it by months: {lag_txt}"
+            f"{'; dropped (lag >= 4, re-meaned): ' + ', '.join(dropped) if dropped else ''}): "
+            f"{nc['value']:+.2f}\u03c3 -> {nc['phase']} (bridge {nc['bridge']:+.2f}, claims member "
+            f"{nc['claims']:+.2f}{'; claims member below -0.75' if nc.get('claims_trigger') else ''}). "
+            f"Pre-registered v2 (scored 2026-10-28): RMSE {st.get('lagsim_rmse_vs_pers_pct_full')}% vs "
+            f"persistence 1972-2026 ({st.get('lagsim_rmse_vs_pers_pct_ex2020')}% ex-2020; the edge is "
+            f"thin since 2013, ratio {st.get('lagsim_ratio_2013plus_ex2020')}); in true real time 2013+ "
+            f"RMSE {st.get('realtime_rmse_ex2020')} vs {st.get('realtime_pers_in_hand_rmse_ex2020')} for "
+            f"the best persistence actually in hand.")
+
+
+def _completed_read(current: dict, completed: dict | None) -> str:
+    k, month = current.get("members_in_latest"), current.get("month")
+    partial = current.get("coincident")
+    if not completed or completed.get("value") is None:
+        why = (completed or {}).get("reason") or "no completion available"
+        return (f"Headline coincident {partial:+.2f}\u03c3 is the mean of {k} of 4 members for {month}; "
+                f"no bridge-completed value ({why}).") if partial is not None else ""
+    lo, hi = (completed.get("band") or [None, None])
+    band = f" (80% band {lo:+.2f} to {hi:+.2f})" if lo is not None and hi is not None else " (band pending)"
+    pat = completed.get("pattern") or {}
+    pat_txt = ", ".join(f"{c} bridged {L}m" for c, L in pat.items()) or "all members published"
+    return (f"Completed coincident for {month}: {completed['value']:+.2f}\u03c3{band}; {pat_txt}. The "
+            f"{k}-of-4 partial mean reads {partial:+.2f}\u03c3 and stays the phase/alert quantity "
+            f"(completed RMSE 0.133 vs 0.168 partial, 1977-2026; bands are completion error only).")
+
+
+def _piger_read(piger: dict | None) -> str:
+    if not piger:
+        return "Chauvet-Piger probability unavailable."
+    return (f"Chauvet-Piger recession probability (FRED, smoothed): {piger['pct']:.1f}% for "
+            f"{piger['month']}; 3x80% rule {piger['state_3x80'].replace('-', ' ')}. Real-time record "
+            f"2006-2026: declared 2008 on 2009-01-01 (13 months after the peak), never declared 2020 "
+            f"by 3x80%. Same four inputs as our composite - a cross-check, not independent evidence.")
+
+
+def _flags_read(flags: dict | None) -> str:
+    if not flags:
+        return ""
+    if flags.get("umcsent_delayed"):
+        return (f"Sentiment (UMCSENT) is {flags['umcsent_lag_months']} months behind the headline month "
+                f"on FRED (last {flags['umcsent_month']}); the leading composite uses its last print.")
+    return ""
 
 
 # ---------- phase-change detection (called from the refresh job) ----------
@@ -456,8 +529,16 @@ def phase_change(board: dict) -> str | None:
     prev = state.get("phase")
     now = int(time.time())
     fire = False
+    coin_now = board["current"].get("coincident")
+    quiet = (prev is not None and cur != prev and {prev, cur} == {"EXPANSION", "STALL"}
+             and coin_now is not None and abs(coin_now) < RT_EDGE_P90)
     if prev is None:
         state = {"phase": cur}                      # first sight: adopt quietly
+    elif quiet:
+        # EXPANSION<->STALL inside the revision band (|coin| < p90 edge error
+        # 0.46): the label flips ~1-in-3 on revision there, so re-baseline
+        # quietly - no event, no alert (backlog item 9, 2026-10-28)
+        state = {"phase": cur, "quiet_rebaseline": prev}
     elif cur == prev:
         state.pop("candidate", None)                # back to baseline: reset
         state.pop("candidate_ts", None)
@@ -481,161 +562,173 @@ def phase_change(board: dict) -> str | None:
     return None
 
 
-# ---------- nowcast: next-month coincident, ahead of publication ----------
-# Method ENS_BC from the 2026-08-07 walk-forward study (1972-2026, n=654):
-# 0.5*BRIDGE + 0.5*CLAIMS. RMSE -28.5% vs persistence (-14.7% ex-2020,
-# DM t -5.33); 25.4% of phase transitions called a month early (persistence
-# 0% by construction); recession onsets: earlier 3/7, tied 3, later 1,
-# missed 0; only sub -0.75 false alarm (1981-06) preceded the actual 1981
-# recession. The edge is PUBLICATION-TIMING asymmetry: payrolls, claims and
-# rates for month M print ~1 month before the full composite for M does.
-# Caveats: final-vintage validation; COIN(M-1) regressor = last realized.
-# Full spec + study: scratchpad nowcast_study.md / nowcast_spec.json,
-# summarized in the /cycle response.
+# ---------- nowcast v2: lag-aware, issued every day (cycle-nowcast-v2) ----------
+# Pre-registered study studies/cycle-nowcast-v2.md, ONE scored run 2026-10-28
+# (results.json, verified). The engine is the study's own, vendored byte-for-
+# byte as cycle_engine.py (gate test). Decisions as frozen:
+#   D-1 PASS    ENS_HH at the information set in force is the one-month-ahead
+#               reading: RMSE vs realized persistence -29.9% full / -12.5%
+#               ex-2020 (bars -25 / -8), DM NW-6 t = -4.69 (bar -1.645); final-
+#               vintage replay 1972-01..2026-07, n = 655. Thin recently: the
+#               2013+ ex-2020 ratio is 0.94 (whole sample 0.875).
+#   D-2 PASS    the bridge-COMPLETED coincident is the headline value with its
+#               band (RMSE 0.133 vs 0.168 for the partial mean; the partial
+#               stays the gate/alert quantity, Q6 default).
+#   D-3 SUCCESS calibrated ENS_HH / calibrated ADS RMSE ratio 0.71 on 120
+#               real-time rows 2015-07+ ex-2020 (SUCCESS <= 1.10).
+# True real time (ALFRED vintages, 2013-06+, one recession, descriptive): ex-2020
+# RMSE 0.234 vs 0.253 (completed-persistence in hand) and 0.279 (available-
+# members persistence) - but 0.194 for the HINDSIGHT final-vintage persistence
+# nobody has on the day. Availability: a reading on 100% of calendar days vs
+# 33% for the retired fixed-lag form (11% in the 2025-10..2026-04 shutdown).
+# Bands: completion error only, final-vintage; first-print revision excluded.
 
-def _ols(X, y):
-    import numpy as np
-    X = np.asarray(X, float); y = np.asarray(y, float)
-    beta, *_ = np.linalg.lstsq(np.column_stack([np.ones(len(X)), X]), y,
-                               rcond=None)
-    return beta
+from . import cycle_engine as CE
+
+_BANDS_PATH = os.path.join(os.path.dirname(__file__), "cycle_bands.json")
+PIGER_SERIES = "RECPROUSM156N"        # FRED smoothed Chauvet-Piger, PERCENT
+PIGER_HI, PIGER_LO = 80.0, 20.0        # Piger's 3-month declaration rule
+
+NOWCAST_STATS = {
+    # frozen numbers of the ONE scored run (studies/cycle_nowcast_v2/results.json)
+    "study": "cycle-nowcast-v2, scored 2026-10-28 (pre-registered; verified)",
+    "lagsim_rmse_vs_pers_pct_full": -29.9, "lagsim_rmse_vs_pers_pct_ex2020": -12.5,
+    "lagsim_dm_t_ex2020": -4.69, "lagsim_n": 655, "lagsim_window": "1972-01..2026-07",
+    "lagsim_ratio_2013plus_ex2020": 0.94,
+    "realtime_rmse_ex2020": 0.234, "realtime_pers_in_hand_rmse_ex2020": 0.253,
+    "realtime_pers_available_rmse_ex2020": 0.279, "realtime_pers_hindsight_rmse_ex2020": 0.194,
+    "realtime_n_ex2020": 145, "realtime_window": "2013-06..2026-09 (one recession)",
+    "comparator_r_ens_over_ads_ex2020": 0.713, "comparator_n": 120,
+    "completed_rmse": 0.133, "partial_rmse": 0.168,
+    "availability_share_days_v2": 1.0, "availability_share_days_fixed_lag": 0.33,
+}
 
 
-def _zs_at(hist_vals, x):
-    """expanding z of x against history (history includes x's month peers)."""
-    import numpy as np
-    h = np.asarray([v for v in hist_vals if v is not None], float)
-    if len(h) < Z_MIN:
-        return None
-    return float((x - h.mean()) / (h.std() + 1e-9))
-
-
-def nowcast(M: dict, months: list, coin: list) -> dict | None:
-    """M = {series: {month: value}} from _fetch_all; coin = realized
-    coincident series aligned to months. Returns the ENS_BC nowcast for the
-    first month after the last realized composite value."""
-    import numpy as np
+def _load_bands() -> dict:
     try:
-        pay_months = sorted(M["PAYEMS"])
-        tgt = pay_months[-1]                      # payrolls lead the pack
-        last_realized = max(i for i, c in enumerate(coin) if c is not None)
-        if months[last_realized] >= tgt:
-            return None                           # composite already caught up
+        return json.load(open(_BANDS_PATH))["bands"]
+    except Exception:  # noqa: BLE001
+        return {}
 
-        def mdiff(a, b):                          # calendar months a - b
-            return (int(a[:4]) - int(b[:4])) * 12 + int(a[5:7]) - int(b[5:7])
 
-        if mdiff(tgt, months[last_realized]) != 1:
-            return None   # one-step model; a wider gap was never validated
+BANDS = _load_bands()
 
-        def g6_at(ser, m, lag=0):
-            ms = sorted(M[ser])
-            if m not in ms:
-                return None
-            i = ms.index(m)
-            if i - 6 - lag < 0:
-                return None
-            a, b = M[ser][ms[i - lag]], M[ser][ms[i - 6 - lag]]
-            return (math.log(a) - math.log(b)) * 2 if a > 0 and b > 0 else None
 
-        gp_tgt = g6_at("PAYEMS", tgt)
-        zparts = []
-        # payrolls: actual, z'd against its own growth history (z is
-        # scale-invariant — but only if value and history share units)
-        gp_hist = [h for h in (g6_at("PAYEMS", m) for m in pay_months)
-                   if h is not None]
-        zparts.append(_zs_at(gp_hist, gp_tgt) if gp_tgt is not None else None)
-        # bridged components
-        for ser, lag in (("INDPRO", 1), ("W875RX1", 1), ("CMRMTSPL", 2)):
-            ms = sorted(M[ser])
-            if mdiff(tgt, ms[-1]) != lag:
-                return None   # series staler than the trained bridge lag:
-                              # gl_t below would no longer mean g6(tgt-lag)
-            X, y = [], []
-            for m in ms:
-                g0, gl, gpm = g6_at(ser, m), g6_at(ser, m, lag), g6_at("PAYEMS", m)
-                if None not in (g0, gl, gpm):
-                    X.append([gl, gpm]); y.append(g0)
-            if len(y) < 200:
+def _rnd(x, k=3):
+    return None if x is None else round(float(x), k)
+
+
+def nowcast(M: dict, months: list, coin: list, today: str | None = None) -> dict | None:
+    """v2 reading from the series in hand (any lags): cycle_engine.issue on the
+    monthly dicts the board already holds. Always returns a dict for the target
+    month (the last PAYEMS month); `value` is None only with a `reason`
+    (v1 §2.4). The old fixed-lag form returned None ~2/3 of the days."""
+    try:
+        state = {k: {m: v for m, v in d.items() if v is not None} for k, d in M.items()}
+        out = CE.issue(state, d=today, mode="scoring", bands=BANDS)
+    except Exception as exc:  # noqa: BLE001
+        return {"month": max(M["PAYEMS"]) if M.get("PAYEMS") else None, "value": None,
+                "reason": f"engine error: {type(exc).__name__}: {exc}", "stats": NOWCAST_STATS}
+    ens = out.get("ens_hh")
+    ct, cp = out.get("completed_target"), out.get("completed_prev")
+    claims = out.get("claims_hh")
+    return {"month": out["target_month"], "value": _rnd(ens),
+            "bridge": _rnd(out.get("bridge_hh")), "claims": _rnd(claims),
+            "phase": out.get("phase"),
+            "claims_trigger": bool(claims is not None and claims < COIN_RECESSION),
+            "info_set": out.get("info_set"), "lags": out.get("lags"), "K": out.get("K"),
+            "dropped": out.get("dropped") or [], "members_bridged": out.get("members_bridged") or {},
+            "members_skipped": out.get("members_skipped") or [],
+            "flags": out.get("flags") or {},
+            "reason": out.get("reason"),
+            "last_complete_coin": out.get("last_complete_coin"),
+            "completed_target": ({"month": ct["month"], "value": _rnd(ct["value"]),
+                                  "band": [_rnd(b) for b in ct["band"]] if ct.get("band") else None,
+                                  "pattern": ct["pattern"], "dropped": ct["dropped"],
+                                  "pattern_key": ct["pattern_key"], "band_basis": ct["band_basis"]}
+                                 if ct else None),
+            "completed_prev": ({"month": cp["month"], "value": _rnd(cp["value"]),
+                                "band": [_rnd(b) for b in cp["band"]] if cp.get("band") else None,
+                                "pattern": cp["pattern"], "dropped": cp["dropped"],
+                                "pattern_key": cp["pattern_key"], "band_basis": cp["band_basis"],
+                                "nonstandard_pattern": cp.get("nonstandard_pattern")}
+                               if cp else None),
+            "persistence": {k: _rnd(v) for k, v in (out.get("persistence") or {}).items()},
+            "inputs_asof": {c: (max(M[c]) if M.get(c) else None)
+                            for c in ("PAYEMS", "INDPRO", "W875RX1", "CMRMTSPL", "ICSA")},
+            "stats": NOWCAST_STATS,
+            "basis": ("ENS_HH = 0.5*BRIDGE_HH + 0.5*CLAIMS_HH at the information set in force "
+                      "(lag-aware bridges per member, claims/curve regression on bridge-"
+                      "completed history; rows admitted only through K = M - max lag). "
+                      "Pre-registered cycle-nowcast-v2, one scored run 2026-10-28; final-"
+                      "vintage replay 1972-2026 plus a true real-time replay on ALFRED "
+                      "vintages 2013-06+ (one recession). Bands = completion error only.")}
+
+
+def completed_headline(nc: dict | None, month: str) -> dict | None:
+    """The bridge-COMPLETED coincident for the board's headline month (D-2):
+    completed_target when the axis already holds the PAYEMS month, else
+    completed_prev; None (with reason) otherwise."""
+    if not nc:
+        return None
+    for key in ("completed_target", "completed_prev"):
+        c = nc.get(key)
+        if c and c.get("month") == month and c.get("value") is not None:
+            return {"month": month, "value": c["value"], "band": c.get("band"),
+                    "pattern": c.get("pattern"), "dropped": c.get("dropped") or [],
+                    "band_basis": c.get("band_basis"), "source": key}
+    return {"month": month, "value": None, "band": None, "pattern": None, "dropped": [],
+            "band_basis": None, "source": None,
+            "reason": nc.get("reason") or "no completion for the headline month"}
+
+
+def piger_line(raw_override: dict | None = None) -> dict | None:
+    """Chauvet-Piger smoothed recession probability (FRED RECPROUSM156N, PERCENT)
+    as a cross-check line: latest print, the last three months, and the state
+    of Piger's 3x80% / 3x20% rule on the CURRENT vintage. Descriptive: in the
+    pre-registered study the real-time record (240 releases 2006-08..2026-09)
+    declared 2008 on 2009-01-01 (13 months after the NBER peak month, 31 days
+    after NBER's own announcement) and never declared 2020 by 3x80% (the 100%
+    print of 2020-04-30 was followed by re-based months). Same four inputs as
+    our composite: a different model, not independent data. Optional: None when
+    the series is unavailable."""
+    try:
+        if raw_override is not None:
+            pairs = raw_override.get(PIGER_SERIES)
+            if not pairs:
                 return None
-            b = _ols(X, y)
-            gl_t = g6_at(ser, ms[-1], 0)          # last actual growth as lag proxy
-            if gl_t is None or gp_tgt is None:
-                return None
-            proj = float(b[0] + b[1] * gl_t + b[2] * gp_tgt)
-            hist = [g6_at(ser, m) for m in ms]
-            zparts.append(_zs_at([h * 100 for h in hist if h is not None],
-                                 proj * 100))
-        if any(z is None for z in zparts):
+            dates, vals = [p[0] for p in pairs], [float(p[1]) for p in pairs]
+        else:
+            dates, vals = fetch_series(PIGER_SERIES, start="1967-06-01")
+        ser = _monthly(dates, vals, "last")
+        if not ser:
             return None
-        bridge = float(np.mean(zparts))
-
-        # CLAIMS member
-        cl_months = sorted(M["ICSA"])
-        def zc6(m):
-            ms = cl_months
-            if m not in ms: return None
-            i = ms.index(m)
-            if i < 6: return None
-            a, b_ = M["ICSA"][ms[i]], M["ICSA"][ms[i - 6]]
-            return -(math.log(a) - math.log(b_)) * 2 if a > 0 and b_ > 0 else None
-        zc_hist = [zc6(m) for m in cl_months]
-        def zc_z(m):
-            v = zc6(m)
-            return _zs_at([x for x in zc_hist if x is not None], v) if v is not None else None
-        def curve_at(m):
-            t = M["T10Y3M"].get(m)
-            if t is not None: return t
-            g, tb = M["GS10"].get(m), M["TB3MS"].get(m)
-            return (g - tb) if g is not None and tb is not None else None
-        curve_hist = [curve_at(m) for m in months]
-        def curve_z(m):
-            v = curve_at(m)
-            return _zs_at([x for x in curve_hist if x is not None], v) if v is not None else None
-        X, y = [], []
-        for i in range(1, len(months)):
-            m = months[i]
-            f = [coin[i - 1], zc_z(m),
-                 (zc_z(m) - zc_z(months[i - 3])) if i >= 3 and zc_z(m) is not None
-                 and zc_z(months[i - 3]) is not None else None, curve_z(m)]
-            if coin[i] is not None and None not in f:
-                X.append(f); y.append(coin[i])
-        if len(y) < 200:
-            return None
-        b = _ols(X, y)
-        m3 = months[last_realized - 2]
-        f_t = [coin[last_realized], zc_z(tgt),
-               (zc_z(tgt) - zc_z(m3)) if zc_z(tgt) is not None
-               and zc_z(m3) is not None else None, curve_z(tgt)]
-        if None in f_t:
-            return None
-        claims = float(b[0] + sum(bi * xi for bi, xi in zip(b[1:], f_t)))
-
-        ens = 0.5 * bridge + 0.5 * claims
-        ph = ("CONTRACTION" if ens < COIN_RECESSION else
-              "STALL" if ens < 0 else "EXPANSION")
-        return {"month": tgt, "value": round(ens, 3),
-                "bridge": round(bridge, 3), "claims": round(claims, 3),
-                "phase": ph,
-                "claims_trigger": bool(claims < COIN_RECESSION),
-                "inputs_asof": {"PAYEMS": tgt,
-                                "INDPRO": sorted(M["INDPRO"])[-1],
-                                "W875RX1": sorted(M["W875RX1"])[-1],
-                                "CMRMTSPL": sorted(M["CMRMTSPL"])[-1]},
-                # honest numbers for THIS estimator (ENS_BC_S: COIN(M-1)
-                # = available 3-component mean), from the timing audit's
-                # walk-forward re-run - NOT the study baseline's headline,
-                # which used a regressor unavailable at issue time
-                "stats": {"rmse_vs_persistence_pct": -24.2,
-                          "rmse_ex2020_pct": -7.0,
-                          "dm_ex2020": -2.76,
-                          "transitions_called_early_pct": "~25 (CI 18-34)",
-                          "onsets_earlier": "5/7 earlier, 1 tie, 1 later "
-                                            "(calendar basis; never missed)"},
-                "basis": ("ENS_BC_S walk-forward, QA-corrected 2026-08-07; "
-                          "edge = publication-timing (payrolls/claims/rates "
-                          "print ~1m before the composite); final-vintage "
-                          "validation - live vintages noisier; upgrade path "
-                          "ENS_BC_HH in CYCLE_NOWCAST.md")}
+        ms = sorted(ser)
+        last3 = [(m, ser[m]) for m in ms[-3:]]
+        pcts = [v for _, v in last3]
+        state = ("recession-declared" if len(pcts) == 3 and all(v > PIGER_HI for v in pcts) else
+                 "expansion-declared" if len(pcts) == 3 and all(v < PIGER_LO for v in pcts) else
+                 "undeclared")
+        return {"series": PIGER_SERIES, "month": ms[-1], "pct": round(ser[ms[-1]], 2),
+                "last3": [{"month": m, "pct": round(v, 2)} for m, v in last3],
+                "state_3x80": state, "fires_1m50": bool(ser[ms[-1]] >= 50.0),
+                "rule": "three consecutive months > 80% = recession start; < 20% = end (Piger)",
+                "basis": ("smoothed (two-sided) probabilities: the back-history overstates "
+                          "real-time skill; the latest print IS the real-time reading for its "
+                          "month. Real-time record 2006-2026: 2008 declared 2009-01-01, 2020 "
+                          "never declared by 3x80%. Same four inputs as the composite.")}
     except Exception:  # noqa: BLE001
         return None
+
+
+def member_flags(M: dict, headline_month: str) -> dict:
+    """Publication-delay flags for the read box (Q11: UMCSENT's one-month FRED
+    delay since September 2026)."""
+    um = max(M["UMCSENT"]) if M.get("UMCSENT") else None
+    lag = (mdiff_months(headline_month, um) if um else None)
+    return {"umcsent_month": um, "umcsent_lag_months": lag,
+            "umcsent_delayed": bool(lag is not None and lag >= 2)}
+
+
+def mdiff_months(a: str, b: str) -> int:
+    return (int(a[:4]) - int(b[:4])) * 12 + int(a[5:7]) - int(b[5:7])

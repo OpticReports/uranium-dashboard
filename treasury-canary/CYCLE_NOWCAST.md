@@ -224,7 +224,17 @@ Corrections applied to the shipped module/panel:
 
 ---
 
-# ROBUSTNESS BACKLOG (2026-10-20, Casey's ask; NOT implemented — ranked, each with the test that would decide it)
+# ROBUSTNESS BACKLOG (2026-10-20, Casey's ask; ranked, each with the test that would decide it)
+#
+# STATUS 2026-10-28 — items 1, 2, 5 (cheap step) and 9 SHIPPED through the pre-registered study
+# studies/cycle-nowcast-v2.md (ONE scored run, two independent verifiers, correction 1 wording-only):
+# D-1 PASS (lag-aware ENS_HH at any information set: −29.9 % / −12.5 % ex-2020 vs persistence,
+# DM −4.69; thin since 2013, ratio 0.94), D-2 PASS (completed coincident RMSE 0.133 vs 0.168,
+# shown with its band), D-3 SUCCESS (calibrated ENS/ADS 0.71), Chauvet–Piger line on the
+# panel (descriptive), EXPANSION<->STALL flips inside the revision band re-baseline quietly.
+# Item 3 is REPORTED by the study (true real time 2013+: the nowcast beats persistence-in-hand,
+# loses to hindsight persistence) but the −0.75 rule on first prints is not yet scored.
+# Items 4, 6, 7 (real-time band), 8 remain open. The original list follows unchanged.
 
 1. **The nowcast only exists ~1 week a month.** `nowcast()` requires every bridge
    input at its trained lag (INDPRO/W875RX1 at M−1, CMRMTSPL at M−2) and returns

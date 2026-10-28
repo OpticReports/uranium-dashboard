@@ -783,3 +783,174 @@ choose; all recorded in `notes_B1.md` §2 and `notes_B2.md` §5):
   them) and rebuild the F6 tarball and build_summary so the hashes match.
 - Casey's Q1–Q5 remain the only open inputs; `run_study.py --real` refuses a
   freeze file that does not answer them.
+
+
+## RESULTS — the ONE scored run, 2026-10-28 (verified; correction 1 wording-only)
+
+Decided under SPEC v1 (2026-10-20) with the v1.1 and v1.2 amendments (spec sha256
+`6da4a8e7…`), freeze.json `64109389…` — Casey answered every question at the SPEC
+default on 2026-10-28 (X = 10, Y = 25, two regimes never pooled, drop-and-re-mean,
+gate F1 / score F5, Q16/Q17 as ruled; the August harness is **not retrievable**).
+F5 = `data/fred_2026-10-28` (13 series, keyless, hashes in `MANIFEST.json`); F6/F7/F8
+re-pulled on the run day (`notes_freeze.md`). Real data were scored exactly once
+(`results.json`, run_id `79fcb272…`, commit 168aafe1); **correction 1**
+(`results.correction-1.json`, run_id `1eac4c97…`) re-ran the same frozen inputs
+after the verifiers' notes: **0 numeric leaves differ**, decisions identical; only
+basis strings, the matrix hash label, `spec.version` and two honesty statements
+changed (`corrections.log`). The superseded original carried a session scratch
+path under `inputs.hashes` and is retired from the tree (unedited at 168aafe1,
+sha256 `8bfc1b04…` on record).
+
+Verification (both independent of the authors; verdicts logged in
+`verdict_A_recompute.md`, `verdict_B_claims_wording.md`):
+
+| verifier | verdict | what it did |
+|---|---|---|
+| A — recompute | PASS_WITH_NOTES, 0 BLOCKING / 0 SERIOUS / 0 MINOR | own implementation of the spec from the raw F5 CSVs and the F6 tarball: every D-1/D-2/D-3 number, window, count, DM, LOYO, calibration coefficient and 5 regime-(i) rows replayed from raw vintages reproduce to full double precision |
+| B — claims & wording | PASS_WITH_NOTES, 0 BLOCKING, 2 SERIOUS (wording/provenance) → correction 1 | every DECISION record traced to §8; thresholds = frozen defaults; rulings v1.1/v1.2 honoured; tag audit 255/0 recounted; §9 honesty items checked |
+
+### Decisions (frozen rules, frozen thresholds)
+
+| decision | rule as frozen | result | verdict |
+|---|---|---|---|
+| **D-1** one-month-ahead nowcast (ENS_HH at IS-A vs PERS = realized COIN(M−1); final-vintage lag simulation 1972-01..2026-07, n 655 / 643 ex-2020) | RMSE ≤ −25 % full AND ≤ −8 % ex-2020 AND DM NW-6 ex-2020 ≤ −1.645 | **−29.9 % / −12.5 % / t −4.69**; LOYO ratio 0.696–0.875 full, 0.870–0.883 ex-2020 (full-sample DM −1.57 is reported, not a bar) | **PASS** |
+| **D-2** completed coincident vs the partial 3-member mean (1977-07..2026-07, n 589 / 577) | completed RMSE < partial, full AND ex-2020 | **0.133 vs 0.168** (full), **0.099 vs 0.142** (ex-2020); bias +0.003 vs +0.040; p10/p90 −0.13/+0.12 vs −0.13/+0.21; LOYO 0.685–0.725 ex-2020 | **PASS** |
+| **D-3** calibrated ENS_HH vs calibrated ADS, true real time (regime (i), IS-A, 2015-07..2026-07, n 120 ex-2020) | r = RMSE_ENS/RMSE_ADS ≤ 1.10 SUCCESS; > 1.25 with one-sided DM p < 0.10 KILL; same class under target_first (v1.2 Q17) | **r = 0.713** (0.218 vs 0.306; LOYO 0.650–0.902); DM t −1.75 (ENS not worse); target_first r = 0.704, same class; with-2020 r 0.39 never decides | **SUCCESS** |
+
+Consequences (D-1/D-2 pre-registered text verbatim; the D-3 SUCCESS consequence
+is inferred from §8, which pre-registers text for KILL and MIDDLE only):
+ENS_HH at the information set in force is the one-month-ahead reading on the
+board with the v2 numbers in its stats block; `coincident_completed` is shown as
+the headline value with its band (the partial mean stays the gate/alert quantity,
+Q6 default); the home-built ENS_HH stays the headline and calibrated ADS is
+reported as the comparator (within X).
+
+### What the numbers say (descriptive; no grade)
+
+- **The D-1 edge is real but thinning.** Rolling ratios on the same ex-2020 rows
+  (chart-only, post-hoc, not in results.json): 1972–89 0.865, 1990–99 0.892,
+  2000–12 0.841, **2013+ 0.940**, 2016+ 0.926. Half the whole-sample edge comes
+  from the ensemble: BRIDGE alone −5.1 % ex-2020, CLAIMS alone −7.1 %, ENS −12.5 %.
+  The ENS_GRID_D3 selector (DESCRIPTIVE) does not beat the fixed 50/50
+  (ex-2020 RMSE 0.2295 vs 0.2254) and picks 50/50 on 345 of 631 targets.
+  Onsets at IS-A (window [−6, +12]): earlier 4 (1981 by 6 months, 2008 by 4,
+  2001 and 2020 by 1), tie 1 (1990), later 2 (1973/74, 1980 by 1 month), missed 0;
+  one sub-−0.75 false alarm (1981-06, two months before the 1981 onset);
+  30.5 % of realized phase transitions called a month early. IS-B/IS-C improve
+  monotonically (−21.8 % / −43.4 % ex-2020; the §3 diagnostic holds).
+- **True real time (regime (i), ALFRED vintages, 159 IS-A issue dates
+  2013-06-14..2026-10-02, ONE recession): reported, no verdict.** Ex-2020 RMSE
+  vs the final-vintage target: ENS_HH **0.234**; the HINDSIGHT persistence
+  (final-vintage COIN(M−1), which nobody holds on the day) **0.194** — ENS is
+  **+20.7 % worse** (one-sided DM t +1.37, p 0.085; B +20.6 %, C +10.7 %).
+  Against the persistence forms actually in hand it is better: completed
+  COIN_HH(M−1) 0.253 (DM −1.64, p 0.05), available-members mean 0.279 (DM −2.13,
+  p 0.02) — these two aggregates are computed from the stored rows for the
+  write-up, not scored. Full sample (2020 in) −31.6 %. The 2020-03 onset was
+  called on the 2020-04-03 issue, one month before the realized line crossed.
+  Phase label vs the revised one 78 %. 13 rows had a member at lag ≥ 3, 2 a
+  dropped member, 7 fell in the 2025-10..2026-04 shutdown window.
+- **Availability.** A v2 reading exists on 100 % of calendar days 2013-06+
+  (30.3 days/month) vs 33 % for the retired fixed-lag form (10.1 days/month;
+  10.8 % inside the shutdown window); ADS 99.8 %.
+- **Regime (ii), 2000-01..2013-05, pseudo-real-time (list-proxy issue points,
+  labelled):** ENS_HH crossed −0.75 on 2001-04-06 vs the realized line's first
+  full print 2001-05-29 (1 month), and on 2007-12-07 vs 2008-05-01 (4 months).
+- **D-3 context.** Calibration is a walk-forward affine fit of each reading to
+  realized COIN on identical stored rows (first calibrated 2015-07 after 24
+  stored months; 25 IS-A rows uncalibrated; n 120 vs the ~145 the spec
+  expected — the ~30 % MSE minimum detectable difference scales by
+  sqrt(145/120) ≈ 1.10 to ~33 %, so SUCCESS is a point-estimate statement with
+  its LOYO range). ENS barely needs calibration (slope 0.82, raw RMSE 0.224);
+  ADS does (mean slope 0.36). Sensitivities: smoothed-fit r 0.704, strict "< d"
+  r 0.703; the claims-only exclusion is **identical to the primary because no
+  scored row used a claims-only vintage** — it demonstrates nothing. Tracking
+  accuracy on expansion-dominated months; one onset event (tie, 2020-04-03).
+  ADS reproduction gate: 0.8655 / 0.9560 vs the note's 0.866 / 0.956 (PASS;
+  every-vintage correlations 0.808 / 0.925 descriptive).
+- **Chauvet–Piger (descriptive, 240 releases 2006-08..2026-09, two recessions,
+  no grade).** 3×80 % declared 2008 at the 2009-01-01 release — model peak
+  2008-01 (NBER 2007-12), first recession month 2008-02, 13 months after the
+  peak, 31 days AFTER NBER's own announcement and 391 days after our
+  pseudo-real-time ENS_HH crossing; end declared 2010-01-01 (262 days before
+  NBER). 2020 was **never declared by 3×80 %** (100 % at the 2020-04-30 release,
+  then re-based; the 1-month ≥ 50 % sensitivity catches it). Largest
+  non-recession print by USREC: Sep-2020 at 100 % on the 2020-10-30 release
+  (post-trough); outside the 2020 episode, 2021-10-29 at 44.4 % (fires under
+  neither rule). ALFRED vintage 2023-02-01 differs from Piger's column by > 1 pp
+  (flagged); 80 of 240 releases read from Piger's archive where ALFRED has no
+  vintage. Latest: 2026-08 at 0.62 % (2026-09-30 release).
+
+### Honesty box (frozen numbers)
+
+- Measurement basis: population RMSE of (estimate − realized COIN(M)) on
+  final-vintage F5 for D-1/D-2 and the lag simulation; D-3 on calibrated
+  readings vs the F5 target; ex-2020 = the 12 rows of 2020 dropped and the
+  series concatenated; DM NW-6 Bartlett.
+- Final-vintage data for the lag simulation and regime (ii): seasonal factors,
+  benchmark and definition revisions, final z-score histories; publication
+  calendars are not modeled there; 2000–2013 is pseudo-real-time with emulated
+  lags. True real time only from 2013-06 — one recession.
+- The real-time edge over persistence-in-hand is small and rests on that one
+  recession; against hindsight persistence the nowcast is worse. The D-1 PASS
+  is a final-vintage lag-simulation result.
+- Bands = completion error only (final vintage); first-print revision is not
+  included (W875RX1 first prints revise by 0.47 sd with a +0.9 pp bias) until the
+  real-time band is scored. Pre-2009 claims on final seasonal factors.
+- ADS end-points revise by 0.36 mean-abs; post-2023 vintages embed a COVID
+  exclusion. Chauvet–Piger shares the four inputs (a different model, not
+  independent data); its smoothed FRED series is two-sided in history.
+- F1 reproduction gate on the committed August fixtures: 93 PASS, 16 INFO,
+  5 NOT_RUN, 6 recorded misses ruled DESCRIPTIVE under v1.1 (G04, S01_claims,
+  S01_ens, S04 hard; Q01, Q04 soft) — never gate failures; the estimator-pinning
+  row passes. Q05 computed once on F1: −29.9 % / −12.5 % / 30.7 % / onsets 4-1-2
+  on 653 targets (August: 654). The August forms re-run on F5 land within 0.001
+  of the August values. The realized target itself moved vs the 2026-08-07
+  fixture (NIPA 2026-09-30): RMS 0.018, max 0.220 at 2026-03, 3 label flips
+  (2023-01/09/11 STALL→EXPANSION); the mid-2026 "STALL near −0.5" on the August
+  fixture was largely pre-revision W875RX1 (2026-03: −0.469 → −0.249).
+- T10Y3M and BAA10YM taken current: 0 changed values vs the listed 2026-10-27
+  and 2026-10-01 ALFRED vintages. UMCSENT is ~M−2 on the live board (FRED delay)
+  — flagged on the panel; the replay is unaffected. The QA variants' numbers are
+  soft; their harness is not recoverable.
+- Not modeled: a real-time completion band; benchmark-revision pre-adjustment;
+  the MS-DFM fitted walk-forward; any re-tuning (none was tried — one run).
+
+### Charts (`studies/cycle_nowcast_v2/figs/`, script `make_charts.py`; series asserted equal to results.json)
+
+`fig_cnv2_d1_lagsim.png` (nowcast vs realized 1972–2026, the 2005+ zoom
+against persistence, the rolling 36-month RMSE ratio) ·
+`fig_cnv2_d2_completed.png` (completed vs partial error series and
+distributions) · `fig_cnv2_regime_i_d3.png` (true real-time replay 2013+, the
+calibrated ADS comparison, LOYO r by year) · `fig_cnv2_regime_i_baselines.png`
+(real-time RMSE vs the three persistence forms) · `fig_cnv2_chauvet_piger.png`
+(the real-time probability path by release date with the declarations).
+
+### What shipped on the board (treasury-canary; redeploy needed)
+
+- `backend/app/sources/cycle_engine.py` = the study engine, byte-identical
+  (gate test); `cycle_bands.json` = `board_bands` of the scored run, unedited.
+- `business_cycle.nowcast` now issues the v2 reading every day (information
+  set, lags, dropped members, reason when None); `completed` = the
+  bridge-completed coincident for the headline month with its p10/p90 band
+  (D-2), served beside the partial mean, which remains the phase/alert
+  quantity; `piger` = the FRED Chauvet–Piger print with the 3×80 % state
+  (optional); `flags.umcsent_delayed`; `phase_change` re-baselines
+  EXPANSION↔STALL flips quietly inside the revision band (|coin| < 0.46).
+- Panel: header shows the completed value with its band and the partial in
+  brackets; the chart draws the completed point with an error bar and the
+  nowcast beside it; the read box carries the completed, nowcast, Piger and
+  delay sentences with the frozen numbers. Gate tests pin the fixture values
+  (ENS_HH −0.332 at IS-A for 2026-07; completed 2026-06 −0.322 [−0.436, −0.207]).
+
+### Pending questions (living ledger; 60-day expiry from first ask)
+
+| P | question | would move | status |
+|---|---|---|---|
+| P2 | Real-time completion band: score the first-print revision of the completed value on the stored regime-(i) rows (target_first is stored) so the board band includes revision, not completion error only | the band width shown on the panel; whether PROVISIONAL can retire | open — next R2 |
+| P2 | The thinning edge: pre-register a sub-period D-1 (2013+) with its own bar before the next R2, rather than reading the post-hoc 0.94 as a verdict | whether the nowcast keeps its stats block on the panel | open — needs Casey's go |
+| P2 | UMCSENT FRED delay (Q11): switch the leading composite's sentiment member to the Michigan release itself if the delay persists | leading composite timeliness | asked 2026-10-28 |
+| P3 | Claims-only ADS sensitivity is vacuous (0 rows); keep or drop at the next revision | nothing scored | recorded |
+| P3 | Fit the MS-DFM walk-forward in-repo (backlog 5, full step) | a third real-time line | not started |
+
+Q1–Q17 of the SPEC v1 ledger: all answered on 2026-10-28 (defaults; v1.2 rulings).
