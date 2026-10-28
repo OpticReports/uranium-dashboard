@@ -3405,7 +3405,9 @@ class Executor:
                         plan["stopped_same"].append(n)
                         plan["qty"][n] = 0.0
                     elif l.close_cloid and l.close_mode == "single" \
-                            and abs(l.qty) <= l.close_qty + 1e-9:
+                            and (abs(l.qty) - l.close_qty <= 1e-9
+                                 or self._below_venue_floor(
+                                     abs(l.qty) - l.close_qty)):
                         # a same-sign leg whose OWN single-leg close is in
                         # flight for all of it: a flat venue says that close
                         # filled - the only order of ours that could have
@@ -3429,6 +3431,26 @@ class Executor:
             plan["qty"][leg] = 0.0
             return plan
         if (d_new > 0) != d_pos or abs(d_new) > abs(led.qty) + 1e-9:
+            # the venue holds LESS than the other legs' ledger alone: D is
+            # fully closed AND another leg shrank. A same-sign leg whose
+            # single close is in flight is the one order of ours that can
+            # have done that (a PARTIAL IOC not yet booked): D flat, and
+            # that leg's remainder must fit its ledger; its own settlement
+            # books the partial from its record or fills. Round-4 review:
+            # this returned None and halted LEDGER_DIVERGENCE in three
+            # polls on a venue that did exactly what was asked
+            cand = [n for n, l in others.items()
+                    if (l.qty > 0) == d_pos and l.close_cloid
+                    and l.close_mode == "single"]
+            if len(cand) == 1:
+                n_c, l_c = cand[0], others[cand[0]]
+                rest = round(net - sum(o.qty for m, o in others.items()
+                                       if m != n_c), 8)
+                if (abs(rest) <= 1e-9 or (rest > 0) == (l_c.qty > 0)) \
+                        and abs(rest) <= abs(l_c.qty) + 1e-9:
+                    plan["qty"][leg] = 0.0
+                    plan["partial_single"] = n_c
+                    return plan
             return None
         plan["qty"][leg] = d_new
         return plan
@@ -3492,6 +3514,22 @@ class Executor:
             if attempt < 2:
                 time.sleep(NETTING_REREAD_SLEEP_S)
         if plan is None:
+            single_other = [n for n, l in self.state.legs.items()
+                            if n != leg and l.close_cloid
+                            and l.close_mode == "single"
+                            and (l.qty > 0) == (led.qty > 0)]
+            if single_other:
+                # the gap may be that leg's close, still settling on its
+                # own bounded path: the ledger stays, this poll is NOT
+                # counted toward the halt (round-4 review)
+                legs = {k: l.qty for k, l in self.state.legs.items()}
+                self._event("RED", "netting_inconsistent",
+                            f"{leg} {via} fill confirmed but the venue net "
+                            f"{net} cannot be attributed to the ledger {legs} "
+                            f"while {single_other[0]}'s single close is "
+                            f"settling - ledger untouched, not counted "
+                            f"toward the halt")
+                return False
             if self._mismatch_seq != self._poll_seq:     # once per poll
                 self._mismatch_seq = self._poll_seq
                 self._netting_mismatch_polls += 1
@@ -4351,6 +4389,24 @@ class Executor:
                                 return "resolved"
                     elif status in ("OPEN", "UNKNOWN", None):
                         in_flight = True
+        single_open = [l for l in self.state.legs.values()
+                       if l.close_cloid and l.close_mode == "single"]
+        if single_open and toward_flat and abs(want2) - abs(net2) <= sum(
+                l.close_qty for l in single_open) + 1e-9:
+            # the gap is no larger than the single-leg closes still
+            # settling: that path keeps its ref until the record, the
+            # fills or two position looks answer, and pages every poll.
+            # Round-4 review: the three-poll grace here ran out before the
+            # close's second look when the other leg's trail moved in the
+            # send poll, and a healthy book halted and flattened the leg
+            # the engine still held - the 10-07 damage again
+            self._event("RED", "netting_inconsistent",
+                        f"{where}: venue net {net2} vs ledger sum {want2} "
+                        f"with a single-leg close still settling "
+                        f"({', '.join(l.close_cloid for l in single_open)}) "
+                        f"- not counted toward the halt; the close path "
+                        f"bounds it")
+            return "grace"
         if in_flight:
             if self._mismatch_seq != self._poll_seq:     # once per poll
                 self._mismatch_seq = self._poll_seq
@@ -4489,19 +4545,26 @@ class Executor:
                         f"remainder is re-closed next poll")
         self._save_state()
 
-    def _close_fill_from_position(self, leg: str, led: LegLedger) -> float | None:
-        """How much of the in-flight close the venue's position says has
-        left THIS leg: its exposure is (net - the other legs' ledger sum),
-        read before the send and now, so a change another leg has booked
-        in the window - its stop absorbed, an entry, an R fill - is never
-        attributed to this close (round-3 review: a frozen net baseline
-        booked the trend's absorbed stop fill as the pullback's close and
-        left the trend's size orphaned on the venue). A change another leg
-        has NOT yet booked still shows as a move; the caller treats a
-        partial move as ambiguous and books a full one only when it holds
-        on two polls. None when the venue cannot be read or no baseline
-        was recorded."""
-        if led.close_net_before is None:
+    def _close_fill_from_position(self, leg: str, led: LegLedger
+                                  ) -> tuple[float, float, float, float] | None:
+        """What the venue's position says about the in-flight close of THIS
+        leg: its exposure is (net - the other legs' ledger sum), read before
+        the send and now, so a change another leg has booked in the window
+        - its stop absorbed, an entry, an R fill - is never attributed to
+        this close (round-3 review: a frozen net baseline booked the
+        trend's absorbed stop fill as the pullback's close and left the
+        trend's size orphaned on the venue). Returns (moved, raw, mine_now,
+        net): `moved` is the reduction clamped to [0, close_qty]; `raw` is
+        the unclamped reduction (NEGATIVE when this leg's exposure reads
+        larger than at the send - another leg's change not yet booked, or
+        a wrong baseline - which the caller treats as ambiguous, never as
+        "unmoved": round-4 review, an unbooked maker fill on the other leg
+        masked a filled close and the retry closed the other leg's
+        exposure); `mine_now` carries the leg's sign. None when the venue
+        cannot be read or no baseline was recorded (a ref persisted before
+        close_others_before existed is settled from the record or the
+        fills only: guessing the baseline reproduced the round-3 fault)."""
+        if led.close_net_before is None or led.close_others_before is None:
             return None
         try:
             net = self.venue.position()
@@ -4509,14 +4572,37 @@ class Executor:
             return None
         self.state.last_venue_read_ts = int(time.time())
         others_now = sum(l.qty for n, l in self.state.legs.items() if n != leg)
-        others_before = led.close_others_before
-        if others_before is None:           # a ref persisted before this field
-            others_before = others_now
         sgn = 1.0 if led.qty > 0 else -1.0
-        mine_before = led.close_net_before - others_before
+        mine_before = led.close_net_before - led.close_others_before
         mine_now = net - others_now
-        reduced = sgn * (mine_before - mine_now)
-        return max(0.0, min(reduced, led.close_qty))
+        raw = round(sgn * (mine_before - mine_now), 8)
+        return max(0.0, min(raw, led.close_qty)), raw, mine_now, net
+
+    def _close_affirmative_never(self, l: LegLedger) -> bool:
+        """Another leg's single close whose own record affirmatively reads
+        CANCELLED/0 past the min age cannot explain a position move."""
+        if not l.close_cloid or l.close_mode != "single":
+            return False
+        if not l.close_sent_ts or time.time() - l.close_sent_ts < CLOSE_SETTLE_MIN_AGE_S:
+            return False
+        st = self.venue.order_status(l.close_cloid)
+        return (st or {}).get("status") == "CANCELLED" \
+            and float((st or {}).get("filled_qty") or 0.0) <= 0.0
+
+    def _close_flat_all_in_flight(self, net: float) -> bool:
+        """The venue is FLAT and every held leg has a single close in flight
+        sized to all of it: each close explains its own leg (two looks are
+        still required by the caller). Round-4 review: two closes rejected
+        in one poll held each other ambiguous for ever, and a hand flatten
+        was never booked."""
+        if abs(net) > 1e-9:
+            return False
+        held = [l for l in self.state.legs.values() if abs(l.qty) > 1e-9]
+        return bool(held) and all(
+            l.close_cloid and l.close_mode == "single"
+            and (abs(l.qty) - l.close_qty <= 1e-9
+                 or self._below_venue_floor(abs(l.qty) - l.close_qty))
+            for l in held)
 
     def _settle_close_single(self, leg: str, led: LegLedger) -> bool:
         """Settle a same-side / single-leg close ref on a LATER poll (the
@@ -4591,41 +4677,107 @@ class Executor:
             if q > 0.0:
                 self._book_close_fill(leg, led, q, "venue fills")
                 return True
-        # another leg's order in flight, or a stop of theirs that does not
-        # read OPEN, makes any position move ambiguous: ref kept
-        for n_, l in self.state.legs.items():
-            if n_ == leg or abs(l.qty) <= 1e-9:
-                continue
-            if l.close_cloid or l.reest_cloid:
-                self._event("RED", "close_unconfirmed",
-                            f"{leg} close {cloid} unconfirmed for {n} poll(s) "
-                            f"and {n_} has an order in flight "
-                            f"({l.close_cloid or l.reest_cloid}): a position "
-                            f"move could be its fill, not this close's - "
-                            f"ref kept; settling next poll")
-                led.close_moved_polls = 0
-                self._save_state()
-                return False
-            if not l.stop_cloid:
-                continue
-            st_o = self.venue.order_status(l.stop_cloid)
-            if (st_o or {}).get("status") != "OPEN":
-                self._event("RED", "close_unconfirmed",
-                            f"{leg} close {cloid} unconfirmed for {n} poll(s) "
-                            f"and {n_}'s stop reads "
-                            f"{(st_o or {}).get('status') or 'unreadable'}: a "
-                            f"position move could be its fill, not this "
-                            f"close's - ref kept; settling next poll")
-                led.close_moved_polls = 0
-                self._save_state()
-                return False
-        moved = self._close_fill_from_position(leg, led)
-        if moved is None:
+        # THE POSITION FIRST (round-4 review): an UNMOVED own exposure is
+        # unambiguous - another leg's unbooked change shows as a move of
+        # this leg's exposure, never as "unmoved" - so the verdict path
+        # stays reachable with another ref open (two closes rejected in
+        # one poll used to hold each other ambiguous for ever, both legs
+        # stopless, no retry, no close_stuck). Ambiguity is weighed only
+        # for a move.
+        read = self._close_fill_from_position(leg, led)
+        if read is None:
+            led.close_moved_polls = 0
+            if led.close_others_before is None:
+                why_r = ("has no baseline (a ref from a previous build): it "
+                         "settles from the order record or the venue's fills "
+                         "only; if neither ever answers, flatten by hand and "
+                         "/resume?adopt_venue=1 on the flat venue")
+            else:
+                why_r = ("the venue position is unreadable - ref kept; the "
+                         "order record or the venue's fills settle it")
+            self._event("RED", "close_unconfirmed",
+                        f"{leg} close {cloid} unconfirmed for {n} poll(s): "
+                        f"{why_r}")
+            self._save_state()
+            return False
+        moved, raw, mine_now, net = read
+        sgn = 1.0 if led.qty > 0 else -1.0
+        if self._close_flat_all_in_flight(net):
+            # the venue is flat and every held leg's single close covers
+            # it: each close explains its own leg; two looks still apply
+            moved = led.close_qty
+        elif raw < -1e-8 or sgn * mine_now < -1e-8:
+            # this leg's exposure reads LARGER than at the send, or beyond
+            # its own ledger: a reduce-only close cannot do that, so another
+            # leg's change is not booked yet (a maker fill in the same
+            # status outage) or the baseline is wrong (a retry sent off a
+            # lagging node). Never "unmoved", never booked: ref kept
+            led.close_moved_polls = 0
+            led.close_unmoved_polls = 0
+            self._event("RED", "close_unconfirmed",
+                        f"{leg} close {cloid} unconfirmed for {n} poll(s); "
+                        f"this leg's venue exposure reads {mine_now} against "
+                        f"{led.close_net_before - led.close_others_before} "
+                        f"at the send - another leg's change is not booked "
+                        f"yet or the baseline is wrong - ref kept; the "
+                        f"order record or the venue's fills settle it")
+            self._save_state()
+            return False
+        elif moved > 1e-9:
+            # a MOVE: could another leg's order explain it? Its single
+            # close or R order in flight (unless that close's own record
+            # affirmatively never traded), a stop of theirs that does not
+            # read OPEN, or an entry of theirs that is unreadable or filled
+            # beyond what is booked - any of these keeps the ref
+            for n_, l in self.state.legs.items():
+                if n_ == leg:
+                    continue
+                why_amb = None
+                if abs(l.qty) > 1e-9 and (l.close_cloid or l.reest_cloid):
+                    if not (l.close_cloid and not l.reest_cloid
+                            and self._close_affirmative_never(l)):
+                        why_amb = (f"{n_} has an order in flight "
+                                   f"({l.close_cloid or l.reest_cloid})")
+                elif abs(l.qty) > 1e-9 and l.stop_cloid:
+                    st_o = self.venue.order_status(l.stop_cloid)
+                    if (st_o or {}).get("status") != "OPEN":
+                        why_amb = (f"{n_}'s stop reads "
+                                   f"{(st_o or {}).get('status') or 'unreadable'}")
+                if why_amb is None and l.entry_cloid and not l.entry_accounted:
+                    st_e = self.venue.order_status(l.entry_cloid)
+                    status_e = (st_e or {}).get("status")
+                    filled_e = float((st_e or {}).get("filled_qty") or 0.0)
+                    if status_e not in ("OPEN", "FILLED", "CANCELLED"):
+                        why_amb = f"{n_}'s entry {l.entry_cloid} is unreadable"
+                    elif filled_e > l.entry_booked + 1e-9:
+                        why_amb = (f"{n_}'s entry {l.entry_cloid} shows "
+                                   f"{filled_e} filled, {l.entry_booked} booked")
+                if why_amb is not None:
+                    self._event("RED", "close_unconfirmed",
+                                f"{leg} close {cloid} unconfirmed for {n} "
+                                f"poll(s) and {why_amb}: a position move could "
+                                f"be its fill, not this close's - ref kept; "
+                                f"settling next poll")
+                    led.close_moved_polls = 0
+                    self._save_state()
+                    return False
+        if moved >= led.close_qty - 1e-9 and affirmative_zero \
+                and led.close_never_n <= CLOSE_NEVER_MAX \
+                and not self._close_flat_all_in_flight(net):
+            # the venue's own record says this order never existed, yet the
+            # exposure is gone: an affirmative never-traded beats a position
+            # inference (round-4 review: the other leg's stop read OPEN for
+            # two polls on a slow node and its fill was booked as this
+            # close). Ref kept; the record, the fills or the verdict decide.
+            # Once the leg is STUCK (every retry affirmed never traded) the
+            # only way its exposure leaves is the operator's hand close -
+            # the documented recovery - so the position books it there
             led.close_moved_polls = 0
             self._event("RED", "close_unconfirmed",
-                        f"{leg} close {cloid} unconfirmed for {n} poll(s) and "
-                        f"the venue position is unreadable - ref kept; "
-                        f"retrying next poll")
+                        f"{leg} close {cloid} unconfirmed for {n} poll(s): "
+                        f"the record reads CANCELLED/0 yet this leg's venue "
+                        f"exposure moved {moved} - not booked off the "
+                        f"position against an affirmative record; ref kept")
             self._save_state()
             return False
         if moved >= led.close_qty - 1e-9:
@@ -4680,23 +4832,28 @@ class Executor:
                         f"kept; a repeat verdict clears it")
             self._save_state()
             return False
-        led.close_never_n += 1
+        if led.close_never_n <= CLOSE_NEVER_MAX:
+            led.close_never_n += 1        # frozen once stuck: a stable text
         if led.close_never_n > CLOSE_NEVER_MAX:
-            # recovery (round-3 review): a hand close alone is booked from
-            # the position change on the next two polls and resets this
-            # budget; a restart does NOT (the count is persisted on
-            # purpose), and /resume?adopt_venue=1 refuses while another
-            # leg is held - the old text sent the operator to flatten the
-            # healthy leg
+            # recovery (rounds 3-4 of review): a hand close of EXACTLY the
+            # ledger size is booked from the position change on the next
+            # two polls and resets this budget (a smaller one is held as a
+            # partial move until the remainder is closed too); a restart
+            # does NOT retry (the count is persisted on purpose), and
+            # /resume?adopt_venue=1 refuses while another leg is held - the
+            # round-2 text sent the operator to flatten the healthy leg.
+            # The text is stable so the 10-minute log dedupe applies; the
+            # phone ping is rate-limited to one per 30 minutes
             self._event("RED", "close_stuck",
                         f"{leg} close {cloid}: {led.close_never_n} consecutive "
                         f"closes the venue reports as never happened "
                         f"(status {status or 'unreadable'}, net unmoved) - NO "
                         f"further close is sent; the leg is stopless. Close "
-                        f"{led.qty} by hand on {self._venue_label()}: the "
-                        f"next polls book it from the position change, no "
-                        f"/resume needed. /resume?adopt_venue=1 fits only a "
-                        f"FLAT venue (it refuses while another leg is held)")
+                        f"exactly {abs(led.qty)} by hand on "
+                        f"{self._venue_label()}: the next two polls book it "
+                        f"from the position change, no /resume needed. "
+                        f"/resume?adopt_venue=1 fits only a FLAT venue (it "
+                        f"refuses while another leg is held)")
             self._save_state()
             return False
         self._event("RED", "close_never_happened",

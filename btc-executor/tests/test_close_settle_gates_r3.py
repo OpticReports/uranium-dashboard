@@ -52,8 +52,11 @@ class PollVenue(SilentVenue):
     it. `fills`: the fills endpoint shows the print."""
 
     def __init__(self, *a, status_fn=None, stale_fn=None, stop_fn=None,
-                 drop=0, never_fill=(), raise_after=False, fills=False, **k):
+                 drop=0, never_fill=(), raise_after=False, fills=False,
+                 dropped_reads="unknownOid", **k):
         super().__init__(*a, **k)
+        self.dropped_reads = dropped_reads      # or "UNKNOWN": a dropped send
+                                                # whose record never answers
         self.status_fn = status_fn or (lambda p, c: None)
         self.stale_fn = stale_fn or (lambda p: False)
         self.stop_fn = stop_fn or (lambda p: False)
@@ -89,6 +92,8 @@ class PollVenue(SilentVenue):
 
     def order_status(self, cloid):
         if cloid in self.dropped:
+            if self.dropped_reads == "UNKNOWN":
+                return {"status": "UNKNOWN", "filled_qty": 0.0, "avg_price": None}
             return {"status": "CANCELLED", "filled_qty": 0.0, "avg_price": None}
         o = self.orders.get(cloid)
         if o and o["type"] == "STOP" and self.stop_fn(self.poll()):
@@ -215,7 +220,11 @@ def test_gate_r3_equal_sizes_race_books_nothing_on_one_look(tmp_path, clock):
         return orig(cloid)
     v.order_status = triggered
     _poll(ex, clock, target(trend=trend_tl))          # age 40: one look
-    assert p.close_cloid and p.qty == 0.5 and p.close_moved_polls == 1
+    # round 5: the record reads CANCELLED/0 (the send never reached the
+    # venue), so the full move is not even counted as a look
+    assert p.close_cloid and p.qty == 0.5 and p.close_moved_polls == 0
+    assert any("against an affirmative record" in e["msg"]
+               for e in ex.state.events[n0:] if e["kind"] == "close_unconfirmed")
     assert "close_settled_by_position" not in _kinds(ex, n0)
     _poll(ex, clock, target(trend=trend_tl))          # age 60: stop reads FILLED
     assert "stop_filled_on_venue" in _kinds(ex, n0) and t.qty == 0.0
@@ -333,11 +342,17 @@ def test_gate_r3_one_affirmative_read_does_not_render_the_verdict(tmp_path, cloc
 
 def test_gate_r3_hard_streak_needs_the_position_unmoved_twice(tmp_path, clock):
     """The hard streak (6 unusable polls) clears the ref only with the
-    position unmoved on two tiebreak polls. The trend's stop reads
-    UNKNOWN on polls 3-5 (ambiguous: nothing is counted), so the first
-    unmoved look is poll 6 - no verdict there, one on poll 7."""
-    v = PollVenue(status_fn=lambda p, c: "UNKNOWN", never_fill=("P-",),
-                  stop_fn=lambda p: 3 <= p <= 5)
+    position unmoved on two tiebreak polls. The position shows a PARTIAL
+    move on polls 3-5 (held, nothing counted), so the first unmoved look
+    is poll 6 - no verdict there, one on poll 7."""
+    v = PollVenue(status_fn=lambda p, c: "UNKNOWN", never_fill=("P-",))
+    orig_pos = v.position
+
+    def pos():
+        if 3 <= v.poll() <= 5:
+            return orig_pos() - 0.03              # looks like a partial move
+        return orig_pos()
+    v.position = pos
     ex, trend_tl = _book(tmp_path, v)
     sends, verdicts = _spy_sends(ex, v)
     p = ex.state.legs["pullback"]
@@ -415,10 +430,15 @@ def test_gate_r3_close_stuck_pages_once_per_half_hour(tmp_path, clock, monkeypat
     v = PollVenue(drop=99)
     ex, trend_tl = _book(tmp_path, v)
     n0 = len(ex.state.events)
-    for _ in range(40):                               # 13 min
+    for _ in range(80):                               # 27 min
         _poll(ex, clock, target(trend=trend_tl))
     k = _kinds(ex, n0)
-    assert k.count("close_stuck") >= 10, "the event log keeps every line"
+    # round 5: the text is stable (the count freezes at 1 + CLOSE_NEVER_MAX)
+    # so the 10-minute log dedupe applies; the phone pings once per 30 min
+    stuck = [e for e in ex.state.events[n0:] if e["kind"] == "close_stuck"]
+    assert 2 <= len(stuck) <= 4, len(stuck)
+    assert all(f"{1 + mirror.CLOSE_NEVER_MAX} consecutive" in e["msg"] for e in stuck)
+    assert "exactly" in stuck[0]["msg"]
     assert len([m for m in pings if "close_stuck" in m]) == 1
     clock.tick(1800)
     _poll(ex, clock, target(trend=trend_tl))
