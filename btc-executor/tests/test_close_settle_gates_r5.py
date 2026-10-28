@@ -14,7 +14,7 @@ gates bind:
   unreadable or filled beyond what is booked (both verdict doors);
 - unmoved looks must be consecutive across an ambiguous move;
 - a partially filled trigger keeps its residue on its own leg;
-- close_stuck lines from two stuck legs are deduped per message;
+- close_stuck is logged once per leg per ten minutes (two stuck legs);
 - hl.position() refuses a response without a positions list.
 """
 import pytest
@@ -250,3 +250,102 @@ def test_gate_r5_hl_position_refuses_a_response_without_positions():
     assert hv.position() == 0.0
     hv.info = Info({"assetPositions": [{"position": {"coin": "BTC", "szi": "-0.5"}}]})
     assert hv.position() == -0.5
+
+
+# ----------------------------------------------- round-6 verifier follow-ups
+
+def test_gate_r6_slow_partial_record_with_the_other_stop_resting_never_halts(
+        tmp_path, clock):
+    """What the deferral's "every other leg's stop resting" clause protects
+    (the round-6 verifier found it unbound): the pullback's IOC fills 0.5
+    of 0.9, its record is unusable for eight polls - longer than the
+    close's settle window - and the trend's trail moved in the send poll
+    so its stop maintenance corroborates every poll. The trend's exposure
+    is accounted and protected (its stop reads OPEN), so the gap can only
+    be the pullback's own partial: no halt; the partial books from the
+    record, the remainder is re-closed, the trend keeps its stop."""
+    v = PollVenue(status_fn=lambda p, c: "UNKNOWN" if p <= 8 else None)
+    v.part = 0.5
+    orig = v.place_market
+
+    def pm(side, qty, cloid, reduce_only=False):
+        if cloid.endswith("-X") and v.part is not None:
+            qty, v.part = min(qty, v.part), None
+        return orig(side, qty, cloid, reduce_only=reduce_only)
+    v.place_market = pm
+    ex, _ = _book(tmp_path, v)
+    moved = _pos(side="L", stop=STOP * 1.01)
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    n0 = len(ex.state.events)
+    for _ in range(10):
+        _poll(ex, clock, target(trend=moved))
+        assert ex.state.halted is None, _kinds(ex, n0)[-6:]
+    assert "leg_partially_closed" in _kinds(ex, n0) and p.qty == 0.0
+    assert t.qty == pytest.approx(TREND) and t.stop_cloid
+    assert v.orders[t.stop_cloid]["status"] == "OPEN"
+    assert _ledger_sum(ex) == pytest.approx(v._true_position()) == pytest.approx(TREND)
+    assert len(_xs(v)) == 2 and "ledger_divergence" not in _kinds(ex, n0)
+
+
+def test_gate_r6_both_stuck_each_legs_hand_close_books_on_its_own(tmp_path, clock, pings):
+    """Both legs stuck (two rejected closes, retries spent). The stuck text
+    prescribes a per-leg hand close; round 6's unconditional in-flight
+    rule held one leg's hand close ambiguous because the OTHER stuck leg's
+    ref was in flight. A stuck leg's ref is no witness (its exposure
+    leaves only by hand): the pullback books on its own hand close, then
+    the trend on its own."""
+    v = PollVenue(drop=99)
+    ex, _ = _book(tmp_path, v)
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    n0 = len(ex.state.events)
+    for _ in range(60):
+        _poll(ex, clock, target())
+    assert p.close_never_n > mirror.CLOSE_NEVER_MAX and t.close_never_n > mirror.CLOSE_NEVER_MAX
+    v._add("MARKET", "SELL", PULL, "operator-close-pullback")
+    for _ in range(3):
+        _poll(ex, clock, target())
+    assert p.qty == 0.0 and p.close_cloid is None and p.close_never_n == 0
+    assert t.qty == pytest.approx(TREND) and t.close_cloid     # untouched
+    v._add("MARKET", "SELL", TREND, "operator-close-trend")
+    for _ in range(3):
+        _poll(ex, clock, target())
+    assert t.qty == 0.0 and t.close_cloid is None
+    assert _ledger_sum(ex) == pytest.approx(v._true_position()) == 0.0
+    assert ex.state.halted is None and len(v.sends) == 2 * (1 + mirror.CLOSE_NEVER_MAX)
+
+
+def test_gate_r6_unreadable_other_entry_pages_a_distinct_red_past_the_hard_streak(
+        tmp_path, clock, pings):
+    """The trend's close is dropped; the pullback's resting maker entry
+    reads UNKNOWN for a long time. The unmoved verdict waits (the entry
+    could hide the close) - bounded only by that record: past the hard
+    streak the wait is paged as its own RED naming the recovery; nothing
+    is sent; when the entry reads again the verdict and retry follow."""
+    v = PollVenue(drop=1)
+    ex = mkexec(tmp_path, v, dry_run=False)
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    t.qty = TREND
+    _hold(v, TREND)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend, trend=_pos(side="L", stop=STOP)))
+    clock.tick()
+    entry = p.entry_cloid
+    orig = v.order_status
+
+    def ostat(cloid):
+        if cloid == entry and 1 <= v.poll() <= 14:
+            return dict(UNK)
+        return orig(cloid)
+    v.order_status = ostat
+    n0 = len(ex.state.events)
+    for _ in range(14):
+        _poll(ex, clock, target(pull=pend))
+        assert len(v.sends) == 1 and ex.state.halted is None
+    k = _kinds(ex, n0)
+    assert "close_blocked_by_other_leg" in k and "close_never_happened" not in k
+    assert len([m for m in pings if "close_blocked_by_other_leg" in m]) == 1
+    for _ in range(4):                                # the entry reads again
+        _poll(ex, clock, target(pull=pend))
+    assert t.qty == 0.0 and len(v.sends) == 2 and ex.state.halted is None
+    assert _ledger_sum(ex) == pytest.approx(v._true_position())

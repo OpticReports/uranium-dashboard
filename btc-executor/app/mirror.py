@@ -1522,7 +1522,7 @@ class Executor:
                         "close_unconfirmed", "close_rejected", "stop_residue",
                         # true every poll once the retry budget is spent
                         # (round-3 review: it paged every 20 s)
-                        "close_stuck",
+                        "close_stuck", "close_blocked_by_other_leg",
                         "close_deferred_under_floor", "reest_unsettled",
                         "position_drift", "entries_blocked", "sub_min_size",
                         # a persistent accept-then-cancel venue condition
@@ -4779,7 +4779,13 @@ class Executor:
             for n_, l in self.state.legs.items():
                 if n_ == leg or abs(l.qty) <= 1e-9:
                     continue
-                if l.close_cloid:
+                if l.close_cloid and l.close_never_n <= CLOSE_NEVER_MAX:
+                    # a STUCK leg's ref is no witness: every retry of its
+                    # close was affirmed never traded and nothing more is
+                    # sent for it, so its exposure leaves only by hand -
+                    # which is exactly the per-leg recovery the stuck text
+                    # prescribes (round-6 review: two stuck legs held each
+                    # other's hand close until the whole book was flat)
                     why_amb = f"{n_} has a close in flight ({l.close_cloid})"
                 elif l.stop_cloid and not l.reest_cloid:
                     st_o = self.venue.order_status(l.stop_cloid)
@@ -4808,11 +4814,23 @@ class Executor:
             if why_amb is not None:
                 led.close_unmoved_polls = 0
                 led.close_moved_polls = 0
-                self._event("RED", "close_unconfirmed",
-                            f"{leg} close {cloid} unconfirmed for {n} "
-                            f"poll(s), venue net unmoved but {why_amb}: an "
-                            f"unbooked change could hide this close - ref "
-                            f"kept; settling next poll")
+                if n >= CLOSE_UNKNOWN_HARD_POLLS:
+                    # bounded only by the other leg's record coming back:
+                    # say so loudly rather than wait in silence (this leg
+                    # holds real exposure with no stop and no retry)
+                    self._event("RED", "close_blocked_by_other_leg",
+                                f"{leg} close {cloid}: {n} polls with the "
+                                f"venue net unmoved but {why_amb} - no retry "
+                                f"and no stop for this leg until that record "
+                                f"answers. Cancel that order by hand on "
+                                f"{self._venue_label()} (or close this leg "
+                                f"by hand) if it stays blind")
+                else:
+                    self._event("RED", "close_unconfirmed",
+                                f"{leg} close {cloid} unconfirmed for {n} "
+                                f"poll(s), venue net unmoved but {why_amb}: "
+                                f"an unbooked change could hide this close "
+                                f"- ref kept; settling next poll")
                 self._save_state()
                 return False
         if moved >= led.close_qty - 1e-9 and affirmative_zero \
