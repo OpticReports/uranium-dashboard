@@ -560,6 +560,13 @@ class HyperliquidVenue:
         to tell them apart. Here the response either arrives (and either
         lists our coin or does not) or it raises."""
         st = self._user_state()
+        if not isinstance(st.get("assetPositions"), list):
+            # a dict without the positions list is not a flat account, it
+            # is an answer we do not understand (round-5 review: it read as
+            # a confirmed 0 and two such reads would have booked both legs
+            # flat off the position)
+            raise RuntimeError(
+                f"user_state carried no assetPositions list: {list(st)[:6]}")
         for ap in st.get("assetPositions", []):
             p = (ap or {}).get("position") or {}
             if p.get("coin") == self.coin:

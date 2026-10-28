@@ -54,8 +54,9 @@ def pings(monkeypatch):
 
 # -------------------------------------------- two refs in flight (BLOCKING)
 
+@pytest.mark.parametrize("record", ["unknownOid", "UNKNOWN"])
 def test_gate_r4_two_rejected_closes_in_one_poll_are_bounded_and_recoverable(
-        tmp_path, clock, pings):
+        tmp_path, clock, pings, record):
     """Both legs exit in one poll and both sends raise (one rate-limit
     burst), unknownOid after. Round 4: each leg's tiebreak saw the other's
     ref and returned 'ambiguous' before any position read - no verdict,
@@ -63,7 +64,7 @@ def test_gate_r4_two_rejected_closes_in_one_poll_are_bounded_and_recoverable(
     flatten was never booked. Now: an unmoved own exposure is unambiguous,
     each leg runs its bounded retries to close_stuck, and a hand flatten
     books both on two looks."""
-    v = PollVenue(drop=99)
+    v = PollVenue(drop=99, dropped_reads=record)
     ex, _ = _book(tmp_path, v)
     p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
     n0 = len(ex.state.events)
@@ -409,6 +410,7 @@ def test_gate_r4_looks_must_be_consecutive(tmp_path, clock):
     assert p.close_moved_polls == 0 and p.close_cloid
     _poll(ex, clock, target(trend=trend_tl))          # poll 5: look 1 again
     assert p.close_moved_polls == 1 and p.close_cloid and p.qty == PULL
+    assert p.close_unmoved_polls == 0                 # a full move resets the unmoved count
     _poll(ex, clock, target(trend=trend_tl))          # poll 6: look 2
     assert p.qty == 0.0 and p.close_cloid is None
     _healthy(ex, v, n0)

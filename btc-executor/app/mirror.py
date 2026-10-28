@@ -1375,7 +1375,9 @@ class Executor:
         # dedupe only SPAM: identical kind+msg within 10 minutes. An
         # unconditional match muted every cooldown-spaced RED after the
         # first (venue_read_failed, leg_sync_error) - one page per multi-day
-        # blindness spell (review of first hotfix cut, 2026-08-26).
+        # blindness spell (review of first hotfix cut, 2026-08-26). A
+        # per-message map was tried in round 6 and muted exactly those;
+        # close_stuck throttles itself per leg instead
         if last and last["kind"] == kind and last["msg"] == msg \
                 and time.time() - last.get("ts", 0) < 600:
             return
@@ -3444,11 +3446,26 @@ class Executor:
                     and l.close_mode == "single"]
             if len(cand) == 1:
                 n_c, l_c = cand[0], others[cand[0]]
-                rest = round(net - sum(o.qty for m, o in others.items()
-                                       if m != n_c), 8)
+                # D's own trigger may have filled only PART of its size (a
+                # record reading less than the stop size is a genuine
+                # partial - over-reporting is the clamped case, N6): keep
+                # that residue on D rather than fold it into the other
+                # leg's remainder (round-5 review: it was left on the venue
+                # with no ledger row and no stop)
+                d_new = 0.0
+                if led.stop_cloid:
+                    st_d = self.venue.order_status(led.stop_cloid)
+                    f_d = float((st_d or {}).get("filled_qty") or 0.0)
+                    size_d = led.stop_qty or abs(led.qty)
+                    if (st_d or {}).get("status") == "FILLED" \
+                            and 0.0 < f_d < size_d - 1e-9:
+                        d_new = round((1.0 if d_pos else -1.0)
+                                      * max(0.0, abs(led.qty) - f_d), 8)
+                rest = round(net - d_new - sum(o.qty for m, o in others.items()
+                                               if m != n_c), 8)
                 if (abs(rest) <= 1e-9 or (rest > 0) == (l_c.qty > 0)) \
                         and abs(rest) <= abs(l_c.qty) + 1e-9:
-                    plan["qty"][leg] = 0.0
+                    plan["qty"][leg] = d_new
                     plan["partial_single"] = n_c
                     return plan
             return None
@@ -3514,22 +3531,6 @@ class Executor:
             if attempt < 2:
                 time.sleep(NETTING_REREAD_SLEEP_S)
         if plan is None:
-            single_other = [n for n, l in self.state.legs.items()
-                            if n != leg and l.close_cloid
-                            and l.close_mode == "single"
-                            and (l.qty > 0) == (led.qty > 0)]
-            if single_other:
-                # the gap may be that leg's close, still settling on its
-                # own bounded path: the ledger stays, this poll is NOT
-                # counted toward the halt (round-4 review)
-                legs = {k: l.qty for k, l in self.state.legs.items()}
-                self._event("RED", "netting_inconsistent",
-                            f"{leg} {via} fill confirmed but the venue net "
-                            f"{net} cannot be attributed to the ledger {legs} "
-                            f"while {single_other[0]}'s single close is "
-                            f"settling - ledger untouched, not counted "
-                            f"toward the halt")
-                return False
             if self._mismatch_seq != self._poll_seq:     # once per poll
                 self._mismatch_seq = self._poll_seq
                 self._netting_mismatch_polls += 1
@@ -4394,19 +4395,44 @@ class Executor:
         if single_open and toward_flat and abs(want2) - abs(net2) <= sum(
                 l.close_qty for l in single_open) + 1e-9:
             # the gap is no larger than the single-leg closes still
-            # settling: that path keeps its ref until the record, the
-            # fills or two position looks answer, and pages every poll.
-            # Round-4 review: the three-poll grace here ran out before the
-            # close's second look when the other leg's trail moved in the
-            # send poll, and a healthy book halted and flattened the leg
-            # the engine still held - the 10-07 damage again
-            self._event("RED", "netting_inconsistent",
-                        f"{where}: venue net {net2} vs ledger sum {want2} "
-                        f"with a single-leg close still settling "
-                        f"({', '.join(l.close_cloid for l in single_open)}) "
-                        f"- not counted toward the halt; the close path "
-                        f"bounds it")
-            return "grace"
+            # settling. Round-4 review: the three-poll grace here ran out
+            # before the close's second look when the other leg's trail
+            # moved in the send poll, and a healthy book halted and
+            # flattened the leg the engine still held. Round-5 review: a
+            # deferral for the life of the ref hid an external reduction
+            # of the OTHER leg (its stop reduce-only cancelled, its ledger
+            # a phantom) for ever. So: not counted while a close is inside
+            # its settle window (before its two looks, or a full move seen
+            # once), or while every other held leg's stop reads OPEN (its
+            # exposure is accounted and protected, so the gap can only be
+            # the close's own leg - a partial fill whose record is slow,
+            # or a hand close of part of it: real exposure, paged, never a
+            # phantom). An other leg whose stop is gone makes the poll
+            # count again
+            in_window = any(l.close_unknown_polls < CLOSE_UNKNOWN_MAX_POLLS + 2
+                            or l.close_moved_polls >= 1 for l in single_open)
+            others_ok = True
+            for l in self.state.legs.values():
+                if abs(l.qty) <= 1e-9 or (l.close_cloid and l.close_mode == "single"):
+                    continue
+                st_s = self.venue.order_status(l.stop_cloid) if l.stop_cloid else None
+                if (st_s or {}).get("status") != "OPEN":
+                    # its exposure may have left (a reduce-only cancel, a
+                    # vanished stop) - or its stop is merely pending a
+                    # re-arm after a residue; no evidence either way, so
+                    # the poll counts once the window is spent (a slow
+                    # record on a partial IOC then halts: fail loud)
+                    others_ok = False
+                    break
+            if in_window or others_ok:
+                self._event("RED", "netting_inconsistent",
+                            f"{where}: venue net {net2} vs ledger sum {want2} "
+                            f"with a single-leg close still settling "
+                            f"({', '.join(l.close_cloid for l in single_open)}) "
+                            + ("inside its settle window" if in_window else
+                               "and every other leg's stop resting")
+                            + " - not counted toward the halt")
+                return "grace"
         if in_flight:
             if self._mismatch_seq != self._poll_seq:     # once per poll
                 self._mismatch_seq = self._poll_seq
@@ -4578,16 +4604,29 @@ class Executor:
         raw = round(sgn * (mine_before - mine_now), 8)
         return max(0.0, min(raw, led.close_qty)), raw, mine_now, net
 
-    def _close_affirmative_never(self, l: LegLedger) -> bool:
-        """Another leg's single close whose own record affirmatively reads
-        CANCELLED/0 past the min age cannot explain a position move."""
-        if not l.close_cloid or l.close_mode != "single":
-            return False
-        if not l.close_sent_ts or time.time() - l.close_sent_ts < CLOSE_SETTLE_MIN_AGE_S:
-            return False
-        st = self.venue.order_status(l.close_cloid)
-        return (st or {}).get("status") == "CANCELLED" \
-            and float((st or {}).get("filled_qty") or 0.0) <= 0.0
+    def _close_other_leg_unbooked(self, leg: str) -> str | None:
+        """Why another leg's own orders could be changing the venue
+        unseen: an R order in flight, or an entry ref not yet accounted
+        whose record is unreadable or shows more filled than is booked.
+        Checked before a MOVE is attributed and before an UNMOVED look is
+        counted (round-5 review: an unbooked maker fill on the other leg
+        of exactly this close's size read as "unmoved", the verdict fired
+        and the retry sold that leg's exposure)."""
+        for n_, l in self.state.legs.items():
+            if n_ == leg:
+                continue
+            if abs(l.qty) > 1e-9 and l.reest_cloid:
+                return f"{n_} has an R order in flight ({l.reest_cloid})"
+            if l.entry_cloid and not l.entry_accounted:
+                st_e = self.venue.order_status(l.entry_cloid)
+                status_e = (st_e or {}).get("status")
+                filled_e = float((st_e or {}).get("filled_qty") or 0.0)
+                if status_e not in ("OPEN", "FILLED", "CANCELLED"):
+                    return f"{n_}'s entry {l.entry_cloid} is unreadable"
+                if filled_e > l.entry_booked + 1e-9:
+                    return (f"{n_}'s entry {l.entry_cloid} shows {filled_e} "
+                            f"filled, {l.entry_booked} booked")
+        return None
 
     def _close_flat_all_in_flight(self, net: float) -> bool:
         """The venue is FLAT and every held leg has a single close in flight
@@ -4714,53 +4753,68 @@ class Executor:
             # lagging node). Never "unmoved", never booked: ref kept
             led.close_moved_polls = 0
             led.close_unmoved_polls = 0
+            if led.close_never_n > CLOSE_NEVER_MAX:
+                tail_r = (f"- more than the ledger size left this leg: an "
+                          f"over-close by hand. Close the other leg too and "
+                          f"/resume?adopt_venue=1 on the flat venue")
+            else:
+                tail_r = (f"- another leg's change is not booked yet or the "
+                          f"baseline is wrong - ref kept; the order record "
+                          f"or the venue's fills settle it")
             self._event("RED", "close_unconfirmed",
                         f"{leg} close {cloid} unconfirmed for {n} poll(s); "
                         f"this leg's venue exposure reads {mine_now} against "
                         f"{led.close_net_before - led.close_others_before} "
-                        f"at the send - another leg's change is not booked "
-                        f"yet or the baseline is wrong - ref kept; the "
-                        f"order record or the venue's fills settle it")
+                        f"at the send {tail_r}")
             self._save_state()
             return False
         elif moved > 1e-9:
             # a MOVE: could another leg's order explain it? Its single
-            # close or R order in flight (unless that close's own record
-            # affirmatively never traded), a stop of theirs that does not
-            # read OPEN, or an entry of theirs that is unreadable or filled
-            # beyond what is booked - any of these keeps the ref
+            # close in flight (its record is no witness: unknownOid is the
+            # 10-07 lie, so no exception for an "affirmative" CANCELLED/0 -
+            # round-5 review), a stop of theirs that does not read OPEN, an
+            # R order, or an entry of theirs unreadable or filled beyond
+            # what is booked - any of these keeps the ref
+            why_amb = None
             for n_, l in self.state.legs.items():
-                if n_ == leg:
+                if n_ == leg or abs(l.qty) <= 1e-9:
                     continue
-                why_amb = None
-                if abs(l.qty) > 1e-9 and (l.close_cloid or l.reest_cloid):
-                    if not (l.close_cloid and not l.reest_cloid
-                            and self._close_affirmative_never(l)):
-                        why_amb = (f"{n_} has an order in flight "
-                                   f"({l.close_cloid or l.reest_cloid})")
-                elif abs(l.qty) > 1e-9 and l.stop_cloid:
+                if l.close_cloid:
+                    why_amb = f"{n_} has a close in flight ({l.close_cloid})"
+                elif l.stop_cloid and not l.reest_cloid:
                     st_o = self.venue.order_status(l.stop_cloid)
                     if (st_o or {}).get("status") != "OPEN":
                         why_amb = (f"{n_}'s stop reads "
                                    f"{(st_o or {}).get('status') or 'unreadable'}")
-                if why_amb is None and l.entry_cloid and not l.entry_accounted:
-                    st_e = self.venue.order_status(l.entry_cloid)
-                    status_e = (st_e or {}).get("status")
-                    filled_e = float((st_e or {}).get("filled_qty") or 0.0)
-                    if status_e not in ("OPEN", "FILLED", "CANCELLED"):
-                        why_amb = f"{n_}'s entry {l.entry_cloid} is unreadable"
-                    elif filled_e > l.entry_booked + 1e-9:
-                        why_amb = (f"{n_}'s entry {l.entry_cloid} shows "
-                                   f"{filled_e} filled, {l.entry_booked} booked")
-                if why_amb is not None:
-                    self._event("RED", "close_unconfirmed",
-                                f"{leg} close {cloid} unconfirmed for {n} "
-                                f"poll(s) and {why_amb}: a position move could "
-                                f"be its fill, not this close's - ref kept; "
-                                f"settling next poll")
-                    led.close_moved_polls = 0
-                    self._save_state()
-                    return False
+                if why_amb:
+                    break
+            if why_amb is None:
+                why_amb = self._close_other_leg_unbooked(leg)
+            if why_amb is not None:
+                self._event("RED", "close_unconfirmed",
+                            f"{leg} close {cloid} unconfirmed for {n} "
+                            f"poll(s) and {why_amb}: a position move could "
+                            f"be its fill, not this close's - ref kept; "
+                            f"settling next poll")
+                led.close_moved_polls = 0
+                led.close_unmoved_polls = 0      # looks must be consecutive
+                self._save_state()
+                return False
+        else:
+            # UNMOVED: unambiguous as far as the other legs' BOOKED state
+            # goes, but an unbooked change of theirs equal to this close
+            # reads as unmoved too - wait for their refs to resolve
+            why_amb = self._close_other_leg_unbooked(leg)
+            if why_amb is not None:
+                led.close_unmoved_polls = 0
+                led.close_moved_polls = 0
+                self._event("RED", "close_unconfirmed",
+                            f"{leg} close {cloid} unconfirmed for {n} "
+                            f"poll(s), venue net unmoved but {why_amb}: an "
+                            f"unbooked change could hide this close - ref "
+                            f"kept; settling next poll")
+                self._save_state()
+                return False
         if moved >= led.close_qty - 1e-9 and affirmative_zero \
                 and led.close_never_n <= CLOSE_NEVER_MAX \
                 and not self._close_flat_all_in_flight(net):
@@ -4842,8 +4896,17 @@ class Executor:
             # does NOT retry (the count is persisted on purpose), and
             # /resume?adopt_venue=1 refuses while another leg is held - the
             # round-2 text sent the operator to flatten the healthy leg.
-            # The text is stable so the 10-minute log dedupe applies; the
-            # phone ping is rate-limited to one per 30 minutes
+            # One line per leg per 10 minutes (two stuck legs alternate and
+            # defeat the last-event dedupe: the 200-entry log rotated in
+            # half an hour, round-5 review); the phone ping is rate-limited
+            # to one per 30 minutes by kind
+            logged = getattr(self, "_stuck_logged", None)
+            if logged is None:
+                logged = self._stuck_logged = {}
+            if now - logged.get(leg, -1e12) < 600:
+                self._save_state()
+                return False
+            logged[leg] = now
             self._event("RED", "close_stuck",
                         f"{leg} close {cloid}: {led.close_never_n} consecutive "
                         f"closes the venue reports as never happened "
