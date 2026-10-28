@@ -115,7 +115,26 @@
    "p90": 0.20611917546744504
   }
  },
- "correction": null,
+ "correction": {
+  "code_identical": false,
+  "compared": [
+   "F1",
+   "F5",
+   "F6_F7_F8_verified",
+   "piger_history",
+   "nber_turning_points",
+   "ads_matrix",
+   "freeze.sha256"
+  ],
+  "inputs_identical": true,
+  "k": 1,
+  "logged": "2026-10-28T16:24:00Z",
+  "reason": "correction 1 (2026-10-28, after two independent verifiers PASS_WITH_NOTES, no number changed): the --ads-matrix entry of inputs.hashes.F6_F7_F8_verified carried a session scratch path (identifier test red) - now a stable label; the D-3 calibration-store basis text pasted the rejected alternative after the ruling; SUCCESS consequence labelled as inferred from v1 s8; MDD caveat figure; D-1 list bases name the bar elements; spec.version names v1.2; two v0 s9 honesty statements",
+  "spec_md_identical": true,
+  "superseded_run_id": "79fcb2727c27a49001ad4182211bed7b061a00ee62d7cb6ebbec2f2744aa9dc4",
+  "supersedes": "results.json",
+  "supersedes_sha256": "8bfc1b041356c8a95fa675872f765b800c98055c29eb5ba246d2a8e8ac101648"
+ },
  "decisions": {
   "D1_primary": "PASS",
   "D2_completed_vs_partial": "PASS",
@@ -1311,11 +1330,11 @@
    }
   }
  },
- "generated": "2026-10-28T15:59:19Z",
+ "generated": "2026-10-28T16:26:13Z",
  "git": {
   "clean": true,
   "dirty": [],
-  "head": "60fb30067ff12258e734005ae4ea4769b86dd6b0",
+  "head": "b12c20f73206e78abbe9c97b1cb6c35bf29775a4",
   "paths_checked": [
    "studies/cycle-nowcast-v2.md",
    "studies/cycle_nowcast_v2/ads.py",
@@ -1361,7 +1380,7 @@
     "W875RX1.csv": "fa12b2e42b79f1bdcf5604403a828459ec9d4d5fd137c38058ffc968e440386a"
    },
    "F6_F7_F8_verified": {
-    "../../../../../../tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/cnv2/ads_panel_aux/ads_monthly_matrix.npz": "dbecce8e7826d6f7a35c7ecfc2c7d093e930e78512e10c53d6c11169511d33cd",
+    "ads_monthly_matrix.npz (--ads-matrix, outside the repo; hash also under hashes.ads_matrix)": "dbecce8e7826d6f7a35c7ecfc2c7d093e930e78512e10c53d6c11169511d33cd",
     "data/ads_panel/ads_vintage_2010-12-03.csv": "51c2b3a1b8d296e483f511477112323c3bc545f3a5c788e4bee3eaec3a06b1a7",
     "data/ads_panel/ads_vintage_panel.csv": "e269190d2cdac3b453df72dd10a8921afa31b96aaf1668a32e8a70f513a913fd",
     "data/piger/History_of_Real_Time_Recession_Probabilities.xlsx": "297de74203772a44374dc66247b1bb9d11f4b9de52f066ca0bceca786a11cb64",
@@ -1385,12 +1404,12 @@
    "code": {
     "ads.py": "54a23a7feb471e806ee1204161aa9122afcde1c1e321be72afacd59d3fe439b5",
     "engine.py": "70d00598a997c1d25600b4621b920cd0099e2385b61992f7c44f52e8f1d99d49",
-    "gates.py": "3b5d0cf9bd127b1747d68d3c65eb336a695e30ce82fb301c949a33dc2a21ba46",
+    "gates.py": "0f6f86c06445435d202a54a3e5832019c5c8ab46f3990f39e63d85bfc2d7372d",
     "metrics.py": "8b8765966c81cbd51c826deb41cbac2e61fa2ded4eced93f811799d579bdc971",
     "nber.py": "f32553321228386a27a99b8582bf3db87058e984a95cd23d3a07ebfbf1a767ba",
     "piger.py": "1c6539c2b4da45c2472ac56f0c08c075c81eaa96b0f5fa0f0b1f968e4ae3458e",
-    "run_study.py": "0d4c72ecac175261071c619bdef4e0f2c11fad29666234d175a91a8253571057",
-    "scoring.py": "04d77e69c3f8ac0a84f1d543ca7b915f58767745c8081fba595af07a0fc69463",
+    "run_study.py": "e4800280edc2ee0ebe5d8a18eb1d5211b6c3b8234de39f608cebdc7c20d3041d",
+    "scoring.py": "78f0c5130067c7670770b7c3209f2ea776c7938cba6b7fab4fff1c28b1bf358f",
     "synthetic.py": "cbe3bbf01cb30e514b60adb4463384f0bfe90eca76912d94a1ee063e397da579",
     "vintages.py": "d01af818d7bd7b836f57139eb37d180d97bb35695018043dcf3c6f89f8f6d16f"
    },
@@ -7610,7 +7629,7 @@
   },
   "comparator": {
    "basis": {
-    "basis": "calibrated-vs-calibrated; raw ENS_HH also reported. calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the ADS side is NOT seeded from the 2008-12+ archive) at list-proxy IS points against vintage-consistent COIN(t), with a labelled pseudo ENS side",
+    "basis": "calibrated-vs-calibrated; raw ENS_HH also reported. calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the rejected alternative - seeding the ADS side from the 2008-12+ archive at list-proxy IS points against a labelled pseudo ENS side - is NOT implemented)",
     "n": 467,
     "spec": "v1 §5",
     "tag": "DESCRIPTIVE",
@@ -21691,7 +21710,7 @@
   "comparator_sensitivities": {
    "excl_claims_only": {
     "basis": {
-     "basis": "calibrated-vs-calibrated; raw ENS_HH also reported. calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the ADS side is NOT seeded from the 2008-12+ archive) at list-proxy IS points against vintage-consistent COIN(t), with a labelled pseudo ENS side",
+     "basis": "calibrated-vs-calibrated; raw ENS_HH also reported. calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the rejected alternative - seeding the ADS side from the 2008-12+ archive at list-proxy IS points against a labelled pseudo ENS side - is NOT implemented)",
      "n": 467,
      "spec": "v1 §5",
      "tag": "DESCRIPTIVE",
@@ -35771,7 +35790,7 @@
    },
    "smoothed_fit": {
     "basis": {
-     "basis": "calibrated-vs-calibrated; raw ENS_HH also reported. calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the ADS side is NOT seeded from the 2008-12+ archive) at list-proxy IS points against vintage-consistent COIN(t), with a labelled pseudo ENS side",
+     "basis": "calibrated-vs-calibrated; raw ENS_HH also reported. calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the rejected alternative - seeding the ADS side from the 2008-12+ archive at list-proxy IS points against a labelled pseudo ENS side - is NOT implemented)",
      "n": 467,
      "spec": "v1 §5",
      "tag": "DESCRIPTIVE",
@@ -49851,7 +49870,7 @@
    },
    "strict_lt_d": {
     "basis": {
-     "basis": "calibrated-vs-calibrated; raw ENS_HH also reported. calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the ADS side is NOT seeded from the 2008-12+ archive) at list-proxy IS points against vintage-consistent COIN(t), with a labelled pseudo ENS side",
+     "basis": "calibrated-vs-calibrated; raw ENS_HH also reported. calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the rejected alternative - seeding the ADS side from the 2008-12+ archive at list-proxy IS points against a labelled pseudo ENS side - is NOT implemented)",
      "n": 467,
      "spec": "v1 §5",
      "tag": "DESCRIPTIVE",
@@ -64429,7 +64448,7 @@
     ]
    },
    "consequence": {
-    "basis": "pre-registered consequence text",
+    "basis": "consequence inferred from v1 §8 D-3 (the spec pre-registers consequence text for KILL and MIDDLE only; SUCCESS pre-registers 'r <= 1 + X/100 (point estimate, with its LOYO range)')",
     "n": null,
     "spec": "v1 §8 D-3",
     "tag": "DECISION",
@@ -64527,7 +64546,7 @@
     ]
    },
    "outcome": {
-    "basis": "r = 0.7133 <= 1.1000; target_first agreement reading = same_outcome_class (Q17): r_first = 0.7036 -> class SUCCESS; r_latest = 0.7133 -> class SUCCESS; calibration warm-up (S1/D1): first IS-A row 2013-06, first calibrated reading 2015-07, 25 regime-(i) IS-A rows without a calibrated reading; decisive n_ex2020 = 120 vs the v1 §8 power-note expectation n ≈ 145 (the ~30% MSE minimum detectable difference quoted there gets worse); calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the ADS side is NOT seeded from the 2008-12+ archive) at list-proxy IS points against vintage-consistent COIN(t), with a labelled pseudo ENS side",
+    "basis": "r = 0.7133 <= 1.1000; target_first agreement reading = same_outcome_class (Q17): r_first = 0.7036 -> class SUCCESS; r_latest = 0.7133 -> class SUCCESS; calibration warm-up (S1/D1): first IS-A row 2013-06, first calibrated reading 2015-07, 25 regime-(i) IS-A rows without a calibrated reading; decisive n_ex2020 = 120 vs the v1 §8 power-note expectation n ≈ 145 (the ~30% MSE minimum detectable difference quoted there scales by sqrt(145/120) = 1.10, i.e. ~33% MSE: SUCCESS remains a point-estimate statement with its LOYO range, v1 §8); calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the rejected alternative - seeding the ADS side from the 2008-12+ archive at list-proxy IS points against a labelled pseudo ENS side - is NOT implemented)",
     "n": 120,
     "spec": "v1 §8 D-3",
     "tag": "DECISION",
@@ -64650,7 +64669,7 @@
     ]
    },
    "d3_calibration_warmup": {
-    "basis": "calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the ADS side is NOT seeded from the 2008-12+ archive) at list-proxy IS points against vintage-consistent COIN(t), with a labelled pseudo ENS side",
+    "basis": "calibration store = regime (i) stored real-time readings only (ADS_avg and ENS_HH at the same IS), identical rows for both sides (v1 §5 Symmetry); the first calibrated reading therefore comes >= 24 stored regime-(i) months after the first row at that IS, not '>= 2011 on the 2008-12+ archive' (v1 §5): the spec is resolved by SPEC v1.2 (Q16 ruled: symmetric regime-(i) store; the rejected alternative - seeding the ADS side from the 2008-12+ archive at list-proxy IS points against a labelled pseudo ENS side - is NOT implemented)",
     "n": null,
     "spec": "v1 §5 / §8 D-3",
     "tag": "DESCRIPTIVE",
@@ -64815,7 +64834,7 @@
       "W875RX1.csv": "fa12b2e42b79f1bdcf5604403a828459ec9d4d5fd137c38058ffc968e440386a"
      },
      "F6_F7_F8_verified": {
-      "../../../../../../tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/cnv2/ads_panel_aux/ads_monthly_matrix.npz": "dbecce8e7826d6f7a35c7ecfc2c7d093e930e78512e10c53d6c11169511d33cd",
+      "ads_monthly_matrix.npz (--ads-matrix, outside the repo; hash also under hashes.ads_matrix)": "dbecce8e7826d6f7a35c7ecfc2c7d093e930e78512e10c53d6c11169511d33cd",
       "data/ads_panel/ads_vintage_2010-12-03.csv": "51c2b3a1b8d296e483f511477112323c3bc545f3a5c788e4bee3eaec3a06b1a7",
       "data/ads_panel/ads_vintage_panel.csv": "e269190d2cdac3b453df72dd10a8921afa31b96aaf1668a32e8a70f513a913fd",
       "data/piger/History_of_Real_Time_Recession_Probabilities.xlsx": "297de74203772a44374dc66247b1bb9d11f4b9de52f066ca0bceca786a11cb64",
@@ -64839,12 +64858,12 @@
      "code": {
       "ads.py": "54a23a7feb471e806ee1204161aa9122afcde1c1e321be72afacd59d3fe439b5",
       "engine.py": "70d00598a997c1d25600b4621b920cd0099e2385b61992f7c44f52e8f1d99d49",
-      "gates.py": "3b5d0cf9bd127b1747d68d3c65eb336a695e30ce82fb301c949a33dc2a21ba46",
+      "gates.py": "0f6f86c06445435d202a54a3e5832019c5c8ab46f3990f39e63d85bfc2d7372d",
       "metrics.py": "8b8765966c81cbd51c826deb41cbac2e61fa2ded4eced93f811799d579bdc971",
       "nber.py": "f32553321228386a27a99b8582bf3db87058e984a95cd23d3a07ebfbf1a767ba",
       "piger.py": "1c6539c2b4da45c2472ac56f0c08c075c81eaa96b0f5fa0f0b1f968e4ae3458e",
-      "run_study.py": "0d4c72ecac175261071c619bdef4e0f2c11fad29666234d175a91a8253571057",
-      "scoring.py": "04d77e69c3f8ac0a84f1d543ca7b915f58767745c8081fba595af07a0fc69463",
+      "run_study.py": "e4800280edc2ee0ebe5d8a18eb1d5211b6c3b8234de39f608cebdc7c20d3041d",
+      "scoring.py": "78f0c5130067c7670770b7c3209f2ea776c7938cba6b7fab4fff1c28b1bf358f",
       "synthetic.py": "cbe3bbf01cb30e514b60adb4463384f0bfe90eca76912d94a1ee063e397da579",
       "vintages.py": "d01af818d7bd7b836f57139eb37d180d97bb35695018043dcf3c6f89f8f6d16f"
      },
@@ -64930,7 +64949,9 @@
      "Chauvet-Piger shares the inputs; its real-time record is two recessions, one declared 13 months late, one never",
      "The QA variants' numbers are soft; their harness is not recoverable",
      "UMCSENT is ~M-2 on the live board since September 2026 (FRED delay); the replay is unaffected",
-     "Bands: completion error only, final-vintage data; first-print revision not included until the real-time band is scored"
+     "Bands: completion error only, final-vintage data; first-print revision not included until the real-time band is scored",
+     "2000-2013 is pseudo-real-time with emulated lags (list-proxy issue points); publication calendars are not modeled in the lag simulation (v0 §9)",
+     "The mid-2026 'STALL near -0.5' on the August fixture was largely pre-revision W875RX1 (2026-03: F1 -0.469 vs F5 -0.249; honesty.f1_vs_f5_realized_drift.last_months) (v0 §9)"
     ],
     "window": null
    },
@@ -65806,7 +65827,7 @@
        ]
       },
       "dm_vs_pers_t_full_ex2020": {
-       "basis": "DM NW-6 Bartlett, d = e_cand^2 - e_PERS^2, negative = better; primary two-sided |t| >= 1.645",
+       "basis": "DM NW-6 Bartlett, d = e_cand^2 - e_PERS^2, negative = better; primary two-sided |t| >= 1.645; only the ex-2020 t (second element) is a D-1 bar - the full-sample t is reported, no bar (v1 §8 D-1)",
        "n": [
         655,
         643
@@ -66078,7 +66099,7 @@
        ]
       },
       "rmse_full_1990_ex2020": {
-       "basis": "population RMSE vs realized COIN(M) on the rows where the candidate and PERS are both finite; 2020-only 1.768924",
+       "basis": "population RMSE vs realized COIN(M) on the rows where the candidate and PERS are both finite; 2020-only 1.768924; D-1 bars use the full and ex-2020 PERCENT rows (decision_D1), the 1990+ element enters no bar",
        "n": 655,
        "spec": "v0 §3",
        "tag": "DECISION",
@@ -120620,7 +120641,7 @@
    }
   }
  },
- "run_id": "79fcb2727c27a49001ad4182211bed7b061a00ee62d7cb6ebbec2f2744aa9dc4",
+ "run_id": "1eac4c97b022bd6786f3f91613806c78373c9427ae47a5261864ea0384708037",
  "scored_real_data": true,
  "section_order": [
   "windows",
@@ -120640,9 +120661,9 @@
  "spec": {
   "file": "studies/cycle-nowcast-v2.md",
   "sha256": "6da4a8e7006b234c9b12a9648e3648fcf9d43be4b60ba5cfcd853465945e6b4a",
-  "version": "SPEC v1 (2026-10-20) + v1.1 amendments"
+  "version": "SPEC v1 (2026-10-20) with the v1.1 and v1.2 amendments"
  },
- "statement": "Every number under 'results' is a tagged record {tag: DECISION | DESCRIPTIVE, value, basis, n, window, spec}; no descriptive number is a pass or fail. gates.F1_reproduction is the pre-registered v1 §7.1 / §7.2 gate (gates.run_all) on the committed REAL fixtures F1 / F3 / F4 — the same rows as gate_report_F1.json, no study metric. Real data were scored exactly once by this invocation.The only non-deterministic field is `generated`.",
+ "statement": "Every number under 'results' is a tagged record {tag: DECISION | DESCRIPTIVE, value, basis, n, window, spec}; no descriptive number is a pass or fail. gates.F1_reproduction is the pre-registered v1 §7.1 / §7.2 gate (gates.run_all) on the committed REAL fixtures F1 / F3 / F4 — the same rows as gate_report_F1.json, no study metric. Real data were scored exactly once by this invocation.The non-deterministic fields are `generated` and `correction.logged`.",
  "study": "cycle nowcast v2 — SCORED RUN (real data)",
  "tag_audit": {
   "n_untagged": 0,
