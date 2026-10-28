@@ -374,7 +374,7 @@ def test_committed_raw_cache_tarball_matches_vintage_table(tmp_path):
     cache = V.cache_from_tarball(V.RAW_TARBALL, str(tmp_path))
     with open(os.path.join(DATA, "vintages_panel", "vintage_table.csv"), newline="") as f:
         vt = list(csv.DictReader(f))
-    assert len(vt) == 1571
+    assert len(vt) == 1572          # 1,571 at the 2026-10-20 build + ICSA 2026-10-22 from the run-day F8 re-pull (notes_freeze.md)
     bad = []
     for r in vt:
         p = V.cache_path(cache, r["series"], r["vintage_date"])

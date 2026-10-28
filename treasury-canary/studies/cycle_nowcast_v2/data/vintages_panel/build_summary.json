@@ -1,5 +1,5 @@
 {
- "built": "2026-10-20T20:46:20Z",
+ "built": "2026-10-28T15:46:49Z",
  "cache": "vintages_raw",
  "is_counts": {
   "A": 165,
@@ -19,9 +19,9 @@
  "n_issue_rows": 997,
  "n_rows_completion": 10,
  "n_rows_nowcast": 467,
- "n_vintages": 1571,
+ "n_vintages": 1572,
  "n_vintages_before_start": 26,
- "n_vintages_in_range": 1545,
+ "n_vintages_in_range": 1546,
  "per_series": {
   "CMRMTSPL": {
    "bytes": 2252353,
@@ -30,10 +30,10 @@
    "n": 158
   },
   "ICSA": {
-   "bytes": 35453057,
+   "bytes": 35509268,
    "first": "2013-01-03",
-   "last": "2026-10-15",
-   "n": 714
+   "last": "2026-10-22",
+   "n": 715
   },
   "INDPRO": {
    "bytes": 4555891,
@@ -61,10 +61,10 @@
   }
  },
  "raw_tarball": {
-  "bytes": 392944,
+  "bytes": 394036,
   "file": "vintages_raw.tar.xz",
-  "sha256": "acb7f966fbac2e08fdded085cea567f526b6e18f8a6d09b33bfa1c3add17b17a"
+  "sha256": "4388498dc652c400ebdc01d4a433d543dc991f5360a480c20c590d823bd047b6"
  },
  "start": "2013-01-01",
- "vintage_table_sha256": "1c5a127374d1fd8f39a6fbd669b100ca83937db829db8607e9bcbf26e9f4cce7"
+ "vintage_table_sha256": "3d4bbb477b02b2813087b3f3bd98d087af727d9e8c4e9dce5b58255809cbd1c5"
 }
