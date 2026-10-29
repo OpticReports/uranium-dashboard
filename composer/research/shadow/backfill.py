@@ -143,8 +143,10 @@ def main():
             print(f"{r['date']} {r['engine']:6s} {r['status']:12s} live {sr.fmt_w(r.get('live') or {})} | logic "
                   f"{sr.fmt_w(r.get('target') or {})} | {how} {r.get('corridor_check', '')} {r.get('why', '')[:200]}")
     if write:
-        sr.write_ledger(rows)
-        print("ledger rows written:", len(rows))
+        live = {(r["date"], r["engine"]) for r in sr.read_ledger() if r.get("src") == "live"}
+        keep = [r for r in rows if (r["date"], r["engine"]) not in live]     # never overwrite the daily check's rows
+        sr.write_ledger(keep)
+        print("ledger rows written:", len(keep), "| kept live rows:", len(rows) - len(keep))
 
 
 if __name__ == "__main__":

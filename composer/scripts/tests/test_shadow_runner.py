@@ -529,7 +529,7 @@ class S6Assess(unittest.TestCase):
         st = {}
         s, a1, _, st = self.run_({"A": 0.999}, att=OLD, prices=p, st=st)
         self.assertEqual(s, {"E1": "no-rebalance", "E2": "no-rebalance"})
-        self.assertTrue(a1[0].startswith(f"COMPOSER DID NOT REBALANCE — no rebalance attempt on {D} for E1, E2"))
+        self.assertTrue(a1[0].startswith(f"COMPOSER DID NOT REBALANCE — no rebalance on {D} for E1, E2"))
         self.assertIn("logic unavailable", a1[0])
         _, a2, _, st = self.run_({"A": 0.999}, att=OLD, prices=p, st=st)
         self.assertTrue(a2[0].startswith("COMPOSER STILL NOT REBALANCING — E1 session 2"))
@@ -540,7 +540,7 @@ class S6Assess(unittest.TestCase):
         st = {}
         s, a1, _, st = self.run_({"A": 0.999}, att=OLD, att2=D, st=st)
         self.assertEqual((s["E1"], s["E2"]), ("no-rebalance", "agree"))
-        self.assertIn("for E1 (", a1[0])
+        self.assertIn(f"for E1 (E1 last attempted {OLD})", a1[0])
         _, a2, _, st = self.run_({"A": 0.999}, st=st)
         self.assertTrue(a2[0].startswith(f"COMPOSER REBALANCING RESUMED on {D} — E1 after 1 session(s)"))
         self.assertEqual(st["frozen"], {})
@@ -630,29 +630,53 @@ class S7Hook(unittest.TestCase):
         sr.load_manifest, sr.load_tree, sr.fetch_prices = self.saved
         self.tmp.cleanup()
 
-    def hook(self, state, m, get=None, now=None):
+    def hook(self, state, m, get=None, now=None, bars="none"):
         alerts, snap, out = [], {}, io.StringIO()
         with contextlib.redirect_stdout(out):
-            sr.check_shadow(state, alerts, snap, m, now or self.NOW, get=get, ledger=self.ledger, bars=lambda tk: {})
+            sr.check_shadow(state, alerts, snap, m, now or self.NOW, get=get, ledger=self.ledger,
+                            bars=(lambda tk: {}) if bars == "none" else bars)
         return alerts, snap, out.getvalue()
 
     def ok_prices(self):
         sr.fetch_prices = lambda *a, **k: (self.prices, self.prices, {})
 
-    def test_yahoo_failure_keeps_state_and_alerts_on_third(self):
+    def test_yahoo_down_still_judges_composer_record(self):
         def boom(*a, **k):
             raise RuntimeError("Yahoo down")
         sr.fetch_prices = boom
+        state = {"shadow": {"last_date": "2025-04-29"}}
+        alerts, snap, out = self.hook(state, meta(OLD, {"A": 0.999}))
+        self.assertIn("session dated 2025-05-01 from the exchange calendar", out)
+        self.assertTrue(alerts and alerts[0].startswith("COMPOSER DID NOT REBALANCE — no rebalance on 2025-05-01"))
+        self.assertNotIn("fail", state["shadow"])
+        self.assertEqual(snap["shadow"]["status"], {"E1": "no-rebalance", "E2": "no-rebalance"})
+        # an engine that did rebalance is unchecked, and that counts toward SHADOW BLIND, not a failure
+        state = {}
+        for day, wd_now in ((1, datetime.datetime(2025, 5, 1, 21, 35, tzinfo=UTC)), (2, datetime.datetime(2025, 5, 2, 21, 35, tzinfo=UTC)),
+                            (3, datetime.datetime(2025, 5, 5, 21, 35, tzinfo=UTC))):
+            alerts, snap, out = self.hook(state, meta(wd_now.date().isoformat(), {"A": 0.999}), now=wd_now)
+        self.assertTrue(any(a.startswith("SHADOW BLIND — E1: no comparison for 3 sessions") for a in alerts))
+
+    def test_manifest_failure_counts_and_alerts_on_third(self):
+        self.ok_prices()
+
+        def broken():
+            raise ValueError("manifest unreadable")
+        sr.load_manifest = broken
         state = {"shadow": {"last_date": "2025-04-29", "frozen": {}}}
         for i in range(1, 4):
             alerts, _, out = self.hook(state, meta(OLD, {"A": 0.999}))
-            self.assertIn("shadow runner unavailable: Yahoo down", out)
-            self.assertEqual(state["shadow"]["last_date"], "2025-04-29")      # untouched
-            self.assertEqual(state["shadow"]["frozen"], {})
+            self.assertIn("shadow runner unavailable: manifest unreadable", out)
+            self.assertEqual((state["shadow"]["last_date"], state["shadow"]["frozen"]), ("2025-04-29", {}))
             self.assertEqual(state["shadow"]["fail"]["n"], i)
             self.assertEqual(bool(alerts), i == 3)
         self.assertTrue(alerts[0].startswith("SHADOW RUNNER DOWN — 3 runs"))
-        self.ok_prices()
+        tue = datetime.datetime(2025, 5, 6, 21, 35, tzinfo=UTC)
+        self.assertEqual(self.hook(state, meta(OLD, {"A": 0.999}), now=tue)[0], [])            # run 4, a Tuesday
+        mon = datetime.datetime(2025, 5, 12, 21, 35, tzinfo=UTC)
+        self.assertEqual(len(self.hook(state, meta(OLD, {"A": 0.999}), now=mon)[0]), 1)        # Mondays repeat
+        self.assertEqual(self.hook(state, meta(OLD, {"A": 0.999}), now=mon)[0], [])            # once a day
+        sr.load_manifest = lambda: CFG
         self.hook(state, meta(D, {"A": 0.999}))
         self.assertNotIn("fail", state["shadow"])
 
@@ -668,7 +692,7 @@ class S7Hook(unittest.TestCase):
                 raise SystemExit("error: HTTP 401")
             return [{"version_id": "v2new"}] if path.endswith("/versions") else changed
         state = {}
-        alerts, _, out = self.hook(state, meta(D, {"A": 0.999}), get=get)
+        alerts, _, out = self.hook(state, meta("2025-05-01", {"A": 0.999}), get=get)
         self.assertTrue(alerts and alerts[0].startswith("LOGIC DRIFT — E2"))
         self.assertIn("logic-drift check for E1 unavailable", out)
 
@@ -703,7 +727,7 @@ class S7Hook(unittest.TestCase):
         self.assertEqual(state["shadow"]["pending"], ["E1"])
         self.ok_prices()
         _, snap, out = self.hook(state, meta(D, {"A": 0.999}))
-        self.assertEqual(snap["shadow"]["status"], {"E1": "agree"})
+        self.assertEqual(snap["shadow"]["status"], {"E1": "agree", "E2": "agree"})   # merged with the first run
         self.assertEqual(state["shadow"]["pending"], [])
 
     def test_failure_after_assess_keeps_previous_state(self):
@@ -729,6 +753,19 @@ class S7Hook(unittest.TestCase):
         self.assertIn("unreadable rebalance-attempt date", out)
         self.assertEqual(snap["shadow"]["status"]["E1"], "unavailable")
         self.assertEqual(snap["shadow"]["status"]["E2"], "mismatch")      # holds nothing: reported, not a crash
+
+    def test_rerun_does_not_advance_a_freeze(self):
+        p = copy.deepcopy(self.prices)
+        del p["A"][D]                                   # E2 cannot be checked on the first run
+        sr.fetch_prices = lambda *a, **k: (p, p, {})
+        state = {}
+        self.hook(state, meta(OLD, {"A": 0.999}, att2=D))
+        self.assertEqual((state["shadow"]["frozen"]["E1"]["sessions"], state["shadow"]["pending"]), (1, ["E2"]))
+        self.ok_prices()
+        alerts, snap, _ = self.hook(state, meta(OLD, {"A": 0.999}, att2=D))
+        self.assertEqual(alerts, [])                    # no STILL NOT REBALANCING from a re-run
+        self.assertEqual(state["shadow"]["frozen"]["E1"]["sessions"], 1)
+        self.assertEqual(snap["shadow"]["status"], {"E1": "no-rebalance", "E2": "agree"})
 
     def test_ledger_write_failure_still_delivers_alerts(self):
         self.ok_prices()
@@ -781,7 +818,7 @@ class S8Drift(unittest.TestCase):
                 "children": [dict(asset("A")), asset("B")]}
         c0 = sr.canonical(base)
         for k, v in (("select-n", "2"), ("select-fn", "bottom"), ("sort-by-fn-params", {"window": 20}),
-                     ("sort-by-window-days", "20"), ("select?", None), ("sort-by?", None), ("sort-by-fn", "cumulative-return")):
+                     ("sort-by-window-days", "20"), ("select?", False), ("sort-by?", False), ("sort-by-fn", "cumulative-return")):
             m = copy.deepcopy(base)
             if v is None:
                 m.pop(k)
@@ -796,7 +833,8 @@ class S8Drift(unittest.TestCase):
         r = root(asset("A"), rebalance="daily")
         self.assertNotEqual(sr.canonical(r), sr.canonical(dict(r, rebalance="none")))
         self.assertNotEqual(sr.canonical(r), sr.canonical(dict(r, **{"rebalance-corridor-width": 0.1})))
-        spec = {"step": "wt-cash-specified", "children": [dict(asset("A"), weight={"num": 50, "den": 100})]}
+        spec = {"step": "wt-cash-specified", "children": [dict(asset("A"), weight={"num": 50, "den": 100}),
+                                                          dict(asset("B"), weight={"num": 50, "den": 100})]}
         spec2 = copy.deepcopy(spec)
         spec2["children"][0]["weight"] = {"num": 60, "den": 100}
         self.assertNotEqual(sr.canonical(spec), sr.canonical(spec2))
@@ -935,6 +973,332 @@ class S10Data(unittest.TestCase):
         self.assertIsNone(sr.era_for(cfg, "2026-06-29"))
         self.assertEqual([e["v"] for e in sr.eras_between(cfg, "2026-10-12", "2026-10-22")], [2, 3])
         self.assertEqual([e["v"] for e in sr.eras_between(cfg, "2026-10-20", "2026-10-22")], [3])
+
+
+
+# ------------------------------------------------------------------ S11 (round-2 survivors)
+def timed_bars(p, moves_at, day=D, close="16:00"):
+    """bars for every ticker at its close, except X, moved by moves_at[hh:mm] in the bar ending at that minute"""
+    times = sr.decision_times(close)
+    out = {}
+    for t, s in p.items():
+        b = {}
+        for i in range(-6, 1):
+            hh = sr._hm(sr._min(close) - 5 + 5 * i)
+            b[hh] = s[day]
+        if t == "X":
+            for hh, mv in moves_at.items():
+                b[sr._hm(sr._min(hh) - 5)] = s[day] * (1 + mv)
+        b["_close"] = close
+        out[t] = {day: b}
+    return out
+
+
+class S11Intraday(unittest.TestCase):
+    def classify(self, live, bars, tree=None, corridor=None, drifted=None, prices=None, raw=None):
+        p = prices or near_threshold_prices()
+        tree = tree or rsi_tree()
+        sim, target, tr = sr.run_engine(p, tree, D)
+        intraday = lambda: sr.at_times(p, raw or {t: dict(s) for t, s in p.items()}, bars, tree, D)  # noqa: E731
+        return target, sr.classify(sim, tree, D, target, tr, live, corridor, drifted, intraday)
+
+    def test_each_decision_minute_is_tried(self):
+        for hh in ("15:45", "15:50", "15:55"):
+            _, (status, det) = self.classify({"B": 1.0}, timed_bars(near_threshold_prices(), {hh: -0.002}))
+            self.assertEqual((status, det["edge"]["time"]), ("knife-edge", hh), hh)
+
+    def test_half_day_uses_its_own_close(self):
+        bars = timed_bars(near_threshold_prices(), {"12:50": -0.002}, close="13:00")
+        self.assertEqual(sr.decision_times("13:00"), ("12:45", "12:50", "12:55"))
+        _, (status, det) = self.classify({"B": 1.0}, bars)
+        self.assertEqual((status, det["edge"]["time"]), ("knife-edge", "12:50"))
+        for b in bars.values():                                   # broken: treated as a 16:00 close
+            b[D].pop("_close")
+        _, (status, _) = self.classify({"B": 1.0}, bars)
+        self.assertEqual(status, "knife-edge")                    # stale 12:5x bars -> no bars -> fallback search
+        self.assertIsNone(sr.at_times(near_threshold_prices(), near_threshold_prices(), bars, rsi_tree(), D))
+
+    def test_intraday_prices_are_scaled_onto_the_adjusted_series(self):
+        p = near_threshold_prices()
+        adj = {t: {d: v / 2 for d, v in s.items()} for t, s in p.items()}       # adjusted = half the raw price
+        bars = timed_bars(p, {"15:50": -0.002})                                  # raw-price bars
+        sim, target, tr = sr.run_engine(adj, rsi_tree(), D)
+        status, det = sr.classify(sim, rsi_tree(), D, target, tr, {"B": 1.0}, None, None,
+                                  lambda: sr.at_times(adj, p, bars, rsi_tree(), D))
+        self.assertEqual((status, det["edge"]["time"]), ("knife-edge", "15:50"))
+
+    def test_missing_bars_for_a_decision_ticker_fall_back_to_search(self):
+        bars = timed_bars(near_threshold_prices(), {"15:50": -0.002})
+        del bars["X"]
+        _, (status, det) = self.classify({"B": 1.0}, bars)
+        self.assertEqual((status, det["edge"]["basis"]), ("knife-edge", "search"))
+
+    def test_held_only_tickers_need_no_bars(self):
+        bars = timed_bars(near_threshold_prices(), {"15:50": -0.002})
+        del bars["A"], bars["B"]                              # held, never read by a condition
+        _, (status, det) = self.classify({"B": 1.0}, bars)
+        self.assertEqual((status, det["edge"]["basis"]), ("knife-edge", "intraday"))
+
+    def test_stale_bars_are_missing(self):
+        b = {"13:00": 10.0, "15:40": 11.0}
+        self.assertIsNone(sr.bar_price({"13:00": 10.0}, "15:50"))
+        self.assertEqual(sr.bar_price(b, "15:50"), 11.0)
+        self.assertEqual(sr.bar_price({"15:20": 9.0}, "15:50"), 9.0)          # 25 minutes: still fresh
+        self.assertIsNone(sr.bar_price({"15:05": 9.0}, "15:50"))              # 40 minutes: stale
+
+    def test_intraday_check_keeps_the_corridor_path(self):
+        tree = {"step": "root", "id": "r", "children": [{"step": "wt-cash-specified", "id": "s", "children": [
+            dict(if_(cond("relative-strength-index", "X", 2, "gt", 50), [asset("A")], [asset("B")]), weight={"num": 75}),
+            dict(asset("C"), weight={"num": 25})]}]}
+        drifted = {"B": 0.70, "C": 0.30}                       # yesterday's holdings at today's close
+        live = {"B": 0.75, "C": 0.25}                          # Composer rebalanced inside the corridor: wrong
+        _, (status, _) = self.classify(live, timed_bars(near_threshold_prices(), {"15:50": -0.002}), tree=tree,
+                                       corridor=0.10, drifted=drifted)
+        self.assertEqual(status, "mismatch")
+        _, (status, _) = self.classify(drifted, timed_bars(near_threshold_prices(), {"15:50": -0.002}), tree=tree,
+                                       corridor=0.10, drifted=drifted)
+        self.assertEqual(status, "knife-edge")                 # broken pair: Composer held the drifted weights
+
+    def test_fallback_radius_boundary(self):
+        _, (status, det) = S5Classify._classify(None, flip_bump(0.31), {"B": 1.0})
+        self.assertEqual(status, "mismatch")                   # 0.31 sigma is outside 0.3 (and inside 0.4)
+
+
+class S12Corridor(unittest.TestCase):
+    def test_tolerance_and_ambiguity_band(self):
+        t = {"A": 0.75, "B": 0.25}
+        near = {"A": 0.70, "B": 0.30}
+        self.assertTrue(sr.agrees(t, {"A": 0.714, "B": 0.286}, 0.10, near))      # 1.4% from the drifted weights
+        self.assertFalse(sr.agrees(t, {"A": 0.716, "B": 0.284}, 0.10, near))     # 1.6%
+        band = {"A": 0.655, "B": 0.345}                                         # 9.5pp: inside the band
+        self.assertTrue(sr.agrees(t, t, 0.10, band) and sr.agrees(t, band, 0.10, band))
+
+    def test_deposit_in_flight_means_lenient(self):
+        p = {"A": {"d0": 100.0, "d1": 100.0}, "B": {"d0": 100.0, "d1": 100.0}, "SPY": {"d0": 1, "d1": 1}}
+        cfg = {"corridor": 0.1}
+        row = {"date": "d0", "live": {"A": 0.5, "B": 0.5}, "net_deposits": 1000, "cash_share": 0.001}
+        s = {"net_deposits": 1000, "value": 1000.0, "cash": 1.0}
+        self.assertIsNotNone(sr.corridor_base(cfg, row, s, p, "d1"))
+        for bad_row, bad_s in ((dict(row, deposit_moved=True), s), (dict(row, queued=True), s),
+                               (dict(row, cash_share=0.05), s), (row, dict(s, has_queued_deploy=True)),
+                               (row, dict(s, cash=50.0))):
+            self.assertIsNone(sr.corridor_base(cfg, bad_row, bad_s, p, "d1"))
+
+    def test_rows_record_what_the_guard_reads(self):
+        m = meta(D, {"A": 0.999})
+        m[1].update(net_deposits=5000.0, cash=10.0, value=1000.0, has_queued_deploy=True)
+        prev = {"E2": {"date": D0, "engine": "E2", "live": {"A": 0.75, "B": 0.25}, "net_deposits": 4000.0}}
+        p = near_threshold_prices()
+        rows, _, _ = sr.assess(CFG, m, p, D, {}, load=load, raw=p, prev=prev)
+        e2 = next(r for r in rows if r["engine"] == "E2")
+        self.assertEqual((e2["net_deposits"], e2["queued"], e2["cash_share"], e2["deposit_moved"], e2["corridor_check"]),
+                         (5000.0, True, 0.01, True, "lenient"))
+
+
+class S13Wiring(unittest.TestCase):
+    NOW = datetime.datetime(2025, 5, 1, 21, 35, tzinfo=UTC)
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.saved = (sr.load_manifest, sr.load_tree, sr.fetch_prices, sr.fetch_intraday)
+        sr.load_manifest = lambda: CFG
+        sr.load_tree = load
+        self.ledger = os.path.join(self.tmp.name, "ledger.jsonl")
+        self.p = near_threshold_prices()
+        sr.fetch_prices = lambda *a, **k: (self.p, self.p, {})
+
+    def tearDown(self):
+        sr.load_manifest, sr.load_tree, sr.fetch_prices, sr.fetch_intraday = self.saved
+        self.tmp.cleanup()
+
+    def run_hook(self, m, bars=None):
+        alerts, snap = [], {}
+        with contextlib.redirect_stdout(io.StringIO()):
+            sr.check_shadow({}, alerts, snap, m, self.NOW, ledger=self.ledger, bars=bars)
+        return {r["engine"]: r for r in sr.read_ledger(self.ledger) if r["date"] == D}
+
+    def test_daily_path_fetches_bars_itself(self):
+        b = timed_bars(self.p, {"15:50": -0.002})
+        calls = []
+
+        def fake(t, rng="5d"):
+            calls.append(t)
+            return b.get(t, {})
+        sr.fetch_intraday = fake
+        rows = self.run_hook(meta(D, {"B": 0.999}))
+        self.assertEqual((rows["E1"]["status"], rows["E1"]["edge"]["basis"]), ("knife-edge", "intraday"))
+        self.assertIn("X", calls)
+
+    def test_previous_row_feeds_the_corridor_path(self):
+        def seed(date):
+            sr.write_ledger([{"date": date, "engine": "E2", "live": {"A": 0.75, "B": 0.25}, "status": "agree"}], self.ledger)
+        seed(D0)
+        self.assertEqual(self.run_hook(meta(D, {"A": 0.999}))["E2"]["corridor_check"], "path")
+        os.remove(self.ledger)
+        seed(dates(N)[-3])                                     # two sessions back: not usable
+        self.assertEqual(self.run_hook(meta(D, {"A": 0.999}))["E2"]["corridor_check"], "lenient")
+        os.remove(self.ledger)
+        seed(D)                                                # the session itself: not the previous one
+        self.assertEqual(self.run_hook(meta(D, {"A": 0.999}))["E2"]["corridor_check"], "lenient")
+
+
+class S14Freeze(unittest.TestCase):
+    def assess(self, m, st, weekday=1):
+        p = near_threshold_prices()
+        return sr.assess(CFG, m, p, D, st, load=load, raw=p, weekday=weekday)
+
+    def test_missing_attempt_date_never_ends_a_freeze(self):
+        st = {}
+        self.assess(meta(OLD, {"A": 0.999}, att2=D), st)       # only E1 frozen
+        m = meta(D, {"A": 0.999})
+        m[0]["last_rebalance_attempted_on"] = None
+        rows, alerts, _ = self.assess(m, st)
+        self.assertEqual(rows[0]["status"], "no-rebalance")
+        self.assertTrue(alerts[0].startswith("COMPOSER STILL NOT REBALANCING — E1 session 2"))
+        self.assertFalse(any("RESUMED" in a for a in alerts))
+
+    def test_paused_counts_even_with_a_fresh_attempt(self):
+        rows, alerts, _ = self.assess(meta(D, {"A": 0.999}, paused1=True), {})
+        self.assertEqual((rows[0]["status"], rows[0]["paused"]), ("no-rebalance", True))
+        self.assertIn("E1 is paused in Composer (owner: test)", alerts[0])
+
+    def test_engine_missing_from_composer_goes_blind(self):
+        st = {}
+        for i in range(1, 4):
+            rows, alerts, _ = self.assess(meta(D, {"A": 0.999})[1:], st)
+            self.assertEqual(rows[0]["note"], "not in Composer's symphony list")
+        self.assertTrue(alerts[0].startswith("SHADOW BLIND — E1: no comparison for 3 sessions"))
+
+    def test_blind_resets_and_repeats_on_mondays(self):
+        p = near_threshold_prices()
+        del p["X"][D]
+        st = {}
+        for prices in (p, p, near_threshold_prices(), p):
+            rows, alerts, _ = sr.assess(CFG, meta(D, {"A": 0.999}), prices, D, st, load=load, raw=prices)
+        self.assertEqual(alerts, [])                           # the agree session in between reset it
+        for wd in (1, 1, 1, 0):
+            rows, alerts, _ = sr.assess(CFG, meta(D, {"A": 0.999}), p, D, st, load=load, raw=p, weekday=wd)
+        self.assertEqual(st["blind"]["E1"], 5)
+        self.assertTrue(alerts and alerts[0].startswith("SHADOW BLIND — E1: no comparison for 5 sessions"))
+
+
+class S15Data(unittest.TestCase):
+    def setUp(self):
+        self.saved = (sr._chart, sr.fetch_intraday)
+
+    def tearDown(self):
+        sr._chart, sr.fetch_intraday = self.saved
+
+    def test_fetch_intraday_keys_bars_in_et_with_the_session_close(self):
+        start = int(datetime.datetime(2026, 11, 27, 12, 45, tzinfo=sr.et_now(datetime.datetime(2026, 11, 27, 17, 0, tzinfo=UTC)).tzinfo).timestamp())
+        ts = [start, start + 300, start + 600, start + 900]                   # 12:45 .. 13:00 ET on a half-day
+        end = start + 900
+        res = {"timestamp": ts, "indicators": {"quote": [{"close": [1.0, None, 2.0, 3.0]}]},
+               "meta": {"tradingPeriods": [[{"start": end - 3.5 * 3600, "end": end}]]}}
+        sr._chart = lambda url, timeout=30: res
+        b = sr.fetch_intraday("X")["2026-11-27"]
+        self.assertEqual(b, {"12:45": 1.0, "12:55": 2.0, "13:00": 3.0, "_close": "13:00"})
+        res["timestamp"], res["indicators"]["quote"][0]["close"] = [start - 900], [1.0]   # thin: last bar 12:30
+        self.assertEqual(sr.fetch_intraday("X")["2026-11-27"]["_close"], "13:00")         # the exchange's close
+        res["timestamp"], res["indicators"]["quote"][0]["close"] = ts, [1.0, None, 2.0, 3.0]
+        res["meta"] = {}                                                      # inferred: the 13:00 auction bar
+        self.assertEqual(sr.fetch_intraday("X")["2026-11-27"]["_close"], "13:00")
+        res["timestamp"], res["indicators"]["quote"][0]["close"] = ts[:3], [1.0, None, 2.0]
+        self.assertEqual(sr.fetch_intraday("X")["2026-11-27"]["_close"], "13:00")   # last bar 12:55 ends at 13:00
+
+    def test_bars_fetcher_dates_thin_funds_by_spy(self):
+        def fake(t, rng="5d"):
+            return {"2026-11-27": {"12:50": 1.0, "_close": "13:00"}} if t == "SPY" else {"2026-11-27": {"11:00": 2.0}}
+        sr.fetch_intraday = fake
+        got = sr.bars_fetcher()(["ZVOL"])
+        self.assertEqual(got["ZVOL"]["2026-11-27"]["_close"], "13:00")
+        self.assertNotIn("SPY", got)
+
+    def test_expected_session_skips_weekends_and_holidays(self):
+        self.assertEqual(sr.expected_session(datetime.datetime(2026, 10, 31, 22, 0, tzinfo=UTC)), "2026-10-30")   # Saturday
+        self.assertEqual(sr.expected_session(datetime.datetime(2026, 11, 26, 22, 0, tzinfo=UTC)), "2026-11-25")   # Thanksgiving
+        self.assertEqual(sr.expected_session(datetime.datetime(2026, 11, 27, 22, 0, tzinfo=UTC)), "2026-11-27")
+
+    def test_ledger_write_is_atomic_and_strict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = os.path.join(tmp, "l.jsonl")
+            sr.write_ledger([{"date": "2026-10-01", "engine": "HG", "status": "agree"}], p)
+            def text():
+                with open(p) as f:
+                    return f.read()
+            before = text()
+            with self.assertRaises(TypeError):
+                sr.write_ledger([{"date": "2026-10-02", "engine": "HG", "bad": object()}], p)
+            self.assertEqual(text(), before)                                   # a crash mid-write leaves it whole
+            self.assertEqual(oct(os.stat(p).st_mode & 0o777), "0o644")
+            with open(p, "a") as f:
+                f.write('{"date":null,"engine":"HG"}\n{"date":"2026-10-03","engine":7}\n')
+            self.assertEqual(len(sr.read_ledger(p)), 1)                        # untyped rows skipped
+            sr.write_ledger([{"date": "2026-10-02", "engine": "HG", "status": "agree"}], p)
+            self.assertEqual(len(sr.read_ledger(p)), 2)
+            good = text()
+            real_open = open
+
+            def failing_open(f, *a, **k):
+                if f == p:
+                    raise PermissionError("read refused")
+                return real_open(f, *a, **k)
+            sr.open = failing_open
+            try:
+                self.assertEqual(sr.read_ledger(p), [])
+                with self.assertRaises(PermissionError):
+                    sr.write_ledger([{"date": "2026-10-05", "engine": "HG"}], p)
+            finally:
+                del sr.open
+            self.assertEqual(text(), good)                                    # history intact
+            unreadable = os.path.join(tmp, "dir.jsonl")
+            os.makedirs(unreadable)                                            # an I/O error even root gets
+            self.assertEqual(sr.read_ledger(unreadable), [])
+            with self.assertRaises(OSError):
+                sr.write_ledger([{"date": "2026-10-04", "engine": "HG"}], unreadable)   # never rewrite an unread history
+
+    def test_duplicate_holdings_are_summed(self):
+        w = sr.live_weights({"holdings": [{"ticker": "A", "allocation": 0.25}, {"ticker": "A", "allocation": 0.25},
+                                          {"ticker": "B", "allocation": 0.5}]})
+        self.assertEqual(w, {"A": 0.5, "B": 0.5})
+
+
+class S16Canonical(unittest.TestCase):
+    def test_equal_forms(self):
+        c = cond("relative-strength-index", "SPY", 10, "gt", 50)
+        moved = dict(c)
+        moved.pop("lhs-fn-params")
+        moved["lhs-window-days"] = "10"
+        self.assertEqual(sr.canonical(c), sr.canonical(moved))                 # same window, other field
+        f = {"step": "filter", "sort-by-fn": "relative-strength-index", "sort-by-fn-params": {"window": 10},
+             "select-fn": "top", "select-n": 1, "children": [asset("A")]}
+        self.assertEqual(sr.canonical(f), sr.canonical(dict(f, **{"select?": True, "sort-by?": True})))
+        self.assertNotEqual(sr.canonical(f), sr.canonical(dict(f, **{"select?": False})))
+        w1 = {"step": "wt-cash-specified", "children": [dict(asset("A"), weight={"num": 50}), dict(asset("B"), weight={"num": 50})]}
+        w2 = {"step": "wt-cash-specified", "children": [dict(asset("A"), weight={"num": 30}), dict(asset("B"), weight={"num": 30})]}
+        self.assertEqual(sr.canonical(w1), sr.canonical(w2))                   # same shares
+
+    def test_non_window_params_count(self):
+        c = cond("relative-strength-index", "SPY", 10, "gt", 50)
+        c["lhs-fn-params"] = {"window": 10, "smoothing": 2}             # a parameter a future indicator might take
+        self.assertNotEqual(sr.canonical(c), sr.canonical(dict(c, **{"lhs-fn-params": {"window": 10, "smoothing": 3}})))
+
+    def test_same_version_with_edited_logic_alerts(self):
+        changed = rsi_tree()
+        changed["children"][0]["children"][0]["children"][0]["rhs-val"] = "55"
+        get = lambda path: [{"version_id": "v1aaaaaaaa"}] if path.endswith("/versions") else changed  # noqa: E731
+        alerts, _ = sr.check_drift({"E1": CFG["E1"]}, get, {}, sr.et_now(datetime.datetime(2026, 11, 3, 21, 35, tzinfo=UTC)),
+                                   load=lambda era: rsi_tree())
+        self.assertTrue(alerts and alerts[0].startswith("LOGIC DRIFT — E1"))
+
+    def test_drift_check_failures_go_blind_once_a_day(self):
+        def get(path):
+            raise SystemExit("error: HTTP 503")
+        st = {}
+        days = [datetime.datetime(2026, 11, d, 21, 35, tzinfo=UTC) for d in (3, 3, 4, 5)]
+        out = [sr.check_drift({"E1": CFG["E1"]}, get, st, sr.et_now(t), load=lambda era: rsi_tree())[0] for t in days]
+        self.assertEqual([len(a) for a in out], [0, 0, 0, 1])                 # a re-run the same day does not count
+        self.assertTrue(out[-1][0].startswith("SHADOW BLIND — E1: the logic-drift check failed on 3 days"))
 
 
 if __name__ == "__main__":
