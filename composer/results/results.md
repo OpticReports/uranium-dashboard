@@ -3026,37 +3026,42 @@ DECISION: none; answers a question.
 
 Owner: "define shadow decision runner" -> "ok build the shadow runner". Built: scripts/shadow_runner.py,
 called by monitor.py after the gate watch; approved-logic registry fixtures/approved/ (manifest + 7 trees,
-one per approved version, by era); 70 merge-blocking tests (scripts/tests/test_shadow_runner.py, each
+one per approved version, by era); 98 merge-blocking tests (scripts/tests/test_shadow_runner.py, each
 paired with a broken input; frozen fixtures shadow-2026-10-28.json.gz and shadow-warmup-2026-04-07.json);
 research/shadow/ (backfill.py, calibrate.py, make_chart.py); exhibit results/shadow-runner-baseline-
 2026-10-29.html; ledger results/monitor/shadow-ledger.jsonl (seeded with the 276 backfill rows). Keyless;
 the daily path calls Composer with GET only (calibrate.py also runs POST /backtest simulations); never trades.
 
 WHAT IT CHECKS, per engine, for session D (the latest final Yahoo close):
-- NO REBALANCE: symphony-stats-meta last_rebalance_attempted_on < D, read before and regardless of prices.
-  Alert on the first session, daily while it lasts (Mondays only for a symphony paused in Composer),
-  RESUMED once.
+- NO REBALANCE: symphony-stats-meta last_rebalance_attempted_on < D, or the symphony paused in Composer;
+  read from Composer's record alone (with Yahoo down, the session is dated from the exchange calendar), and
+  a missing attempt date never ends it. Alert on the first session, daily while it lasts (Mondays only for
+  a paused symphony), RESUMED once.
 - The approved tree for D's era on Yahoo adjusted closes: add. 27 semantics, Wilder RSI over the whole
   2-year history (>= 60 closes), windows from fn-params or window-days (conflicting fields refused).
   Anything the evaluator has not been validated on is "unavailable", never guessed.
 - AGREE: daily engines within 3% (half-L1). KMLM on its corridor path: the previous session's holdings
   drifted to the close; the target if any holding is more than 10pp off it, else the drifted holdings
   (both accepted within 1pp of the trigger); within 1.5%. Lenient (every holding within 11pp) without a
-  previous session or after a deposit.
-- KNIFE-EDGE (logged, no alert): not agree on closes, but agree when every ticker's close is replaced by
-  its 15:45, 15:50 or 15:55 ET price (Yahoo 5-minute bars). Without bars: a one-ticker move of at most
+  previous session, or while a deposit may be in flight (net deposits moved on either day, a queued
+  deploy, or more than 2% uninvested cash).
+- KNIFE-EDGE (logged, no alert): not agree on closes, but agree when every decision ticker's close is
+  replaced by its price 15, 10 or 5 minutes before the session's own close (15:45/15:50/15:55; 12:45.. on a
+  half-day; Yahoo 5-minute bars, none older than 30 minutes). Without bars: a one-ticker move of at most
   0.3 sigma; two such sessions in a row on one engine alert.
 - MISMATCH: alert, with the closest calls on the decision path.
 - LOGIC DRIFT, every run, prices or not: the live tree (GET /score) vs the last approved era, compared on
   every field except display ones (numbers normalised). Alert when first seen or changed and on Mondays,
   naming the node; a new version with identical logic is a note.
-- SHADOW BLIND (an engine unchecked 3 sessions running) and SHADOW RUNNER DOWN (3 failed runs). A failed
-  run leaves the state as it was; the ledger is written atomically and a malformed line is skipped.
+- SHADOW BLIND (an engine unchecked 3 sessions running, a symphony missing from Composer's list included;
+  likewise 3 days of failed drift checks) and SHADOW RUNNER DOWN (3 failed runs). A failed run leaves the
+  state as it was; the ledger is read strictly before a write, written atomically, and a malformed line
+  is skipped.
 
 FIDELITY (calibrate.py; Composer's own backtests decide on closes like the runner). All 7 approved trees,
 2026-04-01..10-28: 1,022 of 1,022 sessions identical (same tickers within 0.5%; KMLM's drifted backtest
-holdings on the absolute-corridor path). The runner follows 276 of 276 days Composer's backtest changed
-allocation; compared one day off, agreement falls to 63%.
+holdings on the absolute-corridor path). In the six daily-rebalanced trees the runner follows all 276
+allocation changes in Composer's backtests; compared one day off, agreement falls to 63%.
 
 LIVE BASELINE (backfill.py: 74 snapshot commits -> 67 sessions, 07-15..10-23). 243 agree (92%), 21
 knife-edge (8%), 0 mismatch. By engine (agree / knife-edge / mismatch): HG 65/2/0, KMLM 61/6/0 (63 of 67
@@ -3073,8 +3078,8 @@ SOXL + SVIX) and HARV (PULS 100%, then PULS / VXZ) while Composer held its ZVOL-
 CALIBRATION. Move from Composer's decision time to the official close, in 20-session daily sigmas (13
 decisive tickers x ~60 sessions of 5-minute bars, 2026-08-06..10-29): from 15:45 median 0.08, p95 0.30,
 p99 0.49; from 15:50 p95 0.27; from 15:55 p95 0.19. Fallback radius 0.3 sigma = the 15:45 p95. Placebo
-(the logic at D against Composer's holdings from D-1, D+1, D+5 where those differ): with bars 2 of 273
-excused (mismatch 259, agree 12); fallback only, 9 of 86 (mismatch 71, agree 6). KMLM's placebo used
+(the logic at D against Composer's holdings from D-1, D+1, D+5 where those differ): with bars 2 of 271
+excused (mismatch 257, agree 12); fallback only, 9 of 88 (mismatch 73, agree 6). KMLM's placebo used
 the lenient check (an overstatement for KMLM).
 
 SIDE FINDINGS (nothing changed):
@@ -3086,8 +3091,10 @@ SIDE FINDINGS (nothing changed):
 - Composer made no rebalance attempt 2026-10-26..28 (confirmed from meta) and resumed 10-29.
 
 NOT MODELED / LIMITS:
-- Not checked: fill prices and timing, cash, and deposits (KMLM falls back to the lenient check).
-- Composer does not publish its decision time; 15:45-15:55 is what is tried.
+- Not checked: fill prices and timing, and cash. While a deposit may be in flight, KMLM falls back to the
+  lenient check; how Composer invests a deposit into a threshold symphony is not verified.
+- Composer does not publish its decision time; 15, 10 and 5 minutes before the close is what is tried.
+- With Yahoo down, sessions are dated from NYSE's 2026-27 holiday list (extend it for 2028).
 - Yahoo is the price source. A dividend or split it books before adjusting its series is repaired; one it
   never books is not.
 - The corridor's absolute reading is inferred from Composer's backtests.
@@ -3101,7 +3108,7 @@ COUNTER-AGENT (one hostile reviewer; scratchpad/shadow/review/):
   - D2: one malformed ledger line silenced the runner and left its state half-updated.
 - REFUTED and fixed, should-fix:
   - D3: the 0.5-sigma one-ticker knife-edge excused 21% of wrong pairs. Replaced by decision-time prices:
-    13 of 13 real cases, 2 of 273 wrong pairs.
+    13 of 13 real cases, 2 of 271 wrong pairs.
   - D4: the 250-close RSI warm-up was the cause of the SLEEVE 04-07 miss, not a price tie.
   - D5: the drift check saw only new version ids, and only after Yahoo.
   - D6: canonical() missed select?, sort-by?, weight-method and window-days edits, and flagged ignored
@@ -3113,7 +3120,19 @@ COUNTER-AGENT (one hostile reviewer; scratchpad/shadow/review/):
   ledger path; HARV's start date; the snapshot cut-off (now 16:00 ET).
 - Tests: 25 of its 37 mutants survived the first suite; the rewritten 70-test suite kills 55 of 55
   re-expressed mutants.
-- Round 2 (verification of the fixes): in progress.
+- Round 2 (the fixes, hostile again; scratchpad/shadow/review2/):
+  - Confirmed: D2, D4, D6 and D7 fixed; no false alarm on a normal day; the backfill reproduced exactly.
+  - Three gaps remained, now fixed:
+    - A knife-edge on a half-day (13:00 close) would have alerted as a mismatch. The decision minutes now
+      follow the session's own close.
+    - A Composer freeze during a Yahoo outage went unreported for two runs. The session is now dated from
+      the calendar.
+    - 25 of its 52 new mutants survived, including the daily wiring of D3, D5 and D8.
+  - Also fixed: deposit timing on KMLM's path; silent gaps (a symphony missing from Composer's list,
+    failing drift checks); canonical() defaults for select? and sort-by?, window re-encodings and
+    sibling-weight shares; strict ledger reads before writes; typed rows; file mode; manifest failures.
+- Round 3 was not a third review. The reviewer's half-day, deposit-flow and outage demonstrations now pass,
+  and its 52 mutants (re-expressed where the code moved) plus 6 more all fail the 98 tests.
 
 DECISION: none on symphonies. The runner joins the daily routine (POLICY standing cadence: its lines are
 relayed and pushed, never traded on).

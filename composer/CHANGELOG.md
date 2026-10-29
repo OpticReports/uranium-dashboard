@@ -606,9 +606,12 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   backtests reproduced on 1,022/1,022 era-tree sessions; live snapshots
   07-15..10-23: 243 agree / 21 knife-edge / 0 mismatch; 10-29 (first live
   run): 4/4 agree.
-- Counter-agent: two blockers (no-rebalance depended on Yahoo; a bad ledger
-  line silenced the runner) and six should-fixes, all fixed. 70 tests; 55/55
-  mutants killed. Round 2 (verification of the fixes): in progress.
+- Counter-agent, round 1: two blockers (no-rebalance depended on Yahoo; a
+  bad ledger line silenced the runner) and six should-fixes, all fixed.
+  Round 2 (the fixes): three gaps, now fixed (half-day decision minutes; a
+  freeze during a Yahoo outage; untested daily wiring), plus deposit timing
+  on KMLM's path and silent gaps. 98 tests; the reviewer's 52 mutants and 6
+  more all fail them; its half-day, deposit and outage demonstrations pass.
 - Side finding, not acted on: HARV has no HYG condition in any saved version
   despite its name (owner decision: rename or add the guard). RUNBOOK.md
   corrected.

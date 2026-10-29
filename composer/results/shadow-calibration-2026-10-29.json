@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-29T20:44:14+00:00",
+ "generated": "2026-10-29T21:23:10+00:00",
  "knife_sigma": 0.3,
  "knife_times": [
   "15:45",
@@ -2777,11 +2777,11 @@
     "agree": 4
    },
    "SLEEVE / no bars": {
-    "mismatch": 11,
+    "mismatch": 13,
     "knife-edge": 3
    },
    "SLEEVE / bars": {
-    "mismatch": 34,
+    "mismatch": 32,
     "agree": 4,
     "knife-edge": 1
    },
@@ -2798,12 +2798,12 @@
   },
   "total": {
    "bars": {
-    "mismatch": 259,
+    "mismatch": 257,
     "agree": 12,
     "knife-edge": 2
    },
    "no bars": {
-    "mismatch": 71,
+    "mismatch": 73,
     "knife-edge": 9,
     "agree": 6
    }
