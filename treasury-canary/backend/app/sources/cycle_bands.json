@@ -1,0 +1,127 @@
+{
+ "_about": "Completion-error bands for the live cycle board (SPEC v1 \u00a72.2 / \u00a72.4 of studies/cycle-nowcast-v2.md): p10/p90 of e = realized - COIN_HH(pattern) on the PRIMARY window (1990+ ex-2020; dropped-member patterns 1977+ ex-2020). Copied unedited from results.json board_bands of the ONE scored run. Final-vintage completion error only; first-print revision not included.",
+ "bands": {
+  "bridged[CMRMTSPL:1,W875RX1:1]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.18429969748364972,
+   "p90": 0.18520656326475798
+  },
+  "bridged[CMRMTSPL:1]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.11373471991064295,
+   "p90": 0.1153520442303637
+  },
+  "bridged[CMRMTSPL:2,INDPRO:1,W875RX1:1]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.25208480252693494,
+   "p90": 0.2664022248413653
+  },
+  "bridged[CMRMTSPL:2,INDPRO:1,W875RX1:2]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.3040469011537029,
+   "p90": 0.29514207946469095
+  },
+  "bridged[CMRMTSPL:2,W875RX1:1]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.20555788009587694,
+   "p90": 0.20501877573449884
+  },
+  "bridged[CMRMTSPL:2,W875RX1:2]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.25303358427453504,
+   "p90": 0.25726604252553203
+  },
+  "bridged[CMRMTSPL:2]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.11985356729432203,
+   "p90": 0.14870692786030876
+  },
+  "bridged[CMRMTSPL:3,INDPRO:1,W875RX1:1]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.2802332533394986,
+   "p90": 0.2978694638263277
+  },
+  "bridged[CMRMTSPL:3,INDPRO:1,W875RX1:2]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.2978869912563389,
+   "p90": 0.3327297227147113
+  },
+  "bridged[CMRMTSPL:3,INDPRO:1,W875RX1:3]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.3305357206782558,
+   "p90": 0.3684317020024976
+  },
+  "bridged[CMRMTSPL:3,INDPRO:2,W875RX1:2]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.34316375112091724,
+   "p90": 0.3951282950518813
+  },
+  "bridged[CMRMTSPL:3,W875RX1:1]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.24815005923851327,
+   "p90": 0.24133500036423583
+  },
+  "bridged[CMRMTSPL:3,W875RX1:2]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.2754960456711482,
+   "p90": 0.2934527403459323
+  },
+  "bridged[CMRMTSPL:3,W875RX1:3]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.2950164909110894,
+   "p90": 0.31019467572030335
+  },
+  "bridged[CMRMTSPL:3]|dropped[]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window primary_1990_ex2020",
+   "n": 427,
+   "p10": -0.13160495182769405,
+   "p90": 0.18278379030452535
+  },
+  "bridged[INDPRO:1,W875RX1:1]|dropped[CMRMTSPL]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window sens_1977_ex2020",
+   "n": 577,
+   "p10": -0.2637900423914064,
+   "p90": 0.33235004582811856
+  },
+  "bridged[INDPRO:2,W875RX1:2]|dropped[CMRMTSPL]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window sens_1977_ex2020",
+   "n": 577,
+   "p10": -0.3585780871834357,
+   "p90": 0.442270271426653
+  },
+  "bridged[W875RX1:1]|dropped[CMRMTSPL]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window sens_1977_ex2020",
+   "n": 577,
+   "p10": -0.1960851986009394,
+   "p90": 0.26156631141640196
+  },
+  "bridged[]|dropped[CMRMTSPL]|skipped[]": {
+   "basis": "completion error only, final-vintage data; first-print revision not included (v1 \u00a72.2); window sens_1977_ex2020",
+   "n": 577,
+   "p10": -0.1240942956437728,
+   "p90": 0.20611917546744504
+  }
+ },
+ "source": {
+  "file": "studies/cycle_nowcast_v2/results.correction-1.json",
+  "freeze_sha256": "641093896892f582ccffcf666b78fe0f851ac9df81c58a8e4c9b0dbb9ccc50fb",
+  "generated": "2026-10-28T16:26:13Z",
+  "results_sha256": "f6e9fdf735feeb59be44b81dcfc3e6b1c6e36ba2c76d42ef0e421bb4d1a82802",
+  "run_id": "1eac4c97b022bd6786f3f91613806c78373c9427ae47a5261864ea0384708037",
+  "supersedes": "results.json (run_id 79fcb272..., sha256 8bfc1b04..., identical board_bands; commit 168aafe1)"
+ }
+}

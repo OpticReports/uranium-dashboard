@@ -105,11 +105,28 @@ def test_gate_empty_series_raises_not_partial_board():
             business_cycle.compute(raw_override=broken)
 
 
-def test_gate_nowcast_bails_on_stale_bridge_inputs():
-    """A bridge series staler than its trained lag (e.g. CMRMTSPL 3 months
-    behind payrolls) must yield nowcast=None, not a silently-shifted value."""
-    stale = {**FIX, "CMRMTSPL": [p for p in FIX["CMRMTSPL"] if p[0] < "2026-05-01"]}
-    assert business_cycle.compute(raw_override=stale)["nowcast"] is None
+def test_gate_nowcast_v2_issues_at_any_lag_and_drops_at_four():
+    """cycle-nowcast-v2 (scored 2026-10-28): a bridge series staler than the
+    canonical lag no longer kills the reading - it is bridged at its actual
+    lag (1..3) and flagged; at lag >= 4 the member is DROPPED and re-meaned
+    with the drop named (v1 §2.4). Every None carries a reason."""
+    stale3 = {**FIX, "CMRMTSPL": [p for p in FIX["CMRMTSPL"] if p[0] < "2026-05-01"]}
+    nc = business_cycle.compute(raw_override=stale3)["nowcast"]
+    assert nc["value"] is not None and nc["reason"] is None
+    assert nc["lags"]["CMRMTSPL"] == 3 and nc["flags"]["lag_ge3"] == ["CMRMTSPL"]
+    assert nc["dropped"] == []
+    stale4 = {**FIX, "CMRMTSPL": [p for p in FIX["CMRMTSPL"] if p[0] < "2026-04-01"]}
+    nc4 = business_cycle.compute(raw_override=stale4)["nowcast"]
+    assert nc4["value"] is not None and nc4["dropped"] == ["CMRMTSPL"]
+    assert nc4["lags"]["CMRMTSPL"] == 4
+    # a member absent from the state -> no reading, with a reason (never a silent None)
+    nc_abs = business_cycle.nowcast({**FIX_M(), "ICSA": {}}, [], [])
+    assert nc_abs["value"] is None and "claims half unavailable" in nc_abs["reason"]
+
+
+def FIX_M():
+    """the monthly dicts the board holds (same collapse as _fetch_all)."""
+    return business_cycle._fetch_all(FIX)
 
 
 def test_gate_partial_month_invariance():
@@ -125,20 +142,128 @@ def test_gate_partial_month_invariance():
     assert b2["nowcast"]["value"] == b["nowcast"]["value"]
 
 
-def test_gate_nowcast_reproduces_study_spec():
-    """ENS_BC nowcast on the frozen fixture must reproduce the walk-forward
-    study's live values (spec 2026-08-07: bridge -0.347, claims -0.429,
-    ens -0.388, target 2026-07, phase STALL)."""
+def test_gate_nowcast_reproduces_scored_study():
+    """The live reading on the frozen F1 fixture (2026-08-07) must equal the
+    study engine's issue() on the same fixture (cycle_engine.issue, scoring
+    mode, bands from the scored run): ENS_HH -0.332 = 0.5*(-0.347) +
+    0.5*(-0.318) at IS-A for 2026-07, lags INDPRO 1 / W875RX1 1 / CMRMTSPL 2,
+    rows through K = 2026-05, phase STALL. Pinned 2026-10-28."""
     nc = board()["nowcast"]
-    assert nc is not None
-    assert nc["month"] == "2026-07"
-    # tight bounds (QA: the old +/-0.11 bounds let a silent lag-mismatch
-    # output of -0.336 pass; deterministic fixture warrants +/-0.05)
-    assert -0.45 <= nc["value"] <= -0.35, nc
-    assert -0.40 <= nc["bridge"] <= -0.30, nc
-    assert -0.50 <= nc["claims"] <= -0.40, nc
-    assert nc["phase"] == "STALL"
-    assert nc["claims_trigger"] is False
+    assert nc["month"] == "2026-07" and nc["info_set"] == "A" and nc["K"] == "2026-05"
+    assert nc["lags"] == {"PAYEMS": 0, "INDPRO": 1, "W875RX1": 1, "CMRMTSPL": 2}
+    assert abs(nc["value"] - (-0.332)) <= 0.002, nc
+    assert abs(nc["bridge"] - (-0.347)) <= 0.002, nc
+    assert abs(nc["claims"] - (-0.318)) <= 0.002, nc
+    assert nc["phase"] == "STALL" and nc["claims_trigger"] is False
+    assert nc["reason"] is None and nc["dropped"] == []
+    # the study's own engine agrees to the rounding (byte-identical module)
+    from app.sources import cycle_engine as CE
+    out = CE.issue(FIX_M(), d="2026-08-07", mode="scoring", bands=business_cycle.BANDS)
+    assert round(out["ens_hh"], 3) == nc["value"]
+    assert nc["stats"]["lagsim_rmse_vs_pers_pct_full"] == -29.9
+    assert nc["stats"]["comparator_r_ens_over_ads_ex2020"] == 0.713
+
+
+def test_gate_vendored_engine_is_byte_identical_to_the_study_engine():
+    """backend/app/sources/cycle_engine.py IS studies/cycle_nowcast_v2/engine.py
+    (the module the scored run used); any edit must land in both."""
+    here = os.path.dirname(__file__)
+    vend = os.path.join(here, "..", "app", "sources", "cycle_engine.py")
+    study = os.path.join(here, "..", "..", "studies", "cycle_nowcast_v2", "engine.py")
+    if not os.path.exists(study):
+        import pytest
+        pytest.skip("study directory not present (container build)")
+    assert open(vend, "rb").read() == open(study, "rb").read()
+
+
+def test_gate_bands_are_the_scored_runs_board_bands():
+    """cycle_bands.json = results.json board_bands of the ONE scored run,
+    unedited, with the results file's sha256 recorded."""
+    import hashlib
+    here = os.path.dirname(__file__)
+    bands_file = os.path.join(here, "..", "app", "sources", "cycle_bands.json")
+    doc = json.load(open(bands_file))
+    assert len(doc["bands"]) == 19 and business_cycle.BANDS == doc["bands"]
+    for v in doc["bands"].values():
+        assert v["p10"] < 0 < v["p90"] and v["n"] >= 24
+    res = os.path.join(here, "..", "..", "studies", "cycle_nowcast_v2", "results.correction-1.json")
+    if os.path.exists(res):
+        assert hashlib.sha256(open(res, "rb").read()).hexdigest() == doc["source"]["results_sha256"]
+        R = json.load(open(res))
+        assert R["board_bands"] == doc["bands"] and R["run_id"] == doc["source"]["run_id"]
+
+
+def test_gate_completed_headline_with_band():
+    """D-2 (PASS): the bridge-completed coincident for the headline month is
+    served beside the partial mean, with its p10/p90 completion band. On F1
+    the axis ends 2026-06 (INDPRO month); CMRMTSPL lags one month, so the
+    headline completion is completed_prev = COIN_HH(2026-06 | CMRMTSPL:1) =
+    -0.322, band [-0.436, -0.207]; the 3-of-4 partial mean is -0.486 and
+    remains the phase/alert quantity."""
+    b = board()
+    c = b["completed"]
+    assert c["month"] == b["current"]["month"] == "2026-06" and c["source"] == "completed_prev"
+    assert abs(c["value"] - (-0.322)) <= 0.002 and c["pattern"] == {"CMRMTSPL": 1}
+    lo, hi = c["band"]
+    assert abs(lo - (-0.436)) <= 0.002 and abs(hi - (-0.207)) <= 0.002
+    assert lo < c["value"] < hi
+    assert b["current"]["coincident_completed"] == c["value"]
+    assert b["current"]["completed_band"] == c["band"]
+    assert b["current"]["coincident"] == -0.486          # partial, unchanged
+    assert b["current"]["phase"] == business_cycle.phase_of(b["current"]["coincident"], b["current"]["leading"])
+    assert "Completed coincident for 2026-06: -0.32" in b["read"]["completed"]
+    assert "80% band -0.44 to -0.21" in b["read"]["completed"]
+    # band basis is the honest one
+    assert "completion error only" in c["band_basis"]
+
+
+def test_gate_piger_line_rule_and_units():
+    """Chauvet-Piger cross-check: FRED RECPROUSM156N is in PERCENT; the 3x80%
+    / 3x20% rule is evaluated on the last three months of the vintage in hand;
+    unavailable -> None (never a fake zero)."""
+    assert board()["piger"] is None                       # not in the frozen fixture
+    mk = lambda tail: {"RECPROUSM156N": [("2026-0%d-01" % i, v) for i, v in zip((4, 5, 6, 7, 8), tail)]}
+    p = business_cycle.piger_line({**FIX, **mk([0.5, 0.7, 0.9, 0.8, 0.62])})
+    assert p["month"] == "2026-08" and p["pct"] == 0.62 and p["state_3x80"] == "expansion-declared"
+    assert p["fires_1m50"] is False and len(p["last3"]) == 3
+    p2 = business_cycle.piger_line({**FIX, **mk([5, 40, 85, 97, 99])})
+    assert p2["state_3x80"] == "recession-declared" and p2["fires_1m50"] is True
+    p3 = business_cycle.piger_line({**FIX, **mk([5, 40, 85, 15, 99])})
+    assert p3["state_3x80"] == "undeclared"
+    b = business_cycle.compute(raw_override={**FIX, **mk([0.5, 0.7, 0.9, 0.8, 0.62])})
+    assert "0.6% for 2026-08" in b["read"]["piger"] and "never declared 2020" in b["read"]["piger"]
+
+
+def test_gate_umcsent_delay_flag():
+    """Q11: UMCSENT's FRED delay is flagged when it trails the headline month
+    by two or more months (one month is the normal lag)."""
+    assert board()["flags"]["umcsent_delayed"] is False
+    late = {**FIX, "UMCSENT": [p for p in FIX["UMCSENT"] if p[0] < "2026-05-01"]}
+    b = business_cycle.compute(raw_override=late)
+    assert b["flags"] == {"umcsent_month": "2026-04", "umcsent_lag_months": 2, "umcsent_delayed": True}
+    assert "2 months behind" in b["read"]["flags"]
+
+
+def test_gate_phase_change_quiet_rebaseline_inside_revision_band(tmp_path, monkeypatch):
+    """Backlog item 9: EXPANSION<->STALL flips at |coin| < 0.46 (the p90 edge
+    error, where the label flips ~1-in-3 on revision) re-baseline QUIETLY:
+    no event, no 8-hour candidate; every other transition is unchanged."""
+    monkeypatch.setattr(business_cycle.settings, "cache_dir", str(tmp_path))
+    b = board()
+    mk = lambda ph, coin: {**b, "current": {**b["current"], "phase": ph, "coincident": coin}}
+    assert business_cycle.phase_change(mk("STALL", -0.2)) is None       # baseline
+    assert business_cycle.phase_change(mk("EXPANSION", 0.1)) is None    # quiet
+    st = json.load(open(os.path.join(str(tmp_path), "cycle_phase.json")))
+    assert st["phase"] == "EXPANSION" and st.get("quiet_rebaseline") == "STALL" and "candidate" not in st
+    # the same flip OUTSIDE the band is a real candidate that fires after confirmation
+    assert business_cycle.phase_change(mk("STALL", -0.6)) is None
+    _backdate_candidate(tmp_path)
+    msg = business_cycle.phase_change(mk("STALL", -0.6))
+    assert msg and "EXPANSION -> STALL" in msg
+    # CONTRACTION is never quiet, whatever the level
+    assert business_cycle.phase_change(mk("CONTRACTION", -0.8)) is None
+    _backdate_candidate(tmp_path)
+    assert "STALL -> CONTRACTION" in business_cycle.phase_change(mk("CONTRACTION", -0.8))
 
 
 def test_gate_realtime_block_and_provisional_rule():
@@ -232,4 +357,12 @@ def test_gate_read_box_every_phase_is_self_consistent():
         if phase == "LATE_CYCLE":
             assert "EXPANSION needs the leading line to rise" in rd["next"]
     assert seen == {"CONTRACTION", "SLOWDOWN", "STALL", "LATE_CYCLE", "EXPANSION"}
-    assert "No nowcast at the moment" in rd["nowcast"]
+    assert rd["nowcast"] == "No nowcast: the engine did not run."      # nc=None path
+    # v2: a reading that exists names its information set and lags; one that does
+    # not carries the engine's reason (v1 §2.4), never a bare None
+    rd2 = business_cycle.build_read(cur, False, comps, stats, board()["nowcast"])
+    assert "information set A" in rd2["nowcast"] and "CMRMTSPL 2" in rd2["nowcast"]
+    rd3 = business_cycle.build_read(cur, False, comps, stats,
+                                    {"month": "2026-07", "value": None, "reason": "claims half unavailable: x",
+                                     "lags": {"PAYEMS": 0, "INDPRO": 1, "W875RX1": 1, "CMRMTSPL": 2}})
+    assert rd3["nowcast"].startswith("No nowcast for 2026-07: claims half unavailable: x")

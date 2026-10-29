@@ -1,0 +1,124 @@
+[
+ {
+  "comparisons": [
+   {
+    "changed_examples": [],
+    "current_file": "T10Y3M.csv",
+    "current_header": [
+     "observation_date",
+     "T10Y3M"
+    ],
+    "max_abs_change": 0.0,
+    "n_changed": 0,
+    "n_common": 8017,
+    "n_current": 11201,
+    "n_vintage": 8017,
+    "series": "T10Y3M",
+    "unrevised": true,
+    "vintage_date": "2014-01-27",
+    "vintage_sha256": "ee78ae7c2df839a3f5d2f2614a4df68e242b6472ff5af15717ad08a3daff5cb2",
+    "which": "earliest_listed"
+   },
+   {
+    "changed_examples": [],
+    "current_file": "T10Y3M.csv",
+    "current_header": [
+     "observation_date",
+     "T10Y3M"
+    ],
+    "max_abs_change": 0.0,
+    "n_changed": 0,
+    "n_common": 11002,
+    "n_current": 11201,
+    "n_vintage": 11002,
+    "series": "T10Y3M",
+    "unrevised": true,
+    "vintage_date": "2026-01-02",
+    "vintage_sha256": "a1ccc6f183f4952b941ad35c032e31cb07d31986ee5d259f145b0b7354f7930b",
+    "which": "earliest_2026"
+   },
+   {
+    "changed_examples": [],
+    "current_file": "T10Y3M.csv",
+    "current_header": [
+     "observation_date",
+     "T10Y3M"
+    ],
+    "max_abs_change": 0.0,
+    "n_changed": 0,
+    "n_common": 11201,
+    "n_current": 11201,
+    "n_vintage": 11201,
+    "series": "T10Y3M",
+    "unrevised": true,
+    "vintage_date": "2026-10-19",
+    "vintage_sha256": "8a1a89b6b0f9c6e43efd84a4c8c6de1b365bb54fe5e0613d3dda1298ddc75bae",
+    "which": "latest_2026_cached"
+   }
+  ],
+  "n_changed_total": 0,
+  "series": "T10Y3M",
+  "unrevised": true
+ },
+ {
+  "comparisons": [
+   {
+    "changed_examples": [],
+    "current_file": "BAA10YM.csv",
+    "current_header": [
+     "observation_date",
+     "BAA10YM"
+    ],
+    "max_abs_change": 0.0,
+    "n_changed": 0,
+    "n_common": 733,
+    "n_current": 882,
+    "n_vintage": 733,
+    "series": "BAA10YM",
+    "unrevised": true,
+    "vintage_date": "2014-05-16",
+    "vintage_sha256": "43f342bdf760d303ed4e3357ade4a23ffed1299fd1031706bf9b33c4b5b667f2",
+    "which": "earliest_listed"
+   },
+   {
+    "changed_examples": [],
+    "current_file": "BAA10YM.csv",
+    "current_header": [
+     "observation_date",
+     "BAA10YM"
+    ],
+    "max_abs_change": 0.0,
+    "n_changed": 0,
+    "n_common": 873,
+    "n_current": 882,
+    "n_vintage": 873,
+    "series": "BAA10YM",
+    "unrevised": true,
+    "vintage_date": "2026-01-02",
+    "vintage_sha256": "b5a6a7d24f1c43de8953d4922114548652d31905f310016089816e5b87af247a",
+    "which": "earliest_2026"
+   },
+   {
+    "changed_examples": [],
+    "current_file": "BAA10YM.csv",
+    "current_header": [
+     "observation_date",
+     "BAA10YM"
+    ],
+    "max_abs_change": 0.0,
+    "n_changed": 0,
+    "n_common": 882,
+    "n_current": 882,
+    "n_vintage": 882,
+    "series": "BAA10YM",
+    "unrevised": true,
+    "vintage_date": "2026-10-01",
+    "vintage_sha256": "fbf9fe2e9eb56f2368217a2d3b0267c3c88b56b12474c0c296dafed0dc564ffc",
+    "which": "latest_2026_cached"
+   }
+  ],
+  "n_changed_total": 0,
+  "series": "BAA10YM",
+  "unrevised": true
+ }
+]

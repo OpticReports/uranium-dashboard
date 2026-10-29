@@ -1,0 +1,2760 @@
+{
+ "study": "cycle nowcast v2 — stage B1 gate report",
+ "spec": "studies/cycle-nowcast-v2.md SPEC v1 §7.1 (reproduction gate, scoring-mode delta row), §2.3 identities, §7.2 engine gates (F3/F4)",
+ "date": "2026-10-20",
+ "scored": false,
+ "scoring_statement": "No v2 metric (ENS_HH / CLAIMS_HH / completion-error band) was aggregated over the evaluation window on any fixture; the named gate rows above are the only metric computations.",
+ "modes": {
+  "reproduction": "bridge rows t < M; CLAIMS rows t ≤ M−1 incl. partial targets; selector errors through M−1",
+  "scoring": "bridge rows t ≤ M−L (D1); CLAIMS rows t ≤ K(d) and complete targets (D2/D6); selector errors through M−2 (D3)"
+ },
+ "fixtures": {
+  "F1": {
+   "path": "backend/tests/fixtures_cycle_fred.json",
+   "sha256": "6a342c0aa223c6c267de0a2bd729d5dd1d77fb5c74f0712b6ebeaffb4e9ed541"
+  },
+  "F3": {
+   "dir": "studies/cycle_nowcast_v2/data/fred_2026-10-20",
+   "sha256": {
+    "AWHMAN.csv": "10e14acf1b3a3ab537d5d4dce08ffded160acc752a79d5a3698f8db0ca9e65a1",
+    "BAA10YM.csv": "19f3a0dc9825dfa5714a911f1f68040b86f402f0a96fea91496da80889ab55b4",
+    "CMRMT.csv": "b0be58a594ec382c29d7a074915b73505bd41707c6d606380d6e0a7524adb74d",
+    "CMRMTSPL.csv": "c84bd6dc387d54f20fc125e77380a44562b8a50f2cb47e623e46f663b6537e0f",
+    "GS10.csv": "40323f225e613a19a4eec7eef20523dec10764de21c70cd1416a7379fb7f13b6",
+    "HMRMT.csv": "92f7ea1753f89cd9ee97019fbf51dd9b4426a85b54501e94f625a9f9b943866a",
+    "ICSA.csv": "2b1eb1b4a5f5bf48779bffa43197db6e657349964bd7634c468b5ddf1e26b72d",
+    "INDPRO.csv": "0fc53a503386efaf83f17cf0cc6d77b3980830a91c9dfa9ebab97b4cf1aa5feb",
+    "PAYEMS.csv": "c8c429818ed73de6db985f4ff565d64bd2a5ba66a6b651b39373a1532924fc0e",
+    "PERMIT.csv": "216dcf040c76d9a4bec4198083891fcdf50530d93217662886d1b8bb6bf1ffe8",
+    "RECPROUSM156N.csv": "e372f9c471adda60185a76ab829bb9de137677491aee2977d432966f745ed61e",
+    "T10Y3M.csv": "d16594e5fdf89ea462c506a46f8e907bd752ceab7c1bc6403f582a0170328393",
+    "TB3MS.csv": "631bc444a8c5370c3a2df12f484a67ae7b9a68c00fe8a33215895fb49c8cc08c",
+    "UMCSENT.csv": "27ce18aeda2ab875e799cf856913f95330bb6013fe75d8358c63a6f0c02a8e95",
+    "USREC.csv": "a42a3581fe9c260dd3627febc84a7d563e5ed162cc7085a7518ebde99dc3c3b4",
+    "W875RC1.csv": "74e310822a455a17e3da3511d0fbf817f5c16acaf492e99ae0fb978ae2f38ce6",
+    "W875RX1.csv": "fa12b2e42b79f1bdcf5604403a828459ec9d4d5fd137c38058ffc968e440386a",
+    "multi_series.csv": "0d2fd097bd2311b16aaf05ec6d27f8fec82871c490875714bb09b4130cd854cd"
+   }
+  },
+  "F4": {
+   "dir": "studies/cycle_nowcast_v2/data/alfred_shutdown",
+   "sha256": {
+    "alf_CMRMTSPL_2025-11-20.csv": "3037129462a4cc4a6ddd1970ca9ed5a0014017137fcd6e1b677fd152476556e2",
+    "alf_CMRMTSPL_2025-12-16.csv": "82ad01aaf63a6bccd49c92427396478b994989796f80bbf5f71d469c59946fb5",
+    "alf_CMRMTSPL_2026-01-09.csv": "189c2295bc52610ebe4a6353ae6f90f60382e46b39883c42f9f352c018b64357",
+    "alf_CMRMTSPL_2026-02-06.csv": "cd4b686b34711fc4a64871ec5df8137b790f92650698b244b29780b9f7cc7299",
+    "alf_ICNSA_2026-01-09.csv": "acf65ef7bde76b96ee1e66f3e4521fe980c397c44404bb4c18aeef630a70bffb",
+    "alf_ICSA_2025-11-20.csv": "dc42a4a6a184cd6d7018ff145291442a0abcba106895afc11f52c20570332db5",
+    "alf_ICSA_2025-12-11.csv": "cd0515896159d2efe92461deb92d104190060d2ba2646823196ab19c201199cf",
+    "alf_ICSA_2026-01-09.csv": "0d5309d58a9ce67382d7787a8ac50f20edd1c64907795f974b685aef4340cc2f",
+    "alf_ICSA_2026-02-05.csv": "ca4d9c513eaaaf79ec6b3bff86c17e15f45737f2fc12df8f4853a81105e64cbd",
+    "alf_INDPRO_2025-11-20.csv": "f3ed61d59622a4df598b217594a87a47f46d47c3370ee2f1a4731c7cee05b782",
+    "alf_INDPRO_2025-12-16.csv": "9c490e0fa4b09d078cf960b3d933d907eb61befe4dd6364697bed43ac9c7df9a",
+    "alf_INDPRO_2026-01-09.csv": "1904361fc2bc40ef8b2bcc5649d76c015e3ff14e6d2526ddec7895af92c98ce5",
+    "alf_INDPRO_2026-02-06.csv": "842d7e28885d2b1b7307796d99bce000757655fab9807657c8ff0e754f728178",
+    "alf_PAYEMS_2025-11-20.csv": "bc0b00fa1f18e963ab24a9a1b4b428fcf0e90b2185d093de529c788e25555e8d",
+    "alf_PAYEMS_2025-12-16.csv": "c449c146f4e381de6199f27ccd9a742a4a3210e924f936333f74af68885b1281",
+    "alf_PAYEMS_2026-01-09.csv": "f1d37befcb87530f1c964152693b063700d890ebd90626e3f7b99d7af6cb1790",
+    "alf_PAYEMS_2026-02-06.csv": "85bd4ee4c257c0ac868abff250cd2c214dbc51d00d2e75fb6aad4a6edfe295a9",
+    "alf_T10Y3M_2026-01-09.csv": "8f4e85dc225d13de1f896940c46f747a8e2cf7a69e993810b2136efe7ed0e662",
+    "alf_UMCSENT_2026-01-09.csv": "cf6522e57434fb2913cbae61a8834d215097e2840d8797e5f202f63e517d3d28",
+    "alf_UMCSENT_2026-02-06.csv": "1438ec2eb9333a7a584e36d55a9bd8374d91ddce3eea86a5cb216ca8457e2683",
+    "alf_W875RX1_2025-11-20.csv": "543119a0c9636c6d1d4600b5a4939becea075e5994652e45a5c102238e097c10",
+    "alf_W875RX1_2025-12-16.csv": "fce0b29f89f34c9095865e971dd397a5ac895782a1c95bb1e87c32d2fb05c7a0",
+    "alf_W875RX1_2026-01-09.csv": "202d84c72258f0adaa63520f87449124eba7a82943c995d920ff25161814cc4a",
+    "alf_W875RX1_2026-02-06.csv": "19088fdec3f6d9c3c954d42c21294586a155529e4bd60aaf0f069bc069b50cab"
+   }
+  },
+  "spec_json": {
+   "path": "backend/app/sources/cycle_nowcast_spec.json",
+   "sha256": "119df679379a55bdf3fb21e3fdc875f11720248a7e875f5370b6e41e9646df35"
+  }
+ },
+ "summary": {
+  "PASS": 97,
+  "FAIL": 6,
+  "INFO": 16,
+  "NOT_RUN": 1,
+  "n_rows": 120,
+  "hard_fail_ids": [
+   "G04",
+   "S01_claims",
+   "S01_ens",
+   "S04"
+  ],
+  "soft_fail_ids": [
+   "Q01",
+   "Q04"
+  ],
+  "deployed_module_imported": true
+ },
+ "rows": [
+  {
+   "id": "W01",
+   "section": "F1_reproduction",
+   "quantity": "eval window n (targets 1972-01..2026-06)",
+   "computed": 654,
+   "target": 654,
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "first": "1972-01",
+    "last": "2026-06"
+   }
+  },
+  {
+   "id": "W02",
+   "section": "F1_reproduction",
+   "quantity": "eval window n 1990-01+",
+   "computed": 438,
+   "target": 438,
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "W03",
+   "section": "F1_reproduction",
+   "quantity": "first COIN month (1959 start, 120 warm-up)",
+   "computed": "1969-06",
+   "target": "1969-06",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §1"
+  },
+  {
+   "id": "W04",
+   "section": "F1_reproduction",
+   "quantity": "realized COIN 2026-06 (3-member partial on F1)",
+   "computed": -0.49166,
+   "target": -0.4917,
+   "tolerance": 0.0005,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §1 row 1 (−0.4917; doc −0.492)"
+  },
+  {
+   "id": "W05",
+   "section": "F1_reproduction",
+   "quantity": "PAYEMS-only partial COIN 2026-07",
+   "computed": -0.448451,
+   "target": -0.4485,
+   "tolerance": 0.0005,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "verify_R1 F1 (−0.4485; doc −0.448)"
+  },
+  {
+   "id": "W06",
+   "section": "F1_reproduction",
+   "quantity": "NBER onsets from USREC (1972-01+)",
+   "computed": [
+    "1973-12",
+    "1980-02",
+    "1981-08",
+    "1990-08",
+    "2001-04",
+    "2008-01",
+    "2020-03"
+   ],
+   "target": [
+    "1973-12",
+    "1980-02",
+    "1981-08",
+    "1990-08",
+    "2001-04",
+    "2008-01",
+    "2020-03"
+   ],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §1"
+  },
+  {
+   "id": "P01",
+   "section": "F1_reproduction",
+   "quantity": "PERS RMSE full",
+   "computed": 0.467416,
+   "target": 0.4674,
+   "tolerance": 0.0001,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "P02",
+   "section": "F1_reproduction",
+   "quantity": "PERS RMSE 1990+",
+   "computed": 0.531598,
+   "target": 0.5316,
+   "tolerance": 0.0001,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "P03",
+   "section": "F1_reproduction",
+   "quantity": "PERS RMSE ex-2020 (population; n−1 would be 0.2582)",
+   "computed": 0.258044,
+   "target": 0.258,
+   "tolerance": 0.0001,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "n_ex2020": 642,
+    "n_minus_1_form": 0.258245
+   }
+  },
+  {
+   "id": "P04",
+   "section": "F1_reproduction",
+   "quantity": "PERS phase accuracy %",
+   "computed": 82.569,
+   "target": 82.6,
+   "tolerance": 0.1,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "accuracy_pct": 82.56880733944953,
+    "hits": 540,
+    "n": 654
+   }
+  },
+  {
+   "id": "P05",
+   "section": "F1_reproduction",
+   "quantity": "realized transitions full",
+   "computed": 114,
+   "target": 114,
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "P06",
+   "section": "F1_reproduction",
+   "quantity": "realized transitions 1990+",
+   "computed": 75,
+   "target": 75,
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "P07",
+   "section": "F1_reproduction",
+   "quantity": "realized −0.75 crossing months (window [onset−6, onset+12])",
+   "computed": [
+    "1974-01",
+    "1979-09",
+    "1981-11",
+    "1990-09",
+    "2001-03",
+    "2008-02",
+    "2020-03"
+   ],
+   "target": [
+    "1974-01",
+    "1979-09",
+    "1981-11",
+    "1990-09",
+    "2001-03",
+    "2008-02",
+    "2020-03"
+   ],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "B01",
+   "section": "F1_reproduction",
+   "quantity": "BRIDGE RMSE full",
+   "computed": 0.334581,
+   "target": 0.3348,
+   "tolerance": 0.002,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "n_nan": 0,
+    "note": "1977-06/07: CMRMTSPL L2 history < 120 → skipped and re-meaned (v1 §2.2)"
+   }
+  },
+  {
+   "id": "B02",
+   "section": "F1_reproduction",
+   "quantity": "BRIDGE RMSE 1990+",
+   "computed": 0.365648,
+   "target": 0.3656,
+   "tolerance": 0.002,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "B03",
+   "section": "F1_reproduction",
+   "quantity": "BRIDGE live 2026-07",
+   "computed": -0.346864,
+   "target": -0.347,
+   "tolerance": 0.002,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "INDPRO": {
+     "n": 803,
+     "coef": [
+      -0.0016782,
+      0.7448147,
+      0.4465418
+     ]
+    },
+    "W875RX1": {
+     "n": 803,
+     "coef": [
+      0.0045349,
+      0.7025804,
+      0.2379391
+     ]
+    },
+    "CMRMTSPL": {
+     "n": 705,
+     "coef": [
+      0.0042636,
+      0.5146865,
+      0.522979
+     ]
+    }
+   }
+  },
+  {
+   "id": "B04_INDPRO",
+   "section": "F1_reproduction",
+   "quantity": "BRIDGE INDPRO full-history coefficients vs spec (max |Δ|)",
+   "computed": 0.0,
+   "target": 0,
+   "tolerance": 1e-06,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "cycle_nowcast_spec.json",
+   "detail": {
+    "n": 803,
+    "spec_n": 803
+   }
+  },
+  {
+   "id": "B04_W875RX1",
+   "section": "F1_reproduction",
+   "quantity": "BRIDGE W875RX1 full-history coefficients vs spec (max |Δ|)",
+   "computed": 0.0,
+   "target": 0,
+   "tolerance": 1e-06,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "cycle_nowcast_spec.json",
+   "detail": {
+    "n": 803,
+    "spec_n": 803
+   }
+  },
+  {
+   "id": "B04_CMRMTSPL",
+   "section": "F1_reproduction",
+   "quantity": "BRIDGE CMRMTSPL full-history coefficients vs spec (max |Δ|)",
+   "computed": 0.0,
+   "target": 0,
+   "tolerance": 1e-06,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "cycle_nowcast_spec.json",
+   "detail": {
+    "n": 705,
+    "spec_n": 705
+   }
+  },
+  {
+   "id": "C01",
+   "section": "F1_reproduction",
+   "quantity": "CLAIMS (expanding-z, original form) RMSE full",
+   "computed": 0.392998,
+   "target": 0.393,
+   "tolerance": 0.003,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "rmse_1990": 0.438348,
+    "fallback_months": 92
+   }
+  },
+  {
+   "id": "C02",
+   "section": "F1_reproduction",
+   "quantity": "CLAIMS live 2026-07 (walk-forward fit rows t ≤ 2026-06)",
+   "computed": -0.429033,
+   "target": -0.429,
+   "tolerance": 0.003,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "n_fit": 586,
+    "coef": [
+     -0.0618369,
+     0.7609553,
+     0.1231617,
+     0.1178177,
+     -0.0189625
+    ]
+   }
+  },
+  {
+   "id": "C03",
+   "section": "F1_reproduction",
+   "quantity": "CLAIMS full-history coefficients vs spec (max |Δ|, rows t ≤ 2026-07 incl. partial targets)",
+   "computed": 0.0,
+   "target": 0,
+   "tolerance": 0.001,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "coef": [
+     -0.0618642,
+     0.7609849,
+     0.1231412,
+     0.1178304,
+     -0.0189434
+    ],
+    "spec": [
+     -0.0618642,
+     0.7609849,
+     0.1231412,
+     0.1178304,
+     -0.0189434
+    ],
+    "rows": [
+     "1977-09",
+     "2026-07"
+    ]
+   }
+  },
+  {
+   "id": "C04",
+   "section": "F1_reproduction",
+   "quantity": "CLAIMS n (full-history fit incl. 2026-06 3-member and 2026-07 PAYEMS-only partial rows)",
+   "computed": 587,
+   "target": 587,
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode) / verify_R1 F9"
+  },
+  {
+   "id": "C05",
+   "section": "F1_reproduction",
+   "quantity": "CLAIMS live with spec coefficients on the same features",
+   "computed": -0.429089,
+   "target": -0.429,
+   "tolerance": 0.003,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "E01",
+   "section": "F1_reproduction",
+   "quantity": "ENS_BC RMSE full",
+   "computed": 0.334102,
+   "target": 0.3344,
+   "tolerance": 0.002,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "E02",
+   "section": "F1_reproduction",
+   "quantity": "ENS_BC RMSE 1990+",
+   "computed": 0.369199,
+   "target": 0.3692,
+   "tolerance": 0.002,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "E03",
+   "section": "F1_reproduction",
+   "quantity": "ENS_BC RMSE ex-2020",
+   "computed": 0.220028,
+   "target": 0.2202,
+   "tolerance": 0.002,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "E04",
+   "section": "F1_reproduction",
+   "quantity": "ENS_BC directional accuracy % (realized COIN(M−1) both sides, ties wrong)",
+   "computed": 69.725,
+   "target": 69.8,
+   "tolerance": 0.5,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode); v1 §1 A8",
+   "detail": {
+    "accuracy_pct": 69.72477064220183,
+    "hits": 456,
+    "ties": 0,
+    "n": 654
+   }
+  },
+  {
+   "id": "E05",
+   "section": "F1_reproduction",
+   "quantity": "ENS_BC phase accuracy %",
+   "computed": 83.792,
+   "target": 83.8,
+   "tolerance": 0.3,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "accuracy_pct": 83.79204892966361,
+    "hits": 548,
+    "n": 654
+   }
+  },
+  {
+   "id": "E06",
+   "section": "F1_reproduction",
+   "quantity": "ENS_BC transitions called / realized",
+   "computed": [
+    29,
+    114
+   ],
+   "target": [
+    29,
+    114
+   ],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "E07",
+   "section": "F1_reproduction",
+   "quantity": "ENS_BC DM vs PERS (NW-6 Bartlett)",
+   "computed": -1.6335,
+   "target": -1.63,
+   "tolerance": 0.1,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode); v1 §1 F08",
+   "detail": {
+    "n": 654,
+    "mean_d": -0.10685383820466747,
+    "se": 0.06541508828245933
+   }
+  },
+  {
+   "id": "E08",
+   "section": "F1_reproduction",
+   "quantity": "ENS_BC DM ex-2020",
+   "computed": -5.3379,
+   "target": -5.33,
+   "tolerance": 0.3,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "n": 642
+   }
+  },
+  {
+   "id": "E09",
+   "section": "F1_reproduction",
+   "quantity": "ENS_BC onset crossing months",
+   "computed": [
+    "1974-03",
+    "1979-10",
+    "1981-06",
+    "1990-10",
+    "2001-03",
+    "2008-03",
+    "2020-03"
+   ],
+   "target": [
+    "1974-03",
+    "1979-10",
+    "1981-06",
+    "1990-10",
+    "2001-03",
+    "2008-03",
+    "2020-03"
+   ],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "rows": [
+     {
+      "onset": "1973-12",
+      "realized_cross": "1974-01",
+      "nowcast_cross": "1974-03",
+      "calendar_advantage_months": -1,
+      "class": "later"
+     },
+     {
+      "onset": "1980-02",
+      "realized_cross": "1979-09",
+      "nowcast_cross": "1979-10",
+      "calendar_advantage_months": 0,
+      "class": "tie"
+     },
+     {
+      "onset": "1981-08",
+      "realized_cross": "1981-11",
+      "nowcast_cross": "1981-06",
+      "calendar_advantage_months": 6,
+      "class": "earlier"
+     },
+     {
+      "onset": "1990-08",
+      "realized_cross": "1990-09",
+      "nowcast_cross": "1990-10",
+      "calendar_advantage_months": 0,
+      "class": "tie"
+     },
+     {
+      "onset": "2001-04",
+      "realized_cross": "2001-03",
+      "nowcast_cross": "2001-03",
+      "calendar_advantage_months": 1,
+      "class": "earlier"
+     },
+     {
+      "onset": "2008-01",
+      "realized_cross": "2008-02",
+      "nowcast_cross": "2008-03",
+      "calendar_advantage_months": 0,
+      "class": "tie"
+     },
+     {
+      "onset": "2020-03",
+      "realized_cross": "2020-03",
+      "nowcast_cross": "2020-03",
+      "calendar_advantage_months": 1,
+      "class": "earlier"
+     }
+    ],
+    "summary": {
+     "earlier": 3,
+     "tie": 3,
+     "later": 1,
+     "missed": 0
+    },
+    "realized_cross_months": [
+     "1974-01",
+     "1979-09",
+     "1981-11",
+     "1990-09",
+     "2001-03",
+     "2008-02",
+     "2020-03"
+    ],
+    "nowcast_cross_months": [
+     "1974-03",
+     "1979-10",
+     "1981-06",
+     "1990-10",
+     "2001-03",
+     "2008-03",
+     "2020-03"
+    ],
+    "window": [
+     -6,
+     12
+    ],
+    "threshold": -0.75
+   }
+  },
+  {
+   "id": "E10",
+   "section": "F1_reproduction",
+   "quantity": "CLAIMS onset crossing months",
+   "computed": [
+    "1974-02",
+    "1979-10",
+    "1981-06",
+    "1990-10",
+    "2001-02",
+    "2007-12",
+    "2020-03"
+   ],
+   "target": [
+    "1974-02",
+    "1979-10",
+    "1981-06",
+    "1990-10",
+    "2001-02",
+    "2007-12",
+    "2020-03"
+   ],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)",
+   "detail": {
+    "earlier": 4,
+    "tie": 3,
+    "later": 0,
+    "missed": 0
+   }
+  },
+  {
+   "id": "E11",
+   "section": "F1_reproduction",
+   "quantity": "ENS_BC false alarms",
+   "computed": [
+    "1981-06"
+   ],
+   "target": [
+    "1981-06"
+   ],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "E12",
+   "section": "F1_reproduction",
+   "quantity": "CLAIMS false alarms",
+   "computed": [
+    "1981-06",
+    "1981-07"
+   ],
+   "target": [
+    "1981-06",
+    "1981-07"
+   ],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 / v1 §7.1 (reproduction_mode)"
+  },
+  {
+   "id": "G01",
+   "section": "F1_reproduction",
+   "quantity": "AR2 RMSE full / 1990+ (August table 0.4692 / 0.5383; pins the AR2 reading)",
+   "computed": [
+    0.469241,
+    0.538272
+   ],
+   "target": [
+    0.4692,
+    0.5383
+   ],
+   "tolerance": 0.0005,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v0 §1 method 2"
+  },
+  {
+   "id": "G02",
+   "section": "F1_reproduction",
+   "quantity": "LEADREG RMSE full / 1990+ with 1959-start LEAD (August table 0.4511 / 0.5179)",
+   "computed": [
+    0.451059,
+    0.517923
+   ],
+   "target": [
+    0.4511,
+    0.5179
+   ],
+   "tolerance": 0.0005,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v0 §1 method 3",
+   "detail": {
+    "with_1960_start_LEAD": [
+     0.451287,
+     0.518059
+    ],
+    "reading": "the August harness built LEAD on the 1959 axis; ENS_GRID_REPRO uses it; the board's leading composite keeps 1960 (v1 §2.1)"
+   }
+  },
+  {
+   "id": "G03",
+   "section": "F1_reproduction",
+   "quantity": "ENS_GRID_REPRO RMSE (selector errors through M−1; 24-month warm-up; PERS before selection starts)",
+   "computed": 0.331865,
+   "target": 0.3319,
+   "tolerance": 0.003,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §1 ENS_GRID (F21/DT-22)",
+   "detail": {
+    "rmse_1990": 0.363596,
+    "n_selected": 630,
+    "default_equal_weight_instead": 0.331291
+   }
+  },
+  {
+   "id": "G04",
+   "section": "F1_reproduction",
+   "quantity": "ENS_GRID_REPRO: months choosing exactly 0.5·BRIDGE + 0.5·CLAIMS (of 630 selections)",
+   "computed": 361,
+   "target": 354,
+   "tolerance": 5,
+   "kind": "abs",
+   "status": "FAIL",
+   "pass": false,
+   "spec": "v1 §1 ENS_GRID",
+   "detail": {
+    "n_selected": 630,
+    "top_combos": [
+     [
+      "0.5*BRIDGE+0.5*CLAIMS",
+      361
+     ],
+     [
+      "0.5*LEADREG+0.5*BRIDGE",
+      140
+     ],
+     [
+      "0.75*BRIDGE+0.25*CLAIMS",
+      74
+     ],
+     [
+      "0.25*LEADREG+0.75*BRIDGE",
+      42
+     ],
+     [
+      "0.25*AR2+0.75*BRIDGE",
+      8
+     ],
+     [
+      "0.5*AR2+0.5*BRIDGE",
+      3
+     ]
+    ]
+   }
+  },
+  {
+   "id": "G05",
+   "section": "F1_reproduction",
+   "quantity": "leading composite (1960 start) == deployed compute()['leading'] (max |Δ| at 3 dp)",
+   "computed": 0.0,
+   "target": 0,
+   "tolerance": 1e-09,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.1 DT-10",
+   "not_run_reason": "deployed module not imported",
+   "detail": {
+    "n": 798,
+    "axis": [
+     "1960-01",
+     "2026-06"
+    ]
+   }
+  },
+  {
+   "id": "S01_bridge",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "|ΔRMSE| BRIDGE full — literal: D1+D2+D6 (CLAIMS rows t ≤ K = M−2)",
+   "computed": 0.000466,
+   "target": 0,
+   "tolerance": 0.003,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)",
+   "detail": {
+    "reproduction": 0.334581,
+    "scoring": 0.335048,
+    "signed_delta": 0.000466,
+    "delta_ex2020": 0.000874,
+    "delta_1990": 0.00032,
+    "rmse_2020_only": {
+     "reproduction": 1.709554,
+     "scoring": 1.707847
+    }
+   }
+  },
+  {
+   "id": "S01_claims",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "|ΔRMSE| CLAIMS full — literal: D1+D2+D6 (CLAIMS rows t ≤ K = M−2)",
+   "computed": 0.030688,
+   "target": 0,
+   "tolerance": 0.003,
+   "kind": "le",
+   "status": "FAIL",
+   "pass": false,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)",
+   "detail": {
+    "reproduction": 0.392998,
+    "scoring": 0.362311,
+    "signed_delta": -0.030688,
+    "delta_ex2020": 0.003718,
+    "delta_1990": -0.044905,
+    "rmse_2020_only": {
+     "reproduction": 2.333496,
+     "scoring": 2.021746
+    }
+   }
+  },
+  {
+   "id": "S01_ens",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "|ΔRMSE| ENS full — literal: D1+D2+D6 (CLAIMS rows t ≤ K = M−2)",
+   "computed": 0.011836,
+   "target": 0,
+   "tolerance": 0.003,
+   "kind": "le",
+   "status": "FAIL",
+   "pass": false,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)",
+   "detail": {
+    "reproduction": 0.334102,
+    "scoring": 0.322266,
+    "signed_delta": -0.011836,
+    "delta_ex2020": 0.002095,
+    "delta_1990": -0.017851,
+    "rmse_2020_only": {
+     "reproduction": 1.86908,
+     "scoring": 1.737958
+    }
+   }
+  },
+  {
+   "id": "S02",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "|Δ directional accuracy| ENS pp — literal: D1+D2+D6 (CLAIMS rows t ≤ K = M−2)",
+   "computed": 0.3058,
+   "target": 0,
+   "tolerance": 1.0,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)",
+   "detail": {
+    "reproduction": 69.7248,
+    "scoring": 69.419
+   }
+  },
+  {
+   "id": "S03",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "exact-count changes logged (transitions / onsets / false alarms) — literal: D1+D2+D6 (CLAIMS rows t ≤ K = M−2)",
+   "computed": {
+    "transitions": [
+     29,
+     29
+    ],
+    "flip_months": [
+     "1979-10",
+     "1980-11",
+     "1981-04",
+     "1993-03"
+    ],
+    "onset_moves": [
+     {
+      "onset": "1980-02",
+      "reproduction": "1979-10",
+      "scoring": "1979-12"
+     }
+    ],
+    "false_alarms": {
+     "reproduction": [
+      "1981-06"
+     ],
+     "scoring": [
+      "1981-06"
+     ]
+    }
+   },
+   "target": "expected: 1980-11, one transition",
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)",
+   "detail": {
+    "transition_flips": [
+     {
+      "month": "1979-10",
+      "reproduction": -0.83208,
+      "scoring": -0.720196,
+      "realized": -0.530883,
+      "called_reproduction": false,
+      "called_scoring": true
+     },
+     {
+      "month": "1980-11",
+      "reproduction": 0.00059,
+      "scoring": -0.00497,
+      "realized": 0.2725,
+      "called_reproduction": true,
+      "called_scoring": false
+     },
+     {
+      "month": "1981-04",
+      "reproduction": -0.006884,
+      "scoring": 0.041191,
+      "realized": -0.494776,
+      "called_reproduction": true,
+      "called_scoring": false
+     },
+     {
+      "month": "1993-03",
+      "reproduction": 0.000501,
+      "scoring": -0.00106,
+      "realized": -0.170854,
+      "called_reproduction": false,
+      "called_scoring": true
+     }
+    ],
+    "onset_moves": [
+     {
+      "onset": "1980-02",
+      "reproduction": "1979-10",
+      "scoring": "1979-12"
+     }
+    ],
+    "false_alarms": {
+     "reproduction": [
+      "1981-06"
+     ],
+     "scoring": [
+      "1981-06"
+     ]
+    },
+    "any_change": true
+   }
+  },
+  {
+   "id": "S04",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "exact-count change == expected {1980-11} only — literal: D1+D2+D6 (CLAIMS rows t ≤ K = M−2)",
+   "computed": false,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "FAIL",
+   "pass": false,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)"
+  },
+  {
+   "id": "S05",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "DM / DM ex-2020 under scoring rows — literal: D1+D2+D6 (CLAIMS rows t ≤ K = M−2)",
+   "computed": [
+    -1.5981,
+    -5.2197
+   ],
+   "target": [
+    -1.6335,
+    -5.3379
+   ],
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)"
+  },
+  {
+   "id": "D01_bridge",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "|ΔRMSE| BRIDGE full — diagnostic: D1+D6 (CLAIMS rows t ≤ M−1, partial targets excluded)",
+   "computed": 0.000466,
+   "target": 0,
+   "tolerance": 0.003,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)",
+   "detail": {
+    "reproduction": 0.334581,
+    "scoring": 0.335048,
+    "signed_delta": 0.000466,
+    "delta_ex2020": 0.000874,
+    "delta_1990": 0.00032,
+    "rmse_2020_only": {
+     "reproduction": 1.709554,
+     "scoring": 1.707847
+    }
+   }
+  },
+  {
+   "id": "D01_claims",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "|ΔRMSE| CLAIMS full — diagnostic: D1+D6 (CLAIMS rows t ≤ M−1, partial targets excluded)",
+   "computed": 0.0,
+   "target": 0,
+   "tolerance": 0.003,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)",
+   "detail": {
+    "reproduction": 0.392998,
+    "scoring": 0.392998,
+    "signed_delta": 0.0,
+    "delta_ex2020": 0.0,
+    "delta_1990": 0.0,
+    "rmse_2020_only": {
+     "reproduction": 2.333496,
+     "scoring": 2.333496
+    }
+   }
+  },
+  {
+   "id": "D01_ens",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "|ΔRMSE| ENS full — diagnostic: D1+D6 (CLAIMS rows t ≤ M−1, partial targets excluded)",
+   "computed": 0.001191,
+   "target": 0,
+   "tolerance": 0.003,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)",
+   "detail": {
+    "reproduction": 0.334102,
+    "scoring": 0.332911,
+    "signed_delta": -0.001191,
+    "delta_ex2020": 0.000214,
+    "delta_1990": -0.001671,
+    "rmse_2020_only": {
+     "reproduction": 1.86908,
+     "scoring": 1.856104
+    }
+   }
+  },
+  {
+   "id": "D02",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "|Δ directional accuracy| ENS pp — diagnostic: D1+D6 (CLAIMS rows t ≤ M−1, partial targets excluded)",
+   "computed": 0.1529,
+   "target": 0,
+   "tolerance": 1.0,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)",
+   "detail": {
+    "reproduction": 69.7248,
+    "scoring": 69.5719
+   }
+  },
+  {
+   "id": "D03",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "exact-count changes logged (transitions / onsets / false alarms) — diagnostic: D1+D6 (CLAIMS rows t ≤ M−1, partial targets excluded)",
+   "computed": {
+    "transitions": [
+     29,
+     28
+    ],
+    "flip_months": [
+     "1980-11"
+    ],
+    "onset_moves": [],
+    "false_alarms": {
+     "reproduction": [
+      "1981-06"
+     ],
+     "scoring": [
+      "1981-06"
+     ]
+    }
+   },
+   "target": "expected: 1980-11, one transition",
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)",
+   "detail": {
+    "transition_flips": [
+     {
+      "month": "1980-11",
+      "reproduction": 0.00059,
+      "scoring": -0.002299,
+      "realized": 0.2725,
+      "called_reproduction": true,
+      "called_scoring": false
+     }
+    ],
+    "onset_moves": [],
+    "false_alarms": {
+     "reproduction": [
+      "1981-06"
+     ],
+     "scoring": [
+      "1981-06"
+     ]
+    },
+    "any_change": true
+   }
+  },
+  {
+   "id": "D04",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "exact-count change == expected {1980-11} only — diagnostic: D1+D6 (CLAIMS rows t ≤ M−1, partial targets excluded)",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)"
+  },
+  {
+   "id": "D05",
+   "section": "F1_scoring_mode_delta",
+   "quantity": "DM / DM ex-2020 under scoring rows — diagnostic: D1+D6 (CLAIMS rows t ≤ M−1, partial targets excluded)",
+   "computed": [
+    -1.6303,
+    -5.3328
+   ],
+   "target": [
+    -1.6335,
+    -5.3379
+   ],
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §7.1 (D1 rows t ≤ M−L; D2/D6 rows t ≤ K(d), no partial targets; D3)"
+  },
+  {
+   "id": "I01",
+   "section": "identity",
+   "quantity": "IS-C CLAIMS_HH coefficients == original CLAIMS on rows t ≤ 2026-05 (max |Δ|)",
+   "computed": 0.0,
+   "target": 0,
+   "tolerance": 1e-09,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.3 identity (DT-16)",
+   "detail": {
+    "n_original": 585,
+    "n_hh_C": 585,
+    "rows": [
+     "1977-09",
+     "2026-05"
+    ],
+    "coef": [
+     -0.061656395,
+     0.760848476,
+     0.123243203,
+     0.117738169,
+     -0.019075382
+    ]
+   }
+  },
+  {
+   "id": "I02",
+   "section": "identity",
+   "quantity": "IS-C completed COIN(M−1) == realized on months with L_CMRMTSPL = 1 (max |Δ|)",
+   "computed": 0.0,
+   "target": 0,
+   "tolerance": 1e-12,
+   "kind": "le",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.3 identity (DT-2)",
+   "detail": {
+    "n": 684,
+    "first": "1969-06",
+    "last": "2026-05"
+   }
+  },
+  {
+   "id": "I03",
+   "section": "identity",
+   "quantity": "completed COIN(2026-06), 1-bridged (CMRMTSPL L1) on F1 — deterministic coincident_completed bound",
+   "computed": -0.322149,
+   "target": -0.3221,
+   "tolerance": 0.0015,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 (bound from the deterministic algorithm; verify_R1 F4 −0.3221)",
+   "detail": {
+    "pattern": {
+     "CMRMTSPL": 1
+    },
+    "fit": {
+     "n_fit": 706,
+     "beta": [
+      0.0028445561466561476,
+      0.7625558220454455,
+      0.20733318110372348
+     ],
+     "proj_g": 0.03493286958065547,
+     "rows_through": "2026-05",
+     "lag": 1
+    }
+   }
+  },
+  {
+   "id": "I04",
+   "section": "identity",
+   "quantity": "1977-06 1-bridged completion: CMRMTSPL history < 120 → skipped and re-meaned (flag)",
+   "computed": [
+    "CMRMTSPL"
+   ],
+   "target": [
+    "CMRMTSPL"
+   ],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.2",
+   "detail": {
+    "value_3_member": 0.639856,
+    "realized_4_member": 0.558477
+   }
+  },
+  {
+   "id": "I05",
+   "section": "identity",
+   "quantity": "stored 1-bridged completion history defined months (D4)",
+   "computed": 685,
+   "target": null,
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §2.3 D4",
+   "detail": {
+    "first": "1969-06"
+   }
+  },
+  {
+   "id": "L01",
+   "section": "legacy_deployed",
+   "quantity": "deployed nowcast bridge on F1",
+   "computed": -0.347,
+   "target": -0.347,
+   "tolerance": 0.005,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 'Legacy deployed output on the fixture'",
+   "detail": {
+    "month": "2026-07"
+   }
+  },
+  {
+   "id": "L02",
+   "section": "legacy_deployed",
+   "quantity": "deployed nowcast claims on F1 (full-sample z, rows from 1970-07)",
+   "computed": -0.449,
+   "target": -0.449,
+   "tolerance": 0.005,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 'Legacy deployed output on the fixture'"
+  },
+  {
+   "id": "L03",
+   "section": "legacy_deployed",
+   "quantity": "deployed nowcast ens on F1",
+   "computed": -0.398,
+   "target": -0.398,
+   "tolerance": 0.005,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 'Legacy deployed output on the fixture'",
+   "detail": {
+    "phase": "STALL"
+   }
+  },
+  {
+   "id": "L04",
+   "section": "legacy_deployed",
+   "quantity": "spec form live bridge 2026-07",
+   "computed": -0.346864,
+   "target": -0.347,
+   "tolerance": 0.005,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 'Legacy deployed output on the fixture'"
+  },
+  {
+   "id": "L05",
+   "section": "legacy_deployed",
+   "quantity": "spec form live claims 2026-07",
+   "computed": -0.429033,
+   "target": -0.429,
+   "tolerance": 0.005,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 'Legacy deployed output on the fixture'"
+  },
+  {
+   "id": "L06",
+   "section": "legacy_deployed",
+   "quantity": "spec form live ens 2026-07",
+   "computed": -0.387948,
+   "target": -0.388,
+   "tolerance": 0.005,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 'Legacy deployed output on the fixture'"
+  },
+  {
+   "id": "Q01",
+   "section": "F1_soft",
+   "quantity": "ENS_BC_S RMSE vs PERS % (serve-time regressor = available 3-member COIN(M−1); August training)",
+   "computed": -22.086,
+   "target": -24.2,
+   "tolerance": 1.0,
+   "kind": "abs",
+   "status": "FAIL",
+   "pass": false,
+   "spec": "v0 §7.1 SOFT (QA harness not recoverable; ±1 pp; a miss is raised, never widened)",
+   "soft": true,
+   "detail": {
+    "rmse": 0.364185
+   }
+  },
+  {
+   "id": "Q02",
+   "section": "F1_soft",
+   "quantity": "ENS_BC_S RMSE vs PERS % ex-2020",
+   "computed": -7.881,
+   "target": -7.0,
+   "tolerance": 1.0,
+   "kind": "abs",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v0 §7.1 SOFT (QA harness not recoverable; ±1 pp; a miss is raised, never widened)",
+   "soft": true
+  },
+  {
+   "id": "Q03",
+   "section": "F1_soft",
+   "quantity": "ENS_BC_S DM ex-2020 (QA −2.76; no tolerance stated)",
+   "computed": -3.0686,
+   "target": -2.76,
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v0 §7.1 SOFT (QA harness not recoverable; ±1 pp; a miss is raised, never widened)",
+   "soft": true
+  },
+  {
+   "id": "Q04",
+   "section": "F1_soft",
+   "quantity": "ENS_BC_S onsets earlier/tie/later (QA 5-1-1)",
+   "computed": [
+    4,
+    2,
+    1
+   ],
+   "target": [
+    5,
+    1,
+    1
+   ],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "FAIL",
+   "pass": false,
+   "spec": "v0 §7.1 SOFT (QA harness not recoverable; ±1 pp; a miss is raised, never widened)",
+   "soft": true,
+   "detail": [
+    "1974-03",
+    "1979-10",
+    "1981-12",
+    "1990-09",
+    "2001-03",
+    "2007-11",
+    "2020-03"
+   ]
+  },
+  {
+   "id": "Q05",
+   "section": "F1_soft",
+   "quantity": "ENS_BC_HH −29.8% / −12.5% / transitions 30.7% / onsets 4-1-2",
+   "computed": null,
+   "target": [
+    -29.8,
+    -12.5,
+    30.7,
+    [
+     4,
+     1,
+     2
+    ]
+   ],
+   "tolerance": 1.0,
+   "kind": "abs",
+   "status": "NOT_RUN",
+   "pass": null,
+   "spec": "v0 §7.1 SOFT (QA harness not recoverable; ±1 pp; a miss is raised, never widened)",
+   "soft": true,
+   "not_run_reason": "ENS_BC_HH is the v2 primary quantity (D-1); not computed on any fixture before the single scored run (task rule: nothing scored in this stage); report it in the scored run's honesty box on F1 and F5 (Q4)"
+  },
+  {
+   "id": "X01",
+   "section": "engine_F1",
+   "quantity": "F1 (2026-08-07, IS-A): v2 issue lags / IS / K",
+   "computed": {
+    "lags": {
+     "PAYEMS": 0,
+     "INDPRO": 1,
+     "W875RX1": 1,
+     "CMRMTSPL": 2
+    },
+    "IS": "A",
+    "K": "2026-05"
+   },
+   "target": {
+    "lags": {
+     "PAYEMS": 0,
+     "INDPRO": 1,
+     "W875RX1": 1,
+     "CMRMTSPL": 2
+    },
+    "IS": "A",
+    "K": "2026-05"
+   },
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 (test_gate_nowcast_bails_on_stale_bridge_inputs inverted; test_gate_partial_month_invariance kept)",
+   "detail": {
+    "bridge_hh": -0.346864,
+    "claims_hh": -0.317811,
+    "ens_hh": -0.332337,
+    "claims_fit": {
+     "n": 585,
+     "rows": [
+      "1977-09",
+      "2026-05"
+     ],
+     "coef": [
+      -0.052007368181952854,
+      0.7898405164354497,
+      0.09166511269828069,
+      0.17124617333418393,
+      -0.009768133184046887
+     ],
+     "rows_through": "2026-05",
+     "regressor_history": "spliced history: canonical-lag completions recomputed walk-forward on the vintage in hand",
+     "info_set_fit": "A"
+    }
+   }
+  },
+  {
+   "id": "X02",
+   "section": "engine_F1",
+   "quantity": "F1 with CMRMTSPL at lag 3: value with lags (bridged at L3, not None)",
+   "computed": {
+    "lag": 3,
+    "bridged": 3,
+    "value": true,
+    "dropped": []
+   },
+   "target": {
+    "lag": 3,
+    "bridged": 3,
+    "value": true,
+    "dropped": []
+   },
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 (test_gate_nowcast_bails_on_stale_bridge_inputs inverted; test_gate_partial_month_invariance kept)",
+   "detail": {
+    "bridge_hh": -0.384022,
+    "K": "2026-04"
+   }
+  },
+  {
+   "id": "X03",
+   "section": "engine_F1",
+   "quantity": "F1 with CMRMTSPL at lag 4: dropped and re-meaned (value, flagged)",
+   "computed": {
+    "lag": 4,
+    "dropped": [
+     "CMRMTSPL"
+    ],
+    "value": true
+   },
+   "target": {
+    "lag": 4,
+    "dropped": [
+     "CMRMTSPL"
+    ],
+    "value": true
+   },
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 (test_gate_nowcast_bails_on_stale_bridge_inputs inverted; test_gate_partial_month_invariance kept)",
+   "detail": {
+    "bridge_hh": -0.474782,
+    "K": "2026-03"
+   }
+  },
+  {
+   "id": "X04",
+   "section": "engine_F1",
+   "quantity": "partial-month invariance: dropping the 2026-08 ICSA week / August T10Y3M days changes nothing",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 (test_gate_nowcast_bails_on_stale_bridge_inputs inverted; test_gate_partial_month_invariance kept)"
+  },
+  {
+   "id": "X05",
+   "section": "engine_F1",
+   "quantity": "all four members published for the last PAYEMS month → nowcast None with reason",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4",
+   "detail": {
+    "reason": "COIN(2026-05) is complete (all members published); no PAYEMS month lies beyond the last complete COIN — nothing to nowcast",
+    "target": "2026-05"
+   }
+  },
+  {
+   "id": "F3_01",
+   "section": "engine_F3",
+   "quantity": "deployed compute(F3) nowcast is None",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 / v1 §1 row 2 (F3 = 2026-10-20 pull)",
+   "detail": {
+    "current": {
+     "month": "2026-09",
+     "coincident": -0.019,
+     "leading": 0.339,
+     "phase": "STALL",
+     "members_in_latest": 2,
+     "leading_3m_change": 0.2
+    }
+   }
+  },
+  {
+   "id": "F3_02",
+   "section": "engine_F3",
+   "quantity": "engine emulation of the deployed gates on F3 would issue",
+   "computed": false,
+   "target": false,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 / v1 §1 row 2 (F3 = 2026-10-20 pull)",
+   "detail": {
+    "reason": "catch-up gate: composite axis already contains the target month"
+   }
+  },
+  {
+   "id": "F3_03",
+   "section": "engine_F3",
+   "quantity": "v2 issue(F3): target month",
+   "computed": "2026-09",
+   "target": "2026-09",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 / v1 §1 row 2 (F3 = 2026-10-20 pull)"
+  },
+  {
+   "id": "F3_04",
+   "section": "engine_F3",
+   "quantity": "v2 issue(F3): information set",
+   "computed": "B",
+   "target": "B",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 / v1 §1 row 2 (F3 = 2026-10-20 pull)"
+  },
+  {
+   "id": "F3_05",
+   "section": "engine_F3",
+   "quantity": "v2 issue(F3): lags",
+   "computed": {
+    "PAYEMS": 0,
+    "INDPRO": 0,
+    "W875RX1": 1,
+    "CMRMTSPL": 2
+   },
+   "target": {
+    "PAYEMS": 0,
+    "INDPRO": 0,
+    "W875RX1": 1,
+    "CMRMTSPL": 2
+   },
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 / v1 §1 row 2 (F3 = 2026-10-20 pull)"
+  },
+  {
+   "id": "F3_06",
+   "section": "engine_F3",
+   "quantity": "v2 issue(F3): a value (BRIDGE_HH, CLAIMS_HH, ENS_HH all finite; reason None)",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 / v1 §1 row 2 (F3 = 2026-10-20 pull)",
+   "detail": {
+    "bridge_hh": -0.184075,
+    "claims_hh": -0.196322,
+    "ens_hh": -0.190199,
+    "phase": "STALL",
+    "K": "2026-07",
+    "claims_fit": {
+     "n": 587,
+     "rows": [
+      "1977-09",
+      "2026-07"
+     ],
+     "coef": [
+      -0.05089981309072601,
+      0.7891827137964013,
+      0.09219702325641917,
+      0.17087792883132866,
+      -0.01099004079780482
+     ],
+     "rows_through": "2026-07",
+     "regressor_history": "spliced history: canonical-lag completions recomputed walk-forward on the vintage in hand",
+     "info_set_fit": "B"
+    },
+    "members_bridged": {
+     "W875RX1": 1,
+     "CMRMTSPL": 2
+    },
+    "completed_prev": {
+     "month": "2026-08",
+     "value": -0.24623510033764048,
+     "pattern": {
+      "CMRMTSPL": 1
+     },
+     "dropped": [],
+     "skipped": [],
+     "pattern_key": "bridged[CMRMTSPL:1]|dropped[]|skipped[]",
+     "band": null,
+     "band_basis": "pending: lag-simulation error distribution not available in this stage (nothing scored)",
+     "nonstandard_pattern": false
+    },
+    "persistence": {
+     "realized": null,
+     "available": -0.30874648400737664,
+     "hh": -0.24623510033764048
+    }
+   }
+  },
+  {
+   "id": "F3_07",
+   "section": "engine_F3",
+   "quantity": "v2 issue(F3): dropped members",
+   "computed": [],
+   "target": [],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §7.2 / v1 §1 row 2 (F3 = 2026-10-20 pull)"
+  },
+  {
+   "id": "F3_08",
+   "section": "engine_F3",
+   "quantity": "v2 issue(F3): CLAIMS_HH training rows end at K(d) = 2026-07",
+   "computed": "2026-07",
+   "target": "2026-07",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.3 D2"
+  },
+  {
+   "id": "F4_2025-11-20_a",
+   "section": "engine_F4",
+   "quantity": "2025-11-20: vintages in F4",
+   "computed": [
+    "CMRMTSPL",
+    "ICSA",
+    "INDPRO",
+    "PAYEMS",
+    "W875RX1"
+   ],
+   "target": null,
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "last_months": {
+     "CMRMTSPL": "2025-07",
+     "ICSA": "2025-11",
+     "INDPRO": "2025-08",
+     "PAYEMS": "2025-09",
+     "W875RX1": "2025-08"
+    },
+    "sources": {
+     "ICSA": "alf_ICSA_2025-11-20.csv (listed vintage <= 2025-11-20)",
+     "T10Y3M": "current (2026-10-20 pull, days <= 2025-11-20) per v1 §4.1"
+    }
+   }
+  },
+  {
+   "id": "F4_2025-11-20_b",
+   "section": "engine_F4",
+   "quantity": "2025-11-20: target month",
+   "computed": "2025-09",
+   "target": "2025-09",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2025-11-20_c",
+   "section": "engine_F4",
+   "quantity": "2025-11-20: information set",
+   "computed": "A",
+   "target": "A",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2025-11-20_d",
+   "section": "engine_F4",
+   "quantity": "2025-11-20: lags",
+   "computed": {
+    "PAYEMS": 0,
+    "INDPRO": 1,
+    "W875RX1": 1,
+    "CMRMTSPL": 2
+   },
+   "target": {
+    "PAYEMS": 0,
+    "INDPRO": 1,
+    "W875RX1": 1,
+    "CMRMTSPL": 2
+   },
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2025-11-20_e",
+   "section": "engine_F4",
+   "quantity": "2025-11-20: dropped (lag ≥ 4 → dropped and re-meaned)",
+   "computed": [],
+   "target": [],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2025-11-20_f",
+   "section": "engine_F4",
+   "quantity": "2025-11-20: BRIDGE_HH is a value (bridge half; no bridge-side reason)",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "bridge_hh": -0.279267,
+    "members_bridged": {
+     "INDPRO": 1,
+     "W875RX1": 1,
+     "CMRMTSPL": 2
+    },
+    "members_skipped": [],
+    "K": "2025-07",
+    "completed_prev": {
+     "month": "2025-08",
+     "value": -0.2513392241575292,
+     "pattern": {
+      "CMRMTSPL": 1
+     },
+     "dropped": [],
+     "skipped": [],
+     "pattern_key": "bridged[CMRMTSPL:1]|dropped[]|skipped[]",
+     "band": null,
+     "band_basis": "pending: lag-simulation error distribution not available in this stage (nothing scored)",
+     "nonstandard_pattern": false
+    },
+    "persistence": {
+     "realized": null,
+     "available": -0.4100467478984314,
+     "hh": -0.2513392241575292
+    },
+    "reason": null
+   }
+  },
+  {
+   "id": "F4_2025-11-20_g",
+   "section": "engine_F4",
+   "quantity": "2025-11-20: CLAIMS_HH / ENS_HH from the ICSA vintage (claims half; fit rows end at K(d); reason None)",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "claims_hh": -0.233676,
+    "ens_hh": -0.256471,
+    "phase": "STALL",
+    "claims_fit": {
+     "n": 575,
+     "rows": [
+      "1977-09",
+      "2025-07"
+     ],
+     "coef": [
+      -0.04987957226411168,
+      0.7881529106322854,
+      0.09358807720256608,
+      0.17020777295709133,
+      -0.011766948184270556
+     ],
+     "rows_through": "2025-07",
+     "regressor_history": "spliced history: canonical-lag completions recomputed walk-forward on the vintage in hand",
+     "info_set_fit": "A"
+    },
+    "claims_reason": null,
+    "reason": null,
+    "icsa_source": "alf_ICSA_2025-11-20.csv (listed vintage <= 2025-11-20)",
+    "t10y3m_source": "current (2026-10-20 pull, days <= 2025-11-20) per v1 §4.1",
+    "curve_pre1982_source": "GS10-TB3MS from the 2026-10-20 pull (unrevised rates)"
+   }
+  },
+  {
+   "id": "F4_2025-11-20_h",
+   "section": "engine_F4",
+   "quantity": "2025-11-20: deployed-form emulation would issue",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §1 row 5: the deployed engine returns None on 2025-12-16, 2026-01-09, 2026-02-06",
+   "detail": {
+    "reason": "all deployed gates pass"
+   }
+  },
+  {
+   "id": "F4_2025-11-20_i",
+   "section": "engine_F4",
+   "quantity": "2025-11-20: band",
+   "computed": null,
+   "target": null,
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §2.2 / §2.4",
+   "detail": {
+    "basis": "pending: lag-simulation error distribution not available in this stage (nothing scored)",
+    "pattern_key": "bridged[CMRMTSPL:2,INDPRO:1,W875RX1:1]|dropped[]|skipped[]",
+    "note": "'wide band' for the dropped-member case is asserted structurally in test_engine.py; the p10–p90 values come from the scored lag simulation"
+   }
+  },
+  {
+   "id": "F4_2025-12-16_a",
+   "section": "engine_F4",
+   "quantity": "2025-12-16: vintages in F4",
+   "computed": [
+    "CMRMTSPL",
+    "ICSA",
+    "INDPRO",
+    "PAYEMS",
+    "W875RX1"
+   ],
+   "target": null,
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "last_months": {
+     "CMRMTSPL": "2025-07",
+     "ICSA": "2025-12",
+     "INDPRO": "2025-09",
+     "PAYEMS": "2025-11",
+     "W875RX1": "2025-09"
+    },
+    "sources": {
+     "ICSA": "alf_ICSA_2025-12-11.csv (listed vintage <= 2025-12-16)",
+     "T10Y3M": "current (2026-10-20 pull, days <= 2025-12-16) per v1 §4.1"
+    }
+   }
+  },
+  {
+   "id": "F4_2025-12-16_b",
+   "section": "engine_F4",
+   "quantity": "2025-12-16: target month",
+   "computed": "2025-11",
+   "target": "2025-11",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2025-12-16_c",
+   "section": "engine_F4",
+   "quantity": "2025-12-16: information set",
+   "computed": "A",
+   "target": "A",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2025-12-16_d",
+   "section": "engine_F4",
+   "quantity": "2025-12-16: lags",
+   "computed": {
+    "PAYEMS": 0,
+    "INDPRO": 2,
+    "W875RX1": 2,
+    "CMRMTSPL": 4
+   },
+   "target": {
+    "PAYEMS": 0,
+    "INDPRO": 2,
+    "W875RX1": 2,
+    "CMRMTSPL": 4
+   },
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2025-12-16_e",
+   "section": "engine_F4",
+   "quantity": "2025-12-16: dropped (lag ≥ 4 → dropped and re-meaned)",
+   "computed": [
+    "CMRMTSPL"
+   ],
+   "target": [
+    "CMRMTSPL"
+   ],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2025-12-16_f",
+   "section": "engine_F4",
+   "quantity": "2025-12-16: BRIDGE_HH is a value (bridge half; no bridge-side reason)",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "bridge_hh": -0.487328,
+    "members_bridged": {
+     "INDPRO": 2,
+     "W875RX1": 2
+    },
+    "members_skipped": [],
+    "K": "2025-07",
+    "completed_prev": {
+     "month": "2025-10",
+     "value": -0.3991923065336236,
+     "pattern": {
+      "INDPRO": 1,
+      "W875RX1": 1,
+      "CMRMTSPL": 3
+     },
+     "dropped": [],
+     "skipped": [],
+     "pattern_key": "bridged[CMRMTSPL:3,INDPRO:1,W875RX1:1]|dropped[]|skipped[]",
+     "band": null,
+     "band_basis": "pending: lag-simulation error distribution not available in this stage (nothing scored)",
+     "nonstandard_pattern": true
+    },
+    "persistence": {
+     "realized": null,
+     "available": -0.5475299254273966,
+     "hh": -0.3991923065336236
+    },
+    "reason": null
+   }
+  },
+  {
+   "id": "F4_2025-12-16_g",
+   "section": "engine_F4",
+   "quantity": "2025-12-16: CLAIMS_HH / ENS_HH from the ICSA vintage (claims half; fit rows end at K(d); reason None)",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "claims_hh": -0.271757,
+    "ens_hh": -0.379543,
+    "phase": "STALL",
+    "claims_fit": {
+     "n": 575,
+     "rows": [
+      "1977-09",
+      "2025-07"
+     ],
+     "coef": [
+      -0.05000321155297041,
+      0.7890257788805791,
+      0.0921514023883452,
+      0.1710297120346425,
+      -0.011538309754270592
+     ],
+     "rows_through": "2025-07",
+     "regressor_history": "spliced history: canonical-lag completions recomputed walk-forward on the vintage in hand",
+     "info_set_fit": "A"
+    },
+    "claims_reason": null,
+    "reason": null,
+    "icsa_source": "alf_ICSA_2025-12-11.csv (listed vintage <= 2025-12-16)",
+    "t10y3m_source": "current (2026-10-20 pull, days <= 2025-12-16) per v1 §4.1",
+    "curve_pre1982_source": "GS10-TB3MS from the 2026-10-20 pull (unrevised rates)"
+   }
+  },
+  {
+   "id": "F4_2025-12-16_h",
+   "section": "engine_F4",
+   "quantity": "2025-12-16: deployed-form emulation would issue",
+   "computed": false,
+   "target": false,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §1 row 5: the deployed engine returns None on 2025-12-16, 2026-01-09, 2026-02-06",
+   "detail": {
+    "reason": "one-step gate: gap != 1"
+   }
+  },
+  {
+   "id": "F4_2025-12-16_i",
+   "section": "engine_F4",
+   "quantity": "2025-12-16: band",
+   "computed": null,
+   "target": null,
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §2.2 / §2.4",
+   "detail": {
+    "basis": "pending: lag-simulation error distribution not available in this stage (nothing scored)",
+    "pattern_key": "bridged[INDPRO:2,W875RX1:2]|dropped[CMRMTSPL]|skipped[]",
+    "note": "'wide band' for the dropped-member case is asserted structurally in test_engine.py; the p10–p90 values come from the scored lag simulation"
+   }
+  },
+  {
+   "id": "F4_2026-01-09_a",
+   "section": "engine_F4",
+   "quantity": "2026-01-09: vintages in F4",
+   "computed": [
+    "CMRMTSPL",
+    "ICSA",
+    "INDPRO",
+    "PAYEMS",
+    "T10Y3M",
+    "UMCSENT",
+    "W875RX1"
+   ],
+   "target": null,
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "last_months": {
+     "CMRMTSPL": "2025-09",
+     "ICSA": "2026-01",
+     "INDPRO": "2025-11",
+     "PAYEMS": "2025-12",
+     "T10Y3M": "2026-01",
+     "UMCSENT": "2025-12",
+     "W875RX1": "2025-09"
+    },
+    "sources": {
+     "ICSA": "alf_ICSA_2026-01-09.csv (research-pass file; header echoes the requested date)",
+     "T10Y3M": "alf_T10Y3M_2026-01-09.csv (listed vintage)"
+    }
+   }
+  },
+  {
+   "id": "F4_2026-01-09_b",
+   "section": "engine_F4",
+   "quantity": "2026-01-09: target month",
+   "computed": "2025-12",
+   "target": "2025-12",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2026-01-09_c",
+   "section": "engine_F4",
+   "quantity": "2026-01-09: information set",
+   "computed": "A",
+   "target": "A",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2026-01-09_d",
+   "section": "engine_F4",
+   "quantity": "2026-01-09: lags",
+   "computed": {
+    "PAYEMS": 0,
+    "INDPRO": 1,
+    "W875RX1": 3,
+    "CMRMTSPL": 3
+   },
+   "target": {
+    "PAYEMS": 0,
+    "INDPRO": 1,
+    "W875RX1": 3,
+    "CMRMTSPL": 3
+   },
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2026-01-09_e",
+   "section": "engine_F4",
+   "quantity": "2026-01-09: dropped (lag ≥ 4 → dropped and re-meaned)",
+   "computed": [],
+   "target": [],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2026-01-09_f",
+   "section": "engine_F4",
+   "quantity": "2026-01-09: BRIDGE_HH is a value (bridge half; no bridge-side reason)",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "bridge_hh": -0.453825,
+    "members_bridged": {
+     "INDPRO": 1,
+     "W875RX1": 3,
+     "CMRMTSPL": 3
+    },
+    "members_skipped": [],
+    "K": "2025-09",
+    "completed_prev": {
+     "month": "2025-11",
+     "value": -0.4879836742140288,
+     "pattern": {
+      "W875RX1": 2,
+      "CMRMTSPL": 2
+     },
+     "dropped": [],
+     "skipped": [],
+     "pattern_key": "bridged[CMRMTSPL:2,W875RX1:2]|dropped[]|skipped[]",
+     "band": null,
+     "band_basis": "pending: lag-simulation error distribution not available in this stage (nothing scored)",
+     "nonstandard_pattern": true
+    },
+    "persistence": {
+     "realized": null,
+     "available": -0.3301212963186016,
+     "hh": -0.4879836742140288
+    },
+    "reason": null
+   }
+  },
+  {
+   "id": "F4_2026-01-09_g",
+   "section": "engine_F4",
+   "quantity": "2026-01-09: CLAIMS_HH / ENS_HH from the ICSA vintage (claims half; fit rows end at K(d); reason None)",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "claims_hh": -0.30172,
+    "ens_hh": -0.377773,
+    "phase": "STALL",
+    "claims_fit": {
+     "n": 577,
+     "rows": [
+      "1977-09",
+      "2025-09"
+     ],
+     "coef": [
+      -0.05099808602996171,
+      0.7891012067005576,
+      0.0921722096100556,
+      0.17098813780311206,
+      -0.010724646271897535
+     ],
+     "rows_through": "2025-09",
+     "regressor_history": "spliced history: canonical-lag completions recomputed walk-forward on the vintage in hand",
+     "info_set_fit": "A"
+    },
+    "claims_reason": null,
+    "reason": null,
+    "icsa_source": "alf_ICSA_2026-01-09.csv (research-pass file; header echoes the requested date)",
+    "t10y3m_source": "alf_T10Y3M_2026-01-09.csv (listed vintage)",
+    "curve_pre1982_source": "GS10-TB3MS from the 2026-10-20 pull (unrevised rates)"
+   }
+  },
+  {
+   "id": "F4_2026-01-09_h",
+   "section": "engine_F4",
+   "quantity": "2026-01-09: deployed-form emulation would issue",
+   "computed": false,
+   "target": false,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §1 row 5: the deployed engine returns None on 2025-12-16, 2026-01-09, 2026-02-06",
+   "detail": {
+    "reason": "fixed-lag gate: W875RX1 at lag 3 != trained 1"
+   }
+  },
+  {
+   "id": "F4_2026-01-09_i",
+   "section": "engine_F4",
+   "quantity": "2026-01-09: band",
+   "computed": null,
+   "target": null,
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §2.2 / §2.4",
+   "detail": {
+    "basis": "pending: lag-simulation error distribution not available in this stage (nothing scored)",
+    "pattern_key": "bridged[CMRMTSPL:3,INDPRO:1,W875RX1:3]|dropped[]|skipped[]",
+    "note": "'wide band' for the dropped-member case is asserted structurally in test_engine.py; the p10–p90 values come from the scored lag simulation"
+   }
+  },
+  {
+   "id": "F4_2026-02-06_a",
+   "section": "engine_F4",
+   "quantity": "2026-02-06: vintages in F4",
+   "computed": [
+    "CMRMTSPL",
+    "ICSA",
+    "INDPRO",
+    "PAYEMS",
+    "UMCSENT",
+    "W875RX1"
+   ],
+   "target": null,
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "last_months": {
+     "CMRMTSPL": "2025-10",
+     "ICSA": "2026-01",
+     "INDPRO": "2025-12",
+     "PAYEMS": "2025-12",
+     "UMCSENT": "2026-01",
+     "W875RX1": "2025-11"
+    },
+    "sources": {
+     "ICSA": "alf_ICSA_2026-02-05.csv (listed vintage <= 2026-02-06)",
+     "T10Y3M": "current (2026-10-20 pull, days <= 2026-02-06) per v1 §4.1"
+    }
+   }
+  },
+  {
+   "id": "F4_2026-02-06_b",
+   "section": "engine_F4",
+   "quantity": "2026-02-06: target month",
+   "computed": "2025-12",
+   "target": "2025-12",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2026-02-06_c",
+   "section": "engine_F4",
+   "quantity": "2026-02-06: information set",
+   "computed": "B",
+   "target": "B",
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2026-02-06_d",
+   "section": "engine_F4",
+   "quantity": "2026-02-06: lags",
+   "computed": {
+    "PAYEMS": 0,
+    "INDPRO": 0,
+    "W875RX1": 1,
+    "CMRMTSPL": 2
+   },
+   "target": {
+    "PAYEMS": 0,
+    "INDPRO": 0,
+    "W875RX1": 1,
+    "CMRMTSPL": 2
+   },
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2026-02-06_e",
+   "section": "engine_F4",
+   "quantity": "2026-02-06: dropped (lag ≥ 4 → dropped and re-meaned)",
+   "computed": [],
+   "target": [],
+   "tolerance": 0,
+   "kind": "exact",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2"
+  },
+  {
+   "id": "F4_2026-02-06_f",
+   "section": "engine_F4",
+   "quantity": "2026-02-06: BRIDGE_HH is a value (bridge half; no bridge-side reason)",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "bridge_hh": -0.426473,
+    "members_bridged": {
+     "W875RX1": 1,
+     "CMRMTSPL": 2
+    },
+    "members_skipped": [],
+    "K": "2025-10",
+    "completed_prev": {
+     "month": "2025-11",
+     "value": -0.46194901614424194,
+     "pattern": {
+      "CMRMTSPL": 1
+     },
+     "dropped": [],
+     "skipped": [],
+     "pattern_key": "bridged[CMRMTSPL:1]|dropped[]|skipped[]",
+     "band": null,
+     "band_basis": "pending: lag-simulation error distribution not available in this stage (nothing scored)",
+     "nonstandard_pattern": false
+    },
+    "persistence": {
+     "realized": null,
+     "available": -0.4758633625515669,
+     "hh": -0.46194901614424194
+    },
+    "reason": null
+   }
+  },
+  {
+   "id": "F4_2026-02-06_g",
+   "section": "engine_F4",
+   "quantity": "2026-02-06: CLAIMS_HH / ENS_HH from the ICSA vintage (claims half; fit rows end at K(d); reason None)",
+   "computed": true,
+   "target": true,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §2.4 expected F4 outputs (written before the engine ran) / v1 §7.2",
+   "detail": {
+    "claims_hh": -0.282007,
+    "ens_hh": -0.35424,
+    "phase": "STALL",
+    "claims_fit": {
+     "n": 578,
+     "rows": [
+      "1977-09",
+      "2025-10"
+     ],
+     "coef": [
+      -0.05140888158703823,
+      0.7893720276821969,
+      0.09202843629506009,
+      0.17104853463416408,
+      -0.01032072203122581
+     ],
+     "rows_through": "2025-10",
+     "regressor_history": "spliced history: canonical-lag completions recomputed walk-forward on the vintage in hand",
+     "info_set_fit": "B"
+    },
+    "claims_reason": null,
+    "reason": null,
+    "icsa_source": "alf_ICSA_2026-02-05.csv (listed vintage <= 2026-02-06)",
+    "t10y3m_source": "current (2026-10-20 pull, days <= 2026-02-06) per v1 §4.1",
+    "curve_pre1982_source": "GS10-TB3MS from the 2026-10-20 pull (unrevised rates)"
+   }
+  },
+  {
+   "id": "F4_2026-02-06_h",
+   "section": "engine_F4",
+   "quantity": "2026-02-06: deployed-form emulation would issue",
+   "computed": false,
+   "target": false,
+   "tolerance": null,
+   "kind": "bool",
+   "status": "PASS",
+   "pass": true,
+   "spec": "v1 §1 row 5: the deployed engine returns None on 2025-12-16, 2026-01-09, 2026-02-06",
+   "detail": {
+    "reason": "catch-up gate: composite axis already contains the target month"
+   }
+  },
+  {
+   "id": "F4_2026-02-06_i",
+   "section": "engine_F4",
+   "quantity": "2026-02-06: band",
+   "computed": null,
+   "target": null,
+   "tolerance": null,
+   "kind": "info",
+   "status": "INFO",
+   "pass": null,
+   "spec": "v1 §2.2 / §2.4",
+   "detail": {
+    "basis": "pending: lag-simulation error distribution not available in this stage (nothing scored)",
+    "pattern_key": "bridged[CMRMTSPL:2,W875RX1:1]|dropped[]|skipped[]",
+    "note": "'wide band' for the dropped-member case is asserted structurally in test_engine.py; the p10–p90 values come from the scored lag simulation"
+   }
+  }
+ ],
+ "diagnostics": {
+  "ens_grid_repro_variants": {
+   "LEAD_1959|warmup12": {
+    "rmse": 0.331556,
+    "n_selected": 642,
+    "count_5050": 361
+   },
+   "LEAD_1959|warmup24": {
+    "rmse": 0.331865,
+    "n_selected": 630,
+    "count_5050": 361
+   },
+   "LEAD_1959|warmup36": {
+    "rmse": 0.33237,
+    "n_selected": 618,
+    "count_5050": 361
+   },
+   "LEAD_1960|warmup12": {
+    "rmse": 0.331474,
+    "n_selected": 642,
+    "count_5050": 370
+   },
+   "LEAD_1960|warmup24": {
+    "rmse": 0.331887,
+    "n_selected": 630,
+    "count_5050": 370
+   },
+   "LEAD_1960|warmup36": {
+    "rmse": 0.332381,
+    "n_selected": 618,
+    "count_5050": 370
+   },
+   "near_ties_within_1pct_mse": 97
+  },
+  "scoring_mode_largest_claims_moves": [
+   [
+    1.436178,
+    "2020-07",
+    -3.181438,
+    -4.617615
+   ],
+   [
+    1.052913,
+    "2020-05",
+    -9.853315,
+    -8.800402
+   ],
+   [
+    0.939673,
+    "2020-04",
+    -3.840178,
+    -4.779851
+   ],
+   [
+    0.58898,
+    "1980-06",
+    -2.010318,
+    -1.421338
+   ],
+   [
+    0.535326,
+    "2020-06",
+    -6.62561,
+    -6.090283
+   ],
+   [
+    0.497556,
+    "2020-11",
+    6.24877,
+    5.751213
+   ]
+  ]
+ }
+}
