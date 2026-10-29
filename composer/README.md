@@ -299,12 +299,14 @@ writing state. Tests: `python3 -m unittest composer.scripts.tests.test_gate_watc
 Called by `monitor.py` after the gate watch. Each session it evaluates every
 symphony's approved tree (`fixtures/approved/manifest.json`, one era per
 approved version) on Yahoo adjusted closes and compares the answer with
-Composer's holdings. Silent when they agree; alerts on a MISMATCH, on a
-KNIFE-EDGE two sessions running (Composer decides on ~15:50 prices, the
-shadow on the close), when Composer makes NO REBALANCE attempt (first
-session, daily while it lasts, then RESUMED), and on LOGIC DRIFT (Composer's
-live version differs in logic from the approved one). Ledger:
-`results/monitor/shadow-ledger.jsonl`, one line per engine and session.
+Composer's holdings (KMLM on its 10% corridor path). A difference the logic
+reproduces on Composer's actual 15:45/15:50/15:55 ET prices (Yahoo 5-minute
+bars) is a logged knife-edge, not an alert. Alerts: a MISMATCH; COMPOSER DID
+NOT REBALANCE (read from Composer's own attempt date, first session, daily
+while it lasts, then RESUMED); LOGIC DRIFT (Composer's live tree differs in
+logic from the approved one; checked every run, prices or not); SHADOW BLIND
+(an engine unchecked 3 sessions running); SHADOW RUNNER DOWN (3 failed runs).
+Ledger: `results/monitor/shadow-ledger.jsonl`, one line per engine and session.
 Approving a logic change = add an era to the manifest (tree from
 `GET /symphonies/{id}/score`) in the same commit as its CHANGELOG entry;
 otherwise the next run reports LOGIC DRIFT. Keyless and read-only.

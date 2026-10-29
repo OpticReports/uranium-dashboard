@@ -3,7 +3,7 @@
 
 Every session it works out what each symphony's APPROVED logic says to hold, on independent prices
 (Yahoo adjusted closes), and compares that with what Composer actually holds. Read-only toward
-Composer, holds no broker key, never trades or edits a symphony.
+Composer (GET only), holds no broker key, never trades or edits a symphony.
 
 It catches what Composer's own numbers cannot show:
   - Composer stops rebalancing (2026-10-26..28: three sessions with no rebalance attempt, seen at
@@ -15,33 +15,42 @@ and its ledger is the running proof that the rules reproduce outside Composer, t
 for running them anywhere else (IBKR).
 
 Per engine, for session D (the latest final close on Yahoo):
+  no-rebalance  Composer made no rebalance attempt on D. Read from Composer's own record alone, so
+                no price outage can hide or end it. Alerts on the first session, daily while it lasts
+                (Mondays only for a symphony paused in Composer), once when it resumes
   agree         Composer holds what the approved logic says: daily engines within 3% (half the L1
-                distance between weight vectors); KMLM within its 10% threshold corridor
-  knife-edge    it does not, but one decisive ticker closing at most 0.5 sigma (its 20-session daily
-                sigma) away from its close turns the logic's answer into Composer's. Composer decides
-                on ~15:50 ET prices, the shadow on the close; 0.5 sigma is the p99 of the measured
-                15:45 -> close move. Alerts only on a second session in a row for the same engine
-  mismatch      it does not, and no such move explains it -> alert
-  no-rebalance  Composer made no rebalance attempt on D -> alert on the first session, daily while
-                it lasts, once when it resumes
-  unavailable   prices missing, a data gap on the decision path, or logic the shadow has not been
-                validated on (Unsupported) -> note, never an alert
-Separately, LOGIC DRIFT alerts when Composer's live version is not the last approved era in
-fixtures/approved/manifest.json and its logic differs (a rename passes with a note).
+                distance between weight vectors). KMLM (threshold corridor 10%): within 1.5% of the
+                corridor path, i.e. the target if the previous session's holdings drifted to D's
+                closes sit more than 10pp off it, else those drifted holdings; without a previous
+                session, every holding within 11pp of the target
+  knife-edge    not on closing prices, but yes when every ticker's close on D is replaced by its
+                price at 15:45, 15:50 or 15:55 ET (Yahoo 5-minute bars): Composer decides on prices
+                from those minutes. Logged, not alerted. Without bars, a one-ticker move within
+                0.3 sigma counts instead (p95 of the measured 15:45 -> close move), and two such
+                sessions in a row for one engine alert
+  mismatch      neither explains it -> alert
+  unavailable   prices missing, a data gap, or logic the shadow has not been validated on -> note;
+                three sessions in a row for one engine -> SHADOW BLIND alert (then Mondays)
+LOGIC DRIFT, every run, with or without prices: Composer's live tree differs in logic from the last
+approved era in fixtures/approved/manifest.json -> alert when first seen or changed, and on Mondays
+while it lasts; a new version with identical logic is a note. Three failed runs in a row -> SHADOW
+RUNNER DOWN. A failed run leaves the state as it was; only its failure count moves.
 
-Evaluation semantics: research/synth/tree_sim.py (validated 0.999-1.000 daily-return correlation
-against Composer on these four trees, Wilder RSI) with research/crash/replay.py's bounded RSI
-warm-up (up to 250 closes, at least 60). Weights decided at the close of D from data through D.
-Ledger: composer/results/monitor/shadow-ledger.jsonl, one line per engine and session.
+Evaluation semantics: research/synth/tree_sim.py (validated against Composer on these trees) with
+Wilder RSI over all fetched history (at least 60 closes). Weights decided at the close of D from
+data through D. Ledger: composer/results/monitor/shadow-ledger.jsonl, one line per engine and session.
 
 Usage: shadow_runner.py     today's comparison, printed; state and ledger untouched
 """
 import concurrent.futures
+import copy
 import datetime
+import hashlib
 import json
 import math
 import os
 import sys
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -51,20 +60,26 @@ APPROVED = os.path.join(HERE, "..", "fixtures", "approved")
 LEDGER = os.path.join(HERE, "..", "results", "monitor", "shadow-ledger.jsonl")
 
 DEFAULT_W = 10
-RSI_MAX, RSI_MIN = 250, 60
-TOL_DAILY = 0.03          # agree: half-L1 distance between target and live weights
-CORRIDOR_SLACK = 0.01     # KMLM: every asset within corridor + 1pp of target
-KNIFE_SIGMA = 0.5         # knife-edge search radius in 20-session daily sigmas: the p99 of the measured
-                          # 15:45 ET -> close move (0.49; p95 0.29, median 0.08; 13 decisive tickers x 59
-                          # sessions of Yahoo 5-minute bars to 2026-10-28)
+RSI_MIN = 60              # Wilder RSI over all fetched history; at least 60 closes
+TOL_DAILY = 0.03          # agree: half-L1 distance between target and live weights (daily engines)
+TOL_PATH = 0.015          # KMLM: live vs the corridor path's expected weights (half-L1)
+CORRIDOR_SLACK = 0.01     # KMLM: trigger ambiguity band; lenient check without a previous session
+KNIFE_TIMES = ("15:45", "15:50", "15:55")    # ET; price = close of the 5-minute bar ending then
+KNIFE_SIGMA = 0.3         # fallback search radius without bars, in 20-session daily sigmas: p95 of the
+                          # measured 15:45 ET -> official close move (add. 48 calibration)
 SUB_WARMUP = 60           # sessions of filter sub-tree history before the first decision
 FINAL_AFTER = (16, 15)    # ET: a session's close counts as final from 16:15
+STREAK_ALERT = 2          # unexplained (search-basis) knife-edges in a row before an alert
+BLIND_ALERT = 3           # sessions an engine is unavailable, or runs the runner fails, before an alert
+DISPLAY = {"id", "name", "description", "collapsed?", "exchange", "has_marketcap", "asset_class",
+           "asset_classes"}   # fields that never change what a tree holds
 FNS = {"current-price", "moving-average-price", "cumulative-return", "standard-deviation-return",
        "relative-strength-index"}
 STEPS = {"root", "group", "wt-cash-equal", "wt-cash-specified", "if", "if-child", "filter", "asset"}
 OPS = {"gt": lambda a, b: a > b, "lt": lambda a, b: a < b}
 SHORT = {"relative-strength-index": "RSI", "moving-average-price": "MA", "cumulative-return": "CR",
          "standard-deviation-return": "SD", "current-price": "price"}
+ORDER = ("HG", "KMLM", "SLEEVE", "HARV")
 
 
 class Unsupported(Exception):
@@ -78,10 +93,13 @@ class DataGap(Exception):
 # ------------------------------------------------------------------ evaluator
 def window(node, side):
     """indicator window: newer nodes keep it in <side>-fn-params.window, older ones in
-    <side>-window-days (API.md); Composer's default is 10"""
-    w = (node.get(f"{side}-fn-params") or {}).get("window")
-    if w is None:
-        w = node.get(f"{side}-window-days")
+    <side>-window-days (API.md); Composer's default is 10. Both present and different ->
+    Unsupported (which one Composer reads is not known)."""
+    p = (node.get(f"{side}-fn-params") or {}).get("window")
+    wd = node.get(f"{side}-window-days")
+    if p not in (None, "") and wd not in (None, "") and int(float(p)) != int(float(wd)):
+        raise Unsupported(f"{side} window: fn-params {p} vs window-days {wd}")
+    w = p if p not in (None, "") else wd
     return int(float(w)) if w not in (None, "") else DEFAULT_W
 
 
@@ -101,10 +119,9 @@ def indicator(fn, s, w):
         m = sum(r) / w
         return math.sqrt(sum((x - m) ** 2 for x in r) / w) * 100
     if fn == "relative-strength-index":
-        n = min(RSI_MAX, len(s) - 1)
-        if n < max(RSI_MIN, w + 1):
+        if len(s) - 1 < max(RSI_MIN, w + 1):
             return None
-        d = [s[i] - s[i - 1] for i in range(len(s) - n, len(s))]
+        d = [s[i] - s[i - 1] for i in range(1, len(s))]
         ag = sum(max(x, 0) for x in d[:w]) / w
         al = sum(max(-x, 0) for x in d[:w]) / w
         for x in d[w:]:
@@ -154,22 +171,28 @@ def tree_tickers(tree):
 
 
 def validate(tree):
-    """raise Unsupported if any branch (visited today or not) uses a step, indicator, comparator or
-    group metric the evaluator has not been validated on"""
+    """raise Unsupported if any branch (visited today or not) uses a step, indicator, comparator,
+    window encoding or group metric the evaluator has not been validated on"""
     def walk(n):
         if n.get("step") not in STEPS:
             raise Unsupported(f"step {n.get('step')}")
         if n.get("lhs-fn"):
             if n.get("comparator") not in OPS:
                 raise Unsupported(f"comparator {n.get('comparator')}")
+            if not n.get("rhs-fixed-value?") and not n.get("rhs-fn"):
+                raise Unsupported("comparison against a ticker without rhs-fn")
             for fn in (n["lhs-fn"], None if n.get("rhs-fixed-value?") else n.get("rhs-fn")):
                 if fn and fn not in FNS:
                     raise Unsupported(f"indicator {fn}")
+            window(n, "lhs")
+            if not n.get("rhs-fixed-value?"):
+                window(n, "rhs")
         if n.get("step") == "filter":
             if n.get("sort-by-fn") not in FNS:
                 raise Unsupported(f"indicator {n.get('sort-by-fn')}")
             if n.get("select-fn") not in ("top", "bottom"):
                 raise Unsupported(f"select-fn {n.get('select-fn')}")
+            window(n, "sort-by")
             if any(k.get("step") != "asset" for k in n.get("children") or []) and \
                     n["sort-by-fn"] not in ("standard-deviation-return", "cumulative-return"):
                 raise Unsupported(f"filter on a group by {n['sort-by-fn']}")
@@ -194,11 +217,13 @@ class Shadow:
         self.trace, self.strict = None, False
         self.bump, self.overlay = None, {}      # what_if: (ticker, day) whose close is moved
 
-    def closes(self, t, d, k):
+    def closes(self, t, d, k=None):
+        """closes of t up to and including d: the last k, or all of them"""
         i = self.pos.get(t, {}).get(d)
         if i is None:
             return None
-        return [self.p[t][x] for x in self.days[t][max(0, i - k + 1):i + 1]]
+        lo = 0 if k is None else max(0, i - k + 1)
+        return [self.p[t][x] for x in self.days[t][lo:i + 1]]
 
     def ind(self, fn, t, w, d):
         if fn not in FNS:
@@ -206,7 +231,7 @@ class Shadow:
         key = (fn, t, w, d)
         cache = self.overlay if self.bump == (t, d) else self.cache
         if key not in cache:
-            s = self.closes(t, d, RSI_MAX + 1 if fn == "relative-strength-index" else w + 1)
+            s = self.closes(t, d, None if fn == "relative-strength-index" else w + 1)
             cache[key] = indicator(fn, s, w) if s else None
         v = cache[key]
         if v is None and self.strict:
@@ -231,7 +256,9 @@ class Shadow:
         if n.get("rhs-fixed-value?"):
             rhs_ref, rhs = None, float(n["rhs-val"])
         else:
-            rhs_ref = (n.get("rhs-fn") or n["lhs-fn"], n["rhs-val"], window(n, "rhs"))
+            if not n.get("rhs-fn"):
+                raise Unsupported("comparison against a ticker without rhs-fn")
+            rhs_ref = (n["rhs-fn"], n["rhs-val"], window(n, "rhs"))
             rhs = self.ind(*rhs_ref, d)
         res = lhs is not None and rhs is not None and OPS[op](lhs, rhs)
         if self.trace is not None:
@@ -265,7 +292,7 @@ class Shadow:
                 self.weights(k, d, w, out)
         elif step == "filter":
             fn, fw = node.get("sort-by-fn"), window(node, "sort-by")
-            n_sel = int(node.get("select-n") or 1)
+            n_sel = int(float(node.get("select-n") or 1))
             scored = []
             for k in kids:
                 s = self.ind(fn, k["ticker"], fw, d) if k.get("step") == "asset" else self.sub_metric(k["id"], fn, fw, d)
@@ -273,7 +300,7 @@ class Shadow:
                     scored.append((s, k))
             scored.sort(key=lambda x: x[0], reverse=node.get("select-fn") == "top")
             if self.trace is not None:
-                self.trace.append({"kind": "filter", "fn": fn, "w": fw, "select": f"{node.get('select-fn')}-{n_sel}",
+                self.trace.append({"kind": "filter", "fn": fn, "w": fw, "n": n_sel, "select": f"{node.get('select-fn')}-{n_sel}",
                                    "ranked": [(round(s, 4), k.get("ticker") or k.get("name") or k["id"][:8]) for s, k in scored]})
             for s, k in scored[:n_sel]:
                 self.weights(k, d, w / n_sel, out)
@@ -346,11 +373,45 @@ def distance(target, live):
     return (0.5 * sum(gaps), max(gaps)) if gaps else (0.0, 0.0)
 
 
-def agrees(target, live, corridor=None):
-    half_l1, max_gap = distance(target, live)
-    if corridor:
-        return max_gap <= corridor + CORRIDOR_SLACK
-    return half_l1 <= TOL_DAILY
+def agrees(target, live, corridor=None, drifted=None):
+    """daily engines: half-L1 <= 3%. A threshold engine (corridor c) holds the target if the previous
+    session's holdings, drifted to today's closes, sit more than c off it, else those drifted holdings
+    (either is accepted within 1pp of the trigger, which Composer reads at ~15:50 prices), each within
+    1.5% half-L1; without previous holdings, every asset within c + 1pp of the target"""
+    if not corridor:
+        return distance(target, live)[0] <= TOL_DAILY
+    if drifted is None:
+        return distance(target, live)[1] <= corridor + CORRIDOR_SLACK
+    gap = distance(target, drifted)[1]
+    expect = ([target] if gap >= corridor - CORRIDOR_SLACK else []) + ([drifted] if gap <= corridor + CORRIDOR_SLACK else [])
+    return any(distance(e, live)[0] <= TOL_PATH for e in expect)
+
+
+def drift(w, prices, d0, d):
+    """weights w held from the close of d0, drifted to the close of d (None if a price is missing)"""
+    g = {}
+    for t, x in w.items():
+        p0, p1 = prices.get(t, {}).get(d0), prices.get(t, {}).get(d)
+        if not p0 or not p1:
+            return None
+        g[t] = x * p1 / p0
+    tot = sum(g.values())
+    return {t: x / tot for t, x in g.items()} if tot else None
+
+
+def corridor_base(cfg, prev_row, s, prices, d):
+    """for a threshold engine: the previous session's live holdings drifted to d's closes. None (the
+    lenient check applies) without a previous ledger row for the session before d, or when the
+    symphony's net deposits moved in between (a deposit or withdrawal resets the weights)"""
+    if not cfg.get("corridor") or not prev_row or not prev_row.get("live"):
+        return None
+    cal = sorted(x for x in prices.get("SPY", {}) if x < d)
+    if not cal or prev_row.get("date") != cal[-1] or prev_row.get("live_asof", cal[-1]) != cal[-1]:
+        return None
+    n0, n1 = prev_row.get("net_deposits"), (s or {}).get("net_deposits")
+    if n0 is not None and n1 is not None and abs(float(n1) - float(n0)) > 1.0:
+        return None
+    return drift(prev_row["live"], prices, cal[-1], d)
 
 
 def trace_tickers(trace, tree):
@@ -368,10 +429,11 @@ def trace_tickers(trace, tree):
     return sorted(out)
 
 
-def knife_edge(sim, tree, d, trace, live, corridor=None):
-    """smallest one-ticker move on d, in sigma, that turns the logic's answer into Composer's, if any
-    within KNIFE_SIGMA: {'ticker', 'move', 'sigma_ratio', 'target'} or None"""
-    steps = [1e-4 * 1.25 ** k for k in range(42)]          # 0.01% .. ~1.2x sigma multiples below
+def knife_edge(sim, tree, d, trace, live, corridor=None, drifted=None):
+    """fallback when 5-minute bars are missing: the smallest one-ticker move on d, in sigma, that turns
+    the logic's answer into Composer's, if any within KNIFE_SIGMA: {'ticker', 'move', 'sigma_ratio',
+    'target'} or None"""
+    steps = [1e-4 * 1.25 ** k for k in range(42)]
     trials = []
     for t in trace_tickers(trace, tree):
         sg = sim.sigma(t, d)
@@ -383,9 +445,49 @@ def knife_edge(sim, tree, d, trace, live, corridor=None):
             trials += [(s / sg, t, s), (s / sg, t, -s)]
     for ratio, t, x in sorted(trials):
         alt = sim.what_if(tree, d, t, x)
-        if agrees(alt, live, corridor):
+        if agrees(alt, live, corridor, drifted):
             return {"ticker": t, "move": round(x, 5), "sigma_ratio": round(ratio, 3), "target": alt}
     return None
+
+
+def bar_price(day_bars, hhmm):
+    """price at hh:mm ET = close of the 5-minute bar ending then (the last earlier bar if missing)"""
+    h, m = map(int, hhmm.split(":"))
+    start = f"{(h * 60 + m - 5) // 60:02d}:{(h * 60 + m - 5) % 60:02d}"
+    ks = [k for k, v in day_bars.items() if k <= start and v]
+    return day_bars[max(ks)] if ks else None
+
+
+def at_times(prices, raw, bars, tree, d):
+    """{hh:mm: target} with every ticker's close on d replaced by its price at hh:mm ET (Yahoo
+    5-minute bars, scaled onto the adjusted series by the official close); None if a bar or a raw
+    close is missing for any ticker"""
+    tk = tree_tickers(tree)
+    out = {}
+    for hh in KNIFE_TIMES:
+        p = {}
+        for t in tk:
+            px = bar_price(((bars or {}).get(t) or {}).get(d) or {}, hh)
+            rc = (raw.get(t) or {}).get(d)
+            if px is None or not rc or d not in prices.get(t, {}):
+                return None
+            p[t] = dict(prices[t])
+            p[t][d] = prices[t][d] * px / rc
+        _, alt, _ = run_engine(p, tree, d)
+        out[hh] = alt
+    return out
+
+
+def margin(it):
+    """how close a traced check came to the other answer (relative; small = decisive)"""
+    if it["kind"] == "cond":
+        if it["l"] is None or it["r"] is None:
+            return 0.0
+        return abs(it["l"] - it["r"]) / max(1.0, abs(it["r"]))
+    r, n = it["ranked"], it.get("n", 1)
+    if len(r) <= n:
+        return float("inf")
+    return abs(r[n - 1][0] - r[n][0]) / max(1.0, abs(r[n - 1][0]))
 
 
 def fmt_w(w):
@@ -397,31 +499,136 @@ def fmt_item(it):
         def side(ref, v):
             fn, t, w = ref
             return f"{t} {v:.2f}" if fn == "current-price" else f"{SHORT[fn]}({t},{w}) {v:.2f}"
-        l = side(it["lhs"], it["l"]) if it["l"] is not None else f"{it['lhs']} n/a"
-        r = (side(it["rhs"], it["r"]) if it["rhs"] else f"{it['r']:g}") if it["r"] is not None else "n/a"
-        return f"{l} {'>' if it['op'] == 'gt' else '<'} {r}: {'yes' if it['res'] else 'no'}"
+        lft = side(it["lhs"], it["l"]) if it["l"] is not None else f"{it['lhs']} n/a"
+        rgt = (side(it["rhs"], it["r"]) if it["rhs"] else f"{it['r']:g}") if it["r"] is not None else "n/a"
+        return f"{lft} {'>' if it['op'] == 'gt' else '<'} {rgt}: {'yes' if it['res'] else 'no'}"
     top = ", ".join(f"{n} {s:.2f}" for s, n in it["ranked"][:4])
     return f"{it['select']} by {SHORT.get(it['fn'], it['fn'])}({it['w']}): {top}"
 
 
 def explain(trace, limit=4):
-    """the decision path in words (the last items decided the branch)"""
-    items = [fmt_item(it) for it in trace or []]
-    return "; ".join(items[-limit:])
+    """the closest calls on the decision path, in path order"""
+    idx = sorted(sorted(range(len(trace or [])), key=lambda i: margin(trace[i]))[:limit])
+    return "; ".join(fmt_item(trace[i]) for i in idx)
 
 
-def classify(sim, tree, d, target, trace, live, corridor=None):
-    """(status, detail dict) for one engine on one session where Composer attempted a rebalance"""
+def classify(sim, tree, d, target, trace, live, corridor=None, drifted=None, intraday=None):
+    """(status, detail) for one engine on a session where Composer attempted a rebalance.
+    intraday: callable -> {hh:mm: target} (None when 5-minute bars are missing)"""
     half_l1, max_gap = distance(target, live)
     det = {"dist": round(half_l1, 4), "max_gap": round(max_gap, 4)}
-    if agrees(target, live, corridor):
+    if agrees(target, live, corridor, drifted):
         return "agree", det
-    edge = knife_edge(sim, tree, d, trace, live, corridor)
+    alts = intraday() if intraday else None
+    if alts is not None:
+        hit = next((hh for hh, alt in alts.items() if alt and agrees(alt, live, corridor, drifted)), None)
+        if hit:
+            det["edge"] = {"basis": "intraday", "time": hit, "target": alts[hit]}
+            return "knife-edge", det
+        det.update(why=explain(trace), checked=f"prices at {', '.join(KNIFE_TIMES)} ET")
+        return "mismatch", det
+    edge = knife_edge(sim, tree, d, trace, live, corridor, drifted)
     if edge:
-        det["edge"] = edge
+        det["edge"] = dict(edge, basis="search")
         return "knife-edge", det
-    det["why"] = explain(trace)
+    det.update(why=explain(trace), checked=f"one-ticker moves to {KNIFE_SIGMA:g} sigma (no 5-minute bars)")
     return "mismatch", det
+
+
+# ------------------------------------------------------------- logic drift
+def _num(v):
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        try:
+            return float(v)
+        except ValueError:
+            return v
+    return v
+
+
+def canonical(n, parent=None):
+    """a tree's logic for comparison: every field except display-only ones (an unknown new field
+    counts), numbers normalised ('10' == 10), False == absent, a weight only where the parent reads
+    it (wt-cash-specified), rhs-fn only when the right side is not a fixed value"""
+    c = {}
+    for k, v in n.items():
+        if k in DISPLAY or k == "children" or v is None or v is False or v in ("", {}, []):
+            continue
+        if k == "weight":
+            if parent == "wt-cash-specified":
+                c[k] = round(weight_of(n), 10)
+            continue
+        if k == "rhs-fn" and n.get("rhs-fixed-value?"):
+            continue
+        c[k] = {kk: _num(vv) for kk, vv in sorted(v.items()) if vv not in (None, "")} if isinstance(v, dict) else _num(v)
+    if n.get("children"):
+        c["children"] = [canonical(k, n.get("step")) for k in n["children"]]
+    return c
+
+
+def first_diff(a, b, path="root"):
+    """where two canonical trees first differ, as 'path: approved -> live'"""
+    def short(v):
+        return json.dumps(v)[:60]
+    if isinstance(a, dict) and isinstance(b, dict):
+        for k in sorted(set(a) | set(b)):
+            if k == "children" and k in a and k in b:
+                for i, (x, y) in enumerate(zip(a[k], b[k])):
+                    lab = f"{path}>{x.get('step', '?')}#{i}" + (f"({x.get('ticker') or x.get('lhs-val')})"
+                                                              if x.get("ticker") or x.get("lhs-val") else "")
+                    r = first_diff(x, y, lab)
+                    if r:
+                        return r
+                if len(a[k]) != len(b[k]):
+                    return f"{path}: {len(a[k])} -> {len(b[k])} children"
+                continue
+            if k not in a:
+                return f"{path}.{k}: (absent) -> {short(b[k])}"
+            if k not in b:
+                return f"{path}.{k}: {short(a[k])} -> (absent)"
+            if a[k] != b[k]:
+                return f"{path}.{k}: {short(a[k])} -> {short(b[k])}"
+        return None
+    return None if a == b else f"{path}: {short(a)} -> {short(b)}"
+
+
+def check_drift(cfg_all, get, st_drift, e_now, load=None):
+    """(alerts, notes): Composer's live tree vs the last approved era, for every engine, every run.
+    One engine's failure (composerlib exits on HTTP errors) does not stop the others."""
+    load = load or load_tree
+    alerts, notes = [], []
+    today = e_now.date().isoformat()
+    for eng, cfg in cfg_all.items():
+        try:
+            era = cfg["eras"][-1]
+            want = canonical(load(era))
+            have = canonical(get(f"/symphonies/{cfg['symphony']}/score"))
+            vs = get(f"/symphonies/{cfg['symphony']}/versions")
+            vs = vs if isinstance(vs, list) else (vs or {}).get("versions", [])
+            head = vs[0].get("version_id") if vs else None
+            if have == want:
+                if eng in st_drift:
+                    notes.append(f"shadow: {eng} runs the approved logic again")
+                    st_drift.pop(eng)
+                if head and head != era["version"]:
+                    notes.append(f"shadow: {eng} has a new version {head} with the approved logic (a rename?); "
+                                 f"add it to fixtures/approved/manifest.json")
+                continue
+            h = hashlib.sha1(json.dumps(have, sort_keys=True).encode()).hexdigest()[:12]
+            prev = st_drift.get(eng) or {}
+            if prev.get("hash") != h or (e_now.weekday() == 0 and prev.get("alerted") != today):
+                alerts.append(f"LOGIC DRIFT — {eng}: Composer's live logic (version {head or 'unknown'}) differs from the "
+                              f"approved {era['version']} at {first_diff(want, have)}. The shadow keeps checking the "
+                              f"approved logic. Approve the change (a new era in fixtures/approved/manifest.json, with a "
+                              f"CHANGELOG entry) or roll it back.")
+                prev = {"hash": h, "alerted": today, "version": head}
+            st_drift[eng] = prev
+        except (Exception, SystemExit) as e:  # noqa: BLE001
+            notes.append(f"shadow: logic-drift check for {eng} unavailable ({e})")
+    return alerts, notes
 
 
 # ----------------------------------------------------------------- data I/O
@@ -450,15 +657,22 @@ def load_tree(era):
         return json.load(f)
 
 
+def _et_fallback(now):
+    """UTC -> US Eastern without a tz database (DST: second Sunday of March 07:00 UTC to the first
+    Sunday of November 06:00 UTC)"""
+    y = now.year
+    mar = datetime.datetime(y, 3, 8 + (6 - datetime.date(y, 3, 8).weekday()) % 7, 7, tzinfo=datetime.timezone.utc)
+    nov = datetime.datetime(y, 11, 1 + (6 - datetime.date(y, 11, 1).weekday()) % 7, 6, tzinfo=datetime.timezone.utc)
+    off = -4 if mar <= now < nov else -5
+    return now.astimezone(datetime.timezone(datetime.timedelta(hours=off)))
+
+
 def et_now(now):
     try:
         import zoneinfo
         return now.astimezone(zoneinfo.ZoneInfo("America/New_York"))
-    except Exception:  # noqa: BLE001  no tz database: US DST rule (second Sun Mar .. first Sun Nov)
-        y = now.year
-        mar = datetime.datetime(y, 3, 8 + (6 - datetime.date(y, 3, 8).weekday()) % 7, 7, tzinfo=datetime.timezone.utc)
-        nov = datetime.datetime(y, 11, 1 + (6 - datetime.date(y, 11, 1).weekday()) % 7, 6, tzinfo=datetime.timezone.utc)
-        return now + datetime.timedelta(hours=-4 if mar <= now < nov else -5)
+    except Exception:  # noqa: BLE001
+        return _et_fallback(now)
 
 
 def final_through(now):
@@ -468,24 +682,60 @@ def final_through(now):
     return today if (e.hour, e.minute) >= FINAL_AFTER else today - datetime.timedelta(days=1)
 
 
+def _chart(url, timeout=30):
+    req = urllib.request.Request(url, headers={"user-agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)["chart"]["result"][0]
+
+
+def _utc_date(ts):
+    return datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).date().isoformat()
+
+
+def apply_events(dates, adj, raw, events):
+    """in place: a dividend or split Yahoo has booked but not yet applied to the closes before it (its
+    adjusted series can lag on the ex-date) is applied here, multiplicatively, as Yahoo does"""
+    idx = {d: i for i, d in enumerate(dates)}
+    for ev in (events.get("dividends") or {}).values():
+        i = idx.get(_utc_date(ev["date"]))
+        if not i:
+            continue
+        k = 1 - float(ev["amount"]) / raw[i - 1]
+        if abs((adj[i - 1] / raw[i - 1]) / (adj[i] / raw[i]) - 1) < 1e-6 and abs(k - 1) > 1e-6:
+            for j in range(i):
+                adj[j] *= k
+    for ev in (events.get("splits") or {}).values():
+        i = idx.get(_utc_date(ev["date"]))
+        if not i or not ev.get("numerator") or not ev.get("denominator"):
+            continue
+        m = float(ev["denominator"]) / float(ev["numerator"])
+        jump = raw[i] / raw[i - 1]
+        if m > 0 and abs(math.log(jump) - math.log(m)) < abs(math.log(jump)):
+            for j in range(i):
+                adj[j] *= m
+                raw[j] *= m
+
+
 def fetch_yahoo(t, rng="2y", tries=3):
+    """({date: adjusted close}, {date: raw close}) from Yahoo daily bars"""
     url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(t)}"
            f"?range={rng}&interval=1d&events=div%2Csplit")
     err = None
     for k in range(tries):
         try:
-            req = urllib.request.Request(url, headers={"user-agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=30) as r:
-                res = json.load(r)["chart"]["result"][0]
+            res = _chart(url)
             q = res["indicators"]["quote"][0]
             adj = (res["indicators"].get("adjclose") or [{}])[0].get("adjclose")
-            out = {}
+            rows = {}
             for i, ts in enumerate(res.get("timestamp") or []):
-                v = adj[i] if adj and adj[i] is not None else q["close"][i]
-                if v:
-                    out[datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).date().isoformat()] = float(v)
-            if out:
-                return out
+                c = q["close"][i]
+                if c:
+                    rows[_utc_date(ts)] = (float(adj[i] if adj and adj[i] else c), float(c))
+            if rows:
+                dates = sorted(rows)
+                a_, r_ = [rows[d][0] for d in dates], [rows[d][1] for d in dates]
+                apply_events(dates, a_, r_, res.get("events") or {})
+                return dict(zip(dates, a_)), dict(zip(dates, r_))
             err = "empty series"
         except Exception as e:  # noqa: BLE001
             err = e
@@ -494,18 +744,53 @@ def fetch_yahoo(t, rng="2y", tries=3):
 
 
 def fetch_prices(tickers, now, rng="2y"):
-    """({ticker: {date: adjusted close}} with closes final at `now`, {ticker: error})"""
+    """({ticker: {date: adjusted close}}, {ticker: {date: raw close}}, {ticker: error}), closes final
+    at `now`"""
     cut = final_through(now).isoformat()
-    out, bad = {}, {}
+    out, raw, bad = {}, {}, {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
         futs = {ex.submit(fetch_yahoo, t, rng): t for t in sorted(tickers)}
         for f in concurrent.futures.as_completed(futs):
             t = futs[f]
             try:
-                out[t] = {d: v for d, v in f.result().items() if d <= cut}
+                a, r = f.result()
+                out[t] = {d: v for d, v in a.items() if d <= cut}
+                raw[t] = {d: v for d, v in r.items() if d <= cut}
             except Exception as e:  # noqa: BLE001
                 bad[t] = str(e)
-    return out, bad
+    return out, raw, bad
+
+
+def fetch_intraday(t, rng="5d"):
+    """{date: {'HH:MM' bar start, ET: bar close}} from Yahoo 5-minute bars"""
+    res = _chart(f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(t)}"
+                 f"?range={rng}&interval=5m&includePrePost=false")
+    out = {}
+    for ts, c in zip(res.get("timestamp") or [], res["indicators"]["quote"][0]["close"]):
+        if c:
+            e = et_now(datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc))
+            out.setdefault(e.date().isoformat(), {})[e.strftime("%H:%M")] = float(c)
+    return out
+
+
+def bars_fetcher(rng="5d"):
+    """a cached callable tickers -> {ticker: intraday bars}; tickers without bars are absent"""
+    cache = {}
+
+    def get(tickers):
+        need = [t for t in tickers if t not in cache]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            for t, res in zip(need, ex.map(lambda t: _try(fetch_intraday, t, rng), need)):
+                cache[t] = res
+        return {t: cache[t] for t in tickers if cache.get(t)}
+    return get
+
+
+def _try(fn, *a):
+    try:
+        return fn(*a)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def common_days(prices, tickers, end):
@@ -537,79 +822,61 @@ def run_engine(prices, tree, d):
 
 
 def live_weights(s):
-    h = {x["ticker"]: x["allocation"] for x in s.get("holdings") or [] if x.get("allocation")}
+    """Composer's holdings as weights summing to 1; malformed entries are skipped"""
+    hs = s.get("holdings")
+    h = {}
+    for x in hs if isinstance(hs, list) else []:
+        if isinstance(x, dict) and isinstance(x.get("ticker"), str) and isinstance(x.get("allocation"), (int, float)) \
+                and x["allocation"] > 0:
+            h[x["ticker"]] = h.get(x["ticker"], 0.0) + float(x["allocation"])
     tot = sum(h.values())
     return {t: round(x / tot, 6) for t, x in sorted(h.items())} if tot else {}
 
 
-LOGIC_KEYS = ("step", "ticker", "comparator", "is-else-condition?", "lhs-fn", "lhs-val", "rhs-fn", "rhs-val",
-              "rhs-fixed-value?", "select-fn", "select-n", "sort-by-fn", "rebalance", "rebalance-corridor-width")
-
-
-def canonical(n):
-    """a tree's logic only (no ids, names, display fields); windows resolved from either field"""
-    c = {k: n[k] for k in LOGIC_KEYS if n.get(k) not in (None, "")}
-    if n.get("step") == "if-child" and n.get("lhs-fn"):
-        c["lhs-w"] = window(n, "lhs")
-        if n.get("rhs-fixed-value?"):
-            c.pop("rhs-fn", None)                 # ignored against a fixed value
-        else:
-            c["rhs-w"] = window(n, "rhs")
-    if n.get("step") == "filter":
-        c["sort-w"] = window(n, "sort-by")
-    if n.get("weight") is not None:
-        c["weight"] = round(weight_of(n), 8)
-    if n.get("children"):
-        c["children"] = [canonical(k) for k in n["children"]]
-    return c
-
-
-def check_drift(cfg_all, get, state_drift, weekday, load=None):
-    """(alerts, notes): Composer's live version head vs the last approved era, per engine"""
-    load = load or load_tree
-    alerts, notes = [], []
-    for eng, cfg in cfg_all.items():
-        era = cfg["eras"][-1]
-        vs = get(f"/symphonies/{cfg['symphony']}/versions")
-        vs = vs if isinstance(vs, list) else vs.get("versions", [])
-        head = vs[0]["version_id"] if vs else None
-        if head is None or head == era["version"]:
-            state_drift.pop(eng, None)
-            continue
-        live = get(f"/symphonies/{cfg['symphony']}/score")
-        if canonical(live) == canonical(load(era)):
-            notes.append(f"shadow: {eng} has a new version {head} with unchanged logic (a rename?); "
-                         f"add it to fixtures/approved/manifest.json")
-            state_drift.pop(eng, None)
-            continue
-        if state_drift.get(eng) != head or weekday == 0:
-            alerts.append(f"LOGIC DRIFT — {eng}: Composer runs version {head} ({vs[0].get('created_at', '')[:16]}), "
-                          f"not the approved {era['version']}, and the logic differs. The shadow keeps checking the "
-                          f"approved logic. Approve the change (new era in fixtures/approved/manifest.json, with a "
-                          f"CHANGELOG entry) or roll it back.")
-        state_drift[eng] = head
-    return alerts, notes
-
-
 def read_ledger(path=None):
+    """ledger rows; a malformed line or an unreadable file is skipped, never fatal"""
     path = path or LEDGER
-    if not os.path.exists(path):
-        return []
-    with open(path) as f:
-        return [json.loads(x) for x in f if x.strip()]
+    out = []
+    try:
+        with open(path) as f:
+            lines = f.readlines()
+    except OSError:
+        return out
+    for x in lines:
+        try:
+            r = json.loads(x)
+        except ValueError:
+            continue
+        if isinstance(r, dict) and "date" in r and "engine" in r:
+            out.append(r)
+    return out
 
 
 def write_ledger(rows, path=None):
-    """upsert by (date, engine); file sorted by date then engine"""
+    """upsert by (date, engine), sorted by date then engine; written to a temp file and renamed, so a
+    crash cannot leave a half-written ledger"""
     path = path or LEDGER
     keep = {(r["date"], r["engine"]): r for r in read_ledger(path)}
     for r in rows:
         keep[(r["date"], r["engine"])] = r
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    order = {"HG": 0, "KMLM": 1, "SLEEVE": 2, "HARV": 3}
-    with open(path, "w") as f:
-        for k in sorted(keep, key=lambda k: (k[0], order.get(k[1], 9), k[1])):
-            f.write(json.dumps(keep[k], separators=(",", ":")) + "\n")
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    order = {e: i for i, e in enumerate(ORDER)}
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=".shadow-ledger.")
+    try:
+        with os.fdopen(fd, "w") as f:
+            for k in sorted(keep, key=lambda k: (k[0], order.get(k[1], 9), k[1])):
+                f.write(json.dumps(keep[k], separators=(",", ":")) + "\n")
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
+def previous_rows(path, d, prices):
+    """{engine: ledger row} for the session immediately before d (SPY calendar)"""
+    cal = sorted(x for x in prices.get("SPY", {}) if x < d)
+    return {r["engine"]: r for r in read_ledger(path) if cal and r.get("date") == cal[-1]}
 
 
 def record(rows_all, n=20):
@@ -623,113 +890,194 @@ def record(rows_all, n=20):
 
 
 # --------------------------------------------------------------- daily check
-def assess(cfg_all, meta, prices, d, st, load=None):
-    """Pure core of the daily check (no network). st: persisted shadow state (mutated); load: era ->
-    tree (default: the approved fixtures). Returns (rows, alerts, notes)."""
+def assess(cfg_all, meta, prices, d, st, load=None, raw=None, bars=None, prev=None, weekday=1, only=None):
+    """Pure core of the daily check (no network). st: shadow state, mutated (the caller works on a
+    copy and keeps it only on success). raw: {ticker: {date: raw close}}; bars: callable(tickers) ->
+    5-minute bars, called only on a disagreement; prev: {engine: ledger row of the previous session};
+    weekday: ET weekday of the run; only: re-assess just these engines (a re-run of the same session:
+    no no-rebalance or blind-count transitions). Returns (rows, alerts, notes)."""
     load = load or load_tree
-    rows, alerts, notes, frozen = [], [], [], []
+    raw = raw or {}
+    rows, alerts, notes = [], [], []
     by_id = {s["id"]: s for s in meta}
+    fz, ks, bl = st.setdefault("frozen", {}), st.setdefault("knife_streak", {}), st.setdefault("blind", {})
+    new, still, resumed, wants = [], [], [], {}
     for eng, cfg in cfg_all.items():
-        era = era_for(cfg, d)
-        s = by_id.get(cfg["symphony"])
+        if only is not None and eng not in only:
+            continue
+        era, s = era_for(cfg, d), by_id.get(cfg["symphony"])
         if not era or not s:
             notes.append(f"shadow: {eng} not live on {d}")
             continue
-        tree = load(era)
-        sim, target, tr = run_engine(prices, tree, d)
-        live, attempted = live_weights(s), s.get("last_rebalance_attempted_on")
-        row = {"date": d, "engine": eng, "version": era["version"][:8], "src": "live", "target": target,
-               "live": live, "attempted": attempted}
-        if target is None:
-            row.update(status="unavailable", note=tr)
-            notes.append(f"shadow: {eng} unavailable on {d} ({tr})")
-        elif attempted and attempted < d:
+        attempted, live = s.get("last_rebalance_attempted_on"), live_weights(s)
+        if attempted is not None and not isinstance(attempted, str):
+            notes.append(f"shadow: {eng}: unreadable rebalance-attempt date {attempted!r}; treated as missing")
+            attempted = None
+        row = {"date": d, "engine": eng, "version": era["version"][:8], "src": "live", "live": live,
+               "attempted": attempted, "net_deposits": s.get("net_deposits")}
+        # 1. no-rebalance, from Composer's own record alone (no price outage can hide or end it)
+        frozen = bool(attempted and attempted < d)
+        if only is None:
+            if frozen:
+                f = fz.get(eng)
+                if f:
+                    f["sessions"] += 1
+                    still.append(eng)
+                else:
+                    fz[eng] = {"since": d, "sessions": 1, "last": attempted}
+                    new.append(eng)
+            elif attempted and eng in fz:
+                resumed.append((eng, fz.pop(eng)))
+        # 2. the approved logic on D's closes; any failure is this engine's, not the run's
+        try:
+            tree = load(era)
+            sim, target, tr = run_engine(prices, tree, d)
+        except Exception as e:  # noqa: BLE001
+            tree, sim, target, tr = None, None, None, f"evaluator error: {e!r}"
+        row["target"] = target
+        if frozen:
             row["status"] = "no-rebalance"
-            frozen.append((eng, s, target, live, cfg.get("corridor")))
-        elif attempted and attempted > d:
-            row.update(status="unavailable", note=f"Composer attempted {attempted}, newest final close here is {d}")
-            notes.append(f"shadow: {eng}: {row['note']}")
+            wants[eng] = (target, live, cfg.get("corridor"), s, tr)
+        elif target is None:
+            row.update(status="unavailable", note=tr)
+        elif not attempted or attempted > d:
+            row.update(status="unavailable", note=(f"Composer attempted {attempted}; the newest final close here is {d}"
+                                                   if attempted else "Composer reports no rebalance attempt date"))
         else:
-            status, det = classify(sim, tree, d, target, tr, live, cfg.get("corridor"))
-            row.update(status=status, **det)
-            ks = st.setdefault("knife_streak", {})
-            ks[eng] = ks.get(eng, 0) + 1 if status == "knife-edge" else 0
-            if status == "mismatch":
-                alerts.append(f"SHADOW MISMATCH — {eng} on {d}: Composer holds {fmt_w(live)}; its approved logic "
-                              f"({era['version'][:8]}) says {fmt_w(target)}, and no single-ticker move within "
-                              f"{KNIFE_SIGMA:g} sigma of the close explains it. Path: {det['why']}. Check the symphony "
-                              f"and the data before the next rebalance; no trade is implied.")
-            elif status == "knife-edge" and ks[eng] >= 2:
-                e = det["edge"]
-                alerts.append(f"SHADOW KNIFE-EDGE x{ks[eng]} — {eng} on {d}: Composer holds {fmt_w(live)}, the "
-                              f"approved logic on closing prices says {fmt_w(target)}; a {e['move']:+.2%} {e['ticker']} "
-                              f"move ({e['sigma_ratio']:.2f} sigma) explains it. A real knife-edge rarely repeats: "
-                              f"check the data feed and the symphony if it continues.")
+            try:
+                base = corridor_base(cfg, (prev or {}).get(eng), s, prices, d)
+                intraday = (lambda: at_times(prices, raw, bars(sorted(tree_tickers(tree))), tree, d)) if bars else None
+                status, det = classify(sim, tree, d, target, tr, live, cfg.get("corridor"), base, intraday)
+                row.update(status=status, **det)
+                if cfg.get("corridor"):
+                    row["corridor_check"] = "path" if base else "lenient"
+            except Exception as e:  # noqa: BLE001
+                row.update(status="unavailable", note=f"classifier error: {e!r}")
+        # 3. per-engine streaks and alerts
+        status = row["status"]
+        if status == "unavailable":
+            notes.append(f"shadow: {eng} unavailable on {d} ({row['note']})")
+            if only is None:
+                bl[eng] = bl.get(eng, 0) + 1
+                if bl[eng] == BLIND_ALERT or (bl[eng] > BLIND_ALERT and weekday == 0):
+                    alerts.append(f"SHADOW BLIND — {eng}: no comparison for {bl[eng]} sessions in a row "
+                                  f"(latest: {row['note']}). The runner cannot vouch for this engine until it clears.")
+        else:
+            bl.pop(eng, None)
+        if status == "knife-edge" and row["edge"]["basis"] == "search":
+            ks[eng] = ks.get(eng, 0) + 1
+        else:
+            ks.pop(eng, None)
+        if status == "mismatch":
+            alerts.append(f"SHADOW MISMATCH — {eng} on {d}: Composer holds {fmt_w(live)}; its approved logic "
+                          f"({era['version'][:8]}) says {fmt_w(target)}, on closing prices and on {row['checked']}. "
+                          f"Closest calls: {row['why']}. Check the symphony and the data before the next "
+                          f"rebalance; no trade is implied.")
+        elif status == "knife-edge" and ks.get(eng, 0) >= STREAK_ALERT:
+            e = row["edge"]
+            alerts.append(f"SHADOW KNIFE-EDGE x{ks[eng]} — {eng} on {d}: Composer holds {fmt_w(live)}, the approved "
+                          f"logic on closing prices says {fmt_w(target)}; with no 5-minute bars to check, a "
+                          f"{e['move']:+.2%} {e['ticker']} move ({e['sigma_ratio']:.2f} sigma) is the explanation. "
+                          f"Check the data feed and the symphony if it continues.")
         rows.append(row)
-    # book-level no-rebalance state machine (one alert line for all frozen engines)
-    if frozen:
-        since = st.get("frozen_since") or d
-        n = st.get("frozen_sessions", 0) + 1
-        last = sorted({s.get("last_rebalance_attempted_on") for _, s, *_ in frozen})
-        wants = "; ".join(f"{e} {fmt_w(t)}" + ("" if agrees(t, lv, c) else f" (frozen at {fmt_w(lv)})")
-                          for e, _, t, lv, c in frozen)
-        paused = [f"{e} paused by {s.get('paused_by')}: {s.get('paused_reason')}" for e, s, *_ in frozen if s.get("is_paused")]
-        head = ("COMPOSER DID NOT REBALANCE" if n == 1 else f"COMPOSER STILL NOT REBALANCING (session {n})")
-        alerts.append(f"{head} — no rebalance attempt on {d} for {', '.join(e for e, *_ in frozen)} (last attempt "
-                      f"{', '.join(x or 'unknown' for x in last)}); holdings are frozen. "
-                      + (f"{'; '.join(paused)}. " if paused else "")
-                      + f"Approved logic now: {wants}. The 2026-10-26..28 subscription lapse looked like this.")
-        st["frozen_since"], st["frozen_sessions"] = since, n
-    elif st.get("frozen_since"):
-        alerts.append(f"COMPOSER REBALANCING RESUMED on {d} after {st.get('frozen_sessions', 0)} session(s) without an "
-                      f"attempt (since {st['frozen_since']}).")
-        st["frozen_since"], st["frozen_sessions"] = None, 0
+
+    def wanted(e):
+        t, lv, c, s, tr = wants[e]
+        if t is None:
+            return f"{e} logic unavailable ({tr})"
+        return f"{e} {fmt_w(t)}" + ("" if agrees(t, lv, c) else f" (frozen at {fmt_w(lv)})")
+    if new:
+        last = sorted({wants[e][3].get("last_rebalance_attempted_on") for e in new})
+        paused = [f"{e} is paused in Composer ({wants[e][3].get('paused_by')}: {wants[e][3].get('paused_reason')})"
+                  for e in new if wants[e][3].get("is_paused")]
+        alerts.append(f"COMPOSER DID NOT REBALANCE — no rebalance attempt on {d} for {', '.join(new)} (last attempt "
+                      f"{', '.join(last)}); holdings are frozen. " + (f"{'; '.join(paused)}. " if paused else "")
+                      + f"Approved logic now: {'; '.join(wanted(e) for e in new)}. The 2026-10-26..28 subscription "
+                      f"lapse looked like this.")
+    loud = [e for e in still if not wants[e][3].get("is_paused") or weekday == 0]
+    if loud:
+        alerts.append("COMPOSER STILL NOT REBALANCING — " + "; ".join(
+            f"{e} session {fz[e]['sessions']} without an attempt (since {fz[e]['since']})" for e in loud)
+            + f". Approved logic now: {'; '.join(wanted(e) for e in loud)}.")
+    if resumed:
+        alerts.append(f"COMPOSER REBALANCING RESUMED on {d} — " + "; ".join(
+            f"{e} after {f['sessions']} session(s) without an attempt (since {f['since']})" for e, f in resumed) + ".")
     return rows, alerts, notes
 
 
-def check_shadow(state, alerts, snap, meta, now, get=None, write=True):
-    """monitor.py hook. Any failure degrades to a printed note (no alert, state untouched)."""
+def check_shadow(state, alerts, snap, meta, now, get=None, write=True, ledger=None, bars=None):
+    """monitor.py hook. The logic-drift check runs first and needs no prices. Alerts are delivered even
+    if the ledger cannot be written. A failed run keeps the previous state (only its failure count
+    moves); three in a row alert."""
+    ledger = ledger or LEDGER
+    st = copy.deepcopy(state.get("shadow") or {})
+    e_now = et_now(now)
+    new_alerts, notes, rows = [], [], []
     try:
         cfg_all = load_manifest()
-        st = state.setdefault("shadow", {})
+    except Exception as e:  # noqa: BLE001
+        print(f"  (shadow runner unavailable: manifest: {e})")
+        return
+    if get is not None:
+        a, n = check_drift(cfg_all, get, st.setdefault("drift", {}), e_now)
+        new_alerts += a
+        notes += n
+    d = None
+    try:
+        work = copy.deepcopy(st)
         hi = final_through(now)
         lo = (hi - datetime.timedelta(days=10)).isoformat()   # D is the latest session on or before hi
-        tick = set()
+        tick = {"SPY"}
         for cfg in cfg_all.values():
             for era in eras_between(cfg, lo, hi.isoformat()):
                 tick |= tree_tickers(load_tree(era))
-        prices, bad = fetch_prices(tick | {"SPY"}, now)
-        if "SPY" not in prices:
+        prices, raw, bad = fetch_prices(tick, now)
+        if "SPY" not in prices or not prices["SPY"]:
             raise RuntimeError(f"no SPY prices ({bad.get('SPY')})")
         d = max(prices["SPY"])
         if bad:
-            print(f"  (shadow: Yahoo failed for {', '.join(sorted(bad))})")
-        if st.get("last_date") == d:
-            print(f"  (shadow: no session newer than {d}; nothing re-assessed)")
+            notes.append(f"shadow: Yahoo failed for {', '.join(sorted(bad))}")
+        pending = work.get("pending") or []
+        if work.get("last_date") == d and not pending:
+            notes.append(f"shadow: no session newer than {d}; nothing re-assessed")
             snap["shadow"] = {"date": d, "stale": True}
-            return
-        rows, new_alerts, notes = assess(cfg_all, meta, prices, d, st)
-        if get is not None:
-            try:
-                a2, n2 = check_drift(cfg_all, get, st.setdefault("drift", {}), now.weekday())
-                new_alerts += a2
-                notes += n2
-            except (Exception, SystemExit) as e:  # noqa: BLE001  composerlib exits on HTTP errors
-                notes.append(f"shadow: logic-drift check unavailable ({e})")
-        for n in notes:
-            print(f"  ({n})")
-        if write:
-            write_ledger(rows)
-            st["last_date"] = d
-        n, rec = record(read_ledger() if write else rows)
-        line = " | ".join(f"{r['engine']} {r['status']}" + (f" {fmt_w(r['target'])}" if r.get("target") else "")
-                          for r in rows)
-        print(f"  shadow {d}: {line}")
-        print(f"  shadow record, last {n} session(s): " + ", ".join(f"{v} {k}" for k, v in sorted(rec.items())))
-        alerts.extend(new_alerts)
-        snap["shadow"] = {"date": d, "status": {r["engine"]: r["status"] for r in rows}}
+        else:
+            only = set(pending) if work.get("last_date") == d else None
+            rows, a, n = assess(cfg_all, meta, prices, d, work, raw=raw, bars=bars or bars_fetcher(),
+                                prev=previous_rows(ledger, d, prices), weekday=e_now.weekday(), only=only)
+            new_alerts += a
+            notes += n
+            work["last_date"] = d
+            work["pending"] = sorted(r["engine"] for r in rows if r["status"] == "unavailable")
+            snap["shadow"] = {"date": d, "status": {r["engine"]: r["status"] for r in rows}}
+        work.pop("fail", None)
+        st = work
     except (Exception, SystemExit) as e:  # noqa: BLE001  never take the monitor down
-        print(f"  (shadow runner unavailable: {e})")
+        f = st.setdefault("fail", {"n": 0})
+        f["n"] += 1
+        f["last"] = str(e)[:300]
+        notes.append(f"shadow runner unavailable: {e}")
+        if f["n"] == BLIND_ALERT or (f["n"] > BLIND_ALERT and e_now.weekday() == 0 and f.get("alerted") != e_now.date().isoformat()):
+            new_alerts.append(f"SHADOW RUNNER DOWN — {f['n']} runs in a row failed (latest: {f['last']}). Composer is "
+                              f"not being checked against the approved logic until this clears.")
+            f["alerted"] = e_now.date().isoformat()
+    for n in notes:
+        print(f"  ({n})")
+    if rows:
+        line = " | ".join(f"{r['engine']} {r['status']}" + (f" @{r['edge']['time']}" if r.get("edge", {}).get("basis") == "intraday" else "")
+                          + (f" {fmt_w(r['target'])}" if r.get("target") else "") for r in rows)
+        print(f"  shadow {d}: {line}")
+    alerts.extend(new_alerts)
+    if not write:
+        return
+    state["shadow"] = st
+    if rows:
+        try:
+            write_ledger(rows, ledger)
+            n, rec = record(read_ledger(ledger))
+            print(f"  shadow record, last {n} session(s): " + ", ".join(f"{v} {k}" for k, v in sorted(rec.items())))
+        except Exception as e:  # noqa: BLE001
+            print(f"  (shadow ledger not written: {e})")
 
 
 def main():

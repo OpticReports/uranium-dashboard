@@ -22,19 +22,26 @@ def main():
     rows = [r for r in bf["rows"] if r["engine"] in ENGINES]
     dates = sorted({r["date"] for r in rows})
     cells = [{"d": r["date"], "e": r["engine"], "s": r["status"], "live": sr.fmt_w(r.get("live") or {}),
-              "logic": sr.fmt_w(r.get("target") or {}), "edge": r.get("edge") and {
-                  "t": r["edge"]["ticker"], "m": r["edge"]["move"], "k": r["edge"]["sigma_ratio"]}} for r in rows]
+              "logic": sr.fmt_w(r.get("target") or {}), "chk": r.get("corridor_check"),
+              "edge": r.get("edge") and ({"b": "intraday", "time": r["edge"]["time"]} if r["edge"]["basis"] == "intraday" else
+                                         {"b": "search", "t": r["edge"]["ticker"], "m": r["edge"]["move"], "k": r["edge"]["sigma_ratio"]})}
+             for r in rows]
     counts = {e: {} for e in ENGINES}
     for r in rows:
         counts[r["engine"]][r["status"]] = counts[r["engine"]].get(r["status"], 0) + 1
     live_rows = [r for r in rows if r["status"] != "no-rebalance"]
     rep = cal["reproduction"]
     rep_ok = sum(v["agree"] for v in rep.values())
+    rep_strict = sum(v["strict"] for v in rep.values())
     rep_n = sum(v["n"] for v in rep.values())
     rep_sh = sum(v["shifted_agree"] for v in rep.values()) / max(1, sum(v["shifted_n"] for v in rep.values()))
-    differ = [{"era": k, **x} for k, v in rep.items() for x in v["differ"]]
+    ch = sum(v["changes"] for v in rep.values())
+    ch_ok = sum(v["changes_followed"] for v in rep.values())
     late = cal["late_moves"]["pooled"]["15:45"]
-    knives = sorted(r["edge"]["sigma_ratio"] for r in rows if r["status"] == "knife-edge")
+    knives = [r for r in rows if r["status"] == "knife-edge"]
+    search = sorted(r["edge"]["sigma_ratio"] for r in knives if r["edge"]["basis"] == "search")
+    intra = sorted(({"d": r["date"], "e": r["engine"], "t": r["edge"]["time"]} for r in knives if r["edge"]["basis"] == "intraday"),
+                   key=lambda x: (x["d"], ENGINES.index(x["e"])))
     pl = cal["placebo"]
     eras = []
     for e, cfg in man.items():
@@ -51,14 +58,17 @@ def main():
     qrows = [r for r in rows if r["date"] == qd]
     n, rec = sr.record([r for r in rows if r["date"] <= qd])
     quiet = {"date": qd,
-             "line": f"shadow {qd}: " + " | ".join(f"{r['engine']} {r['status']} {sr.fmt_w(r['target'])}" for r in qrows),
+             "line": f"shadow {qd}: " + " | ".join(f"{r['engine']} {r['status']}" + (f" @{r['edge']['time']}" if r.get("edge", {}).get("basis") == "intraday" else "")
+                                                    + f" {sr.fmt_w(r['target'])}" for r in qrows),
              "record": f"shadow record, last {n} session(s): " + ", ".join(f"{v} {k}" for k, v in sorted(rec.items()))}
+    kmlm = [r for r in rows if r["engine"] == "KMLM" and r["status"] != "no-rebalance"]
     data = {"dates": dates, "cells": cells, "counts": counts, "eras": eras, "late": late["values"], "quiet": quiet,
-            "late_q": {k: late[k] for k in ("p50", "p95", "p99", "max", "n")}, "knives": knives,
-            "placebo": pl["knife_edge_sigma_ratios"], "placebo_total": pl["total"], "K": sr.KNIFE_SIGMA,
-            "rep": {"ok": rep_ok, "n": rep_n, "shifted": rep_sh, "differ": differ}, "lapse": lapse,
-            "n_live": len(live_rows), "agree": sum(r["status"] == "agree" for r in live_rows),
+            "late_q": {k: late[k] for k in ("p50", "p95", "p99", "max", "n")}, "search": search, "intra": intra,
+            "placebo_search": pl["search_sigma_ratios"], "placebo": pl["total"], "K": sr.KNIFE_SIGMA,
+            "rep": {"ok": rep_ok, "strict": rep_strict, "n": rep_n, "shifted": rep_sh, "changes": ch, "changes_ok": ch_ok},
+            "lapse": lapse, "n_live": len(live_rows), "agree": sum(r["status"] == "agree" for r in live_rows),
             "knife": len(knives), "mismatch": sum(r["status"] == "mismatch" for r in live_rows),
+            "kmlm_path": sum(r.get("corridor_check") == "path" for r in kmlm), "kmlm_n": len(kmlm),
             "window": [dates[0], dates[-1]], "late_window": cal["late_moves"].get("window")}
     html = TEMPLATE.replace("__DATA__", json.dumps(data, separators=(",", ":")))
     with open(PAGE, "w") as f:
@@ -112,6 +122,7 @@ svg{display:block;width:100%;height:auto;overflow:visible}
 .notes li{margin:3px 0}
 pre{background:var(--code);border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 10px}
 .ok{color:var(--ink2)} .bad{font-weight:600}
+#intra{min-width:560px} #intra td:last-child{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -129,12 +140,14 @@ pre{background:var(--code);border-radius:8px;padding:10px 12px;font-size:12.5px;
 </section>
 
 <section class="card">
-<h2>How big a price move explains each knife-edge</h2>
-<p class="sub-h">Composer decides on prices from about 15:45-15:50 ET; the runner uses the close. A difference counts as a knife-edge only if one decisive ticker closing within half a typical daily move (0.5&sigma;) of where it did turns the logic's answer into Composer's. Top: how far these tickers actually move in those last minutes. Bottom: the move each live knife-edge needed, and the same search run on deliberately wrong pairs (placebo).</p>
+<h2>How each knife-edge was confirmed</h2>
+<p class="sub-h">Composer decides on prices from about 15:45-15:55 ET; the runner uses the official close. A difference counts as a knife-edge when the approved logic, re-run with every ticker at its actual 15:45, 15:50 or 15:55 price (Yahoo 5-minute bars), gives exactly what Composer holds. Bars go back about 60 sessions; before that, and on any day bars are missing, a one-ticker move of at most 0.3&sigma; must explain it instead. The placebo row is the same test on deliberately wrong pairs inside the bar window.</p>
+<div class="tablewrap"><table id="intra"></table></div>
+<p class="sub-h" style="margin-top:12px">The fallback's radius: how far decisive tickers actually move from 15:45 to the close (top), and the move each fallback-confirmed knife-edge needed, against the same search run on deliberately wrong pairs (bottom).</p>
 <div class="legend" id="lg-k"></div>
 <div class="scroll">
-<svg id="hist" role="img" aria-label="Histogram of the measured 15:45 to close move in units of daily sigma, with the 0.5 sigma search radius marked"></svg>
-<svg id="dots" role="img" aria-label="Dot rows: the move each live knife-edge needed, and placebo knife-edges, on the same sigma axis"></svg>
+<svg id="hist" role="img" aria-label="Histogram of the measured 15:45 to close move in units of daily sigma, with the 0.3 sigma fallback radius marked"></svg>
+<svg id="dots" role="img" aria-label="Dot rows: the move each fallback-confirmed knife-edge needed, and placebo cases the fallback excused, on the same sigma axis"></svg>
 </div>
 </section>
 
@@ -172,9 +185,9 @@ const ST = {'agree': ['var(--agree)', '✓ agree'], 'knife-edge': ['var(--warn)'
 
 // KPIs
 const k = document.getElementById('kpis');
-[[`${D.agree} / ${D.n_live}`, `engine-sessions where Composer held what the approved logic says (${pct(D.agree / D.n_live)}), ${D.window[0].slice(5)} to 10-23`],
- [`${D.knife}`, `knife-edges, each explained by one ticker moving at most ${Math.max(...D.knives).toFixed(2)}σ before the close; ${D.mismatch} mismatches`],
- [`${D.rep.ok.toLocaleString()} / ${D.rep.n.toLocaleString()}`, `Composer's own backtest decisions reproduced (every approved tree, Apr 1 to Oct 28)`],
+[[`${D.agree} / ${D.n_live}`, `engine-sessions where Composer held what the approved logic says on closing prices (${pct(D.agree / D.n_live)}), ${D.window[0].slice(5)} to 10-23`],
+ [`${D.mismatch}`, `mismatches. ${D.knife} knife-edges: ${D.intra.length} confirmed on Composer's actual 15:45-15:55 prices, ${D.search.length} (before 5-minute bars) by the fallback`],
+ [`${D.rep.strict.toLocaleString()} / ${D.rep.n.toLocaleString()}`, `Composer's own backtest decisions reproduced exactly (every approved tree, Apr 1 to Oct 28)`],
  ['First session', 'the Oct 26-28 lapse (no rebalance attempts) would have alerted on Oct 26, not via API errors']]
  .forEach(([b, s]) => { const d = document.createElement('div'); d.className = 'kpi'; d.innerHTML = `<b>${b}</b><span>${s}</span>`; k.appendChild(d); });
 
@@ -202,7 +215,9 @@ ct.innerHTML = '<thead><tr><th>Engine</th><th class="n">agree</th><th class="n">
     if (!c) return;
     el('rect', {x, y: y - 1, width: cw, height: ch + 2, fill: 'transparent'}, svg).addEventListener('mousemove', ev => {
       let h = `<div class="d">${d} · ${e}</div><b>${ST[c.s][1]}</b><br>Composer: ${c.live}<br>Logic: ${c.logic}`;
-      if (c.edge) h += `<br>Explained by ${c.edge.t} ${(100 * c.edge.m).toFixed(2)}% (${c.edge.k.toFixed(2)}σ)`;
+      if (c.edge && c.edge.b === 'intraday') h += `<br>The logic on ${c.edge.time} ET prices gives Composer's holding`;
+      if (c.edge && c.edge.b === 'search') h += `<br>No 5-minute bars; explained by ${c.edge.t} ${(100 * c.edge.m).toFixed(2)}% (${c.edge.k.toFixed(2)}σ)`;
+      if (c.chk) h += `<br>Corridor check: ${c.chk === 'path' ? 'path (from the previous session)' : 'lenient (no previous session)'}`;
       if (c.s === 'no-rebalance') h += '<br>No rebalance attempt: holdings frozen since 10-23';
       tip(ev, h); });
     svg.lastChild.addEventListener('mouseleave', untip);
@@ -224,10 +239,15 @@ ct.innerHTML = '<thead><tr><th>Engine</th><th class="n">agree</th><th class="n">
 
 // knife-edge chart
 (function(){
+  const it = document.getElementById('intra'), times = ['15:45', '15:50', '15:55'];
+  it.innerHTML = '<thead><tr><th>Confirmed on actual prices</th>' + times.map(t => `<th class="n">${t} ET</th>`).join('') + '<th>Sessions</th></tr></thead><tbody>' +
+    ['HG', 'KMLM', 'SLEEVE', 'HARV'].map(e => { const xs = D.intra.filter(x => x.e === e);
+      return `<tr><td>${e}</td>${times.map(t => `<td class="n">${xs.filter(x => x.t === t).length}</td>`).join('')}<td>${xs.map(x => x.d.slice(5)).join(', ') || '-'}</td></tr>`; }).join('') +
+    `<tr><td>Placebo (wrong-day pairs)</td><td class="n" colspan="3">${D.placebo.bars['knife-edge'] || 0} of ${Object.values(D.placebo.bars).reduce((a, b) => a + b, 0)} excused</td><td></td></tr></tbody>`;
   const lgk = document.getElementById('lg-k');
-  lgk.innerHTML = `<span><i class="sw" style="background:var(--s1)"></i>measured 15:45 ET → close move (${D.late_q.n} ticker-sessions)</span>` +
-    `<span><i class="dot" style="background:var(--s2)"></i>live knife-edges (${D.knives.length})</span>` +
-    `<span><i class="dot" style="background:var(--s3)"></i>placebo knife-edges (${D.placebo.length})</span>`;
+  lgk.innerHTML = `<span><i class="sw" style="background:var(--s1)"></i>measured 15:45 ET → official close move (${D.late_q.n} ticker-sessions)</span>` +
+    `<span><i class="dot" style="background:var(--s2)"></i>live knife-edges confirmed by the fallback (${D.search.length})</span>` +
+    `<span><i class="dot" style="background:var(--s3)"></i>placebo cases the fallback excused (${D.placebo_search.length} of ${Object.values(D.placebo['no bars']).reduce((a, b) => a + b, 0)})</span>`;
   const W = 1060, L = 170, R = 20, X1 = 1.0, x = v => L + Math.min(v, X1) / X1 * (W - L - R);
   // histogram
   const h = document.getElementById('hist'), H = 170, T = 14, B = 26;
@@ -243,9 +263,9 @@ ct.innerHTML = '<thead><tr><th>Engine</th><th class="n">agree</th><th class="n">
     r.addEventListener('mousemove', ev => tip(ev, `<div class="d">${(i * .05).toFixed(2)}-${((i + 1) * .05).toFixed(2)}σ</div>${c} of ${D.late.length} ticker-sessions (${pct(c / D.late.length)})`));
     r.addEventListener('mouseleave', untip); });
   el('line', {x1: x(D.K), x2: x(D.K), y1: T - 6, y2: H - B, stroke: 'var(--ink)', 'stroke-width': 1.5}, h);
-  el('text', {x: x(D.K) + 6, y: T + 4, class: 'lbl'}, h).textContent = `search radius ${D.K}σ = p99 of the measured move (p95 ${D.late_q.p95.toFixed(2)}σ, median ${D.late_q.p50.toFixed(2)}σ)`;
+  el('text', {x: x(D.K) + 6, y: T + 4, class: 'lbl'}, h).textContent = `fallback radius ${D.K}σ ≈ p95 of the measured move (p99 ${D.late_q.p99.toFixed(2)}σ, median ${D.late_q.p50.toFixed(2)}σ)`;
   // dot rows
-  const s = document.getElementById('dots'), rows = [['Live knife-edges', D.knives, 'var(--s2)'], ['Placebo (wrong-day pairs)', D.placebo, 'var(--s3)']];
+  const s = document.getElementById('dots'), rows = [['Live', D.search, 'var(--s2)'], ['Placebo', D.placebo_search, 'var(--s3)']];
   const RH = 44, H2 = rows.length * RH + 30;
   s.setAttribute('viewBox', `0 0 ${W} ${H2}`);
   [0, .25, .5, .75, 1].forEach(t => { el('line', {x1: x(t), x2: x(t), y1: 0, y2: rows.length * RH, stroke: 'var(--grid)'}, s);
@@ -274,21 +294,21 @@ document.getElementById('samples').textContent = [
   '  ' + D.quiet.record,
   '',
   'COMPOSER DID NOT REBALANCE — no rebalance attempt on 2026-10-28 for HG, KMLM, SLEEVE, HARV (last attempt 2026-10-23); holdings are frozen. Approved logic now: HG BIL 100%; KMLM SOXL 38%, SVIX 38%, PULS 16%, VXZ 9% (frozen at SOXL 78%, ZVOL 11%, PULS 10%); SLEEVE BOXX 100%; HARV PULS 64%, VXZ 36% (frozen at ZVOL 52%, PULS 48%). ...',
-  'COMPOSER STILL NOT REBALANCING (session N) — ...      COMPOSER REBALANCING RESUMED on D after N session(s) ...',
-  'SHADOW MISMATCH — <engine> on D: Composer holds X; its approved logic says Y, and no single-ticker move within 0.5 sigma of the close explains it. Path: <the deciding checks with their values>. ...',
-  'SHADOW KNIFE-EDGE x2 — <engine> on D: ... a -0.15% TQQQ move (0.05 sigma) explains it. A real knife-edge rarely repeats ...',
-  'LOGIC DRIFT — <engine>: Composer runs version V, not the approved V0, and the logic differs. ... Approve the change or roll it back.'].join('\n');
+  'COMPOSER STILL NOT REBALANCING — HG session 2 without an attempt (since 2026-10-26); ...      COMPOSER REBALANCING RESUMED on D — HG after 3 session(s) ...',
+  'SHADOW MISMATCH — <engine> on D: Composer holds X; its approved logic says Y, on closing prices and on prices at 15:45, 15:50, 15:55 ET. Closest calls: <the decisive checks with their values>. ...',
+  'LOGIC DRIFT — <engine>: Composer\'s live logic (version V) differs from the approved V0 at <the node and field>: <approved> -> <live>. ... Approve the change or roll it back.',
+  'SHADOW BLIND — <engine>: no comparison for 3 sessions in a row (latest: <why>) ...      SHADOW RUNNER DOWN — 3 runs in a row failed ...',
+  'SHADOW KNIFE-EDGE x2 — <engine> on D: ... with no 5-minute bars to check, a -0.15% TQQQ move (0.05 sigma) is the explanation ...'].join('\n');
 
 const B = document.getElementById('basis');
-const dif = [...new Set(D.rep.differ.map(x => `${x.era.split(':')[0]} ${x.date}`))].join(', ') +
-  (D.rep.differ.length > new Set(D.rep.differ.map(x => x.date)).size ? ', the same session in both SLEEVE versions' : '');
-[`Live side: Composer's holdings in the daily monitor's git-tracked snapshot (taken after the ~15:50 ET rebalance), mapped to the session they show; ${D.dates.length - 3} sessions from ${D.window[0]} to 10-23 have one (a few sessions in the window have no snapshot and are not counted), plus the three lapse sessions from the live API.`,
- `Shadow side: the approved tree for each date (fixtures/approved/manifest.json: HG's three versions, SLEEVE's two, KMLM and HARV one each), evaluated on Yahoo adjusted closes with the semantics validated in add. 27 (Wilder RSI, up to 250 closes of warm-up).`,
- `Reproduction control: against Composer's own backtests (which, like the runner, decide on closes) the runner matches ${D.rep.ok} of ${D.rep.n} era-tree sessions; the exceptions (${dif}) are an exact RSI tie. Compared one day off, agreement drops to ${pct(D.rep.shifted)}, so the check has power.`,
- `Knife-edge rule: single-ticker moves only, up to 0.5σ (20-session daily sigma), the p99 of the 15:45 → close move measured on 13 decisive tickers over ${D.late_window ? D.late_window.join(' to ') : 'the last ~60 sessions'} (5-minute bars; a short, recent window). Composer's exact decision time is not published; 15:45-15:50 is assumed.`,
- `Placebo: on deliberately wrong pairs (the logic at D against Composer's holdings from another session, where those holdings differ) the classifier says mismatch ${D.placebo_total.mismatch}, knife-edge ${D.placebo_total['knife-edge']}, agree ${D.placebo_total.agree || 0}. So about one wrong comparison in five could pass as a one-off knife-edge; the backstops are the second-session alert and the logic-drift check, which compares Composer's live version and tree with the approved ones directly.`,
- `KMLM rebalances on a 10% corridor, so it counts as agreeing when every holding is within 10 + 1 points of the logic's weight. This reads Composer's corridor leniently; it cannot see a VIX-sleeve slice change smaller than that (the 25% sleeve moves in 1 to 9 point steps).`,
- `Not checked: fill prices and trade timing, cash drag, deposits and withdrawals, and dividend-adjustment differences between Composer's data and Yahoo's.`,
+const pb = D.placebo.bars, pn = D.placebo['no bars'], sum = o => Object.values(o).reduce((a, b) => a + b, 0);
+[`Live side: Composer's holdings in the daily monitor's git-tracked snapshot (taken after the ~15:50 ET rebalance), mapped to the session they show (taken after 16:00 ET on a session day = that session); ${D.dates.length - 3} sessions from ${D.window[0]} to 10-23 have one (a few sessions in the window have none and are not counted), plus the three lapse sessions from the live API. The snapshots do not record Composer's rebalance-attempt date, so a past skipped session with unchanged logic would read as agree.`,
+ `Shadow side: the approved tree for each date (fixtures/approved/manifest.json: HG's three versions, SLEEVE's two, KMLM and HARV one each), evaluated on Yahoo adjusted closes with the add. 27 semantics and Wilder RSI over the whole fetched history.`,
+ `Reproduction control: against Composer's own backtests (which, like the runner, decide on closes) the runner matches ${D.rep.strict} of ${D.rep.n} era-tree sessions exactly (same tickers, within 0.5%; KMLM on its corridor path), and follows ${D.rep.changes_ok} of the ${D.rep.changes} days Composer's backtest changed allocation. Compared one day off, agreement drops to ${pct(D.rep.shifted)}. A 250-close RSI warm-up (the first version) missed SLEEVE on 2026-04-07; the full history fixes it.`,
+ `Knife-edge rule: the logic re-run on actual 15:45, 15:50 and 15:55 ET prices (5-minute bar closes for every ticker at once). On deliberately wrong pairs (the logic at D against Composer's holdings from another session, where they differ) it excuses ${pb['knife-edge'] || 0} of ${sum(pb)} inside the bar window (mismatch ${pb.mismatch}). Without bars, the fallback (one ticker, at most ${D.K}σ, about the p95 of the measured 15:45 → close move) excuses ${pn['knife-edge'] || 0} of ${sum(pn)}, so two fallback knife-edges in a row on one engine alert.`,
+ `KMLM rebalances on a 10% corridor (absolute: Composer's own backtest holdings reproduce on that reading, not the relative one). It is checked on its path: the previous session's holdings drifted to the close, the target if any holding is more than 10 points off it, else the drifted holdings, within 1.5%. ${D.kmlm_path} of its ${D.kmlm_n} sessions had the previous session to do that; the others used the lenient check (every holding within 11 points).`,
+ `Not checked: fill prices and trade timing, cash drag, and deposits or withdrawals (KMLM falls back to the lenient check when its net deposits move). A dividend or reverse split that Yahoo books before adjusting its series is applied by the runner itself.`,
+ `Counter-agent (add. 48): reproduced every claim; refuted two blocker defects (no-rebalance detection depended on Yahoo; one bad ledger line silenced the runner), the 0.5σ single-ticker knife-edge (too generous: 21% of wrong pairs excused), the 250-close RSI warm-up, the drift check's blind spots and the lenient KMLM check. All fixed; 55 of 55 code mutants now fail the tests.`,
  `Side finding: no saved version of the harvester contains an HYG condition, although its name says "HYG Credit Guard" and add. 12 records the guard as saved. Its only guard is the UVXY RSI(14) > 70 switch to PULS. Nothing was changed.`,
  `Reporting only. The runner holds no broker key and never trades or edits a symphony.`]
  .forEach(s => { const li = document.createElement('li'); li.textContent = s; B.appendChild(li); });

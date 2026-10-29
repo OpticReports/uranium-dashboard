@@ -15,8 +15,8 @@ compares against the previous snapshot. Alerts on:
     (gate_watch.py; event-driven with hysteresis, never daily)
   - the shadow decision runner (shadow_runner.py): Composer's holdings vs
     each symphony's approved logic on independent prices; alerts on a
-    mismatch, a repeated knife-edge, a session with no rebalance attempt,
-    and logic drift from the approved versions
+    mismatch, a session with no rebalance attempt, logic drift from the
+    approved versions, and an engine or the runner itself going unchecked
 
 Exit code: 0 = quiet, 2 = alerts fired (easy to wire into cron/CI/triggers).
 Read-only. State lives in composer/results/monitor/state.json (tracked peaks
@@ -291,7 +291,8 @@ def main():
     # hold vs what Composer holds; ledger in shadow-ledger.jsonl
     try:
         import shadow_runner
-        shadow_runner.check_shadow(state, alerts, snap, meta, now, get=cl.get)
+        shadow_runner.check_shadow(state, alerts, snap, meta, now, get=cl.get,
+                                   ledger=os.path.join(DIR, "shadow-ledger.jsonl"))
     except (Exception, SystemExit) as e:  # composerlib exits on HTTP errors; the run must go on
         print(f"  (shadow runner unavailable: {e})")
 

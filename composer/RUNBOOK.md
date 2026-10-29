@@ -7,12 +7,16 @@ Everything here was decided with data, in advance. Addenda cited.
 
 - 3:45 PM ET: every symphony re-evaluates and rotates itself. The engines
   are internally convexity-aware — they EARN in turbulence (add. 20b/25);
-  their defensive branches (BIL cash, PULS, HYG credit guard, vol legs)
-  engage without anyone's help.
+  their defensive branches (BIL cash, PULS, the harvester's UVXY-RSI
+  switch to PULS, the sleeve's HYG/TLT frontrunner, vol legs) engage
+  without anyone's help. (The harvester has no HYG credit guard despite
+  its name: none was ever saved, add. 48.)
 - 5:35 PM ET daily check: two-tier DD alerts (anomaly thresholds are
   conservative-calibrated), book-level 17% alarm, sleeve band, 40%
   concentration cap (full reset, pre-authorized), 25% single-move and
   >50% data-anomaly guards. Trades only what POLICY.md pre-authorizes.
+  The shadow runner (add. 48) checks that Composer holds what each
+  symphony's approved logic says and flags a session with no rebalance.
 - You get a push notification for anything that matters.
 
 ## What the OWNER does on a crash day

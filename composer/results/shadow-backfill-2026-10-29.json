@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-29T19:58:19+00:00",
+ "generated": "2026-10-29T20:43:54+00:00",
  "sessions": [
   "2026-07-15",
   "2026-10-28"
@@ -8,22 +8,24 @@
  "summary": {
   "HG": {
    "agree": 65,
-   "knife-edge": 2,
+   "knife-edge (intraday)": 2,
    "no-rebalance": 3
   },
   "KMLM": {
-   "agree": 63,
-   "knife-edge": 4,
+   "agree": 61,
+   "knife-edge (search)": 3,
+   "knife-edge (intraday)": 3,
    "no-rebalance": 3
   },
   "SLEEVE": {
    "agree": 63,
-   "knife-edge": 4,
+   "knife-edge (intraday)": 4,
    "no-rebalance": 3
   },
   "HARV": {
-   "knife-edge": 9,
+   "knife-edge (search)": 5,
    "agree": 54,
+   "knife-edge (intraday)": 4,
    "no-rebalance": 3
   }
  },
@@ -60,7 +62,8 @@
    "snapshot": "2026-07-16T00:20:15+00:00",
    "status": "agree",
    "dist": 0.0006,
-   "max_gap": 0.0006
+   "max_gap": 0.0006,
+   "corridor_check": "lenient"
   },
   {
    "date": "2026-07-15",
@@ -110,7 +113,8 @@
    "snapshot": "2026-07-16T20:05:24+00:00",
    "status": "agree",
    "dist": 0.0085,
-   "max_gap": 0.0085
+   "max_gap": 0.0085,
+   "corridor_check": "path"
   },
   {
    "date": "2026-07-16",
@@ -162,7 +166,8 @@
    "snapshot": "2026-07-20T21:51:22+00:00",
    "status": "agree",
    "dist": 0.0014,
-   "max_gap": 0.0014
+   "max_gap": 0.0014,
+   "corridor_check": "lenient"
   },
   {
    "date": "2026-07-20",
@@ -216,7 +221,8 @@
    "snapshot": "2026-07-21T22:31:45+00:00",
    "status": "agree",
    "dist": 0.0003,
-   "max_gap": 0.0003
+   "max_gap": 0.0003,
+   "corridor_check": "path"
   },
   {
    "date": "2026-07-21",
@@ -272,7 +278,8 @@
    "snapshot": "2026-07-24T21:40:46+00:00",
    "status": "agree",
    "dist": 0.0618,
-   "max_gap": 0.0618
+   "max_gap": 0.0618,
+   "corridor_check": "lenient"
   },
   {
    "date": "2026-07-24",
@@ -318,9 +325,10 @@
     "target": {
      "PULS": 0.48,
      "ZVOL": 0.52
-    }
+    },
+    "basis": "search"
    },
-   "path": "RSI(SPY,8) 39.49 < 25: no; RSI(SPY,8) 39.49 > 80: no; RSI(SPY,9) 40.92 < 25: no; RSI(SPY,9) 40.92 > 80: no; RSI(SPY,10) 42.12 < 25: no; RSI(SPY,10) 42.12 > 80: no"
+   "path": "RSI(SPY,2) 23.07 < 25: yes; RSI(UVXY,14) 47.68 > 70: no; RSI(SPY,3) 26.71 < 25: no; RSI(SPY,4) 30.12 < 25: no; RSI(SPY,5) 33.11 < 25: no; RSI(SPY,6) 35.65 < 25: no"
   },
   {
    "date": "2026-07-27",
@@ -364,9 +372,11 @@
      "PULS": 0.16,
      "SQQQ": 0.75,
      "ZVOL": 0.09
-    }
+    },
+    "basis": "search"
    },
-   "path": "RSI(SPY,8) 39.82 < 25: no; RSI(SPY,8) 39.82 > 80: no; RSI(SPY,9) 41.20 < 25: no; RSI(SPY,9) 41.20 > 80: no; RSI(SPY,10) 42.36 < 25: no; RSI(SPY,10) 42.36 > 80: no"
+   "corridor_check": "path",
+   "path": "RSI(VTV,10) 67.53 > 79: no; RSI(FAS,10) 67.83 > 80: no; RSI(TQQQ,10) 33.57 < 30: no; RSI(SOXL,10) 35.56 < 30: no; RSI(SPY,2) 26.54 < 25: no; RSI(SPY,3) 28.23 < 25: no"
   },
   {
    "date": "2026-07-27",
@@ -411,9 +421,10 @@
     "target": {
      "PULS": 0.64,
      "ZVOL": 0.36
-    }
+    },
+    "basis": "search"
    },
-   "path": "RSI(SPY,8) 39.82 < 25: no; RSI(SPY,8) 39.82 > 80: no; RSI(SPY,9) 41.20 < 25: no; RSI(SPY,9) 41.20 > 80: no; RSI(SPY,10) 42.36 < 25: no; RSI(SPY,10) 42.36 > 80: no"
+   "path": "RSI(SPY,2) 26.54 < 25: no; RSI(SPY,3) 28.23 < 25: no; RSI(SPY,4) 31.06 < 25: no; RSI(SPY,5) 33.77 < 25: no; RSI(SPY,6) 36.15 < 25: no; RSI(SPY,10) 42.36 > 80: no"
   },
   {
    "date": "2026-07-28",
@@ -447,7 +458,8 @@
    "snapshot": "2026-07-28T21:36:12+00:00",
    "status": "agree",
    "dist": 0.0004,
-   "max_gap": 0.0005
+   "max_gap": 0.0005,
+   "corridor_check": "path"
   },
   {
    "date": "2026-07-28",
@@ -513,9 +525,22 @@
     "ZVOL": 0.171872
    },
    "snapshot": "2026-07-29T21:35:43+00:00",
-   "status": "agree",
+   "status": "knife-edge",
    "dist": 0.021,
-   "max_gap": 0.021
+   "max_gap": 0.021,
+   "edge": {
+    "ticker": "SPY",
+    "move": 0.00093,
+    "sigma_ratio": 0.142,
+    "target": {
+     "PULS": 0.08,
+     "TECL": 0.75,
+     "ZVOL": 0.17
+    },
+    "basis": "search"
+   },
+   "corridor_check": "path",
+   "path": "RSI(XLP,10) 65.95 > 75: no; RSI(TQQQ,10) 26.43 < 30: yes; RSI(SPY,5) 21.20 < 25: yes; RSI(SPY,6) 24.43 < 25: yes; RSI(SPY,7) 27.25 < 25: no; RSI(SPY,8) 29.68 < 25: no"
   },
   {
    "date": "2026-07-29",
@@ -561,9 +586,10 @@
     "target": {
      "PULS": 0.32,
      "ZVOL": 0.68
-    }
+    },
+    "basis": "search"
    },
-   "path": "RSI(SPY,8) 29.68 < 25: no; RSI(SPY,8) 29.68 > 80: no; RSI(SPY,9) 31.78 < 25: no; RSI(SPY,9) 31.78 > 80: no; RSI(SPY,10) 33.60 < 25: no; RSI(SPY,10) 33.60 > 80: no"
+   "path": "RSI(UVXY,14) 55.14 > 70: no; RSI(UVXY,14) 55.14 > 70: no; RSI(SPY,5) 21.20 < 25: yes; RSI(SPY,6) 24.43 < 25: yes; RSI(SPY,7) 27.25 < 25: no; RSI(SPY,8) 29.68 < 25: no"
   },
   {
    "date": "2026-07-30",
@@ -597,7 +623,8 @@
    "snapshot": "2026-07-31T03:49:51+00:00",
    "status": "agree",
    "dist": 0.0001,
-   "max_gap": 0.0002
+   "max_gap": 0.0002,
+   "corridor_check": "path"
   },
   {
    "date": "2026-07-30",
@@ -665,7 +692,8 @@
    "snapshot": "2026-08-02T19:48:59+00:00",
    "status": "agree",
    "dist": 0.0031,
-   "max_gap": 0.0031
+   "max_gap": 0.0031,
+   "corridor_check": "path"
   },
   {
    "date": "2026-07-31",
@@ -708,9 +736,10 @@
     "target": {
      "PULS": 0.64,
      "VXZ": 0.36
-    }
+    },
+    "basis": "search"
    },
-   "path": "RSI(SPY,8) 55.74 < 25: no; RSI(SPY,8) 55.74 > 80: no; RSI(SPY,9) 54.89 < 25: no; RSI(SPY,9) 54.89 > 80: no; RSI(SPY,10) 54.28 < 25: no; RSI(SPY,10) 54.28 > 80: no"
+   "path": "RSI(SPY,2) 79.57 > 80: no; RSI(SPY,3) 70.11 > 80: no; RSI(SPY,4) 64.58 > 80: no; RSI(SPY,5) 60.99 > 80: no; RSI(SPY,6) 58.58 > 80: no; RSI(SPY,7) 56.92 > 80: no"
   },
   {
    "date": "2026-08-03",
@@ -748,7 +777,8 @@
    "snapshot": "2026-08-03T21:36:43+00:00",
    "status": "agree",
    "dist": 0.0007,
-   "max_gap": 0.0005
+   "max_gap": 0.0005,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-03",
@@ -820,7 +850,8 @@
    "snapshot": "2026-08-04T21:36:52+00:00",
    "status": "agree",
    "dist": 0.0011,
-   "max_gap": 0.0009
+   "max_gap": 0.0009,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-04",
@@ -890,9 +921,23 @@
     "VXZ": 0.170754
    },
    "snapshot": "2026-08-06T17:40:46+00:00",
-   "status": "agree",
+   "status": "knife-edge",
    "dist": 0.0246,
-   "max_gap": 0.0208
+   "max_gap": 0.0208,
+   "edge": {
+    "ticker": "SPY",
+    "move": 0.00116,
+    "sigma_ratio": 0.131,
+    "target": {
+     "PULS": 0.08,
+     "SOXL": 0.375,
+     "TECL": 0.375,
+     "VXZ": 0.17
+    },
+    "basis": "search"
+   },
+   "corridor_check": "path",
+   "path": "bottom-2 by RSI(10): SOXL 45.74, TECL 59.21, SVIX 61.49; RSI(SPY,2) 85.11 > 80: yes; RSI(SPY,3) 84.33 > 80: yes; RSI(SPY,4) 81.26 > 80: yes; RSI(SPY,5) 78.27 > 80: no; RSI(SPY,6) 75.68 > 80: no"
   },
   {
    "date": "2026-08-05",
@@ -934,9 +979,10 @@
     "target": {
      "PULS": 0.32,
      "VXZ": 0.68
-    }
+    },
+    "basis": "search"
    },
-   "path": "RSI(SPY,8) 71.61 < 25: no; RSI(SPY,8) 71.61 > 80: no; RSI(SPY,9) 70.02 < 25: no; RSI(SPY,9) 70.02 > 80: no; RSI(SPY,10) 68.65 < 25: no; RSI(SPY,10) 68.65 > 80: no"
+   "path": "RSI(SPY,2) 85.11 > 80: yes; RSI(SPY,3) 84.33 > 80: yes; RSI(SPY,4) 81.26 > 80: yes; RSI(SPY,5) 78.27 > 80: no; RSI(SPY,6) 75.68 > 80: no; RSI(SPY,7) 73.48 > 80: no"
   },
   {
    "date": "2026-08-06",
@@ -972,7 +1018,8 @@
    "snapshot": "2026-08-06T21:35:48+00:00",
    "status": "agree",
    "dist": 0.0034,
-   "max_gap": 0.0034
+   "max_gap": 0.0034,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-06",
@@ -1042,7 +1089,8 @@
    "snapshot": "2026-08-07T21:35:52+00:00",
    "status": "agree",
    "dist": 0.0021,
-   "max_gap": 0.0017
+   "max_gap": 0.0017,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-07",
@@ -1115,17 +1163,16 @@
    "dist": 0.1533,
    "max_gap": 0.1523,
    "edge": {
-    "ticker": "SPY",
-    "move": -0.00024,
-    "sigma_ratio": 0.028,
+    "basis": "intraday",
+    "time": "15:55",
     "target": {
-     "PULS": 0.21,
+     "PULS": 0.25,
      "SOXL": 0.375,
-     "TECL": 0.375,
-     "VXZ": 0.04
+     "TECL": 0.375
     }
    },
-   "path": "RSI(SPY,8) 72.45 < 25: no; RSI(SPY,8) 72.45 > 80: no; RSI(SPY,9) 70.94 < 25: no; RSI(SPY,9) 70.94 > 80: no; RSI(SPY,10) 69.62 < 25: no; RSI(SPY,10) 69.62 > 80: no"
+   "corridor_check": "path",
+   "path": "RSI(SPY,2) 82.72 > 80: yes; RSI(SPY,3) 82.74 > 80: yes; RSI(SPY,4) 80.72 > 80: yes; RSI(SPY,5) 78.36 > 80: no; RSI(SPY,6) 76.15 > 80: no; RSI(SPY,7) 74.18 > 80: no"
   },
   {
    "date": "2026-08-10",
@@ -1162,14 +1209,13 @@
    "dist": 0.6,
    "max_gap": 0.6,
    "edge": {
-    "ticker": "SPY",
-    "move": -0.00048,
-    "sigma_ratio": 0.055,
+    "basis": "intraday",
+    "time": "15:55",
     "target": {
      "PULS": 1.0
     }
    },
-   "path": "RSI(SPY,8) 72.45 < 25: no; RSI(SPY,8) 72.45 > 80: no; RSI(SPY,9) 70.94 < 25: no; RSI(SPY,9) 70.94 > 80: no; RSI(SPY,10) 69.62 < 25: no; RSI(SPY,10) 69.62 > 80: no"
+   "path": "RSI(SPY,2) 82.72 > 80: yes; RSI(SPY,3) 82.74 > 80: yes; RSI(SPY,4) 80.72 > 80: yes; RSI(SPY,5) 78.36 > 80: no; RSI(SPY,6) 76.15 > 80: no; RSI(SPY,7) 74.18 > 80: no"
   },
   {
    "date": "2026-08-11",
@@ -1205,7 +1251,8 @@
    "snapshot": "2026-08-11T21:36:07+00:00",
    "status": "agree",
    "dist": 0.0031,
-   "max_gap": 0.0031
+   "max_gap": 0.0031,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-11",
@@ -1224,14 +1271,13 @@
    "dist": 0.25,
    "max_gap": 0.25,
    "edge": {
-    "ticker": "IEF",
-    "move": 0.0001,
-    "sigma_ratio": 0.037,
+    "basis": "intraday",
+    "time": "15:45",
     "target": {
      "BOXX": 1.0
     }
    },
-   "path": "CR(KIE,1) -0.39 > 3.45: no; RSI(KIE,14) 50.35 < 27: no; CR(LQD,1) 0.03 > 1.5: no; CR(LQD,1) 0.03 < -4: no; RSI(LQD,12) 41.83 > 79.5: no; RSI(LQD,14) 41.97 < 25: no"
+   "path": "RSI(IEF,8) 45.92 < RSI(PSQ,45) 46.05: yes; RSI(TMV,20) 61.27 < RSI(KMLM,10) 50.90: no; RSI(LABD,20) 38.83 < RSI(KMLM,10) 50.90: yes; CR(SHY,1) 0.01 < -0.33: no; RSI(PEJ,14) 57.33 > 75.6: no; RSI(KIE,10) 45.67 > 78: no"
   },
   {
    "date": "2026-08-11",
@@ -1283,7 +1329,8 @@
    "snapshot": "2026-08-12T21:35:48+00:00",
    "status": "agree",
    "dist": 0.012,
-   "max_gap": 0.012
+   "max_gap": 0.012,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-12",
@@ -1353,7 +1400,8 @@
    "snapshot": "2026-08-13T21:38:28+00:00",
    "status": "agree",
    "dist": 0.0007,
-   "max_gap": 0.0007
+   "max_gap": 0.0007,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-13",
@@ -1423,7 +1471,8 @@
    "snapshot": "2026-08-14T21:35:55+00:00",
    "status": "agree",
    "dist": 0.0011,
-   "max_gap": 0.0011
+   "max_gap": 0.0011,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-14",
@@ -1473,9 +1522,8 @@
    "dist": 1.0,
    "max_gap": 1.0,
    "edge": {
-    "ticker": "TNA",
-    "move": -0.00284,
-    "sigma_ratio": 0.103,
+    "basis": "intraday",
+    "time": "15:45",
     "target": {
      "SSO": 1.0
     }
@@ -1500,7 +1548,8 @@
    "snapshot": "2026-08-17T21:36:03+00:00",
    "status": "agree",
    "dist": 0.0111,
-   "max_gap": 0.0111
+   "max_gap": 0.0111,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-17",
@@ -1519,14 +1568,13 @@
    "dist": 0.25,
    "max_gap": 0.25,
    "edge": {
-    "ticker": "IEF",
-    "move": 0.00013,
-    "sigma_ratio": 0.045,
+    "basis": "intraday",
+    "time": "15:45",
     "target": {
      "BOXX": 1.0
     }
    },
-   "path": "CR(KIE,1) -1.60 > 3.45: no; RSI(KIE,14) 47.38 < 27: no; CR(LQD,1) -0.40 > 1.5: no; CR(LQD,1) -0.40 < -4: no; RSI(LQD,12) 39.87 > 79.5: no; RSI(LQD,14) 40.36 < 25: no"
+   "path": "RSI(IEF,8) 44.70 < RSI(PSQ,45) 44.95: yes; RSI(TMV,20) 64.70 < RSI(KMLM,10) 62.74: no; RSI(LABD,20) 38.69 < RSI(KMLM,10) 62.74: yes; CR(SHY,1) 0.00 < -0.33: no; RSI(CORP,16) 43.99 > 80: no; RSI(PEJ,14) 58.80 > 75.6: no"
   },
   {
    "date": "2026-08-17",
@@ -1578,7 +1626,8 @@
    "snapshot": "2026-08-18T21:36:10+00:00",
    "status": "agree",
    "dist": 0.0001,
-   "max_gap": 0.0001
+   "max_gap": 0.0001,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-18",
@@ -1646,7 +1695,8 @@
    "snapshot": "2026-08-19T21:36:04+00:00",
    "status": "agree",
    "dist": 0.0002,
-   "max_gap": 0.0003
+   "max_gap": 0.0003,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-19",
@@ -1714,7 +1764,8 @@
    "snapshot": "2026-08-20T21:36:13+00:00",
    "status": "agree",
    "dist": 0.0004,
-   "max_gap": 0.0004
+   "max_gap": 0.0004,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-20",
@@ -1782,7 +1833,8 @@
    "snapshot": "2026-08-22T14:42:21+00:00",
    "status": "agree",
    "dist": 0.0,
-   "max_gap": 0.0
+   "max_gap": 0.0,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-21",
@@ -1852,7 +1904,8 @@
    "snapshot": "2026-08-24T21:36:19+00:00",
    "status": "agree",
    "dist": 0.0056,
-   "max_gap": 0.0056
+   "max_gap": 0.0056,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-24",
@@ -1918,7 +1971,8 @@
    "snapshot": "2026-08-25T21:36:34+00:00",
    "status": "agree",
    "dist": 0.0,
-   "max_gap": 0.0
+   "max_gap": 0.0,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-25",
@@ -1984,7 +2038,8 @@
    "snapshot": "2026-08-26T21:36:25+00:00",
    "status": "agree",
    "dist": 0.0003,
-   "max_gap": 0.0004
+   "max_gap": 0.0004,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-26",
@@ -2054,7 +2109,8 @@
    "snapshot": "2026-08-27T21:35:57+00:00",
    "status": "agree",
    "dist": 0.0022,
-   "max_gap": 0.0022
+   "max_gap": 0.0022,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-27",
@@ -2122,7 +2178,8 @@
    "snapshot": "2026-08-28T21:35:41+00:00",
    "status": "agree",
    "dist": 0.0001,
-   "max_gap": 0.0002
+   "max_gap": 0.0002,
+   "corridor_check": "path"
   },
   {
    "date": "2026-08-28",
@@ -2194,15 +2251,15 @@
    "dist": 0.75,
    "max_gap": 0.75,
    "edge": {
-    "ticker": "SQQQ",
-    "move": 0.00146,
-    "sigma_ratio": 0.046,
+    "basis": "intraday",
+    "time": "15:45",
     "target": {
      "PULS": 0.25,
      "SQQQ": 0.75
     }
    },
-   "path": "RSI(SPY,8) 50.70 < 25: no; RSI(SPY,8) 50.70 > 80: no; RSI(SPY,9) 51.59 < 25: no; RSI(SPY,9) 51.59 > 80: no; RSI(SPY,10) 52.31 < 25: no; RSI(SPY,10) 52.31 > 80: no"
+   "corridor_check": "path",
+   "path": "RSI(TECL,10) 53.18 > 79: no; RSI(VOOG,10) 52.16 > 79: no; RSI(SOXL,10) 39.77 < 30: no; RSI(XLK,10) 54.98 > RSI(KMLM,10) 66.08: no; top-1 by RSI(10): TLT 47.57, SQQQ 47.25; RSI(SPY,2) 30.97 < 25: no"
   },
   {
    "date": "2026-08-31",
@@ -2274,7 +2331,8 @@
    "snapshot": "2026-09-01T21:36:25+00:00",
    "status": "agree",
    "dist": 0.0006,
-   "max_gap": 0.0006
+   "max_gap": 0.0006,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-01",
@@ -2346,7 +2404,8 @@
    "snapshot": "2026-09-02T21:36:04+00:00",
    "status": "agree",
    "dist": 0.0002,
-   "max_gap": 0.0002
+   "max_gap": 0.0002,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-02",
@@ -2418,7 +2477,8 @@
    "snapshot": "2026-09-03T21:35:56+00:00",
    "status": "agree",
    "dist": 0.0002,
-   "max_gap": 0.0002
+   "max_gap": 0.0002,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-03",
@@ -2491,7 +2551,8 @@
    "snapshot": "2026-09-07T21:36:03+00:00",
    "status": "agree",
    "dist": 0.09,
-   "max_gap": 0.09
+   "max_gap": 0.09,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-04",
@@ -2562,7 +2623,8 @@
    "snapshot": "2026-09-08T21:36:29+00:00",
    "status": "agree",
    "dist": 0.09,
-   "max_gap": 0.09
+   "max_gap": 0.09,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-08",
@@ -2634,7 +2696,8 @@
    "snapshot": "2026-09-09T21:35:36+00:00",
    "status": "agree",
    "dist": 0.0003,
-   "max_gap": 0.0003
+   "max_gap": 0.0003,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-09",
@@ -2708,7 +2771,8 @@
    "snapshot": "2026-09-10T21:36:15+00:00",
    "status": "agree",
    "dist": 0.0624,
-   "max_gap": 0.0624
+   "max_gap": 0.0624,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-10",
@@ -2782,7 +2846,8 @@
    "snapshot": "2026-09-15T21:35:43+00:00",
    "status": "agree",
    "dist": 0.0083,
-   "max_gap": 0.0083
+   "max_gap": 0.0083,
+   "corridor_check": "lenient"
   },
   {
    "date": "2026-09-15",
@@ -2856,7 +2921,8 @@
    "snapshot": "2026-09-16T21:36:10+00:00",
    "status": "agree",
    "dist": 0.0422,
-   "max_gap": 0.0422
+   "max_gap": 0.0422,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-16",
@@ -2896,15 +2962,14 @@
    "dist": 0.0808,
    "max_gap": 0.0808,
    "edge": {
-    "ticker": "SPY",
-    "move": -0.00013,
-    "sigma_ratio": 0.024,
+    "basis": "intraday",
+    "time": "15:45",
     "target": {
      "PULS": 0.4,
      "ZVOL": 0.6
     }
    },
-   "path": "RSI(SPY,8) 34.60 < 25: no; RSI(SPY,8) 34.60 > 80: no; RSI(SPY,9) 36.14 < 25: no; RSI(SPY,9) 36.14 > 80: no; RSI(SPY,10) 37.52 < 25: no; RSI(SPY,10) 37.52 > 80: no"
+   "path": "RSI(UVXY,14) 43.42 > 70: no; RSI(SPY,3) 20.28 < 25: yes; RSI(SPY,4) 25.14 < 25: no; RSI(SPY,5) 28.39 < 25: no; RSI(SPY,6) 30.85 < 25: no; RSI(SPY,7) 32.86 < 25: no"
   },
   {
    "date": "2026-09-17",
@@ -2938,7 +3003,8 @@
    "snapshot": "2026-09-17T21:35:37+00:00",
    "status": "agree",
    "dist": 0.0,
-   "max_gap": 0.0
+   "max_gap": 0.0,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-17",
@@ -3008,7 +3074,8 @@
    "snapshot": "2026-09-18T21:35:52+00:00",
    "status": "agree",
    "dist": 0.0013,
-   "max_gap": 0.0013
+   "max_gap": 0.0013,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-18",
@@ -3082,7 +3149,8 @@
    "snapshot": "2026-09-21T21:35:49+00:00",
    "status": "agree",
    "dist": 0.0014,
-   "max_gap": 0.0014
+   "max_gap": 0.0014,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-21",
@@ -3158,7 +3226,8 @@
    "snapshot": "2026-09-22T21:35:56+00:00",
    "status": "agree",
    "dist": 0.0114,
-   "max_gap": 0.0114
+   "max_gap": 0.0114,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-22",
@@ -3198,15 +3267,14 @@
    "dist": 0.0802,
    "max_gap": 0.0802,
    "edge": {
-    "ticker": "SPY",
-    "move": 0.00116,
-    "sigma_ratio": 0.18,
+    "basis": "intraday",
+    "time": "15:45",
     "target": {
      "PULS": 0.4,
      "VXZ": 0.6
     }
    },
-   "path": "RSI(SPY,8) 65.43 < 25: no; RSI(SPY,8) 65.43 > 80: no; RSI(SPY,9) 63.85 < 25: no; RSI(SPY,9) 63.85 > 80: no; RSI(SPY,10) 62.62 < 25: no; RSI(SPY,10) 62.62 > 80: no"
+   "path": "RSI(SPY,2) 93.31 > 80: yes; RSI(SPY,3) 85.34 > 80: yes; RSI(SPY,4) 78.69 > 80: no; RSI(SPY,5) 73.78 > 80: no; RSI(SPY,6) 70.17 > 80: no; RSI(SPY,7) 67.47 > 80: no"
   },
   {
    "date": "2026-09-23",
@@ -3242,7 +3310,8 @@
    "snapshot": "2026-09-23T21:36:22+00:00",
    "status": "agree",
    "dist": 0.0019,
-   "max_gap": 0.0019
+   "max_gap": 0.0019,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-23",
@@ -3314,7 +3383,8 @@
    "snapshot": "2026-09-24T21:36:11+00:00",
    "status": "agree",
    "dist": 0.002,
-   "max_gap": 0.002
+   "max_gap": 0.002,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-24",
@@ -3384,7 +3454,8 @@
    "snapshot": "2026-09-25T21:36:05+00:00",
    "status": "agree",
    "dist": 0.0081,
-   "max_gap": 0.0081
+   "max_gap": 0.0081,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-25",
@@ -3454,7 +3525,8 @@
    "snapshot": "2026-09-28T21:35:54+00:00",
    "status": "agree",
    "dist": 0.0051,
-   "max_gap": 0.0051
+   "max_gap": 0.0051,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-28",
@@ -3527,9 +3599,8 @@
    "dist": 0.465,
    "max_gap": 0.3771,
    "edge": {
-    "ticker": "TECL",
-    "move": 0.00116,
-    "sigma_ratio": 0.033,
+    "basis": "intraday",
+    "time": "15:55",
     "target": {
      "PULS": 0.16,
      "SOXL": 0.375,
@@ -3537,7 +3608,8 @@
      "ZVOL": 0.09
     }
    },
-   "path": "RSI(SPY,8) 47.92 < 25: no; RSI(SPY,8) 47.92 > 80: no; RSI(SPY,9) 48.54 < 25: no; RSI(SPY,9) 48.54 > 80: no; RSI(SPY,10) 49.00 < 25: no; RSI(SPY,10) 49.00 > 80: no"
+   "corridor_check": "path",
+   "path": "RSI(TECL,10) 61.37 > 79: no; RSI(VOOG,10) 58.59 > 79: no; RSI(TQQQ,10) 59.08 > 79: no; RSI(XLK,10) 62.92 > RSI(KMLM,10) 61.58: yes; bottom-2 by RSI(10): SVIX 58.25, TECL 61.37, SOXL 61.60; RSI(SPY,2) 21.19 < 25: yes"
   },
   {
    "date": "2026-09-29",
@@ -3610,7 +3682,8 @@
    "snapshot": "2026-09-30T21:35:38+00:00",
    "status": "agree",
    "dist": 0.0923,
-   "max_gap": 0.09
+   "max_gap": 0.09,
+   "corridor_check": "path"
   },
   {
    "date": "2026-09-30",
@@ -3649,14 +3722,13 @@
    "dist": 0.36,
    "max_gap": 0.36,
    "edge": {
-    "ticker": "SPY",
-    "move": 0.00227,
-    "sigma_ratio": 0.343,
+    "basis": "intraday",
+    "time": "15:45",
     "target": {
      "PULS": 1.0
     }
    },
-   "path": "RSI(SPY,8) 45.34 < 25: no; RSI(SPY,8) 45.34 > 80: no; RSI(SPY,9) 46.25 < 25: no; RSI(SPY,9) 46.25 > 80: no; RSI(SPY,10) 46.95 < 25: no; RSI(SPY,10) 46.95 > 80: no"
+   "path": "RSI(UVXY,14) 41.40 > 70: no; RSI(SPY,3) 26.78 < 25: no; RSI(SPY,4) 34.76 < 25: no; RSI(SPY,8) 45.34 > 80: no; RSI(SPY,9) 46.25 > 80: no; RSI(SPY,10) 46.95 > 80: no"
   },
   {
    "date": "2026-10-01",
@@ -3692,7 +3764,8 @@
    "snapshot": "2026-10-01T21:35:55+00:00",
    "status": "agree",
    "dist": 0.0156,
-   "max_gap": 0.0156
+   "max_gap": 0.0156,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-01",
@@ -3763,7 +3836,8 @@
    "snapshot": "2026-10-02T21:36:18+00:00",
    "status": "agree",
    "dist": 0.105,
-   "max_gap": 0.09
+   "max_gap": 0.09,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-02",
@@ -3837,7 +3911,8 @@
    "snapshot": "2026-10-05T21:35:51+00:00",
    "status": "agree",
    "dist": 0.0008,
-   "max_gap": 0.0007
+   "max_gap": 0.0007,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-05",
@@ -3911,7 +3986,8 @@
    "snapshot": "2026-10-06T21:37:01+00:00",
    "status": "agree",
    "dist": 0.0258,
-   "max_gap": 0.0231
+   "max_gap": 0.0231,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-06",
@@ -3983,7 +4059,8 @@
    "snapshot": "2026-10-07T21:35:39+00:00",
    "status": "agree",
    "dist": 0.0007,
-   "max_gap": 0.0007
+   "max_gap": 0.0007,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-07",
@@ -4035,9 +4112,8 @@
    "dist": 1.0,
    "max_gap": 1.0,
    "edge": {
-    "ticker": "TQQQ",
-    "move": -0.00146,
-    "sigma_ratio": 0.05,
+    "basis": "intraday",
+    "time": "15:50",
     "target": {
      "SSO": 1.0
     }
@@ -4060,7 +4136,8 @@
    "snapshot": "2026-10-08T21:36:31+00:00",
    "status": "agree",
    "dist": 0.0007,
-   "max_gap": 0.0007
+   "max_gap": 0.0007,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-08",
@@ -4128,7 +4205,8 @@
    "snapshot": "2026-10-09T21:36:21+00:00",
    "status": "agree",
    "dist": 0.0006,
-   "max_gap": 0.0006
+   "max_gap": 0.0006,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-09",
@@ -4147,15 +4225,14 @@
    "dist": 0.2497,
    "max_gap": 0.2497,
    "edge": {
-    "ticker": "IEF",
-    "move": -0.0001,
-    "sigma_ratio": 0.026,
+    "basis": "intraday",
+    "time": "15:45",
     "target": {
      "BOXX": 0.75,
      "LABD": 0.25
     }
    },
-   "path": "CR(KIE,1) -0.78 > 3.45: no; RSI(KIE,14) 44.06 < 27: no; CR(LQD,1) -0.06 > 1.5: no; CR(LQD,1) -0.06 < -4: no; RSI(LQD,12) 39.63 > 79.5: no; RSI(LQD,14) 38.88 < 25: no"
+   "path": "RSI(IEF,8) 44.32 < RSI(PSQ,45) 44.15: no; CR(SHY,1) 0.00 < -0.33: no; CR(SHY,1) 0.00 > 0.5: no; RSI(PEJ,14) 50.76 > 75.6: no; RSI(KIE,10) 46.33 > 78: no; RSI(LQD,12) 39.63 > 79.5: no"
   },
   {
    "date": "2026-10-09",
@@ -4205,7 +4282,8 @@
    "snapshot": "2026-10-12T21:35:47+00:00",
    "status": "agree",
    "dist": 0.0,
-   "max_gap": 0.0
+   "max_gap": 0.0,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-12",
@@ -4271,7 +4349,8 @@
    "snapshot": "2026-10-13T21:36:23+00:00",
    "status": "agree",
    "dist": 0.002,
-   "max_gap": 0.002
+   "max_gap": 0.002,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-13",
@@ -4339,7 +4418,8 @@
    "snapshot": "2026-10-14T21:36:10+00:00",
    "status": "agree",
    "dist": 0.0025,
-   "max_gap": 0.0025
+   "max_gap": 0.0025,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-14",
@@ -4407,7 +4487,8 @@
    "snapshot": "2026-10-15T21:35:53+00:00",
    "status": "agree",
    "dist": 0.0003,
-   "max_gap": 0.0003
+   "max_gap": 0.0003,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-15",
@@ -4475,7 +4556,8 @@
    "snapshot": "2026-10-16T21:35:50+00:00",
    "status": "agree",
    "dist": 0.0015,
-   "max_gap": 0.0015
+   "max_gap": 0.0015,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-16",
@@ -4543,7 +4625,8 @@
    "snapshot": "2026-10-19T21:36:30+00:00",
    "status": "agree",
    "dist": 0.0,
-   "max_gap": 0.0
+   "max_gap": 0.0,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-19",
@@ -4609,7 +4692,8 @@
    "snapshot": "2026-10-20T21:36:24+00:00",
    "status": "agree",
    "dist": 0.0022,
-   "max_gap": 0.0022
+   "max_gap": 0.0022,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-20",
@@ -4677,7 +4761,8 @@
    "snapshot": "2026-10-21T21:36:01+00:00",
    "status": "agree",
    "dist": 0.0001,
-   "max_gap": 0.0
+   "max_gap": 0.0,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-21",
@@ -4747,7 +4832,8 @@
    "snapshot": "2026-10-22T21:36:06+00:00",
    "status": "agree",
    "dist": 0.0013,
-   "max_gap": 0.0013
+   "max_gap": 0.0013,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-22",
@@ -4766,14 +4852,13 @@
    "dist": 0.5,
    "max_gap": 0.5,
    "edge": {
-    "ticker": "KIE",
-    "move": -0.00013,
-    "sigma_ratio": 0.014,
+    "basis": "intraday",
+    "time": "15:45",
     "target": {
      "BOXX": 1.0
     }
    },
-   "path": "CR(TMF,1) 5.53 < -7.5: no; RSI(CORP,15) 61.88 < 23: no; RSI(CORP,16) 60.65 > 80: no; RSI(PEJ,14) 63.85 > 75.6: no; RSI(KIE,10) 78.03 > 78: yes; bottom-1 by CR(1): SOXL -20.47, TQQQ -8.53, UVXY 9.58"
+   "path": "RSI(IEF,8) 77.12 < RSI(PSQ,45) 52.16: no; CR(SHY,1) 0.28 > 0.5: no; CR(TMF,1) 5.53 > 10.5: no; RSI(CORP,16) 60.65 > 80: no; RSI(PEJ,14) 63.85 > 75.6: no; RSI(KIE,10) 78.03 > 78: yes"
   },
   {
    "date": "2026-10-22",
@@ -4827,7 +4912,8 @@
    "snapshot": "2026-10-23T21:36:43+00:00",
    "status": "agree",
    "dist": 0.0009,
-   "max_gap": 0.0009
+   "max_gap": 0.0009,
+   "corridor_check": "path"
   },
   {
    "date": "2026-10-23",
@@ -4872,10 +4958,11 @@
    "target": {
     "BIL": 1.0
    },
+   "attempted": "2026-10-23",
    "live": {
     "BIL": 1.0
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-26",
@@ -4887,12 +4974,13 @@
     "PULS": 0.25,
     "TLT": 0.75
    },
+   "attempted": "2026-10-23",
    "live": {
     "PULS": 0.11952,
     "SOXL": 0.750851,
     "ZVOL": 0.12963
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-26",
@@ -4903,10 +4991,11 @@
    "target": {
     "BOXX": 1.0
    },
+   "attempted": "2026-10-23",
    "live": {
     "BOXX": 1.0
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-26",
@@ -4917,11 +5006,12 @@
    "target": {
     "PULS": 1.0
    },
+   "attempted": "2026-10-23",
    "live": {
     "PULS": 0.47978,
     "ZVOL": 0.52022
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-27",
@@ -4932,10 +5022,11 @@
    "target": {
     "BIL": 1.0
    },
+   "attempted": "2026-10-23",
    "live": {
     "BIL": 1.0
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-27",
@@ -4948,12 +5039,13 @@
     "SOXL": 0.375,
     "SVIX": 0.375
    },
+   "attempted": "2026-10-23",
    "live": {
     "PULS": 0.11952,
     "SOXL": 0.750851,
     "ZVOL": 0.12963
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-27",
@@ -4964,10 +5056,11 @@
    "target": {
     "BOXX": 1.0
    },
+   "attempted": "2026-10-23",
    "live": {
     "BOXX": 1.0
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-27",
@@ -4978,11 +5071,12 @@
    "target": {
     "PULS": 1.0
    },
+   "attempted": "2026-10-23",
    "live": {
     "PULS": 0.47978,
     "ZVOL": 0.52022
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-28",
@@ -4993,10 +5087,11 @@
    "target": {
     "BIL": 1.0
    },
+   "attempted": "2026-10-23",
    "live": {
     "BIL": 1.0
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-28",
@@ -5010,12 +5105,13 @@
     "SVIX": 0.375,
     "VXZ": 0.09
    },
+   "attempted": "2026-10-23",
    "live": {
     "PULS": 0.11952,
     "SOXL": 0.750851,
     "ZVOL": 0.12963
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-28",
@@ -5026,10 +5122,11 @@
    "target": {
     "BOXX": 1.0
    },
+   "attempted": "2026-10-23",
    "live": {
     "BOXX": 1.0
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   },
   {
    "date": "2026-10-28",
@@ -5041,11 +5138,12 @@
     "PULS": 0.64,
     "VXZ": 0.36
    },
+   "attempted": "2026-10-23",
    "live": {
     "PULS": 0.47978,
     "ZVOL": 0.52022
    },
-   "attempted": "2026-10-23"
+   "live_asof": "2026-10-23"
   }
  ]
 }

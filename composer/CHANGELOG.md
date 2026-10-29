@@ -584,3 +584,34 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   missing data, duplicate-session skip, 2000-02 attribution; 31 tests.
 - Artifacts: results.md addendum 46; README (monitor section); POLICY.md
   standing cadence; monitor.py docstring.
+
+
+## 2026-10-29 — shadow decision runner added to the daily monitor (owner request; reporting only)
+
+- Change: `scripts/shadow_runner.py`, hooked into `monitor.py` after the gate
+  watch. Each session it evaluates every symphony's approved logic on Yahoo
+  closes and compares it with Composer's holdings. Alerts: SHADOW MISMATCH,
+  COMPOSER DID NOT REBALANCE / STILL / RESUMED (from Composer's own
+  rebalance-attempt date), LOGIC DRIFT (the live tree vs the approved one,
+  every run), SHADOW BLIND, SHADOW RUNNER DOWN, SHADOW KNIFE-EDGE x2 (only
+  when 5-minute bars are missing). Knife-edges the logic reproduces on
+  Composer's 15:45-15:55 prices are logged, not alerted. No symphony mutated.
+- New registry `fixtures/approved/` (manifest + 7 version trees, by era):
+  approving a logic change now means adding an era there in the same commit
+  as its CHANGELOG entry, or the next run reports LOGIC DRIFT.
+- Why: owner, "define shadow decision runner" -> "ok build the shadow
+  runner". The 10-26..28 lapse (no rebalance attempts, seen only as API
+  errors) is exactly what it reports on day one.
+- Before / after: no live change. Baseline (add. 48): Composer's own
+  backtests reproduced on 1,022/1,022 era-tree sessions; live snapshots
+  07-15..10-23: 243 agree / 21 knife-edge / 0 mismatch; 10-29 (first live
+  run): 4/4 agree.
+- Counter-agent: two blockers (no-rebalance depended on Yahoo; a bad ledger
+  line silenced the runner) and six should-fixes, all fixed. 70 tests; 55/55
+  mutants killed. Round 2 (verification of the fixes): in progress.
+- Side finding, not acted on: HARV has no HYG condition in any saved version
+  despite its name (owner decision: rename or add the guard). RUNBOOK.md
+  corrected.
+- Artifacts: results.md addendum 48; README (monitor section); POLICY.md
+  standing cadence; RUNBOOK.md; daily routine prompt (relays the new lines;
+  commits the ledger with the daily snapshot).

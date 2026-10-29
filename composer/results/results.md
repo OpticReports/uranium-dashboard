@@ -3020,3 +3020,100 @@ points), "harvester is a drag" (it lowers risk), page formatting. Its sensitivit
 exactly by sens1997.py. Verdict after fixes: showable.
 
 DECISION: none; answers a question.
+
+
+## Addendum 48 — Shadow decision runner: Composer's holdings vs the approved logic, every session (2026-10-29)
+
+Owner: "define shadow decision runner" -> "ok build the shadow runner". Built: scripts/shadow_runner.py,
+called by monitor.py after the gate watch; approved-logic registry fixtures/approved/ (manifest + 7 trees,
+one per approved version, by era); 70 merge-blocking tests (scripts/tests/test_shadow_runner.py, each
+paired with a broken input; frozen fixtures shadow-2026-10-28.json.gz and shadow-warmup-2026-04-07.json);
+research/shadow/ (backfill.py, calibrate.py, make_chart.py); exhibit results/shadow-runner-baseline-
+2026-10-29.html; ledger results/monitor/shadow-ledger.jsonl (seeded with the 276 backfill rows). Keyless;
+the daily path calls Composer with GET only (calibrate.py also runs POST /backtest simulations); never trades.
+
+WHAT IT CHECKS, per engine, for session D (the latest final Yahoo close):
+- NO REBALANCE: symphony-stats-meta last_rebalance_attempted_on < D, read before and regardless of prices.
+  Alert on the first session, daily while it lasts (Mondays only for a symphony paused in Composer),
+  RESUMED once.
+- The approved tree for D's era on Yahoo adjusted closes: add. 27 semantics, Wilder RSI over the whole
+  2-year history (>= 60 closes), windows from fn-params or window-days (conflicting fields refused).
+  Anything the evaluator has not been validated on is "unavailable", never guessed.
+- AGREE: daily engines within 3% (half-L1). KMLM on its corridor path: the previous session's holdings
+  drifted to the close; the target if any holding is more than 10pp off it, else the drifted holdings
+  (both accepted within 1pp of the trigger); within 1.5%. Lenient (every holding within 11pp) without a
+  previous session or after a deposit.
+- KNIFE-EDGE (logged, no alert): not agree on closes, but agree when every ticker's close is replaced by
+  its 15:45, 15:50 or 15:55 ET price (Yahoo 5-minute bars). Without bars: a one-ticker move of at most
+  0.3 sigma; two such sessions in a row on one engine alert.
+- MISMATCH: alert, with the closest calls on the decision path.
+- LOGIC DRIFT, every run, prices or not: the live tree (GET /score) vs the last approved era, compared on
+  every field except display ones (numbers normalised). Alert when first seen or changed and on Mondays,
+  naming the node; a new version with identical logic is a note.
+- SHADOW BLIND (an engine unchecked 3 sessions running) and SHADOW RUNNER DOWN (3 failed runs). A failed
+  run leaves the state as it was; the ledger is written atomically and a malformed line is skipped.
+
+FIDELITY (calibrate.py; Composer's own backtests decide on closes like the runner). All 7 approved trees,
+2026-04-01..10-28: 1,022 of 1,022 sessions identical (same tickers within 0.5%; KMLM's drifted backtest
+holdings on the absolute-corridor path). The runner follows 276 of 276 days Composer's backtest changed
+allocation; compared one day off, agreement falls to 63%.
+
+LIVE BASELINE (backfill.py: 74 snapshot commits -> 67 sessions, 07-15..10-23). 243 agree (92%), 21
+knife-edge (8%), 0 mismatch. By engine (agree / knife-edge / mismatch): HG 65/2/0, KMLM 61/6/0 (63 of 67
+sessions on the strict corridor path), SLEEVE 63/4/0, HARV 54/9/0. Of the knife-edges, 13 fall inside
+the 5-minute-bar window (08-06 onward), and the logic on Composer's decision-time prices reproduces every
+one (15:45: 9, 15:50: 1, 15:55: 3). The other 8 predate the window; the fallback confirms them at <= 0.14
+sigma. The snapshots do not record attempt dates, so a past skipped session with unchanged logic would
+read as agree.
+2026-10-26..28: no rebalance attempt on all four (meta on 10-29: last attempt 10-23); the runner would
+have alerted on 10-26. The logic wanted different holdings for KMLM (TLT 75% / PULS 25% on 10-26, then
+SOXL + SVIX) and HARV (PULS 100%, then PULS / VXZ) while Composer held its ZVOL-heavy 10-23 positions; HG
+(BIL) and SLEEVE (BOXX) were unaffected. Composer rebalanced again on 10-29: first live check, 4 of 4 agree.
+
+CALIBRATION. Move from Composer's decision time to the official close, in 20-session daily sigmas (13
+decisive tickers x ~60 sessions of 5-minute bars, 2026-08-06..10-29): from 15:45 median 0.08, p95 0.30,
+p99 0.49; from 15:50 p95 0.27; from 15:55 p95 0.19. Fallback radius 0.3 sigma = the 15:45 p95. Placebo
+(the logic at D against Composer's holdings from D-1, D+1, D+5 where those differ): with bars 2 of 273
+excused (mismatch 259, agree 12); fallback only, 9 of 86 (mismatch 71, agree 6). KMLM's placebo used
+the lenient check (an overstatement for KMLM).
+
+SIDE FINDINGS (nothing changed):
+- HARV, "VIX Harvester + HYG Credit Guard", has no HYG condition in any saved version (J6evkY1V,
+  uQf3HrDb, XVtsDTV1, all logically identical to the community copy). Add. 12's "guarded symphony built +
+  saved ... 9 ZVOL legs wrapped" is true of none of them. Its only guard is the UVXY RSI(14) > 70 switch
+  to PULS, which add. 31 already treats as the guard. RUNBOOK.md corrected. Owner decision: rename it, or
+  add the guard add. 12 approved.
+- Composer made no rebalance attempt 2026-10-26..28 (confirmed from meta) and resumed 10-29.
+
+NOT MODELED / LIMITS:
+- Not checked: fill prices and timing, cash, and deposits (KMLM falls back to the lenient check).
+- Composer does not publish its decision time; 15:45-15:55 is what is tried.
+- Yahoo is the price source. A dividend or split it books before adjusting its series is repaired; one it
+  never books is not.
+- The corridor's absolute reading is inferred from Composer's backtests.
+
+COUNTER-AGENT (one hostile reviewer; scratchpad/shadow/review/):
+- Reproduced: the first build's numbers (1,020/1,022; 245/19/0/12), the calibration, the placebo, the
+  registry (live trees byte-identical to the fixtures) and the HARV finding.
+- REFUTED and fixed, blockers:
+  - D1: no-rebalance detection depended on Yahoo, so a data gap could drop an engine from the alert or
+    fire a false RESUMED.
+  - D2: one malformed ledger line silenced the runner and left its state half-updated.
+- REFUTED and fixed, should-fix:
+  - D3: the 0.5-sigma one-ticker knife-edge excused 21% of wrong pairs. Replaced by decision-time prices:
+    13 of 13 real cases, 2 of 273 wrong pairs.
+  - D4: the 250-close RSI warm-up was the cause of the SLEEVE 04-07 miss, not a price tie.
+  - D5: the drift check saw only new version ids, and only after Yahoo.
+  - D6: canonical() missed select?, sort-by?, weight-method and window-days edits, and flagged ignored
+    weights and number formats.
+  - D7: data failures were silent.
+  - D8: the lenient KMLM check missed wrong legs of 11pp or less.
+- Nits fixed: the knife-edge streak across unavailable sessions; a "path" showing non-decisive checks;
+  per-engine error isolation; dividend/split lag; daily repeats for a paused symphony; the UTC weekday; the
+  ledger path; HARV's start date; the snapshot cut-off (now 16:00 ET).
+- Tests: 25 of its 37 mutants survived the first suite; the rewritten 70-test suite kills 55 of 55
+  re-expressed mutants.
+- Round 2 (verification of the fixes): in progress.
+
+DECISION: none on symphonies. The runner joins the daily routine (POLICY standing cadence: its lines are
+relayed and pushed, never traded on).
