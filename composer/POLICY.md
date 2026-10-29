@@ -150,6 +150,13 @@ unchanged vs disciplined manual resets).
   STILL CLOSED / REOPENED / OVERRIDE lines are informational: relay the full
   description to the owner (it is written to be read), send the push, and do
   nothing else. The gate acts inside HG's own logic; no operation here.
+- EVENT-DRIVEN (every daily check): the shadow decision runner
+  (`scripts/shadow_runner.py`, addendum 48). SHADOW MISMATCH / SHADOW
+  KNIFE-EDGE / COMPOSER DID NOT REBALANCE / COMPOSER STILL NOT REBALANCING /
+  COMPOSER REBALANCING RESUMED / LOGIC DRIFT lines are informational: relay
+  them as written, send the push, and do nothing else: no trade, no symphony
+  edit. Only the owner resolves a LOGIC DRIFT (approve: a new era in
+  `fixtures/approved/manifest.json` plus a CHANGELOG entry; or roll back).
 
 ## Standing exclusions
 

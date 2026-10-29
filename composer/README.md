@@ -276,8 +276,8 @@ Composer's `/dry-run` simulation, and (with `--previews`, during market
 hours) per-symphony trade previews.
 
 **`monitor.py` — scheduled monitoring.** Snapshots per-symphony state to
-`results/monitor/` (`state.json` and `last-snapshot.json` are git-tracked and
-committed by the routine; dated snapshots rotate), compares to the previous run, and alerts on
+`results/monitor/` (`state.json`, `last-snapshot.json` and `shadow-ledger.jsonl`
+are git-tracked and committed by the routine; dated snapshots rotate), compares to the previous run, and alerts on
 drawdown from tracked peak (`--dd-alert`), large moves (`--move-alert`),
 holding rotations, and queued deploys. Exit code 2 when alerts fire, so a
 scheduled session/cron can decide whether to notify.
@@ -294,3 +294,19 @@ what a cross would do to HG's holding. Data: two ad-hoc Composer backtests
 (single-asset SPY; the pre-gate HG tree in `fixtures/`). Reporting only.
 `python3 composer/scripts/gate_watch.py` prints today's reading without
 writing state. Tests: `python3 -m unittest composer.scripts.tests.test_gate_watch`.
+
+**`shadow_runner.py` — the approved logic vs what Composer holds (addendum 48).**
+Called by `monitor.py` after the gate watch. Each session it evaluates every
+symphony's approved tree (`fixtures/approved/manifest.json`, one era per
+approved version) on Yahoo adjusted closes and compares the answer with
+Composer's holdings. Silent when they agree; alerts on a MISMATCH, on a
+KNIFE-EDGE two sessions running (Composer decides on ~15:50 prices, the
+shadow on the close), when Composer makes NO REBALANCE attempt (first
+session, daily while it lasts, then RESUMED), and on LOGIC DRIFT (Composer's
+live version differs in logic from the approved one). Ledger:
+`results/monitor/shadow-ledger.jsonl`, one line per engine and session.
+Approving a logic change = add an era to the manifest (tree from
+`GET /symphonies/{id}/score`) in the same commit as its CHANGELOG entry;
+otherwise the next run reports LOGIC DRIFT. Keyless and read-only.
+`python3 composer/scripts/shadow_runner.py` prints today's comparison without
+writing. Tests: `python3 -m unittest composer.scripts.tests.test_shadow_runner`.

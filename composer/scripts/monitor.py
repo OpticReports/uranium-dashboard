@@ -13,6 +13,10 @@ compares against the previous snapshot. Alerts on:
     treasury-canary/studies/pin-rule-hindcast v2)
   - HG's SPY 200-day gate approaching, crossing, overriding or re-opening
     (gate_watch.py; event-driven with hysteresis, never daily)
+  - the shadow decision runner (shadow_runner.py): Composer's holdings vs
+    each symphony's approved logic on independent prices; alerts on a
+    mismatch, a repeated knife-edge, a session with no rebalance attempt,
+    and logic drift from the approved versions
 
 Exit code: 0 = quiet, 2 = alerts fired (easy to wire into cron/CI/triggers).
 Read-only. State lives in composer/results/monitor/state.json (tracked peaks
@@ -282,6 +286,14 @@ def main():
         gate_watch.check_gate(state, alerts, snap, meta, now)
     except (Exception, SystemExit) as e:  # composerlib exits on HTTP errors; the run must go on
         print(f"  (gate watch unavailable: {e})")
+
+    # shadow decision runner (addendum 48): what the approved logic says to
+    # hold vs what Composer holds; ledger in shadow-ledger.jsonl
+    try:
+        import shadow_runner
+        shadow_runner.check_shadow(state, alerts, snap, meta, now, get=cl.get)
+    except (Exception, SystemExit) as e:  # composerlib exits on HTTP errors; the run must go on
+        print(f"  (shadow runner unavailable: {e})")
 
     # ops-tempo conditioning (addendum 28): when the accident composite is
     # RED, escalate DIAGNOSTIC tempo (never trades): run live-vs-model

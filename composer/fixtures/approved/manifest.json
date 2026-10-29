@@ -1,0 +1,75 @@
+{
+  "_doc": "Approved logic per live symphony, by era (shadow_runner.py; results.md addendum 48). 'from' is the first session whose ~15:50 ET rebalance ran that version (created_at is ET). The shadow evaluates the era covering each date; the live check compares Composer's current version head and tree against the LAST era. Approving a logic change = add an era here (tree fetched from GET /symphonies/{id}/score) in the same commit as the CHANGELOG entry.",
+  "engines": {
+    "HG": {
+      "symphony": "mbkiXcuNDjueXpiox5Av",
+      "eras": [
+        {
+          "version": "6jq2MZNfQcEWZjQFq5v9",
+          "created_at": "2026-06-30T12:42:47-04:00",
+          "from": "2026-06-30",
+          "tree": "hg-6jq2MZNf.json",
+          "note": "VBF bond baskets"
+        },
+        {
+          "version": "bP4mvRy6YHHejuPGUBNY",
+          "created_at": "2026-07-30T23:30:40-04:00",
+          "from": "2026-07-31",
+          "tree": "hg-bP4mvRy6.json",
+          "note": "bond baskets -> BIL (CHANGELOG 2026-07-31); bI6tlUMw (VCIT, 2026-07-30 20:50 ET) was superseded before any rebalance"
+        },
+        {
+          "version": "2oyXahw1VWpFtV15dhIi",
+          "created_at": "2026-10-18T15:35:52-04:00",
+          "from": "2026-10-19",
+          "tree": "hg-2oyXahw1.json",
+          "note": "SPY 200-day gate (addendum 45)"
+        }
+      ]
+    },
+    "KMLM": {
+      "symphony": "YPTSJFJwD2ZKfAeYJUbW",
+      "corridor": 0.1,
+      "eras": [
+        {
+          "version": "MVfHI8OgKae5EaC3W9oE",
+          "created_at": "2026-07-06T12:07:06-04:00",
+          "from": "2026-07-06",
+          "tree": "kmlm-MVfHI8Og.json",
+          "note": "threshold rebalance: 'none' + 0.10 corridor"
+        }
+      ]
+    },
+    "SLEEVE": {
+      "symphony": "nNdBk7hc5NiBzeRvbI5T",
+      "eras": [
+        {
+          "version": "GtCP9qywDB4E5kxj6ScN",
+          "created_at": "2026-07-06T13:11:53-04:00",
+          "from": "2026-07-06",
+          "tree": "sleeve-GtCP9qyw.json",
+          "note": "BIL legs, daily rebalance"
+        },
+        {
+          "version": "yHJkdePZUWBT6eMCgO9m",
+          "created_at": "2026-07-30T23:31:19-04:00",
+          "from": "2026-07-31",
+          "tree": "sleeve-yHJkdePZ.json",
+          "note": "BIL -> BOXX (CHANGELOG 2026-07-31)"
+        }
+      ]
+    },
+    "HARV": {
+      "symphony": "ORQNCfZnA18wmsMWVhf8",
+      "eras": [
+        {
+          "version": "XVtsDTV1R6iuYDEg8XZK",
+          "created_at": "2026-07-21T17:34:39-04:00",
+          "from": "2026-07-21",
+          "tree": "harv-XVtsDTV1.json",
+          "note": "rename of uQf3HrDb (2026-07-20 17:07 ET, first rebalance 2026-07-21), logic identical; no HYG condition in any version despite the name"
+        }
+      ]
+    }
+  }
+}
