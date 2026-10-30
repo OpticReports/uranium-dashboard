@@ -17,6 +17,12 @@ Everything here was decided with data, in advance. Addenda cited.
   >50% data-anomaly guards. Trades only what POLICY.md pre-authorizes.
   The shadow runner (add. 48) checks that Composer holds what each
   symphony's approved logic says and flags a session with no rebalance.
+- 3:15 PM ET pre-close preview (add. 49): what the ~3:50 rebalance is about
+  to do, before it does it. It gives the gate on live SPY, each symphony's
+  expected holdings and dollars, and how close each call is. It pushes on
+  a gate flip, a gate on the line, a 2%+ SPY day, or no preview at all.
+  It is there so nothing surprises you, not as a cue to act. Step 1 below
+  still holds.
 - You get a push notification for anything that matters.
 
 ## What the OWNER does on a crash day
@@ -24,7 +30,15 @@ Everything here was decided with data, in advance. Addenda cited.
 1. NOTHING intraday, by default. Measured five ways: every intervention
    family (news force-runs add. 22, gates 19b, vol targets 20b, DD exits
    21, valuation 26) amputates the engines' best states — which are
-   crash-recovery states.
+   crash-recovery states. The 3:15 preview shows these states coming,
+   e.g. HG/KMLM buying levered dip-rebounds on a -2% day. Seeing one
+   arrive is not new information against it.
+   If you still override, do it in the Composer app before ~3:45 PM ET.
+   - Pausing a symphony keeps its current holdings: no rebalance, but no
+     exit either.
+   - Liquidating moves it to cash.
+   - Both leave the symphony off its logic until you undo them, and the
+     next evening's shadow check flags it.
 2. Read the evening report. It states: book DD vs the expected bands
    (ordinary year: 22-27%; tail: high-30s — add. 21b), which engines
    rotated defensive, gauge status, and any POLICY action taken.

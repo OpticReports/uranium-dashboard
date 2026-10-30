@@ -313,3 +313,24 @@ Approving a logic change = add an era to the manifest (tree from
 otherwise the next run reports LOGIC DRIFT. Keyless and read-only.
 `python3 composer/scripts/shadow_runner.py` prints today's comparison without
 writing. Tests: `python3 -m unittest composer.scripts.tests.test_shadow_runner`.
+
+**`preclose.py` — what today's rebalance will do, before it does it (addendum 49).**
+Its own scheduled run at 15:15 ET on weekdays (12:15 on a half-day), not part of
+`monitor.py`. Composer decides at ~15:50 on live prices; the post-close check
+only reports afterwards. This evaluates the same approved trees on Yahoo's
+latest trades and prints:
+- the gate: SPY live vs its 200-day average, and the exact SPY price that flips it
+  (the average includes today's price);
+- per symphony: holdings now -> what the logic holds at the rebalance (KMLM only
+  past its 10pp corridor), the dollars that move, and the nearest one-ticker move
+  that would change at least a quarter of that, in sigmas of the move left before
+  15:50 (coin-flip <= 1, could flip <= 2, else firm).
+
+A quote older than 15 minutes is rebuilt from a fresh fund on the same index at
+its leverage, else used and named. Alerts, exit 2: GATE CLOSES / REOPENS AT TODAY'S
+REBALANCE, GATE ON THE LINE (within 2 sigma), BIG DAY (SPY 2% or more off
+yesterday's close), PRE-CLOSE UNAVAILABLE. Report-only: overrides are the owner's
+call in the Composer app (RUNBOOK). Ledger:
+`results/monitor/preclose-ledger.jsonl`, one line per engine and run.
+`python3 composer/scripts/preclose.py --no-ledger` prints a read without writing.
+Tests: `python3 -m unittest composer.scripts.tests.test_preclose`.

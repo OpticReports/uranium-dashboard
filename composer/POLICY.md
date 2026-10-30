@@ -158,6 +158,14 @@ unchanged vs disciplined manual resets).
   nothing else: no trade, no symphony edit. Only the owner resolves a LOGIC
   DRIFT (approve: a new era in `fixtures/approved/manifest.json` plus a
   CHANGELOG entry; or roll back).
+- DAILY PRE-CLOSE (15:15 ET weekdays; 12:15 ET on NYSE half-days): the
+  pre-close preview (`scripts/preclose.py`, addendum 49). It shows what
+  Composer's ~15:50 rebalance is about to do: the gate on live SPY, and
+  each symphony's expected holdings with the dollars that move and how
+  close the call is. Relay the lines as written. Push only for GATE CLOSES
+  / REOPENS AT TODAY'S REBALANCE, GATE ON THE LINE, BIG DAY and PRE-CLOSE
+  UNAVAILABLE. Never trade, pause or edit a symphony on it: an override
+  is the owner's call in the Composer app (RUNBOOK.md).
 
 ## Standing exclusions
 

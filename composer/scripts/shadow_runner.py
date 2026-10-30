@@ -812,6 +812,23 @@ def apply_events(dates, adj, raw, events):
                 raw[j] *= m
 
 
+def parse_daily(res):
+    """({date: adjusted close}, {date: raw close}) from a Yahoo daily chart result; empty if no bars"""
+    q = res["indicators"]["quote"][0]
+    adj = (res["indicators"].get("adjclose") or [{}])[0].get("adjclose")
+    rows = {}
+    for i, ts in enumerate(res.get("timestamp") or []):
+        c = q["close"][i]
+        if c:
+            rows[_utc_date(ts)] = (float(adj[i] if adj and adj[i] else c), float(c))
+    if not rows:
+        return {}, {}
+    dates = sorted(rows)
+    a_, r_ = [rows[d][0] for d in dates], [rows[d][1] for d in dates]
+    apply_events(dates, a_, r_, res.get("events") or {})
+    return dict(zip(dates, a_)), dict(zip(dates, r_))
+
+
 def fetch_yahoo(t, rng="2y", tries=3):
     """({date: adjusted close}, {date: raw close}) from Yahoo daily bars"""
     url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(t)}"
@@ -819,19 +836,9 @@ def fetch_yahoo(t, rng="2y", tries=3):
     err = None
     for k in range(tries):
         try:
-            res = _chart(url)
-            q = res["indicators"]["quote"][0]
-            adj = (res["indicators"].get("adjclose") or [{}])[0].get("adjclose")
-            rows = {}
-            for i, ts in enumerate(res.get("timestamp") or []):
-                c = q["close"][i]
-                if c:
-                    rows[_utc_date(ts)] = (float(adj[i] if adj and adj[i] else c), float(c))
-            if rows:
-                dates = sorted(rows)
-                a_, r_ = [rows[d][0] for d in dates], [rows[d][1] for d in dates]
-                apply_events(dates, a_, r_, res.get("events") or {})
-                return dict(zip(dates, a_)), dict(zip(dates, r_))
+            adj, raw = parse_daily(_chart(url))
+            if adj:
+                return adj, raw
             err = "empty series"
         except Exception as e:  # noqa: BLE001
             err = e

@@ -618,3 +618,24 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
 - Artifacts: results.md addendum 48; README (monitor section); POLICY.md
   standing cadence; RUNBOOK.md; daily routine prompt (relays the new lines;
   commits the ledger with the daily snapshot).
+
+## 2026-10-30 — pre-close preview: today's rebalance read at 15:15 ET, before it happens (owner request; reporting only)
+
+- Change: `scripts/preclose.py`, its own scheduled run at 15:15 ET on weekdays (12:15 on NYSE half-days).
+  It evaluates every symphony's approved tree on Yahoo's latest trades and prints:
+  - the gate: SPY live vs its 200-day average, and the exact flip price;
+  - per symphony: holdings now -> after the ~15:50 rebalance (KMLM through its 10pp corridor), dollars
+    moving, and how close the call is (coin-flip / could flip / firm).
+  Alerts: GATE CLOSES / REOPENS AT TODAY'S REBALANCE, GATE ON THE LINE, BIG DAY (SPY 2%+),
+  PRE-CLOSE UNAVAILABLE. Stale quotes are rebuilt from a fresh same-index fund. No symphony mutated.
+  `shadow_runner.fetch_yahoo` now parses through `parse_daily()` (shared; behaviour unchanged, 98 tests).
+- Why: owner, "Shouldn't we be doing gate checks before market close? ... So it's not gate checking in
+  arrears?" The gate watch and the shadow runner read closes at 17:35; Composer acts at ~15:50.
+- Before / after: no live change. Lead-time study (add. 49, 59 sessions): the 15:15 read matched the 15:50
+  answer on 221/228 engine-sessions (225/228 no material change); all 3 material changes were flagged
+  coin-flip; 0 of 172 "firm" calls changed materially. Sigma scale 0.52 x sqrt(t), measured.
+- Counter-agent: REVIEW_PENDING
+- Artifacts: results.md addendum 49; exhibit results/preclose-leadtime-2026-10-30.html; README (monitor
+  section); POLICY.md standing cadence; RUNBOOK.md (what the preview is for; what a pause or a
+  liquidation does); new 15:15 ET routine; daily routine prompt (commits the preclose ledger too).
+- No service redeploy (local CLI run by the routine).
