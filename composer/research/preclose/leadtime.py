@@ -5,8 +5,9 @@ Over the sessions Yahoo still has 5-minute bars for (~60), for each engine's app
 in force that day):
   1. how often its answer at 15:00 / 15:15 / 15:30 / 15:40 ET matches its answer at 15:50 (Composer's
      decision minute): the same holdings (half-L1 <= 3%) and no material change (< 25%)
-  2. whether the 15:15 flip labels (coin-flip / could flip / firm, preclose.flip) sort the sessions
-     whose answer changed materially by 15:50
+  2. whether the 15:15 labels (close call / could flip / firm, preclose.uncertainty: whole-market moves
+     of 1 and 2 sigma by each fund's beta, and the nearest one-ticker move) sort the sessions whose
+     answer changed materially by 15:50, and whether the alternatives shown at 15:15 held the answer
   3. the size of the move to 15:50 of every decision ticker in daily sigmas (20 sessions to the day
      before), from each earlier minute: the scale the live preview applies to sqrt(minutes / 390)
      (preclose.SIGMA_SCALE), on tickers with a full day of 5-minute bars (liquid) and on all
@@ -77,6 +78,8 @@ def main():
         close = spy_bars[d]["_close"]
         cal = [x for x in sorted(prices["SPY"]) if x < d]
         prev = cal[-1]
+        betas = {t: pc.beta(prices[t], prices["SPY"], prev) for t in prices}
+        spy_sd = pc.daily_sd(prices["SPY"], prev)
         hh = {off: sr._hm(sr._min(close) - off) for off in OFFSETS}
         # 4. the gate
         g = {}
@@ -108,9 +111,12 @@ def main():
                     row["dist"][hh[off]] = round(sr.distance(res[off][1], ref[1])[0], 4)
             s15 = res.get(LABEL_AT)
             if s15 and s15[1] is not None:
-                # searched with the unscaled sqrt(t) factor (the wider radius); labels at any scale follow
-                fl = pc.flip(s15[0], tree, d, prev, s15[2], s15[1], {}, None, math.sqrt((LABEL_AT - REF) / pc.SESSION_MIN))
-                row.update(flip=fl and {k: fl[k] for k in ("ticker", "move", "sigma")}, target_1515=s15[1])
+                p15 = at(prices, raw, bars, tk, d, hh[LABEL_AT])
+                unc = pc.uncertainty(s15[0], tree, d, prev, s15[2], s15[1], p15, dict, LABEL_AT - REF, betas, spy_sd)
+                alts = list(unc["market"].values()) + ([unc["flip"]["instead"]] if unc["flip"] else [])
+                row.update(label=unc["label"], target_1515=s15[1], market={str(k): v for k, v in unc["market"].items()},
+                           flip=unc["flip"] and {k: unc["flip"][k] for k in ("ticker", "move", "sigma")},
+                           alt_hit=any(pc.same(a, ref[1]) for a in alts))
             rows.append(dict(row, status="ok"))
         # 3. moves to 15:50 in daily sigmas, from each earlier minute
         for t in sorted(day_tk):
@@ -121,7 +127,7 @@ def main():
                 a1 = sr.bar_price(b, hh[off])
                 if a1 and a2 and sg:
                     z.append((d, t, off - REF, liquid, (a2 / a1 - 1) / sg))
-        print(d, " ".join(f"{r['engine']}:{(r.get('flip') or {}).get('sigma', '-')}/{r.get('dist', {}).get(hh[LABEL_AT], '-')}"
+        print(d, " ".join(f"{r['engine']}:{r.get('label', '-')}/{r.get('dist', {}).get(hh[LABEL_AT], '-')}"
                           for r in rows if r["date"] == d), flush=True)
 
     # summaries
@@ -149,21 +155,17 @@ def main():
             for grp in ("liquid", "all")}
     scale = zsum["liquid"][f"{LABEL_AT - REF} min"]["scale"]
 
-    def labels(sc):
-        """the 15:15 labels if the preview's sigma were sc x sqrt(t), and what then happened by 15:50"""
-        out = {}
-        for r in ok:
-            if "15:15" not in r["dist"] or "target_1515" not in r:
-                continue
-            fl = r.get("flip")
-            sig = fl["sigma"] / sc if fl else None
-            lb = pc.label({"sigma": sig} if sig is not None and sig <= pc.FLIP_MAX else None)
-            k = out.setdefault(lb, {"n": 0, "changed": 0, "material": 0})
-            k["n"] += 1
-            k["changed"] += r["dist"]["15:15"] > sr.TOL_DAILY
-            k["material"] += r["dist"]["15:15"] >= pc.FLIP_MATERIAL
-        return out
-    lab = {"sqrt_t": labels(1.0), "measured": labels(scale), "measured_scale": scale}
+    lab = {}
+    for r in ok:
+        if "15:15" not in r["dist"] or "label" not in r:
+            continue
+        k = lab.setdefault(r["label"], {"n": 0, "changed": 0, "material": 0, "material_in_alternatives": 0})
+        k["n"] += 1
+        k["changed"] += r["dist"]["15:15"] > sr.TOL_DAILY
+        if r["dist"]["15:15"] >= pc.FLIP_MATERIAL:
+            k["material"] += 1
+            k["material_in_alternatives"] += bool(r.get("alt_hit"))
+    lab = {"by_label": lab, "sigma_scale_used": pc.SIGMA_SCALE, "measured_scale_35min_liquid": scale}
     gflips = {sr._hm(16 * 60 - off): sum(1 for g in gate_rows if g["open"].get(off) is not None and
                                           g["open"][REF] is not None and g["open"][off] != g["open"][REF])
               for off in OFFSETS}

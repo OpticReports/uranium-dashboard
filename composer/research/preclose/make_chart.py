@@ -12,6 +12,7 @@ import shadow_runner as sr  # noqa: E402
 
 RES = os.path.join(HERE, "..", "..", "results")
 SRC = os.path.join(RES, "preclose-leadtime-2026-10-30.json")
+REPLAY = os.path.join(RES, "preclose-replay-2026-10-30.txt")
 PAGE = os.path.join(RES, "preclose-leadtime-2026-10-30.html")
 ENGINES = ["HG", "KMLM", "SLEEVE", "HARV"]
 SAMPLE = """PRE-CLOSE 2026-10-30 15:27 ET: Composer decides ~15:50 (23 min); SPY -2.15% today
@@ -27,20 +28,21 @@ HARV   $37,350 PULS 100% -> ZVOL 60%, PULS 40% ($22,410 moves). firm (no one-tic
 
 def main():
     r = json.load(open(SRC))
-    scale = r["labels_1515"]["measured_scale"]
+    scale = r["labels_1515"]["measured_scale_35min_liquid"]
     cells = []
     for x in r["rows"]:
-        if x["status"] != "ok" or "15:15" not in x["dist"] or "target_1515" not in x:
+        if x["status"] != "ok" or "15:15" not in x["dist"] or "label" not in x:
             cells.append({"d": x["date"], "e": x["engine"], "l": "n/a"})
             continue
         fl = x.get("flip")
-        sig = fl["sigma"] / scale if fl else None
-        lab = pc.label({"sigma": sig} if sig is not None and sig <= pc.FLIP_MAX else None)
-        cells.append({"d": x["date"], "e": x["engine"], "l": lab, "ch": x["dist"]["15:15"],
-                      "a": sr.fmt_w(x["target_1515"]), "b": sr.fmt_w(x["target_1550"]),
-                      "f": fl and sig <= pc.FLIP_MAX and {"t": fl["ticker"], "m": fl["move"], "s": round(sig, 2)}})
-    data = {"times": r["times"], "acc": r["accuracy"], "lab": r["labels_1515"]["measured"],
-            "lab_sqrt": r["labels_1515"]["sqrt_t"], "scale": scale, "moves": r["moves_to_1550"],
+        cells.append({"d": x["date"], "e": x["engine"], "l": x["label"], "ch": x["dist"]["15:15"],
+                      "a": sr.fmt_w(x["target_1515"]), "b": sr.fmt_w(x["target_1550"]), "hit": bool(x.get("alt_hit")),
+                      "mk": {k: sr.fmt_w(v) for k, v in (x.get("market") or {}).items()},
+                      "f": fl and {"t": fl["ticker"], "m": fl["move"], "s": fl["sigma"]}})
+    with open(REPLAY) as f:
+        replay = f.read().strip()
+    data = {"times": r["times"], "acc": r["accuracy"], "lab": r["labels_1515"]["by_label"],
+            "used": r["labels_1515"]["sigma_scale_used"], "scale": scale, "moves": r["moves_to_1550"], "replay": replay,
             "hist": r["z_hist_1515_liquid"], "cells": cells, "dates": sorted({c["d"] for c in cells}),
             "window": r["sessions"], "n_sessions": r["n_sessions"], "gate_open": r["gate_open_1550"],
             "gate_flips": r["gate_flips_vs_1550"], "sample": SAMPLE, "material": pc.FLIP_MATERIAL}
@@ -116,7 +118,7 @@ pre{background:var(--code);border-radius:8px;padding:10px 12px;font-size:12.5px;
 <div class="two">
 <section class="card">
 <h2>The 15:15 labels: where the misses sat</h2>
-<p class="sub-h">Each engine-session's label at 15:15 (the nearest one-ticker move that changes a quarter of the holdings, in sigmas of the move left), and how many then changed materially by 15:50.</p>
+<p class="sub-h">Each engine-session's label at 15:15: would the whole market moving 1 or 2 sigma before 15:50 (each fund by its beta), or the nearest single ticker, change a quarter of the holdings? And how many then changed materially by 15:50.</p>
 <div class="legend" id="lg-lab"></div>
 <svg id="lab" role="img" aria-label="Bars: sessions per 15:15 label, with the ones that changed materially by 15:50"></svg>
 </section>
@@ -136,8 +138,10 @@ pre{background:var(--code);border-radius:8px;padding:10px 12px;font-size:12.5px;
 </section>
 
 <section class="card">
-<h2>What arrives at 15:15</h2>
-<p class="sub-h">The first live read (2026-10-30, a -2% day; run at 15:27 ET while the feature was being built). Yahoo's quotes for 11 tickers were ~50 minutes stale that afternoon, so the preview rebuilt SPY from IVV and named the stale ones it could not rebuild.</p>
+<h2>The first live day, 2026-10-30: what went wrong and what the revision says</h2>
+<p class="sub-h">SPY -2.2%. At 15:27 the first version said HG BIL -> QLD 100% and KMLM -> TECL 75%, both "could flip", with the wrong alternatives. Composer ended at HG BIL 100% and KMLM SQQQ 75%: TQQQ's 10-day RSI sat at 29.6-29.8 until 15:45 and a late rally lifted it to 30.05 at 15:50, switching off both engines' dip-buy branches. The revised preview, replayed on that afternoon's 5-minute bars (stale tickers frozen where Yahoo's feed froze):</p>
+<pre id="replay"></pre>
+<p class="sub-h">The first version's 15:27 read, as sent:</p>
 <pre id="sample"></pre>
 </section>
 
@@ -157,14 +161,14 @@ function untip(){tt.style.display='none';}
 const NS = 'http://www.w3.org/2000/svg';
 function el(tag, attrs, parent, text){const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e;}
 const pct = (a, b) => (100 * a / b).toFixed(1) + '%';
-const LB = {'firm': ['var(--firm)', 'firm (> 2σ)'], 'could flip': ['var(--warn)', 'could flip (1-2σ)'], 'coin-flip': ['var(--serious)', 'coin-flip (≤ 1σ)'], 'n/a': ['transparent', 'no 15:15 read']};
+const LB = {'firm': ['var(--firm)', 'firm'], 'could flip': ['var(--warn)', 'could flip (2σ)'], 'close call': ['var(--serious)', 'close call (1σ)'], 'n/a': ['transparent', 'no 15:15 read']};
 const A = D.acc.all, t15 = A['15:15'], L = D.lab;
-const nLab = k => (L[k] || {n: 0}).n, mLab = k => (L[k] || {material: 0}).material;
+const nLab = k => (L[k] || {n: 0}).n, mLab = k => (L[k] || {material: 0}).material, hLab = k => (L[k] || {material_in_alternatives: 0}).material_in_alternatives;
 
 // KPIs
 [[`${t15.same} / ${t15.n}`, `engine-sessions where the 15:15 answer equals 15:50's (${pct(t15.same, t15.n)}); ${t15.no_material} with no material change`],
- [`${mLab('coin-flip')} of ${nLab('coin-flip')}`, `coin-flip calls that changed materially by 15:50; ${mLab('firm') + mLab('could flip')} of ${nLab('firm') + nLab('could flip')} firm or could-flip calls did`],
- [`${D.scale.toFixed(2)}×`, `the measured late-session move against the random-walk scale from a daily sigma (0.52-0.57 from 10 to 50 minutes)`],
+ [`${mLab('close call')} of ${nLab('close call')}`, `close calls that changed materially by 15:50, and the 15:15 alternatives named the answer in ${hLab('close call')}; ${mLab('firm') + mLab('could flip')} of ${nLab('firm') + nLab('could flip')} firm or could-flip calls changed`],
+ [`${D.scale.toFixed(2)}×`, `the measured late-session move against the random-walk scale from a daily sigma (0.52-0.57 from 10 to 50 minutes); the preview uses ${D.used}`],
  [`${D.gate_open} / ${D.n_sessions}`, `sessions with HG's gate open at 15:50: no gate crossing in this window, so gate timing is not tested here`]]
  .forEach(([b, s]) => { const d = document.createElement('div'); d.className = 'kpi'; d.innerHTML = `<b>${b}</b><span>${s}</span>`; document.getElementById('kpis').appendChild(d); });
 
@@ -200,7 +204,7 @@ const nLab = k => (L[k] || {n: 0}).n, mLab = k => (L[k] || {material: 0}).materi
 
 // label bars
 (function(){
-  const svg = document.getElementById('lab'), W = 520, rowH = 34, l = 118, r = 120, t = 6, ks = ['firm', 'could flip', 'coin-flip'];
+  const svg = document.getElementById('lab'), W = 520, rowH = 34, l = 118, r = 120, t = 6, ks = ['firm', 'could flip', 'close call'];
   const H = t + ks.length * rowH + 22, max = Math.max(...ks.map(nLab));
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   const sx = v => (W - l - r) * v / max;
@@ -212,9 +216,9 @@ const nLab = k => (L[k] || {n: 0}).n, mLab = k => (L[k] || {material: 0}).materi
     if (m) el('rect', {x: l + w1 + 1, y: y + 4, width: Math.max(2, w2 - 1), height: 20, fill: 'var(--crit)'}, svg);
     el('text', {x: l + sx(n) + 8, y: y + 18, class: 'lbl'}, svg, `${m} of ${n} changed`);
     el('rect', {x: l, y, width: W - l, height: rowH, fill: 'transparent'}, svg).addEventListener('mousemove', ev =>
-      tip(ev, `<div class="d">labelled ${k} at 15:15</div>${n} engine-sessions<br>${m} changed materially by 15:50 (${n ? pct(m, n) : '-'})<br>${(L[k] || {}).changed || 0} changed at all (over 3%)`));
+      tip(ev, `<div class="d">labelled ${k} at 15:15</div>${n} engine-sessions<br>${m} changed materially by 15:50 (${n ? pct(m, n) : '-'}), ${hLab(k)} of them to an alternative the preview named<br>${(L[k] || {}).changed || 0} changed at all (over 3%)`));
     svg.lastChild.addEventListener('mouseleave', untip); });
-  el('text', {x: l, y: H - 4, class: 'axis'}, svg, `engine-sessions, 15:15 reads (sigma scale ${D.scale})`);
+  el('text', {x: l, y: H - 4, class: 'axis'}, svg, `engine-sessions, 15:15 reads (sigma scale ${D.used})`);
 })();
 
 // histogram
@@ -244,7 +248,7 @@ const nLab = k => (L[k] || {n: 0}).n, mLab = k => (L[k] || {material: 0}).materi
   const svg = document.getElementById('strip'), L0 = 62, T = 10, W = 1060, cw = (W - L0 - 8) / D.dates.length, ch = 22, gap = 2;
   const H = T + ENG.length * (ch + gap) + 26;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  ['firm', 'could flip', 'coin-flip'].forEach(k => document.getElementById('lg-strip').insertAdjacentHTML('beforeend', `<span><i class="sw" style="background:${LB[k][0]}"></i>${LB[k][1]}</span>`));
+  ['firm', 'could flip', 'close call'].forEach(k => document.getElementById('lg-strip').insertAdjacentHTML('beforeend', `<span><i class="sw" style="background:${LB[k][0]}"></i>${LB[k][1]}</span>`));
   document.getElementById('lg-strip').insertAdjacentHTML('beforeend', `<span style="color:var(--ink)">✕ changed materially by 15:50</span><span style="color:var(--ink)">• changed under 25%</span>`);
   const by = {}; D.cells.forEach(c => by[c.e + c.d] = c);
   ENG.forEach((e, i) => el('text', {x: L0 - 8, y: T + i * (ch + gap) + ch / 2 + 4, 'text-anchor': 'end', class: 'lblb'}, svg, e));
@@ -257,8 +261,9 @@ const nLab = k => (L[k] || {n: 0}).n, mLab = k => (L[k] || {material: 0}).materi
     el('rect', {x, y: y - 1, width: cw, height: ch + 2, fill: 'transparent'}, svg).addEventListener('mousemove', ev => {
       let s = `<div class="d">${d} · ${e}</div><b>${LB[c.l][1]}</b>`;
       if (c.l !== 'n/a') { s += `<br>15:15 logic: ${c.a}<br>15:50 logic: ${c.b}`;
-        if (c.f) s += `<br>nearest flip: ${c.f.t} ${(100 * c.f.m).toFixed(2)}% (${c.f.s}σ)`;
-        s += `<br>difference by 15:50: ${(100 * c.ch).toFixed(0)}%`; }
+        Object.entries(c.mk || {}).forEach(([k, v]) => { s += `<br>market ${k > 0 ? '+' : ''}${k}σ: ${v}`; });
+        if (c.f) s += `<br>nearest one-ticker: ${c.f.t} ${(100 * c.f.m).toFixed(2)}% (${c.f.s}σ)`;
+        s += `<br>difference by 15:50: ${(100 * c.ch).toFixed(0)}%` + (c.ch >= D.material ? (c.hit ? ' (named at 15:15)' : ' (not among the alternatives)') : ''); }
       tip(ev, s); });
     svg.lastChild.addEventListener('mouseleave', untip);
   }));
@@ -269,12 +274,13 @@ const nLab = k => (L[k] || {n: 0}).n, mLab = k => (L[k] || {material: 0}).materi
 })();
 
 document.getElementById('sample').textContent = D.sample;
+document.getElementById('replay').textContent = D.replay;
 [`Window: ${D.window[0]} to ${D.window[1]}, ${D.n_sessions} sessions (all Yahoo still has 5-minute bars for). Each engine runs the approved era in force that day. Some SLEEVE sessions lack a 15:15 read: a thin decision ticker had no 5-minute bar within 30 minutes.`,
  `Prices at a minute = the close of the 5-minute bar ending then, scaled onto the adjusted series by the official close (the shadow runner's method). 15:50 stands in for Composer's decision minute (it decides at about 15:45-15:55).`,
  `Logic only: the targets are compared. Composer's actual holdings, KMLM's 10pp corridor (which absorbs small target changes) and live-feed problems (stale quotes, as on 10-30) are not part of this study.`,
- `In-sample: the 0.52 sigma scale was measured on these same sessions (on ~2,200 liquid ticker-moves, a different quantity from the 3 material changes the labels are graded on). The label result rests on 3 events: indicative, not a rate.`,
- `HG's 200-day gate was open at 15:50 on all ${D.n_sessions} sessions (no crossing in the window), so how often a 15:15 gate reading flips by 15:50 is not measured here; the preview alerts within 2 sigma of the flip price.`,
- `Under the plain random-walk scale (no 0.52), the same reads label ${D.lab_sqrt['coin-flip'].n} engine-sessions coin-flip (vs ${nLab('coin-flip')}), with the same ${D.lab_sqrt['coin-flip'].material} material changes in that group: the scale only changes how many calls are flagged, not which ones changed.`]
+ `In-sample: the labels' sigma scale (${D.used}) and rules were set on this window's evidence (0.52 measured here; raised to 0.6 because a 2-year hourly check found this quarter calm). The label result rests on 3 material events: indicative, not a rate.`,
+ `HG's 200-day gate was open at 15:50 on all ${D.n_sessions} sessions (no crossing in the window), so how often a 15:15 gate reading flips by 15:50 is not measured here; the preview alerts within 2 sigma of the flip price and says what HG holds on each side.`,
+ `The window had no 2%+ SPY day (largest 1.55%). The first such day, 10-30, is outside it: its replay is above, on bars as Yahoo serves them after the close, which may differ from what the live feed showed at the time.`]
  .forEach(s => document.getElementById('basis').insertAdjacentHTML('beforeend', `<li>${s}</li>`));
 </script>
 </body>

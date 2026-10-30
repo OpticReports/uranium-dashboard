@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-30T19:25:32+00:00",
+ "generated": "2026-10-30T20:12:20+00:00",
  "sessions": [
   "2026-08-07",
   "2026-10-29"
@@ -150,41 +150,28 @@
   }
  },
  "labels_1515": {
-  "sqrt_t": {
-   "coin-flip": {
-    "n": 53,
+  "by_label": {
+   "close call": {
+    "n": 39,
     "changed": 3,
-    "material": 3
+    "material": 3,
+    "material_in_alternatives": 3
    },
    "could flip": {
-    "n": 54,
-    "changed": 2,
-    "material": 0
-   },
-   "firm": {
-    "n": 121,
-    "changed": 2,
-    "material": 0
-   }
-  },
-  "measured": {
-   "coin-flip": {
-    "n": 32,
-    "changed": 3,
-    "material": 3
-   },
-   "firm": {
-    "n": 172,
-    "changed": 4,
-    "material": 0
-   },
-   "could flip": {
-    "n": 24,
+    "n": 35,
     "changed": 0,
-    "material": 0
+    "material": 0,
+    "material_in_alternatives": 0
+   },
+   "firm": {
+    "n": 154,
+    "changed": 4,
+    "material": 0,
+    "material_in_alternatives": 0
    }
   },
-  "measured_scale": 0.524
+  "sigma_scale_used": 0.6,
+  "measured_scale_35min_liquid": 0.524
  },
  "moves_to_1550": {
   "liquid": {
@@ -372,14 +359,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SSO",
-    "move": -0.00182,
-    "sigma": 0.35
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "UPRO",
+    "move": 0.0026,
+    "sigma": 0.55
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -399,17 +389,20 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SVIX",
-    "move": -0.01084,
-    "sigma": 1.18
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 0.1,
     "SOXL": 0.375,
     "TECL": 0.375,
     "VXZ": 0.15
    },
+   "market": {},
+   "flip": {
+    "ticker": "SVIX",
+    "move": -0.00921,
+    "sigma": 1.67
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -425,10 +418,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -446,15 +442,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00355,
-    "sigma": 1.35
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.4,
     "VXZ": 0.6
    },
+   "market": {},
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.0035,
+    "sigma": 2.21
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -471,14 +470,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SSO",
-    "move": -0.00093,
-    "sigma": 0.18
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "SSO",
+    "move": -0.00088,
+    "sigma": 0.28
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -498,17 +500,20 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SVIX",
-    "move": -0.01355,
-    "sigma": 1.49
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.1,
     "SOXL": 0.375,
     "TECL": 0.375,
     "VXZ": 0.15
    },
+   "market": {},
+   "flip": {
+    "ticker": "SVIX",
+    "move": -0.01243,
+    "sigma": 2.28
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -526,15 +531,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": 0.00116,
-    "sigma": 1.42
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.75,
     "LABD": 0.25
    },
+   "market": {},
+   "flip": {
+    "ticker": "IEF",
+    "move": 0.00106,
+    "sigma": 2.15
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -552,15 +560,25 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.0006,
-    "sigma": 0.23
-   },
+   "label": "close call",
    "target_1515": {
     "PULS": 0.4,
     "VXZ": 0.6
    },
+   "market": {
+    "-2": {
+     "PULS": 1.0
+    },
+    "-1": {
+     "PULS": 1.0
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00055,
+    "sigma": 0.34
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -577,14 +595,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "UPRO",
-    "move": 0.00146,
-    "sigma": 0.19
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "UPRO",
+    "move": 0.00141,
+    "sigma": 0.31
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -603,12 +624,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SOXL": 0.375,
     "TECL": 0.375
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -625,14 +649,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": -0.00075,
-    "sigma": 0.89
-   },
+   "label": "could flip",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {
+    "-2": {
+     "BOXX": 0.75,
+     "LABD": 0.25
+    }
+   },
+   "flip": {
+    "ticker": "IEF",
+    "move": -0.00061,
+    "sigma": 1.21
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -649,14 +681,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00355,
-    "sigma": 1.38
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00312,
+    "sigma": 2.02
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -673,14 +708,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "UPRO",
-    "move": 0.00227,
-    "sigma": 0.29
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "UPRO",
+    "move": 0.00226,
+    "sigma": 0.49
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -699,12 +737,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SOXL": 0.375,
     "TECL": 0.375
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -721,14 +762,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": -0.00146,
-    "sigma": 1.78
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "IEF",
+    "move": -0.00135,
+    "sigma": 2.75
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -745,14 +789,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00355,
-    "sigma": 1.37
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "2": {
+     "PULS": 0.64,
+     "VXZ": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00295,
+    "sigma": 1.9
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -769,14 +821,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SSO",
-    "move": -0.00116,
-    "sigma": 0.23
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "UPRO",
+    "move": 0.00167,
+    "sigma": 0.36
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -795,18 +850,34 @@
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
+   },
+   "label": "close call",
+   "target_1515": {
+    "PULS": 0.1,
+    "SOXL": 0.375,
+    "TECL": 0.375,
+    "VXZ": 0.15
+   },
+   "market": {
+    "-2": {
+     "PULS": 0.12,
+     "SOXL": 0.375,
+     "SVIX": 0.375,
+     "VXZ": 0.13
+    },
+    "-1": {
+     "PULS": 0.1,
+     "SOXL": 0.375,
+     "SVIX": 0.375,
+     "VXZ": 0.15
+    }
    },
    "flip": {
     "ticker": "SVIX",
     "move": -0.00024,
-    "sigma": 0.03
+    "sigma": 0.04
    },
-   "target_1515": {
-    "PULS": 0.1,
-    "SOXL": 0.375,
-    "TECL": 0.375,
-    "VXZ": 0.15
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -823,10 +894,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -844,15 +918,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00555,
-    "sigma": 2.15
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.4,
     "VXZ": 0.6
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -869,14 +942,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
+   "label": "close call",
+   "target_1515": {
+    "SSO": 1.0
+   },
+   "market": {},
    "flip": {
     "ticker": "SSO",
-    "move": -0.0006,
-    "sigma": 0.12
+    "move": -0.00056,
+    "sigma": 0.18
    },
-   "target_1515": {
-    "SSO": 1.0
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -895,16 +971,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLK",
-    "move": -0.01355,
-    "sigma": 2.2
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SOXL": 0.375,
     "TECL": 0.375
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -921,14 +996,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": -0.00227,
-    "sigma": 2.71
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -945,14 +1019,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00182,
-    "sigma": 0.71
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "2": {
+     "PULS": 0.32,
+     "VXZ": 0.68
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00172,
+    "sigma": 1.12
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -969,14 +1051,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
+   "label": "close call",
+   "target_1515": {
+    "SSO": 1.0
+   },
+   "market": {},
    "flip": {
     "ticker": "UPRO",
-    "move": 0.00116,
-    "sigma": 0.16
+    "move": 0.00111,
+    "sigma": 0.25
    },
-   "target_1515": {
-    "SSO": 1.0
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -995,225 +1080,43 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLK",
-    "move": -0.00444,
-    "sigma": 0.73
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 0.25,
     "SOXL": 0.375,
     "TECL": 0.375
    },
-   "status": "ok"
-  },
-  {
-   "date": "2026-08-17",
-   "engine": "SLEEVE",
-   "version": "yHJkdePZ",
-   "target_1550": {
-    "BOXX": 1.0
-   },
-   "dist": {
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-08-17",
-   "engine": "HARV",
-   "version": "XVtsDTV1",
-   "target_1550": {
-    "PULS": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00146,
-    "sigma": 0.59
-   },
-   "target_1515": {
-    "PULS": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-08-18",
-   "engine": "HG",
-   "version": "bP4mvRy6",
-   "target_1550": {
-    "SSO": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "SSO",
-    "move": -0.00116,
-    "sigma": 0.24
-   },
-   "target_1515": {
-    "SSO": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-08-18",
-   "engine": "KMLM",
-   "version": "MVfHI8Og",
-   "target_1550": {
-    "PULS": 0.12,
-    "SQQQ": 0.75,
-    "ZVOL": 0.13
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "PULS": 0.12,
-    "SQQQ": 0.75,
-    "ZVOL": 0.13
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-08-18",
-   "engine": "SLEEVE",
-   "version": "yHJkdePZ",
-   "target_1550": {
-    "BOXX": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "IEF",
-    "move": -0.00093,
-    "sigma": 1.11
-   },
-   "target_1515": {
-    "BOXX": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-08-18",
-   "engine": "HARV",
-   "version": "XVtsDTV1",
-   "target_1550": {
-    "PULS": 0.48,
-    "ZVOL": 0.52
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00694,
-    "sigma": 2.79
-   },
-   "target_1515": {
-    "PULS": 0.48,
-    "ZVOL": 0.52
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-08-19",
-   "engine": "HG",
-   "version": "bP4mvRy6",
-   "target_1550": {
-    "SSO": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "UPRO",
-    "move": 0.00182,
-    "sigma": 0.24
-   },
-   "target_1515": {
-    "SSO": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-08-19",
-   "engine": "KMLM",
-   "version": "MVfHI8Og",
-   "target_1550": {
-    "PULS": 0.25,
-    "TLT": 0.75
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
+   "market": {
+    "-2": {
+     "PULS": 0.16,
+     "SQQQ": 0.75,
+     "ZVOL": 0.09
+    }
    },
    "flip": {
     "ticker": "XLK",
-    "move": 0.01084,
-    "sigma": 1.77
+    "move": -0.00441,
+    "sigma": 1.2
    },
-   "target_1515": {
-    "PULS": 0.25,
-    "TLT": 0.75
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
-   "date": "2026-08-19",
+   "date": "2026-08-17",
    "engine": "SLEEVE",
    "version": "yHJkdePZ",
    "target_1550": {
     "BOXX": 1.0
    },
    "dist": {
-    "15:15": 0.0,
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
-   "target_1515": {
-    "BOXX": 1.0
-   },
    "status": "ok"
   },
   {
-   "date": "2026-08-19",
+   "date": "2026-08-17",
    "engine": "HARV",
    "version": "XVtsDTV1",
    "target_1550": {
@@ -1226,18 +1129,30 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
+   "label": "close call",
+   "target_1515": {
+    "PULS": 1.0
+   },
+   "market": {
+    "-2": {
+     "PULS": 0.64,
+     "ZVOL": 0.36
+    },
+    "-1": {
+     "PULS": 0.64,
+     "ZVOL": 0.36
+    }
+   },
    "flip": {
     "ticker": "SPY",
-    "move": -0.00227,
+    "move": -0.00134,
     "sigma": 0.91
    },
-   "target_1515": {
-    "PULS": 1.0
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
-   "date": "2026-08-20",
+   "date": "2026-08-18",
    "engine": "HG",
    "version": "bP4mvRy6",
    "target_1550": {
@@ -1250,18 +1165,21 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SSO",
-    "move": -0.00116,
-    "sigma": 0.24
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "UPRO",
+    "move": 0.00166,
+    "sigma": 0.37
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
-   "date": "2026-08-20",
+   "date": "2026-08-18",
    "engine": "KMLM",
    "version": "MVfHI8Og",
    "target_1550": {
@@ -1276,20 +1194,19 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SQQQ",
-    "move": -0.01694,
-    "sigma": 1.29
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.12,
     "SQQQ": 0.75,
     "ZVOL": 0.13
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
-   "date": "2026-08-20",
+   "date": "2026-08-18",
    "engine": "SLEEVE",
    "version": "yHJkdePZ",
    "target_1550": {
@@ -1302,14 +1219,243 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
+   "label": "could flip",
+   "target_1515": {
+    "BOXX": 1.0
+   },
+   "market": {},
    "flip": {
     "ticker": "IEF",
-    "move": -0.00116,
-    "sigma": 1.34
+    "move": -0.00091,
+    "sigma": 1.81
    },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-08-18",
+   "engine": "HARV",
+   "version": "XVtsDTV1",
+   "target_1550": {
+    "PULS": 0.48,
+    "ZVOL": 0.52
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 0.48,
+    "ZVOL": 0.52
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-08-19",
+   "engine": "HG",
+   "version": "bP4mvRy6",
+   "target_1550": {
+    "SSO": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "close call",
+   "target_1515": {
+    "SSO": 1.0
+   },
+   "market": {},
+   "flip": {
+    "ticker": "UPRO",
+    "move": 0.00176,
+    "sigma": 0.39
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-08-19",
+   "engine": "KMLM",
+   "version": "MVfHI8Og",
+   "target_1550": {
+    "PULS": 0.25,
+    "TLT": 0.75
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 0.25,
+    "TLT": 0.75
+   },
+   "market": {},
+   "flip": {
+    "ticker": "XLK",
+    "move": 0.0103,
+    "sigma": 2.8
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-08-19",
+   "engine": "SLEEVE",
+   "version": "yHJkdePZ",
+   "target_1550": {
+    "BOXX": 1.0
+   },
+   "dist": {
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-08-19",
+   "engine": "HARV",
+   "version": "XVtsDTV1",
+   "target_1550": {
+    "PULS": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "could flip",
+   "target_1515": {
+    "PULS": 1.0
+   },
+   "market": {
+    "-2": {
+     "PULS": 0.48,
+     "ZVOL": 0.52
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00186,
+    "sigma": 1.23
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-08-20",
+   "engine": "HG",
+   "version": "bP4mvRy6",
+   "target_1550": {
+    "SSO": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "close call",
+   "target_1515": {
+    "SSO": 1.0
+   },
+   "market": {},
+   "flip": {
+    "ticker": "UPRO",
+    "move": 0.00158,
+    "sigma": 0.35
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-08-20",
+   "engine": "KMLM",
+   "version": "MVfHI8Og",
+   "target_1550": {
+    "PULS": 0.12,
+    "SQQQ": 0.75,
+    "ZVOL": 0.13
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "could flip",
+   "target_1515": {
+    "PULS": 0.12,
+    "SQQQ": 0.75,
+    "ZVOL": 0.13
+   },
+   "market": {
+    "2": {
+     "PULS": 0.12,
+     "TLT": 0.75,
+     "ZVOL": 0.13
+    }
+   },
+   "flip": {
+    "ticker": "SQQQ",
+    "move": -0.01628,
+    "sigma": 2.06
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-08-20",
+   "engine": "SLEEVE",
+   "version": "yHJkdePZ",
+   "target_1550": {
+    "BOXX": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "BOXX": 1.0
+   },
+   "market": {},
+   "flip": {
+    "ticker": "IEF",
+    "move": -0.00107,
+    "sigma": 2.04
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1327,15 +1473,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00694,
-    "sigma": 2.77
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.48,
     "ZVOL": 0.52
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1352,14 +1497,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SSO",
-    "move": -0.00116,
-    "sigma": 0.24
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "SSO",
+    "move": -0.00101,
+    "sigma": 0.35
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1377,11 +1525,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SQQQ": 0.75
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1400,16 +1551,19 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "KMLM",
-    "move": -0.00146,
-    "sigma": 0.47
-   },
+   "label": "close call",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": {
+    "ticker": "KMLM",
+    "move": -0.00123,
+    "sigma": 0.66
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1426,14 +1580,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00355,
-    "sigma": 1.47
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00335,
+    "sigma": 2.3
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1450,14 +1607,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SSO",
-    "move": 0.00694,
-    "sigma": 1.45
-   },
+   "label": "firm",
    "target_1515": {
     "UDOW": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "UDOW",
+    "move": -0.01085,
+    "sigma": 2.25
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1475,15 +1635,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SQQQ",
-    "move": -0.02118,
-    "sigma": 1.71
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SQQQ": 0.75
    },
+   "market": {},
+   "flip": {
+    "ticker": "SQQQ",
+    "move": -0.01876,
+    "sigma": 2.53
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1506,14 +1669,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00284,
-    "sigma": 1.17
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "-2": {
+     "PULS": 0.64,
+     "ZVOL": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00229,
+    "sigma": 1.57
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1530,14 +1701,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "UDOW",
-    "move": -0.01355,
-    "sigma": 1.69
-   },
+   "label": "firm",
    "target_1515": {
     "UDOW": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "UDOW",
+    "move": -0.0111,
+    "sigma": 2.31
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1555,15 +1729,24 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLK",
-    "move": 0.00555,
-    "sigma": 0.9
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 0.25,
     "TLT": 0.75
    },
+   "market": {
+    "2": {
+     "PULS": 0.25,
+     "SOXL": 0.375,
+     "TECL": 0.375
+    }
+   },
+   "flip": {
+    "ticker": "XLK",
+    "move": 0.00512,
+    "sigma": 1.39
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1580,10 +1763,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1600,14 +1786,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00355,
-    "sigma": 1.45
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "-2": {
+     "PULS": 0.64,
+     "ZVOL": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00288,
+    "sigma": 1.96
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1624,14 +1818,24 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "UDOW",
-    "move": -0.00048,
-    "sigma": 0.06
-   },
+   "label": "close call",
    "target_1515": {
     "UDOW": 1.0
    },
+   "market": {
+    "1": {
+     "SSO": 1.0
+    },
+    "2": {
+     "SSO": 1.0
+    }
+   },
+   "flip": {
+    "ticker": "UDOW",
+    "move": -0.00039,
+    "sigma": 0.08
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1649,15 +1853,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLK",
-    "move": 0.00867,
-    "sigma": 1.44
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "TLT": 0.75
    },
+   "market": {},
+   "flip": {
+    "ticker": "XLK",
+    "move": 0.0085,
+    "sigma": 2.36
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1674,10 +1881,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1694,14 +1904,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00227,
-    "sigma": 0.93
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "2": {
+     "PULS": 0.64,
+     "VXZ": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00209,
+    "sigma": 1.42
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1717,15 +1935,25 @@
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
+   },
+   "label": "close call",
+   "target_1515": {
+    "SSO": 1.0
+   },
+   "market": {
+    "-2": {
+     "BIL": 1.0
+    },
+    "-1": {
+     "BIL": 1.0
+    }
    },
    "flip": {
     "ticker": "UPRO",
-    "move": 0.00093,
-    "sigma": 0.14
+    "move": 0.0009,
+    "sigma": 0.23
    },
-   "target_1515": {
-    "SSO": 1.0
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1745,17 +1973,20 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLK",
-    "move": -0.00694,
-    "sigma": 1.23
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 0.16,
     "SOXL": 0.375,
     "TECL": 0.375,
     "VXZ": 0.09
    },
+   "market": {},
+   "flip": {
+    "ticker": "XLK",
+    "move": -0.00675,
+    "sigma": 1.99
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1772,10 +2003,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1793,15 +2027,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00355,
-    "sigma": 1.65
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.64,
     "VXZ": 0.36
    },
+   "market": {},
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00333,
+    "sigma": 2.58
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1818,14 +2055,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TQQQ",
-    "move": 0.01694,
-    "sigma": 1.71
-   },
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "TQQQ",
+    "move": 0.01492,
+    "sigma": 2.51
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1843,15 +2083,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SQQQ",
-    "move": 0.02118,
-    "sigma": 2.13
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "TLT": 0.75
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1870,16 +2109,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": 0.00182,
-    "sigma": 2.0
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1896,14 +2134,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00182,
-    "sigma": 0.94
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "2": {
+     "PULS": 0.64,
+     "VXZ": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00181,
+    "sigma": 1.56
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1920,14 +2166,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TQQQ",
-    "move": 0.02647,
-    "sigma": 2.64
-   },
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1945,15 +2190,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SQQQ",
-    "move": -0.01694,
-    "sigma": 1.68
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SQQQ": 0.75
    },
+   "market": {},
+   "flip": {
+    "ticker": "SQQQ",
+    "move": -0.01445,
+    "sigma": 2.39
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1972,12 +2220,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -1994,14 +2245,26 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
+   "label": "close call",
+   "target_1515": {
+    "PULS": 1.0
+   },
+   "market": {
+    "-2": {
+     "PULS": 0.64,
+     "ZVOL": 0.36
+    },
+    "-1": {
+     "PULS": 0.64,
+     "ZVOL": 0.36
+    }
+   },
    "flip": {
     "ticker": "SPY",
-    "move": -0.00038,
-    "sigma": 0.2
+    "move": -0.00036,
+    "sigma": 0.31
    },
-   "target_1515": {
-    "PULS": 1.0
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2018,10 +2281,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2040,12 +2306,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.12,
     "SQQQ": 0.75,
     "ZVOL": 0.13
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2064,12 +2333,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2087,11 +2359,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.48,
     "ZVOL": 0.52
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2108,10 +2383,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2129,11 +2407,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SQQQ": 0.75
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2152,12 +2433,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2174,10 +2458,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2193,15 +2480,22 @@
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
+   },
+   "label": "could flip",
+   "target_1515": {
+    "BIL": 1.0
+   },
+   "market": {
+    "2": {
+     "SSO": 1.0
+    }
    },
    "flip": {
     "ticker": "TQQQ",
-    "move": 0.00694,
-    "sigma": 0.99
+    "move": 0.00583,
+    "sigma": 1.38
    },
-   "target_1515": {
-    "BIL": 1.0
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2220,16 +2514,25 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TLT",
-    "move": -0.00146,
-    "sigma": 0.75
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 0.16,
     "TLT": 0.75,
     "VXZ": 0.09
    },
+   "market": {
+    "-2": {
+     "PULS": 0.16,
+     "SQQQ": 0.75,
+     "VXZ": 0.09
+    }
+   },
+   "flip": {
+    "ticker": "TLT",
+    "move": -0.00139,
+    "sigma": 1.19
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2253,11 +2556,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.64,
     "VXZ": 0.36
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2274,14 +2580,21 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TQQQ",
-    "move": 0.00694,
-    "sigma": 0.94
-   },
+   "label": "could flip",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {
+    "2": {
+     "SSO": 1.0
+    }
+   },
+   "flip": {
+    "ticker": "TQQQ",
+    "move": 0.00629,
+    "sigma": 1.42
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2299,15 +2612,23 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TLT",
-    "move": -0.00227,
-    "sigma": 1.19
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 0.25,
     "TLT": 0.75
    },
+   "market": {
+    "-2": {
+     "PULS": 0.25,
+     "SQQQ": 0.75
+    }
+   },
+   "flip": {
+    "ticker": "TLT",
+    "move": -0.00211,
+    "sigma": 1.84
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2326,16 +2647,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "KMLM",
-    "move": -0.00867,
-    "sigma": 2.9
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2352,14 +2672,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00444,
-    "sigma": 2.92
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2376,14 +2695,24 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TQQQ",
-    "move": -0.00182,
-    "sigma": 0.26
-   },
+   "label": "close call",
    "target_1515": {
     "TQQQ": 1.0
    },
+   "market": {
+    "-2": {
+     "BIL": 1.0
+    },
+    "-1": {
+     "BIL": 1.0
+    }
+   },
+   "flip": {
+    "ticker": "TQQQ",
+    "move": -0.00149,
+    "sigma": 0.35
+   },
+   "alt_hit": true,
    "status": "ok"
   },
   {
@@ -2400,16 +2729,28 @@
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
+   },
+   "label": "close call",
+   "target_1515": {
+    "PULS": 0.25,
+    "TLT": 0.75
+   },
+   "market": {
+    "-2": {
+     "PULS": 0.25,
+     "SQQQ": 0.75
+    },
+    "-1": {
+     "PULS": 0.25,
+     "SQQQ": 0.75
+    }
    },
    "flip": {
     "ticker": "TLT",
-    "move": -0.00146,
-    "sigma": 0.76
+    "move": -0.00126,
+    "sigma": 1.1
    },
-   "target_1515": {
-    "PULS": 0.25,
-    "TLT": 0.75
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2428,12 +2769,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2450,14 +2794,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00355,
-    "sigma": 2.38
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2474,14 +2817,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TQQQ",
-    "move": 0.01355,
-    "sigma": 1.93
-   },
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "TQQQ",
+    "move": 0.01097,
+    "sigma": 2.61
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2500,12 +2846,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.16,
     "SQQQ": 0.75,
     "ZVOL": 0.09
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2524,12 +2873,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2547,15 +2899,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00355,
-    "sigma": 2.32
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.64,
     "ZVOL": 0.36
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2572,10 +2923,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2594,12 +2948,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.1,
     "SQQQ": 0.75,
     "ZVOL": 0.15
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2618,12 +2975,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2641,11 +3001,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.4,
     "ZVOL": 0.6
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2661,15 +3024,22 @@
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
+   },
+   "label": "could flip",
+   "target_1515": {
+    "BIL": 1.0
+   },
+   "market": {
+    "2": {
+     "TQQQ": 1.0
+    }
    },
    "flip": {
     "ticker": "TQQQ",
-    "move": 0.00867,
-    "sigma": 1.22
+    "move": 0.00732,
+    "sigma": 1.71
    },
-   "target_1515": {
-    "BIL": 1.0
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2687,11 +3057,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SQQQ": 0.75
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2710,16 +3083,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "KMLM",
-    "move": -0.00694,
-    "sigma": 2.45
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2736,10 +3108,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2756,10 +3131,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2777,11 +3155,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SQQQ": 0.75
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2815,10 +3196,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2835,10 +3219,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2857,12 +3244,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.16,
     "SQQQ": 0.75,
     "ZVOL": 0.09
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2881,12 +3271,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2903,16 +3296,23 @@
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
+   },
+   "label": "could flip",
+   "target_1515": {
+    "PULS": 0.64,
+    "ZVOL": 0.36
+   },
+   "market": {
+    "2": {
+     "PULS": 1.0
+    }
    },
    "flip": {
     "ticker": "SPY",
-    "move": 0.00182,
-    "sigma": 1.12
+    "move": 0.00175,
+    "sigma": 1.8
    },
-   "target_1515": {
-    "PULS": 0.64,
-    "ZVOL": 0.36
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2929,10 +3329,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2951,12 +3354,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.08,
     "SQQQ": 0.75,
     "ZVOL": 0.17
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2975,12 +3381,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -2998,11 +3407,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.32,
     "ZVOL": 0.68
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3019,14 +3431,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TQQQ",
-    "move": -0.01355,
-    "sigma": 2.1
-   },
+   "label": "firm",
    "target_1515": {
     "TQQQ": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "TQQQ",
+    "move": -0.01109,
+    "sigma": 2.87
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3044,15 +3459,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "KMLM",
-    "move": -0.00555,
-    "sigma": 1.96
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "TLT": 0.75
    },
+   "market": {},
+   "flip": {
+    "ticker": "KMLM",
+    "move": -0.00467,
+    "sigma": 2.75
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3071,12 +3489,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3093,10 +3514,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3113,14 +3537,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TQQQ",
-    "move": -0.02118,
-    "sigma": 2.89
-   },
+   "label": "firm",
    "target_1515": {
     "TQQQ": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3137,16 +3560,28 @@
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
+   },
+   "label": "close call",
+   "target_1515": {
+    "PULS": 0.25,
+    "TLT": 0.75
+   },
+   "market": {
+    "-2": {
+     "PULS": 0.25,
+     "SQQQ": 0.75
+    },
+    "-1": {
+     "PULS": 0.25,
+     "SQQQ": 0.75
+    }
    },
    "flip": {
     "ticker": "SQQQ",
-    "move": 0.00444,
-    "sigma": 0.61
+    "move": 0.00442,
+    "sigma": 1.01
    },
-   "target_1515": {
-    "PULS": 0.25,
-    "TLT": 0.75
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3165,16 +3600,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "KMLM",
-    "move": -0.00694,
-    "sigma": 2.54
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3191,14 +3625,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00227,
-    "sigma": 1.28
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "2": {
+     "PULS": 0.64,
+     "VXZ": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00192,
+    "sigma": 1.81
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3215,10 +3657,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "TQQQ": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3238,13 +3683,16 @@
     "15:40": 0.02,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.1,
     "SOXL": 0.375,
     "SVIX": 0.375,
     "VXZ": 0.15
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3263,16 +3711,19 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": 0.00182,
-    "sigma": 1.99
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": {
+    "ticker": "IEF",
+    "move": 0.00147,
+    "sigma": 2.68
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3290,11 +3741,14 @@
     "15:40": 0.08,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.4,
     "VXZ": 0.6
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3311,10 +3765,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "TQQQ": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3334,17 +3791,20 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TECL",
-    "move": -0.02647,
-    "sigma": 2.06
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.12,
     "SOXL": 0.375,
     "SVIX": 0.375,
     "VXZ": 0.13
    },
+   "market": {},
+   "flip": {
+    "ticker": "TECL",
+    "move": -0.02247,
+    "sigma": 2.91
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3362,16 +3822,19 @@
     "15:40": 0.5,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": 0.00182,
-    "sigma": 1.88
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.5,
     "LABD": 0.25,
     "TMV": 0.25
    },
+   "market": {},
+   "flip": {
+    "ticker": "IEF",
+    "move": 0.00148,
+    "sigma": 2.56
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3389,209 +3852,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00284,
-    "sigma": 1.46
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.48,
     "VXZ": 0.52
    },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-23",
-   "engine": "HG",
-   "version": "bP4mvRy6",
-   "target_1550": {
-    "TQQQ": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "TQQQ": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-23",
-   "engine": "KMLM",
-   "version": "MVfHI8Og",
-   "target_1550": {
-    "PULS": 0.25,
-    "SOXL": 0.375,
-    "SVIX": 0.375
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "XLK",
-    "move": -0.00555,
-    "sigma": 1.38
-   },
-   "target_1515": {
-    "PULS": 0.25,
-    "SOXL": 0.375,
-    "SVIX": 0.375
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-23",
-   "engine": "SLEEVE",
-   "version": "yHJkdePZ",
-   "target_1550": {
-    "BOXX": 0.5,
-    "LABD": 0.25,
-    "TMV": 0.25
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "BOXX": 0.5,
-    "LABD": 0.25,
-    "TMV": 0.25
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-23",
-   "engine": "HARV",
-   "version": "XVtsDTV1",
-   "target_1550": {
-    "PULS": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "PULS": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-24",
-   "engine": "HG",
-   "version": "bP4mvRy6",
-   "target_1550": {
-    "TQQQ": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "TQQQ": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-24",
-   "engine": "KMLM",
-   "version": "MVfHI8Og",
-   "target_1550": {
-    "PULS": 0.25,
-    "SOXL": 0.375,
-    "SVIX": 0.375
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "XLK",
-    "move": -0.00284,
-    "sigma": 0.7
-   },
-   "target_1515": {
-    "PULS": 0.25,
-    "SOXL": 0.375,
-    "SVIX": 0.375
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-24",
-   "engine": "SLEEVE",
-   "version": "yHJkdePZ",
-   "target_1550": {
-    "BOXX": 0.75,
-    "LABD": 0.25
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "KMLM",
-    "move": 0.00075,
-    "sigma": 0.28
-   },
-   "target_1515": {
-    "BOXX": 0.75,
-    "LABD": 0.25
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-24",
-   "engine": "HARV",
-   "version": "XVtsDTV1",
-   "target_1550": {
-    "PULS": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
+   "market": {},
    "flip": {
     "ticker": "SPY",
-    "move": -0.00284,
-    "sigma": 1.42
+    "move": -0.00252,
+    "sigma": 2.15
    },
-   "target_1515": {
-    "PULS": 1.0
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
-   "date": "2026-09-25",
+   "date": "2026-09-23",
    "engine": "HG",
    "version": "bP4mvRy6",
    "target_1550": {
@@ -3604,14 +3880,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "TQQQ": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
-   "date": "2026-09-25",
+   "date": "2026-09-23",
    "engine": "KMLM",
    "version": "MVfHI8Og",
    "target_1550": {
@@ -3625,17 +3904,254 @@
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
+   },
+   "label": "could flip",
+   "target_1515": {
+    "PULS": 0.25,
+    "SOXL": 0.375,
+    "SVIX": 0.375
+   },
+   "market": {
+    "-2": {
+     "PULS": 0.25,
+     "TLT": 0.75
+    }
    },
    "flip": {
     "ticker": "TECL",
-    "move": -0.01355,
-    "sigma": 1.11
+    "move": -0.01538,
+    "sigma": 2.12
    },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-23",
+   "engine": "SLEEVE",
+   "version": "yHJkdePZ",
+   "target_1550": {
+    "BOXX": 0.5,
+    "LABD": 0.25,
+    "TMV": 0.25
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "BOXX": 0.5,
+    "LABD": 0.25,
+    "TMV": 0.25
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-23",
+   "engine": "HARV",
+   "version": "XVtsDTV1",
+   "target_1550": {
+    "PULS": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 1.0
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-24",
+   "engine": "HG",
+   "version": "bP4mvRy6",
+   "target_1550": {
+    "TQQQ": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "TQQQ": 1.0
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-24",
+   "engine": "KMLM",
+   "version": "MVfHI8Og",
+   "target_1550": {
+    "PULS": 0.25,
+    "SOXL": 0.375,
+    "SVIX": 0.375
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "close call",
    "target_1515": {
     "PULS": 0.25,
     "SOXL": 0.375,
     "SVIX": 0.375
    },
+   "market": {
+    "-2": {
+     "PULS": 0.25,
+     "SQQQ": 0.75
+    },
+    "-1": {
+     "PULS": 0.25,
+     "SQQQ": 0.75
+    }
+   },
+   "flip": {
+    "ticker": "XLK",
+    "move": -0.00233,
+    "sigma": 0.96
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-24",
+   "engine": "SLEEVE",
+   "version": "yHJkdePZ",
+   "target_1550": {
+    "BOXX": 0.75,
+    "LABD": 0.25
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "close call",
+   "target_1515": {
+    "BOXX": 0.75,
+    "LABD": 0.25
+   },
+   "market": {
+    "-2": {
+     "BOXX": 0.5,
+     "LABD": 0.25,
+     "TMV": 0.25
+    }
+   },
+   "flip": {
+    "ticker": "KMLM",
+    "move": 0.00069,
+    "sigma": 0.43
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-24",
+   "engine": "HARV",
+   "version": "XVtsDTV1",
+   "target_1550": {
+    "PULS": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 1.0
+   },
+   "market": {},
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00265,
+    "sigma": 2.21
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-25",
+   "engine": "HG",
+   "version": "bP4mvRy6",
+   "target_1550": {
+    "TQQQ": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "TQQQ": 1.0
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-25",
+   "engine": "KMLM",
+   "version": "MVfHI8Og",
+   "target_1550": {
+    "PULS": 0.25,
+    "SOXL": 0.375,
+    "SVIX": 0.375
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "could flip",
+   "target_1515": {
+    "PULS": 0.25,
+    "SOXL": 0.375,
+    "SVIX": 0.375
+   },
+   "market": {},
+   "flip": {
+    "ticker": "TECL",
+    "move": -0.01173,
+    "sigma": 1.59
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3653,15 +4169,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "KMLM",
-    "move": 0.00694,
-    "sigma": 2.66
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.75,
     "LABD": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3678,14 +4193,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00355,
-    "sigma": 1.78
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00296,
+    "sigma": 2.47
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3702,10 +4220,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "TQQQ": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3724,16 +4245,29 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLK",
-    "move": -0.00355,
-    "sigma": 0.99
-   },
+   "label": "close call",
    "target_1515": {
     "PULS": 0.25,
     "SOXL": 0.375,
     "SVIX": 0.375
    },
+   "market": {
+    "-2": {
+     "PULS": 0.16,
+     "SQQQ": 0.75,
+     "ZVOL": 0.09
+    },
+    "-1": {
+     "PULS": 0.25,
+     "SQQQ": 0.75
+    }
+   },
+   "flip": {
+    "ticker": "XLK",
+    "move": -0.00296,
+    "sigma": 1.37
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3751,15 +4285,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "LQD",
-    "move": -0.00355,
-    "sigma": 2.84
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.75,
     "LABD": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3776,14 +4309,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00182,
-    "sigma": 0.92
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "-2": {
+     "PULS": 0.64,
+     "ZVOL": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00163,
+    "sigma": 1.37
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3800,10 +4341,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "TQQQ": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -3823,490 +4367,561 @@
     "15:40": 0.375,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TECL",
-    "move": -0.0002,
-    "sigma": 0.02
-   },
+   "label": "close call",
    "target_1515": {
     "PULS": 0.16,
     "SOXL": 0.375,
     "SVIX": 0.375,
     "ZVOL": 0.09
    },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-29",
-   "engine": "SLEEVE",
-   "version": "yHJkdePZ",
-   "target_1550": {
-    "BOXX": 0.75,
-    "LABD": 0.25
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-29",
-   "engine": "HARV",
-   "version": "XVtsDTV1",
-   "target_1550": {
-    "PULS": 0.64,
-    "ZVOL": 0.36
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00116,
-    "sigma": 0.57
-   },
-   "target_1515": {
-    "PULS": 0.64,
-    "ZVOL": 0.36
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-30",
-   "engine": "HG",
-   "version": "bP4mvRy6",
-   "target_1550": {
-    "TQQQ": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "TQQQ": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-30",
-   "engine": "KMLM",
-   "version": "MVfHI8Og",
-   "target_1550": {
-    "PULS": 0.25,
-    "SOXL": 0.375,
-    "SVIX": 0.375
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "XLK",
-    "move": -0.00867,
-    "sigma": 2.49
-   },
-   "target_1515": {
-    "PULS": 0.25,
-    "SOXL": 0.375,
-    "SVIX": 0.375
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-30",
-   "engine": "SLEEVE",
-   "version": "yHJkdePZ",
-   "target_1550": {
-    "BOXX": 0.25,
-    "LABD": 0.25,
-    "SOXL": 0.5
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "KIE",
-    "move": 0.00116,
-    "sigma": 0.41
-   },
-   "target_1515": {
-    "BOXX": 0.25,
-    "LABD": 0.25,
-    "SOXL": 0.5
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-09-30",
-   "engine": "HARV",
-   "version": "XVtsDTV1",
-   "target_1550": {
-    "PULS": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00355,
-    "sigma": 1.75
-   },
-   "target_1515": {
-    "PULS": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-01",
-   "engine": "HG",
-   "version": "bP4mvRy6",
-   "target_1550": {
-    "TQQQ": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "TQQQ": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-01",
-   "engine": "KMLM",
-   "version": "MVfHI8Og",
-   "target_1550": {
-    "PULS": 0.25,
-    "SOXL": 0.375,
-    "SVIX": 0.375
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "PULS": 0.25,
-    "SOXL": 0.375,
-    "SVIX": 0.375
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-01",
-   "engine": "SLEEVE",
-   "version": "yHJkdePZ",
-   "target_1550": {
-    "BOXX": 0.75,
-    "LABD": 0.25
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "LQD",
-    "move": -0.00355,
-    "sigma": 2.77
-   },
-   "target_1515": {
-    "BOXX": 0.75,
-    "LABD": 0.25
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-01",
-   "engine": "HARV",
-   "version": "XVtsDTV1",
-   "target_1550": {
-    "PULS": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00227,
-    "sigma": 1.14
-   },
-   "target_1515": {
-    "PULS": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-02",
-   "engine": "HG",
-   "version": "bP4mvRy6",
-   "target_1550": {
-    "TQQQ": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "TQQQ": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-02",
-   "engine": "KMLM",
-   "version": "MVfHI8Og",
-   "target_1550": {
-    "PULS": 0.16,
-    "SOXL": 0.375,
-    "SVIX": 0.375,
-    "VXZ": 0.09
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "SOXL",
-    "move": 0.03309,
-    "sigma": 1.6
-   },
-   "target_1515": {
-    "PULS": 0.16,
-    "SOXL": 0.375,
-    "SVIX": 0.375,
-    "VXZ": 0.09
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-02",
-   "engine": "SLEEVE",
-   "version": "yHJkdePZ",
-   "target_1550": {
-    "BOXX": 0.75,
-    "LABD": 0.25
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "BOXX": 0.75,
-    "LABD": 0.25
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-02",
-   "engine": "HARV",
-   "version": "XVtsDTV1",
-   "target_1550": {
-    "PULS": 0.64,
-    "VXZ": 0.36
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00284,
-    "sigma": 1.44
-   },
-   "target_1515": {
-    "PULS": 0.64,
-    "VXZ": 0.36
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-05",
-   "engine": "HG",
-   "version": "bP4mvRy6",
-   "target_1550": {
-    "TQQQ": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "TQQQ": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-05",
-   "engine": "KMLM",
-   "version": "MVfHI8Og",
-   "target_1550": {
-    "PULS": 0.12,
-    "SOXL": 0.375,
-    "SVIX": 0.375,
-    "VXZ": 0.13
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "PULS": 0.12,
-    "SOXL": 0.375,
-    "SVIX": 0.375,
-    "VXZ": 0.13
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-05",
-   "engine": "SLEEVE",
-   "version": "yHJkdePZ",
-   "target_1550": {
-    "BOXX": 0.75,
-    "LABD": 0.25
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "BOXX": 0.75,
-    "LABD": 0.25
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-05",
-   "engine": "HARV",
-   "version": "XVtsDTV1",
-   "target_1550": {
-    "PULS": 0.48,
-    "VXZ": 0.52
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "PULS": 0.48,
-    "VXZ": 0.52
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-06",
-   "engine": "HG",
-   "version": "bP4mvRy6",
-   "target_1550": {
-    "TQQQ": 1.0
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
-   },
-   "flip": null,
-   "target_1515": {
-    "TQQQ": 1.0
-   },
-   "status": "ok"
-  },
-  {
-   "date": "2026-10-06",
-   "engine": "KMLM",
-   "version": "MVfHI8Og",
-   "target_1550": {
-    "PULS": 0.1,
-    "SOXL": 0.375,
-    "SVIX": 0.375,
-    "VXZ": 0.15
-   },
-   "dist": {
-    "15:00": 0.0,
-    "15:15": 0.0,
-    "15:30": 0.0,
-    "15:40": 0.0,
-    "15:50": 0.0
+   "market": {
+    "-2": {
+     "PULS": 0.16,
+     "SQQQ": 0.75,
+     "ZVOL": 0.09
+    },
+    "-1": {
+     "PULS": 0.16,
+     "SQQQ": 0.75,
+     "ZVOL": 0.09
+    }
    },
    "flip": {
     "ticker": "TECL",
-    "move": 0.02118,
-    "sigma": 2.14
+    "move": -0.00017,
+    "sigma": 0.03
    },
+   "alt_hit": true,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-29",
+   "engine": "SLEEVE",
+   "version": "yHJkdePZ",
+   "target_1550": {
+    "BOXX": 0.75,
+    "LABD": 0.25
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-29",
+   "engine": "HARV",
+   "version": "XVtsDTV1",
+   "target_1550": {
+    "PULS": 0.64,
+    "ZVOL": 0.36
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "close call",
+   "target_1515": {
+    "PULS": 0.64,
+    "ZVOL": 0.36
+   },
+   "market": {
+    "1": {
+     "PULS": 1.0
+    },
+    "2": {
+     "PULS": 1.0
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00097,
+    "sigma": 0.79
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-30",
+   "engine": "HG",
+   "version": "bP4mvRy6",
+   "target_1550": {
+    "TQQQ": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "TQQQ": 1.0
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-30",
+   "engine": "KMLM",
+   "version": "MVfHI8Og",
+   "target_1550": {
+    "PULS": 0.25,
+    "SOXL": 0.375,
+    "SVIX": 0.375
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 0.25,
+    "SOXL": 0.375,
+    "SVIX": 0.375
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-30",
+   "engine": "SLEEVE",
+   "version": "yHJkdePZ",
+   "target_1550": {
+    "BOXX": 0.25,
+    "LABD": 0.25,
+    "SOXL": 0.5
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "close call",
+   "target_1515": {
+    "BOXX": 0.25,
+    "LABD": 0.25,
+    "SOXL": 0.5
+   },
+   "market": {},
+   "flip": {
+    "ticker": "KIE",
+    "move": 0.00096,
+    "sigma": 0.57
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-09-30",
+   "engine": "HARV",
+   "version": "XVtsDTV1",
+   "target_1550": {
+    "PULS": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 1.0
+   },
+   "market": {},
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00323,
+    "sigma": 2.65
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-01",
+   "engine": "HG",
+   "version": "bP4mvRy6",
+   "target_1550": {
+    "TQQQ": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "TQQQ": 1.0
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-01",
+   "engine": "KMLM",
+   "version": "MVfHI8Og",
+   "target_1550": {
+    "PULS": 0.25,
+    "SOXL": 0.375,
+    "SVIX": 0.375
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 0.25,
+    "SOXL": 0.375,
+    "SVIX": 0.375
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-01",
+   "engine": "SLEEVE",
+   "version": "yHJkdePZ",
+   "target_1550": {
+    "BOXX": 0.75,
+    "LABD": 0.25
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "BOXX": 0.75,
+    "LABD": 0.25
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-01",
+   "engine": "HARV",
+   "version": "XVtsDTV1",
+   "target_1550": {
+    "PULS": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "could flip",
+   "target_1515": {
+    "PULS": 1.0
+   },
+   "market": {
+    "-2": {
+     "PULS": 0.64,
+     "ZVOL": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00211,
+    "sigma": 1.77
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-02",
+   "engine": "HG",
+   "version": "bP4mvRy6",
+   "target_1550": {
+    "TQQQ": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "TQQQ": 1.0
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-02",
+   "engine": "KMLM",
+   "version": "MVfHI8Og",
+   "target_1550": {
+    "PULS": 0.16,
+    "SOXL": 0.375,
+    "SVIX": 0.375,
+    "VXZ": 0.09
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 0.16,
+    "SOXL": 0.375,
+    "SVIX": 0.375,
+    "VXZ": 0.09
+   },
+   "market": {},
+   "flip": {
+    "ticker": "SOXL",
+    "move": 0.02888,
+    "sigma": 2.33
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-02",
+   "engine": "SLEEVE",
+   "version": "yHJkdePZ",
+   "target_1550": {
+    "BOXX": 0.75,
+    "LABD": 0.25
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "BOXX": 0.75,
+    "LABD": 0.25
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-02",
+   "engine": "HARV",
+   "version": "XVtsDTV1",
+   "target_1550": {
+    "PULS": 0.64,
+    "VXZ": 0.36
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 0.64,
+    "VXZ": 0.36
+   },
+   "market": {},
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00269,
+    "sigma": 2.28
+   },
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-05",
+   "engine": "HG",
+   "version": "bP4mvRy6",
+   "target_1550": {
+    "TQQQ": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "TQQQ": 1.0
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-05",
+   "engine": "KMLM",
+   "version": "MVfHI8Og",
+   "target_1550": {
+    "PULS": 0.12,
+    "SOXL": 0.375,
+    "SVIX": 0.375,
+    "VXZ": 0.13
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 0.12,
+    "SOXL": 0.375,
+    "SVIX": 0.375,
+    "VXZ": 0.13
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-05",
+   "engine": "SLEEVE",
+   "version": "yHJkdePZ",
+   "target_1550": {
+    "BOXX": 0.75,
+    "LABD": 0.25
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "BOXX": 0.75,
+    "LABD": 0.25
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-05",
+   "engine": "HARV",
+   "version": "XVtsDTV1",
+   "target_1550": {
+    "PULS": 0.48,
+    "VXZ": 0.52
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "PULS": 0.48,
+    "VXZ": 0.52
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-06",
+   "engine": "HG",
+   "version": "bP4mvRy6",
+   "target_1550": {
+    "TQQQ": 1.0
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
+   "target_1515": {
+    "TQQQ": 1.0
+   },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
+   "status": "ok"
+  },
+  {
+   "date": "2026-10-06",
+   "engine": "KMLM",
+   "version": "MVfHI8Og",
+   "target_1550": {
+    "PULS": 0.1,
+    "SOXL": 0.375,
+    "SVIX": 0.375,
+    "VXZ": 0.15
+   },
+   "dist": {
+    "15:00": 0.0,
+    "15:15": 0.0,
+    "15:30": 0.0,
+    "15:40": 0.0,
+    "15:50": 0.0
+   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.1,
     "SOXL": 0.375,
     "SVIX": 0.375,
     "VXZ": 0.15
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4324,15 +4939,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TMV",
-    "move": -0.00694,
-    "sigma": 1.23
-   },
+   "label": "could flip",
    "target_1515": {
     "BOXX": 0.75,
     "LABD": 0.25
    },
+   "market": {},
+   "flip": {
+    "ticker": "TMV",
+    "move": -0.00589,
+    "sigma": 1.75
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4350,11 +4968,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.4,
     "VXZ": 0.6
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4371,10 +4992,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "TQQQ": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4393,16 +5017,20 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLK",
-    "move": -0.00694,
-    "sigma": 2.12
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 0.25,
     "SOXL": 0.375,
     "SVIX": 0.375
    },
+   "market": {
+    "-2": {
+     "PULS": 0.25,
+     "SQQQ": 0.75
+    }
+   },
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4420,15 +5048,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": 0.00355,
-    "sigma": 2.98
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 0.75,
     "LABD": 0.25
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4445,14 +5072,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00146,
-    "sigma": 0.76
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "2": {
+     "PULS": 0.4,
+     "VXZ": 0.6
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00123,
+    "sigma": 1.07
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4469,14 +5104,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SSO",
-    "move": -0.00093,
-    "sigma": 0.25
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "TQQQ",
+    "move": 0.00195,
+    "sigma": 0.38
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4494,15 +5132,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SQQQ",
-    "move": -0.02118,
-    "sigma": 2.49
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SQQQ": 0.75
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4519,14 +5156,23 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": -0.0006,
-    "sigma": 0.5
-   },
+   "label": "close call",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {
+    "-2": {
+     "BOXX": 0.5,
+     "LABD": 0.25,
+     "TMV": 0.25
+    }
+   },
+   "flip": {
+    "ticker": "IEF",
+    "move": -0.00053,
+    "sigma": 0.74
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4543,14 +5189,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00146,
-    "sigma": 0.77
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "-2": {
+     "PULS": 0.64,
+     "ZVOL": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00145,
+    "sigma": 1.28
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4567,14 +5221,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SSO",
-    "move": -0.00093,
-    "sigma": 0.25
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "SSO",
+    "move": -0.00087,
+    "sigma": 0.39
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4593,16 +5250,25 @@
     "15:40": 0.375,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TECL",
-    "move": -0.00284,
-    "sigma": 0.28
-   },
+   "label": "close call",
    "target_1515": {
     "PULS": 0.25,
     "SOXL": 0.375,
     "SVIX": 0.375
    },
+   "market": {
+    "-2": {
+     "PULS": 0.25,
+     "SOXL": 0.375,
+     "TECL": 0.375
+    }
+   },
+   "flip": {
+    "ticker": "TECL",
+    "move": -0.0026,
+    "sigma": 0.42
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4620,15 +5286,25 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": 0.00031,
-    "sigma": 0.27
-   },
+   "label": "close call",
    "target_1515": {
     "BOXX": 0.75,
     "LABD": 0.25
    },
+   "market": {
+    "1": {
+     "BOXX": 1.0
+    },
+    "2": {
+     "BOXX": 1.0
+    }
+   },
+   "flip": {
+    "ticker": "IEF",
+    "move": 0.00025,
+    "sigma": 0.36
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4645,14 +5321,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00355,
-    "sigma": 1.9
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00315,
+    "sigma": 2.81
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4669,14 +5348,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "UPRO",
-    "move": 0.00093,
-    "sigma": 0.17
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "UPRO",
+    "move": 0.00088,
+    "sigma": 0.27
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4694,15 +5376,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TLT",
-    "move": 0.00555,
-    "sigma": 2.82
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SQQQ": 0.75
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4734,14 +5415,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00355,
-    "sigma": 1.94
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4758,14 +5438,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SSO",
-    "move": -0.00038,
-    "sigma": 0.11
-   },
+   "label": "close call",
    "target_1515": {
     "SSO": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "SSO",
+    "move": -0.00034,
+    "sigma": 0.16
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4782,16 +5465,29 @@
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
+   },
+   "label": "close call",
+   "target_1515": {
+    "PULS": 0.25,
+    "SQQQ": 0.75
+   },
+   "market": {
+    "1": {
+     "PULS": 0.25,
+     "TLT": 0.75
+    },
+    "2": {
+     "PULS": 0.16,
+     "TLT": 0.75,
+     "VXZ": 0.09
+    }
    },
    "flip": {
     "ticker": "SQQQ",
-    "move": -0.00694,
-    "sigma": 0.81
+    "move": -0.00679,
+    "sigma": 1.33
    },
-   "target_1515": {
-    "PULS": 0.25,
-    "SQQQ": 0.75
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4807,14 +5503,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": -0.00182,
-    "sigma": 1.58
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "IEF",
+    "move": -0.0015,
+    "sigma": 2.18
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4831,14 +5530,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00182,
-    "sigma": 1.01
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "2": {
+     "PULS": 0.64,
+     "VXZ": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00168,
+    "sigma": 1.56
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4855,14 +5562,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SSO",
-    "move": 0.00355,
-    "sigma": 1.01
-   },
+   "label": "could flip",
    "target_1515": {
     "UDOW": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "UDOW",
+    "move": -0.00462,
+    "sigma": 1.46
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4881,16 +5591,19 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SOXL",
-    "move": 0.03309,
-    "sigma": 1.83
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.12,
     "SOXL": 0.75,
     "ZVOL": 0.13
    },
+   "market": {},
+   "flip": {
+    "ticker": "SOXL",
+    "move": 0.02883,
+    "sigma": 2.66
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4907,14 +5620,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "IEF",
-    "move": -0.00284,
-    "sigma": 2.46
-   },
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4932,11 +5644,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.48,
     "ZVOL": 0.52
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4953,10 +5668,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "UDOW": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4974,11 +5692,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "UVXY": 0.75
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -4995,10 +5716,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5015,14 +5739,22 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00227,
-    "sigma": 1.2
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "-2": {
+     "PULS": 0.64,
+     "ZVOL": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00209,
+    "sigma": 1.84
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5039,14 +5771,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SMH",
-    "move": -0.00227,
-    "sigma": 0.41
-   },
+   "label": "close call",
    "target_1515": {
     "USD": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "SMH",
+    "move": -0.00222,
+    "sigma": 0.67
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5065,12 +5800,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.1,
     "UVXY": 0.75,
     "ZVOL": 0.15
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5087,10 +5825,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5108,11 +5849,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.4,
     "ZVOL": 0.6
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5129,10 +5873,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5150,15 +5897,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLP",
-    "move": -0.00284,
-    "sigma": 1.03
-   },
+   "label": "could flip",
    "target_1515": {
     "PULS": 0.25,
     "UVXY": 0.75
    },
+   "market": {},
+   "flip": {
+    "ticker": "XLP",
+    "move": -0.00275,
+    "sigma": 1.67
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5175,10 +5925,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5195,14 +5948,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00444,
-    "sigma": 2.31
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5219,10 +5971,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5240,15 +5995,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLP",
-    "move": -0.00555,
-    "sigma": 2.01
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "UVXY": 0.75
    },
+   "market": {},
+   "flip": {
+    "ticker": "XLP",
+    "move": -0.00479,
+    "sigma": 2.89
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5265,10 +6023,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5285,10 +6046,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5305,10 +6069,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5327,15 +6094,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SOXL",
-    "move": -0.02647,
-    "sigma": 1.59
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "TLT": 0.75
    },
+   "market": {},
+   "flip": {
+    "ticker": "SOXL",
+    "move": -0.02343,
+    "sigma": 2.35
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5352,10 +6122,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5373,14 +6146,26 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00075,
-    "sigma": 0.45
-   },
+   "label": "close call",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {
+    "1": {
+     "PULS": 0.64,
+     "VXZ": 0.36
+    },
+    "2": {
+     "PULS": 0.64,
+     "VXZ": 0.36
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00072,
+    "sigma": 0.72
+   },
+   "alt_hit": true,
    "status": "ok"
   },
   {
@@ -5397,14 +6182,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TQQQ",
-    "move": -0.01084,
-    "sigma": 1.25
-   },
+   "label": "could flip",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "TQQQ",
+    "move": -0.00974,
+    "sigma": 1.87
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5423,12 +6211,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.16,
     "UVXY": 0.75,
     "ZVOL": 0.09
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5461,15 +6252,18 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00355,
-    "sigma": 2.19
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.64,
     "ZVOL": 0.36
    },
+   "market": {},
+   "flip": {
+    "ticker": "SPY",
+    "move": 0.00289,
+    "sigma": 2.96
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5486,14 +6280,17 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TQQQ",
-    "move": -0.01355,
-    "sigma": 1.33
-   },
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": {
+    "ticker": "TQQQ",
+    "move": -0.01343,
+    "sigma": 2.2
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5512,16 +6309,19 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TQQQ",
-    "move": -0.01355,
-    "sigma": 1.33
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.12,
     "SOXL": 0.75,
     "ZVOL": 0.13
    },
+   "market": {},
+   "flip": {
+    "ticker": "TQQQ",
+    "move": -0.01343,
+    "sigma": 2.2
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5552,15 +6352,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": 0.00444,
-    "sigma": 2.46
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.48,
     "ZVOL": 0.52
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5577,10 +6376,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5598,15 +6400,14 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLK",
-    "move": 0.00867,
-    "sigma": 2.02
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "TLT": 0.75
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5623,10 +6424,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5643,10 +6447,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5663,10 +6470,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5685,12 +6495,15 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 0.25,
     "SOXL": 0.375,
     "SVIX": 0.375
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5707,10 +6520,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5726,15 +6542,23 @@
     "15:30": 0.0,
     "15:40": 0.0,
     "15:50": 0.0
+   },
+   "label": "could flip",
+   "target_1515": {
+    "PULS": 1.0
+   },
+   "market": {
+    "2": {
+     "PULS": 0.64,
+     "VXZ": 0.36
+    }
    },
    "flip": {
     "ticker": "SPY",
-    "move": 0.00146,
-    "sigma": 0.81
+    "move": 0.00133,
+    "sigma": 1.24
    },
-   "target_1515": {
-    "PULS": 1.0
-   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5751,10 +6575,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5774,17 +6601,20 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "TECL",
-    "move": -0.02647,
-    "sigma": 1.9
-   },
+   "label": "firm",
    "target_1515": {
     "PULS": 0.16,
     "SOXL": 0.375,
     "SVIX": 0.375,
     "VXZ": 0.09
    },
+   "market": {},
+   "flip": {
+    "ticker": "SVIX",
+    "move": 0.01391,
+    "sigma": 2.69
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5801,10 +6631,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5822,15 +6655,25 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "SPY",
-    "move": -0.00048,
-    "sigma": 0.26
-   },
+   "label": "close call",
    "target_1515": {
     "PULS": 0.64,
     "VXZ": 0.36
    },
+   "market": {
+    "-2": {
+     "PULS": 1.0
+    },
+    "-1": {
+     "PULS": 1.0
+    }
+   },
+   "flip": {
+    "ticker": "SPY",
+    "move": -0.00045,
+    "sigma": 0.41
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5847,10 +6690,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BIL": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5869,16 +6715,28 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": {
-    "ticker": "XLK",
-    "move": -0.00048,
-    "sigma": 0.1
-   },
+   "label": "close call",
    "target_1515": {
     "PULS": 0.25,
     "SOXL": 0.375,
     "TECL": 0.375
    },
+   "market": {
+    "-2": {
+     "PULS": 0.25,
+     "TLT": 0.75
+    },
+    "-1": {
+     "PULS": 0.25,
+     "TLT": 0.75
+    }
+   },
+   "flip": {
+    "ticker": "KMLM",
+    "move": 0.00021,
+    "sigma": 0.15
+   },
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5894,10 +6752,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "BOXX": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   },
   {
@@ -5914,10 +6775,13 @@
     "15:40": 0.0,
     "15:50": 0.0
    },
-   "flip": null,
+   "label": "firm",
    "target_1515": {
     "PULS": 1.0
    },
+   "market": {},
+   "flip": null,
+   "alt_hit": false,
    "status": "ok"
   }
  ]
