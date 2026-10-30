@@ -21,7 +21,8 @@
       "2026-10-21": "BIL",
       "2026-10-22": "BIL",
       "2026-10-23": "BIL",
-      "2026-10-29": "BIL"
+      "2026-10-29": "BIL",
+      "2026-10-30": "BIL"
     }
   },
   "shadow": {
@@ -33,11 +34,11 @@
     "blind": {},
     "status": {
       "HG": "agree",
-      "KMLM": "agree",
+      "KMLM": "mismatch",
       "SLEEVE": "agree",
-      "HARV": "agree"
+      "HARV": "mismatch"
     },
-    "last_date": "2026-10-29",
+    "last_date": "2026-10-30",
     "pending": []
   }
 }
