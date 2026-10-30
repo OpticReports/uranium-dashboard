@@ -3141,32 +3141,72 @@ relayed and pushed, never traded on).
 
 Owner, 10-30 (SPY -2.2%, KMLM levered long): "Shouldn't we be doing gate checks before market close? In
 the event we need to make changes in more real time? So it's not gate checking in arrears?" Yes. Composer
-decides at ~15:50 ET on live prices; the gate watch (add. 46) and the shadow runner (add. 48) report at
-17:35 from closing data, after the fact. Built: scripts/preclose.py, its own scheduled run at 15:15 ET on
-weekdays (12:15 on NYSE half-days); 30 merge-blocking tests (scripts/tests/test_preclose.py, each paired
-with a broken input); research/preclose/ (leadtime.py, make_chart.py); exhibit
-results/preclose-leadtime-2026-10-30.html; ledger results/monitor/preclose-ledger.jsonl. GET-only and
-keyless; never trades, pauses or edits a symphony.
+decides at ~15:50 ET on live prices; the gate watch (add. 46) and the shadow runner (add. 48) read the
+close at 17:35, after the fact. Built:
+- scripts/preclose.py: its own scheduled run at 15:15 ET on weekdays (12:15 on NYSE half-days).
+- 50 merge-blocking tests (scripts/tests/test_preclose.py).
+- research/preclose/: leadtime.py, replay_1030.py, make_chart.py.
+- Exhibit: results/preclose-leadtime-2026-10-30.html.
+- Ledger: results/monitor/preclose-ledger.jsonl.
+GET-only and keyless; it never trades, pauses or edits a symphony.
 
-WHAT IT PRINTS. The approved trees and the shadow runner's evaluator, with Yahoo's latest trades as
-today's close:
+WHAT IT PRINTS (approved trees, the shadow runner's evaluator, Yahoo's latest trades as today's close):
 - GATE: SPY live vs its 200-day average, and the SPY price that flips it. The average includes today's
-  price, so the flip price is the mean of the other 199 closes; the evaluator flips exactly there (tested).
-  Also the state at yesterday's close.
-- Per symphony: holdings now -> expected holdings after the rebalance (KMLM: the target only if some
-  holding is more than 10pp off it, else no trade), and the dollars that move. Plus the nearest one-ticker
-  move on the decision path that changes at least 25% of that outcome, in sigmas of the move left: daily
-  sigma x 0.52 x sqrt(minutes / 390). Labels: <= 1 coin-flip, <= 2 could flip, else firm.
-- Stale quotes (last trade > 15 min old): rebuilt from a fresh fund on the same index at its daily
-  leverage, previous close x (1 + L x the index's return today); otherwise used as they are and named.
+  price, so that price is the mean of the other 199 closes; the evaluator flips exactly there (tested).
+  Also yesterday's state, and what HG holds on each side of the line: HG's dip-buy branch does not read
+  the gate.
+- Per symphony: holdings now -> after the ~15:50 rebalance (KMLM: the target only past 10pp; a paused
+  symphony: nothing), and the dollars that move.
+- How close each call is, in sigmas of the move left (daily sigma x 0.6 x sqrt(minutes / 390)), from two
+  probes, each naming the holdings it would lead to:
+  - the whole market moving 1 or 2 sigma either way, every fund by its 60-session beta to SPY;
+  - the nearest one-ticker move (bisected).
+  Labels, for a change of 25% or more of the holdings:
+  - close call: a 1-sigma move of either kind causes it, or KMLM's trigger is within 1pp;
+  - could flip: a 2-sigma move does, or a stale input might;
+  - firm: neither.
+- Stale quotes (last trade more than 15 minutes old) are rebuilt from a fresh fund on the same index at
+  its daily leverage, or from a related index (semiconductors from USD, tagged approx). Otherwise they are
+  used as they are, named, and stress-tested at 2 sigma since they last traded.
 - Alerts (exit 2, pushed):
   - GATE CLOSES / REOPENS AT TODAY'S REBALANCE
-  - GATE ON THE LINE (<= 2 sigma)
+  - GATE ON THE LINE (within 2 sigma)
   - BIG DAY (SPY 2% or more off yesterday's close)
-  - PRE-CLOSE UNAVAILABLE
+  - PRE-CLOSE UNAVAILABLE (no prices, no trading today, or a failed run)
 
-LEAD-TIME STUDY (leadtime.py; 59 sessions, 2026-08-07..10-29, Yahoo 5-minute bars). Each engine's logic
-(the era in force that day) is run on prices at each minute and compared with its answer at 15:50:
+FIRST LIVE DAY (10-30). The first version, read at 15:27, said:
+- HG: BIL -> QLD 100%, "could flip".
+- KMLM: -> TECL 75 / ZVOL 15 / PULS 10, "could flip".
+
+Composer ended at:
+- HG: BIL 100%.
+- KMLM: SQQQ 75 / ZVOL 13 / PULS 12.
+- HARV: ZVOL 52 / PULS 48 (preview ZVOL 60 / PULS 40, under the 25% line).
+- SLEEVE: BOXX 100%, as previewed.
+
+Cause: TQQQ's 10-day RSI sat at 29.6-29.8 until 15:45. A late rally (IVV +0.45% from 15:15 to 15:50) took
+it to 30.05 at 15:50, which switched off both engines' "RSI(TQQQ,10) < 30" dip-buy branches. HG fell
+through to BIL, and KMLM to a top-RSI pick, SQQQ. Re-run on 15:50 prices (stale quotes rebuilt), the
+logic reproduces Composer exactly; at 15:45 it still said QLD / TECL. The first version's one-ticker
+search showed the wrong alternatives (QLD -> USD; TQQQ -> SOXL 75, the latter on a SOXL quote frozen
+since 14:41).
+
+Also that afternoon:
+- Yahoo froze 11 quotes, including SPY, SOXL, SQQQ and SPXL, at 14:25-14:55, while IVV, VOO and QQQ
+  stayed live.
+- Composer's API answered HTTP 503 once, at 15:33, and was back by 15:35.
+
+The revised preview, replayed on that afternoon's 5-minute bars (replay_1030.py; preclose-replay-
+2026-10-30.txt):
+- 15:15:
+  - HG: close call; market +2 sigma (SPY +0.22%) or TQQQ +0.56% (0.8 sigma) -> BIL 100%.
+  - KMLM: close call; the same two moves -> SQQQ 75 / ZVOL 15 / PULS 10.
+- 15:27: HG close call; KMLM could flip; the same alternatives.
+The main call is still wrong, by construction: the logic on 15:15 prices. But it is marked uncertain,
+and it names what Composer did.
+
+LEAD-TIME STUDY (leadtime.py; 59 sessions 2026-08-07..10-29, Yahoo 5-minute bars). Each engine's logic is
+run at each minute and compared with its answer at 15:50:
 
   read at   same holdings (<= 3%)   no material change (< 25%)
   15:00     217 / 227  (95.6%)      221  (97.4%)
@@ -3174,42 +3214,54 @@ LEAD-TIME STUDY (leadtime.py; 59 sessions, 2026-08-07..10-29, Yahoo 5-minute bar
   15:30     228 / 232  (98.3%)      229  (98.7%)
   15:40     229 / 234  (97.9%)      230  (98.3%)
 
-- 15:15 labels (measured scale):
-  - coin-flip: 32, of which 3 changed materially by 15:50
-  - could flip: 24, none changed
-  - firm: 172, none changed materially (4 changed by less than 25%)
-  Every material change was a flagged coin-flip.
-- The move to 15:50, in daily sigmas (liquid tickers, ~2,200 per horizon): its RMS is 0.52-0.56 x
-  sqrt(t / 390) for t = 10, 20, 35 and 50 minutes. p95 is about 2 x RMS; p99 is 3-3.4 x RMS (fat
-  tails). A daily sigma carries the overnight gap and the open, so the last hour moves about half as
-  much per sqrt-minute. The preview uses 0.52; plain sqrt(t) would flag 53 coin-flips, not 32, with the
-  same 3 changes among them.
-- Gate: open at 15:50 on all 59 sessions. No crossing in the window.
-
-FIRST LIVE READS (10-30, during the build):
-- Read at 15:05, 15:13, 15:17 and 15:27.
-- Yahoo's quotes for 11 tickers froze at 14:25-14:32 ET while IVV, VOO and QQQ stayed live: SPY, SOXL,
-  SPXL, SQQQ, SSO, SMH, SVIX, SVXY, SOXS, SHY and CORP. That is why stale quotes are rebuilt.
-- 15:27 read:
-  - Gate open, 3.6% clear.
-  - HG: BIL -> QLD 100%. Could flip to USD 100% on QLD +0.44% (1.4 sigma).
-  - KMLM: TECL 38 / SOXL 33 / PULS 30 -> TECL 75 / ZVOL 15 / PULS 10. Could flip to SOXL 75 on TQQQ
-    +0.87% (1.9 sigma).
-  - SLEEVE: no change.
-  - HARV: PULS 100 -> ZVOL 60 / PULS 40.
-- What Composer did: OUTCOME_PENDING
+- 15:15 labels:
+  - close call: 39, of which 3 changed materially by 15:50. In all 3 the 15:15 alternatives named the
+    answer (HG 09-08, KMLM 09-29, HARV 10-21).
+  - could flip: 35, none changed.
+  - firm: 154, none changed materially (4 changed by less than 25%).
+- The move to 15:50 in daily sigmas (liquid tickers, ~2,200 per horizon): RMS 0.52-0.56 x sqrt(t / 390)
+  for t = 10-50 minutes; p95 about 2 x RMS, p99 3-3.4 x RMS. A daily sigma carries the overnight gap and
+  the open. The preview uses 0.6: round 1's 2-year hourly check put this window about 13% below the
+  2-year level.
+- Gate: open at 15:50 on all 59 sessions; no crossing in the window.
 
 HONESTY BOX:
-- The study compares logic only. Composer's holdings, KMLM's corridor and feed problems are not in it.
-- In-sample: the 0.52 scale was measured on the same window, though on ~2,200 ticker-moves, not on the 3
-  events that grade the labels. The label result rests on 3 events: indicative, not a rate.
-- 15:50 stands in for Composer's decision minute (15:45-15:55).
-- How often a 15:15 gate reading flips by 15:50 is untested: there was no crossing in the window.
-- The leverage rebuild assumes daily reset and ignores fees and intraday premium or discount.
+- One live day, and it went wrong. The revision was built after seeing that day; the replay of it uses
+  bars Yahoo backfilled after the close, which may differ from what the live feed showed at 15:15.
+- The study compares the logic only, with no corridor and no feed problems. The label rules and the 0.6
+  scale were set with this window in view. The label result rests on 3 events: indicative, not a rate.
+- The window was calm: no 2% SPY day (largest 1.55%), and 10-30's late move was about 4 sigma on this
+  scale.
+- The market probe moves funds by their 60-session beta, so correlations that break on the day are not
+  in it. 15:50 stands in for Composer's decision minute (15:45-15:55).
+- Gate timing within the session is untested: there was no crossing.
+- The rebuild assumes daily reset and ignores fees and intraday premium or discount; the semiconductor
+  stand-in is a different index.
 - The preview is not a recommendation. The RUNBOOK default, no intraday intervention (measured five
   ways), stands.
 
-COUNTER-AGENT: REVIEW_PENDING
+COUNTER-AGENT, round 1 (one hostile reviewer, scratchpad/preclose-review/): ship-with-fixes.
+- Reproduced: every headline number; the gate math; the rebuild arithmetic; the family table and the
+  NYSE calendar (official 2026-28 release).
+- Blockers, both fixed:
+  - The gate alert claimed "HG moves to BIL" even where HG's dip-buy branch ignores the gate.
+  - An empty-holdings symphony crashed the report.
+- Should-fixes, all fixed:
+  - Stale inputs off the traced path were not flagged; today's KMLM alternative is the case.
+  - An unscheduled closure previewed yesterday's prices.
+  - A paused symphony showed a trade.
+  - Failed drift checks were silent.
+  - The 25% grid overstated sigma.
+  - "Coin-flip" meant a 13-50% chance; it is now "close call".
+  - KMLM's trigger had no ambiguity band.
+- Tests: 23 of its 54 mutants survived the 30-test suite. The 50-test suite pins each of the 17 real gaps
+  (the nearer of two tickers, corridor max gap and 10pp, materiality, radius, corridor-aware flips,
+  yesterday's window, distance sign, gate_in, family table, up-day BIG DAY, the UNAVAILABLE conditions,
+  closed-side ON THE LINE, stale filtering, dollars from the outcome). It also caught a grid that never
+  reached the 3-sigma edge.
+- It also graded today independently and reached the same root cause.
 
-DECISION: none on symphonies. A new 15:15 ET routine, report-only (POLICY standing cadence); RUNBOOK
-updated (what the preview is for; what a pause or a liquidation does).
+COUNTER-AGENT, round 2: REVIEW2_PENDING
+
+DECISION: none on symphonies. A new 15:15 ET weekday routine, report-only (POLICY standing cadence; half-
+day runs at 12:15). RUNBOOK updated: what the preview is for, and what a pause or a liquidation does.

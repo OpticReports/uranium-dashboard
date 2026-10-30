@@ -623,19 +623,28 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
 
 - Change: `scripts/preclose.py`, its own scheduled run at 15:15 ET on weekdays (12:15 on NYSE half-days).
   It evaluates every symphony's approved tree on Yahoo's latest trades and prints:
-  - the gate: SPY live vs its 200-day average, and the exact flip price;
-  - per symphony: holdings now -> after the ~15:50 rebalance (KMLM through its 10pp corridor), dollars
-    moving, and how close the call is (coin-flip / could flip / firm).
-  Alerts: GATE CLOSES / REOPENS AT TODAY'S REBALANCE, GATE ON THE LINE, BIG DAY (SPY 2%+),
-  PRE-CLOSE UNAVAILABLE. Stale quotes are rebuilt from a fresh same-index fund. No symphony mutated.
-  `shadow_runner.fetch_yahoo` now parses through `parse_daily()` (shared; behaviour unchanged, 98 tests).
+  - the gate: SPY live vs its 200-day average, the exact flip price, and what HG holds on each side of it;
+  - per symphony: holdings now -> after the ~15:50 rebalance (KMLM through its 10pp corridor), and the
+    dollars moving;
+  - how close each call is (close call / could flip / firm), with what it would hold instead, from two
+    probes: the whole market moving 1-2 sigma (each fund by its beta) and the nearest one-ticker move.
+  Stale quotes are rebuilt from a fresh same-index fund (semiconductors from USD, tagged approx),
+  otherwise named and stress-tested. Alerts: GATE CLOSES / REOPENS AT TODAY'S REBALANCE, GATE ON THE
+  LINE, BIG DAY (SPY 2%+), PRE-CLOSE UNAVAILABLE. No symphony mutated.
+  `shadow_runner.fetch_yahoo` now parses through a shared `parse_daily()` (behaviour unchanged; 98 tests).
 - Why: owner, "Shouldn't we be doing gate checks before market close? ... So it's not gate checking in
-  arrears?" The gate watch and the shadow runner read closes at 17:35; Composer acts at ~15:50.
-- Before / after: no live change. Lead-time study (add. 49, 59 sessions): the 15:15 read matched the 15:50
-  answer on 221/228 engine-sessions (225/228 no material change); all 3 material changes were flagged
-  coin-flip; 0 of 172 "firm" calls changed materially. Sigma scale 0.52 x sqrt(t), measured.
-- Counter-agent: REVIEW_PENDING
-- Artifacts: results.md addendum 49; exhibit results/preclose-leadtime-2026-10-30.html; README (monitor
-  section); POLICY.md standing cadence; RUNBOOK.md (what the preview is for; what a pause or a
-  liquidation does); new 15:15 ET routine; daily routine prompt (commits the preclose ledger too).
+  arrears?" The gate watch and the shadow runner read the close at 17:35; Composer acts at ~15:50.
+- First live day (10-30): the first version's 15:27 read missed HG (Composer BIL, not QLD) and KMLM
+  (SQQQ 75, not TECL 75). TQQQ's 10-day RSI crossed 30 at 15:50 in a late rally. The revision (market
+  probe, stale stress test), replayed on that afternoon's bars, flags both as close calls and names BIL
+  and SQQQ 75 as the alternatives.
+- Before / after: no live change. Lead-time study (add. 49, 59 sessions): the 15:15 read matched 15:50
+  on 221/228 engine-sessions (225/228 with no material change); all 3 material changes were close calls
+  with the answer among the alternatives; 0 of 189 could-flip or firm calls changed materially.
+- Counter-agent: round 1, ship-with-fixes (2 blockers, 7 should-fixes, 17 test gaps: all fixed; 50
+  tests). Round 2: REVIEW2_PENDING
+- Artifacts: results.md addendum 49; exhibit results/preclose-leadtime-2026-10-30.html; replay
+  results/preclose-replay-2026-10-30.txt; README (monitor section); POLICY.md standing cadence;
+  RUNBOOK.md (what the preview is for; what a pause or a liquidation does); new 15:15 ET routine (half-day
+  runs at 12:15); daily routine prompt (commits the preclose ledger too).
 - No service redeploy (local CLI run by the routine).
