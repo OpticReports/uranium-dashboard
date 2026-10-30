@@ -1,19 +1,38 @@
-PRE-CLOSE 2026-10-30 15:15 ET: Composer decides ~15:50 (35 min); SPY -2.12% today
-GATE   open (as at yesterday's close): SPY 753.04 vs 200-day 725.97; flips at 725.83 (-3.61%, 32.5 sigma); stale: SPY 14:55 -> via IVV
-HG     $86,900 BIL 100% -> QLD 100% ($86,900 moves). close call: market +2 sigma (SPY +0.22%) -> BIL 100%; TQQQ +0.56% (0.8 sigma) -> BIL 100%; stale: SMH 14:55 -> via USD (approx), SOXL 14:55 -> via USD (approx)
-KMLM   $92,144 TECL 38%, SOXL 32%, PULS 30% -> TECL 75%, ZVOL 15%, PULS 10% ($47,915 moves). close call: market +2 sigma (SPY +0.22%) -> SQQQ 75%, ZVOL 15%, PULS 10%; TQQQ +0.56% (0.8 sigma) -> SQQQ 75%, ZVOL 15%, PULS 10%; largest gap 37.0% vs the 10% trigger; stale: SOXL 14:55 -> via USD (approx)
-SLEEVE $81,666 no change (BOXX 100%). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it; stale: CORP 14:50 (no fresh sibling: last price used), SHY 14:55 (no fresh sibling: last price used), SOXL 14:55 -> via USD (approx), SOXS 14:55 -> via USD (approx)
+== replay at 15:15 ET, quotes 0 min behind the read
+PRE-CLOSE 2026-10-30 15:15 ET: Composer decides ~15:50 (35 min); SPY -2.10% today
+GATE   open (as at yesterday's close): SPY 753.23 vs 200-day 725.97; flips at 725.83 (-3.64%, 32.7 sigma)
+HG     $86,900 BIL 100% -> QLD 100% ($86,900 moves). close call: market +2 sigma (SPY +0.22%) -> BIL 100%; TQQQ +0.56% (0.8 sigma) -> BIL 100%
+KMLM   $92,144 TECL 38%, SOXL 32%, PULS 30% -> TECL 75%, ZVOL 15%, PULS 10% ($47,915 moves). close call: market +2 sigma (SPY +0.22%) -> SQQQ 75%, ZVOL 15%, PULS 10%; TQQQ +0.56% (0.8 sigma) -> SQQQ 75%, ZVOL 15%, PULS 10%; largest gap 37.0% vs the 10% trigger
+SLEEVE $81,666 no change (BOXX 100%). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
 HARV   $37,350 PULS 100% -> ZVOL 60%, PULS 40% ($22,410 moves). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
-stale quotes rebuilt from same-index funds: SPXL, SPY, SSO via IVV; SQQQ via QQQ; SVIX, SVXY via VIXY
-ALERTS: ["BIG DAY — SPY -2.12% at 15:15 ET. What the rebalance at ~15:50 will do is in the preview; overrides are the owner's call in the Composer app."]
+ALERTS: ["BIG DAY — SPY -2.10% at 15:15 ET. What the rebalance at ~15:50 will do is in the preview; overrides are the owner's call in the Composer app."]
 
-PRE-CLOSE 2026-10-30 15:27 ET: Composer decides ~15:50 (23 min); SPY -2.15% today
-GATE   open (as at yesterday's close): SPY 752.85 vs 200-day 725.97; flips at 725.83 (-3.59%, 39.8 sigma); stale: SPY 14:55 -> via IVV
-HG     $86,900 BIL 100% -> QLD 100% ($86,900 moves). close call: market +2 sigma (SPY +0.18%) -> BIL 100%; QLD +0.35% (1.0 sigma) -> USD 100%; stale: SMH 14:55 -> via USD (approx), SOXL 14:55 -> via USD (approx)
-KMLM   $92,144 TECL 38%, SOXL 32%, PULS 30% -> TECL 75%, ZVOL 15%, PULS 10% ($47,915 moves). could flip: market +2 sigma (SPY +0.18%) -> SQQQ 75%, ZVOL 15%, PULS 10%; TQQQ +0.57% (1.1 sigma) -> SQQQ 75%, ZVOL 15%, PULS 10%; largest gap 37.0% vs the 10% trigger; stale: SOXL 14:55 -> via USD (approx)
-SLEEVE $81,666 no change (BOXX 100%). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it; stale: CORP 14:50 (no fresh sibling: last price used), PEJ 15:05 (no fresh sibling: last price used), SHY 14:55 (no fresh sibling: last price used), SOXL 14:55 -> via USD (approx), SOXS 14:55 -> via USD (approx)
+== replay at 15:27 ET, quotes 0 min behind the read
+PRE-CLOSE 2026-10-30 15:27 ET: Composer decides ~15:50 (23 min; quotes ~2 min old); SPY -2.12% today
+GATE   open (as at yesterday's close): SPY 753.05 vs 200-day 725.97; flips at 725.83 (-3.61%, 38.4 sigma)
+HG     $86,900 BIL 100% -> QLD 100% ($86,900 moves). close call: market +2 sigma (SPY +0.19%) -> BIL 100%; QLD +0.37% (1.0 sigma) -> USD 100%
+KMLM   $92,144 TECL 38%, SOXL 32%, PULS 30% -> TECL 75%, ZVOL 15%, PULS 10% ($47,915 moves). could flip: market +2 sigma (SPY +0.19%) -> SQQQ 75%, ZVOL 15%, PULS 10%; TQQQ +0.57% (1.0 sigma) -> SQQQ 75%, ZVOL 15%, PULS 10%; largest gap 37.0% vs the 10% trigger
+SLEEVE $81,666 no change (BOXX 100%). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it; stale: PEJ 15:05 (no fresh sibling: last price used)
 HARV   $37,350 PULS 100% -> ZVOL 60%, PULS 40% ($22,410 moves). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
-stale quotes rebuilt from same-index funds: SPXL, SPY, SSO via IVV; SQQQ via QQQ; VXZ via VIXM; SVIX, SVXY via VIXY
-(1 more stale price(s), on tickers no decision reads today: VXZ)
-ALERTS: ["BIG DAY — SPY -2.15% at 15:27 ET. What the rebalance at ~15:50 will do is in the preview; overrides are the owner's call in the Composer app."]
+stale quotes rebuilt from same-index funds: VXZ via VIXM
+ALERTS: ["BIG DAY — SPY -2.12% at 15:27 ET. What the rebalance at ~15:50 will do is in the preview; overrides are the owner's call in the Composer app."]
+
+== replay at 15:15 ET, quotes 5 min behind the read
+PRE-CLOSE 2026-10-30 15:15 ET: Composer decides ~15:50 (35 min; quotes ~5 min old); SPY -2.10% today
+GATE   open (as at yesterday's close): SPY 753.17 vs 200-day 725.97; flips at 725.83 (-3.63%, 30.5 sigma)
+HG     $86,900 BIL 100% -> QLD 100% ($86,900 moves). close call: market +2 sigma (SPY +0.24%) -> BIL 100%; QLD +0.42% (0.9 sigma) -> USD 100%
+KMLM   $92,144 TECL 38%, SOXL 32%, PULS 30% -> TECL 75%, ZVOL 15%, PULS 10% ($47,915 moves). could flip: market +2 sigma (SPY +0.24%) -> SQQQ 75%, ZVOL 15%, PULS 10%; TQQQ +0.76% (1.1 sigma) -> SQQQ 75%, ZVOL 15%, PULS 10%; largest gap 37.0% vs the 10% trigger
+SLEEVE $81,666 no change (BOXX 100%). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
+HARV   $37,350 PULS 100% -> ZVOL 60%, PULS 40% ($22,410 moves). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
+ALERTS: ["BIG DAY — SPY -2.10% at 15:15 ET. What the rebalance at ~15:50 will do is in the preview; overrides are the owner's call in the Composer app."]
+
+== replay at 15:27 ET, quotes 5 min behind the read
+PRE-CLOSE 2026-10-30 15:27 ET: Composer decides ~15:50 (23 min; quotes ~7 min old); SPY -2.21% today
+GATE   open (as at yesterday's close): SPY 752.35 vs 200-day 725.97; flips at 725.83 (-3.52%, 34.2 sigma)
+HG     $86,900 BIL 100% -> QLD 100% ($86,900 moves). could flip: QLD +0.41% (1.0 sigma) -> USD 100%
+KMLM   $92,144 TECL 38%, SOXL 32%, PULS 30% -> TECL 75%, ZVOL 15%, PULS 10% ($47,915 moves). could flip: TQQQ +1.08% (1.8 sigma) -> SQQQ 75%, ZVOL 15%, PULS 10%; largest gap 37.0% vs the 10% trigger
+SLEEVE $81,666 no change (BOXX 100%). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it; stale: PEJ 15:05 (no fresh sibling: last price used)
+HARV   $37,350 PULS 100% -> ZVOL 60%, PULS 40% ($22,410 moves). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
+stale quotes rebuilt from same-index funds: VXZ via VIXM
+ALERTS: ["BIG DAY — SPY -2.21% at 15:27 ET. What the rebalance at ~15:50 will do is in the preview; overrides are the owner's call in the Composer app."]
 

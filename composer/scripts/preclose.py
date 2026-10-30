@@ -16,12 +16,14 @@ a half-day) on live prices, with the approved trees and the evaluator of the sha
                     beta to SPY: what the symphony would hold instead
             ticker  the smallest one-ticker move that changes at least a quarter of the outcome
           close call: a 1-sigma move of either kind changes it (or KMLM's trigger is within 1pp);
-          could flip: a 2-sigma market move or a 2-sigma one-ticker move does; firm: neither
+          could flip: a 2-sigma market move or a 2-sigma one-ticker move does; firm: neither.
+          The minutes include the quotes' own age (the median of the fresh ones)
 Live prices are Yahoo's latest trades. A price older than 15 minutes is stale: it is rebuilt from a
 fresh fund on the same index at its daily leverage (previous close x (1 + L x the index's return
-today)), or from a fund on a related index (tagged approx). A stale decision ticker that cannot be
-rebuilt is used as it is, named, and moved 2 sigma (sized from its last trade) to see whether the
-answer depends on it.
+today)). A stale decision ticker that cannot be rebuilt is used as it is, named, and moved 2 sigma
+(sized from its last trade) to see whether the answer depends on it; an alternative whose decision
+path reads one is flagged. (A cross-index stand-in, SOXL from USD, was tried and dropped: 3.4% RMS
+error a day, 8.9% on 10-30, worse than the stale price itself.)
 
 Alerts (exit 2): the gate flips today or sits within 2 sigma of flipping; SPY 2% or more off
 yesterday's close (a big day: read the whole preview); no usable preview (no live prices, the market
@@ -77,10 +79,6 @@ FAMILIES = {
     "S&P 500 VIX Mid-Term Futures": {"VIXM": 1, "VXZ": 1},
     "ICE US Treasury 20+ Year": {"TLT": 1, "TMF": 3, "TMV": -3},
 }
-# related indexes, used only when no fund on the exact index is fresh; the rebuild is tagged approx
-APPROX = {
-    "US semiconductors": {"SOXX": 1, "SMH": 1, "USD": 2, "SOXL": 3, "SOXS": -3},
-}
 
 
 # ------------------------------------------------------------------ pure core
@@ -134,28 +132,24 @@ def family(t):
     return next((f for f in FAMILIES.values() if t in f), None)
 
 
-def approx_family(t):
-    return next((f for f in APPROX.values() if t in f), None)
-
-
 def rebuild(t, data, today, fresh):
-    """t's price now from a fresh fund on the same index (else a related one): t's previous close x
-    (1 + L_t x R), R the index's return today (the sibling's return / its leverage), both returns from
-    the same previous session. (price, sibling, approx) or None"""
-    if t not in data:
+    """t's price now from a fresh fund on the same index: t's previous close x (1 + L_t x R), R the
+    index's return today (the sibling's return / its leverage), both returns from the same previous
+    session. (price, sibling) or None"""
+    fam = family(t)
+    if not fam or t not in data:
         return None
     prev_t = [d for d in data[t][0] if d < today]
     if not prev_t:
         return None
-    for fam, approx in ((family(t), False), (approx_family(t), True)):
-        for s in fam or {}:
-            if s == t or s not in fresh:
-                continue
-            prev_s = [d for d in data[s][0] if d < today]
-            if not prev_s or prev_s[-1] != prev_t[-1]:
-                continue
-            r = (fresh[s] / data[s][0][prev_s[-1]] - 1) / fam[s]
-            return data[t][0][prev_t[-1]] * (1 + fam[t] * r), s, approx
+    for s in fam:
+        if s == t or s not in fresh:
+            continue
+        prev_s = [d for d in data[s][0] if d < today]
+        if not prev_s or prev_s[-1] != prev_t[-1]:
+            continue
+        r = (fresh[s] / data[s][0][prev_s[-1]] - 1) / fam[s]
+        return data[t][0][prev_t[-1]] * (1 + fam[t] * r), s
     return None
 
 
@@ -172,7 +166,7 @@ def live_prices(data, today, now):
             rb = rebuild(t, data, today, fresh)
             if rb:
                 p[today] = rb[0]
-                notes[t] = f"{t} {why} -> via {rb[1]}" + (" (approx)" if rb[2] else "")
+                notes[t] = f"{t} {why} -> via {rb[1]}"
             else:
                 prev = [d for d in adj if d <= today]
                 if prev:
@@ -313,40 +307,62 @@ def flip(sim, tree, d, sd_day, trace, outcome, end, factor):
 
 
 def market(prices, tree, d, m, betas):
-    """the tree's target had the market moved m (a SPY return) before the decision: each ticker's price
+    """(target, trace) had the market moved m (a SPY return) before the decision: each ticker's price
     today moved by its beta x m (no beta: unmoved)"""
     p = {}
     for t in sr.tree_tickers(tree):
         p[t] = dict(prices[t])
         p[t][d] = prices[t][d] * (1 + (betas.get(t) or 0.0) * m)
-    return sr.run_engine(p, tree, d)[1]
+    _, target, trace = sr.run_engine(p, tree, d)
+    return target, trace
+
+
+def moved_trace(prices, tree, d, t, x):
+    """the decision path had ticker t closed a fraction x higher today"""
+    p = {k: prices[k] for k in sr.tree_tickers(tree)}
+    p[t] = dict(prices[t])
+    p[t][d] = prices[t][d] * (1 + x)
+    return sr.run_engine(p, tree, d)[2]
 
 
 def uncertainty(sim, tree, d, sd_day, trace, outcome, prices, end, left, betas, spy_sd, carried=None, paused=False):
-    """how close the call is: {'flip', 'market': {k: holdings}, 'stale_dep', 'label'}. market: the market
-    scenarios whose outcome differs by FLIP_MATERIAL or more; stale_dep: carried stale decision tickers
-    whose STALE_SIGMA move (sigma over the minutes since they traded plus the minutes left) does that"""
+    """how close the call is: {'flip', 'market': {k: holdings}, 'stale_dep', 'alt_stale', 'label'}.
+    market: the market scenarios whose outcome differs by FLIP_MATERIAL or more; stale_dep: carried
+    stale decision tickers whose STALE_SIGMA move (sigma over the minutes since they traded plus the
+    minutes left) does that; alt_stale: carried tickers the alternatives' decision paths read"""
     if paused:
-        return {"flip": None, "market": {}, "stale_dep": [], "label": "firm"}
+        return {"flip": None, "market": {}, "stale_dep": [], "alt_stale": [], "label": "firm"}
+    carried = carried or {}
     factor = sigma_factor(left)
     fl = flip(sim, tree, d, sd_day, trace, outcome, end, factor)
-    mk = {}
+    mk, alt_stale = {}, set()
     if spy_sd:
         for k in MARKET:
-            tgt = market(prices, tree, d, k * spy_sd * factor, betas)
+            tgt, tr = market(prices, tree, d, k * spy_sd * factor, betas)
             if tgt is not None and sr.distance(end(tgt), outcome)[0] >= FLIP_MATERIAL:
                 mk[k] = end(tgt)
+                alt_stale |= set(sr.trace_tickers(tr, tree)) & set(carried)
+    if fl and carried:
+        alt_stale |= set(sr.trace_tickers(moved_trace(prices, tree, d, fl["ticker"], fl["move"]), tree)) & set(carried)
     dep = []
-    for t, age in sorted((carried or {}).items()):
+    for t, age in sorted(carried.items()):
         sg = sim.sigma(t, sd_day)
         if not sg or d not in sim.p.get(t, {}):
             continue
         x = STALE_SIGMA * sg * sigma_factor((age if age is not None else SESSION_MIN) + max(left, 0))
         if any(sr.distance(end(sim.what_if(tree, d, t, s * x)), outcome)[0] >= FLIP_MATERIAL for s in (1, -1)):
             dep.append(t)
-    close = (fl and fl["sigma"] <= CLOSE) or any(abs(k) <= 1 for k in mk)
-    could = (fl and fl["sigma"] <= COULD) or mk or dep
-    return {"flip": fl, "market": mk, "stale_dep": dep, "label": "close call" if close else "could flip" if could else "firm"}
+    return {"flip": fl, "market": mk, "stale_dep": dep, "alt_stale": sorted(alt_stale), "label": label(fl, mk, dep)}
+
+
+def label(fl, mk, dep):
+    """close call: a 1-sigma move of either kind changes the outcome; could flip: a 2-sigma one does, or
+    a stale input might; firm: neither"""
+    if (fl is not None and fl["sigma"] <= CLOSE) or any(abs(int(k)) <= 1 for k in mk):
+        return "close call"
+    if (fl is not None and fl["sigma"] <= COULD) or mk or dep:
+        return "could flip"
+    return "firm"
 
 
 def engine(eng, cfg, tree, prices, today, s, left, notes, carried, betas, spy_sd, drifted=False):
@@ -395,6 +411,8 @@ def engine(eng, cfg, tree, prices, today, s, left, notes, carried, betas, spy_sd
         caveats.append("Composer's live logic differs from the approved version: this preview may not apply")
     if unc["stale_dep"]:
         caveats.append("depends on stale " + ", ".join(unc["stale_dep"]))
+    if unc["alt_stale"]:
+        caveats.append("the alternatives read stale " + ", ".join(unc["alt_stale"]))
     if caveats:
         row["caveats"] = caveats
     return row
@@ -429,7 +447,8 @@ def render(ss, g, rows, notes, failures, spy_move=None, sides=None):
     """(report lines, alert lines)"""
     lines, alerts = [], []
     left = ss["left"]
-    when = (f"Composer decides ~{ss['decide']} ({left} min)" if left > 0 else
+    lag = f"; quotes ~{ss['lag']:.0f} min old" if ss.get("lag") else ""
+    when = (f"Composer decides ~{ss['decide']} ({left} min{lag})" if left > 0 else
             f"Composer's rebalance window is open ({ss['decide']}); this read is for the record")
     day = f"; SPY {g['day']:+.2%} today" if g else ""
     lines.append(f"PRE-CLOSE {ss['date']} {ss['now']} ET: {when}{day}")
@@ -473,7 +492,7 @@ def render(ss, g, rows, notes, failures, spy_move=None, sides=None):
         extra = "".join(f"; {x}" for x in r.get("caveats") or [])
         if r.get("max_gap") is not None and not any("trigger" in x for x in r.get("caveats") or []):
             extra += f"; largest gap {r['max_gap']:.1%} vs the {r.get('corridor', 0.1):.0%} trigger"
-        weak = [n for n in r.get("stale") or [] if "approx" in n or "last price used" in n]
+        weak = [n for n in r.get("stale") or [] if "last price used" in n]
         if weak:
             extra += f"; stale: {', '.join(weak)}"
         shown |= {n.split()[0] for n in r.get("stale") or []}
@@ -482,11 +501,11 @@ def render(ss, g, rows, notes, failures, spy_move=None, sides=None):
         lines.append("unavailable: " + "; ".join(failures))
     via = {}
     for t, n in sorted(notes.items()):
-        if " -> via " in n and "approx" not in n:
+        if " -> via " in n:
             via.setdefault(n.split(" -> via ")[1], []).append(t)
     if via:
         lines.append("stale quotes rebuilt from same-index funds: " + "; ".join(f"{', '.join(ts)} via {s}" for s, ts in sorted(via.items())))
-    rest = [t for t in notes if t not in shown and not (g and t == "SPY")]
+    rest = [t for t, n in notes.items() if t not in shown and " -> via " not in n and not (g and t == "SPY")]
     if rest:
         lines.append(f"({len(rest)} more stale price(s), on tickers no decision reads today: {', '.join(sorted(rest))})")
     return lines, alerts
@@ -563,17 +582,23 @@ def preview(now, get_meta, get_drift=None, fetch=None):
     _, stale = freshness(data, today, now)
     need = set()
     for t in stale:
-        need |= (set(family(t) or {}) | set(approx_family(t) or {})) - set(data)
+        need |= set(family(t) or {}) - set(data)
     if need:
         more, _ = fetch_all(need, fetch)
         data.update(more)
     prices, notes, carried = live_prices(data, today, now)
-    failures = [f"Yahoo {t}: {one_line(e)}" for t, e in sorted(bad.items())]
+    ages = sorted((now - lt).total_seconds() / 60 for t in tick if t in data and t not in stale
+                  for lt in [last_trade(data[t][2])] if lt)
+    ss["lag"] = round(max(ages[len(ages) // 2], 0.0), 1) if ages else 0.0      # the move to price runs from the quote
+    left = ss["left"] + ss["lag"]
+    failures = [one_line(e) for t, e in sorted(bad.items())]
     if int(today[:4]) > max(int(d[:4]) for d in sr.NYSE_HOLIDAYS):
         failures.append("the NYSE holiday and half-day lists end before this year: extend shadow_runner.NYSE_HOLIDAYS "
                         "and preclose.HALF_DAYS")
-    factor = sigma_factor(ss["left"])
-    g = gate(prices["SPY"], today, factor) if "SPY" in prices else None
+    factor = sigma_factor(left)
+    spy_age = carried.get("SPY", 0.0) if "SPY" in carried else 0.0
+    g = gate(prices["SPY"], today, sigma_factor(left + (spy_age if spy_age is not None else SESSION_MIN))) \
+        if "SPY" in prices else None
     spy_prev = sorted(d for d in prices.get("SPY", {}) if d < today)
     spy_sd = daily_sd(prices["SPY"], spy_prev[-1]) if spy_prev else None
     betas = {t: beta(prices[t], prices["SPY"], spy_prev[-1]) for t in prices} if spy_prev else {}
@@ -609,7 +634,7 @@ def preview(now, get_meta, get_drift=None, fetch=None):
             s = meta.get(cfg["symphony"]) if meta is not None else None
             if meta is not None and s is None:
                 failures.append(f"{eng} is not in Composer's symphony list")
-            r = engine(eng, cfg, trees[eng], prices, today, s, ss["left"], notes, carried, betas, spy_sd, eng in drift)
+            r = engine(eng, cfg, trees[eng], prices, today, s, left, notes, carried, betas, spy_sd, eng in drift)
             if cfg.get("corridor"):
                 r["corridor"] = cfg["corridor"]
             rows.append(r)
@@ -620,9 +645,14 @@ def preview(now, get_meta, get_drift=None, fetch=None):
     if g is None or all(r["status"] != "ok" for r in rows):
         alerts.append("PRE-CLOSE UNAVAILABLE — " + ("; ".join(failures) or "no live SPY price") +
                       ". Today's rebalance runs at ~" + ss["decide"] + " ET unpreviewed.")
-    stamp = {"date": today, "time": ss["now"], "left": ss["left"], "src": "preclose"}
+    stamp = {"date": today, "time": ss["now"], "left": ss["left"], "lag": ss["lag"], "src": "preclose"}
+    dec = set()
+    for t in trees.values():
+        dec |= sr.decision_tickers(t)
     led = [dict(stamp, engine="GATE", **{k: v for k, v in g.items() if k != "flip_exact"},
-                sides=sides)] if g else []
+                sides=sides, spy_sd=round(spy_sd, 6) if spy_sd else None, sd_day=spy_prev[-1] if spy_prev else None,
+                spy_move=round(spy_move, 6) if spy_move else None,
+                betas={t: round(b, 3) for t, b in sorted(betas.items()) if t in dec and b is not None})] if g else []
     led += [dict(stamp, **{k: v for k, v in r.items() if k != "corridor"}) for r in rows]
     return lines, alerts, led
 

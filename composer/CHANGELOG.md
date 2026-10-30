@@ -635,14 +635,22 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
 - Why: owner, "Shouldn't we be doing gate checks before market close? ... So it's not gate checking in
   arrears?" The gate watch and the shadow runner read the close at 17:35; Composer acts at ~15:50.
 - First live day (10-30): the first version's 15:27 read missed HG (Composer BIL, not QLD) and KMLM
-  (SQQQ 75, not TECL 75). TQQQ's 10-day RSI crossed 30 at 15:50 in a late rally. The revision (market
-  probe, stale stress test), replayed on that afternoon's bars, flags both as close calls and names BIL
-  and SQQQ 75 as the alternatives.
+  (SQQQ 75, not TECL 75). An ordinary ~1-sigma Nasdaq move after 15:45 lifted TQQQ's 10-day RSI past 30
+  and switched off both dip-buy branches. Its alternatives were wrong; KMLM's came from a frozen SOXL
+  quote. The revision, replayed on that afternoon's bars (no lag and 5-minute lag), still makes the same
+  main call, labels it close call or could flip, and names SQQQ 75 for KMLM every time and BIL for HG
+  three times in four.
 - Before / after: no live change. Lead-time study (add. 49, 59 sessions): the 15:15 read matched 15:50
   on 221/228 engine-sessions (225/228 with no material change); all 3 material changes were close calls
   with the answer among the alternatives; 0 of 189 could-flip or firm calls changed materially.
-- Counter-agent: round 1, ship-with-fixes (2 blockers, 7 should-fixes, 17 test gaps: all fixed; 50
-  tests). Round 2: REVIEW2_PENDING
+- Counter-agent:
+  - Round 1, ship-with-fixes: 2 blockers, 7 should-fixes and 17 test gaps, all fixed.
+  - Round 2, ship-with-fixes:
+    - The SOXL-from-USD stand-in was removed (8.9% off on 10-30).
+    - The replay claims were corrected.
+    - Quote age and a stale SPY's age now widen sigma.
+    - Alternatives that read a stale price are flagged.
+    - Its mutants: 98 of the 99 that still apply die; the survivor is near-equivalent. 71 tests.
 - Artifacts: results.md addendum 49; exhibit results/preclose-leadtime-2026-10-30.html; replay
   results/preclose-replay-2026-10-30.txt; README (monitor section); POLICY.md standing cadence;
   RUNBOOK.md (what the preview is for; what a pause or a liquidation does); new 15:15 ET routine (half-day

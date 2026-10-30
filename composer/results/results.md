@@ -3174,9 +3174,9 @@ WHAT IT PRINTS (approved trees, the shadow runner's evaluator, Yahoo's latest tr
   - BIG DAY (SPY 2% or more off yesterday's close)
   - PRE-CLOSE UNAVAILABLE (no prices, no trading today, or a failed run)
 
-FIRST LIVE DAY (10-30). The first version, read at 15:27, said:
-- HG: BIL -> QLD 100%, "could flip".
-- KMLM: -> TECL 75 / ZVOL 15 / PULS 10, "could flip".
+FIRST LIVE DAY (10-30). The first version, read at 15:27 on the live feed, said:
+- HG: BIL -> QLD 100%, "could flip" (QLD +0.44% -> USD).
+- KMLM: -> TECL 75 / ZVOL 15 / PULS 10, "could flip" (TQQQ +0.87% -> SOXL 75).
 
 Composer ended at:
 - HG: BIL 100%.
@@ -3184,26 +3184,31 @@ Composer ended at:
 - HARV: ZVOL 52 / PULS 48 (preview ZVOL 60 / PULS 40, under the 25% line).
 - SLEEVE: BOXX 100%, as previewed.
 
-Cause: TQQQ's 10-day RSI sat at 29.6-29.8 until 15:45. A late rally (IVV +0.45% from 15:15 to 15:50) took
-it to 30.05 at 15:50, which switched off both engines' "RSI(TQQQ,10) < 30" dip-buy branches. HG fell
-through to BIL, and KMLM to a top-RSI pick, SQQQ. Re-run on 15:50 prices (stale quotes rebuilt), the
-logic reproduces Composer exactly; at 15:45 it still said QLD / TECL. The first version's one-ticker
-search showed the wrong alternatives (QLD -> USD; TQQQ -> SOXL 75, the latter on a SOXL quote frozen
-since 14:41).
+Cause: TQQQ's 10-day RSI sat at 29.6-29.8 until 15:45. An ordinary Nasdaq-led move (TQQQ +0.6% by 15:45,
+about 1 sigma, while IVV moved +0.1%) lifted it to 30.05 at 15:50. That switched off both engines'
+"RSI(TQQQ,10) < 30" dip-buy branches: HG fell through to BIL, and KMLM to a top-RSI pick, SQQQ. Re-run on
+15:50 prices, the logic reproduces Composer exactly; at 15:45 it still said QLD / TECL. The first
+version's alternatives were wrong: USD for HG, and SOXL 75 for KMLM, from a SOXL quote frozen since
+14:41.
 
 Also that afternoon:
 - Yahoo froze 11 quotes, including SPY, SOXL, SQQQ and SPXL, at 14:25-14:55, while IVV, VOO and QQQ
   stayed live.
 - Composer's API answered HTTP 503 once, at 15:33, and was back by 15:35.
 
-The revised preview, replayed on that afternoon's 5-minute bars (replay_1030.py; preclose-replay-
-2026-10-30.txt):
-- 15:15:
-  - HG: close call; market +2 sigma (SPY +0.22%) or TQQQ +0.56% (0.8 sigma) -> BIL 100%.
-  - KMLM: close call; the same two moves -> SQQQ 75 / ZVOL 15 / PULS 10.
-- 15:27: HG close call; KMLM could flip; the same alternatives.
-The main call is still wrong, by construction: the logic on 15:15 prices. But it is marked uncertain,
-and it names what Composer did.
+The revised preview, replayed (replay_1030.py; results/preclose-replay-2026-10-30.txt) at 15:15 and 15:27,
+with no quote lag and with the live feed's 5-minute lag. The replay uses bars Yahoo backfilled after the
+close, so the frozen quotes are filled in: it shows what a healthy feed would have given.
+- Main call: still QLD / TECL 75 in every variant. It is the logic on the read's prices, and the call
+  flipped after 15:45.
+- Labels:
+  - HG: close call (15:15, both lags; 15:27 with no lag), could flip (15:27 lagged).
+  - KMLM: close call (15:15, no lag), could flip otherwise.
+  - Round 2's live 15:30 snapshot gives "could flip" for both, the same label the first version gave.
+- Alternatives:
+  - KMLM: SQQQ 75 in all four variants.
+  - HG: BIL in three of four; the lagged 15:27 read shows QLD +0.41% -> USD instead.
+- So the revision's gain on 10-30 is the alternatives it names, not the label, and on one day.
 
 LEAD-TIME STUDY (leadtime.py; 59 sessions 2026-08-07..10-29, Yahoo 5-minute bars). Each engine's logic is
 run at each minute and compared with its answer at 15:50:
@@ -3226,17 +3231,26 @@ run at each minute and compared with its answer at 15:50:
 - Gate: open at 15:50 on all 59 sessions; no crossing in the window.
 
 HONESTY BOX:
-- One live day, and it went wrong. The revision was built after seeing that day; the replay of it uses
-  bars Yahoo backfilled after the close, which may differ from what the live feed showed at 15:15.
+- One live day, and it went wrong. The revision was built after seeing it; the replay uses backfilled
+  bars.
+- On 10-30 the flip came after 15:45, on an ordinary ~1-sigma Nasdaq move. No read at 15:15 could have
+  called it; the preview can only say the call is near a line and what lies across it.
+- Labels change from minute to minute around 15:15, and with quote lag. Treat close call and could flip
+  alike: the logic is near a line.
 - The study compares the logic only, with no corridor and no feed problems. The label rules and the 0.6
   scale were set with this window in view. The label result rests on 3 events: indicative, not a rate.
-- The window was calm: no 2% SPY day (largest 1.55%), and 10-30's late move was about 4 sigma on this
-  scale.
-- The market probe moves funds by their 60-session beta, so correlations that break on the day are not
-  in it. 15:50 stands in for Composer's decision minute (15:45-15:55).
-- Gate timing within the session is untested: there was no crossing.
-- The rebuild assumes daily reset and ignores fees and intraday premium or discount; the semiconductor
-  stand-in is a different index.
+- The window was calm: no 2% SPY day (largest 1.55%).
+- 0.6 rests on one proxy (round 1's 10 tickers on the 14:30-15:30 bar); other cuts give 0.565-0.74, and
+  quarters range 0.52-0.86.
+- The market probe: in the window it changed 7 of 228 labels, none of which then moved; all 3 material
+  events came from the one-ticker probe alone. It moves funds by 60-session daily betas, which overstate
+  late-session moves of TQQQ, QLD and SQQQ by about 40%, and correlations that break on the day are not
+  in it. It has one live day.
+- 15:50 stands in for Composer's decision minute (15:45-15:55). Gate timing within the session is
+  untested: there was no crossing.
+- The rebuild assumes daily reset and ignores fees and intraday premium or discount. A cross-index
+  stand-in (SOXL from USD) was tried and dropped: 3.4% RMS error a day, 8.9% on 10-30, worse than the
+  stale price.
 - The preview is not a recommendation. The RUNBOOK default, no intraday intervention (measured five
   ways), stands.
 
@@ -3261,7 +3275,31 @@ COUNTER-AGENT, round 1 (one hostile reviewer, scratchpad/preclose-review/): ship
   reached the 3-sigma edge.
 - It also graded today independently and reached the same root cause.
 
-COUNTER-AGENT, round 2: REVIEW2_PENDING
+COUNTER-AGENT, round 2 (one hostile reviewer, scratchpad/preclose-review2/): ship-with-fixes.
+- Confirmed:
+  - All round-1 fixes except D6 (gate sigma with a stale SPY).
+  - No regression: targets, outcomes, dollars and gate values identical to 039a354 on five inputs.
+  - About 3 s a run.
+  - One alert in 60 sessions at 15:15 (10-30's BIG DAY); the gate never came within 30 sigma.
+  - The study JSON reproduced row by row.
+- REFUTED and fixed:
+  - The SOXL-from-USD stand-in was 8.9% off on 10-30 and was never stress-tested. Removed. Carried
+    tickers are stress-tested, and alternatives that read one are flagged.
+  - The replay claims (both close calls; "4 sigma"; "IVV +0.45%", which used a bar running past 15:50)
+    were overstated. The live-day section above is rewritten.
+  - Unpinned headline outputs: the close-call threshold, upside scenarios, and a signed gate distance.
+  - Quote age was left out of sigma. Now added: the median age of the fresh quotes, plus a stale SPY's
+    own age on the gate (D6).
+  - Nits: a repeated error prefix, and rebuilt tickers listed twice.
+- Tests: 33 of its 112 mutants survived the 50-test suite. Against the 71-test suite:
+  - 98 of the 99 that still apply now die. The survivor, F7 (a coarser grid), is near-equivalent:
+    bisection recovers the threshold.
+  - 8 re-expressed where the code moved also die; 5 are moot (the stand-in is gone).
+  - So do 8 new mutants on the round-2 code (label thresholds, quote age, stale SPY, alternatives reading
+    stale).
+- Its D1-D8 demonstrations, re-run on the fixed code, pass. D6 is fixed in how preview() sizes the gate's
+  sigma, which the demo calls around.
+- Kept as caveats, not changed: the beta overstatement, the 0.6 proxy, and minute-to-minute labels.
 
 DECISION: none on symphonies. A new 15:15 ET weekday routine, report-only (POLICY standing cadence; half-
 day runs at 12:15). RUNBOOK updated: what the preview is for, and what a pause or a liquidation does.

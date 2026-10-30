@@ -9,23 +9,25 @@ BROKEN-INPUT counterpart that must land on the other side. The counter-agent's s
   P2  sigma of the minutes left: 0.6 x sqrt(minutes / 390), floored at 5 minutes
   P3  freshness: today's bar and a trade within 15 minutes; otherwise stale, with reason and age
   P4  stale prices rebuilt from a fresh fund on the same index at its leverage (inverse, 2x/3x, VIX
-      futures), from a related index tagged approx, never across different previous sessions; the
-      family table pinned
+      futures), never across different previous sessions or from a related index; the family table
+      pinned
   P5  gate: the flip price is the average of the other 199 closes, and the shadow evaluator's own
       reading of HG's condition flips exactly there; yesterday's state on yesterday's window; the
       sign of the distance; sigma from yesterday back; gate_in reads ticker, window and comparator
   P6  outcome and one-ticker flip: KMLM's corridor on the largest gap at 10pp; the flip is the
       nearest move (bisected) that changes a quarter of the holdings, through the corridor, None
       beyond 3 sigma, the nearer of two tickers
-  P7  market scenarios and labels: beta, every fund moved by its beta, a correlated move that no
-      single ticker makes, stale decision tickers stress-tested
+  P7  market scenarios and labels: beta, every fund moved by its beta, either way, through the
+      corridor, a correlated move that no single ticker makes, the label thresholds, stale decision
+      tickers stress-tested both ways, alternatives that read a stale price flagged
   P8  engine rows and report: empty holdings, paused, caveats kept together, dollars from the
       outcome, KMLM's trigger on the line; alerts (gate flips with what HG holds on each side, gate
       on the line on either side, big day either way) and their absence
   P9  preview end to end on the frozen 2026-10-28 prices: the approved trees reproduce Composer's
       own decisions for that session, a stale SPY is rebuilt from IVV, a Composer outage leaves the
       logic, a Yahoo outage or a market with no trades alerts, drift caveats and failures shown,
-      closed hours say so
+      closed hours say so, the quotes' age widens every sigma, a stale SPY's own age widens the
+      gate's, sigma and betas end yesterday
   P10 ledger appends; exit codes; a crashed preview still alerts
 
 Run: python3 -m unittest composer.scripts.tests.test_preclose -v
@@ -189,9 +191,10 @@ class P3Fresh(unittest.TestCase):
     def test_fresh_and_stale(self):
         now = et(2026, 10, 28, 15, 15)
         s = {"2026-10-27": 10.0, "2026-10-28": 11.0}
-        data = {"A": feed(s, now, 14), "B": feed(s, now, 16), "C": feed(s, now, 2, today=False), "D": (s, s, {})}
+        data = {"A": feed(s, now, 14), "B": feed(s, now, 16), "C": feed(s, now, 2, today=False), "D": (s, s, {}),
+                "E": feed(s, now, 15)}
         fresh, stale = pc.freshness(data, "2026-10-28", now)
-        self.assertEqual(fresh, {"A": 11.0})
+        self.assertEqual(fresh, {"A": 11.0, "E": 11.0})                       # 15 minutes exactly is still fresh
         self.assertEqual(stale["B"][0], "14:59")
         self.assertAlmostEqual(stale["B"][1], 16.0)
         self.assertEqual(stale["C"], ("no trade today", None))
@@ -213,11 +216,11 @@ class P4Rebuild(unittest.TestCase):
                 out[t] = feed({"2026-10-27": 100.0, "2026-10-28": 100.0 * (1 + m)}, self.now)
         return out
 
-    def check(self, stale, sib, move, expect_ratio, approx=False):
+    def check(self, stale, sib, move, expect_ratio):
         d = self.data(**{stale: None, sib: move})
         fresh, _ = pc.freshness(d, "2026-10-28", self.now)
-        p, s, ap = pc.rebuild(stale, d, "2026-10-28", fresh)
-        self.assertEqual((s, ap), (sib, approx))
+        p, s = pc.rebuild(stale, d, "2026-10-28", fresh)
+        self.assertEqual(s, sib)
         self.assertAlmostEqual(p / 50.0, expect_ratio, places=9)
 
     def test_leverage(self):
@@ -229,13 +232,16 @@ class P4Rebuild(unittest.TestCase):
         self.check("TMV", "TLT", 0.01, 0.97)
         self.check("SPY", "IVV", -0.02, 0.98)
 
-    def test_approx(self):
-        self.check("SOXL", "USD", 0.02, 1.03, approx=True)                # 3 x (2% / 2)
-        d = self.data(SOXL=None, USD=0.02, SOXX=0.01)
+    def test_no_cross_index_stand_in(self):
+        d = self.data(SOXL=None, USD=0.02)                                     # USD: 2x a different index
         fresh, _ = pc.freshness(d, "2026-10-28", self.now)
-        self.assertEqual(pc.rebuild("SOXL", d, "2026-10-28", fresh)[1:], ("SOXX", False))   # the exact index first
-        _, notes, _ = pc.live_prices(self.data(SOXL=None, USD=0.02), "2026-10-28", self.now)
-        self.assertIn("via USD (approx)", notes["SOXL"])
+        self.assertIsNone(pc.rebuild("SOXL", d, "2026-10-28", fresh))
+        _, notes, carried = pc.live_prices(d, "2026-10-28", self.now)
+        self.assertIn("last price used", notes["SOXL"])
+        self.assertIn("SOXL", carried)
+        d = self.data(SOXL=None, SOXX=0.01)                                    # broken: the same index is fresh
+        fresh, _ = pc.freshness(d, "2026-10-28", self.now)
+        self.assertEqual(pc.rebuild("SOXL", d, "2026-10-28", fresh)[1], "SOXX")
 
     def test_no_sibling(self):
         d = self.data(ZVOL=None, IVV=0.01)
@@ -263,6 +269,10 @@ class P4Rebuild(unittest.TestCase):
         self.assertIn("no fresh sibling", notes["ZVOL"])
         self.assertEqual(set(carried), {"ZVOL"})
         self.assertAlmostEqual(carried["ZVOL"], 60.0)
+        d["PEJ"] = feed({"2026-10-27": 30.0}, self.now, 2)                    # no trade today at all
+        _, _, carried = pc.live_prices(d, "2026-10-28", self.now)
+        self.assertIn("PEJ", carried)
+        self.assertIsNone(carried["PEJ"])
         self.assertNotIn("IVV", notes)
 
     def test_families_pinned(self):
@@ -273,8 +283,7 @@ class P4Rebuild(unittest.TestCase):
         got = {t: lv for f in pc.FAMILIES.values() for t, lv in f.items()}
         self.assertEqual(got, want)
         self.assertEqual(pc.family("SQQQ"), pc.family("QQQ"))
-        self.assertIsNone(pc.family("USD"))                                    # USD is a stand-in only
-        self.assertEqual(pc.approx_family("SOXL")["USD"], 2)
+        self.assertIsNone(pc.family("USD"))
 
 
 # ------------------------------------------------------------------ P5
@@ -314,6 +323,9 @@ class P5Gate(unittest.TestCase):
         self.assertGreater(pc.gate(s, d, 0.3)["dist"], 0)
         s[d] = thr
         self.assertFalse(pc.gate(s, d, 0.3)["open"])                          # at the line: closed (gt)
+        for k in (1.2, 0.8):                                                   # far either side: a large positive sigma
+            s[d] = thr * k
+            self.assertGreater(pc.gate(s, d, 0.3)["sigma"], 10)
 
     def test_yesterday_on_yesterdays_window(self):
         s, d = self.series(130.0, yday=80.0)
@@ -365,6 +377,7 @@ class P6OutcomeFlip(unittest.TestCase):
         # the largest single gap decides, not the total: 6pp each, 12pp half-L1 -> no trade
         live4 = {"P": 0.35, "Q": 0.35, "R": 0.15, "S": 0.15}
         self.assertEqual(pc.after({"P": 0.29, "Q": 0.29, "R": 0.21, "S": 0.21}, live4, 0.1), live4)
+        self.assertEqual(pc.after({"Q": 1.0}, {"P": 0.1, "Q": 0.9}, 0.1), {"P": 0.1, "Q": 0.9})   # exactly 10pp: no trade
         # 10.5pp is past the 10pp trigger
         self.assertEqual(pc.after({"P": 0.395, "Q": 0.605}, {"P": 0.5, "Q": 0.5}, 0.1), {"P": 0.395, "Q": 0.605})
 
@@ -406,6 +419,75 @@ class P6OutcomeFlip(unittest.TestCase):
         self.assertIsNotNone(self.run_flip(100.2, swing)[0])                  # broken: a daily engine would trade
         self.assertIsNotNone(self.run_flip(100.2, live={"Y": 1.0}, corridor=0.1)[0])
 
+    def two(self, a_sig, b_sig):
+        """A and B both on the path; A must move a_sig sigmas, B b_sig sigmas, to flip"""
+        sl = 0.01 * F35
+        a = walk_series(60, step=0.01, today=100 / (1 - a_sig * sl))
+        b = walk_series(60, step=0.01, today=100 / (1 - b_sig * sl))
+        tree = tree_of(cond("A", 100, [cond("B", 100, [asset("X")], [asset("Y")])], [asset("Y")]))
+        sim, target, tr, d, prev = sim_of({"A": a, "B": b, "X": a, "Y": a}, tree)
+        return pc.flip(sim, tree, d, prev, tr, target, dict, F35)
+
+    def test_nearest_across_tickers(self):
+        fl = self.two(1.3, 0.5)                                              # A is searched first, B is nearer
+        self.assertEqual(fl["ticker"], "B")
+        self.assertAlmostEqual(fl["sigma"], 0.5, delta=0.02)
+        fl = self.two(1.0, 0.92)                                             # both flip at the same grid step
+        self.assertEqual(fl["ticker"], "B")
+        self.assertAlmostEqual(fl["sigma"], 0.92, delta=0.02)
+        self.assertEqual(self.two(0.6, 1.4)["ticker"], "A")                  # broken: A nearer
+
+    def test_nearer_ticker_one_grid_step_later(self):
+        """B's threshold is nearer than A's but its first flipping grid step comes after A's: the search
+        must look one step beyond the first flip"""
+        sl_a = 0.01 * F35
+        grid = [1e-4 * 1.25 ** k for k in range(40)]
+        found = None
+        for ka in range(12, 18):                                             # A's threshold just under a grid step
+            a_x = grid[ka] * 0.999
+            for step_b in (0.0105, 0.011, 0.0115, 0.012, 0.0125, 0.013):
+                sl_b = step_b * F35
+                b_ratio = a_x / sl_a * 0.97                                   # B 3% nearer, in its own sigmas
+                b_x = b_ratio * sl_b
+                ga = min(g for g in grid if g >= a_x) / sl_a
+                gb = min(g for g in grid if g >= b_x) / sl_b
+                if gb > ga * 1.0001 and b_ratio < a_x / sl_a:
+                    found = (a_x, step_b, b_x, b_ratio)
+                    break
+            if found:
+                break
+        self.assertIsNotNone(found)
+        a_x, step_b, b_x, b_ratio = found
+        a = walk_series(60, step=0.01, today=100 / (1 - a_x))
+        b = walk_series(60, step=step_b, today=100 / (1 - b_x))
+        tree = tree_of(cond("A", 100, [cond("B", 100, [asset("X")], [asset("Y")])], [asset("Y")]))
+        sim, target, tr, d, prev = sim_of({"A": a, "B": b, "X": a, "Y": a}, tree)
+        fl = pc.flip(sim, tree, d, prev, tr, target, dict, F35)
+        self.assertEqual(fl["ticker"], "B")
+        self.assertAlmostEqual(fl["sigma"], b_ratio * (step_b / sim.sigma("B", prev)), delta=0.02)
+
+    def test_alternative_at_the_threshold(self):
+        """the holdings shown are those just past the threshold, not at the grid step that found it"""
+        a = walk_series(60, step=0.01, today=100.2)
+        tree = tree_of(cond("A", 100, [asset("X")], [cond("A", 99.99, [asset("Y")], [asset("Z")])]))
+        sim, target, tr, d, prev = sim_of({"A": a, "X": a, "Y": a, "Z": a}, tree)
+        fl = pc.flip(sim, tree, d, prev, tr, target, dict, F35)
+        self.assertEqual(fl["instead"], {"Y": 1.0})
+        self.assertLess(100.2 * (1 + fl["move"]), 100.0)
+        self.assertGreater(100.2 * (1 + fl["move"]), 99.99)
+
+    def test_corridor_absorbs_a_wide_swing(self):
+        live = {t: 1 / 6 for t in "PQRSTU"}
+        hi, lo = 1 / 6 + 0.09, 1 / 6 - 0.09
+        swing = price_tree(yes=[mix(P=hi, Q=hi, R=hi, S=lo, T=lo, U=lo)], no=[mix(P=lo, Q=lo, R=lo, S=hi, T=hi, U=hi)])
+        a = walk_series(60, step=0.01, today=100.2)
+        prices = {t: a for t in "AXYPQRSTU"}
+        sim, target, tr, d, prev = sim_of(prices, swing)
+        end = lambda w: pc.after(w, live, 0.1)                               # noqa: E731
+        self.assertGreaterEqual(sr.distance(target, live)[0], pc.FLIP_MATERIAL)   # the raw targets differ by 27%
+        self.assertIsNone(pc.flip(sim, swing, d, prev, tr, end(target), end, F35))  # but neither would trade
+        self.assertIsNotNone(pc.flip(sim, swing, d, prev, tr, target, dict, F35))   # broken: no corridor
+
     def test_nearer_of_two_tickers(self):
         a = walk_series(60, step=0.01, today=100.4)                          # A needs -0.4%
         b = walk_series(60, step=0.01, today=100.2)                          # B needs -0.2%: nearer
@@ -443,9 +525,10 @@ class P7Market(unittest.TestCase):
         prices, tree = self.both()
         betas = {t: pc.beta(prices[t], self.spy, self.prev) for t in prices}
         self.assertAlmostEqual(betas["A"], 3.0, places=6)
-        self.assertEqual(pc.market(prices, tree, self.d, -self.m1, betas), {"Y": 1.0})   # -0.54% on A and B
-        self.assertEqual(pc.market(prices, tree, self.d, self.m1, betas), {"X": 1.0})
-        self.assertEqual(pc.market(prices, tree, self.d, -self.m1, {}), {"X": 1.0})      # no betas: nothing moves
+        self.assertEqual(pc.market(prices, tree, self.d, -self.m1, betas)[0], {"Y": 1.0})   # -0.54% on A and B
+        self.assertEqual(pc.market(prices, tree, self.d, self.m1, betas)[0], {"X": 1.0})
+        self.assertEqual(pc.market(prices, tree, self.d, -self.m1, {})[0], {"X": 1.0})      # no betas: nothing moves
+        self.assertEqual(set(sr.trace_tickers(pc.market(prices, tree, self.d, -self.m1, betas)[1], tree)), {"A", "B"})
 
     def test_correlated_move_only(self):
         prices, tree = self.both()
@@ -472,12 +555,119 @@ class P7Market(unittest.TestCase):
         u = pc.uncertainty(sim, tree, d, prev, tr, target, prices, dict, 35, {}, None, {"A": 5.0})
         self.assertEqual((u["stale_dep"], u["label"]), ([], "firm"))         # traded 5 minutes ago: no doubt
 
+    def test_label_rule(self):
+        self.assertEqual(pc.label({"sigma": 1.0}, {}, []), "close call")     # boundaries are inclusive
+        self.assertEqual(pc.label({"sigma": 1.01}, {}, []), "could flip")
+        self.assertEqual(pc.label({"sigma": 2.0}, {}, []), "could flip")
+        self.assertEqual(pc.label({"sigma": 2.01}, {}, []), "firm")
+        self.assertEqual(pc.label(None, {"-1": {}}, []), "close call")
+        self.assertEqual(pc.label(None, {2: {}}, []), "could flip")
+        self.assertEqual(pc.label(None, {}, ["A"]), "could flip")
+        self.assertEqual(pc.label(None, {}, []), "firm")
+
+    def test_market_materiality(self):
+        prices, _ = self.both()
+        betas = {t: pc.beta(prices[t], self.spy, self.prev) for t in prices}
+        small = tree_of(cond("A", 100, [mix(X=0.55, Y=0.45)], [cond("B", 100, [mix(X=0.55, Y=0.45)], [mix(X=0.45, Y=0.55)])]))
+        sim, target, tr = sr.run_engine(prices, small, self.d)
+        u = pc.uncertainty(sim, small, self.d, self.prev, tr, target, prices, dict, 35, betas, 0.01)
+        self.assertEqual(u["market"], {})                                    # a 10% change is not material
+
+    def test_market_alternative_through_the_corridor(self):
+        prices, _ = self.both()
+        betas = {t: pc.beta(prices[t], self.spy, self.prev) for t in prices}
+        for t in "PQRSTU":
+            prices[t] = self.spy
+        live = {t: 1 / 6 for t in "PQRSTU"}
+        hi, lo = 1 / 6 + 0.09, 1 / 6 - 0.09
+        near = [mix(P=hi, Q=hi, R=hi, S=lo, T=lo, U=lo)]
+        far = [mix(P=lo, Q=lo, R=lo, S=hi, T=hi, U=hi)]
+        end = lambda w: pc.after(w, live, 0.1)                               # noqa: E731
+        # both answers sit inside the corridor: no trade either way, nothing to show
+        tree = tree_of(cond("A", 100, near, [cond("B", 100, near, far)]))
+        sim, target, tr = sr.run_engine(prices, tree, self.d)
+        self.assertEqual(pc.uncertainty(sim, tree, self.d, self.prev, tr, end(target), prices, end, 35, betas, 0.01)["market"], {})
+        # trade to X now; the market alternative would keep today's holdings, and that is what is shown
+        tree = tree_of(cond("A", 100, [asset("X")], [cond("B", 100, [asset("X")], far)]))
+        prices["X"] = self.spy
+        sim, target, tr = sr.run_engine(prices, tree, self.d)
+        u = pc.uncertainty(sim, tree, self.d, self.prev, tr, end(target), prices, end, 35, betas, 0.01)
+        self.assertEqual(u["market"][-1], live)
+
+    def test_label_thresholds(self):
+        for need, label in ((0.9, "close call"), (1.1, "could flip"), (1.9, "could flip"), (2.1, "firm")):
+            a = walk_series(60, step=0.01, today=100 / (1 - need * 0.01 * F35))
+            prices = {"A": a, "X": a, "Y": a}
+            sim, target, tr, d, prev = sim_of(prices, price_tree())
+            u = pc.uncertainty(sim, price_tree(), d, prev, tr, target, prices, dict, 35, {}, None)
+            self.assertEqual(u["label"], label, need)
+
+    def test_market_either_way(self):
+        prices, tree = self.both(a_today=99.7, b_today=99.8)                 # Y now; a rally makes it X
+        betas = {t: pc.beta(prices[t], self.spy, self.prev) for t in prices}
+        sim, target, tr = sr.run_engine(prices, tree, self.d)
+        self.assertEqual(target, {"Y": 1.0})
+        u = pc.uncertainty(sim, tree, self.d, self.prev, tr, target, prices, dict, 35, betas, 0.01)
+        self.assertEqual(u["market"], {1: {"X": 1.0}, 2: {"X": 1.0}})
+
+    def test_market_through_the_corridor(self):
+        prices, tree = self.both()
+        betas = {t: pc.beta(prices[t], self.spy, self.prev) for t in prices}
+        sim, target, tr = sr.run_engine(prices, tree, self.d)
+        live = {"X": 0.55, "Y": 0.45}                                        # X or Y both sit 45-55pp off: trade
+        end = lambda w: pc.after(w, live, 0.1)                               # noqa: E731
+        u = pc.uncertainty(sim, tree, self.d, self.prev, tr, target, prices, end, 35, betas, 0.01)
+        self.assertEqual(u["market"], {-2: {"Y": 1.0}, -1: {"Y": 1.0}})
+        live = {"X": 0.5, "Y": 0.5}
+        swing = tree_of(cond("A", 100, [mix(X=0.55, Y=0.45)], [cond("B", 100, [mix(X=0.55, Y=0.45)], [mix(X=0.45, Y=0.55)])]))
+        sim, target, tr = sr.run_engine(prices, swing, self.d)
+        end = lambda w: pc.after(w, live, 0.1)                               # noqa: E731
+        u = pc.uncertainty(sim, swing, self.d, self.prev, tr, end(target), prices, end, 35, betas, 0.01)
+        self.assertEqual(u["market"], {})                                    # inside the corridor: no trade either way
+
+    def test_stale_both_ways_and_no_age(self):
+        a = walk_series(60, step=0.01, today=99.3)                           # below the line; only a rise flips it
+        prices = {"A": a, "X": a, "Y": a}
+        sim, target, tr, d, prev = sim_of(prices, price_tree())
+        u = pc.uncertainty(sim, price_tree(), d, prev, tr, target, prices, dict, 35, {}, None, {"A": 300.0})
+        self.assertEqual(u["stale_dep"], ["A"])
+        u = pc.uncertainty(sim, price_tree(), d, prev, tr, target, prices, dict, 35, {}, None, {"A": None})
+        self.assertEqual(u["stale_dep"], ["A"])                              # no trade today: sized as a whole session
+
+    def test_alternatives_reading_stale(self):
+        a = walk_series(60, step=0.01, today=100.2)                          # A near its line
+        b = walk_series(60, step=0.01, today=150.0)                          # B decides the alternative only
+        tree = tree_of(cond("A", 100, [asset("X")], [cond("B", 100, [asset("Y")], [asset("Z")])]))
+        prices = {"A": a, "B": b, "X": a, "Y": a, "Z": a}
+        sim, target, tr, d, prev = sim_of(prices, tree)
+        u = pc.uncertainty(sim, tree, d, prev, tr, target, prices, dict, 35, {}, None, {"B": 60.0})
+        self.assertEqual((u["flip"]["instead"], u["alt_stale"], u["stale_dep"]), ({"Y": 1.0}, ["B"], []))
+        u = pc.uncertainty(sim, tree, d, prev, tr, target, prices, dict, 35, {}, None, {})
+        self.assertEqual(u["alt_stale"], [])
+
+    def test_market_alternative_reading_stale(self):
+        prices, tree = self.both()                                           # today's path reads A only
+        betas = {t: pc.beta(prices[t], self.spy, self.prev) for t in prices}
+        sim, target, tr = sr.run_engine(prices, tree, self.d)
+        self.assertEqual(set(sr.trace_tickers(tr, tree)), {"A"})
+        u = pc.uncertainty(sim, tree, self.d, self.prev, tr, target, prices, dict, 35, betas, 0.01, {"B": 30.0})
+        self.assertIsNone(u["flip"])
+        self.assertEqual(u["alt_stale"], ["B"])                              # the market alternative reads B
+        u = pc.uncertainty(sim, tree, self.d, self.prev, tr, target, prices, dict, 35, betas, 0.01, {"Q": 30.0})
+        self.assertEqual(u["alt_stale"], [])
+
+    def test_beta_on_shared_dates(self):
+        m = self.spy
+        s = levered(m, 2, 50.0)
+        s["2026-10-24"] = 49.0                                               # a Saturday inside the window: no SPY close
+        self.assertAlmostEqual(pc.beta(s, m, self.d), 2.0, places=6)
+
     def test_paused_has_no_flips(self):
         a = walk_series(60, step=0.01, today=100.05)
         prices = {"A": a, "X": a, "Y": a}
         sim, target, tr, d, prev = sim_of(prices, price_tree())
         u = pc.uncertainty(sim, price_tree(), d, prev, tr, target, prices, dict, 35, {}, None, paused=True)
-        self.assertEqual(u, {"flip": None, "market": {}, "stale_dep": [], "label": "firm"})
+        self.assertEqual(u, {"flip": None, "market": {}, "stale_dep": [], "alt_stale": [], "label": "firm"})
 
 
 # ------------------------------------------------------------------ P8
@@ -520,6 +710,25 @@ class P8EngineRender(unittest.TestCase):
         r, _ = self.row(dict(s, is_paused=False))                            # broken: not paused
         self.assertEqual(r["after"], {"X": 1.0})
 
+    def test_sigma_ends_yesterday(self):
+        a = walk_series(60, today=110.2)
+        ds = sorted(a)
+        a[ds[-2]] = 100.0                                                    # today's own move is +10%
+        prices = {"A": a, "X": a, "Y": a, "SPY": a}
+        r = pc.engine("HG", self.cfg, price_tree(110.0), prices, ds[-1], None, 35, {}, {}, {}, 0.01)
+        sd_y = pc.daily_sd(a, ds[-2])
+        self.assertAlmostEqual(r["flip"]["sigma"], abs(r["flip"]["move"]) / (sd_y * F35), delta=0.02)
+
+    def test_stale_caveat(self):
+        a = walk_series(60, today=100.7)
+        prices = {"A": a, "X": a, "Y": a, "SPY": a}
+        r = pc.engine("HG", self.cfg, price_tree(), prices, max(a), None, 35, {"A": "A 10:00 (no fresh sibling: last price used)"},
+                      {"A": 330.0}, {}, 0.01)
+        self.assertIn("depends on stale A", r["caveats"])
+        self.assertEqual(r["stale"], ["A 10:00 (no fresh sibling: last price used)"])
+        r = pc.engine("HG", self.cfg, price_tree(), prices, max(a), None, 35, {}, {}, {}, 0.01)
+        self.assertNotIn("caveats", r)
+
     def test_moves_from_the_outcome(self):
         s = {"holdings": [{"ticker": "X", "allocation": 0.95}, {"ticker": "Y", "allocation": 0.05}], "value": 1000.0}
         r, _ = self.row(s, corridor=0.1)
@@ -529,6 +738,9 @@ class P8EngineRender(unittest.TestCase):
         r, _ = self.row(s2, corridor=0.1)
         self.assertEqual(r["label"], "close call")                           # 9.5pp: the trigger is on the line
         self.assertIn("trigger is on the line", r["caveats"][0])
+        line = pc.render(self.ss(), None, [dict(r, corridor=0.1)], {}, [])[0][1]
+        self.assertEqual(line.count("9.5%"), 1)                               # said once, in the caveat
+        self.assertNotIn("largest gap 9.5% vs", line)
 
     def ss(self):
         return {"date": "2026-10-28", "now": "15:15", "decide": "15:50", "left": 35, "open": "09:30", "close": "16:00"}
@@ -547,11 +759,15 @@ class P8EngineRender(unittest.TestCase):
         self.assertTrue(a[0].startswith("GATE CLOSES"))
         self.assertIn("QLD 100% on either side of the line", a[0])           # the dip-buy branch ignores the gate
         self.assertNotIn("moves to BIL", a[0])
-        a = pc.render(self.ss(), self.g(sigma=1.5), [], {}, [])[1]
+        a = pc.render(self.ss(), self.g(sigma=1.5), [], {}, [], sides=[{"QLD": 1.0}, {"BIL": 1.0}])[1]
         self.assertTrue(a[0].startswith("GATE ON THE LINE") and "closes" in a[0])
+        self.assertIn("HG holds QLD 100% above the line and BIL 100% below it", a[0])
+        self.assertTrue(pc.render(self.ss(), self.g(sigma=2.0), [], {}, [])[1][0].startswith("GATE ON THE LINE"))   # inclusive
+        self.assertTrue(pc.render(self.ss(), self.g(day=-0.02), [], {}, [])[1][0].startswith("BIG DAY"))          # inclusive
         a = pc.render(self.ss(), self.g(open=False, open_prev=False, dist=0.004, sigma=1.5), [], {}, [])[1]
         self.assertTrue(a[0].startswith("GATE ON THE LINE") and "reopens" in a[0])
         self.assertEqual(pc.render(self.ss(), self.g(sigma=2.5), [], {}, [])[1], [])
+        self.assertEqual(pc.render(self.ss(), self.g(open=False, open_prev=False, dist=0.08, sigma=30.0), [], {}, [])[1], [])
         for day in (-0.021, 0.021):
             a = pc.render(self.ss(), self.g(day=day), [], {}, [])[1]
             self.assertTrue(a[0].startswith("BIG DAY"), day)
@@ -564,7 +780,8 @@ class P8EngineRender(unittest.TestCase):
                     market={"-1": {"X": 1.0}, "-2": {"X": 1.0}, "2": {"Z": 1.0}}, label="close call",
                     stale=["A 14:25 (no fresh sibling: last price used)", "B 14:25 -> via IVV"])
         bad = {"engine": "KMLM", "status": "unavailable", "note": "no close"}
-        notes = {"A": "A 14:25 (no fresh sibling: last price used)", "B": "B 14:25 -> via IVV", "C": "C 14:25 -> via IVV"}
+        notes = {"A": "A 14:25 (no fresh sibling: last price used)", "B": "B 14:25 -> via IVV", "C": "C 14:25 -> via IVV",
+                 "D": "D 14:25 (no fresh sibling: last price used)"}
         lines, _ = pc.render(self.ss(), self.g(), [same, move, bad], notes, [], spy_move=0.002)
         self.assertIn("no change (X 100%)", lines[2])
         self.assertIn("firm: no 2-sigma market move", lines[2])
@@ -574,7 +791,8 @@ class P8EngineRender(unittest.TestCase):
         self.assertNotIn("B 14:25", lines[3])                                # exact rebuilds go to the footer
         self.assertIn("unavailable: no close", lines[4])
         self.assertIn("rebuilt from same-index funds: B, C via IVV", lines[5])
-        self.assertIn("1 more stale price(s), on tickers no decision reads today: C", lines[6])
+        self.assertIn("1 more stale price(s), on tickers no decision reads today: D", lines[6])   # C is in the line above
+        self.assertEqual(len(lines), 7)
 
 
 # ------------------------------------------------------------------ P9
@@ -657,6 +875,56 @@ class P9Preview(unittest.TestCase):
         rows = {r["engine"]: r for r in self.run_preview()[2]}
         self.assertTrue(any(n.startswith("UVXY") for n in rows["HARV"]["stale"]))
 
+    def test_quote_age_widens_sigma(self):
+        lines, _, led = self.run_preview()
+        g = led[0]
+        self.assertEqual(g["lag"], 2.0)                                      # the fixture's quotes are 2 minutes old
+        self.assertIn("(35 min; quotes ~2 min old)", lines[0])
+        thr, spy = g["flip_at"], g["spy"]
+        sd = g["spy_sd"]
+        self.assertAlmostEqual(g["sigma"], abs(thr / spy - 1) / (sd * pc.sigma_factor(37)), delta=0.05)
+        self.assertEqual(g["sd_day"], "2026-10-27")                           # sigma and betas end yesterday
+        self.extra["IVV"] = {d: p * 0.9 for d, p in self.fx["prices"]["SPY"].items()}
+        self.stale = {"SPY": 700.0}                                          # today's SPY moved hard (rebuilt): same sigma
+        g2 = self.run_preview()[2][0]
+        self.assertEqual(g2["spy_sd"], sd)
+
+    def test_market_move_and_betas_recorded(self):
+        g = self.run_preview()[2][0]
+        self.assertAlmostEqual(g["spy_move"], g["spy_sd"] * pc.sigma_factor(37), places=6)
+        self.assertAlmostEqual(g["betas"]["SPY"], 1.0, places=3)
+        self.assertLess(g["betas"]["SQQQ"], -2)
+        beta0 = g["betas"]["UVXY"]
+        self.stale = {"UVXY": self.fx["prices"]["UVXY"][max(self.fx["prices"]["UVXY"])] * 3}   # today's UVXY x3
+        self.assertEqual(self.run_preview()[2][0]["betas"]["UVXY"], beta0)    # betas end yesterday
+
+    def test_sibling_only_funds_not_reported(self):
+        self.extra["IVV"] = {d: p * 0.9 for d, p in self.fx["prices"]["SPY"].items()}
+        self.stale = {"SPY": 700.0, "IVV": 600.0}                             # IVV fetched only as a sibling, stale too
+        lines = self.run_preview()[0]
+        self.assertFalse(any("IVV" in x for x in lines), lines)
+        self.assertTrue(any("SPY" in x and "via SSO" in x for x in lines), lines)
+
+    def test_stale_spy_widens_the_gate(self):
+        self.stale = {t: self.fx["prices"][t][max(self.fx["prices"][t])] for t in ("SPY", "SSO", "SPXL", "UPRO")}
+        g = self.run_preview()[2][0]                                         # SPY carried, 60 minutes old
+        self.assertAlmostEqual(g["sigma"], abs(g["flip_at"] / g["spy"] - 1) / (g["spy_sd"] * pc.sigma_factor(35 + 2 + 60)),
+                               delta=0.05)
+
+    def test_failure_lines(self):
+        def fetch(t):
+            if t == "VOOV":
+                raise RuntimeError("Yahoo VOOV: timed out")
+            return self.fetch(t)
+        lines = pc.preview(self.now, lambda: self.meta(), fetch=fetch)[0]
+        self.assertTrue(any("Yahoo VOOV: timed out" in x for x in lines), lines)
+        self.assertFalse(any("Yahoo VOOV: Yahoo VOOV" in x for x in lines))
+        self.extra["VIXY"] = {d: p for d, p in self.fx["prices"]["VIXM"].items()}
+        self.stale = {"VXZ": 1.0}                                            # held only, rebuilt exactly from VIXM
+        lines = self.run_preview()[0]
+        self.assertTrue(any("VXZ via VIXM" in x for x in lines), lines)
+        self.assertFalse(any("decision reads today: VXZ" in x for x in lines))
+
     def test_composer_down(self):
         lines, alerts, led = self.run_preview(meta="down")
         self.assertTrue(any("Composer holdings: error: HTTP 503 Service Unavailable" in x for x in lines), lines)
@@ -714,6 +982,7 @@ class P9Preview(unittest.TestCase):
     def test_closed_hours(self):
         lines, alerts, led = self.run_preview(now=et(2026, 10, 28, 16, 5))
         self.assertIn("closed at 16:00", lines[0])
+        self.assertIn("closed at 16:00", self.run_preview(now=et(2026, 10, 28, 16, 0))[0][0])   # 16:00 itself is closed
         self.assertEqual((alerts, led), ([], []))
         lines, _, _ = self.run_preview(now=et(2026, 10, 28, 9, 0))
         self.assertIn("opens at 09:30", lines[0])

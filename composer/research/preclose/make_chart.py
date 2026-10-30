@@ -139,7 +139,7 @@ pre{background:var(--code);border-radius:8px;padding:10px 12px;font-size:12.5px;
 
 <section class="card">
 <h2>The first live day, 2026-10-30: what went wrong and what the revision says</h2>
-<p class="sub-h">SPY -2.2%. At 15:27 the first version said HG BIL -> QLD 100% and KMLM -> TECL 75%, both "could flip", with the wrong alternatives. Composer ended at HG BIL 100% and KMLM SQQQ 75%: TQQQ's 10-day RSI sat at 29.6-29.8 until 15:45 and a late rally lifted it to 30.05 at 15:50, switching off both engines' dip-buy branches. The revised preview, replayed on that afternoon's 5-minute bars (stale tickers frozen where Yahoo's feed froze):</p>
+<p class="sub-h">SPY -2.2%. At 15:27 the first version said HG BIL -> QLD 100% and KMLM -> TECL 75%, both "could flip", but named the wrong alternatives (USD; SOXL 75 from a SOXL quote frozen since 14:41). Composer ended at HG BIL 100% and KMLM SQQQ 75%. TQQQ's 10-day RSI sat at 29.6-29.8 until 15:45; an ordinary Nasdaq-led move (TQQQ +0.6%, about 1 sigma) lifted it to 30.05 at 15:50, switching off both engines' dip-buy branches. Below, the revised preview replayed on that afternoon's 5-minute bars at 15:15 and 15:27. The bars are as Yahoo serves them after the close, with the frozen quotes backfilled, so this is what a healthy feed would have shown. It is shown with no quote lag and with the 5-minute lag the live feed had. The main call stays wrong in every variant: it is the logic on 15:15 prices. The label moves between close call and could flip, and the alternatives name SQQQ 75 for KMLM in every variant and BIL for HG in three of four.</p>
 <pre id="replay"></pre>
 <p class="sub-h">The first version's 15:27 read, as sent:</p>
 <pre id="sample"></pre>
@@ -280,7 +280,9 @@ document.getElementById('replay').textContent = D.replay;
  `Logic only: the targets are compared. Composer's actual holdings, KMLM's 10pp corridor (which absorbs small target changes) and live-feed problems (stale quotes, as on 10-30) are not part of this study.`,
  `In-sample: the labels' sigma scale (${D.used}) and rules were set on this window's evidence (0.52 measured here; raised to 0.6 because a 2-year hourly check found this quarter calm). The label result rests on 3 material events: indicative, not a rate.`,
  `HG's 200-day gate was open at 15:50 on all ${D.n_sessions} sessions (no crossing in the window), so how often a 15:15 gate reading flips by 15:50 is not measured here; the preview alerts within 2 sigma of the flip price and says what HG holds on each side.`,
- `The window had no 2%+ SPY day (largest 1.55%). The first such day, 10-30, is outside it: its replay is above, on bars as Yahoo serves them after the close, which may differ from what the live feed showed at the time.`]
+ `The window had no 2%+ SPY day (largest 1.55%). The first such day, 10-30, is outside it; its replay above uses bars Yahoo backfilled after the close.`,
+ `The market probe moves each fund by its 60-session daily beta; for late-session moves those overstate TQQQ, QLD and SQQQ by about 40% (59-session 15:15-15:50 betas: TQQQ 3.3 vs 4.7 daily). In this window it changed 7 of 228 labels, none of which then moved; the 3 material events were found by the one-ticker probe alone.`,
+ `Labels change from minute to minute around 15:15 (on 10-30: close call at 15:15, could flip at 15:27 or with lagged quotes). Treat close call and could flip alike: the logic is near a line.`]
  .forEach(s => document.getElementById('basis').insertAdjacentHTML('beforeend', `<li>${s}</li>`));
 </script>
 </body>
