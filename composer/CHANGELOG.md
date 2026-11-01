@@ -723,3 +723,18 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
 - Tests: 35 new (106 in test_preclose). Mutants on copies: round 1, 36 (2 survivors closed by tests);
   round 2, 30 (2 closed); round 3's 57 left boundary survivors, listed in add. 50.
 - No service redeploy: the 15:15 routine runs the CLI in this environment, which has FMP_API_KEY.
+
+## 2026-11-01 — "Value and Momentum Everywhere" read against the book (research only)
+
+- Owner's four questions answered in results.md addendum 51; exhibit results/vme-2026-11-01.html;
+  code research/vme/. No symphony changed, none proposed, no value engine.
+- Findings:
+  - The book and each engine carry no measurable value or momentum factor risk (|corr| <= 0.13 with
+    AQR's factors, 1997-2025; controls load as expected).
+  - AQR's updated factors: the paper's 50/50 Sharpe 1.25 on its dates, 0.45 since; US stock value
+    0.27 -> -0.23, max drawdown -70%.
+  - A long-only asset-class value+momentum symphony: Sharpe 0.56 vs SPY 0.92 (2012-2026); 20% in the
+    book adds 0.02 Sharpe and costs a fifth of the return.
+  - A funding-liquidity gate would cut the months the book earns: next-month Sharpe 1.74 after a
+    worsening TED shock vs 1.21 after an improving one.
+- Counter-agent: REVIEW51_PENDING

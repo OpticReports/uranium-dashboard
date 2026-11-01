@@ -187,3 +187,10 @@ deterministic rationale are listed.
     trend baskets. Sharpe 1.19 vs 1.12 over 1990-2026, timing beats 209/210 re-datings,
     but four episodes and a hindsight threshold; de-levered since 2025-07 and 25% behind
     the 200d over that stretch. Log the live stretch; revisit after it completes.
+
+12. Lead, untested (add. 51, 2026-11-01): a 12-1 month cross-asset momentum sleeve (top 3 of SPY EFA
+    EEM IEF TLT GLD DBC VNQ UUP, monthly) earned Sharpe 0.75 / DD -14% in 2012-26 (0.56 / -27% from
+    2008) with ~0.05 correlation to the book. Not a return improver; a possible replacement for part of
+    SLEEVE's cash if a diversifier is ever wanted. The paper's asset-class value leg (worst 5-year
+    return) is dead weight: 0.16 here, 0.29 in AQR's own series since 2012. Do not build a value engine
+    on its own; see add. 51 answer 4.

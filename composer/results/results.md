@@ -3580,3 +3580,137 @@ COUNTER-AGENT (preview quotes):
 
 DECISION: none on symphonies. monitor.py and the 15:15 preview pick it up on their next runs; no
 redeploy. Routine prompt: the daily check relays SHADOW FMP DOWN (POLICY lists it).
+
+## Addendum 51 — "Value and Momentum Everywhere" (Asness, Moskowitz, Pedersen 2013) read against this book (2026-11-01)
+
+Owner, 11-01: does the paper (1) improve or change our symphonies, alone or together; (2) argue for a new
+symphony; (3) have other uses, e.g. liquidity as a gate; (4) mean we should build a value engine (Buffett,
+Graham, the academic papers) for IBKR or Composer. Research only. Exhibit results/vme-2026-11-01.html;
+code research/vme/vme_study.py (all numbers below) and make_vme_chart.py; data in the scratchpad (AQR's
+updated VME factors, Ken French, Yahoo monthly ETF closes, FRED TED and VIX, add. 47's book history).
+
+WHAT THE PAPER SAYS (the parts that bear on us):
+- Value (book/market for stocks; the negative 5-year return for country indices, currencies and
+  commodities; the 5-year yield change for bonds) and momentum (the 12-1 month return) earn premia in all
+  eight markets, 1972-2011, gross, long-short, monthly rebalanced, in the most liquid names.
+- Table I: value everywhere Sharpe 0.73 (rank-weighted factor 0.72), momentum 0.67 (0.74), the 50/50
+  1.42 (1.59). US stocks alone: value 0.29 (0.26), momentum 0.33 (0.45), 50/50 0.63 (0.86).
+- The engine of the result is a correlation: value and momentum are negatively correlated everywhere
+  (-0.53 US stocks, -0.60 global), so each alone is modest and the pair is strong. Momentum is the
+  crowded trade, value the contrarian one.
+- Funding-liquidity shocks (TED and like spreads, AR(2) residuals): momentum loads positively, value
+  negatively; the 50/50 is immune. After 1998: value Sharpe 0.85 when liquidity worsens vs 0.28 when
+  it improves; momentum 0.19 vs 0.99 (Table VII).
+- Its own caveats: gross returns; shorting; long-only versions still earn (Israel and Moskowitz 2012);
+  bonds weak on the simple measure; the authors chose the simplest signals to avoid data mining.
+
+SINCE PUBLICATION (AQR's updated factor series, the paper's own construction, to 2025-12):
+  Sharpe                paper's dates  since 2011-08  1972-2025   max drawdown
+  value everywhere          0.50           0.10          0.42        -32%
+  momentum everywhere       0.63           0.30          0.56        -31%
+  50/50                     1.25           0.45          1.07        -12%
+  US stock value            0.27          -0.23          0.16        -70% (1998-05..2000-02)
+  US stock momentum         0.46           0.33          0.43        -53%
+  asset-class value         0.32           0.26          0.29        -59%
+  asset-class momentum      0.43          -0.09          0.36        -47%
+  corr(value, momentum) everywhere -0.59 on the paper's dates, -0.61 since: the diversification held;
+  the premia roughly halved. (AQR's published everywhere series gives 1.25 for the 50/50 where Table I
+  gives 1.42/1.59: the paper vol-weights the asset classes.)
+
+MEASURED ON OUR BOOK (monthly, 1997-01..2025-12; add. 47's weekly history turned into calendar months;
+rules built on 2015-26, so the book's own Sharpe there is in sample; the regressions ask only what its
+returns covary with):
+1. Factor exposure, excess returns on Mkt-RF + value + momentum everywhere (Newey-West t):
+     series   beta value [t]   beta momentum [t]   corr value / momentum   R2
+     book       -0.42 [-0.8]      -0.41 [-1.0]          -0.02 / -0.07       0.03
+     HG         -0.80 [-1.2]      -0.34 [-0.7]          -0.08 / -0.04       0.07
+     KMLM       +0.74 [+1.2]      -0.11 [-0.2]          +0.09 / -0.11       0.04
+     SLEEVE     -1.79 [-1.3]      -1.17 [-1.7]          -0.13 / +0.02       0.06
+     HARV       +0.12 [+0.8]      +0.10 [+0.8]          +0.02 / +0.01       0.00
+     SPY (control)  market beta 0.84 [23.5], R2 0.76;  QQQ (control) value -1.31 [-6.1], R2 0.66
+   The only loading past |t| 2 anywhere: HG in 2015-25, -2.6 on value and -2.3 on momentum (R2 0.09):
+   in its own years HG is short both factors (leveraged growth and vol rotation). The US HML/UMD
+   version says the same (book: HML -0.25 [-0.9], UMD -0.15 [-1.1]).
+   Meaning: the book is not a momentum-factor portfolio, trend and RSI rules notwithstanding. Its
+   monthly returns are orthogonal to the two premia. The paper's hedge (value against momentum) has
+   nothing to hedge here; what it offers us is an uncorrelated, low-Sharpe sleeve.
+2. Diversification. The factor itself at equal risk (not buyable, a bound): 20% value, Sharpe 1.48 ->
+   1.50; 50%, 1.22. Buyable long-only value ETFs: correlation with the book 0.00-0.07 (IWD, VTV, VLUE,
+   QVAL, IVAL), their own Sharpe 0.34-0.70; 30% VTV turns the book's 1.59 into 1.65, max drawdown -19%
+   into -16%, CAGR 58% into 43% (2004-2026, in-sample years included). A long-short proxy (IWD - IWF)
+   correlates 0.75 with AQR's US value and -0.12 with the book.
+3. Liquidity as a gate. TED shocks as the paper builds them, 1997-2022, 300 months (FRED's HY OAS was
+   not served without a key; VIX shocks give the same picture):
+     next-month Sharpe after   a worsening shock   an improving shock      level gate: tight / easy
+     book                            1.74                1.21                      1.38 / 1.35
+     HG                              1.40                1.15                      1.11 / 1.32
+     KMLM                            1.35                0.86                      1.10 / 0.95
+     SLEEVE                          0.72                0.40                      0.76 / 0.39
+     HARV                            0.41                0.25                      0.15 / 0.42
+     value everywhere                0.56                0.03                     -0.37 / 0.57
+     momentum everywhere            -0.16                0.64                      0.89 / 0.04
+   The factors reproduce the paper's signs. The book and every engine do better after liquidity
+   worsens (contemporaneous betas all |t| < 1.5; SPY's is +2.8). A gate that de-risks on worsening
+   liquidity would remove the months the book earns. The book is already long liquidity stress: the
+   crash sleeve, KMLM's trend, HARV's HYG guard. Differences of 0.3-0.5 in Sharpe on ~150 months a leg
+   are inside noise either way.
+4. A buyable value-and-momentum symphony. Nine asset-class ETFs (SPY EFA EEM IEF TLT GLD DBC VNQ UUP),
+   month-end, long the top 3 by 12-1 momentum and the top 3 by the paper's value signal (worst 5-year
+   return), 50/50; nothing tuned, no alternatives tried; 2012-2026:
+     series           CAGR   vol   Sharpe  max DD   corr book  corr SPY
+     momentum sleeve    9%   10%    0.75    -14%      0.07       0.52
+     value sleeve       3%   10%    0.16    -21%      0.05       0.56
+     50/50              6%    8%    0.56    -11%      0.07       0.65
+     equal weight       6%    8%    0.56    -16%      0.07       0.79
+     60/40              9%    9%    0.85    -21%      0.11       0.96
+     SPY               14%   14%    0.92    -24%      0.10       1.00
+   Momentum alone 2008-2026: Sharpe 0.56, drawdown -27%. AQR's own asset-allocation factors over
+   2012-2024: value 0.29, momentum -0.08. 20% of the 50/50 in the book: Sharpe 2.04 -> 2.06, drawdown
+   -18% -> -16%, CAGR 86% -> 68%.
+
+ANSWERS:
+1. Symphonies, alone or together: nothing to change on this evidence. The four engines carry no value
+   or momentum factor risk, so the paper's pairing logic does not apply to them, and HG's in-sample
+   tilt (short both factors) is what its rules are, not a defect. The transferable point is about
+   verification, not allocation: the book's return is rule alpha, not a documented premium, so it has
+   to keep proving itself (the shadow runner, add. 48/50) in a way a factor sleeve would not.
+2. A new symphony: no. The long-only version earns Sharpe 0.56 against SPY's 0.92 in the only period
+   the ETFs allow; its value leg is dead weight (0.16, and AQR's own asset-class value 0.29); its
+   momentum leg (0.75) is a diversified trend sleeve, which KMLM already is. Blended at 20% it adds
+   0.02 of Sharpe and gives up a fifth of the return.
+3. Liquidity as a gate: no, for this book (3 above). The paper's liquidity finding matters for the
+   factors, not for us: a value sleeve would be, like the book, a liquidity-stress beneficiary, and
+   momentum factors are the ones that need protection. HARV's HYG guard is already a credit-liquidity
+   gate on the one engine where it was shown to help. A TED-type shock is worth showing on the
+   dashboard as context, not trading.
+4. A value engine: not now, and never a value-only one. The paper is the strongest case against it: US
+   stock value alone earned 0.27 gross and long-short in the paper's sample, -0.23 since, with a -70%
+   drawdown; value is the weak leg that momentum rescues. "Load up Buffett's writings" is the wrong
+   input: Buffett's record decomposes into quality, low-beta and value with 1.6x leverage (Frazzini,
+   Kabiller, Pedersen 2018), and rules distilled from prose cannot be tested. If a stock engine is
+   wanted, it is a documented value + momentum + quality composite on a liquid US universe, built from
+   the papers' definitions (the owner can supply them), on point-in-time fundamentals, gated and
+   shadowed like everything else, and run only through ibkr-executor (Composer reads prices, not
+   fundamentals). The literature puts a long-only version at Sharpe 0.5-0.8 gross; at a 20% sleeve of
+   this book that is roughly $3-6k a year of expected edge before costs, against a multi-week build.
+   Prerequisite to ask for before any build: a point-in-time fundamentals source (FMP's as-reported
+   data needs a survivorship check). Decision: park it; revisit if the IBKR executor is live and a
+   stock sleeve is wanted for capacity (add. 15) rather than return.
+
+HONESTY BOX:
+- The book series is add. 47's reconstruction: rebuilt prices before each fund's launch, the rules' own
+  years after 2015 (its 2.1 Sharpe there is in sample), weekly points turned into months.
+- Monthly returns of a 33%-vol book against factors of 6-10% vol: a true loading could hide inside the
+  t-stats shown; what is ruled out is a large one (the controls load as expected).
+- AQR's series are not the paper's tables (1.25 vs 1.42/1.59); the comparison across time uses one
+  construction throughout, which is what matters.
+- The buyable test is one universe, one rule, one US-equity-led period, long-only, before costs; its
+  sleeves carry market beta the paper's factors do not.
+- The liquidity test is predictive (next month), not the paper's contemporaneous regression; TED ends
+  2022-01; ~150 months a leg.
+- Yahoo serves monthly bars for the long-range ETF pulls (month-end adjusted closes), as used.
+
+COUNTER-AGENT: REVIEW51_PENDING
+
+DECISION: none on symphonies; no new symphony; no value engine now. ideas-backlog entry 12 records the
+one lead worth keeping (a 12-1 cross-asset momentum sleeve as a cash replacement, untested).
