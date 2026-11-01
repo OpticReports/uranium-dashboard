@@ -3494,7 +3494,8 @@ ALSO — the 15:15 preview's live prices (owner, 11-01: "use FMP for the 15:15 p
     (TQQQ's flip +0.57% vs +0.56%).
   - At 15:27, FMP's read is two minutes fresher: SPY 753.39 vs 753.05, KMLM a close call (not could
     flip), PEJ no longer stale.
-  - Tests: P11, 22 tests, each with a broken input; 93 in the suite. Mutants of the new code: MUT50Q.
+  - Tests: P11, 22 tests, each with a broken input; 93 in the suite. Mutants of the new code, run on a copy: 37 of 37 killed (the first
+    pass's two survivors, a one-minute freshness sliver and the ledger's source field, closed by tests).
 - Not yet measured: whether FMP's minutes are real time on this plan. Monday 11-02's 15:15 run is the
   first live one. If they lag, Yahoo's newer sales are used and the report says so.
 - Composer does not publish its price feed. The shadow study (271 of 272 engine-sessions match on

@@ -711,5 +711,5 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   - Replays at a past minute are now exact.
   - First live run: Monday 11-02 at 15:15 ET.
 - Counter-agent: REVIEW50Q_PENDING
-- Tests: 22 new (93 in test_preclose); mutants of the new code: MUT50Q.
+- Tests: 22 new (93 in test_preclose); 37 of 37 mutants of the new code killed.
 - No service redeploy: the 15:15 routine runs the CLI in this environment, which has FMP_API_KEY.

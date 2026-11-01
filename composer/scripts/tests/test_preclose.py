@@ -1380,6 +1380,7 @@ class P11Preview(PreviewBase):
         self.quotes = self.fmp(age=5)                                               # Yahoo's 2-minute sales are 3 newer
         lines, _, led = self.run_preview()
         self.assertEqual(led[0]["quotes"]["fmp"], 0)
+        self.assertEqual(led[0]["quotes"]["detail"]["SPY"]["used"], "yahoo")
         self.assertTrue(any(x.startswith("live prices: FMP 1-minute bars for 0 of") and "Yahoo's last sale for" in x
                             for x in lines), lines)
         self.assertEqual(led[0]["lag"], 2.0)
