@@ -54,7 +54,8 @@ def main():
             "agree_pairs": r["placebo"]["old"].get("agree", 0), "n_rows": len(r["rows"]), "n_nonagree": len(nonagree),
             "changed": [x for x in nonagree if x["old"] != x["new"] or x["new"] != "agree"],
             "sessions": r["sessions"], "n_sessions": r["n_sessions"], "window": [r["window"][0], r["window"][-1]],
-            "placebo_changed": r["placebo"]["changed"]}
+            "placebo_changed": r["placebo"]["changed"], "profile": [x for x in r["profile"] if x["t"] >= "15:40"],
+            "windows": r["windows"], "not_wrong": r["placebo_not_wrong"]}
     html = TEMPLATE.replace("__DATA__", json.dumps(data, separators=(",", ":")))
     with open(PAGE, "w") as f:
         f.write(html)
@@ -86,7 +87,7 @@ h1{font-size:22px;margin:0 0 4px;font-weight:650}h2{font-size:16px;margin:0 0 2p
 .kpi b{display:block;font-size:22px;font-weight:650}.kpi span{color:var(--ink2);font-size:13px}
 .legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:6px 0 8px;font-size:13px;color:var(--ink2)}
 .legend span{display:inline-flex;align-items:center;gap:6px}.sw{display:inline-block;width:14px;height:12px;border-radius:3px}
-svg{display:block;width:100%;height:auto}.ax,.ax text{fill:var(--muted);font-size:11px}.lb{fill:var(--ink2);font-size:12px}.lbb{fill:var(--ink);font-size:12px;font-weight:600}
+svg{display:block;width:100%;height:auto}.chartwrap{overflow-x:auto}.chartwrap svg{min-width:680px}.ax,.ax text{fill:var(--muted);font-size:11px}.lb{fill:var(--ink2);font-size:12px}.lbb{fill:var(--ink);font-size:12px;font-weight:600}
 table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{padding:5px 7px;text-align:left;border-bottom:1px solid var(--grid)}
 thead th{color:var(--ink2);font-weight:600;font-size:12.5px}.tablewrap{overflow-x:auto}
 .notes{font-size:13.5px;color:var(--ink2)}.notes li{margin:3px 0}
@@ -96,26 +97,33 @@ thead th{color:var(--ink2);font-weight:600;font-size:12.5px}.tablewrap{overflow-
 <body>
 <main>
 <h1>Shadow runner: checking Composer's decision minute by minute</h1>
-<p class="sub-h">When the approved logic on closing prices disagrees with what Composer bought, the runner asks whether the logic, re-run on prices from Composer's ~15:45-15:55 decision window, gives what Composer holds (a knife-edge). It used to try three 5-minute snapshots from Yahoo; it now tries every minute from 15:44 to 15:56 on FMP 1-minute bars, with the old checks as fallbacks.</p>
+<p class="sub-h">When the approved logic on closing prices disagrees with what Composer bought, the runner asks whether the logic, re-run on prices from Composer's decision window, gives what Composer holds (a knife-edge). It used to try three 5-minute snapshots from Yahoo; it now tries every minute from 15:50 to 15:55 on FMP 1-minute bars, with the old checks as fallbacks. The window is measured, not assumed: Composer's holdings match the logic best at 15:54.</p>
 <div class="kpis" id="kpis"></div>
 
 <section class="card">
 <h2>Friday 10-30: the decision fell between the snapshots</h2>
-<p class="sub-h">SPY, price at the end of each minute (FMP). Above the red line, HARV's and KMLM's approved logic gives exactly the 52/48 ZVOL/PULS split Composer bought. The three 5-minute snapshots (black) were all below it, so the old check reported two mismatches; the 15:54 minute (red) is above it.</p>
-<svg id="fri" role="img" aria-label="SPY one-minute prices 15:30-16:00 on 2026-10-30 against the 52/48 threshold"></svg>
+<p class="sub-h">SPY, price at the end of each minute (FMP). Above the red line, HARV's and KMLM's approved logic gives exactly the 52/48 ZVOL/PULS split Composer bought. The three 5-minute snapshots (black) were all below it, so the old check reported two mismatches. In the window, only the 15:54 minute (red) is above it.</p>
+<div class="chartwrap"><svg id="fri" role="img" aria-label="SPY one-minute prices 15:30-16:00 on 2026-10-30 against the 52/48 threshold"></svg></div>
+</section>
+
+<section class="card">
+<h2>Where Composer's decision prices sit</h2>
+<p class="sub-h">For each minute, the approved logic re-run on that minute's prices, against what Composer bought: how many of the 272 engine-sessions it contradicts. 15:54 contradicts one. The shaded window, 15:50-15:55, is the 15:51-15:54 low a minute either side.</p>
+<div class="chartwrap"><svg id="prof" role="img" aria-label="Bars: engine-sessions the logic at each minute 15:40-16:00 contradicts"></svg></div>
+<div class="tablewrap" style="margin-top:10px"><table id="win"></table></div>
 </section>
 
 <section class="card">
 <h2>Every disagreement since July 15, by the evidence that settled it</h2>
 <p class="sub-h">Engine-sessions where the logic on closing prices differed from Composer's holdings, old rule vs new. "Search" means no price data, only a hypothetical one-ticker move within 0.3 sigma.</p>
 <div class="legend" id="lg"></div>
-<svg id="evid" role="img" aria-label="Stacked bars: evidence basis of the disagreements under the old and new rules"></svg>
+<div class="chartwrap"><svg id="evid" role="img" aria-label="Stacked bars: evidence basis of the disagreements under the old and new rules"></svg></div>
 </section>
 
 <section class="card">
 <h2>The control: deliberately wrong pairs</h2>
 <p class="sub-h">The logic on one session against Composer's holdings from another (the day before, after, or five sessions later) where those holdings differ. Every one should be a mismatch; each one excused as a knife-edge is a way a real error could hide.</p>
-<svg id="plc" role="img" aria-label="Bars: wrong pairs excused under the old and new rules"></svg>
+<div class="chartwrap"><svg id="plc" role="img" aria-label="Bars: wrong pairs excused under the old and new rules"></svg></div>
 </section>
 
 <section class="card">
@@ -168,8 +176,8 @@ const ev = D.evid;
 (function(){
   const BASES = ['fmp-1m', 'yahoo-5m', 'search', 'mismatch'];
   BASES.forEach(b => document.getElementById('lg').insertAdjacentHTML('beforeend', `<span><i class="sw" style="background:${COL[b]}"></i>${NAME[b]}</span>`));
-  const svg = document.getElementById('evid'), W = 900, rowH = 46, l = 110, r = 260, H = 2 * rowH + 24;
-  const SHORT = {'fmp-1m': 'FMP minutes', 'yahoo-5m': 'Yahoo snapshots', 'search': 'search', 'mismatch': 'mismatch'};
+  const svg = document.getElementById('evid'), W = 900, rowH = 46, l = 110, r = 280, H = 2 * rowH + 24;
+  const SHORT = {'fmp-1m': 'FMP minutes', 'yahoo-5m': 'snapshots', 'search': 'search', 'mismatch': 'mismatch'};
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   const tot = D.n_nonagree, sx = v => (W - l - r) * v / tot;
   [['old', 'old rule'], ['new', 'new rule']].forEach(([k, name], i) => {
@@ -199,16 +207,36 @@ const ev = D.evid;
       x += w; });
     el('text', {x: x + 8, y: y + 20, class: 'lb'}, svg, `${D.exc[k]} of ${D.wrong} excused`);
   });
-  el('text', {x: l, y: H - 4, class: 'ax'}, svg, `${D.pairs} wrong pairs; ${D.agree_pairs} agree under KMLM's lenient corridor check under both rules and are left out`);
+  el('text', {x: l, y: H - 4, class: 'ax'}, svg, `${D.pairs} pairs; ${D.agree_pairs} are not wrong pairs and are left out (${D.not_wrong['logic-equal'] || 0} equal the logic's own answer, ${D.not_wrong['kmlm-lenient'] || 0} sit inside KMLM's corridor)`);
 })();
+
+(function(){
+  const svg = document.getElementById('prof'), W = 900, H = 230, l = 40, r = 12, t = 16, b = 30, P = D.profile;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const max = Math.max(...P.map(x => x.bad)) + 2, bw = (W - l - r) / P.length, Y = v => t + (1 - v / max) * (H - t - b);
+  const iw = P.findIndex(x => x.t === D.window[0]), jw = P.findIndex(x => x.t === D.window[1]);
+  el('rect', {x: l + iw * bw, y: t - 10, width: (jw - iw + 1) * bw, height: H - t - b + 10, fill: 'var(--band)'}, svg);
+  el('text', {x: l + iw * bw + 4, y: t - 1, class: 'lb'}, svg, `window ${D.window[0]}-${D.window[1]}`);
+  for (let v = 0; v <= max; v += 5) { el('line', {x1: l, x2: W - r, y1: Y(v), y2: Y(v), stroke: 'var(--grid)'}, svg); el('text', {x: l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, v); }
+  P.forEach((x, i) => {
+    const best = x.bad === Math.min(...P.map(y => y.bad));
+    const rr = el('rect', {x: l + i * bw + 2, y: Y(x.bad), width: bw - 4, height: Y(0) - Y(x.bad), rx: 2, fill: best ? 'var(--s3)' : 'var(--s1)'}, svg);
+    el('text', {x: l + i * bw + bw / 2, y: Y(x.bad) - 4, 'text-anchor': 'middle', class: best ? 'lbb' : 'ax'}, svg, x.bad);
+    if (i % 2 === 0 || best) el('text', {x: l + i * bw + bw / 2, y: H - 10, 'text-anchor': 'middle', class: 'ax'}, svg, x.t);
+    rr.addEventListener('mousemove', e => tip(e, `<b>${x.t}</b><br>the logic on this minute's prices contradicts Composer on ${x.bad} of ${x.n} engine-sessions`)); rr.addEventListener('mouseleave', untip);
+  });
+})();
+document.getElementById('win').innerHTML = '<thead><tr><th>Window</th><th>Disagreements explained</th><th>Wrong pairs excused</th></tr></thead><tbody>' +
+  Object.entries(D.windows).map(([k, v]) => `<tr><td>${k}</td><td>${v.explained} of ${v.of}</td><td>${v.placebo_excused} of ${v.placebo_of}</td></tr>`).join('') +
+  `<tr><td>old rule (Yahoo snapshots, then the search)</td><td>${D.evid.old['yahoo-5m'] + D.evid.old.search} of ${D.n_nonagree}</td><td>${D.exc.old} of ${D.wrong}</td></tr></tbody>`;
 
 document.getElementById('tbl').innerHTML = '<thead><tr><th>Session</th><th>Engine</th><th>Old rule</th><th>New rule</th><th>Composer held</th><th>Logic on closes</th></tr></thead><tbody>' +
   D.changed.map(x => `<tr><td>${x.date}</td><td>${x.engine}</td><td>${x.old}</td><td>${x.new}${x.new_time ? ' @' + x.new_time : ''}</td><td>${x.live}</td><td>${x.logic}</td></tr>`).join('') + '</tbody>';
-[`Prices: FMP 1-minute bars (price at a minute = the close of the bar ending then; a fund with no trade that minute keeps its last trade, none older than 30 minutes), scaled onto Yahoo's adjusted series by the official close. Window ${D.window[0]}-${D.window[1]} ET, 16 to 4 minutes before the close (12:44-12:56 on a half-day).`,
+[`Prices: FMP 1-minute bars (price at a minute = the close of the bar ending then; a fund with no trade that minute keeps its last trade, none older than 30 minutes), scaled onto Yahoo's adjusted series by the official close. Window ${D.window[0]}-${D.window[1]} ET, 10 to 5 minutes before the close (12:50-12:55 on a half-day). FMP's day is used only if complete: SPY through the last minute, no feed cut short; otherwise the older checks decide and the row says why.`,
  `Old rule: Yahoo 5-minute snapshots at 15:45/15:50/15:55, available for the last ~60 sessions; before that, the one-ticker search within 0.3 sigma. New rule: FMP minutes, then the Yahoo snapshots, then the search.`,
  `Sessions: ${D.n_sessions} sessions with a committed holdings snapshot, ${D.sessions[0]} to ${D.sessions[1]} (the 10-26..28 no-rebalance sessions are judged on Composer's record and left out).`,
- `More minutes means more chances for a wrong holding to look explained. The control measures that directly: the new rule excuses ${D.exc.new} of ${D.wrong} wrong pairs, against ${D.exc.old} for the old one, because real minute prices replace the permissive search for older sessions.`,
- `In-sample: the window and the control were set and read on the same sessions. Composer does not publish its decision time; 15:44-15:56 brackets the 15:45-15:55 it is observed to use.`]
+ `The control mostly measures the price source, not the window: the new rule excuses ${D.exc.new} of ${D.wrong} wrong pairs against ${D.exc.old} for the old one, because real minute prices replace the permissive search on older sessions. Across windows (table above) the excused count moves by one or two.`,
+ `In-sample: the window was chosen from the profile on the same 69 sessions it is scored on, all summer-time full days. Composer does not publish its decision time.`]
  .forEach(s => document.getElementById('basis').insertAdjacentHTML('beforeend', `<li>${s}</li>`));
 </script>
 </body>

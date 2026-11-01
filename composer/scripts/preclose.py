@@ -18,7 +18,10 @@ a half-day) on live prices, with the approved trees and the evaluator of the sha
           close call: a 1-sigma move of either kind changes it (or KMLM's trigger is within 1pp);
           could flip: a 2-sigma market move or a 2-sigma one-ticker move does; firm: neither.
           The minutes include the quotes' own age (the median of the fresh ones)
-Live prices are Yahoo's latest trades. A price older than 15 minutes is stale: it is rebuilt from a
+Live prices are FMP's latest trades (batch quote, key FMP_API_KEY; add. 50), Yahoo's where FMP has none
+from today at least as recent; where both are fresh and differ by more than 0.3% the report lists it.
+The 2-year history stays Yahoo's adjusted closes, as in the shadow runner. A price older than 15
+minutes is stale: it is rebuilt from a
 fresh fund on the same index at its daily leverage (previous close x (1 + L x the index's return
 today)). A stale decision ticker that cannot be rebuilt is used as it is, named, and moved 2 sigma
 (sized from its last trade) to see whether the answer depends on it; an alternative whose decision
@@ -27,8 +30,8 @@ error a day, 8.9% on 10-30, worse than the stale price itself.)
 
 Alerts (exit 2): the gate flips today or sits within 2 sigma of flipping; SPY 2% or more off
 yesterday's close (a big day: read the whole preview); no usable preview (no live prices, the market
-shows no trading today, or the run fails). Otherwise exit 0. Report-only: GET from Composer and
-Yahoo; it never trades, edits a symphony or writes state. Each run appends one line per engine (and
+shows no trading today, or the run fails). Otherwise exit 0. Report-only: GET from Composer, FMP
+and Yahoo; it never trades, edits a symphony or writes state. Each run appends one line per engine (and
 one for the gate) to composer/results/monitor/preclose-ledger.jsonl.
 
 Usage: preclose.py [--no-ledger]
@@ -41,6 +44,7 @@ import os
 import sys
 import time
 import urllib.parse
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -62,9 +66,12 @@ STALE_SIGMA = 2.0         # a stale decision ticker that cannot be rebuilt is mo
 GATE_SIGMA = 2.0          # gate alert: within this many sigmas of flipping
 BIG_DAY = 0.02            # SPY this far off yesterday's close -> big-day alert
 TRADING_SHARE = 0.5       # fewer tickers than this share with a bar today -> the market is not trading
+FMP_QUOTES = "https://financialmodelingprep.com/stable/batch-quote"
+QUOTE_BATCH = 100         # symbols per FMP batch-quote call (the preview asks ~60: one call)
+DISAGREE = 0.003          # fresh FMP and Yahoo prices further apart than this are listed in the report
 GATE = ("SPY", 200)       # HG's gate: current-price(SPY) > moving-average-price(SPY, 200)
-HALF_DAYS = {"2026-11-27": "13:00", "2026-12-24": "13:00", "2027-11-26": "13:00"}   # NYSE 13:00 closes;
-#             used only when Yahoo gives no trading period for today
+HALF_DAYS = sr.HALF_DAYS   # NYSE 13:00 closes (shadow_runner's table); used only when Yahoo gives no trading
+#                           period for today
 # daily-reset funds on one index, with their leverage: a stale price is rebuilt from a fresh sibling
 FAMILIES = {
     "S&P 500": {"IVV": 1, "VOO": 1, "SPY": 1, "SSO": 2, "SPXL": 3, "UPRO": 3},
@@ -544,6 +551,66 @@ def fetch_all(tickers, fetch=None):
     return out, bad
 
 
+def fetch_quotes(tickers, key, tries=3):
+    """{ticker: (price, last trade UTC)} from FMP's batch quote, QUOTE_BATCH symbols a call. A refusal (any
+    answer that is not a list) is an error, never "no quotes"; the key never appears in one"""
+    out, syms = {}, sorted(tickers)
+    for i in range(0, len(syms), QUOTE_BATCH):
+        part = syms[i:i + QUOTE_BATCH]
+        url = f"{FMP_QUOTES}?" + urllib.parse.urlencode({"symbols": ",".join(part), "apikey": key})
+        err = None
+        for k in range(tries):
+            try:
+                req = urllib.request.Request(url, headers={"user-agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    rows = json.load(r)
+                if not isinstance(rows, list):
+                    raise RuntimeError(f"unexpected answer {str(rows)[:80]}")
+                got = {}
+                for q in rows:                     # a row without a positive price and a trade time is no quote
+                    if isinstance(q, dict) and q.get("symbol") in part and isinstance(q.get("price"), (int, float)) \
+                            and q["price"] > 0 and isinstance(q.get("timestamp"), (int, float)):
+                        got[q["symbol"]] = (float(q["price"]),
+                                            datetime.datetime.fromtimestamp(q["timestamp"], tz=datetime.timezone.utc))
+                out.update(got)
+                err = None
+                break
+            except Exception as e:  # noqa: BLE001
+                err = str(e).replace(key, "***") if key else str(e)
+                if k + 1 < tries:
+                    time.sleep(2 ** k)
+        if err:
+            raise RuntimeError(f"FMP {err}")
+    return out
+
+
+def fmp_quotes(key=None):
+    """a quotes callable on FMP's batch quote, or None without a key (env FMP_API_KEY)"""
+    key = key or os.environ.get("FMP_API_KEY")
+    return (lambda tickers: fetch_quotes(tickers, key)) if key else None
+
+
+def merge_quotes(data, quotes, today, now):
+    """(data with FMP's quote as today's price wherever it is from today and at least as recent as
+    Yahoo's last trade, {ticker: 'fmp' | 'yahoo'}, [(ticker, FMP price, its time, Yahoo price, its
+    time)] where both are fresh and more than DISAGREE apart). Yahoo's daily history is kept"""
+    def fresh(lt):
+        return lt is not None and (now - lt).total_seconds() <= FRESH_MIN * 60
+    out, src, diff = {}, {}, []
+    for t, (adj, raw, meta) in data.items():
+        q = quotes.get(t)
+        ylt = last_trade(meta) if today in adj else None
+        if q is None or sr.et_now(q[1]).date().isoformat() != today or (ylt and q[1] < ylt):
+            out[t], src[t] = (adj, raw, meta), "yahoo"
+            continue
+        if fresh(q[1]) and fresh(ylt) and abs(adj[today] / q[0] - 1) > DISAGREE:
+            diff.append((t, q[0], sr.et_now(q[1]).strftime("%H:%M:%S"), adj[today], sr.et_now(ylt).strftime("%H:%M:%S")))
+        a, r = dict(adj), dict(raw)
+        a[today] = r[today] = q[0]
+        out[t], src[t] = (a, r, dict(meta, regularMarketTime=int(q[1].timestamp()))), "fmp"
+    return out, src, diff
+
+
 def append_ledger(rows, path=None):
     path = path or LEDGER
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
@@ -551,9 +618,13 @@ def append_ledger(rows, path=None):
         f.write("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in rows))
 
 
-def preview(now, get_meta, get_drift=None, fetch=None):
+def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
     """(lines, alerts, ledger rows); get_meta() -> Composer's symphony-stats-meta list (may raise);
-    get_drift(cfg_all) -> (engines whose live logic differs from the approved, failure notes)"""
+    get_drift(cfg_all) -> (engines whose live logic differs from the approved, failure notes);
+    quotes(tickers) -> {ticker: (price, last trade UTC)} live quotes (may raise); None: FMP when
+    FMP_API_KEY is set, else Yahoo alone; False: Yahoo alone"""
+    no_fmp = "FMP_API_KEY not set" if quotes is None else "FMP quotes off"
+    quotes = quotes if quotes is not None else fmp_quotes()
     cfg_all = sr.load_manifest()
     day0 = sr.et_now(now).date().isoformat()
     trees = {e: sr.load_tree(sr.era_for(c, day0) or c["eras"][-1]) for e, c in cfg_all.items()}
@@ -575,6 +646,16 @@ def preview(now, get_meta, get_drift=None, fetch=None):
     if not data:
         return head, [f"PRE-CLOSE UNAVAILABLE — no prices from Yahoo ({'; '.join(f'{t}: {one_line(e)}' for t, e in sorted(bad.items())[:3])}). "
                       f"Today's rebalance runs at ~{ss['decide']} ET unpreviewed."], []
+    qfail, qsrc, qdiff = None, {}, []
+    if quotes:
+        fam = set(tick)
+        for t in tick:
+            fam |= set(family(t) or {})
+        try:
+            live_q = quotes(fam)
+        except Exception as e:  # noqa: BLE001
+            live_q, qfail = {}, one_line(e)
+        data, qsrc, qdiff = merge_quotes(data, live_q, today, now)
     trading = sum(today in a for a, _, _ in data.values())
     if trading < TRADING_SHARE * len(data):
         return head, [f"PRE-CLOSE UNAVAILABLE — only {trading} of {len(data)} tickers show a trade today: the market may "
@@ -585,6 +666,8 @@ def preview(now, get_meta, get_drift=None, fetch=None):
         need |= set(family(t) or {}) - set(data)
     if need:
         more, _ = fetch_all(need, fetch)
+        if quotes and not qfail:
+            more, _, _ = merge_quotes(more, live_q, today, now)
         data.update(more)
     prices, notes, carried = live_prices(data, today, now)
     ages = sorted((now - lt).total_seconds() / 60 for t in tick if t in data and t not in stale
@@ -592,9 +675,11 @@ def preview(now, get_meta, get_drift=None, fetch=None):
     ss["lag"] = round(max(ages[len(ages) // 2], 0.0), 1) if ages else 0.0      # the move to price runs from the quote
     left = ss["left"] + ss["lag"]
     failures = [one_line(e) for t, e in sorted(bad.items())]
+    if qfail:
+        failures.append(f"FMP quotes ({qfail}): Yahoo's prices used")
     if int(today[:4]) > max(int(d[:4]) for d in sr.NYSE_HOLIDAYS):
         failures.append("the NYSE holiday and half-day lists end before this year: extend shadow_runner.NYSE_HOLIDAYS "
-                        "and preclose.HALF_DAYS")
+                        "and HALF_DAYS")
     factor = sigma_factor(left)
     spy_age = carried.get("SPY", 0.0) if "SPY" in carried else 0.0
     g = gate(prices["SPY"], today, sigma_factor(left + (spy_age if spy_age is not None else SESSION_MIN))) \
@@ -642,17 +727,30 @@ def preview(now, get_meta, get_drift=None, fetch=None):
             rows.append({"engine": eng, "status": "unavailable", "note": f"preview error: {one_line(repr(e))}"})
     spy_move = spy_sd * factor if spy_sd else None
     lines, alerts = render(ss, g, rows, {t: n for t, n in notes.items() if t in tick}, failures, spy_move, sides)
+    yh = sorted(t for t in tick if qsrc.get(t) == "yahoo")
+    if not quotes:
+        lines.append(f"live prices: Yahoo's ({no_fmp})")
+    elif not qfail:
+        lines.append(f"live prices: FMP for {sum(qsrc.get(t) == 'fmp' for t in tick)} of {len(tick)}"
+                     + (f"; Yahoo for {', '.join(yh)} (FMP's quote older or not from today)" if yh else ""))
+    dis = [x for x in qdiff if x[0] in tick]
+    if dis:
+        lines.append(f"FMP and Yahoo disagree by more than {DISAGREE:.1%} (FMP's used): "
+                     + "; ".join(f"{t} {a:.2f} at {ta} vs {b:.2f} at {tb}" for t, a, ta, b, tb in dis))
     if g is None or all(r["status"] != "ok" for r in rows):
         alerts.append("PRE-CLOSE UNAVAILABLE — " + ("; ".join(failures) or "no live SPY price") +
                       ". Today's rebalance runs at ~" + ss["decide"] + " ET unpreviewed.")
     stamp = {"date": today, "time": ss["now"], "left": ss["left"], "lag": ss["lag"], "src": "preclose"}
+    qrec = ({"fmp": sum(qsrc.get(t) == "fmp" for t in tick), "yahoo": yh, "failed": qfail, "disagree": [list(x) for x in dis]}
+            if quotes else {"fmp": 0, "failed": no_fmp})
     dec = set()
     for t in trees.values():
         dec |= sr.decision_tickers(t)
     led = [dict(stamp, engine="GATE", **{k: v for k, v in g.items() if k != "flip_exact"},
                 sides=sides, spy_sd=round(spy_sd, 6) if spy_sd else None, sd_day=spy_prev[-1] if spy_prev else None,
                 spy_move=round(spy_move, 6) if spy_move else None,
-                betas={t: round(b, 3) for t, b in sorted(betas.items()) if t in dec and b is not None})] if g else []
+                betas={t: round(b, 3) for t, b in sorted(betas.items()) if t in dec and b is not None},
+                quotes=qrec)] if g else []
     led += [dict(stamp, **{k: v for k, v in r.items() if k != "corridor"}) for r in rows]
     return lines, alerts, led
 

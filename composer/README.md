@@ -301,13 +301,18 @@ symphony's approved tree (`fixtures/approved/manifest.json`, one era per
 approved version) on Yahoo adjusted closes and compares the answer with
 Composer's holdings (KMLM on its 10% corridor path). A difference the logic
 reproduces on Composer's actual decision-time prices is a logged knife-edge, not
-an alert. Those prices are FMP 1-minute bars at every minute from 15:44 to 15:56
-(addendum 50; key from `FMP_API_KEY`), else Yahoo 5-minute bars at 15:45, 15:50
-and 15:55, else a one-ticker move within 0.3 sigma. Alerts: a MISMATCH; COMPOSER DID
+an alert. Those prices are FMP 1-minute bars at every minute from 15:50 to 15:55
+(addendum 50: the logic matches Composer best at 15:51-15:54; key from
+`FMP_API_KEY`), else Yahoo 5-minute bars at 15:45, 15:50 and 15:55, else a
+one-ticker move within 0.3 sigma. FMP's day is used only when it is complete (SPY
+through the last minute, no feed cut short); a fallback says why in the row and the
+alert. Alerts: a MISMATCH; COMPOSER DID
 NOT REBALANCE (read from Composer's own attempt date, first session, daily
 while it lasts, then RESUMED); LOGIC DRIFT (Composer's live tree differs in
 logic from the approved one; checked every run, prices or not); SHADOW BLIND
-(an engine unchecked 3 sessions running); SHADOW RUNNER DOWN (3 failed runs).
+(an engine unchecked 3 sessions running); SHADOW RUNNER DOWN (3 failed runs);
+SHADOW FMP DOWN (FMP's 1-minute bars unusable 3 sessions running; SPY checked
+once a run).
 Ledger: `results/monitor/shadow-ledger.jsonl`, one line per engine and session.
 Approving a logic change = add an era to the manifest (tree from
 `GET /symphonies/{id}/score`) in the same commit as its CHANGELOG entry;
@@ -317,9 +322,10 @@ writing. Tests: `python3 -m unittest composer.scripts.tests.test_shadow_runner`.
 
 **`preclose.py` — what today's rebalance will do, before it does it (addendum 49).**
 Its own scheduled run at 15:15 ET on weekdays (12:15 on a half-day), not part of
-`monitor.py`. Composer decides at ~15:50 on live prices; the post-close check
-only reports afterwards. This evaluates the same approved trees on Yahoo's
-latest trades and prints:
+`monitor.py`. Composer decides at ~15:50 on live prices (its decision prices
+measure ~15:54, addendum 50); the post-close check only reports afterwards. This evaluates the same approved trees on live prices
+(FMP's latest trade from its batch quote, key `FMP_API_KEY`, addendum 50; Yahoo's
+where FMP's is older or not from today; the 2-year history stays Yahoo's) and prints:
 - the gate: SPY live vs its 200-day average, the exact SPY price that flips it
   (the average includes today's price), and what HG holds on each side of it;
 - per symphony: holdings now -> what the logic holds at the rebalance (KMLM only
@@ -334,7 +340,10 @@ latest trades and prints:
 
 A quote older than 15 minutes is rebuilt from a fresh fund on the same index at
 its leverage. Otherwise it is used as is, named, and stress-tested, and any
-alternative that reads it is flagged. Sigma includes the quotes' own age. Alerts (exit 2): GATE CLOSES / REOPENS AT TODAY'S
+alternative that reads it is flagged. Sigma includes the quotes' own age. The
+report names the source of each decision ticker's price, lists fresh FMP and
+Yahoo prices more than 0.3% apart, and says so when FMP fails or has no key
+(Yahoo's prices then). Alerts (exit 2): GATE CLOSES / REOPENS AT TODAY'S
 REBALANCE, GATE ON THE LINE (within 2 sigma), BIG DAY (SPY 2% or more off
 yesterday's close), PRE-CLOSE UNAVAILABLE. Report-only: overrides are the owner's
 call in the Composer app (RUNBOOK). Ledger: `results/monitor/preclose-ledger.jsonl`,

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Shadow runner on FMP 1-minute prices (results.md addendum 50): what the minute check changes.
 
-The daily check's decision-time test now reads FMP 1-minute prices at every minute from 15:44 to
-15:56 ET (16 to 4 minutes before the close), before Yahoo's 5-minute bars at 15:45/15:50/15:55, before
-the 0.3-sigma one-ticker search. Two measurements, old rule against new, on the same inputs:
+The daily check's decision-time test now reads FMP 1-minute prices at every minute from 15:50 to
+15:55 ET (10 to 5 minutes before the close), before Yahoo's 5-minute bars at 15:45/15:50/15:55, before
+the 0.3-sigma one-ticker search. Measurements, old rule against new, on the same inputs:
 
 1. sessions  every live-holdings snapshot session from 2026-07-15 (backfill.py's mapping, the daily
    commits of composer/results/monitor/last-snapshot.json), re-classified. The no-rebalance sessions
@@ -11,12 +11,15 @@ the 0.3-sigma one-ticker search. Two measurements, old rule against new, on the 
 2. placebo   the classifier on deliberately wrong pairs: the logic at D against Composer's holdings
    from another session (D-1, D+1, D+5) where those holdings differ (calibrate.py's design). How many
    wrong pairs each rule excuses as a knife-edge.
-Each minute knife-edge also records how many of the 13 minutes reproduce Composer and whether any lies
-inside 15:45-15:55 (not only on the margin minutes 15:44 / 15:56).
+3. profile   for every engine-session, the logic re-run at each minute 15:26-16:00 against Composer's
+   holdings: how many sessions each minute contradicts (where Composer's decision prices sit)
+4. windows   candidate windows read off the same minute tables: disagreements explained, wrong pairs
+   excused (the window choice's own evidence)
+Each minute knife-edge records the window minutes that reproduce Composer.
 
 FMP minutes are prefetched one session per call for every decision ticker (a range returns only the last
-three calendar days up to `to`); only 15:25-16:00 and each day's last bar are kept, cached in the
-scratchpad (not the repo). Writes
+three calendar days up to `to`); only 15:25-16:00 and each day's last bar are kept, cached outside the
+repo (env MINUTES_CACHE, else the system temp directory). Writes
 composer/results/shadow-minutes-2026-11-01.json. Usage: minutes_calib.py
 """
 import concurrent.futures
@@ -24,6 +27,7 @@ import datetime
 import json
 import os
 import sys
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -35,8 +39,7 @@ import shadow_runner as sr  # noqa: E402
 import backfill as bf  # noqa: E402
 
 OUT = os.path.join(HERE, "..", "..", "results", "shadow-minutes-2026-11-01.json")
-CACHE = os.environ.get("MINUTES_CACHE", "/tmp/claude-0/-home-user-uranium-dashboard/6d96d78e-807c-545a-8c5b-9d9d8e765587/"
-                       "scratchpad/fmp-minutes-cache.json")
+CACHE = os.environ.get("MINUTES_CACHE") or os.path.join(tempfile.gettempdir(), "fmp-minutes-cache.json")
 KEEP = ("15:25", "16:00")
 
 
@@ -105,17 +108,39 @@ def prefetch(tickers, cal, key):
 
 
 def minutes_from(cache):
-    """a minutes callable over the prefetched bars, with SPY's last bar as every ticker's session close"""
+    """a minutes callable over the prefetched bars, vetted as the daily check vets FMP's answer
+    (sr.vet_minutes: the calendar's close, SPY complete, no cut feed)"""
     def get(tickers, d):
-        spy = (cache.get("SPY") or {}).get(d) or {}
-        close = sr._hm(max(sr._min(k) for k in spy) + 1) if spy else None
-        out = {}
-        for t in tickers:
-            m = (cache.get(t) or {}).get(d)
-            if m:
-                out[t] = {d: dict(m, _close=close) if close else dict(m)}
-        return out
+        day = {t: (cache.get(t) or {}).get(d) for t in set(tickers) | {"SPY"}}
+        usable, _ = sr.vet_minutes({t: m for t, m in day.items() if m}, d)
+        return {t: usable[t] for t in tickers if t in usable}
     return get
+
+
+PROFILE = [sr._hm(m) for m in range(sr._min("15:26"), sr._min("16:00") + 1)]
+WINDOWS = {"15:44-15:56 (first draft)": (16, 4), "15:45-15:55": (15, 5), "15:50-15:55 (shipped)": (10, 5),
+           "15:51-15:54": (9, 6)}
+
+
+def logic_by_minute(prices, raw, minutes, tree, d):
+    """{hh:mm: target} for every minute in PROFILE that prices every decision ticker"""
+    tk = sorted(sr.decision_tickers(tree))
+    got = minutes(tk, d)
+    out = {}
+    for hh in PROFILE:
+        px = {t: sr.minute_price(((got.get(t) or {}).get(d)) or {}, hh) for t in tk}
+        if any(v is None for v in px.values()) or any(not (raw.get(t) or {}).get(d) for t in tk):
+            continue
+        p = dict(prices)
+        for t in tk:
+            p[t] = dict(prices[t])
+            p[t][d] = prices[t][d] * px[t] / raw[t][d]
+        out[hh] = sr.run_engine(p, tree, d)[1]
+    return out
+
+
+def in_window(hh, w):
+    return sr._min("16:00") - w[0] <= sr._min(hh) <= sr._min("16:00") - w[1]
 
 
 def label(status, det):
@@ -178,6 +203,11 @@ def main():
                 if ("new", d) not in cache_alts:
                     cache_alts[("new", d)] = sr.intraday_check(prices, raw, tree, d, minutes, ybars)
                 return cache_alts[("new", d)]
+
+            def by_minute(d):
+                if ("min", d) not in cache_alts:
+                    cache_alts[("min", d)] = logic_by_minute(prices, raw, minutes, tree, d)
+                return cache_alts[("min", d)]
             for j, d in enumerate(keep):
                 target, tr = dec[d]
                 if target is None:
@@ -194,10 +224,11 @@ def main():
                 row = {"date": d, "engine": eng, "version": era["version"][:8], "old": label(o_st, o_det),
                        "new": label(n_st, n_det), "live": sr.fmt_w(live), "logic": sr.fmt_w(target)}
                 if n_st == "knife-edge" and n_det["edge"].get("time"):
-                    row["new_time"] = n_det["edge"]["time"]
-                    hits = [k for k, v in alts_new(d).items() if k != "_src" and v and sr.agrees(v, live, corridor, drifted)]
-                    row.update(minutes_matched=len(hits), first=hits[0], last=hits[-1],
-                               inner=any("15:45" <= k <= "15:55" for k in hits))
+                    row.update(new_time=n_det["edge"]["time"], new_times=n_det["edge"].get("times"))
+                bm = by_minute(d)
+                row["agree_at"] = [hh for hh, alt in bm.items() if alt and sr.agrees(alt, live, corridor, drifted)]
+                row["priced"] = sorted(bm, key=sr._min)
+                row["close_agrees"] = sr.agrees(target, live, corridor, drifted)
                 if o_st != "agree" or n_st != "agree":
                     print(f"  {d} {eng:6s} old {row['old']:24s} new {row['new']:24s} {row.get('new_time', '')}", flush=True)
                 rows.append(row)
@@ -212,6 +243,13 @@ def main():
                     o2, d2 = sr.classify(sim, tree, d, target, tr, other, corridor, None, intraday=(lambda d=d: alts_old(d)))
                     n2, e2 = sr.classify(sim, tree, d, target, tr, other, corridor, None, intraday=(lambda d=d: alts_new(d)))
                     lo, ln = label(o2, d2), label(n2, e2)
+                    if not sr.agrees(target, other, corridor):
+                        bm = by_minute(d)
+                        placebo.setdefault("minute_pairs", []).append(
+                            [hh for hh, alt in bm.items() if alt and sr.agrees(alt, other, corridor)])
+                    else:                                  # not a wrong pair: the logic's own answer, or KMLM lenient
+                        why = "kmlm-lenient" if corridor and not sr.agrees(target, other) else "logic-equal"
+                        placebo.setdefault("not_wrong", {}).setdefault(why, []).append(f"{d} {eng} lag {lag:+d}")
                     placebo["old"][lo] = placebo["old"].get(lo, 0) + 1
                     placebo["new"][ln] = placebo["new"].get(ln, 0) + 1
                     if lo != ln:
@@ -221,15 +259,25 @@ def main():
     for r in rows:
         k = f"{r['old']} -> {r['new']}"
         trans[k] = trans.get(k, 0) + 1
-    ke = [x for x in rows if "minutes_matched" in x]
+    profile = [{"t": hh, "bad": sum(1 for x in rows if hh in x["priced"] and hh not in x["agree_at"]),
+                "n": sum(1 for x in rows if hh in x["priced"])} for hh in PROFILE]
+    dis = [x for x in rows if not x["close_agrees"]]
+    windows = {name: {"explained": sum(1 for x in dis if any(in_window(hh, w) for hh in x["agree_at"])), "of": len(dis),
+                      "placebo_excused": sum(1 for hs in placebo.get("minute_pairs", []) if any(in_window(hh, w) for hh in hs)),
+                      "placebo_of": len(placebo.get("minute_pairs", []))} for name, w in WINDOWS.items()}
+    ke = [x for x in rows if x.get("new_times")]
     res = {"generated": now.isoformat(timespec="seconds"), "sessions": [days[0], days[-1]], "n_sessions": len(days),
-           "minute_knife_edges": {"n": len(ke), "margin_only": sum(not x["inner"] for x in ke),
-                                  "matched_minutes": sorted(x["minutes_matched"] for x in ke)},
-           "window": sr.decision_minutes(), "transitions": trans, "placebo": placebo, "rows": rows}
+           "minute_knife_edges": {"n": len(ke), "matched_minutes": sorted(len(x["new_times"]) for x in ke),
+                                  "times": sorted(x["new_time"] for x in ke)},
+           "window": sr.decision_minutes(), "transitions": trans, "profile": profile, "windows": windows,
+           "placebo_not_wrong": {k: len(v) for k, v in (placebo.get("not_wrong") or {}).items()},
+           "placebo": {k: v for k, v in placebo.items() if k != "minute_pairs"}, "rows": rows}
     with open(OUT, "w") as f:
         json.dump(res, f, indent=1)
     print(json.dumps({"transitions": trans, "placebo_old": placebo["old"], "placebo_new": placebo["new"],
-                      "placebo_pairs": placebo["pairs"]}, indent=1))
+                      "placebo_pairs": placebo["pairs"], "not_wrong": res["placebo_not_wrong"], "windows": windows,
+                      "profile_15:40+": {x["t"]: x["bad"] for x in profile if x["t"] >= "15:40"},
+                      "knife_edge_times": res["minute_knife_edges"]}, indent=1))
 
 
 if __name__ == "__main__":

@@ -3306,31 +3306,55 @@ day runs at 12:15). RUNBOOK updated: what the preview is for, and what a pause o
 
 ## Addendum 50 — Shadow runner: Composer's decision window checked minute by minute (2026-11-01)
 
-Owner, 11-01: "is yahoo the best source here? what about our FMP API?", then "build it".
+Owner, 11-01: "is yahoo the best source here? what about our FMP API?", then "build it", then "use FMP for
+the 15:15 preview quotes too".
 
 Friday 10-30's two SHADOW MISMATCH alerts (KMLM and HARV holding ZVOL/PULS 52/48 against the logic's
 60/40) were a knife-edge the old check could not see. The split flips on RSI(SPY,4) against 25, at SPY
-756.13. SPY traded above that only at 15:51-15:54 ET, between the 5-minute snapshots (the 15:55
-snapshot read 756.07). After the close, Yahoo's bars and FMP's agree within about 3 cents; the gap was
-the time grid, not the source.
+756.13. In the decision window only one minute's price was above it: 15:54 (756.28). The snapshots read
+753.25 (15:45), 754.27 (15:50) and 756.07 (15:55; FMP's minute, Yahoo's snapshot now reads 756.10). The
+gap was the time grid, not the source: FMP's minutes and Yahoo's 5-minute bars agree to 3 cents on 92%
+of 16,853 pairs (counter-agent).
 
 CHANGE (scripts/shadow_runner.py):
 - The decision-time check reads FMP 1-minute prices (/stable/historical-chart/1min, key FMP_API_KEY) at
-  every minute from 16 to 4 minutes before the close: 15:44-15:56 ET, 12:44-12:56 on a half-day.
+  every minute from 10 to 5 minutes before the close: 15:50-15:55 ET, 12:50-12:55 on a half-day.
   - The price at a minute is the close of the 1-minute bar ending then.
   - A fund with no trade that minute keeps its last trade, none older than 30 minutes.
   - A minute missing a decision ticker's price is skipped.
-- Without FMP bars for a decision ticker, the old checks follow as before: Yahoo 5-minute snapshots
-  (15:45/15:50/15:55), then the 0.3-sigma one-ticker search.
-- The knife-edge record and the mismatch alert name the source (fmp-1m / yahoo-5m).
+- FMP's day is used only when complete (vet_minutes; the close from the exchange calendar): SPY has a
+  bar in the session's last minute, and no fund that traded in 20 of the 30 minutes before its last bar
+  stops more than 5 minutes before the close. Otherwise the older checks decide and the row says why
+  ("FMP minutes not used: ...", also in a MISMATCH alert). SPY is fetched first: a dead or lagging feed
+  costs one call. On the 77 cached sessions the rule flags 0 of 3,773 ticker-days.
+- Without usable FMP bars the old checks follow: Yahoo 5-minute snapshots (15:45/15:50/15:55), then the
+  0.3-sigma one-ticker search.
+- A knife-edge records its source (fmp-1m / yahoo-5m), every matching minute (`times`) and, as `time`,
+  the one nearest 15:54.
+- New alert SHADOW FMP DOWN: each run reads SPY's FMP minutes for the session. Unusable (refused, no key,
+  incomplete) is noted every run; 3 sessions in a row alert, then Mondays while it lasts.
+
+THE WINDOW, MEASURED (the counter-agent's finding, reproduced by minutes_calib.py): the logic on each
+minute's prices against Composer's holdings, 272 engine-sessions.
+
+  minute       15:40-15:50  15:51  15:52  15:53  15:54  15:55  15:56  15:57-16:00  official close
+  contradicts  9-13         3      5      6      1      9      13     12-21        23
+
+  Composer's decision prices sit at ~15:54. 15:51-15:54 alone explains all 23 disagreements; the shipped
+  window adds a minute either side. The first draft's 15:44-15:56 bracketed an assumed 15:45-15:55 that
+  had never been measured.
 
 FMP facts found while building:
 - One session per call: a range returns only the last 3 calendar days up to `to`, so a weekend inside
   it drops sessions. (This silently thinned the first prefetch; caught and fixed.)
 - A date FMP lacks returns the latest day it has, so bars are filtered to the session asked.
 - A refusal (any non-list answer) is an error, never read as "no bars".
-- 1-minute history goes back to at least 2023.
-- Thin funds are sparse: ZVOL traded in 108 of 390 minutes on 10-30.
+- 1-minute history goes back to at least 2023. Timestamps mark the bar's start, New York time, in summer
+  and winter time; half-days end at 12:59 (counter-agent).
+- Bars are unadjusted (checked on 62 ex-dividend days). FMP's last bar vs Yahoo's raw close: median 2 bp,
+  p99 34 bp, max 110 bp (VBF).
+- Thin funds are sparse: VBF (a decision ticker in an earlier era) trades in 40% of the minutes 15:25-
+  16:00, CORP in 67%, every other decision ticker in 92% or more.
 
 MEASURED (research/shadow/minutes_calib.py, old rule vs new on the same inputs; results/shadow-minutes-
 2026-11-01.json, exhibit .html; 69 sessions with a committed holdings snapshot, 2026-07-15..10-30):
@@ -3340,29 +3364,99 @@ MEASURED (research/shadow/minutes_calib.py, old rule vs new on the same inputs; 
   old              -                       13                            8                      2
   new             23                        -                            -                      -
 
-  None of the 23 matches only on the margin minutes 15:44 or 15:56. Matched minutes per case: median 12
-  of 13, minimum 1 (10-30 KMLM and HARV: 15:54 only).
-- Control: 370 deliberately wrong pairs (the logic at D against Composer's holdings from D-1, D+1 or D+5
-  where they differ); 18 agree under KMLM's lenient check under both rules.
-  - The old rule excused 16 of the other 352 as knife-edges: 14 by the search, 2 on snapshots.
-  - The new rule excuses 4. Two were already excused by the old snapshots. The other two are HG
-    07-27/07-28: one genuine knife-edge between those two days' holdings, seen from each side.
-  - Real minute prices replace the permissive search for sessions older than Yahoo's ~60-day bar window.
+  Matched minutes per case: median 6 of 6. Fewest: 10-30 KMLM and HARV (15:54 only), 10-08 HG
+  (15:50-15:51). `time` is 15:54 for 22 of 23.
+- Control: 370 pairs, the logic at D against Composer's holdings from D-1, D+1 or D+5 where they differ.
+  18 are not wrong pairs: 14 equal the logic's own answer at D, 4 sit inside KMLM's corridor. Of the
+  other 352:
+  - The old rule excused 16: 14 by the search, 2 on snapshots.
+  - The new rule excuses 3, all on FMP minutes. HG 07-27/07-28 is one genuine knife-edge between those
+    two days' holdings, seen from each side. SLEEVE 10-12 was excused by the old snapshots too.
+  - Across windows the excused count moves by one or two (15:44-15:56: 4; 15:45-15:55: 4; 15:50-15:55:
+    3; 15:51-15:54: 2). The 16 -> 3 comes from real prices replacing the search, not from the window.
+- Harder controls (counter-agent, its own code; first draft / shipped / old rule):
+  - One decision condition flipped, 1,650 alternatives: 19 / 16 / 25 excused.
+  - Other-day holdings at lags +-1, 2, 3, 5, 979 pairs: 11 / 10 / 33.
+  - On the sessions with Yahoo bars, the shipped window excuses 11 of 1,313 flipped conditions vs 13 for
+    the snapshots, and 1 of 326 weight-shifted targets vs 0.
 - Ledger:
   - The 10-30 KMLM and HARV live rows were reclassified mismatch -> knife-edge at 15:54 (fmp-1m) by
-    research/shadow/reclassify_live.py, with a 'reclassified' field (on, from, by).
+    research/shadow/reclassify_live.py. Their 'reclassified' field records on, from, by, and `was` (the
+    original why/checked). They hold under the final window: 15:54 is inside it.
+  - state.json and last-snapshot.json say mismatch for 10-30 until the next run overwrites them.
   - The backfill rows keep add. 48's classification; minutes_calib.py records theirs under the new rule.
-  - backfill.py now classifies with the same chain (checked end to end, written outside the repo).
+  - backfill.py now classifies with the same chain.
+- Tests: 121 shadow tests (12 new: S18 and S17's time rule). 36 of 36 mutants of the new and fixed code
+  are killed, including the counter-agent's surviving ones.
 
 HONESTY BOX:
-- In-sample: the window was set, and the control read, on the same 69 sessions.
+- In-sample: the window was read off the per-minute profile of the same 69 sessions it is scored on.
+  All are summer-time full days; half-days and winter time are checked on FMP's data, not end to end.
 - A wrong holding one minute's price away from the logic is excused by design: a knife-edge and a
-  one-minute error look alike. The control's wrong pairs are other days' real holdings, not every kind
-  of error.
-- Composer does not publish its decision time. 15:44-15:56 brackets the 15:45-15:55 it is observed to use.
-- FMP is one more data dependency. If it fails, the old checks decide, and the row's source field shows it.
+  one-minute error look alike. A one-condition difference within 1% of its threshold is excused 7 of 16
+  times by the shipped window, 8 by the old rule (counter-agent). Minute-based knife-edges never alert.
+- Composer does not publish its decision time; 15:54 is measured, not documented. If it moves outside
+  15:50-15:55, disagreements show as mismatches (alerts), not hidden ones.
+- FMP is one more data dependency. Unusable data now falls back with the reason in the row, and SHADOW
+  FMP DOWN fires after 3 sessions. Whether FMP's same-day minutes are complete by the 16:35 ET run is
+  unmeasured until Monday 11-02; the per-run SPY check measures it.
 - Minute prices are raw, scaled onto the adjusted series by Yahoo's adjusted/raw factor for the day.
+- The preview (add. 49) still times Composer's decision at 15:50. The measured ~15:54 adds ~4 minutes
+  to its horizon at 15:15: sigma ~6% narrow, inside the headroom of its 0.6 scale (measured 0.52-0.57).
+  Re-baseline at the next preview study.
 
-COUNTER-AGENT: REVIEW50_PENDING
+COUNTER-AGENT (minute check): SHIP WITH FIXES. It rebuilt the study with its own code and reproduced
+every row.
+- Should-fix failure modes, both fixed:
+  - No completeness check: a lagging SPY series shifted the window, raising false MISMATCHes or
+    excusing wrong pairs, and a cut feed passed. Fixed by vet_minutes and the fallback note.
+  - FMP failures were silent. Fixed: the note on every fallback and SHADOW FMP DOWN.
+- Two production paths untested, 16 of its 49 mutants surviving (10 real gaps): 12 tests added.
+- Wrong or overstated claims, all corrected here and in the exhibit:
+  - the 18 control pairs;
+  - "brackets the 15:45-15:55 it is observed to use";
+  - "the control measures that directly";
+  - the 10-30 minute narrative;
+  - ZVOL named as the thin decision ticker;
+  - the test count.
+  Its per-minute profile is now the window's basis.
+- Nits fixed:
+  - `time` / `times`;
+  - the reclassified rows keep their original text;
+  - the calibration cache path;
+  - the CHANGELOG wording;
+  - one call for a dead feed.
+- Outside this change: the FMP key sat as a literal default in barbell-lab/research/barbell_timer/
+  fetch_data.py in this public repo since 2026-08-12 (with a FRED key). Removed in 528f6d6. The leaked
+  values must be rotated (owner).
 
-DECISION: none on symphonies. monitor.py picks it up on the next run; no redeploy.
+ALSO — the 15:15 preview's live prices (owner, 11-01: "use FMP for the 15:15 preview quotes too"):
+- scripts/preclose.py now prices each ticker from FMP's batch quote (/stable/batch-quote): one call for
+  the ~60 tickers, same-index siblings included.
+  - FMP's price is used where its last trade is from today and at least as recent as Yahoo's;
+    otherwise Yahoo's.
+  - FMP's trade time is the quote's time: the 15-minute stale rule, the quote-age sigma and the
+    sibling rebuild all run on it.
+  - Yahoo's 2-year adjusted history is unchanged.
+- The report names the source. Fresh FMP and Yahoo prices more than 0.3% apart are listed (FMP's is
+  used). If FMP fails or has no key, the report says so and uses Yahoo's prices.
+- The GATE ledger row records `quotes`: the FMP count, Yahoo-priced tickers, any failure and
+  disagreements.
+- Checked on Friday 10-30's close:
+  - 58 of 58 tickers quoted in one 0.4 s call.
+  - Trade times are real: PEJ 15:59:42, ZVOL 15:59:15, the rest 16:00:00-02.
+  - Prices: 55 equal Yahoo's; IVV is 3 cents apart. On the two thin funds FMP has the later trade
+    (PEJ 66.49 vs 66.39; ZVOL 7.08 vs 7.085).
+  - Replayed at 15:59 against Yahoo-only, the read is the same for all four engines.
+- Tests: 17 new (P11), each paired with a broken input; 88 in the suite. All 24 mutants of the new code
+  are killed. The first pass's one survivor exposed a needless retry on a quote without a trade time;
+  fixed.
+- Not yet measured: FMP vs Yahoo intraday. Monday 11-02's 15:15 run is the first live one, and the
+  ledger's `quotes` record is the measurement.
+- Unknown: whether FMP's thin-fund prints are odd lots (which do not set the consolidated last sale).
+  It matters for the held-only ZVOL, PULS and VXZ, and for PEJ, a SLEEVE decision ticker.
+
+COUNTER-AGENT (preview quotes): REVIEW50Q_PENDING
+
+DECISION: none on symphonies. monitor.py and the 15:15 preview pick it up on their next runs; no
+redeploy. Routine prompt: the daily check relays SHADOW FMP DOWN (POLICY lists it).

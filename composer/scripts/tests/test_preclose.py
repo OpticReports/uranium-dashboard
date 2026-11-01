@@ -29,6 +29,11 @@ BROKEN-INPUT counterpart that must land on the other side. The counter-agent's s
       closed hours say so, the quotes' age widens every sigma, a stale SPY's own age widens the
       gate's, sigma and betas end yesterday
   P10 ledger appends; exit codes; a crashed preview still alerts
+  P11 live prices from FMP's batch quote (add. 50): FMP's price wherever it is from today and at
+      least as recent as Yahoo's, Yahoo's otherwise; a stale Yahoo price rescued, siblings too; a
+      market Yahoo shows shut but FMP shows trading is previewed; disagreements listed with their
+      times; FMP down or no key -> Yahoo's prices, said in the report; a refusal is an error, retried,
+      the key never in it; batches; the ledger's record of the source
 
 Run: python3 -m unittest composer.scripts.tests.test_preclose -v
 """
@@ -42,10 +47,13 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
+import urllib.parse
 import zoneinfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
+os.environ.pop("FMP_API_KEY", None)          # the suite never reaches FMP: quotes come from the tests
 import preclose as pc  # noqa: E402
 import shadow_runner as sr  # noqa: E402
 
@@ -796,8 +804,8 @@ class P8EngineRender(unittest.TestCase):
 
 
 # ------------------------------------------------------------------ P9
-class P9Preview(unittest.TestCase):
-    """end to end on the frozen 2026-10-28 closes as if they were 15:15 prices"""
+class PreviewBase(unittest.TestCase):
+    """the frozen 2026-10-28 closes as if they were 15:15 prices; no tests of its own"""
     @classmethod
     def setUpClass(cls):
         with gzip.open(FIXTURE) as f:
@@ -807,6 +815,7 @@ class P9Preview(unittest.TestCase):
         self.now = et(2026, 10, 28, 15, 15)
         self.period = {"start": ts(et(2026, 10, 28, 9, 30)), "end": ts(et(2026, 10, 28, 16, 0))}
         self.stale, self.extra, self.down, self.no_today = {}, {}, False, False
+        self.quotes = None                   # None: no FMP key (the suite pops it), Yahoo's prices alone
 
     def fetch(self, t):
         if self.down:
@@ -836,8 +845,12 @@ class P9Preview(unittest.TestCase):
             if meta == "down":
                 raise SystemExit("error: HTTP 503\nService Unavailable")
             return self.meta(meta, drop)
-        return pc.preview(now or self.now, get_meta, (lambda c: drift) if drift else None, fetch=self.fetch)
+        return pc.preview(now or self.now, get_meta, (lambda c: drift) if drift else None, fetch=self.fetch,
+                          quotes=self.quotes)
 
+
+class P9Preview(PreviewBase):
+    """end to end on the frozen 2026-10-28 closes as if they were 15:15 prices (Yahoo's alone)"""
     def test_reproduces_composer(self):
         lines, alerts, led = self.run_preview()
         rows = {r["engine"]: r for r in led if r["engine"] != "GATE"}
@@ -1025,6 +1038,247 @@ class P10LedgerExit(unittest.TestCase):
         code, out = self.run_main(boom)
         self.assertEqual(code, 2)
         self.assertIn("PRE-CLOSE UNAVAILABLE — the preview failed: KeyError('SPY')", out)
+
+
+# ------------------------------------------------------------------ P11
+class Resp(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class P11Quotes(unittest.TestCase):
+    """FMP's batch quote as the live price; Yahoo's daily history kept"""
+    T = "2026-10-28"
+
+    def setUp(self):
+        self.now = et(2026, 10, 28, 15, 15)
+
+    def yahoo(self, age=2, today=True, price=100.0):
+        adj = {"2026-10-26": 98.0, "2026-10-27": 99.0}
+        if today:
+            adj[self.T] = price
+        return adj, dict(adj), {"regularMarketTime": ts(self.now - datetime.timedelta(minutes=age))}
+
+    def q(self, price, age=1, days_back=0):
+        return price, self.now - datetime.timedelta(minutes=age, days=days_back)
+
+    def test_fresher_fmp_used(self):
+        data = {"SPY": self.yahoo(age=5)}
+        out, src, diff = pc.merge_quotes(data, {"SPY": self.q(100.1, age=1)}, self.T, self.now)
+        adj, raw, meta = out["SPY"]
+        self.assertEqual((adj[self.T], raw[self.T], src["SPY"]), (100.1, 100.1, "fmp"))
+        self.assertEqual(meta["regularMarketTime"], ts(self.now - datetime.timedelta(minutes=1)))
+        self.assertEqual((adj["2026-10-27"], data["SPY"][0][self.T]), (99.0, 100.0))   # history kept, input not mutated
+        out, src, _ = pc.merge_quotes(data, {"SPY": self.q(100.1, age=9)}, self.T, self.now)   # broken: FMP older
+        self.assertEqual((out["SPY"][0][self.T], src["SPY"]), (100.0, "yahoo"))
+        self.assertEqual(out["SPY"][2]["regularMarketTime"], data["SPY"][2]["regularMarketTime"])
+
+    def test_equal_time_prefers_fmp(self):
+        out, src, _ = pc.merge_quotes({"SPY": self.yahoo(age=3)}, {"SPY": self.q(100.2, age=3)}, self.T, self.now)
+        self.assertEqual(src["SPY"], "fmp")
+
+    def test_only_todays_quote(self):
+        out, src, _ = pc.merge_quotes({"SPY": self.yahoo(age=30)}, {"SPY": self.q(101.0, days_back=1)}, self.T, self.now)
+        self.assertEqual((out["SPY"][0][self.T], src["SPY"]), (100.0, "yahoo"))         # yesterday's quote: never today's price
+        out, src, _ = pc.merge_quotes({"SPY": self.yahoo(age=30)}, {}, self.T, self.now)  # no quote at all
+        self.assertEqual(src["SPY"], "yahoo")
+
+    def test_today_injected_when_yahoo_has_none(self):
+        out, src, _ = pc.merge_quotes({"SPY": self.yahoo(today=False)}, {"SPY": self.q(100.3)}, self.T, self.now)
+        self.assertEqual((out["SPY"][0][self.T], src["SPY"]), (100.3, "fmp"))
+        fresh, stale = pc.freshness(out, self.T, self.now)
+        self.assertEqual((fresh, stale), ({"SPY": 100.3}, {}))
+        out, src, _ = pc.merge_quotes({"SPY": self.yahoo(today=False)}, {"SPY": self.q(100.3, days_back=1)}, self.T, self.now)
+        self.assertNotIn(self.T, out["SPY"][0])                                          # broken: yesterday's quote
+
+    def test_disagreement_listed(self):
+        _, _, diff = pc.merge_quotes({"SPY": self.yahoo(age=2)}, {"SPY": self.q(100.5, age=1)}, self.T, self.now)
+        self.assertEqual(diff, [("SPY", 100.5, "15:14:00", 100.0, "15:13:00")])
+        _, _, diff = pc.merge_quotes({"SPY": self.yahoo(age=2)}, {"SPY": self.q(100.25, age=1)}, self.T, self.now)
+        self.assertEqual(diff, [])                                                        # within 0.3%
+        _, _, diff = pc.merge_quotes({"SPY": self.yahoo(age=2)}, {"SPY": self.q(99.5, age=1)}, self.T, self.now)
+        self.assertEqual(len(diff), 1)                                                    # either way
+        _, src, diff = pc.merge_quotes({"SPY": self.yahoo(age=20)}, {"SPY": self.q(100.5, age=1)}, self.T, self.now)
+        self.assertEqual((diff, src["SPY"]), ([], "fmp"))                                # Yahoo stale: a move, not a disagreement
+
+    def fake_fmp(self, answers, calls):
+        def urlopen(req, timeout=None):
+            calls.append(req.full_url)
+            a = answers.pop(0) if answers else []
+            if isinstance(a, Exception):
+                raise a
+            return Resp(json.dumps(a).encode())
+        return unittest.mock.patch.object(pc.urllib.request, "urlopen", urlopen)
+
+    def test_fetch_quotes_parses(self):
+        t0 = ts(self.now)
+        rows = [{"symbol": "SPY", "price": 690.1, "timestamp": t0}, {"symbol": "QQQ", "price": 0, "timestamp": t0},
+                {"symbol": "TLT", "price": 81.2}, {"symbol": "XXX", "price": 5.0, "timestamp": t0}, "junk"]
+        calls = []
+        with self.fake_fmp([rows] * 3, calls), unittest.mock.patch.object(pc.time, "sleep"):
+            q = pc.fetch_quotes({"SPY", "QQQ", "TLT"}, "SECRETKEY")
+        self.assertEqual(q, {"SPY": (690.1, self.now)})                                  # no price, no time, not asked: dropped
+        self.assertEqual(len(calls), 1)                                                   # a dropped row is not a failed call
+        args = urllib.parse.parse_qs(urllib.parse.urlparse(calls[0]).query)
+        self.assertEqual(args["symbols"], ["QQQ,SPY,TLT"])
+        self.assertTrue(calls[0].startswith(pc.FMP_QUOTES))
+
+    def test_refusal_is_an_error_without_the_key(self):
+        calls = []
+        refusal = {"Error Message": "Limit Reach for apikey=SECRETKEY"}
+        with self.fake_fmp([refusal] * 3, calls), unittest.mock.patch.object(pc.time, "sleep"):
+            with self.assertRaises(RuntimeError) as cm:
+                pc.fetch_quotes({"SPY"}, "SECRETKEY")
+        self.assertEqual(len(calls), 3)                                                   # retried
+        self.assertNotIn("SECRETKEY", str(cm.exception))
+        self.assertIn("Limit Reach", str(cm.exception))
+        calls = []
+        with self.fake_fmp([RuntimeError("refused https://x?apikey=SECRETKEY")] * 3, calls), \
+                unittest.mock.patch.object(pc.time, "sleep"), self.assertRaises(RuntimeError) as cm:
+            pc.fetch_quotes({"SPY"}, "SECRETKEY")
+        self.assertNotIn("SECRETKEY", str(cm.exception))
+        calls = []                                                                        # broken: refused once, then answered
+        with self.fake_fmp([refusal, [{"symbol": "SPY", "price": 1.0, "timestamp": ts(self.now)}]], calls), \
+                unittest.mock.patch.object(pc.time, "sleep"):
+            self.assertEqual(pc.fetch_quotes({"SPY"}, "SECRETKEY"), {"SPY": (1.0, self.now)})
+        self.assertEqual(len(calls), 2)
+
+    def test_batches(self):
+        calls = []
+        with self.fake_fmp([], calls), unittest.mock.patch.object(pc, "QUOTE_BATCH", 2):
+            pc.fetch_quotes({"A", "B", "C", "D", "E"}, "K")
+        got = [urllib.parse.parse_qs(urllib.parse.urlparse(u).query)["symbols"][0] for u in calls]
+        self.assertEqual(got, ["A,B", "C,D", "E"])
+
+    def test_key_from_the_environment(self):
+        with unittest.mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("FMP_API_KEY", None)
+            self.assertIsNone(pc.fmp_quotes())
+            os.environ["FMP_API_KEY"] = "ENVKEY"
+            seen = []
+            with unittest.mock.patch.object(pc, "fetch_quotes", lambda t, k: seen.append(k) or {}):
+                pc.fmp_quotes()({"SPY"})
+            self.assertEqual(seen, ["ENVKEY"])
+
+
+class P11Preview(PreviewBase):
+    """the preview end to end with FMP quotes (the frozen 2026-10-28 closes as 15:15 prices)"""
+    def setUp(self):
+        super().setUp()
+        self.asked = []
+
+    def fmp(self, age=1, only=None, scale=None, days_back=0, fail=None):
+        def quotes(tickers):
+            self.asked.append(set(tickers))
+            if fail:
+                raise RuntimeError(fail)
+            out = {}
+            for t in tickers:
+                s = self.fx["prices"].get(t) or self.extra.get(t)
+                if s is None or (only is not None and t not in only):
+                    continue
+                out[t] = (s[max(s)] * (scale or {}).get(t, 1.0),
+                          self.now - datetime.timedelta(minutes=age, days=days_back))
+            return out
+        return quotes
+
+    def test_stale_yahoo_rescued(self):
+        self.stale = {t: self.fx["prices"][t][max(self.fx["prices"][t])] * 0.9 for t in ("SPY", "SSO", "SPXL", "UPRO")}
+        self.quotes = self.fmp()
+        lines, _, led = self.run_preview()
+        g = led[0]
+        self.assertAlmostEqual(g["spy"], 772.31, places=2)
+        self.assertNotIn("stale", g)
+        self.assertEqual(g["lag"], 1.0)                                                   # FMP's quotes are a minute old
+        self.assertEqual((g["quotes"]["failed"], g["quotes"]["yahoo"]), (None, []))
+        self.assertTrue(any(x.startswith("live prices: FMP for") for x in lines), lines)
+        self.assertTrue(any("SSO" in a for a in self.asked[0]))                          # one call, siblings included
+        self.assertEqual(len(self.asked), 1)
+        self.quotes = self.fmp(days_back=1)                                               # broken: FMP's quotes are yesterday's
+        lines, _, led = self.run_preview()
+        self.assertAlmostEqual(led[0]["spy"], 772.31 * 0.9, places=2)
+        self.assertIn("no fresh sibling", led[0]["stale"])
+        self.assertIn("SPY", led[0]["quotes"]["yahoo"])
+
+    def test_sibling_quote_used(self):
+        self.extra["IVV"] = {d: p * 0.9 for d, p in self.fx["prices"]["SPY"].items()}
+        self.stale = {t: self.fx["prices"][t][max(self.fx["prices"][t])] * 0.9 for t in ("SPY", "SSO", "SPXL", "UPRO")}
+        self.stale["IVV"] = 600.0                                                         # Yahoo's IVV stale too
+        self.quotes = self.fmp(only={"IVV"})                                              # FMP: IVV only
+        g = self.run_preview()[2][0]
+        self.assertAlmostEqual(g["spy"], 772.31, places=1)
+        self.assertIn("via IVV", g["stale"])
+        self.quotes = self.fmp(only=set())                                                # broken: no FMP quote for IVV
+        g = self.run_preview()[2][0]
+        self.assertIn("no fresh sibling", g["stale"])
+
+    def test_market_trading_on_fmp(self):
+        self.no_today = True                                                              # Yahoo shows no bar today
+        self.quotes = self.fmp()
+        lines, alerts, led = self.run_preview()
+        self.assertFalse(any(a.startswith("PRE-CLOSE UNAVAILABLE") for a in alerts), alerts)
+        self.assertAlmostEqual(led[0]["spy"], 772.31, places=2)
+        self.quotes = self.fmp(days_back=1)                                               # broken: FMP shows no trade today either
+        _, alerts, led = self.run_preview()
+        self.assertTrue(alerts[-1].startswith("PRE-CLOSE UNAVAILABLE") and "show a trade today" in alerts[-1])
+
+    def test_disagreement_in_the_report(self):
+        self.quotes = self.fmp(scale={"TQQQ": 1.01})
+        lines, _, led = self.run_preview()
+        dis = [x for x in lines if x.startswith("FMP and Yahoo disagree")]
+        self.assertEqual(len(dis), 1, lines)
+        self.assertIn("TQQQ", dis[0])
+        self.assertEqual([d[0] for d in led[0]["quotes"]["disagree"]], ["TQQQ"])
+        self.quotes = self.fmp()                                                          # broken: they agree
+        lines, _, led = self.run_preview()
+        self.assertFalse(any(x.startswith("FMP and Yahoo disagree") for x in lines))
+        self.assertEqual(led[0]["quotes"]["disagree"], [])
+
+    def test_fmp_down(self):
+        self.quotes = self.fmp(fail="FMP unexpected answer {'Error Message': 'Limit Reach'}")
+        lines, alerts, led = self.run_preview()
+        self.assertTrue(any("FMP quotes (FMP unexpected answer" in x and "Yahoo's prices used" in x for x in lines), lines)
+        self.assertFalse(any(a.startswith("PRE-CLOSE UNAVAILABLE") for a in alerts))
+        self.assertEqual(led[0]["lag"], 2.0)                                              # Yahoo's quotes
+        self.assertTrue(led[0]["quotes"]["failed"].startswith("FMP unexpected answer"))
+        self.assertFalse(any(x.startswith("live prices: FMP") for x in lines))
+
+    def test_no_key_said(self):
+        lines, _, led = self.run_preview()                                                # the suite has no key
+        self.assertIn("live prices: Yahoo's (FMP_API_KEY not set)", lines)
+        self.assertEqual(led[0]["quotes"], {"fmp": 0, "failed": "FMP_API_KEY not set"})
+        self.quotes = self.fmp()                                                          # broken: a key
+        lines, _, led = self.run_preview()
+        self.assertNotIn("live prices: Yahoo's (FMP_API_KEY not set)", lines)
+        n = led[0]["quotes"]["fmp"]
+        self.assertGreater(n, 20)
+        self.assertIn(f"live prices: FMP for {n} of {n}", lines)
+        self.quotes = False                                                               # switched off: said as such
+        lines, _, led = self.run_preview()
+        self.assertIn("live prices: Yahoo's (FMP quotes off)", lines)
+        self.assertEqual(led[0]["quotes"]["failed"], "FMP quotes off")
+
+    def test_default_is_fmp_with_a_key(self):
+        seen = []
+
+        def fake(tickers, key):
+            seen.append(key)
+            return self.fmp()(tickers)
+        with unittest.mock.patch.dict(os.environ, {"FMP_API_KEY": "ENVKEY"}), \
+                unittest.mock.patch.object(pc, "fetch_quotes", fake):
+            led = self.run_preview()[2]                                                   # quotes=None, as main() calls it
+        self.assertEqual(seen, ["ENVKEY"])
+        self.assertGreater(led[0]["quotes"]["fmp"], 20)
+
+    def test_older_fmp_named(self):
+        self.quotes = self.fmp(age=5)                                                     # Yahoo's 2-minute quotes are newer
+        lines, _, led = self.run_preview()
+        self.assertEqual(led[0]["quotes"]["fmp"], 0)
+        self.assertTrue(any(x.startswith("live prices: FMP for 0 of") and "Yahoo for" in x for x in lines), lines)
+        self.assertEqual(led[0]["lag"], 2.0)
 
 
 if __name__ == "__main__":

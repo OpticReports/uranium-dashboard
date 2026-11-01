@@ -49,10 +49,12 @@ def main():
         print(f"{d} {eng}: {r['status']} -> {st} {det.get('edge', {}).get('time', '')} {det.get('edge', {}).get('src', '')}")
         if st == r["status"]:
             continue
-        new = {k: v for k, v in r.items() if k not in ("edge", "why", "checked", "path")}
+        new = {k: v for k, v in r.items() if k not in ("edge", "why", "checked", "path", "fmp")}
         new.update(status=st, **det)
+        w = sr.decision_minutes()
         new["reclassified"] = {"on": now.date().isoformat(), "from": r["status"],
-                               "by": "add. 50: FMP 1-minute prices 15:44-15:56 ET"}
+                               "by": f"add. 50: FMP 1-minute prices {w[0]}-{w[-1]} ET",
+                               "was": {k: r[k] for k in ("why", "checked") if k in r}}
         out.append(new)
     if out and not dry:
         sr.write_ledger(out)

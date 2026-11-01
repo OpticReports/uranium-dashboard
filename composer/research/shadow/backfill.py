@@ -2,8 +2,8 @@
 """Shadow-runner backfill (results.md addendum 48): replay the approved logic, era by era, against
 every live-holdings snapshot the daily monitor committed to git (composer/results/monitor/
 last-snapshot.json, 2026-07-15 onward), on the same Yahoo prices the daily check uses, with the
-daily check's classifier: knife-edges confirmed on FMP 1-minute prices at every minute 15:44-15:56 ET
-(add. 50; FMP keeps years of them), else on Yahoo 5-minute bars at 15:45/15:50/15:55 (the last ~60
+daily check's classifier: knife-edges confirmed on FMP 1-minute prices at every minute 15:50-15:55 ET
+(add. 50; FMP keeps years of them; vetted as the daily check vets them), else on Yahoo 5-minute bars at 15:45/15:50/15:55 (the last ~60
 sessions), else the 0.3-sigma one-ticker search; KMLM on its corridor path when the previous
 session has a snapshot.
 

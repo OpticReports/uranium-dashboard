@@ -73,8 +73,16 @@ CORRIDOR_SLACK = 0.01     # KMLM: trigger ambiguity band; lenient check without 
 KNIFE_OFFSETS = (15, 10, 5)   # minutes before the session close (15:45/15:50/15:55; 12:45.. on half-days)
 KNIFE_TIMES = ("15:45", "15:50", "15:55")    # the offsets on a normal day
 STALE_BAR_MIN = 30        # a 5-minute bar older than this before the decision time counts as missing
-MINUTE_WINDOW = (16, 4)   # FMP 1-minute check: every minute from 16 to 4 minutes before the close (15:44-15:56)
+MINUTE_WINDOW = (10, 5)   # FMP 1-minute check: every minute from 10 to 5 minutes before the close (15:50-15:55).
+                          # Measured (add. 50, 272 engine-sessions): the logic at 15:54 contradicts Composer on 1,
+                          # at 15:51-15:53 on 3-6, at 15:44-15:50 and 15:55-15:56 on 9-13: 15:51-15:54, a minute
+                          # either side
+DECISION_MINUTE = 6       # 15:54, the best-matching minute: a knife-edge's 'time' is the matched minute nearest it
 FMP_MINUTES = "https://financialmodelingprep.com/stable/historical-chart/1min"
+FMP_DENSE, FMP_CUT = 20, 5   # a ticker with bars in >= 20 of the 30 minutes before its last bar that stops more than
+                          # 5 minutes before the close is a cut feed, not a thin fund (0 of 3,773 FMP ticker-days)
+FMP_ALERT = 3             # sessions in a row with FMP's 1-minute bars unusable before an alert
+HALF_DAYS = {"2026-11-27": "13:00", "2026-12-24": "13:00", "2027-11-26": "13:00"}   # NYSE 13:00 closes
 KNIFE_SIGMA = 0.3         # fallback search radius without bars, in 20-session daily sigmas: p95 of the
                           # measured 15:45 ET -> official close move (add. 48 calibration)
 CASH_SHARE_MAX = 0.02     # KMLM: uninvested cash above this (a deposit in flight) -> lenient check
@@ -528,7 +536,7 @@ def at_times(prices, raw, bars, tree, d):
     decision minutes (Yahoo 5-minute bars, scaled onto the adjusted series by the official close);
     None if a bar or a raw close is missing for a decision ticker"""
     bars = bars or {}
-    close = next((b[d]["_close"] for b in bars.values() if (b or {}).get(d, {}).get("_close")), "16:00")
+    close = next((b[d]["_close"] for b in bars.values() if (b or {}).get(d, {}).get("_close")), session_close(d))
     tk = decision_tickers(tree)
     out = {}
     for hh in decision_times(close):
@@ -542,7 +550,7 @@ def at_times(prices, raw, bars, tree, d):
             p[t][d] = prices[t][d] * px / rc
         _, alt, _ = run_engine(p, tree, d)
         out[hh] = alt
-    return out
+    return dict(out, _close=close)
 
 
 def minute_price(day_min, hhmm, max_age=STALE_BAR_MIN):
@@ -553,8 +561,14 @@ def minute_price(day_min, hhmm, max_age=STALE_BAR_MIN):
     return day_min[max(ks, key=_min)] if ks else None
 
 
+def session_close(d):
+    """the regular session's close on d from the exchange calendar ('HH:MM' ET)"""
+    return HALF_DAYS.get(d, "16:00")
+
+
 def decision_minutes(close="16:00"):
-    """every minute of Composer's decision window, a minute either side: 15:44 .. 15:56 on a full day"""
+    """every minute of Composer's decision window: 15:50 .. 15:55 on a full day (12:50 .. 12:55 on a
+    half-day), the measured 15:51-15:54 a minute either side (add. 50)"""
     return tuple(_hm(_min(close) - k) for k in range(MINUTE_WINDOW[0], MINUTE_WINDOW[1] - 1, -1))
 
 
@@ -568,7 +582,7 @@ def at_minutes(prices, raw, minutes, tree, d):
     for t in tk:
         if not (minutes.get(t) or {}).get(d) or not (raw.get(t) or {}).get(d) or d not in prices.get(t, {}):
             return None
-    close = next((m[d]["_close"] for m in minutes.values() if (m or {}).get(d, {}).get("_close")), "16:00")
+    close = next((m[d]["_close"] for m in minutes.values() if (m or {}).get(d, {}).get("_close")), session_close(d))
     out = {}
     for hh in decision_minutes(close):
         px = {t: minute_price(minutes[t][d], hh) for t in tk}
@@ -579,22 +593,34 @@ def at_minutes(prices, raw, minutes, tree, d):
             p[t] = dict(prices[t])
             p[t][d] = prices[t][d] * px[t] / raw[t][d]
         out[hh] = run_engine(p, tree, d)[1]
-    return dict(out, _src="fmp-1m") if out else None
+    return dict(out, _src="fmp-1m", _close=close) if out else None
 
 
 def intraday_check(prices, raw, tree, d, minutes=None, bars=None):
     """decision-time targets for classify(): FMP 1-minute prices across the window, else Yahoo 5-minute
-    bars at 15:45/15:50/15:55, else None (then the one-ticker search decides)"""
+    bars at 15:45/15:50/15:55, else none (then the one-ticker search decides). '_src' names the source;
+    '_fmp' says why FMP's minutes were not used when they were asked for (fetch failures, an incomplete
+    day, a decision ticker without bars), so a fallback is never silent"""
     tk = sorted(decision_tickers(tree))
+    note = None
     if minutes:
-        alts = at_minutes(prices, raw, minutes(tk, d), tree, d)
+        got = minutes(tk, d)
+        alts = at_minutes(prices, raw, got, tree, d)
         if alts:
             return alts
+        probs = list(getattr(minutes, "problems", lambda day: [])(d))
+        lack = [t for t in tk if not (got.get(t) or {}).get(d)]
+        norc = [t for t in tk if not (raw.get(t) or {}).get(d)]
+        if lack and not probs:
+            probs.append(f"FMP has no 1-minute bars for {', '.join(lack)} on {d}")
+        elif norc and not lack:
+            probs.append(f"no raw close for {', '.join(norc)} on {d}")
+        note = "; ".join(probs) or "no minute in the window priced every decision ticker"
     if bars:
         alts = at_times(prices, raw, bars(tk), tree, d)
         if alts:
-            return dict(alts, _src="yahoo-5m")
-    return None
+            return dict(alts, _src="yahoo-5m", **({"_fmp": note} if note else {}))
+    return {"_fmp": note} if note else None
 
 
 def margin(it):
@@ -633,28 +659,33 @@ def explain(trace, limit=4):
 
 def classify(sim, tree, d, target, trace, live, corridor=None, drifted=None, intraday=None):
     """(status, detail) for one engine on a session where Composer attempted a rebalance.
-    intraday: callable -> {hh:mm: target} (None when 5-minute bars are missing)"""
+    intraday: callable -> intraday_check()'s {hh:mm: target, '_src', '_close', '_fmp'} or None"""
     half_l1, max_gap = distance(target, live)
     det = {"dist": round(half_l1, 4), "max_gap": round(max_gap, 4)}
     if agrees(target, live, corridor, drifted):
         return "agree", det
-    alts = intraday() if intraday else None
-    if alts is not None:
-        alts = dict(alts)
-        src = alts.pop("_src", "yahoo-5m")
-        hit = next((hh for hh, alt in alts.items() if alt and agrees(alt, live, corridor, drifted)), None)
-        if hit:
-            det["edge"] = {"basis": "intraday", "time": hit, "target": alts[hit], "src": src}
+    alts = dict(intraday() or {}) if intraday else {}
+    src = alts.pop("_src", "yahoo-5m")
+    close = alts.pop("_close", "16:00")
+    note = alts.pop("_fmp", None)
+    tail = f"; FMP minutes not used: {note}" if note else ""
+    if note:
+        det["fmp"] = note
+    if alts:
+        hits = sorted((hh for hh, alt in alts.items() if alt and agrees(alt, live, corridor, drifted)), key=_min)
+        if hits:
+            at = min(hits, key=lambda hh: (abs(_min(hh) - (_min(close) - DECISION_MINUTE)), _min(hh)))
+            det["edge"] = {"basis": "intraday", "time": at, "times": hits, "target": alts[at], "src": src}
             return "knife-edge", det
         span = (f"every minute {min(alts, key=_min)}-{max(alts, key=_min)} ET (FMP 1-minute bars)" if src == "fmp-1m"
                 else f"{', '.join(alts)} ET (Yahoo 5-minute bars)")
-        det.update(why=explain(trace), checked=f"prices at {span}")
+        det.update(why=explain(trace), checked=f"prices at {span}{tail}")
         return "mismatch", det
     edge = knife_edge(sim, tree, d, trace, live, corridor, drifted)
     if edge:
         det["edge"] = dict(edge, basis="search")
         return "knife-edge", det
-    det.update(why=explain(trace), checked=f"one-ticker moves to {KNIFE_SIGMA:g} sigma (no 5-minute bars)")
+    det.update(why=explain(trace), checked=f"one-ticker moves to {KNIFE_SIGMA:g} sigma (no 5-minute bars){tail}")
     return "mismatch", det
 
 
@@ -1006,29 +1037,80 @@ def fetch_minutes(t, d, key, tries=3):
     raise RuntimeError(f"FMP {t} {d}: {err}")
 
 
+def vet_minutes(day, d):
+    """({ticker: {d: bars + '_close'}} usable, [problem]) from FMP's 1-minute bars for session d
+    ({ticker: {'HH:MM' bar start: close}}), the close from the exchange calendar. SPY trades every
+    minute: without a bar in the session's last minute the whole day reads as incomplete (nothing usable).
+    A ticker with bars in at least FMP_DENSE of the 30 minutes before its last bar that stops more than
+    FMP_CUT minutes before the close reads as a cut feed and is left out; a thin fund's early last trade
+    is kept"""
+    close = session_close(d)
+    c = _min(close)
+    last_spy = max((_min(k) for k in day.get("SPY") or {} if not k.startswith("_")), default=None)
+    if last_spy is None or last_spy < c - 1:
+        return {}, [f"FMP's SPY minutes for {d} end at {_hm(last_spy) if last_spy is not None else 'none'}, "
+                    f"before the {close} close: the day reads as incomplete"]
+    out, probs = {}, []
+    for t, m in sorted(day.items()):
+        ks = sorted(_min(k) for k in m if not k.startswith("_"))
+        if not ks:
+            continue
+        if ks[-1] < c - FMP_CUT and sum(ks[-1] - 30 < k for k in ks) >= FMP_DENSE:
+            probs.append(f"FMP's {t} minutes for {d} stop at {_hm(ks[-1])} after trading nearly every minute: "
+                         f"read as cut")
+            continue
+        out[t] = {d: dict(m, _close=close)}
+    return out, probs
+
+
 def minutes_fetcher(key=None):
-    """a cached callable (tickers, d) -> {ticker: {d: 1-minute bars}}; tickers without bars that day are
-    absent. Every ticker's '_close' (the session close) comes from SPY's last bar, always fetched: a thin
-    fund's last trade can come early. None without an FMP key (env FMP_API_KEY)"""
+    """a cached callable (tickers, d) -> {ticker: {d: 1-minute bars + '_close'}} on FMP, vetted by
+    vet_minutes; tickers without usable bars are absent. SPY is fetched first: if it fails or ends early
+    nothing else is fetched for that day (a dead or lagging feed costs one call). The callable's
+    .problems(d) lists the day's fetch failures and incompleteness. None without a key (env FMP_API_KEY)"""
     key = key or os.environ.get("FMP_API_KEY")
     if not key:
         return None
-    cache = {}
+    cache, errors = {}, {}
+
+    def fetch(t, d):
+        try:
+            return fetch_minutes(t, d, key)
+        except Exception as e:  # noqa: BLE001
+            errors[(t, d)] = str(e)[:200]
+            return {}
+
+    def day(d):
+        return {t: m for (t, dd), m in cache.items() if dd == d and m}
 
     def get(tickers, d):
-        need = [t for t in set(tickers) | {"SPY"} if (t, d) not in cache]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
-            for t, res in zip(need, ex.map(lambda t: _try(fetch_minutes, t, d, key), need)):
-                cache[(t, d)] = res or {}
-        spy = cache.get(("SPY", d)) or {}
-        close = _hm(max(_min(k) for k in spy) + 1) if spy else None
-        out = {}
-        for t in tickers:
-            m = cache.get((t, d))
-            if m:
-                out[t] = {d: dict(m, _close=close) if close else dict(m)}
-        return out
+        if ("SPY", d) not in cache:
+            cache[("SPY", d)] = fetch("SPY", d)
+        if vet_minutes({"SPY": cache[("SPY", d)]}, d)[0]:
+            need = [t for t in set(tickers) if (t, d) not in cache]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+                for t, res in zip(need, ex.map(lambda t: fetch(t, d), need)):
+                    cache[(t, d)] = res
+        usable, _ = vet_minutes(day(d), d)
+        return {t: usable[t] for t in tickers if t in usable}
+
+    def problems(d):
+        return ([f"FMP failed for {t}: {e}" for (t, dd), e in sorted(errors.items()) if dd == d]
+                + vet_minutes(day(d), d)[1])
+    get.problems = problems
     return get
+
+
+def fmp_health(minutes, d):
+    """None when FMP's 1-minute bars for session d are usable (SPY's complete), else why not"""
+    if minutes is None:
+        return "FMP_API_KEY not set"
+    try:
+        if "SPY" in minutes(["SPY"], d):
+            return None
+    except Exception as e:  # noqa: BLE001
+        return f"FMP failed: {str(e)[:200]}"
+    return "; ".join(getattr(minutes, "problems", lambda day: [])(d)) or f"no SPY 1-minute bars for {d}"
 
 
 def _try(fn, *a):
@@ -1288,6 +1370,27 @@ def assess(cfg_all, meta, prices, d, st, load=None, raw=None, bars=None, prev=No
     return rows, alerts, notes
 
 
+def fmp_canary(h, minutes, d, e_now):
+    """(alerts, notes): FMP's 1-minute bars for session d checked once a session (h: state, mutated). A
+    failure is noted each run; FMP_ALERT sessions in a row alert, then Mondays while it lasts"""
+    why = fmp_health(minutes, d)
+    if not why:
+        h.clear()
+        return [], []
+    if h.get("date") != d:
+        h["fails"] = h.get("fails", 0) + 1
+        h["date"] = d
+    h["last"] = why
+    notes = [f"shadow: FMP 1-minute bars unusable for {d} ({why}); a disagreement is checked on Yahoo's 5-minute bars"]
+    today = e_now.date().isoformat()
+    if h.get("alerted") != today and (h["fails"] == FMP_ALERT or (h["fails"] > FMP_ALERT and e_now.weekday() == 0)):
+        h["alerted"] = today
+        return [f"SHADOW FMP DOWN — FMP's 1-minute bars unusable {h['fails']} sessions in a row (latest: {why}). "
+                f"Disagreements with Composer fall back to Yahoo's 5-minute bars, then the one-ticker search, until "
+                f"it clears."], notes
+    return [], notes
+
+
 def check_shadow(state, alerts, snap, meta, now, get=None, write=True, ledger=None, bars=None, minutes=None):
     """monitor.py hook. The logic-drift check needs no prices; a Yahoo outage dates the session from
     the exchange calendar so Composer's own record is still judged. Alerts are delivered even if the
@@ -1327,11 +1430,15 @@ def check_shadow(state, alerts, snap, meta, now, get=None, write=True, ledger=No
             snap["shadow"] = {"date": d, "stale": True, "status": dict(work.get("status") or {})}
         else:
             only = set(pending) if work.get("last_date") == d else None
+            fm = minutes if minutes is not None else minutes_fetcher()
             rows, a, n = assess(cfg_all, meta, prices, d, work, raw=raw, bars=bars or bars_fetcher(),
-                                minutes=minutes if minutes is not None else minutes_fetcher(),
-                                prev=previous_rows(ledger, d, prices), weekday=e_now.weekday(), only=only)
+                                minutes=fm, prev=previous_rows(ledger, d, prices), weekday=e_now.weekday(), only=only)
             new_alerts += a
             notes += n
+            if minutes is None:          # production: is FMP usable for D? (one SPY call, cached for the check)
+                a, n = fmp_canary(work.setdefault("fmp", {}), fm, d, e_now)
+                new_alerts += a
+                notes += n
             work["last_date"] = d
             work["pending"] = sorted(e for e, x in work.get("status", {}).items() if x == "unavailable")
             snap["shadow"] = {"date": d, "status": dict(work["status"])}

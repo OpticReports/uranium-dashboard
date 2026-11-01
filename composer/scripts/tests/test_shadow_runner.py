@@ -27,11 +27,17 @@ BROKEN-INPUT counterpart that must land on the other side. The counter-agent's s
       alerts when first seen / changed / Mondays, rename is a note, first_diff names the node
   S9  approved registry: eras ordered, files load, every tree validates; HG eras equal the
       gate-watch fixtures
-  S17 FMP 1-minute decision window (add. 50): every minute 15:44-15:56 is tried and none outside it;
+  S17 FMP 1-minute decision window (add. 50): every minute 15:50-15:55 is tried and none outside it;
       a thin fund's last trade within 30 minutes; scaled onto the adjusted series; FMP missing -> Yahoo
       5-minute bars -> the one-ticker search; the alert names the source; the fetcher keeps only the
-      asked day and never shows the key; the session close comes from SPY; the daily path wires it;
+      asked day and never shows the key, retries, skips a null close; the session close comes from
+      the calendar; the daily path wires it; 'time' is the match nearest 15:54, 'times' all of them;
       2026-10-30 (HARV 52/48 at 15:54, missed by the 5-minute snapshots) is a knife-edge
+  S18 FMP guards (add. 50 counter-agent): an incomplete day (SPY short of the close) or a cut feed
+      falls back to the older checks and says why; a refused FMP is said; a dead feed costs one call;
+      FMP before Yahoo; a minute one of several tickers cannot price is skipped; no priced minute
+      falls back; the once-a-run SPY check counts sessions and alerts at the third; the production
+      path builds the fetcher from FMP_API_KEY
   S10 data plumbing: fetch_yahoo uses adjclose and repairs a lagging dividend or split; the
       fetch_prices cut at 16:15 ET; bar_price; the ET fallback matches zoneinfo; ledger upsert,
       record, live_weights, eras
@@ -48,6 +54,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
@@ -1346,27 +1353,45 @@ class S17Minutes(unittest.TestCase):
 
     def test_window(self):
         w = sr.decision_minutes()
-        self.assertEqual((len(w), w[0], w[-1]), (13, "15:44", "15:56"))
-        self.assertEqual(sr.decision_minutes("13:00")[::12], ("12:44", "12:56"))
+        self.assertEqual((len(w), w[0], w[-1]), (6, "15:50", "15:55"))
+        self.assertEqual(sr.decision_minutes("13:00")[::5], ("12:50", "12:55"))
 
     def test_every_minute_is_tried_and_none_outside(self):
-        for hh in ("15:44", "15:51", "15:56"):
+        for hh in ("15:50", "15:52", "15:55"):
             status, det = self.classify({"B": 1.0}, timed_minutes(near_threshold_prices(), {hh: -0.002}))
             self.assertEqual((status, det["edge"]["time"], det["edge"]["src"]), ("knife-edge", hh, "fmp-1m"), hh)
-        for hh in ("15:43", "15:57"):                                         # broken: just outside the window
+            self.assertEqual(det["edge"]["times"], [hh])
+        for hh in ("15:49", "15:56"):                                         # broken: just outside the window
             status, det = self.classify({"B": 1.0}, timed_minutes(near_threshold_prices(), {hh: -0.002}))
             self.assertEqual(status, "mismatch", hh)
-            self.assertEqual(det["checked"], "prices at every minute 15:44-15:56 ET (FMP 1-minute bars)")
+            self.assertEqual(det["checked"], "prices at every minute 15:50-15:55 ET (FMP 1-minute bars)")
+            self.assertNotIn("fmp", det)
 
     def test_half_day_window(self):
-        m = timed_minutes(near_threshold_prices(), {"12:47": -0.002}, close="13:00")
+        m = timed_minutes(near_threshold_prices(), {"12:52": -0.002}, close="13:00")
         status, det = self.classify({"B": 1.0}, m)
-        self.assertEqual((status, det["edge"]["time"]), ("knife-edge", "12:47"))
+        self.assertEqual((status, det["edge"]["time"]), ("knife-edge", "12:52"))
+        with unittest.mock.patch.dict(sr.HALF_DAYS, {D: "13:00"}):            # no '_close': the calendar's
+            for t in m:
+                m[t][D].pop("_close")
+            status, det = self.classify({"B": 1.0}, m)
+            self.assertEqual((status, det["edge"]["time"]), ("knife-edge", "12:52"))
+        status, det = self.classify({"B": 1.0}, m)                             # broken: a full day's window finds
+        self.assertEqual((status, det["edge"]["basis"]), ("knife-edge", "search"))   # no minute; the search decides
+
+    def test_time_is_the_match_nearest_15_54(self):
+        p = near_threshold_prices()
+        status, det = self.classify({"B": 1.0}, timed_minutes(p, {"15:50": -0.002, "15:54": -0.002}))
+        self.assertEqual((det["edge"]["time"], det["edge"]["times"]), ("15:54", ["15:50", "15:54"]))
+        status, det = self.classify({"B": 1.0}, timed_minutes(p, {"15:50": -0.002, "15:51": -0.002}))
+        self.assertEqual((det["edge"]["time"], det["edge"]["times"]), ("15:51", ["15:50", "15:51"]))
+        status, det = self.classify({"B": 1.0}, timed_minutes(p, {"15:53": -0.002, "15:55": -0.002}))
+        self.assertEqual(det["edge"]["time"], "15:53")                         # a tie: the earlier minute
 
     def test_thin_fund_minutes(self):
         m = timed_minutes(near_threshold_prices(), {"15:52": -0.002}, first="15:50")   # X first trades at 15:50
         alts = sr.at_minutes(near_threshold_prices(), near_threshold_prices(), m, rsi_tree(), D)
-        self.assertEqual(min((k for k in alts if k != "_src"), key=sr._min), "15:51")   # earlier minutes skipped
+        self.assertEqual(min((k for k in alts if not k.startswith("_")), key=sr._min), "15:51")   # earlier skipped
         status, det = self.classify({"B": 1.0}, m)
         self.assertEqual((status, det["edge"]["time"]), ("knife-edge", "15:52"))
 
@@ -1383,10 +1408,18 @@ class S17Minutes(unittest.TestCase):
         status, det = self.classify({"B": 1.0}, m, bars=timed_bars(p, {"15:50": -0.002}))
         self.assertEqual((status, det["edge"]["src"]), ("knife-edge", "yahoo-5m"))
         status, det = self.classify({"B": 1.0}, m, bars=timed_bars(p, {}))
-        self.assertEqual((status, det["checked"]), ("mismatch", "prices at 15:45, 15:50, 15:55 ET (Yahoo 5-minute bars)"))
+        self.assertEqual((status, det["checked"]), ("mismatch", "prices at 15:45, 15:50, 15:55 ET (Yahoo 5-minute bars); "
+                                                     f"FMP minutes not used: FMP has no 1-minute bars for X on {D}"))
+        self.assertEqual(det["fmp"], f"FMP has no 1-minute bars for X on {D}")
         status, det = self.classify({"B": 1.0}, m)                           # neither: the one-ticker search
-        self.assertEqual((status, det["edge"]["basis"]), ("knife-edge", "search"))
+        self.assertEqual((status, det["edge"]["basis"], det["fmp"]), ("knife-edge", "search", f"FMP has no 1-minute bars for X on {D}"))
         self.assertIsNone(sr.intraday_check(p, p, rsi_tree(), D))
+        status, det = self.classify({"B": 1.0}, None, bars=timed_bars(p, {}))   # FMP not asked: nothing to say
+        self.assertNotIn("fmp", det)
+        raw = {t: dict(v) for t, v in p.items()}
+        del raw["X"][D]                                                        # no raw close: minutes cannot be scaled
+        alts = sr.intraday_check(p, raw, rsi_tree(), D, lambda tk, d: timed_minutes(p, {"15:50": -0.002}))
+        self.assertEqual(alts, {"_fmp": f"no raw close for X on {D}"})
 
     def test_fetch_keeps_only_the_day_and_hides_the_key(self):
         saved = (sr.urllib.request.urlopen, sr.time.sleep)
@@ -1403,6 +1436,18 @@ class S17Minutes(unittest.TestCase):
             sr.urllib.request.urlopen = lambda req, timeout=30: Resp(json.dumps(rows))
             self.assertEqual(sr.fetch_minutes("SPY", D, "SECRET"), {"15:50": 100.0, "15:51": 101.0, "15:52": 102.0})
             self.assertEqual(sr.fetch_minutes("SPY", "2025-05-02", "SECRET"), {})   # a day FMP lacks: nothing
+            nulls = rows + [{"date": f"{D} 15:53:00", "close": None}]
+            sr.urllib.request.urlopen = lambda req, timeout=30: Resp(json.dumps(nulls))
+            self.assertEqual(len(sr.fetch_minutes("SPY", D, "SECRET")), 3)          # a null close skipped, not fatal
+            answers = [RuntimeError("timed out"), Resp(json.dumps(rows))]
+
+            def flaky(req, timeout=30):
+                a = answers.pop(0)
+                if isinstance(a, Exception):
+                    raise a
+                return a
+            sr.urllib.request.urlopen = flaky
+            self.assertEqual(len(sr.fetch_minutes("SPY", D, "SECRET")), 3)          # retried after a failure
             sr.urllib.request.urlopen = lambda req, timeout=30: Resp(json.dumps({"Error Message": "Limit Reach"}))
             with self.assertRaises(RuntimeError):                                  # a refusal is not "no bars"
                 sr.fetch_minutes("SPY", D, "SECRET")
@@ -1422,17 +1467,21 @@ class S17Minutes(unittest.TestCase):
         saved = sr.fetch_minutes
 
         def fake(t, d, key, tries=2):
-            calls.append(t)
+            calls.append((t, d))
             return {"SPY": {"15:58": 1.0, "15:59": 1.0}, "THIN": {"15:41": 2.0, "15:42": 2.0}}.get(t, {})
         try:
             sr.fetch_minutes = fake
             get = sr.minutes_fetcher("k")
             out = get(["THIN", "NONE"], D)
-            self.assertEqual(out["THIN"][D]["_close"], "16:00")               # from SPY, not THIN's 15:43
+            self.assertEqual(out["THIN"][D]["_close"], "16:00")               # the calendar's, not THIN's 15:43
             self.assertNotIn("NONE", out)
+            self.assertEqual(calls[0], ("SPY", D))                            # SPY first
             n = len(calls)
             get(["THIN"], D)
             self.assertEqual(len(calls), n)                                   # cached
+            get(["THIN"], "2025-05-01")
+            self.assertIn(("THIN", "2025-05-01"), calls)                      # by ticker and day
+            self.assertEqual(get.problems(D), [])
         finally:
             sr.fetch_minutes = saved
 
@@ -1471,6 +1520,165 @@ class S17Minutes(unittest.TestCase):
         status, _ = sr.classify(sim, tree, d, target, tr, fx["composer"], None, None,
                                 lambda: sr.intraday_check(fx["prices"], fx["raw"], tree, d, None, lambda tk: snaps))
         self.assertEqual(status, "mismatch")                                  # the old check, as on the day
+
+
+class S18FmpGuards(unittest.TestCase):
+    """counter-agent review of add. 50: FMP's minutes are vetted (an incomplete day or a cut feed falls back,
+    said), failures are never silent, and the production path builds the fetcher"""
+    def fx(self):
+        with gzip.open(MINUTES_FX) as f:
+            fx = json.load(f)
+        era = next(e for e in sr.load_manifest()["HARV"]["eras"] if e["version"] == fx["era"])
+        tree, d = sr.load_tree(era), fx["date"]
+        snaps = {t: {d: {"15:40": m["15:44"], "15:45": m["15:49"], "15:50": m["15:54"], "_close": "16:00"}}
+                 for t, m in fx["minutes"].items()}                             # what Yahoo's 5-minute bars showed
+        return fx, tree, d, snaps
+
+    def run_fx(self, fake, snaps=True):
+        """classify 10-30 HARV with a production fetcher on a faked FMP"""
+        fx, tree, d, sn = self.fx()
+        sim, target, tr = sr.run_engine(fx["prices"], tree, d)
+        with unittest.mock.patch.object(sr, "fetch_minutes", fake):
+            mf = sr.minutes_fetcher("FAKEKEY")
+            return sr.classify(sim, tree, d, target, tr, fx["composer"], None, None,
+                               lambda: sr.intraday_check(fx["prices"], fx["raw"], tree, d, mf,
+                                                         (lambda tk: sn) if snaps else None))
+
+    def answers(self, cut=None, drop=None, fail=None):
+        fx = self.fx()[0]
+
+        def fake(t, d, key, tries=3):
+            if fail and t in fail:
+                raise RuntimeError(f"FMP {t} {d}: unexpected answer {{'Error Message': 'Limit Reach'}}")
+            m = dict(fx["minutes"].get(t) or {})
+            if t in (cut or {}):
+                m = {k: v for k, v in m.items() if k <= cut[t]}
+            if t in (drop or {}):
+                m = drop[t]
+            return m
+        return fake
+
+    def test_vet_minutes(self):
+        full = {f"15:{m:02d}": 1.0 for m in range(25, 60)}
+        ok, probs = sr.vet_minutes({"SPY": full, "THIN": {"15:10": 2.0}}, D)
+        self.assertEqual((sorted(ok), probs), (["SPY", "THIN"], []))           # a thin fund's early last trade kept
+        self.assertEqual(ok["SPY"][D]["_close"], "16:00")
+        ok, probs = sr.vet_minutes({"SPY": {k: v for k, v in full.items() if k <= "15:49"}, "X": full}, D)
+        self.assertEqual(ok, {})                                               # broken: SPY ends 15:49
+        self.assertIn("end at 15:49, before the 16:00 close", probs[0])
+        self.assertEqual(sr.vet_minutes({"X": full}, D)[0], {})                # no SPY at all
+        cut = {f"{h}:{m:02d}": 3.0 for h in (14, 15) for m in range(60) if "14:51" <= f"{h}:{m:02d}" <= "15:20"}
+        ok, probs = sr.vet_minutes({"SPY": full, "UVXY": cut}, D)
+        self.assertEqual((sorted(ok), len(probs)), (["SPY"], 1))               # a dense feed cut at 15:20
+        self.assertIn("UVXY minutes for", probs[0])
+        sparse = {k: v for i, (k, v) in enumerate(sorted(cut.items())) if i % 2 == 0}   # 15 of 30: thin, kept
+        self.assertIn("UVXY", sr.vet_minutes({"SPY": full, "UVXY": sparse}, D)[0])
+        late = dict(cut, **{"15:55": 3.0})
+        self.assertIn("UVXY", sr.vet_minutes({"SPY": full, "UVXY": late}, D)[0])   # trades to 15:55: complete
+        busy = {f"{h}:{m:02d}": 3.0 for h in (13, 14) for m in range(60) if f"{h}:{m:02d}" <= "14:30"}
+        busy.update({f"{h}:{m:02d}": 3.0 for h in (14, 15) for m in range(0, 60, 3) if "14:51" <= f"{h}:{m:02d}" <= "15:20"})
+        self.assertIn("UVXY", sr.vet_minutes({"SPY": full, "UVXY": busy}, D)[0])   # busy earlier, thin at its end: kept
+        with unittest.mock.patch.dict(sr.HALF_DAYS, {D: "13:00"}):
+            half = {f"12:{m:02d}": 1.0 for m in range(25, 60)}
+            ok, probs = sr.vet_minutes({"SPY": half}, D)
+            self.assertEqual((ok["SPY"][D]["_close"], probs), ("13:00", []))
+
+    def test_complete_answer_is_used(self):
+        status, det = self.run_fx(self.answers())
+        self.assertEqual((status, det["edge"]["time"], det["edge"]["src"]), ("knife-edge", "15:54", "fmp-1m"))
+        self.assertNotIn("fmp", det)
+
+    def test_fmp_before_yahoo(self):                                           # counter-agent mutant F1
+        status, det = self.run_fx(self.answers(), snaps=True)
+        self.assertEqual(det["edge"]["src"], "fmp-1m")
+
+    def test_incomplete_spy_falls_back_and_says_so(self):
+        for at in ("15:49", "15:30"):                                          # a lagging feed
+            status, det = self.run_fx(self.answers(cut={"SPY": at}))
+            self.assertEqual(status, "mismatch")                               # the 5-minute snapshots, as on the day
+            self.assertTrue(det["checked"].startswith("prices at 15:45, 15:50, 15:55 ET (Yahoo 5-minute bars); "
+                                                      "FMP minutes not used: "), det["checked"])
+            self.assertIn(f"end at {at}", det["fmp"])
+            self.assertNotIn("every minute", det["checked"])                   # never a shifted minute window
+
+    def test_cut_ticker_falls_back_and_says_so(self):
+        dense = {f"{h}:{m:02d}": 19.0 for h in (14, 15) for m in range(60) if "14:51" <= f"{h}:{m:02d}" <= "15:20"}
+        status, det = self.run_fx(self.answers(drop={"UVXY": dense}))
+        self.assertEqual(status, "mismatch")
+        self.assertIn("UVXY minutes for 2026-10-30 stop at 15:20", det["fmp"])
+
+    def test_refused_fmp_is_said(self):
+        status, det = self.run_fx(self.answers(fail={"SPY"}))
+        self.assertIn("FMP failed for SPY: FMP SPY 2026-10-30: unexpected answer", det["fmp"])
+        self.assertIn("FMP minutes not used", det["checked"])
+        status, det = self.run_fx(self.answers(fail={"SPY"}), snaps=False)    # no 5-minute bars either
+        self.assertEqual(det["edge"]["basis"], "search")
+        self.assertIn("FMP failed for SPY", det["fmp"])
+
+    def test_dead_feed_costs_one_call(self):
+        calls = []
+        fake = self.answers(fail={"SPY"})
+
+        def counting(t, d, key, tries=3):
+            calls.append(t)
+            return fake(t, d, key, tries)
+        self.run_fx(counting)
+        self.assertEqual(calls, ["SPY"])                                       # SPY failed: nothing else asked
+        calls.clear()
+        self.run_fx(lambda t, d, key, tries=3: counting(t, d, key, tries) if t != "SPY" else self.answers()(t, d, key))
+        self.assertEqual(calls, ["UVXY"])                                      # broken: SPY fine, UVXY asked
+
+    def test_multi_ticker_minute_skipped(self):                                # counter-agent mutant S2
+        fx, tree, d, _ = self.fx()
+        mins = {t: {d: dict(m, _close="16:00")} for t, m in fx["minutes"].items()}
+        mins["UVXY"][d] = {k: v for k, v in mins["UVXY"][d].items() if k.startswith("_") or k >= "15:52"}
+        alts = sr.at_minutes(fx["prices"], fx["raw"], mins, tree, d)
+        self.assertEqual(sorted((k for k in alts if not k.startswith("_")), key=sr._min), ["15:53", "15:54", "15:55"])
+
+    def test_no_priced_minute_falls_back(self):                                # counter-agent mutant S3
+        status, det = self.run_fx(self.answers(drop={"UVXY": {"15:00": 19.0}}))
+        self.assertEqual(status, "mismatch")
+        self.assertTrue(det["checked"].startswith("prices at 15:45, 15:50, 15:55 ET (Yahoo 5-minute bars)"))
+        self.assertEqual(det["fmp"], "no minute in the window priced every decision ticker")
+
+    def test_canary_counts_sessions(self):
+        h, mon = {}, sr.et_now(datetime.datetime(2025, 5, 5, 21, 35, tzinfo=UTC))
+        tue = sr.et_now(datetime.datetime(2025, 5, 6, 21, 35, tzinfo=UTC))
+        runs = [("2025-04-29", tue), ("2025-04-29", tue), ("2025-04-30", tue), ("2025-05-01", tue),
+                ("2025-05-02", tue), ("2025-05-05", mon)]
+        got = [sr.fmp_canary(h, None, d, e) for d, e in runs]
+        self.assertTrue(all(n and "FMP_API_KEY not set" in n[0] for _, n in got))   # said every run
+        self.assertEqual([len(a) for a, _ in got], [0, 0, 0, 1, 0, 1])          # 3rd session; a re-run is not one; Mondays
+        self.assertTrue(got[3][0][0].startswith("SHADOW FMP DOWN — FMP's 1-minute bars unusable 3 sessions in a row"))
+        ok = lambda tk, d: {"SPY": {d: {"15:59": 1.0}}}                          # noqa: E731
+        self.assertEqual(sr.fmp_canary(h, ok, "2025-05-06", tue), ([], []))      # broken: FMP fine -> quiet, reset
+        self.assertEqual(h, {})
+
+    def test_production_wiring_builds_the_fetcher(self):                       # counter-agent mutant A1
+        tmp = tempfile.TemporaryDirectory()
+        p = near_threshold_prices()
+        mins = timed_minutes(p, {"15:52": -0.002})
+        led = os.path.join(tmp.name, "l.jsonl")
+        fake = lambda t, d, key, tries=3: {k: v for k, v in mins.get(t, {}).get(d, {}).items() if k != "_close"}  # noqa: E731
+        refuse = self.answers(fail={"SPY", "X", "A", "B", "C"})
+        try:
+            with unittest.mock.patch.dict(os.environ, {"FMP_API_KEY": "FAKEKEY"}), \
+                    unittest.mock.patch.multiple(sr, load_manifest=lambda: CFG, load_tree=load,
+                                                 fetch_prices=lambda *a, **k: (p, p, {}), fetch_minutes=fake):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    sr.check_shadow({}, [], {}, meta(D, {"B": 0.999}), S13Wiring.NOW, ledger=led, bars=lambda tk: {})
+                e1 = next(r for r in sr.read_ledger(led) if r["engine"] == "E1")
+                self.assertEqual((e1["status"], e1["edge"]["src"]), ("knife-edge", "fmp-1m"))
+                self.assertNotIn("FMP 1-minute bars unusable", out.getvalue())
+                st, out = {}, io.StringIO()                                    # broken: FMP refuses every call
+                with unittest.mock.patch.object(sr, "fetch_minutes", refuse), \
+                        contextlib.redirect_stdout(out):
+                    sr.check_shadow(st, [], {}, meta(D, {"B": 0.999}), S13Wiring.NOW, ledger=led + "2", bars=lambda tk: {})
+                self.assertIn("FMP 1-minute bars unusable", out.getvalue())
+                self.assertEqual(st["shadow"]["fmp"]["fails"], 1)
+        finally:
+            tmp.cleanup()
 
 
 if __name__ == "__main__":

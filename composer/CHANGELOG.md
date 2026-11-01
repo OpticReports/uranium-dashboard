@@ -660,18 +660,54 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
 ## 2026-11-01 — shadow runner reads Composer's decision window minute by minute (FMP 1-minute bars; reporting only)
 
 - Change: `scripts/shadow_runner.py` re-runs the approved logic on FMP 1-minute prices at every minute
-  from 15:44 to 15:56 ET (16 to 4 before the close) before Yahoo's 5-minute snapshots and the one-ticker
-  search. The knife-edge record and the mismatch alert name the source. No symphony mutated.
+  from 15:50 to 15:55 ET (10 to 5 before the close) before Yahoo's 5-minute snapshots and the one-ticker
+  search. Composer's holdings match the logic best at 15:54: 1 of 272 engine-sessions contradicted.
+  - FMP's day is used only when complete (SPY through the last minute, no feed cut short); a fallback
+    says why.
+  - New alert: SHADOW FMP DOWN, when FMP is unusable 3 sessions running.
+  - A knife-edge names its source and the matching minutes.
+  - No symphony mutated.
 - Why: Friday 10-30's two SHADOW MISMATCH alerts (KMLM, HARV) were a knife-edge at 15:54 that fell
   between the 15:50 and 15:55 snapshots. Owner: "is yahoo the best source here? what about our FMP
   API?", then "build it".
 - Before / after (add. 50, 69 sessions 2026-07-15..10-30):
-  - Disagreements settled on actual minute prices: 13 of 23 -> 23 of 23.
+  - Disagreements settled on actual decision-time prices: 13 of 23 (Yahoo 5-minute snapshots) ->
+    23 of 23 (FMP minutes).
   - Mismatch alerts: 2 -> 0.
-  - Deliberately wrong pairs excused: 16 -> 4 of 352.
-  - The 10-30 KMLM and HARV live ledger rows were reclassified knife-edge (provenance recorded).
-- Counter-agent: REVIEW50_PENDING
-- Artifacts: results.md addendum 50; results/shadow-minutes-2026-11-01.{json,html};
-  research/shadow/minutes_calib.py, make_minutes_chart.py, reclassify_live.py; backfill.py on the new
-  rule; README (monitor section); 110 shadow tests, including a frozen 10-30 HARV regression fixture.
-- No service redeploy (monitor.py runs in the daily routine; FMP_API_KEY is already in its environment).
+  - Deliberately wrong pairs excused: 16 -> 3 of 352. The price source does most of this; the window
+    moves it by one or two.
+  - The 10-30 KMLM and HARV live ledger rows were reclassified knife-edge (provenance and original text
+    recorded).
+- Counter-agent: ship with fixes, all applied:
+  - completeness check and fallback notes;
+  - FMP failures surfaced;
+  - 12 tests;
+  - the window taken from its measured per-minute profile (the first draft's 15:44-15:56 was assumed);
+  - claims corrected.
+  36 of 36 mutants of the fixed code are killed. It also found the FMP key hard-coded in a public file
+  (removed in 528f6d6; rotate it).
+- Artifacts:
+  - results.md addendum 50; results/shadow-minutes-2026-11-01.{json,html} (with the per-minute profile);
+  - research/shadow/minutes_calib.py, make_minutes_chart.py, reclassify_live.py; backfill.py on the
+    new rule;
+  - README (monitor section); POLICY (SHADOW FMP DOWN informational); the daily routine prompt relays it;
+  - 121 shadow tests, including a frozen 10-30 HARV regression fixture.
+- No service redeploy: monitor.py runs in the daily routine, whose environment has FMP_API_KEY.
+
+## 2026-11-01 — pre-close preview prices on FMP's live quotes (reporting only)
+
+- Change: `scripts/preclose.py` takes each ticker's price from FMP's batch quote where FMP's last trade
+  is from today and at least as recent as Yahoo's; otherwise Yahoo's. Yahoo's 2-year history is
+  unchanged. The report and the GATE ledger row show:
+  - which source priced each ticker;
+  - fresh prices more than 0.3% apart;
+  - any FMP failure or missing key (Yahoo's prices then).
+  No symphony mutated.
+- Why: owner, 11-01: "use FMP for the 15:15 preview quotes too".
+- Before / after:
+  - Friday 10-30's close: 58 of 58 quoted, 55 equal to Yahoo's, trade times real.
+  - A 15:59 replay reads the same for all four engines.
+  - First live run: Monday 11-02 at 15:15 ET.
+- Counter-agent: REVIEW50Q_PENDING
+- Tests: 17 new (88 in test_preclose); 24 of 24 mutants of the new code killed.
+- No service redeploy: the 15:15 routine runs the CLI in this environment, which has FMP_API_KEY.
