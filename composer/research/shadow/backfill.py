@@ -2,9 +2,10 @@
 """Shadow-runner backfill (results.md addendum 48): replay the approved logic, era by era, against
 every live-holdings snapshot the daily monitor committed to git (composer/results/monitor/
 last-snapshot.json, 2026-07-15 onward), on the same Yahoo prices the daily check uses, with the
-daily check's classifier: knife-edges confirmed on actual 15:45/15:50/15:55 ET prices where Yahoo
-still has 5-minute bars (the last ~60 sessions), the 0.3-sigma one-ticker search before that; KMLM
-on its corridor path when the previous session has a snapshot.
+daily check's classifier: knife-edges confirmed on FMP 1-minute prices at every minute 15:44-15:56 ET
+(add. 50; FMP keeps years of them), else on Yahoo 5-minute bars at 15:45/15:50/15:55 (the last ~60
+sessions), else the 0.3-sigma one-ticker search; KMLM on its corridor path when the previous
+session has a snapshot.
 
 Each snapshot is mapped to the session whose rebalance it shows: taken at or after 16:00 ET on a
 session day -> that session; otherwise the previous session. The latest snapshot per session wins.
@@ -13,8 +14,8 @@ and unchanged logic would read as agree. The three sessions Composer skipped (20
 symphony-stats-meta on 2026-10-29 showed last_rebalance_attempted_on = 2026-10-23 for all four)
 are added as no-rebalance rows: Composer's frozen 10-23 holdings against what the logic wanted.
 
-Writes composer/results/shadow-backfill-2026-10-29.json and upserts src=backfill rows into the
-shadow ledger. Usage: backfill.py [--no-ledger]
+Writes composer/results/shadow-backfill-2026-10-29.json (add. 48's frozen run; env BACKFILL_OUT writes
+elsewhere) and upserts src=backfill rows into the shadow ledger. Usage: backfill.py [--no-ledger]
 """
 import datetime
 import json
@@ -26,9 +27,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "scripts"))
 import shadow_runner as sr  # noqa: E402
+import minutes_calib as mc  # noqa: E402
 
 SNAP = "composer/results/monitor/last-snapshot.json"
-OUT = os.path.join(HERE, "..", "..", "results", "shadow-backfill-2026-10-29.json")
+OUT = os.environ.get("BACKFILL_OUT") or os.path.join(HERE, "..", "..", "results", "shadow-backfill-2026-10-29.json")
 SKIPPED = ["2026-10-26", "2026-10-27", "2026-10-28"]
 LAST_ATTEMPT = "2026-10-23"
 
@@ -74,6 +76,14 @@ def main():
         print("Yahoo failures:", bad)
     bars = sr.bars_fetcher("60d")
     cal = sorted(prices["SPY"])
+    minutes = None
+    if os.environ.get("FMP_API_KEY"):
+        dec = {"SPY"}
+        for cfg in cfg_all.values():
+            for era in cfg["eras"]:
+                dec |= sr.decision_tickers(sr.load_tree(era))
+        first = min(session_of(s[0], cal) or "9999" for s in snaps)
+        minutes = mc.minutes_from(mc.prefetch(dec, [d for d in cal if d >= first], os.environ["FMP_API_KEY"]))
     by_day = {}
     for taken, h, s in snaps:
         d = session_of(taken, cal)
@@ -117,7 +127,7 @@ def main():
                 if cfg.get("corridor") and prev_d in by_day and sid in by_day[prev_d][2]["symphonies"]:
                     drifted = sr.drift(holdings(by_day[prev_d][2], sid), prices, prev_d, d)
                 status, det = sr.classify(sim, tree, d, target, tr, live, cfg.get("corridor"), drifted,
-                                          intraday=lambda: sr.at_times(prices, raw, bars(sorted(tk)), tree, d))
+                                          intraday=lambda: sr.intraday_check(prices, raw, tree, d, minutes, bars))
                 row.update(status=status, **det)
                 if cfg.get("corridor"):
                     row["corridor_check"] = "path" if drifted else "lenient"
@@ -138,7 +148,7 @@ def main():
     for r in rows:
         if r["status"] != "agree":
             e = r.get("edge") or {}
-            how = (f"@{e['time']}" if e.get("basis") == "intraday" else
+            how = (f"@{e['time']} ({e.get('src')})" if e.get("basis") == "intraday" else
                    f"{e.get('ticker')} {e.get('move', 0):+.3%} ({e.get('sigma_ratio')} sigma)" if e else r.get("note", ""))
             print(f"{r['date']} {r['engine']:6s} {r['status']:12s} live {sr.fmt_w(r.get('live') or {})} | logic "
                   f"{sr.fmt_w(r.get('target') or {})} | {how} {r.get('corridor_check', '')} {r.get('why', '')[:200]}")

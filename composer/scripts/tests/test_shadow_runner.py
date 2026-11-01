@@ -27,6 +27,11 @@ BROKEN-INPUT counterpart that must land on the other side. The counter-agent's s
       alerts when first seen / changed / Mondays, rename is a note, first_diff names the node
   S9  approved registry: eras ordered, files load, every tree validates; HG eras equal the
       gate-watch fixtures
+  S17 FMP 1-minute decision window (add. 50): every minute 15:44-15:56 is tried and none outside it;
+      a thin fund's last trade within 30 minutes; scaled onto the adjusted series; FMP missing -> Yahoo
+      5-minute bars -> the one-ticker search; the alert names the source; the fetcher keeps only the
+      asked day and never shows the key; the session close comes from SPY; the daily path wires it;
+      2026-10-30 (HARV 52/48 at 15:54, missed by the 5-minute snapshots) is a knife-edge
   S10 data plumbing: fetch_yahoo uses adjclose and repairs a lagging dividend or split; the
       fetch_prices cut at 16:15 ET; bar_price; the ET fallback matches zoneinfo; ledger upsert,
       record, live_weights, eras
@@ -46,10 +51,12 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
+os.environ.pop("FMP_API_KEY", None)        # tests never reach FMP: 1-minute bars come from fakes
 import shadow_runner as sr  # noqa: E402
 
 FIXTURE = os.path.join(HERE, "fixtures", "shadow-2026-10-28.json.gz")
 WARMUP = os.path.join(HERE, "fixtures", "shadow-warmup-2026-04-07.json")
+MINUTES_FX = os.path.join(HERE, "fixtures", "shadow-minutes-2026-10-30.json.gz")
 UTC = datetime.timezone.utc
 N = 120
 
@@ -1299,6 +1306,171 @@ class S16Canonical(unittest.TestCase):
         out = [sr.check_drift({"E1": CFG["E1"]}, get, st, sr.et_now(t), load=lambda era: rsi_tree())[0] for t in days]
         self.assertEqual([len(a) for a in out], [0, 0, 0, 1])                 # a re-run the same day does not count
         self.assertTrue(out[-1][0].startswith("SHADOW BLIND — E1: the logic-drift check failed on 3 days"))
+
+
+def timed_minutes(p, moves_at, day=D, close="16:00", tickers=None, first=None):
+    """1-minute bars from 35 minutes before the close, every ticker at its close except X, moved by
+    moves_at[hh:mm] in the minute ending then (the bar starting a minute earlier)"""
+    out = {}
+    for t, s in p.items():
+        if tickers is not None and t not in tickers:
+            continue
+        b = {sr._hm(sr._min(close) - k): s[day] for k in range(35, 0, -1)}
+        if t == "X":
+            for hh, mv in moves_at.items():
+                b[sr._hm(sr._min(hh) - 1)] = s[day] * (1 + mv)
+            if first:
+                b = {k: v for k, v in b.items() if sr._min(k) >= sr._min(first)}
+        b["_close"] = close
+        out[t] = {day: b}
+    return out
+
+
+class S17Minutes(unittest.TestCase):
+    def classify(self, live, minutes=None, bars=None, prices=None, raw=None, tree=None):
+        p = prices or near_threshold_prices()
+        tree = tree or rsi_tree()
+        sim, target, tr = sr.run_engine(p, tree, D)
+        mfn = (lambda tk, d: minutes) if minutes is not None else None
+        bfn = (lambda tk: bars) if bars is not None else None
+        intraday = lambda: sr.intraday_check(p, raw or {t: dict(s) for t, s in p.items()}, tree, D, mfn, bfn)  # noqa: E731
+        return sr.classify(sim, tree, D, target, tr, live, None, None, intraday)
+
+    def test_minute_price(self):
+        m = {"15:53": 756.28, "15:54": 756.07, "_close": "16:00"}
+        self.assertEqual(sr.minute_price(m, "15:54"), 756.28)                 # the bar ending at 15:54
+        self.assertEqual(sr.minute_price(m, "15:55"), 756.07)
+        self.assertEqual(sr.minute_price({"15:40": 10.0}, "15:54"), 10.0)       # no trade since: the last one
+        self.assertIsNone(sr.minute_price({"15:20": 9.0}, "15:54"))             # 33 minutes old: stale
+        self.assertEqual(sr.minute_price({"15:23": 9.0}, "15:54"), 9.0)         # 30 minutes: still fresh
+
+    def test_window(self):
+        w = sr.decision_minutes()
+        self.assertEqual((len(w), w[0], w[-1]), (13, "15:44", "15:56"))
+        self.assertEqual(sr.decision_minutes("13:00")[::12], ("12:44", "12:56"))
+
+    def test_every_minute_is_tried_and_none_outside(self):
+        for hh in ("15:44", "15:51", "15:56"):
+            status, det = self.classify({"B": 1.0}, timed_minutes(near_threshold_prices(), {hh: -0.002}))
+            self.assertEqual((status, det["edge"]["time"], det["edge"]["src"]), ("knife-edge", hh, "fmp-1m"), hh)
+        for hh in ("15:43", "15:57"):                                         # broken: just outside the window
+            status, det = self.classify({"B": 1.0}, timed_minutes(near_threshold_prices(), {hh: -0.002}))
+            self.assertEqual(status, "mismatch", hh)
+            self.assertEqual(det["checked"], "prices at every minute 15:44-15:56 ET (FMP 1-minute bars)")
+
+    def test_half_day_window(self):
+        m = timed_minutes(near_threshold_prices(), {"12:47": -0.002}, close="13:00")
+        status, det = self.classify({"B": 1.0}, m)
+        self.assertEqual((status, det["edge"]["time"]), ("knife-edge", "12:47"))
+
+    def test_thin_fund_minutes(self):
+        m = timed_minutes(near_threshold_prices(), {"15:52": -0.002}, first="15:50")   # X first trades at 15:50
+        alts = sr.at_minutes(near_threshold_prices(), near_threshold_prices(), m, rsi_tree(), D)
+        self.assertEqual(min((k for k in alts if k != "_src"), key=sr._min), "15:51")   # earlier minutes skipped
+        status, det = self.classify({"B": 1.0}, m)
+        self.assertEqual((status, det["edge"]["time"]), ("knife-edge", "15:52"))
+
+    def test_scaled_onto_the_adjusted_series(self):
+        p = near_threshold_prices()
+        adj = {t: {d: v / 2 for d, v in s.items()} for t, s in p.items()}
+        status, det = self.classify({"B": 1.0}, timed_minutes(p, {"15:50": -0.002}), prices=adj, raw=p)
+        self.assertEqual((status, det["edge"]["time"]), ("knife-edge", "15:50"))
+
+    def test_fallbacks(self):
+        p = near_threshold_prices()
+        m = timed_minutes(p, {"15:50": -0.002})
+        del m["X"]                                                            # FMP has no X that day
+        status, det = self.classify({"B": 1.0}, m, bars=timed_bars(p, {"15:50": -0.002}))
+        self.assertEqual((status, det["edge"]["src"]), ("knife-edge", "yahoo-5m"))
+        status, det = self.classify({"B": 1.0}, m, bars=timed_bars(p, {}))
+        self.assertEqual((status, det["checked"]), ("mismatch", "prices at 15:45, 15:50, 15:55 ET (Yahoo 5-minute bars)"))
+        status, det = self.classify({"B": 1.0}, m)                           # neither: the one-ticker search
+        self.assertEqual((status, det["edge"]["basis"]), ("knife-edge", "search"))
+        self.assertIsNone(sr.intraday_check(p, p, rsi_tree(), D))
+
+    def test_fetch_keeps_only_the_day_and_hides_the_key(self):
+        saved = (sr.urllib.request.urlopen, sr.time.sleep)
+
+        class Resp(io.StringIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+        rows = [{"date": f"{day} 15:5{i}:00", "close": 100.0 + i} for day in ("2025-04-28", "2025-04-29", D) for i in range(3)]
+        try:
+            sr.time.sleep = lambda s: None
+            sr.urllib.request.urlopen = lambda req, timeout=30: Resp(json.dumps(rows))
+            self.assertEqual(sr.fetch_minutes("SPY", D, "SECRET"), {"15:50": 100.0, "15:51": 101.0, "15:52": 102.0})
+            self.assertEqual(sr.fetch_minutes("SPY", "2025-05-02", "SECRET"), {})   # a day FMP lacks: nothing
+            sr.urllib.request.urlopen = lambda req, timeout=30: Resp(json.dumps({"Error Message": "Limit Reach"}))
+            with self.assertRaises(RuntimeError):                                  # a refusal is not "no bars"
+                sr.fetch_minutes("SPY", D, "SECRET")
+            def boom(req, timeout=30):
+                raise RuntimeError(f"cannot open {req.full_url}")
+            sr.urllib.request.urlopen = boom
+            with self.assertRaises(RuntimeError) as cm:
+                sr.fetch_minutes("SPY", D, "SECRET")
+            self.assertNotIn("SECRET", str(cm.exception))
+            self.assertIn("***", str(cm.exception))
+        finally:
+            sr.urllib.request.urlopen, sr.time.sleep = saved
+
+    def test_fetcher_session_close_and_cache(self):
+        self.assertIsNone(sr.minutes_fetcher())                               # no key in the test process
+        calls = []
+        saved = sr.fetch_minutes
+
+        def fake(t, d, key, tries=2):
+            calls.append(t)
+            return {"SPY": {"15:58": 1.0, "15:59": 1.0}, "THIN": {"15:41": 2.0, "15:42": 2.0}}.get(t, {})
+        try:
+            sr.fetch_minutes = fake
+            get = sr.minutes_fetcher("k")
+            out = get(["THIN", "NONE"], D)
+            self.assertEqual(out["THIN"][D]["_close"], "16:00")               # from SPY, not THIN's 15:43
+            self.assertNotIn("NONE", out)
+            n = len(calls)
+            get(["THIN"], D)
+            self.assertEqual(len(calls), n)                                   # cached
+        finally:
+            sr.fetch_minutes = saved
+
+    def test_daily_path_uses_minutes(self):
+        tmp = tempfile.TemporaryDirectory()
+        saved = (sr.load_manifest, sr.load_tree, sr.fetch_prices)
+        p = near_threshold_prices()
+        try:
+            sr.load_manifest, sr.load_tree = (lambda: CFG), load
+            sr.fetch_prices = lambda *a, **k: (p, p, {})
+            led = os.path.join(tmp.name, "l.jsonl")
+            with contextlib.redirect_stdout(io.StringIO()):
+                sr.check_shadow({}, [], {}, meta(D, {"B": 0.999}), S13Wiring.NOW, ledger=led, bars=lambda tk: {},
+                                minutes=lambda tk, d: timed_minutes(p, {"15:52": -0.002}))
+            e1 = next(r for r in sr.read_ledger(led) if r["engine"] == "E1")
+            self.assertEqual((e1["status"], e1["edge"]["src"], e1["edge"]["time"]), ("knife-edge", "fmp-1m", "15:52"))
+        finally:
+            sr.load_manifest, sr.load_tree, sr.fetch_prices = saved
+            tmp.cleanup()
+
+    def test_2026_10_30_harv(self):
+        with gzip.open(MINUTES_FX) as f:
+            fx = json.load(f)
+        man = sr.load_manifest()
+        era = next(e for e in man["HARV"]["eras"] if e["version"] == fx["era"])
+        tree, d = sr.load_tree(era), fx["date"]
+        sim, target, tr = sr.run_engine(fx["prices"], tree, d)
+        self.assertEqual(target, {"PULS": 0.4, "ZVOL": 0.6})                  # the logic on closing prices
+        minutes = {t: {d: dict(m, _close="16:00")} for t, m in fx["minutes"].items()}
+        snaps = {t: {d: {"15:40": m["15:44"], "15:45": m["15:49"], "15:50": m["15:54"], "_close": "16:00"}}
+                 for t, m in fx["minutes"].items()}                           # what 5-minute bars show
+        status, det = sr.classify(sim, tree, d, target, tr, fx["composer"], None, None,
+                                  lambda: sr.intraday_check(fx["prices"], fx["raw"], tree, d, lambda tk, dd: minutes))
+        self.assertEqual((status, det["edge"]["time"], det["edge"]["src"]), ("knife-edge", "15:54", "fmp-1m"))
+        self.assertEqual(det["edge"]["target"], {"PULS": 0.48, "ZVOL": 0.52})
+        status, _ = sr.classify(sim, tree, d, target, tr, fx["composer"], None, None,
+                                lambda: sr.intraday_check(fx["prices"], fx["raw"], tree, d, None, lambda tk: snaps))
+        self.assertEqual(status, "mismatch")                                  # the old check, as on the day
 
 
 if __name__ == "__main__":

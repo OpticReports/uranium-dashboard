@@ -300,9 +300,10 @@ Called by `monitor.py` after the gate watch. Each session it evaluates every
 symphony's approved tree (`fixtures/approved/manifest.json`, one era per
 approved version) on Yahoo adjusted closes and compares the answer with
 Composer's holdings (KMLM on its 10% corridor path). A difference the logic
-reproduces on Composer's actual decision-time prices (15, 10 and 5 minutes
-before the close, from Yahoo 5-minute bars) is a logged knife-edge, not an
-alert. Alerts: a MISMATCH; COMPOSER DID
+reproduces on Composer's actual decision-time prices is a logged knife-edge, not
+an alert. Those prices are FMP 1-minute bars at every minute from 15:44 to 15:56
+(addendum 50; key from `FMP_API_KEY`), else Yahoo 5-minute bars at 15:45, 15:50
+and 15:55, else a one-ticker move within 0.3 sigma. Alerts: a MISMATCH; COMPOSER DID
 NOT REBALANCE (read from Composer's own attempt date, first session, daily
 while it lasts, then RESUMED); LOGIC DRIFT (Composer's live tree differs in
 logic from the approved one; checked every run, prices or not); SHADOW BLIND

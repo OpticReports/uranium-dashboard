@@ -26,11 +26,13 @@ Per engine, for session D (the latest final close on Yahoo):
                 closes sit more than 10pp off it, else those drifted holdings; without a previous
                 session, every holding within 11pp of the target
   knife-edge    not on closing prices, but yes when every decision ticker's close on D is replaced by
-                its price 15, 10 or 5 minutes before the session close (15:45/15:50/15:55; 12:45..
-                on a half-day; Yahoo 5-minute bars, none older than 30 minutes): Composer decides on
-                prices from those minutes. Logged, not alerted. Without bars, a one-ticker move within
-                0.3 sigma counts instead (p95 of the measured 15:45 -> close move), and two such
-                sessions in a row for one engine alert
+                its price at some minute from 16 to 4 minutes before the session close (15:44-15:56
+                ET; 12:44.. on a half-day; FMP 1-minute bars, the last trade if none that minute, none
+                older than 30 minutes): Composer decides on prices from those minutes (add. 50).
+                Without FMP, Yahoo 5-minute bars at 15, 10 and 5 minutes before the close. Logged,
+                not alerted. Without either, a one-ticker move within 0.3 sigma counts instead (p95
+                of the measured 15:45 -> close move), and two such sessions in a row for one engine
+                alert
   mismatch      neither explains it -> alert
   unavailable   prices missing, a data gap, the symphony missing from Composer's list, or logic the
                 shadow has not been validated on -> note; three sessions in a row for one engine ->
@@ -71,6 +73,8 @@ CORRIDOR_SLACK = 0.01     # KMLM: trigger ambiguity band; lenient check without 
 KNIFE_OFFSETS = (15, 10, 5)   # minutes before the session close (15:45/15:50/15:55; 12:45.. on half-days)
 KNIFE_TIMES = ("15:45", "15:50", "15:55")    # the offsets on a normal day
 STALE_BAR_MIN = 30        # a 5-minute bar older than this before the decision time counts as missing
+MINUTE_WINDOW = (16, 4)   # FMP 1-minute check: every minute from 16 to 4 minutes before the close (15:44-15:56)
+FMP_MINUTES = "https://financialmodelingprep.com/stable/historical-chart/1min"
 KNIFE_SIGMA = 0.3         # fallback search radius without bars, in 20-session daily sigmas: p95 of the
                           # measured 15:45 ET -> official close move (add. 48 calibration)
 CASH_SHARE_MAX = 0.02     # KMLM: uninvested cash above this (a deposit in flight) -> lenient check
@@ -541,6 +545,58 @@ def at_times(prices, raw, bars, tree, d):
     return out
 
 
+def minute_price(day_min, hhmm, max_age=STALE_BAR_MIN):
+    """price at hh:mm ET = close of the 1-minute bar ending then (it starts a minute earlier); the last
+    earlier bar if none traded that minute, but none older than max_age minutes"""
+    end = _min(hhmm) - 1
+    ks = [k for k, v in day_min.items() if not k.startswith("_") and v and end - max_age <= _min(k) <= end]
+    return day_min[max(ks, key=_min)] if ks else None
+
+
+def decision_minutes(close="16:00"):
+    """every minute of Composer's decision window, a minute either side: 15:44 .. 15:56 on a full day"""
+    return tuple(_hm(_min(close) - k) for k in range(MINUTE_WINDOW[0], MINUTE_WINDOW[1] - 1, -1))
+
+
+def at_minutes(prices, raw, minutes, tree, d):
+    """{hh:mm: target, '_src': 'fmp-1m'} at every minute of the decision window, each decision ticker's
+    close on d replaced by its 1-minute price then (scaled onto the adjusted series by the official close);
+    a minute where a decision ticker has no price is skipped. None if a decision ticker has no 1-minute
+    bars on d, or no raw close"""
+    minutes = minutes or {}
+    tk = decision_tickers(tree)
+    for t in tk:
+        if not (minutes.get(t) or {}).get(d) or not (raw.get(t) or {}).get(d) or d not in prices.get(t, {}):
+            return None
+    close = next((m[d]["_close"] for m in minutes.values() if (m or {}).get(d, {}).get("_close")), "16:00")
+    out = {}
+    for hh in decision_minutes(close):
+        px = {t: minute_price(minutes[t][d], hh) for t in tk}
+        if any(v is None for v in px.values()):
+            continue
+        p = dict(prices)
+        for t in tk:
+            p[t] = dict(prices[t])
+            p[t][d] = prices[t][d] * px[t] / raw[t][d]
+        out[hh] = run_engine(p, tree, d)[1]
+    return dict(out, _src="fmp-1m") if out else None
+
+
+def intraday_check(prices, raw, tree, d, minutes=None, bars=None):
+    """decision-time targets for classify(): FMP 1-minute prices across the window, else Yahoo 5-minute
+    bars at 15:45/15:50/15:55, else None (then the one-ticker search decides)"""
+    tk = sorted(decision_tickers(tree))
+    if minutes:
+        alts = at_minutes(prices, raw, minutes(tk, d), tree, d)
+        if alts:
+            return alts
+    if bars:
+        alts = at_times(prices, raw, bars(tk), tree, d)
+        if alts:
+            return dict(alts, _src="yahoo-5m")
+    return None
+
+
 def margin(it):
     """how close a traced check came to the other answer (relative; small = decisive)"""
     if it["kind"] == "cond":
@@ -584,11 +640,15 @@ def classify(sim, tree, d, target, trace, live, corridor=None, drifted=None, int
         return "agree", det
     alts = intraday() if intraday else None
     if alts is not None:
+        alts = dict(alts)
+        src = alts.pop("_src", "yahoo-5m")
         hit = next((hh for hh, alt in alts.items() if alt and agrees(alt, live, corridor, drifted)), None)
         if hit:
-            det["edge"] = {"basis": "intraday", "time": hit, "target": alts[hit]}
+            det["edge"] = {"basis": "intraday", "time": hit, "target": alts[hit], "src": src}
             return "knife-edge", det
-        det.update(why=explain(trace), checked=f"prices at {', '.join(alts)} ET")
+        span = (f"every minute {min(alts, key=_min)}-{max(alts, key=_min)} ET (FMP 1-minute bars)" if src == "fmp-1m"
+                else f"{', '.join(alts)} ET (Yahoo 5-minute bars)")
+        det.update(why=explain(trace), checked=f"prices at {span}")
         return "mismatch", det
     edge = knife_edge(sim, tree, d, trace, live, corridor, drifted)
     if edge:
@@ -925,6 +985,52 @@ def bars_fetcher(rng="5d"):
     return get
 
 
+def fetch_minutes(t, d, key, tries=3):
+    """{'HH:MM' bar start, ET: close} of t's FMP 1-minute bars on session d ({} if FMP has none that day).
+    FMP answers a range with the last three sessions up to `to`, and a day it lacks with the latest day it
+    has, so only bars dated d are kept. The key never appears in an error"""
+    url = f"{FMP_MINUTES}?" + urllib.parse.urlencode({"symbol": t, "from": d, "to": d, "apikey": key})
+    err = None
+    for k in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={"user-agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                rows = json.load(r)
+            if not isinstance(rows, list):
+                raise RuntimeError(f"unexpected answer {str(rows)[:80]}")
+            return {b["date"][11:16]: float(b["close"]) for b in rows
+                    if isinstance(b, dict) and str(b.get("date", "")).startswith(d) and b.get("close")}
+        except Exception as e:  # noqa: BLE001
+            err = str(e).replace(key, "***")
+        time.sleep(2 ** k)
+    raise RuntimeError(f"FMP {t} {d}: {err}")
+
+
+def minutes_fetcher(key=None):
+    """a cached callable (tickers, d) -> {ticker: {d: 1-minute bars}}; tickers without bars that day are
+    absent. Every ticker's '_close' (the session close) comes from SPY's last bar, always fetched: a thin
+    fund's last trade can come early. None without an FMP key (env FMP_API_KEY)"""
+    key = key or os.environ.get("FMP_API_KEY")
+    if not key:
+        return None
+    cache = {}
+
+    def get(tickers, d):
+        need = [t for t in set(tickers) | {"SPY"} if (t, d) not in cache]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+            for t, res in zip(need, ex.map(lambda t: _try(fetch_minutes, t, d, key), need)):
+                cache[(t, d)] = res or {}
+        spy = cache.get(("SPY", d)) or {}
+        close = _hm(max(_min(k) for k in spy) + 1) if spy else None
+        out = {}
+        for t in tickers:
+            m = cache.get((t, d))
+            if m:
+                out[t] = {d: dict(m, _close=close) if close else dict(m)}
+        return out
+    return get
+
+
 def _try(fn, *a):
     try:
         return fn(*a)
@@ -1046,10 +1152,11 @@ def expected_session(now):
     return d.isoformat()
 
 
-def assess(cfg_all, meta, prices, d, st, load=None, raw=None, bars=None, prev=None, weekday=1, only=None):
+def assess(cfg_all, meta, prices, d, st, load=None, raw=None, bars=None, prev=None, weekday=1, only=None, minutes=None):
     """Pure core of the daily check (no network). st: shadow state, mutated (the caller works on a
-    copy and keeps it only on success). raw: {ticker: {date: raw close}}; bars: callable(tickers) ->
-    5-minute bars, called only on a disagreement; prev: {engine: ledger row of the previous session};
+    copy and keeps it only on success). raw: {ticker: {date: raw close}}; minutes: callable(tickers, d)
+    -> FMP 1-minute bars, bars: callable(tickers) -> Yahoo 5-minute bars, called only on a
+    disagreement (minutes first); prev: {engine: ledger row of the previous session};
     weekday: ET weekday of the run; only: re-assess just these engines (a re-run of the same session:
     no no-rebalance or blind-count transitions). Returns (rows, alerts, notes)."""
     load = load or load_tree
@@ -1118,7 +1225,7 @@ def assess(cfg_all, meta, prices, d, st, load=None, raw=None, bars=None, prev=No
             else:
                 try:
                     base = corridor_base(cfg, p0, s, prices, d)
-                    intraday = (lambda: at_times(prices, raw, bars(sorted(decision_tickers(tree))), tree, d)) if bars else None
+                    intraday = (lambda: intraday_check(prices, raw, tree, d, minutes, bars)) if (minutes or bars) else None
                     status, det = classify(sim, tree, d, target, tr, live, cfg.get("corridor"), base, intraday)
                     row.update(status=status, **det)
                     if cfg.get("corridor"):
@@ -1181,7 +1288,7 @@ def assess(cfg_all, meta, prices, d, st, load=None, raw=None, bars=None, prev=No
     return rows, alerts, notes
 
 
-def check_shadow(state, alerts, snap, meta, now, get=None, write=True, ledger=None, bars=None):
+def check_shadow(state, alerts, snap, meta, now, get=None, write=True, ledger=None, bars=None, minutes=None):
     """monitor.py hook. The logic-drift check needs no prices; a Yahoo outage dates the session from
     the exchange calendar so Composer's own record is still judged. Alerts are delivered even if the
     ledger cannot be written. A failed run keeps the previous state (only its failure count moves);
@@ -1221,6 +1328,7 @@ def check_shadow(state, alerts, snap, meta, now, get=None, write=True, ledger=No
         else:
             only = set(pending) if work.get("last_date") == d else None
             rows, a, n = assess(cfg_all, meta, prices, d, work, raw=raw, bars=bars or bars_fetcher(),
+                                minutes=minutes if minutes is not None else minutes_fetcher(),
                                 prev=previous_rows(ledger, d, prices), weekday=e_now.weekday(), only=only)
             new_alerts += a
             notes += n

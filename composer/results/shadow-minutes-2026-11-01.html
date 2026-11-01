@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shadow runner minutes</title>
+<style>
+:root{color-scheme:light;--page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--ring:rgba(11,11,11,.10);
+--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#8c63c9;--band:rgba(42,120,214,.12);--crit:#d03b3b;--code:#f0efec}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--ring:rgba(255,255,255,.10);
+--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#9a72d6;--band:rgba(57,135,229,.16);--code:#232321}}
+:root[data-theme="dark"]{color-scheme:dark;--page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--ring:rgba(255,255,255,.10);
+--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#9a72d6;--band:rgba(57,135,229,.16);--code:#232321}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1000px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px;font-weight:650}h2{font-size:16px;margin:0 0 2px;font-weight:600}
+.sub-h{color:var(--ink2);margin:0 0 12px;font-size:14px}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:16px;margin:0 0 16px;min-width:0}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0 16px}
+@media (max-width:760px){.kpis{grid-template-columns:1fr}}
+.kpi{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:12px 14px}
+.kpi b{display:block;font-size:22px;font-weight:650}.kpi span{color:var(--ink2);font-size:13px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:6px 0 8px;font-size:13px;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}.sw{display:inline-block;width:14px;height:12px;border-radius:3px}
+svg{display:block;width:100%;height:auto}.ax,.ax text{fill:var(--muted);font-size:11px}.lb{fill:var(--ink2);font-size:12px}.lbb{fill:var(--ink);font-size:12px;font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{padding:5px 7px;text-align:left;border-bottom:1px solid var(--grid)}
+thead th{color:var(--ink2);font-weight:600;font-size:12.5px}.tablewrap{overflow-x:auto}
+.notes{font-size:13.5px;color:var(--ink2)}.notes li{margin:3px 0}
+.tt{position:fixed;pointer-events:none;background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:6px 9px;font-size:13px;display:none;z-index:5}
+</style>
+</head>
+<body>
+<main>
+<h1>Shadow runner: checking Composer's decision minute by minute</h1>
+<p class="sub-h">When the approved logic on closing prices disagrees with what Composer bought, the runner asks whether the logic, re-run on prices from Composer's ~15:45-15:55 decision window, gives what Composer holds (a knife-edge). It used to try three 5-minute snapshots from Yahoo; it now tries every minute from 15:44 to 15:56 on FMP 1-minute bars, with the old checks as fallbacks.</p>
+<div class="kpis" id="kpis"></div>
+
+<section class="card">
+<h2>Friday 10-30: the decision fell between the snapshots</h2>
+<p class="sub-h">SPY, price at the end of each minute (FMP). Above the red line, HARV's and KMLM's approved logic gives exactly the 52/48 ZVOL/PULS split Composer bought. The three 5-minute snapshots (black) were all below it, so the old check reported two mismatches; the 15:54 minute (red) is above it.</p>
+<svg id="fri" role="img" aria-label="SPY one-minute prices 15:30-16:00 on 2026-10-30 against the 52/48 threshold"></svg>
+</section>
+
+<section class="card">
+<h2>Every disagreement since July 15, by the evidence that settled it</h2>
+<p class="sub-h">Engine-sessions where the logic on closing prices differed from Composer's holdings, old rule vs new. "Search" means no price data, only a hypothetical one-ticker move within 0.3 sigma.</p>
+<div class="legend" id="lg"></div>
+<svg id="evid" role="img" aria-label="Stacked bars: evidence basis of the disagreements under the old and new rules"></svg>
+</section>
+
+<section class="card">
+<h2>The control: deliberately wrong pairs</h2>
+<p class="sub-h">The logic on one session against Composer's holdings from another (the day before, after, or five sessions later) where those holdings differ. Every one should be a mismatch; each one excused as a knife-edge is a way a real error could hide.</p>
+<svg id="plc" role="img" aria-label="Bars: wrong pairs excused under the old and new rules"></svg>
+</section>
+
+<section class="card">
+<h2>Sessions whose classification changed</h2>
+<div class="tablewrap"><table id="tbl"></table></div>
+</section>
+
+<section class="card notes">
+<h2 style="color:var(--ink)">Basis and limits</h2>
+<ul id="basis"></ul>
+</section>
+</main>
+<div class="tt" id="tt"></div>
+<script>
+const D = {"pts":[{"t":"15:31","c":752.58},{"t":"15:32","c":752.59},{"t":"15:33","c":752.75},{"t":"15:34","c":752.77},{"t":"15:35","c":753.15},{"t":"15:36","c":753.48},{"t":"15:37","c":753.57},{"t":"15:38","c":753.61},{"t":"15:39","c":753.09},{"t":"15:40","c":753.46},{"t":"15:41","c":753.62},{"t":"15:42","c":753.11},{"t":"15:43","c":753.51},{"t":"15:44","c":753.39},{"t":"15:45","c":753.25},{"t":"15:46","c":753.73},{"t":"15:47","c":753.58},{"t":"15:48","c":753.63},{"t":"15:49","c":754.03},{"t":"15:50","c":754.27},{"t":"15:51","c":755.7},{"t":"15:52","c":755.73},{"t":"15:53","c":755.8},{"t":"15:54","c":756.28},{"t":"15:55","c":756.07},{"t":"15:56","c":755.68},{"t":"15:57","c":754.69},{"t":"15:58","c":755.69},{"t":"15:59","c":755.4},{"t":"16:00","c":755.69}],"thr":756.13,"close":755.72,"snaps":[["15:45",753.25],["15:50",754.27],["15:55",756.07]],"evid":{"old":{"fmp-1m":0,"yahoo-5m":13,"search":8,"mismatch":2},"new":{"fmp-1m":23,"yahoo-5m":0,"search":0,"mismatch":0}},"plc":{"old":{"mismatch":336,"search":14,"yahoo-5m":2},"new":{"mismatch":348,"fmp-1m":4}},"exc":{"old":16,"new":4},"wrong":352,"pairs":370,"agree_pairs":18,"n_rows":272,"n_nonagree":23,"changed":[{"date":"2026-08-17","engine":"HG","version":"bP4mvRy6","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"SSO 100%","logic":"TNA 100%","new_time":"15:44","minutes_matched":12,"first":"15:44","last":"15:55","inner":true},{"date":"2026-10-08","engine":"HG","version":"bP4mvRy6","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"SSO 100%","logic":"TQQQ 100%","new_time":"15:44","minutes_matched":6,"first":"15:44","last":"15:51","inner":true},{"date":"2026-07-27","engine":"KMLM","version":"MVfHI8Og","old":"knife-edge (search)","new":"knife-edge (fmp-1m)","live":"SQQQ 76%, ZVOL 15%, PULS 10%","logic":"SQQQ 75%, PULS 25%","new_time":"15:44","minutes_matched":12,"first":"15:44","last":"15:56","inner":true},{"date":"2026-07-29","engine":"KMLM","version":"MVfHI8Og","old":"knife-edge (search)","new":"knife-edge (fmp-1m)","live":"TECL 75%, ZVOL 17%, PULS 8%","logic":"TECL 75%, ZVOL 19%, PULS 6%","new_time":"15:44","minutes_matched":12,"first":"15:44","last":"15:55","inner":true},{"date":"2026-08-05","engine":"KMLM","version":"MVfHI8Og","old":"knife-edge (search)","new":"knife-edge (fmp-1m)","live":"SOXL 38%, TECL 37%, VXZ 17%, PULS 8%","logic":"SOXL 38%, TECL 38%, VXZ 15%, PULS 10%","new_time":"15:44","minutes_matched":13,"first":"15:44","last":"15:56","inner":true},{"date":"2026-08-10","engine":"KMLM","version":"MVfHI8Og","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"TECL 38%, SOXL 37%, PULS 25%","logic":"SOXL 38%, TECL 38%, VXZ 15%, PULS 10%","new_time":"15:51","minutes_matched":6,"first":"15:51","last":"15:56","inner":true},{"date":"2026-08-31","engine":"KMLM","version":"MVfHI8Og","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"SQQQ 75%, PULS 25%","logic":"TLT 75%, PULS 25%","new_time":"15:44","minutes_matched":13,"first":"15:44","last":"15:56","inner":true},{"date":"2026-09-29","engine":"KMLM","version":"MVfHI8Og","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"SOXL 38%, SVIX 38%, PULS 25%","logic":"SVIX 38%, TECL 38%, PULS 16%, ZVOL 9%","new_time":"15:52","minutes_matched":4,"first":"15:52","last":"15:55","inner":true},{"date":"2026-10-30","engine":"KMLM","version":"MVfHI8Og","old":"mismatch","new":"knife-edge (fmp-1m)","live":"SQQQ 75%, ZVOL 13%, PULS 12%","logic":"SQQQ 75%, ZVOL 15%, PULS 10%","new_time":"15:54","minutes_matched":1,"first":"15:54","last":"15:54","inner":true},{"date":"2026-08-11","engine":"SLEEVE","version":"yHJkdePZ","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"BOXX 100%","logic":"BOXX 75%, LABD 25%","new_time":"15:44","minutes_matched":13,"first":"15:44","last":"15:56","inner":true},{"date":"2026-08-17","engine":"SLEEVE","version":"yHJkdePZ","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"BOXX 100%","logic":"BOXX 75%, LABD 25%","new_time":"15:44","minutes_matched":13,"first":"15:44","last":"15:56","inner":true},{"date":"2026-10-09","engine":"SLEEVE","version":"yHJkdePZ","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"BOXX 75%, LABD 25%","logic":"BOXX 100%","new_time":"15:44","minutes_matched":11,"first":"15:44","last":"15:54","inner":true},{"date":"2026-10-22","engine":"SLEEVE","version":"yHJkdePZ","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"BOXX 100%","logic":"BOXX 50%, SOXL 50%","new_time":"15:44","minutes_matched":13,"first":"15:44","last":"15:56","inner":true},{"date":"2026-07-24","engine":"HARV","version":"XVtsDTV1","old":"knife-edge (search)","new":"knife-edge (fmp-1m)","live":"ZVOL 52%, PULS 48%","logic":"PULS 64%, ZVOL 36%","new_time":"15:44","minutes_matched":13,"first":"15:44","last":"15:56","inner":true},{"date":"2026-07-27","engine":"HARV","version":"XVtsDTV1","old":"knife-edge (search)","new":"knife-edge (fmp-1m)","live":"PULS 64%, ZVOL 36%","logic":"PULS 100%","new_time":"15:44","minutes_matched":12,"first":"15:44","last":"15:56","inner":true},{"date":"2026-07-29","engine":"HARV","version":"XVtsDTV1","old":"knife-edge (search)","new":"knife-edge (fmp-1m)","live":"ZVOL 68%, PULS 32%","logic":"ZVOL 76%, PULS 24%","new_time":"15:44","minutes_matched":12,"first":"15:44","last":"15:55","inner":true},{"date":"2026-07-31","engine":"HARV","version":"XVtsDTV1","old":"knife-edge (search)","new":"knife-edge (fmp-1m)","live":"PULS 64%, VXZ 36%","logic":"PULS 100%","new_time":"15:44","minutes_matched":13,"first":"15:44","last":"15:56","inner":true},{"date":"2026-08-05","engine":"HARV","version":"XVtsDTV1","old":"knife-edge (search)","new":"knife-edge (fmp-1m)","live":"VXZ 68%, PULS 32%","logic":"VXZ 60%, PULS 40%","new_time":"15:44","minutes_matched":13,"first":"15:44","last":"15:56","inner":true},{"date":"2026-08-10","engine":"HARV","version":"XVtsDTV1","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"PULS 100%","logic":"VXZ 60%, PULS 40%","new_time":"15:51","minutes_matched":6,"first":"15:51","last":"15:56","inner":true},{"date":"2026-09-16","engine":"HARV","version":"XVtsDTV1","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"ZVOL 60%, PULS 40%","logic":"ZVOL 52%, PULS 48%","new_time":"15:44","minutes_matched":11,"first":"15:44","last":"15:54","inner":true},{"date":"2026-09-22","engine":"HARV","version":"XVtsDTV1","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"VXZ 60%, PULS 40%","logic":"VXZ 52%, PULS 48%","new_time":"15:44","minutes_matched":12,"first":"15:44","last":"15:55","inner":true},{"date":"2026-09-30","engine":"HARV","version":"XVtsDTV1","old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","live":"PULS 100%","logic":"PULS 64%, ZVOL 36%","new_time":"15:44","minutes_matched":11,"first":"15:44","last":"15:54","inner":true},{"date":"2026-10-30","engine":"HARV","version":"XVtsDTV1","old":"mismatch","new":"knife-edge (fmp-1m)","live":"ZVOL 52%, PULS 48%","logic":"ZVOL 60%, PULS 40%","new_time":"15:54","minutes_matched":1,"first":"15:54","last":"15:54","inner":true}],"sessions":["2026-07-15","2026-10-30"],"n_sessions":69,"window":["15:44","15:56"],"placebo_changed":[{"date":"2026-07-21","engine":"HG","lag":1,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-07-27","engine":"HG","lag":1,"old":"mismatch","new":"knife-edge (fmp-1m)","time":"15:44"},{"date":"2026-07-28","engine":"HG","lag":-1,"old":"mismatch","new":"knife-edge (fmp-1m)","time":"15:44"},{"date":"2026-08-05","engine":"KMLM","lag":1,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-08-05","engine":"KMLM","lag":5,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-08-06","engine":"KMLM","lag":-1,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-08-06","engine":"KMLM","lag":1,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-08-06","engine":"KMLM","lag":5,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-07-16","engine":"SLEEVE","lag":1,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-07-28","engine":"SLEEVE","lag":-1,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-07-28","engine":"SLEEVE","lag":1,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-10-12","engine":"SLEEVE","lag":-1,"old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","time":"15:44"},{"date":"2026-07-27","engine":"HARV","lag":-1,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-08-05","engine":"HARV","lag":1,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-08-05","engine":"HARV","lag":5,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-08-06","engine":"HARV","lag":1,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-08-06","engine":"HARV","lag":5,"old":"knife-edge (search)","new":"mismatch","time":null},{"date":"2026-09-21","engine":"HARV","lag":1,"old":"knife-edge (yahoo-5m)","new":"knife-edge (fmp-1m)","time":"15:44"}]}, NS = 'http://www.w3.org/2000/svg', tt = document.getElementById('tt');
+function el(t, a, p, x){const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (x != null) e.textContent = x; p.appendChild(e); return e;}
+function tip(ev, h){tt.innerHTML = h; tt.style.display = 'block'; tt.style.left = Math.min(ev.clientX + 12, innerWidth - tt.offsetWidth - 8) + 'px'; tt.style.top = ev.clientY + 12 + 'px';}
+function untip(){tt.style.display = 'none';}
+const COL = {'fmp-1m': 'var(--s1)', 'yahoo-5m': 'var(--s3)', 'search': 'var(--s4)', 'mismatch': 'var(--crit)'};
+const NAME = {'fmp-1m': 'knife-edge on FMP 1-minute prices', 'yahoo-5m': 'knife-edge on Yahoo 5-minute snapshots', 'search': 'knife-edge by one-ticker search (no prices)', 'mismatch': 'mismatch (alert)'};
+const ev = D.evid;
+[[`${ev.old.mismatch} → ${ev.new.mismatch}`, `mismatch alerts among the ${D.n_nonagree} disagreements since ${D.sessions[0].slice(5)}: Friday's two were knife-edges at 15:54`],
+ [`${ev.old['yahoo-5m'] + ev.old['fmp-1m']} → ${ev.new['fmp-1m'] + ev.new['yahoo-5m']}`, `of the ${D.n_nonagree} settled on actual decision-time prices rather than a hypothetical move (${ev.new.search} left to the search)`],
+ [`${D.exc.old} → ${D.exc.new}`, `of ${D.wrong} deliberately wrong pairs excused as knife-edges: the minute check is stricter than the search it replaces`]]
+ .forEach(([b, s]) => { const k = document.createElement('div'); k.className = 'kpi'; k.innerHTML = `<b>${b}</b><span>${s}</span>`; document.getElementById('kpis').appendChild(k); });
+
+(function(){
+  const svg = document.getElementById('fri'), W = 900, H = 320, l = 50, r = 160, t = 12, b = 28, m = s => +s.slice(0, 2) * 60 + +s.slice(3);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const vals = D.pts.map(p => p.c).concat([D.thr]), lo = Math.floor(Math.min(...vals)) - .5, hi = Math.ceil(Math.max(...vals)) + .3;
+  const X = s => l + (m(s) - m('15:30')) / 30 * (W - l - r), Y = v => t + (hi - v) / (hi - lo) * (H - t - b);
+  for (let v = Math.ceil(lo); v <= hi; v++) { el('line', {x1: l, x2: W - r, y1: Y(v), y2: Y(v), stroke: 'var(--grid)'}, svg); el('text', {x: l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, v); }
+  ['15:30', '15:40', '15:45', '15:50', '15:55', '16:00'].forEach(s => el('text', {x: X(s), y: H - 8, 'text-anchor': 'middle', class: 'ax'}, svg, s));
+  el('rect', {x: X(D.window[0]), y: t, width: X(D.window[1]) - X(D.window[0]), height: H - t - b, fill: 'var(--grid)', opacity: .45}, svg);
+  el('text', {x: X(D.window[0]) + 4, y: t + 12, class: 'lb'}, svg, `minute window ${D.window[0]}-${D.window[1]}`);
+  el('polyline', {points: D.pts.map(p => `${X(p.t)},${Y(p.c)}`).join(' '), fill: 'none', stroke: 'var(--s1)', 'stroke-width': 2, 'stroke-linejoin': 'round'}, svg);
+  el('line', {x1: l, x2: W - r, y1: Y(D.thr), y2: Y(D.thr), stroke: 'var(--crit)', 'stroke-width': 1.5, 'stroke-dasharray': '5 4'}, svg);
+  el('text', {x: W - r + 6, y: Y(D.thr) + 4, class: 'lbb'}, svg, `${D.thr}: 52/48 above`);
+  el('line', {x1: l, x2: W - r, y1: Y(D.close), y2: Y(D.close), stroke: 'var(--muted)', 'stroke-dasharray': '2 3'}, svg);
+  el('text', {x: W - r + 6, y: Y(D.close) + 16, class: 'lb'}, svg, `close ${D.close}`);
+  D.snaps.forEach(([s, v]) => { el('circle', {cx: X(s), cy: Y(v), r: 5, fill: 'var(--ink)', stroke: 'var(--surface)', 'stroke-width': 2}, svg);
+    el('text', {x: X(s), y: Y(v) + 18, 'text-anchor': 'middle', class: 'lb'}, svg, `${s} ${v.toFixed(2)}`); });
+  D.pts.filter(p => p.c >= D.thr && p.t >= D.window[0] && p.t <= D.window[1]).forEach(p => {
+    el('circle', {cx: X(p.t), cy: Y(p.c), r: 5, fill: 'var(--crit)', stroke: 'var(--surface)', 'stroke-width': 2}, svg);
+    el('text', {x: X(p.t), y: Y(p.c) - 10, 'text-anchor': 'middle', class: 'lbb'}, svg, `${p.t} ${p.c.toFixed(2)}`); });
+  D.pts.forEach(p => { const z = el('rect', {x: X(p.t) - 7, y: t, width: 14, height: H - t - b, fill: 'transparent'}, svg);
+    z.addEventListener('mousemove', e => tip(e, `<b>${p.t}</b> SPY ${p.c.toFixed(2)}${p.c >= D.thr ? '<br>logic: ZVOL 52 / PULS 48 (Composer)' : '<br>logic: ZVOL 60 / PULS 40'}`)); z.addEventListener('mouseleave', untip); });
+})();
+
+(function(){
+  const BASES = ['fmp-1m', 'yahoo-5m', 'search', 'mismatch'];
+  BASES.forEach(b => document.getElementById('lg').insertAdjacentHTML('beforeend', `<span><i class="sw" style="background:${COL[b]}"></i>${NAME[b]}</span>`));
+  const svg = document.getElementById('evid'), W = 900, rowH = 46, l = 110, r = 260, H = 2 * rowH + 24;
+  const SHORT = {'fmp-1m': 'FMP minutes', 'yahoo-5m': 'Yahoo snapshots', 'search': 'search', 'mismatch': 'mismatch'};
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const tot = D.n_nonagree, sx = v => (W - l - r) * v / tot;
+  [['old', 'old rule'], ['new', 'new rule']].forEach(([k, name], i) => {
+    const y = 6 + i * rowH; let x = l;
+    el('text', {x: l - 10, y: y + 20, 'text-anchor': 'end', class: 'lbb'}, svg, name);
+    BASES.forEach(b => { const n = ev[k][b] || 0; if (!n) return;
+      const w = sx(n);
+      const rr = el('rect', {x: x, y: y + 4, width: Math.max(1, w - 2), height: 24, fill: COL[b]}, svg);
+      rr.addEventListener('mousemove', e => tip(e, `<b>${name}</b><br>${NAME[b]}: ${n} of ${tot}`)); rr.addEventListener('mouseleave', untip);
+      x += w; });
+    el('text', {x: x + 8, y: y + 20, class: 'lb'}, svg, BASES.filter(b => ev[k][b]).map(b => `${ev[k][b]} ${SHORT[b]}`).join(' · '));
+  });
+  el('text', {x: l, y: H - 4, class: 'ax'}, svg, `${tot} engine-sessions, ${D.sessions[0]} to ${D.sessions[1]}`);
+})();
+
+(function(){
+  const svg = document.getElementById('plc'), W = 900, rowH = 46, l = 110, r = 200, H = 2 * rowH + 24;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const max = Math.max(D.exc.old, D.exc.new, 1), sx = v => (W - l - r) * v / max;
+  [['old', 'old rule'], ['new', 'new rule']].forEach(([k, name], i) => {
+    const y = 6 + i * rowH; let x = l;
+    el('text', {x: l - 10, y: y + 20, 'text-anchor': 'end', class: 'lbb'}, svg, name);
+    ['fmp-1m', 'yahoo-5m', 'search'].forEach(b => { const n = D.plc[k][b] || 0; if (!n) return;
+      const w = sx(n);
+      const rr = el('rect', {x: x, y: y + 4, width: Math.max(1, w - 2), height: 24, fill: COL[b]}, svg);
+      rr.addEventListener('mousemove', e => tip(e, `<b>${name}</b><br>${NAME[b]}: ${n} wrong pairs`)); rr.addEventListener('mouseleave', untip);
+      x += w; });
+    el('text', {x: x + 8, y: y + 20, class: 'lb'}, svg, `${D.exc[k]} of ${D.wrong} excused`);
+  });
+  el('text', {x: l, y: H - 4, class: 'ax'}, svg, `${D.pairs} wrong pairs; ${D.agree_pairs} agree under KMLM's lenient corridor check under both rules and are left out`);
+})();
+
+document.getElementById('tbl').innerHTML = '<thead><tr><th>Session</th><th>Engine</th><th>Old rule</th><th>New rule</th><th>Composer held</th><th>Logic on closes</th></tr></thead><tbody>' +
+  D.changed.map(x => `<tr><td>${x.date}</td><td>${x.engine}</td><td>${x.old}</td><td>${x.new}${x.new_time ? ' @' + x.new_time : ''}</td><td>${x.live}</td><td>${x.logic}</td></tr>`).join('') + '</tbody>';
+[`Prices: FMP 1-minute bars (price at a minute = the close of the bar ending then; a fund with no trade that minute keeps its last trade, none older than 30 minutes), scaled onto Yahoo's adjusted series by the official close. Window ${D.window[0]}-${D.window[1]} ET, 16 to 4 minutes before the close (12:44-12:56 on a half-day).`,
+ `Old rule: Yahoo 5-minute snapshots at 15:45/15:50/15:55, available for the last ~60 sessions; before that, the one-ticker search within 0.3 sigma. New rule: FMP minutes, then the Yahoo snapshots, then the search.`,
+ `Sessions: ${D.n_sessions} sessions with a committed holdings snapshot, ${D.sessions[0]} to ${D.sessions[1]} (the 10-26..28 no-rebalance sessions are judged on Composer's record and left out).`,
+ `More minutes means more chances for a wrong holding to look explained. The control measures that directly: the new rule excuses ${D.exc.new} of ${D.wrong} wrong pairs, against ${D.exc.old} for the old one, because real minute prices replace the permissive search for older sessions.`,
+ `In-sample: the window and the control were set and read on the same sessions. Composer does not publish its decision time; 15:44-15:56 brackets the 15:45-15:55 it is observed to use.`]
+ .forEach(s => document.getElementById('basis').insertAdjacentHTML('beforeend', `<li>${s}</li>`));
+</script>
+</body>
+</html>
