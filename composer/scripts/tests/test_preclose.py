@@ -29,11 +29,12 @@ BROKEN-INPUT counterpart that must land on the other side. The counter-agent's s
       closed hours say so, the quotes' age widens every sigma, a stale SPY's own age widens the
       gate's, sigma and betas end yesterday
   P10 ledger appends; exit codes; a crashed preview still alerts
-  P11 live prices from FMP's batch quote (add. 50): FMP's price wherever it is from today and at
-      least as recent as Yahoo's, Yahoo's otherwise; a stale Yahoo price rescued, siblings too; a
-      market Yahoo shows shut but FMP shows trading is previewed; disagreements listed with their
-      times; FMP down or no key -> Yahoo's prices, said in the report; a refusal is an error, retried,
-      the key never in it; batches; the ledger's record of the source
+  P11 live prices from FMP's 1-minute bars (add. 50): the last bar ending at or before the run, SPY
+      first or nothing; FMP's price unless Yahoo's last sale is over a minute newer; nothing from the
+      run's future (replays), Yahoo's included; a stale Yahoo price rescued, siblings too; a market
+      Yahoo shows shut but FMP shows trading is previewed; Yahoo's history must reach the previous
+      session; disagreements only between prices of one moment; FMP down, problems, no key, switched
+      off: said in the report; counts over priced tickers; the ledger's per-ticker record
 
 Run: python3 -m unittest composer.scripts.tests.test_preclose -v
 """
@@ -816,6 +817,7 @@ class PreviewBase(unittest.TestCase):
         self.period = {"start": ts(et(2026, 10, 28, 9, 30)), "end": ts(et(2026, 10, 28, 16, 0))}
         self.stale, self.extra, self.down, self.no_today = {}, {}, False, False
         self.quotes = None                   # None: no FMP key (the suite pops it), Yahoo's prices alone
+        self.cut = {}                        # {ticker: dates missing from Yahoo's history}
 
     def fetch(self, t):
         if self.down:
@@ -823,6 +825,7 @@ class PreviewBase(unittest.TestCase):
         s = self.fx["prices"].get(t) or self.extra.get(t)
         if s is None:
             raise RuntimeError("no such ticker")
+        s = {d: v for d, v in s.items() if d not in self.cut.get(t, ())}
         a, r, meta = feed(s, self.now, 60 if t in self.stale else 2, today=not self.no_today)
         if t in self.stale:
             a[max(a)] = r[max(r)] = self.stale[t]
@@ -1041,117 +1044,163 @@ class P10LedgerExit(unittest.TestCase):
 
 
 # ------------------------------------------------------------------ P11
-class Resp(io.BytesIO):
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        return False
-
-
-class P11Quotes(unittest.TestCase):
-    """FMP's batch quote as the live price; Yahoo's daily history kept"""
+class P11Merge(unittest.TestCase):
+    """FMP's 1-minute bar as today's price unless Yahoo's last sale is over a minute newer; Yahoo's
+    history kept; nothing from the run's future; disagreements only between prices of one moment"""
     T = "2026-10-28"
 
     def setUp(self):
         self.now = et(2026, 10, 28, 15, 15)
 
-    def yahoo(self, age=2, today=True, price=100.0):
+    def at(self, minutes=0, seconds=0, days=0):
+        return self.now - datetime.timedelta(minutes=minutes, seconds=seconds, days=days)
+
+    def yahoo(self, when, today=True, price=100.0):
         adj = {"2026-10-26": 98.0, "2026-10-27": 99.0}
         if today:
             adj[self.T] = price
-        return adj, dict(adj), {"regularMarketTime": ts(self.now - datetime.timedelta(minutes=age))}
+        return adj, dict(adj), {"regularMarketTime": ts(when)}
 
-    def q(self, price, age=1, days_back=0):
-        return price, self.now - datetime.timedelta(minutes=age, days=days_back)
+    def merge(self, y, q):
+        return pc.merge_quotes({"SPY": y}, {"SPY": q} if q else {}, self.T, self.now)
 
-    def test_fresher_fmp_used(self):
-        data = {"SPY": self.yahoo(age=5)}
-        out, src, diff = pc.merge_quotes(data, {"SPY": self.q(100.1, age=1)}, self.T, self.now)
+    def test_fmp_unless_yahoo_a_minute_newer(self):
+        y = self.yahoo(self.at(2))
+        out, src, _ = self.merge(y, (100.1, self.at(1)))
         adj, raw, meta = out["SPY"]
         self.assertEqual((adj[self.T], raw[self.T], src["SPY"]), (100.1, 100.1, "fmp"))
-        self.assertEqual(meta["regularMarketTime"], ts(self.now - datetime.timedelta(minutes=1)))
-        self.assertEqual((adj["2026-10-27"], data["SPY"][0][self.T]), (99.0, 100.0))   # history kept, input not mutated
-        out, src, _ = pc.merge_quotes(data, {"SPY": self.q(100.1, age=9)}, self.T, self.now)   # broken: FMP older
+        self.assertEqual(meta["regularMarketTime"], ts(self.at(1)))
+        self.assertEqual((adj["2026-10-27"], y[0][self.T]), (99.0, 100.0))           # history kept, input untouched
+        _, src, _ = self.merge(self.yahoo(self.at(1)), (100.1, self.at(1, 30)))
+        self.assertEqual(src["SPY"], "fmp")                                         # 30 s older: the same moment
+        out, src, _ = self.merge(self.yahoo(self.at(1)), (100.1, self.at(3)))       # broken: 2 minutes older
         self.assertEqual((out["SPY"][0][self.T], src["SPY"]), (100.0, "yahoo"))
-        self.assertEqual(out["SPY"][2]["regularMarketTime"], data["SPY"][2]["regularMarketTime"])
+        self.assertEqual(out["SPY"][2]["regularMarketTime"], ts(self.at(1)))
 
-    def test_equal_time_prefers_fmp(self):
-        out, src, _ = pc.merge_quotes({"SPY": self.yahoo(age=3)}, {"SPY": self.q(100.2, age=3)}, self.T, self.now)
-        self.assertEqual(src["SPY"], "fmp")
+    def test_only_today_and_never_the_future(self):
+        _, src, _ = self.merge(self.yahoo(self.at(30)), (101.0, self.at(1, days=1)))
+        self.assertEqual(src["SPY"], "yahoo")                                       # yesterday's bar
+        _, src, _ = self.merge(self.yahoo(self.at(30)), (101.0, self.at(-45)))
+        self.assertEqual(src["SPY"], "yahoo")                                       # 45 minutes after the run: a replay
+        _, src, _ = self.merge(self.yahoo(self.at(30)), (101.0, self.at(-1)))
+        self.assertEqual(src["SPY"], "fmp")                                         # a minute of clock skew is tolerated
+        _, src, _ = self.merge(self.yahoo(self.at(30)), (101.0, self.at(1)))
+        self.assertEqual(src["SPY"], "fmp")                                         # broken: a past bar
 
-    def test_only_todays_quote(self):
-        out, src, _ = pc.merge_quotes({"SPY": self.yahoo(age=30)}, {"SPY": self.q(101.0, days_back=1)}, self.T, self.now)
-        self.assertEqual((out["SPY"][0][self.T], src["SPY"]), (100.0, "yahoo"))         # yesterday's quote: never today's price
-        out, src, _ = pc.merge_quotes({"SPY": self.yahoo(age=30)}, {}, self.T, self.now)  # no quote at all
-        self.assertEqual(src["SPY"], "yahoo")
+    def test_yahoo_from_the_future_dropped(self):
+        out, src, _ = self.merge(self.yahoo(self.at(-30)), None)                    # a replay: Yahoo shows the close
+        self.assertNotIn(self.T, out["SPY"][0])
+        out, src, _ = self.merge(self.yahoo(self.at(-30)), (100.2, self.at(1)))
+        self.assertEqual((out["SPY"][0][self.T], src["SPY"]), (100.2, "fmp"))
+        out, _, _ = self.merge(self.yahoo(self.at(2)), None)                        # broken: Yahoo's own past
+        self.assertEqual(out["SPY"][0][self.T], 100.0)
 
     def test_today_injected_when_yahoo_has_none(self):
-        out, src, _ = pc.merge_quotes({"SPY": self.yahoo(today=False)}, {"SPY": self.q(100.3)}, self.T, self.now)
+        out, src, _ = self.merge(self.yahoo(self.at(1), today=False), (100.3, self.at(1)))
         self.assertEqual((out["SPY"][0][self.T], src["SPY"]), (100.3, "fmp"))
-        fresh, stale = pc.freshness(out, self.T, self.now)
-        self.assertEqual((fresh, stale), ({"SPY": 100.3}, {}))
-        out, src, _ = pc.merge_quotes({"SPY": self.yahoo(today=False)}, {"SPY": self.q(100.3, days_back=1)}, self.T, self.now)
-        self.assertNotIn(self.T, out["SPY"][0])                                          # broken: yesterday's quote
+        self.assertEqual(pc.freshness(out, self.T, self.now), ({"SPY": 100.3}, {}))
+        out, _, _ = self.merge(self.yahoo(self.at(1), today=False), (100.3, self.at(1, days=1)))
+        self.assertNotIn(self.T, out["SPY"][0])                                     # broken: yesterday's bar
 
-    def test_disagreement_listed(self):
-        _, _, diff = pc.merge_quotes({"SPY": self.yahoo(age=2)}, {"SPY": self.q(100.5, age=1)}, self.T, self.now)
-        self.assertEqual(diff, [("SPY", 100.5, "15:14:00", 100.0, "15:13:00")])
-        _, _, diff = pc.merge_quotes({"SPY": self.yahoo(age=2)}, {"SPY": self.q(100.25, age=1)}, self.T, self.now)
-        self.assertEqual(diff, [])                                                        # within 0.3%
-        _, _, diff = pc.merge_quotes({"SPY": self.yahoo(age=2)}, {"SPY": self.q(99.5, age=1)}, self.T, self.now)
-        self.assertEqual(len(diff), 1)                                                    # either way
-        _, src, diff = pc.merge_quotes({"SPY": self.yahoo(age=20)}, {"SPY": self.q(100.5, age=1)}, self.T, self.now)
-        self.assertEqual((diff, src["SPY"]), ([], "fmp"))                                # Yahoo stale: a move, not a disagreement
+    def test_disagreement_at_one_moment_only(self):
+        _, _, diff = self.merge(self.yahoo(self.at(1, 30)), (100.5, self.at(1)))
+        self.assertEqual(diff, [("SPY", 100.5, "15:14:00", 100.0, "15:13:30")])
+        _, _, diff = self.merge(self.yahoo(self.at(1, 30)), (99.5, self.at(1)))
+        self.assertEqual(len(diff), 1)                                              # either way
+        _, _, diff = self.merge(self.yahoo(self.at(1, 30)), (100.25, self.at(1)))
+        self.assertEqual(diff, [])                                                  # within 0.3%
+        _, src, diff = self.merge(self.yahoo(self.at(6)), (100.5, self.at(1)))
+        self.assertEqual((diff, src["SPY"]), ([], "fmp"))                           # 5 minutes apart: the market moved
+        _, _, diff = self.merge(self.yahoo(self.at(20)), (100.5, self.at(1)))
+        self.assertEqual(diff, [])                                                  # Yahoo stale
 
-    def fake_fmp(self, answers, calls):
+
+    def test_previous_session(self):
+        self.assertEqual(pc.previous_session("2026-10-28"), "2026-10-27")
+        self.assertEqual(pc.previous_session("2026-11-02"), "2026-10-30")             # over a weekend
+        self.assertEqual(pc.previous_session("2026-11-27"), "2026-11-25")             # over Thanksgiving
+        self.assertNotEqual(pc.previous_session("2026-11-27"), "2026-11-26")          # broken: the holiday itself
+
+
+class P11Minutes(unittest.TestCase):
+    """the FMP source: each ticker's last 1-minute bar ending at or before the run"""
+    def bars(self, base=100.0):
+        return {f"15:{m:02d}": base + m for m in range(10, 21)}
+
+    def test_last_bar_at_or_before_now(self):
+        asked = []
+
+        def fetch(t, d, key):
+            asked.append((t, d, key))
+            return self.bars(500.0 if t == "SPY" else 50.0)
+        q, probs = pc.minute_quotes({"SPY", "QQQ"}, et(2026, 10, 28, 15, 15) + datetime.timedelta(seconds=30), "K", fetch)
+        self.assertEqual(q["SPY"], (514.0, et(2026, 10, 28, 15, 15)))                # the 15:14 bar, ending 15:15
+        self.assertEqual((q["QQQ"][0], probs), (64.0, {}))
+        self.assertEqual(asked[0], ("SPY", "2026-10-28", "K"))                     # SPY first, today's ET date
+        q, _ = pc.minute_quotes({"SPY"}, et(2026, 10, 28, 15, 20) + datetime.timedelta(seconds=30), "K", fetch)
+        self.assertEqual(q["SPY"][0], 519.0)                                        # broken: a later run, a later bar
+        asked.clear()
+        pc.minute_quotes({"SPY"}, datetime.datetime(2026, 10, 29, 0, 30, tzinfo=UTC), "K", fetch)
+        self.assertEqual(asked[0][1], "2026-10-28")                                 # 20:30 ET is still the 28th
+
+    def test_spy_first_or_nothing(self):
+        asked = []
+
+        def none_for_spy(t, d, key):
+            asked.append(t)
+            return {} if t == "SPY" else self.bars()
+        with self.assertRaises(RuntimeError) as cm:
+            pc.minute_quotes({"SPY", "QQQ"}, et(2026, 10, 28, 15, 15), "K", none_for_spy)
+        self.assertIn("no SPY 1-minute bar for 2026-10-28", str(cm.exception))
+        self.assertEqual(asked, ["SPY"])                                            # nothing else asked
+
+        def refused(t, d, key):
+            asked.append(t)
+            raise RuntimeError("FMP SPY 2026-10-28: unexpected answer {'Error Message': 'Limit Reach'}")
+        asked.clear()
+        with self.assertRaises(RuntimeError):
+            pc.minute_quotes({"SPY", "QQQ"}, et(2026, 10, 28, 15, 15), "K", refused)
+        self.assertEqual(asked, ["SPY"])
+        asked.clear()                                                                # broken: SPY fine
+        pc.minute_quotes({"SPY", "QQQ"}, et(2026, 10, 28, 15, 15), "K", lambda t, d, k: asked.append(t) or self.bars())
+        self.assertEqual(sorted(asked), ["QQQ", "SPY"])
+
+    def test_problems_and_odd_rows(self):
+        def fetch(t, d, key):
+            if t == "BAD":
+                raise RuntimeError("FMP BAD 2026-10-28: timed out")
+            if t == "THIN":
+                return {}
+            if t == "ODD":
+                return {"15:11": 7, "_close": "16:00", "15:12": None, "15:13": True, "15:14": -1.0, "xx": 3.0,
+                        "15:59": 9.0}                                                # an int close; junk; a later bar
+            return self.bars()
+        q, probs = pc.minute_quotes({"SPY", "BAD", "THIN", "ODD"}, et(2026, 10, 28, 15, 15), "K", fetch)
+        self.assertEqual(probs, {"BAD": "FMP BAD 2026-10-28: timed out", "THIN": "no bar today"})
+        self.assertEqual(q["ODD"], (7.0, et(2026, 10, 28, 15, 12)))                 # the int kept, junk and the future not
+        self.assertIsInstance(q["ODD"][0], float)
+        self.assertEqual(sorted(q), ["ODD", "SPY"])
+
+    def test_fetch_reads_fmp_minutes(self):
+        urls = []
+
+        class Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
         def urlopen(req, timeout=None):
-            calls.append(req.full_url)
-            a = answers.pop(0) if answers else []
-            if isinstance(a, Exception):
-                raise a
-            return Resp(json.dumps(a).encode())
-        return unittest.mock.patch.object(pc.urllib.request, "urlopen", urlopen)
-
-    def test_fetch_quotes_parses(self):
-        t0 = ts(self.now)
-        rows = [{"symbol": "SPY", "price": 690.1, "timestamp": t0}, {"symbol": "QQQ", "price": 0, "timestamp": t0},
-                {"symbol": "TLT", "price": 81.2}, {"symbol": "XXX", "price": 5.0, "timestamp": t0}, "junk"]
-        calls = []
-        with self.fake_fmp([rows] * 3, calls), unittest.mock.patch.object(pc.time, "sleep"):
-            q = pc.fetch_quotes({"SPY", "QQQ", "TLT"}, "SECRETKEY")
-        self.assertEqual(q, {"SPY": (690.1, self.now)})                                  # no price, no time, not asked: dropped
-        self.assertEqual(len(calls), 1)                                                   # a dropped row is not a failed call
-        args = urllib.parse.parse_qs(urllib.parse.urlparse(calls[0]).query)
-        self.assertEqual(args["symbols"], ["QQQ,SPY,TLT"])
-        self.assertTrue(calls[0].startswith(pc.FMP_QUOTES))
-
-    def test_refusal_is_an_error_without_the_key(self):
-        calls = []
-        refusal = {"Error Message": "Limit Reach for apikey=SECRETKEY"}
-        with self.fake_fmp([refusal] * 3, calls), unittest.mock.patch.object(pc.time, "sleep"):
-            with self.assertRaises(RuntimeError) as cm:
-                pc.fetch_quotes({"SPY"}, "SECRETKEY")
-        self.assertEqual(len(calls), 3)                                                   # retried
-        self.assertNotIn("SECRETKEY", str(cm.exception))
-        self.assertIn("Limit Reach", str(cm.exception))
-        calls = []
-        with self.fake_fmp([RuntimeError("refused https://x?apikey=SECRETKEY")] * 3, calls), \
-                unittest.mock.patch.object(pc.time, "sleep"), self.assertRaises(RuntimeError) as cm:
-            pc.fetch_quotes({"SPY"}, "SECRETKEY")
-        self.assertNotIn("SECRETKEY", str(cm.exception))
-        calls = []                                                                        # broken: refused once, then answered
-        with self.fake_fmp([refusal, [{"symbol": "SPY", "price": 1.0, "timestamp": ts(self.now)}]], calls), \
-                unittest.mock.patch.object(pc.time, "sleep"):
-            self.assertEqual(pc.fetch_quotes({"SPY"}, "SECRETKEY"), {"SPY": (1.0, self.now)})
-        self.assertEqual(len(calls), 2)
-
-    def test_batches(self):
-        calls = []
-        with self.fake_fmp([], calls), unittest.mock.patch.object(pc, "QUOTE_BATCH", 2):
-            pc.fetch_quotes({"A", "B", "C", "D", "E"}, "K")
-        got = [urllib.parse.parse_qs(urllib.parse.urlparse(u).query)["symbols"][0] for u in calls]
-        self.assertEqual(got, ["A,B", "C,D", "E"])
+            urls.append(req.full_url)
+            return Resp(json.dumps([{"date": "2026-10-28 15:14:00", "close": 690.5}]).encode())
+        with unittest.mock.patch.object(sr.urllib.request, "urlopen", urlopen), unittest.mock.patch.object(sr.time, "sleep"):
+            q, _ = pc.minute_quotes({"SPY"}, et(2026, 10, 28, 15, 15) + datetime.timedelta(seconds=5), "SECRETKEY")
+        self.assertEqual(q["SPY"][0], 690.5)
+        u = urllib.parse.urlparse(urls[0])
+        self.assertEqual((u.scheme, u.netloc, u.path), ("https", "financialmodelingprep.com", "/stable/historical-chart/1min"))
+        args = urllib.parse.parse_qs(u.query)
+        self.assertEqual((args["symbol"], args["from"], args["to"]), (["SPY"], ["2026-10-28"], ["2026-10-28"]))
 
     def test_key_from_the_environment(self):
         with unittest.mock.patch.dict(os.environ, {}, clear=False):
@@ -1159,20 +1208,20 @@ class P11Quotes(unittest.TestCase):
             self.assertIsNone(pc.fmp_quotes())
             os.environ["FMP_API_KEY"] = "ENVKEY"
             seen = []
-            with unittest.mock.patch.object(pc, "fetch_quotes", lambda t, k: seen.append(k) or {}):
-                pc.fmp_quotes()({"SPY"})
+            with unittest.mock.patch.object(pc, "minute_quotes", lambda t, now, k: seen.append(k) or ({}, {})):
+                pc.fmp_quotes()({"SPY"}, et(2026, 10, 28, 15, 15))
             self.assertEqual(seen, ["ENVKEY"])
 
 
 class P11Preview(PreviewBase):
-    """the preview end to end with FMP quotes (the frozen 2026-10-28 closes as 15:15 prices)"""
+    """the preview end to end with FMP minutes (the frozen 2026-10-28 closes as 15:15 prices)"""
     def setUp(self):
         super().setUp()
         self.asked = []
 
-    def fmp(self, age=1, only=None, scale=None, days_back=0, fail=None):
-        def quotes(tickers):
-            self.asked.append(set(tickers))
+    def fmp(self, age=1, only=None, scale=None, days_back=0, fail=None, probs=None):
+        def quotes(tickers, now):
+            self.asked.append((set(tickers), now))
             if fail:
                 raise RuntimeError(fail)
             out = {}
@@ -1180,9 +1229,8 @@ class P11Preview(PreviewBase):
                 s = self.fx["prices"].get(t) or self.extra.get(t)
                 if s is None or (only is not None and t not in only):
                     continue
-                out[t] = (s[max(s)] * (scale or {}).get(t, 1.0),
-                          self.now - datetime.timedelta(minutes=age, days=days_back))
-            return out
+                out[t] = (s[max(s)] * (scale or {}).get(t, 1.0), now - datetime.timedelta(minutes=age, days=days_back))
+            return out, dict(probs or {})
         return quotes
 
     def test_stale_yahoo_rescued(self):
@@ -1192,93 +1240,146 @@ class P11Preview(PreviewBase):
         g = led[0]
         self.assertAlmostEqual(g["spy"], 772.31, places=2)
         self.assertNotIn("stale", g)
-        self.assertEqual(g["lag"], 1.0)                                                   # FMP's quotes are a minute old
-        self.assertEqual((g["quotes"]["failed"], g["quotes"]["yahoo"]), (None, []))
-        self.assertTrue(any(x.startswith("live prices: FMP for") for x in lines), lines)
-        self.assertTrue(any("SSO" in a for a in self.asked[0]))                          # one call, siblings included
-        self.assertEqual(len(self.asked), 1)
-        self.quotes = self.fmp(days_back=1)                                               # broken: FMP's quotes are yesterday's
+        self.assertEqual(g["lag"], 1.0)                                             # FMP's bars end a minute ago
+        self.assertEqual((g["quotes"]["failed"], g["quotes"]["yahoo"], g["quotes"]["source"]), (None, [], "fmp-1m"))
+        self.assertTrue(any("SSO" in a for a in self.asked[0][0]))                   # one call, siblings included
+        self.assertEqual((len(self.asked), self.asked[0][1]), (1, self.now))
+        self.quotes = self.fmp(days_back=1)                                         # broken: yesterday's bars
         lines, _, led = self.run_preview()
         self.assertAlmostEqual(led[0]["spy"], 772.31 * 0.9, places=2)
         self.assertIn("no fresh sibling", led[0]["stale"])
         self.assertIn("SPY", led[0]["quotes"]["yahoo"])
 
-    def test_sibling_quote_used(self):
+    def test_sibling_bar_used(self):
         self.extra["IVV"] = {d: p * 0.9 for d, p in self.fx["prices"]["SPY"].items()}
         self.stale = {t: self.fx["prices"][t][max(self.fx["prices"][t])] * 0.9 for t in ("SPY", "SSO", "SPXL", "UPRO")}
-        self.stale["IVV"] = 600.0                                                         # Yahoo's IVV stale too
-        self.quotes = self.fmp(only={"IVV"})                                              # FMP: IVV only
+        self.stale["IVV"] = 600.0
+        self.quotes = self.fmp(only={"IVV"})
         g = self.run_preview()[2][0]
         self.assertAlmostEqual(g["spy"], 772.31, places=1)
         self.assertIn("via IVV", g["stale"])
-        self.quotes = self.fmp(only=set())                                                # broken: no FMP quote for IVV
-        g = self.run_preview()[2][0]
-        self.assertIn("no fresh sibling", g["stale"])
+        self.quotes = self.fmp(only=set())                                          # broken: no IVV bar
+        self.assertIn("no fresh sibling", self.run_preview()[2][0]["stale"])
 
     def test_market_trading_on_fmp(self):
-        self.no_today = True                                                              # Yahoo shows no bar today
+        self.no_today = True
         self.quotes = self.fmp()
         lines, alerts, led = self.run_preview()
         self.assertFalse(any(a.startswith("PRE-CLOSE UNAVAILABLE") for a in alerts), alerts)
         self.assertAlmostEqual(led[0]["spy"], 772.31, places=2)
-        self.quotes = self.fmp(days_back=1)                                               # broken: FMP shows no trade today either
-        _, alerts, led = self.run_preview()
+        self.quotes = self.fmp(days_back=1)                                         # broken: no trade today on FMP either
+        _, alerts, _ = self.run_preview()
         self.assertTrue(alerts[-1].startswith("PRE-CLOSE UNAVAILABLE") and "show a trade today" in alerts[-1])
 
+    def test_yahoo_history_must_reach_the_previous_session(self):
+        self.quotes = self.fmp()
+        self.cut = {"SPY": {"2026-10-27"}}                                          # Yahoo's SPY stops at 10-26
+        lines, alerts, led = self.run_preview()
+        self.assertEqual(led, [])
+        self.assertIn("Yahoo's SPY history ends 2026-10-26, not the previous session 2026-10-27", alerts[-1])
+        self.cut = {"QLD": {"2026-10-27"}}                                          # one fund short: named, not fatal
+        lines, alerts, led = self.run_preview()
+        self.assertTrue(any("before the previous session 2026-10-27 for QLD" in x for x in lines), lines)
+        self.assertEqual(led[0]["quotes"]["short"], ["QLD"])
+        self.cut = {}                                                               # broken: complete history
+        lines, alerts, led = self.run_preview()
+        self.assertFalse(any("previous session" in x for x in lines + alerts))
+        self.assertEqual(led[0]["quotes"]["short"], [])
+
     def test_disagreement_in_the_report(self):
-        self.quotes = self.fmp(scale={"TQQQ": 1.01})
+        self.quotes = self.fmp(scale={"TQQQ": 1.01})                                # FMP 15:14, Yahoo 15:13: one moment
         lines, _, led = self.run_preview()
         dis = [x for x in lines if x.startswith("FMP and Yahoo disagree")]
         self.assertEqual(len(dis), 1, lines)
         self.assertIn("TQQQ", dis[0])
         self.assertEqual([d[0] for d in led[0]["quotes"]["disagree"]], ["TQQQ"])
-        self.quotes = self.fmp()                                                          # broken: they agree
+        self.quotes = self.fmp()                                                    # broken: they agree
         lines, _, led = self.run_preview()
         self.assertFalse(any(x.startswith("FMP and Yahoo disagree") for x in lines))
-        self.assertEqual(led[0]["quotes"]["disagree"], [])
 
     def test_fmp_down(self):
-        self.quotes = self.fmp(fail="FMP unexpected answer {'Error Message': 'Limit Reach'}")
+        self.quotes = self.fmp(fail="no SPY 1-minute bar for 2026-10-28 up to 15:15 ET")
         lines, alerts, led = self.run_preview()
-        self.assertTrue(any("FMP quotes (FMP unexpected answer" in x and "Yahoo's prices used" in x for x in lines), lines)
+        self.assertTrue(any("FMP 1-minute bars (no SPY 1-minute bar" in x and "Yahoo's prices used" in x for x in lines), lines)
         self.assertFalse(any(a.startswith("PRE-CLOSE UNAVAILABLE") for a in alerts))
-        self.assertEqual(led[0]["lag"], 2.0)                                              # Yahoo's quotes
-        self.assertTrue(led[0]["quotes"]["failed"].startswith("FMP unexpected answer"))
+        self.assertEqual(led[0]["lag"], 2.0)
+        self.assertTrue(led[0]["quotes"]["failed"].startswith("no SPY 1-minute bar"))
         self.assertFalse(any(x.startswith("live prices: FMP") for x in lines))
-
-    def test_no_key_said(self):
-        lines, _, led = self.run_preview()                                                # the suite has no key
-        self.assertIn("live prices: Yahoo's (FMP_API_KEY not set)", lines)
-        self.assertEqual(led[0]["quotes"], {"fmp": 0, "failed": "FMP_API_KEY not set"})
-        self.quotes = self.fmp()                                                          # broken: a key
+        self.quotes = self.fmp()                                                    # broken: FMP up
         lines, _, led = self.run_preview()
-        self.assertNotIn("live prices: Yahoo's (FMP_API_KEY not set)", lines)
-        n = led[0]["quotes"]["fmp"]
-        self.assertGreater(n, 20)
-        self.assertIn(f"live prices: FMP for {n} of {n}", lines)
-        self.quotes = False                                                               # switched off: said as such
-        lines, _, led = self.run_preview()
-        self.assertIn("live prices: Yahoo's (FMP quotes off)", lines)
-        self.assertEqual(led[0]["quotes"]["failed"], "FMP quotes off")
+        self.assertTrue(any(x.startswith("live prices: FMP 1-minute bars for") for x in lines))
+        self.assertIsNone(led[0]["quotes"]["failed"])
 
-    def test_default_is_fmp_with_a_key(self):
+    def test_problems_named(self):
+        self.quotes = self.fmp(only=set(self.fx["prices"]) - {"UVXY"}, probs={"UVXY": "no bar today"})
+        lines, _, led = self.run_preview()
+        line = next(x for x in lines if x.startswith("live prices:"))
+        self.assertIn("Yahoo's last sale for UVXY (FMP: UVXY no bar today;", line)
+        self.assertEqual(led[0]["quotes"]["problems"], {"UVXY": "no bar today"})
+        self.quotes = self.fmp()                                                    # broken: no problem
+        line = next(x for x in self.run_preview()[0] if x.startswith("live prices:"))
+        self.assertNotIn("FMP:", line)
+
+    def test_no_key_off_and_default(self):
+        lines, _, led = self.run_preview()                                          # the suite has no key
+        self.assertIn("live prices: Yahoo's last sale (FMP_API_KEY not set)", lines)
+        self.assertEqual((led[0]["quotes"]["failed"], led[0]["quotes"]["source"]), ("FMP_API_KEY not set", None))
         seen = []
 
-        def fake(tickers, key):
+        def fake(tickers, now, key):
             seen.append(key)
-            return self.fmp()(tickers)
+            return self.fmp()(tickers, now)
         with unittest.mock.patch.dict(os.environ, {"FMP_API_KEY": "ENVKEY"}), \
-                unittest.mock.patch.object(pc, "fetch_quotes", fake):
-            led = self.run_preview()[2]                                                   # quotes=None, as main() calls it
-        self.assertEqual(seen, ["ENVKEY"])
-        self.assertGreater(led[0]["quotes"]["fmp"], 20)
+                unittest.mock.patch.object(pc, "minute_quotes", fake):
+            self.quotes = False                                                      # off, though a key is set
+            lines, _, led = self.run_preview()
+            self.assertEqual(seen, [])
+            self.assertIn("live prices: Yahoo's last sale (FMP quotes off)", lines)
+            self.quotes = None                                                       # broken: the default, as main() calls it
+            lines, _, led = self.run_preview()
+            self.assertEqual(seen, ["ENVKEY"])
+            n = led[0]["quotes"]["fmp"]
+            self.assertGreater(n, 20)
+            self.assertIn(f"live prices: FMP 1-minute bars for {n} of {n}", lines)
+
+    def test_counts_over_tickers_with_prices(self):
+        def fetch(t):
+            if t == "VOOV":
+                raise RuntimeError("Yahoo VOOV: timed out")
+            return self.fetch(t)
+        self.quotes = self.fmp()
+        lines, _, led = pc.preview(self.now, lambda: self.meta(), fetch=fetch, quotes=self.quotes)
+        line = next(x for x in lines if x.startswith("live prices:"))
+        n = led[0]["quotes"]["fmp"]
+        self.assertTrue(line.startswith(f"live prices: FMP 1-minute bars for {n} of {n}"), line)
+        self.assertIn("none for VOOV", line)
+        self.assertEqual(led[0]["quotes"]["none"], ["VOOV"])
+        line = next(x for x in self.run_preview()[0] if x.startswith("live prices:"))
+        self.assertNotIn("none for", line)                                           # broken: every ticker priced
+
+    def test_quotes_record(self):
+        self.quotes = self.fmp()
+        led = self.run_preview()[2]
+        det = led[0]["quotes"]["detail"]
+        self.assertEqual(det["SPY"]["used"], "fmp")
+        self.assertEqual(det["SPY"]["fmp"][1], "15:14:00")
+        self.assertEqual(det["SPY"]["yahoo"][1], "15:13:00")
+        self.assertNotIn("PULS", det)                                               # held only: no decision reads it
+        with unittest.mock.patch.object(pc, "gate", lambda *a, **k: None):           # no gate reading: first row
+            led = self.run_preview()[2]
+        self.assertNotEqual(led[0]["engine"], "GATE")
+        self.assertEqual(led[0]["quotes"]["source"], "fmp-1m")
 
     def test_older_fmp_named(self):
-        self.quotes = self.fmp(age=5)                                                     # Yahoo's 2-minute quotes are newer
+        self.quotes = self.fmp(age=5)                                               # Yahoo's 2-minute sales are 3 newer
         lines, _, led = self.run_preview()
         self.assertEqual(led[0]["quotes"]["fmp"], 0)
-        self.assertTrue(any(x.startswith("live prices: FMP for 0 of") and "Yahoo for" in x for x in lines), lines)
+        self.assertTrue(any(x.startswith("live prices: FMP 1-minute bars for 0 of") and "Yahoo's last sale for" in x
+                            for x in lines), lines)
         self.assertEqual(led[0]["lag"], 2.0)
+        self.quotes = self.fmp(age=1)                                               # broken: FMP's newer
+        _, _, led = self.run_preview()
+        self.assertEqual(led[0]["lag"], 1.0)
 
 
 if __name__ == "__main__":

@@ -323,9 +323,11 @@ writing. Tests: `python3 -m unittest composer.scripts.tests.test_shadow_runner`.
 **`preclose.py` — what today's rebalance will do, before it does it (addendum 49).**
 Its own scheduled run at 15:15 ET on weekdays (12:15 on a half-day), not part of
 `monitor.py`. Composer decides at ~15:50 on live prices (its decision prices
-measure ~15:54, addendum 50); the post-close check only reports afterwards. This evaluates the same approved trees on live prices
-(FMP's latest trade from its batch quote, key `FMP_API_KEY`, addendum 50; Yahoo's
-where FMP's is older or not from today; the 2-year history stays Yahoo's) and prints:
+measure ~15:54, addendum 50); the post-close check only reports afterwards. This evaluates the same approved trees on live prices:
+FMP's 1-minute bars (the last complete bar before the run, key `FMP_API_KEY`,
+addendum 50; the minutes the shadow runner checks Composer against), Yahoo's last
+sale where it is over a minute newer. The 2-year history stays Yahoo's and must
+reach the previous session. It prints:
 - the gate: SPY live vs its 200-day average, the exact SPY price that flips it
   (the average includes today's price), and what HG holds on each side of it;
 - per symphony: holdings now -> what the logic holds at the rebalance (KMLM only
@@ -341,9 +343,9 @@ where FMP's is older or not from today; the 2-year history stays Yahoo's) and pr
 A quote older than 15 minutes is rebuilt from a fresh fund on the same index at
 its leverage. Otherwise it is used as is, named, and stress-tested, and any
 alternative that reads it is flagged. Sigma includes the quotes' own age. The
-report names the source of each decision ticker's price, lists fresh FMP and
-Yahoo prices more than 0.3% apart, and says so when FMP fails or has no key
-(Yahoo's prices then). Alerts (exit 2): GATE CLOSES / REOPENS AT TODAY'S
+report names the source, lists FMP and Yahoo prices of the same moment more
+than 0.3% apart, and names FMP's failures and gaps (Yahoo's prices then); a
+replay at a past minute reads that minute. Alerts (exit 2): GATE CLOSES / REOPENS AT TODAY'S
 REBALANCE, GATE ON THE LINE (within 2 sigma), BIG DAY (SPY 2% or more off
 yesterday's close), PRE-CLOSE UNAVAILABLE. Report-only: overrides are the owner's
 call in the Composer app (RUNBOOK). Ledger: `results/monitor/preclose-ledger.jsonl`,

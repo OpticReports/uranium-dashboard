@@ -694,20 +694,20 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   - 121 shadow tests, including a frozen 10-30 HARV regression fixture.
 - No service redeploy: monitor.py runs in the daily routine, whose environment has FMP_API_KEY.
 
-## 2026-11-01 — pre-close preview prices on FMP's live quotes (reporting only)
+## 2026-11-01 — pre-close preview prices on FMP's 1-minute bars (reporting only)
 
-- Change: `scripts/preclose.py` takes each ticker's price from FMP's batch quote where FMP's last trade
-  is from today and at least as recent as Yahoo's; otherwise Yahoo's. Yahoo's 2-year history is
-  unchanged. The report and the GATE ledger row show:
-  - which source priced each ticker;
-  - fresh prices more than 0.3% apart;
-  - any FMP failure or missing key (Yahoo's prices then).
-  No symphony mutated.
-- Why: owner, 11-01: "use FMP for the 15:15 preview quotes too".
+- Change: `scripts/preclose.py` prices each ticker from FMP's 1-minute bars (the last complete bar at
+  or before the run), unless Yahoo's last sale is over a minute newer. No symphony mutated.
+  - Yahoo's 2-year history is unchanged; it must reach the previous session or the preview stops.
+  - The report and the ledger show, per ticker: the source, any disagreement over 0.3% at the same
+    moment, and FMP's failures and gaps.
+- Why: owner, 11-01: "use FMP for the 15:15 preview quotes too". FMP's batch quote, tried first, is
+  not the consolidated last sale for thin funds (counter-agent; PEJ 66.49 vs 66.39 at Friday's close).
 - Before / after:
-  - Friday 10-30's close: 58 of 58 quoted, 55 equal to Yahoo's, trade times real.
-  - A 15:59 replay reads the same for all four engines.
+  - Friday's 15:15 replayed on FMP minutes gives add. 49's replay on Yahoo bars: same calls and labels
+    on all four engines.
+  - Replays at a past minute are now exact.
   - First live run: Monday 11-02 at 15:15 ET.
 - Counter-agent: REVIEW50Q_PENDING
-- Tests: 17 new (88 in test_preclose); 24 of 24 mutants of the new code killed.
+- Tests: 22 new (93 in test_preclose); mutants of the new code: MUT50Q.
 - No service redeploy: the 15:15 routine runs the CLI in this environment, which has FMP_API_KEY.

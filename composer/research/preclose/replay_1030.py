@@ -56,7 +56,7 @@ for hhmm in args:
         return a, r, {"regularMarketTime": int(last.timestamp()),
                       "currentTradingPeriod": {"regular": {"start": int(datetime.datetime(2026, 10, 30, 9, 30, tzinfo=NY).timestamp()),
                                                            "end": int(datetime.datetime(2026, 10, 30, 16, 0, tzinfo=NY).timestamp())}}}
-    lines, alerts, _ = pc.preview(now, lambda: META, fetch=fetch)
+    lines, alerts, _ = pc.preview(now, lambda: META, fetch=fetch, quotes=False)   # the bars above are the feed
     print(f"== replay at {hhmm} ET, quotes {lag} min behind the read")
     print("\n".join(lines))
     print("ALERTS:", alerts)
