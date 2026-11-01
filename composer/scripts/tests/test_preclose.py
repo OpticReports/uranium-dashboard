@@ -1459,6 +1459,36 @@ class P11Preview(PreviewBase):
         self.assertEqual(led[0]["quotes"]["detail"]["SPY"]["yahoo"], [772.31, "15:16:30"])
         self.assertEqual(led[0]["quotes"]["detail"]["SPY"]["used"], "yahoo")         # 90 s newer than FMP's bar
 
+    def test_replay_with_fmp_off_reads_nothing_after_the_run(self):
+        def fetch(t):
+            a, r, meta = self.fetch(t)
+            if t == "SPY":                                                           # Yahoo's SPY sale 90 s after the run
+                meta = dict(meta, regularMarketTime=ts(self.now + datetime.timedelta(seconds=90)))
+            return a, r, meta
+        led = pc.preview(self.now, lambda: self.meta(), fetch=fetch, quotes=False)[2]
+        self.assertIsNone(led[0]["quotes"]["detail"]["SPY"]["yahoo"])                 # dropped, FMP off or not
+        self.assertIn("SPY", led[0]["stale"])
+        with unittest.mock.patch.object(pc, "REPLAY_AFTER", 10 ** 9):              # broken: a live run keeps it
+            led = pc.preview(self.now, lambda: self.meta(), fetch=fetch, quotes=False)[2]
+        self.assertEqual(led[0]["quotes"]["detail"]["SPY"]["yahoo"], [772.31, "15:16:30"])
+
+    def test_siblings_get_the_runs_horizon(self):
+        self.extra["IVV"] = {d: p * 0.9 for d, p in self.fx["prices"]["SPY"].items()}
+        self.stale = {t: self.fx["prices"][t][max(self.fx["prices"][t])] * 0.9 for t in ("SPY", "SSO", "SPXL", "UPRO")}
+
+        def fetch(t):
+            a, r, meta = self.fetch(t)
+            if t == "IVV":                                                           # IVV's Yahoo sale after the run
+                meta = dict(meta, regularMarketTime=ts(self.now + datetime.timedelta(seconds=90)))
+            return a, r, meta
+        sp = {"SPY", "IVV", "VOO", "SSO", "SPXL", "UPRO"}
+        self.quotes = self.fmp(only=set(self.fx["prices"]) - sp)                    # FMP cannot rescue the S&P family
+        g = pc.preview(self.now, lambda: self.meta(), fetch=fetch, quotes=self.quotes)[2][0]
+        self.assertIn("no fresh sibling", g["stale"])                               # IVV's later sale is not used
+        with unittest.mock.patch.object(pc, "REPLAY_AFTER", 10 ** 9):              # broken: live, IVV's sale is fresh
+            g = pc.preview(self.now, lambda: self.meta(), fetch=fetch, quotes=self.quotes)[2][0]
+        self.assertIn("via IVV", g["stale"])
+
     def test_yahoo_spy_missing_is_not_a_history_stop(self):
         def fetch(t):
             if t == "SPY":

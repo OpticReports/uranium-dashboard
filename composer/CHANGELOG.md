@@ -719,5 +719,5 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   - First live run: Monday 11-02 at 15:15 ET.
 - Counter-agent: round 1 ship with fixes (8 findings); round 2, a four-lens workflow, ship with fixes or
   block on untraded bars. All applied; see add. 50.
-- Tests: 31 new (102 in test_preclose). Mutants: 37 of 37 (round 1); MUT50Q2 (round 2).
+- Tests: 33 new (104 in test_preclose). Mutants: 37 of 37 (round 1); 30 of 30 (round 2).
 - No service redeploy: the 15:15 routine runs the CLI in this environment, which has FMP_API_KEY.

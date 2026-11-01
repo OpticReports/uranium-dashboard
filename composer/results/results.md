@@ -3509,7 +3509,7 @@ ALSO — the 15:15 preview's live prices (owner, 11-01: "use FMP for the 15:15 p
     10 of 10. Feed differences still change a label in 10 of 130 runs from 14:30 to 15:45 (counter-agent).
   - The committed Yahoo-only replay (results/preclose-replay-2026-10-30.txt) was regenerated with FMP
     off: identical apart from the new "live prices" line.
-  - Tests: P11, 31 tests; 102 in the suite. The first-round mutant runs killed 37 of 37 (harness:
+  - Tests: P11, 33 tests; 104 in the suite. The first-round mutant runs killed 37 of 37 (harness:
     scratchpad mutants_preview2.py). Round two: see the counter-agent note.
 - Not measurable on a Sunday:
   - whether FMP serves the 15:14 bar by 15:15;
@@ -3552,7 +3552,8 @@ COUNTER-AGENT (preview quotes):
     the preview, and its message says to add the date. The shadow runner's window check still reads the
     no-volume bars for PEJ, KMLM, VIXM and CORP, as its 271-of-272 study did. Whether trades alone fit
     Composer better is a follow-up for the minute study.
-  - Mutants of the round-2 code, on a copy: MUT50Q2.
+  - Mutants of the round-2 code, on a copy: 30 of 30 killed (the first pass's two survivors, a replay
+    with FMP off and the siblings' horizon, closed by tests).
 
 DECISION: none on symphonies. monitor.py and the 15:15 preview pick it up on their next runs; no
 redeploy. Routine prompt: the daily check relays SHADOW FMP DOWN (POLICY lists it).
