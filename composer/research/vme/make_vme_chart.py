@@ -37,6 +37,7 @@ def main():
     ex = r["exposure"]
     B = [{"name": n, "val": ex[n]["AQR everywhere"]["1997-2025"]["beta"]["VAL_ALL"], "mom": ex[n]["AQR everywhere"]["1997-2025"]["beta"]["MOM_ALL"],
           "tval": ex[n]["AQR everywhere"]["1997-2025"]["t"]["VAL_ALL"], "tmom": ex[n]["AQR everywhere"]["1997-2025"]["t"]["MOM_ALL"],
+          "seval": ex[n]["AQR everywhere"]["1997-2025"]["se"]["VAL_ALL"], "semom": ex[n]["AQR everywhere"]["1997-2025"]["se"]["MOM_ALL"],
           "r2": ex[n]["AQR everywhere"]["1997-2025"]["r2"], "cv": ex[n]["AQR everywhere"]["1997-2025"]["corr"]["VAL_ALL"],
           "cm": ex[n]["AQR everywhere"]["1997-2025"]["corr"]["MOM_ALL"]} for n in ("book", "HG", "KMLM", "SLEEVE", "HARV", "SPY", "QQQ")]
     p = r["paths"]
@@ -46,7 +47,11 @@ def main():
          "blend": r["buyable_vme"]["book blend 2012-2026"]}
     liq = r["liquidity"]["TED"]
     D = [{"name": n, "worse": liq[n]["next_month"]["worse"]["sharpe"], "better": liq[n]["next_month"]["better"]["sharpe"],
-          "nw": liq[n]["next_month"]["worse"]["n"], "nb": liq[n]["next_month"]["better"]["n"], "beta_t": liq[n]["t"]}
+          "nw": liq[n]["next_month"]["worse"]["n"], "nb": liq[n]["next_month"]["better"]["n"], "beta_t": liq[n]["t"],
+          "welch": liq[n]["next_month"].get("welch_t"),
+          "xw": (liq[n].get("next_month_expanding") or {}).get("worse", {}).get("sharpe"),
+          "xb": (liq[n].get("next_month_expanding") or {}).get("better", {}).get("sharpe"),
+          "xt": (liq[n].get("next_month_expanding") or {}).get("welch_t")}
          for n in ("book", "HG", "KMLM", "SLEEVE", "HARV", "SPY", "VAL_ALL", "MOM_ALL")]
     kpi = {"combo_paper": f["COMBO_ALL"]["paper"]["sharpe"], "combo_since": f["COMBO_ALL"]["since"]["sharpe"],
            "cv": B[0]["cv"], "cm": B[0]["cm"], "vme": C["stats"]["50/50"]["sharpe"], "spy": C["stats"]["SPY"]["sharpe"],
@@ -100,15 +105,15 @@ details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)
 
 <section class="card">
 <h2>A. The paper's factors, before and after it was published</h2>
-<p class="sub-h">Growth of $1 in AQR's rank-weighted long-short factors (excess returns), log scale. The paper's sample ends July 2011 (marked). Both premia and their combination are thinner since.</p>
+<p class="sub-h">Growth of $1 in AQR's rank-weighted long-short factors (excess returns), log scale, to 2025-01 (the last month with all eight legs live). The paper's sample ends July 2011 (marked). Both premia and their combination are thinner since.</p>
 <div class="legend" id="lgA"></div>
 <div class="chartwrap"><svg id="chA" role="img" aria-label="Cumulative growth of value, momentum, their 50/50 blend and US stock value, 1972 to 2025, log scale"></svg></div>
 <details><summary>Table: Sharpe ratios (annualized, excess returns)</summary><div class="tablewrap"><table id="tbA"></table></div></details>
 </section>
 
 <section class="card">
-<h2>B. Does the book carry value or momentum risk? No.</h2>
-<p class="sub-h">Monthly excess returns 1997-2025 regressed on the market and AQR's value and momentum everywhere. Bars are the factor betas; labels carry the t-statistic (Newey-West). SPY and QQQ are controls: the market and growth load as they should, the book and its engines do not load on either factor.</p>
+<h2>B. Does the book carry value or momentum risk? Nothing measurable, one engine apart.</h2>
+<p class="sub-h">Monthly excess returns 1997-2025 (calendar months compounded from the daily engine paths; the book is a daily 29/29/27/15 constant mix) regressed on the market and AQR's value and momentum everywhere. Bars are the factor betas; labels carry the Newey-West t-statistic. SPY and QQQ are controls: their market and growth loadings show the regression sees a loading when there is one. KMLM's positive value beta is the one past |t| 2. Intervals are wide: see the table.</p>
 <div class="legend" id="lgB"></div>
 <div class="chartwrap"><svg id="chB" role="img" aria-label="Value and momentum betas of the book, each engine, SPY and QQQ"></svg></div>
 <details><summary>Table: betas, t-statistics, correlations, R-squared</summary><div class="tablewrap"><table id="tbB"></table></div></details>
@@ -116,15 +121,15 @@ details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)
 
 <section class="card">
 <h2>C. A buyable version: value and momentum on asset-class ETFs</h2>
-<p class="sub-h">Nine ETFs (SPY EFA EEM IEF TLT GLD DBC VNQ UUP). Each month-end: the momentum sleeve holds the top 3 by 12-1 month return; the value sleeve the top 3 by the paper's non-stock value signal (the worst 5-year return); 50/50 of the two. Growth of $1 since 2012, log scale; SPY in gray for context.</p>
+<p class="sub-h">Nine ETFs (SPY EFA EEM IEF TLT GLD DBC VNQ UUP). Each month-end: the momentum sleeve holds the top 3 by 12-1 month return; the value sleeve the top 3 by the paper's non-stock value signal (the worst 60-month return); 50/50 of the two. Growth of $1 since 2012, log scale; SPY in gray for context. The value sleeve's Sharpe moves between 0.1 and 0.3 across 48-72 month lookbacks, the 50/50 between 0.4 and 0.6 (addendum 51).</p>
 <div class="legend" id="lgC"></div>
 <div class="chartwrap"><svg id="chC" role="img" aria-label="Growth of the momentum sleeve, value sleeve, their blend and SPY since 2012"></svg></div>
 <details open><summary>Table: 2012-2026, monthly</summary><div class="tablewrap"><table id="tbC"></table></div></details>
 </section>
 
 <section class="card">
-<h2>D. Funding liquidity as a gate? The book earns after liquidity worsens.</h2>
-<p class="sub-h">The paper's liquidity shock (AR(2) residual of the TED spread, signed as liquidity), 1997-2022. Bars: the annualized Sharpe of each series in the month AFTER a worsening shock vs after an improving one. The factors behave as the paper says (value after worsening, momentum after improving); the book and every engine do better after worsening, so a de-risking gate would remove the months they earn.</p>
+<h2>D. Funding liquidity as a gate? No evidence it would help.</h2>
+<p class="sub-h">The paper's liquidity shock (AR(2) residual of the TED spread, signed as liquidity), 1997-2022; the shocks are skewed, so the legs are unequal (counts in the table). Bars: the annualized Sharpe of each series in the month AFTER a worsening shock vs after an improving one; the book series are excess returns. The factors behave as the paper says. The book's point estimate runs the wrong way for a de-risking gate and is within noise (Welch t below 1; the no-look-ahead version in the table is closer still).</p>
 <div class="legend" id="lgD"></div>
 <div class="chartwrap"><svg id="chD" role="img" aria-label="Next-month Sharpe after worsening versus improving funding-liquidity shocks, by series"></svg></div>
 <details><summary>Table: next-month Sharpe and month counts; contemporaneous beta t-statistic</summary><div class="tablewrap"><table id="tbD"></table></div></details>
@@ -144,10 +149,10 @@ function untip(){tt.style.display = 'none';}
 function legend(id, items){document.getElementById(id).innerHTML = items.map(([n, c]) => `<span><i class="sw" style="background:${c}"></i>${n}</span>`).join('');}
 const f2 = v => v == null ? '–' : v.toFixed(2), pc = v => v == null ? '–' : (v * 100).toFixed(0) + '%';
 const K = D.kpi;
-[[`${f2(K.combo_paper)} → ${f2(K.combo_since)}`, `Sharpe of the 50/50 value+momentum factor: the paper's sample (1972-2011) → since (2011-2025)`],
- [`${K.cv >= 0 ? '+' : ''}${f2(K.cv)} / ${K.cm >= 0 ? '+' : ''}${f2(K.cm)}`, `the book's monthly correlation with value / momentum everywhere, 1997-2025: not a factor bet`],
+[[`${f2(K.combo_paper)} → ${f2(K.combo_since)}`, `Sharpe of the 50/50 value+momentum factor: the paper's sample (1972-2011) → since (2011-08 to 2025-01, while all eight legs are live)`],
+ [`${K.cv >= 0 ? '+' : ''}${f2(K.cv)} / ${K.cm >= 0 ? '+' : ''}${f2(K.cm)}`, `the book's monthly correlation with value / momentum everywhere, 1997-2025: no measurable loading (wide intervals: table B)`],
  [`${f2(K.vme)} vs ${f2(K.spy)}`, `Sharpe of a buyable 50/50 value+momentum on asset-class ETFs vs SPY, 2012-2026`],
- [`${f2(K.book_worse)} vs ${f2(K.book_better)}`, `the book's next-month Sharpe after a worsening vs an improving funding-liquidity shock`]]
+ [`${f2(K.book_worse)} vs ${f2(K.book_better)}`, `the book's next-month Sharpe after a worsening vs an improving funding-liquidity shock (${D.D[0].nw} vs ${D.D[0].nb} months; within noise)`]]
  .forEach(([b, s]) => { const k = document.createElement('div'); k.className = 'kpi'; k.innerHTML = `<b>${b}</b><span>${s}</span>`; document.getElementById('kpis').appendChild(k); });
 
 function lineChart(svgId, months, series, colors, opts){
@@ -181,7 +186,7 @@ function lineChart(svgId, months, series, colors, opts){
 const colA = {'Value everywhere': 'var(--s1)', 'Momentum everywhere': 'var(--s2)', '50/50 combination': 'var(--s3)', 'US stock value': 'var(--s4)'};
 legend('lgA', Object.entries(colA));
 lineChart('chA', D.A.months, D.A.series, colA, {mark: '2011-07', markLabel: "paper's sample ends 2011-07", yearStep: 5, short: {'Value everywhere': 'Value', 'Momentum everywhere': 'Momentum', '50/50 combination': '50/50', 'US stock value': 'US stock value'}});
-document.getElementById('tbA').innerHTML = '<thead><tr><th>Factor</th><th class="n">1972-2011 (paper)</th><th class="n">2011-2025</th><th class="n">1972-2025</th><th class="n">max drawdown</th></tr></thead><tbody>' +
+document.getElementById('tbA').innerHTML = '<thead><tr><th>Factor</th><th class="n">1972-01 to 2011-07 (paper)</th><th class="n">2011-08 to 2025-01</th><th class="n">1972-01 to 2025-01</th><th class="n">max drawdown</th></tr></thead><tbody>' +
   D.A.table.map(([k, a, b, c, d]) => `<tr><td>${k}</td><td class="n">${f2(a)}</td><td class="n">${f2(b)}</td><td class="n">${f2(c)}</td><td class="n">${pc(d)}</td></tr>`).join('') + '</tbody>';
 
 // B: horizontal grouped bars around zero
@@ -202,8 +207,8 @@ document.getElementById('tbA').innerHTML = '<thead><tr><th>Factor</th><th class=
     });
   });
   legend('lgB', [['beta to value everywhere', 'var(--s1)'], ['beta to momentum everywhere', 'var(--s2)']]);
-  document.getElementById('tbB').innerHTML = '<thead><tr><th>Series</th><th class="n">β value</th><th class="n">t</th><th class="n">β momentum</th><th class="n">t</th><th class="n">corr value</th><th class="n">corr momentum</th><th class="n">R²</th></tr></thead><tbody>' +
-    D.B.map(x => `<tr><td>${x.name}</td><td class="n">${f2(x.val)}</td><td class="n">${x.tval.toFixed(1)}</td><td class="n">${f2(x.mom)}</td><td class="n">${x.tmom.toFixed(1)}</td><td class="n">${f2(x.cv)}</td><td class="n">${f2(x.cm)}</td><td class="n">${f2(x.r2)}</td></tr>`).join('') + '</tbody>';
+  document.getElementById('tbB').innerHTML = '<thead><tr><th>Series</th><th class="n">β value [95% CI]</th><th class="n">t</th><th class="n">β momentum [95% CI]</th><th class="n">t</th><th class="n">corr value</th><th class="n">corr momentum</th><th class="n">R²</th></tr></thead><tbody>' +
+    D.B.map(x => `<tr><td>${x.name}</td><td class="n">${f2(x.val)} [${f2(x.val - 1.96 * x.seval)}, ${f2(x.val + 1.96 * x.seval)}]</td><td class="n">${x.tval.toFixed(1)}</td><td class="n">${f2(x.mom)} [${f2(x.mom - 1.96 * x.semom)}, ${f2(x.mom + 1.96 * x.semom)}]</td><td class="n">${x.tmom.toFixed(1)}</td><td class="n">${f2(x.cv)}</td><td class="n">${f2(x.cm)}</td><td class="n">${f2(x.r2)}</td></tr>`).join('') + '</tbody>';
 })();
 
 // C
@@ -235,14 +240,14 @@ lineChart('chC', D.C.months, D.C.series, colC, {context: ['SPY'], yearStep: 2, s
     el('text', {x: cx, y: H - 14, 'text-anchor': 'middle', class: 'lbb'}, svg, x.name);
   });
   legend('lgD', [['next month after a WORSENING liquidity shock', 'var(--s1)'], ['next month after an IMPROVING shock', 'var(--s2)']]);
-  document.getElementById('tbD').innerHTML = '<thead><tr><th>Series</th><th class="n">Sharpe after worsening</th><th class="n">months</th><th class="n">Sharpe after improving</th><th class="n">months</th><th class="n">beta t (same month)</th></tr></thead><tbody>' +
-    D.D.map(x => `<tr><td>${x.name}</td><td class="n">${f2(x.worse)}</td><td class="n">${x.nw}</td><td class="n">${f2(x.better)}</td><td class="n">${x.nb}</td><td class="n">${x.beta_t.toFixed(1)}</td></tr>`).join('') + '</tbody>';
+  document.getElementById('tbD').innerHTML = '<thead><tr><th>Series</th><th class="n">after worsening</th><th class="n">months</th><th class="n">after improving</th><th class="n">months</th><th class="n">Welch t</th><th class="n">no-look-ahead AR(2): worse / better (t)</th><th class="n">beta t (same month)</th></tr></thead><tbody>' +
+    D.D.map(x => `<tr><td>${x.name}</td><td class="n">${f2(x.worse)}</td><td class="n">${x.nw}</td><td class="n">${f2(x.better)}</td><td class="n">${x.nb}</td><td class="n">${f2(x.welch)}</td><td class="n">${f2(x.xw)} / ${f2(x.xb)} (${f2(x.xt)})</td><td class="n">${x.beta_t.toFixed(1)}</td></tr>`).join('') + '</tbody>';
 })();
 
-['Factors: AQR, "Value and Momentum Everywhere: Factors, Monthly" (the paper\'s rank-weighted long-short factors, updated to 2025-12; the paper\'s Table I reports 1.42 (P3-P1) and 1.59 (factor) for the global 50/50 with equal-volatility weights across asset classes; AQR\'s published everywhere series gives 1.25 on the same dates). US stock value and momentum are the US90 series. Risk-free rate and market: Ken French.',
- 'Book: add. 47\'s rebuilt four-engine history, weekly points turned into calendar-month returns, 1997-01 to 2025-12; prices before each fund\'s launch are proxies, and the rules were built on 2015-2026, so the book\'s own Sharpe there (2.1) is in sample. The regressions ask only what its returns covary with.',
- 'Buyable VME: Yahoo monthly adjusted closes; the universe, top-3 rule and 12-1 / 5-year signals follow the paper and were not tuned (and no alternatives were tried). 2012-2026 is one US-equity-led period. Long-only sleeves carry market beta (corr with SPY 0.5-0.65); the paper\'s factors are long-short and market neutral.',
- 'Liquidity: FRED TEDRATE (ends 2022-01), monthly average, signed as liquidity (-TED), AR(2) residual as in the paper. "Worsening" = a negative shock this month; the bars are the next month\'s returns, so this is a gate test, not the paper\'s contemporaneous regression. 1997-2022, about 150 months a leg: differences of 0.3-0.5 in Sharpe are within noise.',
+['Factors: AQR, "Value and Momentum Everywhere: Factors, Monthly": the paper\'s rank-weighted long-short factors, the stock legs updated to 2026-08, the asset-allocation legs to 2025-01, after which "everywhere" equals the stock series, so every everywhere window here ends 2025-01. AQR notes the update "can differ in data sources and methodology" from the paper: its everywhere 50/50 gives 1.25 on the paper\'s dates where Table I reports 1.42 (P3-P1) and 1.59 (factor). US stock value and momentum are the US90 series. Risk-free rate and market: Ken French.',
+ 'Book: add. 47\'s rebuilt four-engine history; calendar months compounded from the DAILY engine returns; the book is a daily 29/29/27/15 constant mix of the engines (the live book drifts between rebalances, so its level and drawdown differ). Prices before each fund\'s launch are proxies, and the rules were built on 2015-2026, so the book\'s own Sharpe there is in sample. The regressions ask only what its returns covary with; the t-statistics are Newey-West (3 lags), and plain-OLS t\'s are larger (the returns have heavy tails).',
+ 'Buyable VME: Yahoo monthly adjusted closes (month-end); the universe, top-3 rule and 12-1 / 60-month signals follow the paper and were not tuned; a 48-72 month lookback sweep and a no-UUP variant are in the addendum (UUP, not one of the paper\'s asset classes, sets the 2012 start). One US-equity-led period, before costs. Long-only sleeves carry market beta (corr with SPY 0.5-0.65); the paper\'s factors are long-short and market neutral.',
+ 'Liquidity: FRED TEDRATE (ends 2022-01), monthly average, signed as liquidity (-TED), AR(2) residual fitted on the full sample as in the paper, plus an expanding-window fit with no look-ahead. "Worsening" = a negative shock this month; the bars are the next month\'s returns, so this is a gate test, not the paper\'s contemporaneous regression. FRED\'s HY credit spread was served for 2023-10 on only and is left out (60-month floor); VIX shocks are in the addendum.',
  `Generated ${D.generated}. Research only; no symphony changed.`]
  .forEach(s => document.getElementById('basis').insertAdjacentHTML('beforeend', `<li>${s}</li>`));
 </script>

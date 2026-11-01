@@ -729,12 +729,13 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
 - Owner's four questions answered in results.md addendum 51; exhibit results/vme-2026-11-01.html;
   code research/vme/. No symphony changed, none proposed, no value engine.
 - Findings:
-  - The book and each engine carry no measurable value or momentum factor risk (|corr| <= 0.13 with
-    AQR's factors, 1997-2025; controls load as expected).
-  - AQR's updated factors: the paper's 50/50 Sharpe 1.25 on its dates, 0.45 since; US stock value
-    0.27 -> -0.23, max drawdown -70%.
-  - A long-only asset-class value+momentum symphony: Sharpe 0.56 vs SPY 0.92 (2012-2026); 20% in the
-    book adds 0.02 Sharpe and costs a fifth of the return.
-  - A funding-liquidity gate would cut the months the book earns: next-month Sharpe 1.74 after a
-    worsening TED shock vs 1.21 after an improving one.
-- Counter-agent: REVIEW51_PENDING
+  - No measurable value or momentum factor loading in the book (correlations -0.05 / -0.05 with AQR's
+    factors, 1997-2025, wide intervals); KMLM alone shows a mild positive value loading (t 2.2).
+  - AQR's updated factors, while all eight legs are live (to 2025-01): the 50/50 Sharpe 1.25 on the
+    paper's dates, 0.25 since; value everywhere 0.00 since; US stock value -0.29, max drawdown -70%.
+  - A long-only asset-class value+momentum symphony: Sharpe 0.4-0.6 across variants vs SPY 0.9
+    (2012-2026); 20% in the book adds 0.02 Sharpe and costs a fifth of the return.
+  - A funding-liquidity gate: no evidence it helps; the book's next month is slightly better after a
+    worsening TED shock (1.55 vs 1.24, 89 vs 211 months, Welch t 0.7).
+- Counter-agent: showable with fixes, all applied (month-end series from the daily paths, leg counts and
+  t's, the 60-month value signal and its sweep, AQR's series composition, wording). No decision flipped.

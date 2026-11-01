@@ -39,6 +39,7 @@ import os
 S = "/tmp/claude-0/-home-user-uranium-dashboard/6d96d78e-807c-545a-8c5b-9d9d8e765587/scratchpad"
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "results", "vme-2026-11-01.json")
+AA_END = "2025-01"            # AQR's EQ/FX/FI/CM legs end 2025-01; VAL|EVERYWHERE equals VAL^SS after that
 ERAS = {"1997-2014": ("1997-01", "2014-12"), "2015-2025": ("2015-01", "2025-12"), "1997-2025": ("1997-01", "2025-12")}
 
 
@@ -61,22 +62,24 @@ def to_returns(levels):
 
 
 def load_book():
-    d = json.load(open(os.path.join(S, "long1997", "book1997_ts_synth.json")))
-    P = d["paths"]
-    dates = P["dates"]
-    if isinstance(dates, dict):                      # {index: date} or {date: ...}
-        dates = [dates[k] for k in sorted(dates, key=lambda x: int(x))] if all(str(k).isdigit() for k in dates) else sorted(dates)
+    """calendar-month simple returns of the four engines and a book proxy, compounded from add. 47's DAILY
+    engine returns (engines_ts_synth.json), so each month ends at the month-end close. The book proxy is a
+    daily-rebalanced 29/29/27/15 constant mix (add. 47's live book drifts between rebalances; the constant
+    mix differs in level, not in month-to-month shape). The weekly book path was used in the first draft
+    and its months ended up to 7 days early (counter-agent)"""
+    e = json.load(open(os.path.join(S, "long1997", "engines_ts_synth.json")))
+    daily = {k: e[k]["rets"] for k in ("HG", "KMLM", "SLEEVE", "HARV")}
+    days = sorted(set.intersection(*[set(v) for v in daily.values()]))
+    W = {"HG": 0.29, "KMLM": 0.29, "SLEEVE": 0.27, "HARV": 0.15}
+    daily["book"] = {d: sum(W[k] * daily[k][d] for k in W) for d in days}
     out = {}
-    for k in ("book", "HG", "KMLM", "SLEEVE", "HARV", "SPY", "QQQ"):
-        v = P[k]
-        if isinstance(v, dict) and "value" in v:         # add. 47's shape: {'value': [weekly levels]}
-            v = v["value"]
-        if isinstance(v, dict):
-            lv = {dt: x for dt, x in v.items() if x} if not all(str(q).isdigit() for q in v) else \
-                 {dates[int(i)]: x for i, x in v.items() if x}
-        else:
-            lv = {dt: x for dt, x in zip(dates, v) if x}
-        out[k] = to_returns(month_ends(lv))
+    for k, r in daily.items():
+        m = {}
+        for d in sorted(r):
+            if d < "1997-01-01":
+                continue
+            m[ym(d)] = m.get(ym(d), 1.0) * (1 + r[d])
+        out[k] = {mo: v - 1 for mo, v in m.items()}
     return out
 
 
@@ -89,6 +92,8 @@ def load_aqr():
         out[key] = {}
         for dt, v in s.items():
             m, d_, y = dt.split("/")
+            if key in ("VAL_ALL", "MOM_ALL", "VAL_AA", "MOM_AA") and f"{y}-{m}" > AA_END:
+                continue                               # the asset-allocation legs stop; 'everywhere' == stocks after
             out[key][f"{y}-{m}"] = v
     return out
 
@@ -217,6 +222,7 @@ def ols(y, X, names):
     r2 = 1 - sum(r * r for r in res) / tss if tss else float("nan")
     return {"alpha_ann": beta[0] * 12, "t_alpha": beta[0] / se[0] if se[0] else float("nan"), "r2": r2, "n": n,
             "beta": {nm: beta[i + 1] for i, nm in enumerate(names)},
+            "se": {nm: se[i + 1] for i, nm in enumerate(names)},
             "t": {nm: (beta[i + 1] / se[i + 1] if se[i + 1] else float("nan")) for i, nm in enumerate(names)}}
 
 
@@ -233,6 +239,26 @@ def ar2_shocks(level):
     return out
 
 
+def ar2_shocks_expanding(level, min_n=60):
+    """AR(2) residuals with the model fitted only on months before each one (no look-ahead)"""
+    ks = sorted(level)
+    out = {}
+    for i in range(max(min_n, 3), len(ks)):
+        y = [level[k] for k in ks[2:i]]
+        X = [[level[k] for k in ks[1:i - 1]], [level[k] for k in ks[:i - 2]]]
+        fit = ols(y, X, ["l1", "l2"])
+        if not fit:
+            continue
+        pred = fit["alpha_ann"] / 12 + fit["beta"]["l1"] * level[ks[i - 1]] + fit["beta"]["l2"] * level[ks[i - 2]]
+        out[ks[i]] = level[ks[i]] - pred
+    return out
+
+
+def welch_t(a, b):
+    va, vb = sd(a) ** 2 / len(a), sd(b) ** 2 / len(b)
+    return (mean(a) - mean(b)) / math.sqrt(va + vb) if va + vb > 0 else float("nan")
+
+
 # ------------------------------------------------------------------ study
 def excess(r, rf, ks):
     return [r[k] - rf.get(k, 0.0) for k in ks]
@@ -243,17 +269,18 @@ def main():
     aqr = load_aqr()
     ff = load_french()
     etf_m, etf_d = load_etfs()
+    book["SPY"], book["QQQ"] = etf_m["SPY"], etf_m["QQQ"]          # month-end bars; the controls
     res = {"generated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}
 
     # ---- 0. the factors themselves, as AQR now publishes them (the paper's Table I in its sample, then since)
     fac = {}
     for key in ("VAL_ALL", "MOM_ALL", "VAL_SS", "MOM_SS", "VAL_AA", "MOM_AA", "VAL_US", "MOM_US"):
         s = aqr[key]
-        for lo, hi, tag in (("1972-01", "2011-07", "paper"), ("2011-08", "2025-12", "since"), ("1972-01", "2025-12", "all"), ("1997-01", "2025-12", "book era")):
+        for lo, hi, tag in (("1972-01", "2011-07", "paper"), ("2011-08", AA_END, "since"), ("1972-01", AA_END, "all"), ("1997-01", AA_END, "book era"), ("2011-08", "2026-08", "since, to data end")):
             ks = common(s, lo=lo, hi=hi)
             r = [s[k] for k in ks]
             fac.setdefault(key, {})[tag] = {"sharpe": sharpe(r), "mean_ann": mean(r) * 12, "vol_ann": sd(r) * math.sqrt(12), "maxdd": maxdd(r), "n": len(r)}
-    for tag, (lo, hi) in (("paper", ("1972-01", "2011-07")), ("since", ("2011-08", "2025-12")), ("all", ("1972-01", "2025-12")), ("book era", ("1997-01", "2025-12"))):
+    for tag, (lo, hi) in (("paper", ("1972-01", "2011-07")), ("since", ("2011-08", AA_END)), ("all", ("1972-01", AA_END)), ("book era", ("1997-01", AA_END))):
         ks = common(aqr["VAL_ALL"], aqr["MOM_ALL"], lo=lo, hi=hi)
         v = [aqr["VAL_ALL"][k] for k in ks]
         m = [aqr["MOM_ALL"][k] for k in ks]
@@ -336,7 +363,8 @@ def main():
                             "sharpe": sharpe([ls[k] for k in ks]), "n": len(ks)}
     res["diversification"] = div
 
-    # ---- 3. liquidity shocks
+    # ---- 3. liquidity shocks (excess returns for the book series; the paper's full-sample AR(2) and a
+    #         no-look-ahead expanding-window AR(2); legs counted; Welch t between the legs' months)
     liq = {}
     series = {}
     for name, fred, sign in (("TED", "TEDRATE", -1), ("HY_OAS", "BAMLH0A0HYM2", -1), ("VIX", "VIXCLS", -1)):
@@ -345,37 +373,44 @@ def main():
         for d in sorted(daily):
             monthly.setdefault(ym(d), []).append(daily[d])
         level = {k: sign * mean(v) for k, v in monthly.items()}      # signed as liquidity, monthly average as the paper
-        series[name] = {"level": level, "shock": ar2_shocks(level)}
+        series[name] = {"level": level, "shock": ar2_shocks(level), "shock_x": ar2_shocks_expanding(level)}
+    xs_names = {"book", "HG", "KMLM", "SLEEVE", "HARV", "SPY"}
     targets = {"book": book["book"], "HG": book["HG"], "KMLM": book["KMLM"], "SLEEVE": book["SLEEVE"], "HARV": book["HARV"],
                "SPY": book["SPY"], "VAL_ALL": aqr["VAL_ALL"], "MOM_ALL": aqr["MOM_ALL"], "VAL_US": aqr["VAL_US"], "MOM_US": aqr["MOM_US"]}
+
+    def legs(r, sh, ks, key):
+        nxt = {}
+        for a_, b_ in zip(ks[:-1], ks[1:]):
+            nxt.setdefault("worse" if sh[a_] < 0 else "better", []).append(r[b_])
+        out = {s_: {"mean_ann": mean(v) * 12, "sharpe": sharpe(v), "n": len(v)} for s_, v in nxt.items()}
+        if len(nxt) == 2:
+            out["welch_t"] = welch_t(nxt["worse"], nxt["better"])
+        return out
     for lname, sr in series.items():
-        sh = sr["shock"]
-        for tname, r in targets.items():
-            ks = common(r, sh, lo="1997-01", hi="2025-12")
+        for tname, r0 in targets.items():
+            r = {k: v - (rf.get(k, 0) if tname in xs_names else 0) for k, v in r0.items()}
+            ks = common(r, sr["shock"], lo="1997-01", hi="2025-12")
             if len(ks) < 60:
                 continue
-            y = [r[k] - (rf.get(k, 0) if tname in ("book", "HG", "KMLM", "SLEEVE", "HARV", "SPY") else 0) for k in ks]
-            x = [sh[k] for k in ks]
-            xs = sd(x)
-            fit = ols(y, [[v / xs for v in x]], ["shock"])                 # beta per 1-sd shock
-            # predictive: next month after a worsening (negative) vs improving shock
-            nxt = {}
-            for k in ks[:-1]:
-                j = ks[ks.index(k) + 1]
-                nxt.setdefault("worse" if sh[k] < 0 else "better", []).append(r[j])
-            # level gate: spread above its trailing 12-month average (liquidity below average) -> next month
+            x = [sr["shock"][k] for k in ks]
+            xsd = sd(x)
+            fit = ols([r[k] for k in ks], [[v / xsd for v in x]], ["shock"])
             lv = sr["level"]
             gate = {}
-            for k in ks[:-1]:
-                prev = [lv[q] for q in sorted(lv) if q < k][-12:]
+            for a_, b_ in zip(ks[:-1], ks[1:]):
+                prev = [lv[q] for q in sorted(lv) if q < a_][-12:]
                 if len(prev) < 12:
                     continue
-                j = ks[ks.index(k) + 1]
-                gate.setdefault("tight" if lv[k] < mean(prev) else "easy", []).append(r[j])
+                gate.setdefault("tight" if lv[a_] < mean(prev) else "easy", []).append(r[b_])
+            ksx = common(r, sr["shock_x"], lo="1997-01", hi="2025-12")
             liq.setdefault(lname, {})[tname] = {
-                "beta_1sd_monthly": fit["beta"]["shock"], "t": fit["t"]["shock"], "n": fit["n"],
-                "next_month": {s: {"mean_ann": mean(v) * 12, "sharpe": sharpe(v), "n": len(v)} for s, v in nxt.items()},
-                "level_gate": {s: {"mean_ann": mean(v) * 12, "sharpe": sharpe(v), "n": len(v)} for s, v in gate.items()}}
+                "beta_1sd_monthly": fit["beta"]["shock"], "t": fit["t"]["shock"], "n": fit["n"], "excess": tname in xs_names,
+                "next_month": legs(r, sr["shock"], ks, "shock"),
+                "next_month_expanding": legs(r, sr["shock_x"], ksx, "shock_x") if len(ksx) >= 60 else None,
+                "level_gate": {s_: {"mean_ann": mean(v) * 12, "sharpe": sharpe(v), "n": len(v)} for s_, v in gate.items()}}
+            if len(gate) == 2:
+                liq[lname][tname]["level_gate"]["welch_t"] = welch_t(gate["tight"], gate["easy"])
+    res["liquidity_series_months"] = {n: len(v["level"]) for n, v in series.items()}
     res["liquidity"] = liq
 
     # ---- 4. a buyable VME on asset-class ETFs
@@ -398,14 +433,36 @@ def main():
             out[m1] = mean([ret(t, m0, m1) for t in pick])
         return out
     mom = sleeve(lambda t, i: ret(t, months[i - 13], months[i - 2]) if i >= 13 else None, 13)
-    val = sleeve(lambda t, i: -ret(t, months[i - 60], months[i - 1]) if i >= 60 else None, 60)
+
+    def val_sleeve(L):
+        return sleeve(lambda t, i: -ret(t, months[i - L - 1], months[i - 1]) if i >= L + 1 else None, L + 1)
+    val = val_sleeve(60)                              # 60 monthly returns = 5 years (the first draft had 59)
     ks = common(mom, val)
+    sweep = {}
+    k72 = common(mom, val_sleeve(72))
+    for L in (48, 54, 60, 66, 72):
+        v = val_sleeve(L)
+        kk = common(v, mom, lo=min(k72))              # one common window, so the lookbacks compare
+        sweep[str(L)] = {"val_sharpe": sharpe([v[k] - rf.get(k, 0) for k in kk]),
+                         "combo_sharpe": sharpe([(v[k] + mom[k]) / 2 - rf.get(k, 0) for k in kk]), "from": min(kk), "n": len(kk)}
+    # without UUP (not an asset class in the paper), from its own start
+    lv_all = lv
+    lv = {t: v for t, v in lv_all.items() if t != "UUP"}
+    months_all, months = months, sorted(set.intersection(*[set(v) for v in lv.values()]))
+    mom_nu = sleeve(lambda t, i: ret(t, months[i - 13], months[i - 2]) if i >= 13 else None, 13)
+    val_nu = val_sleeve(60)
+    knu = common(mom_nu, val_nu)
+    no_uup = {"from": min(knu), "n": len(knu), "val_sharpe": sharpe([val_nu[k] - rf.get(k, 0) for k in knu]),
+              "mom_sharpe": sharpe([mom_nu[k] - rf.get(k, 0) for k in knu]),
+              "combo_sharpe": sharpe([(val_nu[k] + mom_nu[k]) / 2 - rf.get(k, 0) for k in knu]),
+              "spy_sharpe": sharpe([etf_m["SPY"][k] - rf.get(k, 0) for k in knu])}
+    lv, months = lv_all, months_all
     combo = {k: (mom[k] + val[k]) / 2 for k in ks}
     ew = {months[i]: mean([ret(t, months[i - 1], months[i]) for t in lv]) for i in range(1, len(months))}
     sixty = {months[i]: 0.6 * ret("SPY", months[i - 1], months[i]) + 0.4 * ret("IEF", months[i - 1], months[i]) for i in range(1, len(months))}
     vme = {}
     for name, s in (("MOM sleeve", mom), ("VAL sleeve", val), ("50/50", combo), ("equal weight", ew), ("60/40", sixty), ("SPY", etf_m["SPY"]), ("book", book["book"])):
-        for era, (lo, hi) in (("2012-2026", (min(ks), "2026-09")), ("2008-2026", (min(mom), "2026-09"))):
+        for era, (lo, hi) in (("2012-2026", (min(ks), "2026-09")), ("2008-2026", (min(mom), "2026-09"))):   # 2012-04.. and 2008-04..
             kk = common(s, rf, lo=lo, hi=hi)
             if len(kk) < 24:
                 continue
@@ -423,6 +480,8 @@ def main():
     for key in ("VAL_AA", "MOM_AA"):
         kk = common(aqr[key], lo=min(ks), hi="2024-12")
         vme[f"AQR {key} (long-short)"] = {"2012-2024": {"sharpe": sharpe([aqr[key][k] for k in kk]), "mean_ann": mean([aqr[key][k] for k in kk]) * 12}}
+    vme["value lookback sweep (common window)"] = sweep
+    vme["without UUP, 60 months"] = no_uup
     res["buyable_vme"] = vme
     res["paths"] = {"months": ks, "mom": [mom[k] for k in ks], "val": [val[k] for k in ks], "combo": [combo[k] for k in ks],
                     "spy": [etf_m["SPY"].get(k) for k in ks], "book": [book["book"].get(k) for k in ks]}
@@ -462,7 +521,8 @@ if __name__ == "__main__":
     for lname, d in r["liquidity"].items():
         for t, v in d.items():
             nm = v["next_month"]; lg = v["level_gate"]
-            print(f"  {lname:6s} {t:8s} beta {v['beta_1sd_monthly']:+.4f} [{v['t']:.1f}] | next: worse {nm.get('worse', {}).get('sharpe', float('nan')):.2f} better {nm.get('better', {}).get('sharpe', float('nan')):.2f} | gate: tight {lg.get('tight', {}).get('sharpe', float('nan')):.2f} easy {lg.get('easy', {}).get('sharpe', float('nan')):.2f}")
+            nx = v.get("next_month_expanding") or {}
+            print(f"  {lname:6s} {t:8s} beta [{v['t']:.1f}] | next: worse {nm.get('worse', {}).get('sharpe', float('nan')):.2f} ({nm.get('worse', {}).get('n')}) better {nm.get('better', {}).get('sharpe', float('nan')):.2f} ({nm.get('better', {}).get('n')}) welch {nm.get('welch_t', float('nan')):.2f} | expanding: {nx.get('worse', {}).get('sharpe', float('nan')):.2f} / {nx.get('better', {}).get('sharpe', float('nan')):.2f} welch {nx.get('welch_t', float('nan')):.2f} | gate: tight {lg.get('tight', {}).get('sharpe', float('nan')):.2f} easy {lg.get('easy', {}).get('sharpe', float('nan')):.2f}")
     print("\nbuyable VME:")
     for name, d in r["buyable_vme"].items():
         print(" ", name, json.dumps({k: {kk: (round(vv, 3) if isinstance(vv, float) else vv) for kk, vv in v.items()} for k, v in d.items()}))
