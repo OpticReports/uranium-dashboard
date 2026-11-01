@@ -1022,10 +1022,13 @@ def bars_fetcher(rng="5d"):
     return get
 
 
-def fetch_minutes(t, d, key, tries=3):
+def fetch_minutes(t, d, key, tries=3, traded=False):
     """{'HH:MM' bar start, ET: close} of t's FMP 1-minute bars on session d ({} if FMP has none that day).
     FMP answers a range with the last three sessions up to `to`, and a day it lacks with the latest day it
-    has, so only bars dated d are kept. The key never appears in an error"""
+    has, so only bars dated d are kept. The key never appears in an error. FMP also emits bars with no
+    volume for thin funds, priced off quotes (PEJ: 324 of 386 on 2026-10-30); traded=True keeps only bars
+    with volume, i.e. trades (the preview's freshness needs trade times). The shadow runner's window check
+    reads all bars, as measured in add. 50"""
     url = f"{FMP_MINUTES}?" + urllib.parse.urlencode({"symbol": t, "from": d, "to": d, "apikey": key})
     err = None
     for k in range(tries):
@@ -1041,6 +1044,9 @@ def fetch_minutes(t, d, key, tries=3):
                     continue
                 c, hm = b.get("close"), str(b["date"])[11:16]
                 if isinstance(c, bool) or not isinstance(c, (int, float)) or c <= 0 or len(hm) != 5 or hm[2] != ":":
+                    continue
+                v = b.get("volume")
+                if traded and (isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0):
                     continue
                 out[hm] = float(c)
             return out

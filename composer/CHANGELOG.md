@@ -696,20 +696,28 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   SPY's window minutes required, no-key rows say so, 7 tests). 30 of 30 mutants killed.
 - No service redeploy: monitor.py runs in the daily routine, whose environment has FMP_API_KEY.
 
-## 2026-11-01 — pre-close preview prices on FMP's 1-minute bars (reporting only)
+## 2026-11-01 — pre-close preview prices on FMP's last traded minute (reporting only)
 
-- Change: `scripts/preclose.py` prices each ticker from FMP's 1-minute bars (the last complete bar at
-  or before the run), unless Yahoo's last sale is over a minute newer. No symphony mutated.
-  - Yahoo's 2-year history is unchanged; it must reach the previous session or the preview stops.
-  - The report and the ledger show, per ticker: the source, any disagreement over 0.3% at the same
-    moment, and FMP's failures and gaps.
-- Why: owner, 11-01: "use FMP for the 15:15 preview quotes too". FMP's batch quote, tried first, is
-  not the consolidated last sale for thin funds (counter-agent; PEJ 66.49 vs 66.39 at Friday's close).
+- Change: `scripts/preclose.py` prices each ticker from FMP's last traded minute (the last 1-minute bar
+  with volume at or before the run), unless Yahoo's last sale is over a minute newer. No symphony
+  mutated.
+  - FMP's bars with no volume, quote fills for thin funds, are skipped.
+  - Yahoo's 2-year history is unchanged. SPY's must reach the previous session or the preview stops;
+    other short funds are named and caveated.
+  - Replays read nothing stamped after their time.
+  - The report and the ledger show the source per ticker, same-minute disagreements over 0.3%, and FMP's
+    failures and gaps.
+- Why: owner, 11-01: "use FMP for the 15:15 preview quotes too".
+  - FMP's batch quote, tried first, is not the last sale for thin funds (PEJ 66.49 vs 66.39 at Friday's
+    close).
+  - FMP's untraded minute bars made stale funds read fresh (PEJ stale in 0 of 240 checks with them, 57
+    without).
 - Before / after:
-  - Friday's 15:15 replayed on FMP minutes gives add. 49's replay on Yahoo bars: same calls and labels
-    on all four engines.
-  - Replays at a past minute are now exact.
+  - Friday's 15:15 on FMP's traded minutes gives add. 49's Yahoo-bar replay: same calls and labels on all
+    four engines.
+  - 10 of 10 sessions agree at 15:15 (counter-agent).
   - First live run: Monday 11-02 at 15:15 ET.
-- Counter-agent: REVIEW50Q_PENDING
-- Tests: 22 new (93 in test_preclose); 37 of 37 mutants of the new code killed.
+- Counter-agent: round 1 ship with fixes (8 findings); round 2, a four-lens workflow, ship with fixes or
+  block on untraded bars. All applied; see add. 50.
+- Tests: 31 new (102 in test_preclose). Mutants: 37 of 37 (round 1); MUT50Q2 (round 2).
 - No service redeploy: the 15:15 routine runs the CLI in this environment, which has FMP_API_KEY.

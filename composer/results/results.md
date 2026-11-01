@@ -3464,45 +3464,95 @@ as monitor.py calls it: key set, no key, FMP down, no disagreement. All fixed:
   fixed (round 1 of the preview's review).
 
 ALSO — the 15:15 preview's live prices (owner, 11-01: "use FMP for the 15:15 preview quotes too"):
-- scripts/preclose.py prices each ticker from FMP's 1-minute bars: the last complete bar at or before
-  the run, its close at its end. These are the minutes the shadow runner checks Composer against.
-  - FMP's price is used unless Yahoo's last sale is more than a minute newer, or FMP has no bar today.
-  - SPY is asked first. No SPY bar today, or a refusal, makes FMP unusable: the report says so and uses
-    Yahoo's prices.
-  - A bar or a Yahoo price stamped after the run is a replay's future and is dropped, so a replay at a
-    past minute reads that minute.
-  - The bar's end is the price's time: the 15-minute stale rule, the quote-age sigma and the sibling
-    rebuild run on it.
-  - Yahoo's 2-year adjusted history is unchanged and must reach the previous session. If SPY's does
-    not, the preview stops (PRE-CLOSE UNAVAILABLE); other funds short of it are named.
+- scripts/preclose.py prices each ticker from FMP's last traded minute: the last 1-minute bar WITH VOLUME
+  ending at or before the run. Its close is the price and its end the time; the trade fell in that minute.
+  - Bars with no volume are skipped. For thin funds FMP fills quiet minutes with quote-based bars: share
+    of bars with no volume over 10-19..10-30, counter-agent: PEJ 85.6%, VXZ 85.1%, VIXM 60.7%, CORP 36.7%,
+    KMLM 35.2%. Of 12,365 such bars, 82 fall in a minute where Yahoo shows a trade. Read as prices, they
+    made a stale fund look fresh: PEJ read stale in 0 of 240 checks with them, 57 without.
+  - FMP's price is used unless Yahoo's last sale is more than a minute newer, or FMP has no traded bar
+    today.
+  - SPY is asked first. No SPY bar, or a refusal (its reason kept), makes FMP unusable: the report says so
+    and uses Yahoo's prices. The rest have 90 s, then fall back to Yahoo, named.
+  - A replay (the run's clock more than 5 minutes behind the wall clock) reads nothing stamped after its
+    own time, FMP's or Yahoo's. A live run drops nothing for being late: a slow fetch is not the future.
+  - Yahoo's 2-year adjusted history is unchanged. SPY's must reach the previous session or the preview
+    stops (PRE-CLOSE UNAVAILABLE). Other funds short of it are named, with a caveat on their engines.
 - Reporting:
-  - The report names the source and FMP's per-ticker problems (no bar today, a refusal).
-  - FMP and Yahoo prices of one moment (bar end and last sale within a minute) more than 0.3% apart
-    are listed.
-  - The ledger's `quotes` record keeps, for every decision ticker, both prices with their times and
-    which was used. That is the measurement from Monday on.
-- FMP's batch quote, the first draft, was dropped (counter-agent): it is not the consolidated last sale
-  for thin funds.
-  - Friday's close: PEJ 66.49 at 15:59:42 vs the last sale 66.39 (Nasdaq; FMP's own 15:59 minute bar
-    and end-of-day close agree with 66.39). ZVOL 7.08 vs 7.0847, with FMP's 15:59 minute bar empty.
+  - The report names the source and FMP's per-ticker problems.
+  - A Yahoo sale inside FMP's last traded minute and more than 0.3% from FMP's close is listed (FMP's is
+    used). A later sale is the market's move, not the feeds', and is not compared.
+  - The ledger's `quotes` record keeps, for every decision ticker, both prices with their times and which
+    was used: the measurement from Monday on.
+- How well the feeds agree (counter-agent, 10 sessions):
+  - At 15:15, the 40 liquid decision tickers are within 0.05% of Yahoo in 92.8% of cases and within 0.1%
+    in 97.8%; the 7 thin funds in 67.1% and 81.4%.
+  - Every gap over 0.3% came from a bar with no volume.
+  - Neither feed is shown to be the consolidated last sale: Yahoo's matches Nasdaq's NLS, while FMP's
+    minute volume matches consolidated volume. Which one Composer prices on is not known; the ledger
+    will show which one predicts its decisions.
+- FMP's batch quote, the first draft, was dropped (round 1): it is not the last sale for thin funds.
+  - At Friday's close: PEJ 66.49 at 15:59:42 vs 66.39 (Nasdaq; FMP's own end-of-day close and its 15:59
+    traded bar agree with 66.39).
+  - ZVOL 7.08 vs Yahoo's 7.0847 at 15:57:43. FMP's ZVOL bar at 15:59 has no volume and carries 7.08, as
+    does its last traded bar, at 15:57.
   - Its timestamp is not always a trade: 55 of 222 thin ETFs carried a ~10:00 time with the previous
     close.
-  - The failure mode: a stale decision ticker (PEJ, in SLEEVE) would have read fresh, with no caveat.
 - Checked:
-  - Friday 10-30 at 15:15, replayed on FMP minutes, reproduces add. 49's replay on Yahoo's 5-minute
-    bars. SPY 753.23, the gate's distance, and the calls and labels for all four engines are the same
-    (TQQQ's flip +0.57% vs +0.56%).
-  - At 15:27, FMP's read is two minutes fresher: SPY 753.39 vs 753.05, KMLM a close call (not could
-    flip), PEJ no longer stale.
-  - Tests: P11, 22 tests, each with a broken input; 93 in the suite. Mutants of the new code, run on a copy: 37 of 37 killed (the first
-    pass's two survivors, a one-minute freshness sliver and the ledger's source field, closed by tests).
-- Not yet measured: whether FMP's minutes are real time on this plan. Monday 11-02's 15:15 run is the
-  first live one. If they lag, Yahoo's newer sales are used and the report says so.
-- Composer does not publish its price feed. The shadow study (271 of 272 engine-sessions match on
-  consolidated-tape minute prices at 15:54) points to last sales of that kind, which the preview now
-  reads.
+  - Friday 10-30 replayed at 15:15 on FMP's traded minutes gives add. 49's replay on Yahoo's 5-minute
+    bars: SPY 753.23, the gate's distance, and the calls and labels of all four engines (TQQQ's flip
+    +0.57% vs +0.56%).
+  - At 15:27, FMP's minute grid reads SPY two minutes fresher than the 5-minute bars (753.39 vs 753.05),
+    so KMLM is a close call instead of could flip. PEJ reads stale since 15:04, as Yahoo's bars have it
+    at 15:05.
+  - Over 10 sessions at 15:15, the gate, targets, labels and alternatives match the 5-minute replay on
+    10 of 10. Feed differences still change a label in 10 of 130 runs from 14:30 to 15:45 (counter-agent).
+  - The committed Yahoo-only replay (results/preclose-replay-2026-10-30.txt) was regenerated with FMP
+    off: identical apart from the new "live prices" line.
+  - Tests: P11, 31 tests; 102 in the suite. The first-round mutant runs killed 37 of 37 (harness:
+    scratchpad mutants_preview2.py). Round two: see the counter-agent note.
+- Not measurable on a Sunday:
+  - whether FMP serves the 15:14 bar by 15:15;
+  - whether live minutes carry the no-volume fills;
+  - Yahoo's live lag;
+  - Composer's own price source.
+  Monday 11-02's 15:15 run is the first live one.
 
-COUNTER-AGENT (preview quotes): REVIEW50Q_PENDING
+COUNTER-AGENT (preview quotes):
+- Round 1 (one reviewer): SHIP WITH FIXES, 8 findings.
+  - The batch quote is not the last sale for thin funds (high).
+  - Replays read the future.
+  - A stalled Yahoo history passed the trading guard.
+  - The disagreement check was one-sided and unbounded.
+  - The key leaked before redaction.
+  - Empty answers read as no quotes.
+  - One bad row failed a batch.
+  - Accounting gaps.
+  All fixed by the redesign on FMP minutes.
+- Round 2 (a four-lens workflow: correctness, data, tests and claims, each serious finding re-checked by
+  a refuter): SHIP WITH FIXES / BLOCK on one finding, now fixed.
+  - Bars with no volume were read as fresh trades (high, three lenses agreed). Now skipped.
+  - The disagreement line flagged ordinary one-minute moves (medium; about 1 run in 8, refuter's
+    estimate). Now only a sale inside FMP's minute is compared.
+  - FUTURE_SLACK failed both ways (a 15:58:30 replay read the close; a slow live fetch dropped good
+    Yahoo prices). Now: replays cut at their time, live runs drop nothing.
+  - 29 of the tests lens's 35 mutants survived, including: the last bar by price or arrival rather than
+    time, the constants, the ledger record, a swallowed SPY refusal, a stale FMP bar, a missing Yahoo SPY,
+    a sale with no time. Each now has a test.
+  - Lows fixed:
+    - a 90 s budget for FMP's calls;
+    - an engine caveat for funds short of the previous session;
+    - the ledger's Yahoo entry no longer shows a replay's future close;
+    - the regenerated replay exhibit;
+    - wording.
+  - Fourteen claims were wrong or overstated and are corrected above: "consolidated-tape minutes",
+    "replays exact", the ZVOL example, "PEJ no longer stale", the history guard's reach, the pairing and
+    tally claims, the monitor's time and the ledger line count.
+  - Still open: after an unscheduled closure missing from NYSE_HOLIDAYS, the previous-session guard stops
+    the preview, and its message says to add the date. The shadow runner's window check still reads the
+    no-volume bars for PEJ, KMLM, VIXM and CORP, as its 271-of-272 study did. Whether trades alone fit
+    Composer better is a follow-up for the minute study.
+  - Mutants of the round-2 code, on a copy: MUT50Q2.
 
 DECISION: none on symphonies. monitor.py and the 15:15 preview pick it up on their next runs; no
 redeploy. Routine prompt: the daily check relays SHADOW FMP DOWN (POLICY lists it).

@@ -2,7 +2,7 @@
 """Pre-close preview (results.md addendum 49): what Composer's ~15:50 ET rebalance is about to do,
 read before it happens, so the owner can act in the Composer app if they choose to.
 
-The daily monitor reports a session after its rebalance (17:35 ET). This runs at 15:15 ET (12:15 on
+The daily monitor reports a session after its rebalance (21:35 UTC). This runs at 15:15 ET (12:15 on
 a half-day) on live prices, with the approved trees and the evaluator of the shadow runner
 (shadow_runner.py, add. 48):
   GATE    HG's condition SPY > its 200-day average, on SPY's live price: the SPY price that flips it
@@ -18,14 +18,17 @@ a half-day) on live prices, with the approved trees and the evaluator of the sha
           close call: a 1-sigma move of either kind changes it (or KMLM's trigger is within 1pp);
           could flip: a 2-sigma market move or a 2-sigma one-ticker move does; firm: neither.
           The minutes include the quotes' own age (the median of the fresh ones)
-Live prices are FMP's 1-minute bars (key FMP_API_KEY; add. 50): each ticker's last complete bar at or
-before the run, its close at its end, the consolidated-tape minutes the shadow runner checks Composer
-against. Yahoo's last sale is used where it is more than a minute newer, or FMP has no bar today. FMP's
-batch quote was tried and dropped: for thin funds it carries prints that are not the consolidated last
-sale and quote-refresh times (10-30: PEJ 66.49 vs the last sale 66.39). Where both are fresh, a minute
-or less apart and more than 0.3% different, the report lists it. The 2-year history stays Yahoo's
-adjusted closes, as in the shadow runner, and must reach the previous session. A price older than 15
-minutes is stale: it is rebuilt from a
+Live prices are FMP's last traded minute (key FMP_API_KEY; add. 50): each ticker's last 1-minute bar
+with volume ending at or before the run, its close, timed at the bar's end (the trade was in that
+minute). Bars with no volume are skipped: for thin funds FMP fills quiet minutes with quote-based bars
+(PEJ: 324 of 386 on 10-30), which would make a stale price read fresh. FMP's batch quote was tried first
+and dropped for the same reason (10-30: PEJ 66.49 vs the last sale 66.39). Yahoo's last sale is used
+where it is more than a minute newer, or FMP has no traded bar today. Where Yahoo's sale falls inside
+FMP's last traded minute, both fresh and more than 0.3% apart, the report lists it. A replay (the run's
+clock well behind the wall clock) reads nothing stamped after the run. The 2-year history stays Yahoo's
+adjusted closes, as in the shadow runner; SPY's must reach the previous session (other funds short of
+it are named, with a caveat on their engines). A price older than 15 minutes is stale: it is rebuilt
+from a
 fresh fund on the same index at its daily leverage (previous close x (1 + L x the index's return
 today)). A stale decision ticker that cannot be rebuilt is used as it is, named, and moved 2 sigma
 (sized from its last trade) to see whether the answer depends on it; an alternative whose decision
@@ -35,8 +38,9 @@ error a day, 8.9% on 10-30, worse than the stale price itself.)
 Alerts (exit 2): the gate flips today or sits within 2 sigma of flipping; SPY 2% or more off
 yesterday's close (a big day: read the whole preview); no usable preview (no live prices, the market
 shows no trading today, Yahoo's SPY history stops short of the previous session, or the run fails).
-Otherwise exit 0. Report-only: GET from Composer, FMP and Yahoo; it never trades, edits a symphony or writes state. Each run appends one line per engine (and
-one for the gate) to composer/results/monitor/preclose-ledger.jsonl.
+Otherwise exit 0. Report-only: GET from Composer, FMP and Yahoo; it never trades, edits a symphony or
+writes state. Each run appends one line per engine, and one for the gate, to
+composer/results/monitor/preclose-ledger.jsonl.
 
 Usage: preclose.py [--no-ledger]
 """
@@ -70,9 +74,13 @@ GATE_SIGMA = 2.0          # gate alert: within this many sigmas of flipping
 BIG_DAY = 0.02            # SPY this far off yesterday's close -> big-day alert
 TRADING_SHARE = 0.5       # fewer tickers than this share with a bar today -> the market is not trading
 DISAGREE = 0.003          # fresh FMP and Yahoo prices further apart than this are listed in the report
-SAME_MOMENT = 60          # seconds: an FMP bar's end and Yahoo's last sale this close are one moment (FMP's is used,
-                          # and only such pairs are compared: a wider gap is the market's move, not the feeds')
-FUTURE_SLACK = 120        # seconds: a price stamped later than the run by more than this is a replay's future
+SAME_MOMENT = 60          # seconds: Yahoo's last sale at most this much newer than FMP's bar end still takes FMP's
+BAR = 60                  # seconds: a Yahoo sale within FMP's last traded minute is the same minute's trade, and
+                          # only such pairs are compared (a later sale is the market's move, not the feeds')
+FUTURE_SLACK = 120        # seconds: merge_quotes' default tolerance past the run for a price's stamp (clock skew)
+REPLAY_AFTER = 300        # seconds: a run whose clock is this far behind the wall clock is a replay; it reads
+                          # nothing stamped after its own time
+FMP_BUDGET = 90           # seconds for FMP's minutes after SPY's; tickers still unanswered fall back to Yahoo
 GATE = ("SPY", 200)       # HG's gate: current-price(SPY) > moving-average-price(SPY, 200)
 HALF_DAYS = sr.HALF_DAYS   # NYSE 13:00 closes (shadow_runner's table); used only when Yahoo gives no trading
 #                           period for today
@@ -561,12 +569,15 @@ def bar_end(d, hhmm, tz):
     return (start + datetime.timedelta(minutes=1)).astimezone(datetime.timezone.utc)
 
 
-def minute_quotes(tickers, now, key, fetch=None, workers=6):
+def minute_quotes(tickers, now, key, fetch=None, workers=6, budget=None):
     """({ticker: (price, time UTC)}, {ticker: problem}) from FMP's 1-minute bars for today's ET session:
-    each ticker's last bar ending at or before `now` (its close, its end), so a replay at a past `now`
-    reads that moment. SPY is asked first: a refusal or no SPY bar today means FMP is unusable (raises,
-    and nothing else is asked). A ticker FMP refuses or has no bar for is a problem, not an error"""
-    fetch = fetch or sr.fetch_minutes
+    each ticker's last TRADED bar (with volume) ending at or before `now` (its close, its end), so a
+    replay at a past `now` reads that moment. SPY is asked first: a refusal or no SPY bar today means FMP
+    is unusable (raises with the reason, and nothing else is asked). A ticker FMP refuses, has no traded
+    bar for, or does not answer within the budget (FMP_BUDGET seconds after SPY's) is a problem, not an
+    error"""
+    fetch = fetch or (lambda t, d, k: sr.fetch_minutes(t, d, k, traded=True))
+    budget = FMP_BUDGET if budget is None else budget
     e = sr.et_now(now)
     d = e.date().isoformat()
 
@@ -588,9 +599,11 @@ def minute_quotes(tickers, now, key, fetch=None, workers=6):
         raise RuntimeError(f"no SPY 1-minute bar for {d} up to {e:%H:%M} ET")
     out, probs = {"SPY": (spy[1], spy[0])}, {}
     rest = sorted(set(tickers) - {"SPY"})
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    try:
         futs = {ex.submit(last, t): t for t in rest}
-        for f in concurrent.futures.as_completed(futs):
+        done, late = concurrent.futures.wait(futs, timeout=budget)
+        for f in done:
             t = futs[f]
             try:
                 r = f.result()
@@ -598,9 +611,13 @@ def minute_quotes(tickers, now, key, fetch=None, workers=6):
                 probs[t] = one_line(err, 100)
                 continue
             if r is None:
-                probs[t] = "no bar today"
+                probs[t] = "no traded bar today"
             else:
                 out[t] = (r[1], r[0])
+        for f in late:
+            probs[futs[f]] = f"no answer within {budget:g} s"
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
     return out, probs
 
 
@@ -610,13 +627,16 @@ def fmp_quotes(key=None):
     return (lambda tickers, now: minute_quotes(tickers, now, key)) if key else None
 
 
-def merge_quotes(data, quotes, today, now):
-    """(data with FMP's price as today's wherever FMP's bar is from today, not from the run's future, and
-    no more than SAME_MOMENT older than Yahoo's last sale; {ticker: 'fmp' | 'yahoo'}; [(ticker, FMP price,
-    its time, Yahoo price, its time)] wherever both are fresh, within SAME_MOMENT of each other and more
-    than DISAGREE apart). A Yahoo price from the run's future is dropped too. Yahoo's history is kept"""
+def merge_quotes(data, quotes, today, now, horizon=None):
+    """(data with FMP's price as today's wherever FMP's bar is from today, not stamped after `horizon`
+    (default: now + FUTURE_SLACK), and no more than SAME_MOMENT older than Yahoo's last sale; {ticker:
+    'fmp' | 'yahoo'}; [(ticker, FMP price, its time, Yahoo price, its time)] wherever Yahoo's sale falls
+    within FMP's last traded minute (the same minute's trade), both fresh and more than DISAGREE apart).
+    A Yahoo price stamped after `horizon` is dropped too (a replay). Yahoo's history is kept"""
+    horizon = horizon or now + datetime.timedelta(seconds=FUTURE_SLACK)
+
     def fresh(lt):
-        return lt is not None and 0 <= (now - lt).total_seconds() + FUTURE_SLACK and (now - lt).total_seconds() <= FRESH_MIN * 60
+        return lt is not None and lt <= horizon and (now - lt).total_seconds() <= FRESH_MIN * 60
 
     def hms(x):
         return sr.et_now(x).strftime("%H:%M:%S")
@@ -624,14 +644,14 @@ def merge_quotes(data, quotes, today, now):
     for t, (adj, raw, meta) in data.items():
         adj, raw = dict(adj), dict(raw)
         ylt = last_trade(meta) if today in adj else None
-        if ylt is not None and (ylt - now).total_seconds() > FUTURE_SLACK:   # a replay: Yahoo's today is later
+        if ylt is not None and ylt > horizon:       # a replay: Yahoo's today is later than the run
             adj.pop(today, None)
             raw.pop(today, None)
             ylt = None
         q = quotes.get(t)
-        if q is not None and (sr.et_now(q[1]).date().isoformat() != today or (q[1] - now).total_seconds() > FUTURE_SLACK):
+        if q is not None and (sr.et_now(q[1]).date().isoformat() != today or q[1] > horizon):
             q = None
-        if q and ylt and fresh(q[1]) and fresh(ylt) and abs((q[1] - ylt).total_seconds()) <= SAME_MOMENT \
+        if q and ylt and fresh(q[1]) and fresh(ylt) and 0 <= (q[1] - ylt).total_seconds() <= BAR \
                 and abs(adj[today] / q[0] - 1) > DISAGREE:
             diff.append((t, q[0], hms(q[1]), adj[today], hms(ylt)))
         if q is None or (ylt is not None and (ylt - q[1]).total_seconds() > SAME_MOMENT):
@@ -665,6 +685,7 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
     None: FMP's 1-minute bars when FMP_API_KEY is set, else Yahoo alone; False: Yahoo alone"""
     no_fmp = "FMP_API_KEY not set" if quotes is None else "FMP quotes off"
     quotes = quotes if quotes is not None else fmp_quotes()
+    replay = (datetime.datetime.now(datetime.timezone.utc) - now).total_seconds() > REPLAY_AFTER
     cfg_all = sr.load_manifest()
     day0 = sr.et_now(now).date().isoformat()
     trees = {e: sr.load_tree(sr.era_for(c, day0) or c["eras"][-1]) for e, c in cfg_all.items()}
@@ -690,10 +711,10 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
     spy_last = max((d for d in (data.get("SPY") or ({},))[0] if d < today), default=None)
     if "SPY" in data and spy_last != prev:
         return head, [f"PRE-CLOSE UNAVAILABLE — Yahoo's SPY history ends {spy_last}, not the previous session {prev}: "
-                      f"today's move, the gate and every indicator would be read off the wrong day. Nothing previewed; "
-                      f"check before ~{ss['decide']} ET."], []
+                      f"today's move, the gate and every indicator would be read off the wrong day (if the exchange "
+                      f"was shut on {prev}, add it to shadow_runner.NYSE_HOLIDAYS). Nothing previewed; check before "
+                      f"~{ss['decide']} ET."], []
     short = sorted(t for t, (a, _, _) in data.items() if max((d for d in a if d < today), default=None) != prev)
-    yq = {t: (a[today], last_trade(m)) for t, (a, _, m) in data.items() if today in a}
     qfail, qsrc, qdiff, qprob, live_q = None, {}, [], {}, {}
     if quotes:
         fam = set(tick)
@@ -703,7 +724,10 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
             live_q, qprob = quotes(fam, now)
         except Exception as e:  # noqa: BLE001
             live_q, qfail = {}, one_line(e)
-        data, qsrc, qdiff = merge_quotes(data, live_q, today, now)
+    horizon = now if replay else datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=BAR)
+    yq = {t: (a[today], lt) for t, (a, _, m) in data.items() if today in a
+          for lt in [last_trade(m)] if lt is None or lt <= horizon}
+    data, qsrc, qdiff = merge_quotes(data, live_q, today, now, horizon)
     trading = sum(today in a for a, _, _ in data.values())
     if trading < TRADING_SHARE * len(data):
         return head, [f"PRE-CLOSE UNAVAILABLE — only {trading} of {len(data)} tickers show a trade today: the market may "
@@ -714,8 +738,7 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
         need |= set(family(t) or {}) - set(data)
     if need:
         more, _ = fetch_all(need, fetch)
-        if quotes and not qfail:
-            more, _, _ = merge_quotes(more, live_q, today, now)
+        more, _, _ = merge_quotes(more, live_q, today, now, horizon)
         data.update(more)
     prices, notes, carried = live_prices(data, today, now)
     ages = sorted((now - lt).total_seconds() / 60 for t in tick if t in data and t not in stale
@@ -776,6 +799,10 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
             rows.append(r)
         except Exception as e:  # noqa: BLE001
             rows.append({"engine": eng, "status": "unavailable", "note": f"preview error: {one_line(repr(e))}"})
+    for r in rows:
+        hit = sorted(set(short) & sr.decision_tickers(trees[r["engine"]])) if r["status"] == "ok" else []
+        if hit:
+            r.setdefault("caveats", []).append(f"{', '.join(hit)} a session short in Yahoo's history")
     spy_move = spy_sd * factor if spy_sd else None
     lines, alerts = render(ss, g, rows, {t: n for t, n in notes.items() if t in tick}, failures, spy_move, sides)
     have = sorted(t for t in tick if t in data)
@@ -786,14 +813,14 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
         lines.append(f"live prices: Yahoo's last sale ({no_fmp})" + (f"; none for {', '.join(none)}" if none else ""))
     elif not qfail:
         why = "; ".join(f"{t} {m}" for t, m in probs.items())
-        lines.append(f"live prices: FMP 1-minute bars for {sum(qsrc.get(t) == 'fmp' for t in have)} of {len(have)}"
+        lines.append(f"live prices: FMP's last traded minute for {sum(qsrc.get(t) == 'fmp' for t in have)} of {len(have)}"
                      + (f"; Yahoo's last sale for {', '.join(yh)} (" + (f"FMP: {why}; " if why else "")
-                        + "else FMP's bar over a minute older or not from today)" if yh else "")
+                        + "else FMP's last trade over a minute older or not from today)" if yh else "")
                      + (f"; none for {', '.join(none)}" if none else ""))
     dis = [x for x in qdiff if x[0] in tick]
     if dis:
-        lines.append(f"FMP and Yahoo disagree by more than {DISAGREE:.1%} at the same moment: "
-                     + "; ".join(f"{t} {a:.2f} at {ta} vs {b:.2f} at {tb}" for t, a, ta, b, tb in dis))
+        lines.append(f"FMP and Yahoo disagree by more than {DISAGREE:.1%} on the same minute's trade (FMP's used): "
+                     + "; ".join(f"{t} {a:.2f} (FMP, minute to {ta}) vs {b:.2f} (Yahoo, {tb})" for t, a, ta, b, tb in dis))
     if g is None or all(r["status"] != "ok" for r in rows):
         alerts.append("PRE-CLOSE UNAVAILABLE — " + ("; ".join(failures) or "no live SPY price") +
                       ". Today's rebalance runs at ~" + ss["decide"] + " ET unpreviewed.")

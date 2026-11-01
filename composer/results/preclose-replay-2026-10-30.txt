@@ -5,6 +5,7 @@ HG     $86,900 BIL 100% -> QLD 100% ($86,900 moves). close call: market +2 sigma
 KMLM   $92,144 TECL 38%, SOXL 32%, PULS 30% -> TECL 75%, ZVOL 15%, PULS 10% ($47,915 moves). close call: market +2 sigma (SPY +0.22%) -> SQQQ 75%, ZVOL 15%, PULS 10%; TQQQ +0.56% (0.8 sigma) -> SQQQ 75%, ZVOL 15%, PULS 10%; largest gap 37.0% vs the 10% trigger
 SLEEVE $81,666 no change (BOXX 100%). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
 HARV   $37,350 PULS 100% -> ZVOL 60%, PULS 40% ($22,410 moves). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
+live prices: Yahoo's last sale (FMP quotes off)
 ALERTS: ["BIG DAY — SPY -2.10% at 15:15 ET. What the rebalance at ~15:50 will do is in the preview; overrides are the owner's call in the Composer app."]
 
 == replay at 15:27 ET, quotes 0 min behind the read
@@ -15,6 +16,7 @@ KMLM   $92,144 TECL 38%, SOXL 32%, PULS 30% -> TECL 75%, ZVOL 15%, PULS 10% ($47
 SLEEVE $81,666 no change (BOXX 100%). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it; stale: PEJ 15:05 (no fresh sibling: last price used)
 HARV   $37,350 PULS 100% -> ZVOL 60%, PULS 40% ($22,410 moves). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
 stale quotes rebuilt from same-index funds: VXZ via VIXM
+live prices: Yahoo's last sale (FMP quotes off)
 ALERTS: ["BIG DAY — SPY -2.12% at 15:27 ET. What the rebalance at ~15:50 will do is in the preview; overrides are the owner's call in the Composer app."]
 
 == replay at 15:15 ET, quotes 5 min behind the read
@@ -24,6 +26,7 @@ HG     $86,900 BIL 100% -> QLD 100% ($86,900 moves). close call: market +2 sigma
 KMLM   $92,144 TECL 38%, SOXL 32%, PULS 30% -> TECL 75%, ZVOL 15%, PULS 10% ($47,915 moves). could flip: market +2 sigma (SPY +0.24%) -> SQQQ 75%, ZVOL 15%, PULS 10%; TQQQ +0.76% (1.1 sigma) -> SQQQ 75%, ZVOL 15%, PULS 10%; largest gap 37.0% vs the 10% trigger
 SLEEVE $81,666 no change (BOXX 100%). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
 HARV   $37,350 PULS 100% -> ZVOL 60%, PULS 40% ($22,410 moves). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
+live prices: Yahoo's last sale (FMP quotes off)
 ALERTS: ["BIG DAY — SPY -2.10% at 15:15 ET. What the rebalance at ~15:50 will do is in the preview; overrides are the owner's call in the Composer app."]
 
 == replay at 15:27 ET, quotes 5 min behind the read
@@ -34,5 +37,6 @@ KMLM   $92,144 TECL 38%, SOXL 32%, PULS 30% -> TECL 75%, ZVOL 15%, PULS 10% ($47
 SLEEVE $81,666 no change (BOXX 100%). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it; stale: PEJ 15:05 (no fresh sibling: last price used)
 HARV   $37,350 PULS 100% -> ZVOL 60%, PULS 40% ($22,410 moves). firm: no 2-sigma market move or 3-sigma one-ticker move changes a quarter of it
 stale quotes rebuilt from same-index funds: VXZ via VIXM
+live prices: Yahoo's last sale (FMP quotes off)
 ALERTS: ["BIG DAY — SPY -2.21% at 15:27 ET. What the rebalance at ~15:50 will do is in the preview; overrides are the owner's call in the Composer app."]
 
