@@ -656,3 +656,22 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   RUNBOOK.md (what the preview is for; what a pause or a liquidation does); new 15:15 ET routine (half-day
   runs at 12:15); daily routine prompt (commits the preclose ledger too).
 - No service redeploy (local CLI run by the routine).
+
+## 2026-11-01 — shadow runner reads Composer's decision window minute by minute (FMP 1-minute bars; reporting only)
+
+- Change: `scripts/shadow_runner.py` re-runs the approved logic on FMP 1-minute prices at every minute
+  from 15:44 to 15:56 ET (16 to 4 before the close) before Yahoo's 5-minute snapshots and the one-ticker
+  search. The knife-edge record and the mismatch alert name the source. No symphony mutated.
+- Why: Friday 10-30's two SHADOW MISMATCH alerts (KMLM, HARV) were a knife-edge at 15:54 that fell
+  between the 15:50 and 15:55 snapshots. Owner: "is yahoo the best source here? what about our FMP
+  API?", then "build it".
+- Before / after (add. 50, 69 sessions 2026-07-15..10-30):
+  - Disagreements settled on actual minute prices: 13 of 23 -> 23 of 23.
+  - Mismatch alerts: 2 -> 0.
+  - Deliberately wrong pairs excused: 16 -> 4 of 352.
+  - The 10-30 KMLM and HARV live ledger rows were reclassified knife-edge (provenance recorded).
+- Counter-agent: REVIEW50_PENDING
+- Artifacts: results.md addendum 50; results/shadow-minutes-2026-11-01.{json,html};
+  research/shadow/minutes_calib.py, make_minutes_chart.py, reclassify_live.py; backfill.py on the new
+  rule; README (monitor section); 110 shadow tests, including a frozen 10-30 HARV regression fixture.
+- No service redeploy (monitor.py runs in the daily routine; FMP_API_KEY is already in its environment).

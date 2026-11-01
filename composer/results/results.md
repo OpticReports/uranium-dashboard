@@ -3303,3 +3303,66 @@ COUNTER-AGENT, round 2 (one hostile reviewer, scratchpad/preclose-review2/): shi
 
 DECISION: none on symphonies. A new 15:15 ET weekday routine, report-only (POLICY standing cadence; half-
 day runs at 12:15). RUNBOOK updated: what the preview is for, and what a pause or a liquidation does.
+
+## Addendum 50 — Shadow runner: Composer's decision window checked minute by minute (2026-11-01)
+
+Owner, 11-01: "is yahoo the best source here? what about our FMP API?", then "build it".
+
+Friday 10-30's two SHADOW MISMATCH alerts (KMLM and HARV holding ZVOL/PULS 52/48 against the logic's
+60/40) were a knife-edge the old check could not see. The split flips on RSI(SPY,4) against 25, at SPY
+756.13. SPY traded above that only at 15:51-15:54 ET, between the 5-minute snapshots (the 15:55
+snapshot read 756.07). After the close, Yahoo's bars and FMP's agree within about 3 cents; the gap was
+the time grid, not the source.
+
+CHANGE (scripts/shadow_runner.py):
+- The decision-time check reads FMP 1-minute prices (/stable/historical-chart/1min, key FMP_API_KEY) at
+  every minute from 16 to 4 minutes before the close: 15:44-15:56 ET, 12:44-12:56 on a half-day.
+  - The price at a minute is the close of the 1-minute bar ending then.
+  - A fund with no trade that minute keeps its last trade, none older than 30 minutes.
+  - A minute missing a decision ticker's price is skipped.
+- Without FMP bars for a decision ticker, the old checks follow as before: Yahoo 5-minute snapshots
+  (15:45/15:50/15:55), then the 0.3-sigma one-ticker search.
+- The knife-edge record and the mismatch alert name the source (fmp-1m / yahoo-5m).
+
+FMP facts found while building:
+- One session per call: a range returns only the last 3 calendar days up to `to`, so a weekend inside
+  it drops sessions. (This silently thinned the first prefetch; caught and fixed.)
+- A date FMP lacks returns the latest day it has, so bars are filtered to the session asked.
+- A refusal (any non-list answer) is an error, never read as "no bars".
+- 1-minute history goes back to at least 2023.
+- Thin funds are sparse: ZVOL traded in 108 of 390 minutes on 10-30.
+
+MEASURED (research/shadow/minutes_calib.py, old rule vs new on the same inputs; results/shadow-minutes-
+2026-11-01.json, exhibit .html; 69 sessions with a committed holdings snapshot, 2026-07-15..10-30):
+- 272 engine-sessions: 249 agree under both rules. The 23 disagreements:
+
+  rule  knife-edge, FMP minutes  knife-edge, Yahoo snapshots  knife-edge, one-ticker search  mismatch
+  old              -                       13                            8                      2
+  new             23                        -                            -                      -
+
+  None of the 23 matches only on the margin minutes 15:44 or 15:56. Matched minutes per case: median 12
+  of 13, minimum 1 (10-30 KMLM and HARV: 15:54 only).
+- Control: 370 deliberately wrong pairs (the logic at D against Composer's holdings from D-1, D+1 or D+5
+  where they differ); 18 agree under KMLM's lenient check under both rules.
+  - The old rule excused 16 of the other 352 as knife-edges: 14 by the search, 2 on snapshots.
+  - The new rule excuses 4. Two were already excused by the old snapshots. The other two are HG
+    07-27/07-28: one genuine knife-edge between those two days' holdings, seen from each side.
+  - Real minute prices replace the permissive search for sessions older than Yahoo's ~60-day bar window.
+- Ledger:
+  - The 10-30 KMLM and HARV live rows were reclassified mismatch -> knife-edge at 15:54 (fmp-1m) by
+    research/shadow/reclassify_live.py, with a 'reclassified' field (on, from, by).
+  - The backfill rows keep add. 48's classification; minutes_calib.py records theirs under the new rule.
+  - backfill.py now classifies with the same chain (checked end to end, written outside the repo).
+
+HONESTY BOX:
+- In-sample: the window was set, and the control read, on the same 69 sessions.
+- A wrong holding one minute's price away from the logic is excused by design: a knife-edge and a
+  one-minute error look alike. The control's wrong pairs are other days' real holdings, not every kind
+  of error.
+- Composer does not publish its decision time. 15:44-15:56 brackets the 15:45-15:55 it is observed to use.
+- FMP is one more data dependency. If it fails, the old checks decide, and the row's source field shows it.
+- Minute prices are raw, scaled onto the adjusted series by Yahoo's adjusted/raw factor for the day.
+
+COUNTER-AGENT: REVIEW50_PENDING
+
+DECISION: none on symphonies. monitor.py picks it up on the next run; no redeploy.
