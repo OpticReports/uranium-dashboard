@@ -77,7 +77,8 @@ DISAGREE = 0.003          # fresh FMP and Yahoo prices further apart than this a
 SAME_MOMENT = 60          # seconds: Yahoo's last sale at most this much newer than FMP's bar end still takes FMP's
 BAR = 60                  # seconds: a Yahoo sale within FMP's last traded minute is the same minute's trade, and
                           # only such pairs are compared (a later sale is the market's move, not the feeds')
-FUTURE_SLACK = 120        # seconds: merge_quotes' default tolerance past the run for a price's stamp (clock skew)
+FUTURE_SLACK = 120        # seconds: merge_quotes' default tolerance past `now` for a stamp (library callers); the
+                          # preview passes its own horizon: the run time for a replay, none for a live run
 REPLAY_AFTER = 300        # seconds: a run whose clock is this far behind the wall clock is a replay; it reads
                           # nothing stamped after its own time
 FMP_BUDGET = 90           # seconds for FMP's minutes after SPY's; tickers still unanswered fall back to Yahoo
@@ -596,7 +597,7 @@ def minute_quotes(tickers, now, key, fetch=None, workers=6, budget=None):
         return max(ok) if ok else None
     spy = last("SPY")
     if spy is None:
-        raise RuntimeError(f"no SPY 1-minute bar for {d} up to {e:%H:%M} ET")
+        raise RuntimeError(f"no SPY 1-minute bar with volume for {d} up to {e:%H:%M} ET")
     out, probs = {"SPY": (spy[1], spy[0])}, {}
     rest = sorted(set(tickers) - {"SPY"})
     ex = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
@@ -627,16 +628,27 @@ def fmp_quotes(key=None):
     return (lambda tickers, now: minute_quotes(tickers, now, key)) if key else None
 
 
-def merge_quotes(data, quotes, today, now, horizon=None):
-    """(data with FMP's price as today's wherever FMP's bar is from today, not stamped after `horizon`
-    (default: now + FUTURE_SLACK), and no more than SAME_MOMENT older than Yahoo's last sale; {ticker:
-    'fmp' | 'yahoo'}; [(ticker, FMP price, its time, Yahoo price, its time)] wherever Yahoo's sale falls
-    within FMP's last traded minute (the same minute's trade), both fresh and more than DISAGREE apart).
-    A Yahoo price stamped after `horizon` is dropped too (a replay). Yahoo's history is kept"""
-    horizon = horizon or now + datetime.timedelta(seconds=FUTURE_SLACK)
+_DEFAULT = object()
+
+
+def is_replay(now, wall=None):
+    """a run whose clock is more than REPLAY_AFTER behind the wall clock is a replay of a past minute"""
+    wall = wall or datetime.datetime.now(datetime.timezone.utc)
+    return (wall - now).total_seconds() > REPLAY_AFTER
+
+
+def merge_quotes(data, quotes, today, now, horizon=_DEFAULT):
+    """(data with FMP's price as today's wherever FMP's bar is from today, not stamped after `horizon`,
+    and no more than SAME_MOMENT older than Yahoo's last sale; {ticker: 'fmp' | 'yahoo'}; [(ticker, FMP
+    price, its time, Yahoo price, its time)] wherever Yahoo's sale falls within FMP's last traded minute
+    (the same minute's trade), both fresh and more than DISAGREE apart). horizon: the latest stamp used,
+    Yahoo's included; default now + FUTURE_SLACK; None: no cut (a live run, where nothing is the future).
+    Yahoo's history is kept"""
+    if horizon is _DEFAULT:
+        horizon = now + datetime.timedelta(seconds=FUTURE_SLACK)
 
     def fresh(lt):
-        return lt is not None and lt <= horizon and (now - lt).total_seconds() <= FRESH_MIN * 60
+        return lt is not None and (horizon is None or lt <= horizon) and (now - lt).total_seconds() <= FRESH_MIN * 60
 
     def hms(x):
         return sr.et_now(x).strftime("%H:%M:%S")
@@ -644,12 +656,12 @@ def merge_quotes(data, quotes, today, now, horizon=None):
     for t, (adj, raw, meta) in data.items():
         adj, raw = dict(adj), dict(raw)
         ylt = last_trade(meta) if today in adj else None
-        if ylt is not None and ylt > horizon:       # a replay: Yahoo's today is later than the run
+        if horizon is not None and ylt is not None and ylt > horizon:   # a replay: Yahoo's today is later
             adj.pop(today, None)
             raw.pop(today, None)
             ylt = None
         q = quotes.get(t)
-        if q is not None and (sr.et_now(q[1]).date().isoformat() != today or q[1] > horizon):
+        if q is not None and (sr.et_now(q[1]).date().isoformat() != today or (horizon is not None and q[1] > horizon)):
             q = None
         if q and ylt and fresh(q[1]) and fresh(ylt) and 0 <= (q[1] - ylt).total_seconds() <= BAR \
                 and abs(adj[today] / q[0] - 1) > DISAGREE:
@@ -685,7 +697,7 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
     None: FMP's 1-minute bars when FMP_API_KEY is set, else Yahoo alone; False: Yahoo alone"""
     no_fmp = "FMP_API_KEY not set" if quotes is None else "FMP quotes off"
     quotes = quotes if quotes is not None else fmp_quotes()
-    replay = (datetime.datetime.now(datetime.timezone.utc) - now).total_seconds() > REPLAY_AFTER
+    replay = is_replay(now)
     cfg_all = sr.load_manifest()
     day0 = sr.et_now(now).date().isoformat()
     trees = {e: sr.load_tree(sr.era_for(c, day0) or c["eras"][-1]) for e, c in cfg_all.items()}
@@ -724,9 +736,9 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
             live_q, qprob = quotes(fam, now)
         except Exception as e:  # noqa: BLE001
             live_q, qfail = {}, one_line(e)
-    horizon = now if replay else datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=BAR)
+    horizon = now if replay else None            # a live run cuts nothing: a late fetch or a lagging clock is not the future
     yq = {t: (a[today], lt) for t, (a, _, m) in data.items() if today in a
-          for lt in [last_trade(m)] if lt is None or lt <= horizon}
+          for lt in [last_trade(m)] if horizon is None or lt is None or lt <= horizon}
     data, qsrc, qdiff = merge_quotes(data, live_q, today, now, horizon)
     trading = sum(today in a for a, _, _ in data.values())
     if trading < TRADING_SHARE * len(data):
@@ -802,7 +814,7 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
     for r in rows:
         hit = sorted(set(short) & sr.decision_tickers(trees[r["engine"]])) if r["status"] == "ok" else []
         if hit:
-            r.setdefault("caveats", []).append(f"{', '.join(hit)} a session short in Yahoo's history")
+            r.setdefault("caveats", []).append(f"{', '.join(hit)}: Yahoo's history lacks {prev} (indicators a session short)")
     spy_move = spy_sd * factor if spy_sd else None
     lines, alerts = render(ss, g, rows, {t: n for t, n in notes.items() if t in tick}, failures, spy_move, sides)
     have = sorted(t for t in tick if t in data)
@@ -831,9 +843,14 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
 
     def pt(x):
         return [round(x[0], 4), sr.et_now(x[1]).strftime("%H:%M:%S")] if x and x[1] else None
+
+    def used(t):
+        n = notes.get(t, "")
+        return (f"via {n.split(' -> via ')[1]}" if " -> via " in n else
+                "carried" if "last price used" in n else qsrc.get(t, "yahoo"))
     qrec = {"source": "fmp-1m" if quotes else None, "fmp": sum(qsrc.get(t) == "fmp" for t in have), "yahoo": yh,
             "none": none, "failed": qfail if quotes else no_fmp, "problems": probs, "disagree": [list(x) for x in dis],
-            "short": short, "detail": {t: {"fmp": pt(live_q.get(t)), "yahoo": pt(yq.get(t)), "used": qsrc.get(t, "yahoo")}
+            "short": short, "detail": {t: {"fmp": pt(live_q.get(t)), "yahoo": pt(yq.get(t)), "used": used(t)}
                                        for t in sorted(dec) if t in data}}
     led = [dict(stamp, engine="GATE", **{k: v for k, v in g.items() if k != "flip_exact"},
                 sides=sides, spy_sd=round(spy_sd, 6) if spy_sd else None, sd_day=spy_prev[-1] if spy_prev else None,
@@ -883,4 +900,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit as e:                 # FMP fetches past the budget may still be in flight: do not wait
+        sys.stdout.flush()                  # for their threads (the routine's shell has its own timeout)
+        sys.stderr.flush()
+        os._exit(e.code if isinstance(e.code, int) else 1)

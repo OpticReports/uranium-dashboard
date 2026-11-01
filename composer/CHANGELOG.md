@@ -715,9 +715,11 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
 - Before / after:
   - Friday's 15:15 on FMP's traded minutes gives add. 49's Yahoo-bar replay: same calls and labels on all
     four engines.
-  - 10 of 10 sessions agree at 15:15 (counter-agent).
+  - The gate, targets and labels agree with the Yahoo-bar replay on 10 of 10 sessions at 15:15; the
+    stale notes differ on 4 (counter-agent).
   - First live run: Monday 11-02 at 15:15 ET.
 - Counter-agent: round 1 ship with fixes (8 findings); round 2, a four-lens workflow, ship with fixes or
-  block on untraded bars. All applied; see add. 50.
-- Tests: 33 new (104 in test_preclose). Mutants: 37 of 37 (round 1); 30 of 30 (round 2).
+  block on untraded bars; round 3, three lenses on the fixes, ship with fixes (lows). Applied; add. 50.
+- Tests: 35 new (106 in test_preclose). Mutants on copies: round 1, 36 (2 survivors closed by tests);
+  round 2, 30 (2 closed); round 3's 57 left boundary survivors, listed in add. 50.
 - No service redeploy: the 15:15 routine runs the CLI in this environment, which has FMP_API_KEY.

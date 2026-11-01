@@ -344,7 +344,7 @@ its leverage. Otherwise it is used as is, named, and stress-tested, and any
 alternative that reads it is flagged. Sigma includes the quotes' own age. The
 report names the source and FMP's failures and gaps (Yahoo's prices then), and
 lists a Yahoo sale more than 0.3% from FMP's price for the same minute. A replay
-(its clock in the past) reads nothing stamped after its time. Alerts (exit 2): GATE CLOSES / REOPENS AT TODAY'S
+(its clock more than 5 minutes in the past) reads nothing stamped after its time. Alerts (exit 2): GATE CLOSES / REOPENS AT TODAY'S
 REBALANCE, GATE ON THE LINE (within 2 sigma), BIG DAY (SPY 2% or more off
 yesterday's close), PRE-CLOSE UNAVAILABLE. Report-only: overrides are the owner's
 call in the Composer app (RUNBOOK). Ledger: `results/monitor/preclose-ledger.jsonl`,

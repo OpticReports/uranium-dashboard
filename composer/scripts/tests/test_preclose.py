@@ -34,9 +34,10 @@ BROKEN-INPUT counterpart that must land on the other side. The counter-agent's s
       FMP's price unless Yahoo's last sale is over a minute newer; a replay reads nothing after its
       time, a live run drops nothing; a stale Yahoo price rescued, siblings too; a market Yahoo shows
       shut but FMP shows trading is previewed; SPY's history must reach the previous session, short
-      funds caveat their engines; a disagreement only for a Yahoo sale inside FMP's minute; the
-      constants pinned at their edges; FMP down, problems, no key, switched off: said in the report;
-      counts over priced tickers; the ledger's per-ticker record
+      funds caveat their engines; a disagreement only for a Yahoo sale inside FMP's minute; the merge
+      constants pinned at their edges, the replay split by its helper, a live run cutting nothing; FMP
+      down, problems, no key, switched off: said in the report; counts over priced tickers; the
+      ledger's per-ticker record, 'via <sibling>' or 'carried' for rebuilt or carried prices
 
 Run: python3 -m unittest composer.scripts.tests.test_preclose -v
 """
@@ -1200,11 +1201,15 @@ class P11Minutes(unittest.TestCase):
             if t == "SLOW":
                 gate.wait(5)
             return {"15:10": 10.0}
+        import time as _t
+        t0 = _t.monotonic()
         try:
             q, probs = pc.minute_quotes({"SPY", "SLOW", "FAST"}, et(2026, 10, 28, 15, 15), "K", fetch, budget=0.2)
+            took = _t.monotonic() - t0
         finally:
             gate.set()
         self.assertEqual((sorted(q), probs), (["FAST", "SPY"], {"SLOW": "no answer within 0.2 s"}))
+        self.assertLess(took, 1.2)                                                  # it returns at the budget
         q, probs = pc.minute_quotes({"SPY", "SLOW", "FAST"}, et(2026, 10, 28, 15, 15), "K", fetch, budget=5)
         self.assertEqual((sorted(q), probs), (["FAST", "SLOW", "SPY"], {}))         # broken: in time
 
@@ -1216,7 +1221,7 @@ class P11Minutes(unittest.TestCase):
             return {} if t == "SPY" else self.bars()
         with self.assertRaises(RuntimeError) as cm:
             pc.minute_quotes({"SPY", "QQQ"}, et(2026, 10, 28, 15, 15), "K", none_for_spy)
-        self.assertIn("no SPY 1-minute bar for 2026-10-28", str(cm.exception))
+        self.assertIn("no SPY 1-minute bar with volume for 2026-10-28", str(cm.exception))
         self.assertEqual(asked, ["SPY"])                                            # nothing else asked
 
         def refused(t, d, key):
@@ -1331,8 +1336,11 @@ class P11Preview(PreviewBase):
         g = self.run_preview()[2][0]
         self.assertAlmostEqual(g["spy"], 772.31, places=1)
         self.assertIn("via IVV", g["stale"])
+        self.assertEqual(g["quotes"]["detail"]["SPY"]["used"], "via IVV")           # the ledger says so too
         self.quotes = self.fmp(only=set())                                          # broken: no IVV bar
-        self.assertIn("no fresh sibling", self.run_preview()[2][0]["stale"])
+        g = self.run_preview()[2][0]
+        self.assertIn("no fresh sibling", g["stale"])
+        self.assertEqual(g["quotes"]["detail"]["SPY"]["used"], "carried")
 
     def test_market_trading_on_fmp(self):
         self.no_today = True
@@ -1489,6 +1497,25 @@ class P11Preview(PreviewBase):
             g = pc.preview(self.now, lambda: self.meta(), fetch=fetch, quotes=self.quotes)[2][0]
         self.assertIn("via IVV", g["stale"])
 
+    def test_is_replay(self):
+        now = et(2026, 10, 28, 15, 15)
+        self.assertFalse(pc.is_replay(now, wall=now + datetime.timedelta(seconds=299)))   # a slow start is live
+        self.assertTrue(pc.is_replay(now, wall=now + datetime.timedelta(seconds=301)))    # broken: past 5 minutes
+
+    def test_live_run_keeps_late_yahoo(self):
+        def fetch(t):
+            a, r, meta = self.fetch(t)                                                   # every Yahoo sale 150 s after
+            return a, r, dict(meta, regularMarketTime=ts(self.now + datetime.timedelta(seconds=150)))   # the run's clock
+        for q in (False, self.fmp(fail="no SPY 1-minute bar with volume for 2026-10-28 up to 15:15 ET")):
+            with unittest.mock.patch.object(pc, "REPLAY_AFTER", 10 ** 9):          # a live run
+                lines, alerts, led = pc.preview(self.now, lambda: self.meta(), fetch=fetch, quotes=q)
+            self.assertFalse(any(a.startswith("PRE-CLOSE UNAVAILABLE") for a in alerts), alerts)
+            self.assertEqual(led[0]["quotes"]["detail"]["SPY"]["yahoo"], [772.31, "15:17:30"])
+            self.assertEqual(led[0]["lag"], 0.0)
+        _, alerts, led = pc.preview(self.now, lambda: self.meta(), fetch=fetch, quotes=False)   # broken: a replay (the
+        self.assertTrue(alerts[-1].startswith("PRE-CLOSE UNAVAILABLE") and "show a trade today" in alerts[-1])   # wall clock
+        self.assertEqual(led, [])                                                        # is days later): every sale cut
+
     def test_yahoo_spy_missing_is_not_a_history_stop(self):
         def fetch(t):
             if t == "SPY":
@@ -1505,7 +1532,7 @@ class P11Preview(PreviewBase):
     def test_short_fund_caveats_its_engine(self):
         self.cut = {"QLD": {"2026-10-27"}}
         rows = {r["engine"]: r for r in self.run_preview()[2]}
-        self.assertIn("QLD a session short in Yahoo's history", rows["HG"].get("caveats") or [])
+        self.assertIn("QLD: Yahoo's history lacks 2026-10-27 (indicators a session short)", rows["HG"].get("caveats") or [])
         self.assertFalse(any("QLD" in c for c in rows["SLEEVE"].get("caveats") or []))
         self.cut = {}                                                               # broken: complete
         rows = {r["engine"]: r for r in self.run_preview()[2]}
