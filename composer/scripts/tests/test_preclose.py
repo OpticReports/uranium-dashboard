@@ -1113,6 +1113,12 @@ class P11Merge(unittest.TestCase):
         self.assertEqual((diff, src["SPY"]), ([], "fmp"))                           # 5 minutes apart: the market moved
         _, _, diff = self.merge(self.yahoo(self.at(20)), (100.5, self.at(1)))
         self.assertEqual(diff, [])                                                  # Yahoo stale
+        _, _, diff = self.merge(self.yahoo(self.at(15, 20)), (100.5, self.at(14, 30)))
+        self.assertEqual(diff, [])                                                  # 50 s apart, Yahoo just stale
+        _, _, diff = self.merge(self.yahoo(self.at(14, 30)), (100.5, self.at(15, 20)))
+        self.assertEqual(diff, [])                                                  # 50 s apart, FMP just stale
+        _, _, diff = self.merge(self.yahoo(self.at(14, 50)), (100.5, self.at(14, 0)))
+        self.assertEqual(len(diff), 1)                                              # broken: both just fresh
 
 
     def test_previous_session(self):

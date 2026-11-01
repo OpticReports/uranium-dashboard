@@ -26,10 +26,12 @@ Per engine, for session D (the latest final close on Yahoo):
                 closes sit more than 10pp off it, else those drifted holdings; without a previous
                 session, every holding within 11pp of the target
   knife-edge    not on closing prices, but yes when every decision ticker's close on D is replaced by
-                its price at some minute from 16 to 4 minutes before the session close (15:44-15:56
-                ET; 12:44.. on a half-day; FMP 1-minute bars, the last trade if none that minute, none
-                older than 30 minutes): Composer decides on prices from those minutes (add. 50).
-                Without FMP, Yahoo 5-minute bars at 15, 10 and 5 minutes before the close. Logged,
+                its price at some minute from 10 to 5 minutes before the session close (15:50-15:55
+                ET; 12:50.. on a half-day; FMP 1-minute bars, the last trade if none that minute, none
+                older than 30 minutes). Measured: the logic matches Composer best at 15:51-15:54
+                (add. 50). FMP's day is used only when SPY is complete (through the close and every
+                window minute) and no dense feed stops early; otherwise, or without FMP, Yahoo
+                5-minute bars at 15, 10 and 5 minutes before the close, and the row says why. Logged,
                 not alerted. Without either, a one-ticker move within 0.3 sigma counts instead (p95
                 of the measured 15:45 -> close move), and two such sessions in a row for one engine
                 alert
@@ -40,7 +42,9 @@ Per engine, for session D (the latest final close on Yahoo):
 LOGIC DRIFT, every run, with or without prices: Composer's live tree differs in logic from the last
 approved era in fixtures/approved/manifest.json -> alert when first seen or changed, and on Mondays
 while it lasts; a new version with identical logic is a note. Three failed runs in a row -> SHADOW
-RUNNER DOWN. A failed run leaves the state as it was; only its failure count moves.
+RUNNER DOWN. A failed run leaves the state as it was; only its failure count moves. SHADOW FMP DOWN:
+each run that checks a new session reads SPY's FMP minutes for it; three sessions in a row unusable
+(refused, no key, incomplete) alert, then Mondays while it lasts; a re-check never counts.
 
 Evaluation semantics: research/synth/tree_sim.py (validated against Composer on these trees) with
 Wilder RSI over all fetched history (at least 60 closes). Weights decided at the close of D from
@@ -80,7 +84,7 @@ MINUTE_WINDOW = (10, 5)   # FMP 1-minute check: every minute from 10 to 5 minute
 DECISION_MINUTE = 6       # 15:54, the best-matching minute: a knife-edge's 'time' is the matched minute nearest it
 FMP_MINUTES = "https://financialmodelingprep.com/stable/historical-chart/1min"
 FMP_DENSE, FMP_CUT = 20, 5   # a ticker with bars in >= 20 of the 30 minutes before its last bar that stops more than
-                          # 5 minutes before the close is a cut feed, not a thin fund (0 of 3,773 FMP ticker-days)
+                          # 5 minutes before the close is a cut feed, not a thin fund (flags 0 of 343 full FMP ticker-days)
 FMP_ALERT = 3             # sessions in a row with FMP's 1-minute bars unusable before an alert
 HALF_DAYS = {"2026-11-27": "13:00", "2026-12-24": "13:00", "2027-11-26": "13:00"}   # NYSE 13:00 closes
 KNIFE_SIGMA = 0.3         # fallback search radius without bars, in 20-session daily sigmas: p95 of the
@@ -550,7 +554,7 @@ def at_times(prices, raw, bars, tree, d):
             p[t][d] = prices[t][d] * px / rc
         _, alt, _ = run_engine(p, tree, d)
         out[hh] = alt
-    return dict(out, _close=close)
+    return dict(out, _close=close, _src="yahoo-5m")
 
 
 def minute_price(day_min, hhmm, max_age=STALE_BAR_MIN):
@@ -608,13 +612,15 @@ def intraday_check(prices, raw, tree, d, minutes=None, bars=None):
         alts = at_minutes(prices, raw, got, tree, d)
         if alts:
             return alts
-        probs = list(getattr(minutes, "problems", lambda day: [])(d))
-        lack = [t for t in tk if not (got.get(t) or {}).get(d)]
-        norc = [t for t in tk if not (raw.get(t) or {}).get(d)]
-        if lack and not probs:
-            probs.append(f"FMP has no 1-minute bars for {', '.join(lack)} on {d}")
-        elif norc and not lack:
-            probs.append(f"no raw close for {', '.join(norc)} on {d}")
+        pd = dict(getattr(minutes, "problems", lambda day, tickers=None: {})(d, tk))
+        probs = list(pd.values())
+        if "FMP" not in pd:                         # a reason for the whole feed (no key) covers every ticker
+            lack = [t for t in tk if not (got.get(t) or {}).get(d) and t not in pd]
+            norc = [t for t in tk if not (raw.get(t) or {}).get(d) and t not in lack]
+            if lack:
+                probs.append(f"FMP has no 1-minute bars for {', '.join(lack)} on {d}")
+            if norc:
+                probs.append(f"no raw close for {', '.join(norc)} on {d}")
         note = "; ".join(probs) or "no minute in the window priced every decision ticker"
     if bars:
         alts = at_times(prices, raw, bars(tk), tree, d)
@@ -1028,9 +1034,16 @@ def fetch_minutes(t, d, key, tries=3):
             with urllib.request.urlopen(req, timeout=30) as r:
                 rows = json.load(r)
             if not isinstance(rows, list):
-                raise RuntimeError(f"unexpected answer {str(rows)[:80]}")
-            return {b["date"][11:16]: float(b["close"]) for b in rows
-                    if isinstance(b, dict) and str(b.get("date", "")).startswith(d) and b.get("close")}
+                raise RuntimeError(f"unexpected answer {str(rows).replace(key, '***')[:80]}")
+            out = {}
+            for b in rows:                          # a row that is not a bar of d is skipped, never fatal
+                if not isinstance(b, dict) or not str(b.get("date", "")).startswith(d):
+                    continue
+                c, hm = b.get("close"), str(b["date"])[11:16]
+                if isinstance(c, bool) or not isinstance(c, (int, float)) or c <= 0 or len(hm) != 5 or hm[2] != ":":
+                    continue
+                out[hm] = float(c)
+            return out
         except Exception as e:  # noqa: BLE001
             err = str(e).replace(key, "***")
         time.sleep(2 ** k)
@@ -1038,26 +1051,32 @@ def fetch_minutes(t, d, key, tries=3):
 
 
 def vet_minutes(day, d):
-    """({ticker: {d: bars + '_close'}} usable, [problem]) from FMP's 1-minute bars for session d
+    """({ticker: {d: bars + '_close'}} usable, {ticker: problem}) from FMP's 1-minute bars for session d
     ({ticker: {'HH:MM' bar start: close}}), the close from the exchange calendar. SPY trades every
-    minute: without a bar in the session's last minute the whole day reads as incomplete (nothing usable).
-    A ticker with bars in at least FMP_DENSE of the 30 minutes before its last bar that stops more than
-    FMP_CUT minutes before the close reads as a cut feed and is left out; a thin fund's early last trade
-    is kept"""
+    minute: without a bar in the session's last minute, or in any minute the decision window reads
+    (the bars starting 15:49-15:54 on a full day), the whole day reads as incomplete (nothing usable;
+    the problem is SPY's). A ticker with bars in at least FMP_DENSE of the 30 minutes before its last
+    bar that stops more than FMP_CUT minutes before the close reads as a cut feed and is left out; a
+    thin fund's early last trade is kept, and so is a gap inside a dense fund's window (none in 343
+    full FMP ticker-days, counter-agent)"""
     close = session_close(d)
     c = _min(close)
-    last_spy = max((_min(k) for k in day.get("SPY") or {} if not k.startswith("_")), default=None)
+    spy = {_min(k) for k in day.get("SPY") or {} if not k.startswith("_")}
+    last_spy = max(spy, default=None)
     if last_spy is None or last_spy < c - 1:
-        return {}, [f"FMP's SPY minutes for {d} end at {_hm(last_spy) if last_spy is not None else 'none'}, "
-                    f"before the {close} close: the day reads as incomplete"]
-    out, probs = {}, []
+        return {}, {"SPY": f"FMP's SPY minutes for {d} end at {_hm(last_spy) if last_spy is not None else 'none'}, "
+                           f"before the {close} close: the day reads as incomplete"}
+    gaps = [_hm(_min(hh) - 1) for hh in decision_minutes(close) if _min(hh) - 1 not in spy]
+    if gaps:
+        return {}, {"SPY": f"FMP's SPY minutes for {d} have no bar at {', '.join(gaps)}, inside the decision "
+                           f"window: the day reads as incomplete"}
+    out, probs = {}, {}
     for t, m in sorted(day.items()):
         ks = sorted(_min(k) for k in m if not k.startswith("_"))
         if not ks:
             continue
         if ks[-1] < c - FMP_CUT and sum(ks[-1] - 30 < k for k in ks) >= FMP_DENSE:
-            probs.append(f"FMP's {t} minutes for {d} stop at {_hm(ks[-1])} after trading nearly every minute: "
-                         f"read as cut")
+            probs[t] = f"FMP's {t} minutes for {d} stop at {_hm(ks[-1])} after trading nearly every minute: read as cut"
             continue
         out[t] = {d: dict(m, _close=close)}
     return out, probs
@@ -1067,7 +1086,8 @@ def minutes_fetcher(key=None):
     """a cached callable (tickers, d) -> {ticker: {d: 1-minute bars + '_close'}} on FMP, vetted by
     vet_minutes; tickers without usable bars are absent. SPY is fetched first: if it fails or ends early
     nothing else is fetched for that day (a dead or lagging feed costs one call). The callable's
-    .problems(d) lists the day's fetch failures and incompleteness. None without a key (env FMP_API_KEY)"""
+    .problems(d, tickers=None) gives the day's fetch failures and incompleteness by ticker, for SPY and
+    the tickers asked about. None without a key (env FMP_API_KEY)"""
     key = key or os.environ.get("FMP_API_KEY")
     if not key:
         return None
@@ -1094,10 +1114,22 @@ def minutes_fetcher(key=None):
         usable, _ = vet_minutes(day(d), d)
         return {t: usable[t] for t in tickers if t in usable}
 
-    def problems(d):
-        return ([f"FMP failed for {t}: {e}" for (t, dd), e in sorted(errors.items()) if dd == d]
-                + vet_minutes(day(d), d)[1])
+    def problems(d, tickers=None):
+        keep = None if tickers is None else set(tickers) | {"SPY"}
+        out = dict(vet_minutes(day(d), d)[1]) if day(d) else {}
+        out.update({t: f"FMP failed for {t}: {e}" for (t, dd), e in errors.items() if dd == d})
+        if not day(d) and ("SPY", d) in cache and ("SPY", d) not in errors:
+            out["SPY"] = f"FMP has no SPY minutes for {d}"
+        return {t: m for t, m in sorted(out.items()) if keep is None or t in keep}
     get.problems = problems
+    return get
+
+
+def no_minutes(reason):
+    """a minutes callable with nothing, saying why, so rows and alerts carry the reason (no key)"""
+    def get(tickers, d):
+        return {}
+    get.problems = lambda d, tickers=None: {"FMP": reason}
     return get
 
 
@@ -1108,9 +1140,10 @@ def fmp_health(minutes, d):
     try:
         if "SPY" in minutes(["SPY"], d):
             return None
+        why = "; ".join(dict(getattr(minutes, "problems", lambda day, tickers=None: {})(d, ["SPY"])).values())
     except Exception as e:  # noqa: BLE001
         return f"FMP failed: {str(e)[:200]}"
-    return "; ".join(getattr(minutes, "problems", lambda day: [])(d)) or f"no SPY 1-minute bars for {d}"
+    return why or f"no SPY 1-minute bars for {d}"
 
 
 def _try(fn, *a):
@@ -1371,20 +1404,21 @@ def assess(cfg_all, meta, prices, d, st, load=None, raw=None, bars=None, prev=No
 
 
 def fmp_canary(h, minutes, d, e_now):
-    """(alerts, notes): FMP's 1-minute bars for session d checked once a session (h: state, mutated). A
-    failure is noted each run; FMP_ALERT sessions in a row alert, then Mondays while it lasts"""
+    """(alerts, notes): FMP's 1-minute bars for session d checked (h: state, mutated). A failure is
+    noted each run, but counted only for a session newer than the last one counted, so a re-check
+    (a pending engine, a later run of the same session) never counts or alerts. FMP_ALERT sessions in
+    a row alert, then Mondays while it lasts"""
     why = fmp_health(minutes, d)
     if not why:
         h.clear()
         return [], []
-    if h.get("date") != d:
-        h["fails"] = h.get("fails", 0) + 1
-        h["date"] = d
     h["last"] = why
     notes = [f"shadow: FMP 1-minute bars unusable for {d} ({why}); a disagreement is checked on Yahoo's 5-minute bars"]
-    today = e_now.date().isoformat()
-    if h.get("alerted") != today and (h["fails"] == FMP_ALERT or (h["fails"] > FMP_ALERT and e_now.weekday() == 0)):
-        h["alerted"] = today
+    if d <= h.get("date", ""):
+        return [], notes
+    h["fails"] = h.get("fails", 0) + 1
+    h["date"] = d
+    if h["fails"] == FMP_ALERT or (h["fails"] > FMP_ALERT and e_now.weekday() == 0):
         return [f"SHADOW FMP DOWN — FMP's 1-minute bars unusable {h['fails']} sessions in a row (latest: {why}). "
                 f"Disagreements with Composer fall back to Yahoo's 5-minute bars, then the one-ticker search, until "
                 f"it clears."], notes
@@ -1430,7 +1464,7 @@ def check_shadow(state, alerts, snap, meta, now, get=None, write=True, ledger=No
             snap["shadow"] = {"date": d, "stale": True, "status": dict(work.get("status") or {})}
         else:
             only = set(pending) if work.get("last_date") == d else None
-            fm = minutes if minutes is not None else minutes_fetcher()
+            fm = minutes if minutes is not None else (minutes_fetcher() or no_minutes("FMP_API_KEY not set"))
             rows, a, n = assess(cfg_all, meta, prices, d, work, raw=raw, bars=bars or bars_fetcher(),
                                 minutes=fm, prev=previous_rows(ledger, d, prices), weekday=e_now.weekday(), only=only)
             new_alerts += a

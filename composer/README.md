@@ -304,9 +304,9 @@ reproduces on Composer's actual decision-time prices is a logged knife-edge, not
 an alert. Those prices are FMP 1-minute bars at every minute from 15:50 to 15:55
 (addendum 50: the logic matches Composer best at 15:51-15:54; key from
 `FMP_API_KEY`), else Yahoo 5-minute bars at 15:45, 15:50 and 15:55, else a
-one-ticker move within 0.3 sigma. FMP's day is used only when it is complete (SPY
-through the last minute, no feed cut short); a fallback says why in the row and the
-alert. Alerts: a MISMATCH; COMPOSER DID
+one-ticker move within 0.3 sigma. FMP's day is used only when SPY is complete
+(through the close and every window minute) and no dense feed stops early; a
+fallback says why in the row and the alert. Alerts: a MISMATCH; COMPOSER DID
 NOT REBALANCE (read from Composer's own attempt date, first session, daily
 while it lasts, then RESUMED); LOGIC DRIFT (Composer's live tree differs in
 logic from the approved one; checked every run, prices or not); SHADOW BLIND

@@ -662,8 +662,8 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
 - Change: `scripts/shadow_runner.py` re-runs the approved logic on FMP 1-minute prices at every minute
   from 15:50 to 15:55 ET (10 to 5 before the close) before Yahoo's 5-minute snapshots and the one-ticker
   search. Composer's holdings match the logic best at 15:54: 1 of 272 engine-sessions contradicted.
-  - FMP's day is used only when complete (SPY through the last minute, no feed cut short); a fallback
-    says why.
+  - FMP's day is used only when SPY is complete (through the close and every window minute) and no
+    dense feed stops early; a fallback says why, naming the engine's own tickers.
   - New alert: SHADOW FMP DOWN, when FMP is unusable 3 sessions running.
   - A knife-edge names its source and the matching minutes.
   - No symphony mutated.
@@ -671,7 +671,7 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   between the 15:50 and 15:55 snapshots. Owner: "is yahoo the best source here? what about our FMP
   API?", then "build it".
 - Before / after (add. 50, 69 sessions 2026-07-15..10-30):
-  - Disagreements settled on actual decision-time prices: 13 of 23 (Yahoo 5-minute snapshots) ->
+  - Disagreements explained on actual decision-time prices: 13 of 23 (Yahoo 5-minute snapshots) ->
     23 of 23 (FMP minutes).
   - Mismatch alerts: 2 -> 0.
   - Deliberately wrong pairs excused: 16 -> 3 of 352. The price source does most of this; the window
@@ -691,7 +691,9 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
   - research/shadow/minutes_calib.py, make_minutes_chart.py, reclassify_live.py; backfill.py on the
     new rule;
   - README (monitor section); POLICY (SHADOW FMP DOWN informational); the daily routine prompt relays it;
-  - 121 shadow tests, including a frozen 10-30 HARV regression fixture.
+  - 128 shadow tests, including a frozen 10-30 HARV regression fixture.
+- Counter-agent, round 2: ship with fixes, all applied (alert once per new session, engine-own notes,
+  SPY's window minutes required, no-key rows say so, 7 tests). 30 of 30 mutants killed.
 - No service redeploy: monitor.py runs in the daily routine, whose environment has FMP_API_KEY.
 
 ## 2026-11-01 — pre-close preview prices on FMP's 1-minute bars (reporting only)

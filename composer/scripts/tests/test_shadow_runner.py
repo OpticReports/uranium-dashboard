@@ -1468,7 +1468,8 @@ class S17Minutes(unittest.TestCase):
 
         def fake(t, d, key, tries=2):
             calls.append((t, d))
-            return {"SPY": {"15:58": 1.0, "15:59": 1.0}, "THIN": {"15:41": 2.0, "15:42": 2.0}}.get(t, {})
+            spy = {f"15:{m:02d}": 1.0 for m in range(40, 60)}
+            return {"SPY": spy, "THIN": {"15:41": 2.0, "15:42": 2.0}}.get(t, {})
         try:
             sr.fetch_minutes = fake
             get = sr.minutes_fetcher("k")
@@ -1481,7 +1482,7 @@ class S17Minutes(unittest.TestCase):
             self.assertEqual(len(calls), n)                                   # cached
             get(["THIN"], "2025-05-01")
             self.assertIn(("THIN", "2025-05-01"), calls)                      # by ticker and day
-            self.assertEqual(get.problems(D), [])
+            self.assertEqual(get.problems(D), {})
         finally:
             sr.fetch_minutes = saved
 
@@ -1561,16 +1562,36 @@ class S18FmpGuards(unittest.TestCase):
     def test_vet_minutes(self):
         full = {f"15:{m:02d}": 1.0 for m in range(25, 60)}
         ok, probs = sr.vet_minutes({"SPY": full, "THIN": {"15:10": 2.0}}, D)
-        self.assertEqual((sorted(ok), probs), (["SPY", "THIN"], []))           # a thin fund's early last trade kept
+        self.assertEqual((sorted(ok), probs), (["SPY", "THIN"], {}))           # a thin fund's early last trade kept
         self.assertEqual(ok["SPY"][D]["_close"], "16:00")
         ok, probs = sr.vet_minutes({"SPY": {k: v for k, v in full.items() if k <= "15:49"}, "X": full}, D)
         self.assertEqual(ok, {})                                               # broken: SPY ends 15:49
-        self.assertIn("end at 15:49, before the 16:00 close", probs[0])
+        self.assertIn("end at 15:49, before the 16:00 close", probs["SPY"])
+        ok, probs = sr.vet_minutes({"SPY": {k: v for k, v in full.items() if k <= "15:58"}}, D)
+        self.assertEqual(ok, {})                                               # one minute short is short
+        self.assertIn("end at 15:58", probs["SPY"])
+        holed = {k: v for k, v in full.items() if not "15:49" <= k <= "15:56"}
+        ok, probs = sr.vet_minutes({"SPY": holed, "X": full}, D)
+        self.assertEqual(ok, {})                                               # SPY missing the window's bars
+        self.assertIn("no bar at 15:49, 15:50, 15:51, 15:52, 15:53, 15:54, inside the decision window", probs["SPY"])
+        self.assertIn("SPY", sr.vet_minutes({"SPY": {k: v for k, v in full.items() if k != "15:48"}}, D)[0])   # outside it: fine
         self.assertEqual(sr.vet_minutes({"X": full}, D)[0], {})                # no SPY at all
         cut = {f"{h}:{m:02d}": 3.0 for h in (14, 15) for m in range(60) if "14:51" <= f"{h}:{m:02d}" <= "15:20"}
         ok, probs = sr.vet_minutes({"SPY": full, "UVXY": cut}, D)
-        self.assertEqual((sorted(ok), len(probs)), (["SPY"], 1))               # a dense feed cut at 15:20
-        self.assertIn("UVXY minutes for", probs[0])
+        self.assertEqual((sorted(ok), sorted(probs)), (["SPY"], ["UVXY"]))     # a dense feed cut at 15:20
+        self.assertIn("UVXY minutes for", probs["UVXY"])
+
+        def dense(last, n, span=30):                                           # n bars in the `span` minutes to `last`
+            m = sr._min(last)
+            return {sr._hm(m - k): 3.0 for k in range(n)} if span == 30 else None
+        self.assertIn("UVXY", sr.vet_minutes({"SPY": full, "UVXY": dense("15:20", 19)}, D)[0])    # 19 of 30: kept
+        self.assertNotIn("UVXY", sr.vet_minutes({"SPY": full, "UVXY": dense("15:20", 20)}, D)[0])  # 20 of 30: cut
+        self.assertIn("UVXY", sr.vet_minutes({"SPY": full, "UVXY": dense("15:55", 30)}, D)[0])    # 5 before the close: kept
+        self.assertNotIn("UVXY", sr.vet_minutes({"SPY": full, "UVXY": dense("15:54", 30)}, D)[0]) # 6 before: cut
+        edge = {sr._hm(sr._min("15:20") - k): 3.0 for k in list(range(19)) + [30]}                  # 19 inside, one at 30
+        self.assertIn("UVXY", sr.vet_minutes({"SPY": full, "UVXY": edge}, D)[0])               # the 30th minute back is out
+        split = {sr._hm(sr._min("15:20") - k): 3.0 for k in list(range(10)) + list(range(20, 30))}
+        self.assertNotIn("UVXY", sr.vet_minutes({"SPY": full, "UVXY": split}, D)[0])           # 20 spread over 30: cut
         sparse = {k: v for i, (k, v) in enumerate(sorted(cut.items())) if i % 2 == 0}   # 15 of 30: thin, kept
         self.assertIn("UVXY", sr.vet_minutes({"SPY": full, "UVXY": sparse}, D)[0])
         late = dict(cut, **{"15:55": 3.0})
@@ -1581,7 +1602,7 @@ class S18FmpGuards(unittest.TestCase):
         with unittest.mock.patch.dict(sr.HALF_DAYS, {D: "13:00"}):
             half = {f"12:{m:02d}": 1.0 for m in range(25, 60)}
             ok, probs = sr.vet_minutes({"SPY": half}, D)
-            self.assertEqual((ok["SPY"][D]["_close"], probs), ("13:00", []))
+            self.assertEqual((ok["SPY"][D]["_close"], probs), ("13:00", {}))
 
     def test_complete_answer_is_used(self):
         status, det = self.run_fx(self.answers())
@@ -1605,7 +1626,8 @@ class S18FmpGuards(unittest.TestCase):
         dense = {f"{h}:{m:02d}": 19.0 for h in (14, 15) for m in range(60) if "14:51" <= f"{h}:{m:02d}" <= "15:20"}
         status, det = self.run_fx(self.answers(drop={"UVXY": dense}))
         self.assertEqual(status, "mismatch")
-        self.assertIn("UVXY minutes for 2026-10-30 stop at 15:20", det["fmp"])
+        self.assertEqual(det["fmp"], "FMP's UVXY minutes for 2026-10-30 stop at 15:20 after trading nearly every minute: "
+                                     "read as cut")                            # named once, not again as 'no bars'
 
     def test_refused_fmp_is_said(self):
         status, det = self.run_fx(self.answers(fail={"SPY"}))
@@ -1624,6 +1646,11 @@ class S18FmpGuards(unittest.TestCase):
             return fake(t, d, key, tries)
         self.run_fx(counting)
         self.assertEqual(calls, ["SPY"])                                       # SPY failed: nothing else asked
+        calls.clear()
+        lag = self.answers(cut={"SPY": "15:49"})
+        self.run_fx(lambda t, d, key, tries=3: calls.append(t) or lag(t, d, key, tries))
+        self.assertEqual(calls, ["SPY"])                                       # SPY lagging: nothing else asked
+        calls.clear()
         calls.clear()
         self.run_fx(lambda t, d, key, tries=3: counting(t, d, key, tries) if t != "SPY" else self.answers()(t, d, key))
         self.assertEqual(calls, ["UVXY"])                                      # broken: SPY fine, UVXY asked
@@ -1679,6 +1706,146 @@ class S18FmpGuards(unittest.TestCase):
                 self.assertEqual(st["shadow"]["fmp"]["fails"], 1)
         finally:
             tmp.cleanup()
+
+
+class S19FmpReasons(unittest.TestCase):
+    """round 2 of add. 50's review: the alert path end to end, once per session; each engine's own FMP
+    reasons; no key said in the row; the search path keeps the note; health on a raising fetcher; the
+    fetch never leaks a key prefix and skips a bad row"""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.led = os.path.join(self.tmp.name, "l.jsonl")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def refuse(self, t, d, key, tries=3):
+        raise RuntimeError(f"FMP {t} {d}: unexpected answer {{'Error Message': 'Limit Reach'}}")
+
+    def run_session(self, st, p, d, now, drop=None):
+        pp = {t: {k: v for k, v in s.items() if k <= d and not (drop and t in drop and k == d)} for t, s in p.items()}
+        alerts = []
+        with unittest.mock.patch.object(sr, "fetch_prices", lambda *a, **k: (pp, pp, {})), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            sr.check_shadow(st, alerts, {}, meta(d, {"A": 0.999}), now, ledger=self.led, bars=lambda tk: {})
+        return [a for a in alerts if a.startswith("SHADOW FMP DOWN")], out.getvalue()
+
+    def test_fmp_down_alerts_once_per_session_end_to_end(self):
+        p = near_threshold_prices()
+        d1, d2, d3 = dates(N)[-3:]
+        at = lambda d, h=21: datetime.datetime.fromisoformat(d).replace(hour=h, minute=35, tzinfo=UTC)  # noqa: E731
+        st = {}
+        with unittest.mock.patch.dict(os.environ, {"FMP_API_KEY": "FAKEKEY"}), \
+                unittest.mock.patch.multiple(sr, load_manifest=lambda: CFG, load_tree=load, fetch_minutes=self.refuse):
+            got = [self.run_session(st, p, d, at(d))[0] for d in (d1, d2)]
+            got.append(self.run_session(st, p, d3, at(d3), drop={"X"})[0])     # E1 cannot be checked: pending
+            self.assertEqual(st["shadow"]["pending"], ["E1"])
+            nxt = at(d3) + datetime.timedelta(days=1)
+            got.append(self.run_session(st, p, d3, nxt)[0])                    # a later day's re-check of d3
+            got.append(self.run_session(st, p, d2, nxt + datetime.timedelta(hours=1))[0])   # a date going backwards
+        self.assertEqual([len(a) for a in got], [0, 0, 1, 0, 0])
+        self.assertTrue(got[2][0].startswith("SHADOW FMP DOWN — FMP's 1-minute bars unusable 3 sessions in a row"))
+        self.assertEqual(st["shadow"]["fmp"]["fails"], 3)
+        st2 = {}                                                               # broken: FMP fine -> never
+        p2 = near_threshold_prices()
+        ok = lambda t, d, key, tries=3: {f"15:{m:02d}": p2[t][d] for m in range(25, 60)} if t in p2 else {}  # noqa: E731
+        with unittest.mock.patch.dict(os.environ, {"FMP_API_KEY": "FAKEKEY"}), \
+                unittest.mock.patch.multiple(sr, load_manifest=lambda: CFG, load_tree=load, fetch_minutes=ok):
+            got = [self.run_session(st2, p2, d, at(d))[0] for d in (d1, d2, d3)]
+        self.assertEqual([len(a) for a in got], [0, 0, 0])
+        self.assertEqual(st2["shadow"]["fmp"], {})
+
+    def test_no_key_is_said_in_the_row_and_the_alert(self):
+        p = near_threshold_prices()
+        with unittest.mock.patch.dict(os.environ, {}, clear=False), \
+                unittest.mock.patch.multiple(sr, load_manifest=lambda: CFG, load_tree=load,
+                                             fetch_prices=lambda *a, **k: (p, p, {})):
+            os.environ.pop("FMP_API_KEY", None)
+            alerts, out = [], io.StringIO()
+            with contextlib.redirect_stdout(out):
+                sr.check_shadow({}, alerts, {}, meta(D, {"C": 0.999}), S13Wiring.NOW, ledger=self.led, bars=lambda tk: {})
+            e1 = next(r for r in sr.read_ledger(self.led) if r["engine"] == "E1")
+            self.assertEqual((e1["status"], e1["fmp"]), ("mismatch", "FMP_API_KEY not set"))
+            self.assertTrue(any("FMP minutes not used: FMP_API_KEY not set" in a for a in alerts), alerts)
+            self.assertIn("FMP 1-minute bars unusable", out.getvalue())
+            alerts = []                                                        # broken: minutes supplied
+            led2 = self.led + "2"
+            with contextlib.redirect_stdout(io.StringIO()):
+                sr.check_shadow({}, alerts, {}, meta(D, {"C": 0.999}), S13Wiring.NOW, ledger=led2, bars=lambda tk: {},
+                                minutes=lambda tk, d: timed_minutes(p, {}))
+            e1 = next(r for r in sr.read_ledger(led2) if r["engine"] == "E1")
+            self.assertNotIn("fmp", e1)
+
+    def test_reasons_are_the_engines_own(self):
+        with gzip.open(MINUTES_FX) as f:
+            fx = json.load(f)
+        era = next(e for e in sr.load_manifest()["HARV"]["eras"] if e["version"] == fx["era"])
+        tree, d = sr.load_tree(era), fx["date"]
+        dense = {f"{h}:{m:02d}": 9.0 for h in (14, 15) for m in range(60) if "14:51" <= f"{h}:{m:02d}" <= "15:20"}
+
+        def fake(t, dd, key, tries=3):
+            if t == "CORP":
+                raise RuntimeError("FMP CORP 2026-10-30: timed out")
+            if t == "PEJ":
+                return dense                                                   # SLEEVE's ticker, read as cut
+            if t == "UVXY":
+                return {}                                                      # HARV's own cause
+            return dict(fx["minutes"].get(t) or {})
+        with unittest.mock.patch.object(sr, "fetch_minutes", fake):
+            mf = sr.minutes_fetcher("FAKEKEY")
+            mf(["CORP", "PEJ"], d)                                             # another engine's check, earlier
+            alts = sr.intraday_check(fx["prices"], fx["raw"], tree, d, mf)
+        self.assertEqual(alts, {"_fmp": "FMP has no 1-minute bars for UVXY on 2026-10-30"})
+        self.assertEqual(sorted(mf.problems(d)), ["CORP", "PEJ"])               # the day's, unfiltered
+        self.assertEqual(mf.problems(d, ["UVXY"]), {})                          # broken: filtered to the engine's
+
+    def test_search_path_keeps_the_note(self):
+        p = near_threshold_prices()
+        sim, target, tr = sr.run_engine(p, rsi_tree(), D)
+        mfn = sr.no_minutes("FMP_API_KEY not set")
+        st, det = sr.classify(sim, rsi_tree(), D, target, tr, {"C": 1.0}, None, None,
+                              lambda: sr.intraday_check(p, p, rsi_tree(), D, mfn, None))
+        self.assertEqual(st, "mismatch")
+        self.assertTrue(det["checked"].endswith("(no 5-minute bars); FMP minutes not used: FMP_API_KEY not set"), det["checked"])
+        st, det = sr.classify(sim, rsi_tree(), D, target, tr, {"C": 1.0}, None, None, lambda: None)   # broken: no FMP asked
+        self.assertTrue(det["checked"].endswith("(no 5-minute bars)"))
+
+    def test_health_on_a_raising_fetcher(self):
+        def boom(tickers, d):
+            raise RuntimeError("socket closed")
+        self.assertEqual(sr.fmp_health(boom, D), "FMP failed: socket closed")
+        self.assertIsNone(sr.fmp_health(lambda tk, d: {"SPY": {d: {"15:59": 1.0}}}, D))   # broken: healthy
+        self.assertEqual(sr.fmp_health(sr.no_minutes("FMP_API_KEY not set"), D), "FMP_API_KEY not set")
+
+    def test_at_times_names_its_source(self):
+        p = near_threshold_prices()
+        alts = sr.at_times(p, {t: dict(s) for t, s in p.items()}, timed_bars(p, {}), rsi_tree(), D)
+        self.assertEqual(alts["_src"], "yahoo-5m")
+        st, det = sr.classify(*sr.run_engine(p, rsi_tree(), D)[:1], rsi_tree(), D, *sr.run_engine(p, rsi_tree(), D)[1:],
+                              {"B": 1.0}, None, None, lambda: sr.at_times(p, p, timed_bars(p, {"15:50": -0.002}), rsi_tree(), D))
+        self.assertEqual(det["edge"]["src"], "yahoo-5m")
+
+    def test_fetch_never_leaks_a_key_prefix_and_skips_bad_rows(self):
+        key = "K" * 8 + "SECRETKEYSECRETKEY0123456789"
+
+        class Resp(io.StringIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+        long_refusal = {"Error Message": "x" * 40 + f" apikey={key} more text"}
+        with unittest.mock.patch.object(sr.urllib.request, "urlopen", lambda req, timeout=30: Resp(json.dumps(long_refusal))), \
+                unittest.mock.patch.object(sr.time, "sleep"):
+            with self.assertRaises(RuntimeError) as cm:
+                sr.fetch_minutes("SPY", D, key)
+        self.assertNotIn(key[:12], str(cm.exception))                         # no prefix of the key either
+        rows = [{"date": f"{D} 15:50:00", "close": 100.0}, {"date": f"{D} 15:51:00", "close": "abc"},
+                {"date": f"{D} 15:52:00", "close": True}, {"date": f"{D} 15:53:00", "close": -1},
+                {"date": f"{D} 1554", "close": 5.0}, {"date": f"{D} 15:55:00", "close": 7}]
+        with unittest.mock.patch.object(sr.urllib.request, "urlopen", lambda req, timeout=30: Resp(json.dumps(rows))), \
+                unittest.mock.patch.object(sr.time, "sleep"):
+            self.assertEqual(sr.fetch_minutes("SPY", D, key), {"15:50": 100.0, "15:55": 7.0})   # bad rows skipped
 
 
 if __name__ == "__main__":

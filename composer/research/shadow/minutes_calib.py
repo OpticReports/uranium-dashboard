@@ -108,8 +108,9 @@ def prefetch(tickers, cal, key):
 
 
 def minutes_from(cache):
-    """a minutes callable over the prefetched bars, vetted as the daily check vets FMP's answer
-    (sr.vet_minutes: the calendar's close, SPY complete, no cut feed)"""
+    """a minutes callable over the prefetched bars, vetted with the daily check's rule (sr.vet_minutes).
+    The cache keeps only 15:25-16:00 and each day's last bar, so a feed cut before 15:25 is not seen
+    here; every cached last bar is at 15:53 or later, so the 69 sessions are unaffected"""
     def get(tickers, d):
         day = {t: (cache.get(t) or {}).get(d) for t in set(tickers) | {"SPY"}}
         usable, _ = sr.vet_minutes({t: m for t, m in day.items() if m}, d)

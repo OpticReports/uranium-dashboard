@@ -3311,10 +3311,10 @@ the 15:15 preview quotes too".
 
 Friday 10-30's two SHADOW MISMATCH alerts (KMLM and HARV holding ZVOL/PULS 52/48 against the logic's
 60/40) were a knife-edge the old check could not see. The split flips on RSI(SPY,4) against 25, at SPY
-756.13. In the decision window only one minute's price was above it: 15:54 (756.28). The snapshots read
-753.25 (15:45), 754.27 (15:50) and 756.07 (15:55; FMP's minute, Yahoo's snapshot now reads 756.10). The
-gap was the time grid, not the source: FMP's minutes and Yahoo's 5-minute bars agree to 3 cents on 92%
-of 16,853 pairs (counter-agent).
+756.13. In the decision window only one minute's price was above it: 15:54 (756.28). At the snapshot
+times FMP's minutes read 753.25 (15:45), 754.27 (15:50) and 756.07 (15:55); Yahoo's own snapshots are a
+few cents off (754.30 at 15:50, 756.10 at 15:55). The gap was the time grid, not the source: FMP's
+minutes and Yahoo's 5-minute bars agree to 3 cents on 92% of 16,853 pairs (counter-agent).
 
 CHANGE (scripts/shadow_runner.py):
 - The decision-time check reads FMP 1-minute prices (/stable/historical-chart/1min, key FMP_API_KEY) at
@@ -3322,17 +3322,25 @@ CHANGE (scripts/shadow_runner.py):
   - The price at a minute is the close of the 1-minute bar ending then.
   - A fund with no trade that minute keeps its last trade, none older than 30 minutes.
   - A minute missing a decision ticker's price is skipped.
-- FMP's day is used only when complete (vet_minutes; the close from the exchange calendar): SPY has a
-  bar in the session's last minute, and no fund that traded in 20 of the 30 minutes before its last bar
-  stops more than 5 minutes before the close. Otherwise the older checks decide and the row says why
-  ("FMP minutes not used: ...", also in a MISMATCH alert). SPY is fetched first: a dead or lagging feed
-  costs one call. On the 77 cached sessions the rule flags 0 of 3,773 ticker-days.
+- FMP's day is used only when it passes vet_minutes (the close from the exchange calendar):
+  - SPY has a bar in the session's last minute and in every minute the window reads (bars starting
+    15:49-15:54);
+  - no fund that traded in 20 of the 30 minutes before its last bar stops more than 5 minutes before
+    the close.
+  Otherwise the older checks decide, and the row and any MISMATCH alert say why ("FMP minutes not used:
+  ...", naming only that engine's tickers; with no key, that the key is not set). SPY is fetched first,
+  so a dead or lagging feed costs one call.
+  - On real data the rule flags nothing: 0 of 343 full FMP ticker-days (counter-agent; VBF peaks at 19
+    of 30, one under), and 0 of the 3,773 cached ones (only 2 of which end before 15:55).
+  - Not caught: a gap inside a dense fund's window (none in those 343 days) and a thin fund cut early
+    (indistinguishable from its last trade).
 - Without usable FMP bars the old checks follow: Yahoo 5-minute snapshots (15:45/15:50/15:55), then the
   0.3-sigma one-ticker search.
 - A knife-edge records its source (fmp-1m / yahoo-5m), every matching minute (`times`) and, as `time`,
   the one nearest 15:54.
-- New alert SHADOW FMP DOWN: each run reads SPY's FMP minutes for the session. Unusable (refused, no key,
-  incomplete) is noted every run; 3 sessions in a row alert, then Mondays while it lasts.
+- New alert SHADOW FMP DOWN: each run that checks a session reads SPY's FMP minutes for it. Unusable
+  (refused, no key, incomplete) is noted every such run. It counts once per new session, never on a
+  re-check; 3 sessions in a row alert, then Mondays while it lasts.
 
 THE WINDOW, MEASURED (the counter-agent's finding, reproduced by minutes_calib.py): the logic on each
 minute's prices against Composer's holdings, 272 engine-sessions.
@@ -3386,8 +3394,11 @@ MEASURED (research/shadow/minutes_calib.py, old rule vs new on the same inputs; 
   - state.json and last-snapshot.json say mismatch for 10-30 until the next run overwrites them.
   - The backfill rows keep add. 48's classification; minutes_calib.py records theirs under the new rule.
   - backfill.py now classifies with the same chain.
-- Tests: 121 shadow tests (12 new: S18 and S17's time rule). 36 of 36 mutants of the new and fixed code
-  are killed, including the counter-agent's surviving ones.
+- Tests: 128 shadow tests (19 new: S18, S19 and S17's time rule).
+  - Mutants of the new code: 36 of 36 killed after round 1, 30 of 30 after round 2, run on a copy. They
+    include every real gap either counter-agent found.
+  - Round 1's six other survivors are equivalent. at_times now labels its own source, so round 1's L3
+    (a mislabelled old-rule column) is moot.
 
 HONESTY BOX:
 - In-sample: the window was read off the per-minute profile of the same 69 sessions it is scored on.
@@ -3429,6 +3440,28 @@ every row.
 - Outside this change: the FMP key sat as a literal default in barbell-lab/research/barbell_timer/
   fetch_data.py in this public repo since 2026-08-12 (with a FRED key). Removed in 528f6d6. The leaked
   values must be rotated (owner).
+
+COUNTER-AGENT, round 2 (minute check): SHIP WITH FIXES. The production path works end to end on 10-30
+as monitor.py calls it: key set, no key, FMP down, no disagreement. All fixed:
+- Untested paths: SHADOW FMP DOWN reaching the alerts, its once-a-day guard, the vetting thresholds, a
+  lagging SPY's call count, the search path's note, a raising fetcher. 31 of its 58 mutants survived; 7
+  tests (S19) and boundary cases added.
+- The alert fired again when a session was re-checked on a later day, and a date going backwards
+  counted twice. It now counts and alerts once per new session.
+- Notes blamed other engines' tickers (the day's problems were not filtered). They are now the engine's
+  own plus SPY, and a lacking ticker is always named.
+- A gap inside SPY's window minutes passed the check. SPY must now have every window minute.
+- Stale docstring and overstated claims, corrected:
+  - "including the counter-agent's surviving ones";
+  - "settled" for "explained";
+  - "no feed cut short";
+  - the 15:50 snapshot price;
+  - "vetted as the daily check vets them";
+  - "each run reads".
+- Silent no-key rows: they now say so.
+- In-place mutation of the shared tree: mutants now run on a copy.
+- The fetcher truncated an error before redacting the key, and one bad row could fail a ticker. Both
+  fixed (round 1 of the preview's review).
 
 ALSO — the 15:15 preview's live prices (owner, 11-01: "use FMP for the 15:15 preview quotes too"):
 - scripts/preclose.py prices each ticker from FMP's 1-minute bars: the last complete bar at or before

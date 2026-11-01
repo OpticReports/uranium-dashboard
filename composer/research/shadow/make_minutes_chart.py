@@ -146,7 +146,7 @@ const COL = {'fmp-1m': 'var(--s1)', 'yahoo-5m': 'var(--s3)', 'search': 'var(--s4
 const NAME = {'fmp-1m': 'knife-edge on FMP 1-minute prices', 'yahoo-5m': 'knife-edge on Yahoo 5-minute snapshots', 'search': 'knife-edge by one-ticker search (no prices)', 'mismatch': 'mismatch (alert)'};
 const ev = D.evid;
 [[`${ev.old.mismatch} → ${ev.new.mismatch}`, `mismatch alerts among the ${D.n_nonagree} disagreements since ${D.sessions[0].slice(5)}: Friday's two were knife-edges at 15:54`],
- [`${ev.old['yahoo-5m'] + ev.old['fmp-1m']} → ${ev.new['fmp-1m'] + ev.new['yahoo-5m']}`, `of the ${D.n_nonagree} settled on actual decision-time prices rather than a hypothetical move (${ev.new.search} left to the search)`],
+ [`${ev.old['yahoo-5m'] + ev.old['fmp-1m']} → ${ev.new['fmp-1m'] + ev.new['yahoo-5m']}`, `of the ${D.n_nonagree} explained on actual decision-time prices rather than a hypothetical move (${ev.new.search} left to the search)`],
  [`${D.exc.old} → ${D.exc.new}`, `of ${D.wrong} deliberately wrong pairs excused as knife-edges: the minute check is stricter than the search it replaces`]]
  .forEach(([b, s]) => { const k = document.createElement('div'); k.className = 'kpi'; k.innerHTML = `<b>${b}</b><span>${s}</span>`; document.getElementById('kpis').appendChild(k); });
 
@@ -232,7 +232,7 @@ document.getElementById('win').innerHTML = '<thead><tr><th>Window</th><th>Disagr
 
 document.getElementById('tbl').innerHTML = '<thead><tr><th>Session</th><th>Engine</th><th>Old rule</th><th>New rule</th><th>Composer held</th><th>Logic on closes</th></tr></thead><tbody>' +
   D.changed.map(x => `<tr><td>${x.date}</td><td>${x.engine}</td><td>${x.old}</td><td>${x.new}${x.new_time ? ' @' + x.new_time : ''}</td><td>${x.live}</td><td>${x.logic}</td></tr>`).join('') + '</tbody>';
-[`Prices: FMP 1-minute bars (price at a minute = the close of the bar ending then; a fund with no trade that minute keeps its last trade, none older than 30 minutes), scaled onto Yahoo's adjusted series by the official close. Window ${D.window[0]}-${D.window[1]} ET, 10 to 5 minutes before the close (12:50-12:55 on a half-day). FMP's day is used only if complete: SPY through the last minute, no feed cut short; otherwise the older checks decide and the row says why.`,
+[`Prices: FMP 1-minute bars (price at a minute = the close of the bar ending then; a fund with no trade that minute keeps its last trade, none older than 30 minutes), scaled onto Yahoo's adjusted series by the official close. Window ${D.window[0]}-${D.window[1]} ET, 10 to 5 minutes before the close (12:50-12:55 on a half-day). FMP's day is used only if SPY is complete (through the close and every window minute) and no dense feed stops early; otherwise the older checks decide and the row says why.`,
  `Old rule: Yahoo 5-minute snapshots at 15:45/15:50/15:55, available for the last ~60 sessions; before that, the one-ticker search within 0.3 sigma. New rule: FMP minutes, then the Yahoo snapshots, then the search.`,
  `Sessions: ${D.n_sessions} sessions with a committed holdings snapshot, ${D.sessions[0]} to ${D.sessions[1]} (the 10-26..28 no-rebalance sessions are judged on Composer's record and left out).`,
  `The control mostly measures the price source, not the window: the new rule excuses ${D.exc.new} of ${D.wrong} wrong pairs against ${D.exc.old} for the old one, because real minute prices replace the permissive search on older sessions. Across windows (table above) the excused count moves by one or two.`,
