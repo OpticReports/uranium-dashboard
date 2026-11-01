@@ -32,8 +32,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FIX = os.path.join(HERE, "fixtures")
 REPO_FIX = os.path.join(HERE, "..", "fixtures", "phase_data.json")
 
-FMP_KEY = os.environ.get("FMP_KEY", "TQYoJ120E2XRY4jf20NzUx7mmBBp23o5")
-FRED_KEY = os.environ.get("FRED_KEY", "697cc828d99500845c7b5056e4a7c5a2")
+# Keys come from the environment only: never a literal default (this repo is public).
+FMP_KEY = os.environ.get("FMP_API_KEY") or os.environ.get("FMP_KEY")
+FRED_KEY = os.environ.get("FRED_API_KEY") or os.environ.get("FRED_KEY")
 FMP_BASE = "https://financialmodelingprep.com/stable/historical-price-eod"
 FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
 
@@ -100,6 +101,9 @@ def save(name, payload):
 
 
 def main():
+    missing = [n for n, v in (("FMP_API_KEY", FMP_KEY), ("FRED_API_KEY", FRED_KEY)) if not v]
+    if missing:
+        raise SystemExit(f"set {' and '.join(missing)} in the environment")
     os.makedirs(FIX, exist_ok=True)
     log(f"# BARBELL-TIMER fixture provenance log — fetched {TODAY}")
     log("")
