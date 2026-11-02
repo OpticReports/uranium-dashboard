@@ -271,8 +271,12 @@ already does for HY/IG.
 
 | P | question | would move | status |
 |---|---|---|---|
-| P1 | Build the four layers descriptive now and pre-register the momentum and end rules in parallel (recommended), or pre-register first? | build order | asked 2026-11-02 |
-| P1 | Which crisis list is the frozen primary: finder A's 25 (broad), finder C's 16 (multi-country dollar stress), or the 5 squeezes (reported, not inferred on)? | every base rate on the panel | asked |
+| P1 | Build the four layers descriptive now and pre-register the momentum and end rules in parallel (recommended), or pre-register first? | build order | answered 2026-11-02: "Build it" (§9) |
+| P1 | Which crisis list is the frozen primary: finder A's 25 (broad), finder C's 16 (multi-country dollar stress, default), or the 5 squeezes (reported, not inferred on)? | every base rate on the panel; the freeze | asked 2026-11-02 |
+| P1 | Route after both reviews returned NOT_PASS: `forward_only` (the dated ledger; recommended) or a redesigned cross-section on the clean subset (low power)? | whether anything is scored before the 2030s | asked 2026-11-02 |
+| P1 | Primary deceleration variant: unpatched (default) or re-arm? Both are logged forward either way. | the ledger's primary record | asked 2026-11-02 |
+| P1 | The mechanical rule that dates future crises for the ledger (default: 2 of 5 markers: VIX ≥ 40; OFR FSI above its 5-year 95th percentile for 5 days; EM FX basket +10% in 63 days; S&P −20% from its 252-day high; a Fed emergency action) | how forward firings are scored | asked 2026-11-02 |
+| P2 | May a live alert on the gauge ever come from anything but the forward ledger? (default: ledger only) | the lamp licence | asked 2026-11-02 |
 | P2 | Is a paid basis-swap feed (the direct price of offshore dollars) worth it for the funding layer? | layer 2 completeness | asked |
 | P2 | Reconstruct and freeze EM OAS history (FRED truncated to 2023-11) as the repo does for HY/IG | EM stress layer | open |
 | P3 | Daily gold before 2000 (LBMA/FRED gone): any free source | pre-2000 gold table | open |
@@ -354,20 +358,41 @@ is the share of all eligible months 1971–2026 with an onset in (m, m+H].
   1st percentile of ten years. Brent $123.1 (+87.9% in 12 months); gold $3,945 (−27.2% from its
   52-week high).
 
-### 9.4 Pre-registration: drafted, NOT frozen
+### 9.4 Pre-registration: drafted, reviewed NOT_PASS, NOT frozen
 
-SPEC v0 withdraws rev 1's 1973–2007 / 2008–26 split and the leave-one-crisis-out logit (no DXY history
-is unseen, so neither is out-of-sample). It proposes three routes:
+SPEC v0 withdrew rev 1's 1973–2007 / 2008–26 split and the leave-one-crisis-out logit, because no DXY
+history is unseen, so neither is out-of-sample. In their place it proposed:
 
-- **D-1:** a cross-section of 15 FRED currencies, each scored on its own falls against the dollar with
-  the frozen rule converted to that currency's volatility. The unit is the calendar cluster, with an
-  exact sign-flip test against a random rule that has the same gate.
-- **D-2:** the ICE DXY daily 1973–2005 (secondary).
-- **D-3:** the forward ledger, which the panel now runs.
+- **D-1:** a cross-section of 15 FRED currencies, scored on their own falls against the dollar.
+- **D-2:** the ICE DXY 1973–2005.
+- **D-3:** the forward ledger.
 
-Expected power: D-1 can detect only a large edge (+0.15 to +0.25), and the forward ledger needs
-decades at realistic edges. Two adversarial reviews (statistics and design; data, look-ahead and
-contamination) are under way. The freeze waits on Casey's P1 answers (§7).
+Both adversarial reviews returned NOT_PASS (`dollar_watch/spec/`):
+
+- **Statistics:** D-1's random-rule null is biased against the rule, so an information-free series
+  scores below zero and is declared INVERSE 24–28% of the time. A real +0.16–0.19 edge would pass with
+  probability about 0.01. The units of inference overlap: about 5–17 independent clusters, against a
+  floor of 15.
+- **Data:** most of D-1's "unseen" record has already been seen: the basket's outcomes computed for
+  this panel, finder B's charted paths, and 11 of the 15 currencies inside the broad dollar index.
+  Done properly, the clean subset is 266–310 of about 625 currency-years, mostly NZD, NOK, LKR and
+  pre-1997 managed regimes. D-2's outcomes are already published.
+
+**Consequence: D-1 is not run as designed.** It cannot change the decision, and running it would spend
+the only partly unseen data. The recommended route is now `forward_only`: the dated ledger the panel
+has written since the freeze date, under both variants. It needs decades to score at realistic edges
+(about 45 / 90 / 234 years at edges of 0.70 / 0.60 / 0.50 against 0.35, on exact binomials).
+
+To freeze it, Casey answers:
+
+- the primary crisis list (default C16);
+- the primary variant (default unpatched; both are logged);
+- the mechanical rule that dates future crises (default 2 of 5 mechanical markers);
+- whether a live alert may come from anything but the ledger (default: ledger only).
+
+Until then the panel withholds its EM FX outcome columns (data review S1): seven of the basket's eight
+currencies sit in D-1's proposed set, and those numbers could steer the D-1 design questions if the
+cross-section is revived.
 
 ### 9.5 Gates (merge-blocking)
 

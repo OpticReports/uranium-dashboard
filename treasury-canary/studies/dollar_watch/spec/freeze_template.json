@@ -1,0 +1,65 @@
+{
+  "_about": "freeze.json template for the ONE scored run of the Dollar-watch pre-registration (SPEC v0 2026-11-02 -> SPEC v1 after two reviews). Copy to freeze.json, replace every value with Casey's answer, set status to FROZEN, fill answered_by / answered_on. The run script must refuse anything else. Each field names its pending question (SPEC section 7), the question it answers, and the SPEC default it carries here. Defaults are NOT answers.",
+  "status": "TEMPLATE_DEFAULTS_NOT_CASEYS_ANSWERS",
+  "answered_by": "",
+  "answered_on": "",
+  "spec_version": "SPEC v0 (2026-11-02); to be replaced by SPEC v1 sha256 before freezing",
+
+  "route": "xs_D1_primary_dxy_D2_semiclean_forward_D3",
+  "_route": "Q1 (P1): Which evidence decides DECEL? 'xs_D1_primary_dxy_D2_semiclean_forward_D3' (cross-section of 15 currencies now + ICE DXY daily 1973-2005 semi-clean + forward ledger) or 'forward_only' (log the ledger; no scored run now; no colour before ~2066). Default: xs_D1_primary_dxy_D2_semiclean_forward_D3.",
+
+  "primary_crisis_list": "C16_L_broad",
+  "_primary_crisis_list": "Q2 (P1): Which frozen list is primary for base rates on the panel and the MOM ledger? 'C16_L_broad' (16 onsets, base 29%), 'A25' (25, base 42%), 'V1_strict15' (base 27%). L-narrow (5) is always reported and never inferred on; V1_strict12 is robustness. D-1/D-2/D-3 do not use any list. Default: C16_L_broad.",
+
+  "decel_primary_variant": "unpatched",
+  "_decel_primary_variant": "Q3 (P1): Which deceleration variant decides? 'unpatched' (120-day cooling only; 6 in-sample firings) or 'rearm' (re-fire on a 1.5x bigger scramble; added after the 2008-09-22 miss; 7 firings). The other is always reported and can never rescue a fail. Default: unpatched.",
+
+  "d1_bars": {"T_pass_min": 0.15, "p_pass_max": 0.05, "T_fail_below": 0.05, "T_inverse_max": -0.10, "p_inverse_max": 0.05, "K_min": 15, "loco_all_positive": true, "share_clusters_positive_min": 0.60},
+  "_d1_bars": "Q4 (P1): D-1 decision bars on T = mean over calendar clusters of (S1 hit - exact frequency-matched random-rule hit probability), exact one-sided sign-flip p. Defaults as listed; T_pass_min must exceed T_fail_below.",
+
+  "forward_onset_rule": "mechanical_2_of_5",
+  "_forward_onset_rule": "Q5 (P1): How are crises AFTER the freeze dated for the ledger? 'mechanical_2_of_5' (VIX>=40; OFR FSI >5y p95 for 5 days; EM FX basket +10% in 63d; S&P -20% from 252d high; Fed emergency action; dollar-funding subtype if SWPT>$50bn or CP-bill>1.00pp) or 'judgment_logged' (judgment additions are never scored). Default: mechanical_2_of_5.",
+
+  "lamp_license": "D3_only",
+  "_lamp_license": "Q6 (P2): May a lamp/alert on layer 3(a) come from D-1 PASS + D-2 PASS ('D1_and_D2') or only from the forward ledger D-3 PASS ('D3_only')? Colour (one neutral state) remains licensable by D-1 per SPEC section 4 either way. Default: D3_only.",
+
+  "xs_yield_condition": "dropped",
+  "_xs_yield_condition": "Q7 (P2): D-1 transposition - drop the US-10y safe-haven condition ('dropped') or keep it ('kept_us10y')? The other is DESCRIPTIVE. Default: dropped.",
+
+  "xs_scaling": "vol_scaled_trailing_756d_ending_k_minus_61",
+  "_xs_scaling": "Q8 (P2): D-1 thresholds in volatility units s = sigma_i/sigma_B (gate 0.04*s, near-high 1-0.03*s, hit 0.03*s; s clipped to [0.25, 8]) or 'raw_frozen' (4% / 3% / 3% as on the broad dollar). The other is DESCRIPTIVE. Default: vol-scaled.",
+
+  "xs_currencies": ["DEXBZUS", "DEXMXUS", "DEXKOUS", "DEXSFUS", "DEXINUS", "DEXTHUS", "DEXMAUS", "DEXTAUS", "DEXSIUS", "DEXSLUS", "DEXCAUS", "DEXUSAL_inv", "DEXUSNZ_inv", "DEXNOUS", "DEXSDUS"],
+  "_xs_currencies": "Q9 (P2): The D-1 panel. Excluded by default: DEXCHUS (managed), DEXHKUS (peg), DEXVZUS (peg), DEXDNUS (EUR peg), DEXUSEU/DEXUSUK (reserve currencies, DXY core), DEXJPUS/DEXSZUS (route c). Sample start 1973-03-01; peg filter >=50% zero changes in trailing 60d. Default: the 15 listed.",
+
+  "cluster_rule": "single_linkage_126d_blind_switch_calendar_year_if_span_gt_24m",
+  "_cluster_rule": "Q10 (P2): Unit of inference. Single linkage of firing dates across currencies, gap <= 126 US trading days; if the blind count finds any cluster spanning > 24 months, calendar-year clusters become primary (decided before any outcome). Default as stated.",
+
+  "global_cluster_min_ccy": 5,
+  "clean_windows_excluded": ["2007-06-01/2009-06-30", "2015-06-01/2016-03-31", "2018-03-01/2019-01-31", "2020-02-01/2020-06-30", "2022-01-01/2022-12-31"],
+  "clean_excluded_ccy": ["DEXCAUS", "DEXSDUS"],
+  "_global_clean": "Q11 (P2): The dollar-panel license requires T_global > 0 (clusters with >= 5 currencies firing) and T_clean > 0 (firings outside finder B's five examined windows, excluding the DXY components CAD and SEK). Default as stated.",
+
+  "d2": {"series": "ICE_DXY_daily_finderA", "fallback": "DTWEXM", "window": "1973-03-01/2005-12-30", "keep_us10y_condition": true, "K_min": 6, "T_pass_min": 0.15, "p_pass_max": 0.10, "T_fail_below": 0.05},
+  "_d2": "Q12 (P2): D-2 semi-clean dollar test - frozen rule with the 10y condition, thresholds scaled by s = sigma_DXY/sigma_B (overlap 2006-01-03..2026-10-23). Decides only in combination with D-1 (SPEC section 4 table). Default as stated.",
+
+  "s1_horizon_days": 250,
+  "s1_tolerance": "0.03_times_s",
+  "outcome_anchor": "data_date_with_T_plus_5_sensitivity",
+  "_s1": "Q13 (P2): Primary hit S1 = further rise in dollar units over the next 250 trading days <= 3% x s, measured from the data date (H.10 publishes ~T+5; T+5 sensitivity row reported). Default as stated.",
+
+  "jpy_chf": "not_run",
+  "_jpy_chf": "Q14 (P3): JPY/CHF safe-haven appreciation scrambles - 'not_run' or 'descriptive_appendix'. Default: not_run (n <= 8, partly seen).",
+
+  "pre_1971": "not_run",
+  "_pre_1971": "Q15 (P3): Pre-1971 / interwar data. Default: not_run (pegs, monthly, n < 5).",
+
+  "c26_in_C16": false,
+  "_c26_in_C16": "Q16 (P3): Does the 2026 Hormuz shock (A-25 C26, open) enter C-16? Default: no (no dollar-funding stress on any free gauge).",
+
+  "run_day_pull_date": "",
+  "_run_day_pull_date": "YYYY-MM-DD of the frozen F-XS / F-DXY / F-US pull; sha256 of every file goes into results.json.",
+  "freeze_date": "",
+  "_freeze_date": "The forward ledger (D-3/D-4) starts on this date; no row before it is ever scored as forward evidence.",
+  "freeze_note": ""
+}
