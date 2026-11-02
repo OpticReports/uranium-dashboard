@@ -15,14 +15,15 @@
   "gate": {
     "override": false,
     "zone": "far",
-    "last_dist": 0.06026,
-    "last_date": "2026-10-29",
+    "last_dist": 0.04096,
+    "last_date": "2026-10-30",
     "live_hist": {
       "2026-10-21": "BIL",
       "2026-10-22": "BIL",
       "2026-10-23": "BIL",
       "2026-10-29": "BIL",
-      "2026-10-30": "BIL"
+      "2026-10-30": "BIL",
+      "2026-11-02": "TECL"
     }
   },
   "shadow": {
@@ -34,11 +35,12 @@
     "blind": {},
     "status": {
       "HG": "agree",
-      "KMLM": "mismatch",
+      "KMLM": "agree",
       "SLEEVE": "agree",
-      "HARV": "mismatch"
+      "HARV": "agree"
     },
-    "last_date": "2026-10-30",
-    "pending": []
+    "last_date": "2026-11-02",
+    "pending": [],
+    "fmp": {}
   }
 }
