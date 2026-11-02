@@ -26,9 +26,9 @@ the Dollar tab built from it is descriptive (memo §9).
   the monthly panel the scoping scripts write as `<out>/dollar_monthly.csv` — run them with an out dir
   other than `data/`, which holds finder A's `dollar_monthly.csv`);
   finder B's `analyze_out.json` (lead/lag dates) and `johnson_quarterly.csv` (BIS USD credit vs dollar).
-  `fred/` — the 14 FRED series the reference builder reads, fetched 2026-11-02 (DTWEXBGS, DGS10, VIXCLS,
-  GS10, BAA10Y, BAA and the eight EM-basket pairs DEXBZUS DEXMXUS DEXSFUS DEXINUS DEXKOUS DEXTHUS DEXCHUS
-  DEXMAUS). Not committed: the other FRED/BIS/OFR raw pulls (re-fetchable; IDs in the notes), the Shiller
-  workbook.
+  `fred/` — the 6 FRED series the reference builder reads, fetched 2026-11-02 (DTWEXBGS, DGS10, VIXCLS,
+  GS10, BAA10Y, BAA). The eight EM-basket pairs were removed with the EM FX outcomes, which are withheld
+  until the pre-registration freeze (`spec/README.md`). Not committed: the other FRED/BIS/OFR raw pulls
+  (re-fetchable; IDs in the notes), the Shiller workbook.
 - `figs/` — `fig_dollar_scoping.png`, `fig_decel_rule.png` (orchestrator), `fig_funding_leadlag_finderB.png`,
   `fig_band_onsets_finderC.png`.
