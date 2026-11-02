@@ -1,0 +1,19 @@
+date,event,dxy_close,dxy_high,pct_from_freeze_2022-02-28,pct_from_2022-01-03,pct_from_first_hike_2022-03-16,source
+2022-01-03,S&P 500 all-time high (pre-bear),96.24,96.33,-0.5,+0.0,-2.2,market record
+2022-02-24,Russia invades Ukraine,97.14,97.74,+0.4,+0.9,-1.3,public record
+2022-02-28,"US Treasury/OFAC Directive 4: CBR, NWF, MinFin transactions prohibited (reserves immobilised)",96.71,97.42,+0.0,+0.5,-1.7,https://home.treasury.gov/news/press-releases/jy0612
+2022-03-16,First Fed hike (+25bp) of the cycle,98.38,99.08,+1.7,+2.2,+0.0,https://www.federalreserve.gov/newsevents/pressreleases/monetary20220316a.htm
+2022-04-12,Sri Lanka suspends external debt payments,100.29,100.33,+3.7,+4.2,+1.9,https://eastmojo.com/news/2022/04/12/crisis-hit-sri-lanka-announces-debt-default/
+2022-05-04,Fed +50bp,102.59,103.62,+6.1,+6.6,+4.3,https://www.federalreserve.gov/newsevents/pressreleases/monetary20220504a.htm
+2022-06-15,Fed +75bp (first of four),105.16,105.79,+8.7,+9.3,+6.9,https://www.federalreserve.gov/newsevents/pressreleases/monetary20220615a.htm
+2022-07-21,ECB announces TPI (+50bp hike),106.91,107.32,+10.5,+11.1,+8.7,https://www.ecb.europa.eu/press/pr/date/2022/html/ecb.pr220721~973e6e7273.en.html
+2022-08-28,Six months after the reserve freeze,108.80,108.87,+12.5,+13.1,+10.6,computed
+2022-09-22,Japan MoF first yen-buying intervention since 1998,111.35,111.81,+15.1,+15.7,+13.2,https://www.mof.go.jp/english/policy/international_policy/reference/feio/index.html
+2022-09-23,UK mini-budget; gilt selloff begins,113.19,113.23,+17.0,+17.6,+15.1,public record
+2022-09-28,BoE announces temporary gilt purchases; DXY intraday high 114.78,112.60,114.78,+16.4,+17.0,+14.5,https://www.bankofengland.co.uk/news/2022/september/bank-of-england-announces-gilt-market-operation
+2022-10-12,S&P 500 bear-market low,113.32,113.59,+17.2,+17.7,+15.2,market record
+2022-10-14,BoE gilt operations end,113.31,113.42,+17.2,+17.7,+15.2,BoE (end-date page 404 on probe; UNVERIFIED URL)
+2022-10-21,Japan MoF second intervention (USDJPY ~151.9),112.01,113.94,+15.8,+16.4,+13.9,https://www.mof.go.jp/english/policy/international_policy/reference/feio/index.html
+2022-11-11,FTX bankruptcy,106.29,108.44,+9.9,+10.4,+8.0,public record
+2022-12-19,Ghana suspends external debt service,104.72,104.93,+8.3,+8.8,+6.4,https://modeldiplomat.com/learn/glossary/ghana-default-2022
+2022-12-20,BoJ widens YCC band to +/-50bp,103.97,104.79,+7.5,+8.0,+5.7,https://www.boj.or.jp/en/mopo/mpmdeci/mpr_2022/k221220a.pdf
