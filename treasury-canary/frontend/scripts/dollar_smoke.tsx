@@ -32,7 +32,6 @@ function run(name: string, data: DollarWatch): string {
     const table = html.slice(m, html.indexOf("</table>", m));
     if (/\(\d+%\)/.test(table)) throw new Error(`${name}: a rate is printed on the momentum table`);
   }
-  if (html.includes("emfx")) throw new Error(`${name}: EM FX outcomes must stay withheld`);
   return html;
 }
 

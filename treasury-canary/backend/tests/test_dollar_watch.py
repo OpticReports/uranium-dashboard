@@ -170,9 +170,12 @@ def test_reference_numbers_the_memo_cites():
     assert all(r["label"] for r in ref["funding_leadlag"]["rows"]) and "calendar days" in ref["funding_leadlag"]["basis"].lower()
 
 
-def test_emfx_outcomes_withheld(payload):
-    assert "emfx_pct" not in json.dumps(payload) and "emfx_pct" not in open(REF_FILE).read()
-    assert payload["ledger"]["emfx_withheld"]
+def test_emfx_outcomes_restored_after_the_freeze(payload):
+    """withheld while a cross-section of these currencies was a candidate test; the freeze (forward_only) withdrew it."""
+    fire = {x["date"]: x for x in dw.REF["scramble_rule"]["firings"]}
+    assert fire["2008-11-06"]["outcomes"]["12m"]["emfx_pct"] == -8.7
+    assert all("emfx_pct" in (r["outcomes"]["12m"] or {}) for r in dw.REF["momentum_ledger"] if r["outcomes"]["12m"])
+    assert "emfx_withheld" not in payload["ledger"] and not any("withheld" in h for h in payload["honesty"])
 
 
 # ---------------------------------------------------------------------------- live payload on the fixture

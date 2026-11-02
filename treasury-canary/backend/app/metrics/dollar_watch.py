@@ -374,20 +374,20 @@ def emfx_basket(fred: dict) -> tuple[list[tuple[str, float]], str | None]:
     return [(d, 100 * v / b0) for d, v in raw], base_m
 
 
-def forward_outcomes(anchor: str | None, spx, baa, broad, last_day: str) -> dict:
-    """S&P, Baa-10y and broad-dollar changes 3/6/12 calendar months after `anchor` (an S&P close date).
-    EM FX outcomes are withheld until the pre-registration freeze."""
+def forward_outcomes(anchor: str | None, spx, emfx, baa, broad, last_day: str) -> dict:
+    """S&P, EM FX basket, Baa-10y and broad-dollar changes 3/6/12 calendar months after `anchor` (an S&P close date)."""
     o = {}
     if not anchor:
         return {f"{k}m": None for k in (3, 6, 12)}
-    s0, b0, d0 = asof(spx, anchor), asof(baa, anchor), asof(broad, anchor)
+    s0, e0, b0, d0 = asof(spx, anchor), asof(emfx, anchor), asof(baa, anchor), asof(broad, anchor)
     for k in (3, 6, 12):
         dk = add_months(anchor, k)
         if dk > last_day:
             o[f"{k}m"] = None               # not yet matured
             continue
-        s1, b1, d1 = asof(spx, dk), asof(baa, dk), asof(broad, dk)
+        s1, e1, b1, d1 = asof(spx, dk), asof(emfx, dk), asof(baa, dk), asof(broad, dk)
         o[f"{k}m"] = {"spx_pct": r(100 * (s1 / s0 - 1), 1) if s0 and s1 else None,
+                      "emfx_pct": r(100 * (e1 / e0 - 1), 1) if e0 and e1 else None,
                       "baa10y_pp": r(b1 - b0, 2) if b0 is not None and b1 is not None else None,
                       "broad_dollar_pct": r(100 * (d1 / d0 - 1), 1) if d0 and d1 else None}
     return o
@@ -844,7 +844,8 @@ def ledger_block(inp: dict, state: dict, today: str, path: str) -> dict:
     became observable (the H.10 release for the rule; the month's end for momentum) and frozen into the row at maturity."""
     fred = inp.get("fred") or {}
     spx, baa, broad = pairs(fred.get("SP500")), pairs(fred.get("BAA10Y")), pairs(fred.get("DTWEXBGS"))
-    last_day = min([p[-1][0] for p in (spx, baa, broad) if p] or [today])
+    em, _ = emfx_basket(fred)
+    last_day = min([p[-1][0] for p in (spx, em, baa, broad) if p] or [today])
     mom = state["momentum"]
     mon = state["dxy"]["monthly"]
     avg = dict(zip(mon["months"], mon["avg"]))
@@ -876,7 +877,7 @@ def ledger_block(inp: dict, state: dict, today: str, path: str) -> dict:
         return d
 
     def compute(e, last):
-        return forward_outcomes(anchor(e), spx, baa, broad, last)
+        return forward_outcomes(anchor(e), spx, em, baa, broad, last)
 
     led = freeze_matured(path, compute, last_day, today) if spx else load_ledger(path)
     if led.get("_write_failed"):
@@ -893,9 +894,9 @@ def ledger_block(inp: dict, state: dict, today: str, path: str) -> dict:
                                                     "observable_on", "spx_to_next_low_from_observable_pct", "spx_firing_to_observable_pct")}
                             for f in (REF.get("scramble_rule") or {}).get("firings") or []],
             "live": live, "frozen_on": FROZEN_ON, "cutoff_rule": LAST_INDEX_DAY, "cutoff_momentum": LAST_FROZEN_MONTH,
-            "outcomes_through": last_day, "emfx_withheld": REF.get("emfx_withheld"),
+            "outcomes_through": last_day,
             "basis": "frozen rows are in-sample reconstructions; live rows are appended the day the panel first sees a firing after the "
-                     "reference cut-off and are never edited; each horizon (3, 6, 12 months: S&P 500, Baa minus 10-year, broad dollar) "
+                     "reference cut-off and are never edited; each horizon (3, 6, 12 months: S&P 500, EM FX basket, Baa minus 10-year, broad dollar) "
                      "is frozen into the row when it matures; at realistic edges the record needs decades to score",
             "status": status, "problem": "; ".join(write_problems) or ("ledger file unreadable or wrongly shaped" if led.get("_unreadable") else None)}
 
@@ -959,4 +960,4 @@ def build_dollar_watch(inp: dict, today: str | None = None, ledger_file: str | N
             "provenance": {k: (REF.get("provenance") or {}).get(k) for k in ("study", "builder", "reviews")},
             "pending_questions": [dict(q, status="asked", first_asked="2026-11-02", expires=EXPIRES) if "status" not in q else
                                   dict(q, first_asked=None, expires=None) for q in PENDING],
-            "honesty": list(REF.get("honesty") or []) + HONESTY_LIVE + ([REF["emfx_withheld"] + "."] if REF.get("emfx_withheld") else [])}
+            "honesty": list(REF.get("honesty") or []) + HONESTY_LIVE}

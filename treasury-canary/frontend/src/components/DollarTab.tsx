@@ -261,7 +261,7 @@ function OutcomeCell({ o }: { o: DwOutcomes | null | undefined }) {
   if (!x) return <span className="text-slate-600">pending</span>;
   return (
     <span className="font-mono text-[10px] tabular-nums">
-      S&amp;P {pct(x.spx_pct)} · Baa−10y {pp(x.baa10y_pp ?? x.baa_minus_10y_pp)}
+      S&amp;P {pct(x.spx_pct)} · EM FX {pct(x.emfx_pct)} · Baa−10y {pp(x.baa10y_pp ?? x.baa_minus_10y_pp)}
     </span>
   );
 }
@@ -556,7 +556,7 @@ function ScrambleLayer({ d }: { d: DollarWatch }) {
           Every firing of the rule, in-sample: {unpatched.length || "n/a"} under the unpatched rule (the default) plus the re-arm variant's 2008-11-06, added after the 2008-09-22 miss
         </div>
         <table className="w-full min-w-[860px] text-[11px]">
-          <thead><tr><Th>#</Th><Th>fired</Th><Th>variant</Th><Th right>largest 20d climb</Th><Th right>dollar rose further</Th><Th right>S&amp;P to next low: firing day / observable</Th><Th right>VIX change over 60d (points)</Th><Th>12 months later</Th><Th>reading</Th></tr></thead>
+          <thead><tr><Th>#</Th><Th>fired</Th><Th>variant</Th><Th right>largest 20d climb</Th><Th right>dollar rose further</Th><Th right>S&amp;P to next low: firing day / observable</Th><Th right>VIX change over 60d (points)</Th><Th>12 months later (EM FX up = EM weaker)</Th><Th>reading</Th></tr></thead>
           <tbody>
             {hist.map((f: DwFiring, i) => (
               <tr key={f.date} className="border-t border-slate-800/70">
@@ -671,7 +671,7 @@ function OutcomeTriplet({ o }: { o: DwOutcomes | null | undefined }) {
     <span className="font-mono text-[10px] tabular-nums">
       {(["3m", "6m", "12m"] as const).map((h) => {
         const x = o?.[h];
-        return <span key={h} className="mr-2">{h}: {x ? `S&P ${pct(x.spx_pct)} · Baa−10y ${pp(x.baa10y_pp)}` : "pending"}</span>;
+        return <span key={h} className="mr-2">{h}: {x ? `S&P ${pct(x.spx_pct)} · EM FX ${pct(x.emfx_pct)} · Baa−10y ${pp(x.baa10y_pp)}` : "pending"}</span>;
       })}
     </span>
   );
@@ -704,13 +704,13 @@ function LedgerLayer({ d }: { d: DollarWatch }) {
       <div className="overflow-x-auto">
         <div className="mb-1 text-xs font-semibold text-slate-300">Momentum episodes since 1971 (12-month DXY change above +10%), reconstructed in-sample</div>
         <table className="w-full min-w-[600px] text-[11px]">
-          <thead><tr><Th>month</Th><Th right>DXY 12m (trailing)</Th><Th right>S&amp;P next 12m</Th><Th right>Baa−10y next 12m</Th><Th right>DXY next 12m</Th></tr></thead>
+          <thead><tr><Th>month</Th><Th right>DXY 12m (trailing)</Th><Th right>S&amp;P next 12m</Th><Th right>EM FX next 12m (up = EM weaker)</Th><Th right>Baa−10y next 12m</Th><Th right>DXY next 12m</Th></tr></thead>
           <tbody>
             {arr(l.frozen_momentum).map((m) => {
               const o = m.outcomes?.["12m"];
               return (
                 <tr key={m.month} className="border-t border-slate-800/70"><Td mono>{m.month}</Td><Td right mono>{pct(m.dxy_12m_pct)}</Td><Td right mono>{pct(o?.spx_pct)}</Td>
-                  <Td right mono>{pp(o?.baa_minus_10y_pp)}</Td><Td right mono>{pct(o?.dxy_pct)}</Td></tr>
+                  <Td right mono>{pct(o?.emfx_pct)}</Td><Td right mono>{pp(o?.baa_minus_10y_pp)}</Td><Td right mono>{pct(o?.dxy_pct)}</Td></tr>
               );
             })}
           </tbody>
