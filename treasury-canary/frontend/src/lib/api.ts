@@ -1080,6 +1080,7 @@ export const api = {
   refresh: () =>
     getJson<unknown>("/refresh", { method: "POST" }),
   aiDebt: () => getJson<AiDebt>("/ai-debt"),
+  dollarWatch: () => getJson<DollarWatch>("/dollar-watch"),
 };
 
 // ---------------------------------------------------------------------------
@@ -1424,4 +1425,101 @@ export interface AiDebt {
   honesty: string[] | null;
   sources: Record<string, string> | null;
   status: Record<string, AiDebtBlockStatus | string> | null;
+}
+
+// ---------------------------------------------------------------------------
+// GET /dollar-watch — the Dollar watch tab (studies/dollar-watch.md §5).
+// Descriptive only. Every block may be null or carry status "stale"/"error";
+// the view reads everything defensively.
+// ---------------------------------------------------------------------------
+export type DwStatus = "ok" | "stale" | "error";
+export interface DwSeries { dates?: string[] | null; values?: Array<number | null> | null }
+export interface DwReading {
+  latest?: number | null; asof?: string | null; unit?: string | null; src?: string | Array<string | null> | null; basis?: string | null;
+  status?: DwStatus | null; pct_own_history?: number | null; n?: number | null; history_from?: string | null;
+  pct_10y?: number | null; n_10y?: number | null; chg_6m_pct?: number | null; chg_12m_pct?: number | null; pct_basis?: string | null;
+}
+export interface DwFundingRow extends DwReading {
+  id: string; label: string; median_1y?: number | null; direction?: string | null; note?: string | null;
+  chg_1m_pct?: number | null; off_52w_high_pct?: number | null;
+}
+export interface DwListRate { [k: string]: number | Record<string, number> | null | undefined }
+export interface DwExcursion { side: string; start: string; end: string; months: number; extreme: number | null; extreme_month: string; began_inside_crisis_A25: boolean }
+export interface DwOutcome { spx_pct?: number | null; emfx_pct?: number | null; baa10y_pp?: number | null; broad_dollar_pct?: number | null; baa_minus_10y_pp?: number | null; dxy_pct?: number | null }
+export type DwOutcomes = Record<string, DwOutcome | null>;
+export interface DwFiring {
+  date: string; roc20_max_pct?: number | null; roc20_max_date?: string | null; roc20_now_pct?: number | null; dollar?: number | null;
+  dollar_further_rise_pct?: number | null; dollar_peak_date?: string | null; spx_to_next_low_pct?: number | null; spx_low_date?: string | null;
+  vix_change_60d?: number | null; outcomes?: DwOutcomes | null; reading?: string | null;
+}
+export interface DwRuleState {
+  asof: string; dollar?: number | null; roc20_now_pct?: number | null; roc20_max_60d_pct?: number | null; roc20_max_date?: string | null;
+  ratio_now_to_max?: number | null; dollar_vs_60d_high_pct?: number | null; y10_now?: number | null; y10_ref?: number | null;
+  y10_ref_date?: string | null; gate_open?: boolean; climb_ge_4pct?: boolean; y10_falling?: boolean; decel_met?: boolean;
+  near_high_met?: boolean; episode_start?: string | null; episode_dollar_peak?: number | null; episode_dollar_peak_date?: string | null;
+}
+export interface DwIndicator { met?: boolean | null; rule?: string | null; [k: string]: unknown }
+export interface DwLedgerEntry { kind: string; date: string; recorded_on?: string | null; variants?: string[] | null; outcomes?: DwOutcomes | null; [k: string]: unknown }
+export interface DollarWatch {
+  generated?: string | null; frozen_on?: string | null; mode?: string | null; headline?: string | null;
+  status?: { overall?: DwStatus | null; blocks?: Record<string, DwStatus | null> | null } | null;
+  state?: {
+    status?: DwStatus | null;
+    dxy?: (DwReading & { provider?: string | null; band_position?: string | null;
+      monthly?: { months?: string[] | null; avg?: Array<number | null> | null; close?: Array<number | null> | null; frozen_through?: string | null;
+        month_to_date?: { month?: string | null; avg?: number | null; days?: number | null } | null;
+        splice_check?: { overlap_months?: number | null; max_abs_diff_pct?: number | null } | null; basis?: string | null } | null }) | null;
+    band?: { lo?: number; hi?: number; label?: string | null; basis?: string | null; excursions?: DwExcursion[] | null;
+      by_list?: Record<string, Record<string, number | null>> | null } | null;
+    broad?: { broad?: DwReading | null; afe?: DwReading | null; eme?: DwReading | null; high_since_2006?: { value?: number | null; date?: string | null } | null } | null;
+    momentum?: { month?: string | null; dxy_12m_pct?: number | null; signal?: boolean | null; threshold_pct?: number | null; last_signal_month?: string | null;
+      definition?: string | null; caveat?: string | null; episodes_history?: string[] | null; by_list?: Record<string, Record<string, number | null>> | null } | null;
+    quadrant?: { month?: string | null; dxy_3m_pct?: number | null; y10_3m_pp?: number | null; quadrant?: string | null; label?: string | null; definition?: string | null;
+      labels?: Record<string, string> | null; onsets_C16?: { counts?: Record<string, number> | null; n?: number | null } | null;
+      onsets_A25?: { counts?: Record<string, number> | null; n?: number | null } | null;
+      base_all_months?: { months?: number | null; shares?: Record<string, number> | null } | null } | null;
+    safe_haven?: { gold?: (DwReading & { provider?: string | null; off_52w_high_pct?: number | null }) | null; chf?: DwReading | null; jpy?: DwReading | null;
+      gold_record?: { drawdowns?: Array<Record<string, string | number | null>> | null; ended_higher?: number | null; n_with_end?: number | null;
+        ended_higher_gt_1pct?: number | null; basis?: string | null } | null;
+      dollar_fell_at_peak_stress?: { n_crises?: number | null; fell?: number | null; basis?: string | null } | null } | null;
+    emfx?: (DwReading & { series?: DwSeries | null }) | null;
+    brent?: DwReading | null;
+    counter_examples?: Array<{ when: string; text: string }> | null;
+  } | null;
+  funding?: { status?: DwStatus | null; rows?: DwFundingRow[] | null; label?: string | null; basis?: string | null;
+    series?: { cp_fin?: DwSeries | null; ofr_funding?: DwSeries | null; swap_lines?: DwSeries | null } | null;
+    leadlag?: { basis?: string | null; dollar_peaks?: Record<string, string> | null; rows?: Array<Record<string, string>> | null } | null;
+    swap_events?: Array<{ date: string; text: string; url?: string | null }> | null } | null;
+  scramble?: { status?: DwStatus | null; state?: DwRuleState | null; gate_open?: boolean | null; fires_today?: Record<string, boolean> | null;
+    indicators?: { a_deceleration?: DwIndicator | null; b_funding_easing?: DwIndicator | null; c_risk_turn?: DwIndicator | null; note?: string | null } | null;
+    confirmations?: { dollar_off_peak_pct?: number | null; dollar_3pct_off_peak?: boolean | null; swap_now_bn?: number | null; swap_episode_peak_bn?: number | null;
+      swap_below_10pct_of_peak?: boolean | null; episode_start?: string | null; rule?: string | null } | null;
+    history?: DwFiring[] | null; history_unpatched?: string[] | null; live_firings?: DwLedgerEntry[] | null;
+    live_check?: { reproduces_frozen_rearm?: boolean | null; reproduces_frozen_unpatched?: boolean | null; note?: string | null } | null;
+    monthly_null?: { window?: string | null; firings?: number | null; dollar_peak_within_3m?: number | null; base_dollar_peak_within_3m?: number | null;
+      spx_up_12m?: number | null; base_spx_up_12m?: number | null } | null;
+    vspike_timing?: Array<Record<string, string | number | null>> | null;
+    end_of_scramble?: { order?: string[] | null; case_2008?: string | null; basis?: string | null } | null;
+    series?: { dates?: string[] | null; dollar?: Array<number | null> | null; roc20_pct?: Array<number | null> | null } | null;
+    series_long?: DwSeries | null; params?: Record<string, number | string> | null; variant_live?: string | null; wording?: string | null; basis?: string | null } | null;
+  slow?: { status?: DwStatus | null;
+    usd_credit?: { quarter?: string | null; total_tn?: number | null; yoy_pct?: number | null; eme_tn?: number | null; eme_yoy_pct?: number | null;
+      eme_share_pct?: number | null; label?: string | null; reading?: string | null; basis?: string | null; status?: DwStatus | null; src?: Array<string | null> | null;
+      series?: { quarters?: string[] | null; credit_yoy_pct?: Array<number | null> | null; dollar_yoy_pct?: Array<number | null> | null } | null;
+      history?: Record<string, number | string | null> | null } | null;
+    fx_swaps?: { period?: string | null; all_tn?: number | null; usd_leg_tn?: number | null; prev_period?: string | null; prev_all_tn?: number | null;
+      basis?: string | null; status?: DwStatus | null } | null;
+    policy_rates?: { rows?: Array<{ area: string; name: string; rate: number | null; month: string; vs_fed_pp?: number | null; chg_12m_pp?: number | null }> | null;
+      basis?: string | null; status?: DwStatus | null } | null;
+    us2y_vs_funds?: { dgs2?: number | null; dgs2_asof?: string | null; fed_upper?: number | null; gap_pp?: number | null; reading?: string | null; status?: DwStatus | null } | null;
+    treasury?: { y10?: DwReading | null; y10_chg_6m_pp?: number | null; term_premium?: DwReading | null; custody?: (DwReading & { chg_12m_pct?: number | null }) | null;
+      april_2025?: Record<string, string | number | null> | null; chain_2022?: Record<string, string | number | null> | null } | null } | null;
+  ledger?: { status?: DwStatus | null; frozen_momentum?: Array<{ month: string; dxy_12m_pct?: number | null; dxy?: number | null; outcomes?: DwOutcomes | null }> | null;
+    frozen_rule?: DwFiring[] | null; live?: DwLedgerEntry[] | null; frozen_on?: string | null; outcomes_through?: string | null; basis?: string | null;
+    frozen_momentum_basis?: string | null } | null;
+  crisis_lists?: Record<string, { label?: string | null; onsets?: Array<{ month: string; name: string }> | null }> | null;
+  window_convention?: string | null;
+  pending_questions?: Array<{ rank: string; q: string; moves?: string | null; status?: string | null; first_asked?: string | null }> | null;
+  honesty?: string[] | null;
+  build_error?: string | null;
 }

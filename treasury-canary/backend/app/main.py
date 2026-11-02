@@ -55,6 +55,11 @@ def _start_scheduler(app: FastAPI) -> None:
             warm_ai_debt(force=True)
         except Exception as exc:  # noqa: BLE001
             logger.warning("AI-debt warm-up failed: %s", exc)
+        try:   # Dollar watch: ~20-30s of keyless fetches; the warm also appends live firings to the forward ledger
+            from .api.routes_dollar import warm_dollar_watch
+            warm_dollar_watch(force=True)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Dollar-watch warm-up failed: %s", exc)
 
     from datetime import datetime, timedelta, timezone
     sched.add_job(_job, IntervalTrigger(minutes=settings.refresh_interval_minutes),
@@ -86,7 +91,7 @@ app.add_middleware(
 )
 
 from .api import (  # noqa: E402
-    routes_ai_debt, routes_composite, routes_cycle, routes_distress, routes_events, routes_flows,
+    routes_ai_debt, routes_composite, routes_cycle, routes_distress, routes_dollar, routes_events, routes_flows,
     routes_labor, routes_margin,
     routes_margin_fast, routes_rate_ensemble, routes_rates, routes_shock_sim,
     routes_metrics, routes_news, routes_pins, routes_severity, routes_statregime,
@@ -115,6 +120,7 @@ app.include_router(routes_statregime.router)
 from .api import routes_squeeze  # noqa: E402
 app.include_router(routes_squeeze.router)
 app.include_router(routes_ai_debt.router)
+app.include_router(routes_dollar.router)
 
 
 @app.post("/telegram/webhook")
