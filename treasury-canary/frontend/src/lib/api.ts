@@ -1525,7 +1525,19 @@ export interface DollarWatch {
     emfx_withheld?: string | null } | null;
   crisis_lists?: Record<string, { label?: string | null; onsets?: Array<{ month: string; name: string }> | null }> | null;
   window_convention?: string | null;
-  pending_questions?: Array<{ rank: string; q: string; moves?: string | null; status?: string | null; first_asked?: string | null; expires?: string | null }> | null;
+  pending_questions?: Array<{ rank: string; q: string; moves?: string | null; status?: string | null; first_asked?: string | null; expires?: string | null;
+    answer?: string | null; answered_on?: string | null }> | null;
+  forward?: {
+    status?: DwStatus | null; problems?: string[] | null;
+    freeze?: { freeze_date?: string | null; spec_version?: string | null; route?: string | null; primary_crisis_list?: string | null;
+      decel_primary_variant?: string | null; forward_onset_rule?: string | null; notification_licence?: string | null;
+      answered_by?: string | null; answered_on?: string | null } | null;
+    d3?: { units?: number | null; matured?: number | null; looks?: number[] | null; next_look_at?: number | null; status?: string | null; rule?: string | null } | null;
+    onsets?: { historical?: string[] | null; historical_dollar_funding?: string[] | null; historical_note?: string | null;
+      live?: DwLedgerEntry[] | null } | null;
+    fed_actions?: { n?: number | null; last?: string | null; error?: string | null } | null;
+    garch?: Record<string, unknown> | null;
+  } | null;
   honesty?: string[] | null;
   build_error?: string | null;
 }

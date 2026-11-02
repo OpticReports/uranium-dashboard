@@ -721,6 +721,38 @@ function LedgerLayer({ d }: { d: DollarWatch }) {
   );
 }
 
+function PreregLayer({ d }: { d: DollarWatch }) {
+  const f = d.forward;
+  if (!f) return <Unavailable what="Pre-registration record" />;
+  const fz = f.freeze;
+  const frozen = str(fz?.freeze_date) && /^\d{4}-/.test(String(fz?.freeze_date));
+  const live = arr(f.onsets?.live);
+  return (
+    <>
+      <div className="grid gap-2 md:grid-cols-2">
+        <div className="rounded border border-slate-700 px-3 py-2 text-[11px] text-slate-300">
+          <div className="font-semibold">{frozen ? `Frozen ${fz?.freeze_date}` : "Answered; the freeze record is pending its reviews"}</div>
+          <div className="mt-1 text-slate-400">
+            Answered by {str(fz?.answered_by) ?? "n/a"} on {str(fz?.answered_on) ?? "n/a"}: route {str(fz?.route) ?? "n/a"}; primary crisis list {str(fz?.primary_crisis_list) ?? "n/a"};
+            primary rule variant {str(fz?.decel_primary_variant) ?? "n/a"}; future crises dated by {str(fz?.forward_onset_rule) ?? "n/a"}; a colour or notification only from {str(fz?.notification_licence) ?? "n/a"}.
+          </div>
+          {str(fz?.spec_version) && <div className="mt-1 break-all font-mono text-[10px] text-slate-600">{fz?.spec_version}</div>}
+        </div>
+        <div className="rounded border border-slate-700 px-3 py-2 text-[11px] text-slate-300">
+          <div className="font-semibold">The forward test: {f.d3?.units ?? 0} units logged, {f.d3?.matured ?? 0} matured; first look at {f.d3?.next_look_at ?? 8} (about 2060)</div>
+          <div className="mt-1 text-slate-400">{str(f.d3?.rule) ?? ""}. Status: {str(f.d3?.status) ?? "n/a"}.</div>
+        </div>
+      </div>
+      <Note>
+        Crisis dating, 2000-2026 check: {arr(f.onsets?.historical).join(", ") || "n/a"} (dollar-funding: {arr(f.onsets?.historical_dollar_funding).join(", ") || "none"}).{" "}
+        {str(f.onsets?.historical_note) ?? ""}. Live onsets since the cut-off: {live.length === 0 ? "none" : live.map((e) => e.date).join(", ")}.
+        Fed emergency actions on file: {f.fed_actions?.n ?? "n/a"} (latest {str(f.fed_actions?.last) ?? "n/a"}).
+      </Note>
+      {arr(f.problems).length > 0 && <Note>Problems: {arr(f.problems).join("; ")}.</Note>}
+    </>
+  );
+}
+
 // ---------------------------------------------------------------------------- tab
 function devOverride(): DollarWatch | null {
   if (!import.meta.env.DEV) return null;
@@ -803,6 +835,9 @@ export function DollarView({ data }: { data: DollarWatch }) {
       <Section title="Forward ledger" subtitle="dated firings after the reference cut-off; outcomes frozen in as they mature; at realistic edges it needs decades to score" status={b.ledger ?? d.ledger?.status} basis={d.ledger?.basis}>
         <LedgerLayer d={d} />
       </Section>
+      <Section title="Pre-registration" subtitle="the frozen rules the forward ledger is graded by (studies/dollar_watch/spec/SPEC_v1.md)" status={b.forward ?? d.forward?.status}>
+        <PreregLayer d={d} />
+      </Section>
       <Panel title="Honesty box">
         <ul className="list-disc space-y-1 pl-4 text-[11px] text-slate-400">
           {arr(d.honesty).map((h, i) => <li key={i}>{h}</li>)}
@@ -812,7 +847,11 @@ export function DollarView({ data }: { data: DollarWatch }) {
           <div className="mt-3 text-[11px] text-slate-400">
             <div className="font-semibold text-slate-300">Pending questions (ranked)</div>
             {arr(d.pending_questions).map((q, i) => (
-              <div key={i}><span className="font-mono">{q.rank}</span> {q.q} <span className="text-slate-500">(moves: {q.moves ?? "n/a"}; {q.status ?? "n/a"}{q.first_asked ? ` ${q.first_asked}` : ""}{q.expires ? `, expires ${q.expires}` : ""})</span></div>
+              <div key={i}><span className="font-mono">{q.rank}</span> {q.q}{" "}
+                {q.status === "answered"
+                  ? <span className="text-slate-500">(answered {q.answered_on ?? ""}: {q.answer ?? "n/a"})</span>
+                  : <span className="text-slate-500">(moves: {q.moves ?? "n/a"}; {q.status ?? "n/a"}{q.first_asked ? ` ${q.first_asked}` : ""}{q.expires ? `, expires ${q.expires}` : ""})</span>}
+              </div>
             ))}
           </div>
         )}

@@ -189,8 +189,9 @@ def test_payload_ok_and_serialisable(payload):
     assert payload["scramble"]["live_check"]["reproduces_frozen_unpatched"] is True
     assert {h["variant"] for h in payload["scramble"]["history"]} == {"both", "re-arm only"}
     pq = payload["pending_questions"]
-    assert len(pq) == 8 and all(q["expires"] == "2027-01-01" for q in pq if q["status"] == "asked")
-    assert [q["status"] for q in pq].count("open") == 2 and all(q["expires"] is None for q in pq if q["status"] == "open")
+    assert len(pq) == 10 and all(q["expires"] == "2027-01-01" for q in pq if q["status"] == "asked")
+    assert [q["status"] for q in pq].count("answered") == 5 and [q["status"] for q in pq].count("asked") == 3
+    assert [q["status"] for q in pq].count("open") == 2 and all(q["expires"] is None for q in pq if q["status"] != "asked")
 
 
 def test_payload_values_on_the_fixture(payload, inputs):
@@ -462,3 +463,135 @@ def test_forbidden_language_absent(payload, tmp_path):
         src = open(path, encoding="utf-8").read().lower()
         for phrase in FORBIDDEN:
             assert phrase not in src, (os.path.basename(path), phrase)
+
+
+# ============================================================================ the frozen pre-registration (SPEC v1)
+SPEC_DIR = os.path.join(STUDY, "spec")
+
+
+def test_freeze_record_shipped_and_rule_matches():
+    assert open(os.path.join(ROOT, "backend", "app", "sources", "dollar_freeze.json"), "rb").read() == \
+        open(os.path.join(SPEC_DIR, "freeze.json"), "rb").read()
+    fz = dw.FREEZE
+    assert fz["route"] == "forward_only" and fz["decel_primary_variant"] == "unpatched" and fz["primary_crisis_list"].startswith("C16")
+    assert fz["forward_onset_rule"] == "mechanical_2_of_5" and fz["answered_by"] == "Casey"
+    for k, v in fz["rule_params"].items():
+        if k in dw.RULE_FROZEN and k != "index":
+            assert dw.RULE_FROZEN[k] == v, k
+
+
+def test_fed_actions_list_is_valid_and_frozen():
+    import hashlib
+    shipped = os.path.join(ROOT, "backend", "app", "sources", "dollar_fed_actions.json")
+    body = open(shipped, "rb").read()
+    assert body == open(os.path.join(SPEC_DIR, "fed_emergency_actions.json"), "rb").read()
+    acts = dw.FED["actions"]
+    assert len(acts) == dw.FED["n"] and [a["date"] for a in acts] == sorted(a["date"] for a in acts)
+    assert all(a["url"].startswith("https://www.federalreserve.gov/") for a in acts)
+    assert hashlib.sha256(body).hexdigest() == dw.FREEZE["fed_emergency_actions_sha256"]
+
+
+def test_h10_release_moves_off_federal_holidays():
+    assert dw.h10_release("2026-09-02") == "2026-09-08"      # Labor Day Monday 2026-09-07
+    assert dw.h10_release("2027-01-14") == "2027-01-19"      # MLK Day Monday 2027-01-18
+    assert dw.h10_release("2028-11-06") == "2028-11-13"
+    assert "2026-11-26" in dw.us_federal_holidays(2026) and "2027-07-05" in dw.us_federal_holidays(2027)   # Thanksgiving; observed July 4
+
+
+def test_onset_markers_on_2020(inputs):
+    trip = dw.onset_markers(inputs, ["2020-03"])["2020-03"]
+    assert {"1_vix", "4_spx", "5_fed"} <= set(trip) and len(trip) >= 4
+
+
+def _shift(inputs, years: int, cut: str | None = None):
+    out = json.loads(json.dumps(inputs))
+    for s in list(out["fred"].values()) + [out["dxy"], out["gold"], out["emb"]]:
+        keep = [i for i, d in enumerate(s["dates"]) if cut is None or d <= cut]
+        s["dates"] = [f"{int(s['dates'][i][:4]) + years}{s['dates'][i][4:]}" for i in keep]
+        s["values"] = [s["values"][i] for i in keep]
+    o = out["ofr"]
+    keep = [i for i, d in enumerate(o["dates"]) if cut is None or d <= cut]
+    for c in [k for k in o if isinstance(o[k], list) and len(o[k]) == len(o["dates"])]:
+        o[c] = [o[c][i] for i in keep]
+    o["dates"] = [f"{int(d[:4]) + years}{d[4:]}" for d in o["dates"]]
+    return out
+
+
+def test_live_onset_recorded_once_with_frozen_subtype(inputs, tmp_path):
+    """the 2020 shock replayed in 2028 (leap years line up): an onset row is appended once, its subtype frozen after m+2."""
+    shifted = _shift(inputs, 8, cut="2020-12-31")
+    path = str(tmp_path / "ledger.json")
+    p = dw.build_dollar_watch(shifted, today="2028-07-01", ledger_file=path)
+    on = [e for e in dw.load_ledger(path)["entries"] if e["kind"] == "onset"]
+    assert [e["date"] for e in on] == ["2028-03"]
+    assert {"1_vix", "4_spx"} <= set(on[0]["markers"]) and "5_fed" not in on[0]["markers"]      # Fed list dates are not shifted
+    assert on[0]["subtype"]["dollar_funding"] is True and on[0]["recorded_on"] == "2028-07-01"
+    dw.build_dollar_watch(shifted, today="2028-07-02", ledger_file=path)
+    assert len([e for e in dw.load_ledger(path)["entries"] if e["kind"] == "onset"]) == 1
+    assert p["forward"]["onsets"]["live"][0]["date"] == "2028-03" and p["forward"]["status"] == "ok"
+
+
+def test_firing_rows_carry_the_point_in_time_record(inputs, tmp_path):
+    first = _shift(inputs, 20, cut="2008-09-30")          # first vintage: through 2008-09-30 -> 2028-09-29
+    path = str(tmp_path / "ledger.json")
+    dw.build_dollar_watch(first, today="2028-10-01", ledger_file=path)
+    second = _shift(inputs, 20, cut="2008-11-06")
+    dw.build_dollar_watch(second, today="2028-11-07", ledger_file=path)
+    rows = {e["date"]: e for e in dw.load_ledger(path)["entries"] if e["kind"] == "scramble_rule"}
+    a, b = rows["2028-09-22"], rows["2028-11-06"]
+    assert a["first_vintage_contains_date"] is None                       # nothing seen before the first build
+    assert b["first_vintage_contains_date"] is True                       # 2028-11-06 > the last day of the first vintage
+    assert a["unit_first"] == "2028-09-22" and b["unit_first"] is None    # re-arm-only rows are never units
+    assert a["h10_release"] == "2028-09-25" and b["h10_release"] == "2028-11-13"
+    for e in (a, b):
+        assert isinstance(e["k"], int) and e["y10_now"] < e["y10_ref"] and 0.97 <= e["near_high_ratio"] <= 1.0
+        assert set(e["inputs"]) == {"DTWEXBGS", "DGS10", "VIXCLS"}
+    assert a["revision_checks"][0]["still_fires"] == {"re-arm": True, "unpatched": True}
+
+
+def test_units_merge_within_250_index_days(tmp_path):
+    path = str(tmp_path / "ledger.json")
+    dw.append_ledger(path, [{"kind": "scramble_rule", "date": "2030-01-10", "variants": ["unpatched"], "k": 100,
+                             "unit_first": "2030-01-10", "index_gap_to_unit_first": 0}], "2030-01-20")
+    ds = [f"2030-{1 + i // 28:02d}-{1 + i % 28:02d}" for i in range(330)]
+    B = [100.0 + 0.01 * i for i in range(330)]
+    Y = [3.0] * 330
+    new = {ds[300]: {"kind": "scramble_rule", "date": ds[300], "variants": ["unpatched"], "roc20_max_date": ds[290],
+                     "roc20_max_pct": 4.5, "roc20_now_pct": 1.0, "dollar": B[300]}}
+    rows = dw.enrich_firings(new, ds, B, Y, path, None)
+    assert rows[0]["unit_first"] == "2030-01-10" and rows[0]["index_gap_to_unit_first"] == 200
+
+
+def test_revision_checks_append_never_delete(tmp_path):
+    path = str(tmp_path / "ledger.json")
+    dw.append_ledger(path, [{"kind": "scramble_rule", "date": "2030-02-01", "variants": ["unpatched"]}], "2030-02-10")
+    dw.revision_checks(path, set(), {"2030-02-01"}, "2030-02-10")
+    dw.revision_checks(path, set(), {"2030-02-01"}, "2030-02-17")       # unchanged: no new entry
+    dw.revision_checks(path, set(), set(), "2030-03-01")                # a revision removes the firing
+    e = dw.load_ledger(path)["entries"][0]
+    assert [c["still_fires"]["unpatched"] for c in e["revision_checks"]] == [True, False] and e["date"] == "2030-02-01"
+
+
+def test_maturity_block_written_once(inputs, tmp_path):
+    ds, B, _ = dw.rule_index(inputs["fred"])
+    path = str(tmp_path / "ledger.json")
+    d = "2020-04-09"                                                      # an in-sample firing with 250 index days after it
+    dw.append_ledger(path, [{"kind": "scramble_rule", "date": d, "variants": ["unpatched"]}], "2020-04-20")
+    dw._write_once(path, "scramble_rule", "outcomes_250d", lambda e: dw.maturity_250d(e, ds, B, inputs, path), "2026-11-02")
+    blk = dw.load_ledger(path)["entries"][0]["outcomes_250d"]
+    frozen = {x["date"]: x for x in dw.REF["scramble_rule"]["firings"]}[d]
+    assert blk["further_rise_pct"] == pytest.approx(frozen["dollar_further_rise_pct"], abs=0.06) and blk["hit"] is True
+    assert blk["max_date"] == frozen["dollar_peak_date"] and blk["frozen_on"] == "2026-11-02"
+    dw._write_once(path, "scramble_rule", "outcomes_250d", lambda e: {"hit": False}, "2026-11-03")
+    assert dw.load_ledger(path)["entries"][0]["outcomes_250d"]["hit"] is True        # never rewritten
+
+
+def test_momentum_rows_mature_with_the_onset_record(tmp_path):
+    path = str(tmp_path / "ledger.json")
+    dw.append_ledger(path, [{"kind": "momentum", "date": "2027-01", "dxy_12m_pct": 10.5},
+                            {"kind": "onset", "date": "2027-06", "markers": {}, "subtype": {"dollar_funding": True}}], "2027-02-03")
+    dw.mature_momentum({"fred": {}}, path, "2028-01-15")                  # m+12 = 2028-01 has not closed
+    assert "onset_within_12m" not in dw.load_ledger(path)["entries"][0]
+    dw.mature_momentum({"fred": {}}, path, "2028-02-02")
+    got = dw.load_ledger(path)["entries"][0]["onset_within_12m"]
+    assert got["onsets"] == ["2027-06"] and got["dollar_funding"] == ["2027-06"]

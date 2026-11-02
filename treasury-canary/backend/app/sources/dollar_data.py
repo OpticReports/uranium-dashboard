@@ -267,6 +267,14 @@ def fetch_bis() -> dict:
             "cbpol": _bis("bis_cbpol.csv", BIS_CBPOL, key_col="REF_AREA")}
 
 
+def cache_file(name: str) -> str:
+    """The on-disk cache path of a fetched source, for archiving its exact bytes (SPEC v1 C2 / C7):
+    a FRED id from FRED_SERIES, or "ofr_fsi" for the OFR FSI csv."""
+    if name == "ofr_fsi":
+        return fred_csv._cache_path("ofr_fsi.csv")
+    return fred_csv._cache_path(f"fred_csv_{name}_{FRED_SERIES[name][0]}.csv")
+
+
 def fetch_all() -> dict:
     """Every input once; a source that raises becomes None (its block says error)."""
     out: dict = {}
