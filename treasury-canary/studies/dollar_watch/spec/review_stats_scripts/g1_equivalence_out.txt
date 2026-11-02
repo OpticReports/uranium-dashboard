@@ -1,0 +1,21 @@
+calendar sizes: B∩V∩Y 5167  B∩Y 5174  B 5217
+
+unpatched
+  B∩V∩Y (decel_realtime): [('2008-09-22', np.float64(4.3)), ('2010-06-03', np.float64(4.8)), ('2011-11-01', np.float64(6.1)), ('2012-06-07', np.float64(4.5)), ('2020-04-09', np.float64(7.4)), ('2022-07-28', np.float64(4.3))]
+  B∩Y   (build_reference): [('2008-09-22', np.float64(4.3)), ('2010-06-03', np.float64(4.8)), ('2011-11-01', np.float64(6.1)), ('2012-06-07', np.float64(4.5)), ('2020-04-09', np.float64(7.4)), ('2022-07-28', np.float64(4.3))]
+  same dates: True
+  further rise [k,k+250) vs SPEC S1 window (k,k+250]: [('2008-09-22', np.float64(17.7), np.float64(17.7)), ('2010-06-03', np.float64(1.1), np.float64(1.1)), ('2011-11-01', np.float64(4.4), np.float64(4.4)), ('2012-06-07', np.float64(0.5), np.float64(0.5)), ('2020-04-09', np.float64(1.4), np.float64(1.4)), ('2022-07-28', np.float64(5.2), np.float64(5.2))]
+
+rearm
+  B∩V∩Y (decel_realtime): [('2008-09-22', np.float64(4.3)), ('2008-11-06', np.float64(12.9)), ('2010-06-03', np.float64(4.8)), ('2011-11-01', np.float64(6.1)), ('2012-06-07', np.float64(4.5)), ('2020-04-09', np.float64(7.4)), ('2022-07-28', np.float64(4.3))]
+  B∩Y   (build_reference): [('2008-09-22', np.float64(4.3)), ('2008-11-06', np.float64(12.9)), ('2010-06-03', np.float64(4.8)), ('2011-11-01', np.float64(6.1)), ('2012-06-07', np.float64(4.5)), ('2020-04-09', np.float64(7.4)), ('2022-07-28', np.float64(4.3))]
+  same dates: True
+  further rise [k,k+250) vs SPEC S1 window (k,k+250]: [('2008-09-22', np.float64(17.7), np.float64(17.7)), ('2008-11-06', np.float64(6.5), np.float64(6.5)), ('2010-06-03', np.float64(1.1), np.float64(1.1)), ('2011-11-01', np.float64(4.4), np.float64(4.4)), ('2012-06-07', np.float64(0.5), np.float64(0.5)), ('2020-04-09', np.float64(1.4), np.float64(1.4)), ('2022-07-28', np.float64(5.2), np.float64(5.2))]
+
+committed decel_realtime.json [('2008-09-22', 4.3, 17.7), ('2010-06-03', 4.8, 1.1), ('2011-11-01', 6.1, 4.4), ('2012-06-07', 4.5, 0.5), ('2020-04-09', 7.4, 1.4), ('2022-07-28', 4.3, 5.2)]
+
+committed decel_realtime_rearm.json [('2008-09-22', 4.3, 17.7), ('2008-11-06', 12.9, 6.5), ('2010-06-03', 4.8, 1.1), ('2011-11-01', 6.1, 4.4), ('2012-06-07', 4.5, 0.5), ('2020-04-09', 7.4, 1.4), ('2022-07-28', 4.3, 5.2)]
+
+sigma_B daily log change (B's own calendar, 2006-01-03..2026-10-23): 0.00341
+20-day sigma (sqrt20): 0.0152 ; 4% gate in 20d-sigma units: 2.63
+empirical sd of overlapping 20-day log changes: 0.0161 ; gate in those units: 2.43

@@ -27,6 +27,7 @@ const proxied = [
   "/track-record",
   "/recession-model",
   "/ai-debt",
+  "/dollar-watch",
 ];
 
 export default defineConfig({

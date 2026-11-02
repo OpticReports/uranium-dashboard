@@ -1,0 +1,12 @@
+test,n_events,followed_by_crisis_start_12m,pct_12m,followed_24m,pct_24m,crisis_start_12m_after_end,crisis_peak_within_12m,base_rate_12m_pct,base_rate_24m_pct
+excursion outside 85-105 (close),25,11,44,19,76,9,12,42,69
+excursion outside 85-105 (avg),22,11,50,16,73,8,11,42,69
+excursion outside 90-110 (close),24,7,29,15,62,8,5,42,69
+excursion outside 90-110 (avg),21,7,33,13,62,7,7,42,69
+excursion outside 83-102 (close),31,17,55,24,77,11,10,42,69
+excursion outside 83-102 (avg),25,11,44,18,72,8,6,42,69
+"excursion outside 85-105 (close, runs merged if gap<=3m)",17,9,53,13,76,,started_inside_crisis=7,42,69
+"excursion outside 85-105 (close, runs merged if gap<=6m)",13,5,38,9,69,,started_inside_crisis=7,42,69
+6m DXY rise >= 8% (close),28,13,46,20,71,,11,42,69
+6m DXY rise >= 10% (close),18,5,28,11,61,,6,42,69
+6m DXY rise >= 15% (close),8,0,0,5,62,,1,42,69

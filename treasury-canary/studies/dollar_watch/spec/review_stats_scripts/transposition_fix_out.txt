@@ -1,0 +1,6 @@
+sigma_B constant (2006-26, incl. 2008/2020) 0.00342; median trailing-756d sigma 0.00333; s range with constant: 0.72-1.45
+frozen firings after the warm-up (s=1, yield on): 2010-06-03 2011-11-01 2012-06-07 2020-04-09 2022-07-28
+  SPEC sigma_B (constant)     yield on : 2011-11-01 2015-02-19 2015-08-12 2016-06-03 2020-04-16 2022-07-28
+  SPEC sigma_B (constant)     yield off: 2011-10-07 2015-02-19 2015-08-12 2016-06-03 2016-12-12 2020-04-16 2022-05-19
+  sigma_B = median trailing   yield on : 2011-11-01 2015-02-24 2020-04-16 2022-07-28
+  sigma_B = median trailing   yield off: 2011-10-07 2015-02-24 2020-04-16 2022-05-19 2022-11-21

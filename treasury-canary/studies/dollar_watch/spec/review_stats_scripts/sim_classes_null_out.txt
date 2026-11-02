@@ -1,0 +1,19 @@
+pool | phi | mean edge in mixed eps | E[T] | P(PASS) P(INC) P(FAIL) P(INVERSE)
+RW: firings 2161, homogeneous share 0.55, mean D (null) -0.032
+  RW K=25 phi=0.0 | edge_mixed +0.00 | E[T] -0.030 | PASS 0.00  INC 0.02  FAIL 0.94  INVERSE 0.04
+  RW K=25 phi=0.3 | edge_mixed +0.16 | E[T] +0.039 | PASS 0.01  INC 0.40  FAIL 0.60  INVERSE 0.00
+  RW K=25 phi=0.5 | edge_mixed +0.27 | E[T] +0.086 | PASS 0.06  INC 0.73  FAIL 0.21  INVERSE 0.00
+  RW K=25 phi=0.7 | edge_mixed +0.38 | E[T] +0.134 | PASS 0.33  INC 0.63  FAIL 0.04  INVERSE 0.00
+  RW K=35 phi=0.0 | edge_mixed +0.00 | E[T] -0.032 | PASS 0.00  INC 0.01  FAIL 0.97  INVERSE 0.03
+  RW K=35 phi=0.3 | edge_mixed +0.16 | E[T] +0.040 | PASS 0.00  INC 0.38  FAIL 0.62  INVERSE 0.00
+  RW K=35 phi=0.5 | edge_mixed +0.27 | E[T] +0.087 | PASS 0.04  INC 0.81  FAIL 0.15  INVERSE 0.00
+  RW K=35 phi=0.7 | edge_mixed +0.38 | E[T] +0.133 | PASS 0.28  INC 0.70  FAIL 0.01  INVERSE 0.00
+GARCH: firings 2642, homogeneous share 0.52, mean D (null) -0.077
+  GARCH K=25 phi=0.0 | edge_mixed +0.00 | E[T] -0.076 | PASS 0.00  INC 0.00  FAIL 0.72  INVERSE 0.28
+  GARCH K=25 phi=0.3 | edge_mixed +0.19 | E[T] +0.014 | PASS 0.00  INC 0.22  FAIL 0.78  INVERSE 0.00
+  GARCH K=25 phi=0.5 | edge_mixed +0.32 | E[T] +0.074 | PASS 0.05  INC 0.63  FAIL 0.32  INVERSE 0.00
+  GARCH K=25 phi=0.7 | edge_mixed +0.45 | E[T] +0.136 | PASS 0.35  INC 0.62  FAIL 0.03  INVERSE 0.00
+  GARCH K=35 phi=0.0 | edge_mixed +0.00 | E[T] -0.077 | PASS 0.00  INC 0.00  FAIL 0.76  INVERSE 0.24
+  GARCH K=35 phi=0.3 | edge_mixed +0.19 | E[T] +0.014 | PASS 0.00  INC 0.19  FAIL 0.81  INVERSE 0.00
+  GARCH K=35 phi=0.5 | edge_mixed +0.32 | E[T] +0.073 | PASS 0.03  INC 0.68  FAIL 0.29  INVERSE 0.00
+  GARCH K=35 phi=0.7 | edge_mixed +0.45 | E[T] +0.136 | PASS 0.34  INC 0.64  FAIL 0.01  INVERSE 0.00

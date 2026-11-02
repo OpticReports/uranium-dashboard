@@ -1,0 +1,6 @@
+[rw sig_u=0.006 a=0 b=0] | firings 2161 | rule-uncond +0.015±0.009 | D_SPEC(all E_f) -0.032±0.006 | D_pre(E_f<=f) -0.019±0.004 | D_post(E_f>=f) -0.034±0.007
+[garch sig_u=0.003 a=0.08 b=0.9] | firings 2533 | rule-uncond -0.046±0.010 | D_SPEC(all E_f) -0.078±0.006 | D_pre(E_f<=f) -0.014±0.004 | D_post(E_f>=f) -0.089±0.006
+[garch sig_u=0.006 a=0.08 b=0.9] | firings 2623 | rule-uncond -0.053±0.009 | D_SPEC(all E_f) -0.077±0.006 | D_pre(E_f<=f) -0.022±0.005 | D_post(E_f>=f) -0.086±0.006
+[garch sig_u=0.012 a=0.08 b=0.9] | firings 2884 | rule-uncond -0.059±0.009 | D_SPEC(all E_f) -0.087±0.006 | D_pre(E_f<=f) -0.020±0.003 | D_post(E_f>=f) -0.096±0.006
+[garch sig_u=0.006 a=0.05 b=0.9] | firings 2506 | rule-uncond -0.021±0.010 | D_SPEC(all E_f) -0.056±0.006 | D_pre(E_f<=f) -0.021±0.004 | D_post(E_f>=f) -0.060±0.006
+[garch sig_u=0.006 a=0.1 b=0.89] | firings 2741 | rule-uncond -0.079±0.010 | D_SPEC(all E_f) -0.094±0.006 | D_pre(E_f<=f) -0.020±0.004 | D_post(E_f>=f) -0.107±0.006
