@@ -13,7 +13,7 @@ import type { DollarWatch } from "../src/lib/api";
 // memo §5: never on the panel (the backend gate test scans the same list)
 const FORBIDDEN = ["probability of", "p(crisis", "chance of a crisis", "% chance", "crisis subsided", "subsided", "crisis over",
   "crisis is over", "all clear", "countdown", "next crisis in", "every crisis", "will crash", "imminent", "band breach",
-  "ends in crisis", "leads the vix", "lamp"];
+  "ends in crisis", "leads the vix", "lamp", "points below the top", "dates the end of"];
 
 function run(name: string, data: DollarWatch): string {
   const html = renderToStaticMarkup(<DollarView data={data} />);
@@ -26,13 +26,21 @@ function run(name: string, data: DollarWatch): string {
   const low = html.toLowerCase();
   for (const p of FORBIDDEN) if (low.includes(p)) throw new Error(`${name}: forbidden phrase '${p}'`);
   if (/\b(warning|alert|danger)\b/i.test(html)) throw new Error(`${name}: status language leak`);
+  // no rate on the momentum table: its cells are 11 clustered episodes (memo §5: none below ~15)
+  const m = html.indexOf('data-testid="momentum-table"');
+  if (m >= 0) {
+    const table = html.slice(m, html.indexOf("</table>", m));
+    if (/\(\d+%\)/.test(table)) throw new Error(`${name}: a rate is printed on the momentum table`);
+  }
+  if (html.includes("emfx")) throw new Error(`${name}: EM FX outcomes must stay withheld`);
   return html;
 }
 
 // 1. the dev fixture
 const a = run("fixture", DOLLAR_FIXTURE);
 for (const must of ["Dollar state", "Dollar-funding nowcast", "Dollar-scramble peak gauge", "Slow state", "Forward ledger", "Honesty box",
-  "101.72", "inside the band", "Gate closed", "2008-09-22", "2022-07-28", "No edge", "re-dollarising", "129.3", "Pending questions", "C16"]) {
+  "101.72", "ad hoc 85-105 band (no edge found)", "Gate closed", "2008-09-22", "2022-07-28", "No edge", "re-dollarising", "129.3",
+  "Pending questions", "C16", "calendar days", "no better than gold", "re-arm only", "expires 2027-01-01", "5 of 11", "41 of 85"]) {
   if (!a.includes(must)) throw new Error(`fixture render missing '${must}'`);
 }
 

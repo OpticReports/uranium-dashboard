@@ -22,6 +22,7 @@ import json
 import math
 import os
 import sys
+from datetime import date, timedelta
 
 FROZEN_ON = "2026-11-02"
 DATA, OUT = sys.argv[1], sys.argv[2]
@@ -75,16 +76,16 @@ LAST = len(MONTHS) - 1
 # ----------------------------------------------------------------- crisis lists
 crises = [row for row in csv.DictReader(open(os.path.join(DATA, "crises.csv"))) if row["is_crisis"] == "1"]
 LISTS = {
-    "A25": {"label": "finder A: 25 global / regional financial crises 1973-2026 (broad; hand-dated with sources)",
+    "A25": {"label": "25 global / regional financial crises 1973-2026 (broad; hand-dated with sources)",
             "onsets": [{"month": c["start"], "name": c["name"]} for c in crises]},
-    "C16": {"label": "finder C: 16 multi-country dollar-stress onsets 1974-2023 ('L-broad')",
+    "C16": {"label": "16 multi-country dollar-stress onsets 1974-2023 (dated knowing the dollar's path)",
             "onsets": [{"month": m, "name": n} for m, n in [
                 ("1974-06", "Herstatt / Franklin National"), ("1982-08", "Mexico / LatAm debt"), ("1987-10", "Black Monday"),
                 ("1992-09", "ERM"), ("1994-12", "Tequila"), ("1997-07", "Asia"), ("1998-08", "Russia / LTCM"),
                 ("2001-02", "Turkey / Argentina"), ("2008-09", "Lehman"), ("2010-05", "Greece / euro"), ("2013-05", "taper tantrum"),
                 ("2015-08", "China devaluation / commodities"), ("2018-08", "Turkey / Argentina"), ("2020-03", "COVID"),
                 ("2022-09", "UK LDI / EM FX at the dollar peak"), ("2023-03", "SVB / Credit Suisse")]]},
-    "N5": {"label": "the five dollar-funding squeezes proper (1982, 1998, 2008, 2020, 2022) - reported, never inferred on",
+    "N5": {"label": "the 5 dollar-funding squeezes proper (1982, 1998, 2008, 2020, 2022); reported, never inferred on",
            "onsets": [{"month": m, "name": n} for m, n in [("1982-08", "LatAm debt"), ("1998-08", "Russia / LTCM"),
                                                           ("2008-09", "Lehman"), ("2020-03", "COVID"), ("2022-09", "UK LDI / EM FX")]]},
 }
@@ -124,13 +125,18 @@ for m in sig:
     if prev is None or IDX[m] - IDX[prev] > 12:
         episodes.append(m)
     prev = m
+def _in_a25(m: str) -> bool:
+    return any(c["start"] <= m <= (c["end"][:7] if c["end"][:4].isdigit() else MONTHS[-1]) for c in crises)
+
+
+episodes_in_crisis = sum(1 for m in episodes if _in_a25(m))
 mom_by_list = {}
 for key in LISTS:
     elig_sig = [m for m in sig if IDX[m] <= LAST - 12]
     hits = sum(1 for m in elig_sig if followed(IDX[m], 12, key))
     ep_elig = [m for m in episodes if IDX[m] <= LAST - 12]
     ep_hits = sum(1 for m in ep_elig if followed(IDX[m], 12, key))
-    mom_by_list[key] = {"signal_months": len(elig_sig), "signal_months_followed_12m": hits, "rate_months": r(hits / len(elig_sig), 3),
+    mom_by_list[key] = {"signal_months": len(elig_sig), "signal_months_followed_12m": hits,
                         "episodes": len(ep_elig), "episodes_followed_12m": ep_hits, "base_12m": base(12, key)["rate"]}
 
 # ----------------------------------------------------------------- dollar-yield quadrant into each onset (3m window, finder C convention)
@@ -168,7 +174,36 @@ fell = [{"id": c["id"], "name": c["name"], "start": c["start"], "peak_stress": c
          "dxy_eve_to_peak_stress_pct": fnum(c["dxy_chg_eve_to_peak_stress_pct"])}
         for c in cm if (fnum(c["dxy_chg_eve_to_peak_stress_pct"]) or 0) < 0]
 gold_end = [c for c in cm if fnum(c["gold_eve_to_end_pct"]) is not None]
-gold_higher = [{"id": c["id"], "name": c["name"], "pct": fnum(c["gold_eve_to_end_pct"])} for c in gold_end if fnum(c["gold_eve_to_end_pct"]) > 0]
+OPEN = [c["id"] for c in cm if not c["end"][:4].isdigit()]             # still running (C26): not an "end"
+gold_done = [c for c in gold_end if c["id"] not in OPEN]
+gold_higher = [{"id": c["id"], "name": c["name"], "pct": fnum(c["gold_eve_to_end_pct"])} for c in gold_done if fnum(c["gold_eve_to_end_pct"]) > 0]
+gold_open = [{"id": c["id"], "name": c["name"], "pct_so_far": fnum(c["gold_eve_to_end_pct"])} for c in gold_end if c["id"] in OPEN]
+
+
+def _mdiff(a: str, b: str) -> int:
+    return (int(b[:4]) - int(a[:4])) * 12 + int(b[5:7]) - int(a[5:7])
+
+
+def _mshift(m: str, k: int) -> str:
+    y, mm = int(m[:4]), int(m[5:7]) + k
+    y, mm = y + (mm - 1) // 12, (mm - 1) % 12 + 1
+    return f"{y:04d}-{mm:02d}"
+
+
+GOLD_M = {row["month"]: fnum(row["gold_best"]) for row in csv.DictReader(open(os.path.join(DATA, "gold_monthly.csv"))) if fnum(row["gold_best"])}
+DXY_M = dict(zip(MONTHS, CLOSE))
+
+
+def window_base(series: dict, length: int, up: bool) -> float:
+    """share of all month pairs (m, m+length) in which the series ended higher (up) or lower (not up)."""
+    ms = sorted(series)
+    w = [(series[_mshift(m, length)] > series[m]) if up else (series[_mshift(m, length)] < series[m]) for m in ms if _mshift(m, length) in series]
+    return sum(w) / len(w)
+
+
+gold_base = [window_base(GOLD_M, _mdiff(_mshift(c["start"], -1), c["end"][:7]), True) for c in gold_done]
+dxy_fell_base = [window_base(DXY_M, _mdiff(_mshift(c["start"], -1), c["peak_stress"]), False)
+                 for c in cm if fnum(c["dxy_chg_eve_to_peak_stress_pct"]) is not None]
 
 
 def daily(path, col="close"):
@@ -240,8 +275,10 @@ RY = [Y_[d] for d in RDATES]
 spx = daily(os.path.join(DATA, "spx_daily.csv"))
 SPX_D = sorted(spx)
 baa10y = fred_daily("BAA10Y")
-EMFX_IDS = ["DEXBZUS", "DEXMXUS", "DEXSFUS", "DEXINUS", "DEXKOUS", "DEXTHUS", "DEXCHUS", "DEXMAUS"]
-EMFX = {s: fred_daily(s) for s in EMFX_IDS}
+# EM FX outcomes (the 8-pair basket) are WITHHELD until the pre-registration freeze: seven of its eight
+# currencies sit in the proposed cross-section (spec/review_data_v0.md S1). Not computed, not shipped.
+EMFX_WITHHELD = ("EM FX outcomes are withheld until the pre-registration is frozen: seven of the basket's eight currencies "
+                 "are in the proposed cross-section test, and seeing them could steer its design")
 
 
 def asof(series: dict, d: str, keys=None):
@@ -258,17 +295,6 @@ def asof(series: dict, d: str, keys=None):
     return series[keys[lo]]
 
 
-EMFX_KEYS = {s: sorted(v) for s, v in EMFX.items()}
-
-
-def emfx(d: str):
-    """equal-weight basket of 8 EM currencies per USD, log-average; up = EM currencies weaker. None if any leg missing."""
-    vals = [asof(EMFX[s], d, EMFX_KEYS[s]) for s in EMFX_IDS]
-    if any(v is None for v in vals):
-        return None
-    return math.exp(sum(math.log(v) for v in vals) / len(vals))
-
-
 def add_months(d: str, k: int) -> str:
     y, m = int(d[:4]), int(d[5:7]) + k
     y, m = y + (m - 1) // 12, (m - 1) % 12 + 1
@@ -279,20 +305,28 @@ BAA_K, SPX_K, VIX_K, B_K = sorted(baa10y), SPX_D, sorted(V_), sorted(B_)
 
 
 def outcomes(d: str) -> dict:
-    """what EM FX, spreads and the S&P did over the following 3 / 6 / 12 calendar months (as-of closes)."""
+    """what spreads, the S&P and the dollar did over the following 3 / 6 / 12 calendar months (as-of closes)."""
     o = {}
-    s0, e0, b0, d0 = asof(spx, d, SPX_K), emfx(d), asof(baa10y, d, BAA_K), asof(B_, d, B_K)
+    s0, b0, d0 = asof(spx, d, SPX_K), asof(baa10y, d, BAA_K), asof(B_, d, B_K)
     for k in (3, 6, 12):
         dk = add_months(d, k)
         if dk > FROZEN_ON:
             o[f"{k}m"] = None
             continue
-        s1, e1, b1, d1 = asof(spx, dk, SPX_K), emfx(dk), asof(baa10y, dk, BAA_K), asof(B_, dk, B_K)
+        s1, b1, d1 = asof(spx, dk, SPX_K), asof(baa10y, dk, BAA_K), asof(B_, dk, B_K)
         o[f"{k}m"] = {"spx_pct": r(100 * (s1 / s0 - 1), 1) if s0 and s1 else None,
-                      "emfx_pct": r(100 * (e1 / e0 - 1), 1) if e0 and e1 else None,
                       "baa10y_pp": r(b1 - b0, 2) if b0 is not None and b1 is not None else None,
                       "broad_dollar_pct": r(100 * (d1 / d0 - 1), 1) if d0 and d1 else None}
     return o
+
+
+def h10_observable(d: str) -> str | None:
+    """first S&P close after the H.10 release that carries day d (released the Monday after d's week,
+    4:15pm ET, after the equity close); holiday shifts of the release are ignored."""
+    dt = date.fromisoformat(d)
+    monday = (dt + timedelta(days=7 - dt.weekday())).isoformat()
+    later = [x for x in SPX_D if x > monday]
+    return later[0] if later else None
 
 
 def firing_record(f: dict) -> dict:
@@ -305,9 +339,15 @@ def firing_record(f: dict) -> dict:
     vix0 = asof(V_, f["date"], VIX_K)
     d60 = RDATES[min(len(RDATES) - 1, k + 60)]
     vix60 = asof(V_, d60, VIX_K)
+    obs = h10_observable(f["date"])
+    j0 = SPX_D.index(obs) if obs else None
+    fut2 = [spx[x] for x in SPX_D[j0:j0 + 251]] if j0 is not None else []
     return {**{x: f[x] for x in ("date", "roc20_max_pct", "roc20_max_date", "roc20_now_pct", "dollar")},
             "dollar_further_rise_pct": r(100 * (RB[pk] / RB[k] - 1), 1), "dollar_peak_date": RDATES[pk],
             "spx_to_next_low_pct": r(100 * (lowv / spx[SPX_D[i0]] - 1), 1), "spx_low_date": lowd,
+            "observable_on": obs,
+            "spx_firing_to_observable_pct": r(100 * (spx[obs] / spx[SPX_D[i0]] - 1), 1) if obs else None,
+            "spx_to_next_low_from_observable_pct": r(100 * (min(fut2) / spx[obs] - 1), 1) if fut2 else None,
             "vix_change_60d": r(vix60 - vix0, 1) if vix0 is not None and vix60 is not None else None,
             "outcomes": outcomes(f["date"])}
 
@@ -315,8 +355,9 @@ def firing_record(f: dict) -> dict:
 rearm = [firing_record(f) for f in scramble_firings(RDATES, RB, RY, True) if f["date"] <= FROZEN_ON]
 unpatched = [f["date"] for f in scramble_firings(RDATES, RB, RY, False)]
 CLASS = {"2008-09-22": "first wave of a two-wave scramble", "2008-11-06": "re-arm firing (added after the 2008-09-22 miss); dollar scramble peaking, equity low still four months away",
-         "2010-06-03": "euro-crisis mini-episode, resolved within weeks", "2011-11-01": "euro-crisis mini-episode",
-         "2012-06-07": "euro-crisis mini-episode, resolved within weeks", "2020-04-09": "clean: the scramble had peaked",
+         "2010-06-03": "euro-crisis dollar spike; the climb faded within weeks (the euro crisis ran on to 2012)",
+         "2011-11-01": "euro-crisis dollar spike at the crisis's peak stress (Nov-2011)",
+         "2012-06-07": "euro-crisis dollar spike; the climb faded within weeks", "2020-04-09": "clean: the scramble had peaked",
          "2022-07-28": "first wave of a policy grind (not a funding scramble)"}
 for f in rearm:
     f["reading"] = CLASS.get(f["date"], "unclassified")
@@ -357,7 +398,7 @@ for k in range(15, len(mD) - 12):
                        "spx_12m_up": mP[k + 12] > mP[k]})
 pre = [f for f in mfires if f["month"] < "2006-01"]
 base_k = [k for k in range(15, len(mD) - 12) if mM[k] < "2006-01"]
-monthly_null = {"window": "1973-2005 (monthly; unseen by the daily parameter choices)", "firings": len(pre),
+monthly_null = {"window": "1973-2005 monthly data, which the parameter choice did not use (the study had seen it)", "firings": len(pre),
                 "dollar_peak_within_3m": sum(f["peak_within_3m"] for f in pre),
                 "base_dollar_peak_within_3m": r(sum(1 for k in base_k if abs(max(range(max(0, k - 3), min(len(mD), k + 13)), key=lambda j: mD[j]) - k) <= 3) / len(base_k), 2),
                 "spx_up_12m": sum(f["spx_12m_up"] for f in pre), "base_spx_up_12m": r(sum(1 for k in base_k if mP[k + 12] > mP[k]) / len(base_k), 2),
@@ -378,10 +419,8 @@ for m in episodes:
             row["outcomes"][f"{k}m"] = None
             continue
         mk = MONTHS[i + k]
-        e0, e1 = emfx(m + "-28"), emfx(mk + "-28")
         row["outcomes"][f"{k}m"] = {
             "spx_pct": r(100 * (spx_m[mk] / spx_m[m] - 1), 1) if m in spx_m and mk in spx_m else None,
-            "emfx_pct": r(100 * (e1 / e0 - 1), 1) if e0 and e1 else None,
             "baa_minus_10y_pp": r((baa_m[mk] - gs10[mk]) - (baa_m[m] - gs10[m]), 2) if all(x in baa_m and x in gs10 for x in (m, mk)) else None,
             "dxy_pct": r(100 * (AVG[i + k] / AVG[i] - 1), 1)}
     mom_ledger.append(row)
@@ -407,8 +446,10 @@ up = [fnum(x["g_credit_yoy"]) for x in jq if fnum(x["g_usd_yoy"]) > 0]
 redollar = {"quarters": len(jq), "first": jq[0][""][:7], "last": jq[-1][""][:7],
             "corr_yoy_contemporaneous": r(corr(gcy, guy), 2), "corr_yoy_dollar_leads_1q": r(corr(gcy[1:], guy[:-1]), 2),
             "corr_qoq_contemporaneous": r(corr(gc, gu), 2), "corr_qoq_dollar_leads_1q": r(corr(gc[1:], gu[:-1]), 2),
-            "corr_caveat": "yoy changes overlap by three quarters, so the yoy correlations rest on roughly a quarter of the nominal sample; "
-                           "the non-overlapping qoq correlations are weaker (about -0.3)",
+            "corr_caveat": "coincident (yoy -0.50); the one-quarter dollar lead (-0.55 yoy) does not survive on non-overlapping "
+                           "quarters (-0.36 coincident, -0.29 dollar first); yoy changes overlap by three quarters, so they rest on about a "
+                           "quarter of the nominal sample",
+            "quarters_credit_growing": sum(1 for x in gcy if x > 0),
             "credit_growth_yoy_when_dollar_down_pct": r(sum(down) / len(down), 1), "n_down": len(down),
             "credit_growth_yoy_when_dollar_up_pct": r(sum(up) / len(up), 1), "n_up": len(up),
             "basis": "log growth (100 x log-difference); BIS GLI Q.USD.3P.N.A.I.B.USD vs the Fed broad dollar, quarter-end; descriptive, not causal"}
@@ -434,32 +475,44 @@ ref = {
                    "reviews": "studies/dollar_watch/verdicts (numbers; logic and design)",
                    "inputs_sha256": {p: sha(os.path.join(DATA, p)) for p in INPUTS}},
     "window_convention": "an event at month m is followed by an onset if one falls in (m, m+H]; base rate = share of eligible months 1971-01..2026-10 minus H with an onset in (m, m+H]",
-    "dxy_monthly": {"basis": "ICE DXY, month-end close and monthly average of daily closes (Yahoo DX-Y.NYB daily, finder A; identical to a fresh pull)",
+    "dxy_monthly": {"basis": "ICE DXY, month-end close and monthly average of daily closes (Yahoo DX-Y.NYB daily; identical to a fresh pull)",
                     "months": MONTHS, "close": [r(x, 2) for x in CLOSE], "avg": [r(x, 2) for x in AVG]},
     "crisis_lists": LISTS,
     "band": {"lo": 85, "hi": 105, "label": "Johnson's ad hoc 85-105 band (as relayed in the Oct-2026 talk); no edge over the base rate on three crisis lists",
              "excursions": excursions, "by_list": band_by_list,
-             "basis": "month-end closes outside 85-105, runs separated by <= 3 in-band months merged (finder A); 17 excursions"},
+             "basis": "month-end closes outside 85-105, runs separated by <= 3 in-band months merged: 17 excursions, 7 of which began "
+                      "inside a crisis; in-sample"},
     "momentum": {"definition": "12-month change of the monthly-average DXY above +10%", "episodes": episodes, "by_list": mom_by_list,
-                 "caveat": "in-sample on data the study had already examined; list-dependent; clusters, not independent draws; NOT validated"},
+                 "episodes_began_in_a25_crisis": episodes_in_crisis,
+                 "caveat": f"{len(episodes)} episodes, not {len(sig)} independent readings, so no rate is shown. {episodes_in_crisis} of the "
+                           f"{len(episodes)} began during a crisis on the 25-crisis list; the 16-onset list was dated knowing the dollar's path; "
+                           "a 6-month version of the test falls below its base (28% vs 42%). In-sample and list-dependent: no edge established."},
     "quadrant": {"definition": "sign of the 3-month change of the monthly-average DXY and of the 10-year yield (GS10) into the onset month (finder C)",
                  "by_list": quadrant, "base_all_months": quadrant_base},
     "dollar_fell_at_peak_stress": {"n_crises": len(cm), "fell": len(fell), "crises": fell,
-                                   "basis": "month-end close, eve of the crisis to its peak-stress month, finder A's 25-crisis list"},
-    "gold": {"drawdowns": gold_dd, "ended_higher": len(gold_higher), "n_with_end": len(gold_end),
+                                   "base_share": r(sum(dxy_fell_base) / len(dxy_fell_base), 2),
+                                   "basis": "DXY month-end close, the eve of each crisis (month before its start) to its peak-stress month, on the "
+                                            "25-crisis list; base = share of all same-length windows since 1971 in which the DXY ended lower, "
+                                            "averaged over the crises' lengths"},
+    "gold": {"drawdowns": gold_dd, "ended_higher": len(gold_higher), "n_with_end": len(gold_done),
              "ended_higher_gt_1pct": sum(1 for g in gold_higher if g["pct"] > 1), "ended_higher_list": gold_higher,
-             "basis": "COMEX GC=F daily (2000+), World Bank monthly before; 'ended higher' = gold above its eve level at the episode's end "
-                      "(monthly averages, finder A's 25-crisis list, col gold_eve_to_end_pct). Corrects the memo's '10 of 25', which "
-                      "listed ten examples and missed dotcom (+13.6%), China property (+7.3%) and two flat cases (+0.9%, +0.2%). "
-                      "Drawdown windows end with the episode (2022: Mar-Oct, C22 ends 2022-10)."},
+             "open_episodes": gold_open, "base_share": r(sum(gold_base) / len(gold_base), 2),
+             "basis": "COMEX GC=F daily (2000+), World Bank monthly before. 'Ended higher' = gold's monthly average above its eve-month "
+                      "level at the episode's end, completed crises on the 25-crisis list (the open 2026 episode is shown separately); "
+                      "base = share of all same-length windows since 1971 in which gold ended higher, averaged over the crises' lengths. "
+                      "Drawdown windows end with the episode (2022: Mar-Oct)."},
     "scramble_rule": {"params": RULE, "variant_live": "re-arm (fires again inside the cooling window on a 1.5x bigger scramble; added after the 2008-09-22 miss)",
                       "firings": rearm, "firings_unpatched": unpatched, "vspike_timing": vspike, "monthly_null": monthly_null,
-                      "basis": "outcomes on the rule's own index: dollar_further_rise_pct = broad dollar's max over the next 250 index days vs the firing day; "
-                               "spx_to_next_low_pct = S&P 500 from the firing close to its lowest close in the next 250 trading days; "
-                               "3/6/12-month outcomes as-of calendar offsets"},
+                      "basis": "'dollar rose further' = the broad dollar's highest level over the next 250 index days vs the firing day; "
+                               "'S&P to next low' = the S&P 500 from the firing-day close to its lowest close in the next 250 trading days; "
+                               "3/6/12-month outcomes at calendar offsets. The broad dollar (H.10) is published the Monday after each week, "
+                               "so a firing is first observable at the next S&P close after that release ('observable'); the S&P "
+                               "moved -3.7% to +4.7% between the firing day and that close across these seven firings",
+                      "last_index_day": [d for d in RDATES if d <= FROZEN_ON][-1]},
     "momentum_ledger": mom_ledger,
     "momentum_ledger_basis": "one row per momentum episode (first signal month after 12 quiet months); S&P and DXY as monthly averages, "
-                             "EM FX basket as-of the 28th, BAA minus GS10 monthly; reconstructed in-sample, not a forecast record",
+                             "Baa minus the 10-year monthly; reconstructed in-sample, not a forecast record. " + EMFX_WITHHELD,
+    "emfx_withheld": EMFX_WITHHELD,
     "redollarisation": redollar,
     "events": {"swap_lines": [
         {"date": "2007-12-12", "text": "first swap lines (ECB, SNB) with the term auction facility", "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20071212a.htm"},
@@ -481,20 +534,22 @@ ref = {
                        "text": "the reserve freeze and the first Fed hike are 16 days apart; Evergrande's default (2021-12-09) predates the freeze; "
                                "the DXY fell 10% in Oct-Dec 2022 with sanctions intact; Fed swap lines peaked at $11bn - the data cannot separate the freeze from the hiking cycle"}},
     "funding_leadlag": {
-        "basis": "date of each series' stress extreme minus the broad dollar's peak, trading days (finder B notes §2, verified by reviewer 1); "
-                 "these series lead the DOLLAR, they are coincident with crisis onset, and were silent in the EM growth scares",
+        "basis": "Calendar days from each series' stress extreme to the broad dollar's peak (the study's lead/lag table, independently "
+                 "re-checked). Funding prices (CP minus bill, OFR funding, NFCI risk) peaked 3-5 months before the DOLLAR's peak in 2008 "
+                 "and 2022 (n = 2) and within a week of it in 2020; in 2015-16 and 2018 they gave no alarm (those cells date a quiet "
+                 "series' high). Gold and EMB/EEM troughs are early-coincident; swap-line usage and EM FX lag. None leads crisis onset.",
         "dollar_peaks": {"2008": "2009-03-03", "2015-16": "2016-01-20", "2018": "2018-11-27", "2020": "2020-03-23", "2022": "2022-09-26"},
         "rows": [
-            {"series": "financial CP - 3m bill", "2008": "alarm 2007-06; peak -139d", "2015-16": "-40d", "2018": "-238d", "2020": "+2d",
+            {"series": "financial CP - 3m bill", "label": "led the DOLLAR (2008, 2022)", "2008": "alarm 2007-06; peak -139d", "2015-16": "-40d", "2018": "-238d", "2020": "+2d",
              "2022": "alarm 2022-03-04; peak -87d on a one-day print (-206d without it)"},
-            {"series": "OFR FSI funding", "2008": "alarm 2007-08-09 (BNP week); -144d", "2015-16": "+22d", "2018": "-236d", "2020": "+7d", "2022": "alarm 2022-03-04; -87d"},
-            {"series": "NFCI risk", "2008": "alarm 2007-07-13", "2015-16": "-", "2018": "-", "2020": "-24d", "2022": "alarm 2022-02-25"},
-            {"series": "gold trough", "2008": "-111d", "2015-16": "-34d", "2018": "-103d", "2020": "-4d", "2022": "0d"},
-            {"series": "EMB / EEM trough", "2008": "-126d / -103d", "2015-16": "0d", "2018": "0d / -29d", "2020": "-5d / 0d", "2022": "+24d / +28d"},
-            {"series": "Fed swap-line usage", "2008": "-76d (peak $583bn)", "2015-16": "spikes", "2018": "year-end", "2020": "+65d ($449bn)", "2022": "+30d ($11bn)"},
-            {"series": "EM FX basket weakest", "2008": "-1d", "2015-16": "0d", "2018": "-83d", "2020": "+32d", "2022": "+28d"}]},
+            {"series": "OFR FSI funding", "label": "led the DOLLAR (2008, 2022)", "2008": "alarm 2007-08-09 (BNP week); -144d", "2015-16": "+22d", "2018": "-236d", "2020": "+7d", "2022": "alarm 2022-03-04; -87d"},
+            {"series": "NFCI risk", "label": "led the DOLLAR (2008, 2022)", "2008": "alarm 2007-07-13", "2015-16": "-", "2018": "-", "2020": "-24d", "2022": "alarm 2022-02-25"},
+            {"series": "gold trough", "label": "early-coincident", "2008": "-111d", "2015-16": "-34d", "2018": "-103d", "2020": "-4d", "2022": "0d"},
+            {"series": "EMB / EEM trough", "label": "coincident", "2008": "-126d / -103d", "2015-16": "0d", "2018": "0d / -29d", "2020": "-5d / 0d", "2022": "+24d / +28d"},
+            {"series": "Fed swap-line usage", "label": "usage lags; announcements lead", "2008": "-76d (peak $583bn)", "2015-16": "spikes", "2018": "year-end", "2020": "+65d ($449bn)", "2022": "+30d ($11bn)"},
+            {"series": "EM FX basket weakest", "label": "coincident-to-lag", "2008": "-1d", "2015-16": "0d", "2018": "-83d", "2020": "+32d", "2022": "+28d"}]},
     "end_of_scramble": {
-        "basis": "finder B notes §3; the sequence dates the end of the dollar SCRAMBLE, not of the crisis",
+        "basis": "as dated in 2008 and 2020 (n = 2); the sequence marks the end of the dollar SCRAMBLE, not of the crisis",
         "order": ["policy announcement", "funding spread halves (4 days in 2008, 7 weeks in 2020)", "gold bottoms", "EMB / EEM bottom",
                   "the broad dollar peaks", "EM FX and official custody recover last"],
         "case_2008": "by mid-November 2008 the funding spread had halved (17-Oct), gold had bottomed (12-Nov) and the re-armed rule had fired (6-Nov); "
@@ -502,18 +557,19 @@ ref = {
     "counter_examples": [
         {"when": "1985-87", "text": "the DXY fell about 40% from its Feb-1985 peak (164.72) with no crisis for 32 months"},
         {"when": "Oct 1987", "text": "the crash came with the dollar FALLING (Louvre dispute)"},
-        {"when": "1995", "text": "the peso crisis peaked with the DXY at a then-record low (80.05)"},
+        {"when": "1995", "text": "the peso crisis peaked with the dollar falling: the DXY touched 80.05 on 19-Apr-1995, its lowest since Sep-1992"},
         {"when": "Aug-Oct 1998", "text": "LTCM's acute phase saw the DXY fall 8.9% on the yen-carry unwind"},
         {"when": "Mar 2008", "text": "the DXY hit its all-time low (70.70) on the Bear Stearns weekend, seven months into the subprime crisis; it rose only after Lehman"},
-        {"when": "2011", "text": "the euro-crisis peak came with the DXY at the bottom of the band"},
+        {"when": "2011", "text": "the euro-crisis peak (Nov-2011) came with the DXY near 78, below the band and 3% lower than on the crisis eve"},
         {"when": "2023-25", "text": "SVB (2023), the yen-carry unwind (Aug-2024) and the tariff shock (Apr-2025) all saw the dollar fall"}],
     "honesty": [
         "Every historical number here is in-sample: the study examined all of 1971-2026 before the panel was built.",
         "Crises cluster: 25 crises (A25), 16 onsets (C16), 5 dollar-funding squeezes (N5); counts are of months or episodes, not independent draws.",
         "Reverse causality: the dollar rises because forced deleveraging buys dollars, so 'dollar up then crisis' and 'crisis then dollar up' look alike.",
-        "The deceleration rule's parameters were chosen on 2008, 2020 and 2022; its record on unseen 1973-2005 monthly data shows no edge.",
-        "The dollar-scramble markers (funding easing, gold's trough, the dollar's peak) date the end of the scramble, not the end of a crisis.",
-        "Johnson's claims are as relayed in the user's transcript; the Oct-2026 talk itself was not located."],
+        "The deceleration rule's parameters were chosen on 2008, 2020 and 2022; on 1973-2005 monthly data, which the parameter choice did not use (the study had seen it), it shows no edge.",
+        "In 2008 and 2020 the scramble markers (funding easing, gold's trough, the dollar's peak) came at the end of the dollar scramble, not of the crisis: in 2008 all were in place four months and 25% before the equity low.",
+        "Scoring by the VIX flatters the rule: on 2008-11-06 the VIX fell 20 points while the S&P fell 25% more.",
+        "Johnson's claims are as relayed in the transcript Casey shared; the Oct-2026 talk itself was not located."],
 }
 os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
 with open(OUT, "w") as f:

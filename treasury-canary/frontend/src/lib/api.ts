@@ -1438,6 +1438,7 @@ export interface DwReading {
   latest?: number | null; asof?: string | null; unit?: string | null; src?: string | Array<string | null> | null; basis?: string | null;
   status?: DwStatus | null; pct_own_history?: number | null; n?: number | null; history_from?: string | null;
   pct_10y?: number | null; n_10y?: number | null; chg_6m_pct?: number | null; chg_12m_pct?: number | null; pct_basis?: string | null;
+  intraday?: boolean | null;
 }
 export interface DwFundingRow extends DwReading {
   id: string; label: string; median_1y?: number | null; direction?: string | null; note?: string | null;
@@ -1450,7 +1451,8 @@ export type DwOutcomes = Record<string, DwOutcome | null>;
 export interface DwFiring {
   date: string; roc20_max_pct?: number | null; roc20_max_date?: string | null; roc20_now_pct?: number | null; dollar?: number | null;
   dollar_further_rise_pct?: number | null; dollar_peak_date?: string | null; spx_to_next_low_pct?: number | null; spx_low_date?: string | null;
-  vix_change_60d?: number | null; outcomes?: DwOutcomes | null; reading?: string | null;
+  vix_change_60d?: number | null; outcomes?: DwOutcomes | null; reading?: string | null; variant?: string | null;
+  observable_on?: string | null; spx_to_next_low_from_observable_pct?: number | null; spx_firing_to_observable_pct?: number | null;
 }
 export interface DwRuleState {
   asof: string; dollar?: number | null; roc20_now_pct?: number | null; roc20_max_60d_pct?: number | null; roc20_max_date?: string | null;
@@ -1469,7 +1471,8 @@ export interface DollarWatch {
       monthly?: { months?: string[] | null; avg?: Array<number | null> | null; close?: Array<number | null> | null; frozen_through?: string | null;
         month_to_date?: { month?: string | null; avg?: number | null; days?: number | null } | null;
         splice_check?: { overlap_months?: number | null; max_abs_diff_pct?: number | null } | null; basis?: string | null } | null }) | null;
-    band?: { lo?: number; hi?: number; label?: string | null; basis?: string | null; excursions?: DwExcursion[] | null;
+    issues?: string[] | null;
+    band?: { lo?: number; hi?: number; label?: string | null; basis?: string | null; note?: string | null; excursions?: DwExcursion[] | null;
       by_list?: Record<string, Record<string, number | null>> | null } | null;
     broad?: { broad?: DwReading | null; afe?: DwReading | null; eme?: DwReading | null; high_since_2006?: { value?: number | null; date?: string | null } | null } | null;
     momentum?: { month?: string | null; dxy_12m_pct?: number | null; signal?: boolean | null; threshold_pct?: number | null; last_signal_month?: string | null;
@@ -1477,8 +1480,9 @@ export interface DollarWatch {
     quadrant?: { month?: string | null; dxy_3m_pct?: number | null; y10_3m_pp?: number | null; quadrant?: string | null; label?: string | null; definition?: string | null;
       labels?: Record<string, string> | null; onsets_C16?: { counts?: Record<string, number> | null; n?: number | null } | null;
       onsets_A25?: { counts?: Record<string, number> | null; n?: number | null } | null;
-      base_all_months?: { months?: number | null; shares?: Record<string, number> | null } | null } | null;
-    safe_haven?: { gold?: (DwReading & { provider?: string | null; off_52w_high_pct?: number | null }) | null; chf?: DwReading | null; jpy?: DwReading | null;
+      base_all_months?: { months?: number | null; counts?: Record<string, number> | null; shares?: Record<string, number> | null } | null } | null;
+    safe_haven?: { gold?: (DwReading & { provider?: string | null; off_52w_high_pct?: number | null; note?: string | null }) | null; chf?: DwReading | null; jpy?: DwReading | null;
+      note?: string | null;
       gold_record?: { drawdowns?: Array<Record<string, string | number | null>> | null; ended_higher?: number | null; n_with_end?: number | null;
         ended_higher_gt_1pct?: number | null; basis?: string | null } | null;
       dollar_fell_at_peak_stress?: { n_crises?: number | null; fell?: number | null; basis?: string | null } | null } | null;
@@ -1501,7 +1505,8 @@ export interface DollarWatch {
     vspike_timing?: Array<Record<string, string | number | null>> | null;
     end_of_scramble?: { order?: string[] | null; case_2008?: string | null; basis?: string | null } | null;
     series?: { dates?: string[] | null; dollar?: Array<number | null> | null; roc20_pct?: Array<number | null> | null } | null;
-    series_long?: DwSeries | null; params?: Record<string, number | string> | null; variant_live?: string | null; wording?: string | null; basis?: string | null } | null;
+    series_long?: DwSeries | null; params?: Record<string, number | string> | null; variant_live?: string | null; wording?: string | null; basis?: string | null;
+    last_index_day?: string | null } | null;
   slow?: { status?: DwStatus | null;
     usd_credit?: { quarter?: string | null; total_tn?: number | null; yoy_pct?: number | null; eme_tn?: number | null; eme_yoy_pct?: number | null;
       eme_share_pct?: number | null; label?: string | null; reading?: string | null; basis?: string | null; status?: DwStatus | null; src?: Array<string | null> | null;
@@ -1516,10 +1521,11 @@ export interface DollarWatch {
       april_2025?: Record<string, string | number | null> | null; chain_2022?: Record<string, string | number | null> | null } | null } | null;
   ledger?: { status?: DwStatus | null; frozen_momentum?: Array<{ month: string; dxy_12m_pct?: number | null; dxy?: number | null; outcomes?: DwOutcomes | null }> | null;
     frozen_rule?: DwFiring[] | null; live?: DwLedgerEntry[] | null; frozen_on?: string | null; outcomes_through?: string | null; basis?: string | null;
-    frozen_momentum_basis?: string | null } | null;
+    frozen_momentum_basis?: string | null; cutoff_rule?: string | null; cutoff_momentum?: string | null; problem?: string | null;
+    emfx_withheld?: string | null } | null;
   crisis_lists?: Record<string, { label?: string | null; onsets?: Array<{ month: string; name: string }> | null }> | null;
   window_convention?: string | null;
-  pending_questions?: Array<{ rank: string; q: string; moves?: string | null; status?: string | null; first_asked?: string | null }> | null;
+  pending_questions?: Array<{ rank: string; q: string; moves?: string | null; status?: string | null; first_asked?: string | null; expires?: string | null }> | null;
   honesty?: string[] | null;
   build_error?: string | null;
 }

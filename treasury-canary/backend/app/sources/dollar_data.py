@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
+from urllib.parse import quote
 
 from . import breaking, fmp, fred_csv
 
@@ -70,8 +72,8 @@ BIS_CBPOL = ("https://stats.bis.org/api/v1/data/WS_CBPOL/M." + "+".join(BIS_CBPO
              + "/all?format=csv&startPeriod=2000-01")
 
 DXY_SYMBOL = "DX-Y.NYB"
-DXY_BASIS = "ICE US Dollar Index (DXY), daily close; Yahoo DX-Y.NYB, FMP fallback"
-GOLD_BASIS = {"fmp": "spot gold XAUUSD, daily (FMP)", "yahoo": "COMEX gold front-month futures GC=F, daily (Yahoo fallback; futures, not spot)"}
+DXY_BASIS = "ICE US Dollar Index (DXY), daily; Yahoo DX-Y.NYB (10 years), FMP fallback; the latest bar is intraday until the session ends"
+GOLD_BASIS = {"fmp": "spot gold XAUUSD, daily, weekdays (FMP)", "yahoo": "COMEX gold front-month futures GC=F, daily (Yahoo fallback; futures, not spot)"}
 EMB_BASIS = "iShares JP Morgan USD Emerging Markets Bond ETF (EMB), daily close"
 
 
@@ -99,25 +101,53 @@ def fetch_fred() -> dict[str, dict]:
     return out
 
 
-def _yahoo(symbol: str, basis: str) -> dict:
-    y = breaking.fetch_yahoo_daily(symbol)
-    if not y["dates"]:
-        return _empty(breaking.yahoo_url(symbol), basis)
-    return {"dates": _iso(y["dates"]), "values": y["closes"], "status": y["status"],
-            "src": breaking.yahoo_url(symbol), "basis": basis}
+YAHOO_RANGE_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range={rng}&interval=1d"
 
 
-def _fmp(symbol: str, basis: str) -> dict:
+def yahoo_intraday(body: bytes) -> bool:
+    """True when the chart's last price was taken before its trading period ended (the last bar is not a close)."""
+    meta = (json.loads(body.decode("utf-8", errors="replace"))["chart"]["result"][0] or {}).get("meta") or {}
+    end = ((meta.get("currentTradingPeriod") or {}).get("regular") or {}).get("end")
+    t = meta.get("regularMarketTime")
+    return bool(end and t and t < end)
+
+
+def _yahoo(symbol: str, basis: str, rng: str = "2y") -> dict:
+    """Daily bars over `rng` (cached 6h, stale on failure). The DXY uses 10 years so its monthly splice
+    never outruns the window; `intraday` marks a last bar taken before the session's end."""
+    u = YAHOO_RANGE_URL.format(sym=quote(symbol, safe=""), rng=rng)
+    safe = "".join(ch if ch.isalnum() else "_" for ch in symbol)
+    body, st = fred_csv.download_cached(f"yahoo_{safe}_{rng}.json", u, 6 * 3600, headers=breaking._YAHOO_HEADERS,
+                                        validate=fred_csv.parses(breaking.parse_yahoo_chart))
+    if body is None:
+        return _empty(u, basis)
+    try:
+        ds, closes, _ = breaking.parse_yahoo_chart(body)
+        intraday = yahoo_intraday(body)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Yahoo %s parse failed: %s", symbol, exc)
+        return _empty(u, basis)
+    if not ds:
+        return _empty(u, basis)
+    return {"dates": _iso(ds), "values": closes, "status": st, "src": u, "basis": basis, "intraday": intraday}
+
+
+def _fmp(symbol: str, basis: str, weekdays_only: bool = False) -> dict:
     ds, vs = fmp.fetch_gold(symbol)          # /stable/historical-price-eod/light works for any symbol
     src = f"{fmp._URL}?symbol={symbol}"
+    if weekdays_only:                        # FMP's spot gold carries Sunday rows; a "20-day high" must mean 20 trading days
+        keep = [i for i, d in enumerate(ds) if d.weekday() < 5]
+        ds, vs = [ds[i] for i in keep], [vs[i] for i in keep]
     if not ds:
         return _empty(src, basis)
-    return {"dates": _iso(ds), "values": vs, "status": "ok", "src": src, "basis": basis}
+    now = datetime.now(timezone.utc)
+    intraday = ds[-1] == now.date() and now.hour < 21     # before the US close: the latest row is a live price
+    return {"dates": _iso(ds), "values": vs, "status": "ok", "src": src, "basis": basis, "intraday": intraday}
 
 
 def fetch_dxy() -> dict:
-    """ICE DXY daily: Yahoo first (2 years, keyless), FMP if Yahoo has nothing."""
-    y = _yahoo(DXY_SYMBOL, DXY_BASIS)
+    """ICE DXY daily: Yahoo first (10 years, keyless), FMP if Yahoo has nothing."""
+    y = _yahoo(DXY_SYMBOL, DXY_BASIS, "10y")
     if y["dates"]:
         y["provider"] = "yahoo"
         return y
@@ -128,7 +158,7 @@ def fetch_dxy() -> dict:
 
 def fetch_gold() -> dict:
     """Spot gold from FMP (needs FMP_API_KEY); COMEX futures from Yahoo otherwise, labelled as such."""
-    f = _fmp("XAUUSD", GOLD_BASIS["fmp"])
+    f = _fmp("XAUUSD", GOLD_BASIS["fmp"], weekdays_only=True)
     if f["dates"]:
         f["provider"] = "fmp"
         return f

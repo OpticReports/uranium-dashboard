@@ -1,23 +1,22 @@
-"""Merge-blocking gate tests for GET /dollar-watch (studies/dollar-watch.md §5).
+"""Merge-blocking gate tests for GET /dollar-watch (studies/dollar-watch.md §5, §9).
 
 Offline. The assembly runs on the fetch_all() output captured 2026-11-02
 (tests/fixtures/dollar_watch, FRED series other than the rule's three and SWPT
 trimmed to 2019+). Gates:
-  - the live frozen rule reproduces the reference's 7 re-arm / 6 unpatched
-    firings, clause values included, on the fixture's full 2006+ history;
-  - the reference is reproducible: re-running the study builder gives the
-    committed bytes, and its input hashes match the committed study data;
-  - the forward ledger is append-only and forward-only;
-  - the scramble indicators exist only with the gate open, and are never summed;
-  - forbidden language never appears in the payload or the tab's source;
-  - the all-null payload ships every block (status "error") plus the frozen record;
-  - payload json-serialisable, nulls never zeros, counts carry N and base rate.
+  - the live rule reproduces the reference's 7 re-arm / 6 unpatched firings, clause
+    values included, and the reference agrees with the study's own rule outputs;
+  - the reference rebuilds byte-identical and carries the numbers the memo cites;
+  - percentiles are tie-safe; monthly changes use calendar keys, and a gap is an error;
+  - the forward ledger is append-only, forward-only, point-in-time, and freezes outcomes once;
+  - the scramble indicators exist only with the gate open and are never summed;
+  - EM FX outcomes are withheld; forbidden language never appears;
+  - the all-null payload ships every block plus the frozen record; nothing crashes on partial data.
 """
 from __future__ import annotations
 
 import gzip
-import hashlib
 import json
+import math
 import os
 import subprocess
 import sys
@@ -35,10 +34,11 @@ REF_FILE = os.path.join(ROOT, "backend", "app", "sources", "dollar_reference.jso
 TAB_SOURCES = [os.path.join(ROOT, "frontend", "src", "components", "DollarTab.tsx"),
                os.path.join(ROOT, "frontend", "src", "lib", "dollarFixture.ts")]
 
-# memo §5: never on the panel
+# memo §5 and the wording review: never on the panel
 FORBIDDEN = ["probability of", "p(crisis", "chance of a crisis", "% chance", "crisis subsided", "subsided",
              "crisis over", "crisis is over", "all clear", "countdown", "next crisis in", "every crisis",
-             "will crash", "imminent", "band breach", "ends in crisis", "leads the vix", "lamp"]
+             "will crash", "imminent", "band breach", "ends in crisis", "leads the vix", "lamp",
+             "points below the top", "dates the end of"]
 
 
 @pytest.fixture(scope="module")
@@ -64,18 +64,45 @@ def _strings(o):
             yield from _strings(v)
 
 
+def _cut(inputs, day: str):
+    out = json.loads(json.dumps(inputs))
+    for s in list(out["fred"].values()) + [out["dxy"], out["gold"], out["emb"]]:
+        keep = [i for i, d in enumerate(s["dates"]) if d <= day]
+        s["dates"] = [s["dates"][i] for i in keep]
+        s["values"] = [s["values"][i] for i in keep]
+    return out
+
+
 # ---------------------------------------------------------------------------- the frozen rule
 def test_live_rule_reproduces_frozen_firings(inputs):
     ds, B, Y = dw.rule_index(inputs["fred"])
     re = dw.scramble_firings(ds, B, Y, True)
     un = dw.scramble_firings(ds, B, Y, False)
     frozen = dw.REF["scramble_rule"]["firings"]
-    assert [f["date"] for f in re if f["date"] <= dw.FROZEN_ON] == [f["date"] for f in frozen]
-    assert [f["date"] for f in un if f["date"] <= dw.FROZEN_ON] == dw.REF["scramble_rule"]["firings_unpatched"]
+    assert [f["date"] for f in re if f["date"] <= dw.LAST_INDEX_DAY] == [f["date"] for f in frozen]
+    assert [f["date"] for f in un if f["date"] <= dw.LAST_INDEX_DAY] == dw.REF["scramble_rule"]["firings_unpatched"]
     assert len(frozen) == 7 and len(dw.REF["scramble_rule"]["firings_unpatched"]) == 6
     for live, ref in zip(re, frozen):
         for k in ("roc20_max_pct", "roc20_max_date", "roc20_now_pct", "dollar"):
             assert live[k] == ref[k], (live["date"], k)
+
+
+def test_reference_matches_the_studys_own_rule_outputs():
+    """anchor to the study's committed decel_realtime*.json, not only to the builder's copy of the rule."""
+    for name, frozen in (("decel_realtime_rearm.json", dw.REF["scramble_rule"]["firings"]),
+                         ("decel_realtime.json", [f for f in dw.REF["scramble_rule"]["firings"]
+                                                  if f["date"] in dw.REF["scramble_rule"]["firings_unpatched"]])):
+        study = json.load(open(os.path.join(STUDY, "data", name)))
+        assert [s["fire"] for s in study] == [f["date"] for f in frozen]
+        for s, f in zip(study, frozen):
+            assert (s["roc20_max_pct"], s["roc_max_day"], s["roc20_now_pct"], s["dollar_more_rise_pct"], s["dollar_peak_next250"]) == \
+                   (f["roc20_max_pct"], f["roc20_max_date"], f["roc20_now_pct"], f["dollar_further_rise_pct"], f["dollar_peak_date"])
+            assert s["vix_fwd60_chg"] == f["vix_change_60d"]
+
+
+def test_rule_params_are_the_frozen_ones():
+    assert dw.REF["scramble_rule"]["params"] == dw.RULE_FROZEN
+    assert dw.LAST_INDEX_DAY == "2026-10-23" and dw.LAST_FROZEN_MONTH == "2026-10"
 
 
 def test_rule_index_is_the_frozen_one(inputs):
@@ -83,21 +110,25 @@ def test_rule_index_is_the_frozen_one(inputs):
     have = {s: set(inputs["fred"][s]["dates"][i] for i, v in enumerate(inputs["fred"][s]["values"]) if v is not None)
             for s in ("DTWEXBGS", "DGS10", "VIXCLS")}
     assert set(ds) == have["DTWEXBGS"] & have["DGS10"] & have["VIXCLS"]
-    assert "VIXCLS" in dw.RULE["index"] and "DGS10" in dw.RULE["index"]
 
 
 def test_rule_evaluates_the_latest_day():
     """the study code skipped the final index day; the live rule must not."""
-    import math
     n = 200
     ds = [f"2030-{1 + i // 28:02d}-{1 + i % 28:02d}" for i in range(n)]
-    B = [100.0] * 100 + [100.0 * math.exp(0.003 * j) for j in range(1, 81)]            # a 20-day climb near +6%
-    B += [B[-1] * (1 + 0.0002 * j) for j in range(1, 21)]                                # then a crawl: deceleration
-    Y = [3.0] * 100 + [3.0 - 0.01 * j for j in range(1, 101)]                            # yields falling
+    B = [100.0] * 100 + [100.0 * math.exp(0.003 * j) for j in range(1, 81)]
+    B += [B[-1] * (1 + 0.0002 * j) for j in range(1, 21)]
+    Y = [3.0] * 100 + [3.0 - 0.01 * j for j in range(1, 101)]
     fires = dw.scramble_firings(ds, B, Y, True)
     assert fires, "synthetic scramble must fire"
     k = fires[0]["k"]
-    assert dw.scramble_firings(ds[:k + 1], B[:k + 1], Y[:k + 1], True)[-1]["k"] == k   # fires ON its last day
+    assert dw.scramble_firings(ds[:k + 1], B[:k + 1], Y[:k + 1], True)[-1]["k"] == k
+
+
+def test_h10_release_is_the_monday_after_the_week():
+    assert dw.h10_release("2008-11-06") == "2008-11-10"       # Thursday -> next Monday
+    assert dw.h10_release("2026-11-02") == "2026-11-09"       # Monday -> the following Monday
+    assert dw.h10_release("2026-10-30") == "2026-11-02"       # Friday -> next Monday
 
 
 # ---------------------------------------------------------------------------- provenance of the reference
@@ -108,29 +139,40 @@ def test_reference_rebuilds_byte_identical(tmp_path):
     assert out.read_bytes() == open(REF_FILE, "rb").read()
 
 
-def test_reference_input_hashes_match_committed_data():
-    ref = json.load(open(REF_FILE))
-    for rel, want in ref["provenance"]["inputs_sha256"].items():
-        got = hashlib.sha256(open(os.path.join(STUDY, "data", rel), "rb").read()).hexdigest()
-        assert got == want, rel
-
-
 def test_reference_numbers_the_memo_cites():
     ref = dw.REF
-    a, c = ref["band"]["by_list"]["A25"], ref["band"]["by_list"]["C16"]
-    assert ref["band"]["by_list"]["A25"]["n_excursions"] == 17
-    assert (a["hits_12m"], a["hits_24m"], c["hits_12m"], c["hits_24m"]) == (8, 12, 4, 8)
-    assert ref["quadrant"]["by_list"]["C16"]["counts"] == {"usd_up_yld_down": 9, "usd_up_yld_up": 2, "usd_down_yld_up": 3, "usd_down_yld_down": 2}
-    assert abs(sum(ref["quadrant"]["base_all_months"]["shares"].values()) - 1) < 0.002
-    assert (ref["gold"]["ended_higher"], ref["gold"]["n_with_end"]) == (14, 25)
-    assert ref["dollar_fell_at_peak_stress"]["fell"] == 9
+    bl = ref["band"]["by_list"]
+    assert bl["A25"]["n_excursions"] == 17
+    assert [(bl[k]["hits_12m"], bl[k]["hits_24m"]) for k in ("A25", "C16", "N5")] == [(8, 12), (4, 8), (1, 3)]
+    assert [(bl[k]["base_12m"], bl[k]["base_24m"]) for k in ("A25", "C16", "N5")] == [(0.421, 0.693), (0.283, 0.536), (0.091, 0.186)]
+    q = ref["quadrant"]
+    assert q["by_list"]["C16"]["counts"] == {"usd_up_yld_down": 9, "usd_up_yld_up": 2, "usd_down_yld_up": 3, "usd_down_yld_down": 2}
+    assert q["base_all_months"]["shares"] == {"usd_down_yld_down": 0.264, "usd_down_yld_up": 0.234, "usd_up_yld_down": 0.216, "usd_up_yld_up": 0.285}
+    g = ref["gold"]
+    assert (g["ended_higher"], g["n_with_end"], g["ended_higher_gt_1pct"], g["base_share"]) == (14, 24, 12, 0.61)
+    assert g["open_episodes"][0]["id"] == "C26"
+    assert [(d["episode"], d.get("intraday_pct"), d.get("close_pct")) for d in g["drawdowns"][:3]] == \
+           [("GFC 2008", -32.9, -29.7), ("COVID 2020", -14.7, -11.8), ("2022", -22.0, -20.1)]
+    f = ref["dollar_fell_at_peak_stress"]
+    assert (f["fell"], f["n_crises"], f["base_share"]) == (9, 25, 0.5)
+    mo = ref["momentum"]
+    assert (len(mo["episodes"]), mo["episodes_began_in_a25_crisis"]) == (11, 8)
+    assert [(mo["by_list"][k]["episodes_followed_12m"], mo["by_list"][k]["signal_months_followed_12m"]) for k in ("A25", "C16", "N5")] == [(5, 37), (5, 41), (1, 19)]
+    fire = {x["date"]: x for x in ref["scramble_rule"]["firings"]}
+    assert fire["2022-07-28"]["dollar_further_rise_pct"] == 5.2 and fire["2008-09-22"]["dollar_further_rise_pct"] == 17.7
+    vs = ref["scramble_rule"]["vspike_timing"][0]
+    assert (vs["climb_peak"], vs["climb_peak_pct"], vs["index_days_climb_to_dollar_peak"]) == ("2008-10-27", 12.9, 84)
     mn = ref["scramble_rule"]["monthly_null"]
     assert (mn["firings"], mn["dollar_peak_within_3m"], mn["spx_up_12m"]) == (10, 3, 6)
     rd = ref["redollarisation"]
-    assert (rd["corr_yoy_contemporaneous"], rd["corr_yoy_dollar_leads_1q"]) == (-0.5, -0.55)
-    for key in ("A25", "C16", "N5"):          # every count carries its N and base rate
-        assert {"rate_12m", "base_12m", "n_excursions"} <= set(ref["band"]["by_list"][key])
-        assert {"episodes", "base_12m", "signal_months"} <= set(ref["momentum"]["by_list"][key])
+    assert (rd["corr_yoy_contemporaneous"], rd["corr_yoy_dollar_leads_1q"], rd["corr_qoq_contemporaneous"], rd["corr_qoq_dollar_leads_1q"]) == (-0.5, -0.55, -0.36, -0.29)
+    assert (rd["quarters"], rd["quarters_credit_growing"], rd["n_down"], rd["n_up"]) == (102, 93, 50, 52)
+    assert all(r["label"] for r in ref["funding_leadlag"]["rows"]) and "calendar days" in ref["funding_leadlag"]["basis"].lower()
+
+
+def test_emfx_outcomes_withheld(payload):
+    assert "emfx_pct" not in json.dumps(payload) and "emfx_pct" not in open(REF_FILE).read()
+    assert payload["ledger"]["emfx_withheld"]
 
 
 # ---------------------------------------------------------------------------- live payload on the fixture
@@ -142,13 +184,15 @@ def test_payload_ok_and_serialisable(payload):
         assert payload[b]["status"] in ("ok", "stale", "error")
     assert payload["scramble"]["live_check"]["reproduces_frozen_rearm"] is True
     assert payload["scramble"]["live_check"]["reproduces_frozen_unpatched"] is True
+    assert {h["variant"] for h in payload["scramble"]["history"]} == {"both", "re-arm only"}
+    assert len(payload["pending_questions"]) == 8 and all(q["expires"] == "2027-01-01" for q in payload["pending_questions"])
 
 
 def test_payload_values_on_the_fixture(payload, inputs):
     st = payload["state"]
     assert st["dxy"]["latest"] == 101.72 and st["dxy"]["asof"] == "2026-11-02"
-    assert st["dxy"]["band_position"].startswith("inside the band")
-    assert st["dxy"]["monthly"]["splice_check"]["max_abs_diff_pct"] <= 0.1
+    assert st["dxy"]["band_position"] == "inside Johnson's ad hoc 85-105 band (no edge found)"
+    assert st["dxy"]["monthly"]["splice_check"]["ok"] and st["dxy"]["monthly"]["gaps"] == []
     assert st["broad"]["broad"]["latest"] == 121.32
     rows = {r["id"]: r for r in payload["funding"]["rows"]}
     f = inputs["fred"]
@@ -156,23 +200,51 @@ def test_payload_values_on_the_fixture(payload, inputs):
     tb = dict(zip(f["DTB3"]["dates"], f["DTB3"]["values"]))
     last = max(d for d in cpf if cpf[d] is not None and tb.get(d) is not None)
     assert rows["cp_fin"]["latest"] == round(cpf[last] - tb[last], 2) and rows["cp_fin"]["asof"] == last
-    assert rows["swap_lines"]["unit"] == "$bn" and rows["swap_lines"]["latest"] == 0.16
-    assert rows["emb"]["pct_own_history"] is None              # two-year feed: no percentile claimed
+    assert rows["swap_lines"]["unit"] == "$bn" and rows["swap_lines"]["latest"] == 0.16 and rows["swap_lines"]["history_from"] == "2007-12-12"
+    assert rows["emb"]["pct_own_history"] is None and rows["emb"]["n_10y"] is None
     sc = payload["scramble"]
     assert sc["state"]["gate_open"] is False and sc["indicators"] is None and sc["confirmations"] is None
     uc = payload["slow"]["usd_credit"]
     assert (uc["quarter"], uc["total_tn"], uc["yoy_pct"]) == ("2026-Q2", 15.133, 8.1)
-    assert uc["label"].startswith("re-dollarising")
+    assert uc["label"].startswith("re-dollarising") and "93 of 102" in uc["label"]
     assert payload["slow"]["fx_swaps"]["all_tn"] == 129.3 and payload["slow"]["fx_swaps"]["usd_leg_tn"] == 113.5
     q = st["quadrant"]
     assert q["month"] == "2026-10" and q["quadrant"] == "usd_up_yld_up"
+    assert "no better than gold's own drift" in st["safe_haven"]["note"] and "No edge on any list" in st["band"]["note"]
+
+
+def test_percentiles_are_tie_safe():
+    a = [("2026-01-0%d" % i, v) for i, v in enumerate([4.05, 4.10, 4.20, 4.30, 4.40], start=1)]
+    b = [("2026-01-0%d" % i, v) for i, v in enumerate([4.00, 4.05, 4.15, 4.25, 4.35], start=1)]
+    s = dw.spread(a, b)
+    assert [v for _, v in s] == [0.05] * 5                     # 4.05-4.00 and 4.10-4.05 tie exactly
+    hist = [(f"2025-{1 + i // 28:02d}-{1 + i % 28:02d}", 0.05 if i % 2 else 0.10) for i in range(40)] + [("2026-02-01", round(4.05 - 4.00, 6))]
+    p, n, _ = dw.pct_rank(hist)
+    assert n == 41 and p == round(100 * 21 / 41)                  # at or below: the 20 tied 0.05s + today
+
+
+def test_monthly_changes_use_calendar_keys_and_flag_gaps(inputs, tmp_path):
+    """a live window that no longer reaches the frozen series must not produce 13-month 'changes' or ledger rows."""
+    shifted = json.loads(json.dumps(inputs))
+    dx = shifted["dxy"]
+    keep = [i for i, d in enumerate(dx["dates"]) if d >= "2025-11-01"]
+    dx["dates"] = [f"{int(dx['dates'][i][:4]) + 2}{dx['dates'][i][4:]}" for i in keep]     # 2025-11.. -> 2027-11..: 2026-11..2027-10 missing
+    dx["values"] = [None if dx["values"][i] is None else dx["values"][i] * (1.3 if dx["dates"][j][:7] <= "2028-03" else 1.0)
+                    for j, i in enumerate(keep)]
+    path = str(tmp_path / "l.json")
+    p = dw.build_dollar_watch(shifted, today="2028-11-02", ledger_file=path)
+    st = p["state"]
+    assert st["dxy"]["monthly"]["gaps"][:2] == ["2026-11", "2026-12"]
+    assert st["status"] == "error" and st["momentum"]["signal"] is None and st["issues"]
+    assert all(m <= dw.LAST_FROZEN_MONTH or m >= "2028-11" for m in st["momentum"]["signal_months"])   # no 12m change spans the hole
+    assert [e for e in p["ledger"]["live"] if e["kind"] == "momentum"] == []
 
 
 def test_nulls_never_zero(tmp_path):
     p = dw.build_dollar_watch({}, today="2026-11-02", ledger_file=str(tmp_path / "l.json"))
     assert p["state"]["dxy"]["latest"] is None and p["state"]["broad"]["broad"]["latest"] is None
     assert all(r["latest"] is None for r in p["funding"]["rows"])
-    assert p["scramble"]["state"] is None
+    assert p["scramble"]["state"] is None and p["slow"]["us2y_vs_funds"]["reading"] is None
 
 
 def test_all_null_payload_ships_every_block_and_the_frozen_record(tmp_path):
@@ -184,6 +256,24 @@ def test_all_null_payload_ships_every_block_and_the_frozen_record(tmp_path):
     assert len(p["scramble"]["history"]) == 7 and p["scramble"]["monthly_null"]["firings"] == 10
     assert p["state"]["band"]["excursions"] and p["state"]["counter_examples"]
     assert "unavailable" in p["headline"]
+
+
+def test_partial_data_never_crashes(inputs, tmp_path):
+    part = json.loads(json.dumps(inputs))
+    part["bis"]["gli_total"]["series"]["_"] = [x for x in part["bis"]["gli_total"]["series"]["_"] if x[0] != "2025-Q2"]   # yoy missing
+    part["bis"]["gli_total"]["series"]["_"].append(["2026Q3", 1.0])                                                       # format drift
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"entries": [{"kind": "scramble_rule"}]}))                                                   # a row with no date
+    p = dw.build_dollar_watch(part, today="2026-11-02", ledger_file=str(bad))
+    assert p["slow"]["usd_credit"]["yoy_pct"] is None and p["slow"]["usd_credit"]["quarter"] == "2026-Q2"
+    assert p["ledger"]["status"] == "error" and json.loads(bad.read_text()) == {"entries": [{"kind": "scramble_rule"}]}
+    assert p["headline"].endswith("(2026-Q2).")
+
+
+def test_policy_rates_compare_the_same_month():
+    bis = {"cbpol": {"status": "ok", "series": {"US": [("2026-06", 4.375), ("2026-09", 3.875)], "BR": [("2026-06", 14.0)]}}}
+    rows = {x["area"]: x for x in dw.slow_block({"bis": bis})["policy_rates"]["rows"]}
+    assert rows["BR"]["vs_fed_pp"] == round(14.0 - 4.375, 2)
 
 
 def test_fetch_all_never_raises_offline(monkeypatch, tmp_path):
@@ -202,34 +292,33 @@ def test_parsers():
     ofr = dollar_data.parse_ofr_columns(b"\xef\xbb\xbfDate,OFR FSI,Credit,Safe assets,Funding,Emerging markets\n"
                                         b"2026-10-28,-1.2,0.1,-0.3,-0.15,-0.5\n2026-10-29,-1.1,,-0.29,-0.151,-0.499\n")
     assert ofr["dates"] == ["2026-10-28", "2026-10-29"] and ofr["Funding"] == [-0.15, -0.151] and ofr["Credit"] == [0.1, None]
-    assert ofr["Volatility"] == [None, None]                   # absent column -> None, never 0
+    assert ofr["Volatility"] == [None, None]
     with pytest.raises(ValueError):
         dollar_data.parse_ofr_columns(b"<html>maintenance</html>")
     bis = dollar_data.parse_bis_csv(b"FREQ,REF_AREA,TIME_PERIOD,OBS_VALUE\nM,US,2026-09,3.875\nM,US,2026-08,3.625\nM,XM,2026-09,\n", "REF_AREA")
     assert bis["US"] == [("2026-08", 3.625), ("2026-09", 3.875)] and bis["XM"] == [("2026-09", None)]
     with pytest.raises(ValueError):
         dollar_data.parse_bis_csv(b"<html/>")
+    assert dw._q_end("2026-Q2") == "2026-06" and dw._q_end("2026Q2") is None
+
+
+def test_yahoo_intraday_flag():
+    body = json.dumps({"chart": {"result": [{"meta": {"regularMarketTime": 100, "currentTradingPeriod": {"regular": {"end": 200}}}}]}}).encode()
+    assert dollar_data.yahoo_intraday(body) is True
+    body = json.dumps({"chart": {"result": [{"meta": {"regularMarketTime": 200, "currentTradingPeriod": {"regular": {"end": 200}}}}]}}).encode()
+    assert dollar_data.yahoo_intraday(body) is False
 
 
 # ---------------------------------------------------------------------------- the gauge with the gate open
-def _open_gate_inputs(inputs):
-    """the fixture cut at 2008-11-06 (the re-arm firing): a real open gate."""
-    cut = json.loads(json.dumps(inputs))
-    for s in list(cut["fred"].values()) + [cut["dxy"], cut["gold"], cut["emb"]]:
-        keep = [i for i, d in enumerate(s["dates"]) if d <= "2008-11-06"]
-        s["dates"] = [s["dates"][i] for i in keep]
-        s["values"] = [s["values"][i] for i in keep]
-    return cut
-
-
 def test_indicators_only_with_gate_open_never_summed(inputs, tmp_path):
-    p = dw.build_dollar_watch(_open_gate_inputs(inputs), today="2008-11-06", ledger_file=str(tmp_path / "l.json"))
+    p = dw.build_dollar_watch(_cut(inputs, "2008-11-06"), today="2008-11-06", ledger_file=str(tmp_path / "l.json"))
     sc = p["scramble"]
     assert sc["state"]["asof"] == "2008-11-06" and sc["gate_open"] is True
     assert sc["fires_today"]["re-arm"] is True and sc["fires_today"]["unpatched"] is False
     ind = sc["indicators"]
     assert set(ind) == {"a_deceleration", "b_funding_easing", "c_risk_turn", "note"}
     assert ind["a_deceleration"]["met"] is True
+    assert ind["b_funding_easing"]["met"] is None                 # its inputs are missing on this cut: unknown, not "not met"
     for k in ("score", "total", "sum", "count_met", "composite"):
         assert k not in ind and k not in sc
     assert sc["confirmations"]["episode_start"] <= sc["state"]["roc20_max_date"]
@@ -242,35 +331,66 @@ def test_ledger_append_only_forward_only(tmp_path):
     e1 = {"kind": "scramble_rule", "date": "2027-03-01", "variants": ["re-arm"]}
     led = dw.append_ledger(path, [e1], "2027-03-08")
     assert led["entries"] == [dict(e1, recorded_on="2027-03-08")]
-    dw.append_ledger(path, [dict(e1, variants=["re-arm", "unpatched"])], "2027-03-15")     # same key: never edited
-    led = dw.load_ledger(path)
-    assert led["entries"] == [dict(e1, recorded_on="2027-03-08")]
+    dw.append_ledger(path, [dict(e1, variants=["re-arm", "unpatched"])], "2027-03-15")
+    assert dw.load_ledger(path)["entries"] == [dict(e1, recorded_on="2027-03-08")]
     dw.append_ledger(path, [{"kind": "momentum", "date": "2027-05", "dxy_12m_pct": 10.4}], "2027-06-02")
     assert [e["kind"] for e in dw.load_ledger(path)["entries"]] == ["scramble_rule", "momentum"]
-    bad = tmp_path / "bad.json"
-    bad.write_text("{not json")
-    assert dw.append_ledger(str(bad), [e1], "2027-03-08").get("_unreadable")
-    assert bad.read_text() == "{not json"                      # an unreadable ledger is never overwritten
+    for junk in ("{not json", json.dumps({"entries": "x"}), json.dumps([1, 2])):
+        bad = tmp_path / "bad.json"
+        bad.write_text(junk)
+        assert dw.append_ledger(str(bad), [e1], "2027-03-08").get("_unreadable")
+        assert bad.read_text() == junk                            # never overwritten
+
+
+def test_outcomes_freeze_once_at_maturity(tmp_path):
+    path = str(tmp_path / "ledger.json")
+    dw.append_ledger(path, [{"kind": "scramble_rule", "date": "2027-03-01", "variants": ["unpatched"]}], "2027-03-08")
+    calls = {"v": 1.0}
+
+    def compute(e, last):
+        return {"3m": {"spx_pct": calls["v"]}, "6m": None, "12m": None}
+
+    dw.freeze_matured(path, compute, "2027-07-01", "2027-07-01")
+    calls["v"] = 99.0                                             # a later data revision
+    dw.freeze_matured(path, compute, "2027-07-02", "2027-07-02")
+    e = dw.load_ledger(path)["entries"][0]
+    assert e["outcomes_frozen"] == {"3m": {"spx_pct": 1.0, "frozen_on": "2027-07-01"}}
 
 
 def test_frozen_history_never_enters_the_live_ledger(payload, tmp_path):
     assert payload["ledger"]["live"] == [] and payload["scramble"]["live_firings"] == []
-    assert not os.path.exists(tmp_path / "ledger.json")         # nothing after the freeze fired: nothing written
+    assert not os.path.exists(tmp_path / "ledger.json")
 
 
-def test_live_firing_after_freeze_is_recorded_once(inputs, tmp_path):
-    """replay the 2008-11-06 shape after the freeze date: the rule fires, the ledger records it once."""
-    shifted = _open_gate_inputs(inputs)
-    for s in shifted["fred"].values():
+def test_live_firing_after_cutoff_is_recorded_once_point_in_time(inputs, tmp_path):
+    """replay the 2008 shape in 2028: the rule fires, the ledger records it once, stamped with its H.10 release."""
+    shifted = _cut(inputs, "2008-11-06")
+    for s in list(shifted["fred"].values()):
         s["dates"] = [f"{int(d[:4]) + 20}{d[4:]}" for d in s["dates"]]       # 2008 -> 2028 (leap years line up)
     path = str(tmp_path / "ledger.json")
     p1 = dw.build_dollar_watch(shifted, today="2028-11-06", ledger_file=path)
     live = [e for e in p1["scramble"]["live_firings"] if e["kind"] == "scramble_rule"]
     assert [e["date"] for e in live] == ["2028-09-22", "2028-11-06"]
     assert live[1]["variants"] == ["re-arm"] and live[0]["variants"] == ["re-arm", "unpatched"]
+    assert [e["h10_release"] for e in live] == ["2028-09-25", "2028-11-13"]
     assert all(e["recorded_on"] == "2028-11-06" for e in live)
     p2 = dw.build_dollar_watch(shifted, today="2028-11-07", ledger_file=path)
     assert len([e for e in p2["scramble"]["live_firings"] if e["kind"] == "scramble_rule"]) == 2
+
+
+def test_failed_build_is_served_stale_not_ok(monkeypatch):
+    from app.api import routes_dollar as rd
+    good = {"status": {"overall": "ok", "blocks": {}}, "headline": "x"}
+    monkeypatch.setitem(rd._cache, "data", good)
+    monkeypatch.setattr(rd, "fetch_all", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    out = rd._rebuild()
+    assert out["status"]["overall"] == "stale" and "boom" in out["build_error"] and good["status"]["overall"] == "ok"
+
+
+def test_broken_reference_fails_the_route_not_the_app(monkeypatch):
+    monkeypatch.setattr(dw, "REF_ERROR", "JSONDecodeError: x")
+    with pytest.raises(RuntimeError):
+        dw.build_dollar_watch({}, today="2026-11-02", ledger_file="/nonexistent/l.json")
 
 
 # ---------------------------------------------------------------------------- language
@@ -280,12 +400,6 @@ def test_forbidden_language_absent(payload, tmp_path):
     for phrase in FORBIDDEN:
         assert phrase not in text, phrase
     for path in TAB_SOURCES:
-        if os.path.exists(path):
-            src = open(path, encoding="utf-8").read().lower()
-            for phrase in FORBIDDEN:
-                assert phrase not in src, (os.path.basename(path), phrase)
-
-
-def test_tab_sources_exist():
-    for path in TAB_SOURCES:
-        assert os.path.exists(path), path
+        src = open(path, encoding="utf-8").read().lower()
+        for phrase in FORBIDDEN:
+            assert phrase not in src, (os.path.basename(path), phrase)

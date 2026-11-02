@@ -1,7 +1,7 @@
 {
  "_about": "Frozen historical reference for the Dollar watch tab (GET /dollar-watch). Recomputed from the reviewed study data by studies/dollar_watch/code/build_reference.py; every number is in-sample history, descriptive, with its N and base rate.",
  "band": {
-  "basis": "month-end closes outside 85-105, runs separated by <= 3 in-band months merged (finder A); 17 excursions",
+  "basis": "month-end closes outside 85-105, runs separated by <= 3 in-band months merged: 17 excursions, 7 of which began inside a crisis; in-sample",
   "by_list": {
    "A25": {
     "base_12m": 0.421,
@@ -200,7 +200,7 @@
    "when": "Oct 1987"
   },
   {
-   "text": "the peso crisis peaked with the DXY at a then-record low (80.05)",
+   "text": "the peso crisis peaked with the dollar falling: the DXY touched 80.05 on 19-Apr-1995, its lowest since Sep-1992",
    "when": "1995"
   },
   {
@@ -212,7 +212,7 @@
    "when": "Mar 2008"
   },
   {
-   "text": "the euro-crisis peak came with the DXY at the bottom of the band",
+   "text": "the euro-crisis peak (Nov-2011) came with the DXY near 78, below the band and 3% lower than on the crisis eve",
    "when": "2011"
   },
   {
@@ -222,7 +222,7 @@
  ],
  "crisis_lists": {
   "A25": {
-   "label": "finder A: 25 global / regional financial crises 1973-2026 (broad; hand-dated with sources)",
+   "label": "25 global / regional financial crises 1973-2026 (broad; hand-dated with sources)",
    "onsets": [
     {
      "month": "1973-10",
@@ -327,7 +327,7 @@
    ]
   },
   "C16": {
-   "label": "finder C: 16 multi-country dollar-stress onsets 1974-2023 ('L-broad')",
+   "label": "16 multi-country dollar-stress onsets 1974-2023 (dated knowing the dollar's path)",
    "onsets": [
     {
      "month": "1974-06",
@@ -396,7 +396,7 @@
    ]
   },
   "N5": {
-   "label": "the five dollar-funding squeezes proper (1982, 1998, 2008, 2020, 2022) - reported, never inferred on",
+   "label": "the 5 dollar-funding squeezes proper (1982, 1998, 2008, 2020, 2022); reported, never inferred on",
    "onsets": [
     {
      "month": "1982-08",
@@ -422,7 +422,8 @@
   }
  },
  "dollar_fell_at_peak_stress": {
-  "basis": "month-end close, eve of the crisis to its peak-stress month, finder A's 25-crisis list",
+  "base_share": 0.5,
+  "basis": "DXY month-end close, the eve of each crisis (month before its start) to its peak-stress month, on the 25-crisis list; base = share of all same-length windows since 1971 in which the DXY ended lower, averaged over the crises' lengths",
   "crises": [
    {
     "dxy_eve_to_peak_stress_pct": -1.4,
@@ -1164,7 +1165,7 @@
    100.07,
    102.05
   ],
-  "basis": "ICE DXY, month-end close and monthly average of daily closes (Yahoo DX-Y.NYB daily, finder A; identical to a fresh pull)",
+  "basis": "ICE DXY, month-end close and monthly average of daily closes (Yahoo DX-Y.NYB daily; identical to a fresh pull)",
   "close": [
    120.24,
    120.26,
@@ -2510,8 +2511,9 @@
    "2026-10"
   ]
  },
+ "emfx_withheld": "EM FX outcomes are withheld until the pre-registration is frozen: seven of the basket's eight currencies are in the proposed cross-section test, and seeing them could steer its design",
  "end_of_scramble": {
-  "basis": "finder B notes \u00a73; the sequence dates the end of the dollar SCRAMBLE, not of the crisis",
+  "basis": "as dated in 2008 and 2020 (n = 2); the sequence marks the end of the dollar SCRAMBLE, not of the crisis",
   "case_2008": "by mid-November 2008 the funding spread had halved (17-Oct), gold had bottomed (12-Nov) and the re-armed rule had fired (6-Nov); the S&P 500 low came on 9-Mar-2009, four months and 25% lower",
   "order": [
    "policy announcement",
@@ -2600,7 +2602,7 @@
  },
  "frozen_on": "2026-11-02",
  "funding_leadlag": {
-  "basis": "date of each series' stress extreme minus the broad dollar's peak, trading days (finder B notes \u00a72, verified by reviewer 1); these series lead the DOLLAR, they are coincident with crisis onset, and were silent in the EM growth scares",
+  "basis": "Calendar days from each series' stress extreme to the broad dollar's peak (the study's lead/lag table, independently re-checked). Funding prices (CP minus bill, OFR funding, NFCI risk) peaked 3-5 months before the DOLLAR's peak in 2008 and 2022 (n = 2) and within a week of it in 2020; in 2015-16 and 2018 they gave no alarm (those cells date a quiet series' high). Gold and EMB/EEM troughs are early-coincident; swap-line usage and EM FX lag. None leads crisis onset.",
   "dollar_peaks": {
    "2008": "2009-03-03",
    "2015-16": "2016-01-20",
@@ -2615,6 +2617,7 @@
     "2018": "-238d",
     "2020": "+2d",
     "2022": "alarm 2022-03-04; peak -87d on a one-day print (-206d without it)",
+    "label": "led the DOLLAR (2008, 2022)",
     "series": "financial CP - 3m bill"
    },
    {
@@ -2623,6 +2626,7 @@
     "2018": "-236d",
     "2020": "+7d",
     "2022": "alarm 2022-03-04; -87d",
+    "label": "led the DOLLAR (2008, 2022)",
     "series": "OFR FSI funding"
    },
    {
@@ -2631,6 +2635,7 @@
     "2018": "-",
     "2020": "-24d",
     "2022": "alarm 2022-02-25",
+    "label": "led the DOLLAR (2008, 2022)",
     "series": "NFCI risk"
    },
    {
@@ -2639,6 +2644,7 @@
     "2018": "-103d",
     "2020": "-4d",
     "2022": "0d",
+    "label": "early-coincident",
     "series": "gold trough"
    },
    {
@@ -2647,6 +2653,7 @@
     "2018": "0d / -29d",
     "2020": "-5d / 0d",
     "2022": "+24d / +28d",
+    "label": "coincident",
     "series": "EMB / EEM trough"
    },
    {
@@ -2655,6 +2662,7 @@
     "2018": "year-end",
     "2020": "+65d ($449bn)",
     "2022": "+30d ($11bn)",
+    "label": "usage lags; announcements lead",
     "series": "Fed swap-line usage"
    },
    {
@@ -2663,12 +2671,14 @@
     "2018": "-83d",
     "2020": "+32d",
     "2022": "+28d",
+    "label": "coincident-to-lag",
     "series": "EM FX basket weakest"
    }
   ]
  },
  "gold": {
-  "basis": "COMEX GC=F daily (2000+), World Bank monthly before; 'ended higher' = gold above its eve level at the episode's end (monthly averages, finder A's 25-crisis list, col gold_eve_to_end_pct). Corrects the memo's '10 of 25', which listed ten examples and missed dotcom (+13.6%), China property (+7.3%) and two flat cases (+0.9%, +0.2%). Drawdown windows end with the episode (2022: Mar-Oct, C22 ends 2022-10).",
+  "base_share": 0.61,
+  "basis": "COMEX GC=F daily (2000+), World Bank monthly before. 'Ended higher' = gold's monthly average above its eve-month level at the episode's end, completed crises on the 25-crisis list (the open 2026 episode is shown separately); base = share of all same-length windows since 1971 in which gold ended higher, averaged over the crises' lengths. Drawdown windows end with the episode (2022: Mar-Oct).",
   "drawdowns": [
    {
     "close_pct": -29.7,
@@ -2772,15 +2782,23 @@
     "pct": 10.9
    }
   ],
-  "n_with_end": 25
+  "n_with_end": 24,
+  "open_episodes": [
+   {
+    "id": "C26",
+    "name": "Iran war / Hormuz oil shock (ONGOING)",
+    "pct_so_far": -16.5
+   }
+  ]
  },
  "honesty": [
   "Every historical number here is in-sample: the study examined all of 1971-2026 before the panel was built.",
   "Crises cluster: 25 crises (A25), 16 onsets (C16), 5 dollar-funding squeezes (N5); counts are of months or episodes, not independent draws.",
   "Reverse causality: the dollar rises because forced deleveraging buys dollars, so 'dollar up then crisis' and 'crisis then dollar up' look alike.",
-  "The deceleration rule's parameters were chosen on 2008, 2020 and 2022; its record on unseen 1973-2005 monthly data shows no edge.",
-  "The dollar-scramble markers (funding easing, gold's trough, the dollar's peak) date the end of the scramble, not the end of a crisis.",
-  "Johnson's claims are as relayed in the user's transcript; the Oct-2026 talk itself was not located."
+  "The deceleration rule's parameters were chosen on 2008, 2020 and 2022; on 1973-2005 monthly data, which the parameter choice did not use (the study had seen it), it shows no edge.",
+  "In 2008 and 2020 the scramble markers (funding easing, gold's trough, the dollar's peak) came at the end of the dollar scramble, not of the crisis: in 2008 all were in place four months and 25% before the equity low.",
+  "Scoring by the VIX flatters the rule: on 2008-11-06 the VIX fell 20 points while the S&P fell 25% more.",
+  "Johnson's claims are as relayed in the transcript Casey shared; the Oct-2026 talk itself was not located."
  ],
  "momentum": {
   "by_list": {
@@ -2788,7 +2806,6 @@
     "base_12m": 0.421,
     "episodes": 11,
     "episodes_followed_12m": 5,
-    "rate_months": 0.435,
     "signal_months": 85,
     "signal_months_followed_12m": 37
    },
@@ -2796,7 +2813,6 @@
     "base_12m": 0.283,
     "episodes": 11,
     "episodes_followed_12m": 5,
-    "rate_months": 0.482,
     "signal_months": 85,
     "signal_months_followed_12m": 41
    },
@@ -2804,12 +2820,11 @@
     "base_12m": 0.091,
     "episodes": 11,
     "episodes_followed_12m": 1,
-    "rate_months": 0.224,
     "signal_months": 85,
     "signal_months_followed_12m": 19
    }
   },
-  "caveat": "in-sample on data the study had already examined; list-dependent; clusters, not independent draws; NOT validated",
+  "caveat": "11 episodes, not 85 independent readings, so no rate is shown. 8 of the 11 began during a crisis on the 25-crisis list; the 16-onset list was dated knowing the dollar's path; a 6-month version of the test falls below its base (28% vs 42%). In-sample and list-dependent: no edge established.",
   "definition": "12-month change of the monthly-average DXY above +10%",
   "episodes": [
    "1976-03",
@@ -2823,7 +2838,8 @@
    "2012-06",
    "2014-12",
    "2022-05"
-  ]
+  ],
+  "episodes_began_in_a25_crisis": 8
  },
  "momentum_ledger": [
   {
@@ -2834,19 +2850,16 @@
     "12m": {
      "baa_minus_10y_pp": -0.73,
      "dxy_pct": 0.1,
-     "emfx_pct": null,
      "spx_pct": -0.5
     },
     "3m": {
      "baa_minus_10y_pp": -0.36,
      "dxy_pct": 1.8,
-     "emfx_pct": null,
      "spx_pct": 0.7
     },
     "6m": {
      "baa_minus_10y_pp": -0.58,
      "dxy_pct": 0.5,
-     "emfx_pct": null,
      "spx_pct": 4.3
     }
    }
@@ -2859,19 +2872,16 @@
     "12m": {
      "baa_minus_10y_pp": 0.57,
      "dxy_pct": 14.9,
-     "emfx_pct": null,
      "spx_pct": -10.8
     },
     "3m": {
      "baa_minus_10y_pp": -0.33,
      "dxy_pct": 7.9,
-     "emfx_pct": null,
      "spx_pct": 2.6
     },
     "6m": {
      "baa_minus_10y_pp": -0.78,
      "dxy_pct": 16.9,
-     "emfx_pct": null,
      "spx_pct": 1.0
     }
    }
@@ -2884,19 +2894,16 @@
     "12m": {
      "baa_minus_10y_pp": 0.05,
      "dxy_pct": -8.8,
-     "emfx_pct": null,
      "spx_pct": 11.6
     },
     "3m": {
      "baa_minus_10y_pp": 0.17,
      "dxy_pct": -0.4,
-     "emfx_pct": null,
      "spx_pct": 10.4
     },
     "6m": {
      "baa_minus_10y_pp": 0.34,
      "dxy_pct": -3.0,
-     "emfx_pct": null,
      "spx_pct": 8.4
     }
    }
@@ -2909,19 +2916,16 @@
     "12m": {
      "baa_minus_10y_pp": -0.62,
      "dxy_pct": -5.6,
-     "emfx_pct": null,
      "spx_pct": 0.9
     },
     "3m": {
      "baa_minus_10y_pp": -0.14,
      "dxy_pct": -1.3,
-     "emfx_pct": null,
      "spx_pct": 3.7
     },
     "6m": {
      "baa_minus_10y_pp": -0.22,
      "dxy_pct": 2.2,
-     "emfx_pct": null,
      "spx_pct": 5.7
     }
    }
@@ -2934,19 +2938,16 @@
     "12m": {
      "baa_minus_10y_pp": 0.18,
      "dxy_pct": 5.1,
-     "emfx_pct": 21.0,
      "spx_pct": 35.9
     },
     "3m": {
      "baa_minus_10y_pp": 0.04,
      "dxy_pct": -0.1,
-     "emfx_pct": 0.2,
      "spx_pct": 10.6
     },
     "6m": {
      "baa_minus_10y_pp": 0.0,
      "dxy_pct": 2.9,
-     "emfx_pct": 8.3,
      "spx_pct": 18.3
     }
    }
@@ -2959,19 +2960,16 @@
     "12m": {
      "baa_minus_10y_pp": 0.45,
      "dxy_pct": 2.9,
-     "emfx_pct": 10.1,
      "spx_pct": -20.7
     },
     "3m": {
      "baa_minus_10y_pp": 0.13,
      "dxy_pct": 4.8,
-     "emfx_pct": 4.8,
      "spx_pct": -7.4
     },
     "6m": {
      "baa_minus_10y_pp": 0.34,
      "dxy_pct": 0.6,
-     "emfx_pct": 5.9,
      "spx_pct": -12.1
     }
    }
@@ -2984,19 +2982,16 @@
     "12m": {
      "baa_minus_10y_pp": -0.19,
      "dxy_pct": -8.3,
-     "emfx_pct": -4.2,
      "spx_pct": 12.2
     },
     "3m": {
      "baa_minus_10y_pp": -0.16,
      "dxy_pct": -1.0,
-     "emfx_pct": -2.3,
      "spx_pct": 2.5
     },
     "6m": {
      "baa_minus_10y_pp": -0.18,
      "dxy_pct": -5.7,
-     "emfx_pct": 0.0,
      "spx_pct": -0.7
     }
    }
@@ -3009,19 +3004,16 @@
     "12m": {
      "baa_minus_10y_pp": -2.76,
      "dxy_pct": -12.8,
-     "emfx_pct": -12.3,
      "spx_pct": 23.2
     },
     "3m": {
      "baa_minus_10y_pp": -0.47,
      "dxy_pct": 0.1,
-     "emfx_pct": 3.2,
      "spx_pct": -8.8
     },
     "6m": {
      "baa_minus_10y_pp": -0.91,
      "dxy_pct": -4.9,
-     "emfx_pct": -7.6,
      "spx_pct": 2.2
     }
    }
@@ -3034,19 +3026,16 @@
     "12m": {
      "baa_minus_10y_pp": -0.51,
      "dxy_pct": -0.5,
-     "emfx_pct": 1.6,
      "spx_pct": 22.3
     },
     "3m": {
      "baa_minus_10y_pp": -0.28,
      "dxy_pct": -2.9,
-     "emfx_pct": -3.8,
      "spx_pct": 9.1
     },
     "6m": {
      "baa_minus_10y_pp": -0.49,
      "dxy_pct": -3.0,
-     "emfx_pct": -3.5,
      "spx_pct": 7.5
     }
    }
@@ -3059,19 +3048,16 @@
     "12m": {
      "baa_minus_10y_pp": 0.69,
      "dxy_pct": 10.3,
-     "emfx_pct": 16.5,
      "spx_pct": -0.0
     },
     "3m": {
      "baa_minus_10y_pp": -0.03,
      "dxy_pct": 9.8,
-     "emfx_pct": 3.4,
      "spx_pct": 1.3
     },
     "6m": {
      "baa_minus_10y_pp": 0.24,
      "dxy_pct": 6.7,
-     "emfx_pct": 4.7,
      "spx_pct": 2.2
     }
    }
@@ -3084,25 +3070,22 @@
     "12m": {
      "baa_minus_10y_pp": -0.02,
      "dxy_pct": -0.5,
-     "emfx_pct": 5.5,
      "spx_pct": 2.6
     },
     "3m": {
      "baa_minus_10y_pp": 0.03,
      "dxy_pct": 3.9,
-     "emfx_pct": 4.6,
      "spx_pct": 2.9
     },
     "6m": {
      "baa_minus_10y_pp": -0.04,
      "dxy_pct": 4.8,
-     "emfx_pct": 6.1,
      "spx_pct": -3.0
     }
    }
   }
  ],
- "momentum_ledger_basis": "one row per momentum episode (first signal month after 12 quiet months); S&P and DXY as monthly averages, EM FX basket as-of the 28th, BAA minus GS10 monthly; reconstructed in-sample, not a forecast record",
+ "momentum_ledger_basis": "one row per momentum episode (first signal month after 12 quiet months); S&P and DXY as monthly averages, Baa minus the 10-year monthly; reconstructed in-sample, not a forecast record. EM FX outcomes are withheld until the pre-registration is frozen: seven of the basket's eight currencies are in the proposed cross-section test, and seeing them could steer its design",
  "provenance": {
   "builder": "studies/dollar_watch/code/build_reference.py",
   "inputs_sha256": {
@@ -3114,14 +3097,6 @@
    "dxy_daily.csv": "86f05634159c67631c923a555dd1e523e64e1946b9c10a1377dbbe059c37a63e",
    "fred/BAA.csv": "0d7a21abcb6af2a2d7ac83fb6a8941a5e3ad8ddcec913dcff1b7d9d50eed6404",
    "fred/BAA10Y.csv": "c6e37a6ca40dfae67fa0c9c0d3e456fdcaee6ed4fcdbc3d90c990bc73bfd0fc0",
-   "fred/DEXBZUS.csv": "64bf7c9e0fead5ce9a0c4615beacae32489be60495dd68831373f24c9791eda3",
-   "fred/DEXCHUS.csv": "a8d1ee991b050b4942272163bcc08e57cb5ec78553aab07bdd6e5da6c825f791",
-   "fred/DEXINUS.csv": "081d9f2c775f79fc1f8301fd452f3b847e1824ab210876901ffe8e085c6200f3",
-   "fred/DEXKOUS.csv": "0257f9e7f21bcb0bff94b8bb77c9e01369bf18ecd7d8673632a56db2370f8c64",
-   "fred/DEXMAUS.csv": "76893bfef0502f9071cc0668b43552d83bc72d01b356f73d5c312095160accaa",
-   "fred/DEXMXUS.csv": "2355afe567bd0019bc989d49199bf3f902b3ed4f77f2fea25986a845047a978f",
-   "fred/DEXSFUS.csv": "56b1c4ccdaade2229fd1651e4b7efcf7512de6f5984aea80d94052029d65875a",
-   "fred/DEXTHUS.csv": "89925e914783d8cfe16a8342771759528eea3229447e1af385a81b2941098057",
    "fred/DGS10.csv": "55e2559ffdb30b8ed921b119935fa6b3893dde3d1ed26ddede33fb59895f0659",
    "fred/DTWEXBGS.csv": "8080a7d962c8e8976e4394a5dbdb2e4a2ddb984c1c5aefc581aa42b715fd6932",
    "fred/GS10.csv": "40323f225e613a19a4eec7eef20523dec10764de21c70cd1416a7379fb7f13b6",
@@ -3428,7 +3403,7 @@
  },
  "redollarisation": {
   "basis": "log growth (100 x log-difference); BIS GLI Q.USD.3P.N.A.I.B.USD vs the Fed broad dollar, quarter-end; descriptive, not causal",
-  "corr_caveat": "yoy changes overlap by three quarters, so the yoy correlations rest on roughly a quarter of the nominal sample; the non-overlapping qoq correlations are weaker (about -0.3)",
+  "corr_caveat": "coincident (yoy -0.50); the one-quarter dollar lead (-0.55 yoy) does not survive on non-overlapping quarters (-0.36 coincident, -0.29 dollar first); yoy changes overlap by three quarters, so they rest on about a quarter of the nominal sample",
   "corr_qoq_contemporaneous": -0.36,
   "corr_qoq_dollar_leads_1q": -0.29,
   "corr_yoy_contemporaneous": -0.5,
@@ -3439,33 +3414,32 @@
   "last": "2026-06",
   "n_down": 50,
   "n_up": 52,
-  "quarters": 102
+  "quarters": 102,
+  "quarters_credit_growing": 93
  },
  "scramble_rule": {
-  "basis": "outcomes on the rule's own index: dollar_further_rise_pct = broad dollar's max over the next 250 index days vs the firing day; spx_to_next_low_pct = S&P 500 from the firing close to its lowest close in the next 250 trading days; 3/6/12-month outcomes as-of calendar offsets",
+  "basis": "'dollar rose further' = the broad dollar's highest level over the next 250 index days vs the firing day; 'S&P to next low' = the S&P 500 from the firing-day close to its lowest close in the next 250 trading days; 3/6/12-month outcomes at calendar offsets. The broad dollar (H.10) is published the Monday after each week, so a firing is first observable at the next S&P close after that release ('observable'); the S&P moved -3.7% to +4.7% between the firing day and that close across these seven firings",
   "firings": [
    {
     "date": "2008-09-22",
     "dollar": 90.11,
     "dollar_further_rise_pct": 17.7,
     "dollar_peak_date": "2009-03-03",
+    "observable_on": "2008-09-30",
     "outcomes": {
      "12m": {
       "baa10y_pp": -0.94,
       "broad_dollar_pct": 3.1,
-      "emfx_pct": 3.6,
       "spx_pct": -11.2
      },
      "3m": {
       "baa10y_pp": 2.15,
       "broad_dollar_pct": 8.9,
-      "emfx_pct": 12.6,
       "spx_pct": -27.8
      },
      "6m": {
       "baa10y_pp": 2.08,
       "broad_dollar_pct": 12.1,
-      "emfx_pct": 15.1,
       "spx_pct": -36.3
      }
     },
@@ -3473,7 +3447,9 @@
     "roc20_max_date": "2008-09-02",
     "roc20_max_pct": 4.3,
     "roc20_now_pct": 1.0,
+    "spx_firing_to_observable_pct": -3.4,
     "spx_low_date": "2009-03-09",
+    "spx_to_next_low_from_observable_pct": -42.0,
     "spx_to_next_low_pct": -44.0,
     "vix_change_60d": 13.5
    },
@@ -3482,23 +3458,21 @@
     "dollar": 99.54,
     "dollar_further_rise_pct": 6.5,
     "dollar_peak_date": "2009-03-03",
+    "observable_on": "2008-11-11",
     "outcomes": {
      "12m": {
       "baa10y_pp": -2.64,
       "broad_dollar_pct": -7.2,
-      "emfx_pct": -8.7,
       "spx_pct": 18.2
      },
      "3m": {
       "baa10y_pp": -0.37,
       "broad_dollar_pct": 2.2,
-      "emfx_pct": 2.0,
       "spx_pct": -4.0
      },
      "6m": {
       "baa10y_pp": -0.59,
       "broad_dollar_pct": -0.6,
-      "emfx_pct": -2.4,
       "spx_pct": 1.6
      }
     },
@@ -3506,7 +3480,9 @@
     "roc20_max_date": "2008-10-27",
     "roc20_max_pct": 12.9,
     "roc20_now_pct": 2.6,
+    "spx_firing_to_observable_pct": -0.7,
     "spx_low_date": "2009-03-09",
+    "spx_to_next_low_from_observable_pct": -24.7,
     "spx_to_next_low_pct": -25.2,
     "vix_change_60d": -20.3
    },
@@ -3515,31 +3491,31 @@
     "dollar": 96.46,
     "dollar_further_rise_pct": 1.1,
     "dollar_peak_date": "2010-06-07",
+    "observable_on": "2010-06-08",
     "outcomes": {
      "12m": {
       "baa10y_pp": -0.19,
       "broad_dollar_pct": -10.4,
-      "emfx_pct": -8.6,
       "spx_pct": 17.9
      },
      "3m": {
       "baa10y_pp": 0.05,
       "broad_dollar_pct": -2.9,
-      "emfx_pct": -2.7,
       "spx_pct": 0.2
      },
      "6m": {
       "baa10y_pp": 0.1,
       "broad_dollar_pct": -5.8,
-      "emfx_pct": -5.5,
       "spx_pct": 11.1
      }
     },
-    "reading": "euro-crisis mini-episode, resolved within weeks",
+    "reading": "euro-crisis dollar spike; the climb faded within weeks (the euro crisis ran on to 2012)",
     "roc20_max_date": "2010-05-25",
     "roc20_max_pct": 4.8,
     "roc20_now_pct": 2.2,
+    "spx_firing_to_observable_pct": -3.7,
     "spx_low_date": "2010-07-02",
+    "spx_to_next_low_from_observable_pct": -3.7,
     "spx_to_next_low_pct": -7.3,
     "vix_change_60d": -5.0
    },
@@ -3548,31 +3524,31 @@
     "dollar": 90.73,
     "dollar_further_rise_pct": 4.4,
     "dollar_peak_date": "2012-06-01",
+    "observable_on": "2011-11-08",
     "outcomes": {
      "12m": {
       "baa10y_pp": -0.28,
       "broad_dollar_pct": 0.4,
-      "emfx_pct": 2.3,
       "spx_pct": 17.2
      },
      "3m": {
       "baa10y_pp": 0.22,
       "broad_dollar_pct": -0.7,
-      "emfx_pct": -1.8,
       "spx_pct": 8.7
      },
      "6m": {
       "baa10y_pp": 0.19,
       "broad_dollar_pct": -0.4,
-      "emfx_pct": 0.1,
       "spx_pct": 15.4
      }
     },
-    "reading": "euro-crisis mini-episode",
+    "reading": "euro-crisis dollar spike at the crisis's peak stress (Nov-2011)",
     "roc20_max_date": "2011-10-03",
     "roc20_max_pct": 6.1,
     "roc20_now_pct": -1.9,
+    "spx_firing_to_observable_pct": 4.7,
     "spx_low_date": "2011-11-25",
+    "spx_to_next_low_from_observable_pct": -9.2,
     "spx_to_next_low_pct": -4.9,
     "vix_change_60d": -15.3
    },
@@ -3581,31 +3557,31 @@
     "dollar": 93.77,
     "dollar_further_rise_pct": 0.5,
     "dollar_peak_date": "2012-07-24",
+    "observable_on": "2012-06-12",
     "outcomes": {
      "12m": {
       "baa10y_pp": -0.54,
       "broad_dollar_pct": -1.2,
-      "emfx_pct": 0.5,
       "spx_pct": 25.0
      },
      "3m": {
       "baa10y_pp": -0.23,
       "broad_dollar_pct": -2.6,
-      "emfx_pct": -1.9,
       "spx_pct": 9.3
      },
      "6m": {
       "baa10y_pp": -0.47,
       "broad_dollar_pct": -2.9,
-      "emfx_pct": -2.4,
       "spx_pct": 7.8
      }
     },
-    "reading": "euro-crisis mini-episode, resolved within weeks",
+    "reading": "euro-crisis dollar spike; the climb faded within weeks",
     "roc20_max_date": "2012-05-31",
     "roc20_max_pct": 4.5,
     "roc20_now_pct": 2.2,
+    "spx_firing_to_observable_pct": 0.7,
     "spx_low_date": "2012-06-11",
+    "spx_to_next_low_from_observable_pct": -0.8,
     "spx_to_next_low_pct": -0.5,
     "vix_change_60d": -4.2
    },
@@ -3614,23 +3590,21 @@
     "dollar": 122.48,
     "dollar_further_rise_pct": 1.4,
     "dollar_peak_date": "2020-04-24",
+    "observable_on": "2020-04-14",
     "outcomes": {
      "12m": {
       "baa10y_pp": -1.65,
       "broad_dollar_pct": -7.6,
-      "emfx_pct": -6.3,
       "spx_pct": 48.0
      },
      "3m": {
       "baa10y_pp": -0.88,
       "broad_dollar_pct": -2.4,
-      "emfx_pct": -1.9,
       "spx_pct": 13.0
      },
      "6m": {
       "baa10y_pp": -0.94,
       "broad_dollar_pct": -5.9,
-      "emfx_pct": -4.5,
       "spx_pct": 24.6
      }
     },
@@ -3638,7 +3612,9 @@
     "roc20_max_date": "2020-03-23",
     "roc20_max_pct": 7.4,
     "roc20_now_pct": 1.6,
+    "spx_firing_to_observable_pct": 2.0,
     "spx_low_date": "2020-04-21",
+    "spx_to_next_low_from_observable_pct": -3.8,
     "spx_to_next_low_pct": -1.9,
     "vix_change_60d": -12.2
    },
@@ -3647,23 +3623,21 @@
     "dollar": 122.12,
     "dollar_further_rise_pct": 5.2,
     "dollar_peak_date": "2022-09-26",
+    "observable_on": "2022-08-02",
     "outcomes": {
      "12m": {
       "baa10y_pp": -0.62,
       "broad_dollar_pct": -3.5,
-      "emfx_pct": -2.6,
       "spx_pct": 12.5
      },
      "3m": {
       "baa10y_pp": -0.12,
       "broad_dollar_pct": 4.2,
-      "emfx_pct": 4.9,
       "spx_pct": -4.2
      },
      "6m": {
       "baa10y_pp": -0.54,
       "broad_dollar_pct": -2.6,
-      "emfx_pct": -3.1,
       "spx_pct": -0.0
      }
     },
@@ -3671,7 +3645,9 @@
     "roc20_max_date": "2022-05-12",
     "roc20_max_pct": 4.3,
     "roc20_now_pct": 1.0,
+    "spx_firing_to_observable_pct": 0.5,
     "spx_low_date": "2022-10-12",
+    "spx_to_next_low_from_observable_pct": -12.6,
     "spx_to_next_low_pct": -12.2,
     "vix_change_60d": 7.5
    }
@@ -3684,6 +3660,7 @@
    "2020-04-09",
    "2022-07-28"
   ],
+  "last_index_day": "2026-10-23",
   "monthly_null": {
    "base_dollar_peak_within_3m": 0.42,
    "base_spx_up_12m": 0.76,
@@ -3702,7 +3679,7 @@
     "2005-08"
    ],
    "spx_up_12m": 6,
-   "window": "1973-2005 (monthly; unseen by the daily parameter choices)"
+   "window": "1973-2005 monthly data, which the parameter choice did not use (the study had seen it)"
   },
   "params": {
    "cooling_days": 120,

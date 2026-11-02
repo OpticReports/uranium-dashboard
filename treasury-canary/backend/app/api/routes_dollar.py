@@ -47,8 +47,12 @@ def _rebuild() -> dict:
         with _lock:
             prev = _cache["data"]
             _cache["retry_after"] = time.time() + _TTL_DEGRADED
-        if prev is not None:
-            return prev
+        if prev is not None:              # serve the last good payload, but never as if it were fresh
+            stale = dict(prev, build_error=f"{type(exc).__name__}: {str(exc)[:200]}",
+                         status={**(prev.get("status") or {}), "overall": "stale"})
+            with _lock:
+                _cache["data"] = stale
+            return stale
         try:
             data = build_dollar_watch({})     # every live block "error"; the frozen record still ships
         except Exception as exc2:  # noqa: BLE001
