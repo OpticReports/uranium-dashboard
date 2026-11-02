@@ -227,7 +227,7 @@ function TimeChart({
   rows: Array<{ t: number; v: number }>;
   unit: string;
   digits?: number;
-  refY?: Array<{ y: number }>;
+  refY?: Array<{ y: number; label?: string }>;
   refX?: Array<{ t: number; label?: string }>;
   height?: number;
 }) {
@@ -243,7 +243,8 @@ function TimeChart({
           <YAxis tick={tickStyle} width={44} domain={["auto", "auto"]} tickFormatter={(v: number) => fmt(v, digits)} />
           <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={dayLabel} formatter={(v: number) => [`${fmt(v, digits)}${u ? ` ${u}` : ""}`, ""]} />
           {refY.map((r) => (
-            <ReferenceLine key={`y${r.y}`} y={r.y} stroke={SLATE} strokeDasharray="4 3" />
+            <ReferenceLine key={`y${r.y}`} y={r.y} stroke={SLATE} strokeDasharray="4 3" ifOverflow="extendDomain"
+              label={r.label ? { value: r.label, fill: SLATE, fontSize: 9, position: "insideTopLeft" } : undefined} />
           ))}
           {refX.map((r, i) => (
             <ReferenceLine key={`x${i}`} x={r.t} stroke={VIOLET} strokeDasharray="2 3" label={r.label ? { value: r.label, fill: VIOLET, fontSize: 9, position: "top" } : undefined} />
@@ -305,7 +306,8 @@ function StateLayer({ d }: { d: DollarWatch }) {
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div>
           <div className="mb-1 text-xs font-semibold text-slate-300">Outside the band: what followed ({band?.by_list?.A25?.n_excursions ?? "n/a"} excursions)</div>
-          <table className="w-full text-[11px]">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[460px] text-[11px]">
             <thead><tr><Th>crisis list</Th><Th right>onset within 12m</Th><Th right>base</Th><Th right>within 24m</Th><Th right>base</Th></tr></thead>
             <tbody>
               {lists.map((k) => {
@@ -317,6 +319,7 @@ function StateLayer({ d }: { d: DollarWatch }) {
               })}
             </tbody>
           </table>
+          </div>
           <Note>{str(band?.note) ?? ""}</Note>
           <p className="mt-1 text-[10px] text-slate-600">Basis: {str(band?.basis) ?? "n/a"}</p>
           {arr(band?.excursions).length > 0 && (
@@ -406,7 +409,7 @@ function StateLayer({ d }: { d: DollarWatch }) {
         </div>
       </div>
       <div className="mt-4">
-        <div className="mb-1 text-xs text-slate-400">EM FX basket (8 FRED pairs; {str(s.emfx?.unit) ?? "index"})</div>
+        <div className="mb-1 text-xs text-slate-400">EM FX basket: 8 FRED pairs, {(str(s.emfx?.unit) ?? "index").replace(/^index \(/, "").replace(/\)$/, "")}</div>
         <TimeChart rows={seriesRows(s.emfx?.series)} unit="" digits={0} height={170} />
       </div>
     </>
@@ -439,7 +442,7 @@ function FundingLayer({ d }: { d: DollarWatch }) {
               <tr key={r.id} className="border-t border-slate-800/70">
                 <Td>{r.label} <Src href={r.src} /></Td>
                 <Td right mono>{fundingNow(r)}</Td>
-                <Td mono><AsOf asof={r.asof} intraday={r.intraday} /></Td>
+                <Td mono>{str(r.asof) ?? "n/a"}{r.intraday === true ? " (intraday)" : ""}</Td>
                 <Td right mono>{pctile(r.pct_own_history, r.history_from)}</Td>
                 <Td right mono>{isNum(r.pct_10y) ? ord(r.pct_10y) : "n/a"}</Td>
                 <Td right mono>{r.unit === "$" ? usd(r.median_1y, 2) : fmt(r.median_1y, r.unit === "bp" ? 0 : 2)}</Td>
@@ -544,7 +547,7 @@ function ScrambleLayer({ d }: { d: DollarWatch }) {
         </div>
         <div>
           <div className="mb-1 text-xs text-slate-400">20-day change of the broad dollar, %, last ~3 years (gauge opens at +4% with the 10-year falling)</div>
-          <TimeChart rows={roc} unit="%" digits={1} refY={[{ y: 4 }, { y: 0 }]} height={210} />
+          <TimeChart rows={roc} unit="%" digits={1} refY={[{ y: 4, label: "+4%" }, { y: 0 }]} height={210} />
         </div>
       </div>
 
@@ -809,7 +812,7 @@ export function DollarView({ data }: { data: DollarWatch }) {
           <div className="mt-3 text-[11px] text-slate-400">
             <div className="font-semibold text-slate-300">Pending questions (ranked)</div>
             {arr(d.pending_questions).map((q, i) => (
-              <div key={i}><span className="font-mono">{q.rank}</span> {q.q} <span className="text-slate-500">(moves: {q.moves ?? "n/a"}; {q.status ?? "n/a"} {q.first_asked ?? ""}{q.expires ? `, expires ${q.expires}` : ""})</span></div>
+              <div key={i}><span className="font-mono">{q.rank}</span> {q.q} <span className="text-slate-500">(moves: {q.moves ?? "n/a"}; {q.status ?? "n/a"}{q.first_asked ? ` ${q.first_asked}` : ""}{q.expires ? `, expires ${q.expires}` : ""})</span></div>
             ))}
           </div>
         )}

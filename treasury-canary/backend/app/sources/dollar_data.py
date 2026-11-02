@@ -104,15 +104,21 @@ def fetch_fred() -> dict[str, dict]:
 YAHOO_RANGE_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range={rng}&interval=1d"
 
 
-def yahoo_intraday(body: bytes) -> bool:
-    """True when the chart's last price was taken before its trading period ended (the last bar is not a close)."""
+def yahoo_intraday(body: bytes, settle_hours: float | None = None) -> bool:
+    """True when the last price was taken INSIDE the current session (start <= t < end): the last bar is not a close.
+    Before the open the last bar is the previous session's close; after the end it is today's close. The ICE DXY's
+    Yahoo session runs midnight to midnight ET, so for it the end is the 17:00 ET settlement (settle_hours=17)."""
     meta = (json.loads(body.decode("utf-8", errors="replace"))["chart"]["result"][0] or {}).get("meta") or {}
-    end = ((meta.get("currentTradingPeriod") or {}).get("regular") or {}).get("end")
-    t = meta.get("regularMarketTime")
-    return bool(end and t and t < end)
+    per = (meta.get("currentTradingPeriod") or {}).get("regular") or {}
+    start, end, t = per.get("start"), per.get("end"), meta.get("regularMarketTime")
+    if not (start and end and t):
+        return False
+    if settle_hours is not None:
+        end = min(end, start + int(settle_hours * 3600))
+    return bool(start <= t < end)
 
 
-def _yahoo(symbol: str, basis: str, rng: str = "2y") -> dict:
+def _yahoo(symbol: str, basis: str, rng: str = "2y", settle_hours: float | None = None) -> dict:
     """Daily bars over `rng` (cached 6h, stale on failure). The DXY uses 10 years so its monthly splice
     never outruns the window; `intraday` marks a last bar taken before the session's end."""
     u = YAHOO_RANGE_URL.format(sym=quote(symbol, safe=""), rng=rng)
@@ -123,7 +129,7 @@ def _yahoo(symbol: str, basis: str, rng: str = "2y") -> dict:
         return _empty(u, basis)
     try:
         ds, closes, _ = breaking.parse_yahoo_chart(body)
-        intraday = yahoo_intraday(body)
+        intraday = yahoo_intraday(body, settle_hours)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Yahoo %s parse failed: %s", symbol, exc)
         return _empty(u, basis)
@@ -147,7 +153,7 @@ def _fmp(symbol: str, basis: str, weekdays_only: bool = False) -> dict:
 
 def fetch_dxy() -> dict:
     """ICE DXY daily: Yahoo first (10 years, keyless), FMP if Yahoo has nothing."""
-    y = _yahoo(DXY_SYMBOL, DXY_BASIS, "10y")
+    y = _yahoo(DXY_SYMBOL, DXY_BASIS, "10y", settle_hours=17)
     if y["dates"]:
         y["provider"] = "yahoo"
         return y

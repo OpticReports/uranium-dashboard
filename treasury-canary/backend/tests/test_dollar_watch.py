@@ -154,7 +154,7 @@ def test_reference_numbers_the_memo_cites():
     assert [(d["episode"], d.get("intraday_pct"), d.get("close_pct")) for d in g["drawdowns"][:3]] == \
            [("GFC 2008", -32.9, -29.7), ("COVID 2020", -14.7, -11.8), ("2022", -22.0, -20.1)]
     f = ref["dollar_fell_at_peak_stress"]
-    assert (f["fell"], f["n_crises"], f["base_share"]) == (9, 25, 0.5)
+    assert (f["fell"], f["n_crises"], f["base_share"]) == (9, 24, 0.5) and f["open_episodes"][0]["id"] == "C26"
     mo = ref["momentum"]
     assert (len(mo["episodes"]), mo["episodes_began_in_a25_crisis"]) == (11, 8)
     assert [(mo["by_list"][k]["episodes_followed_12m"], mo["by_list"][k]["signal_months_followed_12m"]) for k in ("A25", "C16", "N5")] == [(5, 37), (5, 41), (1, 19)]
@@ -185,7 +185,9 @@ def test_payload_ok_and_serialisable(payload):
     assert payload["scramble"]["live_check"]["reproduces_frozen_rearm"] is True
     assert payload["scramble"]["live_check"]["reproduces_frozen_unpatched"] is True
     assert {h["variant"] for h in payload["scramble"]["history"]} == {"both", "re-arm only"}
-    assert len(payload["pending_questions"]) == 8 and all(q["expires"] == "2027-01-01" for q in payload["pending_questions"])
+    pq = payload["pending_questions"]
+    assert len(pq) == 8 and all(q["expires"] == "2027-01-01" for q in pq if q["status"] == "asked")
+    assert [q["status"] for q in pq].count("open") == 2 and all(q["expires"] is None for q in pq if q["status"] == "open")
 
 
 def test_payload_values_on_the_fixture(payload, inputs):
@@ -302,11 +304,18 @@ def test_parsers():
     assert dw._q_end("2026-Q2") == "2026-06" and dw._q_end("2026Q2") is None
 
 
+def _meta(t, start, end):
+    return json.dumps({"chart": {"result": [{"meta": {"regularMarketTime": t, "currentTradingPeriod": {"regular": {"start": start, "end": end}}}}]}}).encode()
+
+
 def test_yahoo_intraday_flag():
-    body = json.dumps({"chart": {"result": [{"meta": {"regularMarketTime": 100, "currentTradingPeriod": {"regular": {"end": 200}}}}]}}).encode()
-    assert dollar_data.yahoo_intraday(body) is True
-    body = json.dumps({"chart": {"result": [{"meta": {"regularMarketTime": 200, "currentTradingPeriod": {"regular": {"end": 200}}}}]}}).encode()
-    assert dollar_data.yahoo_intraday(body) is False
+    S = 1793595600                                     # 2026-11-02 00:00 ET: the DXY's Yahoo session runs midnight to midnight
+    assert dollar_data.yahoo_intraday(_meta(S + 15 * 3600, S, S + 86340), settle_hours=17) is True     # 15:00 ET, before settlement
+    assert dollar_data.yahoo_intraday(_meta(S + 20 * 3600, S, S + 86340), settle_hours=17) is False    # 20:00 ET, after the 17:00 settle
+    O = S + 9 * 3600 + 1800                            # EMB: 09:30-16:00 ET
+    assert dollar_data.yahoo_intraday(_meta(O - 3600, O, O + 23400)) is False    # pre-open: the last bar is yesterday's close
+    assert dollar_data.yahoo_intraday(_meta(O + 3600, O, O + 23400)) is True     # in session
+    assert dollar_data.yahoo_intraday(_meta(O + 23400, O, O + 23400)) is False   # at the close
 
 
 # ---------------------------------------------------------------------------- the gauge with the gate open
@@ -355,6 +364,53 @@ def test_outcomes_freeze_once_at_maturity(tmp_path):
     dw.freeze_matured(path, compute, "2027-07-02", "2027-07-02")
     e = dw.load_ledger(path)["entries"][0]
     assert e["outcomes_frozen"] == {"3m": {"spx_pct": 1.0, "frozen_on": "2027-07-01"}}
+
+
+def test_freeze_skips_incomplete_horizons(tmp_path):
+    path = str(tmp_path / "ledger.json")
+    dw.append_ledger(path, [{"kind": "scramble_rule", "date": "2027-03-01", "variants": ["unpatched"]}], "2027-03-08")
+    dw.freeze_matured(path, lambda e, last: {"3m": {"spx_pct": 1.0, "baa10y_pp": None}, "6m": None, "12m": None}, "2027-07-01", "2027-07-01")
+    assert dw.load_ledger(path)["entries"][0].get("outcomes_frozen", {}) == {}  # a missing component is retried, not frozen
+    dw.freeze_matured(path, lambda e, last: {"3m": {"spx_pct": 1.0, "baa10y_pp": 0.1}, "6m": None, "12m": None}, "2027-07-02", "2027-07-02")
+    assert dw.load_ledger(path)["entries"][0]["outcomes_frozen"]["3m"]["frozen_on"] == "2027-07-02"
+
+
+def test_late_recorded_rows_anchor_at_recording(inputs, tmp_path):
+    """a firing first seen after an outage is scored from the first close after the panel recorded it."""
+    path = str(tmp_path / "ledger.json")
+    dw.append_ledger(path, [{"kind": "scramble_rule", "date": "2025-03-03", "variants": ["unpatched"], "h10_release": "2025-03-10"}], "2025-06-02")
+    p = dw.build_dollar_watch(inputs, today="2026-11-02", ledger_file=path)
+    row = p["ledger"]["live"][0]
+    assert row["anchor_close"] > "2025-06-02"
+    dw.append_ledger(path, [{"kind": "scramble_rule", "date": "2025-04-01", "variants": ["unpatched"], "h10_release": "2025-04-07"}], "2025-04-07")
+    p = dw.build_dollar_watch(inputs, today="2026-11-02", ledger_file=path)
+    on_time = [r for r in p["ledger"]["live"] if r["date"] == "2025-04-01"][0]
+    assert on_time["anchor_close"] == "2025-04-08"
+
+
+def test_failed_ledger_write_is_reported(inputs, tmp_path, monkeypatch):
+    shifted = _cut(inputs, "2008-11-06")
+    for s in list(shifted["fred"].values()):
+        s["dates"] = [f"{int(d[:4]) + 20}{d[4:]}" for d in s["dates"]]
+    from app.sources import fred_csv as fc
+
+    def boom(*a, **k):
+        raise OSError("No space left on device")
+    monkeypatch.setattr(fc, "_write_atomic", boom)
+    p = dw.build_dollar_watch(shifted, today="2028-11-06", ledger_file=str(tmp_path / "l.json"))
+    assert p["ledger"]["status"] == "error" and "No space left" in (p["ledger"]["problem"] or "") + str(p["scramble"]["ledger_status"])
+    assert p["status"]["overall"] == "error"
+
+
+def test_gold_note_requires_quiet_funding(payload, inputs, tmp_path):
+    g = payload["state"]["safe_haven"]["gold"]
+    cp = {r["id"]: r for r in payload["funding"]["rows"]}["cp_fin"]
+    assert g["off_52w_high_pct"] <= -15 and g["note"] == (f"with dollar funding quiet (financial CP minus bill at its {dw._ord(cp['pct_own_history'])} "
+                                                           "percentile): outside the crisis pattern below")
+    stressed = json.loads(json.dumps(inputs))
+    stressed["fred"]["DCPF3M"]["values"][-1] = (stressed["fred"]["DTB3"]["values"][-1] or 4.0) + 3.05     # CP-bill at a Lehman-sized print
+    p = dw.build_dollar_watch(stressed, today="2026-11-02", ledger_file=str(tmp_path / "s.json"))
+    assert p["state"]["safe_haven"]["gold"]["note"] is None
 
 
 def test_frozen_history_never_enters_the_live_ledger(payload, tmp_path):

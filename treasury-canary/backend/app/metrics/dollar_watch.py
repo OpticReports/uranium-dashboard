@@ -65,7 +65,7 @@ HONESTY_LIVE = [
     "Descriptive panel: readings and counts only, each conditional count with its N and base rate; nothing here is a forecast or a crisis call.",
     "Live readings use today's data vintage; the broad dollar (H.10) is published weekly, so it can lag the DXY by up to two weeks. "
     "A reading dated today is intraday until the session ends.",
-    "2026 sits outside every pattern in this study: gold fell 27-31% from its January high with the dollar up under 6% and no "
+    "2026 (as of 2026-11-02) sits outside every pattern in this study: gold fell 27-31% from its January high with the dollar up under 6% and no "
     "dollar-funding stress, Brent nearly doubled, and foreign official custody is at a 14-year low. The dollar-funding mechanism "
     "does not explain it; do not read the crisis records on this page onto it.",
     "The pre-registration was drafted and both reviews returned NOT_PASS: the currency cross-section is not run as designed; the "
@@ -74,7 +74,7 @@ HONESTY_LIVE = [
     "Ledger outcomes are measured from the first S&P close after the H.10 release that made a firing visible, not from the firing day.",
 ]
 
-PENDING = [
+PENDING = [   # status per CLAUDE.md: asked / answered / refused / expired; "open" = ours to source, not a question to Casey
     {"rank": "P1", "q": "Which crisis list is the primary: A25 (25 broad crises), C16 (16 dollar-stress onsets; default) or N5 (the 5 funding squeezes, reported only)?",
      "moves": "every base rate on the panel; the freeze"},
     {"rank": "P1", "q": "Route after both reviews returned NOT_PASS: forward_only (the dated ledger; recommended) or a redesigned cross-section on the clean subset (low power)?",
@@ -87,8 +87,9 @@ PENDING = [
     {"rank": "P2", "q": "May a live notification on the gauge ever come from anything but the forward ledger? (default: ledger only)",
      "moves": "the notification licence"},
     {"rank": "P2", "q": "Is a paid basis-swap feed (the direct price of offshore dollars) worth it for the funding layer?", "moves": "layer 2 completeness"},
-    {"rank": "P2", "q": "Reconstruct and freeze EM OAS history (FRED truncated it to 2023-11) as the repo does for HY/IG?", "moves": "the EM stress row"},
-    {"rank": "P3", "q": "Daily gold before 2000 (LBMA/FRED gone): any free source?", "moves": "the pre-2000 gold table"},
+    {"rank": "P2", "q": "Reconstruct and freeze EM OAS history (FRED truncated it to 2023-11) as the repo does for HY/IG", "moves": "the EM stress row",
+     "status": "open"},
+    {"rank": "P3", "q": "Daily gold before 2000 (LBMA/FRED gone): find a free source", "moves": "the pre-2000 gold table", "status": "open"},
 ]
 
 
@@ -346,7 +347,7 @@ def freeze_matured(path: str, compute, last_day: str, today: str) -> dict:
         for e in led["entries"]:
             done = e.setdefault("outcomes_frozen", {})
             for h, o in compute(e, last_day).items():
-                if o is not None and h not in done:
+                if o is not None and h not in done and all(v is not None for v in o.values()):
                     done[h] = dict(o, frozen_on=today)
                     changed = True
         return _write_ledger(path, led) if changed else led
@@ -489,13 +490,31 @@ def gold_note() -> str:
     f = REF.get("dollar_fell_at_peak_stress") or {}
     op = (g.get("open_episodes") or [{}])[0]
     open_txt = f"; the open 2026 episode is {op['pct_so_far']:+.1f}% so far" if op.get("pct_so_far") is not None else ""
+    fo = (f.get("open_episodes") or [{}])[0]
+    f_open = (f" (the open 2026 episode, {fo['dxy_eve_to_peak_stress_pct_so_far']:+.1f}% so far, is provisional)"
+              if fo.get("dxy_eve_to_peak_stress_pct_so_far") is not None else "")
     return (f"Gold was higher at the end than on the eve in {g.get('ended_higher')} of {g.get('n_with_end')} completed crises "
             f"({g.get('ended_higher_gt_1pct')} by more than 1%{open_txt}), against about {round(100 * (g.get('base_share') or 0))}% of all windows "
-            "of the same lengths since 1971: no better than gold's own drift. It was sold for dollars in the liquidation weeks of the "
-            "four episodes above, and rose outright in 1973-74 and 1987. "
-            f"The DXY was lower at peak stress than on the eve in {f.get('fell')} of {f.get('n_crises')} crises, against about "
+            "of the same lengths since 1971: no better than gold's own drift. It fell in all four episodes above: in the liquidation "
+            "weeks of 2008 and 2020, over months in 2022 and the dotcom bust; it rose outright in 1973-74 and 1987. "
+            f"The DXY was lower at peak stress than on the eve in {f.get('fell')} of {f.get('n_crises')} completed crises{f_open}, against about "
             f"{round(100 * (f.get('base_share') or 0))}% of same-length windows: it rose into peak stress in "
             f"{(f.get('n_crises') or 0) - (f.get('fell') or 0)} of {f.get('n_crises')}, more often than usual.")
+
+
+def gold_funding_note(state: dict, fund: dict) -> str | None:
+    """The gold tile's 'outside the crisis pattern' note, shown only when gold is 15%+ off its high AND dollar funding is
+    quiet by the gauge's own test (financial CP minus bill and OFR funding both at or below their 1-year medians)."""
+    g = state["safe_haven"]["gold"]
+    rows = {x["id"]: x for x in fund["rows"]}
+    cp, of = rows["cp_fin"], rows["ofr_funding"]
+    vals = (g.get("off_52w_high_pct"), cp["latest"], cp["median_1y"], of["latest"], of["median_1y"])
+    if any(v is None for v in vals) or g["off_52w_high_pct"] > -15:
+        return None
+    if not (cp["latest"] <= cp["median_1y"] and of["latest"] <= of["median_1y"]):
+        return None
+    pr = f"financial CP minus bill at its {_ord(cp['pct_own_history'])} percentile" if cp.get("pct_own_history") is not None else "financial CP minus bill below its 1-year median"
+    return f"with dollar funding quiet ({pr}): outside the crisis pattern below"
 
 
 def state_block(inp: dict) -> dict:
@@ -538,8 +557,7 @@ def state_block(inp: dict) -> dict:
     st["safe_haven"] = {
         "gold": {**reading(gps, "$/oz", g.get("src"), g.get("basis"), g.get("status") or "error", 1), "provider": g.get("provider"),
                  "intraday": bool(g.get("intraday")), "chg_6m_pct": chg_pct(gps, 6), "chg_12m_pct": chg_pct(gps, 12),
-                 "off_52w_high_pct": off,
-                 "note": "with no dollar-funding stress: outside the crisis pattern below" if off is not None and off <= -15 else None},
+                 "off_52w_high_pct": off, "note": None},          # set in build_dollar_watch, only if funding is quiet (gold_funding_note)
         "chf": {**reading(pairs(fred.get("DEXSZUS")), "CHF per $", (fred.get("DEXSZUS") or {}).get("src"), "Swiss francs per dollar (up = franc weaker)",
                           (fred.get("DEXSZUS") or {}).get("status") or "error", 4), "chg_6m_pct": chg_pct(pairs(fred.get("DEXSZUS")), 6),
                 "chg_12m_pct": chg_pct(pairs(fred.get("DEXSZUS")), 12)},
@@ -610,12 +628,14 @@ def funding_block(inp: dict) -> dict:
         row("sofr_iorb", "SOFR minus interest on reserves", iorb, "bp", [src["SOFR"], src["IORB"]], worst([stt["SOFR"], stt["IORB"]]), 0,
             "above zero = reserves less ample", "history begins in 2021: no crisis record"),
         row("swap_lines", "Fed central-bank liquidity swaps outstanding", swpt, "$bn", src["SWPT"], stt["SWPT"], 2,
-            "higher = foreign central banks borrowing dollars (weekly, Wednesday)", "history from the first swap lines (Dec-2007)"),
+            "higher = foreign central banks borrowing dollars (weekly, Wednesday)", "history from the first swap lines, Dec-2007"),
         emb_row,
     ]
     return {"rows": rows,
             "label": "Funding prices led the dollar's peak by 3-5 months in 2008 and 2022 (n = 2), moved with it in 2020 and were silent "
-                     "in the EM growth scares; coincident with crisis onset, never ahead of it. The SOFR rows begin in 2018 and have no such record.",
+                     "in the EM growth scares. Their first alarms came within about two months of the crisis's start as the 25-crisis list "
+                     "dates it (2007, 2022; n = 2): roughly coincident with the crisis. The lead is over the dollar squeeze, which the "
+                     "16-onset list dates later. The SOFR rows begin in 2018 and have no such record.",
             "series": {"cp_fin": weekly(cpf, since="2007-01-01"), "ofr_funding": weekly(ofr_ps["Funding"], since="2007-01-01"),
                        "swap_lines": weekly(swpt, since="2007-12-01")},
             "leadlag": REF.get("funding_leadlag"), "swap_events": (REF.get("events") or {}).get("swap_lines"),
@@ -707,6 +727,7 @@ def scramble_block(inp: dict, fund: dict, today: str, path: str) -> dict:
     led = append_ledger(path, list(new.values()), today) if new else load_ledger(path)
     out["live_firings"] = [e for e in led.get("entries", []) if e.get("kind") == "scramble_rule"]
     out["ledger_status"] = "unreadable" if led.get("_unreadable") else "write_failed" if led.get("_write_failed") else "ok"
+    out["ledger_problem"] = led.get("_write_failed")
     return out
 
 
@@ -838,27 +859,35 @@ def ledger_block(inp: dict, state: dict, today: str, path: str) -> dict:
             p = add_months(m + "-01", -12)[:7]
             new.append({"kind": "momentum", "date": m, "dxy_12m_pct": r(100 * (avg[m] / avg[p] - 1), 1) if avg.get(m) and avg.get(p) else None,
                         "dxy": avg.get(m)})
+    write_problems = []
     if new:
-        append_ledger(path, new, today)
+        w = append_ledger(path, new, today)
+        if w.get("_write_failed"):
+            write_problems.append(f"momentum row not saved: {w['_write_failed']}")
 
     def anchor(e) -> str | None:
+        """first S&P close after the later of (a) the day the firing became public (the H.10 release; a momentum
+        month's end) and (b) the day the panel recorded it: outcomes the panel could not have captured are never scored."""
         if e.get("kind") == "scramble_rule":
-            d, _ = first_after(spx, e.get("h10_release") or h10_release(e["date"]))
-        else:                                   # a momentum month is complete at its end
-            d, _ = first_after(spx, add_months(e["date"] + "-01", 1)[:7] + "-00")
+            public = e.get("h10_release") or h10_release(e["date"])
+        else:
+            public = add_months(e["date"] + "-01", 1)[:7] + "-00"
+        d, _ = first_after(spx, max(public, e.get("recorded_on") or ""))
         return d
 
     def compute(e, last):
         return forward_outcomes(anchor(e), spx, baa, broad, last)
 
     led = freeze_matured(path, compute, last_day, today) if spx else load_ledger(path)
+    if led.get("_write_failed"):
+        write_problems.append(f"matured outcomes not saved: {led['_write_failed']}")
     live = []
     for e in led.get("entries", []):
         if not isinstance(e.get("date"), str):
             continue
         frozen = e.get("outcomes_frozen") or {}
         live.append({**e, "anchor_close": anchor(e), "outcomes": {h: frozen.get(h) for h in ("3m", "6m", "12m")}})
-    status = "error" if led.get("_unreadable") or led.get("_write_failed") else "ok"
+    status = "error" if led.get("_unreadable") or write_problems else "ok"
     return {"frozen_momentum": REF.get("momentum_ledger"), "frozen_momentum_basis": REF.get("momentum_ledger_basis"),
             "frozen_rule": [{k: f.get(k) for k in ("date", "reading", "outcomes", "dollar_further_rise_pct", "spx_to_next_low_pct",
                                                     "observable_on", "spx_to_next_low_from_observable_pct", "spx_firing_to_observable_pct")}
@@ -868,7 +897,7 @@ def ledger_block(inp: dict, state: dict, today: str, path: str) -> dict:
             "basis": "frozen rows are in-sample reconstructions; live rows are appended the day the panel first sees a firing after the "
                      "reference cut-off and are never edited; each horizon (3, 6, 12 months: S&P 500, Baa minus 10-year, broad dollar) "
                      "is frozen into the row when it matures; at realistic edges the record needs decades to score",
-            "status": status, "problem": led.get("_write_failed") or ("ledger file unreadable or wrongly shaped" if led.get("_unreadable") else None)}
+            "status": status, "problem": "; ".join(write_problems) or ("ledger file unreadable or wrongly shaped" if led.get("_unreadable") else None)}
 
 
 # ---------------------------------------------------------------------------- assembly
@@ -913,9 +942,14 @@ def build_dollar_watch(inp: dict, today: str | None = None, ledger_file: str | N
     path = ledger_file or ledger_path()
     state = state_block(inp)
     fund = funding_block(inp)
+    state["safe_haven"]["gold"]["note"] = gold_funding_note(state, fund)
     scr = scramble_block(inp, fund, today, path)
     slow = slow_block(inp)
     led = ledger_block(inp, state, today, path)
+    if scr.get("ledger_status") not in (None, "ok"):          # the rule's append failed or found the file unreadable
+        led["status"] = "error"
+        why = f"scramble-rule rows not saved: {scr['ledger_problem']}" if scr.get("ledger_problem") else f"scramble-rule rows: {scr['ledger_status']}"
+        led["problem"] = "; ".join(x for x in (led.get("problem"), why) if x)
     blocks = {"state": state["status"], "funding": fund["status"], "scramble": scr["status"], "slow": slow["status"], "ledger": led["status"]}
     return {"generated": datetime.now(timezone.utc).isoformat(timespec="seconds"), "frozen_on": FROZEN_ON, "mode": "descriptive",
             "status": {"overall": worst(blocks.values()), "blocks": blocks},
@@ -923,5 +957,6 @@ def build_dollar_watch(inp: dict, today: str | None = None, ledger_file: str | N
             "state": state, "funding": fund, "scramble": scr, "slow": slow, "ledger": led,
             "crisis_lists": REF.get("crisis_lists"), "window_convention": REF.get("window_convention"),
             "provenance": {k: (REF.get("provenance") or {}).get(k) for k in ("study", "builder", "reviews")},
-            "pending_questions": [dict(q, status="asked", first_asked="2026-11-02", expires=EXPIRES) for q in PENDING],
+            "pending_questions": [dict(q, status="asked", first_asked="2026-11-02", expires=EXPIRES) if "status" not in q else
+                                  dict(q, first_asked=None, expires=None) for q in PENDING],
             "honesty": list(REF.get("honesty") or []) + HONESTY_LIVE + ([REF["emfx_withheld"] + "."] if REF.get("emfx_withheld") else [])}

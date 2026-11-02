@@ -423,7 +423,7 @@
  },
  "dollar_fell_at_peak_stress": {
   "base_share": 0.5,
-  "basis": "DXY month-end close, the eve of each crisis (month before its start) to its peak-stress month, on the 25-crisis list; base = share of all same-length windows since 1971 in which the DXY ended lower, averaged over the crises' lengths",
+  "basis": "DXY month-end close, the eve of each crisis (month before its start) to its peak-stress month, completed crises on the 25-crisis list (the open 2026 episode is provisional and shown apart); base = share of all same-length windows since 1971 in which the DXY ended lower, averaged over the crises' lengths",
   "crises": [
    {
     "dxy_eve_to_peak_stress_pct": -1.4,
@@ -490,7 +490,14 @@
    }
   ],
   "fell": 9,
-  "n_crises": 25
+  "n_crises": 24,
+  "open_episodes": [
+   {
+    "dxy_eve_to_peak_stress_pct_so_far": 1.1,
+    "id": "C26",
+    "name": "Iran war / Hormuz oil shock (ONGOING)"
+   }
+  ]
  },
  "dxy_monthly": {
   "avg": [
@@ -2602,7 +2609,7 @@
  },
  "frozen_on": "2026-11-02",
  "funding_leadlag": {
-  "basis": "Calendar days from each series' stress extreme to the broad dollar's peak (the study's lead/lag table, independently re-checked). Funding prices (CP minus bill, OFR funding, NFCI risk) peaked 3-5 months before the DOLLAR's peak in 2008 and 2022 (n = 2) and within a week of it in 2020; in 2015-16 and 2018 they gave no alarm (those cells date a quiet series' high). Gold and EMB/EEM troughs are early-coincident; swap-line usage and EM FX lag. None leads crisis onset.",
+  "basis": "Calendar days from each series' stress extreme to the broad dollar's peak (the study's lead/lag table, independently re-checked). Funding prices (CP minus bill, OFR funding, NFCI risk) peaked 3-5 months before the DOLLAR's peak in 2008 and 2022 (n = 2) and within a week of it in 2020; in 2015-16 and 2018 they gave no alarm (those cells date a quiet series' high). Gold's trough is early-coincident and EMB/EEM troughs are coincident; swap-line usage and EM FX lag. None gives a usable lead on crisis onset as the 25-crisis list dates it.",
   "dollar_peaks": {
    "2008": "2009-03-03",
    "2015-16": "2016-01-20",
@@ -3403,7 +3410,7 @@
  },
  "redollarisation": {
   "basis": "log growth (100 x log-difference); BIS GLI Q.USD.3P.N.A.I.B.USD vs the Fed broad dollar, quarter-end; descriptive, not causal",
-  "corr_caveat": "coincident (yoy -0.50); the one-quarter dollar lead (-0.55 yoy) does not survive on non-overlapping quarters (-0.36 coincident, -0.29 dollar first); yoy changes overlap by three quarters, so they rest on about a quarter of the nominal sample",
+  "corr_caveat": "Coincident (yoy -0.50); the one-quarter dollar lead (-0.55 yoy) does not survive on non-overlapping quarters (-0.36 coincident, -0.29 dollar first); yoy changes overlap by three quarters, so they rest on about a quarter of the nominal sample",
   "corr_qoq_contemporaneous": -0.36,
   "corr_qoq_dollar_leads_1q": -0.29,
   "corr_yoy_contemporaneous": -0.5,
@@ -3418,7 +3425,7 @@
   "quarters_credit_growing": 93
  },
  "scramble_rule": {
-  "basis": "'dollar rose further' = the broad dollar's highest level over the next 250 index days vs the firing day; 'S&P to next low' = the S&P 500 from the firing-day close to its lowest close in the next 250 trading days; 3/6/12-month outcomes at calendar offsets. The broad dollar (H.10) is published the Monday after each week, so a firing is first observable at the next S&P close after that release ('observable'); the S&P moved -3.7% to +4.7% between the firing day and that close across these seven firings",
+  "basis": "'dollar rose further' = the broad dollar's highest level over the next 250 index days vs the firing day; 'S&P to next low' = the S&P 500 from the firing-day close to its lowest close in the next 250 trading days; 3/6/12-month outcomes at calendar offsets from the firing day. The broad dollar (H.10) is published the Monday after each week, so a firing is first observable at the next S&P close after that release ('observable'); the S&P moved -3.7% to +4.7% between the firing day and that close across these seven firings",
   "firings": [
    {
     "date": "2008-09-22",
@@ -3542,7 +3549,7 @@
       "spx_pct": 15.4
      }
     },
-    "reading": "euro-crisis dollar spike at the crisis's peak stress (Nov-2011)",
+    "reading": "euro-crisis dollar spike; the dollar rose 4.4% further and peaked in Jun-2012",
     "roc20_max_date": "2011-10-03",
     "roc20_max_pct": 6.1,
     "roc20_now_pct": -1.9,

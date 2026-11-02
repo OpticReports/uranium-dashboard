@@ -170,9 +170,13 @@ for key in ("C16", "A25"):
 
 # ----------------------------------------------------------------- crisis metrics: dollar at peak stress, gold over the episode
 cm = [row for row in csv.DictReader(open(os.path.join(DATA, "crises_metrics.csv"))) if row["is_crisis"] == "1"]
+OPEN_IDS = [c["id"] for c in cm if not c["end"][:4].isdigit()]       # still running: its peak-stress month is provisional
+cm_done = [c for c in cm if c["id"] not in OPEN_IDS]
 fell = [{"id": c["id"], "name": c["name"], "start": c["start"], "peak_stress": c["peak_stress"],
          "dxy_eve_to_peak_stress_pct": fnum(c["dxy_chg_eve_to_peak_stress_pct"])}
-        for c in cm if (fnum(c["dxy_chg_eve_to_peak_stress_pct"]) or 0) < 0]
+        for c in cm_done if (fnum(c["dxy_chg_eve_to_peak_stress_pct"]) or 0) < 0]
+fell_open = [{"id": c["id"], "name": c["name"], "dxy_eve_to_peak_stress_pct_so_far": fnum(c["dxy_chg_eve_to_peak_stress_pct"])}
+             for c in cm if c["id"] in OPEN_IDS]
 gold_end = [c for c in cm if fnum(c["gold_eve_to_end_pct"]) is not None]
 OPEN = [c["id"] for c in cm if not c["end"][:4].isdigit()]             # still running (C26): not an "end"
 gold_done = [c for c in gold_end if c["id"] not in OPEN]
@@ -203,7 +207,7 @@ def window_base(series: dict, length: int, up: bool) -> float:
 
 gold_base = [window_base(GOLD_M, _mdiff(_mshift(c["start"], -1), c["end"][:7]), True) for c in gold_done]
 dxy_fell_base = [window_base(DXY_M, _mdiff(_mshift(c["start"], -1), c["peak_stress"]), False)
-                 for c in cm if fnum(c["dxy_chg_eve_to_peak_stress_pct"]) is not None]
+                 for c in cm_done if fnum(c["dxy_chg_eve_to_peak_stress_pct"]) is not None]
 
 
 def daily(path, col="close"):
@@ -356,7 +360,7 @@ rearm = [firing_record(f) for f in scramble_firings(RDATES, RB, RY, True) if f["
 unpatched = [f["date"] for f in scramble_firings(RDATES, RB, RY, False)]
 CLASS = {"2008-09-22": "first wave of a two-wave scramble", "2008-11-06": "re-arm firing (added after the 2008-09-22 miss); dollar scramble peaking, equity low still four months away",
          "2010-06-03": "euro-crisis dollar spike; the climb faded within weeks (the euro crisis ran on to 2012)",
-         "2011-11-01": "euro-crisis dollar spike at the crisis's peak stress (Nov-2011)",
+         "2011-11-01": "euro-crisis dollar spike; the dollar rose 4.4% further and peaked in Jun-2012",
          "2012-06-07": "euro-crisis dollar spike; the climb faded within weeks", "2020-04-09": "clean: the scramble had peaked",
          "2022-07-28": "first wave of a policy grind (not a funding scramble)"}
 for f in rearm:
@@ -446,7 +450,7 @@ up = [fnum(x["g_credit_yoy"]) for x in jq if fnum(x["g_usd_yoy"]) > 0]
 redollar = {"quarters": len(jq), "first": jq[0][""][:7], "last": jq[-1][""][:7],
             "corr_yoy_contemporaneous": r(corr(gcy, guy), 2), "corr_yoy_dollar_leads_1q": r(corr(gcy[1:], guy[:-1]), 2),
             "corr_qoq_contemporaneous": r(corr(gc, gu), 2), "corr_qoq_dollar_leads_1q": r(corr(gc[1:], gu[:-1]), 2),
-            "corr_caveat": "coincident (yoy -0.50); the one-quarter dollar lead (-0.55 yoy) does not survive on non-overlapping "
+            "corr_caveat": "Coincident (yoy -0.50); the one-quarter dollar lead (-0.55 yoy) does not survive on non-overlapping "
                            "quarters (-0.36 coincident, -0.29 dollar first); yoy changes overlap by three quarters, so they rest on about a "
                            "quarter of the nominal sample",
             "quarters_credit_growing": sum(1 for x in gcy if x > 0),
@@ -489,10 +493,11 @@ ref = {
                            "a 6-month version of the test falls below its base (28% vs 42%). In-sample and list-dependent: no edge established."},
     "quadrant": {"definition": "sign of the 3-month change of the monthly-average DXY and of the 10-year yield (GS10) into the onset month (finder C)",
                  "by_list": quadrant, "base_all_months": quadrant_base},
-    "dollar_fell_at_peak_stress": {"n_crises": len(cm), "fell": len(fell), "crises": fell,
+    "dollar_fell_at_peak_stress": {"n_crises": len(cm_done), "fell": len(fell), "crises": fell, "open_episodes": fell_open,
                                    "base_share": r(sum(dxy_fell_base) / len(dxy_fell_base), 2),
-                                   "basis": "DXY month-end close, the eve of each crisis (month before its start) to its peak-stress month, on the "
-                                            "25-crisis list; base = share of all same-length windows since 1971 in which the DXY ended lower, "
+                                   "basis": "DXY month-end close, the eve of each crisis (month before its start) to its peak-stress month, completed "
+                                            "crises on the 25-crisis list (the open 2026 episode is provisional and shown apart); base = share of all "
+                                            "same-length windows since 1971 in which the DXY ended lower, "
                                             "averaged over the crises' lengths"},
     "gold": {"drawdowns": gold_dd, "ended_higher": len(gold_higher), "n_with_end": len(gold_done),
              "ended_higher_gt_1pct": sum(1 for g in gold_higher if g["pct"] > 1), "ended_higher_list": gold_higher,
@@ -505,7 +510,7 @@ ref = {
                       "firings": rearm, "firings_unpatched": unpatched, "vspike_timing": vspike, "monthly_null": monthly_null,
                       "basis": "'dollar rose further' = the broad dollar's highest level over the next 250 index days vs the firing day; "
                                "'S&P to next low' = the S&P 500 from the firing-day close to its lowest close in the next 250 trading days; "
-                               "3/6/12-month outcomes at calendar offsets. The broad dollar (H.10) is published the Monday after each week, "
+                               "3/6/12-month outcomes at calendar offsets from the firing day. The broad dollar (H.10) is published the Monday after each week, "
                                "so a firing is first observable at the next S&P close after that release ('observable'); the S&P "
                                "moved -3.7% to +4.7% between the firing day and that close across these seven firings",
                       "last_index_day": [d for d in RDATES if d <= FROZEN_ON][-1]},
@@ -537,7 +542,8 @@ ref = {
         "basis": "Calendar days from each series' stress extreme to the broad dollar's peak (the study's lead/lag table, independently "
                  "re-checked). Funding prices (CP minus bill, OFR funding, NFCI risk) peaked 3-5 months before the DOLLAR's peak in 2008 "
                  "and 2022 (n = 2) and within a week of it in 2020; in 2015-16 and 2018 they gave no alarm (those cells date a quiet "
-                 "series' high). Gold and EMB/EEM troughs are early-coincident; swap-line usage and EM FX lag. None leads crisis onset.",
+                 "series' high). Gold's trough is early-coincident and EMB/EEM troughs are coincident; swap-line usage and EM FX lag. "
+                 "None gives a usable lead on crisis onset as the 25-crisis list dates it.",
         "dollar_peaks": {"2008": "2009-03-03", "2015-16": "2016-01-20", "2018": "2018-11-27", "2020": "2020-03-23", "2022": "2022-09-26"},
         "rows": [
             {"series": "financial CP - 3m bill", "label": "led the DOLLAR (2008, 2022)", "2008": "alarm 2007-06; peak -139d", "2015-16": "-40d", "2018": "-238d", "2020": "+2d",

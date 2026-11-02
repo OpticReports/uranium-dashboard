@@ -30,9 +30,9 @@ UNVERIFIED labelled. Notes, verdicts, scripts, charts and small data under
    on the 25-crisis list, 8 of 17 (47%) against 54% on finder C's 16 onsets, and 3 of 17 (18%)
    against 19% on the five dollar-funding crises proper (strict window, §9.2; finder A's inclusive
    count was 13 of 17); the dollar FELL at peak
-   stress in 9 of 25 crises (1982, 1987, 1990, 1995, 1998 LTCM, 2011, 2023, 2024, 2025), against
-   about 50% of same-length windows (so it rose into peak stress in 16 of 25, more often than usual,
-   but far from "every"); 10 of 18
+   stress in 9 of 24 completed crises (1982, 1987, 1990, 1995, 1998 LTCM, 2011, 2023, 2024, 2025),
+   against about 50% of same-length windows (so it rose into peak stress in 15 of 24, more often than
+   usual, but far from "every"; the open 2026 episode, +1.1% so far, is provisional); 10 of 18
    fast rises BEGAN inside a crisis. No DXY band or speed threshold beat the unconditional crisis
    frequency on any of three crisis lists. The dollar's rise in a crisis is mostly the crisis
    itself: in 9 of 16 onsets it rose with US yields falling (flight to safety), it does not
@@ -85,8 +85,8 @@ UNVERIFIED labelled. Notes, verdicts, scripts, charts and small data under
    phase: the fuel is being added, not burned. What the data describe instead is a rates/oil
    shock: Brent $123 (98th percentile since 2000), US 2y 4.61 above the funds-rate ceiling, SOFR
    above IORB (97th percentile), foreign official custody at a 14-year low, and a safe-haven bid
-   that went to gold until January, not to the dollar (the franc WEAKENED 4–5% against the dollar
-   over 6–12 months; rev 1 said otherwise). No rule in this study is anywhere near firing.
+   that went to gold until January, not to the dollar (the franc WEAKENED 3.7–5.2% against the dollar
+   over 12 and 6 months; rev 1 said otherwise). No rule in this study is anywhere near firing.
 6. **Recommendation — build the "Dollar watch" panel on treasury-canary DESCRIPTIVE, in four
    layers (§5): dollar state with the regime quadrant as a label; a "dollar-funding nowcast" of
    the free plumbing gauges; a "dollar-scramble peak" gauge (deceleration, funding easing, gold
@@ -102,7 +102,7 @@ UNVERIFIED labelled. Notes, verdicts, scripts, charts and small data under
 
 | Claim | What the data say | Verdict |
 |---|---|---|
-| The dollar rose in every crisis; faster = worse | DXY was LOWER at peak stress than on the eve in 9 of 25 crises (base: about 50% of same-length windows, so it rose in 16 of 25, more often than usual) (1982, 1987, 1990, 1995, 1998 LTCM acute phase −8.9%, 2011, 2023, 2024, 2025). Speed-vs-severity Spearman +0.27 (n = 25). The four he names (1998, 2008, 2020, 2022) are the ones where it held. | FALSE as stated; true of the dollar-funding subset |
+| The dollar rose in every crisis; faster = worse | DXY was LOWER at peak stress than on the eve in 9 of 24 completed crises (base: about 50% of same-length windows, so it rose in 15 of 24, more often than usual; the open 2026 episode is provisional) (1982, 1987, 1990, 1995, 1998 LTCM acute phase −8.9%, 2011, 2023, 2024, 2025). Speed-vs-severity Spearman +0.27 (n = 25). The four he names (1998, 2008, 2020, 2022) are the ones where it held. | FALSE as stated; true of the dollar-funding subset |
 | Band 85–105; 16 excursions in 50 years; 75% ended in a dollar funding crisis | Outside 85–105 → 17 merged excursions (closest to his 16); crisis start within 12m 53%, within 24m 76% counting the excursion's own start month (strict window, as the panel shows it: 8 of 17 = 47% and 12 of 17 = 71%; on C's 16 onsets 24% vs 28% and 47% vs 54%). Base rate for ANY month on the same 25-crisis list: 42% / 69%. On a 15-crisis systemic list the band is BELOW base (24% vs 27% at 12m; 47% vs 52% at 24m); on 12 crises 12% vs 22%; on the 5 dollar-funding squeezes 18% vs 19%. Bands 90–110 and 83–102 do no better. 7 of 17 excursions began inside a crisis. Before 1987 the DXY lived above 105 for 59 straight months (daily peak 164.72 on 1985-02-25). | REPRODUCES, UNINFORMATIVE on every list |
 | Gold falls in every crisis | Intra-crisis dips (intraday high to low; close-to-close in brackets): GFC −33% (−30%), 2020 −15% (−12%), 2022 −22% (−20%), dotcom −16% (monthly) — his numbers right. Eve-to-end: gold higher in 14 of 24 completed crises, 12 by more than 1% (GFC +42%, euro crisis +57%, COVID +10%, 1973–75 +73%, dotcom +14%, China property +7%), against about 61% of all same-length windows: gold's own drift (rev 1's "10 of 25" listed examples, not the count); 3 months after the DXY peak gold was up in 15 of 24. | TRUE for weeks, FALSE for the episode |
 | Reserve freeze → +15% in 6 months → gilts, TPI, Japan, China | DXY +12.5% in the 6 months after 2022-02-28, +18.0% to the 27-Sep closing peak. Evergrande's default (Fitch RD 2021-12-09) predates the freeze; the first Fed hike came 16 days after it; the DXY fell 10% Oct–Dec 2022 with sanctions intact. 2022 was a rates shock to leveraged duration (LDI, YCC); Fed swap lines were essentially undrawn ($11bn peak). | NOT SEPARABLE from the hiking cycle; the sequence is right, the cause is not established |
@@ -201,8 +201,10 @@ unconditional rate beside it; no probabilities on cells with fewer than ~15 inde
 EM / safe-asset subindices (already loaded; expose the columns), NFCI risk, SOFR99 − SOFR and SOFR −
 IORB, Fed swap-line usage with the announcement dates logged as event markers, EMB. Each with its
 own-history percentile and its 2008 / 2020 / 2022 alarm dates. Labelled honestly: these series led the
-DOLLAR's peak by 3–5 months in the two balance-sheet episodes, were coincident with crisis onset, and
-were silent in the EM growth scares.
+DOLLAR's peak by 3–5 months in the two balance-sheet episodes (n = 2) and were silent in the EM growth
+scares; their first alarms came within about two months of the crisis's start as the 25-crisis list dates
+it (2007, 2022), i.e. roughly coincident with the crisis. The lead is over the dollar squeeze, which the
+16-onset list dates 6–15 months later.
 
 **Layer 3 — the DOLLAR-SCRAMBLE PEAK gauge (Casey's rule, frozen and gated).** Visible only when a
 scramble exists (20-day climb ≥ 4% with the 10-year yield falling). Three indicators, shown separately,
@@ -285,7 +287,7 @@ already does for HY/IG.
 | P1 | Primary deceleration variant: unpatched (default) or re-arm? Both are logged forward either way. | the ledger's primary record | asked 2026-11-02 |
 | P1 | The mechanical rule that dates future crises for the ledger (default: 2 of 5 markers: VIX ≥ 40; OFR FSI above its 5-year 95th percentile for 5 days; EM FX basket +10% in 63 days; S&P −20% from its 252-day high; a Fed emergency action) | how forward firings are scored | asked 2026-11-02 |
 | P2 | May a live alert on the gauge ever come from anything but the forward ledger? (default: ledger only) | the lamp licence | asked 2026-11-02 |
-| P2 | Is a paid basis-swap feed (the direct price of offshore dollars) worth it for the funding layer? | layer 2 completeness | asked |
+| P2 | Is a paid basis-swap feed (the direct price of offshore dollars) worth it for the funding layer? | layer 2 completeness | asked 2026-11-02 |
 | P2 | Reconstruct and freeze EM OAS history (FRED truncated to 2023-11) as the repo does for HY/IG | EM stress layer | open |
 | P3 | Daily gold before 2000 (LBMA/FRED gone): any free source | pre-2000 gold table | open |
 
@@ -325,10 +327,13 @@ BIS contraction spanned 2022Q3–2023Q4) applied where quoted.
   `code/decel_realtime.py`) and also evaluates the latest day (the study code skipped the final index
   day). Each build re-runs the rule over 2006→today and shows whether today's data vintage reproduces
   the 7 frozen re-arm and 6 unpatched firings (it does today).
-- Forward ledger: a firing after 2026-11-02 under EITHER variant (the primary variant is a pending
-  question) and any new momentum episode is appended to `$CACHE_DIR/dollar_ledger.json` on the
-  persistent disk, stamped with the day the panel first saw it; rows are never edited; 3/6/12-month
-  outcomes fill in as they mature.
+- Forward ledger: a firing after the reference cut-off (rule: index day 2026-10-23; momentum: 2026-10)
+  under EITHER variant (the primary variant is a pending question), and any new momentum episode, is
+  appended to `<data>/ledger/dollar_ledger.json` (`/app/data/ledger` on Render's persistent disk,
+  outside the disposable caches), stamped with its H.10 release and the day the panel first saw it.
+  Existing values are never changed. Each 3/6/12-month outcome is frozen into its row once it matures
+  with every component present. It is measured from the first S&P close after the later of the release
+  and the recording day, so nothing the panel could not have seen is ever scored.
 - Descriptive only: no odds, no colour-coded states; the status chips report data freshness only.
 
 ### 9.2 Numbers restated under one window convention
@@ -342,7 +347,7 @@ is the share of all eligible months 1971–2026 with an onset in (m, m+H].
 | Band, C's 16 onsets | not shown | 4/17 (24%) vs 28%; 8/17 (47%) vs 54% | added |
 | Band, the 5 squeezes | 3/17 (18%) vs 19% at 24m | 1/17 (6%) vs 9%; 3/17 (18%) vs 19% | unchanged at 24m |
 | Gold above its eve level at the episode's end | 10 of 25 | 14 of 24 completed crises (12 by more than 1%; the open 2026 episode −16.5% so far) against about 61% of same-length windows | rev 1 listed examples; base rate added (wording review B2) |
-| The dollar lower at peak stress than on the eve | 9 of 25, no base | 9 of 25 against about 50% of same-length windows: it rose into peak stress in 16 of 25 | base rate added (wording review B2) |
+| The dollar lower at peak stress than on the eve | 9 of 25, no base | 9 of 24 completed crises against about 50% of same-length windows: it rose into peak stress in 15 of 24 (the open 2026 episode, +1.1% so far, shown apart) | base rate added (wording review B2, re-check R3) |
 | Lead/lag units | unstated | calendar days (139 calendar days = 95 trading days) | the first build mislabelled them "trading days" (both verifiers) |
 | 1995 / 2011 counter-examples | "record low"; "bottom of the band" | 80.05 was the lowest since Sep-1992 (78.19 then); in Nov-2011 the DXY was near 78, below the band | wording review S7 |
 | 2022-07-28 firing: further dollar rise | +6.6% | +5.2% on the broad dollar, the rule's index (+7.3% on the ICE DXY) | rev 1's figure matched neither index |
@@ -368,7 +373,8 @@ is the share of all eligible months 1971–2026 with an onset in (m, m+H].
   re-dollarising on Johnson's terms. FX forwards and swaps $129.3tn (dollar leg $113.5tn, 2025-S2).
   US 2-year 4.61% against a 4.00% ceiling (+0.61pp). Foreign official custody $2,569bn, −6.6% yoy,
   1st percentile of ten years. Brent $123.1 (+87.9% in 12 months); gold $3,945 (−27.2% from its
-  52-week high, with no dollar-funding stress: outside every crisis pattern in this study).
+  52-week high). The tile adds "with dollar funding quiet: outside the crisis pattern" only while
+  CP−bill and OFR funding both sit at or below their 1-year medians, as they do today.
 
 ### 9.4 Pre-registration: drafted, reviewed NOT_PASS, NOT frozen
 
@@ -392,7 +398,7 @@ Both adversarial reviews returned NOT_PASS (`dollar_watch/spec/`):
 
 **Consequence: D-1 is not run as designed.** It cannot change the decision, and running it would spend
 the only partly unseen data. The recommended route is now `forward_only`: the dated ledger the panel
-has written since the freeze date, under both variants. It needs decades to score at realistic edges
+has written since the reference cut-off, under both variants. It needs decades to score at realistic edges
 (about 45 / 90 / 234 years at edges of 0.70 / 0.60 / 0.50 against 0.35, on exact binomials).
 
 To freeze it, Casey answers:
@@ -408,7 +414,7 @@ cross-section is revived.
 
 ### 9.5 Gates (merge-blocking)
 
-`backend/tests/test_dollar_watch.py` (28 tests) and `npm run smoke:dollar` (6 render cases):
+`backend/tests/test_dollar_watch.py` (32 tests) and `npm run smoke:dollar` (6 render cases):
 
 - **The rule:**
   - The live rule reproduces the 7 / 6 frozen firings, clause values included.
@@ -479,5 +485,24 @@ Two independent verifiers reviewed the checkpoint build (`a46874d4`). Neither wr
     - The pre-registration status, the default variant and the pending questions were stale.
   - MINOR fixes: units and directions, null-safe formatting, jargon, the 17 excursions, and 3/6/12-month
     ledger outcomes.
+- **Re-check of the fix commit `4da1ca8d`, by the same two verifiers:**
+  - **Data: PASS.** All 4 SERIOUS fixed, recomputed independently. 5 new MINOR, all fixed:
+    - The intraday flag now uses the session window, with the DXY's 17:00 ET settlement.
+    - A failed ledger write shows in the block's status.
+    - An outcome is never frozen with a missing component.
+    - A firing first seen late is anchored at the recording day.
+    - This §9.1 is updated.
+    - Open: the test hashes are still not anchored to the reviewed data set.
+  - **Wording: PASS_WITH_FIXES.** Both BLOCKING and 8 of 9 SERIOUS were fixed. The one new SERIOUS is
+    fixed: the gold tile's "no dollar-funding stress" note never checked funding, so in a real scramble
+    it would have denied the crisis pattern. It now appears only when the funding gauges are quiet.
+    The 8 new MINOR are fixed:
+    - "Never ahead of crisis onset" is withdrawn (§5).
+    - The dollar tally counts completed crises only (9 of 24).
+    - Firing #4's reading no longer ties the rule to a crisis peak.
+    - The band table scrolls on a phone.
+    - The +4% line can no longer drop off the chart.
+    - The question statuses match §7.
+    - Two captions are cleaned up.
 
 Redeploy: **treasury-canary**.
