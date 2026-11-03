@@ -1,29 +1,30 @@
 {
   "peaks": {
-    "mbkiXcuNDjueXpiox5Av": 1967.9,
-    "nNdBk7hc5NiBzeRvbI5T": 26282.25,
+    "mbkiXcuNDjueXpiox5Av": 1999.24,
+    "nNdBk7hc5NiBzeRvbI5T": 26283.35,
     "YPTSJFJwD2ZKfAeYJUbW": 40378.17,
     "ORQNCfZnA18wmsMWVhf8": 35223.93
   },
   "accident_gauge": "YELLOW",
   "peak_dates": {
     "YPTSJFJwD2ZKfAeYJUbW": "2026-08-17",
-    "nNdBk7hc5NiBzeRvbI5T": "2026-10-30",
-    "mbkiXcuNDjueXpiox5Av": "2026-10-06"
+    "nNdBk7hc5NiBzeRvbI5T": "2026-11-03",
+    "mbkiXcuNDjueXpiox5Av": "2026-11-03"
   },
-  "book_peak": 100006.18,
+  "book_peak": 100054.55,
   "gate": {
     "override": false,
     "zone": "far",
-    "last_dist": 0.04096,
-    "last_date": "2026-10-30",
+    "last_dist": 0.03551,
+    "last_date": "2026-11-02",
     "live_hist": {
       "2026-10-21": "BIL",
       "2026-10-22": "BIL",
       "2026-10-23": "BIL",
       "2026-10-29": "BIL",
       "2026-10-30": "BIL",
-      "2026-11-02": "TECL"
+      "2026-11-02": "TECL",
+      "2026-11-03": "BIL"
     }
   },
   "shadow": {
@@ -39,7 +40,7 @@
       "SLEEVE": "agree",
       "HARV": "agree"
     },
-    "last_date": "2026-11-02",
+    "last_date": "2026-11-03",
     "pending": [],
     "fmp": {}
   }
