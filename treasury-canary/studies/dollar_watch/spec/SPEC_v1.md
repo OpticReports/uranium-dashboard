@@ -242,7 +242,17 @@ Sensitivity (stats review v1 S1), at no edge and P(PASS by look 3), volatile / c
 | +1%/yr | 0.008 / 0.001 |
 
 Under the fit window's own +0.9%/yr drift, power at +0.20 is 0.36 / 0.09. The bracket costs power where
-volatility is low. Without it, a −1%/yr trend roughly doubles the false-PASS rate (0.026 → 0.062 in the
+volatility is low.
+
+**Volatility regime (stats re-check S1; G6, simulated).** The bracket covers drift, not a shift in the
+volatility model. Under the fit window's own latest decade (2016–26 volatility), a false PASS with no edge
+is:
+- 0.019 with no drift;
+- 0.055 ± 0.007 with a −1%/yr drift. The statistics re-check measured 0.066–0.079 in its own runs: about
+  0.07.
+
+The stronger option in Q19 (PASS judged on the larger p⁻ of two frozen fits) gives about 0.04 there, but
+power at +0.20 falls from about 0.39 to 0.26. Without it, a −1%/yr trend roughly doubles the false-PASS rate (0.026 → 0.062 in the
 statistics review's simulation). That trade is Q19.
 
 **Simulated (G6, heterogeneous p_u; §3.7; `prereg/g6_out/`):**

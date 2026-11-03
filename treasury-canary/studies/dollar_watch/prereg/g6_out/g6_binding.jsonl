@@ -1,1 +1,2 @@
 {"p_table_seconds": 20}
+{"scenario": "model", "paths": 2000, "years_cap": 400, "units_per_year": 0.2, "mean_hit_minus_p0": 0.0004, "se": 0.0022, "mean_hit_minus_pminus": -0.0477, "design_size": 0.0358, "pass_by_look": [0.0, 0.0025, 0.0075], "fail": 0.0455, "inconclusive": 0.947, "pending": 0.0, "pass_not_specific_share": 0.133, "seconds": 263, "label": "BINDING: DGP = model"}

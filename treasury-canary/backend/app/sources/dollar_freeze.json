@@ -100,7 +100,7 @@
   ],
   "critical_values": "exact alpha-spending recursion on the recorded p_u at -1%/yr, units in maturity order, earlier critical values as recorded, futility non-binding (stats review v1 minor 2)",
   "fail_rule": "delta_U < 0.10, delta_U = the one-sided 98.3% (level 0.05/3) upper bound on the edge with p_u at +1%/yr, on the 0.001 grid over [-1, 1] (stats review v1 minor 3)",
-  "placebo": "the same rule without the deceleration clause (unpatched, the same cooling), logged forward with identical eligibility, units, p_u and hits; printed beside any result; a PASS reads 'post-scramble reversal: not specific to deceleration' when the placebo also passes (p_plus at -1%/yr <= the look's cumulative alpha) or T_placebo >= T_decel at zero drift (stats review v1 S2)",
+  "placebo": "the same rule without the deceleration clause (unpatched, the same cooling), logged forward with identical eligibility, units, p_u and hits; its n, S, T at zero drift, tail probability at -1%/yr and whether it matches or beats the rule are printed beside any result and never change the wording (stats re-check S2)",
   "statistic": "exact Poisson-binomial on matured units; T = (S - sum p_u)/n reported at each drift",
   "garch_fit": {
    "alpha": 0.04371597,
@@ -124,7 +124,10 @@
    },
    "fetched_on": "2026-11-03",
    "command": "python3 -I d3.py fit freeze_vintage/DTWEXBGS.csv freeze_vintage/DGS10.csv 2026-11-03"
-  }
+  },
+  "pass_wording": "dollar scramble peaking: beat a no-information model (deceleration-specific: not tested)",
+  "_pass_wording": "deceleration-specific wording needs its own pre-registered matched-scramble test, with G6 showing a false-'deceleration' rate <= 0.05, added as a new SPEC version before the first unit is scored",
+  "volatility_regime": "not bracketed: under the fit window's latest decade (2016-26 volatility) plus a -1%/yr drift a false PASS runs about 0.055-0.079 (G6 and the statistics re-check); the stronger option (PASS on the larger p- of two frozen fits) is Q19's alternative"
  },
  "_d3": "Q17 (P2, asked 2026-11-02) and Q19 (P1, asked 2026-11-03: the drift bracket trades power for robustness): the SPEC v1 defaults CARRIED, NOT answers. Any change is post-hoc and needs a new SPEC version.",
  "onset_exclusion": "12_months_from_last_onset",
