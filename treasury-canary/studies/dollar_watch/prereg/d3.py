@@ -5,10 +5,12 @@ from those archived bytes (each checked against its recorded sha256), before the
 evaluates a look when n matured units reaches 8 / 16 / 24. Stdlib + numpy + scipy.
 
     python3 -I d3.py fit    <DTWEXBGS.csv> <DGS10.csv> <through YYYY-MM-DD>                     -> frozen params (JSON)
-    python3 -I d3.py admit  <ledger.json> <freeze.json> <kind> <date> <ALFRED DTWEXBGS.csv> <DGS10.csv> <archive dir> <admissions.json>
-                            (a row whose first vintage the panel did not read: re-run the rule on that vintage; append the record)
+    python3 -I d3.py admit  <ledger.json> <freeze.json> <kind> <date> <ALFRED vintage date> <ALFRED DTWEXBGS.csv> <DGS10.csv>
+                            <archive dir> <admissions.json>
+                            (a row whose first vintage the panel did not read, or whose archived bytes are lost: re-run the
+                            rule on the first vintage; append the record)
     python3 -I d3.py units  <ledger.json> <admissions.json> <archive dir> <kind> <units.json>  -> the units, rebuilt (SPEC v1 §3.1)
-    python3 -I d3.py pu-row <ledger.json> <archive dir> <freeze.json> <kind> <date> <units.json> <admissions.json> <records.json> [N]
+    python3 -I d3.py pu-row <ledger.json> <archive dir> <freeze.json> <kind> <date> <admissions.json> <records.json> [N]
                             (once per unit start, before maturity; appends to records.json, i.e. backend/app/sources/dollar_pu_records.json)
     python3 -I d3.py look   <looks.json>                                                        -> the look (JSON)
 
@@ -205,15 +207,28 @@ def _same_h10_week(a: str, b: str) -> bool:
     return dt.date.fromisoformat(a).isocalendar()[:2] == dt.date.fromisoformat(b).isocalendar()[:2]
 
 
-def admit(ledger_path: str, freeze_path: str, kind: str, date: str, b_path: str, y_path: str, archive_dir: str,
-          admissions_path: str) -> dict:
-    """A row the panel saw only on a later vintage (d3_eligible None): re-run the frozen rule on the FIRST vintage that
-    carried its date (from ALFRED; its last day must fall in the date's H.10 week), archive those bytes, and append an
-    admission record (append-only; refused if one exists)."""
+def _bytes_ok(archive_dir: str, inp: dict | None) -> bool:
+    try:
+        for sid in ARCHIVED:
+            _archived(archive_dir, ((inp or {}).get(sid) or {}).get("sha256"), sid)
+        return True
+    except SystemExit:
+        return False
+
+
+def admit(ledger_path: str, freeze_path: str, kind: str, date: str, vintage_date: str, b_path: str, y_path: str,
+          archive_dir: str, admissions_path: str) -> dict:
+    """Settle a row from the FIRST vintage that carried its date (ALFRED vintage `vintage_date`; its last day must fall in
+    the date's H.10 week): re-run the frozen rule, archive the bytes, append an admission record (append-only; refused if
+    one exists). For a row with an unknown first vintage (d3_eligible None) the record decides admission; for an admitted
+    row whose archived bytes are lost it is a repair (data confirm pass M-1)."""
     import datetime as dt
     row = _row(ledger_path, kind, date)
-    if row.get("d3_eligible") is not None:
-        raise SystemExit(f"{kind} {date} has d3_eligible {row.get('d3_eligible')}: admission is only for unknown first vintages")
+    if row.get("d3_eligible") is False:
+        raise SystemExit(f"{kind} {date} is not eligible (in-sample or revision-born): nothing to admit")
+    repair = row.get("d3_eligible") is True
+    if repair and _bytes_ok(archive_dir, row.get("inputs")):
+        raise SystemExit(f"{kind} {date} is admitted and its archived bytes are intact: nothing to repair")
     fz = json.load(open(freeze_path, encoding="utf-8"))
     if not (fz.get("freeze_date") and date > fz["freeze_date"]):
         raise SystemExit(f"{date} is not after the freeze date")
@@ -236,72 +251,88 @@ def admit(ledger_path: str, freeze_path: str, kind: str, date: str, b_path: str,
         if not os.path.exists(dst):
             open(dst, "wb").write(body)
         shas[sid] = {"sha256": h}
-    rec = {"kind": kind, "date": date, "admitted": date in fires, "k": k, "vintage_last_day": b_last, "inputs": shas,
-           "checked_on": dt.datetime.now(dt.timezone.utc).date().isoformat()}
+    rec = {"kind": kind, "date": date, "admitted": date in fires, "repair": repair, "k": k, "vintage_date": vintage_date,
+           "vintage_last_day": b_last, "inputs": shas, "checked_on": dt.datetime.now(dt.timezone.utc).date().isoformat()}
+    if repair and not rec["admitted"]:
+        rec["note"] = "the reconstructed first vintage does not fire: a discrepancy for the look's verifiers"
     adm["records"].append(rec)
     _save(admissions_path, adm)
     return rec
 
 
-def _admitted_inputs(row: dict, adm: dict) -> dict | None:
-    """the vintage a row is scored on: its own first-sight inputs when d3_eligible is True; the admission's when unknown."""
+def _settle(row: dict, adm: dict, archive_dir: str) -> tuple[str, dict | None]:
+    """("ok", inputs) for a row scored on intact archived bytes; ("excluded", None); or ("unresolved", None) when the
+    first vintage is unknown, or the bytes are lost, and no admission record settles it."""
+    a = next((x for x in adm.get("records", []) if x["kind"] == row["kind"] and x["date"] == row["date"]), None)
     if row.get("d3_eligible") is True:
-        return row.get("inputs")
+        if _bytes_ok(archive_dir, row.get("inputs")):
+            return "ok", row.get("inputs")
+        if a and a.get("admitted") and _bytes_ok(archive_dir, a.get("inputs")):
+            return "ok", a["inputs"]
+        return "unresolved", None
     if row.get("d3_eligible") is None:
-        a = next((x for x in adm.get("records", []) if x["kind"] == row["kind"] and x["date"] == row["date"]), None)
-        return a["inputs"] if a and a.get("admitted") else None
-    return None
+        if a is None:
+            return "unresolved", None
+        return ("ok", a["inputs"]) if a.get("admitted") and _bytes_ok(archive_dir, a.get("inputs")) else ("excluded", None)
+    return "excluded", None
 
 
 def units(ledger_path: str, admissions_path: str, archive_dir: str, kind: str) -> dict:
     """SPEC v1 §3.1, rebuilt from the rows: admitted unpatched firings in date order; a firing within 250 index days of
     the current unit's FIRST firing (counted on the later firing's own vintage) joins it; otherwise it starts a unit.
-    The panel's unit fields are compared and every mismatch listed."""
+    Unresolved rows (first vintage unknown, or bytes lost, with no admission) are listed and skipped, never fatal; the
+    panel's unit fields are compared and every mismatch listed."""
     led = json.load(open(ledger_path, encoding="utf-8"))
     adm = _load(admissions_path, {"records": []})
     rows = sorted((e for e in led.get("entries", []) if e.get("kind") == kind and "unpatched" in (e.get("variants") or [])),
                   key=lambda e: e["date"])
-    out, cur, notes = [], None, []
+    out, cur, notes, unresolved = [], None, [], []
     for e in rows:
-        inp = _admitted_inputs(e, adm)
-        if inp is None:
+        status, inp = _settle(e, adm, archive_dir)
+        if status == "unresolved":
+            unresolved.append(e["date"])
             continue
-        b = _archived(archive_dir, (inp.get("DTWEXBGS") or {}).get("sha256"), f"{e['date']} DTWEXBGS")
-        y = _archived(archive_dir, (inp.get("DGS10") or {}).get("sha256"), f"{e['date']} DGS10")
-        ds, _, _ = calendar_by(b, y)
+        if status == "excluded":
+            continue
+        ds, _, _ = calendar_by(os.path.join(archive_dir, inp["DTWEXBGS"]["sha256"]), os.path.join(archive_dir, inp["DGS10"]["sha256"]))
         pos = {d: i for i, d in enumerate(ds)}
         if cur is not None and cur["first"] in pos and pos[e["date"]] - pos[cur["first"]] < 250:
             cur["members"].append({"date": e["date"], "gap": pos[e["date"]] - pos[cur["first"]]})
             continue
         if cur is not None and cur["first"] not in pos:
-            notes.append(f"{e['date']}: the unit first {cur['first']} is off this vintage's calendar; a new unit starts")
+            notes.append(f"{e['date']}: the unit first {cur['first']} is off this vintage's calendar; a new unit starts "
+                         "(its window may overlap the previous unit's: for the look's verifiers)")
         cur = {"first": e["date"], "members": []}
         out.append(cur)
     panel = {e["date"]: e.get("unit_first") for e in rows}
     rebuilt = {u["first"]: u["first"] for u in out} | {m["date"]: u["first"] for u in out for m in u["members"]}
     mism = [{"date": d, "panel": panel.get(d), "rebuilt": rebuilt.get(d)} for d in sorted(set(panel) | set(rebuilt))
-            if panel.get(d) != rebuilt.get(d)]
-    return {"kind": kind, "units": out, "mismatches_with_panel": mism, "notes": notes}
+            if d not in unresolved and panel.get(d) != rebuilt.get(d)]
+    return {"kind": kind, "units": out, "unresolved": unresolved, "mismatches_with_panel": mism, "notes": notes}
 
 
-def pu_row(ledger_path: str, archive_dir: str, freeze_path: str, kind: str, date: str, units_path: str, admissions_path: str,
+def pu_row(ledger_path: str, archive_dir: str, freeze_path: str, kind: str, date: str, admissions_path: str,
            records_path: str | None = None, n_paths: int = 100_000) -> dict:
-    """p_u for the unit that starts at (kind, date). Refuses unless (kind, date) is a unit start in the rebuilt units, it
-    has not matured, it has no record yet, every archived input matches its recorded sha256, the frozen parameters match
-    their hash, and the archived vintage puts the firing at the recorded index k. Appends the record when records_path is
-    given (data re-check M-B)."""
+    """p_u for the unit that starts at (kind, date). The units are rebuilt here, never read from a file (confirm pass N-b).
+    Refuses unless (kind, date) is a unit start, no unresolved row precedes it, it has not matured, it has no record yet,
+    every archived input matches its recorded sha256, the frozen parameters match their hash, and the archived vintage puts
+    the firing at the recorded index k. Appends the record when records_path is given (data re-check M-B)."""
     import datetime as dt
     row = _row(ledger_path, kind, date)
-    us = json.load(open(units_path, encoding="utf-8"))
-    if us.get("kind") != kind or date not in {u["first"] for u in us.get("units", [])}:
+    us = units(ledger_path, admissions_path, archive_dir, kind)
+    if date not in {u["first"] for u in us["units"]}:
         raise SystemExit(f"{kind} {date} is not an admitted unit start (d3_eligible {row.get('d3_eligible')}, unit_first {row.get('unit_first')})")
+    early = [d for d in us["unresolved"] if d < date]
+    if early:
+        raise SystemExit(f"unresolved rows before {date} ({', '.join(early)}) could change the units: settle them with admit first")
     if "outcomes_250d" in row:
         raise SystemExit(f"{kind} {date} has matured: p_u is computed before maturity only")
     recs = _load(records_path, {"records": []}) if records_path else {"records": []}
     if any(r.get("kind") == kind and r.get("date") == date for r in recs.get("records", [])):
         raise SystemExit(f"{kind} {date} already carries a p_u record: it is computed once")
     adm = _load(admissions_path, {"records": []})
-    inp = _admitted_inputs(row, adm) or {}
+    _, inp = _settle(row, adm, archive_dir)
+    inp = inp or {}
     fz = json.load(open(freeze_path, encoding="utf-8"))
     params = (fz.get("d3") or {}).get("garch_fit") or {}
     if param_hash(params) != params.get("param_hash"):
@@ -310,14 +341,15 @@ def pu_row(ledger_path: str, archive_dir: str, freeze_path: str, kind: str, date
     ds, B = rule_calendar(paths["DTWEXBGS"], paths["DGS10"], through=date)      # truncated at k1: nothing after the firing
     if not ds or ds[-1] != date:
         raise SystemExit(f"{date} is not an index day of the archived vintage")
-    k_rec = row.get("k") if row.get("d3_eligible") is True else next(
-        (a.get("k") for a in adm.get("records", []) if a["kind"] == kind and a["date"] == date), None)
+    a = next((x for x in adm.get("records", []) if x["kind"] == kind and x["date"] == date), None)
+    k_rec = a.get("k") if a and inp == a.get("inputs") else row.get("k")
     if isinstance(k_rec, int) and len(ds) - 1 != k_rec:
         raise SystemExit(f"index mismatch: the archived vintage puts {date} at k={len(ds) - 1}, the record says k={k_rec}")
     h1 = h_next(params, returns(B))
     res = p_u(params, h1, n_paths, seed=int(date.replace("-", "")))
     rec = {"kind": kind, "date": date, "k": len(ds) - 1, "h_next": h1, **res, "garch_param_hash": params["param_hash"],
            "inputs_sha256": {sid: inp[sid]["sha256"] for sid in ARCHIVED},
+           "unit_members": next(u["members"] for u in us["units"] if u["first"] == date),
            "computed_on": dt.datetime.now(dt.timezone.utc).date().isoformat()}
     if records_path:
         recs.setdefault("records", []).append(rec)
@@ -428,14 +460,14 @@ if __name__ == "__main__":
                    inputs_sha256={"DTWEXBGS": _sha256(sys.argv[2]), "DGS10": _sha256(sys.argv[3])})
         print(json.dumps(out, indent=1, sort_keys=True))
     elif cmd == "admit":
-        print(json.dumps(admit(*sys.argv[2:10]), indent=1))
+        print(json.dumps(admit(*sys.argv[2:11]), indent=1))
     elif cmd == "units":
         res = units(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
         _save(sys.argv[6], res)
         print(json.dumps(res, indent=1))
     elif cmd == "pu-row":
-        n = int(sys.argv[10]) if len(sys.argv) > 10 else 100_000
-        print(json.dumps(pu_row(*sys.argv[2:10], n_paths=n), indent=1))
+        n = int(sys.argv[9]) if len(sys.argv) > 9 else 100_000
+        print(json.dumps(pu_row(*sys.argv[2:9], n_paths=n), indent=1))
     elif cmd == "look":
         spec = json.load(open(sys.argv[2], encoding="utf-8"))
         lk = evaluate_look(spec["look"] - 1, spec["units"], spec.get("prev_crit", []))

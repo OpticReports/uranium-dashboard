@@ -91,9 +91,15 @@ reads the release that added the date's week. The flag is unknown (null) in two 
 - no earlier rule state exists. At the freeze the state is seeded with the freeze vintage's last day,
   2026-10-30.
 
-An unknown row is settled by `prereg/d3.py admit`. It re-runs the frozen rule on the first vintage from
-ALFRED (whose last day must fall in the date's H.10 week), archives those bytes, and appends an admission
-record (data re-check M-A). A firing that appears only after a revision is logged and never scored.
+An unknown row is settled by `prereg/d3.py admit`.
+- It re-runs the frozen rule on the first vintage from ALFRED, whose last day must fall in the date's
+  H.10 week, and records the ALFRED vintage date.
+- It archives those bytes and appends an admission record (data re-check M-A).
+- `admit` also repairs an admitted row whose archived bytes are lost.
+- Until a row is settled it is listed as unresolved. It is skipped, never fatal, and no p_u is computed
+  for a later unit while it is open (confirm pass M-1).
+
+A firing that appears only after a revision is logged and never scored.
 
 **Units.**
 - A unit starts at an admitted unpatched firing f₁ (index k₁).
@@ -105,8 +111,9 @@ record (data re-check M-A). A firing that appears only after a revision is logge
 Outcome windows are therefore disjoint, so units are the clusters (stats review v0 S1). The panel's unit
 fields are provisional. At each R1 and at each look, `prereg/d3.py units` rebuilds the units from the
 rows and the admissions under this rule, counting each gap on the later firing's own archived vintage.
-It lists every mismatch with the panel's fields, and two verifiers check the result at a look. Matured
-units are ordered by maturity date, k₁ + 250.
+It lists every mismatch with the panel's fields, and two verifiers check the result at a look. If a
+unit's first date is missing from a later firing's vintage, a new unit starts. The verifiers check such
+cases for overlapping windows. Matured units are ordered by maturity date, k₁ + 250.
 
 ### 3.2 Outcome (S1, primary)
 
@@ -150,11 +157,12 @@ The fit uses returns only, never S1, and was written before any forward firing e
 - The three drifts share the same random numbers, so p⁻ ≥ p⁰ ≥ p⁺. The seed is YYYYMMDD of k₁, and the
   MC SE is ≤ 0.0016 each.
 - p_u is computed **once, before the unit matures**, by `prereg/d3.py pu-row`, for a unit start in the
-  rebuilt units, from the archived firing bytes only, each checked against its recorded sha256.
+  units it rebuilds itself, from the archived firing bytes only, each checked against its recorded
+  sha256.
 - The harness refuses on any of these (G7; data review v1 M5, re-check M-B):
   - a hash mismatch;
   - an index mismatch;
-  - a row that is not a unit start;
+  - a row that is not a unit start, or one with an unresolved row before it;
   - a matured unit;
   - an existing record.
 - The record goes into `backend/app/sources/dollar_pu_records.json` (append-only) and is checked by a
@@ -389,8 +397,8 @@ it, in a new SPEC version labelled post-hoc (Q18). No DECEL outcome was computed
     after the day's first builds: data re-check S-1);
   - m's end + 5 business days.
 - **What it waits for.** The Fed list must be reviewed through m (`reviewed_through` ≥ m). Every input
-  (VIXCLS, SP500, the 8 EM legs, the OFR FSI) must be **fetched fresh** that build, not served from a
-  stale cache, and must **reach m's last business day**. The EM basket counts when its newest leg
+  (VIXCLS, SP500, the 8 EM legs, the OFR FSI) must **not be served from a failed fetch's stale cache**
+  (status "ok") and must **reach m's last business day**. The EM basket counts when its newest leg
   reaches that day and no leg is stale. It waits for these until a **deadline**, the end of m+1. At the
   deadline it is evaluated anyway, recording what was missing and whether the list was current.
 - **One row per month, onset or not**, carrying:
@@ -478,7 +486,7 @@ they are, frozen field by field.
 The panel serves `GET /dollar-watch/ledger` (the ledger as stored) and
 `GET /dollar-watch/archive/<sha256>[.gz]` (only names that are a sha256). At each R1 the harness:
 - downloads both, and commits the ledger snapshot;
-- runs `admit` for any unknown row and `units` for the unit list;
+- runs `admit` for any unknown row or lost archive, and `units` for the unit list;
 - runs `pu-row` for any new unit start, and commits the record.
 
 The payload reports the archive's size on disk, any row whose inputs failed to archive (those are retried

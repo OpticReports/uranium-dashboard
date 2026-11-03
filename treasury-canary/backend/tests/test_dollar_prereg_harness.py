@@ -106,13 +106,6 @@ def _ledger(tmp_path, name, date, shas, k, **kw):
     return str(p)
 
 
-def _units(tmp_path, ledger, arc, name="units.json"):
-    out = d3.units(ledger, str(tmp_path / "none.json"), arc, "scramble_rule")
-    p = tmp_path / name
-    p.write_text(json.dumps(out))
-    return str(p)
-
-
 def test_pu_row_reads_only_the_archived_bytes(tmp_path):
     day = "2026-10-15"
     arc, shas = _archive(tmp_path, day, extra_after=False)
@@ -120,28 +113,29 @@ def test_pu_row_reads_only_the_archived_bytes(tmp_path):
     k = ds.index(day)
     l1 = _ledger(tmp_path, "l1.json", day, shas, k)
     none = str(tmp_path / "none.json")
-    rec = d3.pu_row(l1, arc, FREEZE, "scramble_rule", day, _units(tmp_path, l1, arc), none, None, n_paths=3000)
+    rec = d3.pu_row(l1, arc, FREEZE, "scramble_rule", day, none, None, n_paths=3000)
     arc2, shas2 = _archive(tmp_path, day, extra_after=True)                  # the same vintage plus data after k1
     l2 = _ledger(tmp_path, "l2.json", day, shas2, k)
-    u2 = _units(tmp_path, l2, arc2, "u2.json")
-    rec2 = d3.pu_row(l2, arc2, FREEZE, "scramble_rule", day, u2, none, None, n_paths=3000)
+    rec2 = d3.pu_row(l2, arc2, FREEZE, "scramble_rule", day, none, None, n_paths=3000)
     assert rec["by_drift"] == rec2["by_drift"] and rec["h_next"] == rec2["h_next"] and rec["seed"] == 20261015
+    assert rec["unit_members"] == []
     records = str(tmp_path / "records.json")
-    d3.pu_row(l2, arc2, FREEZE, "scramble_rule", day, u2, none, records, n_paths=500)
+    d3.pu_row(l2, arc2, FREEZE, "scramble_rule", day, none, records, n_paths=500)
     assert len(json.load(open(records))["records"]) == 1
     with pytest.raises(SystemExit, match="computed once"):                    # M-B: once
-        d3.pu_row(l2, arc2, FREEZE, "scramble_rule", day, u2, none, records, n_paths=100)
+        d3.pu_row(l2, arc2, FREEZE, "scramble_rule", day, none, records, n_paths=100)
     with pytest.raises(SystemExit, match="before maturity"):                  # M-B: before maturity
-        d3.pu_row(_ledger(tmp_path, "l6.json", day, shas2, k, outcomes_250d={"hit": True}), arc2, FREEZE, "scramble_rule", day, u2,
+        d3.pu_row(_ledger(tmp_path, "l6.json", day, shas2, k, outcomes_250d={"hit": True}), arc2, FREEZE, "scramble_rule", day,
                   none, None, n_paths=100)
-    open(os.path.join(arc, shas["DGS10"]), "ab").write(b"2026-10-16,9.99\n")   # tampered bytes
-    with pytest.raises(SystemExit, match="do not match"):
-        d3.pu_row(l1, arc, FREEZE, "scramble_rule", day, str(tmp_path / "units.json"), none, None, n_paths=100)
-    with pytest.raises(SystemExit, match="not an admitted unit start"):
-        d3.pu_row(_ledger(tmp_path, "l4.json", day, shas2, k, d3_eligible=False), arc2, FREEZE, "scramble_rule", day,
-                  _units(tmp_path, str(tmp_path / "l4.json"), arc2, "u4.json"), none, None, n_paths=100)
     with pytest.raises(SystemExit, match="index mismatch"):
-        d3.pu_row(_ledger(tmp_path, "l5.json", day, shas2, k + 1), arc2, FREEZE, "scramble_rule", day, u2, none, None, n_paths=100)
+        d3.pu_row(_ledger(tmp_path, "l5.json", day, shas2, k + 1), arc2, FREEZE, "scramble_rule", day, none, None, n_paths=100)
+    with pytest.raises(SystemExit, match="not an admitted unit start"):
+        d3.pu_row(_ledger(tmp_path, "l4.json", day, shas2, k, d3_eligible=False), arc2, FREEZE, "scramble_rule", day, none, None,
+                  n_paths=100)
+    open(os.path.join(arc, shas["DGS10"]), "ab").write(b"2026-10-16,9.99\n")   # tampered bytes: the row no longer resolves
+    with pytest.raises(SystemExit, match="not an admitted unit start"):
+        d3.pu_row(l1, arc, FREEZE, "scramble_rule", day, none, None, n_paths=100)
+    assert d3.units(l1, none, arc, "scramble_rule")["unresolved"] == [day]
 
 
 def test_harness_rule_is_the_panels_rule():
@@ -180,15 +174,27 @@ def test_admit_reruns_the_rule_on_the_first_vintage(tmp_path, monkeypatch):
     adm = str(tmp_path / "admissions.json")
     late = _vintage(tmp_path, "late", "2008-10-03")
     with pytest.raises(SystemExit, match="not the first vintage"):
-        d3.admit(str(led), str(fzp), "scramble_rule", "2008-09-22", late["DTWEXBGS"], late["DGS10"], str(arc), adm)
+        d3.admit(str(led), str(fzp), "scramble_rule", "2008-09-22", "2008-10-06", late["DTWEXBGS"], late["DGS10"], str(arc), adm)
     first = _vintage(tmp_path, "first", "2008-09-26")
-    rec = d3.admit(str(led), str(fzp), "scramble_rule", "2008-09-22", first["DTWEXBGS"], first["DGS10"], str(arc), adm)
-    assert rec["admitted"] is True and rec["vintage_last_day"] == "2008-09-26"     # the in-sample 2008 firing, re-run
-    assert all(os.path.exists(arc / v["sha256"]) for v in rec["inputs"].values())
-    plc = d3.admit(str(led), str(fzp), "placebo_rule", "2008-09-22", first["DTWEXBGS"], first["DGS10"], str(arc), adm)
+    rec = d3.admit(str(led), str(fzp), "scramble_rule", "2008-09-22", "2008-09-29", first["DTWEXBGS"], first["DGS10"], str(arc), adm)
+    assert rec["admitted"] is True and rec["vintage_last_day"] == "2008-09-26" and rec["vintage_date"] == "2008-09-29"
+    assert all(os.path.exists(arc / v["sha256"]) for v in rec["inputs"].values()) and rec["repair"] is False
+    plc = d3.admit(str(led), str(fzp), "placebo_rule", "2008-09-22", "2008-09-29", first["DTWEXBGS"], first["DGS10"], str(arc), adm)
     assert plc["admitted"] is False                                         # the placebo did not fire that day
     with pytest.raises(SystemExit, match="already has an admission"):
-        d3.admit(str(led), str(fzp), "scramble_rule", "2008-09-22", first["DTWEXBGS"], first["DGS10"], str(arc), adm)
+        d3.admit(str(led), str(fzp), "scramble_rule", "2008-09-22", "2008-09-29", first["DTWEXBGS"], first["DGS10"], str(arc), adm)
+    u = d3.units(str(led), adm, str(arc), "scramble_rule")
+    assert [x["first"] for x in u["units"]] == ["2008-09-22"] and u["unresolved"] == []
+    # confirm pass M-1: an admitted row whose archived bytes are lost is repaired from the first vintage (other bytes)
+    led2 = tmp_path / "ledger2.json"
+    led2.write_text(json.dumps({"entries": [{"kind": "scramble_rule", "date": "2008-09-22", "variants": ["unpatched"], "d3_eligible": True,
+                                             "inputs": {"DTWEXBGS": {"sha256": "0" * 64}, "DGS10": {"sha256": "1" * 64}}}]}))
+    adm2 = str(tmp_path / "admissions2.json")
+    assert d3.units(str(led2), adm2, str(arc), "scramble_rule")["unresolved"] == ["2008-09-22"]
+    fix = d3.admit(str(led2), str(fzp), "scramble_rule", "2008-09-22", "2008-09-29", first["DTWEXBGS"], first["DGS10"], str(arc), adm2)
+    assert fix["repair"] is True and fix["admitted"] is True
+    u2 = d3.units(str(led2), adm2, str(arc), "scramble_rule")
+    assert [x["first"] for x in u2["units"]] == ["2008-09-22"] and u2["unresolved"] == []
 
 
 def test_units_rebuild_from_the_rows(tmp_path):
@@ -216,6 +222,21 @@ def test_units_rebuild_from_the_rows(tmp_path):
     assert [u["first"] for u in out["units"]] == [days[0], days[2]]
     assert out["units"][0]["members"] == [{"date": days[1], "gap": 130}]
     assert out["mismatches_with_panel"] == [{"date": days[1], "panel": days[1], "rebuilt": days[0]}]
+    # confirm pass M-1: a lost archive makes its row unresolved (listed, skipped, never fatal) until admit restores the bytes
+    lost = rows[0]["inputs"]["DTWEXBGS"]["sha256"]
+    os.remove(arc / lost)
+    out = d3.units(str(led), str(tmp_path / "none.json"), str(arc), "scramble_rule")
+    assert out["unresolved"] == [days[0]] and [u["first"] for u in out["units"]] == [days[1]]
+    fz = json.load(open(FREEZE))
+    fz["freeze_date"] = "2018-12-31"
+    fzp = tmp_path / "freeze_2018.json"
+    fzp.write_text(json.dumps(fz))
+    v = _vintage(tmp_path, "alfred_" + days[0], days[0])
+    adm = str(tmp_path / "adm.json")
+    rec = d3.admit(str(led), str(fzp), "scramble_rule", days[0], "2019-01-07", v["DTWEXBGS"], v["DGS10"], str(arc), adm)
+    assert rec["repair"] is True
+    out = d3.units(str(led), adm, str(arc), "scramble_rule")
+    assert out["unresolved"] == [] and [u["first"] for u in out["units"]] == [days[0], days[2]]
 
 
 def test_look_uses_the_recorded_critical_value_and_prints_the_placebo():
