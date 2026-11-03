@@ -14,8 +14,8 @@ export const DW: Record<string, GlossaryEntry> = {
     title: "Layer 2: dollar-funding nowcast",
     what: "The plumbing of dollar borrowing: what banks and companies pay for short-term dollars, how stressed overnight repo is, and how much foreign central banks borrow from the Fed.",
     read: "This is the mechanism behind a dollar scramble: when dollar borrowers abroad cannot roll their debt, these gauges jump first or alongside the dollar. Quiet gauges mean no sign of a funding squeeze on the free gauges. They were also quiet through the 2015-16 and 2018 EM scares, and the cross-currency basis (the direct price of offshore dollars) is paid-only and not shown.",
-    read2: "The summary's one word: under strain = the CP spread's 5-day average above 1pp (the crisis dating's line); elevated = below that line, but CP or the OFR funding index at its 80th percentile of its own history or higher; quiet = both at or below their 1-year medians; in its usual range = the rest, about three days in five since 2020. Swap-line borrowing is a lagging stock and never sets the word.",
-    caveat: "Each gauge is ranked against its own history, from the start year the table shows; for most of them that includes 2008 (CP since 1997, the OFR index since 2000, NFCI since 1971, swap lines since Dec-2007); the two SOFR rows start in 2018 and 2021 and have no crisis in their base. They moved with or ahead of the dollar's peak, but their first alarms came roughly with the crisis's start (2007, 2022; n = 2): coincident, not early.",
+    read2: "The summary's one word: under strain = the CP spread's 5-print average above 1pp (the crisis dating's line); elevated = below that line, but CP's 5-print average or the OFR funding index at or above the 80th percentile of its own history; quiet = both at or below their 1-year medians; in its usual range = the rest, about three days in five since 2020. Swap-line borrowing is a lagging stock and never sets the word.",
+    caveat: "Each gauge is ranked against its own history, from the start year the table shows; for most of them that includes 2008 (CP since 1997, the OFR index since 2000, NFCI since 1971, swap lines since Dec-2007); the SOFR tail starts in 2018 (its base holds the Sep-2019 repo spike and March 2020, not 2008); SOFR minus IORB starts in 2021, with no crisis in its base. They moved with or ahead of the dollar's peak, but their first alarms came roughly with the crisis's start (2007, 2022; n = 2): coincident, not early.",
   },
   layer_scramble: {
     title: "Layer 3: dollar-scramble peak gauge",
@@ -126,8 +126,8 @@ export const DW: Record<string, GlossaryEntry> = {
   cp_fin: {
     title: "Financial CP minus 3-month T-bill",
     what: "What banks and finance companies pay to borrow unsecured for 3 months in commercial paper, minus the Treasury bill yield. It is the price of bank credit risk in dollar money markets.",
-    read: "Usually between about 0.05 and 0.6 points (median 0.18 since 1997; 0.09 since 2019). In the dollar-funding onsets of 2007-12, 2009-01 and 2020-03 its 5-day average passed 1 percentage point (1.78, 1.14 and 1.12). The crisis dating uses that 1pp line to mark an onset as dollar-funding.",
-    caveat: "The own-history percentile runs from the start year the table shows (1997 for this series with its full history loaded), so it includes 2008; the last-10-years column does not. Single prints can jump, month-ends especially, so the summaries judge it on the 5-day average, as the crisis dating does.",
+    read: "Usually between about 0.05 and 0.6 points (median 0.18 since 1997; 0.09 since 2019). In the dollar-funding onsets of 2007-12, 2009-01 and 2020-03 its average over 5 prints passed 1 percentage point (1.78, 1.14 and 1.12). The crisis dating uses that 1pp line to mark an onset as dollar-funding.",
+    caveat: "The own-history percentile runs from the start year the table shows (1997 for this series with its full history loaded), so it includes 2008; the last-10-years column does not. Single prints can jump, month-ends especially, so the summaries judge it on the average of its last 5 prints, as the crisis dating does. FRED leaves the rate blank when too few trades print, for weeks in March-May 2020; the summaries then say so and set no word from CP.",
   },
   cp_nonfin: {
     title: "Nonfinancial CP minus 3-month T-bill",
@@ -157,7 +157,7 @@ export const DW: Record<string, GlossaryEntry> = {
   sofr_tail: {
     title: "SOFR tail: 99th percentile minus SOFR",
     what: "How much the most expensive overnight repo trades (the 99th percentile) pay over the median repo rate (SOFR), in basis points.",
-    read: "A wide tail means some borrowers are paying up for overnight dollars, strain in the repo market that funds Treasuries. Its history starts in 2018 and holds no crisis, so no lead is established.",
+    read: "A wide tail means some borrowers are paying up for overnight dollars, strain in the repo market that funds Treasuries. Its history starts in 2018: it holds the Sep-2019 repo spike and March 2020 but not 2008, and no lead was tested.",
   },
   sofr_iorb: {
     title: "SOFR minus interest on reserves",

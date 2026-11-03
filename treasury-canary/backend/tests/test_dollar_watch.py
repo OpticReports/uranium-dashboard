@@ -437,9 +437,9 @@ def test_gold_note_requires_quiet_funding(payload, inputs, tmp_path):
     g = payload["state"]["safe_haven"]["gold"]
     cp = {r["id"]: r for r in payload["funding"]["rows"]}["cp_fin"]
     assert cp["mean_5d"] <= 1.0 and dw._funding_word({r["id"]: r for r in payload["funding"]["rows"]}) in ("quiet", "usual")
-    assert g["off_52w_high_pct"] <= -15 and g["note"] == ("with no sign of a dollar-funding squeeze (the CP spread's 5-day average under "
-                                                           "1pp, it and the OFR funding index under their 80th percentiles): outside the "
-                                                           "crisis pattern below")
+    assert g["off_52w_high_pct"] <= -15 and g["note"] == ("with no sign of a dollar-funding squeeze (the CP spread's 5-print average under "
+                                                           "1pp, it and the OFR funding index under their 80th percentiles, swap lines "
+                                                           "under $50bn): outside the crisis pattern below")
     stressed = json.loads(json.dumps(inputs))
     stressed["fred"]["DCPF3M"]["values"][-1] = (stressed["fred"]["DTB3"]["values"][-1] or 4.0) + 3.05     # CP-bill at a Lehman-sized print
     p = dw.build_dollar_watch(stressed, today="2026-11-02", ledger_file=str(tmp_path / "s.json"))
@@ -515,7 +515,7 @@ def test_summaries_cover_every_layer_restate_the_panel_and_never_print_a_hole(pa
     assert f"{dx['latest']:.1f}" in s["state"][0] and dw._ord(dx["pct_own_history"]) + " percentile" in s["state"][0]
     cp = next(r for r in payload["funding"]["rows"] if r["id"] == "cp_fin")
     cpf = dw.spread(dw.pairs(inputs["fred"]["DCPF3M"]), dw.pairs(inputs["fred"]["DTB3"]))
-    assert cp["mean_5d"] == dw.r(sum(v for _, v in cpf[-5:]) / 5, 2)          # SPEC v1 §5.3's line is on the 5-day mean
+    assert cp["mean_5d"] == dw.r(sum(v for _, v in cpf[-5:]) / 5, 3)          # SPEC v1 §5.3's line is on the unrounded 5-day mean
     assert f"{cp['latest']:.2f}pp" in s["funding"][0] and f"{cp['mean_5d']:.2f}pp" in s["funding"][1]
     assert f"{payload['scramble']['state']['roc20_max_60d_pct']:+.1f}%" in s["scramble"][0]
     assert s["page"][0].startswith("The dollar is ") and "not a forecast" in s["page"][1]
@@ -551,7 +551,7 @@ def test_every_glossary_entry_is_wired_into_the_tab(payload):
 
 def test_summaries_judge_funding_on_the_5_day_cp_line_never_on_the_swap_stock():
     """Wording review 2026-11-03 (S1, S4): 'strained' is SPEC v1 §5.3's CP line on the 5-day average; swap-line usage is a lagging
-    stock (above $50bn until Sep-2009 and Sep-2020 with prices calm) and never sets the word; one print cannot flip it."""
+    stock (above $50bn until Sep-2009 and Sep-2020 with prices calm) and never sets the word; one print moves the 5-day average by a fifth."""
     spec = open(os.path.join(STUDY, "spec", "SPEC_v1.md"), encoding="utf-8").read()
     assert "FRED SWPT > 50,000 ($m)" in spec and "trailing 5-observation mean of DCPF3M − DTB3" in spec and "> 1.00 on any day" in spec
 
@@ -573,6 +573,12 @@ def test_summaries_judge_funding_on_the_5_day_cp_line_never_on_the_swap_stock():
     assert dw._funding_word(crisis) == "elevated"                         # CP on its 5-day average, at the 80th
     crisis["cp_fin"]["pct_5d_own_history"] = 79
     assert dw._funding_word(crisis) == "quiet"
+    # second verifier, finding 4: 2008-01-14's true 5-day mean was 1.004; rounding to 2 dp read it 'usual', 'below both'
+    on_line = {"cp_fin": {"latest": 1.0, "mean_5d": 1.004, "median_1y": 0.5}, "ofr_funding": {"latest": 0.0, "median_1y": 0.0}}
+    assert dw._funding_word(on_line) == "strained"
+    f = dw.summaries({}, {"rows": [{"id": "cp_fin", "label": "c", "latest": 1.0, "mean_5d": 1.004, "median_1y": 0.5},
+                                   {"id": "swap_lines", "label": "s", "latest": 24.0}]}, {}, {}, {}, {})["funding"]
+    assert "average 1.004pp and swap lines are $24.00bn, past the 1pp line." in f[1]
     row = lambda i, v, p, **k: {"id": i, "label": i, "latest": v, "pct_own_history": p, "history_from": "1997-01-02", **k}   # noqa: E731
     ofr = row("ofr_funding", -1.0, 20, median_1y=0.0)
     hot = dw.summaries({}, {"rows": [row("cp_fin", 1.3, 99, mean_5d=1.2, median_1y=0.2), row("swap_lines", 0.1, 10), ofr]}, {}, {}, {}, {})
@@ -585,8 +591,11 @@ def test_summaries_judge_funding_on_the_5_day_cp_line_never_on_the_swap_stock():
     assert "strain" not in tail["page"][0] and "swap-line borrowing above $50bn but falling" in tail["page"][0]
     # re-check N2: Dec-2011 to Feb-2012 the stock was being drawn with CP calm: new demand, never 'the tail of a squeeze'
     new = dw.summaries({}, {"rows": [calm_cp, row("swap_lines", 108.8, 99, prev_4w=103.3), ofr]}, {}, {}, {}, {})
-    assert not any("tail of a squeeze" in x for x in new["funding"]) and any("and rising ($103bn four weeks earlier)" in x for x in new["funding"])
-    assert "swap-line borrowing above $50bn and rising" in new["page"][0]
+    assert not any("tail of a squeeze" in x for x in new["funding"]) and not any("rising" in x for x in new["funding"])   # +5%: a plateau
+    assert "swap-line borrowing above $50bn and roughly flat" in new["page"][0]
+    drawn = dw.summaries({}, {"rows": [calm_cp, row("swap_lines", 54.3, 99, prev_4w=2.3), ofr]}, {}, {}, {}, {})
+    assert any("and rising ($2bn four weeks earlier): dollar demand abroad" in x for x in drawn["funding"])
+    assert "swap-line borrowing above $50bn and rising" in drawn["page"][0]
 
 
 def test_one_month_end_print_moves_the_word_by_a_fifth(inputs, tmp_path):
@@ -600,9 +609,41 @@ def test_one_month_end_print_moves_the_word_by_a_fifth(inputs, tmp_path):
     p = dw.build_dollar_watch(x, today="2026-11-02", ledger_file=str(tmp_path / "m.json"))
     rows = {r["id"]: r for r in p["funding"]["rows"]}
     cpf = dw.spread(dw.pairs(x["fred"]["DCPF3M"]), dw.pairs(x["fred"]["DTB3"]))
-    assert rows["cp_fin"]["latest"] == 0.39 and rows["cp_fin"]["mean_5d"] == dw.r(sum(v for _, v in cpf[-5:]) / 5, 2) < 0.2
+    assert rows["cp_fin"]["latest"] == 0.39 and rows["cp_fin"]["mean_5d"] == dw.r(sum(v for _, v in cpf[-5:]) / 5, 3) < 0.2
     assert dw._funding_word(rows) in ("quiet", "usual") and p["state"]["safe_haven"]["gold"]["note"]
+    state = {"safe_haven": {"gold": {"off_52w_high_pct": -27.2}}}
+    big = [dict(r, latest=320.0) if r["id"] == "swap_lines" else r for r in p["funding"]["rows"]]
+    assert dw.gold_funding_note(state, {"rows": big}) is None                         # a $320bn swap stock is a squeeze sign
     assert not any(w in p["summaries"]["page"][0] for w in ("elevated", "strain"))
+
+
+def _cut(inputs, day):
+    """the fixture as a build on `day` would have seen it (every dated series cut at day)."""
+    out = json.loads(json.dumps(inputs))
+    for s in list(out["fred"].values()) + [out["dxy"], out["gold"], out["emb"]]:
+        keep = [i for i, d in enumerate(s["dates"]) if d <= day]
+        s["dates"], s["values"] = [s["dates"][i] for i in keep], [s["values"][i] for i in keep]
+    o = out["ofr"]
+    keep = [i for i, d in enumerate(o["dates"]) if d <= day]
+    for c in [c for c in o if c != "dates" and isinstance(o[c], list) and len(o[c]) == len(o["dates"])]:
+        o[c] = [o[c][i] for i in keep]
+    o["dates"] = [o["dates"][i] for i in keep]
+    return out
+
+
+def test_stale_cp_prints_set_no_word_and_say_so(inputs, tmp_path):
+    """Round-3 S1: FRED left DCPF3M blank 2020-03-27 to 2020-05-06 and 2023-03-03 to 2023-03-16 while bills printed. The
+    'last five prints' were weeks old; they must not read as today's strain (2020) or calm (SVB week)."""
+    for day, last in (("2020-05-06", "2020-03-26"), ("2023-03-15", "2023-03-02")):
+        p = dw.build_dollar_watch(_cut(inputs, day), today=day, ledger_file=str(tmp_path / f"{day}.json"))
+        cp = {r["id"]: r for r in p["funding"]["rows"]}["cp_fin"]
+        assert cp["mean_5d_stale"] is True and cp["mean_5d_to"] == last, (day, cp.get("mean_5d_to"))
+        f, page = " ".join(p["summaries"]["funding"]), p["summaries"]["page"][0]
+        assert f"The CP spread has no print since {last}" in f and "Now: the last five CP prints" not in f
+        assert not any(w in f + page for w in ("under strain", "quiet")), (day, f, page)
+        assert p["state"]["safe_haven"]["gold"]["note"] is None
+    fresh = {r["id"]: r for r in dw.build_dollar_watch(inputs, today="2026-11-02", ledger_file=str(tmp_path / "f.json"))["funding"]["rows"]}
+    assert fresh["cp_fin"]["mean_5d_stale"] is False and fresh["cp_fin"]["mean_5d_to"] == "2026-10-29"
 
 
 def test_summaries_follow_the_state_they_describe():
