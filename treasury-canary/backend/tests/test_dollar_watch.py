@@ -202,9 +202,10 @@ def test_payload_ok_and_serialisable(payload):
     pq = payload["pending_questions"]
     assert len(pq) == 11 and pq[0]["rank"] == "P1"
     asked = [q for q in pq if q["status"] == "asked"]
-    assert {q["first_asked"]: q["expires"] for q in asked} == {"2026-11-02": "2027-01-01", "2026-11-03": "2027-01-02"}   # 60 days each
-    assert [q["status"] for q in pq].count("answered") == 5 and len(asked) == 4
-    assert any(q["rank"] == "P1" and "drift" in q["q"] for q in asked)                                    # Q19
+    assert {q["first_asked"]: q["expires"] for q in asked} == {"2026-11-02": "2027-01-01"}                # 60 days from the first ask
+    assert [q["status"] for q in pq].count("answered") == 6 and len(asked) == 3
+    q19 = [q for q in pq if q["rank"] == "P1" and "drift" in q["q"]][0]
+    assert q19["status"] == "answered" and q19["answered_on"] == "2026-11-03" and "keep the default" in q19["answer"]
     assert [q["status"] for q in pq].count("open") == 2 and all(q["expires"] is None for q in pq if q["status"] != "asked")
 
 
@@ -507,7 +508,17 @@ def test_fed_actions_list_is_valid_and_frozen():
     acts = dw.FED["actions"]
     assert len(acts) == dw.FED["n"] and [a["date"] for a in acts] == sorted(a["date"] for a in acts)
     assert all(a["url"].startswith("https://www.federalreserve.gov/") and a["verified"]["http_status"] == 200 for a in acts)
-    assert hashlib.sha256(body).hexdigest() == dw.FREEZE["fed_emergency_actions_sha256"] == dw.FED_SHA
+    assert hashlib.sha256(body).hexdigest() == dw.FED_SHA
+    # the list grows append-only from the copy frozen with the SPEC (the monthly upkeep appends; nothing else changes)
+    frozen_body = open(os.path.join(SPEC_DIR, "fed_emergency_actions_at_freeze.json"), "rb").read()
+    assert hashlib.sha256(frozen_body).hexdigest() == dw.FREEZE["fed_emergency_actions_sha256"]
+    frozen = json.loads(frozen_body)
+    key = lambda a: json.dumps(a, sort_keys=True)                         # noqa: E731
+    assert all(key(a) in {key(x) for x in acts} for a in frozen["actions"])
+    assert [key(a) for a in acts if key(a) in {key(x) for x in frozen["actions"]}] == [key(a) for a in frozen["actions"]]
+    assert all(a.get("added_on", "") > dw.FREEZE["freeze_date"] for a in acts if key(a) not in {key(x) for x in frozen["actions"]})
+    assert all(key(x) in {key(y) for y in dw.FED["excluded_candidates"]} for x in frozen["excluded_candidates"])
+    assert dw.FED["reviewed_through"] >= frozen["reviewed_through"] and dw.FED["definition"] == frozen["definition"]
     assert dw.FED["onset_check_list_sha256"] == dw.FREEZE["onset_check"]["fed_list_sha256"]     # the list the count ran on
     added = [a for a in acts if a.get("added_on")]
     assert [a["date"] for a in added] == ["2008-10-08", "2009-03-02"] and all("recount is unchanged" in a["added_note"] for a in added)

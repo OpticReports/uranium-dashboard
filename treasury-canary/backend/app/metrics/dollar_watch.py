@@ -99,7 +99,8 @@ PENDING = [   # status per CLAUDE.md: asked / answered / refused / expired; "ope
                         "undecided. It does not cover a volatility-regime shift (2016-26 volatility plus -1%/yr: false PASS about 0.07); "
                         "the stronger option (also bracketing volatility) brings that to about 0.04 but cuts power at +0.20 from about "
                         "0.39 to 0.26. In force as the default; any change is post-hoc and needs a new SPEC version.",
-     "moves": "how hard a PASS is, and how often the record ends undecided", "first_asked": "2026-11-03"},
+     "moves": "how hard a PASS is, and how often the record ends undecided", "first_asked": "2026-11-03",
+     "status": "answered", "answered_on": "2026-11-03", "answer": "keep the default: the drift bracket as frozen"},
     {"rank": "P2", "q": "Accept the redesigned forward test (a no-information GARCH-t null; looks at 8 / 16 / 24 matured units with alpha "
                         "spent 0.005 / 0.020 / 0.050; a placebo rule without the deceleration clause scored beside it, never changing "
                         "the wording; a PASS reads 'beat a no-information model', deceleration-specific: not tested)? In force as the "
