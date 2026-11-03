@@ -7,8 +7,11 @@ day, independent of the dollar) and its placebo (no deceleration clause) fire; u
 later firings with k - k1 < 250; p_u comes from a lookup table on log h per drift, built from the frozen model with
 the harness's own Monte Carlo; hits and the look decisions follow SPEC v1 §3.3-3.5 through the harness (d3.py).
 
-Binding (the gate fails otherwise): DGP = model and DGP = model + a -1%/yr drift, cumulative P(PASS) <= 0.05; and
-under the model, mean(hit - p_u at zero drift) within +-0.01. Every other row is DESCRIPTIVE.
+Binding (the gate fails otherwise): DGP = model and DGP = model + a -1%/yr drift, cumulative P(PASS) <= 0.05; under
+the model, mean(hit - p0) within +-0.01; under the -1%/yr drift, mean(hit - p-) within +-0.01 (stats re-check minor 1).
+Each row also reports the design size: the exact P(PASS) under the pessimistic null given each path's own recorded
+p- and p+ (FAIL binding), averaged over paths. Every other row is DESCRIPTIVE, including the fit window's latest decade
+(2016-26, `g6_out/garch_fit_2016_2026.json`) with and without a -1%/yr drift (stats re-check S1).
 
     python3 -I g6.py <freeze.json> [paths] [years] [scenario,...]
 """
@@ -107,6 +110,27 @@ def inject(U: np.ndarray, delta: float, rng) -> np.ndarray:
     return U
 
 
+def conditional_pass(pm, pp, q) -> float:
+    """exact P(PASS by the last look) when the hit probabilities are q, with critical values from the recorded p- (pm)
+    and FAIL from the recorded p+ (pp), FAIL binding (the stats re-check's design-size measure)."""
+    crit, dist, P = [], np.array([1.0]), 0.0
+    for j, n in enumerate(d3.LOOKS):
+        lo = 0 if j == 0 else d3.LOOKS[j - 1]
+        blocks = [list(pm[(0 if i == 0 else d3.LOOKS[i - 1]):d3.LOOKS[i]]) for i in range(j + 1)]
+        c = d3.critical_value(blocks, crit, d3.ALPHA_CUM[j])
+        crit.append(c)
+        dist = np.convolve(dist, d3.pb_pmf(q[lo:n]))
+        for s in range(len(dist)):
+            if dist[s] == 0.0:
+                continue
+            if s >= c:
+                P += dist[s]
+                dist[s] = 0.0
+            elif d3.delta_upper(s, pp[:n]) < d3.FAIL_EDGE:
+                dist[s] = 0.0
+    return P
+
+
 def as_units(U: np.ndarray) -> list:
     return [{"p_u": {"minus1": r[0], "zero": r[1], "plus1": r[2]}, "hit": int(r[3])} for r in U]
 
@@ -122,7 +146,7 @@ def decide(D: np.ndarray, Pl: np.ndarray) -> tuple[str, int, str | None]:
         if lk["class"] == "PASS":
             t_look = D[n - 1, 4]
             pl = d3.placebo_beside(lk, as_units(Pl[Pl[:, 4] <= t_look]))
-            return "PASS", j + 1, pl.get("wording")
+            return "PASS", j + 1, pl.get("matches_or_beats_rule")
         if lk["class"] == "FAIL":
             return "FAIL", j + 1, None
     return "INCONCLUSIVE", 3, None
@@ -139,6 +163,8 @@ def scenarios(model: dict) -> dict:
 
     def vol(f):
         return dict(base, omega=model["omega"] * f * f)
+    fit16 = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "g6_out", "garch_fit_2016_2026.json")))
+    R16 = {k: fit16[k] for k in ("omega", "alpha", "beta", "nu")}
     return {
         "model": (base, 0.0, 0.0, "BINDING: DGP = model"),
         "drift-1": (dict(base, mu=-1.0 / 250), 0.0, 0.0, "BINDING: drift -1%/yr"),
@@ -155,13 +181,15 @@ def scenarios(model: dict) -> dict:
         "edge30": (base, 0.30, 0.0, "edge +0.30 (deceleration-specific)"),
         "generic20": (base, 0.20, 0.20, "generic reversal +0.20 (rule and placebo)"),
         "drift+0.9_edge20": (dict(base, mu=0.9 / 250), 0.20, 0.0, "drift +0.9%/yr, edge +0.20"),
+        "regime2016": (R16, 0.0, 0.0, "2016-26 volatility regime"),
+        "regime2016_drift-1": (dict(R16, mu=-1.0 / 250), 0.0, 0.0, "2016-26 volatility regime + drift -1%/yr"),
     }
 
 
 def run(name, dgp, d_edge, p_edge, model, logH, tabs, paths, years, seed, chunk=100):
     rng = np.random.default_rng(seed)
     T = years * 250
-    res, diffs, rate = [], [], []
+    res, diffs, diffs_m, rate, design = [], [], [], [], []
     t0 = time.time()
     for c0 in range(0, paths, chunk):
         X = simulate(dgp, rng, min(chunk, paths - c0), T)
@@ -170,15 +198,20 @@ def run(name, dgp, d_edge, p_edge, model, logH, tabs, paths, years, seed, chunk=
             Pl = inject(units_of(x, rng, logH, tabs, model, False), p_edge, rng)
             res.append(decide(D, Pl))
             diffs += list(D[:24, 3] - D[:24, 1])
+            diffs_m += list(D[:24, 3] - D[:24, 0])
             rate.append(len(D) / years)
+            if len(D) >= 24:
+                design.append(conditional_pass(D[:24, 0], D[:24, 2], D[:24, 0]))
     cls = [r[0] for r in res]
     passes = [r for r in res if r[0] == "PASS"]
     return {"scenario": name, "paths": paths, "years_cap": years, "units_per_year": round(float(np.mean(rate)), 3),
             "mean_hit_minus_p0": round(float(np.mean(diffs)), 4), "se": round(float(np.std(diffs, ddof=1) / math.sqrt(len(diffs))), 4),
+            "mean_hit_minus_pminus": round(float(np.mean(diffs_m)), 4),
+            "design_size": round(float(np.mean(design)), 4) if design else None,
             "pass_by_look": [round(float(np.mean([r[0] == "PASS" and r[1] <= j for r in res])), 4) for j in (1, 2, 3)],
             "fail": round(cls.count("FAIL") / paths, 4), "inconclusive": round(cls.count("INCONCLUSIVE") / paths, 4),
             "pending": round(cls.count("PENDING") / paths, 4),
-            "pass_not_specific_share": round(sum(r[2] != "deceleration flag ON" for r in passes) / len(passes), 3) if passes else None,
+            "pass_not_specific_share": round(sum(bool(r[2]) for r in passes) / len(passes), 3) if passes else None,   # placebo matches or beats
             "seconds": round(time.time() - t0)}
 
 
@@ -205,4 +238,5 @@ if __name__ == "__main__":
         gate["model_calibration_within_0.01"] = abs(m["model"]["mean_hit_minus_p0"]) <= 0.01
     if "drift-1" in m:
         gate["drift-1_size_le_0.05"] = m["drift-1"]["pass_by_look"][2] <= 0.05
+        gate["drift-1_calibration_vs_pminus_within_0.01"] = abs(m["drift-1"]["mean_hit_minus_pminus"]) <= 0.01
     print(json.dumps({"gate": gate, "G6": "PASS" if gate and all(gate.values()) else "FAIL" if gate else "no binding row run"}), flush=True)

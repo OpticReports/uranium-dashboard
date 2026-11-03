@@ -287,7 +287,7 @@ already does for HY/IG.
 | P1 | Primary deceleration variant? | the ledger's primary record | answered 2026-11-02: unpatched; re-arm logged |
 | P1 | The mechanical rule that dates future crises | how forward firings are scored | answered 2026-11-02: 2 of 5 markers (SPEC v1 §5) |
 | P2 | May a live notification on the gauge come from anything but the forward test? | the notification licence | answered 2026-11-02: only a D-3 PASS |
-| P1 | Q19: keep the drift bracket (a PASS judged at a −1%/yr dollar drift, a FAIL at +1%/yr)? It costs power in calm markets (+0.20 edge: 0.43 → 0.24) and makes "undecided" the likely end with no edge; without it a −1%/yr trend roughly doubles the false-PASS rate | how hard a PASS is | asked 2026-11-03; default in force (frozen) |
+| P1 | Q19: keep the drift bracket as frozen (a PASS judged at a −1%/yr dollar drift, a FAIL at +1%/yr)? It costs power in calm markets (+0.20 edge: 0.43 → 0.24) and makes "undecided" the likely end with no edge; without it a −1%/yr trend roughly doubles the false-PASS rate. It does not cover a volatility-regime shift (2016–26 volatility plus −1%/yr: false PASS about 0.07); the stronger option (bracketing volatility too) gives about 0.04 at a power cost (+0.20: 0.39 → 0.26) | how hard a PASS is | asked 2026-11-03; default in force (frozen) |
 | P2 | Q17: accept the redesigned forward test (GARCH-t null; alpha spent 0.005 / 0.020 / 0.050 at 8 / 16 / 24 units; the placebo beside it)? | what a PASS or FAIL means | asked 2026-11-02; default in force |
 | P2 | Q18: keep the onset rule's 12-month exclusion from the last onset (a long crisis re-dates at month 13)? | how long crises are dated (descriptive) | asked 2026-11-02; default in force |
 | P2 | Is a paid basis-swap feed (the direct price of offshore dollars) worth it for the funding layer? | layer 2 completeness | asked 2026-11-02 |
@@ -394,12 +394,13 @@ PASS_WITH_FIXES; with the fixes applied, `spec/SPEC_v1.md` is frozen (`spec/free
 | Hit | the broad dollar rises ≤ 3% further over the next 250 index days |
 | Null | GARCH(1,1)-t fitted on 2006-01-03..2026-10-30 (persistence 0.995, ν 7.0), conditioned on the firing's state; PASS judged at a −1%/yr drift, FAIL at +1%/yr |
 | Looks | 8 / 16 / 24 matured units; alpha spent 0.005 / 0.020 / 0.050 by exact recursion; FAIL if the 98.3% upper bound on the edge < +0.10 |
-| Beside it | a placebo (the rule without the deceleration clause); a PASS reads "not specific to deceleration" if the placebo matches it |
+| Wording | a PASS reads "dollar scramble peaking: beat a no-information model" (deceleration-specific: not tested); a placebo (the rule without the deceleration clause) is printed beside it and never changes the wording |
 | Calendar | DTWEXBGS ∩ DGS10 (VIXCLS dropped; identical firings); successor series pre-registered |
 | Crisis dating | 2 of 5 markers; 8 onsets on 2000–2026 (inside the pre-committed 3–13); forward, one row per month at its close |
 
-Power (exact, equal p_u): with no edge P(PASS) ≤ 0.03 inside the bracket; at +0.20, 0.44 (volatile
-firing state) or 0.24 (calm); at +0.30, 0.80 / 0.67. Looks fall around 2060–2067, 2093–2107 and
+Power (exact, equal p_u): with no edge P(PASS) ≤ 0.03 inside the drift bracket if the volatility model
+holds (about 0.07 under 2016–26 volatility plus −1%/yr); at +0.20, 0.44 (volatile firing state) or 0.24
+(calm); at +0.30, 0.80 / 0.67. Looks fall around 2060–2067, 2093–2107 and
 2126–2147; with no edge the record most likely ends INCONCLUSIVE. The momentum signal stays
 descriptive (~400 years to test).
 
@@ -516,6 +517,11 @@ Two independent verifiers reviewed the checkpoint build (`a46874d4`). Neither wr
   - the freeze date did not gate D-3 → `d3_eligible`;
   - the onset evaluator re-dated months on revised data → one row per month at its close;
   - the SPEC text lagged the code → §1, §7 and Appendix A amended.
-- **Re-check of the fixes, by the same two reviewers:** see SPEC v1's counter-agent log.
+- **Re-check of the fixes, by the same two reviewers:**
+  - Statistics: PASS_WITH_FIXES (2 SERIOUS, both fixed in the text):
+    - the drift bracket is model-conditional → qualifiers, 2016–26 rows in G6, the stronger option in Q19;
+    - the placebo cannot certify deceleration → a fixed PASS wording.
+  - Data: PASS_WITH_FIXES. Its SERIOUS was fixed: a month could be dated before its last H.10 day was
+    released. The confirm pass then returned PASS.
 
 Redeploy: **treasury-canary**.

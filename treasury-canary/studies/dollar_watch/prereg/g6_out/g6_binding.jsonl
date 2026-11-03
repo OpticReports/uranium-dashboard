@@ -1,4 +1,1 @@
-{"p_table_seconds": 19}
-{"scenario": "model", "paths": 2000, "years_cap": 400, "units_per_year": 0.2, "mean_hit_minus_p0": 0.0004, "se": 0.0022, "pass_by_look": [0.0, 0.0025, 0.0075], "fail": 0.0455, "inconclusive": 0.947, "pending": 0.0, "pass_not_specific_share": 0.133, "seconds": 233, "label": "BINDING: DGP = model"}
-{"scenario": "drift-1", "paths": 2000, "years_cap": 400, "units_per_year": 0.189, "mean_hit_minus_p0": 0.0485, "se": 0.0022, "pass_by_look": [0.002, 0.012, 0.0305], "fail": 0.023, "inconclusive": 0.9465, "pending": 0.0, "pass_not_specific_share": 0.18, "seconds": 237, "label": "BINDING: drift -1%/yr"}
-{"gate": {"model_size_le_0.05": true, "model_calibration_within_0.01": true, "drift-1_size_le_0.05": true}, "G6": "PASS"}
+{"p_table_seconds": 20}

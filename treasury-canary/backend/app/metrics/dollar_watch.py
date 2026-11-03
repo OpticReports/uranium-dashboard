@@ -93,13 +93,16 @@ PENDING = [   # status per CLAUDE.md: asked / answered / refused / expired; "ope
                "days; S&P -20% from its 252-day high; a Fed emergency action); 8 onsets on 2000-2026, inside the pre-committed 3-13"},
     {"rank": "P2", "q": "May a live notification on the gauge ever come from anything but the forward ledger?", "moves": "the notification licence",
      "status": "answered", "answered_on": "2026-11-02", "answer": "no: only a forward-test PASS"},
-    {"rank": "P1", "q": "Keep the drift bracket in the forward test (a PASS judged as if the dollar drifted -1% a year, a FAIL as if +1%)? "
-                        "Without it a -1%/yr trend roughly doubles the false-PASS rate; with it, power at a +0.20 edge falls from 0.43 "
-                        "to 0.24 in calm markets (0.44 either way in volatile ones) and a record with no edge most likely ends "
-                        "undecided. In force as the default; any change is post-hoc and needs a new SPEC version.",
+    {"rank": "P1", "q": "Keep the drift bracket in the forward test as frozen (a PASS judged as if the dollar drifted -1% a year, a FAIL "
+                        "as if +1%)? Without it a -1%/yr trend roughly doubles the false-PASS rate; with it, power at a +0.20 edge falls "
+                        "from 0.43 to 0.24 in calm markets (0.44 either way in volatile ones) and a record with no edge most likely ends "
+                        "undecided. It does not cover a volatility-regime shift (2016-26 volatility plus -1%/yr: false PASS about 0.07); "
+                        "the stronger option (also bracketing volatility) brings that to about 0.04 but cuts power at +0.20 from about "
+                        "0.39 to 0.26. In force as the default; any change is post-hoc and needs a new SPEC version.",
      "moves": "how hard a PASS is, and how often the record ends undecided", "first_asked": "2026-11-03"},
     {"rank": "P2", "q": "Accept the redesigned forward test (a no-information GARCH-t null; looks at 8 / 16 / 24 matured units with alpha "
-                        "spent 0.005 / 0.020 / 0.050; a placebo rule without the deceleration clause scored beside it)? In force as the "
+                        "spent 0.005 / 0.020 / 0.050; a placebo rule without the deceleration clause scored beside it, never changing "
+                        "the wording; a PASS reads 'beat a no-information model', deceleration-specific: not tested)? In force as the "
                         "default.",
      "moves": "what a PASS or FAIL means decades from now"},
     {"rank": "P2", "q": "Keep the onset rule's 12-month exclusion from the last onset (a long crisis re-dates itself at month 13, as 2009-01 "
@@ -1738,7 +1741,8 @@ def forward_block(inp: dict, scr: dict, today: str, path: str) -> dict:
                            "250 index days from its first firing; hit = the broad dollar rises at most 3% further over the next 250 index "
                            "days; null = the frozen GARCH(1,1)-t, a PASS judged at a -1%/yr drift and a FAIL at +1%/yr; exact "
                            "Poisson-binomial with alpha spent 0.005 / 0.020 / 0.050 at 8 / 16 / 24 matured units; the placebo rule (no "
-                           "deceleration clause) scored beside it",
+                           "deceleration clause) scored beside it; a PASS would read 'dollar scramble peaking: beat a no-information model' "
+                           "(deceleration-specific: not tested)",
                    "calendar": FORWARD_CALENDAR},
             "onsets": {"historical": hist.get("onsets"), "historical_dollar_funding": hist.get("dollar_funding_subtype"),
                        "historical_note": "the frozen rule run on 2000-2026 as a pre-committed degeneracy check (8, inside 3-13): "

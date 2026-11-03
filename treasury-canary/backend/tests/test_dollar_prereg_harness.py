@@ -248,6 +248,8 @@ def test_look_uses_the_recorded_critical_value_and_prints_the_placebo():
     weak = d3.evaluate_look(0, [dict(unit, hit=int(i < 3)) for i in range(8)], [])
     assert weak["class"] == "continue"
     same = d3.placebo_beside(lk, [dict(unit, hit=1) for _ in range(5)])
-    assert same["wording"] == "post-scramble reversal: not specific to deceleration"
     none = d3.placebo_beside(lk, [dict(unit, hit=0) for _ in range(5)])
-    assert none["wording"] == "deceleration flag ON"
+    assert same["matches_or_beats_rule"] is True and none["matches_or_beats_rule"] is False
+    # stats re-check S2: the placebo is printed beside a PASS and never changes its wording
+    assert same["wording"] == none["wording"] == d3.PASS_WORDING and "deceleration-specific: not tested" in d3.PASS_WORDING
+    assert d3.placebo_beside(weak, [])["wording"] is None and set(lk["tail_p"]) == {"minus1", "zero", "plus1"}

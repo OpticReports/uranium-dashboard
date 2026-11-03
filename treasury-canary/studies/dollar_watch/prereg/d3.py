@@ -18,7 +18,8 @@ The null brackets the drift it cannot know (stats review v1 S1): PASS is judged 
 of -1%/yr, FAIL with p_u at an optimistic +1%/yr, and the zero-drift p_u is reported. Critical values come from
 an exact alpha-spending recursion on the recorded p_u (cumulative 0.005 / 0.020 / 0.050); FAIL uses a 98.3%
 one-sided bound per look (0.05 / 3). The placebo rule (the same rule without the deceleration clause) is
-scored the same way and printed beside any result (stats review v1 S2).
+scored the same way and printed beside any result (stats review v1 S2); it never changes the wording of a PASS
+(stats re-check S2).
 """
 from __future__ import annotations
 
@@ -431,24 +432,28 @@ def evaluate_look(j: int, units: list, prev_crit: list) -> dict:
             "null_crossing_prob": crossing_prob(blocks, list(prev_crit) + [c]),
             "sum_p_u": {k: round(float(sum(v)), 4) for k, v in p.items()},
             "T": {k: round((S - float(sum(v))) / n, 4) for k, v in p.items()},
-            "p_plus": {k: p_plus(S, v) for k, v in p.items()},
+            "tail_p": {k: p_plus(S, v) for k, v in p.items()},        # P_PB(S' >= S) at each drift (not the +1%/yr p_u)
             "delta_U_plus1": du, "fail_level": FAIL_LEVEL, "class": cls}
 
 
+PASS_WORDING = "dollar scramble peaking: beat a no-information model (deceleration-specific: not tested)"
+
+
 def placebo_beside(look: dict, placebo_units: list) -> dict:
-    """The placebo rule's units matured by the look date, scored the same way (printed beside any result)."""
+    """The placebo rule's units matured by the look date, scored the same way and printed beside any result. Its numbers
+    never change the wording (stats re-check S2: a post-PASS comparison is biased toward the rule, so under a generic
+    reversal most PASSes would still have read "deceleration"); a PASS always reads PASS_WORDING."""
     n = len(placebo_units)
+    out = {"wording": PASS_WORDING if look["class"] == "PASS" else None}
     if n == 0:
-        return {"n": 0, "note": "no placebo unit matured by the look date"}
+        return dict(out, n=0, note="no placebo unit matured by the look date")
     S = int(sum(x["hit"] for x in placebo_units))
     p0 = [x["p_u"]["zero"] for x in placebo_units]
     pm = [x["p_u"]["minus1"] for x in placebo_units]
     T0 = (S - sum(p0)) / n
-    passes = p_plus(S, pm) <= ALPHA_CUM[look["look"] - 1]
-    generic = bool(passes or T0 >= look["T"]["zero"])
-    return {"n": n, "S": S, "T_zero": round(T0, 4), "p_plus_minus1": p_plus(S, pm), "passes": bool(passes),
-            "wording": ("post-scramble reversal: not specific to deceleration" if generic else "deceleration flag ON")
-            if look["class"] == "PASS" else None}
+    tail = p_plus(S, pm)
+    return dict(out, n=n, S=S, T_zero=round(T0, 4), tail_p_minus1=tail,
+                matches_or_beats_rule=bool(tail <= ALPHA_CUM[look["look"] - 1] or T0 >= look["T"]["zero"]))
 
 
 if __name__ == "__main__":

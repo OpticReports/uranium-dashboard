@@ -14,9 +14,9 @@ deceleration rule's outcomes is computed here.
 |---|---|
 | What is clean | **Only data after the freeze date.** A row counts only if its data date is after 2026-11-03 **and** it fired on the first vintage that carried that date (`d3_eligible`). Every month of dollar history 1971–2026 has been examined (§1). |
 | DECEL test | **D-3, forward only.** A unit starts at an admitted unpatched firing and takes in admitted firings less than 250 index days after its **first** firing (never chained). Hit: "≤ +3% further rise in 250 index days". Null: the frozen GARCH(1,1)-t, conditioned on the state at the firing, with the drift **bracketed**: a PASS is judged as if the dollar drifted −1%/yr, a FAIL as if +1%/yr. Exact Poisson-binomial; alpha spent 0.005 / 0.020 / 0.050 at 8 / 16 / 24 matured units. A **placebo** (the rule without its deceleration clause) is scored beside it. |
-| Power | About 0.20 units a year under the model (0.24 in the tuned sample; 0.11–0.16 in calmer regimes). **Looks ~2060–2067 / ~2093–2107 / ~2126–2147.** P(PASS by look 3): at most 0.03 with no edge inside the bracket; 0.24–0.44 at +0.20; 0.67–0.80 at +0.30. With no edge the record most likely ends INCONCLUSIVE (§3.6). |
+| Power | About 0.20 units a year under the model (0.24 in the tuned sample; 0.11–0.16 in calmer regimes). **Looks ~2060–2067 / ~2093–2107 / ~2126–2147.** P(PASS by look 3) with no edge: at most 0.03 inside the drift bracket **if the frozen volatility model holds**, and about 0.07 under the fit window's own latest decade (2016–26) plus a −1%/yr drift (G6; Q19). At +0.20: 0.24–0.44; at +0.30: 0.67–0.80. With no edge the record most likely ends INCONCLUSIVE (§3.6). |
 | MOM | **Descriptive and logged; never tested.** The bar at the house convention is ~40 independent episodes, about 400 years. |
-| Colour or notification | **Only a D-3 PASS** licenses one neutral colour state on layer 3(a) and a notification. Its text depends on the placebo (§3.5). The wording is always "dollar scramble peaking", never "subsided". |
+| Colour or notification | **Only a D-3 PASS** licenses one neutral colour state on layer 3(a) and a notification. A PASS reads **"dollar scramble peaking: beat a no-information model"**, with "deceleration-specific: not tested" and the placebo's numbers beside it (§3.5). It never says "subsided". |
 | Onset rule | Mechanical 2-of-5 (§5), with its degeneracy check pre-committed in §5.4 before the count was run; the result is in §5.5. Forward, each month is dated once, at its close (§5.6). |
 | Data succession | Pre-registered for the broad dollar and the 10-year (§2.1). With no successor the ledger ends and the last completed look stands. |
 | D-1 / D-2 | Withdrawn and not run (Appendix A). |
@@ -173,7 +173,8 @@ The fit uses returns only, never S1, and was written before any forward firing e
 **Statistic.** At n matured units:
 - S = Σ hit_u.
 - T_μ = (S − Σ p_u^μ) / n, reported at each drift.
-- p⁺_μ = P_PB(S′ ≥ S), the exact Poisson-binomial upper tail at each drift.
+- P_tail(μ) = P_PB(S′ ≥ S), the exact Poisson-binomial upper tail at each drift. This is not the p⁺ of
+  the table above, which is the +1%/yr p_u (stats re-check minor 2).
 - δ_U = the largest δ, on the 0.001 grid over [−1, 1], with P_PB(S′ ≤ S | p⁺_u + δ, clipped to
   [0, 1]) ≥ 0.05/3. This is the one-sided 98.3% upper bound on the edge, taken at the optimistic drift.
 
@@ -200,13 +201,18 @@ The fit uses returns only, never S1, and was written before any forward firing e
 
 | Class | Layer 3(a) |
 |---|---|
-| PASS | One neutral colour state **and** a notification are licensed. The text gives n, S, Σp_u at each drift and the look, with the **placebo beside it**. If the placebo also passes (its p⁺ at −1%/yr ≤ the look's cumulative alpha), or if T⁰_placebo ≥ T⁰_decel, the text reads **"post-scramble reversal: not specific to deceleration"**. Otherwise it reads "deceleration flag ON". It never says "crisis subsided", and the crisis-over (C) outcomes and their gap are printed beside it. |
+| PASS | One neutral colour state **and** a notification are licensed. The text reads **"dollar scramble peaking: beat a no-information model"**, with **"deceleration-specific: not tested"**. It gives n, S, Σp_u at each drift and the look. The **placebo's numbers sit beside it**: its n, S, T⁰, P_tail at −1%/yr, and whether it matches or beats the rule. They never change the wording. It never says "crisis subsided", and the crisis-over (C) outcomes and their gap are printed beside it. |
 | FAIL | Descriptive permanently, labelled "forward record: did not beat a no-information model (n, δ_U < 0.10 at +1%/yr)". No re-tuning and no new variant. The ledger continues as a record. |
 | INCONCLUSIVE | Descriptive, with n, S, Σp_u and "undecided". At the final look this is permanent. |
 | before look 1 | Descriptive (the status today), with the unit count shown. |
 
 The placebo counts its own units matured by the look date, under identical admission, units, p_u and
-hits (stats review v1 S2). Layers 2, 3(b), 3(c), the quadrant and MOM stay DESCRIPTIVE under every
+hits (stats review v1 S2). It cannot certify deceleration. A placebo comparison made after the rule has
+passed is biased toward the rule: under a generic post-scramble reversal of +0.20, 65–71% of PASSes would
+still have read "deceleration", a false claim in about a quarter of all records (stats re-check S2).
+Deceleration-specific wording needs its own pre-registered test, a matched-scramble comparison, with G6
+showing a false-"deceleration" rate ≤ 0.05. That test may be added as a new SPEC version before the first
+unit is scored. Layers 2, 3(b), 3(c), the quadrant and MOM stay DESCRIPTIVE under every
 outcome.
 
 ### 3.6 Power
@@ -280,7 +286,7 @@ not a proof:
 | G1 | The rule reproduces the 6 unpatched and 7 re-arm frozen dates (done: data review v0 N1; gate test). |
 | G1b | Run on data truncated at each historical firing, the rule fires on the last day (done; gate test). |
 | G1c | On DTWEXBGS ∩ DGS10 and on the script's DTWEXBGS ∩ DGS10 ∩ VIXCLS, the firings are identical, both variants (done; gate test). |
-| G6 | `prereg/g6.py` runs the full pipeline from the frozen model: the rule and the placebo, units, p_u from a log-h table per drift built with the harness's own Monte Carlo, hits and looks. Paths run until 24 rule units mature, capped at 400 years. The simulated 10-year yield is a random walk, sd 0.057pp per index day, independent of the dollar. **Binding:** cumulative P(PASS) ≤ 0.05 under the model and under a −1%/yr drift, and \|mean(hit − p⁰)\| ≤ 0.01 under the model. **Descriptive:** drift +1, −2 and +0.9%/yr; vol ×0.8 and ×1.2; half-life ×0.5 and ×2 at the same unconditional variance; a constant-vol random walk; edges +0.10 / +0.20 / +0.30; a generic reversal on both rules. The design size is reported beside the 0.05 bar. Reduced run at the freeze (2,000 paths for the binding rows, 1,000 for the rest; `prereg/g6_out/`). It is re-run with 2,000 paths on every row before the first unit is scored. |
+| G6 | `prereg/g6.py` runs the full pipeline from the frozen model: the rule and the placebo, units, p_u from a log-h table per drift built with the harness's own Monte Carlo, hits and looks. Paths run until 24 rule units mature, capped at 400 years. The simulated 10-year yield is a random walk, sd 0.057pp per index day, independent of the dollar. **Binding:** cumulative P(PASS) ≤ 0.05 under the model and under a −1%/yr drift; \|mean(hit − p⁰)\| ≤ 0.01 under the model; \|mean(hit − p⁻)\| ≤ 0.01 under the −1%/yr drift. **Descriptive:** drift +1, −2 and +0.9%/yr; vol ×0.8 and ×1.2; half-life ×0.5 and ×2 at the same unconditional variance; a constant-vol random walk; the fit window's latest decade (2016–26), alone and with a −1%/yr drift; edges +0.10 / +0.20 / +0.30; a generic reversal on both rules. Each binding row also reports the **design size**: the exact P(PASS) under the pessimistic null given each path's own recorded p⁻ and p⁺, averaged over paths (stats re-check minor 1). Reduced run at the freeze (2,000 paths for the binding rows, 1,000 for the rest; `prereg/g6_out/`). It is re-run with 2,000 paths on every row before the first unit is scored. |
 | G7 | The harness: the PB pmf, δ_U and the exact spending recursion match brute-force enumeration for n ≤ 12; p_u is ordered by drift and reproducible from its seed; `pu-row` refuses a hash, admission or index mismatch; appending data after k₁ changes nothing (done; gate tests). |
 
 ## 4. D-4 — momentum (DESCRIPTIVE only)
@@ -529,17 +535,20 @@ while the cached bytes still match), an unreadable ledger, and any late-dated mo
 
 - **The only clean evidence is the future.** It needs ~33–40 years to the first look and ~100–120 to
   the last. With no edge it most likely ends INCONCLUSIVE.
-- **What a PASS would show:** "better than a no-information GARCH-t martingale even at a −1%/yr drift",
-  **not** "better than any near-high day in a scramble".
-  - The placebo printed beside it says whether the edge belongs to deceleration or to any
-    post-scramble reversal.
+- **What a PASS would show:** "better than a no-information GARCH-t martingale even at a −1%/yr drift,
+  if the volatility model holds". It would **not** show that deceleration is what works: the PASS
+  wording says "deceleration-specific: not tested".
+  - The placebo printed beside it is a diagnostic, not a certificate. It matches or beats the rule in
+    only about 3 in 10 of the PASSes a generic reversal would earn (G6).
   - v1's draft claimed that no unbiased comparator exists on one series. The statistics review showed
     that a placebo logged forward against the same null matches the rule's nuisance bias within
-    ±0.006.
-  - The placebo screens only about 3 in 10 of the PASSes a generic reversal would earn (G6), so a
-    "deceleration flag ON" can still be a generic reversal.
-- **The model null** assumes a stable GARCH-t. Its drift is bracketed at ±1%/yr. Beyond the bracket
-  size drifts: −2%/yr gives a false PASS up to 0.09. G6 reports vol-level and persistence rows.
+    ±0.006. Its point comparison after a PASS is still biased toward the rule (stats re-check S2).
+- **The model null** assumes a stable GARCH-t. Its drift is bracketed at ±1%/yr, but the volatility
+  model is not.
+  - Under the fit window's own latest decade (2016–26 volatility) plus a −1%/yr drift, a false PASS
+    runs about 0.07 (G6).
+  - Beyond the drift bracket, −2%/yr gives up to 0.09.
+  - G6 also reports vol-level and persistence rows.
 - **The 3% / 250-day hit** was inherited from the 2006+ sweep. It is frozen, but it was not chosen
   blind.
 - **DTWEXBGS** is published at about T+5 and revised about annually. S1 is measured from the data
@@ -561,7 +570,7 @@ while the cached bytes still match), an unreadable ledger, and any late-dated mo
 | P2 | Q6 colour / notification | D3_only | **answered** |
 | P3 | Q14–Q16 | JPY/CHF not run; pre-1971 not run; C26 not in C16 | **answered** |
 | — | Q4, Q7–Q13 | D-1 / D-2 design | **not applicable: route forward_only** |
-| P1 | Q19 (new) | Keep the drift bracket (PASS judged at −1%/yr, FAIL at +1%/yr)? It costs power in calm markets (+0.20 edge: 0.43 → 0.24) and makes INCONCLUSIVE the likely end with no edge. Without it, a −1%/yr trend roughly doubles the false-PASS rate. | asked 2026-11-03; **default keep (frozen)** |
+| P1 | Q19 (new) | Keep the drift bracket as frozen (PASS judged at −1%/yr, FAIL at +1%/yr)? It costs power in calm markets (+0.20 edge: 0.43 → 0.24) and makes INCONCLUSIVE the likely end with no edge. Without it, a −1%/yr trend roughly doubles the false-PASS rate. It does not cover a volatility-regime shift: under 2016–26 volatility plus −1%/yr, a false PASS runs about 0.07. The stronger option judges PASS on the larger p⁻ of the full-window fit and a frozen 2016–26 fit: false PASS about 0.04 in that case, but power at +0.20 falls from about 0.39 to 0.26 (stats re-check S1). | asked 2026-11-03; **default: the bracket as frozen** |
 | P2 | Q17 | Accept the redesigned D-3 (GARCH-t null; exact alpha spending at 8 / 16 / 24; FAIL at δ_U < 0.10, 98.3%; the placebo beside it)? | asked 2026-11-02; the default in this SPEC |
 | P2 | Q18 | Keep the 12-month exclusion from the last onset (§5.5), or count it from the last month with ≥ 2 markers? | asked 2026-11-02; default keep (frozen) |
 
@@ -601,4 +610,6 @@ would say so.
 | data, look-ahead and contamination, SPEC v0 | NOT_PASS (1 BLOCKING, 6 SERIOUS) | B1 and S2 (D-1/D-2 withdrawn), S5 (calendar stated), M1 (last-day evaluation, G1b), M2 (vintages, C2/C13), M4 (OFR as published, C7), N5 (C10) |
 | statistics and design, SPEC v1 draft | PASS_WITH_FIXES (0 BLOCKING, 3 SERIOUS, 5 MINOR) | S1 (drift bracket, binding G6 rows, sensitivity table, Q19), S2 (placebo beside any result; §8 corrected), S3 (calendar DTWEXBGS ∩ DGS10, succession §2.1); minors 1–5 (G6 specified, exact spending, the 98.3% FAIL bound, the calendar range, definitions) |
 | data, look-ahead and point in time, SPEC v1 draft | PASS_WITH_FIXES (0 BLOCKING, 3 SERIOUS, 5 MINOR) | S1 (`d3_eligible`), S2 (§5.6 month rows), S3 (§1, §7 and Appendix A amended); M1 (Fed list v1.1, §5.7), M2 (maturity after subtypes), M3 (live-only anchor wording), M4 (basket staleness, field-by-field freezing), M5 (hash-checked harness) |
-| re-check of the fixes (both reviewers) | RECHECK_VERDICT | — |
+| statistics re-check of the fixes | PASS_WITH_FIXES (0 BLOCKING, 2 SERIOUS, 2 MINOR) | S1 (the bracket holds only under the frozen volatility model: the 2016–26 rows in G6, qualifiers in §0, §3.6 and §8, the stronger option in Q19), S2 (the placebo cannot certify deceleration: a fixed PASS wording, the specific wording left to a future matched-scramble test); minors (G6's design size and the p⁻ calibration bound; P_tail notation). The spending recursion, the drift implementation, the FAIL bound and every §3.6 number were verified. |
+| data re-check of the fixes | PASS_WITH_FIXES (0 BLOCKING, 1 SERIOUS, 5 MINOR) | S-1 (the close the day after the release; fresh-and-complete inputs), M-A (the first-vintage outage rule, the freeze seed, `admit`, `units`), M-B (`pu-row` once, before maturity), M-C (failure surfacing, late months), M-D (`onset_first_month`), M-E (the OFR extract), N-3, N-5 |
+| data confirm pass | PASS (0 BLOCKING, 0 SERIOUS, 1 MINOR) | M-1 (a lost archive is repaired by `admit`; unresolved rows are listed, not fatal), N-a (wording), N-b (`pu-row` rebuilds the units itself), N-c (the ALFRED vintage date recorded), N-d (overlap cases for the verifiers) |
