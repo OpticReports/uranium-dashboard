@@ -12,12 +12,15 @@ degraded TTL.
 from __future__ import annotations
 
 import logging
+import os
+import re
 import threading
 import time
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
-from ..metrics.dollar_watch import build_dollar_watch
+from ..metrics.dollar_watch import build_dollar_watch, ledger_path
 from ..sources.dollar_data import fetch_all
 
 logger = logging.getLogger(__name__)
@@ -113,3 +116,27 @@ def warm_dollar_watch(force: bool = False) -> dict:
 @router.get("/dollar-watch")
 def dollar_watch():
     return dollar_watch_payload()
+
+
+_ARCHIVE_NAME = re.compile(r"^[0-9a-f]{64}(\.gz)?$")
+
+
+@router.get("/dollar-watch/ledger")
+def dollar_watch_ledger():
+    """The forward ledger exactly as stored (append-only). The offline D-3 harness (studies/dollar_watch/prereg/d3.py)
+    reads it at each monthly review to compute p_u for a new unit (SPEC v1 §6, C12)."""
+    path = ledger_path()
+    if not os.path.isfile(path):
+        return {"entries": []}
+    return FileResponse(path, media_type="application/json")
+
+
+@router.get("/dollar-watch/archive/{name}")
+def dollar_watch_archive(name: str):
+    """One archived input file by its sha256 (SPEC v1 C2 / C7), so the harness can check the bytes it computes from."""
+    if not _ARCHIVE_NAME.fullmatch(name):
+        raise HTTPException(status_code=404, detail="not an archive name")
+    path = os.path.join(os.path.dirname(os.path.abspath(ledger_path())), "archive", name)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="not archived")
+    return FileResponse(path, media_type="application/gzip" if name.endswith(".gz") else "text/plain")

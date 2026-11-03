@@ -1,0 +1,812 @@
+{
+ "_about": "Fed emergency actions 2000-01-01..2026-10-31 under SPEC v1 §3 marker 5 (Dollar watch forward onset rule). One row per press release; several rows may share a date. Each URL fetched on 2026-11-02 (HTTP 200) and its title and announcement date checked against the page; sha256_prefix is of the fetched bytes (federalreserve.gov pages carry dynamic chrome, so the hash identifies the fetch, not the text).",
+ "definition": {
+  "included": [
+   "FOMC cut of the federal funds target announced outside a scheduled FOMC meeting (intermeeting cut)",
+   "a new lending facility or loan authorised under Section 13(3) of the Federal Reserve Act, or another new temporary emergency lending facility or authority (e.g. TAF, the 2008 GSE lending authority)",
+   "a new or expanded central-bank liquidity swap line: new counterparty, larger limit, lower price, longer operation tenor, or higher operation frequency",
+   "the FIMA repo facility (establishment)"
+  ],
+  "excluded": [
+   "changes to the discount (primary credit) rate alone, e.g. 2007-08-17",
+   "open market and repo operations, e.g. the Sept-2019 NY Fed repo operations",
+   "expansions, collateral changes, extensions or wind-downs of an existing lending facility (e.g. 2008-09-14, 2008-12-02)",
+   "extensions of swap-line expiry dates (e.g. 2010-12-21, 2011-06-29)",
+   "conversions to standing status without new terms (swap lines 2013-10-31; FIMA repo and the Standing Repo Facility 2021-07-28)",
+   "asset purchase programmes and rate cuts at scheduled meetings"
+  ],
+  "rulings": [
+   "Reverse (foreign-currency) liquidity swap lines count as a new central-bank liquidity swap line: the clause does not distinguish direction (ruled 2026-11-03, before any forward evaluation; it decides only 2009-04-06, which lies inside the 2009-01 exclusion).",
+   "One-firm 13(3) arrangements count when they are a new loan or facility (AIG, Citigroup, Bank of America); extending an existing facility's terms to named firms is an expansion and is excluded (2008-09-21)."
+  ]
+ },
+ "source_feed": "https://www.federalreserve.gov/json/ne-press.json (2006-01..2026-10 searched for facility/swap/13(3)/FIMA/intermeeting releases; none after 2023-03-19); 2000-2005 from the boarddocs archive",
+ "n": 50,
+ "months": [
+  "2001-01",
+  "2001-04",
+  "2001-09",
+  "2007-12",
+  "2008-01",
+  "2008-03",
+  "2008-05",
+  "2008-07",
+  "2008-09",
+  "2008-10",
+  "2008-11",
+  "2009-01",
+  "2009-03",
+  "2009-04",
+  "2010-05",
+  "2011-11",
+  "2020-03",
+  "2020-04",
+  "2023-03"
+ ],
+ "actions": [
+  {
+   "date": "2001-01-03",
+   "type": "intermeeting_cut",
+   "action": "FOMC intermeeting cut of the federal funds target, 50bp (6.50% -> 6.00%)",
+   "url": "https://www.federalreserve.gov/boarddocs/press/general/2001/20010103/default.htm",
+   "page_title": "The Federal Open Market Committee decided today to lower its target for the federal funds rate by 50 basis points to 6...",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "a78e58a1b9b0c7f6"
+   }
+  },
+  {
+   "date": "2001-04-18",
+   "type": "intermeeting_cut",
+   "action": "FOMC intermeeting cut of the federal funds target, 50bp (5.00% -> 4.50%)",
+   "url": "https://www.federalreserve.gov/boarddocs/press/general/2001/20010418/default.htm",
+   "page_title": "The Federal Open Market Committee decided today to lower its target for the federal funds rate by 50 basis points to 4...",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "9b4e97c3fd5f4494"
+   }
+  },
+  {
+   "date": "2001-09-13",
+   "type": "swap_line_new_or_expanded",
+   "action": "New temporary swap arrangement with the ECB, up to $50bn, after 9/11",
+   "url": "https://www.federalreserve.gov/boarddocs/press/general/2001/20010913/default.htm",
+   "page_title": "In order to facilitate the functioning of financial markets and provide liquidity in dollars, the Federal Reserve and...",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "42aaa6bb539a8891"
+   }
+  },
+  {
+   "date": "2001-09-14",
+   "type": "swap_line_new_or_expanded",
+   "action": "Temporary augmentation of the Bank of Canada swap facility to $10bn",
+   "url": "https://www.federalreserve.gov/boarddocs/press/general/2001/20010914/default.htm",
+   "page_title": "The Federal Reserve and the Bank of Canada have agreed to a temporary augmentation of their existing swap facility in...",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "2ed85158e9c53632"
+   }
+  },
+  {
+   "date": "2001-09-17",
+   "type": "intermeeting_cut",
+   "action": "FOMC intermeeting cut of the federal funds target, 50bp (3.50% -> 3.00%), before the market reopened",
+   "url": "https://www.federalreserve.gov/boarddocs/press/general/2001/20010917/default.htm",
+   "page_title": "The Federal Open Market Committee decided today to lower its target for the federal funds rate by 50 basis points to 3...",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "94e7d634381d8c05"
+   }
+  },
+  {
+   "date": "2007-12-12",
+   "type": "emergency_facility_and_swap",
+   "action": "Term Auction Facility created; new swap lines with the ECB ($20bn) and SNB ($4bn)",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20071212a.htm",
+   "page_title": "Federal Reserve and other central banks announce measures designed to address elevated pressures in short-term funding markets",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "e80a5b9ddf821cd5"
+   }
+  },
+  {
+   "date": "2008-01-22",
+   "type": "intermeeting_cut",
+   "action": "FOMC intermeeting cut of the federal funds target, 75bp (4.25% -> 3.50%)",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080122b.htm",
+   "page_title": "FOMC statement",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "ee0814be824b8cad"
+   }
+  },
+  {
+   "date": "2008-03-11",
+   "type": "emergency_facility_and_swap",
+   "action": "Term Securities Lending Facility (13(3)) created; ECB and SNB swap lines expanded",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080311a.htm",
+   "page_title": "FOMC statement: Federal Reserve and other central banks announce specific measures designed to address liquidity pressures in funding markets",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "5c691cbb009a8b7f"
+   }
+  },
+  {
+   "date": "2008-03-14",
+   "type": "section_13_3_firm",
+   "action": "Board approves the JPMorgan Chase / Bear Stearns financing arrangement (13(3) lending)",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080314a.htm",
+   "page_title": "The Federal Reserve is monitoring market developments closely and will continue to provide liquidity as necessary to promote the orderly functioning of the financial system",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "6a92f927404b0a89"
+   }
+  },
+  {
+   "date": "2008-03-16",
+   "type": "section_13_3_facility",
+   "action": "Primary Dealer Credit Facility created (13(3)); Bear Stearns acquisition financing",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080316a.htm",
+   "page_title": "Federal Reserve announces two initiatives designed to bolster market liquidity and promote orderly market functioning",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "f97b8202e05b6963"
+   }
+  },
+  {
+   "date": "2008-05-02",
+   "type": "swap_line_new_or_expanded",
+   "action": "ECB and SNB swap lines expanded",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080502a.htm",
+   "page_title": "Federal Reserve, European Central Bank, and Swiss National Bank announce an expansion of liquidity measures",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "5a0f960161d0401e"
+   }
+  },
+  {
+   "date": "2008-07-13",
+   "type": "emergency_lending_authority",
+   "action": "FRBNY authorised to lend to Fannie Mae and Freddie Mac should it prove necessary",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/other20080713a.htm",
+   "page_title": "Board grants Federal Reserve Bank of New York the authority to lend to Fannie Mae and Freddie Mac should such lending prove necessary",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "86ba237f01f26344"
+   }
+  },
+  {
+   "date": "2008-07-30",
+   "type": "swap_line_new_or_expanded",
+   "action": "ECB swap line expanded; 84-day TAF and TSLF options added",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080730a.htm",
+   "page_title": "Federal Reserve announces steps to enhance the effectiveness of its existing liquidity facilities",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "ab13068aa4720237"
+   }
+  },
+  {
+   "date": "2008-09-16",
+   "type": "section_13_3_firm",
+   "action": "FRBNY authorised to lend up to $85bn to AIG (13(3))",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/other20080916a.htm",
+   "page_title": "Federal Reserve Board, with full support of the Treasury Department, authorizes the Federal Reserve Bank of New York to lend up to $85 billion to the American International Group (AIG)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "23a631da58cf6121"
+   }
+  },
+  {
+   "date": "2008-09-18",
+   "type": "swap_line_new_or_expanded",
+   "action": "Swap lines expanded by $180bn; new lines with the Bank of Japan, Bank of England and Bank of Canada",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080918a.htm",
+   "page_title": "Federal Reserve and other central banks announce further measures to address elevated pressures in funding markets",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "291da4797f5cd56f"
+   }
+  },
+  {
+   "date": "2008-09-19",
+   "type": "section_13_3_facility",
+   "action": "Asset-Backed Commercial Paper Money Market Mutual Fund Liquidity Facility (AMLF) created",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080919a.htm",
+   "page_title": "Federal Reserve Board announces two enhancements to its programs to provide liquidity to markets",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "3cb73b9165df49c2"
+   }
+  },
+  {
+   "date": "2008-09-24",
+   "type": "swap_line_new_or_expanded",
+   "action": "New swap lines with the RBA, Sveriges Riksbank, Danmarks Nationalbank and Norges Bank",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080924a.htm",
+   "page_title": "Federal Reserve and other central banks announce additional measures to address elevated pressures in funding markets",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "a2d6a92f2c3cba48"
+   }
+  },
+  {
+   "date": "2008-09-26",
+   "type": "swap_line_new_or_expanded",
+   "action": "ECB and SNB swap lines expanded over quarter end",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080926a.htm",
+   "page_title": "Federal Reserve and other central banks announce operations to address funding pressures over quarter end",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "7edc09f96337990b"
+   }
+  },
+  {
+   "date": "2008-09-29",
+   "type": "swap_line_new_or_expanded",
+   "action": "Swap lines expanded to $620bn",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080929a.htm",
+   "page_title": "Federal Reserve and other central banks announce further coordinated actions to expand significantly the capacity to provide U.S. dollar liquidity",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "460f463e4875a1ce"
+   }
+  },
+  {
+   "date": "2008-10-07",
+   "type": "section_13_3_facility",
+   "action": "Commercial Paper Funding Facility (CPFF) created",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081007c.htm",
+   "page_title": "Board announces creation of the Commercial Paper Funding Facility (CPFF) to help provide liquidity to term funding markets",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "1c9df18c698bb097"
+   }
+  },
+  {
+   "date": "2008-10-08",
+   "type": "intermeeting_cut",
+   "action": "Coordinated intermeeting cut of the federal funds target, 50bp (2.00% -> 1.50%)",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081008a.htm",
+   "page_title": "FOMC statement: Federal Reserve and other central banks announce reductions in policy interest rates",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "ac16d69fc028036f"
+   }
+  },
+  {
+   "date": "2008-10-08",
+   "type": "section_13_3_firm",
+   "action": "FRBNY authorised under 13(3) to borrow up to $37.8bn of securities from AIG insurance subsidiaries against cash",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/other20081008a.htm",
+   "page_title": "Board authorizes Federal Reserve Bank of New York to borrow securities from certain regulated U.S. insurance subsidiaries of AIG",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "f51c690e7318ded8"
+   },
+   "added_on": "2026-11-03",
+   "added_note": "added 2026-11-03 after the 2026-11-02 onset check (data review v1 M1); 2008-10 was already listed, so the recount is unchanged"
+  },
+  {
+   "date": "2008-10-13",
+   "type": "swap_line_new_or_expanded",
+   "action": "Swap lines with the ECB, Bank of England and SNB made unlimited",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081013a.htm",
+   "page_title": "Federal Reserve and other central banks announce further measures to provide broad access to liquidity and funding to financial institutions",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "bbbf682d2350a210"
+   }
+  },
+  {
+   "date": "2008-10-14",
+   "type": "swap_line_new_or_expanded",
+   "action": "Bank of Japan swap line made unlimited",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081014d.htm",
+   "page_title": "FOMC authorizes an increase in the size of its temporary reciprocal currency arrangement with the Bank of Japan",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "3657ff70bab94967"
+   }
+  },
+  {
+   "date": "2008-10-21",
+   "type": "section_13_3_facility",
+   "action": "Money Market Investor Funding Facility (MMIFF) created",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081021a.htm",
+   "page_title": "Federal Reserve announces the creation of the Money Market Investor Funding Facility (MMIFF)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "df09e24da60e8292"
+   }
+  },
+  {
+   "date": "2008-10-28",
+   "type": "swap_line_new_or_expanded",
+   "action": "New swap line with the Reserve Bank of New Zealand",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081028a.htm",
+   "page_title": "Federal Reserve and Reserve Bank of New Zealand announce the establishment of a temporary reciprocal currency arrangement",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "2a31f6214d738a11"
+   }
+  },
+  {
+   "date": "2008-10-29",
+   "type": "swap_line_new_or_expanded",
+   "action": "New swap lines with Banco Central do Brasil, Banco de Mexico, Bank of Korea and MAS ($30bn each)",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081029b.htm",
+   "page_title": "Federal Reserve, Banco Central do Brasil, Banco de Mexico, Bank of Korea, and Monetary Authority of Singapore announce the establishment of temporary reciprocal currency arrangements",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "1841ceaa70ea792c"
+   }
+  },
+  {
+   "date": "2008-11-10",
+   "type": "section_13_3_firm",
+   "action": "AIG support restructured; new 13(3) facilities (Maiden Lane II and III)",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/other20081110a.htm",
+   "page_title": "Federal Reserve Board and Treasury Department announce restructuring of financial support to AIG",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "0e4327c6e75e3ef2"
+   }
+  },
+  {
+   "date": "2008-11-23",
+   "type": "section_13_3_firm",
+   "action": "Citigroup asset guarantee with a Federal Reserve non-recourse loan backstop",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20081123a.htm",
+   "page_title": "Joint Statement by Treasury, Federal Reserve, and the FDIC on Citigroup",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "39c7ec956ee911bd"
+   }
+  },
+  {
+   "date": "2008-11-25",
+   "type": "section_13_3_facility",
+   "action": "Term Asset-Backed Securities Loan Facility (TALF) created",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081125a.htm",
+   "page_title": "Federal Reserve announces the creation of the Term Asset-Backed Securities Loan Facility (TALF)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "cd2a88c7ae18df22"
+   }
+  },
+  {
+   "date": "2009-01-16",
+   "type": "section_13_3_firm",
+   "action": "Bank of America asset guarantee with a Federal Reserve non-recourse loan backstop",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20090116a.htm",
+   "page_title": "Treasury, Federal Reserve, and the FDIC Provide Assistance to Bank of America",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "2f71792b96162280"
+   }
+  },
+  {
+   "date": "2009-03-02",
+   "type": "section_13_3_firm",
+   "action": "AIG restructuring: new 13(3) loans of up to about $8.5bn to life-insurance SPVs",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/other20090302a.htm",
+   "page_title": "U.S. Treasury and Federal Reserve Board Announce Participation in AIG Restructuring Plan",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "5474afdd9aec453e"
+   },
+   "added_on": "2026-11-03",
+   "added_note": "added 2026-11-03 after the 2026-11-02 onset check (data review v1 M1); 2009-03 already had 2+ markers and lies inside the 2009-01 exclusion, so the recount is unchanged (8 onsets)"
+  },
+  {
+   "date": "2009-04-06",
+   "type": "swap_line_new_or_expanded",
+   "action": "New foreign-currency swap lines with the BoE, ECB, BoJ and SNB",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20090406a.htm",
+   "page_title": "Federal Reserve, Bank of England, European Central Bank, Bank of Japan, and Swiss National Bank announce swap arrangements",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "b5965aa8c5272757"
+   }
+  },
+  {
+   "date": "2010-05-09",
+   "type": "swap_line_new_or_expanded",
+   "action": "Dollar swap lines with the ECB, BoC, BoE and SNB re-established",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20100509a.htm",
+   "page_title": "FOMC statement: Federal Reserve, European Central Bank, Bank of Canada, Bank of England, and Swiss National Bank announce reestablishment of temporary U.S. dollar liquidity swap facilities",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "421f25c15080c056"
+   }
+  },
+  {
+   "date": "2010-05-10",
+   "type": "swap_line_new_or_expanded",
+   "action": "Dollar swap line with the Bank of Japan re-established",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20100510a.htm",
+   "page_title": "FOMC statement: FOMC authorizes re-establishment of temporary U.S. dollar liquidity swap arrangement with the Bank of Japan",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "207ff6c02db0613b"
+   }
+  },
+  {
+   "date": "2011-11-30",
+   "type": "swap_line_new_or_expanded",
+   "action": "Coordinated action: dollar swap-line pricing cut 50bp; bilateral swap network among six central banks",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20111130a.htm",
+   "page_title": "Coordinated central bank action to address pressures in global money markets",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "f2ee8b592e42374d"
+   }
+  },
+  {
+   "date": "2020-03-03",
+   "type": "intermeeting_cut",
+   "action": "FOMC intermeeting cut of the federal funds target range, 50bp (to 1.00-1.25%)",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200303a.htm",
+   "page_title": "Federal Reserve issues FOMC statement",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "33040abd617e9225"
+   }
+  },
+  {
+   "date": "2020-03-15",
+   "type": "intermeeting_cut_and_swap",
+   "action": "Sunday FOMC cut, 100bp (to 0-0.25%); coordinated swap-line pricing cut and 84-day operations",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200315a.htm",
+   "page_title": "Federal Reserve issues FOMC statement",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "e036cd87f61912a9"
+   }
+  },
+  {
+   "date": "2020-03-15",
+   "type": "intermeeting_cut_and_swap",
+   "action": "Sunday FOMC cut, 100bp (to 0-0.25%); coordinated swap-line pricing cut and 84-day operations",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200315c.htm",
+   "page_title": "Coordinated Central Bank Action to Enhance the Provision of U.S. Dollar Liquidity",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "4453d5da215439a7"
+   }
+  },
+  {
+   "date": "2020-03-17",
+   "type": "section_13_3_facility",
+   "action": "Commercial Paper Funding Facility and Primary Dealer Credit Facility re-established",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200317a.htm",
+   "page_title": "Federal Reserve Board announces establishment of a Commercial Paper Funding Facility (CPFF) to support the flow of credit to households and businesses",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "ca0e547f245367c7"
+   }
+  },
+  {
+   "date": "2020-03-17",
+   "type": "section_13_3_facility",
+   "action": "Commercial Paper Funding Facility and Primary Dealer Credit Facility re-established",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200317b.htm",
+   "page_title": "Federal Reserve Board announces establishment of a Primary Dealer Credit Facility (PDCF) to support the credit needs of households and businesses",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "2a0ff7e6f262a6e4"
+   }
+  },
+  {
+   "date": "2020-03-18",
+   "type": "section_13_3_facility",
+   "action": "Money Market Mutual Fund Liquidity Facility (MMLF) created",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200318a.htm",
+   "page_title": "Federal Reserve Board broadens program of support for the flow of credit to households and businesses by establishing a Money Market Mutual Fund Liquidity Facility (MMLF)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "ddcb68f17c991197"
+   }
+  },
+  {
+   "date": "2020-03-19",
+   "type": "swap_line_new_or_expanded",
+   "action": "Temporary swap lines with nine more central banks (RBA, BCB, BoK, Banxico, MAS, Riksbank, DN, Norges, RBNZ)",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200319b.htm",
+   "page_title": "Federal Reserve announces the establishment of temporary U.S. dollar liquidity arrangements with other central banks",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "3b29e551a4bae156"
+   }
+  },
+  {
+   "date": "2020-03-20",
+   "type": "swap_line_new_or_expanded",
+   "action": "Swap-line 7-day operations moved from weekly to daily",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200320a.htm",
+   "page_title": "Coordinated central bank action to further enhance the provision of U.S. dollar liquidity",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "c2c38733ffeeaa95"
+   }
+  },
+  {
+   "date": "2020-03-23",
+   "type": "section_13_3_facility",
+   "action": "PMCCF, SMCCF and TALF created; CPFF expanded",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200323b.htm",
+   "page_title": "Federal Reserve announces extensive new measures to support the economy",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "d359117edd6f9b55"
+   }
+  },
+  {
+   "date": "2020-03-31",
+   "type": "fima_repo",
+   "action": "Temporary FIMA Repo Facility established",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200331a.htm",
+   "page_title": "Federal Reserve announces establishment of a temporary FIMA Repo Facility to help support the smooth functioning of financial markets",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "27b79ed2c5d55329"
+   }
+  },
+  {
+   "date": "2020-04-06",
+   "type": "section_13_3_facility",
+   "action": "Paycheck Protection Program Liquidity Facility (PPPLF) announced",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200406a.htm",
+   "page_title": "Federal Reserve will establish a facility to facilitate lending to small businesses via the Small Business Administration's Paycheck Protection Program (PPP) by providing term financing backed by PPP loans",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "2f51ed0405f46ab5"
+   }
+  },
+  {
+   "date": "2020-04-09",
+   "type": "section_13_3_facility",
+   "action": "Main Street Lending Program and Municipal Liquidity Facility created; corporate and TALF facilities expanded",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200409a.htm",
+   "page_title": "Federal Reserve takes additional actions to provide up to $2.3 trillion in loans to support the economy",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "a335622f9f1dc7e9"
+   }
+  },
+  {
+   "date": "2023-03-12",
+   "type": "section_13_3_facility",
+   "action": "Bank Term Funding Program (BTFP) created",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230312a.htm",
+   "page_title": "Federal Reserve Board announces it will make available additional funding to eligible depository institutions to help assure banks have the ability to meet the needs of all their depositors",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "cba5e20cfad23e31"
+   }
+  },
+  {
+   "date": "2023-03-19",
+   "type": "swap_line_new_or_expanded",
+   "action": "Swap-line 7-day operations moved from weekly to daily",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20230319a.htm",
+   "page_title": "Coordinated central bank action to enhance the provision of U.S. dollar liquidity",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-02",
+    "sha256_prefix": "9ab4a732b921a8a8"
+   }
+  }
+ ],
+ "excluded_candidates": [
+  {
+   "date": "2007-08-10",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20070810a.htm",
+   "page_title": "FOMC statement: The Federal Reserve is providing liquidity to facilitate the orderly functioning of financial markets",
+   "clause": "open market and repo operations (a liquidity statement; no target cut)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "dadec899fa944ada"
+   }
+  },
+  {
+   "date": "2007-08-17",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20070817a.htm",
+   "page_title": "Federal Reserve Board discount rate action",
+   "clause": "changes to the discount (primary credit) rate alone",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "323bf107dccf8a77"
+   }
+  },
+  {
+   "date": "2007-08-17",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20070817b.htm",
+   "page_title": "FOMC statement",
+   "clause": "an unscheduled FOMC statement without a target cut (not an included class)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "ac542fb385b13d7f"
+   }
+  },
+  {
+   "date": "2008-09-14",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080914a.htm",
+   "page_title": "Federal Reserve Board announces several initiatives to provide additional support to financial markets, including enhancements to its existing liquidity facilities",
+   "clause": "expansions and collateral changes of existing facilities (PDCF, TSLF)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "3bd1e3ecb178ce68"
+   }
+  },
+  {
+   "date": "2008-09-21",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20080921a.htm",
+   "page_title": "Board approves, pending a statutory five-day antitrust waiting period, the applications of Goldman Sachs and Morgan Stanley to become bank holding companies",
+   "clause": "expansion of existing facilities' eligibility and collateral (primary-credit / PDCF-type credit to the broker-dealer subsidiaries of the new bank holding companies and of Merrill Lynch); added after the data re-check (N-3); 2008-09 is a listed month, so no effect",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "19d0b069b10c7051"
+   }
+  },
+  {
+   "date": "2008-10-06",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081006a.htm",
+   "page_title": "Board announces that it will begin to pay interest on depository institutions' required and excess reserve balances",
+   "clause": "not an included class (interest on reserves)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "9169066c304c86c1"
+   }
+  },
+  {
+   "date": "2008-10-06",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081006b.htm",
+   "page_title": "Federal Reserve will offer $150 billion in 85-day credit through its Term Auction Facility today",
+   "clause": "expansion of an existing facility (TAF)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "cef4c6b80ccbcde5"
+   }
+  },
+  {
+   "date": "2008-12-02",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081202b.htm",
+   "page_title": "Federal Reserve announces the extension of three liquidity facilities through April 30, 2009",
+   "clause": "extensions of existing facilities",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "cff280e383c0984c"
+   }
+  },
+  {
+   "date": "2009-02-10",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20090210b.htm",
+   "page_title": "Federal Reserve is prepared to expand Term Asset-Backed Securities Loan Facility (TALF)",
+   "clause": "expansion of an existing facility (TALF)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "5f53dcc7723b1afd"
+   }
+  },
+  {
+   "date": "2010-12-21",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20101221a.htm",
+   "page_title": "FOMC statement: Federal Reserve, European Central Bank, Bank of Japan, Bank of Canada, Bank of England, and Swiss National Bank announce extension of temporary U.S. dollar liquidity swap facilities",
+   "clause": "extensions of swap-line expiry dates",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "d889d8172dae3a9a"
+   }
+  },
+  {
+   "date": "2011-06-29",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20110629a.htm",
+   "page_title": "Federal Reserve and other central banks announce an extension of the existing temporary U.S. dollar liquidity swap arrangements through August 1, 2012",
+   "clause": "extensions of swap-line expiry dates",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "88cf62600f5dc780"
+   }
+  },
+  {
+   "date": "2013-10-31",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20131031a.htm",
+   "page_title": "Federal Reserve and other central banks convert temporary bilateral liquidity swap arrangements to standing arrangements",
+   "clause": "conversion to standing status without new terms",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "9ba86c7d4534d2cc"
+   }
+  },
+  {
+   "date": "2020-03-23",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200323a.htm",
+   "page_title": "Federal Reserve issues FOMC statement",
+   "clause": "asset purchase programmes (the same day's new facilities are listed separately)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "1379b2ae88ef99d7"
+   }
+  },
+  {
+   "date": "2021-07-28",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20210728b.htm",
+   "page_title": "Statement Regarding Repurchase Agreement Arrangements",
+   "clause": "conversion to standing status without new terms (FIMA repo, Standing Repo Facility)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "983d858577f109e3"
+   }
+  }
+ ],
+ "reviewed_through": "2026-10",
+ "update_rule": "Append-only, kept date-sorted; every row carries its fetched URL, title and date check. At each R1 the list is reviewed through the previous month (reviewed_through) BEFORE that month's onset evaluation; every forward addition or exclusion is checked by a second reader (a counter-agent) and logged with added_on. A row is never removed; a correction is a new row plus a note.",
+ "onset_check_list_sha256": "f24ab63fdfe031b804ef336b93b0a1086090c922f627621cca5812b01611a563",
+ "onset_check_note": "The 2026-11-02 pre-committed onset check ran on the list with sha256 onset_check_list_sha256 (48 rows); the two rows added on 2026-11-03 do not change its count (8 onsets, 31 months with 2+ markers)."
+}

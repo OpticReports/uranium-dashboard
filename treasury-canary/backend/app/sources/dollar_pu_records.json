@@ -1,0 +1,4 @@
+{
+ "_about": "D-3 p_u records (SPEC v1 §3.3): one per admitted unit start (scramble_rule and placebo_rule), written by the offline harness studies/dollar_watch/prereg/d3.py pu-row from the archived firing inputs, before the unit matures, and checked by a second reader. Append-only; never edited.",
+ "records": []
+}

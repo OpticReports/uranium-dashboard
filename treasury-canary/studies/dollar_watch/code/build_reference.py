@@ -279,10 +279,21 @@ RY = [Y_[d] for d in RDATES]
 spx = daily(os.path.join(DATA, "spx_daily.csv"))
 SPX_D = sorted(spx)
 baa10y = fred_daily("BAA10Y")
-# EM FX outcomes (the 8-pair basket) are WITHHELD until the pre-registration freeze: seven of its eight
-# currencies sit in the proposed cross-section (spec/review_data_v0.md S1). Not computed, not shipped.
-EMFX_WITHHELD = ("EM FX outcomes are withheld until the pre-registration is frozen: seven of the basket's eight currencies "
-                 "are in the proposed cross-section test, and seeing them could steer its design")
+# EM FX outcomes (the 8-pair basket). They were withheld while a cross-section of these currencies was a
+# candidate test; the freeze (2026-11-02, route forward_only) withdrew that test, so they are shown again.
+EMFX_IDS = ["DEXBZUS", "DEXMXUS", "DEXSFUS", "DEXINUS", "DEXKOUS", "DEXTHUS", "DEXCHUS", "DEXMAUS"]
+EMFX = {s: fred_daily(s) for s in EMFX_IDS}
+EMFX_KEYS = {s: sorted(v) for s, v in EMFX.items()}
+
+
+def emfx(d: str):
+    """equal-weight basket of 8 EM currencies per USD, log-average; up = EM currencies weaker. None if any leg missing."""
+    vals = [asof(EMFX[s], d, EMFX_KEYS[s]) for s in EMFX_IDS]
+    if any(v is None for v in vals):
+        return None
+    return math.exp(sum(math.log(v) for v in vals) / len(vals))
+
+
 
 
 def asof(series: dict, d: str, keys=None):
@@ -309,16 +320,17 @@ BAA_K, SPX_K, VIX_K, B_K = sorted(baa10y), SPX_D, sorted(V_), sorted(B_)
 
 
 def outcomes(d: str) -> dict:
-    """what spreads, the S&P and the dollar did over the following 3 / 6 / 12 calendar months (as-of closes)."""
+    """what EM FX, spreads, the S&P and the dollar did over the following 3 / 6 / 12 calendar months (as-of closes)."""
     o = {}
-    s0, b0, d0 = asof(spx, d, SPX_K), asof(baa10y, d, BAA_K), asof(B_, d, B_K)
+    s0, e0, b0, d0 = asof(spx, d, SPX_K), emfx(d), asof(baa10y, d, BAA_K), asof(B_, d, B_K)
     for k in (3, 6, 12):
         dk = add_months(d, k)
         if dk > FROZEN_ON:
             o[f"{k}m"] = None
             continue
-        s1, b1, d1 = asof(spx, dk, SPX_K), asof(baa10y, dk, BAA_K), asof(B_, dk, B_K)
+        s1, e1, b1, d1 = asof(spx, dk, SPX_K), emfx(dk), asof(baa10y, dk, BAA_K), asof(B_, dk, B_K)
         o[f"{k}m"] = {"spx_pct": r(100 * (s1 / s0 - 1), 1) if s0 and s1 else None,
+                      "emfx_pct": r(100 * (e1 / e0 - 1), 1) if e0 and e1 else None,
                       "baa10y_pp": r(b1 - b0, 2) if b0 is not None and b1 is not None else None,
                       "broad_dollar_pct": r(100 * (d1 / d0 - 1), 1) if d0 and d1 else None}
     return o
@@ -423,8 +435,10 @@ for m in episodes:
             row["outcomes"][f"{k}m"] = None
             continue
         mk = MONTHS[i + k]
+        e0, e1 = emfx(m + "-28"), emfx(mk + "-28")
         row["outcomes"][f"{k}m"] = {
             "spx_pct": r(100 * (spx_m[mk] / spx_m[m] - 1), 1) if m in spx_m and mk in spx_m else None,
+            "emfx_pct": r(100 * (e1 / e0 - 1), 1) if e0 and e1 else None,
             "baa_minus_10y_pp": r((baa_m[mk] - gs10[mk]) - (baa_m[m] - gs10[m]), 2) if all(x in baa_m and x in gs10 for x in (m, mk)) else None,
             "dxy_pct": r(100 * (AVG[i + k] / AVG[i] - 1), 1)}
     mom_ledger.append(row)
@@ -516,8 +530,8 @@ ref = {
                       "last_index_day": [d for d in RDATES if d <= FROZEN_ON][-1]},
     "momentum_ledger": mom_ledger,
     "momentum_ledger_basis": "one row per momentum episode (first signal month after 12 quiet months); S&P and DXY as monthly averages, "
-                             "Baa minus the 10-year monthly; reconstructed in-sample, not a forecast record. " + EMFX_WITHHELD,
-    "emfx_withheld": EMFX_WITHHELD,
+                             "EM FX basket as-of the 28th (8 FRED pairs from 1995; up = EM weaker), Baa minus the 10-year monthly; "
+                             "reconstructed in-sample, not a forecast record",
     "redollarisation": redollar,
     "events": {"swap_lines": [
         {"date": "2007-12-12", "text": "first swap lines (ECB, SNB) with the term auction facility", "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20071212a.htm"},

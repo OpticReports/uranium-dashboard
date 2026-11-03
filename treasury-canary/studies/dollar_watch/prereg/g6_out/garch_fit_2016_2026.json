@@ -1,0 +1,13 @@
+{
+ "omega": 0.00116543,
+ "alpha": 0.03987664,
+ "beta": 0.94873949,
+ "nu": 6.327434,
+ "loglik": -548.7628,
+ "n_returns": 2692,
+ "converged": true,
+ "param_hash": "3faec92b766d74f5dd06e6c06d8f83935db1437c48b34e8a8aea9c1401f2ac28",
+ "first": "2016-01-04",
+ "last": "2026-10-30",
+ "note": "DESCRIPTIVE: a G6 scenario (the fit window's latest decade), never the null"
+}

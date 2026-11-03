@@ -277,16 +277,19 @@ already does for HY/IG.
 - Johnson's published band statements elsewhere differ from the relayed ones (reviewer note: 125/135/170
   in 2024 material); the 16/75% statistic is unsourced and the band is self-described as ad hoc.
 
-## 7. Pending questions (ranked; 60-day expiry)
+## 7. Pending questions (ranked; 60-day expiry from each first ask)
 
 | P | question | would move | status |
 |---|---|---|---|
-| P1 | Build the four layers descriptive now and pre-register the momentum and end rules in parallel (recommended), or pre-register first? | build order | answered 2026-11-02: "Build it" (§9) |
-| P1 | Which crisis list is the frozen primary: finder A's 25 (broad), finder C's 16 (multi-country dollar stress, default), or the 5 squeezes (reported, not inferred on)? | every base rate on the panel; the freeze | asked 2026-11-02 |
-| P1 | Route after both reviews returned NOT_PASS: `forward_only` (the dated ledger; recommended) or a redesigned cross-section on the clean subset (low power)? | whether anything is scored before the 2030s | asked 2026-11-02 |
-| P1 | Primary deceleration variant: unpatched (default) or re-arm? Both are logged forward either way. | the ledger's primary record | asked 2026-11-02 |
-| P1 | The mechanical rule that dates future crises for the ledger (default: 2 of 5 markers: VIX ≥ 40; OFR FSI above its 5-year 95th percentile for 5 days; EM FX basket +10% in 63 days; S&P −20% from its 252-day high; a Fed emergency action) | how forward firings are scored | asked 2026-11-02 |
-| P2 | May a live alert on the gauge ever come from anything but the forward ledger? (default: ledger only) | the lamp licence | asked 2026-11-02 |
+| P1 | Build the four layers descriptive now and pre-register the momentum and end rules in parallel, or pre-register first? | build order | answered 2026-11-02: "Build it" (§9) |
+| P1 | Which crisis list is the frozen primary? | every base rate on the panel; the freeze | answered 2026-11-02: C16 ("go with the defaults") |
+| P1 | Route after both SPEC v0 reviews returned NOT_PASS? | whether anything is scored before the 2060s | answered 2026-11-02: `forward_only` |
+| P1 | Primary deceleration variant? | the ledger's primary record | answered 2026-11-02: unpatched; re-arm logged |
+| P1 | The mechanical rule that dates future crises | how forward firings are scored | answered 2026-11-02: 2 of 5 markers (SPEC v1 §5) |
+| P2 | May a live notification on the gauge come from anything but the forward test? | the notification licence | answered 2026-11-02: only a D-3 PASS |
+| P1 | Q19: keep the drift bracket as frozen (a PASS judged at a −1%/yr dollar drift, a FAIL at +1%/yr)? It costs power in calm markets (+0.20 edge: 0.43 → 0.24) and makes "undecided" the likely end with no edge; without it a −1%/yr trend roughly doubles the false-PASS rate. It does not cover a volatility-regime shift (2016–26 volatility plus −1%/yr: false PASS about 0.07); the stronger option (bracketing volatility too) gives about 0.04 at a power cost (+0.20: 0.39 → 0.26) | how hard a PASS is | answered 2026-11-03: keep the default (the bracket as frozen) |
+| P2 | Q17: accept the redesigned forward test (GARCH-t null; alpha spent 0.005 / 0.020 / 0.050 at 8 / 16 / 24 units; the placebo beside it)? | what a PASS or FAIL means | asked 2026-11-02; default in force |
+| P2 | Q18: keep the onset rule's 12-month exclusion from the last onset (a long crisis re-dates at month 13)? | how long crises are dated (descriptive) | asked 2026-11-02; default in force |
 | P2 | Is a paid basis-swap feed (the direct price of offshore dollars) worth it for the funding layer? | layer 2 completeness | asked 2026-11-02 |
 | P2 | Reconstruct and freeze EM OAS history (FRED truncated to 2023-11) as the repo does for HY/IG | EM stress layer | open |
 | P3 | Daily gold before 2000 (LBMA/FRED gone): any free source | pre-2000 gold table | open |
@@ -376,45 +379,35 @@ is the share of all eligible months 1971–2026 with an onset in (m, m+H].
   52-week high). The tile adds "with dollar funding quiet: outside the crisis pattern" only while
   CP−bill and OFR funding both sit at or below their 1-year medians, as they do today.
 
-### 9.4 Pre-registration: drafted, reviewed NOT_PASS, NOT frozen
+### 9.4 Pre-registration: SPEC v1, FROZEN 2026-11-03
 
-SPEC v0 withdrew rev 1's 1973–2007 / 2008–26 split and the leave-one-crisis-out logit, because no DXY
-history is unseen, so neither is out-of-sample. In their place it proposed:
+SPEC v0 (a 15-currency cross-section D-1, the DXY 1973–2005 D-2, the forward ledger D-3) was reviewed
+NOT_PASS twice: D-1's null was biased and its "unseen" record mostly seen; D-2's outcomes were already
+published. Casey answered on 2026-11-02 ("go with the defaults, freeze it"): `forward_only`, C16,
+unpatched, the 2-of-5 onset rule, a notification only from D-3. Both reviews of the v1 draft returned
+PASS_WITH_FIXES; with the fixes applied, `spec/SPEC_v1.md` is frozen (`spec/freeze.json`).
 
-- **D-1:** a cross-section of 15 FRED currencies, scored on their own falls against the dollar.
-- **D-2:** the ICE DXY 1973–2005.
-- **D-3:** the forward ledger.
+| Item | Frozen |
+|---|---|
+| Evidence | rows with a data date after 2026-11-03 that fired on the first vintage carrying it (`d3_eligible`) |
+| Unit | an admitted unpatched firing plus admitted firings < 250 index days after it (never chained) |
+| Hit | the broad dollar rises ≤ 3% further over the next 250 index days |
+| Null | GARCH(1,1)-t fitted on 2006-01-03..2026-10-30 (persistence 0.995, ν 7.0), conditioned on the firing's state; PASS judged at a −1%/yr drift, FAIL at +1%/yr |
+| Looks | 8 / 16 / 24 matured units; alpha spent 0.005 / 0.020 / 0.050 by exact recursion; FAIL if the 98.3% upper bound on the edge < +0.10 |
+| Wording | a PASS reads "dollar scramble peaking: beat a no-information model" (deceleration-specific: not tested); a placebo (the rule without the deceleration clause) is printed beside it and never changes the wording |
+| Calendar | DTWEXBGS ∩ DGS10 (VIXCLS dropped; identical firings); successor series pre-registered |
+| Crisis dating | 2 of 5 markers; 8 onsets on 2000–2026 (inside the pre-committed 3–13); forward, one row per month at its close |
 
-Both adversarial reviews returned NOT_PASS (`dollar_watch/spec/`):
-
-- **Statistics:** D-1's random-rule null is biased against the rule, so an information-free series
-  scores below zero and is declared INVERSE 24–28% of the time. A real +0.16–0.19 edge would pass with
-  probability about 0.01. The units of inference overlap: about 5–17 independent clusters, against a
-  floor of 15.
-- **Data:** most of D-1's "unseen" record has already been seen: the basket's outcomes computed for
-  this panel, finder B's charted paths, and 11 of the 15 currencies inside the broad dollar index.
-  Done properly, the clean subset is 266–310 of about 625 currency-years, mostly NZD, NOK, LKR and
-  pre-1997 managed regimes. D-2's outcomes are already published.
-
-**Consequence: D-1 is not run as designed.** It cannot change the decision, and running it would spend
-the only partly unseen data. The recommended route is now `forward_only`: the dated ledger the panel
-has written since the reference cut-off, under both variants. It needs decades to score at realistic edges
-(about 45 / 90 / 234 years at edges of 0.70 / 0.60 / 0.50 against 0.35, on exact binomials).
-
-To freeze it, Casey answers:
-
-- the primary crisis list (default C16);
-- the primary variant (default unpatched; both are logged);
-- the mechanical rule that dates future crises (default 2 of 5 mechanical markers);
-- whether a live alert may come from anything but the ledger (default: ledger only).
-
-Until then the panel withholds its EM FX outcome columns (data review S1): seven of the basket's eight
-currencies sit in D-1's proposed set, and those numbers could steer the D-1 design questions if the
-cross-section is revived.
+Power (exact, equal p_u): with no edge P(PASS) ≤ 0.03 inside the drift bracket if the volatility model
+holds (about 0.07 under 2016–26 volatility plus −1%/yr); at +0.20, 0.44 (volatile firing state) or 0.24
+(calm); at +0.30, 0.80 / 0.67. Looks fall around 2060–2067, 2093–2107 and
+2126–2147; with no edge the record most likely ends INCONCLUSIVE. The momentum signal stays
+descriptive (~400 years to test).
 
 ### 9.5 Gates (merge-blocking)
 
-`backend/tests/test_dollar_watch.py` (32 tests) and `npm run smoke:dollar` (6 render cases):
+`backend/tests/test_dollar_watch.py` (49 tests), `backend/tests/test_dollar_prereg_harness.py` (5, gate G7) and
+`npm run smoke:dollar` (6 render cases); G6 is `dollar_watch/prereg/g6.py` (§9.4):
 
 - **The rule:**
   - The live rule reproduces the 7 / 6 frozen firings, clause values included.
@@ -439,8 +432,13 @@ cross-section is revived.
     in 2028).
   - Matured outcomes are frozen once.
   - An unreadable or wrongly shaped file is never overwritten.
+- **The pre-registration:** the freeze record and the Fed list ship byte-identical with their hashes; D-3
+  eligibility starts after the freeze date; units run from the first firing; the placebo is logged; each
+  month is dated once at its close with revisions logged, never re-dated; momentum matures after every
+  month and subtype; the EM basket is withheld when a leg goes stale; outcomes freeze field by field; the
+  harness reads only hash-checked archived bytes.
 - **Wording:**
-  - EM FX outcomes are withheld.
+  - EM FX outcomes are shown (the cross-section they could have steered is withdrawn).
   - Forbidden phrases are absent from the payload and the tab source.
   - The smoke fails if a rate is printed on the 11-episode momentum table.
 
@@ -504,5 +502,26 @@ Two independent verifiers reviewed the checkpoint build (`a46874d4`). Neither wr
     - The +4% line can no longer drop off the chart.
     - The question statuses match §7.
     - Two captions are cleaned up.
+
+### 9.7 Counter-agent reviews of the pre-registration (SPEC v1)
+
+- **Statistics: PASS_WITH_FIXES** (0 BLOCKING, 3 SERIOUS, 5 MINOR). The null is calibrated under its own
+  model (mean hit − p_u +0.003 ± 0.003) and size stays under 0.05 across the looks. All SERIOUS fixed:
+  - a ±1%/yr dollar trend moved size and power by about as much as the edges sought (false PASS 0.062
+    at −1%/yr) → the drift bracket, binding G6 rows, Q19;
+  - a PASS could not tell deceleration from any post-scramble reversal → the placebo beside it;
+  - a century-long ledger had no rule for a replaced series and leaned on VIXCLS needlessly → the
+    succession table and the DTWEXBGS ∩ DGS10 calendar.
+- **Data and point in time: PASS_WITH_FIXES** (0 BLOCKING, 3 SERIOUS, 5 MINOR). The pre-commit holds, and
+  the 8-onset count reproduces independently and on OFR's pre-revision values. All SERIOUS fixed:
+  - the freeze date did not gate D-3 → `d3_eligible`;
+  - the onset evaluator re-dated months on revised data → one row per month at its close;
+  - the SPEC text lagged the code → §1, §7 and Appendix A amended.
+- **Re-check of the fixes, by the same two reviewers:**
+  - Statistics: PASS_WITH_FIXES (2 SERIOUS, both fixed in the text):
+    - the drift bracket is model-conditional → qualifiers, 2016–26 rows in G6, the stronger option in Q19;
+    - the placebo cannot certify deceleration → a fixed PASS wording.
+  - Data: PASS_WITH_FIXES. Its SERIOUS was fixed: a month could be dated before its last H.10 day was
+    released. The confirm pass then returned PASS.
 
 Redeploy: **treasury-canary**.

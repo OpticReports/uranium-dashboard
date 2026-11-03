@@ -261,7 +261,7 @@ function OutcomeCell({ o }: { o: DwOutcomes | null | undefined }) {
   if (!x) return <span className="text-slate-600">pending</span>;
   return (
     <span className="font-mono text-[10px] tabular-nums">
-      S&amp;P {pct(x.spx_pct)} · Baa−10y {pp(x.baa10y_pp ?? x.baa_minus_10y_pp)}
+      S&amp;P {pct(x.spx_pct)} · EM FX {pct(x.emfx_pct)} · Baa−10y {pp(x.baa10y_pp ?? x.baa_minus_10y_pp)}
     </span>
   );
 }
@@ -556,7 +556,7 @@ function ScrambleLayer({ d }: { d: DollarWatch }) {
           Every firing of the rule, in-sample: {unpatched.length || "n/a"} under the unpatched rule (the default) plus the re-arm variant's 2008-11-06, added after the 2008-09-22 miss
         </div>
         <table className="w-full min-w-[860px] text-[11px]">
-          <thead><tr><Th>#</Th><Th>fired</Th><Th>variant</Th><Th right>largest 20d climb</Th><Th right>dollar rose further</Th><Th right>S&amp;P to next low: firing day / observable</Th><Th right>VIX change over 60d (points)</Th><Th>12 months later</Th><Th>reading</Th></tr></thead>
+          <thead><tr><Th>#</Th><Th>fired</Th><Th>variant</Th><Th right>largest 20d climb</Th><Th right>dollar rose further</Th><Th right>S&amp;P to next low: firing day / observable</Th><Th right>VIX change over 60d (points)</Th><Th>12 months later (EM FX up = EM weaker)</Th><Th>reading</Th></tr></thead>
           <tbody>
             {hist.map((f: DwFiring, i) => (
               <tr key={f.date} className="border-t border-slate-800/70">
@@ -671,7 +671,7 @@ function OutcomeTriplet({ o }: { o: DwOutcomes | null | undefined }) {
     <span className="font-mono text-[10px] tabular-nums">
       {(["3m", "6m", "12m"] as const).map((h) => {
         const x = o?.[h];
-        return <span key={h} className="mr-2">{h}: {x ? `S&P ${pct(x.spx_pct)} · Baa−10y ${pp(x.baa10y_pp)}` : "pending"}</span>;
+        return <span key={h} className="mr-2">{h}: {x ? `S&P ${pct(x.spx_pct)} · EM FX ${pct(x.emfx_pct)} · Baa−10y ${pp(x.baa10y_pp)}` : "pending"}</span>;
       })}
     </span>
   );
@@ -704,19 +704,58 @@ function LedgerLayer({ d }: { d: DollarWatch }) {
       <div className="overflow-x-auto">
         <div className="mb-1 text-xs font-semibold text-slate-300">Momentum episodes since 1971 (12-month DXY change above +10%), reconstructed in-sample</div>
         <table className="w-full min-w-[600px] text-[11px]">
-          <thead><tr><Th>month</Th><Th right>DXY 12m (trailing)</Th><Th right>S&amp;P next 12m</Th><Th right>Baa−10y next 12m</Th><Th right>DXY next 12m</Th></tr></thead>
+          <thead><tr><Th>month</Th><Th right>DXY 12m (trailing)</Th><Th right>S&amp;P next 12m</Th><Th right>EM FX next 12m (up = EM weaker)</Th><Th right>Baa−10y next 12m</Th><Th right>DXY next 12m</Th></tr></thead>
           <tbody>
             {arr(l.frozen_momentum).map((m) => {
               const o = m.outcomes?.["12m"];
               return (
                 <tr key={m.month} className="border-t border-slate-800/70"><Td mono>{m.month}</Td><Td right mono>{pct(m.dxy_12m_pct)}</Td><Td right mono>{pct(o?.spx_pct)}</Td>
-                  <Td right mono>{pp(o?.baa_minus_10y_pp)}</Td><Td right mono>{pct(o?.dxy_pct)}</Td></tr>
+                  <Td right mono>{pct(o?.emfx_pct)}</Td><Td right mono>{pp(o?.baa_minus_10y_pp)}</Td><Td right mono>{pct(o?.dxy_pct)}</Td></tr>
               );
             })}
           </tbody>
         </table>
         <Note>{str(l.frozen_momentum_basis) ?? ""}</Note>
       </div>
+    </>
+  );
+}
+
+function PreregLayer({ d }: { d: DollarWatch }) {
+  const f = d.forward;
+  if (!f) return <Unavailable what="Pre-registration record" />;
+  const fz = f.freeze;
+  const frozen = str(fz?.freeze_date) && /^\d{4}-/.test(String(fz?.freeze_date));
+  const live = arr(f.onsets?.live);
+  return (
+    <>
+      <div className="grid gap-2 md:grid-cols-2">
+        <div className="rounded border border-slate-700 px-3 py-2 text-[11px] text-slate-300">
+          <div className="font-semibold">{frozen ? `Frozen ${fz?.freeze_date}` : "Answered; the freeze record is pending its reviews"}</div>
+          <div className="mt-1 text-slate-400">
+            Answered by {str(fz?.answered_by) ?? "n/a"} on {str(fz?.answered_on) ?? "n/a"}: route {str(fz?.route) ?? "n/a"}; primary crisis list {str(fz?.primary_crisis_list) ?? "n/a"};
+            primary rule variant {str(fz?.decel_primary_variant) ?? "n/a"}; future crises dated by {str(fz?.forward_onset_rule) ?? "n/a"}; a colour or notification only from {str(fz?.notification_licence) ?? "n/a"}.
+          </div>
+          {str(fz?.spec_version) && <div className="mt-1 break-all font-mono text-[10px] text-slate-600">{fz?.spec_version}</div>}
+        </div>
+        <div className="rounded border border-slate-700 px-3 py-2 text-[11px] text-slate-300">
+          <div className="font-semibold">The forward test: {f.d3?.units ?? 0} units logged, {f.d3?.matured ?? 0} matured; first look at {f.d3?.next_look_at ?? 8} (about 2060-2070)</div>
+          <div className="mt-1 text-slate-400">{str(f.d3?.rule) ?? ""}. Status: {str(f.d3?.status) ?? "n/a"}.</div>
+          <div className="mt-1 text-slate-400">
+            Placebo rule: {f.d3?.placebo?.units ?? 0} units. Rows never scored (data date on or before the freeze, or first seen after a revision):{" "}
+            {(f.d3?.decel?.in_sample_rows ?? 0) + (f.d3?.placebo?.in_sample_rows ?? 0)}.
+          </div>
+        </div>
+      </div>
+      <Note>
+        Crisis dating, 2000-2026 check: {arr(f.onsets?.historical).join(", ") || "n/a"} (dollar-funding: {arr(f.onsets?.historical_dollar_funding).join(", ") || "none"}).{" "}
+        {str(f.onsets?.historical_note) ?? ""}. Months dated since the cut-off: {f.onsets?.months_evaluated ?? 0}
+        {str(f.onsets?.last_evaluated) ? ` (through ${f.onsets?.last_evaluated})` : ""}; onsets among them:{" "}
+        {live.length === 0 ? "none" : live.map((e) => e.date).join(", ")}. Next month dated: {str(f.onsets?.next_month) ?? "n/a"}, once it closes on{" "}
+        {str(f.onsets?.next_close) ?? "n/a"}. Fed emergency actions on file: {f.fed_actions?.n ?? "n/a"} (latest {str(f.fed_actions?.last) ?? "n/a"};
+        list reviewed through {str(f.fed_actions?.reviewed_through) ?? "n/a"}).
+      </Note>
+      {arr(f.problems).length > 0 && <Note>Problems: {arr(f.problems).join("; ")}.</Note>}
     </>
   );
 }
@@ -803,6 +842,9 @@ export function DollarView({ data }: { data: DollarWatch }) {
       <Section title="Forward ledger" subtitle="dated firings after the reference cut-off; outcomes frozen in as they mature; at realistic edges it needs decades to score" status={b.ledger ?? d.ledger?.status} basis={d.ledger?.basis}>
         <LedgerLayer d={d} />
       </Section>
+      <Section title="Pre-registration" subtitle="the frozen rules the forward ledger is graded by (studies/dollar_watch/spec/SPEC_v1.md)" status={b.forward ?? d.forward?.status}>
+        <PreregLayer d={d} />
+      </Section>
       <Panel title="Honesty box">
         <ul className="list-disc space-y-1 pl-4 text-[11px] text-slate-400">
           {arr(d.honesty).map((h, i) => <li key={i}>{h}</li>)}
@@ -812,7 +854,11 @@ export function DollarView({ data }: { data: DollarWatch }) {
           <div className="mt-3 text-[11px] text-slate-400">
             <div className="font-semibold text-slate-300">Pending questions (ranked)</div>
             {arr(d.pending_questions).map((q, i) => (
-              <div key={i}><span className="font-mono">{q.rank}</span> {q.q} <span className="text-slate-500">(moves: {q.moves ?? "n/a"}; {q.status ?? "n/a"}{q.first_asked ? ` ${q.first_asked}` : ""}{q.expires ? `, expires ${q.expires}` : ""})</span></div>
+              <div key={i}><span className="font-mono">{q.rank}</span> {q.q}{" "}
+                {q.status === "answered"
+                  ? <span className="text-slate-500">(answered {q.answered_on ?? ""}: {q.answer ?? "n/a"})</span>
+                  : <span className="text-slate-500">(moves: {q.moves ?? "n/a"}; {q.status ?? "n/a"}{q.first_asked ? ` ${q.first_asked}` : ""}{q.expires ? `, expires ${q.expires}` : ""})</span>}
+              </div>
             ))}
           </div>
         )}
