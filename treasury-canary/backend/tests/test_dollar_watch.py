@@ -41,6 +41,9 @@ TAB_SOURCES = [os.path.join(ROOT, "frontend", "src", "components", "DollarTab.ts
                os.path.join(ROOT, "frontend", "src", "lib", "dollarFixture.ts"),
                os.path.join(ROOT, "frontend", "src", "lib", "dollarGlossary.ts")]
 
+# status language: the tab is descriptive, so no alarm vocabulary even in negations or tooltip cards (wording review 2026-11-03)
+STATUS_WORDS = re.compile(r"\b(warning|alert|danger)\w*", re.I)
+
 # memo §5 and the wording review: never on the panel
 FORBIDDEN = ["probability of", "p(crisis", "chance of a crisis", "% chance", "crisis subsided", "subsided",
              "crisis over", "crisis is over", "all clear", "countdown", "next crisis in", "every crisis",
@@ -433,8 +436,9 @@ def test_failed_ledger_write_is_reported(inputs, tmp_path, monkeypatch):
 def test_gold_note_requires_quiet_funding(payload, inputs, tmp_path):
     g = payload["state"]["safe_haven"]["gold"]
     cp = {r["id"]: r for r in payload["funding"]["rows"]}["cp_fin"]
-    assert g["off_52w_high_pct"] <= -15 and g["note"] == (f"with dollar funding quiet (financial CP minus bill at its {dw._ord(cp['pct_own_history'])} "
-                                                           "percentile): outside the crisis pattern below")
+    assert cp["mean_5d"] <= cp["median_1y"]
+    assert g["off_52w_high_pct"] <= -15 and g["note"] == ("with dollar funding quiet (the CP spread's 5-day average and the OFR funding "
+                                                           "index at or below their 1-year medians): outside the crisis pattern below")
     stressed = json.loads(json.dumps(inputs))
     stressed["fred"]["DCPF3M"]["values"][-1] = (stressed["fred"]["DTB3"]["values"][-1] or 4.0) + 3.05     # CP-bill at a Lehman-sized print
     p = dw.build_dollar_watch(stressed, today="2026-11-02", ledger_file=str(tmp_path / "s.json"))
@@ -487,6 +491,8 @@ def test_forbidden_language_absent(payload, tmp_path):
         src = open(path, encoding="utf-8").read().lower()
         for phrase in FORBIDDEN:
             assert phrase not in src, (os.path.basename(path), phrase)
+        assert not STATUS_WORDS.search(src), (os.path.basename(path), STATUS_WORDS.search(src).group(0))
+    assert not STATUS_WORDS.search(text), STATUS_WORDS.search(text).group(0)
 
 
 # ---------------------------------------------------------------------------- plain-language summaries (Casey, 2026-11-03)
@@ -542,23 +548,58 @@ def test_every_glossary_entry_is_wired_into_the_tab(payload):
         assert k in keys, k
 
 
-def test_summaries_judge_funding_on_the_frozen_subtype_lines():
+def test_summaries_judge_funding_on_the_5_day_cp_line_never_on_the_swap_stock():
+    """Wording review 2026-11-03 (S1, S4): 'strained' is SPEC v1 §5.3's CP line on the 5-day average; swap-line usage is a lagging
+    stock (above $50bn until Sep-2009 and Sep-2020 with prices calm) and never sets the word; one print cannot flip it."""
     spec = open(os.path.join(STUDY, "spec", "SPEC_v1.md"), encoding="utf-8").read()
     assert "FRED SWPT > 50,000 ($m)" in spec and "trailing 5-observation mean of DCPF3M − DTB3" in spec and "> 1.00 on any day" in spec
 
     def rows(cp5, cp, sw, of):
         return {"cp_fin": {"latest": cp, "mean_5d": cp5, "median_1y": 0.2}, "swap_lines": {"latest": sw},
                 "ofr_funding": {"latest": of, "median_1y": 0.0}}
-    assert dw._funding_word(rows(1.01, 0.9, 0.1, -1)) == "strained"      # CP-bill 5-day mean past 1.00
-    assert dw._funding_word(rows(1.00, 1.0, 0.1, -1)) == "firmer"        # at the line is not past it
-    assert dw._funding_word(rows(0.1, 0.1, 50.01, -1)) == "strained"     # swap lines past $50bn
-    assert dw._funding_word(rows(0.1, 0.1, 50.0, -1)) == "quiet"         # the gold note's test: both at or below their medians
-    assert dw._funding_word(rows(0.1, 0.1, 0.1, 0.5)) == "firmer"        # OFR funding above its 1-year median
+    assert dw._funding_word(rows(1.01, 0.9, 0.1, -1)) == "strained"      # the CP-bill 5-day mean past 1.00
+    assert dw._funding_word(rows(1.00, 1.0, 0.1, -1)) == "usual"         # at the line is not past it
+    assert dw._funding_word(rows(0.1, 0.1, 450.0, -1)) == "quiet"        # a large swap stock with calm prices is not strain
+    assert dw._funding_word(rows(0.1, 0.9, 0.1, -1)) == "quiet"          # one high print does not flip the 5-day average
+    assert dw._funding_word(rows(0.1, 0.1, 0.1, 0.5)) == "usual"         # OFR funding above its 1-year median
     assert dw._funding_word(rows(0.1, 0.1, 0.1, None)) is None           # not enough data to say
-    row = lambda i, v, p, **k: {"id": i, "label": i, "latest": v, "pct_own_history": p, "history_from": "2019-01-02", **k}   # noqa: E731
-    hot = dw.summaries({}, {"rows": [row("cp_fin", 1.3, 99, mean_5d=1.2, median_1y=0.2), row("swap_lines", 0.1, 10)]}, {}, {}, {}, {})
-    assert hot["funding"][0].startswith("Dollar funding is under strain") and hot["funding"][1].endswith("past a line.")
+    row = lambda i, v, p, **k: {"id": i, "label": i, "latest": v, "pct_own_history": p, "history_from": "1997-01-02", **k}   # noqa: E731
+    ofr = row("ofr_funding", -1.0, 20, median_1y=0.0)
+    hot = dw.summaries({}, {"rows": [row("cp_fin", 1.3, 99, mean_5d=1.2, median_1y=0.2), row("swap_lines", 0.1, 10), ofr]}, {}, {}, {}, {})
+    assert hot["funding"][0].startswith("Dollar funding is under strain") and hot["funding"][1].endswith("past the 1pp line.")
     assert "dollar funding is under strain" in hot["page"][0].lower()
+    tail = dw.summaries({}, {"rows": [row("cp_fin", 0.12, 40, mean_5d=0.1, median_1y=0.2), row("swap_lines", 450.0, 99), ofr]}, {}, {}, {}, {})
+    assert tail["funding"][0].startswith("Dollar funding is quiet") and "past the $50bn line" in tail["funding"][1]
+    assert tail["funding"][2].startswith("Swap-line borrowing is still above the $50bn line") and "tail of a squeeze" in tail["funding"][2]
+    assert "strain" not in tail["page"][0] and "swap-line borrowing still above $50bn" in tail["page"][0]
+
+
+def test_summaries_follow_the_state_they_describe():
+    """Wording review 2026-11-03 (M14, M15, M19, M20): the open gate names the clause that fails; 'what would change' never lists
+    the state the page already shows; the gauge count leaves out EMB; each branch says its own implication."""
+    scr = {"gate_open": True, "state": {"roc20_max_60d_pct": 7.4},
+           "indicators": {"a_deceleration": {"met": False, "dollar_vs_60d_high_pct": -4.89, "ratio_now_to_max": 0.2},
+                          "b_funding_easing": {"met": True}, "c_risk_turn": {"met": None}}}
+    s = dw.summaries({}, {"rows": []}, scr, {}, {}, {})
+    assert "4.9% below its 60-day high, so the climb has reversed" in s["scramble"][0]
+    assert "gauge opening" not in s["page"][-1] and "the scramble gauge closing" in s["page"][-1]
+    scr["indicators"]["a_deceleration"] = {"met": False, "dollar_vs_60d_high_pct": -0.4, "ratio_now_to_max": 0.8}
+    assert "still above half its peak" in dw.summaries({}, {"rows": []}, scr, {}, {}, {})["scramble"][0]
+    closed = dw.summaries({}, {"rows": []}, {"gate_open": False, "state": {"roc20_max_60d_pct": 2.9}}, {}, {}, {})
+    assert "the scramble gauge opening" in closed["page"][-1]
+    slow = {"usd_credit": {"total_tn": 14.0, "yoy_pct": -1.2, "quarter": "2027-Q1"},
+            "treasury": {"custody": {"latest": 2700.0, "chg_12m_pct": 3.1, "pct_10y": 40}}}
+    w = dw.summaries({}, {"rows": []}, {}, slow, {}, {})["slow"]
+    assert "a contraction" in w[0] and "records in calm years" not in w[0] and "A fall can mean" not in w[1]
+    mom = {"momentum": {"dxy_12m_pct": 11.2, "signal": True, "month": "2027-03",
+                        "by_list": {"C16": {"episodes_followed_12m": 5, "episodes": 11, "base_12m": 0.283}}}}
+    assert "8 of the 11 began during a crisis already under way" in dw.summaries(mom, {"rows": []}, {}, {}, {}, {})["state"][0]
+    edge = {"momentum": {"dxy_12m_pct": 9.97, "signal": False, "month": "2027-03"}}
+    assert "+9.97%, below" in dw.summaries(edge, {"rows": []}, {}, {}, {}, {})["state"][0]
+    rows = [{"id": "emb", "label": "EMB", "latest": 90.0, "pct_own_history": None},
+            {"id": "sofr_iorb", "label": "SOFR minus interest on reserves", "latest": 3.0, "pct_own_history": 97, "history_from": "2021-07-29"}]
+    f = dw.summaries({}, {"rows": rows}, {}, {}, {}, {})["funding"]
+    assert any(x.startswith("1 of 1 gauges with a percentile") and "history from 2021" in x for x in f)
 
 
 # ============================================================================ the frozen pre-registration (SPEC v1)

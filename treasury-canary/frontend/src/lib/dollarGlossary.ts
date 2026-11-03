@@ -7,19 +7,19 @@ export const DW: Record<string, GlossaryEntry> = {
   layer_state: {
     title: "Layer 1: dollar state",
     what: "Where the dollar sits against its own history: its level, its trend, what bonds and safe havens are doing alongside it, and how emerging-market currencies are holding up.",
-    read: "Context, not timing. In this study no level or trend in this layer dated crises better than its base rate, so treat it as background for layers 2 and 3.",
+    read: "Context, not timing. Nothing in this layer has a validated edge: the band showed none, and momentum's in-sample edge depends on the crisis list. Treat it as background for layers 2 and 3.",
     caveat: "All the counts beside these readings are in-sample on 1971-2026; the crisis lists were drawn up knowing the dollar's path.",
   },
   layer_funding: {
     title: "Layer 2: dollar-funding nowcast",
     what: "The plumbing of dollar borrowing: what banks and companies pay for short-term dollars, how stressed overnight repo is, and how much foreign central banks borrow from the Fed.",
-    read: "This is the mechanism behind a dollar scramble: when dollar borrowers abroad cannot roll their debt, these gauges jump first or alongside the dollar. Quiet gauges mean the mechanism is not running.",
-    caveat: "Each gauge is ranked against its own history (mostly since 2019, so the 2008 extremes are not in the percentile base). They move with or ahead of the dollar's peak; they do not date the crisis itself.",
+    read: "This is the mechanism behind a dollar scramble: when dollar borrowers abroad cannot roll their debt, these gauges jump first or alongside the dollar. Quiet gauges mean no sign of a funding squeeze on the free gauges. They were also quiet through the 2015-16 and 2018 EM scares, and the cross-currency basis (the direct price of offshore dollars) is paid-only and not shown.",
+    caveat: "Each gauge is ranked against its own history, which for most of them includes 2008 (CP since 1997, the OFR index since 2000, NFCI since 1971, swap lines since Dec-2007); the two SOFR rows start in 2018 and 2021 and have no crisis in their base. They moved with or ahead of the dollar's peak, but their first alarms came roughly with the crisis's start (2007, 2022; n = 2): coincident, not early.",
   },
   layer_scramble: {
     title: "Layer 3: dollar-scramble peak gauge",
     what: "Casey's deceleration rule, with its parameters fixed, run live every day on the Fed's broad dollar index. It looks for the top of a dollar SCRAMBLE: a sharp dollar climb with Treasury yields falling, then the climb slowing while the dollar stays near its high.",
-    read: "Closed = no scramble on this definition, and nothing to read. Open = a scramble is under way; the three readings beneath are shown separately and never added up.",
+    read: "Closed = no scramble on this definition, and nothing to read. Open = a 4%+ climb with yields falling within the last 60 index days: a scramble under way or just past, and the readings beneath tell which. They are shown separately and never added up. Index days are the days both the broad dollar and the 10-year yield are published, about 250 a year.",
     caveat: "An untested hypothesis. In-sample: 6 firings since 2006, one clean call (2020) and two first-wave firings (2008, 2022, after which the dollar rose another 18% and 5%); no edge on 1973-2005 monthly data. It says nothing about when a crisis ends.",
   },
   layer_slow: {
@@ -31,14 +31,14 @@ export const DW: Record<string, GlossaryEntry> = {
     title: "Forward ledger",
     what: "An append-only record of every live firing of the rule and every momentum episode after the reference cut-off, written the day the panel first sees it and never edited.",
     read: "Outcomes (S&P, EM currencies, credit spreads, the dollar) are frozen into each row 3, 6 and 12 months later, measured from the first close after the firing became public.",
-    caveat: "With about one firing every four to five years, the record needs decades before it can say anything.",
+    caveat: "With about one scored unit every four to five years, the record needs decades before it can say anything.",
   },
   prereg: {
     title: "Pre-registration (frozen 2026-11-03)",
     what: "The rules that will grade the deceleration rule on future data only, written and frozen before any of that data exists, so nobody can tune them to the outcome.",
     calc: "A firing counts only if it comes after the freeze and showed on first publication. A 'unit' is a firing plus any within 250 index days of it. A hit is the broad dollar rising at most 3% further over the next 250 index days. Each hit is compared with a no-information volatility model, judged as if the dollar drifted -1% a year for a PASS and +1% for a FAIL.",
-    read: "Looks come at 8, 16 and 24 matured units, around 2060-2067, 2093-2107 and 2126-2147. Only a PASS could ever license a colour or a notification on this page, and it would read 'dollar scramble peaking: beat a no-information model (deceleration-specific: not tested)'.",
-    caveat: "With no real edge the most likely end is 'undecided'. A return of 2016-26 volatility plus a dollar downtrend would raise the false-PASS rate to about 0.06-0.08.",
+    read: "Looks come at 8, 16 and 24 matured units, around 2060-2067, 2093-2107 and 2126-2147. A unit is a firing plus its 250-index-day outcome window (later firings inside the window join it); it matures when the window closes. Only a PASS could ever license anything beyond description: one neutral colour on the deceleration reading (3a) and a notification, reading 'dollar scramble peaking: beat a no-information model (deceleration-specific: not tested)'. Every other reading stays descriptive under any outcome.",
+    caveat: "With no real edge the most likely end is 'undecided'. If the dollar keeps its 2016-26 volatility and drifts down 1% a year, a false PASS runs about 0.07, above the 0.05 the test is meant to allow (Q19 kept this as frozen).",
   },
   onset_months: {
     title: "Crisis months, dated mechanically",
@@ -57,13 +57,13 @@ export const DW: Record<string, GlossaryEntry> = {
   dxy: {
     title: "ICE US Dollar Index (DXY)",
     what: "The dollar against six major currencies, weighted by 1970s trade: euro 57.6%, yen 13.6%, pound 11.9%, Canadian dollar 9.1%, krona 4.2%, Swiss franc 3.6%. March 1973 = 100. Up = the dollar stronger.",
-    read: "The percentile ranks today's level among month-end closes since 1971: 70th means higher than 70% of them. A rise of more than about 10% in 12 months is the momentum line this tab watches.",
+    read: "The percentile ranks today's level among month-end closes since 1971: 70th means higher than 70% of them. The momentum line this tab watches is a 12-month rise of more than 10% in the monthly-average DXY (the tile's own 12-month change is on daily closes and can differ).",
     caveat: "Heavy on the euro and blind to China and most emerging markets. The Fed's broad index (next tile) is the better gauge of the dollar the world actually borrows in.",
   },
   band: {
     title: "Johnson's 85-105 band",
     what: "A rule of thumb from the October 2026 talk this study started from: a DXY below 85 or above 105 is supposed to signal trouble.",
-    read: "Tested here on three crisis lists, 1971-2026: months outside the band were followed by a crisis no more often than all months were. The band is shown because it was claimed, not because it works.",
+    read: "Tested here on three crisis lists, 1971-2026: the 17 excursions outside the band were followed by a crisis about as often as any month was (within one excursion of the base on every list). The band is shown because it was claimed, not because it works.",
     caveat: "No edge on any list (for example 8 excursions followed by an A25 crisis within 12 months, against 7.2 expected).",
   },
   broad: {
@@ -86,13 +86,13 @@ export const DW: Record<string, GlossaryEntry> = {
   momentum: {
     title: "12-month momentum (+10% line)",
     what: "The change in the DXY's monthly average over 12 months. An 'episode' starts when it first rises above +10% after a year below.",
-    read: "In-sample, 5 of 11 episodes were followed by a dollar-stress onset (C16) within 12 months, against 28% of all months. That sounds like an edge, but the 11 episodes form about 5 independent clusters, 8 of them began during a crisis already on the 25-crisis list, and a 6-month version of the test falls below its base (28% vs 42%).",
+    read: "In-sample, 5 of 11 episodes were followed by a dollar-stress onset (C16) within 12 months, against 28% of all months. That sounds like an edge, but 11 episodes is below the ~15 the study needs before showing a rate, the 41 signal months followed by an onset come from just those 5 episodes, 8 of the 11 began during a crisis already on the 25-crisis list, and a 6-month version of the test falls below its base (28% vs 42%).",
     caveat: "Never tested: a fair test needs about 40 independent episodes, roughly 400 years of data.",
   },
   base_rate: {
     title: "Base rate",
     what: "The share of all months (1971-2026) that were followed by a crisis onset within the same window. It is what a signal has to beat.",
-    read: "A count like '8 of 12 (67%)' means nothing on its own: if 60% of all months were followed by an onset in that window, the signal added little. Every count on this page is shown beside its base rate.",
+    read: "A count like '8 of 12 (67%)' means nothing on its own: if 60% of all months were followed by an onset in that window, the signal added little. Every 'X of N were followed by...' count on this page is shown beside its base rate.",
   },
   crisis_lists: {
     title: "The three crisis lists",
@@ -102,13 +102,13 @@ export const DW: Record<string, GlossaryEntry> = {
   gold: {
     title: "Gold",
     what: "Spot gold in dollars per ounce (FMP; COMEX futures as a fallback).",
-    read: "In dollar-funding crises gold has often FALLEN at first, sold to raise dollars, before recovering. It ended higher in 14 of 24 completed crises, against a 61% base. A gold fall with dollar funding quiet does not fit that pattern; the tile says so when it happens.",
+    read: "In the 2008 and 2020 dollar-funding squeezes gold fell in the liquidation weeks before recovering. Across all 24 completed crises on the 25-crisis list it ended higher in 14 (58%), against 61% of same-length windows: no better than gold's own drift. A fall with dollar funding quiet does not fit the squeeze pattern; the tile says so when it happens.",
     caveat: "Daily gold before 2000 is not available free, so the early record is monthly.",
   },
   emfx: {
     title: "EM currency basket",
     what: "An equal-weight average of 8 emerging-market currencies against the dollar (Brazilian real, Mexican peso, South African rand, Indian rupee, Korean won, Thai baht, Chinese yuan, Malaysian ringgit). Up = EM currencies weaker.",
-    read: "A fast rise is the dollar squeeze reaching emerging markets. A 10% rise in 63 trading days is one of the five crisis-dating markers.",
+    read: "A fast rise means EM currencies are falling against the dollar, from a dollar squeeze or from EM-specific stress (2015-16 and 2018 came with dollar funding quiet). A 10% rise in 63 trading days is one of the five crisis-dating markers.",
     caveat: "Turkey and Indonesia are not on FRED daily. Several of these currencies are managed, which damps the basket.",
   },
   chf_jpy: {
@@ -125,8 +125,8 @@ export const DW: Record<string, GlossaryEntry> = {
   cp_fin: {
     title: "Financial CP minus 3-month T-bill",
     what: "What banks and finance companies pay to borrow unsecured for 3 months in commercial paper, minus the Treasury bill yield. It is the price of bank credit risk in dollar money markets.",
-    read: "Normally a few hundredths of a point. In the dollar-funding onsets of 2007-12, 2009-01 and 2020-03 its 5-day average passed 1 percentage point (1.78, 1.14 and 1.12). The crisis dating uses that 1pp line to mark an onset as dollar-funding.",
-    caveat: "The percentile base starts in 2019, so the 2008 extremes are not in it.",
+    read: "Usually between about 0.05 and 0.6 points (median 0.18 since 1997; 0.09 since 2019). In the dollar-funding onsets of 2007-12, 2009-01 and 2020-03 its 5-day average passed 1 percentage point (1.78, 1.14 and 1.12). The crisis dating uses that 1pp line to mark an onset as dollar-funding.",
+    caveat: "The own-history percentile runs from 1997 and includes 2008; the last-10-years column does not. Single prints can jump, month-ends especially, so the summaries judge it on the 5-day average, as the crisis dating does.",
   },
   cp_nonfin: {
     title: "Nonfinancial CP minus 3-month T-bill",
@@ -156,12 +156,12 @@ export const DW: Record<string, GlossaryEntry> = {
   sofr_tail: {
     title: "SOFR tail: 99th percentile minus SOFR",
     what: "How much the most expensive overnight repo trades (the 99th percentile) pay over the median repo rate (SOFR), in basis points.",
-    read: "A wide tail means some borrowers are paying up for overnight dollars, an early sign of strain in the repo market that funds Treasuries.",
+    read: "A wide tail means some borrowers are paying up for overnight dollars, strain in the repo market that funds Treasuries. Its history starts in 2018 and holds no crisis, so no lead is established.",
   },
   sofr_iorb: {
     title: "SOFR minus interest on reserves",
     what: "The overnight repo rate minus the rate the Fed pays banks on their reserves, in basis points.",
-    read: "Repo trading above the reserve rate means cash is getting scarcer relative to collateral: the pattern before the September 2019 repo spike. A few basis points is a sign to watch, not a scramble.",
+    read: "Repo trading above the reserve rate means cash is getting scarcer relative to collateral: as in 2019 before the September repo spike (an observation, not tested here; this series starts in 2021). A few basis points is not a scramble.",
     caveat: "History starts in 2021, so its percentile is against a short and unusually cash-rich window.",
   },
   swap_lines: {
@@ -177,7 +177,7 @@ export const DW: Record<string, GlossaryEntry> = {
   percentile: {
     title: "Percentile of its own history",
     what: "Where today's value ranks among the series' own past values: the 90th percentile means higher than 90% of them.",
-    read: "It answers 'is this unusual for this series?'. It does not say whether the level is dangerous: a series with a calm history can sit at its 99th percentile at a harmless level.",
+    read: "It answers 'is this unusual for this series?'. It does not say whether the level is extreme in absolute terms: a series with a calm history can sit at its 99th percentile at an ordinary level.",
   },
 
   // ── layer 3 readings ──────────────────────────────────────────────────────
@@ -215,14 +215,14 @@ export const DW: Record<string, GlossaryEntry> = {
   null_box: {
     title: "The null (shown permanently)",
     what: "The rule's monthly analogue run on 1973-2005, data the parameter choice did not use (though the study had seen it): 10 firings.",
-    read: "The dollar peaked within 3 months after 3 of them, against 42% of all months: no edge. This box stays on the page whatever the forward record later shows.",
+    read: "The dollar peaked within 3 months either side of 3 of them, against 42% of all months: no edge. This box stays on the page whatever the forward record later shows.",
   },
 
   // ── layer 4 readings ──────────────────────────────────────────────────────
   usd_credit: {
     title: "Dollar credit outside the US",
-    what: "Dollar loans and bonds owed by borrowers outside the United States (BIS global liquidity indicators), about $15 trillion, roughly 30% of it in emerging markets.",
-    read: "The size of the potential scramble: these borrowers need dollars to roll their debt. Fast growth (Johnson's 're-dollarising') raises exposure, but the stock has hit records in calm years and before crises alike.",
+    what: "Dollar loans and bonds owed by non-bank borrowers outside the United States (BIS global liquidity indicators). The tile shows the latest total and the emerging-market share.",
+    read: "The size of the potential scramble: these borrowers need dollars to roll their debt. Growth (Johnson's 're-dollarising') raises exposure, but the stock has hit records in calm years and before crises alike.",
     caveat: "Quarterly, published with about a 5-month lag.",
   },
   fx_swaps: {
@@ -238,7 +238,7 @@ export const DW: Record<string, GlossaryEntry> = {
   },
   custody: {
     title: "Foreign official custody holdings",
-    what: "Treasuries and agency securities the New York Fed holds for foreign central banks and official accounts (H.4.1, weekly).",
+    what: "Marketable Treasury securities the New York Fed holds in custody for foreign central banks and official accounts (H.4.1, weekly; agencies not included).",
     read: "Falling holdings can mean official holders selling Treasuries to raise dollars, as in March 2020, or simply moving custody elsewhere. The percentile is against the last 10 years.",
   },
   treasury: {
