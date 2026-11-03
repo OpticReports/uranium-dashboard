@@ -511,7 +511,7 @@ def test_summaries_cover_every_layer_restate_the_panel_and_never_print_a_hole(pa
     assert cp["mean_5d"] == dw.r(sum(v for _, v in cpf[-5:]) / 5, 2)          # SPEC v1 §5.3's line is on the 5-day mean
     assert f"{cp['latest']:.2f}pp" in s["funding"][0] and f"{cp['mean_5d']:.2f}pp" in s["funding"][1]
     assert f"{payload['scramble']['state']['roc20_max_60d_pct']:+.1f}%" in s["scramble"][0]
-    assert s["page"][0].startswith("Reading the page together: ") and "not a forecast" in s["page"][1]
+    assert s["page"][0].startswith("The dollar is ") and "not a forecast" in s["page"][1]
     null = dw.build_dollar_watch({}, today="2026-11-02", ledger_file=str(tmp_path / "n.json"))
     more = _summary_lines(null)
     assert null["summaries"]["page"][0].startswith("Live data unavailable")
@@ -558,7 +558,7 @@ def test_summaries_judge_funding_on_the_frozen_subtype_lines():
     row = lambda i, v, p, **k: {"id": i, "label": i, "latest": v, "pct_own_history": p, "history_from": "2019-01-02", **k}   # noqa: E731
     hot = dw.summaries({}, {"rows": [row("cp_fin", 1.3, 99, mean_5d=1.2, median_1y=0.2), row("swap_lines", 0.1, 10)]}, {}, {}, {}, {})
     assert hot["funding"][0].startswith("Dollar funding is under strain") and hot["funding"][1].endswith("past a line.")
-    assert "dollar funding is under strain" in hot["page"][0]
+    assert "dollar funding is under strain" in hot["page"][0].lower()
 
 
 # ============================================================================ the frozen pre-registration (SPEC v1)

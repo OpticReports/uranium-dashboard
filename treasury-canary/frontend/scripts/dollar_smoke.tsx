@@ -40,7 +40,7 @@ const a = run("fixture", DOLLAR_FIXTURE);
 for (const must of ["Dollar state", "Dollar-funding nowcast", "Dollar-scramble peak gauge", "Slow state", "Forward ledger", "Honesty box",
   "101.72", "ad hoc 85-105 band (no edge found)", "Gate closed", "2008-09-22", "2022-07-28", "No edge", "re-dollarising", "129.3",
   "Pending questions", "C16", "calendar days", "no better than gold", "re-arm only", "expires 2027-01-01", "5 of 11", "41 of 85",
-  "What this means", "Reading the page together: the dollar is firm against its history", "Dollar funding is quiet"]) {
+  "What this means", "Reading the page together", "The dollar is firm against its history, funding is", "Dollar funding is quiet"]) {
   if (!a.includes(must)) throw new Error(`fixture render missing '${must}'`);
 }
 // every layer carries its plain-language takeaways, and every indicator its "?" (Casey, 2026-11-03)

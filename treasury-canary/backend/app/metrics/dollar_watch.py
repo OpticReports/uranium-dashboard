@@ -1206,7 +1206,7 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
     # the page as a whole
     parts = []
     if _num(dx.get("pct_own_history")):
-        parts.append(f"the dollar is {_level(dx['pct_own_history'])}")
+        parts.append(f"The dollar is {_level(dx['pct_own_history'])}")
     if word:
         many = len(hot) > 1
         near = f" ({len(hot)} gauge{'s' if many else ''} near the top of {'their' if many else 'its'} range)" if hot else ""
@@ -1217,7 +1217,8 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
     if _num(uc.get("yoy_pct")):
         parts.append(f"dollar debt abroad is {'growing' if uc['yoy_pct'] > 0 else 'shrinking' if uc['yoy_pct'] < 0 else 'flat'}")
     caveat = "None of these readings has been validated as an early sign of crisis; the base rate beside each one is the honest guide."
-    out["page"] = (["Reading the page together: " + ", ".join(parts[:-1]) + (" and " if len(parts) > 1 else "") + parts[-1] + ".",
+    parts[:1] = [x[:1].upper() + x[1:] for x in parts[:1]]       # the box's own title says "Reading the page together"
+    out["page"] = ([", ".join(parts[:-1]) + (" and " if len(parts) > 1 else "") + parts[-1] + ".",
                     "Taken together this describes where the dollar and its plumbing stand, not a forecast. " + caveat,
                     "What would change this picture: funding gauges climbing toward their 2008 and 2020 levels, the scramble gauge "
                     "opening (a 4% climb with yields falling), or a month dated as a crisis onset by the mechanical markers. Each "
