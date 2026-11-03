@@ -127,7 +127,7 @@ export const DW: Record<string, GlossaryEntry> = {
     title: "Financial CP minus 3-month T-bill",
     what: "What banks and finance companies pay to borrow unsecured for 3 months in commercial paper, minus the Treasury bill yield. It is the price of bank credit risk in dollar money markets.",
     read: "Usually between about 0.05 and 0.6 points (median 0.18 since 1997; 0.09 since 2019). In the dollar-funding onsets of 2007-12, 2009-01 and 2020-03 its average over 5 prints passed 1 percentage point (1.78, 1.14 and 1.12). The crisis dating uses that 1pp line to mark an onset as dollar-funding.",
-    caveat: "The own-history percentile runs from the start year the table shows (1997 for this series with its full history loaded), so it includes 2008; the last-10-years column does not. Single prints can jump, month-ends especially, so the summaries judge it on the average of its last 5 prints, as the crisis dating does. FRED leaves the rate blank when too few trades print, for weeks in March-May 2020; the summaries then say so and set no word from CP.",
+    caveat: "The own-history percentile runs from the start year the table shows (1997 for this series with its full history loaded), so it includes 2008; the last-10-years column does not. Single prints can jump, month-ends especially, so the summaries judge it on the average of its last 5 prints, as the crisis dating does. The Fed publishes no rate (n.a.) when too few trades print: for weeks in March-May 2020, and on about two days in five since 2021. When the newest print is over a week old, or the five straddle a blank of more than three weeks (March-May 2020, February 2024), the summaries say so and set no word from CP.",
   },
   cp_nonfin: {
     title: "Nonfinancial CP minus 3-month T-bill",

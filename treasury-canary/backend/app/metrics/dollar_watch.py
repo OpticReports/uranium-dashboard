@@ -655,7 +655,7 @@ def state_block(inp: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------- layer 2: funding
-def funding_block(inp: dict) -> dict:
+def funding_block(inp: dict, today: str | None = None) -> dict:
     fred = inp.get("fred") or {}
     ofr = inp.get("ofr") or {}
     f = {s: pairs(fred.get(s)) for s in ("DCPF3M", "DCPN3M", "DTB3", "NFCIRISK", "SOFR", "SOFR99", "IORB", "SWPT")}
@@ -700,9 +700,22 @@ def funding_block(inp: dict) -> dict:
     ]
     c5 = r(sum(v for _, v in cpf[-5:]) / 5, 3) if len(cpf) >= 5 else None              # SPEC v1 §5.3's line, unrounded (0.01 steps: 3 dp is exact)
     c5_from, c5_to = (cpf[-5][0], cpf[-1][0]) if len(cpf) >= 5 else (None, None)
+    c5_days = [d for d, _ in cpf[-5:]]
+    gap_from = max(zip(c5_days, c5_days[1:]), key=lambda ab: _bdays_between(*ab))[0] if len(c5_days) == 5 else None
     ref = f["DTB3"][-1][0] if f["DTB3"] else None          # bills print every business day: the CP rate's blanks show against them
-    stale = bool(c5_to and ref and (_bdays_between(c5_to, ref) > 5 or _bdays_between(c5_from, c5_to) > 10))
-    rows[0].update(mean_5d=c5, mean_5d_from=c5_from, mean_5d_to=c5_to, mean_5d_stale=stale,
+    why = None                                             # round-4 review: the Fed publishes no CP rate on ~2 days in 5 since 2021
+    if c5_to and ref:
+        if today and _bdays_between(ref, today) > 5:
+            why = "fetch"                                  # FRED itself is behind: nothing here is current
+        elif _bdays_between(c5_to, ref) > 5:
+            why = "cp_fetch" if stt["DCPF3M"] != "ok" else "gap"
+        elif max(_bdays_between(a, b) for a, b in zip(c5_days, c5_days[1:])) > 15:   # never the span: since 2021 five fresh
+            why = "outage"                                 # prints often cover 2-3 weeks; this is a month-long blank (2020, 2024-02)
+    lo12 = add_months(cpf[-1][0], -12) if cpf else None
+    mx12 = max((sum(v for _, v in cpf[i - 4:i + 1]) / 5 for i in range(4, len(cpf)) if cpf[i][0] > lo12), default=None)
+    rows[0].update(mean_5d=c5, mean_5d_from=c5_from, mean_5d_to=c5_to, mean_5d_stale=why is not None, mean_5d_stale_why=why,
+                   mean_5d_ref=ref, mean_5d_max_12m=r(mx12, 3) if mx12 is not None else None,
+                   mean_5d_gap_from=gap_from,
                    pct_5d_own_history=r(100 * sum(1 for _, v in cpf if v <= c5) / len(cpf), 0) if c5 is not None else None)
     wk4 = (date.fromisoformat(swpt[-1][0]) - timedelta(days=28)).isoformat() if swpt else None
     next(x for x in rows if x["id"] == "swap_lines")["prev_4w"] = r(asof(swpt, wk4), 2) if wk4 else None   # is the stock falling?
@@ -1057,8 +1070,9 @@ def _funding_word(rows: dict) -> str | None:
     print); 'elevated' = below that line, but CP's 5-print average or the OFR funding index at or above the 80th percentile of its own
     history (the 1-year medians alone read 'quiet' in early 2009, when they were crisis medians); 'quiet' = both at or below their
     1-year medians; 'usual' = the rest, the common state (about three days in five since 2020); None = not enough data. Swap-line
-    usage is a lagging stock and never sets the word. Stale CP prints (round-3 S1: the newest more than 5 business days behind
-    the bill rate, or the five spread over more than 10) set no word: OFR alone can read 'elevated', otherwise there is none."""
+    usage is a lagging stock and never sets the word. Stale CP prints (the newest more than 5 business days behind the bill
+    rate, the five straddling a blank of more than 15, or FRED itself a week behind) set no word: OFR alone can read 'elevated',
+    otherwise there is none. The span of the five never counts: since 2021 the rate is blank on ~2 days in 5."""
     cp, of = rows.get("cp_fin") or {}, rows.get("ofr_funding") or {}
     c5 = cp.get("mean_5d")
     if cp.get("mean_5d_stale") is not True and _num(c5) and c5 > 1.0:
@@ -1097,6 +1111,9 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
     c5f, c5t = cp.get("mean_5d_from"), cp.get("mean_5d_to")
     c5s = (f"{c5:.3f}pp" if abs(c5 - 1.0) < 0.01 else f"{c5:.2f}pp") if _num(c5) else "n/a"
     prints = f" ({c5f} to {c5t})" if c5f and c5t else ""
+    why = cp.get("mean_5d_stale_why")
+    recent_sq = _num(cp.get("mean_5d_max_12m")) and cp["mean_5d_max_12m"] > 1.0    # a CP squeeze in the past year
+    bn = lambda x: f"${x:.2f}bn" if abs(x) < 10 else f"${x:.0f}bn"   # noqa: E731
     ons = fwd.get("onsets") or {}
     st = scr.get("state") or {}
     fz = (fwd.get("freeze") or {}).get("freeze_date")
@@ -1164,7 +1181,7 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
         els = _funding_elevated(rows)
         el = (f"{els[0][0]} is at the {_ord(els[0][1])} percentile of its own history"
               + (f" and {els[1][0]} at the {_ord(els[1][1])}" if len(els) > 1 else "")) if els else ""
-        adj = {"strained": "under strain on the crisis dating's own line (the CP spread's 5-day average above 1pp)",
+        adj = {"strained": "under strain on the crisis dating's own line (the CP spread's 5-print average above 1pp)",
                "elevated": (f"elevated: {el}" if cp_stale else
                             f"elevated: under the crisis dating's 1pp line, but {el}"),
                "quiet": "quiet (the CP spread's 5-print average and the OFR funding index at or below their 1-year medians)",
@@ -1172,9 +1189,15 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
                         "as on about three days in five since 2020)"}.get(word or "")
         pc = f" ({_ord(cp['pct_own_history'])} percentile since {(cp.get('history_from') or '')[:4]})" if _num(cp.get("pct_own_history")) else ""
         if cp_stale:
-            F.append((f"Dollar funding is {adj}. " if adj else "") + f"The CP spread has no print since {c5t} (FRED leaves the 90-day AA "
-                     f"financial rate blank when too few trades print); its last five prints{prints} average {c5s}. Foreign central "
-                     f"banks owe ${sw['latest']:.2f}bn on the Fed's swap lines.")
+            cpx = ({"outage": f"The CP spread printed again on {c5t}, its first print since {cp.get('mean_5d_gap_from')}; its last "
+                              f"five prints{prints} average {c5s}, so the CP test waits until five recent prints accumulate.",
+                    "fetch": f"FRED data end {cp.get('mean_5d_ref')} (the fetch is behind); the last five CP prints{prints} average {c5s}.",
+                    "cp_fetch": f"The CP data end {c5t} (the CP fetch failed; showing the last good copy); its last five prints{prints} "
+                                f"average {c5s}."}.get(why) or
+                   f"The CP spread has no print since {c5t} (the Fed publishes no rate when too few trades print); its last five "
+                   f"prints{prints} average {c5s}.")
+            F.append((f"Dollar funding is {adj}. " if adj else "") + cpx + f" Foreign central banks owe ${sw['latest']:.2f}bn on the "
+                     "Fed's swap lines.")
         else:
             F.append((f"Dollar funding is {adj}. " if adj else "") + f"Financial commercial paper costs {cp['latest']:.2f}pp over "
                      f"Treasury bills{pc} and foreign central banks owe ${sw['latest']:.2f}bn on the Fed's swap lines.")
@@ -1186,17 +1209,19 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
             F.append(rule + f"Swap lines are ${sw['latest']:.2f}bn, {'past' if sw['latest'] > 50 else 'below'} the $50bn line; the CP test "
                      "waits for fresh prints.")
         else:
-            F.append(rule + f"Now: the last five CP prints{prints} average {c5s} and swap lines are ${sw['latest']:.2f}bn"
+            F.append(rule + f"Latest: the last five CP prints{prints} average {c5s} and swap lines are ${sw['latest']:.2f}bn"
                      + (", past both lines." if len(past) == 2 else f", past {past[0]}." if past else ", below both." if _num(c5) else "."))
-        wk = f" (${p4:.0f}bn four weeks earlier)" if _num(p4) else ""
+        wk = f" ({bn(p4)} four weeks earlier)" if _num(p4) else ""
         if swap_tail:
             F.append(f"Swap-line borrowing is above the $50bn line but falling{wk}. Usage lags "
                      "funding prices: in 2008 and 2020 it peaked about two months after CP minus bills and stayed above $50bn until "
                      "Sep-2009 and Sep-2020, so a falling stock with calm prices reads as the tail of a squeeze rather than new strain.")
+        elif swap_dir == "rising" and recent_sq:
+            F.append(f"Swap-line borrowing is above the $50bn line and still rising{wk}, as usage did for about two months after CP "
+                     "minus bills peaked in 2008 and 2020: the lag after a squeeze, not new demand.")
         elif swap_dir == "rising" and word in ("quiet", "usual"):
             F.append(f"Swap-line borrowing is above the $50bn line and rising{wk}: dollar demand abroad that US funding prices need not "
-                     "show. From Dec-2011 to Feb-2012 draws, mostly by the ECB, rose from $2bn to $109bn while the CP spread stayed near "
-                     "its median.")
+                     "show. From Dec-2011 to Feb-2012 swap-line draws rose from $2bn to $109bn while the CP spread stayed near its median.")
         elif swap_dir == "rising" and word != "strained":
             F.append(f"Swap-line borrowing is above the $50bn line and rising{wk}.")
         elif swap_dir in ("falling", "roughly flat") and word != "strained":
@@ -1231,7 +1256,7 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
                 a_txt = "not met" if a.get("met") is False else "unknown"
             met = lambda x: "met" if (x or {}).get("met") is True else "not met" if (x or {}).get("met") is False else "unknown"   # noqa: E731
             S.append(f"The scramble gauge is open: {win}, with the 10-year below where it stood before the climb. Deceleration (a) is "
-                     f"{a_txt}. Funding easing (b, on the latest print) is {met(ind.get('b_funding_easing'))}, and gold and EM bonds turning (c) "
+                     f"{a_txt}. Funding easing (b, on the latest print{f', CP of {c5t}' if cp_stale and c5t else ''}) is {met(ind.get('b_funding_easing'))}, and gold and EM bonds turning (c) "
                      f"{met(ind.get('c_risk_turn'))}; the three are shown separately and never added up.")
         else:
             S.append(f"The scramble gauge is closed: {win} (it opens at +4% with the 10-year falling). No dollar scramble is under way "
@@ -1316,10 +1341,16 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
         parts.append(f"the dollar is {_level(dx['pct_own_history'])}")
     if word:
         notes = ([f"{len(hot)} gauge{'s' if len(hot) > 1 else ''} near the top of {'their' if len(hot) > 1 else 'its'} range"] if hot else []) \
-            + ([f"swap-line borrowing above $50bn {'but' if swap_dir == 'falling' else 'and'} {swap_dir}"] if swap_dir and word != "strained" else [])
+            + ([f"swap-line borrowing above $50bn {'but' if swap_dir == 'falling' else 'and'} {'still rising' if swap_dir == 'rising' and recent_sq else swap_dir}"]
+               if swap_dir and word != "strained" else [])
         par = f" ({'; '.join(notes)})" if notes else ""
         parts.append({"strained": "dollar funding is under strain", "elevated": f"funding is elevated{par}", "quiet": f"funding is {'mostly quiet' if hot else 'quiet'}{par}",
                       "usual": f"funding is in its usual range{par}"}[word])
+    elif cp_stale:
+        ofp = (rows.get("ofr_funding") or {}).get("pct_own_history")
+        tail = f" (the OFR funding index at its {_ord(ofp)} percentile)" if _num(ofp) and why != "fetch" else ""
+        parts.append({"outage": "funding has too few CP prints since a gap", "fetch": f"funding data end {cp.get('mean_5d_ref')} (the fetch is behind)",
+                      "cp_fetch": "funding has no current CP data (the fetch failed)"}.get(why, "funding has no recent CP print") + tail)
     if st:
         parts.append("the scramble gauge is open" if scr.get("gate_open") else "the scramble gauge is closed")
     if _num(uc.get("yoy_pct")):
@@ -1348,7 +1379,7 @@ def build_dollar_watch(inp: dict, today: str | None = None, ledger_file: str | N
     today = today or datetime.now(timezone.utc).date().isoformat()
     path = ledger_file or ledger_path()
     state = state_block(inp)
-    fund = funding_block(inp)
+    fund = funding_block(inp, today)
     state["safe_haven"]["gold"]["note"] = gold_funding_note(state, fund)
     scr = scramble_block(inp, fund, today, path)
     fwd = forward_block(inp, scr, today, path)

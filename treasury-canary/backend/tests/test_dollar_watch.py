@@ -594,7 +594,7 @@ def test_summaries_judge_funding_on_the_5_day_cp_line_never_on_the_swap_stock():
     assert not any("tail of a squeeze" in x for x in new["funding"]) and not any("rising" in x for x in new["funding"])   # +5%: a plateau
     assert "swap-line borrowing above $50bn and roughly flat" in new["page"][0]
     drawn = dw.summaries({}, {"rows": [calm_cp, row("swap_lines", 54.3, 99, prev_4w=2.3), ofr]}, {}, {}, {}, {})
-    assert any("and rising ($2bn four weeks earlier): dollar demand abroad" in x for x in drawn["funding"])
+    assert any("and rising ($2.30bn four weeks earlier): dollar demand abroad" in x for x in drawn["funding"])   # 2 dp under $10bn
     assert "swap-line borrowing above $50bn and rising" in drawn["page"][0]
 
 
@@ -639,11 +639,41 @@ def test_stale_cp_prints_set_no_word_and_say_so(inputs, tmp_path):
         cp = {r["id"]: r for r in p["funding"]["rows"]}["cp_fin"]
         assert cp["mean_5d_stale"] is True and cp["mean_5d_to"] == last, (day, cp.get("mean_5d_to"))
         f, page = " ".join(p["summaries"]["funding"]), p["summaries"]["page"][0]
-        assert f"The CP spread has no print since {last}" in f and "Now: the last five CP prints" not in f
+        assert f"The CP spread has no print since {last}" in f and "Latest: the last five CP prints" not in f
         assert not any(w in f + page for w in ("under strain", "quiet")), (day, f, page)
         assert p["state"]["safe_haven"]["gold"]["note"] is None
     fresh = {r["id"]: r for r in dw.build_dollar_watch(inputs, today="2026-11-02", ledger_file=str(tmp_path / "f.json"))["funding"]["rows"]}
     assert fresh["cp_fin"]["mean_5d_stale"] is False and fresh["cp_fin"]["mean_5d_to"] == "2026-10-29"
+    # round-4 review: since 2021 the rate is blank on ~2 days in 5, so five fresh prints can span 12 business days (2025-09-05,
+    # a same-day print): that is fresh, never "no print since" the day it printed
+    p = dw.build_dollar_watch(_cut(inputs, "2025-09-05"), today="2025-09-05", ledger_file=str(tmp_path / "w.json"))
+    cp = {r["id"]: r for r in p["funding"]["rows"]}["cp_fin"]
+    assert cp["mean_5d_to"] == "2025-09-05" and cp["mean_5d_stale"] is False
+    assert "no print since" not in " ".join(p["summaries"]["funding"]) and "Latest: the last five CP prints" in p["summaries"]["funding"][1]
+    # the first print after the 2020 gap: fresh, but the five reach back to March, so the CP test waits
+    p = dw.build_dollar_watch(_cut(inputs, "2020-05-07"), today="2020-05-07", ledger_file=str(tmp_path / "g.json"))
+    cp = {r["id"]: r for r in p["funding"]["rows"]}["cp_fin"]
+    assert cp["mean_5d_stale_why"] == "outage" and "printed again on 2020-05-07, its first print since 2020-03-26" in " ".join(p["summaries"]["funding"])
+    assert "under strain" not in " ".join(p["summaries"]["funding"]) + p["summaries"]["page"][0]
+    for day in ("2026-10-28", "2026-10-26"):                   # second verifier: CP printed that day; the old span test called it stale
+        cp = {r["id"]: r for r in dw.build_dollar_watch(_cut(inputs, day), today=day, ledger_file=str(tmp_path / f"{day}.json"))["funding"]["rows"]}["cp_fin"]
+        assert cp["mean_5d_to"] == day and cp["mean_5d_stale"] is False, (day, cp.get("mean_5d_stale_why"))
+    # after the March-2020 squeeze the swap stock kept rising into May: the lag, never 'new demand'
+    p = dw.build_dollar_watch(_cut(inputs, "2020-05-15"), today="2020-05-15", ledger_file=str(tmp_path / "l.json"))
+    f = " ".join(p["summaries"]["funding"])
+    assert "need not show" not in f and ("still rising" in f or "rising" not in f)
+    # FRED itself a week behind: four-week-old prints never read as 'Latest'
+    p = dw.build_dollar_watch(inputs, today="2026-11-20", ledger_file=str(tmp_path / "o.json"))
+    f = " ".join(p["summaries"]["funding"])
+    assert "FRED data end 2026-10-29 (the fetch is behind)" in f and "Latest:" not in f and "quiet" not in f
+    assert "funding data end 2026-10-29 (the fetch is behind)" in p["summaries"]["page"][0]
+    # only the CP fetch failed: the cause is the fetch, not the Fed
+    x = _cut(inputs, "2026-11-02")
+    x["fred"]["DCPF3M"] = {**x["fred"]["DCPF3M"], "status": "stale",
+                           "dates": [d for d in x["fred"]["DCPF3M"]["dates"] if d <= "2026-10-06"]}
+    x["fred"]["DCPF3M"]["values"] = inputs["fred"]["DCPF3M"]["values"][:len(x["fred"]["DCPF3M"]["dates"])]
+    f = " ".join(dw.build_dollar_watch(x, today="2026-11-02", ledger_file=str(tmp_path / "c.json"))["summaries"]["funding"])
+    assert "the CP fetch failed; showing the last good copy" in f and "the Fed publishes no rate" not in f
 
 
 def test_summaries_follow_the_state_they_describe():
