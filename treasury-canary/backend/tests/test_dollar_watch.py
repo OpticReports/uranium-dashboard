@@ -653,7 +653,10 @@ def test_stale_cp_prints_set_no_word_and_say_so(inputs, tmp_path):
     # the first print after the 2020 gap: fresh, but the five reach back to March, so the CP test waits
     p = dw.build_dollar_watch(_cut(inputs, "2020-05-07"), today="2020-05-07", ledger_file=str(tmp_path / "g.json"))
     cp = {r["id"]: r for r in p["funding"]["rows"]}["cp_fin"]
-    assert cp["mean_5d_stale_why"] == "outage" and "printed again on 2020-05-07, its first print since 2020-03-26" in " ".join(p["summaries"]["funding"])
+    assert cp["mean_5d_stale_why"] == "outage" and "resumed on 2020-05-07 after no print since 2020-03-26" in " ".join(p["summaries"]["funding"])
+    p8 = dw.build_dollar_watch(_cut(inputs, "2020-05-08"), today="2020-05-08", ledger_file=str(tmp_path / "g8.json"))
+    assert "resumed on 2020-05-07 after no print since 2020-03-26" in " ".join(p8["summaries"]["funding"])   # final check M1
+    assert "waits until five recent prints accumulate" in p8["summaries"]["funding"][1] and "waits for fresh prints" not in p8["summaries"]["funding"][1]
     assert "under strain" not in " ".join(p["summaries"]["funding"]) + p["summaries"]["page"][0]
     for day in ("2026-10-28", "2026-10-26"):                   # second verifier: CP printed that day; the old span test called it stale
         cp = {r["id"]: r for r in dw.build_dollar_watch(_cut(inputs, day), today=day, ledger_file=str(tmp_path / f"{day}.json"))["funding"]["rows"]}["cp_fin"]
@@ -661,7 +664,17 @@ def test_stale_cp_prints_set_no_word_and_say_so(inputs, tmp_path):
     # after the March-2020 squeeze the swap stock kept rising into May: the lag, never 'new demand'
     p = dw.build_dollar_watch(_cut(inputs, "2020-05-15"), today="2020-05-15", ledger_file=str(tmp_path / "l.json"))
     f = " ".join(p["summaries"]["funding"])
-    assert "need not show" not in f and ("still rising" in f or "rising" not in f)
+    assert "need not show" not in f and "the lag after a squeeze, not new demand" in f
+    # final check S1: never 'not new demand' while the squeeze itself runs (2020-03-27: $0.04bn -> $206bn, CP strained)
+    p = dw.build_dollar_watch(_cut(inputs, "2020-03-27"), today="2020-03-27", ledger_file=str(tmp_path / "q.json"))
+    assert "not new demand" not in " ".join(p["summaries"]["funding"]) + p["summaries"]["page"][0]
+    oct08 = {"cp_fin": {"id": "cp_fin", "label": "c", "latest": 2.6, "mean_5d": 2.5, "median_1y": 0.9, "mean_5d_max_12m": 2.5,
+                        "mean_5d_max_12m_date": "2008-09-19", "mean_5d_from": "2008-09-29", "mean_5d_to": "2008-10-03"},
+             "swap_lines": {"id": "swap_lines", "label": "s", "latest": 286.0, "prev_4w": 62.0}}
+    assert "not new demand" not in " ".join(dw.summaries({}, {"rows": list(oct08.values())}, {}, {}, {}, {})["funding"])
+    oct08["cp_fin"].update(mean_5d=0.6, latest=0.6)                    # prices back under the line, but the peak is 10 days old
+    oct08["cp_fin"]["mean_5d_max_12m_date"] = "2008-09-26"
+    assert "not new demand" not in " ".join(dw.summaries({}, {"rows": list(oct08.values())}, {}, {}, {}, {})["funding"])
     # FRED itself a week behind: four-week-old prints never read as 'Latest'
     p = dw.build_dollar_watch(inputs, today="2026-11-20", ledger_file=str(tmp_path / "o.json"))
     f = " ".join(p["summaries"]["funding"])
