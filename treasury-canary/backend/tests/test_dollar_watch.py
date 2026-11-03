@@ -787,3 +787,27 @@ def test_spec_text_is_the_frozen_one():
     fit = dw.FREEZE["d3"]["garch_fit"]
     for sid, h in fit["inputs_sha256"].items():
         assert hashlib.sha256(open(os.path.join(STUDY, "prereg", "freeze_vintage", f"{sid}.csv"), "rb").read()).hexdigest() == h
+
+
+def test_failed_write_keeps_a_firing_first_vintage(inputs, tmp_path, monkeypatch):
+    """a firing whose row could not be saved must still read as first-vintage on the next build (the rule state
+    advances only after a successful write, and never backwards)."""
+    monkeypatch.setitem(dw.FREEZE, "freeze_date", "2026-11-03")
+    path = str(tmp_path / "dollar_ledger.json")
+    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-19"), today="2028-09-20", ledger_file=path)
+    from app.sources import fred_csv as fc
+    real = fc._write_atomic
+
+    def boom(p, body):
+        if p.endswith("dollar_ledger.json"):
+            raise OSError("No space left on device")
+        return real(p, body)
+    monkeypatch.setattr(fc, "_write_atomic", boom)
+    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-30"), today="2028-10-01", ledger_file=path)
+    assert dw._rule_state(path)["last_index_day"] < "2028-09-22"
+    monkeypatch.setattr(fc, "_write_atomic", real)
+    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-30"), today="2028-10-02", ledger_file=path)
+    row = [e for e in dw.load_ledger(path)["entries"] if e["kind"] == "scramble_rule"][0]
+    assert row["date"] == "2028-09-22" and row["first_vintage_contains_date"] is True and row["d3_eligible"] is True
+    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-19"), today="2028-10-03", ledger_file=path)   # an older vintage
+    assert dw._rule_state(path)["last_index_day"] >= "2028-09-30"

@@ -794,8 +794,10 @@ def scramble_block(inp: dict, fund: dict, today: str, path: str) -> dict:
     rows = (enrich_firings(new, ds, B, Y, path, prev) if new else []) + \
         (enrich_firings(placebo, ds, B, Y, path, prev, kind="placebo_rule") if placebo else [])
     led = append_ledger(path, rows, today) if rows else load_ledger(path)
-    if not led.get("_unreadable"):
-        _save_rule_state(path, {"last_index_day": ds[-1], "saved_on": today})
+    if not led.get("_unreadable") and not led.get("_write_failed"):
+        # only once this vintage's rows are saved (an unsaved firing must still read as first-vintage next build),
+        # and never backwards (an older cached vintage must not re-open days already seen)
+        _save_rule_state(path, {"last_index_day": max(prev or "", ds[-1]), "saved_on": today})
     out["live_firings"] = [e for e in led.get("entries", []) if e.get("kind") == "scramble_rule"]
     out["ledger_status"] = "unreadable" if led.get("_unreadable") else "write_failed" if led.get("_write_failed") else "ok"
     out["ledger_problem"] = led.get("_write_failed")
