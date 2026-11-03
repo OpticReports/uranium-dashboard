@@ -8,40 +8,54 @@ IBKR SPY and Genomics sleeve?"
 Evidence, in the order it should be trusted:
   A. Ken French's long-only portfolios (CRSP/Compustat; survivorship-free; point-in-time; value-
      weighted; monthly; GROSS of trading costs):
-       momentum   deciles on the prior 12-2 month return, rebalanced monthly (10_Portfolios_Prior_12_2)
-       value      deciles on book-to-market, rebalanced each June (Portfolios_Formed_on_BE-ME)
-       quality    deciles on operating profitability, June (Portfolios_Formed_on_OP; 1963-07 on)
-       BIG rows   the largest-size quintile (NYSE breakpoints) of the 5x5 size x momentum, size x
-                  book-to-market and size x profitability sorts: the names an IBKR sleeve would trade
-       value+quality  the HiBM HiOP corner of the 5x5 book-to-market x profitability sort
-     Two- and three-sleeve portfolios are monthly-rebalanced equal mixes of the single sorts.
-  B. The live ETFs that implement these, NET of fees, real fills: MTUM / VLUE (2013-), QVAL / QMOM
-     (2015 / 2016-), SPMO (2015-), VFMO / VFVA (2018-), VTV / IWD; QQQ / RSP / IWF for contrast;
+       BIG rows   the 2x3 sorts (size above the NYSE median x the top 30% on the signal, NYSE
+                  breakpoints): BIG HiPRIOR (prior 12-2 month return, monthly rebalance; ~300 names),
+                  BIG HiBM (book-to-market, June rebalance; ~140 names), BIG HiOP (operating
+                  profitability, June; ~310 names). These are the sleeve: the names an IBKR account
+                  would trade, enough of them to be a portfolio.
+       "20" rows  the 5x5 corner cells (largest size quintile x top signal quintile): the concentrated
+                  versions. The value corner holds 6-31 names (median 23) and is bank-heavy; shown as a
+                  sensitivity, not as the sleeve (counter-agent, add. 52).
+       all-cap    the top deciles (10_Portfolios_Prior_12_2, BE-ME, OP): hundreds of names including
+                  microcaps; not holdable at this size, kept for the long record.
+     Two- and three-sleeve portfolios are monthly-rebalanced equal mixes of the rows.
+  B. The live ETFs that implement these, NET of fees, real fills: MTUM / VLUE (2013-), SPMO (2015-),
+     QVAL / QMOM (2015 / 2016-), VFMO / VFVA (2018-), VTV / IWD; QQQ / RSP / IWF for contrast;
      ARKG / XBI / IBB / GNOM as genomics CONTEXT (they are not the owner's sleeve).
 Benchmarks: the CRSP value-weighted market (Mkt-RF + RF) in the French era; SPY from 1993-02.
-Costs: French portfolios are gross. COSTS below is an ASSUMED annual drag (turnover x a round-trip
-cost), applied as a sensitivity, not a measurement.
+Costs: French rows are gross. COSTS below is an ASSUMED annual drag applied as a sensitivity: a monthly
+12-2 sort keeps a top-30% name with p ~0.8 a month, i.e. ~250% one-way turnover a year, at 10-20 bps a
+round trip in mega caps ~0.4-0.5%/yr at $150k (more at $50k: IBKR Pro's $1 minimum per order); the June
+sorts turn over 20-30% a year. Taxes are not modeled (Act 60).
 
 Inputs (scratchpad vmi/, fetched 2026-11-03): french_ports.json (parse_french.py over the library's
-CSV zips), etf_adj.json (Yahoo monthly adjusted closes, range=max). Writes
-composer/results/vm-ibkr-2026-11-03.json. Usage: vm_ibkr.py
+CSV zips: value-weighted monthly returns and the firm counts), etf_adj.json (Yahoo monthly adjusted
+closes, range=max). French's last month is 2026-09 and every window stops there; the ETFs' complete
+2026-10 is reported separately. Writes composer/results/vm-ibkr-2026-11-03.json. Usage: vm_ibkr.py
 """
 import json
 import math
 import os
+import statistics
 
 S = "/tmp/claude-0/-home-user-uranium-dashboard/6d96d78e-807c-545a-8c5b-9d9d8e765587/scratchpad/vmi"
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "results", "vm-ibkr-2026-11-03.json")
 END = "2026-09"                        # French's last month; every window stops here
+END_ETF = "2026-10"                    # the ETFs' last complete month (reported separately)
 ERAS = {"1927-2026": ("1927-01", END), "1963-2026": ("1963-07", END), "1993-2026": ("1993-02", END),
         "2010-2026": ("2010-01", END), "2013-2026": ("2013-06", END)}
-# assumed annual drag, % per year: one-way turnover x round-trip cost. Momentum deciles turn over
-# ~100%+ one-way a year, value ~25%, profitability ~20%; big caps cost ~10-20 bps a round trip at this
-# size, the all-cap deciles hold microcaps that cost several times that.
-COSTS = {"MOM10": 1.5, "BIG-MOM": 0.5, "VAL10": 0.5, "BIG-VAL": 0.2, "QUAL10": 0.5, "BIG-QUAL": 0.2,
-         "VAL+QUAL": 0.5}
+COSTS = {"BIG-MOM": 0.5, "BIG-VAL": 0.2, "BIG-QUAL": 0.2, "BIG-MOM20": 0.5, "BIG-VAL20": 0.2, "BIG-QUAL20": 0.2}
 ROLL = 120                             # rolling window, months
+SOURCES = {"MKT": ("F-F_Research_Data_Factors", "Mkt-RF + RF"),
+           "BIG-MOM": ("6_Portfolios_ME_Prior_12_2", "BIG HiPRIOR"), "BIG-VAL": ("6_Portfolios_2x3", "BIG HiBM"),
+           "BIG-QUAL": ("6_Portfolios_ME_OP_2x3", "BIG HiOP"),
+           "BIG-LOMOM": ("6_Portfolios_ME_Prior_12_2", "BIG LoPRIOR"), "BIG-GROWTH": ("6_Portfolios_2x3", "BIG LoBM"),
+           "BIG-MOM20": ("25_Portfolios_ME_Prior_12_2", "BIG HiPRIOR"), "BIG-VAL20": ("25_Portfolios_5x5", "BIG HiBM"),
+           "BIG-QUAL20": ("25_Portfolios_ME_OP_5x5", "BIG HiOP"),
+           "MOM10": ("10_Portfolios_Prior_12_2", "Hi PRIOR"), "MOM1": ("10_Portfolios_Prior_12_2", "Lo PRIOR"),
+           "VAL10": ("Portfolios_Formed_on_BE-ME", "Hi 10"), "VAL1": ("Portfolios_Formed_on_BE-ME", "Lo 10"),
+           "QUAL10": ("Portfolios_Formed_on_OP", "Hi 10")}
 
 
 # ------------------------------------------------------------------ loading
@@ -52,42 +66,36 @@ def norm(s):
 def load_french():
     f = json.load(open(os.path.join(S, "french_ports.json")))
 
-    def series(name, colname):
+    def col(name, colname):
         t = f[name]
         cols = [norm(c) for c in t["cols"]]
         if norm(colname) not in cols:
             raise KeyError(f"{name}: {colname!r} not in {t['cols']}")
-        i = cols.index(norm(colname))
-        return {m: v[i] / 100 for m, v in t["rows"].items() if v[i] is not None and m <= END}
+        return t, cols.index(norm(colname))
 
     ff = f["F-F_Research_Data_Factors"]
     cols = [norm(c) for c in ff["cols"]]
     rf = {m: v[cols.index("rf")] / 100 for m, v in ff["rows"].items() if m <= END}
     mkt = {m: v[cols.index("mkt-rf")] / 100 + rf[m] for m, v in ff["rows"].items() if m <= END}
-    P = {"MKT": mkt,
-         "MOM10": series("10_Portfolios_Prior_12_2", "Hi PRIOR"),
-         "MOM1": series("10_Portfolios_Prior_12_2", "Lo PRIOR"),
-         "VAL10": series("Portfolios_Formed_on_BE-ME", "Hi 10"),
-         "VAL1": series("Portfolios_Formed_on_BE-ME", "Lo 10"),
-         "QUAL10": series("Portfolios_Formed_on_OP", "Hi 10"),
-         "BIG-MOM": series("25_Portfolios_ME_Prior_12_2", "BIG HiPRIOR"),
-         "BIG-LOMOM": series("25_Portfolios_ME_Prior_12_2", "BIG LoPRIOR"),
-         "BIG-VAL": series("25_Portfolios_5x5", "BIG HiBM"),
-         "BIG-GROWTH": series("25_Portfolios_5x5", "BIG LoBM"),
-         "BIG-QUAL": series("25_Portfolios_ME_OP_5x5", "BIG HiOP"),
-         "VAL+QUAL": series("25_Portfolios_BEME_OP_5x5", "HiBM HiOP")}
-    chosen = {"MOM10": "10_Portfolios_Prior_12_2: Hi PRIOR", "VAL10": "Portfolios_Formed_on_BE-ME: Hi 10",
-              "QUAL10": "Portfolios_Formed_on_OP: Hi 10", "BIG-MOM": "25_Portfolios_ME_Prior_12_2: BIG HiPRIOR",
-              "BIG-VAL": "25_Portfolios_5x5: BIG HiBM", "BIG-QUAL": "25_Portfolios_ME_OP_5x5: BIG HiOP",
-              "VAL+QUAL": "25_Portfolios_BEME_OP_5x5: HiBM HiOP", "MKT": "F-F_Research_Data_Factors: Mkt-RF + RF"}
-    return P, rf, chosen
+    P, firms = {"MKT": mkt}, {}
+    for k, (name, colname) in SOURCES.items():
+        if k == "MKT":
+            continue
+        t, i = col(name, colname)
+        P[k] = {m: v[i] / 100 for m, v in t["rows"].items() if v[i] is not None and m <= END}
+        if "firms" in t:
+            ks = sorted(m for m in t["firms"] if m >= "1963-07" and t["firms"][m][i] is not None)
+            vals = [t["firms"][m][i] for m in ks]
+            firms[k] = {"min": min(vals), "median": statistics.median(vals), "max": max(vals), "latest": vals[-1],
+                        "latest_month": ks[-1], "since": ks[0]}
+    return P, rf, firms
 
 
-def load_etfs():
+def load_etfs(end=END):
     adj = json.load(open(os.path.join(S, "etf_adj.json")))
     out = {}
     for t, lv in adj.items():
-        ks = sorted(k for k in lv if k <= END)
+        ks = sorted(k for k in lv if k <= end)
         out[t] = {ks[i]: lv[ks[i]] / lv[ks[i - 1]] - 1 for i in range(1, len(ks))}
     return out
 
@@ -114,6 +122,13 @@ def cagr(r):
     for v in r:
         g *= 1 + v
     return g ** (12 / len(r)) - 1 if r else float("nan")
+
+
+def total(r):
+    g = 1.0
+    for v in r:
+        g *= 1 + v
+    return g - 1
 
 
 def maxdd(r):
@@ -146,10 +161,10 @@ def beta(a, b):
     return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / den if den else float("nan")
 
 
-def mix(P, weights, drag=0.0):
-    """monthly-rebalanced constant mix of return series, less an annual drag (fraction) applied monthly"""
+def mix(P, weights):
+    """monthly-rebalanced constant mix of return series"""
     ms = common(*[P[k] for k in weights])
-    return {m: sum(w * P[k][m] for k, w in weights.items()) - drag / 12 for m in ms}
+    return {m: sum(w * P[k][m] for k, w in weights.items()) for m in ms}
 
 
 def stats(r, bench, rf, months):
@@ -181,7 +196,8 @@ def stats(r, bench, rf, months):
         for i in range(ROLL, len(months) + 1):
             roll.append(cagr(x[i - ROLL:i]) - cagr(b[i - ROLL:i]))
         out["roll10"] = {"share_positive": sum(1 for v in roll if v > 0) / len(roll), "worst": min(roll),
-                         "best": max(roll), "latest": roll[-1], "latest_window": f"{months[-ROLL]}..{months[-1]}"}
+                         "best": max(roll), "latest": roll[-1], "latest_window": f"{months[-ROLL]}..{months[-1]}",
+                         "windows": len(roll)}
     return out
 
 
@@ -203,34 +219,37 @@ def decades(r, bench, months):
 
 # ------------------------------------------------------------------ main
 def main():
-    P, rf, chosen = load_french()
+    P, rf, firms = load_french()
     E = load_etfs()
-    res = {"generated": "2026-11-03", "columns": chosen, "costs_pct_per_year": COSTS, "roll_months": ROLL}
+    res = {"generated": "2026-11-03", "sources": {k: f"{v[0]}: {v[1]}" for k, v in SOURCES.items()}, "firms": firms,
+           "costs_pct_per_year": COSTS, "roll_months": ROLL}
 
-    # sleeves (gross) and their net versions
-    P["V+M"] = mix(P, {"VAL10": .5, "MOM10": .5})
+    # sleeves (gross) and the net versions of the big-cap rows and mixes
     P["BIG V+M"] = mix(P, {"BIG-VAL": .5, "BIG-MOM": .5})
-    P["V+M+Q"] = mix(P, {"VAL10": 1 / 3, "MOM10": 1 / 3, "QUAL10": 1 / 3})
-    P["BIG V+M+Q"] = mix(P, {"BIG-VAL": 1 / 3, "BIG-MOM": 1 / 3, "BIG-QUAL": 1 / 3})
     P["BIG V+Q"] = mix(P, {"BIG-VAL": .5, "BIG-QUAL": .5})
+    P["BIG V+M+Q"] = mix(P, {"BIG-VAL": 1 / 3, "BIG-MOM": 1 / 3, "BIG-QUAL": 1 / 3})
+    P["BIG V+M (20)"] = mix(P, {"BIG-VAL20": .5, "BIG-MOM20": .5})
+    P["BIG V+M+Q (20)"] = mix(P, {"BIG-VAL20": 1 / 3, "BIG-MOM20": 1 / 3, "BIG-QUAL20": 1 / 3})
+    P["V+M"] = mix(P, {"VAL10": .5, "MOM10": .5})
+    P["V+M+Q"] = mix(P, {"VAL10": 1 / 3, "MOM10": 1 / 3, "QUAL10": 1 / 3})
     drag = dict(COSTS)
-    drag["V+M"] = (COSTS["VAL10"] + COSTS["MOM10"]) / 2
     drag["BIG V+M"] = (COSTS["BIG-VAL"] + COSTS["BIG-MOM"]) / 2
-    drag["V+M+Q"] = (COSTS["VAL10"] + COSTS["MOM10"] + COSTS["QUAL10"]) / 3
-    drag["BIG V+M+Q"] = (COSTS["BIG-VAL"] + COSTS["BIG-MOM"] + COSTS["BIG-QUAL"]) / 3
     drag["BIG V+Q"] = (COSTS["BIG-VAL"] + COSTS["BIG-QUAL"]) / 2
-    NET = {}
-    for k, c in drag.items():
-        NET[k + " net"] = {m: v - c / 100 / 12 for m, v in P[k].items()}
+    drag["BIG V+M+Q"] = (COSTS["BIG-VAL"] + COSTS["BIG-MOM"] + COSTS["BIG-QUAL"]) / 3
+    drag["BIG V+M (20)"] = (COSTS["BIG-VAL20"] + COSTS["BIG-MOM20"]) / 2
+    drag["BIG V+M+Q (20)"] = (COSTS["BIG-VAL20"] + COSTS["BIG-MOM20"] + COSTS["BIG-QUAL20"]) / 3
+    NET = {k + " net": {m: v - c / 100 / 12 for m, v in P[k].items()} for k, c in drag.items()}
     res["drag_pct_per_year"] = drag
 
     # 1. French long-only portfolios vs the market, by era (gross and net)
-    names = ["MOM10", "VAL10", "QUAL10", "V+M", "V+M+Q", "BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+Q",
-             "BIG V+M+Q", "VAL+QUAL", "MOM1", "VAL1", "BIG-LOMOM", "BIG-GROWTH"]
+    names = ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+Q", "BIG V+M+Q",
+             "BIG-MOM20", "BIG-VAL20", "BIG-QUAL20", "BIG V+M (20)", "BIG V+M+Q (20)",
+             "MOM10", "VAL10", "QUAL10", "V+M", "V+M+Q", "BIG-LOMOM", "BIG-GROWTH", "MOM1", "VAL1"]
+    net_names = ["BIG V+M net", "BIG V+M+Q net", "BIG-MOM net", "BIG-VAL net", "BIG V+M (20) net"]
     res["french"] = {}
     for era, (lo, hi) in ERAS.items():
         res["french"][era] = {}
-        for k in names + [n for n in NET]:
+        for k in names + net_names:
             src = NET[k] if k in NET else P[k]
             ms = common(src, P["MKT"], rf, lo=lo, hi=hi)
             if len(ms) < 36:
@@ -246,21 +265,22 @@ def main():
     # 2. decades and rolling 10-year excess vs the market (gross)
     res["decades"] = {}
     res["rolling"] = {}
-    for k in ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+M+Q", "MOM10", "VAL10", "V+M", "VAL+QUAL"]:
+    for k in ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+M+Q", "BIG-VAL20", "BIG V+M (20)", "MOM10", "VAL10", "V+M"]:
         ms = common(P[k], P["MKT"], rf)
         res["decades"][k] = decades(P[k], P["MKT"], ms)
         res["rolling"][k] = rolling_series(P[k], P["MKT"], ms)
 
-    # 3. live ETFs vs SPY on each fund's own window (net of fees, real)
+    # 3. live ETFs vs SPY, each fund from its first return month to END (the first return month is
+    #    dropped: the fund's first bar can sit inside a month)
     E["MTUM+VLUE"] = mix(E, {"MTUM": .5, "VLUE": .5})
     E["QVAL+QMOM"] = mix(E, {"QVAL": .5, "QMOM": .5})
     E["VFMO+VFVA"] = mix(E, {"VFMO": .5, "VFVA": .5})
     E["SPMO+VLUE"] = mix(E, {"SPMO": .5, "VLUE": .5})
     res["etfs"] = {}
     for t in ["MTUM", "VLUE", "MTUM+VLUE", "SPMO", "SPMO+VLUE", "QVAL", "QMOM", "QVAL+QMOM", "VFMO", "VFVA", "VFMO+VFVA",
-              "VTV", "IWD", "IWF", "QQQ", "RSP", "IVAL", "IMOM", "ARKG", "XBI", "IBB", "GNOM"]:
+              "VTV", "IWD", "IWF", "QQQ", "RSP", "ARKG", "XBI", "IBB", "GNOM"]:
         ms = common(E[t], E["SPY"], rf)
-        ms = ms[1:] if ms else ms                   # the first month of a new fund is partial
+        ms = ms[1:] if ms else ms
         if len(ms) < 24:
             continue
         res["etfs"][t] = stats(E[t], E["SPY"], rf, ms)
@@ -271,13 +291,26 @@ def main():
     for t in core:
         res["etfs_common"][t] = stats(E[t], E["SPY"], rf, ms)
     res["etfs_common"]["window"] = f"{ms[0]}..{ms[-1]}"
-    # French BIG rows on the ETF window, for the gross-vs-net gap
+    # French rows on the ETF window, for the gap between the sort and the fund that implements it
     res["french_on_etf_window"] = {}
-    for k in ["BIG-MOM", "BIG-VAL", "BIG V+M", "MOM10", "VAL10"]:
+    for k in ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG-MOM20", "BIG-VAL20", "BIG V+M (20)", "MOM10", "VAL10"]:
         ms2 = common(P[k], E["SPY"], rf, lo=ms[0], hi=ms[-1])
         res["french_on_etf_window"][k] = stats(P[k], E["SPY"], rf, ms2)
+    # 3b. the ETFs' complete 2026-10, which the French cut discards
+    E10 = load_etfs(END_ETF)
+    E10["MTUM+VLUE"] = mix(E10, {"MTUM": .5, "VLUE": .5})
+    E10["SPMO+VLUE"] = mix(E10, {"SPMO": .5, "VLUE": .5})
+    E10["QVAL+QMOM"] = mix(E10, {"QVAL": .5, "QMOM": .5})
+    res["october_2026"] = {"month": END_ETF}
+    for t in ["SPY", "QQQ", "MTUM", "VLUE", "MTUM+VLUE", "SPMO", "SPMO+VLUE", "QVAL", "QMOM", "QVAL+QMOM", "VTV", "IWD", "ARKG", "XBI"]:
+        ms = common(E10[t], E10["SPY"])[1:]
+        row = {"ret": E10[t].get(END_ETF), "from": ms[0], "cagr_to_oct": cagr([E10[t][m] for m in ms]),
+               "excess_to_oct": cagr([E10[t][m] for m in ms]) - cagr([E10["SPY"][m] for m in ms])}
+        if t in res["etfs"]:
+            row["excess_to_sep"] = res["etfs"][t]["excess_cagr"]
+        res["october_2026"][t] = row
 
-    # 4. blends: SPY + x of the big V+M sleeve (net), 1993- and 2010-
+    # 4. blends: SPY + x of the big-cap sleeve (net), 1993- and 2010-
     res["blends"] = {}
     for era in ["1993-2026", "2010-2026"]:
         lo, hi = ERAS[era]
@@ -298,20 +331,25 @@ def main():
             "2025-01..2026-09": ("2025-01", END)}
     for label, (lo, hi) in cuts.items():
         row = {}
-        for k in ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+M+Q"]:
+        for k in ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+M+Q", "BIG-VAL20", "BIG V+M (20)"]:
             ms = common(P[k], P["MKT"], rf, lo=lo, hi=hi)
             c = cagr([P[k][m] for m in ms])
-            row[k] = {"cagr": c, "excess": c - cagr([P["MKT"][m] for m in ms]), "n": len(ms), "from": ms[0]}
+            row[k] = {"cagr": c, "excess": c - cagr([P["MKT"][m] for m in ms]), "n": len(ms), "from": ms[0],
+                      "beta": beta([P[k][m] for m in ms], [P["MKT"][m] for m in ms]),
+                      "total": total([P[k][m] for m in ms])}
         for k in ["MTUM", "VLUE", "MTUM+VLUE", "SPMO", "QVAL", "QMOM"]:
             ms = common(E[k], E["SPY"], rf, lo=lo, hi=hi)
             if ms and ms[0] == min(E[k]):
-                ms = ms[1:]                              # a fund's first return month is partial
+                ms = ms[1:]
             if len(ms) < 12:
                 continue
             c = cagr([E[k][m] for m in ms])
-            row[k] = {"cagr": c, "excess": c - cagr([E["SPY"][m] for m in ms]), "n": len(ms), "from": ms[0]}
+            row[k] = {"cagr": c, "excess": c - cagr([E["SPY"][m] for m in ms]), "n": len(ms), "from": ms[0],
+                      "beta": beta([E[k][m] for m in ms], [E["SPY"][m] for m in ms]), "total": total([E[k][m] for m in ms])}
         ms = common(P["MKT"], lo=lo, hi=hi)
-        row["MKT"] = {"cagr": cagr([P["MKT"][m] for m in ms]), "n": len(ms), "from": ms[0]}
+        row["MKT"] = {"cagr": cagr([P["MKT"][m] for m in ms]), "n": len(ms), "from": ms[0], "total": total([P["MKT"][m] for m in ms])}
+        ms = common(E["SPY"], lo=lo, hi=hi)
+        row["SPY"] = {"cagr": cagr([E["SPY"][m] for m in ms]), "n": len(ms), "from": ms[0], "total": total([E["SPY"][m] for m in ms])}
         res["rally"][label] = row
 
     # 5. paths for the exhibit
@@ -321,11 +359,9 @@ def main():
 
     res["paths"] = {
         "A": {k: path(P[k], "1963-07") for k in ["MKT", "BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+M+Q"]},
-        "A_net": {k: path(NET[k + " net"], "1963-07") for k in ["BIG-MOM", "BIG-VAL", "BIG V+M", "BIG V+M+Q"]},
         "C": {k: path(E[k], "2013-06") for k in ["SPY", "QQQ", "MTUM", "VLUE", "MTUM+VLUE"]},
         "D": {k: path(E[k], "2014-12") for k in ["SPY", "ARKG", "XBI", "IBB"]},
     }
-    # drawdown series, market vs big V+M (gross), 1963-
     ms = common(P["MKT"], P["BIG V+M"], lo="1963-07")
     for k in ["MKT", "BIG V+M"]:
         lv, peak, dd = 1.0, 1.0, []
@@ -340,47 +376,56 @@ def main():
     # ---- console summary
     def row(k, st):
         r10 = st.get("roll10") or {}
-        return (f"  {k:14s} {st['cagr']:7.1%} {st['vol']:6.1%} {st['sharpe']:6.2f} {st['maxdd']:7.1%} "
+        return (f"  {k:16s} {st['cagr']:7.1%} {st['vol']:6.1%} {st['sharpe']:6.2f} {st['maxdd']:7.1%} "
                 f"{st['excess_cagr']:+7.1%} {st['te']:6.1%} {st['beta']:5.2f} {st['years_beating']:3d}/{st['years']:<3d}"
                 + (f" {r10['share_positive']:5.0%} {r10['worst']:+6.1%} {r10['latest']:+6.1%}" if r10 else ""))
 
-    hdr = "                   CAGR    vol Sharpe   maxDD  excess     TE  beta  yrs>mkt  10y>0 worst10 last10"
+    hdr = "                     CAGR    vol Sharpe   maxDD  excess     TE  beta  yrs>mkt  10y>0 worst10 last10"
+    print("names per row since 1963-07 (min / median / latest):")
+    for k, v in firms.items():
+        print(f"  {k:12s} {v['min']:4d} / {v['median']:5.0f} / {v['latest']:4d}  ({res['sources'][k]})")
     for era in ERAS:
         print(f"\n== French long-only, {era} (gross; 'net' = less the assumed drag) ==")
         print(hdr)
         F = res["french"][era]
         print(row("MKT", F["MKT"]))
-        for k in ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+Q", "BIG V+M+Q", "VAL+QUAL", "MOM10", "VAL10", "QUAL10", "V+M", "V+M+Q",
-                  "BIG V+M net", "BIG V+M+Q net", "BIG-MOM net", "BIG-VAL net", "MOM1", "VAL1", "BIG-LOMOM", "BIG-GROWTH"]:
+        for k in names[:6] + net_names + names[6:]:
             if k in F:
                 print(row(k, F[k]))
     s = res["spy_vs_mkt"]
     print(f"\nSPY vs CRSP market {s['from']}..{s['to']}: SPY {s['cagr']:.2%} vs market {s['bench_cagr']:.2%}, corr {s['corr']:.3f}")
     print("\n== live ETFs vs SPY, each on its own window (net of fees) ==")
-    print("                   CAGR    vol Sharpe   maxDD  excess     TE  beta  yrs>spy   window")
+    print("                     CAGR    vol Sharpe   maxDD  excess     TE  beta  yrs>spy   window")
     for t, st in res["etfs"].items():
         print(row(t, st) + f"   {st['from']}..{st['to']}  SPY {st['bench_cagr']:.1%}")
     print(f"\n== live ETFs on one window {res['etfs_common']['window']} ==")
     for t in core:
         print(row(t, res["etfs_common"][t]))
-    print("\n== French BIG rows on that window (gross) ==")
+    print("\n== French rows on that window (gross) ==")
     for k, st in res["french_on_etf_window"].items():
         print(row(k, st) + f"  {st['from']}..{st['to']}")
+    print(f"\n== the ETFs' {END_ETF} (discarded by the French cut): month return; excess vs SPY to 2026-09 -> to {END_ETF} ==")
+    for t, v in res["october_2026"].items():
+        if isinstance(v, dict):
+            print(f"  {t:10s} {v['ret']:+7.1%}   {v.get('excess_to_sep', float('nan')):+6.1%} -> {v['excess_to_oct']:+6.1%}  (from {v['from']})")
     print("\n== blends SPY + x sleeve (net) ==")
     for era, d in res["blends"].items():
         for sleeve, rows in d.items():
             print(f"  {era} {sleeve:14s} " + "  ".join(f"x={x}: {v['cagr']:.1%}/{v['sharpe']:.2f}/{v['maxdd']:.0%}" for x, v in rows.items()))
-    print("\n== the 2025-26 value rally: excess CAGR vs market / SPY, windows stopped at 2024-12 vs through 2026-09 ==")
-    keys = ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+M+Q", "MTUM", "VLUE", "MTUM+VLUE", "SPMO", "QVAL", "QMOM"]
-    print("  " + " " * 12 + "".join(f"{w:>18s}" for w in res["rally"]))
-    print("  " + f"{'market CAGR':12s}" + "".join(f"{res['rally'][w]['MKT']['cagr']:>18.1%}" for w in res["rally"]))
+    print("\n== the 2025-26 value rally: excess CAGR vs market / SPY; windows stopped at 2024-12 vs through 2026-09 ==")
+    keys = ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+M+Q", "BIG-VAL20", "BIG V+M (20)", "MTUM", "VLUE", "MTUM+VLUE", "SPMO", "QVAL", "QMOM"]
+    print("  " + " " * 14 + "".join(f"{w:>18s}" for w in res["rally"]))
+    for b in ("MKT", "SPY"):
+        print("  " + f"{b + ' CAGR':14s}" + "".join(f"{res['rally'][w][b]['cagr']:>18.1%}" for w in res["rally"]))
     for k in keys:
-        print(f"  {k:12s}" + "".join(f"{res['rally'][w][k]['excess']:>+18.1%}" if k in res["rally"][w] else f"{'':>18s}" for w in res["rally"]))
-    print("\n== decades, excess CAGR vs market (gross) ==")
+        print(f"  {k:14s}" + "".join(f"{res['rally'][w][k]['excess']:>+18.1%}" if k in res["rally"][w] else f"{'':>18s}" for w in res["rally"]))
+    print("  betas in the rally window: " + ", ".join(f"{k} {res['rally']['2025-01..2026-09'][k]['beta']:.2f}" for k in ("BIG-VAL", "BIG V+M", "BIG V+M+Q", "BIG-VAL20", "VLUE")))
+    print("\n== decades, excess CAGR vs market (gross; months) ==")
     ds = sorted({d for k in res["decades"] for d in res["decades"][k]})
-    print("  " + " " * 12 + "".join(f"{d:>8s}" for d in ds))
-    for k in ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+M+Q", "MOM10", "VAL10"]:
-        print(f"  {k:12s}" + "".join(f"{res['decades'][k][d]['excess']:+8.1%}" if d in res["decades"][k] else f"{'':>8s}" for d in ds))
+    print("  " + " " * 14 + "".join(f"{d:>9s}" for d in ds))
+    for k in ["BIG-MOM", "BIG-VAL", "BIG-QUAL", "BIG V+M", "BIG V+M+Q", "BIG-VAL20", "BIG V+M (20)", "MOM10", "VAL10"]:
+        print(f"  {k:14s}" + "".join(f"{res['decades'][k][d]['excess']:+9.1%}" if d in res["decades"][k] else f"{'':>9s}" for d in ds))
+    print("  months        " + "".join(f"{res['decades']['BIG-MOM'][d]['n']:>9d}" for d in ds))
     print(f"\nwrote {OUT}")
 
 

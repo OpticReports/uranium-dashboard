@@ -195,11 +195,12 @@ deterministic rationale are listed.
     which would need its own study. The paper's asset-class value leg (worst 5-year return) earns
     0.1-0.3 across lookbacks (0.29 in AQR's own series since 2012). Do not build a value engine on its
     own; see add. 51 answer 4.
-13. IBKR value/momentum stock sleeve (add. 52, 2026-11-03): a big-cap long-only 50/50 of top-quintile
-    12-2 momentum and top-quintile book-to-market earned the market +2.6%/yr gross over 1963-2026 (+2.2%
-    net of assumed costs), beta 1, TE 7%, behind in the 2010s (-1.2%/yr), most of the recent edge in
-    the 2025-26 value rally; the live ETF versions earned SPY +0.5% (MTUM+VLUE, 2013-) to -3.3%
-    (QVAL+QMOM, 2016-). A SPY replacement, not a diversifier for the Composer book. If the exposure is
+13. IBKR value/momentum stock sleeve (add. 52, 2026-11-03): a big-cap long-only 50/50 of top-30%
+    12-2 momentum and top-30% book-to-market (French 2x3 rows, 140-300 names each) earned the market
+    +2.6%/yr gross over 1963-2026 (+2.2% net of assumed costs), beta 1, TE 5%, but +0.3%/yr since 2010
+    (-0.1% net; -0.6%/yr through 2024, the rest is the 2025-26 value rally); the live ETF versions
+    earned SPY +0.5% (MTUM+VLUE, 2013-; +0.0 with October 2026) to -3.3% (QVAL+QMOM, 2016-). A SPY
+    replacement, not a diversifier for the Composer book, and not a return engine. If the exposure is
     wanted: ETF pair first (SPMO or MTUM + VLUE, quarterly), measured against SPY; a stock engine only
-    for capacity/ownership reasons, behind the point-in-time fundamentals prerequisite (add. 51), keyless
-    through ibkr-executor, shadowed. Open input: the owner's genomics sleeve record.
+    for capacity/ownership reasons, behind the point-in-time fundamentals prerequisite (add. 51),
+    keyless through ibkr-executor, shadowed. Open input: the owner's genomics sleeve record.

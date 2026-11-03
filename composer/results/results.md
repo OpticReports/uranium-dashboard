@@ -3770,128 +3770,155 @@ Owner, 11-03: "What about making a momentum vs value sleeve strategy within IBKR
 What could returns look like? Can we make a better performing strategy than our current IBKR SPY and
 Genomics sleeve?" Research only. Exhibit results/vm-ibkr-2026-11-03.html; code research/vme/vm_ibkr.py
 (every number below) and make_vm_ibkr_chart.py; data in the scratchpad (Ken French's library CSVs
-downloaded 2026-11-03, Yahoo monthly adjusted closes). The owner's IBKR genomics sleeve has NO record in
-this repo (POLICY.md carries only "IBKR equities ~$346k, owner-reported 2026-07-07"); it is a missing key
-input and is asked for below, not analyzed around.
+downloaded 2026-11-03, CRSP vintage 202609; Yahoo monthly adjusted closes). The owner's IBKR genomics
+sleeve has NO record in this repo (POLICY.md carries only "IBKR equities ~$346k, owner-reported
+2026-07-07"); it is a missing key input and is asked for below, not analyzed around.
 
 WHAT WAS MEASURED
 - A. Ken French's long-only portfolios (CRSP/Compustat; survivorship-free; point-in-time; value-weighted;
-  monthly; GROSS of costs; through 2026-09): the top decile on the prior 12-2 month return (momentum,
-  monthly rebalance), on book-to-market (value, June rebalance) and on operating profitability (quality,
-  June; 1963-07 on); and the BIG row (largest NYSE size quintile) of the 5x5 size x momentum, size x
-  book-to-market and size x profitability sorts, i.e. the names an IBKR sleeve would trade. "BIG V+M" is a
-  monthly-rebalanced 50/50 of the big-cap top-quintile value and momentum rows; "BIG V+M+Q" the thirds
-  version with profitability. Costs: an ASSUMED drag of 0.5%/yr (big momentum, ~100%+ one-way turnover),
-  0.2% (big value, profitability), 1.5% / 0.5% for the all-cap deciles (microcaps), shown as "net" rows.
-- B. The live ETFs that implement the same ideas, NET of fees, as they traded: MTUM / VLUE (2013-),
-  SPMO (2015-), QVAL / QMOM (2015 / 2016-), VFMO / VFVA (2018-), VTV / IWD; QQQ / RSP / IWF for contrast;
-  ARKG / XBI / IBB / GNOM as genomics CONTEXT only.
+  monthly; GROSS of costs; through 2026-09). The SLEEVE rows are the big side of the 2x3 sorts: stocks
+  above the NYSE size median in the top 30% (NYSE breakpoints) on the prior 12-2 month return
+  (momentum, monthly rebalance; 141-308 names since 1963, median 298), on book-to-market (value, June
+  rebalance; 80-143 names, median 143) and on operating profitability (quality, June; median 310).
+  "BIG V+M" is a monthly-rebalanced 50/50 of the value and momentum rows; "thirds" adds profitability.
+  CONCENTRATED rows are the 5x5 corner cells (largest size quintile x top signal quintile): the value
+  corner holds 6-31 names (median 23, 9 in 2026-09) and loads ~1.15x on large financials — a bank
+  basket, shown as a sensitivity, not as the sleeve (counter-agent). The all-cap top deciles (hundreds of
+  names, microcaps included) are kept for the long record; not holdable at this size.
+  Costs: an ASSUMED drag — a monthly 12-2 sort keeps a top-30% name with p ~0.8 a month, ~250% one-way
+  turnover a year, at 10-20 bps a round trip in mega caps ~0.5%/yr at $150k (more at $50k); the June
+  sorts 0.2%/yr. "Net" rows subtract it. Taxes not modeled (Act 60).
+- B. The live ETFs that implement the same ideas, NET of fees, as they traded: MTUM / VLUE (2013-), SPMO
+  (2016-), QVAL / QMOM (2015 / 2016-), VFMO / VFVA (2018-), VTV / IWD; QQQ / RSP / IWF for contrast;
+  ARKG / XBI / IBB / GNOM as genomics CONTEXT only. Each fund from its first full return month.
 - Benchmark: the CRSP market (Mkt-RF + RF) for the French rows; SPY for the ETFs. SPY vs the market,
   1993-03..2026-09: 10.81% vs 10.95% CAGR, correlation 0.987 — the same thing. Sharpe on excess returns
-  (French RF). "10y" = rolling 120-month excess CAGR vs the benchmark: share of windows ahead / worst.
+  (French RF). "10y" = rolling 120-month excess CAGR vs the benchmark (overlapping): share ahead / worst.
+  French's series end 2026-09 and every window stops there; the ETFs' complete October 2026 is reported
+  separately (it matters: MTUM and SPMO fell ~10% in it).
 
 RESULTS
 1. The long record, 1963-07..2026-09 (759 months), gross unless "net":
-     portfolio                CAGR   vol  Sharpe  maxDD  vs mkt    TE  beta  yrs ahead  10y ahead / worst
-     market                  10.9%  15.4%  0.47   -50%
-     big momentum (top 20%)  13.7%  18.0%  0.56   -50%   +2.8%   9.0%  1.01   34/62      89% / -1.7%
-     big value (top 20%)     12.5%  19.8%  0.48   -62%   +1.7%  12.4%  1.00   32/62      61% / -7.6%
-     big profitability       11.7%  15.1%  0.52   -49%   +0.8%   5.2%  0.93   35/62      74% / -4.3%
-     BIG V+M 50/50           13.5%  17.1%  0.57   -50%   +2.6%   7.2%  1.01   38/62      83% / -2.9%
-       net of assumed costs  13.1%                       +2.2%                 37/62      78% / -3.3%
-     BIG V+M+Q thirds        13.0%  15.9%  0.58   -47%   +2.1%   4.9%  0.98   39/62      88% / -1.8%
-       net                   12.6%                       +1.8%                 39/62      86% / -2.1%
-     all-cap momentum decile 17.2%  21.7%  0.65   -51%   +6.4%  12.3%  1.17   41/62      94% / -1.4%
-     all-cap value decile    14.4%  21.7%  0.53   -70%   +3.5%  12.7%  1.15   37/62      71% / -11.0%
-     the other side: big bottom-momentum quintile 5.0% (-5.9%/yr), all-cap bottom momentum decile -0.1%.
-   1927-2026: BIG V+M +3.0%/yr (89% of 10y windows ahead), big momentum +3.3%, big value +1.5% (65%);
-   drawdowns -77% to -89% in the 1930s, the market's -84%. 1993-2026: market 10.9% / Sharpe 0.60; BIG
-   V+M 12.8% (+1.8) / 0.63; BIG V+M+Q 12.6% (+1.6) / 0.67, TE 5.3%; big value +1.1% with 19% of 10y
-   windows ahead. 2010-2026: market 14.1% / 0.87 / -25%; BIG V+M 16.1% (+2.0) / 0.82 / -27%, net +1.5%;
-   BIG V+M+Q 15.9% (+1.8) / 0.89 / -23%; big momentum +1.4%; big value +1.6% at Sharpe 0.68, -40% DD.
-2. By decade, excess CAGR vs the market (gross):
-                     1930s  1940s  1950s  1960s  1970s  1980s  1990s  2000s  2010s  2020s
-     big momentum    +1.5   +1.7   +5.0   +8.2   +3.8   +1.9   +5.3   -0.3   +1.2   +1.6
-     big value       -5.5   +7.2   +1.4   -0.3   +2.7   +5.3   -0.6   +1.7   -4.1  +10.9
-     BIG V+M 50/50   +0.5   +4.6   +3.4   +4.1   +3.5   +3.9   +2.6   +1.4   -1.2   +6.8
-     BIG V+M+Q                            +3.2   +1.9   +2.7   +2.5   +1.3   -0.4   +5.1
-   Momentum's one losing decade is the 2000s (the 2009 crash of momentum); value's are the 1930s, 1990s
-   and 2010s. The 50/50 lost one decade of ten.
-3. The last 21 months carry the modern-era numbers. Excess CAGR, the recent windows stopped at 2024-12
-   vs run through 2026-09, and the rally months alone (French rows vs the market, ETFs vs SPY):
-                   2010..2024-12  2010..2026-09  2016-02..2024-12  2016-02..2026-09  2025-01..2026-09
-     market CAGR        13.8%          14.1%           15.3%             15.6%            16.9%
-     big momentum       +1.3%          +1.4%           +0.4%             +0.6%            +1.5%
-     big value          -2.6%          +1.6%           -0.2%             +6.3%           +46.4%
-     BIG V+M            -0.2%          +2.0%           +0.6%             +4.0%           +22.7%
-     BIG V+M+Q          +0.5%          +1.8%           +1.5%             +3.4%           +13.8%
-     MTUM (2013-07-)    +0.3%          +1.7%           -0.9%             +0.9%           +11.1%
-     VLUE               -5.0%          -1.1%           -5.2%             -0.3%           +28.7%
-     MTUM+VLUE          -2.2%          +0.5%           -2.9%             +0.6%           +20.1%
-     SPMO (2016-01-)    +2.6%          +4.4%           +2.5%             +4.3%           +14.1%
-   Calendar 2025: big value +51.1%, all-cap value decile +39.1%, VLUE +32.7%, IWD +15.7%, market +17.5%;
-   2026 through September: +56.3%, +59.0%, +46.6%, +19.1%, +11.9%. The French and Yahoo series agree on
-   the rally; French's big-value cell is the concentrated version of it. Through 2024 the big-cap 50/50
-   had earned nothing over the market since 2010 and MTUM+VLUE had lagged SPY by 2%/yr.
+     portfolio                 CAGR   vol  Sharpe  maxDD  vs mkt    TE  beta  yrs ahead  10y ahead / worst
+     market                   10.9%  15.4%  0.47   -50%
+     big momentum (top 30%)   13.4%  16.7%  0.58   -48%   +2.6%   6.6%  1.00   40/62      86% / -1.4%
+     big value (top 30%)      13.0%  17.5%  0.54   -62%   +2.2%   8.8%  0.98   34/62      70% / -5.6%
+     big profitability        12.1%  15.1%  0.54   -48%   +1.2%   3.7%  0.95   36/62      82% / -2.9%
+     BIG V+M 50/50            13.4%  16.0%  0.60   -54%   +2.6%   4.9%  0.99   41/62      77% / -2.5%
+       net of assumed costs   13.0%                       +2.2%                 40/62      73% / -2.8%
+     thirds (V+M+Q)           13.0%  15.4%  0.59   -50%   +2.2%   3.3%  0.98   48/62      88% / -1.0%
+       net                    12.7%                       +1.8%                 46/62      82% / -1.3%
+     concentrated 50/50       13.5%  17.1%  0.57   -50%   +2.6%   7.2%  1.01   38/62      83% / -2.9%
+     concentrated value cell  12.5%  19.8%  0.48   -62%   +1.7%  12.4%  1.00   32/62      61% / -7.6%
+     all-cap momentum decile  17.2%  21.7%  0.65   -51%   +6.4%  12.3%  1.17   41/62      94% / -1.4%
+     all-cap value decile     14.4%  21.7%  0.53   -70%   +3.5%  12.7%  1.15   37/62      71% / -11.0%
+     the other side: big bottom-30% momentum 7.7% (-3.2%/yr), all-cap bottom momentum decile -0.1%.
+   1927-2026: BIG V+M +2.9%/yr (86% of 10y windows ahead), big momentum +3.2% (91%), big value +2.1%
+   (76%); drawdowns -77% to -89% in the 1930s, the market's -84%. 1993-2026: market 10.9% / Sharpe
+   0.60; BIG V+M 12.3% (+1.3) / 0.65, 47% of 10y windows; thirds 12.4% (+1.5) / 0.69, TE 3.7%, 74%; big
+   momentum +1.5%; big value +0.6% (38%); big profitability +1.6% (100%). 2010-2026: market 14.1% /
+   0.87 / -25%; BIG V+M 14.4% (+0.3) / 0.82 / -28%, net -0.1%; thirds 14.9% (+0.7) / 0.89 / -24%, net
+   +0.4%; big momentum +0.3%; big value -0.3% at Sharpe 0.70 and -38% DD; the concentrated 50/50 +2.0%.
+2. By decade, excess CAGR vs the market (gross; the 2020s are 81 months):
+                        1930s  1940s  1950s  1960s  1970s  1980s  1990s  2000s  2010s  2020s
+     big momentum       +2.9   +3.5   +4.9   +5.8   +4.3   +1.7   +5.1   +0.8   +0.5   +0.2
+     big value          -4.3   +6.6   +4.0   +2.4   +6.2   +3.5   -1.5   +3.9   -2.5   +3.0
+     big profitability                       +2.1   -0.9   +0.7   +1.7   +2.3   +1.1   +1.9
+     BIG V+M 50/50      +0.2   +5.1   +4.6   +4.2   +5.3   +2.8   +1.9   +2.7   -0.9   +2.0
+     thirds                                  +3.6   +3.3   +2.1   +1.9   +2.6   -0.2   +2.1
+     concentrated value -5.5   +7.2   +1.4   -0.3   +2.7   +5.3   -0.6   +1.7   -4.1  +10.9
+   Momentum has not had a losing decade; its edge has faded to +0.2-0.8%/yr since 2000. Value lost
+   the 1930s, 1990s and 2010s. The 50/50 lost one decade of ten (the 2010s, -0.9%/yr).
+3. The last 21 months carry the modern-era numbers. Excess CAGR, recent windows stopped at 2024-12 vs
+   run through 2026-09, and the rally months alone (French rows vs the market, ETFs vs SPY; 2025-01..
+   2026-09 is 21 months, annualized):
+                     2010..2024-12  2010..2026-09  2016-02..2024-12  2016-02..2026-09  2025-01..2026-09
+     market CAGR         13.8%          14.1%           15.3%             15.6%            16.9%
+     SPY CAGR            13.8%          14.2%           15.2%             15.6%            17.5%
+     big momentum        +0.2%          +0.3%           -0.7%             -0.4%            +1.1%
+     big value           -1.9%          -0.3%           -0.9%             +1.5%           +14.8%
+     BIG V+M             -0.6%          +0.3%           -0.4%             +0.9%            +8.1%
+     thirds              +0.2%          +0.7%           +0.7%             +1.4%            +4.9%
+     concentrated value  -2.6%          +1.6%           -0.2%             +6.3%           +46.4%
+     MTUM (2013-07-)     +0.3%          +1.7%           -0.9%             +0.9%           +11.1%
+     VLUE                -5.0%          -1.1%           -5.2%             -0.3%           +28.7%
+     MTUM+VLUE           -2.2%          +0.5%           -2.9%             +0.6%           +20.1%
+     SPMO (2016-01-)     +2.6%          +4.4%           +2.5%             +4.3%           +14.1%
+     QVAL                -5.7%          -4.8%           -4.3%             -3.5%            +0.8%
+   Calendar 2025: concentrated value cell +51.1%, VLUE +32.7%, IWD +15.7%, market +17.5%; 2026 through
+   September: +56.3%, +46.6%, +19.1%, +11.9%. Real, not a data problem: the equal-weighted version of
+   the cell did +41.8% / +35.6%, VLUE has the same shape (0.83 correlation over the 21 months), French's
+   HML +6.6% / +6.7%, and the zips match fresh downloads (counter-agent). Through 2024 the big-cap 50/50
+   had lost 0.6%/yr to the market since 2010 and MTUM+VLUE had lagged SPY by 2.2%/yr; the rally put
+   them back to about even. The concentrated cell's +46%/yr is 9-13 names at beta 1.8.
 4. The buyable versions, net of fees, each from its first full month to 2026-09, vs SPY:
-     fund                   window      CAGR    SPY   vs SPY  Sharpe/SPY  maxDD   TE   beta  yrs ahead
-     MTUM                   2013-07-   16.1%  14.4%   +1.7%  0.87/0.84   -30%   8.9%  0.98   7/12
-     VLUE                   2013-07-   13.3%  14.4%   -1.1%  0.70/0.84   -29%   8.6%  1.08   5/12
-     MTUM+VLUE 50/50        2013-07-   14.9%  14.4%   +0.5%  0.84/0.84   -25%   6.2%  1.03   5/12
-     SPMO                   2016-01-   19.3%  14.9%   +4.4%  0.98/0.86   -21%   9.3%  0.99   6/10
-     SPMO+VLUE 50/50        2016-01-   16.9%  14.9%   +2.0%  0.88/0.86   -22%   6.8%  1.04   4/10
-     QVAL                   2015-01-    8.8%  13.7%   -4.8%  0.41/0.78   -42%  12.5%  1.16   5/11
-     QMOM                   2016-03-   12.5%  15.7%   -3.2%  0.55/0.90   -28%  13.9%  1.12   3/9
-     QVAL+QMOM 50/50        2016-03-   12.4%  15.7%   -3.3%  0.58/0.90   -32%  10.4%  1.16   2/9
-     VFMO+VFVA 50/50        2018-04-   13.2%  15.1%   -1.8%  0.56/0.79   -36%  12.7%  1.12   1/7
-     VTV                    2004-04-    9.6%  10.9%   -1.3%  0.59/0.65   -55%   5.1%  0.93   6/21
-     IWD                    2000-08-    8.3%   8.5%   -0.2%  0.49/0.45   -55%   5.4%  0.94  11/25
-     QQQ                    1999-06-   10.9%   8.6%   +2.3%  0.48/0.46   -81%  13.4%  1.30  16/26
-   On one window, 2016-02..2026-09: SPY 15.6% / 0.90 / -24%; QQQ +5.5%; SPMO +4.3%; MTUM +0.9%;
-   MTUM+VLUE +0.6%; VLUE -0.3%; QVAL+QMOM -2.9%; VTV -2.7%; IWD -3.5%; RSP -3.3%. The French big-cap
-   rows on that window, gross: big value +6.3%, BIG V+M +4.0%, big momentum +0.6%. The gap between the
-   academic sort and the fund that claims to implement it is the implementation gap: index value
-   (sector-neutral, multi-metric, diluted) is not the top book-to-market quintile.
+     fund                   window      CAGR    SPY   vs SPY  Sharpe/SPY  maxDD/SPY   TE   beta  yrs ahead
+     MTUM                   2013-07-   16.1%  14.4%   +1.7%  0.87/0.84   -30%/-24%  8.9%  0.98   7/12
+     VLUE                   2013-07-   13.3%  14.4%   -1.1%  0.70/0.84   -29%/-24%  8.6%  1.08   5/12
+     MTUM+VLUE 50/50        2013-07-   14.9%  14.4%   +0.5%  0.84/0.84   -25%/-24%  6.2%  1.03   5/12
+     SPMO                   2016-01-   19.3%  14.9%   +4.4%  0.98/0.86   -21%/-24%  9.3%  0.99   6/10
+     SPMO+VLUE 50/50        2016-01-   16.9%  14.9%   +2.0%  0.88/0.86   -22%/-24%  6.8%  1.04   4/10
+     QVAL                   2015-01-    8.8%  13.7%   -4.8%  0.41/0.78   -42%/-24% 12.5%  1.16   5/11
+     QMOM                   2016-03-   12.5%  15.7%   -3.2%  0.55/0.90   -28%/-24% 13.9%  1.12   3/9
+     QVAL+QMOM 50/50        2016-03-   12.4%  15.7%   -3.3%  0.58/0.90   -32%/-24% 10.4%  1.16   2/9
+     VFMO+VFVA 50/50        2018-04-   13.2%  15.1%   -1.8%  0.56/0.79   -36%/-24% 12.7%  1.12   1/7
+     VTV                    2004-04-    9.6%  10.9%   -1.3%  0.59/0.65   -55%/-51%  5.1%  0.93   6/21
+     IWD                    2000-08-    8.3%   8.5%   -0.2%  0.49/0.45   -55%/-51%  5.4%  0.94  11/25
+     QQQ                    1999-06-   10.9%   8.6%   +2.3%  0.48/0.46   -81%/-51% 13.4%  1.30  16/26
+   October 2026 (complete; outside French's window): MTUM -10.5%, SPMO -10.1%, QQQ -6.7%, VLUE -1.8%,
+   SPY -0.9%, QVAL +10.6%. With it: MTUM +0.8%/yr vs SPY (was +1.7), SPMO +3.3% (was +4.4), MTUM+VLUE
+   +0.0% (was +0.5), SPMO+VLUE +1.5%, QVAL+QMOM -2.7%.
+   On one window, 2016-02..2026-09 (SPY 15.6% / 0.90 / -24%): QQQ +5.5%; SPMO +4.3%; MTUM +0.9%;
+   MTUM+VLUE +0.6%; VLUE -0.3%; QVAL+QMOM -2.9%; VTV -2.7%; IWD -3.5%; RSP -3.3%. The French rows on
+   that window, gross: big momentum -0.4%, big value +1.5%, big profitability +2.0%, BIG V+M +0.9%;
+   concentrated value cell +6.3%, concentrated 50/50 +4.0%, all-cap momentum decile +4.2%. Read: the
+   momentum funds show NO implementation gap (MTUM +0.9 and SPMO +4.3 against the sort's -0.4); the
+   value funds sit between the broad French value row (+1.5) and nothing — definition (sector-neutral,
+   multi-metric, diluted index value), not trading cost; QVAL/QMOM and VFMO/VFVA (50-stock and all-cap
+   products, 8-10 year records) did lag.
 5. SPY with a sleeve bolted on (net rows, monthly rebalanced; CAGR / Sharpe / max DD). 2010-2026: SPY
-   14.2% / 0.90 / -24%; +20% BIG V+M 14.5 / 0.89 / -23%; +60% 15.2 / 0.85 / -24%; 100% 15.7 / 0.80 / -27%;
-   +20% BIG V+M+Q 14.5 / 0.90 / -23%; 100% 15.6 / 0.87 / -23%. 1993-2026: SPY 10.8 / 0.61 / -51%; 100%
-   BIG V+M 12.3 / 0.61 / -50%; 100% BIG V+M+Q 12.2 / 0.65 / -47%. More return per unit of sleeve, the
-   same drawdown, no Sharpe to speak of: it is a different way to hold stocks, not a diversifier.
-6. Genomics, context only: ARKG 2015-01..2026-09 9.0% vs SPY 13.7% (-4.6%/yr), max DD -80%, TE 30%,
-   beta 1.6, 0% of 10y windows ahead; GNOM 2019-06.. 3.9% vs 16.6% (-12.7%/yr), -71% DD; XBI 2006-05..
-   12.2% vs 11.0% (+1.2%/yr) with a -57% DD and 55% of 10y windows ahead; IBB 2001-05.. 8.1% vs 9.3%.
-   On 2016-02..2026-09: ARKG -3.0%/yr, XBI -4.1%, IBB -6.9% vs SPY.
+   14.2% / 0.90 / -24%; 100% BIG V+M 14.0 / 0.80 / -28%; 100% thirds 14.5 / 0.87 / -24%; +20% of either
+   leaves SPY's numbers unchanged to the decimal. 1993-2026: SPY 10.8 / 0.61 / -51%; 100% BIG V+M 11.8 /
+   0.63 / -54%; 100% thirds 12.1 / 0.67 / -50%. A different way to hold stocks (correlation with the
+   market 0.91-0.96; MTUM+VLUE with SPY 0.92), not a diversifier.
+6. Genomics, context only: ARKG 2015-01..2026-09 9.0% vs SPY 13.7% (-4.6%/yr), max DD -80% vs -24%,
+   TE 30%, beta 1.6; GNOM 2019-06.. 3.9% vs 16.6% (-12.7%/yr), -71% DD; XBI 2006-05.. 12.2% vs 11.0%
+   (+1.2%/yr), max DD -57% vs SPY's -51% (both 2007-09), 55% of 10y windows ahead; IBB 2001-05.. 8.1%
+   vs 9.3%. On 2016-02..2026-09: ARKG -3.0%/yr, XBI -4.1% (DD -57% vs -24%), IBB -6.9% vs SPY.
 
 ANSWERS
-1. What returns could look like. A big-cap long-only value + momentum sleeve has earned the market plus
-   about 2.5%/yr gross over 63 years (2.2% net of assumed costs), plus 2%/yr since 2010, with beta 1,
-   7% tracking error, the market's drawdowns (-50% in 2007-09), ahead in 60% of calendar years and 83%
-   of ten-year windows, behind by 1-3%/yr in the worst decade (the 2010s). The thirds version with
-   profitability is the tamer shape: TE 5%, 88% of decades ahead, worst -1.8%/yr, Sharpe 0.58 vs the
-   market's 0.47. The forward reading (mine, from these records, not a forecast): market +1 to +3%/yr,
-   with a real chance of a ten-year stretch behind, and a large part of the recent edge delivered in
-   the last 21 months. The live funds show what implementation did to that: MTUM+VLUE +0.5%/yr over SPY
-   since 2013 (-2.2%/yr through 2024), QVAL+QMOM -3.3%, VFMO+VFVA -1.8%, SPMO +4.4% (one fund, one
-   mega-cap-led decade).
-2. Better than SPY in IBKR? In expectation, by a few percent a year gross, at the same risk and with
-   multi-year lags; not a higher Sharpe in the modern era (2010-26: 0.82 vs 0.87 for the 50/50, 0.89 for
-   the thirds). It replaces SPY; it does not diversify it (correlation with the market 0.91 in 2010-26;
-   MTUM+VLUE with SPY 0.92), and it adds nothing to the Composer book (add. 51: the book has no value or
-   momentum loading to hedge).
+1. What returns could look like. A big-cap long-only value + momentum sleeve (top-30% rows, 140-300
+   names each) has earned the market plus 2.6%/yr gross over 63 years (2.2% net of assumed costs),
+   beta 1, 5% tracking error, the market's drawdowns (-54% in 2007-09), ahead in 41 of 62 calendar
+   years and 77% of ten-year windows, worst decade -2.5%/yr. Since 2010 it has earned the market plus
+   0.3%/yr gross, -0.1% net, and that is WITH the 2025-26 rally (-0.6%/yr through 2024). The thirds
+   version with profitability is the tamer shape: TE 3.3%, 88% of ten-year windows ahead, worst
+   -1.0%/yr, +0.7%/yr since 2010. Momentum alone: +2.6%/yr long run, 86% of windows, but +0.2-0.8%/yr
+   per decade since 2000. The forward reading (mine, from these records, not a forecast): market +0 to
+   +2%/yr for a diversified sleeve, with ten-year stretches behind; the +4-6%/yr numbers belong to a
+   9-30 stock bank basket and to the last 21 months. The live funds: MTUM+VLUE +0.5%/yr over SPY since
+   2013 (+0.0 with October 2026; -2.2%/yr through 2024), SPMO +4.4% (+3.3 with October; one fund, one
+   mega-cap-led decade), QVAL+QMOM -3.3%, VFMO+VFVA -1.8%.
+2. Better than SPY in IBKR? Over long horizons, probably, by 1-2%/yr gross at the same risk, with
+   multi-year lags; over the last 16 years, no — the sleeve matched the market (+0.3%/yr) and its Sharpe
+   was lower (0.82 vs 0.87; thirds 0.89). It replaces SPY; it does not diversify it, and it adds nothing
+   to the Composer book (add. 51: the book has no value or momentum loading to hedge).
 3. Better than the genomics sleeve? Unknown until the sleeve's record is in hand — see MISSING INPUT.
-   If that sleeve behaves like its ETF proxies (ARKG -4.6%/yr vs SPY with a -80% drawdown, GNOM -12.7%/yr,
-   XBI +1.2%/yr with twice SPY's drawdown), a value/momentum sleeve dominates it on every measure.
-4. How it would be built, if wanted. Two versions. (a) ETF pair, zero build: SPMO (or MTUM) + VLUE in
-   IBKR, 50/50, rebalanced quarterly; SPMO+VLUE earned 16.9% vs SPY 14.9% since 2016 (+2.0%/yr, Sharpe
-   0.88 vs 0.86, -22% DD); this is the realized, net-of-fee version of the idea and takes two tickers.
-   (b) Stock sleeve, the French construction: big-cap top-quintile 12-2 momentum rebalanced monthly plus
-   top-quintile book-to-market (or a value composite) rebalanced annually, equal halves; needs
-   point-in-time fundamentals (FMP's as-reported statements with a survivorship check — the prerequisite
-   add. 51 set), a keyless engine emitting intents to ibkr-executor (DRY_RUN, paper first), and a shadow
-   runner; weeks of build. Its edge over (a) is the implementation gap above, 0-4%/yr on the one window
-   measured, uncertain, and gross. Recommendation: if the exposure is wanted, start with (a) in IBKR and
-   measure it against SPY; build (b) only for a reason beyond return (capacity, tax lots, the owner's
-   wish to own the rules).
+   If that sleeve behaves like its ETF proxies (ARKG -4.6%/yr vs SPY with a -80% drawdown, GNOM
+   -12.7%/yr, XBI -4.1%/yr since 2016 with a -57% drawdown), SPY alone dominates it, and so does any
+   value/momentum sleeve.
+4. How it would be built, if wanted. (a) ETF pair, zero build: SPMO (or MTUM) + VLUE in IBKR, 50/50,
+   rebalanced quarterly; SPMO+VLUE earned 16.9% vs SPY 14.9% since 2016 (+2.0%/yr; +1.5 with October
+   2026; Sharpe 0.88 vs 0.86; -22% DD); the realized, net-of-fee version, two tickers. (b) Stock sleeve,
+   the French construction: top-30% 12-2 momentum among large caps rebalanced monthly (~300 names, or a
+   100-name cut) plus top-30% book-to-market (or a value composite) rebalanced annually, equal halves;
+   needs point-in-time fundamentals (FMP's as-reported statements with a survivorship check, the
+   prerequisite add. 51 set), a keyless engine emitting intents to ibkr-executor (DRY_RUN, paper first),
+   and a shadow runner; weeks of build. Its measured edge over (a): momentum none; value +1.5 vs -0.3
+   on 2016-26, gross, from a definition the funds do not use. Recommendation: if the exposure is
+   wanted, hold (a) in IBKR and measure it against SPY; build (b) only for a reason beyond return
+   (capacity, tax lots, owning the rules). On the evidence, neither is a return engine: the honest
+   expectation is SPY-like with a tilt.
 
 MISSING INPUT (ask, do not analyze around): the IBKR genomics sleeve — holdings or rules, start date,
 dollar size, and its return to date (or a statement export). Without it question 3 has no answer. The
@@ -3899,20 +3926,43 @@ SPY half of the IBKR account needs nothing: SPY is the benchmark here.
 
 HONESTY BOX
 - French rows are gross, value-weighted within each cell, rebalanced monthly (momentum) or each June
-  (value, profitability); the net rows subtract an assumed drag (turnover x cost), not a measured one;
-  taxes are not modeled (Act 60 makes them moot for the owner). The BIG value cell is the concentrated
-  form of value; no live fund holds it. The all-cap deciles include microcaps and are not tradeable at
-  size.
-- Rolling-window shares count overlapping windows; 62 years hold six independent decades. Calendar-year
-  hit rates are the independent count.
-- The 2025-26 value rally (21 months) moves every recent window: section 3 is the sensitivity and should
-  be read before any modern-era number.
+  (value, profitability); the net rows subtract an assumed drag, not a measured one; taxes are not
+  modeled. The all-cap deciles and the 5x5 corner cells are not what a sleeve would hold; the sleeve
+  numbers are the 2x3 rows, and the 2x3 value row is still 80-143 names, value-weighted.
+- Rolling 10-year shares count overlapping windows (640 since 1963); 62 years hold six independent
+  decades. Calendar-year counts are the independent tally.
+- The 2025-26 value rally (21 months) moves every recent window: section 3 is the sensitivity and
+  should be read before any modern-era number. French's 2026-09 cut discards October 2026, a -10%
+  month for the momentum funds; section 4 carries it.
 - ETF records are short (7-13 years), one US-equity-led regime, and the funds implement different
-  definitions from the sorts. Yahoo monthly adjusted closes, month-end, first partial month dropped.
-- No look-ahead in the French construction; no survivorship (CRSP includes delisted names). Nothing here
-  is a forecast; "what could returns look like" is answered with what they were.
+  definitions from the sorts. Yahoo monthly adjusted closes, month-end, dividends included, first return
+  month dropped.
+- No look-ahead in the French construction (June formation on prior-December size and prior-fiscal-year
+  book; momentum skips the last month); no survivorship (CRSP carries delisting returns). Nothing here
+  is a forecast.
 
-COUNTER-AGENT: pending.
+COUNTER-AGENT (one hostile reviewer, scratchpad/review52/): SHOWABLE WITH FIXES, all applied. It
+re-derived every number in the JSON, console and exhibit from the raw zips and Yahoo file with its own
+parser and stats (agreement to the third decimal; no parse, alignment, unit or timestamp bug; Yahoo
+month-ends verified against daily closes, dividends present, no lag vs CRSP; zips match fresh
+downloads) and found:
+- MAJOR: the first draft's "big value" row was the 5x5 corner cell — 6-31 names, ~1.15x large
+  financials (industry regression R² 0.87-0.94) — presented as "the names an IBKR sleeve would trade";
+  that one fact produced the draft's +6.3%/yr-vs-SPY value row and its "implementation gap". Fixed: the
+  2x3 rows (80-308 names) are now the sleeve; the corner cells are labelled concentrated and carry their
+  firm counts; every headline number above is on the 2x3 rows.
+- MAJOR: the draft's claim that "the academic sorts beat SPY where the funds lagged" was wrong for
+  momentum (MTUM +0.9 / SPMO +4.3 vs the sort's +0.6, now -0.4 on the 2x3 row) and mis-attributed for
+  value (definition, not cost). Rewritten (result 4).
+- MAJOR: the since-2010 edge is the last 21 months; the KPIs and answers now say so, with the
+  through-2024 numbers beside them.
+- MAJOR: "XBI matched SPY with double its drawdown" mixed two windows; corrected (result 6).
+- MINOR: momentum turnover is ~250% one-way a year, not "~100%+" (cost text rewritten; 0.5%/yr fair at
+  $150k, light at $50k); the rally table's 21-month column is labelled and SPY's CAGR added; the
+  October 2026 month is reported; partial decades carry their month counts; IVAL/IMOM and the ETF
+  "10y windows" column dropped; phone view scrolls to the recent end; "-0%" tick; wording nits.
+- Beta: 1.0 on average, 1.06 since 2010, 1.08 in the rally months for the 50/50; 1.8 for the
+  concentrated value cell and 1.4 for VLUE in those months.
 
 DECISION: research only; nothing traded, no engine built. Backlog item 13 records the two versions and
 the prerequisite. Awaiting the owner's genomics sleeve record for question 3.
