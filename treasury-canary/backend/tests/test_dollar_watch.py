@@ -12,7 +12,9 @@ trimmed to 2019+). Gates:
   - EM FX outcomes are shown (forward_only withdrew the test they could steer); forbidden language never appears;
   - the frozen pre-registration (SPEC v1): eligibility after the freeze date, units from the first firing, the
     placebo, one onset row per month at its close, revisions logged never re-dated, the Fed list and SPEC hashes;
-  - the all-null payload ships every block plus the frozen record; nothing crashes on partial data.
+  - the all-null payload ships every block plus the frozen record; nothing crashes on partial data;
+  - the plain-language summaries cover every layer, restate the panel's own numbers, judge funding on the frozen
+    SPEC v1 §5.3 lines, and degrade by dropping a sentence, never by printing a hole.
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ import gzip
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 from datetime import date, timedelta
@@ -35,7 +38,8 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))            # treasury-can
 STUDY = os.path.join(ROOT, "studies", "dollar_watch")
 REF_FILE = os.path.join(ROOT, "backend", "app", "sources", "dollar_reference.json")
 TAB_SOURCES = [os.path.join(ROOT, "frontend", "src", "components", "DollarTab.tsx"),
-               os.path.join(ROOT, "frontend", "src", "lib", "dollarFixture.ts")]
+               os.path.join(ROOT, "frontend", "src", "lib", "dollarFixture.ts"),
+               os.path.join(ROOT, "frontend", "src", "lib", "dollarGlossary.ts")]
 
 # memo §5 and the wording review: never on the panel
 FORBIDDEN = ["probability of", "p(crisis", "chance of a crisis", "% chance", "crisis subsided", "subsided",
@@ -483,6 +487,78 @@ def test_forbidden_language_absent(payload, tmp_path):
         src = open(path, encoding="utf-8").read().lower()
         for phrase in FORBIDDEN:
             assert phrase not in src, (os.path.basename(path), phrase)
+
+
+# ---------------------------------------------------------------------------- plain-language summaries (Casey, 2026-11-03)
+SUMMARY_KEYS = ("state", "funding", "scramble", "slow", "ledger", "forward", "page")
+HOLE = re.compile(r"\bNone\b(?! of\b)|\bnan\b|\binf\b|[{}]")          # a Python None/nan/inf or a stray f-string brace; "None of" is English
+
+
+def _summary_lines(p):
+    s = p.get("summaries") or {}
+    assert set(SUMMARY_KEYS) <= set(s), set(SUMMARY_KEYS) - set(s)
+    for k in SUMMARY_KEYS:
+        assert isinstance(s[k], list) and s[k] and all(isinstance(x, str) and x.strip() for x in s[k]), k
+    return [x for k in SUMMARY_KEYS for x in s[k]]
+
+
+def test_summaries_cover_every_layer_restate_the_panel_and_never_print_a_hole(payload, inputs, tmp_path):
+    lines = _summary_lines(payload)
+    s, dx = payload["summaries"], payload["state"]["dxy"]
+    assert f"{dx['latest']:.1f}" in s["state"][0] and dw._ord(dx["pct_own_history"]) + " percentile" in s["state"][0]
+    cp = next(r for r in payload["funding"]["rows"] if r["id"] == "cp_fin")
+    cpf = dw.spread(dw.pairs(inputs["fred"]["DCPF3M"]), dw.pairs(inputs["fred"]["DTB3"]))
+    assert cp["mean_5d"] == dw.r(sum(v for _, v in cpf[-5:]) / 5, 2)          # SPEC v1 §5.3's line is on the 5-day mean
+    assert f"{cp['latest']:.2f}pp" in s["funding"][0] and f"{cp['mean_5d']:.2f}pp" in s["funding"][1]
+    assert f"{payload['scramble']['state']['roc20_max_60d_pct']:+.1f}%" in s["scramble"][0]
+    assert s["page"][0].startswith("Reading the page together: ") and "not a forecast" in s["page"][1]
+    null = dw.build_dollar_watch({}, today="2026-11-02", ledger_file=str(tmp_path / "n.json"))
+    more = _summary_lines(null)
+    assert null["summaries"]["page"][0].startswith("Live data unavailable")
+    assert [x[:17] for x in null["summaries"]["funding"]] == ["What it tells you"]                       # no reading, no verdict
+    # each source down in turn, and each series the summaries read: a sentence drops, nothing prints a hole
+    for key in [k for k in inputs if not k.startswith("_")]:
+        part = {k: v for k, v in inputs.items() if k != key}
+        more += _summary_lines(dw.build_dollar_watch(part, today="2026-11-02", ledger_file=str(tmp_path / f"{key}.json")))
+    for sid in ("DTWEXBGS", "DGS10", "DCPF3M", "DTB3", "SWPT", "WMTSECL1", "SOFR", "IORB"):
+        part = {**inputs, "fred": {k: v for k, v in inputs["fred"].items() if k != sid}}
+        more += _summary_lines(dw.build_dollar_watch(part, today="2026-11-02", ledger_file=str(tmp_path / f"{sid}.json")))
+    for x in lines + more:
+        assert not HOLE.search(x), x
+        for phrase in FORBIDDEN:
+            assert phrase not in x.lower(), (phrase, x)
+
+
+def test_every_glossary_entry_is_wired_into_the_tab(payload):
+    """Casey, 2026-11-03: a '?' on every indicator. Each dollarGlossary entry is used by the tab, directly or as a funding row's id."""
+    gloss = open(TAB_SOURCES[2], encoding="utf-8").read()
+    tab = open(TAB_SOURCES[0], encoding="utf-8").read()
+    keys = re.findall(r"^  ([a-z0-9_]+): \{", gloss, re.M)
+    row_ids = {r["id"] for r in payload["funding"]["rows"]}
+    assert len(keys) >= 40 and row_ids <= set(keys), row_ids - set(keys)
+    assert "DW[r.id]" in tab
+    assert [k for k in keys if f"DW.{k}" not in tab and k not in row_ids] == []
+    for k in re.findall(r"DW\.([a-z0-9_]+)", tab):
+        assert k in keys, k
+
+
+def test_summaries_judge_funding_on_the_frozen_subtype_lines():
+    spec = open(os.path.join(STUDY, "spec", "SPEC_v1.md"), encoding="utf-8").read()
+    assert "FRED SWPT > 50,000 ($m)" in spec and "trailing 5-observation mean of DCPF3M − DTB3" in spec and "> 1.00 on any day" in spec
+
+    def rows(cp5, cp, sw, of):
+        return {"cp_fin": {"latest": cp, "mean_5d": cp5, "median_1y": 0.2}, "swap_lines": {"latest": sw},
+                "ofr_funding": {"latest": of, "median_1y": 0.0}}
+    assert dw._funding_word(rows(1.01, 0.9, 0.1, -1)) == "strained"      # CP-bill 5-day mean past 1.00
+    assert dw._funding_word(rows(1.00, 1.0, 0.1, -1)) == "firmer"        # at the line is not past it
+    assert dw._funding_word(rows(0.1, 0.1, 50.01, -1)) == "strained"     # swap lines past $50bn
+    assert dw._funding_word(rows(0.1, 0.1, 50.0, -1)) == "quiet"         # the gold note's test: both at or below their medians
+    assert dw._funding_word(rows(0.1, 0.1, 0.1, 0.5)) == "firmer"        # OFR funding above its 1-year median
+    assert dw._funding_word(rows(0.1, 0.1, 0.1, None)) is None           # not enough data to say
+    row = lambda i, v, p, **k: {"id": i, "label": i, "latest": v, "pct_own_history": p, "history_from": "2019-01-02", **k}   # noqa: E731
+    hot = dw.summaries({}, {"rows": [row("cp_fin", 1.3, 99, mean_5d=1.2, median_1y=0.2), row("swap_lines", 0.1, 10)]}, {}, {}, {}, {})
+    assert hot["funding"][0].startswith("Dollar funding is under strain") and hot["funding"][1].endswith("past a line.")
+    assert "dollar funding is under strain" in hot["page"][0]
 
 
 # ============================================================================ the frozen pre-registration (SPEC v1)

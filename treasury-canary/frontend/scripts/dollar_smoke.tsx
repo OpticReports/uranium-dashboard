@@ -39,13 +39,20 @@ function run(name: string, data: DollarWatch): string {
 const a = run("fixture", DOLLAR_FIXTURE);
 for (const must of ["Dollar state", "Dollar-funding nowcast", "Dollar-scramble peak gauge", "Slow state", "Forward ledger", "Honesty box",
   "101.72", "ad hoc 85-105 band (no edge found)", "Gate closed", "2008-09-22", "2022-07-28", "No edge", "re-dollarising", "129.3",
-  "Pending questions", "C16", "calendar days", "no better than gold", "re-arm only", "expires 2027-01-01", "5 of 11", "41 of 85"]) {
+  "Pending questions", "C16", "calendar days", "no better than gold", "re-arm only", "expires 2027-01-01", "5 of 11", "41 of 85",
+  "What this means", "Reading the page together: the dollar is firm against its history", "Dollar funding is quiet"]) {
   if (!a.includes(must)) throw new Error(`fixture render missing '${must}'`);
 }
+// every layer carries its plain-language takeaways, and every indicator its "?" (Casey, 2026-11-03)
+const takeaways = (a.match(/data-testid="takeaways"/g) ?? []).length;
+const tips = (a.match(/aria-label="What is /g) ?? []).length;
+console.log(`fixture: ${takeaways} takeaway boxes, ${tips} '?' tips`);
+if (takeaways !== 6) throw new Error(`fixture: ${takeaways} takeaway boxes, expected 6`);
+if (tips < 40) throw new Error(`fixture: only ${tips} '?' tips`);   // the backend gate checks every glossary entry is wired
 
 // 2. the all-null payload
 const b = run("all-null", DOLLAR_ALL_NULL);
-for (const must of ["unavailable", "2008-11-06", "No edge", "Honesty box"]) {
+for (const must of ["unavailable", "2008-11-06", "No edge", "Honesty box", "Live data unavailable: only the frozen record below applies."]) {
   if (!b.includes(must)) throw new Error(`all-null render missing '${must}'`);
 }
 
@@ -63,6 +70,7 @@ if (open.scramble?.state) {
   open.scramble.confirmations = { dollar_off_peak_pct: -0.4, dollar_3pct_off_peak: false, swap_now_bn: 450, swap_episode_peak_bn: 583, swap_below_10pct_of_peak: false, episode_start: "2008-09-29" };
 }
 const c = run("gate-open", open);
+if ((c.match(/aria-label="What is /g) ?? []).length < tips + 4) throw new Error("gate-open: the (a)/(b)/(c) and confirmation tips are missing");
 for (const must of ["Gate open", "(a) deceleration: met (dollar scramble peaking)", "(b) funding easing: not met", "(c) gold and EM bonds turning: n/a", "Confirmations since 2008-09-29"]) {
   if (!c.includes(must)) throw new Error(`gate-open render missing '${must}'`);
 }

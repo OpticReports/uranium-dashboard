@@ -14,6 +14,9 @@ import type { DollarWatch, DwFiring, DwFundingRow, DwLedgerEntry, DwOutcomes, Dw
 import { api } from "../lib/api";
 import { errorMessage } from "../lib/format";
 import { DOLLAR_ALL_NULL, DOLLAR_FIXTURE } from "../lib/dollarFixture";
+import { DW } from "../lib/dollarGlossary";
+import type { GlossaryEntry } from "../lib/glossary";
+import InfoTip from "./InfoTip";
 import { InlineError, Loading, Panel } from "./ui";
 
 /* Dollar watch — studies/dollar-watch.md §5, §9. DESCRIPTIVE: what the dollar and
@@ -164,10 +167,27 @@ class Boundary extends Component<{ what: string; children: ReactNode }, { err: s
   }
 }
 
-function Section({ title, subtitle, status, basis, children }: { title: string; subtitle?: string; status?: DwStatus | null; basis?: string | null; children: ReactNode }) {
+// "What this means": the backend's plain-language summary of a layer (today's readings against their own history or
+// base rate, and what they do not tell you). Descriptive: no forecast, no crisis call.
+function Takeaways({ lines, title = "What this means" }: { lines?: string[] | null; title?: string }) {
+  const xs = arr(lines);
+  if (xs.length === 0) return null;
   return (
-    <Panel title={title} subtitle={subtitle} right={<DataChip status={status} />}>
+    <div className="mt-4 rounded-lg border border-sky-900/50 bg-sky-950/20 px-3 py-2" data-testid="takeaways">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-300/80">{title}</div>
+      <ul className="mt-1 list-disc space-y-1 pl-4 text-[12px] leading-snug text-slate-300">
+        {xs.map((x, i) => <li key={i}>{x}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function Section({ title, subtitle, status, basis, tip, summary, children }: { title: string; subtitle?: string; status?: DwStatus | null; basis?: string | null;
+  tip?: GlossaryEntry; summary?: string[] | null; children: ReactNode }) {
+  return (
+    <Panel title={<>{title}{tip && <InfoTip entry={tip} />}</>} subtitle={subtitle} right={<DataChip status={status} />}>
       <Boundary what={title}>{children}</Boundary>
+      <Takeaways lines={summary} />
       {basis && <p className="mt-3 text-[10px] leading-snug text-slate-600">Basis: {basis}</p>}
     </Panel>
   );
@@ -192,10 +212,10 @@ function AsOf({ asof, intraday }: { asof: unknown; intraday?: unknown }) {
   );
 }
 
-function Tile({ label, value, sub, asof, intraday, src }: { label: string; value: string; sub?: ReactNode; asof?: unknown; intraday?: unknown; src?: unknown }) {
+function Tile({ label, value, sub, asof, intraday, src, tip }: { label: string; value: string; sub?: ReactNode; asof?: unknown; intraday?: unknown; src?: unknown; tip?: GlossaryEntry }) {
   return (
     <div className="rounded-lg border border-panelborder bg-slate-900/40 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}{tip && <InfoTip entry={tip} />}</div>
       <div className="mt-0.5 font-mono text-lg font-semibold tabular-nums text-slate-100">{value}</div>
       {sub && <div className="mt-0.5 text-[11px] leading-snug text-slate-400">{sub}</div>}
       <div className="mt-1 font-mono text-[10px] text-slate-500">
@@ -205,8 +225,12 @@ function Tile({ label, value, sub, asof, intraday, src }: { label: string; value
   );
 }
 
-function Th({ children, right = false }: { children: ReactNode; right?: boolean }) {
-  return <th className={`px-2 py-1 font-medium text-slate-500 ${right ? "text-right" : "text-left"}`}>{children}</th>;
+function Th({ children, right = false, tip }: { children: ReactNode; right?: boolean; tip?: GlossaryEntry }) {
+  return <th className={`px-2 py-1 font-medium text-slate-500 ${right ? "text-right" : "text-left"}`}>{children}{tip && <InfoTip entry={tip} />}</th>;
+}
+
+function Sub({ children, tip }: { children: ReactNode; tip?: GlossaryEntry }) {
+  return <div className="mb-1 text-xs font-semibold text-slate-300">{children}{tip && <InfoTip entry={tip} />}</div>;
 }
 function Td({ children, right = false, mono = false }: { children: ReactNode; right?: boolean; mono?: boolean }) {
   return <td className={`px-2 py-1 ${right ? "text-right" : ""} ${mono ? "whitespace-nowrap font-mono tabular-nums" : ""} text-slate-300`}>{children}</td>;
@@ -287,28 +311,28 @@ function StateLayer({ d }: { d: DollarWatch }) {
   return (
     <>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Tile label="ICE DXY" value={fmt(dx?.latest, 2)} asof={dx?.asof} intraday={dx?.intraday} src={dx?.src}
+        <Tile label="ICE DXY" tip={DW.dxy} value={fmt(dx?.latest, 2)} asof={dx?.asof} intraday={dx?.intraday} src={dx?.src}
           sub={<>{str(dx?.band_position) ?? "n/a"}; {pct(dx?.chg_6m_pct)} 6m, {pct(dx?.chg_12m_pct)} 12m (daily); {isNum(dx?.pct_own_history) ? `${ord(dx?.pct_own_history)} percentile of month-end closes since 1971` : "percentile n/a"}</>} />
-        <Tile label="Fed broad dollar" value={fmt(s.broad?.broad?.latest, 1)} asof={s.broad?.broad?.asof} src={s.broad?.broad?.src}
+        <Tile label="Fed broad dollar" tip={DW.broad} value={fmt(s.broad?.broad?.latest, 1)} asof={s.broad?.broad?.asof} src={s.broad?.broad?.src}
           sub={<>{pct(s.broad?.broad?.chg_6m_pct)} 6m, {pct(s.broad?.broad?.chg_12m_pct)} 12m; {isNum(s.broad?.broad?.pct_10y) ? `${ord(s.broad?.broad?.pct_10y)} percentile, last 10 yrs` : "percentile n/a"}; high since 2006 {fmt(s.broad?.high_since_2006?.value, 1)} ({str(s.broad?.high_since_2006?.date) ?? "n/a"})</>} />
-        <Tile label="vs advanced / EM economies" value={`${fmt(s.broad?.afe?.latest, 1)} / ${fmt(s.broad?.eme?.latest, 1)}`} asof={s.broad?.afe?.asof} src={s.broad?.afe?.src}
+        <Tile label="vs advanced / EM economies" tip={DW.afe_eme} value={`${fmt(s.broad?.afe?.latest, 1)} / ${fmt(s.broad?.eme?.latest, 1)}`} asof={s.broad?.afe?.asof} src={s.broad?.afe?.src}
           sub={<>12m {pct(s.broad?.afe?.chg_12m_pct)} / {pct(s.broad?.eme?.chg_12m_pct)}</>} />
-        <Tile label="Dollar-yield quadrant" value={str(q?.label) ?? "n/a"} asof={q?.month}
+        <Tile label="Dollar-yield quadrant" tip={DW.quadrant} value={str(q?.label) ?? "n/a"} asof={q?.month}
           sub={<>3 months to {str(q?.month) ?? "n/a"}: DXY {pct(q?.dxy_3m_pct)}, 10y {pp(q?.y10_3m_pp)}</>} />
       </div>
       {arr(s.issues).length > 0 && <Note>Data note: {arr(s.issues).join("; ")}.</Note>}
 
       <div className="mt-4">
-        <div className="mb-1 text-xs text-slate-400">ICE DXY, month-end close, 1971 to now. Dashed lines at 85 and 105: {str(band?.label) ?? "Johnson's ad hoc band"}</div>
+        <div className="mb-1 text-xs text-slate-400">ICE DXY, month-end close, 1971 to now. Dashed lines at 85 and 105: {str(band?.label) ?? "Johnson's ad hoc band"}<InfoTip entry={DW.band} /></div>
         <TimeChart rows={rows} unit="" digits={0} refY={[{ y: band?.lo ?? 85 }, { y: band?.hi ?? 105 }]} height={230} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div>
-          <div className="mb-1 text-xs font-semibold text-slate-300">Outside the band: what followed ({band?.by_list?.A25?.n_excursions ?? "n/a"} excursions)</div>
+          <Sub tip={DW.band}>Outside the band: what followed ({band?.by_list?.A25?.n_excursions ?? "n/a"} excursions)</Sub>
           <div className="overflow-x-auto">
           <table className="w-full min-w-[460px] text-[11px]">
-            <thead><tr><Th>crisis list</Th><Th right>onset within 12m</Th><Th right>base</Th><Th right>within 24m</Th><Th right>base</Th></tr></thead>
+            <thead><tr><Th tip={DW.crisis_lists}>crisis list</Th><Th right>onset within 12m</Th><Th right tip={DW.base_rate}>base</Th><Th right>within 24m</Th><Th right>base</Th></tr></thead>
             <tbody>
               {lists.map((k) => {
                 const r = band?.by_list?.[k] ?? {};
@@ -337,9 +361,9 @@ function StateLayer({ d }: { d: DollarWatch }) {
           )}
         </div>
         <div>
-          <div className="mb-1 text-xs font-semibold text-slate-300">The quadrant into crisis onsets (C16, {q?.onsets_C16?.n ?? "n/a"} onsets)</div>
+          <Sub tip={DW.quadrant}>The quadrant into crisis onsets (C16, {q?.onsets_C16?.n ?? "n/a"} onsets)</Sub>
           <table className="w-full text-[11px]">
-            <thead><tr><Th>3-month quadrant</Th><Th right>onsets</Th><Th right>all months 1971-2026</Th></tr></thead>
+            <thead><tr><Th>3-month quadrant</Th><Th right>onsets</Th><Th right tip={DW.base_rate}>all months 1971-2026</Th></tr></thead>
             <tbody>
               {["usd_up_yld_down", "usd_up_yld_up", "usd_down_yld_up", "usd_down_yld_down"].map((k) => (
                 <tr key={k} className={q?.quadrant === k ? "font-semibold" : ""}>
@@ -355,9 +379,9 @@ function StateLayer({ d }: { d: DollarWatch }) {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div data-testid="momentum-table">
-          <div className="mb-1 text-xs font-semibold text-slate-300">12-month DXY change (monthly averages): {pct(mom?.dxy_12m_pct)} to {str(mom?.month) ?? "n/a"}; above +{fmt(mom?.threshold_pct, 0)}%: {mom?.signal === true ? "yes" : mom?.signal === false ? "no" : "n/a"} (last {str(mom?.last_signal_month) ?? "n/a"})</div>
+          <Sub tip={DW.momentum}>12-month DXY change (monthly averages): {pct(mom?.dxy_12m_pct)} to {str(mom?.month) ?? "n/a"}; above +{fmt(mom?.threshold_pct, 0)}%: {mom?.signal === true ? "yes" : mom?.signal === false ? "no" : "n/a"} (last {str(mom?.last_signal_month) ?? "n/a"})</Sub>
           <table className="w-full text-[11px]">
-            <thead><tr><Th>crisis list</Th><Th right>episodes followed by an onset within 12m</Th><Th right>months above +10% followed (overlapping)</Th><Th right>base (share of all months)</Th></tr></thead>
+            <thead><tr><Th tip={DW.crisis_lists}>crisis list</Th><Th right>episodes followed by an onset within 12m</Th><Th right>months above +10% followed (overlapping)</Th><Th right tip={DW.base_rate}>base (share of all months)</Th></tr></thead>
             <tbody>
               {lists.map((k) => {
                 const r = mom?.by_list?.[k] ?? {};
@@ -373,13 +397,13 @@ function StateLayer({ d }: { d: DollarWatch }) {
         <div>
           <div className="mb-1 text-xs font-semibold text-slate-300">Safe havens and EM</div>
           <div className="grid grid-cols-2 gap-2">
-            <Tile label={g?.provider === "yahoo" ? "Gold (COMEX futures)" : "Gold (spot)"} value={usd(g?.latest, 0)} asof={g?.asof} intraday={g?.intraday} src={g?.src}
+            <Tile label={g?.provider === "yahoo" ? "Gold (COMEX futures)" : "Gold (spot)"} tip={DW.gold} value={usd(g?.latest, 0)} asof={g?.asof} intraday={g?.intraday} src={g?.src}
               sub={sentences(`${pct(g?.chg_6m_pct)} 6m; ${pct(g?.off_52w_high_pct)} from its 52-week high${str(g?.note) ? `, ${g?.note}` : ""}`)} />
-            <Tile label="EM FX basket" value={fmt(s.emfx?.latest, 1)} asof={s.emfx?.asof}
+            <Tile label="EM FX basket" tip={DW.emfx} value={fmt(s.emfx?.latest, 1)} asof={s.emfx?.asof}
               sub={<>{pct(s.emfx?.chg_12m_pct)} 12m (up = EM weaker); {isNum(s.emfx?.pct_10y) ? `${ord(s.emfx?.pct_10y)} percentile, last 10 yrs` : "percentile n/a"}</>} />
-            <Tile label="CHF / JPY per $ (up = franc / yen weaker)" value={`${fmt(s.safe_haven?.chf?.latest, 3)} / ${fmt(s.safe_haven?.jpy?.latest, 1)}`} asof={s.safe_haven?.chf?.asof}
+            <Tile label="CHF / JPY per $ (up = franc / yen weaker)" tip={DW.chf_jpy} value={`${fmt(s.safe_haven?.chf?.latest, 3)} / ${fmt(s.safe_haven?.jpy?.latest, 1)}`} asof={s.safe_haven?.chf?.asof}
               sub={<>6m {pct(s.safe_haven?.chf?.chg_6m_pct)} / {pct(s.safe_haven?.jpy?.chg_6m_pct)}; 12m {pct(s.safe_haven?.chf?.chg_12m_pct)} / {pct(s.safe_haven?.jpy?.chg_12m_pct)}</>} />
-            <Tile label="Brent" value={usd(s.brent?.latest, 1)} asof={s.brent?.asof} src={s.brent?.src}
+            <Tile label="Brent" tip={DW.brent} value={usd(s.brent?.latest, 1)} asof={s.brent?.asof} src={s.brent?.src}
               sub={<>{pct(s.brent?.chg_12m_pct)} 12m; {pctile(s.brent?.pct_own_history, s.brent?.history_from)}</>} />
           </div>
         </div>
@@ -387,7 +411,7 @@ function StateLayer({ d }: { d: DollarWatch }) {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div>
-          <div className="mb-1 text-xs font-semibold text-slate-300">Gold in crises</div>
+          <Sub tip={DW.gold}>Gold in crises</Sub>
           <table className="w-full text-[11px]">
             <thead><tr><Th>episode</Th><Th right>intra-crisis drawdown</Th><Th right>close-to-close</Th></tr></thead>
             <tbody>
@@ -436,11 +460,11 @@ function FundingLayer({ d }: { d: DollarWatch }) {
       <div className="mb-2 text-[11px] text-slate-400">{str(f.label) ?? ""}</div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-[11px]">
-          <thead><tr><Th>gauge</Th><Th right>now</Th><Th>as of</Th><Th right>percentile, own history</Th><Th right>percentile, last 10 yrs</Th><Th right>1y median</Th><Th>reading</Th></tr></thead>
+          <thead><tr><Th>gauge</Th><Th right>now</Th><Th>as of</Th><Th right tip={DW.percentile}>percentile, own history</Th><Th right>percentile, last 10 yrs</Th><Th right>1y median</Th><Th>reading</Th></tr></thead>
           <tbody>
             {arr(f.rows).map((r: DwFundingRow) => (
               <tr key={r.id} className="border-t border-slate-800/70">
-                <Td>{r.label} <Src href={r.src} /></Td>
+                <Td>{r.label}{DW[r.id] && <InfoTip entry={DW[r.id]} />} <Src href={r.src} /></Td>
                 <Td right mono>{fundingNow(r)}</Td>
                 <Td mono>{str(r.asof) ?? "n/a"}{r.intraday === true ? " (intraday)" : ""}</Td>
                 <Td right mono>{pctile(r.pct_own_history, r.history_from)}</Td>
@@ -507,6 +531,7 @@ function ScrambleLayer({ d }: { d: DollarWatch }) {
   return (
     <>
       <div className="rounded border border-slate-700 bg-slate-900/40 px-3 py-2 text-[12px] text-slate-300">
+        <InfoTip entry={DW.gate} />{" "}
         {!st ? (
           "Rule state unavailable."
         ) : sc.gate_open ? (
@@ -528,13 +553,14 @@ function ScrambleLayer({ d }: { d: DollarWatch }) {
             ] as const
           ).map(([name, x, detail]) => (
             <div key={name} className="rounded border border-panelborder bg-slate-900/40 px-3 py-2">
-              <div className="text-[11px] font-semibold text-slate-300">{name}: {yes(x?.met)}{name.startsWith("(a)") && x?.met ? ` (${str(sc.wording) ?? ""})` : ""}</div>
+              <div className="text-[11px] font-semibold text-slate-300">{name}: {yes(x?.met)}{name.startsWith("(a)") && x?.met ? ` (${str(sc.wording) ?? ""})` : ""}
+                <InfoTip entry={name.startsWith("(a)") ? DW.decel : name.startsWith("(b)") ? DW.funding_easing : DW.risk_turn} /></div>
               <div className="mt-1 font-mono text-[10px] text-slate-400">{detail}</div>
               <div className="mt-1 text-[10px] text-slate-500">{str(x?.rule) ?? ""}</div>
             </div>
           ))}
           <div className="rounded border border-panelborder bg-slate-900/40 px-3 py-2 text-[11px] text-slate-400 md:col-span-3">
-            Confirmations since {str(conf?.episode_start) ?? "n/a"}: dollar {pct(conf?.dollar_off_peak_pct, 2)} from its episode peak ({yes(conf?.dollar_3pct_off_peak)} at 3%);
+            <InfoTip entry={DW.confirmations} /> Confirmations since {str(conf?.episode_start) ?? "n/a"}: dollar {pct(conf?.dollar_off_peak_pct, 2)} from its episode peak ({yes(conf?.dollar_3pct_off_peak)} at 3%);
             swap lines {usd(conf?.swap_now_bn, 1, "bn")} vs {usd(conf?.swap_episode_peak_bn, 1, "bn")} at the peak ({conf?.swap_below_10pct_of_peak == null ? "n/a: no material draw" : yes(conf?.swap_below_10pct_of_peak)} at 10%).
           </div>
         </div>
@@ -553,7 +579,7 @@ function ScrambleLayer({ d }: { d: DollarWatch }) {
 
       <div className="mt-4 overflow-x-auto">
         <div className="mb-1 text-xs font-semibold text-slate-300">
-          Every firing of the rule, in-sample: {unpatched.length || "n/a"} under the unpatched rule (the default) plus the re-arm variant's 2008-11-06, added after the 2008-09-22 miss
+          <InfoTip entry={DW.firings_table} /> Every firing of the rule, in-sample: {unpatched.length || "n/a"} under the unpatched rule (the default) plus the re-arm variant's 2008-11-06, added after the 2008-09-22 miss
         </div>
         <table className="w-full min-w-[860px] text-[11px]">
           <thead><tr><Th>#</Th><Th>fired</Th><Th>variant</Th><Th right>largest 20d climb</Th><Th right>dollar rose further</Th><Th right>S&amp;P to next low: firing day / observable</Th><Th right>VIX change over 60d (points)</Th><Th>12 months later (EM FX up = EM weaker)</Th><Th>reading</Th></tr></thead>
@@ -573,7 +599,7 @@ function ScrambleLayer({ d }: { d: DollarWatch }) {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <div className="rounded border border-slate-700 px-3 py-2 text-[11px] text-slate-300">
-          <div className="font-semibold">The null, shown permanently</div>
+          <div className="font-semibold">The null, shown permanently<InfoTip entry={DW.null_box} /></div>
           On {str(mn?.window) ?? "1973-2005 monthly data"}: {mn?.firings ?? "n/a"} firings; the dollar peaked within 3 months in {mn?.dollar_peak_within_3m ?? "n/a"} (base {share(mn?.base_dollar_peak_within_3m)});
           the S&amp;P was higher 12 months later in {mn?.spx_up_12m ?? "n/a"} (base {share(mn?.base_spx_up_12m)}). No edge.
         </div>
@@ -610,15 +636,15 @@ function SlowLayer({ d }: { d: DollarWatch }) {
   return (
     <>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
-        <Tile label="USD credit outside the US" value={usd(uc?.total_tn, 2, "tn")} asof={uc?.quarter} src={uc?.src}
+        <Tile label="USD credit outside the US" tip={DW.usd_credit} value={usd(uc?.total_tn, 2, "tn")} asof={uc?.quarter} src={uc?.src}
           sub={sentences(`${pct(uc?.yoy_pct)} yoy; EMEs ${usd(uc?.eme_tn, 2, "tn")} (${pct(uc?.eme_yoy_pct)} yoy, ${unit(uc?.eme_share_pct, 0, "%")} of the total)`, str(uc?.label))} />
-        <Tile label="FX forwards and swaps outstanding" value={usd(fx?.all_tn, 1, "tn")} asof={fx?.period}
+        <Tile label="FX forwards and swaps outstanding" tip={DW.fx_swaps} value={usd(fx?.all_tn, 1, "tn")} asof={fx?.period}
           sub={<>dollar leg {usd(fx?.usd_leg_tn, 1, "tn")}; {str(fx?.prev_period) ?? "previous"} {usd(fx?.prev_all_tn, 1, "tn")}</>} />
-        <Tile label="US 2-year vs funds ceiling" value={`${unit(s.us2y_vs_funds?.dgs2, 2, "%")} / ${unit(s.us2y_vs_funds?.fed_upper, 2, "%")}`} asof={s.us2y_vs_funds?.dgs2_asof}
+        <Tile label="US 2-year vs funds ceiling" tip={DW.two_year} value={`${unit(s.us2y_vs_funds?.dgs2, 2, "%")} / ${unit(s.us2y_vs_funds?.fed_upper, 2, "%")}`} asof={s.us2y_vs_funds?.dgs2_asof}
           sub={sentences(`gap ${pp(s.us2y_vs_funds?.gap_pp)}`, str(s.us2y_vs_funds?.reading))} />
-        <Tile label="Foreign official custody" value={usd(t?.custody?.latest, 0, "bn")} asof={t?.custody?.asof} src={t?.custody?.src}
+        <Tile label="Foreign official custody" tip={DW.custody} value={usd(t?.custody?.latest, 0, "bn")} asof={t?.custody?.asof} src={t?.custody?.src}
           sub={<>{pct(t?.custody?.chg_12m_pct)} 12m; {isNum(t?.custody?.pct_10y) ? `${ord(t?.custody?.pct_10y)} percentile, last 10 yrs` : "percentile n/a"}</>} />
-        <Tile label="10-year yield / term premium" value={`${unit(t?.y10?.latest, 2, "%")} / ${unit(t?.term_premium?.latest, 2, "pp")}`} asof={t?.y10?.asof} src={t?.y10?.src}
+        <Tile label="10-year yield / term premium" tip={DW.treasury} value={`${unit(t?.y10?.latest, 2, "%")} / ${unit(t?.term_premium?.latest, 2, "pp")}`} asof={t?.y10?.asof} src={t?.y10?.src}
           sub={<>10-year {pp(t?.y10_chg_6m_pp)} in 6 months; term premium as of {str(t?.term_premium?.asof) ?? "n/a"}</>} />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -645,7 +671,7 @@ function SlowLayer({ d }: { d: DollarWatch }) {
             str(h.corr_caveat as string))}</Note>
         </div>
         <div className="overflow-x-auto">
-          <div className="mb-1 text-xs font-semibold text-slate-300">Policy rates vs the Fed (BIS, end of month)</div>
+          <Sub tip={DW.policy_rates}>Policy rates vs the Fed (BIS, end of month)</Sub>
           {pr.length === 0 ? <Unavailable what="Policy rates" /> : (
             <table className="w-full text-[11px]">
               <thead><tr><Th>area</Th><Th right>rate</Th><Th right>vs Fed (same month)</Th><Th right>12m change</Th><Th>month</Th></tr></thead>
@@ -742,13 +768,13 @@ function PreregLayer({ d }: { d: DollarWatch }) {
           <div className="font-semibold">The forward test: {f.d3?.units ?? 0} units logged, {f.d3?.matured ?? 0} matured; first look at {f.d3?.next_look_at ?? 8} (about 2060-2070)</div>
           <div className="mt-1 text-slate-400">{str(f.d3?.rule) ?? ""}. Status: {str(f.d3?.status) ?? "n/a"}.</div>
           <div className="mt-1 text-slate-400">
-            Placebo rule: {f.d3?.placebo?.units ?? 0} units. Rows never scored (data date on or before the freeze, or first seen after a revision):{" "}
+            Placebo rule<InfoTip entry={DW.placebo} />: {f.d3?.placebo?.units ?? 0} units. Rows never scored (data date on or before the freeze, or first seen after a revision):{" "}
             {(f.d3?.decel?.in_sample_rows ?? 0) + (f.d3?.placebo?.in_sample_rows ?? 0)}.
           </div>
         </div>
       </div>
       <Note>
-        Crisis dating, 2000-2026 check: {arr(f.onsets?.historical).join(", ") || "n/a"} (dollar-funding: {arr(f.onsets?.historical_dollar_funding).join(", ") || "none"}).{" "}
+        Crisis dating<InfoTip entry={DW.onset_months} />, 2000-2026 check: {arr(f.onsets?.historical).join(", ") || "n/a"} (dollar-funding: {arr(f.onsets?.historical_dollar_funding).join(", ") || "none"}).{" "}
         {str(f.onsets?.historical_note) ?? ""}. Months dated since the cut-off: {f.onsets?.months_evaluated ?? 0}
         {str(f.onsets?.last_evaluated) ? ` (through ${f.onsets?.last_evaluated})` : ""}; onsets among them:{" "}
         {live.length === 0 ? "none" : live.map((e) => e.date).join(", ")}. Next month dated: {str(f.onsets?.next_month) ?? "n/a"}, once it closes on{" "}
@@ -825,26 +851,33 @@ export function DollarView({ data }: { data: DollarWatch }) {
         <p className="mt-1 text-[12px] leading-snug text-slate-300">{str(d.headline) ?? "No live reading."}</p>
         {str(d.build_error) && <p className="mt-1 text-[11px] text-slate-500">The last rebuild failed ({d.build_error}); showing the previous build.</p>}
       </div>
-      <Section title="1 · Dollar state" subtitle="ICE DXY, the Fed broad index, the dollar-yield quadrant, momentum, safe havens, EM FX, oil" status={b.state ?? d.state?.status}>
+      <Section title="1 · Dollar state" tip={DW.layer_state} summary={d.summaries?.state} subtitle="ICE DXY, the Fed broad index, the dollar-yield quadrant, momentum, safe havens, EM FX, oil" status={b.state ?? d.state?.status}>
         <StateLayer d={d} />
       </Section>
-      <Section title="2 · Dollar-funding nowcast" subtitle="the plumbing: CP minus bills, OFR funding, NFCI risk, SOFR tails, swap lines, EM dollar bonds" status={b.funding ?? d.funding?.status} basis={d.funding?.basis}>
+      <Section title="2 · Dollar-funding nowcast" tip={DW.layer_funding} summary={d.summaries?.funding} subtitle="the plumbing: CP minus bills, OFR funding, NFCI risk, SOFR tails, swap lines, EM dollar bonds" status={b.funding ?? d.funding?.status} basis={d.funding?.basis}>
         <FundingLayer d={d} />
       </Section>
-      <Section title="3 · Dollar-scramble peak gauge"
+      <Section title="3 · Dollar-scramble peak gauge" tip={DW.layer_scramble} summary={d.summaries?.scramble}
         subtitle="Casey's deceleration rule, parameters fixed, run live: an untested hypothesis about the top of a dollar SCRAMBLE (1 clean and 2 first-wave firings on the three V-spikes; no edge on 1973-2005); it says nothing about the end of a crisis"
         status={b.scramble ?? d.scramble?.status} basis={d.scramble?.basis}>
         <ScrambleLayer d={d} />
       </Section>
-      <Section title="4 · Slow state" subtitle="dollar credit outside the US, the FX-swap stock, policy rates, the 2-year, the Treasury channel" status={b.slow ?? d.slow?.status}>
+      <Section title="4 · Slow state" tip={DW.layer_slow} summary={d.summaries?.slow} subtitle="dollar credit outside the US, the FX-swap stock, policy rates, the 2-year, the Treasury channel" status={b.slow ?? d.slow?.status}>
         <SlowLayer d={d} />
       </Section>
-      <Section title="Forward ledger" subtitle="dated firings after the reference cut-off; outcomes frozen in as they mature; at realistic edges it needs decades to score" status={b.ledger ?? d.ledger?.status} basis={d.ledger?.basis}>
+      <Section title="Forward ledger" tip={DW.ledger} summary={d.summaries?.ledger} subtitle="dated firings after the reference cut-off; outcomes frozen in as they mature; at realistic edges it needs decades to score" status={b.ledger ?? d.ledger?.status} basis={d.ledger?.basis}>
         <LedgerLayer d={d} />
       </Section>
-      <Section title="Pre-registration" subtitle="the frozen rules the forward ledger is graded by (studies/dollar_watch/spec/SPEC_v1.md)" status={b.forward ?? d.forward?.status}>
+      <Section title="Pre-registration" tip={DW.prereg} summary={d.summaries?.forward} subtitle="the frozen rules the forward ledger is graded by (studies/dollar_watch/spec/SPEC_v1.md)" status={b.forward ?? d.forward?.status}>
         <PreregLayer d={d} />
       </Section>
+      {arr(d.summaries?.page).length > 0 && (
+        <Panel title="Reading the page together">
+          <ul className="list-disc space-y-1 pl-4 text-[12px] leading-snug text-slate-300" data-testid="page-summary">
+            {arr(d.summaries?.page).map((x, i) => <li key={i}>{x}</li>)}
+          </ul>
+        </Panel>
+      )}
       <Panel title="Honesty box">
         <ul className="list-disc space-y-1 pl-4 text-[11px] text-slate-400">
           {arr(d.honesty).map((h, i) => <li key={i}>{h}</li>)}
