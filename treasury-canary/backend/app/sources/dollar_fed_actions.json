@@ -1,5 +1,5 @@
 {
- "_about": "Fed emergency actions 2000-01-01..2026-11-02 under SPEC v1 §3 marker 5 (Dollar watch forward onset rule). One row per press release; several rows may share a date. Each URL fetched on 2026-11-02 (HTTP 200) and its title and announcement date checked against the page; sha256_prefix is of the fetched bytes (federalreserve.gov pages carry dynamic chrome, so the hash identifies the fetch, not the text).",
+ "_about": "Fed emergency actions 2000-01-01..2026-10-31 under SPEC v1 §3 marker 5 (Dollar watch forward onset rule). One row per press release; several rows may share a date. Each URL fetched on 2026-11-02 (HTTP 200) and its title and announcement date checked against the page; sha256_prefix is of the fetched bytes (federalreserve.gov pages carry dynamic chrome, so the hash identifies the fetch, not the text).",
  "definition": {
   "included": [
    "FOMC cut of the federal funds target announced outside a scheduled FOMC meeting (intermeeting cut)",
@@ -14,10 +14,14 @@
    "extensions of swap-line expiry dates (e.g. 2010-12-21, 2011-06-29)",
    "conversions to standing status without new terms (swap lines 2013-10-31; FIMA repo and the Standing Repo Facility 2021-07-28)",
    "asset purchase programmes and rate cuts at scheduled meetings"
+  ],
+  "rulings": [
+   "Reverse (foreign-currency) liquidity swap lines count as a new central-bank liquidity swap line: the clause does not distinguish direction (ruled 2026-11-03, before any forward evaluation; it decides only 2009-04-06, which lies inside the 2009-01 exclusion).",
+   "One-firm 13(3) arrangements (AIG, Citigroup, Bank of America) count as a new loan under Section 13(3)."
   ]
  },
  "source_feed": "https://www.federalreserve.gov/json/ne-press.json (2006-01..2026-10 searched for facility/swap/13(3)/FIMA/intermeeting releases; none after 2023-03-19); 2000-2005 from the boarddocs archive",
- "n": 48,
+ "n": 50,
  "months": [
   "2001-01",
   "2001-04",
@@ -31,6 +35,7 @@
   "2008-10",
   "2008-11",
   "2009-01",
+  "2009-03",
   "2009-04",
   "2010-05",
   "2011-11",
@@ -292,6 +297,20 @@
    }
   },
   {
+   "date": "2008-10-08",
+   "type": "section_13_3_firm",
+   "action": "FRBNY authorised under 13(3) to borrow up to $37.8bn of securities from AIG insurance subsidiaries against cash",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/other20081008a.htm",
+   "page_title": "Board authorizes Federal Reserve Bank of New York to borrow securities from certain regulated U.S. insurance subsidiaries of AIG",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "f51c690e7318ded8"
+   },
+   "added_on": "2026-11-03",
+   "added_note": "added 2026-11-03 after the 2026-11-02 onset check (data review v1 M1); 2008-10 was already listed, so the recount is unchanged"
+  },
+  {
    "date": "2008-10-13",
    "type": "swap_line_new_or_expanded",
    "action": "Swap lines with the ECB, Bank of England and SNB made unlimited",
@@ -398,6 +417,20 @@
     "fetched_on": "2026-11-02",
     "sha256_prefix": "2f71792b96162280"
    }
+  },
+  {
+   "date": "2009-03-02",
+   "type": "section_13_3_firm",
+   "action": "AIG restructuring: new 13(3) loans of up to about $8.5bn to life-insurance SPVs",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/other20090302a.htm",
+   "page_title": "U.S. Treasury and Federal Reserve Board Announce Participation in AIG Restructuring Plan",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "5474afdd9aec453e"
+   },
+   "added_on": "2026-11-03",
+   "added_note": "added 2026-11-03 after the 2026-11-02 onset check (data review v1 M1); 2009-03 already had 2+ markers and lies inside the 2009-01 exclusion, so the recount is unchanged (8 onsets)"
   },
   {
    "date": "2009-04-06",
@@ -615,5 +648,154 @@
     "sha256_prefix": "9ab4a732b921a8a8"
    }
   }
- ]
+ ],
+ "excluded_candidates": [
+  {
+   "date": "2007-08-10",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20070810a.htm",
+   "page_title": "FOMC statement: The Federal Reserve is providing liquidity to facilitate the orderly functioning of financial markets",
+   "clause": "open market and repo operations (a liquidity statement; no target cut)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "dadec899fa944ada"
+   }
+  },
+  {
+   "date": "2007-08-17",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20070817a.htm",
+   "page_title": "Federal Reserve Board discount rate action",
+   "clause": "changes to the discount (primary credit) rate alone",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "323bf107dccf8a77"
+   }
+  },
+  {
+   "date": "2007-08-17",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20070817b.htm",
+   "page_title": "FOMC statement",
+   "clause": "an unscheduled FOMC statement without a target cut (not an included class)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "ac542fb385b13d7f"
+   }
+  },
+  {
+   "date": "2008-09-14",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20080914a.htm",
+   "page_title": "Federal Reserve Board announces several initiatives to provide additional support to financial markets, including enhancements to its existing liquidity facilities",
+   "clause": "expansions and collateral changes of existing facilities (PDCF, TSLF)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "3bd1e3ecb178ce68"
+   }
+  },
+  {
+   "date": "2008-10-06",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081006a.htm",
+   "page_title": "Board announces that it will begin to pay interest on depository institutions' required and excess reserve balances",
+   "clause": "not an included class (interest on reserves)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "9169066c304c86c1"
+   }
+  },
+  {
+   "date": "2008-10-06",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081006b.htm",
+   "page_title": "Federal Reserve will offer $150 billion in 85-day credit through its Term Auction Facility today",
+   "clause": "expansion of an existing facility (TAF)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "cef4c6b80ccbcde5"
+   }
+  },
+  {
+   "date": "2008-12-02",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20081202b.htm",
+   "page_title": "Federal Reserve announces the extension of three liquidity facilities through April 30, 2009",
+   "clause": "extensions of existing facilities",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "cff280e383c0984c"
+   }
+  },
+  {
+   "date": "2009-02-10",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20090210b.htm",
+   "page_title": "Federal Reserve is prepared to expand Term Asset-Backed Securities Loan Facility (TALF)",
+   "clause": "expansion of an existing facility (TALF)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "5f53dcc7723b1afd"
+   }
+  },
+  {
+   "date": "2010-12-21",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20101221a.htm",
+   "page_title": "FOMC statement: Federal Reserve, European Central Bank, Bank of Japan, Bank of Canada, Bank of England, and Swiss National Bank announce extension of temporary U.S. dollar liquidity swap facilities",
+   "clause": "extensions of swap-line expiry dates",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "d889d8172dae3a9a"
+   }
+  },
+  {
+   "date": "2011-06-29",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20110629a.htm",
+   "page_title": "Federal Reserve and other central banks announce an extension of the existing temporary U.S. dollar liquidity swap arrangements through August 1, 2012",
+   "clause": "extensions of swap-line expiry dates",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "88cf62600f5dc780"
+   }
+  },
+  {
+   "date": "2013-10-31",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20131031a.htm",
+   "page_title": "Federal Reserve and other central banks convert temporary bilateral liquidity swap arrangements to standing arrangements",
+   "clause": "conversion to standing status without new terms",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "9ba86c7d4534d2cc"
+   }
+  },
+  {
+   "date": "2020-03-23",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200323a.htm",
+   "page_title": "Federal Reserve issues FOMC statement",
+   "clause": "asset purchase programmes (the same day's new facilities are listed separately)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "1379b2ae88ef99d7"
+   }
+  },
+  {
+   "date": "2021-07-28",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20210728b.htm",
+   "page_title": "Statement Regarding Repurchase Agreement Arrangements",
+   "clause": "conversion to standing status without new terms (FIMA repo, Standing Repo Facility)",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "983d858577f109e3"
+   }
+  }
+ ],
+ "reviewed_through": "2026-10",
+ "update_rule": "Append-only, kept date-sorted; every row carries its fetched URL, title and date check. At each R1 the list is reviewed through the previous month (reviewed_through) BEFORE that month's onset evaluation; every forward addition or exclusion is checked by a second reader (a counter-agent) and logged with added_on. A row is never removed; a correction is a new row plus a note.",
+ "onset_check_list_sha256": "f24ab63fdfe031b804ef336b93b0a1086090c922f627621cca5812b01611a563",
+ "onset_check_note": "The 2026-11-02 pre-committed onset check ran on the list with sha256 onset_check_list_sha256 (48 rows); the two rows added on 2026-11-03 do not change its count (8 onsets, 31 months with 2+ markers)."
 }

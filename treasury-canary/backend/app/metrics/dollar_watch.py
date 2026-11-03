@@ -4,7 +4,9 @@ DESCRIPTIVE ONLY. No odds, no colour-coded states, no crisis calls: every
 historical number is in-sample and comes from the frozen reference
 (sources/dollar_reference.json, rebuilt by studies/dollar_watch/code/
 build_reference.py); every conditional count carries its N and base rate. The
-pre-registration is drafted, reviewed NOT_PASS and not frozen (memo §9.4).
+pre-registration (studies/dollar_watch/spec/SPEC_v1.md, forward only) is frozen
+in sources/dollar_freeze.json; this module records, point in time, what its
+offline harness (studies/dollar_watch/prereg/d3.py) will need (memo §9.4).
 
 Four layers plus the forward ledger:
   state     ICE DXY vs Johnson's ad hoc 85-105 band, the Fed broad index and its
@@ -19,6 +21,9 @@ Four layers plus the forward ledger:
             the Fed, the 2-year vs the funds ceiling, the Treasury channel.
   ledger    firings after the reference cut-off, append-only on the persistent
             disk; each horizon's outcome is frozen into its row when it matures.
+  forward   the pre-registration's point-in-time duties: D-3 eligibility and units,
+            the placebo rule, archived inputs, maturity blocks, one onset row per
+            month at its close, revision checks.
 
 sources/dollar_data.fetch_all() fetches; build_dollar_watch(inputs, today=...,
 ledger_file=...) assembles (pure apart from the ledger file, injectable).
@@ -26,6 +31,8 @@ ledger_file=...) assembles (pure apart from the ledger file, injectable).
 from __future__ import annotations
 
 import bisect
+import gzip
+import hashlib
 import json
 import logging
 import math
@@ -69,7 +76,9 @@ HONESTY_LIVE = [
     "dollar-funding stress, Brent nearly doubled, and foreign official custody is at a 14-year low. The dollar-funding mechanism "
     "does not explain it; do not read the crisis records on this page onto it.",
     "PREREG",                                                     # replaced at build time by prereg_line()
-    "Ledger outcomes are measured from the first S&P close after the H.10 release that made a firing visible, not from the firing day.",
+    "Live ledger rows are measured from the first S&P close after the release that made a firing visible (the H.10 release; a momentum "
+    "month's end), never from the firing day. The historical rows are in-sample and measured from the data date (momentum: monthly "
+    "averages, EM FX as of the 28th).",
 ]
 
 PENDING = [   # status per CLAUDE.md: asked / answered / refused / expired; "open" = ours to source, not a question to Casey
@@ -221,9 +230,11 @@ def _month_range(a: str, b: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------- the frozen rule (identical to the builder)
-def scramble_firings(dates, B, Y, rearm=True, p=RULE):
+def scramble_firings(dates, B, Y, rearm=True, p=RULE, decel=True):
     """The frozen deceleration rule, line for line as build_reference.py / decel_realtime.py
-    (the live version also evaluates the latest index day). Returns firing dicts with index k."""
+    (the live version also evaluates the latest index day). Returns firing dicts with index k.
+    decel=False is SPEC v1's placebo (stats review v1 S2): the same rule without the deceleration clause, so it
+    fires on the first day of a >= 4% climb near the high with the 10-year falling (unpatched only)."""
     n = len(B)
     roc = [None] * n
     for k in range(p["roc_days"], n):
@@ -233,7 +244,7 @@ def scramble_firings(dates, B, Y, rearm=True, p=RULE):
         w = [(roc[j], j) for j in range(k - p["window_days"], k + 1) if roc[j] is not None]
         mx = max(v for v, _ in w)
         kmx = min(j for v, j in w if v == mx)
-        if (mx >= p["min_max_roc"] and roc[k] <= p["decel_ratio"] * mx
+        if (mx >= p["min_max_roc"] and (not decel or roc[k] <= p["decel_ratio"] * mx)
                 and B[k] >= p["near_high"] * max(B[k - p["window_days"]:k + 1])
                 and Y[k] < Y[max(0, kmx - p["yield_lookback_days"])]
                 and (k - last > p["cooling_days"] or (rearm and mx >= p["rearm_multiple"] * last_mx))):
@@ -243,10 +254,15 @@ def scramble_firings(dates, B, Y, rearm=True, p=RULE):
     return fires
 
 
+FORWARD_CALENDAR = ("days with DTWEXBGS and DGS10 both published (SPEC v1 §2, stats review v1 S3); the in-sample record used the "
+                    "frozen script's calendar, which also required VIXCLS: the two differ on 7 Good Fridays in 2006-2026 and give "
+                    "identical firings")
+
+
 def rule_index(fred: dict):
-    """(dates, B, Y) on days with DTWEXBGS, DGS10 and VIXCLS all published (the frozen index)."""
-    b, y, v = (dict(pairs(fred.get(s))) for s in ("DTWEXBGS", "DGS10", "VIXCLS"))
-    ds = sorted(d for d in b if d in y and d in v)
+    """(dates, B, Y) on days with DTWEXBGS and DGS10 both published: the live rule's and D-3's calendar (FORWARD_CALENDAR)."""
+    b, y = (dict(pairs(fred.get(s))) for s in ("DTWEXBGS", "DGS10"))
+    ds = sorted(d for d in b if d in y)
     return ds, [b[d] for d in ds], [y[d] for d in ds]
 
 
@@ -336,28 +352,68 @@ def append_ledger(path: str, new: list[dict], today: str) -> dict:
         return _write_ledger(path, led)
 
 
+LEDGER_VIEW_KINDS = ("scramble_rule", "momentum")      # the rows the ledger table shows and scores; the others are SPEC v1 bookkeeping
+
+
 def freeze_matured(path: str, compute, last_day: str, today: str) -> dict:
-    """Write each matured horizon's outcome into its row once (fields are only ever added, never changed)."""
+    """Write each matured horizon's outcome into its row, field by field, once (data review v1 M4: a missing
+    component waits on its own and never holds the others back; a value is never changed after it is written)."""
     with _LEDGER_LOCK:
         led = load_ledger(path)
         if led.get("_unreadable") or not led["entries"]:
             return led
         changed = False
         for e in led["entries"]:
-            done = e.setdefault("outcomes_frozen", {})
+            if e.get("kind") not in LEDGER_VIEW_KINDS:
+                continue
             for h, o in compute(e, last_day).items():
-                if o is not None and h not in done and all(v is not None for v in o.values()):
-                    done[h] = dict(o, frozen_on=today)
-                    changed = True
+                if o is None:
+                    continue
+                cur = (e.get("outcomes_frozen") or {}).get(h)
+                add = {k: v for k, v in o.items() if v is not None and (cur is None or k not in cur)}
+                if not add:
+                    continue
+                done = e.setdefault("outcomes_frozen", {})
+                if cur is None:
+                    done[h] = dict(add, frozen_on=today)
+                else:
+                    cur.update(add)
+                    cur.setdefault("late_fields", {}).update({k: today for k in add})
+                changed = True
         return _write_ledger(path, led) if changed else led
 
 
 # ---------------------------------------------------------------------------- outcome helpers
+def _bdays_between(a: str, b: str) -> int:
+    """business days after a up to and including b (weekdays that are not US federal holidays)."""
+    d, e, n = date.fromisoformat(a), date.fromisoformat(b), 0
+    while d < e:
+        d += timedelta(days=1)
+        if d.weekday() < 5 and d.isoformat() not in us_federal_holidays(d.year):
+            n += 1
+    return n
+
+
+def emfx_stale(fred: dict) -> str | None:
+    """Why the EM basket is withheld, or None: a missing leg, or a leg whose last observation is more than 10 business
+    days behind the newest leg (a stopped leg would otherwise be carried flat into every outcome; data review v1 M4)."""
+    last = {s: pairs(fred.get(s))[-1][0] for s in EMFX_IDS if pairs(fred.get(s))}
+    if len(last) < len(EMFX_IDS):
+        return "missing leg(s): " + ", ".join(s for s in EMFX_IDS if s not in last)
+    newest = max(last.values())
+    behind = [s for s in EMFX_IDS if _bdays_between(last[s], newest) > 10]
+    return (", ".join(f"{s} ends {last[s]}" for s in behind) + f", more than 10 business days behind {newest}") if behind else None
+
+
 def emfx_basket(fred: dict) -> tuple[list[tuple[str, float]], str | None]:
     """Equal-weight log-average of the 8 FRED EM pairs (EM currency per dollar; up = EM weaker), rebased so the average
-    of its first month from 2006 on (Jan-2006 on the full FRED history) = 100. Returns (series, base month)."""
+    of its first month from 2006 on (Jan-2006 on the full FRED history) = 100. Returns (series, base month); empty
+    when a leg is missing or stale (emfx_stale)."""
     legs = {s: pairs(fred.get(s)) for s in EMFX_IDS}
-    if any(not legs[s] for s in EMFX_IDS):
+    why = emfx_stale(fred)
+    if why:
+        if all(legs.values()):
+            logger.warning("EM FX basket withheld: %s", why)
         return [], None
     days = sorted({d for s in EMFX_IDS for d, _ in legs[s] if d >= "2006-01-01"})
     raw = []
@@ -575,6 +631,9 @@ def state_block(inp: dict) -> dict:
                              (fred.get("DCOILBRENTEU") or {}).get("status") or "error", 1), "chg_12m_pct": chg_pct(brent, 12)}
     st["counter_examples"] = REF.get("counter_examples")
     issues = []
+    em_why = emfx_stale(fred)
+    if em_why and all(pairs(fred.get(s)) for s in EMFX_IDS):
+        issues.append(f"the EM FX basket is withheld: {em_why}")
     if mon["gaps"]:
         issues.append(f"the monthly DXY has gaps ({', '.join(mon['gaps'][:3])}...): momentum and the quadrant are not computed across them")
         st["momentum"].update(dxy_12m_pct=None, signal=None)
@@ -662,7 +721,7 @@ def scramble_block(inp: dict, fund: dict, today: str, path: str) -> dict:
            "variant_live": "both variants run and logged; unpatched is the frozen primary (re-arm was added after the 2008-09-22 "
                            "miss and stays descriptive)",
            "vspike_timing": ref.get("vspike_timing"), "monthly_null": ref.get("monthly_null"), "end_of_scramble": REF.get("end_of_scramble"),
-           "basis": ref.get("basis"), "wording": SCRAMBLE_WORDS, "last_index_day": LAST_INDEX_DAY,
+           "basis": ref.get("basis"), "wording": SCRAMBLE_WORDS, "last_index_day": LAST_INDEX_DAY, "calendar": FORWARD_CALENDAR,
            "status": worst([(fred.get(s) or {}).get("status") for s in ("DTWEXBGS", "DGS10", "VIXCLS")])}
     if len(ds) <= RULE["first_eval_index"]:
         out.update(state=None, gate_open=None, indicators=None, confirmations=None, live_check=None, live_firings=[],
@@ -684,6 +743,9 @@ def scramble_block(inp: dict, fund: dict, today: str, path: str) -> dict:
                 e = new.setdefault(f["date"], {"kind": "scramble_rule", "date": f["date"], "variants": [], "h10_release": h10_release(f["date"]),
                                                **{x: f[x] for x in ("roc20_max_pct", "roc20_max_date", "roc20_now_pct", "dollar")}})
                 e["variants"].append(variant)
+    placebo = {f["date"]: {"kind": "placebo_rule", "date": f["date"], "variants": ["unpatched"], "h10_release": h10_release(f["date"]),
+                           **{x: f[x] for x in ("roc20_max_pct", "roc20_max_date", "roc20_now_pct", "dollar")}}
+               for f in scramble_firings(ds, B, Y, False, decel=False) if f["date"] > LAST_INDEX_DAY}
     st = rule_state(ds, B, Y)
     out["state"] = st
     out["gate_open"] = st["gate_open"]
@@ -724,7 +786,8 @@ def scramble_block(inp: dict, fund: dict, today: str, path: str) -> dict:
             "episode_start": st["episode_start"],
             "rule": "the dollar 3% off its episode peak; swap-line usage under 10% of the episode's peak (shown only if that peak was at least $10bn)"}
     prev = _rule_state(path).get("last_index_day")
-    rows = enrich_firings(new, ds, B, Y, path, prev) if new else []
+    rows = (enrich_firings(new, ds, B, Y, path, prev) if new else []) + \
+        (enrich_firings(placebo, ds, B, Y, path, prev, kind="placebo_rule") if placebo else [])
     led = append_ledger(path, rows, today) if rows else load_ledger(path)
     if not led.get("_unreadable"):
         _save_rule_state(path, {"last_index_day": ds[-1], "saved_on": today})
@@ -887,7 +950,7 @@ def ledger_block(inp: dict, state: dict, today: str, path: str) -> dict:
         write_problems.append(f"matured outcomes not saved: {led['_write_failed']}")
     live = []
     for e in led.get("entries", []):
-        if not isinstance(e.get("date"), str):
+        if not isinstance(e.get("date"), str) or e.get("kind") not in LEDGER_VIEW_KINDS:
             continue
         frozen = e.get("outcomes_frozen") or {}
         live.append({**e, "anchor_close": anchor(e), "outcomes": {h: frozen.get(h) for h in ("3m", "6m", "12m")}})
@@ -968,13 +1031,16 @@ def build_dollar_watch(inp: dict, today: str | None = None, ledger_file: str | N
             "honesty": list(REF.get("honesty") or []) + [prereg_line() if h == "PREREG" else h for h in HONESTY_LIVE]}
 
 
+
+
 def prereg_line() -> str:
-    fd = FREEZE.get("freeze_date")
-    if isinstance(fd, str) and fd[:4].isdigit():
+    fd = _freeze_date()
+    if fd:
         return (f"Pre-registration frozen {fd} (SPEC v1, forward only): the deceleration rule is graded only on firings after the "
-                "freeze, unpatched variant primary, against a no-information GARCH-t model; the first look comes at 8 matured units "
-                "(about 2060) and only a PASS there could license a colour or a notification. C16 is the primary crisis list; future "
-                "crises are dated by 2 of 5 mechanical markers.")
+                "freeze (unpatched variant) against a no-information volatility model bracketed for drift (a PASS is judged at a "
+                "-1%/yr dollar drift, a FAIL at +1%/yr), with a placebo rule scored beside it. The first look comes at 8 matured "
+                "units (about 2060-2070) and only a PASS there could license a colour or a notification. C16 is the primary crisis "
+                "list; future crises are dated by 2 of 5 mechanical markers, one month at a time.")
     return ("Pre-registration answered 2026-11-02 (forward only; C16; unpatched; 2-of-5 crisis dating); the freeze record is "
             "pending its reviews.")
 
@@ -985,6 +1051,8 @@ def prereg_line() -> str:
 # harness studies/dollar_watch/prereg/d3.py, checked by two verifiers at each look).
 FREEZE_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "dollar_freeze.json")
 FED_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "dollar_fed_actions.json")
+PU_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "dollar_pu_records.json")
+D3_KINDS = ("scramble_rule", "placebo_rule")       # the rule and its placebo (stats review v1 S2), scored the same way
 
 
 def _load_json(path: str):
@@ -995,14 +1063,32 @@ def _load_json(path: str):
         return {}, f"{type(exc).__name__}: {exc}"
 
 
+def _sha256_file(path: str | None) -> str | None:
+    if not path:
+        return None
+    try:
+        with open(path, "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 FREEZE, FREEZE_ERROR = _load_json(FREEZE_PATH)
 FED, FED_ERROR = _load_json(FED_PATH)
+FED_SHA = _sha256_file(FED_PATH)
+PU, PU_ERROR = _load_json(PU_PATH)
 HIST_ONSETS = list(((FREEZE.get("onset_check") or {}).get("onsets")) or [])
+HIST_DOLLAR_FUNDING = set(((FREEZE.get("onset_check") or {}).get("dollar_funding_subtype")) or [])
 UNIT_GAP = int(((FREEZE.get("d3") or {}).get("unit_merge_index_days")) or 250)
 FIRST_LIVE_MONTH = add_months(LAST_FROZEN_MONTH + "-01", 1)[:7]
 
 
-# ---------------------------------------------------------------------------- the H.10 release calendar (C5)
+def _freeze_date() -> str | None:
+    fd = FREEZE.get("freeze_date")
+    return fd if isinstance(fd, str) and len(fd) == 10 and fd[:4].isdigit() else None
+
+
+# ---------------------------------------------------------------------------- the H.10 release calendar (C5) and month closes
 def _nth_weekday(y: int, m: int, wd: int, n: int) -> date:
     d = date(y, m, 1)
     d += timedelta(days=(wd - d.weekday()) % 7)
@@ -1028,11 +1114,15 @@ def us_federal_holidays(y: int) -> set[str]:
     return out
 
 
+def _is_bday(d: date) -> bool:
+    return d.weekday() < 5 and d.isoformat() not in us_federal_holidays(d.year)
+
+
 def h10_release(d: str) -> str:
     """The H.10 release that first carries day d: the Monday after d's week (4:15pm ET, after the equity
     close), moved to the next business day when that Monday is a federal holiday."""
     dt = date.fromisoformat(d) + timedelta(days=7 - date.fromisoformat(d).weekday())
-    while dt.weekday() >= 5 or dt.isoformat() in us_federal_holidays(dt.year):
+    while not _is_bday(dt):
         dt += timedelta(days=1)
     return dt.isoformat()
 
@@ -1040,14 +1130,49 @@ def h10_release(d: str) -> str:
 H10_SOURCE = "computed: the Monday after the data week, next business day on a federal holiday (H.10 weekly release)"
 
 
+def _month_end(m: str) -> date:
+    y, mm = int(m[:4]), int(m[5:7])
+    return date(y + (mm == 12), mm % 12 + 1, 1) - timedelta(days=1)
+
+
+def _last_bday(m: str) -> date:
+    d = _month_end(m)
+    while not _is_bday(d):
+        d -= timedelta(days=1)
+    return d
+
+
+def _bdays_after(d: date, n: int) -> date:
+    while n > 0:
+        d += timedelta(days=1)
+        n -= _is_bday(d)
+    return d
+
+
+def onset_close(m: str) -> str:
+    """SPEC v1 §5.3 (data review v1 S2): month m is evaluated once, at the first build on or after the later of the H.10
+    release carrying m's last business day and m's end + 5 business days."""
+    return max(h10_release(_last_bday(m).isoformat()), _bdays_after(_month_end(m), 5).isoformat())
+
+
+def onset_deadline(m: str) -> str:
+    """the last day m may wait for a late input or the Fed-list review: the end of the following month."""
+    return _month_end(add_months(m + "-01", 1)[:7]).isoformat()
+
+
+def _covers(ps: list, m: str) -> bool:
+    """the series has an observation in m's last 7 calendar days or later."""
+    return bool(ps) and ps[-1][0] >= (_month_end(m) - timedelta(days=6)).isoformat()
+
+
 # ---------------------------------------------------------------------------- archives and the rule state (C2, C7)
 def _ledger_dir(path: str) -> str:
     return os.path.dirname(os.path.abspath(path))
 
 
-def archive_bytes(path: str, src: str | None) -> dict:
-    """Copy a fetched file's exact bytes into <ledger dir>/archive/<sha256> (deduplicated)."""
-    import hashlib
+def archive_bytes(path: str, src: str | None, compress: bool = False) -> dict:
+    """Copy a fetched file's exact bytes into <ledger dir>/archive/<sha256> (gzip-compressed as <sha256>.gz when asked;
+    the hash is always of the raw bytes; deduplicated)."""
     if not src:
         return {"sha256": None, "archived": False}
     try:
@@ -1056,15 +1181,15 @@ def archive_bytes(path: str, src: str | None) -> dict:
     except Exception:  # noqa: BLE001
         return {"sha256": None, "archived": False}
     h = hashlib.sha256(body).hexdigest()
-    dst = os.path.join(_ledger_dir(path), "archive", h)
+    dst = os.path.join(_ledger_dir(path), "archive", h + (".gz" if compress else ""))
     if not os.path.exists(dst):
         try:
             from ..sources.fred_csv import _write_atomic
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            _write_atomic(dst, body)
+            _write_atomic(dst, gzip.compress(body, mtime=0) if compress else body)
         except Exception as exc:  # noqa: BLE001
             return {"sha256": h, "archived": False, "error": str(exc)[:120]}
-    return {"sha256": h, "archived": True, "bytes": len(body)}
+    return {"sha256": h, "archived": True, "bytes": len(body), **({"gzip": True} if compress else {})}
 
 
 def _source_file(name: str) -> str | None:
@@ -1090,44 +1215,65 @@ def _save_rule_state(path: str, state: dict) -> None:
         logger.warning("dollar rule state not saved: %s", exc)
 
 
-def enrich_firings(new: dict, ds, B, Y, path: str, prev_last_index_day: str | None) -> list[dict]:
-    """SPEC v1 §6.1 fields for rows the ledger does not hold yet: k, clause values, the release, whether the
-    firing showed on the first vintage that carried its date, unit assignment (C1) and archived inputs (C2)."""
+# ---------------------------------------------------------------------------- D-3 rows: eligibility, units, inputs (C1, C2; data review v1 S1)
+def d3_eligibility(d: str, first_vintage: bool | None, freeze_date: str | None) -> tuple[bool | None, str | None]:
+    """SPEC v1 §1 / §3.1: a row is evidence only if its data date is after the freeze date AND it fired on the first
+    vintage that carried that date. None = the first vintage is unknown (reconstructed from ALFRED at the look)."""
+    if freeze_date is None:
+        return False, "no freeze record yet: in-sample"
+    if d <= freeze_date:
+        return False, "data date on or before the freeze date: in-sample, never scored"
+    if first_vintage is None:
+        return None, "first vintage unknown (no earlier rule state): reconstruct from ALFRED at the look (SPEC v1 §3.1)"
+    if first_vintage is False:
+        return False, "appeared only after a revision: logged, never scored (SPEC v1 §3.1)"
+    return True, None
+
+
+def enrich_firings(new: dict, ds, B, Y, path: str, prev_last_index_day: str | None, kind: str = "scramble_rule") -> list[dict]:
+    """SPEC v1 §6.1 fields for rows the ledger does not hold yet: k, clause values, the release, whether the firing showed
+    on the first vintage that carried its date, D-3 eligibility, unit assignment and archived inputs. Units start only at
+    eligible unpatched rows and are measured from the unit's FIRST firing (k - k1 < 250 merges; never chained): a
+    pre-freeze or revision-born row never starts or absorbs a unit. Index gaps are counted on the vintage being read."""
     led = load_ledger(path)
     have = {(e.get("kind"), e.get("date")) for e in led.get("entries", [])}
-    units = sorted((e for e in led.get("entries", []) if e.get("kind") == "scramble_rule" and e.get("unit_first") == e.get("date")),
-                   key=lambda e: e["date"])
+    units = sorted((e for e in led.get("entries", []) if e.get("kind") == kind and e.get("d3_eligible") is True
+                    and e.get("unit_first") == e.get("date")), key=lambda e: e["date"])
     pos = {d: i for i, d in enumerate(ds)}
+    fz = _freeze_date()
     out = []
     inputs = None
     for d in sorted(new):
         e = new[d]
-        if ("scramble_rule", d) in have or d not in pos:
+        if (kind, d) in have or d not in pos:
             continue
         k = pos[d]
         kmx = pos.get(e["roc20_max_date"], k)
         ref_i = max(0, kmx - RULE["yield_lookback_days"])
-        e.update(k=k, calendar="DTWEXBGS & DGS10 & VIXCLS", y10_now=Y[k], y10_ref=Y[ref_i], y10_ref_date=ds[ref_i],
+        fv = None if prev_last_index_day is None else d > prev_last_index_day
+        elig, why = d3_eligibility(d, fv, fz)
+        e.update(k=k, calendar="DTWEXBGS & DGS10", y10_now=Y[k], y10_ref=Y[ref_i], y10_ref_date=ds[ref_i],
                  near_high_ratio=r(B[k] / max(B[max(0, k - RULE["window_days"]):k + 1]), 4),
                  h10_release=h10_release(d), h10_release_source=H10_SOURCE,
-                 first_vintage_contains_date=(None if prev_last_index_day is None else d > prev_last_index_day))
-        if "unpatched" in e["variants"]:
+                 first_vintage_contains_date=fv, d3_eligible=elig, d3_note=why)
+        if "unpatched" in e["variants"] and elig is True:
             last_unit = units[-1] if units else None
-            if last_unit is not None and isinstance(last_unit.get("k"), int) and k - last_unit["k"] < UNIT_GAP:
-                e.update(unit_first=last_unit["date"], index_gap_to_unit_first=k - last_unit["k"])
+            ku = None if last_unit is None else pos.get(last_unit["date"], last_unit.get("k"))
+            if isinstance(ku, int) and k - ku < UNIT_GAP:
+                e.update(unit_first=last_unit["date"], index_gap_to_unit_first=k - ku)
             else:
                 e.update(unit_first=d, index_gap_to_unit_first=0)
                 units.append(e)
         else:
-            e.update(unit_first=None, index_gap_to_unit_first=None)          # re-arm-only rows are never units
+            e.update(unit_first=None, index_gap_to_unit_first=None)       # re-arm-only, pre-freeze and revision-born rows
         if inputs is None:
-            inputs = {sid: archive_bytes(path, _source_file(sid)) for sid in ("DTWEXBGS", "DGS10", "VIXCLS")}
+            inputs = {sid: archive_bytes(path, _source_file(sid)) for sid in ("DTWEXBGS", "DGS10")}
         e["inputs"] = inputs
         out.append(e)
     return out
 
 
-def revision_checks(path: str, rearm_dates: set, unp_dates: set, today: str) -> dict:
+def revision_checks(path: str, rearm_dates: set, unp_dates: set, today: str, placebo_dates: set | None = None) -> dict:
     """C3: when a live row's fire status changes on a new vintage, append {checked_on, still_fires}; never delete."""
     with _LEDGER_LOCK:
         led = load_ledger(path)
@@ -1135,9 +1281,12 @@ def revision_checks(path: str, rearm_dates: set, unp_dates: set, today: str) -> 
             return led
         changed = False
         for e in led["entries"]:
-            if e.get("kind") != "scramble_rule":
+            if e.get("kind") == "scramble_rule":
+                now = {v: (e["date"] in (unp_dates if v == "unpatched" else rearm_dates)) for v in (e.get("variants") or [])}
+            elif e.get("kind") == "placebo_rule" and placebo_dates is not None:
+                now = {"unpatched": e["date"] in placebo_dates}
+            else:
                 continue
-            now = {v: (e["date"] in (unp_dates if v == "unpatched" else rearm_dates)) for v in (e.get("variants") or [])}
             checks = e.setdefault("revision_checks", [])
             if not checks or checks[-1].get("still_fires") != now:
                 checks.append({"checked_on": today, "still_fires": now})
@@ -1162,8 +1311,8 @@ def _write_once(path: str, kind: str, field: str, compute, today: str) -> dict:
         return _write_ledger(path, led) if changed else led
 
 
-def maturity_250d(e: dict, ds, B, inp: dict, path: str) -> dict | None:
-    """C4 / SPEC v1 §6.2: the D-3 hit on the maturity vintage plus the descriptive tracks, once k+250 exists."""
+def maturity_250d(e: dict, ds, B, inp: dict, path: str, full: bool = True) -> dict | None:
+    """C4 / SPEC v1 §6.2: the D-3 hit on the maturity vintage plus (full=True) the descriptive tracks, once k+250 exists."""
     pos = {d: i for i, d in enumerate(ds)}
     kk = pos.get(e.get("date"))
     if kk is None or kk + 250 > len(ds) - 1:
@@ -1173,8 +1322,10 @@ def maturity_250d(e: dict, ds, B, inp: dict, path: str) -> dict | None:
     imx = kk + 1 + seg.index(mx)
     fred = inp.get("fred") or {}
     out = {"hit": bool(mx <= 1.03 * B[kk]), "dollar_at_firing": r(B[kk], 4), "max_b": r(mx, 4), "max_date": ds[imx],
-           "further_rise_pct": r(100 * (mx / B[kk] - 1), 2),
+           "further_rise_pct": r(100 * (mx / B[kk] - 1), 2), "maturity_date": ds[kk + 250],
            "maturity_vintage": archive_bytes(path, _source_file("DTWEXBGS")).get("sha256")}
+    if not full:
+        return out
     rel = h10_release(e["date"])
     kr = next((i for i in range(kk, len(ds)) if ds[i] > rel), None)
     if kr is not None and kr + 250 <= len(ds) - 1:
@@ -1209,7 +1360,10 @@ def maturity_250d(e: dict, ds, B, inp: dict, path: str) -> dict | None:
     return out
 
 
-# ---------------------------------------------------------------------------- the forward onset rule (C6, C7; SPEC v1 §5)
+# ---------------------------------------------------------------------------- the forward onset rule (C6, C7; SPEC v1 §5; data review v1 S2)
+ONSET_FRED = ["VIXCLS", "SP500"] + EMFX_IDS          # markers 1, 3 and 4 (marker 2: the OFR fsi.csv; marker 5: the Fed list)
+
+
 def _p95_flags(fsi: list[tuple[str, float]], start: str) -> dict[str, tuple[bool, float]]:
     """for each FSI day >= start: (above its own P95 over the prior 5 calendar years, that P95); needs 250 prior obs."""
     import numpy as np
@@ -1230,8 +1384,14 @@ def _p95_flags(fsi: list[tuple[str, float]], start: str) -> dict[str, tuple[bool
     return out
 
 
+def _fsi(inp: dict) -> list[tuple[str, float]]:
+    ofr = inp.get("ofr") or {}
+    return pairs({"dates": ofr.get("dates"), "values": ofr.get("OFR FSI")})
+
+
 def onset_markers(inp: dict, months: list[str]) -> dict[str, dict]:
-    """SPEC v1 §5.1: which of the five markers tripped in each month (first date and value)."""
+    """SPEC v1 §5.1: which of the five markers tripped in each month (first date and value). A withheld EM basket
+    (emfx_stale) trips nothing."""
     fred = inp.get("fred") or {}
     trip: dict[str, dict] = {m: {} for m in months}
     if not months:
@@ -1240,8 +1400,7 @@ def onset_markers(inp: dict, months: list[str]) -> dict[str, dict]:
     for d, v in pairs(fred.get("VIXCLS")):
         if d[:7] in trip and v >= 40:
             trip[d[:7]].setdefault("1_vix", {"date": d, "value": v})
-    ofr = inp.get("ofr") or {}
-    fsi = pairs({"dates": ofr.get("dates"), "values": ofr.get("OFR FSI")})
+    fsi = _fsi(inp)
     flags = _p95_flags(fsi, add_months(lo, -1))
     fd = sorted(flags)
     for i in range(4, len(fd)):
@@ -1249,7 +1408,7 @@ def onset_markers(inp: dict, months: list[str]) -> dict[str, dict]:
         if all(a for a, _ in w) and fd[i][:7] in trip:
             trip[fd[i][:7]].setdefault("2_ofr", {"date": fd[i], "value": dict(fsi).get(fd[i]), "p95": r(w[-1][1], 4)})
     legs = {s: pairs(fred.get(s)) for s in EMFX_IDS}
-    if all(legs.values()):
+    if all(legs.values()) and not emfx_stale(fred):
         days = sorted({d for s in EMFX_IDS for d, _ in legs[s] if d >= add_months(lo, -6)})
         bk = []
         for d in days:
@@ -1272,66 +1431,150 @@ def onset_markers(inp: dict, months: list[str]) -> dict[str, dict]:
     return trip
 
 
-def evaluate_onsets(inp: dict, path: str, today: str) -> list[dict]:
-    """Append an onset row for each month after the cut-off with >= 2 markers and no onset in the prior 12 months."""
-    months = _month_range(FIRST_LIVE_MONTH, today[:7]) if today[:7] >= FIRST_LIVE_MONTH else []
-    trip = onset_markers(inp, months)
-    led = load_ledger(path)
-    known = set(HIST_ONSETS) | {e["date"] for e in led.get("entries", []) if e.get("kind") == "onset"}
-    new = []
-    for m in months:
-        if len(trip[m]) < 2:
-            continue
-        window = {add_months(m + "-01", -j)[:7] for j in range(1, 13)}
-        if known & window:
-            continue
-        row = {"kind": "onset", "date": m, "markers": trip[m], "rule": "SPEC v1 §5 (2 of 5; 12-month exclusion)"}
-        if "2_ofr" in trip[m]:
-            row["ofr_fsi_archive"] = archive_bytes(path, _source_file("ofr_fsi"))       # C7: the as-published file
-        new.append(row)
-        known.add(m)
-    if new:
-        append_ledger(path, new, today)
+def _onset_missing(inp: dict, m: str) -> list[str]:
+    """the onset inputs that do not yet reach the end of month m (or a withheld EM basket)."""
     fred = inp.get("fred") or {}
+    miss = [s for s in ONSET_FRED if not _covers(pairs(fred.get(s)), m)]
+    if not _covers(_fsi(inp), m):
+        miss.append("OFR FSI")
+    why = emfx_stale(fred)
+    if why and not any(s in miss for s in EMFX_IDS):
+        miss.append(f"EM FX basket withheld ({why})")
+    return miss
+
+
+def _window12(m: str) -> set[str]:
+    return {add_months(m + "-01", -j)[:7] for j in range(1, 13)}
+
+
+def evaluate_onsets(inp: dict, path: str, today: str) -> list[dict]:
+    """SPEC v1 §5.3: every month from the first live month is evaluated ONCE, in order, at the first build on or after its
+    close, once the Fed list is reviewed through it and every input reaches the month's end (or at the deadline, the end
+    of the following month, recording what was missing). A row is written for every month, onset or not; the 12-month
+    exclusion reads only earlier months. Later revisions and list appends go to the row's revision_checks, never to `onset`."""
+    led = load_ledger(path)
+    if led.get("_unreadable"):
+        return []
+    done = {e["date"] for e in led["entries"] if e.get("kind") == "onset_month"}
+    known = set(HIST_ONSETS) | {e["date"] for e in led["entries"] if e.get("kind") == "onset_month" and e.get("onset")}
+    reviewed = str(FED.get("reviewed_through") or "")
+    fred = inp.get("fred") or {}
+    new, m = [], FIRST_LIVE_MONTH
+    while m < today[:7]:
+        if m in done:
+            m = add_months(m + "-01", 1)[:7]
+            continue
+        close = onset_close(m)
+        if today < close:
+            break
+        missing = _onset_missing(inp, m)
+        fed_ok = reviewed >= m
+        if (missing or not fed_ok) and today <= onset_deadline(m):
+            break                                             # wait for the input or the R1 list review, until the deadline
+        trip = onset_markers(inp, [m])[m]
+        prior = sorted(x for x in known if x in _window12(m))
+        n = len(trip)
+        row = {"kind": "onset_month", "date": m, "evaluated_on": today, "close": close, "markers": trip, "n_markers": n,
+               "onset": bool(n >= 2 and not prior), "excluded_by": prior[-1] if n >= 2 and prior else None,
+               "inputs_missing": missing or None,
+               "fed_list": {"sha256": FED_SHA, "reviewed_through": reviewed or None, "current": fed_ok},
+               "inputs": {s: {"sha256": _sha256_file(_source_file(s)), "last_obs": (pairs(fred.get(s)) or [(None, None)])[-1][0]}
+                          for s in ONSET_FRED},
+               "ofr_fsi": {**archive_bytes(path, _source_file("ofr_fsi"), compress=True), "last_obs": (_fsi(inp) or [(None, None)])[-1][0]},
+               "rule": "SPEC v1 §5 (2 of 5; 12-month exclusion from the last onset), evaluated once at the month's close"}
+        new.append(row)
+        if row["onset"]:
+            known.add(m)
+        m = add_months(m + "-01", 1)[:7]
+    if new:
+        w = append_ledger(path, new, today)
+        if w.get("_write_failed") or w.get("_unreadable"):
+            raise OSError(f"onset rows not saved: {w.get('_write_failed') or 'ledger unreadable'}")
+    onset_revision_checks(inp, path, today)
     swpt = pairs(fred.get("SWPT"))
     cp = spread(pairs(fred.get("DCPF3M")), pairs(fred.get("DTB3")))
     cp5 = [(cp[i][0], sum(v for _, v in cp[i - 4:i + 1]) / 5) for i in range(4, len(cp))]
 
     def subtype(e):
-        m = e["date"]
-        if add_months(m + "-01", 2)[:7] >= today[:7]:
-            return None                                                    # pending until m+2 closes
-        win = {m, add_months(m + "-01", 1)[:7], add_months(m + "-01", 2)[:7]}
+        if not e.get("onset"):
+            return None
+        m0 = e["date"]
+        m2 = add_months(m0 + "-01", 2)[:7]
+        if today < onset_close(m2):
+            return None                                       # pending until m+2's close (M2)
+        miss = [s for s in ("SWPT", "DCPF3M", "DTB3") if not _covers(pairs(fred.get(s)), m2)]
+        if miss and today <= onset_deadline(m2):
+            return None
+        win = {m0, add_months(m0 + "-01", 1)[:7], m2}
         sw = [(d, v) for d, v in swpt if d[:7] in win and v > 50_000]
         c5 = [(d, r(v, 2)) for d, v in cp5 if d[:7] in win and v > 1.00]
-        return {"dollar_funding": bool(sw or c5), "swpt_gt_50bn_first": sw[0] if sw else None, "cp_bill_5d_gt_1pp_first": c5[0] if c5 else None}
+        return {"dollar_funding": bool(sw or c5), "swpt_gt_50bn_first": sw[0] if sw else None,
+                "cp_bill_5d_gt_1pp_first": c5[0] if c5 else None, "close": onset_close(m2), "inputs_missing": miss or None}
 
-    led = _write_once(path, "onset", "subtype", subtype, today)
-    return [e for e in led.get("entries", []) if e.get("kind") == "onset"]
+    led = _write_once(path, "onset_month", "subtype", subtype, today)
+    if led.get("_write_failed"):
+        raise OSError(f"onset subtype not saved: {led['_write_failed']}")
+    return [e for e in led.get("entries", []) if e.get("kind") == "onset_month"]
+
+
+def onset_revision_checks(inp: dict, path: str, today: str) -> None:
+    """re-read every evaluated month on today's data and list; append {checked_on, markers_now} when the set of tripped
+    markers changes. Skipped when an input failed to fetch (a fetch failure is not a revision)."""
+    fred = inp.get("fred") or {}
+    if any(not pairs(fred.get(s)) for s in ONSET_FRED) or not _fsi(inp):
+        return
+    with _LEDGER_LOCK:
+        led = load_ledger(path)
+        rows = [e for e in led.get("entries", []) if e.get("kind") == "onset_month"]
+        if led.get("_unreadable") or not rows:
+            return
+        now = onset_markers(inp, sorted(e["date"] for e in rows))
+        changed = False
+        for e in rows:
+            keys = sorted(now.get(e["date"], {}))
+            checks = e.get("revision_checks") or []
+            last = checks[-1]["markers_now"] if checks else sorted(e.get("markers") or {})
+            if keys != last:
+                e["revision_checks"] = checks + [{"checked_on": today, "markers_now": keys, "fed_list_sha256": FED_SHA}]
+                changed = True
+        if changed:
+            _write_ledger(path, led)
 
 
 def mature_momentum(inp: dict, path: str, today: str) -> None:
-    """C8: when m+12 closes, write whether an onset fell in m+1..m+12 and the EM basket's 12-month max rise."""
+    """C8 (data review v1 M2): a momentum row's onset record is written once every month m+1..m+12 has been evaluated
+    and every onset among them has its subtype; its EM FX 12-month maximum rise once the basket reaches past m+12's close."""
     fred = inp.get("fred") or {}
     em, _ = emfx_basket(fred)
     led = load_ledger(path)
-    onsets = {e["date"]: (e.get("subtype") or {}).get("dollar_funding") for e in led.get("entries", []) if e.get("kind") == "onset"}
+    rows = {e["date"]: e for e in led.get("entries", []) if e.get("kind") == "onset_month"}
 
-    def compute(e):
+    def onsets_12m(e):
+        win = [add_months(e["date"] + "-01", j)[:7] for j in range(1, 13)]
+        if any(x >= FIRST_LIVE_MONTH and x not in rows for x in win):
+            return None                                       # a month not evaluated yet
+        hit = [x for x in win if x in HIST_ONSETS or (rows.get(x) or {}).get("onset")]
+        if any(x in rows and "subtype" not in rows[x] for x in hit):
+            return None                                       # a subtype still pending
+        return {"onsets": hit, "dollar_funding": [x for x in hit if x in HIST_DOLLAR_FUNDING or
+                                                  ((rows.get(x) or {}).get("subtype") or {}).get("dollar_funding")]}
+
+    def emfx_12m(e):
         m = e["date"]
         end = add_months(m + "-01", 12)[:7]
-        if end >= today[:7]:
+        if today < onset_close(end) or not _covers(em, end):
             return None
-        win = [add_months(m + "-01", j)[:7] for j in range(1, 13)]
-        hit = [x for x in win if x in onsets or x in HIST_ONSETS]
-        e0 = asof(em, add_months(m + "-01", 1)[:7] + "-00")
-        ew = [v for d, v in em if win[0] <= d[:7] <= win[-1]]
-        return {"onsets": hit, "dollar_funding": [x for x in hit if onsets.get(x)],
-                "emfx_12m_max_rise_pct": r(100 * (max(ew) / e0 - 1), 1) if e0 and ew else None}
+        e0 = asof(em, _month_end(m).isoformat())
+        ew = [v for d, v in em if add_months(m + "-01", 1)[:7] <= d[:7] <= end]
+        return {"max_rise_pct": r(100 * (max(ew) / e0 - 1), 1)} if e0 and ew else None
 
-    _write_once(path, "momentum", "onset_within_12m", compute, today)
+    for field, fn in (("onset_within_12m", onsets_12m), ("emfx_12m", emfx_12m)):
+        w = _write_once(path, "momentum", field, fn, today)
+        if w.get("_write_failed"):
+            raise OSError(f"momentum {field} not saved: {w['_write_failed']}")
 
 
+# ---------------------------------------------------------------------------- the forward block
 def forward_block(inp: dict, scr: dict, today: str, path: str) -> dict:
     """Runs the point-in-time duties (C3, C4, C6-C8) and summarises the frozen pre-registration for the panel."""
     fred = inp.get("fred") or {}
@@ -1341,32 +1584,58 @@ def forward_block(inp: dict, scr: dict, today: str, path: str) -> dict:
         if len(ds) > RULE["first_eval_index"]:
             rearm = {f["date"] for f in scramble_firings(ds, B, Y, True)}
             unp = {f["date"] for f in scramble_firings(ds, B, Y, False)}
-            revision_checks(path, rearm, unp, today)
-            _write_once(path, "scramble_rule", "outcomes_250d", lambda e: maturity_250d(e, ds, B, inp, path), today)
-        onsets = evaluate_onsets(inp, path, today)
+            plc = {f["date"] for f in scramble_firings(ds, B, Y, False, decel=False)}
+            for what, w in (("revision checks", revision_checks(path, rearm, unp, today, placebo_dates=plc)),
+                            ("rule maturity", _write_once(path, "scramble_rule", "outcomes_250d",
+                                                          lambda e: maturity_250d(e, ds, B, inp, path), today)),
+                            ("placebo maturity", _write_once(path, "placebo_rule", "outcomes_250d",
+                                                             lambda e: maturity_250d(e, ds, B, inp, path, full=False), today))):
+                if w.get("_write_failed"):
+                    problems.append(f"{what} not saved: {w['_write_failed']}")
+        months = evaluate_onsets(inp, path, today)
         mature_momentum(inp, path, today)
     except Exception as exc:  # noqa: BLE001 - the forward duties must never take the panel down
         logger.exception("dollar forward duties failed: %s", exc)
         problems.append(f"{type(exc).__name__}: {str(exc)[:160]}")
-        onsets = []
+        months = []
     led = load_ledger(path)
-    rows = [e for e in led.get("entries", []) if e.get("kind") == "scramble_rule"]
-    units = [e for e in rows if e.get("unit_first") == e.get("date")]
-    matured = [e for e in units if "outcomes_250d" in e]
+    pu = {(x.get("kind"), x.get("date")): x for x in (PU.get("records") or [])}
+
+    def d3_summary(kind):
+        rows = [e for e in led.get("entries", []) if e.get("kind") == kind]
+        units = [e for e in rows if e.get("d3_eligible") is True and e.get("unit_first") == e.get("date")]
+        return {"rows": len(rows), "units": len(units), "matured": sum("outcomes_250d" in e for e in units),
+                "in_sample_rows": sum(e.get("d3_eligible") is False for e in rows),
+                "eligibility_unknown": sum(e.get("d3_eligible") is None for e in rows),
+                "with_p_u": sum((kind, e["date"]) in pu for e in units),
+                "unit_list": [{"date": e["date"], "k": e.get("k"), "matured": "outcomes_250d" in e,
+                               "hit": (e.get("outcomes_250d") or {}).get("hit"),
+                               "p_u_zero": ((pu.get((kind, e["date"])) or {}).get("by_drift") or {}).get("zero", {}).get("p_u")} for e in units]}
+
+    dec, plc_s = d3_summary("scramble_rule"), d3_summary("placebo_rule")
+    nxt = FIRST_LIVE_MONTH
+    done = {e["date"] for e in months}
+    while nxt in done:
+        nxt = add_months(nxt + "-01", 1)[:7]
     hist = (FREEZE.get("onset_check") or {})
+    d3f = FREEZE.get("d3") or {}
     return {"freeze": {**{k: FREEZE.get(k) for k in ("freeze_date", "spec_version", "route", "primary_crisis_list", "decel_primary_variant",
                                                        "forward_onset_rule", "answered_by", "answered_on")},
                        "notification_licence": FREEZE.get("lamp_license")},
-            "garch": (FREEZE.get("d3") or {}).get("garch_fit"),
-            "d3": {"units": len(units), "matured": len(matured), "looks": [8, 16, 24], "next_look_at": 8,
-                   "status": "before look 1: descriptive" if len(matured) < 8 else "look due: run the offline harness",
-                   "rule": "unpatched forward firings merged when < 250 index days apart; hit = the broad dollar rises at most 3% "
-                           "further over the next 250 index days; null = the frozen GARCH(1,1)-t martingale; exact Poisson-binomial; "
-                           "looks at 8 / 16 / 24 matured units"},
+            "garch": d3f.get("garch_fit"),
+            "d3": {"units": dec["units"], "matured": dec["matured"], "looks": [8, 16, 24], "next_look_at": 8, "decel": dec, "placebo": plc_s,
+                   "status": "before look 1: descriptive" if dec["matured"] < 8 else "look due: run the offline harness",
+                   "rule": "unpatched firings after the freeze date that showed on the first vintage carrying their date; a unit runs "
+                           "250 index days from its first firing; hit = the broad dollar rises at most 3% further over the next 250 index "
+                           "days; null = the frozen GARCH(1,1)-t, a PASS judged at a -1%/yr drift and a FAIL at +1%/yr; exact "
+                           "Poisson-binomial with alpha spent 0.005 / 0.020 / 0.050 at 8 / 16 / 24 matured units; the placebo rule (no "
+                           "deceleration clause) scored beside it",
+                   "calendar": FORWARD_CALENDAR},
             "onsets": {"historical": hist.get("onsets"), "historical_dollar_funding": hist.get("dollar_funding_subtype"),
                        "historical_note": "the frozen rule run on 2000-2026 as a pre-committed degeneracy check (8, inside 3-13): "
                                           "a calibration check, not validation; long crises re-date at month 13 (Q18)",
-                       "live": onsets},
+                       "live": [e for e in months if e.get("onset")], "months_evaluated": len(months),
+                       "last_evaluated": months[-1]["date"] if months else None, "next_month": nxt, "next_close": onset_close(nxt)},
             "fed_actions": {"n": len(FED.get("actions") or []), "last": ((FED.get("actions") or [{}])[-1]).get("date"),
-                            "error": FED_ERROR},
-            "status": "error" if (FREEZE_ERROR or FED_ERROR or problems) else "ok", "problems": problems or None}
+                            "reviewed_through": FED.get("reviewed_through"), "sha256": FED_SHA, "error": FED_ERROR},
+            "status": "error" if (FREEZE_ERROR or FED_ERROR or PU_ERROR or problems) else "ok", "problems": problems or None}
