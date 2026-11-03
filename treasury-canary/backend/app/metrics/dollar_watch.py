@@ -66,7 +66,6 @@ EMFX_IDS = ["DEXBZUS", "DEXMXUS", "DEXSFUS", "DEXINUS", "DEXKOUS", "DEXTHUS", "D
 QUAD_LABEL = {"usd_up_yld_down": "dollar up, 10-year yield down", "usd_up_yld_up": "dollar up, 10-year yield up",
               "usd_down_yld_up": "dollar down, 10-year yield up", "usd_down_yld_down": "dollar down, 10-year yield down"}
 SCRAMBLE_WORDS = "dollar scramble peaking"      # a met (a) reads only this; nothing about the crisis
-EXPIRES = "2027-01-01"                          # 60 days from the first ask (CLAUDE.md pending-question rule)
 
 HONESTY_LIVE = [
     "Descriptive panel: readings and counts only, each conditional count with its N and base rate; nothing here is a forecast or a crisis call.",
@@ -94,9 +93,15 @@ PENDING = [   # status per CLAUDE.md: asked / answered / refused / expired; "ope
                "days; S&P -20% from its 252-day high; a Fed emergency action); 8 onsets on 2000-2026, inside the pre-committed 3-13"},
     {"rank": "P2", "q": "May a live notification on the gauge ever come from anything but the forward ledger?", "moves": "the notification licence",
      "status": "answered", "answered_on": "2026-11-02", "answer": "no: only a forward-test PASS"},
-    {"rank": "P2", "q": "Accept SPEC v1's redesign of the forward test (a GARCH-t no-information null; looks at 8 / 16 / 24 matured units; "
-                        "FAIL when the edge's 95% upper bound is below +0.10)? It is in force as the default.",
-     "moves": "what a PASS or FAIL means in the 2060s"},
+    {"rank": "P1", "q": "Keep the drift bracket in the forward test (a PASS judged as if the dollar drifted -1% a year, a FAIL as if +1%)? "
+                        "Without it a -1%/yr trend roughly doubles the false-PASS rate; with it, power at a +0.20 edge falls from 0.43 "
+                        "to 0.24 in calm markets (0.44 either way in volatile ones) and a record with no edge most likely ends "
+                        "undecided. In force as the default; any change is post-hoc and needs a new SPEC version.",
+     "moves": "how hard a PASS is, and how often the record ends undecided", "first_asked": "2026-11-03"},
+    {"rank": "P2", "q": "Accept the redesigned forward test (a no-information GARCH-t null; looks at 8 / 16 / 24 matured units with alpha "
+                        "spent 0.005 / 0.020 / 0.050; a placebo rule without the deceleration clause scored beside it)? In force as the "
+                        "default.",
+     "moves": "what a PASS or FAIL means decades from now"},
     {"rank": "P2", "q": "Keep the onset rule's 12-month exclusion from the last onset (a long crisis re-dates itself at month 13, as 2009-01 "
                         "did after 2007-12)? In force as the default; any change is post-hoc and needs a new SPEC version.",
      "moves": "how long crises are dated in the ledger (descriptive outcomes only)"},
@@ -1026,8 +1031,9 @@ def build_dollar_watch(inp: dict, today: str | None = None, ledger_file: str | N
             "state": state, "funding": fund, "scramble": scr, "slow": slow, "ledger": led, "forward": fwd,
             "crisis_lists": REF.get("crisis_lists"), "window_convention": REF.get("window_convention"),
             "provenance": {k: (REF.get("provenance") or {}).get(k) for k in ("study", "builder", "reviews")},
-            "pending_questions": [dict(q, status="asked", first_asked="2026-11-02", expires=EXPIRES) if "status" not in q else
-                                  dict(q, first_asked=q.get("answered_on"), expires=None) for q in PENDING],
+            "pending_questions": [dict(q, status="asked", first_asked=q.get("first_asked", "2026-11-02"),
+                                       expires=(date.fromisoformat(q.get("first_asked", "2026-11-02")) + timedelta(days=60)).isoformat())
+                                  if "status" not in q else dict(q, first_asked=q.get("answered_on"), expires=None) for q in PENDING],
             "honesty": list(REF.get("honesty") or []) + [prereg_line() if h == "PREREG" else h for h in HONESTY_LIVE]}
 
 

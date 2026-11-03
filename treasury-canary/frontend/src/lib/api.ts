@@ -1462,6 +1462,12 @@ export interface DwRuleState {
 }
 export interface DwIndicator { met?: boolean | null; rule?: string | null; [k: string]: unknown }
 export interface DwLedgerEntry { kind: string; date: string; recorded_on?: string | null; variants?: string[] | null; outcomes?: DwOutcomes | null; [k: string]: unknown }
+export interface DwD3Summary {
+  rows?: number | null; units?: number | null; matured?: number | null; in_sample_rows?: number | null; eligibility_unknown?: number | null;
+  with_p_u?: number | null;
+  unit_list?: Array<{ date: string; k?: number | null; matured?: boolean | null; hit?: boolean | null; p_u_zero?: number | null }> | null;
+}
+
 export interface DollarWatch {
   generated?: string | null; frozen_on?: string | null; mode?: string | null; headline?: string | null;
   status?: { overall?: DwStatus | null; blocks?: Record<string, DwStatus | null> | null } | null;
@@ -1532,10 +1538,12 @@ export interface DollarWatch {
     freeze?: { freeze_date?: string | null; spec_version?: string | null; route?: string | null; primary_crisis_list?: string | null;
       decel_primary_variant?: string | null; forward_onset_rule?: string | null; notification_licence?: string | null;
       answered_by?: string | null; answered_on?: string | null } | null;
-    d3?: { units?: number | null; matured?: number | null; looks?: number[] | null; next_look_at?: number | null; status?: string | null; rule?: string | null } | null;
+    d3?: { units?: number | null; matured?: number | null; looks?: number[] | null; next_look_at?: number | null; status?: string | null; rule?: string | null;
+      calendar?: string | null; decel?: DwD3Summary | null; placebo?: DwD3Summary | null } | null;
     onsets?: { historical?: string[] | null; historical_dollar_funding?: string[] | null; historical_note?: string | null;
-      live?: DwLedgerEntry[] | null } | null;
-    fed_actions?: { n?: number | null; last?: string | null; error?: string | null } | null;
+      live?: DwLedgerEntry[] | null; months_evaluated?: number | null; last_evaluated?: string | null; next_month?: string | null;
+      next_close?: string | null } | null;
+    fed_actions?: { n?: number | null; last?: string | null; reviewed_through?: string | null; sha256?: string | null; error?: string | null } | null;
     garch?: Record<string, unknown> | null;
   } | null;
   honesty?: string[] | null;

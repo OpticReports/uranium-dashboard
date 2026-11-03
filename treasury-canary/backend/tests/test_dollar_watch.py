@@ -9,7 +9,9 @@ trimmed to 2019+). Gates:
   - percentiles are tie-safe; monthly changes use calendar keys, and a gap is an error;
   - the forward ledger is append-only, forward-only, point-in-time, and freezes outcomes once;
   - the scramble indicators exist only with the gate open and are never summed;
-  - EM FX outcomes are withheld; forbidden language never appears;
+  - EM FX outcomes are shown (forward_only withdrew the test they could steer); forbidden language never appears;
+  - the frozen pre-registration (SPEC v1): eligibility after the freeze date, units from the first firing, the
+    placebo, one onset row per month at its close, revisions logged never re-dated, the Fed list and SPEC hashes;
   - the all-null payload ships every block plus the frozen record; nothing crashes on partial data.
 """
 from __future__ import annotations
@@ -750,3 +752,38 @@ def test_maturity_block_written_once(inputs, tmp_path):
     assert dw.load_ledger(path)["entries"][0]["outcomes_250d"]["hit"] is True        # never rewritten
     short = dw.maturity_250d({"date": d}, ds, B, inputs, path, full=False)
     assert set(short) == {"hit", "dollar_at_firing", "max_b", "max_date", "further_rise_pct", "maturity_date", "maturity_vintage"}
+
+
+def test_ledger_and_archive_are_downloadable_by_hash_only(tmp_path, monkeypatch):
+    """C12: the harness downloads the ledger and the archived bytes; nothing but a sha256 name is ever served."""
+    from fastapi import HTTPException
+    from app.api import routes_dollar as rd
+    path = tmp_path / "ledger" / "dollar_ledger.json"
+    monkeypatch.setenv("DOLLAR_LEDGER_PATH", str(path))
+    assert rd.dollar_watch_ledger() == {"entries": []}
+    src = tmp_path / "x.csv"
+    src.write_bytes(b"observation_date,DTWEXBGS\n2030-01-02,120.0\n")
+    rec = dw.archive_bytes(str(path), str(src))
+    dw.append_ledger(str(path), [{"kind": "scramble_rule", "date": "2030-01-02", "variants": ["unpatched"]}], "2030-01-10")
+    assert rd.dollar_watch_ledger().path == str(path)
+    assert rd.dollar_watch_archive(rec["sha256"]).path.endswith(rec["sha256"])
+    gz = dw.archive_bytes(str(path), str(src), compress=True)
+    assert gz["sha256"] == rec["sha256"] and gzip.decompress(open(rd.dollar_watch_archive(gz["sha256"] + ".gz").path, "rb").read()) == src.read_bytes()
+    for bad in ("../dollar_ledger.json", "dollar_ledger.json", rec["sha256"][:63], "0" * 64):
+        with pytest.raises(HTTPException):
+            rd.dollar_watch_archive(bad)
+
+
+def test_spec_text_is_the_frozen_one():
+    """the pre-committed §5.1-5.4 text is unchanged, and freeze.json carries the sha256 of the SPEC as frozen."""
+    import hashlib
+    body = open(os.path.join(SPEC_DIR, "SPEC_v1.md"), "rb").read()
+    s = body.decode("utf-8")
+    sec5 = s[s.index("## 5."):s.index("### 5.5")]
+    assert hashlib.sha256(sec5.encode()).hexdigest() == dw.FREEZE["onset_check"]["precommit_sha256_section5"]
+    assert dw.FREEZE["status"] == "FROZEN" and dw.FREEZE["freeze_date"] == "2026-11-03"
+    assert hashlib.sha256(body).hexdigest() == dw.FREEZE["spec_sha256"]
+    assert "TO_FILL" not in json.dumps(dw.FREEZE) and "G6_TABLE" not in s and "RECHECK_VERDICT" not in s
+    fit = dw.FREEZE["d3"]["garch_fit"]
+    for sid, h in fit["inputs_sha256"].items():
+        assert hashlib.sha256(open(os.path.join(STUDY, "prereg", "freeze_vintage", f"{sid}.csv"), "rb").read()).hexdigest() == h

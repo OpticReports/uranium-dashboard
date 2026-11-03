@@ -739,14 +739,21 @@ function PreregLayer({ d }: { d: DollarWatch }) {
           {str(fz?.spec_version) && <div className="mt-1 break-all font-mono text-[10px] text-slate-600">{fz?.spec_version}</div>}
         </div>
         <div className="rounded border border-slate-700 px-3 py-2 text-[11px] text-slate-300">
-          <div className="font-semibold">The forward test: {f.d3?.units ?? 0} units logged, {f.d3?.matured ?? 0} matured; first look at {f.d3?.next_look_at ?? 8} (about 2060)</div>
+          <div className="font-semibold">The forward test: {f.d3?.units ?? 0} units logged, {f.d3?.matured ?? 0} matured; first look at {f.d3?.next_look_at ?? 8} (about 2060-2070)</div>
           <div className="mt-1 text-slate-400">{str(f.d3?.rule) ?? ""}. Status: {str(f.d3?.status) ?? "n/a"}.</div>
+          <div className="mt-1 text-slate-400">
+            Placebo rule: {f.d3?.placebo?.units ?? 0} units. Rows never scored (data date on or before the freeze, or first seen after a revision):{" "}
+            {(f.d3?.decel?.in_sample_rows ?? 0) + (f.d3?.placebo?.in_sample_rows ?? 0)}.
+          </div>
         </div>
       </div>
       <Note>
         Crisis dating, 2000-2026 check: {arr(f.onsets?.historical).join(", ") || "n/a"} (dollar-funding: {arr(f.onsets?.historical_dollar_funding).join(", ") || "none"}).{" "}
-        {str(f.onsets?.historical_note) ?? ""}. Live onsets since the cut-off: {live.length === 0 ? "none" : live.map((e) => e.date).join(", ")}.
-        Fed emergency actions on file: {f.fed_actions?.n ?? "n/a"} (latest {str(f.fed_actions?.last) ?? "n/a"}).
+        {str(f.onsets?.historical_note) ?? ""}. Months dated since the cut-off: {f.onsets?.months_evaluated ?? 0}
+        {str(f.onsets?.last_evaluated) ? ` (through ${f.onsets?.last_evaluated})` : ""}; onsets among them:{" "}
+        {live.length === 0 ? "none" : live.map((e) => e.date).join(", ")}. Next month dated: {str(f.onsets?.next_month) ?? "n/a"}, once it closes on{" "}
+        {str(f.onsets?.next_close) ?? "n/a"}. Fed emergency actions on file: {f.fed_actions?.n ?? "n/a"} (latest {str(f.fed_actions?.last) ?? "n/a"};
+        list reviewed through {str(f.fed_actions?.reviewed_through) ?? "n/a"}).
       </Note>
       {arr(f.problems).length > 0 && <Note>Problems: {arr(f.problems).join("; ")}.</Note>}
     </>
