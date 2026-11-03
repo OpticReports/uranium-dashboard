@@ -200,8 +200,11 @@ def test_payload_ok_and_serialisable(payload):
     assert payload["scramble"]["live_check"]["reproduces_frozen_unpatched"] is True
     assert {h["variant"] for h in payload["scramble"]["history"]} == {"both", "re-arm only"}
     pq = payload["pending_questions"]
-    assert len(pq) == 10 and all(q["expires"] == "2027-01-01" for q in pq if q["status"] == "asked")
-    assert [q["status"] for q in pq].count("answered") == 5 and [q["status"] for q in pq].count("asked") == 3
+    assert len(pq) == 11 and pq[0]["rank"] == "P1"
+    asked = [q for q in pq if q["status"] == "asked"]
+    assert {q["first_asked"]: q["expires"] for q in asked} == {"2026-11-02": "2027-01-01", "2026-11-03": "2027-01-02"}   # 60 days each
+    assert [q["status"] for q in pq].count("answered") == 5 and len(asked) == 4
+    assert any(q["rank"] == "P1" and "drift" in q["q"] for q in asked)                                    # Q19
     assert [q["status"] for q in pq].count("open") == 2 and all(q["expires"] is None for q in pq if q["status"] != "asked")
 
 
