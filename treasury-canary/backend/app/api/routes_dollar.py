@@ -134,7 +134,7 @@ def dollar_watch_ledger():
 @router.get("/dollar-watch/archive/{name}")
 def dollar_watch_archive(name: str):
     """One archived input file by its sha256 (SPEC v1 C2 / C7), so the harness can check the bytes it computes from."""
-    if not _ARCHIVE_NAME.match(name):
+    if not _ARCHIVE_NAME.fullmatch(name):
         raise HTTPException(status_code=404, detail="not an archive name")
     path = os.path.join(os.path.dirname(os.path.abspath(ledger_path())), "archive", name)
     if not os.path.isfile(path):

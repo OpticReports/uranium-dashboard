@@ -17,7 +17,7 @@
   ],
   "rulings": [
    "Reverse (foreign-currency) liquidity swap lines count as a new central-bank liquidity swap line: the clause does not distinguish direction (ruled 2026-11-03, before any forward evaluation; it decides only 2009-04-06, which lies inside the 2009-01 exclusion).",
-   "One-firm 13(3) arrangements (AIG, Citigroup, Bank of America) count as a new loan under Section 13(3)."
+   "One-firm 13(3) arrangements count when they are a new loan or facility (AIG, Citigroup, Bank of America); extending an existing facility's terms to named firms is an expansion and is excluded (2008-09-21)."
   ]
  },
  "source_feed": "https://www.federalreserve.gov/json/ne-press.json (2006-01..2026-10 searched for facility/swap/13(3)/FIMA/intermeeting releases; none after 2023-03-19); 2000-2005 from the boarddocs archive",
@@ -692,6 +692,17 @@
     "http_status": 200,
     "fetched_on": "2026-11-03",
     "sha256_prefix": "3bd1e3ecb178ce68"
+   }
+  },
+  {
+   "date": "2008-09-21",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20080921a.htm",
+   "page_title": "Board approves, pending a statutory five-day antitrust waiting period, the applications of Goldman Sachs and Morgan Stanley to become bank holding companies",
+   "clause": "expansion of existing facilities' eligibility and collateral (primary-credit / PDCF-type credit to the broker-dealer subsidiaries of the new bank holding companies and of Merrill Lynch); added after the data re-check (N-3); 2008-09 is a listed month, so no effect",
+   "verified": {
+    "http_status": 200,
+    "fetched_on": "2026-11-03",
+    "sha256_prefix": "19d0b069b10c7051"
    }
   },
   {

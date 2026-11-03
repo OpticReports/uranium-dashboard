@@ -790,9 +790,10 @@ def scramble_block(inp: dict, fund: dict, today: str, path: str) -> dict:
             "swap_below_10pct_of_peak": (bool(sw[-1][1] < 0.10 * sw_pk) if sw and sw_pk and sw_pk >= 10_000 else None),
             "episode_start": st["episode_start"],
             "rule": "the dollar 3% off its episode peak; swap-line usage under 10% of the episode's peak (shown only if that peak was at least $10bn)"}
-    prev = _rule_state(path).get("last_index_day")
-    rows = (enrich_firings(new, ds, B, Y, path, prev) if new else []) + \
-        (enrich_firings(placebo, ds, B, Y, path, prev, kind="placebo_rule") if placebo else [])
+    prev = _rule_state(path).get("last_index_day") or _seed_index_day()
+    b_last = (pairs(fred.get("DTWEXBGS")) or [(ds[-1], None)])[-1][0]
+    rows = (enrich_firings(new, ds, B, Y, path, prev, b_last=b_last) if new else []) + \
+        (enrich_firings(placebo, ds, B, Y, path, prev, kind="placebo_rule", b_last=b_last) if placebo else [])
     led = append_ledger(path, rows, today) if rows else load_ledger(path)
     if not led.get("_unreadable") and not led.get("_write_failed"):
         # only once this vintage's rows are saved (an unsaved firing must still read as first-vintage next build),
@@ -1088,7 +1089,7 @@ PU, PU_ERROR = _load_json(PU_PATH)
 HIST_ONSETS = list(((FREEZE.get("onset_check") or {}).get("onsets")) or [])
 HIST_DOLLAR_FUNDING = set(((FREEZE.get("onset_check") or {}).get("dollar_funding_subtype")) or [])
 UNIT_GAP = int(((FREEZE.get("d3") or {}).get("unit_merge_index_days")) or 250)
-FIRST_LIVE_MONTH = add_months(LAST_FROZEN_MONTH + "-01", 1)[:7]
+FIRST_LIVE_MONTH = str(FREEZE.get("onset_first_month") or add_months(LAST_FROZEN_MONTH + "-01", 1)[:7])   # frozen, not rebuilt
 
 
 def _freeze_date() -> str | None:
@@ -1158,9 +1159,10 @@ def _bdays_after(d: date, n: int) -> date:
 
 
 def onset_close(m: str) -> str:
-    """SPEC v1 §5.3 (data review v1 S2): month m is evaluated once, at the first build on or after the later of the H.10
-    release carrying m's last business day and m's end + 5 business days."""
-    return max(h10_release(_last_bday(m).isoformat()), _bdays_after(_month_end(m), 5).isoformat())
+    """SPEC v1 §5.6: month m is evaluated once, at the first build on or after the later of the day AFTER the H.10 release
+    carrying m's last business day (the release comes at 4:15pm ET; data re-check S-1) and m's end + 5 business days."""
+    rel = date.fromisoformat(h10_release(_last_bday(m).isoformat())) + timedelta(days=1)
+    return max(rel.isoformat(), _bdays_after(_month_end(m), 5).isoformat())
 
 
 def onset_deadline(m: str) -> str:
@@ -1168,9 +1170,19 @@ def onset_deadline(m: str) -> str:
     return _month_end(add_months(m + "-01", 1)[:7]).isoformat()
 
 
-def _covers(ps: list, m: str) -> bool:
-    """the series has an observation in m's last 7 calendar days or later."""
-    return bool(ps) and ps[-1][0] >= (_month_end(m) - timedelta(days=6)).isoformat()
+def _covers(ps: list, m: str, weekly: bool = False) -> bool:
+    """the series reaches m's last business day (weekly: m's last Wednesday), i.e. every observation dated in m is out."""
+    if weekly:
+        d = _month_end(m)
+        last = d - timedelta(days=(d.weekday() - 2) % 7)
+    else:
+        last = _last_bday(m)
+    return bool(ps) and ps[-1][0] >= last.isoformat()
+
+
+def _fresh(s: dict | None) -> bool:
+    """fetched this build (status "ok"), not served from a stale cache."""
+    return bool(s) and s.get("status") == "ok"
 
 
 # ---------------------------------------------------------------------------- archives and the rule state (C2, C7)
@@ -1188,6 +1200,10 @@ def archive_bytes(path: str, src: str | None, compress: bool = False) -> dict:
             body = fh.read()
     except Exception:  # noqa: BLE001
         return {"sha256": None, "archived": False}
+    return archive_body(path, body, compress)
+
+
+def archive_body(path: str, body: bytes, compress: bool = False) -> dict:
     h = hashlib.sha256(body).hexdigest()
     dst = os.path.join(_ledger_dir(path), "archive", h + (".gz" if compress else ""))
     if not os.path.exists(dst):
@@ -1238,7 +1254,24 @@ def d3_eligibility(d: str, first_vintage: bool | None, freeze_date: str | None) 
     return True, None
 
 
-def enrich_firings(new: dict, ds, B, Y, path: str, prev_last_index_day: str | None, kind: str = "scramble_rule") -> list[dict]:
+def first_vintage(d: str, prev_last_index_day: str | None, b_last: str) -> bool | None:
+    """Did the panel read the first vintage that carried day d? False if an earlier build had already seen d; True if d is
+    in the week the latest H.10 release added (b_last = DTWEXBGS's last day this build); None otherwise: an outage spanned a
+    release, so a later vintage is being read (data re-check M-A) - reconstructed from ALFRED by the harness."""
+    if prev_last_index_day is None:
+        return None
+    if d <= prev_last_index_day:
+        return False
+    return True if h10_release(d) == h10_release(b_last) else None
+
+
+def _seed_index_day() -> str | None:
+    """with no rule state yet, the freeze vintage's last day: the panel was frozen having seen it (data re-check M-A)."""
+    return ((FREEZE.get("d3") or {}).get("garch_fit") or {}).get("last") if _freeze_date() else None
+
+
+def enrich_firings(new: dict, ds, B, Y, path: str, prev_last_index_day: str | None, kind: str = "scramble_rule",
+                   b_last: str | None = None) -> list[dict]:
     """SPEC v1 §6.1 fields for rows the ledger does not hold yet: k, clause values, the release, whether the firing showed
     on the first vintage that carried its date, D-3 eligibility, unit assignment and archived inputs. Units start only at
     eligible unpatched rows and are measured from the unit's FIRST firing (k - k1 < 250 merges; never chained): a
@@ -1258,7 +1291,7 @@ def enrich_firings(new: dict, ds, B, Y, path: str, prev_last_index_day: str | No
         k = pos[d]
         kmx = pos.get(e["roc20_max_date"], k)
         ref_i = max(0, kmx - RULE["yield_lookback_days"])
-        fv = None if prev_last_index_day is None else d > prev_last_index_day
+        fv = first_vintage(d, prev_last_index_day, b_last or ds[-1])
         elig, why = d3_eligibility(d, fv, fz)
         e.update(k=k, calendar="DTWEXBGS & DGS10", y10_now=Y[k], y10_ref=Y[ref_i], y10_ref_date=ds[ref_i],
                  near_high_ratio=r(B[k] / max(B[max(0, k - RULE["window_days"]):k + 1]), 4),
@@ -1267,6 +1300,8 @@ def enrich_firings(new: dict, ds, B, Y, path: str, prev_last_index_day: str | No
         if "unpatched" in e["variants"] and elig is True:
             last_unit = units[-1] if units else None
             ku = None if last_unit is None else pos.get(last_unit["date"], last_unit.get("k"))
+            if last_unit is not None and last_unit["date"] not in pos:
+                e["unit_gap_note"] = "the unit's first date is off this vintage's calendar: the gap uses its stored k (mixed vintages)"
             if isinstance(ku, int) and k - ku < UNIT_GAP:
                 e.update(unit_first=last_unit["date"], index_gap_to_unit_first=k - ku)
             else:
@@ -1440,15 +1475,33 @@ def onset_markers(inp: dict, months: list[str]) -> dict[str, dict]:
 
 
 def _onset_missing(inp: dict, m: str) -> list[str]:
-    """the onset inputs that do not yet reach the end of month m (or a withheld EM basket)."""
+    """the onset inputs that are not fresh this build or do not yet reach m's last business day (data re-check S-1).
+    The EM basket covers m when its newest leg reaches that day and no leg is stale (emfx_stale)."""
     fred = inp.get("fred") or {}
-    miss = [s for s in ONSET_FRED if not _covers(pairs(fred.get(s)), m)]
-    if not _covers(_fsi(inp), m):
+    miss = [s for s in ("VIXCLS", "SP500") if not (_fresh(fred.get(s)) and _covers(pairs(fred.get(s)), m))]
+    if not (_fresh(inp.get("ofr")) and _covers(_fsi(inp), m)):
         miss.append("OFR FSI")
-    why = emfx_stale(fred)
-    if why and not any(s in miss for s in EMFX_IDS):
-        miss.append(f"EM FX basket withheld ({why})")
+    legs = [pairs(fred.get(s)) for s in EMFX_IDS]
+    stale = [s for s in EMFX_IDS if not _fresh(fred.get(s))]
+    if stale:
+        miss.append("EM FX legs not fresh: " + ", ".join(stale))
+    elif not all(legs) or not _covers(max(legs, key=lambda x: x[-1][0] if x else ""), m):
+        miss.append("EM FX basket")
+    else:
+        why = emfx_stale(fred)
+        if why:
+            miss.append(f"EM FX basket withheld ({why})")
     return miss
+
+
+def _fsi_extract(inp: dict, m: str) -> bytes:
+    """the OFR FSI values marker 2 reads for month m (data re-check M-E): from 5 years before the month preceding m
+    (a 5-day run can start there) to m's end, as "date,OFR FSI" rows with exact float text."""
+    lo = date.fromisoformat(add_months(m + "-01", -1))
+    lo = (lo.replace(year=lo.year - 5) - timedelta(days=7)).isoformat()
+    hi = _month_end(m).isoformat()
+    rows = "".join(f"{d},{v!r}\n" for d, v in _fsi(inp) if lo <= d <= hi)
+    return ("date,OFR FSI\n" + rows).encode()
 
 
 def _window12(m: str) -> set[str]:
@@ -1485,10 +1538,13 @@ def evaluate_onsets(inp: dict, path: str, today: str) -> list[dict]:
         row = {"kind": "onset_month", "date": m, "evaluated_on": today, "close": close, "markers": trip, "n_markers": n,
                "onset": bool(n >= 2 and not prior), "excluded_by": prior[-1] if n >= 2 and prior else None,
                "inputs_missing": missing or None,
+               "late_evaluation": today > onset_deadline(m),           # after a ledger reset or a long outage: not point in time
                "fed_list": {"sha256": FED_SHA, "reviewed_through": reviewed or None, "current": fed_ok},
-               "inputs": {s: {"sha256": _sha256_file(_source_file(s)), "last_obs": (pairs(fred.get(s)) or [(None, None)])[-1][0]}
-                          for s in ONSET_FRED},
-               "ofr_fsi": {**archive_bytes(path, _source_file("ofr_fsi"), compress=True), "last_obs": (_fsi(inp) or [(None, None)])[-1][0]},
+               "inputs": {s: {"sha256": _sha256_file(_source_file(s)), "last_obs": (pairs(fred.get(s)) or [(None, None)])[-1][0],
+                              "status": (fred.get(s) or {}).get("status")} for s in ONSET_FRED},
+               "ofr_fsi": {**archive_body(path, _fsi_extract(inp, m), compress=True), "extract": "date,OFR FSI; 5 years before m-1 to m's end",
+                           "full_file_sha256": _sha256_file(_source_file("ofr_fsi")), "last_obs": (_fsi(inp) or [(None, None)])[-1][0],
+                           "status": (inp.get("ofr") or {}).get("status")},
                "rule": "SPEC v1 §5 (2 of 5; 12-month exclusion from the last onset), evaluated once at the month's close"}
         new.append(row)
         if row["onset"]:
@@ -1510,7 +1566,8 @@ def evaluate_onsets(inp: dict, path: str, today: str) -> list[dict]:
         m2 = add_months(m0 + "-01", 2)[:7]
         if today < onset_close(m2):
             return None                                       # pending until m+2's close (M2)
-        miss = [s for s in ("SWPT", "DCPF3M", "DTB3") if not _covers(pairs(fred.get(s)), m2)]
+        miss = [s for s in ("SWPT", "DCPF3M", "DTB3")
+                if not (_fresh(fred.get(s)) and _covers(pairs(fred.get(s)), m2, weekly=(s == "SWPT")))]
         if miss and today <= onset_deadline(m2):
             return None
         win = {m0, add_months(m0 + "-01", 1)[:7], m2}
@@ -1583,6 +1640,39 @@ def mature_momentum(inp: dict, path: str, today: str) -> None:
 
 
 # ---------------------------------------------------------------------------- the forward block
+def retry_archives(path: str) -> None:
+    """data re-check M-C: a rule or placebo row whose input bytes failed to archive is retried while the cached file still
+    has the recorded sha256 (the same bytes); only the archive flag changes, never the evidence."""
+    with _LEDGER_LOCK:
+        led = load_ledger(path)
+        if led.get("_unreadable"):
+            return
+        changed = False
+        for e in led.get("entries", []):
+            if e.get("kind") not in D3_KINDS:
+                continue
+            for sid, rec in (e.get("inputs") or {}).items():
+                if rec and not rec.get("archived") and rec.get("sha256") and _sha256_file(_source_file(sid)) == rec["sha256"]:
+                    got = archive_bytes(path, _source_file(sid))
+                    if got.get("archived") and got.get("sha256") == rec["sha256"]:
+                        e["inputs"] = dict(e["inputs"], **{sid: dict(got, archived_late=True)})
+                        changed = True
+        if changed:
+            _write_ledger(path, led)
+
+
+def archive_usage(path: str) -> dict:
+    """the archive's size on the persistent disk (data re-check M-E)."""
+    d = os.path.join(_ledger_dir(path), "archive")
+    try:
+        files = [os.path.join(d, f) for f in os.listdir(d)]
+        return {"files": len(files), "bytes": sum(os.path.getsize(f) for f in files)}
+    except FileNotFoundError:
+        return {"files": 0, "bytes": 0}
+    except Exception as exc:  # noqa: BLE001
+        return {"files": None, "bytes": None, "error": str(exc)[:120]}
+
+
 def forward_block(inp: dict, scr: dict, today: str, path: str) -> dict:
     """Runs the point-in-time duties (C3, C4, C6-C8) and summarises the frozen pre-registration for the panel."""
     fred = inp.get("fred") or {}
@@ -1605,8 +1695,19 @@ def forward_block(inp: dict, scr: dict, today: str, path: str) -> dict:
     except Exception as exc:  # noqa: BLE001 - the forward duties must never take the panel down
         logger.exception("dollar forward duties failed: %s", exc)
         problems.append(f"{type(exc).__name__}: {str(exc)[:160]}")
-        months = []
+    retry_archives(path)
     led = load_ledger(path)
+    if led.get("_unreadable"):
+        problems.append("the ledger file is unreadable or wrongly shaped: nothing is being recorded")
+    months = [e for e in led.get("entries", []) if e.get("kind") == "onset_month"]      # the summary reads the ledger itself
+    unarchived = [f"{e['kind']} {e['date']}" for e in led.get("entries", []) if e.get("kind") in D3_KINDS
+                  and any(not (x or {}).get("archived") for x in (e.get("inputs") or {}).values())]
+    unarchived += [f"onset_month {e['date']}" for e in months if not (e.get("ofr_fsi") or {}).get("archived")]
+    if unarchived:
+        problems.append(f"inputs not archived for {len(unarchived)} rows ({', '.join(unarchived[:3])})")
+    late = [e["date"] for e in months if e.get("late_evaluation")]
+    if late:
+        problems.append(f"{len(late)} months dated after their deadline, not point in time ({', '.join(late[:3])})")
     pu = {(x.get("kind"), x.get("date")): x for x in (PU.get("records") or [])}
 
     def d3_summary(kind):
@@ -1643,7 +1744,9 @@ def forward_block(inp: dict, scr: dict, today: str, path: str) -> dict:
                        "historical_note": "the frozen rule run on 2000-2026 as a pre-committed degeneracy check (8, inside 3-13): "
                                           "a calibration check, not validation; long crises re-date at month 13 (Q18)",
                        "live": [e for e in months if e.get("onset")], "months_evaluated": len(months),
-                       "last_evaluated": months[-1]["date"] if months else None, "next_month": nxt, "next_close": onset_close(nxt)},
+                       "last_evaluated": months[-1]["date"] if months else None, "next_month": nxt, "next_close": onset_close(nxt),
+                       "late_months": late},
+            "archive": archive_usage(path),
             "fed_actions": {"n": len(FED.get("actions") or []), "last": ((FED.get("actions") or [{}])[-1]).get("date"),
                             "reviewed_through": FED.get("reviewed_through"), "sha256": FED_SHA, "error": FED_ERROR},
             "status": "error" if (FREEZE_ERROR or FED_ERROR or PU_ERROR or problems) else "ok", "problems": problems or None}

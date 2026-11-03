@@ -85,9 +85,15 @@ Parameter values are frozen in `freeze.json` and asserted equal to `RULE` by a g
 - its data date is after the freeze date (2026-11-03);
 - it fired on the first DTWEXBGS vintage that contains its data date.
 
-That vintage is the one the panel archived at first sight (§6.1). If the panel's first-vintage flag is
-unknown, the vintage is reconstructed from ALFRED. A firing that appears only after a revision is logged
-and never scored.
+That vintage is the one the panel archived at first sight (§6.1). First sight counts only when the panel
+reads the release that added the date's week. The flag is unknown (null) in two cases:
+- an outage spanned a release, so a later vintage is being read;
+- no earlier rule state exists. At the freeze the state is seeded with the freeze vintage's last day,
+  2026-10-30.
+
+An unknown row is settled by `prereg/d3.py admit`. It re-runs the frozen rule on the first vintage from
+ALFRED (whose last day must fall in the date's H.10 week), archives those bytes, and appends an admission
+record (data re-check M-A). A firing that appears only after a revision is logged and never scored.
 
 **Units.**
 - A unit starts at an admitted unpatched firing f₁ (index k₁).
@@ -97,8 +103,10 @@ and never scored.
 - Pre-freeze and revision-born rows never start or absorb a unit.
 
 Outcome windows are therefore disjoint, so units are the clusters (stats review v0 S1). The panel's unit
-fields are provisional. At each look the harness rebuilds the units from the rows under this rule, and
-two verifiers check them. Matured units are ordered by maturity date, k₁ + 250.
+fields are provisional. At each R1 and at each look, `prereg/d3.py units` rebuilds the units from the
+rows and the admissions under this rule, counting each gap on the later firing's own archived vintage.
+It lists every mismatch with the panel's fields, and two verifiers check the result at a look. Matured
+units are ordered by maturity date, k₁ + 250.
 
 ### 3.2 Outcome (S1, primary)
 
@@ -141,9 +149,14 @@ The fit uses returns only, never S1, and was written before any forward firing e
   through k₁ on the firing vintage.
 - The three drifts share the same random numbers, so p⁻ ≥ p⁰ ≥ p⁺. The seed is YYYYMMDD of k₁, and the
   MC SE is ≤ 0.0016 each.
-- p_u is computed **once, before the unit matures**, by `prereg/d3.py pu-row` from the archived firing
-  bytes only, each checked against its recorded sha256. The harness refuses to run on any mismatch (G7,
-  data review v1 M5).
+- p_u is computed **once, before the unit matures**, by `prereg/d3.py pu-row`, for a unit start in the
+  rebuilt units, from the archived firing bytes only, each checked against its recorded sha256.
+- The harness refuses on any of these (G7; data review v1 M5, re-check M-B):
+  - a hash mismatch;
+  - an index mismatch;
+  - a row that is not a unit start;
+  - a matured unit;
+  - an existing record.
 - The record goes into `backend/app/sources/dollar_pu_records.json` (append-only) and is checked by a
   second reader.
 - Conditioning on h_{k₁+1} prices the vol-timing effect (decel days sit at high conditional vol) that
@@ -218,7 +231,31 @@ Under the fit window's own +0.9%/yr drift, power at +0.20 is 0.36 / 0.09. The br
 volatility is low. Without it, a −1%/yr trend roughly doubles the false-PASS rate (0.026 → 0.062 in the
 statistics review's simulation). That trade is Q19.
 
-**Simulated (G6, heterogeneous p_u; §3.7):** G6_TABLE
+**Simulated (G6, heterogeneous p_u; §3.7; `prereg/g6_out/`):**
+| Scenario | units/yr | mean(hit − p⁰) | P(PASS) by look 1 / 2 / 3 | FAIL | INCONCLUSIVE | PASSes read "not specific" |
+|---|---|---|---|---|---|---|
+| **binding:** DGP = model (2,000 paths) | 0.200 | +0.000 ± 0.002 | 0.000 / 0.003 / 0.007 | 0.045 | 0.947 | 0.13 |
+| **binding:** drift -1%/yr (2,000 paths) | 0.189 | +0.049 ± 0.002 | 0.002 / 0.012 / 0.030 | 0.023 | 0.947 | 0.18 |
+| drift +1%/yr (1,000 paths) | 0.211 | -0.051 ± 0.003 | 0.000 / 0.000 / 0.001 | 0.107 | 0.892 | 0.00 |
+| drift -2%/yr (1,000 paths) | 0.178 | +0.091 ± 0.003 | 0.005 / 0.040 / 0.081 | 0.008 | 0.911 | 0.27 |
+| drift +0.9%/yr (the fit window's) (1,000 paths) | 0.210 | -0.039 ± 0.003 | 0.000 / 0.001 / 0.004 | 0.106 | 0.890 | 0.00 |
+| unconditional vol x0.8 (1,000 paths) | 0.105 | +0.035 ± 0.003 | 0.002 / 0.012 / 0.027 | 0.024 | 0.949 | 0.26 |
+| unconditional vol x1.2 (1,000 paths) | 0.303 | -0.023 ± 0.003 | 0.001 / 0.003 / 0.006 | 0.090 | 0.904 | 0.00 |
+| half-life x0.5 (1,000 paths) | 0.230 | -0.004 ± 0.003 | 0.000 / 0.001 / 0.010 | 0.055 | 0.935 | 0.10 |
+| half-life x2 (1,000 paths) | 0.162 | +0.000 ± 0.003 | 0.000 / 0.007 / 0.015 | 0.058 | 0.927 | 0.20 |
+| constant-vol random walk (1,000 paths) | 0.246 | -0.038 ± 0.003 | 0.000 / 0.002 / 0.007 | 0.098 | 0.895 | 0.00 |
+| edge +0.10 (deceleration-specific) (1,000 paths) | 0.200 | +0.105 ± 0.003 | 0.005 / 0.033 / 0.100 | 0.005 | 0.895 | 0.01 |
+| edge +0.20 (deceleration-specific) (1,000 paths) | 0.200 | +0.198 ± 0.003 | 0.018 / 0.134 / 0.356 | 0.001 | 0.643 | 0.01 |
+| edge +0.30 (deceleration-specific) (1,000 paths) | 0.200 | +0.302 ± 0.003 | 0.055 / 0.381 / 0.767 | 0.000 | 0.233 | 0.01 |
+| generic reversal +0.20 (rule and placebo) (1,000 paths) | 0.200 | +0.198 ± 0.003 | 0.015 / 0.144 / 0.382 | 0.002 | 0.616 | 0.29 |
+| drift +0.9%/yr, edge +0.20 (1,000 paths) | 0.210 | +0.166 ± 0.003 | 0.014 / 0.094 / 0.240 | 0.002 | 0.758 | 0.00 |
+
+Binding rows: model_size_le_0.05 yes, model_calibration_within_0.01 yes, drift-1_size_le_0.05 yes → **G6 PASS**. Paths still pending at the 400-year cap: at most 0.000 of a scenario.
+
+With heterogeneous p_u, power sits between the two exact states: 0.36 at +0.20 and 0.77 at +0.30. The placebo is a guard,
+not a proof:
+- It flags 29% of the PASSes a generic post-scramble reversal earns.
+- It flags 1% of those a deceleration-specific edge earns.
 
 **Calendar** (stats review v1 minor 4):
 
@@ -346,24 +383,33 @@ it, in a new SPEC version labelled post-hoc (Q18). No DECEL outcome was computed
 
 ### 5.6 Forward evaluation, point in time (data review v1 S2)
 
-- **Once, in order.** Each month m from 2026-11 is evaluated once, at the first panel build on or after
-  its **close**: the later of the H.10 release carrying m's last business day and m's end + 5 business
-  days.
-- **What it waits for.** The Fed list must be reviewed through m (`reviewed_through` ≥ m), and every
-  input (VIXCLS, SP500, the 8 EM legs, the OFR FSI) must reach m's last week. It waits for these until
-  a **deadline**, the end of m+1. At the deadline it is evaluated anyway, recording what was missing and
-  whether the list was current.
+- **Once, in order.** Each month m from `freeze.json` `onset_first_month` (2026-11) is evaluated once,
+  at the first panel build on or after its **close**. The close is the later of:
+  - the day **after** the H.10 release carrying m's last business day (the release comes at 4:15pm ET,
+    after the day's first builds: data re-check S-1);
+  - m's end + 5 business days.
+- **What it waits for.** The Fed list must be reviewed through m (`reviewed_through` ≥ m). Every input
+  (VIXCLS, SP500, the 8 EM legs, the OFR FSI) must be **fetched fresh** that build, not served from a
+  stale cache, and must **reach m's last business day**. The EM basket counts when its newest leg
+  reaches that day and no leg is stale. It waits for these until a **deadline**, the end of m+1. At the
+  deadline it is evaluated anyway, recording what was missing and whether the list was current.
 - **One row per month, onset or not**, carrying:
   - the markers with their dates and values, and the OFR P95s;
   - `onset` and `excluded_by`;
   - the Fed list's sha256 and `reviewed_through`;
   - each input's sha256 and last observation;
-  - the OFR `fsi.csv` archived (gzip) under its sha256. "As published" means that file.
+  - the OFR FSI values marker 2 reads, archived (gzip) under their sha256 beside the downloaded file's
+    sha256. These run from 5 years before m−1 to m's end, about 35 KB a month (data re-check M-E).
+    "As published" means those values.
 - **The 12-month exclusion** reads only the rows of earlier months.
 - **Later revisions and list appends** go to the month row's `revision_checks` {checked_on,
   markers_now, list sha256}. They never create, remove or re-date an onset.
-- **The subtype** is evaluated the same way at m+2's close, waiting for SWPT, DCPF3M and DTB3 to reach
-  m+2's last week (deadline: the end of m+3). Until then it is pending.
+- **The subtype** is evaluated the same way at m+2's close. It waits for SWPT (through m+2's last
+  Wednesday), DCPF3M and DTB3 (through m+2's last business day), all fetched fresh. The deadline is the
+  end of m+3. Until then it is pending.
+- **A month dated after its deadline** is flagged `late_evaluation` and reported as not point in time.
+  That happens after a ledger reset or a long outage. The ledger is committed to the repository at each
+  R1, so a reset can be detected (re-check M-C).
 - **A withheld EM basket** trips nothing and is recorded as missing (data review v1 M4). The basket is
   withheld when a leg's last observation is more than 10 business days behind the newest leg.
 
@@ -373,12 +419,13 @@ it, in a new SPEC version labelled post-hoc (Q18). No DECEL outcome was computed
   securities against cash) and 2009-03-02 (new 13(3) loans to AIG's life-insurance SPVs). Both pages
   were fetched (HTTP 200), and their dates and titles checked. The recount is unchanged (§5.5).
 - **List hashes.** The check's list keeps its recorded sha256 (`f24ab63f…`, in `freeze.json`
-  `onset_check`). The shipped list is `9e1441f0…`: 50 actions in 19 months.
+  `onset_check`). The shipped list is `f03ce7f5…`: 50 actions in 19 months.
 - **Rulings.**
   - Reverse (foreign-currency) liquidity swap lines count as a new swap line. This decides only
     2009-04-06, which lies inside the 2009-01 exclusion.
-  - One-firm 13(3) arrangements count.
-- **Register.** 13 rejected candidates are listed, each with the exclusion clause applied, URL and fetch
+  - One-firm 13(3) arrangements count when they are a new loan or facility. Extending an existing
+    facility's terms to named firms is an expansion and is excluded (2008-09-21, re-check N-3).
+- **Register.** 14 rejected candidates are listed, each with the exclusion clause applied, URL and fetch
   check.
 - **Upkeep.** `reviewed_through` is 2026-10. At each R1 the list is reviewed through the previous month
   before that month is dated. Every forward addition or exclusion is checked by a second reader and
@@ -429,8 +476,13 @@ they are, frozen field by field.
 ### 6.4 Transport
 
 The panel serves `GET /dollar-watch/ledger` (the ledger as stored) and
-`GET /dollar-watch/archive/<sha256>[.gz]` (only names that are a sha256). At each R1 the harness
-downloads both, runs `pu-row` for any new unit, and commits the record.
+`GET /dollar-watch/archive/<sha256>[.gz]` (only names that are a sha256). At each R1 the harness:
+- downloads both, and commits the ledger snapshot;
+- runs `admit` for any unknown row and `units` for the unit list;
+- runs `pu-row` for any new unit start, and commits the record.
+
+The payload reports the archive's size on disk, any row whose inputs failed to archive (those are retried
+while the cached bytes still match), an unreadable ledger, and any late-dated month (re-check M-C, M-E).
 
 ## 7. The panel code (`backend/app/metrics/dollar_watch.py`) against this SPEC
 
@@ -463,6 +515,7 @@ downloads both, runs `pu-row` for any new unit, and commits the record.
 | C15 | The rule calendar is DTWEXBGS ∩ DGS10 (§2). |
 | C16 | The EM basket staleness guard, and field-by-field freezing of the 3 / 6 / 12-month outcomes. |
 | C17 | The transport routes (§6.4). |
+| C18 | Re-check fixes: the close the day after the release; fresh-and-complete inputs; late-dated months flagged; the OFR extract archive and the disk line; failure surfacing and archive retries; the first-vintage outage rule and the freeze seed; `onset_first_month` from `freeze.json`; `admit`, `units` and the hardened `pu-row` in the harness. |
 
 ## 8. Honesty box
 
@@ -475,6 +528,8 @@ downloads both, runs `pu-row` for any new unit, and commits the record.
   - v1's draft claimed that no unbiased comparator exists on one series. The statistics review showed
     that a placebo logged forward against the same null matches the rule's nuisance bias within
     ±0.006.
+  - The placebo screens only about 3 in 10 of the PASSes a generic reversal would earn (G6), so a
+    "deceleration flag ON" can still be a generic reversal.
 - **The model null** assumes a stable GARCH-t. Its drift is bracketed at ±1%/yr. Beyond the bracket
   size drifts: −2%/yr gives a false PASS up to 0.09. G6 reports vol-level and persistence rows.
 - **The 3% / 250-day hit** was inherited from the 2006+ sweep. It is frozen, but it was not chosen
@@ -511,9 +566,10 @@ would say so.
 1. SPEC v1 → two reviews (PASS_WITH_FIXES) → fixes → re-check → **freeze** (this commit; `freeze.json`
    carries this file's sha256).
 2. **R1, monthly:**
-   - review the Fed list through the previous month, with a second reader;
+   - review the Fed list through the previous month, with a second reader, and redeploy;
    - the panel dates the month at its close (§5.6);
-   - compute p_u for any new unit (harness plus a second reader).
+   - download and commit the ledger snapshot; `admit` any unknown row; rebuild the `units`;
+   - compute p_u for any new unit start (harness plus a second reader).
 3. **R2, quarterly:** the unit count. A look happens only at 8 / 16 / 24 matured units.
 4. **Before the first unit is scored:** re-run the full G6 (2,000 paths on every row).
 5. **Each look:** the harness result plus two independent verifiers, then the consequence per §3.5 and

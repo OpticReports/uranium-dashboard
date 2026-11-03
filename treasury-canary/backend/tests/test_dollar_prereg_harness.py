@@ -106,23 +106,116 @@ def _ledger(tmp_path, name, date, shas, k, **kw):
     return str(p)
 
 
+def _units(tmp_path, ledger, arc, name="units.json"):
+    out = d3.units(ledger, str(tmp_path / "none.json"), arc, "scramble_rule")
+    p = tmp_path / name
+    p.write_text(json.dumps(out))
+    return str(p)
+
+
 def test_pu_row_reads_only_the_archived_bytes(tmp_path):
     day = "2026-10-15"
     arc, shas = _archive(tmp_path, day, extra_after=False)
     ds, _ = d3.rule_calendar(os.path.join(arc, shas["DTWEXBGS"]), os.path.join(arc, shas["DGS10"]))
     k = ds.index(day)
-    rec = d3.pu_row(_ledger(tmp_path, "l1.json", day, shas, k), arc, FREEZE, "scramble_rule", day, n_paths=3000)
+    l1 = _ledger(tmp_path, "l1.json", day, shas, k)
+    none = str(tmp_path / "none.json")
+    rec = d3.pu_row(l1, arc, FREEZE, "scramble_rule", day, _units(tmp_path, l1, arc), none, None, n_paths=3000)
     arc2, shas2 = _archive(tmp_path, day, extra_after=True)                  # the same vintage plus data after k1
-    rec2 = d3.pu_row(_ledger(tmp_path, "l2.json", day, shas2, k), arc2, FREEZE, "scramble_rule", day, n_paths=3000)
+    l2 = _ledger(tmp_path, "l2.json", day, shas2, k)
+    u2 = _units(tmp_path, l2, arc2, "u2.json")
+    rec2 = d3.pu_row(l2, arc2, FREEZE, "scramble_rule", day, u2, none, None, n_paths=3000)
     assert rec["by_drift"] == rec2["by_drift"] and rec["h_next"] == rec2["h_next"] and rec["seed"] == 20261015
-    bad = dict(shas)
+    records = str(tmp_path / "records.json")
+    d3.pu_row(l2, arc2, FREEZE, "scramble_rule", day, u2, none, records, n_paths=500)
+    assert len(json.load(open(records))["records"]) == 1
+    with pytest.raises(SystemExit, match="computed once"):                    # M-B: once
+        d3.pu_row(l2, arc2, FREEZE, "scramble_rule", day, u2, none, records, n_paths=100)
+    with pytest.raises(SystemExit, match="before maturity"):                  # M-B: before maturity
+        d3.pu_row(_ledger(tmp_path, "l6.json", day, shas2, k, outcomes_250d={"hit": True}), arc2, FREEZE, "scramble_rule", day, u2,
+                  none, None, n_paths=100)
     open(os.path.join(arc, shas["DGS10"]), "ab").write(b"2026-10-16,9.99\n")   # tampered bytes
     with pytest.raises(SystemExit, match="do not match"):
-        d3.pu_row(_ledger(tmp_path, "l3.json", day, bad, k), arc, FREEZE, "scramble_rule", day, n_paths=100)
+        d3.pu_row(l1, arc, FREEZE, "scramble_rule", day, str(tmp_path / "units.json"), none, None, n_paths=100)
     with pytest.raises(SystemExit, match="not an admitted unit start"):
-        d3.pu_row(_ledger(tmp_path, "l4.json", day, shas2, k, d3_eligible=False), arc2, FREEZE, "scramble_rule", day, n_paths=100)
+        d3.pu_row(_ledger(tmp_path, "l4.json", day, shas2, k, d3_eligible=False), arc2, FREEZE, "scramble_rule", day,
+                  _units(tmp_path, str(tmp_path / "l4.json"), arc2, "u4.json"), none, None, n_paths=100)
     with pytest.raises(SystemExit, match="index mismatch"):
-        d3.pu_row(_ledger(tmp_path, "l5.json", day, shas2, k + 1), arc2, FREEZE, "scramble_rule", day, n_paths=100)
+        d3.pu_row(_ledger(tmp_path, "l5.json", day, shas2, k + 1), arc2, FREEZE, "scramble_rule", day, u2, none, None, n_paths=100)
+
+
+def test_harness_rule_is_the_panels_rule():
+    import gzip
+    from app.metrics import dollar_watch as dw
+    inputs = json.load(gzip.open(os.path.join(HERE, "fixtures", "dollar_watch", "inputs_2026-11-02.json.gz"), "rt"))
+    ds, B, Y = dw.rule_index(inputs["fred"])
+    params = json.load(open(FREEZE))["rule_params"]
+    assert d3.rule_firings(ds, B, Y, params) == [f["date"] for f in dw.scramble_firings(ds, B, Y, False)]
+    assert d3.rule_firings(ds, B, Y, params, decel=False) == [f["date"] for f in dw.scramble_firings(ds, B, Y, False, decel=False)]
+
+
+def _vintage(tmp_path, name: str, through: str):
+    """a vintage cut at `through`, written outside the archive (as an ALFRED download would be)."""
+    out = {}
+    for sid in ("DTWEXBGS", "DGS10"):
+        lines = open(os.path.join(PREREG, "freeze_vintage", f"{sid}.csv"), encoding="utf-8").read().splitlines()
+        p = tmp_path / f"{name}_{sid}.csv"
+        p.write_text("\n".join([lines[0]] + [x for x in lines[1:] if x[:10] <= through]) + "\n")
+        out[sid] = str(p)
+    return out
+
+
+def test_admit_reruns_the_rule_on_the_first_vintage(tmp_path, monkeypatch):
+    """re-check M-A: a row with an unknown first vintage is admitted (or not) by the rule on the vintage whose last day falls
+    in the firing's H.10 week; a later vintage is refused; the record is written once."""
+    fz = json.load(open(FREEZE))
+    fz["freeze_date"] = "2008-01-01"                                       # pretend the freeze preceded 2008 (synthetic check)
+    fzp = tmp_path / "freeze.json"
+    fzp.write_text(json.dumps(fz))
+    arc = tmp_path / "arc"
+    arc.mkdir()
+    led = tmp_path / "ledger.json"
+    led.write_text(json.dumps({"entries": [{"kind": "scramble_rule", "date": "2008-09-22", "variants": ["unpatched"], "d3_eligible": None},
+                                           {"kind": "placebo_rule", "date": "2008-09-22", "variants": ["unpatched"], "d3_eligible": None}]}))
+    adm = str(tmp_path / "admissions.json")
+    late = _vintage(tmp_path, "late", "2008-10-03")
+    with pytest.raises(SystemExit, match="not the first vintage"):
+        d3.admit(str(led), str(fzp), "scramble_rule", "2008-09-22", late["DTWEXBGS"], late["DGS10"], str(arc), adm)
+    first = _vintage(tmp_path, "first", "2008-09-26")
+    rec = d3.admit(str(led), str(fzp), "scramble_rule", "2008-09-22", first["DTWEXBGS"], first["DGS10"], str(arc), adm)
+    assert rec["admitted"] is True and rec["vintage_last_day"] == "2008-09-26"     # the in-sample 2008 firing, re-run
+    assert all(os.path.exists(arc / v["sha256"]) for v in rec["inputs"].values())
+    plc = d3.admit(str(led), str(fzp), "placebo_rule", "2008-09-22", first["DTWEXBGS"], first["DGS10"], str(arc), adm)
+    assert plc["admitted"] is False                                         # the placebo did not fire that day
+    with pytest.raises(SystemExit, match="already has an admission"):
+        d3.admit(str(led), str(fzp), "scramble_rule", "2008-09-22", first["DTWEXBGS"], first["DGS10"], str(arc), adm)
+
+
+def test_units_rebuild_from_the_rows(tmp_path):
+    """SPEC v1 §3.1: units run 250 index days from their FIRST firing, counted on each later firing's own vintage."""
+    full, _ = d3.rule_calendar(os.path.join(PREREG, "freeze_vintage", "DTWEXBGS.csv"), os.path.join(PREREG, "freeze_vintage", "DGS10.csv"))
+    i0 = full.index("2019-01-02")
+    days = [full[i0], full[i0 + 130], full[i0 + 260]]
+    arc = tmp_path / "arc"
+    arc.mkdir()
+    rows = []
+    for d in days:
+        v = _vintage(tmp_path, d, d)
+        shas = {}
+        for sid, src in v.items():
+            body = open(src, "rb").read()
+            h = hashlib.sha256(body).hexdigest()
+            (arc / h).write_bytes(body)
+            shas[sid] = {"sha256": h}
+        rows.append({"kind": "scramble_rule", "date": d, "variants": ["unpatched"], "d3_eligible": True, "inputs": shas,
+                     "unit_first": days[0] if d != days[2] else days[2]})
+    rows[1]["unit_first"] = days[1]                                         # a wrong panel field, to be reported
+    led = tmp_path / "ledger.json"
+    led.write_text(json.dumps({"entries": rows}))
+    out = d3.units(str(led), str(tmp_path / "none.json"), str(arc), "scramble_rule")
+    assert [u["first"] for u in out["units"]] == [days[0], days[2]]
+    assert out["units"][0]["members"] == [{"date": days[1], "gap": 130}]
+    assert out["mismatches_with_panel"] == [{"date": days[1], "panel": days[1], "rebuilt": days[0]}]
 
 
 def test_look_uses_the_recorded_critical_value_and_prints_the_placebo():

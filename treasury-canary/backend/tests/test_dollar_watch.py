@@ -551,8 +551,12 @@ def _months(a: str, b: str) -> list[str]:
 
 
 def test_onset_close_and_deadline():
-    assert dw.onset_close("2026-11") == "2026-12-07"          # H.10 of Mon 11-30 = Mon 12-07; 11-30 + 5 business days = 12-07
+    # 2026-11: the H.10 carrying Mon 11-30 comes out Mon 12-07 at 4:15pm ET, the same day as 11-30 + 5 business days, so the
+    # close is the day after (data re-check S-1); a build at 00:05 UTC on 12-07 must not date the month
+    assert dw.h10_release("2026-11-30") == "2026-12-07" and dw.onset_close("2026-11") == "2026-12-08"
     assert dw.onset_close("2026-12") == "2027-01-08"          # New Year's Day off: 5 business days after 12-31 = 01-08
+    assert dw._covers([("2026-11-27", 1.0)], "2026-11") is False and dw._covers([("2026-11-30", 1.0)], "2026-11") is True
+    assert dw._covers([("2026-11-25", 1.0)], "2026-11", weekly=True) is True       # SWPT: the month's last Wednesday
     assert dw.onset_deadline("2026-12") == "2027-01-31" and dw.onset_deadline("2027-01") == "2027-02-28"
 
 
@@ -572,8 +576,12 @@ def test_onset_months_evaluated_once_point_in_time(inputs, tmp_path, monkeypatch
     assert on["subtype"]["dollar_funding"] is True and on["recorded_on"] == "2028-07-01"
     assert all(e["evaluated_on"] == "2028-07-01" and set(e["inputs"]) == set(dw.ONSET_FRED) for e in rows)
     assert [e["date"] for e in rows if e["n_markers"] >= 2 and not e["onset"]] == [e["date"] for e in rows if e["excluded_by"]]
-    assert p["forward"]["onsets"]["live"][0]["date"] == "2028-03" and p["forward"]["status"] == "ok"
+    assert p["forward"]["onsets"]["live"][0]["date"] == "2028-03"
+    assert all(e["late_evaluation"] for e in rows) and p["forward"]["status"] == "error"     # first run years late: flagged
+    assert any("dated after their deadline" in x for x in p["forward"]["problems"])
     assert p["forward"]["onsets"]["next_month"] == "2028-06" and p["forward"]["onsets"]["months_evaluated"] == len(rows)
+    blob = gzip.decompress(open(os.path.join(tmp_path, "archive", on["ofr_fsi"]["sha256"] + ".gz"), "rb").read()).decode()
+    assert blob.startswith("date,OFR FSI\n") and blob.splitlines()[-1][:10] <= "2028-03-31" and len(blob.splitlines()) < 1600
     # a later vintage gives 2028-01 two markers: logged in revision_checks, never an onset
     rev = json.loads(json.dumps(shifted))
     vx = rev["fred"]["VIXCLS"]
@@ -591,12 +599,17 @@ def test_onset_months_evaluated_once_point_in_time(inputs, tmp_path, monkeypatch
 def test_onset_waits_for_the_fed_list_review_until_the_deadline(inputs, tmp_path, monkeypatch):
     shifted = _shift(inputs, 8, cut="2020-12-31")
     path = str(tmp_path / "ledger.json")
+    src = tmp_path / "cached.csv"                              # the fetch caches exist in production; archiving must succeed
+    src.write_bytes(b"observation_date,X\n2026-11-30,1.0\n")
+    monkeypatch.setattr(dw, "_source_file", lambda name: str(src))
     dw.build_dollar_watch(shifted, today="2026-12-08", ledger_file=path)           # 2026-11 closed 12-07; list reviewed through 2026-10
     assert not [e for e in dw.load_ledger(path)["entries"] if e["kind"] == "onset_month"]
     monkeypatch.setitem(dw.FED, "reviewed_through", "2026-11")
     dw.build_dollar_watch(shifted, today="2026-12-09", ledger_file=path)
+    p = dw.build_dollar_watch(shifted, today="2026-12-09", ledger_file=path)
     rows = [e for e in dw.load_ledger(path)["entries"] if e["kind"] == "onset_month"]
     assert [e["date"] for e in rows] == ["2026-11"] and rows[0]["fed_list"]["current"] is True
+    assert rows[0]["late_evaluation"] is False and rows[0]["inputs_missing"] is None and p["forward"]["status"] == "ok"
 
 
 def test_momentum_rows_mature_after_every_month_and_subtype(tmp_path):
@@ -621,7 +634,7 @@ def test_firing_rows_carry_the_point_in_time_record(inputs, tmp_path, monkeypatc
     monkeypatch.setitem(dw.FREEZE, "freeze_date", "2026-11-03")
     path = str(tmp_path / "ledger.json")
     dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-19"), today="2028-09-20", ledger_file=path)   # before the firing
-    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-30"), today="2028-10-01", ledger_file=path)
+    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-24"), today="2028-09-26", ledger_file=path)   # the week's release
     dw.build_dollar_watch(_shift(inputs, 20, cut="2008-11-06"), today="2028-11-07", ledger_file=path)
     led = dw.load_ledger(path)["entries"]
     rows = {e["date"]: e for e in led if e["kind"] == "scramble_rule"}
@@ -653,18 +666,20 @@ def test_d3_eligibility_starts_after_the_freeze(tmp_path, monkeypatch):
     def firing(i):
         return {ds[i]: {"kind": "scramble_rule", "date": ds[i], "variants": ["unpatched"], "roc20_max_date": ds[i - 5],
                         "roc20_max_pct": 4.5, "roc20_now_pct": 1.0, "dollar": B[i]}}
-    pre = dw.enrich_firings(firing(40), ds, B, Y, path, ds[39])            # 2030-02-13: before the freeze
+    pre = dw.enrich_firings(firing(40), ds, B, Y, path, ds[39], b_last=ds[40])     # 2030-02-13: before the freeze
     assert pre[0]["d3_eligible"] is False and pre[0]["unit_first"] is None and "in-sample" in pre[0]["d3_note"]
     dw.append_ledger(path, pre, "2030-02-20")
-    post = dw.enrich_firings(firing(170), ds, B, Y, path, ds[169])         # 130 index days later, after the freeze
+    post = dw.enrich_firings(firing(170), ds, B, Y, path, ds[169], b_last=ds[170])  # 130 index days later, after the freeze
     assert post[0]["d3_eligible"] is True and post[0]["unit_first"] == ds[170]      # not absorbed by the pre-freeze row
     dw.append_ledger(path, post, "2030-07-20")
-    late = dw.enrich_firings(firing(300), ds, B, Y, path, ds[310])          # first seen on a vintage that already held its date
+    late = dw.enrich_firings(firing(300), ds, B, Y, path, ds[310], b_last=ds[310])  # first seen on a vintage that already held its date
     assert late[0]["first_vintage_contains_date"] is False and late[0]["d3_eligible"] is False and late[0]["unit_first"] is None
-    unknown = dw.enrich_firings(firing(320), ds, B, Y, path, None)
+    unknown = dw.enrich_firings(firing(320), ds, B, Y, path, None, b_last=ds[320])
     assert unknown[0]["d3_eligible"] is None and unknown[0]["unit_first"] is None
+    outage = dw.enrich_firings(firing(322), ds, B, Y, path, ds[321], b_last=ds[329])   # a later release is being read
+    assert outage[0]["first_vintage_contains_date"] is None and outage[0]["d3_eligible"] is None
     monkeypatch.setitem(dw.FREEZE, "freeze_date", "TO_FILL")
-    assert dw.enrich_firings(firing(321), ds, B, Y, path, ds[320])[0]["d3_eligible"] is False   # no freeze record: in-sample
+    assert dw.enrich_firings(firing(321), ds, B, Y, path, ds[320], b_last=ds[321])[0]["d3_eligible"] is False   # no freeze record
 
 
 def test_units_run_from_the_first_firing_never_chained(tmp_path, monkeypatch):
@@ -680,7 +695,8 @@ def test_units_run_from_the_first_firing_never_chained(tmp_path, monkeypatch):
 
     def add(i):
         rows = dw.enrich_firings({ds[i]: {"kind": "scramble_rule", "date": ds[i], "variants": ["unpatched"], "roc20_max_date": ds[i - 5],
-                                          "roc20_max_pct": 4.5, "roc20_now_pct": 1.0, "dollar": B[i]}}, ds, B, Y, path, ds[i - 1])
+                                          "roc20_max_pct": 4.5, "roc20_now_pct": 1.0, "dollar": B[i]}}, ds, B, Y, path, ds[i - 1],
+                                  b_last=ds[i])
         dw.append_ledger(path, rows, ds[i])
         return rows[0]
     assert add(100)["unit_first"] == ds[100]
@@ -725,7 +741,7 @@ def test_units_merge_within_250_index_days(tmp_path, monkeypatch):
                              "unit_first": ds[100], "index_gap_to_unit_first": 0}], "2030-04-20")
     new = {ds[300]: {"kind": "scramble_rule", "date": ds[300], "variants": ["unpatched"], "roc20_max_date": ds[290],
                      "roc20_max_pct": 4.5, "roc20_now_pct": 1.0, "dollar": B[300]}}
-    rows = dw.enrich_firings(new, ds, B, Y, path, ds[299])
+    rows = dw.enrich_firings(new, ds, B, Y, path, ds[299], b_last=ds[300])
     assert rows[0]["unit_first"] == ds[100] and rows[0]["index_gap_to_unit_first"] == 200
 
 
@@ -806,11 +822,11 @@ def test_failed_write_keeps_a_firing_first_vintage(inputs, tmp_path, monkeypatch
             raise OSError("No space left on device")
         return real(p, body)
     monkeypatch.setattr(fc, "_write_atomic", boom)
-    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-30"), today="2028-10-01", ledger_file=path)
+    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-24"), today="2028-09-26", ledger_file=path)
     assert dw._rule_state(path)["last_index_day"] < "2028-09-22"
     monkeypatch.setattr(fc, "_write_atomic", real)
-    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-30"), today="2028-10-02", ledger_file=path)
+    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-24"), today="2028-09-27", ledger_file=path)
     row = [e for e in dw.load_ledger(path)["entries"] if e["kind"] == "scramble_rule"][0]
     assert row["date"] == "2028-09-22" and row["first_vintage_contains_date"] is True and row["d3_eligible"] is True
-    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-19"), today="2028-10-03", ledger_file=path)   # an older vintage
-    assert dw._rule_state(path)["last_index_day"] >= "2028-09-30"
+    dw.build_dollar_watch(_shift(inputs, 20, cut="2008-09-19"), today="2028-09-28", ledger_file=path)   # an older vintage
+    assert dw._rule_state(path)["last_index_day"] >= "2028-09-24"
