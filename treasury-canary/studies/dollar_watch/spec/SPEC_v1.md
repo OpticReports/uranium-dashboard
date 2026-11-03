@@ -256,30 +256,35 @@ power at +0.20 falls from about 0.39 to 0.26. Without it, a −1%/yr trend rough
 statistics review's simulation). That trade is Q19.
 
 **Simulated (G6, heterogeneous p_u; §3.7; `prereg/g6_out/`):**
-| Scenario | units/yr | mean(hit − p⁰) | P(PASS) by look 1 / 2 / 3 | FAIL | INCONCLUSIVE | PASSes read "not specific" |
-|---|---|---|---|---|---|---|
-| **binding:** DGP = model (2,000 paths) | 0.200 | +0.000 ± 0.002 | 0.000 / 0.003 / 0.007 | 0.045 | 0.947 | 0.13 |
-| **binding:** drift -1%/yr (2,000 paths) | 0.189 | +0.049 ± 0.002 | 0.002 / 0.012 / 0.030 | 0.023 | 0.947 | 0.18 |
-| drift +1%/yr (1,000 paths) | 0.211 | -0.051 ± 0.003 | 0.000 / 0.000 / 0.001 | 0.107 | 0.892 | 0.00 |
-| drift -2%/yr (1,000 paths) | 0.178 | +0.091 ± 0.003 | 0.005 / 0.040 / 0.081 | 0.008 | 0.911 | 0.27 |
-| drift +0.9%/yr (the fit window's) (1,000 paths) | 0.210 | -0.039 ± 0.003 | 0.000 / 0.001 / 0.004 | 0.106 | 0.890 | 0.00 |
-| unconditional vol x0.8 (1,000 paths) | 0.105 | +0.035 ± 0.003 | 0.002 / 0.012 / 0.027 | 0.024 | 0.949 | 0.26 |
-| unconditional vol x1.2 (1,000 paths) | 0.303 | -0.023 ± 0.003 | 0.001 / 0.003 / 0.006 | 0.090 | 0.904 | 0.00 |
-| half-life x0.5 (1,000 paths) | 0.230 | -0.004 ± 0.003 | 0.000 / 0.001 / 0.010 | 0.055 | 0.935 | 0.10 |
-| half-life x2 (1,000 paths) | 0.162 | +0.000 ± 0.003 | 0.000 / 0.007 / 0.015 | 0.058 | 0.927 | 0.20 |
-| constant-vol random walk (1,000 paths) | 0.246 | -0.038 ± 0.003 | 0.000 / 0.002 / 0.007 | 0.098 | 0.895 | 0.00 |
-| edge +0.10 (deceleration-specific) (1,000 paths) | 0.200 | +0.105 ± 0.003 | 0.005 / 0.033 / 0.100 | 0.005 | 0.895 | 0.01 |
-| edge +0.20 (deceleration-specific) (1,000 paths) | 0.200 | +0.198 ± 0.003 | 0.018 / 0.134 / 0.356 | 0.001 | 0.643 | 0.01 |
-| edge +0.30 (deceleration-specific) (1,000 paths) | 0.200 | +0.302 ± 0.003 | 0.055 / 0.381 / 0.767 | 0.000 | 0.233 | 0.01 |
-| generic reversal +0.20 (rule and placebo) (1,000 paths) | 0.200 | +0.198 ± 0.003 | 0.015 / 0.144 / 0.382 | 0.002 | 0.616 | 0.29 |
-| drift +0.9%/yr, edge +0.20 (1,000 paths) | 0.210 | +0.166 ± 0.003 | 0.014 / 0.094 / 0.240 | 0.002 | 0.758 | 0.00 |
+| Scenario | units/yr | mean(hit − p⁰) | mean(hit − p⁻) | design size | P(PASS) by look 1 / 2 / 3 | FAIL | INCONCLUSIVE | placebo matches or beats the rule (share of PASSes) |
+|---|---|---|---|---|---|---|---|---|
+| **binding:** DGP = model (2,000 paths) | 0.200 | +0.000 ± 0.002 | -0.048 | 0.036 | 0.000 / 0.003 / 0.007 | 0.045 | 0.947 | 0.13 |
+| **binding:** drift -1%/yr (2,000 paths) | 0.189 | +0.049 ± 0.002 | +0.001 | 0.036 | 0.002 / 0.012 / 0.030 | 0.023 | 0.947 | 0.18 |
+| 2016-26 volatility regime (1,000 paths) | 0.163 | +0.030 ± 0.003 | -0.023 | 0.034 | 0.001 / 0.005 / 0.019 | 0.029 | 0.952 | 0.16 |
+| 2016-26 volatility regime + drift -1%/yr (1,000 paths) | 0.150 | +0.080 ± 0.003 | +0.028 | 0.034 | 0.005 / 0.024 / 0.055 | 0.005 | 0.940 | 0.27 |
+| drift +1%/yr (1,000 paths) | 0.211 | -0.051 ± 0.003 | — | — | 0.000 / 0.000 / 0.001 | 0.107 | 0.892 | 0.00 |
+| drift -2%/yr (1,000 paths) | 0.178 | +0.091 ± 0.003 | — | — | 0.005 / 0.040 / 0.081 | 0.008 | 0.911 | 0.27 |
+| drift +0.9%/yr (the fit window's) (1,000 paths) | 0.210 | -0.039 ± 0.003 | — | — | 0.000 / 0.001 / 0.004 | 0.106 | 0.890 | 0.00 |
+| unconditional vol x0.8 (1,000 paths) | 0.105 | +0.035 ± 0.003 | — | — | 0.002 / 0.012 / 0.027 | 0.024 | 0.949 | 0.26 |
+| unconditional vol x1.2 (1,000 paths) | 0.303 | -0.023 ± 0.003 | — | — | 0.001 / 0.003 / 0.006 | 0.090 | 0.904 | 0.00 |
+| half-life x0.5 (1,000 paths) | 0.230 | -0.004 ± 0.003 | — | — | 0.000 / 0.001 / 0.010 | 0.055 | 0.935 | 0.10 |
+| half-life x2 (1,000 paths) | 0.162 | +0.000 ± 0.003 | — | — | 0.000 / 0.007 / 0.015 | 0.058 | 0.927 | 0.20 |
+| constant-vol random walk (1,000 paths) | 0.246 | -0.038 ± 0.003 | — | — | 0.000 / 0.002 / 0.007 | 0.098 | 0.895 | 0.00 |
+| edge +0.10 (deceleration-specific) (1,000 paths) | 0.200 | +0.105 ± 0.003 | — | — | 0.005 / 0.033 / 0.100 | 0.005 | 0.895 | 0.01 |
+| edge +0.20 (deceleration-specific) (1,000 paths) | 0.200 | +0.198 ± 0.003 | — | — | 0.018 / 0.134 / 0.356 | 0.001 | 0.643 | 0.01 |
+| edge +0.30 (deceleration-specific) (1,000 paths) | 0.200 | +0.302 ± 0.003 | — | — | 0.055 / 0.381 / 0.767 | 0.000 | 0.233 | 0.01 |
+| generic reversal +0.20 (rule and placebo) (1,000 paths) | 0.200 | +0.198 ± 0.003 | — | — | 0.015 / 0.144 / 0.382 | 0.002 | 0.616 | 0.29 |
+| drift +0.9%/yr, edge +0.20 (1,000 paths) | 0.210 | +0.166 ± 0.003 | — | — | 0.014 / 0.094 / 0.240 | 0.002 | 0.758 | 0.00 |
 
-Binding rows: model_size_le_0.05 yes, model_calibration_within_0.01 yes, drift-1_size_le_0.05 yes → **G6 PASS**. Paths still pending at the 400-year cap: at most 0.000 of a scenario.
+Binding checks: model_size_le_0.05 yes, model_calibration_within_0.01 yes, drift-1_size_le_0.05 yes, drift-1_calibration_vs_pminus_within_0.01 yes → **G6 PASS**. Paths still pending at the 400-year cap: at most 0.000 of a scenario.
 
-With heterogeneous p_u, power sits between the two exact states: 0.36 at +0.20 and 0.77 at +0.30. The placebo is a guard,
-not a proof:
-- It flags 29% of the PASSes a generic post-scramble reversal earns.
-- It flags 1% of those a deceleration-specific edge earns.
+With heterogeneous p_u, power sits between the two exact states: 0.36 at +0.20 and 0.77 at +0.30.
+The design size (the exact P(PASS) under the pessimistic null for each path's own recorded p_u) is the
+test's real budget. The realized rate under the model is far below it, because the model's drift is zero
+and PASS is judged at −1%/yr.
+
+The placebo column shows why it cannot certify deceleration. Under a generic reversal it matches or
+beats the rule in only 29% of PASSes, so the PASS wording never depends on it (§3.5).
 
 **Calendar** (stats review v1 minor 4):
 

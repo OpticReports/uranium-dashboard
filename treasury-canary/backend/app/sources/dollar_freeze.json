@@ -5,8 +5,8 @@
  "answered_on": "2026-11-02",
  "freeze_date": "2026-11-03",
  "_freeze_date": "D-3 evidence comes only from rows whose data date is after this date AND which fired on the first vintage carrying that date (d3_eligible; data review v1 S1).",
- "spec_version": "SPEC_v1.md sha256 TO_FILL",
- "spec_sha256": "TO_FILL",
+ "spec_version": "SPEC_v1.md sha256 e6fa6602bdd9ca7fe34de95f58ca07b035e73185f4d83f6c39e6a0cb8eab97ea",
+ "spec_sha256": "e6fa6602bdd9ca7fe34de95f58ca07b035e73185f4d83f6c39e6a0cb8eab97ea",
  "route": "forward_only",
  "_route": "Q1 (P1) answered: forward_only. D-1 (cross-section) and D-2 (DXY daily 1973-2005) are withdrawn and not run (SPEC v1 Appendix A).",
  "primary_crisis_list": "C16_L_broad",
@@ -152,7 +152,10 @@
  "run_day_pull_date": "not applicable: route forward_only",
  "reviews": {
   "stats_v1": "PASS_WITH_FIXES (0 BLOCKING, 3 SERIOUS, 5 MINOR): S1 drift bracket, S2 placebo, S3 calendar and succession; minors adopted",
-  "data_v1": "PASS_WITH_FIXES (0 BLOCKING, 3 SERIOUS, 5 MINOR): S1 freeze-date eligibility, S2 point-in-time onset months, S3 SPEC text; minors adopted"
+  "data_v1": "PASS_WITH_FIXES (0 BLOCKING, 3 SERIOUS, 5 MINOR): S1 freeze-date eligibility, S2 point-in-time onset months, S3 SPEC text; minors adopted",
+  "stats_recheck": "PASS_WITH_FIXES (0 BLOCKING, 2 SERIOUS, 2 MINOR): S1 the bracket is model-conditional (qualified; 2016-26 rows in G6; Q19), S2 fixed PASS wording; minors adopted",
+  "data_recheck": "PASS_WITH_FIXES (0 BLOCKING, 1 SERIOUS, 5 MINOR): S-1 the close the day after the release; minors adopted",
+  "data_confirm": "PASS (0 BLOCKING, 0 SERIOUS, 1 MINOR): M-1 lost-archive repair adopted"
  },
  "freeze_note": "Casey 2026-11-02: 'go with the defaults, freeze it'. Frozen 2026-11-03 after both v1 reviews' fixes."
 }
