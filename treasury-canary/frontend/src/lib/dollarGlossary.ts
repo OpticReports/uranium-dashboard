@@ -14,7 +14,8 @@ export const DW: Record<string, GlossaryEntry> = {
     title: "Layer 2: dollar-funding nowcast",
     what: "The plumbing of dollar borrowing: what banks and companies pay for short-term dollars, how stressed overnight repo is, and how much foreign central banks borrow from the Fed.",
     read: "This is the mechanism behind a dollar scramble: when dollar borrowers abroad cannot roll their debt, these gauges jump first or alongside the dollar. Quiet gauges mean no sign of a funding squeeze on the free gauges. They were also quiet through the 2015-16 and 2018 EM scares, and the cross-currency basis (the direct price of offshore dollars) is paid-only and not shown.",
-    caveat: "Each gauge is ranked against its own history, which for most of them includes 2008 (CP since 1997, the OFR index since 2000, NFCI since 1971, swap lines since Dec-2007); the two SOFR rows start in 2018 and 2021 and have no crisis in their base. They moved with or ahead of the dollar's peak, but their first alarms came roughly with the crisis's start (2007, 2022; n = 2): coincident, not early.",
+    read2: "The summary's one word: under strain = the CP spread's 5-day average above 1pp (the crisis dating's line); elevated = below that line, but CP or the OFR funding index at its 80th percentile of its own history or higher; quiet = both at or below their 1-year medians; in its usual range = the rest, about three days in five since 2020. Swap-line borrowing is a lagging stock and never sets the word.",
+    caveat: "Each gauge is ranked against its own history, from the start year the table shows; for most of them that includes 2008 (CP since 1997, the OFR index since 2000, NFCI since 1971, swap lines since Dec-2007); the two SOFR rows start in 2018 and 2021 and have no crisis in their base. They moved with or ahead of the dollar's peak, but their first alarms came roughly with the crisis's start (2007, 2022; n = 2): coincident, not early.",
   },
   layer_scramble: {
     title: "Layer 3: dollar-scramble peak gauge",
@@ -63,7 +64,7 @@ export const DW: Record<string, GlossaryEntry> = {
   band: {
     title: "Johnson's 85-105 band",
     what: "A rule of thumb from the October 2026 talk this study started from: a DXY below 85 or above 105 is supposed to signal trouble.",
-    read: "Tested here on three crisis lists, 1971-2026: the 17 excursions outside the band were followed by a crisis about as often as any month was (within one excursion of the base on every list). The band is shown because it was claimed, not because it works.",
+    read: "Tested here on three crisis lists, 1971-2026: the 17 excursions outside the band were followed by a crisis no more often than any month was: within one excursion of the base on A25 and N5, below it on C16. The band is shown because it was claimed, not because it works.",
     caveat: "No edge on any list (for example 8 excursions followed by an A25 crisis within 12 months, against 7.2 expected).",
   },
   broad: {
@@ -86,7 +87,7 @@ export const DW: Record<string, GlossaryEntry> = {
   momentum: {
     title: "12-month momentum (+10% line)",
     what: "The change in the DXY's monthly average over 12 months. An 'episode' starts when it first rises above +10% after a year below.",
-    read: "In-sample, 5 of 11 episodes were followed by a dollar-stress onset (C16) within 12 months, against 28% of all months. That sounds like an edge, but 11 episodes is below the ~15 the study needs before showing a rate, the 41 signal months followed by an onset come from just those 5 episodes, 8 of the 11 began during a crisis already on the 25-crisis list, and a 6-month version of the test falls below its base (28% vs 42%).",
+    read: "In-sample, 5 of 11 episodes were followed by a dollar-stress onset (C16) within 12 months, against 28% of all months. That sounds like an edge, but 11 episodes is below the ~15 the study needs before showing a rate, the 41 of 85 months are overlapping readings rather than independent ones, 8 of the 11 began during a crisis already on the 25-crisis list, and a 6-month version of the test falls below its base (28% vs 42%).",
     caveat: "Never tested: a fair test needs about 40 independent episodes, roughly 400 years of data.",
   },
   base_rate: {
@@ -102,7 +103,7 @@ export const DW: Record<string, GlossaryEntry> = {
   gold: {
     title: "Gold",
     what: "Spot gold in dollars per ounce (FMP; COMEX futures as a fallback).",
-    read: "In the 2008 and 2020 dollar-funding squeezes gold fell in the liquidation weeks before recovering. Across all 24 completed crises on the 25-crisis list it ended higher in 14 (58%), against 61% of same-length windows: no better than gold's own drift. A fall with dollar funding quiet does not fit the squeeze pattern; the tile says so when it happens.",
+    read: "In the 2008 and 2020 dollar-funding squeezes gold fell in the liquidation weeks before recovering. Across all 24 completed crises on the 25-crisis list it ended higher in 14 (58%), against 61% of same-length windows: no better than gold's own drift. A fall with no sign of a funding squeeze does not fit that pattern; the tile says so when it happens.",
     caveat: "Daily gold before 2000 is not available free, so the early record is monthly.",
   },
   emfx: {
@@ -126,7 +127,7 @@ export const DW: Record<string, GlossaryEntry> = {
     title: "Financial CP minus 3-month T-bill",
     what: "What banks and finance companies pay to borrow unsecured for 3 months in commercial paper, minus the Treasury bill yield. It is the price of bank credit risk in dollar money markets.",
     read: "Usually between about 0.05 and 0.6 points (median 0.18 since 1997; 0.09 since 2019). In the dollar-funding onsets of 2007-12, 2009-01 and 2020-03 its 5-day average passed 1 percentage point (1.78, 1.14 and 1.12). The crisis dating uses that 1pp line to mark an onset as dollar-funding.",
-    caveat: "The own-history percentile runs from 1997 and includes 2008; the last-10-years column does not. Single prints can jump, month-ends especially, so the summaries judge it on the 5-day average, as the crisis dating does.",
+    caveat: "The own-history percentile runs from the start year the table shows (1997 for this series with its full history loaded), so it includes 2008; the last-10-years column does not. Single prints can jump, month-ends especially, so the summaries judge it on the 5-day average, as the crisis dating does.",
   },
   cp_nonfin: {
     title: "Nonfinancial CP minus 3-month T-bill",

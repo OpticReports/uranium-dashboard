@@ -568,13 +568,14 @@ def gold_note() -> str:
 
 def gold_funding_note(state: dict, fund: dict) -> str | None:
     """The gold tile's 'outside the crisis pattern' note, shown only when gold is 15%+ off its high AND dollar funding is
-    quiet by the same test as the summaries (_funding_word: the CP spread's 5-day average and the OFR funding index both at or
-    below their 1-year medians; on the 5-day average since the wording review of 2026-11-03, so one print cannot flip it)."""
+    showing no sign of a squeeze by the same test as the summaries (_funding_word 'quiet' or 'usual': the CP spread's 5-day
+    average under 1pp and no funding price gauge at its 80th own-history percentile or higher; wording re-check 2026-11-03)."""
     g = state["safe_haven"]["gold"]
     off = g.get("off_52w_high_pct")
-    if off is None or off > -15 or _funding_word({x["id"]: x for x in fund["rows"]}) != "quiet":
+    if off is None or off > -15 or _funding_word({x["id"]: x for x in fund["rows"]}) not in ("quiet", "usual"):
         return None
-    return "with dollar funding quiet (the CP spread's 5-day average and the OFR funding index at or below their 1-year medians): outside the crisis pattern below"
+    return ("with no sign of a dollar-funding squeeze (the CP spread's 5-day average under 1pp, it and the OFR funding index under "
+            "their 80th percentiles): outside the crisis pattern below")
 
 
 def state_block(inp: dict) -> dict:
@@ -694,7 +695,10 @@ def funding_block(inp: dict) -> dict:
             "higher = foreign central banks borrowing dollars (weekly, Wednesday)", "history from the first swap lines, Dec-2007"),
         emb_row,
     ]
-    rows[0]["mean_5d"] = r(sum(v for _, v in cpf[-5:]) / 5, 2) if len(cpf) >= 5 else None   # SPEC v1 §5.3's dollar-funding line is on this
+    c5 = r(sum(v for _, v in cpf[-5:]) / 5, 2) if len(cpf) >= 5 else None              # SPEC v1 §5.3's dollar-funding line is on this
+    rows[0].update(mean_5d=c5, pct_5d_own_history=r(100 * sum(1 for _, v in cpf if v <= c5) / len(cpf), 0) if c5 is not None else None)
+    wk4 = (date.fromisoformat(swpt[-1][0]) - timedelta(days=28)).isoformat() if swpt else None
+    next(x for x in rows if x["id"] == "swap_lines")["prev_4w"] = r(asof(swpt, wk4), 2) if wk4 else None   # is the stock falling?
     return {"rows": rows,
             "label": "Funding prices led the dollar's peak by 3-5 months in 2008 and 2022 (n = 2), moved with it in 2020 and were silent "
                      "in the EM growth scares. Their first alarms came within about two months of the crisis's start as the 25-crisis list "
@@ -1025,15 +1029,34 @@ def _level(pct) -> str:
     return ("high" if pct >= 80 else "firm" if pct >= 60 else "middling" if pct >= 40 else "soft" if pct >= 20 else "low") + " against its history"
 
 
+ELEVATED_PCT = 80      # own-history percentile at or above which a funding gauge reads "elevated" (wording re-check 2026-11-03)
+
+
+def _funding_elevated(rows: dict) -> list[tuple[str, float]]:
+    """(name, percentile) of the price gauges at or above ELEVATED_PCT of their own history: CP on its 5-day average, the OFR
+    funding index on its latest value."""
+    cp, of = rows.get("cp_fin") or {}, rows.get("ofr_funding") or {}
+    out = []
+    if _num(cp.get("pct_5d_own_history")) and cp["pct_5d_own_history"] >= ELEVATED_PCT:
+        out.append(("the CP spread's 5-day average", cp["pct_5d_own_history"]))
+    if _num(of.get("pct_own_history")) and of["pct_own_history"] >= ELEVATED_PCT:
+        out.append(("the OFR funding index", of["pct_own_history"]))
+    return out
+
+
 def _funding_word(rows: dict) -> str | None:
-    """Dollar funding in one word, shared by the summaries and the gold tile's note. Judged on the CP spread's 5-day average,
-    the basis of SPEC v1 §5.3's line, so one print cannot flip it; swap-line usage is a lagging stock and never sets it (wording
-    review 2026-11-03). 'strained' = that average above 1pp (§5.3); 'quiet' = that average and the OFR funding index both at or
-    below their 1-year medians; 'usual' = neither, the common state (about two days in three since 2020); None = not enough data."""
+    """Dollar funding in one word, shared by the summaries and the gold tile's note (wording review and re-check, 2026-11-03).
+    'strained' = the CP spread's 5-day average above 1pp (SPEC v1 §5.3's line; the 5-day average moves a fifth per print);
+    'elevated' = below that line, but CP's 5-day average or the OFR funding index at or above the 80th percentile of its own
+    history (the 1-year medians alone read 'quiet' in early 2009, when they were crisis medians); 'quiet' = both at or below their
+    1-year medians; 'usual' = the rest, the common state (about three days in five since 2020); None = not enough data. Swap-line
+    usage is a lagging stock and never sets the word."""
     cp, of = rows.get("cp_fin") or {}, rows.get("ofr_funding") or {}
     c5 = cp.get("mean_5d")
     if _num(c5) and c5 > 1.0:
         return "strained"
+    if _funding_elevated(rows):
+        return "elevated"
     if not all(_num(v) for v in (c5, cp.get("median_1y"), of.get("latest"), of.get("median_1y"))):
         return None
     return "quiet" if c5 <= cp["median_1y"] and of["latest"] <= of["median_1y"] else "usual"
@@ -1055,7 +1078,11 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
     hot = [r for r in ranked if r["pct_own_history"] >= 90]
     word = _funding_word(rows)
     c5 = cp.get("mean_5d")
-    swap_tail = word in ("quiet", "usual") and _num(sw.get("latest")) and sw["latest"] > 50   # a lagging stock with calm prices
+    swap_big = _num(sw.get("latest")) and sw["latest"] > 50
+    swap_falling = swap_big and _num(sw.get("prev_4w")) and sw["latest"] < sw["prev_4w"]
+    swap_tail = swap_falling and word in ("quiet", "usual")              # a lagging stock running off, with calm prices
+    swap_new = swap_big and not swap_falling and word not in ("strained", None)   # still being drawn: demand CP prices need not show
+    swap_dir = "rising" if swap_new and _num(sw.get("prev_4w")) and sw["latest"] > sw["prev_4w"] else "not falling"
     ons = fwd.get("onsets") or {}
     st = scr.get("state") or {}
     fz = (fwd.get("freeze") or {}).get("freeze_date")
@@ -1082,10 +1109,9 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
     mom = state.get("momentum") or {}
     if _num(mom.get("dxy_12m_pct")):
         m12 = mom["dxy_12m_pct"]
-        ms = _sp(m12, 2) if not mom.get("signal") and round(m12, 1) >= 10 else _sp(m12)       # never "+10.0%, below the +10% line"
-        head = f"12-month momentum (monthly averages, to {mom.get('month') or 'n/a'}) is {ms}"
+        head = f"12-month momentum (monthly averages, to {mom.get('month') or 'n/a'}) is {_sp(m12)}"
         c = (mom.get("by_list") or {}).get("C16") or {}
-        began = (REF.get("momentum") or {}).get("episodes_began_in_a25_crisis")
+        began = mom.get("episodes_began_in_a25_crisis", (REF.get("momentum") or {}).get("episodes_began_in_a25_crisis"))
         if mom.get("signal") and all(_num(c.get(f)) for f in ("episodes_followed_12m", "episodes", "base_12m")):
             L.append(f"{head}, above the +10% line: in-sample, {c['episodes_followed_12m']} of {c['episodes']} such episodes were followed "
                      f"by a C16 onset within 12 months, against {round(100 * c['base_12m'])}% of all months"
@@ -1093,6 +1119,8 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
                      + "; the edge depends on the crisis list and is not validated.")
         elif mom.get("signal"):
             L.append(f"{head}, above the +10% line the study watches; its in-sample record is unavailable.")
+        elif m12 >= 10:                                   # rounded to 1 dp upstream: +10.0% with the signal off is just short
+            L.append(f"{head}, just short of the line the study watches (it needs more than +10%).")
         else:
             L.append(f"{head}, below the +10% line the study watches"
                      + (f" (last above it in {mom['last_signal_month']})" if mom.get("last_signal_month") else "") + ".")
@@ -1104,11 +1132,11 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
         dfo = [str(o) for o in (ons.get("historical_dollar_funding") or [])]
         dd = [d for d in ((sh.get("gold_record") or {}).get("drawdowns") or []) if _num(d.get("close_pct"))
               and any(o <= str(d.get("peak"))[:7] <= add_months(o + "-01", 12)[:7] for o in dfo)]   # falls begun within a year of a dollar-funding onset
-        if g.get("note") and word == "quiet" and dd:            # the tile's own test, and the same word as the funding headline
+        if g.get("note") and word in ("quiet", "usual") and dd:     # the tile's own test, the same word as the funding headline
             yrs = " and ".join(sorted({str(d.get("peak"))[:4] for d in dd}))
             ex = "; ".join(f"{d.get('episode')} {d['close_pct']:.0f}%, {_span(d)}" for d in dd)
-            L.append(f"Gold is {where} while dollar funding is quiet. In the {yrs} dollar-funding squeezes gold fell before recovering "
-                     f"({ex}; close to close), so a fall with funding quiet does not fit that pattern.")
+            L.append(f"Gold is {where} with no sign of a dollar-funding squeeze. In the {yrs} dollar-funding squeezes gold fell before "
+                     f"recovering ({ex}; close to close), so a fall without one does not fit that pattern.")
         else:
             L.append(f"Gold is {where}.")
     L.append("What it tells you: where the dollar sits against its own history. None of these readings has been validated as an early sign "
@@ -1119,10 +1147,14 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
     # layer 2: the plumbing
     F = []
     if _num(cp.get("latest")) and _num(sw.get("latest")):
+        els = _funding_elevated(rows)
+        el = (f"{els[0][0]} is at the {_ord(els[0][1])} percentile of its own history"
+              + (f" and {els[1][0]} at the {_ord(els[1][1])}" if len(els) > 1 else "")) if els else ""
         adj = {"strained": "under strain on the crisis dating's own line (the CP spread's 5-day average above 1pp)",
+               "elevated": f"elevated: under the crisis dating's 1pp line, but {el}",
                "quiet": "quiet (the CP spread's 5-day average and the OFR funding index at or below their 1-year medians)",
                "usual": "in its usual range (the CP spread's 5-day average or the OFR funding index above its 1-year median, "
-                        "as on about two days in three since 2020)"}.get(word or "")
+                        "as on about three days in five since 2020)"}.get(word or "")
         pc = f" ({_ord(cp['pct_own_history'])} percentile since {(cp.get('history_from') or '')[:4]})" if _num(cp.get("pct_own_history")) else ""
         F.append((f"Dollar funding is {adj}. " if adj else "") + f"Financial commercial paper costs {cp['latest']:.2f}pp over Treasury "
                  f"bills{pc} and foreign central banks owe ${sw['latest']:.2f}bn on the Fed's swap lines.")
@@ -1133,9 +1165,14 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
                  f"Today: {f'{c5:.2f}pp' if _num(c5) else 'n/a'} and ${sw['latest']:.2f}bn"
                  + (", past both lines." if len(past) == 2 else f", past {past[0]}." if past else ", below both." if _num(c5) else "."))
         if swap_tail:
-            F.append(f"Swap-line borrowing is still above the $50bn line. Usage lags funding prices: in 2008 and 2020 it peaked about two "
-                     "months after CP minus bills and stayed above $50bn until Sep-2009 and Sep-2020, so a large stock with calm prices "
-                     "reads as the tail of a squeeze rather than new strain.")
+            F.append(f"Swap-line borrowing is above the $50bn line but falling (${sw['prev_4w']:.0f}bn four weeks earlier). Usage lags "
+                     "funding prices: in 2008 and 2020 it peaked about two months after CP minus bills and stayed above $50bn until "
+                     "Sep-2009 and Sep-2020, so a falling stock with calm prices reads as the tail of a squeeze rather than new strain.")
+        elif swap_new:
+            F.append(f"Swap-line borrowing is above the $50bn line and {swap_dir}"
+                     + (f" (${sw['prev_4w']:.0f}bn four weeks earlier)" if _num(sw.get("prev_4w")) else "")
+                     + ": dollar demand abroad that US funding prices need not show. From Dec-2011 to Feb-2012 euro-area draws rose "
+                     "from $2bn to $109bn while the CP spread stayed near its median.")
     if ranked:
         nh = len(hot)
         F.append(f"{nh} of {len(ranked)} gauges with a percentile {'sits' if nh == 1 else 'sit'} at or above the 90th percentile of "
@@ -1166,7 +1203,7 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
                 a_txt = "not met" if a.get("met") is False else "unknown"
             met = lambda x: "met" if (x or {}).get("met") is True else "not met" if (x or {}).get("met") is False else "unknown"   # noqa: E731
             S.append(f"The scramble gauge is open: {win}, with the 10-year below where it stood before the climb. Deceleration (a) is "
-                     f"{a_txt}. Funding easing (b) is {met(ind.get('b_funding_easing'))}, and gold and EM bonds turning (c) "
+                     f"{a_txt}. Funding easing (b, on the latest print) is {met(ind.get('b_funding_easing'))}, and gold and EM bonds turning (c) "
                      f"{met(ind.get('c_risk_turn'))}; the three are shown separately and never added up.")
         else:
             S.append(f"The scramble gauge is closed: {win} (it opens at +4% with the 10-year falling). No dollar scramble is under way "
@@ -1202,7 +1239,7 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
     if _num(uc.get("total_tn")) and _num(uc.get("yoy_pct")):
         W.append(f"Dollar credit to non-bank borrowers outside the US is ${uc['total_tn']:.2f}tn, {_sp(uc['yoy_pct'])} a year ({uc.get('quarter')}). "
                  + ("It has set records in calm years and before crises alike, so it sizes the backdrop rather than timing anything."
-                    if uc["yoy_pct"] >= 0 else "That is a contraction, seen before only in 2009Q1-Q3 and 2022Q3-2023Q4."))
+                    if uc["yoy_pct"] >= 0 else "That is a contraction; from 2001 to 2026 the only ones were 2009Q1-Q3 and 2022Q3-2023Q4."))
     t = slow.get("treasury") or {}
     cu, y = t.get("custody") or {}, t.get("y10") or {}
     if _num(cu.get("latest")) and _num(cu.get("chg_12m_pct")):
@@ -1251,9 +1288,9 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
         parts.append(f"the dollar is {_level(dx['pct_own_history'])}")
     if word:
         notes = ([f"{len(hot)} gauge{'s' if len(hot) > 1 else ''} near the top of {'their' if len(hot) > 1 else 'its'} range"] if hot else []) \
-            + (["swap-line borrowing still above $50bn"] if swap_tail else [])
+            + (["swap-line borrowing above $50bn but falling"] if swap_tail else [f"swap-line borrowing above $50bn and {swap_dir}"] if swap_new else [])
         par = f" ({'; '.join(notes)})" if notes else ""
-        parts.append({"strained": "dollar funding is under strain", "quiet": f"funding is {'mostly quiet' if hot else 'quiet'}{par}",
+        parts.append({"strained": "dollar funding is under strain", "elevated": f"funding is elevated{par}", "quiet": f"funding is {'mostly quiet' if hot else 'quiet'}{par}",
                       "usual": f"funding is in its usual range{par}"}[word])
     if st:
         parts.append("the scramble gauge is open" if scr.get("gate_open") else "the scramble gauge is closed")
@@ -1262,8 +1299,10 @@ def summaries(state: dict, fund: dict, scr: dict, slow: dict, led: dict, fwd: di
     parts[:1] = [x[:1].upper() + x[1:] for x in parts[:1]]       # the box's own title says "Reading the page together"
     watch = (["the CP spread's 5-day average falling back under 1pp"] if word == "strained" else
              ["funding gauges climbing toward their 2008 and 2020 levels (the CP spread's 5-day average past 1pp)"])
+    a_met = ((scr.get("indicators") or {}).get("a_deceleration") or {}).get("met") is True
     if st:
-        watch.append("the deceleration reading (a) being met, or the scramble gauge closing" if scr.get("gate_open") else
+        watch.append(("the dollar 3% off its episode peak (the first confirmation), or the scramble gauge closing" if a_met else
+                      "the deceleration reading (a) being met, or the scramble gauge closing") if scr.get("gate_open") else
                      "the scramble gauge opening (a 4% climb with yields falling)")
     watch.append("a month dated as a crisis onset by the mechanical markers")
     caveat = ("None of these readings has been validated as an early sign of crisis; the base rate or own-history percentile beside "

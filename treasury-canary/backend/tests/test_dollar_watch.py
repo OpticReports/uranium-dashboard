@@ -436,9 +436,10 @@ def test_failed_ledger_write_is_reported(inputs, tmp_path, monkeypatch):
 def test_gold_note_requires_quiet_funding(payload, inputs, tmp_path):
     g = payload["state"]["safe_haven"]["gold"]
     cp = {r["id"]: r for r in payload["funding"]["rows"]}["cp_fin"]
-    assert cp["mean_5d"] <= cp["median_1y"]
-    assert g["off_52w_high_pct"] <= -15 and g["note"] == ("with dollar funding quiet (the CP spread's 5-day average and the OFR funding "
-                                                           "index at or below their 1-year medians): outside the crisis pattern below")
+    assert cp["mean_5d"] <= 1.0 and dw._funding_word({r["id"]: r for r in payload["funding"]["rows"]}) in ("quiet", "usual")
+    assert g["off_52w_high_pct"] <= -15 and g["note"] == ("with no sign of a dollar-funding squeeze (the CP spread's 5-day average under "
+                                                           "1pp, it and the OFR funding index under their 80th percentiles): outside the "
+                                                           "crisis pattern below")
     stressed = json.loads(json.dumps(inputs))
     stressed["fred"]["DCPF3M"]["values"][-1] = (stressed["fred"]["DTB3"]["values"][-1] or 4.0) + 3.05     # CP-bill at a Lehman-sized print
     p = dw.build_dollar_watch(stressed, today="2026-11-02", ledger_file=str(tmp_path / "s.json"))
@@ -563,15 +564,45 @@ def test_summaries_judge_funding_on_the_5_day_cp_line_never_on_the_swap_stock():
     assert dw._funding_word(rows(0.1, 0.9, 0.1, -1)) == "quiet"          # one high print does not flip the 5-day average
     assert dw._funding_word(rows(0.1, 0.1, 0.1, 0.5)) == "usual"         # OFR funding above its 1-year median
     assert dw._funding_word(rows(0.1, 0.1, 0.1, None)) is None           # not enough data to say
+    # re-check N1: 2009-01-15 on the long replay. CP's 5-day mean 0.42 sat under its crisis-year median (1.08) and OFR funding
+    # 2.69 under its 3.37, so the medians alone read 'quiet'; OFR funding was at its 91st own-history percentile
+    crisis = {"cp_fin": {"latest": 0.8, "mean_5d": 0.42, "median_1y": 1.08, "pct_5d_own_history": 60},
+              "ofr_funding": {"latest": 2.69, "median_1y": 3.37, "pct_own_history": 91}, "swap_lines": {"latest": 510.5, "prev_4w": 560.0}}
+    assert dw._funding_word(crisis) == "elevated"
+    crisis["ofr_funding"]["pct_own_history"], crisis["cp_fin"]["pct_5d_own_history"] = 79, 80
+    assert dw._funding_word(crisis) == "elevated"                         # CP on its 5-day average, at the 80th
+    crisis["cp_fin"]["pct_5d_own_history"] = 79
+    assert dw._funding_word(crisis) == "quiet"
     row = lambda i, v, p, **k: {"id": i, "label": i, "latest": v, "pct_own_history": p, "history_from": "1997-01-02", **k}   # noqa: E731
     ofr = row("ofr_funding", -1.0, 20, median_1y=0.0)
     hot = dw.summaries({}, {"rows": [row("cp_fin", 1.3, 99, mean_5d=1.2, median_1y=0.2), row("swap_lines", 0.1, 10), ofr]}, {}, {}, {}, {})
     assert hot["funding"][0].startswith("Dollar funding is under strain") and hot["funding"][1].endswith("past the 1pp line.")
     assert "dollar funding is under strain" in hot["page"][0].lower()
-    tail = dw.summaries({}, {"rows": [row("cp_fin", 0.12, 40, mean_5d=0.1, median_1y=0.2), row("swap_lines", 450.0, 99), ofr]}, {}, {}, {}, {})
+    calm_cp = row("cp_fin", 0.12, 40, mean_5d=0.1, median_1y=0.2, pct_5d_own_history=30)
+    tail = dw.summaries({}, {"rows": [calm_cp, row("swap_lines", 450.0, 99, prev_4w=520.0), ofr]}, {}, {}, {}, {})
     assert tail["funding"][0].startswith("Dollar funding is quiet") and "past the $50bn line" in tail["funding"][1]
-    assert tail["funding"][2].startswith("Swap-line borrowing is still above the $50bn line") and "tail of a squeeze" in tail["funding"][2]
-    assert "strain" not in tail["page"][0] and "swap-line borrowing still above $50bn" in tail["page"][0]
+    assert tail["funding"][2].startswith("Swap-line borrowing is above the $50bn line but falling") and "tail of a squeeze" in tail["funding"][2]
+    assert "strain" not in tail["page"][0] and "swap-line borrowing above $50bn but falling" in tail["page"][0]
+    # re-check N2: Dec-2011 to Feb-2012 the stock was being drawn with CP calm: new demand, never 'the tail of a squeeze'
+    new = dw.summaries({}, {"rows": [calm_cp, row("swap_lines", 108.8, 99, prev_4w=103.3), ofr]}, {}, {}, {}, {})
+    assert not any("tail of a squeeze" in x for x in new["funding"]) and any("and rising ($103bn four weeks earlier)" in x for x in new["funding"])
+    assert "swap-line borrowing above $50bn and rising" in new["page"][0]
+
+
+def test_one_month_end_print_moves_the_word_by_a_fifth(inputs, tmp_path):
+    """Re-check M1: FRED's 2026-10-30 print (4.38 - 3.99 = 0.39pp) lifts the 5-day mean, never the word to elevated or strained,
+    and the gold tile keeps its note: its claim is 'no squeeze', which still holds."""
+    x = json.loads(json.dumps(inputs))
+    for sid, v in (("DCPF3M", 4.38), ("DTB3", 3.99)):
+        assert x["fred"][sid]["dates"][-1] < "2026-10-30"
+        x["fred"][sid]["dates"].append("2026-10-30")
+        x["fred"][sid]["values"].append(v)
+    p = dw.build_dollar_watch(x, today="2026-11-02", ledger_file=str(tmp_path / "m.json"))
+    rows = {r["id"]: r for r in p["funding"]["rows"]}
+    cpf = dw.spread(dw.pairs(x["fred"]["DCPF3M"]), dw.pairs(x["fred"]["DTB3"]))
+    assert rows["cp_fin"]["latest"] == 0.39 and rows["cp_fin"]["mean_5d"] == dw.r(sum(v for _, v in cpf[-5:]) / 5, 2) < 0.2
+    assert dw._funding_word(rows) in ("quiet", "usual") and p["state"]["safe_haven"]["gold"]["note"]
+    assert not any(w in p["summaries"]["page"][0] for w in ("elevated", "strain"))
 
 
 def test_summaries_follow_the_state_they_describe():
@@ -594,8 +625,11 @@ def test_summaries_follow_the_state_they_describe():
     mom = {"momentum": {"dxy_12m_pct": 11.2, "signal": True, "month": "2027-03",
                         "by_list": {"C16": {"episodes_followed_12m": 5, "episodes": 11, "base_12m": 0.283}}}}
     assert "8 of the 11 began during a crisis already under way" in dw.summaries(mom, {"rows": []}, {}, {}, {}, {})["state"][0]
-    edge = {"momentum": {"dxy_12m_pct": 9.97, "signal": False, "month": "2027-03"}}
-    assert "+9.97%, below" in dw.summaries(edge, {"rows": []}, {}, {}, {}, {})["state"][0]
+    edge = {"momentum": {"dxy_12m_pct": 10.0, "signal": False, "month": "2027-03"}}       # momentum_now rounds to 1 dp; > 10% fires
+    assert "+10.0%, just short of the line" in dw.summaries(edge, {"rows": []}, {}, {}, {}, {})["state"][0]
+    scr["indicators"]["a_deceleration"] = {"met": True}
+    s = dw.summaries({}, {"rows": []}, scr, {}, {}, {})
+    assert "the dollar 3% off its episode peak (the first confirmation)" in s["page"][-1] and "being met" not in s["page"][-1]
     rows = [{"id": "emb", "label": "EMB", "latest": 90.0, "pct_own_history": None},
             {"id": "sofr_iorb", "label": "SOFR minus interest on reserves", "latest": 3.0, "pct_own_history": 97, "history_from": "2021-07-29"}]
     f = dw.summaries({}, {"rows": rows}, {}, {}, {}, {})["funding"]
