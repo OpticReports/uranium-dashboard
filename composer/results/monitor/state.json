@@ -1,22 +1,22 @@
 {
   "peaks": {
-    "mbkiXcuNDjueXpiox5Av": 1999.24,
-    "nNdBk7hc5NiBzeRvbI5T": 26283.35,
+    "mbkiXcuNDjueXpiox5Av": 1999.46,
+    "nNdBk7hc5NiBzeRvbI5T": 26290.82,
     "YPTSJFJwD2ZKfAeYJUbW": 40378.17,
     "ORQNCfZnA18wmsMWVhf8": 35223.93
   },
   "accident_gauge": "YELLOW",
   "peak_dates": {
     "YPTSJFJwD2ZKfAeYJUbW": "2026-08-17",
-    "nNdBk7hc5NiBzeRvbI5T": "2026-11-03",
-    "mbkiXcuNDjueXpiox5Av": "2026-11-03"
+    "nNdBk7hc5NiBzeRvbI5T": "2026-11-04",
+    "mbkiXcuNDjueXpiox5Av": "2026-11-04"
   },
-  "book_peak": 100054.55,
+  "book_peak": 100227.19000000002,
   "gate": {
     "override": false,
     "zone": "far",
-    "last_dist": 0.03551,
-    "last_date": "2026-11-02",
+    "last_dist": 0.03812,
+    "last_date": "2026-11-03",
     "live_hist": {
       "2026-10-21": "BIL",
       "2026-10-22": "BIL",
@@ -24,7 +24,8 @@
       "2026-10-29": "BIL",
       "2026-10-30": "BIL",
       "2026-11-02": "TECL",
-      "2026-11-03": "BIL"
+      "2026-11-03": "BIL",
+      "2026-11-04": "BIL"
     }
   },
   "shadow": {
@@ -36,11 +37,11 @@
     "blind": {},
     "status": {
       "HG": "agree",
-      "KMLM": "agree",
+      "KMLM": "knife-edge",
       "SLEEVE": "agree",
       "HARV": "agree"
     },
-    "last_date": "2026-11-03",
+    "last_date": "2026-11-04",
     "pending": [],
     "fmp": {}
   }
