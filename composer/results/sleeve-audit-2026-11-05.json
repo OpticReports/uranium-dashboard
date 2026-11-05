@@ -1,5 +1,5 @@
 {
-"generated": "2026-11-05T22:03:25+00:00",
+"generated": "2026-11-05T23:34:56+00:00",
 "symphony": "nNdBk7hc5NiBzeRvbI5T",
 "era": {
 "version": "yHJkdePZUWBT6eMCgO9m",
@@ -48,14 +48,17 @@
 "BOXX": 0.999
 },
 "closest_calls": "RSI(IEF,8) 70.16 < RSI(PSQ,45) 59.71: no; CR(SHY,1) 0.21 > 0.5: no; RSI(CORP,16) 59.91 > 80: no; RSI(PEJ,14) 54.51 > 75.6: no; RSI(KIE,10) 67.78 > 78: no; RSI(LQD,12) 63.01 > 79.5: no",
-"daily_json_1105_spy": 744.4500122070312,
-"daily_json_mtime_utc": "2026-11-05T16:45+00:00"
+"conditions_in_tree": 24,
+"conditions_on_path": 21,
+"daily_json_1105_spy_now": 733.0,
+"daily_json_mtime_utc": "2026-11-05T22:55+00:00",
+"daily_json_note": "at the first run (22:03 UTC) the daily dataset's 11-05 row was an 11:45 ET print (SPY 744.45, VIX 23.3); it was refreshed to the close (SPY 733.00, VIX 28.18) at 22:55 UTC; this study reads 11-05 from Yahoo's 16:00 closes (yh2y) throughout and daily.json only to 11-04"
 },
 "rules_words": [
-"Two halves of 50%, re-evaluated at every close (daily rebalance). Nothing in the tree reads VIX, VIX3M, SPY or any equity index: the triggers are one-day shocks in bond and credit ETFs and RSI extremes in a few sector ETFs.",
+"Two halves of 50%, re-evaluated at every close (daily rebalance). Nothing in the tree reads VIX, VIX3M or a broad equity index (the InverseHold gate reads PSQ, the -1x Nasdaq-100 fund; the filters only rank the legs themselves by their one-day return): the triggers are one-day shocks in bond and credit ETFs (HYG, TLT, SHY, TMF, LQD), RSI extremes in credit (CORP, LQD) AND one-day or RSI extremes in two sector ETFs, KIE (insurance) and PEJ (leisure). 24 condition nodes in the tree; 21 sit on the 11-05 path (the other three, SHY 1d > +0.6% and the gate's two inner tests, are behind conditions that read false).",
 "InverseHold (50%): gate RSI(IEF,8) < RSI(PSQ,45): the 7-10y Treasury ETF must be weaker on an 8-day RSI than the 45-day RSI of the inverse-Nasdaq fund, i.e. bonds selling off while the inverse-equity trend is strong (a 2022-type tape). Gate open: 25% LABD (-3x biotech) if RSI(LABD,20) < RSI(KMLM,10) else BOXX, and 25% TMV (-3x long Treasuries) if RSI(TMV,20) < RSI(KMLM,10) else BOXX. Gate closed: 50% BOXX. A flight-to-quality crash (bonds up) pushes IEF's RSI up and the gate further from opening.",
 "FrontrunBonds (50%): a cascade tested in order, the first true condition picks the leg, usually the WORST one-day performer of a short list (a mean-reversion buy), and the next close re-tests everything: HYG 1d > +1.75% or TLT 1d > +6% or TLT 1d < -3.5% -> worst-1d of UVXY/SVXY/SOXL; HYG 1d < -1.75% -> worst of SVXY/SOXS/UGL; SHY 1d < -0.33% -> UVXY; SHY 1d > +0.5% -> UVXY (SVXY above +0.6%); TMF 1d > +10.5% -> UVXY; TMF 1d < -7.5% -> SVXY; RSI(CORP,15) < 23 or RSI(CORP,16) > 80 -> worst of SVXY/SOXL; RSI(PEJ,14) > 75.6 -> worst of UVXY/TQQQ/SPXL; RSI(KIE,10) > 78 -> worst of UVXY/SOXL/TQQQ; RSI(KIE,10) < 21 -> worst of SOXL/TQQQ; KIE 1d < -6% -> worst of KIE/SOXL/TQQQ; KIE 1d > +3.45% -> UVXY+SOXS; RSI(KIE,14) < 27 -> KIE+SOXL; LQD 1d > +1.5% or < -4% -> worst of UVXY/SOXL; RSI(LQD,12) > 79.5 -> SOXL; RSI(LQD,14) < 25 -> worst of SVXY/TMF; else BOXX.",
-"So the sleeve leaves BOXX when BONDS move, not when stocks do. On an equity crash day with calm Treasuries and credit (11-05: HYG -0.3%, TLT +0.2%, SHY +0.2%, LQD +0.2%) every condition reads false and both halves stay in BOXX; had a FrontrunBonds trigger fired at the 11-05 close, most branches would have bought SOXL (the worst one-day performer, -39%), a dip-buy, not a hedge."
+"So the sleeve leaves BOXX on bond/credit shocks and on KIE/PEJ sector extremes, not on a broad-index or VIX move. Of the four paid episodes two entered on sector triggers: 2018-02 on RSI(PEJ,14) 81.7 > 75.6 at the 01-26 close (UVXY 01-29; the bond selloff opened the InverseHold gate only at the 01-29 close, LABD +7 pp of the +24.5%) and COVID on KIE (RSI(KIE,10) < 21 at the 02-27 close -> TQQQ 02-28; KIE 1d +5.5% / +3.7% at the 03-02 / 03-04 closes -> UVXY+SOXS 03-03 / 03-05; the TMF/TLT/HYG shocks came from 03-06). Two entered on rates shocks: 2022 (TMF 1d -7.5% at the 01-03 close, then SHY 1d < -0.33% on 02-10, 03-02, 08-02, 08-05 -> UVXY; the gate open 134/195 days -> LABD/TMV) and 2024-08 (SHY 1d +0.56% at the 08-02 close -> UVXY 08-05). The unpaid equity-only selloffs entered late on KIE extremes as dip-buys (2015-08-24 and 2018-12-21: RSI(KIE,10) < 21 -> TQQQ; 2025-04-04: KIE 1d -7.45% -> SOXL) or not at all. On an equity crash day with calm Treasuries, credit and insurers (11-05: HYG -0.3%, TLT +0.2%, SHY +0.2%, LQD +0.2%, KIE -0.6%, RSI(KIE,10) 67.8) every condition reads false and both halves stay in BOXX; had a FrontrunBonds trigger fired at the 11-05 close, most branches would have bought SOXL (the worst one-day performer, -39%), a dip-buy, not a hedge."
 ],
 "trigger_table": [
 {
@@ -3991,6 +3994,622 @@
 "parked_at_open": 3,
 "best": "2025-04-10",
 "worst": "2025-04-04"
+},
+"1995-06..2011-09 SPY<=-3% (VIX legs modelled)": {
+"n": 67,
+"spy_mean": -0.044046266667277297,
+"ret_mean": 0.002126438870352239,
+"ret_median": 4.583333219776442e-05,
+"hit": 0.5074626865671642,
+"ret_t": 0.37331714725581633,
+"ret_sum": 0.14247140431360003,
+"ret_min": -0.14796070202776607,
+"ret_max": 0.17310552761265777,
+"f1": -0.000338081218111388,
+"f5": 0.0011843156493144848,
+"f10": -0.005113146827678794,
+"f20": -0.008300090471129928,
+"f5_median": 0.00030622797711932215,
+"f20_median": 0.001284394017488033,
+"f5_pos": 0.5522388059701493,
+"f20_pos": 0.5223880597014925,
+"parked_share": 0.5074626865671642,
+"parked_next_share": 0.34328358208955223,
+"entered_at_close": 17,
+"parked_at_open": 34,
+"best": "2008-10-15",
+"worst": "1998-08-31"
+},
+"2011-10+ SPY<=-3% (VIX legs real)": {
+"n": 37,
+"spy_mean": -0.043423130822839835,
+"ret_mean": 0.037966411100162356,
+"ret_median": 0.00010941713766610128,
+"hit": 0.5675675675675675,
+"ret_t": 3.406407753983289,
+"ret_sum": 1.4047572107060071,
+"ret_min": -0.05934822577770726,
+"ret_max": 0.28721637591212634,
+"f1": 0.00766091119718371,
+"f5": 0.10470223868444622,
+"f10": 0.20242634093125034,
+"f20": 0.37964203441836647,
+"f5_median": 0.05029474208031148,
+"f20_median": 0.08794492646358376,
+"f5_pos": 0.8888888888888888,
+"f20_pos": 0.8333333333333334,
+"parked_share": 0.5405405405405406,
+"parked_next_share": 0.43243243243243246,
+"entered_at_close": 8,
+"parked_at_open": 20,
+"best": "2020-03-16",
+"worst": "2020-03-12"
+}
+},
+"crash_runs": {
+"2015-06+": {
+"n_days": 36,
+"n_runs": 20,
+"run_sizes": [
+2,
+1,
+2,
+1,
+1,
+1,
+1,
+10,
+1,
+1,
+1,
+1,
+1,
+3,
+1,
+2,
+1,
+1,
+3,
+1
+],
+"longest": [
+"2020-02-24",
+"2020-03-20",
+10
+],
+"all_days": {
+"n": 35,
+"f5_mean": 0.10682051723008781,
+"f5_median": 0.06653715560696183,
+"f5_pos": 0.8857142857142857,
+"t_vs_any_day": 3.6125423022512475,
+"shift_placebo_p_mean": 0.002,
+"shift_placebo_p_median": 0.00025
+},
+"first_day": {
+"n": 19,
+"f5_mean": 0.02819746156295824,
+"f5_median": 0.011719680611870675,
+"f5_pos": 0.8421052631578947,
+"t_vs_any_day": 1.9367628534708932,
+"shift_placebo_p_mean": 0.0495
+},
+"per_run": {
+"n": 19,
+"mean": 0.16591677003278874,
+"median": 0.033933267833590186,
+"pos": 0.8421052631578947,
+"basis": "from the close before the first crash day of the run to 5 sessions after its last",
+"runs": [
+[
+"2015-08-21",
+"2015-08-24",
+0.06654
+],
+[
+"2016-06-24",
+"2016-06-24",
+-1e-05
+],
+[
+"2018-02-05",
+"2018-02-08",
+0.11367
+],
+[
+"2018-10-10",
+"2018-10-10",
+0.00055
+],
+[
+"2018-10-24",
+"2018-10-24",
+0.03393
+],
+[
+"2018-12-04",
+"2018-12-04",
+0.00066
+],
+[
+"2019-08-05",
+"2019-08-05",
+0.00044
+],
+[
+"2020-02-24",
+"2020-03-20",
+2.23279
+],
+[
+"2020-04-01",
+"2020-04-01",
+0.06932
+],
+[
+"2020-04-21",
+"2020-04-21",
+0.01149
+],
+[
+"2020-06-11",
+"2020-06-11",
+0.00803
+],
+[
+"2020-09-03",
+"2020-09-03",
+-0.00022
+],
+[
+"2020-10-28",
+"2020-10-28",
+0.0
+],
+[
+"2022-04-29",
+"2022-05-09",
+0.21137
+],
+[
+"2022-05-18",
+"2022-05-18",
+0.03338
+],
+[
+"2022-06-13",
+"2022-06-16",
+0.10728
+],
+[
+"2022-08-26",
+"2022-08-26",
+0.06441
+],
+[
+"2022-09-13",
+"2022-09-13",
+0.06131
+],
+[
+"2025-04-03",
+"2025-04-10",
+0.13748
+]
+]
+},
+"any_day_f5_mean": 0.009905093493588047
+},
+"1995-06+": {
+"n_days": 104,
+"n_runs": 63,
+"run_sizes": [
+1,
+1,
+1,
+1,
+1,
+1,
+2,
+1,
+1,
+1,
+1,
+1,
+1,
+1,
+2,
+1,
+1,
+2,
+1,
+1,
+1,
+1,
+1,
+1,
+1,
+2,
+9,
+7,
+1,
+2,
+1,
+5,
+1,
+1,
+1,
+1,
+1,
+1,
+1,
+3,
+1,
+1,
+1,
+2,
+1,
+2,
+1,
+1,
+1,
+1,
+10,
+1,
+1,
+1,
+1,
+1,
+3,
+1,
+2,
+1,
+1,
+3,
+1
+],
+"longest": [
+"2020-02-24",
+"2020-03-20",
+10
+],
+"all_days": {
+"n": 103,
+"f5_mean": 0.037365337292661505,
+"f5_median": 0.0052571760005524215,
+"f5_pos": 0.6699029126213593,
+"t_vs_any_day": 2.813449900989665,
+"shift_placebo_p_mean": 0.00075,
+"shift_placebo_p_median": 0.00025
+},
+"first_day": {
+"n": 62,
+"f5_mean": 0.0011990003932378834,
+"f5_median": 0.0004430012014979834,
+"f5_pos": 0.6290322580645161,
+"t_vs_any_day": -0.4311942706763973,
+"shift_placebo_p_mean": 0.74175
+},
+"per_run": {
+"n": 62,
+"mean": 0.04881516041188405,
+"median": 0.0012623707333792034,
+"pos": 0.6774193548387096,
+"basis": "from the close before the first crash day of the run to 5 sessions after its last",
+"runs": [
+[
+"1996-03-08",
+"1996-03-08",
+0.01319
+],
+[
+"1997-04-11",
+"1997-04-11",
+0.00042
+],
+[
+"1997-08-15",
+"1997-08-15",
+0.00122
+],
+[
+"1997-10-27",
+"1997-10-27",
+0.0012
+],
+[
+"1998-01-09",
+"1998-01-09",
+0.01006
+],
+[
+"1998-08-04",
+"1998-08-04",
+-0.02046
+],
+[
+"1998-08-27",
+"1998-08-31",
+-0.02903
+],
+[
+"1998-09-30",
+"1998-09-30",
+-0.00683
+],
+[
+"2000-01-04",
+"2000-01-04",
+-0.07927
+],
+[
+"2000-01-28",
+"2000-01-28",
+0.00131
+],
+[
+"2000-04-14",
+"2000-04-14",
+0.00548
+],
+[
+"2001-01-05",
+"2001-01-05",
+0.00121
+],
+[
+"2001-03-12",
+"2001-03-12",
+0.00468
+],
+[
+"2001-04-03",
+"2001-04-03",
+0.03866
+],
+[
+"2001-09-17",
+"2001-09-20",
+-0.14289
+],
+[
+"2002-01-29",
+"2002-01-29",
+0.00683
+],
+[
+"2002-07-10",
+"2002-07-10",
+-0.0621
+],
+[
+"2002-07-18",
+"2002-07-19",
+-0.05083
+],
+[
+"2002-08-05",
+"2002-08-05",
+0.00488
+],
+[
+"2002-09-03",
+"2002-09-03",
+0.00038
+],
+[
+"2002-09-27",
+"2002-09-27",
+0.00037
+],
+[
+"2003-03-24",
+"2003-03-24",
+0.00027
+],
+[
+"2007-02-27",
+"2007-02-27",
+0.00119
+],
+[
+"2008-06-06",
+"2008-06-06",
+-0.01118
+],
+[
+"2008-09-04",
+"2008-09-04",
+0.0602
+],
+[
+"2008-09-15",
+"2008-09-17",
+0.08806
+],
+[
+"2008-09-29",
+"2008-10-27",
+0.06973
+],
+[
+"2008-11-05",
+"2008-11-20",
+-0.06508
+],
+[
+"2008-12-01",
+"2008-12-01",
+-0.06584
+],
+[
+"2009-01-14",
+"2009-01-20",
+0.12866
+],
+[
+"2009-01-29",
+"2009-01-29",
+-0.02419
+],
+[
+"2009-02-10",
+"2009-03-05",
+-0.00364
+],
+[
+"2009-03-30",
+"2009-03-30",
+-0.04356
+],
+[
+"2009-04-20",
+"2009-04-20",
+0.04521
+],
+[
+"2010-02-04",
+"2010-02-04",
+0.03422
+],
+[
+"2010-05-06",
+"2010-05-06",
+-0.14779
+],
+[
+"2010-05-20",
+"2010-05-20",
+0.01814
+],
+[
+"2010-06-04",
+"2010-06-04",
+-0.02726
+],
+[
+"2010-06-29",
+"2010-06-29",
+-0.00044
+],
+[
+"2011-08-04",
+"2011-08-10",
+0.10228
+],
+[
+"2011-08-18",
+"2011-08-18",
+-0.02467
+],
+[
+"2011-09-22",
+"2011-09-22",
+0.01123
+],
+[
+"2011-11-09",
+"2011-11-09",
+0.03011
+],
+[
+"2015-08-21",
+"2015-08-24",
+0.06654
+],
+[
+"2016-06-24",
+"2016-06-24",
+-1e-05
+],
+[
+"2018-02-05",
+"2018-02-08",
+0.11367
+],
+[
+"2018-10-10",
+"2018-10-10",
+0.00055
+],
+[
+"2018-10-24",
+"2018-10-24",
+0.03393
+],
+[
+"2018-12-04",
+"2018-12-04",
+0.00066
+],
+[
+"2019-08-05",
+"2019-08-05",
+0.00044
+],
+[
+"2020-02-24",
+"2020-03-20",
+2.23279
+],
+[
+"2020-04-01",
+"2020-04-01",
+0.06932
+],
+[
+"2020-04-21",
+"2020-04-21",
+0.01149
+],
+[
+"2020-06-11",
+"2020-06-11",
+0.00803
+],
+[
+"2020-09-03",
+"2020-09-03",
+-0.00022
+],
+[
+"2020-10-28",
+"2020-10-28",
+0.0
+],
+[
+"2022-04-29",
+"2022-05-09",
+0.21137
+],
+[
+"2022-05-18",
+"2022-05-18",
+0.03338
+],
+[
+"2022-06-13",
+"2022-06-16",
+0.10728
+],
+[
+"2022-08-26",
+"2022-08-26",
+0.06441
+],
+[
+"2022-09-13",
+"2022-09-13",
+0.06131
+],
+[
+"2025-04-03",
+"2025-04-10",
+0.13748
+]
+]
+},
+"any_day_f5_mean": 0.004135729438199987
 }
 },
 "episodes": [
@@ -4036,6 +4655,29 @@
 "proxies": [
 "KMLM-signal"
 ],
+"entries": [
+{
+"decided": "2015-08-24",
+"held": "2015-08-25",
+"hold": {
+"BOXX": 0.5,
+"TQQQ": 0.5
+},
+"new": [
+"TQQQ"
+],
+"fired": [
+"RSI(KIE,10) 19.54 < 21"
+],
+"evaluator_agrees": true
+}
+],
+"trigger_counts": {
+"RSI(KIE,10) < 21": 1
+},
+"leg_contrib": {
+"TQQQ": -0.0066
+},
 "path": [
 [
 "2015-08-18",
@@ -4126,6 +4768,70 @@
 "proxies": [
 "KMLM-signal"
 ],
+"entries": [
+{
+"decided": "2018-01-26",
+"held": "2018-01-29",
+"hold": {
+"BOXX": 0.5,
+"UVXY": 0.5
+},
+"new": [
+"UVXY"
+],
+"fired": [
+"RSI(PEJ,14) 81.72 > 75.6"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2018-01-29",
+"held": "2018-01-30",
+"hold": {
+"TMV": 0.25,
+"LABD": 0.25,
+"SPXL": 0.5
+},
+"new": [
+"SPXL",
+"gate open"
+],
+"fired": [
+"RSI(IEF,8) 26.90 < RSI(PSQ,45) 30.55",
+"RSI(TMV,20) 58.37 < RSI(KMLM,10) 65.14",
+"RSI(LABD,20) 30.77 < RSI(KMLM,10) 65.14",
+"RSI(PEJ,14) 78.21 > 75.6"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2018-01-31",
+"held": "2018-02-01",
+"hold": {
+"BOXX": 0.25,
+"LABD": 0.25,
+"UVXY": 0.5
+},
+"new": [
+"UVXY"
+],
+"fired": [
+"RSI(IEF,8) 24.66 < RSI(PSQ,45) 32.30",
+"RSI(LABD,20) 37.66 < RSI(KMLM,10) 57.08",
+"RSI(PEJ,14) 76.77 > 75.6"
+],
+"evaluator_agrees": true
+}
+],
+"trigger_counts": {
+"RSI(PEJ,14) > 75.6": 3
+},
+"leg_contrib": {
+"UVXY": 0.1756,
+"LABD": 0.0688,
+"TMV": 0.0045,
+"SPXL": -0.0147
+},
 "path": [
 [
 "2018-01-29",
@@ -4224,6 +4930,49 @@
 "proxies": [
 "KMLM-signal"
 ],
+"entries": [
+{
+"decided": "2018-12-20",
+"held": "2018-12-21",
+"hold": {
+"BOXX": 0.5,
+"KIE": 0.25,
+"SOXL": 0.25
+},
+"new": [
+"KIE",
+"SOXL"
+],
+"fired": [
+"RSI(KIE,14) 26.46 < 27"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2018-12-21",
+"held": "2018-12-24",
+"hold": {
+"BOXX": 0.5,
+"TQQQ": 0.5
+},
+"new": [
+"TQQQ"
+],
+"fired": [
+"RSI(KIE,10) 18.65 < 21"
+],
+"evaluator_agrees": true
+}
+],
+"trigger_counts": {
+"RSI(KIE,14) < 27": 1,
+"RSI(KIE,10) < 21": 1
+},
+"leg_contrib": {
+"KIE": -0.0029,
+"SOXL": -0.0115,
+"TQQQ": -0.037
+},
 "path": [
 [
 "2018-12-03",
@@ -4365,6 +5114,184 @@
 "proxies": [
 "KMLM-signal"
 ],
+"entries": [
+{
+"decided": "2020-02-27",
+"held": "2020-02-28",
+"hold": {
+"BOXX": 0.5,
+"TQQQ": 0.5
+},
+"new": [
+"TQQQ"
+],
+"fired": [
+"RSI(KIE,10) 15.19 < 21"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2020-03-02",
+"held": "2020-03-03",
+"hold": {
+"BOXX": 0.5,
+"UVXY": 0.25,
+"SOXS": 0.25
+},
+"new": [
+"SOXS",
+"UVXY"
+],
+"fired": [
+"CR(KIE,1) 5.48 > 3.45"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2020-03-04",
+"held": "2020-03-05",
+"hold": {
+"BOXX": 0.5,
+"UVXY": 0.25,
+"SOXS": 0.25
+},
+"new": [
+"SOXS",
+"UVXY"
+],
+"fired": [
+"CR(KIE,1) 3.69 > 3.45"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2020-03-06",
+"held": "2020-03-09",
+"hold": {
+"BOXX": 0.5,
+"UVXY": 0.5
+},
+"new": [
+"UVXY"
+],
+"fired": [
+"CR(TMF,1) 15.66 > 10.5"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2020-03-09",
+"held": "2020-03-10",
+"hold": {
+"BOXX": 0.5,
+"SVXY": 0.5
+},
+"new": [
+"SVXY"
+],
+"fired": [
+"CR(HYG,1) -4.30 < -1.75"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2020-03-10",
+"held": "2020-03-11",
+"hold": {
+"BOXX": 0.5,
+"UVXY": 0.5
+},
+"new": [
+"UVXY"
+],
+"fired": [
+"CR(TLT,1) -5.13 < -3.5"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2020-03-11",
+"held": "2020-03-12",
+"hold": {
+"BOXX": 0.5,
+"SVXY": 0.5
+},
+"new": [
+"SVXY"
+],
+"fired": [
+"RSI(IEF,8) 54.05 < RSI(PSQ,45) 55.24",
+"CR(HYG,1) -2.18 < -1.75"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2020-03-12",
+"held": "2020-03-13",
+"hold": {
+"BOXX": 0.25,
+"TMV": 0.25,
+"SVXY": 0.5
+},
+"new": [
+"gate open"
+],
+"fired": [
+"RSI(IEF,8) 54.47 < RSI(PSQ,45) 61.26",
+"RSI(TMV,20) 36.75 < RSI(KMLM,10) 37.98",
+"CR(HYG,1) -4.00 < -1.75"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2020-03-13",
+"held": "2020-03-16",
+"hold": {
+"BOXX": 0.5,
+"UVXY": 0.5
+},
+"new": [
+"UVXY"
+],
+"fired": [
+"RSI(IEF,8) 48.05 < RSI(PSQ,45) 53.07",
+"CR(HYG,1) 3.14 > 1.75"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2020-03-16",
+"held": "2020-03-17",
+"hold": {
+"BOXX": 0.5,
+"SOXL": 0.5
+},
+"new": [
+"SOXL"
+],
+"fired": [
+"CR(TLT,1) 6.48 > 6"
+],
+"evaluator_agrees": true
+}
+],
+"trigger_counts": {
+"RSI(KIE,10) < 21": 1,
+"KIE 1d > 3.45%": 2,
+"TMF 1d > 10.5%": 1,
+"HYG 1d < -1.75%": 5,
+"TLT 1d < -3.5%": 2,
+"HYG 1d > 1.75%": 1,
+"TLT 1d > 6%": 2
+},
+"leg_contrib": {
+"UVXY": 0.8042,
+"SOXL": 0.0962,
+"SOXS": 0.0911,
+"TQQQ": 0.076,
+"SVXY": 0.0191,
+"TMV": 0.0186
+},
 "path": [
 [
 "2020-02-20",
@@ -4546,6 +5473,207 @@
 "next20": 0.07929810210331367,
 "spy_next20": 0.04927654831677186,
 "proxies": [],
+"entries": [
+{
+"decided": "2022-01-03",
+"held": "2022-01-04",
+"hold": {
+"BOXX": 0.5,
+"SVXY": 0.5
+},
+"new": [
+"SVXY"
+],
+"fired": [
+"RSI(IEF,8) 27.35 < RSI(PSQ,45) 43.04",
+"CR(TMF,1) -7.53 < -7.5"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2022-01-19",
+"held": "2022-01-20",
+"hold": {
+"TMV": 0.25,
+"BOXX": 0.75
+},
+"new": [
+"gate open"
+],
+"fired": [
+"RSI(IEF,8) 27.36 < RSI(PSQ,45) 53.68",
+"RSI(TMV,20) 59.54 < RSI(KMLM,10) 63.34"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2022-02-04",
+"held": "2022-02-07",
+"hold": {
+"TMV": 0.25,
+"LABD": 0.25,
+"TMF": 0.5
+},
+"new": [
+"TMF"
+],
+"fired": [
+"RSI(IEF,8) 29.13 < RSI(PSQ,45) 53.29",
+"RSI(TMV,20) 59.93 < RSI(KMLM,10) 83.10",
+"RSI(LABD,20) 57.11 < RSI(KMLM,10) 83.10",
+"RSI(LQD,14) 24.85 < 25"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2022-02-10",
+"held": "2022-02-11",
+"hold": {
+"TMV": 0.25,
+"LABD": 0.25,
+"UVXY": 0.5
+},
+"new": [
+"UVXY"
+],
+"fired": [
+"RSI(IEF,8) 20.92 < RSI(PSQ,45) 52.94",
+"RSI(TMV,20) 65.46 < RSI(KMLM,10) 73.97",
+"RSI(LABD,20) 50.80 < RSI(KMLM,10) 73.97",
+"CR(SHY,1) -0.51 < -0.33"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2022-02-25",
+"held": "2022-02-28",
+"hold": {
+"BOXX": 0.25,
+"LABD": 0.25,
+"UVXY": 0.25,
+"SOXS": 0.25
+},
+"new": [
+"SOXS",
+"UVXY"
+],
+"fired": [
+"RSI(IEF,8) 46.73 < RSI(PSQ,45) 53.86",
+"RSI(LABD,20) 52.49 < RSI(KMLM,10) 53.30",
+"CR(KIE,1) 3.62 > 3.45"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2022-03-02",
+"held": "2022-03-03",
+"hold": {
+"TMV": 0.25,
+"LABD": 0.25,
+"UVXY": 0.5
+},
+"new": [
+"UVXY",
+"gate open"
+],
+"fired": [
+"RSI(IEF,8) 50.81 < RSI(PSQ,45) 53.18",
+"RSI(TMV,20) 54.99 < RSI(KMLM,10) 73.65",
+"RSI(LABD,20) 52.91 < RSI(KMLM,10) 73.65",
+"CR(SHY,1) -0.33 < -0.33"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2022-03-08",
+"held": "2022-03-09",
+"hold": {
+"TMV": 0.25,
+"LABD": 0.25,
+"BOXX": 0.5
+},
+"new": [
+"gate open"
+],
+"fired": [
+"RSI(IEF,8) 50.67 < RSI(PSQ,45) 58.60",
+"RSI(TMV,20) 51.79 < RSI(KMLM,10) 85.31",
+"RSI(LABD,20) 58.54 < RSI(KMLM,10) 85.31"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2022-03-14",
+"held": "2022-03-15",
+"hold": {
+"TMV": 0.25,
+"LABD": 0.25,
+"TMF": 0.5
+},
+"new": [
+"TMF"
+],
+"fired": [
+"RSI(IEF,8) 29.88 < RSI(PSQ,45) 58.64",
+"RSI(TMV,20) 61.63 < RSI(KMLM,10) 61.68",
+"RSI(LABD,20) 60.52 < RSI(KMLM,10) 61.68",
+"RSI(LQD,14) 24.98 < 25"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2022-03-16",
+"held": "2022-03-17",
+"hold": {
+"BOXX": 0.75,
+"LABD": 0.25
+},
+"new": [
+"gate open"
+],
+"fired": [
+"RSI(IEF,8) 28.58 < RSI(PSQ,45) 52.40",
+"RSI(LABD,20) 51.01 < RSI(KMLM,10) 51.39"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2022-03-21",
+"held": "2022-03-22",
+"hold": {
+"TMV": 0.25,
+"LABD": 0.25,
+"UVXY": 0.5
+},
+"new": [
+"UVXY"
+],
+"fired": [
+"RSI(IEF,8) 23.38 < RSI(PSQ,45) 50.25",
+"RSI(TMV,20) 61.47 < RSI(KMLM,10) 67.04",
+"RSI(LABD,20) 47.68 < RSI(KMLM,10) 67.04",
+"CR(SHY,1) -0.33 < -0.33"
+],
+"evaluator_agrees": true
+}
+],
+"trigger_counts": {
+"TMF 1d < -7.5%": 2,
+"RSI(LQD,14) < 25": 3,
+"SHY 1d < -0.33%": 6,
+"KIE 1d > 3.45%": 2,
+"HYG 1d < -1.75%": 3,
+"HYG 1d > 1.75%": 2,
+"LQD 1d > 1.5%": 1
+},
+"leg_contrib": {
+"LABD": 0.2867,
+"TMV": 0.2863,
+"UVXY": 0.2028,
+"SVXY": 0.0228,
+"SOXS": 0.0049,
+"TMF": -0.0418
+},
 "path": [
 [
 "2022-01-04",
@@ -5564,6 +6692,29 @@
 "next20": 0.12821173457942914,
 "spy_next20": 0.06706869843918706,
 "proxies": [],
+"entries": [
+{
+"decided": "2024-08-02",
+"held": "2024-08-05",
+"hold": {
+"BOXX": 0.5,
+"UVXY": 0.5
+},
+"new": [
+"UVXY"
+],
+"fired": [
+"CR(SHY,1) 0.56 > 0.5"
+],
+"evaluator_agrees": true
+}
+],
+"trigger_counts": {
+"SHY 1d > 0.5%": 1
+},
+"leg_contrib": {
+"UVXY": 0.2915
+},
 "path": [
 [
 "2024-08-01",
@@ -5627,6 +6778,47 @@
 "next20": 0.2174703497167607,
 "spy_next20": 0.13025716600250736,
 "proxies": [],
+"entries": [
+{
+"decided": "2025-04-04",
+"held": "2025-04-07",
+"hold": {
+"BOXX": 0.5,
+"SOXL": 0.5
+},
+"new": [
+"SOXL"
+],
+"fired": [
+"CR(KIE,1) -7.45 < -6"
+],
+"evaluator_agrees": true
+},
+{
+"decided": "2025-04-07",
+"held": "2025-04-08",
+"hold": {
+"BOXX": 0.5,
+"SVXY": 0.5
+},
+"new": [
+"SVXY"
+],
+"fired": [
+"RSI(IEF,8) 54.85 < RSI(PSQ,45) 64.86",
+"CR(TMF,1) -9.18 < -7.5"
+],
+"evaluator_agrees": true
+}
+],
+"trigger_counts": {
+"KIE 1d < -6%": 1,
+"TMF 1d < -7.5%": 1
+},
+"leg_contrib": {
+"SOXL": 0.0241,
+"SVXY": -0.0331
+},
 "path": [
 [
 "2025-04-03",
@@ -5680,6 +6872,9 @@
 "next20": null,
 "spy_next20": null,
 "proxies": [],
+"entries": [],
+"trigger_counts": {},
+"leg_contrib": {},
 "path": [
 [
 "2026-11-05",
@@ -5687,6 +6882,26 @@
 -0.04409
 ]
 ]
+}
+],
+"episode_alt": [
+{
+"label": "2015-08 flash crash, one session later",
+"from": "2015-08-18",
+"to": "2015-08-26",
+"sessions": 7,
+"sleeve": 0.06677076570719032,
+"spy": -0.07659395440332184,
+"note": "TQQQ bought at the 08-24 close pays on 08-26"
+},
+{
+"label": "2022 bear, full year",
+"from": "2022-01-03",
+"to": "2022-12-30",
+"sessions": 251,
+"sleeve": 1.2307112100130198,
+"spy": -0.18175362063962264,
+"note": "the Q4 rally added to the trough-dated +99%"
 }
 ],
 "convexity": {
@@ -6013,6 +7228,86 @@
 "frontrun_out_share": 0.062458025520483546,
 "inverse_out_share": 0.30691739422431163,
 "corr_with_spy": -0.39483743607056304
+}
+},
+"costs": {
+"path_bps_per_unit_sum_abs_dw": 2.246,
+"fit": {
+"cost_bps_per_unit_sum_abs_dw": 2.246,
+"intercept_bps": -0.344,
+"resid_sd_bps": 7.86,
+"n": 869,
+"zero_turnover_days": 665,
+"zero_turnover_mean_bps": -0.092,
+"mean_sum_abs_dw_per_day": 0.1893,
+"cum_sim_costed": 2.993,
+"cum_composer": 2.995
+},
+"alt_bps": 5.12,
+"rule": "cost on d = c x sum|hold[d+1] - hold[d]| (research/crash/replay.py composer_equiv); c = the SLEEVE row of cost_fit.json",
+"windows": {
+"2015-06+": {
+"turnover_per_day": 0.20281543274244004,
+"cost_per_year_path": 0.011479191240875911,
+"cost_per_year_alt": 0.026168058394160584,
+"cagr_path": 0.578928084482089,
+"cagr_alt": 0.5560977278787622,
+"maxdd_path": 0.1975386052424114,
+"maxdd_alt": 0.20287631571734321
+},
+"2020-12+ (all legs real)": {
+"turnover_per_day": 0.21558092679650773,
+"cost_per_year_path": 0.0122017079919409,
+"cost_per_year_alt": 0.027815113498992617,
+"cagr_path": 0.5420672275115537,
+"cagr_alt": 0.5183502839790861,
+"maxdd_path": 0.14394710540673517,
+"maxdd_alt": 0.14860235494776308
+},
+"1995-06+": {
+"turnover_per_day": 0.22873082287308227,
+"cost_per_year_path": 0.012945981589958157,
+"cost_per_year_alt": 0.02951176569037657,
+"cagr_path": 0.19493115237289382,
+"cagr_alt": 0.175449967037979,
+"maxdd_path": 0.5112717191262347,
+"maxdd_alt": 0.543650001241992
+}
+}
+},
+"eras": {
+"1995-06..2011-09 (VIX legs modelled)": {
+"from": "1995-06-02",
+"to": "2011-09-30",
+"n": 4091,
+"cagr": 0.008397467988544571,
+"multiple": 1.1463074791605194,
+"maxdd": 0.5112717191262347,
+"maxdd_peak": "2008-11-17",
+"maxdd_trough": "2011-08-08",
+"spy_cagr": 0.06086857558790881
+},
+"2011-10+ (VIX legs real)": {
+"from": "2011-10-03",
+"to": "2026-11-05",
+"n": 3796,
+"cagr": 0.4359543807618682,
+"multiple": 235.1877581297995,
+"maxdd": 0.25555304399827516,
+"maxdd_peak": "2013-06-27",
+"maxdd_trough": "2015-06-08",
+"spy_cagr": 0.15156341675332552
+},
+"1995-06+": {
+"from": "1995-06-02",
+"to": "2026-11-05",
+"n": 7887,
+"cagr": 0.19493115237289382,
+"multiple": 269.5974861511861,
+"maxdd": 0.5112717191262347,
+"maxdd_peak": "2008-11-17",
+"maxdd_trough": "2011-08-08",
+"spy_cagr": 0.10347359611983387
 }
 },
 "years": {
@@ -34601,7 +35896,266 @@
 "SOXL": 0.5
 }
 }
+],
+"miss_sessions": {
+"rows": [
+{
+"decided": "2026-08-11",
+"session": "2026-08-12",
+"path_hold": {
+"BOXX": 0.75,
+"LABD": 0.25
+},
+"composer_hold": {
+"BOXX": 1.0
+},
+"path": -0.006632802455685834,
+"composer": 0.000169750785639744,
+"gap": -0.006802553241325578
+},
+{
+"decided": "2026-08-17",
+"session": "2026-08-18",
+"path_hold": {
+"BOXX": 0.75,
+"LABD": 0.25
+},
+"composer_hold": {
+"BOXX": 1.0
+},
+"path": -0.002777684465787263,
+"composer": 0.0003393934780264729,
+"gap": -0.0031170779438137357
+},
+{
+"decided": "2026-10-01",
+"session": "2026-10-02",
+"path_hold": {
+"BOXX": 0.25,
+"LABD": 0.25,
+"SVXY": 0.5
+},
+"composer_hold": {
+"BOXX": 0.747848,
+"LABD": 0.252152
+},
+"path": 0.006195684418015398,
+"composer": 0.0013297923263557389,
+"gap": 0.004865892091659659
+},
+{
+"decided": "2026-10-02",
+"session": "2026-10-05",
+"path_hold": {
+"BOXX": 0.25,
+"LABD": 0.25,
+"TMF": 0.5
+},
+"composer_hold": {
+"BOXX": 0.750651,
+"LABD": 0.249349
+},
+"path": -0.015606455522274715,
+"composer": -0.007926427364200211,
+"gap": -0.007680028158074503
+},
+{
+"decided": "2026-10-05",
+"session": "2026-10-06",
+"path_hold": {
+"BOXX": 0.25,
+"LABD": 0.25,
+"TMF": 0.5
+},
+"composer_hold": {
+"BOXX": 0.75015,
+"LABD": 0.24985
+},
+"path": 0.028004660630930177,
+"composer": 0.02493935982726281,
+"gap": 0.0030653008036673653
+},
+{
+"decided": "2026-10-08",
+"session": "2026-10-09",
+"path_hold": {
+"TMV": 0.25,
+"LABD": 0.25,
+"BOXX": 0.5
+},
+"composer_hold": {
+"BOXX": 1.0
+},
+"path": -0.022648310150036422,
+"composer": 0.0006751704877925313,
+"gap": -0.023323480637828953
+},
+{
+"decided": "2026-10-12",
+"session": "2026-10-13",
+"path_hold": {
+"BOXX": 0.75,
+"LABD": 0.25
+},
+"composer_hold": {
+"BOXX": 1.0
+},
+"path": 0.02327043663917473,
+"composer": 8.430625540833958e-05,
+"gap": 0.02318613038376639
+},
+{
+"decided": "2026-10-22",
+"session": "2026-10-23",
+"path_hold": {
+"BOXX": 0.5,
+"SOXL": 0.5
+},
+"composer_hold": {
+"BOXX": 1.0
+},
+"path": 0.008768748953075908,
+"composer": 0.0005897690907772368,
+"gap": 0.008178979862298671
+}
+],
+"path_total": 0.017609163418301765,
+"composer_total": 0.020060830266839025,
+"gap_pp_sum": -0.001626836839650687
+},
+"early_october": {
+"rsi_lqd14_as_fetched": {
+"2026-10-01": 24.504247043424655,
+"2026-10-02": 23.406851174308656,
+"2026-10-05": 23.406851174308656
+},
+"rsi_lqd14_with_1001_exdiv_0.44": {
+"2026-10-01": 29.92406507720726,
+"2026-10-02": 28.616800635532556,
+"2026-10-05": 28.616800635532556
+},
+"path_1001_1007": 0.05672748578421172,
+"composer_actual_holdings_1001_1007": 0.05786332518598303,
+"hypothetical_boxx75_labd25_1001_1007": 0.03768073312103004,
+"path_1002_1006": 0.018230943556819534,
+"composer_actual_holdings_1002_1006": 0.018167405558896954,
+"sept_dividend_fraction": {
+"LQD": 0.00418039966074657,
+"HYG": 0.0054504143829147145,
+"SHY": 0.0029796470596784586,
+"IEF": 0.0035799087779748717,
+"TLT": 0.0038172861636043276,
+"BIL": 0.0030547541796861477
+},
+"misses_redecided_with_oct_exdivs": {
+"2026-08-11": {
+"target_with_oct_exdivs": {
+"BOXX": 0.75,
+"LABD": 0.25
+},
+"matches_composer": false,
+"matched_before": false
+},
+"2026-08-17": {
+"target_with_oct_exdivs": {
+"BOXX": 0.75,
+"LABD": 0.25
+},
+"matches_composer": false,
+"matched_before": false
+},
+"2026-10-01": {
+"target_with_oct_exdivs": {
+"BOXX": 0.75,
+"LABD": 0.25
+},
+"matches_composer": true,
+"matched_before": false
+},
+"2026-10-02": {
+"target_with_oct_exdivs": {
+"BOXX": 0.75,
+"LABD": 0.25
+},
+"matches_composer": true,
+"matched_before": false
+},
+"2026-10-05": {
+"target_with_oct_exdivs": {
+"BOXX": 0.75,
+"LABD": 0.25
+},
+"matches_composer": true,
+"matched_before": false
+},
+"2026-10-08": {
+"target_with_oct_exdivs": {
+"BOXX": 1.0
+},
+"matches_composer": true,
+"matched_before": false
+},
+"2026-10-12": {
+"target_with_oct_exdivs": {
+"BOXX": 1.0
+},
+"matches_composer": true,
+"matched_before": false
+},
+"2026-10-22": {
+"target_with_oct_exdivs": {
+"BOXX": 0.5,
+"SOXL": 0.5
+},
+"matches_composer": false,
+"matched_before": false
+}
+},
+"last_booked_exdates_in_1105_vintage": {
+"LQD": [
+"2026-07-01",
+"2026-08-03",
+"2026-09-01"
+],
+"HYG": [
+"2026-07-01",
+"2026-08-03",
+"2026-09-01"
+],
+"SHY": [
+"2026-07-01",
+"2026-08-03",
+"2026-09-01"
+],
+"IEF": [
+"2026-07-01",
+"2026-08-03",
+"2026-09-01"
+],
+"TLT": [
+"2026-07-01",
+"2026-08-03",
+"2026-09-01"
+],
+"BIL": [
+"2026-07-01",
+"2026-08-03",
+"2026-09-01"
+],
+"CORP": [
+"2026-08-03",
+"2026-09-01",
+"2026-10-01"
 ]
+},
+"is_1105_exdate": false,
+"monthly_div_as_pct_of_price": {
+"SHY": 0.00306,
+"HYG": 0.00427,
+"LQD": 0.0042,
+"TLT": 0.00403
+}
+}
 },
 "states": [
 {
@@ -35086,7 +36640,7 @@
 },
 "edges": [
 {
-"kind": "held-leg conditional return",
+"kind": "held-leg component record (same-session timing of the sleeve's own leg; not an overlay)",
 "ticker": "LABD",
 "n": 601,
 "mean_on": 0.00686811912241985,
@@ -35101,10 +36655,14 @@
 "hit_on": 0.5317073170731708,
 "t_diff": 3.177691796748144,
 "mean_off": -0.005177688269842637
-}
+},
+"shift_placebo_p": 0.0006666666666666666,
+"lag1_mean": 0.003947958480920345,
+"lag1_hit": 0.49916805324459235,
+"lag1_n": 601
 },
 {
-"kind": "held-leg conditional return",
+"kind": "held-leg component record (same-session timing of the sleeve's own leg; not an overlay)",
 "ticker": "SOXL",
 "n": 70,
 "mean_on": 0.03125031911385987,
@@ -35119,10 +36677,14 @@
 "hit_on": 0.8888888888888888,
 "t_diff": 2.090223375679087,
 "mean_off": 0.0033942345257070663
-}
+},
+"shift_placebo_p": 0.0006666666666666666,
+"lag1_mean": 0.006475844299122405,
+"lag1_hit": 0.5285714285714286,
+"lag1_n": 70
 },
 {
-"kind": "held-leg conditional return",
+"kind": "held-leg component record (same-session timing of the sleeve's own leg; not an overlay)",
 "ticker": "SVXY",
 "n": 37,
 "mean_on": 0.014173988476426374,
@@ -35137,10 +36699,14 @@
 "hit_on": 0.42857142857142855,
 "t_diff": -1.252438025740964,
 "mean_off": 0.0009690825509845388
-}
+},
+"shift_placebo_p": 0.0036666666666666666,
+"lag1_mean": 0.0006965475360856512,
+"lag1_hit": 0.6216216216216216,
+"lag1_n": 37
 },
 {
-"kind": "held-leg conditional return",
+"kind": "held-leg component record (same-session timing of the sleeve's own leg; not an overlay)",
 "ticker": "TMV",
 "n": 376,
 "mean_on": 0.0038597828610507858,
@@ -35155,10 +36721,14 @@
 "hit_on": 0.4552238805970149,
 "t_diff": -0.3086774549291521,
 "mean_off": 0.0010559716092428128
-}
+},
+"shift_placebo_p": 0.0036666666666666666,
+"lag1_mean": 0.0012842204507848701,
+"lag1_hit": 0.5053191489361702,
+"lag1_n": 376
 },
 {
-"kind": "held-leg conditional return",
+"kind": "held-leg component record (same-session timing of the sleeve's own leg; not an overlay)",
 "ticker": "UVXY",
 "n": 101,
 "mean_on": 0.052847321209783304,
@@ -35173,7 +36743,11 @@
 "hit_on": 0.47368421052631576,
 "t_diff": 1.8366459917983502,
 "mean_off": -0.0037193347846809508
-}
+},
+"shift_placebo_p": 0.0,
+"lag1_mean": 0.008554427924447322,
+"lag1_hit": 0.45544554455445546,
+"lag1_n": 101
 },
 {
 "kind": "SPY after \"InverseHold leg on\" (2015-06+)",

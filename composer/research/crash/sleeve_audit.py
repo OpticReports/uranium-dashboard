@@ -14,13 +14,17 @@ Inputs (read-only):
   <SC>/study3/yh2y.json          Yahoo adjusted closes, 2 years, every tree ticker (+SPY, BIL, VIXM, VXZ, ^VIX,
                                  ^VIX3M), fetched 2026-11-05 16:50 ET with shadow_runner.fetch_prices; refetched
                                  with --refresh-yahoo. This is the basis of the 11-05 trigger table.
-  <SC>/overnight/daily.json      SPY / BOXX / BIL / VIXM / VXZ bars 2006..2026-11-05 (its 11-05 row is an 11:45 ET
-                                 snapshot, not the close: SPY 744.45 there vs 733.00 at 16:00; replaced by yh2y)
+  <SC>/overnight/daily.json      SPY / BOXX / BIL / VIXM / VXZ bars 2006.. (rows <= 11-04 only: at the first run,
+                                 22:03 UTC, its 11-05 row was an 11:45 ET print, refreshed to the close at 22:55 UTC;
+                                 every 11-05 number here comes from yh2y, Yahoo's 16:00 closes)
   <SC>/crash/yh/*.json           Yahoo histories: SPY 1993+ (the pre-2006 SPY days), ^IRX / BIL / BOXX (the cash
-                                 line), the held funds' own returns (edge section), RYMFX
+                                 line), the held funds' own returns (component records), RYMFX, the tree's tickers
+                                 (the entry-trigger replay of section 3)
   <SC>/long1997/engines_ts_synth.json   the sleeve's daily path 1995-06..2026-11-04 from research/longrun/book1997.py
                                  (the live tree on the long panel of long_panel.py, Composer-equivalent costs):
                                  rets[d] = return earned on d, hold[d] = weights earning on d (decided at close d-1)
+  <SC>/crash/cost_fit.json       the cost the path charged: replay.composer_equiv, cost on d = c x sum|hold[d+1]-hold[d]|
+                                 with c = the SLEEVE's own fit (2.246 bps per unit sum|dw|; HG's is 5.12)
   results/monitor/shadow-ledger.jsonl   Composer's live holdings per session (path validation)
 Writes composer/results/sleeve-audit-2026-11-05.json. Chart: make_sleeve_chart.py.
 
@@ -30,6 +34,7 @@ import datetime
 import json
 import math
 import os
+import random
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -41,6 +46,8 @@ YH2Y = f'{SC}/study3/yh2y.json'
 DAILY = f'{SC}/overnight/daily.json'
 YH = f'{SC}/crash/yh'
 ENGINES = f'{SC}/long1997/engines_ts_synth.json'
+COST_FIT = f'{SC}/crash/cost_fit.json'
+ALT_BPS = 5.12                      # HG's fit: the level the first draft of this study misquoted as the sleeve's
 LEDGER = os.path.join(HERE, '..', '..', 'results', 'monitor', 'shadow-ledger.jsonl')
 OUT = os.path.join(HERE, '..', '..', 'results', 'sleeve-audit-2026-11-05.json')
 D_LIVE = '2026-11-05'
@@ -60,8 +67,12 @@ EPISODES = [  # (label, first return day, last return day): returns compound fro
     ('2026-11-05', '2026-11-05', '2026-11-05'),
 ]
 WORDS = [
-    "Two halves of 50%, re-evaluated at every close (daily rebalance). Nothing in the tree reads VIX, VIX3M, SPY or any "
-    "equity index: the triggers are one-day shocks in bond and credit ETFs and RSI extremes in a few sector ETFs.",
+    "Two halves of 50%, re-evaluated at every close (daily rebalance). Nothing in the tree reads VIX, VIX3M or a broad "
+    "equity index (the InverseHold gate reads PSQ, the -1x Nasdaq-100 fund; the filters only rank the legs themselves by "
+    "their one-day return): the triggers are one-day shocks in bond and credit ETFs (HYG, TLT, SHY, TMF, LQD), RSI "
+    "extremes in credit (CORP, LQD) AND one-day or RSI extremes in two sector ETFs, KIE (insurance) and PEJ (leisure). "
+    "24 condition nodes in the tree; 21 sit on the 11-05 path (the other three, SHY 1d > +0.6% and the gate's two inner "
+    "tests, are behind conditions that read false).",
     "InverseHold (50%): gate RSI(IEF,8) < RSI(PSQ,45): the 7-10y Treasury ETF must be weaker on an 8-day RSI than the "
     "45-day RSI of the inverse-Nasdaq fund, i.e. bonds selling off while the inverse-equity trend is strong (a 2022-type "
     "tape). Gate open: 25% LABD (-3x biotech) if RSI(LABD,20) < RSI(KMLM,10) else BOXX, and 25% TMV (-3x long Treasuries) "
@@ -75,10 +86,18 @@ WORDS = [
     "of UVXY/SOXL/TQQQ; RSI(KIE,10) < 21 -> worst of SOXL/TQQQ; KIE 1d < -6% -> worst of KIE/SOXL/TQQQ; KIE 1d > +3.45% -> "
     "UVXY+SOXS; RSI(KIE,14) < 27 -> KIE+SOXL; LQD 1d > +1.5% or < -4% -> worst of UVXY/SOXL; RSI(LQD,12) > 79.5 -> SOXL; "
     "RSI(LQD,14) < 25 -> worst of SVXY/TMF; else BOXX.",
-    "So the sleeve leaves BOXX when BONDS move, not when stocks do. On an equity crash day with calm Treasuries and "
-    "credit (11-05: HYG -0.3%, TLT +0.2%, SHY +0.2%, LQD +0.2%) every condition reads false and both halves stay in "
-    "BOXX; had a FrontrunBonds trigger fired at the 11-05 close, most branches would have bought SOXL (the worst "
-    "one-day performer, -39%), a dip-buy, not a hedge.",
+    "So the sleeve leaves BOXX on bond/credit shocks and on KIE/PEJ sector extremes, not on a broad-index or VIX move. "
+    "Of the four paid episodes two entered on sector triggers: 2018-02 on RSI(PEJ,14) 81.7 > 75.6 at the 01-26 close "
+    "(UVXY 01-29; the bond selloff opened the InverseHold gate only at the 01-29 close, LABD +7 pp of the +24.5%) and "
+    "COVID on KIE (RSI(KIE,10) < 21 at the 02-27 close -> TQQQ 02-28; KIE 1d +5.5% / +3.7% at the 03-02 / 03-04 closes "
+    "-> UVXY+SOXS 03-03 / 03-05; the TMF/TLT/HYG shocks came from 03-06). Two entered on rates shocks: 2022 (TMF 1d -7.5% "
+    "at the 01-03 close, then SHY 1d < -0.33% on 02-10, 03-02, 08-02, 08-05 -> UVXY; the gate open 134/195 days -> "
+    "LABD/TMV) and 2024-08 (SHY 1d +0.56% at the 08-02 close -> UVXY 08-05). The unpaid equity-only selloffs entered late "
+    "on KIE extremes as dip-buys (2015-08-24 and 2018-12-21: RSI(KIE,10) < 21 -> TQQQ; 2025-04-04: KIE 1d -7.45% -> SOXL) "
+    "or not at all. On an equity crash day with calm Treasuries, credit and insurers (11-05: HYG -0.3%, TLT +0.2%, SHY "
+    "+0.2%, LQD +0.2%, KIE -0.6%, RSI(KIE,10) 67.8) every condition reads false and both halves stay in BOXX; had a "
+    "FrontrunBonds trigger fired at the 11-05 close, most branches would have bought SOXL (the worst one-day performer, "
+    "-39%), a dip-buy, not a hedge.",
 ]
 
 
@@ -188,6 +207,31 @@ def maxdd(r, ds):
         pk = max(pk, v)
         dd = max(dd, 1 - v / pk)
     return dd
+
+
+def maxdd_dates(r, ds):
+    """(max drawdown, peak date, trough date)"""
+    v = pk = 1.0
+    dd, pk_d, out = 0.0, ds[0], (ds[0], ds[0])
+    for d in ds:
+        v *= 1 + r.get(d, 0.0)
+        if v >= pk:
+            pk, pk_d = v, d
+        if 1 - v / pk > dd:
+            dd, out = 1 - v / pk, (pk_d, d)
+    return dd, out[0], out[1]
+
+
+def runs_of(ds, idx, gap=5):
+    """consecutive dates closer than `gap` sessions form one run"""
+    out, prev = [], None
+    for d in ds:
+        if prev is None or idx[d] - idx[prev] > gap:
+            out.append([d])
+        else:
+            out[-1].append(d)
+        prev = d
+    return out
 
 
 # ------------------------------------------------------------------ data
@@ -507,12 +551,101 @@ def main():
         crash_summary[f'{lab} top-10 up-days'] = summary(top)
         crash_summary[f'{lab} top-10 up-days']['days'] = [{'date': x['date'], 'spy': x['spy'], 'ret': x['ret'], 'hold': x['hold']} for x in top]
         crash_summary[f'{lab} all days'] = summary([row(d) for d in spy_days if d >= lo])
+    # the 1995+ crash days blend two regimes: modelled VIX legs before UVXY/SVXY's launch (2011-10-04), real funds after
+    UV0 = '2011-10-01'
+    crash_summary['1995-06..2011-09 SPY<=-3% (VIX legs modelled)'] = summary([x for x in crash if x['date'] < UV0])
+    crash_summary['2011-10+ SPY<=-3% (VIX legs real)'] = summary([x for x in crash if x['date'] >= UV0])
 
-    # ---- 3. episodes
+    # ---- 2b. clustering: the crash days form runs (gap > 5 sessions). One-per-run (first day) and per-run forward
+    #          returns, Welch t vs any day, and a circular-shift placebo of the selected set inside the window
+    def shift_placebo(sel, win, stat, obs, n_iter=4000, seed=7):
+        """share of circular shifts of the whole selected set (inside win, keeping the gaps) whose stat >= observed"""
+        rng = random.Random(seed)
+        base = [idx[d] for d in sel]
+        lo_i, hi_i = idx[win[0]], idx[win[-1]] - 5
+        span = hi_i - lo_i
+        cnt = 0
+        for _ in range(n_iter):
+            k = rng.randrange(1, span)
+            f5 = [fwd(hold_days[lo_i + (i - lo_i + k) % span], 5) for i in base]
+            f5 = [x for x in f5 if x is not None]
+            cnt += stat(f5) >= obs
+        return cnt / n_iter
+    crash_runs = {}
+    for lab, lo in (('2015-06+', REAL_FROM), ('1995-06+', PATH_FROM)):
+        cds = [x['date'] for x in crash if x['date'] >= lo]
+        rs = runs_of(cds, idx)
+        win = [d for d in spy_days if d >= lo]
+        all5 = [v for v in (fwd(d, 5) for d in win) if v is not None]
+        first = [(r[0], fwd(r[0], 5)) for r in rs if fwd(r[0], 5) is not None]
+        per = [(r[0], r[-1], prod([rets[x] for x in hold_days[idx[r[0]]:idx[r[-1]] + 6]])) for r in rs if idx[r[-1]] + 5 < len(hold_days)]
+        f5 = [v for _, v in first]
+        pr = [v for _, _, v in per]
+        allc = [d for d in cds if fwd(d, 5) is not None]
+        allc5 = [fwd(d, 5) for d in allc]
+        longest = max(rs, key=len)
+        crash_runs[lab] = {'n_days': len(cds), 'n_runs': len(rs), 'run_sizes': [len(r) for r in rs], 'longest': [longest[0], longest[-1], len(longest)],
+                           'all_days': {'n': len(allc5), 'f5_mean': mean(allc5), 'f5_median': median(allc5), 'f5_pos': sum(1 for v in allc5 if v > 0) / len(allc5),
+                                        't_vs_any_day': tdiff(allc5, all5), 'shift_placebo_p_mean': shift_placebo(allc, win, mean, mean(allc5)),
+                                        'shift_placebo_p_median': shift_placebo(allc, win, median, median(allc5))},
+                           'first_day': {'n': len(f5), 'f5_mean': mean(f5), 'f5_median': median(f5), 'f5_pos': sum(1 for v in f5 if v > 0) / len(f5),
+                                         't_vs_any_day': tdiff(f5, all5), 'shift_placebo_p_mean': shift_placebo([d for d, _ in first], win, mean, mean(f5))},
+                           'per_run': {'n': len(pr), 'mean': mean(pr), 'median': median(pr), 'pos': sum(1 for v in pr if v > 0) / len(pr),
+                                       'basis': 'from the close before the first crash day of the run to 5 sessions after its last',
+                                       'runs': [[a, b, round(v, 5)] for a, b, v in per]},
+                           'any_day_f5_mean': mean(all5)}
+
+    # ---- 3. episodes, with the decision-day conditions that read true before each leg came on (the approved tree
+    #         re-evaluated by the shadow evaluator on the Yahoo cache; KMLM <- RYMFX, BOXX <- BIL before launch)
+    panel = {}
+    for t in sr.tree_tickers(tree):
+        p = yh(t)
+        if t == 'KMLM':
+            p = splice(p, yh('RYMFX'))
+        elif t == 'BOXX':
+            p = splice(p, yh('BIL'))
+        panel[t] = p
+
+    def cond_key(x):
+        fn, t, w = x['lhs']
+        lhs = f"{t} 1d" if fn == 'cumulative-return' and w == 1 else f"{sr.SHORT[fn]}({t},{w})"
+        rhs = f"{sr.SHORT[x['rhs'][0]]}({x['rhs'][1]},{x['rhs'][2]})" if x['rhs'] else f"{x['r']:g}" + ('%' if fn == 'cumulative-return' else '')
+        return f"{lhs} {'>' if x['op'] == 'gt' else '<'} {rhs}"
+
+    def fired_at(d):
+        _, tgt, tr = sr.run_engine(panel, tree, d)
+        if tgt is None:
+            return None, [], []
+        trues = [x for x in tr if x['kind'] == 'cond' and x['res']]
+        return tgt, [sr.fmt_item(x).rsplit(':', 1)[0] for x in trues], [cond_key(x) for x in trues]
+    own = {}
+    for t in FRONTRUN | INVERSE:
+        try:
+            own[t] = rets_of(yh(t))
+        except FileNotFoundError:
+            pass
     episodes = []
     for lab, a, b in EPISODES:
         ds = [d for d in hold_days if a <= d <= b]
         ia, ib = idx[ds[0]], idx[ds[-1]]
+        entries, counts, contrib = [], {}, {}
+        for i in range(ia, ib + 1):
+            d, d0 = hold_days[i], hold_days[i - 1]
+            w, w0 = hold[d], hold[d0]
+            for t, x in w.items():
+                if t not in CASH and d in own.get(t, {}):
+                    contrib[t] = contrib.get(t, 0.0) + x * own[t][d]
+            new_front = sorted(t for t in w if t in FRONTRUN and w0.get(t, 0.0) < w[t] - 1e-9)
+            gate_open = any(t in INVERSE for t in w) and not any(t in INVERSE for t in w0)
+            if not new_front and not gate_open:
+                continue
+            tgt, trues, keys = fired_at(d0)
+            for k in keys:
+                if not k.startswith('RSI(IEF') and not k.startswith('RSI(LABD') and not k.startswith('RSI(TMV'):
+                    counts[k] = counts.get(k, 0) + 1
+            if len(entries) < 10:
+                entries.append({'decided': d0, 'held': d, 'hold': w, 'new': new_front + (['gate open'] if gate_open else []), 'fired': trues,
+                                'evaluator_agrees': tgt is not None and sr.distance(tgt, w)[0] <= 0.03})
         v = pk = 1.0
         mdd, best, worst = 0.0, None, None
         for d in ds:
@@ -541,7 +674,14 @@ def main():
                          'next20': prod([rets[x] for x in hold_days[ib + 1:ib + 21]]) if ib + 20 < len(hold_days) else None,
                          'spy_next20': prod([r_spy[x] for x in hold_days[ib + 1:ib + 21] if x in r_spy]) if ib + 20 < len(hold_days) else None,
                          'proxies': sorted({p for d in ds for p in proxies(d, hold[d])}),
+                         'entries': entries, 'trigger_counts': counts, 'leg_contrib': {t: round(v, 4) for t, v in sorted(contrib.items(), key=lambda kv: -kv[1])},
                          'path': [[d, round(prod([rets[x] for x in ds[:k + 1]]), 5), round(prod([r_spy[x] for x in ds[:k + 1]]), 5)] for k, d in enumerate(ds)]})
+    # the study windows end at each trough; the same episodes one session later / over the whole year
+    episode_alt = []
+    for lab, a, b, note in (('2015-08 flash crash, one session later', '2015-08-18', '2015-08-26', 'TQQQ bought at the 08-24 close pays on 08-26'),
+                            ('2022 bear, full year', '2022-01-03', '2022-12-30', 'the Q4 rally added to the trough-dated +99%')):
+        ds = [d for d in hold_days if a <= d <= b]
+        episode_alt.append({'label': lab, 'from': ds[0], 'to': ds[-1], 'sessions': len(ds), 'sleeve': prod([rets[d] for d in ds]), 'spy': prod([r_spy[d] for d in ds if d in r_spy]), 'note': note})
 
     # ---- 4. convexity
     conv = {}
@@ -565,6 +705,30 @@ def main():
                      'frontrun_out_share': sum(any(t in FRONTRUN for t in hold[d]) for d in ds) / len(ds),
                      'inverse_out_share': sum(any(t in INVERSE for t in hold[d]) for d in ds) / len(ds),
                      'corr_with_spy': ols([r_spy[d] for d in ds], [rets[d] for d in ds])['r']}
+    # ---- 4b. the cost level the path charged (replay.composer_equiv: cost on d = c x sum|hold[d+1] - hold[d]|, c = the
+    #          SLEEVE's own fit) and the same path re-costed at HG's 5.12 bps
+    with open(COST_FIT) as f:
+        cfit = json.load(f)['SLEEVE']
+    c_path = cfit['cost_bps_per_unit_sum_abs_dw']
+    turn = {}
+    for i in range(len(hold_days) - 1):
+        w, wn = hold[hold_days[i]], hold[hold_days[i + 1]]
+        turn[hold_days[i]] = sum(abs(wn.get(t, 0.0) - w.get(t, 0.0)) for t in set(w) | set(wn))
+    r_alt = {d: rets[d] - (ALT_BPS - c_path) / 1e4 * turn.get(d, 0.0) for d in hold_days}
+    costs = {'path_bps_per_unit_sum_abs_dw': c_path, 'fit': cfit, 'alt_bps': ALT_BPS,
+             'rule': 'cost on d = c x sum|hold[d+1] - hold[d]| (research/crash/replay.py composer_equiv); c = the SLEEVE row of cost_fit.json', 'windows': {}}
+    for lab, lo in (('2015-06+', REAL_FROM), ('2020-12+ (all legs real)', '2020-12-02'), ('1995-06+', PATH_FROM)):
+        ds = [d for d in spy_days if d >= lo]
+        tpd = mean([turn.get(d, 0.0) for d in ds])
+        costs['windows'][lab] = {'turnover_per_day': tpd, 'cost_per_year_path': c_path * tpd * 252 / 1e4, 'cost_per_year_alt': ALT_BPS * tpd * 252 / 1e4,
+                                 'cagr_path': cagr(rets, ds), 'cagr_alt': cagr(r_alt, ds), 'maxdd_path': maxdd(rets, ds), 'maxdd_alt': maxdd(r_alt, ds)}
+    # ---- 4c. the two regimes of the synthetic path: VIX legs modelled before UVXY/SVXY's launch, real after
+    eras = {}
+    for lab, a, b in (('1995-06..2011-09 (VIX legs modelled)', PATH_FROM, UV0), ('2011-10+ (VIX legs real)', UV0, '2099'), ('1995-06+', PATH_FROM, '2099')):
+        ds = [d for d in spy_days if a <= d < b]
+        dd, pk, tr = maxdd_dates(rets, ds)
+        eras[lab] = {'from': ds[0], 'to': ds[-1], 'n': len(ds), 'cagr': cagr(rets, ds), 'multiple': 1 + prod([rets[d] for d in ds]), 'maxdd': dd, 'maxdd_peak': pk, 'maxdd_trough': tr,
+                     'spy_cagr': cagr(r_spy, ds)}
     years = {}
     for d in spy_days:
         y = d[:4]
@@ -633,6 +797,7 @@ def main():
 
     # ---- 6. path validation: Composer's live holdings (ledger) vs the path's decision at the same close
     val = {'n': 0, 'agree': 0, 'misses': []}
+    led = {}
     if os.path.exists(LEDGER):
         led = {r['date']: r for r in sr.read_ledger(LEDGER) if r.get('engine') == 'SLEEVE' and r.get('live')}
         for d, r in sorted(led.items()):
@@ -645,6 +810,62 @@ def main():
                 val['agree'] += 1
             else:
                 val['misses'].append({'date': d, 'status': r.get('status'), 'live': r['live'], 'path': w})
+    # the five early-October misses: RSI(LQD,14) < 25 read true on the path (24.50 / 23.41 / 23.41 at the 10-01 / 10-02 /
+    # 10-05 closes) because Yahoo's LQD series as of 11-05 books no ex-dividend after 2026-09-01; with LQD's ~$0.44 10-01
+    # ex-dividend applied the RSI stays above 25 and nothing fires, which is what Composer held. Path vs Composer's
+    # holdings (BOXX 75 / LABD 25) over 10-01..10-07, and the dividend bookkeeping of the bond ETFs in the 11-05 vintage
+    lqd = P2['LQD']
+    lqd_rsi = indicator_series(lqd, 'relative-strength-index', 14)
+    raw_prev = y2['raw']['LQD']['2026-09-30']
+    lqd_x = {d: (v * (raw_prev - 0.44) / raw_prev if d < '2026-10-01' else v) for d, v in lqd.items()}
+    lqd_rsi_x = indicator_series(lqd_x, 'relative-strength-index', 14)
+    oct_days = [d for d in hold_days if '2026-10-01' <= d <= '2026-10-07']
+    boxx_r, labd_r = rets_of(P2['BOXX']), rets_of(P2['LABD'])
+    legs_r = {t: rets_of(P2[t]) for t in P2}
+
+    def composer_ret(d):
+        """Composer's holdings as the ledger saw them after the previous close (BIL read as BOXX), earning on d"""
+        lw = led.get(hold_days[idx[d] - 1], {}).get('live')
+        return sum(x * legs_r[('BOXX' if t == 'BIL' else t)][d] for t, x in lw.items()) if lw else None
+    # the path vs Composer's actual holdings on the session after each miss (what the disagreements cost or earned)
+    miss_rows = []
+    for m in val['misses']:
+        i = idx[m['date']]
+        if i + 1 < len(hold_days) and composer_ret(hold_days[i + 1]) is not None:
+            d1 = hold_days[i + 1]
+            miss_rows.append({'decided': m['date'], 'session': d1, 'path_hold': m['path'], 'composer_hold': m['live'], 'path': rets[d1],
+                              'composer': composer_ret(d1), 'gap': rets[d1] - composer_ret(d1)})
+    val['miss_sessions'] = {'rows': miss_rows, 'path_total': prod([x['path'] for x in miss_rows]), 'composer_total': prod([x['composer'] for x in miss_rows]),
+                            'gap_pp_sum': sum(x['gap'] for x in miss_rows)}
+    # re-decide the misses with the 10-01 ex-dividends applied: each bond ETF's September fraction (the booked 09-01
+    # adjustment) applied again to every close before 10-01, the way a vintage that books the October dividend would
+    adj_panel = {t: dict(p) for t, p in P2.items()}
+    sept_frac = {}
+    for t in ('LQD', 'HYG', 'SHY', 'IEF', 'TLT', 'BIL'):
+        adj, raw = y2['adj'][t], y2['raw'][t]
+        sept_frac[t] = 1 - (adj['2026-08-31'] / raw['2026-08-31']) / (adj['2026-09-01'] / raw['2026-09-01'])
+        for d in adj_panel[t]:
+            if d < '2026-10-01':
+                adj_panel[t][d] *= 1 - sept_frac[t]
+    redo = {}
+    for m in val['misses']:
+        _, tgt, _ = sr.run_engine(adj_panel, tree, m['date'])
+        lv = {('BOXX' if t == 'BIL' else t): x for t, x in m['live'].items()}
+        redo[m['date']] = {'target_with_oct_exdivs': tgt, 'matches_composer': tgt is not None and sr.distance(tgt, lv)[0] <= 0.03,
+                           'matched_before': sr.distance(m['path'], lv)[0] <= 0.03}
+    exdates = {}
+    for t in ('LQD', 'HYG', 'SHY', 'IEF', 'TLT', 'BIL', 'CORP'):
+        adj, raw = y2['adj'][t], y2['raw'][t]
+        dd = sorted(d for d in adj if d in raw)
+        exdates[t] = [dd[i] for i in range(1, len(dd)) if abs(adj[dd[i - 1]] / raw[dd[i - 1]] - adj[dd[i]] / raw[dd[i]]) > 1e-6][-3:]
+    val['early_october'] = {'rsi_lqd14_as_fetched': {d: lqd_rsi.get(d) for d in ('2026-10-01', '2026-10-02', '2026-10-05')},
+                            'rsi_lqd14_with_1001_exdiv_0.44': {d: lqd_rsi_x.get(d) for d in ('2026-10-01', '2026-10-02', '2026-10-05')},
+                            'path_1001_1007': prod([rets[d] for d in oct_days]), 'composer_actual_holdings_1001_1007': prod([composer_ret(d) for d in oct_days]) if all(composer_ret(d) is not None for d in oct_days) else None,
+                            'hypothetical_boxx75_labd25_1001_1007': prod([0.75 * boxx_r[d] + 0.25 * labd_r[d] for d in oct_days]),
+                            'path_1002_1006': prod([rets[d] for d in oct_days[1:-1]]), 'composer_actual_holdings_1002_1006': prod([composer_ret(d) for d in oct_days[1:-1]]) if all(composer_ret(d) is not None for d in oct_days) else None,
+                            'sept_dividend_fraction': sept_frac, 'misses_redecided_with_oct_exdivs': redo,
+                            'last_booked_exdates_in_1105_vintage': exdates, 'is_1105_exdate': any('2026-11-05' in v for v in exdates.values()),
+                            'monthly_div_as_pct_of_price': {t: round(x / y2['raw'][t][D_LIVE], 5) for t, x in (('SHY', 0.25), ('HYG', 0.33), ('LQD', 0.44), ('TLT', 0.33))}}
 
     # ---- 7. by-products: what the sleeve's states say about the legs and about SPY (candidate edges, with mirrors)
     R = {}
@@ -708,13 +929,34 @@ def main():
                           't': tdiff([x['f5'] for x in cd], [x['f5'] for x in alld]) if len(cd) > 2 else None,
                           'sleeve_f20_after_crash': mean([x['f20'] for x in cd if x['f20'] is not None]),
                           'sleeve_f20_any_day': mean([x['f20'] for x in alld if x['f20'] is not None])}
+    # the held legs' own records while held are COMPONENT RECORDS of the sleeve, not overlays: the rule times its own
+    # legs (shift placebo), and holding each leg one session later than the rule says loses most of the mean (lag-1)
+    rng = random.Random(11)
+    placebo = {}
+    for t in ('UVXY', 'SOXL', 'LABD', 'TMV', 'SVXY'):
+        if t not in R:
+            continue
+        lo = max(REAL_FROM, launch[t] or REAL_FROM)
+        ds = [d for d in spy_days if d >= lo and d in R[t] and d != D_LIVE]
+        on = [d for d in ds if hold[d].get(t, 0) > 0]
+        if len(on) < 5:
+            continue
+        ron = [R[t][d] for d in on]
+        pos = {d: i for i, d in enumerate(ds)}
+        oi = [pos[d] for d in on]
+        cnt, n_iter = 0, 3000
+        for _ in range(n_iter):
+            k = rng.randrange(1, len(ds))
+            cnt += mean([R[t][ds[(i + k) % len(ds)]] for i in oi]) >= mean(ron)
+        lag = [R[t][ds[pos[d] + 1]] for d in on if pos[d] + 1 < len(ds)]
+        placebo[t] = {'shift_placebo_p': cnt / n_iter, 'lag1_mean': mean(lag), 'lag1_hit': sum(1 for x in lag if x > 0) / len(lag), 'lag1_n': len(lag)}
     edges = []
     for s in states:
         if s['window'] == 'all' and s['n_on'] >= 30 and s['t_diff'] is not None and abs(s['t_diff']) >= 2:
             oos = next((x for x in states if x['ticker'] == s['ticker'] and x['window'].endswith('(OOS)')), None)
-            edges.append({'kind': 'held-leg conditional return', 'ticker': s['ticker'], 'n': s['n_on'], 'mean_on': s['mean_on'], 'mean_off': s['mean_off'],
-                          't_diff': s['t_diff'], 'hit_on': s['hit_on'], 'from': s['from'], 'in_sample_to': OOS,
-                          'oos': {k: oos[k] for k in ('n_on', 'mean_on', 'hit_on', 't_diff', 'mean_off')} if oos else None})
+            edges.append({'kind': 'held-leg component record (same-session timing of the sleeve\'s own leg; not an overlay)', 'ticker': s['ticker'], 'n': s['n_on'],
+                          'mean_on': s['mean_on'], 'mean_off': s['mean_off'], 't_diff': s['t_diff'], 'hit_on': s['hit_on'], 'from': s['from'], 'in_sample_to': OOS,
+                          'oos': {k: oos[k] for k in ('n_on', 'mean_on', 'hit_on', 't_diff', 'mean_off')} if oos else None, **placebo.get(s['ticker'], {})})
     for lab, o in trans.items():
         for k, v in o.items():
             if k == 'unconditional' or k.startswith('MIRROR') or v['n'] < 30:
@@ -739,10 +981,13 @@ def main():
                       'hyg': live['HYG'], 'tlt': live['TLT'], 'shy': live['SHY'], 'lqd': live['LQD'], 'tmf': live['TMF'], 'ief': live['IEF'],
                       'boxx': live['BOXX'], 'uvxy': live['UVXY'], 'svxy': live['SVXY'], 'soxs': live['SOXS'], 'labd': live['LABD'], 'tmv': live['TMV'],
                       'target_1105': target, 'decided_1104': t1104, 'sleeve_value': 81707.36, 'sleeve_holdings_live': {'BOXX': 0.999},
-                      'closest_calls': sr.explain(trace, 6), 'daily_json_1105_spy': dj['SPY']['rows'][D_LIVE]['c'], 'daily_json_mtime_utc': datetime.datetime.fromtimestamp(os.path.getmtime(DAILY), tz=datetime.timezone.utc).isoformat(timespec='minutes')},
+                      'closest_calls': sr.explain(trace, 6), 'conditions_in_tree': 24, 'conditions_on_path': len(rows),
+                      'daily_json_1105_spy_now': dj['SPY']['rows'].get(D_LIVE, {}).get('c'), 'daily_json_mtime_utc': datetime.datetime.fromtimestamp(os.path.getmtime(DAILY), tz=datetime.timezone.utc).isoformat(timespec='minutes'),
+                      'daily_json_note': 'at the first run (22:03 UTC) the daily dataset\'s 11-05 row was an 11:45 ET print (SPY 744.45, VIX 23.3); it was refreshed to the '
+                                         'close (SPY 733.00, VIX 28.18) at 22:55 UTC; this study reads 11-05 from Yahoo\'s 16:00 closes (yh2y) throughout and daily.json only to 11-04'},
         'rules_words': WORDS, 'trigger_table': rows, 'inverse_inner': inner, 'counterfactual_legs_1105': cf,
-        'crash_days': crash, 'crash_summary': crash_summary, 'episodes': episodes,
-        'convexity': conv, 'years': years, 'carry': carry, 'curves': curves, 'scatter': scatter,
+        'crash_days': crash, 'crash_summary': crash_summary, 'crash_runs': crash_runs, 'episodes': episodes, 'episode_alt': episode_alt,
+        'convexity': conv, 'costs': costs, 'eras': eras, 'years': years, 'carry': carry, 'curves': curves, 'scatter': scatter,
         'comparator': comp, 'validation': val, 'states': states, 'transitions': trans, 'crash_signal': crash_sig, 'edges': edges,
         'launch_dates': launch, 'path': {'from': hold_days[0], 'to': hold_days[-1], 'n': len(hold_days), 'held_tickers': held},
     }
@@ -753,7 +998,8 @@ def main():
     L = out['live_1105']
     print(f"11-05 close: SPY {L['spy']:+.2%}  SOXL {L['soxl']:+.1%}  VIX {L['vix']:.2f}  VIX3M {L['vix3m']:.2f} ({L['vix3m_over_vix_minus_1']:+.1%})  "
           f"HYG {L['hyg']:+.2%} TLT {L['tlt']:+.2%} SHY {L['shy']:+.2%} LQD {L['lqd']:+.2%} TMF {L['tmf']:+.2%} IEF {L['ief']:+.2%}")
-    print(f"target at the 11-05 close: {fmt_w(target)}; at 11-04: {fmt_w(t1104)}; daily.json 11-05 SPY print {L['daily_json_1105_spy']} (file {L['daily_json_mtime_utc']})")
+    print(f"target at the 11-05 close: {fmt_w(target)}; at 11-04: {fmt_w(t1104)}; {L['conditions_on_path']} conditions on the path of {L['conditions_in_tree']} in the tree; "
+          f"daily.json 11-05 SPY print now {L['daily_json_1105_spy_now']} (file {L['daily_json_mtime_utc']}; {L['daily_json_note']})")
     print('\nTRIGGER TABLE (11-05 close)')
     for r in rows:
         fm, fc = r['flip_move'], r['fires']
@@ -770,11 +1016,26 @@ def main():
             print(f"  {k:44s} n {v['n']:3d}  sleeve same-day {v['ret_mean']:+.2%} (median {v['ret_median']:+.2%}, hit {v['hit']:.0%}, min {v['ret_min']:+.1%} max {v['ret_max']:+.1%})  next 1/5/20: "
                   f"{v['f1']:+.2%} / {v['f5']:+.2%} (med {v['f5_median']:+.2%}, pos {v['f5_pos']:.0%}) / {(v['f20'] or 0):+.2%} (med {(v['f20_median'] or 0):+.2%})  "
                   f"parked at open {v['parked_share']:.0%}, after close {v['parked_next_share']:.0%}, entered at the close {v['entered_at_close']}/{v['parked_at_open']}")
+    print('\nCRASH-DAY RUNS (gap > 5 sessions)')
+    for k, v in crash_runs.items():
+        a, fd, pr = v['all_days'], v['first_day'], v['per_run']
+        print(f"  {k}: {v['n_days']} days in {v['n_runs']} runs, sizes {v['run_sizes']}, longest {v['longest'][0]}..{v['longest'][1]} ({v['longest'][2]} days)")
+        print(f"     all days   n {a['n']:3d} next-5 {a['f5_mean']:+.2%} / median {a['f5_median']:+.2%} / pos {a['f5_pos']:.0%}, Welch t vs any day {a['t_vs_any_day']:+.2f} (overlapping), "
+              f"shift placebo p(mean) {a['shift_placebo_p_mean']:.3f} p(median) {a['shift_placebo_p_median']:.3f}; any-day next-5 {v['any_day_f5_mean']:+.2%}")
+        print(f"     one per run (first day) n {fd['n']:3d} next-5 {fd['f5_mean']:+.2%} / median {fd['f5_median']:+.2%} / pos {fd['f5_pos']:.0%}, t {fd['t_vs_any_day']:+.2f}, shift placebo p(mean) {fd['shift_placebo_p_mean']:.3f}")
+        print(f"     per run (close before first day -> 5 after last) n {pr['n']:3d} {pr['mean']:+.2%} / median {pr['median']:+.2%} / pos {pr['pos']:.0%}; "
+              + '; '.join(f"{x[0]}..{x[1]} {x[2]:+.1%}" for x in pr['runs'] if abs(x[2]) > 0.3))
     print('\nEPISODES')
     for e in episodes:
         ml = e['max_leg']
         print(f"  {e['label']:28s} {e['from']}..{e['to']} SPY {e['spy']:+.1%}  sleeve {e['sleeve']:+.1%} (maxDD {e['sleeve_maxdd']:.1%})  max leg "
               f"{(ml[1] + ' %.0f%% on %s' % (ml[0] * 100, ml[2])) if ml else 'none'}  left cash after {e['days_to_leave_cash']} sessions  parked {e['parked_share']:.0%}  next20 {e['next20'] if e['next20'] is None else '%+.1f%%' % (e['next20'] * 100)}")
+        print(f"     triggers (decision-day conditions true before a new FrontrunBonds leg): {e['trigger_counts'] or 'none'};  leg contributions (w x own return): "
+              + (', '.join(f"{t} {v:+.0%}" for t, v in e['leg_contrib'].items()) or 'none'))
+        for x in e['entries'][:4]:
+            print(f"       decided {x['decided']} -> {x['held']} {fmt_w(x['hold'])} new {x['new']}: {'; '.join(x['fired']) or 'nothing (else branch)'}{'' if x['evaluator_agrees'] else '  [evaluator differs]'}")
+    for e in episode_alt:
+        print(f"  alt window {e['label']:40s} {e['from']}..{e['to']} ({e['sessions']}) SPY {e['spy']:+.1%}  sleeve {e['sleeve']:+.1%}  ({e['note']})")
     print('\nCONVEXITY')
     for k, v in conv.items():
         print(f"  {k:26s} beta down {v['down']['beta']:+.3f} (t {v['down']['t']:+.1f}, n {v['down']['n']})  up {v['up']['beta']:+.3f} (t {v['up']['t']:+.1f}, n {v['up']['n']})  "
@@ -783,12 +1044,30 @@ def main():
         print('     buckets: ' + '; '.join(f"{b['lo']:+.0%}..{b['hi']:+.0%}: {b['sleeve']:+.2%} (n {b['n']})" for b in v['buckets'] if b['n']))
     for k, v in carry.items():
         print(f"  carry {k}: calm years {v['calm_years']} mean {v['calm_mean']:+.1%} median {v['calm_median']:+.1%} min {v['calm_min']:+.1%}; rough years mean {v['rough_mean']:+.1%}")
+    print(f"\nCOSTS: the path charged {costs['path_bps_per_unit_sum_abs_dw']} bps per unit sum|dw| (SLEEVE fit: intercept {cfit['intercept_bps']} bps, resid SD {cfit['resid_sd_bps']} bps, n {cfit['n']}); re-costed at {ALT_BPS}:")
+    for k, v in costs['windows'].items():
+        print(f"  {k:26s} turnover {v['turnover_per_day']:.3f}/day = {v['cost_per_year_path']:.2%}/yr at the path's level, {v['cost_per_year_alt']:.2%}/yr at {ALT_BPS}; "
+              f"CAGR {v['cagr_path']:+.1%} -> {v['cagr_alt']:+.1%} ({(v['cagr_alt'] - v['cagr_path']) * 100:+.2f} pp); maxDD {v['maxdd_path']:.1%} -> {v['maxdd_alt']:.1%}")
+    print('ERAS')
+    for k, v in eras.items():
+        print(f"  {k:40s} {v['from']}..{v['to']} CAGR {v['cagr']:+.1%} ({v['multiple']:.2f}x; SPY {v['spy_cagr']:+.1%}) maxDD {v['maxdd']:.1%} {v['maxdd_peak']}..{v['maxdd_trough']}")
     print('\nCOMPARATOR')
     for t, v in comp.items():
         c = v['crash_days']
         print(f"  {t}: {v['from']}..{v['to']} CAGR {v['cagr']:+.1%} (sleeve {v['sleeve_cagr_same_window']:+.1%}) maxDD {v['maxdd']:.0%}; crash days n {c['n']} mean {c['mean']:+.2%} hit {c['hit']:.0%} "
               f"(sleeve {c['sleeve_mean_same_days']:+.2%}, hit {c['sleeve_hit_same_days']:.0%}); calm-year mean {v['calm_year_mean']:+.1%} (sleeve {v['sleeve_calm_year_mean']:+.1%}); betas down {v['down_beta']:+.2f} up {v['up_beta']:+.2f}; 11-05 {v['d1105']:+.1%}")
     print(f"\nVALIDATION vs ledger: {val['agree']}/{val['n']} agree; misses {[(m['date'], m['status']) for m in val['misses']]}")
+    eo = val['early_october']
+    print(f"  early October: RSI(LQD,14) as fetched {', '.join(f'{d[5:]} {v:.2f}' for d, v in eo['rsi_lqd14_as_fetched'].items())}; with the 10-01 ex-div applied "
+          f"{', '.join(f'{d[5:]} {v:.2f}' for d, v in eo['rsi_lqd14_with_1001_exdiv_0.44'].items())}; path 10-01..10-07 {eo['path_1001_1007']:+.2%} vs Composer's actual holdings {eo['composer_actual_holdings_1001_1007']:+.2%} "
+          f"(hypothetical 75/25 all week {eo['hypothetical_boxx75_labd25_1001_1007']:+.2%}); artefact sessions 10-02..10-06 path {eo['path_1002_1006']:+.2%} vs Composer {eo['composer_actual_holdings_1002_1006']:+.2%}; "
+          f"last booked ex-dates {eo['last_booked_exdates_in_1105_vintage']}; 11-05 an ex-date: {eo['is_1105_exdate']}; monthly dividend as % of price {eo['monthly_div_as_pct_of_price']}")
+    print(f"  September dividend fractions applied at 10-01: {eo['sept_dividend_fraction']}")
+    for d, r in eo['misses_redecided_with_oct_exdivs'].items():
+        print(f"    {d}: with the October ex-dividends the evaluator decides {fmt_w(r['target_with_oct_exdivs']) if r['target_with_oct_exdivs'] else 'n/a'} -> matches Composer: {r['matches_composer']} (before: {r['matched_before']})")
+    ms = val['miss_sessions']
+    print(f"  the sessions after the {len(ms['rows'])} misses: path {ms['path_total']:+.2%} vs Composer's holdings {ms['composer_total']:+.2%}, gap sum {ms['gap_pp_sum'] * 100:+.2f} pp: "
+          + '; '.join(f"{x['session']} {x['path']:+.2%} vs {x['composer']:+.2%}" for x in ms['rows']))
     print('\nSTATES (held leg, its own return on days held vs not)')
     for s in states:
         print(f"  {s['ticker']:5s} {s['window']:30s} {s['from']}..{s['to']} n_on {s['n_on']:4d} mean {s['mean_on']:+.2%} hit {s['hit_on']:.0%} t {s['t_on']:+.1f} | off mean {s['mean_off']:+.2%} | t_diff {s['t_diff']:+.1f} | leg total {s['leg_total']:+.0%}")
@@ -796,7 +1075,14 @@ def main():
     for lab, o in trans.items():
         for k, v in o.items():
             print(f"  {lab} {k:30s} " + (f"n {v['n']:4d} SPY f5 {v['spy_f5']:+.2%} (t {v['spy_f5_t_vs_uncond']}) f20 {v['spy_f20']:+.2%} (t {v['spy_f20_t_vs_uncond']}) sleeve f5 {v['sleeve_f5']:+.2%}" if k != 'unconditional' else f"n {v['n']} SPY f5 {v['spy_f5']:+.2%} f20 {v['spy_f20']:+.2%}"))
-    print('\nEDGES:', json.dumps(edges, default=str)[:2000] or 'none')
+    print('\nCOMPONENT RECORDS / EDGES')
+    for e in edges:
+        if 'ticker' in e:
+            o = e['oos'] or {}
+            print(f"  {e['ticker']:5s} n {e['n']:4d} while held {e['mean_on']:+.2%}/day vs {e['mean_off']:+.2%} (t {e['t_diff']:+.1f}, hit {e['hit_on']:.0%}) | OOS n {o.get('n_on', 0)} {o.get('mean_on', 0):+.2%} hit {o.get('hit_on', 0):.0%} t {o.get('t_diff', 0):+.1f} "
+                  f"| shift placebo p {e.get('shift_placebo_p', float('nan')):.4f} | lag-1 (held one session later) {e.get('lag1_mean', float('nan')):+.2%}/day hit {e.get('lag1_hit', float('nan')):.0%}")
+        else:
+            print(f"  {e['kind']} {e['horizon']}: SPY {e['spy_fwd']:+.2%} vs {e['uncond']:+.2%} (t {e['t']:+.1f}, n {e['n']})")
     print('wrote', OUT)
 
 

@@ -4439,12 +4439,13 @@ first day to five after the last, +16.6% mean / +3.4% median; circular-shift pla
 1995 (n 104) +1.49%, up 53% — +0.21% on the 67 days before UVXY/SVXY existed (modeled legs) and +3.80%
 on the 37 real-fund days. Episodes: 2015-08 −0.7% (entered on RSI(KIE,10) < 21; +6.7% one session
 later), 2018-02 +24.5% (entered 01-26 on RSI(PEJ,14) > 75.6; the bond selloff opened the gate only on
-01-30), 2018-12 −5.0% (KIE), COVID +179% (first entry 03-04 on KIE 1d > +3.45%, then the TMF / TLT /
-HYG shocks), 2022 +99% to the trough (+123% full year), 2024-08 +29.2% (SHY > +0.5% fired 08-02 → UVXY
-into 08-05), 2025-04 −1.0% (BOXX on 04-03 and 04-04, KIE −7.45% on 04-04), 11-05 0.0%. Four of eight
-paid: two entered on sector triggers (2018-02, COVID), two on SHY rate shocks (2022, 2024-08); the
-three equity-only selloffs cost 1-5% to their troughs (a window statement; the next-20 column covers
-the rest).
+01-30), 2018-12 −5.0% (KIE), COVID +179% (first entry 02-27 on RSI(KIE,10) < 21 → TQQQ, first vol leg
+03-02 on KIE +5.5% → UVXY + SOXS, then the TMF / TLT / HYG shocks), 2022 +99% to the trough (+123% full
+year; TMF −7.5% then SHY < −0.33%), 2024-08 +29.2% (SHY > +0.5% fired 08-02 → UVXY into 08-05), 2025-04
+−1.0% (BOXX on 04-03 and 04-04, KIE −7.45% on 04-04), 11-05 0.0%. Four of eight paid: two entered on
+sector triggers (2018-02, COVID), two on rates shocks (2022, 2024-08); the three equity-only selloffs
+cost 1-5% to their troughs (a window statement; the next-20 column covers the rest). The per-run
+after-crash effect is absent on the 1995+ path (+0.12%, n 62, p 0.74): it is a real-fund-era result.
 (c) Convex: β to SPY −0.93 on down days (t −16.3) vs +0.06 on up days (2015-06+; −1.14 / −0.33 with all
 legs real, 2020-12+); parked 72% of days; calm years (no ≤ −3% day) +37.1% mean since 2015 (in sample),
 +2.2% median since 1995; CAGR 2015+ +57.9% (SPY +13.4%), max DD 19.8%; 1995+ +19.5%, max DD 51% (all of
@@ -4465,11 +4466,13 @@ HONESTY. Legs before launch are models (VIX funds from a term-structure fit, syn
 2020-12); both halves were authored 2023-25 on this history, so only 2024-06+ (4 crash days) and the
 live log are out of sample; forward returns use overlapping windows dominated by 2020-03 and 2022
 (per-run figures given); costs = the path's fitted 2.25 bps per unit turnover for this symphony (not
-5.1, which is HG's), no limit-down fills; the five early-October ledger misses are a data artefact
-(Yahoo's LQD / HYG / SHY / IEF / TLT series book no ex-dividend after 2026-09-01; with LQD's 10-01
-ex-div the RSI reads 29.9, not 24.5, and the path's SVXY / TMF sessions 10-01..10-06 vanish, +2.1% of
-sleeve value overstated in 2026): an unbooked monthly ex-dividend moves the one-day reads by 0.3-0.5 pp,
-the size of the SHY thresholds (11-05 is not an ex-date); fire counts ignore cascade order; at run time
+5.1, which is HG's; at 5.12 bps the 2015+ CAGR would read +55.6%), no limit-down fills; the five
+early-October ledger misses are a data artefact (Yahoo's LQD / HYG / SHY / IEF / TLT series book no
+ex-dividend after 2026-09-01; with LQD's 10-01 ex-div the RSI reads 29.9, not 24.5, and all five
+October days re-decide to Composer's holdings; the path's return over those sessions is not overstated —
+Composer held the same SOXL 50% from the 09-30 close, +5.67% on the path vs +5.79% on its actual
+holdings): an unbooked monthly ex-dividend moves the one-day reads by 0.3-0.5 pp, the size of the SHY
+thresholds (11-05 is not an ex-date); fire counts ignore cascade order; at run time
 the daily dataset's 11-05 row was an 11:45 ET print, so this study read Yahoo's 16:00 closes directly;
 the sleeve is a conditional hedge by design and the owner's sizing (Op 1; Op 2 review 2027-01) governs.
 
