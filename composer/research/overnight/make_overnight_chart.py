@@ -18,15 +18,22 @@ RULES = ["fund gap <= -2%", "fund gap <= -5%", "fund gap <= -8%", "fund gap <= -
 def main():
     r = json.load(open(os.path.join(RES, "overnight-2026-11-05.json")))
     ev = json.load(open(os.path.join(RES, "overnight-events-2026-11-05.json")))
-    eng = {}
+    ed = json.load(open(os.path.join(RES, "overnight-edge-2026-11-05.json")))
+    eng, counts = {}, {}
     for e, E in r["engines"].items():
+        allr = E["rules_exit"]
+        pos = sorted([(k, v) for k, v in allr.items() if v["delta_cagr"] > 0], key=lambda kv: -kv[1]["delta_cagr"])
+        counts[e] = {"total": len(allr), "negative": sum(1 for v in allr.values() if v["delta_cagr"] <= 0),
+                     "positives": [{"name": k, "dcagr": v["delta_cagr"], "n": v["n_fires"], "t": v.get("t"), "pct": (v.get("placebo") or {}).get("percentile_of_actual")} for k, v in pos],
+                     "improved_dd": sum(1 for v in allr.values() if v["delta_maxdd"] > 0.0005), "raised_sharpe": sum(1 for v in allr.values() if v["delta_sharpe"] > 0),
+                     "t": {k: allr[k].get("t") for k in ("fund gap <= -5%", "fund gap <= -2%", "Asia <= -1.0%", "fund gap <= -10%") if k in allr}}
         rows = []
         for name in RULES:
             v = E["rules_exit"].get(name)
             if not v:
                 continue
             pl = v.get("placebo") or {}
-            rows.append({"name": name, "n": v["n_fires"], "hit": v["hit_rate"], "saved": v["saved_mean"], "dcagr": v["delta_cagr"],
+            rows.append({"name": name, "n": v["n_fires"], "hit": v["hit_rate"], "saved": v["saved_mean"], "t": v.get("t"), "dcagr": v["delta_cagr"],
                          "dsharpe": v["delta_sharpe"], "dmaxdd": v["delta_maxdd"], "p05": pl.get("p05"), "p95": pl.get("p95"), "pct": pl.get("percentile_of_actual"),
                          "flip": (E["rules_flip"].get(name) or {}).get("delta_cagr")})
         short = [{"name": k, "n": v["n_fires"], "hit": v["hit_rate"], "dcagr": v["delta_cagr"], "pct": (v.get("placebo") or {}).get("percentile_of_actual")}
@@ -45,7 +52,9 @@ def main():
     alln = sum(ev["funds"][f]["all"]["n"] for f in ev["funds"])
     pooled.insert(0, {"signal": "all dip-buy mornings", "n": alln, "intra": sum(ev["funds"][f]["all"]["n"] * ev["funds"][f]["all"]["intra"] for f in ev["funds"]) / alln,
                       "neg": sum(ev["funds"][f]["all"]["n"] * ev["funds"][f]["all"]["intra_neg"] for f in ev["funds"]) / alln})
-    data = {"eng": eng, "deciles": ev["gap_deciles"], "pooled": pooled, "corr": ev["pooled_corr_with_intraday"], "events_n": ev["pooled_n"],
+    e1 = {k: {kk: vv for kk, vv in v.items() if kk not in ("best", "by_year")} for k, v in ed["E1"].items() if v.get("n")}
+    data = {"eng": eng, "counts": counts, "deciles": ev["gap_deciles"], "pooled": pooled, "corr": ev["pooled_corr_with_intraday"], "events_n": ev["pooled_n"],
+            "edge": {"E1": e1, "E2": ed["E2"], "rt_bps": ed["rt_bps"], "events": ed["events"], "event_days": ed["event_days"]},
             "bridge": r.get("premarket_bridge", {}), "exit_bps": r["exit_bps"], "reentry_bps": r["reentry_bps"], "generated": r["generated"],
             "funds_ev": {f: {"n": v["n"], "from": v["from"], "to": v["to"], "all": v["all"], "gap5": v["by_gap"]["<= -5%"], "gap10": v["by_gap"]["<= -10%"]} for f, v in ev["funds"].items()}}
     html = TEMPLATE.replace("__DATA__", json.dumps(data, separators=(",", ":")))
@@ -96,15 +105,15 @@ details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)
 <div class="kpis" id="kpis"></div>
 
 <section class="card">
-<h2>A. Model-free: after an oversold close, the worse the overnight, the better the day</h2>
-<p class="sub-h">Every morning after SOXL, TECL, TQQQ, SPXL or LABU closed with Wilder RSI(10) under 30 (the engines' dip-buy trigger), 2008-2026. Bars: the fund's open-to-close move by decile of its overnight gap. The bottom decile (gaps averaging −9%) was followed by +4.7% intraday, positive 70% of the time. Pooled correlation of each pre-open signal with the subsequent open-to-close move is in the table: all negative for "bad news" signals.</p>
+<h2>A. Path-free panel: after an oversold close, the worst overnights were followed by the best sessions</h2>
+<p class="sub-h">Every morning after SOXL, TECL, TQQQ, SPXL or LABU closed with Wilder RSI(10) under 30 (the engines' dip-buy trigger), 2008-2026. Bars: the fund's open-to-close move by decile of its overnight gap. The bottom decile (gaps averaging −9%) was followed by +4.7% intraday, positive 70% of the time (t 4.2; +5.2% without 2020); deciles 2-9 are flat (−0.3% to +1.2%), so this is a tail effect, not a gradient. It is conditional on the oversold close: unconditionally, SOXL gap-downs of 5%+ since 2015 (n 197) show no rebound (mean −0.01%, 46% up). Pooled correlation of each pre-open signal with the subsequent open-to-close move is in the table.</p>
 <div class="chartwrap"><svg id="chA" role="img" aria-label="Mean open-to-close move of leveraged funds by decile of the overnight gap, mornings after an oversold close"></svg></div>
 <div class="tablewrap"><table id="tbA"></table></div>
 </section>
 
 <section class="card">
-<h2>B. The same rules on the KMLM switcher's own path: every exit costs return</h2>
-<p class="sub-h">Exit the leveraged long at the 09:30 open when the signal fires, hold cash until the next 15:50 decision; the engine's decisions are unchanged. Bars: change in CAGR over 2015-06..2026-11-04 vs the engine as built (gross of the overlay's own costs: 15 bps at the open, 10 bps to re-enter when the engine re-holds the fund). The thin bar is the placebo band (5th-95th percentile of exiting the same number of random leveraged-long mornings): a rule inside or below the band has no information or picks the wrong mornings. Labels: fires and the share of fires where exiting helped.</p>
+<h2>B. The same rules on the KMLM switcher's own path: 43 of 47 exit rules cost return</h2>
+<p class="sub-h">Exit the leveraged long at the 09:30 open when the signal fires, hold cash until the next 15:50 decision; the engine's decisions are unchanged. Bars: change in CAGR over 2015-06..2026-11-04 vs the engine as built (net of the overlay's own costs: 15 bps at the open, 10 bps to re-enter when the engine re-holds the fund; the signs hold before costs). The thin bar is the placebo band (5th-95th percentile of exiting the same number of random leveraged-long mornings): random exits already cost (−6.6%/yr at 100 fires, because the legs earn intraday on average); a rule below the band picks worse mornings than chance. Labels: fires and the share of fires where exiting helped. The four rules with a positive change are mirrored "good overnight" signals (table), t ≤ 1.3.</p>
 <div class="legend" id="lgB"></div>
 <div class="chartwrap"><svg id="chB" role="img" aria-label="Change in CAGR from each overnight exit rule on the KMLM path, with placebo bands"></svg></div>
 <details><summary>Table: every rule on KMLM (exit and flip), the short-leg mirror, the flip breaker</summary><div class="tablewrap"><table id="tbB"></table></div></details>
@@ -121,6 +130,15 @@ details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)
 <h2>D. This week, morning by morning</h2>
 <p class="sub-h">What the engine held into each morning (as reconstructed; it matches Composer's ledger), the overnight signals, and the leg's gap and intraday move. 2026-11-05 (SOXL: gap −14.6%, −15% more by 11:30) is outside the reconstructed path, which ends at the 11-04 close.</p>
 <div class="tablewrap"><table id="tbD"></table></div>
+</section>
+
+<section class="card">
+<h2>F. The other side: the morning bounce as a trade</h2>
+<p class="sub-h">If a bad overnight after an oversold close predicts a better session, buy it. E1: on a morning when a 3x fund closed with RSI(10) under 30 and the signal fires before 09:30, buy the fund at the open and sell at the close (one trade per day, qualifying funds equal-weighted, 30 bps round trip), 2008-2026. E2: inside the KMLM engine, top the leveraged leg up to 100% of the symphony at the open when the signal fires (sell the extra at the close). Lines: growth of $1 compounding one trade at a time.</p>
+<div class="legend" id="lgF"></div>
+<div class="chartwrap"><svg id="chF" role="img" aria-label="Growth of one dollar in the morning-bounce trade for three signals and for every oversold morning, 2008 to 2026"></svg></div>
+<div class="tablewrap"><table id="tbF"></table></div>
+<details><summary>Table: E2, the add-on inside the KMLM engine</summary><div class="tablewrap"><table id="tbF2"></table></div></details>
 </section>
 
 <section class="card">
@@ -145,13 +163,13 @@ const f2 = v => v == null ? '–' : v.toFixed(2), pc = v => v == null ? '–' : 
 const sg = v => v == null ? '–' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%', sg2 = v => v == null ? '–' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%';
 const cls = v => v == null ? ' class="n"' : (v < 0 ? ' class="n neg"' : ' class="n"');
 const K = D.eng.KMLM, H = D.eng.HG;
-const worstK = K.rules.filter(r => r.n >= 20).sort((a, b) => a.dcagr - b.dcagr)[0];
-const bestK = K.rules.filter(r => r.n >= 20).sort((a, b) => b.dcagr - a.dcagr)[0];
+const CK = D.counts.KMLM, CH = D.counts.HG, g5 = K.rules.find(r => r.name === 'fund gap <= -5%');
 const dec0 = D.deciles[0];
-[[`${sg(dec0.intra_mean)} intraday`, `after the worst overnight gaps (bottom decile, ${pc(dec0.gap_mean)} average) on ${D.events_n} oversold-close mornings since 2008; positive ${pc0(1 - dec0.intra_neg)} of the time`],
- [`${K.rules.filter(r => r.n >= 10 && r.dcagr < 0).length} of ${K.rules.filter(r => r.n >= 10).length} rules`, `on KMLM's path cost CAGR; best with 20+ fires: ${bestK.name} ${sg(bestK.dcagr)}/yr; worst: ${worstK.name} ${sg(worstK.dcagr)}/yr (as built ${pc0(K.base.cagr)}/yr, in sample)`],
- [`${pc0(K.rules.find(r => r.name === 'fund gap <= -5%').hit)} hit rate`, `share of KMLM's ${K.rules.find(r => r.name === 'fund gap <= -5%').n} mornings with a 5%+ gap-down where exiting at the open beat holding to the close; the exit lost ${sg2(K.rules.find(r => r.name === 'fund gap <= -5%').saved)} of the engine per fire`],
- [`${K.flip_rate.mean.toFixed(1)} → 10`, `KMLM direction changes per 25 sessions: the 2015-26 path's mean → the last 25 live sessions (its 99th percentile is ${K.flip_rate.p99}, max ${K.flip_rate.max}); the breaker that would have sat out such runs costs ${sg(K.breaker['3 flips in 5 -> cash 5'].delta_cagr)}/yr`]]
+const E1 = D.edge.E1, e1best = E1['sector gap <= -2%'], e1gap = E1['fund gap <= -5%'];
+[[`${sg(dec0.intra_mean)} intraday`, `after the worst overnight gaps (bottom decile, ${pc(dec0.gap_mean)} average) on ${D.events_n} oversold-close mornings since 2008; positive ${pc0(1 - dec0.intra_neg)} of the time (t 4.2); deciles 2-9 flat`],
+ [`${CK.negative} of ${CK.total} rules`, `on KMLM's path cost CAGR (HG: ${CH.negative} of ${CH.total}); the exceptions are mirrored "good overnight" signals, best ${sg(CK.positives[0].dcagr)}/yr on ${CK.positives[0].n} fires, t ${f2(CK.positives[0].t)}. Fund gap ≤ −5%: ${sg(g5.dcagr)}/yr, t ${f2(g5.t)} (as built ${pc0(K.base.cagr)}/yr, in sample)`],
+ [`${pc0(g5.hit)} hit rate`, `share of KMLM's ${g5.n} mornings with a 5%+ gap-down where exiting at the open beat holding to the close; each exit cost the engine ${pc(-g5.saved)} on average`],
+ [`${e1best.n} trades, ${sg(e1best.mean)} each`, `the other side (section F): buy the open, sell the close when the sector gaps ≤ −2% after an oversold close — win ${pc0(e1best.win)}, t ${e1best.t.toFixed(1)}, ${e1best.per_year.toFixed(1)} trades a year, worst ${sg(e1best.worst[0].ret)}; fund gap ≤ −5%: ${e1gap.n} trades, ${sg(e1gap.mean)}, t ${e1gap.t.toFixed(1)}`]]
  .forEach(([b, s]) => { const k = document.createElement('div'); k.className = 'kpi'; k.innerHTML = `<b>${b}</b><span>${s}</span>`; document.getElementById('kpis').appendChild(k); });
 
 // A: decile bars
@@ -180,7 +198,7 @@ function ruleChart(svgId, rows){
   svg.setAttribute('viewBox', `0 0 ${W} ${H2}`);
   const vals = rows.flatMap(x => [x.dcagr, x.p05 ?? 0, x.p95 ?? 0]), lo = Math.min(...vals) - 0.02, hi = Math.max(0.02, ...vals) + 0.02;
   const X = v => l + (v - lo) / (hi - lo) * (W - l - r);
-  for (let v = Math.ceil(lo * 10) / 10; v <= hi; v += 0.1) { el('line', {x1: X(v), x2: X(v), y1: t, y2: H2 - 30, stroke: Math.abs(v) < 1e-9 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: X(v), y: H2 - 12, 'text-anchor': 'middle', class: 'ax'}, svg, (v * 100).toFixed(0) + '%'); }
+  for (let v = Math.ceil(lo * 10) / 10; v <= hi; v += 0.1) { el('line', {x1: X(v), x2: X(v), y1: t, y2: H2 - 30, stroke: Math.abs(v) < 1e-9 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: X(v), y: H2 - 12, 'text-anchor': 'middle', class: 'ax'}, svg, (Math.round(v * 100) || 0) + '%'); }
   rows.forEach((x, i) => {
     const y = t + i * rowH;
     el('text', {x: l - 8, y: y + 16, 'text-anchor': 'end', class: x.name.startsWith('INVERSE') ? 'lb' : 'lbb'}, svg, x.name.replace('combo: ', '').replace(' (bought a crash)', ''));
@@ -197,7 +215,7 @@ ruleChart('chC', H.rules);
 function ruleTable(id, E){
   const head = '<thead><tr><th>rule (exit the long at the open)</th><th class="n">fires</th><th class="n">helped</th><th class="n">per fire</th><th class="n">ΔCAGR</th><th class="n">ΔSharpe</th><th class="n">Δmax DD</th><th class="n">placebo p05..p95</th><th class="n">pct</th><th class="n">flip variant ΔCAGR</th></tr></thead>';
   let body = E.rules.map(x => `<tr><td>${x.name}</td><td class="n">${x.n}</td><td class="n">${pc0(x.hit)}</td><td${cls(x.saved)}>${sg2(x.saved)}</td><td${cls(x.dcagr)}>${sg(x.dcagr)}</td><td${cls(x.dsharpe)}>${f2(x.dsharpe)}</td><td${cls(x.dmaxdd)}>${sg(x.dmaxdd)}</td><td class="n">${sg(x.p05)}..${sg(x.p95)}</td><td class="n">${pc0(x.pct)}</td><td${cls(x.flip)}>${x.flip == null ? '–' : sg(x.flip)}</td></tr>`).join('');
-  if (E.short.length) body += `<tr><td colspan="10" style="color:var(--ink2)">Short legs (SQQQ / TLT / UVXY mornings), exit at the open:</td></tr>` + E.short.map(x => `<tr><td>${x.name}</td><td class="n">${x.n}</td><td class="n">${pc0(x.hit)}</td><td></td><td${cls(x.dcagr)}>${sg(x.dcagr)}</td><td></td><td></td><td></td><td class="n">${pc0(x.pct)}</td><td></td></tr>`).join('');
+  if (E.short.length) body += `<tr><td colspan="10" style="color:var(--ink2)">Short legs (SQQQ mornings), exit at the open:</td></tr>` + E.short.map(x => `<tr><td>${x.name}</td><td class="n">${x.n}</td><td class="n">${pc0(x.hit)}</td><td></td><td${cls(x.dcagr)}>${sg(x.dcagr)}</td><td></td><td></td><td></td><td class="n">${pc0(x.pct)}</td><td></td></tr>`).join('');
   body += `<tr><td colspan="10" style="color:var(--ink2)">Flip breaker (after N direction changes in M sessions, cash for K sessions):</td></tr>` + Object.entries(E.breaker).map(([k, v]) => `<tr><td>${k}</td><td class="n">${v.trips} trips</td><td class="n">${v.cash_days} cash days</td><td></td><td${cls(v.delta_cagr)}>${sg(v.delta_cagr)}</td><td${cls(v.delta_sharpe)}>${f2(v.delta_sharpe)}</td><td${cls(v.delta_maxdd)}>${sg(v.delta_maxdd)}</td><td colspan="3" class="n">last: ${v.last_trips.join(', ')}</td></tr>`).join('');
   body += `<tr><td colspan="10" style="color:var(--ink2)">As built ${E.from}..${E.to}: CAGR ${pc(E.base.cagr)}, Sharpe ${f2(E.base.sharpe)}, max DD ${pc0(E.base.maxdd)} (in sample); ${E.long_mornings} leveraged-long mornings (${Object.entries(E.funds).map(([k, v]) => `${k} ${v}`).join(', ')}), ${E.short_mornings} short-leg mornings. Direction changes per 25 sessions: mean ${E.flip_rate.mean.toFixed(1)}, p90 ${E.flip_rate.p90}, p99 ${E.flip_rate.p99}, max ${E.flip_rate.max}.</td></tr>`;
   document.getElementById(id).innerHTML = head + '<tbody>' + body + '</tbody>';
@@ -206,17 +224,47 @@ ruleTable('tbB', K); ruleTable('tbC', H);
 // D: recent mornings
 document.getElementById('tbD').innerHTML = '<thead><tr><th>morning</th><th>engine</th><th>leg (weight)</th><th class="n">Asia</th><th class="n">DAX open</th><th class="n">VIX</th><th class="n">gap at open</th><th class="n">open→close</th><th class="n">day</th></tr></thead><tbody>' +
   [['KMLM', K.recent], ['HG', H.recent]].flatMap(([e, rows]) => rows.map(m => [e, m])).sort((a, b) => a[1].date.localeCompare(b[1].date)).map(([e, m]) => `<tr><td>${m.date}</td><td>${e}</td><td>${m.fund} (${pc0(m.w)})</td><td${cls(m.asia)}>${sg(m.asia)}</td><td${cls(m.eu_open)}>${sg(m.eu_open)}</td><td class="n">${m.vix == null ? '–' : m.vix.toFixed(1)}</td><td${cls(m.gap)}>${sg(m.gap)}</td><td${cls(m.intra)}>${sg(m.intra)}</td><td${cls(m.day)}>${sg(m.day)}</td></tr>`).join('') +
-  '<tr><td>2026-11-05</td><td>KMLM</td><td>SOXL (69%)</td><td class="n neg">−0.5%</td><td class="n">+0.1%</td><td class="n">20.8</td><td class="n neg">−14.6%</td><td class="n neg">−15% to 11:30</td><td class="n neg">–</td></tr></tbody>';
+  '<tr><td>2026-11-05</td><td>KMLM</td><td>SOXL (75%)</td><td class="n neg">−3.4%</td><td class="n">+0.1%</td><td class="n">16.6</td><td class="n neg">−14.6%</td><td class="n neg">−15% to 11:30</td><td class="n neg">–</td></tr></tbody>';
+// F: the edge
+(function(){
+  const E1 = D.edge.E1, names = ['sector gap <= -2%', 'fund gap <= -5%', 'gap <= -5% OR DAX <= -2%', 'any oversold morning (no signal)'];
+  const col = {'sector gap <= -2%': 'var(--s3)', 'fund gap <= -5%': 'var(--s1)', 'gap <= -5% OR DAX <= -2%': 'var(--s2)', 'any oversold morning (no signal)': 'var(--ctx2)'};
+  legend('lgF', names.map(n => [n, col[n]]));
+  const svg = document.getElementById('chF'), W = 900, H2 = 320, l = 54, r = 230, t = 14, b = 30;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H2}`);
+  const T = s => new Date(s + 'T12:00:00Z').getTime(), t0 = T('2008-11-01'), t1 = T('2026-11-30');
+  const series = {};
+  names.forEach(n => { let eq = 1; series[n] = E1[n].trades.map(([d, ret]) => { eq *= 1 + ret; return [T(d), eq]; }); series[n].unshift([t0, 1]); });
+  const vals = Object.values(series).flat().map(p => p[1]), lo = Math.log10(Math.min(...vals) * 0.9), hi = Math.log10(Math.max(...vals) * 1.1);
+  const X = ms => l + (ms - t0) / (t1 - t0) * (W - l - r), Y = v => t + (hi - Math.log10(v)) / (hi - lo) * (H2 - t - b);
+  [0.5, 1, 2, 5, 10].forEach(v => { if (Math.log10(v) >= lo && Math.log10(v) <= hi) { el('line', {x1: l, x2: W - r, y1: Y(v), y2: Y(v), stroke: v === 1 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, '$' + v); } });
+  for (let y = 2010; y <= 2026; y += 2) el('text', {x: X(T(y + '-01-01')), y: H2 - 8, 'text-anchor': 'middle', class: 'ax'}, svg, y);
+  const ends = names.map(n => { const last = series[n][series[n].length - 1]; return {n, v: last[1], y: Y(last[1])}; }).sort((a, b2) => a.y - b2.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+  names.forEach(n => {
+    el('polyline', {points: series[n].map(p => `${X(p[0])},${Y(p[1])}`).join(' '), fill: 'none', stroke: col[n], 'stroke-width': n.startsWith('any') ? 1.4 : 2, 'stroke-linejoin': 'round'}, svg);
+    series[n].slice(1).forEach(p => el('circle', {cx: X(p[0]), cy: Y(p[1]), r: 2.2, fill: col[n]}, svg));
+    const e = ends.find(x => x.n === n); el('text', {x: W - r + 6, y: e.y + 4, class: n.startsWith('any') ? 'lb' : 'lbb', fill: col[n]}, svg, `${n.replace(' (no signal)', '')} $${e.v.toFixed(2)}`);
+  });
+  document.getElementById('tbF').innerHTML = `<thead><tr><th>E1 rule (buy the open, sell the close)</th><th class="n">days</th><th class="n">per year</th><th class="n">mean</th><th class="n">median</th><th class="n">win</th><th class="n">t</th><th class="n">total</th><th class="n">worst run</th><th class="n">placebo pct</th><th>worst trades</th></tr></thead><tbody>` +
+    Object.entries(E1).map(([n, s]) => `<tr><td>${n}</td><td class="n">${s.n}</td><td class="n">${s.per_year.toFixed(1)}</td><td${cls(s.mean)}>${sg2(s.mean)}</td><td${cls(s.median)}>${sg2(s.median)}</td><td class="n">${pc0(s.win)}</td><td class="n">${s.t == null ? '–' : s.t.toFixed(1)}</td><td${cls(s.total)}>${sg(s.total)}</td><td class="n neg">${pc0(s.maxdd)}</td><td class="n">${s.placebo ? pc0(s.placebo.percentile_of_actual) : '–'}</td><td>${s.worst.slice(0, 3).map(w => `${w.date} ${sg(w.ret)}`).join(', ')}</td></tr>`).join('') +
+    `<tr><td colspan="11" style="color:var(--ink2)">${D.edge.events} oversold mornings on ${D.edge.event_days} distinct days; ${D.edge.rt_bps} bps round trip; placebo = the same number of random oversold mornings (the 51%-win, +0.3% base rate). Clustered: 2020-03, 2022-05, 2025-04 carry the worst trades and much of the gain.</td></tr></tbody>`;
+  const E2 = D.edge.E2;
+  document.getElementById('tbF2').innerHTML = `<thead><tr><th>E2 inside KMLM (as built ${pc0(E2.base.cagr)} / ${f2(E2.base.sharpe)} / ${pc0(E2.base.maxdd)})</th><th class="n">add-on mornings</th><th class="n">ΔCAGR</th><th class="n">ΔSharpe</th><th class="n">Δmax DD</th><th class="n">worst extra day</th><th class="n">day-trades when not long</th><th class="n">ΔCAGR</th></tr></thead><tbody>` +
+    Object.entries(E2).filter(([k]) => k !== 'base').map(([k, v]) => `<tr><td>${k}</td><td class="n">${v.add_on.n}</td><td${cls(v.add_on.dcagr)}>${sg(v.add_on.dcagr)}</td><td${cls(v.add_on.dsharpe)}>${f2(v.add_on.dsharpe)}</td><td${cls(v.add_on.dmaxdd)}>${sg(v.add_on.dmaxdd)}</td><td class="n neg">${sg(v.add_on.worst_extra)} (${v.add_on.worst_date})</td><td class="n">${v.day_trade_when_not_long.n}</td><td${cls(v.day_trade_when_not_long.dcagr)}>${sg(v.day_trade_when_not_long.dcagr)}</td></tr>`).join('') + '</tbody>';
+})();
 // E: bridge
 (function(){
   const B = D.bridge; let h = '<thead><tr><th>fund</th><th class="n">sessions</th><th class="n">04:00 vs open (median, sd)</th><th class="n">08:00 vs open</th><th class="n">09:25 vs open</th><th class="n">gap-downs ≥4%</th><th class="n">share of the gap seen by 08:00</th></tr></thead><tbody>';
   for (const t in B) { const v = B[t], s = k => v.vs_open[k] ? `${sg2(v.vs_open[k].median)}, ${pc(v.vs_open[k].sd)}` : '–'; h += `<tr><td>${t}</td><td class="n">${v.sessions}</td><td class="n">${s('04:00')}</td><td class="n">${s('08:00')}</td><td class="n">${s('09:25')}</td><td class="n">${v.big_gaps.length}</td><td class="n">${v.big_gap_0800_captured == null ? '–' : pc0(v.big_gap_0800_captured)}</td></tr>`; }
   document.getElementById('tbE').innerHTML = h + '</tbody>';
 })();
-[`Engine paths: the add. 47 pipeline (research/longrun) re-run 2026-11-05 on the live trees (fixtures/approved, the last era per engine), daily 1995-06..2026-11-04 with Composer-equivalent costs; proxies before each fund's launch, the rules' own years after 2015 (in sample). The KMLM path's dominant leg matches Composer's ledger on 56 of 58 comparable sessions since August. Overlays are applied from 2015-06 on the real funds' raw opens and closes (the engine's own returns use adjusted closes; ex-dividend days differ by the dividend).`,
+[`Engine paths: the add. 47 pipeline (research/longrun) re-run 2026-11-05 on the live trees (fixtures/approved, the last era per engine), daily 1995-06..2026-11-04 with Composer-equivalent costs; proxies before each fund's launch, the rules' own years after 2015 (in sample). The KMLM path's dominant leg matches Composer's ledger on 59 of 64 sessions since 2026-08-01 (the misses: two knife-edge days and three Composer no-rebalance days). Overlays are applied from 2015-06 on the real funds' raw opens and closes (the engine's own returns use adjusted closes; ex-dividend days differ by the dividend; one December distribution, TECL 2025-12-10, fires the gap rules as a phantom −6.5% gap: a live layer must use adjusted prior closes). "entry day" = the prior session's move of the fund (44% of those fires were legs already held).`,
+ `Robustness (counter-agent): per-fire t-statistics −2.8 (fund gap ≤ −5%), −3.7 (≤ −2%), −3.3 (Asia ≤ −1%), −1.0 (≤ −10%, not significant despite the 64% hit rate); the sign is negative in every sub-window (2015-19, 2020-26, 2015-18, 2019-22, 2023-26) on both engines for the seven key rules, and leave-one-year-out never flips it; gross of costs, fund gap ≤ −5% is −0.89% per fire, −21.3%/yr, and would need a +197 bps rebate per fire to break even; of its −23.7%/yr, −6.6 is the cost of any 100 exits and −17.1 is the selection. The day after a 5%+ gap-down the engine averaged +0.83% (exit at the close instead: −16.9%/yr). HG's −10.6% is half three 2016 fires; its −7.2pp drawdown change is one fire (2016-01-20 LABU, +21.8% intraday).`,
  `Overlay mechanics: the leg's close-to-close return on a fired morning becomes its gap (exit) or gap plus the inverse fund's open-to-close (flip), less ${D.exit_bps} bps at the open and ${D.reentry_bps} bps when the engine re-holds the fund at the next close. Placebo: ${2000} draws of the same number of random leveraged-long mornings; "pct" is where the actual rule sits in that distribution (0% = worse than every random draw). Inverse rules fire on the mirrored signal.`,
  'Signals: the fund\'s own gap (09:30 open vs prior close; the pre-market bridge shows the 09:25 print equals it), the sector ETF\'s gap, the mean of the Nikkei, Kospi and Taiwan closes that day (all before 04:00 ET), the DAX open (03:00 ET) vs its prior close, VIX\'s prior close and change, VIX vs VIX3M, and the entry day\'s move. No historical 04:00-08:00 prints exist in our sources (FMP\'s 1-minute bars are 09:30-15:59; Yahoo keeps 60 days).',
- 'Model-free panel: Wilder RSI(10) on adjusted closes, the engines\' dip-buy trigger, for the five 3x funds from launch; 893 mornings; pooled statistics weight funds by their counts.',
+ 'Panel: Wilder RSI(10) on adjusted closes, the engines\' dip-buy trigger, for the five 3x funds from launch; 893 mornings (180 of them are KMLM long mornings, so "path-free", not independent of the engine); pooled statistics weight funds by their counts; SPXL is the exception (gap ≤ −5%: n 12, −1.6%). Flip counts: the breaker and the flip-rate distribution count long↔short changes only (moves into vol or bond legs are neutral); on that definition the last 25 live KMLM sessions had 8 (10 counting every change of state) against the path\'s mean 1.7, p99 8, max 11; the path itself flips 7 times in the same window, the ledger 7, directions agree on 24 of 25.',
+ `The edge (section F): the morning trade's t-statistics are 2.1-3.1 on 31-44 trades over 17 years, 2-4 trades a year, with one-in-three losers and worst days of −12 to −21%; it is conditional on the oversold close (unconditional gap-downs show no rebound) and clustered in 2020-03, 2022-05 and 2025-04. Inside the engine, topping the leg up at the open raises CAGR for some signals but lowers Sharpe and deepens the drawdown: more of the engine's own mechanism, not a free lunch.`,
  'What this does not test: an engine redesigned to trade futures instead of 3x ETFs (a different strategy, not an overlay); a 15:59 instead of 15:50 decision (add. 50: the 15:54 logic contradicts Composer on 1 of 272 sessions); execution costs (add. 14/14b: Composer measured at 2.9 bps a side, IBKR modeled ~$1.3k/yr worse at $250k). Research only; nothing traded.',
  `Generated ${D.generated}.`]
  .forEach(s => document.getElementById('basis').insertAdjacentHTML('beforeend', `<li>${s}</li>`));

@@ -38,6 +38,15 @@ SUCCINCTNESS (Casey, 2026-08-13): "cut to the meat." Results first, minimal
 prose, tables/bullets over paragraphs. Keep the honesty caveats but compress
 them to one line each. No restating context Casey already has.
 
+EDGE IS THE POINT (Casey, 2026-11-05): "if you run into edge in any study,
+that isn't directly the original prompt, still bring it to my attention.
+Edge is important." Any study that surfaces a conditional return, a
+mispricing or a tradeable asymmetry — even as a by-product, even if the
+original question was answered "no" — reports it explicitly as a candidate
+edge, with its sample size, the mirrored/placebo check, and what it would
+take to use it. Origin: add. 53 found that "bad overnight -> better session"
+after oversold closes and first reported it only as "don't exit".
+
 ## Standing engineering conventions
 
 - Agent-governed pattern for studies/builds: research or counter-agent pass

@@ -219,8 +219,11 @@ def evaluate(path, rows, fire, action="exit", placebo=True, start=START):
     full, fires = apply(path, rows, fire, action)
     rets = [full[i] for i in sel]
     base = [path["rets"][i] for i in sel]
-    out = {"n_fires": len(fires), "saved_total": sum(f["saved"] for f in fires),
-           "saved_mean": statistics.mean([f["saved"] for f in fires]) if fires else 0.0,
+    sv = [f["saved"] for f in fires]
+    out = {"n_fires": len(fires), "saved_total": sum(sv),
+           "saved_mean": statistics.mean(sv) if fires else 0.0,
+           "saved_sd": statistics.pstdev(sv) if len(sv) > 1 else None,
+           "t": (statistics.mean(sv) / (statistics.pstdev(sv) / math.sqrt(len(sv)))) if len(sv) > 1 and statistics.pstdev(sv) else None,
            "hit_rate": (sum(1 for f in fires if f["saved"] > 0) / len(fires)) if fires else None,
            "overlay": summary(rets), "base": summary(base),
            "delta_cagr": cagr(rets) - cagr(base), "delta_sharpe": sharpe(rets) - sharpe(base), "delta_maxdd": maxdd(rets) - maxdd(base),
