@@ -330,8 +330,10 @@ def main():
         snap["vix_contango"] = round(contango, 4)
         if contango < 0:
             harv = next((s2 for s2 in meta if s2["id"] == a.harv_symphony), None)
-            alerts.append(f"BACKWARDATION DAY (VIX3M/VIX {contango:+.1%}) — harvester "
-                          f"{(harv or {}).get('last_percent_change', 'n/a')} today; logging for the "
+            lpc = (harv or {}).get("last_percent_change")
+            hday = f"{float(lpc):+.2%}" if isinstance(lpc, (int, float)) else "n/a"
+            alerts.append(f"BACKWARDATION DAY (VIX3M/VIX {contango:+.1%}) — HARV day return {hday} "
+                          "(Composer's last_percent_change, not a signal); logging for the "
                           "ZVOL-in-backwardation evidence record (no action)")
     except Exception:
         pass

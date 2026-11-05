@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Exhibit for the conditioned-exit study (results.md addendum 53 follow-up, study 2): reads
 results/conditioned-exits-2026-11-05.json, writes results/conditioned-exits-2026-11-05.html.
-Inline SVG, the house palette tokens, light/dark, no external libraries (make_overnight_chart.py style)."""
+Inline SVG, the house palette tokens, light/dark, no external libraries (make_overnight_chart.py style).
+Counter-agent review2 fixes built in: both family-wise p (by row / by day), the leg's t vs the engine's
+per-fire-gain t labelled, the >= 30 panel column, the panel window to 2026-11-04 with add. 53's cell
+noted as containing the 11-05 half-day morning, the fires-for-t-2 arithmetic on the per-fire-gain t,
+and section E on the 11-05 knife-edge (15:54 vs 16:00)."""
 import json
 import os
 
@@ -19,11 +23,17 @@ CHART_ROWS = [("gap <= -5%", None), ("gap <= -8%", None),
 
 def trim_rule(v):
     pl = v.get("placebo") or {}
-    return {"signal": v["signal"], "gate": v["gate"], "n": v["n"], "intra": v["intra"].get("mean"), "intra_t": v["intra"].get("t"), "intra_win": v["intra"].get("win"),
-            "t_saved": v.get("t_saved"), "saved": v["saved_mean"], "hit": v["hit"], "dcagr": v["delta_cagr"], "dsharpe": v["delta_sharpe"], "dmaxdd": v["delta_maxdd"],
-            "p05": pl.get("p05"), "p95": pl.get("p95"), "pct": pl.get("percentile_of_actual"), "p_fw": v.get("p_fw"),
-            "c2515": v["costs"]["25+15"]["delta_cagr"], "gross": v["costs"]["0+0"]["delta_cagr"], "dip": v.get("share_dip_leg"), "two": v.get("share_two_leg_days"),
-            "worst": v.get("worst_fire"), "best": v.get("best_fire"), "by_year": v.get("by_year")}
+    return {"signal": v["signal"], "gate": v["gate"], "n": v["n"], "n_days": v.get("n_days"), "intra": v["intra"].get("mean"), "intra_t": v["intra"].get("t"), "intra_win": v["intra"].get("win"),
+            "t_saved": v.get("t_saved"), "t_saved_day": v.get("t_saved_day"), "saved": v["saved_mean"], "hit": v["hit"], "dcagr": v["delta_cagr"], "dsharpe": v["delta_sharpe"], "dmaxdd": v["delta_maxdd"],
+            "p05": pl.get("p05"), "p95": pl.get("p95"), "pct": pl.get("percentile_of_actual"), "p_fw": v.get("p_fw"), "p_fw_day": v.get("p_fw_day"),
+            "c2515": v["costs"]["25+15"]["delta_cagr"], "gross": v["costs"]["0+0"]["delta_cagr"],
+            "costs": {k: {"dcagr": c["delta_cagr"], "t": c.get("t_saved"), "hit": c.get("hit")} for k, c in v["costs"].items()},
+            "dip": v.get("share_dip_leg"), "two": v.get("share_two_leg_days"), "worst": v.get("worst_fire"), "best": v.get("best_fire"), "by_year": v.get("by_year")}
+
+
+def trim_rob(rb):
+    keep = lambda c: {"n": c["n"], "n_days": c.get("n_days"), "dcagr": c["delta_cagr"], "t": c.get("t_saved"), "hit": c.get("hit")} if c else None
+    return {"loyo": {y: keep(c) for y, c in rb["leave_one_year_out"].items()}, "ex_2026": keep(rb.get("ex_2026")), "ex_3": keep(rb["ex_2020_2025_2026"])}
 
 
 def main():
@@ -38,11 +48,12 @@ def main():
                 chart.append({"group": sig, "rules": names})
         eng[e] = {"base": E["base"], "from": E["from"], "to": E["to"], "sessions": E["sessions"], "long_mornings": E["long_mornings"], "long_all": E["long_mornings_all"],
                   "phantom": E["excluded_phantom"], "funds": E["funds"], "legs": E["legs"], "leg_check": E["leg_check"], "saved_dist": E["saved_dist"],
-                  "family": E["family"], "rules": rules, "chart": chart, "states": E["states"], "fires": E.get("fires", {})}
+                  "family": E["family"], "rules": rules, "chart": chart, "states": E["states"], "fires": E.get("fires", {}),
+                  "robustness": {k: trim_rob(v) for k, v in E.get("robustness", {}).items()}}
     P = r["panel"]
     data = {"eng": eng, "generated": r["generated"], "exit_bps": r["exit_bps"], "reentry_bps": r["reentry_bps"], "placebo_n": r["placebo_n"], "perm_n": r["perm_n"],
-            "signals": r["signals"], "gates": r["gates"], "dipbuy": r["dipbuy_triggers"], "bridge": r.get("bridge_0925_vs_open", {}),
-            "panel": {"start": P["start"], "n": P["n"], "pooled": P["pooled"], "daily": P["pooled_daily"], "funds": P["funds"], "check": P["add53_cell_check"], "cell": P["cell_2010"]}}
+            "signals": r["signals"], "gates": r["gates"], "dipbuy": r["dipbuy_triggers"], "bridge": r.get("bridge_0925_vs_open", {}), "nov05": r.get("nov05"),
+            "panel": {"start": P["start"], "end": P.get("end"), "n": P["n"], "pooled": P["pooled"], "daily": P["pooled_daily"], "funds": P["funds"], "check": P["add53_cell_check"], "cell": P["cell_2010"]}}
     html = TEMPLATE.replace("__DATA__", json.dumps(data, separators=(",", ":")))
     open(PAGE, "w").write(html)
     print("wrote", PAGE, f"({len(html) // 1024} KB)")
@@ -54,7 +65,7 @@ TEMPLATE = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Conditioned overnight exits</title>
-<meta name="description" content="Do overnight exit rules gated on the held fund not being oversold help the KMLM and HG engines? Rule bars with placebo bands, the gap-by-RSI panel, costs.">
+<meta name="description" content="Do overnight exit rules gated on the held fund not being oversold help the KMLM and HG engines? Rule bars with placebo bands, row- and day-level family-wise p, the gap-by-RSI panel, costs, and the 2026-11-05 knife-edge.">
 <style>
 :root{color-scheme:light;--page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--ring:rgba(11,11,11,.10);
 --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--ctx:#b9b7ae;--ctx2:#8e8c84;--neg:#e34948;--band:rgba(42,120,214,.18);--mid:#f0efec}
@@ -81,7 +92,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 thead th{color:var(--ink2);font-weight:600;font-size:12.5px}.tablewrap{overflow-x:auto}
 details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)}
 .notes{font-size:13.5px;color:var(--ink2)}.notes li{margin:3px 0}
-.neg{color:var(--neg)}
+.neg{color:var(--neg)}.pos{color:var(--s3)}
 .filters{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:8px 0 10px;font-size:13.5px;color:var(--ink2)}
 select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--ring);border-radius:6px;padding:3px 6px}
 .heat td{text-align:center;padding:4px 4px;border-bottom:2px solid var(--surface);border-right:2px solid var(--surface);min-width:92px}
@@ -95,15 +106,15 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
 <body>
 <main>
 <h1>Conditioned overnight exits: does gating on "not oversold" rescue the exit rule?</h1>
-<p class="sub-h">Addendum 53 found that every unconditional overnight exit loses on the engines' leveraged legs because bad overnights after oversold closes are followed by better sessions, and its edge section showed the untested cell: a 5%+ gap-down when the fund was <em>not</em> oversold ran −0.9% open-to-close (t −2.5, n 208, SOXL/TECL/TQQQ 2010-26; an in-sample cell from the same data). This study puts that gate on the exit rule and runs it on the KMLM switcher's and HG's own paths, 2015-06..2026-11-04, with add. 53's harness unchanged: exit the leveraged long at the 09:30 open when its own gap (or the sector ETF's) is below a threshold AND the held fund's RSI(10) at the prior close was ≥ 30 (also ≥ 40, ≥ 50; the converse; no dip-buy trigger oversold; the leg a switcher pick rather than a dip-buy branch), 15 + 10 bps, a 2,000-draw same-side placebo per rule, and a family-wise permutation p over every rule tried. Then, model-free, every 2x/3x fund's open-to-close by gap bucket × RSI state, 2010-26.</p>
+<p class="sub-h" id="intro"></p>
 <div class="kpis" id="kpis"></div>
 
 <section class="card">
-<h2>A. KMLM's path: the gate removes most of the damage, it does not create a gain, except in one small tail cell</h2>
-<p class="sub-h">Bars: change in CAGR over 2015-06..2026-11-04 from exiting the leveraged long at the open whenever the rule fires (net of 15 bps at the open and 10 bps to re-enter when the engine re-holds the fund). The thin bar is the placebo band (5th-95th percentile of exiting the same number of random leveraged-long mornings). Labels: fires, the exited leg's mean open-to-close move (negative = exiting was right gross of costs), and the family-wise p where the rule beats its placebo. "MIRROR" rules exit on a gap-up gated on not-overbought: the control.</p>
+<h2>A. KMLM's path: the gate removes most of the damage, it does not create a gain, except in the ≤ −8% tail and its sector-gap cousin</h2>
+<p class="sub-h">Bars: change in CAGR over 2015-06..2026-11-04 from exiting the leveraged long at the open whenever the rule fires (net of 15 bps at the open and 10 bps to re-enter when the engine re-holds the fund). The thin bar is the placebo band (5th-95th percentile of exiting the same number of random leveraged-long mornings). Labels: fires, the exited leg's mean open-to-close move (negative = exiting was right gross of costs), and, where the rule beats its placebo, the family-wise p on the engine's per-fire gain, by row (per-fire gains shuffled across mornings) and by day (the day is the unit: two legs held on the same day count once). "MIRROR" rules exit on a gap-up gated on not-overbought: the control.</p>
 <div class="legend" id="lgA"></div>
 <div class="chartwrap"><svg id="chA" role="img" aria-label="Change in CAGR from each conditioned exit rule on the KMLM path, with placebo bands"></svg></div>
-<details><summary>Table: all rules on KMLM, with costs and the family-wise test</summary><div class="tablewrap"><table id="tbA"></table></div></details>
+<details><summary>Table: all rules on KMLM, with costs and the two family-wise tests</summary><div class="tablewrap"><table id="tbA"></table></div></details>
 <details><summary>Every fire of the gated 5% and 8% rules on KMLM</summary><div class="tablewrap"><table id="tbAf"></table></div></details>
 </section>
 
@@ -115,17 +126,23 @@ select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid 
 </section>
 
 <section class="card">
-<h2>C. Model-free: open-to-close by overnight gap × RSI state at the prior close, 2010-2026</h2>
-<p class="sub-h">Every morning of every 2x/3x fund in the data (12 long, 4 inverse), the fund's own gap and its own Wilder RSI(10) on adjusted closes — the engines' indicator. Cell: mean open-to-close that session (blue = the fund rose from the open, red = it fell); beneath it n · t (sample sd) · share positive. "One per day" averages the qualifying funds on each day before the statistics (the honest t: the same day shows up in several funds). The ≥ 70 column is the overbought mirror. Ex-distribution mornings excluded.</p>
+<h2>C. Model-free: open-to-close by overnight gap × RSI state at the prior close, 2010-01..2026-11-04</h2>
+<p class="sub-h">Every morning of every 2x/3x fund in the data (12 long, 4 inverse) up to the engine window's last day (2026-11-05, the morning that prompted the study, is excluded), the fund's own gap and its own Wilder RSI(10) on adjusted closes — the engines' indicator. Cell: mean open-to-close that session (blue = the fund rose from the open, red = it fell); beneath it n · t (sample sd) · share positive. "One per day" averages the qualifying funds on each day before the statistics (the honest t: the same day shows up in several funds). "RSI ≥ 30" is the candidate's gate (30-50 and ≥ 50 together); the ≥ 70 column is the overbought mirror. Ex-distribution mornings excluded.</p>
 <div class="filters"><label>Funds <select id="selGrp"></select></label><label>Pooling <select id="selPool"><option value="rows">fund-mornings</option><option value="daily">one per day</option></select></label><span id="panelNote"></span></div>
 <div class="tablewrap"><table class="heat" id="heat"></table></div>
 <div class="legend" style="margin-top:8px"><span><i class="sw" style="background:color-mix(in oklab, var(--s1) 55%, var(--surface))"></i>rose from the open</span><span><i class="sw" style="background:var(--mid)"></i>flat</span><span><i class="sw" style="background:color-mix(in oklab, var(--neg) 55%, var(--surface))"></i>fell from the open (saturates at ±3%)</span><span>outlined: the cells the exit rules live in (gap ≤ −5%, RSI ≥ 30)</span></div>
-<details><summary>The engines' own mornings on the same grid (KMLM and HG leveraged-long legs, 2015-06..2026-11)</summary><div class="tablewrap"><table class="heat" id="heatK"></table></div><div class="tablewrap" style="margin-top:10px"><table class="heat" id="heatH"></table></div></details>
+<details><summary>The engines' own mornings on the same grid (KMLM and HG leveraged-long legs, 2015-06..2026-11-04)</summary><div class="tablewrap"><table class="heat" id="heatK"></table></div><div class="tablewrap" style="margin-top:10px"><table class="heat" id="heatH"></table></div></details>
 </section>
 
 <section class="card">
 <h2>D. Costs, the pre-open proxy, and what a candidate would need</h2>
 <div class="tablewrap"><table id="tbD"></table></div>
+</section>
+
+<section class="card">
+<h2>E. 2026-11-05: the knife-edge is 15:54 vs 16:00, not a data source; and it is fire #1 of a log, not evidence</h2>
+<p class="sub-h" id="e-intro"></p>
+<div class="tablewrap"><table id="tbE"></table></div>
 </section>
 
 <section class="card notes">
@@ -143,19 +160,23 @@ function legend(id, items){document.getElementById(id).innerHTML = items.map(([n
 const f1 = v => v == null ? '–' : v.toFixed(1), f2 = v => v == null ? '–' : v.toFixed(2), pc = v => v == null ? '–' : (v * 100).toFixed(1) + '%', pc0 = v => v == null ? '–' : (Math.round(v * 100) || 0) + '%';
 const sg = v => v == null ? '–' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%', sg2 = v => v == null ? '–' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%';
 const cls = v => v == null ? ' class="n"' : (v < 0 ? ' class="n neg"' : ' class="n"');
-const K = D.eng.KMLM, H = D.eng.HG, P = D.panel;
-const k5 = K.rules['gap <= -5% & held RSI >= 30'], k5u = K.rules['gap <= -5% & ungated (add. 53)'], k8 = K.rules['gap <= -8% & held RSI >= 30'], k84 = K.rules['gap <= -8% & held RSI >= 40'];
+const K = D.eng.KMLM, H = D.eng.HG, P = D.panel, CK = P.check, N5 = D.nov05;
+const k5 = K.rules['gap <= -5% & held RSI >= 30'], k5u = K.rules['gap <= -5% & ungated (add. 53)'], k8 = K.rules['gap <= -8% & held RSI >= 30'], k84 = K.rules['gap <= -8% & held RSI >= 40'], k85 = K.rules['gap <= -8% & held RSI >= 50'];
 const h5 = H.rules['gap <= -5% & held RSI >= 30'], h5u = H.rules['gap <= -5% & ungated (add. 53)'], h3 = H.rules['gap <= -3% & held RSI >= 30'];
 const bestH = Object.values(H.rules).filter(v => v.n >= 5 && !v.signal.startsWith('MIRROR') && !v.gate.includes('converse')).sort((a, b) => b.dcagr - a.dcagr)[0];
 const c8 = P.pooled['long all 12']['<= -8%'], c8d = P.daily['long all 12']['<= -8%'], c58 = P.pooled['long all 12']['-8..-5%'], c58d = P.daily['long all 12']['-8..-5%'];
-[[`${sg(k5.dcagr)}/yr`, `KMLM, exit on an own gap ≤ −5% when the held fund's RSI(10) ≥ 30 (the add. 53 cell on the engine's path): ${k5.n} fires, the leg still went ${sg2(k5.intra)} open-to-close on average (t ${f1(k5.intra_t)}), exiting helped ${pc0(k5.hit)} of the time, ${pc0(k5.pct)} placebo percentile. Ungated the same rule cost ${sg(k5u.dcagr)}/yr: the gate removes the dip-buy mornings, not the loss`],
- [`${sg(k8.dcagr)}/yr on ${k8.n} fires`, `the one cell that beats its placebo: gap ≤ −8% & RSI ≥ 30 on KMLM, leg ${sg2(k8.intra)} open-to-close (t ${f1(k8.intra_t)}), ${pc0(k8.hit)} helped, ${pc0(k8.pct)} placebo pct, family-wise p ${f2(k8.p_fw)}; RSI ≥ 40: ${k84.n} fires, ${sg(k84.dcagr)}/yr, p ${f2(k84.p_fw)}. Three episodes (2020, 2025, 2026) carry it; the ≤ −5% version is negative. A tail cell, in sample`],
+const fires30 = K.fires['gap <= -8% & held RSI >= 30'] || [], n3050 = fires30.filter(f => f[3] < 50).length;
+const rob8 = (K.robustness || {})['gap <= -8% & held RSI >= 30'], years = K.sessions / 252, perYear = k8.n / years, perYearD = k8.n_days / years;
+const need = k8.t_saved > 0 ? Math.round(Math.pow(2 / k8.t_saved, 2) * k8.n) : null, needD = k8.t_saved_day > 0 ? Math.round(Math.pow(2 / k8.t_saved_day, 2) * k8.n_days) : null;
+document.getElementById('intro').innerHTML = `Addendum 53 found that every unconditional overnight exit loses on the engines' leveraged legs because bad overnights after oversold closes are followed by better sessions, and its edge section showed the untested cell: a 5%+ gap-down when the fund was <em>not</em> oversold ran −0.9% open-to-close (t −2.5, n 208, SOXL/TECL/TQQQ 2010-26; an in-sample cell from the same data — and one that contained the 2026-11-05 morning itself on a half-day print: without it, n ${CK.ex_1105.n}, ${sg2(CK.ex_1105.mean)}, t ${f1(CK.ex_1105.t)}). This study puts that gate on the exit rule and runs it on the KMLM switcher's and HG's own paths, 2015-06..2026-11-04, with add. 53's harness unchanged: exit the leveraged long at the 09:30 open when its own gap (or the sector ETF's) is below a threshold AND the held fund's RSI(10) at the prior close was ≥ 30 (also ≥ 40, ≥ 50; the converse; no dip-buy trigger oversold; the leg a switcher pick rather than a dip-buy branch), 15 + 10 bps, a 2,000-draw same-side placebo per rule, and two family-wise permutation p over every rule tried (by row and by day). Then, model-free, every 2x/3x fund's open-to-close by gap bucket × RSI state, 2010-01..2026-11-04.`;
+[[`${sg(k5.dcagr)}/yr`, `KMLM, exit on an own gap ≤ −5% when the held fund's RSI(10) ≥ 30 (the add. 53 cell on the engine's path): ${k5.n} fires, the leg still went ${sg2(k5.intra)} open-to-close on average (leg t ${f1(k5.intra_t)}), exiting helped ${pc0(k5.hit)} of the time, ${pc0(k5.pct)} placebo percentile. Ungated the same rule cost ${sg(k5u.dcagr)}/yr: the gate removes the dip-buy mornings, not the loss`],
+ [`${sg(k8.dcagr)}/yr on ${k8.n} fires`, `the ≤ −8% tail and its sector-gap cousin beat their placebos (five overlapping rules at ≥ 96th pct): gap ≤ −8% & RSI ≥ 30 on KMLM, ${k8.n} fires on ${k8.n_days} days, leg ${sg2(k8.intra)} open-to-close (leg t ${f1(k8.intra_t)}), ${pc0(k8.hit)} helped, per-fire gain t ${f2(k8.t_saved)} by row / ${f2(k8.t_saved_day)} by day, family-wise p ${f2(k8.p_fw)} by row / ${f2(k8.p_fw_day)} by day; RSI ≥ 40: ${k84.n} fires on ${k84.n_days} days, ${sg(k84.dcagr)}/yr, p ${f2(k84.p_fw)} / ${f2(k84.p_fw_day)}. Three episodes (2020, 2025, 2026) carry it; the ≤ −5% version is negative. A tail cell, in sample`],
  [`${sg(bestH.dcagr)}/yr best on HG`, `HG's best gated rule with 5+ fires (${bestH.signal} & ${bestH.gate}, n ${bestH.n}, ${pc0(bestH.pct)} placebo pct); gap ≤ −5% & RSI ≥ 30: ${h5.n} fires, ${sg(h5.dcagr)}/yr, leg ${sg2(h5.intra)}; the 8% rules fire once. Nothing on HG survives`],
- [`${sg2(c8['>=50'].mean)} after a −8% gap`, `model-free, 12 leveraged long funds 2010-26: open-to-close when the fund gapped ≤ −8% and was not oversold (RSI ≥ 50): n ${c8['>=50'].n}, t ${f1(c8['>=50'].t)} by fund-mornings, ${sg2(c8d['>=50'].mean)} t ${f1(c8d['>=50'].t)} one-per-day; oversold (RSI < 30): ${sg2(c8['<30'].mean)} (t ${f1(c8['<30'].t)}). The state matters; the gated exit still only pays in the deepest tail`]]
+ [`${sg2(c8d['>=30'].mean)} after a −8% gap`, `model-free, the candidate's own cell: 12 leveraged long funds 2010-01..2026-11-04, open-to-close when the fund gapped ≤ −8% with RSI ≥ 30 at the prior close (the gate): ${sg2(c8d['>=30'].mean)}, t ${f1(c8d['>=30'].t)} one-per-day (n ${c8d['>=30'].n}; ${sg2(c8['>=30'].mean)} t ${f1(c8['>=30'].t)} by fund-mornings, n ${c8['>=30'].n}). RSI 30-50, where ${n3050} of the candidate's ${k8.n} fires sit: ${sg2(c8d['30-50'].mean)} one-per-day (n ${c8d['30-50'].n}), flat. Only RSI ≥ 50 is negative (${sg2(c8d['>=50'].mean)}, t ${f1(c8d['>=50'].t)}, n ${c8d['>=50'].n}): that supports the ≥ 50 gate, n ${k85.n} on the engine, p ${f2(k85.p_fw)} / ${f2(k85.p_fw_day)}, not the ≥ 30 candidate. Oversold (RSI < 30): ${sg2(c8['<30'].mean)} (t ${f1(c8['<30'].t)})`]]
  .forEach(([b, s]) => { const k = document.createElement('div'); k.className = 'kpi'; k.innerHTML = `<b>${b}</b><span>${s}</span>`; document.getElementById('kpis').appendChild(k); });
 
 function ruleChart(svgId, E){
-  const svg = document.getElementById(svgId), W = 900, rowH = 22, gh = 24, l = 250, r = 300, t = 8;
+  const svg = document.getElementById(svgId), W = 900, rowH = 22, gh = 24, l = 250, r = 330, t = 8;
   const items = [];
   E.chart.forEach(g => { items.push({head: g.group}); g.rules.forEach(n => items.push({rule: n})); });
   let y = t; const ys = items.map(it => { const yy = y; y += it.head ? gh : rowH; return yy; });
@@ -175,17 +196,18 @@ function ruleChart(svgId, E){
     const x0 = X(Math.min(0, x.dcagr)), w = Math.abs(X(x.dcagr) - X(0));
     const bar = el('rect', {x: x0, y: yy + 4, width: Math.max(w, 1.5), height: 14, rx: 2, fill: x.dcagr < 0 ? 'var(--neg)' : 'var(--s3)', opacity: (mirror || conv) ? 0.55 : 1}, svg);
     const beat = x.pct != null && x.pct >= 0.95 && x.dcagr > 0;
-    el('text', {x: W - r + 6, y: yy + 15, class: 'ax'}, svg, `${sg(x.dcagr)}/yr · ${x.n} fires · leg ${sg2(x.intra)}` + (beat ? ` · p_fw ${f2(x.p_fw)}` : ''));
-    bar.addEventListener('mousemove', e => tip(e, `<b>${x.signal} & ${x.gate}</b><br>${x.n} fires; the exited leg's mean open-to-close ${sg2(x.intra)} (t ${f1(x.intra_t)}, ${pc0(x.intra_win)} up); exiting helped ${pc0(x.hit)}; ${sg2(x.saved)} of the engine per fire (t ${f1(x.t_saved)})<br>CAGR ${sg(x.dcagr)}/yr (25+15 bps ${sg(x.c2515)}, gross ${sg(x.gross)}), Sharpe ${f2(x.dsharpe)}, max DD ${sg(x.dmaxdd)}<br>placebo band ${sg(x.p05)}..${sg(x.p95)}, actual at the ${pc0(x.pct)} percentile; family-wise p ${f2(x.p_fw)}<br>dip-buy legs among the fires ${pc0(x.dip)}; two-leg days ${pc0(x.two)}`)); bar.addEventListener('mouseleave', untip);
+    el('text', {x: W - r + 6, y: yy + 15, class: 'ax'}, svg, `${sg(x.dcagr)}/yr · ${x.n} fires · leg ${sg2(x.intra)}` + (beat ? ` · p ${f2(x.p_fw)} row / ${f2(x.p_fw_day)} day` : ''));
+    bar.addEventListener('mousemove', e => tip(e, `<b>${x.signal} & ${x.gate}</b><br>${x.n} fires on ${x.n_days} days; the exited leg's mean open-to-close ${sg2(x.intra)} (leg t ${f1(x.intra_t)}, ${pc0(x.intra_win)} up); exiting helped ${pc0(x.hit)}; ${sg2(x.saved)} of the engine per fire (per-fire gain t ${f2(x.t_saved)} by row, ${f2(x.t_saved_day)} by day)<br>CAGR ${sg(x.dcagr)}/yr (25+15 bps ${sg(x.c2515)}, gross ${sg(x.gross)}), Sharpe ${f2(x.dsharpe)}, max DD ${sg(x.dmaxdd)}<br>placebo band ${sg(x.p05)}..${sg(x.p95)}, actual at the ${pc0(x.pct)} percentile; family-wise p ${f2(x.p_fw)} by row / ${f2(x.p_fw_day)} by day<br>dip-buy legs among the fires ${pc0(x.dip)}; two-leg days ${pc0(x.two)}`)); bar.addEventListener('mouseleave', untip);
   });
 }
 legend('lgA', [['change in CAGR, exit at the open (red = cost, green = gain)', 'var(--neg)'], ['placebo band: 5th-95th pct of random same-count exits', 'var(--band)']]);
 ruleChart('chA', K); ruleChart('chB', H);
 
 function ruleTable(id, E){
-  const head = '<thead><tr><th>signal</th><th>gate</th><th class="n">fires</th><th class="n">leg open→close</th><th class="n">t</th><th class="n">helped</th><th class="n">per fire</th><th class="n">ΔCAGR 15+10</th><th class="n">25+15</th><th class="n">gross</th><th class="n">ΔSharpe</th><th class="n">Δmax DD</th><th class="n">placebo p05..p95</th><th class="n">pct</th><th class="n">family-wise p</th><th class="n">dip-buy legs</th></tr></thead>';
-  const body = Object.values(E.rules).map(x => `<tr><td>${x.signal}</td><td>${x.gate}</td><td class="n">${x.n}</td><td${cls(x.intra)}>${sg2(x.intra)}</td><td class="n">${f1(x.intra_t)}</td><td class="n">${pc0(x.hit)}</td><td${cls(x.saved)}>${sg2(x.saved)}</td><td${cls(x.dcagr)}>${sg(x.dcagr)}</td><td${cls(x.c2515)}>${sg(x.c2515)}</td><td${cls(x.gross)}>${sg(x.gross)}</td><td${cls(x.dsharpe)}>${f2(x.dsharpe)}</td><td${cls(x.dmaxdd)}>${sg(x.dmaxdd)}</td><td class="n">${x.p05 == null ? '–' : sg(x.p05) + '..' + sg(x.p95)}</td><td class="n">${pc0(x.pct)}</td><td class="n">${f2(x.p_fw)}</td><td class="n">${pc0(x.dip)}</td></tr>`).join('') +
-    `<tr><td colspan="16" style="color:var(--ink2)">As built ${E.from}..${E.to}: CAGR ${pc(E.base.cagr)}, Sharpe ${f2(E.base.sharpe)}, max DD ${pc0(E.base.maxdd)} (in sample). ${E.long_mornings} eligible leveraged-long mornings of ${E.long_all} (${E.phantom} ex-distribution mornings excluded): ${Object.entries(E.funds).map(([k, v]) => `${k} ${v}`).join(', ')}; ${E.legs.switcher || 0} switcher legs, ${E.legs.dip || 0} dip-buy legs (leg labels vs the tree's triggers at the prior close on this study's RSI: ${Object.entries(E.leg_check).map(([k, v]) => `${k} ${v.agree}/${v.n}`).join('; ')}). Family-wise p: share of ${D.perm_n} shuffles of the per-fire exit gains across the eligible mornings in which the best of the ${E.family.rules.length} rules reaches the rule's observed t (null max t: median ${f2(E.family.null_max_t_p50)}, 95th pct ${f2(E.family.null_max_t_p95)}); 1.00 means the rule's t is negative. Per-fire gain across all eligible mornings: sd ${pc(E.saved_dist.sd)}, ${E.saved_dist.n_abs_gt_10pct} mornings beyond ±10%, ${E.saved_dist.two_leg_days} two-leg mornings (the permutation treats legs as independent).</td></tr>`;
+  const fd = E.family.days || {};
+  const head = '<thead><tr><th>signal</th><th>gate</th><th class="n">fires</th><th class="n">days</th><th class="n">leg open→close</th><th class="n">t leg</th><th class="n">helped</th><th class="n">per fire</th><th class="n">t gain (row / day)</th><th class="n">ΔCAGR 15+10</th><th class="n">25+15</th><th class="n">gross</th><th class="n">50+50</th><th class="n">ΔSharpe</th><th class="n">Δmax DD</th><th class="n">placebo p05..p95</th><th class="n">pct</th><th class="n">p_fw row</th><th class="n">p_fw day</th><th class="n">dip-buy legs</th></tr></thead>';
+  const body = Object.values(E.rules).map(x => `<tr><td>${x.signal}</td><td>${x.gate}</td><td class="n">${x.n}</td><td class="n">${x.n_days}</td><td${cls(x.intra)}>${sg2(x.intra)}</td><td class="n">${f1(x.intra_t)}</td><td class="n">${pc0(x.hit)}</td><td${cls(x.saved)}>${sg2(x.saved)}</td><td class="n">${f2(x.t_saved)} / ${f2(x.t_saved_day)}</td><td${cls(x.dcagr)}>${sg(x.dcagr)}</td><td${cls(x.c2515)}>${sg(x.c2515)}</td><td${cls(x.gross)}>${sg(x.gross)}</td><td${cls(x.costs['50+50'].dcagr)}>${sg(x.costs['50+50'].dcagr)}</td><td${cls(x.dsharpe)}>${f2(x.dsharpe)}</td><td${cls(x.dmaxdd)}>${sg(x.dmaxdd)}</td><td class="n">${x.p05 == null ? '–' : sg(x.p05) + '..' + sg(x.p95)}</td><td class="n">${pc0(x.pct)}</td><td class="n">${f2(x.p_fw)}</td><td class="n">${f2(x.p_fw_day)}</td><td class="n">${pc0(x.dip)}</td></tr>`).join('') +
+    `<tr><td colspan="20" style="color:var(--ink2)">As built ${E.from}..${E.to}: CAGR ${pc(E.base.cagr)}, Sharpe ${f2(E.base.sharpe)}, max DD ${pc0(E.base.maxdd)} (in sample). ${E.long_mornings} eligible leveraged-long mornings of ${E.long_all} (${E.phantom} ex-distribution mornings excluded): ${Object.entries(E.funds).map(([k, v]) => `${k} ${v}`).join(', ')}; ${E.legs.switcher || 0} switcher legs, ${E.legs.dip || 0} dip-buy legs (leg labels vs the tree's triggers at the prior close on this study's RSI: ${Object.entries(E.leg_check).map(([k, v]) => `${k} ${v.agree}/${v.n}`).join('; ')}). "t leg" is the exited leg's open→close t (sample sd); "t gain" is the engine's per-fire gain t, the statistic the family-wise p is on. Family-wise p: share of ${D.perm_n} shuffles in which the best of the ${E.family.rules.length} rules reaches the rule's observed per-fire-gain t — by row (the per-fire exit gains shuffled across the ${E.long_mornings} eligible mornings, two legs held on the same day counted twice; null max t median ${f2(E.family.null_max_t_p50)}, 95th pct ${f2(E.family.null_max_t_p95)}) and by day (the unit is the day, its value the mean gain over that day's legs, shuffled across the ${fd.n_days} eligible days; null max t median ${f2(fd.null_max_t_p50)}, 95th pct ${f2(fd.null_max_t_p95)}); 1.00 means the rule's t is negative. Per-fire gain across all eligible mornings: sd ${pc(E.saved_dist.sd)}, ${E.saved_dist.n_abs_gt_10pct} mornings beyond ±10%, ${E.saved_dist.two_leg_days} two-leg mornings.</td></tr>`;
   document.getElementById(id).innerHTML = head + '<tbody>' + body + '</tbody>';
 }
 ruleTable('tbA', K); ruleTable('tbB', H);
@@ -193,17 +215,17 @@ ruleTable('tbA', K); ruleTable('tbB', H);
   const F = K.fires, names = Object.keys(F);
   if (!names.length) return;
   let h = '<thead><tr><th>rule</th><th>date</th><th>fund</th><th class="n">weight</th><th class="n">RSI(10) prior close</th><th class="n">gap at the open</th><th class="n">open→close</th><th class="n">engine gain from exiting</th></tr></thead><tbody>';
-  names.forEach(n => { h += `<tr><td colspan="8" style="color:var(--ink2)">${n}: ${F[n].length} fires</td></tr>` + F[n].map(f => `<tr><td></td><td>${f[0]}</td><td>${f[1]}</td><td class="n">${pc0(f[2])}</td><td class="n">${f1(f[3])}</td><td${cls(f[4])}>${sg(f[4])}</td><td${cls(f[5])}>${sg(f[5])}</td><td${cls(f[6])}>${sg2(f[6])}</td></tr>`).join(''); });
+  names.forEach(n => { h += `<tr><td colspan="8" style="color:var(--ink2)">${n}: ${F[n].length} fires on ${new Set(F[n].map(f => f[0])).size} days</td></tr>` + F[n].map(f => `<tr><td></td><td>${f[0]}</td><td>${f[1]}</td><td class="n">${pc0(f[2])}</td><td class="n">${f1(f[3])}</td><td${cls(f[4])}>${sg(f[4])}</td><td${cls(f[5])}>${sg(f[5])}</td><td${cls(f[6])}>${sg2(f[6])}</td></tr>`).join(''); });
   document.getElementById('tbAf').innerHTML = h + '</tbody>';
 })();
 
 // C: heat tables
-const GAPS = ['<= -8%', '-8..-5%', '-5..-3%', '-3..-1%', '-1..+1%', '+1..+3%', '+3..+5%', '+5..+8%', '> +8%'], STATES = ['<30', '30-50', '>=50', '>=70', 'all'];
-const SLAB = {'<30': 'RSI < 30 (oversold)', '30-50': 'RSI 30-50', '>=50': 'RSI ≥ 50', '>=70': 'RSI ≥ 70 (overbought, mirror)', 'all': 'all'};
+const GAPS = ['<= -8%', '-8..-5%', '-5..-3%', '-3..-1%', '-1..+1%', '+1..+3%', '+3..+5%', '+5..+8%', '> +8%'], STATES = ['<30', '30-50', '>=50', '>=30', '>=70', 'all'];
+const SLAB = {'<30': 'RSI < 30 (oversold)', '30-50': 'RSI 30-50', '>=50': 'RSI ≥ 50', '>=30': 'RSI ≥ 30 (the gate)', '>=70': 'RSI ≥ 70 (overbought, mirror)', 'all': 'all'};
 function cellStyle(m){ if (m == null) return 'background:var(--mid)'; const a = Math.min(1, Math.abs(m) / 0.03) * 55; return `background:color-mix(in oklab, ${m >= 0 ? 'var(--s1)' : 'var(--neg)'} ${a.toFixed(0)}%, var(--surface))`; }
 function heat(id, grid, hot){
   let h = '<thead><tr><th class="rowh">overnight gap</th>' + STATES.map(s => `<th>${SLAB[s]}</th>`).join('') + '</tr></thead><tbody>';
-  GAPS.forEach(g => { h += `<tr><td class="rowh">${g.replace('<=', '≤').replace('>', '>')}</td>` + STATES.map(s => { const c = grid[g][s]; const isHot = hot && (g === '<= -8%' || g === '-8..-5%') && (s === '30-50' || s === '>=50'); return c.n ? `<td class="${isHot ? 'hot' : ''}" style="${cellStyle(c.mean)}" data-tip="${g} × ${SLAB[s]}: n ${c.n}, mean ${sg2(c.mean)}, median ${sg2(c.median)}, t ${f1(c.t)}, ${pc0(c.win)} positive"><span class="v">${sg2(c.mean)}</span><span class="m">n ${c.n} · t ${f1(c.t)} · ${pc0(c.win)} up</span></td>` : `<td style="background:var(--mid)"><span class="m">–</span></td>`; }).join('') + '</tr>'; });
+  GAPS.forEach(g => { h += `<tr><td class="rowh">${g.replace('<=', '≤').replace('>', '>')}</td>` + STATES.map(s => { const c = grid[g][s] || {n: 0}; const isHot = hot && (g === '<= -8%' || g === '-8..-5%') && (s === '30-50' || s === '>=50' || s === '>=30'); return c.n ? `<td class="${isHot ? 'hot' : ''}" style="${cellStyle(c.mean)}" data-tip="${g} × ${SLAB[s]}: n ${c.n}, mean ${sg2(c.mean)}, median ${sg2(c.median)}, t ${f1(c.t)}, ${pc0(c.win)} positive"><span class="v">${sg2(c.mean)}</span><span class="m">n ${c.n} · t ${f1(c.t)} · ${pc0(c.win)} up</span></td>` : `<td style="background:var(--mid)"><span class="m">–</span></td>`; }).join('') + '</tr>'; });
   const T = document.getElementById(id); T.innerHTML = h + '</tbody>';
   T.querySelectorAll('td[data-tip]').forEach(td => { td.addEventListener('mousemove', e => tip(e, td.dataset.tip)); td.addEventListener('mouseleave', untip); });
 }
@@ -217,7 +239,7 @@ function heat(id, grid, hot){
     const grid = kind === 'fund' ? P.funds[name].grid : (pool.value === 'daily' ? P.daily[name] : P.pooled[name]);
     pool.disabled = kind === 'fund';
     heat('heat', grid, true);
-    document.getElementById('panelNote').textContent = kind === 'fund' ? `${name}: ${P.funds[name].from}..${P.funds[name].to}` : `${P.n.rows} fund-mornings in all, ${P.n.phantom_excluded} ex-distribution excluded; add. 53's cell reproduced: n ${P.check.n}, ${sg2(P.check.mean)}, t ${f2(P.check.t)}`;
+    document.getElementById('panelNote').textContent = kind === 'fund' ? `${name}: ${P.funds[name].from}..${P.funds[name].to}` : `${P.n.rows} fund-mornings ${P.start}..${P.end}, ${P.n.phantom_excluded} ex-distribution excluded; add. 53's cell (n 208, −0.92%, t −2.45) contained the 11-05 half-day morning: ex 11-05 n ${CK.ex_1105.n}, ${sg2(CK.ex_1105.mean)}, t ${f2(CK.ex_1105.t)} (with it, on the 16:00 closes: ${sg2(CK.incl_1105_final_closes.mean)}, t ${f2(CK.incl_1105_final_closes.t)})`;
   }
   sel.addEventListener('change', draw); pool.addEventListener('change', draw); draw();
   heat('heatK', K.states, true); heat('heatH', H.states, true);
@@ -227,20 +249,31 @@ function heat(id, grid, hot){
 
 // D: costs and the proxy
 (function(){
-  const rows = ['gap <= -5% & held RSI >= 30', 'gap <= -8% & held RSI >= 30', 'gap <= -8% & held RSI >= 40', 'gap <= -5% & RSI >= 30 & no trigger & switcher', 'sector gap <= -2% & held RSI >= 30', 'gap <= -5% & ungated (add. 53)'];
-  let h = '<thead><tr><th>rule</th><th>engine</th><th class="n">fires</th><th class="n">ΔCAGR at 15 + 10 bps</th><th class="n">at 25 + 15 bps</th><th class="n">gross</th><th class="n">Δmax DD</th><th class="n">placebo pct</th><th class="n">family-wise p</th></tr></thead><tbody>';
-  [['KMLM', K], ['HG', H]].forEach(([e, E]) => rows.forEach(n => { const x = E.rules[n]; if (!x) return; h += `<tr><td>${n}</td><td>${e}</td><td class="n">${x.n}</td><td${cls(x.dcagr)}>${sg(x.dcagr)}</td><td${cls(x.c2515)}>${sg(x.c2515)}</td><td${cls(x.gross)}>${sg(x.gross)}</td><td${cls(x.dmaxdd)}>${sg(x.dmaxdd)}</td><td class="n">${pc0(x.pct)}</td><td class="n">${f2(x.p_fw)}</td></tr>`; }));
+  const rows = ['gap <= -5% & held RSI >= 30', 'gap <= -8% & held RSI >= 30', 'gap <= -8% & held RSI >= 40', 'gap <= -8% & held RSI >= 50', 'gap <= -5% & RSI >= 30 & no trigger & switcher', 'sector gap <= -2% & held RSI >= 30', 'gap <= -5% & ungated (add. 53)'];
+  let h = '<thead><tr><th>rule</th><th>engine</th><th class="n">fires (days)</th><th class="n">ΔCAGR at 15 + 10 bps</th><th class="n">at 25 + 15</th><th class="n">gross</th><th class="n">50 + 50</th><th class="n">80 + 80</th><th class="n">Δmax DD</th><th class="n">placebo pct</th><th class="n">p_fw row / day</th></tr></thead><tbody>';
+  [['KMLM', K], ['HG', H]].forEach(([e, E]) => rows.forEach(n => { const x = E.rules[n]; if (!x) return; h += `<tr><td>${n}</td><td>${e}</td><td class="n">${x.n} (${x.n_days})</td><td${cls(x.dcagr)}>${sg(x.dcagr)}</td><td${cls(x.c2515)}>${sg(x.c2515)}</td><td${cls(x.gross)}>${sg(x.gross)}</td><td${cls(x.costs['50+50'].dcagr)}>${sg(x.costs['50+50'].dcagr)} (t ${f2(x.costs['50+50'].t)})</td><td${cls(x.costs['80+80'].dcagr)}>${sg(x.costs['80+80'].dcagr)} (t ${f2(x.costs['80+80'].t)})</td><td${cls(x.dmaxdd)}>${sg(x.dmaxdd)}</td><td class="n">${pc0(x.pct)}</td><td class="n">${f2(x.p_fw)} / ${f2(x.p_fw_day)}</td></tr>`; }));
   const B = D.bridge, bl = Object.entries(B).map(([t, v]) => `${t} ${pc(v.sd)} sd (median ${sg2(v.median)}, ${v.sessions} sessions)`).join('; ');
-  const k8 = K.rules['gap <= -8% & held RSI >= 30'];
-  const need = k8.intra != null && k8.intra < 0 ? Math.ceil(Math.pow(2 * (Math.abs(k8.intra / k8.intra_t) * Math.sqrt(k8.n)) / Math.abs(k8.intra), 2)) : null;
-  h += `<tr><td colspan="9" style="color:var(--ink2)">The exit print is the 09:30 open; the pre-open signal an IBKR layer would read is the 09:25 indicative, which add. 53's 60-session bridge puts at the open to within 0.1%: ${bl}. Costs are the add. 53 assumptions (Composer's measured fills are 2.9 bps a side); the signs hold gross. What the one surviving cell would need before it is a rule: pre-registration (own gap ≤ −8%, own RSI(10) ≥ 30 at the prior close, switcher leg), an execution log with the 09:25 print, and about ${need == null ? '–' : need} fires at the in-sample mean for t 2 on its own — at ${(k8.n / 11.4).toFixed(1)} fires a year, ${need == null ? '–' : Math.round(need / (k8.n / 11.4))} years. It adds ${sg(k8.dcagr)}/yr to a ${pc0(K.base.cagr)}/yr in-sample engine.</td></tr>`;
+  const loyo = rob8 ? Object.entries(rob8.loyo).map(([y, c]) => `ex-${y} ${sg(c.dcagr)}`).join(', ') : '–';
+  h += `<tr><td colspan="11" style="color:var(--ink2)">The exit print is the 09:30 open; the pre-open signal an IBKR layer would read is the 09:25 indicative, which add. 53's 60-session bridge puts at the open to within 0.1%: ${bl}. Costs are the add. 53 assumptions (Composer's measured fills are 2.9 bps a side); 50 + 50 and 80 + 80 are add. 53's stressed-open fills; the signs hold gross. What the surviving tail would need before it is a rule: pre-registration (own gap ≤ −8% on the 09:25 print, the leg a 0.375 switcher pick in the engine's own holdings — no RSI read), an execution log with the 09:25 and auction prints, and about ${need == null ? '–' : need} fires at the in-sample per-fire gain (t ${f2(k8.t_saved)} on ${k8.n} fires) for t 2 on its own — at ${perYear.toFixed(1)} fires a year, ${need == null ? '–' : Math.round(need / perYear)} years (on day units, t ${f2(k8.t_saved_day)} over ${k8.n_days} fire-days: about ${needD == null ? '–' : needD} fire-days, ${needD == null ? '–' : Math.round(needD / perYearD)} years at ${perYearD.toFixed(1)} a year). It adds ${sg(k8.dcagr)}/yr to a ${pc0(K.base.cagr)}/yr in-sample engine. Leave-one-year-out never flips the sign (${loyo}), but without 2026 it is n ${rob8 ? rob8.ex_2026.n : '–'}, per-fire t ${rob8 ? f2(rob8.ex_2026.t) : '–'}, helped ${rob8 ? pc0(rob8.ex_2026.hit) : '–'}, ${rob8 ? sg(rob8.ex_2026.dcagr) : '–'} — inside the rule's own placebo band (95th pct ${sg(k8.p95)}); without 2020, 2025 and 2026: n ${rob8 ? rob8.ex_3.n : '–'}, ${rob8 ? sg(rob8.ex_3.dcagr) : '–'}, helped ${rob8 ? pc0(rob8.ex_3.hit) : '–'}.</td></tr>`;
   document.getElementById('tbD').innerHTML = h + '</tbody>';
 })();
-[`Hypothesis origin: the add. 53 edge study's intersection block (the same daily.json, the same funds, the same 2010-26 years) — so the engine-path test here is an in-sample refinement of a cell found in the data, not an out-of-sample test; the family-wise p counts the ${K.family.rules.length} rules tried in this study, not the 47 + 16 tried in add. 53 before it.`,
+
+// E: the 2026-11-05 case
+(function(){
+  if (!N5) return;
+  const S = N5.funds.SOXL, T = N5.funds.TECL, c = N5.soxl_close_for_rsi30, L = N5.ledger || {}, ed = L.edge || {};
+  const tgt = o => o ? Object.entries(o).filter(([k]) => k !== 'PULS' && k !== 'VXZ').map(([k, v]) => `${k} ${v}`).join(' / ') : '–';
+  document.getElementById('e-intro').innerHTML = `SOXL's RSI(10) at the ${N5.decision_close} close is ${S.rsi_adj.toFixed(3)} on adjusted closes and ${S.rsi_raw.toFixed(3)} on raw closes, from the same Yahoo source the engine's shadow runner reads: there is no data-source gap. The shadow ledger's ${N5.decision_close} KMLM row shows the mechanism: the 16:00-close target was ${tgt(L.target)} (the switcher picks: SOXL not oversold at the close), but at ${(ed.times || []).length ? ed.times[0] + '-' + ed.times[ed.times.length - 1] : '15:50-15:55'} on ${ed.src === 'fmp-1m' ? 'FMP 1-minute bars' : (ed.src || 'FMP minutes')} the target was ${tgt(ed.target)} — status "${L.status || 'knife-edge'}". Composer dip-bought on the ${ed.time || '15:54'} price; the close then read ${S.rsi_adj.toFixed(1)}. RSI 30 sits ${(Math.abs(c.pct_from_actual) * 100).toFixed(2)}% below the actual close (${c.close_at_rsi30.toFixed(2)} vs ${c.close.toFixed(2)}). On ${N5.date} SOXL gapped ${sg(S.gap)}, went ${sg(S.intra)} from the open and ${sg(S.leg_cc ?? S.day)} close-to-close; TECL ${sg(T.gap)} / ${sg(T.intra)} / ${sg(T.day)}. What each gate definition does with that morning (nominal tree weights, 15 bps at the open, re-entry not counted):`;
+  let h = '<thead><tr><th>gate definition</th><th>holding into 11-05</th><th>fires?</th><th class="n">effect on the symphony</th><th>note</th></tr></thead><tbody>';
+  N5.gates.forEach(g => { h += `<tr><td>${g.gate}</td><td>${g.holding}</td><td>${g.fires ? 'yes' : 'no'}</td><td class="n ${g.fires ? 'pos' : 'neg'}">${g.fires ? `exit at the open (gap ${sg(g.gap)}): ${sg(g.exit_gain_pp)}` : `rode ${g.fund} ${sg(g.leg_cc)} close-to-close: ${sg(g.rode_pp)}`}</td><td style="color:var(--ink2)">${g.note}</td></tr>`; });
+  h += `<tr><td colspan="5" style="color:var(--ink2)">The live rule is therefore defined by the engine's actual leg weight (0.375 = switcher pick), which needs no RSI feed and is unambiguous — and so defined it would have ridden 11-05, because Composer's 15:54 read made the leg a dip-buy. Under the path's own 16:00 logic the ≤ −8% & ≥ 30 rule fires on SOXL for ${sg(N5.gates[3].exit_gain_pp)} of the symphony, which would be the largest fire in the sample, and TECL fires the ≤ −5% rule for ${sg(N5.gates[4].exit_gain_pp)}; the morning prompted the study, so it is fire #1 of an execution log, not evidence, and it is outside every number above.</td></tr>`;
+  document.getElementById('tbE').innerHTML = h + '</tbody>';
+})();
+[`Hypothesis origin: the add. 53 edge study's intersection block (the same daily.json, the same funds, the same 2010-26 years) — so the engine-path test here is an in-sample refinement of a cell found in the data, not an out-of-sample test; the family-wise p counts the ${K.family.rules.length} rules tried in this study, not the 47 + 16 tried in add. 53 before it. The add. 53 cell (n 208, −0.92%, t −2.45) was computed on a half-day 2026-11-05 print and contained that morning; this study's panel stops at 2026-11-04 (ex 11-05 the cell is n ${CK.ex_1105.n}, ${sg2(CK.ex_1105.mean)}, t ${f2(CK.ex_1105.t)}).`,
  `Engine paths: the add. 47 pipeline (live trees, Composer-equivalent costs) 2015-06..2026-11-04, in sample, proxies before each fund's launch; the overlay is evaluated on the real funds' raw opens and closes from launch, with add. 53's mechanics unchanged (exit = the leg's close-to-close return replaced by its gap less ${D.exit_bps} bps, ${D.reentry_bps} bps when the engine re-holds the fund; placebo ${D.placebo_n} draws of the same number of random leveraged-long mornings). Leg types from the holdings: KMLM 0.75 = a dip-buy branch (TQQQ/SOXL/SPXL RSI(10) < 30, LABU < 25 at the prior close), 0.375 = a switcher pick (bottom-2 RSI of TECL/SOXL/SVIX); HG by ticker (TQQQ/UPRO/UDOW/SSO/TNA the momentum pick, TECL/QLD/LABU/USD the dip-buy pick). The labels agree with the trees' triggers on this study's RSI as stated under each table.`,
- `RSI: edge_study's Wilder RSI(10) on Yahoo adjusted closes (the engines' definition; the engines run on the add. 47 caches, so the two can differ on a knife-edge day). The gap is the raw 09:30 open vs the raw prior close (as add. 53); mornings where the raw and adjusted day returns differ by more than 5 bps (distributions: the phantom gaps add. 53's counter-agent flagged) are excluded from firing and from the placebo pool.`,
- `Statistics: t with the sample sd on the fired legs' open-to-close and on the engine's per-fire gain; the placebo percentile is per rule; the family-wise permutation shuffles per-fire gains across mornings and treats two legs held on the same day as independent (${K.saved_dist.two_leg_days} of KMLM's eligible mornings are two-leg days), so its p is slightly optimistic; per-fire gains are fat-tailed (${K.saved_dist.n_abs_gt_10pct} KMLM mornings beyond ±10%), which makes small-n t-statistics less extreme under the null than a normal table would say. The model-free panel pools fund-mornings (the same day across funds) and, as the honest alternative, one trade per day; both are gross of costs.`,
- `Costs: 15 + 10 and 25 + 15 bps are assumptions; add. 53 put TECL/LABU fills on a stressed open at 50-80 bps. The 2026 fires are the live year (the flip-heavy tape of add. 53 section 5). Research only; nothing traded, paused or edited on Composer.`,
+ `RSI: edge_study's Wilder RSI(10) on Yahoo adjusted closes, the engines' definition and the shadow runner's source (SOXL at the 11-04 close: ${N5 ? N5.funds.SOXL.rsi_adj.toFixed(3) : '–'} adjusted, ${N5 ? N5.funds.SOXL.rsi_raw.toFixed(3) : '–'} raw). The knife-edge is not the data source but the clock: Composer decides on 15:50-15:55 minute prints, the tree in this study on the 16:00 close (section E). The gap is the raw 09:30 open vs the raw prior close (as add. 53); mornings where the raw and adjusted day returns differ by more than 5 bps (distributions: the phantom gaps add. 53's counter-agent flagged) are excluded from firing and from the placebo pool.`,
+ `Statistics: two t's are shown and labelled — "t leg" on the fired legs' open-to-close, "t gain" on the engine's per-fire gain (the one the p values are on; for the ≤ −8% & ≥ 30 rule ${f2(k8.t_saved)} by row, ${f2(k8.t_saved_day)} by day); the placebo percentile is per rule. The family-wise permutation is reported by row (per-fire gains shuffled across mornings; ${K.saved_dist.two_leg_days} of KMLM's eligible mornings are two-leg days it treats as independent, so the ${k8.n} fires count as ${k8.n} units where they are ${k8.n_days} days) and by day (the unit is the day: p ${f2(k8.p_fw)} by row becomes ${f2(k8.p_fw_day)} by day for the ≥ 30 rule, ${f2(k84.p_fw)} becomes ${f2(k84.p_fw_day)} for ≥ 40). Per-fire gains are fat-tailed (${K.saved_dist.n_abs_gt_10pct} KMLM mornings beyond ±10%), which makes small-n t-statistics less extreme under the null than a normal table would say. The model-free panel pools fund-mornings (the same day across funds) and, as the honest alternative, one trade per day; both are gross of costs; the 30-50 column, where ${n3050} of the candidate's ${k8.n} fires sit, is flat one-per-day (${sg2(c8d['30-50'].mean)}) and the ≥ 30 pooled cell is ${sg2(c8d['>=30'].mean)} (t ${f1(c8d['>=30'].t)}): the panel supports the ≥ 50 gate, not the ≥ 30 candidate.`,
+ `Clustering: 2026 (the live year, the flip-heavy tape of add. 53 section 5) carries most of the candidate's per-fire sum; without it the rule sits inside its own placebo band (section D); without 2020, 2025 and 2026 it has ${rob8 ? rob8.ex_3.n : '–'} fires, all losers. Costs: 15 + 10 and 25 + 15 bps are assumptions; at add. 53's 50-80 bps stressed-open fills the rule keeps its sign (${sg(k8.costs['50+50'].dcagr)} at 50 + 50, t ${f2(k8.costs['50+50'].t)}; ${sg(k8.costs['80+80'].dcagr)} at 80 + 80, t ${f2(k8.costs['80+80'].t)}). Research only; nothing traded, paused or edited on Composer.`,
  `Generated ${D.generated}.`]
  .forEach(s => document.getElementById('basis').insertAdjacentHTML('beforeend', `<li>${s}</li>`));
 </script>

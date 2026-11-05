@@ -102,6 +102,28 @@ def tkeys(rows):
     return ks
 
 
+def patch_duplicate_volume(F, I):
+    """Yahoo repeats the prior session's volume on some days of the continuous contracts (counter-agent:
+    2023-11-23, 2024-09-09, 2025-10-13, 2026-11-04 for ES). Where the hourly bars cover the session
+    (18:00 ET the evening before to 16:00 ET), replace the print with their sum x 1.06 (the median
+    daily/hourly ratio); otherwise drop it so no ratio is read from it. Returns {symbol: [[date, bad
+    print, replacement], ...]}"""
+    out = {}
+    for s in ("ES=F", "NQ=F"):
+        idx = hourly_index(I[f"{s}|1h"]) if f"{s}|1h" in I else {}
+        ks = sorted(k for k in F[s] if not k.startswith("_"))
+        for i in range(1, len(ks)):
+            d, p = ks[i], ks[i - 1]
+            v, vp = F[s][d].get("v"), F[s][p].get("v")
+            if not v or v != vp or d < "2015-01-01":
+                continue
+            bars = [idx[k][4] for k in idx if (k[0] == p and k[1] >= 18) or (p < k[0] < d) or (k[0] == d and k[1] <= 16)]
+            new = sum(bars) * 1.06 if bars else None
+            F[s][d]["v"] = new
+            out.setdefault(s, []).append([d, vp, new])
+    return out
+
+
 def vol_ratio(rows, d, n=20, min_n=10):
     """rows[d]['v'] over the median of the n sessions before d; None if fewer than min_n of them print"""
     ks = tkeys(rows)
@@ -253,7 +275,7 @@ def stats(x):
             "win": sum(1 for v in x if v > 0) / len(x)}
 
 
-def split_table(rows, outcome, splits, perm_n=PERM_N):
+def split_table(rows, outcome, splits, perm_n=PERM_N, min_n=8):
     """two-way splits of one outcome over one conditioning sample, each with the difference of means, a
     per-split permutation p, and the family-wise p of the largest |difference| across all splits"""
     base = [r for r in rows if r.get(outcome) is not None]
@@ -268,14 +290,20 @@ def split_table(rows, outcome, splits, perm_n=PERM_N):
     if not diffs:
         return {"base": stats([r[outcome] for r in base]), "splits": out, "p_family": None}
     vals = [r[outcome] for r in base]
-    # per-split and family-wise permutation (shuffle outcomes across the sample, keep the split masks)
+    # per-split and family-wise permutation (shuffle outcomes across the sample, keep the split masks);
+    # the family-wise p is given twice: over every split, and over the splits with at least min_n on
+    # both sides (the counter-agent: the max |difference| is otherwise always a 2-6 night split)
     masks = {name: [side(r) for r in base] for name in diffs for side in [splits[name]]}
+    big = {name for name in diffs if out[name]["yes"]["n"] >= min_n and out[name]["no"]["n"] >= min_n}
+    for name in out:
+        out[name]["small"] = name not in big
     hits = {name: 0 for name in diffs}
-    fam = 0
+    fam = fam8 = 0
     obs_max = max(abs(v[1]) for v in diffs.values())
+    obs_max8 = max(abs(diffs[k][1]) for k in big) if big else None
     for _ in range(perm_n):
         random.shuffle(vals)
-        mx = 0.0
+        mx = mx8 = 0.0
         for name in diffs:
             m = masks[name]
             a = [v for v, k in zip(vals, m) if k is True]
@@ -284,12 +312,49 @@ def split_table(rows, outcome, splits, perm_n=PERM_N):
             if dd >= abs(diffs[name][1]):
                 hits[name] += 1
             mx = max(mx, dd)
+            if name in big:
+                mx8 = max(mx8, dd)
         if mx >= obs_max:
             fam += 1
+        if big and mx8 >= obs_max8:
+            fam8 += 1
     for name in diffs:
         out[name]["p_perm"] = hits[name] / perm_n
     return {"base": stats([r[outcome] for r in base]), "splits": out, "p_family": fam / perm_n,
-            "family_best": max(diffs, key=lambda k: abs(diffs[k][1]))}
+            "family_best": max(diffs, key=lambda k: abs(diffs[k][1])),
+            "p_family_n8": (fam8 / perm_n) if big else None, "family_best_n8": (max(big, key=lambda k: abs(diffs[k][1])) if big else None),
+            "min_n": min_n}
+
+
+def welch(a, b):
+    if len(a) < 3 or len(b) < 3:
+        return None
+    va, vb = statistics.variance(a), statistics.variance(b)
+    se = math.sqrt(va / len(a) + vb / len(b))
+    return (statistics.mean(a) - statistics.mean(b)) / se if se else None
+
+
+def ols2(x1, x2, y):
+    """y on x1 and x2 with an intercept: slopes and t-stats (centered normal equations)"""
+    pts = [(a, b, c) for a, b, c in zip(x1, x2, y) if a is not None and b is not None and c is not None]
+    n = len(pts)
+    if n < 10:
+        return {"n": n}
+    m1, m2, my = (statistics.mean(p[i] for p in pts) for i in range(3))
+    s11 = sum((p[0] - m1) ** 2 for p in pts)
+    s22 = sum((p[1] - m2) ** 2 for p in pts)
+    s12 = sum((p[0] - m1) * (p[1] - m2) for p in pts)
+    s1y = sum((p[0] - m1) * (p[2] - my) for p in pts)
+    s2y = sum((p[1] - m2) * (p[2] - my) for p in pts)
+    det = s11 * s22 - s12 * s12
+    if det <= 0:
+        return {"n": n}
+    b1 = (s22 * s1y - s12 * s2y) / det
+    b2 = (s11 * s2y - s12 * s1y) / det
+    sse = sum((p[2] - my - b1 * (p[0] - m1) - b2 * (p[1] - m2)) ** 2 for p in pts)
+    s2 = sse / (n - 3)
+    return {"n": n, "b1": b1, "t1": b1 / math.sqrt(s2 * s22 / det), "b2": b2, "t2": b2 / math.sqrt(s2 * s11 / det),
+            "r12": s12 / math.sqrt(s11 * s22)}
 
 
 def ols(xs, ys):
@@ -329,6 +394,24 @@ def analyse_nights(rows):
                                     "abs_SPY_oc": [stats([abs(r["SPY_oc"]) for r in R if r.get(k) is not None and c(r[k])]) for c in (lambda v: v < t1, lambda v: t1 <= v < t2, lambda v: v >= t2)],
                                     "abs_SPY_cc": [stats([abs(r["SPY_cc"]) for r in R if r.get(k) is not None and c(r[k])]) for c in (lambda v: v < t1, lambda v: t1 <= v < t2, lambda v: v >= t2)],
                                     "corr_abs_SPY_oc": ols([r[k] for r in R], [abs(r["SPY_oc"]) for r in R])}
+    # 2b. volume or range? joint regression of |SPY o->c| on both ratios, and a double sort (the
+    #     counter-agent: the size read is the range; volume adds nothing beyond it except in the
+    #     widest-range tercile)
+    R2 = [r for r in R if r.get("es_volr") is not None and r.get("es_ranger") is not None]
+    out["size_joint"] = {"n": len(R2), "joint_abs_SPY_oc": ols2([r["es_volr"] for r in R2], [r["es_ranger"] for r in R2], [abs(r["SPY_oc"]) for r in R2]),
+                         "range_alone": ols([r["es_ranger"] for r in R2], [abs(r["SPY_oc"]) for r in R2]),
+                         "volume_alone": ols([r["es_volr"] for r in R2], [abs(r["SPY_oc"]) for r in R2])}
+    rq = sorted(r["es_ranger"] for r in R2)
+    rt1, rt2 = rq[len(rq) // 3], rq[2 * len(rq) // 3]
+    vmed = statistics.median(r["es_volr"] for r in R2)
+    ds = []
+    for lo_, hi_ in ((None, rt1), (rt1, rt2), (rt2, None)):
+        sub = [r for r in R2 if (lo_ is None or r["es_ranger"] >= lo_) and (hi_ is None or r["es_ranger"] < hi_)]
+        hv = [abs(r["SPY_oc"]) for r in sub if r["es_volr"] >= vmed]
+        lv = [abs(r["SPY_oc"]) for r in sub if r["es_volr"] < vmed]
+        ds.append({"range_tercile": [lo_, hi_], "n": len(sub), "abs_oc_high_volume": stats(hv), "abs_oc_low_volume": stats(lv),
+                   "diff": (statistics.mean(hv) - statistics.mean(lv)) if hv and lv else None, "t": welch(hv, lv)})
+    out["size_double_sort"] = {"volume_median": vmed, "rows": ds}
     # 3. down nights: continuation vs reversal, and what confirms
     out["down"] = {}
     for thr in (-0.005, -0.01):
@@ -394,17 +477,46 @@ def analyse_history(D, F, paths):
         out = []
         for d, rs in sorted(by.items()):
             m = lambda k: (statistics.mean([x[k] for x in rs if x[k] is not None]) if any(x[k] is not None for x in rs) else None)
+            sp = os_.gap_intraday(D, "SPY", d)
             out.append({"date": d, "n_funds": len(rs), "oc": statistics.mean(x["intra"] for x in rs), "gap": statistics.mean(x["gap"] for x in rs),
-                        "fund_volr": m("fund_volr"), "spy_volr": m("spy_volr"), "es_volr": m("es_volr"), "nq_volr": m("nq_volr")})
+                        "fund_volr": m("fund_volr"), "spy_volr": m("spy_volr"), "es_volr": m("es_volr"), "nq_volr": m("nq_volr"),
+                        "spy_oc": sp["intra"] if sp else None})
         return out
+
+    def side_extra(rows):
+        """the robustness line for one side of a split: median, share up, the mean without the best
+        three days, distinct months"""
+        x = sorted(t["oc"] for t in rows)
+        if not x:
+            return {"n": 0}
+        return {"n": len(x), "median": statistics.median(x), "win": sum(1 for v in x if v > 0) / len(x),
+                "wo_best3": statistics.mean(x[:-3]) if len(x) > 5 else None, "wo_worst3": statistics.mean(x[3:]) if len(x) > 5 else None,
+                "months": len({t["date"][:7] for t in rows})}
+
+    def lomo(yes, no):
+        """leave-one-month-out range of the difference of means"""
+        months = {t["date"][:7] for t in yes}
+        if len(months) < 2:
+            return None
+        ds = []
+        for m in months:
+            a = [t["oc"] for t in yes if t["date"][:7] != m]
+            b = [t["oc"] for t in no if t["date"][:7] != m]
+            if a and b:
+                ds.append(statistics.mean(a) - statistics.mean(b))
+        return [min(ds), max(ds)] if ds else None
+
     conds = {
         "oversold AND own gap <= -5% (the E1 sample)": lambda r: r["oversold"] and r["gap"] <= -0.05,
         "oversold AND own gap <= -3%": lambda r: r["oversold"] and r["gap"] <= -0.03,
         "any state AND own gap <= -5%": lambda r: r["gap"] <= -0.05,
         "any state AND own gap <= -3%": lambda r: r["gap"] <= -0.03,
         "NOT oversold AND own gap <= -5%": lambda r: (not r["oversold"]) and r["gap"] <= -0.05,
+        "NOT oversold AND own gap <= -3%": lambda r: (not r["oversold"]) and r["gap"] <= -0.03,
         "oversold, any gap": lambda r: r["oversold"],
         "MIRROR: any state AND own gap >= +3%": lambda r: r["gap"] >= 0.03,
+        "MIRROR: NOT overbought (RSI < 70) AND own gap >= +5%": lambda r: r["rsi"] < 70 and r["gap"] >= 0.05,
+        "MIRROR: NOT overbought (RSI < 70) AND own gap >= +3%": lambda r: r["rsi"] < 70 and r["gap"] >= 0.03,
     }
     out = {}
     for name, cond in conds.items():
@@ -421,6 +533,20 @@ def analyse_history(D, F, paths):
         out[name] = split_table(T, "oc", splits) if len(T) >= 8 and splits else {"base": stats([t["oc"] for t in T])}
         out[name]["days"] = len(T)
         out[name]["volume_on_those_days"] = {k: stats([t[k] for t in T]) for k in ("fund_volr", "es_volr", "spy_volr")}
+        out[name]["base_extra"] = side_extra(T)
+        out[name]["spy_oc_all"] = stats([t["spy_oc"] for t in T])
+        for sn, side in splits.items():
+            s = out[name].get("splits", {}).get(sn)
+            if not s or s.get("diff") is None:
+                continue
+            yes = [t for t in T if side(t) is True]
+            no = [t for t in T if side(t) is False]
+            s["yes_extra"] = side_extra(yes)
+            s["no_extra"] = side_extra(no)
+            s["spy_oc_yes"] = stats([t["spy_oc"] for t in yes])
+            s["spy_oc_no"] = stats([t["spy_oc"] for t in no])
+            s["lomo"] = lomo(yes, no)
+            s["yes_dates"] = [t["date"] for t in yes] if len(yes) <= 40 else None
     # the engines' own legs: exit at the open when the gap AND a volume condition hold
     eng = {}
     rsi = {}
@@ -463,8 +589,11 @@ def analyse_history(D, F, paths):
                     k = len(fired)
                     draws = sorted(sum(random.sample(allv, k)) for _ in range(PLACEBO_N)) if k <= len(allv) else []
                     pct = (bisect.bisect_left(draws, val) / PLACEBO_N) if draws else None
+                    ex = [m for m in fired if m["date"] != "2026-11-05"]
                     rules[f"gap <= {gthr:.0%} AND {vn} AND {sn}"] = {
-                        "n": k, "leg_oc": stats([m["oc"] for m in fired]), "exit_value_pp": val * 100, "placebo_pct": pct,
+                        "n": k, "days": len({m["date"] for m in fired}), "leg_oc": stats([m["oc"] for m in fired]), "exit_value_pp": val * 100,
+                        "placebo_pct": pct, "includes_1105": len(ex) < k,
+                        "exit_value_pp_ex_1105": sum(m["w"] * (-m["oc"] - COST) for m in ex) * 100 if len(ex) < k else None,
                         "dates": [m["date"] for m in fired] if k <= 12 else None}
         eng[e] = {"mornings": len(M), "window": [days[0], days[-1]], "base_exit_value_pp_all_mornings": sum(allv) * 100, "rules": rules}
     return {"mornings": len(rows), "conditions": out, "engines": eng}
@@ -515,16 +644,20 @@ def main():
     D = os_.load_daily()
     F = daily_futures()
     I = intraday_futures()
+    patched = patch_duplicate_volume(F, I)
     paths = os_.load_paths()
     tdays = [k for k in tkeys(D["SPY"]) if k <= END]
     nights, rth = build_nights(D, paths, I, tdays)
     B = analyse_nights(nights)
     A = analyse_history(D, F, paths)
     Dv = opening_volume(D, tdays)
+    dk = lambda s: [k for k in F[s] if not k.startswith("_")]
     res = {"generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "basis": __doc__,
            "coverage": {"hourly": {s: {"first": min(k for k in I[f"{s}|1h"]["t"]), "n_bars": len(I[f"{s}|1h"]["t"])} for s in HOURLY},
-                        "daily_futures": {s: [min(F[s]), max(F[s]), len(F[s])] for s in F},
-                        "nights": B["n_nights"], "history_window": [START, END]},
+                        "daily_futures": {s: [min(dk(s)), max(dk(s)), len(dk(s))] for s in F},
+                        "nights": B["n_nights"], "history_window": [START, END],
+                        "nights_dropped": len([d for d in tdays if HSTART <= d <= END]) - B["n_nights"],
+                        "patched_volume": patched},
            "B_overnight_session": B, "A_prior_session_volume": A, "D_opening_volume": Dv,
            "C_rth_paths": rth, "nights": nights}
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
