@@ -34,16 +34,25 @@ closes, "CAGR given up per point of max DD saved" vs as built, and the book (HG 
 Plus the by-products the EDGE rule asks for: the leg's return by prior-close vol quartile, by VIX bucket and by branch,
 with t, hit rate, a mirrored bucket and a block-permutation placebo.
 
+Counter-agent fixes (review1, 2026-11-05): (1) the SOXL dip-buy by-product is the REAL counterfactual: the live tree with
+its RSI10(SOXL) < 30 condition disabled, replayed by the engine's own simulator (replay.SimW, Wilder RSI) on the same panel
+and sessions, gated on identical holdings on every non-branch session; (2) leave-one-year-out ranges on every ratio (that
+year's sessions set flat for base and variant), the 2015-26 max-DD episode and 2022's share of the 2015-26 growth; (3) the
+longest time-under-water end date, SOXL's own 10-30 session; (4) the cap-37.5 -> 1x leg weight counts the SVIX halves that
+stay in SVIX; (5) PULS = BIL on the whole path. Edge 1 gets its within-branch, 1x-twin, era and since-2015 checks.
+
 Output: results/leg-sizing-2026-11-05.json (every frozen number the exhibit shows).
 usage: leg_sizing.py [--engines PATH] [--out PATH] [--placebo N]
 """
 import argparse
+import copy
 import datetime
 import json
 import math
 import os
 import random
 import sys
+from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.normpath(os.path.join(HERE, '..', 'longrun')))
@@ -73,11 +82,16 @@ PLACEBO_N = 1000
 # 2026-11-05 (the path ends at the 11-04 close): the live holding into the session (Composer's 11-04 close: SOXL 75.5 / PULS
 # 15.6 / VXZ 8.8, the tree's own 75 / 16 / 9) and the prints. 'as_traded' = Composer's ~15:50 rebalance: SOXL 44.50 per the
 # owner's brief (5-minute bars printed 43.95-44.65 from 15:25 to 15:55), USD/SMH at the 15:50 bar; VXZ/PULS at the close.
-# 'close' = the 16:00 closes (Yahoo, fetched 2026-11-05 21:50 UTC): SOXL slid 7% in the last five minutes.
+# 'close' = the 16:00 closes (Yahoo, fetched 2026-11-05 21:50 UTC): SOXL slid 7% in the last five minutes. TECL (the
+# edited tree's other half on 11-05): close only, no ~15:50 print on file.
 LIVE_1105 = {'SOXL': 0.75, 'PULS': 0.16, 'VXZ': 0.09}
-PX_1104 = {'SOXL': 66.68, 'USD': 65.28, 'SMH': 504.27, 'VXZ': 45.21, 'PULS': 49.50, '^VIX': 16.61}
+PX_1104 = {'SOXL': 66.68, 'USD': 65.28, 'SMH': 504.27, 'VXZ': 45.21, 'PULS': 49.50, '^VIX': 16.61, 'TECL': 163.69}
 PX_1105 = {'as_traded': {'SOXL': 44.50, 'USD': 51.50, 'SMH': 452.37, 'VXZ': 48.21, 'PULS': 49.50},
-           'close': {'SOXL': 40.87, 'USD': 50.27, 'SMH': 447.73, 'VXZ': 48.21, 'PULS': 49.50}}
+           'close': {'SOXL': 40.87, 'USD': 50.27, 'SMH': 447.73, 'VXZ': 48.21, 'PULS': 49.50, 'TECL': 124.62}}
+# the edited tree's holding into 11-05: with the dip-buy gone, the switcher's bottom-2 of TECL / SOXL / SVIX at the 11-04
+# close AND at the 15:5x prices = SOXL / TECL (the engine's own close decision under both trees)
+FT_LEG_1105 = {'SOXL': 0.375, 'TECL': 0.375}
+SLEEVE = {'PULS', 'VXZ', 'ZVOL'}        # the 25% sleeve's assets: never in the 75% group
 COMPOSER_1105 = {'value_1104': 99677.37, 'value_1105': 73020.64}   # monitor snapshots: the symphony's realized session
 # the book into 11-05: the 11-04 close values (snapshot-20261104T213559Z) and the other engines' realized sessions
 # (last-snapshot last_percent_change): HG held USD (-1.7%), SLEEVE BOXX (+0.0%), HARV ZVOL/PULS (+2.0%)
@@ -167,6 +181,8 @@ def run_variant(days, hold, R, c, rule=None, sub=None, to_1x=False):
                         k, src = ('1x:' + t, ONE_X[t]) if t in ONE_X else (t, t)
                         w[k] = w.get(k, 0.0) + rel
                         r += rel * R[src].get(d1, 0.0)
+                        if t not in ONE_X:
+                            legw_sum += rel      # SVIX has no twin: the released half stays in the leg (counter-agent fix 4)
                     else:
                         w[CASH] = w.get(CASH, 0.0) + rel
                         r += rel * R[CASH].get(d1, 0.0)
@@ -254,7 +270,7 @@ def stats(r, days, a, b):
     x = [r[d] for d in ds]
     n = len(x)
     cum, pk, pk_d, mdd, mdd_pk, mdd_tr = 1.0, 1.0, ds[0], 0.0, None, None
-    tuw, tmax, tuw_from, under = 0, 0, None, 0
+    tuw, tmax, tuw_from, tuw_to, under = 0, 0, None, None, 0
     months, years, worst_day = {}, {}, (0.0, None)
     for v, d in zip(x, ds):
         cum *= 1 + v
@@ -263,6 +279,8 @@ def stats(r, days, a, b):
         if v < worst_day[0]:
             worst_day = (v, d)
         if cum >= pk:
+            if tuw and tuw == tmax:
+                tuw_to = d          # the longest stretch so far ends here (a new peak)
             pk, pk_d, tuw = cum, d, 0
         else:
             tuw += 1
@@ -272,6 +290,8 @@ def stats(r, days, a, b):
         dd = 1 - cum / pk
         if dd > mdd:
             mdd, mdd_pk, mdd_tr = dd, pk_d, d
+    if tuw and tuw == tmax:
+        tuw_to = 'open'
     yrs = (datetime.date.fromisoformat(ds[-1]) - datetime.date.fromisoformat(prev_day(ds[0]))).days / 365.25
     cagr = cum ** (1 / yrs) - 1
     mu = sum(x) / n
@@ -283,8 +303,122 @@ def stats(r, days, a, b):
             'vol': sd * math.sqrt(252), 'sharpe': mu / sd * math.sqrt(252), 'sortino': mu / dn * math.sqrt(252) if dn else None,
             'maxdd': mdd, 'maxdd_peak': mdd_pk, 'maxdd_trough': mdd_tr, 'calmar': cagr / mdd if mdd else None,
             'worst_day': worst_day[0], 'worst_day_date': worst_day[1], 'worst_month': wm[0], 'worst_month_id': wm[1],
-            'worst_year': wy[0], 'worst_year_id': wy[1], 'tuw_longest_sessions': tmax, 'tuw_longest_from': tuw_from,
+            'worst_year': wy[0], 'worst_year_id': wy[1], 'tuw_longest_sessions': tmax, 'tuw_longest_from': tuw_from, 'tuw_longest_to': tuw_to,
             'tuw_share': under / n, 'by_year': {y: v - 1 for y, v in sorted(years.items())}}
+
+
+def cagr_dd(r, days, a, b, flat_year=None):
+    """CAGR (calendar time, unchanged) and max DD on the window with one calendar year's sessions set flat: the
+    counter-agent's leave-one-year-out"""
+    ds = [d for d in days if a <= d <= b and d in r]
+    cum, pk, mdd = 1.0, 1.0, 0.0
+    for d in ds:
+        if flat_year is None or d[:4] != flat_year:
+            cum *= 1 + r[d]
+            if cum > pk:
+                pk = cum
+            elif 1 - cum / pk > mdd:
+                mdd = 1 - cum / pk
+    yrs = (datetime.date.fromisoformat(ds[-1]) - datetime.date.fromisoformat(prev_day(ds[0]))).days / 365.25
+    return cum ** (1 / yrs) - 1, mdd
+
+
+def loyo(rb, rv, days, a, b):
+    """the ratio (pp CAGR given up per pp max DD saved) with each calendar year left out (set flat for base and variant):
+    its range and the years at the ends"""
+    out = {}
+    for y in sorted({d[:4] for d in days if a <= d <= b}):
+        cb, db = cagr_dd(rb, days, a, b, y)
+        cv, dv = cagr_dd(rv, days, a, b, y)
+        dd = db - dv
+        out[y] = ((cb - cv) / dd) if dd > 1e-9 else None
+    vals = {y: v for y, v in out.items() if v is not None}
+    mn = min(vals.items(), key=lambda kv: kv[1]) if vals else None
+    mx = max(vals.items(), key=lambda kv: kv[1]) if vals else None
+    return {'by_year': out, 'min': list(mn) if mn else None, 'max': list(mx) if mx else None, 'n_years': len(out)}
+
+
+def mstat(x):
+    n = len(x)
+    mu = sum(x) / n if n else None
+    sd = math.sqrt(sum((v - mu) ** 2 for v in x) / (n - 1)) if n > 1 else 0.0
+    return {'n': n, 'mean': mu, 'sd': sd, 't': (mu / sd * math.sqrt(n)) if sd else None, 'hit': (sum(1 for v in x if v > 0) / n) if n else None}
+
+
+def welch(a, b):
+    """Welch t of mean(b) - mean(a) from two mstat dicts"""
+    se = math.sqrt(a['sd'] ** 2 / a['n'] + b['sd'] ** 2 / b['n']) if a['n'] > 1 and b['n'] > 1 else 0.0
+    return (b['mean'] - a['mean']) / se if se else None
+
+
+def leg_kind(h):
+    """what the 75% group holds: 'pair A+B', 'dip-buy X', 'UVXY', 'SQQQ', 'TLT'"""
+    L = {t: x for t, x in h.items() if t in LEG}
+    if not L:
+        return 'TLT' if h.get('TLT') else 'none'
+    if len(L) == 2:
+        return 'pair ' + '+'.join(sorted(L))
+    t = next(iter(L))
+    return 'dip-buy ' + t if t in ('TECL', 'SOXL', 'SPXL', 'LABU') else t
+
+
+# ------------------------------------------------------------------ the edited tree (counter-agent fix 1)
+def edit_tree_no_soxl_dip(tree):
+    """the live tree with its RSI10(SOXL) < 30 dip-buy disabled: the condition can never fire (rhs -1), so that 'if'
+    falls through to its else-branch, the approved tree's next checks (SPXL RSI10 < 30, LABU RSI10 < 25, then the
+    XLK-vs-KMLM switcher). Returns (edited deep copy, number of conditions changed: must be exactly 1)."""
+    T = copy.deepcopy(tree)
+    hits = []
+
+    def walk(n):
+        if (n.get('step') == 'if-child' and not n.get('is-else-condition?') and n.get('lhs-fn') == 'relative-strength-index'
+                and n.get('lhs-val') == 'SOXL' and n.get('comparator') == 'lt' and n.get('rhs-fixed-value?') and float(n['rhs-val']) == 30):
+            n['rhs-val'] = '-1'
+            hits.append(n)
+        for k in n.get('children') or []:
+            walk(k)
+    walk(T)
+    return T, len(hits)
+
+
+def fallthrough(P, days, hold, R, first_real):
+    """Replay the edited tree with the engine's own simulator (replay.SimW, Wilder RSI) on the same panel and sessions.
+    GATE: its holdings must equal the engine's on every session the SOXL dip-buy did not fire. Returns the edited holdings
+    (what the fall-through variant earns) and the day-level comparison on the branch's sessions, symphony-level: the 75%
+    group's contribution as built (SOXL 75) vs the fall-through holdings vs the released-to-PULS alternative."""
+    T2, nhit = edit_tree_no_soxl_dip(lp.gs.trees['KMLM'])
+    if nhit != 1:
+        sys.exit(f'tree edit: expected one RSI10(SOXL) < 30 condition, found {nhit}')
+    sim = lp.lg.SimW(P, rsi_method='wilder')
+    _, h2 = lp.lg.run_tree(sim, T2, days)
+    branch = [d for d in days[1:] if hold[d].get('SOXL') == BASE_LEG]
+    bset = set(branch)
+    mism = [d for d in days[1:] if d not in bset and h2[d] != hold[d]]
+    print(f'fall-through gate: edited tree vs engine holdings on {len(days) - 1 - len(branch)} non-branch sessions: {len(mism)} mismatches', flush=True)
+    if mism:
+        sys.exit(f'FALL-THROUGH GATE FAILED: the edited tree differs from the engine on non-branch sessions, e.g. {mism[:3]}; stop')
+    rows = []
+    for d in branch:
+        ab = sum(x * R[t].get(d, 0.0) for t, x in hold[d].items() if t not in SLEEVE)
+        ft = sum(x * R[t].get(d, 0.0) for t, x in h2[d].items() if t not in SLEEVE)
+        rows.append((d, ab, ft, BASE_LEG * R[CASH].get(d, 0.0), leg_kind(h2[d])))
+    kinds = Counter(r[4] for r in rows)
+    eras = {'all': rows, 'synthetic (before SOXL launch)': [r for r in rows if r[0] < first_real['SOXL']],
+            'real (since SOXL launch)': [r for r in rows if r[0] >= first_real['SOXL']],
+            'since 2015-06': [r for r in rows if r[0] >= WINDOWS['since2015'][0]]}
+
+    def comp(rs):
+        a, b, p, dd = mstat([r[1] for r in rs]), mstat([r[2] for r in rs]), mstat([r[3] for r in rs]), mstat([r[2] - r[1] for r in rs])
+        return {'n': len(rs), 'as_built': a, 'fall_through': b, 'puls': p, 'diff': dd,
+                'compounded_as_built': math.prod(1 + r[1] for r in rs), 'compounded_fall_through': math.prod(1 + r[2] for r in rs)}
+    in_pair = sum(v for k, v in kinds.items() if k.startswith('pair') and 'SOXL' in k)
+    return h2, {'edit': 'the live tree with its RSI10(SOXL) < 30 condition disabled (rhs -1): that if falls through to its else-branch (SPXL RSI10 < 30, LABU RSI10 < 25, the XLK-vs-KMLM switcher)',
+                'gate': {'non_branch_sessions': len(days) - 1 - len(branch), 'mismatches': len(mism), 'simulator': "replay.SimW (Wilder RSI), the engine's own, same panel and sessions"},
+                'branch_sessions': len(branch), 'holdings': dict(kinds.most_common()),
+                'soxl_in_pair': {'n': in_pair, 'share': in_pair / len(branch)}, 'sqqq_or_tlt': {'n': kinds['SQQQ'] + kinds['TLT'], 'share': (kinds['SQQQ'] + kinds['TLT']) / len(branch)},
+                'day_level': {k: comp(v) for k, v in eras.items() if len(v) > 2},
+                'basis': "symphony-level: the 75% group's contribution to the session (SOXL 75% as built vs the fall-through holdings vs 75% in PULS), before costs; " +
+                         f"synthetic / real split at SOXL's launch {first_real['SOXL']}"}
 
 
 def episode(r, days, a, b):
@@ -392,8 +526,8 @@ def block_placebo(rows, label_of, group_a, group_b, n_draw, seed=11, block=21):
             'placebo_p95': draws[int(0.95 * len(draws))], 'percentile_of_observed': pct, 'draws': len(draws), 'block_sessions': block}
 
 
-def edge_section(days, hold, R, VOL, vix, n_draw):
-    rows = []       # (d1, leg return at base weights / 0.75, weighted prior-close sigma, prior-close VIX, branch)
+def edge_section(days, hold, R, VOL, vix, n_draw, first_real):
+    rows = []       # (d1, leg return at base weights / 0.75, weighted prior-close sigma, prior-close VIX, branch, the 1x twins' return)
     for i in range(1, len(days)):
         d0, d1 = days[i - 1], days[i]
         L = {t: x for t, x in hold[d1].items() if t in LEG}
@@ -401,13 +535,14 @@ def edge_section(days, hold, R, VOL, vix, n_draw):
             continue
         rl = sum(x * R[t].get(d1, 0.0) for t, x in L.items()) / BASE_LEG
         sig = sum(x * VOL[t].get(d0, 0.0) for t, x in L.items()) / BASE_LEG
-        kind = 'pair ' + '+'.join(sorted(L)) if len(L) == 2 else ('dip-buy ' + next(iter(L)) if next(iter(L)) in ('TECL', 'SOXL', 'SPXL', 'LABU') else next(iter(L)))
-        rows.append((d1, rl, sig, vix.get(d0), kind))
+        tw = sum(x * R[ONE_X.get(t, t)].get(d1, 0.0) for t, x in L.items()) / BASE_LEG     # the same names' 1x twins (SVIX: none, stays)
+        rows.append((d1, rl, sig, vix.get(d0), leg_kind(hold[d1]), tw))
     sig_sorted = sorted(r[2] for r in rows)
     q = [sig_sorted[int(len(sig_sorted) * p)] for p in (0.25, 0.5, 0.75)]
+    QL = ('Q1 lowest vol', 'Q2', 'Q3', 'Q4 highest vol')
 
     def qlab(r):
-        return 'Q1 lowest vol' if r[2] <= q[0] else 'Q2' if r[2] <= q[1] else 'Q3' if r[2] <= q[2] else 'Q4 highest vol'
+        return QL[0] if r[2] <= q[0] else QL[1] if r[2] <= q[1] else QL[2] if r[2] <= q[2] else QL[3]
 
     def vlab(r):
         v = r[4 - 1]
@@ -425,15 +560,48 @@ def edge_section(days, hold, R, VOL, vix, n_draw):
         v['per_year_pct'] = (math.exp(v['log_growth_at_75pct'] / yrs15) - 1)
     for k, v in by_kind.items():
         v['placebo'] = draw_placebo(rows, v['n'], v['mean'], n_draw)
+        # synthetic / real split at the latest launch among the branch's funds (counter-agent, review1)
+        tks = k.split(' ', 1)[1].split('+') if k.startswith(('pair', 'dip-buy')) else [k]
+        launch = max(first_real[t] for t in tks)
+        rs = [r for r in rows if r[4] == k]
+        v['eras'] = {'launch': launch, 'synthetic': mstat([r[1] for r in rs if r[0] < launch]), 'real': mstat([r[1] for r in rs if r[0] >= launch])}
     allx = [r[1] for r in rows]
     mu = sum(allx) / len(allx)
     sd = math.sqrt(sum((v - mu) ** 2 for v in allx) / (len(allx) - 1))
+    # --- counter-agent (review1) checks on edge 1: the gradient within each branch (its own sigma quartiles), in the 1x
+    # twins on the same days with the same labels, the Q4 bucket's composition by year, and since 2015 on its own quartiles
+    q1s, q4s = mstat([r[1] for r in rows if qlab(r) == QL[0]]), mstat([r[1] for r in rows if qlab(r) == QL[3]])
+
+    def own_quartiles(rs):
+        e = sorted(r[2] for r in rs)
+        lo, hi = e[int(len(e) * 0.25)], e[int(len(e) * 0.75)]
+        a, b = mstat([r[1] for r in rs if r[2] <= lo]), mstat([r[1] for r in rs if r[2] > hi])
+        return {'n': len(rs), 'Q1': a, 'Q4': b, 'welch_t_Q4_minus_Q1': welch(a, b)}
+    within = {k: own_quartiles([r for r in rows if r[4] == k]) for k, v in by_kind.items() if v['n'] >= 150}
+    mirror = {k: mstat([r[5] for r in rows if qlab(r) == k]) for k in QL}
+    ysum = {}
+    for r in rows:
+        if qlab(r) == QL[3]:
+            ysum[r[0][:4]] = ysum.get(r[0][:4], 0.0) + r[1]
+    tot4 = sum(ysum.values())
+    q4comp = {'sum_of_daily_returns': tot4, 'top_years_share': {y: v / tot4 for y, v in sorted(ysum.items(), key=lambda kv: -kv[1])[:6]},
+              'pre_2010_share': sum(v for y, v in ysum.items() if y < '2010') / tot4, 'share_2022': ysum.get('2022', 0.0) / tot4}
+    e15 = sorted(r[2] for r in rows15)
+    q15 = [e15[int(len(e15) * p)] for p in (0.25, 0.5, 0.75)]
+    since15 = bucket_stats(rows15, lambda r: QL[0] if r[2] <= q15[0] else QL[1] if r[2] <= q15[1] else QL[2] if r[2] <= q15[2] else QL[3])
+    p_soxl = by_kind['dip-buy SOXL']['placebo']['percentile_of_observed']
     return {'leg_days': len(rows), 'leg_mean': mu, 'leg_sd': sd, 'leg_t': mu / sd * math.sqrt(len(allx)),
             'sigma_quartile_edges': q, 'by_sigma_quartile': by_sig, 'by_vix': by_vix, 'by_branch': by_kind, 'by_branch_since2015': by_kind15,
-            'placebo_sigma_Q4_minus_Q1': block_placebo(rows, qlab, 'Q4 highest vol', 'Q1 lowest vol', n_draw),
+            'placebo_sigma_Q4_minus_Q1': block_placebo(rows, qlab, QL[3], QL[0], n_draw),
             'placebo_vix_gt25_minus_le25': block_placebo(rows, lambda r: 'hi' if (r[3] or 0) > 25 else 'lo', 'hi', 'lo', n_draw, seed=12),
+            'welch_t_Q4_minus_Q1': welch(q1s, q4s), 'within_branch_own_quartiles': within, 'mirror_1x_twins_same_days': mirror,
+            'q4_composition': q4comp, 'since2015_own_quartiles': since15, 'since2015_sigma_quartile_edges': q15,
+            'worst_of_branches_placebo': {'n_branches': len(by_kind), 'soxl_dip_percentile': p_soxl,
+                                          'p_some_branch_at_or_below': 1 - (1 - p_soxl) ** len(by_kind),
+                                          'note': 'the SOXL dip-buy is the minimum of the branch t-stats; a placebo percentile this low for the worst of n branches is expected 1 - (1 - p)^n of the time'},
             'note': 'leg return = the leveraged holdings\' return at their base weights / 0.75 (the leg at 100%); sigma = the holdings\' '
-                    'weighted realized 20-session vol at the prior close; VIX = prior close; in sample on the engine\'s own path'}
+                    'weighted realized 20-session vol at the prior close; VIX = prior close; in sample on the engine\'s own path; '
+                    'mirror = the same names\' 1x twins (XLK, SMH, SPY, XBI, PSQ, VIXY; SVIX itself) on the same days with the same vol labels'}
 
 
 # ------------------------------------------------------------------ main
@@ -458,7 +626,6 @@ def main():
     if gate['max_abs_diff'] > 1e-9:
         sys.exit('GATE FAILED: the rebuilt path does not match the engine path; stop')
     # --- leg structure
-    from collections import Counter
     kinds = Counter()
     for h in hold.values():
         kinds[', '.join(f'{t} {x:g}' for t, x in sorted(h.items()) if t in LEG) or 'none (TLT)'] += 1
@@ -483,9 +650,14 @@ def main():
         V.append((f'vix{thr}', f'leg halved when prior VIX > {thr}', 'vix', {'vix': thr}, vix_rule(thr, vix), None, False))
     V.append(('two_x', '2x substitution (USD, SSO; 2/3 of TECL, LABU, SQQQ)', 'sub', {}, None, TWO_X, False))
     V.append(('one_x', '1x reference (XLK, SMH, SPY, XBI, PSQ, VIXY)', 'sub', {}, None, {t: (p, 1.0) for t, p in ONE_X.items()}, False))
-    # by-product (EDGE rule), not a sizing option: the one branch whose days carry no measured return, bounded two ways
-    V.append(('soxl_dip37.5', 'by-product: SOXL dip-buy days only, capped at 37.5%', 'byprod', {'cap': 0.375}, single_name_rule(0.375, 'SOXL'), None, False))
-    V.append(('soxl_dip0', 'by-product: SOXL dip-buy days to PULS (branch removed, no fall-through)', 'byprod', {'cap': 0.0}, single_name_rule(0.0, 'SOXL'), None, False))
+    # by-product (EDGE rule), not a sizing option: the real counterfactual for the SOXL dip-buy branch (counter-agent fix 1):
+    # the edited tree replayed by the engine's own simulator; its holdings replace the path's on the branch's sessions
+    first_real = {t: min(lp.yh(t)) for t in ('SOXL', 'TECL', 'SPXL', 'LABU', 'SQQQ', 'UVXY', 'SVIX', 'VXZ', 'ZVOL', 'PULS', 'BIL', 'KMLM', 'RYMFX', 'TLT', 'USD', 'SSO', 'SMH', 'XLK', 'PSQ', 'VIXY', 'XBI')}
+    hold_ft, FT = fallthrough(P, days, hold, R, first_real)
+    print(f"fall-through: {FT['branch_sessions']} branch sessions -> {FT['holdings']}; SOXL 37.5 in a pair on {FT['soxl_in_pair']['n']}", flush=True)
+    V.append(('soxl_dip_ft', 'by-product: SOXL dip-buy branch removed (the edited tree falls through to its next checks)', 'byprod',
+              {'edit': 'RSI10(SOXL) < 30 disabled'}, None, None, False))
+    HOLD_OVERRIDE = {'soxl_dip_ft': hold_ft}
     # --- book inputs
     snap = json.load(open(SNAPSHOT))
     sym = {'HG': 'mbkiXcuNDjueXpiox5Av', 'KMLM': 'YPTSJFJwD2ZKfAeYJUbW', 'SLEEVE': 'nNdBk7hc5NiBzeRvbI5T', 'HARV': 'ORQNCfZnA18wmsMWVhf8'}
@@ -497,10 +669,12 @@ def main():
     # --- 11-05 inputs
     sig_soxl = vol_through(P['SOXL'], '2026-11-04')
     vix_1104 = PX_1104['^VIX']
-    out_v, paths = {}, {}
+    out_v, paths, series = {}, {}, {}
     base_stats = {}
+    btot = sum(BOOK_1104.values())
     for vid, label, fam, params, rule, sub, to1x in V:
-        r, info = run_variant(days, hold, R, c, rule, sub, to1x)
+        r, info = run_variant(days, HOLD_OVERRIDE.get(vid, hold), R, c, rule, sub, to1x)
+        series[vid] = r
         S = {w: stats(r, days, *WINDOWS[w]) for w in WINDOWS}
         if vid == 'base':
             base_stats = S
@@ -511,8 +685,19 @@ def main():
         d11 = {}
         for ps, px in PX_1105.items():
             rr = {t: px[t] / PX_1104[t] - 1 for t in px}
+            sleeve = LIVE_1105['PULS'] * rr['PULS'] + LIVE_1105['VXZ'] * rr['VXZ']
+            if vid == 'soxl_dip_ft':
+                # the edited tree holds the engine's own close decision, SOXL / TECL 37.5 each; TECL has a close but no ~15:50 print
+                if 'TECL' not in px:
+                    d11[ps] = None
+                    continue
+                leg_ret = sum(x * rr[t] for t, x in FT_LEG_1105.items())
+                d11[ps] = {'leg_weight': sum(FT_LEG_1105.values()), 'leg_instrument': '+'.join(FT_LEG_1105), 'leg_contrib': leg_ret, 'sleeve_contrib': sleeve,
+                           'day': leg_ret + sleeve, 'book_day': sum(BOOK_1104[e] / btot * OTHERS_1105[e] for e in OTHERS_1105) + BOOK_1104['KMLM'] / btot * (leg_ret + sleeve),
+                           'note': 'the edited tree\'s holding into 11-05 (SOXL 37.5 / TECL 37.5, the engine\'s own close decision under both trees); at the 16:00 closes only'}
+                continue
             f = 1.0
-            if fam in ('cap', 'cap1x', 'single', 'byprod'):
+            if fam in ('cap', 'cap1x', 'single'):
                 f = min(1.0, params['cap'] / BASE_LEG)
             elif fam == 'vt':
                 f = min(1.0, (params['k'] / sig_soxl) / BASE_LEG)
@@ -524,8 +709,6 @@ def main():
             if vid == 'one_x':
                 leg_src = 'SMH'
             leg_ret = LIVE_1105['SOXL'] * f * rr[leg_src] + LIVE_1105['SOXL'] * (1 - f) * (rr['SMH'] if to1x else rr['PULS'])
-            sleeve = LIVE_1105['PULS'] * rr['PULS'] + LIVE_1105['VXZ'] * rr['VXZ']
-            btot = sum(BOOK_1104.values())
             bday = sum(BOOK_1104[e] / btot * OTHERS_1105[e] for e in OTHERS_1105) + BOOK_1104['KMLM'] / btot * (leg_ret + sleeve)
             d11[ps] = {'leg_weight': LIVE_1105['SOXL'] * f, 'leg_instrument': leg_src, 'leg_contrib': leg_ret, 'sleeve_contrib': sleeve, 'day': leg_ret + sleeve,
                        'book_day': bday}
@@ -541,16 +724,48 @@ def main():
         row['book'] = bk
         out_v[vid] = row
         paths[vid] = {w: path_sample(r, days, *WINDOWS[w]) for w in WINDOWS}
+        d11p = d11['as_traded'] or d11['close']
         print(f"{vid:12s} full CAGR {S['full']['cagr']:+.1%} DD {S['full']['maxdd']:.1%} Sh {S['full']['sharpe']:.2f} | 2015 CAGR {S['since2015']['cagr']:+.1%} "
-              f"DD {S['since2015']['maxdd']:.1%} Sh {S['since2015']['sharpe']:.2f} | 11-05 {d11['as_traded']['day']:+.1%} | leg {info['avg_leg_weight']:.3f} to/yr {info['turnover_yr']:.0f}", flush=True)
+              f"DD {S['since2015']['maxdd']:.1%} Sh {S['since2015']['sharpe']:.2f} | 11-05 {d11p['day']:+.1%}{'' if d11['as_traded'] else ' (closes)'} | leg {info['avg_leg_weight']:.3f} to/yr {info['turnover_yr']:.0f}", flush=True)
+    # --- leave-one-year-out on every ratio (counter-agent fix 2): that year's sessions set flat for base and variant
+    for vid in out_v:
+        if vid != 'base':
+            out_v[vid]['loyo'] = {w: loyo(series['base'], series[vid], days, *WINDOWS[w]) for w in WINDOWS}
+    for vid in ('cap37.5', 'cap60', 'vt_m60', 'vix30'):
+        L = out_v[vid]['loyo']
+        print(f"LOYO {vid:8s} " + ' | '.join(f"{w}: as is {out_v[vid]['tradeoff'][w]['cagr_per_dd']:.2f}, {L[w]['min'][1]:.2f} (no {L[w]['min'][0]}) .. {L[w]['max'][1]:.2f} (no {L[w]['max'][0]})" for w in WINDOWS), flush=True)
+    # the fall-through's largest day-level differences (full costed daily returns) and the concentration of the windows
+    rb, rf = series['base'], series['soxl_dip_ft']
+    bdays_ft = [d for d in days[1:] if hold[d].get('SOXL') == BASE_LEG]
+    for key, lo_d, keyf in (('largest_day_differences', '0000', lambda d: -abs(rf[d] - rb[d])), ('largest_day_differences_since2015', WINDOWS['since2015'][0], lambda d: -abs(rf[d] - rb[d])),
+                            ('worst_for_fall_through_since2015', WINDOWS['since2015'][0], lambda d: rf[d] - rb[d])):
+        diffs = sorted((d for d in bdays_ft if d >= lo_d), key=keyf)[:6]
+        FT[key] = [{'date': d, 'as_built': rb[d], 'fall_through': rf[d], 'held': leg_kind(hold_ft[d])} for d in diffs]
+    FT['edited_tree'] = {w: {k: out_v['soxl_dip_ft']['windows'][w][k] for k in ('cagr', 'maxdd', 'sharpe', 'calmar', 'tuw_longest_sessions', 'worst_day', 'worst_day_date')} for w in WINDOWS}
+    FT['episodes'] = {k: {'as_built': out_v['base']['episodes'][k], 'fall_through': out_v['soxl_dip_ft']['episodes'][k]} for k in EPISODES}
+    print('fall-through largest day diffs:', [(x['date'], round(x['as_built'] * 100, 1), round(x['fall_through'] * 100, 1), x['held']) for x in FT['largest_day_differences']], flush=True)
+    bs = base_stats['since2015']
+    conc = {'share_2022_of_log_growth_since2015': math.log1p(bs['by_year']['2022']) / math.log(bs['final_multiple']),
+            'maxdd_since2015_episode': [bs['maxdd_peak'], bs['maxdd_trough']], 'maxdd_full_episode': [base_stats['full']['maxdd_peak'], base_stats['full']['maxdd_trough']],
+            'maxdd_since2015_not_2020': {vid: [v['windows']['since2015']['maxdd_peak'], v['windows']['since2015']['maxdd_trough']] for vid, v in out_v.items()
+                                         if v['windows']['since2015']['maxdd_trough'][:4] != '2020'},
+            'dd_saved_full_pp': {vid: v['tradeoff']['full']['dd_saved'] * 100 for vid, v in out_v.items() if vid != 'base'},
+            'note': 'every since-2015 ratio divides by the Feb-Mar 2020 drawdown; a full-window ratio that divides by < 3 pp of DD saved is ill-conditioned'}
+    print(f"2022 share of 2015-26 log growth {conc['share_2022_of_log_growth_since2015']:.3f}; since-2015 max DD {conc['maxdd_since2015_episode']}; variants whose own since-2015 max DD is not 2020: {sorted(conc['maxdd_since2015_not_2020'])}", flush=True)
     # base book for reference (same as out_v['base']['book'])
     bench = {}
     for bname in ('SPY', 'QQQ'):
-        rb = {d: v for d, v in lp.rets_of(P[bname]).items()}
-        bench[bname] = {w: {k: stats(rb, days, *WINDOWS[w])[k] for k in ('cagr', 'maxdd', 'sharpe')} for w in WINDOWS}
-    edge = edge_section(days, hold, R, VOL, vix, a.placebo)
-    first_real = {t: min(lp.yh(t)) for t in ('SOXL', 'TECL', 'SPXL', 'LABU', 'SQQQ', 'UVXY', 'SVIX', 'VXZ', 'ZVOL', 'PULS', 'BIL', 'KMLM', 'RYMFX', 'TLT', 'USD', 'SSO', 'SMH', 'XLK', 'PSQ', 'VIXY', 'XBI')}
+        rb_ = {d: v for d, v in lp.rets_of(P[bname]).items()}
+        bench[bname] = {w: {k: stats(rb_, days, *WINDOWS[w])[k] for k in ('cagr', 'maxdd', 'sharpe')} for w in WINDOWS}
+    edge = edge_section(days, hold, R, VOL, vix, a.placebo, first_real)
     composer_day = COMPOSER_1105['value_1105'] / COMPOSER_1105['value_1104'] - 1
+    soxl_1030 = P['SOXL']['2026-10-30'] / P['SOXL']['2026-10-29'] - 1
+
+    def lo(vid, w):
+        L = out_v[vid]['loyo'][w]
+        return f"{out_v[vid]['tradeoff'][w]['cagr_per_dd']:.2f} as is, {L['min'][1]:.2f} (no {L['min'][0]}) .. {L['max'][1]:.2f} (no {L['max'][0]})"
+    no20 = {vid: out_v[vid]['loyo']['since2015']['by_year'].get('2020') for vid in ('cap60', 'cap37.5', 'vt_m60', 'vix30')}
+    ft_s = FT['day_level']
     res = {'generated': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
            'question': 'KMLM switcher + VIX sleeve 75/25: what capping or vol-scaling the 75% leveraged leg costs in CAGR per point of max DD saved, on the engine\'s own path',
            'inputs': {'engine_path': a.engines, 'days': [days[1], days[-1]], 'sessions': n, 'vix_mode': meta.get('vix_mode'), 'cost_bps_per_unit_sum_abs_dw': c * 1e4,
@@ -559,19 +774,24 @@ def main():
                       'leg_weight_distribution': {str(k): v for k, v in sorted(legw.items())}, 'branch_days': dict(kinds.most_common()),
                       'first_real_date': first_real, 'book_dollars_2026_11_05': dollars, 'book_weights': target, 'cap40': CAP40,
                       'live_holding_1105': LIVE_1105, 'px_1104': PX_1104, 'px_1105': PX_1105, 'sigma20_soxl_1104': sig_soxl, 'vix_1104': vix_1104,
+                      'soxl_1030': soxl_1030, 'path_1030': rets['2026-10-30'], 'ft_leg_1105': FT_LEG_1105,
                       'composer_realized_1105': composer_day, 'composer_values_1105': COMPOSER_1105, 'matched_k': {f'{C:g}': k for C, k in k_matched.items()},
                       'book_1104_dollars': BOOK_1104, 'book_1104_weights': {e: v / sum(BOOK_1104.values()) for e, v in BOOK_1104.items()}, 'others_1105': OTHERS_1105,
                       'book_realized_1105': sum(BOOK_1104[e] / sum(BOOK_1104.values()) * OTHERS_1105[e] for e in OTHERS_1105) + BOOK_1104['KMLM'] / sum(BOOK_1104.values()) * composer_day},
            'gate_test': gate, 'windows': WINDOWS, 'episodes': EPISODES, 'variants': out_v, 'order': [v[0] for v in V], 'paths': paths, 'bench': bench, 'edge': edge,
+           'fallthrough': FT, 'concentration': conc,
            'honesty': [
                'All variants are in-sample re-sizings of a live rule on its own reconstructed path: the KMLM rules were built on 2015-26, and every variant is a function of the same holdings; the 1995-2015 years are out of sample for the rules but synthetic for most legs.',
-               f'Synthetic data before each fund\'s launch (long_panel, ts_synth VIX mode): SOXL real from {first_real["SOXL"]}, TECL {first_real["TECL"]}, SPXL {first_real["SPXL"]}, LABU {first_real["LABU"]}, SQQQ {first_real["SQQQ"]}, UVXY {first_real["UVXY"]}, SVIX {first_real["SVIX"]}, VXZ {first_real["VXZ"]}, ZVOL {first_real["ZVOL"]}; PULS = BIL before {first_real["PULS"]} (T-bills before {first_real["BIL"]}); the KMLM signal from RYMFX before {first_real["KMLM"]} and a trend proxy before {first_real["RYMFX"]}; VIX funds before 2006 model a market that did not exist.',
+               f'Synthetic data before each fund\'s launch (long_panel, ts_synth VIX mode): SOXL real from {first_real["SOXL"]}, TECL {first_real["TECL"]}, SPXL {first_real["SPXL"]}, LABU {first_real["LABU"]}, SQQQ {first_real["SQQQ"]}, UVXY {first_real["UVXY"]}, SVIX {first_real["SVIX"]}, VXZ {first_real["VXZ"]}, ZVOL {first_real["ZVOL"]}; PULS = BIL on the whole path, 2018-26 included (long_panel sets PULS to BIL; BIL real from {first_real["BIL"]}, T-bills before), so released weight earns T-bills throughout; the KMLM signal from RYMFX before {first_real["KMLM"]} and a trend proxy before {first_real["RYMFX"]}; VIX funds before 2006 model a market that did not exist.',
+               f'The 2015-26 ratios are one episode: the as-built max DD since 2015, every ratio\'s starting point, is {conc["maxdd_since2015_episode"][0]} → {conc["maxdd_since2015_episode"][1]} (COVID), as is every cap\'s; the {len(conc["maxdd_since2015_not_2020"])} vol-target and VIX variants cut COVID below their own 2015-16 or 2018-Q4 drawdowns. So "pp of CAGR per pp of DD saved" since 2015 is priced on Feb-Mar 2020 alone. Leave-one-year-out (that year set flat for base and variant): cap 37.5 {lo("cap37.5", "since2015")}; vol-target k {k_matched[0.60]:.2f} {lo("vt_m60", "since2015")}; VIX > 30 {lo("vix30", "since2015")}. "VIX gates are the cheapest DD since 2015" and "vol-targeting beats caps since 2015" are statements about Feb-Mar 2020: without 2020 the vol-target costs more per pp than the cap at the same mean leg weight ({no20["vt_m60"]:.2f} vs cap 60 {no20["cap60"]:.2f}). The full-window vol-target and VIX ratios divide by < 3 pp of DD saved ({conc["dd_saved_full_pp"]["vt_m60"]:.1f} and {conc["dd_saved_full_pp"]["vix30"]:.1f} pp) and are ill-conditioned (vt k {k_matched[0.60]:.2f}: {lo("vt_m60", "full")}). 2022 (+{bs["by_year"]["2022"]:,.0%}) is {conc["share_2022_of_log_growth_since2015"]:.0%} of the 2015-26 log growth.',
                f'Costs: the engine\'s own Composer-equivalent assumption only ({c * 1e4:.3f} bps per unit of sum|dw|, i.e. {2 * c * 1e4:.1f} bps per full switch, add. 38), charged on each variant\'s own turnover; the vol-target\'s daily resizing pays it every day. No financing, borrow or tax beyond what the funds\' (synthetic) returns embed.',
-               'Not modeled: Composer\'s 10pp threshold corridor (the path rebalances to target daily; live KMLM trades only when a holding drifts 10pp off target), taxes, the sleeve\'s own rebalancing and its interaction with a smaller leg (the sleeve stays at its path weights; released weight sits in PULS beside it).',
+               'Not modeled: Composer\'s 10pp threshold corridor (the path rebalances to target daily; live KMLM trades only when a holding drifts 10pp off target), taxes, the sleeve\'s own rebalancing and its interaction with a smaller leg (the sleeve stays at its path weights; released weight sits in PULS beside it). Cap 37.5 → 1x keeps the SVIX halves in SVIX (no twin), so its mean leg weight is '
+               f'{out_v["cap37.5_1x"]["avg_leg_weight"]:.1%}, not the cap\'s {out_v["cap37.5"]["avg_leg_weight"]:.1%}.',
                '2x and 1x legs are substitutions on the same decisions: the decisions (RSI thresholds on the 3x funds) are unchanged, only the instrument earning the day changes; ROM, QID and a 2x biotech fund are proxied as 2/3 of the 3x fund\'s daily return.',
                'The 2026-11-05 session is outside the path (which ends at the 11-04 close): it is the live holding (SOXL 75%, PULS 16%, VXZ 9%) priced at Composer\'s ~15:50 prints (SOXL 44.50 per the brief; the 15:50 bar printed 44.03) and at the 16:00 closes (SOXL 40.87 after a 7% slide in the final five minutes). Composer\'s realized session was '
                f'{composer_day:+.1%} (its own fills, then TECL into the close). The engine\'s closing-price decision on 11-04 was SOXL 37.5 / TECL 37.5; Composer held SOXL 75.5 (a knife-edge at 15:5x prices, shadow ledger): the day is shown on the live holding, as the question asks.',
-               'Vol-target and VIX rules read the decision close (d0) and earn d1, as the engine does; Composer decides at ~15:50, not the close. The matched k is solved on the full path, so the 2015-26 mean leg weight differs slightly from the cap\'s.']}
+               'Vol-target and VIX rules read the decision close (d0) and earn d1, as the engine does; Composer decides at ~15:50, not the close. The matched k is solved on the full path, so the 2015-26 mean leg weight differs slightly from the cap\'s.',
+               f'The by-product row is the real counterfactual for the SOXL dip-buy branch: the live tree with its RSI10(SOXL) < 30 condition disabled, replayed by the engine\'s own simulator (Wilder RSI) on the same panel; identical holdings on every one of the {FT["gate"]["non_branch_sessions"]:,} non-branch sessions (checked), the fall-through holdings on the {FT["branch_sessions"]} branch sessions ({", ".join(f"{k} {v}" for k, v in FT["holdings"].items())}: SOXL 37.5 in a pair on only {FT["soxl_in_pair"]["share"]:.0%}), costed on its own turnover. The branch\'s sessions are {ft_s["synthetic (before SOXL launch)"]["n"] / FT["branch_sessions"]:.0%} synthetic. Its 11-05 is at the 16:00 closes only: the edited tree holds the engine\'s own close decision (SOXL 37.5 / TECL 37.5, the same under both trees) and no ~15:50 TECL print is on file; the as-built figure is Composer\'s knife-edge at 15:5x prices.']}
     json.dump(res, open(a.out, 'w'), default=lambda o: float(o))
     print('wrote', a.out, f'({os.path.getsize(a.out) // 1024} KB)')
 

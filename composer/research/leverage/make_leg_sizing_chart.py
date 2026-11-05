@@ -12,7 +12,7 @@ PAGE = os.path.join(RES, "leg-sizing-2026-11-05.html")
 EQ_SERIES = ["base", "cap60", "cap50", "cap37.5", "cap25", "vt_m37.5", "two_x", "one_x"]
 DD_SERIES = ["base", "cap37.5", "vt_m37.5", "two_x"]
 WKEYS = ("cagr", "maxdd", "sharpe", "calmar", "worst_day", "worst_day_date", "worst_month", "worst_month_id", "tuw_longest_sessions",
-         "tuw_longest_from", "tuw_share", "final_multiple", "maxdd_peak", "maxdd_trough", "vol")
+         "tuw_longest_from", "tuw_longest_to", "tuw_share", "final_multiple", "maxdd_peak", "maxdd_trough", "vol")
 
 
 def main():
@@ -24,7 +24,10 @@ def main():
         variants.append({"id": vid, "label": v["label"], "family": v["family"], "legw": v["avg_leg_weight"], "to": v["turnover_yr"], "params": v["params"],
                          "w": {wk: {k: v["windows"][wk].get(k) for k in WKEYS} for wk in ("full", "since2015")},
                          "tr": v["tradeoff"], "ep": v["episodes"],
-                         "day": {ps: {k: v["day_2026_11_05"][ps][k] for k in ("day", "leg_weight", "book_day", "leg_instrument")} for ps in ("as_traded", "close")},
+                         "day": {ps: (None if v["day_2026_11_05"][ps] is None else {k: v["day_2026_11_05"][ps][k] for k in ("day", "leg_weight", "book_day", "leg_instrument")})
+                                 for ps in ("as_traded", "close")},
+                         "loyo": (None if "loyo" not in v else {wk: {"min": v["loyo"][wk]["min"], "max": v["loyo"][wk]["max"], "no2020": v["loyo"][wk]["by_year"].get("2020"),
+                                                                     "no2022": v["loyo"][wk]["by_year"].get("2022")} for wk in ("full", "since2015")}),
                          "book": {wk: {k: v["book"][wk][k] for k in ("cagr", "maxdd", "sharpe")} for wk in ("full", "since2015")}})
     for vid in EQ_SERIES + DD_SERIES:          # every variant is sampled on the same sessions: one date array per window
         for wk in ("full", "since2015"):
@@ -34,12 +37,15 @@ def main():
     E = J["edge"]
     edge = {"leg_days": E["leg_days"], "leg_mean": E["leg_mean"], "leg_t": E["leg_t"], "q_edges": E["sigma_quartile_edges"],
             "sig": E["by_sigma_quartile"], "vix": E["by_vix"], "branch": E["by_branch"], "branch15": E["by_branch_since2015"],
-            "pl_sig": E["placebo_sigma_Q4_minus_Q1"], "pl_vix": E["placebo_vix_gt25_minus_le25"]}
+            "pl_sig": E["placebo_sigma_Q4_minus_Q1"], "pl_vix": E["placebo_vix_gt25_minus_le25"],
+            "welch": E["welch_t_Q4_minus_Q1"], "within": E["within_branch_own_quartiles"], "mirror": E["mirror_1x_twins_same_days"],
+            "q4comp": E["q4_composition"], "s15q": E["since2015_own_quartiles"], "worst": E["worst_of_branches_placebo"]}
     data = {"generated": J["generated"], "inputs": {k: J["inputs"][k] for k in ("days", "sessions", "cost_bps_per_unit_sum_abs_dw", "leg_weight_distribution", "branch_days",
                                                                              "first_real_date", "book_dollars_2026_11_05", "book_weights", "book_1104_weights", "others_1105",
                                                                              "live_holding_1105", "px_1104", "px_1105", "sigma20_soxl_1104", "vix_1104", "composer_realized_1105",
-                                                                             "book_realized_1105", "matched_k", "two_x_map", "one_x_map", "vix_mode")},
-            "gate": J["gate_test"], "variants": variants, "paths": paths, "bench": J["bench"], "edge": edge, "honesty": J["honesty"], "windows": J["windows"]}
+                                                                             "book_realized_1105", "matched_k", "two_x_map", "one_x_map", "vix_mode", "soxl_1030", "path_1030", "ft_leg_1105")},
+            "gate": J["gate_test"], "variants": variants, "paths": paths, "bench": J["bench"], "edge": edge, "honesty": J["honesty"], "windows": J["windows"],
+            "ft": J["fallthrough"], "conc": J["concentration"]}
     html = TEMPLATE.replace("__DATA__", json.dumps(data, separators=(",", ":")))
     open(PAGE, "w").write(html)
     print("wrote", PAGE, f"({len(html) // 1024} KB)")
@@ -97,14 +103,14 @@ details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)
 
 <section class="card">
 <h2>A. Growth of $1, 1995-06..2026-11-04 (log scale)</h2>
-<p class="sub-h">As built against four caps (the released weight sits in PULS, the tree's own cash leg), the vol-target with the same mean leg weight as the 37.5% cap, the 2x substitution and the 1x reference. The caps are a pure sizing trade: every cap keeps the path's shape and its Sharpe (1.30 → 1.30 over 31 years, 2.16 → 2.16 since 2015) and gives up CAGR roughly in proportion. The vol-target bends the shape: it cuts exposure after every shock, which on a dip-buying engine is also when the recovery is earned.</p>
+<p class="sub-h">As built against four caps (the released weight sits in PULS, the tree's own cash leg), the vol-target with the same mean leg weight as the 37.5% cap, the 2x substitution and the 1x reference. The caps are a pure sizing trade: every cap keeps the path's shape and its Sharpe (<span id="fA"></span>) and gives up CAGR roughly in proportion. The vol-target bends the shape: it cuts exposure after every shock, which on a dip-buying engine is also when the recovery is earned.</p>
 <div class="legend" id="lgA"></div>
 <div class="chartwrap"><svg id="chA" role="img" aria-label="Growth of one dollar on the KMLM path, as built and under each leg-sizing variant, 1995 to 2026, log scale"></svg></div>
 </section>
 
 <section class="card">
 <h2>B. Drawdown from the running peak</h2>
-<p class="sub-h">Left: 1995-2026, where the as-built path spends 2006-2011 under water (a 5-year stretch in the synthetic era: 2007 −49%, 2011 −38%). Right: 2015-2026, the rules' own years; the 54% hole is Feb-Mar 2020. A cap scales the hole; the vol-target shallows the entry and lengthens the exit (longest time under water 1,826 → 2,738 sessions over 31 years).</p>
+<p class="sub-h">Left: 1995-2026, where the as-built path's longest stretch under water runs <span id="fB"></span>, in the synthetic era (2007 −49%, 2011 −38%). Right: 2015-2026, the rules' own years; the 54% hole is Feb-Mar 2020, the as-built and every cap's max drawdown since 2015 (<span id="fB3"></span>). A cap scales the hole; the vol-target shallows the entry and lengthens the exit (longest time under water <span id="fB2"></span> sessions over 31 years).</p>
 <div class="legend" id="lgB"></div>
 <div class="two">
 <div class="chartwrap"><svg id="chB1" role="img" aria-label="Drawdown profiles 1995 to 2026 for as built, cap 37.5, vol-target and 2x"></svg></div>
@@ -114,7 +120,7 @@ details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)
 
 <section class="card">
 <h2>C. The trade-off: CAGR against max drawdown, one point per variant</h2>
-<p class="sub-h">Right and up is better. The cap family traces a near-straight line from as built toward cash; its slope is the price of a point of drawdown: 1.1-1.6 pp of CAGR per pp over 31 years, 4.1-5.2 pp since 2015. The vol-target family sits to the lower-left of the caps over 31 years (it cuts the recoveries as much as the crashes, so the 2006-11 drawdown barely moves) and to the upper-left since 2015 (it was in the right place in Feb 2020 and Nov 2026). VIX gates, the 2x and 1x substitutions and the single-name cap are single points. Hover a point for its numbers; the full table is below.</p>
+<p class="sub-h">Right and up is better. The cap family traces a near-straight line from as built toward cash; its slope is the price of a point of drawdown: 1.1-1.6 pp of CAGR per pp over 31 years, 4.1-5.2 pp since 2015. The vol-target family sits to the lower-left of the caps over 31 years (it cuts the recoveries as much as the crashes, so the 2006-11 drawdown barely moves) and to the upper-left since 2015 (it was in the right place in Feb 2020 and Nov 2026). VIX gates, the 2x and 1x substitutions and the single-name cap are single points. Hover a point for its numbers; the full table is below. The 2015-26 ratios are one episode: <span id="fC"></span></p>
 <div class="legend" id="lgC"></div>
 <div class="chartwrap"><svg id="chC1" role="img" aria-label="Scatter of CAGR against max drawdown for every variant, 1995 to 2026"></svg></div>
 <div class="chartwrap"><svg id="chC2" role="img" aria-label="Scatter of CAGR against max drawdown for every variant, 2015 to 2026"></svg></div>
@@ -124,25 +130,28 @@ details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)
 
 <section class="card">
 <h2>D. 2026-11-05 under each variant</h2>
-<p class="sub-h">The path ends at the 11-04 close, so the session is priced from the live holding into it (SOXL 75%, PULS 16%, VXZ 9%) at Composer's ~15:50 prints: SOXL 66.68 → 44.50 (−33.3%), VXZ +6.6%. The 16:00 close printed 40.87 (−38.7%) after a 7% slide in the last five minutes; that figure is in the table. The vol-target rows read SOXL's realized 20-session vol at the 11-04 close (154% annualized after 10-30's −15% day), which is why they are smallest; the VIX gates read 16.6 and do nothing. The thin line is Composer's realized session (its own fills).</p>
+<p class="sub-h">The path ends at the 11-04 close, so the session is priced from the live holding into it (SOXL 75%, PULS 16%, VXZ 9%) at Composer's ~15:50 prints: SOXL 66.68 → 44.50 (−33.3%), VXZ +6.6%. The 16:00 close printed 40.87 (−38.7%) after a 7% slide in the last five minutes; that figure is in the table. The vol-target rows read SOXL's realized 20-session vol at the 11-04 close (<span id="fD"></span>), which is why they are smallest; the VIX gates read 16.6 and do nothing. The thin line is Composer's realized session (its own fills). The by-product row (the edited tree) holds the engine's own close decision, SOXL / TECL 37.5 each, and is priced at the 16:00 closes only: no ~15:50 TECL print is on file.</p>
 <div class="chartwrap"><svg id="chD" role="img" aria-label="The 2026-11-05 session return under each variant"></svg></div>
 </section>
 
 <section class="card">
 <h2>E. Metrics, both windows</h2>
-<p class="sub-h">CAGR on calendar time; Sharpe daily, rf 0; Calmar = CAGR / max DD; TUW = the longest stretch under water, in sessions; "per pp DD" = CAGR given up per point of max drawdown saved against as built (the headline ratio; "none" where no drawdown is saved, negative where CAGR rose while drawdown fell); episodes compound the variant over the dates; 11-05 is the session at Composer's ~15:50 prints (hover for the 16:00-close figure and the book's day); the book is HG / KMLM / SLEEVE / HARV at the 2026-11-05 dollar weights (31 / 26 / 29 / 14%), drifting, reset to those weights at the next close after any engine passes 40%, with the KMLM variant swapped in. Leg wt = the mean leg weight over every session (the leg is 75% on 80% of them, TLT otherwise).</p>
+<p class="sub-h">CAGR on calendar time; Sharpe daily, rf 0; Calmar = CAGR / max DD; TUW = the longest stretch under water, in sessions; "per pp DD" = CAGR given up per point of max drawdown saved against as built (the headline ratio; "none" where no drawdown is saved, negative where CAGR rose while drawdown fell); episodes compound the variant over the dates; 11-05 is the session at Composer's ~15:50 prints (hover for the 16:00-close figure and the book's day); the book is HG / KMLM / SLEEVE / HARV at the 2026-11-05 dollar weights (31 / 26 / 29 / 14%), drifting, reset to those weights at the next close after any engine passes 40%, with the KMLM variant swapped in. Leg wt = the mean leg weight over every session (the leg is 75% on 80% of them, TLT otherwise); cap 37.5 → 1x keeps the SVIX halves in SVIX, which has no twin, so its leg weight is <span id="fE"></span>, not the cap's.</p>
 <div class="tablewrap"><table id="tb15"></table></div>
 <details open><summary>1995-06-02..2026-11-04 (synthetic before each fund's launch)</summary><div class="tablewrap"><table id="tbFull"></table></div></details>
 </section>
 
 <section class="card">
 <h2>F. By-products: where the leg's return comes from (the EDGE rule)</h2>
-<p class="sub-h">The leg's own daily return (its holdings at 100%) on the 6,279 sessions it is on, split by the holdings' realized 20-session vol at the prior close, by the prior VIX close, and by branch. Two asymmetries beyond the sizing trade-off: the leg earns most when its own vol is highest (the mirror of a vol-target, and the reason vol-scaling pays 3-16 pp per point over 31 years), and the SOXL dip-buy branch — the one that fired into 11-05 — is the only branch with no measured return, while the TECL and LABU dip-buys and the UVXY pops carry the path. In sample on the engine's own path; the placebo for a branch draws the same number of random 21-session blocks of leg days.</p>
+<p class="sub-h" id="pF"></p>
 <div class="two">
 <div class="chartwrap"><svg id="chF1" role="img" aria-label="Mean daily leg return by quartile of the holdings' prior-close realized vol"></svg></div>
 <div class="chartwrap"><svg id="chF2" role="img" aria-label="Mean daily leg return by prior VIX close bucket"></svg></div>
 </div>
 <div class="tablewrap"><table id="tbF"></table></div>
+<h2 style="margin-top:16px">The SOXL dip-buy branch's real counterfactual: the tree with the branch removed</h2>
+<p class="sub-h" id="pFT"></p>
+<div class="tablewrap"><table id="tbFT"></table></div>
 </section>
 
 <section class="card notes">
@@ -161,23 +170,37 @@ function legend(id, items){const g = document.getElementById(id); g.replaceChild
 const f2 = v => v == null ? '–' : v.toFixed(2), pc = v => v == null ? '–' : (v * 100).toFixed(1) + '%', pc0 = v => v == null ? '–' : (Math.round(v * 100) || 0) + '%';
 const ordn = p => { const n = Math.round(p * 100), m = n % 100, u = n % 10; return n + ((m >= 11 && m <= 13) ? 'th' : u === 1 ? 'st' : u === 2 ? 'nd' : u === 3 ? 'rd' : 'th'); };
 const sg = v => v == null ? '–' : (v >= 0 ? '+' : '−') + (Math.abs(v) * 100).toFixed(1) + '%', sg2 = v => v == null ? '–' : (v >= 0 ? '+' : '−') + (Math.abs(v) * 100).toFixed(2) + '%';
+const sgB = v => v == null ? '–' : (v >= 0 ? '+' : '−') + Math.round(Math.abs(v) * 100).toLocaleString() + '%';
 const cls = v => v == null ? 'n' : (v < 0 ? 'n neg' : 'n');
 const byId = {}; D.variants.forEach(v => byId[v.id] = v);
 const COL = {base: 'var(--c0)', cap60: 'var(--c1)', cap50: 'var(--c2)', 'cap37.5': 'var(--c3)', cap25: 'var(--c4)', 'vt_m37.5': 'var(--s2)', two_x: 'var(--s3)', one_x: 'var(--ctx2)'};
 const NAME = {base: 'as built (75%)', cap60: 'cap 60%', cap50: 'cap 50%', 'cap37.5': 'cap 37.5%', cap25: 'cap 25%', 'vt_m37.5': 'vol-target, mean leg 37.5%', two_x: '2x substitution', one_x: '1x reference'};
 const SHORT = {base: 'as built', cap60: 'cap 60', cap50: 'cap 50', 'cap37.5': 'cap 37.5', cap25: 'cap 25', 'cap37.5_1x': 'cap 37.5 → 1x', 'sn37.5': 'single-name cap 37.5', vt_m60: 'vt k.43 (≈cap 60)', vt_m50: 'vt k.32 (≈cap 50)',
   'vt_m37.5': 'vt k.22 (≈cap 37.5)', vt_m25: 'vt k.15 (≈cap 25)', 'vt_k0.3': 'vt k.30', 'vt_k0.45': 'vt k.45', 'vt_k0.6': 'vt k.60', 'vt_k0.9': 'vt k.90', vix25: 'halve if VIX > 25', vix30: 'halve if VIX > 30', two_x: '2x', one_x: '1x',
-  'soxl_dip37.5': 'SOXL dip-buy at 37.5', soxl_dip0: 'SOXL dip-buy removed'};
+  soxl_dip_ft: 'SOXL dip-buy removed'};
 const B = byId.base, I = D.inputs;
 const c50 = byId.cap50, c375 = byId['cap37.5'], vt60 = byId.vt_m60, vt375 = byId['vt_m37.5'];
 const capRatios = w => ['cap60', 'cap50', 'cap37.5', 'cap25'].map(k => byId[k].tr[w].cagr_per_dd);
 const rng = a => `${Math.min(...a).toFixed(1)}-${Math.max(...a).toFixed(1)}`;
 const sigQ = D.edge.sig, q1 = sigQ['Q1 lowest vol'], q4 = sigQ['Q4 highest vol'];
-[[`${rng(capRatios('since2015'))} pp`, `of CAGR per point of max drawdown saved by a cap, 2015-26 (${rng(capRatios('full'))} pp over 1995-2026). Cap 50%: CAGR ${pc0(B.w.since2015.cagr)} → ${pc0(c50.w.since2015.cagr)}, max DD ${pc0(B.w.since2015.maxdd)} → ${pc0(c50.w.since2015.maxdd)}; the book gives up ${((B.book.since2015.cagr - c50.book.since2015.cagr) * 100).toFixed(0)} pp of CAGR for ${((B.book.since2015.maxdd - c50.book.since2015.maxdd) * 100).toFixed(1)} pp of drawdown`],
+[[`${rng(capRatios('since2015'))} pp`, `of CAGR per point of max drawdown saved by a cap, 2015-26 (${rng(capRatios('full'))} pp over 1995-2026). The 2015-26 figure is the Feb-Mar 2020 episode: leave 2020 out and cap 37.5 reads ${c375.loyo.since2015.no2020.toFixed(1)}, leave 2022 out ${c375.loyo.since2015.no2022.toFixed(1)}. Cap 50%: CAGR ${pc0(B.w.since2015.cagr)} → ${pc0(c50.w.since2015.cagr)}, max DD ${pc0(B.w.since2015.maxdd)} → ${pc0(c50.w.since2015.maxdd)}; the book gives up ${((B.book.since2015.cagr - c50.book.since2015.cagr) * 100).toFixed(0)} pp of CAGR for ${((B.book.since2015.maxdd - c50.book.since2015.maxdd) * 100).toFixed(1)} pp of drawdown`],
  [`${sg(B.day.as_traded.day)} → ${sg(c375.day.as_traded.day)}`, `the 11-05 session as built vs cap 37.5% (Composer's realized session ${sg(I.composer_realized_1105)}); ${sg(vt60.day.as_traded.day)} under the vol-target with the mean leg weight of a 60% cap, which read SOXL's 20-session vol at ${pc0(I.sigma20_soxl_1104)}; the VIX gates read ${I.vix_1104} and did nothing`],
  [`Sharpe ${f2(B.w.since2015.sharpe)} → ${f2(c375.w.since2015.sharpe)}`, `a cap buys nothing risk-adjusted (2015-26; ${f2(B.w.full.sharpe)} → ${f2(c375.w.full.sharpe)} over 31 years). The vol-target: ${f2(vt60.w.since2015.sharpe)} since 2015 but ${f2(vt60.w.full.sharpe)} over 31 years, with ${vt375.w.full.tuw_longest_sessions.toLocaleString()} sessions of its longest stretch under water against ${B.w.full.tuw_longest_sessions.toLocaleString()}`],
- [`${sg2(q1.mean)} → ${sg2(q4.mean)} a day`, `the leg's return from its lowest to its highest prior-vol quartile (t ${q4.t.toFixed(1)}, n ${q4.n}; the gap sits at the ${ordn(D.edge.pl_sig.percentile_of_observed)} percentile of ${D.edge.pl_sig.draws} block placebos). The leg earns most exactly where a vol-target cuts it. By-product (section F): the SOXL dip-buy branch, which fired into 11-05, is the one branch with no measured return`]]
+ [`${sg2(q1.mean)} → ${sg2(q4.mean)} a day`, `the leg's return from its lowest to its highest prior-vol quartile (t ${q4.t.toFixed(1)}, n ${q4.n}; Welch t ${D.edge.welch.toFixed(1)}, the gap at the ${ordn(D.edge.pl_sig.percentile_of_observed)} percentile of ${D.edge.pl_sig.draws} block placebos). The leg earns most where a vol-target cuts it, but the engine is vol-timed by construction: the same names' 1x twins show the same gradient on the same days (t ${D.edge.mirror['Q4 highest vol'].t.toFixed(1)}) and within a branch it is weak (section F). The SOXL dip-buy branch (11-05's) has no measured return, and the tree without it is worse since 2015: it stays as built`]]
  .forEach(([b, s]) => { const k = document.createElement('div'); k.className = 'kpi'; const bb = document.createElement('b'); bb.textContent = b; const ss = document.createElement('span'); ss.textContent = s; k.append(bb, ss); document.getElementById('kpis').appendChild(k); });
+// the hand-written sentences' numbers come from the JSON (counter-agent fix 3)
+const vtRatios = D.variants.filter(v => v.family === 'vt').map(v => v.tr.full.cagr_per_dd).filter(x => x != null);
+const tuwYears = ((Date.parse(B.w.full.tuw_longest_to) - Date.parse(B.w.full.tuw_longest_from)) / 365.25 / 86400000).toFixed(1);
+const lo = (id, w) => byId[id].loyo[w], vix30 = byId.vix30, c60 = byId.cap60;
+const fills = {
+  fA: `${f2(B.w.full.sharpe)} → ${f2(c375.w.full.sharpe)} over 31 years, ${f2(B.w.since2015.sharpe)} → ${f2(c375.w.since2015.sharpe)} since 2015`,
+  fB: `${B.w.full.tuw_longest_from} → ${B.w.full.tuw_longest_to} (${tuwYears} years, ${B.w.full.tuw_longest_sessions.toLocaleString()} sessions)`,
+  fB2: `${B.w.full.tuw_longest_sessions.toLocaleString()} → ${vt375.w.full.tuw_longest_sessions.toLocaleString()}`,
+  fB3: `the ${Object.keys(D.conc.maxdd_since2015_not_2020).length} vol-target and VIX variants cut it below their own 2015-16 or 2018-Q4 holes`,
+  fC: `the as-built max drawdown since 2015, every ratio's starting point, is ${D.conc.maxdd_since2015_episode[0]} → ${D.conc.maxdd_since2015_episode[1]} (COVID), as is every cap's (the vol-target and VIX variants cut COVID below their own 2015-16 or 2018-Q4 drawdowns), so "pp per pp" since 2015 is priced on Feb-Mar 2020 alone. Leave one year out (set flat for base and variant) and cap 37.5 reads ${lo('cap37.5', 'since2015').min[1].toFixed(2)} (no ${lo('cap37.5', 'since2015').min[0]}) to ${lo('cap37.5', 'since2015').max[1].toFixed(2)} (no ${lo('cap37.5', 'since2015').max[0]}), vt k${I.matched_k['0.6'].toFixed(2).slice(1)} ${lo('vt_m60', 'since2015').min[1].toFixed(2)} to ${lo('vt_m60', 'since2015').max[1].toFixed(2)} (no ${lo('vt_m60', 'since2015').max[0]}), VIX > 30 ${lo('vix30', 'since2015').min[1].toFixed(2)} (no ${lo('vix30', 'since2015').min[0]}) to ${lo('vix30', 'since2015').max[1].toFixed(2)} (no ${lo('vix30', 'since2015').max[0]}). "VIX gates are the cheapest drawdown since 2015" and "vol-targeting beats caps since 2015" are statements about Feb-Mar 2020: without 2020 the vol-target costs more per pp than the cap at the same mean leg weight (${lo('vt_m60', 'since2015').no2020.toFixed(2)} vs cap 60 ${lo('cap60', 'since2015').no2020.toFixed(2)}). 2022 (${sgB(byId.base.ep['2022 full year'])}) is ${pc0(D.conc.share_2022_of_log_growth_since2015)} of the 2015-26 log growth. Over 31 years the vol-target and VIX ratios divide by ${D.conc.dd_saved_full_pp.vt_m60.toFixed(1)} and ${D.conc.dd_saved_full_pp.vix30.toFixed(1)} pp of drawdown saved and are ill-conditioned (vt k${I.matched_k['0.6'].toFixed(2).slice(1)}: ${lo('vt_m60', 'full').min[1].toFixed(1)} to ${lo('vt_m60', 'full').max[1].toFixed(0)} leave-one-year-out).`,
+  fD: `${pc0(I.sigma20_soxl_1104)} annualized after SOXL's ${sg(I.soxl_1030)} session on 10-30, the symphony's ${sg(I.path_1030)}`,
+  fE: pc0(byId['cap37.5_1x'].legw)};
+for (const k in fills) document.getElementById(k).textContent = fills[k];
 
 const T = s => new Date(s + 'T12:00:00Z').getTime();
 function crosshair(svg, X, l, r, t, b, dates, readout){
@@ -272,7 +295,9 @@ function scatter(id, w, title){
     const hit = el('circle', {cx: x, cy: y, r: 12, fill: 'transparent'}, svg);
     const tr = p.v.tr[w], s = p.v.w[w];
     const rows = () => [{v: p.v.label, l: ''}, {v: pc(s.cagr), l: 'CAGR'}, {v: pc(s.maxdd), l: `max DD (${s.maxdd_peak} → ${s.maxdd_trough})`}, {v: f2(s.sharpe), l: 'Sharpe'}, {v: f2(s.calmar), l: 'Calmar'},
-      {v: tr.cagr_per_dd == null ? '–' : tr.cagr_per_dd.toFixed(2) + ' pp', l: 'CAGR per pp of DD saved'}, {v: pc(p.v.legw), l: 'mean leg weight'}, {v: sg(p.v.day.as_traded.day), l: '2026-11-05'}];
+      {v: tr.cagr_per_dd == null ? '–' : tr.cagr_per_dd.toFixed(2) + ' pp', l: 'CAGR per pp of DD saved'},
+      {v: p.v.loyo && p.v.loyo[w].min ? `${p.v.loyo[w].min[1].toFixed(2)}..${p.v.loyo[w].max[1].toFixed(2)}` : '–', l: p.v.loyo && p.v.loyo[w].min ? `leave-one-year-out range (no ${p.v.loyo[w].min[0]} .. no ${p.v.loyo[w].max[0]})` : ''},
+      {v: pc(p.v.legw), l: 'mean leg weight'}, p.v.day.as_traded ? {v: sg(p.v.day.as_traded.day), l: '2026-11-05'} : {v: sg(p.v.day.close.day), l: '2026-11-05 at the closes (SOXL / TECL 37.5)'}];
     [mark, hit].forEach(h => { h.addEventListener('mousemove', e => tip(e, rows())); h.addEventListener('mouseleave', untip); });
   });
 }
@@ -303,20 +328,23 @@ legend('lgC3', [['1995-2026', 'var(--ctx2)'], ['2015-2026', 'var(--s1)']]);
 })();
 // D: the 11-05 bars
 (function(){
-  const svg = document.getElementById('chD'), rows = D.variants, W = 900, rowH = 22, l = 190, r = 120, t = 14, H2 = rows.length * rowH + t + 34;
+  const svg = document.getElementById('chD'), rows = D.variants, W = 900, rowH = 22, l = 190, r = 120, t = 14, H2 = rows.length * rowH + t + 50;
   svg.setAttribute('viewBox', `0 0 ${W} ${H2}`);
-  const vals = rows.map(v => v.day.as_traded.day).concat([I.composer_realized_1105, 0.02]), lo = Math.min(...vals) - 0.02, hi = Math.max(...vals) + 0.02;
+  const dayOf = v => v.day.as_traded ? v.day.as_traded : v.day.close, atClose = v => !v.day.as_traded;
+  const vals = rows.map(v => dayOf(v).day).concat([I.composer_realized_1105, 0.02]), lo = Math.min(...vals) - 0.02, hi = Math.max(...vals) + 0.02;
   const X = v => l + (v - lo) / (hi - lo) * (W - l - r);
   for (let v = Math.ceil(lo * 20) / 20; v <= hi; v += 0.05) { el('line', {x1: X(v), x2: X(v), y1: t, y2: H2 - 30, stroke: Math.abs(v) < 1e-9 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: X(v), y: H2 - 12, 'text-anchor': 'middle', class: 'ax'}, svg, Math.round(v * 100) + '%'); }
   el('line', {x1: X(I.composer_realized_1105), x2: X(I.composer_realized_1105), y1: t, y2: H2 - 30, stroke: 'var(--ink2)', 'stroke-width': 1}, svg);
   el('text', {x: X(I.composer_realized_1105) + 4, y: H2 - 36, class: 'ax'}, svg, `Composer realized ${sg(I.composer_realized_1105)}`);
-  rows.forEach((v, i) => { const y = t + i * rowH + 2, d = v.day.as_traded.day, x0 = X(Math.min(0, d)), w = Math.abs(X(d) - X(0));
+  rows.forEach((v, i) => { const y = t + i * rowH + 2, dd = dayOf(v), d = dd.day, x0 = X(Math.min(0, d)), w = Math.abs(X(d) - X(0)), cl = atClose(v);
     el('text', {x: l - 8, y: y + 14, 'text-anchor': 'end', class: v.id === 'base' ? 'lbb' : v.family === 'byprod' ? 'lbs' : 'lb'}, svg, SHORT[v.id]);
-    const rr = el('rect', {x: x0, y: y + 2, width: Math.max(w, 1.5), height: 14, rx: 2, fill: 'var(--s1)'}, svg);
-    el('text', {x: d < 0 ? x0 - 4 : x0 + w + 4, y: y + 14, 'text-anchor': d < 0 ? 'end' : 'start', class: 'ax'}, svg, sg(d));
-    el('text', {x: W - r + 6, y: y + 14, class: 'ax'}, svg, `leg ${pc0(v.day.as_traded.leg_weight)} ${v.day.as_traded.leg_instrument}`);
-    rr.addEventListener('mousemove', e => tip(e, [{v: v.label, l: ''}, {v: sg(d), l: `symphony, at the ~15:50 prints (leg ${pc0(v.day.as_traded.leg_weight)} in ${v.day.as_traded.leg_instrument})`}, {v: sg(v.day.close.day), l: 'at the 16:00 closes'},
-      {v: sg(v.day.as_traded.book_day), l: `the book (KMLM ${pc0(I.book_1104_weights.KMLM)} of it on 11-04; realized ${sg(I.book_realized_1105)})`}])); rr.addEventListener('mouseleave', untip); });
+    const rr = el('rect', {x: x0, y: y + 2, width: Math.max(w, 1.5), height: 14, rx: 2, fill: 'var(--s1)', opacity: cl ? 0.55 : 1}, svg);
+    el('text', {x: d < 0 ? x0 - 4 : x0 + w + 4, y: y + 14, 'text-anchor': d < 0 ? 'end' : 'start', class: 'ax'}, svg, sg(d) + (cl ? '*' : ''));
+    el('text', {x: W - r + 6, y: y + 14, class: 'ax'}, svg, `leg ${pc0(dd.leg_weight)} ${dd.leg_instrument}${cl ? '*' : ''}`);
+    rr.addEventListener('mousemove', e => tip(e, cl ? [{v: v.label, l: ''}, {v: sg(d), l: `symphony, at the 16:00 closes (leg ${pc0(dd.leg_weight)} in ${dd.leg_instrument}, the engine's own close decision; no ~15:50 TECL print on file)`},
+      {v: sg(dd.book_day), l: `the book at the closes (KMLM ${pc0(I.book_1104_weights.KMLM)} of it on 11-04; realized ${sg(I.book_realized_1105)})`}]
+      : [{v: v.label, l: ''}, {v: sg(d), l: `symphony, at the ~15:50 prints (leg ${pc0(dd.leg_weight)} in ${dd.leg_instrument})`}, {v: sg(v.day.close.day), l: 'at the 16:00 closes'},
+      {v: sg(dd.book_day), l: `the book (KMLM ${pc0(I.book_1104_weights.KMLM)} of it on 11-04; realized ${sg(I.book_realized_1105)})`}])); rr.addEventListener('mouseleave', untip); });
 })();
 // E: tables
 function table(id, w){
@@ -326,11 +354,11 @@ function table(id, w){
   D.variants.forEach(v => { const s = v.w[w], t = v.tr[w], e = Object.values(v.ep), row = document.createElement('tr'); row.className = v.id === 'base' ? 'base' : v.family === 'byprod' ? 'bp' : '';
     const cells = [[SHORT[v.id], ''], [pc0(v.legw), 'n'], [pc(s.cagr), cls(s.cagr)], [pc(s.maxdd), 'n'], [f2(s.sharpe), 'n'], [f2(s.calmar), 'n'], [sg(s.worst_day), cls(s.worst_day)], [sg(s.worst_month), cls(s.worst_month)], [s.tuw_longest_sessions.toLocaleString(), 'n'],
       [t.cagr_per_dd == null ? (v.id === 'base' ? '' : 'none') : t.cagr_per_dd.toFixed(2), 'n'],
-      [sg(e[0]), cls(e[0])], [sg(e[1]), cls(e[1])], [sg(e[2]), cls(e[2])], [sg(v.day.as_traded.day), cls(v.day.as_traded.day)], [pc(v.book[w].cagr), 'n'], [pc(v.book[w].maxdd), 'n']];
-    cells.forEach(([x, c], i) => { const td = document.createElement('td'); td.textContent = x; td.className = c; if (!i) td.title = v.label; if (i === 13) td.title = `at the ~15:50 prints; at the 16:00 closes: ${sg(v.day.close.day)}; the book: ${sg(v.day.as_traded.book_day)}`; row.appendChild(td); }); tb.appendChild(row); });
+      [sg(e[0]), cls(e[0])], [sg(e[1]), cls(e[1])], [sg(e[2]), cls(e[2])], [sg((v.day.as_traded || v.day.close).day) + (v.day.as_traded ? '' : '*'), cls((v.day.as_traded || v.day.close).day)], [pc(v.book[w].cagr), 'n'], [pc(v.book[w].maxdd), 'n']];
+    cells.forEach(([x, c], i) => { const td = document.createElement('td'); td.textContent = x; td.className = c; if (!i) td.title = v.label; if (i === 13) td.title = v.day.as_traded ? `at the ~15:50 prints; at the 16:00 closes: ${sg(v.day.close.day)}; the book: ${sg(v.day.as_traded.book_day)}` : `* at the 16:00 closes only: the edited tree holds SOXL / TECL 37.5 each (the engine's own close decision), no ~15:50 TECL print on file; the book: ${sg(v.day.close.book_day)}`; row.appendChild(td); }); tb.appendChild(row); });
   const foot = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = head.length; td.style.color = 'var(--ink2)'; td.style.whiteSpace = 'normal';
   const bn = D.bench;
-  td.textContent = `${w === 'full' ? '1995-06-02..2026-11-04' : '2015-06-01..2026-11-04'}. Benchmarks over the window: SPY CAGR ${pc(bn.SPY[w].cagr)}, max DD ${pc0(bn.SPY[w].maxdd)}, Sharpe ${f2(bn.SPY[w].sharpe)}; QQQ ${pc(bn.QQQ[w].cagr)}, ${pc0(bn.QQQ[w].maxdd)}, ${f2(bn.QQQ[w].sharpe)}. Variants: cap C = every leg holding × C/75, released weight in PULS; vt k = each holding × min(1, k / (0.75 × its 20-session vol)); the VIX gates halve the leg on the prior close; 2x = USD, SSO, else 2/3 of the 3x fund; 1x = XLK, SMH, SPY, XBI, PSQ, VIXY. COVID = 2020-02-19..03-23; Apr 2025 = 04-02..04-08; 2022 = the full year (the rules' in-sample peak year: +1,112% as built). Italic rows are the section-F by-products, not sizing options. Hover a variant name for its full description.`;
+  td.textContent = `${w === 'full' ? '1995-06-02..2026-11-04' : '2015-06-01..2026-11-04'}. Benchmarks over the window: SPY CAGR ${pc(bn.SPY[w].cagr)}, max DD ${pc0(bn.SPY[w].maxdd)}, Sharpe ${f2(bn.SPY[w].sharpe)}; QQQ ${pc(bn.QQQ[w].cagr)}, ${pc0(bn.QQQ[w].maxdd)}, ${f2(bn.QQQ[w].sharpe)}. Variants: cap C = every leg holding × C/75, released weight in PULS; vt k = each holding × min(1, k / (0.75 × its 20-session vol)); the VIX gates halve the leg on the prior close; 2x = USD, SSO, else 2/3 of the 3x fund; 1x = XLK, SMH, SPY, XBI, PSQ, VIXY. COVID = 2020-02-19..03-23; Apr 2025 = 04-02..04-08; 2022 = the full year (the rules' in-sample peak year: +1,112% as built). ${w === 'since2015' ? 'The as-built and every cap\'s max DD in this window is the Feb-Mar 2020 episode (the vol-target and VIX rows\' own is 2015-16 or 2018-Q4): hover a point in section C for each ratio\'s leave-one-year-out range. ' : ''}The italic row is the section-F by-product (the tree with the SOXL dip-buy removed), not a sizing option; * = its 11-05 at the 16:00 closes. Hover a variant name for its full description.`;
   foot.appendChild(td); tb.appendChild(foot);
   const tab = document.getElementById(id); tab.replaceChildren(thead, tb);
 }
@@ -364,8 +392,29 @@ edgeBars('chF2', D.edge.vix, ['VIX <= 20', 'VIX 20-25', 'VIX 25-30', 'VIX > 30']
      [e.n ?? '–', 'n'], [e.n ? sg2(e.mean) : '–', e.n ? cls(e.mean) : 'n'], [e.n ? e.t.toFixed(2) : '–', 'n'], [e.n ? sg(e.per_year_pct) : '–', e.n ? cls(e.per_year_pct) : 'n']]
      .forEach(([x, c]) => { const td = document.createElement('td'); td.textContent = x; td.className = c; row.appendChild(td); }); tb.appendChild(row); });
   const foot = document.createElement('tr'), td = document.createElement('td'); td.colSpan = head.length; td.style.color = 'var(--ink2)'; td.style.whiteSpace = 'normal';
-  const bd = D.edge.branch['dip-buy SOXL'], bt = D.edge.branch['dip-buy TECL'], bu = D.edge.branch.UVXY, s0 = byId.soxl_dip0, s375 = byId['soxl_dip37.5'];
-  td.textContent = `All ${D.edge.leg_days} leg sessions: mean ${sg2(D.edge.leg_mean)} a day, t ${D.edge.leg_t.toFixed(1)}. "Per year at 75%" = what the branch's days compounded to per year with the leg at its live 75%. The placebo draws the branch's number of sessions as random 21-session blocks of leg days, 1,000 times: the TECL dip-buy (${sg2(bt.mean)}, t ${bt.t.toFixed(1)}) and the UVXY pops (${sg2(bu.mean)}, t ${bu.t.toFixed(1)}) sit above every draw; the SOXL dip-buy (${bd.n} sessions, ${sg2(bd.mean)}, t ${bd.t.toFixed(1)}) sits at the ${ordn(bd.placebo.percentile_of_observed)} percentile: no measured return, not a measured loss. Bounded as a variant (italic rows above): SOXL dip-buy days to PULS leaves CAGR at ${pc0(s0.w.full.cagr)} vs ${pc0(B.w.full.cagr)} over 31 years (${pc0(s0.w.since2015.cagr)} vs ${pc0(B.w.since2015.cagr)} since 2015), cuts the 31-year max DD ${pc0(B.w.full.maxdd)} → ${pc0(s0.w.full.maxdd)} (since 2015 ${pc0(B.w.since2015.maxdd)} → ${pc0(s0.w.since2015.maxdd)}) and turns 11-05 from ${sg(B.day.as_traded.day)} into ${sg(s0.day.as_traded.day)}; capped at 37.5% instead: ${pc0(s375.w.full.cagr)} / ${pc0(s375.w.full.maxdd)}, 11-05 ${sg(s375.day.as_traded.day)}. The real change is a tree edit (the RSI(SOXL,10) < 30 branch falls through to the next checks, which would often hold SOXL at 37.5% in a pair), so the effect lies between the two bounds and must be simulated on the edited tree through the add.-40 build path (draft → fidelity gate → counter-agent → owner approval). In sample, 212 sessions (54 since 2015).`;
+  const bd = D.edge.branch['dip-buy SOXL'], bt = D.edge.branch['dip-buy TECL'], bu = D.edge.branch.UVXY, bs = D.edge.branch['dip-buy SPXL'], bs15 = D.edge.branch15['dip-buy SPXL'], bq = D.edge.branch.SQQQ;
+  const pairPct = order.filter(k => k.startsWith('pair')).map(k => D.edge.branch[k].placebo.percentile_of_observed);
+  const weak = [`the SPXL dip-buy t ${bs.t.toFixed(1)} (since 2015 t ${bs15.t.toFixed(1)}, n ${bs15.n})`, `SQQQ t ${bq.t.toFixed(1)} at the ${ordn(bq.placebo.percentile_of_observed)} placebo percentile`, `the pairs at the ${ordn(Math.min(...pairPct))}-${ordn(Math.max(...pairPct))}`];
+  td.textContent = `All ${D.edge.leg_days} leg sessions: mean ${sg2(D.edge.leg_mean)} a day, t ${D.edge.leg_t.toFixed(1)}. "Per year at 75%" = what the branch's days compounded to per year with the leg at its live 75%. The placebo draws the branch's number of sessions as random 21-session blocks of leg days, 1,000 times: the TECL dip-buy (${sg2(bt.mean)}, t ${bt.t.toFixed(1)}) and the UVXY pops (${sg2(bu.mean)}, t ${bu.t.toFixed(1)}) sit above every draw; the SOXL dip-buy (${bd.n} sessions, ${sg2(bd.mean)}, t ${bd.t.toFixed(1)}) sits at the ${ordn(bd.placebo.percentile_of_observed)} percentile: no measured return, not a measured loss, and not alone (${weak.join('; ')}). It is the minimum of ${D.edge.worst.n_branches} branch t-stats, and the worst of ${D.edge.worst.n_branches} sits at or below the ${ordn(bd.placebo.percentile_of_observed)} percentile ${pc0(D.edge.worst.p_some_branch_at_or_below)} of the time by chance. Its ${bd.n} sessions are ${pc0(bd.eras.synthetic.n / bd.n)} synthetic (n ${bd.eras.synthetic.n}, ${sg2(bd.eras.synthetic.mean)} a day); the real era is positive (n ${bd.eras.real.n}, ${sg2(bd.eras.real.mean)}, t ${bd.eras.real.t.toFixed(1)}). The TECL comparison is not like-for-like: TECL fires on TQQQ RSI < 30 (the index oversold), SOXL only when semis are oversold and QQQ is not. What removing the branch does is simulated below.`;
+  foot.appendChild(td); tb.appendChild(foot); tab.replaceChildren(thead, tb);
+})();
+// F: the section text and the fall-through table (counter-agent fix 1)
+(function(){
+  const E = D.edge, W4 = E.within, m = E.mirror, s15 = E.s15q, q = E.q4comp;
+  const wt = k => W4[k] ? W4[k].welch_t_Q4_minus_Q1.toFixed(1) : '–';
+  const others = Object.keys(W4).filter(k => k.startsWith('pair') && k !== 'pair SOXL+TECL').map(k => W4[k].welch_t_Q4_minus_Q1);
+  document.getElementById('pF').textContent = `The leg's own daily return (its holdings at 100%) on the ${E.leg_days.toLocaleString()} sessions it is on, split by the holdings' realized 20-session vol at the prior close, by the prior VIX close, and by branch. Two by-products beyond the sizing trade-off, both checked by the counter-agent. (1) The leg earns most when its own vol is highest (${sg2(q1.mean)} → ${sg2(q4.mean)} a day, Q4 − Q1 Welch t ${E.welch.toFixed(1)}), which is why vol-scaling pays ${rng(vtRatios)} pp per point over 31 years. But within a branch, on its own vol quartiles, the gradient is weak (Q4 − Q1 Welch t: SQQQ ${wt('SQQQ')}, TECL dip-buy ${wt('dip-buy TECL')}, UVXY ${wt('UVXY')}, SOXL+TECL ${wt('pair SOXL+TECL')}, the other pairs ${Math.min(...others).toFixed(1)}-${Math.max(...others).toFixed(1)}), the same names' 1x twins show the same gradient on the same days (${sg2(m['Q1 lowest vol'].mean)} → ${sg2(m['Q4 highest vol'].mean)} a day, t ${m['Q4 highest vol'].t.toFixed(1)}), and ${pc0(q.pre_2010_share)} of the Q4 bucket's summed return is pre-2010 synthetic (2022 ${pc0(q.share_2022)}; since 2015 on its own quartiles: ${sg2(s15['Q1 lowest vol'].mean)} (t ${s15['Q1 lowest vol'].t.toFixed(1)}) → ${sg2(s15['Q4 highest vol'].mean)} (t ${s15['Q4 highest vol'].t.toFixed(1)}) still holds). Read: the engine is vol-timed by construction (pops and dip-buys fire in high vol); a book-level size-up-with-vol would be a post-shock-reversal bet, not a new conditional return. The earlier "mirror = the low buckets are the weakest" was not a mirror check; the 1x-twin test is. (2) The SOXL dip-buy branch, the one that fired into 11-05, has no measured return; its real counterfactual (the tree with the branch removed, simulated below) is better over 31 years, all of it in the synthetic era, and worse since 2015: not a candidate edge, the branch stays as built. In sample on the engine's own path; the placebo for a branch draws the same number of random 21-session blocks of leg days.`;
+  const F = D.ft, ft = byId.soxl_dip_ft, dl = F.day_level, ld = F.worst_for_fall_through_since2015;
+  document.getElementById('pFT').textContent = `${F.edit}, replayed by the engine's own simulator (Wilder RSI) on the same panel and sessions: identical holdings on all ${F.gate.non_branch_sessions.toLocaleString()} sessions where the dip-buy did not fire (${F.gate.mismatches} mismatches), the fall-through holdings on its ${F.branch_sessions} sessions: ${Object.entries(F.holdings).map(([k, v]) => `${k} ${v}`).join(', ')}. SOXL stays in the leg (37.5 in a pair) on only ${F.soxl_in_pair.n} of them (${pc0(F.soxl_in_pair.share)}); SQQQ or TLT on ${F.sqqq_or_tlt.n} (${pc0(F.sqqq_or_tlt.share)}). The edited tree: ${pc(ft.w.full.cagr)} CAGR / ${pc(ft.w.full.maxdd)} max DD / Sharpe ${f2(ft.w.full.sharpe)} over 1995-2026 against ${pc(B.w.full.cagr)} / ${pc(B.w.full.maxdd)} / ${f2(B.w.full.sharpe)} as built (better, all of it in the synthetic era: the hole it cuts is the ${B.w.full.maxdd_peak.slice(0, 4)}-${B.w.full.maxdd_trough.slice(2, 4)} synthetic-SOXL one, and its own worst becomes ${ft.w.full.maxdd_peak} → ${ft.w.full.maxdd_trough}), and ${pc(ft.w.since2015.cagr)} / ${pc(ft.w.since2015.maxdd)} / ${f2(ft.w.since2015.sharpe)} since 2015 against ${pc(B.w.since2015.cagr)} / ${pc(B.w.since2015.maxdd)} / ${f2(B.w.since2015.sharpe)} (worse: ${ld.slice(0, 2).map(x => `${x.date} ${sg(x.as_built)} → ${sg(x.fall_through)} holding ${x.held}`).join(', ')}; COVID ${sg(F.episodes['2020-02-19..03-23 (COVID)'].as_built)} → ${sg(F.episodes['2020-02-19..03-23 (COVID)'].fall_through)}; 2022 ${sgB(F.episodes['2022 full year'].as_built)} → ${sgB(F.episodes['2022 full year'].fall_through)}). Day-level on the branch's sessions (the 75% group's contribution, symphony-level, before costs):`;
+  const tab = document.getElementById('tbFT'), head = ['sessions', 'n', 'as built (SOXL 75) / day', 't', 'fall-through / day', 't', 'PULS / day', 'difference / day', 't', '× as built', '× fall-through'];
+  const thead = document.createElement('thead'), tr = document.createElement('tr'); head.forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i) th.className = 'n'; tr.appendChild(th); }); thead.appendChild(tr);
+  const tb = document.createElement('tbody');
+  Object.entries(dl).forEach(([k, d]) => { const row = document.createElement('tr');
+    [[k, ''], [d.n, 'n'], [sg2(d.as_built.mean), cls(d.as_built.mean)], [f2(d.as_built.t), 'n'], [sg2(d.fall_through.mean), cls(d.fall_through.mean)], [f2(d.fall_through.t), 'n'], [sg2(d.puls.mean), 'n'],
+     [sg2(d.diff.mean), cls(d.diff.mean)], [f2(d.diff.t), 'n'], ['×' + d.compounded_as_built.toFixed(3), 'n'], ['×' + d.compounded_fall_through.toFixed(3), 'n']]
+     .forEach(([x, c]) => { const td = document.createElement('td'); td.textContent = x; td.className = c; row.appendChild(td); }); tb.appendChild(row); });
+  const foot = document.createElement('tr'), td = document.createElement('td'); td.colSpan = head.length; td.style.color = 'var(--ink2)'; td.style.whiteSpace = 'normal';
+  td.textContent = `${F.basis}. Verdict: not a candidate edge; the branch stays as built; this table is the deliverable. Any tree change still goes through the add.-40 build path (draft → fidelity gate → counter-agent → owner approval).`;
   foot.appendChild(td); tb.appendChild(foot); tab.replaceChildren(thead, tb);
 })();
 // basis
