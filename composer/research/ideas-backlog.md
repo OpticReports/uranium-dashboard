@@ -213,4 +213,8 @@ deterministic rationale are listed.
     The tenth failure of the de-risking-overlay class. The IBKR migration gains nothing from overnight
     action; fills (add. 14b) and decision time (add. 50) were closed earlier. Reopen only with a
     mechanism that is not "de-risk the stress state". The live question 11-05 raised is sizing (KMLM's
-    75% single-3x-fund leg; Op 3), not venue.
+    75% single-3x-fund leg; Op 3), not venue. The other side (buy the open after an oversold close on
+    a 5%+ gap-down, SOXL/TECL/TQQQ/LABU): +3.6% on 40 days in 18 years, nominal t 2.0, family-wise p
+    0.32, +1.9% without the best three trades, no transfer to seven other leveraged funds — an
+    in-sample anomaly to log (one pre-registered rule, auction prints), not an edge to trade; 38
+    trades needed for t 2.

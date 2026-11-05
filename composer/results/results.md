@@ -4097,36 +4097,67 @@ RESULTS
    the rest; nothing in it changes the sign of 3-4. A live layer must use ADJUSTED prior closes: on raw
    closes every December distribution fires the gap rules (TECL 2025-12-10 -6.5% phantom gap; FAS, SOXL,
    SPXL likewise in other years).
-7. THE OTHER SIDE — the morning bounce as an edge (edge_study.py; counter-agent pending at the time
-   of writing, see below). E1, a standalone trade: on a morning when a 3x fund closed with RSI(10) < 30
-   and the signal fires before 09:30, buy the fund at the 09:30 open, sell at the 16:00 close; one
-   trade per day, qualifying funds equal-weighted; 30 bps round trip; 2008-2026 (416 oversold days):
-     rule                                    days  /yr    mean   median   win    t   compounded  worst run  placebo pct  worst trades
-     fund gap <= -3%                           65  3.6   +2.01%  +2.85%   60%  1.6     +161%      -36%        99%     2022-05-09 -21, 2015-09-28 -20, 2022-05-11 -20
-     fund gap <= -5%                           40  2.2   +3.63%  +5.27%   65%  2.1     +230%      -23%       100%     2022-05-09 -21, 2020-03-16 -13, 2025-04-04 -12
-     fund gap <= -8%                           16  1.0   +4.69%  +7.72%   62%  1.6      +88%      -23%       100%
-     sector gap <= -1% / -2%              66 / 32  3.7/1.8  +2.29 / +6.28%   59/72%  1.9/3.1  +226 / +484%  -36/-23%  100%
-     gap <= -5% AND sector gap <= -2%          31  1.7   +5.96%  +6.76%   71%  2.9     +403%      -23%       100%
-     DAX open <= -1% / -2%                59 / 14  3.5/0.9  +1.69 / +8.59%   54/79%  1.6/2.7  +124 / +191%  -23%      96/100%
-     Asia <= -1% / -2%                  130 / 54  6.8/3.0  +0.75 / +2.01%   52/56%  1.2/1.6   +91 / +136%  -45/-26%   85/98%
-     VIX > 30                                  88  4.6   +1.24%  +0.57%   53%  1.3     +106%      -37%        93%
-     gap <= -5% OR DAX <= -2%                  44  2.4   +4.06%  +5.87%   66%  2.4     +346%      -23%       100%
-     any oversold morning (the base rate)     416 21.9   +0.29%  +0.12%   51%  0.9      +43%      -51%         0%
-     MIRROR: fund gap >= +5%                   59  3.1   +0.62%  +0.82%   59%  0.7      +25%      -34%        67%
-     MIRROR: DAX open >= +1%                   42  2.5   +0.25%  +0.86%   60%  0.2       -5%      -29%        47%
-   Year by year, fund gap <= -5%: 2009 n2 -7.4%, 2010 n3 +5.9, 2011 n2 -8.5, 2014 n2 +5.7, 2015 n3
-   +13.5, 2016 n6 +2.2, 2018 n2 +3.6, 2019 n2 -1.6, 2020 n5 -2.4, 2021 n1 +15.1, 2022 n6 +6.4, 2024 n1
-   +18.3, 2025 n3 +9.8, 2026 n2 +0.6: positive in 10 of 14 years with trades, lumpy, the losers
-   clustered (2020-03, 2022-05, 2025-04 carry the worst trades and much of the gain). The mirrors show
-   nothing: the asymmetry is on the gap-down side only.
-   E2, inside the KMLM engine (top the leveraged leg up from its weight to 100% of the symphony at the
-   open when the signal fires, sell the extra at the close): DAX open <= -1%: 111 mornings, dCAGR
-   +10.6pp, dSharpe -0.01, dMaxDD -3.9pp, worst extra day -7.1% (2020-03-16); gap <= -5% OR DAX <= -2%:
-   112, +8.1, -0.04, -7.1pp; fund gap <= -5%: 100, +4.5, -0.04, -7.1pp, worst -7.6% (2025-04-10); DAX
-   <= -2%: 25, +6.9, +0.00, -2.1pp; sector gap <= -2%: 67, -5.1, -0.09, -7.1pp; Asia <= -1%: 226, +0.5,
-   -0.10, -3.5pp, worst -11.0% (2026-07-02). Day trades on mornings when the engine is not long: 0-12
-   events, nothing. The add-on buys more of what the engine already does: more CAGR for some signals,
-   never a better Sharpe, always a deeper drawdown.
+7. THE OTHER SIDE — the morning bounce as an edge (edge_study.py; counter-agent review53b applied:
+   sample-sd t, a family-wise permutation test over the 13 "bad overnight" rules, the mean without the
+   best three trades, the rule on seven leveraged funds it was not found on, the own-state
+   intersection, and a capped, placebo-tested E2). E1, a standalone trade: on a morning when a 3x fund
+   closed with RSI(10) < 30 and the signal fires before 09:30, buy the fund at the 09:30 open, sell at
+   the 16:00 close; one trade per day, qualifying funds equal-weighted; 30 bps round trip; 2008-2026
+   (893 oversold mornings on 416 days):
+     rule                                    days  /yr    mean   median   win    t   w/o best 3 (t)  total  worst run  p_fw  Bonf x16  worst trades
+     fund gap <= -3%                           65  3.6   +2.01%  +2.85%   60%  1.6   +0.93% (0.8)   +161%    -36%     0.45   1.00    2022-05-09 -21, 2015-09-28 -20
+     fund gap <= -5%                           40  2.2   +3.63%  +5.27%   65%  2.0   +1.94% (1.2)   +230%    -23%     0.32   0.66    2022-05-09 -21, 2020-03-16 -13
+     fund gap <= -8%                           16  1.0   +4.69%  +7.72%   62%  1.5   +1.14% (0.4)    +88%    -23%     0.52   1.00
+     sector gap <= -1% / -2%              66 / 32  3.7/1.8  +2.29 / +6.28%   59/72%  1.9/3.1  +1.23 (1.1) / +4.34 (2.3)  +226/+484%  -36/-23%  0.30/0.04  1.00/0.03
+     gap <= -5% AND sector gap <= -2%          31  1.7   +5.96%  +6.76%   71%  2.9   +3.93% (2.1)   +403%    -23%     0.07   0.06
+     DAX open <= -1% / -2%                59 / 14  3.5/0.9  +1.69 / +8.59%   54/79%  1.6/2.6  +0.50 (0.6) / +4.41 (1.5)  +124/+191%  -23%  0.44/0.07  1.00/0.16
+     Asia <= -1% / -2%                  130 / 54  6.8/3.0  +0.75 / +2.01%   52/56%  1.2/1.6  +0.18 (0.3) / +0.68 (0.6)   +91/+136%  -45/-26%  0.67/0.44  1.00
+     VIX > 30                                  88  4.6   +1.24%  +0.57%   53%  1.3   +0.39% (0.4)   +106%    -37%     0.62   1.00
+     gap <= -5% OR DAX <= -2%                  44  2.4   +4.06%  +5.87%   66%  2.4   +2.39% (1.6)   +346%    -23%     0.16   0.29
+     gap <= -3% AND (Asia <= -1% OR DAX <= -1%) 39  2.2   +3.25%  +3.32%   62%  1.9   +1.63% (1.1)   +184%    -23%     0.27   0.91
+     any oversold morning (the base rate)     416 21.9   +0.29%  +0.12%   51%  0.9   +0.10% (0.3)    +43%    -51%
+     MIRROR: fund gap >= +5%                   59  3.1   +0.62%  +0.82%   59%  0.7   +0.04% (0.1)    +25%    -34%
+     MIRROR: DAX open >= +1%                   42  2.5   +0.25%  +0.86%   60%  0.2   -1.02% (-0.9)    -5%    -29%
+   p_fw: the share of 4,000 shuffles of the day returns in which the best of the 13 rules reaches the
+   rule's observed t (null max t: median 1.47, 95th pct 2.69 — the best of 13 overlapping rules reaches
+   t 2.7 by chance one time in twenty). The one rule that survives family-wise, sector gap <= -2%, is
+   the primary rule's 40 days minus 9 losing ones plus one (31 of 32 overlap): an in-sample refinement,
+   not a second signal. Splits of the primary rule: LABU-only days 11, +4.96% (t 1.1); days without
+   LABU 20, +2.64% (t 1.2); tech rows only (SOXL/TECL/TQQQ) 24, +4.56% (t 2.4). Year by year: 2009 n2
+   -7.4%, 2010 n3 +5.9, 2011 n2 -8.5, 2014 n2 +5.7, 2015 n3 +13.5, 2016 n6 +2.2, 2018 n2 +3.6, 2019 n2
+   -1.6, 2020 n5 -2.4, 2021 n1 +15.1, 2022 n6 +6.4, 2024 n1 +18.3, 2025 n3 +9.8, 2026 n2 +0.6; none in
+   four of eighteen years. Excluding 2020-03: +4.41% (t 2.4); excluding 2025-04: +3.13% (t 1.8); the
+   best three trades (2025-04-09 LABU +29%, 2015-10-02 LABU +24%, 2022-10-13 +20%) carry half the mean.
+   The mirrors show nothing. Costs: t falls to 2.0 at 37 bps round trip; break-even 393 bps; TECL and
+   LABU trade $100-130M a day, so 50-80 bps on a -10% open is the fairer assumption for them.
+   Intersection (SOXL/TECL/TQQQ, one trade per day, 2010-26): gap <= -5% with no RSI condition n245
+   -0.30% (t -0.7, 46% up); AND own RSI < 30 (the E1 trade) n24 +4.56% (t +2.4, 67%); own RSI >= 30
+   n231 -0.64% (t -1.6); own RSI >= 30 but another fund oversold n23 +1.96% (t 1.1); no fund oversold
+   n208 -0.92% (t -2.5); own RSI < 30 with a gap > -5% n264 +0.48% (t 1.4); own RSI < 30 and -5% < gap
+   <= -3% n22 +2.13% (t 1.6). The condition is the fund's OWN oversold close AND its OWN gap.
+   Out of sample, the seven leveraged funds the hypothesis was not built on (own RSI < 30, own gap <=
+   -5%, 2008-26): all seven pooled n43 +0.28% (t 0.2, 58% up; -0.93% without the best three); TNA+FAS,
+   the sector-distinct pair, n32 -2.21% (t -1.1; TNA alone -3.02%, FAS -1.94%); UDOW / UPRO / SSO +0.1 /
+   +0.8 / +1.3% (t <= 0.6); QLD+USD, the 2x copies of TQQQ and SOXL on the same dates, n14 +5.36% (t
+   2.7). The sector-gap variant pooled: -0.02% (t 0.0). The effect transfers only to the funds that
+   are the same bet on the same dates: a tech/semis-on-these-dates result, not a property of leveraged
+   funds after an oversold gap-down.
+   The engine already held a leveraged leg on 27 of the primary rule's 31 days since 2015-06 (0.75 on
+   most): the standalone trade would have 1.3-2x'd the book's exposure on its worst mornings; on the
+   4 mornings it was not long the trade did -11.2%, +15.1%, -20.8%, -7.7%.
+   E2, inside the KMLM engine (top the leveraged exposure up to 100% of the symphony at the open when
+   the signal fires, capped at 1 - the day's total leveraged weight, sell the extra at the close;
+   placebo = random long mornings, same count, 300 draws): fund gap <= -5%: 86 days (23% of them
+   oversold mornings), +2.2pp, Sharpe -0.03, max DD -7.1pp, 76th placebo percentile (band -9.1..+5.8);
+   gap <= -8%: 33 days, -3.6pp (12th); sector gap <= -2%: 61, -3.3 (27th); gap AND sector: 59, -2.1
+   (38th); VIX > 30: 104, -1.2 (44th); DAX open <= -1%: 96 (33% oversold), +7.9, -0.01, DD -3.9pp, 97th
+   (band -8.6..+6.7); DAX <= -2%: 23 (43%), +7.7, +0.01, DD -2.1pp, 100th (band -4.6..+3.4); Asia <=
+   -1%: 188 (36%), +9.7, -0.02, DD -3.5pp, 95th; Asia <= -2%: 63, +5.1, 92nd; gap OR DAX: 96, +6.5,
+   -0.03, DD -7.1pp, 95th. Worst extra day -7.6% (2025-04-10) / -7.1% (2020-03-16). The engine's long
+   legs are mostly not fresh dip-buys (16-49% of the fired days), so E2 is largely a different trade
+   from E1; the gap-based top-ups sit inside the random band; the DAX/Asia top-ups sit at the 95-100th
+   percentile on 23-188 mornings, every one with a deeper max drawdown and no Sharpe gain — more of
+   the engine's own mechanism, with the tail that comes with it.
 8. Second order, for the IBKR question:
    - Execution: Composer's measured fills 2.9 bps a side (add. 14b); IBKR modeled ~$1.3k/yr worse at
      $250k; closed by measurement. Decision time: the logic at 15:54 contradicts Composer on 1 of 272
@@ -4160,16 +4191,21 @@ ANSWERS
    decision-time cases were closed earlier, and the operational cost is real. Reopen only with a
    mechanism that is not "de-risk the stress state" — the house rule (ideas-backlog, settled questions)
    holds a tenth time.
-4. The edge (owner's follow-up): the bounce is real as a conditional mean and asymmetric (the mirrors
-   show nothing), t 2-3 on 31-44 trades over 17 years, 2-4 trades a year, +4-6% per trade on a 3x
-   fund (+1.3-2% on the sector), one-in-three losers, worst trades -12 to -21%, clustered. It is
-   conditional on the oversold close — gap-downs in general do not bounce — which is why the engines
-   already capture most of it by holding through the session; buying more at the open adds CAGR for
-   some signals at a lower Sharpe and a deeper drawdown. As a standalone IBKR day trade at $50-70k a
-   trade it is worth a few thousand dollars a year in expectation with a -$15k worst day; too thin and
-   too lumpy to size from 40 trades. Recommendation: paper-track it (log every qualifying morning, the
-   open and close prints, from here on) for a year before any capital; the counter-agent's verdict on
-   this part is logged below when it lands.
+4. The edge (owner's follow-up): what survives review is an in-sample conditional mean on three tech
+   3x funds plus LABU — after an oversold close, a 5%+ gap-down bounced +3.6% open-to-close on 40 days
+   in 18 years (+1.9% without the best three trades), nominal t 2.0, family-wise p 0.32 across the 13
+   rules tried; the same rule on seven other leveraged funds returns +0.3% (TNA/FAS negative); the
+   best variant (sector gap <= -2%, t 3.1, family-wise p 0.04) is the same 40 days minus 9 losing ones.
+   It needs the fund's own oversold close and its own gap (gap-downs without the oversold close: -0.6%,
+   t -1.6), which is why the engines already capture most of it by holding through the session — the
+   engine was long on 27 of the 31 qualifying days. Inside the engine the gap-based top-up is inside the
+   random band; the DAX/Asia top-ups add 5-10 points of CAGR at the 95-100th placebo percentile with a
+   2-4 point deeper drawdown and no Sharpe gain. Verdict: a tech-gap-after-oversold-close anomaly
+   worth logging, not an edge to trade. If logged: one pre-registered rule (own gap <= -5% after an own
+   RSI(10) < 30 close on SOXL/TECL/TQQQ; LABU separately), the 09:25 indicative and the auction prints,
+   as an execution record — 2-3 trades a year cannot validate it (38 trades at the in-sample mean for
+   t 2). The first message to the owner on this ("t 2-3", "+4 to +11 points inside KMLM") overstated
+   it; this paragraph is the corrected statement.
 
 HONESTY BOX
 - The 2015-26 KMLM path is in sample (the rules were built on these years) and runs on proxies before
@@ -4185,9 +4221,9 @@ HONESTY BOX
 - Asia/Europe stamps are local session dates (Yahoo); VIX is the prior close; no look-ahead in the
   signals. The placebo draws from the same side's mornings. The panel conditions on the engines' own
   trigger, so it is not independent evidence about the engines.
-- The edge numbers are 31-44 trades, 16 rules tested (selection), three clustered episodes; the
-  counter-agent's multiple-comparison and clustering checks are the ones to read before believing
-  the t-statistics.
+- The edge numbers: 40 trades, 13 rules in the family (16 tested), the family-wise p and the
+  without-best-three mean are the honest statistics; LABU supplies the best and the worst trades; the
+  seven-fund out-of-sample test is the one that fails.
 - The direction-change count treats cash/vol legs as neutral (HG has no counted flips; the any-change
   figures are given beside it).
 
@@ -4207,9 +4243,19 @@ leave-one-year-out, gross-of-cost, day-after and unconditional-gap tests reporte
   decile), "model-free" (path-free), the short-leg label (all SQQQ), "entry day" (prior session), the
   ledger match (59/64 since 08-01, not 56/58), the phantom distribution gap, HG's dependence on 2016,
   the "-0%" tick and a double negative. All rewritten above and in the exhibit.
-COUNTER-AGENT, edge study (scratchpad/review53b/): pending — logged on arrival.
+COUNTER-AGENT, edge study (scratchpad/review53b/): SHOWABLE WITH FIXES, all applied. Every E1 number
+reproduced to the digit; no look-ahead; no phantom-gap trade in E1. Its findings: MAJOR multiplicity
+(family-wise p 0.31 for the primary rule, 0.77 Bonferroni; only the sector rule survives, an in-sample
+refinement of the same days); MAJOR three trades carry half the mean; MAJOR no transfer to the seven
+other leveraged funds; MAJOR E2 as first built topped two-leg days to 137-200% exposure, had no
+placebo, and 80% of its fires were not oversold mornings (fixed: capped per day, 300-draw band, the
+share of oversold mornings shown; the gap rule falls inside the band); MAJOR a one-year paper track
+cannot validate (reframed as an execution log); MINOR LABU heterogeneity, the pstdev t, costs (t 2.0 at
+37 bps; TECL/LABU fills 50-80 bps), "17 years" (18). The intersection test (own state AND own gap)
+verified; the claim "inside the engine it adds CAGR at a lower Sharpe" removed as first phrased.
 
 DECISION: none on symphonies; no IBKR build; the overnight-overlay question joins the settled list
 (ideas-backlog 14). New standing convention (CLAUDE.md): edge found in any study is reported as a
-candidate edge. Open: the KMLM weight / leg size (Op 3 on 11-09; owner); the morning-bounce paper
-track (owner's call to start it).
+candidate edge — with its family-wise test, its out-of-sample check and what it would take to use it.
+Open: the KMLM weight / leg size (Op 3 on 11-09; owner); the morning-bounce execution log (owner's
+call to start it).
