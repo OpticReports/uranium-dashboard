@@ -1,96 +1,96 @@
 {
-  "taken_at": "2026-11-04T21:35:59+00:00",
+  "taken_at": "2026-11-05T21:35:55+00:00",
   "total_stats": {
     "pending_deploys_cash": 0,
-    "total_cash": 408.297030709,
-    "time_weighted_return": 0.8864692341200235,
-    "total_unallocated_cash": 102.237030709,
-    "portfolio_value": 308286.32,
+    "total_cash": 385.99383592,
+    "time_weighted_return": 0.7187721719052627,
+    "total_unallocated_cash": 102.24383592,
+    "portfolio_value": 280881.31,
     "net_deposits": 247000.0,
     "pending_net_deposits": 0.0,
-    "todays_percent_change": 0.001447037671156162,
-    "simple_return": 0.24812277147713946,
-    "todays_dollar_change": 445.457331593455,
+    "todays_percent_change": -0.08867926954329178,
+    "simple_return": 0.13717130814348688,
+    "todays_dollar_change": -27332.14426341473,
     "metrics": {
-      "annualized_rate_of_return": 1.0045,
+      "annualized_rate_of_return": 0.8055,
       "max_drawdown": 0.2006,
-      "sharpe_ratio": 2.0806,
-      "standard_deviation": 0.3687
+      "sharpe_ratio": 1.7526,
+      "standard_deviation": 0.3803
     },
     "pending_withdrawals": 0.0
   },
   "symphonies": {
     "ORQNCfZnA18wmsMWVhf8": {
       "name": "VIX Harvester + HYG Credit Guard",
-      "value": 37310.44,
-      "deposit_adjusted_value": 34278.05,
-      "cash": 37.33,
+      "value": 38077.98,
+      "deposit_adjusted_value": 34983.21,
+      "cash": 38.16,
       "holdings": {
-        "VXZ": 0.3594,
-        "PULS": 0.6396
+        "PULS": 0.4003,
+        "ZVOL": 0.5987
       },
-      "next_rebalance_on": "2026-11-05",
+      "next_rebalance_on": "2026-11-06",
       "has_queued_deploy": null,
-      "last_percent_change": -0.0001
+      "last_percent_change": 0.0202
     },
     "YPTSJFJwD2ZKfAeYJUbW": {
       "name": "KMLM switcher + VIX sleeve 75/25",
-      "value": 99677.37,
-      "deposit_adjusted_value": 37658.86,
-      "cash": 97.57,
+      "value": 73020.64,
+      "deposit_adjusted_value": 27587.75,
+      "cash": 74.06,
       "holdings": {
-        "VXZ": 0.0879,
-        "PULS": 0.1564,
-        "SOXL": 0.7547
+        "PULS": 0.1013,
+        "TECL": 0.7462,
+        "ZVOL": 0.1515
       },
-      "next_rebalance_on": "2026-11-05",
+      "next_rebalance_on": "2026-11-06",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0042
+      "last_percent_change": -0.2668
     },
     "nNdBk7hc5NiBzeRvbI5T": {
       "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
-      "value": 81695.6,
-      "deposit_adjusted_value": 26290.82,
-      "cash": 81.7,
+      "value": 81707.36,
+      "deposit_adjusted_value": 26294.61,
+      "cash": 81.71,
       "holdings": {
         "BOXX": 0.999
       },
-      "next_rebalance_on": "2026-11-05",
+      "next_rebalance_on": "2026-11-06",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0003
+      "last_percent_change": 0.0001
     },
     "mbkiXcuNDjueXpiox5Av": {
       "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
-      "value": 89500.68,
-      "deposit_adjusted_value": 1999.46,
-      "cash": 89.46,
+      "value": 87973.1,
+      "deposit_adjusted_value": 1965.33,
+      "cash": 89.82,
       "holdings": {
-        "BIL": 0.999
+        "USD": 0.999
       },
-      "next_rebalance_on": "2026-11-05",
+      "next_rebalance_on": "2026-11-06",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0001
+      "last_percent_change": -0.017
     }
   },
-  "book_drawdown": 0.0,
-  "sleeve_weight": 0.1249,
+  "book_drawdown": 0.0937,
+  "sleeve_weight": 0.1304,
   "gate": {
-    "date": "2026-11-03",
-    "spy_vs_200d": 0.03812,
+    "date": "2026-11-04",
+    "spy_vs_200d": 0.05458,
     "zone": "far",
-    "hg_holding": "BIL",
+    "hg_holding": "USD",
     "ungated_holding": "BIL",
     "override": false,
     "closed_days": 0
   },
   "shadow": {
-    "date": "2026-11-04",
+    "date": "2026-11-05",
     "status": {
       "HG": "agree",
-      "KMLM": "knife-edge",
+      "KMLM": "agree",
       "SLEEVE": "agree",
       "HARV": "agree"
     }
   },
-  "vix_contango": 0.1318
+  "vix_contango": -0.0933
 }
