@@ -17,15 +17,30 @@ Method
     only for the 1995+ full-path split and labelled as such.
  2. ZVOL's next 1/5/20-session returns conditional on D's regime: real ZVOL 2023-04-19+; before that the
     add. 47 proxy (ZVOL = -0.971 x VXZ daily; VXZ real from 2018-01-25, the vix_etp term-structure model on
-    the real VIX3M/VIX6M before that). Mirror: VXZ on the same days. Placebo: 2000 draws of the same
-    number of random days from the same era. Episode-start rows de-cluster the overlapping windows.
+    the real VIX3M/VIX6M before that). Mirror: VXZ on the same days (an identity before 2023: the proxy IS
+    -0.971 x VXZ). Placebo: 2000 draws of the same number of random days from the same era, and a block
+    placebo that draws the same number of runs with the same lengths. Episode-start rows and the
+    leave-one-episode-out range de-cluster the overlapping windows.
+    2018 RE-PRICED (counter-agent, review4): Yahoo's VXZ (Series B, VXZB until the 2019-01-30 rename) prints
+    a flat 67.80 at zero volume for 169 sessions 2018-01-25..2019-01-02 (178 of 234 sessions in 2018 have a
+    0.00% return, the whole Feb-2018 episode included). Decisions never read VXZ or ZVOL prices, so inside
+    this study VXZ's daily returns on 2018-01-26..2019-01-31 are replaced by VIXM's (beta 0.99, corr 0.985
+    on 2019-23; VIXM from daily.json) in (a) the ZVOL proxy and the VXZ mirror and (b) the engine's day
+    return on the days it held VXZ or the proxy (holdings x re-priced returns; costs and everything else as
+    the path). The add. 47 panel and engines_ts_synth.json are NOT rebuilt here: its harvester 2018 rests on
+    the same stale prints (upstream fix pending, logged for the add. 47 pipeline).
  3. The engine path (add. 47 pipeline; engines_ts_synth.json HARV: costed daily returns and the weights
     earning each day, 1995-06-02..2026-11-04, plus the live 11-04 and 11-05 decisions): every decision
     close where the ZVOL weight rose, by regime, with ZVOL's and HARV's next 1/5/20 returns; HARV's daily
     return split by the regime at the decision close; the counterfactual that sends the ZVOL weight to
-    PULS when the decision close is inverted (add. 47 C1, re-measured here).
+    PULS when the decision close is inverted (add. 39 C1, 2026-10-07: x2.11 -> x2.00, "its backwardation
+    entries ARE the edge", killed; re-measured here). The path is the model (the approved logic on Yahoo
+    closes), not Composer: the shadow ledger shows where the live weights differed (10-30: engine ZVOL 0.60
+    vs live 0.52, a knife-edge).
  4. The live record: every monitor snapshot in git (vix_contango recorded since 2026-08-06; read-only git
     log/show) and the shadow ledger's live holdings per session.
+Clustering tests next to every headline (review4): block placebo percentile, leave-one-episode-out range,
+Welch t of the filter effect (rule-short vs sat-out inverted closes) with leave-one-run-out, trade LOO min.
 Writes composer/results/harv-backwardation-2026-11-05.json (every number quoted in the write-up).
 Usage: harv_backwardation.py  (stdlib only; rebuilds the long-panel cache via research/longrun if absent)
 """
@@ -54,8 +69,14 @@ LIVE_START = "2026-07-21"              # first session on this logic (uQf3HrDb; 
 HORIZONS = (1, 5, 20)
 BUCKETS = (("0..-3%", -0.03, 0.0), ("-3..-8%", -0.08, -0.03), ("< -8%", -9.0, -0.08))
 PLACEBO_N = 2000
-# Yahoo closes read 2026-11-05 ~22:00 UTC. daily.json's 11-05 rows are an 11:45 ET print and the add. 47 panel
-# ends at the 11-04 close, so the day's closes are frozen here (the monitor's own read: VIX3M/VIX -9.33%).
+BLOCK_RNG = random.Random(20261106)      # its own stream, so the iid placebo draws are the same as before review4
+# the stale-VXZ window: daily returns on REPRICE[0] < d <= REPRICE[1] come from VIXM (see the docstring)
+REPRICE = ("2018-01-25", "2019-01-31")
+REPRICE_BETA = {"ZVOL": -0.971, "VXZ": 1.0}
+W18 = "VXZ 2018-01+ (2018 on VIXM)"                 # the window formerly labelled "real VXZ 2018-01+"
+W18_COND = "-0.971 x VXZ (2018 on VIXM)"            # formerly "-0.971 x real VXZ"
+# Yahoo closes read 2026-11-05 ~22:00 UTC; daily.json's 11-05 rows are the 16:00 closes (same values), but the
+# add. 47 panel ends at the 11-04 close, so the day's closes are frozen here (the monitor's own read: VIX3M/VIX -9.33%).
 CLOSE_1105 = {"^VIX": 28.18, "^VIX3M": 25.55, "SPY": 733.0, "ZVOL": 6.82, "VXZ": 48.21, "PULS": 49.50, "UVXY": 23.61}
 CLOSE_1104 = {"^VIX": 16.61, "^VIX3M": 18.80, "SPY": 766.81, "ZVOL": 7.29, "VXZ": 45.21, "PULS": 49.50, "UVXY": 16.24}
 LIVE_1105 = {"last_percent_change": 0.0202, "value": 38077.98, "prev_value": 37310.44,
@@ -116,6 +137,68 @@ def series(panel, t):
     return s
 
 
+def daily_series(D, t, field="a"):
+    rows = D[t]["rows"]
+    return {d: float(rows[d][field]) for d in rows}
+
+
+def reprice_px(s, vm, beta):
+    """replace the price series' daily returns on REPRICE[0] < d <= REPRICE[1] with beta x VIXM's, anchored on the
+    first unchanged close after the window: prices from there on are the prints, the window is rebuilt backward
+    and everything before it is scaled by one factor, so every ratio outside the window is what it was"""
+    lo, hi = REPRICE
+    cal = sorted(s)
+    pos = {d: i for i, d in enumerate(cal)}
+    vcal = sorted(vm)
+    vpos = {d: i for i, d in enumerate(vcal)}
+    win = [d for d in cal if lo < d <= hi]
+    assert win and [d for d in vcal if lo <= d <= hi] == [d for d in cal if lo <= d <= hi], "VIXM / series calendars differ in the window"
+    out = dict(s)
+    for d in reversed(win):
+        r = beta * (vm[d] / vm[vcal[vpos[d] - 1]] - 1)
+        out[cal[pos[d] - 1]] = out[d] / (1 + r)
+    first = cal[pos[win[0]] - 1]
+    k = out[first] / s[first]
+    for d in cal:
+        if d < first:
+            out[d] = s[d] * k
+    return out
+
+
+def vxz_stale_diagnostics(D):
+    """what is wrong with Yahoo's VXZ in 2018, and the VIXM fit used to replace it"""
+    px, vol = daily_series(D, "VXZ"), {d: r["v"] for d, r in D["VXZ"]["rows"].items()}
+    vm = daily_series(D, "VIXM")
+    cal = sorted(px)
+    rx = {cal[i]: px[cal[i]] / px[cal[i - 1]] - 1 for i in range(1, len(cal))}
+    vc = sorted(vm)
+    rm = {vc[i]: vm[vc[i]] / vm[vc[i - 1]] - 1 for i in range(1, len(vc))}
+    zero_vol = [d for d in cal if d >= VXZ_START and vol[d] == 0]
+    y18 = [d for d in rx if d[:4] == "2018"]
+
+    def corr(ds):
+        a, b = [rx[d] for d in ds], [rm[d] for d in ds]
+        ma, mb = statistics.fmean(a), statistics.fmean(b)
+        sa, sb = math.sqrt(sum((x - ma) ** 2 for x in a)), math.sqrt(sum((y - mb) ** 2 for y in b))
+        return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / (sa * sb)
+
+    fit = [d for d in rx if "2019-02-01" <= d <= "2023-04-18" and d in rm]
+    a, b = [rm[d] for d in fit], [rx[d] for d in fit]
+    ma, mb = statistics.fmean(a), statistics.fmean(b)
+    beta = sum((x - ma) * (y - mb) for x, y in zip(a, b)) / sum((x - ma) ** 2 for x in a)
+    win = [d for d in rx if REPRICE[0] < d <= REPRICE[1]]          # the sessions whose daily return is replaced
+    return {"window": {"returns_from": win[0], "to": win[-1], "sessions": len(win), "anchor_close": REPRICE[0]},
+            "source": "VIXM daily returns from daily.json (adjusted closes), beta " + ", ".join(f"{t} {v:+.3f}" for t, v in REPRICE_BETA.items()),
+            "vxz_zero_volume_sessions": {"n": len(zero_vol), "from": zero_vol[0] if zero_vol else None, "to": zero_vol[-1] if zero_vol else None,
+                                         "price": px.get(zero_vol[0]) if zero_vol else None},
+            "vxz_2018_zero_return_sessions": {"n": sum(1 for d in y18 if rx[d] == 0), "of": len(y18)},
+            "corr_vxz_vixm_2018": corr([d for d in y18 if d in rm]),
+            "fit_2019_02_to_2023_04": {"beta_vxz_on_vixm": beta, "corr": corr(fit), "n": len(fit)},
+            "feb_2018": {"2018-02-05": {"VXZ": rx.get("2018-02-05"), "VIXM": rm.get("2018-02-05")}},
+            "upstream": "the add. 47 long panel (long_panel.py yh('VXZ') splice from 2018-01-25) and engines_ts_synth.json carry the same stale "
+                        "prints, so add. 47's harvester 2018 rests on them too; fix pending upstream, applied inside this study only"}
+
+
 def regime_map(panel):
     """{close: (depth = VIX3M/VIX - 1, VIX, 'real' | 'synth')}"""
     vix, v3, s3 = series(panel, "^VIX"), series(panel, "^VIX3M"), panel.get("^VIX3M_synth", {})
@@ -158,20 +241,68 @@ def placebo(pool, n, actual, draws=PLACEBO_N):
             "pct": sum(1 for m in ms if m <= actual) / draws, "draws": draws}
 
 
-def episodes(days, cal):
-    """runs of consecutive trading days (cal = the full calendar) -> list of first days"""
+def runs_of(days, cal):
+    """runs (episodes) of consecutive trading days (cal = the full calendar) -> list of lists"""
     pos = {d: i for i, d in enumerate(cal)}
-    first, prev = [], None
+    runs, prev = [], None
     for d in days:
         if prev is None or pos[d] != pos[prev] + 1:
-            first.append(d)
+            runs.append([d])
+        else:
+            runs[-1].append(d)
         prev = d
-    return first
+    return runs
+
+
+def episodes(days, cal):
+    """first day of each run"""
+    return [r[0] for r in runs_of(days, cal)]
+
+
+def block_placebo(pool, lens, actual, draws=PLACEBO_N):
+    """the same number of runs with the same lengths, each a block of consecutive closes drawn at random from the
+    era (pool in date order): keeps the clustering the iid placebo ignores"""
+    if actual is None or not lens or max(lens) >= len(pool):
+        return None
+    ms = []
+    for _ in range(draws):
+        got = []
+        for L in lens:
+            st = BLOCK_RNG.randrange(0, len(pool) - L)
+            got.extend(pool[st:st + L])
+        ms.append(statistics.fmean(got))
+    ms.sort()
+    return {"p05": ms[int(0.05 * draws)], "p50": ms[draws // 2], "p95": ms[int(0.95 * draws) - 1],
+            "pct": sum(1 for m in ms if m <= actual) / draws, "draws": draws, "runs": len(lens)}
+
+
+def loo_runs(runs, val):
+    """leave one run (episode) out: the mean and t of the rest; each run's share of the sum"""
+    if len(runs) < 2:
+        return None
+    tot = sum(val[d] for r in runs for d in r)
+    rows = []
+    for r in runs:
+        st = stats([val[d] for q in runs if q is not r for d in q])
+        rows.append({"start": r[0], "len": len(r), "share_of_sum": (sum(val[d] for d in r) / tot) if tot else None,
+                     "mean_without": st.get("mean"), "t_without": st.get("t")})
+    lo_, hi_ = min(rows, key=lambda x: x["mean_without"]), max(rows, key=lambda x: x["mean_without"])
+    return {"min": lo_["mean_without"], "max": hi_["mean_without"], "min_without": lo_, "max_without": hi_,
+            "largest_shares": sorted(rows, key=lambda x: -abs(x["share_of_sum"] or 0))[:3]}
+
+
+def welch(a, b):
+    """Welch t for the difference of two means (unequal variances)"""
+    a, b = [x for x in a if x is not None], [x for x in b if x is not None]
+    if len(a) < 2 or len(b) < 2:
+        return None
+    se = math.sqrt(statistics.variance(a) / len(a) + statistics.variance(b) / len(b))
+    return (statistics.fmean(a) - statistics.fmean(b)) / se if se > 0 else None
 
 
 # ------------------------------------------------------------------ 1-2. ZVOL conditional on the regime
 def conditional(Z, X, R):
-    eras = [("real ZVOL", ZVOL_START, ASOF), ("-0.971 x real VXZ", VXZ_START, "2023-04-18"),
+    eras = [("real ZVOL", ZVOL_START, ASOF), (W18_COND, VXZ_START, "2023-04-18"),
             ("modeled VXZ", VIX3M_START, "2018-01-24"), ("all since 2006-07", VIX3M_START, ASOF)]
     out = {}
     for name, lo, hi in eras:
@@ -188,9 +319,12 @@ def conditional(Z, X, R):
                 row = {"zvol": stats(zs), "vxz": stats([X.fwd(d, k) for d in ds])}
                 if g != "all" and ds:
                     row["placebo"] = placebo(pool, len(ds), row["zvol"]["mean"])
-                    ep = episodes(ds, Z.d)
-                    row["episodes"] = len(ep)
-                    row["episode_start"] = stats([Z.fwd(d, k) for d in ep])
+                    runs = runs_of(ds, Z.d)
+                    row["episodes"] = len(runs)
+                    row["episode_start"] = stats([Z.fwd(r[0], k) for r in runs])
+                    if g in ("backwardation", "< -8%"):      # the clustering tests next to the headline numbers
+                        row["block_placebo"] = block_placebo(pool, [len(r) for r in runs], row["zvol"]["mean"])
+                        row["loo_episodes"] = loo_runs(runs, {d: Z.fwd(d, k) for d in ds})
                 h[g] = row
             era["horizons"][str(k)] = h
             era["days"] = len(days) if k == 1 else era.get("days")
@@ -209,6 +343,27 @@ def load_engine():
     hold[ASOF] = dict(LIVE_1105["held_during"])
     days.append(ASOF)
     return days, rets, hold
+
+
+def reprice_engine(days, rets, hold, Z0, X0, Z, X):
+    """the engine's day return on the re-priced days = the path's return + holdings x (re-priced minus printed leg
+    return); decisions never read those prices and the costs stay as the path has them"""
+    lo, hi = REPRICE
+    out, n_on, cum0, cum1, worst = dict(rets), 0, 1.0, 1.0, (0.0, None)
+    for d in days:
+        if lo < d <= hi:
+            wz, wx = hold[d].get("ZVOL", 0.0), hold[d].get("VXZ", 0.0)
+            dz = (Z.ret(d) - Z0.ret(d)) if wz else 0.0
+            dx = (X.ret(d) - X0.ret(d)) if wx else 0.0
+            out[d] = rets[d] + wz * dz + wx * dx
+            n_on += (wz > 0 or wx > 0)
+            cum0 *= 1 + rets[d]
+            cum1 *= 1 + out[d]
+            if out[d] < worst[0]:
+                worst = (out[d], d)
+    return out, {"engine_sessions_in_window": sum(1 for d in days if lo < d <= hi), "sessions_on_vxz_or_zvol": n_on,
+                 "window_compounded_as_printed": cum0 - 1, "window_compounded_repriced": cum1 - 1,
+                 "worst_repriced_day": {"date": worst[1], "harv": worst[0], "as_printed": rets.get(worst[1]), "hold": hold.get(worst[1])}}
 
 
 def fwd_engine(days, rets, i, k):
@@ -232,11 +387,12 @@ def entries(days, rets, hold, R, Z, X, SPY):
                      "zvol_fwd": {str(k): Z.fwd(D, k) for k in HORIZONS}, "vxz_fwd": {str(k): X.fwd(D, k) for k in HORIZONS},
                      "harv_fwd": {str(k): fwd_engine(days, rets, i, k) for k in HORIZONS},
                      "era": "real" if D >= ZVOL_START else ("vxz" if D >= VXZ_START else "model"),
+                     "repriced": any(REPRICE[0] < days[j] <= REPRICE[1] for j in range(i + 1, min(i + 21, len(days)))),
                      "live": D >= LIVE_START})
     return rows
 
 
-WINDOWS = (("real ZVOL 2023-04+", ZVOL_START), ("real VXZ 2018-01+", VXZ_START), ("2015-06+", "2015-06-01"), ("2006-07+", VIX3M_START))
+WINDOWS = (("real ZVOL 2023-04+", ZVOL_START), (W18, VXZ_START), ("2015-06+", "2015-06-01"), ("2006-07+", VIX3M_START))
 
 
 def hold_lengths(days, hold, rows):
@@ -283,11 +439,15 @@ def trades(days, rets, hold, R, Z):
         W = {"from": lo, "n": len(sub), "open": sum(1 for t in out if t["entry"] >= lo and t["open"]), "groups": {}}
         for g in ("contango", "backwardation", "0..-3%", "-3..-8%", "< -8%"):
             ts = [t for t in sub if (t["bucket"] == g) or (g == "backwardation" and t["depth"] < 0)]
+            best = max(ts, key=lambda t: t["pnl"]) if ts else None
             W["groups"][g] = {"n": len(ts), "pnl": stats([t["pnl"] for t in ts]), "zvol_contrib": stats([t["zvol_contrib"] for t in ts]),
                               "sessions_mean": statistics.fmean([t["sessions"] for t in ts]) if ts else None,
                               "sessions_median": statistics.median([t["sessions"] for t in ts]) if ts else None,
                               "sum_pnl_pp": sum(t["pnl"] for t in ts) * 100, "worst": min(ts, key=lambda t: t["pnl"])["entry"] if ts else None,
-                              "worst_pnl": min(t["pnl"] for t in ts) if ts else None}
+                              "worst_pnl": min(t["pnl"] for t in ts) if ts else None,
+                              "best": best["entry"] if best else None, "best_pnl": best["pnl"] if best else None,
+                              # leave-one-trade-out: the smallest mean after dropping any one trade (= dropping the best)
+                              "loo_min": min(statistics.fmean([t["pnl"] for t in ts if t is not u]) for u in ts) if len(ts) > 1 else None}
         summary[wname] = W
     return {"rows": out, "summary": summary}
 
@@ -321,12 +481,12 @@ def path_split(days, rets, hold, R, Z, P):
     ZVOL-leg contribution and the counterfactuals ZVOL -> PULS on inverted decision closes"""
     out = {}
     for wname, lo, synth_ok in (("1995-06+ (synthetic curve before 2006-07)", "1995-06-02", True), ("2006-07+", VIX3M_START, False),
-                                ("2015-06+", "2015-06-01", False), ("real VXZ 2018-01+", VXZ_START, False), ("real ZVOL 2023-04+", ZVOL_START, False)):
+                                ("2015-06+", "2015-06-01", False), (W18, VXZ_START, False), ("real ZVOL 2023-04+", ZVOL_START, False)):
         acc = {}
         base, cf_all, cf_deep = 1.0, 1.0, 1.0
         peak = {"base": 1.0, "cf_all": 1.0, "cf_deep": 1.0}
         dd = {"base": 0.0, "cf_all": 0.0, "cf_deep": 0.0}
-        n_days, n_synth = 0, 0
+        n_days, n_synth, legs = 0, 0, []
         for i in range(1, len(days)):
             d, p = days[i], days[i - 1]
             if d < lo or p not in R or (R[p][2] == "synth" and not synth_ok):
@@ -353,9 +513,12 @@ def path_split(days, rets, hold, R, Z, P):
             adj = (wz * ((rz or 0.0) - (rp or 0.0))) if wz else 0.0
             cf_all *= 1 + (r - adj if depth < 0 else r)
             cf_deep *= 1 + (r - adj if depth <= -0.08 else r)
+            if depth < 0 and wz:
+                legs.append((adj, d))
             for key, v in (("base", base), ("cf_all", cf_all), ("cf_deep", cf_deep)):
                 peak[key] = max(peak[key], v)
                 dd[key] = max(dd[key], 1 - v / peak[key])
+        legs.sort()
         yrs = n_days / 252
         for key, a in acc.items():
             a["mean_daily"] = a["sum_r"] / a["n"]
@@ -370,7 +533,12 @@ def path_split(days, rets, hold, R, Z, P):
         out[wname] = {"from": lo, "days": n_days, "synthetic_regime_days": n_synth, "regimes": acc,
                       "base": {"multiple": base, "cagr": base ** (1 / yrs) - 1 if yrs else None, "maxdd": dd["base"]},
                       "cf_zvol_to_puls_when_inverted": {"multiple": cf_all, "cagr": cf_all ** (1 / yrs) - 1 if yrs else None, "maxdd": dd["cf_all"]},
-                      "cf_zvol_to_puls_when_deep": {"multiple": cf_deep, "cagr": cf_deep ** (1 / yrs) - 1 if yrs else None, "maxdd": dd["cf_deep"]}}
+                      "cf_zvol_to_puls_when_deep": {"multiple": cf_deep, "cagr": cf_deep ** (1 / yrs) - 1 if yrs else None, "maxdd": dd["cf_deep"]},
+                      # concentration of the counterfactual: the largest single ZVOL-leg days on inverted decisions
+                      "ratio_base_over_cf": base / cf_all if cf_all else None,
+                      "largest_zvol_leg_days": [{"date": d, "leg": a} for a, d in legs[-3:][::-1]],
+                      "worst_zvol_leg_days": [{"date": d, "leg": a} for a, d in legs[:2]],
+                      "ratio_without_largest_leg_day": (base / cf_all / (1 + legs[-1][0])) if legs and cf_all else None}
     return out
 
 
@@ -410,6 +578,8 @@ def harvester_number(days, rets, hold, Z, X, R, snaps):
             "live_1105": lpc, "value_based_1105": LIVE_1105["value"] / LIVE_1105["prev_value"] - 1,
             "model_close_to_close_1105": model, "vxz_ret_1105": vxz_ret, "held_during_1105": LIVE_1105["held_during"],
             "gap_live_minus_model": lpc - model,
+            "gap_attribution": "plausibly the 15:50 fills on 11-04 and 11-05 against the 16:00 closes (lpc +2.02 vs deposit-adjusted value "
+                               "+2.06 vs close-to-close model +2.38%); asserted from the mechanism, not measured against fill prints",
             "history_engine_real_era": {"from": real[0], "to": real[-1], "n": len(xs), "mean": statistics.fmean(xs), "sd": statistics.stdev(xs),
                                         "p50": qs[0.5], "p90": qs[0.9], "p99": qs[0.99], "max": xs[-1], "min": xs[0],
                                         "days_ge_1105": sum(1 for x in xs if x >= lpc), "percentile_of_1105": rank},
@@ -474,7 +644,20 @@ def live_record(snaps, R, Z, X, days, rets, hold):
                      "zvol_day": Z.ret(d), "vxz_day": X.ret(d), "zvol_fwd": {str(k): Z.fwd(d, k) for k in HORIZONS}})
     bw_close = [r for r in rows if r["depth_close"] < 0]
     alerts = [s for s in snaps if s["vix_contango"] is not None and s["vix_contango"] < 0]
+    # the engine path is the model, not Composer: ledger sessions where the live weights differ from the engine's
+    nxt = {days[i]: days[i + 1] for i in range(len(days) - 1)}
+    mvl = []
+    for d, lg in sorted(ledger.items()):
+        eng = dict(LIVE_1105["decided_at_close"]) if d == ASOF else hold.get(nxt.get(d))
+        if eng is None or not lg["live"]:
+            continue
+        gap = max(abs(lg["live"].get(t, 0.0) - eng.get(t, 0.0)) for t in set(lg["live"]) | set(eng))
+        if gap > 0.02:
+            mvl.append({"date": d, "live": lg["live"], "engine": eng, "status": lg["status"], "max_gap": gap})
     return {"from": LIVE_START, "to": ASOF, "sessions": len(sessions), "snapshots_with_contango": sum(1 for s in snaps if s["vix_contango"] is not None),
+            "model_vs_live": {"ledger_sessions": len(ledger), "off_by_more_than_2pp": len(mvl), "rows": mvl,
+                              "note": "the engine path = the approved logic on Yahoo closes (the model); Composer's live weights differ on knife-edge "
+                                      "and no-rebalance sessions, e.g. 10-30 engine ZVOL 0.60 vs live 0.52"},
             "first_snapshot_with_contango": next((s["session"] for s in snaps if s["vix_contango"] is not None), None),
             "backwardation_closes": [{k: r[k] for k in ("date", "depth_close", "vix", "snapshot_contango", "decided_at_close", "status", "harv_day", "zvol_day", "zvol_fwd")} for r in bw_close],
             "backwardation_alerts": [{"session": s["session"], "et_time": s["et_time"], "vix_contango": s["vix_contango"], "holdings": s["holdings"], "lpc": s["lpc"]} for s in alerts],
@@ -484,13 +667,12 @@ def live_record(snaps, R, Z, X, days, rets, hold):
 
 
 # ------------------------------------------------------------------ the rule, with its 11-05 values
-def rule_trace():
+def rule_trace(D):
     sys.path.insert(0, os.path.join(REPO, "composer", "scripts"))
     try:
         import shadow_runner as sr
     except Exception as e:  # noqa: BLE001
         return {"error": str(e)}
-    D = json.load(open(DAILY))
     cfg = sr.load_manifest()["HARV"]
     era = sr.era_for(cfg, ASOF)
     tree = sr.load_tree(era)
@@ -518,23 +700,44 @@ def main():
     for t in ("^VIX", "^VIX3M", "ZVOL", "VXZ"):
         v = float(panel[t]["2026-11-04"])
         assert abs(v / CLOSE_1104[t] - 1) < 2e-3, (t, v, CLOSE_1104[t])
+    D = json.load(open(DAILY))
     R = regime_map(panel)
-    Z, X, P, SPY = Px(series(panel, "ZVOL")), Px(series(panel, "VXZ")), Px(series(panel, "PULS")), Px(series(panel, "SPY"))
-    days, rets, hold = load_engine()
+    z_raw, x_raw = series(panel, "ZVOL"), series(panel, "VXZ")
+    Z0, X0 = Px(z_raw), Px(x_raw)                       # as printed (stale 2018): used only for the re-pricing delta
+    vm = daily_series(D, "VIXM")
+    Z, X = Px(reprice_px(z_raw, vm, REPRICE_BETA["ZVOL"])), Px(reprice_px(x_raw, vm, REPRICE_BETA["VXZ"]))
+    P, SPY = Px(series(panel, "PULS")), Px(series(panel, "SPY"))
+    days, rets0, hold = load_engine()
+    rets, rp_engine = reprice_engine(days, rets0, hold, Z0, X0, Z, X)
+    reprice = vxz_stale_diagnostics(D)
+    reprice["engine"] = rp_engine
+    reprice["check_2018_02_05"] = {"as_printed": rets0.get("2018-02-05"), "repriced": rets.get("2018-02-05"), "hold": hold.get("2018-02-05"),
+                                   "zvol_proxy_as_printed": Z0.ret("2018-02-05"), "zvol_proxy_repriced": Z.ret("2018-02-05")}
+    assert abs(Z.fwd("2019-01-31", 20) - Z0.fwd("2019-01-31", 20)) < 1e-12 and abs(Z.fwd("2017-11-01", 20) - Z0.fwd("2017-11-01", 20)) < 1e-12, "re-pricing leaked outside its window"
     snaps = git_snapshots()
 
     real_bw = [d for d in Z.d if d >= ZVOL_START and d in R and R[d][0] < 0]
+    real_bw_out = [d for d in real_bw if d < ASOF]                       # closes with an outcome (11-05's is pending)
+    real_deep = [d for d in real_bw if R[d][0] <= -0.08]
+    real_deep_out = [d for d in real_deep if d < ASOF]
     res = {"generated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "asof": ASOF,
            "inputs": {"engine_path": PATHS, "panel": PANEL, "daily": DAILY, "closes_1105": CLOSE_1105, "closes_1104": CLOSE_1104, "live_1105": LIVE_1105,
-                      "hyg_1105": HYG_1105, "zvol_proxy": "ZVOL = -0.971 x VXZ daily before 2023-04-19 (add. 47 long_panel.py); VXZ real from 2018-01-25, "
-                      "vix_etp term-structure model on the real VIX3M/VIX6M from 2006-07-18, a synthetic VIX-only curve before (ts_synth); PULS = BIL in the panel",
+                      "hyg_1105": HYG_1105, "zvol_proxy": "ZVOL = -0.971 x VXZ daily before 2023-04-19 (add. 47 long_panel.py); VXZ real from 2018-01-25 but "
+                      "re-priced on VIXM through 2019-01-31 in this study (see vxz_reprice), the vix_etp term-structure model on the real VIX3M/VIX6M from "
+                      "2006-07-18, a synthetic VIX-only curve before (ts_synth); PULS = BIL in the panel. The VXZ 'mirror' is an identity before 2023-04-19",
+                      "vxz_reprice": reprice,
                       "regime": "VIX3M/VIX - 1 at the close; real VIX3M from 2006-07-17; synthetic curve (coefs in panel) before, used only for the 1995+ split",
                       "synth_curve_coefs": panel.get("_synth_coefs")},
            "regime_counts": {"real_zvol_era_days": sum(1 for d in Z.d if d >= ZVOL_START and d in R), "real_zvol_era_backwardation_days": len(real_bw),
                              "real_zvol_era_episodes": len(episodes(real_bw, Z.d)), "real_zvol_era_backwardation_dates": real_bw,
+                             "real_zvol_era_backwardation_days_with_outcomes": len(real_bw_out), "real_zvol_era_episodes_with_outcomes": len(episodes(real_bw_out, Z.d)),
+                             "real_zvol_era_deep_days": len(real_deep), "real_zvol_era_deep_episodes": len(episodes(real_deep, Z.d)),
+                             "real_zvol_era_deep_days_with_outcomes": len(real_deep_out), "real_zvol_era_deep_episodes_with_outcomes": len(episodes(real_deep_out, Z.d)),
+                             "count_bases": "'with outcomes' = closes before 2026-11-05 (every table of outcomes); the other base adds the 11-05 close, "
+                                            "which is one more close, episode, deep close and deep episode",
                              "since_2006_days": sum(1 for d in R if R[d][2] == "real"), "since_2006_backwardation_days": sum(1 for d in R if R[d][2] == "real" and R[d][0] < 0),
                              "depth_1105": R[ASOF][0], "vix_1105": R[ASOF][1], "bucket_1105": bucket(R[ASOF][0]), "spy_1105": SPY.ret(ASOF), "zvol_1105": Z.ret(ASOF), "vxz_1105": X.ret(ASOF)},
-           "rule": rule_trace()}
+           "rule": rule_trace(D)}
     print("conditional ZVOL table ...", flush=True)
     res["conditional"] = conditional(Z, X, R)
     rows = entries(days, rets, hold, R, Z, X, SPY)
@@ -552,11 +755,20 @@ def main():
         inv = [d for d in Z.d if lo <= d < ASOF and d in R and R[d][2] == "real" and R[d][0] < 0 and d in hold_next]
         g_in = [d for d in inv if hold_next[d] > 0]
         g_out = [d for d in inv if hold_next[d] <= 0]
+        runs_in = runs_of(g_in, Z.d)
+        v1 = {d: Z.fwd(d, 1) for d in g_in}
+        lo1 = loo_runs(runs_in, v1)
         fe[wname] = {"inverted_closes": len(inv), "rule_short_vol": len(g_in), "rule_not": len(g_out),
                      "with": {str(k): stats([Z.fwd(d, k) for d in g_in]) for k in HORIZONS},
                      "without": {str(k): stats([Z.fwd(d, k) for d in g_out]) for k in HORIZONS},
                      "deep_with": {str(k): stats([Z.fwd(d, k) for d in g_in if R[d][0] <= -0.08]) for k in HORIZONS},
-                     "deep_without": {str(k): stats([Z.fwd(d, k) for d in g_out if R[d][0] <= -0.08]) for k in HORIZONS}}
+                     "deep_without": {str(k): stats([Z.fwd(d, k) for d in g_out if R[d][0] <= -0.08]) for k in HORIZONS},
+                     # the fair tests of the selection (the contango entries are NOT a placebo for it): Welch t of with vs without,
+                     # and the next-1 mean across the runs the rule-short closes fall in, leaving one run out
+                     "welch_t": {str(k): welch([Z.fwd(d, k) for d in g_in], [Z.fwd(d, k) for d in g_out]) for k in HORIZONS},
+                     "short_vol_runs": len(runs_in),
+                     "run_mean_of_means_1": statistics.fmean([statistics.fmean([v1[d] for d in r if v1[d] is not None]) for r in runs_in]) if runs_in else None,
+                     "loo_run_min_1": lo1["min"] if lo1 else None, "loo_run_max_1": lo1["max"] if lo1 else None}
     res["filter_effect"] = fe
     # daily series for the exhibit: the earning day d, ZVOL's return on d, the regime at the decision close (d-1),
     # the engine's return and ZVOL weight on d (2006-07+; 11-05 = live)
@@ -567,7 +779,8 @@ def main():
             continue
         ser.append([d, round(Z.ret(d) or 0.0, 5), round(R[p][0], 4), round(rets[d], 5), hold[d].get("ZVOL", 0.0), hold[d].get("VXZ", 0.0)])
     res["series"] = {"columns": ["date", "zvol_ret", "depth_at_decision_close", "harv_ret", "zvol_w", "vxz_w"], "rows": ser,
-                     "zvol_1105": {"ret": Z.ret(ASOF), "depth_prev": R["2026-11-04"][0]}}
+                     "zvol_1105": {"ret": Z.ret(ASOF), "depth_prev": R["2026-11-04"][0]},
+                     "reprice_window": {"from": REPRICE[0], "to": REPRICE[1], "label": "VXZ re-priced on VIXM"}}
     res["harvester_number"] = harvester_number(days, rets, hold, Z, X, R, snaps)
     res["live"] = live_record(snaps, R, Z, X, days, rets, hold)
     # 11-05 in context: where today's entry sits among past backwardation entries
@@ -581,6 +794,11 @@ def main():
                            "weight_percentile_among_bw_entries": sum(1 for r in bw if r["zvol_to"] <= today["zvol_to"]) / len(bw) if bw else None,
                            "deep_entries": deep, "deep_summary": {k: stats([r["harv_fwd"][str(k)] for r in deep]) for k in HORIZONS},
                            "deep_zvol_20": stats([r["zvol_fwd"]["20"] for r in deep]),
+                           "deep_by_era": {e: {"n": sum(1 for r in deep if r["era"] == e), "harv_1": stats([r["harv_fwd"]["1"] for r in deep if r["era"] == e]),
+                                               "harv_20": stats([r["harv_fwd"]["20"] for r in deep if r["era"] == e])} for e in ("model", "vxz", "real")},
+                           "deep_verdict": "the two real-era deep entries lost; the full record (29 entries, 23 modeled + 4 on -VXZ + 2 real) says the opposite, "
+                                           "the deep-only counterfactual hurts on 2006+ and is noise on 2018+, and real-era ZVOL itself after deep closes is "
+                                           "positive over 20 sessions: a watch item, 11-05 = observation 3, not a candidate",
                            "vxz_to_zvol_flips": flips, "flip_summary": {k: stats([r["harv_fwd"][str(k)] for r in flips]) for k in HORIZONS},
                            "flip_zvol_20": stats([r["zvol_fwd"]["20"] for r in flips])}
     res["guard"] = {"in_live_tree": False, "note": "no HYG condition in any saved HARV version (add. 48); the only guard is RSI(UVXY,14) > 70 -> PULS, "
@@ -612,8 +830,18 @@ def pc(x, d=1):
 
 def report(res):
     rc = res["regime_counts"]
+    rp = res["inputs"]["vxz_reprice"]
     print(f"\n11-05: VIX {rc['vix_1105']:.2f}, VIX3M/VIX {pc(rc['depth_1105'])} ({rc['bucket_1105']}), SPY {pc(rc['spy_1105'])}, ZVOL {pc(rc['zvol_1105'])}, VXZ {pc(rc['vxz_1105'])}")
-    print(f"real ZVOL era: {rc['real_zvol_era_days']} closes, {rc['real_zvol_era_backwardation_days']} in backwardation ({rc['real_zvol_era_episodes']} episodes)")
+    print(f"real ZVOL era: {rc['real_zvol_era_days']} closes, {rc['real_zvol_era_backwardation_days']} in backwardation ({rc['real_zvol_era_episodes']} episodes) incl. 11-05 = "
+          f"{rc['real_zvol_era_backwardation_days_with_outcomes']} / {rc['real_zvol_era_episodes_with_outcomes']} with outcomes; deep {rc['real_zvol_era_deep_days']} / "
+          f"{rc['real_zvol_era_deep_episodes']} incl. 11-05 = {rc['real_zvol_era_deep_days_with_outcomes']} / {rc['real_zvol_era_deep_episodes_with_outcomes']} with outcomes")
+    print(f"VXZ RE-PRICED {rp['window']['returns_from']}..{rp['window']['to']} ({rp['window']['sessions']} sessions) on VIXM: Yahoo VXZ zero-volume sessions {rp['vxz_zero_volume_sessions']['n']} "
+          f"({rp['vxz_zero_volume_sessions']['from']}..{rp['vxz_zero_volume_sessions']['to']} at {rp['vxz_zero_volume_sessions']['price']}); 2018 zero-return sessions "
+          f"{rp['vxz_2018_zero_return_sessions']['n']} of {rp['vxz_2018_zero_return_sessions']['of']}; corr(VXZ, VIXM) 2018 {rp['corr_vxz_vixm_2018']:.3f}; fit 2019-02..2023-04 beta "
+          f"{rp['fit_2019_02_to_2023_04']['beta_vxz_on_vixm']:.3f} corr {rp['fit_2019_02_to_2023_04']['corr']:.3f} n {rp['fit_2019_02_to_2023_04']['n']}; engine days on VXZ/ZVOL in the window "
+          f"{rp['engine']['sessions_on_vxz_or_zvol']} of {rp['engine']['engine_sessions_in_window']}, window compounded as printed {pc(rp['engine']['window_compounded_as_printed'])} -> re-priced "
+          f"{pc(rp['engine']['window_compounded_repriced'])}; 2018-02-05 HARV {pc(rp['check_2018_02_05']['as_printed'],2)} -> {pc(rp['check_2018_02_05']['repriced'],2)} "
+          f"(ZVOL proxy {pc(rp['check_2018_02_05']['zvol_proxy_as_printed'],2)} -> {pc(rp['check_2018_02_05']['zvol_proxy_repriced'],2)}, hold {rp['check_2018_02_05']['hold']})")
     for era, E in res["conditional"].items():
         print(f"\n[{era}] {E['from']}..{E['to']}")
         for k in ("1", "5", "20"):
@@ -627,6 +855,12 @@ def report(res):
                 print(f"  {k:>2}d {g:14} n {z['n']:5} ZVOL mean {pc(z['mean'],2)} med {pc(z['median'],2)} t {z['t'] if z['t'] is None else round(z['t'],2)} win {z['win']:.0%} | "
                       f"VXZ {pc(v['mean'],2)} | placebo pct {pl.get('pct')} band {pc(pl.get('p05'),2)}..{pc(pl.get('p95'),2)}"
                       + (f" | episodes {h[g].get('episodes')} start-mean {pc(ep.get('mean'),2)} t {None if ep.get('t') is None else round(ep['t'],2)}" if ep else ""))
+                bp, lo_ = h[g].get("block_placebo"), h[g].get("loo_episodes")
+                if bp or lo_:
+                    print("      " + (f"block placebo pct {bp['pct']:.3f} band {pc(bp['p05'],2)}..{pc(bp['p95'],2)} ({bp['runs']} runs)" if bp else "block placebo n/a")
+                          + (f" | LOO-episode {pc(lo_['min'],2)}..{pc(lo_['max'],2)}; min without {lo_['min_without']['start']} (len {lo_['min_without']['len']}, "
+                             f"share {lo_['min_without']['share_of_sum']:+.2f}, t {None if lo_['min_without']['t_without'] is None else round(lo_['min_without']['t_without'],2)}); "
+                             "largest shares " + ", ".join(f"{x['start']} len {x['len']} {x['share_of_sum']:+.2f}" for x in lo_['largest_shares']) if lo_ else ""))
     print("\nENGINE ENTRIES (ZVOL weight up at the decision close; 11-05 pending, excluded)")
     for w, W in res["entries"]["summary"].items():
         print(f" [{w}] entries {W['n']} (pending {W['pending']})")
@@ -640,13 +874,16 @@ def report(res):
         for g, r in W["groups"].items():
             if r["n"]:
                 print(f"   {g:14} n {r['n']:4} sessions med {r['sessions_median']} mean {r['sessions_mean']:.1f} | P&L mean {pc(r['pnl']['mean'],2)} med {pc(r['pnl']['median'],2)} t {None if r['pnl']['t'] is None else round(r['pnl']['t'],2)} "
-                      f"win {r['pnl']['win']:.0%} sum {r['sum_pnl_pp']:+.1f}pp | ZVOL-leg contrib mean {pc(r['zvol_contrib']['mean'],2)} | worst {r['worst']} {pc(r['worst_pnl'])}")
+                      f"win {r['pnl']['win']:.0%} sum {r['sum_pnl_pp']:+.1f}pp | ZVOL-leg contrib mean {pc(r['zvol_contrib']['mean'],2)} | worst {r['worst']} {pc(r['worst_pnl'])} | best {r['best']} {pc(r['best_pnl'])} LOO min {pc(r['loo_min'],2)}")
     print("\nPATH SPLIT by the regime at the decision close")
     for w, W in res["path_split"].items():
         b, c = W["regimes"].get("backwardation", {}), W["regimes"].get("contango", {})
         print(f" [{w}] {W['days']} days (synthetic regime {W['synthetic_regime_days']}): base x{W['base']['multiple']:.2f} CAGR {pc(W['base']['cagr'])} DD {W['base']['maxdd']:.1%}; "
               f"cf ZVOL->PULS when inverted x{W['cf_zvol_to_puls_when_inverted']['multiple']:.2f} CAGR {pc(W['cf_zvol_to_puls_when_inverted']['cagr'])} DD {W['cf_zvol_to_puls_when_inverted']['maxdd']:.1%}; "
-              f"deep only x{W['cf_zvol_to_puls_when_deep']['multiple']:.2f}")
+              f"deep only x{W['cf_zvol_to_puls_when_deep']['multiple']:.2f} | ratio {W['ratio_base_over_cf']:.3f}, without the largest ZVOL-leg day "
+              f"({W['largest_zvol_leg_days'][0]['date'] if W['largest_zvol_leg_days'] else None} {pc(W['largest_zvol_leg_days'][0]['leg'],2) if W['largest_zvol_leg_days'] else ''}) "
+              f"{W['ratio_without_largest_leg_day'] if W['ratio_without_largest_leg_day'] is None else round(W['ratio_without_largest_leg_day'],3)}; worst "
+              + ", ".join(f"{x['date']} {pc(x['leg'],2)}" for x in W['worst_zvol_leg_days']))
         for g, a in (("backwardation", b), ("contango", c)):
             if a:
                 print(f"   {g:14} n {a['n']:5} mean {pc(a['mean_daily'],3)} compounded {pc(a['compounded'])} ZVOL held {a['zvol_share_of_days']:.0%} of days (avg w {a['mean_zvol_w']:.2f}) "
@@ -661,7 +898,9 @@ def report(res):
               + " ".join(f"{pc(F['with'][k]['mean'],2)}" for k in ('1', '5', '20')) + f" (win1 {F['with']['1'].get('win')}); not {F['rule_not']} -> "
               + " ".join(f"{pc(F['without'][k]['mean'],2)}" for k in ('1', '5', '20')) + f" (win1 {F['without']['1'].get('win')})"
               + f" | deep: short n {F['deep_with']['1']['n']} " + " ".join(f"{pc(F['deep_with'][k].get('mean'),2)}" for k in ('1', '5', '20'))
-              + f"; not n {F['deep_without']['1']['n']} " + " ".join(f"{pc(F['deep_without'][k].get('mean'),2)}" for k in ('1', '5', '20')))
+              + f"; not n {F['deep_without']['1']['n']} " + " ".join(f"{pc(F['deep_without'][k].get('mean'),2)}" for k in ('1', '5', '20'))
+              + f" | Welch t 1/5/20 " + " ".join("n/a" if F['welch_t'][k] is None else f"{F['welch_t'][k]:.2f}" for k in ('1', '5', '20'))
+              + f"; short closes in {F['short_vol_runs']} runs, run-mean-of-means(+1) {pc(F['run_mean_of_means_1'],2)}, LOO-run min {pc(F['loo_run_min_1'],2)}")
     H = res["harvester_number"]
     print(f"\nHARVESTER NUMBER: live {pc(H['live_1105'],2)} value-based {pc(H['value_based_1105'],2)} model close-to-close {pc(H['model_close_to_close_1105'],2)} (VXZ {pc(H['vxz_ret_1105'],2)} x 0.3594); "
           f"engine real-era history n {H['history_engine_real_era']['n']} sd {pc(H['history_engine_real_era']['sd'],2)} p99 {pc(H['history_engine_real_era']['p99'],2)} max {pc(H['history_engine_real_era']['max'],2)} "
@@ -677,9 +916,13 @@ def report(res):
     for a in L["backwardation_alerts"]:
         print("  alert:", a["session"], a["et_time"], a["vix_contango"], a["holdings"], a["lpc"])
     print("  shallowest contango closes:", [(x["date"], pc(x["depth"])) for x in L["shallowest_contango_closes"]])
+    M = L["model_vs_live"]
+    print(f"  MODEL vs LIVE: {M['off_by_more_than_2pp']} of {M['ledger_sessions']} ledger sessions have live weights > 2pp from the engine's: "
+          + "; ".join(f"{r['date']} {r['status']} live ZVOL {r['live'].get('ZVOL', 0):.2f} vs engine {r['engine'].get('ZVOL', 0):.2f}" for r in M["rows"]))
     C = res["context_1105"]
     print(f"\n11-05 IN CONTEXT: {C['n_backwardation_entries_before']} prior backwardation entries since 2006-07; depth pct {C['depth_percentile_among_bw_entries']:.2f} VIX pct {C['vix_percentile_among_bw_entries']:.2f} weight pct {C['weight_percentile_among_bw_entries']:.2f}")
-    print(f"  deep (< -8%) entries n {len(C['deep_entries'])}: HARV fwd20 {pc(C['deep_summary'][20].get('mean'))} win {C['deep_summary'][20].get('win')} ZVOL fwd20 {pc(C['deep_zvol_20'].get('mean'))}")
+    print(f"  deep (< -8%) entries n {len(C['deep_entries'])}: HARV fwd20 {pc(C['deep_summary'][20].get('mean'))} win {C['deep_summary'][20].get('win')} ZVOL fwd20 {pc(C['deep_zvol_20'].get('mean'))}; by era "
+          + "; ".join(f"{e} n {v['n']} HARV +1 {pc(v['harv_1'].get('mean'))} +20 {pc(v['harv_20'].get('mean'))} win20 {v['harv_20'].get('win')}" for e, v in C["deep_by_era"].items()))
     for r in C["deep_entries"]:
         print(f"    {r['date']} depth {pc(r['depth'])} VIX {r['vix']:.1f} SPY {pc(r['spy_day'])} w {r['zvol_from']:.2f}->{r['zvol_to']:.2f} ZVOL 1/5/20 {pc(r['zvol_fwd']['1'])} {pc(r['zvol_fwd']['5'])} {pc(r['zvol_fwd']['20'])} HARV {pc(r['harv_fwd']['1'])} {pc(r['harv_fwd']['5'])} {pc(r['harv_fwd']['20'])} [{r['era']}]")
     print(f"  VXZ->ZVOL flips (held VXZ, day >= +1%, entered ZVOL) n {len(C['vxz_to_zvol_flips'])}: HARV fwd20 {pc(C['flip_summary'][20].get('mean'))} win {C['flip_summary'][20].get('win')} ZVOL fwd20 {pc(C['flip_zvol_20'].get('mean'))}")

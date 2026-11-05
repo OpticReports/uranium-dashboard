@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Exhibit for the HARV-in-backwardation study (harv_backwardation.py).
 Reads results/harv-backwardation-2026-11-05.json; writes results/harv-backwardation-2026-11-05.html
-(inline SVG, house palette tokens, light/dark, no external libraries)."""
+(inline SVG, house palette tokens, light/dark, no external libraries).
+Counter-agent (review4) fixes carried here: the 2018 VXZ re-pricing on VIXM is labelled in charts A2/C and the basis;
+the title and KPIs say what is measured (one-session entries paid; the two deep real-era entries lost; 11-05 pending);
+block placebo, leave-one-episode-out and Welch t sit next to each headline; the citation is add. 39 C1 (2026-10-07)."""
 import json
 import os
 
@@ -10,6 +13,7 @@ RES = os.path.join(HERE, "..", "results")
 SRC = os.path.join(RES, "harv-backwardation-2026-11-05.json")
 PAGE = os.path.join(RES, "harv-backwardation-2026-11-05.html")
 GROUPS = ("contango", "backwardation", "0..-3%", "-3..-8%", "< -8%")
+W18 = "VXZ 2018-01+ (2018 on VIXM)"          # the study's label for the window formerly called "real VXZ 2018-01+"
 
 
 def pc(x, d=1, sign=True):
@@ -25,34 +29,50 @@ def main():
     real_entries = [e for e in rows if e["date"] >= "2023-04-19"]
     cond, tr, ps, H, C, L, rc = r["conditional"], r["trades"]["summary"], r["path_split"], r["harvester_number"], r["context_1105"], r["live"], r["regime_counts"]
     real_tr = tr["real ZVOL 2023-04+"]["groups"]
+    bw_tr, tr18 = real_tr["backwardation"], tr[W18]["groups"]["backwardation"]
     c_real = cond["real ZVOL"]["horizons"]
     c_all = cond["all since 2006-07"]["horizons"]
+    bw20 = c_real["20"]["backwardation"]
+    bp, lo = bw20["block_placebo"], bw20["loo_episodes"]
+    shares = {x["start"]: x for x in lo["largest_shares"]}
+    s0402, s0303 = shares.get("2025-04-02", {}), shares.get("2025-03-03", {})
+    deep_real = [e for e in C["deep_entries"] if e["era"] == "real"]
+    dbe, d20 = C["deep_by_era"], C["deep_summary"]["20"]
+    ps_real, ps18, ps06 = ps["real ZVOL 2023-04+"], ps[W18], ps["2006-07+"]
+    big = ps_real["largest_zvol_leg_days"][0] if ps_real["largest_zvol_leg_days"] else {"date": "–", "leg": 0}
     kpis = [
-        [f"{pc(real_tr['backwardation']['pnl']['mean'], 2)} per trade, {real_tr['backwardation']['pnl']['win']:.0%} win",
-         f"the engine's {real_tr['backwardation']['n']} ZVOL trades entered on an inverted close since ZVOL exists (2023-04), entry to exit, median "
-         f"{real_tr['backwardation']['sessions_median']:.0f} session, {real_tr['backwardation']['sum_pnl_pp']:+.1f}pp in all (t {real_tr['backwardation']['pnl']['t']:.1f}); "
-         f"since 2018 on real VXZ: {tr['real VXZ 2018-01+']['groups']['backwardation']['n']} trades, {pc(tr['real VXZ 2018-01+']['groups']['backwardation']['pnl']['mean'], 2)}, "
-         f"{tr['real VXZ 2018-01+']['groups']['backwardation']['pnl']['win']:.0%} win. The two deep (VIX3M/VIX under −8%) trades both lost: "
-         f"{', '.join(pc(e['harv_fwd']['1']) for e in C['deep_entries'] if e['era'] == 'real')}"],
-        [f"{pc(c_real['20']['backwardation']['zvol']['mean'])} in 20 sessions",
-         f"ZVOL itself after an inverted close, 2023-04..2026-11 ({c_real['20']['backwardation']['zvol']['n']} closes in {c_real['20']['backwardation']['episodes']} episodes, "
-         f"t {c_real['20']['backwardation']['zvol']['t']:.1f}, {c_real['20']['backwardation']['placebo']['pct']:.0%} placebo percentile) against {pc(c_real['20']['contango']['zvol']['mean'])} after contango. "
-         f"Since 2006 on the proxies the sign flips: {pc(c_all['20']['backwardation']['zvol']['mean'])} (n {c_all['20']['backwardation']['zvol']['n']}, t {c_all['20']['backwardation']['zvol']['t']:.1f}), "
-         f"{pc(c_all['20']['< -8%']['zvol']['mean'])} when the inversion is deeper than 8% (n {c_all['20']['< -8%']['zvol']['n']})"],
-        [f"×{ps['real ZVOL 2023-04+']['base']['multiple']:.2f} → ×{ps['real ZVOL 2023-04+']['cf_zvol_to_puls_when_inverted']['multiple']:.2f}",
-         f"HARV's real-era path if the ZVOL weight went to PULS on every inverted decision close (CAGR {pc(ps['real ZVOL 2023-04+']['base']['cagr'])} → "
-         f"{pc(ps['real ZVOL 2023-04+']['cf_zvol_to_puls_when_inverted']['cagr'])}; add. 47 C1 measured ×2.11 → ×2.00): the entries pay. Only on deep inversions: "
-         f"×{ps['real ZVOL 2023-04+']['cf_zvol_to_puls_when_deep']['multiple']:.2f} real era ({ps['real ZVOL 2023-04+']['regimes']['< -8%']['n']} days), "
-         f"×{ps['real VXZ 2018-01+']['base']['multiple']:.2f} → ×{ps['real VXZ 2018-01+']['cf_zvol_to_puls_when_deep']['multiple']:.2f} since 2018, "
-         f"×{ps['2006-07+']['base']['multiple']:.2f} → ×{ps['2006-07+']['cf_zvol_to_puls_when_deep']['multiple']:.2f} since 2006 (modeled 2008 entries)"],
+        [f"{pc(bw_tr['pnl']['mean'], 2)} per trade, {bw_tr['pnl']['win']:.0%} win",
+         f"the engine's {bw_tr['n']} ZVOL trades entered on an inverted close since ZVOL exists (2023-04), entry to exit, median {bw_tr['sessions_median']:.0f} session, "
+         f"{bw_tr['sum_pnl_pp']:+.1f}pp in all; t {bw_tr['pnl']['t']:.1f}, leave-one-trade-out min {pc(bw_tr['loo_min'], 2)}. Since 2018 (2018 re-priced on VIXM): {tr18['n']} trades, "
+         f"{pc(tr18['pnl']['mean'], 2)}, {tr18['pnl']['win']:.0%} win, t {tr18['pnl']['t']:.1f}, LOO min {pc(tr18['loo_min'], 2)}. The two deep (VIX3M/VIX under −8%) real-era trades both lost "
+         f"({', '.join(pc(e['harv_fwd']['1']) for e in deep_real)}); the full record's {len(C['deep_entries'])} deep entries say HARV {pc(d20['mean'])} over 20 sessions, {d20['win']:.0%} positive "
+         f"({dbe['model']['n']} modeled, {dbe['vxz']['n']} on −VXZ, {dbe['real']['n']} real)"],
+        [f"{pc(bw20['zvol']['mean'])} in 20 sessions",
+         f"ZVOL itself after an inverted close, 2023-04..2026-11 ({bw20['zvol']['n']} closes in {bw20['episodes']} episodes; t {bw20['zvol']['t']:.1f} on overlapping windows; "
+         f"{bw20['placebo']['pct']:.0%} iid placebo percentile but {bp['pct']:.0%} on the block placebo with the same {bp['runs']} episode lengths, band {pc(bp['p05'])}..{pc(bp['p95'])}). "
+         f"Leave one episode out and the mean runs {pc(lo['min'])}..{pc(lo['max'])}: without 2025-04-02's {s0402.get('len')} closes ({s0402.get('share_of_sum', 0):+.0%} of the sum) it is "
+         f"{pc(s0402.get('mean_without'))} at t {s0402.get('t_without', 0):.1f}; 2025-03-03's {s0303.get('len')} closes are {s0303.get('share_of_sum', 0):+.0%} of it. "
+         f"Against {pc(c_real['20']['contango']['zvol']['mean'])} after contango. Since 2006 on the proxies the sign flips: {pc(c_all['20']['backwardation']['zvol']['mean'])} "
+         f"(n {c_all['20']['backwardation']['zvol']['n']}, t {c_all['20']['backwardation']['zvol']['t']:.1f}), {pc(c_all['20']['< -8%']['zvol']['mean'])} when the inversion is deeper than 8% "
+         f"(n {c_all['20']['< -8%']['zvol']['n']}): ZVOL held for 20 sessions, which the rule never does"],
+        [f"×{ps_real['base']['multiple']:.2f} → ×{ps_real['cf_zvol_to_puls_when_inverted']['multiple']:.2f}",
+         f"HARV's real-era path if the ZVOL weight went to PULS on every inverted decision close (CAGR {pc(ps_real['base']['cagr'])} → "
+         f"{pc(ps_real['cf_zvol_to_puls_when_inverted']['cagr'])}; ratio {ps_real['ratio_base_over_cf']:.2f}, {ps_real['ratio_without_largest_leg_day']:.2f} without the largest single day, {big['date']}). "
+         f"add. 39 C1 (2026-10-07) measured ×2.11 → ×2.00 and killed the filter: \"its backwardation entries ARE the edge\". Only on deep inversions: "
+         f"×{ps_real['cf_zvol_to_puls_when_deep']['multiple']:.2f} real era ({ps_real['regimes']['< -8%']['n']} days), "
+         f"×{ps18['base']['multiple']:.2f} → ×{ps18['cf_zvol_to_puls_when_deep']['multiple']:.2f} since 2018 (noise), "
+         f"×{ps06['base']['multiple']:.2f} → ×{ps06['cf_zvol_to_puls_when_deep']['multiple']:.2f} since 2006 (modeled 2008 entries: the filter hurts)"],
         [f"{pc(H['live_1105'], 2)} = HARV's own day",
          f"\"harvester 0.0202\" is Composer's last_percent_change for the symphony: the VXZ 36% leg held into the crash day earned it (VXZ {pc(H['vxz_ret_1105'])}; "
-         f"close-to-close model {pc(H['model_close_to_close_1105'], 2)}, the gap is 15:50 fills). It sits at the {H['history_engine_real_era']['percentile_of_1105']:.0%} percentile of the engine's daily "
+         f"close-to-close model {pc(H['model_close_to_close_1105'], 2)}, deposit-adjusted value {pc(H['value_based_1105'], 2)}; the gap is plausibly the 15:50 fills, not measured). "
+         f"It sits at the {H['history_engine_real_era']['percentile_of_1105']:.0%} percentile of the engine's daily "
          f"returns (sd {pc(H['history_engine_real_era']['sd'], 2, False)}), the largest live day of {H['history_live_snapshots']['n']}; its correlation with ZVOL's next 20 sessions is "
          f"{H['as_a_signal']['real ZVOL 2023-04+']['corr_harv_day_vs_zvol_fwd20']:+.2f}: not a signal"]]
-    data = {"kpis": kpis, "series": r["series"]["rows"], "zvol_start": "2023-04-19", "vxz_start": "2018-01-25", "asof": r["asof"],
+    data = {"kpis": kpis, "series": r["series"]["rows"], "zvol_start": "2023-04-19", "vxz_start": "2018-01-25", "asof": r["asof"], "w18": W18,
+            "reprice": r["inputs"]["vxz_reprice"], "reprice_window": r["series"]["reprice_window"],
             "bw_entries": [{"date": e["date"], "depth": e["depth"], "vix": e["vix"], "w": e["zvol_to"], "w0": e["zvol_from"], "era": e["era"], "harv20": e["harv_fwd"]["20"],
-                            "harv1": e["harv_fwd"]["1"], "harv5": e["harv_fwd"]["5"], "zvol20": e["zvol_fwd"]["20"], "zvol1": e["zvol_fwd"]["1"], "hold": e.get("hold_len")} for e in bw_entries],
+                            "harv1": e["harv_fwd"]["1"], "harv5": e["harv_fwd"]["5"], "zvol20": e["zvol_fwd"]["20"], "zvol1": e["zvol_fwd"]["1"], "hold": e.get("hold_len"),
+                            "rp": bool(e.get("repriced"))} for e in bw_entries],
             "real_entries": real_entries, "cond": cond, "filter_effect": r["filter_effect"], "entries_summary": r["entries"]["summary"], "trades": tr, "path": ps, "harv": H, "ctx": C, "live": L, "rc": rc, "rule": r["rule"],
             "guard": r["guard"], "generated": r["generated"]}
     html = TEMPLATE.replace("__DATA__", json.dumps(data, separators=(",", ":")))
@@ -98,22 +118,22 @@ details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)
 </head>
 <body>
 <main>
-<h1>HARV's short-vol entries in VIX backwardation: paying on the way back, bleeding when the inversion is deep</h1>
+<h1>HARV's short-vol entries in VIX backwardation: one-session entries have paid; the two deep real-era entries lost; 11-05 pending</h1>
 <p class="sub-h" id="lead"></p>
 <div class="kpis" id="kpis"></div>
 
 <section class="card">
 <h2>A. ZVOL compounding only on inverted closes vs only on contango closes</h2>
-<p class="sub-h">Each line compounds ZVOL's next-day return only on the days whose previous close had the stated regime (VIX3M/VIX under 1 = backwardation) and is flat on the others; the grey line is every day. Left: the real fund, 2023-04-19 to 2026-11-05. Right: 2006-07 onward on the add. 47 proxies (ZVOL = −0.971 × VXZ before 2023; VXZ itself modeled from the term structure before 2018-01-25), log scale, era bands shaded. In the real era an inverted close has been followed by a rebound; on the longer record it has been followed by more losses, and the deep inversions (2008, 2011, 2020) are where the proxy line falls.</p>
+<p class="sub-h">Each line compounds ZVOL's next-day return only on the days whose previous close had the stated regime (VIX3M/VIX under 1 = backwardation) and is flat on the others; the grey line is every day. Left: the real fund, 2023-04-19 to 2026-11-05. Right: 2006-07 onward on the add. 47 proxies (ZVOL = −0.971 × VXZ before 2023; VXZ itself modeled from the term structure before 2018-01-25), log scale, era bands shaded. The dashed box is the band re-priced in this study: Yahoo's VXZ prints a flat 67.80 at zero volume for 169 sessions from 2018-01-25 (178 of 234 sessions in 2018 at 0.00%), so VXZ's daily returns 2018-01-26..2019-01-31 are VIXM's here (beta 0.99, corr 0.985 on 2019-23). In the real era an inverted close has been followed by a rebound; on the longer record it has been followed by more losses, and the deep inversions (2008, 2011, Feb-2018, 2020) are where the proxy line falls.</p>
 <div class="legend" id="lgA"></div>
 <div class="chartwrap"><svg id="chA1" role="img" aria-label="ZVOL cumulative return by regime of the prior close, real fund, 2023 to 2026"></svg></div>
-<div class="chartwrap"><svg id="chA2" role="img" aria-label="ZVOL cumulative return by regime of the prior close, proxies since 2006, log scale"></svg></div>
-<details><summary>Table: ZVOL's next 1 / 5 / 20 sessions by regime and depth, each era, with the VXZ mirror and the placebo percentile</summary><div class="tablewrap"><table id="tbA"></table></div></details>
+<div class="chartwrap"><svg id="chA2" role="img" aria-label="ZVOL cumulative return by regime of the prior close, proxies since 2006, log scale, with the 2018 VIXM re-priced band marked"></svg></div>
+<details><summary>Table: ZVOL's next 1 / 5 / 20 sessions by regime and depth, each era, with the VXZ mirror, the iid and block placebo percentiles and the leave-one-episode-out range</summary><div class="tablewrap"><table id="tbA"></table></div></details>
 </section>
 
 <section class="card">
 <h2>B. The engine's entries: every close at which the ZVOL weight rose, by the regime at that close</h2>
-<p class="sub-h" id="bLead">The rule holds ZVOL while SPY's short RSIs are under 25, which resolves in a session or two (median hold 1 session after an inverted entry). So the 20-session ZVOL path matters less than what the engine made while it held: the trade table compounds the engine's return from entry to the close that sent the weight back to zero. 11-05 is in the first table with its outcomes pending.</p>
+<p class="sub-h" id="bLead">The rule holds ZVOL while SPY's short RSIs are under 25, which resolves in a session or two (median hold 1 session after an inverted entry, 1 to 2 after a contango entry). So the 20-session ZVOL path matters less than what the engine made while it held: the trade table compounds the engine's return from entry to the close that sent the weight back to zero. 11-05 is in the first table with its outcomes pending. Every 2018 number is on the VIXM re-priced VXZ.</p>
 <div class="tablewrap"><table id="tbB0"></table></div>
 <div class="tablewrap"><table id="tbB1"></table></div>
 <details open><summary>Summary by window and regime: entries (weight up), then trades (fresh entry to exit)</summary><div class="tablewrap"><table id="tbB2"></table></div><div class="tablewrap" style="margin-top:10px"><table id="tbB3"></table></div></details>
@@ -121,7 +141,7 @@ details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)
 
 <section class="card">
 <h2>C. HARV's next 20 sessions after each inverted-close entry, 2006 to 2026</h2>
-<p class="sub-h">One bar per entry on an inverted close (the engine path; proxies before each fund's launch, the regime from the real VIX3M). Hover for the entry's depth, VIX, weight and ZVOL's own 20-session move. The 11-05 entry is the hollow marker at the right: pending.</p>
+<p class="sub-h">One bar per entry on an inverted close (the engine path; proxies before each fund's launch, the regime from the real VIX3M; outlined bars are the entries whose 20 sessions fall in the 2018 band re-priced on VIXM). Hover for the entry's depth, VIX, weight and ZVOL's own 20-session move. The 11-05 entry is the hollow marker at the right: pending.</p>
 <div class="legend" id="lgC"></div>
 <div class="chartwrap"><svg id="chC" role="img" aria-label="HARV next-20-session return after each backwardation entry since 2006"></svg></div>
 </section>
@@ -144,7 +164,7 @@ details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)
 <h2>F. 11-05 in context: the deep entries and the long-vol-to-short-vol flips</h2>
 <p class="sub-h" id="ctxLead"></p>
 <div class="tablewrap"><table id="tbF1"></table></div>
-<details><summary>Table: the nine earlier flips from a VXZ day of +1% or more straight into ZVOL</summary><div class="tablewrap"><table id="tbF2"></table></div></details>
+<details><summary>Table: the earlier flips from a VXZ day of +1% or more straight into ZVOL</summary><div class="tablewrap"><table id="tbF2"></table></div></details>
 </section>
 
 <section class="card notes">
@@ -158,7 +178,7 @@ const D = __DATA__, NS = 'http://www.w3.org/2000/svg', tt = document.getElementB
 function el(t, a, p, x){const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (x != null) e.textContent = x; p.appendChild(e); return e;}
 function tip(ev, h){tt.innerHTML = h; tt.style.display = 'block'; tt.style.left = Math.min(ev.clientX + 12, innerWidth - tt.offsetWidth - 8) + 'px'; tt.style.top = ev.clientY + 12 + 'px';}
 function untip(){tt.style.display = 'none';}
-function legend(id, items){document.getElementById(id).innerHTML = items.map(([n, c]) => `<span><i class="sw" style="background:${c}"></i>${n}</span>`).join('');}
+function legend(id, items){document.getElementById(id).innerHTML = items.map(([n, c, dash]) => `<span><i class="sw" style="${dash ? 'background:transparent;border:1.5px dashed ' + c : 'background:' + c}"></i>${n}</span>`).join('');}
 const f2 = v => v == null ? '–' : v.toFixed(2), f1 = v => v == null ? '–' : v.toFixed(1), pc = v => v == null ? '–' : (v * 100).toFixed(1) + '%', pc0 = v => v == null ? '–' : (Math.round(v * 100) || 0) + '%';
 const sg = v => v == null ? '–' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%', sg2 = v => v == null ? '–' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%';
 const cls = v => v == null ? ' class="n"' : (v < 0 ? ' class="n neg"' : ' class="n"');
@@ -179,7 +199,9 @@ function cumChart(id, rows, log, bands, yearStep){
   let lo = Infinity, hi = -Infinity; pts.forEach(p => { lo = Math.min(lo, p.a, p.bw, p.ct); hi = Math.max(hi, p.a, p.bw, p.ct); });
   if (log) { lo = Math.log10(lo * 0.92); hi = Math.log10(hi * 1.08); } else { const pad = (hi - lo) * 0.06; lo -= pad; hi += pad; }
   const Y = v => t + (hi - (log ? Math.log10(v) : v)) / (hi - lo) * (H2 - t - b);
-  (bands || []).forEach(bd => { const x0 = X(T(bd.from)), x1 = X(T(bd.to)); el('rect', {x: x0, y: t, width: x1 - x0, height: H2 - t - b, fill: bd.fill}, svg); el('text', {x: x0 + 4, y: t + 11, class: 'ax'}, svg, bd.label); });
+  (bands || []).forEach(bd => { const x0 = X(T(bd.from)), x1 = X(T(bd.to));
+    if (bd.outline) { el('rect', {x: x0, y: t + 2, width: x1 - x0, height: H2 - t - b - 4, fill: 'none', stroke: bd.outline, 'stroke-width': 1.2, 'stroke-dasharray': '4 3'}, svg); el('text', {x: x0 + 3, y: H2 - b - 6, class: 'ax'}, svg, bd.label); return; }
+    el('rect', {x: x0, y: t, width: x1 - x0, height: H2 - t - b, fill: bd.fill}, svg); el('text', {x: x0 + 4, y: t + 11, class: 'ax'}, svg, bd.label); });
   const ticks = log ? [0.2, 0.3, 0.5, 0.7, 1, 1.5, 2, 3, 5, 7, 10].filter(v => Math.log10(v) >= lo && Math.log10(v) <= hi) : (function(){ const s = (hi - lo) > 2 ? 0.5 : (hi - lo) > 1 ? 0.25 : 0.1, o = []; for (let v = Math.ceil(lo / s) * s; v <= hi; v += s) o.push(+v.toFixed(2)); return o; })();
   ticks.forEach(v => { el('line', {x1: l, x2: W - r, y1: Y(v), y2: Y(v), stroke: Math.abs(v - 1) < 1e-9 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, '×' + v); });
   const y0 = +rows[0][0].slice(0, 4), y1 = +rows[rows.length - 1][0].slice(0, 4);
@@ -203,29 +225,29 @@ function cumChart(id, rows, log, bands, yearStep){
   });
   hit.addEventListener('mouseleave', () => { untip(); cross.setAttribute('visibility', 'hidden'); });
 }
-legend('lgA', [['contango closes only', 'var(--s1)'], ['inverted closes only', 'var(--s2)'], ['every day', 'var(--ctx2)']]);
+legend('lgA', [['contango closes only', 'var(--s1)'], ['inverted closes only', 'var(--s2)'], ['every day', 'var(--ctx2)'], [`VXZ re-priced on VIXM, ${D.reprice_window.from.slice(0, 7)}..${D.reprice_window.to.slice(0, 7)} (right chart, dashed box)`, 'var(--s2)', true]]);
 cumChart('chA1', D.series.filter(x => x[0] >= D.zvol_start), false, [], 1);
-cumChart('chA2', D.series, true, [{from: D.series[0][0], to: D.vxz_start, label: 'ZVOL = −0.971 × modeled VXZ', fill: 'var(--band3)'}, {from: D.vxz_start, to: D.zvol_start, label: '−0.971 × real VXZ', fill: 'var(--band2)'}, {from: D.zvol_start, to: D.asof, label: 'real ZVOL', fill: 'var(--band)'}], 2);
+cumChart('chA2', D.series, true, [{from: D.series[0][0], to: D.vxz_start, label: 'ZVOL = −0.971 × modeled VXZ', fill: 'var(--band3)'}, {from: D.vxz_start, to: D.zvol_start, label: '−0.971 × VXZ, 2018 on VIXM', fill: 'var(--band2)'}, {from: D.zvol_start, to: D.asof, label: 'real ZVOL', fill: 'var(--band)'}, {from: D.reprice_window.from, to: D.reprice_window.to, outline: 'var(--s2)', label: 'VIXM'}], 2);
 (function(){
-  let h = '<thead><tr><th>era · regime at the close</th><th class="n">closes</th><th class="n">episodes</th><th class="n">next 1</th><th class="n">next 5</th><th class="n">next 20</th><th class="n">t (20)</th><th class="n">win (20)</th><th class="n">placebo pct (20)</th><th class="n">episode-start 20</th><th class="n">VXZ next 20</th></tr></thead><tbody>';
+  let h = '<thead><tr><th>era · regime at the close</th><th class="n">closes</th><th class="n">episodes</th><th class="n">next 1</th><th class="n">next 5</th><th class="n">next 20</th><th class="n">t (20)</th><th class="n">win (20)</th><th class="n">iid placebo pct (20)</th><th class="n">block placebo pct (20)</th><th class="n">LOO-episode range (20)</th><th class="n">episode-start 20</th><th class="n">VXZ mirror next 20</th></tr></thead><tbody>';
   for (const era in D.cond) {
-    const E = D.cond[era]; h += `<tr><td colspan="11" style="color:var(--ink2)">${era}: ${E.from} to ${E.to}</td></tr>`;
+    const E = D.cond[era]; h += `<tr><td colspan="13" style="color:var(--ink2)">${era}: ${E.from} to ${E.to}</td></tr>`;
     ['contango', 'backwardation', '0..-3%', '-3..-8%', '< -8%'].forEach(g => {
       const g1 = E.horizons['1'][g], g5 = E.horizons['5'][g], g20 = E.horizons['20'][g]; if (!g20 || !g20.zvol.n) return;
-      const pl = g20.placebo || {}, es = g20.episode_start || {};
-      h += `<tr${g === 'backwardation' ? ' class="hl"' : ''}><td>${g === 'backwardation' ? 'inverted (all depths)' : g}</td><td class="n">${g20.zvol.n}</td><td class="n">${g20.episodes == null ? '–' : g20.episodes}</td><td${cls(g1.zvol.mean)}>${sg2(g1.zvol.mean)}</td><td${cls(g5.zvol.mean)}>${sg2(g5.zvol.mean)}</td><td${cls(g20.zvol.mean)}>${sg(g20.zvol.mean)}</td><td class="n">${f1(g20.zvol.t)}</td><td class="n">${pc0(g20.zvol.win)}</td><td class="n">${pl.pct == null ? '–' : pc0(pl.pct)}</td><td${cls(es.mean)}>${es.mean == null ? '–' : sg(es.mean) + ' (n ' + es.n + ')'}</td><td${cls(g20.vxz.mean)}>${sg(g20.vxz.mean)}</td></tr>`;
+      const pl = g20.placebo || {}, es = g20.episode_start || {}, bp = g20.block_placebo, lo = g20.loo_episodes;
+      h += `<tr${g === 'backwardation' ? ' class="hl"' : ''}><td>${g === 'backwardation' ? 'inverted (all depths)' : g}</td><td class="n">${g20.zvol.n}</td><td class="n">${g20.episodes == null ? '–' : g20.episodes}</td><td${cls(g1.zvol.mean)}>${sg2(g1.zvol.mean)}</td><td${cls(g5.zvol.mean)}>${sg2(g5.zvol.mean)}</td><td${cls(g20.zvol.mean)}>${sg(g20.zvol.mean)}</td><td class="n">${f1(g20.zvol.t)}</td><td class="n">${pc0(g20.zvol.win)}</td><td class="n">${pl.pct == null ? '–' : pc0(pl.pct)}</td><td class="n">${bp ? pc0(bp.pct) : '–'}</td><td class="n">${lo ? sg(lo.min) + ' .. ' + sg(lo.max) : '–'}</td><td${cls(es.mean)}>${es.mean == null ? '–' : sg(es.mean) + ' (n ' + es.n + ')'}</td><td${cls(g20.vxz.mean)}>${sg(g20.vxz.mean)}</td></tr>`;
     });
   }
-  document.getElementById('tbA').innerHTML = h + '<tr><td colspan="11" style="color:var(--ink2)">Means of overlapping windows; t with the sample sd (overstated for 5/20-session windows, which is why the episode-start column, one row per run of inverted closes, is shown). Placebo: 2000 draws of the same number of random closes in the era; pct = share of draws with a lower mean.</td></tr></tbody>';
+  document.getElementById('tbA').innerHTML = h + `<tr><td colspan="13" style="color:var(--ink2)">Means of overlapping windows; t with the sample sd (overstated for 5/20-session windows, which is why the episode-start column, one row per run of inverted closes, is shown). iid placebo: 2000 draws of the same number of random closes in the era; block placebo: 2000 draws of the same number of runs with the same lengths (consecutive closes), which keeps the clustering the iid draw ignores; pct = share of draws with a lower mean. LOO: the mean with any one episode left out, min to max. The VXZ mirror is an identity before 2023-04 (the proxy IS −0.971 × VXZ) and checks nothing there; the ${D.w18} era is on VIXM's returns through ${D.reprice_window.to}.</td></tr></tbody>`;
 })();
 
 // ---------- B: entries
 (function(){
   const FE = D.filter_effect;
-  document.getElementById('tbB0').innerHTML = '<thead><tr><th>inverted closes, by whether the rule is short vol into the next session</th><th class="n">closes</th><th class="n">ZVOL +1</th><th class="n">win (+1)</th><th class="n">ZVOL +5</th><th class="n">ZVOL +20</th><th class="n">deep (under −8%): closes</th><th class="n">ZVOL +1</th><th class="n">ZVOL +5</th><th class="n">ZVOL +20</th></tr></thead><tbody>' +
+  document.getElementById('tbB0').innerHTML = '<thead><tr><th>inverted closes, by whether the rule is short vol into the next session</th><th class="n">closes</th><th class="n">ZVOL +1</th><th class="n">win (+1)</th><th class="n">ZVOL +5</th><th class="n">ZVOL +20</th><th class="n">Welch t (+1)</th><th class="n">runs · LOO-run min (+1)</th><th class="n">deep (under −8%): closes</th><th class="n">ZVOL +1</th><th class="n">ZVOL +5</th><th class="n">ZVOL +20</th></tr></thead><tbody>' +
     Object.entries(FE).flatMap(([w, F]) => [['rule short vol (ZVOL weight > 0)', F.rule_short_vol, F.with, F.deep_with], ['rule not (PULS / VXZ)', F.rule_not, F.without, F.deep_without]].map(([lab, n, s, d], i) =>
-      `<tr${i === 0 ? ' class="hl"' : ''}><td>${i === 0 ? w + ': ' : ''}${lab}</td><td class="n">${n}</td><td${cls(s['1'].mean)}>${sg2(s['1'].mean)}</td><td class="n">${pc0(s['1'].win)}</td><td${cls(s['5'].mean)}>${sg2(s['5'].mean)}</td><td${cls(s['20'].mean)}>${sg(s['20'].mean)}</td><td class="n">${d['1'].n}</td><td${cls(d['1'].mean)}>${d['1'].n ? sg2(d['1'].mean) : '–'}</td><td${cls(d['5'].mean)}>${d['5'].n ? sg2(d['5'].mean) : '–'}</td><td${cls(d['20'].mean)}>${d['20'].n ? sg(d['20'].mean) : '–'}</td></tr>`)).join('') +
-    '<tr><td colspan="10" style="color:var(--ink2)">The SPY-oversold condition is a selection: of the inverted closes, the ones the rule shorts vol into are followed by a better ZVOL session than the ones it sits out (the 11-05 close is excluded; its next session is pending).</td></tr></tbody>';
+      `<tr${i === 0 ? ' class="hl"' : ''}><td>${i === 0 ? w + ': ' : ''}${lab}</td><td class="n">${n}</td><td${cls(s['1'].mean)}>${sg2(s['1'].mean)}</td><td class="n">${pc0(s['1'].win)}</td><td${cls(s['5'].mean)}>${sg2(s['5'].mean)}</td><td${cls(s['20'].mean)}>${sg(s['20'].mean)}</td><td class="n">${i === 0 ? f2(F.welch_t['1']) : ''}</td><td class="n">${i === 0 ? F.short_vol_runs + ' · ' + sg2(F.loo_run_min_1) : ''}</td><td class="n">${d['1'].n}</td><td${cls(d['1'].mean)}>${d['1'].n ? sg2(d['1'].mean) : '–'}</td><td${cls(d['5'].mean)}>${d['5'].n ? sg2(d['5'].mean) : '–'}</td><td${cls(d['20'].mean)}>${d['20'].n ? sg(d['20'].mean) : '–'}</td></tr>`)).join('') +
+    `<tr><td colspan="12" style="color:var(--ink2)">The SPY-oversold condition is a selection: of the inverted closes, the ones the rule shorts vol into are followed by a better ZVOL session than the ones it sits out (the 11-05 close is excluded; its next session is pending). This is HARV's own rule read on its own in-sample history, not a new edge, and the contango entries are not a placebo for it: the fair tests are the Welch t of with-vs-without (real era ${f2(FE['real ZVOL 2023-04+'].welch_t['1'])} on n ${FE['real ZVOL 2023-04+'].rule_short_vol}/${FE['real ZVOL 2023-04+'].rule_not}; since 2018 ${f2(FE[D.w18].welch_t['1'])}) and the next-session mean with any one run of rule-short closes left out. Logged as "the selection survives inversion".</td></tr></tbody>`;
   const rows = D.real_entries.filter(e => e.depth < 0);
   document.getElementById('tbB1').innerHTML = `<thead><tr><th>entry close</th><th class="n">VIX3M/VIX</th><th class="n">VIX</th><th class="n">SPY day</th><th class="n">HARV day</th><th class="n">ZVOL weight</th><th class="n">held</th><th class="n">ZVOL +1</th><th class="n">ZVOL +5</th><th class="n">ZVOL +20</th><th class="n">HARV +1</th><th class="n">HARV +5</th><th class="n">HARV +20</th><th class="n">VXZ +20</th></tr></thead><tbody>` +
     rows.map(e => `<tr${e.date === D.asof ? ' class="hl"' : ''}><td>${e.date}${e.date === D.asof ? ' (live, pending)' : ''}${e.vxz_held > 0 ? ' ◆' : ''}</td><td class="n neg">${sg(e.depth)}</td><td class="n">${e.vix.toFixed(1)}</td><td${cls(e.spy_day)}>${sg(e.spy_day)}</td><td${cls(e.harv_day)}>${sg2(e.harv_day)}</td><td class="n">${pc0(e.zvol_from)} → ${pc0(e.zvol_to)}</td><td class="n">${e.hold_len == null ? '–' : e.hold_len}</td><td${cls(e.zvol_fwd['1'])}>${sg(e.zvol_fwd['1'])}</td><td${cls(e.zvol_fwd['5'])}>${sg(e.zvol_fwd['5'])}</td><td${cls(e.zvol_fwd['20'])}>${sg(e.zvol_fwd['20'])}</td><td${cls(e.harv_fwd['1'])}>${sg2(e.harv_fwd['1'])}</td><td${cls(e.harv_fwd['5'])}>${sg2(e.harv_fwd['5'])}</td><td${cls(e.harv_fwd['20'])}>${sg2(e.harv_fwd['20'])}</td><td${cls(e.vxz_fwd['20'])}>${sg(e.vxz_fwd['20'])}</td></tr>`).join('') +
@@ -236,11 +258,11 @@ cumChart('chA2', D.series, true, [{from: D.series[0][0], to: D.vxz_start, label:
     ['contango', 'backwardation', '0..-3%', '-3..-8%', '< -8%'].forEach(g => { const x = W.groups[g]; if (!x || !x.n) return;
       h += `<tr${g === 'backwardation' ? ' class="hl"' : ''}><td>${g === 'backwardation' ? 'inverted (all depths)' : g}</td><td class="n">${x.n}</td><td class="n">${x.fresh}</td><td class="n">${pc0(x.mean_zvol_to)}</td><td class="n">${f1(x.mean_vix)}</td><td class="n">${x.hold_len_median == null ? '–' : x.hold_len_median}</td><td${cls(x.zvol_1.mean)}>${sg2(x.zvol_1.mean)}</td><td${cls(x.zvol_5.mean)}>${sg2(x.zvol_5.mean)}</td><td${cls(x.zvol_20.mean)}>${sg(x.zvol_20.mean)}</td><td${cls(x.harv_1.mean)}>${sg2(x.harv_1.mean)}</td><td${cls(x.harv_5.mean)}>${sg2(x.harv_5.mean)}</td><td${cls(x.harv_20.mean)}>${sg2(x.harv_20.mean)}</td><td class="n">${f1(x.harv_20.t)}</td><td class="n">${pc0(x.harv_20.win)}</td></tr>`; }); }
   document.getElementById('tbB2').innerHTML = h + '</tbody>';
-  let g = '<thead><tr><th>window · regime at the fresh entry</th><th class="n">trades</th><th class="n">sessions (median / mean)</th><th class="n">P&amp;L mean</th><th class="n">median</th><th class="n">t</th><th class="n">win</th><th class="n">sum</th><th class="n">ZVOL-leg contribution</th><th>worst</th></tr></thead><tbody>';
-  for (const w in TR) { const W = TR[w]; g += `<tr><td colspan="10" style="color:var(--ink2)">${w} (${W.n} trades)</td></tr>`;
+  let g = '<thead><tr><th>window · regime at the fresh entry</th><th class="n">trades</th><th class="n">sessions (median / mean)</th><th class="n">P&amp;L mean</th><th class="n">median</th><th class="n">t</th><th class="n">win</th><th class="n">sum</th><th class="n">LOO min</th><th class="n">ZVOL-leg contribution</th><th>worst</th><th>best</th></tr></thead><tbody>';
+  for (const w in TR) { const W = TR[w]; g += `<tr><td colspan="12" style="color:var(--ink2)">${w} (${W.n} trades)</td></tr>`;
     ['contango', 'backwardation', '0..-3%', '-3..-8%', '< -8%'].forEach(k => { const x = W.groups[k]; if (!x || !x.n) return;
-      g += `<tr${k === 'backwardation' ? ' class="hl"' : ''}><td>${k === 'backwardation' ? 'inverted (all depths)' : k}</td><td class="n">${x.n}</td><td class="n">${x.sessions_median} / ${f1(x.sessions_mean)}</td><td${cls(x.pnl.mean)}>${sg2(x.pnl.mean)}</td><td${cls(x.pnl.median)}>${sg2(x.pnl.median)}</td><td class="n">${f1(x.pnl.t)}</td><td class="n">${pc0(x.pnl.win)}</td><td${cls(x.sum_pnl_pp)}>${x.sum_pnl_pp.toFixed(1)}pp</td><td${cls(x.zvol_contrib.mean)}>${sg2(x.zvol_contrib.mean)}</td><td>${x.worst} ${sg(x.worst_pnl)}</td></tr>`; }); }
-  document.getElementById('tbB3').innerHTML = g + '<tr><td colspan="10" style="color:var(--ink2)">A trade runs from the close that first gives ZVOL weight to the close that takes it back to zero; P&amp;L is the engine\'s compounded return over those sessions (Composer-equivalent costs inside); the ZVOL-leg contribution is the sum of weight × ZVOL\'s return.</td></tr></tbody>';
+      g += `<tr${k === 'backwardation' ? ' class="hl"' : ''}><td>${k === 'backwardation' ? 'inverted (all depths)' : k}</td><td class="n">${x.n}</td><td class="n">${x.sessions_median} / ${f1(x.sessions_mean)}</td><td${cls(x.pnl.mean)}>${sg2(x.pnl.mean)}</td><td${cls(x.pnl.median)}>${sg2(x.pnl.median)}</td><td class="n">${f1(x.pnl.t)}</td><td class="n">${pc0(x.pnl.win)}</td><td${cls(x.sum_pnl_pp)}>${x.sum_pnl_pp.toFixed(1)}pp</td><td${cls(x.loo_min)}>${sg2(x.loo_min)}</td><td${cls(x.zvol_contrib.mean)}>${sg2(x.zvol_contrib.mean)}</td><td>${x.worst} ${sg(x.worst_pnl)}</td><td>${x.best} ${sg(x.best_pnl)}</td></tr>`; }); }
+  document.getElementById('tbB3').innerHTML = g + '<tr><td colspan="12" style="color:var(--ink2)">A trade runs from the close that first gives ZVOL weight to the close that takes it back to zero; P&amp;L is the engine\'s compounded return over those sessions (Composer-equivalent costs inside); the ZVOL-leg contribution is the sum of weight × ZVOL\'s return. LOO min = the mean with any one trade left out (dropping the best).</td></tr></tbody>';
 })();
 
 // ---------- C: bars per backwardation entry
@@ -249,8 +271,9 @@ cumChart('chA2', D.series, true, [{from: D.series[0][0], to: D.vxz_start, label:
   svg.setAttribute('viewBox', `0 0 ${W} ${H2}`);
   const vals = rows.map(x => x.harv20).filter(v => v != null), lo = Math.min(-0.02, ...vals) - 0.01, hi = Math.max(0.02, ...vals) + 0.01;
   const gw = (W - l - r) / n, Y = v => t + (hi - v) / (hi - lo) * (H2 - t - b), X = i => l + i * gw;
-  const eras = [['model', 'ZVOL = −0.971 × modeled VXZ', 'var(--band3)'], ['vxz', '−0.971 × real VXZ', 'var(--band2)'], ['real', 'real ZVOL', 'var(--band)']];
-  eras.forEach(([k, lab, fill]) => { const idx = rows.map((x, i) => x.era === k ? i : -1).filter(i => i >= 0); if (!idx.length) return; const x0 = X(idx[0]), x1 = X(idx[idx.length - 1] + 1); el('rect', {x: x0, y: t, width: x1 - x0, height: H2 - t - b, fill}, svg); el('text', {x: x0 + 4, y: t + 11, class: 'ax'}, svg, `${lab} (${idx.length})`); });
+  const eras = [['model', 'ZVOL = −0.971 × modeled VXZ', 'var(--band3)'], ['vxz', '−VXZ proxy, 2018 on VIXM', 'var(--band2)'], ['real', 'real ZVOL', 'var(--band)']];
+  eras.forEach(([k, lab, fill], ei) => { const idx = rows.map((x, i) => x.era === k ? i : -1).filter(i => i >= 0); if (!idx.length) return; const x0 = X(idx[0]), x1 = X(idx[idx.length - 1] + 1); el('rect', {x: x0, y: t, width: x1 - x0, height: H2 - t - b, fill}, svg);
+    const last = ei === eras.length - 1; el('text', {x: last ? x1 - 4 : x0 + 4, y: t + 11, class: 'ax', 'text-anchor': last ? 'end' : 'start'}, svg, `${lab} (${idx.length})`); });
   for (let v = Math.ceil(lo * 20) / 20; v <= hi; v += 0.05) { el('line', {x1: l, x2: W - r, y1: Y(v), y2: Y(v), stroke: Math.abs(v) < 1e-9 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, (v * 100).toFixed(0) + '%'); }
   let lastYear = null, lastLabelX = -1e9;
   rows.forEach((x, i) => {
@@ -259,10 +282,10 @@ cumChart('chA2', D.series, true, [{from: D.series[0][0], to: D.vxz_start, label:
     if (x.harv20 == null) { const m = el('circle', {cx: X(i) + gw / 2, cy: Y(0), r: 5, fill: 'var(--surface)', stroke: 'var(--s1)', 'stroke-width': 2}, svg); el('text', {x: X(i) + gw / 2 - 8, y: t + 30, 'text-anchor': 'end', class: 'lbb'}, svg, '11-05: pending ○');
       m.addEventListener('mousemove', e => tip(e, `<b>${x.date}</b> live entry, outcomes pending<br>VIX3M/VIX ${sg(x.depth)}, VIX ${x.vix.toFixed(1)}, ZVOL ${pc0(x.w0)} → ${pc0(x.w)}`)); m.addEventListener('mouseleave', untip); return; }
     const y0 = Y(Math.max(0, x.harv20)), h = Math.abs(Y(x.harv20) - Y(0));
-    const rr = el('rect', {x: X(i) + gw * 0.12, y: y0, width: Math.max(gw * 0.76, 1.2), height: Math.max(h, 1), fill: x.harv20 < 0 ? 'var(--neg)' : 'var(--s3)'}, svg);
-    rr.addEventListener('mousemove', e => tip(e, `<b>${x.date}</b> (${x.era === 'real' ? 'real ZVOL' : x.era === 'vxz' ? '−VXZ proxy' : 'modeled proxy'})<br>VIX3M/VIX ${sg(x.depth)}, VIX ${x.vix.toFixed(1)}, ZVOL ${pc0(x.w0)} → ${pc0(x.w)}, held ${x.hold == null ? '–' : x.hold} session(s)<br>HARV next 1 / 5 / 20: ${sg2(x.harv1)} / ${sg2(x.harv5)} / <b>${sg2(x.harv20)}</b><br>ZVOL next 1 / 20: ${sg(x.zvol1)} / ${sg(x.zvol20)}`)); rr.addEventListener('mouseleave', untip);
+    const rr = el('rect', Object.assign({x: X(i) + gw * 0.12, y: y0, width: Math.max(gw * 0.76, 1.2), height: Math.max(h, 1), fill: x.harv20 < 0 ? 'var(--neg)' : 'var(--s3)'}, x.rp ? {stroke: 'var(--ink)', 'stroke-width': 1, 'stroke-dasharray': '2 1'} : {}), svg);
+    rr.addEventListener('mousemove', e => tip(e, `<b>${x.date}</b> (${x.era === 'real' ? 'real ZVOL' : x.era === 'vxz' ? '−VXZ proxy' : 'modeled proxy'}${x.rp ? ', 2018 re-priced on VIXM' : ''})<br>VIX3M/VIX ${sg(x.depth)}, VIX ${x.vix.toFixed(1)}, ZVOL ${pc0(x.w0)} → ${pc0(x.w)}, held ${x.hold == null ? '–' : x.hold} session(s)<br>HARV next 1 / 5 / 20: ${sg2(x.harv1)} / ${sg2(x.harv5)} / <b>${sg2(x.harv20)}</b><br>ZVOL next 1 / 20: ${sg(x.zvol1)} / ${sg(x.zvol20)}`)); rr.addEventListener('mouseleave', untip);
   });
-  legend('lgC', [[`HARV next 20 sessions ≥ 0 (${n} entries, chronological)`, 'var(--s3)'], ['< 0', 'var(--neg)']]);
+  legend('lgC', [[`HARV next 20 sessions ≥ 0 (${n} entries, chronological)`, 'var(--s3)'], ['< 0', 'var(--neg)'], [`outlined: 20 sessions in the band re-priced on VIXM (${rows.filter(x => x.rp).length} entries, 2018)`, 'var(--ink)', true]]);
 })();
 
 // ---------- D: harvester daily return
@@ -285,7 +308,7 @@ cumChart('chA2', D.series, true, [{from: D.series[0][0], to: D.vxz_start, label:
   document.getElementById('tbD').innerHTML = `<thead><tr><th>the number</th><th class="n">value</th><th>note</th></tr></thead><tbody>` +
     [['Composer last_percent_change, 11-05 (what the alert printed)', sg2(HV.live_1105), 'the symphony\'s day return'],
      ['deposit-adjusted value 11-04 → 11-05', sg2(HV.value_based_1105), '$37,310 → $38,078'],
-     ['close-to-close model', sg2(HV.model_close_to_close_1105), `0.3594 × VXZ ${sg2(HV.vxz_ret_1105)} + 0.6396 × PULS 0.00%; the ${sg2(HV.gap_live_minus_model)} gap is the 15:50 fills on 11-04 and 11-05 vs the 16:00 closes`],
+     ['close-to-close model', sg2(HV.model_close_to_close_1105), `0.3594 × VXZ ${sg2(HV.vxz_ret_1105)} + 0.6396 × PULS 0.00%; the ${sg2(HV.gap_live_minus_model)} gap is plausibly the 15:50 fills on 11-04 and 11-05 vs the 16:00 closes (lpc 2.02 vs value-based 2.06 vs model 2.38%): asserted from the mechanism, not measured against fill prints`],
      ['engine daily returns, real era', `sd ${pc(E.sd)}, p99 ${sg2(E.p99)}, max ${sg2(E.max)}`, `${E.n} sessions ${E.from}..${E.to}; ${E.days_ge_1105} days at or above +2.02% (percentile ${pc0(E.percentile_of_1105)})`],
      ['live sessions in the monitor record', `${LS.n}, max ${sg2(LS.max)}`, `${LS.from}..${LS.to}; 11-05 is the largest`],
      ['as a signal: corr(HARV day, ZVOL next 20), real era', f2(S['real ZVOL 2023-04+'].corr_harv_day_vs_zvol_fwd20), `n ${S['real ZVOL 2023-04+'].n}; since 2006: ${f2(S['2006-07+'].corr_harv_day_vs_zvol_fwd20)} (n ${S['2006-07+'].n})`],
@@ -296,7 +319,8 @@ cumChart('chA2', D.series, true, [{from: D.series[0][0], to: D.vxz_start, label:
 // ---------- E: live record
 (function(){
   document.getElementById('liveLead').textContent = `${LV.sessions} sessions since ${LV.from}; the VIX3M/VIX read has been written into every snapshot since ${LV.first_snapshot_with_contango} (${LV.snapshots_with_contango} snapshots). ` +
-    `Closes in backwardation: ${LV.backwardation_closes.length}. BACKWARDATION DAY alerts: ${LV.backwardation_alerts.length} (one was a 14:58 ET midday run on 10-30 that read −3.4% while HARV sat in PULS; the close was +7.0%). Sessions whose close put HARV into ZVOL: ${LV.zvol_sessions_live}. The evidence record therefore holds one inverted-close entry, 11-05, with no outcome yet.`;
+    `Closes in backwardation: ${LV.backwardation_closes.length}. BACKWARDATION DAY alerts: ${LV.backwardation_alerts.length} (one was a 14:58 ET midday run on 10-30 that read −3.4% while HARV sat in PULS; the close was +7.0%). Sessions whose close put HARV into ZVOL: ${LV.zvol_sessions_live}. The evidence record therefore holds one inverted-close entry, 11-05, with no outcome yet. ` +
+    `The engine path above is the model (the approved logic on Yahoo closes), not Composer: on ${LV.model_vs_live.off_by_more_than_2pp} of the ${LV.model_vs_live.ledger_sessions} ledger sessions the live weights differ from the engine's by more than 2pp (${LV.model_vs_live.rows.filter(x => x.status === 'knife-edge').length} knife-edge, ${LV.model_vs_live.rows.filter(x => x.status === 'no-rebalance').length} no-rebalance), 10-30 among them: engine ZVOL ${pc0((LV.model_vs_live.rows.find(x => x.date === '2026-10-30') || {engine: {}}).engine.ZVOL)} vs live ${pc0((LV.model_vs_live.rows.find(x => x.date === '2026-10-30') || {live: {}}).live.ZVOL)}.`;
   const rows = LV.rows.filter(x => x.depth_close < 0.03 || (x.decided_at_close || {}).ZVOL);
   document.getElementById('tbE').innerHTML = `<thead><tr><th>session</th><th class="n">VIX3M/VIX close</th><th class="n">VIX</th><th class="n">snapshot read</th><th>decided at the close (live)</th><th>shadow</th><th class="n">HARV day</th><th class="n">ZVOL day</th><th class="n">ZVOL +1</th><th class="n">ZVOL +5</th><th class="n">ZVOL +20</th></tr></thead><tbody>` +
     rows.map(x => `<tr${x.depth_close < 0 ? ' class="hl"' : ''}><td>${x.date}</td><td${cls(x.depth_close)}>${sg(x.depth_close)}</td><td class="n">${x.vix.toFixed(1)}</td><td class="n">${x.snapshot_contango == null ? '–' : sg(x.snapshot_contango) + ' @' + x.snapshot_et}</td><td>${x.decided_at_close ? Object.entries(x.decided_at_close).map(([k, v]) => `${k} ${pc0(v)}`).join(', ') : '–'}</td><td>${x.status || '–'}</td><td${cls(x.harv_day)}>${x.harv_day == null ? '–' : sg2(x.harv_day)}</td><td${cls(x.zvol_day)}>${sg(x.zvol_day)}</td><td${cls(x.zvol_fwd['1'])}>${sg(x.zvol_fwd['1'])}</td><td${cls(x.zvol_fwd['5'])}>${sg(x.zvol_fwd['5'])}</td><td${cls(x.zvol_fwd['20'])}>${sg(x.zvol_fwd['20'])}</td></tr>`).join('') +
@@ -306,21 +330,24 @@ cumChart('chA2', D.series, true, [{from: D.series[0][0], to: D.vxz_start, label:
 // ---------- F: context
 (function(){
   const deep = CX.deep_entries, fl = CX.vxz_to_zvol_flips, ds = CX.deep_summary['20'], dz = CX.deep_zvol_20, fs = CX.flip_summary['20'];
+  const BE = CX.deep_by_era, dr = deep.filter(e => e.era === 'real');
   document.getElementById('ctxLead').textContent = `Among the ${CX.n_backwardation_entries_before} earlier inverted-close entries since 2006, 11-05's inversion (${sg(CX.entry.depth)}) is deeper than ${pc0(1 - CX.depth_percentile_among_bw_entries)} of them, its VIX (${CX.entry.vix.toFixed(1)}) sits at the ${pc0(CX.vix_percentile_among_bw_entries)} percentile and its 60% weight at the ${pc0(CX.weight_percentile_among_bw_entries)}. ` +
-    `The ${deep.length} earlier entries deeper than −8%: HARV +20 sessions ${sg(ds.mean)} on average, ${pc0(ds.win)} positive, while ZVOL itself averaged ${sg(dz.mean)}; the two in the real era (2024-12-18, 2025-04-03) lost ${sg(deep.filter(e => e.era === 'real')[0].harv_fwd['1'])} and ${sg(deep.filter(e => e.era === 'real')[1].harv_fwd['1'])} on the next session and were out within one. ` +
-    `11-05 is also the tenth flip from a +1% VXZ day straight into ZVOL; the nine before averaged ${sg(fs.mean)} over the next 20 sessions (${pc0(fs.win)} positive).`;
+    `The ${deep.length} earlier entries deeper than −8% (${BE.model.n} modeled, ${BE.vxz.n} on −VXZ, ${BE.real.n} real): HARV +20 sessions ${sg(ds.mean)} on average, ${pc0(ds.win)} positive, while ZVOL itself averaged ${sg(dz.mean)}; the two in the real era (${dr.map(e => e.date).join(', ')}) lost ${dr.map(e => sg(e.harv_fwd['1'])).join(' and ')} on the next session and were out within one. ` +
+    `The full record disagrees with those two: the modeled entries made ${sg(BE.model.harv_20.mean)} (${pc0(BE.model.harv_20.win)} positive) and the −VXZ ones ${sg(BE.vxz.harv_20.mean)}, the deep-only counterfactual hurts since 2006 and is noise since 2018, and real-era ZVOL itself was ${sg(D.cond['real ZVOL'].horizons['20']['< -8%'].zvol.mean)} twenty sessions after a deep close (n ${D.cond['real ZVOL'].horizons['20']['< -8%'].zvol.n}, ${D.cond['real ZVOL'].horizons['20']['< -8%'].episodes} episodes). "Avoid deep entries" is a watch item with 11-05 as observation 3, not a candidate. ` +
+    `11-05 is also the ${fl.length + 1}th flip from a +1% VXZ day straight into ZVOL; the ${fl.length} before averaged ${sg(fs.mean)} over the next 20 sessions (${pc0(fs.win)} positive).`;
   const row = e => `<tr${e.era === 'real' ? ' class="hl"' : ''}><td>${e.date}</td><td>${e.era === 'real' ? 'real' : e.era === 'vxz' ? '−VXZ' : 'modeled'}</td><td class="n neg">${sg(e.depth)}</td><td class="n">${e.vix.toFixed(1)}</td><td${cls(e.spy_day)}>${sg(e.spy_day)}</td><td${cls(e.harv_day)}>${sg2(e.harv_day)}</td><td class="n">${pc0(e.zvol_from)} → ${pc0(e.zvol_to)}</td><td class="n">${e.hold_len == null ? '–' : e.hold_len}</td><td${cls(e.zvol_fwd['1'])}>${sg(e.zvol_fwd['1'])}</td><td${cls(e.zvol_fwd['20'])}>${sg(e.zvol_fwd['20'])}</td><td${cls(e.harv_fwd['1'])}>${sg2(e.harv_fwd['1'])}</td><td${cls(e.harv_fwd['5'])}>${sg2(e.harv_fwd['5'])}</td><td${cls(e.harv_fwd['20'])}>${sg2(e.harv_fwd['20'])}</td></tr>`;
   const head = '<thead><tr><th>entry close</th><th>data</th><th class="n">VIX3M/VIX</th><th class="n">VIX</th><th class="n">SPY day</th><th class="n">HARV day</th><th class="n">ZVOL weight</th><th class="n">held</th><th class="n">ZVOL +1</th><th class="n">ZVOL +20</th><th class="n">HARV +1</th><th class="n">HARV +5</th><th class="n">HARV +20</th></tr></thead>';
-  document.getElementById('tbF1').innerHTML = head + '<tbody>' + deep.map(row).join('') + row(Object.assign({}, CX.entry, {era: 'real'})).replace('<td>real</td>', '<td>live, pending</td>') + `<tr><td colspan="13" style="color:var(--ink2)">Entries at a VIX3M/VIX below −8%, 2006 to 2026, with 11-05 last. The 2007-2011 rows run on the modeled VXZ whose 2008 behaviour the add. 27 panel called artifact-grade (the model's contango beta is unidentified in backwardation); 2018-2020 rows on −0.971 × real VXZ; the two 2024-25 rows and 11-05 on the real fund.</td></tr></tbody>`;
+  document.getElementById('tbF1').innerHTML = head + '<tbody>' + deep.map(row).join('') + row(Object.assign({}, CX.entry, {era: 'real'})).replace('<td>real</td>', '<td>live, pending</td>') + `<tr><td colspan="13" style="color:var(--ink2)">Entries at a VIX3M/VIX below −8%, 2006 to 2026, with 11-05 last. The 2007-2011 rows run on the modeled VXZ whose 2008 behaviour the add. 27 panel called artifact-grade (the model's contango beta is unidentified in backwardation); 2018-2020 rows on −0.971 × VXZ (2018-03-23 inside the band re-priced on VIXM: its HARV +1 was "−0.1%" on the stale prints); the two 2024-25 rows and 11-05 on the real fund.</td></tr></tbody>`;
   document.getElementById('tbF2').innerHTML = head + '<tbody>' + fl.map(row).join('') + '</tbody>';
 })();
 
 [`Rule and data: the live tree fixtures/approved/harv-XVtsDTV1.json (version ${D.rule.version}), evaluated by the shadow runner on Yahoo adjusted closes with the 11-05 closes read at ~22:00 UTC (VIX 28.18, VIX3M 25.55, SPY 733.00, ZVOL 6.82, VXZ 48.21, UVXY 23.61); it reproduces the 11-04 (VXZ 36 / PULS 64) and 11-05 (ZVOL 60 / PULS 40) decisions. Regime = VIX3M/VIX at the close; depth buckets 0..−3%, −3..−8%, under −8%.`,
- `ZVOL's real history is short: ${RC.real_zvol_era_days} closes since 2023-04-19, ${RC.real_zvol_era_backwardation_days} of them inverted in ${RC.real_zvol_era_episodes} episodes (9 deeper than −8%, three episodes). Everything before 2023 is the add. 47 proxy, ZVOL = −0.971 × VXZ (fit corr 0.973, backwardation-day beta 0.98-1.00 on 48 days); VXZ is real from 2018-01-25 and the vix_etp term-structure model on the real VIX3M/VIX6M before that, whose 2008 is kinder than reality (add. 27). The 1995-2006 split uses a synthetic VIX3M fitted from the VIX alone and is shown only for completeness (${D.path['1995-06+ (synthetic curve before 2006-07)'].synthetic_regime_days} such days).`,
- `Measurement basis: the engine path is the add. 47 pipeline with Composer-equivalent costs (5.1 bps per unit of weight traded), rebuilt 2026-11-05 on the live tree; the 11-05 return in the path is the live +2.02%. Trade P&amp;L is close to close on that path, not Composer's fills; add. 38 measured live fills within a few bps of the model on average, and 11-05's +2.02% against the +2.38% close-to-close model shows a 15:50-fill day. The counterfactuals leave the cost of the removed trades in (slightly conservative against the counterfactual).`,
- `Statistics: t with the sample sd on overlapping windows, so the 5- and 20-session t-values are overstated and the episode-start rows are the fairer read; the inverted closes cluster (${RC.since_2006_backwardation_days} closes in ${D.cond['all since 2006-07'].horizons['20'].backwardation.episodes} episodes since 2006). Small n everywhere that matters: 19 inverted-close entries and 15 trades in the real era, 2 of them deep; 29 deep entries since 2006 of which 24 are modeled. In sample: the rule's windows were chosen on 2015-26 data.`,
- `The HYG credit guard in the symphony's name does not exist in any saved version (add. 48): the only guard is RSI(UVXY,14) > 70 → PULS, which read 66.7 on 11-05 (3.3 points from blocking the entry). The add. 12 design (block ZVOL when HYG fell more than 1% that day) lives only in research/harv_sim.py; HYG was −0.31% on 11-05, so it would not have fired either. The guard sim's monthly series (research/harv_guard_sim.json, 2018-02..2023-04, cumulative ${sg(D.guard.harv_guard_sim.cumulative)}) has its worst months in the 2018 chop (${Object.entries(D.guard.harv_guard_sim.worst_months).slice(0, 3).map(([k, v]) => k + ' ' + sg(v)).join(', ')}), not in a crash.`,
- `Prior measurements this study agrees with: add. 25 (the harvester's best contango quartile is low/negative: +18.5 bp/day) and add. 47 C1 (sending ZVOL to PULS when VIX > VIX3M cost the real era ×2.11 → ×2.00 and was killed). What is new: the depth split. Not modeled: fills on a limit-down open, the ZVOL ex-distribution timing (add. 37), anything about VIX futures themselves. Research only; nothing traded, paused or edited.`,
+ `ZVOL's real history is short: ${RC.real_zvol_era_days} closes since 2023-04-19; counting the 11-05 close, ${RC.real_zvol_era_backwardation_days} of them inverted in ${RC.real_zvol_era_episodes} episodes and ${RC.real_zvol_era_deep_days} deeper than −8% in ${RC.real_zvol_era_deep_episodes} episodes; with outcomes (every table above) ${RC.real_zvol_era_backwardation_days_with_outcomes} / ${RC.real_zvol_era_episodes_with_outcomes} and ${RC.real_zvol_era_deep_days_with_outcomes} / ${RC.real_zvol_era_deep_episodes_with_outcomes}. Everything before 2023 is the add. 47 proxy, ZVOL = −0.971 × VXZ (fit corr 0.973, backwardation-day beta 0.98-1.00 on 48 days), so the VXZ "mirror" is an identity there and checks nothing. VXZ is real from 2018-01-25 but Yahoo's print is stale through 2019-01: ${D.reprice.vxz_zero_volume_sessions.n} zero-volume sessions at ${D.reprice.vxz_zero_volume_sessions.price.toFixed(2)} from ${D.reprice.vxz_zero_volume_sessions.from}, ${D.reprice.vxz_2018_zero_return_sessions.n} of ${D.reprice.vxz_2018_zero_return_sessions.of} sessions in 2018 at 0.00% (corr with VIXM ${D.reprice.corr_vxz_vixm_2018.toFixed(2)} that year vs ${D.reprice.fit_2019_02_to_2023_04.corr.toFixed(3)} after). Inside this study VXZ's daily returns ${D.reprice.window.returns_from}..${D.reprice.window.to} are VIXM's (beta ${D.reprice.fit_2019_02_to_2023_04.beta_vxz_on_vixm.toFixed(2)}) for the proxy, the mirror and the engine's day return on the ${D.reprice.engine.sessions_on_vxz_or_zvol} sessions it held VXZ or the proxy (holdings × re-priced returns; decisions never read those prices; e.g. 2018-02-05 HARV ${sg2(D.reprice.check_2018_02_05.as_printed)} as printed → ${sg2(D.reprice.check_2018_02_05.repriced)}). The add. 47 panel and its harvester 2018 rest on the same stale prints; the upstream fix is pending and is not applied here. Before 2018 VXZ is the vix_etp term-structure model on the real VIX3M/VIX6M, whose 2008 is kinder than reality (add. 27). The 1995-2006 split uses a synthetic VIX3M fitted from the VIX alone and is shown only for completeness (${D.path['1995-06+ (synthetic curve before 2006-07)'].synthetic_regime_days} such days).`,
+ `Measurement basis: the engine path is the add. 47 pipeline with Composer-equivalent costs (5.1 bps per unit of weight traded), rebuilt 2026-11-05 on the live tree; the 11-05 return in the path is the live +2.02%. It is the model, not Composer: on ${LV.model_vs_live.off_by_more_than_2pp} of ${LV.model_vs_live.ledger_sessions} ledger sessions the live weights differ from the engine's by more than 2pp (10-30: engine ZVOL 60% vs live 52%, a knife-edge). Trade P&amp;L is close to close on that path, not Composer's fills; add. 38 measured live fills within a few bps of the model on average. 11-05's +2.02% against the +2.38% close-to-close model (deposit-adjusted value +2.06%) is plausibly a 15:50-fill day; that attribution is asserted from the mechanism, not measured. The counterfactuals leave the cost of the removed trades in (slightly conservative against the counterfactual).`,
+ `Statistics: t with the sample sd on overlapping windows, so the 5- and 20-session t-values are overstated and the episode-start rows are the fairer read; the inverted closes cluster (${RC.since_2006_backwardation_days} closes in ${D.cond['all since 2006-07'].horizons['20'].backwardation.episodes} episodes since 2006; the ${RC.real_zvol_era_backwardation_days_with_outcomes} real-era closes are ${RC.real_zvol_era_episodes_with_outcomes} runs and the 20-session result is two runs fighting: block placebo ${pc0(D.cond['real ZVOL'].horizons['20'].backwardation.block_placebo.pct)} percentile, leave-one-episode-out ${sg(D.cond['real ZVOL'].horizons['20'].backwardation.loo_episodes.min)}..${sg(D.cond['real ZVOL'].horizons['20'].backwardation.loo_episodes.max)}). Small n everywhere that matters: 19 inverted-close entries and 15 trades in the real era, 2 of them deep; 29 deep entries since 2006, of which ${CX.deep_by_era.model.n} are modeled, ${CX.deep_by_era.vxz.n} on −VXZ and ${CX.deep_by_era.real.n} real. In sample: the rule's windows were chosen on 2015-26 data.`,
+ `The HYG credit guard in the symphony's name does not exist in any saved version (add. 48): the only guard is RSI(UVXY,14) > 70 → PULS, which read 66.7 on 11-05 (3.3 points from blocking the entry). The add. 12 design (block ZVOL when HYG fell more than 1% that day) lives only in research/harv_sim.py; HYG was −0.31% on 11-05, so it would not have fired either. The guard sim's monthly series (research/harv_guard_sim.json, 2018-02..2023-04, cumulative ${sg(D.guard.harv_guard_sim.cumulative)}) has its worst months in the 2018 chop (${Object.entries(D.guard.harv_guard_sim.worst_months).slice(0, 3).map(([k, v]) => k + ' ' + sg(v)).join(', ')}), not in a crash; it too was built on the stale 2018 VXZ prints.`,
+ `Prior measurements this study agrees with: add. 25 (the harvester's best contango quartile is low/negative: +18.5 bp/day) and add. 39 C1 (2026-10-07: sending ZVOL to PULS when VIX > VIX3M cost the real era ×2.11 → ×2.00, "its backwardation entries ARE the edge", killed). What is new: the depth split. Not modeled: fills on a limit-down open, the ZVOL ex-distribution timing (add. 37), anything about VIX futures themselves. Research only; nothing traded, paused or edited.`,
+ `EDGE rule: nothing here is a new edge. The selection effect (rule-short inverted closes beat the ones the rule sits out) is HARV's own rule read on its own in-sample history, conditioned on a regime the rule does not read; its "placebo" (the contango entries) is not a placebo and the VXZ mirror is tautological before 2023. Logged as "the selection survives inversion": Welch t ${f2(D.filter_effect['real ZVOL 2023-04+'].welch_t['1'])} in the real era (n ${D.filter_effect['real ZVOL 2023-04+'].rule_short_vol}/${D.filter_effect['real ZVOL 2023-04+'].rule_not}, ${D.filter_effect['real ZVOL 2023-04+'].short_vol_runs} runs, leave-one-run-out min ${sg2(D.filter_effect['real ZVOL 2023-04+'].loo_run_min_1)}), ${f2(D.filter_effect[D.w18].welch_t['1'])} since 2018 re-priced (${D.filter_effect[D.w18].short_vol_runs} runs, LOO-run min ${sg2(D.filter_effect[D.w18].loo_run_min_1)}), ${f2(D.filter_effect['2006-07+'].welch_t['1'])} since 2006. The deep-entry caution is 2 real trades against a record of 29 that points the other way: a watch item, 11-05 is observation 3.`,
  `Generated ${D.generated}.`]
  .forEach(s => document.getElementById('basis').insertAdjacentHTML('beforeend', `<li>${s}</li>`));
 </script>
