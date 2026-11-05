@@ -3966,3 +3966,155 @@ downloads) and found:
 
 DECISION: research only; nothing traded, no engine built. Backlog item 13 records the two versions and
 the prerequisite. Awaiting the owner's genomics sleeve record for question 3.
+
+---
+
+## Addendum 53 — Overnight / pre-open overlays on the engines' leveraged legs: what an IBKR layer could add (2026-11-05)
+
+Owner, 11-05, after KMLM's SOXL buy at the 11-04 close opened -14.6% and fell another 15% by 11:30
+("TA on futures was off a cliff"): "what if we had all our same logic + this new futures overnight
+logic on IBKR — could we have caught this move properly? ... see if there are overnight indicators like
+semis etc. or others, run large study, to see if there are a series or individual ones we can run;
+think second order; trying to see if it makes sense to switch all this logic over on IBKR." Research
+only. Exhibit results/overnight-2026-11-05.html; code research/overnight/ (overnight_study.py: the
+engine-path harness; dipbuy_events.py: the model-free panel; make_overnight_chart.py); data in the
+scratchpad (overnight/daily.json, premarket_bridge.json; the add. 47 pipeline re-run for the engine
+paths, long1997/engines_ts_synth.json).
+
+WHAT WAS MEASURED
+- The engines' 15:50 decisions are left as they are. The overlay acts BETWEEN decisions: on the
+  morning after a leveraged entry it reads what is known before 09:30 — the fund's own pre-open gap,
+  the sector ETF's gap (SMH/XLK/QQQ/SPY/IWM/XBI), the mean of the Nikkei, Kospi and Taiwan closes that
+  day (all before 04:00 ET; the Korea+Taiwan pair as "Asia semis"), the DAX open (03:00 ET) vs its
+  prior close, VIX's prior close, its change on the entry day, VIX vs VIX3M, and the entry day's own
+  move — and EXITS at the 09:30 open (cash until the next 15:50 decision), or FLIPS into the inverse
+  fund for the session. The mirror for the short legs (SQQQ/TLT/UVXY) on overnight rallies. Plus a
+  flip BREAKER (after N direction changes in M sessions, cash for K sessions). Thresholds swept; AND
+  combinations; the mirrored ("INVERSE") signals as controls; 2,000-draw placebos of the same number of
+  random same-side mornings.
+- Test bed: the KMLM switcher's and HG's daily paths from the add. 47 pipeline (live trees, Composer-
+  equivalent costs; KMLM's dominant leg matches Composer's ledger on 56 of 58 comparable sessions since
+  August), 2015-06-01..2026-11-04, overlays on the real funds' raw opens and closes; costs 15 bps at
+  the open and 10 bps when the engine re-holds the fund at the next close.
+- Model-free panel: every morning after SOXL, TECL, TQQQ, SPXL or LABU closed with Wilder RSI(10) < 30
+  (the engines' dip-buy trigger), from each fund's launch: 893 mornings.
+- Data limits: no historical 04:00-08:00 prints exist in our sources (FMP's 1-minute bars are
+  09:30-15:59; Yahoo keeps 60 days of pre-market), so the exit print is the open; a 60-day bridge
+  measures the pre-market prints against it (below). Index futures intraday history: 60 days only.
+
+RESULTS
+1. The night of 11-04 -> 11-05, as % of the 16:00 close: ES -0.3% at midnight, -0.2% at 09:25; NQ -1.1%
+   / -1.3%; SPY -0.1% at 09:25. SMH pre-market -2.5% at 04:00, -4.5% at 09:25; SOXL pre-market -8.7% at
+   04:00, -13.3% at 09:25, open -14.6%, -35% at the 11:00 low. Index futures were flat; the warning was
+   semis pre-market; most of the damage was the regular session (SPY -3.6% by 11:00).
+2. Model-free, 893 dip-buy mornings (pooled; "up" = open-to-close positive):
+     signal before 09:30             n    open->close   up        signal                 n    open->close   up
+     all mornings                  893      +0.88%     55%       Asia <= -1%            322     +1.67%     55%
+     fund gap <= -2%               161      +3.15%     64%       Asia <= -2%            149     +3.45%     60%
+     fund gap <= -5%                72      +4.49%     64%       DAX open <= -1%        151     +2.76%     58%
+     fund gap <= -8%                38      +6.17%     66%       DAX open <= -2%         44    +11.56%     86%
+     fund gap <= -10%               23      +5.83%     65%       VIX > 30               247     +2.14%     56%
+     sector gap <= -2%              87      +4.78%     69%       VIX > 40                97     +3.48%     66%
+     sector gap <= -3%              54      +5.62%     69%       entry day <= -10%      166     +2.05%     57%
+   By decile of the fund's gap: the worst decile (mean gap -8.8%) -> +4.72% open-to-close, 70% up; the
+   best (+9.7%) -> -0.11%. Correlation of each pre-open signal with the subsequent open-to-close move:
+   fund gap -0.14, sector gap -0.14, Asia -0.16, DAX open -0.17, VIX +0.15, entry day -0.11. Per fund,
+   gap <= -5%: SOXL n18 +5.7% (33% negative), TECL n11 +6.3%, TQQQ n11 +4.9%, LABU n20 +5.9%, SPXL n12
+   -1.6% (the exception, 58% negative). The eight prior SOXL gap-downs of 10%+ averaged +8.4%
+   open-to-close. The worse the overnight, the better the day: an exit at the open sells the low two
+   mornings in three.
+3. The rules on KMLM's own path (as built 2015-06..2026-11-04: CAGR 193.8%, Sharpe 2.16, max DD -54.4%,
+   in sample; 2,187 leveraged-long mornings: SOXL 1,144, TECL 1,004, SPXL 21, LABU 18; long legs' mean
+   gap +0.33%, mean open-to-close +0.39%; after a 5%+ gap-down, n100, +1.52%). Exit at the open:
+     rule                           fires  helped  per fire   dCAGR    dSharpe  dMaxDD   placebo pct (p05..p95)
+     fund gap <= -2%                 362    42%    -0.48%    -39.2pp   -0.23    -1.5pp    3%  (-36.8..-8.4)
+     fund gap <= -5%                 100    44%    -0.98%    -23.7     -0.14    +0.6      0%  (-14.8..+1.2)
+     fund gap <= -8%                  36    56%    -1.25%    -10.8     -0.06    +0.6      0%  (-7.2..+2.4)
+     fund gap <= -10%                 25    64%    -1.13%     -6.6     -0.03    -0.9      3%  (-5.8..+2.2)
+     sector gap <= -1% / -2%     206 / 67  43/52%  -0.6/-1.0  -28.5 / -15.2                 1% / 1%
+     Asia <= -1% / -2%           226 / 74  38/42%  -0.8/-1.5  -40.1 / -24.8  -0.21  -10.3   0% / 0%
+     Asia semis <= -1% / -2%     208 / 73  39/34%             -34.8 / -28.4                 0% / 0%
+     DAX open <= -1% / -2%       111 / 25  40/28%  -1.2/-3.8  -29.7 / -22.6                 0% / 0%
+     VIX > 20 / 25 / 30      611/294/104  42-44%             -70.8 / -41.4 / -29.3  -11.8..-13.2   0%
+     VIX backwardation               153    41%    -0.90%    -29.0     -0.10   -12.2      0%
+     entry day <= -5% / -8% / -10%  256/109/67  39-43%        -55.0 / -27.8 / -23.3  -13..-15   0%
+     combos (gap&Asia, gap&sector, Asia&DAX, gap&VIX, crash&gap)   17-96  29-45%   -12.4 .. -22.9      0%
+     INVERSE gap >= +2% / +5%    500 / 124  41/42%            -36.7 / -4.5                  26% / 73%
+     INVERSE Asia >= +1%             255    42%               -14.9                         54%
+   Flip into the inverse fund instead of cash: gap <= -2% -71.4pp, <= -5% -46.1 (Sharpe -0.33), <= -10%
+   -15.3; every combination -24.9 to -44.7. Short legs, exit at the open on an overnight rally: short
+   fund gap <= -2% n90 -7.1pp (57th pct); <= -3% n42, 60% helped, +1.6pp, +0.01 Sharpe (88th pct); Asia
+   >= +1% n68 -4.0. Breaker: 2 flips in 3 -> cash 3: 55 trips, 163 cash days, -18.9pp; cash 5: -42.3;
+   3 in 5 -> cash 5: 22 trips, 105 days, -21.0 (-0.10 Sharpe); cash 10: -36.6; 4 in 10 -> 10: -23.3.
+   Placebo reading: the "bad news" rules sit at or below the 5th percentile of exiting the same number
+   of random mornings — they select the mornings on which exiting hurts most; the mirrored rules sit
+   inside the band (no information). Drawdowns deepen (Asia, VIX, crash-entry rules -9 to -15pp) because
+   the bounce days are inside the drawdown episodes.
+4. HG's legs (as built 86.1% / 1.62 / -35.9%; 1,909 long mornings: TQQQ 716, UDOW 452, TNA 320, SSO 278,
+   others 143; after a 5%+ gap-down, n17, +4.03%): fund gap <= -2% n122, 39% helped, -19.8pp, DD -5.2pp;
+   <= -5% n17, 29%, -10.6, DD -7.2; sector gap <= -1% n67 -22.9, DD -11.2; Asia <= -1% n187 -24.8; <= -2%
+   n45 -15.5; DAX <= -1% n75 -24.3, DD -10.7; VIX > 25 n149 -17.6; > 30 n53 -14.9, DD -7.5; entry day
+   <= -8% n33, 24% helped, -13.6; combos -6.6 to -12.4; flips -20.8 to -36.6 with DD -15 to -22pp; the
+   INVERSE Asia rule -2.2 (92nd pct). Same signs in every row.
+5. Flip rate. KMLM direction changes per 25 sessions on the 2015-26 path: mean 1.7, p90 4, p99 8, max
+   11, 0.7% of windows at 10 or more (196 changes in 2,876 sessions). Live, 2026-10-07..11-04: 10 in
+   25. The reconstructed path flips the same way in these sessions (its dominant leg matches the ledger),
+   so the run is the rules meeting a daily-reversal tape, not a Composer defect; the breakers that
+   would have sat it out cost 19-42pp a year because the flip-heavy regimes are where the engine earns.
+6. Pre-market vs the open (60 sessions of 5-minute prints): the 09:25 print is the open to within 0.1%
+   (SOXL sd 0.11%, TECL 0.12%, TQQQ 0.02%); the 08:00 print sits within 3.2% / 2.0% / 1.3% (sd) of the
+   open and shows 72% / 77% / 82% of gap-downs of 4%+ (15 / 8 / 3 cases). An 04:00-08:00 exit would have
+   sold a little higher than the open on the big gap-downs and lower on the rest; nothing in it changes
+   the sign of 3-4.
+7. Second order, for the IBKR question:
+   - Execution: Composer's measured fills 2.9 bps a side (add. 14b); IBKR modeled ~$1.3k/yr worse at
+     $250k; closed by measurement. Decision time: the logic at 15:54 contradicts Composer on 1 of 272
+     sessions (add. 50), so a 15:59 decision buys nothing. Overnight / pre-market action: this addendum —
+     every rule tested subtracts. Futures as the instrument instead of 3x ETFs: a different strategy
+     (no daily reset, different path dependence), untested, not an overlay. Operational: ibkr-executor
+     is OFFLINE with one strategy (the El Nino ladder); a Composer-equivalent runner for four trees,
+     the corridor logic and the RSI semantics, with its own shadowing, is weeks of work and a new
+     failure surface (gateway, order handling) in exchange for nothing measured. The backlog's
+     migration gate ($500-750k, thin-name fills) is unchanged.
+   - What a day like 11-05 is actually about: KMLM put 75% of the symphony (29% of the book) in one 3x
+     sector fund, 2.25x semis notional on ~22% of the book; the -27% SOXL day took -20% off the symphony,
+     -6.5% off the book, with the other three engines flat. That is a sizing question — the KMLM weight
+     (Op 3's earn-back read on 11-09) or the leg size inside the symphony (add. 42 item 9: a long-leg vol
+     gate cut DD 55 -> 45-48 for -11pp CAGR, in sample) — not a venue question. And the exit that
+     looks obvious this morning has been the losing trade two mornings in three since 2008.
+
+ANSWERS
+1. Overnight indicators (semis, Asia, Europe, VIX, the fund's own pre-open print): all of them carried
+   information, and all of it pointed the wrong way for an exit — after an oversold close, a bad
+   overnight predicted a better session, not a worse one. Individually and in series (AND
+   combinations), every exit rule lowered CAGR (KMLM -7 to -71pp off 194; HG -2 to -32pp off 86),
+   lowered Sharpe, and deepened or left unchanged the max drawdown; flips were worse; the breaker was
+   worse still. The one non-negative candidate, exiting the short legs on an overnight rally, is
+   +1.6pp on 42 fires at the 88th placebo percentile — noise.
+2. Could IBKR have "caught" 11-05? A pre-market stop on the position would have sold SOXL at -9 to -13%
+   instead of riding to -27%: ~$10k on the day. The same stop, applied every time it fired since 2015,
+   would have cost 11-24pp of CAGR a year on KMLM and deepened its drawdowns. Index futures carried no
+   signal at all (ES -0.2% at the open).
+3. Switch the logic to IBKR? No, on this evidence: the overnight capability subtracts, the fill and
+   decision-time cases were closed earlier, and the operational cost is real. Reopen only with a
+   mechanism that is not "de-risk the stress state" — the house rule (ideas-backlog, settled questions)
+   holds a tenth time.
+
+HONESTY BOX
+- The 2015-26 KMLM path is in sample (the rules were built on these years) and runs on proxies before
+  each fund's launch; the overlay results are differences against that path, on the real funds' prices
+  from launch, so the in-sample level does not favour "hold" by construction — but a 194%/yr base
+  magnifies every delta in CAGR points; read the Sharpe and placebo columns alongside.
+- The exit print is the 09:30 open; a pre-market exit (04:00-08:00) is not testable beyond 60 days. No
+  intraday stops (09:30-15:50) were tested: no history.
+- Costs assumed (15 + 10 bps); the signs hold before costs. Yahoo raw opens for leveraged ETFs;
+  ex-dividend days differ from the engine's adjusted returns by the dividend.
+- Asia/Europe stamps are local session dates (Yahoo); VIX is the prior close; no look-ahead in the
+  signals. The placebo draws from the same side's mornings.
+- The direction-change count treats cash/vol legs as neutral (HG has no counted flips).
+
+COUNTER-AGENT: pending.
+
+DECISION: none on symphonies; no IBKR build; the overnight-overlay question joins the settled list
+(ideas-backlog). Open items that this week raised and this addendum does not answer: the KMLM weight
+and leg size (Op 3 on 11-09; owner).

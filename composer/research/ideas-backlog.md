@@ -204,3 +204,13 @@ deterministic rationale are listed.
     wanted: ETF pair first (SPMO or MTUM + VLUE, quarterly), measured against SPY; a stock engine only
     for capacity/ownership reasons, behind the point-in-time fundamentals prerequisite (add. 51),
     keyless through ibkr-executor, shadowed. Open input: the owner's genomics sleeve record.
+14. SETTLED (add. 53, 2026-11-05): overnight / pre-open overlays on the engines' leveraged legs — exit
+    or flip at the open on the fund's gap, the sector's gap, Asia's closes, the DAX open, VIX level /
+    change / backwardation, the entry day's crash, their AND-combinations, and a flip-frequency
+    breaker — every one lowered CAGR, Sharpe and (mostly) deepened max DD on the KMLM and HG paths
+    2015-26, at or below the 5th placebo percentile: after an oversold close, a bad overnight predicts a
+    better session (893 dip-buy mornings since 2008: bottom gap decile +4.7% open-to-close, 70% up).
+    The tenth failure of the de-risking-overlay class. The IBKR migration gains nothing from overnight
+    action; fills (add. 14b) and decision time (add. 50) were closed earlier. Reopen only with a
+    mechanism that is not "de-risk the stress state". The live question 11-05 raised is sizing (KMLM's
+    75% single-3x-fund leg; Op 3), not venue.

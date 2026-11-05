@@ -38,8 +38,10 @@ PATHS = os.path.join(S, "long1997", "engines_ts_synth.json")
 DAILY = os.path.join(S, "overnight", "daily.json")
 BRIDGE = os.path.join(S, "overnight", "premarket_bridge.json")
 START = "2015-06-01"                       # LABU's first month; the rules' own years
-LONG3 = {"SOXL": "SMH", "TECL": "XLK", "TQQQ": "QQQ", "SPXL": "SPY", "LABU": "LABU", "UPRO": "SPY", "UDOW": "SPY", "SSO": "SPY", "QLD": "QQQ", "FAS": "SPY"}
-INVERSE = {"SOXL": "SOXS", "TECL": "SQQQ", "TQQQ": "SQQQ", "SPXL": "SPXS", "LABU": "SQQQ", "UPRO": "SPXS", "UDOW": "SPXS", "SSO": "SPXS", "QLD": "SQQQ", "FAS": "SPXS"}
+LONG3 = {"SOXL": "SMH", "TECL": "XLK", "TQQQ": "QQQ", "SPXL": "SPY", "LABU": "XBI", "UPRO": "SPY", "UDOW": "SPY", "SSO": "SPY", "QLD": "QQQ", "FAS": "SPY",
+         "TNA": "IWM", "USD": "SMH"}
+INVERSE = {"SOXL": "SOXS", "TECL": "SQQQ", "TQQQ": "SQQQ", "SPXL": "SPXS", "LABU": "SQQQ", "UPRO": "SPXS", "UDOW": "SPXS", "SSO": "SPXS", "QLD": "SQQQ", "FAS": "SPXS",
+           "TNA": "TZA", "USD": "SOXS"}
 SHORT3 = {"SQQQ": "QQQ", "SOXS": "SMH", "SPXS": "SPY"}
 EXIT_BPS, REENTRY_BPS = 15, 10
 MIN_W = 0.30                               # a leg counts when it carries at least this weight
@@ -54,19 +56,20 @@ def load_daily():
 
 
 def load_paths():
+    """{engine: {days, rets, hold}} aligned lists: rets[i] is the engine's costed return on days[i] and
+    hold[i] the weights that EARN on days[i] (decided at the previous close). The add. 47 file keys
+    rets and hold by the earning date."""
     p = json.load(open(PATHS))
     out = {}
     for e, v in p.items():
-        days, rets, hold = v["days"], v["rets"], v["hold"]
-        H = []
-        for h in hold:
-            if isinstance(h, dict):
-                H.append({k: float(x) for k, x in h.items()})
-            elif isinstance(h, list):
-                H.append({k: float(x) for k, x in h})
-            else:
-                H.append({})
-        out[e] = {"days": list(days), "rets": [float(r) for r in rets], "hold": H}
+        rets, hold = v["rets"], v["hold"]
+        if isinstance(rets, dict):
+            days = sorted(d for d in rets if d in hold)
+            out[e] = {"days": days, "rets": [float(rets[d]) for d in days], "hold": [{k: float(x) for k, x in hold[d].items()} for d in days]}
+        else:                                   # list form: hold[i] decided at the close of days[i]
+            days = list(v["days"])
+            H = [({k: float(x) for k, x in h.items()} if isinstance(h, dict) else {}) for h in hold]
+            out[e] = {"days": days[1:], "rets": [float(r) for r in rets[1:]], "hold": H[:-1]}
     return out
 
 
@@ -152,8 +155,8 @@ def mornings(D, path, start=START):
     short) of weight >= MIN_W: everything known before 09:30 plus what the leg then did"""
     days, hold = path["days"], path["hold"]
     rows = []
-    for i in range(1, len(days)):
-        d, h = days[i], hold[i - 1]            # hold[i-1]: the holdings decided at the close of days[i-1]
+    for i in range(len(days)):
+        d, h = days[i], hold[i]                # hold[i]: decided at the previous close, earns on days[i]
         if d < start:
             continue
         for t, w in h.items():
@@ -180,7 +183,7 @@ def mornings(D, path, start=START):
                          "vix_curve": (vix / vix3 - 1) if (vix and vix3) else None,
                          "entry_day": entry["day"] if entry else None,
                          "inv_intra": ig["intra"] if ig else None,
-                         "still_held": (hold[i].get(t, 0.0) >= MIN_W) if i < len(hold) else False})
+                         "still_held": (hold[i + 1].get(t, 0.0) >= MIN_W) if i + 1 < len(hold) else False})
     return rows
 
 
@@ -209,9 +212,13 @@ def apply(path, rows, fire, action="exit", exit_bps=EXIT_BPS, reentry_bps=REENTR
     return rets, fires
 
 
-def evaluate(path, rows, fire, action="exit", placebo=True):
-    rets, fires = apply(path, rows, fire, action)
-    base = path["rets"]
+def evaluate(path, rows, fire, action="exit", placebo=True, start=START):
+    """metrics on the START.. window only (the overlays apply there; the full path's 1995-2015 proxy
+    years would dilute every delta and hide the drawdown change)"""
+    sel = [i for i, d in enumerate(path["days"]) if d >= start]
+    full, fires = apply(path, rows, fire, action)
+    rets = [full[i] for i in sel]
+    base = [path["rets"][i] for i in sel]
     out = {"n_fires": len(fires), "saved_total": sum(f["saved"] for f in fires),
            "saved_mean": statistics.mean([f["saved"] for f in fires]) if fires else 0.0,
            "hit_rate": (sum(1 for f in fires if f["saved"] > 0) / len(fires)) if fires else None,
@@ -231,11 +238,12 @@ def evaluate(path, rows, fire, action="exit", placebo=True):
         elig = [r for r in rows if (r["fund"] in LONG3) in sides]
         k = min(len(fires), len(elig))
         draws = []
+        base_cagr = cagr(base)
         for _ in range(PLACEBO_N):
             pick = random.sample(elig, k)
-            sel = {(r["date"], r["fund"]) for r in pick}
-            pr, pf = apply(path, rows, lambda r: (r["date"], r["fund"]) in sel, action)
-            draws.append(cagr(pr) - cagr(base))
+            chosen = {(r["date"], r["fund"]) for r in pick}
+            pr, pf = apply(path, rows, lambda r: (r["date"], r["fund"]) in chosen, action)
+            draws.append(cagr([pr[i] for i in sel]) - base_cagr)
         draws.sort()
         out["placebo"] = {"n": PLACEBO_N, "k": k, "p50": draws[len(draws) // 2], "p95": draws[int(0.95 * len(draws))],
                           "p05": draws[int(0.05 * len(draws))], "percentile_of_actual": sum(1 for x in draws if x < out["delta_cagr"]) / len(draws)}
