@@ -218,3 +218,48 @@ deterministic rationale are listed.
     0.32, +1.9% without the best three trades, no transfer to seven other leveraged funds — an
     in-sample anomaly to log (one pre-registered rule, auction prints), not an edge to trade; 38
     trades needed for t 2.
+
+15. SETTLED (add. 54.1, 2026-11-05): KMLM leg sizing. Caps on the 75% leveraged leg are a pure sizing
+    trade on the engine's own path (Sharpe flat): each point of max drawdown costs 1.1-1.6 points of CAGR
+    over 1995-2026 and 4-5 points in the rules' own years, where max DD is the COVID episode by
+    definition (leave-one-year-out 2.9-5.6). Vol-targeting and VIX gates look cheaper since 2015 only
+    because of Feb-Mar 2020 and cost more over 31 years; 2x/1x substitutions are the worst ratios. The
+    SOXL dip-buy branch (the one that fired into 11-05) has no measured return (n 212, t 0.2) but its
+    real fall-through is SQQQ/TLT and that edited tree is worse since 2015: it stays as built. Nothing
+    here says to resize; the leg size is the owner's call (Op 3, 11-09). Reopen only with a different
+    objective than CAGR per point of drawdown (a loss limit, a financing constraint).
+16. Execution-log line, not a build (add. 54.2): KMLM, exit a SWITCHER leg (weight 0.375) at the open on
+    an own gap ≤ −8% vs the adjusted prior close — 22 fires on 19 days in 11 years, +4.4 pp/yr on a
+    194%/yr engine, p_fw 0.13 by rows / 0.14 by days, three episodes, ex-2026 inside the placebo band.
+    Joined to the add. 53 morning-bounce log (item 14); ~34 fires for t 2 ≈ 18 years. The RSI-gated
+    versions of the same rule depend on a 0.2-point read on 11-05 and must not be used live. Every HG
+    rule and every ≤ −5% gated rule: not an edge (settled).
+17. Sleeve reading rule (add. 54.3): the Crash Convexity Sleeve responds to bond/credit shocks and
+    KIE/PEJ sector extremes, not to VIX or broad-index crashes (0 of 21 triggers on 11-05, correctly);
+    its crash return arrives in the 5-20 sessions after a crash day (one per run n 19, next-5 +2.8%,
+    84% positive). Judge it then; the Op 1 band sells it then. Whether to add a static vol leg (VIXM:
+    +7.3% on crash days, −34% in calm years, +0.7% of the book on 11-05) is the owner's Op 2 question
+    (2027-01). Data risk logged: Yahoo's bond-ETF series can miss a monthly ex-dividend, which moves
+    the one-day reads by the size of the SHY thresholds (the five early-October path/ledger misses).
+18. Watch item (add. 54.4): HARV's one-session short-vol entries on inverted closes have paid in
+    sample (real era 15 trades, +0.61%, 80% win, t 1.0; counterfactual ×2.09 → ×1.94); the two
+    real-era deep (< −8%) entries lost while the 29-entry record points the other way; 11-05 is deep
+    entry number three, outcome in the live evidence record (first inverted close in 77 sessions).
+    Revisit at ≥ 30 live inverted-close entries. Monitor label "harvester" → "HARV day return"
+    (todo). UPSTREAM DATA DEFECT (add. 47 panel): Yahoo's VXZ is stale for 2018-01-26..2019-01-31
+    (169 flat sessions, the Feb-2018 episode included); HARV's and the KMLM sleeve's 2018 path days
+    rest on it. Fix: splice VIXM for VXZ in long_panel.py and rebuild engines_ts_synth.json (a
+    separate pass; add. 47's frozen harvester numbers for 2018 change, signs do not).
+19. SETTLED (add. 54.5): futures volume and the overnight Globex session. The overnight tape predicts
+    the SIZE of the next session, not its direction, and the size read is the RANGE (|SPY o→c| 0.41% →
+    0.72% by range tercile, t 6.5; volume alone t 5.6 but jointly t 1.0): the overnight move reverses
+    on average, down nights continue 51% of the time, and no volume / range / recovery / note / gold /
+    yen split survives family-wise over splits with 8+ nights a side. The 11-05 crash was intraday (ES
+    +0.04% at 09:00 on 1.0x volume; the funds' own 09:30 prints had it). Two climax-volume cells to
+    log, pre-registered, ten occurrences each before anything is a rule: SPY climax volume (≥ 2x its
+    median) the session before a 3%+ gap-down → bounce (26 days in 18 months, +3.2% vs −0.4%,
+    family-wise 0.04; the engines' legs bounce on exactly those mornings, so no exit rule uses it);
+    the fund's own climax volume before a 5%+ gap-down on a fund NOT oversold → continuation (12 days,
+    −5.0%, family-wise 0.06, no mirror; the one rule that would have exited 11-05). Data: Yahoo repeats
+    the prior session's futures volume on some days (patched from the hourly bars). Not free, not
+    tested: VIX futures intraday, open interest, basis, order flow.

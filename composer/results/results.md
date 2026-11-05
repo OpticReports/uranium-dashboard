@@ -4259,3 +4259,392 @@ DECISION: none on symphonies; no IBKR build; the overnight-overlay question join
 candidate edge — with its family-wise test, its out-of-sample check and what it would take to use it.
 Open: the KMLM weight / leg size (Op 3 on 11-09; owner); the morning-bounce execution log (owner's
 call to start it).
+
+## Addendum 54 — The 11-05 batch: KMLM leg sizing, conditioned exits, the sleeve on a crash day, HARV's short-vol entries, and the futures tape (2026-11-05)
+
+Owner, 2026-11-05, after KMLM lost 26.7% in one session (SOXL 75% into a −38.7% SOXL day): "Did you look
+at volume of futures? Not just price, and look at other signals on futures" and "Run studies 1-4" (the
+four areas proposed after add. 53). Five studies, each with its own script, frozen JSON, exhibit and
+counter-agent review. Report-only; nothing traded, paused or edited. Scripts: research/leverage/
+leg_sizing.py, research/overnight/conditioned_exits.py, research/crash/sleeve_audit.py,
+research/harv_backwardation.py, research/overnight/futures_signals.py; exhibits results/
+leg-sizing-, conditioned-exits-, sleeve-audit-, harv-backwardation-, futures-signals-2026-11-05.html.
+Shared basis: the add. 47 daily engine paths (live trees, 1995-06..2026-11-04, synthetic pre-launch
+legs, Composer-equivalent costs); daily data from Yahoo (its 11-05 rows were an 11:45 ET print until
+22:55 UTC and are now the closes: SPY −4.41%, SOXL −38.7%, VIX 28.18, VIX3M/VIX −9.3%); t with the
+sample sd; permutation and placebo tests as add. 53.
+
+### 54.1 KMLM leg sizing — what a cap or a vol-target costs per point of drawdown saved (study 1)
+
+WHAT WAS MEASURED. The KMLM path rebuilt from holdings × per-ticker returns (gate: max |diff| vs the
+path 5.6e-17). The 75% leg = {TECL, SOXL, SPXL, LABU, SQQQ, UVXY, SVIX}: 75% on 6,279 of 7,894 sessions
+(pairs at 37.5+37.5 on 3,631, single dip-buys 713), never above 75%. Variants decided at the prior
+close, released weight in PULS (the tree's own cash leg), costed on their own turnover: caps 60 / 50 /
+37.5 / 25; vol-target k/(0.75·σ20) with k matched to each cap's mean weight; halve the leg at prior
+VIX > 25 / > 30; 2x and 1x substitutions. Metrics 1995-2026 and 2015-06..2026-11-04; the 11-05
+session from the live holding at the ~15:50 prints (SOXL 44.50) and the 16:00 close (40.87).
+
+RESULTS (CAGR / max DD / Sharpe; ratio = pp of CAGR given up per pp of max DD saved):
+  variant                         1995-26               ratio   2015-26               ratio   11-05
+  as built (mean leg 60%)         80.5 / 83.5 / 1.30      –     193.3 / 54.4 / 2.16     –     −24.4
+  cap 60 → PULS                   65.4 / 74.3 / 1.30     1.6    143.8 / 44.8 / 2.16    5.2    −19.4
+  cap 50                          54.8 / 65.9 / 1.30     1.5    113.8 / 37.9 / 2.16    4.8    −16.0
+  cap 37.5                        41.2 / 52.6 / 1.31     1.3     80.1 / 28.8 / 2.16    4.4    −11.9
+  cap 25                          27.7 / 36.1 / 1.30     1.1     50.3 / 19.2 / 2.15    4.1     −7.7
+  vol-target k .43 (≈ cap 60)     49.1 / 81.6 / 1.23    16.3    125.4 / 34.1 / 2.21    3.4     −8.7
+  vol-target k .22 (≈ cap 37.5)   27.1 / 64.9 / 1.15     2.9     62.3 / 25.4 / 2.10    4.5     −4.3
+  halve the leg at VIX > 30       74.2 / 81.0 / 1.30     2.5    179.1 / 40.1 / 2.20    1.0    −24.4
+  2x substitution                 60.5 / 75.7 / 1.27     2.6    137.8 / 49.7 / 2.10   11.9    −15.2
+  1x reference                    31.8 / 70.9 / 1.16     3.9     75.8 / 42.0 / 2.05    9.5     −7.1
+Caps are a pure sizing trade: Sharpe flat (1.30 → 1.31 / 2.16), each point of drawdown costs 1.1-1.6
+points of CAGR over 31 years and 4-5 points since 2015. The since-2015 ratios are one episode: max DD
+there is COVID (2020-01-24 → 03-20) by definition, so leave-one-year-out moves cap 37.5 from 4.4 to
+2.9 (no 2022) .. 5.6 (no 2020), the vol-target k .43 from 3.4 to 2.0 .. 7.8, the VIX > 30 gate from 1.0
+to 0.1 .. 9.0; "vol-targeting beats caps since 2015" and "the VIX gate is the cheapest" are statements
+about February-March 2020 only, and without it the vol-target costs more per point than the cap. Over
+31 years the vol-target is the dearest (16 pp/pp at the 60% mean weight, ill-conditioned: 6..138
+leave-one-year-out): it cuts the leg after every shock, which on a dip-buying engine is when the
+recovery is earned (time under water 1,826 sessions, 2006-02 → 2013-05, becomes 2,600-2,740). The VIX
+gates were blind on 11-05 (VIX closed 16.6 on 11-04). 2022 is 20% of the 2015-26 log growth.
+Book level (HG/KMLM/SLEEVE/HARV at 31/26/29/14): cap 50 gives up 22 pp of CAGR for 2.2 pp of max DD;
+the book's 11-05: −8.1% as built → −4.1% at cap 37.5 → −3.1% at vol-target k .43.
+Episodes: COVID −43.6% as built → −21.0% (cap 37.5) / −9.7% (vt k .22); 2025-04 −13.2 → −6.9 / −3.8;
+2022 +1,112% → +270 / +146 (the in-sample peak year).
+
+BY-PRODUCTS, after the counter-agent. (1) The leg earns most when its own vol is highest (+0.16%/day in
+the lowest prior-vol quartile → +1.05% in the highest, t 5.0, n 1,569) — but the 1x twins show the same
+gradient on the same days (+0.08 → +0.41%/day, t 4.7), within-branch it is weak (Welch t 0.2-2.3), and
+53% of the top bucket's sum is pre-2010 synthetic: the engine is vol-timed by construction (its dip-buy
+and pop branches fire in high vol), which is why a vol-target costs so much; a book-level size-up with
+vol would be a post-shock-reversal bet, not a new conditional return. Not a candidate edge. (2) The
+SOXL dip-buy branch (RSI10(SOXL) < 30 → SOXL 75%, the one that fired into 11-05) has no measured
+return (n 212, +0.14%/day, t 0.2; 63% of its days synthetic, the real era n 79 +0.88%, t 1.3) — but a
+14th-percentile placebo for the worst of nine branches is expected three times in four, and the real
+fall-through if the branch is removed is TLT 75 (80 days) / SQQQ 75 (67) / SPXL or LABU dip-buys (44),
+a SOXL pair on only 21 of 212: that edited tree is WORSE in the rules' own years (2015-26 CAGR 187.9 /
+DD 61.3 vs 193.3 / 54.4; 2020-03-23 and 2022-01-31 flip to SQQQ losses; real era −0.41%/day vs +0.66%).
+Not a candidate edge; the branch stays as built. The first draft's "DD 83.5 → 72.6, 11-05 +0.6" bound
+was the 2006-08 synthetic era and is withdrawn.
+
+HONESTY. In-sample re-sizings of a live rule on its own path (2015-26 are the rules' own years; 2022
+alone is +1,112%); synthetic legs before launch (SOXL 2010-03, TECL 2008-12, LABU 2015-05, SVIX
+2022-03; PULS = BIL on the whole path, so released weight earns T-bills throughout; the 83.5%
+full-window drawdown is the 2006-08 synthetic era); costs = the engine's own (5.856 bps per unit
+turnover) on each variant's turnover, no financing or tax; Composer's 10pp corridor, the sleeve's
+rebalancing and taxes not modeled; 11-05 is off-path (the engine's own 11-04 close decision was SOXL
+37.5 / TECL 37.5; Composer dip-bought SOXL 75 on the 15:54 price, a knife-edge); the "cap 37.5, half in
+the 1x twin" row's leveraged weight is 36%, not 30% (the SVIX halves stay in SVIX).
+
+COUNTER-AGENT (scratchpad/review1/): SHOWABLE WITH FIXES, applied. The sizing curve reproduced from
+the raw path to four decimals (gate 5.55e-17; every CAGR / DD / Sharpe / ratio; the matched k; the 11-05
+day; the book). Its findings: MAJOR candidate edge 2's "bounds" were not bounds (the real fall-through
+is SQQQ/TLT and the edited tree is worse since 2015; the DD "cut" was synthetic) — withdrawn, the
+fall-through table carried instead; MAJOR the since-2015 ratios are the COVID episode (leave-one-year-out
+ranges added; the "cheapest" claims qualified); MINOR four exhibit sentences with wrong numbers (the
+2006-13 under-water stretch, SOXL's 10-30 day −24.7%, "3-16" → 1.7-18, "the only branch" → not the only
+one), the 36% leg weight, PULS = BIL throughout; edge 1 reframed as vol-timing by construction.
+
+### 54.2 Oversold-conditioned overnight exits — add. 53's untested cell on the engines' paths (study 2)
+
+WHAT WAS MEASURED. The add. 53 harness unchanged (15 + 10 bps, 2,000-draw same-side placebo, Wilder
+RSI(10) on adjusted closes, family-wise permutation). Rules: own gap ≤ −3 / −5 / −8% and sector gap ≤
+−1 / −2% × gates {ungated; held fund RSI ≥ 30 / 40 / 50; the converse RSI < 30; no dip-buy trigger
+oversold; none of the five 3x funds oversold; switcher leg only} + gap-up mirrors = 51 rules per
+engine, p_fw over all 51; ex-distribution mornings excluded (16 KMLM, 20 HG). Leg type from the
+holdings (KMLM 0.75 = dip-buy branch, 0.375 = switcher pick; agrees with the trees' triggers on
+2171/2171 KMLM legs). Panel: 12 long + 4 inverse funds 2010-26, own gap × own RSI state; add. 53's
+cell reproduced to the digit (n 208, −0.92%, t −2.45).
+
+RESULTS (KMLM as built 193.8% / 2.16 / −54%; dCAGR in pp over 2015-06..2026-11-04):
+  rule                                       n    leg O→C    t     helped  dCAGR  placebo pct  p_fw
+  gap ≤ −5% ungated (add. 53)                98   +1.53%    2.2    44%    −23.5     0%        1.00
+  gap ≤ −5% & RSI ≥ 30 (= switcher leg)      78   +0.56%    0.9    46%     −5.2    48%        1.00
+  gap ≤ −5% & RSI ≥ 50                       43   −0.12%   −0.2    56%     −0.1    80%        1.00
+  gap ≤ −5% & RSI < 30 (converse)            20   +5.35%    2.4    35%    −18.6     0%          –
+  gap ≤ −8% & RSI ≥ 30                       22   −2.33%   −1.9    64%     +4.4    99%        0.13
+  gap ≤ −8% & RSI ≥ 40                       15   −3.36%   −2.7    80%     +4.5    99%        0.02
+  gap ≤ −8% & RSI < 30 (converse)            13   +6.76%    2.1    38%    −15.0     0%          –
+  sector gap ≤ −2% & RSI ≥ 50                26   −1.39%   −1.3    69%     +3.1    97%        0.35
+  MIRROR gap ≥ +8% & RSI ≤ 70 (control)      36   −0.07%   −0.1    42%     +1.6    91%        0.87
+HG: every rule with n ≥ 5 is negative (gap ≤ −5% ungated −10.3 pp; gated −1.4 to −2.0). The gate does
+what add. 53 predicted: it removes the dip-buy mornings (the converse costs 15-19 pp on 13-20 fires)
+and leaves a residual inside the placebo band. Only the ≤ −8% tail and its sector-gap cousin are
+positive: +4.4 pp on a 194%/yr engine, 22 fires on 19 days in 11 years, three episodes (2020, 2025,
+2026; the live year alone is 62% of the per-fire sum; without those three years n 3, all losers);
++4.1 at 25 + 15 bps, +4.9 gross, +3.0 at 50 + 50 (t 1.05). The t on the leg's open→close is −1.9; on the
+engine's per-fire gain, the number the edge is claimed on, 1.60 (≥ 40: 2.44). Row-level p_fw 0.13 / 0.02
+becomes 0.14 / 0.07 when the unit is the day (three two-leg days). Ex-2026 (n 17) the rule sits inside
+the placebo band (per-fire t 0.65, helped 53%); leave-one-year-out never flips the sign. Panel, 12
+funds one-per-day, the matching cell (≤ −8% & RSI ≥ 30): −0.30%, t −0.4 (the 30-50 column where 14 of
+the 22 fires sit: +0.33%); the ≥ 50 column −1.60% (t −1.3) supports the ≥ 50 gate (n 8 on the engine,
+p_fw 0.24), not the candidate. The engine's own −5..−8% not-oversold mornings bounce (+3.73%, n 21, t
+4.0), which is why the ≤ −5% gate loses on the path where the panel is flat. Add. 53's cell (n 208,
+−0.92%, t −2.45) included the 11-05 morning itself (ex 11-05: n 207, −0.86%, t −2.31).
+11-05 under the path's own 16:00 logic (SOXL 0.375 + TECL 0.375): the ≤ −8% & ≥ 30 rule fires on SOXL
+(gap −14.6%, open→close −28.2%, +9.0 pp of the symphony, the largest fire in the sample) and TECL fires
+the ≤ −5% rule (+6.3 pp); it prompted the study, so it is fire #1 of an execution log, not evidence.
+Live, the gate is a knife-edge of a different kind: the 16:00-close target was SOXL 0.375 / TECL 0.375
+but at 15:50-15:55 on FMP minutes it was SOXL 0.75 (the shadow ledger's "knife-edge"); Composer
+dip-bought on the 15:54 price and the close read RSI 30.2 (RSI 30 sits 0.87% below the actual close).
+A switcher-leg gate on the live 0.755 holding would not have fired (rode −38.7% close-to-close); an
+RSI ≥ 30 gate on the close read would have exited at −14.6%, +18.0 pp. The live rule must be keyed to
+the engine's actual leg weight (0.375 = switcher pick), not an RSI read.
+
+CANDIDATE EDGE (weak; a log line, not a build): KMLM, exit a switcher leg (weight 0.375) at the open on
+own gap ≤ −8% — n 22 on 19 days, leg −2.3%, +4.4 pp/yr, 99th placebo pct, p_fw 0.13 by rows / 0.14 by
+days (≥ 40: 0.02 / 0.07); the mirror (gap ≥ +8%, p_fw 0.87) does not refute it. To use: pre-register it
+in the add. 53 morning-bounce execution log (09:25 print ≤ −8% vs the adjusted prior close, leg weight
+0.375, cash to the next 15:50); ~34 fires for t 2 on the engine's gain ≈ 18 years at 1.9 a year. +4 pp
+on a 194%/yr engine does not move the IBKR decision. Not an edge: the add. 53 cell as a ≤ −5% exit
+(−5.2 pp, 48th pct); every HG rule; sector-gap variants (p_fw ≥ 0.35).
+
+HONESTY. An in-sample refinement of an in-sample cell (same data, funds, years); the surviving cell is
+the deepest tail of the hypothesis (≤ −8% of a ≤ −5% idea, ≥ 40 of a ≥ 30 gate) and p_fw covers this
+study's 51 rules, not add. 53's 63 nor the choice of the cell; day-level p 0.14 / 0.07; three episodes;
+the 30-50 panel column is flat; costs assumed, stressed-open fills not applied (50 + 50 bps: +3.0 pp);
+the 09:25 ≈ open proxy; the first run's panel carried the 11:45 ET 11-05 print (now excluded; signs
+unchanged).
+
+COUNTER-AGENT (scratchpad/review2/): SHOWABLE WITH FIXES, applied. Every engine-path number reproduced
+to the digit (n 22, −2.33%, +4.42 pp, p_fw 0.135; n 15, −3.36%, +4.48; n 98, +1.53%, −23.47); leg typing
+confirmed against the tree on 28/28 dates; exhibit matched its JSON. Its findings: MAJOR the panel ran
+on the stale half-day 11-05 row and the hypothesis cell contained the 11-05 morning (excluded; add. 53's
+cell restated ex 11-05); MAJOR the wrong panel cell was quoted for the ≥ 30 gate (the matching cell is
+flat); MAJOR p_fw 0.02 is row-level — by days 0.14 / 0.07; MAJOR the knife-edge paragraph misstated the
+mechanism (15:54 vs 16:00, not a data-source gap; live rule keyed to leg weight); MINOR "~25 fires ≈ 13
+years" (34 ≈ 18 on the engine-gain t), "the one cell" (five rules in the same tail), the ex-2026 band.
+
+### 54.3 The Crash Convexity Sleeve on a −4.4% day: what it needs, what it has done (study 3)
+
+WHAT WAS MEASURED. The approved tree (era yHJkdePZ) read condition by condition with shadow_runner on
+the 11-05 closes; the add. 47 SLEEVE path 1995-06..11-04 plus the live 11-05 row; every SPY ≤ −3% day,
+the eight episodes, down-day vs up-day betas, calm-year carry, parked share; a static VIXM / VXZ sleeve
+as the comparator; path vs Composer's ledger 67 / 75 sessions since 07-15.
+
+RESULTS. (a) The tree reads no VIX, VIX3M or broad index. Its conditions (24 nodes, 21 on the 11-05
+path) are one-day shocks in HYG / TLT / SHY / TMF / LQD and RSI extremes in CORP / PEJ / KIE / LQD
+(FrontrunBonds, 50%) plus the gate RSI(IEF,8) < RSI(PSQ,45) (InverseHold, 50%): bond and credit shocks
+AND insurance / leisure-sector extremes. On 11-05 bonds were calm (HYG −0.31%, TLT +0.21%, SHY +0.21%,
+LQD +0.15%) and the sector reads were mid-range: 0 of 21 true; closest SHY > +0.5% (0.29 pp away →
+UVXY 50%), SHY < −0.33% (0.54 pp → UVXY 50%), LQD > +1.5% (1.35 pp → SOXL 50%), HYG < −1.75% (1.44 pp →
+SVXY 50%). A flight-to-quality crash pushes IEF's RSI away from the gate. Most Frontrun branches, had
+they fired at the 11-05 close, buy the worst one-day name of their list = SOXL: a dip-buy for 11-06,
+not a hedge. "Firm: no change" was right; the sleeve is by construction a bond/credit-and-sector-shock
+hedge, not a VIX or broad-index crash hedge.
+(b) SPY ≤ −3% days since 2015-06 (n 36, in 20 runs): sleeve +3.90% mean on the day, median +0.0%, up
+58%, parked at the open on 19 of 36; ≤ −4% (n 17) +5.37%, up 71%; ex-2020 +3.05%. The money comes after
+the day: next 5 sessions +10.7% mean / +6.7% median / 89% positive over the 36 days, which are
+clustered; one per run (first day) n 19, +2.8% mean / +1.2% median, 84% positive, t 1.9; per run,
+first day to five after the last, +16.6% mean / +3.4% median; circular-shift placebo p 0.002. Since
+1995 (n 104) +1.49%, up 53% — +0.21% on the 67 days before UVXY/SVXY existed (modeled legs) and +3.80%
+on the 37 real-fund days. Episodes: 2015-08 −0.7% (entered on RSI(KIE,10) < 21; +6.7% one session
+later), 2018-02 +24.5% (entered 01-26 on RSI(PEJ,14) > 75.6; the bond selloff opened the gate only on
+01-30), 2018-12 −5.0% (KIE), COVID +179% (first entry 03-04 on KIE 1d > +3.45%, then the TMF / TLT /
+HYG shocks), 2022 +99% to the trough (+123% full year), 2024-08 +29.2% (SHY > +0.5% fired 08-02 → UVXY
+into 08-05), 2025-04 −1.0% (BOXX on 04-03 and 04-04, KIE −7.45% on 04-04), 11-05 0.0%. Four of eight
+paid: two entered on sector triggers (2018-02, COVID), two on SHY rate shocks (2022, 2024-08); the
+three equity-only selloffs cost 1-5% to their troughs (a window statement; the next-20 column covers
+the rest).
+(c) Convex: β to SPY −0.93 on down days (t −16.3) vs +0.06 on up days (2015-06+; −1.14 / −0.33 with all
+legs real, 2020-12+); parked 72% of days; calm years (no ≤ −3% day) +37.1% mean since 2015 (in sample),
++2.2% median since 1995; CAGR 2015+ +57.9% (SPY +13.4%), max DD 19.8%; 1995+ +19.5%, max DD 51% (all of
+it modeled-era: CAGR +0.8% to 2011-09, +43.6% from 2011-10). Comparator: a static VIXM leg on the same
+crash days +7.31% mean, up 100% (sleeve +3.42%, up 52%) but CAGR −18% and −34% in calm years; on 11-05
+VIXM +6.8% = +0.7% of the book at a 10% weight vs the sleeve's 0.
+
+COMPONENT RECORDS (the sleeve's own rules read on their own in-sample history; not edges): UVXY while
+held +5.28%/day vs −0.45% otherwise (n 101, t 4.6; OOS 2023-04+ n 19, +6.4%, hit 47%); SOXL as the
+"worst one-day name" after a shock +3.13%/day, up 73% (n 70, t 4.5; OOS n 9); LABD when the gate selects
+it +0.69%/day vs −0.33% (n 601, t 3.5; OOS n 205, t 3.3). Shift placebo p ≈ 0 for all (the rule times
+its own legs); held one session later the same legs give +0.86 / +0.65 / +0.39%/day: a same-session
+timing effect, not an overlay. Dead out of sample: TMV, SVXY. Reading rule: the sleeve's crash return
+arrives in the 5-20 sessions after the crash day; judge it then, and the Op 1 band sells it then.
+
+HONESTY. Legs before launch are models (VIX funds from a term-structure fit, synthetic VIX3M before
+2006-07, leveraged copies for LABD / TMV / TMF / SOXS; BOXX = BIL on every path day; KMLM = RYMFX to
+2020-12); both halves were authored 2023-25 on this history, so only 2024-06+ (4 crash days) and the
+live log are out of sample; forward returns use overlapping windows dominated by 2020-03 and 2022
+(per-run figures given); costs = the path's fitted 2.25 bps per unit turnover for this symphony (not
+5.1, which is HG's), no limit-down fills; the five early-October ledger misses are a data artefact
+(Yahoo's LQD / HYG / SHY / IEF / TLT series book no ex-dividend after 2026-09-01; with LQD's 10-01
+ex-div the RSI reads 29.9, not 24.5, and the path's SVXY / TMF sessions 10-01..10-06 vanish, +2.1% of
+sleeve value overstated in 2026): an unbooked monthly ex-dividend moves the one-day reads by 0.3-0.5 pp,
+the size of the SHY thresholds (11-05 is not an ex-date); fire counts ignore cascade order; at run time
+the daily dataset's 11-05 row was an 11:45 ET print, so this study read Yahoo's 16:00 closes directly;
+the sleeve is a conditional hedge by design and the owner's sizing (Op 1; Op 2 review 2027-01) governs.
+
+COUNTER-AGENT (scratchpad/review3/): SHOWABLE WITH FIXES, applied. Every number reproduced (own tree
+walk, own Yahoo fetch, own path recompute: the 11-05 reads and distances, 36 crash days +3.90% / +0.01%
+/ 58%, the betas, CAGR / DD, VIXM, the 67/75 ledger match). Its findings: MAJOR the cost level (2.25
+bps, not 5.1); MAJOR the October ledger misses misdiagnosed as RSI seeding (an unbooked ex-dividend);
+MAJOR "leaves BOXX when bonds move, not stocks" and "all four paid episodes were credit/rates shocks"
+wrong (KIE / PEJ sector triggers entered two of the four); MAJOR clustered forward returns quoted as 36
+independent observations (per-run line added, "t 3.6" dropped); MINOR the held-leg "edges" lacked
+placebos (shift and lag-1 added; relabeled component records), the 1995+ mean split by era, the
+trough-dated episode windows, the stale 11:45 note.
+
+### 54.4 HARV's short-vol entries on inverted closes (study 4)
+
+WHAT WAS MEASURED. The approved HARV tree read with shadow_runner; the "harvester 0.0202" line traced
+in monitor.py; ZVOL's next 1 / 5 / 20 sessions by the VIX3M/VIX regime at the close (real 2023-04+,
+VXZ-based proxy 2018+, modeled before); every engine entry into ZVOL on an inverted close with HARV's
+subsequent return; the counterfactual ZVOL → PULS on inverted decision closes; the live record.
+
+RESULTS. The rule has no backwardation input: nine voters on Wilder RSI(SPY, 2..10) weighted 36 / 16 /
+8 / 8 / 8 / 8 / 8 / 4 / 4, RSI < 25 → ZVOL (unless RSI(UVXY,14) > 70 → PULS), RSI > 80 → VXZ, else
+PULS; no HYG condition exists in any saved version (add. 48). On 11-05 RSI(2) 16.4, RSI(3) 20.9, RSI(4)
+23.3 fired → 60% ZVOL; RSI(5) 25.07 missed by 0.07; the UVXY guard read 66.7 (3.3 points from
+blocking). Backwardation is simply what an oversold SPY close looks like. "harvester 0.0202" is
+Composer's last_percent_change for the symphony: HARV's own +2.02% on 11-05, earned by the VXZ 36% leg
+(VXZ +6.64%); the 98th percentile of its daily returns and no signal (corr with ZVOL's next 20
+sessions −0.03).
+ZVOL after an inverted close: real era (48 closes in 17 episodes with outcomes; 49 / 18 counting 11-05)
+next-20 +3.28% (t 2.3 on overlapping windows; iid placebo 95th pct but a block placebo with the same
+17 episode lengths puts it at the 77th, band −2.5..+6.0%; leave-one-episode-out +1.7..+6.0%, the
+2025-04-02 run is 66% of the sum) vs +1.47% after contango; on the proxy record since 2006 (553 closes,
+2018 re-priced) −3.55% (t −6.9), −12.3% when the inversion is deeper than 8%. The filter: the inverted
+closes HARV shorts into are followed by +0.54% next session since 2018 (n 68) vs −0.83% for the ones
+it sits out (n 116; Welch t 2.3); real era +0.62% vs −0.59% (n 19 / 29, Welch t 1.1). Engine entries on
+inverted closes: real era n 19, HARV next-20 +1.80% (t 2.2, 63% up), median hold one session; ZVOL
+trades entered on inverted closes real era n 15, +0.61% mean, 80% win, +9.1 pp in all (t 1.0,
+leave-one-out min +0.37%); 2018+ n 33, +0.97%, 82% win (t 2.3). Counterfactual ZVOL → PULS on every
+inverted decision close: ×2.09 → ×1.94 real era, ×1.04 without 2025-03-14 (add. 39 C1 measured ×2.11
+→ ×2.00 and killed the idea); 2018+ ×3.77 → ×3.01. Deep inversions (< −8%): both real-era deep trades
+lost (−4.0% 2024-12-18, −5.2% 2025-04-03), but the full record of 29 deep entries has HARV +2.6% over
+the next 20 sessions, 72% positive (23 modeled, 4 on the VXZ proxy, 2 real), and the deep-only
+counterfactual hurts on 2006+; 11-05 (−9.3%) is deep entry number three, outcome pending (the live
+record's first inverted close in 77 sessions). The engine path is the model, not Composer: 13 of 72
+ledger sessions differ by more than 2 pp (10 knife-edge, 3 no-rebalance days).
+Answer: one-session entries have paid, in sample, because of the SPY-oversold selection and the hold
+length; short vol bought on any inverted close and held 20 sessions bleeds, the closes HARV picks do
+not, on 15-33 real trades; "paying" is thin (t 1.0 real era), "not bleeding" is solid.
+
+BY-PRODUCTS. E1 is HARV's own rule read on its own in-sample history, conditioned on a regime the rule
+does not read: "the selection survives inversion" (Welch t 1.1 real era, 2.3 since 2018 re-priced),
+not an edge; its contango comparison is not a placebo and its VXZ "mirror" is an identity before 2023.
+E2 (avoid deep entries) is n 2 against 29 the other way: a watch item, not a candidate. To use either
+beyond HARV: a log of ≥ 30 inverted-close entries (now 1).
+
+HONESTY. ZVOL's real history is 892 closes, 48 inverted, 9 deep (3 episodes), 2 deep trades; pre-2023
+= proxies (ZVOL = −0.971 × VXZ; VXZ modeled before 2018, 2008 artifact-grade per add. 27); Yahoo's VXZ
+prints are STALE for 2018-01-26..2019-01-31 (flat 67.80 at zero volume for 169 sessions, 178 of 234
+sessions at 0.00%, the Feb-2018 episode included): re-priced with VIXM inside this study (every 2018+
+number changed, no sign flipped) and logged as an upstream defect of the add. 47 panel (the KMLM
+sleeve's and HARV's 2018 path days rest on the same prints; fix pending); RSI windows chosen on 2015-26;
+t on overlapping windows overstated (episode-start rows and block placebo given); the engine path is
+the model, not Composer (10-30: model ZVOL 0.60 vs live 0.52, a ledger knife-edge); the UVXY guard
+was a close call; "the gap is 15:50 fills" is plausible, not measured; the monitor's "harvester" label
+should read "HARV day return".
+
+COUNTER-AGENT (scratchpad/review4/): SHOWABLE WITH FIXES, applied. The rule description, the 11-05
+vote (16.36 / 20.87 / 23.32 / 25.07; UVXY 66.66 → ZVOL 60%), the "harvester" number, every real-era
+number, the live record and the exhibit's arithmetic reproduced. Its findings: MAJOR the "real VXZ
+2018+" column was built on stale Yahoo prints for all of 2018 (re-priced with VIXM; 2018-23 ZVOL
+after inverted closes 20d −5.2% → −3.0%, filter effect +0.65/−1.07% → +0.54/−0.83%, 2018+ trades +0.88%
+→ +0.97%, counterfactual ×3.64→×2.68 → ×3.77→×3.01; verdict unchanged); MAJOR the "bleeding when deep"
+title rested on 2 trades against a record of 29 the other way (retitled; E2 demoted to a watch item);
+MAJOR clustering absent from the headline numbers (block placebo 77th pct, leave-one-episode-out and
+Welch t added); MINOR the add. 47 / add. 39 citation, mixed count bases, the mirror identity, the
+15:50-fill attribution, the stale 11:45-print note.
+
+### 54.5 Futures volume and the overnight Globex session (study F)
+
+WHAT WAS MEASURED. Add. 53 was price-only and used no futures. Added: (B) the Globex overnight session
+itself from hourly ES / NQ / ZN / GC / 6J bars with volume (Yahoo, 582 nights 2024-06-17..2026-11-05,
+the only free intraday futures history): the move to 09:00 ET, overnight volume and range vs their
+20-night medians, position in the range, recovery from the low, Asia vs Europe hours, late (06-09)
+volume share, note / gold / yen as risk-off confirmation; outcomes = the next session's open→close of
+SPY, QQQ, SMH and the three tech 3x funds, and the KMLM leg when held. (A) The prior session's volume
+(ES, NQ, the fund's own, SPY, each vs its 20-session median) back to 2015 on the mornings add. 53
+studied, model-free and on the engines' legs (exit at the open, 25 bps, same-count placebo). (C) The
+11-04 → 11-05 night hour by hour. (D) Opening 5-minute volume of SOXL / TECL for 30 sessions
+(illustration). Every split permutation-tested with a family-wise p over all splits on a sample.
+
+RESULTS. (C) The crash was not an overnight event: ES at 09:00 on 11-05 was +0.04% vs the prior cash
+close on 1.01× its median overnight volume (48th pct) and 0.94× its median range; NQ −0.9% (11th pct),
+gold +1.5%, the note −0.1%. The −4.4% came between 09:00 and 16:00, three quarters of it by 11:00,
+on 476k and 832k contracts an hour against 10-35k overnight. SPY's session −4.24% is the worst of the
+582; no pre-open read of the futures, price or volume, had it.
+(B) The overnight tape predicts the SIZE of the session, not its direction, and the size read is the
+RANGE: mean |SPY open→close| 0.41% / 0.51% / 0.72% by tercile of the overnight range (t 6.5); by
+overnight volume 0.46% / 0.51% / 0.67% (t 5.6), but the two ratios move together (r 0.78) and jointly
+volume adds nothing (t 1.0, range t 3.3; within range terciles the above-median-volume half differs
+by −0.04 / −0.09 / +0.11%). The overnight move itself reverses on average (slope of the session on the
+overnight ES move −0.13, t −2.2; tech 3x −0.68, t −2.4), the same on high-volume nights (t −1.8). Down
+nights (ES ≤ −0.5%, n 73): the session continued down 51% of the time, mean SPY +0.13%, tech 3x
++0.64%; split by overnight volume ≥ 1.5× median +0.27% vs +0.02% (p 0.59); by range, late volume, yen,
+gold, tech-led: p 0.3-0.9; nothing survives family-wise over the splits with 8+ nights a side (p 0.26
+/ 0.59 at −0.5%, 0.28 / 0.45 at −1%; the 2-6-night splits that drove the first run's "p 0.04" are a V
+already under way, and the n 6 cell is one night, 2025-04-09). The note up overnight at ES ≤ −1% (15 vs
+15: SPY −0.31% vs +1.17%, p 0.05 single-test) is logged, not a candidate. KMLM held a leg on 32 of the
+73 nights: +2.01% (t 1.2), the same on high- and low-volume nights. Up-night mirror (ES ≥ +0.5%, n 89):
+SPY −0.07% (t −0.8), continued up 47% of the time.
+(A) 2015-26: on the oversold-close sample the bounce does not depend on volume (E1 sample, 31 days,
++5.1%; family-wise p 0.81 over 12 splits). On all 3%+ gap-downs (490 days) the one split that survives
+is SPY climax volume (≥ 2× its median) the session before: +3.2% (n 26) vs −0.4% (n 464), p 0.00,
+family-wise 0.04; median +2.4%, 54% up, +1.2% without the best three days, 18 distinct months,
+leave-one-month-out +2.5..+4.1%, SPY itself +0.8% (t 1.6) vs −0.0%. The gap-up mirror (n 35, −1.3% vs
++0.4%, p 0.05) is a mean made by six days of −10% or worse: median +1.1%, 63% of those days closed up.
+Its complement, found by the counter-agent in the same table: a 5%+ gap-down on the fund's OWN climax
+volume when the fund was NOT oversold (RSI(10) ≥ 30) continues down — 12 days in 12 months, −5.0%
+mean, −4.9% median, 17% up, −7.2% without the best three, vs +0.2% on the other 200 (p 0.003,
+family-wise 0.06); SPY itself −1.07% (t −2.5); at 3%+ 17 days, −3.3% (p 0.02, family-wise 0.10); the
+mirror (5%+ gap-up on climax volume, not overbought) −0.8% vs +0.8% (p 0.17): no continuation up. On the
+engines' own legs the climax-volume exit rules lose on any or oversold legs (KMLM gap ≤ −3% AND fund
+volume ≥ 2×: 15 fires, leg +2.06%, exit value −31 pp, 1st placebo pct; the legs bounce on exactly
+those mornings) and pay on the few NOT-oversold legs (KMLM 4 fires +29 pp, 21 of it 11-05, +8 without;
+3 fires +26 pp; HG 3 fires −18 pp): the one rule that would have exited 11-05 (SOXL traded 2.5× its
+median volume on 11-04 and closed with RSI 30.2). (D) SOXL's opening five minutes on 11-05 traded 1.0×
+their 30-session median (TECL 2.5×); 30 sessions say nothing.
+
+CANDIDATE EDGES (to log, not to trade; both found while searching 12 splits on 10 conditions): (1)
+SPY climax volume the session before a 3%+ gap-down → bounce (26 days, +3.2%, family-wise 0.04, no
+clean mirror); (2) the fund's own climax volume before a 5%+ gap-down on a fund NOT oversold →
+continuation (12 days, −5.0%, family-wise 0.06, mirror none). They are add. 53's "oversold → bounce"
+and its complement seen through volume. Pre-register the next ten occurrences of each. The size read
+(range) is a sizing input, not a trade.
+
+HONESTY. Yahoo continuous front-month contracts (roll weeks distort daily volume: the Tuesday-Thursday
+before expiry print 0.3-0.7×, 14% of "quiet" flags are roll days; Yahoo repeats the prior session's
+volume on four ES days since 2015, 2026-11-04 among them — patched from the hourly bars where they
+exist, dropped otherwise; before the patch the 11-05 morning sat in "ES volume < 1x" and alone made two
+rules positive); hourly history is 730 days (582 nights, 18 dropped where the bars do not frame the
+night; ~70 down nights, 30 at ≤ −1%); the first bar of each weeknight session prints zero volume; the
+overnight read is 09:00 ET, 30 minutes before the open (add. 53's bridge covers 09:25); outcomes on raw
+opens and closes (11-04/05 refreshed to the closes; SPY's volume matches FMP on 2,833 days); the 11-05
+engine leg is the live holding, off-path; the engine "exit value" is summed, not compounded; VIX
+futures intraday, open interest, basis and order flow are not free and were not tested; FMP 1-minute
+bars run back to 2016 with volume but cost one call per fund-day, so the opening-volume read is 30
+sessions.
+
+COUNTER-AGENT (scratchpad/reviewF/): SHOWABLE WITH FIXES, applied. The session construction and every
+headline number reproduced to the digit (582 nights, the 11-05 night by hand, the carry slopes, the
+terciles, the down-night splits, the climax split and its mirror, the engine rules). Its findings: MAJOR
+"volume predicts size" is the overnight range (jointly volume t 1.0, range t 3.3; headline rewritten);
+MAJOR section E's "every volume-conditioned rule is negative" was false by its own table and the
+NOT-oversold climax cell was never called out (now the second candidate, with its mirror); MAJOR a Yahoo
+duplicate volume print on 11-04 misfiled the 11-05 morning (patched; two KMLM rules flip back negative);
+MAJOR the section C family-wise p was the 2-6-night splits (restricted to 8+ a side: nothing survives);
+MINOR the "clustered in the crash months" claim (18 months; leave-one-month-out given), the mirror's
+median / win line, SPY's own return beside the pooled funds, a stale t, "recovered 185%", the summed
+exit value and the placebo direction stated.
+
+### DECISION
+
+None on symphonies: no trade, no symphony edit, no IBKR build. The five studies change what is known,
+not what is held. (1) KMLM's leg size is the owner's call with the curve in hand (54.1): a cap buys
+drawdown at 1.1-1.6 points of CAGR per point over 31 years and 4-5 in the rules' own years, Sharpe
+unchanged; nothing in the data says to resize, and the SOXL dip-buy branch stays as built. Operation 3's
+earn-back read lands 11-09. (2) The add. 53 execution log (ideas-backlog 14) gains two pre-registered
+lines: the ≤ −8% switcher-leg exit (54.2) and the climax-volume pair (54.5: SPY climax → bounce on a
+3%+ gap-down; own climax + not oversold + 5%+ gap-down → continuation). Ten occurrences of each before
+anything is a rule. (3) The sleeve is what it was sized to be (54.3): a bond/credit-and-sector-shock
+hedge that pays in the 5-20 sessions after a crash day and sat out 11-05 correctly; a static vol leg is
+the Op 2 question for 2027-01. (4) HARV's inverted-close entries have paid on one-session holds in
+sample (54.4); 11-05 is the live record's first inverted close and its third deep entry; revisit at 30.
+(5) The futures tape carries no direction into the session, price or volume; its range sizes the day.
+Two data defects go upstream: Yahoo's VXZ 2018 prints in the add. 47 panel (HARV's and the KMLM
+sleeve's 2018 path days) and bond-ETF ex-dividends missing from Yahoo's series (the sleeve's October
+path/ledger misses; a 0.3-0.5 pp read error at the SHY thresholds). The monitor's "harvester" label
+becomes "HARV day return". Open for the owner: the leg size; the sleeve's static vol leg; the IBKR
+genomics sleeve record (add. 52, still missing).
