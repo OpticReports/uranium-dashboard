@@ -82,3 +82,42 @@ Everything here was decided with data, in advance. Addenda cited.
   question (as-measured vs conservative) — the earn-back and divergence
   records after the episode are the most valuable data this book will
   ever produce. Protect the experiment: let it run.
+
+## Owner override requests (2026-11-06)
+
+The owner can ask, in the session, for the book to go to cash or to re-enter.
+Nothing here is automatic: a request is one operation, executed through the
+guarded CLI on an explicit instruction, logged, and reported.
+
+Grammar (in chat, any of):
+- `RISK OFF ALL` or `RISK OFF KMLM HG` — go-to-cash inside the named
+  symphonies: Composer sells every holding to cash and cancels queued
+  deploys; the symphony keeps its allocation, as cash. Add `AND SKIP` to also
+  skip each symphony's next automated rebalance (otherwise the engine
+  re-enters at the next window on its own logic).
+- `RISK ON ALL` or `RISK ON KMLM` — rebalance-now: re-enter per the live logic.
+- There is no `FLIP BEARISH`: no approved inverse symphony exists. Building
+  one (tree, backtest, fixture, POLICY line) is a separate owner-approved
+  step; until then a bearish stance is the owner's manual trade in the app.
+
+What the assistant does with a request: `composer-api.py risk-off|risk-on
+--dry-run` and show the table (symphonies, dollars, holdings); confirm back
+the exact operation once; execute with `COMPOSER_ALLOW_CAPITAL=1 … --yes`;
+poll `symphony-stats` until the holdings change; report. Every call is
+appended to `results/monitor/override-ledger.jsonl` and logged in
+CHANGELOG.md. Pre-authorized self-confirming phrases: none set (owner's
+choice); every request is confirmed once before execution.
+
+Timing: Composer executes in its trading window (~15:50 ET). A request landed
+before ~15:30 ET on a trading day is expected to execute that day; later, the
+next trading day. NOT yet verified live: whether go-to-cash fills immediately
+during market hours or at the window, and whether the same day's automated
+rebalance re-buys after a go-to-cash (hence `--skip-next`). First live use:
+rehearse on the smallest symphony (HARV, ~$38k) and watch the ledger before
+relying on it for the whole book. Gate tests (2026-11-06): dry run lists the
+four engines on reads only; refused without `COMPOSER_ALLOW_CAPITAL=1`;
+refused without `--yes`; unknown names rejected; no ledger line without an
+execution.
+
+Standing advice (unchanged): liquidating to cash forfeits the recovery
+capture (add. 19b, add. 53); the decision is the owner's.

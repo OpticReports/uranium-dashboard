@@ -87,6 +87,11 @@ its own guards:
    `COMPOSER_ALLOW_CAPITAL` is deliberately **not** set in the environment
    config; it is set inline, per command, only for an operation the human
    explicitly requested that session.
+   Owner overrides (`risk-off` = go-to-cash, `risk-on` = rebalance-now, plus
+   the per-symphony `go-to-cash` / `rebalance-now`) sit behind the same double
+   guard and append to `results/monitor/override-ledger.jsonl`; the request
+   grammar and timing are in [`RUNBOOK.md`](RUNBOOK.md) "Owner override
+   requests".
 3. **One human request = one operation** — with two standing exceptions
    pre-authorized by the owner on 2026-07-06 and codified in
    [`POLICY.md`](POLICY.md): the sleeve monetization band and the

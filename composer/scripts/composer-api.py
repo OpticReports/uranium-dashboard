@@ -26,6 +26,10 @@ Usage examples:
   COMPOSER_ALLOW_CAPITAL=1 composer-api.py invest   <symphony-id> --amount 1000 --yes
   COMPOSER_ALLOW_CAPITAL=1 composer-api.py withdraw <symphony-id> --amount 1000 --yes
   COMPOSER_ALLOW_CAPITAL=1 composer-api.py transfer --from <sym-a> --to <sym-b> --amount 1000 --yes
+  composer-api.py risk-off --all --dry-run              # owner override, read-only listing
+  COMPOSER_ALLOW_CAPITAL=1 composer-api.py risk-off --all --yes          # go-to-cash on every approved engine
+  COMPOSER_ALLOW_CAPITAL=1 composer-api.py risk-off --symphony KMLM HG --yes --skip-next
+  COMPOSER_ALLOW_CAPITAL=1 composer-api.py risk-on --all --yes           # rebalance now, re-enter per logic
 """
 
 import argparse
@@ -100,6 +104,53 @@ def guard_capital(args, description):
     if not args.yes:
         sys.exit(f"REFUSED: --yes not passed. Would have: {description}")
     print(f"CAPITAL MOVE: {description}", file=sys.stderr)
+
+
+# ---- owner overrides (RUNBOOK.md "Owner override requests"): risk-off = go-to-cash inside the named
+# symphonies, risk-on = rebalance them now per their live logic. Same double guard as invest/withdraw;
+# every call is appended to results/monitor/override-ledger.jsonl.
+HERE = os.path.dirname(os.path.abspath(__file__))
+MANIFEST = os.path.join(HERE, "..", "fixtures", "approved", "manifest.json")
+OVERRIDE_LEDGER = os.path.join(HERE, "..", "results", "monitor", "override-ledger.jsonl")
+
+
+def approved_symphonies():
+    """{NAME: symphony id} for the live engines, from fixtures/approved/manifest.json"""
+    m = json.load(open(MANIFEST))
+    return {name: e["symphony"] for name, e in m["engines"].items()}
+
+
+def symphony_meta(acct):
+    """{symphony id: {name, value, last_percent_change, holdings {ticker: weight}}}"""
+    rows = call("GET", f"/portfolio/accounts/{acct}/symphony-stats-meta")["symphonies"]
+    return {s["id"]: {"name": s.get("name"), "value": s.get("value"), "last_percent_change": s.get("last_percent_change"),
+                      "holdings": {h["ticker"]: round(h["allocation"], 4) for h in s.get("holdings", [])}} for s in rows}
+
+
+def resolve_targets(args):
+    """the symphonies an override names: --all = every approved engine; --symphony takes manifest names or ids"""
+    approved = approved_symphonies()
+    if args.all:
+        return dict(approved)
+    chosen = {}
+    for s in args.symphony:
+        if s.upper() in approved:
+            chosen[s.upper()] = approved[s.upper()]
+        elif s in approved.values():
+            chosen[next(n for n, i in approved.items() if i == s)] = s
+        else:
+            sys.exit(f"error: {s!r} is not an approved symphony name or id ({', '.join(approved)})")
+    if not chosen:
+        sys.exit("error: name the symphonies: --all, or --symphony HG KMLM ...")
+    return chosen
+
+
+def override_log(entry):
+    import datetime
+    row = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), **entry}
+    os.makedirs(os.path.dirname(OVERRIDE_LEDGER), exist_ok=True)
+    with open(OVERRIDE_LEDGER, "a") as f:
+        f.write(json.dumps(row) + "\n")
 
 
 def backtest_body(args, symphony=None):
@@ -188,6 +239,19 @@ def main():
     tr.add_argument("--amount", type=float, required=True)
     tr.add_argument("--account")
     tr.add_argument("--yes", action="store_true")
+
+    add("go-to-cash", "sym", "account", "yes", "out")
+    add("rebalance-now", "sym", "account", "yes", "out")
+    for name in ("risk-off", "risk-on"):
+        sp = sub.add_parser(name, help=("sell every holding to cash inside the named symphonies (owner override)"
+                                        if name == "risk-off" else "rebalance the named symphonies now, re-entering per their live logic"))
+        sp.add_argument("--all", action="store_true", help="every approved engine in fixtures/approved/manifest.json")
+        sp.add_argument("--symphony", nargs="*", default=[], help="manifest names (HG KMLM SLEEVE HARV) or symphony ids")
+        sp.add_argument("--account")
+        sp.add_argument("--yes", action="store_true", help="confirm capital move")
+        sp.add_argument("--dry-run", action="store_true", help="print what would move and exit (reads only; no guard needed)")
+        if name == "risk-off":
+            sp.add_argument("--skip-next", action="store_true", help="also skip each symphony's next automated rebalance")
 
     args = p.parse_args()
     a = args
@@ -298,6 +362,47 @@ def main():
         print(json.dumps(w, indent=2))
         i = call("POST", f"/deploy/accounts/{acct}/symphonies/{a.dst}/invest", {"amount": a.amount})
         print(json.dumps(i, indent=2))
+    elif a.cmd in ("go-to-cash", "rebalance-now"):
+        acct = a.account or default_account()
+        m = symphony_meta(acct).get(a.symphony_id, {})
+        label = m.get("name") or a.symphony_id
+        desc = (f"go to cash on {label} (${(m.get('value') or 0):,.0f}; holds {m.get('holdings')})" if a.cmd == "go-to-cash"
+                else f"rebalance NOW {label} (${(m.get('value') or 0):,.0f}) per its live logic")
+        guard_capital(a, desc)
+        route = "go-to-cash" if a.cmd == "go-to-cash" else "rebalance"
+        res = call("POST", f"/deploy/accounts/{acct}/symphonies/{a.symphony_id}/{route}")
+        override_log({"cmd": a.cmd, "symphony": a.symphony_id, "name": m.get("name"), "value": m.get("value"),
+                      "holdings_before": m.get("holdings"), "response": res})
+        out(res, a.out)
+    elif a.cmd in ("risk-off", "risk-on"):
+        targets = resolve_targets(a)
+        acct = a.account or default_account()
+        meta = symphony_meta(acct)
+        total = 0.0
+        print(f"{'DRY RUN' if a.dry_run else 'OVERRIDE'}: {a.cmd} on {', '.join(targets)} (account {acct})", file=sys.stderr)
+        for name, sid in targets.items():
+            m = meta.get(sid, {})
+            total += m.get("value") or 0
+            print(f"  {name:6s} {sid}  ${(m.get('value') or 0):>10,.0f}  holds {m.get('holdings')}", file=sys.stderr)
+        print(f"  total ${total:,.0f}; " + ("sells every holding to cash inside each symphony and cancels queued deploys; automated "
+              "rebalancing resumes at the next window unless --skip-next" if a.cmd == "risk-off" else
+              "re-enters each symphony per its live logic") + "; executes in Composer's trading window (check market-hours)",
+              file=sys.stderr)
+        if a.dry_run:
+            return
+        guard_capital(a, f"{a.cmd} on {', '.join(targets)}: ${total:,.0f}")
+        results = {}
+        for name, sid in targets.items():
+            route = "go-to-cash" if a.cmd == "risk-off" else "rebalance"
+            res = call("POST", f"/deploy/accounts/{acct}/symphonies/{sid}/{route}")
+            results[name] = res
+            override_log({"cmd": a.cmd, "symphony": sid, "name": name, "value": (meta.get(sid) or {}).get("value"),
+                          "holdings_before": (meta.get(sid) or {}).get("holdings"), "response": res})
+            if a.cmd == "risk-off" and a.skip_next:
+                res2 = call("POST", f"/deploy/accounts/{acct}/symphonies/{sid}/skip-automated-rebalance")
+                results[name + " (skip next automated rebalance)"] = res2
+                override_log({"cmd": "skip-automated-rebalance", "symphony": sid, "name": name, "response": res2})
+        out(results)
 
 
 if __name__ == "__main__":

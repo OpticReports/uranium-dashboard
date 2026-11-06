@@ -172,7 +172,12 @@ unchanged vs disciplined manual resets).
 Never auto-executed under any circumstances: changes to symphony logic,
 investing in new/unapproved symphonies, liquidations, go-to-cash, direct
 single-asset trades, bank transfers, or any trade outside the two operations
-above. During a suspected regime break (e.g., sleeve above 20% of book in a
+above. Owner override requests (RUNBOOK.md "Owner override requests",
+2026-11-06) are the one human-request path through that list: on an explicit
+in-session instruction the assistant runs `risk-off` (go-to-cash) or
+`risk-on` (rebalance-now) on the approved symphonies via the guarded CLI,
+confirmed once, logged in results/monitor/override-ledger.jsonl. A request,
+not automation. During a suspected regime break (e.g., sleeve above 20% of book in a
 crash), the band still executes its mechanical trim, but the owner is
 notified prominently that discretionary harvesting beyond the band is their
 call (results.md addendum 7).
