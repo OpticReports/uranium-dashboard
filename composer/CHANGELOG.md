@@ -761,3 +761,7 @@ the guarded CLI (`risk-off --symphony KMLM HG --yes --skip-next`, then
 - CLI fix in the same commit: the risk-off loop no longer stops on a failed
   skip call (go-to-cash for every target first, skips after, failures
   reported, exit 1).
+- 2026-11-06 ~17:40 ET: owner cancelled both queued go-to-cash deploys manually in
+  the Composer app (owner-reported; the API offers no deploy list or cancel route, so
+  not verifiable from here). Expected Monday state: KMLM and HG run their normal logic
+  (holding TECL into the 09:31 open, deciding at 15:50). Verify by holdings Monday.
