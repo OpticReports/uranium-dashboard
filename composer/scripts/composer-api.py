@@ -391,18 +391,33 @@ def main():
         if a.dry_run:
             return
         guard_capital(a, f"{a.cmd} on {', '.join(targets)}: ${total:,.0f}")
-        results = {}
+        # every go-to-cash / rebalance first (a failure on one symphony must not stop the others:
+        # call() exits on an HTTP error), then the optional skips, which Composer answered with
+        # HTTP 500 on 2026-11-06 while a go-to-cash deploy was queued
+        results, failed = {}, []
         for name, sid in targets.items():
             route = "go-to-cash" if a.cmd == "risk-off" else "rebalance"
-            res = call("POST", f"/deploy/accounts/{acct}/symphonies/{sid}/{route}")
+            try:
+                res = call("POST", f"/deploy/accounts/{acct}/symphonies/{sid}/{route}")
+            except SystemExit as e:
+                res = {"error": str(e)[:300]}
+                failed.append(name)
             results[name] = res
             override_log({"cmd": a.cmd, "symphony": sid, "name": name, "value": (meta.get(sid) or {}).get("value"),
                           "holdings_before": (meta.get(sid) or {}).get("holdings"), "response": res})
-            if a.cmd == "risk-off" and a.skip_next:
-                res2 = call("POST", f"/deploy/accounts/{acct}/symphonies/{sid}/skip-automated-rebalance")
+            print(f"  {name}: {json.dumps(res)[:200]}", file=sys.stderr)
+        if a.cmd == "risk-off" and a.skip_next:
+            for name, sid in targets.items():
+                try:
+                    res2 = call("POST", f"/deploy/accounts/{acct}/symphonies/{sid}/skip-automated-rebalance")
+                except SystemExit as e:
+                    res2 = {"error": str(e)[:300]}
                 results[name + " (skip next automated rebalance)"] = res2
                 override_log({"cmd": "skip-automated-rebalance", "symphony": sid, "name": name, "response": res2})
+                print(f"  {name} skip-next: {json.dumps(res2)[:200]}", file=sys.stderr)
         out(results)
+        if failed:
+            sys.exit(f"FAILED on {', '.join(failed)}: see the responses above and results/monitor/override-ledger.jsonl")
 
 
 if __name__ == "__main__":

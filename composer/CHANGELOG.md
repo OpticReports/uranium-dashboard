@@ -739,3 +739,25 @@ terminal wealth preserved per breakage event (addendum 21 discussion).
     worsening TED shock (1.55 vs 1.24, 89 vs 211 months, Welch t 0.7).
 - Counter-agent: showable with fixes, all applied (month-end series from the daily paths, leg counts and
   t's, the 60-month value signal and its sweep, AQR's series composition, wording). No decision flipped.
+
+## 2026-11-06 15:50 ET — owner override: RISK OFF KMLM HG (go-to-cash)
+
+Owner instruction in session at 15:49 ET ("RISK OFF KMLM HG"), after the
+15:16 preview showed both engines risk-on into the weekend (KMLM TECL 75%,
+HG USD → TECL 100%) and ahead of a weekend geopolitical event. Executed via
+the guarded CLI (`risk-off --symphony KMLM HG --yes --skip-next`, then
+`go-to-cash` on HG after the first run stopped on a skip error):
+- KMLM YPTSJFJwD2ZKfAeYJUbW ($75,251; PULS 10 / TECL 76 / ZVOL 15): go-to-cash
+  accepted, deploy 9f2863af-2c5e-4795-b837-909a8d0e3e30, deploy_time
+  2026-11-09T14:31:00Z, deploy_on_market_open = true (MONDAY'S OPEN, not
+  today's window).
+- HG mbkiXcuNDjueXpiox5Av ($94,289; USD 100): go-to-cash accepted, deploy
+  e831b627-8508-4cca-93e4-b2b50aa1d522, same deploy time.
+- skip-automated-rebalance on both: HTTP 500 from Composer (twice); not
+  applied. Monday's 15:50 automated rebalance will re-enter per logic unless
+  the owner says otherwise.
+- Weekend exposure therefore unchanged by this override; the sells execute
+  at Monday 09:31 ET. Ledger: results/monitor/override-ledger.jsonl.
+- CLI fix in the same commit: the risk-off loop no longer stops on a failed
+  skip call (go-to-cash for every target first, skips after, failures
+  reported, exit 1).
