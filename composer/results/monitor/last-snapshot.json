@@ -1,90 +1,89 @@
 {
-  "taken_at": "2026-11-06T21:37:24+00:00",
+  "taken_at": "2026-11-09T21:35:39+00:00",
   "total_stats": {
     "pending_deploys_cash": 0,
-    "total_cash": 385.824426657,
-    "time_weighted_return": 0.7652634081770546,
-    "total_unallocated_cash": 102.254426657,
-    "portfolio_value": 288478.89,
+    "total_cash": 409.050092427,
+    "time_weighted_return": 0.8767175080292158,
+    "total_unallocated_cash": 102.270092427,
+    "portfolio_value": 306692.69,
     "net_deposits": 247000.0,
     "pending_net_deposits": 0.0,
-    "todays_percent_change": 0.027280067954131137,
-    "simple_return": 0.16793076587334776,
-    "todays_dollar_change": 7660.7385056959,
+    "todays_percent_change": 0.06218962361194224,
+    "simple_return": 0.24167084998586885,
+    "todays_dollar_change": 17956.401710408645,
     "metrics": {
-      "annualized_rate_of_return": 0.8539,
+      "annualized_rate_of_return": 0.9756,
       "max_drawdown": 0.2006,
-      "sharpe_ratio": 1.8222,
-      "standard_deviation": 0.3804
+      "sharpe_ratio": 1.9725,
+      "standard_deviation": 0.3846
     },
     "pending_withdrawals": 0.0
   },
   "symphonies": {
-    "YPTSJFJwD2ZKfAeYJUbW": {
-      "name": "KMLM switcher + VIX sleeve 75/25",
-      "value": 74947.64,
-      "deposit_adjusted_value": 28315.78,
-      "cash": 70.33,
+    "mbkiXcuNDjueXpiox5Av": {
+      "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
+      "value": 104807.52,
+      "deposit_adjusted_value": 2341.41,
+      "cash": 104.82,
       "holdings": {
-        "PULS": 0.0987,
-        "TECL": 0.7556,
-        "ZVOL": 0.1448
+        "BIL": 0.999
       },
-      "next_rebalance_on": "2026-11-07",
+      "next_rebalance_on": "2026-11-10",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0283
+      "last_percent_change": 0.1135
     },
     "nNdBk7hc5NiBzeRvbI5T": {
       "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
-      "value": 81741.69,
-      "deposit_adjusted_value": 26305.66,
-      "cash": 81.71,
+      "value": 81753.3,
+      "deposit_adjusted_value": 26309.39,
+      "cash": 81.76,
       "holdings": {
         "BOXX": 0.999
       },
-      "next_rebalance_on": "2026-11-07",
+      "next_rebalance_on": "2026-11-10",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0004
+      "last_percent_change": -0.0005
+    },
+    "YPTSJFJwD2ZKfAeYJUbW": {
+      "name": "KMLM switcher + VIX sleeve 75/25",
+      "value": 81774.67,
+      "deposit_adjusted_value": 30895.09,
+      "cash": 81.94,
+      "holdings": {
+        "PULS": 0.2502,
+        "SOXL": 0.3751,
+        "TECL": 0.3736
+      },
+      "next_rebalance_on": "2026-11-10",
+      "has_queued_deploy": null,
+      "last_percent_change": 0.0899
     },
     "ORQNCfZnA18wmsMWVhf8": {
       "name": "VIX Harvester + HYG Credit Guard",
-      "value": 37623.42,
-      "deposit_adjusted_value": 34565.6,
-      "cash": 37.63,
+      "value": 38254.95,
+      "deposit_adjusted_value": 35145.8,
+      "cash": 38.26,
       "holdings": {
-        "PULS": 0.6388,
-        "ZVOL": 0.3602
+        "PULS": 0.999
       },
-      "next_rebalance_on": "2026-11-07",
+      "next_rebalance_on": "2026-11-10",
       "has_queued_deploy": null,
-      "last_percent_change": -0.0119
-    },
-    "mbkiXcuNDjueXpiox5Av": {
-      "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
-      "value": 94063.9,
-      "deposit_adjusted_value": 2101.4,
-      "cash": 93.9,
-      "holdings": {
-        "TECL": 0.999
-      },
-      "next_rebalance_on": "2026-11-07",
-      "has_queued_deploy": null,
-      "last_percent_change": 0.0684
+      "last_percent_change": 0.0152
     }
   },
-  "book_drawdown": 0.0892,
-  "sleeve_weight": 0.1289,
+  "book_drawdown": 0.0552,
+  "sleeve_weight": 0.1253,
   "gate": {
-    "date": "2026-11-05",
-    "spy_vs_200d": 0.00772,
+    "date": "2026-11-06",
+    "spy_vs_200d": 0.0105,
     "zone": "tight",
-    "hg_holding": "TECL",
-    "ungated_holding": "USD",
+    "hg_holding": "BIL",
+    "ungated_holding": "TECL",
     "override": false,
     "closed_days": 0
   },
   "shadow": {
-    "date": "2026-11-06",
+    "date": "2026-11-09",
     "status": {
       "HG": "agree",
       "KMLM": "agree",
@@ -92,5 +91,5 @@
       "HARV": "agree"
     }
   },
-  "vix_contango": -0.0406
+  "vix_contango": 0.0467
 }
