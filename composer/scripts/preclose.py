@@ -538,7 +538,9 @@ def fetch_live(t, rng="2y", tries=2, timeout=None):
     (default shadow_runner._chart's 30). With FMP_API_KEY the dividends
     and splits FMP lists and Yahoo has not booked are applied to the history too (shadow_runner.
     parse_daily), and meta['corporateActions'] carries the ticker's dividends and splits, Yahoo's events
-    union FMP's lists (shadow_runner.corporate_actions; the mirror brain publishes the recent ones)"""
+    union FMP's lists (shadow_runner.corporate_actions; the mirror brain publishes the recent ones),
+    with 'fmp' (whether FMP's lists were read) and 'applied' (the FMP-only events that changed the
+    history)"""
     url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(t)}"
            f"?range={rng}&interval=1d&events=div%2Csplit")
     err = None
@@ -546,10 +548,11 @@ def fetch_live(t, rng="2y", tries=2, timeout=None):
     for k in range(tries):
         try:
             res = sr._chart(url) if timeout is None else sr._chart(url, timeout)
-            adj, raw = sr.parse_daily(res, acts)
+            applied = []
+            adj, raw = sr.parse_daily(res, acts, applied)
             if adj:
-                return adj, raw, dict(res.get("meta") or {},
-                                      corporateActions=sr.corporate_actions(res.get("events") or {}, acts, max(raw)))
+                ca = sr.corporate_actions(res.get("events") or {}, acts, max(raw))
+                return adj, raw, dict(res.get("meta") or {}, corporateActions=dict(ca, applied=applied))
             err = "empty series"
         except Exception as e:  # noqa: BLE001
             err = e

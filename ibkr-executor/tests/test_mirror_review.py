@@ -290,26 +290,121 @@ def test_a21_a_refused_flatten_sell_is_sold_again_in_the_next_round(tmp_path):
     soxl = [(q, cid) for s, q, cid in r.venue.placed if s == "SOXL" and q < 0]
     assert len(soxl) == 2 and soxl[0][1] != soxl[1][1] and "-r2-" in soxl[1][1]        # a NEW id per round
     assert r.m.halt_state()["flatten_done"] is True and r.m.next_wait() is None
-    assert any("flatten round 2 of 5" in a for a in r.red())
+    assert any("flatten round 2 (" in a and "open-session minutes used" in a for a in r.red())
+    assert r.m.halt_state()["account_flat"] is True
     sound(r)
 
 
-def test_a21_the_flatten_gives_up_loudly_after_five_rounds(tmp_path):
+def test_a21_the_flatten_gives_up_loudly_after_thirty_minutes_of_open_session(tmp_path):
+    """round 2 (N-08): the bound was five rounds five seconds apart - about 25 s, and a venue that
+    refused for a minute ended the /kill with the book still on. It is OPEN-session time now (30
+    minutes), with the rounds further and further apart: 5 s, 15 s, 60 s, then every 5 minutes."""
     r = invested(tmp_path)
     soxl = r.m.book.positions()["SOXL"]
     r.venue.reject.add("SOXL")                         # refused every time
     r.m.halt("KILL", flatten=True)
-    r.tick("15:56:00")
-    ticks(r, 30, 5)
-    assert [q for s, q in r.orders() if s == "SOXL" and q < 0] == [-soxl] * mm.FLATTEN_ROUNDS      # bounded
-    assert r.m.book.positions() == {"SOXL": soxl} and r.m.halt_state()["flatten_done"] is True
-    assert any("GAVE UP after 5 rounds" in a and "STILL HELD" in a for a in r.red())
-    assert [a for a in r.red() if "flatten round" in a].__len__() == mm.FLATTEN_ROUNDS - 1     # one alert per extra round
+    t0 = r.clock.now = at("10:00:00", D2)
+    sent, gave_up = [], None
+    for _ in range(400):
+        n = len(r.venue.placed)
+        r.m.tick(r.venue)
+        if any(sym == "SOXL" for sym, _, _ in r.venue.placed[n:]):
+            sent.append((r.clock.now - t0).total_seconds())
+        if r.m.halt_state().get("flatten_done"):
+            gave_up = (r.clock.now - t0).total_seconds()
+            break
+        r.clock.now += timedelta(seconds=5)
+    assert sent == [0, 5, 20, 80, 380, 680, 980, 1280, 1580]                   # the gaps widen: 5, 15, 60, then 300 s
+    assert gave_up == mm.FLATTEN_OPEN_BUDGET_S == 1800.0                       # ... for 30 minutes of open session
+    assert [q for s, q in r.orders() if s == "SOXL" and q < 0] == [-soxl] * 9
+    assert r.m.book.positions() == {"SOXL": soxl}
+    done = [a for a in r.red() if "GAVE UP after 30 minutes of open session and 9 rounds" in a]
+    assert len(done) == 1 and "flatten NOT complete" in done[0] and "STILL HELD" in done[0] and "/kill again" in done[0]
+    assert len([a for a in r.red() if "flatten round" in a]) == 8              # one red alert per extra round
+    assert r.m.halt_state()["account_flat"] is False and r.m.next_wait() is None
     r.venue.reject.clear()
-    r.m.halt("KILL", flatten=True)                     # the twin: a new /kill arms a new flatten
+    assert "account_flat" not in r.m.halt("KILL", flatten=True)                # the twin: a new /kill arms a new flatten
     ticks(r, 2, 5)
-    assert r.m.book.positions() == {}
+    assert r.m.book.positions() == {} and r.m.halt_state()["account_flat"] is True
     sound(r)
+
+
+def test_n08_a_refusal_that_lasts_a_minute_no_longer_ends_the_kill(tmp_path):
+    """the reviewer's scenario: the gateway refuses every order for a minute, then takes them again"""
+    r = invested(tmp_path)
+    held = dict(r.m.book.positions())
+    r.venue.reject.update(held)
+    r.m.halt("KILL", flatten=True)
+    r.clock.now = at("10:00:00", D2)
+    for i in range(40):
+        r.m.tick(r.venue)
+        r.clock.now += timedelta(seconds=5)
+        if i == 11:
+            r.venue.reject.clear()                     # +60 s: the venue takes orders again
+    assert r.m.book.positions() == {} and r.venue.positions_snapshot()["stocks"] == {}
+    assert r.m.halt_state()["flatten_done"] is True and any("flatten complete" in a for a in r.alerts)
+    sound(r)
+
+
+def test_n08_only_open_session_time_counts_towards_the_bound(tmp_path):
+    """a flatten that starts ten minutes before the close has used ten minutes when the next session
+    opens - the night adds nothing - and carries on there"""
+    r = invested(tmp_path)
+    soxl = r.m.book.positions()["SOXL"]
+    r.venue.reject.add("SOXL")
+    r.m.halt("KILL", flatten=True)
+    r.clock.now = at("15:50:00")
+    while r.clock.now < at("16:00:00"):
+        r.m.tick(r.venue)
+        r.clock.now += timedelta(seconds=5)
+    used = r.m.state["flatten"]["open_s"]
+    assert 590 <= used <= 600 and not r.m.halt_state().get("flatten_done")
+    for hms in ("16:00:30", "18:00:00", "23:00:00"):   # the session is shut: nothing is sent, nothing is counted
+        r.tick(hms)
+    r.tick("03:00:00", day=D2)
+    assert r.m.state["flatten"]["open_s"] == used and r.m.halt_state().get("flatten_done") is False
+    n = len(r.venue.placed)
+    r.venue.reject.clear()
+    r.tick("09:30:05", day=D2)                         # the next open: the next round goes out at once
+    r.tick("09:30:10", day=D2)
+    assert [(s, q) for s, q, _ in r.venue.placed[n:]] == [("SOXL", -soxl)] and r.m.book.positions() == {}
+    assert r.m.state["flatten"]["open_s"] < used + 60
+    sound(r)
+
+
+def test_n08_a_flatten_queued_into_a_weekday_holiday_sends_nothing_until_the_next_session(tmp_path):
+    """a halted book never refreshes the brain's clock, so the kill path falls back to its own: with
+    the SERVICE's trading-day calendar (passed in by build) a weekday holiday is not a session"""
+    from datetime import date
+    holiday = date(2026, 11, 11)
+
+    def rig(path, calendar):
+        os.makedirs(path, exist_ok=True)
+        r = live_rig(path, poll_s=1e9)
+        r.trading_day = calendar
+        r.boot()
+        r.tick("15:55:05")
+        assert r.m.state["last_run"]["outcome"] == "traded"
+        r.m.halt("KILL", flatten=True)
+        r.tick("17:00:00")                             # queued: the session is shut
+        return r
+    r = rig(tmp_path / "cal", lambda d: d.weekday() < 5 and d != holiday)
+    n = len(r.venue.placed)
+    assert r.m.next_wait() == pytest.approx((at("09:30:00", D3) - at("17:00:00")).total_seconds())      # not tomorrow's 09:30
+    r.tick("10:00:00", day=D2)                         # the holiday, mid-morning
+    assert r.venue.placed[n:] == [] and r.m.book.positions() != {} and not r.m.halt_state().get("flatten_done")
+    r.tick("09:30:05", day=D3)
+    assert len(r.venue.placed) == n + 5 and r.m.book.positions() == {}
+    sound(r)
+    t = rig(tmp_path / "none", None)                   # the twin: without the calendar every weekday is a session
+    n = len(t.venue.placed)
+    assert t.m.next_wait() == pytest.approx((at("09:30:00", D2) - at("17:00:00")).total_seconds())
+    t.tick("10:00:00", day=D2)
+    assert len(t.venue.placed) == n + 5
+    boom = rig(tmp_path / "boom", lambda d: 1 / 0)     # a calendar that raises is not a reason to sit on a kill
+    n = len(boom.venue.placed)
+    boom.tick("10:00:00", day=D2)
+    assert len(boom.venue.placed) == n + 5
 
 
 def test_a21_a_partial_flatten_fill_at_the_close_is_finished_at_the_next_open(tmp_path):
@@ -720,7 +815,8 @@ def test_a05b_a_sleeve_in_debt_is_repaired_the_next_session(tmp_path):
     held = dict(k.shares)
     fee = round(k.cash + 400.0, 2)                             # a fee larger than the sleeve's cash: it is $400 in debt
     r.venue.cash -= fee
-    r.m.request_credit("KMLM", -fee, "fee")               # (a queued debit clears the cash gate it would else be locked out by)
+    r.m.request_credit("KMLM", -fee, "fee", force=True)   # (a queued debit clears the cash gate it would else be locked out
+                                                          # by; one that takes the sleeve into debt needs force - N-01)
     r.brain.make = lambda now: payload(now, session=D2)
     r.tick("15:55:05", day=D2)
     assert r.m.state["last_run"]["session"] == D2
@@ -1232,18 +1328,71 @@ def test_d9_a_receivable_never_paid_expires_with_an_alert(tmp_path):
     sound(r)
 
 
-def test_d9_a_missing_pay_date_is_the_ex_date_plus_seven_days(tmp_path):
+def test_r2_a_pay_date_never_listed_is_assumed_only_ten_days_after_the_ex_date(tmp_path):
+    """round 2 (R2): ex + 7 used to be FINALISED the day the dividend was first seen. Now the
+    receivable stays open with no pay date; only ten calendar days after the ex-date is ex + 7 assumed"""
     d = Rig(tmp_path)
     d.tick("15:55:05")
+    d.brain.make = with_div(D2, div=dict(DIV, pay_date=None))                  # ex-date 2026-11-11, pay date unknown
+    d.tick("15:55:05", day=D2)
+    assert {x["pay_date"] for x in d.m.state["dividends"]} == {None}
+    assert any("pay date NOT KNOWN YET" in n for n in d.m.state["last_run"]["notes"])
+    for day in ("2026-11-18", "2026-11-19", "2026-11-20"):                     # ex + 7, + 8, + 9: the old rule paid on the 18th
+        d.brain.make = lambda now, day=day: payload(now, session=day)
+        d.tick("15:55:05", day=day)
+        assert all(x["status"] == "open" and x["pay_date"] is None for x in d.m.state["dividends"]), day
+        assert d.m.state["last_run"]["credits"] == []
+    d.brain.make = lambda now: payload(now, session="2026-11-23")              # the first session ten days after it
+    d.tick("15:55:05", day="2026-11-23")
+    recs = d.m.state["dividends"]
+    assert all(x["status"] == "credited" and x["pay_date"] == "2026-11-18" and x["pay_date_assumed"] is True for x in recs)
+    assert [x for x in d.journal() if x["event"] == "dividend_pay_date" and x.get("assumed") is True]
+    sound(d)
+
+
+def test_r2_a_pay_date_learnt_from_a_later_payload_is_the_one_used(tmp_path):
+    d = Rig(tmp_path)
+    d.tick("15:55:05")
+    held = d.m.book.sleeves["HARV"].shares["PULS"]
+    eq = lambda: mc.equity(d.m.book.sleeves["HARV"], PX)                       # noqa: E731
+    eq0 = eq()
     d.brain.make = with_div(D2, div=dict(DIV, pay_date=None))
     d.tick("15:55:05", day=D2)
-    assert {x["pay_date"] for x in d.m.state["dividends"]} == {"2026-11-18"}
-    d.brain.make = lambda now: payload(now, session="2026-11-17")
-    d.tick("15:55:05", day="2026-11-17")
-    assert all(x["status"] == "open" for x in d.m.state["dividends"])
-    d.brain.make = lambda now: payload(now, session="2026-11-18")
-    d.tick("15:55:05", day="2026-11-18")
-    assert all(x["status"] == "credited" for x in d.m.state["dividends"])
+    for day in (D3, D4):                                                       # still not known: open, nothing assumed
+        d.brain.make = with_div(day, div=dict(DIV, pay_date=None))
+        d.tick("15:55:05", day=day)
+        assert all(x["status"] == "open" and x["pay_date"] is None for x in d.m.state["dividends"])
+    d.brain.make = with_div("2026-11-16", div=dict(DIV, pay_date="2026-11-24"))        # a LATER listing carries it
+    d.tick("15:55:05", day="2026-11-16")
+    assert {x["pay_date"] for x in d.m.state["dividends"]} == {"2026-11-24"}
+    assert not any(x.get("pay_date_assumed") for x in d.m.state["dividends"])
+    assert [x for x in d.journal() if x["event"] == "dividend_pay_date" and x.get("learnt") == "2026-11-16"]
+    d.boot()
+    d.brain.make = lambda now: payload(now, session="2026-11-23")              # ex + 12: NOT the ex + 7 fallback any more
+    d.tick("15:55:05", day="2026-11-23")
+    assert all(x["status"] == "open" for x in d.m.state["dividends"]) and eq() == pytest.approx(eq0)
+    d.brain.make = lambda now: payload(now, session="2026-11-24")
+    d.tick("15:55:05", day="2026-11-24")
+    assert all(x["status"] == "credited" for x in d.m.state["dividends"]) and eq() == pytest.approx(eq0 + held * 0.20)
+    sound(d)
+
+
+def test_r2_an_incomplete_actions_list_is_recorded_and_said_once(tmp_path):
+    r = live_rig(tmp_path)
+    r.brain.make = lambda now: payload(now, actions_complete=False)
+    r.tick("15:55:05")
+    row = r.m.state["last_run"]
+    assert row["outcome"] == "traded" and row["actions_complete"] is False     # it trades; the record says what it lacked
+    said = [a for a in r.alerts if "dividend and split lists are INCOMPLETE" in a]
+    assert len(said) == 1 and said[0].startswith("⚠️") and DAY in said[0]
+    r.tick("15:56:00")
+    r.tick("16:30:00")
+    assert len([a for a in r.alerts if "INCOMPLETE" in a]) == 1                # once that day
+    t = live_rig(tmp_path / "twin")                    # the twin: complete (or not stated): recorded, nothing said
+    os.makedirs(tmp_path / "twin", exist_ok=True)
+    t.brain.make = lambda now: payload(now, actions_complete=True)
+    t.tick("15:55:05")
+    assert t.m.state["last_run"]["actions_complete"] is True and not any("INCOMPLETE" in a for a in t.alerts)
 
 
 # =============================================================================================== D9 splits

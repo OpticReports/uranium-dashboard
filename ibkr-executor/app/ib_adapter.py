@@ -1275,8 +1275,14 @@ class IBAdapter:
         Venue-side dedupe by client_order_id exactly as place_stock_order:
         a working or filled order under the key is returned (duplicate=True),
         never re-placed, and the lookup asks the VENUE when this session
-        holds nothing that binds. ref_price is the caller's reference - never
-        used as a price here."""
+        holds nothing that binds. LIMIT of that dedupe (the same as
+        place_stock_order's): it reads open and completed orders, not the
+        execution store, so on a gateway whose completed orders are
+        unavailable a prior FILLED in an EARLIER session is not seen here.
+        A caller that may retry across sessions asks find_stock_order (which
+        does read the executions) or order_absent_today first - the mirror
+        does. ref_price is the caller's reference - never used as a price
+        here."""
         if str(tif).upper() != "DAY":
             raise ValueError(f"unsupported limit order tif {tif!r} (DAY only)")
         qty = int(qty)
@@ -1310,6 +1316,51 @@ class IBAdapter:
                     action, symbol, abs(qty), placed_limit, out["status"],
                     out["order_ref"])
         return out
+
+    def order_absent_today(self, client_order_id: str) -> bool | None:
+        """Is it PROVEN that no order under this idempotency key is working
+        and that none executed today? True only when BOTH venue requests
+        answered - the open orders and today's executions - and neither shows
+        the key; False when either does (or this session knows the order);
+        None when either request did not answer (nothing is proven).
+
+        For the caller that must tell "never reached the venue" from "the
+        venue forgot" on a gateway that never answers reqCompletedOrders
+        (history_complete() False): an order of TODAY that is not open and
+        has no execution today filled nothing, whatever became of it.
+        It proves nothing about an order of an earlier day - that is the
+        caller's check. Read-only and additive: bounded like the other
+        history requests, but it never drops the session on a timeout."""
+        self._require_connected()
+        self._pump()
+        if self._find_trade_by_client_id(client_order_id) is not None:
+            return False
+        prev = getattr(self.ib, "RequestTimeout", 0)
+        try:
+            self.ib.RequestTimeout = VENUE_HISTORY_TIMEOUT_S
+            try:
+                opens = list(self.ib.reqAllOpenOrders() or [])
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("order_absent_today: open orders did not "
+                               "answer (%s)", exc)
+                return None
+            if any((getattr(t.order, "orderRef", "") or "") == client_order_id
+                   for t in opens):
+                return False
+            try:
+                fresh = list(self.ib.reqExecutions() or [])
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("order_absent_today: executions did not "
+                               "answer (%s)", exc)
+                return None
+        finally:
+            self.ib.RequestTimeout = prev
+        store = list(getattr(self.ib, "fills", lambda: [])() or [])
+        for f in store + fresh:
+            ex = getattr(f, "execution", None)
+            if ex is not None and (getattr(ex, "orderRef", "") or "") == client_order_id:
+                return False
+        return True
 
     def cancel_inactive_stock_order(self, client_order_id: str) -> bool:
         """Send a cancel for the order under this idempotency key when the
@@ -2040,3 +2091,9 @@ class DryAdapter:
         """Mirrors IBAdapter.cancel_inactive_stock_order: a simulated order
         is never Inactive, so there is never a cancel to send."""
         return False
+
+    def order_absent_today(self, client_order_id: str) -> bool | None:
+        """Mirrors IBAdapter.order_absent_today: the simulator's order
+        memory is whole, so it always answers - True when it never saw the
+        key."""
+        return self._orders.get(self._by_client.get(client_order_id, "")) is None

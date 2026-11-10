@@ -19,7 +19,7 @@ import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import Body, FastAPI, Header, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
 
 from .alerts import send
 from .outages import OutageLog
@@ -800,7 +800,8 @@ def _build_mirror() -> None:
     global MIRROR
     try:
         from . import mirror as mirror_mod
-        MIRROR = mirror_mod.build(settings, alert=lambda msg: send(msg))
+        MIRROR = mirror_mod.build(settings, alert=lambda msg: send(msg),
+                                  trading_day=_is_trading_day)
     except Exception as exc:  # noqa: BLE001
         MIRROR = {}
         logger.exception("mirror build failed: %s", exc)
@@ -1681,13 +1682,22 @@ def status(x_exec_token: str | None = Header(default=None),
 
 @app.get("/mirror/feed")
 def mirror_feed(x_read_token: str | None = Header(default=None),
-                history: int = Query(default=30, ge=0, le=120)):
+                history: str | None = Query(default=None)):
     """READ-ONLY view of the Composer mirror's books for the parity monitor
     (composer/scripts): per sleeve the shares, cash, rule and tree version,
     and the last sessions' decisions and fills. Gated by READ_TOKEN via
     X-Read-Token, like /blend/feed; 404 while MIRROR_ENABLED is off or no
-    read token is set."""
+    read token is set. `history` (0..120, default 30) is read AFTER the
+    off-check, so a bad value is this route's 422 only when the route
+    exists (N-03)."""
     _mirror_off_404()
+    try:
+        history = 30 if history is None else int(history)
+    except ValueError:
+        history = -1
+    if not 0 <= history <= 120:
+        raise HTTPException(status_code=422,
+                            detail="history must be a whole number, 0..120")
     if not settings.read_token:
         raise HTTPException(status_code=404, detail="not found")
     supplied = x_read_token or ""
@@ -1736,12 +1746,30 @@ def mirror_resume(x_exec_token: str | None = Header(default=None),
     return {"ok": True, "mirror": out}
 
 
-def _mirror_body(body) -> dict:
-    return body if isinstance(body, dict) else {}
+async def _mirror_body(request: Request) -> dict:
+    """The JSON object a mirror POST carries, read AFTER the off-check: with
+    MIRROR_ENABLED off a malformed body gets the same 404 as any unknown
+    path, never FastAPI's 422 (N-03: a 422 would say the route exists). With
+    the mirror on a body that is not a JSON object is still the 422 it was;
+    no body at all is the empty request it was."""
+    _mirror_off_404()
+    raw = await request.body()
+    if not raw.strip():
+        return {}
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="the body is not JSON")
+    if body is None:
+        return {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422,
+                            detail="the body must be a JSON object")
+    return body
 
 
 @app.post("/mirror/transfer")
-def mirror_transfer(body: dict | None = Body(default=None),
+def mirror_transfer(body: dict = Depends(_mirror_body),
                     x_exec_token: str | None = Header(default=None),
                     token: str | None = Query(default=None)):
     """Queue a move of capital between two sleeves of one mirror book:
@@ -1751,7 +1779,6 @@ def mirror_transfer(body: dict | None = Body(default=None),
     that moves less than asked is said and its remainder re-queued."""
     _mirror_off_404()
     _auth(x_exec_token, token)
-    body = _mirror_body(body)
     book = _mirror_book(body.get("book"))
     try:
         req = book.request_transfer(body.get("from"), body.get("to"),
@@ -1763,21 +1790,23 @@ def mirror_transfer(body: dict | None = Body(default=None),
 
 
 @app.post("/mirror/credit")
-def mirror_credit(body: dict | None = Body(default=None),
+def mirror_credit(body: dict = Depends(_mirror_body),
                   x_exec_token: str | None = Header(default=None),
                   token: str | None = Query(default=None)):
     """Queue a cash adjustment of one sleeve: {"sleeve", "amount", "note"?,
-    "book"?} - cash the account received for that sleeve (+), a fee (-).
-    Debits are applied first; a live book takes a credit only from cash the
-    account holds beyond the book. (Dividends the brain lists are booked by
+    "force"?, "book"?} - cash the account received for that sleeve (+), a
+    fee (-). Debits are applied first; a live book takes a credit only from
+    cash the account holds beyond the book. A debit that would take the
+    sleeve's cash below zero is REFUSED (journaled, alerted) unless the
+    request carries "force": true. (Dividends the brain lists are booked by
     the book itself, as receivables.)"""
     _mirror_off_404()
     _auth(x_exec_token, token)
-    body = _mirror_body(body)
     book = _mirror_book(body.get("book"))
     try:
         req = book.request_credit(body.get("sleeve"), body.get("amount"),
-                                  body.get("note") or "")
+                                  body.get("note") or "",
+                                  force=body.get("force") is True)
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True, "book": book.cfg.name, "request": req,
@@ -1785,17 +1814,19 @@ def mirror_credit(body: dict | None = Body(default=None),
 
 
 @app.post("/mirror/resolve")
-def mirror_resolve(body: dict | None = Body(default=None),
+def mirror_resolve(body: dict = Depends(_mirror_body),
                    x_exec_token: str | None = Header(default=None),
                    token: str | None = Query(default=None)):
     """State what an UNRESOLVED order of a mirror book did: {"id",
-    "filled", "price"?, "commission"?, "note"?, "book"?}. The loop thread
-    books that order of the open run or flatten at exactly what is stated
-    (journaled, alerted) - unless the venue still reports it working. The
-    repair for an order the venue can no longer answer for."""
+    "filled", "price"?, "commission"?, "note"?, "book"?}. Only an order the
+    book has flagged unresolved can be resolved. The loop thread asks the
+    venue ONCE MORE first: an order still working is refused, an order the
+    venue now answers for is booked at the VENUE's answer (and the alert
+    says so), and only otherwise is the statement booked - never a buy
+    above its limit, never a price more than 20% from the order's reference.
+    Every refusal is journaled and alerted."""
     _mirror_off_404()
     _auth(x_exec_token, token)
-    body = _mirror_body(body)
     book = _mirror_book(body.get("book"))
     try:
         req = book.request_resolve(body.get("id"), body.get("filled"),
@@ -1813,22 +1844,23 @@ def mirror_resolve(body: dict | None = Body(default=None),
 
 
 @app.post("/mirror/adjust")
-def mirror_adjust(body: dict | None = Body(default=None),
+def mirror_adjust(body: dict = Depends(_mirror_body),
                   x_exec_token: str | None = Header(default=None),
                   token: str | None = Query(default=None)):
     """A signed correction of ONE sleeve of a mirror book: {"sleeve",
-    "symbol"?, "shares"?, "cash"?, "note", "book"?} - shares of one symbol
-    and / or its cash. Applied by the loop thread only while no run is open
-    (journaled, alerted); a sleeve's shares can never go negative. The
-    repair path for any share-count divergence."""
+    "symbol"?, "shares"?, "cash"?, "note", "force"?, "book"?} - shares of
+    one symbol and / or its cash. Applied by the loop thread only while no
+    run is open (journaled, alerted); a sleeve's shares can never go
+    negative, and its cash only with "force": true (refused, journaled and
+    alerted otherwise). The repair path for any share-count divergence."""
     _mirror_off_404()
     _auth(x_exec_token, token)
-    body = _mirror_body(body)
     book = _mirror_book(body.get("book"))
     try:
         req = book.request_adjust(body.get("sleeve"), body.get("symbol"),
                                   body.get("shares"), body.get("cash"),
-                                  body.get("note") or "")
+                                  body.get("note") or "",
+                                  force=body.get("force") is True)
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     LOOP_WAKE.set()

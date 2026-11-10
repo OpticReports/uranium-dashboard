@@ -93,8 +93,14 @@ ACTIONS_NEAR = 4          # days: an FMP dividend or split with a Yahoo one this
                           # (Yahoo's date stands). Measured 2026-11-10 on the manifest's 62 tickers over two years:
                           # 617 of 627 FMP dividends on Yahoo's exact ex-date, none merely near, 10 Yahoo lacked (nine
                           # ex 2026-11-02, still unbooked six sessions later; one not yet ex); every split on both
-ACTIONS_RETRY = 600       # seconds before a failed FMP dividend/split call for a ticker is tried again
+ACTIONS_RETRY = 120       # seconds before a failed FMP dividend/split call for a ticker is tried again
 ACTIONS_TRIP = 5          # failures in a row (any tickers) before FMP's lists are left alone for ACTIONS_RETRY
+                          # (short on purpose: the mirror brain warms its histories for 30 minutes and asks again
+                          # for every ticker whose lists it could not read; at 600 s one burst of failures left
+                          # the whole session's histories unrepaired)
+ACTIONS_RECENT = 30       # days: an event only FMP lists is applied to the history when it is at most this old at
+                          # the series' last date. Yahoo books a dividend within days or weeks (617 of 617 older
+                          # ones were booked), so an older FMP-only entry is more likely FMP's error than Yahoo's lag
 HALF_DAYS = {"2026-11-27": "13:00", "2026-12-24": "13:00", "2027-11-26": "13:00"}   # NYSE 13:00 closes
 KNIFE_SIGMA = 0.3         # fallback search radius without bars, in 20-session daily sigmas: p95 of the
                           # measured 15:45 ET -> official close move (add. 48 calibration)
@@ -1092,13 +1098,16 @@ def _noon(d):
     return int(datetime.datetime.fromisoformat(d).replace(hour=14, minute=30, tzinfo=datetime.timezone.utc).timestamp())
 
 
-def parse_daily(res, actions=None):
+def parse_daily(res, actions=None, applied=None):
     """({date: adjusted close}, {date: raw close}) from a Yahoo daily chart result; empty if no bars.
     actions: FMP's dividend and split lists for the ticker (fmp_actions). Yahoo's own events are applied
     first, exactly as before; then the events FMP lists and Yahoo has NOT booked (corporate_actions: src
     'fmp'), splits before dividends, through the same apply_events, which acts only where the series
     still lacks the event (measured 2026-11-10: nine bond-fund dividends ex 2026-11-02 were missing from
-    Yahoo six sessions later, and CR(SHY,1) on the ex-date read -0.29% for a true +0.02%)"""
+    Yahoo six sessions later, and CR(SHY,1) on the ex-date read -0.29% for a true +0.02%). Only an event
+    at most ACTIONS_RECENT days before the series' last date is taken from FMP alone: the list is
+    trusted for what Yahoo is late with, not for rewriting older history. applied: a list that receives
+    {'kind': 'dividend' | 'split', 'date', 'amount'} for each FMP-only event that changed the series"""
     q = res["indicators"]["quote"][0]
     adj = (res["indicators"].get("adjclose") or [{}])[0].get("adjclose")
     rows = {}
@@ -1113,10 +1122,22 @@ def parse_daily(res, actions=None):
     apply_events(dates, a_, r_, res.get("events") or {})
     if actions:
         more = corporate_actions(res.get("events") or {}, actions, dates[-1])
-        apply_events(dates, a_, r_, {"splits": {i: dict(x, date=_noon(x["date"]))
-                                                for i, x in enumerate(more["splits"]) if x["src"] == "fmp"}})
-        apply_events(dates, a_, r_, {"dividends": {i: {"date": _noon(x["ex_date"]), "amount": x["adj"]}
-                                                   for i, x in enumerate(more["dividends"]) if x["src"] == "fmp"}})
+        last = datetime.date.fromisoformat(dates[-1])
+
+        def recent(d):
+            return 0 <= (last - datetime.date.fromisoformat(d)).days <= ACTIONS_RECENT
+        for x in more["splits"]:
+            if x["src"] == "fmp" and recent(x["date"]):
+                before = (list(a_), list(r_))
+                apply_events(dates, a_, r_, {"splits": {0: dict(x, date=_noon(x["date"]))}})
+                if applied is not None and (a_, r_) != before:
+                    applied.append({"kind": "split", "date": x["date"], "amount": f"{x['numerator']:g}:{x['denominator']:g}"})
+        for x in more["dividends"]:
+            if x["src"] == "fmp" and recent(x["ex_date"]):
+                before = list(a_)
+                apply_events(dates, a_, r_, {"dividends": {0: {"date": _noon(x["ex_date"]), "amount": x["adj"]}}})
+                if applied is not None and a_ != before:
+                    applied.append({"kind": "dividend", "date": x["ex_date"], "amount": round(x["amount"], 6)})
     return dict(zip(dates, a_)), dict(zip(dates, r_))
 
 

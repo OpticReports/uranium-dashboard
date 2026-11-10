@@ -25,8 +25,16 @@ Model
   cash) is never inside its corridor and is exempt from the dust rule until it is repaired; a
   threshold sleeve idling more than MAX_IDLE_CASH_FRAC of its equity in cash trades too (a state
   Composer never reaches, e.g. after a refused buy).
+  KNOWN LIMIT of that cash rule (measured by the review, not changed): a target holding a share
+  worth more than MAX_IDLE_CASH_FRAC of the sleeve leaves more than that in cash by whole-share
+  rounding alone, so such a sleeve trades inside its corridor (979 of 5,000 random sessions at a
+  $3,000 sleeve, 6 of 5,000 at $34,000). Keep threshold sleeves well above 20 x their dearest share.
 - Distributions and splits are accounting, and live here so the research-side paper simulator
-  applies the same rules: dividend_receivables() / settle_receivable() and apply_split().
+  applies the same rules: dividend_receivables() / settle_receivable() and apply_split(). A
+  dividend whose PAY DATE is not known yet keeps it unknown (None): it is taken from a later
+  listing, and only PAY_DATE_GIVE_UP_DAYS after the ex-date is ex + DEFAULT_PAY_LAG_DAYS assumed.
+- The cash reserve (cash_reserve_frac, 0.1% of a sleeve) is what pays commissions. It is below
+  IBKR's $0.005 a share for a name under about $5 a share; the cheapest holdable names are above $6.
 
 Invariants (check(); tests/test_mirror_core.py)
 - every share is owned by exactly one sleeve: the sleeves' shares per symbol sum to the book's
@@ -46,7 +54,8 @@ TARGET_SUM_TOL = 0.002           # a target vector must sum to 1 within this
 MAX_IDLE_CASH_FRAC = 0.05        # a threshold sleeve holding more cash than this share of its equity trades
 DEBT_TOL_USD = 0.005             # cash below minus this is a debt (float dust is not)
 DIVIDEND_RULES = ("composer", "holder")
-DEFAULT_PAY_LAG_DAYS = 7         # a dividend with no pay date is taken to pay this long after its ex-date
+DEFAULT_PAY_LAG_DAYS = 7         # a dividend whose pay date never became known is taken to pay this long after its ex-date
+PAY_DATE_GIVE_UP_DAYS = 10       # ... but only once this many calendar days have passed since the ex-date
 RECEIVABLE_EXPIRE_DAYS = 30      # a receivable still unpaid this long after its pay date is closed
 
 
@@ -306,7 +315,9 @@ def build_plan(book: Book, targets: dict, prices: dict, session: str, cfg: Confi
         row = targets.get(name) if isinstance(targets, dict) else None
         if not isinstance(row, dict) or row.get("status") != "ok":
             why = (row or {}).get("note") or (row or {}).get("status") or "no target published"
-            plan["sleeves"][name] = {"action": "skip", "reason": f"brain: {why}", "deltas": {}}
+            # skip_reason: the CALLER holds the sleeve back (the executor's own gate), in its own words
+            plan["sleeves"][name] = {"action": "skip", "reason": (row or {}).get("skip_reason") or f"brain: {why}",
+                                     "deltas": {}}
             continue
         target, problem = clean_target(row.get("target"))
         if problem:
@@ -540,9 +551,9 @@ def split_key(ticker: str, day: str) -> str:
 
 
 def clean_dividend(row) -> dict | None:
-    """a usable dividend row {"ticker", "ex_date", "pay_date", "amount"} or None: a ticker, a real
-    ex-date, a positive finite cash amount per share; pay_date None or unreadable becomes the ex-date
-    + DEFAULT_PAY_LAG_DAYS (never before the ex-date)"""
+    """a usable dividend row {"ticker", "ex_date", "pay_date" | None, "amount"} or None: a ticker, a
+    real ex-date, a positive finite cash amount per share. pay_date is None while it is not known
+    (absent, unreadable, or before the ex-date): it is never guessed here."""
     if not isinstance(row, dict):
         return None
     ticker, ex, amt = row.get("ticker"), _day(row.get("ex_date")), row.get("amount")
@@ -551,19 +562,19 @@ def clean_dividend(row) -> dict | None:
     if isinstance(amt, bool) or not isinstance(amt, (int, float)) or not math.isfinite(amt) or amt <= 0:
         return None
     pay = _day(row.get("pay_date")) if row.get("pay_date") is not None else None
-    given = pay is not None and pay >= ex
-    if not given:
-        pay = ex + timedelta(days=DEFAULT_PAY_LAG_DAYS)
-    return {"ticker": ticker, "ex_date": ex.isoformat(), "pay_date": pay.isoformat(), "amount": float(amt),
-            "pay_date_given": given}
+    if pay is not None and pay < ex:
+        pay = None
+    return {"ticker": ticker, "ex_date": ex.isoformat(), "pay_date": pay.isoformat() if pay else None,
+            "amount": float(amt)}
 
 
 def dividend_receivables(holdings: dict, dividend: dict) -> list:
     """What one distribution owes each sleeve. holdings: {sleeve: {ticker: whole shares}} AS OF THE
     CLOSE BEFORE THE EX-DATE (the shares that carry the entitlement). dividend: {"ticker", "ex_date",
     "pay_date" | None, "amount" (cash per share)}. Returns one row per sleeve that held the ticker:
-    [{"id": "div-{ticker}-{ex_date}-{sleeve}", "sleeve", "ticker", "ex_date", "pay_date", "shares",
-    "amount", "total"}]; [] for an unusable row or when nobody held it. Pure: books nothing."""
+    [{"id": "div-{ticker}-{ex_date}-{sleeve}", "sleeve", "ticker", "ex_date", "pay_date" (None while
+    unknown), "shares", "amount", "total"}]; [] for an unusable row or when nobody held it. Pure:
+    books nothing."""
     d = clean_dividend(dividend)
     if d is None or not isinstance(holdings, dict):
         return []
@@ -578,11 +589,24 @@ def dividend_receivables(holdings: dict, dividend: dict) -> list:
     return out
 
 
+def receivable_pay_date(receivable: dict, session: str) -> str | None:
+    """the date a receivable is due from, as known on `session`: its pay date; while that is unknown,
+    None - until PAY_DATE_GIVE_UP_DAYS calendar days after the ex-date, when ex + DEFAULT_PAY_LAG_DAYS
+    is assumed (by then the brain no longer lists the dividend, so no later listing can supply it)."""
+    pay = _day(receivable.get("pay_date")) if receivable.get("pay_date") else None
+    if pay is not None:
+        return pay.isoformat()
+    ex, day = _day(receivable.get("ex_date")), _day(session)
+    if ex is None or day is None or (day - ex).days < PAY_DATE_GIVE_UP_DAYS:
+        return None
+    return (ex + timedelta(days=DEFAULT_PAY_LAG_DAYS)).isoformat()
+
+
 def settle_receivable(book: Book, receivable: dict, session: str, rule: str = "composer",
                       cash_arrived: bool = True) -> dict:
     """Settle ONE receivable against the book on `session` (YYYY-MM-DD). Returns what it did:
     {"action": "not_due" | "credited" | "leaked" | "wait" | "expired" | "void", "amount", "held": bool}.
-      not_due   the session is before the pay date
+      not_due   the session is before the pay date, or the pay date is not known yet (receivable_pay_date)
       void      its sleeve is no longer in the book
       leaked    rule "composer" and the sleeve no longer held the ticker on the first session on or
                 after the pay date: the cash stays unallocated (what Composer's symphonies do)
@@ -594,12 +618,13 @@ def settle_receivable(book: Book, receivable: dict, session: str, rule: str = "c
     a credit that waits for its cash is not lost to a later sale."""
     if rule not in DIVIDEND_RULES:
         raise MirrorError(f"unknown dividend rule {rule!r}")
-    day, pay = _day(session), _day(receivable.get("pay_date"))
+    day = _day(session)
     total = receivable.get("total")
-    if day is None or pay is None or isinstance(total, bool) or not isinstance(total, (int, float)) \
-            or not math.isfinite(total) or total <= 0:
+    if day is None or _day(receivable.get("ex_date")) is None or isinstance(total, bool) \
+            or not isinstance(total, (int, float)) or not math.isfinite(total) or total <= 0:
         raise MirrorError(f"receivable {receivable.get('id')!r} cannot be settled: bad dates or total")
-    if day < pay:
+    pay = _day(receivable_pay_date(receivable, session))
+    if pay is None or day < pay:
         return {"action": "not_due", "amount": 0.0, "held": None}
     sleeve = book.sleeves.get(receivable.get("sleeve"))
     if sleeve is None:

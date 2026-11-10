@@ -2969,3 +2969,95 @@ def test_gate_a11_an_inactive_order_can_be_cancelled_by_its_client_id(ib_adapter
     assert cancels == ["mirror-d-B-SPY"] and t.orderStatus.status == "Cancelled"
     assert ib_adapter.cancel_inactive_stock_order("mirror-d-B-SPY") is False     # once: it is no longer Inactive
     assert ib_adapter.cancel_inactive_stock_order("mirror-never-sent") is False
+
+
+# --- Composer mirror, verification round 2 -------------------------------------
+
+def test_gate_n04_order_absent_today_is_true_only_when_open_orders_and_executions_both_answer(ib_adapter, monkeypatch):
+    """N-04: on the gateway that never answers reqCompletedOrders, 'no such
+    order' from find_stock_order proves nothing. order_absent_today is the
+    proof for an order of TODAY: both the open orders and today's executions
+    answered, and neither shows the key."""
+    venue, execs = [], []
+    fake = _session(ib_adapter, monkeypatch, venue, execs)
+    cid = "mirror-2026-11-10-B-TECL"
+    assert ib_adapter.order_absent_today(cid) is True                     # never sent: both answered, neither has it
+    assert fake.open_order_calls == 1 and fake.exec_calls == 1
+    r = ib_adapter.place_limit_order("TECL", 108, 99.0, client_order_id=cid)        # rests under the tape
+    assert r["status"] == "working"
+    asked = (fake.open_order_calls, fake.exec_calls)
+    assert ib_adapter.order_absent_today(cid) is False                    # this session placed it ...
+    assert (fake.open_order_calls, fake.exec_calls) == asked              # ... no venue request needed for that
+    fresh = _session(ib_adapter, monkeypatch, venue, execs, next_id=1000)   # a restart: the session knows nothing
+    fresh.reqCompletedOrders = lambda apiOnly=False: (_ for _ in ()).throw(TimeoutError("no completedOrdersEnd"))
+    assert ib_adapter.order_absent_today(cid) is False                    # OPEN at the venue
+    t = venue[0]
+    _execute(fake, t, 108, 99.0, "e1")
+    t.orderStatus.status = "Filled"
+    assert ib_adapter.order_absent_today(cid) is False                    # not open any more, but EXECUTED today
+    assert ib_adapter.order_absent_today("mirror-2026-11-10-B-SPY") is True         # the twin: another key
+    execs.clear()
+    assert ib_adapter.order_absent_today(cid) is True                     # (the next day: no execution today - the
+                                                                          #  CALLER must not ask it of yesterday's order)
+
+    def hang():
+        raise TimeoutError("execDetailsEnd never arrived")
+    fresh.reqExecutions = hang
+    assert ib_adapter.order_absent_today(cid) is None                     # one request did not answer: nothing is proven
+    assert fresh.connected is True                                        # ... and the session is NOT dropped for it
+    fresh.reqExecutions = lambda: []
+    fresh.reqAllOpenOrders = hang
+    assert ib_adapter.order_absent_today(cid) is None
+    assert getattr(fresh, "RequestTimeout", 0) == 0                       # the bound is put back
+    d = DryAdapter()
+    assert d.order_absent_today("c1") is True
+    d.place_stock_order("BIL", 7, "MKT", ref_price=91.5, client_order_id="c1")
+    assert d.order_absent_today("c1") is False and d.order_absent_today("c2") is True
+
+
+def test_gate_mkt_acked_then_filled_inside_the_bounded_window_returns_filled(ib_adapter):
+    """the mirror's SELLS are DAY market orders: one that is acked 'Submitted'
+    and fills a moment later is read inside _await_placement's bounded fill
+    window - not returned 'working' at the ack (dropping MKT from that
+    window passed the whole adapter suite)."""
+    fake = ib_adapter.ib
+    seen = {"resting": 0}
+
+    def venue(f):
+        for t in f.trades():
+            if t.order.orderType == "MKT" and t.orderStatus.status == "Submitted":
+                seen["resting"] += 1
+                if seen["resting"] == 3:              # acked and resting for two reads; then it fills
+                    f.fill(t, [(3, 50.25), (2, 50.20)], commission=1.0)
+    fake.on_sleep = venue
+    r = ib_adapter.place_stock_order("CRSP", -5, "MKT", client_order_id="mirror-d-S-CRSP")
+    assert seen["resting"] == 3 and r["status"] == "filled"
+    assert r["fill_price"] == pytest.approx((3 * 50.25 + 2 * 50.20) / 5)
+    seen["resting"] = -10 ** 9                        # the twin: it never fills -> 'working' once the window is over
+    w = ib_adapter.place_stock_order("CRSP", -5, "MKT", client_order_id="mirror-d-S-CRSP-2")
+    assert w["status"] == "working" and "fill_price" not in w
+
+
+def test_gate_stock_order_fills_counts_only_the_attempt_that_binds(ib_adapter, monkeypatch):
+    """one idempotency key can span two venue orders (an attempt that died,
+    then the retry): the executions of the order that BINDS are the fill -
+    never the sum over both attempts."""
+    venue, execs = [], []
+    fake = _session(ib_adapter, monkeypatch, venue, execs)
+    cid = "mirror-2026-11-10-B-TECL"
+    a = ib_adapter.place_limit_order("TECL", 10, 100.5, client_order_id=cid)
+    t1 = fake.trade_by_ref(a["order_ref"])
+    _execute(fake, t1, 3, 100.40, "e1", commission=0.30)                  # the first attempt: 3 shares, then it died
+    t1.orderStatus.status = "Cancelled"
+    b = ib_adapter.place_limit_order("TECL", 10, 100.5, client_order_id=cid)        # the retry under the SAME key
+    assert b["order_ref"] != a["order_ref"] and "duplicate" not in b
+    t2 = fake.trade_by_ref(b["order_ref"])
+    _execute(fake, t2, 10, 100.25, "e2", commission=1.0)
+    t2.orderStatus.status = "Filled"
+    want = {"filled_qty": 10, "avg_price": 100.25, "commission": 1.0, "venue_status": "Filled"}
+    assert ib_adapter.stock_order_fills(cid) == want                      # in this session ...
+    _session(ib_adapter, monkeypatch, venue, execs, next_id=1000)
+    assert ib_adapter.stock_order_fills(cid) == want                      # ... after a restart (a bare completed row) ...
+    gone = _session(ib_adapter, monkeypatch, venue, execs, next_id=2000)
+    gone.reqCompletedOrders = lambda apiOnly=False: (_ for _ in ()).throw(TimeoutError("x"))
+    assert ib_adapter.stock_order_fills(cid) == dict(want, venue_status=None)       # ... and from executions alone (latest)

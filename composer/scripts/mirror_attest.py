@@ -17,9 +17,13 @@ mirrored that day.
   mirror_attest.py              read Composer, post the attestation
   mirror_attest.py --dry-run    read Composer and compare with the approved trees here; post nothing
 
-One summary line on stdout. Exit 0 when every engine was read and the brain stored it (--dry-run: when
-every engine was read), 1 otherwise. An engine that cannot be read is left out (the brain keeps it at
-'none') and named. It never trades, never edits a symphony, and prints no key or token.
+One summary line on stdout. Exit 0 when every engine was read and the brain stored it in time
+(--dry-run: when every engine was read), 1 otherwise: an engine that cannot be read is left out (the
+brain keeps it at 'none') and named, and an attestation that arrives after the brain has built today's
+pinned decision is stored but TOO LATE for it (the brain says so; the line and the exit code do too).
+The brain counts an "ok" older than MIRROR_ATTEST_MAX_AGE_S (default one hour) before the decision
+instant as none: run this within the hour before it. It never trades, never edits a symphony, and
+prints no key or token.
 
 Env: COMPOSER_API_KEY_ID, COMPOSER_SECRET (composerlib), MIRROR_BRAIN_URL (https; http only for
 localhost), MIRROR_ATTEST_TOKEN.
@@ -166,7 +170,10 @@ def run(argv=None, env=None, get=None, get_meta=None, now=None, send=None):
     line += f" | posted {len(data.get('stored') or [])} of {len(cfg_all)}; the brain reads: {brain}"
     if lost:
         line += f" | NOT STORED: {', '.join(lost)}"
-    return (1 if failed or lost else 0), line
+    late = bool(data.get("pinned_already_built"))
+    if late:                                       # the brain's payload for today's instant is immutable
+        line += " | TOO LATE: today's pinned decision was built before this attestation and does not carry it"
+    return (1 if failed or lost or late else 0), line
 
 
 def main():

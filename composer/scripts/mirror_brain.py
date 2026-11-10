@@ -24,21 +24,39 @@ A PINNED build (build(now=T, pinned=True); /mirror/intents?after=T) is the decis
 second it is computed: today's prices are FMP's traded 1-minute bars ENDING at or before T and nothing
 else (never Yahoo's last sale, which depends on the second it was fetched); the history is Yahoo's
 adjusted closes before the session. Two pinned builds for one T on the same bars give the same targets
-and prices, and the live answer equals `--at` afterwards. /mirror/intents?after=T answers 503
-"decision bar not published yet" until SPY's traded bar ending at T is in AND FMP has stopped
-publishing that minute (it publishes ticker by ticker over 10-25 s: preclose-ledger 2026-11-09 15:16:15,
-SPY had the bar and 23 of 48 tickers did not), waiting at most SETTLE_S; then the payload is built once
-(concurrent requests share the build), cached by T and never rebuilt.
+and prices, and on fully published bars the live answer equals `--at` afterwards (see THE ALLOWANCE).
+FMP IS A HARD DEPENDENCY of a pinned decision: there is no Yahoo fallback, so FMP down at the decision
+instant means no trade that session.
+
+/mirror/intents?after=T answers 503 until the decision is SETTLED, and only a settled payload is cached
+(by T; never rebuilt, and never evicted while its ET day is among the KEEP newest held; concurrent
+requests share one build):
+  - "decision bar not published yet" until SPY's traded bar ending at T is in, and, for at most SETTLE_S,
+    while FMP is still publishing that minute (it publishes ticker by ticker over 10-25 s: preclose-ledger
+    2026-11-09 15:16:15, SPY had the bar and 23 of 48 tickers did not)
+  - "decision not settled yet" while FMP has not answered for a ticker, or an engine is unavailable for
+    a FEED reason (SPY's bar, breadth, a decision ticker priced by an estimate, a price missing): a
+    later request rebuilds, at most every REBUILD_EVERY_S, until the feed is whole. There is no give-up
+    build: the executor's own plan-by deadline bounds the wait. (The give-up build this replaced went
+    out at T+47 s of a 50-second run of FMP 429s with every engine unavailable, and was cached for the
+    session.)
+  An engine unavailable for a reason the feed cannot change (tree drift, paused, a history a session
+  short, no attestation where one is required) on a healthy feed IS a settled answer.
+THE ALLOWANCE: a build goes while up to LAG_MAX of the recently traded tickers are still a bar behind
+(and, past SETTLE_S, with more, said in `problems`), so a live payload's PRICES for those tickers can
+differ slightly from a later rebuild or `--at` of the same instant (the round-2 review: targets did not
+move in about 1,000 lag sets tried on the record).
 
 NEVER A TRADEABLE DECISION ON DEAD DATA (measured on 83 sessions of FMP minutes, 2026-07-15..11-09):
   - pinned: every engine is unavailable unless SPY's price is from the bar ending at T (83 of 83 had it)
   - every engine is unavailable unless at least BREADTH_MIN of the trees' tickers traded within
     BREADTH_AGE_S of the instant (measured share: 92-100%, so a stalled feed or a shut market, 0%, is
     refused and no real session was)
-  - an engine is unavailable when a decision ticker it reads has no trade of its own today (the price
-    would be an estimate: rebuilt from a sibling fund, or an earlier close carried; 0 of 332
-    engine-sessions), when fewer than ENGINE_BREADTH_MIN of its decision tickers traded within
-    BREADTH_AGE_S (0 of 332), or when its history is a session short
+  - an engine is unavailable when a decision ticker it reads is priced by an ESTIMATE, i.e. anything
+    but a trade of its own today: rebuilt from a sibling fund (also when the fund did trade earlier in
+    the day), or an earlier close carried (0 of 327 real engine-sessions); when fewer than
+    ENGINE_BREADTH_MIN of its decision tickers traded within BREADTH_AGE_S (0 of 327); or when its
+    history is a session short
   A thin fund's own last trade, however old, is used and named (PEJ's was over 15 minutes old on 5
   sessions): Composer trades those days, and refusing them would have cost 1.8% of engine-sessions
   (9.6% at a two-minute limit).
@@ -48,7 +66,14 @@ the sha1 of its canonical live tree (shadow_runner.tree_sha1, the one function u
 tree too). `sync` says per engine ok / drift / none; drift makes the engine unavailable; none (no
 attestation for the session) trades with a line in `problems`, or is unavailable when
 MIRROR_REQUIRE_ATTESTATION is set. An engine attested paused is unavailable (Composer will not
-rebalance it).
+rebalance it). An "ok" attested more than MIRROR_ATTEST_MAX_AGE_S (default 3600) before the instant is
+too old to vouch for it and counts as none (attested_utc still shown; a drift or a pause stays one
+however old). An attestation posted AFTER the pinned payload for the instant was cached is NOT in that
+payload (it is immutable): the POST answers "pinned_already_built": true so the routine can say so.
+
+DIVIDENDS YAHOO HAS NOT BOOKED are applied to the history from FMP's lists (shadow_runner.parse_daily;
+each one applied is named in `problems`). Where FMP's lists could not be read for a ticker the history
+is Yahoo's alone: the payload then says "actions_complete": false and names the tickers.
 
 Payload (schema 2): {schema, kind, session, pinned, asof_utc, asof_et, built_utc, decision_bar:
 {end_utc, spy_utc, complete} | null, replay, close_et, engines: {NAME: {status: "ok" | "unavailable",
@@ -56,8 +81,9 @@ symphony, version, rule: "daily" | "threshold", corridor, target: {ticker: weigh
 caveats, note}}, prices: {ticker: raw price} for every ticker of ANY era of the manifest, price_times:
 {ticker: UTC time of the trade or bar end the price is from}, price_notes: {ticker: why a price is an
 estimate or old}, dividends: [{ticker, ex_date, pay_date | null, amount}], splits: [{ticker, date,
-ratio}] (the last ACTIONS_DAYS calendar days), sync, quotes, problems}. `prices` are the executor's
-sizing reference, never a fill. Nothing here is a trade instruction for Composer.
+ratio}] (the last ACTIONS_DAYS calendar days), actions_complete (FMP's dividend and split lists were
+read for every ticker), sync, quotes, problems}. `prices` are the executor's sizing reference, never a
+fill. Nothing here is a trade instruction for Composer.
 """
 import datetime
 import functools
@@ -85,15 +111,20 @@ BREADTH_MIN = 0.80        # the feed is alive: at least this share of the trees'
 ENGINE_BREADTH_MIN = 0.75  # ... and at least this share of an engine's own decision tickers
 LAG_MAX = 0.15            # still publishing: more than this share of the recently traded tickers have their last
                           # bar ending a minute BEFORE the instant (complete days: median 2%, max 6.5% of 83)
-SETTLE_S = 45             # seconds after the instant an unsettled bar is waited for; then what FMP has is used
+SETTLE_S = 45             # seconds after the instant a bar still being published is waited for; then what FMP
+                          # has ANSWERED is used (a ticker it has not answered for is waited for without limit)
+REBUILD_EVERY_S = 10      # an unsettled pinned decision is tried again at most this often
+ATTEST_MAX_AGE_S = 3600   # an "ok" attested longer than this before the instant counts as none
+                          # (env MIRROR_ATTEST_MAX_AGE_S)
 ACTIONS_DAYS = 10         # dividends and splits published: ex-date within this many calendar days of the session
-WARM_FROM_MIN = 10        # --serve: Yahoo's history is fetched from this many minutes before the decision instant
+WARM_FROM_MIN = 30        # --serve: Yahoo's history is fetched from this many minutes before the decision instant
+                          # (several times shadow_runner.ACTIONS_RETRY, so a burst of FMP list failures is retried)
 WARM_EVERY_S = 60         # ... and what is still missing or incomplete is asked again this often
 RECHECK_S = 60            # a history that is not final (no bar for today yet, or a session short) is refetched after this
 YAHOO_TIMEOUT_S = 10      # one Yahoo history call from the serving brain (two attempts)
 AD_HOC_TTL_S = 60         # an ad hoc (unpinned) payload is reused for this long
 ATTEST_MAX_BYTES = 65536
-KEEP = 4                  # pinned instants / attested sessions kept in memory
+KEEP = 4                  # ET days of pinned payloads / attested sessions kept in memory (today's always)
 
 
 def _utcnow():
@@ -238,11 +269,31 @@ class Attestations:
             return {"engines": {k: dict(v) for k, v in rec["engines"].items()}} if rec else None
 
 
-def sync_block(cfg_all, day, attest=None):
+def attest_max_age():
+    """seconds an 'ok' attestation may precede the instant (env MIRROR_ATTEST_MAX_AGE_S; default ATTEST_MAX_AGE_S)"""
+    try:
+        v = float(os.environ.get("MIRROR_ATTEST_MAX_AGE_S", "").strip() or ATTEST_MAX_AGE_S)
+    except ValueError:
+        return float(ATTEST_MAX_AGE_S)
+    return v if v > 0 else float(ATTEST_MAX_AGE_S)
+
+
+def attest_age(row, asof):
+    """seconds from a sync row's attestation to `asof` (negative: attested after it); None if never attested"""
+    try:
+        return (asof - parse_utc(row["attested_utc"])).total_seconds()
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
+def sync_block(cfg_all, day, attest=None, asof=None):
     """{NAME: {state, approved_version, approved_sha1, live_version, attested_utc[, paused]}}: 'ok' the
     attested live tree hashes equal to the approved tree in use on `day`; 'drift' it does not; 'none'
-    nothing was attested for that session. attest: an Attestations (or any .get(day))"""
+    nothing was attested for that session, or (asof given) the 'ok' is older than attest_max_age()
+    before `asof`: too old to vouch for the instant, with attested_utc still shown. A drift or a pause
+    is kept however old (it is a reason NOT to trade). attest: an Attestations (or any .get(day))"""
     rec = (attest.get(day) if attest is not None else None) or {}
+    limit = attest_max_age()
     out = {}
     for eng, cfg in cfg_all.items():
         era = era_of(cfg, day)
@@ -252,6 +303,9 @@ def sync_block(cfg_all, day, attest=None):
         if a:
             row.update(state="ok" if a.get("tree_sha1") == row["approved_sha1"] else "drift",
                        live_version=a.get("version"), attested_utc=a.get("attested_utc"))
+            age = attest_age(row, asof) if asof is not None else None
+            if row["state"] == "ok" and age is not None and age > limit:
+                row["state"] = "none"
             if a.get("paused"):
                 row["paused"] = True
         out[eng] = row
@@ -300,13 +354,15 @@ def price_extra(tickers, now, today, fetch, quotes, pinned):
         return {}, {}, {}, {t: pc.one_line(repr(exc), 80) for t in tickers}
 
 
-def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=None, budget=None):
+def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=None, budget=None, diag=None):
     """the payload at `now` (UTC datetime; default the wall clock).
     pinned=False: an ad hoc read for monitoring (a `now` more than 5 minutes behind the wall clock is a
     replay and reads nothing stamped later). pinned=True: the decision AS OF `now` exactly (see the
     module docstring); 'replay' is then True only when `now` is on another ET day than the wall clock.
     quotes / fetch: the preview's seams (FMP minutes; Yahoo history); attest: an Attestations; wall: the
-    wall clock (a test seam); budget: seconds for FMP's minutes (default FMP_BUDGET_S)."""
+    wall clock (a test seam); budget: seconds for FMP's minutes (default FMP_BUDGET_S); diag: a dict
+    that receives 'feed' {engine: why it is unavailable for a reason a later read of the feed could
+    change} (the pinned path settles on it; not part of the payload)."""
     wall = wall or _utcnow
     started = wall()
     now = now or started
@@ -318,7 +374,8 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
            "asof_et": e.strftime("%H:%M:%S"), "built_utc": None,
            "decision_bar": {"end_utc": _iso(now), "spy_utc": None, "complete": False} if pinned else None,
            "replay": replay, "close_et": None, "engines": {}, "prices": {}, "price_times": {}, "price_notes": {},
-           "dividends": [], "splits": [], "sync": sync_block(cfg_all, day0, attest), "quotes": None, "problems": []}
+           "dividends": [], "splits": [], "actions_complete": False, "sync": sync_block(cfg_all, day0, attest, now),
+           "quotes": None, "problems": []}
 
     def done(o):
         o["built_utc"] = _iso(wall())
@@ -354,7 +411,7 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
     day = next(iter(rows.values()))["date"]
     out["session"] = day
     out["close_et"] = sr.session_close(day)
-    out["sync"] = sync_block(cfg_all, day, attest)
+    out["sync"] = sync_block(cfg_all, day, attest, now)
     qrec = (gate or next(iter(rows.values()))).get("quotes") or {}
     out["quotes"] = {k: qrec.get(k) for k in ("source", "fmp", "yahoo", "none", "failed", "short")}
     out["problems"] += [pc.one_line(a, 300) for a in alerts if "UNAVAILABLE" in a]
@@ -409,27 +466,37 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
                     f"to {e:%H:%M:%S} ET")
     out["problems"] += halt
     need = require_attestation()
-    unattested = []
+    unattested, aged = [], []
+    feed = diag.setdefault("feed", {}) if diag is not None else {}
     for eng, cfg in cfg_all.items():
         era = era_of(cfg, day)
         rule, corridor = rule_of(cfg)
         base_row = {"symphony": cfg["symphony"], "version": era["version"], "rule": rule, "corridor": corridor}
         r = rows.get(eng)
         if not r or r.get("status") != "ok" or not r.get("target"):
-            out["engines"][eng] = dict(base_row, status="unavailable", note=(r or {}).get("note") or "no decision")
+            note = (r or {}).get("note") or "no decision"
+            out["engines"][eng] = dict(base_row, status="unavailable", note=note)
+            if halt or note.startswith(("no prices for", "no close on")):      # a price the feed did not give
+                feed[eng] = "; ".join(halt + [note])
             continue
         dec = sorted(sr.decision_tickers(sr.load_tree(era)))
-        why = list(halt)
-        hit = [t for t in dec if t in short]
-        if hit:
-            why.append(f"the history of {', '.join(hit)} lacks the previous session (indicators a session short)")
-        est = [t for t in dec if t not in traded]
+        why = list(halt)                           # the reasons a later read of the feed could change come first
+        est = [t for t in dec if (stamps.get(t) or (None,))[0] != "trade"]
         if est:
-            why.append(f"no trade today for {', '.join(est)}: priced by an estimate")
+            why.append(f"{', '.join(est)} priced by an estimate, not a trade of its own today"
+                       + (f" ({', '.join(t for t in est if t not in traded)}: no trade today)" if set(est) - traded else ""))
         n_live = sum(recent(t) for t in dec)
         if dec and n_live < ENGINE_BREADTH_MIN * len(dec):
             why.append(f"{n_live} of its {len(dec)} decision tickers traded in the last {BREADTH_AGE_S // 60} minutes")
+        if why:
+            feed[eng] = "; ".join(why)
+        hit = [t for t in dec if t in short]
+        if hit:
+            why.append(f"the history of {', '.join(hit)} lacks the previous session (indicators a session short)")
         s = out["sync"][eng]
+        waited = attest_age(s, now)
+        if waited is not None and waited > attest_max_age():
+            aged.append(f"{eng} {waited:.0f} s")
         if s["state"] == "drift":
             why.append(f"the live logic (version {s['live_version']}) differs from the approved {s['approved_version']}: "
                        f"not mirrored until the change is approved or rolled back")
@@ -449,13 +516,20 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
         caveats = [c for c in r.get("caveats") or [] if "Composer" not in c]
         out["engines"][eng] = dict(base_row, status="ok", target={t: float(w) for t, w in sorted(r["target"].items())},
                                    label=r.get("label"), stale=r.get("stale") or [], caveats=caveats)
+    if aged:
+        out["problems"].append(f"the attestation of the live logic is older than {attest_max_age():.0f} s at the instant "
+                               f"({', '.join(aged)}): an ok that old counts as none")
     if unattested:
         out["problems"].append(f"no attestation of the live logic for {day}: {', '.join(unattested)} on the approved "
                                f"trees, unverified")
 
     # ---- dividends and splits of the last ACTIONS_DAYS days (pure data: the executor does the accounting)
     lo = (datetime.date.fromisoformat(day) - datetime.timedelta(days=ACTIONS_DAYS)).isoformat()
-    unread, yahoo_only = [], []
+    unread, yahoo_only, applied = [], [], []
+    for t in sorted(seen):                         # what FMP's lists added to a history this decision read
+        ca = seen[t].get("corporateActions")
+        for x in (ca.get("applied") or []) if isinstance(ca, dict) else []:
+            applied.append(f"{t} {x.get('kind')} {x.get('date')} {x.get('amount')}")
     for t in sorted(held):
         ca = (seen.get(t) or {}).get("corporateActions")
         if not isinstance(ca, dict):
@@ -473,12 +547,15 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
                                       "ratio": round(float(x["numerator"]) / float(x["denominator"]), 8)})
     out["dividends"].sort(key=lambda x: (x["ex_date"], x["ticker"]))
     out["splits"].sort(key=lambda x: (x["date"], x["ticker"]))
+    out["actions_complete"] = not unread and not yahoo_only
     if unread:
-        out["problems"].append(f"dividends and splits not read for {len(unread)} ticker(s): {', '.join(unread[:8])}"
-                               + (" ..." if len(unread) > 8 else ""))
+        out["problems"].append(f"dividends and splits not read for {len(unread)} ticker(s): {', '.join(unread)}")
     if yahoo_only:
-        out["problems"].append(f"FMP's dividend list not read for {len(yahoo_only)} ticker(s) ({', '.join(yahoo_only[:8])}"
-                               + (" ..." if len(yahoo_only) > 8 else "") + "): Yahoo's events alone, pay dates unknown")
+        out["problems"].append(f"FMP's dividend and split lists not read for {len(yahoo_only)} ticker(s) ({', '.join(yahoo_only)}): "
+                               f"their history and events are Yahoo's alone (a dividend Yahoo has not booked is "
+                               f"missing; pay dates unknown)")
+    if applied:
+        out["problems"].append(f"history repaired from FMP's lists (events Yahoo has not booked): {'; '.join(applied)}")
     return done(out)
 
 
@@ -493,14 +570,23 @@ def _unavailable(out, cfg_all, day, note):
 
 # ------------------------------------------------------------------ the pinned path's data
 class NotPublished(Exception):
-    """the pinned payload for an instant cannot be built YET (the executor retries on the 503)"""
+    """the pinned payload for an instant cannot be built YET (the executor retries on the 503).
+    retry_s: the next attempt is not made before this many seconds (0: on the next request)"""
 
-    def __init__(self, detail, error="decision bar not published yet"):
+    def __init__(self, detail, error="decision bar not published yet", retry_s=0):
         super().__init__(detail)
-        self.error, self.detail = error, detail
+        self.error, self.detail, self.retry_s = error, detail, retry_s
 
     def body(self):
         return {"error": self.error, "detail": self.detail}
+
+
+class NotSettled(NotPublished):
+    """the feed is not whole yet (a ticker unanswered, or an engine unavailable for a feed reason):
+    nothing is cached, and the decision is tried again in REBUILD_EVERY_S"""
+
+    def __init__(self, detail):
+        super().__init__(detail, "decision not settled yet", REBUILD_EVERY_S)
 
 
 class Bars:
@@ -551,12 +637,16 @@ class Bars:
             raise NotPublished(f"SPY's last traded bar ends {sr.et_now(q[pc.GATE[0]][1]):%H:%M:%S} ET")
         self.q, self.probs = pc.minute_quotes(tickers, self.T, self.key, fetch=self.fetch, budget=self.budget)
 
-    def unsettled(self):
-        """None, or why the bar ending at T does not look fully published yet: FMP has not answered for a
-        ticker, or too many of the recently traded tickers still end a minute before T"""
+    def unanswered(self):
+        """None, or the tickers FMP has not answered for (refused, failed, slower than the budget)"""
         late = sorted(t for t, m in self.probs.items() if m != "no traded bar today")
         if late:
-            return f"FMP has not answered for {', '.join(late[:8])}" + (" ..." if len(late) > 8 else "")
+            return f"FMP has not answered for {', '.join(late[:8])}" + (f" ... ({len(late)} tickers)" if len(late) > 8 else "")
+        return None
+
+    def lagging(self):
+        """None, or that too many of the recently traded tickers still end a minute before T (FMP is
+        still publishing the bar)"""
         minute = datetime.timedelta(minutes=1)
         at = sum(1 for _, when in self.q.values() if when == self.T)
         lag = sorted(t for t, (_, when) in self.q.items() if when == self.T - minute)
@@ -564,6 +654,10 @@ class Bars:
             return (f"FMP is still publishing the bar: {len(lag)} of {at + len(lag)} recently traded tickers end a "
                     f"minute earlier ({', '.join(lag[:8])}" + (" ..." if len(lag) > 8 else "") + ")")
         return None
+
+    def unsettled(self):
+        """None, or why the bar ending at T does not look fully published yet"""
+        return self.unanswered() or self.lagging()
 
     def quotes(self, tickers, now):
         if pc.GATE[0] not in self.q:
@@ -575,29 +669,47 @@ class Bars:
 class History:
     """Yahoo's daily history per ticker, fetched once per ET day and reused by every pinned build that
     day: it does not change intraday (only today's own bar does, and a pinned build never reads that
-    bar). fetch() is the builds' seam: what is cached is used as it is (a decision never waits on Yahoo
-    for a ticker it already has), a miss is fetched. refresh() is the warm loop's: an answer that is not
-    final yet (no bar for today, or a session short of the previous one) is asked again after RECHECK_S.
-    A failure is never kept"""
+    bar). An answer is FINAL when it has a bar for today, reaches the previous session, and FMP's
+    dividend and split lists were read for it (the repair of what Yahoo has not booked rides on the same
+    fetch: a history taken while FMP's lists failed is Yahoo's alone). refresh() is the warm loop's
+    seam: an answer that is not final is asked again after RECHECK_S. fetch() is the builds': what is
+    cached is used as it is (a decision does not wait on Yahoo for a bar), EXCEPT an answer whose FMP
+    lists are still unread, which is asked again after RECHECK_S, the cached one standing if that
+    fails. A miss is fetched; a failure is never kept"""
 
-    def __init__(self, fetch=None, wall=None, clock=time.time):
+    def __init__(self, fetch=None, wall=None, clock=None):
         self._fetch = fetch or (lambda t: pc.fetch_live(t, timeout=YAHOO_TIMEOUT_S))
-        self.wall, self.clock = wall or _utcnow, clock
+        self.wall = wall or _utcnow
+        self.clock = clock or (lambda: self.wall().timestamp())   # RECHECK_S runs on the same clock as the day
         self.lock = threading.Lock()
         self.day, self.data, self.calls = None, {}, 0
 
+    @staticmethod
+    def lists_read(r):
+        """FMP's dividend and split lists were read for this answer (or there is no key to read them
+        with, or the source carries no events at all: nothing a retry could add)"""
+        ca = r[2].get("corporateActions") if len(r) > 2 and isinstance(r[2], dict) else None
+        return not isinstance(ca, dict) or bool(ca.get("fmp")) or not os.environ.get("FMP_API_KEY")
+
     def _final(self, r, day):
         adj = r[0]
-        return bool(adj) and day in adj and max((d for d in adj if d < day), default=None) == pc.previous_session(day)
+        return (bool(adj) and day in adj and max((d for d in adj if d < day), default=None) == pc.previous_session(day)
+                and self.lists_read(r))
 
-    def _get(self, t, again):
+    def _get(self, t, warm):
         day = sr.et_now(self.wall()).date().isoformat()
         with self.lock:
             if self.day != day:
                 self.day, self.data = day, {}
             hit = self.data.get(t)
-        if hit is None or (again and not (hit[1] or self.clock() - hit[2] < RECHECK_S)):
-            r = self._fetch(t)
+        due = hit is not None and not hit[1] and self.clock() - hit[2] >= RECHECK_S
+        if hit is None or (due and (warm or not self.lists_read(hit[0]))):
+            try:
+                r = self._fetch(t)
+            except Exception:  # noqa: BLE001
+                if hit is None or warm:
+                    raise
+                r = hit[0]                           # a build keeps what it has; asked again after RECHECK_S
             hit = (r, self._final(r, day), self.clock())
             with self.lock:
                 self.calls += 1
@@ -619,17 +731,35 @@ class History:
     def state(self):
         with self.lock:
             return {"day": self.day, "tickers": len(self.data), "final": sum(1 for h in self.data.values() if h[1]),
-                    "calls": self.calls}
+                    "lists_unread": sorted(t for t, h in self.data.items() if not self.lists_read(h[0])), "calls": self.calls}
 
 
 class Pinned:
-    """the pinned payload per decision instant: built once, one build at a time, then immutable.
-    attempt(T) -> payload, or raises NotPublished"""
+    """the pinned payload per decision instant: one attempt at a time; a SETTLED payload is cached and
+    then immutable. Eviction is by ET DAY, the newest KEEP days kept: no instant can be later than the
+    wall clock, so today's instants are always among them and are never evicted, however many other
+    instants are asked for (evicting the oldest INSTANTS dropped the decision instant first, and the
+    next request for it rebuilt it on moved bars). attempt(T) -> a settled payload, or raises
+    NotPublished / NotSettled; while it raises with retry_s the answer stands for that long and no new
+    attempt is made (requests that waited on the attempt in flight get its answer)"""
 
-    def __init__(self, attempt):
+    def __init__(self, attempt, wall=None):
         self.attempt = attempt
+        self.wall = wall or getattr(attempt, "wall", None) or _utcnow
         self.lock, self.flight = threading.Lock(), threading.Lock()
-        self.done, self.builds, self.error = {}, 0, None
+        self.done, self.hold, self.builds, self.error = {}, {}, 0, None
+
+    def _evict(self):
+        day = lambda k: sr.et_now(parse_utc(k)).date()                           # noqa: E731
+        keep = set(sorted({day(k) for k in self.done})[-KEEP:])
+        for k in [k for k in self.done if day(k) not in keep]:
+            del self.done[k]
+        for k in [k for k in self.hold if day(k) not in keep]:
+            del self.hold[k]
+
+    def has(self, T):
+        with self.lock:
+            return _iso(T) in self.done
 
     def get(self, T):
         """(payload, None), or (None, the 503 body)"""
@@ -641,23 +771,31 @@ class Pinned:
             with self.lock:                        # the request ahead of this one may have built it meanwhile
                 if key in self.done:
                     return self.done[key], None
+                held = self.hold.get(key)
+                if held and self.wall() < held[0]:  # ... or found it unsettled: its answer stands for now
+                    return None, held[1]
                 self.builds += 1
+            pause = REBUILD_EVERY_S
             try:
                 p = self.attempt(T)
             except NotPublished as exc:
-                err = exc.body()
+                err, pause = exc.body(), exc.retry_s
             except Exception as exc:  # noqa: BLE001
                 err = {"error": f"brain failed: {pc.one_line(repr(exc))}"}
             else:
                 if (p.get("decision_bar") or {}).get("complete"):
                     with self.lock:
                         self.done[key], self.error = p, None
-                        for old in sorted(self.done)[:-KEEP]:
-                            del self.done[old]
+                        self.hold.pop(key, None)
+                        self._evict()
                     return p, None
                 err = {"error": (p.get("problems") or ["no decision at that instant"])[0]}
             with self.lock:
                 self.error = err.get("detail") or err["error"]
+                if pause:
+                    self.hold[key] = (self.wall() + datetime.timedelta(seconds=pause), err)
+                else:
+                    self.hold.pop(key, None)
             return None, err
 
     def state(self):
@@ -668,8 +806,11 @@ class Pinned:
 
 
 def pinned_attempt(history=None, attest=None, key=None, wall=None, fetch_minutes=None, settle_s=SETTLE_S):
-    """the attempt(T) of a Pinned: load FMP's bars as of T (kept per T across retries), wait while the
-    bar is still being published (at most settle_s past T by the wall clock), then build pinned"""
+    """the attempt(T) of a Pinned. FMP's bars as of T are loaded (kept per T across attempts, so a retry
+    asks only for what was missing): NotPublished while SPY's bar ending at T is not in, or, for settle_s
+    past T by the wall clock, while the minute is still being published; NotSettled while FMP has not
+    answered for a ticker (no build is made on a partial answer), and after a build in which an engine is
+    unavailable for a feed reason or the decision bar is not complete. Otherwise the payload: settled"""
     wall = wall or _utcnow
     feeds, lock = {}, threading.Lock()
 
@@ -681,17 +822,32 @@ def pinned_attempt(history=None, attest=None, key=None, wall=None, fetch_minutes
             bars = feeds.get(T)
             if bars is None:
                 bars = feeds[T] = Bars(T, k, fetch_minutes)
-                for old in sorted(feeds)[:-KEEP]:
+                today = sr.et_now(wall()).date()
+                for old in [x for x in feeds if sr.et_now(x).date() not in (today, sr.et_now(T).date())]:
                     del feeds[old]
         bars.load(feed_tickers(sr.load_manifest(), bars.day))
-        why = bars.unsettled()
-        if why and (wall() - T).total_seconds() < settle_s:
-            raise NotPublished(why)
+        late = bars.unanswered()
+        if late:
+            raise NotSettled(late)
+        lag = bars.lagging()
+        if lag and (wall() - T).total_seconds() < settle_s:
+            raise NotPublished(lag)
+        diag = {}
         p = build(T, quotes=bars.quotes, fetch=history.fetch if history is not None else None, pinned=True,
-                  attest=attest, wall=wall)
-        if why:
-            p["problems"].append(f"built {settle_s} s after the instant with the bar not fully published: {why}")
+                  attest=attest, wall=wall, diag=diag)
+        if not (p.get("decision_bar") or {}).get("complete"):
+            raise NotSettled((p.get("problems") or ["no decision at that instant"])[0])
+        feed = diag.get("feed") or {}
+        if feed:
+            why = sorted(set(feed.values()))
+            raise NotSettled(f"{', '.join(feed)} unavailable on the feed as it is: {why[0]}"
+                             + (f" (and {len(why) - 1} more)" if len(why) > 1 else ""))
+        if lag:
+            p["problems"].append(f"built {settle_s} s after the instant with the bar not fully published: {lag}")
+        with lock:
+            feeds.pop(T, None)                     # settled: the payload is the record now
         return p
+    attempt.wall = wall
     return attempt
 
 
@@ -750,8 +906,9 @@ def make_server(port, token, cache, window=in_window, clock_info=session_info, w
     """the HTTP server (not started). GET /health is public; GET /mirror/intents and /mirror/session need
     X-API-Token == token; POST /mirror/attest needs X-Attest-Token == attest_token (constant-time
     compares; an unset token answers 404). pinned: a Pinned (the ?after= path); attests: the
-    Attestations POSTs are stored in; status: () -> extra fields for /health; wall: the wall clock (a
-    test seam; default the system's UTC)"""
+    Attestations POSTs are stored in (the answer says "pinned_already_built": true when today's pinned
+    payload was cached before this attestation and so does not carry it); status: () -> extra fields
+    for /health; wall: the wall clock (a test seam; default the system's UTC)"""
     wall = wall or _utcnow
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -835,8 +992,11 @@ def make_server(port, token, cache, window=in_window, clock_info=session_info, w
                 day, stored, ignored = attests.put(json.loads(self.rfile.read(n)), wall(), cfg_all)
             except ValueError as exc:               # json.JSONDecodeError included
                 return self._send(400, {"error": pc.one_line(exc, 200)})
+            now = wall()
+            info = session_info(now)
+            late = bool(pinned is not None and info.get("decide_utc") and pinned.has(parse_utc(info["decide_utc"])))
             return self._send(200, {"ok": True, "session": day, "stored": stored, "ignored": ignored,
-                                    "sync": sync_block(cfg_all, day, attests)})
+                                    "sync": sync_block(cfg_all, day, attests, now), "pinned_already_built": late})
 
         def log_message(self, fmt, *args):         # no access log: the tokens ride in headers, not the URL
             return

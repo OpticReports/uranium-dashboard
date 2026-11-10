@@ -388,8 +388,8 @@ def test_dividend_receivables_follow_the_shares_held_before_the_ex_date():
          "pay_date": "2026-11-12", "shares": 172, "amount": 0.25, "total": 43.0}]
     assert json.loads(json.dumps(rows)) == rows                              # JSON in, JSON out
     assert mc.dividend_receivables({"HG": {"TECL": 5}}, DIV) == []           # nobody held it: no entitlement
-    assert mc.dividend_receivables(held, dict(DIV, pay_date=None))[0]["pay_date"] == "2026-11-17"     # ex + 7 days
-    assert mc.dividend_receivables(held, dict(DIV, pay_date="2026-11-01"))[0]["pay_date"] == "2026-11-17"   # before the ex-date: not a pay date
+    assert mc.dividend_receivables(held, dict(DIV, pay_date=None))[0]["pay_date"] is None             # R2: never guessed here
+    assert mc.dividend_receivables(held, dict(DIV, pay_date="2026-11-01"))[0]["pay_date"] is None     # before the ex-date: not a pay date
     for bad in (dict(DIV, amount=0), dict(DIV, amount=float("nan")), dict(DIV, amount=True), dict(DIV, ex_date="soon"),
                 dict(DIV, ticker=""), None, [], dict(DIV, amount=-1.0)):
         assert mc.dividend_receivables(held, bad) == [], bad
@@ -425,6 +425,41 @@ def test_settle_receivable_applies_the_rule_and_books_only_a_credit():
         mc.settle_receivable(b, rec, "2026-11-12", rule="nope")
     with pytest.raises(mc.MirrorError):
         mc.settle_receivable(b, dict(rec, total=float("nan")), "2026-11-12")
+
+
+def test_r2_a_pay_date_not_known_yet_is_left_open_and_only_assumed_ten_days_after_the_ex_date():
+    """round 2 (R2): FMP lists a dividend before it knows the pay date. Guessing ex + 7 at once
+    finalised a date that the next listing would have corrected."""
+    rec = mc.dividend_receivables({"HARV": {"PULS": 357}}, dict(DIV, pay_date=None))[0]
+    assert rec["pay_date"] is None
+    book = lambda: mc.Book({"HARV": mc.Sleeve("HARV", 100.0, {"PULS": 357})})        # noqa: E731
+    for day in ("2026-11-10", "2026-11-17", "2026-11-18", "2026-11-19"):             # ex + 0 .. ex + 9: not known, not due
+        assert mc.receivable_pay_date(rec, day) is None
+        b = book()
+        assert mc.settle_receivable(b, rec, day)["action"] == "not_due" and b.sleeves["HARV"].cash == 100.0
+    assert mc.receivable_pay_date(rec, "2026-11-20") == "2026-11-17"                 # ex + 10: ex + 7 is assumed
+    b = book()
+    assert mc.settle_receivable(b, rec, "2026-11-20")["action"] == "credited" and b.sleeves["HARV"].cash == 189.25
+    late = dict(rec, pay_date="2026-11-25")                                          # the twin: a later listing supplied it
+    assert mc.receivable_pay_date(late, "2026-11-20") == "2026-11-25"
+    assert mc.settle_receivable(book(), late, "2026-11-24")["action"] == "not_due"
+    assert mc.settle_receivable(book(), late, "2026-11-25")["action"] == "credited"
+    assert mc.PAY_DATE_GIVE_UP_DAYS == 10 and mc.DEFAULT_PAY_LAG_DAYS == 7
+
+
+def test_r3_a_sleeve_the_caller_holds_back_is_skipped_in_the_callers_words():
+    """round 2 (R3): the executor's own gate (a live sleeve whose tree is not attested) reaches the
+    plan as status 'unavailable' + skip_reason; the plan's reason is that text, not 'brain: ...'"""
+    book = fresh()
+    targets = {"HG": ok({"BIL": 1.0}), "KMLM": ok({"SOXL": 0.5, "PULS": 0.5}), "SLEEVE": ok({"BOXX": 1.0}),
+               "HARV": {"status": "unavailable", "version": "v9", "target": {"PULS": 1.0},
+                        "skip_reason": "LIVE tree gate: HARV's tree is not attested"}}
+    plan = mc.build_plan(book, targets, PX, "2026-11-10", mc.Config())
+    assert plan["sleeves"]["HARV"] == {"action": "skip", "reason": "LIVE tree gate: HARV's tree is not attested", "deltas": {}}
+    assert "PULS" not in {s for s, q in plan["buy_asks"].get("HARV", {}).items()} and "HARV" not in plan["buy_asks"]
+    assert plan["sleeves"]["HG"]["action"] == "trade"
+    twin = mc.build_plan(fresh(), dict(targets, HARV={"status": "unavailable", "note": "no prices"}), PX, "2026-11-10", mc.Config())
+    assert twin["sleeves"]["HARV"]["reason"] == "brain: no prices"
 
 
 # ------------------------------------------------------------------ splits (reviewer B's S2)

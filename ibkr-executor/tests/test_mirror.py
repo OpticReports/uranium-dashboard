@@ -166,6 +166,8 @@ class Venue(DryAdapter):
         self.limits = {}                   # client id -> the limit of a buy
         self.history_ok = True             # history_complete(): False = completed orders unavailable
         self.forgotten = set()             # client ids the venue no longer answers for (a session boundary)
+        self.absent = None                 # order_absent_today(): None = open orders / executions did not both answer
+        self.absent_asked = []
         self.inactive_cancels = []
 
     def account_cash(self):
@@ -180,6 +182,10 @@ class Venue(DryAdapter):
 
     def history_complete(self):
         return self.history_ok
+
+    def order_absent_today(self, client_order_id):
+        self.absent_asked.append(client_order_id)
+        return self.absent(client_order_id) if callable(self.absent) else self.absent
 
     def _order_result(self, rec):
         out = {"order_ref": rec["order_ref"], "status": rec["status"]}
@@ -296,6 +302,7 @@ class Rig:
         self.tmp, self.live, self.engines, self.capital, self.cfg_over = tmp_path, live, tuple(engines), capital, cfg
         self.clock = Clock(at("15:00"))
         self.brain = Brain(self.clock)
+        self.trading_day = None            # the service's holiday calendar (date -> bool); None: weekdays
         self.venue = Venue(capital if venue_cash is None else venue_cash) if live else None
         self.alerts = []
         self.m = self.boot()
@@ -305,7 +312,8 @@ class Rig:
                               capital={e: self.capital * w for e, w in W.items()},
                               state_path=str(self.tmp / ("mirror.json" if self.live else "mirror_dry.json")),
                               **self.cfg_over)
-        self.m = mm.MirrorManager(cfg, brain=self.brain, alert=self.alerts.append, clock=self.clock, sleep=self.clock.sleep)
+        self.m = mm.MirrorManager(cfg, brain=self.brain, alert=self.alerts.append, clock=self.clock, sleep=self.clock.sleep,
+                                  trading_day=self.trading_day)
         return self.m
 
     @property
@@ -410,7 +418,7 @@ def test_m2_nothing_before_the_decision_bar_plus_the_offset_and_only_the_decisio
     assert r.orders() == [] and r.m.state["last_session"] is None
     assert "not the decision instant" in r.m._why
     assert all(a == "2026-11-10T20:54:00Z" for a, _ in r.brain.calls)          # decide_utc used AS GIVEN
-    assert len(r.brain.calls) > 10                            # ... and kept asking inside one tick's budget
+    assert len(r.brain.calls) == 2                            # N-09: a PAPER book asks at +0 s and +10 s, then hands the loop back
     r.brain.make = payload                                    # the twin: the decision as of that instant
     r.tick()
     assert r.m.state["last_session"] == DAY and r.orders()
@@ -498,15 +506,22 @@ def test_m2_the_brains_503_while_the_decision_bar_is_published_is_retried_not_fi
     sound(r)
     down = Rig(tmp_path / "down")                             # the twin: it never comes -> a recorded NO TRADE that says why
     os.makedirs(tmp_path / "down", exist_ok=True)
-    down.brain.fail = "http_503"
+    down.brain.fail = "http_503: decision bar not published yet — SPY's 15:53 bar is missing"     # R6: the 503's own body
     down.tick("15:54:25")
-    assert "decision bar is not published yet" in down.m._why and down.m.state["last_session"] is None
+    assert "the brain is not ready (503: decision bar not published yet — SPY's 15:53 bar is missing)" in down.m._why
+    assert down.m.state["last_session"] is None and len(down.brain.calls) == 2      # ... carried, and still retried
     down.tick("15:57:00")
     down.tick("15:58:00")
-    assert down.m.state["last_run"]["outcome"] == "skipped" and "not published yet" in down.m.state["last_run"]["reason"]
+    row = down.m.state["last_run"]
+    assert row["outcome"] == "skipped" and "SPY's 15:53 bar is missing" in row["reason"]          # the day's record says why
+    bare = Rig(tmp_path / "bare")                             # a 503 with no body is still transient, and says so
+    os.makedirs(tmp_path / "bare", exist_ok=True)
+    bare.brain.fail = "http_503"
+    bare.tick("15:54:25")
+    assert "503: no reason given" in bare.m._why and len(bare.brain.calls) == 2
 
 
-def test_m2_sync_rows_and_price_times_are_recorded_verbatim_and_gate_nothing(tmp_path):
+def test_m2_sync_rows_and_price_times_are_recorded_verbatim_and_gate_nothing_on_paper(tmp_path):
     r = Rig(tmp_path)
     sync = {"HG": {"state": "ok", "approved_version": "v1", "approved_sha1": "abc", "live_version": "v1",
                    "attested_utc": "2026-11-10T20:50:00Z"},
@@ -521,7 +536,10 @@ def test_m2_sync_rows_and_price_times_are_recorded_verbatim_and_gate_nothing(tmp
     assert row["outcome"] == "traded" and len(row["orders"]) == 5              # a null or an old price time stops nobody
     assert row["sync"] == sync                                                 # verbatim, 'paused' included
     assert row["price_times"] == {k: v for k, v in times.items() if k != "NOPE"}
-    assert row["sleeves"]["KMLM"]["action"] == "trade"                         # no executor logic on a sync row
+    assert row["sleeves"]["KMLM"]["action"] == "trade"                         # 'paused' is the brain's business
+    assert row["sleeves"]["SLEEVE"]["action"] == "trade" and row["sleeves"]["HARV"]["action"] == "trade"
+    noted = [n for n in row["notes"] if n.startswith("paper:") and "not attested" in n]     # R3: a live book refuses these two
+    assert len(noted) == 2 and any("SLEEVE" in n and "'none'" in n for n in noted) and any("HARV" in n and "no sync row" in n for n in noted)
 
 
 def test_m2_a_missed_window_is_a_recorded_no_trade(tmp_path):
@@ -1165,15 +1183,25 @@ def test_m16_a_commission_never_reported_is_dropped_loudly_after_three_days(tmp_
 
 
 # --- M17 --------------------------------------------------------------------------------------------
-def test_m17_a_fill_with_no_reported_price_is_booked_at_the_reference_loudly(tmp_path):
+def test_m17_a_fill_with_no_reported_price_is_booked_at_the_limit_or_the_reference_loudly(tmp_path):
     r = live_rig(tmp_path)
     r.venue.no_price.add("BIL")
     r.tick("15:55:05")
     bil = next(o for o in r.m.state["last_run"]["orders"] if o["symbol"] == "BIL")
-    assert bil["price"] == PX["BIL"] and bil["filled"] == bil["qty"]
-    assert any("REFERENCE price" in a for a in r.red())
+    limit = r.venue.limits[f"mirror-{DAY}-B-BIL"]
+    # a BUY is booked at its LIMIT, the most it can have cost: the book's cash can never exceed the account's
+    assert bil["price"] == limit > PX["BIL"] and bil["filled"] == bil["qty"]
+    assert any("LIMIT price" in a and "BIL" in a for a in r.red()) and not any("REFERENCE price" in a for a in r.red())
+    assert r.m.book.cash() <= r.venue.cash and r.venue.cash - r.m.book.cash() == pytest.approx(bil["qty"] * (limit - PX["BIL"]))
+    assert [x for x in r.journal() if x["event"] == "fill" and x["symbol"] == "BIL"][0]["price_estimated"] is True
     r.tick("15:56:00")
     assert not r.m.halt_state().get("halted")                 # the shares are right; only the cash basis is flagged
+    r.venue.no_price = {"BIL"}
+    r.brain.make = lambda now: payload(now, dict(T1, HG={"TQQQ": 1.0}), session="2026-11-11")
+    r.tick("15:55:05", day="2026-11-11")                      # the twin: a SELL has no limit - its reference, flagged
+    sold = next(o for o in r.m.state["last_run"]["orders"] if o["symbol"] == "BIL")
+    assert sold["side"] == mc.SELL and sold["price"] == PX["BIL"]
+    assert any("REFERENCE price" in a and "BIL" in a for a in r.red())
 
 
 # --- M18 --------------------------------------------------------------------------------------------
@@ -1205,7 +1233,7 @@ class S:
     mirror_weights = "HG:0.29,KMLM:0.29,SLEEVE:0.27,HARV:0.15"
     mirror_capital_usd = 118_000.0
     mirror_live_engines = "HARV"
-    mirror_brain_url = "http://brain"
+    mirror_brain_url = "https://brain"
     mirror_api_token = "t"
     mirror_decide_offset_s = 25.0
     mirror_cancel_before_close_s = 60.0
@@ -1277,32 +1305,47 @@ def test_m20_the_brain_client(monkeypatch):
         if url.endswith("/mirror/session"):
             return httpx.Response(200, json={"kind": mm.SESSION_KIND}, request=req)
         if (params or {}).get("after") == "early":
-            return httpx.Response(503, json={"error": "decision bar not published yet"}, request=req)
+            return httpx.Response(503, json={"error": "decision bar not published yet",
+                                             "detail": "SPY's 15:53 bar is missing"}, request=req)
+        if (params or {}).get("after") == "early-bare":
+            return httpx.Response(503, text="upstream", request=req)
         if (params or {}).get("after") == "adhoc":
             return httpx.Response(200, json=dict(body, pinned=False, decision_bar=None, asof_utc="adhoc"), request=req)
         return httpx.Response(200, json=body, request=req)
     monkeypatch.setattr(mm.httpx, "get", fake_get)
-    b = mm.HttpBrain(" http://brain/ ", " tok ")
+    b = mm.HttpBrain(" https://brain/ ", " tok ")
     assert b.session() == ({"kind": mm.SESSION_KIND}, "ok")
     p, why = b.intents(T)
-    assert why == "ok" and seen[-1] == ("http://brain/mirror/intents", {"after": T}, {"X-API-Token": "tok"})
+    assert why == "ok" and seen[-1] == ("https://brain/mirror/intents", {"after": T}, {"X-API-Token": "tok"})
     n = len(seen)
     assert b.intents(T)[0] is p and len(seen) == n            # the second book reuses the read (the SAME object)
-    assert b.intents("early") == (None, "http_503")           # the bar is not published yet: the manager retries
-    assert b.intents("early") == (None, "http_503") and len(seen) == n + 2     # ... and a 503 is never kept
+    said = "http_503: decision bar not published yet — SPY's 15:53 bar is missing"       # R6: the body's error and detail
+    assert b.intents("early") == (None, said)                 # the bar is not published yet: the manager retries
+    assert b.intents("early") == (None, said) and len(seen) == n + 2           # ... and a 503 is never kept
+    assert b.intents("early-bare") == (None, "http_503")      # a 503 whose body is not JSON: still a 503
+    n += 1
     q, _ = b.intents("adhoc")                                 # nor is an unpinned payload
     assert q["pinned"] is False and len(seen) == n + 3
     b.intents("adhoc")
     assert len(seen) == n + 4
-    assert mm.HttpBrain("http://brain", "wrong").session() == (None, "auth")
+    assert mm.HttpBrain("https://brain", "wrong").session() == (None, "auth")
     assert mm.HttpBrain("", "tok").session() == (None, "no_url")
+    n = len(seen)                                             # N4: the token never rides plain http ...
+    for url in ("http://brain", "http://brain.example.com:8080/", "ftp://brain", "brain", "http://localhost.evil.example",
+                "http://127.0.0.1.evil.example"):
+        b = mm.HttpBrain(url, "tok")
+        assert b.session() == (None, "insecure_url") and b.intents(T) == (None, "insecure_url"), url
+    assert len(seen) == n                                     # ... NOTHING was sent
+    for url in ("http://localhost:8000", "http://127.0.0.1:8000/", "https://brain.example.com"):      # the twins
+        assert mm.HttpBrain(url, "tok").session() == ({"kind": mm.SESSION_KIND}, "ok"), url
+    assert len(seen) == n + 3
 
     def boom(*a, **k):
         raise httpx.ConnectError("refused")
     monkeypatch.setattr(mm.httpx, "get", boom)
-    assert mm.HttpBrain("http://brain", "tok").intents("x") == (None, "transport")
+    assert mm.HttpBrain("https://brain", "tok").intents("x") == (None, "transport")
     monkeypatch.setattr(mm.httpx, "get", lambda *a, **k: httpx.Response(200, text="[1]", request=httpx.Request("GET", "http://b")))
-    assert mm.HttpBrain("http://brain", "tok").session() == (None, "decode")
+    assert mm.HttpBrain("https://brain", "tok").session() == (None, "decode")
 
 
 def test_view_and_health_never_raise(tmp_path):

@@ -332,6 +332,74 @@ def test_s6_a22_with_the_mirror_off_every_mirror_path_is_the_404_of_an_unknown_p
         assert c.post("/kill").status_code == 401 and c.get("/kill", params=T).status_code == 405
 
 
+def test_s6_n03_with_the_mirror_off_a_malformed_request_is_still_the_404_of_an_unknown_path(tmp_path, monkeypatch):
+    """round 2 (N-03): FastAPI validated the body (and /mirror/feed's `history`) BEFORE the handler's
+    off-check, so a malformed request got a 422 that says the route exists"""
+    client, service, _ = _boot(tmp_path, monkeypatch, enabled=False, read_token="r")
+    with client as c:
+        _ready(service)
+        ref = c.post("/nope/transfer", content=b"[1, 2", headers={"content-type": "application/json"})
+        assert ref.status_code == 404
+        for route in ("transfer", "credit", "resolve", "adjust", "halt", "resume"):
+            for body in (b"[1, 2", b"[1, 2]", b'"x"', b"\xff\xfe", b"{}"):
+                for params in ({}, T):
+                    got = c.post(f"/mirror/{route}", params=params, content=body, headers={"content-type": "application/json"})
+                    assert (got.status_code, got.json()) == (404, ref.json()), (route, body, got.status_code, got.text)
+        for hist in ("x", "-1", "9999", "1.5", ""):
+            got = c.get("/mirror/feed", params={"history": hist}, headers={"X-Read-Token": "r"})
+            assert (got.status_code, got.json()) == (404, ref.json()), hist
+
+
+def test_s6_n03_with_the_mirror_on_a_malformed_request_is_the_422_it_was(tmp_path, monkeypatch):
+    client, service, _ = _boot(tmp_path, monkeypatch, read_token="r")
+    with client as c:
+        _ready(service)
+        js = {"content-type": "application/json"}
+        for route in ("transfer", "credit", "resolve", "adjust"):
+            for body in (b"[1, 2", b"[1, 2]", b'"x"', b"7"):
+                assert c.post(f"/mirror/{route}", params=T, content=body, headers=js).status_code == 422, (route, body)
+            assert c.post(f"/mirror/{route}", params=T).status_code == 400            # no body: an empty request, refused
+            assert c.post(f"/mirror/{route}", params=T, content=b"null", headers=js).status_code == 400
+            assert c.post(f"/mirror/{route}", json={}).status_code == 401             # ... and the token is still asked for
+        for hist in ("x", "-1", "9999", "1.5"):
+            assert c.get("/mirror/feed", params={"history": hist}, headers={"X-Read-Token": "r"}).status_code == 422, hist
+        f = c.get("/mirror/feed", params={"history": "0"}, headers={"X-Read-Token": "r"})
+        assert f.status_code == 200 and "history" not in f.json()["books"]["dry"]
+        assert "history" in c.get("/mirror/feed", params={"history": "120"}, headers={"X-Read-Token": "r"}).json()["books"]["dry"]
+        assert c.get("/mirror/feed", headers={"X-Read-Token": "r"}).status_code == 200
+
+
+def test_s6_n01_force_reaches_the_book_only_as_a_literal_true(tmp_path, monkeypatch):
+    """round 2 (N-01): an adjustment or a debit that would put a sleeve in debt is refused by the
+    loop unless the request carries "force": true"""
+    client, service, sent = _boot(tmp_path, monkeypatch)
+    with client as c:
+        _ready(service)
+        book = service.MIRROR["dry"]
+        assert _wait_until(lambda: set(book.view()["book"]["sleeves"]) == set(TARGETS))
+        cash = lambda: book.view()["book"]["sleeves"]["HG"]["cash"]             # noqa: E731
+        adj = {"sleeve": "HG", "cash": -29_500.0, "note": "wire fee 29.50"}
+        for force in (None, "true", 1, "yes", False):          # only a literal JSON true is force
+            body = dict(adj) if force is None else dict(adj, force=force)
+            ok = c.post("/mirror/adjust", params=T, json=body).json()
+            assert ok["ok"] and ok["request"]["force"] is False
+        assert _wait_until(lambda: len([m for m in sent if "adjust request" in m and "REFUSED" in m and "IN DEBT" in m]) == 5)
+        assert cash() == pytest.approx(29_000.0)
+        assert c.post("/mirror/credit", params=T, json={"sleeve": "HG", "amount": -30_000.0}).json()["request"]["force"] is False
+        assert c.post("/mirror/credit", params=T, json={"sleeve": "HG", "amount": -1.0, "force": True}).json()["request"]["force"] is True
+        ok = c.post("/mirror/adjust", params=T, json=dict(adj, force=True)).json()
+        assert ok["request"]["force"] is True
+        assert _wait_until(lambda: cash() == pytest.approx(-500.0))
+        assert any("ADJUSTED by the operator" in m for m in sent)
+
+
+def test_s6_n08_the_books_are_built_with_the_services_trading_day_calendar(tmp_path, monkeypatch):
+    client, service, _ = _boot(tmp_path, monkeypatch)
+    with client as c:
+        _ready(service)
+        assert all(b._trading_day is service._is_trading_day for b in service.MIRROR.values())
+
+
 def test_s6_a23_the_kill_is_not_queued_behind_the_mirror_ticks_brain_read(tmp_path, monkeypatch):
     """through the REAL service loop: the first thing the loop thread does after a mirror tick is
     nino34_weekly(), and the stage right behind it is 'a /kill that landed while this iteration was

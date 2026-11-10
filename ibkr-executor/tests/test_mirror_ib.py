@@ -12,6 +12,9 @@ manager's own Venue double cannot give, because it remembers every order and ans
   A-11    an order that turns Inactive after its ack is cancelled before it is booked
   A-13    a restart onto bare completed orders books the executions the adapter already holds
   A-16    an execution lookup that fails closed leaves the order unresolved
+  N-04    (round 2) on the gateway that never answers reqCompletedOrders, today's order that never
+          reached the venue is proven absent by its open orders and today's executions: retried or
+          booked zero, never a run that waits for an operator
 """
 from __future__ import annotations
 
@@ -331,4 +334,76 @@ def test_ib_a16_an_execution_lookup_that_fails_closed_leaves_the_order_unresolve
     r.boot(bare_completed=True)                         # the twin: the gateway answers again
     r.tick("16:03:00")
     assert r.m.state["run"] is None and r.m.book.positions()["TECL"] == 40
+    sound(r)
+
+
+# ---------------------------------------------------------------------------------------- N-04 (round 2)
+def test_ib_n04a_a_placement_that_raised_before_the_venue_does_not_wedge_the_run(tmp_path, monkeypatch):
+    """the reviewer's scenario: completed orders unavailable (history_complete() False after every
+    lookup) and a contract that will not qualify. Nothing reached the venue; the D3 rule alone made
+    the order UNRESOLVED and every later session a NO TRADE."""
+    r = IBRig(tmp_path, monkeypatch)
+    r.tick("15:00")
+    r.ib.completed_available = False
+    real = r.ib.qualifyContracts
+    r.ib.qualifyContracts = lambda *cs: [] if cs[0].symbol == "TECL" else real(*cs)
+    real_spot = r.ad.spot_ex
+    r.ad.spot_ex = lambda s: (PX[s], "live") if s == "TECL" else real_spot(s)
+    r.tick("15:55:05")
+    oid = f"mirror-{DAY}-B-TECL"
+    tecl = next(o for o in r.m.state["last_run"]["orders"] if o["id"] == oid)
+    assert r.m.state["run"] is None and tecl["filled"] == 0 and "never reached the venue" in tecl["how"]
+    assert "cannot qualify" in tecl["how"] and [p for p in r.ib.placed if p[0] == "TECL"] == []
+    assert not any("UNRESOLVED" in a for a in r.red())
+    assert r.ad.history_complete() is False                    # (the gateway as the repo records it)
+    sound(r)
+    r.ib.qualifyContracts = real
+    r.brain.make = lambda now: payload(now, session=D2)
+    r.tick("15:55:05", day=D2)                                 # the next session is a session
+    assert r.m.state["last_run"]["session"] == D2 and r.m.state["last_run"]["outcome"] == "traded"
+    assert r.m.book.positions()["TECL"] > 0
+    sound(r)
+
+
+def test_ib_n04b_a_restart_between_the_write_ahead_and_the_placement_sends_the_order_once(tmp_path, monkeypatch):
+    r = IBRig(tmp_path, monkeypatch)
+    r.tick("15:00")
+    real_place = r.ad.place_limit_order
+
+    def die_before(symbol, *a, **k):
+        if symbol == "SOXL":
+            raise tm.Crash("SIGTERM between the write-ahead save and the placement (a deploy)")
+        return real_place(symbol, *a, **k)
+    r.ad.place_limit_order = die_before
+    with pytest.raises(tm.Crash):
+        r.tick("15:55:05")
+    oid = f"mirror-{DAY}-B-SOXL"
+    assert [p for p in r.acct.orders if p.contract.symbol == "SOXL"] == []
+    r.boot(completed_available=False)                          # back 20 s later, same day, same gateway
+    assert r.m.state["run"]["orders"][oid]["state"] == "intent"
+    r.tick("15:55:25")
+    assert r.m.state["run"] is None and not r.red()
+    assert [p[3] for p in r.ib.placed if p[0] == "SOXL"] == [oid]              # sent ONCE, by the new process
+    assert r.m.book.positions()["SOXL"] == r.acct.pos["SOXL"] > 0
+    sound(r)
+
+
+def test_ib_n04_an_order_that_did_reach_the_venue_is_never_proven_absent(tmp_path, monkeypatch):
+    """the other side of the same rule, on the same gateway: the order landed and RESTS (open), or
+    it filled (an execution today) - order_absent_today says False and nothing is sent again"""
+    r = IBRig(tmp_path, monkeypatch)
+    r.tick("15:00")
+    r.ib.hold.add("SOXL")                                      # SOXL rests at the venue ...
+    r.ib.crash_after.update({"SOXL", "TECL"})                  # ... and the process dies right after it landed
+    with pytest.raises(tm.Crash):
+        r.tick("15:55:05")
+    sent = [p[0] for p in r.ib.placed]
+    assert "SOXL" in sent
+    r.boot(completed_available=False)
+    assert r.ad.order_absent_today(f"mirror-{DAY}-B-SOXL") is False
+    r.ib.hold.clear()
+    r.tick("15:55:25")
+    r.tick("15:59:05")
+    assert r.m.state["run"] is None
+    assert [t.contract.symbol for t in r.acct.orders].count("SOXL") == 1       # never a second SOXL order
     sound(r)
