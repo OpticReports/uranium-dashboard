@@ -45,7 +45,7 @@ session gives holdings only. Days on which a symphony's raw value moved by more 
 
   mirror_dry.py backfill [--mode close|minute] [--start D] [--end D] [--minute-start D] [--decide HH:MM]
                          [--cache DIR] [--out FILE]
-  mirror_dry.py daily [--date D] [--force]
+  mirror_dry.py daily [--date D] [--force] [--book FILE] [--ledger FILE]
 The full study (both modes, the decision-time variants, sensitivities, the exhibit's JSON) is
 composer/research/mirror/parity_study.py.
 """
@@ -558,15 +558,18 @@ def brain_payload(d, hhmm, yahoo, minutes, build=None):
                                fetch=lambda t: yahoo.live(t, asof=d))
 
 
-def minute_prices(d, hhmm, symbols, minutes, market, fill="next"):
+def minute_prices(d, hhmm, symbols, minutes, market, fill="next", brain_prices=None):
     """(reference prices at the decision time, fill prices, fallbacks) for the symbols a plan may touch.
-    Reference: the last traded minute at or before hh:mm, else the previous close. Fill ("next"): the
-    close of the traded bar that starts at hh:mm; a ticker without one, or with a print more than
-    FILL_SANITY from the day's close, fills at the day's close and is listed in fallbacks. fill
-    "close": every order fills at the official close (a market-on-close order)."""
+    Reference: the brain's own `prices` when its payload carries them (the executor sizes on exactly
+    those, so a symbol the brain does not price takes its sleeve out of the plan here too); otherwise
+    the last traded minute at or before hh:mm, else the previous close. Fill ("next"): the close of
+    the traded bar that starts at hh:mm; a ticker without one, or with a print more than FILL_SANITY
+    from the day's close, fills at the day's close and is listed in fallbacks. fill "close": every
+    order fills at the official close (a market-on-close order)."""
     closes, prev = market.closes(d), market.prev(d)
     prev_closes = market.closes(prev) if prev else {}
     ref, fills, fallbacks = {}, {}, []
+    published = {t: float(p) for t, p in (brain_prices or {}).items() if _pos(p)} if isinstance(brain_prices, dict) else {}
     for t in sorted(set(symbols)):
         c = _pos(closes.get(t))
         try:
@@ -577,7 +580,7 @@ def minute_prices(d, hhmm, symbols, minutes, market, fill="next"):
             p_ref = p_bar = None
         if p_ref is not None and c and abs(p_ref / c - 1) > FILL_SANITY:
             p_ref = None
-        r = p_ref or _pos(prev_closes.get(t)) or c
+        r = published.get(t) if published else (p_ref or _pos(prev_closes.get(t)) or c)
         if r:
             ref[t] = r
         if fill == "close":
@@ -718,7 +721,9 @@ def composer_traded(shadow, raw, d, prev_d, e):
 def classify_day(row, led, corridor, traded_c, late, apart_prev, stood=()):
     """(agree, dist, class, note) for one engine-day: the mirror's post-trade weights vs Composer's holdings.
     class of a disagreement, in this order: composer-no-rebalance and knife-edge (the ledger says so),
-    mirror-skip, corridor-path (a threshold engine: one side rebalanced and the other did not, both
+    mirror-skip, decision-minute (minute mode: the mirror's own decision minute gave a different
+    answer from the logic on the close: a knife-edge the ledger does not see), corridor-path (a
+    threshold engine: one side rebalanced and the other did not, both
     held on different paths since an earlier split, or the mirror stood still on the sessions `stood`
     the ledger has no row for), late-snapshot (Composer's holdings were read
     during the next session, drifted), whole-share (Composer holds the target; the mirror is off it
@@ -729,17 +734,24 @@ def classify_day(row, led, corridor, traded_c, late, apart_prev, stood=()):
         return True, dist, "agree", ""
     status = led.get("status")
     if status == "no-rebalance":
-        return False, dist, "composer-no-rebalance", f"Composer made no rebalance attempt (holdings of {led.get('live_asof') or 'an earlier day'})"
+        return False, dist, "composer-no-rebalance", ("Composer made no rebalance attempt (holdings of "
+                                                      f"{led.get('live_asof') or 'an earlier day'})")
     if status == "knife-edge":
         edge = led.get("edge") or {}
-        return False, dist, "knife-edge", f"the call flips inside the decision window ({edge.get('time') or edge.get('basis') or 'intraday'})"
+        return False, dist, "knife-edge", ("the call flips inside the decision window "
+                                           f"({edge.get('time') or edge.get('basis') or 'intraday'})")
     if row.get("action") == "skip":
         return False, dist, "mirror-skip", f"the mirror had no decision ({row.get('reason')})"
+    own, on_close = row.get("target"), led.get("target")
+    if row.get("mode") == "minute" and own and on_close and sr.distance(own, on_close)[0] > TOL:
+        return False, dist, "decision-minute", (f"at {row.get('decide') or 'its decision minute'} the logic said {sr.fmt_w(own)} "
+                                                f"({row.get('label') or 'no label'}); on the close it said {sr.fmt_w(on_close)}")
     if corridor:
         m_traded = row.get("action") == "trade"
         if traded_c is not None and m_traded != traded_c:
             who = "the mirror rebalanced, Composer did not" if m_traded else "Composer rebalanced, the mirror did not"
-            return False, dist, "corridor-path", f"{who} (mirror gap {100 * (row.get('gap') or 0):.1f}pp vs the {100 * corridor:.0f}pp corridor)"
+            return False, dist, "corridor-path", (f"{who} (mirror gap {100 * (row.get('gap') or 0):.1f}pp vs the "
+                                                  f"{100 * corridor:.0f}pp corridor)")
         if apart_prev and not m_traded and traded_c is False:
             return False, dist, "corridor-path", f"both held inside the corridor on the paths split on {apart_prev}"
         if stood and not m_traded and traded_c is None:
@@ -748,7 +760,8 @@ def classify_day(row, led, corridor, traded_c, late, apart_prev, stood=()):
     if late:
         return False, dist, "late-snapshot", "Composer's holdings were read during the next session (drifted by its moves)"
     if target and sr.distance(target, live)[0] <= TOL:
-        return False, dist, "whole-share", "Composer holds the target; the mirror is off it by whole shares, its cash reserve or a skipped trim"
+        return False, dist, "whole-share", ("Composer holds the target; the mirror is off it by whole shares, its cash "
+                                            "reserve or a skipped trim")
     return False, dist, "other", (f"mirror {sr.fmt_w(row.get('weights') or {})} vs Composer {sr.fmt_w(live)}; ledger status {status}")
 
 
@@ -781,7 +794,8 @@ def decision_parity(rows, shadow, market, cfg_all=None, composer=None):
                          "apart_since": apart.get(e)})
         days.setdefault(e, []).append(out_rows[-1])
     summary = {}
-    for e, xs in list(days.items()) + [("ALL", out_rows)]:
+    order = sorted(days, key=lambda e: (sr.ORDER.index(e) if e in sr.ORDER else len(sr.ORDER), e))
+    for e, xs in [(e, days[e]) for e in order] + [("ALL", out_rows)]:
         cls = {}
         for x in xs:
             cls[x["class"]] = cls.get(x["class"], 0) + 1
@@ -919,19 +933,20 @@ def cause_labeller(par_days, rows, engine, credits=None, skipped=()):
             why.append(f"different holdings into the day ({', '.join(kinds)} on {', '.join(d[5:] for d, _ in apart[:3])})")
         cr = [c for d in inside for c in cred.get(d, [])]
         if cr:
-            why.append("Composer pay-date credit inside the symphony (" + ", ".join(f"{c['ticker']} ~{c['bps']:+.0f} bps" for c in cr) + ")")
+            why.append("Composer pay-date credit inside the symphony ("
+                       + ", ".join(f"{c['ticker']} ~{c['bps']:+.0f} bps" for c in cr) + ")")
         if s.get("flow"):
             why.append(f"Composer deposit/transfer in the span (${s['flow']:+,.0f})")
         today = [(d, by[d]["class"]) for d in inside if d in by and not by[d]["agree"]]
         if not why and today:
-            why.append(f"the holdings split at this rebalance ({', '.join(sorted({c for _, c in today}))}): the old book to ~15:54 vs to the close")
+            why.append(f"the holdings split at this rebalance ({', '.join(sorted({c for _, c in today}))})")
         if not why:
             def rotated(d):
                 a = acts.get(d) or {}
                 big = (a.get("traded") or 0.0) + (a.get("crossed") or 0.0) > TOL * (a.get("equity_prev") or 0.0) > 0
                 return big or bool((by.get(d) or {}).get("composer_traded"))
             if any(rotated(d) for d in inside):
-                why.append("rotation day: Composer fills ~15:54, the mirror at its own fill price")
+                why.append("rotation day: Composer fills ~15:52-15:53, the mirror at its own fill price")
             else:
                 why.append("no trade on either side: Composer's snapshot marks vs official closes")
         return "; ".join(why)
@@ -953,7 +968,7 @@ def engine_parity(rows, book_rows, shadow, market, composer, cfg_all=None, exclu
     out = {"since": since, "decisions": dec["summary"], "disagreements": dec["disagreements"], "engines": {}, "episodes": {}}
     n_sessions = len({r["date"] for r in live})
     yr = ANNUAL / max(n_sessions, 1)
-    spans_all, idx_all, w_prev = {}, {}, {}
+    spans_all, idx_all, idx_gross_all, w_prev = {}, {}, {}, {}
     for e in engines:
         xs_all = [r for r in rows if r["engine"] == e]
         xs = [r for r in live if r["engine"] == e]
@@ -1016,10 +1031,13 @@ def engine_parity(rows, book_rows, shadow, market, composer, cfg_all=None, exclu
             "by_cause": _by_cause(net.get("series") or [])}
         if (cfg_all.get(e) or {}).get("corridor"):
             out["episodes"][e] = episodes(dec["days"], diffs, e)
-        spans_all[e], idx_all[e] = spans, idx
+        spans_all[e], idx_all[e], idx_gross_all[e] = spans, idx, idx_g
         w_prev[e] = {r["date"]: r["equity"] for r in xs_all}
     causes = {e: {(x["d0"], x["date"]): x for x in out["engines"][e]["series"]} for e in engines}
     out["book"] = book_parity(book_live, spans_all, idx_all, w_prev, cal, exclude, causes)
+    gross = book_parity(book_live, spans_all, idx_gross_all, w_prev, cal, exclude)
+    out["book"]["tracking_gross"] = {k: v for k, v in gross["tracking"].items() if k != "worst"}
+    out["book"]["tracking_gross_ex_no_rebalance"] = gross["tracking_ex_no_rebalance"]
     return out
 
 
@@ -1091,7 +1109,8 @@ def book_parity(book_rows, spans, idx, equity, cal, exclude=NO_REBALANCE, causes
             "distributions_usd": round(sum(r["div"] for r in book_rows), 2),
             "problems": [f"{r['date']}: {p}" for r in book_rows for p in r["problems"]],
             "overspent": [{"date": r["date"], **r["overspent"]} for r in book_rows if r.get("overspent")],
-            "cash_low": min((r["cash_low"] for r in book_rows), default=None)}
+            "cash_low": min((r["cash_low"] for r in book_rows), default=None),
+            "book_cash_low": min((r["cash"] for r in book_rows), default=None)}
 
 
 # ------------------------------------------------------------------ backfill
@@ -1116,6 +1135,9 @@ def backfill(start=START, end=None, mode="close", *, minute_start=MINUTE_START, 
     if market is None:
         yahoo = yahoo or Yahoo(cache)
         market = Market(yahoo=yahoo)
+    yahoo = yahoo or market.yahoo
+    if yahoo is None and (fill_gaps or (mode == "minute" and build is None)):
+        raise ValueError("the brain and the gap fill read Yahoo's history: pass yahoo, or a market built on one")
     fractions = dict(fractions or FRACTIONS)
     engines = list(fractions)
     held = {t for (d, e), r in shadow.items() if start <= d <= end for k in ("target", "live") for t in (r.get(k) or {})}
@@ -1129,8 +1151,7 @@ def backfill(start=START, end=None, mode="close", *, minute_start=MINUTE_START, 
     sim = Sim(seed_book(capital, fractions, rules_from_manifest(cfg_all)), slip_bps, cfg)
     rows, book_rows, skipped, last = [], [], [], None
     info = {"start": minute_start, "decide": decide, "fill": fill, "covered": 0, "fallbacks": 0, "fallback_tickers": {},
-            "orders": 0, "stopped": None, "unavailable": [], "labels": {}} if mode == "minute" else None
-    payloads = {}
+            "orders": 0, "stopped": None, "unavailable": [], "unpriced_skips": [], "labels": {}} if mode == "minute" else None
     for d in sessions:
         minute = mode == "minute" and d >= minute_start
         fallbacks = None
@@ -1148,12 +1169,11 @@ def backfill(start=START, end=None, mode="close", *, minute_start=MINUTE_START, 
                 for r in targets.values():
                     syms |= set((r or {}).get("target") or {})
                 market.need(syms)
-                ref, fills, fallbacks = minute_prices(d, hh, syms, minutes, market, fill)
+                ref, fills, fallbacks = minute_prices(d, hh, syms, minutes, market, fill, payload.get("prices"))
             except Refused as e:
                 info["stopped"] = f"FMP refused on {d}: {e}"
                 log(f"minute mode stopped on {d}: {e}")
                 break
-            payloads[d] = payload
             bad = [e for e in engines if (targets.get(e) or {}).get("status") != "ok"]
             if bad:
                 info["unavailable"].append({"date": d, "engines": bad, "why": (payload.get("problems") or [None])[0]
@@ -1189,6 +1209,8 @@ def backfill(start=START, end=None, mode="close", *, minute_start=MINUTE_START, 
             for r in er:
                 p = (payload.get("engines") or {}).get(r["engine"]) or {}
                 r.update(label=p.get("label"), brain=p.get("status"), decide=hh)
+                if r["action"] == "skip" and p.get("status") == "ok":
+                    info["unpriced_skips"].append({"date": d, "engine": r["engine"], "reason": r["reason"]})
         rows += er
         book_rows.append(br)
         last = d
@@ -1338,7 +1360,7 @@ def _daily(date, book_path, ledger_path, force, now, yahoo, minutes, build, mark
     for r in targets.values():
         syms |= set((r or {}).get("target") or {})
     market.need(syms)
-    ref, fills, fallbacks = minute_prices(d, hh, syms, minutes, market, "next")
+    ref, fills, fallbacks = minute_prices(d, hh, syms, minutes, market, "next", payload.get("prices"))
     er, br = sim.session(d, targets, ref, fills, market.closes(d), market.dividends(last, d) if last else market.dividends(None, d),
                          "minute", fallbacks)
     used = [o["symbol"] for o in br["order_list"] if o["filled"] and o["symbol"] in fallbacks]
@@ -1356,13 +1378,19 @@ def _daily(date, book_path, ledger_path, force, now, yahoo, minutes, build, mark
         e = r["engine"]
         p, c, s = targets.get(e) or {}, comp.get(e), shadow.get((d, e)) or {}
         r.update(decide=hh, label=p.get("label"), brain=p.get("status"), shadow=s.get("status"))
+        if r["action"] == "skip" and p.get("status") == "ok":
+            alerts.append(f"MIRROR DRY SLEEVE LEFT OUT — {e} on {d}: the brain decided ({sr.fmt_w(p.get('target') or {})}) but the "
+                          f"plan skipped the sleeve: {r['reason']}. The executor would skip it the same way, every session, "
+                          f"until that is fixed.")
         if not c:
             r["parity"] = "no Composer snapshot"
             continue
         dist = sr.distance(r["weights"], c["holdings"])[0]
         n_cmp += 1
         r.update(composer=c["holdings"], composer_ret=_r(c["ret"]), composer_ret_basis=c["basis"], dist=round(dist, 4))
-        if c["ret"] is not None and c["kind"] != "next-day":
+        if c["ret"] is not None and c["kind"] != "next-day" and last is not None and last == market.prev(d):
+            # one session on both sides only: not on the seeding day (the book was cash until its fills),
+            # nor after a session the dry step did not run
             r["diff_bps"] = round((r["ret_px"] - c["ret"]) * 1e4, 1)
             diffs.append((e, r["diff_bps"]))
         if dist <= TOL:
@@ -1372,10 +1400,16 @@ def _daily(date, book_path, ledger_path, force, now, yahoo, minutes, build, mark
             r["parity"] = f"explained ({s['status']})"
         else:
             r["parity"] = "MISMATCH"
+            flip = ""
+            if r.get("target") and s.get("target") and sr.distance(r["target"], s["target"])[0] > TOL:
+                flip = (f" At {hh} the logic said {sr.fmt_w(r['target'])} ({p.get('label') or 'no label'}); on the close it "
+                        f"says {sr.fmt_w(s['target'])}: the call flipped after the mirror's decision minute.")
+            if r["action"] == "hold" and "corridor" in (r.get("reason") or ""):
+                flip += f" The mirror's sleeve held {r['reason']}: the two books may be on different corridor paths."
             alerts.append(f"MIRROR MISMATCH — {e} on {d}: the mirror ({r['action']}, decided {hh} ET) holds "
                           f"{sr.fmt_w(r['weights'])}; Composer holds {sr.fmt_w(c['holdings'])} (half-L1 {dist:.1%}). The shadow "
                           f"ledger says {s.get('status') or 'nothing for this session'}: no knife-edge or no-rebalance explains "
-                          f"it. DRY only; no order exists.")
+                          f"it.{flip} DRY only; no order exists.")
     if br["problems"]:
         alerts.append(f"MIRROR DRY BOOK PROBLEM — {d}: " + "; ".join(br["problems"])[:300])
     br.update(decide=hh, seeded_on=seeded, brain={"asof_et": payload.get("asof_et"), "replay": payload.get("replay"),
@@ -1397,7 +1431,8 @@ def _daily(date, book_path, ledger_path, force, now, yahoo, minutes, build, mark
                 + ", ".join(f"{n} ${v:,.2f}" for n, v in br["overspent"].items()) if br["overspent"] else "")]
     if n_cmp:
         lines.append(f"parity vs Composer: {same} of {n_cmp} engines hold the same"
-                     + ("; day return, mirror - Composer: " + ", ".join(f"{e} {x:+.0f} bps" for e, x in diffs) if diffs else ""))
+                     + ("; day return, mirror - Composer: " + ", ".join(f"{e} {x:+.0f} bps" for e, x in diffs) if diffs else "")
+                     + ("; seeded today, so no day return to compare" if last is None else ""))
     else:
         lines.append(f"parity vs Composer: no snapshot for {d} on disk yet")
     return lines, alerts
@@ -1406,7 +1441,11 @@ def _daily(date, book_path, ledger_path, force, now, yahoo, minutes, build, mark
 # ------------------------------------------------------------------ CLI
 def _summary(res):
     p = res.get("parity") or {}
-    lines = [f"{res['mode']} mode {res['start']}..{res['end']}: {len(res['sessions'])} sessions"]
+    m = res.get("minute") or {}
+    lines = [f"{res['mode']} mode {res['start']}..{res['end']}: {len(res['sessions'])} sessions"
+             + (f"; decided on minute bars at {m['decide']} ET from {m['start']} ({m['covered']} sessions, parity measured from there; "
+                f"{m['fallbacks']} of {m['orders']} orders filled at the close instead"
+                + (f"; STOPPED: {m['stopped']}" if m.get("stopped") else "") + ")" if m else "")]
     for e, s in (p.get("decisions") or {}).items():
         t = ((p.get("engines") or {}).get(e) or {}).get("tracking") or (p.get("book") or {}).get("tracking") if e == "ALL" else \
             ((p.get("engines") or {}).get(e) or {}).get("tracking") or {}
@@ -1432,9 +1471,11 @@ def main(argv=None):
     dly = sub.add_parser("daily")
     dly.add_argument("--date")
     dly.add_argument("--force", action="store_true")
+    dly.add_argument("--book", default=BOOK_PATH)
+    dly.add_argument("--ledger", default=LEDGER_PATH)
     a = ap.parse_args(argv)
     if a.cmd == "daily":
-        lines, alerts = daily(a.date, force=a.force)
+        lines, alerts = daily(a.date, a.book, a.ledger, a.force)
         print("\n".join(lines))
         for x in alerts:
             print(f"  !! {x}")

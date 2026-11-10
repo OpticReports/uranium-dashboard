@@ -4,8 +4,9 @@
 ledger's history and measured against Composer's realised record.
 
   close mode   2026-07-15..the ledger's last session, decision = the ledger's target, fills at the close
-  minute mode  from --minute-start: mirror_brain.build() at 15:45 / 15:50 / 15:55 ET, fills a minute
-               later (and, for the design in IBKR_MIRROR.md, a 15:45 decision filled at the close)
+  minute mode  from --minute-start (and, with --minute-full, the whole window): mirror_brain.build() at
+               15:45 / 15:50 / 15:55 ET, fills a minute later; and fills at the official close instead
+               (a market-on-close order: the design's first draft decided near 15:45 that way)
   sensitivity  slippage 0 / 2 / 5 bps; the seed at Composer's own engine weights; ledger gaps filled
   edge checks  the fill-timing difference (close vs ~15:54) with a placebo; knife-edge carry; the
                replay's as-of history
@@ -57,7 +58,12 @@ def headline(res):
                                                              "cum_composer", "cum_gap", "mean_abs_bps")},
            "book_ex": {k: p["book"]["tracking_ex_no_rebalance"].get(k) for k in ("n_daily", "mean_bps", "sd_bps", "cum_mirror",
                                                                                 "cum_composer", "cum_gap")},
-           "costs": p["book"]["costs"], "engines": {}}
+           "book_gross": {k: p["book"]["tracking_gross"].get(k) for k in ("mean_bps", "sd_bps", "cum_mirror", "cum_composer", "cum_gap")},
+           "book_gross_ex": {k: p["book"]["tracking_gross_ex_no_rebalance"].get(k) for k in ("cum_mirror", "cum_composer", "cum_gap")},
+           "costs": p["book"]["costs"], "overspent": p["book"]["overspent"], "book_cash_low": p["book"]["book_cash_low"],
+           "noise_floor": noise_floor(p), "engines": {},
+           "book_worst": [{k: w.get(k) for k in ("d0", "date", "n", "diff_bps", "cause")}
+                          for w in p["book"]["tracking"].get("worst", [])[:4]]}
     for e, blk in p["engines"].items():
         t = blk["tracking"]
         row["engines"][e] = {k: t.get(k) for k in ("n_daily", "mean_bps", "sd_bps", "t", "corr", "beta", "cum_mirror", "cum_composer",
@@ -65,6 +71,34 @@ def headline(res):
         row["engines"][e]["gross_cum_gap"] = blk["tracking_gross"].get("cum_gap")
         row["engines"][e]["gross_mean_bps"] = blk["tracking_gross"].get("mean_bps")
     return row
+
+
+def noise_floor(par):
+    """the daily difference on sessions when neither side traded (same holdings in, no rotation): what
+    the comparison itself adds (Composer's snapshot marks vs official closes, the mirror's idle cash)"""
+    out, pooled = {}, []
+    for e, blk in par["engines"].items():
+        xs = [s["diff_bps"] for s in blk["series"] if s["n"] == 1 and (s.get("cause") or "").startswith("no trade")]
+        out[e] = stats(xs)
+        pooled += xs
+    out["all"] = stats(pooled)
+    return out
+
+
+def composer_fills(path=None):
+    """when Composer's own fills happened (results/slippage-ledger.json, add. 14b): counts by ET minute"""
+    path = path or os.path.join(HERE, "..", "..", "results", "slippage-ledger.json")
+    try:
+        fills = list(json.load(open(path))["fills"].values())
+    except (OSError, ValueError, KeyError):
+        return None
+    by = {}
+    for f in fills:
+        by[f["hhmm"]] = by.get(f["hhmm"], 0) + 1
+    big = [f for f in fills if f.get("notional", 0) > 1000]
+    w = sum(f["notional"] for f in big)
+    return {"n": len(fills), "from": min(f["d"] for f in fills), "to": max(f["d"] for f in fills), "by_minute": dict(sorted(by.items())),
+            "slip_bps_notional_weighted": round(sum(f["slip_bps"] * f["notional"] for f in big) / w, 2) if w else None}
 
 
 def composer_own_book(composer, cal, since):
@@ -84,10 +118,11 @@ def composer_own_book(composer, cal, since):
     return out
 
 
-def fill_timing(shadow, market, minutes, hhmm="15:55", stale=30):
-    """Composer fills near 15:54; a market-on-close order fills at the close. On every engine-day Composer
-    rotated (holdings moved more than 1.5% off yesterday's, drifted), the close-fill's advantage is
-    -(sum over tickers of the weight traded x the ticker's move from the 15:54 bar's close to the
+def fill_timing(shadow, market, minutes, hhmm="15:53", stale=30):
+    """Composer's fills cluster at 15:52-15:53 ET (258 of the 328 fills in results/slippage-ledger.json,
+    2026-07-10..10-02); a market-on-close order fills at the close. On every engine-day Composer
+    rotated (holdings moved more than 1.5% off yesterday's, drifted), a later fill's advantage is
+    -(sum over tickers of the weight traded x the ticker's move from the last trade at hh:mm to the
     official close): positive when what Composer bought fell into the close (or what it sold rose).
     Placebo: the same weights on the PREVIOUS session's last minutes, when that rotation did not happen."""
     cal = market.calendar()
@@ -143,7 +178,8 @@ def timing_summary(rows, diffs=None):
         out[e] = dict(stats([r["adv_bps"] for r in xs]), placebo=stats([r["placebo_bps"] for r in xs]),
                       sum_bps=round(sum(r["adv_bps"] for r in xs), 1))
     for lab, pick in (("spy_down_day", lambda r: r["spy_day"] < 0), ("spy_up_day", lambda r: r["spy_day"] >= 0),
-                      ("spy_move_over_1pct", lambda r: abs(r["spy_day"]) >= 0.01), ("spy_move_under_1pct", lambda r: abs(r["spy_day"]) < 0.01)):
+                      ("spy_move_over_1pct", lambda r: abs(r["spy_day"]) >= 0.01),
+                      ("spy_move_under_1pct", lambda r: abs(r["spy_day"]) < 0.01)):
         xs = [r for r in rows if pick(r)]
         out[lab] = dict(stats([r["adv_bps"] for r in xs]), placebo=stats([r["placebo_bps"] for r in xs]))
     top = sorted(rows, key=lambda r: -abs(r["adv_bps"]))[:3]
@@ -202,6 +238,18 @@ def kmlm_path(rows, shadow):
     return out
 
 
+class YahooAsFetched(md.Yahoo):
+    """Yahoo's history as it is today, never rebased: what mirror_brain.build reads when it fetches for itself"""
+
+    def __init__(self, inner):
+        super().__init__()
+        self.res, self.parsed = inner.res, inner.parsed
+        self.cache_dir = inner.cache_dir
+
+    def live(self, t, asof=None):
+        return super().live(t, asof=None)
+
+
 def asof_check(sessions, yahoo, minutes, log):
     """how many replayed decisions change when the history is NOT rebased to the replayed day (what
     mirror_brain.build does when it fetches for itself): engine-days whose target moves by more than 3%"""
@@ -247,7 +295,14 @@ def study(start, end, minute_start, cache, log, minute_full=False):
                       "ledger_gaps": close["skipped_sessions"]},
            "capital": md.CAPITAL, "fractions": md.FRACTIONS, "slip_bps": md.SLIP_BPS,
            "commission": {"per_share": md.COMM_PER_SHARE, "min": md.COMM_MIN, "cap_share_of_value": md.COMM_CAP},
-           "composer_book_2026_11_09_usd_k": POLICY_BOOK}
+           "composer_book_2026_11_09_usd_k": POLICY_BOOK, "composer_fills": composer_fills()}
+    status = {}
+    for (d, e), row in shadow.items():
+        if start <= d <= end:
+            status[row.get("status")] = status.get(row.get("status"), 0) + 1
+    out["window"]["ledger_status"] = status
+    out["window"]["composer_snapshots"] = {e: sum(1 for d, v in by.items() if start <= d <= end and v.get("dav"))
+                                           for e, by in composer.items()}
     par = close["parity"]
     out["close"] = {"decisions": par["decisions"], "disagreements": par["disagreements"], "episodes": par["episodes"],
                     "engines": par["engines"], "book": par["book"], "headline": headline(close),
@@ -286,35 +341,39 @@ def study(start, end, minute_start, cache, log, minute_full=False):
     sens["seed"] = seed
     out["sensitivity"] = sens
     log("sensitivities done")
-    # ---- minute mode
-    ms = start if minute_full else minute_start
-    mins = {"start": ms, "variants": {}}
-    full = None
-    for lab, decide, fill in (("15:55", "15:55", "next"), ("15:50", "15:50", "next"), ("15:45", "15:45", "next"),
-                              ("15:45 -> close (MOC)", "15:45", "close"), ("15:55 -> close", "15:55", "close")):
-        r = md.backfill(start, end, "minute", minute_start=ms, decide=decide, fill=fill, minutes=minutes, build=build, **common)
-        log(f"minute {lab}: covered {r['minute']['covered']} stopped {r['minute']['stopped']}")
-        log(md._summary(r))
-        blk = {"decide": decide, "fill": fill, "info": r["minute"], "headline": headline(r),
-               "disagreements": r["parity"]["disagreements"], "episodes": r["parity"]["episodes"]}
-        if lab == "15:55":
-            full = r
-            blk.update(engines=r["parity"]["engines"], book=r["parity"]["book"],
-                       rows=[{k: x.get(k) for k in ("date", "engine", "mode", "action", "reason", "gap", "weights", "equity", "index_px",
-                                                    "ret", "ret_px", "label", "decide")} for x in r["rows"] if x["date"] >= ms],
-                       book_rows=[{k: b.get(k) for k in ("date", "equity", "ret", "ret_px", "index_px", "orders", "crosses", "commission",
-                                                         "slippage", "fill_fallbacks", "overspent", "cash_low")}
-                                  for b in r["book"] if b["date"] >= ms])
-        else:
-            blk["engines_tracking"] = {e: v for e, v in headline(r)["engines"].items()}
-            blk["overspent"] = r["parity"]["book"]["overspent"]
-        mins["variants"][lab] = blk
-        if r["minute"]["stopped"]:
-            break
-    same = md.backfill(start, end, "close", parity_from=ms, **common)
-    mins["close_same_sessions"] = {"headline": headline(same), "disagreements": same["parity"]["disagreements"]}
-    out["minute"] = mins
+    # ---- minute mode: the recent sessions (and, with minute_full, the whole window as a second block)
+    def run_minutes(ms, variants):
+        mins, first = {"start": ms, "variants": {}}, None
+        for lab, decide, fill in variants:
+            r = md.backfill(start, end, "minute", minute_start=ms, decide=decide, fill=fill, minutes=minutes, build=build, **common)
+            log(f"minute from {ms} {lab}: covered {r['minute']['covered']} stopped {r['minute']['stopped']}")
+            log(md._summary(r))
+            blk = {"decide": decide, "fill": fill, "info": r["minute"], "headline": headline(r),
+                   "disagreements": r["parity"]["disagreements"], "episodes": r["parity"]["episodes"],
+                   "overspent": r["parity"]["book"]["overspent"]}
+            if first is None:
+                first = r
+                blk.update(engines=r["parity"]["engines"], book=r["parity"]["book"],
+                           rows=[{k: x.get(k) for k in ("date", "engine", "mode", "action", "reason", "gap", "weights", "equity",
+                                                        "index_px", "ret", "ret_px", "label", "decide")} for x in r["rows"] if x["date"] >= ms],
+                           book_rows=[{k: b.get(k) for k in ("date", "equity", "ret", "ret_px", "index_px", "orders", "crosses",
+                                                             "commission", "slippage", "fill_fallbacks", "overspent", "cash_low")}
+                                      for b in r["book"] if b["date"] >= ms])
+            mins["variants"][lab] = blk
+            if r["minute"]["stopped"]:
+                break
+        same = md.backfill(start, end, "close", parity_from=ms, **common)
+        mins["close_same_sessions"] = {"headline": headline(same), "disagreements": same["parity"]["disagreements"]}
+        return mins, first
+    variants = (("15:55", "15:55", "next"), ("15:50", "15:50", "next"), ("15:45", "15:45", "next"),
+                ("15:45 -> close (MOC)", "15:45", "close"), ("15:55 -> close", "15:55", "close"))
+    out["minute"], full = run_minutes(minute_start, variants)
+    ms = minute_start
     out["kmlm_path_minute"] = kmlm_path([x for x in (full or {}).get("rows", []) if x["date"] >= ms], shadow)
+    if minute_full:
+        out["minute_full"], whole = run_minutes(start, variants)
+        out["kmlm_path_minute_full"] = kmlm_path((whole or {}).get("rows", []), shadow)
+        full, ms = whole, start
     # ---- edge checks
     edge = {}
     try:
@@ -326,14 +385,22 @@ def study(start, end, minute_start, cache, log, minute_full=False):
             for (d, ee), v in diffs.items():
                 if ee == e and d in xs:
                     gross[(d, e)] = v + (xs[d]["ret_px_gross"] - xs[d]["ret_px"]) * 1e4
-        edge["fill_timing"] = {"rows": rows, "summary": timing_summary(rows, gross),
-                               "basis": "Composer's rotation engine-days; price at the close of the bar starting 15:54 vs the official close"}
+        alt = fill_timing({k: v for k, v in shadow.items() if start <= k[0] <= end}, market, minutes, "15:55")
+        edge["fill_timing"] = {"rows": rows, "summary": timing_summary(rows, gross), "from": "15:53",
+                               "from_1555": timing_summary(alt, gross),
+                               "basis": "Composer's rotation engine-days; the last trade at 15:53 (the close of the bar starting "
+                                        "15:52) vs the official close; from_1555: the same from the bar starting 15:54"}
     except md.Refused as e:
         edge["fill_timing"] = {"error": f"FMP refused: {e}"}
     edge["knife_edge_carry"] = knife_carry(par)
     try:
         sess = [d for d in market.sessions(ms, end) if d in (full or {}).get("sessions", [])]
         edge["replay_as_of"] = asof_check(sess, yahoo, minutes, log)
+        plain = md.backfill(start, end, "minute", minute_start=ms, minutes=minutes, shadow=shadow, market=market,
+                            yahoo=YahooAsFetched(yahoo), composer=composer, cache=cache)
+        edge["replay_as_of"]["as_fetched_today"] = headline(plain)
+        edge["replay_as_of"]["as_of"] = headline(full)
+        edge["replay_as_of"]["from"] = ms
     except md.Refused as e:
         edge["replay_as_of"] = {"error": f"FMP refused: {e}"}
     out["edge"] = edge

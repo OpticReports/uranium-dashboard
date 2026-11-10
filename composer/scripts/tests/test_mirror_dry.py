@@ -14,7 +14,8 @@ a BROKEN-INPUT twin that must land on the other side (a gate that cannot fail is
   M5  Composer's record and the parity classes: snapshot -> session, deposit-adjusted spans, flow days;
       knife-edge / no-rebalance / corridor path / late snapshot / whole-share; return tracking; twins
   M6  minute mode: the brain's payload decides, fills at the bar that starts at the decision time, the
-      close when there is none (counted), half-days shift, a refusal stops cleanly; the as-of series
+      close when there is none (counted), sized on the brain's published prices, a fill past the buy
+      cushion reported, half-days shift, a refusal stops cleanly; the as-of series
   M7  daily(): seeds once, idempotent, force re-runs the last session without double booking, atomic,
       never raises, MISMATCH only when the shadow ledger does not explain it
   M8  the FMP store: one request per ticker-day, disk cache, throttle, refusal remembered, key never shown
@@ -461,6 +462,18 @@ class M5ComposerRecordAndParity(NoNetwork):
         self.assertEqual(f(row, led(D2, "HG", tgt, live={"AAA": 0.5, "BBB": 0.5}), None, True, False, None)[2], "other")
         self.assertTrue(f(dict(row, weights=tgt), lg, 0.10, True, True, D1)[0])
 
+    def test_a_flip_at_the_mirrors_own_decision_minute_has_its_own_class(self):
+        tgt_close, tgt_1555 = {"AAA": 1.0}, {"BBB": 1.0}
+        lg = led(D2, "HG", tgt_close)                                      # Composer holds what the close says
+        row = {"weights": {"BBB": 0.997}, "action": "trade", "target": tgt_1555, "mode": "minute", "decide": "15:55", "label": "close call"}
+        ok, _, cls, note = md.classify_day(row, lg, None, None, False, None)
+        self.assertEqual((ok, cls), (False, "decision-minute"))
+        self.assertIn("at 15:55 the logic said BBB 100% (close call)", note)
+        # twins: in close mode the row's target IS the ledger's, so the class cannot arise; and the
+        # ledger's own knife-edge still wins when it names one
+        self.assertEqual(md.classify_day(dict(row, mode="close"), lg, None, None, False, None)[2], "other")
+        self.assertEqual(md.classify_day(row, dict(lg, status="knife-edge"), None, None, False, None)[2], "knife-edge")
+
     def test_composer_traded_reads_the_drifted_holdings(self):
         raw = {"AAA": {D1: 100.0, D2: 110.0}, "BBB": {D1: 50.0, D2: 50.0}}
         held = {"AAA": 0.5, "BBB": 0.5}
@@ -551,6 +564,12 @@ class M6MinuteMode(NoNetwork):
         shares = mc.Book.from_dict(res["book_final"]).sleeves["HARV"].shares["AAA"]
         self.assertAlmostEqual(harv["weights"]["AAA"], shares * 110.0 / harv["equity"], places=3)
 
+    def test_minute_mode_without_a_price_history_is_refused_up_front(self):
+        with self.assertRaises(ValueError) as cm:                          # no fake brain, no Yahoo: nothing could decide
+            md.backfill(D1, D3, "minute", minute_start=D2, shadow=two_sleeves((D1,)), market=market(),
+                        minutes=FakeMinutes(self.bars), composer={})
+        self.assertIn("Yahoo", str(cm.exception))
+
     def test_twin_fill_at_the_close_and_other_decision_times(self):
         ref, fills, fb = md.minute_prices(D2, "15:55", ["AAA", "BBB"], FakeMinutes(self.bars), market(), "close")
         self.assertEqual((fills, fb), ({"AAA": 110.0, "BBB": 50.0}, []))    # a market-on-close order: no fallback to count
@@ -565,6 +584,43 @@ class M6MinuteMode(NoNetwork):
         # no minute at all before the decision: the reference is the previous close
         ref, _, _ = md.minute_prices(D2, "15:55", ["BBB"], FakeMinutes({}), market(bbb=50.0))
         self.assertEqual(ref["BBB"], 50.0)
+
+    def test_the_brains_published_prices_are_the_sizing_reference(self):
+        sh = two_sleeves((D1,))
+        plan = {D2: {"HG": {"BBB": 1.0}, "HARV": {"BBB": 1.0}}}
+
+        def build(prices):
+            def fake(now, quotes=None, fetch=None):
+                return dict(payload(**plan[sr.et_now(now).date().isoformat()]), prices=prices)
+            return fake
+        kw = dict(minute_start=D2, shadow=sh, market=market(), composer={}, slip_bps=0.0, capital=100_000.0,
+                  fractions={"HG": 0.5, "HARV": 0.5})
+        res = md.backfill(D1, D2, "minute", minutes=FakeMinutes(self.bars), build=build({"AAA": 109.2, "BBB": 50.0}), **kw)
+        sell = next(o for o in res["book"][1]["order_list"] if o["side"] == mc.SELL)
+        self.assertEqual((sell["symbol"], sell["ref"], sell["px"]), ("AAA", 109.2, 109.5))   # sized on the brain's, filled on the bar
+        self.assertEqual(res["minute"]["unpriced_skips"], [])
+        # twin: the brain prices only what its trees mention. A sleeve still holding something else is
+        # left out of the plan, exactly as the executor would leave it (and it is listed)
+        res = md.backfill(D1, D2, "minute", minutes=FakeMinutes(self.bars), build=build({"BBB": 50.0}), **kw)
+        hg = rows_of(res, "HG")[D2]
+        self.assertEqual((hg["action"], hg["brain"]), ("skip", "ok"))
+        self.assertIn("no price for AAA", hg["reason"])
+        self.assertEqual(hg["weights"].keys(), {"AAA"})
+        self.assertEqual([(x["date"], x["engine"]) for x in res["minute"]["unpriced_skips"]], [(D2, "HG")])
+        self.assertEqual(rows_of(res, "HARV")[D2]["action"], "hold")       # the other sleeve is untouched by it
+
+    def test_a_fill_past_the_buy_cushion_is_reported_not_hidden(self):
+        px = {"AAA": 100.0}
+        t = {"HG": {"status": "ok", "target": {"AAA": 1.0}}}
+        sim = md.Sim(md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5}), 0.0)
+        _, b = sim.session(D1, t, px, {"AAA": 101.0}, {"AAA": 101.0})       # sized at 100, filled 1% higher
+        self.assertEqual(b["problems"], [])                                # no invariant is broken ...
+        self.assertAlmostEqual(b["overspent"]["HG"], 50_000 - 498 * 101.0 - 1.743, places=2)   # ... but the sleeve borrowed $300
+        self.assertLess(b["cash_low"], -299)
+        sim = md.Sim(md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5}), 0.0)
+        _, b = sim.session(D1, t, px, {"AAA": 100.2}, {"AAA": 100.2})       # twin: inside the 0.3% cushion
+        self.assertEqual(b["overspent"], {})
+        self.assertGreaterEqual(b["cash_low"], 0)
 
     def test_half_days_keep_their_distance_to_the_close(self):
         self.assertEqual(md.decide_at("2026-11-27"), "12:55")
@@ -679,6 +735,12 @@ class M7Daily(NoNetwork):
         self.assertAlmostEqual(hg["equity"], round(50_000 - q * 99.6 - md.commission(q, 99.6) + q * 100.0, 2), places=2)
         self.assertEqual(book["overspent"], {})
         self.assertEqual(book["orders"], 2)
+        self.composer(D1)                                                  # a snapshot for the seeding day itself
+        lines, _ = self.day(D1, force=True)
+        self.assertIn("seeded today", lines[-1])                           # holdings are compared, the day's return is not
+        self.assertNotIn("diff_bps", self.rows()[0])
+        self.assertEqual(self.rows()[0]["parity"], "same")
+        saved = json.loads(read(self.book))
         self.assertEqual(saved["before"]["session"], None)                 # the state before this session: the fresh seed
         self.assertEqual(saved["before"]["book"]["sleeves"][0]["shares"], {})
 
@@ -783,6 +845,7 @@ class M7Daily(NoNetwork):
         self.assertEqual(len(alerts), 1)
         self.assertIn("MIRROR MISMATCH — HG on 2026-03-03", alerts[0])
         self.assertIn("Composer holds BBB 100%", alerts[0])
+        self.assertNotIn("flipped after", alerts[0])                       # the close logic agrees with the mirror here
         self.assertIn("1 of 2 engines hold the same", lines[-1])
         hg, harv = self.rows()[3], self.rows()[4]
         self.assertEqual((hg["parity"], harv["parity"]), ("MISMATCH", "same"))
@@ -801,6 +864,13 @@ class M7Daily(NoNetwork):
             f.write("")
         self.shadow_rows(led(D2, "HG", {"AAA": 1.0}, live={"BBB": 1.0}, status="no-rebalance"))
         self.assertEqual(self.day(D2, force=True)[1], [])
+        # ... and when the close logic sides with Composer, the alert says the call flipped after 15:55
+        with open(self.shadow, "w") as f:
+            f.write("")
+        self.shadow_rows(led(D2, "HG", {"BBB": 1.0}, status="agree"))
+        lines, alerts = self.day(D2, force=True)
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("the call flipped after the mirror's decision minute", alerts[0])
         # twin 3: no shadow row at all -> nothing explains it -> alert
         with open(self.shadow, "w") as f:
             f.write("")
@@ -826,10 +896,42 @@ class M7Daily(NoNetwork):
         self.assertEqual(self.rows()[3]["action"], "skip")
         self.assertEqual(self.rows()[3]["weights"].keys(), {"AAA"})
 
+    def test_a_sleeve_the_brain_does_not_price_is_alerted(self):
+        self.day(D1)                                                       # HG now holds AAA
+        real = self.build
+
+        def unpriced(now, quotes=None, fetch=None):
+            return dict(real(now), prices={"BBB": 50.0})                   # the trees no longer mention AAA
+        self.build = unpriced
+        self.plan[D2] = {"HG": {"BBB": 1.0}, "HARV": {"BBB": 1.0}}
+        lines, alerts = self.day(D2)
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("MIRROR DRY SLEEVE LEFT OUT — HG", alerts[0])
+        self.assertIn("no price for AAA", alerts[0])
+        self.assertEqual(self.rows()[3]["action"], "skip")
+        self.build = lambda now, quotes=None, fetch=None: dict(real(now), prices={"AAA": 109.5, "BBB": 50.0})
+        self.assertEqual(self.day(D2, force=True)[1], [])                  # twin: priced -> it trades, no alert
+        self.assertEqual(self.rows()[3]["action"], "trade")
+
+    def test_no_day_return_is_compared_across_a_session_the_step_did_not_run(self):
+        self.day(D1)
+        self.composer(D2, dav=(1100.0, 2000.0))
+        self.composer(D3, dav=(1210.0, 2000.0))
+        lines, alerts = self.day(D3)                                       # D2 was never run: the book's return spans two sessions
+        self.assertEqual(alerts, [])
+        self.assertNotIn("diff_bps", self.rows()[3])
+        self.assertAlmostEqual(self.rows()[3]["composer_ret"], 0.10)       # Composer's is D3's alone
+        self.assertGreater(self.rows()[3]["ret"], 0.20)
+        self.day(D4)                                                       # twin: consecutive sessions are compared
+        self.composer(D4, dav=(1210.0, 2000.0))
+        self.day(D4, force=True)
+        self.assertIn("diff_bps", self.rows()[6])
+
     def test_half_day_decides_five_minutes_before_its_own_close(self):
         cal = ["2026-11-25", "2026-11-27"]
         mkt = md.Market(raw={"AAA": {d: 100.0 for d in cal}, "BBB": {d: 50.0 for d in cal}, "SPY": {d: 500.0 for d in cal}}, calendar=cal)
-        bars = {("AAA", "2026-11-27"): {"12:54": 99.5, "12:55": 99.6, "15:54": 90.0, "15:55": 90.0}, ("BBB", "2026-11-27"): {"12:54": 50.0, "12:55": 50.0}}
+        bars = {("AAA", "2026-11-27"): {"12:54": 99.5, "12:55": 99.6, "15:54": 90.0, "15:55": 90.0},
+                ("BBB", "2026-11-27"): {"12:54": 50.0, "12:55": 50.0}}
         self.plan["2026-11-27"] = self.plan[D1]
         lines, alerts = self.day("2026-11-27", market=mkt, minutes=FakeMinutes(bars))
         self.assertEqual(alerts, [])
