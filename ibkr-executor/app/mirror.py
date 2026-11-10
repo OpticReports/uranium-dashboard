@@ -155,7 +155,7 @@ FLATTEN_SEEN_CAP_S = 600.0     # two looks at a flatten further apart than this 
 FLATTEN_WAIT_S = 5.0           # the loop cadence of a flatten while the session is open
 FLATTEN_SLOW_ALERT_S = 600.0   # a flatten order still unbooked this long (wall time) is said in red, and again this often
 FLATTEN_EMPTY_LOOKS = 3        # an account that reads EMPTY while the book holds shares is read again this often first
-DIVIDEND_MAX_FRAC = 0.10       # F4: a dividend above this share of the position's value (shares x mark) is not credited
+DIVIDEND_MAX_FRAC = 0.25       # F4: a dividend above this share of the position's value (shares x mark) is not credited
 PAPER_TICK_BUDGET_S = 20.0     # a PAPER tick never waits longer than this (it shares the loop with a live strategy)
 PAPER_RETRY_S = 10.0           # ... and asks the brain again this often
 PAPER_UNKNOWN_WAIT_S = 300.0   # session unknown: a paper book asks for the loop this often (UNKNOWN_WAIT_S from 15:30 ET)
@@ -861,15 +861,14 @@ class MirrorManager:
                             f"\"force\": true if it is meant")
             return True
         if self.cfg.live and cash > 0:
-            # F1 (D-04): cash added by /mirror/adjust is capital the book takes, exactly like a credit.
-            # Cash that only REPLACES shares the same adjustment removes (a sale by hand) is not new
-            # capital: the removed shares are netted off at the book's last mark, where it has one.
-            mark = _num(((self.state.get("marks") or {}).get("prices") or {}).get(sym)) if shares < 0 else None
-            added = round(max(cash - (-shares * mark if mark is not None and mark > 0 else 0.0), 0.0), 2)
-            why = None if r.get("force") is True or not added else self._over_cap(added)
+            # F1 (D-04): cash added by /mirror/adjust is capital the book takes, exactly like a credit -
+            # ALL of it. It is not netted against shares the same adjustment removes: add-shares then
+            # remove-them-for-cash would otherwise turn uncapped shares into uncapped cash (V4b D1). A
+            # sale by hand recorded at a book sitting at its cap therefore needs "force": true.
+            added = round(cash, 2)
+            why = None if r.get("force") is True else self._over_cap(added)
             if why:
-                self._refuse(r, why + (f" (${added:,.2f} is the cash beyond the {-shares} {sym} removed at the "
-                                       f"last mark {mark:g})" if added != round(cash, 2) else ""))
+                self._refuse(r, why)
                 return True
             self.state["funded_usd"] = round((_num(self.state.get("funded_usd")) or 0.0) + added, 2)
         if shares:
@@ -1650,7 +1649,7 @@ class MirrorManager:
             shares, total = _num(r.get("shares")) or 0.0, _num(r.get("total")) or 0.0
             if px is None or px <= 0 or total > DIVIDEND_MAX_FRAC * shares * px + 1e-9:
                 # F4: a unit slip in the feed ($20 for $0.20) would be credited from the account's spare
-                # cash. A real distribution is far below 10% of the position; one above it (or one whose
+                # cash. A real distribution has reached ~13% (a managed-futures fund's year-end payout), never 25%; one above it (or one whose
                 # position cannot be priced) stays OUT of the book and is the operator's to credit.
                 r.update(status="refused", settled=session)
                 self._journal("dividend_refused", mark=px, **r)
@@ -1661,7 +1660,8 @@ class MirrorManager:
                                                         if px is not None and px > 0 else
                                                         "not checkable: the book has no price for the symbol")
                                  + ". Check the amount (a unit slip in the feed?). It stays out of the book; if it was "
-                                   "really paid, credit it with POST /mirror/credit.", key=f"div-big:{r.get('id')}")
+                                   "really paid, credit it with POST /mirror/credit (\"force\": true if the book is at its cap) - and only "
+                                   "if the sleeve still holds the symbol on the pay date.", key=f"div-big:{r.get('id')}")
                 notes.append(f"dividend {r.get('ticker')} ex {r.get('ex_date')} ${total:,.2f} for {r.get('sleeve')} NOT "
                              f"credited: implausible against the position's value")
                 continue
@@ -2164,16 +2164,8 @@ class MirrorManager:
             return True
         oid, sym = o["id"], o["symbol"]
         try:
-            snap = ad.positions_snapshot()
-            held = int((snap.get("stocks") or {}).get(sym, 0) or 0)
-        except Exception as exc:  # noqa: BLE001
-            rec["positions_error"] = one_line(exc, 160)
-            self._say("red", f"flatten order {oid} is NOT sent: the account's positions cannot be read "
-                             f"({rec['positions_error']}), and a sell that is not checked against them could take "
-                             f"{sym} short. Tried again on the next step.",
-                      key=f"flat-cap-nopos:{oid}:{one_line(exc, 60)}")
-            return False
-        try:
+            # read BEFORE the positions (V4a D1): a fill of the resting sell that lands between the two
+            # reads then only lowers `held`, never the reverse.
             # a SELL already open at the venue under ANOTHER id (an earlier flatten's, resting on a halted
             # symbol; an order placed by hand) has spoken for its shares: both filling would be a short
             resting = max(int(ad.open_sell_qty(sym, exclude=oid)), 0)
@@ -2183,6 +2175,16 @@ class MirrorManager:
                              f"({rec['positions_error']}), and a sell on top of one already resting there could take "
                              f"{sym} short. Tried again on the next step.",
                       key=f"flat-cap-noopen:{oid}:{one_line(exc, 60)}")
+            return False
+        try:
+            snap = ad.positions_snapshot()
+            held = int((snap.get("stocks") or {}).get(sym, 0) or 0)
+        except Exception as exc:  # noqa: BLE001
+            rec["positions_error"] = one_line(exc, 160)
+            self._say("red", f"flatten order {oid} is NOT sent: the account's positions cannot be read "
+                             f"({rec['positions_error']}), and a sell that is not checked against them could take "
+                             f"{sym} short. Tried again on the next step.",
+                      key=f"flat-cap-nopos:{oid}:{one_line(exc, 60)}")
             return False
         want = int(o["qty"])
         free = held - resting
@@ -2775,9 +2777,8 @@ class MirrorManager:
                 acct = {"?": one_line(exc, 80)}
         left = self.book.positions()
         fl = self.state.get("flatten") or {}
-        if flat is True and left and not (fl.get("id") == self.halt_state().get("flatten_id")
-                                          and any(not str(x).startswith("0/") for x in fl.get("sold") or [])):
-            # the account read EMPTY, the book still holds shares and this flatten sold NOTHING: that
+        if flat is True and left:
+            # the account read EMPTY while the book still holds shares (V4a D2: whatever this flatten sold): that
             # reading agrees with nothing (a position list not yet synced after a reconnect, or shares
             # sold by hand) and is not reported as "flat"
             flat, acct = None, {"?": f"it reads empty while the book still holds {left} and nothing was sold"}

@@ -559,7 +559,8 @@ def test_d3_adjust_repairs_a_share_count_divergence(tmp_path):
     r.m.request_adjust("KMLM", "TECL", -500, 0.0, "typo")              # more than the sleeve holds
     r.tick("10:01:00", day=D2)
     assert any("adjust request" in a and "REFUSED" in a for a in r.red()) and r.m.book.positions()["TECL"] == tecl
-    r.m.request_adjust("KMLM", "TECL", -8, 8 * 99.0, "sold by hand 2026-11-11, statement line 4")
+    r.m.request_adjust("KMLM", "TECL", -8, 8 * 99.0, "sold by hand 2026-11-11, statement line 4",
+                       force=True)   # V4b D1: cash by hand at a full cap is never netted against shares
     r.tick("10:02:00", day=D2)
     assert r.m.book.sleeves["KMLM"].shares["TECL"] == tecl - 8 and r.m.state["requests"] == []
     assert any("ADJUSTED by the operator" in a for a in r.alerts)

@@ -358,17 +358,30 @@ def test_g7_cash_added_by_an_adjustment_is_capped_like_a_credit(tmp_path):
 
 
 def test_g7_the_twins_cash_that_replaces_removed_shares_and_a_paper_book(tmp_path):
+    """V4b D1: cash by hand is never netted against shares the same adjustment removes. At a book
+    sitting at its cap a sale by hand is refused without force and taken with it; and adding shares
+    then 'undoing' them as a sale for cash cannot turn into uncapped cash."""
     w, live = _funded(tmp_path)
     bil = live.book.sleeves["HG"].shares["BIL"]
+    cash0 = live.book.sleeves["HG"].cash
+    live.request_adjust("HG", "BIL", +500, 0.0, "wrong repair")
+    w.tick("16:09:00")
+    live.request_adjust("HG", "BIL", -500, 45750.0, "undo, typed as a sale")
+    w.tick("16:09:30")
+    assert live.book.sleeves["HG"].cash == pytest.approx(cash0) and live.state["funded_usd"] == CAP
+    assert len([a for a in w.red() if "REFUSED" in a]) == 1
+    live.request_adjust("HG", "BIL", -500, 0.0, "undo the wrong repair")
+    w.tick("16:09:45")
+    assert live.book.sleeves["HG"].shares["BIL"] == bil
     w.venue._positions["BIL"] -= 2                           # two BIL sold by hand at 91.00
     w.venue.cash += 2 * 91.0
     live.request_adjust("HG", "BIL", -2, 2 * 91.0, "sold by hand, statement line 4")
     w.tick("16:10:00")
-    assert live.book.sleeves["HG"].shares["BIL"] == bil - 2 and live.state["funded_usd"] == CAP
-    assert not [a for a in w.red() if "REFUSED" in a]
-    live.request_adjust("HG", "BIL", -2, 2 * 91.0 + 5000.0, "typo")         # ... but not cash far beyond their value
+    assert live.book.sleeves["HG"].shares["BIL"] == bil and len([a for a in w.red() if "REFUSED" in a]) == 2
+    live.request_adjust("HG", "BIL", -2, 2 * 91.0, "sold by hand, statement line 4", force=True)
     w.tick("16:11:00")
-    assert live.book.sleeves["HG"].shares["BIL"] == bil - 2 and len([a for a in w.red() if "REFUSED" in a]) == 1
+    assert live.book.sleeves["HG"].shares["BIL"] == bil - 2 and live.state["funded_usd"] == CAP + 182.0
+    assert live.book.sleeves["HG"].cash == pytest.approx(cash0 + 182.0)
     p = Rig(tmp_path / "paper")
     p.tick("15:00")
     p.m.request_adjust("HG", None, 0, 50000.0, "paper has no cap")
