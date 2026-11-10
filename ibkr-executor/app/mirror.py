@@ -1,11 +1,12 @@
 """Composer mirror: the executor strategy (composer/IBKR_MIRROR.md).
 
-One brain, two brokers. The keyless brain (composer/scripts/mirror_brain.py) publishes, at the
-decision minute, the target weights each approved symphony tree holds and the prices it was
-evaluated on. This module turns them into whole-share orders on the IBKR account through the
-existing adapter contract (place_stock_order MKT DAY, find_stock_order, cancel_stock_order), with
-the accounting in app/mirror_core.py: virtual sleeves, Composer's daily / threshold rule,
-cross-sleeve netting, sells booked before buys are sized from the cash actually held.
+One brain, two brokers. The keyless brain (composer/scripts/mirror_brain.py) publishes, pinned to the
+decision instant, the target weights each approved symphony tree holds and the prices it was
+evaluated on (contract schema 2). This module turns them into whole-share orders on the IBKR account
+through the adapter contract (SELLS: place_stock_order MKT DAY; BUYS: place_limit_order DAY;
+find_stock_order, cancel_stock_order, stock_order_fills), with the accounting in app/mirror_core.py:
+virtual sleeves, Composer's daily / threshold rule, cross-sleeve netting, sells booked before buys are
+sized from the cash actually held, dividend receivables and splits.
 
 A MirrorManager is ONE book. The service builds up to two: a DRY book (its own private DryAdapter:
 no venue, no account reads; fills at the brain's reference price) for every engine not yet live,
@@ -14,25 +15,67 @@ builds neither.
 
 Threads
 - the LOOP thread alone calls tick(): it owns the book, the state file and every adapter call
-- API threads call halt() / resume() (the halt file, under halt_lock), request_transfer() /
-  request_credit() (the inbox file, under inbox_lock) and view() / health() (a published snapshot)
+- API threads call halt() / resume() (the halt file, under halt_lock), the request_*() methods (the
+  inbox file, under inbox_lock; the loop thread applies them) and view() / health() (a published
+  snapshot)
 
 A session, in the loop thread
-  1 the brain's clock (/mirror/session) says when the decision bar ends and when the session closes
-  2 at decision + offset: the pre-trade gates (live: the account must hold exactly the book, the
-    account's cash must cover the book's, the blend must be off), then the intents, which must be
-    for today, computed after the decision bar closed, and fresh
-  3 the plan (mirror_core.build_plan); live: every symbol it would trade is cross-checked against
-    the venue's own quote, and a symbol that fails takes its sleeves out of the plan
-  4 SELLS, each under a deterministic id written to disk BEFORE the venue sees it; booked once, at
-    the terminal state; then transfers, then BUYS sized from actual cash; leftovers cancelled
-    before the close and booked at what filled
+  1 the brain's clock (/mirror/session) says when the decision bar ENDS (decide_utc, used as given)
+    and when the session closes. An unreadable clock is never a silent day: the loop is asked back
+    every minute, it is said after ten, and a recorded NO TRADE is written at 16:00 ET
+  2 at decision + offset: the intents (schema 2: PINNED to the decision instant, its bar complete,
+    built after that instant and not in the future). A pinned payload is immutable - the brain
+    caches it by its instant and never rebuilds it - so its AGE is no test: a restart at 15:57 is
+    given the payload built at 15:54:32 and trades it. Lateness is bounded by plan_by, price drift by
+    the venue quote band and by the fresh quote the limit buys are priced on. Until the decision bar
+    is published the brain answers 503: a transient reason, retried every 3 s. Then the splits the
+    payload lists (sleeve shares rescaled), then the pre-trade gates (live: the account must hold
+    exactly the book, the account's cash must cover the book's, the blend must be off). A refusal
+    that cannot change inside the window (the blend on, no sleeve) is a NO TRADE at once; the others
+    are retried
+  3 dividends: a receivable per sleeve from the shares it held at the close before the ex-date,
+    settled from the pay date; then the plan (mirror_core.build_plan); live: every symbol it would
+    trade is cross-checked against the venue's own quote, and a symbol that fails takes its sleeves
+    out of the plan. Everything up to here is undone in memory if a halt, a wake or an error lands
+    before the run is on disk
+  4 SELLS (market DAY), each under a deterministic id written to disk BEFORE the venue sees it;
+    booked once, at the terminal state; then transfers; then BUYS: the venue quote of each is read
+    again and the order is a LIMIT at quote x (1 + buy_cushion), sized AT that limit from actual
+    cash, so a buy can never cost more than it was sized at; leftovers cancelled before the close
+    and booked at what filled. The halt is re-read before every order and no order is sent after the
+    cancel instant
   5 afterwards the account is compared with the book; a mismatch that persists halts the book
+
+What is never guessed
+- "the venue has no such order" proves nothing unless the order is from today (ET) AND the adapter's
+  order history is complete: otherwise the order is UNRESOLVED - never booked as zero, said once a
+  day - until the venue answers or the operator states what it did (POST /mirror/resolve)
+- a cancelled order's executed quantity that cannot be read is UNRESOLVED too
+- a state file that cannot be written latches the book: no run order is placed until a save succeeds
+- any share-count divergence (a manual trade, a split the brain listed late) is repaired by the
+  operator through POST /mirror/adjust, never by the book on its own
+
+/kill's flatten runs in ROUNDS under one id: what its orders did is settled first, whatever the halt
+file says; while the halt still wants it and both the book and the account still hold shares, the
+remainder is sold again (at most FLATTEN_ROUNDS); a symbol with an unresolved run order is held back
+and named, the others are sold.
+
+OWNER QUESTIONS, still open (rollout notes, not built here)
+- The account is believed to be a CASH account. The buys are marketable limits sized inside the
+  sleeve's cash, so IBKR's credit check sees a known price (app/blend.py records market buys sized
+  within a share of available cash coming back Inactive). Whether this account can fund a buy from
+  SAME-MINUTE sale proceeds is not known: it is to be probed with the first live engine. If it
+  cannot, the buys of a rotating sleeve are refused, the book records them as unfilled, and the
+  sleeve trades again the next session.
+- Reviewer B's M2: a threshold sleeve seeded from cash buys its target on its first session, while
+  Composer's may be sitting inside its corridor on other holdings. Start such an engine on a session
+  Composer's own symphony trades; nothing here aligns the two.
 
 Nothing here trades for Composer, and nothing here reads Composer.
 """
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import math
@@ -40,17 +83,19 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as dtime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
 
 from . import mirror_core as mc
 from .feeds import FeedDeadline, with_deadline
+from .ib_adapter import round_limit_to_tick
 
 logger = logging.getLogger(__name__)
 
-SCHEMA = 1
+SCHEMA = 2                     # the brain's payloads (contract_v2)
+STATE_SCHEMA = 1               # this module's own state file
 INTENTS_KIND = "composer-mirror-intents"
 SESSION_KIND = "composer-mirror-session"
 ET = ZoneInfo("America/New_York")
@@ -58,10 +103,9 @@ ET = ZoneInfo("America/New_York")
 SESSION_TTL_S = 600.0          # the brain's clock is re-read this often
 SESSION_FAIL_TTL_S = 20.0      # ... and this soon after a failed read
 SESSION_DEADLINE_S = 6.0       # total deadline of one clock read
-INTENTS_DEADLINE_S = 25.0      # total deadline of one intents read (the brain rebuilds in ~6-10 s)
+INTENTS_DEADLINE_S = 25.0      # total deadline of one intents read (the brain builds in ~6-10 s)
 INTENTS_RETRY_S = 3.0
-INTENTS_MAX_AGE_S = 90.0       # a payload older than this when it is validated is not acted on
-CLOCK_SKEW_S = 60.0            # the brain's clock and this one may differ by at most this
+CLOCK_SKEW_S = 60.0            # the brain's clock and this one may differ by at most this (also the allowance on built_utc)
 ORDER_POLL_S = 1.5
 TICK_BUDGET_S = 150.0          # one tick never waits longer than this in total
 PLAN_MIN_LEFT_S = 60.0         # no plan is started with less than this left before the cancel instant
@@ -69,13 +113,29 @@ PLACE_TRIES = 3
 STUCK_FAST_S = 300.0           # an unresolved order is re-asked every 2 s for this long past the cancel instant
 STUCK_SLOW_WAIT_S = 60.0       # ... and this often afterwards
 QUOTE_BUDGET_S = 45.0          # the venue cross-check of one plan never takes longer than this
+QUOTE_PASSES = 3               # a rebuilt plan that adds symbols is cross-checked again at most this often
+BUY_QUOTE_BUDGET_S = 20.0      # the quote re-read before the buys are sized never takes longer than this
 TRUE_UP_EVERY_S = 600.0        # late commissions are asked for at most this often
+COMMISSION_GIVE_UP_S = 3 * 86400.0
+TERMS_TRIES = 3                # a fill whose price lookup RAISES is retried this often before the reference is used
 CASH_TOL_USD = 1.0             # the book's cash may exceed the account's by at most this
 CHECK_GAP_S = 30.0             # the post-session account check: two strikes this far apart halt
 CHECK_STRIKES = 2
 HISTORY_KEEP = 120
+FLATTEN_ROUNDS = 5             # a /kill flatten sells what is still held at most this many times
+FLATTEN_ROUND_GAP_S = 5.0      # ... no sooner than this after the previous round was built
+FLATTEN_WAIT_S = 5.0           # the loop cadence of a flatten while the session is open
+LATCH_RETRY_S = 20.0           # a failed state save is retried this often
+LATCH_ALERT_EVERY_S = 600.0    # ... and said again this often while it fails
+UNKNOWN_WAIT_S = 60.0          # session unknown on a weekday 09:25-16:05 ET: ask for the loop this often
+UNKNOWN_WAIT_LATE_S = 20.0     # ... and this often from 15:30 ET
+UNKNOWN_ALERT_AFTER_S = 600.0
+TRANSFER_TRIES = 3             # a transfer that moved less than asked is re-queued up to this many plans
+DIVIDEND_ALERT_SESSIONS = 7    # a receivable unpaid this many sessions after its pay date is said once
 QUOTE_SOURCES = ("live", "last", "bid", "ask")   # a venue quote from the previous close is no cross-check
+LIMITS = {"cancel_before_close_s": (20.0, 120.0), "decide_offset_s": (0.0, 120.0), "quote_band": (0.001, 0.05)}
 _UNKNOWN = object()
+_WOKEN = object()
 
 
 def _iso(dt: datetime) -> str:
@@ -117,12 +177,28 @@ class MirrorConfig:
     engines: tuple                         # the sleeves this book runs
     capital: dict                          # {engine: cash a new sleeve is seeded with}
     state_path: str
-    decide_offset_s: float = 5.0           # act this long after the decision bar ends
+    decide_offset_s: float = 25.0          # act this long after the decision bar ends (FMP publishes it 10-25 s late)
     cancel_before_close_s: float = 60.0    # leftovers are cancelled this long before the close
     quote_band: float = 0.015              # live: venue quote vs the brain's price
     est_quote_band: float = 0.05           # ... when the brain's price is itself an estimate
     blend_enabled: bool = False            # live: no trading while the blend runs in the same account
+    dividend_rule: str = "composer"        # "composer": credit only a sleeve that still holds the payer; "holder": always
+    poll_s: float = 300.0                  # the service loop's ordinary cadence (bounds an off-hours flatten wait)
     core: mc.Config = field(default_factory=mc.Config)
+
+
+def clamp_config(cfg: MirrorConfig) -> list:
+    """bring the three timing / band settings inside the range the book is built for; returns what it
+    changed (a setting outside its range silently disables the book: A-19)"""
+    changed = []
+    for key, (lo, hi) in LIMITS.items():
+        raw = _num(getattr(cfg, key))
+        val = min(max(raw if raw is not None else lo, lo), hi)
+        if raw is None or val != raw:
+            changed.append(f"{key} {getattr(cfg, key)!r} -> {val:g} (allowed {lo:g}..{hi:g})")
+            logger.warning("mirror[%s]: %s is %r, outside %g..%g: using %g", cfg.name, key, getattr(cfg, key), lo, hi, val)
+        setattr(cfg, key, val)
+    return changed
 
 
 # ------------------------------------------------------------------ the brain's HTTP surface
@@ -141,13 +217,16 @@ def _reason(exc: Exception) -> str:
 
 class HttpBrain:
     """GET /mirror/session and /mirror/intents with X-API-Token, each under a TOTAL deadline. One
-    object is shared by the service's books, so a payload one of them just read is not asked for
-    twice. Answers (payload | None, reason)."""
+    object is shared by the service's books. A PINNED payload is the decision as of its instant and
+    never changes (the brain caches it by that instant), so the first complete one received for an
+    instant is kept and the second book is given the SAME object, without a second request.
+    Answers (payload | None, reason); the brain's 503 while the decision bar is not yet published
+    is the reason "http_503", which the manager retries."""
 
     def __init__(self, url: str, token: str):
         self.base = (url or "").strip().rstrip("/")
         self.token = (token or "").strip()
-        self._last: tuple | None = None        # (after, payload, monotonic)
+        self._pinned: dict = {}                # {after: payload}: one decision instant at a time
         self._lock = threading.Lock()
 
     def _get(self, path: str, deadline: float, params: dict | None = None) -> tuple:
@@ -170,12 +249,17 @@ class HttpBrain:
 
     def intents(self, after: str) -> tuple:
         with self._lock:
-            if self._last and self._last[0] == after and time.monotonic() - self._last[2] < 20.0:
-                return self._last[1], "ok"
+            hit = self._pinned.get(after)
+        if hit is not None:
+            return hit, "ok"
         payload, reason = self._get("/mirror/intents", INTENTS_DEADLINE_S, {"after": after})
-        if payload is not None and str(payload.get("asof_utc") or "") >= after:
+        bar = payload.get("decision_bar") if payload is not None else None
+        if payload is not None and payload.get("pinned") is True and payload.get("asof_utc") == after \
+                and isinstance(bar, dict) and bar.get("complete") is True:
             with self._lock:
-                self._last = (after, payload, time.monotonic())
+                if after not in self._pinned:
+                    self._pinned = {after: payload}
+                payload = self._pinned[after]
         return payload, reason
 
 
@@ -183,6 +267,9 @@ class HttpBrain:
 class MirrorManager:
     def __init__(self, cfg: MirrorConfig, brain=None, alert=None, clock=None, sleep=None):
         self.cfg = cfg
+        self.clamped = clamp_config(cfg)
+        if cfg.dividend_rule not in mc.DIVIDEND_RULES:
+            raise ValueError(f"MIRROR_DIVIDEND_RULE must be one of {mc.DIVIDEND_RULES}, not {cfg.dividend_rule!r}")
         self.brain = brain
         self._alert = alert or (lambda msg: None)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
@@ -195,8 +282,15 @@ class MirrorManager:
         self.brain_status: dict = {"session": None, "intents": None}
         self._sess: dict | None = None         # {"day", "info", "at", "ok"}
         self._why: str | None = None           # why today's decision has not started yet
+        self._why_day: str | None = None
         self._said: set = set()
         self._trued_at: datetime | None = None
+        self._latched: dict | None = None      # a state save failed: {"since", "error", "said"}
+        self._held: tuple | None = None        # (session, decide_utc, payload): today's validated intents
+        self._unknown: dict | None = None      # {"day", "since"}: today's session is unknown
+        self._prechecked: str | None = None
+        self._seed_why: str | None = None
+        self._deferred: list | None = None     # journal lines and alerts of a plan not yet on disk
         self._view: dict = {}
         self._halt: dict = {}
         self._dry = None
@@ -206,16 +300,16 @@ class MirrorManager:
         if not cfg.live:
             from .ib_adapter import DryAdapter
             self._dry = DryAdapter()
-            for sym, q in self.book.positions().items():
-                self._dry.seed_position(sym, q)
+            self._rebuild_paper()
         self._publish()
 
     # -------------------------------------------------------------- files
     def _fresh(self) -> dict:
-        return {"schema": SCHEMA, "name": self.cfg.name, "live": self.cfg.live, "book": mc.Book().to_dict(),
+        return {"schema": STATE_SCHEMA, "name": self.cfg.name, "live": self.cfg.live, "book": mc.Book().to_dict(),
                 "seeded": {}, "frozen": [], "run": None, "last_run": None, "last_session": None, "history": [],
                 "requests": [], "seen_requests": [], "flatten": None, "marks": {"prices": {}, "asof": None},
-                "check": None, "commission_pending": [], "seq": 0, "saved_utc": None}
+                "check": None, "commission_pending": [], "dividends": [], "div_seen": [], "splits_applied": [],
+                "seq": 0, "saved_utc": None}
 
     def _load(self) -> None:
         path = self.cfg.state_path
@@ -232,8 +326,8 @@ class MirrorManager:
         try:
             with open(path) as f:
                 raw = json.load(f)
-            if not isinstance(raw, dict) or raw.get("schema") != SCHEMA:
-                raise ValueError(f"schema {raw.get('schema') if isinstance(raw, dict) else None!r} is not {SCHEMA}")
+            if not isinstance(raw, dict) or raw.get("schema") != STATE_SCHEMA:
+                raise ValueError(f"schema {raw.get('schema') if isinstance(raw, dict) else None!r} is not {STATE_SCHEMA}")
             if raw.get("name") != self.cfg.name or bool(raw.get("live")) != self.cfg.live:
                 raise ValueError(f"the file is the book {raw.get('name')!r} (live={raw.get('live')!r}), "
                                  f"not {self.cfg.name!r} (live={self.cfg.live!r})")
@@ -251,15 +345,49 @@ class MirrorManager:
             self.archived_state = f"mirror[{self.cfg.name}] state file unreadable ({one_line(exc)}); kept as {kept}"
             self.halt(self.archived_state, by="mirror")
 
-    def _save(self) -> None:
+    def _save(self) -> bool:
+        """Write the state. NEVER raises: a write that fails LATCHES the book (memory is now ahead of
+        the disk; no run order is placed until a save succeeds) and answers False."""
         self.state["book"] = self.book.to_dict()
         self.state["seq"] = int(self.state.get("seq") or 0) + 1
         self.state["saved_utc"] = _iso(self.clock())
-        atomic_write(self.cfg.state_path, self.state)
+        try:
+            atomic_write(self.cfg.state_path, self.state)
+        except Exception as exc:  # noqa: BLE001
+            self._latch(exc)
+            self._publish()
+            return False
+        if self._latched:
+            since = self._latched.get("since")
+            self._latched = None
+            self._say("warn", f"the state file is being written again (it could not be since {since}): the book "
+                              f"carries on from what it holds in memory")
         self._publish()
+        return True
+
+    def _latch(self, exc: Exception) -> None:
+        now = self.clock()
+        if not self._latched:
+            self._latched = {"since": _iso(now), "error": one_line(repr(exc), 200), "said": None}
+        self._latched["error"] = one_line(repr(exc), 200)
+        said = _parse(self._latched.get("said"))
+        if said is None or (now - said).total_seconds() >= LATCH_ALERT_EVERY_S:
+            self._latched["said"] = _iso(now)
+            logger.error("mirror[%s] state save failed: %s", self.cfg.name, self._latched["error"])
+            self._say("red", f"the state file CANNOT BE WRITTEN ({self._latched['error']}) since "
+                             f"{self._latched['since']}. What the book did since then exists in memory only: NO order "
+                             f"of a run is placed until a save succeeds (a /kill flatten still goes out). Free the "
+                             f"disk; do not restart before /status shows save_latched false.")
+
+    def _retry_save(self) -> None:
+        if self._latched:
+            self._save()
 
     def _journal(self, event: str, **kw) -> None:
         """the audit trail (append-only); the state file, not this, is what a restart reads"""
+        if self._deferred is not None:             # a plan not yet on disk: written when it is
+            self._deferred.append(("journal", event, kw))
+            return
         try:
             path = f"{self.cfg.state_path}.journal.jsonl"
             os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
@@ -275,9 +403,21 @@ class MirrorManager:
     def _inbox_path(self) -> str:
         return f"{self.cfg.state_path}.inbox.json"
 
+    def _rebuild_paper(self) -> None:
+        """the private paper adapter holds exactly the book (after a boot, a dropped sleeve, a split, a
+        repair). Reset in place: the tick in flight keeps the object it was given."""
+        if self._dry is None:
+            return
+        self._dry.__init__()
+        for sym, q in self.book.positions().items():
+            self._dry.seed_position(sym, q)
+
     # -------------------------------------------------------------- alerts
     def _say(self, level: str, msg: str, key: str | None = None) -> None:
         """level: info | warn | red. key: said at most once per process for that key"""
+        if self._deferred is not None:
+            self._deferred.append(("say", level, msg, key))
+            return
         if key is not None:
             if key in self._said:
                 return
@@ -290,44 +430,76 @@ class MirrorManager:
         except Exception as exc:  # noqa: BLE001
             logger.warning("mirror alert failed: %s", exc)
 
+    def _loud(self) -> str:
+        return "red" if self.cfg.live else "warn"
+
+    def _set_why(self, why: str | None) -> None:
+        self._why = why
+        self._why_day = self.clock().astimezone(ET).date().isoformat()
+
     # -------------------------------------------------------------- halt / resume (any thread)
     def halt(self, reason: str, flatten: bool = False, by: str = "operator") -> dict:
         """Stop trading. flatten (live books only): also sell every share the book holds, on the loop
-        thread, as soon as the session is open. Idempotent; a second call can add the flatten."""
+        thread, as soon as the session is open. Idempotent; a second call can add the flatten. A
+        flatten that is not finished is CARRIED OVER whatever happened to the halt in between: a
+        re-kill un-cancels the SAME flatten (never a second one over the same shares) and a plain halt
+        keeps the cancelled record, so the loop still settles the orders it has at the venue.
+        Answers the halt record plus "persisted": False when it binds this process only (the halt
+        file could not be written: a restart would forget it)."""
         with self.halt_lock:
             h = dict(self._halt or {})
             now = _iso(self.clock())
+            unfinished = bool(h.get("flatten") and not h.get("flatten_done"))
             if not h.get("halted"):
-                h = {"halted": True, "reason": one_line(reason, 300), "ts": now, "by": by}
-            if flatten and self.cfg.live and not (h.get("flatten") and not h.get("flatten_done")):
-                h.update(flatten=True, flatten_done=False, flatten_cancelled=False, flatten_ts=now,
-                         flatten_id=self.clock().strftime("%Y%m%dT%H%M%S"))
-            self._write_halt(h)
-            return dict(h)
+                new = {"halted": True, "reason": one_line(reason, 300), "ts": now, "by": by}
+                if unfinished:
+                    for k in ("flatten", "flatten_done", "flatten_cancelled", "flatten_ts", "flatten_id"):
+                        if k in h:
+                            new[k] = h[k]
+                h = new
+            if flatten and self.cfg.live:
+                if unfinished:
+                    h["flatten_cancelled"] = False
+                else:
+                    h.update(flatten=True, flatten_done=False, flatten_cancelled=False, flatten_ts=now,
+                             flatten_id=self.clock().strftime("%Y%m%dT%H%M%S"))
+            ok = self._write_halt(h)
+            return dict(h, persisted=ok)
 
     def resume(self) -> dict:
         """Clear the halt. A flatten not yet finished is cancelled: no new flatten order is sent, and
-        the ones already at the venue are settled before the book trades again."""
+        the ones already at the venue are settled before the book trades again. Answers which halt it
+        lifted ("lifted": {"reason", "by", "ts"} or None) and "persisted"."""
         with self.halt_lock:
             h = dict(self._halt or {})
             was = bool(h.get("halted"))
+            lifted = {k: h.get(k) for k in ("reason", "by", "ts")} if was else None
             h["halted"] = False
             h["resumed_ts"] = _iso(self.clock())
             if h.get("flatten") and not h.get("flatten_done"):
                 h["flatten_cancelled"] = True
-            self._write_halt(h)
-            return {"was_halted": was, **h}
+            ok = self._write_halt(h)
+            return {"was_halted": was, "lifted": lifted, **h, "persisted": ok}
 
-    def _write_halt(self, h: dict) -> None:
+    def _write_halt(self, h: dict) -> bool:
         self._halt = h
         try:
             atomic_write(self._halt_path(), h)
+            return True
         except Exception as exc:  # noqa: BLE001  the in-memory halt still binds this process
             logger.error("mirror[%s] halt file write failed: %s", self.cfg.name, exc)
+            return False
 
     def halt_state(self) -> dict:
         with self.halt_lock:
             return dict(self._halt or {})
+
+    def _halted(self) -> bool:
+        return bool(self.halt_state().get("halted"))
+
+    @staticmethod
+    def _woken(wake) -> bool:
+        return wake is not None and wake.is_set()
 
     # -------------------------------------------------------------- requests (any thread)
     def _request(self, row: dict) -> dict:
@@ -361,15 +533,54 @@ class MirrorManager:
         return self._request({"kind": "transfer", "from": src, "to": dst, "amount": amt, "note": one_line(note, 200)})
 
     def request_credit(self, sleeve: str, amount, note: str = "") -> dict:
-        """queue a cash adjustment of one sleeve (a dividend the account received for its shares: +;
-        a fee: -). Applied before the next plan; a live book takes a credit only from cash the account
-        holds beyond the book."""
+        """queue a cash adjustment of one sleeve (cash the account received for it: +; a fee: -).
+        Applied before the next plan, debits first; a live book takes a credit only from cash the
+        account holds beyond the book. (Dividends the brain lists are booked by the book itself.)"""
         amt = _num(amount)
         if amt is None or amt == 0:
             raise ValueError("a credit needs a non-zero amount")
         if sleeve not in self.cfg.engines:
             raise ValueError(f"{sleeve!r} is not a sleeve of the {self.cfg.name} book")
         return self._request({"kind": "credit", "sleeve": sleeve, "amount": amt, "note": one_line(note, 200)})
+
+    def request_resolve(self, order_id: str, filled, price=None, commission=0.0, note: str = "") -> dict:
+        """queue the operator's statement of what an UNRESOLVED order did: `filled` shares at `price`
+        (commission optional). The loop thread books the order of the open run or flatten at exactly
+        that - unless the venue still reports it working. The repair for an order the venue can no
+        longer answer for (an overnight outage, an unreadable execution)."""
+        qty = _num(filled)
+        if not isinstance(order_id, str) or not order_id.strip():
+            raise ValueError("a resolve needs the order id")
+        if qty is None or qty < 0 or qty != int(qty):
+            raise ValueError("filled must be a whole number of shares, 0 or more")
+        px = _num(price) if price is not None else None
+        if qty > 0 and (px is None or px <= 0):
+            raise ValueError("a filled quantity needs the price it filled at")
+        comm = _num(commission if commission is not None else 0.0)
+        if comm is None or comm < 0:
+            raise ValueError("commission must be 0 or more")
+        return self._request({"kind": "resolve", "order": order_id.strip(), "filled": int(qty), "price": px,
+                              "commission": comm, "note": one_line(note, 200)})
+
+    def request_adjust(self, sleeve: str, symbol, shares_delta, cash_delta, note: str = "") -> dict:
+        """queue a signed correction of ONE sleeve: shares of one symbol (shares_delta) and / or its
+        cash (cash_delta). Applied by the loop thread, only while no run is open and no flatten order
+        is in flight; a sleeve's shares can never go negative. The repair for any share-count
+        divergence (a manual trade, a split the brain listed late, an order resolved wrongly)."""
+        shares = _num(shares_delta if shares_delta is not None else 0)
+        cash = _num(cash_delta if cash_delta is not None else 0.0)
+        if shares is None or shares != int(shares) or cash is None:
+            raise ValueError("shares must be a whole number and cash a finite amount")
+        if not shares and not cash:
+            raise ValueError("an adjustment needs a non-zero shares or cash delta")
+        if shares and (not isinstance(symbol, str) or not symbol.strip()):
+            raise ValueError("a share adjustment needs the symbol")
+        if not isinstance(sleeve, str) or (sleeve not in self.cfg.engines and sleeve not in self.book.sleeves):
+            raise ValueError(f"{sleeve!r} is not a sleeve of the {self.cfg.name} book")
+        if not one_line(note):
+            raise ValueError("an adjustment needs a note saying why (it is the audit trail)")
+        return self._request({"kind": "adjust", "sleeve": sleeve, "symbol": symbol.strip() if isinstance(symbol, str) else None,
+                              "shares": int(shares), "cash": cash, "note": one_line(note, 200)})
 
     def _drain_inbox(self) -> None:
         with self.inbox_lock:
@@ -384,22 +595,134 @@ class MirrorManager:
             self._save()                           # on disk in the state BEFORE the inbox forgets them
             for r in fresh:
                 self._journal("request", **r)
+        if self._latched:
+            return                                 # the disk does not hold them yet: the inbox keeps them
         ids = {r.get("id") for r in box if isinstance(r, dict)}
         with self.inbox_lock:
             left = [r for r in self._read_inbox() if not (isinstance(r, dict) and r.get("id") in ids)]
             atomic_write(self._inbox_path(), left)
 
+    # -------------------------------------------------------------- operator repairs (loop thread)
+    def _apply_repairs(self, ad) -> None:
+        keep, changed = [], False
+        for r in list(self.state.get("requests") or []):
+            kind = r.get("kind")
+            if kind not in ("resolve", "adjust"):
+                keep.append(r)
+                continue
+            try:
+                done = self._resolve(ad, r) if kind == "resolve" else self._adjust(r)
+            except mc.MirrorError as exc:
+                done = True
+                self._refuse(r, f"the book refused it: {one_line(exc, 200)}")
+            if done:
+                changed = True
+            else:
+                keep.append(r)
+        if changed:
+            self.state["requests"] = keep
+            self._save()
+
+    def _refuse(self, r: dict, why: str) -> None:
+        self._journal("request_refused", why=why, **r)
+        self._say("red", f"{r.get('kind')} request {r.get('id')} REFUSED: {why}")
+
+    def _open_orders(self) -> list:
+        """[(order, recs dict, where)] of every order of the open run or flatten not yet booked"""
+        out = []
+        run = self.state.get("run")
+        if run:
+            for o in run["plan"]["sells"] + (run["plan"].get("buys") or []):
+                if not o.get("applied"):
+                    out.append((o, run["orders"], "run"))
+        fl = self.state.get("flatten") or {}
+        for o in fl.get("orders") or []:
+            if not o.get("applied"):
+                out.append((o, fl.setdefault("recs", {}), "flatten"))
+        return out
+
+    def _resolve(self, ad, r: dict) -> bool:
+        """True: the request is consumed (applied or refused); False: it stays queued"""
+        oid = r.get("order")
+        hit = next(((o, recs, where) for o, recs, where in self._open_orders() if o["id"] == oid), None)
+        if hit is None:
+            self._refuse(r, f"no unbooked order {oid!r} in the open run or flatten")
+            return True
+        o, recs, where = hit
+        rec = recs.setdefault(oid, {"state": "new", "tries": 0})
+        qty, px, comm = int(r.get("filled") or 0), _num(r.get("price")), _num(r.get("commission")) or 0.0
+        if rec.get("state") == "new":
+            self._refuse(r, f"order {oid} was never sent to the venue: there is nothing to resolve")
+            return True
+        if qty > int(o["qty"]):
+            self._refuse(r, f"order {oid} asked for {o['qty']} shares, not {qty}")
+            return True
+        if qty and (px is None or px <= 0):
+            self._refuse(r, f"{qty} shares need the price they filled at")
+            return True
+        if self._dry is None:
+            if ad is None:
+                return False                       # the venue cannot be asked now: it stays queued
+            res = self._find(ad, oid, rec)
+            if res is not _UNKNOWN and res is not None and res.get("status") == "working":
+                self._refuse(r, f"the venue still holds order {oid} as WORKING: cancel it at the venue first")
+                return True
+        snap = self.book.to_dict()
+        try:
+            self._book(o, rec, qty, px if qty else None, comm if qty else 0.0,
+                       "resolved by the operator" + (f" ({r['note']})" if r.get("note") else ""))
+        except mc.MirrorError:
+            self.book = mc.Book.from_dict(snap)
+            raise
+        self._journal("resolve", where=where, **r)
+        self._say("warn", f"order {oid} RESOLVED by the operator: {qty} of {o['qty']} {o['symbol']}"
+                          + (f" @{px:.4f}" if qty else "") + (f" — {r['note']}" if r.get("note") else ""))
+        return True
+
+    def _adjust(self, r: dict) -> bool:
+        if self.state.get("run") or any(where == "flatten" for _, _, where in self._open_orders()):
+            self._say("info", f"adjustment {r.get('id')} waits: it is applied when no run is open and no flatten "
+                              f"order is in flight", key=f"adjust-wait:{r.get('id')}")
+            return False
+        name, sym = r.get("sleeve"), r.get("symbol")
+        shares, cash = int(r.get("shares") or 0), _num(r.get("cash")) or 0.0
+        s = self.book.sleeves.get(name)
+        if s is None:
+            self._refuse(r, f"the book has no sleeve {name!r}")
+            return True
+        have = s.shares.get(sym, 0) if sym else 0
+        if shares and have + shares < 0:
+            self._refuse(r, f"{name} holds {have} {sym}: it cannot be adjusted by {shares:+d}")
+            return True
+        if shares:
+            if have + shares:
+                s.shares[sym] = have + shares
+            else:
+                s.shares.pop(sym, None)
+        s.cash += cash
+        self.state["check"] = None                 # the account is compared with the book again
+        self._rebuild_paper()
+        self._journal("adjust", **r)
+        self._say("warn", f"sleeve {name} ADJUSTED by the operator: "
+                          + (f"{shares:+d} {sym} (now {s.shares.get(sym, 0)}) " if shares else "")
+                          + (f"cash {cash:+,.2f} (now ${s.cash:,.2f}) " if cash else "") + f"— {r.get('note')}")
+        return True
+
     # -------------------------------------------------------------- the tick (loop thread only)
     def tick(self, adapter=None, wake=None, stop=None) -> None:
         """One pass. adapter: the service's venue adapter (ignored by a DRY book). wake: the loop's
-        wake event (a set event interrupts every wait in here, so /kill is never queued behind a
-        retry). stop: () -> True when this loop has been superseded. Never raises."""
+        wake event. Nothing in here holds the loop thread behind a set `wake` except a venue call
+        already in flight: a brain read runs on a worker while this thread waits on `wake`; the wake
+        is looked at between quotes and between orders; a decision not yet on disk is dropped (and
+        retried by the next tick), a run on disk is left for the next tick. The /kill flatten itself
+        is not interrupted. stop: () -> True when this loop has been superseded. Never raises."""
         ad = self._dry if self._dry is not None else adapter
         with self.tick_lock:
             try:
                 self._tick(ad, wake, stop)
                 self.last_error = None
             except mc.MirrorError as exc:          # the book refused a booking: the book and the venue disagree
+                self._deferred = None
                 self.last_error = one_line(exc, 300)
                 logger.exception("mirror[%s] book error", self.cfg.name)
                 self.halt(f"book error: {self.last_error}", by="mirror")
@@ -407,6 +730,7 @@ class MirrorManager:
                                  f"traded until /resume; compare the account with /status first.",
                           key=f"bookerr:{self.last_error}")
             except Exception as exc:  # noqa: BLE001
+                self._deferred = None
                 self.last_error = one_line(repr(exc), 300)
                 logger.exception("mirror[%s] tick failed", self.cfg.name)
                 self._say("red", f"tick failed: {self.last_error}", key=f"tick:{self.last_error}")
@@ -429,33 +753,80 @@ class MirrorManager:
         time.sleep(seconds)
         return False
 
+    def _brain_call(self, fn, wake, deadline_s: float):
+        """One brain read. With a wake event it runs on a worker and THIS thread waits on the wake
+        (A-23: /kill is never queued behind a 25 s read); _WOKEN when the wake won. Without one (the
+        test seam) it runs inline."""
+        if wake is None:
+            return fn()
+        box: dict = {}
+        done = threading.Event()
+
+        def run() -> None:
+            try:
+                box["v"] = fn()
+            except BaseException as exc:  # noqa: BLE001
+                box["v"] = (None, _reason(exc) if isinstance(exc, Exception) else "transport")
+            finally:
+                done.set()
+        threading.Thread(target=run, daemon=True, name="mirror-brain").start()
+        end = time.monotonic() + deadline_s + 5.0
+        while not done.wait(0.05):
+            if wake.is_set():
+                return _WOKEN
+            if time.monotonic() > end:
+                return None, "deadline"
+        return box["v"]
+
     def _tick(self, ad, wake, stop) -> None:
-        self._drain_inbox()
-        h = self.halt_state()
-        if h.get("flatten") and not h.get("flatten_done"):
-            if not self._flatten_step(ad, h):
-                return
-            h = self.halt_state()
-        if h.get("halted"):
+        self._deferred = None
+        today = self.clock().astimezone(ET).date().isoformat()
+        if self._why_day != today:
+            self._why, self._why_day = None, today
+        self._retry_save()                         # D4: memory may be ahead of the disk
+        for step in (self._drain_inbox, lambda: self._apply_repairs(ad)):
+            try:                                   # neither may ever stand between a /kill and its flatten
+                step()
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("mirror[%s] request handling failed", self.cfg.name)
+                self._say("red", f"the request inbox could not be processed ({one_line(repr(exc), 160)}); queued "
+                                 f"transfers, credits and repairs wait. The halt and flatten path carries on.",
+                          key=f"inbox:{one_line(repr(exc), 80)}")
+        if not self._flatten_tick(ad):
+            return
+        if self._halted():
             self._abort_run(ad, "halted")
             return
         if ad is None:
             return
-        self._reconcile_sleeves(ad)
+        if not self.state.get("run"):
+            self._reconcile_sleeves(ad)
         until = self.clock() + timedelta(seconds=TICK_BUDGET_S)
-        run = self.state.get("run")
-        if run:
+        if self.state.get("run"):
             self._drive(ad, wake, stop, until)
+            self._lost_behind_run(wake)
             return
-        info = self._session()
-        if not info or not info.get("session"):
+        if self._latched:
+            self._set_why(f"the state file cannot be written ({self._latched.get('error')})")
+            return
+        info = self._session(wake)
+        now = self.clock()
+        if info is None:
+            self._unknown_session(now)
+            return
+        self._unknown = None
+        if not info.get("session"):
+            if info.get("reason"):
+                self._say("red", f"the brain's clock says there is NO session today and gives a reason: "
+                                 f"{one_line(info['reason'], 200)}. If today is a session, nothing will be traded.",
+                          key=f"nosession:{today}")
             return
         session = info["session"]
-        now = self.clock()
         if self.state.get("last_session") == session:
             self._post_check(ad, session)
             return
         if now < info["decide_at"]:
+            self._morning_check(ad, info, now)
             return
         if now >= info["plan_by"]:
             self._skip(session, "missed the decision window: " + (self._why or "the executor was not ready in time"))
@@ -466,21 +837,37 @@ class MirrorManager:
         """seconds until this book next needs the loop, or None when the ordinary cadence will do
         (loop thread; reads only what the last tick left)"""
         try:
-            h = self._halt or {}
-            if h.get("flatten") and not h.get("flatten_done"):
-                return 5.0
-            if h.get("halted"):
-                return None
             now = self.clock()
+            h = self._halt or {}
+            fl = self.state.get("flatten") or {}
+            in_flight = any(not o.get("applied") for o in fl.get("orders") or [])
+            pending = bool(h.get("flatten") and not h.get("flatten_done"))
+            if in_flight or pending:
+                if not (pending and not h.get("flatten_cancelled")):
+                    return FLATTEN_WAIT_S          # being cancelled and settled: no session is needed for that
+                if self._rth(now):
+                    return FLATTEN_WAIT_S
+                # the session is shut: nothing can be sold before the next open (A-20: never spin the
+                # whole service loop every 5 s through a night or a weekend)
+                return min(max(self._to_next_open(now), FLATTEN_WAIT_S), max(float(self.cfg.poll_s), FLATTEN_WAIT_S))
+            if self._latched:
+                return LATCH_RETRY_S
             run = self.state.get("run")
             if run:
                 over = _parse(run.get("cancel_utc"))
                 return 2.0 if not over or (now - over).total_seconds() < STUCK_FAST_S else STUCK_SLOW_WAIT_S
+            if h.get("halted"):
+                return None
+            e = now.astimezone(ET)
             s = self._sess
-            if not s or s["day"] != now.astimezone(ET).date().isoformat():
+            known = s is not None and s["day"] == e.date().isoformat() and (s["info"] if s.get("ok") else s.get("kept")) is not None
+            if not known:
+                # D6: an unreadable clock must not park the loop for 300 s against a 3-minute window
+                if e.weekday() < 5 and (9, 25) <= (e.hour, e.minute) < (16, 5):
+                    return UNKNOWN_WAIT_LATE_S if (e.hour, e.minute) >= (15, 30) else UNKNOWN_WAIT_S
                 return None
             info = s["info"] if s.get("ok") else s.get("kept")
-            if not info or not info.get("session") or self.state.get("last_session") == info["session"]:
+            if not info.get("session") or self.state.get("last_session") == info["session"]:
                 return None
             left = (info["decide_at"] - now).total_seconds()
             return max(left, 0.0) + 0.2 if left > 0 else 2.0
@@ -488,15 +875,18 @@ class MirrorManager:
             return None
 
     # -------------------------------------------------------------- the brain's clock
-    def _session(self) -> dict | None:
+    def _session(self, wake=None) -> dict | None:
         """today's session from the brain's clock, parsed and cached: {"session", "decide_at",
-        "cancel_at", "plan_by", "close_at", "open_at"} or {"session": None}; None when unknown"""
+        "cancel_at", "plan_by", "close_at", "open_at"} or {"session": None, "reason"}; None when unknown"""
         now = self.clock()
         day = now.astimezone(ET).date().isoformat()
         c = self._sess
         if c and c["day"] == day and (now - c["at"]).total_seconds() < (SESSION_TTL_S if c["ok"] else SESSION_FAIL_TTL_S):
             return c["info"] if c["ok"] else c.get("kept")
-        raw, reason = self.brain.session() if self.brain is not None else (None, "no_brain")
+        got = self._brain_call(self.brain.session, wake, SESSION_DEADLINE_S) if self.brain is not None else (None, "no_brain")
+        if got is _WOKEN:                          # no answer is not a failed read: what is known stands
+            return (c["info"] if c["ok"] else c.get("kept")) if c and c["day"] == day else None
+        raw, reason = got
         info, why = self._read_session(raw, day, now) if raw is not None else (None, reason)
         self.brain_status["session"] = {"ok": info is not None, "reason": why, "utc": _iso(now)}
         if info is None:
@@ -504,47 +894,84 @@ class MirrorManager:
             if c and c["day"] == day:
                 kept = c["info"] if c["ok"] else c.get("kept")
             self._sess = {"day": day, "info": None, "kept": kept, "at": now, "ok": False}
-            self._why = f"the brain's clock is unreadable ({why})"
+            self._set_why(f"the brain's clock is unreadable ({why})")
             return kept
         self._sess = {"day": day, "info": info, "at": now, "ok": True}
         return info
 
     def _read_session(self, raw: dict, day: str, now: datetime) -> tuple:
         if raw.get("kind") != SESSION_KIND or raw.get("schema") != SCHEMA:
-            return None, "not a mirror session payload"
+            return None, f"not a mirror session payload (schema {SCHEMA})"
         theirs = _parse(raw.get("now_utc"))
         if theirs is None or abs((theirs - now).total_seconds()) > CLOCK_SKEW_S:
             return None, f"the brain's clock reads {raw.get('now_utc')!r}, this one {_iso(now)}"
         if raw.get("session") is None:
-            return {"session": None}, "ok"
+            why = raw.get("reason")
+            return {"session": None, "reason": one_line(why, 300) if why else None}, "ok" if not why else f"no session: {one_line(why, 120)}"
         if raw.get("session") != day:
             return None, f"the brain's session {raw.get('session')!r} is not today's {day}"
         decide, close, opn = _parse(raw.get("decide_utc")), _parse(raw.get("close_utc")), _parse(raw.get("open_utc"))
         if not (decide and close and opn) or not (opn < decide < close):
             return None, "the session times do not parse"
         cancel = close - timedelta(seconds=self.cfg.cancel_before_close_s)
-        return {"session": day, "decide_utc": raw["decide_utc"], "open_at": opn, "close_at": close,
+        # decide_utc is the END of the decision bar, exactly as the brain gives it (contract v2: no "+ 1 minute")
+        return {"session": day, "decide_utc": _iso(decide), "open_at": opn, "close_at": close,
                 "decide_at": decide + timedelta(seconds=self.cfg.decide_offset_s), "cancel_at": cancel,
                 "plan_by": cancel - timedelta(seconds=PLAN_MIN_LEFT_S)}, "ok"
 
-    def _rth(self, now: datetime) -> bool:
-        """is the regular session open now: the brain's clock when it is known for today, else the
-        plain weekday 09:30-16:00 ET (the kill path must not depend on the brain)"""
+    def _today_info(self, now: datetime) -> dict | None:
         s = self._sess
-        day = now.astimezone(ET).date().isoformat()
-        info = (s.get("info") or s.get("kept")) if s and s["day"] == day else None
+        if not s or s["day"] != now.astimezone(ET).date().isoformat():
+            return None
+        return s.get("info") or s.get("kept")
+
+    def _rth(self, now: datetime) -> bool:
+        """is the regular session open now: the brain's clock when it KNOWS today, else the plain
+        weekday 09:30-16:00 ET (the kill path must not depend on the brain; a "no session" that
+        comes with a reason is the brain not knowing)"""
+        info = self._today_info(now)
         if info and info.get("session"):
             return info["open_at"] <= now < info["close_at"]
-        if info is not None:
+        if info is not None and not info.get("reason"):
             return False
         e = now.astimezone(ET)
         return e.weekday() < 5 and (9, 30) <= (e.hour, e.minute) < (16, 0)
+
+    def _to_next_open(self, now: datetime) -> float:
+        info = self._today_info(now)
+        if info and info.get("session") and info["open_at"] > now:
+            return (info["open_at"] - now).total_seconds()
+        e = now.astimezone(ET)
+        for k in range(0, 8):
+            cand = datetime.combine(e.date() + timedelta(days=k), dtime(9, 30), tzinfo=ET)
+            if cand.weekday() < 5 and cand > e:
+                return (cand - e).total_seconds()
+        return 3600.0
+
+    def _unknown_session(self, now: datetime) -> None:
+        """D6: today's session cannot be read. Never a silent day."""
+        e = now.astimezone(ET)
+        day, hm = e.date().isoformat(), (e.hour, e.minute)
+        if e.weekday() >= 5 or hm < (9, 25):
+            return
+        u = self._unknown
+        if not u or u["day"] != day:
+            u = self._unknown = {"day": day, "since": now}
+        why = (self.brain_status.get("session") or {}).get("reason") or "no answer"
+        if hm < (16, 5) and (now - u["since"]).total_seconds() >= UNKNOWN_ALERT_AFTER_S:
+            self._say("red", f"the brain's clock has been unreadable since {u['since'].astimezone(ET).strftime('%H:%M')} ET "
+                             f"({why}): the book does not know whether today is a session or when to decide. "
+                             f"Nothing is traded until it answers; it is asked every minute.", key=f"clock:{day}")
+        if hm >= (16, 0) and (self.state.get("last_session") or "") < day:
+            self._skip(day, f"the brain's clock was unreadable all session (since "
+                            f"{u['since'].astimezone(ET).strftime('%H:%M')} ET: {why}); if today was a session, no "
+                            f"trade was made")
 
     # -------------------------------------------------------------- sleeves
     def _reconcile_sleeves(self, ad) -> None:
         """seed the sleeves the config names and the book lacks; freeze (live) or drop (dry) the ones
         the book has and the config no longer names"""
-        changed = False
+        changed = dropped = False
         for name in [n for n in self.book.sleeves if n not in self.cfg.engines]:
             s = self.book.sleeves[name]
             if not self.cfg.live or not s.shares:
@@ -553,13 +980,16 @@ class MirrorManager:
                 self._journal("sleeve_dropped", sleeve=name, cash=s.cash, shares=dict(s.shares))
                 self._say("warn", f"sleeve {name} is no longer configured for this book: dropped "
                                   f"(cash ${s.cash:,.2f} leaves the book)")
-                changed = True
+                changed = dropped = True
             elif name not in (self.state.get("frozen") or []):
                 self.state["frozen"] = list(self.state.get("frozen") or []) + [name]
                 self._say("red", f"sleeve {name} holds {dict(s.shares)} but is no longer in MIRROR_LIVE_ENGINES: "
                                  f"FROZEN (kept, never traded). Re-add it, or /kill to sell the book.")
                 changed = True
+        if dropped:
+            self._rebuild_paper()                  # A-08: the paper account holds the book, not the sleeve that left
         want = [e for e in self.cfg.engines if e not in self.book.sleeves]
+        self._seed_why = None
         if want:
             avail = None
             if self.cfg.live:
@@ -567,6 +997,7 @@ class MirrorManager:
                 if not cash or _num(cash.get("total_cash")) is None:
                     self._say("warn", f"cannot seed {', '.join(want)}: the account reports no cash claim",
                               key=f"seed-noclaim:{','.join(want)}")
+                    self._seed_why = "the account reports no cash claim to seed from"
                     want = []
                 else:
                     avail = float(cash["total_cash"])
@@ -578,10 +1009,12 @@ class MirrorManager:
                 if amt is None or amt <= 0:
                     self._say("warn", f"cannot seed {name}: no capital configured (MIRROR_CAPITAL_USD and "
                                       f"MIRROR_WEIGHTS)", key=f"seed-nocap:{name}")
+                    self._seed_why = "no capital configured (MIRROR_CAPITAL_USD)"
                     continue
                 if avail is not None and self.book.cash() + amt > avail + CASH_TOL_USD:
                     self._say("red", f"cannot seed {name} with ${amt:,.2f}: the account has ${avail:,.2f} in cash "
                                      f"and the book already claims ${self.book.cash():,.2f}", key=f"seed-short:{name}")
+                    self._seed_why = "the account's cash does not cover the sleeves' capital"
                     continue
                 self.book.sleeves[name] = mc.Sleeve(name=name, cash=amt)
                 self.state.setdefault("seeded", {})[name] = {"amount": amt, "utc": _iso(self.clock())}
@@ -606,46 +1039,110 @@ class MirrorManager:
             probs.append("positions that are not whole stock lots: " + ", ".join(map(str, snap["other"][:5])))
         return probs
 
-    def _pretrade(self, ad) -> str | None:
-        """why this book must not trade now, or None"""
+    def _pretrade_static(self) -> str | None:
+        """a reason this book cannot trade that nothing inside the decision window can change (A-12)"""
         if not self._active():
-            return "the book has no sleeve to trade"
+            return "the book has no sleeve to trade" + (f" ({self._seed_why})" if self._seed_why else "")
         if self.cfg.live and self.cfg.blend_enabled:
             return "the blend strategy is still enabled in this account (the mirror observes only)"
+        return None
+
+    def _pretrade_account(self, ad) -> str | None:
+        """why the ACCOUNT stops this book now, or None (it can clear: retried inside the window)"""
         probs = self._venue_problems(ad)
         if probs:
-            return "the account does not hold exactly the mirror book: " + "; ".join(probs[:5])
+            return ("the account does not hold exactly the mirror book: " + "; ".join(probs[:5])
+                    + " (repair a real divergence with POST /mirror/adjust)")
         if self.cfg.live:
             cash = ad.account_cash()
             have = _num((cash or {}).get("total_cash"))
             if have is None:
                 return "the account reports no cash claim"
-            if self.book.cash() > have + CASH_TOL_USD:
-                return f"the book's cash ${self.book.cash():,.2f} exceeds the account's ${have:,.2f}"
+            # the book as the plan will see it: a queued DEBIT (a fee the account already paid) is applied
+            # before anything is planned, so it must be able to clear this gate - not be locked out by it
+            debits = sum(a for a in (_num(r.get("amount")) for r in self.state.get("requests") or []
+                                     if r.get("kind") == "credit" and r.get("sleeve") in self.book.sleeves)
+                         if a is not None and a < 0)
+            mine = self.book.cash() + debits
+            if mine > have + CASH_TOL_USD:
+                return (f"the book's cash ${mine:,.2f} exceeds the account's ${have:,.2f} (a fee the account paid is "
+                        f"debited with POST /mirror/credit, a negative amount)")
         return None
+
+    def _pretrade(self, ad) -> str | None:
+        return self._pretrade_static() or self._pretrade_account(ad)
+
+    def _morning_check(self, ad, info: dict, now: datetime) -> None:
+        """once per session, on the first tick of the open session before the decision: the pre-trade
+        gates, read-only, so a refusal is learnt in the morning and not at 15:58"""
+        session = info["session"]
+        if self._prechecked == session or now < info["open_at"]:
+            return
+        self._prechecked = session
+        try:
+            why = self._pretrade(ad)
+        except Exception as exc:  # noqa: BLE001
+            why = f"the pre-trade gates could not be read ({one_line(exc, 160)})"
+        if why:
+            self._say(self._loud(), f"{session}: today's decision will be refused unless fixed: {why}",
+                      key=f"precheck:{session}")
 
     # -------------------------------------------------------------- the decision
     def _validate(self, p, info: dict, now: datetime) -> str | None:
+        """contract_v2 'Executor checks' (as clarified once the brain side was finished): schema, kind,
+        pinned, not a replay, today's session, asof_utc == decide_utc exactly, the decision bar
+        complete, built_utc not in the future and not before the instant it decides (each within the
+        clock-skew allowance), engines and prices present. NOT the payload's age: a pinned payload
+        is immutable, and a restart late in the window must be able to trade the one built at 15:54."""
         if not isinstance(p, dict) or p.get("kind") != INTENTS_KIND or p.get("schema") != SCHEMA:
-            return "not a mirror intents payload"
-        if p.get("replay"):
+            return f"not a mirror intents payload (schema {SCHEMA})"
+        if p.get("pinned") is not True:
+            return "the payload is not pinned to the decision instant"
+        if p.get("replay") is not False:
             return "the brain answered with a replay"
         if p.get("session") != info["session"]:
             why = "; ".join(map(str, (p.get("problems") or [])[:2]))
             return f"the payload's session is {p.get('session')!r}, not {info['session']}" + (f" ({why})" if why else "")
         asof = _parse(p.get("asof_utc"))
-        if asof is None:
-            return "the payload has no asof_utc"
-        if _iso(asof) < info["decide_utc"]:
-            return f"computed at {p['asof_utc']}, before the decision bar closed ({info['decide_utc']})"
-        age = (now - asof).total_seconds()
-        if age < -CLOCK_SKEW_S:
-            return f"stamped {-age:.0f} s in the future"
-        if age > INTENTS_MAX_AGE_S:
-            return f"{age:.0f} s old"
+        if asof is None or _iso(asof) != info["decide_utc"]:
+            return f"decided as of {p.get('asof_utc')!r}, not the decision instant {info['decide_utc']}"
+        bar = p.get("decision_bar")
+        if not isinstance(bar, dict) or bar.get("complete") is not True:
+            return "the decision bar is not complete"
+        built = _parse(p.get("built_utc"))
+        if built is None:
+            return "the payload has no built_utc"
+        if (built - now).total_seconds() > CLOCK_SKEW_S:
+            return f"built {(built - now).total_seconds():.0f} s in the future"
+        if (asof - built).total_seconds() > CLOCK_SKEW_S:
+            return f"built at {p.get('built_utc')}, before the instant it decides ({info['decide_utc']})"
         if not isinstance(p.get("engines"), dict) or not isinstance(p.get("prices"), dict):
             return "the payload has no engines or no prices"
         return None
+
+    def _intents(self, info: dict, wake) -> tuple:
+        """(payload, None) | (None, why) | (_WOKEN, None). A pinned payload that passed is held for the
+        session: the decision as of that instant does not change, so the pre-trade gates are retried
+        without asking for it again. Anything else - the brain's 503 while the decision bar is being
+        published included - is a reason to ask again in INTENTS_RETRY_S."""
+        held = self._held
+        if held and held[0] == info["session"] and held[1] == info["decide_utc"]:
+            return held[2], None
+        after = info["decide_utc"]
+        got = self._brain_call(lambda: self.brain.intents(after), wake, INTENTS_DEADLINE_S) \
+            if self.brain is not None else (None, "no_brain")
+        if got is _WOKEN:
+            return _WOKEN, None
+        payload, reason = got
+        now = self.clock()
+        why = self._validate(payload, info, now) if payload is not None else (
+            "the decision bar is not published yet (the brain answered 503)" if reason == "http_503"
+            else f"no intents ({reason})")
+        self.brain_status["intents"] = {"ok": why is None, "reason": why or "ok", "utc": _iso(now)}
+        if why is not None:
+            return None, why
+        self._held = (info["session"], after, payload)
+        return payload, None
 
     def _decide(self, ad, info: dict, wake, stop, until: datetime) -> None:
         session = info["session"]
@@ -654,31 +1151,54 @@ class MirrorManager:
             if now >= info["plan_by"]:
                 self._skip(session, f"nothing usable before {_iso(info['plan_by'])}: {self._why}")
                 return
-            why = self._pretrade(ad)
-            payload = None
+            if self._halted():                     # D1
+                return
+            static = self._pretrade_static()
+            if static:                             # A-12: retrying cannot change it; the loop is not held for it
+                self._skip(session, static)
+                return
+            payload, why = self._intents(info, wake)
+            if payload is _WOKEN:
+                return
             if why is None:
-                payload, reason = self.brain.intents(info["decide_utc"]) if self.brain is not None else (None, "no_brain")
-                now = self.clock()
-                why = self._validate(payload, info, now) if payload is not None else f"no intents ({reason})"
-                self.brain_status["intents"] = {"ok": why is None, "reason": why or "ok", "utc": _iso(now)}
+                self._apply_splits(payload, session)
+                why = self._pretrade_account(ad)
             if why is None:
                 break
-            self._why = why
+            self._set_why(why)
             if self._pause(INTENTS_RETRY_S, wake, stop, until):
                 return
-        self._why = None
-        self._start(ad, info, payload)
-        self._drive(ad, wake, stop, until)
+        self._set_why(None)
+        if self._halted():                         # D1: the halt is re-read wherever an order can originate
+            return
+        if self._start(ad, info, payload, wake) == "started":
+            self._drive(ad, wake, stop, until)
 
     def _skip(self, session: str, reason: str) -> None:
         row = {"session": session, "outcome": "skipped", "reason": one_line(reason, 400), "utc": _iso(self.clock())}
         self.state["history"] = (list(self.state.get("history") or []) + [row])[-HISTORY_KEEP:]
-        self.state["last_session"] = session
+        self.state["last_session"] = max(self.state.get("last_session") or "", session)
         self.state["last_run"] = row
+        self._held = None
         self._save()
         self._journal("session_skipped", **row)
-        self._say("red" if self.cfg.live else "warn", f"{session}: NO TRADE — {row['reason']}. The sleeves keep "
+        self._say(self._loud(), f"{session}: NO TRADE — {row['reason']}. The sleeves keep "
                   f"yesterday's holdings; Composer rebalanced on its own.", key=f"skip:{session}")
+
+    def _lost_behind_run(self, wake) -> None:
+        """a session that passes while an older run is still open is a recorded NO TRADE, not a gap"""
+        run = self.state.get("run")
+        if not run:
+            return
+        info = self._session(wake)
+        if not info or not info.get("session"):
+            return
+        session = info["session"]
+        if session <= run["session"] or (self.state.get("last_session") or "") >= session or self.clock() < info["plan_by"]:
+            return
+        stuck = sorted(k for k, v in (run.get("orders") or {}).items() if v.get("state") != "booked")
+        self._skip(session, f"the run of {run['session']} is still open on {', '.join(stuck) or 'its orders'}: nothing "
+                            f"new is planned until it is resolved (POST /mirror/resolve)")
 
     def _targets(self, payload: dict) -> dict:
         """the plan's targets for the active sleeves; Composer's rebalance rule rides on the payload"""
@@ -700,13 +1220,16 @@ class MirrorManager:
                          "note": row.get("note")}
         return out
 
-    def _venue_prices(self, ad, symbols, prices: dict, notes: dict) -> tuple:
+    def _venue_prices(self, ad, symbols, prices: dict, notes: dict, wake=None):
         """live only: every symbol the plan would trade against the venue's own quote. Returns (prices
         with the failures removed and the brain's estimates replaced by the venue's quote, {symbol:
-        why it failed})."""
-        out, bad = dict(prices), {}
+        why it failed}, {symbol: the accepted quote}); None when a halt or a wake landed between two
+        symbols (nothing is decided on half a check)."""
+        out, bad, quotes = dict(prices), {}, {}
         t0 = time.monotonic()
         for sym in sorted(symbols):
+            if self._woken(wake) or self._halted():
+                return None
             ref = _num(prices.get(sym))
             if time.monotonic() - t0 > QUOTE_BUDGET_S:
                 bad[sym] = f"no venue quote (the cross-check ran past {QUOTE_BUDGET_S:.0f} s)"
@@ -728,9 +1251,10 @@ class MirrorManager:
                 bad[sym] = f"the venue quotes {px:.4f}, the brain {ref!r} (band {band:.1%})"
                 out.pop(sym, None)
                 continue
+            quotes[sym] = px
             if sym in notes:
                 out[sym] = px                       # the brain's price was an estimate: size on the quote
-        return out, bad
+        return out, bad, quotes
 
     @staticmethod
     def _plan_symbols(plan: dict) -> set:
@@ -739,12 +1263,152 @@ class MirrorManager:
             syms |= set(asks)
         return syms
 
-    def _apply_credits(self, ad) -> list:
-        notes, keep = [], []
-        for r in self.state.get("requests") or []:
-            if r.get("kind") != "credit":
-                keep.append(r)
+    # -------------------------------------------------------------- splits, dividends, credits
+    def _apply_splits(self, payload: dict, session: str) -> None:
+        """every split the brain lists that this book has not applied: sleeve shares rescaled
+        (mirror_core.apply_split) BEFORE the pre-trade gate, which then decides whether the account
+        agrees. Applied only to a book that has not yet run a session on post-split prices."""
+        rows = payload.get("splits")
+        if not isinstance(rows, list):
+            return
+        done = list(self.state.get("splits_applied") or [])
+        marks = self.state.get("marks") or {}
+        asof = _parse(marks.get("asof"))
+        marks_day = asof.astimezone(ET).date().isoformat() if asof else None
+        changed = False
+        for row in rows:
+            if not isinstance(row, dict):
                 continue
+            ticker, day, ratio = row.get("ticker"), row.get("date"), _num(row.get("ratio"))
+            if not isinstance(ticker, str) or not ticker or mc.parse_day(day) is None or ratio is None or ratio <= 0:
+                continue
+            day = mc.parse_day(day).isoformat()
+            key = mc.split_key(ticker, day)
+            if day > session or key in done:
+                continue
+            done.append(key)
+            changed = True
+            held = self.book.positions().get(ticker, 0)
+            if not held or abs(ratio - 1.0) < 1e-9:
+                self._journal("split_seen", id=key, ticker=ticker, ratio=ratio, held=held, applied=False)
+                continue
+            if marks_day is not None and marks_day >= day:
+                self._journal("split_late", id=key, ticker=ticker, ratio=ratio, held=held, marks_day=marks_day)
+                self._say("red", f"split {ticker} x{ratio:g} dated {day} was published after this book had already "
+                                 f"run a session on post-split prices ({marks_day}): it is NOT applied. The book "
+                                 f"holds {held} {ticker}; compare with the account and repair with POST /mirror/adjust.")
+                continue
+            res = mc.apply_split(self.book, ticker, ratio)
+            px = _num((payload.get("prices") or {}).get(ticker))
+            old = _num((marks.get("prices") or {}).get(ticker))
+            if old is not None:
+                marks.setdefault("prices", {})[ticker] = old / ratio
+            owed = round(res["fraction"] * px, 2) if px is not None else None
+            self._journal("split", id=key, date=day, cash_in_lieu_owed=owed, price=px, **res)
+            self._say("warn", f"split {ticker} x{ratio:g} ({day}): the book's {res['total_before']} shares are now "
+                              f"{res['total_after']} ({res['before']} -> {res['after']})"
+                              + (f"; {res['fraction']:.4f} of a share is owed as cash in lieu"
+                                 + (f" (about ${owed:,.2f})" if owed is not None else "")
+                                 + ": NOT booked - credit it with POST /mirror/credit when the account receives it"
+                                 if res["fraction"] > 1e-9 else ""))
+        if changed:
+            self.state["splits_applied"] = done[-300:]
+            self._rebuild_paper()
+            self._save()
+
+    def _holdings_before(self, ex_date: str) -> dict:
+        """{sleeve: {ticker: shares}} at the last close before `ex_date` that the history records for
+        each sleeve (a skipped session records none); a sleeve with no such row has no entitlement"""
+        out: dict = {}
+        for row in reversed(self.state.get("history") or []):
+            if not isinstance(row, dict) or str(row.get("session") or "") >= ex_date:
+                continue
+            for name, d in (row.get("sleeves") or {}).items():
+                if name not in out and isinstance(d, dict) and isinstance(d.get("shares"), dict):
+                    out[name] = dict(d["shares"])
+        return out
+
+    def _dividends(self, ad, payload: dict, session: str, notes: list, credits: list) -> None:
+        """the receivables of every dividend not seen before, then the settlement of the ones due
+        (mirror_core does the accounting; this is the I/O around it)"""
+        recs = [dict(r) for r in self.state.get("dividends") or []]
+        seen = list(self.state.get("div_seen") or [])
+        rows = payload.get("dividends")
+        for row in rows if isinstance(rows, list) else []:
+            d = mc.clean_dividend(row)
+            if d is None or d["ex_date"] > session:
+                continue
+            key = mc.dividend_key(d["ticker"], d["ex_date"])
+            if key in seen:
+                continue
+            seen.append(key)
+            if d["ex_date"] == session:
+                holdings, basis = {n: dict(s.shares) for n, s in self.book.sleeves.items()}, "holdings before this session's plan"
+            else:
+                holdings, basis = self._holdings_before(d["ex_date"]), "the last recorded close before the ex-date"
+            new = mc.dividend_receivables(holdings, d)
+            for r in new:
+                r.update(status="open", seen=session, basis=basis, waited=0)
+                recs.append(r)
+            self._journal("dividend", id=key, dividend=d, basis=basis, receivables=new)
+            if new:
+                notes.append(f"dividend {d['ticker']} ex {d['ex_date']} ${d['amount']:g}/sh, pay {d['pay_date']}"
+                             + ("" if d["pay_date_given"] else " (assumed)") + ": receivable "
+                             + ", ".join(f"{r['sleeve']} ${r['total']:,.2f} ({r['shares']} sh)" for r in new))
+        have = _UNKNOWN
+        for r in recs:
+            if r.get("status") != "open" or str(r.get("pay_date") or "9") > session:
+                continue
+            arrived = True
+            if self.cfg.live:
+                if have is _UNKNOWN:
+                    have = _num((ad.account_cash() or {}).get("total_cash"))
+                arrived = have is not None and self.book.cash() + float(r["total"]) <= have + CASH_TOL_USD
+            out = mc.settle_receivable(self.book, r, session, self.cfg.dividend_rule, cash_arrived=arrived)
+            act = out["action"]
+            if isinstance(out.get("held"), bool):
+                r["held"] = out["held"]
+            if act == "credited":
+                r.update(status="credited", settled=session)
+                credits.append({"sleeve": r["sleeve"], "amount": r["total"], "kind": "dividend", "id": r["id"]})
+                notes.append(f"{r['sleeve']} credited ${r['total']:,.2f}: dividend {r['ticker']} ex {r['ex_date']} "
+                             f"({r['shares']} sh)")
+                self._journal("dividend_credited", **r)
+            elif act == "leaked":
+                r.update(status="leaked", settled=session)
+                notes.append(f"dividend {r['ticker']} ex {r['ex_date']} ${r['total']:,.2f}: {r['sleeve']} no longer "
+                             f"holds it on the pay date - left unallocated in the account (Composer's rule)")
+                self._journal("dividend_leaked", **r)
+            elif act == "void":
+                r.update(status="void", settled=session)
+                self._journal("dividend_void", **r)
+            elif act == "expired":
+                r.update(status="expired", settled=session)
+                self._journal("dividend_expired", **r)
+                self._say("red", f"dividend receivable {r['id']} (${r['total']:,.2f}) is CLOSED as expired: "
+                                 f"{mc.RECEIVABLE_EXPIRE_DAYS} days after its pay date {r['pay_date']} the account's "
+                                 f"cash still does not cover it. If it was paid, credit it with POST /mirror/credit.")
+            elif act == "wait":
+                if r.get("last_wait") != session:
+                    r["last_wait"] = session
+                    r["waited"] = int(r.get("waited") or 0) + 1
+                if r["waited"] >= DIVIDEND_ALERT_SESSIONS and not r.get("alerted"):
+                    r["alerted"] = True
+                    self._say("red", f"dividend receivable {r['id']} (${r['total']:,.2f}, pay date {r['pay_date']}) is "
+                                     f"still unpaid after {r['waited']} sessions: the account's cash does not cover the "
+                                     f"book's plus it. Check the account's dividend postings.")
+        closed = [r for r in recs if r.get("status") != "open"]
+        self.state["dividends"] = [r for r in recs if r.get("status") == "open"] + closed[-200:]
+        self.state["div_seen"] = seen[-500:]
+
+    def _apply_credits(self, ad, notes: list, credits: list) -> None:
+        """the queued cash adjustments, DEBITS FIRST (ascending amount): a fee and the dividend that
+        offsets it both apply, whatever order they were sent in"""
+        keep, rows = [], []
+        for r in self.state.get("requests") or []:
+            (rows if r.get("kind") == "credit" else keep).append(r)
+        rows.sort(key=lambda r: _num(r.get("amount")) if _num(r.get("amount")) is not None else 0.0)
+        for r in rows:
             name, amt = r.get("sleeve"), _num(r.get("amount"))
             ok = name in self.book.sleeves and amt is not None
             why = None if ok else "unknown sleeve or amount"
@@ -755,19 +1419,55 @@ class MirrorManager:
             if ok:
                 self.book.sleeves[name].cash += amt
                 notes.append(f"{name} {'credited' if amt > 0 else 'debited'} ${abs(amt):,.2f} ({r.get('note') or 'no note'})")
+                credits.append({"sleeve": name, "amount": amt, "kind": "credit", "id": r.get("id"), "note": r.get("note")})
                 self._journal("credit", **r)
             else:
                 notes.append(f"credit {r.get('id')} REFUSED: {why}")
                 self._say("red", f"credit of ${amt!r} to {name} refused: {why}. Re-submit when it holds.")
                 self._journal("credit_refused", why=why, **r)
         self.state["requests"] = keep
-        return notes
 
-    def _start(self, ad, info: dict, payload: dict) -> None:
+    # -------------------------------------------------------------- the plan
+    def _start(self, ad, info: dict, payload: dict, wake) -> str:
+        """Build the session's plan and put the run on disk: "started". ATOMIC in memory: a halt or a
+        wake seen before the save, a save that fails, or ANY exception restores the book and the
+        state (queued requests included) to what they were - "dropped" (the next tick tries again) or
+        "skipped" (a recorded NO TRADE)."""
+        snap_book = self.book.to_dict()
+        snap_state = {k: copy.deepcopy(v) for k, v in self.state.items() if k != "history"}
+        self._deferred = []
+        try:
+            out = self._plan(ad, info, payload, wake)
+        except Exception:
+            self._rollback(snap_book, snap_state)
+            raise
+        if out != "started":
+            self._rollback(snap_book, snap_state)
+            if out.startswith("skip:"):
+                self._skip(info["session"], out[5:])
+                return "skipped"
+            return "dropped"
+        later, self._deferred = self._deferred, None
+        for item in later:
+            if item[0] == "journal":
+                self._journal(item[1], **item[2])
+            else:
+                self._say(item[1], item[2], item[3])
+        return "started"
+
+    def _rollback(self, snap_book: dict, snap_state: dict) -> None:
+        self._deferred = None
+        self.book = mc.Book.from_dict(snap_book)
+        self.state.update(snap_state)
+        self._publish()
+
+    def _plan(self, ad, info: dict, payload: dict, wake) -> str:
         session, now = info["session"], self.clock()
         prices = {s: p for s, p in ((s, _num(p)) for s, p in payload["prices"].items()) if p is not None and p > 0}
         price_notes = {s: str(n) for s, n in (payload.get("price_notes") or {}).items() if s in prices}
-        notes = self._apply_credits(ad)
+        notes, credits = [], []
+        self._dividends(ad, payload, session, notes, credits)
+        self._apply_credits(ad, notes, credits)
         transfers = [r for r in self.state.get("requests") or [] if r.get("kind") == "transfer"]
         self.state["requests"] = [r for r in self.state.get("requests") or [] if r.get("kind") != "transfer"]
         asks = [{"from": r.get("from"), "to": r.get("to"), "amount": r.get("amount")} for r in transfers]
@@ -779,15 +1479,25 @@ class MirrorManager:
             except mc.MirrorError:
                 pre[name] = None
         plan = mc.build_plan(self.book, targets, prices, session, self.cfg.core, asks)
-        dropped = {}
+        dropped, quotes = {}, {}
         if self.cfg.live:
-            checked = self._plan_symbols(plan)
-            prices, dropped = self._venue_prices(ad, checked, prices, price_notes)
-            if dropped or any(s in price_notes for s in checked):
+            checked: set = set()
+            for _ in range(QUOTE_PASSES):          # A-14: a rebuilt plan can ADD symbols; check those too
+                need = self._plan_symbols(plan) - checked
+                if not need:
+                    break
+                got = self._venue_prices(ad, need, prices, price_notes, wake)
+                if got is None:
+                    return "dropped"
+                prices, bad, seen = got
+                checked |= need
+                dropped.update(bad)
+                quotes.update(seen)
                 plan = mc.build_plan(self.book, targets, prices, session, self.cfg.core, asks)
-                extra = self._plan_symbols(plan) - checked
-                if extra:                          # cannot happen (a rebuilt plan only loses sleeves); never trade unchecked
-                    raise mc.MirrorError(f"the rebuilt plan trades unchecked symbols {sorted(extra)}")
+            extra = self._plan_symbols(plan) - checked
+            if extra:                              # never trade a symbol the venue check has not seen; never halt for it
+                return (f"skip:the plan kept adding symbols the venue cross-check had not seen ({sorted(extra)}) "
+                        f"after {QUOTE_PASSES} passes")
             for sym, why in sorted(dropped.items()):
                 notes.append(f"{sym}: {why}; the sleeves that hold or want it sit this session out")
         elif price_notes:
@@ -798,32 +1508,50 @@ class MirrorManager:
             if t["status"] == "refused":
                 notes.append(f"transfer {r.get('id')} of ${r.get('amount')!r} {r.get('from')} -> {r.get('to')} REFUSED "
                              f"(a sleeve is out of this plan, or the amount exceeds the giver's equity): re-submit")
+                self._say("red", f"transfer {r.get('id')} of ${r.get('amount')!r} {r.get('from')} -> {r.get('to')} was "
+                                 f"REFUSED by {session}'s plan (a sleeve is out of it, or the amount exceeds the "
+                                 f"giver's equity): re-submit it.")
+        if self._halted() or self._woken(wake):    # D1: the last look before the run exists
+            return "dropped"
         mc.apply_crosses(self.book, plan)
         labels = {n: (payload["engines"].get(n) or {}).get("label") for n in targets}
         self.state["run"] = {"session": session, "phase": "sells", "started_utc": _iso(now),
                              "decide_utc": info["decide_utc"], "cancel_utc": _iso(info["cancel_at"]),
                              "close_utc": _iso(info["close_at"]), "intents_asof": payload.get("asof_utc"),
+                             "built_utc": payload.get("built_utc"), "decision_bar": payload.get("decision_bar"),
+                             "sync": payload.get("sync"),
                              "labels": labels, "pre_equity": pre, "plan": plan, "orders": {}, "notes": notes,
+                             "credits": credits, "transfer_reqs": transfers, "venue_quotes": quotes,
                              "price_notes": {s: n for s, n in price_notes.items() if s in plan["prices"]},
+                             "price_times": {s: t for s, t in (payload.get("price_times") or {}).items()
+                                             if s in plan["prices"]} if isinstance(payload.get("price_times"), dict) else {},
                              "dropped": dropped, "quotes": payload.get("quotes")}
         marks = dict((self.state.get("marks") or {}).get("prices") or {})
         marks.update(prices)
         self.state["marks"] = {"prices": marks, "asof": payload.get("asof_utc")}
-        self._save()
+        self._deferred, later = None, self._deferred
+        saved = self._save()
+        self._deferred = later
+        if not saved:
+            return "dropped"                       # D4: nothing reaches the venue without its record on disk
         self._journal("plan", session=session, intents_asof=payload.get("asof_utc"),
+                      decision_bar=payload.get("decision_bar"), sync=payload.get("sync"),
                       sleeves={n: {k: d.get(k) for k in ("action", "reason", "gap", "deltas", "target", "version")}
                                for n, d in plan["sleeves"].items()},
                       crosses=plan["crosses"], sells=[{k: o[k] for k in ("id", "symbol", "qty", "asks", "ref")} for o in plan["sells"]],
                       buy_asks=plan["buy_asks"], transfers=plan["transfers"], notes=notes)
+        return "started"
 
     # -------------------------------------------------------------- orders
     def _drive(self, ad, wake, stop, until: datetime) -> None:
         while True:
-            if self._advance(ad):
+            if self._advance(ad, wake=wake):
                 self._finish(ad)
                 return
-            if self.halt_state().get("halted"):
+            if self._halted():
                 return                              # the halt path settles what is in flight
+            if self._woken(wake):
+                return                              # A-23: the run is on disk; the next tick carries on
             if self._pause(ORDER_POLL_S, wake, stop, until):
                 return
 
@@ -839,15 +1567,22 @@ class MirrorManager:
         if self._advance(ad, abort=True):
             self._finish(ad)
 
-    def _advance(self, ad, abort: bool = False) -> bool:
+    def _advance(self, ad, abort: bool = False, wake=None) -> bool:
         """work the run's orders once; True when every order is booked"""
         run = self.state["run"]
         plan = run["plan"]
-        past = abort or self.clock() >= (_parse(run["cancel_utc"]) or self.clock())
+        cancel_at = _parse(run["cancel_utc"]) or self.clock()
         if run["phase"] == "sells":
-            waiting = [o for o in plan["sells"] if not self._work(ad, o, run["orders"], past, place=not abort)]
-            if waiting:
+            if not self._work_all(ad, plan["sells"], run["orders"], cancel_at, abort, wake):
                 return False
+            past = abort or self.clock() >= cancel_at
+            limits = None
+            if not past:
+                if self._halted():                 # D1: before any buy is sized
+                    return False
+                limits = self._buy_limits(ad, run, wake)
+                if limits is None:
+                    return False                   # woken or halted between two quotes: nothing was changed
             if any(t["status"] == "planned" for t in plan["transfers"]) and not plan.get("transfers_applied"):
                 mc.apply_transfers(self.book, plan)
             if past:
@@ -856,28 +1591,104 @@ class MirrorManager:
                     run.setdefault("notes", []).append("buys NOT sent: " + (run.get("aborted") or "the window closed "
                                                        "before the sells were booked"))
             else:
-                mc.size_buys(self.book, plan, None, self.cfg.core)
+                mc.size_buys(self.book, plan, None, self.cfg.core, limits=limits)
             run["phase"] = "buys"
             self._save()
         if run["phase"] == "buys":
-            past = abort or self.clock() >= (_parse(run["cancel_utc"]) or self.clock())
-            waiting = [o for o in plan["buys"] if not self._work(ad, o, run["orders"], past, place=not abort)]
-            return not waiting
+            return self._work_all(ad, plan["buys"], run["orders"], cancel_at, abort, wake)
         return True
 
-    def _work(self, ad, o: dict, recs: dict, past: bool, place: bool = True) -> bool:
-        """advance one venue order; True once it is booked. past: the window is over (cancel what still
-        works, send nothing). place: new orders may be sent."""
+    def _work_all(self, ad, orders: list, recs: dict, cancel_at, abort: bool, wake) -> bool:
+        waiting = False
+        for o in orders:
+            if o.get("applied"):
+                continue
+            if not abort and self._woken(wake):
+                return False                        # A-23: between two orders the loop is handed back
+            if not self._work(ad, o, recs, cancel_at, abort=abort):
+                waiting = True
+        return not waiting
+
+    def _buy_limits(self, ad, run: dict, wake) -> dict | None:
+        """{symbol: limit} for the buys about to be sized: live, the venue's quote of each is read
+        AGAIN (the sells took time) and the limit is that quote x (1 + buy_cushion), floored to the
+        venue's grid; a quote that cannot be read, or has left the band since the plan's check, falls
+        back to the higher of the brain's price and the quote read at plan time. Paper: {} - the core
+        sizes at reference x (1 + cushion) and the paper adapter fills at the reference. None when a
+        halt or a wake landed between two quotes."""
+        plan = run["plan"]
+        syms = sorted({s for asks in plan["buy_asks"].values() for s, q in asks.items() if int(q) > 0})
+        if self._dry is not None or not syms:
+            return {}
+        seen, notes = run.get("venue_quotes") or {}, run.get("price_notes") or {}
+        out, log, t0 = {}, {}, time.monotonic()
+        for sym in syms:
+            if self._woken(wake) or self._halted():
+                return None
+            ref = _num(plan["prices"].get(sym))
+            base = max([x for x in (ref, _num(seen.get(sym))) if x is not None and x > 0], default=None)
+            if base is None:
+                continue                            # cannot happen (the plan priced it): the core's default applies
+            px, how = base, "fallback"
+            if time.monotonic() - t0 <= BUY_QUOTE_BUDGET_S:
+                try:
+                    q, source = ad.spot_ex(sym)
+                    q = _num(q)
+                    band = self.cfg.est_quote_band if sym in notes else self.cfg.quote_band
+                    if q is not None and q > 0 and source in QUOTE_SOURCES and abs(q / base - 1.0) <= band:
+                        px, how = q, "quote"
+                    else:
+                        how = f"fallback ({q!r} from {source})"
+                except Exception as exc:  # noqa: BLE001
+                    how = f"fallback ({one_line(exc, 60)})"
+            else:
+                how = "fallback (out of time)"
+            try:
+                out[sym] = round_limit_to_tick(mc.buy_limit(px, self.cfg.core), "BUY")
+            except ValueError:
+                pass
+            log[sym] = {"px": px, "how": how, "limit": out.get(sym)}
+        run["buy_quotes"] = log
+        return out
+
+    def _may_place(self, emergency: bool) -> bool:
+        """may a NEW order go to the venue right now? Re-read for every order (D1, D4)."""
+        if emergency:
+            return True                             # a flatten order: its caller re-reads whether it is still wanted
+        return not self._latched and not self._halted()
+
+    def _none_is_conclusive(self, ad, rec: dict) -> tuple:
+        """D3: is 'the venue has no such order' proof? Only for an order of TODAY (ET) on an adapter
+        whose order history is complete. (ok, why not)"""
+        if self._dry is not None:
+            return True, ""
+        at = _parse(rec.get("intent_utc"))
+        today = self.clock().astimezone(ET).date()
+        if at is None or at.astimezone(ET).date() != today:
+            return False, f"it was sent on {at.astimezone(ET).date().isoformat() if at else 'an unknown day'}, and the venue only answers for today"
+        try:
+            if ad.history_complete() is True:
+                return True, ""
+            return False, "the venue's completed-order history is unavailable"
+        except Exception as exc:  # noqa: BLE001
+            return False, f"the adapter cannot say whether its order history is complete ({one_line(exc, 80)})"
+
+    def _work(self, ad, o: dict, recs: dict, cancel_at, abort: bool = False, emergency: bool = False) -> bool:
+        """advance one venue order; True once it is booked. cancel_at: the instant after which nothing
+        new is sent and what works is cancelled, looked at for THIS order (A-17). abort: stopped (a
+        halt, or a flatten no longer wanted): send nothing, cancel what works. emergency: a flatten
+        order (it goes out under a halt and under a save latch)."""
         if o.get("applied"):
             return True
         oid = o["id"]
         rec = recs.setdefault(oid, {"state": "new", "tries": 0})
+        past = abort or (cancel_at is not None and self.clock() >= cancel_at)
         res = None
         if rec["state"] == "new":
-            if past or not place:
-                return self._book(o, rec, 0, None, 0.0, "not sent: " + ("the window closed" if place else "stopped"))
-            rec.update(state="intent", intent_utc=_iso(self.clock()))
-            self._save()                           # WRITE-AHEAD: the id is on disk before the venue sees it
+            if past:
+                return self._book(o, rec, 0, None, 0.0, "not sent: " + ("stopped" if abort else "the window closed"))
+            if not self._may_place(emergency) or not self._write_ahead(o, rec, emergency):
+                return False
             res = self._place(ad, o, rec)
         elif rec["state"] == "intent":
             # a placement whose outcome was never recorded (a crash, a raise): the venue is asked first
@@ -885,9 +1696,16 @@ class MirrorManager:
             if res is _UNKNOWN:
                 return False
             if res is None:
-                if past or not place or rec.get("tries", 0) >= PLACE_TRIES:
+                ok, why = self._none_is_conclusive(ad, rec)
+                if not ok:
+                    self._stuck(rec, oid, f"its placement was never confirmed and the venue now has no record of "
+                                          f"it, which proves nothing: {why}")
+                    return False
+                if past or rec.get("tries", 0) >= PLACE_TRIES:
                     return self._book(o, rec, 0, None, 0.0, "never reached the venue"
                                       + (f" ({rec['error']})" if rec.get("error") else ""))
+                if not self._may_place(emergency):
+                    return False
                 res = self._place(ad, o, rec)
             else:
                 rec.update(state="placed", order_ref=res.get("order_ref"))
@@ -895,23 +1713,51 @@ class MirrorManager:
             res = self._find(ad, oid, rec)
             if res is _UNKNOWN:
                 return False
-            if res is None and self._dry is not None and place and not past:
-                res = self._place(ad, o, rec)      # a paper adapter forgets its orders on a restart
-            elif res is None:
-                if self._dry is not None:
-                    return self._book(o, rec, 0, None, 0.0, "not sent: the paper adapter restarted")
-                self._stuck(rec, oid, "the venue has no record of an order it acknowledged")
-                return False
+            if res is None:
+                if self._dry is not None:           # a paper adapter forgets its orders on a restart
+                    if past or not self._may_place(emergency):
+                        return self._book(o, rec, 0, None, 0.0, "not sent: the paper adapter restarted")
+                    res = self._place(ad, o, rec)
+                else:
+                    ok, why = self._none_is_conclusive(ad, rec)
+                    if not ok:
+                        self._stuck(rec, oid, f"the venue has no record of an order it acknowledged, which proves "
+                                              f"nothing: {why}")
+                        return False
+                    return self._book(o, rec, 0, None, 0.0, "gone from the venue unfilled (acknowledged; today's "
+                                                             "complete order history holds no trace of it)")
         if res is None:
             return False
         return self._settle(ad, o, rec, res, past)
 
+    def _write_ahead(self, o: dict, rec: dict, emergency: bool) -> bool:
+        """WRITE-AHEAD: the id is on disk before the venue sees it. 'intent' stands only if the save
+        succeeded; a flatten order (the emergency stop) goes out regardless, loudly."""
+        prev = dict(rec)
+        rec.update(state="intent", intent_utc=_iso(self.clock()))
+        if self._save():
+            return True
+        if emergency:
+            self._say("red", f"flatten order {o['id']} is being sent with NO record on disk (the state file cannot "
+                             f"be written): if this process restarts, compare the account with /status by hand.",
+                      key=f"flat-nodisk:{o['id']}")
+            return True
+        rec.clear()
+        rec.update(prev)
+        return False
+
     def _place(self, ad, o: dict, rec: dict):
         rec["tries"] = int(rec.get("tries") or 0) + 1
-        qty = int(o["qty"]) if o["side"] == mc.BUY else -int(o["qty"])
         try:
-            res = ad.place_stock_order(o["symbol"], qty, "MKT", tif="DAY", ref_price=o.get("ref"),
-                                       client_order_id=o["id"])
+            if o["side"] == mc.BUY:                 # D5: a buy is a LIMIT at the price it was sized at
+                limit = _num(o.get("limit"))
+                if limit is None or limit <= 0:
+                    raise ValueError(f"buy {o['id']} has no limit price")
+                res = ad.place_limit_order(o["symbol"], int(o["qty"]), limit, tif="DAY", ref_price=o.get("ref"),
+                                           client_order_id=o["id"])
+            else:
+                res = ad.place_stock_order(o["symbol"], -int(o["qty"]), "MKT", tif="DAY", ref_price=o.get("ref"),
+                                           client_order_id=o["id"])
         except Exception as exc:  # noqa: BLE001  rejected, or no ack: the next pass asks the venue what happened
             rec["error"] = one_line(exc, 240)
             logger.warning("mirror[%s] order %s placement raised: %s", self.cfg.name, o["id"], rec["error"])
@@ -929,22 +1775,84 @@ class MirrorManager:
             return _UNKNOWN
 
     def _stuck(self, rec: dict, oid: str, why: str) -> None:
-        if rec.get("stuck") != why:
+        """the order is UNRESOLVED: nothing is booked for it. Said when it starts, when the reason
+        changes, and once a day while it stays so."""
+        day = self.clock().astimezone(ET).date().isoformat()
+        new = rec.get("stuck") != why
+        if new:
             rec["stuck"] = why
+            rec.setdefault("stuck_since", _iso(self.clock()))
+        if new or rec.get("stuck_said") != day:
+            rec["stuck_said"] = day
             self._save()
-        self._say("red", f"order {oid} is UNRESOLVED: {why}. The book is not updated for it and nothing new is "
-                         f"planned until it resolves; check the account.", key=f"stuck:{oid}:{why}")
+            self._say("red", f"order {oid} is UNRESOLVED (since {rec.get('stuck_since')}): {why}. The book is not "
+                             f"updated for it and nothing new is planned until it resolves; check the account, then "
+                             f"state what it did with POST /mirror/resolve.")
 
-    def _fill_terms(self, ad, o: dict, res: dict, rec: dict) -> tuple:
-        """(price, commission) of what an order executed; the reference price, flagged, when the venue
-        reports none (never zero, never a guess that is not on the record)"""
-        price, comm = _num(res.get("fill_price")), _num(res.get("commission"))
-        if (price is None or comm is None) and hasattr(ad, "stock_order_fills"):
+    def _cancelled_fills(self, ad, o: dict, rec: dict, res: dict):
+        """for an order the venue answers 'cancelled': (the answer to book, what it executed), or None
+        while that is not known. An order the venue holds as INACTIVE is cancelled first and read
+        again (it is not dead: it can go live later). An unreadable executed quantity is never zero."""
+        oid = o["id"]
+        if not hasattr(ad, "stock_order_fills"):
+            if res.get("filled_qty") is None:
+                self._stuck(rec, oid, "cancelled at the venue, and this adapter cannot say what it executed")
+                return None
+            return res, {}
+        for _ in range(2):
             try:
-                f = ad.stock_order_fills(o["id"]) or {}
+                f = ad.stock_order_fills(oid) or {}
             except Exception as exc:  # noqa: BLE001
-                f = {}
                 rec["fills_error"] = one_line(exc, 160)
+                self._stuck(rec, oid, f"cancelled at the venue, but what it executed cannot be read "
+                                      f"({rec['fills_error']})")
+                return None
+            if f.get("venue_status") == "Inactive" and not rec.get("inactive_cancel"):
+                try:
+                    sent = bool(ad.cancel_inactive_stock_order(oid))
+                except Exception as exc:  # noqa: BLE001
+                    rec["cancel_error"] = one_line(exc, 240)
+                    self._stuck(rec, oid, f"INACTIVE at the venue (it can go live later) and the cancel could not "
+                                          f"be sent ({rec['cancel_error']})")
+                    return None
+                rec["inactive_cancel"] = _iso(self.clock())
+                self._save()
+                logger.warning("mirror[%s] order %s was Inactive at the venue: cancel %s", self.cfg.name, oid,
+                               "sent" if sent else "not needed")
+                again = self._find(ad, oid, rec)
+                if again is _UNKNOWN or again is None:
+                    self._stuck(rec, oid, "INACTIVE at the venue; after the cancel it cannot be read")
+                    return None
+                if again.get("status") == "working":
+                    return None                     # it went live: the next pass works it like any order
+                res = again
+                if res.get("status") == "filled":
+                    return res, None
+                continue                            # read again what it executed
+            if res.get("filled_qty") is None and f.get("filled_qty") is None:
+                self._stuck(rec, oid, "cancelled at the venue, but neither its record nor the executions say how "
+                                      "many shares it filled")
+                return None
+            return res, f
+        return res, f
+
+    def _fill_terms(self, ad, o: dict, res: dict, rec: dict, fills: dict | None = None):
+        """(price, commission) of what an order executed; the reference price, flagged, when the venue
+        reports none (never zero, never a guess that is not on the record). None: not readable on
+        this pass, ask again."""
+        price, comm = _num(res.get("fill_price")), _num(res.get("commission"))
+        if price is None or comm is None:
+            f = fills
+            if f is None and hasattr(ad, "stock_order_fills"):
+                try:
+                    f = ad.stock_order_fills(o["id"]) or {}
+                except Exception as exc:  # noqa: BLE001
+                    rec["fills_error"] = one_line(exc, 160)
+                    rec["terms_tries"] = int(rec.get("terms_tries") or 0) + 1
+                    if price is None and rec["terms_tries"] < TERMS_TRIES:
+                        return None
+                    f = {}
+            f = f or {}
             price = price if price is not None else _num(f.get("avg_price"))
             comm = comm if comm is not None else _num(f.get("commission"))
         if price is None or price <= 0:
@@ -970,26 +1878,32 @@ class MirrorManager:
                             + (f": {rec['cancel_error']}" if rec.get("cancel_error") else ""))
                 return False
             status = res.get("status")
+        fills = None
+        if status == "cancelled":
+            got = self._cancelled_fills(ad, o, rec, res)
+            if got is None:
+                return False
+            res, fills = got
+            status = res.get("status")
         if status == "filled":
             qty = int(o["qty"])
             if res.get("filled_qty") is not None:   # resolved from execution reports: completeness unproven
                 qty = max(0, min(qty, int(res["filled_qty"])))
             how = "filled"
         elif status == "cancelled":
-            qty = int(res.get("filled_qty") or 0)
-            if qty <= 0 and hasattr(ad, "stock_order_fills"):
-                try:                                # a cancelled row can lack the executions it carries
-                    qty = int((ad.stock_order_fills(o["id"]) or {}).get("filled_qty") or 0)
-                except Exception as exc:  # noqa: BLE001
-                    rec["fills_error"] = one_line(exc, 160)
-            qty = max(0, min(qty, int(o["qty"])))
-            how = "cancelled" + (f" ({one_line(res['reason'], 120)})" if res.get("reason") else "")
+            known = [int(x) for x in (res.get("filled_qty"), (fills or {}).get("filled_qty")) if x is not None]
+            qty = max(0, min(max(known), int(o["qty"])))
+            how = "cancelled" + (f" ({one_line(res['reason'], 120)})" if res.get("reason") else "") \
+                + (" [was Inactive at the venue: cancel sent]" if rec.get("inactive_cancel") else "")
         else:
             self._stuck(rec, o["id"], f"the venue answered status {status!r}")
             return False
         price, comm = (None, 0.0)
         if qty:
-            price, comm = self._fill_terms(ad, o, res, rec)
+            terms = self._fill_terms(ad, o, res, rec, fills)
+            if terms is None:
+                return False
+            price, comm = terms
             if price is None:
                 self._stuck(rec, o["id"], f"{qty} filled with no price from the venue and no reference")
                 return False
@@ -1004,7 +1918,7 @@ class MirrorManager:
                 {"id": o["id"], "split": split, "utc": rec["booked_utc"]}]
         self._save()
         self._journal("fill", id=o["id"], side=o["side"], symbol=o["symbol"], asked=o["qty"], filled=qty, price=price,
-                      ref=o.get("ref"), commission=comm, split=split, how=how,
+                      ref=o.get("ref"), limit=o.get("limit"), commission=comm, split=split, how=how,
                       price_estimated=bool(rec.get("price_estimated")))
         if qty and rec.get("price_estimated"):
             self._say("red", f"order {o['id']}: {qty} {o['symbol']} booked at the REFERENCE price {price} because the "
@@ -1025,6 +1939,7 @@ class MirrorManager:
                 slip = round((o["price"] / o["ref"] - 1.0) * (1 if o["side"] == mc.BUY else -1) * 1e4, 2)
             orders.append({"id": o["id"], "side": o["side"], "symbol": o["symbol"], "qty": o["qty"],
                            "filled": o.get("filled", 0), "price": o.get("price"), "ref": o.get("ref"),
+                           "limit": o.get("limit"),
                            "commission": o.get("commission", 0.0), "cost_bps": slip, "how": rec.get("how"),
                            "split": o.get("split") or {}})
         sleeves = {}
@@ -1038,20 +1953,54 @@ class MirrorManager:
         acts = {d.get("action") for d in plan["sleeves"].values()}
         outcome = ("aborted" if run.get("aborted") else "traded" if orders or plan["crosses"] else
                    "no-targets" if acts <= {"skip"} else "held")
-        return {"session": run["session"], "outcome": outcome, "utc": _iso(self.clock()), "intents_asof": run.get("intents_asof"), "sleeves": sleeves,
+        return {"session": run["session"], "outcome": outcome, "utc": _iso(self.clock()), "intents_asof": run.get("intents_asof"),
+                "built_utc": run.get("built_utc"), "decision_bar": run.get("decision_bar"), "sync": run.get("sync"),
+                "sleeves": sleeves,
                 "orders": orders, "crosses": plan["crosses"], "transfers": plan["transfers"],
+                "credits": list(run.get("credits") or []),
                 "notes": list(run.get("notes") or []), "price_notes": run.get("price_notes") or {},
+                "price_times": run.get("price_times") or {},
                 "dropped": run.get("dropped") or {}, "prices": plan.get("prices") or {}}
+
+    def _transfer_followups(self, run: dict) -> None:
+        """A-09: a transfer that moved less than it was asked to is said, and its remainder rides the
+        next plan (at most TRANSFER_TRIES plans in all)"""
+        reqs = run.get("transfer_reqs") or []
+        for t, r in zip(run["plan"]["transfers"], reqs):
+            if t.get("status") not in ("partial", "planned"):
+                continue
+            amount, moved = float(t.get("amount") or 0.0), float(t.get("moved") or 0.0)
+            left = round(amount - moved, 2)
+            tries = int(r.get("tries") or 1)
+            base = r.get("of") or r.get("id")
+            if left < 0.01:
+                continue
+            again = tries < TRANSFER_TRIES
+            line = (f"transfer {r.get('id')} {t.get('from')} -> {t.get('to')}: ${moved:,.2f} of ${amount:,.2f} moved "
+                    f"(the giver's sells did not raise the rest"
+                    + (" - the run was aborted" if run.get("aborted") else "") + "); "
+                    + (f"${left:,.2f} is queued again for the next plan (try {tries + 1} of {TRANSFER_TRIES})" if again
+                       else f"${left:,.2f} was NOT moved after {TRANSFER_TRIES} plans: re-submit it"))
+            run.setdefault("notes", []).append(line)
+            self._say("red", line)
+            if again:
+                nxt = {"kind": "transfer", "from": t.get("from"), "to": t.get("to"), "amount": left,
+                       "note": r.get("note") or "", "id": f"{base}-r{tries + 1}", "of": base, "tries": tries + 1,
+                       "utc": _iso(self.clock())}
+                self.state["requests"] = list(self.state.get("requests") or []) + [nxt]
+                self._journal("transfer_requeued", **nxt)
 
     def _finish(self, ad) -> None:
         run = self.state["run"]
         mc.finish(self.book, run["plan"])
+        self._transfer_followups(run)
         row = self._summary(run)
         self.state["history"] = (list(self.state.get("history") or []) + [row])[-HISTORY_KEEP:]
-        self.state["last_session"] = run["session"]
+        self.state["last_session"] = max(self.state.get("last_session") or "", run["session"])
         self.state["last_run"] = row
         self.state["run"] = None
         self.state["check"] = None
+        self._held = None
         self._save()
         self._journal("session", **row)
         parts = []
@@ -1090,7 +2039,8 @@ class MirrorManager:
             if self.cfg.live:
                 self.halt("the account does not hold the mirror book: " + "; ".join(probs[:4]), by="mirror")
             self._say("red", f"{session}: the account does NOT hold the mirror book — " + "; ".join(probs[:6])
-                      + (". HALTED until /resume." if self.cfg.live else ""), key=f"mismatch:{session}")
+                      + (". HALTED until /resume (repair a real divergence with POST /mirror/adjust first)."
+                         if self.cfg.live else ""), key=f"mismatch:{session}")
 
     def _true_up(self, ad) -> None:
         """commissions the venue had not reported when their fills were booked"""
@@ -1109,8 +2059,14 @@ class MirrorManager:
             split = {k: int(v) for k, v in (p.get("split") or {}).items() if k in self.book.sleeves and int(v) > 0}
             if comm is None or not split:
                 booked = _parse(p.get("utc"))
-                if split and booked and (self.clock() - booked).total_seconds() < 3 * 86400:
+                if split and booked and (self.clock() - booked).total_seconds() < COMMISSION_GIVE_UP_S:
                     left.append(p)                  # still unreported: asked again for three days
+                    continue
+                self._journal("commission_dropped", id=p.get("id"), split=p.get("split"), booked_utc=p.get("utc"))
+                self._say("warn", f"the commission of order {p.get('id')} was never reported by the venue "
+                                  f"({COMMISSION_GIVE_UP_S / 86400:.0f} days): it is no longer asked for. If the "
+                                  f"account was charged one, the book's cash is too high by it - debit it with POST "
+                                  f"/mirror/credit (a negative amount).", key=f"comm-drop:{p.get('id')}")
                 continue
             total = sum(split.values())
             for name, q in split.items():
@@ -1122,65 +2078,156 @@ class MirrorManager:
             self._save()
 
     # -------------------------------------------------------------- flatten (live; loop thread)
-    def _flatten_step(self, ad, h: dict) -> bool:
-        """work a requested flatten; True when it is finished (or cancelled and settled)"""
-        fid = h.get("flatten_id")
-        cancelled = bool(h.get("flatten_cancelled"))
+    def _flatten_wanted(self) -> bool:
+        h = self.halt_state()
+        return bool(h.get("flatten") and not h.get("flatten_done") and not h.get("flatten_cancelled"))
+
+    def _flatten_tick(self, ad) -> bool:
+        """The flatten, first thing in a tick. The STATE's flatten orders are the truth for what is in
+        flight: whatever the halt file says they are settled first (worked while a flatten is still
+        wanted, cancelled and booked at what filled when it is not), and state['flatten'] is never
+        replaced while one of them is unbooked. Then, while the halt wants a flatten, the next round
+        is built for what the book and the account both still hold. True: nothing is pending (the
+        tick carries on); False: the tick ends here."""
+        fl = self.state.get("flatten") or {}
+        live = [o for o in fl.get("orders") or [] if not o.get("applied")]
+        h = self.halt_state()
+        if not live and not (h.get("flatten") and not h.get("flatten_done")):
+            return True
         if ad is None:
             return False
+        for _ in range(3):
+            fl = self.state.get("flatten") or {}
+            live = [o for o in fl.get("orders") or [] if not o.get("applied")]
+            if live:
+                waiting = False
+                for o in live:                      # D1: 'still wanted' is re-read for every order
+                    if not self._work(ad, o, fl.setdefault("recs", {}), None, abort=not self._flatten_wanted(),
+                                      emergency=True):
+                        waiting = True
+                if waiting:
+                    return False
+            self._flatten_tally(fl)
+            h = self.halt_state()
+            if not (h.get("flatten") and not h.get("flatten_done")):
+                return True
+            if h.get("flatten_cancelled"):
+                return self._flatten_finish(True, "cancelled" if fl.get("id") == h.get("flatten_id") and fl.get("orders")
+                                            else "cancelled before any order was sent")
+            step = self._flatten_round(ad, h)
+            if step == "done":
+                return True
+            if step == "wait":
+                return False
+        return False
+
+    def _flatten_tally(self, fl: dict) -> None:
+        """once per round: what its orders sold, kept for the closing line"""
+        if not fl or fl.get("tallied") or any(not o.get("applied") for o in fl.get("orders") or []):
+            return
+        fl["tallied"] = True
+        fl["sold"] = list(fl.get("sold") or []) + [
+            f"{o.get('filled', 0)}/{o['qty']} {o['symbol']}" + (f" @{o['price']:.2f}" if o.get("price") else "")
+            for o in fl.get("orders") or []]
+        self._save()
+
+    def _flatten_round(self, ad, h: dict) -> str:
+        """build the next round of a wanted flatten: "built" | "wait" | "done" """
+        fid = h.get("flatten_id") or "x"
+        fl = self.state.get("flatten") or {}
+        mine = fl.get("id") == fid
+        n = int(fl.get("round") or (1 if fl.get("orders") is not None else 0)) if mine else 0
+        blocked: dict = {}
         if self.state.get("run"):
             self._abort_run(ad, "kill")
-            if self.state.get("run"):
-                return False
-        fl = self.state.get("flatten")
-        if not fl or fl.get("id") != fid:
-            if cancelled:
-                return self._flatten_done(h, "cancelled before any order was sent")
-            if not self._rth(self.clock()):
-                self._say("warn", "flatten queued: the session is shut; the sells go at the next open", key=f"flat-wait:{fid}")
-                return False
-            venue = (ad.positions_snapshot().get("stocks") or {}) if hasattr(ad, "positions_snapshot") else None
-            marks = (self.state.get("marks") or {}).get("prices") or {}
-            orders = []
-            for sym, total in self.book.positions().items():
-                asks = {n: s.shares[sym] for n, s in self.book.sleeves.items() if s.shares.get(sym)}
-                qty = total
-                if venue is not None:
-                    qty = min(total, max(int(venue.get(sym, 0) or 0), 0))   # never sell more than the account holds
-                    if qty < total:
-                        self._say("red", f"flatten: the book holds {total} {sym}, the account {venue.get(sym, 0)}: "
-                                         f"selling {qty}", key=f"flat-short:{fid}:{sym}")
-                        asks = mc.allocate(qty, asks)
-                if qty > 0:
-                    orders.append({"id": f"mirror-flat-{fid}-{sym}", "side": mc.SELL, "symbol": sym, "qty": qty,
-                                   "asks": {k: v for k, v in asks.items() if v}, "ref": _num(marks.get(sym)), "applied": False})
-            fl = {"id": fid, "orders": orders, "recs": {}, "started_utc": _iso(self.clock())}
-            self.state["flatten"] = fl
-            self._save()
-            self._journal("flatten", id=fid, orders=[{k: o[k] for k in ("id", "symbol", "qty", "asks")} for o in orders])
-        waiting = [o for o in fl["orders"] if not self._work(ad, o, fl["recs"], past=cancelled, place=not cancelled)]
-        if waiting:
-            return False
-        return self._flatten_done(h, "cancelled" if cancelled else None)
+            run = self.state.get("run")
+            if run:                                 # unresolved orders: flatten AROUND them (A-02)
+                for o in run["plan"]["sells"] + (run["plan"].get("buys") or []):
+                    if not o.get("applied"):
+                        blocked[o["symbol"]] = o["id"]
+                self._say("red", f"flatten: {', '.join(sorted(blocked))} held back — the run of {run['session']} has "
+                                 f"unresolved order(s) on them ({', '.join(sorted(blocked.values()))}). Every other "
+                                 f"symbol is being sold. State what those orders did (POST /mirror/resolve) and the "
+                                 f"flatten takes these too; or sell them by hand.",
+                          key=f"flat-blocked:{fid}:{','.join(sorted(blocked))}")
+        now = self.clock()
+        if not self._rth(now):
+            self._say("warn", "flatten queued: the session is shut; the sells go at the next open", key=f"flat-wait:{fid}")
+            return "wait"
+        venue = None
+        if hasattr(ad, "positions_snapshot"):
+            try:
+                venue = ad.positions_snapshot().get("stocks") or {}
+            except Exception as exc:  # noqa: BLE001
+                self._say("red", f"flatten: the account's positions cannot be read ({one_line(exc, 120)}); it is "
+                                 f"tried again every {FLATTEN_WAIT_S:.0f} s", key=f"flat-nopos:{fid}:{one_line(exc, 60)}")
+                return "wait"
+        marks = (self.state.get("marks") or {}).get("prices") or {}
+        orders = []
+        for sym, total in self.book.positions().items():
+            if sym in blocked:
+                continue
+            asks = {name: s.shares[sym] for name, s in self.book.sleeves.items() if s.shares.get(sym)}
+            qty = total
+            if venue is not None:
+                qty = min(total, max(int(venue.get(sym, 0) or 0), 0))   # never sell more than the account holds
+                if qty < total:
+                    self._say("red", f"flatten: the book holds {total} {sym}, the account {venue.get(sym, 0)}: "
+                                     f"selling {qty}", key=f"flat-short:{fid}:{sym}:{qty}")
+                    asks = mc.allocate(qty, asks)
+            if qty > 0:
+                oid = f"mirror-flat-{fid}-{sym}" if n == 0 else f"mirror-flat-{fid}-r{n + 1}-{sym}"
+                orders.append({"id": oid, "side": mc.SELL, "symbol": sym, "qty": qty,
+                               "asks": {k: v for k, v in asks.items() if v}, "ref": _num(marks.get(sym)), "applied": False})
+        if not orders:
+            if any(self.book.positions().get(s) for s in blocked):
+                return "wait"                       # the held-back symbols are still to come
+            return "done" if self._flatten_finish(False, None) else "wait"
+        if n >= FLATTEN_ROUNDS:
+            return "done" if self._flatten_finish(False, f"GAVE UP after {n} rounds") else "wait"
+        last = _parse(fl.get("started_utc")) if mine else None
+        if n >= 1 and last is not None and (now - last).total_seconds() < FLATTEN_ROUND_GAP_S:
+            return "wait"
+        self.state["flatten"] = {"id": fid, "round": n + 1, "orders": orders, "recs": {}, "started_utc": _iso(now),
+                                 "sold": list(fl.get("sold") or []) if mine else []}
+        self._save()
+        self._journal("flatten", id=fid, round=n + 1,
+                      orders=[{k: o[k] for k in ("id", "symbol", "qty", "asks")} for o in orders])
+        if n >= 1:
+            self._say("red", f"flatten round {n + 1} of {FLATTEN_ROUNDS}: the book and the account still hold "
+                             f"{ {o['symbol']: o['qty'] for o in orders} } after round {n}; selling again")
+        return "built"
 
-    def _flatten_done(self, h: dict, note: str | None) -> bool:
-        fl = self.state.get("flatten") or {}
-        sold = [f"{o.get('filled', 0)}/{o['qty']} {o['symbol']}" + (f" @{o['price']:.2f}" if o.get("price") else "")
-                for o in fl.get("orders") or []]
+    def _flatten_finish(self, cancelled: bool, note: str | None) -> bool:
+        """mark the halt's flatten done - only if it is still what this step saw (a re-kill or a
+        resume from an API thread in between is left for the next tick). True when marked."""
         with self.halt_lock:
             cur = dict(self._halt or {})
-            if cur.get("flatten_id") == h.get("flatten_id"):
-                cur["flatten_done"] = True
-                self._write_halt(cur)
+            if not (cur.get("flatten") and not cur.get("flatten_done")) or bool(cur.get("flatten_cancelled")) != cancelled:
+                return False
+            cur["flatten_done"] = True
+            self._write_halt(cur)
+        fl = self.state.get("flatten") or {}
+        sold = list(fl.get("sold") or []) if fl.get("id") == cur.get("flatten_id") else []
         left = self.book.positions()
-        self._journal("flatten_done", id=h.get("flatten_id"), note=note, sold=sold, left=left, cash=self.book.cash())
-        self._say("red" if left and not note else "info",
+        self._journal("flatten_done", id=cur.get("flatten_id"), note=note, sold=sold, left=left, cash=self.book.cash())
+        self._say("red" if left and not cancelled else "info",
                   f"flatten {note or 'complete'}: " + (", ".join(sold) or "nothing was sent")
-                  + f" | book cash ${self.book.cash():,.2f}" + (f" | STILL HELD {left}" if left else ""),
-                  key=f"flat-done:{h.get('flatten_id')}")
+                  + f" | book cash ${self.book.cash():,.2f}"
+                  + (f" | STILL HELD {left}" + ("" if cancelled else " — sell by hand, or /kill again") if left else ""),
+                  key=f"flat-done:{cur.get('flatten_id')}:{cur.get('flatten_ts')}:{note}")
         return True
 
     # -------------------------------------------------------------- what the API reads
+    def _unresolved(self) -> list:
+        out = []
+        for o, recs, where in self._open_orders():
+            rec = recs.get(o["id"]) or {}
+            if rec.get("stuck"):
+                out.append({"id": o["id"], "where": where, "symbol": o["symbol"], "side": o["side"], "qty": o["qty"],
+                            "why": rec.get("stuck"), "since": rec.get("stuck_since")})
+        return out
+
     def _publish(self) -> None:
         marks = self.state.get("marks") or {}
         sleeves, total = {}, 0.0
@@ -1197,6 +2244,7 @@ class MirrorManager:
                              "rule": s.rule, "corridor": s.corridor, "version": s.version, "last_trade": s.last_trade,
                              "frozen": name in (self.state.get("frozen") or [])}
         run = self.state.get("run")
+        fl = self.state.get("flatten")
         self._view = {
             "name": self.cfg.name, "mode": "live" if self.cfg.live else "paper", "engines": list(self.cfg.engines),
             "book": {"equity": None if total is None else round(total, 2), "cash": round(self.book.cash(), 2),
@@ -1208,10 +2256,14 @@ class MirrorManager:
             "last_run": self.state.get("last_run"), "check": self.state.get("check"),
             "pending_requests": list(self.state.get("requests") or []),
             "commission_pending": len(self.state.get("commission_pending") or []),
-            "flatten": None if not self.state.get("flatten") else
-            {"id": self.state["flatten"].get("id"),
+            "dividends_open": [r for r in self.state.get("dividends") or [] if r.get("status") == "open"],
+            "unresolved": self._unresolved(),
+            "save_latched": dict(self._latched) if self._latched else None,
+            "settings_clamped": list(self.clamped),
+            "flatten": None if not fl else
+            {"id": fl.get("id"), "round": fl.get("round"),
              "orders": [{k: o.get(k) for k in ("id", "symbol", "qty", "filled", "price", "applied")}
-                        for o in self.state["flatten"].get("orders") or []]},
+                        for o in fl.get("orders") or []]},
             "saved_utc": self.state.get("saved_utc"), "seq": self.state.get("seq"),
         }
 
@@ -1231,6 +2283,8 @@ class MirrorManager:
             return {"name": self.cfg.name, "error": one_line(repr(exc))}
 
     def health(self) -> dict:
+        """for the UNAUTHENTICATED /health: configuration, enumerated states and booleans only - never
+        a sentence that can carry the account's positions or cash (A-15; the text is on /status)"""
         try:
             h = self.halt_state()
             run = self._view.get("run")
@@ -1238,10 +2292,11 @@ class MirrorManager:
                     "halted": bool(h.get("halted")), "flatten_pending": bool(h.get("flatten") and not h.get("flatten_done")),
                     "last_session": self._view.get("last_session"), "run_phase": (run or {}).get("phase"),
                     "last_outcome": (self._view.get("last_run") or {}).get("outcome"),
-                    "waiting_on": self._why, "last_error": self.last_error,
+                    "waiting": bool(self._why), "error": bool(self.last_error),
+                    "unresolved": bool(self._view.get("unresolved")), "save_latched": bool(self._latched),
                     "brain_ok": bool((self.brain_status.get("session") or {}).get("ok"))}
-        except Exception as exc:  # noqa: BLE001
-            return {"error": one_line(repr(exc))}
+        except Exception:  # noqa: BLE001
+            return {"error": True}
 
 
 # ------------------------------------------------------------------ building the books from settings
@@ -1262,13 +2317,17 @@ def parse_weights(text: str) -> dict:
 def build(settings, alert=None, brain=None) -> dict:
     """{"live": MirrorManager, "dry": MirrorManager} per the settings (either may be absent). An engine
     is LIVE only when it is named in MIRROR_LIVE_ENGINES AND the service itself trades for real (TWS
-    credentials, DRY_RUN off); every other engine runs in the paper book."""
+    credentials, DRY_RUN off); every other engine runs in the paper book. The timing and band settings
+    are clamped to the range the book is built for (MirrorManager, with a log line)."""
     weights = parse_weights(settings.mirror_weights)
     capital = {e: float(settings.mirror_capital_usd) * w for e, w in weights.items()}
     asked = [e.strip() for e in (settings.mirror_live_engines or "").split(",") if e.strip()]
     unknown = [e for e in asked if e not in weights]
     if unknown:
         raise ValueError(f"MIRROR_LIVE_ENGINES names {unknown}, which MIRROR_WEIGHTS does not")
+    rule = str(getattr(settings, "mirror_dividend_rule", "composer") or "composer").strip().lower()
+    if rule not in mc.DIVIDEND_RULES:
+        raise ValueError(f"MIRROR_DIVIDEND_RULE must be one of {mc.DIVIDEND_RULES}, not {rule!r}")
     real = bool(settings.tws_userid and settings.tws_password) and not settings.dry_run
     live = tuple(e for e in weights if e in asked) if real else ()
     if asked and not real:
@@ -1284,9 +2343,13 @@ def build(settings, alert=None, brain=None) -> dict:
                             decide_offset_s=float(settings.mirror_decide_offset_s),
                             cancel_before_close_s=float(settings.mirror_cancel_before_close_s),
                             quote_band=float(settings.mirror_quote_band),
-                            blend_enabled=bool(settings.blend_enabled), core=core)
+                            blend_enabled=bool(settings.blend_enabled), dividend_rule=rule,
+                            poll_s=float(getattr(settings, "poll_seconds", 300) or 300), core=core)
     if live:
         out["live"] = MirrorManager(cfg("live", True, live, settings.mirror_state_path), brain=brain, alert=alert)
     if paper:
         out["dry"] = MirrorManager(cfg("dry", False, paper, settings.mirror_dry_state_path), brain=brain, alert=alert)
+    for book in out.values():
+        if book.clamped:
+            book._say("warn", "settings outside their range were clamped: " + "; ".join(book.clamped))
     return out

@@ -205,6 +205,33 @@ def round_stop_to_tick(stop_price: float, action: str) -> float:
     return float(snapped)
 
 
+def round_limit_to_tick(limit_price: float, action: str) -> float:
+    """Snap a LIMIT price to the venue's grid, NEVER loosening it: a BUY limit
+    rounds DOWN (the order can only pay less than the caller sized it at), a
+    SELL limit rounds UP. The mirror of round_stop_to_tick, whose directions
+    are the opposite because a stop protects and a limit bounds. Same
+    Decimal arithmetic, same fail-closed errors."""
+    try:
+        px = Decimal(str(float(limit_price)))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError(f"limit price {limit_price!r} is not a number") from exc
+    if not px.is_finite() or px <= 0:
+        raise ValueError(f"limit price {limit_price!r} must be a positive number")
+    tick = stock_tick(px)
+    mode = ROUND_FLOOR if action.upper() == "BUY" else ROUND_CEILING
+    try:
+        snapped = px.quantize(tick, rounding=mode)
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(
+            f"limit price {limit_price!r} cannot be expressed on the venue's "
+            f"{tick} grid") from exc
+    if snapped <= 0:
+        raise ValueError(
+            f"limit price {limit_price!r} rounds to {snapped} at the venue's "
+            f"{tick} increment - no limit order is placeable there")
+    return float(snapped)
+
+
 def _map_status(ib_status: str) -> str:
     """IB order state -> the adapter contract's {filled, working, cancelled}."""
     if ib_status == "Filled":
@@ -1080,7 +1107,7 @@ class IBAdapter:
         dedupe by orderRef adopts the order if it did land)."""
         ack_deadline = time.monotonic() + PLACE_ACK_TIMEOUT_S
         fill_deadline = (time.monotonic() + MKT_FILL_WAIT_S
-                         if order_type == "MKT" else None)
+                         if order_type in ("MKT", "LMT") else None)
         while True:
             self._pump()
             s = trade.orderStatus.status
@@ -1216,6 +1243,97 @@ class IBAdapter:
                     action, symbol, abs(qty), order_type, out["status"],
                     out["order_ref"])
         return out
+
+    def _binding_prior(self, client_order_id: str):
+        """The order that still BINDS under this idempotency key (working or
+        filled), or None: this session first, then - whenever the session
+        holds nothing that binds - the venue's open and completed orders.
+        The same two-stage lookup place_stock_order makes (B1: after a
+        restart the session's own trade list is empty, and a retry that only
+        looked there placed a second order)."""
+        prior = self._find_trade_by_client_id(client_order_id)
+        if (prior is None
+                or _map_status(prior.orderStatus.status) == "cancelled"):
+            prior = (self._find_trade_by_client_id(client_order_id,
+                                                   refresh=True)
+                     or prior)
+        if (prior is not None
+                and _map_status(prior.orderStatus.status) != "cancelled"):
+            return prior
+        return None
+
+    def place_limit_order(self, symbol: str, qty: int, limit_price: float,
+                          tif: str = "DAY", ref_price: float | None = None,
+                          client_order_id: str | None = None) -> dict:
+        """A DAY LIMIT stock order (the Composer mirror's buys): qty signed
+        (+buy/-sell), never filled above (buy) / below (sell) limit_price,
+        which is snapped to the venue's grid WITHOUT loosening it (a buy
+        limit rounds down, a sell limit up). Returns what place_stock_order
+        returns for MKT - {order_ref, status, fill_price?, commission?} after
+        one bounded synchronous-fill wait, else 'working' - plus limit_price,
+        the price the venue holds. Raises on a rejection or a missing ack.
+        Venue-side dedupe by client_order_id exactly as place_stock_order:
+        a working or filled order under the key is returned (duplicate=True),
+        never re-placed, and the lookup asks the VENUE when this session
+        holds nothing that binds. ref_price is the caller's reference - never
+        used as a price here."""
+        if str(tif).upper() != "DAY":
+            raise ValueError(f"unsupported limit order tif {tif!r} (DAY only)")
+        qty = int(qty)
+        if qty == 0:
+            raise ValueError("qty must be non-zero (signed +buy/-sell)")
+        action = "BUY" if qty > 0 else "SELL"
+        placed_limit = round_limit_to_tick(limit_price, action)
+        self._require_connected()
+        if client_order_id:
+            self._pump()
+            prior = self._binding_prior(client_order_id)
+            if prior is not None:
+                logger.info("limit order %s duplicate-suppressed by orderRef "
+                            "(prior %s)", client_order_id, _order_ref(prior))
+                out = {**self._trade_result(prior), "duplicate": True}
+                held = _usable_px(getattr(prior.order, "lmtPrice", None))
+                if held is not None:    # the price the PRIOR order holds
+                    out["limit_price"] = held
+                return out
+        from ib_async import LimitOrder
+        order = LimitOrder(action, abs(qty), placed_limit)
+        order.tif = "DAY"
+        if client_order_id:
+            order.orderRef = client_order_id
+        contract = self._stock_contract(symbol)
+        trade = self.ib.placeOrder(contract, order)
+        self._await_placement(trade, "LMT")
+        out = self._trade_result(trade)
+        out["limit_price"] = placed_limit
+        logger.info("limit order placed: %s %s x%d @ %s -> %s (%s)",
+                    action, symbol, abs(qty), placed_limit, out["status"],
+                    out["order_ref"])
+        return out
+
+    def cancel_inactive_stock_order(self, client_order_id: str) -> bool:
+        """Send a cancel for the order under this idempotency key when the
+        venue holds it as INACTIVE. IB's Inactive is not dead - "it is
+        cancellable, and it can go LIVE later" (round 21, _await_placement,
+        which cancels one on sight at placement). This is the same cancel
+        for an order that turned Inactive AFTER its ack, when the placement
+        path is long gone. True when a cancel was sent; False when no order
+        under the key is Inactive. No ack is awaited: the caller re-reads the
+        order. Raises when disconnected."""
+        self._require_connected()
+        self._pump()
+        trade = self._find_trade_by_client_id(client_order_id)
+        if trade is None:
+            trade = self._find_trade_by_client_id(client_order_id,
+                                                  refresh=True)
+        if trade is None or trade.orderStatus.status != "Inactive":
+            return False
+        self.ib.cancelOrder(trade.order)
+        logger.warning("order %s (%s) is Inactive at the venue - cancel sent "
+                       "so it cannot go live unrecorded", client_order_id,
+                       _order_ref(trade))
+        self._pump()
+        return True
 
     def cancel_stock_order(self, order_ref: str) -> bool:
         """CONTRACT (order-safety law #8): cancelling an order that has
@@ -1524,32 +1642,100 @@ class IBAdapter:
 
     def stock_order_fills(self, client_order_id: str) -> dict | None:
         """What the order carrying this idempotency key EXECUTED, whatever
-        its status: {filled_qty, avg_price, commission}, or None when the
-        venue never saw it. avg_price is None when no usable price was
-        reported (never 0.0); commission is None until IB reports it.
-        find_stock_order answers a cancelled order with filled_qty and no
-        price; this is where a caller that must book that partial fill reads
-        the price. Read-only."""
+        its status: {filled_qty, avg_price, commission, venue_status}, or
+        None when the venue has no order and no execution under the key.
+
+        filled_qty  int, or None when no source is conclusive
+        avg_price   None when no usable price was reported (never 0.0)
+        commission  None until IB reports it for every execution
+        venue_status  IB's own word for the order ("Filled", "Cancelled",
+                    "Inactive", "Submitted", ...); None when only executions
+                    were found. "Inactive" is not dead - see
+                    cancel_inactive_stock_order.
+
+        Sources, in the order they are trusted: the trade's own fills; the
+        adapter's EXECUTION STORE by orderRef (ib_async builds a completed-
+        order Trade with no fills and never attaches an execution it already
+        stored, so a trade this session did not place can carry none of the
+        shares it executed - _result_from_executions reads the same store);
+        orderStatus.filled; and a completed order's filledQuantity. A zero is
+        reported only where it is proven: the venue's completed-order record
+        says 0, or the trade is in THIS session (whose execution store is
+        current). Anything else is None - the caller must not book a guess.
+
+        No venue-history request is made for a trade already in the session
+        (the store is read as it stands); a trade the session does not know
+        costs the bounded open/completed-orders refresh and one bounded
+        reqExecutions, either of which FAILS CLOSED by raising. Read-only."""
         self._require_connected()
         self._pump()
         trade = self._find_trade_by_client_id(client_order_id)
-        if trade is None or not (getattr(trade, "fills", None) or []):
-            trade = (self._find_trade_by_client_id(client_order_id,
-                                                   refresh=True) or trade)
+        in_session = trade is not None
         if trade is None:
+            trade = self._find_trade_by_client_id(client_order_id,
+                                                  refresh=True)
+        own = list(getattr(trade, "fills", []) or []) if trade is not None else []
+        own_shares = sum(int(f.execution.shares) for f in own)
+        by_id: dict = {}
+        for f in own:
+            by_id[getattr(f.execution, "execId", "") or id(f)] = f
+        if in_session:
+            pool = list(getattr(self.ib, "fills", lambda: [])() or [])
+        elif own_shares <= 0:
+            pool = self._executions_refreshed()
+        else:
+            pool = []
+        extra: dict = {}
+        for f in pool:
+            ex = getattr(f, "execution", None)
+            if ex is None or (getattr(ex, "orderRef", "") or "") != client_order_id:
+                continue
+            extra[getattr(ex, "execId", "") or id(f)] = f
+        if extra:
+            # one orderRef can span a rejected-then-retried attempt: only the
+            # executions of the order that binds count (the trade's own id
+            # when it is known, else the latest - _result_from_executions)
+            ids = {getattr(f.execution, "orderId", 0) or 0 for f in extra.values()}
+            want = (getattr(trade.order, "orderId", 0) or 0) if trade is not None else 0
+            pick = want if want in ids else max(ids)
+            for key, f in extra.items():
+                if (getattr(f.execution, "orderId", 0) or 0) == pick:
+                    by_id.setdefault(key, f)
+        if trade is None and not by_id:
             return None
-        fills = list(getattr(trade, "fills", []) or [])
-        shares = sum(int(f.execution.shares) for f in fills)
-        if shares <= 0:
+        src = type("_Fills", (), {})()
+        src.fills = list(by_id.values())
+        src.orderStatus = (trade.orderStatus if trade is not None
+                           else type("_S", (), {"avgFillPrice": 0.0})())
+        shares = sum(int(f.execution.shares) for f in src.fills)
+        counts = [shares]
+        done = None
+        if trade is not None:
             try:
-                shares = int(getattr(trade.orderStatus, "filled", 0) or 0)
+                counts.append(int(getattr(trade.orderStatus, "filled", 0) or 0))
             except (TypeError, ValueError):
-                shares = 0
-        px = _agg_fill_price(trade) if shares > 0 else None
-        comm = _agg_commission(trade) if _commission_reported(trade) else None
-        return {"filled_qty": int(shares),
+                pass
+            try:
+                fq = float(getattr(trade.order, "filledQuantity", None))
+                if 0 <= fq < 1e12 and fq == int(fq):   # IB's UNSET is ~1.8e308
+                    done = int(fq)
+                    counts.append(done)
+            except (TypeError, ValueError):
+                pass
+        best = max(counts)
+        if best > 0:
+            filled = best
+        elif done == 0 or in_session:
+            filled = 0
+        else:
+            filled = None
+        px = _agg_fill_price(src) if (filled or 0) > 0 else None
+        comm = _agg_commission(src) if _commission_reported(src) else None
+        return {"filled_qty": filled,
                 "avg_price": float(px) if px is not None else None,
-                "commission": comm}
+                "commission": comm,
+                "venue_status": (str(trade.orderStatus.status)
+                                 if trade is not None else None)}
 
 
 class DryAdapter:
@@ -1781,11 +1967,76 @@ class DryAdapter:
 
     def stock_order_fills(self, client_order_id: str) -> dict | None:
         """Mirrors IBAdapter.stock_order_fills for the simulated orders: a
-        filled order executed its whole quantity at its fill price."""
+        filled order executed its whole quantity at its fill price, anything
+        else executed nothing (a simulator's zero is always proven)."""
         rec = self._orders.get(self._by_client.get(client_order_id, ""))
         if rec is None:
             return None
         done = rec["status"] == "filled" and rec.get("fill_price") is not None
         return {"filled_qty": abs(int(rec["qty"])) if done else 0,
                 "avg_price": float(rec["fill_price"]) if done else None,
-                "commission": 0.0 if done else None}
+                "commission": 0.0 if done else None,
+                "venue_status": {"filled": "Filled", "cancelled": "Cancelled",
+                                 "working": "Submitted"}.get(rec["status"])}
+
+    def history_complete(self) -> bool:
+        """Mirrors IBAdapter.history_complete: the simulator's order memory
+        has no horizon, so 'no such order' is always the whole truth."""
+        return True
+
+    def place_limit_order(self, symbol: str, qty: int, limit_price: float,
+                          tif: str = "DAY", ref_price: float | None = None,
+                          client_order_id: str | None = None) -> dict:
+        """Mirrors IBAdapter.place_limit_order: the limit is recorded snapped
+        to the venue's grid the way the live adapter snaps it; a BUY fills AT
+        the reference price when that is at or below the limit asked for (a
+        SELL when it is at or above), else it rests 'working' until
+        cancelled. A resting limit is kept with the resting stops, so
+        cancel_stock_order cancels it and trigger_stop simulates the market
+        reaching its limit."""
+        if str(tif).upper() != "DAY":
+            raise ValueError(f"unsupported limit order tif {tif!r} (DAY only)")
+        qty = int(qty)
+        if qty == 0:
+            raise ValueError("qty must be non-zero (signed +buy/-sell)")
+        limit = round_limit_to_tick(limit_price, "BUY" if qty > 0 else "SELL")
+        if client_order_id:
+            prior = self._orders.get(self._by_client.get(client_order_id, ""))
+            if prior is not None and prior["status"] in ("working", "filled"):
+                self._rec("duplicate_suppressed", symbol=symbol, qty=qty,
+                          client_order_id=client_order_id,
+                          ref=prior["order_ref"])
+                out = {**self._order_result(prior), "duplicate": True}
+                if prior.get("limit_price") is not None:
+                    out["limit_price"] = prior["limit_price"]
+                return out
+        ref = f"dry-stk-{symbol}-{len(self.log)}-{int(time.time())}"
+        px = float(ref_price) if ref_price is not None else self.spot(symbol)
+        # compared with the limit AS GIVEN: a paper fill at the reference is
+        # the caller's contract, and a sub-cent reference just above a grid
+        # point must not strand it (the recorded limit is the snapped one)
+        asked = float(limit_price)
+        crosses = px <= asked if qty > 0 else px >= asked
+        rec = {"order_ref": ref, "symbol": symbol, "qty": qty,
+               "order_type": "LMT", "tif": tif, "limit_price": limit,
+               "status": "filled" if crosses else "working",
+               "fill_price": px if crosses else None,
+               "client_order_id": client_order_id}
+        self._orders[ref] = rec
+        if client_order_id:
+            self._by_client[client_order_id] = ref
+        if crosses:
+            self._last_px[symbol] = px
+            self._positions[symbol] = self._positions.get(symbol, 0) + qty
+        else:
+            self._stops[ref] = {"symbol": symbol, "qty": qty,
+                                "stop_price": limit, "tif": tif}
+        self._rec("place_limit_order", symbol=symbol, qty=qty, tif=tif,
+                  limit_price=limit, ref=ref, status=rec["status"],
+                  fill_price=rec["fill_price"])
+        return {**self._order_result(rec), "limit_price": limit}
+
+    def cancel_inactive_stock_order(self, client_order_id: str) -> bool:
+        """Mirrors IBAdapter.cancel_inactive_stock_order: a simulated order
+        is never Inactive, so there is never a cancel to send."""
+        return False

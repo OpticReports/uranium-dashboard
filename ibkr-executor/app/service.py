@@ -898,8 +898,11 @@ def _blend_cycle(payload: dict | None, today: str) -> None:
 
 def _mirror_cycle(gen: int, wake: threading.Event) -> None:
     """One pass of the Composer mirror's books, the LIVE one first. Each
-    tick is bounded, persists its own state, and never raises; every wait
-    inside it is on `wake`, so a /kill is never queued behind a retry."""
+    tick is bounded, persists its own state, and never raises. Nothing in
+    it holds this thread behind a set `wake` except a venue call already in
+    flight: every wait is on `wake`, a brain read runs on a worker while the
+    tick waits on `wake`, and the wake is looked at between quotes and
+    between orders (the /kill alert states the bound, MIRROR_KILL_BOUND)."""
     for name in ("live", "dry"):
         book = MIRROR.get(name)
         if book is None:
@@ -924,12 +927,22 @@ def _loop_wait() -> float:
     return wait
 
 
+MIRROR_KILL_BOUND = (
+    "a mirror tick in flight hands the loop back within ONE venue call of "
+    "the kill: a brain read or a retry wait is dropped at once, a quote "
+    "read finishes (8s cap), an order being placed finishes its ack/fill "
+    "wait (10s / 6.5s) - longer only if the gateway's order-history lookup "
+    "stalls (20s per request); the mirror's own flatten then sends its "
+    "sells one by one under the same per-order waits")
+
+
 def _kill_mirror() -> tuple[dict | None, str]:
     """/kill's mirror stage: halt every mirror book and queue the LIVE
     book's flatten for the loop thread (which owns the venue connection).
     One atomic local write under the book's own halt lock - never a venue
     call, never a lock a tick can hold - and it never raises. (None, "")
-    when the mirror is not enabled."""
+    when the mirror is not enabled. A halt that is in force but could NOT
+    be written to disk says so (A-10): a restart would forget it."""
     if not MIRROR:
         return None, ""
     out: dict = {}
@@ -938,11 +951,19 @@ def _kill_mirror() -> tuple[dict | None, str]:
         try:
             h = book.halt("KILL", flatten=True)
             queued = bool(h.get("flatten") and not h.get("flatten_done"))
-            out[name] = "flatten_queued" if queued else "halted"
+            durable = h.get("persisted") is not False
+            out[name] = (("flatten_queued" if queued else "halted")
+                         + ("" if durable else "_not_persisted"))
             notes.append(f"mirror[{name}] HALTED"
                          + (", flatten QUEUED for the execution loop (sells "
                             "go at once in the regular session, else at the "
-                            "next open)" if queued else ""))
+                            "next open)" if queued else "")
+                         + ("" if durable else
+                            " — 🚨 IN FORCE but NOT written to disk (the halt "
+                            "file write failed): a RESTART would forget the "
+                            "halt" + (" and the flatten" if queued else "")
+                            + ", so re-send /kill (or flatten by hand) if "
+                            "the service restarts"))
         except Exception as exc:  # noqa: BLE001
             logger.exception("kill: the mirror[%s] halt failed: %s", name, exc)
             out[name] = "halt_failed"
@@ -952,19 +973,26 @@ def _kill_mirror() -> tuple[dict | None, str]:
         LOOP_WAKE.set()
     except Exception:  # noqa: BLE001
         pass
-    return out, " + " + "; ".join(notes)
+    return out, " + " + "; ".join(notes) + f" ({MIRROR_KILL_BOUND})"
 
 
 def _resume_mirror() -> tuple[dict | None, str]:
-    """/resume's mirror stage; (None, "") when the mirror is not enabled."""
+    """/resume's mirror stage; (None, "") when the mirror is not enabled.
+    Says WHICH halt it lifted per book (its reason and who set it): the
+    global /resume also lifts the halts the mirror set on ITSELF (a book
+    error, an account mismatch, an unreadable state file), and the operator
+    must see that it did."""
     if not MIRROR:
         return None, ""
     out: dict = {}
     for name, book in MIRROR.items():
         try:
             r = book.resume()
+            lifted = r.get("lifted") if r.get("was_halted") else None
             out[name] = {"was_halted": bool(r.get("was_halted")),
-                         "flatten_cancelled": bool(r.get("flatten_cancelled"))}
+                         "flatten_cancelled": bool(r.get("flatten_cancelled")),
+                         "lifted": lifted,
+                         "persisted": r.get("persisted") is not False}
         except Exception as exc:  # noqa: BLE001
             logger.exception("resume: the mirror[%s] failed: %s", name, exc)
             out[name] = {"error": str(exc)}
@@ -973,16 +1001,32 @@ def _resume_mirror() -> tuple[dict | None, str]:
     except Exception:  # noqa: BLE001
         pass
     cleared = [n for n, r in out.items() if r.get("was_halted")]
-    return out, (f"; mirror resumed ({', '.join(cleared)})" if cleared else "")
+    if not cleared:
+        return out, ""
+    what = "; ".join(
+        f"{n}: the halt {(out[n].get('lifted') or {}).get('reason')!r} set by "
+        f"{(out[n].get('lifted') or {}).get('by') or 'unknown'}"
+        + (" (its unfinished flatten is CANCELLED)"
+           if out[n].get("flatten_cancelled") else "")
+        + ("" if out[n].get("persisted") else
+           " — 🚨 NOT written to disk: a restart would bring the halt back")
+        for n in cleared)
+    return out, f"; mirror resumed ({', '.join(cleared)}) — lifted {what}"
 
 
-def _mirror_book(name: str | None):
-    """The mirror book a request names; the only one when it names none."""
+def _mirror_off_404() -> None:
+    """With MIRROR_ENABLED off the /mirror paths do not exist: the same 404
+    body an unknown path gets, BEFORE any auth (A-22)."""
     if not MIRROR:
-        raise HTTPException(status_code=404, detail="not found")
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+def _mirror_book(name):
+    """The mirror book a request names; the only one when it names none."""
+    _mirror_off_404()
     if name is None and len(MIRROR) == 1:
         return next(iter(MIRROR.values()))
-    if name not in MIRROR:
+    if not isinstance(name, str) or name not in MIRROR:
         raise HTTPException(
             status_code=400,
             detail=f"name the book: one of {sorted(MIRROR)} (\"book\")")
@@ -1564,12 +1608,15 @@ def health():
     if MIRROR:
         # Only when MIRROR_ENABLED. health() never raises; the guard is the
         # belt this endpoint wears everywhere (a 500 here restarts the
-        # container).
+        # container). This endpoint takes no token: the mirror block is
+        # configuration, enumerated states and booleans ONLY - never a
+        # sentence that could carry the account's positions or cash (A-15;
+        # the text is on /status).
         try:
             body["mirror"] = {n: b.health() for n, b in MIRROR.items()}
         except Exception as exc:  # noqa: BLE001
             logger.warning("mirror health block failed (ignored): %s", exc)
-            body["mirror"] = {"error": "unavailable"}
+            body["mirror"] = {"error": True}
     if OUTAGES is not None:
         # Guarded: healthCheckPath is /health, so a raise here 500s the probe
         # and Render restarts the WHOLE container - executor included,
@@ -1640,7 +1687,8 @@ def mirror_feed(x_read_token: str | None = Header(default=None),
     and the last sessions' decisions and fills. Gated by READ_TOKEN via
     X-Read-Token, like /blend/feed; 404 while MIRROR_ENABLED is off or no
     read token is set."""
-    if not MIRROR or not settings.read_token:
+    _mirror_off_404()
+    if not settings.read_token:
         raise HTTPException(status_code=404, detail="not found")
     supplied = x_read_token or ""
     if not secrets.compare_digest(supplied.encode("utf-8"),
@@ -1656,30 +1704,40 @@ def mirror_halt(x_exec_token: str | None = Header(default=None),
                 token: str | None = Query(default=None)):
     """Stop the mirror's books from trading WITHOUT selling anything (/kill
     is the one that flattens). Positions stay; POST /mirror/resume or
-    /resume lifts it."""
+    /resume lifts it. A flatten already in flight is not forgotten: the
+    loop still settles its orders."""
+    _mirror_off_404()
     _auth(x_exec_token, token)
-    if not MIRROR:
-        raise HTTPException(status_code=404, detail="not found")
-    out = {n: bool(b.halt("operator halt").get("halted"))
-           for n, b in MIRROR.items()}
+    got = {n: b.halt("operator halt") for n, b in MIRROR.items()}
+    out = {n: bool(h.get("halted")) for n, h in got.items()}
+    lost = sorted(n for n, h in got.items() if h.get("persisted") is False)
     LOOP_WAKE.set()
     send("🛑 mirror HALTED by the operator (no flatten): "
          + ", ".join(sorted(out)) + " — positions are kept; POST "
-         "/mirror/resume lifts it")
-    return {"ok": True, "halted": out}
+         "/mirror/resume lifts it"
+         + (f". 🚨 NOT written to disk for {', '.join(lost)}: a restart "
+            f"would forget the halt" if lost else ""))
+    resp = {"ok": True, "halted": out}
+    if lost:
+        resp["not_persisted"] = lost
+    return resp
 
 
 @app.post("/mirror/resume")
 def mirror_resume(x_exec_token: str | None = Header(default=None),
                   token: str | None = Query(default=None)):
     """Lift the mirror's halt and nothing else (the ladder and the blend
-    are untouched). A flatten not yet finished is cancelled."""
+    are untouched). A flatten not yet finished is cancelled. The answer and
+    the alert say which halt was lifted, per book."""
+    _mirror_off_404()
     _auth(x_exec_token, token)
     out, note = _resume_mirror()
-    if out is None:
-        raise HTTPException(status_code=404, detail="not found")
     send("mirror resume requested" + (note or " (no book was halted)"))
     return {"ok": True, "mirror": out}
+
+
+def _mirror_body(body) -> dict:
+    return body if isinstance(body, dict) else {}
 
 
 @app.post("/mirror/transfer")
@@ -1689,14 +1747,16 @@ def mirror_transfer(body: dict | None = Body(default=None),
     """Queue a move of capital between two sleeves of one mirror book:
     {"from", "to", "amount", "note"?, "book"?}. It rides the next session's
     plan - the POLICY operations that move money between symphonies on
-    Composer land here the same day (ONE BRAIN, TWO BROKERS)."""
+    Composer land here the same day (ONE BRAIN, TWO BROKERS). A transfer
+    that moves less than asked is said and its remainder re-queued."""
+    _mirror_off_404()
     _auth(x_exec_token, token)
-    body = body if isinstance(body, dict) else {}
+    body = _mirror_body(body)
     book = _mirror_book(body.get("book"))
     try:
         req = book.request_transfer(body.get("from"), body.get("to"),
                                     body.get("amount"), body.get("note") or "")
-    except ValueError as exc:
+    except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True, "book": book.cfg.name, "request": req,
             "note": "queued; applied with the next session's plan"}
@@ -1707,19 +1767,93 @@ def mirror_credit(body: dict | None = Body(default=None),
                   x_exec_token: str | None = Header(default=None),
                   token: str | None = Query(default=None)):
     """Queue a cash adjustment of one sleeve: {"sleeve", "amount", "note"?,
-    "book"?} - a dividend the account received for that sleeve's shares
-    (+), a fee (-). A live book takes a credit only from cash the account
-    holds beyond the book."""
+    "book"?} - cash the account received for that sleeve (+), a fee (-).
+    Debits are applied first; a live book takes a credit only from cash the
+    account holds beyond the book. (Dividends the brain lists are booked by
+    the book itself, as receivables.)"""
+    _mirror_off_404()
     _auth(x_exec_token, token)
-    body = body if isinstance(body, dict) else {}
+    body = _mirror_body(body)
     book = _mirror_book(body.get("book"))
     try:
         req = book.request_credit(body.get("sleeve"), body.get("amount"),
                                   body.get("note") or "")
-    except ValueError as exc:
+    except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True, "book": book.cfg.name, "request": req,
             "note": "queued; applied before the next session's plan"}
+
+
+@app.post("/mirror/resolve")
+def mirror_resolve(body: dict | None = Body(default=None),
+                   x_exec_token: str | None = Header(default=None),
+                   token: str | None = Query(default=None)):
+    """State what an UNRESOLVED order of a mirror book did: {"id",
+    "filled", "price"?, "commission"?, "note"?, "book"?}. The loop thread
+    books that order of the open run or flatten at exactly what is stated
+    (journaled, alerted) - unless the venue still reports it working. The
+    repair for an order the venue can no longer answer for."""
+    _mirror_off_404()
+    _auth(x_exec_token, token)
+    body = _mirror_body(body)
+    book = _mirror_book(body.get("book"))
+    try:
+        req = book.request_resolve(body.get("id"), body.get("filled"),
+                                   body.get("price"), body.get("commission"),
+                                   body.get("note") or "")
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    LOOP_WAKE.set()
+    send(f"mirror[{book.cfg.name}] resolve requested by the operator: order "
+         f"{req['order']} = {req['filled']} filled"
+         + (f" @ {req['price']}" if req.get("price") else "")
+         + " — the loop applies it (or refuses it) and says so")
+    return {"ok": True, "book": book.cfg.name, "request": req,
+            "note": "queued; the execution loop applies or refuses it"}
+
+
+@app.post("/mirror/adjust")
+def mirror_adjust(body: dict | None = Body(default=None),
+                  x_exec_token: str | None = Header(default=None),
+                  token: str | None = Query(default=None)):
+    """A signed correction of ONE sleeve of a mirror book: {"sleeve",
+    "symbol"?, "shares"?, "cash"?, "note", "book"?} - shares of one symbol
+    and / or its cash. Applied by the loop thread only while no run is open
+    (journaled, alerted); a sleeve's shares can never go negative. The
+    repair path for any share-count divergence."""
+    _mirror_off_404()
+    _auth(x_exec_token, token)
+    body = _mirror_body(body)
+    book = _mirror_book(body.get("book"))
+    try:
+        req = book.request_adjust(body.get("sleeve"), body.get("symbol"),
+                                  body.get("shares"), body.get("cash"),
+                                  body.get("note") or "")
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    LOOP_WAKE.set()
+    send(f"mirror[{book.cfg.name}] adjustment requested by the operator: "
+         f"{req['sleeve']} {req.get('symbol') or ''} shares "
+         f"{req.get('shares', 0):+d} cash {req.get('cash', 0.0):+,.2f} "
+         f"({req.get('note')}) — the loop applies it when no run is open")
+    return {"ok": True, "book": book.cfg.name, "request": req,
+            "note": "queued; applied by the execution loop when no run is open"}
+
+
+@app.api_route("/mirror/{rest:path}", include_in_schema=False,
+               methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD",
+                        "OPTIONS"])
+def mirror_fallback(rest: str):
+    """Everything else under /mirror. With MIRROR_ENABLED off: the 404 an
+    unknown path gets, whatever the method (A-22: the mirror's routes must
+    not answer 401 or 405 where there was nothing before). With it on: what
+    FastAPI would have said without this catch-all - 405 for a known path
+    asked with the wrong method, 404 for an unknown one."""
+    _mirror_off_404()
+    if rest in ("halt", "resume", "transfer", "credit", "resolve", "adjust",
+                "feed"):
+        raise HTTPException(status_code=405, detail="Method Not Allowed")
+    raise HTTPException(status_code=404, detail="Not Found")
 
 
 @app.get("/blend/feed")

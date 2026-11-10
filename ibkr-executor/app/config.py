@@ -111,9 +111,20 @@ class Settings(BaseSettings):
     # a live book's positions.
     mirror_state_path: str = "./data/mirror_state.json"
     mirror_dry_state_path: str = "./data/mirror_dry_state.json"
-    mirror_decide_offset_s: float = 5.0   # act this long after the decision bar
+    # The brain's decide_utc is the END of the decision bar (15:54:00 ET on a
+    # full day); FMP publishes that bar 10-25 s after it ends, so the book
+    # asks 25 s later. The three are clamped at build to the range the book
+    # is made for (offset 0..120 s, cancel lead 20..120 s, band 0.1%..5%),
+    # with a log line: a value outside it used to disable the book silently.
+    mirror_decide_offset_s: float = 25.0  # act this long after the decision bar
     mirror_cancel_before_close_s: float = 60.0   # leftovers cancelled then
     mirror_quote_band: float = 0.015      # venue quote vs the brain's price
+    # Dividends the brain lists become a receivable per sleeve (shares held
+    # at the close before the ex-date), credited from the pay date.
+    # "composer": only a sleeve that still holds the payer then is credited,
+    # else the cash stays unallocated in the account (what Composer's
+    # symphonies do); "holder": whoever held the shares is always credited.
+    mirror_dividend_rule: str = "composer"   # MIRROR_DIVIDEND_RULE
 
 
 settings = Settings()

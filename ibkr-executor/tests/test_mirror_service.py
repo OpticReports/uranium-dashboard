@@ -8,6 +8,11 @@
   S3  a mirror that cannot be built leaves the rest of the service up, loudly
   S4  the real loop drives a paper session end to end and then asks for nothing
   S5  the deploy file puts both mirror books on the mounted disk and never switches the mirror on
+  S6  the adversarial review's service findings: /health carries no account text (A-15); a non-string
+      "book" is a 400 (A-18); with the mirror off every /mirror path is the 404 an unknown path gets,
+      before any auth and whatever the method (A-22); /kill is not queued behind a mirror tick's brain
+      read (A-23); a halt that is not on disk says so (A-10); /resume says which halt it lifted; the
+      operator's repair routes (/mirror/resolve, /mirror/adjust) validate and queue
 """
 from __future__ import annotations
 
@@ -36,7 +41,8 @@ def _wait_until(cond, timeout=10.0):
 
 
 class FakeBrain:
-    """the brain's two answers on the wall clock: `decide_in` seconds from the first read"""
+    """the brain's two answers (contract schema 2) on the wall clock: the decision bar ends
+    `decide_in` seconds after the first read"""
     decide_in = 3600.0
 
     def __init__(self, url=None, token=None):
@@ -47,9 +53,10 @@ class FakeBrain:
         now = datetime.now(timezone.utc)
         decide = self.t0 + timedelta(seconds=self.decide_in)
         day = now.astimezone(mm.ET).date().isoformat()
-        return {"schema": 1, "kind": mm.SESSION_KIND, "now_utc": mm._iso(now), "session": day,
+        return {"schema": 2, "kind": mm.SESSION_KIND, "now_utc": mm._iso(now), "session": day,
                 "open_utc": mm._iso(decide - timedelta(hours=6)), "decide_utc": mm._iso(decide),
-                "close_utc": mm._iso(decide + timedelta(minutes=5)), "close_et": "16:00"}, "ok"
+                "decide_et": decide.astimezone(mm.ET).strftime("%H:%M"),
+                "close_utc": mm._iso(decide + timedelta(minutes=6)), "close_et": "16:00"}, "ok"
 
     def intents(self, after):
         self.intents_calls += 1
@@ -57,9 +64,11 @@ class FakeBrain:
         engines = {n: {"status": "ok", "target": t, "rule": "threshold" if n == "KMLM" else "daily",
                        "corridor": 0.1 if n == "KMLM" else None, "version": "v-" + n, "symphony": "s", "label": "firm"}
                    for n, t in TARGETS.items()}
-        return {"schema": 1, "kind": mm.INTENTS_KIND, "session": now.astimezone(mm.ET).date().isoformat(),
-                "asof_utc": mm._iso(now), "replay": False, "engines": engines, "prices": dict(PX), "price_notes": {},
-                "problems": []}, "ok"
+        return {"schema": 2, "kind": mm.INTENTS_KIND, "session": now.astimezone(mm.ET).date().isoformat(),
+                "pinned": True, "asof_utc": after, "built_utc": mm._iso(now),
+                "decision_bar": {"end_utc": after, "spy_utc": after, "complete": True}, "replay": False,
+                "engines": engines, "prices": dict(PX), "price_times": {}, "price_notes": {}, "dividends": [],
+                "splits": [], "sync": {}, "problems": []}, "ok"
 
 
 def _boot(tmp_path, monkeypatch, enabled=True, **over):
@@ -108,7 +117,8 @@ def test_s1_disabled_the_service_is_what_it_was(tmp_path, monkeypatch):
         r = c.post("/resume", params=T).json()
         assert set(r) == {"ok", "cleared", "blend_cleared", "kill_journal_cleared"}
         assert c.get("/mirror/feed", headers={"X-Read-Token": "r"}).status_code == 404
-        for route in ("/mirror/halt", "/mirror/resume", "/mirror/transfer", "/mirror/credit"):
+        for route in ("/mirror/halt", "/mirror/resume", "/mirror/transfer", "/mirror/credit", "/mirror/resolve",
+                      "/mirror/adjust"):
             assert c.post(route, params=T, json={}).status_code == 404, route
         assert not any("mirror" in m for m in sent)
     assert not [f for f in os.listdir(tmp_path) if f.startswith("mirror")]     # no state file either
@@ -134,8 +144,10 @@ def test_s2_enabled_offline_is_one_paper_book_with_its_controls(tmp_path, monkey
         assert c.post("/mirror/halt", params=T).json() == {"ok": True, "halted": {"dry": True}}
         assert c.get("/health").json()["mirror"]["dry"]["halted"] is True
         assert c.get("/status", params=T).json()["halted"] is None            # the ladder was not touched
-        assert c.post("/mirror/resume", params=T).json()["mirror"]["dry"]["was_halted"] is True
+        lifted = c.post("/mirror/resume", params=T).json()["mirror"]["dry"]
+        assert lifted["was_halted"] is True and lifted["lifted"]["reason"] == "operator halt" and lifted["lifted"]["by"] == "operator"
         assert book.halt_state()["halted"] is False
+        assert any("mirror resume requested" in m and "'operator halt' set by operator" in m for m in sent)
 
         # /kill halts it too and reports it; /resume lifts it
         k = c.post("/kill", params=T).json()
@@ -144,7 +156,9 @@ def test_s2_enabled_offline_is_one_paper_book_with_its_controls(tmp_path, monkey
         assert any("mirror[dry] HALTED" in m for m in sent)
         r = c.post("/resume", params=T).json()
         assert r["mirror"]["dry"]["was_halted"] is True and book.halt_state()["halted"] is False
-        assert any("mirror resumed (dry)" in m for m in sent)
+        assert r["mirror"]["dry"]["lifted"]["reason"] == "KILL"
+        assert any("mirror resumed (dry)" in m and "the halt 'KILL' set by operator" in m for m in sent)
+        assert any("mirror[dry] HALTED" in m and "hands the loop back within ONE venue call" in m for m in sent)
 
         # the feed: READ_TOKEN only
         assert c.get("/mirror/feed").status_code == 401
@@ -164,6 +178,25 @@ def test_s2_enabled_offline_is_one_paper_book_with_its_controls(tmp_path, monkey
         assert c.post("/mirror/credit", params=T, json={"sleeve": "HARV", "amount": 12.5}).json()["ok"]
         service.LOOP_WAKE.set()
         assert _wait_until(lambda: len(book.view()["pending_requests"]) == 2)
+
+        # the operator's repair routes: validated, then queued for the loop (which applies or refuses them)
+        assert c.post("/mirror/resolve", json={"id": "mirror-x", "filled": 0}).status_code == 401
+        assert c.post("/mirror/resolve", params=T, json={"id": "mirror-x", "filled": 5}).status_code == 400     # no price
+        assert c.post("/mirror/resolve", params=T, json={"filled": 0}).status_code == 400                       # no id
+        ok = c.post("/mirror/resolve", params=T, json={"id": "mirror-x", "filled": 0, "note": "gone"}).json()
+        assert ok["ok"] and ok["request"]["kind"] == "resolve" and ok["request"]["order"] == "mirror-x"
+        assert _wait_until(lambda: any("resolve request" in m and "REFUSED" in m for m in sent))      # no such order: said
+        assert c.post("/mirror/adjust", json={"sleeve": "HG", "cash": 1.0, "note": "x"}).status_code == 401
+        assert c.post("/mirror/adjust", params=T, json={"sleeve": "HG", "cash": 1.0}).status_code == 400        # no note
+        assert c.post("/mirror/adjust", params=T, json={"sleeve": "HG", "shares": -3, "note": "x"}).status_code == 400
+        assert c.post("/mirror/adjust", params=T, json={"sleeve": "HG", "note": "x"}).status_code == 400
+        assert c.post("/mirror/adjust", params=T, json={"sleeve": "NOPE", "cash": 1.0, "note": "x"}).status_code == 400
+        ok = c.post("/mirror/adjust", params=T, json={"sleeve": "HG", "cash": -12.5, "note": "wire fee"}).json()
+        assert ok["ok"] and ok["request"]["kind"] == "adjust"
+        assert _wait_until(lambda: book.view()["book"]["sleeves"]["HG"]["cash"] == pytest.approx(29_000.0 - 12.5))
+        assert any("ADJUSTED by the operator" in m for m in sent)
+        assert c.get("/mirror/halt", params=T).status_code == 405             # enabled: a wrong method is a 405, as ever
+        assert c.post("/mirror/nope", params=T).status_code == 404
 
 
 def test_s2_the_feed_is_dark_without_a_read_token(tmp_path, monkeypatch):
@@ -233,3 +266,119 @@ def test_s5_the_deploy_file_keeps_the_books_on_the_disk_and_the_mirror_off():
         assert f"key: {key}\n        sync: false" in block, key      # typed in the dashboard, never a blueprint literal
     assert settings.__class__.model_fields["mirror_enabled"].default is False
     assert settings.__class__.model_fields["mirror_live_engines"].default == ""
+
+
+# --- S6: the adversarial review's service findings -------------------------------------------------
+def test_s6_a15_health_carries_no_account_text(tmp_path, monkeypatch):
+    """A-15: the pre-trade reason ('AAPL: the book holds 0, the venue 3', 'the book's cash $x exceeds
+    the account's $y') used to be published verbatim on the UNAUTHENTICATED /health"""
+    import test_mirror as tm
+    client, service, _ = _boot(tmp_path, monkeypatch, enabled=False)
+    r = tm.live_rig(tmp_path / "live")
+    r.venue.seed_position("AAPL", 3)                       # a stranger's shares in the account
+    r.clock.interrupt = True
+    r.tick("15:55:05")
+    with client as c:
+        _ready(service)
+        monkeypatch.setattr(service, "MIRROR", {"live": r.m})
+        first = c.get("/health")                           # no token
+        assert first.status_code == 200
+        r.venue._positions.pop("AAPL")
+        r.venue.cash = 90_000.0
+        r.clock.now += timedelta(seconds=3)
+        r.m.tick(r.venue)
+        second = c.get("/health")
+        status = c.get("/status", params=T).json()["mirror"]["live"]
+        monkeypatch.setattr(service, "MIRROR", {})
+    assert "AAPL" in (r.m._why or "") or "exceeds the account's $90,000.00" in r.m._why    # (the reason does exist ...)
+    assert "exceeds the account's $90,000.00" in status["waiting_on"]                       # ... and is on /status)
+    for body in (first, second):
+        text = body.text
+        assert "AAPL" not in text and "the venue" not in text and "90,000" not in text and "$" not in text
+        block = body.json()["mirror"]["live"]
+        assert block["waiting"] is True and block["error"] is False and "waiting_on" not in block and "last_error" not in block
+        for k, v in block.items():                         # configuration, enumerated states, booleans: no sentence
+            assert isinstance(v, (bool, list)) or v is None or (isinstance(v, str) and " " not in v), (k, v)
+
+
+def test_s6_a18_a_book_that_is_not_a_name_is_a_400(tmp_path, monkeypatch):
+    client, service, _ = _boot(tmp_path, monkeypatch)
+    with client as c:
+        _ready(service)
+        for bad in (["dry"], {"a": 1}, 7, True):
+            for route, body in (("/mirror/transfer", {"from": "HG", "to": "HARV", "amount": 100}),
+                                ("/mirror/credit", {"sleeve": "HG", "amount": 1}),
+                                ("/mirror/resolve", {"id": "x", "filled": 0}),
+                                ("/mirror/adjust", {"sleeve": "HG", "cash": 1.0, "note": "x"})):
+                assert c.post(route, params=T, json=dict(body, book=bad)).status_code == 400, (route, bad)
+        assert c.post("/mirror/transfer", params=T, json={"from": ["HG"], "to": "HARV", "amount": 100}).status_code == 400
+        assert c.post("/mirror/credit", params=T, json={"sleeve": {"x": 1}, "amount": 1}).status_code == 400
+        assert c.post("/mirror/transfer", params=T, json={"from": "HG", "to": "HARV", "amount": 100,
+                                                          "book": "dry"}).status_code == 200      # the twin
+
+
+def test_s6_a22_with_the_mirror_off_every_mirror_path_is_the_404_of_an_unknown_path(tmp_path, monkeypatch):
+    client, service, _ = _boot(tmp_path, monkeypatch, enabled=False, read_token="r")
+    with client as c:
+        _ready(service)
+        ref = c.post("/nope/halt", params=T)
+        assert ref.status_code == 404
+        for route in ("halt", "resume", "transfer", "credit", "resolve", "adjust", "feed", "anything/else"):
+            for call in (lambda u: c.post(u), lambda u: c.post(u, params=T), lambda u: c.get(u, params=T),
+                         lambda u: c.put(u, params=T), lambda u: c.delete(u), lambda u: c.post(u, params=T, json={"x": 1})):
+                got = call(f"/mirror/{route}")
+                assert (got.status_code, got.json()) == (ref.status_code, ref.json()), (route, got.status_code, got.text)
+        # ... and nothing else moved: the other routes answer as they always did
+        assert c.post("/kill").status_code == 401 and c.get("/kill", params=T).status_code == 405
+
+
+def test_s6_a23_the_kill_is_not_queued_behind_the_mirror_ticks_brain_read(tmp_path, monkeypatch):
+    """through the REAL service loop: the first thing the loop thread does after a mirror tick is
+    nino34_weekly(), and the stage right behind it is 'a /kill that landed while this iteration was
+    parked'. A tick blocked in a 3 s brain read used to hold it for the 3 s."""
+    slow = 3.0
+    real = FakeBrain.intents
+    state = {"in": 0.0}
+
+    def intents(self, after):
+        state["in"] = time.time()
+        time.sleep(slow)                                   # the brain is building
+        return real(self, after)
+    monkeypatch.setattr(FakeBrain, "intents", intents)
+    monkeypatch.setattr(FakeBrain, "decide_in", 1.0)
+    client, service, sent = _boot(tmp_path, monkeypatch)
+    stamps = []
+    monkeypatch.setattr(service, "nino34_weekly", lambda: stamps.append(time.time()))
+    with client as c:
+        _ready(service)
+        assert _wait_until(lambda: state["in"] > 0, timeout=15)           # the tick is inside the brain read
+        t0 = time.time()
+        assert c.post("/kill", params=T).json()["ok"]                     # answers at once (stage 1) ...
+        answered = time.time() - t0
+        assert _wait_until(lambda: any(t > t0 for t in stamps), timeout=15)
+        waited = min(t for t in stamps if t > t0) - t0                    # ... stage 2 is the loop thread's
+        book = service.MIRROR["dry"]
+        assert book.halt_state()["halted"] is True and book.state["last_session"] is None      # nothing was traded
+    assert answered < 0.5 and waited < 1.0, (answered, waited)
+
+
+def test_s6_a10_a_kill_whose_mirror_halt_is_not_on_disk_says_so(tmp_path, monkeypatch):
+    client, service, sent = _boot(tmp_path, monkeypatch)
+    with client as c:
+        _ready(service)
+        real = mm.atomic_write
+
+        def broken(path, obj):
+            if path.endswith(".halt"):
+                raise OSError(30, "Read-only file system")
+            return real(path, obj)
+        monkeypatch.setattr(mm, "atomic_write", broken)
+        k = c.post("/kill", params=T).json()
+        assert k["mirror"] == {"dry": "halted_not_persisted"}
+        assert any("mirror[dry] HALTED" in m and "NOT written to disk" in m and "RESTART would forget" in m for m in sent)
+        h = c.post("/mirror/halt", params=T).json()
+        assert h["not_persisted"] == ["dry"]
+        monkeypatch.setattr(mm, "atomic_write", real)
+        sent.clear()
+        k = c.post("/kill", params=T).json()                               # the twin: written
+        assert k["mirror"] == {"dry": "halted"} and not any("NOT written to disk" in m for m in sent if "mirror[dry]" in m)

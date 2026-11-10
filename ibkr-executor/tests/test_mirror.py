@@ -1,17 +1,24 @@
 """Gate tests for app/mirror.py, the Composer mirror's executor strategy (composer/IBKR_MIRROR.md).
 
-Every behavioural gate has a broken twin that must land on the other side.
+Every behavioural gate has a broken twin that must land on the other side. The doubles here (Rig,
+Venue, Brain, Clock) are shared by the other mirror test files: tests/test_mirror_review.py (the
+adversarial review's findings, one gate each), tests/test_mirror_sweeps.py (crash sweeps and fuzz)
+and tests/ibrig.py (the same manager over the REAL IBAdapter).
 
   M1  a session end to end on the paper book: seeded sleeves, one netted order per symbol, sells
       before buys, the book equal to the account afterwards, nothing repeated on the next tick
-  M2  timing and freshness: nothing before the decision bar ends; a payload computed before it, old,
-      for another session or a replay is never acted on; a missed window is a recorded NO TRADE
+  M2  timing and validity (contract v2): nothing before the decision bar ends plus the offset; a
+      payload that is not pinned, not as of the decision instant, whose bar is incomplete, built in
+      the future or before its own instant, for another session or a replay is never acted on; its
+      AGE is no test (a restart at 15:57 trades the payload built at 15:54); the brain's 503 while
+      the bar is being published is retried; a missed window is a recorded NO TRADE
   M3  live pre-trade gates: the blend on, a foreign position, cash the account does not have, or no
       cash claim each stop the session; the twin trades
   M4  the venue cross-check: a symbol the venue prices differently takes its sleeves out of the plan
       and nobody else's; a previous-close quote is no cross-check; an estimated price is replaced
   M5  write-ahead and restarts: an id is on disk before the venue sees it; a crash before or after the
-      placement books the order exactly once and never sends a second one; a lost ack is adopted
+      placement books the order exactly once and never sends a second one; a lost ack is adopted; a
+      restart onto a venue that has FORGOTTEN the order never books it as zero and never re-sends it
   M6  the window's end: a working order is cancelled, its partial fill booked at the venue's price,
       and the buys are sized from the cash actually there
   M7  a venue rejection books nothing and stops nobody else
@@ -26,11 +33,11 @@ Every behavioural gate has a broken twin that must land on the other side.
   M14 requests: a transfer rides the next plan and is zero-sum; a credit is applied once, and a live
       book takes it only from cash the account really has
   M15 sleeves: live seeding needs the account's cash; a removed engine is frozen (live) or dropped
-  M16 a commission reported late is debited later, once
+  M16 a commission reported late is debited later, once; one never reported is dropped LOUDLY
   M17 a fill with no reported price is booked at the reference, loudly
   M18 the loop cadence the book asks for
-  M19 build(): which engines are live, which paper; bad weights refuse to build
-  M20 the brain client: token header, the after instant, and why a read failed
+  M19 build(): which engines are live, which paper; bad weights refuse to build; settings clamped
+  M20 the brain client: token header, the after instant, the pinned payload kept for the second book
 """
 from __future__ import annotations
 
@@ -47,13 +54,14 @@ from app import mirror_core as mc
 from app.ib_adapter import DryAdapter
 
 UTC = timezone.utc
-DAY = "2026-11-10"                       # a Tuesday; EST: the decision bar ends 20:55:00Z
+DAY = "2026-11-10"                       # a Tuesday; EST: the decision bar ends 20:54:00Z
 PX = {"BIL": 91.5, "SOXL": 40.0, "TECL": 100.0, "PULS": 49.5, "BOXX": 113.0, "TQQQ": 80.0, "SPY": 600.0}
 T1 = {"HG": {"BIL": 1.0}, "KMLM": {"SOXL": 0.375, "TECL": 0.375, "PULS": 0.25}, "SLEEVE": {"BOXX": 1.0},
       "HARV": {"PULS": 1.0}}
 RULES = {"KMLM": ("threshold", 0.1)}
 ENGINES = ("HG", "KMLM", "SLEEVE", "HARV")
 W = {"HG": 0.29, "KMLM": 0.29, "SLEEVE": 0.27, "HARV": 0.15}
+DECISION_MINUTES = 6                     # contract v2: decide_utc = close - 6 min EXACTLY (the bar ENDING 15:54:00)
 
 
 def at(hms: str, day: str = DAY) -> datetime:
@@ -61,6 +69,10 @@ def at(hms: str, day: str = DAY) -> datetime:
     h, m, s = (list(map(int, hms.split(":"))) + [0])[:3]
     y, mo, d = map(int, day.split("-"))
     return datetime(y, mo, d, h, m, s, tzinfo=mm.ET).astimezone(UTC)
+
+
+def decide_utc(session: str = DAY, close: str = "16:00") -> str:
+    return mm._iso(at(close, session) - timedelta(minutes=DECISION_MINUTES))
 
 
 class Clock:
@@ -76,7 +88,8 @@ class Clock:
         return self.interrupt
 
 
-def payload(now, targets=None, prices=None, session=DAY, rules=None, **over):
+def payload(now, targets=None, prices=None, session=DAY, rules=None, close="16:00", **over):
+    """a schema-2 intents payload: pinned to the session's decision instant, built at `now`"""
     rules = RULES if rules is None else rules
     engines = {}
     for name, tgt in (T1 if targets is None else targets).items():
@@ -84,9 +97,14 @@ def payload(now, targets=None, prices=None, session=DAY, rules=None, **over):
         base = {"symphony": "sym-" + name, "version": "v-" + name, "rule": rule, "corridor": cor}
         engines[name] = (dict(base, status="unavailable", note="no prices for X") if tgt is None else
                          dict(base, status="ok", target=tgt, label="firm", stale=[], caveats=[]))
-    out = {"schema": 1, "kind": mm.INTENTS_KIND, "session": session, "asof_utc": mm._iso(now), "replay": False,
-           "close_et": "16:00", "engines": engines, "prices": dict(PX if prices is None else prices),
-           "price_notes": {}, "quotes": None, "problems": []}
+    t = decide_utc(session, close)
+    out = {"schema": 2, "kind": mm.INTENTS_KIND, "session": session, "pinned": True, "asof_utc": t,
+           "built_utc": mm._iso(now), "decision_bar": {"end_utc": t, "spy_utc": t, "complete": True},
+           "replay": False, "close_et": close, "engines": engines, "prices": dict(PX if prices is None else prices),
+           "price_times": {}, "price_notes": {}, "dividends": [], "splits": [],
+           "sync": {n: {"state": "ok", "approved_version": "v-" + n, "approved_sha1": "x", "live_version": "v-" + n,
+                        "attested_utc": t} for n in engines},
+           "quotes": None, "problems": []}
     out.update(over)
     return out
 
@@ -95,6 +113,7 @@ class Brain:
     def __init__(self, clock):
         self.clock, self.make, self.fail, self.session_fail, self.shut, self.calls = clock, payload, None, None, False, []
         self.close = "16:00"
+        self.no_session_reason = None
 
     def session(self):
         if self.session_fail:
@@ -102,13 +121,16 @@ class Brain:
         now = self.clock.now
         e = now.astimezone(mm.ET)
         day = e.date().isoformat()
-        out = {"schema": 1, "kind": mm.SESSION_KIND, "now_utc": mm._iso(now), "session": None}
+        out = {"schema": 2, "kind": mm.SESSION_KIND, "now_utc": mm._iso(now), "session": None}
+        if self.no_session_reason:
+            return dict(out, reason=self.no_session_reason), "ok"
         if e.weekday() >= 5 or self.shut:
             return out, "ok"
         ch, cm = map(int, self.close.split(":"))
         close = at(f"{ch}:{cm}", day)
-        out.update(session=day, open_utc=mm._iso(at("9:30", day)), decide_utc=mm._iso(close - timedelta(minutes=5)),
-                   close_utc=mm._iso(close), close_et=self.close)
+        dec = close - timedelta(minutes=DECISION_MINUTES)
+        out.update(session=day, open_utc=mm._iso(at("9:30", day)), decide_utc=mm._iso(dec),
+                   decide_et=dec.astimezone(mm.ET).strftime("%H:%M"), close_utc=mm._iso(close), close_et=self.close)
         return out, "ok"
 
     def intents(self, after):
@@ -123,7 +145,9 @@ class Crash(BaseException):
 
 
 class Venue(DryAdapter):
-    """a scriptable account: cash, quotes, and orders that fill, rest, reject or lose their ack"""
+    """a scriptable account: cash, quotes, and orders that fill, rest, reject or lose their ack. SELLS
+    arrive as market orders (place_stock_order), BUYS as limit orders (place_limit_order), which - as
+    at a real venue - never fill above their limit: one priced above it rests."""
 
     def __init__(self, cash=0.0):
         super().__init__()
@@ -138,7 +162,11 @@ class Venue(DryAdapter):
         self.cash_claim = True
         self.cancel_raises = False
         self.crash_before, self.crash_after = set(), set()
-        self.placed = []
+        self.placed = []                   # (symbol, signed qty, client id) of every order that reached the venue
+        self.limits = {}                   # client id -> the limit of a buy
+        self.history_ok = True             # history_complete(): False = completed orders unavailable
+        self.forgotten = set()             # client ids the venue no longer answers for (a session boundary)
+        self.inactive_cancels = []
 
     def account_cash(self):
         if not self.cash_claim:
@@ -149,6 +177,9 @@ class Venue(DryAdapter):
         if symbol not in self.quotes:
             raise RuntimeError(f"no market price for {symbol}")
         return self.quotes[symbol], self.source.get(symbol, "live")
+
+    def history_complete(self):
+        return self.history_ok
 
     def _order_result(self, rec):
         out = {"order_ref": rec["order_ref"], "status": rec["status"]}
@@ -163,10 +194,17 @@ class Venue(DryAdapter):
                 out["filled_qty"] = rec["filled_qty"]
         return out
 
+    def _px(self, rec):
+        return self.fill_px.get(rec["symbol"], self.quotes.get(rec["symbol"], 100.0))
+
+    def _crosses(self, rec):
+        return rec.get("limit") is None or self._px(rec) <= rec["limit"] + 1e-12
+
     def _fill(self, rec, shares):
         sym = rec["symbol"]
-        px = self.fill_px.get(sym, self.quotes.get(sym, 100.0))
+        px = self._px(rec)
         sign = 1 if rec["qty"] > 0 else -1
+        assert rec.get("limit") is None or px <= rec["limit"] + 1e-12, "a limit order never fills above its limit"
         self._positions[sym] = self._positions.get(sym, 0) + sign * shares
         self.cash -= sign * shares * px + self.commission
         rec["filled_qty"] = rec.get("filled_qty", 0) + shares
@@ -174,24 +212,24 @@ class Venue(DryAdapter):
         if rec["filled_qty"] == abs(rec["qty"]):
             rec["status"] = "filled"
 
-    def place_stock_order(self, symbol, qty, order_type, stop_price=None, tif="DAY", ref_price=None,
-                          client_order_id=None):
-        assert order_type == "MKT" and tif == "DAY" and client_order_id
+    def _send(self, symbol, qty, client_order_id, limit):
         prior = self._orders.get(self._by_client.get(client_order_id, ""))
         if prior is not None and prior["status"] in ("working", "filled"):
             return {**self._order_result(prior), "duplicate": True}
         if symbol in self.crash_before:
             raise Crash(symbol)
         self.placed.append((symbol, qty, client_order_id))
+        if limit is not None:
+            self.limits[client_order_id] = limit
         ref = f"v-{len(self._orders) + 1}"
         rec = {"order_ref": ref, "symbol": symbol, "qty": qty, "status": "working", "fill_price": None,
-               "client_order_id": client_order_id, "filled_qty": 0}
+               "client_order_id": client_order_id, "filled_qty": 0, "limit": limit}
         self._orders[ref] = rec
         self._by_client[client_order_id] = ref
         if symbol in self.reject:
             rec.update(status="cancelled", reason="[201] Order rejected - insufficient funds")
             raise RuntimeError("order rejected by venue (status Cancelled): [201] Order rejected")
-        if symbol not in self.hold:
+        if symbol not in self.hold and self._crosses(rec):
             self._fill(rec, abs(qty))
         if symbol in self.crash_after:
             raise Crash(symbol)
@@ -199,6 +237,24 @@ class Venue(DryAdapter):
             self.ack_lost.discard(symbol)
             raise RuntimeError("no venue ack within 10s — state UNKNOWN; retry is idempotent via orderRef")
         return self._order_result(rec)
+
+    def place_stock_order(self, symbol, qty, order_type, stop_price=None, tif="DAY", ref_price=None,
+                          client_order_id=None):
+        assert order_type == "MKT" and tif == "DAY" and client_order_id
+        assert qty < 0, "the mirror's market orders are SELLS; a buy must be a limit order"
+        return self._send(symbol, qty, client_order_id, None)
+
+    def place_limit_order(self, symbol, qty, limit_price, tif="DAY", ref_price=None, client_order_id=None):
+        assert tif == "DAY" and client_order_id and qty > 0 and limit_price > 0
+        assert round(limit_price * 100) == pytest.approx(limit_price * 100, abs=1e-6) or limit_price < 1, \
+            f"a limit must be on the venue's price grid: {limit_price!r}"
+        out = self._send(symbol, qty, client_order_id, float(limit_price))
+        return dict(out, limit_price=float(limit_price))
+
+    def find_stock_order(self, client_order_id):
+        if client_order_id in self.forgotten:
+            return None
+        return super().find_stock_order(client_order_id)
 
     def cancel_stock_order(self, order_ref):
         rec = self._orders.get(order_ref)
@@ -209,24 +265,29 @@ class Venue(DryAdapter):
         if self.cancel_raises:
             raise RuntimeError(f"cancel of {order_ref} not acknowledged — state UNKNOWN (fail closed)")
         part = min(self.partial.get(rec["symbol"], 0), abs(rec["qty"]) - rec.get("filled_qty", 0))
-        if part:
+        if part and self._crosses(rec):
             self._fill(rec, part)
         if rec["status"] == "filled":
             raise RuntimeError(f"cannot cancel {order_ref}: order FILLED before the cancel landed")
         rec["status"] = "cancelled"
         return True
 
+    def cancel_inactive_stock_order(self, client_order_id):
+        self.inactive_cancels.append(client_order_id)
+        return False
+
     def stock_order_fills(self, client_order_id):
         rec = self._orders.get(self._by_client.get(client_order_id, ""))
-        if rec is None:
+        if rec is None or client_order_id in self.forgotten:
             return None
         got = rec.get("filled_qty", 0)
         return {"filled_qty": got, "avg_price": rec["fill_price"] if got and rec["symbol"] not in self.no_price else None,
-                "commission": rec.get("commission") if got and self.report_commission else None}
+                "commission": rec.get("commission") if got and self.report_commission else None,
+                "venue_status": {"filled": "Filled", "cancelled": "Cancelled", "working": "Submitted"}[rec["status"]]}
 
     def release(self, symbol):
         for rec in self._orders.values():
-            if rec["symbol"] == symbol and rec["status"] == "working":
+            if rec["symbol"] == symbol and rec["status"] == "working" and self._crosses(rec):
                 self._fill(rec, abs(rec["qty"]) - rec.get("filled_qty", 0))
 
 
@@ -261,16 +322,28 @@ class Rig:
         return [a for a in self.alerts if a.startswith("🚨")]
 
     def orders(self):
-        return [(s, q) for s, q, _ in self.venue.placed] if self.live else \
-            [(e["symbol"], e["qty"]) for e in self.m._dry.log if e["action"] == "place_stock_order"]
+        if self.live:
+            return [(s, q) for s, q, _ in self.venue.placed]
+        return [(e["symbol"], e["qty"]) for e in self.m._dry.log if e["action"] in ("place_stock_order", "place_limit_order")]
+
+    def journal(self):
+        try:
+            return [json.loads(x) for x in open(self.m.cfg.state_path + ".journal.jsonl")]
+        except FileNotFoundError:
+            return []
 
 
 def sound(rig):
-    """the invariants every gate ends on: the book is whole, equals the account, and never borrows"""
+    """the invariants every gate ends on: the book is whole, equals the account, and neither the book
+    nor the ACCOUNT ever borrows"""
     assert mc.check(rig.m.book, rig.ad.positions_snapshot()["stocks"], exact=True) == []
     assert rig.m.book.cash() >= -1e-6
     if rig.live:
+        assert rig.venue.cash >= -1e-6, f"the account borrowed: ${rig.venue.cash:,.2f}"
         assert rig.m.book.cash() <= rig.venue.cash + 1e-6
+        for cid, limit in rig.venue.limits.items():       # no buy ever filled above the price it was sized at
+            rec = rig.venue._orders[rig.venue._by_client[cid]]
+            assert rec["fill_price"] is None or rec["fill_price"] <= limit + 1e-9, (cid, rec["fill_price"], limit)
 
 
 # --- M1 ---------------------------------------------------------------------------------------------
@@ -324,39 +397,131 @@ def test_m1_day_two_sells_first_crosses_internally_and_nets(tmp_path):
 
 
 # --- M2 ---------------------------------------------------------------------------------------------
-def test_m2_nothing_before_the_decision_bar_and_a_stale_payload_is_never_acted_on(tmp_path):
+def test_m2_nothing_before_the_decision_bar_plus_the_offset_and_only_the_decision_instant_is_asked(tmp_path):
     r = Rig(tmp_path)
-    r.tick("15:54:59")
-    r.tick("15:55:04")                                        # the bar has ended; the offset has not
+    assert r.m.cfg.decide_offset_s == 25.0                    # contract v2: FMP publishes the bar 10-25 s late
+    r.tick("15:53:59")
+    r.tick("15:54:00")                                        # the bar has ended; the offset has not
+    r.tick("15:54:24")
     assert r.orders() == [] and r.brain.calls == []
-    early = at("15:54:40")
-    r.brain.make = lambda now: payload(early)                 # computed before the bar closed
-    r.tick("15:55:05")
+    wrong = lambda now: payload(now, asof_utc="2026-11-10T20:55:00Z")      # noqa: E731  the NEXT bar's end
+    r.brain.make = wrong
+    r.tick("15:54:25")
     assert r.orders() == [] and r.m.state["last_session"] is None
-    assert "before the decision bar closed" in r.m._why
-    assert all(a == "2026-11-10T20:55:00Z" for a, _ in r.brain.calls)          # asked for the right instant
+    assert "not the decision instant" in r.m._why
+    assert all(a == "2026-11-10T20:54:00Z" for a, _ in r.brain.calls)          # decide_utc used AS GIVEN
     assert len(r.brain.calls) > 10                            # ... and kept asking inside one tick's budget
-    r.brain.make = payload                                    # the twin: a payload computed now
+    r.brain.make = payload                                    # the twin: the decision as of that instant
     r.tick()
     assert r.m.state["last_session"] == DAY and r.orders()
+    row = r.m.state["last_run"]                               # the run records which bar and which sync it traded on
+    assert row["decision_bar"] == {"end_utc": "2026-11-10T20:54:00Z", "spy_utc": "2026-11-10T20:54:00Z", "complete": True}
+    assert row["sync"]["HG"]["state"] == "ok" and row["intents_asof"] == "2026-11-10T20:54:00Z"
 
 
 @pytest.mark.parametrize("bad, why", [
     (lambda now: payload(now, session="2026-11-09"), "session"),
     (lambda now: payload(now, replay=True), "replay"),
-    (lambda now: payload(now - timedelta(seconds=mm.INTENTS_MAX_AGE_S + 5)) | {"asof_utc": mm._iso(now - timedelta(seconds=mm.INTENTS_MAX_AGE_S + 5))}, "old"),
+    (lambda now: {k: v for k, v in payload(now).items() if k != "replay"}, "replay"),
+    (lambda now: payload(at("15:52:30")), "before the instant it decides"),     # built 90 s BEFORE the bar it claims
     (lambda now: payload(now, kind="something-else"), "not a mirror intents"),
+    (lambda now: payload(now, schema=1), "not a mirror intents"),
     (lambda now: payload(now + timedelta(seconds=300)), "future"),
     (lambda now: {k: v for k, v in payload(now).items() if k != "prices"}, "no engines or no prices"),
+    (lambda now: payload(now, pinned=False), "not pinned"),
+    (lambda now: {k: v for k, v in payload(now).items() if k != "pinned"}, "not pinned"),
+    (lambda now: payload(now, asof_utc=mm._iso(now)), "not the decision instant"),
+    (lambda now: payload(now, decision_bar={"end_utc": decide_utc(), "spy_utc": "2026-11-10T20:38:00Z", "complete": False}),
+     "decision bar is not complete"),
+    (lambda now: payload(now, decision_bar=None), "decision bar is not complete"),
+    (lambda now: {k: v for k, v in payload(now).items() if k != "built_utc"}, "no built_utc"),
 ])
-def test_m2_a_payload_that_is_not_todays_fresh_decision_is_refused(tmp_path, bad, why):
+def test_m2_a_payload_that_fails_a_contract_check_is_refused(tmp_path, bad, why):
     r = Rig(tmp_path)
-    r.clock.now = at("15:57:00")
     r.brain.make = bad
-    if why == "old":                                          # after the bar, but too old by the time it is read
-        r.clock.now = at("15:57:30")
-    r.tick()
+    r.tick("15:57:00")
     assert r.orders() == [] and why in r.m._why
+    r2 = Rig(tmp_path / "twin")                               # the twin: the same instant, a payload that passes
+    os.makedirs(tmp_path / "twin", exist_ok=True)
+    r2.tick("15:57:00")
+    assert r2.orders()
+
+
+def test_m2_a_pinned_payload_is_traded_however_long_ago_it_was_built(tmp_path):
+    """contract v2 (clarified): a pinned payload is immutable - the brain caches it by its instant and
+    never rebuilds it - so its age says nothing. Lateness is bounded by plan_by alone."""
+    built = payload(at("15:54:32"))                           # what the brain built once, and serves for ever
+    r = live_rig(tmp_path)
+    r.brain.make = lambda now: built
+    r.venue.seed_position("AAPL", 3)                          # the account is not the book ...
+    r.tick("15:54:35")
+    assert r.orders() == [] and "AAPL" in r.m._why and len(r.brain.calls) == 1      # asked once, then held
+    r.venue._positions.pop("AAPL")                            # ... until 15:57:10, 158 s after the build
+    r.tick("15:57:10")
+    assert r.m.state["last_run"]["outcome"] == "traded" and len(r.brain.calls) == 1
+    assert r.m.state["last_run"]["built_utc"] == "2026-11-10T20:54:32Z"
+    late = Rig(tmp_path / "late", live=True)                  # a RESTART at 15:57: the new process asks again and
+    os.makedirs(tmp_path / "late", exist_ok=True)             # is given the payload built at 15:54:32
+    late.tick("15:00")
+    late.brain.make = lambda now: built
+    late.boot()
+    late.tick("15:57:30")
+    assert late.m.state["last_run"]["outcome"] == "traded" and late.m.state["last_run"]["built_utc"] == "2026-11-10T20:54:32Z"
+    sound(late)
+    gone = Rig(tmp_path / "gone", live=True)                  # the twin: what bounds lateness is plan_by
+    os.makedirs(tmp_path / "gone", exist_ok=True)
+    gone.tick("15:00")
+    gone.brain.make = lambda now: built
+    gone.tick("15:58:00")
+    assert gone.orders() == [] and gone.m.state["last_run"]["outcome"] == "skipped"
+
+
+def test_m2_the_brains_503_while_the_decision_bar_is_published_is_retried_not_final(tmp_path):
+    """with a 25 s offset the first read can still be a 503 ('decision bar not published yet', for up
+    to 45 s past the instant): a transient reason, asked again every 3 s inside the same tick"""
+    r = live_rig(tmp_path)
+    real = r.brain.intents
+    answers = []
+
+    def intents(after):
+        if r.clock.now < at("15:54:44"):                      # FMP publishes the bar 44 s after it ended
+            answers.append(r.clock.now)
+            r.brain.calls.append((after, r.clock.now))
+            return None, "http_503"
+        return real(after)
+    r.brain.intents = intents
+    r.tick("15:54:25")
+    assert len(answers) == 7 and r.clock.slept[:7] == [mm.INTENTS_RETRY_S] * 7     # 15:54:25 .. 15:54:43, every 3 s
+    row = r.m.state["last_run"]
+    assert row["outcome"] == "traded" and row["session"] == DAY                    # ... and then it trades, same tick
+    assert r.m.state["history"][-1]["outcome"] == "traded" and not r.red()
+    sound(r)
+    down = Rig(tmp_path / "down")                             # the twin: it never comes -> a recorded NO TRADE that says why
+    os.makedirs(tmp_path / "down", exist_ok=True)
+    down.brain.fail = "http_503"
+    down.tick("15:54:25")
+    assert "decision bar is not published yet" in down.m._why and down.m.state["last_session"] is None
+    down.tick("15:57:00")
+    down.tick("15:58:00")
+    assert down.m.state["last_run"]["outcome"] == "skipped" and "not published yet" in down.m.state["last_run"]["reason"]
+
+
+def test_m2_sync_rows_and_price_times_are_recorded_verbatim_and_gate_nothing(tmp_path):
+    r = Rig(tmp_path)
+    sync = {"HG": {"state": "ok", "approved_version": "v1", "approved_sha1": "abc", "live_version": "v1",
+                   "attested_utc": "2026-11-10T20:50:00Z"},
+            "KMLM": {"state": "ok", "approved_version": "v2", "approved_sha1": "def", "live_version": "v2",
+                     "attested_utc": "2026-11-10T20:50:00Z", "paused": True},
+            "SLEEVE": {"state": "none", "approved_version": "v3", "approved_sha1": "x", "live_version": None, "attested_utc": None}}
+    times = {"BIL": "2026-11-10T20:54:00Z", "PULS": None, "SOXL": "2026-11-09T21:00:00Z", "TECL": "2026-11-10T20:54:00Z",
+             "BOXX": "2026-11-10T20:54:00Z", "NOPE": "2026-11-10T20:54:00Z"}
+    r.brain.make = lambda now: payload(now, sync=sync, price_times=times)
+    r.tick("15:55:05")
+    row = r.m.state["last_run"]
+    assert row["outcome"] == "traded" and len(row["orders"]) == 5              # a null or an old price time stops nobody
+    assert row["sync"] == sync                                                 # verbatim, 'paused' included
+    assert row["price_times"] == {k: v for k, v in times.items() if k != "NOPE"}
+    assert row["sleeves"]["KMLM"]["action"] == "trade"                         # no executor logic on a sync row
 
 
 def test_m2_a_missed_window_is_a_recorded_no_trade(tmp_path):
@@ -383,11 +548,26 @@ def test_m2_no_session_no_decision_and_the_half_day_clock(tmp_path):
     r.tick("15:55:05", day="2026-11-14")                      # a Saturday
     assert r.orders() == [] and r.m.state["last_session"] is None
     r.brain.close = "13:00"
-    r.brain.make = lambda now: payload(now, session="2026-11-27")
-    r.tick("12:54:59", day="2026-11-27")
+    r.brain.make = lambda now: payload(now, session="2026-11-27", close="13:00")
+    r.tick("12:54:24", day="2026-11-27")                      # the half day's bar ends 12:54:00; + 25 s
     assert r.orders() == []
-    r.tick("12:55:05", day="2026-11-27")
+    r.tick("12:54:25", day="2026-11-27")
     assert r.orders() and r.m.state["last_session"] == "2026-11-27"
+
+
+def test_m2_a_null_session_with_a_reason_is_reported(tmp_path):
+    r = Rig(tmp_path)
+    r.tick("15:00")
+    r.brain.no_session_reason = "the calendar table ends 2027-12-31"
+    r.clock.now += timedelta(seconds=mm.SESSION_TTL_S + 1)
+    r.tick()
+    r.tick("15:55:05")
+    assert r.orders() == [] and any("calendar table ends" in a for a in r.red())
+    assert r.m._rth(at("11:00")) is True                      # the kill path does not take that "no session" as a fact
+    q = Rig(tmp_path / "wk")                                  # the twin: a plain weekend says nothing
+    os.makedirs(tmp_path / "wk", exist_ok=True)
+    q.tick("15:55:05", day="2026-11-14")
+    assert not q.red() and not any("NO session" in a for a in q.alerts)
 
 
 def test_m2_the_brains_clock_must_agree_with_this_one(tmp_path):
@@ -405,6 +585,14 @@ def test_m2_the_brains_clock_must_agree_with_this_one(tmp_path):
     r.clock.now += timedelta(seconds=mm.SESSION_FAIL_TTL_S + 1)
     r.tick()
     assert r.orders()
+
+
+def test_m2_a_schema_1_clock_is_not_read(tmp_path):
+    r = Rig(tmp_path)
+    real = r.brain.session
+    r.brain.session = lambda: (dict(real()[0], schema=1), "ok")
+    r.tick("15:55:05")
+    assert r.orders() == [] and "schema 2" in r.m.brain_status["session"]["reason"]
 
 
 # --- M3 ---------------------------------------------------------------------------------------------
@@ -519,6 +707,59 @@ def test_m5_a_lost_ack_is_adopted_not_repeated(tmp_path):
     sound(r)
 
 
+@pytest.mark.parametrize("how", ["history unavailable", "the next day"])
+def test_m5_a_restart_onto_a_venue_that_forgot_the_order_never_books_zero_and_never_resends(tmp_path, how):
+    """the gates above restart onto a venue whose order memory survived. A real one forgets: a new
+    gateway session answers only for today, and only when its completed-order history is available.
+    'No such order' is then no proof - the order (which FILLED here) stays unresolved."""
+    r = live_rig(tmp_path)
+    r.venue.crash_after.add("PULS")                           # filled at the venue; the process dies before 'placed' is saved
+    with pytest.raises(Crash):
+        r.tick("15:55:05")
+    cid = f"mirror-{DAY}-B-PULS"
+    held = r.venue.stock_position("PULS")
+    assert held > 0
+    r.venue.crash_after.clear()
+    r.venue.forgotten.add(cid)                                # the new session has no row for it ...
+    day2 = DAY
+    if how == "history unavailable":
+        r.venue.history_ok = False                            # ... and cannot prove it never filled
+    else:
+        day2 = "2026-11-11"                                   # ... or it can, but only for TODAY's orders
+    r.boot()
+    r.tick("09:35:00" if day2 != DAY else "15:55:20", day=day2)
+    r.tick("09:35:05" if day2 != DAY else "15:55:25", day=day2)
+    run = r.m.state["run"]
+    assert run is not None and run["orders"][cid]["state"] == "intent" and run["orders"][cid].get("stuck")
+    assert [s for s, _ in r.orders()].count("PULS") == 1      # never sent again
+    assert r.m.book.positions().get("PULS") is None           # never booked as zero-and-done, never guessed
+    assert any("UNRESOLVED" in a and cid in a and "/mirror/resolve" in a for a in r.red())
+    r.venue.forgotten.clear()                                 # the twin: the venue answers after all -> adopted once
+    r.venue.history_ok = True
+    r.tick("09:36:00" if day2 != DAY else "15:55:40", day=day2)
+    r.tick("16:00:30", day=day2)
+    assert r.m.state["run"] is None and r.m.book.positions()["PULS"] == held
+    assert [s for s, _ in r.orders()].count("PULS") == 1
+
+
+def test_m5_an_order_that_provably_never_reached_the_venue_today_is_sent_again_once(tmp_path):
+    """the other side of D3: today's order, complete history, no record -> it never got there"""
+    r = live_rig(tmp_path)
+    real = r.venue.place_limit_order
+    n = {"k": 0}
+
+    def flaky(symbol, qty, limit_price, **kw):
+        if symbol == "BOXX" and not n["k"]:
+            n["k"] += 1
+            raise RuntimeError("gateway not connected")       # raised before anything reached the venue
+        return real(symbol, qty, limit_price, **kw)
+    r.venue.place_limit_order = flaky
+    r.tick("15:55:05")
+    assert r.m.state["last_run"]["outcome"] == "traded" and [s for s, _ in r.orders()].count("BOXX") == 1
+    assert r.m.book.positions()["BOXX"] > 0
+    sound(r)
+
+
 def test_m5_a_restart_between_sessions_changes_nothing(tmp_path):
     r = live_rig(tmp_path)
     r.tick("15:55:05")
@@ -569,7 +810,7 @@ def test_m6_buys_are_sized_from_the_cash_actually_there(tmp_path):
     row = r.m.state["last_run"]
     tq = next(o for o in row["orders"] if o["symbol"] == "TQQQ")
     hg = r.m.book.sleeves["HG"]
-    planned = int(row["sleeves"]["HG"]["pre_equity"] * 0.997 / PX["TQQQ"])
+    planned = int(row["sleeves"]["HG"]["pre_equity"] * (1 - r.m.cfg.core.cash_reserve_frac) / PX["TQQQ"])
     assert tq["filled"] < planned and hg.cash >= 0            # scaled to the proceeds; the twin is `planned`
     sound(r)
 
@@ -902,6 +1143,27 @@ def test_m16_a_commission_reported_late_is_debited_once(tmp_path):
     assert r2.m.state["commission_pending"] == [] and r2.m.book.cash() == pytest.approx(r2.venue.cash, abs=0.01)
 
 
+def test_m16_a_commission_never_reported_is_dropped_loudly_after_three_days(tmp_path):
+    r = live_rig(tmp_path)
+    r.venue.commission = 1.0
+    r.venue.report_commission = False
+    r.tick("15:55:05")
+    ids = sorted(p["id"] for p in r.m.state["commission_pending"])
+    assert len(ids) == 5
+    r.brain.shut = True                                       # (no further session: only the true-up runs)
+    r.tick("15:56:00")
+    r.tick("15:56:00", day="2026-11-12")                      # two days on: still asked for, nothing said
+    assert len(r.m.state["commission_pending"]) == 5 and not any("never reported" in a for a in r.alerts)
+    r.venue.forgotten.update(ids)                             # the venue no longer answers for those orders
+    r.m.state["last_session"] = "2026-11-13"                  # (reach the post-session path on the 13th)
+    r.brain.shut = False
+    r.tick("16:30:00", day="2026-11-13")                      # three days after the fills
+    assert r.m.state["commission_pending"] == []
+    said = [a for a in r.alerts if "never reported" in a]
+    assert len(said) == 5 and all(any(i in a for a in said) for i in ids) and all("/mirror/credit" in a for a in said)
+    assert any(x["event"] == "commission_dropped" for x in r.journal())
+
+
 # --- M17 --------------------------------------------------------------------------------------------
 def test_m17_a_fill_with_no_reported_price_is_booked_at_the_reference_loudly(tmp_path):
     r = live_rig(tmp_path)
@@ -918,7 +1180,7 @@ def test_m17_a_fill_with_no_reported_price_is_booked_at_the_reference_loudly(tmp
 def test_m18_the_cadence_the_book_asks_for(tmp_path):
     r = live_rig(tmp_path)
     r.tick("15:50:05")
-    assert r.m.next_wait() == pytest.approx(300.2, abs=0.01)  # wake exactly at decision + offset
+    assert r.m.next_wait() == pytest.approx(260.2, abs=0.01)  # wake exactly at decision (15:54:00) + offset (25 s)
     r.venue.hold.add("BIL")
     r.tick("15:55:05")
     assert r.m.state["run"] is not None and r.m.next_wait() == 2.0
@@ -945,9 +1207,11 @@ class S:
     mirror_live_engines = "HARV"
     mirror_brain_url = "http://brain"
     mirror_api_token = "t"
-    mirror_decide_offset_s = 5.0
+    mirror_decide_offset_s = 25.0
     mirror_cancel_before_close_s = 60.0
     mirror_quote_band = 0.015
+    mirror_dividend_rule = "composer"
+    poll_seconds = 300
     blend_enabled = False
     tws_userid = "u"
     tws_password = "p"
@@ -977,9 +1241,33 @@ def test_m19_build_splits_live_and_paper(tmp_path):
         mm.build(s)
 
 
+def test_m19_settings_outside_their_range_are_clamped_and_said(tmp_path, caplog):
+    s = S()
+    s.mirror_state_path, s.mirror_dry_state_path = str(tmp_path / "l.json"), str(tmp_path / "d.json")
+    s.mirror_cancel_before_close_s, s.mirror_decide_offset_s, s.mirror_quote_band = 240.0, 900.0, 0.5
+    said = []
+    with caplog.at_level("WARNING"):
+        books = mm.build(s, alert=said.append)
+    cfg = books["live"].cfg
+    assert (cfg.cancel_before_close_s, cfg.decide_offset_s, cfg.quote_band) == (120.0, 120.0, 0.05)
+    assert "cancel_before_close_s" in caplog.text and len(books["live"].clamped) == 3
+    assert any("clamped" in a for a in said) and books["live"].view()["settings_clamped"]
+    s.mirror_cancel_before_close_s, s.mirror_decide_offset_s, s.mirror_quote_band = 5.0, -3.0, 0.0
+    cfg = mm.build(s)["dry"].cfg
+    assert (cfg.cancel_before_close_s, cfg.decide_offset_s, cfg.quote_band) == (20.0, 0.0, 0.001)
+    s.mirror_cancel_before_close_s, s.mirror_decide_offset_s, s.mirror_quote_band = 60.0, 25.0, 0.015
+    assert mm.build(s)["live"].clamped == []                  # the twin: defaults are inside the range
+    s.mirror_dividend_rule = "nope"
+    with pytest.raises(ValueError):
+        mm.build(s)
+
+
 # --- M20 --------------------------------------------------------------------------------------------
 def test_m20_the_brain_client(monkeypatch):
     seen = []
+    T = "2026-11-10T20:54:00Z"
+    body = {"schema": 2, "kind": mm.INTENTS_KIND, "pinned": True, "asof_utc": T, "built_utc": "2026-11-10T20:54:21Z",
+            "decision_bar": {"end_utc": T, "spy_utc": T, "complete": True}}
 
     def fake_get(url, params=None, headers=None, timeout=None):
         seen.append((url, params, headers))
@@ -988,14 +1276,24 @@ def test_m20_the_brain_client(monkeypatch):
             return httpx.Response(401, json={"error": "unauthorized"}, request=req)
         if url.endswith("/mirror/session"):
             return httpx.Response(200, json={"kind": mm.SESSION_KIND}, request=req)
-        return httpx.Response(200, json={"kind": mm.INTENTS_KIND, "asof_utc": "2026-11-10T20:55:07Z"}, request=req)
+        if (params or {}).get("after") == "early":
+            return httpx.Response(503, json={"error": "decision bar not published yet"}, request=req)
+        if (params or {}).get("after") == "adhoc":
+            return httpx.Response(200, json=dict(body, pinned=False, decision_bar=None, asof_utc="adhoc"), request=req)
+        return httpx.Response(200, json=body, request=req)
     monkeypatch.setattr(mm.httpx, "get", fake_get)
     b = mm.HttpBrain(" http://brain/ ", " tok ")
     assert b.session() == ({"kind": mm.SESSION_KIND}, "ok")
-    p, why = b.intents("2026-11-10T20:55:00Z")
-    assert why == "ok" and seen[-1] == ("http://brain/mirror/intents", {"after": "2026-11-10T20:55:00Z"}, {"X-API-Token": "tok"})
+    p, why = b.intents(T)
+    assert why == "ok" and seen[-1] == ("http://brain/mirror/intents", {"after": T}, {"X-API-Token": "tok"})
     n = len(seen)
-    assert b.intents("2026-11-10T20:55:00Z")[0] is p and len(seen) == n       # the second book reuses the read
+    assert b.intents(T)[0] is p and len(seen) == n            # the second book reuses the read (the SAME object)
+    assert b.intents("early") == (None, "http_503")           # the bar is not published yet: the manager retries
+    assert b.intents("early") == (None, "http_503") and len(seen) == n + 2     # ... and a 503 is never kept
+    q, _ = b.intents("adhoc")                                 # nor is an unpinned payload
+    assert q["pinned"] is False and len(seen) == n + 3
+    b.intents("adhoc")
+    assert len(seen) == n + 4
     assert mm.HttpBrain("http://brain", "wrong").session() == (None, "auth")
     assert mm.HttpBrain("", "tok").session() == (None, "no_url")
 

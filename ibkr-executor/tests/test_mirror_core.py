@@ -1,4 +1,9 @@
-"""Gate tests for the Composer mirror core (app/mirror_core.py): pure logic, no adapter, no clock."""
+"""Gate tests for the Composer mirror core (app/mirror_core.py): pure logic, no adapter, no clock.
+
+Besides the original gates: the review's core items - the corridor read on INVESTED weights (reviewer
+B's M1), a sleeve in debt or idling in cash (A-05), the dust rule's two exemptions (A-05, A-09), buys
+sized AT THEIR LIMIT (A-05 / D5), an all-or-nothing booking, and the dividend and split accounting
+(reviewer B's B2 and S2), which lives here so the research-side simulator applies the same rules."""
 import json
 import math
 import random
@@ -131,7 +136,9 @@ def test_corridor_boundary_is_inclusive_like_composers_preview():
 
 def test_drift_trims_are_skipped_but_entries_and_exits_never_are():
     book = fresh()
-    run(book, {"HARV": ok({"PULS": 0.4, "ZVOL": 0.6})})
+    # (set up fully invested: sized at its limits, a first plan leaves the 0.5% cushion in cash, and
+    # topping THAT up is not the drift this gate is about)
+    run(book, {"HARV": ok({"PULS": 0.4, "ZVOL": 0.6})}, cfg=mc.Config(buy_cushion=0.0))
     before = dict(book.sleeves["HARV"].shares)
     moved = dict(PX, ZVOL=PX["ZVOL"] * 1.004)                               # 0.24pp of drift
     p = run(book, {"HARV": ok({"PULS": 0.4, "ZVOL": 0.6})}, prices=moved, session="d2")
@@ -180,6 +187,37 @@ def test_opposite_legs_cross_internally_and_only_the_net_reaches_the_venue():
     assert math.isclose(total_equity(book), 118_000.0, abs_tol=1e-6)
     ids = [o["id"] for o in plan["sells"] + plan["buys"]]
     assert len(ids) == len(set(ids)) and all(i.startswith("mirror-d2-") for i in ids)
+
+
+def test_buys_are_limit_orders_sized_at_their_limit():
+    """D5 / A-05: a buy is costed at the price it can never fill above. quantity x limit fits the
+    sleeve's cash less its reserve - so a fill ANYWHERE at or under the limit never overdraws it."""
+    cfg = mc.Config()
+    assert (cfg.buy_cushion, cfg.cash_reserve_frac) == (0.005, 0.001)
+    book = fresh()
+    t = {"HG": ok({"TECL": 1.0}), "KMLM": ok({"SOXL": 0.375, "TECL": 0.375, "PULS": 0.25})}
+    plan = mc.build_plan(book, t, PX, "s")
+    mc.apply_crosses(book, plan)
+    mc.apply_transfers(book, plan)
+    cash = {n: s.cash for n, s in book.sleeves.items()}
+    buys = mc.size_buys(book, plan)
+    for o in buys:
+        assert o["limit"] == pytest.approx(o["ref"] * 1.005) and o["limit"] == mc.buy_limit(o["ref"])
+    for name in ("HG", "KMLM"):
+        at_limit = sum(o["asks"].get(name, 0) * o["limit"] for o in buys)
+        assert at_limit <= cash[name] * (1 - cfg.cash_reserve_frac) + 1e-9, name
+        assert at_limit > cash[name] * 0.985, name                           # ... and it is not timid about it
+    for o in buys:                                                           # the WORST fill the venue can give
+        mc.book_fill(book, o, o["qty"], o["limit"], 0.0)
+    assert all(s.cash >= 0 for s in book.sleeves.values())
+    # the caller's own limits (the venue's quote, on its grid) are what is sized at
+    book2 = fresh()
+    plan2 = mc.build_plan(book2, {"HG": ok({"TECL": 1.0})}, PX, "s")
+    mc.apply_crosses(book2, plan2)
+    hi = mc.size_buys(book2, plan2, limits={"TECL": 143.0})[0]               # the tape is 10% above the reference
+    assert hi["limit"] == 143.0 and hi["ref"] == PX["TECL"] and hi["qty"] * 143.0 <= book2.sleeves["HG"].cash
+    assert hi["qty"] < plan2["buy_asks"]["HG"]["TECL"]                       # fewer shares, never borrowed money
+    assert mc.buy_limit(600.0) == 603.0 and mc.buy_limit(40.0) == 40.2       # no float dust under a grid point
 
 
 def test_buys_are_sized_from_actual_cash_and_never_borrow():
@@ -272,6 +310,168 @@ def test_transfers_move_capital_between_sleeves_through_the_plan():
     # a transfer forces a threshold sleeve to trade even inside its corridor
     p = mc.build_plan(book, t, PX, "d4", transfers=[{"from": "KMLM", "to": "HARV", "amount": 2000.0}])
     assert p["sleeves"]["KMLM"]["action"] == "trade"
+
+
+# ------------------------------------------------------------------ the review's rule changes
+def test_m1_the_corridor_is_read_on_invested_weights_as_composer_reads_it():
+    """reviewer B's M1 (test_B2): the mirror divided each holding by equity INCLUDING cash, so every
+    held weight read (1 - cash share) of Composer's. Both directions."""
+    px = {"A": 100.0, "B": 100.0, "C": 100.0}
+    s = mc.Sleeve(name="KMLM", cash=500.0, shares={"A": 601, "B": 200, "C": 199}, rule="threshold", corridor=0.10)
+    target = {"A": 0.5, "B": 0.25, "C": 0.25}                               # Composer reads A at 60.1%: 10.1pp -> trade
+    d1 = mc.decide_sleeve(s, target, px, mc.Config())
+    s2 = mc.Sleeve(name="KMLM", cash=500.0, shares={"A": 599, "B": 401}, rule="threshold", corridor=0.10)
+    d2 = mc.decide_sleeve(s2, {"A": 0.5, "B": 0.5}, px, mc.Config())        # Composer reads A at 59.9%: 9.9pp -> hold
+    assert (d1["action"], d2["action"]) == ("trade", "hold")
+    assert d1["gap"] == pytest.approx(0.101) and d2["gap"] == pytest.approx(0.099)
+    assert sum(d1["invested"].values()) == pytest.approx(1.0) and sum(d1["weights"].values()) < 1.0
+    assert mc.invested_weights(mc.Sleeve("x", cash=10.0), px) == {}
+
+
+def test_a_threshold_sleeve_idling_in_cash_or_in_debt_is_never_inside_its_corridor():
+    px = {"A": 100.0, "B": 100.0}
+    t = {"A": 0.5, "B": 0.5}
+    at_target = dict(shares={"A": 500, "B": 500}, rule="threshold", corridor=0.10)
+    assert mc.decide_sleeve(mc.Sleeve("K", cash=1_000.0, **at_target), t, px, mc.Config())["action"] == "hold"
+    # more than 5% of the sleeve in cash (a refused buy, a short fill): a state Composer never reaches
+    idle = mc.decide_sleeve(mc.Sleeve("K", cash=6_000.0, **at_target), t, px, mc.Config())
+    assert idle["action"] == "trade" and idle["deltas"] == {"A": 29, "B": 29}
+    assert mc.decide_sleeve(mc.Sleeve("K", cash=5_000.0, **at_target), t, px, mc.Config())["action"] == "hold"   # 4.76%
+    # in debt: it trades, and its trims are exempt from the dust rule until the debt is repaid
+    debt = mc.decide_sleeve(mc.Sleeve("K", cash=-150.0, **at_target), t, px, mc.Config())
+    assert debt["action"] == "trade" and "debt" in debt["reason"] and debt["deltas"] == {"A": -2, "B": -2}
+    daily = mc.decide_sleeve(mc.Sleeve("D", cash=-150.0, shares={"A": 500, "B": 500}), t, px, mc.Config())
+    assert daily["deltas"] == {"A": -2, "B": -2}                             # $200 a leg: under the $499 floor, traded anyway
+    twin = mc.decide_sleeve(mc.Sleeve("D", cash=150.0, shares={"A": 500, "B": 500}), t, px, mc.Config())
+    assert twin["action"] == "hold" and twin["deltas"] == {}                 # ... which it is not for a sleeve in credit
+    assert mc.in_debt(mc.Sleeve("x", cash=-0.001)) is False                  # float dust is not a debt
+
+
+def test_a_transfer_is_exempt_from_the_dust_rule_so_a_small_one_moves_in_full():
+    """A-09: a transfer under the dust floor sold nothing and handed over only the giver's reserve"""
+    book = fresh()
+    t = {"HG": ok({"TECL": 1.0}), "KMLM": ok({"SOXL": 0.375, "TECL": 0.375, "PULS": 0.25}), "SLEEVE": ok({"BOXX": 1.0}),
+         "HARV": ok({"PULS": 1.0})}
+    run(book, t)
+    run(book, t, session="d1b")
+    k0, h0 = mc.equity(book.sleeves["KMLM"], PX), mc.equity(book.sleeves["HARV"], PX)
+    plan = run(book, t, session="d2", transfers=[{"from": "KMLM", "to": "HARV", "amount": 300.0}])   # ~0.9% of KMLM
+    assert plan["transfers"][0]["status"] == "moved" and plan["transfers"][0]["moved"] == 300.0
+    assert plan["sleeves"]["KMLM"]["action"] == "trade" and all(d < 0 for d in plan["sleeves"]["KMLM"]["deltas"].values())
+    assert mc.equity(book.sleeves["KMLM"], PX) == pytest.approx(k0 - 300.0) and book.sleeves["KMLM"].cash >= 0
+    assert mc.equity(book.sleeves["HARV"], PX) == pytest.approx(h0 + 300.0)
+
+
+def test_a_booking_is_all_or_nothing():
+    book = mc.Book({"A": mc.Sleeve("A", 0.0, {"X": 30}), "B": mc.Sleeve("B", 0.0, {"X": 5})})
+    order = {"id": "mirror-s-S-X", "side": mc.SELL, "symbol": "X", "qty": 40, "asks": {"A": 30, "B": 10}, "applied": False}
+    before = book.to_dict()
+    with pytest.raises(mc.MirrorError):                                      # B owns 5, would sell 10
+        mc.book_fill(book, order, 40, 10.0)
+    assert book.to_dict() == before and not order["applied"]                 # A was NOT sold on the way to the refusal
+    with pytest.raises(mc.MirrorError):
+        mc.book_fill(book, dict(order, asks={"A": 30, "NOPE": 10}), 40, 10.0)
+    assert book.to_dict() == before
+
+
+# ------------------------------------------------------------------ dividends (reviewer B's B2)
+DIV = {"ticker": "PULS", "ex_date": "2026-11-10", "pay_date": "2026-11-12", "amount": 0.25}
+
+
+def test_dividend_receivables_follow_the_shares_held_before_the_ex_date():
+    held = {"HARV": {"PULS": 357, "ZVOL": 10}, "KMLM": {"PULS": 172}, "HG": {"TECL": 5}, "SLEEVE": {}}
+    rows = mc.dividend_receivables(held, DIV)
+    assert rows == [
+        {"id": "div-PULS-2026-11-10-HARV", "sleeve": "HARV", "ticker": "PULS", "ex_date": "2026-11-10",
+         "pay_date": "2026-11-12", "shares": 357, "amount": 0.25, "total": 89.25},
+        {"id": "div-PULS-2026-11-10-KMLM", "sleeve": "KMLM", "ticker": "PULS", "ex_date": "2026-11-10",
+         "pay_date": "2026-11-12", "shares": 172, "amount": 0.25, "total": 43.0}]
+    assert json.loads(json.dumps(rows)) == rows                              # JSON in, JSON out
+    assert mc.dividend_receivables({"HG": {"TECL": 5}}, DIV) == []           # nobody held it: no entitlement
+    assert mc.dividend_receivables(held, dict(DIV, pay_date=None))[0]["pay_date"] == "2026-11-17"     # ex + 7 days
+    assert mc.dividend_receivables(held, dict(DIV, pay_date="2026-11-01"))[0]["pay_date"] == "2026-11-17"   # before the ex-date: not a pay date
+    for bad in (dict(DIV, amount=0), dict(DIV, amount=float("nan")), dict(DIV, amount=True), dict(DIV, ex_date="soon"),
+                dict(DIV, ticker=""), None, [], dict(DIV, amount=-1.0)):
+        assert mc.dividend_receivables(held, bad) == [], bad
+    assert mc.dividend_key("PULS", "2026-11-10") == "div-PULS-2026-11-10" and mc.split_key("SQQQ", "2026-11-10") == "split-SQQQ-2026-11-10"
+
+
+def test_settle_receivable_applies_the_rule_and_books_only_a_credit():
+    def book_with(harv_puls):
+        return mc.Book({"HARV": mc.Sleeve("HARV", 100.0, {"PULS": harv_puls} if harv_puls else {"BIL": 3}),
+                        "KMLM": mc.Sleeve("KMLM", 50.0, {"PULS": 172})})
+    rec = mc.dividend_receivables({"HARV": {"PULS": 357}}, DIV)[0]
+    b = book_with(357)
+    assert mc.settle_receivable(b, rec, "2026-11-11")["action"] == "not_due" and b.sleeves["HARV"].cash == 100.0
+    out = mc.settle_receivable(b, rec, "2026-11-12")                         # the pay date, still held: credited
+    assert out == {"action": "credited", "amount": 89.25, "held": True} and b.sleeves["HARV"].cash == 189.25
+    assert b.sleeves["KMLM"].cash == 50.0                                    # nobody else's cash moves
+    sold = book_with(0)                                                      # the sleeve sold the payer before the pay date
+    assert mc.settle_receivable(sold, rec, "2026-11-12", "composer") == {"action": "leaked", "amount": 0.0, "held": False}
+    assert sold.sleeves["HARV"].cash == 100.0                                # Composer's rule: the cash is nobody's
+    assert mc.settle_receivable(sold, rec, "2026-11-12", "holder")["action"] == "credited" and sold.sleeves["HARV"].cash == 189.25
+    late = book_with(357)                                                    # a live account that has not been paid yet
+    assert mc.settle_receivable(late, rec, "2026-11-12", cash_arrived=False) == {"action": "wait", "amount": 0.0, "held": True}
+    assert late.sleeves["HARV"].cash == 100.0
+    # the holding test is made ONCE: a credit that waited for its cash is not lost to a later sale ...
+    assert mc.settle_receivable(book_with(0), dict(rec, held=True), "2026-11-20", "composer")["action"] == "credited"
+    # ... and a leak decided on the pay date is not undone by buying the payer back
+    assert mc.settle_receivable(book_with(357), dict(rec, held=False), "2026-11-20", "composer")["action"] == "leaked"
+    assert mc.settle_receivable(late, rec, "2026-12-11", cash_arrived=False)["action"] == "wait"       # 29 days
+    assert mc.settle_receivable(late, rec, "2026-12-12", cash_arrived=False)["action"] == "expired"    # 30
+    assert mc.settle_receivable(late, rec, "2026-12-12", cash_arrived=True)["action"] == "credited"    # paid late is still paid
+    assert mc.settle_receivable(mc.Book(), rec, "2026-11-12")["action"] == "void"
+    with pytest.raises(mc.MirrorError):
+        mc.settle_receivable(b, rec, "2026-11-12", rule="nope")
+    with pytest.raises(mc.MirrorError):
+        mc.settle_receivable(b, dict(rec, total=float("nan")), "2026-11-12")
+
+
+# ------------------------------------------------------------------ splits (reviewer B's S2)
+def test_a_split_does_not_change_what_a_sleeve_is_worth():
+    """reviewer B's test_B3b: SQQQ 1:5 on 2025-11-20. The book kept the old share count against the
+    new price: sleeve equity 33,515 -> 133,515, and a plan to sell 2,004 of the account's 500 shares."""
+    s = mc.Sleeve(name="KMLM", cash=100.0, shares={"SQQQ": 2500, "PULS": 170}, rule="threshold", corridor=0.10)
+    book = mc.Book({"KMLM": s})
+    before = mc.equity(s, {"SQQQ": 10.0, "PULS": 49.5})
+    out = mc.apply_split(book, "SQQQ", 0.2)
+    after = mc.equity(s, {"SQQQ": 50.0, "PULS": 49.5})
+    assert after == pytest.approx(before) and s.shares == {"SQQQ": 500, "PULS": 170} and s.cash == 100.0
+    assert out == {"ticker": "SQQQ", "ratio": 0.2, "before": {"KMLM": 2500}, "after": {"KMLM": 500},
+                   "total_before": 2500, "total_after": 500, "fraction": 0.0}
+    d = mc.decide_sleeve(s, {"SQQQ": 0.75, "PULS": 0.25}, {"SQQQ": 50.0, "PULS": 49.5}, mc.Config())
+    assert d["action"] == "hold"                                             # the twin of the bug: no phantom trade
+
+
+def test_a_split_floors_the_book_total_and_shares_it_by_largest_remainder():
+    book = mc.Book({"A": mc.Sleeve("A", 1.0, {"X": 3}), "B": mc.Sleeve("B", 2.0, {"X": 2500}),
+                    "C": mc.Sleeve("C", 3.0, {"X": 4, "Y": 9}), "D": mc.Sleeve("D", 4.0, {"Y": 1})})
+    out = mc.apply_split(book, "X", 0.2)                                     # exact: 0.6, 500, 0.8 -> 501.4
+    assert out["total_before"] == 2507 and out["total_after"] == 501 and out["fraction"] == pytest.approx(0.4)
+    assert out["after"] == {"A": 0, "B": 500, "C": 1}                        # the one spare share to the largest remainder
+    assert book.positions() == {"X": 501, "Y": 10} and "X" not in book.sleeves["A"].shares
+    assert [s.cash for s in book.sleeves.values()] == [1.0, 2.0, 3.0, 4.0]   # cash in lieu is NOT booked here
+    assert mc.check(book) == []
+    fwd = mc.Book({"A": mc.Sleeve("A", 0.0, {"X": 7}), "B": mc.Sleeve("B", 0.0, {"X": 5})})
+    assert mc.apply_split(fwd, "X", 1.5)["after"] == {"A": 11, "B": 7} and fwd.positions() == {"X": 18}   # 10.5 + 7.5 = 18
+    assert mc.apply_split(fwd, "X", 2.0)["after"] == {"A": 22, "B": 14}
+    assert mc.apply_split(fwd, "NOPE", 2.0)["total_after"] == 0              # nobody holds it: nothing happens
+    third = mc.Book({"A": mc.Sleeve("A", 0.0, {"X": 9})})
+    assert mc.apply_split(third, "X", 0.3333333)["after"] == {"A": 3}        # a ratio published as a rounded float
+    for bad in (0, -2.0, float("nan"), True, "2", None):
+        with pytest.raises(mc.MirrorError):
+            mc.apply_split(fwd, "X", bad)
+    rnd = random.Random(5)
+    for _ in range(500):                                                     # never a share created, never one lost twice
+        n = rnd.randint(1, 4)
+        b = mc.Book({f"s{i}": mc.Sleeve(f"s{i}", 0.0, {"X": rnd.randint(1, 3000)}) for i in range(n)})
+        total = b.positions()["X"]
+        ratio = rnd.choice([2.0, 3.0, 1.5, 0.5, 0.2, 0.1, 0.05, 0.25])
+        res = mc.apply_split(b, "X", ratio)
+        assert res["total_after"] == math.floor(total * ratio + 1e-9) == sum(res["after"].values())
+        assert 0 <= res["fraction"] < 1 and b.positions().get("X", 0) == res["total_after"]
+        for name, q in res["before"].items():
+            assert abs(res["after"][name] - q * ratio) < 1.0
 
 
 def test_check_compares_the_book_with_the_venue():

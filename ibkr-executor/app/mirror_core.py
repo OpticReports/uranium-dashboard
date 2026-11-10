@@ -15,9 +15,18 @@ Model
   session.
 - Two phases. SELLS first. When the sells are booked, BUYS are sized from each sleeve's ACTUAL
   cash, never from expected proceeds, and scaled so the book as a whole never spends more cash
-  than it has (no borrowing, whatever the account type allows).
+  than it has (no borrowing, whatever the account type allows). A buy is a LIMIT order and is
+  sized AT ITS LIMIT (the price it can never fill above), with the sleeve's cash reserve held
+  back for commissions: quantity x limit never exceeds the cash of the sleeve, nor of the book.
 - A venue order is booked exactly once, at its terminal state, and split across the sleeves that
   asked for it by largest remainder.
+- The corridor of a threshold sleeve is read on INVESTED weights (each holding over the sleeve's
+  holdings value, cash excluded), which is how Composer measures it. A sleeve in debt (negative
+  cash) is never inside its corridor and is exempt from the dust rule until it is repaired; a
+  threshold sleeve idling more than MAX_IDLE_CASH_FRAC of its equity in cash trades too (a state
+  Composer never reaches, e.g. after a refused buy).
+- Distributions and splits are accounting, and live here so the research-side paper simulator
+  applies the same rules: dividend_receivables() / settle_receivable() and apply_split().
 
 Invariants (check(); tests/test_mirror_core.py)
 - every share is owned by exactly one sleeve: the sleeves' shares per symbol sum to the book's
@@ -27,11 +36,18 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from datetime import date, timedelta
+from fractions import Fraction
 
 SCHEMA = 1
 RULE_DAILY, RULE_THRESHOLD = "daily", "threshold"
 SELL, BUY = "SELL", "BUY"
 TARGET_SUM_TOL = 0.002           # a target vector must sum to 1 within this
+MAX_IDLE_CASH_FRAC = 0.05        # a threshold sleeve holding more cash than this share of its equity trades
+DEBT_TOL_USD = 0.005             # cash below minus this is a debt (float dust is not)
+DIVIDEND_RULES = ("composer", "holder")
+DEFAULT_PAY_LAG_DAYS = 7         # a dividend with no pay date is taken to pay this long after its ex-date
+RECEIVABLE_EXPIRE_DAYS = 30      # a receivable still unpaid this long after its pay date is closed
 
 
 class MirrorError(Exception):
@@ -40,8 +56,8 @@ class MirrorError(Exception):
 
 @dataclass
 class Config:
-    cash_reserve_frac: float = 0.003   # share of a sleeve's equity kept uninvested
-    buy_cushion: float = 0.003         # buys are costed at ref x (1 + cushion) when sized
+    cash_reserve_frac: float = 0.001   # share of a sleeve's equity kept uninvested (it pays the commissions)
+    buy_cushion: float = 0.005         # a buy's limit is its price x (1 + cushion); it is sized at that limit
     min_trade_frac: float = 0.005      # a drift trim smaller than this share of sleeve equity
     min_trade_usd: float = 25.0        # ... or this many dollars is skipped (entries/exits never)
 
@@ -168,6 +184,19 @@ def weights(sleeve: Sleeve, prices: dict) -> dict:
     return {sym: q * _need(prices, sym) / eq for sym, q in sorted(sleeve.shares.items())}
 
 
+def invested_weights(sleeve: Sleeve, prices: dict) -> dict:
+    """holdings as shares of the sleeve's HOLDINGS value (cash excluded; they sum to 1): the weights
+    Composer's threshold rule reads. {} when it holds nothing"""
+    hv = holdings_value(sleeve, prices)
+    if hv <= 0:
+        return {}
+    return {sym: q * _need(prices, sym) / hv for sym, q in sorted(sleeve.shares.items())}
+
+
+def in_debt(sleeve: Sleeve) -> bool:
+    return sleeve.cash < -DEBT_TOL_USD
+
+
 def max_gap(target: dict, held: dict) -> float:
     """the largest single-asset distance between two weight vectors (Composer's corridor measure)"""
     keys = set(target) | set(held)
@@ -226,30 +255,37 @@ def _desired(investable: float, target: dict, prices: dict) -> dict:
 def decide_sleeve(sleeve: Sleeve, target: dict, prices: dict, cfg: Config, equity_adj: float = 0.0,
                   force: bool = False) -> dict:
     """one sleeve's decision at the reference prices: {"action": "trade" | "hold", "reason", "gap",
-    "weights", "deltas": {symbol: signed whole shares}}. equity_adj: capital arriving (+) or leaving
-    (-) through a transfer in this plan; force: trade whatever the corridor says (a transfer)."""
+    "weights", "invested", "deltas": {symbol: signed whole shares}}. equity_adj: capital arriving (+)
+    or leaving (-) through a transfer in this plan; force: trade whatever the corridor says, every
+    share of it (a transfer: the dust rule would otherwise leave the giver short of what it owes).
+    gap is measured on INVESTED weights (Composer's measure)."""
     eq = equity(sleeve, prices)
-    held = weights(sleeve, prices)
+    held = invested_weights(sleeve, prices)
     gap = max_gap(target, held)
-    base = {"gap": gap, "weights": held, "equity": eq}
-    if sleeve.rule == RULE_THRESHOLD and sleeve.corridor and sleeve.shares and not force and gap <= sleeve.corridor:
+    debt = in_debt(sleeve)
+    idle = sleeve.cash / eq if eq > 0 else 0.0
+    base = {"gap": gap, "weights": weights(sleeve, prices), "invested": held, "equity": eq}
+    if sleeve.rule == RULE_THRESHOLD and sleeve.corridor and sleeve.shares and not force and not debt \
+            and idle <= MAX_IDLE_CASH_FRAC and gap <= sleeve.corridor:
         return dict(base, action="hold", reason=f"inside the corridor: largest gap {gap:.1%} vs {sleeve.corridor:.0%}",
                     deltas={})
     investable = (eq + equity_adj) * (1.0 - cfg.cash_reserve_frac)
     want = _desired(investable, target, prices)
     floor_usd = max(cfg.min_trade_usd, cfg.min_trade_frac * max(eq, 0.0))
+    every = force or debt                           # no trim is too small for a transfer or a debt
     deltas = {}
     for sym in sorted(set(want) | set(sleeve.shares)):
         have, w = sleeve.shares.get(sym, 0), want.get(sym, 0)
         d = w - have
         if d == 0:
             continue
-        if have > 0 and w > 0 and abs(d) * _need(prices, sym) < floor_usd:
+        if not every and have > 0 and w > 0 and abs(d) * _need(prices, sym) < floor_usd:
             continue                                # a drift trim too small to trade
         deltas[sym] = d
     if not deltas:
         return dict(base, action="hold", reason="at target", deltas={})
-    return dict(base, action="trade", reason="to target", deltas=deltas)
+    why = "to target" + (" (repairing a cash debt)" if debt else "")
+    return dict(base, action="trade", reason=why, deltas=deltas)
 
 
 def build_plan(book: Book, targets: dict, prices: dict, session: str, cfg: Config | None = None,
@@ -372,6 +408,12 @@ def book_fill(book: Book, order: dict, filled_qty: int, avg_price: float | None,
     sign = -1 if order["side"] == SELL else 1
     spent = 0.0
     names = [k for k in sorted(split) if split[k]]
+    for name in names:                              # all or nothing: refuse BEFORE any sleeve is touched
+        if name not in book.sleeves:
+            raise MirrorError(f"order {order.get('id')}: the book has no sleeve {name}")
+        if sign < 0 and book.sleeves[name].shares.get(order["symbol"], 0) < split[name]:
+            raise MirrorError(f"sleeve {name} would sell {split[name]} {order['symbol']} but owns "
+                              f"{book.sleeves[name].shares.get(order['symbol'], 0)}")
     for i, name in enumerate(names):
         fee = commission - spent if i == len(names) - 1 else commission * split[name] / filled_qty
         spent += fee
@@ -397,10 +439,21 @@ def apply_transfers(book: Book, plan: dict) -> None:
     plan["transfers_applied"] = True
 
 
-def size_buys(book: Book, plan: dict, prices: dict | None = None, cfg: Config | None = None) -> list:
-    """The venue BUY orders, sized once the sells are booked: each sleeve's asks are scaled down to
-    the cash it actually has (costed at ref x (1 + cushion)), then all of them together to the book's
-    cash, so the mirror never spends money it does not hold. Stores and returns plan['buys']."""
+def buy_limit(price: float, cfg: Config | None = None) -> float:
+    """the limit of a buy priced at `price`: price x (1 + cushion). (A venue rounds it DOWN to its
+    price grid before it is passed to size_buys; a paper fill needs no grid.)"""
+    return round(float(price) * (1.0 + (cfg or Config()).buy_cushion), 6)   # 600 x 1.005 is 603, not 602.9999999999999
+
+
+def size_buys(book: Book, plan: dict, prices: dict | None = None, cfg: Config | None = None,
+              limits: dict | None = None) -> list:
+    """The venue BUY orders, sized once the sells are booked. Each is a LIMIT order and is costed at
+    its limit - limits[symbol] when given (the caller's venue-quoted, grid-rounded limit), else
+    buy_limit(reference price) - so it can never cost more than it was sized at. Each sleeve's asks
+    are scaled down to the cash it actually has less its reserve (cash_reserve_frac of its equity:
+    what pays the commissions), then all of them together to the book's cash, so the mirror never
+    spends money it does not hold. prices: overrides of the reference prices (the orders' "ref").
+    Stores and returns plan['buys']; every order carries its "limit"."""
     if plan.get("buys") is not None:
         raise MirrorError("buys already sized")
     if any(not o.get("applied") for o in plan["sells"]):
@@ -412,12 +465,24 @@ def size_buys(book: Book, plan: dict, prices: dict | None = None, cfg: Config | 
     cfg = cfg or Config()
     px = dict(plan["prices"])
     px.update({k: v for k, v in (prices or {}).items() if _px(prices, k) is not None})
-    cost = lambda sym, q: q * _need(px, sym) * (1.0 + cfg.buy_cushion)  # noqa: E731
+    lim: dict = {}
+
+    def limit_of(sym: str) -> float:
+        if sym not in lim:
+            given = _px(limits or {}, sym)
+            lim[sym] = given if given is not None else buy_limit(_need(px, sym), cfg)
+        return lim[sym]
+    cost = lambda sym, q: q * limit_of(sym)  # noqa: E731
     sized = {}
     for name, asks in plan["buy_asks"].items():
+        sleeve = book.sleeves[name]
         want = {s: int(q) for s, q in asks.items() if int(q) > 0}
         need = sum(cost(s, q) for s, q in want.items())
-        have = max(book.sleeves[name].cash, 0.0)
+        try:
+            reserve = cfg.cash_reserve_frac * max(equity(sleeve, px), 0.0)
+        except MirrorError:                         # a holding the plan did not price: keep no less than all of it
+            reserve = cfg.cash_reserve_frac * max(sleeve.cash, 0.0)
+        have = max(sleeve.cash - reserve, 0.0)
         if need > have:
             k = have / need if need > 0 else 0.0
             want = {s: int(math.floor(q * k)) for s, q in want.items()}
@@ -434,7 +499,8 @@ def size_buys(book: Book, plan: dict, prices: dict | None = None, cfg: Config | 
             by_sym.setdefault(sym, {})[name] = q
     session = plan["session"]
     plan["buys"] = [{"id": order_id(session, BUY, sym), "side": BUY, "symbol": sym, "qty": sum(asks.values()),
-                     "asks": asks, "ref": _need(px, sym), "applied": False} for sym, asks in sorted(by_sym.items())]
+                     "asks": asks, "ref": _need(px, sym), "limit": limit_of(sym), "applied": False}
+                    for sym, asks in sorted(by_sym.items())]
     return plan["buys"]
 
 
@@ -450,6 +516,136 @@ def finish(book: Book, plan: dict) -> None:
         s = book.sleeves[name]
         s.last_trade = plan["session"]
         s.version = plan["sleeves"][name].get("version") or s.version
+
+
+# ------------------------------------------------------------------ distributions and splits
+def _day(text) -> date | None:
+    try:
+        y, m, d = str(text).split("-")
+        return date(int(y), int(m), int(d))
+    except (TypeError, ValueError):
+        return None
+
+
+parse_day = _day
+
+
+def dividend_key(ticker: str, ex_date: str) -> str:
+    """the id of one distribution of one fund (what 'seen before' is keyed on)"""
+    return f"div-{ticker}-{ex_date}"
+
+
+def split_key(ticker: str, day: str) -> str:
+    return f"split-{ticker}-{day}"
+
+
+def clean_dividend(row) -> dict | None:
+    """a usable dividend row {"ticker", "ex_date", "pay_date", "amount"} or None: a ticker, a real
+    ex-date, a positive finite cash amount per share; pay_date None or unreadable becomes the ex-date
+    + DEFAULT_PAY_LAG_DAYS (never before the ex-date)"""
+    if not isinstance(row, dict):
+        return None
+    ticker, ex, amt = row.get("ticker"), _day(row.get("ex_date")), row.get("amount")
+    if not isinstance(ticker, str) or not ticker or ex is None:
+        return None
+    if isinstance(amt, bool) or not isinstance(amt, (int, float)) or not math.isfinite(amt) or amt <= 0:
+        return None
+    pay = _day(row.get("pay_date")) if row.get("pay_date") is not None else None
+    given = pay is not None and pay >= ex
+    if not given:
+        pay = ex + timedelta(days=DEFAULT_PAY_LAG_DAYS)
+    return {"ticker": ticker, "ex_date": ex.isoformat(), "pay_date": pay.isoformat(), "amount": float(amt),
+            "pay_date_given": given}
+
+
+def dividend_receivables(holdings: dict, dividend: dict) -> list:
+    """What one distribution owes each sleeve. holdings: {sleeve: {ticker: whole shares}} AS OF THE
+    CLOSE BEFORE THE EX-DATE (the shares that carry the entitlement). dividend: {"ticker", "ex_date",
+    "pay_date" | None, "amount" (cash per share)}. Returns one row per sleeve that held the ticker:
+    [{"id": "div-{ticker}-{ex_date}-{sleeve}", "sleeve", "ticker", "ex_date", "pay_date", "shares",
+    "amount", "total"}]; [] for an unusable row or when nobody held it. Pure: books nothing."""
+    d = clean_dividend(dividend)
+    if d is None or not isinstance(holdings, dict):
+        return []
+    out = []
+    for name in sorted(holdings):
+        q = (holdings.get(name) or {}).get(d["ticker"], 0)
+        if not _is_whole(q) or int(q) <= 0:
+            continue
+        out.append({"id": f"{dividend_key(d['ticker'], d['ex_date'])}-{name}", "sleeve": name, "ticker": d["ticker"],
+                    "ex_date": d["ex_date"], "pay_date": d["pay_date"], "shares": int(q), "amount": d["amount"],
+                    "total": round(int(q) * d["amount"], 6)})
+    return out
+
+
+def settle_receivable(book: Book, receivable: dict, session: str, rule: str = "composer",
+                      cash_arrived: bool = True) -> dict:
+    """Settle ONE receivable against the book on `session` (YYYY-MM-DD). Returns what it did:
+    {"action": "not_due" | "credited" | "leaked" | "wait" | "expired" | "void", "amount", "held": bool}.
+      not_due   the session is before the pay date
+      void      its sleeve is no longer in the book
+      leaked    rule "composer" and the sleeve no longer held the ticker on the first session on or
+                after the pay date: the cash stays unallocated (what Composer's symphonies do)
+      credited  the sleeve's cash was raised by the receivable's total (the ONLY case the book changes)
+      wait      due, but the cash has not arrived (cash_arrived False: a live account's own check)
+      expired   still not arrived RECEIVABLE_EXPIRE_DAYS after the pay date
+    rule "holder" credits whoever held the shares at the ex-date, whatever it holds now. The holding
+    test is made once: receivable["held"] (set by the caller from an earlier answer) is honoured, so
+    a credit that waits for its cash is not lost to a later sale."""
+    if rule not in DIVIDEND_RULES:
+        raise MirrorError(f"unknown dividend rule {rule!r}")
+    day, pay = _day(session), _day(receivable.get("pay_date"))
+    total = receivable.get("total")
+    if day is None or pay is None or isinstance(total, bool) or not isinstance(total, (int, float)) \
+            or not math.isfinite(total) or total <= 0:
+        raise MirrorError(f"receivable {receivable.get('id')!r} cannot be settled: bad dates or total")
+    if day < pay:
+        return {"action": "not_due", "amount": 0.0, "held": None}
+    sleeve = book.sleeves.get(receivable.get("sleeve"))
+    if sleeve is None:
+        return {"action": "void", "amount": 0.0, "held": None}
+    held = receivable.get("held")
+    if not isinstance(held, bool):
+        held = sleeve.shares.get(receivable.get("ticker"), 0) > 0
+    if rule == "composer" and not held:
+        return {"action": "leaked", "amount": 0.0, "held": False}
+    if not cash_arrived:
+        if (day - pay).days >= RECEIVABLE_EXPIRE_DAYS:
+            return {"action": "expired", "amount": 0.0, "held": held}
+        return {"action": "wait", "amount": 0.0, "held": held}
+    sleeve.cash += float(total)
+    return {"action": "credited", "amount": float(total), "held": held}
+
+
+def apply_split(book: Book, ticker: str, ratio) -> dict:
+    """Rescale every sleeve's shares of `ticker` for a split. ratio = new shares per old share (2:1
+    -> 2.0; a 1:5 reverse split -> 0.2). The book's total becomes floor(total x ratio), split across
+    the sleeves by largest remainder of their exact entitlements (ties by name); cash is untouched.
+    Returns {"ticker", "ratio", "before": {sleeve: shares}, "after": {sleeve: shares}, "total_before",
+    "total_after", "fraction": the fractional share the floor dropped (the broker pays cash in lieu
+    of it: the caller records it, this books nothing)}."""
+    if isinstance(ratio, bool) or not isinstance(ratio, (int, float)) or not math.isfinite(ratio) or ratio <= 0:
+        raise MirrorError(f"split of {ticker}: bad ratio {ratio!r}")
+    r = Fraction(repr(float(ratio))).limit_denominator(10_000)
+    if r <= 0:
+        raise MirrorError(f"split of {ticker}: bad ratio {ratio!r}")
+    before = {n: s.shares[ticker] for n, s in book.sleeves.items() if s.shares.get(ticker)}
+    total = sum(before.values())
+    exact = {n: q * r for n, q in before.items()}
+    new_total = int(sum(exact.values(), Fraction(0)))            # floor of the book's exact entitlement
+    after = {n: int(e) for n, e in exact.items()}
+    left = new_total - sum(after.values())
+    order = sorted(exact, key=lambda n: (-(exact[n] - int(exact[n])), n))
+    for n in order[:left]:
+        after[n] += 1
+    for n, q in after.items():
+        if q > 0:
+            book.sleeves[n].shares[ticker] = q
+        else:
+            book.sleeves[n].shares.pop(ticker, None)
+    return {"ticker": ticker, "ratio": float(ratio), "before": dict(sorted(before.items())),
+            "after": dict(sorted(after.items())), "total_before": total, "total_after": new_total,
+            "fraction": float(total * r - new_total)}
 
 
 # ------------------------------------------------------------------ checks and reports

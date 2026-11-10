@@ -59,6 +59,12 @@ def FakeStopOrder(action, qty, stop_price):
     return FakeOrder(action, qty, "STP", stop_price)
 
 
+def FakeLimitOrder(action, qty, limit_price):
+    o = FakeOrder(action, qty, "LMT")
+    o.lmtPrice = limit_price
+    return o
+
+
 class FakeStatus:
     def __init__(self):
         self.status = "PendingSubmit"
@@ -290,6 +296,7 @@ def ib_adapter(monkeypatch):
     mod.Future = FakeStock          # unused by the stock surfaces
     mod.MarketOrder = FakeMarketOrder
     mod.StopOrder = FakeStopOrder
+    mod.LimitOrder = FakeLimitOrder
     monkeypatch.setitem(sys.modules, "ib_async", mod)
     # keep the bounded waits short: FakeIB.sleep never actually sleeps
     monkeypatch.setattr(ib_mod, "PLACE_ACK_TIMEOUT_S", 0.2)
@@ -2603,7 +2610,8 @@ def test_mirror_stock_order_fills_prices_a_cancelled_orders_partial(ib_adapter):
     cid = "mirror-2026-11-10-S-BIL"
     o = ib_adapter.place_stock_order("BIL", -10, "MKT", client_order_id=cid)
     assert o["status"] == "working"
-    assert ib_adapter.stock_order_fills(cid) == {"filled_qty": 0, "avg_price": None, "commission": None}
+    assert ib_adapter.stock_order_fills(cid) == {"filled_qty": 0, "avg_price": None, "commission": None,
+                                                 "venue_status": "Submitted"}
     t = ib_adapter.ib.trade_by_ref(o["order_ref"])
     t.fills.append(FakeFill(FakeExec(4, 91.25, "SLD"), 1.0))
     t.fills.append(FakeFill(FakeExec(2, 91.31, "SLD"), 0.5))
@@ -2612,7 +2620,7 @@ def test_mirror_stock_order_fills_prices_a_cancelled_orders_partial(ib_adapter):
     found = ib_adapter.find_stock_order(cid)
     assert found["status"] == "cancelled" and found["filled_qty"] == 6 and "fill_price" not in found
     got = ib_adapter.stock_order_fills(cid)
-    assert got["filled_qty"] == 6 and got["commission"] == 1.5
+    assert got["filled_qty"] == 6 and got["commission"] == 1.5 and got["venue_status"] == "Cancelled"
     assert got["avg_price"] == pytest.approx((4 * 91.25 + 2 * 91.31) / 6)
     assert ib_adapter.stock_order_fills("mirror-never-sent") is None
 
@@ -2624,12 +2632,340 @@ def test_mirror_stock_order_fills_never_reports_a_zero_price(ib_adapter):
     t.orderStatus.filled = 3                  # a completed-orders row: a count, no executions
     t.orderStatus.status = "Filled"
     got = ib_adapter.stock_order_fills(cid)
-    assert got == {"filled_qty": 3, "avg_price": None, "commission": None}
+    assert got == {"filled_qty": 3, "avg_price": None, "commission": None, "venue_status": "Filled"}
 
 
 def test_mirror_dry_adapter_mirrors_both_surfaces():
     d = DryAdapter()
     d.place_stock_order("BIL", 7, "MKT", ref_price=91.5, client_order_id="c1")
     assert d.positions_snapshot() == {"stocks": {"BIL": 7}, "other": []}
-    assert d.stock_order_fills("c1") == {"filled_qty": 7, "avg_price": 91.5, "commission": 0.0}
+    assert d.stock_order_fills("c1") == {"filled_qty": 7, "avg_price": 91.5, "commission": 0.0,
+                                         "venue_status": "Filled"}
     assert d.stock_order_fills("nope") is None
+    assert d.history_complete() is True and d.cancel_inactive_stock_order("c1") is False
+
+
+# --- Composer mirror: LIMIT orders (decision D5) ------------------------------
+# The mirror's BUYS are marketable DAY limit orders, so a buy can never cost
+# more than it was sized at. place_limit_order is a NEW surface on both
+# adapters; these gates pin it the way the MKT gates above pin
+# place_stock_order: construction, dedupe (incl. after a restart), the bounded
+# synchronous fill, 'working', a rejection and a missing ack.
+
+def test_limit_is_a_day_limit_order_snapped_to_the_grid_without_loosening(ib_adapter):
+    r = ib_adapter.place_limit_order("SPY", 5, 100.129, ref_price=99.9,
+                                     client_order_id="mirror-d-B-SPY")
+    (t,) = ib_adapter.ib.trades()
+    assert t.order.orderType == "LMT" and t.order.tif == "DAY"
+    assert t.order.action == "BUY" and t.order.totalQuantity == 5
+    assert t.order.lmtPrice == 100.12                 # a BUY limit rounds DOWN
+    assert t.order.orderRef == "mirror-d-B-SPY"
+    assert t.contract.symbol == "SPY" and t.contract.exchange == "SMART"
+    assert r["status"] == "working" and r["order_ref"] == str(t.order.orderId)
+    assert r["limit_price"] == 100.12 and "fill_price" not in r
+    ib_adapter.place_limit_order("SPY", -5, 100.121, client_order_id="s")
+    t2 = ib_adapter.ib.trades()[-1]
+    assert t2.order.action == "SELL" and t2.order.lmtPrice == 100.13   # a SELL limit rounds UP
+    ib_adapter.place_limit_order("CRSP", 9, 0.50259, client_order_id="sub")
+    assert ib_adapter.ib.trades()[-1].order.lmtPrice == 0.5025          # the finer grid under $1
+
+
+def test_round_limit_to_tick_never_loosens_and_fails_closed():
+    f = ib_mod.round_limit_to_tick
+    assert f(91.9575, "BUY") == 91.95 and f(91.9575, "SELL") == 91.96
+    assert f(603.0, "BUY") == 603.0 and f(40.2, "buy") == 40.2          # a grid point stays where it is
+    assert f(0.99999, "BUY") == 0.9999 and f(1.0, "BUY") == 1.0
+    for bad in (0, -1.0, float("nan"), float("inf"), "x", None, 0.00001):
+        with pytest.raises(ValueError):
+            f(bad, "BUY")
+    assert f(0.00001, "SELL") == 0.0001
+
+
+def test_limit_validation_and_connection(ib_adapter):
+    with pytest.raises(ValueError):
+        ib_adapter.place_limit_order("SPY", 0, 100.0)
+    with pytest.raises(ValueError):
+        ib_adapter.place_limit_order("SPY", 5, 100.0, tif="GTC")
+    with pytest.raises(ValueError):
+        ib_adapter.place_limit_order("SPY", 5, float("nan"))
+    assert ib_adapter.ib.trades() == []
+    ib_adapter.ib.connected = False
+    ib_adapter.ib.connect_fails = True
+    for call in (lambda: ib_adapter.place_limit_order("SPY", 1, 100.0),
+                 lambda: ib_adapter.cancel_inactive_stock_order("x"),
+                 lambda: ib_adapter.stock_order_fills("x"),
+                 lambda: ib_adapter.positions_snapshot()):
+        with pytest.raises(ExecutorConnectionError):
+            call()
+
+
+def test_limit_synchronous_fill_returns_weighted_average_and_commission(ib_adapter):
+    fake = ib_adapter.ib
+    fake.on_place = lambda t: fake.fill(t, [(3, 50.0), (2, 50.5)])
+    r = ib_adapter.place_limit_order("CRSP", 5, 50.6, client_order_id="c")
+    assert r["status"] == "filled" and r["fill_price"] == pytest.approx(50.2) and r["limit_price"] == 50.6
+    assert "commission" not in r                      # not reported for every execution yet: absent, never 0.0
+    fake.on_place = lambda t: fake.fill(t, [(5, 50.0)], commission=1.25)
+    r = ib_adapter.place_limit_order("CRSP", 5, 50.6, client_order_id="d")
+    assert r["status"] == "filled" and r["commission"] == 1.25
+
+
+def test_limit_not_filled_in_window_returns_working_without_price(ib_adapter):
+    r = ib_adapter.place_limit_order("CRSP", 5, 49.0, client_order_id="c")
+    assert r["status"] == "working" and "fill_price" not in r
+    assert ib_adapter.find_stock_order("c")["status"] == "working"
+    assert ib_adapter.cancel_stock_order(r["order_ref"]) is True        # the existing cancel works on it
+    assert ib_adapter.find_stock_order("c")["status"] == "cancelled"
+
+
+def test_limit_rejected_placement_raises_and_an_inactive_one_is_cancelled_on_sight(ib_adapter):
+    fake = ib_adapter.ib
+    cancels = []
+    fake.on_cancel = lambda t: cancels.append(t.order.orderId)
+
+    def reject(t):
+        t.orderStatus.status = "Inactive"
+    fake.on_place = reject
+    with pytest.raises(RuntimeError, match="rejected"):
+        ib_adapter.place_limit_order("CRSP", 5, 50.0, client_order_id="c")
+    assert len(cancels) == 1                          # round 21: Inactive can go live later
+
+    def dead(t):
+        t.orderStatus.status = "Cancelled"
+    fake.on_place = dead
+    with pytest.raises(RuntimeError, match="rejected"):
+        ib_adapter.place_limit_order("CRSP", 5, 50.0, client_order_id="d")
+
+
+def test_limit_missing_ack_times_out_and_raises(ib_adapter):
+    fake = ib_adapter.ib
+
+    def silent(t):
+        t.orderStatus.status = "PendingSubmit"       # venue never answers
+    fake.on_place = silent
+    with pytest.raises(RuntimeError, match="no venue ack"):
+        ib_adapter.place_limit_order("CRSP", 5, 50.0, client_order_id="c")
+    # the retry is idempotent: the order that did land is adopted, not doubled
+    r = ib_adapter.place_limit_order("CRSP", 5, 50.0, client_order_id="c")
+    assert r.get("duplicate") is True and len(ib_adapter.ib.trades()) == 1
+
+
+def test_limit_duplicate_client_order_id_suppressed_by_order_ref(ib_adapter):
+    r1 = ib_adapter.place_limit_order("CRSP", 5, 50.0, client_order_id="mirror-d-B-CRSP")
+    r2 = ib_adapter.place_limit_order("CRSP", 5, 51.0, client_order_id="mirror-d-B-CRSP")
+    assert r2["order_ref"] == r1["order_ref"] and r2.get("duplicate") is True
+    assert r2["limit_price"] == 50.0                  # the price the PRIOR order holds
+    assert len(ib_adapter.ib.trades()) == 1          # one real order only
+    ib_adapter.cancel_stock_order(r1["order_ref"])
+    r3 = ib_adapter.place_limit_order("CRSP", 5, 51.0, client_order_id="mirror-d-B-CRSP")
+    assert r3["order_ref"] != r1["order_ref"] and len(ib_adapter.ib.trades()) == 2      # a dead prior does not bind
+
+
+def test_gate_b1_a_filled_limit_order_still_dedupes_after_a_session_boundary(
+        venue_adapter, monkeypatch):
+    """The B1 defect (a retry that only looked at THIS session's trade list
+    placed a second order after a restart) on the new surface: the lookup
+    must ask the venue."""
+    fake = venue_adapter.ib
+    fake.on_place = lambda t: fake.fill(t, [(5, 50.0)])
+    r1 = venue_adapter.place_limit_order("CRSP", 5, 50.25, client_order_id="mirror-d-B-CRSP")
+    assert r1["status"] == "filled" and len(venue_adapter._venue) == 1
+    fresh = _restart(venue_adapter, venue_adapter._venue, monkeypatch)
+    assert fresh.trades() == []                       # the new session knows nothing ...
+    r2 = venue_adapter.place_limit_order("CRSP", 5, 50.25, client_order_id="mirror-d-B-CRSP")
+    assert r2.get("duplicate") is True and r2["status"] == "filled"
+    assert len(venue_adapter._venue) == 1 and fresh.open_order_calls == 1               # ... and ASKED the venue
+
+
+def test_gate_b1_a_working_limit_order_still_dedupes_after_a_session_boundary(
+        venue_adapter, monkeypatch):
+    r1 = venue_adapter.place_limit_order("CRSP", 5, 49.0, client_order_id="mirror-d-B-CRSP")
+    assert r1["status"] == "working"
+    _restart(venue_adapter, venue_adapter._venue, monkeypatch)
+    r2 = venue_adapter.place_limit_order("CRSP", 5, 49.0, client_order_id="mirror-d-B-CRSP")
+    assert r2.get("duplicate") is True and r2["status"] == "working" and r2["limit_price"] == 49.0
+    assert len(venue_adapter._venue) == 1
+
+
+def test_gate_b1_a_cancelled_limit_prior_still_re_places_after_a_restart(
+        venue_adapter, monkeypatch):
+    r1 = venue_adapter.place_limit_order("CRSP", 5, 49.0, client_order_id="mirror-d-B-CRSP")
+    venue_adapter.cancel_stock_order(r1["order_ref"])
+    _restart(venue_adapter, venue_adapter._venue, monkeypatch)
+    r2 = venue_adapter.place_limit_order("CRSP", 5, 49.0, client_order_id="mirror-d-B-CRSP")
+    assert not r2.get("duplicate") and len(venue_adapter._venue) == 2
+
+
+def test_limit_does_not_change_what_the_existing_order_types_wait_for(ib_adapter):
+    """the one line of _await_placement the new surface touches: MOO and STP
+    still return at their ack, never waiting for a fill"""
+    seen = []
+    ib_adapter.ib.on_sleep = lambda ib: seen.append(1)
+    ib_adapter.place_stock_order("CRSP", 5, "MOO", tif="OPG", client_order_id="m")
+    ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0, client_order_id="s")
+    assert len(seen) == 4                             # the dedupe pump and one status read each: no fill window
+    ib_adapter.place_limit_order("CRSP", 5, 49.0, client_order_id="l")
+    assert len(seen) > 8                              # the twin: a limit order does get the bounded fill window
+
+
+def test_dry_limit_order_fills_at_the_reference_or_rests():
+    d = DryAdapter()
+    r = d.place_limit_order("BIL", 7, 91.9575, ref_price=91.5, client_order_id="b")
+    assert r == {"order_ref": r["order_ref"], "status": "filled", "fill_price": 91.5,
+                 "commission": 0.0, "limit_price": 91.95}
+    assert d.stock_position("BIL") == 7
+    dup = d.place_limit_order("BIL", 7, 92.5, ref_price=91.5, client_order_id="b")
+    assert dup["duplicate"] is True and dup["limit_price"] == 91.95 and d.stock_position("BIL") == 7
+    w = d.place_limit_order("SPY", 3, 99.0, ref_price=100.0, client_order_id="w")      # the tape is above the limit
+    assert w["status"] == "working" and "fill_price" not in w and d.stock_position("SPY") == 0
+    assert d.find_stock_order("w")["status"] == "working"
+    assert d.stock_order_fills("w") == {"filled_qty": 0, "avg_price": None, "commission": None,
+                                        "venue_status": "Submitted"}
+    assert d.cancel_stock_order(w["order_ref"]) is True and d.find_stock_order("w")["status"] == "cancelled"
+    s = d.place_limit_order("BIL", -7, 91.0, ref_price=91.5, client_order_id="s")      # a sell above its limit fills
+    assert s["status"] == "filled" and d.stock_position("BIL") == 0
+    assert d.place_limit_order("BIL", -1, 92.0, ref_price=91.5, client_order_id="s2")["status"] == "working"
+    # a reference just above a grid point still fills: the limit ASKED for covers it (paper fills at the reference)
+    assert d.place_limit_order("LOW", 10, 1.006005, ref_price=1.001, client_order_id="l")["status"] == "filled"
+    for bad in (lambda: d.place_limit_order("BIL", 0, 91.0), lambda: d.place_limit_order("BIL", 1, 91.0, tif="GTC"),
+                lambda: d.place_limit_order("BIL", 1, -1.0)):
+        with pytest.raises(ValueError):
+            bad()
+
+
+# --- Composer mirror: what an order executed, and Inactive (decision D7) -------
+
+class _SessionIB(_VenueIB):
+    """_VenueIB whose completed orders are what ib_async 2.1.0 really builds for
+    an order this session did not place: status only, NO fills, filled == 0;
+    and whose execution store (ib.fills()) survives the session boundary for
+    the current day, as IBKR's does."""
+
+    def __init__(self, venue, execs, next_id=1):
+        super().__init__(venue, next_id)
+        self.execs = execs
+        self.exec_calls = 0
+
+    def reqCompletedOrders(self, apiOnly=True):
+        out = []
+        for t in self.venue:
+            if t.orderStatus.status in ("Filled", "Cancelled", "Inactive"):
+                b = FakeTrade(t.contract, t.order)
+                b.orderStatus.status = t.orderStatus.status
+                b.orderStatus.filled = 0
+                out.append(b)
+        return out
+
+    def reqExecutions(self):
+        self.exec_calls += 1
+        return list(self.execs)
+
+    def fills(self):
+        return list(self.execs)
+
+
+def _session(adapter, monkeypatch, venue, execs, next_id=1):
+    fake = _SessionIB(venue, execs, next_id)
+    fake.connected = True
+    fake.prices = {"SPY": 100.0, "TECL": 100.0}
+    monkeypatch.setattr(adapter, "ib", fake)
+    return fake
+
+
+def _execute(fake, trade, shares, price, exec_id, commission=1.0):
+    ex = FakeExec(shares, price, "BOT" if trade.order.action == "BUY" else "SLD")
+    ex.orderRef, ex.orderId, ex.execId = trade.order.orderRef, trade.order.orderId, exec_id
+    f = FakeFill(ex, commission)
+    f.commissionReport.execId = exec_id
+    trade.fills.append(f)
+    fake.execs.append(f)
+    trade.orderStatus.filled = getattr(trade.orderStatus, "filled", 0) + shares
+
+
+def test_gate_a13_fills_lookup_falls_back_to_the_execution_store(ib_adapter, monkeypatch):
+    """A-13: a partial fill, then the DAY order dies; the process restarts
+    the same day. The completed-order Trade the new session is given carries
+    no fills and filled == 0 - the 40 shares are in the execution store."""
+    venue, execs = [], []
+    fake = _session(ib_adapter, monkeypatch, venue, execs)
+    cid = "mirror-2026-11-10-B-TECL"
+    r = ib_adapter.place_limit_order("TECL", 108, 100.5, client_order_id=cid)
+    t = fake.trade_by_ref(r["order_ref"])
+    _execute(fake, t, 40, 100.5, "e1", commission=1.0)
+    t.orderStatus.status = "Cancelled"
+    asked = fake.open_order_calls                     # (the placement's own dedupe lookup)
+    assert ib_adapter.stock_order_fills(cid)["filled_qty"] == 40          # same session: the trade's own fills
+    assert fake.exec_calls == 0 and fake.open_order_calls == asked        # ... and NO venue request for a session trade
+    fresh = _session(ib_adapter, monkeypatch, venue, execs, next_id=1000)   # the restart
+    assert fresh.trades() == []
+    found = ib_adapter.find_stock_order(cid)
+    assert found["status"] == "cancelled" and "filled_qty" not in found   # the bare row says nothing of the 40 ...
+    got = ib_adapter.stock_order_fills(cid)
+    assert got == {"filled_qty": 40, "avg_price": 100.5, "commission": 1.0, "venue_status": "Cancelled"}
+    assert fresh.exec_calls == 1                                          # ... one bounded refresh of the executions
+
+
+def test_gate_a13_no_source_is_none_not_zero_and_a_proven_zero_is_zero(ib_adapter, monkeypatch):
+    venue, execs = [], []
+    fake = _session(ib_adapter, monkeypatch, venue, execs)
+    cid = "mirror-2026-11-10-B-TECL"
+    r = ib_adapter.place_limit_order("TECL", 108, 100.5, client_order_id=cid)
+    t = fake.trade_by_ref(r["order_ref"])
+    t.orderStatus.status = "Cancelled"
+    assert ib_adapter.stock_order_fills(cid)["filled_qty"] == 0           # in THIS session: nothing filled, proven
+    _session(ib_adapter, monkeypatch, venue, execs, next_id=1000)         # a new session, a bare row, no execution
+    assert ib_adapter.stock_order_fills(cid)["filled_qty"] is None        # (they may be yesterday's): NOT conclusive
+    t.order.filledQuantity = 0.0                                          # the venue's completed-order record says 0
+    assert ib_adapter.stock_order_fills(cid)["filled_qty"] == 0
+    t.order.filledQuantity = 25.0
+    got = ib_adapter.stock_order_fills(cid)
+    assert got["filled_qty"] == 25 and got["avg_price"] is None           # a count without a price: never 0.0
+    t.order.filledQuantity = 1.7976931348623157e308                       # IB's UNSET sentinel is not a quantity
+    assert ib_adapter.stock_order_fills(cid)["filled_qty"] is None
+    assert ib_adapter.stock_order_fills("mirror-never-sent") is None
+
+
+def test_gate_a13_executions_alone_answer_when_completed_orders_are_unavailable(ib_adapter, monkeypatch):
+    venue, execs = [], []
+    fake = _session(ib_adapter, monkeypatch, venue, execs)
+    cid = "mirror-2026-11-10-B-SPY"
+    r = ib_adapter.place_limit_order("SPY", 10, 100.5, client_order_id=cid)
+    t = fake.trade_by_ref(r["order_ref"])
+    _execute(fake, t, 10, 100.25, "e1", commission=0.5)
+    t.orderStatus.status = "Filled"
+    fresh = _session(ib_adapter, monkeypatch, venue, execs, next_id=1000)
+    fresh.reqCompletedOrders = lambda apiOnly=False: (_ for _ in ()).throw(TimeoutError("x"))
+    got = ib_adapter.stock_order_fills(cid)
+    assert got == {"filled_qty": 10, "avg_price": 100.25, "commission": 0.5, "venue_status": None}
+
+
+def test_gate_a16_an_unreadable_execution_store_fails_closed(ib_adapter, monkeypatch):
+    venue, execs = [], []
+    fake = _session(ib_adapter, monkeypatch, venue, execs)
+    cid = "mirror-2026-11-10-B-TECL"
+    r = ib_adapter.place_limit_order("TECL", 108, 100.5, client_order_id=cid)
+    fake.trade_by_ref(r["order_ref"]).orderStatus.status = "Cancelled"
+    fresh = _session(ib_adapter, monkeypatch, venue, execs, next_id=1000)
+
+    def hang():
+        raise TimeoutError("execDetailsEnd never arrived")
+    fresh.reqExecutions = hang
+    with pytest.raises(ExecutorConnectionError):      # never 'no fills'
+        ib_adapter.stock_order_fills(cid)
+
+
+def test_gate_a11_an_inactive_order_can_be_cancelled_by_its_client_id(ib_adapter):
+    fake = ib_adapter.ib
+    cancels = []
+    r = ib_adapter.place_limit_order("SPY", 5, 99.0, client_order_id="mirror-d-B-SPY")
+    assert ib_adapter.cancel_inactive_stock_order("mirror-d-B-SPY") is False     # working: not this method's business
+    t = fake.trade_by_ref(r["order_ref"])
+    t.orderStatus.status = "Inactive"                 # IBKR parks it AFTER the ack
+    assert ib_adapter.stock_order_fills("mirror-d-B-SPY")["venue_status"] == "Inactive"
+    assert ib_adapter.find_stock_order("mirror-d-B-SPY")["status"] == "cancelled"        # ... which the contract maps to dead
+    real = fake.cancelOrder
+    fake.cancelOrder = lambda order: (cancels.append(order.orderRef), real(order))[1]
+    assert ib_adapter.cancel_inactive_stock_order("mirror-d-B-SPY") is True
+    assert cancels == ["mirror-d-B-SPY"] and t.orderStatus.status == "Cancelled"
+    assert ib_adapter.cancel_inactive_stock_order("mirror-d-B-SPY") is False     # once: it is no longer Inactive
+    assert ib_adapter.cancel_inactive_stock_order("mirror-never-sent") is False
