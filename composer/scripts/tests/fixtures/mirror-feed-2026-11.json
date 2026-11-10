@@ -1,0 +1,738 @@
+{
+ "books": {
+  "dry": {
+   "archived_state": null,
+   "book": {
+    "cash": 324.29,
+    "equity": 10554.64,
+    "marks_asof": "2026-11-09T20:54:00Z",
+    "positions": {
+     "BIL": 34,
+     "BOXX": 22,
+     "PULS": 45,
+     "SOXL": 20,
+     "TECL": 8
+    },
+    "sleeves": {
+     "HARV": {
+      "cash": 14.7,
+      "corridor": null,
+      "equity": 1500.0,
+      "frozen": false,
+      "last_trade": "2026-11-06",
+      "rule": "daily",
+      "shares": {
+       "PULS": 30
+      },
+      "version": "XVtsDTV1R6iuYDEg8XZK",
+      "weights": {
+       "PULS": 0.9902
+      }
+     },
+     "HG": {
+      "cash": 110.66,
+      "corridor": null,
+      "equity": 3220.98,
+      "frozen": false,
+      "last_trade": "2026-11-09",
+      "rule": "daily",
+      "shares": {
+       "BIL": 34
+      },
+      "version": "2oyXahw1VWpFtV15dhIi",
+      "weights": {
+       "BIL": 0.96564
+      }
+     },
+     "KMLM": {
+      "cash": 115.83,
+      "corridor": 0.1,
+      "equity": 3133.44,
+      "frozen": false,
+      "last_trade": "2026-11-09",
+      "rule": "threshold",
+      "shares": {
+       "PULS": 15,
+       "SOXL": 20,
+       "TECL": 8
+      },
+      "version": "MVfHI8OgKae5EaC3W9oE",
+      "weights": {
+       "PULS": 0.23701,
+       "SOXL": 0.35782,
+       "TECL": 0.36821
+      }
+     },
+     "SLEEVE": {
+      "cash": 83.1,
+      "corridor": null,
+      "equity": 2700.22,
+      "frozen": false,
+      "last_trade": "2026-11-06",
+      "rule": "daily",
+      "shares": {
+       "BOXX": 22
+      },
+      "version": "yHJkdePZUWBT6eMCgO9m",
+      "weights": {
+       "BOXX": 0.96922
+      }
+     }
+    }
+   },
+   "brain": {
+    "intents": {
+     "ok": true,
+     "reason": "ok",
+     "utc": "2026-11-09T20:54:25Z"
+    },
+    "session": {
+     "ok": true,
+     "reason": "ok",
+     "utc": "2026-11-09T20:54:25Z"
+    }
+   },
+   "check": null,
+   "commission_pending": 0,
+   "dividends_open": [],
+   "engines": [
+    "HG",
+    "KMLM",
+    "SLEEVE",
+    "HARV"
+   ],
+   "flatten": null,
+   "halt": {},
+   "history": [
+    {
+     "actions_complete": true,
+     "built_utc": "2026-11-06T20:54:25Z",
+     "credits": [],
+     "crosses": [],
+     "decision_bar": {
+      "complete": true,
+      "end_utc": "2026-11-06T20:54:00Z",
+      "spy_utc": "2026-11-06T20:54:00Z"
+     },
+     "dropped": {},
+     "intents_asof": "2026-11-06T20:54:00Z",
+     "notes": [
+      "paper: HG traded although its tree is not attested (sync state 'none': approved version '2oyXahw1VWpFtV15dhIi', Composer's live version None); a live book refuses this",
+      "paper: KMLM traded although its tree is not attested (sync state 'none': approved version 'MVfHI8OgKae5EaC3W9oE', Composer's live version None); a live book refuses this",
+      "paper: SLEEVE traded although its tree is not attested (sync state 'none': approved version 'yHJkdePZUWBT6eMCgO9m', Composer's live version None); a live book refuses this",
+      "paper: HARV traded although its tree is not attested (sync state 'none': approved version 'XVtsDTV1R6iuYDEg8XZK', Composer's live version None); a live book refuses this"
+     ],
+     "orders": [
+      {
+       "commission": 0.0,
+       "cost_bps": 0.0,
+       "filled": 22,
+       "how": "filled",
+       "id": "mirror-2026-11-06-B-BOXX",
+       "limit": 119.54475,
+       "price": 118.95,
+       "qty": 22,
+       "ref": 118.95,
+       "side": "BUY",
+       "split": {
+        "SLEEVE": 22
+       },
+       "symbol": "BOXX"
+      },
+      {
+       "commission": 0.0,
+       "cost_bps": 0.0,
+       "filled": 44,
+       "how": "filled",
+       "id": "mirror-2026-11-06-B-PULS",
+       "limit": 49.75755,
+       "price": 49.51,
+       "qty": 44,
+       "ref": 49.51,
+       "side": "BUY",
+       "split": {
+        "HARV": 30,
+        "KMLM": 14
+       },
+       "symbol": "PULS"
+      },
+      {
+       "commission": 0.0,
+       "cost_bps": 0.0,
+       "filled": 38,
+       "how": "filled",
+       "id": "mirror-2026-11-06-B-TECL",
+       "limit": 130.27815,
+       "price": 129.63,
+       "qty": 38,
+       "ref": 129.63,
+       "side": "BUY",
+       "split": {
+        "HG": 22,
+        "KMLM": 16
+       },
+       "symbol": "TECL"
+      }
+     ],
+     "outcome": "traded",
+     "price_notes": {},
+     "price_times": {
+      "BOXX": "2026-11-06T20:54:00Z",
+      "PULS": "2026-11-06T20:54:00Z",
+      "TECL": "2026-11-06T20:54:00Z"
+     },
+     "prices": {
+      "BOXX": 118.95,
+      "PULS": 49.51,
+      "TECL": 129.63
+     },
+     "problems": [
+      "no attestation of the live logic for 2026-11-06: HG, KMLM, SLEEVE, HARV on the approved trees, unverified",
+      "history repaired from FMP's lists (events Yahoo has not booked): ANGL dividend 2026-11-02 0.1688; BIL dividend 2026-11-02 0.30849; CORP dividend 2026-11-02 0.42; HYG dividend 2026-11-02 0.40139; IEF d"
+     ],
+     "session": "2026-11-06",
+     "sleeves": {
+      "HARV": {
+       "action": "trade",
+       "cash": 14.7,
+       "gap": 1.0,
+       "label": "close call",
+       "pre_equity": 1500.0,
+       "reason": "to target",
+       "shares": {
+        "PULS": 30
+       },
+       "target": {
+        "PULS": 1.0
+       },
+       "version": "XVtsDTV1R6iuYDEg8XZK"
+      },
+      "HG": {
+       "action": "trade",
+       "cash": 48.14,
+       "gap": 1.0,
+       "label": "firm",
+       "pre_equity": 2900.0,
+       "reason": "to target",
+       "shares": {
+        "TECL": 22
+       },
+       "target": {
+        "TECL": 1.0
+       },
+       "version": "2oyXahw1VWpFtV15dhIi"
+      },
+      "KMLM": {
+       "action": "trade",
+       "cash": 132.78,
+       "gap": 0.75,
+       "label": "firm",
+       "pre_equity": 2900.0,
+       "reason": "to target",
+       "shares": {
+        "PULS": 14,
+        "TECL": 16
+       },
+       "target": {
+        "PULS": 0.25,
+        "TECL": 0.75
+       },
+       "version": "MVfHI8OgKae5EaC3W9oE"
+      },
+      "SLEEVE": {
+       "action": "trade",
+       "cash": 83.1,
+       "gap": 1.0,
+       "label": "firm",
+       "pre_equity": 2700.0,
+       "reason": "to target",
+       "shares": {
+        "BOXX": 22
+       },
+       "target": {
+        "BOXX": 1.0
+       },
+       "version": "yHJkdePZUWBT6eMCgO9m"
+      }
+     },
+     "sync": {
+      "HARV": {
+       "approved_sha1": "a2cef6d01afd877570fcb19c22e17bab62e3c655",
+       "approved_version": "XVtsDTV1R6iuYDEg8XZK",
+       "attested_utc": null,
+       "live_version": null,
+       "state": "none"
+      },
+      "HG": {
+       "approved_sha1": "a48448ae89443be6d14a4da6c1e0d62784269e3c",
+       "approved_version": "2oyXahw1VWpFtV15dhIi",
+       "attested_utc": null,
+       "live_version": null,
+       "state": "none"
+      },
+      "KMLM": {
+       "approved_sha1": "05e03cb0d93ce950dbdd09b5d70d35900919b244",
+       "approved_version": "MVfHI8OgKae5EaC3W9oE",
+       "attested_utc": null,
+       "live_version": null,
+       "state": "none"
+      },
+      "SLEEVE": {
+       "approved_sha1": "89590aa3b59f3e0af87e1bab67d3cdefd5ac01c3",
+       "approved_version": "yHJkdePZUWBT6eMCgO9m",
+       "attested_utc": null,
+       "live_version": null,
+       "state": "none"
+      }
+     },
+     "transfers": [],
+     "utc": "2026-11-06T20:54:25Z"
+    },
+    {
+     "actions_complete": true,
+     "built_utc": "2026-11-09T20:54:25Z",
+     "credits": [],
+     "crosses": [],
+     "decision_bar": {
+      "complete": true,
+      "end_utc": "2026-11-09T20:54:00Z",
+      "spy_utc": "2026-11-09T20:54:00Z"
+     },
+     "dropped": {},
+     "intents_asof": "2026-11-09T20:54:00Z",
+     "notes": [
+      "paper: HG traded although its tree is not attested (sync state 'none': approved version '2oyXahw1VWpFtV15dhIi', Composer's live version None); a live book refuses this",
+      "paper: KMLM traded although its tree is not attested (sync state 'none': approved version 'MVfHI8OgKae5EaC3W9oE', Composer's live version None); a live book refuses this",
+      "paper: SLEEVE traded although its tree is not attested (sync state 'none': approved version 'yHJkdePZUWBT6eMCgO9m', Composer's live version None); a live book refuses this",
+      "paper: HARV traded although its tree is not attested (sync state 'none': approved version 'XVtsDTV1R6iuYDEg8XZK', Composer's live version None); a live book refuses this"
+     ],
+     "orders": [
+      {
+       "commission": 0.0,
+       "cost_bps": -0.0,
+       "filled": 30,
+       "how": "filled",
+       "id": "mirror-2026-11-09-S-TECL",
+       "limit": null,
+       "price": 144.22,
+       "qty": 30,
+       "ref": 144.22,
+       "side": "SELL",
+       "split": {
+        "HG": 22,
+        "KMLM": 8
+       },
+       "symbol": "TECL"
+      },
+      {
+       "commission": 0.0,
+       "cost_bps": 0.0,
+       "filled": 34,
+       "how": "filled",
+       "id": "mirror-2026-11-09-B-BIL",
+       "limit": 91.9374,
+       "price": 91.48,
+       "qty": 34,
+       "ref": 91.48,
+       "side": "BUY",
+       "split": {
+        "HG": 34
+       },
+       "symbol": "BIL"
+      },
+      {
+       "commission": 0.0,
+       "cost_bps": 0.0,
+       "filled": 1,
+       "how": "filled",
+       "id": "mirror-2026-11-09-B-PULS",
+       "limit": 49.75755,
+       "price": 49.51,
+       "qty": 1,
+       "ref": 49.51,
+       "side": "BUY",
+       "split": {
+        "KMLM": 1
+       },
+       "symbol": "PULS"
+      },
+      {
+       "commission": 0.0,
+       "cost_bps": 0.0,
+       "filled": 20,
+       "how": "filled",
+       "id": "mirror-2026-11-09-B-SOXL",
+       "limit": 56.3403,
+       "price": 56.06,
+       "qty": 20,
+       "ref": 56.06,
+       "side": "BUY",
+       "split": {
+        "KMLM": 20
+       },
+       "symbol": "SOXL"
+      }
+     ],
+     "outcome": "traded",
+     "price_notes": {},
+     "price_times": {
+      "BIL": "2026-11-09T20:54:00Z",
+      "BOXX": "2026-11-09T20:54:00Z",
+      "PULS": "2026-11-09T20:54:00Z",
+      "SOXL": "2026-11-09T20:54:00Z",
+      "TECL": "2026-11-09T20:54:00Z"
+     },
+     "prices": {
+      "BIL": 91.48,
+      "BOXX": 118.96,
+      "PULS": 49.51,
+      "SOXL": 56.06,
+      "TECL": 144.22
+     },
+     "problems": [
+      "no attestation of the live logic for 2026-11-09: HG, KMLM, SLEEVE, HARV on the approved trees, unverified",
+      "history repaired from FMP's lists (events Yahoo has not booked): ANGL dividend 2026-11-02 0.1688; BIL dividend 2026-11-02 0.30849; CORP dividend 2026-11-02 0.42; HYG dividend 2026-11-02 0.40139; IEF d"
+     ],
+     "session": "2026-11-09",
+     "sleeves": {
+      "HARV": {
+       "action": "hold",
+       "cash": 14.7,
+       "gap": 0.0,
+       "label": "firm",
+       "pre_equity": 1500.0,
+       "reason": "at target",
+       "shares": {
+        "PULS": 30
+       },
+       "target": {
+        "PULS": 1.0
+       },
+       "version": "XVtsDTV1R6iuYDEg8XZK"
+      },
+      "HG": {
+       "action": "trade",
+       "cash": 110.66,
+       "gap": 1.0,
+       "label": "firm",
+       "pre_equity": 3220.98,
+       "reason": "to target",
+       "shares": {
+        "BIL": 34
+       },
+       "target": {
+        "BIL": 1.0
+       },
+       "version": "2oyXahw1VWpFtV15dhIi"
+      },
+      "KMLM": {
+       "action": "trade",
+       "cash": 115.83,
+       "gap": 0.394004152419801,
+       "label": "firm",
+       "pre_equity": 3133.44,
+       "reason": "to target",
+       "shares": {
+        "PULS": 15,
+        "SOXL": 20,
+        "TECL": 8
+       },
+       "target": {
+        "PULS": 0.25,
+        "SOXL": 0.375,
+        "TECL": 0.375
+       },
+       "version": "MVfHI8OgKae5EaC3W9oE"
+      },
+      "SLEEVE": {
+       "action": "hold",
+       "cash": 83.1,
+       "gap": 0.0,
+       "label": "firm",
+       "pre_equity": 2700.22,
+       "reason": "at target",
+       "shares": {
+        "BOXX": 22
+       },
+       "target": {
+        "BOXX": 1.0
+       },
+       "version": "yHJkdePZUWBT6eMCgO9m"
+      }
+     },
+     "sync": {
+      "HARV": {
+       "approved_sha1": "a2cef6d01afd877570fcb19c22e17bab62e3c655",
+       "approved_version": "XVtsDTV1R6iuYDEg8XZK",
+       "attested_utc": null,
+       "live_version": null,
+       "state": "none"
+      },
+      "HG": {
+       "approved_sha1": "a48448ae89443be6d14a4da6c1e0d62784269e3c",
+       "approved_version": "2oyXahw1VWpFtV15dhIi",
+       "attested_utc": null,
+       "live_version": null,
+       "state": "none"
+      },
+      "KMLM": {
+       "approved_sha1": "05e03cb0d93ce950dbdd09b5d70d35900919b244",
+       "approved_version": "MVfHI8OgKae5EaC3W9oE",
+       "attested_utc": null,
+       "live_version": null,
+       "state": "none"
+      },
+      "SLEEVE": {
+       "approved_sha1": "89590aa3b59f3e0af87e1bab67d3cdefd5ac01c3",
+       "approved_version": "yHJkdePZUWBT6eMCgO9m",
+       "attested_utc": null,
+       "live_version": null,
+       "state": "none"
+      }
+     },
+     "transfers": [],
+     "utc": "2026-11-09T20:54:25Z"
+    }
+   ],
+   "last_error": null,
+   "last_run": {
+    "actions_complete": true,
+    "built_utc": "2026-11-09T20:54:25Z",
+    "credits": [],
+    "crosses": [],
+    "decision_bar": {
+     "complete": true,
+     "end_utc": "2026-11-09T20:54:00Z",
+     "spy_utc": "2026-11-09T20:54:00Z"
+    },
+    "dropped": {},
+    "intents_asof": "2026-11-09T20:54:00Z",
+    "notes": [
+     "paper: HG traded although its tree is not attested (sync state 'none': approved version '2oyXahw1VWpFtV15dhIi', Composer's live version None); a live book refuses this",
+     "paper: KMLM traded although its tree is not attested (sync state 'none': approved version 'MVfHI8OgKae5EaC3W9oE', Composer's live version None); a live book refuses this",
+     "paper: SLEEVE traded although its tree is not attested (sync state 'none': approved version 'yHJkdePZUWBT6eMCgO9m', Composer's live version None); a live book refuses this",
+     "paper: HARV traded although its tree is not attested (sync state 'none': approved version 'XVtsDTV1R6iuYDEg8XZK', Composer's live version None); a live book refuses this"
+    ],
+    "orders": [
+     {
+      "commission": 0.0,
+      "cost_bps": -0.0,
+      "filled": 30,
+      "how": "filled",
+      "id": "mirror-2026-11-09-S-TECL",
+      "limit": null,
+      "price": 144.22,
+      "qty": 30,
+      "ref": 144.22,
+      "side": "SELL",
+      "split": {
+       "HG": 22,
+       "KMLM": 8
+      },
+      "symbol": "TECL"
+     },
+     {
+      "commission": 0.0,
+      "cost_bps": 0.0,
+      "filled": 34,
+      "how": "filled",
+      "id": "mirror-2026-11-09-B-BIL",
+      "limit": 91.9374,
+      "price": 91.48,
+      "qty": 34,
+      "ref": 91.48,
+      "side": "BUY",
+      "split": {
+       "HG": 34
+      },
+      "symbol": "BIL"
+     },
+     {
+      "commission": 0.0,
+      "cost_bps": 0.0,
+      "filled": 1,
+      "how": "filled",
+      "id": "mirror-2026-11-09-B-PULS",
+      "limit": 49.75755,
+      "price": 49.51,
+      "qty": 1,
+      "ref": 49.51,
+      "side": "BUY",
+      "split": {
+       "KMLM": 1
+      },
+      "symbol": "PULS"
+     },
+     {
+      "commission": 0.0,
+      "cost_bps": 0.0,
+      "filled": 20,
+      "how": "filled",
+      "id": "mirror-2026-11-09-B-SOXL",
+      "limit": 56.3403,
+      "price": 56.06,
+      "qty": 20,
+      "ref": 56.06,
+      "side": "BUY",
+      "split": {
+       "KMLM": 20
+      },
+      "symbol": "SOXL"
+     }
+    ],
+    "outcome": "traded",
+    "price_notes": {},
+    "price_times": {
+     "BIL": "2026-11-09T20:54:00Z",
+     "BOXX": "2026-11-09T20:54:00Z",
+     "PULS": "2026-11-09T20:54:00Z",
+     "SOXL": "2026-11-09T20:54:00Z",
+     "TECL": "2026-11-09T20:54:00Z"
+    },
+    "prices": {
+     "BIL": 91.48,
+     "BOXX": 118.96,
+     "PULS": 49.51,
+     "SOXL": 56.06,
+     "TECL": 144.22
+    },
+    "problems": [
+     "no attestation of the live logic for 2026-11-09: HG, KMLM, SLEEVE, HARV on the approved trees, unverified",
+     "history repaired from FMP's lists (events Yahoo has not booked): ANGL dividend 2026-11-02 0.1688; BIL dividend 2026-11-02 0.30849; CORP dividend 2026-11-02 0.42; HYG dividend 2026-11-02 0.40139; IEF d"
+    ],
+    "session": "2026-11-09",
+    "sleeves": {
+     "HARV": {
+      "action": "hold",
+      "cash": 14.7,
+      "gap": 0.0,
+      "label": "firm",
+      "pre_equity": 1500.0,
+      "reason": "at target",
+      "shares": {
+       "PULS": 30
+      },
+      "target": {
+       "PULS": 1.0
+      },
+      "version": "XVtsDTV1R6iuYDEg8XZK"
+     },
+     "HG": {
+      "action": "trade",
+      "cash": 110.66,
+      "gap": 1.0,
+      "label": "firm",
+      "pre_equity": 3220.98,
+      "reason": "to target",
+      "shares": {
+       "BIL": 34
+      },
+      "target": {
+       "BIL": 1.0
+      },
+      "version": "2oyXahw1VWpFtV15dhIi"
+     },
+     "KMLM": {
+      "action": "trade",
+      "cash": 115.83,
+      "gap": 0.394004152419801,
+      "label": "firm",
+      "pre_equity": 3133.44,
+      "reason": "to target",
+      "shares": {
+       "PULS": 15,
+       "SOXL": 20,
+       "TECL": 8
+      },
+      "target": {
+       "PULS": 0.25,
+       "SOXL": 0.375,
+       "TECL": 0.375
+      },
+      "version": "MVfHI8OgKae5EaC3W9oE"
+     },
+     "SLEEVE": {
+      "action": "hold",
+      "cash": 83.1,
+      "gap": 0.0,
+      "label": "firm",
+      "pre_equity": 2700.22,
+      "reason": "at target",
+      "shares": {
+       "BOXX": 22
+      },
+      "target": {
+       "BOXX": 1.0
+      },
+      "version": "yHJkdePZUWBT6eMCgO9m"
+     }
+    },
+    "sync": {
+     "HARV": {
+      "approved_sha1": "a2cef6d01afd877570fcb19c22e17bab62e3c655",
+      "approved_version": "XVtsDTV1R6iuYDEg8XZK",
+      "attested_utc": null,
+      "live_version": null,
+      "state": "none"
+     },
+     "HG": {
+      "approved_sha1": "a48448ae89443be6d14a4da6c1e0d62784269e3c",
+      "approved_version": "2oyXahw1VWpFtV15dhIi",
+      "attested_utc": null,
+      "live_version": null,
+      "state": "none"
+     },
+     "KMLM": {
+      "approved_sha1": "05e03cb0d93ce950dbdd09b5d70d35900919b244",
+      "approved_version": "MVfHI8OgKae5EaC3W9oE",
+      "attested_utc": null,
+      "live_version": null,
+      "state": "none"
+     },
+     "SLEEVE": {
+      "approved_sha1": "89590aa3b59f3e0af87e1bab67d3cdefd5ac01c3",
+      "approved_version": "yHJkdePZUWBT6eMCgO9m",
+      "attested_utc": null,
+      "live_version": null,
+      "state": "none"
+     }
+    },
+    "transfers": [],
+    "utc": "2026-11-09T20:54:25Z"
+   },
+   "last_session": "2026-11-09",
+   "mode": "paper",
+   "name": "dry",
+   "pending_requests": [],
+   "run": null,
+   "save_latched": null,
+   "saved_utc": "2026-11-09T20:54:25Z",
+   "seeded": {
+    "HARV": {
+     "amount": 1500.0,
+     "utc": "2026-11-06T20:54:25Z"
+    },
+    "HG": {
+     "amount": 2900.0,
+     "utc": "2026-11-06T20:54:25Z"
+    },
+    "KMLM": {
+     "amount": 2900.0,
+     "utc": "2026-11-06T20:54:25Z"
+    },
+    "SLEEVE": {
+     "amount": 2700.0,
+     "utc": "2026-11-06T20:54:25Z"
+    }
+   },
+   "seq": 28,
+   "settings_clamped": [],
+   "unresolved": [],
+   "waiting_on": null
+  }
+ },
+ "kind": "composer-mirror-feed",
+ "mode": "OFFLINE",
+ "schema": 1,
+ "utc": "2026-11-09T20:54:25Z"
+}

@@ -135,6 +135,23 @@ def mirror_dry_step(alerts, now, daily=None):
         print(f"  (mirror dry run unavailable: {' '.join(str(e).split())[:160]})")
 
 
+def mirror_parity_step(alerts, now, check=None):
+    """the IBKR mirror's books ON THE EXECUTOR (real money, and its own paper book) against Composer:
+    is the executor healthy, does each sleeve hold what Composer holds, did it earn the same
+    (mirror_parity.py; read-only feed, MIRROR_EXECUTOR_URL + MIRROR_READ_TOKEN). Silent when the mirror
+    is not deployed. It can never stop the monitor: any failure is one printed line"""
+    try:
+        if check is None:
+            import mirror_parity
+            check = mirror_parity.check
+        lines, more = check(now=now)
+        for ln in lines:
+            print(f"  {ln}")
+        alerts.extend(more)
+    except (Exception, SystemExit) as e:  # noqa: BLE001  the run must go on
+        print(f"  (mirror parity unavailable: {' '.join(str(e).split())[:160]})")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -318,6 +335,8 @@ def main():
 
     # the IBKR mirror's paper book (composer/IBKR_MIRROR.md): after the shadow runner, never fatal
     mirror_dry_step(alerts, now)
+    # ... and the executor's own books (real money once an engine is live), read-only
+    mirror_parity_step(alerts, now)
 
     # ops-tempo conditioning (addendum 28): when the accident composite is
     # RED, escalate DIAGNOSTIC tempo (never trades): run live-vs-model
