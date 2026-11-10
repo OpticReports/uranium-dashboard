@@ -22,19 +22,27 @@ Threads
 A session, in the loop thread
   1 the brain's clock (/mirror/session) says when the decision bar ENDS (decide_utc, used as given)
     and when the session closes. An unreadable clock is never a silent day: the loop is asked back
-    every minute, it is said after ten, and a recorded NO TRADE is written at 16:00 ET
+    every minute (a PAPER book: every five, it shares the loop with a live strategy), it is said
+    after ten, and a recorded NO TRADE is written at 16:00 ET. The brain is asked only over https
+    (or on this machine): the API token never rides plain http
   2 at decision + offset: the intents (schema 2: PINNED to the decision instant, its bar complete,
     built after that instant and not in the future). A pinned payload is immutable - the brain
     caches it by its instant and never rebuilds it - so its AGE is no test: a restart at 15:57 is
     given the payload built at 15:54:32 and trades it. Lateness is bounded by plan_by, price drift by
     the venue quote band and by the fresh quote the limit buys are priced on. Until the decision bar
-    is published the brain answers 503: a transient reason, retried every 3 s. Then the splits the
+    is published the brain answers 503: a transient reason (its body's error and detail are carried
+    into the day's record), retried every 3 s inside the tick (a PAPER book: once more after 10 s,
+    then through the loop). Then the splits the
     payload lists (sleeve shares rescaled), then the pre-trade gates (live: the account must hold
     exactly the book, the account's cash must cover the book's, the blend must be off). A refusal
     that cannot change inside the window (the blend on, no sleeve) is a NO TRADE at once; the others
     are retried
-  3 dividends: a receivable per sleeve from the shares it held at the close before the ex-date,
-    settled from the pay date; then the plan (mirror_core.build_plan); live: every symbol it would
+  3 dividends: a receivable per sleeve from the shares it held at the close before the ex-date
+    (the history also records every change of shares OUTSIDE a run: a flatten, a split, an
+    adjustment), settled from the pay date - left open while the brain does not know that date,
+    ex + 7 assumed only ten days after the ex-date; then the plan (mirror_core.build_plan). A LIVE
+    sleeve is planned only when the payload's own sync row attests its tree (state "ok"); a paper
+    book trades regardless and notes it. Live: every symbol it would
     trade is cross-checked against the venue's own quote, and a symbol that fails takes its sleeves
     out of the plan. Everything up to here is undone in memory if a halt, a wake or an error lands
     before the run is on disk
@@ -44,12 +52,20 @@ A session, in the loop thread
     cash, so a buy can never cost more than it was sized at; leftovers cancelled before the close
     and booked at what filled. The halt is re-read before every order and no order is sent after the
     cancel instant
-  5 afterwards the account is compared with the book; a mismatch that persists halts the book
+  5 afterwards the account is compared with the book; a mismatch that persists halts the book.
+    The session's closing line is RED (paper: a warning) whenever an active sleeve was not traded
 
 What is never guessed
-- "the venue has no such order" proves nothing unless the order is from today (ET) AND the adapter's
-  order history is complete: otherwise the order is UNRESOLVED - never booked as zero, said once a
-  day - until the venue answers or the operator states what it did (POST /mirror/resolve)
+- "the venue has no such order" proves nothing unless the order is from today (ET) AND either the
+  adapter's order history is complete or the venue shows it neither open nor executed today (both
+  requests answered): otherwise the order is UNRESOLVED - never booked as zero, said once a day -
+  until the venue answers or the operator states what it did (POST /mirror/resolve)
+- the operator's statement is taken only where the book has no better source: only for an order
+  flagged UNRESOLVED, after the venue was asked once more (its own answer wins), never a buy above
+  its limit or a price more than 20% from the order's reference; an adjustment or a debit that would
+  put a sleeve in debt needs "force": true
+- a fill the venue reports no price for is booked at the most it can have cost (a buy: its limit;
+  a sell: its reference), flagged and said in red
 - a cancelled order's executed quantity that cannot be read is UNRESOLVED too
 - a state file that cannot be written latches the book: no run order is placed until a save succeeds
 - any share-count divergence (a manual trade, a split the brain listed late) is repaired by the
@@ -585,9 +601,11 @@ class MirrorManager:
 
     def request_resolve(self, order_id: str, filled, price=None, commission=0.0, note: str = "") -> dict:
         """queue the operator's statement of what an UNRESOLVED order did: `filled` shares at `price`
-        (commission optional). The loop thread books the order of the open run or flatten at exactly
-        that - unless the venue still reports it working. The repair for an order the venue can no
-        longer answer for (an overnight outage, an unreadable execution)."""
+        (commission optional). The loop thread takes it only for an order of the open run or flatten
+        that is flagged unresolved, asks the venue once more first (an order still working is
+        refused; one the venue now answers for is booked at the VENUE's answer) and refuses a price
+        that cannot be true (_resolve). The repair for an order the venue can no longer answer for
+        (an overnight outage, an unreadable execution)."""
         qty = _num(filled)
         if not isinstance(order_id, str) or not order_id.strip():
             raise ValueError("a resolve needs the order id")
@@ -727,6 +745,15 @@ class MirrorManager:
                                       f"booked {o.get('filled', 0)} of {o['qty']} {o['symbol']} from the venue's own "
                                       f"record, NOT the {qty} stated in the request")
                     return True
+                if res.get("status") == "filled":
+                    # the venue says FILLED and only its terms cannot be read on this pass: its quantity
+                    # still wins. A statement of the SAME quantity supplies the price; any other is refused
+                    got = int(o["qty"]) if res.get("filled_qty") is None else max(0, min(int(o["qty"]), int(res["filled_qty"])))
+                    if qty != got:
+                        self._refuse(r, f"the venue answers that order {oid} FILLED {got} of {o['qty']} (only its price "
+                                        f"cannot be read yet); the request states {qty}. State the venue's quantity "
+                                        f"with the price from the statement, or wait: the book keeps asking")
+                        return True
         snap = self.book.to_dict()
         try:
             self._book(o, rec, qty, px if qty else None, comm if qty else 0.0,
@@ -775,11 +802,15 @@ class MirrorManager:
                           + (f"cash {cash:+,.2f} (now ${s.cash:,.2f}) " if cash else "") + f"— {r.get('note')}")
         return True
 
-    def _holdings_row(self, day: str, why: str) -> None:
+    def _holdings_row(self, day: str, why: str, from_open: bool = False) -> None:
         """V2-B2: shares changed OUTSIDE a run (a flatten, a split, an adjustment). The history gets a
         row of what every sleeve holds from `day` on, so a later dividend reads its entitlement from
-        the shares really held at the close before its ex-date, not from the last PLANNED session."""
+        the shares really held at the close before its ex-date, not from the last PLANNED session.
+        from_open: the change took effect at the OPEN of `day` (a split): the row also answers for a
+        dividend whose ex-date IS that day, as the plan of that day itself would (it sees the sleeves
+        after the split). A flatten or an adjustment happened DURING its day: only later ex-dates."""
         row = {"session": day, "outcome": "holdings", "reason": why, "utc": _iso(self.clock()),
+               "from_open": bool(from_open),
                "sleeves": {n: {"shares": dict(sorted(x.shares.items())), "cash": round(x.cash, 4)}
                            for n, x in self.book.sleeves.items()}}
         self.state["history"] = (list(self.state.get("history") or []) + [row])[-HISTORY_KEEP:]
@@ -1342,9 +1373,11 @@ class MirrorManager:
                 said = (f"sync state {state!r}: approved version {srow.get('approved_version')!r}, Composer's live "
                         f"version {srow.get('live_version')!r}" if isinstance(srow, dict) else "no sync row in the payload")
                 if self.cfg.live:
+                    also = "" if row.get("status") == "ok" else \
+                        f"; the brain also says: {one_line(row.get('note') or row.get('status') or 'no target published', 160)}"
                     out[name] = {"status": "unavailable", "version": row.get("version"),
                                  "skip_reason": f"LIVE tree gate: {name}'s tree is not attested as Composer's live one "
-                                                f"({said}): not traded"}
+                                                f"({said}): not traded{also}"}
                 elif notes is not None and row.get("status") == "ok":
                     notes.append(f"paper: {name} traded although its tree is not attested ({said}); a live book refuses this")
         return out
@@ -1428,7 +1461,7 @@ class MirrorManager:
                                  f"holds {held} {ticker}; compare with the account and repair with POST /mirror/adjust.")
                 continue
             res = mc.apply_split(self.book, ticker, ratio)
-            self._holdings_row(day, f"split {ticker} x{ratio:g}")
+            self._holdings_row(day, f"split {ticker} x{ratio:g}", from_open=True)
             px = _num((payload.get("prices") or {}).get(ticker))
             old = _num((marks.get("prices") or {}).get(ticker))
             if old is not None:
@@ -1448,10 +1481,16 @@ class MirrorManager:
 
     def _holdings_before(self, ex_date: str) -> dict:
         """{sleeve: {ticker: shares}} at the last close before `ex_date` that the history records for
-        each sleeve (a skipped session records none); a sleeve with no such row has no entitlement"""
+        each sleeve (a skipped session records none); a sleeve with no such row has no entitlement.
+        The LATEST row written that is dated before the ex-date counts - a session's own row, or a
+        holdings row for shares that changed outside a run (_holdings_row); a split's row counts
+        for an ex-date on its own day too (the shares were rescaled at that day's open)."""
         out: dict = {}
         for row in reversed(self.state.get("history") or []):
-            if not isinstance(row, dict) or str(row.get("session") or "") >= ex_date:
+            if not isinstance(row, dict):
+                continue
+            day = str(row.get("session") or "")
+            if day > ex_date or (day == ex_date and not (row.get("outcome") == "holdings" and row.get("from_open") is True)):
                 continue
             for name, d in (row.get("sleeves") or {}).items():
                 if name not in out and isinstance(d, dict) and isinstance(d.get("shares"), dict):

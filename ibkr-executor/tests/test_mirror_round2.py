@@ -179,6 +179,35 @@ def test_n01_the_venue_is_asked_once_more_and_its_own_answer_is_what_is_booked(t
     assert done["filled"] == 0 and "resolved by the operator" in done["how"]
 
 
+def test_n01_a_venue_that_says_filled_but_cannot_give_the_price_still_wins_on_the_quantity(tmp_path):
+    def rig(path):
+        os.makedirs(path, exist_ok=True)
+        r, oid, o = stuck_buy(path)
+        rec = r.venue._orders[r.venue._by_client[oid]]
+        r.venue.hold.clear()
+        r.venue._fill(rec, o["qty"])                           # it FILLED; the gateway answers for it again ...
+        r.venue.forgotten.clear()
+        r.venue.no_price.add("PULS")                           # ... but reports no price, and the executions
+
+        def down(cid):                                         #     cannot be read on this pass
+            raise RuntimeError("reqExecutions timed out")
+        r.venue.stock_order_fills = down
+        return r, oid, o
+    r, oid, o = rig(tmp_path / "wrong")
+    r.m.request_resolve(oid, 0, None, 0.0, "it never filled")
+    r.tick("15:59:10")
+    assert len([a for a in REFUSED(r, "resolve") if f"FILLED {o['qty']} of {o['qty']}" in a and "states 0" in a]) == 1
+    done = next(x for x in r.m.state["last_run"]["orders"] if x["id"] == oid)          # the run's own pass then books the
+    assert done["filled"] == o["qty"] and done["price"] == o["limit"]                  # venue's quantity (at the limit, flagged)
+    assert "resolved by the operator" not in done["how"] and r.m.book.positions()["PULS"] == o["qty"]
+    t, oid, o = rig(tmp_path / "right")                        # the twin: the venue's quantity, the statement's price
+    t.m.request_resolve(oid, o["qty"], 49.55, 1.0, "statement")
+    t.tick("15:59:10")
+    done = next(x for x in t.m.state["last_run"]["orders"] if x["id"] == oid)
+    assert (done["filled"], done["price"]) == (o["qty"], 49.55) and "resolved by the operator" in done["how"]
+    assert not REFUSED(t, "resolve")
+
+
 def test_n01_an_adjustment_that_would_put_a_sleeve_in_debt_needs_force(tmp_path):
     """the reviewer's N-01b: a $29.00 fee typed as 29000 put HG $28,900 in debt, and the next session
     sold its holdings 'to repair a cash debt'"""
@@ -379,6 +408,27 @@ def test_n04_absence_today_proves_nothing_about_an_order_of_an_earlier_day(tmp_p
     assert r.venue.absent_asked == [] and [s for s, _ in r.orders()].count("PULS") == 1
 
 
+# =============================================================================================== N-08
+def test_n08_the_loop_is_asked_back_when_the_next_flatten_round_is_due(tmp_path):
+    """the rounds are minutes apart now: between two of them the book asks the loop back for the
+    moment the next one is due (never later than the loop's own cadence), not every five seconds"""
+    def waits(r):
+        r.venue.reject.add("SOXL")
+        r.m.halt("KILL", flatten=True)
+        t0 = r.clock.now = at("10:00:00", D2)
+        out = {}
+        for _ in range(18):
+            r.m.tick(r.venue)
+            out[int((r.clock.now - t0).total_seconds())] = r.m.next_wait()
+            r.clock.now += timedelta(seconds=5)
+        return out
+    w = waits(invested(tmp_path, poll_s=3600.0))
+    assert [w[t] for t in (0, 5, 20, 80)] == [5.0] * 4          # a round's order is in flight: the flatten cadence
+    assert (w[10], w[15], w[25], w[50], w[85]) == (10.0, 5.0, 55.0, 30.0, 295.0)       # waiting: until the round is due
+    os.makedirs(tmp_path / "short", exist_ok=True)
+    assert waits(invested(tmp_path / "short", poll_s=120.0))[85] == 120.0     # ... or the loop's own cadence, if shorter
+
+
 # =============================================================================================== N-09
 def test_n09_a_paper_tick_hands_the_loop_back_after_ten_seconds_and_a_live_one_keeps_its_budget(tmp_path):
     """a paper book shares the one loop thread with the live blend: a brain that is down held that
@@ -476,9 +526,9 @@ BAD_SYNC = [
 ]
 
 
-def with_sync(row, name="HARV", **kw):
+def with_sync(row, name="HARV", targets=None, **kw):
     def make(now):
-        p = payload(now, **kw)
+        p = payload(now, targets, **kw)
         if row is None:
             p["sync"].pop(name)
         else:
@@ -526,6 +576,19 @@ def test_r3_a_payload_with_no_sync_at_all_trades_nothing_live_and_everything_on_
     os.makedirs(tmp_path / "twin", exist_ok=True)
     t.tick("15:55:05")
     assert all(d["action"] == "trade" for d in t.m.state["last_run"]["sleeves"].values()) and not t.red()
+
+
+def test_r3_when_the_brain_holds_the_sleeve_back_too_both_reasons_are_on_the_record(tmp_path):
+    r = live_rig(tmp_path)
+    r.brain.make = with_sync({"state": "drift", "approved_version": "v7", "live_version": "v9"}, targets=dict(T1, HARV=None))
+    r.tick("15:55:05")
+    why = r.m.state["last_run"]["sleeves"]["HARV"]["reason"]
+    assert "LIVE tree gate" in why and "sync state 'drift'" in why and "the brain also says: no prices for X" in why
+    t = live_rig(tmp_path / "twin")                            # the twin: attested, and only the brain holds it back
+    os.makedirs(tmp_path / "twin", exist_ok=True)
+    t.brain.make = lambda now: payload(now, dict(T1, HARV=None))
+    t.tick("15:55:05")
+    assert t.m.state["last_run"]["sleeves"]["HARV"]["reason"] == "brain: no prices for X"
 
 
 # =============================================================================================== R4
@@ -653,7 +716,7 @@ def test_v2b2_a_dividend_after_a_split_is_owed_on_the_split_adjusted_shares(tmp_
     after = {n: s.shares.get("PULS", 0) for n, s in d.m.book.sleeves.items()}
     assert after == {n: 2 * q for n, q in before.items()} and after["HARV"] > 0
     rows = [x for x in d.m.state["history"] if x["outcome"] == "holdings"]
-    assert len(rows) == 1 and rows[0]["session"] == D2 and rows[0]["reason"] == "split PULS x2"
+    assert len(rows) == 1 and rows[0]["session"] == D2 and rows[0]["reason"] == "split PULS x2" and rows[0]["from_open"] is True
     assert rows[0]["sleeves"]["HARV"]["shares"]["PULS"] == after["HARV"]
     d.brain.fail = "transport"                                 # D3, the ex-date, is lost
     d.tick("15:55:05", day=D3)
@@ -665,11 +728,49 @@ def test_v2b2_a_dividend_after_a_split_is_owed_on_the_split_adjusted_shares(tmp_
     recs = {x["sleeve"]: x for x in d.m.state["dividends"]}
     assert recs["HARV"]["shares"] == after["HARV"] and recs["KMLM"]["shares"] == after["KMLM"]     # post-split
     assert recs["HARV"]["total"] == pytest.approx(after["HARV"] * 0.10)
-    same = {"ticker": "PULS", "ex_date": D2, "pay_date": D4, "amount": 0.20}      # the twin: ex ON the split date ->
+    same = {"ticker": "PULS", "ex_date": D2, "pay_date": D4, "amount": 0.20}      # ex ON the split date, seen late:
     d.brain.make = lambda now: payload(now, prices=px2, session="2026-11-16", splits=split, dividends=[div, same])
-    d.tick("15:55:05", day="2026-11-16")                       # the shares at the close BEFORE it (pre-split)
+    d.tick("15:55:05", day="2026-11-16")                       # what that day's own plan would have seen (post-split)
     late = [x for x in d.m.state["dividends"] if x["ex_date"] == D2]
-    assert {x["sleeve"]: x["shares"] for x in late} == {n: q for n, q in before.items() if q}
+    assert {x["sleeve"]: x["shares"] for x in late} == {n: q for n, q in after.items() if q}
+    early = {"ticker": "PULS", "ex_date": DAY, "pay_date": D4, "amount": 0.30}    # the twin: ex BEFORE the split -> the
+    t = Rig(tmp_path / "twin")                                 # shares at the close before THAT (none: a new book)
+    os.makedirs(tmp_path / "twin", exist_ok=True)
+    t.tick("15:55:05")
+    t.brain.make = lambda now: payload(now, {n: None for n in T1}, prices=px2, session=D2, splits=split)
+    t.tick("15:55:05", day=D2)
+    pre = {"ticker": "PULS", "ex_date": D2, "pay_date": D4, "amount": 0.30}
+    t.m.state["history"] = [dict(x, from_open=False) if x.get("outcome") == "holdings" else x for x in t.m.state["history"]]
+    t.brain.make = lambda now: payload(now, prices=px2, session=D3, splits=split, dividends=[pre, early])
+    t.tick("15:55:05", day=D3)                                 # (a row NOT from the open answers only for later ex-dates)
+    got = {x["sleeve"]: x["shares"] for x in t.m.state["dividends"] if x["ex_date"] == D2}
+    assert got == {n: q for n, q in before.items() if q}
+    assert [x for x in t.m.state["dividends"] if x["ex_date"] == DAY] == []
+
+
+def test_v2b2_a_split_applied_late_is_recorded_on_its_own_date(tmp_path):
+    """the second verifier's scenario: neither the split's session nor the ex-date's is planned (the
+    brain was down); the split is applied two sessions late and must still be in force for the
+    dividend that went ex in between"""
+    r = invested(tmp_path)
+    before = {n: s.shares.get("PULS", 0) for n, s in r.m.book.sleeves.items()}
+    r.venue._positions["PULS"] *= 3                            # PULS splits 3:1 on D2 ...
+    r.venue.quotes["PULS"] = PX["PULS"] / 3
+    r.brain.fail = "transport"                                 # ... and D2 and D3 (the ex-date) are both lost
+    for day in (D2, D3):
+        r.tick("15:55:05", day=day)
+        r.tick("15:58:00", day=day)
+    r.brain.fail = None
+    px3 = dict(PX, PULS=PX["PULS"] / 3)
+    div = {"ticker": "PULS", "ex_date": D3, "pay_date": "2026-11-20", "amount": 0.10}
+    r.brain.make = lambda now: payload(now, prices=px3, session=D4, splits=[{"ticker": "PULS", "date": D2, "ratio": 3.0}],
+                                       dividends=[div])
+    r.tick("15:55:05", day=D4)
+    row = next(x for x in r.m.state["history"] if x["outcome"] == "holdings")
+    assert (row["session"], row["from_open"]) == (D2, True)    # dated the SPLIT's day, not the session that applied it
+    recs = {x["sleeve"]: x["shares"] for x in r.m.state["dividends"]}
+    assert recs == {n: 3 * q for n, q in before.items() if q}  # what the venue will pay on
+    sound(r)
 
 
 def test_v2b2_an_adjustment_of_shares_is_in_the_history_too(tmp_path):
@@ -680,7 +781,7 @@ def test_v2b2_an_adjustment_of_shares_is_in_the_history_too(tmp_path):
     d.m.request_adjust("HG", None, 0, -1.0, "fee")             # cash only: no row
     d.tick("16:30:00")
     rows = [x for x in d.m.state["history"] if x["outcome"] == "holdings"]
-    assert len(rows) == 1 and (rows[0]["session"], rows[0]["reason"]) == (DAY, "adjust")
+    assert len(rows) == 1 and (rows[0]["session"], rows[0]["reason"], rows[0]["from_open"]) == (DAY, "adjust", False)
     assert rows[0]["sleeves"]["HARV"]["shares"]["PULS"] == held - 100
     d.brain.fail = "transport"
     d.tick("15:55:05", day=D2)

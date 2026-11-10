@@ -117,6 +117,24 @@ def check_accident_gauge(state, alerts, url, now):
         alerts.append("accident composite RESET (was tripped) — " + line)
 
 
+def mirror_dry_step(alerts, now, daily=None):
+    """the IBKR mirror's PAPER book, one session's step (composer/IBKR_MIRROR.md): the executor's own
+    core (ibkr-executor/app/mirror_core.py) on the brain's pinned 15:54 decision, then parity against
+    Composer's holdings; book and ledger in results/mirror/. Runs AFTER the shadow runner, whose ledger
+    explains a difference (knife-edge, no-rebalance day). No order, no broker, no Composer call. It can
+    never stop the monitor: any failure is one printed line"""
+    try:
+        if daily is None:
+            import mirror_dry
+            daily = mirror_dry.daily
+        lines, more = daily(now=now)
+        for ln in lines:
+            print(f"  {ln}")
+        alerts.extend(more)
+    except (Exception, SystemExit) as e:  # noqa: BLE001  the run must go on
+        print(f"  (mirror dry run unavailable: {' '.join(str(e).split())[:160]})")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -297,6 +315,9 @@ def main():
                                    ledger=os.path.join(DIR, "shadow-ledger.jsonl"))
     except (Exception, SystemExit) as e:  # composerlib exits on HTTP errors; the run must go on
         print(f"  (shadow runner unavailable: {e})")
+
+    # the IBKR mirror's paper book (composer/IBKR_MIRROR.md): after the shadow runner, never fatal
+    mirror_dry_step(alerts, now)
 
     # ops-tempo conditioning (addendum 28): when the accident composite is
     # RED, escalate DIAGNOSTIC tempo (never trades): run live-vs-model

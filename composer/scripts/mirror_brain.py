@@ -34,14 +34,21 @@ requests share one build):
   - "decision bar not published yet" until SPY's traded bar ending at T is in, and, for at most SETTLE_S,
     while FMP is still publishing that minute (it publishes ticker by ticker over 10-25 s: preclose-ledger
     2026-11-09 15:16:15, SPY had the bar and 23 of 48 tickers did not)
-  - "decision not settled yet" while FMP has not answered for a ticker, or an engine is unavailable for
-    a FEED reason (SPY's bar, breadth, a decision ticker priced by an estimate, a price missing): a
-    later request rebuilds, at most every REBUILD_EVERY_S, until the feed is whole. There is no give-up
-    build: the executor's own plan-by deadline bounds the wait. (The give-up build this replaced went
-    out at T+47 s of a 50-second run of FMP 429s with every engine unavailable, and was cached for the
-    session.)
+  - "decision not settled yet" while FMP has not answered for a ticker a tree reads or can hold, or an
+    engine is unavailable for a FEED reason (SPY's bar, breadth, a decision ticker priced by an
+    estimate, a price missing): a later request rebuilds, at most every REBUILD_EVERY_S.
+  From T + SETTLE_WAIT_S the wait is scoped to the engine. IF the book-level conditions hold (SPY priced
+  from the decision bar, breadth at or above BREADTH_MIN), the build is settled as it is: an engine
+  still down for a feed reason OF ITS OWN (a decision ticker unanswered or on an estimate, its own
+  breadth, a missing price) is published unavailable with the reason, the others ok, and `problems`
+  names what was given up on: one halted ticker must not cost the other sleeves their session. If the
+  book-level conditions do NOT hold (the feed as a whole is down) the 503 goes on, and the executor's
+  plan-by deadline turns it into a recorded no-trade. (An earlier give-up, at T+45 s whatever the
+  feed's state, went out in a 50-second run of FMP 429s with every engine unavailable and was cached
+  for the session.) A ticker no approved tree reads or can hold (a same-index sibling asked only to
+  rebuild a stale price from) never holds the payload back.
   An engine unavailable for a reason the feed cannot change (tree drift, paused, a history a session
-  short, no attestation where one is required) on a healthy feed IS a settled answer.
+  short, no attestation where one is required) on a healthy feed IS a settled answer at once.
 THE ALLOWANCE: a build goes while up to LAG_MAX of the recently traded tickers are still a bar behind
 (and, past SETTLE_S, with more, said in `problems`), so a live payload's PRICES for those tickers can
 differ slightly from a later rebuild or `--at` of the same instant (the round-2 review: targets did not
@@ -114,6 +121,9 @@ LAG_MAX = 0.15            # still publishing: more than this share of the recent
 SETTLE_S = 45             # seconds after the instant a bar still being published is waited for; then what FMP
                           # has ANSWERED is used (a ticker it has not answered for is waited for without limit)
 REBUILD_EVERY_S = 10      # an unsettled pinned decision is tried again at most this often
+SETTLE_WAIT_S = 120       # seconds after the instant the whole payload waits for an engine's own feed trouble (an
+                          # unanswered or estimated decision ticker, a missing price); from then on, if SPY's bar and
+                          # the book's breadth are in order, that engine is published unavailable and the rest trade
 ATTEST_MAX_AGE_S = 3600   # an "ok" attested longer than this before the instant counts as none
                           # (env MIRROR_ATTEST_MAX_AGE_S)
 ACTIONS_DAYS = 10         # dividends and splits published: ex-date within this many calendar days of the session
@@ -468,6 +478,9 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
     need = require_attestation()
     unattested, aged = [], []
     feed = diag.setdefault("feed", {}) if diag is not None else {}
+    if diag is not None:
+        diag["halt"] = list(halt)                  # the book-level reasons: they hold EVERY engine
+    silent = {t for t, m in (cap.get("problems") or {}).items() if m != "no traded bar today"}   # FMP gave no answer
     for eng, cfg in cfg_all.items():
         era = era_of(cfg, day)
         rule, corridor = rule_of(cfg)
@@ -483,8 +496,10 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
         why = list(halt)                           # the reasons a later read of the feed could change come first
         est = [t for t in dec if (stamps.get(t) or (None,))[0] != "trade"]
         if est:
+            mute, none = [t for t in est if t in silent], [t for t in est if t not in silent and t not in traded]
             why.append(f"{', '.join(est)} priced by an estimate, not a trade of its own today"
-                       + (f" ({', '.join(t for t in est if t not in traded)}: no trade today)" if set(est) - traded else ""))
+                       + (f" ({', '.join(mute)}: FMP did not answer)" if mute else "")
+                       + (f" ({', '.join(none)}: no trade today)" if none else ""))
         n_live = sum(recent(t) for t in dec)
         if dec and n_live < ENGINE_BREADTH_MIN * len(dec):
             why.append(f"{n_live} of its {len(dec)} decision tickers traded in the last {BREADTH_AGE_S // 60} minutes")
@@ -582,8 +597,9 @@ class NotPublished(Exception):
 
 
 class NotSettled(NotPublished):
-    """the feed is not whole yet (a ticker unanswered, or an engine unavailable for a feed reason):
-    nothing is cached, and the decision is tried again in REBUILD_EVERY_S"""
+    """the feed is not whole yet (a ticker unanswered, or an engine unavailable for a feed reason), and
+    it is either too early to give up on one engine (SETTLE_WAIT_S) or the trouble is book-wide: nothing
+    is cached, and the decision is tried again in REBUILD_EVERY_S"""
 
     def __init__(self, detail):
         super().__init__(detail, "decision not settled yet", REBUILD_EVERY_S)
@@ -637,9 +653,11 @@ class Bars:
             raise NotPublished(f"SPY's last traded bar ends {sr.et_now(q[pc.GATE[0]][1]):%H:%M:%S} ET")
         self.q, self.probs = pc.minute_quotes(tickers, self.T, self.key, fetch=self.fetch, budget=self.budget)
 
-    def unanswered(self):
-        """None, or the tickers FMP has not answered for (refused, failed, slower than the budget)"""
-        late = sorted(t for t, m in self.probs.items() if m != "no traded bar today")
+    def unanswered(self, matter=None):
+        """None, or the tickers FMP has not answered for (refused, failed, slower than the budget).
+        matter: only these count (the pinned path passes every ticker a tree reads or can hold: a
+        sibling asked only to rebuild a stale price from never holds a decision back)"""
+        late = sorted(t for t, m in self.probs.items() if m != "no traded bar today" and (matter is None or t in matter))
         if late:
             return f"FMP has not answered for {', '.join(late[:8])}" + (f" ... ({len(late)} tickers)" if len(late) > 8 else "")
         return None
@@ -805,12 +823,17 @@ class Pinned:
                     "builds": self.builds, "last_error": self.error}
 
 
-def pinned_attempt(history=None, attest=None, key=None, wall=None, fetch_minutes=None, settle_s=SETTLE_S):
+def pinned_attempt(history=None, attest=None, key=None, wall=None, fetch_minutes=None, settle_s=SETTLE_S,
+                   wait_s=SETTLE_WAIT_S):
     """the attempt(T) of a Pinned. FMP's bars as of T are loaded (kept per T across attempts, so a retry
-    asks only for what was missing): NotPublished while SPY's bar ending at T is not in, or, for settle_s
-    past T by the wall clock, while the minute is still being published; NotSettled while FMP has not
-    answered for a ticker (no build is made on a partial answer), and after a build in which an engine is
-    unavailable for a feed reason or the decision bar is not complete. Otherwise the payload: settled"""
+    asks only for what was missing). NotPublished while SPY's bar ending at T is not in, or, for settle_s
+    past T by the wall clock, while the minute is still being published. NotSettled while FMP has not
+    answered for a ticker a tree reads or can hold (no build is made on a partial answer), and after a
+    build in which the decision bar is not complete or an engine is unavailable for a feed reason:
+    until wait_s past T, whatever the reason; from then on only while a BOOK-level reason stands (SPY's
+    bar, the book's breadth). Past wait_s with the book in order the build is settled as it is: the
+    engines still down for a feed reason of their own are published unavailable, the others ok, and
+    `problems` names what was given up on. Otherwise the payload: settled"""
     wall = wall or _utcnow
     feeds, lock = {}, threading.Lock()
 
@@ -825,12 +848,14 @@ def pinned_attempt(history=None, attest=None, key=None, wall=None, fetch_minutes
                 today = sr.et_now(wall()).date()
                 for old in [x for x in feeds if sr.et_now(x).date() not in (today, sr.et_now(T).date())]:
                     del feeds[old]
-        bars.load(feed_tickers(sr.load_manifest(), bars.day))
-        late = bars.unanswered()
-        if late:
-            raise NotSettled(late)
+        cfg_all = sr.load_manifest()
+        bars.load(feed_tickers(cfg_all, bars.day))
+        waited = (wall() - T).total_seconds()
+        late = bars.unanswered(era_tickers(cfg_all) | {pc.GATE[0]})   # a pure sibling never holds the payload back
+        if late and waited < wait_s:
+            raise NotSettled(late)                 # no build on a partial answer while it may still come
         lag = bars.lagging()
-        if lag and (wall() - T).total_seconds() < settle_s:
+        if lag and waited < settle_s:
             raise NotPublished(lag)
         diag = {}
         p = build(T, quotes=bars.quotes, fetch=history.fetch if history is not None else None, pinned=True,
@@ -838,10 +863,14 @@ def pinned_attempt(history=None, attest=None, key=None, wall=None, fetch_minutes
         if not (p.get("decision_bar") or {}).get("complete"):
             raise NotSettled((p.get("problems") or ["no decision at that instant"])[0])
         feed = diag.get("feed") or {}
-        if feed:
+        if feed or late:
             why = sorted(set(feed.values()))
-            raise NotSettled(f"{', '.join(feed)} unavailable on the feed as it is: {why[0]}"
-                             + (f" (and {len(why) - 1} more)" if len(why) > 1 else ""))
+            down = (f"{', '.join(feed)} unavailable on the feed as it is: {why[0]}"
+                    + (f" (and {len(why) - 1} more)" if len(why) > 1 else "")) if feed else None
+            if waited < wait_s or diag.get("halt"):   # still inside the wait, or the feed as a whole is down
+                raise NotSettled(down or late)
+            p["problems"].append(f"settled {wait_s} s after the instant with the feed still incomplete; given up on: "
+                                 + "; ".join(x for x in (late, down) if x))
         if lag:
             p["problems"].append(f"built {settle_s} s after the instant with the bar not fully published: {lag}")
         with lock:

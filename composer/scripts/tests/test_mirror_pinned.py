@@ -31,10 +31,13 @@ Each behavioural test has a BROKEN twin that must land on the other side.
       reproduces Composer's holdings on all four engines (the ledger); without the scaling three differ
   T8  load: the session's Yahoo history is fetched once; a retry asks FMP only for what was missing; the
       mirror's FMP budget is its own; built_utc is stamped when the build ends
-  T9  only a SETTLED decision is cached: while FMP has not answered for a ticker, or an engine is
-      unavailable for a feed reason, the answer is 503 and a later request rebuilds, at most every
-      REBUILD_EVERY_S (a 50-second run of 429s no longer freezes an all-unavailable session); an engine
-      unavailable for a reason the feed cannot change is a settled answer
+  T9  only a SETTLED decision is cached: while FMP has not answered for a ticker a tree reads or can
+      hold, or an engine is unavailable for a feed reason, the answer is 503 and a later request
+      rebuilds, at most every REBUILD_EVERY_S (a 50-second run of 429s no longer freezes an
+      all-unavailable session). From T + SETTLE_WAIT_S the wait is scoped to the engine: with SPY's bar
+      and the book's breadth in order, an engine still down for a feed reason of its own is published
+      unavailable and the others trade; a feed-wide outage stays a 503; a pure sibling never holds the
+      payload back. An engine unavailable for a reason the feed cannot change is a settled answer at once
 
 Run: python3 -m unittest composer.scripts.tests.test_mirror_pinned -v
 """
@@ -1475,15 +1478,35 @@ class T9Settled(Http):
         self.now[0] = T + 200 * SEC
         self.assertEqual(self.get(self.url), (200, p))
 
+    def test_pinned_caches_only_a_complete_payload_whatever_the_attempt_returns(self):
+        out = [{"decision_bar": {"complete": False}, "problems": ["not yet"]}, {"decision_bar": {"complete": True}, "n": 2}]
+        now = [T + 30 * SEC]
+        cache = mb.Pinned(lambda t: out.pop(0), wall=lambda: now[0])
+        self.assertEqual(cache.get(T), (None, {"error": "not yet"}))
+        self.assertEqual(cache.get(T), (None, {"error": "not yet"}))            # held: not tried again for REBUILD_EVERY_S
+        self.assertEqual((len(out), cache.state()["instants"]), (1, []))
+        now[0] += mb.REBUILD_EVERY_S * SEC
+        p, err = cache.get(T)
+        self.assertEqual((p["n"], err), (2, None))
+        self.assertIs(cache.get(T)[0], p)                                       # cached: the attempt is not asked again
+        self.assertTrue(cache.has(T))
+        self.assertFalse(cache.has(T + 60 * SEC))
+
     def test_build_reports_feed_reasons_apart_from_the_others(self):
         diag = {}
         self.pinned(diag=diag)
-        self.assertEqual(diag, {"feed": {}})
+        self.assertEqual(diag, {"feed": {}, "halt": []})
         diag = {}
         p = self.pinned(quotes=self.quotes(cut="15:38"), diag=diag)             # a stalled feed: every engine, for the feed
         self.assertEqual(sorted(diag["feed"]), sorted(ENGINES))
         self.assertIn("the feed looks dead", diag["feed"]["HG"])
+        self.assertEqual(len(diag["halt"]), 2)                                  # BOOK-level: SPY's bar and the breadth
+        self.assertTrue(any("SPY's price is not from the bar" in x for x in diag["halt"]))
         self.assertEqual(statuses(p), dict.fromkeys(ENGINES, "unavailable"))
+        diag = {}
+        self.pinned(quotes=self.quotes(drop={"TQQQ"}), diag=diag)               # one engine's own trouble is not book-level
+        self.assertTrue(diag["feed"])
+        self.assertEqual(diag["halt"], [])
 
         def short(t):
             adj, raw, meta = self.yahoo(t)
@@ -1505,6 +1528,139 @@ class T9Settled(Http):
         reads = [e for e in ENGINES if "PEJ" in sr.tree_tickers(sr.load_tree(self.man[e]["eras"][-1]))]
         self.assertEqual(sorted(diag["feed"]), sorted(reads))
         self.assertIn("no prices for PEJ", diag["feed"][reads[0]])
+        self.assertEqual(diag["halt"], [])
+
+    # ---- from T + SETTLE_WAIT_S the wait is scoped to the engine
+    def never(self, tickers):
+        """FMP never answers for these tickers; (the attempt's fetch, the calls it saw)"""
+        real = self.fmp.__call__
+
+        def fetch(t, d, key):
+            if t in tickers:
+                self.fmp.calls.append(t)
+                raise RuntimeError("HTTP Error 429: Too Many Requests")
+            return real(t, d, key)
+        self.attempt_with(fetch)
+
+    def test_a_decision_ticker_that_never_answers_costs_only_its_engines(self):
+        """one ticker FMP never answers for must not cost the other sleeves their session"""
+        self.assertEqual(mb.SETTLE_WAIT_S, 120)
+        self.never({"TQQQ"})
+        reads = {e: "TQQQ" in sr.decision_tickers(sr.load_tree(self.man[e]["eras"][-1])) for e in ENGINES}
+        self.assertTrue(any(reads.values()) and not all(reads.values()))
+        built, n = mb.build, []
+
+        def counted(*a, **k):
+            n.append(self.now[0])
+            return built(*a, **k)
+        with unittest.mock.patch.object(mb, "build", counted):
+            for s in (25, 60, 100, 119):                                        # until T+120 s exactly as before
+                self.now[0] = T + s * SEC
+                code, body = self.get(self.url)
+                self.assertEqual((code, body["error"]), (503, "decision not settled yet"), s)
+                self.assertIn("FMP has not answered for TQQQ", body["detail"])
+            self.assertEqual((n, self.pinned_cache.state()["instants"]), ([], []))
+            self.now[0] = T + 130 * SEC                                         # the first attempt past the wait
+            code, p = self.get(self.url)
+            self.assertEqual(code, 200)
+            self.assertEqual(n, [T + 130 * SEC])
+        for e in ENGINES:
+            self.assertEqual(p["engines"][e]["status"], "unavailable" if reads[e] else "ok", e)
+            if reads[e]:
+                self.assertIn("TQQQ priced by an estimate, not a trade of its own today (TQQQ: FMP did not answer)", p["engines"][e]["note"])
+                self.assertNotIn("target", p["engines"][e])
+        self.assertEqual((p["decision_bar"]["complete"], p["pinned"], p["asof_utc"]), (True, True, "2026-11-06T20:54:00Z"))
+        self.assertGreaterEqual(p["quotes"]["breadth"]["share"], mb.BREADTH_MIN)
+        line = next(x for x in p["problems"] if x.startswith("settled 120 s after the instant with the feed still incomplete"))
+        self.assertIn("given up on: FMP has not answered for TQQQ", line)
+        for e in ENGINES:
+            self.assertEqual(e in line.split("given up on:")[1], reads[e], e)   # the engines given up on, and only they
+        self.assertIn("via", p["price_notes"]["TQQQ"])                          # its price is an estimate, and named
+        self.fmp.cut = "15:57"                                                  # cached and immutable like any other:
+        self.attempt_with(self.fmp)                                             # FMP answers again, bars move on
+        builds = self.pinned_cache.builds
+        self.now[0] = T + 200 * SEC
+        self.assertEqual(self.get(self.url), (200, p))
+        self.assertEqual((self.pinned_cache.builds, self.pinned_cache.state()["instants"]), (builds, ["2026-11-06T20:54:00Z"]))
+
+    def test_a_decision_ticker_on_an_estimate_is_given_up_on_after_the_wait(self):
+        """FMP answers, and TQQQ's last trade is 15:31 (halted, say): the same from T + 120 s"""
+        self.fmp.lag = {"TQQQ": "15:30"}
+        self.now[0] = T + 119 * SEC
+        self.assertEqual(self.get(self.url)[0], 503)
+        self.now[0] = T + 131 * SEC
+        code, p = self.get(self.url)
+        self.assertEqual(code, 200)
+        reads = {e: "TQQQ" in sr.decision_tickers(sr.load_tree(self.man[e]["eras"][-1])) for e in ENGINES}
+        self.assertEqual(statuses(p), {e: "unavailable" if reads[e] else "ok" for e in ENGINES})
+        self.assertTrue(any("given up on" in x and "TQQQ priced by an estimate" in x for x in p["problems"]), p["problems"])
+        self.assertFalse(any("FMP has not answered" in x for x in p["problems"]))
+
+    def test_a_price_yahoo_never_gives_costs_only_its_engine(self):
+        def yahoo(t):
+            if t == "PEJ":
+                raise RuntimeError("Yahoo PEJ: timed out")
+            return self.yahoo(t)
+        self.hist._fetch = yahoo
+        reads = [e for e in ENGINES if "PEJ" in sr.tree_tickers(sr.load_tree(self.man[e]["eras"][-1]))]
+        self.assertTrue(0 < len(reads) < 4)
+        self.now[0] = T + 60 * SEC
+        code, body = self.get(self.url)
+        self.assertEqual((code, body["error"]), (503, "decision not settled yet"))
+        self.assertIn("no prices for PEJ", body["detail"])
+        self.now[0] = T + 120 * SEC
+        code, p = self.get(self.url)
+        self.assertEqual((code, statuses(p)), (200, {e: "unavailable" if e in reads else "ok" for e in ENGINES}))
+        self.assertTrue(any("given up on" in x and "no prices for PEJ" in x for x in p["problems"]))
+        self.assertNotIn("PEJ", p["prices"])
+
+    def test_a_feed_wide_outage_is_still_a_503_past_the_wait(self):
+        """FMP answers 429 for 40% of the tickers and never recovers: the book's breadth is not there, so no
+        engine is given up on and nothing is published; the executor's plan-by makes it a recorded no-trade"""
+        feed = sorted(mb.feed_tickers(self.man, D))
+        self.never({t for i, t in enumerate(feed) if i % 5 in (1, 3) and t != "SPY"})
+        for s in (26, 119):
+            self.now[0] = T + s * SEC
+            code, body = self.get(self.url)
+            self.assertEqual((code, body["error"]), (503, "decision not settled yet"), s)
+            self.assertIn("FMP has not answered for", body["detail"])
+        for s in (130, 180, 239):                                               # past the wait: built, and still not settled
+            self.now[0] = T + s * SEC
+            code, body = self.get(self.url)
+            self.assertEqual((code, body["error"]), (503, "decision not settled yet"), s)
+            self.assertIn("the feed looks dead: 27 of 48", body["detail"])
+        self.assertEqual(self.pinned_cache.state()["instants"], [])
+
+    def test_a_pure_sibling_that_never_answers_delays_nothing(self):
+        """a same-index fund no approved tree reads or can hold is asked only to rebuild a stale price from"""
+        sib = mb.feed_tickers(self.man, D) - mb.era_tickers(self.man) - {"SPY"}
+        self.assertGreaterEqual(len(sib), 5)
+        self.never(sib)
+        self.now[0] = T + 25 * SEC
+        code, p = self.get(self.url)                                            # at once, at the first request
+        self.assertEqual((code, statuses(p)), (200, dict.fromkeys(ENGINES, "ok")))
+        self.assertFalse(any("given up" in x or "answered" in x for x in p["problems"]), p["problems"])
+        self.assertFalse(sib & set(p["prices"]))
+        clean = self.pinned()
+        self.assertEqual((p["engines"], p["prices"], p["price_times"]), (clean["engines"], clean["prices"], clean["price_times"]))
+        self.assertEqual(sorted(t for t in self.fmp.calls if t in sib), sorted(sib))   # each asked once, never again
+
+    def test_an_era_only_ticker_that_never_answers_waits_then_is_named(self):
+        """the twin: ANGL is held by an earlier era only. A sleeve may still hold it, so it is waited for; but it
+        is no engine's trouble, and from T + 120 s the payload goes with all four ok and the estimate named"""
+        old = sorted(mb.era_tickers(self.man) - {t for c in self.man.values() for t in sr.tree_tickers(sr.load_tree(c["eras"][-1]))})
+        self.assertIn("ANGL", old)
+        self.never({"ANGL"})
+        self.now[0] = T + 25 * SEC
+        code, body = self.get(self.url)
+        self.assertEqual(code, 503)
+        self.assertIn("FMP has not answered for ANGL", body["detail"])
+        self.now[0] = T + 120 * SEC
+        code, p = self.get(self.url)
+        self.assertEqual((code, statuses(p)), (200, dict.fromkeys(ENGINES, "ok")))
+        self.assertTrue(any(x.endswith("given up on: FMP has not answered for ANGL") for x in p["problems"]), p["problems"])
+        self.assertIn("ANGL", p["price_notes"])
+        self.assertEqual(p["price_times"]["ANGL"], "2026-11-05T21:00:00Z")       # the previous close, carried
 
 
 if __name__ == "__main__":

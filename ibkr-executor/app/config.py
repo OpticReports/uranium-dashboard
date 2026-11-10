@@ -97,7 +97,9 @@ class Settings(BaseSettings):
     # The keyless brain (composer/scripts/mirror_brain.py --serve) and its
     # READ-ONLY intents token (the brain's MIRROR_API_TOKEN). No broker
     # credential is ever read by the mirror path.
-    mirror_brain_url: str = ""            # MIRROR_BRAIN_URL
+    mirror_brain_url: str = ""            # MIRROR_BRAIN_URL (https only, or
+                                          # http://localhost / 127.0.0.1: the
+                                          # token is never sent over plain http)
     mirror_api_token: str = ""            # MIRROR_API_TOKEN
     # The capital the mirror runs, split across the sleeves by
     # MIRROR_WEIGHTS (POLICY.md's targets). 0 = no sleeve can be seeded. A
