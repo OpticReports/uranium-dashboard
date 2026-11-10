@@ -1,95 +1,95 @@
 {
-  "taken_at": "2026-11-09T21:35:39+00:00",
+  "taken_at": "2026-11-10T21:36:12+00:00",
   "total_stats": {
     "pending_deploys_cash": 0,
-    "total_cash": 409.050092427,
-    "time_weighted_return": 0.8767175080292158,
-    "total_unallocated_cash": 102.270092427,
-    "portfolio_value": 306692.69,
+    "total_cash": 409.029981855,
+    "time_weighted_return": 0.8695400015043515,
+    "total_unallocated_cash": 102.269981855,
+    "portfolio_value": 305519.75,
     "net_deposits": 247000.0,
     "pending_net_deposits": 0.0,
-    "todays_percent_change": 0.06218962361194224,
-    "simple_return": 0.24167084998586885,
-    "todays_dollar_change": 17956.401710408645,
+    "todays_percent_change": -0.003984600019903534,
+    "simple_return": 0.2369220795450857,
+    "todays_dollar_change": -1222.24417061187,
     "metrics": {
-      "annualized_rate_of_return": 0.9756,
+      "annualized_rate_of_return": 0.9617,
       "max_drawdown": 0.2006,
-      "sharpe_ratio": 1.9725,
-      "standard_deviation": 0.3846
+      "sharpe_ratio": 1.957,
+      "standard_deviation": 0.3839
     },
     "pending_withdrawals": 0.0
   },
   "symphonies": {
     "mbkiXcuNDjueXpiox5Av": {
       "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
-      "value": 104807.52,
-      "deposit_adjusted_value": 2341.41,
-      "cash": 104.82,
+      "value": 104827.05,
+      "deposit_adjusted_value": 2341.85,
+      "cash": 104.83,
       "holdings": {
         "BIL": 0.999
       },
-      "next_rebalance_on": "2026-11-10",
+      "next_rebalance_on": "2026-11-11",
       "has_queued_deploy": null,
-      "last_percent_change": 0.1135
+      "last_percent_change": 0.0002
     },
     "nNdBk7hc5NiBzeRvbI5T": {
       "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
-      "value": 81753.3,
-      "deposit_adjusted_value": 26309.39,
-      "cash": 81.76,
+      "value": 81767.0,
+      "deposit_adjusted_value": 26313.8,
+      "cash": 81.73,
       "holdings": {
         "BOXX": 0.999
       },
-      "next_rebalance_on": "2026-11-10",
+      "next_rebalance_on": "2026-11-11",
       "has_queued_deploy": null,
-      "last_percent_change": -0.0005
+      "last_percent_change": 0.0001
     },
     "YPTSJFJwD2ZKfAeYJUbW": {
       "name": "KMLM switcher + VIX sleeve 75/25",
-      "value": 81774.67,
-      "deposit_adjusted_value": 30895.09,
+      "value": 80576.21,
+      "deposit_adjusted_value": 30442.3,
       "cash": 81.94,
       "holdings": {
-        "PULS": 0.2502,
-        "SOXL": 0.3751,
-        "TECL": 0.3736
+        "PULS": 0.2539,
+        "SOXL": 0.3783,
+        "TECL": 0.3667
       },
-      "next_rebalance_on": "2026-11-10",
+      "next_rebalance_on": "2026-11-11",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0899
+      "last_percent_change": -0.0152
     },
     "ORQNCfZnA18wmsMWVhf8": {
       "name": "VIX Harvester + HYG Credit Guard",
-      "value": 38254.95,
-      "deposit_adjusted_value": 35145.8,
+      "value": 38247.23,
+      "deposit_adjusted_value": 35138.71,
       "cash": 38.26,
       "holdings": {
         "PULS": 0.999
       },
-      "next_rebalance_on": "2026-11-10",
+      "next_rebalance_on": "2026-11-11",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0152
+      "last_percent_change": -0.0001
     }
   },
-  "book_drawdown": 0.0552,
-  "sleeve_weight": 0.1253,
+  "book_drawdown": 0.0598,
+  "sleeve_weight": 0.1255,
   "gate": {
-    "date": "2026-11-06",
-    "spy_vs_200d": 0.0105,
-    "zone": "tight",
+    "date": "2026-11-09",
+    "spy_vs_200d": 0.03393,
+    "zone": "near",
     "hg_holding": "BIL",
-    "ungated_holding": "TECL",
+    "ungated_holding": "BIL",
     "override": false,
     "closed_days": 0
   },
   "shadow": {
-    "date": "2026-11-09",
+    "date": "2026-11-10",
     "status": {
       "HG": "agree",
       "KMLM": "agree",
-      "SLEEVE": "agree",
+      "SLEEVE": "knife-edge",
       "HARV": "agree"
     }
   },
-  "vix_contango": 0.0467
+  "vix_contango": 0.0606
 }

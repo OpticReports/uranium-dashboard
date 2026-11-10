@@ -3,8 +3,8 @@
   W1  what the paper step reports reaches the monitor: its lines are printed, its alerts are raised
   W2  the paper step can never stop the monitor: an exception, a SystemExit, or a missing module is one
       printed line and no alert
-  W3  it runs after the shadow runner (whose ledger explains a difference) and before the snapshot is
-      written, exactly once
+  W3  it runs after the shadow runner (whose ledger explains a difference) and after today's snapshot is
+      written (it compares against it), exactly once
 
 Run: python3 -m unittest tests.test_monitor_mirror -v
 """
@@ -72,7 +72,7 @@ class W3Wiring(unittest.TestCase):
         body = src[src.index("def main():"):]
         self.assertEqual(body.count("mirror_dry_step(alerts, now)"), 1)
         self.assertLess(body.index("shadow_runner.check_shadow("), body.index("mirror_dry_step(alerts, now)"))
-        self.assertLess(body.index("mirror_dry_step(alerts, now)"), body.index('snap_path = os.path.join(DIR'))
+        self.assertLess(body.index("json.dump(snap, f, indent=2)"), body.index("mirror_dry_step(alerts, now)"))   # today's snapshot first
 
 
 if __name__ == "__main__":

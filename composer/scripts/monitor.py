@@ -333,11 +333,6 @@ def main():
     except (Exception, SystemExit) as e:  # composerlib exits on HTTP errors; the run must go on
         print(f"  (shadow runner unavailable: {e})")
 
-    # the IBKR mirror's paper book (composer/IBKR_MIRROR.md): after the shadow runner, never fatal
-    mirror_dry_step(alerts, now)
-    # ... and the executor's own books (real money once an engine is live), read-only
-    mirror_parity_step(alerts, now)
-
     # ops-tempo conditioning (addendum 28): when the accident composite is
     # RED, escalate DIAGNOSTIC tempo (never trades): run live-vs-model
     # divergence for all engines daily instead of monthly.
@@ -391,6 +386,12 @@ def main():
 
     for old in sorted(glob.glob(os.path.join(DIR, "snapshot-*.json")))[:-a.keep]:
         os.remove(old)
+
+    # the IBKR mirror (composer/IBKR_MIRROR.md), AFTER today's snapshot is on disk: both steps compare
+    # against Composer's holdings in it (found 2026-11-10: run before it, they had nothing to compare).
+    # The paper book on this side, then the executor's own books (read-only); neither is ever fatal
+    mirror_dry_step(alerts, now)
+    mirror_parity_step(alerts, now)
 
     print(f"snapshot {stamp} — {len(meta)} symphonies, "
           f"portfolio value ${sum(s['value'] for s in meta):,.0f}")

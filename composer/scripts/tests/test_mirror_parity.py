@@ -274,7 +274,7 @@ class P7NeverFatal(unittest.TestCase):
         body = src[src.index("def main():"):]
         self.assertEqual(body.count("mirror_parity_step(alerts, now)"), 1)
         self.assertLess(body.index("mirror_dry_step(alerts, now)"), body.index("mirror_parity_step(alerts, now)"))
-        self.assertLess(body.index("mirror_parity_step(alerts, now)"), body.index('snap_path = os.path.join(DIR'))
+        self.assertLess(body.index("json.dump(snap, f, indent=2)"), body.index("mirror_parity_step(alerts, now)"))
 
 
 class P8RealFeed(Base):
