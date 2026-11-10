@@ -36,9 +36,20 @@ research/mirror/reviews/. Numbers: results/results.md addendum 55.
    minute's buy; see "The cash account" below for why that mattered and what
    margin removes.
 
-Still open: the starting sleeve weights (recommendation below; default
-Composer's live split) and the order in which engines get real money
-(default SLEEVE first for two or three sessions, then all four).
+7. (11-10) The test is done with REAL money at a small size, not with weeks of
+   paper: MIRROR_CAPITAL_USD=10000 across all four engines, checked daily
+   against Composer, then scaled up by a cash credit to each sleeve. This
+   replaces the ten-paper-session stage by the owner's decision. Kept from the
+   staged rollout: the independent review of the round-2 fixes reads clean
+   first; one paper session on the executor before the first real order (the
+   live chain has never run at a real 15:54); blend3070 is flattened and
+   switched off before the mirror's live book is armed; the tree attestation
+   is armed (a live sleeve does not trade without it). Known distortions at
+   this size: IBKR's per-order minimum commission and whole-share rounding on
+   sleeves of $1,200-$3,400, so the test measures plumbing and execution, not
+   return. On a margin account $10k is the book's limit, not IBKR's.
+
+Starting weights: Composer's live split on the day (default, see below).
 
 Recommendation on the weights: seed at Composer's live split on the cutover
 day (11-09: HG 34.3 / KMLM 26.8 / SLEEVE 26.5 / HARV 12.4), not at the policy
