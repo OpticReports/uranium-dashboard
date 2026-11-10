@@ -263,3 +263,18 @@ deterministic rationale are listed.
     −5.0%, family-wise 0.06, no mirror; the one rule that would have exited 11-05). Data: Yahoo repeats
     the prior session's futures volume on some days (patched from the hourly bars). Not free, not
     tested: VIX futures intraday, open interest, basis, order flow.
+20. QUEUED, process, after the IBKR mirror (owner, 2026-11-10): studies come back narrower
+    than the thesis they were asked to test. Example: the overnight study (add. 53) answered
+    "TA on futures was off a cliff" with price-only proxies (fund opens, sector opens,
+    Asia/DAX cash closes, VIX cash) and no futures data at all; futures volume and the
+    Globex session were tested only when the owner asked (add. 54.5). Diagnosis to confirm:
+    (a) scope follows the data already on disk, not the thesis; (b) no step decomposes the
+    thesis into its testable parts before the build; (c) the counter-agent audits the
+    correctness of what was built, never the coverage of what was left out; (d) the honesty
+    box lists omissions as caveats at the end, not as a gap list that triggers work.
+    Candidate fix: a thesis map before every study (each mechanism against each data family:
+    price, volume, positioning / open interest, term structure, breadth, cross-asset
+    confirmation, horizon and timing, regime splits, second-order effects), every cell
+    marked tested or not tested with the reason and the cost to obtain the data; a coverage
+    critic in the counter-agent pass; reports lead with what was and was not tested. If it
+    works, it becomes a CLAUDE.md convention (mirrors regenerated in the same commit).
