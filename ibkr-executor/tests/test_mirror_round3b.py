@@ -17,7 +17,7 @@ tests/test_mirror.py's (Venue), tests/ibrig.py's (the REAL IBAdapter over FakeIB
   G8   staged rollout: credits are capped at the capital of THIS book's engines, and a seed counts
        what the book has already taken (F2)
   G9   MIRROR_MAX_BOOK_USD below the capital bounds the seeds (F3)
-  G10  a dividend above 10% of the position's value is not credited (F4)
+  G10  a dividend above 25% of the position's value is not credited (F4)
   G11  a blank MIRROR_MAX_BOOK_USD / MIRROR_CAPITAL_USD is the default, not a crash at import (F5)
   G12  a huge integer is "not a number", not an OverflowError (F7)
 """
@@ -283,7 +283,7 @@ def test_g5_a_flatten_that_sold_nothing_never_reports_the_account_flat(tmp_path,
     h = r.m.halt_state()
     assert h["flatten_done"] is True and h["account_flat"] is None and r.m.book.positions() == held
     assert not [p for p in r.ib.placed if p[1] == "SELL"]
-    assert [a for a in r.red() if "flatten NOT complete" in a and "STILL HELD" in a and "reads empty" in a]
+    assert [a for a in r.red() if "flatten NOT complete" in a and "STILL HELD" in a and "reads EMPTY" in a]
 
 
 # =============================================================================================== G6
@@ -364,15 +364,17 @@ def test_g7_the_twins_cash_that_replaces_removed_shares_and_a_paper_book(tmp_pat
     w, live = _funded(tmp_path)
     bil = live.book.sleeves["HG"].shares["BIL"]
     cash0 = live.book.sleeves["HG"].cash
-    live.request_adjust("HG", "BIL", +500, 0.0, "wrong repair")
+    live.request_adjust("HG", "BIL", +500, 0.0, "wrong repair", force=True)       # (V5 D1: +shares needs force too)
     w.tick("16:09:00")
+    funded = live.state["funded_usd"]
     live.request_adjust("HG", "BIL", -500, 45750.0, "undo, typed as a sale")
     w.tick("16:09:30")
-    assert live.book.sleeves["HG"].cash == pytest.approx(cash0) and live.state["funded_usd"] == CAP
+    assert live.book.sleeves["HG"].cash == pytest.approx(cash0) and live.state["funded_usd"] == funded
     assert len([a for a in w.red() if "REFUSED" in a]) == 1
     live.request_adjust("HG", "BIL", -500, 0.0, "undo the wrong repair")
     w.tick("16:09:45")
     assert live.book.sleeves["HG"].shares["BIL"] == bil
+    live.state["funded_usd"] = CAP                           # (the forced step above is not what this gate measures)
     w.venue._positions["BIL"] -= 2                           # two BIL sold by hand at 91.00
     w.venue.cash += 2 * 91.0
     live.request_adjust("HG", "BIL", -2, 2 * 91.0, "sold by hand, statement line 4")
@@ -516,3 +518,30 @@ def test_g12_a_huge_integer_is_not_a_number_and_the_route_answers_400(tmp_path, 
         body = '{"id":"x","filled":1,"price":10,"commission":1' + "0" * 400 + "}"
         out = client.post("/mirror/resolve", params=T, content=body, headers={"content-type": "application/json"})
         assert out.status_code == 400, out.text
+
+
+# =============================================================================================== V5 D1
+def test_v5_shares_added_by_hand_count_against_the_cap_at_the_last_mark(tmp_path):
+    """500 BIL bought by hand in the account, then an unforced 'adjust +500': the book would take
+    $45k of real positions against a $10k cap. Shares count at the last mark; force is literal."""
+    w, live = _funded(tmp_path)
+    bil = live.book.sleeves["HG"].shares["BIL"]
+    live.request_adjust("HG", "BIL", +500, 0.0, "bought by hand")
+    w.tick("16:09:00")
+    assert live.book.sleeves["HG"].shares["BIL"] == bil and live.state["funded_usd"] == CAP
+    assert len([a for a in w.red() if "REFUSED" in a and "cap" in a]) == 1
+    live.request_adjust("HG", "ZZZZ", +5, 0.0, "no mark")                 # cannot be valued: needs force
+    w.tick("16:09:30")
+    assert "ZZZZ" not in live.book.sleeves["HG"].shares and len([a for a in w.red() if "REFUSED" in a]) == 2
+    mark = live.state["marks"]["prices"]["BIL"]
+    cash0 = live.book.sleeves["HG"].cash
+    n = int(cash0 // mark)
+    if n:                                                                 # a buy by hand PAID from the sleeve's cash: no new capital
+        live.request_adjust("HG", "BIL", +n, -round(n * mark, 2), "bought by hand from the sleeve's cash")
+        w.tick("16:10:00")
+        assert live.book.sleeves["HG"].shares["BIL"] == bil + n and live.state["funded_usd"] == CAP
+        bil += n
+    live.request_adjust("HG", "BIL", +2, 0.0, "split listed late", force=True)
+    w.tick("16:11:00")
+    assert live.book.sleeves["HG"].shares["BIL"] == bil + 2
+    assert live.state["funded_usd"] == pytest.approx(CAP + 2 * mark, abs=0.01)

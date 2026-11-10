@@ -860,13 +860,28 @@ class MirrorManager:
                             f"(the next session would sell holdings to repair it). Check the amount; send it with "
                             f"\"force\": true if it is meant")
             return True
-        if self.cfg.live and cash > 0:
-            # F1 (D-04): cash added by /mirror/adjust is capital the book takes, exactly like a credit -
-            # ALL of it. It is not netted against shares the same adjustment removes: add-shares then
-            # remove-them-for-cash would otherwise turn uncapped shares into uncapped cash (V4b D1). A
-            # sale by hand recorded at a book sitting at its cap therefore needs "force": true.
-            added = round(cash, 2)
-            why = None if r.get("force") is True else self._over_cap(added)
+        if self.cfg.live and (cash > 0 or shares > 0):
+            # F1 (D-04): what /mirror/adjust adds to a live book is capital the book takes, like a credit.
+            # CASH counts in full: it is not netted against shares the same adjustment removes (add-shares
+            # then remove-them-for-cash would turn uncapped shares into uncapped cash, V4b D1), so a sale
+            # by hand recorded at a book sitting at its cap needs "force": true.
+            # SHARES added count at the book's last mark (V5 D1: shares bought by hand in the account and
+            # adjusted in would otherwise join the book with no cap), less cash the same adjustment takes
+            # OUT of the sleeve (a buy by hand paid from the sleeve's cash is no new capital). Shares with
+            # no mark cannot be valued and need force.
+            added = round(max(cash, 0.0), 2)
+            why = None
+            if shares > 0:
+                mark = _num(((self.state.get("marks") or {}).get("prices") or {}).get(sym))
+                if mark is None or mark <= 0:
+                    why = (f"the book has no price for {sym}, so {shares:+d} shares cannot be counted against the "
+                           f"live book's cap. Send it with \"force\": true if it is meant")
+                else:
+                    added = round(added + max(shares * mark + min(cash, 0.0), 0.0), 2)
+            if r.get("force") is True:
+                why = None
+            elif why is None and added:
+                why = self._over_cap(added)
             if why:
                 self._refuse(r, why)
                 return True
@@ -2776,12 +2791,11 @@ class MirrorManager:
             except Exception as exc:  # noqa: BLE001
                 acct = {"?": one_line(exc, 80)}
         left = self.book.positions()
-        fl = self.state.get("flatten") or {}
         if flat is True and left:
             # the account read EMPTY while the book still holds shares (V4a D2: whatever this flatten sold): that
             # reading agrees with nothing (a position list not yet synced after a reconnect, or shares
             # sold by hand) and is not reported as "flat"
-            flat, acct = None, {"?": f"it reads empty while the book still holds {left} and nothing was sold"}
+            flat, acct = None, {"?": f"it reads EMPTY while the book still holds {left}"}
         with self.halt_lock:
             cur = dict(self._halt or {})
             if not (cur.get("flatten") and not cur.get("flatten_done")) or bool(cur.get("flatten_cancelled")) != cancelled:
