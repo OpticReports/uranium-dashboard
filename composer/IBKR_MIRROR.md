@@ -31,12 +31,14 @@ research/mirror/reviews/. Numbers: results/results.md addendum 55.
    to main; the merge is made after 16:00 ET, because it redeploys the live
    executor and that restart needs an IB Key approval with the gateway idle.
 
-6. (11-10) The IBKR account is a CASH account. See "The cash account" below:
-   this decides whether a rotation completes the same day.
+6. (11-10) The IBKR account was a CASH account and was converted to MARGIN the
+   same day (owner). Sale proceeds are therefore available for the same
+   minute's buy; see "The cash account" below for why that mattered and what
+   margin removes.
 
-Still open: whether the account is upgraded to margin before live, the
-starting sleeve weights (recommendation below), and the order in which
-engines get real money.
+Still open: the starting sleeve weights (recommendation below; default
+Composer's live split) and the order in which engines get real money
+(default SLEEVE first for two or three sessions, then all four).
 
 Recommendation on the weights: seed at Composer's live split on the cutover
 day (11-09: HG 34.3 / KMLM 26.8 / SLEEVE 26.5 / HARV 12.4), not at the policy
@@ -209,10 +211,10 @@ whether IBKR accepts the buy.
    the executor's own paper book starts when MIRROR_ENABLED is set.
 3. An independent review of the round-2 fixes and of the code as it then
    stands. Round 2 is verified by its authors only.
-4. The account: it is a CASH account (owner, 11-10). Either it is upgraded to
-   margin first (recommended), or the first live engine's first rotation is
-   watched for a refused buy. Either way: one limit buy sized near available
-   cash, to see IBKR accept it.
+4. The account: MARGIN since 11-10 (owner). DONE as a gate. Still worth
+   watching on the first live rotation: one limit buy sized near available
+   cash accepted by IBKR. On a margin account the venue no longer refuses an
+   overdraft or a short sale, so the mirror's own guards carry that alone.
 5. The attestation armed: MIRROR_ATTEST_TOKEN on the brain, and
    scripts/mirror_attest.py run by the 15:15 preview routine (an attestation
    older than an hour before the decision does not count). A live sleeve does
