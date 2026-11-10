@@ -1078,3 +1078,40 @@ services:
         sync: false
       - key: TELEGRAM_CHAT_ID
         sync: false
+
+  # --- Composer mirror brain (composer/IBKR_MIRROR.md) -----------------------
+  # The KEYLESS decision brain of the IBKR mirror: evaluates the approved
+  # symphony trees as of 15:54:00 ET and publishes each engine's target to
+  # ibkr-executor over a read-only token. Its own service on purpose
+  # (owner, 2026-11-10): the separation-of-powers law keeps every decision
+  # brain out of the process that holds a broker session, and the executor's
+  # image does not contain composer/. Stdlib Python, no disk, no broker
+  # credential, no Composer key. It redeploys when an approved tree changes,
+  # which is how a symphony change reaches the mirror.
+  - type: web
+    name: composer-brain
+    runtime: python
+    plan: starter            # always-on: the decision is timed to the second
+    buildCommand: pip install tzdata
+    startCommand: python composer/scripts/mirror_brain.py --serve
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - composer/scripts/**
+        - composer/fixtures/approved/**
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # The executor's READ token for /mirror/intents and /mirror/session;
+      # must equal ibkr-executor's MIRROR_API_TOKEN. Unset = those routes 404.
+      - key: MIRROR_API_TOKEN
+        sync: false
+      # The WRITE token of the Composer-keyed attestation routine
+      # (scripts/mirror_attest.py). Unset = /mirror/attest 404, and a LIVE
+      # sleeve never trades (it needs its tree attested that day).
+      - key: MIRROR_ATTEST_TOKEN
+        sync: false
+      # Required: the pinned decision reads FMP's 1-minute bars.
+      - key: FMP_API_KEY
+        sync: false

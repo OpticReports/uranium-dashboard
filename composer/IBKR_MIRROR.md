@@ -24,8 +24,23 @@ research/mirror/reviews/. Numbers: results/results.md addendum 55.
    POLICY operation or the methodology reaches both sides in the same change
    set, with a parity check (CLAUDE.md "ONE BRAIN, TWO BROKERS").
 
-Open, for the owner (see the end): sleeve weights at the start, the IBKR
-account type, how fast engines go live, and the brain's hosting.
+5. (11-10, after the review rounds) blend3070 IS retired at cutover. The brain
+   gets its own small Render service (composer-brain in render.yaml): the
+   decision brain stays out of the process that holds the broker session, and
+   the executor's image does not contain composer/. The branch may be merged
+   to main; the merge is made after 16:00 ET, because it redeploys the live
+   executor and that restart needs an IB Key approval with the gateway idle.
+
+Still open: the account type (believed margin; the owner is checking), the
+starting sleeve weights (recommendation below), and the order in which
+engines get real money.
+
+Recommendation on the weights: seed at Composer's live split on the cutover
+day (11-09: HG 34.3 / KMLM 26.8 / SLEEVE 26.5 / HARV 12.4), not at the policy
+targets (29/29/27/15). The purpose of the mirror is that the two books move
+together; with the same mix the book-level returns are comparable day by day,
+and every POLICY transfer on Composer is then mirrored by the same share of
+the book. Engine-level parity does not depend on the choice.
 
 ## Evidence that the logic copies
 
@@ -199,10 +214,18 @@ The brain needs a small always-on service: stdlib Python, no disk.
         - key: FMP_API_KEY            # required: the pinned decision needs minute bars
           sync: false
 
-It is NOT in render.yaml yet: adding it creates a billable service on the next
-blueprint sync, which is the owner's decision. Because it redeploys when
-fixtures/approved changes, an approved symphony change reaches the mirror the
-same session it reaches main.
+It is in render.yaml (owner, 11-10); the block above is its shape. Because it
+redeploys when fixtures/approved changes, an approved symphony change reaches
+the mirror the same session it reaches main.
+
+After the merge, in the Render dashboard (values are typed there, never in
+the repo or a chat):
+- composer-brain: MIRROR_API_TOKEN (any long random string), MIRROR_ATTEST_TOKEN
+  (a different one), FMP_API_KEY.
+- ibkr-executor, to start the PAPER book: MIRROR_ENABLED=true,
+  MIRROR_BRAIN_URL=https://<the brain's onrender.com host>,
+  MIRROR_API_TOKEN (the same value as the brain's), MIRROR_CAPITAL_USD=118000,
+  and MIRROR_WEIGHTS if not the policy split. MIRROR_LIVE_ENGINES stays unset.
 
 ## One brain: what a change must do
 
