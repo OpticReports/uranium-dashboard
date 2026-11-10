@@ -1,0 +1,17 @@
+# RESEARCH ONLY. NOT installed into any deployed service.
+#
+# btc-paper-engine decides trades and btc-executor places them; neither gets
+# a 2GB machine-learning stack added so a study can run. Install this into a
+# separate virtualenv:
+#
+#   python3 -m venv ~/.venvs/fmstudy
+#   ~/.venvs/fmstudy/bin/pip install -r requirements-research.txt
+#   ~/.venvs/fmstudy/bin/python -m research.forecast_fm.run --with-fm
+#
+# CPU wheels are deliberate: this study runs 343 forecasts, which is minutes
+# on a CPU, and a GPU dependency would make it unrunnable on the box that
+# actually has disk space.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.4
+chronos-forecasting>=2.0     # Apache 2.0
+timesfm>=2.0                 # NON-COMMERCIAL licence - see RESEARCH_FORECAST_FM.md section 8

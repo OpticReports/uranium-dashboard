@@ -16,7 +16,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from ..metrics.crossasset import (
-    LEVERAGE_PLAYBOOK, _month_end_closes, leverage_state, margin_series,
+    LEVERAGE_PLAYBOOK, POST_BLOWOFF_W, _month_end_closes, leverage_state,
+    leverage_states_path, margin_series,
 )
 from ..metrics.labor import _yoy_by_date
 from ..sources.fmp import fetch_spx_long
@@ -30,6 +31,24 @@ THRESHOLDS = {"blowoff_excess": 25.0, "elevated_excess": 15.0,
 # Blowoff corroboration (MARGIN_DEBT.md study): six late-cycle flags separate
 # real blowoffs from false positives. Historical outcomes are FROZEN study
 # constants; the flags themselves compute LIVE so the count moves with data.
+#
+# SERIES CHOICE, tested 2026-09-21 — MARGIN_DEBT.md "Flag definition audit",
+# scripts studies/fed_tightened_series_audit.py and
+# studies/corroboration_episode_reconstruction.py. fed_tightened reads the
+# 3-month rate, not the fed funds rate, and the choice is immaterial BOTH ways:
+#   timing  — across 19 crossing episodes since 1955 the two cross +0.50pp a
+#             median of 1 month apart (mean -0.24, bill tied-or-earlier in 14 of
+#             17 paired; within a month in 9 of 10 cycles since 1972);
+#   scoring — re-scoring the 16 peaks with fed funds in place of the bill
+#             reproduces the frozen split EXACTLY: >=4 flags 4/4 bears, <=2
+#             flags 4/12, base 8/16. Only 1955 moves, and only because FEDFUNDS
+#             starts 1954-07 so the flag reads unknown there.
+# Provenance: the LIVE series is DGS3MO (constant maturity, 1981+); the history
+# runs on TB3MS (discount basis, 1934+). Levels differ by ~20-40bp (BACKTEST.md)
+# but the 12-month DIFFERENCE cancels it — same boolean in 527 of 528 months
+# since 1982. Do NOT re-pick the series or the threshold against a live reading:
+# the cuts were chosen with the data in view and n=16 overfit risk is real. A
+# proposed change must be re-scored with the reconstruction script first.
 CORROBORATION_STATS = {
     "high_flags": {"label": ">=4 flags (late-cycle: 1967/1998/2000/2007)",
                    "bears": 4, "n": 4, "prob_note": "4/4 became bears — est. 65-85% (small n)"},
@@ -85,7 +104,49 @@ def late_cycle_flags(bundle, cur_excess) -> dict:
     }
     known = {k: v for k, v in flags.items() if v is not None}
     n_true = sum(1 for v in known.values() if v)
+
+    # Each chip carries its own READING, the bar, and the verdict. A bare
+    # struck-through label reads as a fault; "+0.10 of +0.50 · not firing"
+    # reads as a measurement (2026-09-21: the Sept hike landed and the chip
+    # stayed dark, because two cuts sit inside the same 12-month window).
+    # `short` is rendered ON the chip — a hover does not exist on a phone —
+    # and both forms state the value to enough precision that a reading and
+    # its bar can never render identically on opposite sides of the line.
+    def _d(key: str, v, fmt: str, bar: str) -> str | None:
+        if v is None:
+            return None
+        verdict = "firing" if flags[key] else "not firing"
+        return f"{fmt.format(v)} · {bar} · {verdict}"
+
+    def _s(v, fmt: str) -> str | None:
+        return None if v is None else fmt.format(v)
+
+    details = {
+        "flat_curve": _d("flat_curve", curve, "10y−3m {:+.3f}pp",
+                         "fires below +1.00pp"),
+        "fed_tightened": _d(
+            "fed_tightened", d_rate, "3-month rate {:+.3f}pp over 12 months",
+            "fires above +0.50pp — a tightening CYCLE, not the last meeting"),
+        "late_expansion": _d("late_expansion", mo_since,
+                             "{:.0f} months since the last recession",
+                             "fires at 48+"),
+        "low_unemployment": _d("low_unemployment", un, "unemployment {:.1f}%",
+                               "fires below 5.0%"),
+        "extended_market": _d("extended_market", spx3y, "S&P {:+.1f}% over 3 years",
+                              "fires above +50%"),
+        "high_excess": _d("high_excess", cur_excess, "margin excess {:+.1f}pp",
+                          "fires at +25pp or more"),
+    }
+    short = {
+        "flat_curve": _s(curve, "{:+.2f}/<1.00"),
+        "fed_tightened": _s(d_rate, "{:+.2f}/>+0.50"),
+        "late_expansion": _s(mo_since, "{:.0f}/48+"),
+        "low_unemployment": _s(un, "{:.1f}%/<5.0"),
+        "extended_market": _s(spx3y, "{:+.0f}%/>+50"),
+        "high_excess": _s(cur_excess, "{:+.1f}/≥+25"),
+    }
     return {"flags": flags, "n_true": n_true, "n_known": len(known),
+            "details": details, "short": short,
             "values": {"curve_10y3m": curve and round(curve, 2),
                        "d_rate_12m": d_rate and round(d_rate, 2),
                        "months_since_recession": mo_since,
@@ -191,7 +252,32 @@ def margin_leverage():
                     if p["coverage"] is not None), None)
     cur_date = next((p["date"] for p in reversed(series)
                      if p["margin_yoy"] is not None), None)
-    state = leverage_state(cur_yoy, cur_excess)
+    # path-aware state over the WHOLE monthly history (user finding
+    # 2026-08-15: a snapshot classifier read the blowoff rollover - the
+    # historically dangerous transition - as de-escalation)
+    path = leverage_states_path([p["margin_yoy"] for p in series],
+                                [p["excess_yoy"] for p in series])
+    cur_i = next((i for i in range(len(series) - 1, -1, -1)
+                  if series[i]["margin_yoy"] is not None), None)
+    state = path[cur_i] if cur_i is not None else None
+    path_ctx = None
+    if state == "POST_BLOWOFF":
+        j = max(i for i in range(cur_i) if path[i] == "BLOWOFF")
+        k = j
+        while k >= 0 and path[k] == "BLOWOFF":
+            k -= 1
+        run = series[k + 1:j + 1]
+        peak = max((p["excess_yoy"] for p in run if p["excess_yoy"] is not None),
+                   default=None)
+        path_ctx = {
+            "last_blowoff_month": series[j]["date"][:7],
+            "blowoff_peak_excess_pp": peak,
+            "months_since_blowoff": cur_i - j,
+            "window_m": POST_BLOWOFF_W,
+            "reinflate_rule": "excess >= +25pp or YoY >= 40% -> back to BLOWOFF",
+            "squeeze_rule": "margin YoY < 0 -> SQUEEZE (post-crash reset leg)",
+            "fizzle_rule": f"no re-entry within {POST_BLOWOFF_W}m -> plain level state",
+        }
     # Staleness guard (QA finding): if FINRA fails cold (no cache), the series
     # tail is the 2015 Z.1 splice end — presenting an 11-year-old state as
     # "current" with playbook advice would mislead. FINRA publishes ~3-4 weeks
@@ -201,6 +287,7 @@ def margin_leverage():
         age = (_date.today() - _datetime.strptime(cur_date, "%Y-%m-%d").date()).days
         if age > 120:
             state = None
+            path_ctx = None      # referee: stale payload must not carry path
 
     # NBER recession bands — fetched from 1945 so the deep view has them too
     # (the shared bundle starts at 1976).
@@ -240,7 +327,7 @@ def margin_leverage():
         "recessions": bands,
         "current": {
             "date": cur_date, "margin_yoy": cur_yoy, "excess_yoy": cur_excess,
-            "coverage": cur_cov, "state": state,
+            "coverage": cur_cov, "state": state, "path": path_ctx,
         },
         "playbook": LEVERAGE_PLAYBOOK,
         "thresholds": THRESHOLDS,

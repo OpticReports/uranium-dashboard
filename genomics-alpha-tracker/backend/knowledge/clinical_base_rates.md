@@ -2,7 +2,7 @@
 
 **Purpose:** A grounding knowledge file of empirical clinical-trial success / likelihood-of-approval (LOA) base rates, with every quantitative claim sourced, for calibrating probability estimates in a genomics/biotech trading assistant.
 
-**Last researched: 2026-07-20**
+**Last researched: 2026-10-01** (quarterly pass; previous 2026-07-20)
 
 ---
 
@@ -191,4 +191,4 @@ Reads: **rare-disease gene therapy (18.5%) substantially beats the market**, con
 
 ---
 
-*Compiled 2026-07-20. All quantitative claims carry an inline [S#] reference to the numbered Sources list. Where sources disagree, ranges and the reason for divergence are stated in-line. Modality LOAs with small n are flagged as directional. No liquid-biopsy diagnostic phase-transition base rate is reported because no authoritative series was found — do not substitute a drug LOA for it.*
+*Re-checked 2026-10-01: BIO/Informa/QLS have published no edition superseding Clinical Development Success Rates 2011-2020 [S1], so the headline transition table and the therapeutic-area LOAs stand unchanged this pass. Compiled 2026-07-20. All quantitative claims carry an inline [S#] reference to the numbered Sources list. Where sources disagree, ranges and the reason for divergence are stated in-line. Modality LOAs with small n are flagged as directional. No liquid-biopsy diagnostic phase-transition base rate is reported because no authoritative series was found — do not substitute a drug LOA for it.*

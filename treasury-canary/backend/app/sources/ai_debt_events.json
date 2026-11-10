@@ -1,0 +1,268 @@
+{
+  "rev": 1,
+  "frozen": "2026-10-15",
+  "window": "2026-06-01 .. 2026-10-15",
+  "rule": "Frozen event log for the AI-debt tab's Breaking panel. Only items the counter-agent (verify_E, 2026-10-15) marked CONFIRMED or CORRECTED are kept, with the corrected wording; items it could not fetch or marked UNVERIFIABLE were dropped. provenance: primary = official data, exchange quote or SEC filing; press = a named outlet's own report; aggregator = a monitor or secondary site relaying an original that could not be fetched. CDS levels and bond prices are dated press prints, not a feed; the Reuters CDS article of 2026-10-15 changed intraday, so text and numbers are as retrieved on the stated date.",
+  "events": [
+    {
+      "date": "2026-07-07",
+      "category": "primary-market",
+      "issuers": ["Amazon"],
+      "text": "Amazon $25bn eight-part bond: 18-21bp of new-issue concession on the longest tranche; order book 2.5x vs 3.2x on its March deal (Fortune, 2026-07-17, citing Bloomberg data).",
+      "provenance": "press",
+      "src": "https://fortune.com/2026/07/17/ai-boom-debt-blitz-investor-demand-hyperscaler-bond-issuance/",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-07-09",
+      "category": "rating",
+      "issuers": ["Oracle"],
+      "text": "S&P lowers Oracle to BBB- from BBB, outlook stable: FY27 capex $90-95bn against the $60bn S&P had assumed, free operating cash flow deficit of almost $42bn, $638bn contracted backlog with about half from one customer (heise, 2026-07-13).",
+      "provenance": "press",
+      "src": "https://www.heise.de/en/news/S-P-downgrades-Oracle-to-BBB-only-one-notch-above-junk-level-11363472.html",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-07-15",
+      "category": "primary-market",
+      "issuers": ["hyperscalers"],
+      "text": "Apollo: hyperscaler bond cover ratios fell from nearly 5x in February 2026 to below 2x in July (Bloomberg data; chart only, no deal list).",
+      "provenance": "press",
+      "src": "https://www.apollo.com/institutional/insights-news/insights/daily-spark/cover-ratios-for-hyperscaler-bonds-declining",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-07-24",
+      "category": "cds",
+      "issuers": ["Oracle", "Nvidia", "Meta"],
+      "text": "Record $25.1bn of Oracle CDS outstanding as of 24 Jul (DTCC) vs $6.9bn a year earlier; Oracle 5y CDS at 218bp and Nvidia 5y CDS peaked at 82bp, twice its mid-June level (S&P); Meta CDS $5.8bn notional (IFR 2644, 1-7 Aug 2026).",
+      "provenance": "press",
+      "src": "https://www.ifre.com/topic-codes/2463896/trading-frenzy-builds-in-hyperscaler-debt-and-cds-markets",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-07-29",
+      "category": "secondary",
+      "issuers": ["Amazon", "Alphabet", "Meta", "Oracle"],
+      "text": "Reuters/LSEG: $194bn of bonds from Amazon, Alphabet, Meta and Oracle in 2026 through 7 Jul (+79% vs all of 2025); median new-issue concession 12bp in 2026 vs 2.25bp in 2025; 78 of 91 hyperscaler bonds issued in 2026 trading wider than at issue on 28 Jul, median +22bp; median spreads 2-4y 30 to 40bp, 5-7y 50 to 60bp, 20y+ 108.5 to 118bp.",
+      "provenance": "press",
+      "src": "https://www.investing.com/news/stock-market-news/hyperscaler-debt-binge-pushes-yields-up-as-investor-demand-cools-4820617",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-07-31",
+      "category": "trace",
+      "issuers": ["AI-linked IG"],
+      "text": "Record $127bn of AI-linked corporate bonds traded in July 2026 = 14.5% of US investment-grade volume vs a 4.5% average in 2025 (TRACE via MarketAxess, eight issuers; IFR 2644).",
+      "provenance": "press",
+      "src": "https://www.ifre.com/topic-codes/2463896/trading-frenzy-builds-in-hyperscaler-debt-and-cds-markets",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-08-06",
+      "category": "primary-market",
+      "issuers": ["Alphabet"],
+      "text": "Alphabet $25bn in ten tranches (2-40y), peak order book about $115bn, third-largest of the year; US IG issuance hit a record $145.2bn in August 2026 (Bloomberg data via ECM Source).",
+      "provenance": "press",
+      "src": "https://ecmsource.com/investment-grade-bond-issuance-record-august-2026-ai-hyperscalers-145-billion/",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-08-11",
+      "category": "abs",
+      "issuers": ["data-centre ABS"],
+      "text": "SEC staff letter (July 2026) exempts a subset of data-centre securitisations from ABS disclosure and risk-retention rules; data-centre ABS issuance $15.5bn in 2025 vs $2.4bn in 2020 (Bloomberg data); Morgan Stanley: spreads 'near YTD tights despite the move in corporate markets' (InvestmentNews).",
+      "provenance": "press",
+      "src": "https://www.investmentnews.com/alternatives/sec-exemption-clears-path-for-more-data-center-asset-backed-bonds/267767",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-08-19",
+      "category": "treasury",
+      "issuers": ["US Treasury"],
+      "text": "Treasury expands long-end buybacks to at least $4bn per operation (from $2bn) in the 10-20y and 20-30y buckets, effective 9 Sep to 4 Nov 2026, about $14bn of incremental purchases; the 30y swap spread narrowed on 19-20 Aug (BIS Quarterly Review, September 2026).",
+      "provenance": "press",
+      "src": "https://www.bis.org/publications/qr-202609/yields-climb-yet-risk-appetite-holds-firm",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-09-02",
+      "category": "private-credit",
+      "issuers": ["BDCs"],
+      "text": "Reuters analysis of 44 BDC filings: fair value / cost 99.25% (Dec-25) to 97.77% (Q1-26) to 97.57% (Q2-26); 81% of software loans written down in 2026 vs 40% outside software (Houlihan Lokey); non-accruals about 3.4% of cost from 2.5%; about 4% of borrowers marked below 80 cents vs about 1% in 2023-25.",
+      "provenance": "press",
+      "src": "https://www.investing.com/news/economy-news/us-private-credit-firms-mark-down-more-loans-4886397",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-09-14",
+      "category": "private-credit",
+      "issuers": ["private credit"],
+      "text": "Fitch: US private-credit default rate a record 6.3% in August 2026 (Bloomberg, relayed by the Yardeni Private Credit Monitor; original not fetched).",
+      "provenance": "aggregator",
+      "src": "https://yardeni.com/tools/private-credit-monitor",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-09-15",
+      "category": "abs",
+      "issuers": ["data-centre CMBS"],
+      "text": "About $17bn of data-centre CMBS issued since the start of 2025; AAA data-centre CMBS at 1.65 points over the floating benchmark vs 0.93 for office (Barclays); a $356m 30-MW Illinois deal priced wider than guidance (CRE Daily).",
+      "provenance": "press",
+      "src": "https://www.credaily.com/briefs/data-center-cmbs-boom-rewrites-real-estate-risk/",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-09-15",
+      "category": "treasury",
+      "issuers": ["US Treasury"],
+      "text": "20-year bond reopening: high yield 5.420%, bid-to-cover 2.57, indirect bidders 52.5% — the lowest indirect share across all note and bond auctions in the trailing 365 days (TreasuryDirect auction API).",
+      "provenance": "primary",
+      "src": "https://www.treasurydirect.gov/TA_WS/securities/auctioned?format=json&type=Bond&days=365",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-09-24",
+      "category": "spv",
+      "issuers": ["Oracle", "Project Jupiter"],
+      "text": "Oracle invokes force majeure on the $18bn Project Jupiter data-centre build; the Blue Owl-linked project debt trades below 90 cents (Bloomberg, relayed by the Yardeni Private Credit Monitor; original not fetched).",
+      "provenance": "aggregator",
+      "src": "https://yardeni.com/tools/private-credit-monitor",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-10-02",
+      "category": "private-credit",
+      "issuers": ["Blue Owl"],
+      "text": "Blue Owl again caps redemptions at 5% for Q3 after withdrawal requests of 39% at its technology income fund (Bloomberg, relayed by the Yardeni Private Credit Monitor; original not fetched).",
+      "provenance": "aggregator",
+      "src": "https://yardeni.com/tools/private-credit-monitor",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-10-07",
+      "category": "spv",
+      "issuers": ["Hyperion SPV"],
+      "text": "Hyperion data-centre SPV notes — $27.3bn, 6.581% coupon, due 2049 — quoted at roughly 91.6 cents on the dollar; the article names no price source (GuruFocus).",
+      "provenance": "aggregator",
+      "src": "https://www.gurufocus.com/news/9113532/meta-platforms-273b-ai-data-center-bond-drops-amid-macro-pressure-meta",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-10-07",
+      "category": "treasury",
+      "issuers": ["US Treasury"],
+      "text": "30-year Treasury yield 5.67% (DGS30), its 2026 high and the highest print since 5 Jul 2002 in the same series (FRED).",
+      "provenance": "primary",
+      "src": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS30",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-10-07",
+      "category": "treasury",
+      "issuers": ["US Treasury"],
+      "text": "ACM 10-year term premium 0.985, its 2026 high (0.748 at end-2025; NY Fed ACM daily xls).",
+      "provenance": "primary",
+      "src": "https://www.newyorkfed.org/medialibrary/media/research/data_indicators/ACMTermPremium.xls",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-10-08",
+      "category": "treasury",
+      "issuers": ["US Treasury"],
+      "text": "30-year bond reopening: high yield 5.618%, bid-to-cover 2.54, indirect bidders 72.3%, direct 20.9% (TreasuryDirect auction API).",
+      "provenance": "primary",
+      "src": "https://www.treasurydirect.gov/TA_WS/securities/auctioned?format=json&type=Bond&days=365",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-10-14",
+      "category": "spreads",
+      "issuers": ["CCC index"],
+      "text": "ICE BofA CCC & lower OAS 12.82 points = 2026 high, +3.78 since 1 May (9.04); CCC minus single-B gap 9.53 vs 5.84 at end-2025; IG 0.84, BBB 1.04 and HY 3.25 all inside their 2026 ranges (FRED, daily close).",
+      "provenance": "primary",
+      "src": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A3HYC",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-10-14",
+      "category": "spv",
+      "issuers": ["Volta"],
+      "text": "Volta AI data-centre loan prices at 11%+ as JPMorgan and Goldman limit underwriting to $1.3bn of a $5bn deal (Bloomberg/Reuters, relayed by the Yardeni Private Credit Monitor; originals not fetched).",
+      "provenance": "aggregator",
+      "src": "https://yardeni.com/tools/private-credit-monitor",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-10-15",
+      "category": "bonds",
+      "issuers": ["CoreWeave"],
+      "text": "CoreWeave $2.75bn 9.75% notes at 81 cents on the dollar, yield above 15% (BondCliQ); 5y CDS almost 881bp on Monday 12 Oct vs about 547bp at end-June (Dow Jones Market Data); rated in the B category by S&P per BondCliQ (MarketWatch via Yahoo Finance).",
+      "provenance": "press",
+      "src": "https://finance.yahoo.com/markets/options/articles/coreweave-ai-bonds-tumble-raising-111700097.html",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-10-15",
+      "category": "cds",
+      "issuers": ["CoreWeave"],
+      "text": "CoreWeave 5y CDS 1,194.5bp, a record, implying a more than 60% probability of default; unsecured 2031-32 notes traded as low as 76.5-81 cents; debt about $50bn with $35.6bn of principal at mid-2026, about $4.4bn due by end-2026 and $6.2bn in 2027. The article names no CDS provider and no daily change (an earlier '+74.5bp, ICE Data Services' attribution was not in it and was dropped).",
+      "provenance": "aggregator",
+      "src": "https://cryptobriefing.com/coreweave-credit-risk-record-high/",
+      "retrieved": "2026-10-15",
+      "verif": "CORRECTED"
+    },
+    {
+      "date": "2026-10-15",
+      "category": "cds",
+      "issuers": ["CoreWeave", "Oracle", "Nvidia", "Amazon", "Alphabet", "Meta"],
+      "text": "Reuters: CoreWeave 5y CDS past 1,100bp (S&P Global Market Intelligence); Oracle CDS near 300bp, up about 31bp on the week; CDS on Nvidia, STMicroelectronics and SpaceX rose sharply; Amazon, Alphabet and Meta CDS at record highs (LSEG, S&P GMI). The article was revised intraday (01:26 to 11:36 UTC); an earlier '288bp, +26bp' Oracle print and a SoftBank level are not in the retrieved version and were dropped.",
+      "provenance": "press",
+      "src": "https://www.investing.com/news/stock-market-news/ai-credit-default-swap-spreads-widen-sharply-4950549",
+      "retrieved": "2026-10-15",
+      "verif": "CORRECTED"
+    },
+    {
+      "date": "2026-10-15",
+      "category": "bonds",
+      "issuers": ["CoreWeave"],
+      "text": "CoreWeave June-2030 notes +5.7 cents to 91.3 and October-2031 notes +3.3 to 82.8 in Thursday's rebound; CDS had reached 982bp; its $8.5bn chip-backed loan carries an A3 rating from March (sourced to social posts and a desk note).",
+      "provenance": "aggregator",
+      "src": "https://huggingnews.com/us-markets/coreweave-bonds-rebound-up-to-57-cents-after-ai-debt-selloff-5af657cd",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    },
+    {
+      "date": "2026-10-15",
+      "category": "bonds",
+      "issuers": ["Oracle"],
+      "text": "Oracle 5.950% notes due 2055 (ISIN US68389XDR35) last 72.21 on Boerse Frankfurt at 15:01 UTC, open 73.53, -0.65% on the day (exchange quote endpoint; thin volume, no price history served).",
+      "provenance": "primary",
+      "src": "https://api.boerse-frankfurt.de/v1/data/quote_box/single?isin=US68389XDR35&mic=XFRA",
+      "retrieved": "2026-10-15",
+      "verif": "CONFIRMED"
+    }
+  ]
+}

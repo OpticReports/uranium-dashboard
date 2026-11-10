@@ -1,0 +1,70 @@
+{
+ "built": "2026-10-28T15:46:49Z",
+ "cache": "vintages_raw",
+ "is_counts": {
+  "A": 165,
+  "B": 164,
+  "C": 148
+ },
+ "is_counts_nowcast_rows": {
+  "A": 159,
+  "B": 160,
+  "C": 148
+ },
+ "issue_dates_sha256": "daa466d143d105cd4f8ca413bcafcb9f00f2723499b0a9b17e24811fc21d05b4",
+ "issue_panel_long_sha256": "1b363408c46453d87ed3855f67ceed7949a7614f1dd3af5f4aa63ae97042835f",
+ "issue_panel_wide_sha256": "fef6fe44f6b0d3eabc6e9b3b4ee4378105c54a64df74eb649a1aaff6561f16e4",
+ "missing": [],
+ "n_issue_dates": 477,
+ "n_issue_rows": 997,
+ "n_rows_completion": 10,
+ "n_rows_nowcast": 467,
+ "n_vintages": 1572,
+ "n_vintages_before_start": 26,
+ "n_vintages_in_range": 1546,
+ "per_series": {
+  "CMRMTSPL": {
+   "bytes": 2252353,
+   "first": "2013-06-14",
+   "last": "2026-09-30",
+   "n": 158
+  },
+  "ICSA": {
+   "bytes": 35509268,
+   "first": "2013-01-03",
+   "last": "2026-10-22",
+   "n": 715
+  },
+  "INDPRO": {
+   "bytes": 4555891,
+   "first": "2008-12-15",
+   "last": "2026-10-16",
+   "n": 202
+  },
+  "PAYEMS": {
+   "bytes": 2809026,
+   "first": "2013-01-04",
+   "last": "2026-10-02",
+   "n": 166
+  },
+  "RECPROUSM156N": {
+   "bytes": 1690155,
+   "first": "2012-09-04",
+   "last": "2026-10-01",
+   "n": 167
+  },
+  "W875RX1": {
+   "bytes": 2191014,
+   "first": "2013-01-31",
+   "last": "2026-09-30",
+   "n": 164
+  }
+ },
+ "raw_tarball": {
+  "bytes": 394036,
+  "file": "vintages_raw.tar.xz",
+  "sha256": "4388498dc652c400ebdc01d4a433d543dc991f5360a480c20c590d823bd047b6"
+ },
+ "start": "2013-01-01",
+ "vintage_table_sha256": "3d4bbb477b02b2813087b3f3bd98d087af727d9e8c4e9dce5b58255809cbd1c5"
+}

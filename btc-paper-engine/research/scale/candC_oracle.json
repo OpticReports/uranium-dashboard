@@ -1,0 +1,183 @@
+{
+ "generated_utc": "2026-09-28T18:52:36Z",
+ "winners": [
+  "BTC/S3",
+  "ETH/S3",
+  "SOL/S4",
+  "XRP/S4",
+  "LTC/S3",
+  "DOGE/S4"
+ ],
+ "losers": [
+  "BTC/S4",
+  "ETH/S4",
+  "SOL/S3",
+  "XRP/S3",
+  "LTC/S4",
+  "DOGE/S3"
+ ],
+ "rows": [
+  {
+   "label": "BTC 75/25 (today), shipped weights",
+   "n_legs": 2,
+   "legs": [
+    "BTC/S3",
+    "BTC/S4"
+   ],
+   "weights": {
+    "BTC/S3": 0.75,
+    "BTC/S4": 0.25
+   },
+   "k_at_DD30": 1.003,
+   "gross_usd": 100355.165,
+   "equity_for_1m": 997008.9730807579,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.293,
+   "mean_bp_bar": 0.2759442084547545,
+   "ann_sd_pct": 14.911776823247939,
+   "ann_SR": 0.4052621117382615,
+   "mult_vs_btc": 1.0
+  },
+  {
+   "label": "all 12 legs, SHIPPED 75/25 weights (headline)",
+   "n_legs": 12,
+   "legs": [
+    "BTC/S3",
+    "BTC/S4",
+    "ETH/S3",
+    "ETH/S4",
+    "SOL/S3",
+    "SOL/S4",
+    "XRP/S3",
+    "XRP/S4",
+    "LTC/S3",
+    "LTC/S4",
+    "DOGE/S3",
+    "DOGE/S4"
+   ],
+   "weights": {
+    "BTC/S3": 0.12500000000000003,
+    "BTC/S4": 0.04166666666666667,
+    "ETH/S3": 0.12500000000000003,
+    "ETH/S4": 0.04166666666666667,
+    "SOL/S3": 0.12500000000000003,
+    "SOL/S4": 0.04166666666666667,
+    "XRP/S3": 0.12500000000000003,
+    "XRP/S4": 0.04166666666666667,
+    "LTC/S3": 0.12500000000000003,
+    "LTC/S4": 0.04166666666666667,
+    "DOGE/S3": 0.12500000000000003,
+    "DOGE/S4": 0.04166666666666667
+   },
+   "k_at_DD30": 1.666,
+   "gross_usd": 166691.63,
+   "equity_for_1m": 600240.0960384154,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.233,
+   "mean_bp_bar": 0.3250100807855974,
+   "ann_sd_pct": 10.631092106719104,
+   "ann_SR": 0.6695192457890581,
+   "mult_vs_btc": 1.6610169491525424
+  },
+  {
+   "label": "all 12 legs, inverse-vol",
+   "n_legs": 12,
+   "legs": [
+    "BTC/S3",
+    "BTC/S4",
+    "ETH/S3",
+    "ETH/S4",
+    "SOL/S3",
+    "SOL/S4",
+    "XRP/S3",
+    "XRP/S4",
+    "LTC/S3",
+    "LTC/S4",
+    "DOGE/S3",
+    "DOGE/S4"
+   ],
+   "weights": {
+    "BTC/S3": 0.10670586929631544,
+    "BTC/S4": 0.0728273577686587,
+    "ETH/S3": 0.07908725756712028,
+    "ETH/S4": 0.06888951934253264,
+    "SOL/S3": 0.10413472472235592,
+    "SOL/S4": 0.03200742998420559,
+    "XRP/S3": 0.1760406161606981,
+    "XRP/S4": 0.03655882980763989,
+    "LTC/S3": 0.07074734760904722,
+    "LTC/S4": 0.1299152935746607,
+    "DOGE/S3": 0.09192765294955298,
+    "DOGE/S4": 0.031158101217212658
+   },
+   "k_at_DD30": 0.0,
+   "gross_usd": 0.0,
+   "equity_for_1m": null,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.64,
+   "mean_bp_bar": -0.04842109010194116,
+   "ann_sd_pct": 9.339710935370569,
+   "ann_SR": -0.11353904639773921,
+   "mult_vs_btc": 0.0
+  },
+  {
+   "label": "6 in-sample WINNERS, inverse-vol [ORACLE, not investable]",
+   "n_legs": 6,
+   "legs": [
+    "BTC/S3",
+    "ETH/S3",
+    "SOL/S4",
+    "XRP/S4",
+    "LTC/S3",
+    "DOGE/S4"
+   ],
+   "weights": {
+    "BTC/S3": 0.29951277440022317,
+    "ETH/S3": 0.221990075052518,
+    "SOL/S4": 0.08984167618154941,
+    "XRP/S4": 0.10261700332626313,
+    "LTC/S3": 0.1985807763301209,
+    "DOGE/S4": 0.08745769470932539
+   },
+   "k_at_DD30": 1.705,
+   "gross_usd": 170593.775,
+   "equity_for_1m": 586510.2639296188,
+   "kstar_p10": 3.75,
+   "prob_neg_edge": 0.013,
+   "mean_bp_bar": 1.2892650082332682,
+   "ann_sd_pct": 16.61959797900614,
+   "ann_SR": 1.6988920981106086,
+   "mult_vs_btc": 1.6999002991026921
+  },
+  {
+   "label": "6 in-sample LOSERS, inverse-vol [control]",
+   "n_legs": 6,
+   "legs": [
+    "BTC/S4",
+    "ETH/S4",
+    "SOL/S3",
+    "XRP/S3",
+    "LTC/S4",
+    "DOGE/S3"
+   ],
+   "weights": {
+    "BTC/S4": 0.11313248332975039,
+    "ETH/S4": 0.10701531179217914,
+    "SOL/S3": 0.16176640715324767,
+    "XRP/S3": 0.27346745348668944,
+    "LTC/S4": 0.20181481568098394,
+    "DOGE/S3": 0.1428035285571493
+   },
+   "k_at_DD30": 0.0,
+   "gross_usd": 0.0,
+   "equity_for_1m": null,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.997,
+   "mean_bp_bar": -0.7887418679886559,
+   "ann_sd_pct": 8.573325047019202,
+   "ann_SR": -2.0147896894399504,
+   "mult_vs_btc": 0.0
+  }
+ ],
+ "oracle_over_headline": 1.0234093637454982
+}

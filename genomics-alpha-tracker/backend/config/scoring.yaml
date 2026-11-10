@@ -45,6 +45,7 @@ components:
     impact_weights:
       pdufa: 1.0
       adcom: 0.95
+      interim_analysis: 0.95   # interims are undated by CT.gov; operator-curated (manual lane)
       phase3_readout: 0.9
       phase2_readout: 0.7
       phase1_readout: 0.4

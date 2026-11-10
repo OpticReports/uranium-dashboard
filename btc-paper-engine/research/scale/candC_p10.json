@@ -1,0 +1,303 @@
+{
+ "generated_utc": "2026-09-28T19:14:41Z",
+ "full_kelly_terms": {
+  "BTC only (today's book)": {
+   "kelly_star": 2.75,
+   "terms": {
+    "half_kelly": 1.375,
+    "bootstrap_p10": 0.0,
+    "c_star_x_mstar": 0.726784366670425,
+    "dd30": 1.003
+   },
+   "binding": "bootstrap_p10",
+   "recommended_k": 0.0,
+   "prob_neg_edge": 0.293,
+   "killed_by_kill_rule": true,
+   "coins": [
+    "BTC"
+   ],
+   "rec_gross_usd": 0.0,
+   "x_live": 0.0
+  },
+  "BTC+ETH": {
+   "kelly_star": 7.0,
+   "terms": {
+    "half_kelly": 3.5,
+    "bootstrap_p10": 0.75,
+    "c_star_x_mstar": 4.942582116682996,
+    "dd30": 1.278
+   },
+   "binding": "bootstrap_p10",
+   "recommended_k": 0.75,
+   "prob_neg_edge": 0.087,
+   "killed_by_kill_rule": false,
+   "coins": [
+    "BTC",
+    "ETH"
+   ],
+   "rec_gross_usd": 75041.25,
+   "x_live": 5.00275
+  },
+  "BTC+ETH+SOL": {
+   "kelly_star": 6.5,
+   "terms": {
+    "half_kelly": 3.25,
+    "bootstrap_p10": 0.0,
+    "c_star_x_mstar": 3.8750711119422423,
+    "dd30": 1.47
+   },
+   "binding": "bootstrap_p10",
+   "recommended_k": 0.0,
+   "prob_neg_edge": 0.117,
+   "killed_by_kill_rule": false,
+   "coins": [
+    "BTC",
+    "ETH",
+    "SOL"
+   ],
+   "rec_gross_usd": 0.0,
+   "x_live": 0.0
+  },
+  "all 6 assets": {
+   "kelly_star": 6.173180019046283,
+   "terms": {
+    "half_kelly": 3.0865900095231416,
+    "bootstrap_p10": 0.0,
+    "c_star_x_mstar": 3.056092609999526,
+    "dd30": 1.666
+   },
+   "binding": "bootstrap_p10",
+   "recommended_k": 0.0,
+   "prob_neg_edge": 0.233,
+   "killed_by_kill_rule": false,
+   "coins": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "XRP",
+    "LTC",
+    "DOGE"
+   ],
+   "rec_gross_usd": 0.0,
+   "x_live": 0.0
+  }
+ },
+ "p10_seed_stability": {
+  "BTC only (today's book)": {
+   "values": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "mean": 0.0,
+   "min": 0.0,
+   "max": 0.0,
+   "frac_zero": 1.0
+  },
+  "BTC+ETH": {
+   "values": [
+    0.75,
+    0.75,
+    1.0,
+    0.5,
+    1.225,
+    0.975,
+    0.725,
+    1.25,
+    1.0,
+    0.0
+   ],
+   "mean": 0.8175000000000001,
+   "min": 0.0,
+   "max": 1.25,
+   "frac_zero": 0.1
+  },
+  "BTC+ETH+SOL": {
+   "values": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.225,
+    0.475,
+    0.0
+   ],
+   "mean": 0.06999999999999999,
+   "min": 0.0,
+   "max": 0.475,
+   "frac_zero": 0.8
+  },
+  "all 6 assets": {
+   "values": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "mean": 0.0,
+   "min": 0.0,
+   "max": 0.0,
+   "frac_zero": 1.0
+  }
+ },
+ "btc_eth_gross": {
+  "kelly_star": 7.0,
+  "terms": {
+   "half_kelly": 3.5,
+   "bootstrap_p10": 0.75,
+   "c_star_x_mstar": 4.942582116682996,
+   "dd30": 1.278
+  },
+  "binding": "bootstrap_p10",
+  "recommended_k": 0.75,
+  "prob_neg_edge": 0.087,
+  "killed_by_kill_rule": false,
+  "rec_gross_usd": 75041.25,
+  "x_live": 5.00275,
+  "equity_for_100k": 133333.33333333334,
+  "equity_for_1m": 1333333.3333333333,
+  "implied_KELLY_M_at_base_equity": 0.5
+ },
+ "btc_eth_net": {
+  "kelly_star": 7.0,
+  "terms": {
+   "half_kelly": 3.5,
+   "bootstrap_p10": 0.725,
+   "c_star_x_mstar": 4.877076426601019,
+   "dd30": 1.287
+  },
+  "binding": "bootstrap_p10",
+  "recommended_k": 0.725,
+  "prob_neg_edge": 0.087,
+  "killed_by_kill_rule": false,
+  "rec_gross_usd": 72539.875,
+  "x_live": 4.835991666666666,
+  "equity_for_100k": 137931.03448275864,
+  "equity_for_1m": 1379310.3448275863,
+  "implied_KELLY_M_at_base_equity": 0.48333333333333334
+ },
+ "all_pairs": {
+  "BTC+ETH": {
+   "p10": 0.75,
+   "dd30": 1.278,
+   "prob_neg": 0.087,
+   "rec_k": 0.75,
+   "rec_gross": 75041.25
+  },
+  "BTC+SOL": {
+   "p10": 0.0,
+   "dd30": 1.028,
+   "prob_neg": 0.42,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "BTC+XRP": {
+   "p10": 0.0,
+   "dd30": 0.879,
+   "prob_neg": 0.493,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "BTC+LTC": {
+   "p10": 0.0,
+   "dd30": 1.067,
+   "prob_neg": 0.323,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "BTC+DOGE": {
+   "p10": 0.0,
+   "dd30": 0.934,
+   "prob_neg": 0.317,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "ETH+SOL": {
+   "p10": 0.0,
+   "dd30": 1.258,
+   "prob_neg": 0.123,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "ETH+XRP": {
+   "p10": 0.0,
+   "dd30": 1.058,
+   "prob_neg": 0.183,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "ETH+LTC": {
+   "p10": 0.383,
+   "dd30": 1.196,
+   "prob_neg": 0.09,
+   "rec_k": 0.383,
+   "rec_gross": 38321.065
+  },
+  "ETH+DOGE": {
+   "p10": 0.0,
+   "dd30": 1.169,
+   "prob_neg": 0.12,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "SOL+XRP": {
+   "p10": 0.0,
+   "dd30": 0.0,
+   "prob_neg": 0.577,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "SOL+LTC": {
+   "p10": 0.0,
+   "dd30": 0.824,
+   "prob_neg": 0.457,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "SOL+DOGE": {
+   "p10": 0.0,
+   "dd30": 0.815,
+   "prob_neg": 0.423,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "XRP+LTC": {
+   "p10": 0.0,
+   "dd30": 0.841,
+   "prob_neg": 0.49,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "XRP+DOGE": {
+   "p10": 0.0,
+   "dd30": 0.743,
+   "prob_neg": 0.463,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  },
+  "LTC+DOGE": {
+   "p10": 0.0,
+   "dd30": 0.907,
+   "prob_neg": 0.34,
+   "rec_k": 0.0,
+   "rec_gross": 0.0
+  }
+ },
+ "n_pairs_positive": 2
+}

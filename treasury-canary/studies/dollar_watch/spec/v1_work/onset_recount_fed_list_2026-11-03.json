@@ -1,0 +1,518 @@
+{
+ "rule": "SPEC v1 \u00a75.1-5.3 as pre-committed",
+ "window": "2000-01..2026-10",
+ "n_onsets": 8,
+ "bounds": [
+  3,
+  13
+ ],
+ "degenerate": false,
+ "onsets": [
+  {
+   "onset": "2001-04",
+   "markers": {
+    "2_ofr": [
+     "2001-04-03",
+     5.838,
+     4.755
+    ],
+    "4_spx": [
+     "2001-04-02",
+     -24.7
+    ],
+    "5_fed": [
+     "2001-04-18",
+     "https://www.federalreserve.gov/boarddocs/press/general/2001/20010418/default.htm"
+    ]
+   },
+   "dollar_funding_subtype": false,
+   "subtype_evidence": {
+    "swpt_gt_50bn_first": null,
+    "swpt_available": false,
+    "cp_bill_5d_gt_1pp_first": null
+   }
+  },
+  {
+   "onset": "2002-07",
+   "markers": {
+    "1_vix": [
+     "2002-07-22",
+     41.87
+    ],
+    "2_ofr": [
+     "2002-07-25",
+     6.337,
+     5.111
+    ],
+    "4_spx": [
+     "2002-07-01",
+     -21.7
+    ]
+   },
+   "dollar_funding_subtype": false,
+   "subtype_evidence": {
+    "swpt_gt_50bn_first": null,
+    "swpt_available": false,
+    "cp_bill_5d_gt_1pp_first": null
+   }
+  },
+  {
+   "onset": "2007-12",
+   "markers": {
+    "2_ofr": [
+     "2007-12-03",
+     4.772,
+     4.119
+    ],
+    "5_fed": [
+     "2007-12-12",
+     "https://www.federalreserve.gov/newsevents/pressreleases/monetary20071212a.htm"
+    ]
+   },
+   "dollar_funding_subtype": true,
+   "subtype_evidence": {
+    "swpt_gt_50bn_first": null,
+    "swpt_available": true,
+    "cp_bill_5d_gt_1pp_first": [
+     "2007-12-03",
+     1.78
+    ]
+   }
+  },
+  {
+   "onset": "2009-01",
+   "markers": {
+    "1_vix": [
+     "2009-01-07",
+     43.39
+    ],
+    "4_spx": [
+     "2009-01-02",
+     -34.7
+    ],
+    "5_fed": [
+     "2009-01-16",
+     "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20090116a.htm"
+    ]
+   },
+   "dollar_funding_subtype": true,
+   "subtype_evidence": {
+    "swpt_gt_50bn_first": [
+     "2009-01-07",
+     538162.0
+    ],
+    "swpt_available": true,
+    "cp_bill_5d_gt_1pp_first": [
+     "2009-01-27",
+     1.14
+    ]
+   }
+  },
+  {
+   "onset": "2010-05",
+   "markers": {
+    "1_vix": [
+     "2010-05-07",
+     40.95
+    ],
+    "5_fed": [
+     "2010-05-09",
+     "https://www.federalreserve.gov/newsevents/pressreleases/monetary20100509a.htm"
+    ]
+   },
+   "dollar_funding_subtype": false,
+   "subtype_evidence": {
+    "swpt_gt_50bn_first": null,
+    "swpt_available": true,
+    "cp_bill_5d_gt_1pp_first": null
+   }
+  },
+  {
+   "onset": "2011-09",
+   "markers": {
+    "1_vix": [
+     "2011-09-22",
+     41.35
+    ],
+    "3_emfx": [
+     "2011-09-30",
+     10.2
+    ]
+   },
+   "dollar_funding_subtype": false,
+   "subtype_evidence": {
+    "swpt_gt_50bn_first": null,
+    "swpt_available": true,
+    "cp_bill_5d_gt_1pp_first": null
+   }
+  },
+  {
+   "onset": "2020-03",
+   "markers": {
+    "1_vix": [
+     "2020-03-06",
+     41.94
+    ],
+    "2_ofr": [
+     "2020-03-12",
+     7.475,
+     0.773
+    ],
+    "3_emfx": [
+     "2020-03-18",
+     11.4
+    ],
+    "4_spx": [
+     "2020-03-12",
+     -26.7
+    ],
+    "5_fed": [
+     "2020-03-03",
+     "https://www.federalreserve.gov/newsevents/pressreleases/monetary20200303a.htm"
+    ]
+   },
+   "dollar_funding_subtype": true,
+   "subtype_evidence": {
+    "swpt_gt_50bn_first": [
+     "2020-03-25",
+     206051.0
+    ],
+    "swpt_available": true,
+    "cp_bill_5d_gt_1pp_first": [
+     "2020-03-20",
+     1.12
+    ]
+   }
+  },
+  {
+   "onset": "2022-06",
+   "markers": {
+    "2_ofr": [
+     "2022-06-17",
+     2.588050847470501,
+     1.682
+    ],
+    "4_spx": [
+     "2022-06-13",
+     -21.8
+    ]
+   },
+   "dollar_funding_subtype": false,
+   "subtype_evidence": {
+    "swpt_gt_50bn_first": null,
+    "swpt_available": true,
+    "cp_bill_5d_gt_1pp_first": null
+   }
+  }
+ ],
+ "months_with_ge2_markers": [
+  "2001-04",
+  "2001-09",
+  "2001-10",
+  "2002-07",
+  "2002-08",
+  "2002-09",
+  "2002-10",
+  "2007-12",
+  "2008-01",
+  "2008-03",
+  "2008-05",
+  "2008-07",
+  "2008-09",
+  "2008-10",
+  "2008-11",
+  "2008-12",
+  "2009-01",
+  "2009-02",
+  "2009-03",
+  "2009-04",
+  "2010-05",
+  "2011-09",
+  "2011-10",
+  "2011-11",
+  "2020-03",
+  "2020-04",
+  "2020-05",
+  "2022-06",
+  "2022-07",
+  "2022-09",
+  "2022-10"
+ ],
+ "months_any_marker": {
+  "2001-01": [
+   "5_fed"
+  ],
+  "2001-03": [
+   "4_spx"
+  ],
+  "2001-04": [
+   "2_ofr",
+   "4_spx",
+   "5_fed"
+  ],
+  "2001-06": [
+   "4_spx"
+  ],
+  "2001-07": [
+   "4_spx"
+  ],
+  "2001-08": [
+   "4_spx"
+  ],
+  "2001-09": [
+   "1_vix",
+   "2_ofr",
+   "4_spx",
+   "5_fed"
+  ],
+  "2001-10": [
+   "2_ofr",
+   "4_spx"
+  ],
+  "2001-11": [
+   "4_spx"
+  ],
+  "2002-02": [
+   "4_spx"
+  ],
+  "2002-05": [
+   "4_spx"
+  ],
+  "2002-06": [
+   "4_spx"
+  ],
+  "2002-07": [
+   "1_vix",
+   "2_ofr",
+   "4_spx"
+  ],
+  "2002-08": [
+   "1_vix",
+   "2_ofr",
+   "4_spx"
+  ],
+  "2002-09": [
+   "1_vix",
+   "2_ofr",
+   "4_spx"
+  ],
+  "2002-10": [
+   "1_vix",
+   "2_ofr",
+   "4_spx"
+  ],
+  "2002-11": [
+   "4_spx"
+  ],
+  "2002-12": [
+   "4_spx"
+  ],
+  "2003-01": [
+   "4_spx"
+  ],
+  "2003-02": [
+   "4_spx"
+  ],
+  "2003-03": [
+   "4_spx"
+  ],
+  "2003-04": [
+   "4_spx"
+  ],
+  "2007-11": [
+   "2_ofr"
+  ],
+  "2007-12": [
+   "2_ofr",
+   "5_fed"
+  ],
+  "2008-01": [
+   "2_ofr",
+   "5_fed"
+  ],
+  "2008-02": [
+   "2_ofr"
+  ],
+  "2008-03": [
+   "2_ofr",
+   "5_fed"
+  ],
+  "2008-04": [
+   "2_ofr"
+  ],
+  "2008-05": [
+   "2_ofr",
+   "5_fed"
+  ],
+  "2008-06": [
+   "2_ofr"
+  ],
+  "2008-07": [
+   "2_ofr",
+   "4_spx",
+   "5_fed"
+  ],
+  "2008-08": [
+   "4_spx"
+  ],
+  "2008-09": [
+   "1_vix",
+   "2_ofr",
+   "4_spx",
+   "5_fed"
+  ],
+  "2008-10": [
+   "1_vix",
+   "2_ofr",
+   "3_emfx",
+   "4_spx",
+   "5_fed"
+  ],
+  "2008-11": [
+   "1_vix",
+   "2_ofr",
+   "3_emfx",
+   "4_spx",
+   "5_fed"
+  ],
+  "2008-12": [
+   "1_vix",
+   "2_ofr",
+   "3_emfx",
+   "4_spx"
+  ],
+  "2009-01": [
+   "1_vix",
+   "4_spx",
+   "5_fed"
+  ],
+  "2009-02": [
+   "1_vix",
+   "4_spx"
+  ],
+  "2009-03": [
+   "1_vix",
+   "4_spx",
+   "5_fed"
+  ],
+  "2009-04": [
+   "1_vix",
+   "4_spx",
+   "5_fed"
+  ],
+  "2009-05": [
+   "4_spx"
+  ],
+  "2009-06": [
+   "4_spx"
+  ],
+  "2009-07": [
+   "4_spx"
+  ],
+  "2009-08": [
+   "4_spx"
+  ],
+  "2009-09": [
+   "4_spx"
+  ],
+  "2010-05": [
+   "1_vix",
+   "5_fed"
+  ],
+  "2011-08": [
+   "1_vix"
+  ],
+  "2011-09": [
+   "1_vix",
+   "3_emfx"
+  ],
+  "2011-10": [
+   "1_vix",
+   "3_emfx"
+  ],
+  "2011-11": [
+   "3_emfx",
+   "5_fed"
+  ],
+  "2015-08": [
+   "1_vix"
+  ],
+  "2015-09": [
+   "3_emfx"
+  ],
+  "2015-10": [
+   "3_emfx"
+  ],
+  "2020-02": [
+   "1_vix"
+  ],
+  "2020-03": [
+   "1_vix",
+   "2_ofr",
+   "3_emfx",
+   "4_spx",
+   "5_fed"
+  ],
+  "2020-04": [
+   "1_vix",
+   "2_ofr",
+   "3_emfx",
+   "4_spx",
+   "5_fed"
+  ],
+  "2020-05": [
+   "2_ofr",
+   "3_emfx"
+  ],
+  "2020-06": [
+   "1_vix"
+  ],
+  "2020-10": [
+   "1_vix"
+  ],
+  "2022-03": [
+   "2_ofr"
+  ],
+  "2022-05": [
+   "2_ofr"
+  ],
+  "2022-06": [
+   "2_ofr",
+   "4_spx"
+  ],
+  "2022-07": [
+   "2_ofr",
+   "4_spx"
+  ],
+  "2022-09": [
+   "2_ofr",
+   "4_spx"
+  ],
+  "2022-10": [
+   "2_ofr",
+   "4_spx"
+  ],
+  "2022-11": [
+   "4_spx"
+  ],
+  "2022-12": [
+   "4_spx"
+  ],
+  "2023-01": [
+   "4_spx"
+  ],
+  "2023-03": [
+   "5_fed"
+  ],
+  "2025-04": [
+   "1_vix"
+  ]
+ },
+ "notes": {
+  "ofr_first_evaluable_day": "2000-12-28",
+  "em_basket_first_day": "1995-01-03",
+  "swpt_first": "2002-12-18",
+  "spx_source": "Yahoo ^GSPC committed data/spx_daily.csv",
+  "ofr_vintage": "fsi.csv fetched 2026-11-02 (current vintage, not as-published)"
+ }
+}

@@ -38,17 +38,49 @@ _PHASE_EVENT = {
 class CatalystIngestion(IngestionSource):
     name = "catalysts"
 
-    def __init__(self, name_map: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        name_map: dict[str, str] | None = None,
+        alias_map: dict[str, list[str]] | None = None,
+    ) -> None:
         self.name_map = name_map or {}
+        # symbol -> CT.gov REGISTERED sponsor aliases (Security.ctgov_names).
+        # Registered names differ from display names ("Moderna" -> "ModernaTX");
+        # empty/missing falls back to the display name.
+        self.alias_map = alias_map or {}
         self._impact = scoring_config()["components"]["catalyst_score"]["impact_weights"]
 
+    def _aliases(self, symbol: str) -> list[str]:
+        return self.alias_map.get(symbol) or [self.name_map.get(symbol, symbol)]
+
     def fetch(self, symbol: str) -> dict:
-        company = self.name_map.get(symbol, symbol)
-        trials = self._fetch_trials(company)
+        aliases = self._aliases(symbol)
+        trials = self._fetch_trials(aliases)
+        if not trials:
+            # Greppable radar-gap line: a name with zero sponsor-matched trials
+            # is invisible to the pipeline calendar (the Moderna/ModernaTX miss).
+            logger.warning(
+                "ctgov radar gap: %s returned 0 studies across sponsor aliases %s",
+                symbol, aliases,
+            )
         earnings = self._fetch_earnings(symbol)
         return {"trials": trials, "earnings": earnings}
 
-    def _fetch_trials(self, company: str) -> list[dict]:
+    def _fetch_trials(self, aliases: list[str]) -> list[dict]:
+        # Union across aliases, deduped by NCT id (query.spons also matches
+        # collaborator entries, so partnered trials appear under either alias).
+        by_nct: dict[str, dict] = {}
+        for alias in aliases:
+            for study in self._fetch_trials_for_alias(alias):
+                nct = (
+                    study.get("protocolSection", {})
+                    .get("identificationModule", {})
+                    .get("nctId", "")
+                )
+                by_nct.setdefault(nct or f"_no_nct_{len(by_nct)}", study)
+        return list(by_nct.values())
+
+    def _fetch_trials_for_alias(self, company: str) -> list[dict]:
         key = f"ctgov:{company}"
 
         def _producer():
@@ -96,11 +128,13 @@ class CatalystIngestion(IngestionSource):
 
     def normalize(self, symbol: str, raw: dict) -> list[Catalyst]:
         records: list[Catalyst] = []
+        aliases = self._aliases(symbol)
         for study in raw.get("trials", []):
             ps = study.get("protocolSection", {})
             ident = ps.get("identificationModule", {})
             status = ps.get("statusModule", {})
             design = ps.get("designModule", {})
+            sponsor = ps.get("sponsorCollaboratorsModule", {}) or {}
             nct = ident.get("nctId", "")
             title = ident.get("briefTitle", "")
             phases = design.get("phases", []) or []
@@ -113,10 +147,17 @@ class CatalystIngestion(IngestionSource):
                 if ph in _PHASE_EVENT:
                     event_type = _PHASE_EVENT[ph][0]
                     break
+            # Partnered-trial visibility: the study matched via a collaborator
+            # entry — surface who actually runs it (Merck runs INTerpath-001;
+            # Moderna is the collaborator).
+            lead = (sponsor.get("leadSponsor", {}) or {}).get("name") or ""
+            full_title = f"{title} ({nct})"
+            if lead and not _sponsor_matches(lead, aliases):
+                full_title += f" — partnered, lead: {lead}"
             records.append(
                 Catalyst(
                     symbol=symbol, date=d, event_type=event_type,
-                    title=f"{title} ({nct})"[:200],
+                    title=full_title[:200],
                     impact_weight=self._impact.get(event_type, self._impact.get("other", 0.2)),
                     confirmed=False,
                     url=f"https://clinicaltrials.gov/study/{nct}" if nct else None,
@@ -156,6 +197,13 @@ class CatalystIngestion(IngestionSource):
                 n += 1
         session.commit()
         return n
+
+
+def _sponsor_matches(lead: str, aliases: list[str]) -> bool:
+    """Case-insensitive substring match either way ('ModernaTX' matches
+    'ModernaTX, Inc.' and vice versa)."""
+    lead_l = lead.lower()
+    return any(a.lower() in lead_l or lead_l in a.lower() for a in aliases if a)
 
 
 def _parse_loose_date(value) -> date | None:

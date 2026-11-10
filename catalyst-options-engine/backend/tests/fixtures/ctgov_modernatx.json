@@ -1,0 +1,125 @@
+{
+ "studies": [
+  {
+   "protocolSection": {
+    "identificationModule": {
+     "nctId": "NCT05933577",
+     "briefTitle": "A Clinical Study of Intismeran Autogene (V940) Plus Pembrolizumab in People With High-Risk Melanoma (V940-001)"
+    },
+    "statusModule": {
+     "overallStatus": "ACTIVE_NOT_RECRUITING",
+     "primaryCompletionDateStruct": {
+      "date": "2029-10-26"
+     }
+    },
+    "sponsorCollaboratorsModule": {
+     "leadSponsor": {
+      "name": "Merck Sharp & Dohme LLC"
+     }
+    },
+    "designModule": {
+     "phases": [
+      "PHASE3"
+     ]
+    }
+   }
+  },
+  {
+   "protocolSection": {
+    "identificationModule": {
+     "nctId": "NCT06592794",
+     "briefTitle": "A Study to Investigate the Safety and Efficacy of mRNA-1403 in Participants \u226518 Years of Age for the Prevention of Acute Gastroenteritis"
+    },
+    "statusModule": {
+     "overallStatus": "ACTIVE_NOT_RECRUITING",
+     "primaryCompletionDateStruct": {
+      "date": "2027-02-15"
+     }
+    },
+    "sponsorCollaboratorsModule": {
+     "leadSponsor": {
+      "name": "ModernaTX, Inc."
+     }
+    },
+    "designModule": {
+     "phases": [
+      "PHASE3"
+     ]
+    }
+   }
+  },
+  {
+   "protocolSection": {
+    "identificationModule": {
+     "nctId": "NCT06735248",
+     "briefTitle": "A Study to Investigate Multiple Sclerosis Relapse Prevention With mRNA-1195 Compared With Placebo in Participants Aged 18 to \u226455 Years"
+    },
+    "statusModule": {
+     "overallStatus": "RECRUITING",
+     "primaryCompletionDateStruct": {
+      "date": "2029-01-08"
+     }
+    },
+    "sponsorCollaboratorsModule": {
+     "leadSponsor": {
+      "name": "ModernaTX, Inc."
+     }
+    },
+    "designModule": {
+     "phases": [
+      "PHASE2"
+     ]
+    }
+   }
+  },
+  {
+   "protocolSection": {
+    "identificationModule": {
+     "nctId": "NCT05164094",
+     "briefTitle": "A Study of an Epstein-Barr Virus (EBV) Candidate Vaccine, mRNA-1189, in 10- to 30-Year-Old Healthy Adolescents and Adults"
+    },
+    "statusModule": {
+     "overallStatus": "ACTIVE_NOT_RECRUITING",
+     "primaryCompletionDateStruct": {
+      "date": "2026-10-05"
+     }
+    },
+    "sponsorCollaboratorsModule": {
+     "leadSponsor": {
+      "name": "ModernaTX, Inc."
+     }
+    },
+    "designModule": {
+     "phases": [
+      "PHASE1",
+      "PHASE2"
+     ]
+    }
+   }
+  },
+  {
+   "protocolSection": {
+    "identificationModule": {
+     "nctId": "NCT06067230",
+     "briefTitle": "A Study to Investigate the Immunogenicity and Safety of mRNA-1345 Vaccine Targeting Respiratory Syncytial Virus (RSV) in High-risk Adults"
+    },
+    "statusModule": {
+     "overallStatus": "ACTIVE_NOT_RECRUITING",
+     "primaryCompletionDateStruct": {
+      "date": "2026-07-30"
+     }
+    },
+    "sponsorCollaboratorsModule": {
+     "leadSponsor": {
+      "name": "ModernaTX, Inc."
+     }
+    },
+    "designModule": {
+     "phases": [
+      "PHASE3"
+     ]
+    }
+   }
+  }
+ ]
+}

@@ -226,10 +226,11 @@ def generate_calls(session: Session, asof: date | None = None) -> list[TradeCall
 
         atr_window = risk.get("atr_window", 14)
         bars = _recent_bars(session, sym, bar_date - timedelta(days=atr_window * 3))
+        atr_value = atr(bars, atr_window)
         levels = build_levels(
             entry=entry,
             direction="long",
-            atr_value=atr(bars, atr_window),
+            atr_value=atr_value,
             stop_atr_mult=risk.get("stop_atr_mult", 2.0),
             fallback_stop_pct=risk.get("fallback_stop_pct", 0.08),
             reward_risk=risk.get("reward_risk", 2.0),
@@ -264,6 +265,9 @@ def generate_calls(session: Session, asof: date | None = None) -> list[TradeCall
             expires_on=expires_on,
             composite_at_call=composite,
             confidence=confidence,
+            # Fire-time ATR snapshot for the H11 shadow grader — observe-only
+            # metadata; the live levels above are already frozen from it.
+            atr_at_entry=round(atr_value, 6) if atr_value is not None else None,
             evidence={
                 "flag_id": flag.id,
                 "flag_type": flag.flag_type,

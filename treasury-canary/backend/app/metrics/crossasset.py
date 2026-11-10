@@ -47,6 +47,41 @@ def _rolling_corr(a: list[float], b: list[float], win: int = 60) -> list[float |
     return out
 
 
+FTQ_WINDOWS = (20, 60, 120)
+FTQ_STATUS_WINDOW = 60
+
+
+def flight_to_quality_windows(dates: list, sp_ret: list[float],
+                              bond_ret: list[float]) -> dict:
+    """Counts behind the flight-to-quality fraction, per trailing window of
+    trading days: bid / down days, the window's dates, and where the current
+    fraction ranks in that window's own history (share of past readings at or
+    below it). A 20-day window holds ~10 down days, so one day moves it ~0.1;
+    the 60/120-day windows say whether a reading is noise."""
+    out = {"windows": [], "history_from": dates[0].isoformat() if dates else None}
+    downs = [br for s_, br in zip(sp_ret, bond_ret) if s_ < 0]
+    out["base_rate"] = round(sum(1 for br in downs if br > 0) / len(downs), 3) if downs else None
+    for win in FTQ_WINDOWS:
+        if len(dates) < win:
+            continue
+        hist = []
+        for i in range(win - 1, len(dates)):
+            d = [br for s_, br in zip(sp_ret[i - win + 1:i + 1], bond_ret[i - win + 1:i + 1])
+                 if s_ < 0]
+            if d:
+                hist.append((sum(1 for br in d if br > 0), len(d)))
+        if not hist:
+            continue
+        bid, down = hist[-1]
+        frac = bid / down
+        rank = sum(1 for b, n in hist if b / n <= frac) / len(hist)
+        out["windows"].append({
+            "days": win, "bid": bid, "down": down,
+            "start": dates[-win].isoformat(), "end": dates[-1].isoformat(),
+            "pctile": round(100 * rank, 1)})
+    return out
+
+
 def build_crossasset_metrics(bundle: dict[str, tuple[list, list]]) -> list[MetricResult]:
     out: list[MetricResult] = []
     sp = bundle.get("sp500", ([], []))
@@ -60,27 +95,38 @@ def build_crossasset_metrics(bundle: dict[str, tuple[list, list]]) -> list[Metri
         note="Negative = diversification intact (flight-to-quality works); positive flip = regime break."))
 
     # Flight-to-quality: fraction of recent equity down-days on which bonds rallied.
+    # Status window 60 trading days (~33 down days; 2026-09-30, Casey): the 20d
+    # window holds ~10 down days, so one day moved it ~0.1 and it read RED on
+    # 35% of days 2016-2026 (31 episodes); at 60d, 26% (13), concentrated in
+    # the 2021-26 positive-correlation regime. Thresholds unchanged.
     ftq_dates, ftq_vals = [], []
-    win = 20
+    win = FTQ_STATUS_WINDOW
     for i in range(len(sp_ret)):
         lo = max(0, i - win + 1)
         downs = [(s, br) for s, br in zip(sp_ret[lo:i + 1], bond_ret[lo:i + 1]) if s < 0]
         ftq_dates.append(dates[i])
         ftq_vals.append(round(sum(1 for _, br in downs if br > 0) / len(downs), 2) if downs else None)
-    out.append(simple_metric(
-        "crossasset.flight_to_quality", "H", "Flight-to-quality (20d)", ftq_dates, ftq_vals,
+    ftq = simple_metric(
+        "crossasset.flight_to_quality", "H", "Flight-to-quality (60d)", ftq_dates, ftq_vals,
         unit="frac", source="FRED:SP500,DGS10",
-        note="Share of equity down-days with a Treasury bid. Falling = money not rotating stocks->bonds."))
+        note=("Share of S&P 500 down days on which the 10y yield fell (a Treasury bid). "
+              "Status uses the 60-day window; 20d is the fast read, 120d the slow one."))
+    ftq.extra = flight_to_quality_windows(dates, sp_ret, bond_ret)
+    out.append(ftq)
 
     hy = bundle.get("hy_oas", ([], []))
     out.append(simple_metric(
         "crossasset.hy_oas", "H", "HY OAS", hy[0], hy[1], unit="bps", scale=100.0,
         source="FRED:BAMLH0A0HYM2",
-        note="Credit cross-confirmation: Treasury stress + widening HY = higher-conviction recession signal."))
+        note="Credit cross-confirmation: Treasury stress + widening HY = higher-conviction recession signal. "
+             "STATUS is threshold-based and unaffected, but the displayed PERCENTILE ranks against a rolling "
+             "~3-year window: FRED restricted ICE BofA history in April 2026. Read it as 'vs the last 3 years'."))
     ig = bundle.get("ig_oas", ([], []))
     out.append(simple_metric(
         "crossasset.ig_oas", "H", "IG OAS", ig[0], ig[1], unit="bps", scale=100.0,
-        source="FRED:BAMLC0A0CM", note="Investment-grade credit spread trend."))
+        source="FRED:BAMLC0A0CM",
+        note="Investment-grade credit spread trend. Same caveat as HY OAS: the displayed PERCENTILE "
+             "ranks against a rolling ~3-year window since FRED's April-2026 ICE BofA restriction."))
     out.extend(_margin_metrics(bundle, sp))
     return out
 
@@ -139,7 +185,67 @@ def leverage_state(yoy: float | None, excess: float | None) -> str | None:
     return "NEUTRAL"
 
 
+POST_BLOWOFF_W = 6      # months; pre-registered (study_post_blowoff.py)
+
+
+def leverage_states_path(yoy_vals: list, excess_vals: list) -> list:
+    """Path-aware monthly states: identical to leverage_state except that
+    ELEVATED/NEUTRAL months within POST_BLOWOFF_W months AFTER a BLOWOFF
+    month are labeled POST_BLOWOFF — the rollover leg. A memoryless snapshot
+    read the historically dangerous transition (blowoff subsiding) as
+    de-escalation (user finding, 2026-08-15). Rules, frozen a priori:
+    - BLOWOFF and SQUEEZE/WASHOUT always win: re-inflation (excess >= +25pp
+      or YoY >= 40) returns to BLOWOFF and re-anchors; YoY < 0 hands off to
+      the squeeze states.
+    - Beyond W months with no re-entry the rollover FIZZLES to its plain
+      level state (roughly half of blowoffs fizzle).
+    Anchor uses only PAST months — no lookahead (gate-tested).
+    UNTESTED BRANCH (referee 2026-08-15): BLOWOFF -> SQUEEZE -> ELEVATED
+    within W reads POST_BLOWOFF per the frozen rule text; it never occurs
+    in-sample, so the stats are silent on it. Left frozen rather than tuned
+    post-hoc; revisit only at an annual re-freeze."""
+    out, last_blow = [], None
+    for i, (y, e) in enumerate(zip(yoy_vals, excess_vals)):
+        lvl = leverage_state(y, e)
+        if lvl == "BLOWOFF":
+            last_blow = i
+        if (lvl in ("ELEVATED", "NEUTRAL") and last_blow is not None
+                and 1 <= i - last_blow <= POST_BLOWOFF_W):
+            out.append("POST_BLOWOFF")
+        else:
+            out.append(lvl)
+    return out
+
+
 LEVERAGE_PLAYBOOK: dict[str, dict] = {
+    "POST_BLOWOFF": {
+        "label": "Post-blowoff rollover — leverage peaked and is unwinding",
+        "evidence": "Episode-level permutation p=0.028 as shipped; "
+                    "counter-agent QA 2026-08: sizing null blocks to the 26 "
+                    "scored months and merging episodes <3 months apart "
+                    "(2007/2021 re-inflation gaps) puts it at p~0.04-0.05 - "
+                    "same evidence tier as BLOWOFF (p=0.058), not sharper. "
+                    "~5 independent macro episodes carry the fwd12 stats "
+                    "(1998, 2000, 2007-08, 2010 fizzled positive, 2021-22); "
+                    "consistent with the decision-test finding that crash "
+                    "damage lands AFTER the blowoff ends. Basis: ^GSPC price, "
+                    "1997+, rule frozen before scoring (scripts/"
+                    "study_post_blowoff.py, 2026-08-15).",
+        "stats": {"fwd3": {"n": 31, "mean": 2.1, "median": 0.4, "pct_lower": 48, "worst": -12.2},
+                  "fwd6": {"n": 30, "mean": 4.7, "median": 7.3, "pct_lower": 40, "worst": -20.6},
+                  "fwd12": {"n": 26, "mean": -3.8, "median": -7.6, "pct_lower": 58, "worst": -44.8}},
+        "read": "The dangerous leg of the cycle: leverage has peaked and is "
+                "unwinding, but hasn't squeezed yet. 58% of months here saw "
+                "the S&P LOWER 12 months later - median -7.6%, worst -44.8% "
+                "(baseline +8.4%). Burns slow: 3m median +0.4%. Past episodes: "
+                "1998, the 2000 top, 2007-09..2008-03, 2010 (fizzled), "
+                "2021-22, 2025-11..2026-03 (re-inflated).",
+        "action": "Treat as BLOWOFF-or-worse, NOT de-escalation: keep reducing "
+                  "leverage-sensitive risk over quarters, tighten stops. "
+                  "Re-inflation (excess >= +25pp) returns to BLOWOFF; margin "
+                  "YoY < 0 starts the SQUEEZE - where crash damage "
+                  "historically lands.",
+    },
     "BLOWOFF": {
         "label": "Blowoff — leverage building far faster than the market",
         "evidence": "SUGGESTIVE, not proven: episode-level bootstrap p=0.058 (8 episodes). And the decision test failed: mechanically de-risking on this state (50% or 0% exposure, acted at publication lag, 1998-2026) REDUCED risk-adjusted returns vs holding — historical crash damage lands after BLOWOFF ends, in SQUEEZE/WASHOUT months. Treat as risk-awareness, not a timing rule.",

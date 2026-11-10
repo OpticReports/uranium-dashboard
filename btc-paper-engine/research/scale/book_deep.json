@@ -1,0 +1,108 @@
+{
+ "n_samples": 160,
+ "aggregation": "nSigFigs=4 (~$10 buckets)",
+ "span_min": 7.946116666666667,
+ "price_band_bp": {
+  "ask_p50": 23.237800154918666,
+  "bid_p50": 23.237800154918666
+ },
+ "depth_usd_in_band": {
+  "ask": {
+   "p0": 23183522.269500006,
+   "p10": 34979149.43336,
+   "p50": 41332247.467999995,
+   "p90": 44201911.76764,
+   "p100": 47624858.59650001
+  },
+  "bid": {
+   "p0": 38625573.7543,
+   "p10": 44408778.74312,
+   "p50": 51759828.536350004,
+   "p90": 55489659.09312,
+   "p100": 61558421.9504
+  }
+ },
+ "bucket_rounding_caveat": "level prices rounded to 4 s.f. (~$5 / 0.6bp); understates precision for sub-$1m orders",
+ "slip": {
+  "buy_1000000": {
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "p50": 0.9874876688775736,
+   "p90": 2.4203277201078066,
+   "worst": 4.333142699644021,
+   "worst_incomplete_filled_usd": null
+  },
+  "buy_2000000": {
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "p50": 1.455846313858089,
+   "p90": 2.8299700943195116,
+   "worst": 5.000301117195072,
+   "worst_incomplete_filled_usd": null
+  },
+  "buy_5000000": {
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "p50": 2.681583224277695,
+   "p90": 4.056332849684763,
+   "worst": 6.493794045212553,
+   "worst_incomplete_filled_usd": null
+  },
+  "buy_10000000": {
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "p50": 3.8126401748261873,
+   "p90": 5.055276552341281,
+   "worst": 8.03026639492721,
+   "worst_incomplete_filled_usd": null
+  },
+  "buy_20000000": {
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "p50": 5.438876351898658,
+   "p90": 6.632551647866025,
+   "worst": 11.568512251409757,
+   "worst_incomplete_filled_usd": null
+  },
+  "sell_1000000": {
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "p50": 1.076138808014937,
+   "p90": 2.449058254862524,
+   "worst": 3.211833181683277,
+   "worst_incomplete_filled_usd": null
+  },
+  "sell_2000000": {
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "p50": 1.4413317201733555,
+   "p90": 2.7139257408973494,
+   "worst": 3.690886231232371,
+   "worst_incomplete_filled_usd": null
+  },
+  "sell_5000000": {
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "p50": 2.1122359331549045,
+   "p90": 3.329217415160346,
+   "worst": 4.399829288702639,
+   "worst_incomplete_filled_usd": null
+  },
+  "sell_10000000": {
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "p50": 2.8131549829735203,
+   "p90": 4.072367940108013,
+   "worst": 5.0070982616745585,
+   "worst_incomplete_filled_usd": null
+  },
+  "sell_20000000": {
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "p50": 4.119886481415147,
+   "p90": 5.300346549095614,
+   "worst": 6.723628530940218,
+   "worst_incomplete_filled_usd": null
+  }
+ }
+}

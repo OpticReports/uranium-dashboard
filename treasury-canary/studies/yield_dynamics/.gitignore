@@ -1,0 +1,3 @@
+# progress output and scratch arrays; results.json / power.json are the record
+power.log
+wf_preds_*.npy

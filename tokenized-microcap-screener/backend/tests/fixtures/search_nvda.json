@@ -1,0 +1,468 @@
+{
+ "pairs": [
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0xd9ea532d4b342ae5eef42517474a9ceda952d43febbd39c265f3cdd14de75b9d",
+   "pairAddress": "0xd9ea532d4b342ae5eef42517474a9ceda952d43febbd39c265f3cdd14de75b9d",
+   "baseToken": {
+    "address": "0xDeCF74e4AA6fF30b1612e65665AAF650BEdecbA3",
+    "name": "NVDA",
+    "symbol": "NVDA"
+   },
+   "quoteToken": {
+    "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "name": "NVIDIA \u2022 Robinhood Token",
+    "symbol": "NVDA"
+   },
+   "priceUsd": "0.0000003196",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h6": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h24": {
+     "buys": 2,
+     "sells": 3
+    }
+   },
+   "volume": {
+    "h24": 2.66,
+    "h6": 0,
+    "h1": 0,
+    "m5": 0
+   },
+   "priceChange": {
+    "h24": -1.31
+   },
+   "liquidity": {
+    "usd": 29683.1,
+    "base": 77280023298,
+    "quote": 22.9493
+   },
+   "fdv": 31952,
+   "marketCap": 31952,
+   "pairCreatedAt": 1784786965000,
+   "info": {
+    "websites": [
+     {
+      "url": "https://nvdapaired.fun/",
+      "label": "Website"
+     }
+    ],
+    "socials": [
+     {
+      "url": "https://x.com/NVDAPaired",
+      "type": "twitter"
+     }
+    ]
+   }
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0xca55f039ea804d325875b3939611b1a83a2ce145addc72913ca2c2c34acd7a74",
+   "pairAddress": "0xca55f039ea804d325875b3939611b1a83a2ce145addc72913ca2c2c34acd7a74",
+   "baseToken": {
+    "address": "0x7e6D8536Ae9082e380BC943763e1274511561E18",
+    "name": "NVIDIA",
+    "symbol": "NVDA"
+   },
+   "quoteToken": {
+    "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "name": "NVIDIA \u2022 Robinhood Token",
+    "symbol": "NVDA"
+   },
+   "priceUsd": "0.00002202",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h6": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h24": {
+     "buys": 0,
+     "sells": 2
+    }
+   },
+   "volume": {
+    "h24": 11.65,
+    "h6": 0,
+    "h1": 0,
+    "m5": 0
+   },
+   "priceChange": {
+    "h24": -0.45
+   },
+   "liquidity": {
+    "usd": 22023.67,
+    "base": 984986100,
+    "quote": 1.4854
+   },
+   "fdv": 22029,
+   "marketCap": 22029,
+   "pairCreatedAt": 1784712918000,
+   "info": {
+    "websites": [
+     {
+      "url": "https://app.long.xyz/tokens/0x7e6d8536ae9082e380bc943763e1274511561e18",
+      "label": "Website"
+     }
+    ],
+    "socials": [
+     {
+      "url": "https://x.com/NVDArwa",
+      "type": "twitter"
+     },
+     {
+      "url": "https://t.me/NVDArwa",
+      "type": "telegram"
+     }
+    ]
+   }
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0x99a4c7659bfe9a1a39150479f98fc3b70e59cc9b",
+   "pairAddress": "0x99a4C7659bFe9a1a39150479F98fc3b70E59Cc9b",
+   "baseToken": {
+    "address": "0xdDc0B0e504f000a607C9a680C4F9dC3aDA001A29",
+    "name": "NVIDIA",
+    "symbol": "NVDA"
+   },
+   "quoteToken": {
+    "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "name": "WETH",
+    "symbol": "WETH"
+   },
+   "priceUsd": "0.000006729",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h6": {
+     "buys": 0,
+     "sells": 1
+    },
+    "h24": {
+     "buys": 0,
+     "sells": 1
+    }
+   },
+   "volume": {
+    "h24": 13.72,
+    "h6": 13.72,
+    "h1": 0,
+    "m5": 0
+   },
+   "priceChange": {},
+   "liquidity": {
+    "usd": 6122.1,
+    "base": 697606021,
+    "quote": 0.5945
+   },
+   "fdv": 6197,
+   "marketCap": 6197,
+   "pairCreatedAt": 1781859831000,
+   "info": {
+    "websites": [],
+    "socials": [
+     {
+      "url": "https://x.com/nvdaonrh?s=21",
+      "type": "twitter"
+     },
+     {
+      "url": "https://t.me/NVIDIAonRH",
+      "type": "telegram"
+     }
+    ]
+   }
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0xd4eb21209c4d6093f80b5b84f5c45cc093ea14a3",
+   "pairAddress": "0xd4EB21209C4D6093f80B5b84f5C45cc093EA14a3",
+   "baseToken": {
+    "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "name": "NVIDIA \u2022 Robinhood Token",
+    "symbol": "NVDA"
+   },
+   "quoteToken": {
+    "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "name": "Global Dollar",
+    "symbol": "USDG"
+   },
+   "priceUsd": "225.079",
+   "txns": {
+    "m5": {
+     "buys": 62,
+     "sells": 70
+    },
+    "h1": {
+     "buys": 2421,
+     "sells": 2518
+    },
+    "h6": {
+     "buys": 15642,
+     "sells": 15742
+    },
+    "h24": {
+     "buys": 67081,
+     "sells": 65415
+    }
+   },
+   "volume": {
+    "h24": 41072089.24,
+    "h6": 13530831.84,
+    "h1": 1414231.02,
+    "m5": 59863.8
+   },
+   "priceChange": {
+    "h1": -0.13,
+    "h6": 3.12,
+    "h24": 3.38
+   },
+   "liquidity": {
+    "usd": 6089852.67,
+    "base": 6051.02616,
+    "quote": 4727892
+   },
+   "fdv": 12823684,
+   "marketCap": 12823684,
+   "pairCreatedAt": 1784631726000
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0x62ab521f71431f78ac374cdbadc6cda3c8916b6c",
+   "pairAddress": "0x62AB521f71431f78ac374CdbadC6cda3c8916b6C",
+   "baseToken": {
+    "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "name": "NVIDIA \u2022 Robinhood Token",
+    "symbol": "NVDA"
+   },
+   "quoteToken": {
+    "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "name": "WETH",
+    "symbol": "WETH"
+   },
+   "priceUsd": "225.19",
+   "txns": {
+    "m5": {
+     "buys": 25,
+     "sells": 12
+    },
+    "h1": {
+     "buys": 431,
+     "sells": 502
+    },
+    "h6": {
+     "buys": 3167,
+     "sells": 3680
+    },
+    "h24": {
+     "buys": 13228,
+     "sells": 12081
+    }
+   },
+   "volume": {
+    "h24": 7500326.69,
+    "h6": 1770899.07,
+    "h1": 190827.81,
+    "m5": 5336.9
+   },
+   "priceChange": {
+    "m5": 0.08,
+    "h1": -0.04,
+    "h6": 3.06,
+    "h24": 3.43
+   },
+   "liquidity": {
+    "usd": 518811.33,
+    "base": 1089.5115,
+    "quote": 114.1008
+   },
+   "fdv": 12830046,
+   "marketCap": 12830046,
+   "pairCreatedAt": 1784903496000
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0xcd0f141ce5709cdab5b8845e57e133e940d0380340a29becc590717a3945d077",
+   "pairAddress": "0xcd0f141ce5709cdab5b8845e57e133e940d0380340a29becc590717a3945d077",
+   "baseToken": {
+    "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "name": "NVIDIA \u2022 Robinhood Token",
+    "symbol": "NVDA"
+   },
+   "quoteToken": {
+    "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "name": "WETH",
+    "symbol": "WETH"
+   },
+   "priceUsd": "216.84",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h6": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h24": {
+     "buys": 1049,
+     "sells": 1066
+    }
+   },
+   "volume": {
+    "h24": 432353.9,
+    "h6": 0,
+    "h1": 0,
+    "m5": 0
+   },
+   "priceChange": {
+    "h24": -0.3
+   },
+   "liquidity": {
+    "usd": 381305.38,
+    "base": 0.1631,
+    "quote": 159.2067
+   },
+   "fdv": 12354489,
+   "marketCap": 12354489,
+   "pairCreatedAt": 1788332531000
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0x19bdc345e256cd1da7e36c4042dc8ff90e506c7b047553dab2b177cdb15b843e",
+   "pairAddress": "0x19bdc345e256cd1da7e36c4042dc8ff90e506c7b047553dab2b177cdb15b843e",
+   "baseToken": {
+    "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "name": "NVIDIA \u2022 Robinhood Token",
+    "symbol": "NVDA"
+   },
+   "quoteToken": {
+    "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "name": "WETH",
+    "symbol": "WETH"
+   },
+   "priceUsd": "216.028",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h6": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h24": {
+     "buys": 164,
+     "sells": 180
+    }
+   },
+   "volume": {
+    "h24": 56364.04,
+    "h6": 0,
+    "h1": 0,
+    "m5": 0
+   },
+   "priceChange": {
+    "h24": -0.38
+   },
+   "liquidity": {
+    "usd": 448709.43,
+    "base": 912.6072,
+    "quote": 106.5358
+   },
+   "fdv": 12308050,
+   "marketCap": 12308050,
+   "pairCreatedAt": 1788342356000
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0xdf0896b6060ed97cb8f2dec88887d3adc05d8d5caeba77767670eaa0ea66b7ca",
+   "pairAddress": "0xdf0896b6060ed97cb8f2dec88887d3adc05d8d5caeba77767670eaa0ea66b7ca",
+   "baseToken": {
+    "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+    "name": "NVIDIA \u2022 Robinhood Token",
+    "symbol": "NVDA"
+   },
+   "quoteToken": {
+    "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "name": "WETH",
+    "symbol": "WETH"
+   },
+   "priceUsd": "218.33",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h6": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h24": {
+     "buys": 0,
+     "sells": 172
+    }
+   },
+   "volume": {
+    "h24": 40499.13,
+    "h6": 0,
+    "h1": 0,
+    "m5": 0
+   },
+   "priceChange": {
+    "h24": 0.67
+   },
+   "liquidity": {
+    "usd": 488288.8,
+    "base": 1316.03835,
+    "quote": 84.4821
+   },
+   "fdv": 12439469,
+   "marketCap": 12439469,
+   "pairCreatedAt": 1788346219000
+  }
+ ]
+}

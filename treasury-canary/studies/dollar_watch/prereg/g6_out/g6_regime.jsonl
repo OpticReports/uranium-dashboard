@@ -1,0 +1,4 @@
+{"p_table_seconds": 20}
+{"scenario": "regime2016", "paths": 1000, "years_cap": 400, "units_per_year": 0.163, "mean_hit_minus_p0": 0.0296, "se": 0.0032, "mean_hit_minus_pminus": -0.0228, "design_size": 0.0344, "pass_by_look": [0.001, 0.005, 0.019], "fail": 0.029, "inconclusive": 0.952, "pending": 0.0, "pass_not_specific_share": 0.158, "seconds": 132, "label": "2016-26 volatility regime"}
+{"scenario": "regime2016_drift-1", "paths": 1000, "years_cap": 400, "units_per_year": 0.15, "mean_hit_minus_p0": 0.0804, "se": 0.0032, "mean_hit_minus_pminus": 0.0283, "design_size": 0.0344, "pass_by_look": [0.005, 0.024, 0.055], "fail": 0.005, "inconclusive": 0.94, "pending": 0.0, "pass_not_specific_share": 0.273, "seconds": 133, "label": "2016-26 volatility regime + drift -1%/yr"}
+{"gate": {}, "G6": "no binding row run"}

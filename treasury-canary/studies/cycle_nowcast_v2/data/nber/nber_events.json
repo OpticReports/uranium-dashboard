@@ -1,0 +1,222 @@
+{
+ "built": "2026-10-20T19:35:48Z",
+ "cross_check_pass": true,
+ "note": "announcement dates exist only from the 1980-01 peak; earlier onsets carry none",
+ "onsets_1960plus": [
+  "1960-05",
+  "1970-01",
+  "1973-12",
+  "1980-02",
+  "1981-08",
+  "1990-08",
+  "2001-04",
+  "2008-01",
+  "2020-03"
+ ],
+ "onsets_scored_in_august_study": [
+  "1973-12",
+  "1980-02",
+  "1981-08",
+  "1990-08",
+  "2001-04",
+  "2008-01",
+  "2020-03"
+ ],
+ "recession_spans_usrec_1960plus": [
+  {
+   "end": "1961-02",
+   "onset": "1960-05",
+   "peak": "1960-04"
+  },
+  {
+   "end": "1970-11",
+   "onset": "1970-01",
+   "peak": "1969-12"
+  },
+  {
+   "end": "1975-03",
+   "onset": "1973-12",
+   "peak": "1973-11"
+  },
+  {
+   "end": "1980-07",
+   "onset": "1980-02",
+   "peak": "1980-01"
+  },
+  {
+   "end": "1982-11",
+   "onset": "1981-08",
+   "peak": "1981-07"
+  },
+  {
+   "end": "1991-03",
+   "onset": "1990-08",
+   "peak": "1990-07"
+  },
+  {
+   "end": "2001-11",
+   "onset": "2001-04",
+   "peak": "2001-03"
+  },
+  {
+   "end": "2009-06",
+   "onset": "2008-01",
+   "peak": "2007-12"
+  },
+  {
+   "end": "2020-04",
+   "onset": "2020-03",
+   "peak": "2020-02"
+  }
+ ],
+ "sources": {
+  "turning_points_file": "nber_turning_points_announcements.csv",
+  "turning_points_sha256": "24e1e2b997a9f67783ffdcb712a0d62d266fa3e9cc277b44b9ced90f5087ca92",
+  "usrec_file": "USREC.csv",
+  "usrec_last_month": "2026-09",
+  "usrec_last_value": 0,
+  "usrec_sha256": "a42a3581fe9c260dd3627febc84a7d563e5ed162cc7085a7518ebde99dc3c3b4"
+ },
+ "turning_points": [
+  {
+   "announcement_date": "1980-06-03",
+   "announcement_lag_months": 5,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-june-3-1980",
+   "month": "1980-01",
+   "type": "peak"
+  },
+  {
+   "announcement_date": "1981-07-08",
+   "announcement_lag_months": 12,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-july-8-1981",
+   "month": "1980-07",
+   "type": "trough"
+  },
+  {
+   "announcement_date": "1982-01-06",
+   "announcement_lag_months": 6,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-january-6-1982",
+   "month": "1981-07",
+   "type": "peak"
+  },
+  {
+   "announcement_date": "1983-07-08",
+   "announcement_lag_months": 8,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-july-8-1983",
+   "month": "1982-11",
+   "type": "trough"
+  },
+  {
+   "announcement_date": "1991-04-25",
+   "announcement_lag_months": 9,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-april-25-1991",
+   "month": "1990-07",
+   "type": "peak"
+  },
+  {
+   "announcement_date": "1992-12-22",
+   "announcement_lag_months": 21,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-december-22-1992",
+   "month": "1991-03",
+   "type": "trough"
+  },
+  {
+   "announcement_date": "2001-11-26",
+   "announcement_lag_months": 8,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-november-26-2001",
+   "month": "2001-03",
+   "type": "peak"
+  },
+  {
+   "announcement_date": "2003-07-17",
+   "announcement_lag_months": 20,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-july-17-2003",
+   "month": "2001-11",
+   "type": "trough"
+  },
+  {
+   "announcement_date": "2008-12-01",
+   "announcement_lag_months": 12,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-december-1-2008",
+   "month": "2007-12",
+   "type": "peak"
+  },
+  {
+   "announcement_date": "2010-09-20",
+   "announcement_lag_months": 15,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-september-20-2010",
+   "month": "2009-06",
+   "type": "trough"
+  },
+  {
+   "announcement_date": "2020-06-08",
+   "announcement_lag_months": 4,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-june-8-2020",
+   "month": "2020-02",
+   "type": "peak"
+  },
+  {
+   "announcement_date": "2021-07-19",
+   "announcement_lag_months": 15,
+   "announcement_url": "https://www.nber.org/news/business-cycle-dating-committee-announcement-july-19-2021",
+   "month": "2020-04",
+   "type": "trough"
+  }
+ ],
+ "usrec_vs_announced_cross_check": [
+  {
+   "onset": "1980-02",
+   "peak_announced": true,
+   "peak_announcement_date": "1980-06-03",
+   "peak_from_usrec": "1980-01",
+   "trough_announced": true,
+   "trough_announcement_date": "1981-07-08",
+   "trough_from_usrec": "1980-07"
+  },
+  {
+   "onset": "1981-08",
+   "peak_announced": true,
+   "peak_announcement_date": "1982-01-06",
+   "peak_from_usrec": "1981-07",
+   "trough_announced": true,
+   "trough_announcement_date": "1983-07-08",
+   "trough_from_usrec": "1982-11"
+  },
+  {
+   "onset": "1990-08",
+   "peak_announced": true,
+   "peak_announcement_date": "1991-04-25",
+   "peak_from_usrec": "1990-07",
+   "trough_announced": true,
+   "trough_announcement_date": "1992-12-22",
+   "trough_from_usrec": "1991-03"
+  },
+  {
+   "onset": "2001-04",
+   "peak_announced": true,
+   "peak_announcement_date": "2001-11-26",
+   "peak_from_usrec": "2001-03",
+   "trough_announced": true,
+   "trough_announcement_date": "2003-07-17",
+   "trough_from_usrec": "2001-11"
+  },
+  {
+   "onset": "2008-01",
+   "peak_announced": true,
+   "peak_announcement_date": "2008-12-01",
+   "peak_from_usrec": "2007-12",
+   "trough_announced": true,
+   "trough_announcement_date": "2010-09-20",
+   "trough_from_usrec": "2009-06"
+  },
+  {
+   "onset": "2020-03",
+   "peak_announced": true,
+   "peak_announcement_date": "2020-06-08",
+   "peak_from_usrec": "2020-02",
+   "trough_announced": true,
+   "trough_announcement_date": "2021-07-19",
+   "trough_from_usrec": "2020-04"
+  }
+ ]
+}

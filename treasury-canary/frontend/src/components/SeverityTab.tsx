@@ -16,6 +16,8 @@ import { IMPACT_DATA } from "../lib/severityImpact";
 import { Panel, InlineError, Loading } from "./ui";
 import { errorMessage, formatValue } from "../lib/format";
 import InfoTip from "./InfoTip";
+import SeverityHistoryPanel from "./SeverityHistoryPanel";
+import DistressPanel from "./DistressPanel";
 
 // ---------------------------------------------------------------------------
 // Loosened view of the generated `as const` impact data so we can index
@@ -177,6 +179,7 @@ export default function SeverityTab() {
       {!loading && !error && data && (
         <>
           <SeverityHeader data={data} />
+          <SeverityHistoryPanel />
           {data.blocks.map((b) => (
             <BlockPanel key={b.id} block={b} />
           ))}
@@ -185,6 +188,11 @@ export default function SeverityTab() {
       )}
 
       <ImpactMapPanel />
+
+      {/* Realized distress (studies/distress-signals.md, distress-bottoms.md):
+          filings rose with recessions or after them, so they sit here, not on
+          the Monitor tab's warning stack. */}
+      <DistressPanel />
     </div>
   );
 }

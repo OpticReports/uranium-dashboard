@@ -18,12 +18,14 @@ import threading
 import time
 from dataclasses import asdict
 
-from .config import load_strategy, settings
+from . import alerts
+from .config import LIVE_LEV, LIVE_W_TREND, load_strategy, settings
 from .engine.core import (
     BAR_SECONDS, Bar, Book, Pending, Position,
     eval_donchian, eval_signal, process_closed_bar, resolve_open_exit,
 )
 from .engine.replay import accrue_cash_yield, book_stats, compute_indicators
+from .volsize import size_mult
 from .sources.bitstamp import fetch_4h_bars, kraken_price, last_price
 from .store.db import (
     BarRow, BookStateRow, EquitySnapRow, SignalRow, TradeRow,
@@ -41,12 +43,34 @@ class Engine:
         self.bars: list[Bar] = []
         self.last_processed: int = 0
         self.last_data_ok: float = 0.0
+        # wall-clock time each bar in the window was LAST fetched from REST.
+        # A bar is FINAL only when fetched >= bar_final_grace_s after its
+        # end; catch_up never evaluates a bar that is not final (the
+        # forming-bar snapshot of 2026-10-07, docs in btc-executor/docs/
+        # HALT_2026-10-07.md). Bars loaded from the DB are final by
+        # construction (persisted only when closed, from a post-close fetch).
+        self._bar_fetched_at: dict[int, float] = {}
+        self._not_final_logged: tuple | None = None
         self.degraded = False
         self.data_halt = False            # price-sanity halt (manual resume)
         self.cur_price: float | None = None
         self._persisted_trades: dict[str, int] = {c.name: 0 for c in self.books_cfg}
         self._blend_state: dict[str, dict] = {}
         self._lock = threading.Lock()
+        self.alert_fn = alerts.send      # injected in tests
+        # /exec/target refuses to serve until boot() has restored the DB:
+        # before this, the app answered with fresh Book() defaults
+        # (halted=False, no position, bar_ts=0) while boot ran in the
+        # background thread, and the executor read that as a real engine
+        # state - a false 'resumed' page then a fresh RED on every restart,
+        # and (pre-existing) a routine engine_exit flatten of a live leg.
+        self.booted = False
+        # vol-targeted entry size (app/volsize.py): closes from the repo
+        # fixture (2022-01..) merged with every persisted live bar, rebuilt
+        # once per processed bar; results cached per signal bar.
+        self._vol_closes: dict[int, float] = {}
+        self._vol_key: int | None = None
+        self._vol_cache: dict[int, dict] = {}
 
     # ---------- persistence ----------
 
@@ -57,6 +81,7 @@ class Engine:
             pos["exit_flag"] = getattr(b.position, "exit_flag", None)
         return json.dumps({
             "equity": b.equity, "peak": b.peak_equity, "halted": b.halted,
+            "halt_reason": b.halt_reason, "halt_announced": b.halt_announced,
             "position": pos,
             "pending": asdict(b.pending) if b.pending else None,
         })
@@ -64,6 +89,11 @@ class Engine:
     def _restore_book(self, b: Book, raw: str) -> None:
         d = json.loads(raw)
         b.equity, b.peak_equity, b.halted = d["equity"], d["peak"], d["halted"]
+        b.halt_reason = d.get("halt_reason")     # absent on pre-2026-09-08 rows
+        # A halted row written before the flag existed is treated as already
+        # announced - a restore is never an edge, and re-paging every restart
+        # is the failure mode the executor side had to be fixed for too.
+        b.halt_announced = d.get("halt_announced", b.halted)
         if d.get("position"):
             p = dict(d["position"])
             flag = p.pop("exit_flag", None)
@@ -71,7 +101,14 @@ class Engine:
             if flag:
                 b.position.exit_flag = flag  # type: ignore[attr-defined]
         if d.get("pending"):
-            b.pending = Pending(**d["pending"])
+            if b.halted:
+                # `halted` blocks NEW pendings only; a restored one still
+                # filled on the next bar, so a halted book opened a position
+                # the live executor then mirrored at market (panel, 2026-09-08)
+                logger.warning("%s: dropping pending restored onto a halted book",
+                               b.cfg.name)
+            else:
+                b.pending = Pending(**d["pending"])
 
     def _persist(self, s, snapshot_ts: int | None = None) -> None:
         for name, b in self.books.items():
@@ -116,6 +153,8 @@ class Engine:
                            close=r.close, volume=r.volume)
                        for r in s.query(BarRow).order_by(BarRow.ts_open).all()]
             self.bars = db_bars[-settings.history_bars:]
+            for b in self.bars:
+                self._bar_fetched_at[b.ts] = float("inf")
             for name, b in self.books.items():
                 row = s.get(BookStateRow, name)
                 if row is not None:
@@ -150,34 +189,138 @@ class Engine:
             # from first boot rather than waiting for the next 4h bar close.
             if self.bars:
                 self._blend_step(self.bars[-1].ts + BAR_SECONDS, s)
+            self._announce_halts(s)
             log_event(s, "INFO", "boot",
                       f"bars={len(self.bars)} last_processed={self.last_processed}")
+        self.booted = True
 
     def refresh_bars(self) -> None:
         """Top up the bar window from REST (persist any new finalized bars)."""
-        start = (self.bars[-1].ts - BAR_SECONDS if self.bars
+        # the window starts at the OLDEST closed-but-unprocessed bar when
+        # there is one, so a bar the venue once served while forming and
+        # then dropped keeps being re-requested instead of sliding out of
+        # the window (review 2026-10-27)
+        anchor = self.bars[-1].ts if self.bars else None
+        for b in self.closed_unprocessed():
+            anchor = b.ts if anchor is None else min(anchor, b.ts)
+        if self.last_processed:
+            # and the bar we EXPECT next, even when it is not in memory at
+            # all (dropped by the venue, or a restart loaded a DB with a
+            # hole): it is re-requested every poll until it arrives
+            nxt = self.last_processed + BAR_SECONDS
+            anchor = nxt if anchor is None else min(anchor, nxt)
+        start = (anchor - BAR_SECONDS if anchor is not None
                  else int(time.time()) - settings.history_bars * BAR_SECONDS)
+        # stamp BEFORE the request: the candle reflects the venue's state at
+        # the request, and a 30 s timeout could otherwise stamp an in-grace
+        # read as if taken after the grace
+        fetched_at = time.time()
         fetched = fetch_4h_bars(start)
         if not fetched:
             return
         self.last_data_ok = time.time()
+        for b in fetched:
+            self._bar_fetched_at[b.ts] = fetched_at
         by_ts = {b.ts: b for b in self.bars}
         by_ts.update({b.ts: b for b in fetched})
         self.bars = [by_ts[t] for t in sorted(by_ts)][-max(settings.history_bars, 400):]
+        keep = {b.ts for b in self.bars}
+        self._bar_fetched_at = {t: v for t, v in self._bar_fetched_at.items()
+                                if t in keep}
         with session_scope() as s:
-            now = time.time()
+            # persist only FINAL bars: boot() trusts every DB row as final,
+            # so a candle read inside the grace must not reach the DB (a
+            # restart would otherwise launder it into a processed bar)
             for b in fetched:
-                if b.ts + BAR_SECONDS <= now:
+                if self.bar_final(b, fetched_at):
                     s.merge(BarRow(ts_open=b.ts, open=b.open, high=b.high,
                                    low=b.low, close=b.close, volume=b.volume))
 
+    def bar_final(self, bar: Bar, now: float | None = None) -> bool:
+        """Closed AND fetched at least bar_final_grace_s after its end.
+        A bar kept in memory from a fetch taken while it was forming is NOT
+        final, however long ago its end was: the 2026-10-07 shape."""
+        now = time.time() if now is None else now
+        end = bar.ts + BAR_SECONDS + settings.bar_final_grace_s
+        return end <= now and self._bar_fetched_at.get(bar.ts, 0.0) >= end
+
+    def closed_unprocessed(self, now: float | None = None) -> list[Bar]:
+        """Closed bars catch_up has not processed yet (final or not)."""
+        now = time.time() if now is None else now
+        return [b for b in self.bars
+                if b.ts > self.last_processed and b.ts + BAR_SECONDS <= now]
+
+    def _defer_event(self, s, ts: int, now: float, reason: str) -> None:
+        """Graded, once per (bar, level): INFO when the boundary poll merely
+        landed inside the grace (the expected case, about half of all bars),
+        WARN a poll later, RED `bar_stuck` plus a page three polls later.
+        `reason` is 'not_final' (the bar is in memory from an in-grace or
+        forming fetch), 'missing' (the expected bar is not in memory at all)
+        or 'gap' (a later bar is in memory but the expected one is not: RED
+        at once, never processed over)."""
+        late = now - (ts + BAR_SECONDS)
+        grace = settings.bar_final_grace_s
+        if reason == "gap":
+            level, kind = "RED", "bar_gap"
+        elif late < grace + settings.poll_seconds:
+            level, kind = "INFO", "bar_not_final"
+        elif late < grace + 3 * settings.poll_seconds:
+            level, kind = "WARN", "bar_not_final"
+        else:
+            level, kind = "RED", "bar_stuck"
+        key = (ts, level, kind)
+        if self._not_final_logged == key:
+            return
+        self._not_final_logged = key
+        fa = self._bar_fetched_at.get(ts, 0.0)
+        detail = (f"bar {ts} closed {late:.0f}s ago; "
+                  + ("a LATER bar is in memory but this one is not - never "
+                     "processing over the hole; " if reason == "gap" else
+                     "not in memory - " if reason == "missing" else
+                     f"its last fetch was "
+                     f"{'never' if not fa else f'{fa - ts - BAR_SECONDS:.0f}s after its end'} "
+                     f"(grace {grace}s) - ")
+                  + "re-requesting it every poll until it is final")
+        log_event(s, level, kind, detail)
+        if level == "RED":
+            try:
+                self.alert_fn(f"btc-paper-engine: {kind.upper()} - {detail}; no "
+                              f"signal or exit evaluates until it finalizes "
+                              f"(intrabar stops still run). If the venue never "
+                              f"serves it: RECOVERY in "
+                              f"btc-executor/docs/HALT_2026-10-07.md section 2 "
+                              f"(build the bar from minute candles, insert the "
+                              f"BarRow, restart) - never reset the books over "
+                              f"an open pending")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("%s page failed: %s", kind, exc)
+
     def catch_up(self, s) -> None:
-        """Process every fetched bar that is closed and newer than last_processed."""
+        """Process every fetched bar that is closed and newer than last_processed.
+
+        STRICTLY IN ORDER, CONTIGUOUS, and only FINAL bars: the pass stops at
+        the first bar that is closed but not confirmed by a post-close fetch,
+        and REFUSES to process over a hole (a later bar present while the
+        expected next one is not - a restart can load a DB with such a hole
+        when the venue dropped a candle it once served forming). poll() keeps
+        re-requesting the expected bar until it is final. Late REST data
+        therefore delays processing, as the module docstring promised and the
+        code did not keep before 2026-10-27."""
         now = time.time()
         inds = None
+        deferred = False
+        expected = self.last_processed + BAR_SECONDS if self.last_processed else None
         for i, bar in enumerate(self.bars):
             if bar.ts <= self.last_processed or bar.ts + BAR_SECONDS > now:
                 continue
+            if expected is not None and bar.ts != expected:
+                self._defer_event(s, expected, now, "gap")
+                deferred = True
+                break
+            if not self.bar_final(bar, now):
+                self._defer_event(s, bar.ts, now, "not_final")
+                deferred = True
+                break
             if i < 1:
                 continue
             if inds is None:
@@ -203,9 +346,78 @@ class Engine:
                 process_closed_bar(b, bar, ind, self.scfg, self.tcfg,
                                    sigs[b.cfg.strategy])
                 accrue_cash_yield(b, settings.cash_apy)
+            self._announce_halts(s)        # before _persist: flag rides along
             self.last_processed = bar.ts
             self._persist(s, snapshot_ts=bar.ts + BAR_SECONDS)
             self._blend_step(bar.ts + BAR_SECONDS, s)
+            expected = bar.ts + BAR_SECONDS
+        # the expected next bar is closed but not in memory at all (the
+        # fetch has been failing since before it formed, or a restart loaded
+        # a DB that ends before it): say so on the same graded scale
+        # (never after a gap/not_final break: that ts already has its event,
+        # and two keys alternating would defeat the once-per-key dedupe and
+        # page twice per poll - round-3 review)
+        if not deferred and expected is not None \
+                and expected + BAR_SECONDS <= now \
+                and all(b.ts != expected for b in self.bars):
+            self._defer_event(s, expected, now, "missing")
+
+    BLEND_INGREDIENTS = ("S3", "S4")     # the books the live blends trade
+
+    def _announce_halts(self, s) -> None:
+        """Page every book whose halt has not been announced yet.
+
+        `book.halted` is set by engine.core._close_position (dd_halt), by
+        POST /books/<n>/halt, or arrives already set from reset_books; it is
+        cleared by exactly one thing, POST /books/<n>/resume, and it persists
+        across restarts. Until 2026-09-08 nothing announced it: the book just
+        stopped taking entries, /books still returned 200, and the executor
+        (which never read legs.<n>.halted) booked the leg going flat as a
+        routine exit. A leg that silently never trades again is the
+        healthy-while-doing-nothing failure mode.
+
+        Announced-vs-halted rather than snapshot-vs-now: the panel that
+        reviewed the snapshot design showed it lost the edge to the poll()
+        stop path it did not bracket and to any exception between the
+        halting close and the compare. This scan is idempotent and runs at
+        every persist site, so whichever path set the flag, the next scan
+        pages it once. A restore is never an edge (see _restore_book).
+        Call BEFORE _persist so halt_announced is written with the page.
+        """
+        for name, b in self.books.items():
+            if not b.halted or b.halt_announced:
+                continue
+            dd = (b.equity / b.peak_equity - 1) if b.peak_equity else 0.0
+            if b.halt_reason == "manual":
+                cause = "halted by operator (POST /halt)"
+            else:
+                cause = (f"drawdown {100 * dd:.2f}% <= "
+                         f"-{100 * b.cfg.dd_halt:.0f}% dd_halt")
+            detail = (f"{name} ({b.cfg.strategy}) {cause}; equity "
+                      f"{b.equity:,.0f} vs peak {b.peak_equity:,.0f}")
+            if name in self.BLEND_INGREDIENTS:
+                tail = (f"Until then the live blend runs the other leg plus "
+                        f"cash, at reduced exposure.")
+            else:
+                tail = (f"{name} is a research-only book: nothing trades it "
+                        f"live, so this is dashboard-only.")
+            log_event(s, "RED", "book_halted", detail, book=name)
+            logger.warning("book_halted %s", detail)
+            try:
+                self.alert_fn(
+                    f"\U0001f6d1 ACTION NEEDED - paper engine book "
+                    f"{name} HALTED\n{detail}\n"
+                    f"The engine opens NO new entries for this book; any "
+                    f"position it still holds keeps its stop until the "
+                    f"engine exits it. It does NOT clear itself and it "
+                    f"survives restarts - a human must POST "
+                    f"/books/{name}/resume. {tail}")
+            except Exception as exc:  # noqa: BLE001
+                # alerting must never be able to stall the bar loop; the
+                # flag stays clear so the next scan retries the page
+                logger.warning("halt alert failed: %s", exc)
+                continue
+            b.halt_announced = True
 
     # ---------- poll ----------
 
@@ -234,6 +446,10 @@ class Engine:
             if px is not None:
                 cur_bar_ts = int(time.time()) // BAR_SECONDS * BAR_SECONDS
                 with session_scope() as s:
+                    # A stop-out is the single largest loss a book takes -
+                    # the likeliest way to cross dd_halt, and the only way
+                    # to halt BETWEEN bars. The first cut of the halt alert
+                    # missed this path entirely (BLOCKING, 2026-09-08).
                     for b in self.books.values():
                         pos = b.position
                         if pos is None or getattr(pos, "exit_flag", None):
@@ -245,9 +461,16 @@ class Engine:
                             _close_position(b, pos, cur_bar_ts, pos.stop_price,
                                             "STOP", self.tcfg)
                             log_event(s, "INFO", "stop_fill_live", b.cfg.name)
+                    self._announce_halts(s)
                     self._persist(s)
-            # bar boundary: refresh + process newly closed bars
-            if not self.bars or time.time() >= self.bars[-1].ts + BAR_SECONDS:
+            # bar boundary: refresh + process newly closed bars. ALSO while a
+            # closed bar is still unprocessed (its boundary fetch failed, or
+            # landed inside the grace): retry every poll, not once per bar
+            # (2026-10-07: one failed fetch at 08:00 left the 04:00 bar's
+            # forming snapshot to be evaluated as the closed bar).
+            now = time.time()
+            if not self.bars or now >= self.bars[-1].ts + BAR_SECONDS \
+                    or self.closed_unprocessed(now):
                 self.refresh_bars()
                 with session_scope() as s:
                     self.catch_up(s)
@@ -278,6 +501,15 @@ class Engine:
             all_bars = [by_ts[t] for t in sorted(by_ts)]
             now = time.time()
             closed = [b for b in all_bars if b.ts + BAR_SECONDS <= now]
+            tail = [b for b in closed if b.ts >= start_ts - BAR_SECONDS]
+            for prev, cur in zip(tail, tail[1:]):
+                if cur.ts != prev.ts + BAR_SECONDS:
+                    raise ValueError(
+                        f"bar gap between {prev.ts} and {cur.ts}: refusing to "
+                        f"replay over a hole. Recovery: build the missing bar "
+                        f"from Bitstamp minute candles, insert the BarRow, "
+                        f"restart (btc-executor/docs/HALT_2026-10-07.md "
+                        f"section 2); do not reset over an open pending")
             if capital:
                 self._apply_capital(capital)
             res = run_replay(closed, self.books_cfg, self.scfg, self.tcfg,
@@ -285,12 +517,18 @@ class Engine:
             with session_scope() as s:
                 s.query(TradeRow).delete()
                 s.query(EquitySnapRow).delete()
-                s.query(BookStateRow).delete()
+                # keep the funding monitor's row: a book reset must not make
+                # a restarted monitor forget an ARMED regime and re-page it
+                s.query(BookStateRow).filter(
+                    BookStateRow.book != "_funding_monitor").delete()
                 s.merge(BookStateRow(book="_meta",
                                      state_json=json.dumps({"capital": self.start_capital}),
                                      last_processed_bar=0))
                 self.books = res.books
                 self.bars = all_bars[-max(settings.history_bars, 400):]
+                # fixture + DB rows are closed bars from post-close fetches:
+                # final by construction (the next refresh records the rest)
+                self._bar_fetched_at = {b.ts: float("inf") for b in self.bars}
                 self.last_processed = closed[-1].ts if closed else 0
                 self._persisted_trades = {n: 0 for n in self.books}
                 self._blend_state = {}
@@ -348,6 +586,64 @@ class Engine:
                     "books": {n: {"equity": round(b.equity, 2), "trades": len(b.trades)}
                               for n, b in self.books.items()}}
 
+    def _vol_history(self, need_ts: int | None = None) -> dict[int, float]:
+        # one read of last_processed for both the filter and the cache key
+        # (review 2026-10-01 M1: it was read twice, and catch_up advances it
+        # AFTER creating the pending)
+        lp = self.last_processed
+        if (self._vol_key == lp and self._vol_closes
+                and (need_ts is None or need_ts in self._vol_closes)):
+            return self._vol_closes
+        import csv as _csv
+        import os as _os
+        fix = _os.path.join(_os.path.dirname(__file__), "..", "tests",
+                            "fixtures", "bars_4h_btcusd.csv")
+        closes: dict[int, float] = {}
+        try:
+            with open(fix) as fh:
+                for r in _csv.DictReader(fh):
+                    closes[int(r["ts_open_unix"])] = float(r["close"])
+        except OSError:
+            logger.warning("vol sizing: fixture not readable at %s", fix)
+        with session_scope() as s:
+            for row in s.query(BarRow).all():
+                closes[row.ts_open] = row.close
+        for b in self.bars:
+            closes[b.ts] = b.close
+        # only CLOSED bars up to the newest one the signal could have seen:
+        # a signal is evaluated at its bar's close. volsize.size_mult's grid
+        # also ends at the signal bar, so this is defence in depth; it admits
+        # need_ts itself so a pending created moments before last_processed
+        # advances is not sized off a history missing its own bar.
+        hi = max(lp or 0, need_ts or 0)
+        if hi:
+            closes = {t: c for t, c in closes.items() if t <= hi}
+        self._vol_closes, self._vol_key = closes, lp
+        return closes
+
+    def size_mult_for(self, signal_ts: int | None) -> dict:
+        """Entry-size multiplier for the entry signalled on bar `signal_ts`
+        (RESEARCH_SHARPE.md H1, down-only). 1.0 = today's size."""
+        if signal_ts is None:
+            return {"m": 1.0, "basis": "no_signal", "sigma_now": None,
+                    "sigma_ref": None}
+        hit = self._vol_cache.get(signal_ts)
+        if hit is not None:
+            return hit
+        # FAIL TOWARD TODAY'S SIZE, NEVER TOWARD A 500 (review 2026-10-01
+        # S1): /exec/target is the live executor's only feed, and a failed
+        # fetch skips its whole step - halt checks and stop maintenance
+        # included. The executor pages any non-vol_target basis above 0.30.
+        try:
+            res = size_mult(self._vol_history(int(signal_ts)), int(signal_ts))
+        except Exception:  # noqa: BLE001
+            logger.exception("vol sizing failed for signal %s", signal_ts)
+            return {"m": 1.0, "basis": "error", "sigma_now": None,
+                    "sigma_ref": None}
+        if res["basis"] == "vol_target":      # final once its bars are in
+            self._vol_cache[signal_ts] = res
+        return res
+
     def status(self) -> dict:
         return {
             "degraded": self.degraded, "data_halt": self.data_halt,
@@ -356,6 +652,11 @@ class Engine:
             "last_processed_bar": self.last_processed,
             "bars_cached": len(self.bars),
             "price": self.cur_price,
+            # the entry-size multiplier a signal on the latest processed bar
+            # would get (RESEARCH_SHARPE.md H1, down-only); public so the
+            # deploy can be checked without the exec token
+            "vol_size": {k: v for k, v in self.size_mult_for(
+                self.last_processed or None).items() if k in ("m", "basis")},
             "books": {**self._blend_status(), **{n: {**book_stats(b),
                           "state": ("HALTED" if b.halted else
                                     b.position.side if b.position else
@@ -369,7 +670,7 @@ class Engine:
     # pullback book (S3) and the 1x trend book (S4), levered. Weights/leverage
     # from the RESEARCH_S4.md sizing frontier (75/25 @ 1.5x dominates the pure
     # pullback at equal CAGR with half the DD; 2x is the aggressive seat).
-    BLENDS = {"S5": (0.25, 1.5), "S6": (0.25, 2.0)}   # (w_trend, leverage)
+    BLENDS = {"S5": (LIVE_W_TREND, LIVE_LEV), "S6": (0.25, 2.0)}   # (w_trend, leverage)
 
     def _blend_step(self, snapshot_ts: int, s) -> None:
         """Advance blend equities one snapshot using S3/S4 marked returns."""

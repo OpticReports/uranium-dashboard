@@ -1,0 +1,73 @@
+== F1 (BLOCKING): carry funding source in EVERY headline cell of results.json
+   headline cells: 42  non-XBTUSD / unflagged: none
+   meta.headline_funding = XBTUSD ; quanto_label = BitMEX ETHUSD quanto - not the live venue's instrument
+   table header names XBTUSD: True ; quanto column labelled 'not the live venue': True
+
+==== COVID  anchor 2020-02-13  offset 0  K 0.75
+   splice ok: 2196 path bars from 2026-10-07 12:00, returns == analogue (max |d| 2.2e-16)
+   carry (XBTUSD proxy): 12m value 34,220.63; funding re-summed 4,420.78 vs sleeve 4,420.78; flips 4; on 63.1%
+                          mine  results.json      diff
+   91d               96,887.08     96,887.08     -0.00
+   182d              96,458.37     96,458.37     +0.00
+   273d             103,666.14    103,666.14     +0.00
+   365d             115,986.66    115,986.66     +0.00
+   maxDD             -21.0224%     -21.0200%  -0.0024%
+   final            115,895.90    115,895.90
+   BTC funding       -2,820.12     -2,820.12  by leg mine {'pullback': -547.3111488966093, 'trend': -2272.812882513648}  stamps 1078 / 1078
+   fees                 993.39        993.39   trades 33 / 33
+   worst day c2c     -8,920.69     -8,920.69  (2026-11-12 / 2026-11-12)
+   hw_end           121,392.97    121,392.97   exec halted: None / []
+   curves vs run file: max|d| total 0.005  btc 0.005  worst-intrabar 0.005  carry 0.005
+   paper pullback: halt mine 2026-11-30 04:00 / theirs 2026-11-30 04:00; margin_at_halt mine -1015.5548249437416 / theirs -1015.55; min margin mine -1,015.55 / theirs -1,015.55
+   paper trend: halt mine None / theirs None; margin_at_halt mine None / theirs None; min margin mine +28,076.84 / theirs +28,076.84
+   F2: T7-rule funding from saved trades -2,820.12 (by leg {'pullback': -547.3111496339723, 'trend': -2272.812835328487}) vs run total -2,820.12; sum of per-trade 'funding' -2,820.09; cum[-1] -2,820.12; sum(pnl) - (btc_end - 70k) = +0.02
+   F2: 12m with 115,986.66 / without 118,775.74 = -2,789.08; funding cum at that bar -2,789.08
+   F3: pending_live trade list identical to stress.engine_trades: True; first live trade L 2026-10-07 12:00 @ 83,706.22 (STOP)
+   F3: pending_live 12m mine 115,070.25 / theirs 115,070.25; S3 halt mine 2026-11-30 04:00 margin -1079.033624624164; csv-variant S3 margin -1015.5548249437416 (-0.94% of peak)
+   F3: drop_seam 12m mine 129,231.05 / theirs 129,231.05; S3 halt None; seam trade(s) [('L', '2026-10-07 04:00', 84121.28)]
+
+==== 2008  anchor 2021-11-09  offset 0  K 0.75
+   splice ok: 2190 path bars from 2026-10-07 12:00, returns == analogue (max |d| 2.2e-16)
+   carry (XBTUSD proxy): 12m value 30,182.66; funding re-summed 208.50 vs sleeve 208.50; flips 1; on 9.6%
+                          mine  results.json      diff
+   91d              112,696.80    112,696.80     -0.00
+   182d             120,880.45    120,880.45     -0.00
+   273d             130,077.93    130,077.93     -0.00
+   365d*            125,923.63    125,923.63     -0.00
+   maxDD              -8.1883%      -8.1900%  +0.0017%
+   final            125,923.63    125,923.63
+   BTC funding         -482.07       -482.07  by leg mine {'pullback': -166.8781378837996, 'trend': -315.1900812091631}  stamps 1186 / 1186
+   fees               2,794.32      2,794.32   trades 68 / 68
+   worst day c2c     -4,512.37     -4,512.37  (2027-08-07 / 2027-08-07)
+   hw_end           135,647.29    135,647.29   exec halted: None / []
+   curves vs run file: max|d| total 0.005  btc 0.005  worst-intrabar 0.005  carry 0.005
+   paper pullback: halt mine None / theirs None; margin_at_halt mine None / theirs None; min margin mine +19,864.45 / theirs +19,864.45
+   paper trend: halt mine None / theirs None; margin_at_halt mine None / theirs None; min margin mine +41,319.03 / theirs +41,319.03
+   F2: T7-rule funding from saved trades -482.07 (by leg {'pullback': -166.87813821604374, 'trend': -315.1900801016609}) vs run total -482.07; sum of per-trade 'funding' -482.03; cum[-1] -482.07; sum(pnl) - (btc_end - 70k) = +0.03
+   F2: 12m with 125,923.63 / without 126,405.69 = -482.06; funding cum at that bar -482.07
+   F3: pending_live trade list identical to stress.engine_trades: True; first live trade L 2026-10-07 12:00 @ 83,706.22 (STOP)
+   F3: pending_live 12m mine 126,286.45 / theirs 126,286.45; S3 halt mine None margin None; csv-variant S3 margin None (+0.00% of peak)
+   F3: drop_seam 12m mine 126,281.02 / theirs 126,281.02; S3 halt None; seam trade(s) [('L', '2026-10-07 04:00', 84121.28)]
+
+==== 1999  anchor 2017-12-17  offset 0  K 0.75
+   splice ok: 2190 path bars from 2026-10-07 12:00, returns == analogue (max |d| 2.2e-16)
+   carry (XBTUSD proxy): 12m value 32,641.03; funding re-summed 2,944.46 vs sleeve 2,944.46; flips 9; on 39.1%
+                          mine  results.json      diff
+   91d               92,765.62     92,765.62     -0.00
+   182d              98,705.86     98,705.86     -0.00
+   273d             107,340.43    107,340.43     +0.00
+   365d*            116,599.72    116,599.72     -0.00
+   maxDD             -13.6102%     -13.6100%  -0.0002%
+   final            116,599.72    116,599.72
+   BTC funding       -5,007.97     -5,007.97  by leg mine {'pullback': 402.8254947260963, 'trend': -5410.7988928659515}  stamps 1048 / 1048
+   fees                 897.01        897.01   trades 31 / 31
+   worst day c2c     -6,223.73     -6,223.73  (2026-10-26 / 2026-10-26)
+   hw_end           116,999.95    116,999.95   exec halted: None / []
+   curves vs run file: max|d| total 0.005  btc 0.005  worst-intrabar 0.005  carry 0.005
+   paper pullback: halt mine 2026-12-08 16:00 / theirs 2026-12-08 16:00; margin_at_halt mine -3415.5730258480617 / theirs -3415.57; min margin mine -3,415.57 / theirs -3,415.57
+   paper trend: halt mine None / theirs None; margin_at_halt mine None / theirs None; min margin mine +40,694.84 / theirs +40,694.84
+   F2: T7-rule funding from saved trades -5,007.97 (by leg {'pullback': 402.8254927411264, 'trend': -5410.798892215368}) vs run total -5,007.97; sum of per-trade 'funding' -5,007.97; cum[-1] -5,007.97; sum(pnl) - (btc_end - 70k) = -0.02
+   F2: 12m with 116,599.72 / without 121,607.69 = -5,007.97; funding cum at that bar -5,007.97
+   F3: pending_live trade list identical to stress.engine_trades: True; first live trade L 2026-10-07 12:00 @ 83,706.22 (SIGNAL)
+   F3: pending_live 12m mine 117,115.80 / theirs 117,115.80; S3 halt mine 2026-12-08 16:00 margin -3057.7089073621464; csv-variant S3 margin -3415.5730258480617 (-3.17% of peak)
+   F3: drop_seam 12m mine 115,762.40 / theirs 115,762.40; S3 halt 2026-12-08 16:00; seam trade(s) [('L', '2026-10-07 04:00', 84121.28)]

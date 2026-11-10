@@ -1,0 +1,4 @@
+pre-committed 2026-11-02T23:43:42.366492Z BEFORE the onset count was run
+sha256(SPEC_v1 §5.1-5.4 text) = 8e44ace18481f71801eb86dcf98613aed5a27403c67d569b63239e0dfef24c3c
+sha256(fed_emergency_actions.json) = f24ab63fdfe031b804ef336b93b0a1086090c922f627621cca5812b01611a563
+bounds: degenerate if onsets in 2000-01..2026-10 < 3 or > 13

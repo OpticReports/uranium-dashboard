@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     http_timeout_seconds: float = 30.0
     cache_dir: str = "./data/cache"
     cache_ttl_seconds: int = 3600            # respect FRED etc.; daily data is stable
+    # EDGAR refuses requests without a descriptive User-Agent; the SEC asks for a
+    # contact address in it. Set EDGAR_USER_AGENT on Render to add one — never
+    # hard-code an email here.
+    edgar_user_agent: str = "treasury-canary/1.0 (research dashboard)"
 
     # --- Scheduling ---
     run_scheduler: bool = True
@@ -79,6 +83,7 @@ FRED_LABOR: dict[str, str] = {
     "openings": "JTSJOL",          # JOLTS job openings, thousands (monthly, ~5wk lag)
     "unemployed": "UNEMPLOY",      # unemployed persons, thousands (monthly)
     "indeed_postings": "IHLIDXUS", # Indeed postings index, Feb-2020=100 (near-daily, timely)
+    "payrolls": "PAYEMS",          # total nonfarm payrolls, thousands (Squeeze Radar T2)
 }
 # Flow-compass discriminators: where money hides when the stock-bond hedge breaks.
 # (Gold comes from FMP — FRED's LBMA gold series were discontinued.)
@@ -111,7 +116,9 @@ FRED_FOREIGN: dict[str, str] = {
 # block; several blocks also reuse series already in the bundle.
 FRED_SEVERITY: dict[str, str] = {
     # A. private leverage excess
-    "hh_debt_gdp": "HDTGPDUSQ163N",   # household debt / GDP (BIS)
+    "hh_debt_gdp": "HDTGPDUSQ163N",   # household debt / GDP (starts 2005;
+                                      # extended back with Z.1, sources/household_debt.py)
+    "hh_debt_z1": "CMDEBT",           # Z.1 household+nonprofit debt, $mm (the back-extension)
     "priv_credit": "CRDQUSAPABIS",    # total private nonfin credit, $ (BIS)
     "corp_debt": "BCNSDODNS",         # nonfin corporate debt securities+loans, $
     "dsr": "TDSP",                     # household debt-service ratio
@@ -132,7 +139,7 @@ FRED_SEVERITY: dict[str, str] = {
     "med_income": "MEHOINUSA672N",     # real median household income (a)
     # C. amplification (adds to SLOOS/HY/discount-window already live)
     "delinq_cc": "DRCCLACBS",          # credit-card delinquency rate
-    "delinq_cre": "DRSREACBS",         # CRE delinquency rate
+    "delinq_cre": "DRSREACBS",         # ALL real-estate-secured loans (not CRE-only: DRCRELEXFACBS)
     # D. policy space (adds to EFFR / interest_gdp already live)
     "fed_debt_gdp": "GFDEGDQ188S",     # federal debt / GDP
     "deficit_gdp": "FYFSGDA188S",      # federal surplus/deficit % GDP (a; negative=deficit)
@@ -148,6 +155,14 @@ FRED_SEVERITY: dict[str, str] = {
     "capex_soft": "B985RC1Q027SBEA",   # software investment, $bn
     "cpi": "CPIAUCSL",                 # CPI (real-housing deflator; impact study)
 }
+# Distress panel (studies/distress-signals.md, Q-C): bank delinquency and
+# charge-off rates, quarterly, seasonally adjusted. Display + the study's rule;
+# none passed as a recession warning (all-loan charge-offs 'confirm').
+FRED_DISTRESS: dict[str, str] = {
+    "dq_all": "DRALACBS", "dq_ci": "DRBLACBS", "dq_consumer": "DRCLACBS",
+    "dq_card": "DRCCLACBS", "dq_mortgage": "DRSFRMACBS", "dq_cre": "DRCRELEXFACBS",
+    "co_all": "CORALACBS", "co_ci": "CORBLACBS", "co_card": "CORCCACBS",
+}
 # Pin board (trigger channels) — the measurable proxies for what historically
 # "pricks the bubble". (Oil/EFFR/HY/term premium/SOFR-IORB already in bundle.)
 FRED_PINS: dict[str, str] = {
@@ -158,8 +173,12 @@ FRED_PINS: dict[str, str] = {
     "interest_gdp": "FYOIGDA188S", # federal interest outlays as % of GDP (annual)
     # Corporate & private credit pin: distress tier vs IG, and bank funding TO
     # private-credit vehicles (the H.8 NDFI breakout the Fed added for this).
-    "ccc_oas": "BAMLH0A3HYC",      # CCC-and-lower OAS (daily, 1996+)
-    "bbb_oas": "BAMLC0A4CBBB",     # BBB OAS (daily, 1996+)
+    # ICE BofA series: nominally 1996+, but FRED's licence returns only a ROLLING
+    # ~3-year window (787 daily obs as of 2026-09) whether keyed or not. Anything
+    # ranking these against "history" is ranking against ~3 years. See
+    # treasury-canary/PIN_SATURATION.md DD Q14.
+    "ccc_oas": "BAMLH0A3HYC",      # CCC-and-lower OAS (daily, ~3y rolling)
+    "bbb_oas": "BAMLC0A4CBBB",     # BBB OAS (daily, ~3y rolling)
     "ndfi_loans": "B1030NCBCMG",   # loans to nondepository fin. inst., m/m ann. growth
     # Carry-unwind pin: yen appreciation forces levered unwinds (Aug 2024).
     "jpy": "DEXJPUS",              # USD/JPY daily (falling = yen appreciating)

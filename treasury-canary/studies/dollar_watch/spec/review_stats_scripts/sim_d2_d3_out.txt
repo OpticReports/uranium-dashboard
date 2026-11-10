@@ -1,0 +1,4 @@
+phi 0.0 (mixed-episode edge +0.00) | D-2 n=6: PASS 0.00 FAIL 0.86 | D-2 n=10: PASS 0.00 FAIL 0.91 | D-2 n=15: PASS 0.00 FAIL 0.95 | D-3 n=12: PASS 0.00 | D-3 n=24: PASS 0.00 | D-3 n=48: PASS 0.00
+phi 0.5 (mixed-episode edge +0.32) | D-2 n=6: PASS 0.08 FAIL 0.43 | D-2 n=10: PASS 0.17 FAIL 0.42 | D-2 n=15: PASS 0.18 FAIL 0.40 | D-3 n=12: PASS 0.12 | D-3 n=24: PASS 0.13 | D-3 n=48: PASS 0.05
+phi 0.7 (mixed-episode edge +0.44) | D-2 n=6: PASS 0.13 FAIL 0.27 | D-2 n=10: PASS 0.33 FAIL 0.22 | D-2 n=15: PASS 0.41 FAIL 0.15 | D-3 n=12: PASS 0.28 | D-3 n=24: PASS 0.39 | D-3 n=48: PASS 0.37
+phi 1.0 (mixed-episode edge +0.63) | D-2 n=6: PASS 0.28 FAIL 0.09 | D-2 n=10: PASS 0.70 FAIL 0.03 | D-2 n=15: PASS 0.80 FAIL 0.01 | D-3 n=12: PASS 0.68 | D-3 n=24: PASS 0.89 | D-3 n=48: PASS 0.95

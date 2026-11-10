@@ -1,3 +1,7 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+# tests/probes holds the adversarial-review record, NOT the suite: the files
+# are named attack_*.py so the default python_files patterns skip them, and
+# this makes that explicit (they are standalone scripts, not test modules).
+norecursedirs = ["probes"]

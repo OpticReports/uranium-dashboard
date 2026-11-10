@@ -29,6 +29,23 @@ class Settings(BaseSettings):
     warmup_bars: int = 210
     cash_apy: float = 0.04           # idle capital earns T-bill-ish yield
     history_bars: int = 800              # indicator window kept in memory/DB
+    # A just-closed 4h bar is processed only from a fetch taken at least this
+    # long after its end. A forming-bar snapshot taken at the open must never
+    # be evaluated as the closed bar: on 2026-10-07 the 04:00Z bar was kept
+    # in memory from its first seconds, the one boundary fetch at 08:00 did
+    # not replace it, and the stale snapshot was processed - no paper fill on
+    # a limit the venue had filled (btc-executor/docs/HALT_2026-10-07.md).
+    # The grace also covers Bitstamp finalizing the candle server-side.
+    # Cost: up to this + one poll of signal latency on a 4h bar.
+    bar_final_grace_s: int = 30
+
+    # Funding-regime monitor (RESEARCH_CARRY.md deployment policy): 30d
+    # trailing mean annualized BTC perp funding, ARM >= arm_pct with
+    # hysteresis (DISARM < disarm_pct). Research signal only - no trading.
+    run_funding_monitor: bool = True
+    funding_check_seconds: int = 21600           # 4 checks/day
+    funding_arm_pct: float = 8.0
+    funding_disarm_pct: float = 5.0
 
     frontend_dist: str | None = None
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
@@ -36,6 +53,11 @@ class Settings(BaseSettings):
     # Shared secret for /exec/target (the live-executor signal feed). Empty =
     # endpoint open (dev); set in production so book state isn't public.
     exec_token: str = ""
+    # READ-ONLY companion (2026-10-01): satisfies GET /carry/target and GET
+    # /exec/target and NOTHING else - not halt/resume/reset. carry-executor
+    # holds this, never EXEC_TOKEN, so a leak of the carry service's env
+    # cannot halt or reset the books the live BTC executor mirrors.
+    exec_read_token: str = ""
 
     @property
     def cors_list(self) -> list[str]:
@@ -59,6 +81,13 @@ RESEARCH_BOOKS = [
             leverage=1.0, long_mult=1.0, cap=1.0,
             start_equity=100_000.0, dd_halt=0.50),
 ]
+# The blend /exec/target publishes and btc-executor sizes from, and the S5
+# dashboard row. 0.25 -> 0.30 (Casey, 2026-09-29, RESEARCH_CAGR.md): the
+# pullback leg lost money in every 2013-2018 year bar one, eras out of sample
+# for it; a modest shift toward the trend leg. S6 stays the 0.25 @2.0x
+# research reference.
+LIVE_W_TREND = 0.30
+LIVE_LEV = 1.5
 RESEARCH_SIGNAL = SignalCfg()
 RESEARCH_TRADE = TradeCfg()
 

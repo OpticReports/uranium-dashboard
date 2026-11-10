@@ -200,6 +200,43 @@ def evaluate_flags(
                 )
             )
 
+    # 6b) Quiet before catalyst (OBSERVE-ONLY) ----------------------------------
+    # The MRNA/INTerpath setup: a high-impact binary approaching while the
+    # price is NOT already running — |drift_z| small = the market is not
+    # pricing the event yet (docs/PRE_CATALYST_ASYMMETRY_STUDY.md).
+    f = cfg.get("quiet_before_catalyst", {})
+    drift_z = raw.get("drift_z")
+    if drift_z is not None and abs(drift_z) <= f.get("max_drift_z", 0.75):
+        lo, hi = f.get("catalyst_min_days", 5), f.get("catalyst_max_days", 45)
+        due = [
+            c
+            for c in catalysts
+            if lo <= (c.date - asof).days <= hi
+            and c.effective_impact >= f.get("min_catalyst_impact", 0.85)
+        ]
+        if due:
+            nearest = min(due, key=lambda c: (c.date - asof).days)
+            window = f.get("window_days", 10)
+            flags.append(
+                FlagEvent(
+                    symbol=sec.symbol,
+                    flag_type="quiet_before_catalyst",
+                    severity="info",
+                    message=(
+                        f"High-impact {event_label(nearest.event_type)} in "
+                        f"{(nearest.date - asof).days} days while the last "
+                        f"{window} bars drifted only {drift_z:+.2f}σ of the "
+                        f"name's own vol — not yet priced"
+                    ),
+                    evidence={
+                        "drift_z": drift_z,
+                        "realized_vol_20d": raw.get("realized_vol_20d"),
+                        "window_days": window,
+                        "catalysts": [_cat_ev(c, asof) for c in due],
+                    },
+                )
+            )
+
     # 7) Volume anomaly --------------------------------------------------------
     # log-volume z-score with a dollar floor so Tier-C noise can't fire it.
     f = cfg.get("volume_anomaly", {})

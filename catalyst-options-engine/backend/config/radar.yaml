@@ -1,0 +1,67 @@
+# Radar universe for the Catalyst Options Engine.
+#
+# DELIBERATELY BROADER than the genomics tracker universe: coverage breadth is
+# cheap here (the engine only watches for pre-catalyst asymmetry; it does not
+# maintain full alpha scoring per name), so the radar carries the whole
+# genomics watchlist PLUS the big-biopharma event names the curated tracker
+# excludes. The tracker stays curated; the radar stays wide.
+#
+# Each entry:
+#   symbol      : ticker (uppercase)
+#   name        : display name
+#   ctgov_names : ClinicalTrials.gov REGISTERED sponsor/collaborator aliases.
+#                 CT.gov query.spons matches the registered string, not the
+#                 brand — "Moderna" finds ~1 trial, "ModernaTX" finds ~40 (the
+#                 2026-08-19 melanoma-readout miss). The scanner queries the
+#                 UNION of aliases and dedups by NCT id, so listing both the
+#                 registered name and the brand is safe and encouraged.
+#   tags        : free-form theme tags
+radar:
+  # --- extended big-biopharma event names (beyond the tracker universe) -------
+  - {symbol: MRNA, name: Moderna,                    ctgov_names: [ModernaTX],                      tags: [mrna, oncology, vaccines]}
+  - {symbol: BNTX, name: BioNTech,                   ctgov_names: [BioNTech SE, BioNTech],          tags: [mrna, oncology, vaccines]}
+  - {symbol: NVO,  name: Novo Nordisk,               ctgov_names: [Novo Nordisk A/S, Novo Nordisk], tags: [metabolic, glp1]}
+  - {symbol: LLY,  name: Eli Lilly,                  ctgov_names: [Eli Lilly and Company],          tags: [pharma, metabolic, neuro]}
+  - {symbol: VRTX, name: Vertex Pharmaceuticals,     ctgov_names: [Vertex Pharmaceuticals Incorporated, Vertex Pharmaceuticals], tags: [rare-disease, pain]}
+  - {symbol: REGN, name: Regeneron,                  ctgov_names: [Regeneron Pharmaceuticals],      tags: [biologics, oncology]}
+  - {symbol: SRPT, name: Sarepta Therapeutics,       ctgov_names: [Sarepta Therapeutics, Inc., Sarepta Therapeutics], tags: [gene-therapy, dmd]}
+  - {symbol: ALNY, name: Alnylam Pharmaceuticals,    ctgov_names: [Alnylam Pharmaceuticals],        tags: [rnai]}
+  - {symbol: MRK,  name: Merck,                      ctgov_names: [Merck Sharp & Dohme LLC, Merck Sharp & Dohme], tags: [pharma, oncology]}
+  - {symbol: PFE,  name: Pfizer,                     ctgov_names: [Pfizer]  ,                       tags: [pharma]}
+  - {symbol: AZN,  name: AstraZeneca,                ctgov_names: [AstraZeneca],                    tags: [pharma, oncology]}
+  - {symbol: GILD, name: Gilead Sciences,            ctgov_names: [Gilead Sciences],                tags: [pharma, virology, oncology]}
+  - {symbol: AMGN, name: Amgen,                      ctgov_names: [Amgen],                          tags: [pharma, biologics]}
+
+  # --- gene editing / RNA (in both tracker and extended lists) ----------------
+  - {symbol: IONS, name: Ionis Pharmaceuticals,      ctgov_names: [Ionis Pharmaceuticals],          tags: [rna, oligo]}
+  - {symbol: BEAM, name: Beam Therapeutics,          ctgov_names: [Beam Therapeutics]  ,            tags: [gene-editing]}
+  - {symbol: NTLA, name: Intellia Therapeutics,      ctgov_names: [Intellia Therapeutics],          tags: [gene-editing]}
+  - {symbol: CRSP, name: CRISPR Therapeutics,        ctgov_names: [CRISPR Therapeutics AG, CRISPR Therapeutics], tags: [gene-editing]}
+  - {symbol: ARCT, name: Arcturus Therapeutics,      ctgov_names: [Arcturus Therapeutics],          tags: [rna, mrna]}
+  - {symbol: GH,   name: Guardant Health,            ctgov_names: [Guardant Health],                tags: [liquid-biopsy, dx]}
+  - {symbol: NTRA, name: Natera,                     ctgov_names: [Natera]  ,                       tags: [liquid-biopsy, dx]}
+  - {symbol: ILMN, name: Illumina,                   ctgov_names: [Illumina]  ,                     tags: [sequencing, tools]}
+
+  # --- rest of the genomics tracker watchlist ---------------------------------
+  - {symbol: TWST, name: Twist Bioscience,           ctgov_names: [Twist Bioscience],               tags: [synbio, tools]}
+  - {symbol: ABSI, name: Absci,                      ctgov_names: [Absci]  ,                        tags: [synbio, ai-drug]}
+  - {symbol: GENB, name: Generate Biomedicines,      ctgov_names: [Generate Biomedicines],          tags: [synbio, ai-drug]}
+  - {symbol: TEM,  name: Tempus AI,                  ctgov_names: [Tempus AI]  ,                    tags: [ai-dx, data]}
+  - {symbol: RXRX, name: Recursion Pharmaceuticals,  ctgov_names: [Recursion Pharmaceuticals],      tags: [ai-drug]}
+  - {symbol: SDGR, name: Schrodinger,                ctgov_names: [Schrodinger]  ,                  tags: [ai-drug, tools]}
+  - {symbol: PRME, name: Prime Medicine,             ctgov_names: [Prime Medicine],                 tags: [gene-editing]}
+  - {symbol: TXG,  name: 10x Genomics,               ctgov_names: [10x Genomics]  ,                 tags: [tools, sequencing]}
+  - {symbol: PACB, name: Pacific Biosciences,        ctgov_names: [Pacific Biosciences],            tags: [sequencing]}
+  - {symbol: QSI,  name: Quantum-Si,                 ctgov_names: [Quantum-Si]  ,                   tags: [sequencing, proteomics]}
+  - {symbol: ALMR, name: Alamar Biosciences,         ctgov_names: [Alamar Biosciences],             tags: [proteomics, tools]}
+  - {symbol: MASS, name: 908 Devices,                ctgov_names: [908 Devices]  ,                  tags: [tools, instruments]}
+  - {symbol: PSNL, name: Personalis,                 ctgov_names: [Personalis]  ,                   tags: [liquid-biopsy, dx]}
+  - {symbol: VCYT, name: Veracyte,                   ctgov_names: [Veracyte]  ,                     tags: [dx]}
+  - {symbol: CDNA, name: CareDx,                     ctgov_names: [CareDx]  ,                       tags: [dx, transplant]}
+  - {symbol: ADPT, name: Adaptive Biotechnologies,   ctgov_names: [Adaptive Biotechnologies],       tags: [dx, immune]}
+  - {symbol: WGS,  name: GeneDx Holdings,            ctgov_names: [GeneDx]  ,                       tags: [dx, rare-disease]}
+  - {symbol: NRIX, name: Nurix Therapeutics,         ctgov_names: [Nurix Therapeutics],             tags: [protein-degradation]}
+  - {symbol: CMPS, name: Compass Pathways,           ctgov_names: [COMPASS Pathways, Compass Pathways], tags: [neuro, psychedelics]}
+  - {symbol: ATAI, name: atai Life Sciences,         ctgov_names: [atai Life Sciences],             tags: [neuro, psychedelics]}
+  - {symbol: BFLY, name: Butterfly Network,          ctgov_names: [Butterfly Network],              tags: [devices, imaging]}
+  - {symbol: CERS, name: Cerus,                      ctgov_names: [Cerus]  ,                        tags: [blood-safety]}

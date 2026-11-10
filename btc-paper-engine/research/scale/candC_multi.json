@@ -1,0 +1,555 @@
+{
+ "generated_utc": "2026-09-28T18:32:19Z",
+ "universe": [
+  "BTC",
+  "ETH",
+  "SOL",
+  "XRP",
+  "LTC",
+  "DOGE"
+ ],
+ "bootstrap_validation": {
+  "ref_contig": 0.8991478696741855,
+  "mine_contig": 0.8991353383458647,
+  "target": 0.9
+ },
+ "fee_primary_rt_bps": 8.64,
+ "assets": {
+  "BTC": {
+   "S3": {
+    "mean_bp_bar": 0.6965507540552557,
+    "ann_sd_pct": 19.593303788134687,
+    "ann_SR": 0.7785548409170228,
+    "n_trades": 96,
+    "win_rate_pct": 63.541666666666664,
+    "in_market_frac": 0.1951983298538622,
+    "kstar_p10": 0.0,
+    "kstar_p50": 3.859,
+    "prob_neg_edge": 0.15,
+    "basis": "IN-SAMPLE (fitted)"
+   },
+   "S4": {
+    "mean_bp_bar": -0.985875428346749,
+    "ann_sd_pct": 28.707900123756037,
+    "ann_SR": -0.7520811967339728,
+    "n_trades": 28,
+    "win_rate_pct": 21.428571428571427,
+    "in_market_frac": 0.30041753653444675,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.0,
+    "prob_neg_edge": 0.887,
+    "basis": "IN-SAMPLE (fitted)"
+   },
+   "hold": {
+    "total_return_pct": 27.42510969740217,
+    "max_dd_pct": -53.5023067177677
+   },
+   "blend": {
+    "mean_bp_bar": 0.2759442084547545,
+    "ann_sd_pct": 14.911776823247939,
+    "ann_SR": 0.4052621117382615,
+    "kstar_p10": 0.0,
+    "kstar_p50": 2.5,
+    "prob_neg_edge": 0.293,
+    "kelly_analyze": {
+     "n": 4790,
+     "mean_pct": 0.003,
+     "kelly_m": 2.73,
+     "recommended_m": 0.0,
+     "bootstrap": {
+      "p10": 0.0,
+      "p50": 2.64,
+      "p90": 4.0,
+      "prob_negative_edge": 0.281
+     },
+     "verdict": "EDGE NOT DISTINGUISHABLE FROM ZERO (28% of bootstrap resamples non-positive) \u2014 kill rule: size zero standalone; value, if any, is as a diversifier"
+    }
+   }
+  },
+  "ETH": {
+   "S3": {
+    "mean_bp_bar": 1.7492442662181336,
+    "ann_sd_pct": 26.435617789949738,
+    "ann_SR": 1.4491225336425158,
+    "n_trades": 102,
+    "win_rate_pct": 67.6470588235294,
+    "in_market_frac": 0.1951983298538622,
+    "kstar_p10": 2.123,
+    "kstar_p50": 5.385,
+    "prob_neg_edge": 0.02,
+    "basis": "unfitted"
+   },
+   "S4": {
+    "mean_bp_bar": -0.6701919758527902,
+    "ann_sd_pct": 30.34889099318891,
+    "ann_SR": -0.483615835401368,
+    "n_trades": 19,
+    "win_rate_pct": 31.57894736842105,
+    "in_market_frac": 0.23235908141962422,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.0,
+    "prob_neg_edge": 0.76,
+    "basis": "unfitted"
+   },
+   "hold": {
+    "total_return_pct": -23.651863600317213,
+    "max_dd_pct": -68.07063250832248
+   },
+   "blend": {
+    "mean_bp_bar": 1.1443852057004025,
+    "ann_sd_pct": 21.011711508768517,
+    "ann_SR": 1.1927650917146864,
+    "kstar_p10": 1.527,
+    "kstar_p50": 5.712,
+    "prob_neg_edge": 0.05,
+    "kelly_analyze": {
+     "n": 4790,
+     "mean_pct": 0.011,
+     "kelly_m": 4.0,
+     "recommended_m": 0.9,
+     "bootstrap": {
+      "p10": 1.26,
+      "p50": 4.0,
+      "p90": 4.0,
+      "prob_negative_edge": 0.059
+     },
+     "verdict": "size is roughly right (within the noise band)"
+    }
+   }
+  },
+  "SOL": {
+   "S3": {
+    "mean_bp_bar": -0.6028314010692334,
+    "ann_sd_pct": 20.077073413061612,
+    "ann_SR": -0.6575663400636537,
+    "n_trades": 26,
+    "win_rate_pct": 50.0,
+    "in_market_frac": 0.054279749478079335,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.0,
+    "prob_neg_edge": 0.887,
+    "basis": "unfitted"
+   },
+   "S4": {
+    "mean_bp_bar": 1.84059311077773,
+    "ann_sd_pct": 65.31984961402371,
+    "ann_SR": 0.6171016829374059,
+    "n_trades": 49,
+    "win_rate_pct": 44.89795918367347,
+    "in_market_frac": 0.8734864300626305,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.868,
+    "prob_neg_edge": 0.16,
+    "basis": "unfitted"
+   },
+   "hold": {
+    "total_return_pct": -16.811332546350943,
+    "max_dd_pct": -78.45852566792558
+   },
+   "blend": {
+    "mean_bp_bar": 0.008024726892507423,
+    "ann_sd_pct": 20.273379636997028,
+    "ann_SR": 0.008668585213350451,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.0,
+    "prob_neg_edge": 0.517,
+    "kelly_analyze": {
+     "n": 4790,
+     "mean_pct": 0.0,
+     "kelly_m": 0.04,
+     "recommended_m": 0.0,
+     "bootstrap": {
+      "p10": 0.0,
+      "p50": 0.02,
+      "p90": 4.0,
+      "prob_negative_edge": 0.498
+     },
+     "verdict": "EDGE NOT DISTINGUISHABLE FROM ZERO (50% of bootstrap resamples non-positive) \u2014 kill rule: size zero standalone; value, if any, is as a diversifier"
+    }
+   }
+  },
+  "XRP": {
+   "S3": {
+    "mean_bp_bar": -0.7193063865601231,
+    "ann_sd_pct": 11.876353075197116,
+    "ann_SR": -1.3264012753683851,
+    "n_trades": 12,
+    "win_rate_pct": 41.666666666666664,
+    "in_market_frac": 0.015448851774530271,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.0,
+    "prob_neg_edge": 0.993,
+    "basis": "unfitted"
+   },
+   "S4": {
+    "mean_bp_bar": 2.0143139033304194,
+    "ann_sd_pct": 57.187840095001974,
+    "ann_SR": 0.7713785729563085,
+    "n_trades": 17,
+    "win_rate_pct": 47.05882352941177,
+    "in_market_frac": 0.2837160751565762,
+    "kstar_p10": 0.0,
+    "kstar_p50": 1.215,
+    "prob_neg_edge": 0.287,
+    "basis": "unfitted"
+   },
+   "hold": {
+    "total_return_pct": 202.75394852882224,
+    "max_dd_pct": -72.55050295120127
+   },
+   "blend": {
+    "mean_bp_bar": -0.03590131408748741,
+    "ann_sd_pct": 17.497103588539364,
+    "ann_SR": -0.044935367418808804,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.0,
+    "prob_neg_edge": 0.597,
+    "kelly_analyze": {
+     "n": 4790,
+     "mean_pct": -0.0,
+     "kelly_m": 0.0,
+     "recommended_m": 0.0,
+     "bootstrap": {
+      "p10": 0.0,
+      "p50": 0.0,
+      "p90": 4.0,
+      "prob_negative_edge": 0.527
+     },
+     "verdict": "NEGATIVE EDGE at current sizing \u2014 Kelly says the correct size is zero until the edge itself improves"
+    }
+   }
+  },
+  "LTC": {
+   "S3": {
+    "mean_bp_bar": 0.7182491613969614,
+    "ann_sd_pct": 29.551927863827636,
+    "ann_SR": 0.5322717592934768,
+    "n_trades": 90,
+    "win_rate_pct": 64.44444444444444,
+    "in_market_frac": 0.20187891440501043,
+    "kstar_p10": 0.0,
+    "kstar_p50": 1.816,
+    "prob_neg_edge": 0.193,
+    "basis": "unfitted"
+   },
+   "S4": {
+    "mean_bp_bar": -1.4148234820726042,
+    "ann_sd_pct": 16.092951457621815,
+    "ann_SR": -1.9253543601981935,
+    "n_trades": 10,
+    "win_rate_pct": 10.0,
+    "in_market_frac": 0.06430062630480167,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.0,
+    "prob_neg_edge": 0.987,
+    "basis": "unfitted"
+   },
+   "hold": {
+    "total_return_pct": -10.064017831687522,
+    "max_dd_pct": -72.1665162141518
+   },
+   "blend": {
+    "mean_bp_bar": 0.1849810005295702,
+    "ann_sd_pct": 22.512446346871123,
+    "ann_SR": 0.17994863148938164,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.842,
+    "prob_neg_edge": 0.403,
+    "kelly_analyze": {
+     "n": 4790,
+     "mean_pct": 0.002,
+     "kelly_m": 0.8,
+     "recommended_m": 0.0,
+     "bootstrap": {
+      "p10": 0.0,
+      "p50": 1.02,
+      "p90": 4.0,
+      "prob_negative_edge": 0.36
+     },
+     "verdict": "EDGE NOT DISTINGUISHABLE FROM ZERO (36% of bootstrap resamples non-positive) \u2014 kill rule: size zero standalone; value, if any, is as a diversifier"
+    }
+   }
+  },
+  "DOGE": {
+   "S3": {
+    "mean_bp_bar": -0.1801736525309956,
+    "ann_sd_pct": 22.743107715879837,
+    "ann_SR": -0.17349445114194928,
+    "n_trades": 32,
+    "win_rate_pct": 53.125,
+    "in_market_frac": 0.05970772442588727,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.0,
+    "prob_neg_edge": 0.617,
+    "basis": "unfitted"
+   },
+   "S4": {
+    "mean_bp_bar": 2.0310275864883347,
+    "ann_sd_pct": 67.10038261075827,
+    "ann_SR": 0.6628800375418887,
+    "n_trades": 31,
+    "win_rate_pct": 41.935483870967744,
+    "in_market_frac": 0.49582463465553234,
+    "kstar_p10": 0.0,
+    "kstar_p50": 0.934,
+    "prob_neg_edge": 0.21,
+    "basis": "unfitted"
+   },
+   "hold": {
+    "total_return_pct": -29.377281191806325,
+    "max_dd_pct": -85.44097952936676
+   },
+   "blend": {
+    "mean_bp_bar": 0.37262665722383703,
+    "ann_sd_pct": 21.638958480263568,
+    "ann_SR": 0.37712183794081733,
+    "kstar_p10": 0.0,
+    "kstar_p50": 1.438,
+    "prob_neg_edge": 0.38,
+    "kelly_analyze": {
+     "n": 4790,
+     "mean_pct": 0.004,
+     "kelly_m": 1.75,
+     "recommended_m": 0.0,
+     "bootstrap": {
+      "p10": 0.0,
+      "p50": 1.65,
+      "p90": 4.0,
+      "prob_negative_edge": 0.314
+     },
+     "verdict": "EDGE NOT DISTINGUISHABLE FROM ZERO (31% of bootstrap resamples non-positive) \u2014 kill rule: size zero standalone; value, if any, is as a diversifier"
+    }
+   }
+  }
+ },
+ "fee_sensitivity": {
+  "5.76": {
+   "label": "maker-fix",
+   "per_asset": {
+    "BTC": {
+     "mean_bp_bar": 0.32310799466459567,
+     "ann_sd_pct": 14.885106718722621,
+     "ann_SR": 0.4753788613590729
+    },
+    "ETH": {
+     "mean_bp_bar": 1.1925889616019534,
+     "ann_sd_pct": 20.983615184302373,
+     "ann_SR": 1.2446710459416528
+    },
+    "SOL": {
+     "mean_bp_bar": 0.015693810931025277,
+     "ann_sd_pct": 20.297018464732687,
+     "ann_SR": 0.016933248594449665
+    },
+    "XRP": {
+     "mean_bp_bar": -0.02801787417938759,
+     "ann_sd_pct": 17.47787279615107,
+     "ann_SR": -0.03510675765209321
+    },
+    "LTC": {
+     "mean_bp_bar": 0.2266818216434433,
+     "ann_sd_pct": 22.48296094168473,
+     "ann_SR": 0.22080418619538875
+    },
+    "DOGE": {
+     "mean_bp_bar": 0.34838770528493596,
+     "ann_sd_pct": 22.904943643854185,
+     "ann_SR": 0.3331023583542972
+    }
+   }
+  },
+  "8.64": {
+   "label": "TODAY",
+   "per_asset": {
+    "BTC": {
+     "mean_bp_bar": 0.2759442084547545,
+     "ann_sd_pct": 14.911776823247939,
+     "ann_SR": 0.4052621117382615
+    },
+    "ETH": {
+     "mean_bp_bar": 1.1443852057004025,
+     "ann_sd_pct": 21.011711508768517,
+     "ann_SR": 1.1927650917146864
+    },
+    "SOL": {
+     "mean_bp_bar": 0.008024726892507423,
+     "ann_sd_pct": 20.273379636997028,
+     "ann_SR": 0.008668585213350451
+    },
+    "XRP": {
+     "mean_bp_bar": -0.03590131408748741,
+     "ann_sd_pct": 17.497103588539364,
+     "ann_SR": -0.044935367418808804
+    },
+    "LTC": {
+     "mean_bp_bar": 0.1849810005295702,
+     "ann_sd_pct": 22.512446346871123,
+     "ann_SR": 0.17994863148938164
+    },
+    "DOGE": {
+     "mean_bp_bar": 0.37262665722383703,
+     "ann_sd_pct": 21.638958480263568,
+     "ann_SR": 0.37712183794081733
+    }
+   }
+  },
+  "12.00": {
+   "label": "engine obj",
+   "per_asset": {
+    "BTC": {
+     "mean_bp_bar": 0.2209199197603613,
+     "ann_sd_pct": 14.944577883222982,
+     "ann_SR": 0.3237392371037319
+    },
+    "ETH": {
+     "mean_bp_bar": 1.0881474825409454,
+     "ann_sd_pct": 21.045736840988795,
+     "ann_SR": 1.132316252345911
+    },
+    "SOL": {
+     "mean_bp_bar": -0.014004772820697764,
+     "ann_sd_pct": 20.289159323887436,
+     "ann_SR": -0.01511666993576134
+    },
+    "XRP": {
+     "mean_bp_bar": -0.004491752489824448,
+     "ann_sd_pct": 17.35042417789016,
+     "ann_SR": -0.005669566260662873
+    },
+    "LTC": {
+     "mean_bp_bar": 0.13633004203169588,
+     "ann_sd_pct": 22.54786054144278,
+     "ann_SR": 0.13241291407699549
+    },
+    "DOGE": {
+     "mean_bp_bar": 0.3506780200304272,
+     "ann_sd_pct": 21.660994104422592,
+     "ann_SR": 0.35454737680291126
+    }
+   }
+  }
+ },
+ "correlation": {
+  "assets": [
+   "BTC",
+   "ETH",
+   "SOL",
+   "XRP",
+   "LTC",
+   "DOGE"
+  ],
+  "matrix": [
+   [
+    1.0,
+    0.3463633473537425,
+    0.23728779275865428,
+    0.09368630843438978,
+    0.20315070644488709,
+    0.2526737678297601
+   ],
+   [
+    0.3463633473537426,
+    0.9999999999999998,
+    0.016852692222669757,
+    0.05037142107133191,
+    0.2650458369924519,
+    0.1360388046988504
+   ],
+   [
+    0.23728779275865428,
+    0.016852692222669757,
+    1.0,
+    0.11315560166790603,
+    0.012747474156859982,
+    0.2947646332310351
+   ],
+   [
+    0.09368630843438978,
+    0.05037142107133191,
+    0.11315560166790602,
+    1.0,
+    0.0764293245673476,
+    0.03738308712380264
+   ],
+   [
+    0.2031507064448871,
+    0.2650458369924519,
+    0.01274747415685998,
+    0.0764293245673476,
+    0.9999999999999998,
+    0.14255460562289515
+   ],
+   [
+    0.2526737678297601,
+    0.1360388046988504,
+    0.2947646332310351,
+    0.03738308712380263,
+    0.14255460562289513,
+    1.0
+   ]
+  ],
+  "offdiag_mean": 0.15190036027843895,
+  "offdiag_median": 0.1360388046988504,
+  "offdiag_min": 0.012747474156859982,
+  "offdiag_max": 0.3463633473537425
+ },
+ "price_correlation": {
+  "matrix": [
+   [
+    1.0,
+    0.8189884181302005,
+    0.7840005954626306,
+    0.6482911123463218,
+    0.6381214877549438,
+    0.7553307614533106
+   ],
+   [
+    0.8189884181302005,
+    1.0,
+    0.7853399302802112,
+    0.6705383858956989,
+    0.686777178856173,
+    0.780403272788848
+   ],
+   [
+    0.7840005954626306,
+    0.7853399302802112,
+    1.0,
+    0.6593065648573521,
+    0.6443795728461132,
+    0.7537039383833847
+   ],
+   [
+    0.6482911123463216,
+    0.6705383858956989,
+    0.6593065648573521,
+    0.9999999999999998,
+    0.6623743684665728,
+    0.7016566477373519
+   ],
+   [
+    0.6381214877549438,
+    0.686777178856173,
+    0.6443795728461131,
+    0.6623743684665728,
+    1.0,
+    0.7186437205769559
+   ],
+   [
+    0.7553307614533107,
+    0.780403272788848,
+    0.7537039383833847,
+    0.7016566477373519,
+    0.7186437205769559,
+    0.9999999999999998
+   ]
+  ],
+  "offdiag_mean": 0.7138570637224045,
+  "offdiag_min": 0.6381214877549438,
+  "offdiag_max": 0.8189884181302005
+ },
+ "simultaneity": {
+  "mean_assets_in_market": 2.7396659707724424,
+  "n_assets": 6
+ }
+}

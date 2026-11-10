@@ -7,20 +7,45 @@ from app.live import ENGINE
 from app.main import app
 
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _no_background_engine():
+    """HERMETIC (2026-10-01): TestClient's lifespan starts the real engine
+    loop, whose boot() restores book state from the DB on a background
+    thread - racing the positions these tests inject. It surfaced when
+    /exec/target got slower (vol sizing loads history on its first call)."""
+    old = (settings.run_engine, settings.run_funding_monitor)
+    settings.run_engine = settings.run_funding_monitor = False
+    yield
+    settings.run_engine, settings.run_funding_monitor = old
+
+
 def test_exec_target_shape_and_states():
+    # /exec/target answers 503 until boot() has restored the DB (2026-09-08):
+    # fresh Book() defaults served during boot read as a real engine state
+    # to the executor. These tests are about shape and auth, so mark booted.
+    ENGINE.booted = True
     with TestClient(app) as c:
         r = c.get("/exec/target")
         assert r.status_code == 200
         d = r.json()
         assert set(d) >= {"bar_ts", "price", "degraded", "data_halt",
                           "blend", "legs"}
-        assert d["blend"] == {"w_trend": 0.25, "lev": 1.5}
+        assert d["blend"] == {"w_trend": 0.30, "lev": 1.5}
         assert set(d["legs"]) == {"pullback", "trend"}
 
         # inject a pending on S3 and a trailed position on S4
         s3, s4 = ENGINE.books["S3"], ENGINE.books["S4"]
-        old3, old4 = (s3.pending, s3.position), (s4.pending, s4.position)
+        old3 = (s3.pending, s3.position, s3.halted)
+        old4 = (s4.pending, s4.position, s4.halted)
         try:
+            # HERMETIC: ENGINE is process-global and other tests in the suite
+            # leave positions/halts on it. Set every field the state mapping
+            # reads, not just the ones this test injects (2026-09-30).
+            s3.position, s3.halted = None, False
+            s4.pending, s4.halted = None, False
             s3.pending = Pending(side="L", limit=59_000.0,
                                  signal_ts=1_700_000_000, atr_signal=800.0)
             s4.position = Position(side="S", entry_ts=1_700_000_000,
@@ -38,12 +63,13 @@ def test_exec_target_shape_and_states():
             assert tr["state"] == "S"
             assert tr["position"]["stop"] == 63_210.12   # trail wins over stop_price
         finally:
-            s3.pending, s3.position = old3
-            s4.pending, s4.position = old4
+            s3.pending, s3.position, s3.halted = old3
+            s4.pending, s4.position, s4.halted = old4
 
 
 def test_exec_target_token_auth():
     old = settings.exec_token
+    ENGINE.booted = True
     try:
         settings.exec_token = "sekrit"
         with TestClient(app) as c:

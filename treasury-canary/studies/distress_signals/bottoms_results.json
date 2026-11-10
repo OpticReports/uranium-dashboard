@@ -1,0 +1,5643 @@
+{
+ "spec": "SPEC v1",
+ "seed": 20261012,
+ "perms": 10000,
+ "rule": {
+  "w": 6,
+  "lag": 12,
+  "look": 12,
+  "theta": 0.15,
+  "frac": 0.3333333333333333,
+  "floor": 0.05,
+  "k": 2
+ },
+ "reachable": {
+  "MARKS-trough": false,
+  "CONFIRMS-trough": true,
+  "MARKS-equity": false
+ },
+ "equity_targets": {
+  "1895-12": {
+   "b": "1896-08",
+   "window": [
+    "1895-06",
+    "1898-06"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.20954356846473032,
+   "zone": [
+    "1896-08"
+   ]
+  },
+  "1899-06": {
+   "b": "1898-12",
+   "window": [
+    "1898-12",
+    "1901-12"
+   ],
+   "status": "no equity low",
+   "decline_from_12m_high": 0.06203007518796988,
+   "zone": [
+    "1898-12",
+    "1900-09"
+   ]
+  },
+  "1902-09": {
+   "b": "1903-10",
+   "window": [
+    "1902-03",
+    "1905-08"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.26954492415402576,
+   "zone": [
+    "1903-10",
+    "1903-11"
+   ]
+  },
+  "1907-05": {
+   "b": "1907-11",
+   "window": [
+    "1906-11",
+    "1909-06"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.37059415911379656,
+   "zone": [
+    "1907-11"
+   ]
+  },
+  "1910-01": {
+   "b": "1910-07",
+   "window": [
+    "1909-07",
+    "1912-12"
+   ],
+   "status": "ambiguous",
+   "decline_from_12m_high": -0.1611650485436893,
+   "zone": [
+    "1910-07",
+    "1910-08",
+    "1911-09",
+    "1911-10"
+   ]
+  },
+  "1913-01": {
+   "b": "1914-12",
+   "window": [
+    "1912-07",
+    "1915-12"
+   ],
+   "status": "censored",
+   "decline_from_12m_high": -0.13325471698113212,
+   "zone": [
+    "1914-12",
+    "1915-01",
+    "1915-02",
+    "1915-03"
+   ]
+  },
+  "1918-08": {
+   "b": "1918-04",
+   "window": [
+    "1918-02",
+    "1919-12"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.2137404580152672,
+   "zone": [
+    "1918-03",
+    "1918-04"
+   ]
+  },
+  "1920-01": {
+   "b": "1921-08",
+   "window": [
+    "1919-07",
+    "1922-07"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.18147208121827407,
+   "zone": [
+    "1921-06",
+    "1921-07",
+    "1921-08",
+    "1921-09"
+   ]
+  },
+  "1923-05": {
+   "b": "1923-10",
+   "window": [
+    "1922-11",
+    "1925-07"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.1484623541887593,
+   "zone": [
+    "1923-07",
+    "1923-08",
+    "1923-09",
+    "1923-10",
+    "1923-11"
+   ]
+  },
+  "1926-10": {
+   "b": "1926-04",
+   "window": [
+    "1926-04",
+    "1928-11"
+   ],
+   "status": "no equity low",
+   "decline_from_12m_high": -0.09392265193370164,
+   "zone": [
+    "1926-04",
+    "1926-05"
+   ]
+  },
+  "1929-08": {
+   "b": "1932-06",
+   "window": [
+    "1929-02",
+    "1934-03"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.6671318911374738,
+   "zone": [
+    "1932-06"
+   ]
+  },
+  "1937-05": {
+   "b": "1938-04",
+   "window": [
+    "1936-11",
+    "1939-06"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.41857730746619637,
+   "zone": [
+    "1938-04",
+    "1938-05"
+   ]
+  },
+  "1945-02": {
+   "b": "1944-09",
+   "window": [
+    "1944-08",
+    "1946-10"
+   ],
+   "status": "no equity low",
+   "decline_from_12m_high": -0.03076923076923077,
+   "zone": [
+    "1944-08",
+    "1944-09",
+    "1944-10",
+    "1944-11"
+   ]
+  },
+  "1948-11": {
+   "b": "1949-06",
+   "window": [
+    "1948-05",
+    "1950-10"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.16944114149821643,
+   "zone": [
+    "1949-06"
+   ]
+  },
+  "1953-07": {
+   "b": "1953-09",
+   "window": [
+    "1953-01",
+    "1955-05"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.11115355233002289,
+   "zone": [
+    "1953-06",
+    "1953-09"
+   ]
+  },
+  "1957-08": {
+   "b": "1957-12",
+   "window": [
+    "1957-02",
+    "1959-04"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.16862502576788296,
+   "zone": [
+    "1957-10",
+    "1957-11",
+    "1957-12",
+    "1958-01",
+    "1958-02"
+   ]
+  },
+  "1960-04": {
+   "b": "1960-10",
+   "window": [
+    "1959-10",
+    "1962-02"
+   ],
+   "status": "no equity low",
+   "decline_from_12m_high": -0.09024720623095162,
+   "zone": [
+    "1960-03",
+    "1960-05",
+    "1960-09",
+    "1960-10"
+   ]
+  },
+  "1969-12": {
+   "b": "1970-06",
+   "window": [
+    "1969-06",
+    "1971-11"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.23754286867056684,
+   "zone": [
+    "1970-05",
+    "1970-06",
+    "1970-07"
+   ]
+  },
+  "1973-11": {
+   "b": "1974-12",
+   "window": [
+    "1973-05",
+    "1976-03"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.3116789819376027,
+   "zone": [
+    "1974-09",
+    "1974-12"
+   ]
+  },
+  "1980-01": {
+   "b": "1979-07",
+   "window": [
+    "1979-07",
+    "1981-06"
+   ],
+   "status": "no equity low",
+   "decline_from_12m_high": -0.011549566891241647,
+   "zone": [
+    "1979-07",
+    "1979-10",
+    "1979-11",
+    "1980-03",
+    "1980-04"
+   ]
+  },
+  "1981-07": {
+   "b": "1982-07",
+   "window": [
+    "1981-01",
+    "1983-11"
+   ],
+   "status": "ambiguous",
+   "decline_from_12m_high": -0.1558641975308641,
+   "zone": [
+    "1982-03",
+    "1982-06",
+    "1982-07",
+    "1982-08"
+   ]
+  },
+  "1990-07": {
+   "b": "1990-10",
+   "window": [
+    "1990-01",
+    "1992-03"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.1478120924553955,
+   "zone": [
+    "1990-09",
+    "1990-10",
+    "1990-11"
+   ]
+  },
+  "2001-03": {
+   "b": "2002-10",
+   "window": [
+    "2000-09",
+    "2002-11"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.25928461851810114,
+   "zone": [
+    "2002-09",
+    "2002-10"
+   ]
+  },
+  "2007-12": {
+   "b": "2009-03",
+   "window": [
+    "2007-06",
+    "2010-06"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.4604338592665441,
+   "zone": [
+    "2009-03"
+   ]
+  },
+  "2020-02": {
+   "b": "2020-03",
+   "window": [
+    "2019-08",
+    "2021-04"
+   ],
+   "status": "valid",
+   "decline_from_12m_high": -0.19090009009529374,
+   "zone": [
+    "2020-03"
+   ]
+  }
+ },
+ "P": {
+  "shots": {
+   "MARKS-trough": {
+    "n": 16,
+    "hits": 2,
+    "early": 1,
+    "late": 4,
+    "miss": 8,
+    "censored": 1,
+    "p_lagperm": 0.607039296070393,
+    "median_abs_err": Infinity,
+    "arm_clock_median_abs_err": 16.0,
+    "peak_clock_median_abs_err": 5.0,
+    "episodes": [
+     {
+      "signal": {
+       "data_month": "1897-03",
+       "release": "1897-04",
+       "g": 0.0589,
+       "high": 0.231,
+       "high_set": "1896-12",
+       "rearmed_at": "1898-03"
+      },
+      "release_m": 22767,
+      "e": -2,
+      "outcome": "HIT",
+      "flags": [
+       "left-censored (H undefined at the window start)"
+      ],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1895-12",
+      "trough": "1897-06",
+      "target": "1897-06",
+      "T": 22769,
+      "p": 22751,
+      "arm": "1896-10",
+      "arm_m": 22761,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": true,
+      "war": false
+     },
+     {
+      "signal": {
+       "data_month": "1901-04",
+       "release": "1901-05",
+       "g": 0.1398,
+       "high": 0.2505,
+       "high_set": "1900-10",
+       "rearmed_at": "1902-06"
+      },
+      "release_m": 22816,
+      "e": 5,
+      "outcome": "LATE",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1899-06",
+      "trough": "1900-12",
+      "target": "1900-12",
+      "T": 22811,
+      "p": 22793,
+      "arm": "1900-08",
+      "arm_m": 22807,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": {
+       "data_month": "1904-07",
+       "release": "1904-08",
+       "g": 0.1215,
+       "high": 0.2089,
+       "high_set": "1904-04",
+       "rearmed_at": "1905-06"
+      },
+      "release_m": 22855,
+      "e": 0,
+      "outcome": "HIT",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1902-09",
+      "trough": "1904-08",
+      "target": "1904-08",
+      "T": 22855,
+      "p": 22832,
+      "arm": "1901-09",
+      "arm_m": 22820,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": {
+       "data_month": "1908-11",
+       "release": "1908-12",
+       "g": 0.2241,
+       "high": 0.5904,
+       "high_set": "1908-07",
+       "rearmed_at": "1910-09"
+      },
+      "release_m": 22907,
+      "e": 6,
+      "outcome": "LATE",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1907-05",
+      "trough": "1908-06",
+      "target": "1908-06",
+      "T": 22901,
+      "p": 22888,
+      "arm": "1907-12",
+      "arm_m": 22895,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1910-01",
+      "trough": "1912-01",
+      "target": "1912-01",
+      "T": 22944,
+      "p": 22920,
+      "arm": "1909-01",
+      "arm_m": 22908,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": {
+       "data_month": "1913-01",
+       "release": "1913-02",
+       "g": 0.0796,
+       "high": 0.1779,
+       "high_set": "1912-06",
+       "rearmed_at": "1913-09"
+      },
+      "release_m": 22957,
+      "e": -22,
+      "outcome": "EARLY",
+      "flags": [],
+      "false_start": true,
+      "gap_from": null,
+      "peak": "1913-01",
+      "trough": "1914-12",
+      "target": "1914-12",
+      "T": 22979,
+      "p": 22956,
+      "arm": "1912-04",
+      "arm_m": 22947,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1918-08",
+      "trough": "1919-03",
+      "target": "1919-03",
+      "T": 23030,
+      "p": 23023,
+      "arm": null,
+      "arm_m": null,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": true
+     },
+     {
+      "signal": {
+       "data_month": "1921-11",
+       "release": "1921-12",
+       "g": 1.0293,
+       "high": 1.8352,
+       "high_set": "1921-05",
+       "rearmed_at": null
+      },
+      "release_m": 23063,
+      "e": 5,
+      "outcome": "LATE",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1920-01",
+      "trough": "1921-07",
+      "target": "1921-07",
+      "T": 23058,
+      "p": 23040,
+      "arm": "1920-09",
+      "arm_m": 23048,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1923-05",
+      "trough": "1924-07",
+      "target": "1924-07",
+      "T": 23094,
+      "p": 23080,
+      "arm": "1922-05",
+      "arm_m": 23068,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1926-10",
+      "trough": "1927-11",
+      "target": "1927-11",
+      "T": 23134,
+      "p": 23121,
+      "arm": null,
+      "arm_m": null,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "CENSORED",
+      "gap_from": "1933-02",
+      "peak": "1929-08",
+      "trough": "1933-03",
+      "target": "1933-03",
+      "T": 23198,
+      "p": 23155,
+      "arm": "1930-11",
+      "arm_m": 23170,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": {
+       "data_month": "1939-01",
+       "release": "1939-02",
+       "g": 0.1188,
+       "high": 0.455,
+       "high_set": "1938-06",
+       "rearmed_at": null
+      },
+      "release_m": 23269,
+      "e": 8,
+      "outcome": "LATE",
+      "flags": [],
+      "false_start": false,
+      "gap_from": "1940-02",
+      "peak": "1937-05",
+      "trough": "1938-06",
+      "target": "1938-06",
+      "T": 23261,
+      "p": 23248,
+      "arm": "1938-01",
+      "arm_m": 23256,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": true,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1948-11",
+      "trough": "1949-10",
+      "target": "1949-10",
+      "T": 23397,
+      "p": 23386,
+      "arm": "1947-11",
+      "arm_m": 23374,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": true
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1953-07",
+      "trough": "1954-05",
+      "target": "1954-05",
+      "T": 23452,
+      "p": 23442,
+      "arm": "1953-11",
+      "arm_m": 23446,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1957-08",
+      "trough": "1958-04",
+      "target": "1958-04",
+      "T": 23499,
+      "p": 23491,
+      "arm": "1956-08",
+      "arm_m": 23479,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1960-04",
+      "trough": "1961-02",
+      "target": "1961-02",
+      "T": 23533,
+      "p": 23523,
+      "arm": "1961-01",
+      "arm_m": 23532,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     }
+    ],
+    "window": [
+     -6,
+     3
+    ],
+    "centre": -1,
+    "need_hits": 11,
+    "early_cap": 2,
+    "hits_without_war": 2,
+    "need_without_war": 10,
+    "grid": {
+     "3": {
+      "hits": 1,
+      "need": 11
+     },
+     "12": {
+      "hits": 1,
+      "need": 11
+     }
+    },
+    "p_lagperm_note": "descriptive only: shot out of reach, not tested (SPEC v1 s.6b)"
+   },
+   "CONFIRMS-trough": {
+    "n": 16,
+    "hits": 5,
+    "early": 2,
+    "late": 0,
+    "miss": 8,
+    "censored": 1,
+    "p_lagperm": 0.056894310568943104,
+    "median_abs_err": Infinity,
+    "arm_clock_median_abs_err": 16.0,
+    "peak_clock_median_abs_err": 5.0,
+    "episodes": [
+     {
+      "signal": {
+       "data_month": "1897-03",
+       "release": "1897-04",
+       "g": 0.0589,
+       "high": 0.231,
+       "high_set": "1896-12",
+       "rearmed_at": "1898-03"
+      },
+      "release_m": 22767,
+      "e": -2,
+      "outcome": "EARLY",
+      "flags": [
+       "left-censored (H undefined at the window start)"
+      ],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1895-12",
+      "trough": "1897-06",
+      "target": "1897-06",
+      "T": 22769,
+      "p": 22751,
+      "arm": "1896-10",
+      "arm_m": 22761,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": true,
+      "war": false
+     },
+     {
+      "signal": {
+       "data_month": "1901-04",
+       "release": "1901-05",
+       "g": 0.1398,
+       "high": 0.2505,
+       "high_set": "1900-10",
+       "rearmed_at": "1902-06"
+      },
+      "release_m": 22816,
+      "e": 5,
+      "outcome": "HIT",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1899-06",
+      "trough": "1900-12",
+      "target": "1900-12",
+      "T": 22811,
+      "p": 22793,
+      "arm": "1900-08",
+      "arm_m": 22807,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": {
+       "data_month": "1904-07",
+       "release": "1904-08",
+       "g": 0.1215,
+       "high": 0.2089,
+       "high_set": "1904-04",
+       "rearmed_at": "1905-06"
+      },
+      "release_m": 22855,
+      "e": 0,
+      "outcome": "HIT",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1902-09",
+      "trough": "1904-08",
+      "target": "1904-08",
+      "T": 22855,
+      "p": 22832,
+      "arm": "1901-09",
+      "arm_m": 22820,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": {
+       "data_month": "1908-11",
+       "release": "1908-12",
+       "g": 0.2241,
+       "high": 0.5904,
+       "high_set": "1908-07",
+       "rearmed_at": "1910-09"
+      },
+      "release_m": 22907,
+      "e": 6,
+      "outcome": "HIT",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1907-05",
+      "trough": "1908-06",
+      "target": "1908-06",
+      "T": 22901,
+      "p": 22888,
+      "arm": "1907-12",
+      "arm_m": 22895,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1910-01",
+      "trough": "1912-01",
+      "target": "1912-01",
+      "T": 22944,
+      "p": 22920,
+      "arm": "1909-01",
+      "arm_m": 22908,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": {
+       "data_month": "1913-01",
+       "release": "1913-02",
+       "g": 0.0796,
+       "high": 0.1779,
+       "high_set": "1912-06",
+       "rearmed_at": "1913-09"
+      },
+      "release_m": 22957,
+      "e": -22,
+      "outcome": "EARLY",
+      "flags": [],
+      "false_start": true,
+      "gap_from": null,
+      "peak": "1913-01",
+      "trough": "1914-12",
+      "target": "1914-12",
+      "T": 22979,
+      "p": 22956,
+      "arm": "1912-04",
+      "arm_m": 22947,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1918-08",
+      "trough": "1919-03",
+      "target": "1919-03",
+      "T": 23030,
+      "p": 23023,
+      "arm": null,
+      "arm_m": null,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": true
+     },
+     {
+      "signal": {
+       "data_month": "1921-11",
+       "release": "1921-12",
+       "g": 1.0293,
+       "high": 1.8352,
+       "high_set": "1921-05",
+       "rearmed_at": null
+      },
+      "release_m": 23063,
+      "e": 5,
+      "outcome": "HIT",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1920-01",
+      "trough": "1921-07",
+      "target": "1921-07",
+      "T": 23058,
+      "p": 23040,
+      "arm": "1920-09",
+      "arm_m": 23048,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1923-05",
+      "trough": "1924-07",
+      "target": "1924-07",
+      "T": 23094,
+      "p": 23080,
+      "arm": "1922-05",
+      "arm_m": 23068,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1926-10",
+      "trough": "1927-11",
+      "target": "1927-11",
+      "T": 23134,
+      "p": 23121,
+      "arm": null,
+      "arm_m": null,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "CENSORED",
+      "gap_from": "1933-02",
+      "peak": "1929-08",
+      "trough": "1933-03",
+      "target": "1933-03",
+      "T": 23198,
+      "p": 23155,
+      "arm": "1930-11",
+      "arm_m": 23170,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": {
+       "data_month": "1939-01",
+       "release": "1939-02",
+       "g": 0.1188,
+       "high": 0.455,
+       "high_set": "1938-06",
+       "rearmed_at": null
+      },
+      "release_m": 23269,
+      "e": 8,
+      "outcome": "HIT",
+      "flags": [],
+      "false_start": false,
+      "gap_from": "1940-02",
+      "peak": "1937-05",
+      "trough": "1938-06",
+      "target": "1938-06",
+      "T": 23261,
+      "p": 23248,
+      "arm": "1938-01",
+      "arm_m": 23256,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": true,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1948-11",
+      "trough": "1949-10",
+      "target": "1949-10",
+      "T": 23397,
+      "p": 23386,
+      "arm": "1947-11",
+      "arm_m": 23374,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": true
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1953-07",
+      "trough": "1954-05",
+      "target": "1954-05",
+      "T": 23452,
+      "p": 23442,
+      "arm": "1953-11",
+      "arm_m": 23446,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1957-08",
+      "trough": "1958-04",
+      "target": "1958-04",
+      "T": 23499,
+      "p": 23491,
+      "arm": "1956-08",
+      "arm_m": 23479,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1960-04",
+      "trough": "1961-02",
+      "target": "1961-02",
+      "T": 23533,
+      "p": 23523,
+      "arm": "1961-01",
+      "arm_m": 23532,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false
+     }
+    ],
+    "window": [
+     0,
+     9
+    ],
+    "centre": 5,
+    "need_hits": 11,
+    "early_cap": 2,
+    "hits_without_war": 5,
+    "need_without_war": 10,
+    "grid": {
+     "3": {
+      "hits": 4,
+      "need": 11
+     },
+     "12": {
+      "hits": 5,
+      "need": 11
+     }
+    },
+    "p_lagperm_note": "tested"
+   },
+   "MARKS-equity": {
+    "n": 13,
+    "hits": 0,
+    "early": 0,
+    "late": 5,
+    "miss": 6,
+    "censored": 2,
+    "p_lagperm": 1.0,
+    "median_abs_err": Infinity,
+    "arm_clock_median_abs_err": 9.0,
+    "peak_clock_median_abs_err": 4.0,
+    "episodes": [
+     {
+      "signal": {
+       "data_month": "1897-03",
+       "release": "1897-04",
+       "g": 0.0589,
+       "high": 0.231,
+       "high_set": "1896-12",
+       "rearmed_at": "1898-03"
+      },
+      "release_m": 22767,
+      "e": 8,
+      "outcome": "LATE",
+      "flags": [
+       "left-censored (H undefined at the window start)"
+      ],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1895-12",
+      "trough": "1897-06",
+      "target": "1896-08",
+      "T": 22759,
+      "p": 22751,
+      "arm": "1896-10",
+      "arm_m": 22761,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": true,
+      "war": false,
+      "equity_status": "valid"
+     },
+     {
+      "signal": {
+       "data_month": "1904-07",
+       "release": "1904-08",
+       "g": 0.1215,
+       "high": 0.2089,
+       "high_set": "1904-04",
+       "rearmed_at": "1905-06"
+      },
+      "release_m": 22855,
+      "e": 10,
+      "outcome": "LATE",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1902-09",
+      "trough": "1904-08",
+      "target": "1903-10",
+      "T": 22845,
+      "p": 22832,
+      "arm": "1901-09",
+      "arm_m": 22820,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false,
+      "equity_status": "valid"
+     },
+     {
+      "signal": {
+       "data_month": "1908-11",
+       "release": "1908-12",
+       "g": 0.2241,
+       "high": 0.5904,
+       "high_set": "1908-07",
+       "rearmed_at": "1910-09"
+      },
+      "release_m": 22907,
+      "e": 13,
+      "outcome": "LATE",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1907-05",
+      "trough": "1908-06",
+      "target": "1907-11",
+      "T": 22894,
+      "p": 22888,
+      "arm": "1907-12",
+      "arm_m": 22895,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false,
+      "equity_status": "valid"
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1910-01",
+      "trough": "1912-01",
+      "target": "1910-07",
+      "T": 22926,
+      "p": 22920,
+      "arm": "1909-01",
+      "arm_m": 22908,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false,
+      "equity_status": "ambiguous"
+     },
+     {
+      "signal": {
+       "data_month": "1913-01",
+       "release": "1913-02",
+       "g": 0.0796,
+       "high": 0.1779,
+       "high_set": "1912-06",
+       "rearmed_at": "1913-09"
+      },
+      "release_m": null,
+      "e": null,
+      "outcome": "CENSORED",
+      "flags": [],
+      "false_start": true,
+      "gap_from": null,
+      "peak": "1913-01",
+      "trough": "1914-12",
+      "target": "1914-12",
+      "T": 22979,
+      "p": 22956,
+      "arm": "1912-04",
+      "arm_m": 22947,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false,
+      "equity_status": "censored"
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1918-08",
+      "trough": "1919-03",
+      "target": "1918-04",
+      "T": 23019,
+      "p": 23023,
+      "arm": null,
+      "arm_m": null,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": true,
+      "equity_status": "valid"
+     },
+     {
+      "signal": {
+       "data_month": "1921-11",
+       "release": "1921-12",
+       "g": 1.0293,
+       "high": 1.8352,
+       "high_set": "1921-05",
+       "rearmed_at": null
+      },
+      "release_m": 23063,
+      "e": 4,
+      "outcome": "LATE",
+      "flags": [],
+      "false_start": false,
+      "gap_from": null,
+      "peak": "1920-01",
+      "trough": "1921-07",
+      "target": "1921-08",
+      "T": 23059,
+      "p": 23040,
+      "arm": "1920-09",
+      "arm_m": 23048,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false,
+      "equity_status": "valid"
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1923-05",
+      "trough": "1924-07",
+      "target": "1923-10",
+      "T": 23085,
+      "p": 23080,
+      "arm": "1922-05",
+      "arm_m": 23068,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false,
+      "equity_status": "valid"
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "CENSORED",
+      "gap_from": "1933-02",
+      "peak": "1929-08",
+      "trough": "1933-03",
+      "target": "1932-06",
+      "T": 23189,
+      "p": 23155,
+      "arm": "1930-11",
+      "arm_m": 23170,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false,
+      "equity_status": "valid"
+     },
+     {
+      "signal": {
+       "data_month": "1939-01",
+       "release": "1939-02",
+       "g": 0.1188,
+       "high": 0.455,
+       "high_set": "1938-06",
+       "rearmed_at": null
+      },
+      "release_m": 23269,
+      "e": 10,
+      "outcome": "LATE",
+      "flags": [],
+      "false_start": false,
+      "gap_from": "1940-02",
+      "peak": "1937-05",
+      "trough": "1938-06",
+      "target": "1938-04",
+      "T": 23259,
+      "p": 23248,
+      "arm": "1938-01",
+      "arm_m": 23256,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": true,
+      "war": false,
+      "equity_status": "valid"
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1948-11",
+      "trough": "1949-10",
+      "target": "1949-06",
+      "T": 23393,
+      "p": 23386,
+      "arm": "1947-11",
+      "arm_m": 23374,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": true,
+      "equity_status": "valid"
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1953-07",
+      "trough": "1954-05",
+      "target": "1953-09",
+      "T": 23444,
+      "p": 23442,
+      "arm": "1953-11",
+      "arm_m": 23446,
+      "pre_armed": false,
+      "h_undefined_at_arm_start": false,
+      "war": false,
+      "equity_status": "valid"
+     },
+     {
+      "signal": null,
+      "e": null,
+      "outcome": "MISS",
+      "gap_from": null,
+      "peak": "1957-08",
+      "trough": "1958-04",
+      "target": "1957-12",
+      "T": 23495,
+      "p": 23491,
+      "arm": "1956-08",
+      "arm_m": 23479,
+      "pre_armed": true,
+      "h_undefined_at_arm_start": false,
+      "war": false,
+      "equity_status": "valid"
+     }
+    ],
+    "window": [
+     -3,
+     3
+    ],
+    "centre": 0,
+    "need_hits": 9,
+    "early_cap": 2,
+    "hits_without_war": 0,
+    "need_without_war": 8,
+    "hits_valid_only": 0,
+    "need_valid_only": 8,
+    "n_valid_only": 11,
+    "grid": {
+     "3": {
+      "hits": 1,
+      "need": 9
+     },
+     "12": {
+      "hits": 0,
+      "need": 9
+     }
+    },
+    "p_lagperm_note": "descriptive only: shot out of reach, not tested (SPEC v1 s.6b)"
+   }
+  },
+  "holm": {
+   "CONFIRMS-trough": 0.056894310568943104
+  },
+  "grade": {
+   "tested": [
+    "CONFIRMS-trough"
+   ],
+   "status": "graded",
+   "conditions_descriptive": {
+    "MARKS-trough": {
+     "conditions": {
+      "hits": false,
+      "early": true,
+      "holm_p": false,
+      "beats_clocks": false,
+      "grid": false,
+      "without_war": false
+     },
+     "pass": false
+    },
+    "CONFIRMS-trough": {
+     "conditions": {
+      "hits": false,
+      "early": true,
+      "holm_p": true,
+      "beats_clocks": false,
+      "grid": false,
+      "without_war": false
+     },
+     "pass": false
+    },
+    "MARKS-equity": {
+     "conditions": {
+      "hits": false,
+      "early": true,
+      "holm_p": false,
+      "beats_clocks": false,
+      "grid": false,
+      "without_war": false,
+      "valid_only": false
+     },
+     "pass": false
+    }
+   }
+  },
+  "timing": {
+   "MARKS-trough": {
+    "n": 15,
+    "median": "MISS",
+    "ci": [
+     5,
+     "MISS"
+    ],
+    "coverage": 0.965,
+    "n_miss": 8,
+    "n_censored": 1,
+    "censored": [
+     "1929-08"
+    ],
+    "by_era": {
+     "1895-1914": {
+      "n": 6,
+      "median": 2.5,
+      "ci": [
+       -22,
+       "MISS"
+      ],
+      "coverage": 0.969,
+      "n_miss": 1,
+      "n_censored": 0,
+      "censored": []
+     },
+     "1918-38": {
+      "n": 5,
+      "median": "MISS",
+      "ci": [
+       5,
+       "MISS"
+      ],
+      "coverage": 0.938,
+      "n_miss": 3,
+      "n_censored": 1,
+      "censored": [
+       "1929-08"
+      ]
+     },
+     "1948-61": {
+      "n": 4,
+      "median": "MISS",
+      "n_miss": 4,
+      "n_censored": 0,
+      "censored": []
+     }
+    },
+    "without_war": {
+     "n": 13,
+     "median": 8.0,
+     "ci": [
+      5,
+      "MISS"
+     ],
+     "coverage": 0.908,
+     "n_miss": 6,
+     "n_censored": 1,
+     "censored": [
+      "1929-08"
+     ],
+     "by_era": {
+      "1895-1914": {
+       "n": 6,
+       "median": 2.5,
+       "ci": [
+        -22,
+        "MISS"
+       ],
+       "coverage": 0.969,
+       "n_miss": 1,
+       "n_censored": 0,
+       "censored": []
+      },
+      "1918-38": {
+       "n": 4,
+       "median": "MISS",
+       "n_miss": 2,
+       "n_censored": 1,
+       "censored": [
+        "1929-08"
+       ]
+      },
+      "1948-61": {
+       "n": 3,
+       "median": "MISS",
+       "n_miss": 3,
+       "n_censored": 0,
+       "censored": []
+      }
+     }
+    }
+   },
+   "CONFIRMS-trough": {
+    "n": 15,
+    "median": "MISS",
+    "ci": [
+     5,
+     "MISS"
+    ],
+    "coverage": 0.965,
+    "n_miss": 8,
+    "n_censored": 1,
+    "censored": [
+     "1929-08"
+    ],
+    "by_era": {
+     "1895-1914": {
+      "n": 6,
+      "median": 2.5,
+      "ci": [
+       -22,
+       "MISS"
+      ],
+      "coverage": 0.969,
+      "n_miss": 1,
+      "n_censored": 0,
+      "censored": []
+     },
+     "1918-38": {
+      "n": 5,
+      "median": "MISS",
+      "ci": [
+       5,
+       "MISS"
+      ],
+      "coverage": 0.938,
+      "n_miss": 3,
+      "n_censored": 1,
+      "censored": [
+       "1929-08"
+      ]
+     },
+     "1948-61": {
+      "n": 4,
+      "median": "MISS",
+      "n_miss": 4,
+      "n_censored": 0,
+      "censored": []
+     }
+    },
+    "without_war": {
+     "n": 13,
+     "median": 8.0,
+     "ci": [
+      5,
+      "MISS"
+     ],
+     "coverage": 0.908,
+     "n_miss": 6,
+     "n_censored": 1,
+     "censored": [
+      "1929-08"
+     ],
+     "by_era": {
+      "1895-1914": {
+       "n": 6,
+       "median": 2.5,
+       "ci": [
+        -22,
+        "MISS"
+       ],
+       "coverage": 0.969,
+       "n_miss": 1,
+       "n_censored": 0,
+       "censored": []
+      },
+      "1918-38": {
+       "n": 4,
+       "median": "MISS",
+       "n_miss": 2,
+       "n_censored": 1,
+       "censored": [
+        "1929-08"
+       ]
+      },
+      "1948-61": {
+       "n": 3,
+       "median": "MISS",
+       "n_miss": 3,
+       "n_censored": 0,
+       "censored": []
+      }
+     }
+    }
+   },
+   "MARKS-equity": {
+    "n": 11,
+    "median": "MISS",
+    "ci": [
+     10,
+     "MISS"
+    ],
+    "coverage": 0.935,
+    "n_miss": 6,
+    "n_censored": 2,
+    "censored": [
+     "1913-01",
+     "1929-08"
+    ],
+    "by_era": {
+     "1895-1914": {
+      "n": 4,
+      "median": 11.5,
+      "n_miss": 1,
+      "n_censored": 1,
+      "censored": [
+       "1913-01"
+      ]
+     },
+     "1918-38": {
+      "n": 4,
+      "median": "MISS",
+      "n_miss": 2,
+      "n_censored": 1,
+      "censored": [
+       "1929-08"
+      ]
+     },
+     "1948-61": {
+      "n": 3,
+      "median": "MISS",
+      "n_miss": 3,
+      "n_censored": 0,
+      "censored": []
+     }
+    },
+    "without_war": {
+     "n": 9,
+     "median": 13.0,
+     "ci": [
+      8,
+      "MISS"
+     ],
+     "coverage": 0.961,
+     "n_miss": 4,
+     "n_censored": 2,
+     "censored": [
+      "1913-01",
+      "1929-08"
+     ],
+     "by_era": {
+      "1895-1914": {
+       "n": 4,
+       "median": 11.5,
+       "n_miss": 1,
+       "n_censored": 1,
+       "censored": [
+        "1913-01"
+       ]
+      },
+      "1918-38": {
+       "n": 3,
+       "median": 10.0,
+       "n_miss": 1,
+       "n_censored": 1,
+       "censored": [
+        "1929-08"
+       ]
+      },
+      "1948-61": {
+       "n": 2,
+       "median": "MISS",
+       "n_miss": 2,
+       "n_censored": 0,
+       "censored": []
+      }
+     }
+    },
+    "valid_only": {
+     "n": 10,
+     "median": "MISS",
+     "ci": [
+      8,
+      "MISS"
+     ],
+     "coverage": 0.979,
+     "n_miss": 5,
+     "n_censored": 1,
+     "censored": [
+      "1929-08"
+     ],
+     "by_era": {
+      "1895-1914": {
+       "n": 3,
+       "median": 10.0,
+       "n_miss": 0,
+       "n_censored": 0,
+       "censored": []
+      },
+      "1918-38": {
+       "n": 4,
+       "median": "MISS",
+       "n_miss": 2,
+       "n_censored": 1,
+       "censored": [
+        "1929-08"
+       ]
+      },
+      "1948-61": {
+       "n": 3,
+       "median": "MISS",
+       "n_miss": 3,
+       "n_censored": 0,
+       "censored": []
+      }
+     }
+    }
+   }
+  },
+  "g_peak": {
+   "episodes": [
+    {
+     "peak": "1895-12",
+     "g_peak_release": "1897-01",
+     "e_trough": -5,
+     "equity_status": "valid",
+     "e_equity": 5
+    },
+    {
+     "peak": "1899-06",
+     "g_peak_release": "1901-05",
+     "e_trough": 5
+    },
+    {
+     "peak": "1902-09",
+     "g_peak_release": "1904-10",
+     "e_trough": 2,
+     "equity_status": "valid",
+     "e_equity": 12
+    },
+    {
+     "peak": "1907-05",
+     "g_peak_release": "1908-10",
+     "e_trough": 4,
+     "equity_status": "valid",
+     "e_equity": 11
+    },
+    {
+     "peak": "1910-01",
+     "g_peak_release": "1912-10",
+     "e_trough": 9,
+     "equity_status": "ambiguous",
+     "e_equity": 27
+    },
+    {
+     "peak": "1913-01",
+     "g_peak_release": "1915-07",
+     "e_trough": 7,
+     "equity_status": "censored",
+     "e_equity": 7
+    },
+    {
+     "peak": "1918-08",
+     "g_peaked_before_window": "1915-08",
+     "e_trough": null,
+     "equity_status": "valid",
+     "e_equity": 1
+    },
+    {
+     "peak": "1920-01",
+     "g_peak_release": "1921-10",
+     "e_trough": 3,
+     "equity_status": "valid",
+     "e_equity": 2
+    },
+    {
+     "peak": "1923-05",
+     "g_peak_release": "1925-02",
+     "e_trough": 7,
+     "equity_status": "valid",
+     "e_equity": 16
+    },
+    {
+     "peak": "1926-10",
+     "g_peak_release": "1927-10",
+     "e_trough": -1
+    },
+    {
+     "peak": "1929-08",
+     "g_peak_release": "1932-10",
+     "e_trough": -5,
+     "equity_status": "valid",
+     "e_equity": 4
+    },
+    {
+     "peak": "1937-05",
+     "g_peak_release": "1938-10",
+     "e_trough": 4,
+     "equity_status": "valid",
+     "e_equity": 6
+    },
+    {
+     "peak": "1948-11",
+     "g_peak_release": "1949-12",
+     "e_trough": 2,
+     "equity_status": "valid",
+     "e_equity": 6
+    },
+    {
+     "peak": "1953-07",
+     "g_peak_release": "1954-06",
+     "e_trough": 1,
+     "equity_status": "valid",
+     "e_equity": 9
+    },
+    {
+     "peak": "1957-08",
+     "g_peak_release": "1958-08",
+     "e_trough": 4,
+     "equity_status": "valid",
+     "e_equity": 8
+    },
+    {
+     "peak": "1960-04",
+     "g_peak_release": "1961-09",
+     "e_trough": 7
+    }
+   ],
+   "trough": {
+    "n": 15,
+    "median": 4.0,
+    "ci": [
+     1,
+     7
+    ],
+    "coverage": 0.965
+   },
+   "equity_valid_only": {
+    "n": 11,
+    "median": 6.0,
+    "ci": [
+     4,
+     11
+    ],
+    "coverage": 0.935
+   },
+   "equity_all_lows": {
+    "n": 13,
+    "median": 7.0,
+    "ci": [
+     5,
+     11
+    ],
+    "coverage": 0.908
+   },
+   "n_peaked_before_window": 1
+  },
+  "romer": {
+   "MARKS-trough": {
+    "episodes": {
+     "1895-12": {
+      "romer_trough": "1897-01",
+      "e_nber": -2,
+      "e_romer": 3,
+      "outcome_nber": "HIT",
+      "outcome_romer": "HIT"
+     },
+     "1899-06": {
+      "romer_trough": "1900-12",
+      "e_nber": 5,
+      "e_romer": 5,
+      "outcome_nber": "LATE",
+      "outcome_romer": "LATE"
+     },
+     "1902-09": {
+      "romer_trough": "1904-03",
+      "e_nber": 0,
+      "e_romer": 5,
+      "outcome_nber": "HIT",
+      "outcome_romer": "LATE"
+     },
+     "1907-05": {
+      "romer_trough": "1908-06",
+      "e_nber": 6,
+      "e_romer": 6,
+      "outcome_nber": "LATE",
+      "outcome_romer": "LATE"
+     },
+     "1910-01": {
+      "romer_trough": "1911-05",
+      "e_nber": null,
+      "e_romer": null,
+      "outcome_nber": "MISS",
+      "outcome_romer": "MISS"
+     },
+     "1913-01": {
+      "romer_trough": "1914-12",
+      "e_nber": -22,
+      "e_romer": -22,
+      "outcome_nber": "EARLY",
+      "outcome_romer": "EARLY"
+     },
+     "1918-08": {
+      "romer_trough": "1919-03",
+      "e_nber": null,
+      "e_romer": null,
+      "outcome_nber": "MISS",
+      "outcome_romer": "MISS"
+     },
+     "1920-01": {
+      "romer_trough": "1921-03",
+      "e_nber": 5,
+      "e_romer": 9,
+      "outcome_nber": "LATE",
+      "outcome_romer": "LATE"
+     },
+     "1923-05": {
+      "romer_trough": "1924-07",
+      "e_nber": null,
+      "e_romer": null,
+      "outcome_nber": "MISS",
+      "outcome_romer": "MISS"
+     },
+     "1926-10": {
+      "romer_trough": "1927-12",
+      "e_nber": null,
+      "e_romer": null,
+      "outcome_nber": "MISS",
+      "outcome_romer": "MISS"
+     },
+     "1929-08": {
+      "romer_trough": "1932-07",
+      "e_nber": null,
+      "e_romer": null,
+      "outcome_nber": "CENSORED",
+      "outcome_romer": "CENSORED"
+     },
+     "1937-05": {
+      "romer_trough": "1938-06",
+      "e_nber": 8,
+      "e_romer": 8,
+      "outcome_nber": "LATE",
+      "outcome_romer": "LATE"
+     }
+    },
+    "hits_nber": 2,
+    "hits_romer": 1
+   },
+   "CONFIRMS-trough": {
+    "episodes": {
+     "1895-12": {
+      "romer_trough": "1897-01",
+      "e_nber": -2,
+      "e_romer": 3,
+      "outcome_nber": "EARLY",
+      "outcome_romer": "HIT"
+     },
+     "1899-06": {
+      "romer_trough": "1900-12",
+      "e_nber": 5,
+      "e_romer": 5,
+      "outcome_nber": "HIT",
+      "outcome_romer": "HIT"
+     },
+     "1902-09": {
+      "romer_trough": "1904-03",
+      "e_nber": 0,
+      "e_romer": 5,
+      "outcome_nber": "HIT",
+      "outcome_romer": "HIT"
+     },
+     "1907-05": {
+      "romer_trough": "1908-06",
+      "e_nber": 6,
+      "e_romer": 6,
+      "outcome_nber": "HIT",
+      "outcome_romer": "HIT"
+     },
+     "1910-01": {
+      "romer_trough": "1911-05",
+      "e_nber": null,
+      "e_romer": null,
+      "outcome_nber": "MISS",
+      "outcome_romer": "MISS"
+     },
+     "1913-01": {
+      "romer_trough": "1914-12",
+      "e_nber": -22,
+      "e_romer": -22,
+      "outcome_nber": "EARLY",
+      "outcome_romer": "EARLY"
+     },
+     "1918-08": {
+      "romer_trough": "1919-03",
+      "e_nber": null,
+      "e_romer": null,
+      "outcome_nber": "MISS",
+      "outcome_romer": "MISS"
+     },
+     "1920-01": {
+      "romer_trough": "1921-03",
+      "e_nber": 5,
+      "e_romer": 9,
+      "outcome_nber": "HIT",
+      "outcome_romer": "HIT"
+     },
+     "1923-05": {
+      "romer_trough": "1924-07",
+      "e_nber": null,
+      "e_romer": null,
+      "outcome_nber": "MISS",
+      "outcome_romer": "MISS"
+     },
+     "1926-10": {
+      "romer_trough": "1927-12",
+      "e_nber": null,
+      "e_romer": null,
+      "outcome_nber": "MISS",
+      "outcome_romer": "MISS"
+     },
+     "1929-08": {
+      "romer_trough": "1932-07",
+      "e_nber": null,
+      "e_romer": null,
+      "outcome_nber": "CENSORED",
+      "outcome_romer": "CENSORED"
+     },
+     "1937-05": {
+      "romer_trough": "1938-06",
+      "e_nber": 8,
+      "e_romer": 8,
+      "outcome_nber": "HIT",
+      "outcome_romer": "HIT"
+     }
+    },
+    "hits_nber": 5,
+    "hits_romer": 6
+   }
+  },
+  "flags": {
+   "1937-05": "basis-sensitive",
+   "1929-08": "CENSORED by the 1933 break; unbroken, segment A only re-arms in 1937-12"
+  },
+  "sensitivities": {
+   "release_plus2": {
+    "MARKS-trough": {
+     "n": 16,
+     "hits": 2,
+     "early": 1,
+     "late": 4,
+     "miss": 8,
+     "censored": 1,
+     "p_lagperm": 0.5255474452554745,
+     "outcomes": {
+      "1895-12": [
+       "HIT",
+       -1
+      ],
+      "1899-06": [
+       "LATE",
+       6
+      ],
+      "1902-09": [
+       "HIT",
+       1
+      ],
+      "1907-05": [
+       "LATE",
+       7
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "EARLY",
+       -21
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "LATE",
+       6
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1926-10": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "LATE",
+       9
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ],
+      "1960-04": [
+       "MISS",
+       null
+      ]
+     }
+    },
+    "CONFIRMS-trough": {
+     "n": 16,
+     "hits": 5,
+     "early": 2,
+     "late": 0,
+     "miss": 8,
+     "censored": 1,
+     "p_lagperm": 0.04839516048395161,
+     "outcomes": {
+      "1895-12": [
+       "EARLY",
+       -1
+      ],
+      "1899-06": [
+       "HIT",
+       6
+      ],
+      "1902-09": [
+       "HIT",
+       1
+      ],
+      "1907-05": [
+       "HIT",
+       7
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "EARLY",
+       -21
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "HIT",
+       6
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1926-10": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "HIT",
+       9
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ],
+      "1960-04": [
+       "MISS",
+       null
+      ]
+     }
+    },
+    "MARKS-equity": {
+     "n": 13,
+     "hits": 0,
+     "early": 0,
+     "late": 5,
+     "miss": 6,
+     "censored": 2,
+     "p_lagperm": 1.0,
+     "outcomes": {
+      "1895-12": [
+       "LATE",
+       9
+      ],
+      "1902-09": [
+       "LATE",
+       11
+      ],
+      "1907-05": [
+       "LATE",
+       14
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "CENSORED",
+       null
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "LATE",
+       5
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "LATE",
+       11
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ]
+     }
+    }
+   },
+   "1898_06_masked": {
+    "MARKS-trough": {
+     "n": 16,
+     "hits": 2,
+     "early": 1,
+     "late": 3,
+     "miss": 8,
+     "censored": 2,
+     "p_lagperm": 0.5333466653334666,
+     "outcomes": {
+      "1895-12": [
+       "HIT",
+       -2
+      ],
+      "1899-06": [
+       "CENSORED",
+       null
+      ],
+      "1902-09": [
+       "HIT",
+       0
+      ],
+      "1907-05": [
+       "LATE",
+       6
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "EARLY",
+       -22
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "LATE",
+       5
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1926-10": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "LATE",
+       8
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ],
+      "1960-04": [
+       "MISS",
+       null
+      ]
+     }
+    },
+    "CONFIRMS-trough": {
+     "n": 16,
+     "hits": 4,
+     "early": 2,
+     "late": 0,
+     "miss": 8,
+     "censored": 2,
+     "p_lagperm": 0.1474852514748525,
+     "outcomes": {
+      "1895-12": [
+       "EARLY",
+       -2
+      ],
+      "1899-06": [
+       "CENSORED",
+       null
+      ],
+      "1902-09": [
+       "HIT",
+       0
+      ],
+      "1907-05": [
+       "HIT",
+       6
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "EARLY",
+       -22
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "HIT",
+       5
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1926-10": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "HIT",
+       8
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ],
+      "1960-04": [
+       "MISS",
+       null
+      ]
+     }
+    },
+    "MARKS-equity": {
+     "n": 13,
+     "hits": 0,
+     "early": 0,
+     "late": 5,
+     "miss": 6,
+     "censored": 2,
+     "p_lagperm": 1.0,
+     "outcomes": {
+      "1895-12": [
+       "LATE",
+       8
+      ],
+      "1902-09": [
+       "LATE",
+       10
+      ],
+      "1907-05": [
+       "LATE",
+       13
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "CENSORED",
+       null
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "LATE",
+       4
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "LATE",
+       10
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ]
+     }
+    }
+   },
+   "1933_straight_across": {
+    "MARKS-trough": {
+     "n": 16,
+     "hits": 2,
+     "early": 1,
+     "late": 4,
+     "miss": 9,
+     "censored": 0,
+     "p_lagperm": 0.6106389361063893,
+     "outcomes": {
+      "1895-12": [
+       "HIT",
+       -2
+      ],
+      "1899-06": [
+       "LATE",
+       5
+      ],
+      "1902-09": [
+       "HIT",
+       0
+      ],
+      "1907-05": [
+       "LATE",
+       6
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "EARLY",
+       -22
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "LATE",
+       5
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1926-10": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "MISS",
+       null
+      ],
+      "1937-05": [
+       "LATE",
+       8
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ],
+      "1960-04": [
+       "MISS",
+       null
+      ]
+     }
+    },
+    "CONFIRMS-trough": {
+     "n": 16,
+     "hits": 5,
+     "early": 2,
+     "late": 0,
+     "miss": 9,
+     "censored": 0,
+     "p_lagperm": 0.06419358064193581,
+     "outcomes": {
+      "1895-12": [
+       "EARLY",
+       -2
+      ],
+      "1899-06": [
+       "HIT",
+       5
+      ],
+      "1902-09": [
+       "HIT",
+       0
+      ],
+      "1907-05": [
+       "HIT",
+       6
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "EARLY",
+       -22
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "HIT",
+       5
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1926-10": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "MISS",
+       null
+      ],
+      "1937-05": [
+       "HIT",
+       8
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ],
+      "1960-04": [
+       "MISS",
+       null
+      ]
+     }
+    },
+    "MARKS-equity": {
+     "n": 13,
+     "hits": 0,
+     "early": 0,
+     "late": 5,
+     "miss": 7,
+     "censored": 1,
+     "p_lagperm": 1.0,
+     "outcomes": {
+      "1895-12": [
+       "LATE",
+       8
+      ],
+      "1902-09": [
+       "LATE",
+       10
+      ],
+      "1907-05": [
+       "LATE",
+       13
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "CENSORED",
+       null
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "LATE",
+       4
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "MISS",
+       null
+      ],
+      "1937-05": [
+       "LATE",
+       10
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ]
+     }
+    }
+   },
+   "1937_on_A": {
+    "MARKS-trough": {
+     "n": 16,
+     "hits": 2,
+     "early": 1,
+     "late": 3,
+     "miss": 8,
+     "censored": 2,
+     "p_lagperm": 0.45985401459854014,
+     "outcomes": {
+      "1895-12": [
+       "HIT",
+       -2
+      ],
+      "1899-06": [
+       "LATE",
+       5
+      ],
+      "1902-09": [
+       "HIT",
+       0
+      ],
+      "1907-05": [
+       "LATE",
+       6
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "EARLY",
+       -22
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "LATE",
+       5
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1926-10": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "CENSORED",
+       null
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ],
+      "1960-04": [
+       "MISS",
+       null
+      ]
+     }
+    },
+    "CONFIRMS-trough": {
+     "n": 16,
+     "hits": 4,
+     "early": 2,
+     "late": 0,
+     "miss": 8,
+     "censored": 2,
+     "p_lagperm": 0.13088691130886912,
+     "outcomes": {
+      "1895-12": [
+       "EARLY",
+       -2
+      ],
+      "1899-06": [
+       "HIT",
+       5
+      ],
+      "1902-09": [
+       "HIT",
+       0
+      ],
+      "1907-05": [
+       "HIT",
+       6
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "EARLY",
+       -22
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "HIT",
+       5
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1926-10": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "CENSORED",
+       null
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ],
+      "1960-04": [
+       "MISS",
+       null
+      ]
+     }
+    },
+    "MARKS-equity": {
+     "n": 13,
+     "hits": 0,
+     "early": 0,
+     "late": 4,
+     "miss": 6,
+     "censored": 3,
+     "p_lagperm": 1.0,
+     "outcomes": {
+      "1895-12": [
+       "LATE",
+       8
+      ],
+      "1902-09": [
+       "LATE",
+       10
+      ],
+      "1907-05": [
+       "LATE",
+       13
+      ],
+      "1910-01": [
+       "MISS",
+       null
+      ],
+      "1913-01": [
+       "CENSORED",
+       null
+      ],
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "LATE",
+       4
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "CENSORED",
+       null
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ]
+     }
+    }
+   },
+   "theta10_from_1918": {
+    "MARKS-trough": {
+     "n": 10,
+     "hits": 0,
+     "early": 0,
+     "late": 2,
+     "miss": 7,
+     "censored": 1,
+     "p_lagperm": 1.0,
+     "outcomes": {
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "LATE",
+       5
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1926-10": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "LATE",
+       8
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ],
+      "1960-04": [
+       "MISS",
+       null
+      ]
+     }
+    },
+    "CONFIRMS-trough": {
+     "n": 10,
+     "hits": 2,
+     "early": 0,
+     "late": 0,
+     "miss": 7,
+     "censored": 1,
+     "p_lagperm": 0.07129287071292871,
+     "outcomes": {
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "HIT",
+       5
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1926-10": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "HIT",
+       8
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ],
+      "1960-04": [
+       "MISS",
+       null
+      ]
+     }
+    },
+    "MARKS-equity": {
+     "n": 8,
+     "hits": 0,
+     "early": 0,
+     "late": 2,
+     "miss": 5,
+     "censored": 1,
+     "p_lagperm": 1.0,
+     "outcomes": {
+      "1918-08": [
+       "MISS",
+       null
+      ],
+      "1920-01": [
+       "LATE",
+       4
+      ],
+      "1923-05": [
+       "MISS",
+       null
+      ],
+      "1929-08": [
+       "CENSORED",
+       null
+      ],
+      "1937-05": [
+       "LATE",
+       10
+      ],
+      "1948-11": [
+       "MISS",
+       null
+      ],
+      "1953-07": [
+       "MISS",
+       null
+      ],
+      "1957-08": [
+       "MISS",
+       null
+      ]
+     }
+    }
+   },
+   "theta10_from_1918_timing": {
+    "MARKS-trough": {
+     "n": 9,
+     "median": "MISS",
+     "ci": [
+      8,
+      "MISS"
+     ],
+     "coverage": 0.961,
+     "n_miss": 7,
+     "n_censored": 1,
+     "censored": [
+      "1929-08"
+     ],
+     "by_era": {
+      "1895-1914": {
+       "n": 0,
+       "n_miss": 0,
+       "n_censored": 0,
+       "censored": []
+      },
+      "1918-38": {
+       "n": 5,
+       "median": "MISS",
+       "ci": [
+        5,
+        "MISS"
+       ],
+       "coverage": 0.938,
+       "n_miss": 3,
+       "n_censored": 1,
+       "censored": [
+        "1929-08"
+       ]
+      },
+      "1948-61": {
+       "n": 4,
+       "median": "MISS",
+       "n_miss": 4,
+       "n_censored": 0,
+       "censored": []
+      }
+     }
+    },
+    "CONFIRMS-trough": {
+     "n": 9,
+     "median": "MISS",
+     "ci": [
+      8,
+      "MISS"
+     ],
+     "coverage": 0.961,
+     "n_miss": 7,
+     "n_censored": 1,
+     "censored": [
+      "1929-08"
+     ],
+     "by_era": {
+      "1895-1914": {
+       "n": 0,
+       "n_miss": 0,
+       "n_censored": 0,
+       "censored": []
+      },
+      "1918-38": {
+       "n": 5,
+       "median": "MISS",
+       "ci": [
+        5,
+        "MISS"
+       ],
+       "coverage": 0.938,
+       "n_miss": 3,
+       "n_censored": 1,
+       "censored": [
+        "1929-08"
+       ]
+      },
+      "1948-61": {
+       "n": 4,
+       "median": "MISS",
+       "n_miss": 4,
+       "n_censored": 0,
+       "censored": []
+      }
+     }
+    },
+    "MARKS-equity": {
+     "n": 7,
+     "median": "MISS",
+     "ci": [
+      4,
+      "MISS"
+     ],
+     "coverage": 0.984,
+     "n_miss": 5,
+     "n_censored": 1,
+     "censored": [
+      "1929-08"
+     ],
+     "by_era": {
+      "1895-1914": {
+       "n": 0,
+       "n_miss": 0,
+       "n_censored": 0,
+       "censored": []
+      },
+      "1918-38": {
+       "n": 4,
+       "median": "MISS",
+       "n_miss": 2,
+       "n_censored": 1,
+       "censored": [
+        "1929-08"
+       ]
+      },
+      "1948-61": {
+       "n": 3,
+       "median": "MISS",
+       "n_miss": 3,
+       "n_censored": 0,
+       "censored": []
+      }
+     }
+    }
+   },
+   "theta_primary_from_1918_timing": {
+    "MARKS-trough": {
+     "n": 9,
+     "median": "MISS",
+     "ci": [
+      8,
+      "MISS"
+     ],
+     "coverage": 0.961,
+     "n_miss": 7,
+     "n_censored": 1,
+     "censored": [
+      "1929-08"
+     ],
+     "by_era": {
+      "1895-1914": {
+       "n": 0,
+       "n_miss": 0,
+       "n_censored": 0,
+       "censored": []
+      },
+      "1918-38": {
+       "n": 5,
+       "median": "MISS",
+       "ci": [
+        5,
+        "MISS"
+       ],
+       "coverage": 0.938,
+       "n_miss": 3,
+       "n_censored": 1,
+       "censored": [
+        "1929-08"
+       ]
+      },
+      "1948-61": {
+       "n": 4,
+       "median": "MISS",
+       "n_miss": 4,
+       "n_censored": 0,
+       "censored": []
+      }
+     }
+    },
+    "CONFIRMS-trough": {
+     "n": 9,
+     "median": "MISS",
+     "ci": [
+      8,
+      "MISS"
+     ],
+     "coverage": 0.961,
+     "n_miss": 7,
+     "n_censored": 1,
+     "censored": [
+      "1929-08"
+     ],
+     "by_era": {
+      "1895-1914": {
+       "n": 0,
+       "n_miss": 0,
+       "n_censored": 0,
+       "censored": []
+      },
+      "1918-38": {
+       "n": 5,
+       "median": "MISS",
+       "ci": [
+        5,
+        "MISS"
+       ],
+       "coverage": 0.938,
+       "n_miss": 3,
+       "n_censored": 1,
+       "censored": [
+        "1929-08"
+       ]
+      },
+      "1948-61": {
+       "n": 4,
+       "median": "MISS",
+       "n_miss": 4,
+       "n_censored": 0,
+       "censored": []
+      }
+     }
+    },
+    "MARKS-equity": {
+     "n": 7,
+     "median": "MISS",
+     "ci": [
+      4,
+      "MISS"
+     ],
+     "coverage": 0.984,
+     "n_miss": 5,
+     "n_censored": 1,
+     "censored": [
+      "1929-08"
+     ],
+     "by_era": {
+      "1895-1914": {
+       "n": 0,
+       "n_miss": 0,
+       "n_censored": 0,
+       "censored": []
+      },
+      "1918-38": {
+       "n": 4,
+       "median": "MISS",
+       "n_miss": 2,
+       "n_censored": 1,
+       "censored": [
+        "1929-08"
+       ]
+      },
+      "1948-61": {
+       "n": 3,
+       "median": "MISS",
+       "n_miss": 3,
+       "n_censored": 0,
+       "censored": []
+      }
+     }
+    }
+   }
+  },
+  "false_bottoms": {
+   "signals": [
+    {
+     "release": "1897-04",
+     "kind": "TRUE BOTTOM",
+     "trough": "1897-06",
+     "before_peak": null
+    },
+    {
+     "release": "1901-05",
+     "kind": "TRUE BOTTOM",
+     "trough": "1900-12",
+     "before_peak": null
+    },
+    {
+     "release": "1904-08",
+     "kind": "TRUE BOTTOM",
+     "trough": "1904-08",
+     "before_peak": null
+    },
+    {
+     "release": "1908-12",
+     "kind": "TRUE BOTTOM",
+     "trough": "1908-06",
+     "before_peak": null
+    },
+    {
+     "release": "1913-02",
+     "kind": "FALSE BOTTOM",
+     "trough": null,
+     "before_peak": null
+    },
+    {
+     "release": "1915-11",
+     "kind": "FALSE BOTTOM",
+     "trough": null,
+     "before_peak": null
+    },
+    {
+     "release": "1921-12",
+     "kind": "TRUE BOTTOM",
+     "trough": "1921-07",
+     "before_peak": null
+    },
+    {
+     "release": "1939-02",
+     "kind": "TRUE BOTTOM",
+     "trough": "1938-06",
+     "before_peak": null
+    },
+    {
+     "release": "1948-03",
+     "kind": "FALSE BOTTOM",
+     "trough": null,
+     "before_peak": "1948-11"
+    }
+   ],
+   "n": 9,
+   "n_false": 3,
+   "precision": 0.6666666666666666,
+   "false_per_decade": 0.4580152671755725,
+   "decades_observed": 6.55,
+   "excluding_war_years": {
+    "n": 8,
+    "n_false": 2,
+    "decades_observed": 5.55,
+    "false_per_decade": 0.3603603603603604,
+    "precision": 0.75
+   }
+  }
+ },
+ "equity_crosscheck": {
+  "episodes": {
+   "1895-12": {
+    "shiller": [
+     "1896-08",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1896-08",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1899-06": {
+    "shiller": [
+     "1898-12",
+     "no equity low"
+    ],
+    "cowles_oecd": [
+     "1898-12",
+     "no equity low"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1902-09": {
+    "shiller": [
+     "1903-10",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1903-10",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1907-05": {
+    "shiller": [
+     "1907-11",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1907-11",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1910-01": {
+    "shiller": [
+     "1910-07",
+     "ambiguous"
+    ],
+    "cowles_oecd": [
+     "1910-07",
+     "ambiguous"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1913-01": {
+    "shiller": [
+     "1914-12",
+     "censored"
+    ],
+    "cowles_oecd": [
+     "1914-12",
+     "censored"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1918-08": {
+    "shiller": [
+     "1918-04",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1918-04",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1920-01": {
+    "shiller": [
+     "1921-08",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1921-08",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1923-05": {
+    "shiller": [
+     "1923-10",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1923-10",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1926-10": {
+    "shiller": [
+     "1926-04",
+     "no equity low"
+    ],
+    "cowles_oecd": [
+     "1926-04",
+     "no equity low"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1929-08": {
+    "shiller": [
+     "1932-06",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1932-06",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1937-05": {
+    "shiller": [
+     "1938-04",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1938-04",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1945-02": {
+    "shiller": [
+     "1944-09",
+     "no equity low"
+    ],
+    "cowles_oecd": [
+     "1944-09",
+     "no equity low"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1948-11": {
+    "shiller": [
+     "1949-06",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1949-06",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1953-07": {
+    "shiller": [
+     "1953-09",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1953-09",
+     "no equity low"
+    ],
+    "month_diff": 0,
+    "status_same": false
+   },
+   "1957-08": {
+    "shiller": [
+     "1957-12",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1957-11",
+     "ambiguous"
+    ],
+    "month_diff": -1,
+    "status_same": false
+   },
+   "1960-04": {
+    "shiller": [
+     "1960-10",
+     "no equity low"
+    ],
+    "cowles_oecd": [
+     "1960-10",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": false
+   },
+   "1969-12": {
+    "shiller": [
+     "1970-06",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1970-07",
+     "valid"
+    ],
+    "month_diff": 1,
+    "status_same": true
+   },
+   "1973-11": {
+    "shiller": [
+     "1974-12",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1974-12",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1980-01": {
+    "shiller": [
+     "1979-07",
+     "no equity low"
+    ],
+    "cowles_oecd": [
+     "1979-07",
+     "no equity low"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1981-07": {
+    "shiller": [
+     "1982-07",
+     "ambiguous"
+    ],
+    "cowles_oecd": [
+     "1982-07",
+     "ambiguous"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "1990-07": {
+    "shiller": [
+     "1990-10",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "1990-10",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "2001-03": {
+    "shiller": [
+     "2002-10",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "2002-10",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "2007-12": {
+    "shiller": [
+     "2009-03",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "2009-03",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   },
+   "2020-02": {
+    "shiller": [
+     "2020-03",
+     "valid"
+    ],
+    "cowles_oecd": [
+     "2020-03",
+     "valid"
+    ],
+    "month_diff": 0,
+    "status_same": true
+   }
+  },
+  "same_month": 23,
+  "n": 25
+ },
+ "R": {
+  "primary": {
+   "episodes": {
+    "1981-07": {
+     "MARKS-trough": {
+      "release": "1983-04",
+      "e": 5,
+      "outcome": "LATE",
+      "g": 0.284,
+      "high": 0.5407
+     },
+     "CONFIRMS-trough": {
+      "release": "1983-04",
+      "e": 5,
+      "outcome": "HIT",
+      "g": 0.284,
+      "high": 0.5407
+     },
+     "MARKS-equity": {
+      "release": "1983-04",
+      "e": 9,
+      "outcome": "LATE",
+      "g": 0.284,
+      "high": 0.5407
+     }
+    },
+    "1990-07": {
+     "MARKS-trough": {
+      "outcome": "MISS"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "MISS"
+     },
+     "MARKS-equity": {
+      "outcome": "MISS"
+     }
+    },
+    "2001-03": {
+     "MARKS-trough": {
+      "release": "2002-04",
+      "e": 5,
+      "outcome": "LATE",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "CONFIRMS-trough": {
+      "release": "2002-04",
+      "e": 5,
+      "outcome": "HIT",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "MARKS-equity": {
+      "release": "2002-04",
+      "e": -6,
+      "outcome": "EARLY",
+      "g": 0.0744,
+      "high": 0.176
+     }
+    },
+    "2007-12": {
+     "MARKS-trough": {
+      "outcome": "CENSORED"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "CENSORED"
+     },
+     "MARKS-equity": {
+      "outcome": "CENSORED"
+     }
+    }
+   },
+   "signals": [
+    {
+     "release": "1983-04",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "1987-10",
+     "kind": "FALSE BOTTOM"
+    },
+    {
+     "release": "2002-04",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "2024-10",
+     "kind": "FALSE BOTTOM"
+    }
+   ],
+   "n_false": 2,
+   "live": {
+    "asof": "2026Q2",
+    "g": 0.1917,
+    "high": 0.1917,
+    "armed": true,
+    "last_signal": "2024-10",
+    "rolled_over_now": false
+   }
+  },
+  "mask_1980Q1": {
+   "episodes": {
+    "1981-07": {
+     "MARKS-trough": {
+      "outcome": "CENSORED"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "CENSORED"
+     },
+     "MARKS-equity": {
+      "outcome": "CENSORED"
+     }
+    },
+    "1990-07": {
+     "MARKS-trough": {
+      "outcome": "MISS"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "MISS"
+     },
+     "MARKS-equity": {
+      "outcome": "MISS"
+     }
+    },
+    "2001-03": {
+     "MARKS-trough": {
+      "release": "2002-04",
+      "e": 5,
+      "outcome": "LATE",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "CONFIRMS-trough": {
+      "release": "2002-04",
+      "e": 5,
+      "outcome": "HIT",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "MARKS-equity": {
+      "release": "2002-04",
+      "e": -6,
+      "outcome": "EARLY",
+      "g": 0.0744,
+      "high": 0.176
+     }
+    },
+    "2007-12": {
+     "MARKS-trough": {
+      "outcome": "CENSORED"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "CENSORED"
+     },
+     "MARKS-equity": {
+      "outcome": "CENSORED"
+     }
+    }
+   },
+   "signals": [
+    {
+     "release": "1983-04",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "1987-10",
+     "kind": "FALSE BOTTOM"
+    },
+    {
+     "release": "2002-04",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "2024-10",
+     "kind": "FALSE BOTTOM"
+    }
+   ],
+   "n_false": 2,
+   "live": {
+    "asof": "2026Q2",
+    "g": 0.1917,
+    "high": 0.1917,
+    "armed": true,
+    "last_signal": "2024-10",
+    "rolled_over_now": false
+   }
+  },
+  "release_plus2": {
+   "episodes": {
+    "1981-07": {
+     "MARKS-trough": {
+      "release": "1983-05",
+      "e": 6,
+      "outcome": "LATE",
+      "g": 0.284,
+      "high": 0.5407
+     },
+     "CONFIRMS-trough": {
+      "release": "1983-05",
+      "e": 6,
+      "outcome": "HIT",
+      "g": 0.284,
+      "high": 0.5407
+     },
+     "MARKS-equity": {
+      "release": "1983-05",
+      "e": 10,
+      "outcome": "LATE",
+      "g": 0.284,
+      "high": 0.5407
+     }
+    },
+    "1990-07": {
+     "MARKS-trough": {
+      "outcome": "MISS"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "MISS"
+     },
+     "MARKS-equity": {
+      "outcome": "MISS"
+     }
+    },
+    "2001-03": {
+     "MARKS-trough": {
+      "release": "2002-05",
+      "e": 6,
+      "outcome": "LATE",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "CONFIRMS-trough": {
+      "release": "2002-05",
+      "e": 6,
+      "outcome": "HIT",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "MARKS-equity": {
+      "release": "2002-05",
+      "e": -5,
+      "outcome": "EARLY",
+      "g": 0.0744,
+      "high": 0.176
+     }
+    },
+    "2007-12": {
+     "MARKS-trough": {
+      "outcome": "CENSORED"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "CENSORED"
+     },
+     "MARKS-equity": {
+      "outcome": "CENSORED"
+     }
+    }
+   },
+   "signals": [
+    {
+     "release": "1983-05",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "1987-11",
+     "kind": "FALSE BOTTOM"
+    },
+    {
+     "release": "2002-05",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "2024-11",
+     "kind": "FALSE BOTTOM"
+    }
+   ],
+   "n_false": 2,
+   "live": {
+    "asof": "2026Q2",
+    "g": 0.1917,
+    "high": 0.1917,
+    "armed": true,
+    "last_signal": "2024-11",
+    "rolled_over_now": false
+   }
+  },
+  "1995_in_Q1": {
+   "episodes": {
+    "1981-07": {
+     "MARKS-trough": {
+      "release": "1983-04",
+      "e": 5,
+      "outcome": "LATE",
+      "g": 0.284,
+      "high": 0.5407
+     },
+     "CONFIRMS-trough": {
+      "release": "1983-04",
+      "e": 5,
+      "outcome": "HIT",
+      "g": 0.284,
+      "high": 0.5407
+     },
+     "MARKS-equity": {
+      "release": "1983-04",
+      "e": 9,
+      "outcome": "LATE",
+      "g": 0.284,
+      "high": 0.5407
+     }
+    },
+    "1990-07": {
+     "MARKS-trough": {
+      "outcome": "MISS"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "MISS"
+     },
+     "MARKS-equity": {
+      "outcome": "MISS"
+     }
+    },
+    "2001-03": {
+     "MARKS-trough": {
+      "release": "2002-04",
+      "e": 5,
+      "outcome": "LATE",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "CONFIRMS-trough": {
+      "release": "2002-04",
+      "e": 5,
+      "outcome": "HIT",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "MARKS-equity": {
+      "release": "2002-04",
+      "e": -6,
+      "outcome": "EARLY",
+      "g": 0.0744,
+      "high": 0.176
+     }
+    },
+    "2007-12": {
+     "MARKS-trough": {
+      "outcome": "CENSORED"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "CENSORED"
+     },
+     "MARKS-equity": {
+      "outcome": "CENSORED"
+     }
+    }
+   },
+   "signals": [
+    {
+     "release": "1983-04",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "1987-10",
+     "kind": "FALSE BOTTOM"
+    },
+    {
+     "release": "2002-04",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "2024-10",
+     "kind": "FALSE BOTTOM"
+    }
+   ],
+   "n_false": 2,
+   "live": {
+    "asof": "2026Q2",
+    "g": 0.1917,
+    "high": 0.1917,
+    "armed": true,
+    "last_signal": "2024-10",
+    "rolled_over_now": false
+   }
+  },
+  "1995_in_Q2": {
+   "episodes": {
+    "1981-07": {
+     "MARKS-trough": {
+      "release": "1983-04",
+      "e": 5,
+      "outcome": "LATE",
+      "g": 0.284,
+      "high": 0.5407
+     },
+     "CONFIRMS-trough": {
+      "release": "1983-04",
+      "e": 5,
+      "outcome": "HIT",
+      "g": 0.284,
+      "high": 0.5407
+     },
+     "MARKS-equity": {
+      "release": "1983-04",
+      "e": 9,
+      "outcome": "LATE",
+      "g": 0.284,
+      "high": 0.5407
+     }
+    },
+    "1990-07": {
+     "MARKS-trough": {
+      "outcome": "MISS"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "MISS"
+     },
+     "MARKS-equity": {
+      "outcome": "MISS"
+     }
+    },
+    "2001-03": {
+     "MARKS-trough": {
+      "release": "2002-04",
+      "e": 5,
+      "outcome": "LATE",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "CONFIRMS-trough": {
+      "release": "2002-04",
+      "e": 5,
+      "outcome": "HIT",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "MARKS-equity": {
+      "release": "2002-04",
+      "e": -6,
+      "outcome": "EARLY",
+      "g": 0.0744,
+      "high": 0.176
+     }
+    },
+    "2007-12": {
+     "MARKS-trough": {
+      "outcome": "CENSORED"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "CENSORED"
+     },
+     "MARKS-equity": {
+      "outcome": "CENSORED"
+     }
+    }
+   },
+   "signals": [
+    {
+     "release": "1983-04",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "1987-10",
+     "kind": "FALSE BOTTOM"
+    },
+    {
+     "release": "2002-04",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "2024-10",
+     "kind": "FALSE BOTTOM"
+    }
+   ],
+   "n_false": 2,
+   "live": {
+    "asof": "2026Q2",
+    "g": 0.1917,
+    "high": 0.1917,
+    "armed": true,
+    "last_signal": "2024-10",
+    "rolled_over_now": false
+   }
+  },
+  "1995_in_Q3": {
+   "episodes": {
+    "1981-07": {
+     "MARKS-trough": {
+      "release": "1983-04",
+      "e": 5,
+      "outcome": "LATE",
+      "g": 0.284,
+      "high": 0.5407
+     },
+     "CONFIRMS-trough": {
+      "release": "1983-04",
+      "e": 5,
+      "outcome": "HIT",
+      "g": 0.284,
+      "high": 0.5407
+     },
+     "MARKS-equity": {
+      "release": "1983-04",
+      "e": 9,
+      "outcome": "LATE",
+      "g": 0.284,
+      "high": 0.5407
+     }
+    },
+    "1990-07": {
+     "MARKS-trough": {
+      "outcome": "MISS"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "MISS"
+     },
+     "MARKS-equity": {
+      "outcome": "MISS"
+     }
+    },
+    "2001-03": {
+     "MARKS-trough": {
+      "release": "2002-04",
+      "e": 5,
+      "outcome": "LATE",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "CONFIRMS-trough": {
+      "release": "2002-04",
+      "e": 5,
+      "outcome": "HIT",
+      "g": 0.0744,
+      "high": 0.176
+     },
+     "MARKS-equity": {
+      "release": "2002-04",
+      "e": -6,
+      "outcome": "EARLY",
+      "g": 0.0744,
+      "high": 0.176
+     }
+    },
+    "2007-12": {
+     "MARKS-trough": {
+      "outcome": "CENSORED"
+     },
+     "CONFIRMS-trough": {
+      "outcome": "CENSORED"
+     },
+     "MARKS-equity": {
+      "outcome": "CENSORED"
+     }
+    }
+   },
+   "signals": [
+    {
+     "release": "1983-04",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "1987-10",
+     "kind": "FALSE BOTTOM"
+    },
+    {
+     "release": "2002-04",
+     "kind": "TRUE BOTTOM"
+    },
+    {
+     "release": "2024-10",
+     "kind": "FALSE BOTTOM"
+    }
+   ],
+   "n_false": 2,
+   "live": {
+    "asof": "2026Q2",
+    "g": 0.1917,
+    "high": 0.1917,
+    "armed": true,
+    "last_signal": "2024-10",
+    "rolled_over_now": false
+   }
+  }
+ },
+ "claims": {
+  "1969-12": {
+   "C1/MARKS-trough": {
+    "release": "1970-07",
+    "e": -4,
+    "outcome": "HIT"
+   },
+   "C1/CONFIRMS-trough": {
+    "release": "1970-07",
+    "e": -4,
+    "outcome": "EARLY"
+   },
+   "C1/MARKS-equity": {
+    "release": "1970-07",
+    "e": 1,
+    "outcome": "HIT"
+   },
+   "C2/MARKS-trough": {
+    "release": "1971-04",
+    "e": 5,
+    "outcome": "LATE"
+   },
+   "C2/CONFIRMS-trough": {
+    "release": "1971-04",
+    "e": 5,
+    "outcome": "HIT"
+   },
+   "C2/MARKS-equity": {
+    "release": "1971-04",
+    "e": 10,
+    "outcome": "LATE"
+   },
+   "flags": [
+    "C2: the Sep-Nov 1970 GM strike falls inside its inputs"
+   ]
+  },
+  "1973-11": {
+   "C1/MARKS-trough": {
+    "release": "1975-06",
+    "e": 3,
+    "outcome": "HIT"
+   },
+   "C1/CONFIRMS-trough": {
+    "release": "1975-06",
+    "e": 3,
+    "outcome": "HIT"
+   },
+   "C1/MARKS-equity": {
+    "release": "1975-06",
+    "e": 6,
+    "outcome": "LATE"
+   },
+   "C2/MARKS-trough": {
+    "release": "1975-10",
+    "e": 7,
+    "outcome": "LATE"
+   },
+   "C2/CONFIRMS-trough": {
+    "release": "1975-10",
+    "e": 7,
+    "outcome": "HIT"
+   },
+   "C2/MARKS-equity": {
+    "release": "1975-10",
+    "e": 10,
+    "outcome": "LATE"
+   },
+   "flags": []
+  },
+  "1980-01": {
+   "C1/MARKS-trough": {
+    "release": "1980-08",
+    "e": 1,
+    "outcome": "HIT"
+   },
+   "C1/CONFIRMS-trough": {
+    "release": "1980-08",
+    "e": 1,
+    "outcome": "HIT"
+   },
+   "C2/MARKS-trough": {
+    "release": "1981-02",
+    "e": 7,
+    "outcome": "LATE"
+   },
+   "C2/CONFIRMS-trough": {
+    "release": "1981-02",
+    "e": 7,
+    "outcome": "HIT"
+   },
+   "flags": []
+  },
+  "1981-07": {
+   "C1/MARKS-trough": {
+    "release": "1982-12",
+    "e": 1,
+    "outcome": "HIT"
+   },
+   "C1/CONFIRMS-trough": {
+    "release": "1982-12",
+    "e": 1,
+    "outcome": "HIT"
+   },
+   "C1/MARKS-equity": {
+    "release": "1982-12",
+    "e": 5,
+    "outcome": "LATE"
+   },
+   "C2/MARKS-trough": {
+    "release": "1983-02",
+    "e": 3,
+    "outcome": "HIT"
+   },
+   "C2/CONFIRMS-trough": {
+    "release": "1983-02",
+    "e": 3,
+    "outcome": "HIT"
+   },
+   "C2/MARKS-equity": {
+    "release": "1983-02",
+    "e": 7,
+    "outcome": "LATE"
+   },
+   "flags": []
+  },
+  "1990-07": {
+   "C1/MARKS-trough": {
+    "release": "1991-05",
+    "e": 2,
+    "outcome": "HIT"
+   },
+   "C1/CONFIRMS-trough": {
+    "release": "1991-05",
+    "e": 2,
+    "outcome": "HIT"
+   },
+   "C1/MARKS-equity": {
+    "release": "1991-05",
+    "e": 7,
+    "outcome": "LATE"
+   },
+   "C2/MARKS-trough": {
+    "release": "1991-10",
+    "e": 7,
+    "outcome": "LATE"
+   },
+   "C2/CONFIRMS-trough": {
+    "release": "1991-10",
+    "e": 7,
+    "outcome": "HIT"
+   },
+   "C2/MARKS-equity": {
+    "release": "1991-10",
+    "e": 12,
+    "outcome": "LATE"
+   },
+   "flags": []
+  },
+  "2001-03": {
+   "C1/MARKS-trough": {
+    "release": "2001-12",
+    "e": 1,
+    "outcome": "HIT"
+   },
+   "C1/CONFIRMS-trough": {
+    "release": "2001-12",
+    "e": 1,
+    "outcome": "HIT"
+   },
+   "C1/MARKS-equity": {
+    "release": "2001-12",
+    "e": -10,
+    "outcome": "EARLY"
+   },
+   "C2/MARKS-trough": {
+    "release": "2002-04",
+    "e": 5,
+    "outcome": "LATE"
+   },
+   "C2/CONFIRMS-trough": {
+    "release": "2002-04",
+    "e": 5,
+    "outcome": "HIT"
+   },
+   "C2/MARKS-equity": {
+    "release": "2002-04",
+    "e": -6,
+    "outcome": "EARLY"
+   },
+   "flags": []
+  },
+  "2007-12": {
+   "C1/MARKS-trough": {
+    "release": "2009-07",
+    "e": 1,
+    "outcome": "HIT"
+   },
+   "C1/CONFIRMS-trough": {
+    "release": "2009-07",
+    "e": 1,
+    "outcome": "HIT"
+   },
+   "C1/MARKS-equity": {
+    "release": "2009-07",
+    "e": 4,
+    "outcome": "LATE"
+   },
+   "C2/MARKS-trough": {
+    "release": "2009-12",
+    "e": 6,
+    "outcome": "LATE"
+   },
+   "C2/CONFIRMS-trough": {
+    "release": "2009-12",
+    "e": 6,
+    "outcome": "HIT"
+   },
+   "C2/MARKS-equity": {
+    "release": "2009-12",
+    "e": 9,
+    "outcome": "LATE"
+   },
+   "flags": []
+  },
+  "2020-02": {
+   "C1/MARKS-trough": {
+    "release": "2020-06",
+    "e": 2,
+    "outcome": "HIT"
+   },
+   "C1/CONFIRMS-trough": {
+    "release": "2020-06",
+    "e": 2,
+    "outcome": "HIT"
+   },
+   "C1/MARKS-equity": {
+    "release": "2020-06",
+    "e": 3,
+    "outcome": "HIT"
+   },
+   "C2/MARKS-trough": {
+    "release": "2020-12",
+    "e": 8,
+    "outcome": "LATE"
+   },
+   "C2/CONFIRMS-trough": {
+    "release": "2020-12",
+    "e": 8,
+    "outcome": "HIT"
+   },
+   "C2/MARKS-equity": {
+    "release": "2020-12",
+    "e": 9,
+    "outcome": "LATE"
+   },
+   "flags": []
+  }
+ },
+ "liabilities": {
+  "_note": "nominal; theta and floor were calibrated on the counts and are applied to a series 2-4x noisier; the 1920-21 and 1929-33 deflations move nominal growth by tens of points",
+  "1895-12": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "CENSORED"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "CENSORED"
+   },
+   "MARKS-equity": {
+    "e": null,
+    "outcome": "CENSORED"
+   }
+  },
+  "1899-06": {
+   "MARKS-trough": {
+    "e": 7,
+    "outcome": "LATE"
+   },
+   "CONFIRMS-trough": {
+    "e": 7,
+    "outcome": "HIT"
+   }
+  },
+  "1902-09": {
+   "MARKS-trough": {
+    "e": 2,
+    "outcome": "HIT"
+   },
+   "CONFIRMS-trough": {
+    "e": 2,
+    "outcome": "HIT"
+   },
+   "MARKS-equity": {
+    "e": 12,
+    "outcome": "LATE"
+   }
+  },
+  "1907-05": {
+   "MARKS-trough": {
+    "e": 6,
+    "outcome": "LATE"
+   },
+   "CONFIRMS-trough": {
+    "e": 6,
+    "outcome": "HIT"
+   },
+   "MARKS-equity": {
+    "e": 13,
+    "outcome": "LATE"
+   }
+  },
+  "1910-01": {
+   "MARKS-trough": {
+    "e": -9,
+    "outcome": "EARLY"
+   },
+   "CONFIRMS-trough": {
+    "e": -9,
+    "outcome": "EARLY"
+   },
+   "MARKS-equity": {
+    "e": 9,
+    "outcome": "LATE"
+   }
+  },
+  "1913-01": {
+   "MARKS-trough": {
+    "e": 9,
+    "outcome": "LATE"
+   },
+   "CONFIRMS-trough": {
+    "e": 9,
+    "outcome": "HIT"
+   },
+   "MARKS-equity": {
+    "e": 9,
+    "outcome": "LATE"
+   }
+  },
+  "1918-08": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "MARKS-equity": {
+    "e": null,
+    "outcome": "MISS"
+   }
+  },
+  "1920-01": {
+   "MARKS-trough": {
+    "e": 4,
+    "outcome": "LATE"
+   },
+   "CONFIRMS-trough": {
+    "e": 4,
+    "outcome": "HIT"
+   },
+   "MARKS-equity": {
+    "e": 3,
+    "outcome": "HIT"
+   },
+   "flags": [
+    "deflation: nominal liabilities growth distorted"
+   ]
+  },
+  "1923-05": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "MARKS-equity": {
+    "e": null,
+    "outcome": "MISS"
+   }
+  },
+  "1926-10": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   }
+  },
+  "1929-08": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "CENSORED"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "CENSORED"
+   },
+   "MARKS-equity": {
+    "e": null,
+    "outcome": "CENSORED"
+   },
+   "flags": [
+    "deflation: nominal liabilities growth distorted"
+   ]
+  },
+  "1937-05": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "CENSORED"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "CENSORED"
+   },
+   "MARKS-equity": {
+    "e": null,
+    "outcome": "CENSORED"
+   }
+  },
+  "1948-11": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "MARKS-equity": {
+    "e": null,
+    "outcome": "MISS"
+   }
+  },
+  "1953-07": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "MARKS-equity": {
+    "e": null,
+    "outcome": "MISS"
+   }
+  },
+  "1957-08": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "MARKS-equity": {
+    "e": null,
+    "outcome": "MISS"
+   }
+  },
+  "1960-04": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   }
+  },
+  "1969-12": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "MARKS-equity": {
+    "e": null,
+    "outcome": "MISS"
+   }
+  },
+  "1973-11": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "MARKS-equity": {
+    "e": null,
+    "outcome": "MISS"
+   }
+  },
+  "1980-01": {
+   "MARKS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   },
+   "CONFIRMS-trough": {
+    "e": null,
+    "outcome": "MISS"
+   }
+  },
+  "1981-07": {
+   "MARKS-trough": {
+    "e": -13,
+    "outcome": "EARLY"
+   },
+   "CONFIRMS-trough": {
+    "e": -13,
+    "outcome": "EARLY"
+   },
+   "MARKS-equity": {
+    "e": -9,
+    "outcome": "EARLY"
+   }
+  }
+ },
+ "trader": {
+  "episodes": {
+   "1895-12": {
+    "rollover_P": {
+     "entry": "1897-05",
+     "ret_6m": 0.16197692165874433,
+     "ret_12m": 0.24067749356448265,
+     "ret_24m": 0.6384311196948993,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.35314641634196364
+    },
+    "arm_P": {
+     "entry": "1896-11",
+     "ret_6m": -0.04814463287225923,
+     "ret_12m": 0.10603396935944631,
+     "ret_24m": 0.31439237330363334,
+     "worst_dd_12m": -0.05628014883061594,
+     "rebound_missed": 0.5391095835418348
+    },
+    "minus_20pct": {
+     "entry": "1896-09",
+     "ret_6m": 0.06745980040026334,
+     "ret_12m": 0.29484787525433953,
+     "ret_24m": 0.4206730977361046,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.18772743551702406
+    },
+    "peak_plus_6": {
+     "entry": "1896-06",
+     "ret_6m": -0.0011722203681138188,
+     "ret_12m": 0.0326970457060658,
+     "ret_24m": 0.27150937809363174,
+     "worst_dd_12m": -0.11115528905104066
+    },
+    "random_armed_P": {
+     "ret_24m": 0.4479773240093823,
+     "ret_6m": 0.0797085065133023,
+     "ret_12m": 0.1832002162567694,
+     "worst_dd_12m": -0.02396860729116801,
+     "rebound_missed": 0.7232607074771215,
+     "entry": "random"
+    }
+   },
+   "1899-06": {
+    "rollover_P": {
+     "entry": "1901-06",
+     "ret_6m": -0.04605483111525421,
+     "ret_12m": 0.028913084727616445,
+     "ret_24m": -0.08526886988143445,
+     "worst_dd_12m": -0.06400294117647076
+    },
+    "arm_P": {
+     "entry": "1900-09",
+     "ret_6m": 0.323284672283944,
+     "ret_12m": 0.43705929173525027,
+     "ret_24m": 0.65242501383875,
+     "worst_dd_12m": 0.0
+    },
+    "minus_20pct": {
+     "entry": null
+    },
+    "peak_plus_6": {
+     "entry": "1899-12",
+     "ret_6m": -0.007657986348707957,
+     "ret_12m": 0.1902266776554744,
+     "ret_24m": 0.4330327509173102,
+     "worst_dd_12m": -0.007657986348707957
+    },
+    "random_armed_P": {
+     "ret_24m": -0.08526886988143445,
+     "ret_6m": 0.07971779348043206,
+     "ret_12m": 0.12765320738203445,
+     "worst_dd_12m": 0.0,
+     "entry": "random"
+    }
+   },
+   "1902-09": {
+    "rollover_P": {
+     "entry": "1904-09",
+     "ret_6m": 0.25961525183349154,
+     "ret_12m": 0.30804282808945227,
+     "ret_24m": 0.474862230291351,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.7463847982446141
+    },
+    "arm_P": {
+     "entry": "1901-10",
+     "ret_6m": 0.09330774549305842,
+     "ret_12m": 0.12599309070176368,
+     "ret_24m": -0.1392339593915134,
+     "worst_dd_12m": 0.0
+    },
+    "minus_20pct": {
+     "entry": "1903-08",
+     "ret_6m": 0.0070083352077270344,
+     "ret_12m": 0.1134037962994281,
+     "ret_24m": 0.5169128601236956,
+     "worst_dd_12m": -0.04723425395898462
+    },
+    "peak_plus_6": {
+     "entry": "1903-03",
+     "ret_6m": -0.17969016625555878,
+     "ret_12m": -0.15617747881323274,
+     "ret_24m": 0.23005503101295877,
+     "worst_dd_12m": -0.2026522909551568
+    },
+    "random_armed_P": {
+     "ret_24m": 0.28418577783874244,
+     "ret_6m": 0.11497230355271171,
+     "ret_12m": 0.1983722541031061,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 1.30794504071888,
+     "entry": "random"
+    }
+   },
+   "1907-05": {
+    "rollover_P": {
+     "entry": "1909-01",
+     "ret_6m": 0.12160479469334384,
+     "ret_12m": 0.16188184333815503,
+     "ret_24m": 0.1226167319168514,
+     "worst_dd_12m": -0.02495676968359084,
+     "rebound_missed": 1.101717758998302
+    },
+    "arm_P": {
+     "entry": "1908-01",
+     "ret_6m": 0.1903631530158283,
+     "ret_12m": 0.39423598452071995,
+     "ret_24m": 0.6199374757433216,
+     "worst_dd_12m": -0.031225060827250628,
+     "rebound_missed": 0.2183556108299125
+    },
+    "minus_20pct": {
+     "entry": "1907-07",
+     "ret_6m": -0.13145776077427607,
+     "ret_12m": 0.03388067841216058,
+     "ret_24m": 0.3582105159832212,
+     "worst_dd_12m": -0.21609719989466536
+    },
+    "peak_plus_6": {
+     "entry": "1907-11",
+     "ret_6m": 0.25928069430010336,
+     "ret_12m": 0.49447712448231296,
+     "ret_24m": 0.7996377226762517,
+     "worst_dd_12m": 0.0
+    },
+    "random_armed_P": {
+     "ret_24m": 0.14715645384146891,
+     "ret_6m": 0.11713789164011912,
+     "ret_12m": 0.16592649610397725,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 1.0771156729337517,
+     "entry": "random"
+    }
+   },
+   "1910-01": {
+    "rollover_P": {
+     "entry": null
+    },
+    "arm_P": {
+     "entry": "1909-02",
+     "ret_6m": 0.1822020537446123,
+     "ret_12m": 0.1534468194055767,
+     "ret_24m": 0.17608758620868414,
+     "worst_dd_12m": 0.0
+    },
+    "minus_20pct": {
+     "entry": null
+    },
+    "peak_plus_6": {
+     "entry": "1910-07",
+     "ret_6m": 0.10062570466702203,
+     "ret_12m": 0.17204821643793,
+     "ret_24m": 0.22846702021111454,
+     "worst_dd_12m": 0.0
+    },
+    "random_armed_P": {
+     "ret_24m": -0.09943802445953798,
+     "ret_6m": -0.08302330538007385,
+     "ret_12m": -0.09312687746489057,
+     "worst_dd_12m": -0.11177502738042289,
+     "rebound_missed": 1.327924374581,
+     "entry": "random"
+    }
+   },
+   "1913-01": {
+    "rollover_P": {
+     "entry": "1913-03",
+     "ret_6m": -0.002787273126101386,
+     "ret_12m": 0.0010053505954761288,
+     "ret_24m": -0.03642716083847053,
+     "worst_dd_12m": -0.06414974243966576
+    },
+    "arm_P": {
+     "entry": "1912-05",
+     "ret_6m": 0.04080314505745952,
+     "ret_12m": -0.0606343377737566,
+     "ret_24m": -0.04951823737413996,
+     "worst_dd_12m": -0.0606343377737566
+    },
+    "minus_20pct": {
+     "entry": null
+    },
+    "peak_plus_6": {
+     "entry": "1913-07",
+     "ret_6m": 0.04679927615191648,
+     "ret_12m": -0.012208433114086703,
+     "ret_24m": 0.08867600091497696,
+     "worst_dd_12m": -0.012208433114086703
+    },
+    "random_armed_P": {
+     "ret_24m": 0.041066020489034294,
+     "ret_6m": 0.037963307037655936,
+     "ret_12m": 0.0705674742258342,
+     "worst_dd_12m": -0.009385683760683716,
+     "rebound_missed": 0.9175565148525853,
+     "entry": "random"
+    }
+   },
+   "1918-08": {
+    "rollover_P": {
+     "entry": null
+    },
+    "arm_P": {
+     "entry": null
+    },
+    "minus_20pct": {
+     "entry": "1918-03",
+     "ret_6m": 0.07992385383267964,
+     "ret_12m": 0.20547746650076415,
+     "ret_24m": 0.3671911017078542,
+     "worst_dd_12m": -0.002174908424908528
+    },
+    "peak_plus_6": {
+     "entry": "1919-02",
+     "ret_6m": 0.16131550672725492,
+     "ret_12m": 0.09261878202595275,
+     "ret_24m": 0.017912435133274895,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.6493424859906224
+    }
+   },
+   "1920-01": {
+    "rollover_P": {
+     "entry": "1922-01",
+     "ret_6m": 0.20048211508156188,
+     "ret_12m": 0.29128077964732024,
+     "ret_24m": 0.3617502307642082,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.3586526916260139
+    },
+    "arm_P": {
+     "entry": "1920-10",
+     "ret_6m": -0.09126139241472397,
+     "ret_12m": -0.0867038170087695,
+     "ret_24m": 0.33903845377978015,
+     "worst_dd_12m": -0.1310497290654261
+    },
+    "minus_20pct": {
+     "entry": "1921-01",
+     "ret_6m": -0.0480794469425978,
+     "ret_12m": 0.10082543417413903,
+     "ret_24m": 0.42147472489598226,
+     "worst_dd_12m": -0.05395059552979342
+    },
+    "peak_plus_6": {
+     "entry": "1920-07",
+     "ret_6m": -0.06975490883688207,
+     "ret_12m": -0.11448057834107117,
+     "ret_24m": 0.22933865154340038,
+     "worst_dd_12m": -0.11718518150003787
+    },
+    "random_armed_P": {
+     "ret_24m": 0.33903845377978015,
+     "ret_6m": 0.02058832711254044,
+     "ret_12m": 0.10082543417413903,
+     "worst_dd_12m": -0.037665262819679746,
+     "rebound_missed": 1.0,
+     "entry": "random"
+    }
+   },
+   "1923-05": {
+    "rollover_P": {
+     "entry": null
+    },
+    "arm_P": {
+     "entry": "1922-06",
+     "ret_6m": 0.06866608307758115,
+     "ret_12m": 0.04476252447300344,
+     "ret_24m": 0.15123097548850883,
+     "worst_dd_12m": 0.0
+    },
+    "minus_20pct": {
+     "entry": null
+    },
+    "peak_plus_6": {
+     "entry": "1923-11",
+     "ret_6m": 0.056216492972566146,
+     "ret_12m": 0.23826473067434573,
+     "ret_24m": 0.6593054664749667,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.16963635244909964
+    },
+    "random_armed_P": {
+     "ret_24m": 0.5487849316559283,
+     "ret_6m": 0.12984504504860306,
+     "ret_12m": 0.2175924114080401,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 2.0123694898147977,
+     "entry": "random"
+    }
+   },
+   "1926-10": {
+    "rollover_P": {
+     "entry": null
+    },
+    "arm_P": {
+     "entry": null
+    },
+    "minus_20pct": {
+     "entry": null
+    },
+    "peak_plus_6": {
+     "entry": "1927-04",
+     "ret_6m": 0.20174158097854944,
+     "ret_12m": 0.4285911392496462,
+     "ret_24m": 0.9338040495860638,
+     "worst_dd_12m": 0.0
+    }
+   },
+   "1929-08": {
+    "rollover_P": {
+     "entry": null
+    },
+    "arm_P": {
+     "entry": "1930-12",
+     "ret_6m": -0.07883339453539406,
+     "ret_12m": -0.41775862758062177,
+     "ret_24m": -0.48206925836606673,
+     "worst_dd_12m": -0.41775862758062177
+    },
+    "minus_20pct": {
+     "entry": "1929-12",
+     "ret_6m": 0.026884095839700972,
+     "ret_12m": -0.2401291959908618,
+     "ret_24m": -0.557571780212303,
+     "worst_dd_12m": -0.2401291959908618
+    },
+    "peak_plus_6": {
+     "entry": "1930-02",
+     "ret_6m": -0.07926770529879013,
+     "ret_12m": -0.21644285863670987,
+     "ret_24m": -0.596416626087864,
+     "worst_dd_12m": -0.3002081159817763
+    },
+    "random_armed_P": {
+     "ret_24m": 0.1961455487047905,
+     "ret_6m": -0.1669400149523984,
+     "ret_12m": -0.17328378124086075,
+     "worst_dd_12m": -0.4042064305426133,
+     "rebound_missed": 0.3989484156723128,
+     "entry": "random"
+    }
+   },
+   "1937-05": {
+    "rollover_P": {
+     "entry": "1939-03",
+     "ret_6m": 0.05488531550485054,
+     "ret_12m": 0.02870349976777642,
+     "ret_24m": -0.10253114406705544,
+     "worst_dd_12m": -0.12238812886736605,
+     "rebound_missed": 2.0505303837533884
+    },
+    "arm_P": {
+     "entry": "1938-02",
+     "ret_6m": 0.15417481251006926,
+     "ret_12m": 0.18888403797821463,
+     "ret_24m": 0.228055501701375,
+     "worst_dd_12m": -0.09269530856477581
+    },
+    "minus_20pct": {
+     "entry": "1937-10",
+     "ret_6m": -0.1647990224436655,
+     "ret_12m": 0.13686736154676593,
+     "ret_24m": 0.1737387595440958,
+     "worst_dd_12m": -0.1647990224436655
+    },
+    "peak_plus_6": {
+     "entry": "1937-11",
+     "ret_6m": -0.07554963362389566,
+     "ret_12m": 0.24458667883996776,
+     "ret_24m": 0.26154832714545084,
+     "worst_dd_12m": -0.08961301832456947
+    },
+    "random_armed_P": {
+     "ret_24m": -0.06885808237850854,
+     "ret_6m": 0.045542336975563646,
+     "ret_12m": 0.013628338302071885,
+     "worst_dd_12m": -0.12238812886736605,
+     "rebound_missed": 2.027518059181979,
+     "entry": "random"
+    }
+   },
+   "1948-11": {
+    "rollover_P": {
+     "entry": null
+    },
+    "arm_P": {
+     "entry": "1947-12",
+     "ret_6m": 0.15067482495335027,
+     "ret_12m": 0.06871343787193585,
+     "ret_24m": 0.24470571566061383,
+     "worst_dd_12m": -0.05271401874390147
+    },
+    "minus_20pct": {
+     "entry": null
+    },
+    "peak_plus_6": {
+     "entry": "1949-05",
+     "ret_6m": 0.12809221515862346,
+     "ret_12m": 0.3351767385347164,
+     "ret_24m": 0.7026291457139235,
+     "worst_dd_12m": -0.04905277401894448
+    },
+    "random_armed_P": {
+     "ret_24m": 0.5786154370421448,
+     "ret_6m": 0.12362664218054253,
+     "ret_12m": 0.27520881436450595,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.929905201862769,
+     "entry": "random"
+    }
+   },
+   "1953-07": {
+    "rollover_P": {
+     "entry": null
+    },
+    "arm_P": {
+     "entry": "1953-12",
+     "ret_6m": 0.19803021603306892,
+     "ret_12m": 0.48055582663650265,
+     "ret_24m": 0.998057151868426,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.1946267941167617
+    },
+    "minus_20pct": {
+     "entry": null
+    },
+    "peak_plus_6": {
+     "entry": "1954-01",
+     "ret_6m": 0.2146946864027095,
+     "ret_12m": 0.4682542422296334,
+     "ret_24m": 0.8931683310021228,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.27161318710589405
+    },
+    "random_armed_P": {
+     "ret_24m": 0.37807757707284395,
+     "ret_6m": 0.18636029332335213,
+     "ret_12m": 0.3505626594576221,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 1.498924926490633,
+     "entry": "random"
+    }
+   },
+   "1957-08": {
+    "rollover_P": {
+     "entry": null
+    },
+    "arm_P": {
+     "entry": "1956-09",
+     "ret_6m": -0.04161641014413198,
+     "ret_12m": -0.02454746406653452,
+     "ret_24m": 0.13100645389339527,
+     "worst_dd_12m": -0.056893705196447764
+    },
+    "minus_20pct": {
+     "entry": null
+    },
+    "peak_plus_6": {
+     "entry": "1958-02",
+     "ret_6m": 0.17900358500609181,
+     "ret_12m": 0.37637252067235627,
+     "ret_24m": 0.4465183659087666,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.08057727609910166
+    },
+    "random_armed_P": {
+     "ret_24m": 0.5111117408395827,
+     "ret_6m": 0.10617162469818386,
+     "ret_12m": 0.3529331708935992,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.06160318362317214,
+     "entry": "random"
+    }
+   },
+   "1960-04": {
+    "rollover_P": {
+     "entry": null
+    },
+    "arm_P": {
+     "entry": "1961-02",
+     "ret_6m": 0.10658208048738427,
+     "ret_12m": 0.16285893878459,
+     "ret_24m": 0.12936655568031186,
+     "worst_dd_12m": 0.0
+    },
+    "minus_20pct": {
+     "entry": "1962-07",
+     "ret_6m": 0.1621998895750636,
+     "ret_12m": 0.2536196318630495,
+     "ret_24m": 0.5564425525731456,
+     "worst_dd_12m": -0.005091078156270856
+    },
+    "peak_plus_6": {
+     "entry": "1960-10",
+     "ret_6m": 0.24504458810554453,
+     "ret_12m": 0.3050160579868697,
+     "ret_24m": 0.11337689772553916,
+     "worst_dd_12m": 0.0
+    },
+    "random_armed_P": {
+     "ret_24m": 0.14537107355840995,
+     "ret_6m": 0.04816813024550193,
+     "ret_12m": -0.028801759170621444,
+     "worst_dd_12m": -0.15394317609939356,
+     "entry": "random"
+    }
+   },
+   "1981-07": {
+    "rollover_R": {
+     "entry": "1983-05",
+     "ret_6m": 0.028105468925895494,
+     "ret_12m": -0.0033454370885529494,
+     "ret_24m": 0.2302646954662364,
+     "worst_dd_12m": -0.01030332622634711,
+     "rebound_missed": 0.9356968288885834
+    },
+    "claims_C1": {
+     "entry": "1983-01",
+     "ret_6m": 0.18280656870239675,
+     "ret_12m": 0.20386582406724751,
+     "ret_24m": 0.2994626183281992,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.5886106213982458
+    },
+    "claims_C2": {
+     "entry": "1983-03",
+     "ret_6m": 0.12426107700796951,
+     "ret_12m": 0.08165207378010031,
+     "ret_24m": 0.2897365293165044,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.7254250886700242
+    },
+    "minus_20pct": {
+     "entry": null
+    },
+    "peak_plus_6": {
+     "entry": "1982-01",
+     "ret_6m": -0.039031971366001894,
+     "ret_12m": 0.30134403945429766,
+     "ret_24m": 0.5666436144526485,
+     "worst_dd_12m": -0.04601695350629331
+    }
+   },
+   "1990-07": {
+    "rollover_R": {
+     "entry": null
+    },
+    "claims_C1": {
+     "entry": "1991-06",
+     "ret_6m": 0.04338190645451667,
+     "ret_12m": 0.11295688728967135,
+     "ret_24m": 0.25704655191726866,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.8601603144317962
+    },
+    "claims_C2": {
+     "entry": "1991-11",
+     "ret_6m": 0.09115377189838059,
+     "ret_12m": 0.1289200292567454,
+     "ret_24m": 0.2706961113805477,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 1.0006555022814765
+    },
+    "minus_20pct": {
+     "entry": null
+    },
+    "peak_plus_6": {
+     "entry": "1991-01",
+     "ret_6m": 0.1872120223131899,
+     "ret_12m": 0.3195596193408716,
+     "ret_24m": 0.42172678186841783,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.23058490539004928
+    }
+   },
+   "2001-03": {
+    "rollover_R": {
+     "entry": "2002-05",
+     "ret_6m": -0.1494652623416718,
+     "ret_12m": -0.11709565843062764,
+     "ret_24m": 0.05723176965454524,
+     "worst_dd_12m": -0.21400324004025306
+    },
+    "claims_C1": {
+     "entry": "2002-01",
+     "ret_6m": -0.20153346616530154,
+     "ret_12m": -0.20125513990407928,
+     "ret_24m": 0.02705949574978983,
+     "worst_dd_12m": -0.24138124914736925
+    },
+    "claims_C2": {
+     "entry": "2002-05",
+     "ret_6m": -0.1494652623416718,
+     "ret_12m": -0.11709565843062764,
+     "ret_24m": 0.05723176965454524,
+     "worst_dd_12m": -0.21400324004025306
+    },
+    "minus_20pct": {
+     "entry": "2001-04",
+     "ret_6m": -0.08904397413442211,
+     "ret_12m": -0.052563449545018126,
+     "ret_24m": -0.22809404165977387,
+     "worst_dd_12m": -0.1171540667498574
+    },
+    "peak_plus_6": {
+     "entry": "2001-09",
+     "ret_6m": 0.11224253021066066,
+     "ret_12m": -0.1565775862006038,
+     "ret_24m": 0.008411895825022109,
+     "worst_dd_12m": -0.1565775862006038
+    }
+   },
+   "2007-12": {
+    "rollover_R": {
+     "entry": null
+    },
+    "claims_C1": {
+     "entry": "2009-08",
+     "ret_6m": 0.0900486379408203,
+     "ret_12m": 0.09892960744228918,
+     "ret_24m": 0.22056163320096034,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.6256960176766831
+    },
+    "claims_C2": {
+     "entry": "2010-01",
+     "ret_6m": -0.02947557831622094,
+     "ret_12m": 0.1638752034939872,
+     "ret_24m": 0.20354038767845428,
+     "worst_dd_12m": -0.02947557831622094,
+     "rebound_missed": 0.9221120503872952
+    },
+    "minus_20pct": {
+     "entry": "2008-10",
+     "ret_6m": -0.10992793588446603,
+     "ret_12m": 0.13473461693222966,
+     "ret_24m": 0.2701680170055638,
+     "worst_dd_12m": -0.20752604230822946
+    },
+    "peak_plus_6": {
+     "entry": "2008-06",
+     "ret_6m": -0.336757912067702,
+     "ret_12m": -0.2888555067803338,
+     "ret_24m": -0.15031404464296005,
+     "worst_dd_12m": -0.42286572184158433
+    }
+   }
+  },
+  "median": {
+   "arm_P": {
+    "episodes": 16,
+    "entries": 14,
+    "ret_6m": 0.09994491299022135,
+    "ret_12m": 0.116013530030605,
+    "ret_24m": 0.20207154395502958,
+    "worst_dd_12m": -0.04196953978557605,
+    "rebound_missed": 0.2183556108299125
+   },
+   "claims_C1": {
+    "episodes": 4,
+    "entries": 4,
+    "ret_6m": 0.06671527219766848,
+    "ret_12m": 0.10594324736598026,
+    "ret_24m": 0.2388040925591145,
+    "worst_dd_12m": 0.0,
+    "rebound_missed": 0.6256960176766831
+   },
+   "claims_C2": {
+    "episodes": 4,
+    "entries": 4,
+    "ret_6m": 0.030839096791079823,
+    "ret_12m": 0.10528605151842285,
+    "ret_24m": 0.237118249529501,
+    "worst_dd_12m": -0.01473778915811047,
+    "rebound_missed": 0.9221120503872952
+   },
+   "minus_20pct": {
+    "episodes": 20,
+    "entries": 10,
+    "ret_6m": -0.020535555867435384,
+    "ret_12m": 0.12406920661582888,
+    "ret_24m": 0.3627008088455377,
+    "worst_dd_12m": -0.08555233113982541,
+    "rebound_missed": 0.18772743551702406
+   },
+   "peak_plus_6": {
+    "episodes": 20,
+    "entries": 20,
+    "ret_6m": 0.07842109881979409,
+    "ret_12m": 0.21424570416491007,
+    "ret_24m": 0.2665288526195413,
+    "worst_dd_12m": -0.00993320973139733,
+    "rebound_missed": 0.23058490539004928
+   },
+   "random_armed_P": {
+    "episodes": 14,
+    "entries": 14,
+    "ret_6m": 0.07971314999686718,
+    "ret_12m": 0.14678985174300585,
+    "ret_24m": 0.24016566327176647,
+    "worst_dd_12m": -0.004692841880341858,
+    "rebound_missed": 1.0385578364668757
+   },
+   "rollover_P": {
+    "episodes": 16,
+    "entries": 7,
+    "ret_6m": 0.12160479469334384,
+    "ret_12m": 0.16188184333815503,
+    "ret_24m": 0.1226167319168514,
+    "worst_dd_12m": -0.02495676968359084,
+    "rebound_missed": 0.7463847982446141
+   },
+   "rollover_R": {
+    "episodes": 4,
+    "entries": 2,
+    "ret_6m": -0.06067989670788815,
+    "ret_12m": -0.06022054775959029,
+    "ret_24m": 0.14374823256039082,
+    "worst_dd_12m": -0.11215328313330009,
+    "rebound_missed": 0.9356968288885834
+   }
+  },
+  "median_common_subset_P": {
+   "episodes": [
+    "1895-12",
+    "1902-09",
+    "1907-05",
+    "1920-01",
+    "1937-05"
+   ],
+   "median": {
+    "rollover_P": {
+     "episodes": 5,
+     "entries": 5,
+     "ret_6m": 0.16197692165874433,
+     "ret_12m": 0.24067749356448265,
+     "ret_24m": 0.3617502307642082,
+     "worst_dd_12m": 0.0,
+     "rebound_missed": 0.7463847982446141
+    },
+    "arm_P": {
+     "episodes": 5,
+     "entries": 5,
+     "ret_6m": 0.09330774549305842,
+     "ret_12m": 0.12599309070176368,
+     "ret_24m": 0.31439237330363334,
+     "worst_dd_12m": -0.05628014883061594,
+     "rebound_missed": 0.37873259718587365
+    },
+    "peak_plus_6": {
+     "episodes": 5,
+     "entries": 5,
+     "ret_6m": -0.06975490883688207,
+     "ret_12m": 0.0326970457060658,
+     "ret_24m": 0.26154832714545084,
+     "worst_dd_12m": -0.11115528905104066
+    },
+    "minus_20pct": {
+     "episodes": 5,
+     "entries": 5,
+     "ret_6m": -0.0480794469425978,
+     "ret_12m": 0.1134037962994281,
+     "ret_24m": 0.4206730977361046,
+     "worst_dd_12m": -0.05395059552979342,
+     "rebound_missed": 0.18772743551702406
+    },
+    "random_armed_P": {
+     "episodes": 5,
+     "entries": 5,
+     "ret_6m": 0.0797085065133023,
+     "ret_12m": 0.16592649610397725,
+     "ret_24m": 0.28418577783874244,
+     "worst_dd_12m": -0.02396860729116801,
+     "rebound_missed": 1.0771156729337517
+    }
+   }
+  }
+ }
+}

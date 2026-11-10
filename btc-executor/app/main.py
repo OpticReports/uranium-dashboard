@@ -8,6 +8,7 @@ Control surface:
 """
 from __future__ import annotations
 
+import hmac
 import logging
 import threading
 import time
@@ -17,15 +18,45 @@ from fastapi import FastAPI, HTTPException, Query, Header
 
 from .config import settings
 from .feed import EngineFeed
-from .mirror import Executor
+from . import mirror
+from .mirror import (Executor, DRILL_CYCLE_NEED, SLIP_SANITY_MAX_BPS,  # noqa: F401
+                     SLIPPAGE_SAMPLE_NEED)
+
+
+def _tok_eq(given: str | None, want: str) -> bool:
+    """Constant-time. == on a secret leaks its prefix through timing, and
+    this one authorizes real orders."""
+    return bool(given) and hmac.compare_digest(given, want)
 
 
 def _auth(x_exec_token: str | None, token_q: str | None) -> None:
-    """Control/status endpoints share the EXEC_TOKEN secret. Header for
-    tools, ?token= for a browser. No token configured -> open (dev only)."""
-    if settings.exec_token and x_exec_token != settings.exec_token \
-            and token_q != settings.exec_token:
-        raise HTTPException(status_code=401, detail="bad exec token")
+    """WRITE authority. /drill, /coverage/attest, /kill and /resume all sit
+    behind this, and /drill places REAL ORDERS - so EXEC_TOKEN is a trading
+    credential, not a viewing one. Never hand it to something that only
+    needs to read; use EXEC_READ_TOKEN for that.
+
+    Header for tools, ?token= for a browser. No token configured -> open
+    (dev only)."""
+    if not settings.exec_token:
+        return
+    if _tok_eq(x_exec_token, settings.exec_token) \
+            or _tok_eq(token_q, settings.exec_token):
+        return
+    raise HTTPException(status_code=401, detail="bad exec token")
+
+
+def _auth_read(x_exec_token: str | None, token_q: str | None) -> None:
+    """READ-ONLY authority, for GET /status and nothing else.
+
+    EXEC_READ_TOKEN satisfies this and no other endpoint in the service.
+    That separation is the whole point: an assistant should be able to
+    answer "what is the executor holding" without also being able to fire a
+    drill. EXEC_TOKEN still works here, so existing tooling is untouched,
+    and an unset read token leaves the endpoint exactly as it was."""
+    rt = settings.exec_read_token
+    if rt and (_tok_eq(x_exec_token, rt) or _tok_eq(token_q, rt)):
+        return
+    _auth(x_exec_token, token_q)
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger(__name__)
@@ -35,12 +66,43 @@ LAST: dict = {"target": None, "target_ts": 0, "loop_ok": 0}
 EXEC: Executor | None = None
 
 
+VENUES = ("coinbase", "hyperliquid")
+
+
+def _venue_name() -> str:
+    """Validated at boot. An unknown VENUE RAISES rather than defaulting -
+    a typo must never route real orders to whichever venue happens to be
+    the fallback, and the caller's retry loop turns this into a loud,
+    repeating ACTION page instead of a silent wrong-exchange deploy."""
+    v = str(getattr(settings, "venue", "coinbase") or "coinbase").strip().lower()
+    if v not in VENUES:
+        raise RuntimeError(f"VENUE={v!r} is not one of {VENUES}")
+    return v
+
+
 def _build_executor() -> Executor:
     import os
     inner = None
+    which = _venue_name()
     LAST["venue_init_error"] = None
     LAST["venue_products"] = None
-    if not (settings.cb_api_key_name and settings.cb_api_private_key):
+    LAST["venue_name"] = which
+    if which == "hyperliquid":
+        missing = "no HL_SECRET_KEY set" if not settings.hl_secret_key else None
+        if missing:
+            LAST["venue_init_error"] = missing
+        else:
+            try:
+                from .hl import HyperliquidVenue
+                inner = HyperliquidVenue(settings)
+                LAST["venue_products"] = inner.list_perp_candidates()
+                logger.info("hyperliquid perps visible: %s",
+                            LAST["venue_products"])
+            except Exception as exc:  # noqa: BLE001
+                LAST["venue_init_error"] = f"{type(exc).__name__}: {exc}"
+                logger.error("hyperliquid venue init failed: %s", exc)
+                inner = None
+    elif not (settings.cb_api_key_name and settings.cb_api_private_key):
         LAST["venue_init_error"] = "no CB_API_KEY_NAME / CB_API_PRIVATE_KEY set"
     else:
         try:
@@ -61,11 +123,24 @@ def _build_executor() -> Executor:
         # same phenotype as the DRY_RUN blueprint incident). Alert and raise;
         # _loop retries with backoff so a transient Coinbase outage self-heals.
         from .alerts import send
-        send("🔴 ACTION NEEDED (you) — executor venue_init_failed: LIVE mode "
-             f"cannot connect to Coinbase ({LAST['venue_init_error']}). "
-             "No orders are being managed; any open positions/stops are "
-             "untouched on the venue. Retrying automatically - if this "
-             "repeats, check Coinbase status and the API key in Render.")
+        # RATE-LIMITED (re-gate 2026-08-27): alerts.send has no cooldown of
+        # its own and never touches Executor._event's RATE_LIMITED table, so
+        # the new retry loop below would fire this ACTION page on every
+        # attempt - 144 identical pages a day, forever, on a missing-key
+        # condition that never self-heals. This repo set its own house rule
+        # at one page per 30 min after halt_config (~180/hr) and
+        # stop_vanished (4,320/day); the retry is right, its paging was not.
+        now = time.time()
+        if now - LAST.get("init_paged_at", 0.0) > 1800:
+            LAST["init_paged_at"] = now
+            send("🔴 ACTION NEEDED (you) — executor venue_init_failed: LIVE "
+                 f"mode cannot connect to {which.upper()} "
+                 f"({LAST['venue_init_error']}). "
+                 "No orders are being managed; any open positions/stops are "
+                 "untouched on the venue. Retrying automatically every "
+                 "30s-10min - if this repeats, check the venue's status and "
+                 f"the {which} credentials in Render. "
+                 "(This page is rate-limited to 1/30min.)")
         raise RuntimeError(f"live venue init failed: "
                            f"{LAST['venue_init_error']}")
     if settings.dry_run:
@@ -84,7 +159,31 @@ def _build_executor() -> Executor:
 
 def _loop() -> None:
     global EXEC
-    EXEC = _build_executor()
+    # The venue_init_failed ACTION page has promised "Retrying
+    # automatically" since 2026-08-11 — but this call sat OUTSIDE any
+    # try, so a raise killed the daemon thread and no retry ever existed
+    # (counter-agent 2026-08-27, out-of-delta find). Mid-incident that is
+    # the worst possible shape: a transient Coinbase outage at deploy time
+    # left the service permanently dead while its own alert claimed it was
+    # self-healing. Backoff 30s -> 60s -> ... -> capped 10 min, forever:
+    # a LIVE book must not stay unmanaged because boot raced an outage.
+    delay, attempts = 30.0, 0
+    while EXEC is None:
+        try:
+            EXEC = _build_executor()
+        except Exception as exc:  # noqa: BLE001
+            attempts += 1
+            logger.exception("executor build failed, retrying in %ss: %s",
+                             delay, exc)
+            time.sleep(delay)
+            delay = min(delay * 2, 600.0)
+    if attempts:
+        # close the loop the ACTION page opened: an operator who was told
+        # "no orders are being managed" must be told when that stops being
+        # true, or they act on a stale page.
+        from .alerts import send
+        send(f"✅ executor venue_init recovered after {attempts} failed "
+             f"attempt(s) — the book is being managed again; no action needed")
     while True:
         try:
             target = FEED.get_target()
@@ -94,7 +193,19 @@ def _loop() -> None:
                 EXEC.step(target)
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
+            # NOT SILENT (2026-08-29 review blocker). This caught everything
+            # and wrote a log line nothing reads: no event, no page, no
+            # /pulse signal. equity() is the FIRST venue call of every step
+            # and now touches three endpoints, so one degrading endpoint
+            # aborts the whole step - stops unverified, fills unbooked,
+            # drift unchecked - with a green /health throughout. That is the
+            # silently-absent-safety shape this rewrite exists to prevent.
             logger.exception("executor loop error: %s", exc)
+            try:
+                if EXEC is not None:
+                    EXEC.note_step_error(exc)
+            except Exception:  # noqa: BLE001
+                logger.exception("failed to record step error")
         time.sleep(settings.poll_seconds)
 
 
@@ -107,10 +218,31 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="S5 Executor", version="0.1.0", lifespan=lifespan)
 
 
+def _build_sha() -> str | None:
+    """Which commit is actually running.
+
+    Added 2026-08-28 after a live diagnosis stalled on a question nothing
+    could answer. A rail was reporting a fault, a fix was pushed, and there
+    was no way to tell from outside whether the next reading came from the
+    OLD build or the new one — so a value that had not changed was
+    indistinguishable from a deploy that had not landed, and the diagnosis
+    could only be guessed at. Every other field on these endpoints
+    describes STATE; without this one none of them can be attributed to a
+    version of the code.
+
+    Render injects RENDER_GIT_COMMIT. Absent (local, or a runtime that does
+    not set it) the honest answer is null, never a guess."""
+    import os
+    sha = (os.environ.get("RENDER_GIT_COMMIT")
+           or os.environ.get("GIT_COMMIT") or "").strip()
+    return sha[:7] or None
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "btc-executor",
             "dry_run": settings.dry_run,
+            "build": _build_sha(),
             "loop_age_s": round(time.time() - LAST["loop_ok"], 1)
             if LAST["loop_ok"] else None}
 
@@ -120,25 +252,140 @@ def pulse():
     """Public minimal heartbeat for automated monitoring: state flags only —
     no equity, no position sizes, no order details."""
     if EXEC is None:
-        return {"ready": False}
+        return {"ready": False, "build": _build_sha()}
     st = EXEC.state
     now = time.time()
-    red_24h = sum(1 for e in st.events
-                  if e.get("level") == "RED" and now - e.get("ts", 0) < 86_400)
+    # WHICH REDs, not just how many. A condition that persists logs one RED
+    # per poll - the PHONE ping is throttled by mirror.RATE_LIMITED, the log
+    # deliberately is not - so a single stopless window (the 09-18 16:00Z
+    # entry, unprotected until the engine's 20:00Z bar close) took this count
+    # 1 -> 28 in nine hours. On a bare total, a genuinely NEW kind arriving
+    # in that stretch is indistinguishable from the same one repeating, and
+    # /pulse is the only unauthenticated surface. Kind names carry no sizes,
+    # prices or order ids - the same reason auto_drill publishes a bare
+    # reason token rather than its {pos} / {exc} detail.
+    red_kinds_24h: dict[str, int] = {}
+    for e in st.events:
+        if e.get("level") == "RED" and now - e.get("ts", 0) < 86_400:
+            red_kinds_24h[str(e.get("kind", "?"))] = \
+                red_kinds_24h.get(str(e.get("kind", "?")), 0) + 1
+    # computed from the SAME pass, so the total can never disagree with the
+    # breakdown that explains it
+    red_24h = sum(red_kinds_24h.values())
+    _rv = _ramp_v4(st)
+    rv = _rv["rows"]
     return {"ready": True, "dry_run": settings.dry_run,
+            # CAPABILITY flag, not state: this build values non-USDC spot
+            # (the ETH carry sleeve's UETH) in equity. carry-executor refuses
+            # to OPEN unless it reads True here - an older build would read
+            # the USDC->UETH swap as a -$30k day and halt the BTC book.
+            "equity_counts_spot_tokens": True,
+            # which commit produced every other field below — without it a
+            # reading cannot be attributed to a build (2026-08-28)
+            "build": _build_sha(),
+            # WHICH VENUE is publicly visible: a book silently running on
+            # the wrong exchange is the one config error no ledger check can
+            # catch, and this is the only unauthenticated surface.
+            "venue": LAST.get("venue_name", "coinbase"),
             "halted": st.halted, "red_events_24h": red_24h,
+            # {kind: count}; sum(values()) == red_events_24h by construction
+            "red_kinds_24h": red_kinds_24h,
+            "ramp_v4_met": f"{sum(r['met'] for r in rv.values())}/{len(rv)}",
+            # without this a 13/13 -> 0/13 drop at the provenance split reads
+            # as data loss to whoever is watching the heartbeat
+            "ramp_v4_unattributed": _rv["unattributed_total"],
+            # attestation drives unattributed to 0; without this the public
+            # heartbeat reports attested rows identically to observed ones
+            "ramp_v4_attested": sum(1 for r in rv.values()
+                                    if r.get("attested")),
+            # why auto-drill is not drilling. Without this, "armed and
+            # waiting behind an open position" and "broken" look identical
+            # on the only endpoint that is public.
+            # Bare reason TOKEN only: _drill_refusal returns
+            # venue_not_flat:{pos} and position_unreadable:{exc}, which would
+            # publish position sizes and raw API error text (key ids included)
+            # on an unauthenticated endpoint (counter-agent 2026-08-24).
+            "auto_drill": ("off" if getattr(st, "auto_drill_off", None)
+                           else (getattr(EXEC, "_auto_drill_wait", None)
+                                 or "ok").split(":")[0]),
             "last_target_age_s": round(now - LAST["target_ts"], 1)
             if LAST["target_ts"] else None,
+            # age of the last SUCCESSFUL venue position read. Every other
+            # field here reads the LEDGER (belief); this is the only signal
+            # of venue truth an external monitor gets. null = never read
+            # this process; a growing number = the executor is going blind
+            # (2026-08-26: three days blind with a healthy-looking pulse).
+            "venue_read_age_s": (round(now - st.last_venue_read_ts, 1)
+                                 if getattr(st, "last_venue_read_ts", 0)
+                                 else None),
+            # WHICH KEY IS DEPLOYED, as the address it signs as. Added
+            # 2026-08-28 after a key swap could not be verified from
+            # outside: agent_days_left said "this key is not an approved
+            # agent", but it could not say WHICH key, so "you pasted the
+            # wrong one" and "the new one has not loaded yet" were the same
+            # observation - and every other signal that might have
+            # distinguished them (the build sha, which does not change on an
+            # env edit; the rolling RED count, which can absorb a new event
+            # as an old one ages out) turned out not to. This one is
+            # unambiguous: compare it against the approved agent.
+            # Not a secret - an agent address is public on-chain, already
+            # discoverable from the account, and useless without the key.
+            "agent_address": (getattr(EXEC.venue, "agent_address", None)
+                              or getattr(getattr(EXEC.venue, "inner", None),
+                                         "agent_address", None)),
+            # ...and WHICH ACCOUNT it signs FOR. Both halves are needed:
+            # publishing only the signer sent a live diagnosis down the wrong
+            # path for two rounds, because "this key is not an approved agent
+            # of X" is equally consistent with a wrong key and a wrong X, and
+            # X was the one nobody could see. It is also the address
+            # position() and equity() read, so a wrong value here is the
+            # phantom-position failure mode itself: a real book elsewhere,
+            # reported as a CONFIRMED FLAT, with a healthy-looking
+            # venue_read_age_s because the read genuinely succeeded - against
+            # the wrong account.
+            # Leaks nothing: userRole(agent_address) already returns this
+            # address to anyone, and agent_address is published above.
+            "account_address": (getattr(EXEC.venue, "address", None)
+                                or getattr(getattr(EXEC.venue, "inner", None),
+                                           "address", None)),
+            # WHICH CHAIN every other field describes. venue="hyperliquid"
+            # was not enough: mainnet and testnet are the same adapter and
+            # the same healthy-looking pulse, against different accounts.
+            "network": (getattr(EXEC.venue, "network", None)
+                        or getattr(getattr(EXEC.venue, "inner", None),
+                                   "network", None)),
+            # days until the signing key stops working (Hyperliquid agent
+            # wallets expire). null = no expiry, or not read yet. The
+            # executor halts itself at T-1 day, but this makes the clock
+            # visible to an external monitor long before that.
+            "agent_days_left": (
+                round((getattr(st, "agent_valid_until", None) - now) / 86400.0, 2)
+                if getattr(st, "agent_valid_until", None) is not None else None),
+            # engine_halted is on /pulse deliberately: a halted engine book
+            # goes flat and STAYS flat, which renders here as in_position
+            # false - identical to "flat between signals". Without this field
+            # an external monitor cannot tell a dead leg from a quiet one.
             "legs": {n: {"in_position": l.qty != 0.0,
                          "entry_open": l.entry_cloid is not None,
-                         "stop_placed": l.stop_cloid is not None}
+                         # a VENUE stop only. A subordinate leg on an
+                         # opposed book reads false here with
+                         # stop_mode "engine" (docs/NETTING_FIX_DESIGN.md)
+                         "stop_placed": l.stop_cloid is not None,
+                         "stop_mode": getattr(l, "stop_mode", None),
+                         # exposure the venue netted away that is owed to
+                         # the engine's position (flag only: no sizes on
+                         # the unauthenticated surface)
+                         "netted": bool(getattr(l, "netted_qty", 0.0)),
+                         "reest_open": getattr(l, "reest_cloid", None)
+                         is not None,
+                         "engine_halted": l.engine_halted}
                      for n, l in st.legs.items()}}
 
 
 @app.get("/status")
 def status(x_exec_token: str | None = Header(default=None),
            token: str | None = Query(default=None)):
-    _auth(x_exec_token, token)
+    _auth_read(x_exec_token, token)      # READ token is enough HERE ONLY
     if EXEC is None:
         return {"ready": False}
     inner = LAST.get("_inner")
@@ -154,27 +401,59 @@ def status(x_exec_token: str | None = Header(default=None),
     venue = EXEC.venue
     dry_log = getattr(venue, "log", None)
     out = {"ready": True, "dry_run": settings.dry_run,
+           "build": _build_sha(),
            "venue_inner": LAST.get("venue_inner"),
            "venue_init_error": LAST.get("venue_init_error"),
            "venue_products": LAST.get("venue_products"),
            "product": settings.cb_product_id,
            "kelly_m": settings.kelly_m,
+           # The EFFECTIVE size, next to the configured one. /status reporting
+           # only the env value would state a size the executor is not using
+           # the moment KELLY_M goes over the cap - the same "healthy while
+           # doing something else" phenotype the boot gates exist to kill.
+           "kelly_m_effective": EXEC._effective_kelly_m(),
+           "kelly_m_cap": mirror.KELLY_M_CAP,
            "sizing_config": {
                "sizing_base_usd": settings.sizing_base_usd or "account equity",
                "kelly_m": settings.kelly_m,
+               "kelly_m_effective": EXEC._effective_kelly_m(),
+               "kelly_m_cap": mirror.KELLY_M_CAP,
+               # read the EXECUTOR's cfg, not the module-level settings: they
+               # are the same object in production and only in production
+               # (counter-agent M4)
+               "kelly_over_cap": EXEC.cfg.kelly_m > mirror.KELLY_M_CAP,
+               "max_exposure_frac": mirror.MAX_EXPOSURE_FRAC,
                "max_notional_usd": settings.max_notional_usd,
                "max_account_lev": settings.max_account_lev,
                "daily_loss_halt_pct": settings.daily_loss_halt_pct,
+               # the line actually enforced: scaled with effective KELLY_M
+               # above mirror.DAILY_LOSS_REF_KELLY (2026-10-01)
+               "daily_loss_halt_pct_effective": EXEC._daily_loss_pct(),
                "dd_halt_pct": settings.dd_halt_pct},
            "halted": st.halted,
            "day_start_equity": st.day_start_equity,
            "high_water": st.high_water,
            "legs": {n: vars(l) for n, l in st.legs.items()},
-           "marks": st.marks[-30:],
+           "marks": st.marks[-400:],
+           "fills": getattr(st, "fills", [])[-400:],
            "events": st.events[-50:],
            "last_target": LAST["target"],
            "last_target_age_s": round(time.time() - LAST["target_ts"], 1)
-           if LAST["target_ts"] else None}
+           if LAST["target_ts"] else None,
+           "coverage": getattr(st, "coverage", {}),
+           "coverage_live": getattr(st, "coverage_live", {}),
+           "coverage_attested": getattr(st, "coverage_attested", {}),
+           "mode_flips": getattr(st, "mode_flips", 0),
+           "drills": getattr(st, "drills", [])[-10:],
+           "auto_drill": {"enabled": settings.auto_drill,
+                          "spacing_s": settings.auto_drill_spacing_s,
+                          "off": getattr(st, "auto_drill_off", None),
+                          # full reason string stays on the TOKEN-GATED
+                          # endpoint; /pulse publishes only the bare token
+                          "waiting_on": getattr(EXEC, "_auto_drill_wait",
+                                                None),
+                          "next_needed": EXEC._needed_auto_drill()},
+           "ramp_v4": _ramp_v4(st)}
     try:
         out["equity"] = venue.equity()
         out["venue_position_btc"] = venue.position()
@@ -183,6 +462,195 @@ def status(x_exec_token: str | None = Header(default=None),
     if dry_log is not None:
         out["dry_run_intents"] = dry_log[-50:]
     return out
+
+
+RAMP_V4_REQUIRED = {"entry_long": 2, "entry_short": 2, "stop_placed": 2,
+                    "stop_filled": 1, "signal_exit": 2, "chase": 1,
+                    "post_only_cross": 1, "restart_with_position": 1,
+                    "config_change": 1, "drill_cycle": DRILL_CYCLE_NEED,
+                    "halt": 1, "resume": 1,
+                    # netted venue (docs/NETTING_FIX_DESIGN.md): the R
+                    # order is a NEW live order class - exposure the venue
+                    # netted away re-opened toward the engine. Unwitnessed
+                    # until an opposed episode ends in a netting event.
+                    "netted_reopen": 1}
+
+
+def _ramp_v4(st) -> dict:
+    """Ramp gate on LIVE-MODE evidence only.
+
+    `have` reads state.coverage_live (events produced with DRY_RUN=false).
+    The all-modes total and the difference are reported alongside as
+    `all_modes` / `unattributed` so nothing disappears silently — but only
+    live counts can mark a row met. Rationale: the matrix exists to prove
+    venue mechanics, and a dry-run event proves the state machine against
+    DryRunVenue instead. Counts written before the mode split (2026-08-21)
+    carry no provenance and are therefore unattributed: they must be
+    re-earned live, which is the conservative direction.
+    """
+    # Shape-hardened: /status AND the public /pulse both render this, and
+    # _load_state accepts any JSON that parses. A corrupt row must not blind
+    # monitoring with a 500 (counter-agent find 2026-08-21).
+    cov = getattr(st, "coverage", {}) or {}
+    live = getattr(st, "coverage_live", {}) or {}
+    cov = cov if isinstance(cov, dict) else {}
+    live = live if isinstance(live, dict) else {}
+    fills = getattr(st, "fills", []) or []
+    fills = fills if isinstance(fills, list) else []
+    # a fill recorded before the split has no "live" key -> unattributed
+    # void fills are excluded: the 2026-08-26 incident recorded two chase
+    # fills with 1320bps of fictitious "slippage" (measured against a
+    # days-stale engine price) — one of which never happened at all. They
+    # stay in the record for audit, marked void, and count toward nothing.
+    n_live = sum(1 for f in fills
+                 if isinstance(f, dict) and f.get("live") is True
+                 and not f.get("void"))
+
+    def _n(d, k):
+        v = d.get(k, 0)
+        return v if isinstance(v, int) and v >= 0 else 0
+
+    att = getattr(st, "coverage_attested", {}) or {}
+    att = att if isinstance(att, dict) else {}
+
+    def _row(k, need, have, all_modes):
+        # live > all_modes is impossible from _cov (which writes both) and
+        # can only come from a tampered/rolled-back state file. Never let it
+        # render as satisfied.
+        corrupt = have > all_modes
+        return {"have": have, "need": need,
+                "met": (have >= need) and not corrupt,
+                "all_modes": all_modes,
+                "unattributed": max(0, all_modes - have),
+                # attested != observed: the matrix must keep saying which,
+                # and "have: 7, attested: 2" is ambiguous without observed
+                **({"attested": _n(att, k),
+                    "observed": max(0, have - _n(att, k))}
+                   if _n(att, k) else {}),
+                **({"corrupt": True} if corrupt else {})}
+
+    rows = {k: _row(k, v, _n(live, k), _n(cov, k))
+            for k, v in RAMP_V4_REQUIRED.items()}
+    rows["slippage_sample"] = _row("slippage_sample", SLIPPAGE_SAMPLE_NEED,
+                                   n_live, len(fills))
+    complete = all(r["met"] for r in rows.values())
+    sanity = _slip_sanity(fills)
+    return {"spec": "RAMP_V4.md (frozen 2026-08-15; mode guard 2026-08-21; "
+                    "slippage rationale 2026-09-02)",
+            "basis": "live-mode events only (DRY_RUN=false)",
+            "attestation": getattr(st, "attestation", None),
+            "rows": rows,
+            "coverage_complete": complete,
+            # The spec's own advancement sentence has ALWAYS been "coverage
+            # complete AND slippage sane", but only the first half was ever
+            # computed - the second lived in prose, so an operator reading
+            # /status saw 13/13 and no sanity verdict at all (counter-agent
+            # 2026-09-02). Both halves are machine-checked now.
+            "slippage_sanity": sanity,
+            # CAP-AWARE (counter-agent 2026-09-10). The first cut edited only
+            # the note below and left this boolean pure execution evidence -
+            # so the machine-readable field that the dashboard and any
+            # automation read could still say "advance" when the next rung is
+            # 0.35. That is precisely the failure KELLY_M_CAP exists to stop,
+            # left computationally intact.
+            "next_rung": _next_rung(),
+            "next_rung_within_cap": _next_rung() is not None,
+            "advance_ok": bool(complete and sanity["ok"]
+                               and _next_rung() is not None),
+            "unattributed_total": sum(r["unattributed"] for r in rows.values()),
+            "note": f"advance KELLY_M only when advance_ok AND the target "
+                    f"rung is <= KELLY_M_CAP ({mirror.KELLY_M_CAP}): these rows "
+                    f"EXECUTION evidence and say nothing about the sizing "
+                    f"envelope (RESEARCH_SHARPE.md addendum: ~0.75 on the "
+                    f"modern-regime -30% budget). "
+                    f"advance_ok means every row met AND "
+                    "|mean slip| < 15bps. The slip CUSUM (barbell-lab edge "
+                    "monitor) is the continuous control and arms at the same "
+                    "10 fills. unattributed counts are pre-split or dry-run "
+                    "events - they never satisfy a row"}
+
+
+# EXECUTOR.md "The schedule". Rungs above KELLY_M_CAP are RETIRED and are
+# deliberately absent - this list is what /ramp is allowed to point at.
+RAMP_RUNGS = (0.05, 0.10, 0.20, 0.30, 0.75)   # 0.30 2026-09-30, 0.75 2026-10-01 (Casey)
+
+
+def _next_rung() -> float | None:
+    """The rung a successful step would move to, or None at the ceiling."""
+    cur = settings.kelly_m
+    nxt = [r for r in RAMP_RUNGS if r > cur and r <= mirror.KELLY_M_CAP]
+    return min(nxt) if nxt else None
+
+
+def _slip_sanity(fills) -> dict:
+    """The |mean slip| < 15bps gate RAMP_V4.md has cited since 2026-08-15.
+
+    It was PROSE ONLY until 2026-09-02: the ramp readout counted fills and
+    never looked at `slip_bps`, so a book could show 13/13 with systematically
+    adverse execution and nothing anywhere would say so. Found while
+    adversarially reviewing a proposal to LOWER the fill count on the
+    argument that this gate was the real control - it was not a control at
+    all. Same population as the gating count (live, non-void), so the two
+    can never disagree about which fills are evidence.
+
+    `ok` is False until the sample exists: an unmeasured book is not a sane
+    one, and this must never read as satisfied on n=0.
+    """
+    vals = []
+    for f in fills:
+        if not isinstance(f, dict) or f.get("live") is not True or f.get("void"):
+            continue
+        v = f.get("slip_bps")
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            vals.append(float(v))
+    n = len(vals)
+    mean = (sum(vals) / n) if n else None
+    worst = max((abs(v) for v in vals), default=None)
+    return {"n": n, "need": SLIPPAGE_SAMPLE_NEED,
+            "mean_bps": round(mean, 2) if mean is not None else None,
+            "worst_abs_bps": round(worst, 2) if worst is not None else None,
+            "max_abs_mean_bps": SLIP_SANITY_MAX_BPS,
+            "ok": bool(n >= SLIPPAGE_SAMPLE_NEED and mean is not None
+                       and abs(mean) < SLIP_SANITY_MAX_BPS)}
+
+
+@app.post("/coverage/attest")
+def coverage_attest(confirm: bool = Query(False),
+                    note: str = Query(""),
+                    acknowledge_unwitnessed: bool = Query(False),
+                    x_exec_token: str | None = Header(default=None),
+                    token: str | None = Query(default=None)):
+    """ONE-SHOT: promote pre-split coverage counts to live-attributed.
+
+    Deliberate, bounded hole in the mode guard for the single migration
+    where counts were genuinely earned live but predate provenance
+    recording. Refuses if anything is already attributed, if the executor
+    is not live, or if the retained event log shows any DRY_RUN flip.
+    See RAMP_V4.md; requires ?confirm=true.
+    """
+    _auth(x_exec_token, token)
+    if EXEC is None:
+        raise HTTPException(status_code=503, detail="executor not ready")
+    if not confirm:
+        raise HTTPException(status_code=400,
+                            detail="pass confirm=true: this promotes rows to "
+                                   "ATTESTED evidence and cannot be undone")
+    return EXEC.attest_coverage(note, acknowledge_unwitnessed)
+
+
+@app.post("/drill")
+def drill(kind: str = Query("cycle"),
+          x_exec_token: str | None = Header(default=None),
+          token: str | None = Query(default=None)):
+    """RAMP v4 drill (RAMP_V4.md): ONE min-size round trip through the real
+    order paths. kind = cycle | stopfill | short_cycle (SELL-to-open, BUY
+    stop above market, BUY reduce-only close - proves the short-side
+    mechanics; never credits entry_short). Token-gated, budgeted, refuses
+    unless the whole book is flat."""
+    _auth(x_exec_token, token)
+    if EXEC is None:
+        raise HTTPException(status_code=503, detail="executor not ready")
+    return EXEC.drill(kind)
 
 
 @app.get("/test-alert")
@@ -215,9 +683,32 @@ def kill(x_exec_token: str | None = Header(default=None),
 
 @app.api_route("/resume", methods=["GET", "POST"])
 def resume(x_exec_token: str | None = Header(default=None),
-           token: str | None = Query(default=None)):
+           token: str | None = Query(default=None),
+           adopt_venue: int = Query(default=0),
+           reanchor: int = Query(default=0)):
+    """adopt_venue=1 resets the LEDGER to what the venue actually holds
+    before clearing the halt.
+
+    Needed because a halt whose flatten failed keeps its (divergent) ledger
+    on purpose, and LEDGER_DIVERGENCE then re-fires on every plain /resume —
+    a deadlock only a redeploy could break (re-gate 2026-08-26 N2). Use it
+    ONLY after looking at Coinbase yourself: it makes the venue the source
+    of truth, which is the right call when you have just verified the venue,
+    and the wrong one if the position read is what is broken."""
     _auth(x_exec_token, token)
     if EXEC is None:
         return {"ok": False}
-    EXEC.resume()
-    return {"ok": True, "halted": EXEC.state.halted}
+    # `adopted` reports the OUTCOME, not the request (re-gate 2026-08-27):
+    # echoing the query parameter made a REFUSED adopt on a blind venue
+    # indistinguishable from a successful one, hiding that the stops the
+    # operator believes were cancelled are still armed.
+    ok = EXEC.resume(adopt_venue=bool(adopt_venue), reanchor=bool(reanchor))
+    # `halted` after the call is the honest answer to "did this work": a
+    # DAILY_LOSS/DRAWDOWN resume is REFUSED while the breach is still live,
+    # and the flag stays set. reanchor=1 moves the marks to current equity
+    # and forgives the drawdown - see _resume_locked.
+    return {"ok": bool(ok) or EXEC.state.halted is None,
+            "halted": EXEC.state.halted,
+            "adopt_requested": bool(adopt_venue),
+            "adopted": bool(adopt_venue) and bool(ok),
+            "reanchor_requested": bool(reanchor)}

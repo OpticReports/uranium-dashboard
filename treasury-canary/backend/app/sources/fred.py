@@ -67,6 +67,13 @@ def _get_with_backoff(params: dict, tries: int = 4) -> dict | None:
     return None
 
 
+def _splice_frozen(series_id: str, dates, values):
+    """Prepend frozen pre-truncation history for the ICE series FRED cut in
+    April 2026. No-op for every other series. See sources/ice_reference.py."""
+    from .ice_reference import splice
+    return splice(series_id, list(dates), list(values))
+
+
 def fetch_series(
     series_id: str, start: str = "1976-01-01", use_cache: bool = True
 ) -> tuple[list[date], list[float | None]]:
@@ -81,7 +88,7 @@ def fetch_series(
         if age < settings.cache_ttl_seconds:
             try:
                 raw = json.load(open(cache))
-                return _parse(raw)
+                return _splice_frozen(series_id, *_parse(raw))
             except Exception:  # noqa: BLE001
                 pass
 
@@ -95,7 +102,7 @@ def fetch_series(
         json.dump(data, open(cache, "w"))
     except Exception:  # noqa: BLE001
         pass
-    return _parse(data)
+    return _splice_frozen(series_id, *_parse(data))
 
 
 def _parse(data: dict) -> tuple[list[date], list[float | None]]:
@@ -152,14 +159,14 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
     from concurrent.futures import ThreadPoolExecutor
 
     from ..config import (
-        FRED_BREAKEVENS, FRED_CREDIT, FRED_FLOWS, FRED_FOREIGN, FRED_FUNDING,
-        FRED_LABOR, FRED_LEADING, FRED_MACRO, FRED_PINS, FRED_REAL_YIELDS,
-        FRED_SEVERITY, FRED_TENORS, FRED_VOL,
+        FRED_BREAKEVENS, FRED_CREDIT, FRED_DISTRESS, FRED_FLOWS, FRED_FOREIGN,
+        FRED_FUNDING, FRED_LABOR, FRED_LEADING, FRED_MACRO, FRED_PINS,
+        FRED_REAL_YIELDS, FRED_SEVERITY, FRED_TENORS, FRED_VOL,
     )
     # logical key -> FRED series id
     plan: dict[str, str] = dict(FRED_TENORS)
     for extra in (FRED_LABOR, FRED_FLOWS, FRED_LEADING, FRED_PINS, FRED_FOREIGN,
-                  FRED_SEVERITY):
+                  FRED_SEVERITY, FRED_DISTRESS):
         for k, sid in extra.items():
             plan[k] = sid
     plan["real_10y"] = FRED_REAL_YIELDS["10y"]
@@ -192,6 +199,13 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
     bundle["ofr_fsi"] = fetch_fsi()
     bundle["cot_net_short"] = fetch_lev_net_short()
     bundle.update(fetch_margin_stats())
+    from .household_debt import extend_household_debt
+    before = bundle.get("hh_debt_gdp", ([], []))
+    bundle["hh_debt_gdp"] = extend_household_debt(
+        before, bundle.get("hh_debt_z1", ([], [])), bundle.get("gdp", ([], [])))
+    if before[0] and bundle["hh_debt_gdp"][0][0] == before[0][0]:
+        logger.warning("household debt/GDP: Z.1 back-extension unavailable (CMDEBT or GDP "
+                       "missing) — severity ranks it against 2008+ only")
     return bundle
 
 

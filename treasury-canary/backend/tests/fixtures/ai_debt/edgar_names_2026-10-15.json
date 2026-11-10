@@ -1,0 +1,32 @@
+{
+ "retrieved": "2026-10-15",
+ "src": "https://data.sec.gov/submissions/CIK##########.json (name field), User-Agent 'treasury-canary/1.0 (research dashboard)'",
+ "names": {
+  "2488": "ADVANCED MICRO DEVICES INC",
+  "50863": "INTEL CORP",
+  "723125": "MICRON TECHNOLOGY INC",
+  "789019": "MICROSOFT CORP",
+  "1018724": "AMAZON COM INC",
+  "1045810": "NVIDIA CORP",
+  "1083301": "TERAWULF INC.",
+  "1101239": "EQUINIX INC",
+  "1144879": "Applied Digital Corp.",
+  "1297996": "DIGITAL REALTY TRUST, INC.",
+  "1326801": "Meta Platforms, Inc.",
+  "1341439": "ORACLE CORP",
+  "1513845": "Nebius Group N.V.",
+  "1652044": "Alphabet Inc.",
+  "1662684": "KULR Technology Group, Inc.",
+  "1692819": "Vistra Corp.",
+  "1730168": "Broadcom Inc.",
+  "1769628": "CoreWeave, Inc.",
+  "1819989": "Cipher Digital Inc.",
+  "1839341": "Core Scientific, Inc./tx",
+  "1859392": "Galaxy Digital Inc.",
+  "1868275": "Constellation Energy Corp",
+  "1868941": "Fluence Energy, Inc.",
+  "1878848": "IREN Ltd",
+  "1964789": "Hut 8 Corp.",
+  "1996810": "GE Vernova Inc."
+ }
+}

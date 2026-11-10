@@ -12,8 +12,47 @@ venv/
 backend/.env
 frontend/.env
 
-# Data / cache (SQLite + per-API cache)
-backend/data/
+# Data / cache (SQLite + per-API cache). `backend/data/*` (not `backend/data/`)
+# so the compiled point-in-time catalyst store and backtest result rows CAN be
+# tracked — the raw pit_ctgov_cache/ (thousands of CT.gov responses) stays out.
+backend/data/*
+!backend/data/pit_catalysts.json
+!backend/data/backtest_calls_10y_results.json
+!backend/data/backtest_variants_10y_results.json
+!backend/data/backtest_variants_r2_results.json
+!backend/data/backtest_variants_r3_results.json
+!backend/data/backtest_core_variants_results.json
+!backend/data/backtest_sleeve_variants_r5_results.json
+# Round 8's results, curves included. Round 7's counter-agent (M5) found that
+# round could not be rebuilt from a clean checkout; this file carries every
+# arm curve, every regime row and the gate, so the round-8 report can be
+# checked line by line without re-running the study.
+!backend/data/backtest_vol_overlay_r8_results.json
+# the FROZEN R2-A daily dollar curve — an INPUT the round-4 harness
+# reuses verbatim, so it has to be tracked or the campaign is not
+# reproducible from a clean checkout
+!backend/data/r2a_daily.json
+# R2-A's daily equity AND invested notional, rebuilt from the round-2
+# pipeline (scripts/build_r2a_exposure.py). The idle CAPITAL fraction is
+# what C7 routes; without this file the correction is not reproducible.
+!backend/data/r2a_exposure.json
+!backend/data/bil_bars_raw.json
+!backend/data/backtest_executor_mirror_results.json
+# Round 10's frozen sizing-study results (the H15a deployment numbers, the paired
+# bootstrap per arm and base, the reduction gate). Round-9's ablation results were
+# never allow-listed and are not in the checkout; this one is (counter-agent A1).
+!backend/data/backtest_sizing_study_results.json
+# Round 11's frozen per-symbol study results (A0/U1/U2 at the $120k live base, the paired
+# bootstrap vs A0, the reduction gate and the A0 sanity reproduction).
+!backend/data/backtest_per_symbol_study_results.json
+# The FROZEN campaign price cache (FMP dividend-adjusted lane, segment-normalized,
+# truncated at the registered window end) and the archived Yahoo-basis R2-A sleeve
+# that rounds 4-6 still read. Re-based 2026-10-04; see docs/REBASE_FMP_LANE_2026-10-04.md.
+!backend/data/backtest_bars.json
+!backend/data/spy_bars_raw.json
+!backend/data/backtest_bars_basis.json
+!backend/data/r2a_daily_yahoo_2026-08.json
+!backend/data/r2a_exposure_yahoo_2026-08.json
 *.db
 *.sqlite3
 

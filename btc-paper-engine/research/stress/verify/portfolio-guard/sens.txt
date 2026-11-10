@@ -1,0 +1,41 @@
+== COVID K0.75
+   A intrabar (base)       3m    101,596 6m    106,116 9m    116,330 12m    138,629 maxDD -0.1559 intra -0.1562 halts [] ddmargin 12,089 dlmargin 8,964 hw_end 138,714
+   HW from intrabar highs  3m    101,596 6m    106,116 9m    116,330 12m    138,629 maxDD -0.1559 intra -0.1562 halts [] ddmargin 9,681 dlmargin 8,964 hw_end 139,255 | balances identical to base
+   worst = per-pos adverse 3m    101,596 6m    106,116 9m    116,330 12m    138,629 maxDD -0.1559 intra -0.1562 halts [] ddmargin 12,089 dlmargin 8,964 hw_end 138,714 | balances identical to base
+   variant B               3m    101,596 6m    106,116 9m    116,330 12m    138,629 maxDD -0.1559 intra -0.1562 halts [] ddmargin 12,089 dlmargin 8,964 hw_end 138,714 | balances identical to base
+   close-only              3m    101,596 6m    106,116 9m    116,330 12m    138,629 maxDD -0.1559 intra -0.1562 halts [] ddmargin 12,089 dlmargin 8,964 hw_end 138,714 | balances identical to base
+   XBTUSD proxy funding    3m     97,531 6m     97,562 9m    105,048 12m    118,776 maxDD -0.2017 intra -0.2031 halts [] ddmargin 7,003 dlmargin 8,954 hw_end 123,342 | theirs 12m 118,776 maxDD -0.2017 carry_final 34,221 mine carry_final 34,221 flips mine 4
+   engine halts OFF        3m    110,347 6m    112,485 9m    121,636 12m    151,023 maxDD -0.1404 intra -0.1423 halts [] ddmargin 13,679 dlmargin 5,666 hw_end 151,108 | theirs 12m 151,023 maxDD -0.1404 fees 2,136 mine fees 2,136
+== COVID K0.3
+   A intrabar (base)       3m    103,211 6m    108,278 9m    114,173 12m    129,870 maxDD -0.0600 intra -0.0601 halts [] ddmargin 23,576 dlmargin 3,592 hw_end 129,917
+   HW from intrabar highs  3m    103,211 6m    108,278 9m    114,173 12m    129,870 maxDD -0.0600 intra -0.0601 halts [] ddmargin 22,623 dlmargin 3,592 hw_end 130,120 | balances identical to base
+   worst = per-pos adverse 3m    103,211 6m    108,278 9m    114,173 12m    129,870 maxDD -0.0600 intra -0.0601 halts [] ddmargin 23,576 dlmargin 3,592 hw_end 129,917 | balances identical to base
+   variant B               3m    103,211 6m    108,278 9m    114,173 12m    129,870 maxDD -0.0600 intra -0.0601 halts [] ddmargin 23,576 dlmargin 3,592 hw_end 129,917 | balances identical to base
+   close-only              3m    103,211 6m    108,278 9m    114,173 12m    129,870 maxDD -0.0600 intra -0.0601 halts [] ddmargin 23,576 dlmargin 3,592 hw_end 129,917 | balances identical to base
+== 2008 K0.75
+   A intrabar (base)       3m    114,953 6m    125,147 9m    140,213 12m    137,688 maxDD -0.0731 intra -0.0835 halts [] ddmargin 17,774 dlmargin 9,986 hw_end 146,377
+   HW from intrabar highs  3m    114,953 6m    125,147 9m    140,213 12m    137,688 maxDD -0.0731 intra -0.0835 halts [] ddmargin 17,478 dlmargin 9,986 hw_end 146,674 | balances identical to base
+   worst = per-pos adverse 3m    114,953 6m    125,147 9m    140,213 12m    137,688 maxDD -0.0731 intra -0.0835 halts [] ddmargin 17,774 dlmargin 9,986 hw_end 146,377 | balances identical to base
+   variant B               3m    114,953 6m    125,147 9m    140,213 12m    137,688 maxDD -0.0731 intra -0.0835 halts [] ddmargin 17,774 dlmargin 9,986 hw_end 146,377 | balances identical to base
+   close-only              3m    114,953 6m    125,147 9m    140,213 12m    137,688 maxDD -0.0731 intra -0.0835 halts [] ddmargin 17,774 dlmargin 9,986 hw_end 146,377 | balances identical to base
+   XBTUSD proxy funding    3m    112,591 6m    120,854 9m    130,273 12m    126,406 maxDD -0.0811 intra -0.0947 halts [] ddmargin 17,144 dlmargin 9,974 hw_end 135,725 | theirs 12m 126,406 maxDD -0.0811 carry_final 30,183 mine carry_final 30,183 flips mine 1
+   engine halts OFF        3m    114,953 6m    125,147 9m    140,213 12m    137,688 maxDD -0.0731 intra -0.0835 halts [] ddmargin 17,774 dlmargin 9,986 hw_end 146,377 | theirs 12m 137,688 maxDD -0.0731 fees 2,794 mine fees 2,794
+== 2008 K0.3
+   A intrabar (base)       3m    107,508 6m    112,744 9m    122,159 12m    121,954 maxDD -0.0328 intra -0.0361 halts [] ddmargin 25,488 dlmargin 4,001 hw_end 125,051
+   HW from intrabar highs  3m    107,508 6m    112,744 9m    122,159 12m    121,954 maxDD -0.0328 intra -0.0361 halts [] ddmargin 25,371 dlmargin 4,001 hw_end 125,168 | balances identical to base
+   worst = per-pos adverse 3m    107,508 6m    112,744 9m    122,159 12m    121,954 maxDD -0.0328 intra -0.0361 halts [] ddmargin 25,488 dlmargin 4,001 hw_end 125,051 | balances identical to base
+   variant B               3m    107,508 6m    112,744 9m    122,159 12m    121,954 maxDD -0.0328 intra -0.0361 halts [] ddmargin 25,488 dlmargin 4,001 hw_end 125,051 | balances identical to base
+   close-only              3m    107,508 6m    112,744 9m    122,159 12m    121,954 maxDD -0.0328 intra -0.0361 halts [] ddmargin 25,488 dlmargin 4,001 hw_end 125,051 | balances identical to base
+== 1999 K0.75
+   A intrabar (base)       3m     93,091 6m    100,264 9m    110,694 12m    121,608 maxDD -0.1445 intra -0.1452 halts [] ddmargin 15,013 dlmargin 7,804 hw_end 121,901
+   HW from intrabar highs  3m     93,091 6m    100,264 9m    110,694 12m    121,608 maxDD -0.1445 intra -0.1452 halts [] ddmargin 11,713 dlmargin 7,804 hw_end 121,996 | balances identical to base
+   worst = per-pos adverse 3m     93,091 6m    100,264 9m    110,694 12m    121,608 maxDD -0.1445 intra -0.1452 halts [] ddmargin 15,013 dlmargin 7,804 hw_end 121,901 | balances identical to base
+   variant B               3m     93,091 6m    100,264 9m    110,694 12m    121,608 maxDD -0.1445 intra -0.1452 halts [] ddmargin 15,013 dlmargin 7,804 hw_end 121,901 | balances identical to base
+   close-only              3m     93,091 6m    100,264 9m    110,694 12m    121,608 maxDD -0.1445 intra -0.1452 halts [] ddmargin 15,013 dlmargin 7,804 hw_end 121,901 | balances identical to base
+   engine halts OFF        3m     88,866 6m     98,392 9m     95,814 12m    111,261 maxDD -0.1726 intra -0.1736 halts [] ddmargin 12,082 dlmargin 7,804 hw_end 111,555 | theirs 12m 111,261 maxDD -0.1726 fees 2,550 mine fees 2,550
+== 1999 K0.3
+   A intrabar (base)       3m     98,230 6m    101,581 9m    105,753 12m    110,228 maxDD -0.0523 intra -0.0526 halts [] ddmargin 24,654 dlmargin 3,215 hw_end 110,345
+   HW from intrabar highs  3m     98,230 6m    101,581 9m    105,753 12m    110,228 maxDD -0.0523 intra -0.0526 halts [] ddmargin 23,089 dlmargin 3,215 hw_end 110,383 | balances identical to base
+   worst = per-pos adverse 3m     98,230 6m    101,581 9m    105,753 12m    110,228 maxDD -0.0523 intra -0.0526 halts [] ddmargin 24,654 dlmargin 3,215 hw_end 110,345 | balances identical to base
+   variant B               3m     98,230 6m    101,581 9m    105,753 12m    110,228 maxDD -0.0523 intra -0.0526 halts [] ddmargin 24,654 dlmargin 3,215 hw_end 110,345 | balances identical to base
+   close-only              3m     98,230 6m    101,581 9m    105,753 12m    110,228 maxDD -0.0523 intra -0.0526 halts [] ddmargin 24,654 dlmargin 3,215 hw_end 110,345 | balances identical to base

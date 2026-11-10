@@ -27,6 +27,7 @@ router = APIRouter(prefix="/universe", tags=["universe"])
 def _to_out(sec) -> SecurityOut:
     return SecurityOut(
         symbol=sec.symbol, name=sec.name, subsector=sec.subsector or [],
+        ctgov_names=sec.ctgov_names or [],
         active=sec.active, updated_at=sec.updated_at,
     )
 
@@ -75,6 +76,7 @@ def add_ticker(
     sec = manager.upsert_security(
         session, symbol=symbol, name=name,
         subsector=payload.subsector, active=payload.active,
+        ctgov_names=payload.ctgov_names,
     )
     if payload.backfill and payload.active:
         background.add_task(_backfill_task, symbol)
@@ -94,6 +96,7 @@ def update_ticker(
     sec = manager.upsert_security(
         session, symbol=symbol.upper(), name=payload.name,
         subsector=payload.subsector, active=payload.active,
+        ctgov_names=payload.ctgov_names,
     )
     return _to_out(sec)
 

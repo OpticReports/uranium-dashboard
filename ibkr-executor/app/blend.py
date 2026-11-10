@@ -1,0 +1,6396 @@
+"""blend3070 manager — the H13 30/70 book's execution brain (venue-agnostic).
+
+Runs the R2-A 30/70 construction validated in replay (genomics-alpha-tracker
+docs/BACKTEST_VARIANTS_R2.md + HYPOTHESES.md H11/H13):
+  30% sleeve : the tracker's gate-on auto-call fires, 1% of SLEEVE equity
+               risked per call, <=10 open, exits by 3.0xATR trailing stop
+               (daily GTC cancel/replace) or 90-calendar-day time stop;
+               idle sleeve cash parked in BIL.
+  70% core   : SPY buy-and-hold.
+  Rebalance  : back to 30/70 when the sleeve weight drifts beyond +-5pp.
+
+Separation of powers (CLAUDE.md law): the TRACKER is the keyless decision
+brain — it publishes fires, gate state, and per-call R2-A trail levels at
+GET {TRACKER_URL}/blend3070/intents. THIS manager owns the book: positions,
+sleeve equity, SPY/BIL holdings, and all dollar sizing live here and are
+never sent back to the tracker (the poll is a bare GET). The tracker's
+login gate is HTTP Basic, so the poll authenticates with the dashboard
+credentials TRACKER_USER / TRACKER_PASSWORD (dashboard login only — no
+broker credential is read anywhere in this module).
+
+ORDER-SAFETY LAWS (counter-agent review, merge-blocking):
+  1. RECONCILIATION FIRST: every cycle ingests venue truth (resting-stop
+     fills, orphaned orders from a crash window, failed cancels, missing
+     protective stops) BEFORE any new decision. A tracker exit for a
+     position the venue's stop already closed is a no-op (idempotent).
+     EVERY cycle means every cycle: a tracker outage never skips the
+     reconcile pass or the local 90-day belt — run_cycle(payload=None) is
+     the outage path, and only tracker-DEPENDENT decisions are skipped.
+  2. SINGLE PER-CYCLE CASH LEDGER: all cash needs (entries + rebalance)
+     are planned together and funded by AT MOST ONE BIL sell, clamped to
+     holdings; if the ledger cannot fund everything, the rebalance is
+     deferred first, then the newest entries are skipped — the ledger
+     never goes negative and a short-BIL order can never be emitted.
+     Deferred/unreconciled exit proceeds are NOT spendable: if a funding
+     exit does not actually book this cycle, the remaining entries are
+     dropped, and each entry re-checks SETTLED cash before placement.
+  3. A position without a working protective stop is STOP_MISSING: alerted
+     loudly, retried every cycle, and it BLOCKS all new entries.
+  4. Exit/stop instructions must match BOTH call_id AND symbol against the
+     held position; a mismatch (tracker DB reset) is refused with a RED
+     alert, never acted on.
+  5. Stop replace is place-NEW-first, cancel-old-second: there is never a
+     naked window. A rejected replacement keeps the old stop.
+  6. ALL order placement is write-ahead journaled with a deterministic
+     client_order_id — sleeve entries (blend-{call_id}-entry) AND the
+     book-level CORE_BUY / rebalance core-sell / BIL sweep orders
+     (blend-{kind}-{date}-{seq}); boot/crash reconcile checks venue order
+     history before anything re-places.
+  7. A fill without a fill price is UNRECONCILED: nothing is ever booked
+     at a silent 0.0 — the trade is parked for manual reconciliation and
+     alerted RED.
+  8. An ambiguous stop cancel (False / "already gone") is VERIFIED before
+     any market sell: queued fills are ingested and only a position the
+     book still holds is sold — idempotent with a stop fill that won the
+     race. The paper/live adapter contract pins the unambiguous case:
+     cancelling a FILLED order must RAISE, never return False.
+
+Same state-machine idioms as LadderManager: persisted JSON state, step()
+emitting order intents, on_* execution callbacks, deduped event log. The
+adapter executes; run_cycle() is the loop body service.py calls.
+
+SIZING REFERENCE (documented decision): shares = floor(risk$ / per-share
+risk) where risk$ = risk_frac x sleeve equity and per-share risk =
+entry_ref - trail_level, with entry_ref = the FIRE-DAY CLOSE the tracker
+published (the R2-A entry convention) and trail_level = the tracker's
+day-one trail (entry - 3xATR14 through the fire day). The MOO fill may
+differ from entry_ref; the risk unit stays frozen at the reference, exactly
+as the replay accounted entries at fire-day closes.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import math
+import os
+import tempfile
+import time
+from dataclasses import asdict, dataclass, field, fields
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+import httpx
+
+from .feeds import FeedDeadline, with_deadline
+
+logger = logging.getLogger(__name__)
+
+CORE = "SPY"
+CASH_VEHICLE = "BIL"
+TARGET_SLEEVE = 0.30
+BAND = 0.05
+MAX_OPEN = 10
+# Per-symbol limit (round 11, 2026-10-05; VARIANTS_PREREGISTRATION_R11_PER_SYMBOL.md):
+# at most this many open calls in one name. A repeat fire beyond it is
+# skipped and consumes no cap slot, so the slot goes to the next gated fire.
+# Adopted as RISK CONTROL on non-inferiority (U2): p90 largest-name share of
+# the sleeve 39.9% -> 27.5% on the replay, book Sharpe delta interval spans
+# zero (no return improvement is claimed). The tracker may override it via
+# book_params.max_per_symbol (an int >= 1).
+MAX_PER_SYMBOL = 2
+RISK_FRAC = 0.01
+TIME_STOP_DAYS = 90
+MIN_ORDER_USD = 50.0        # dust guard: never emit orders smaller than this
+ENTRY_REF_MAX_DEV = 3.0     # L-E1: how far the TRACKER's fire-day entry_ref
+                            # may sit from the venue's own quote before the
+                            # entry is refused outright. Deliberately loose —
+                            # a genomics name can gap 100% on a catalyst
+                            # between the fire close and the next open, and
+                            # this is not a slippage control. It is an
+                            # order-of-magnitude sanity bar for the failure
+                            # it exists to stop: an unadjusted split, a
+                            # months-stale reference, or a 1.00 placeholder
+STOP_EPS = 1e-6             # stop cancel/replace only on a real level change
+CASH_EPS = 1e-6             # ledger tolerance
+STOP_RETRY_ATTEMPTS = 3     # in-cycle protective-stop placement retries
+STOP_RETRY_SLEEP_S = 1.0    # backoff base between retries (tests patch to 0)
+TRADE_LOG_MAX = 200         # persisted closed/booked trade rows kept (feed)
+EQUITY_CURVE_MAX = 1500     # daily book-value snapshots kept (~6 years)
+UTIL_ALERT_ON = 0.85        # budget-utilization alert threshold (one-shot)
+UTIL_ALERT_OFF = 0.75       # re-arm threshold once utilization drops back
+# A book order (MKT/DAY) still "working" after this many cycles is stuck -
+# resolve by cancel-confirmation, never by assuming death (2026-08-25).
+BOOK_ORDER_STUCK_CYCLES = 3
+BOOK_ORDER_STALE_DAYS = 2   # a pending book-order journal older than this is
+                            # anomalous (real DAY/OPG orders expire same-day)
+                            # -> WARN once per order (r6)
+STALE_PAYLOAD_DAYS = 5      # as_of older than this vs today -> no decisions
+                            # (5, not the review's 2: a Monday poll after a
+                            # long holiday weekend legitimately sees a 4-day-
+                            # old last trading day; reconciliation still runs)
+# CASH RECONCILE, stage 1 (2026-09-04, Casey-approved): the book's two cash
+# buckets are moved only by orders the book placed; the account's cash also
+# moves by dividends, interest, commissions and anything a human does, and
+# nothing compared the two. reconcile_cash() compares DELTAS from a baseline
+# (never levels - the account may hold cash the book does not own) on QUIET
+# cycles only, and in stage 1 it ALERTS ONLY: no ledger change, no trading
+# impact. Stage 2 (adoption) is a separate, opt-in change.
+CASH_WARN_USD = 25.0        # warn at max($25, 0.1% of the book) ...
+CASH_WARN_FRAC = 0.001
+CASH_RED_FRAC = 0.01        # ... RED at 1% of the book
+CASH_QUIET_S = 15 * 60.0    # no fill inside this window. TotalCashValue
+                            # moves at TRADE time (not settlement); the
+                            # window only covers IB's account-push lag
+                            # (counter-agent round 2)
+CASH_PERSIST_CYCLES = 2     # a drift must hold for this many CONSECUTIVE
+                            # quiet cycles; any fill or skip resets it
+FUNDING_FEE_RESERVE_USD = 2.0   # BIL raise headroom for the sell's own
+                                # commission, so the settled-cash belt never
+                                # skips an ENTER by under a dollar
+CASH_SKIP_WARN_S = 6 * 3600.0   # the cash reconcile skipped this long for
+                                # one reason -> say so once a day (round 3:
+                                # a parked unreconciled exit had suspended it
+                                # forever, silently)
+# CASH ADOPTION, stage 2 (2026-10-05, Casey: "resize the positions and the
+# strategy" after a deposit). The book's capital is its LEDGER, seeded once
+# from BLEND_BOOK_USD; cash that lands in the account later is invisible to
+# it (stage 1 only alerts) and BLEND_BOOK_USD is read only at the seed, so
+# a live book had no way to grow. Adoption is CONFIRM-ONLY: the operator
+# journals an AMOUNT (POST /blend/cash/adopt, EXEC_TOKEN); the LOOP thread
+# executes it on a quiet cycle, only after the venue confirms the account
+# holds at least that much cash the book does not own, only when
+# BLEND_BUDGET can hold the larger book, and only once the venue says that
+# much is available to trade (a cash account's T+1 settlement, a deposit
+# hold). A drift measurement alone never moves the ledger: a number the
+# operator never typed is never adopted. The adopted cash is split by the
+# book's PERSISTED sleeve target and the same cycle's step() deploys it
+# through the existing core-buy / BIL-sweep path - no new order kinds.
+CAPITAL_ADOPT_TOL_USD = 1.0        # venue-vs-request tolerance (rounding)
+CAPITAL_REQUEST_TTL_S = 5 * 86_400.0   # a request older than this expires
+                                       # unexecuted (covers a T+1 settlement
+                                       # across a long weekend): re-issue it
+CAPITAL_REQUEST_MAX_USD = 5_000_000.0  # endpoint sanity bound - a typo
+                                       # guard, not a limit (raise it
+                                       # deliberately, with a review)
+CAPITAL_EVENTS_MAX = 1000              # persisted capital events kept (the
+                                       # deposit rows are the tripwire
+                                       # bootstrap's flows: never truncate
+                                       # them in a book's lifetime)
+# KILL-LEDGER TRIPWIRES (2026-10-05; ibkr-executor/ledger.csv). ALERT-ONLY:
+# nothing here halts, sells or blocks - every line in the ledger names a
+# human action, and the code's only job is to make the line OBSERVABLE and
+# to page when it is crossed. Drawdowns are read on FLOW-ADJUSTED indices
+# (chain-linked across adopted deposits for the book; across rebalance
+# transfers and the sleeve share of deposits for the sleeve), so a deposit
+# is never a new high and a transfer is never a loss.
+TRIP_BOOK_REVIEW_DD = 0.25        # ledger: REVIEW, book drawdown
+TRIP_BOOK_REGIME_DD = 0.35        # ledger: REGIME REVIEW, book drawdown
+TRIP_SLEEVE_KILL_DD = 0.45        # ledger: MODEL-RISK KILL, sleeve (level =
+                                  # Casey's call at arming; 0.52 ~ p95)
+TRIP_UNDERWATER_DAYS = 913        # ledger: >= 30 calendar months under water
+TRIP_UNRECONCILED_SESSIONS = 3    # ledger: PROCESS KILL, record age (sessions)
+TRIP_MIN_BASE_USD = 100.0         # a series base below this holds the index
+TRIP_REARM_PP = 0.05              # a DD line re-arms once the drawdown has
+                                  # recovered this far below its level (or at
+                                  # a new high) - one page per crossing
+# Overnight core buy (2026-10-05): a CORE_BUY planned while the regular
+# session is CLOSED rests as a MKT order for the open and fills at the
+# opening price, not at the quote it was sized on. Sized to the core cash
+# with under one share of slack, a gap-up at the open makes it cost more
+# than the bucket holds (a cash account may reject it). Size it at this
+# much above the quote; the next in-session cycle buys what is left.
+CORE_BUY_OVERNIGHT_HEADROOM = 0.01
+# MARKET-BUY CUSHION + SLEEVE CASH RESERVE (2026-10-26).
+# OBSERVED: from 2026-10-07 every BIL sweep - a MKT BUY sized to every whole
+# share of idle sleeve cash, under one share of slack - came back from IBKR
+# PendingSubmit -> Inactive in 0.8 s with errorCode 0, no message, no hold
+# reason; the status then read Cancelled and IB answered the executor's
+# cleanup cancel with 161 (Render log 2026-10-19, BIL x56, permId
+# 2127961299). INFERRED (ib_async 2.1 treats Inactive as done, so the client
+# could not have set Cancelled): IBKR killed the order itself. Each re-plan
+# asked for the same 56 shares. The first failure was the first sweep after
+# the stage-2 adoption of a deposit.
+# HYPOTHESIS, NOT CONFIRMED: the adoption turned the account's spare
+# (un-owned) cash into book cash, and a cash-account credit check wants a
+# margin above a market order's value (forum reports: ~5%) that the spare
+# cash used to absorb. Against it: IBKR usually names a funds refusal (error
+# 201 with text) and none appears in the 2026-10-19 Render log. The order's
+# own message in the IBKR app (permId 2127961299) is the decisive input.
+# These constants make buys SMALLER (and in session sell 1-2 BIL to restore
+# the reserve), so they are safe either way, and the refusal note below (a
+# yes/no on AvailableFunds at this margin) separates the causes next time:
+#   * every market BUY of SPY or BIL is sized MKT_BUY_CUSHION above the price
+#     it is sized on; and
+#   * SLEEVE_CASH_RESERVE_FRAC of sleeve equity is held back from the sweep
+#     and restored by the in-session BIL raise, so an in-session pre-fund
+#     leaves headroom for its MOO. It does not cover a fire first funded off
+#     hours (the entry spends the reserve; any raise rests for the open),
+#     nor a night's MOOs larger than ~40% of the sleeve at a 5% margin.
+# Cost: the reserve plus the last cushion slice of the sleeve earn no T-bill
+# yield, and a core cushion slice forgoes SPY's return until the next buy.
+MKT_BUY_CUSHION = 0.05
+SLEEVE_CASH_RESERVE_FRAC = 0.02
+
+
+def _num_or_none(v):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if f != f else f
+
+
+def _valid_baseline(b):
+    if (isinstance(b, dict) and _num_or_none(b.get("venue")) is not None
+            and _num_or_none(b.get("ledger")) is not None):
+        return b
+    return None
+
+
+def _parse_date(v) -> date | None:
+    try:
+        return date.fromisoformat(str(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def _finite(v, default=None):
+    f = _num_or_none(v)
+    return f if (f is not None and math.isfinite(f)) else default
+
+
+def _valid_trip_mark(m, with_flow: bool):
+    if m is None:
+        return None
+    if not isinstance(m, dict) or not isinstance(m.get("date"), str):
+        raise ValueError("mark")
+    value, index = _finite(m.get("value")), _finite(m.get("index"))
+    # an index is a ratio of book values: anything outside [1e-6, 1e6] is a
+    # hand edit or corruption, never a market move (TB17)
+    if value is None or index is None or not (1e-6 <= index <= 1e6) or value < 0:
+        raise ValueError("mark")
+    out = {"date": m["date"], "value": value, "index": index}
+    if with_flow:
+        out["flow"] = _finite(m.get("flow"), 0.0)
+    return out
+
+
+def _valid_trip(t):
+    """A persisted tripwire series is rebuilt as a NEW dict with the full key
+    set, every number finite (counter-agent TB1: a malformed subfield - a hand
+    edit, a future build's schema - used to 500 /status and the feed and
+    could page an infinite drawdown). Anything malformed -> None: the series
+    restarts (the book re-bootstraps from the equity curve) and the load
+    says so with a WARN."""
+    if t is None:
+        return None
+    try:
+        if not isinstance(t, dict):
+            raise ValueError("series")
+        hwm = _finite(t.get("hwm"))
+        if hwm is None or hwm <= 0:
+            raise ValueError("hwm")
+        if not isinstance(t.get("hwm_date"), str) or not isinstance(t.get("since"), str):
+            raise ValueError("dates")
+        closes = []
+        for c in (t.get("closes") or []):
+            if (not isinstance(c, (list, tuple)) or len(c) != 2
+                    or not isinstance(c[0], str) or _finite(c[1]) is None
+                    or _finite(c[1]) <= 0):
+                raise ValueError("closes")
+            closes.append([c[0], _finite(c[1])])
+        return {"base": _valid_trip_mark(t.get("base"), False),
+                "cur": _valid_trip_mark(t.get("cur"), True),
+                "cur_rth": _valid_trip_mark(t.get("cur_rth"), True),
+                "day_flow": _finite(t.get("day_flow"), 0.0),
+                "hwm": hwm, "hwm_date": t["hwm_date"], "since": t["since"],
+                "closes": closes[-5:]}
+    except (ValueError, TypeError):
+        return "REJECTED"
+
+
+def _valid_capital_request(r):
+    """A journaled adoption request must carry a positive, finite amount and
+    a numeric timestamp; anything else is dropped at load (a malformed
+    request must never be executed, and never 500 the feed)."""
+    if not isinstance(r, dict):
+        return None
+    usd, ts = _num_or_none(r.get("usd")), _num_or_none(r.get("ts"))
+    if usd is None or ts is None or usd <= 0 or not math.isfinite(usd):
+        return None
+    return r
+
+# ENTRY SESSION WINDOW (2026-09-03). Entries are MOO orders with TIF=OPG:
+# the venue accepts them only for the NEXT opening auction and REJECTS them
+# once the regular session is open. Placing one mid-session was never an
+# entry - it was a guaranteed rejection that first SOLD BIL to fund itself
+# (2026-08-28: NTRA/LLY, 8 rejections; 2026-09-03: MRK, 20 BIL sold, 5
+# rejections, cash stranded). The planner therefore only plans entries
+# OUTSIDE [ENTRY_CUTOFF_ET, opg_accept_from_et) on trading days - the
+# venue's "open" for this check runs through after-hours (round 19, below);
+# a fire published mid-session is picked up by the first cycle after 20:00
+# ET and placed for the next open. Cutoff is a few minutes before the 09:30 bell on purpose: the
+# exchange stops accepting opening-auction orders shortly before it, and a
+# skipped valid minute costs nothing while a doomed order costs a BIL
+# round-trip. NYSE closures are open all day (an OPG placed on one is for
+# the next session); the fire is still published.
+ENTRY_SESSION_TZ = "America/New_York"
+ENTRY_CUTOFF_ET = (9, 25)
+SESSION_OPEN_ET = (9, 30)
+SESSION_CLOSE_ET = (16, 0)
+# OPG ACCEPTANCE ENDS WITH EXTENDED HOURS (2026-09-10, corrective round on
+# the merge's open item). IBKR refuses an OPG order "when market is open",
+# and for that check its market is open through the AFTER-HOURS session:
+# until 20:00 ET, not 16:00. Measured: GH's MOO placed 16:03 ET was
+# rejected [202] at 16:03, 16:09 and 16:14, the ENTER breaker paused the
+# kind, the placements had already released the cash hold, and the sweep
+# bought the entry's cash back into BIL at 16:19. The window therefore
+# closes AFTER_HOURS_H after the session close - 20:00 ET, 17:00 on an
+# early-close day. The REJECTION side is measured (through 16:14 ET); the
+# ACCEPTANCE at close + 4h is IBKR's published extended-hours end, INFERRED
+# until the first live 20:0x placement is accepted - log its order ref and
+# time in docs/verdicts/INDEX.md when it lands. Two clocks now, because the venue has two: MKT/DAY
+# orders fill only INSIDE regular hours (`regular_session_open`), OPG is
+# accepted only OUTSIDE extended hours (`entry_window_open`); between 16:00
+# and 20:00 ET both are false. The pre-market side (04:00-09:25) is
+# UNCHANGED and UNVERIFIED - no OPG has ever been placed there live; if the
+# venue's "open" covers pre-market too, the breaker bounds the cost to five
+# rejections and the same evening's 20:00 placement.
+AFTER_HOURS_H = 4
+# Resolved ONCE at import (counter-agent round 1): a missing tz database
+# then fails at boot, where the boot alert names it, instead of inside
+# step() where it would freeze every decision - exits and stop ratchets
+# included - on every cycle. tzdata is pinned in requirements.txt as the
+# belt against a base-image change.
+_ET = ZoneInfo(ENTRY_SESSION_TZ)
+# NYSE full-day closures the clocks would otherwise treat as trading days.
+# A holiday only DELAYS a valid placement (the fire stays published), but
+# the pre-open page must not fire on one. Extend yearly.
+NYSE_HOLIDAYS = {
+    "2026-09-07", "2026-11-26", "2026-12-25",
+    "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31",
+    "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24",
+}
+
+
+# NYSE early closes (13:00 ET). A mid-afternoon fire on one of these days
+# is a CLOSED venue: sizing it as in-session placed a MKT BIL sell the venue
+# queued to the next session and reconcile cancelled as stuck, three times
+# an hour (counter-agent round 3). Extend yearly with NYSE_HOLIDAYS.
+NYSE_EARLY_CLOSES = {
+    "2026-11-27": (13, 0), "2026-12-24": (13, 0), "2027-11-26": (13, 0),
+}
+
+
+def is_trading_day(d: date) -> bool:
+    return d.weekday() < 5 and d.isoformat() not in NYSE_HOLIDAYS
+
+
+def session_close_et(d: date) -> tuple:
+    return NYSE_EARLY_CLOSES.get(d.isoformat(), SESSION_CLOSE_ET)
+
+
+def opg_accept_from_et(d: date) -> tuple:
+    """The minute the venue starts accepting next-open OPG orders on trading
+    day d: the session close plus the after-hours session."""
+    h, m = session_close_et(d)
+    return (h + AFTER_HOURS_H, m)
+
+
+def _now_utc() -> datetime:
+    """Module-level clock so tests pin it (tests/conftest.py); production
+    reads the wall clock."""
+    return datetime.now(timezone.utc)
+
+
+def _now_et(now: datetime | None = None) -> datetime:
+    now = now or _now_utc()
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return now.astimezone(_ET)
+
+
+def _et_today(now: datetime | None = None) -> str:
+    """The Eastern calendar date - the SESSION date. `today` elsewhere is
+    the UTC date, which rolls at 20:00 ET (19:00 ET in winter): anything
+    that means "the next session has started" must key on this one."""
+    return _now_et(now).date().isoformat()
+
+
+def regular_session_open(now: datetime | None = None) -> bool:
+    """True during the regular session (09:30 to the close, Eastern, on a
+    trading day): when a MKT/DAY order fills now instead of resting for
+    the next open. NOT the complement of `entry_window_open` - between the
+    close and 20:00 ET both are false."""
+    et = _now_et(now)
+    if not is_trading_day(et.date()):
+        return False
+    t = (et.hour, et.minute)
+    return SESSION_OPEN_ET <= t < session_close_et(et.date())
+
+
+def entry_window_open(now: datetime | None = None) -> bool:
+    """True when a MOO/OPG entry placed NOW is accepted for the next opening
+    auction: any time on a weekend or NYSE closure, and on trading days
+    outside [09:25, close + after-hours) Eastern - not before 20:00 ET
+    (17:00 on an early-close day). False through the regular session AND
+    the after-hours session, where the venue rejects it [202]."""
+    et = _now_et(now)
+    if not is_trading_day(et.date()):   # weekend OR NYSE closure: an OPG
+        return True                      # placed now is for the next session
+    t = (et.hour, et.minute)
+    return not (ENTRY_CUTOFF_ET <= t < opg_accept_from_et(et.date()))
+HISTORY_HORIZON_S = 86_400.0  # venue-history horizon (adapter review m2): a
+                              # gap since the LAST successful reconcile longer
+                              # than this means order history may not cover
+                              # fills that happened inside the blackout — a
+                              # cancel-False/verify-empty flatten is then
+                              # UNVERIFIABLE (park + alert, never a MKT sell)
+FLATTEN_MAX_ATTEMPTS = 6    # B4/R-b: how many cycles a /kill flatten that
+                            # could not close everything may RETRY before it
+                            # stops and hands the book to the operator. At
+                            # the deployed 5-minute cadence that is ~30
+                            # minutes of automatic re-attempts. Unbounded
+                            # (cc03347) the retry re-alerted every cycle for
+                            # rows it could never close. The arithmetic is
+                            # the finding: 288 cycles a day at the 300s
+                            # cadence x (1 row alarm + 1 summary) = 576
+                            # Telegram messages for ONE parked row, ~1,150
+                            # for three, forever — burying the emergency
+                            # channel the kill switch exists to serve (the
+                            # judge's report states the same >=576 /
+                            # ~1,150). The book stays HALTED
+                            # when the budget runs out — giving up on the
+                            # RETRY is not giving up on the HALT
+UNVERIFIED_REALERT_CYCLES = 4   # re-armed cadence for a position the blackout
+                                # guard cannot resolve (counter-review X3):
+                                # fail-closed must never mean fails QUIETLY —
+                                # only the operator can resolve these cells,
+                                # so they re-alert every N reconciles until
+                                # they do (the budget-alarm / quote_alert_armed
+                                # pattern), instead of one deduped WARN line
+FEED_TIMEOUT = 8.0          # MF-1: the tracker poll is the loop's second 30s
+                            # timeout — capped so one hanging dependency
+                            # cannot stall the cycle (nino.FEED_TIMEOUT caps
+                            # the first). MF-A: this is the TOTAL deadline
+                            # on the fetch (feeds.with_deadline), not just
+                            # the per-operation httpx timeout it is also
+                            # passed as — a trickling server honours the
+                            # latter and still runs for minutes
+FEED_FAIL_TTL = 60.0        # MF-1: negative cache for a FAILING tracker,
+                            # per URL. Shorter than the poll interval, so a
+                            # scheduled cycle always re-tries; it only stops
+                            # a cycle woken seconds later (e.g. by /kill)
+                            # from re-paying the timeout
+_INTENTS_FAIL: dict = {}    # tracker base URL -> ts of its last failure
+ORPHAN_REALERT_CYCLES = 4       # same cadence for a retired stop whose cancel
+                                # never ACKed (x7): loud on record, then every
+                                # N retries — never per-cycle spam, never
+                                # silent
+
+
+def _utc_today() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+_SNAPSHOT_RETRIES = 5
+
+
+def _snapshot(d: dict) -> dict:
+    """A PRIVATE copy of a dict another thread may be mutating (mf3-10).
+
+    `dict(d)` copies at the C level: with the string keys this book uses,
+    no Python-level code runs inside it, so the GIL is never released
+    mid-copy and the copy is atomic. A comprehension or an `.items()` walk
+    is NOT — it yields between elements, and an insert from the loop thread
+    makes CPython raise `RuntimeError: dictionary changed size during
+    iteration`, which is what took `save()` down (measured 1-10 raises per
+    8s run over 8 runs; 0 over 6 runs after this).
+    The retry is a belt for the copy paths that are not atomic (a dict
+    SUBCLASS carrying its own `keys()` falls back to Python iteration); it
+    converges, because the mutating thread always makes progress."""
+    for _ in range(_SNAPSHOT_RETRIES - 1):
+        try:
+            return dict(d)
+        except RuntimeError:            # "changed size during iteration"
+            time.sleep(0)               # yield the GIL; let the writer land
+    return dict(d)
+
+
+def entry_client_id(call_id: int) -> str:
+    return f"blend-{call_id}-entry"
+
+
+def stop_client_id(call_id: int, level: float) -> str:
+    return f"blend-{call_id}-stp-{level:.4f}"
+
+
+def _min_risk_unit(entry_ref: float) -> float:
+    """One venue price increment at `entry_ref`: the smallest distance a
+    real stop can sit from the reference."""
+    from decimal import Decimal
+    from .ib_adapter import stock_tick
+    return float(stock_tick(Decimal(str(float(entry_ref)))))
+
+
+def snap_stop_level(level: float) -> float | None:
+    """The tracker's published trail level, on the venue's price grid — or
+    None when no stop can exist there.
+
+    ROUND 20, THE SECOND HALF OF THE LIVE BLOCKER. The venue holds cents
+    (`round_stop_to_tick`), and the book uses its stop level for THREE
+    things: the price it sends, the ratchet comparand
+    (`lvl > pos.stop_level + STOP_EPS`) and the idempotency key
+    (`stop_client_id`). Snapping only at the venue boundary let those three
+    numbers diverge, and the first counter-agent pass reproduced what that
+    costs: the book records 137.05, the tracker keeps publishing 137.0507,
+    so the ratchet fires EVERY cycle at an unchanged level, the replacement
+    is placed under the id the resting order already carries, the adapter
+    duplicate-suppresses it — and the cancel of `old_ref` that follows
+    retires the only stop there was. Naked position, `stop_missing` False,
+    entries unblocked, one cheerful "trail ratchet 137.05 -> 137.05" line.
+
+    So the level is snapped HERE, the moment it enters the book, and every
+    downstream use is the same number. The adapter still snaps defensively;
+    with this in front of it that snap is a no-op."""
+    from .ib_adapter import round_stop_to_tick
+    try:
+        return round_stop_to_tick(level, "SELL")   # the book is long-only
+    except ValueError:
+        return None
+
+
+def exit_client_id(call_id: int) -> str:
+    return f"blend-{call_id}-exit"
+
+
+@dataclass
+class BlendPosition:
+    call_id: int
+    symbol: str
+    qty: int
+    entry_ref: float            # fire-day close (sizing reference)
+    fill_price: float           # actual MOO fill
+    entry_date: str             # ISO
+    time_stop: str              # ISO, entry_date + 90 CALENDAR days
+    stop_level: float
+    stop_order_ref: str | None = None
+    stop_missing: bool = False  # placement failed; retried every cycle and
+                                # blocks ALL new entries until protected
+    risk_per_share: float = 0.0  # entry_ref - day-one trail, frozen at entry
+                                 # (R-multiple denominator; 0.0 on legacy
+                                 # state rows -> R reported as null)
+    history_gap: bool = False   # R1 blackout guard: a reconcile gap exceeded
+                                # the venue-history horizon, so a stop fill
+                                # inside the blackout may be invisible
+                                # FOREVER — UNVERIFIABLE. Cleared ONLY by
+                                # positive venue evidence (reconcile pass
+                                # 1b), never by timestamp; exits//kill park
+                                # while set
+    unverified_cycles: int = 0  # reconciles this position has spent flagged
+                                # and UNRESOLVED (X3): drives the re-armed
+                                # escalation alert so a fail-closed cell can
+                                # never go silent. Reset to 0 on unpark
+    stop_cover_qty: int = 0     # Z1: shares the RESTING stop actually covers
+                                # when it was resized BELOW qty (pro-rata
+                                # peer-shortfall resize). 0 = the normal
+                                # case, the stop covers the full qty
+
+
+# ZF-4: fail-closed stand-ins for the eight BlendPosition fields that have
+# NO default, used ONLY by the schema-drift reconstruction below. They are
+# deliberately NOT dataclass defaults: on the ordinary load path a missing
+# required field must still raise, or a removed field would degrade the book
+# SILENTLY (qty 0, stop_level 0.0) with no halt and no alert.
+_DRIFT_FALLBACK = {"call_id": 0, "symbol": "", "qty": 0, "entry_ref": 0.0,
+                   "fill_price": 0.0, "entry_date": "", "time_stop": "",
+                   "stop_level": 0.0}
+
+
+def _position_from_drifted_row(key: str, row: dict) -> tuple[BlendPosition,
+                                                             list[str],
+                                                             list[str]]:
+    """Rebuild one position row written by a build whose schema this one does
+    not share, returning (position, dropped_keys, defaulted_fields).
+
+    The ladder's y2 filter survives the same drift because EVERY `LegState`
+    field is defaulted; `BlendPosition` has eight that are not, so a RENAMED
+    or REMOVED field made the filtered `BlendPosition(**row)` raise INSIDE
+    the drift handler and fall through to `_load`'s outer `except` — a
+    FRESH, un-halted book, which is the exact Z-D harm reached through the
+    Z-D fix. So: drop what this build does not understand, default what the
+    row does not carry, and NAME both to the operator (the book is HALTED
+    either way and the drifted file is preserved, so nothing is lost —
+    an open position's `stop_order_ref` is the only handle on a real
+    resting stop and it survives)."""
+    known = {f.name for f in fields(BlendPosition)}
+    kw = {k: v for k, v in row.items() if k in known}
+    dropped = sorted(k for k in row if k not in known)
+    defaulted = []
+    for name, fallback in _DRIFT_FALLBACK.items():
+        if name not in kw:
+            # call_id is the book's own map key, so it is recoverable even
+            # when the row lost it; the rest can only be stood in for.
+            if name == "call_id" and str(key).lstrip("-").isdigit():
+                kw[name] = int(key)
+            else:
+                kw[name] = fallback
+                defaulted.append(name)
+    pos = BlendPosition(**kw)
+    if defaulted:
+        # MF-3: a row carrying STAND-IN values is not a row this build may
+        # act on. Without this it survived the halt: one /resume later a
+        # tracker EXIT booked a `qty` stand-in of 0 as a green
+        # "blend EXIT CRSP x0", DELETED the row, and abandoned the real
+        # shares untracked with has_naked_position() False. `history_gap`
+        # is exactly the existing "UNVERIFIABLE — do not act, do not
+        # unpark on a timestamp" machinery (R1/X3): the exit defers, the
+        # row is kept, reconcile alerts the venue-vs-book discrepancy, and
+        # entries stay blocked.
+        #
+        # MF-B: it is NOT cleared like every other flagged row. The R1 flag
+        # clears on positive venue evidence about the QUANTITY
+        # (`held == book_qty`, reconcile pass 1b) — which says nothing
+        # about a row whose CONTENTS were invented. Measured: 6 of the 7
+        # stand-in fields cleared on the very next reconcile, and a
+        # defaulted `time_stop` of "" then liquidated 5 real shares as a
+        # green "blend EXIT CRSP x5 (time_stop)" in the same cycle. The
+        # caller records WHICH fields were invented in
+        # `BlendState.stand_in_rows`, and that book-level record — not
+        # this flag alone — is what keeps the row untouchable until a
+        # human restores it.
+        pos.history_gap = True
+    return pos, dropped, defaulted
+
+
+def _intent_size_ref(intent: dict) -> float:
+    """The price an ENTER intent was CHARGED to the cash ledger at.
+
+    L-E1: sizing charges `max(entry_ref, venue quote)` so an entry can
+    never overdraw the sleeve, and every site that unwinds or re-checks
+    that charge has to reverse the SAME number — charging at one price and
+    refunding at another leaks cash into the ledger silently. `entry_ref`
+    is the fallback so an intent journalled by an older build (which had
+    no `size_ref`) still balances against how IT was charged."""
+    return float(intent.get("size_ref") or intent["entry_ref"])
+
+
+def _fill_grade_price(adapter, symbol: str) -> float | None:
+    """A price this service is willing to BOOK A FILL at, or None.
+
+    CR-N2: B8 gave `spot()` a previous-CLOSE fallback so that a thin or
+    out-of-RTH quote stops looking identical to a missing market-data
+    subscription. Right for sizing and valuation, wrong for a fill — a
+    previous session's close is not a price anything traded at today. The
+    two paths that adopt a venue fill with no reported price were taking
+    it as one, where the pre-B8 code raised and failed closed. A live tick
+    or a current-session last is still an honest PROVISIONAL basis; a
+    close is not, and returns None so the caller keeps its journal and
+    tries again when the market is open."""
+    ex = getattr(adapter, "spot_ex", None)
+    if ex is None:                      # adapter without the source surface
+        return None
+    try:
+        px, source = ex(symbol)
+    except Exception as exc:            # noqa: BLE001
+        logger.warning("fill-grade quote %s failed: %s", symbol, exc)
+        return None
+    if px is None or px != px or px <= 0 or source == "close":
+        return None
+    return float(px)
+
+
+@dataclass
+class BlendState:
+    initialized: bool = False
+    positions: dict = field(default_factory=dict)   # str(call_id) -> BlendPosition
+    entered_ids: list = field(default_factory=list)  # every call_id ever entered
+                                                     # (bounded at 2000: recycled-id
+                                                     # detection beyond that horizon
+                                                     # is a documented tradeoff)
+    entered_symbols: dict = field(default_factory=dict)  # str(call_id) -> symbol
+    pending_entries: dict = field(default_factory=dict)  # write-ahead journal:
+                                                         # str(call_id) -> {intent, date}
+    pending_book_orders: dict = field(default_factory=dict)  # write-ahead journal for
+                                                             # CORE_BUY / rebalance
+                                                             # core-sell / BIL sweep:
+                                                             # client_id -> record
+    book_order_seq: int = 0     # monotone id sequence for book-level orders
+    unreconciled: dict = field(default_factory=dict)     # trades with no fill price:
+                                                         # key -> frozen record (manual)
+    stand_in_rows: dict = field(default_factory=dict)    # MF-B/MF-C: position key ->
+                                                         # the field names a schema-drift
+                                                         # rebuild had to INVENT for that
+                                                         # row. Book-level, NOT a
+                                                         # BlendPosition field: `_load`
+                                                         # reads every BlendState key with
+                                                         # raw.get(), so an older build
+                                                         # rolled back onto this file
+                                                         # ignores it, while a new
+                                                         # BlendPosition field would make
+                                                         # its `BlendPosition(**v)` raise
+                                                         # and drift-halt every row
+                                                         # (ZF-3's one-way door). Cleared
+                                                         # ONLY by a human restoring the
+                                                         # row (or by the row leaving the
+                                                         # book) — no venue evidence can
+                                                         # verify an invented value
+    orphan_stop_refs: dict = field(default_factory=dict)  # retired stops whose
+                                                          # cancel failed (retry)
+    sleeve_cash: float = 0.0
+    bil_qty: int = 0
+    spy_qty: int = 0
+    core_cash: float = 0.0
+    halted: str | None = None   # KILL | SCHEMA_DRIFT |
+                                # FRESH_BOOK_VS_VENUE |
+                                # MODE_CHANGE_FROM_REAL | None
+    flatten_request: dict | None = None  # /kill journal (R2): {ts, date} —
+                                         # persisted like pending_entries so
+                                         # a restart resumes the flatten; the
+                                         # LOOP thread executes it (it owns
+                                         # the ib_async event loop)
+    events: list = field(default_factory=list)
+    trades: list = field(default_factory=list)   # booked fills, oldest first
+                                                 # (bounded TRADE_LOG_MAX;
+                                                 # feeds the Execution tab)
+    equity_curve: list = field(default_factory=list)  # [[date, book_value]]
+                                                      # one row per cycle day
+    last_gate: bool | None = None    # last tracker gate seen (feed display)
+    # cash reconcile (stage 1): baseline pair + the running delta drift
+    cash_baseline: dict | None = None    # {venue, ledger, ts}
+    cash_drift: float | None = None      # (venue - b.venue) - (ledger - b.ledger)
+    cash_drift_ts: float | None = None
+    cash_drift_cycles: int = 0           # consecutive quiet cycles over threshold
+    cash_alerted_drift: float | None = None
+    last_fill_ts: float = 0.0            # any booked fill (quiet-cycle rule)
+    commissions_paid: float = 0.0        # debited from the buckets at fill time
+    commissions_unreported: int = 0      # fills booked at 0 because the venue
+                                         # had not reported (round 3: counted)
+    cash_alerted_level: str = ""         # WARN/RED last paged (escalation)
+    # pre-fund hold (option c): cash raised mid-session for a deferred
+    # entry is held back from the sweep until the post-close cycle spends
+    # it or the trading date rolls - persisted so a tracker blip or a
+    # restart cannot re-sweep it
+    prefund_usd: float = 0.0
+    prefund_date: str = ""
+    # The sleeve's target weight the book is RUN at (persisted): adopted
+    # from the tracker's published value only after SLEEVE_TARGET_CONFIRM
+    # consecutive polls agree AND paged; a null/invalid/absent publication
+    # never moves money (2026-10-01 counter-agent: a tracker redeploy with
+    # the env unset would otherwise rebuy the whole core in one cycle).
+    sleeve_target: float | None = None
+    sleeve_target_seen: list = field(default_factory=list)   # [value, n]
+    bootstrap_ack_date: str = ""  # trading date the ack was granted on; the
+                                  # ack is only honoured on that same date
+    bootstrap_ack: bool = False  # operator acknowledged (via /resume) that a
+                                 # FRESH book may seed even though the venue
+                                 # already holds CORE/CASH_VEHICLE. Without
+                                 # it the seed is refused - see run_cycle's
+                                 # bootstrap guard (2026-08-28).
+    util_alert_armed: bool = True    # one-shot 85% budget alert armed?
+    quote_alert_armed: bool = True   # missing-SPY/BIL alert armed? (r3/r4:
+                                     # alert-once per outage, re-armed on
+                                     # recovery — the budget-alarm pattern)
+    # When quotes went missing (wall clock), None = quotes healthy. The
+    # alert-once pattern above is correct for Telegram but made a PERSISTENT
+    # no-quote condition self-silencing: one alert, then /health green and
+    # zero trades forever (2026-08-24 — the book never seeded its SPY core).
+    # This surfaces the condition continuously on /health instead.
+    quotes_missing_since: float | None = None
+    last_reconcile_ts: float = 0.0   # wall clock of the last SUCCESSFUL
+                                     # reconcile pass (venue-history horizon
+                                     # guard, adapter review m2)
+    # Capital (stage-2 cash adoption, 2026-10-05): what the operator has put
+    # INTO the book - the seed plus every adopted deposit. The flow-adjusted
+    # basis the kill ledger's HWM lines need (a deposit is not a gain). None
+    # on a file from before the field: inferred ONCE at load from the seed
+    # config (the only capital a pre-field book can have been given).
+    capital_contributed: float | None = None
+    capital_events: list = field(default_factory=list)   # [{date, ts, kind,
+                                                         #   usd, sleeve_usd,
+                                                         #   core_usd,
+                                                         #   sleeve_target}]
+    # kill-ledger tripwires (alert-only): per series {"base": {date, value,
+    # index} | None, "cur": {...} | None, "day_flow": float, "hwm": float,
+    # "hwm_date": str, "since": str}; flows land in trip_pending_* until
+    # the next snapshot consumes them; trip_alerted: line -> bool (True =
+    # paged, re-arms to False) plus "unrec:<key>" -> True once paged
+    trip_book: dict | None = None
+    trip_sleeve: dict | None = None
+    trip_pending_book: float = 0.0
+    trip_pending_sleeve: float = 0.0
+    trip_alerted: dict = field(default_factory=dict)
+    capital_request: dict | None = None   # journaled adoption request
+                                          # {usd, ts, date}: written by the
+                                          # API thread, EXECUTED by the loop
+                                          # thread (adopt_capital), cleared
+                                          # by /kill
+    mode: str = ""      # "dry:paper" | "real:paper" | "real:live" — the mode
+                        # this book's fills belong to. A book built in one
+                        # mode is FICTION in another (DryAdapter fills at
+                        # placeholder prices; paper fills aren't live fills):
+                        # _load archives the file and starts fresh on any
+                        # mismatch rather than reconciling fiction against a
+                        # venue that never saw those orders.
+
+
+class Blend3070Manager:
+    def __init__(self, cfg, state_path: str):
+        self.cfg = cfg
+        self.state_path = state_path
+        # Set by _load when a mode mismatch archived the previous book —
+        # service startup turns it into a Telegram alert (the manager has
+        # no alert channel at construction time).
+        self.archived_state: str | None = None
+        self.archived_state_critical = False   # y4: unreadable
+                                               # book, not a
+                                               # routine mode change
+        # ZF-7: did the archive/preserve rename actually SUCCEED? The Z-J
+        # boot save below is conditional on it.
+        self._evidence_preserved = False
+        self._trip_rejected: list[str] = []     # set by _load (TB8)
+        self.state = self._load()
+        for _k in self._trip_rejected:
+            self._event("WARN", f"tripwire series {_k} in the state file was "
+                                f"MALFORMED and was dropped: it restarts "
+                                f"(the book re-bootstraps from the equity curve)")
+        # Set when this boot had to INFER capital_contributed (a state file
+        # with no capital fields): service startup turns it into a Telegram
+        # page, the archived_state pattern (counter-agents A3/B3: a rollback
+        # to a pre-stage-2 build drops the capital keys, and the roll-
+        # forward would otherwise re-infer the seed in silence while the
+        # book carries an adopted deposit).
+        self.capital_inferred: float | None = None
+        if self.state.initialized and self.state.capital_contributed is None:
+            # A book written before the field existed: adoptions did not
+            # exist either, so the seed (BLEND_BOOK_USD clamped by
+            # BLEND_BUDGET, exactly as step's seed branch computed it) is
+            # the only capital it was ever given. Inferred ONCE - the
+            # loop's first save persists it, so a later change to the env
+            # var cannot rewrite history. Deliberately NOT the first
+            # equity-curve point: that is a VALUE (post-commission marks),
+            # not a contribution. Recorded as a capital event of its own
+            # kind, so the record never claims it was a seed.
+            inferred = round(self._seed_book_usd(), 2)
+            self.state.capital_contributed = inferred
+            self.capital_inferred = inferred
+            self.state.capital_events.append({
+                "date": _utc_today(), "ts": int(time.time()),
+                "kind": "inferred", "usd": inferred,
+                "sleeve_usd": None, "core_usd": None,
+                "sleeve_target": self.state.sleeve_target})
+            del self.state.capital_events[:-CAPITAL_EVENTS_MAX]
+            self._event("WARN", f"capital contributed INFERRED from the seed "
+                                f"config: ${inferred:,.2f} (the state file "
+                                f"carried no capital fields - a pre-stage-2 "
+                                f"file, or a rollback dropped them). If a "
+                                f"deposit was adopted before, restore "
+                                f"capital_contributed by hand from the "
+                                f"ADOPTED page")
+        if self.archived_state and self._evidence_preserved:
+            # Z-J: the archive/drift branches set `halted` and rebuild the
+            # book IN MEMORY only — a crash before the loop's first save()
+            # lost both and the next boot came back un-halted, which is the
+            # y2 harm one crash earlier. The old file IS already moved aside
+            # on this path (ZF-7: `_evidence_preserved`), so this writes the
+            # recovered book, never over evidence. When the rename FAILED
+            # the original file is still sitting at `state_path` and is the
+            # only copy of the drift — persisting the halt would destroy it
+            # immediately, so the halt stays in memory (the loop's first
+            # save overwrites it either way, and `archived_state` says so).
+            self.save()
+        # M2 (thread-safety): API threads (/status, /blend/feed) serve THIS
+        # loop-thread-refreshed quote cache — they must never touch the
+        # ib_async event loop themselves. run_cycle republishes it (whole-
+        # dict swap: atomic under the GIL) every cycle; staleness is shown,
+        # never hidden.
+        self.mark_cache: dict = {"prices": {}, "ts": None}
+        # m2 (venue-history horizon): seconds between this cycle's reconcile
+        # and the previous SUCCESSFUL one — set by reconcile() each cycle.
+        self._reconcile_gap_s: float = 0.0
+
+    # ---------- persistence (LadderManager pattern) ----------
+
+    def _current_mode(self) -> str:
+        # Mirrors _build's adapter choice exactly (counter-agent F1): the
+        # DryAdapter runs whenever creds are ABSENT too, not just under
+        # DRY_RUN — placeholder fills must be tagged dry regardless of the
+        # flag, or a creds-missing boot with DRY_RUN=false would tag
+        # fiction as a real book.
+        has_creds = bool(getattr(self.cfg, "tws_userid", "")
+                         and getattr(self.cfg, "tws_password", ""))
+        dry = self.cfg.dry_run or not has_creds
+        return f"{'dry' if dry else 'real'}:{self.cfg.trading_mode}"
+
+    def _load(self) -> BlendState:
+        try:
+            raw = json.load(open(self.state_path))
+            stored_mode = raw.get("mode", "")
+            if stored_mode != self._current_mode():
+                # Mode-transition guard: this book's fills belong to a
+                # different mode (or a pre-guard file of unknown mode) and
+                # the current venue never saw its orders — reconciling
+                # them would mark fictional holdings at real prices and
+                # trade the difference. Archive and start clean.
+                archive = (f"{self.state_path}.archived-"
+                           f"{(stored_mode or 'unknown').replace(':', '_')}"
+                           f"-{int(time.time())}")
+                try:
+                    os.replace(self.state_path, archive)
+                    note = f"previous book archived to {archive}"
+                    self._evidence_preserved = True
+                except OSError as exc:
+                    # F2: a failed archive must still be LOUD — the fresh
+                    # book's first save will overwrite the old file.
+                    note = (f"ARCHIVE FAILED ({exc}) — previous book will "
+                            f"be OVERWRITTEN by the next save")
+                self.archived_state = (f"mode change "
+                                       f"{stored_mode or 'unknown'} -> "
+                                       f"{self._current_mode()}; {note}")
+                # Losing a REAL book is never routine (2026-08-28). Note
+                # that _current_mode() reports dry whenever creds are
+                # merely ABSENT, so an unauthenticated boot - a gateway
+                # still waiting on its 2FA approval - is enough to land
+                # here. The old code returned an un-halted fresh book,
+                # which then SEEDS (step's `not st.initialized` branch)
+                # and buys CORE + CASH_VEHICLE on top of the holdings the
+                # archived book already owned. Halt and escalate instead;
+                # /resume is the deliberate acknowledgement.
+                fresh = BlendState(mode=self._current_mode())
+                if stored_mode.startswith("real:"):
+                    self.archived_state_critical = True
+                    fresh.halted = "MODE_CHANGE_FROM_REAL"
+                return fresh
+            st = BlendState(
+                initialized=raw.get("initialized", False),
+                entered_ids=raw.get("entered_ids", []),
+                entered_symbols=raw.get("entered_symbols", {}),
+                pending_entries=raw.get("pending_entries", {}),
+                bootstrap_ack=raw.get("bootstrap_ack", False),
+                bootstrap_ack_date=raw.get("bootstrap_ack_date", ""),
+                pending_book_orders=raw.get("pending_book_orders", {}),
+                book_order_seq=raw.get("book_order_seq", 0),
+                unreconciled=raw.get("unreconciled", {}),
+                stand_in_rows=raw.get("stand_in_rows", {}),
+                orphan_stop_refs=raw.get("orphan_stop_refs", {}),
+                sleeve_cash=raw.get("sleeve_cash", 0.0),
+                bil_qty=raw.get("bil_qty", 0),
+                spy_qty=raw.get("spy_qty", 0),
+                core_cash=raw.get("core_cash", 0.0),
+                halted=raw.get("halted"),
+                flatten_request=raw.get("flatten_request"),
+                trades=raw.get("trades", [])[-TRADE_LOG_MAX:],
+                equity_curve=raw.get("equity_curve", [])[-EQUITY_CURVE_MAX:],
+                last_gate=raw.get("last_gate"),
+                util_alert_armed=raw.get("util_alert_armed", True),
+                quote_alert_armed=raw.get("quote_alert_armed", True),
+                quotes_missing_since=raw.get("quotes_missing_since"),
+                last_reconcile_ts=raw.get("last_reconcile_ts", 0.0),
+                # cash reconcile / pre-fund (counter-agent round 2: these
+                # were declared but never persisted - every deploy silently
+                # re-baselined and zeroed commissions_paid)
+                # a mis-shaped baseline or a non-numeric drift in the file
+                # must not disable the reconcile silently / 500 the feed
+                # (counter-agent round 3)
+                cash_baseline=_valid_baseline(raw.get("cash_baseline")),
+                cash_drift=_num_or_none(raw.get("cash_drift")),
+                cash_drift_ts=_num_or_none(raw.get("cash_drift_ts")),
+                cash_drift_cycles=int(raw.get("cash_drift_cycles", 0) or 0),
+                cash_alerted_drift=raw.get("cash_alerted_drift"),
+                cash_alerted_level=raw.get("cash_alerted_level", "") or "",
+                last_fill_ts=float(raw.get("last_fill_ts", 0.0) or 0.0),
+                commissions_paid=float(raw.get("commissions_paid", 0.0) or 0.0),
+                commissions_unreported=int(raw.get("commissions_unreported", 0) or 0),
+                prefund_usd=float(raw.get("prefund_usd", 0.0) or 0.0),
+                prefund_date=raw.get("prefund_date", "") or "",
+                sleeve_target=_num_or_none(raw.get("sleeve_target")),
+                sleeve_target_seen=list(raw.get("sleeve_target_seen") or []),
+                capital_contributed=_num_or_none(raw.get("capital_contributed")),
+                capital_events=[e for e in (raw.get("capital_events") or [])
+                                if isinstance(e, dict)][-CAPITAL_EVENTS_MAX:],
+                capital_request=_valid_capital_request(raw.get("capital_request")),
+                trip_book=_valid_trip(raw.get("trip_book")),
+                trip_sleeve=_valid_trip(raw.get("trip_sleeve")),
+                trip_pending_book=_finite(raw.get("trip_pending_book"), 0.0),
+                trip_pending_sleeve=_finite(raw.get("trip_pending_sleeve"), 0.0),
+                trip_alerted=(raw.get("trip_alerted")
+                              if isinstance(raw.get("trip_alerted"), dict) else {}),
+                mode=stored_mode,
+            )
+            try:
+                st.positions = {k: BlendPosition(**v)
+                                for k, v in raw.get("positions", {}).items()}
+            except TypeError as exc:
+                # Z-D, y2's premise applied to the book that trades stock: a
+                # deploy ROLLBACK reads position rows a NEWER build wrote
+                # (Z1 added `stop_cover_qty` in this very round). Unfiltered,
+                # that raised straight into the G3 branch and returned a
+                # FRESH, un-halted, un-initialized book — open positions and
+                # `halted` forgotten, entries UNBLOCKED, while real shares
+                # and GTC stops rest at the venue. Same treatment the ladder
+                # got (manager.py y2): keep every field this build still
+                # understands (an open position's stop_order_ref is the only
+                # handle on a real resting stop), PRESERVE the file, and
+                # HALT — reconcile still runs and still protects the book
+                # while halted; only new decisions stop.
+                st.positions = {}
+                unbuildable: list[str] = []     # ZF-6: never SILENTLY lost
+                dropped_keys: set[str] = set()
+                defaulted: list[str] = []
+                for k, v in (raw.get("positions") or {}).items():
+                    if not isinstance(v, dict):
+                        unbuildable.append(str(k))
+                        continue
+                    try:
+                        pos, drop, defl = _position_from_drifted_row(k, v)
+                    except Exception:  # noqa: BLE001
+                        # ZF-4: a row this build cannot rebuild at all must
+                        # never take the whole book down to the G3 branch —
+                        # the halt and every OTHER row are worth more.
+                        unbuildable.append(str(k))
+                        continue
+                    st.positions[k] = pos
+                    dropped_keys.update(drop)
+                    defaulted.extend(f"{k}.{d}" for d in defl)
+                    if defl:
+                        # MF-B/MF-C: the row's provenance, at BOOK level so
+                        # it survives every reconcile and every /resume.
+                        st.stand_in_rows[str(k)] = sorted(defl)
+                archive = f"{self.state_path}.corrupt-{int(time.time())}"
+                try:
+                    os.replace(self.state_path, archive)
+                    note = f"drifted book preserved at {archive}"
+                    self._evidence_preserved = True
+                except OSError as err:
+                    note = (f"PRESERVE FAILED ({err}) — the drifted book "
+                            f"will be OVERWRITTEN by the next save")
+                st.halted = st.halted or "SCHEMA_DRIFT"
+                self.archived_state_critical = True
+                self.archived_state = (
+                    f"blend position rows unreadable ({exc}); book HALTED "
+                    f"({st.halted}) so no entry, exit or ratchet is decided "
+                    f"before you look — positions, cash and stop refs kept, "
+                    f"reconcile still protects them"
+                    + (f"; fields this build does not understand were DROPPED "
+                       f"from the rebuilt rows: {', '.join(sorted(dropped_keys))}"
+                       if dropped_keys else "")
+                    + (f"; fields the rows did not carry were DEFAULTED (the "
+                       f"values are stand-ins, read them off the preserved "
+                       f"file) and those rows are flagged UNVERIFIABLE for "
+                       f"GOOD — nothing exits, re-stops, resizes or flattens "
+                       f"them, no venue answer is allowed to DECIDE "
+                       f"anything about them (an invented symbol or stop "
+                       f"level addresses the WRONG order), and NO reconcile "
+                       f"clears the flag: restore the real values in the "
+                       f"state file and delete the row's `stand_in_rows` "
+                       f"entry. They show up as `unverifiable` on /status "
+                       f"and the feed, and /status names the invented "
+                       f"fields under `stand_in_rows`: "
+                       f"{', '.join(defaulted)}" if defaulted else "")
+                    + (f"; row(s) {', '.join(unbuildable)} could not be "
+                       f"rebuilt at all and were DROPPED from the in-memory "
+                       f"book — they exist ONLY in the preserved file and the "
+                       f"book stays HALTED until you restore them by hand"
+                       if unbuildable else "")
+                    + f"; {note}")
+                logger.error("blend: %s", self.archived_state)
+            # MF-B: keep the stand-in register honest on every load — drop
+            # rows that have left the book, and re-assert the flag on rows
+            # still in it (a hand-edit that cleared `history_gap` without
+            # restoring the invented values must not un-park the row).
+            for gone in [k for k in st.stand_in_rows
+                         if k not in st.positions]:
+                st.stand_in_rows.pop(gone)
+            for k in st.stand_in_rows:
+                st.positions[k].history_gap = True
+            st.events = raw.get("events", [])[-300:]
+            for _k in ("trip_book", "trip_sleeve"):
+                if getattr(st, _k) == "REJECTED":
+                    setattr(st, _k, None)
+                    self._trip_rejected.append(_k)
+            return st
+        except FileNotFoundError:
+            return BlendState(mode=self._current_mode())
+        except Exception as exc:  # noqa: BLE001
+            # G3, mirroring the ladder's x12 fix: an unreadable book (torn
+            # write from outside our atomic save, schema drift, hand-edit)
+            # used to degrade SILENTLY to a fresh book — open positions and
+            # `halted` forgotten, and the next save() overwrote the
+            # evidence. Preserve it and be loud; the service alerts on
+            # archived_state at build.
+            archive = f"{self.state_path}.corrupt-{int(time.time())}"
+            try:
+                os.replace(self.state_path, archive)
+                note = f"unreadable book preserved at {archive}"
+                self._evidence_preserved = True
+            except OSError as err:
+                note = (f"PRESERVE FAILED ({err}) — the unreadable book will "
+                        f"be OVERWRITTEN by the next save")
+            self.archived_state_critical = True
+            self.archived_state = (f"blend state unreadable ({exc}); "
+                                   f"starting a FRESH book; {note}")
+            logger.error("blend: %s", self.archived_state)
+            return BlendState(mode=self._current_mode())
+
+    def save(self) -> None:
+        # Atomic write (counter-agent N3): a save interrupted mid-write —
+        # or two threads racing — must never leave a truncated file that
+        # _load silently resolves to a fresh empty book.
+        #
+        # x11: the temp file is UNIQUE per write (mkstemp in the state
+        # directory, so os.replace stays a same-filesystem rename). One
+        # shared "<state>.tmp" made the racing-threads half of that promise
+        # false: concurrent savers clobbered each other's partial file and
+        # published truncated JSON (measured: 467 raises + 52 corrupt
+        # published states over 4 unlocked savers on a 132 KB book), and it
+        # flaked the suite with FileNotFoundError on the shared .tmp.
+        # Production writers no longer all hold BLEND_LOCK: MF-A moved
+        # /kill's request_flatten to BLEND_HALT_LOCK on purpose, so its
+        # halt cannot queue behind a cycle (mf2-6 — this comment claimed
+        # the old discipline for a round after it was dropped). The
+        # remaining writers are the loop's run_cycle and /resume's resume
+        # under BLEND_LOCK, and /kill under BLEND_HALT_LOCK; /status and
+        # /blend/feed are read-only. What keeps THAT safe is this write
+        # being atomic and the state object being a single shared one
+        # mutated field-by-field under the GIL — never two half-books.
+        #
+        # mf3-10: that GIL argument only covers a writer that ASSIGNS a
+        # field. A writer that ITERATES a shared container breaks it, and
+        # mf2-9's prune (below) did exactly that, under this very comment:
+        # `[k for k in self.state.stand_in_rows ...]` walks a live dict the
+        # loop thread inserts into, and CPython answers "dictionary changed
+        # size during iteration" — reproduced by two API savers against
+        # three mutators, 1-10 raises per 8s run over 8 runs (0 over 6 after
+        # this fix; tests/probes/mf3/save_race.py), raising straight out of
+        # `/kill`'s `request_flatten`. Every shared container is SNAPSHOTTED first now
+        # (`_snapshot`: a C-level dict copy that never runs Python-level
+        # iteration over the live dict), the prune walks the private
+        # snapshot, and json.dump only ever sees snapshots — nothing in this
+        # method iterates shared state.
+        directory = os.path.dirname(self.state_path) or "."
+        os.makedirs(directory, exist_ok=True)
+        positions = _snapshot(self.state.positions)
+        stand_in = _snapshot(self.state.stand_in_rows)
+        # mf2-9: the register was pruned only on _load, so a row that left
+        # the book between saves was written to disk as a dangling entry
+        # (measured: stand_in_rows={'1': ['time_stop']} with no such
+        # position). Prune where the book is written, not only where it is
+        # read — off the SNAPSHOT (mf3-10), and out of the live register too
+        # so /status stops publishing the dangling row as well.
+        for gone in [k for k in stand_in if k not in positions]:
+            stand_in.pop(gone)
+            self.state.stand_in_rows.pop(gone, None)
+        payload = {"initialized": self.state.initialized,
+                   "positions": {k: asdict(v)
+                                 for k, v in positions.items()},
+                   "entered_ids": list(self.state.entered_ids),
+                   "entered_symbols": _snapshot(self.state.entered_symbols),
+                   "pending_entries": _snapshot(self.state.pending_entries),
+                   "bootstrap_ack": self.state.bootstrap_ack,
+                   "bootstrap_ack_date": self.state.bootstrap_ack_date,
+                   "pending_book_orders": _snapshot(
+                       self.state.pending_book_orders),
+                   "book_order_seq": self.state.book_order_seq,
+                   "unreconciled": _snapshot(self.state.unreconciled),
+                   "stand_in_rows": stand_in,
+                   "orphan_stop_refs": _snapshot(self.state.orphan_stop_refs),
+                   "sleeve_cash": self.state.sleeve_cash,
+                   "bil_qty": self.state.bil_qty,
+                   "spy_qty": self.state.spy_qty,
+                   "core_cash": self.state.core_cash,
+                   "halted": self.state.halted,
+                   "flatten_request": self.state.flatten_request,
+                   "trades": self.state.trades[-TRADE_LOG_MAX:],
+                   "equity_curve": self.state.equity_curve[-EQUITY_CURVE_MAX:],
+                   "last_gate": self.state.last_gate,
+                   "util_alert_armed": self.state.util_alert_armed,
+                   "quote_alert_armed": self.state.quote_alert_armed,
+                   "quotes_missing_since": self.state.quotes_missing_since,
+                   "last_reconcile_ts": self.state.last_reconcile_ts,
+                   "cash_baseline": self.state.cash_baseline,
+                   "cash_drift": self.state.cash_drift,
+                   "cash_drift_ts": self.state.cash_drift_ts,
+                   "cash_drift_cycles": self.state.cash_drift_cycles,
+                   "cash_alerted_drift": self.state.cash_alerted_drift,
+                   "cash_alerted_level": self.state.cash_alerted_level,
+                   "last_fill_ts": self.state.last_fill_ts,
+                   "commissions_paid": self.state.commissions_paid,
+                   "commissions_unreported": self.state.commissions_unreported,
+                   "prefund_usd": self.state.prefund_usd,
+                   "prefund_date": self.state.prefund_date,
+                   "sleeve_target": self.state.sleeve_target,
+                   "sleeve_target_seen": self.state.sleeve_target_seen,
+                   "capital_contributed": self.state.capital_contributed,
+                   "capital_events": list(self.state.capital_events[-CAPITAL_EVENTS_MAX:]),
+                   "capital_request": self.state.capital_request,
+                   "trip_book": (_snapshot(self.state.trip_book)
+                                 if self.state.trip_book else None),
+                   "trip_sleeve": (_snapshot(self.state.trip_sleeve)
+                                   if self.state.trip_sleeve else None),
+                   "trip_pending_book": self.state.trip_pending_book,
+                   "trip_pending_sleeve": self.state.trip_pending_sleeve,
+                   "trip_alerted": _snapshot(self.state.trip_alerted),
+                   "mode": self.state.mode,
+                   "events": self.state.events[-300:]}
+        fd, tmp_path = tempfile.mkstemp(
+            dir=directory, prefix=os.path.basename(self.state_path) + ".",
+            suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as fh:
+                json.dump(payload, fh, indent=1)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_path, self.state_path)
+        except BaseException:
+            # Never leave the scratch file behind on a failed save.
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+    def _event_once_today(self, level: str, key: str, msg: str) -> bool:
+        """Record an event at most once per calendar day per key - for the
+        per-cycle notices (entries deferred / breaker open) that _event's
+        last-message dedupe re-logs every 5 minutes as soon as any other
+        event interleaves (counter-agent round 1). In-memory: a restart
+        re-emits once, which is the right amount of noise."""
+        today = _utc_today()
+        seen = getattr(self, "_notice_day", None)
+        if seen is None:
+            seen = self._notice_day = {}
+        if seen.get(key) == today:
+            return False
+        seen[key] = today
+        return self._event(level, msg)
+
+    def _event(self, level: str, msg: str) -> bool:
+        """Log a deduped event. Returns True only when the event was NEWLY
+        recorded (callers use this for alert-once semantics, e.g. the M4
+        missing-quote alert fires once per outage, not every cycle)."""
+        last = self.state.events[-1] if self.state.events else None
+        if last and last.get("msg") == msg:
+            return False
+        self.state.events.append({"ts": int(time.time()), "level": level,
+                                  "msg": msg})
+        logger.info("[blend] %s", msg)
+        return True
+
+    def _record_trade(self, symbol: str, side: str, qty: int,
+                      fill_price: float, when: str, kind: str,
+                      r_multiple: float | None = None,
+                      pnl: float | None = None) -> None:
+        """Append one booked fill to the persisted trade log (feed source).
+        Caller saves — every current call site already saves right after."""
+        self.state.trades.append({
+            "symbol": symbol, "side": side, "qty": abs(qty),
+            "fill_price": round(fill_price, 4), "date": when, "kind": kind,
+            "r_multiple": round(r_multiple, 2) if r_multiple is not None else None,
+            "pnl": round(pnl, 2) if pnl is not None else None})
+        del self.state.trades[:-TRADE_LOG_MAX]
+
+    # ---------- valuation (executor-side only; never leaves this service) ----
+
+    def _mark_price(self, pos: BlendPosition, prices: dict[str, float]) -> float:
+        """Conservative mark for an unquoted held name: the working stop
+        level (the near-guaranteed exit), never the entry reference — a
+        failed quote on a cratered name must not overstate sleeve equity or
+        the per-entry risk$ built on it (counter-agent minor finding)."""
+        return prices.get(pos.symbol,
+                          pos.stop_level if pos.stop_level > 0 else pos.entry_ref)
+
+    def positions_view(self) -> dict:
+        """B6: a PRIVATE snapshot of the position map, for every read path a
+        FastAPI worker thread can reach.
+
+        mf3-10 fixed exactly this class of bug — a Python-level walk of a
+        dict the loop thread inserts into raises `RuntimeError: dictionary
+        changed size during iteration` — but it applied the snapshot to
+        `save()` ONLY. `status_summary()`, `feed()` and every valuation
+        helper they call kept iterating the live shared dict from a worker
+        thread, so `/status` returned HTTP 500 during a flatten — the exact
+        window and the exact surface `/kill`'s own alert tells the operator
+        to watch, and the only surface carrying `flatten_pending`,
+        `unprotected`, `unverifiable` and `stand_in_rows`. The judge's
+        report puts it at 10-16% of requests; this repo's own rig,
+        `tests/probes/corrective/status_race.py`, measures 18.2-18.7% of
+        reads raising at cc03347 and 0% after."""
+        return _snapshot(self.state.positions)
+
+    def sleeve_value(self, prices: dict[str, float]) -> float:
+        v = self.state.sleeve_cash + self.state.bil_qty * prices.get(CASH_VEHICLE, 0.0)
+        for pos in self.positions_view().values():
+            v += pos.qty * self._mark_price(pos, prices)
+        return v
+
+    def core_value(self, prices: dict[str, float]) -> float:
+        return self.state.core_cash + self.state.spy_qty * prices.get(CORE, 0.0)
+
+    def book_value(self, prices: dict[str, float]) -> float:
+        return self.sleeve_value(prices) + self.core_value(prices)
+
+    def gross_exposure(self, prices: dict[str, float]) -> float:
+        """Everything at risk in the market (holdings, ex-cash) — what the
+        BLEND_BUDGET cap binds on."""
+        v = self.state.bil_qty * prices.get(CASH_VEHICLE, 0.0)
+        v += self.state.spy_qty * prices.get(CORE, 0.0)
+        for pos in self.positions_view().values():     # B6
+            v += pos.qty * self._mark_price(pos, prices)
+        return v
+
+    def has_naked_position(self) -> bool:
+        """Any held position without a working protective stop — or one
+        that is blackout-UNVERIFIABLE (R1: its stop state is unknown) —
+        (safety-first: blocks all new entries until resolved)."""
+        return any(p.stop_missing or not p.stop_order_ref or p.history_gap
+                   for p in self.positions_view().values())      # B6
+
+    def budget_utilization(self, prices: dict[str, float]) -> float | None:
+        """Deployed gross notional as a fraction of BLEND_BUDGET; None when
+        no budget cap is configured (0/unset) or no prices are available."""
+        budget = getattr(self.cfg, "blend_budget", 0.0) or 0.0
+        if budget <= 0 or not prices:
+            return None
+        return self.gross_exposure(prices) / budget
+
+    def check_budget_alarm(self, prices: dict[str, float], alert) -> None:
+        """One-shot-per-crossing Telegram alert when gross notional crosses
+        UTIL_ALERT_ON (85%) of BLEND_BUDGET; re-arms once utilization drops
+        below UTIL_ALERT_OFF (75%). Armed flag is persisted so a restart
+        never re-fires an already-sent alert."""
+        util = self.budget_utilization(prices)
+        if util is None:
+            return
+        if self.state.util_alert_armed and util >= UTIL_ALERT_ON:
+            self.state.util_alert_armed = False
+            self._event("WARN", f"budget utilization {util:.0%} of "
+                                f"BLEND_BUDGET (alert sent)")
+            self.save()
+            alert(f"⚠️ blend budget utilization {util:.0%} — review and "
+                  f"raise BLEND_BUDGET")
+        elif not self.state.util_alert_armed and util < UTIL_ALERT_OFF:
+            self.state.util_alert_armed = True
+            self.save()
+
+    def record_equity_snapshot(self, today: str, prices: dict[str, float]) -> None:
+        """Daily book-value point for the Execution tab's equity curve: one
+        row per cycle day (later cycles the same day update it in place).
+        M4: SKIPPED when the CORE or BIL quote is missing — a zero-valued
+        ledger side would record a distorted book value (repo law: no
+        silent zero)."""
+        if not self.state.initialized or not prices:
+            return
+        if prices.get(CORE, 0.0) <= 0 or prices.get(CASH_VEHICLE, 0.0) <= 0:
+            return
+        value = round(self.book_value(prices), 2)
+        curve = self.state.equity_curve
+        if curve and curve[-1][0] == today:
+            if curve[-1][1] == value:
+                return
+            curve[-1][1] = value
+        else:
+            curve.append([today, value])
+            del curve[:-EQUITY_CURVE_MAX]
+        self.save()
+
+    # ---------- kill-ledger tripwires (alert-only, 2026-10-05) ----------
+    #
+    # Each series chain-links one value per cycle. The DAY's point is
+    # FINALIZED at the UTC-day roll from the last mark taken in the REGULAR
+    # SESSION that day (else the day's last mark): the high-water mark and
+    # every ledger line read FINALIZED points only, so a transient intraday
+    # or after-hours mark (a thin name's ask) can neither set a permanent
+    # high nor page a drawdown (counter-agent TA1). Flows are attributed to
+    # the mark they arrive before; flows that land after the finalized mark
+    # (an after-hours adoption) carry into the next day.
+
+    def _trip_series_update(self, key: str, today: str, value: float,
+                            pending_attr: str) -> dict | None:
+        st = self.state
+        ser = getattr(st, key)
+        pending = getattr(st, pending_attr)
+        setattr(st, pending_attr, 0.0)
+        in_rth = regular_session_open()
+        if ser is None:
+            mark = {"date": today, "value": value, "index": 1.0, "flow": 0.0}
+            ser = {"base": None, "cur": mark,
+                   "cur_rth": dict(mark) if in_rth else None,
+                   "day_flow": 0.0, "hwm": 1.0, "hwm_date": today,
+                   "since": today, "closes": []}
+            setattr(st, key, ser)
+            self._event("INFO", f"tripwire series {key} started {today}")
+            return ser
+        cur = ser.get("cur") or {}
+        if cur and cur.get("date") != today:
+            rth = ser.get("cur_rth")
+            if rth and rth.get("date") == cur.get("date"):
+                self._trip_finalize(ser)
+            else:
+                # TC1: a UTC day with NO in-session mark (weekend, holiday,
+                # a session the loop missed) is never a close - its marks are
+                # exactly the after-hours/stale quotes the closes exclude. The
+                # base stays, every flow since it stays in day_flow, no close
+                # is appended and the HWM does not move: "two consecutive
+                # closes" means two SESSIONS.
+                ser["cur_rth"] = None
+        ser["day_flow"] = float(ser.get("day_flow") or 0.0) + pending
+        base = ser.get("base")
+        prev_idx = (cur.get("index") if cur.get("date") == today
+                    else (base or {}).get("index", 1.0)) or 1.0
+        if not base or (_num_or_none(base.get("value")) or 0.0) < TRIP_MIN_BASE_USD:
+            # first day, or a base too small to divide by (a sleeve emptied to
+            # cents then refilled by a transfer would explode the index -
+            # TB10): hold the index, absorb the day's flows
+            idx = prev_idx
+        elif value - ser["day_flow"] <= 0:
+            # the mark EXCLUDES a flow already counted (TA3: a deposit whose
+            # snapshot was skipped): never move the index off it - the flow
+            # stays in day_flow for the next mark
+            self._event_once_today("WARN", f"trip_flow_{key}",
+                                   f"tripwire {key}: mark {value:,.2f} is below "
+                                   f"the day's flows {ser['day_flow']:,.2f} - "
+                                   f"index held until a mark includes them")
+            idx = prev_idx
+            # TB12: record only the flow the held index already reflects (the
+            # previous same-day mark's), so a finalize on this mark CARRIES
+            # the unreflected rest into the next day instead of dropping it
+            reflected = (float(cur.get("flow") or 0.0)
+                         if cur.get("date") == today else 0.0)
+            mark = {"date": today, "value": value, "index": idx,
+                    "flow": reflected}
+            ser["cur"] = mark
+            # TD2: cur_rth is left alone - the day's close is its last GOOD
+            # in-session mark (the carry then picks up the unreflected flow);
+            # a day with none is never finalized (TC1)
+            return ser
+        else:
+            idx = float(base["index"]) * (value - ser["day_flow"]) / float(base["value"])
+        mark = {"date": today, "value": value, "index": idx,
+                "flow": ser["day_flow"]}
+        ser["cur"] = mark
+        if in_rth:
+            ser["cur_rth"] = dict(mark)
+        return ser
+
+    def _trip_finalize(self, ser: dict) -> None:
+        """Close the previous SESSION day at its last in-session mark (the
+        caller guarantees there was one - TC1). Flows that arrived after that
+        mark carry into the new day. The HWM ratchets here and only here."""
+        fin = ser["cur_rth"]
+        carry = float(ser.get("day_flow") or 0.0) - float(fin.get("flow") or 0.0)
+        ser["base"] = {"date": fin["date"], "value": fin["value"],
+                       "index": fin["index"]}
+        ser["day_flow"] = carry if abs(carry) > 1e-9 else 0.0
+        ser["cur_rth"] = None
+        if float(fin["index"]) > float(ser.get("hwm") or 0.0):
+            ser["hwm"], ser["hwm_date"] = float(fin["index"]), fin["date"]
+        closes = list(ser.get("closes") or [])
+        closes.append([fin["date"], float(fin["index"])])
+        ser["closes"] = closes[-5:]
+
+    @staticmethod
+    def _trip_dd_close(ser: dict | None, back: int = 1) -> float | None:
+        """Drawdown of the `back`-th most recent FINALIZED close vs the HWM."""
+        if not ser:
+            return None
+        closes = ser.get("closes") or []
+        hwm = float(ser.get("hwm") or 0.0)
+        if len(closes) < back or hwm <= 0:
+            return None
+        return max(0.0, 1.0 - float(closes[-back][1]) / hwm)
+
+    @staticmethod
+    def _trip_dd_live(ser: dict | None) -> float | None:
+        if not ser or not ser.get("cur"):
+            return None
+        hwm = float(ser.get("hwm") or 0.0)
+        return max(0.0, 1.0 - float(ser["cur"]["index"]) / hwm) if hwm > 0 else None
+
+    def _trip_bootstrap_book(self, today: str) -> None:
+        """First run on a book with history: replay the persisted equity curve
+        (one point per UTC cycle day; earlier days are finalized closes, a
+        point dated `today` is the open day's live mark) into the book index,
+        with ADOPTED deposits as flows. A flow is applied at the first curve
+        point on or after its date whose value covers it (TA3: a deposit whose
+        day has no point, or whose point excludes it, carries forward - never
+        a phantom gain or a negative index). Pending flows already contained
+        in the curve are removed from the pending total (no double count);
+        any not yet in it stay pending. The sleeve has no persisted history
+        and starts at its first snapshot."""
+        st = self.state
+        curve = [p for p in st.equity_curve
+                 if isinstance(p, (list, tuple)) and len(p) == 2
+                 and isinstance(p[0], str) and (_finite(p[1]) or 0.0) > 0
+                 # only SESSION days are closes (TC1); today's point is the
+                 # live mark whatever day it is
+                 and (p[0] == today or (_parse_date(p[0]) is not None
+                                        and is_trading_day(_parse_date(p[0]))))]
+        if not curve:
+            return
+        first_d, last_d = curve[0][0], curve[-1][0]
+        flows = sorted((e["date"], float(_finite(e.get("usd"), 0.0)))
+                       for e in st.capital_events
+                       if e.get("kind") == "deposit_adopted"
+                       and isinstance(e.get("date"), str))
+        in_curve = sum(f for d, f in flows if first_d < d <= last_d)
+        ser = {"base": None, "cur": None, "cur_rth": None, "day_flow": 0.0,
+               "hwm": 1.0, "hwm_date": first_d, "since": first_d, "closes": []}
+        prev = None
+        owed = 0.0
+        fi = 0
+        while fi < len(flows) and flows[fi][0] <= first_d:
+            fi += 1                         # in the first point already
+        open_day = False
+        for d, v in curve:
+            v = float(v)
+            while fi < len(flows) and flows[fi][0] <= d:
+                owed += flows[fi][1]
+                fi += 1
+            if d == today and prev is not None:
+                # the open day: its flows sit in day_flow, the live update
+                # recomputes the index off the base
+                ser["base"] = {"date": prev["date"], "value": prev["value"],
+                               "index": prev["index"]}
+                ser["day_flow"] = owed
+                idx = (prev["index"] * (v - owed) / prev["value"]
+                       if v - owed > 0 else prev["index"])
+                ser["cur"] = {"date": d, "value": v, "index": idx, "flow": owed}
+                owed = 0.0
+                open_day = True
+                break
+            if prev is None:
+                idx = 1.0
+            elif v - owed <= 0:
+                idx = prev["index"]         # point excludes the flow: carry it
+            else:
+                idx = prev["index"] * (v - owed) / prev["value"]
+                owed = 0.0
+            point = {"date": d, "value": v, "index": idx}
+            ser["closes"] = (ser["closes"] + [[d, idx]])[-5:]
+            if idx > ser["hwm"]:
+                ser["hwm"], ser["hwm_date"] = idx, d
+            prev = point
+        if not open_day:
+            # no point for today yet: the last (already finalized) close is the
+            # base for today; no live mark, so the next update neither
+            # re-finalizes it nor double-counts it
+            ser["base"] = dict(prev) if prev else None
+            ser["cur"] = None
+            ser["day_flow"] = 0.0
+        consumed = in_curve - owed          # owed = carried, not yet applied
+        st.trip_pending_book = max(0.0, st.trip_pending_book - consumed) + owed
+        st.trip_book = ser
+        self._event("INFO", f"tripwire book index bootstrapped from the equity "
+                            f"curve: {len(curve)} cycle days since {first_d}, "
+                            f"HWM {ser['hwm_date']}")
+
+    def update_tripwires(self, today: str, prices: dict[str, float],
+                         alert) -> dict | None:
+        """Advance both indices to this cycle's marks and page any ledger line
+        crossed on FINALIZED closes. Same skip rule as the equity snapshot
+        (M4). Never raises; a failure is said once a day (TA7)."""
+        st = self.state
+        try:
+            if not st.initialized or not prices:
+                return None
+            if prices.get(CORE, 0.0) <= 0 or prices.get(CASH_VEHICLE, 0.0) <= 0:
+                return None
+            if st.trip_book is None:
+                self._trip_bootstrap_book(today)
+            self._trip_series_update("trip_book", today, self.book_value(prices),
+                                     "trip_pending_book")
+            self._trip_series_update("trip_sleeve", today,
+                                     self.sleeve_value(prices),
+                                     "trip_pending_sleeve")
+            self._trip_check_lines(today, alert)
+            self.save()
+            return self.tripwire_summary(today)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("update_tripwires failed (ignored): %s", exc)
+            try:
+                self._event_once_today("WARN", "tripwire_failed",
+                                       f"tripwire update FAILED ({exc}) - the "
+                                       f"kill-ledger lines are not being "
+                                       f"watched this cycle")
+            except Exception:  # noqa: BLE001
+                pass
+            return None
+
+    def _trip_page(self, key: str, level: str, msg: str, alert) -> None:
+        self.state.trip_alerted[key] = True
+        self._event(level, "tripwire " + msg)
+        alert(("🚨🚨 " if level == "RED" else "⚠️ ") + "blend tripwire " + msg
+              + " ALERT-ONLY: the code does nothing; ibkr-executor/ledger.csv "
+                "names the action.")
+
+    def _trip_dd_line(self, key: str, ser: dict | None, level_dd: float,
+                      page_level: str, what: str, alert) -> None:
+        """Pages when the LAST TWO finalized closes are both at/over the level
+        (one glitched close cannot page: the ledger's 'confirm a borderline
+        reading against the next day'); re-arms once the last close has
+        recovered TRIP_REARM_PP below the level."""
+        d1, d2 = self._trip_dd_close(ser, 1), self._trip_dd_close(ser, 2)
+        if d1 is None:
+            return
+        fired = bool(self.state.trip_alerted.get(key))
+        if (not fired and d2 is not None and d1 >= level_dd and d2 >= level_dd):
+            self._trip_page(key, page_level,
+                            f"{what}: drawdown {d1:.1%} >= {level_dd:.0%} on two "
+                            f"consecutive closes (flow-adjusted, from the "
+                            f"high-water mark of {ser.get('hwm_date')}).", alert)
+        elif fired and d1 < level_dd - TRIP_REARM_PP:
+            self.state.trip_alerted[key] = False
+            self._event("INFO", f"tripwire {what} re-armed (drawdown {d1:.1%})")
+
+    def _unreconciled_sessions(self, rec: dict, now: datetime | None = None) -> int | None:
+        """Sessions whose CLOSE fell after the record was parked and at or
+        before now (TA4: counted on session closes in ET, not UTC dates)."""
+        ts = _finite((rec or {}).get("ts"))
+        if ts is None:
+            return None
+        try:
+            born = datetime.fromtimestamp(ts, timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None                    # TB17: one junk record never
+                                           # disables the whole summary
+        if born > _now_et(now):
+            return 0
+        now_et = _now_et(now)
+        d = born.astimezone(_ET).date()
+        n = 0
+        while d <= now_et.date():
+            if is_trading_day(d):
+                h, mi = session_close_et(d)
+                close = datetime(d.year, d.month, d.day, h, mi, tzinfo=_ET)
+                if born < close <= now_et:
+                    n += 1
+            d += timedelta(days=1)
+        return n
+
+    def _trip_check_lines(self, today: str, alert) -> None:
+        st = self.state
+        self._trip_dd_line("book_review", st.trip_book, TRIP_BOOK_REVIEW_DD,
+                           "WARN", "REVIEW (book)", alert)
+        self._trip_dd_line("book_regime", st.trip_book, TRIP_BOOK_REGIME_DD,
+                           "RED", "REGIME REVIEW (book)", alert)
+        self._trip_dd_line("sleeve_kill", st.trip_sleeve, TRIP_SLEEVE_KILL_DD,
+                           "RED", "MODEL-RISK KILL line (sleeve)", alert)
+        uw = self._trip_underwater_days(today)
+        fired = bool(st.trip_alerted.get("underwater"))
+        if uw is not None and uw >= TRIP_UNDERWATER_DAYS and not fired:
+            self._trip_page("underwater", "WARN",
+                            f"REVIEW (time under water): {uw} days below the "
+                            f"book's high-water mark of "
+                            f"{st.trip_book['hwm_date']}.", alert)
+        elif fired and (uw or 0) < TRIP_UNDERWATER_DAYS:
+            st.trip_alerted["underwater"] = False      # a new high re-arms
+        for k, rec in _snapshot(st.unreconciled).items():
+            ak = f"unrec:{k}"
+            if st.trip_alerted.get(ak):
+                continue
+            n = self._unreconciled_sessions(rec)
+            if n is not None and n >= TRIP_UNRECONCILED_SESSIONS:
+                self._trip_page(ak, "RED",
+                                f"PROCESS KILL line: unreconciled record {k} "
+                                f"has been parked through {n} session closes "
+                                f"(>= {TRIP_UNRECONCILED_SESSIONS}).", alert)
+        for ak in [a for a in st.trip_alerted if a.startswith("unrec:")]:
+            if ak[len("unrec:"):] not in st.unreconciled:
+                st.trip_alerted.pop(ak, None)      # record resolved: forget
+
+    def _trip_underwater_days(self, today: str) -> int | None:
+        ser = self.state.trip_book
+        if not ser or not (ser.get("closes") or ser.get("cur")):
+            return None
+        hd, td = _parse_date(ser.get("hwm_date")), _parse_date(today)
+        if hd is None or td is None:
+            return None
+        d1 = self._trip_dd_close(ser, 1)
+        if d1 is None or d1 <= 1e-12:
+            return 0
+        return (td - hd).days
+
+    def tripwire_summary(self, today: str | None = None) -> dict:
+        """Public-safe: drawdowns, dates and line states only. `drawdown` is
+        the last FINALIZED close (what the lines read); `drawdown_live` the
+        current mark (informational). Never raises (TB1): /status and the
+        feed must not 500 on a malformed series."""
+        try:
+            return self._tripwire_summary(today)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("tripwire_summary failed: %s", exc)
+            return {"error": "unavailable", "alert_only": True}
+
+    def _tripwire_summary(self, today: str | None = None) -> dict:
+        st = self.state
+        today = today or _utc_today()
+
+        def ser_view(ser):
+            if not ser:
+                return None
+            d1 = self._trip_dd_close(ser, 1)
+            dl = self._trip_dd_live(ser)
+            closes = ser.get("closes") or []
+            return {"drawdown": round(d1, 4) if d1 is not None else None,
+                    "drawdown_live": round(dl, 4) if dl is not None else None,
+                    "close_date": closes[-1][0] if closes else None,
+                    "hwm_date": ser.get("hwm_date"), "since": ser.get("since")}
+        bdd = self._trip_dd_close(st.trip_book, 1)
+        sdd = self._trip_dd_close(st.trip_sleeve, 1)
+        uw = self._trip_underwater_days(today)
+        ages = [self._unreconciled_sessions(r) for r in _snapshot(st.unreconciled).values()]
+        ages = [a for a in ages if a is not None]
+        lines = [
+            {"line": "REVIEW: book drawdown", "level": TRIP_BOOK_REVIEW_DD,
+             "value": bdd, "paged": bool(st.trip_alerted.get("book_review"))},
+            {"line": "REGIME REVIEW: book drawdown", "level": TRIP_BOOK_REGIME_DD,
+             "value": bdd, "paged": bool(st.trip_alerted.get("book_regime"))},
+            {"line": "MODEL-RISK KILL: sleeve drawdown", "level": TRIP_SLEEVE_KILL_DD,
+             "value": sdd, "paged": bool(st.trip_alerted.get("sleeve_kill"))},
+            {"line": "REVIEW: days under water", "level": TRIP_UNDERWATER_DAYS,
+             "value": uw, "paged": bool(st.trip_alerted.get("underwater"))},
+            {"line": "PROCESS KILL: oldest unreconciled record (sessions)",
+             "level": TRIP_UNRECONCILED_SESSIONS,
+             "value": max(ages) if ages else 0,
+             "paged": any(a.startswith("unrec:") and v
+                          for a, v in _snapshot(st.trip_alerted).items())},
+        ]
+        for ln in lines:
+            if isinstance(ln["value"], float):
+                ln["value"] = round(ln["value"], 4)
+        return {"book": ser_view(st.trip_book), "sleeve": ser_view(st.trip_sleeve),
+                "underwater_days": uw, "lines": lines, "alert_only": True,
+                "basis": "finalized daily closes (last in-session mark), "
+                         "flow-adjusted; a line pages on two consecutive "
+                         "closes"}
+
+    # ---------- the decision step ----------
+
+    def _note_quote_health(self, prices: dict[str, float],
+                           alerts: list[str]) -> None:
+        """Track the SPY/BIL quote outage state (set on first miss, cleared
+        only when BOTH recover) and fire the once-per-outage alert. One
+        place, called unconditionally at the top of step()."""
+        st = self.state
+        spy = prices.get(CORE, 0.0) or 0.0
+        bil = prices.get(CASH_VEHICLE, 0.0) or 0.0
+        if spy > 0 and bil > 0:
+            if not st.quote_alert_armed or st.quotes_missing_since is not None:
+                st.quote_alert_armed = True      # outage over: re-arm (r3)
+                st.quotes_missing_since = None
+                self.save()
+            return
+        if st.quotes_missing_since is None:
+            st.quotes_missing_since = time.time()
+            self.save()
+        if st.quote_alert_armed:
+            st.quote_alert_armed = False
+            self.save()
+            alerts.append(f"🚨 blend: rebalance/valuation SKIPPED: missing "
+                          f"quote (SPY={spy or None}, BIL={bil or None}) — "
+                          f"no weight decision is taken on absent prices")
+
+    def step(self, today: str, payload: dict | None,
+             prices: dict[str, float]) -> list[dict]:
+        """One evaluation against the tracker's intent payload. Returns order
+        intents (plus ALERT intents for refused/suspicious instructions);
+        state changes only via the on_* callbacks (plus first-boot seeding
+        and halt bookkeeping, mirroring LadderManager).
+
+        Intents come back in EXECUTION order: exits -> stop adjustments ->
+        BIL cash-raise -> entries -> rebalance transfer -> core buy -> BIL
+        sweep — so cash is always raised before it is spent."""
+        intents: list[dict] = []
+        alerts: list[str] = []
+        st = self.state
+        if st.halted:
+            return intents
+        # Quote-health bookkeeping runs BEFORE the payload gate: with the
+        # tracker down (payload None) the old placement inside section 5
+        # meant a simultaneous quote outage was never flagged - and a
+        # recovery during a tracker outage never CLEARED the flag, so
+        # /health reported a growing false outage (counter-agent B1/B1b).
+        self._note_quote_health(prices, alerts)
+        if payload is None:
+            # Tracker unreachable or stale: NO tracker-dependent decision is
+            # taken, but the LOCAL safety belt still runs — the 90-calendar-
+            # day time stop is this executor's own clock and must fire even
+            # (especially) during a tracker outage (counter-agent N13).
+            for key, pos in st.positions.items():
+                if today > pos.time_stop:
+                    intents.append({"action": "EXIT", "call_id": pos.call_id,
+                                    "symbol": pos.symbol, "qty": pos.qty,
+                                    "stop_order_ref": pos.stop_order_ref,
+                                    "reason": "time_stop"})
+            return intents
+
+        params = payload.get("book_params") or {}
+        max_open = min(MAX_OPEN, params.get("max_open", MAX_OPEN))
+        _mps = params.get("max_per_symbol", MAX_PER_SYMBOL)
+        # like max_open, the tracker may only TIGHTEN this risk control (TB15)
+        max_per_symbol = (min(MAX_PER_SYMBOL, _mps)
+                          if (isinstance(_mps, int) and not isinstance(_mps, bool)
+                              and _mps >= 1) else MAX_PER_SYMBOL)
+        risk_frac = params.get("risk_frac", RISK_FRAC)
+        band = params.get("band", BAND)
+        target = _sleeve_target(self, payload, alerts)
+        budget = getattr(self.cfg, "blend_budget", 0.0) or 0.0
+
+        if not st.initialized:
+
+            # a fresh seed's own fills must never straddle a cash baseline
+
+            self.rebaseline_cash('seed', save=False)
+            book = self._seed_book_usd()
+            st.sleeve_cash = target * book
+            st.core_cash = (1.0 - target) * book
+            st.sleeve_target = target
+            st.initialized = True
+            st.bootstrap_ack = False    # one-shot: consumed by this seed
+            # the seed is the book's first capital event (stage 2)
+            st.capital_contributed = round(float(book), 2)
+            st.capital_events.append({
+                "date": today, "ts": int(time.time()), "kind": "seed",
+                "usd": round(float(book), 2),
+                "sleeve_usd": round(target * book, 2),
+                "core_usd": round((1.0 - target) * book, 2),
+                "sleeve_target": target})
+            del st.capital_events[:-CAPITAL_EVENTS_MAX]
+            self._event("INFO", f"book initialized: ${book:,.0f} "
+                                f"({target:.0%} sleeve / {1 - target:.0%} core)")
+
+        stops_by_id = {s["call_id"]: s for s in payload.get("stops", [])}
+        exiting: set[str] = set()
+        exit_intents: list[dict] = []
+        bil_px = prices.get(CASH_VEHICLE, 0.0)
+        # M1 (idempotent book orders): while ANY write-ahead book-order
+        # journal (CORE_BUY / rebalance core-sell / BIL sweep) is pending,
+        # NO new book-level order is planned this cycle — a 'working' MKT
+        # (guaranteed for any MKT placed outside RTH) simply waits for
+        # reconcile pass 2b to adopt or clear it, instead of being
+        # re-planned and re-placed every poll. Cash a pending sweep BUY
+        # will debit at adoption is reserved (entries can never spend it),
+        # and BIL is not treated as spendable while a sweep is in flight
+        # (the funding sell is a book order too).
+        pending_book = bool(st.pending_book_orders)
+        if pending_book:
+            kinds = sorted({r["kind"] for r in st.pending_book_orders.values()})
+            self._event("INFO", f"book order(s) pending adoption "
+                                f"({', '.join(kinds)}): no new book-level "
+                                f"orders this cycle")
+            # r6: real DAY/OPG orders expire the same day — a journal this
+            # old means a venue-stuck order is freezing sweep/core-buy/
+            # rebalance. Escalate to WARN + Telegram once per order.
+            for cid, rec in st.pending_book_orders.items():
+                try:
+                    age = (date.fromisoformat(today)
+                           - date.fromisoformat(rec.get("date") or "")).days
+                except ValueError:
+                    age = None
+                # a sell placed outside RTH rests until the next open: not
+                # stale while the market is still closed (weekend/holiday);
+                # in-session it is counted by reconcile 2b instead
+                resting = (rec.get("rests_for_open")
+                           and not rec.get("stuck_cycles")
+                           and not regular_session_open())
+                if (age is not None and age >= BOOK_ORDER_STALE_DAYS
+                        and not resting
+                        and not rec.get("stale_alerted")):
+                    rec["stale_alerted"] = True
+                    self.save()
+                    msg = (f"book order {cid} ({rec['kind']}) still working "
+                           f"after {age}d — sweep/core-buy/rebalance frozen; "
+                           f"check the venue order")
+                    self._event("WARN", msg)
+                    alerts.append(msg)
+        projected_cash = st.sleeve_cash - self.reserved_sleeve_cash()
+        funds = projected_cash + (0.0 if pending_book
+                                  else st.bil_qty * bil_px)  # spendable
+
+        # 1) exits the tracker signalled (trail pierced / time stop reached),
+        #    reconciled against OUR book: act only on call_ids we hold, and
+        #    ONLY when the row's symbol matches the held position — a
+        #    mismatch means recycled call_ids (tracker DB reset): refuse.
+        for ex in payload.get("exits", []):
+            key = str(ex["call_id"])
+            pos = st.positions.get(key)
+            if pos is None or key in exiting:
+                continue
+            if ex.get("symbol") != pos.symbol:
+                msg = (f"REFUSED exit for call {ex['call_id']}: tracker says "
+                       f"{ex.get('symbol')!r} but book holds {pos.symbol} — "
+                       f"tracker DB reset? Position kept; manual review needed")
+                self._event("RED", msg)
+                alerts.append(msg)
+                continue
+            exit_intents.append({"action": "EXIT", "call_id": pos.call_id,
+                                 "symbol": pos.symbol, "qty": pos.qty,
+                                 "stop_order_ref": pos.stop_order_ref,
+                                 "reason": ex.get("reason", "trail")})
+            exiting.add(key)
+            proceeds = pos.qty * self._mark_price(pos, prices)
+            projected_cash += proceeds
+            funds += proceeds
+
+        # 2) executor-side time-stop belt: our own 90-calendar-day clock —
+        #    the backstop the intents contract names (a tracker outage or a
+        #    reconciliation gap must never leave a position open past day 90).
+        for key, pos in st.positions.items():
+            if key in exiting or today <= pos.time_stop:
+                continue
+            exit_intents.append({"action": "EXIT", "call_id": pos.call_id,
+                                 "symbol": pos.symbol, "qty": pos.qty,
+                                 "stop_order_ref": pos.stop_order_ref,
+                                 "reason": "time_stop"})
+            exiting.add(key)
+            proceeds = pos.qty * self._mark_price(pos, prices)
+            projected_cash += proceeds
+            funds += proceeds
+
+        # 3) daily GTC stop adjustment (place-new-then-cancel-old). The trail
+        #    RATCHETS UP ONLY — a published level below the working stop is
+        #    never applied; a non-positive level is a data bug, never placed;
+        #    a symbol mismatch on the stop row is refused like an exit.
+        adjust_intents: list[dict] = []
+        for key, pos in st.positions.items():
+            if key in exiting:
+                continue
+            if pos.history_gap:
+                # Y1: the ratchet rests a NEW -qty SELL stop, so it is a
+                # short path exactly like pass 4 — an UNVERIFIABLE position
+                # may not own the shares it claims. Reconcile pass 1b must
+                # positively verify first; the working stop (if any) stays
+                # where it is until then.
+                # Z1 CARVE-OUT (explicit, so this is not read as a Y1
+                # regression): Y1 forbids NEW or RAISED cover on a flagged
+                # position. It does NOT forbid SHRINKING it. Reconcile pass
+                # 1b's pro-rata peer resize (_resize_peer_cover) aligns a
+                # resting stop to at most its share of the shares the venue
+                # actually holds, on positive venue evidence — the aggregate
+                # can never exceed `held`, so it closes a short path instead
+                # of opening one and it is exempt.
+                continue
+            if pos.stop_cover_qty and pos.stop_cover_qty < pos.qty:
+                # Z-A belt (the ratchet is the door that undid the resize):
+                # this stop was CAPPED below the position by a same-symbol
+                # shortfall. A ratchet is a cancel/replace at -pos.qty, so
+                # it would silently restore FULL cover — measured: cover 6
+                # -> 7 against 6 held, then venue -1 on the triggers,
+                # reported as a plain green "position closed". The capped
+                # stop keeps resting where it is; the resize owns its size.
+                # (Capped peers are also flagged history_gap above, so this
+                # is a second lock on the same door, not the only one.)
+                continue
+            s = stops_by_id.get(pos.call_id)
+            if s is None:
+                continue
+            if s.get("symbol") != pos.symbol:
+                msg = (f"REFUSED stop for call {pos.call_id}: tracker says "
+                       f"{s.get('symbol')!r} but book holds {pos.symbol} — "
+                       f"tracker DB reset? Working stop kept")
+                self._event("RED", msg)
+                alerts.append(msg)
+                continue
+            lvl = s.get("trail_level")
+            if lvl is None or lvl <= 0 or (lvl := snap_stop_level(lvl)) is None:
+                self._event("WARN", f"unusable trail {s.get('trail_level')} "
+                                    f"for {pos.symbol} (call {pos.call_id}): "
+                                    f"ignored")
+                continue
+            # snapped-to-snapped: a republished level that only differs
+            # below the venue's tick is NOT a ratchet (round 20)
+            if lvl > pos.stop_level + STOP_EPS:
+                adjust_intents.append({"action": "ADJUST_STOP",
+                                       "call_id": pos.call_id,
+                                       "symbol": pos.symbol, "qty": pos.qty,
+                                       "old_ref": pos.stop_order_ref,
+                                       "stop_level": lvl,
+                                       "reason": f"trail ratchet "
+                                                 f"{pos.stop_level:.2f}"
+                                                 f" -> {lvl:.2f}"})
+
+        # 4) entries: gate-on candidate fires, sized in dollars HERE.
+        #    sleeve_eq is frozen pre-entries (no equity circularity — a
+        #    fire's own outflow never feeds its or a sibling's sizing).
+        entry_intents: list[dict] = []
+        gate_on = (payload.get("gate") or {}).get("xbi_above_200dma_prior") is not False
+        st.last_gate = gate_on          # feed display; persisted on next save
+        sleeve_eq = self.sleeve_value(prices)
+        # The sleeve cash reserve (MKT_BUY_CUSHION note) lives in
+        # projected_cash ONLY: the sweep stops at it, and the single cash
+        # raise below restores it in session (an in-session pre-fund is
+        # funded past it with BIL). `funds` stays GROSS, so sizing, the
+        # rebalance deferral and the entry drops are exactly as before: the
+        # reserve never shrinks or drops an entry (counter-agents A2/B3).
+        cash_reserve = SLEEVE_CASH_RESERVE_FRAC * max(sleeve_eq, 0.0)
+        projected_cash -= cash_reserve
+        open_count = len(st.positions) - len(exiting) + len(st.pending_entries)
+        # Per-symbol occupancy, counted exactly like open_count (round 11 /
+        # verifier A2): held positions not exiting this cycle + pending MOOs
+        # + entries already planned THIS cycle (same-day sibling fires of one
+        # name - multi-flag - are counted in payload order).
+        held_by_symbol: dict[str, int] = {}
+        for _k, _p in self.positions_view().items():
+            if _k not in exiting:
+                held_by_symbol[_p.symbol] = held_by_symbol.get(_p.symbol, 0) + 1
+        for _rec in _snapshot(st.pending_entries).values():
+            _sym = ((_rec or {}).get("intent") or {}).get("symbol")
+            if _sym:
+                held_by_symbol[_sym] = held_by_symbol.get(_sym, 0) + 1
+        projected_gross = self.gross_exposure(prices)
+        for it in exit_intents:      # exits convert holdings back to cash
+            pos = st.positions[str(it["call_id"])]
+            projected_gross -= pos.qty * self._mark_price(pos, prices)
+        naked = self.has_naked_position()
+        # r7: a missing SPY/BIL quote zeroes gross_exposure, so the
+        # BLEND_BUDGET gate (and the 85% alarm) would compute low while
+        # entries proceed — with a cap set, entries wait for the quotes.
+        budget_blind = budget > 0 and (prices.get(CORE, 0.0) <= 0
+                                       or bil_px <= 0)
+        if gate_on and naked and payload.get("entries"):
+            msg = ("entries BLOCKED: a held position has no working stop "
+                   "(STOP_MISSING) — protect the book before adding risk")
+            self._event("RED", msg)
+            alerts.append(msg)
+        if gate_on and not naked and budget_blind and payload.get("entries"):
+            self._event("WARN", "entries skipped: missing SPY/BIL quote "
+                                "with BLEND_BUDGET set — gross exposure "
+                                "(the budget gate's basis) is not "
+                                "computable this cycle")
+        # 4a) SESSION GUARD + PAUSE GUARD (2026-09-03). Both live HERE, in
+        #     the planner, because the BIL cash-raise below is sized from the
+        #     PLANNED entries: an entry that will not be placed must not be
+        #     planned, or its funding sale still goes out. The execution-loop
+        #     breaker (intent_kind_paused) skips the ENTER but not the SWEEP
+        #     that preceded it - MRK 2026-09-03 sold 20 BIL into a paused
+        #     kind - which is why the pause is checked again here.
+        candidates = [e for e in payload.get("entries", [])
+                      if str(e.get("call_id")) not in st.positions
+                      and str(e.get("call_id")) not in st.pending_entries]
+        # Already-entered ids stay in `candidates` so the planning loop can
+        # still refuse a RECYCLED id loudly; they are only excluded from
+        # the "waiting" count the notices report.
+        waiting = [e for e in candidates if e.get("call_id") not in st.entered_ids]
+        # The clock is consulted only when there is something to enter: a
+        # clock problem must never touch a cycle with nothing to plan.
+        window_open = (entry_window_open()
+                       if (gate_on and candidates) else True)
+        enter_paused = intent_kind_paused("ENTER")
+        plannable = gate_on and not naked and not budget_blind and bool(candidates)
+        deferred = plannable and bool(waiting) and (not window_open or enter_paused)
+        if plannable and waiting and not window_open and not enter_paused:
+            self._event_once_today(
+                "INFO", "entries_deferred",
+                f"entries deferred: {len(waiting)} candidate(s) held "
+                f"until extended hours end (20:00 ET, 17:00 on an early "
+                f"close: IBKR rejects OPG [202] while its market is open, "
+                f"09:25-20:00 ET). Their cash is raised NOW if BIL can "
+                f"fill, held unswept, and the MOO goes out after 20:00 ET "
+                f"for the next open (pre-fund, Casey 2026-09-04).")
+        elif plannable and waiting and enter_paused:
+            self._event_once_today(
+                "WARN", "enter_breaker_open",
+                f"entries not planned: ENTER breaker is open "
+                f"({len(waiting)} candidate(s) waiting; no cash raised)")
+        # PRE-FUND (Casey 2026-09-04, option c): the sizing loop runs whether
+        # or not the window is open. When it is CLOSED the ENTER intents it
+        # produces are DROPPED (nothing can place them) but their cost stays
+        # reserved in projected_cash/funds, so the BIL cash-raise below sells
+        # exactly what the post-close MOO will need - a MKT sell that FILLS,
+        # because it is in session. Idempotent: once the cash is on hand the
+        # next cycle sizes the same entries against it and raises nothing.
+        # A paused ENTER kind never pre-funds (raising cash for a kind the
+        # venue is rejecting was the MRK pattern).
+        if plannable and not enter_paused:
+            for e in payload.get("entries", []):
+                key = str(e["call_id"])
+                if key in st.positions or key in st.pending_entries:
+                    continue
+                if e["call_id"] in st.entered_ids:
+                    prev = st.entered_symbols.get(key)
+                    if prev is not None and prev != e["symbol"]:
+                        msg = (f"call_id {e['call_id']} RECYCLED: previously "
+                               f"{prev}, republished as {e['symbol']} — "
+                               f"tracker DB reset? Entry refused; manual "
+                               f"review needed")
+                        self._event("RED", msg)
+                        alerts.append(msg)
+                    continue
+                if open_count + len(entry_intents) >= max_open:
+                    self._event("INFO", f"cap {max_open} open: skipping "
+                                        f"{e['symbol']} (call {e['call_id']})")
+                    continue
+                n_sym = held_by_symbol.get(e["symbol"], 0)
+                if n_sym >= max_per_symbol:
+                    # checked AFTER the cap, as the replay does: a refused
+                    # repeat takes no slot, the next fire in another name may
+                    self._event_once_today(
+                        "INFO", f"per_symbol_{e['call_id']}",
+                        f"per-symbol limit {max_per_symbol}: skipping "
+                        f"{e['symbol']} (call {e['call_id']}) - {n_sym} "
+                        f"already open or planned in that name")
+                    continue
+                entry_ref = e.get("entry_ref")
+                srow = stops_by_id.get(e["call_id"])
+                if srow is not None and srow.get("symbol") != e["symbol"]:
+                    msg = (f"REFUSED entry {e['symbol']} (call {e['call_id']}): "
+                           f"stop row names {srow.get('symbol')!r} — "
+                           f"tracker DB inconsistency")
+                    self._event("RED", msg)
+                    alerts.append(msg)
+                    continue
+                raw_trail = (srow or {}).get("trail_level")
+                if (not entry_ref or raw_trail is None or raw_trail <= 0
+                        or entry_ref <= raw_trail):
+                    # the ordering guard runs on the PUBLISHED numbers: a
+                    # floor-snap only ever widens `entry_ref - trail`, so
+                    # snapping first would ADMIT a trail at or above
+                    # entry_ref that this guard exists to refuse (round 20
+                    # second pass, INGE-1)
+                    self._event("WARN", f"no sizing reference for {e['symbol']} "
+                                        f"(call {e['call_id']}): skipped")
+                    continue
+                # snapped BEFORE it sizes anything: the risk unit
+                # (entry_ref - trail) must be the distance to the stop that
+                # will actually rest, and the same number becomes the
+                # position's stop_level and its idempotency key (round 20)
+                trail = snap_stop_level(raw_trail)
+                if trail is None or entry_ref - trail < _min_risk_unit(entry_ref):
+                    # a risk unit under one venue tick is a data bug (a
+                    # halted name whose ATR is 0), never a several-thousand-
+                    # share order sized only by the cash clamp (INGE-1)
+                    msg = (f"REFUSED entry {e['symbol']} (call {e['call_id']}): "
+                           f"trail {raw_trail} is within one price increment "
+                           f"of entry_ref {entry_ref} — a risk unit that "
+                           f"small is a data defect, not a stop distance")
+                    self._event("RED", msg)
+                    alerts.append(msg)
+                    continue
+                # L-E1 (live blocker): `entry_ref` is the TRACKER's fire-day
+                # close and NOTHING checked it against the venue —
+                # `reference_prices` has always fetched a real spot for
+                # every payload entry symbol, and this, the one place that
+                # sizes real orders from that number, never read it. At a
+                # $10k book a 1.00 placeholder on a $50 name sizes ~300
+                # shares, books $300 into the ledger and fills ~$15,000 at
+                # the account: the book and the venue diverge by 50x on the
+                # FIRST trade, and every gate computed downstream from the
+                # ledger — budget, funds, weights, rebalance — is then
+                # computed from fiction.
+                ref_px = prices.get(e["symbol"], 0.0)
+                if ref_px <= 0:
+                    # Never buy what we cannot price. Same law the
+                    # rebalance/valuation gate already keeps for SPY/BIL: a
+                    # missing quote is a SKIP, never an assumption.
+                    msg = (f"REFUSED entry {e['symbol']} (call {e['call_id']}): "
+                           f"no venue quote to check entry_ref "
+                           f"{entry_ref:.2f} against — nothing sized")
+                    self._event("WARN", msg)
+                    alerts.append(msg)
+                    continue
+                if not (ref_px / ENTRY_REF_MAX_DEV <= entry_ref
+                        <= ref_px * ENTRY_REF_MAX_DEV):
+                    msg = (f"REFUSED entry {e['symbol']} (call {e['call_id']}): "
+                           f"tracker entry_ref {entry_ref:.2f} is off the "
+                           f"venue quote {ref_px:.2f} by more than "
+                           f"{ENTRY_REF_MAX_DEV:.0f}x — an unadjusted split, "
+                           f"a stale reference or a placeholder, not a price "
+                           f"to size real orders on. Nothing entered")
+                    self._event("RED", msg)
+                    alerts.append(msg)
+                    continue
+                risk_usd = risk_frac * sleeve_eq
+                # The RISK unit stays frozen at the tracker reference — that
+                # is the pre-registered contract and it does not change here.
+                risk_qty = int(risk_usd // (entry_ref - trail))
+                # What must NOT stay frozen is what the shares will actually
+                # COST. Size the cash clamp and charge the ledger at
+                # whichever of the two prices is higher, so an entry can
+                # never overdraw the sleeve merely because the venue opened
+                # above the fire-day close.
+                size_px = max(entry_ref, ref_px)
+                avail = max(funds, 0.0)
+                qty = min(risk_qty, int(avail // size_px))
+                if qty <= 0:
+                    self._event("INFO", f"{e['symbol']} sized to zero: skipped")
+                    continue
+                if pending_book and qty < risk_qty:
+                    # the cash clip binds only because a BIL sell / sweep is
+                    # still resting: placing the clipped size would dust the
+                    # entry (1-2 sh) and burn the call_id for good (round 3).
+                    # Wait for the book order to adopt; the candidate stays.
+                    self._event_once_today(
+                        "INFO", f"entry_wait_{e['call_id']}",
+                        f"{e['symbol']} (call {e['call_id']}) waits: a book "
+                        f"order is pending and settled cash covers {qty} of "
+                        f"{risk_qty} sh - not placing a dust entry")
+                    continue
+                cost = qty * size_px
+                # Budget binds on projected gross; the BIL-funded slice of an
+                # entry swaps one holding for another (gross-neutral) — only
+                # the cash-funded slice adds exposure.
+                from_cash = min(max(projected_cash + cash_reserve, 0.0), cost)
+                if budget > 0 and projected_gross + from_cash > budget:
+                    self._event("WARN", f"BLEND_BUDGET ${budget:,.0f} would be "
+                                        f"exceeded: {e['symbol']} entry blocked")
+                    continue
+                entry_intents.append({"action": "ENTER", "call_id": e["call_id"],
+                                      "symbol": e["symbol"], "qty": qty,
+                                      "entry_ref": entry_ref, "stop_level": trail,
+                                      "size_ref": size_px,
+                                      "time_stop_days": TIME_STOP_DAYS,
+                                      "reason": f"gate-on fire {e.get('flag_type')} "
+                                                f"({e.get('fire_date')}), risk "
+                                                f"${risk_usd:,.0f} @ "
+                                                f"{entry_ref - trail:.2f}/sh"})
+                projected_gross += from_cash
+                projected_cash -= cost
+                funds -= cost
+                held_by_symbol[e["symbol"]] = held_by_symbol.get(e["symbol"], 0) + 1
+
+        prefund_usd = 0.0
+        prefund_now = False
+        if entry_intents and not window_open:
+            # The hold covers what the entry was CHARGED at (`size_ref` =
+            # max(entry_ref, venue quote), L-E1), never `entry_ref`: on a
+            # gapped-up quote the difference was raised from BIL, read as
+            # idle, swept straight back, and the post-close placement then
+            # clipped to what was left (merge review 2026-09-10, F1).
+            prefund_usd = sum(i["qty"] * _intent_size_ref(i) for i in entry_intents)
+            self._event_once_today(
+                "INFO", "prefund",
+                f"pre-funding {len(entry_intents)} deferred entry(ies): "
+                f"${prefund_usd:,.0f} reserved in sleeve cash for the "
+                f"MOO placed after extended hours (20:00 ET)"
+                + (" (BIL sold now to cover the shortfall)"
+                   if projected_cash + (0.0 if regular_session_open()
+                                        else cash_reserve) < -CASH_EPS else ""))
+            entry_intents = []          # placed post-close from settled cash
+            st.prefund_usd, st.prefund_date = round(prefund_usd, 2), _et_today()
+            prefund_now = True
+        elif entry_intents:
+            # entries placed: release the hold by the amount SPENT. A second
+            # pre-funded fire absent for one cycle (partial payload, cap)
+            # keeps its cash held (counter-agent round 3, MED).
+            spent = sum(i["qty"] * _intent_size_ref(i)      # same basis as the hold
+                        for i in entry_intents)
+            st.prefund_usd = round(max(0.0, st.prefund_usd - spent), 2)
+            if st.prefund_usd <= CASH_EPS:
+                st.prefund_usd, st.prefund_date = 0.0, ""
+        elif (st.prefund_date and st.prefund_date != _et_today()
+              and regular_session_open() and not enter_paused):
+            # The hold releases only once the NEXT SESSION has started -
+            # keyed on the SESSION date and the regular-hours clock. `today`
+            # is the UTC date: it rolls at 20:00 ET (19:00 ET in winter),
+            # and a release on that roll re-swept the cash before the
+            # placement; the returning fire was then dust-sized to 1 share
+            # (counter-agent round 3, HIGH - and, with the window now
+            # opening at 20:00, the winter roll would land inside the
+            # closed after-hours and do it again). A same-day blip never
+            # releases it (round 2). And NEVER while ENTER is paused
+            # (round 19 review, CLOCK-1 HIGH): the breaker rolls on the UTC
+            # date and the window opens AT or AFTER that roll in both
+            # seasons, so an evening rejection burst is booked under the
+            # next UTC day and pauses ENTER through the following session;
+            # releasing the re-armed hold at that session's 09:30 handed
+            # the cash back to the sweep before the re-plan could run.
+            st.prefund_usd, st.prefund_date = 0.0, ""
+
+        # 4b) sleeve-only book (target 1.0): once the SPY is gone, any cash
+        #     left on the core side is a ledger residue (rounding, or the
+        #     core sell's commission, which leaves it NEGATIVE) - move it to
+        #     the sleeve BEFORE the weight decision so step 5 never plans a
+        #     core sell for cash and step 7 never buys SPY with it
+        #     (2026-10-01, counter-agent MED/LOW). Needs no quote.
+        if (target >= 1.0 - 1e-9 and st.spy_qty == 0
+                and abs(st.core_cash) > CASH_EPS and not pending_book):
+            moved = st.core_cash
+            self.on_transfer(moved)
+            projected_cash += moved
+            funds += moved
+            self._event("INFO", f"sleeve-only book: ${moved:,.2f} of core "
+                                f"cash residue moved to the sleeve")
+
+        # 5) band rebalance (~1x/year expected): executor-side weights.
+        #    M4: NEVER computed from absent prices — a missing SPY (or BIL)
+        #    quote zeroes a whole ledger side, manufactures a spurious
+        #    sleeve-weight drift, and would book a phantom cash transfer
+        #    that later unwinds with REAL trades (repo law: no silent
+        #    zero). Skip + alert ONCE per outage.
+        #    M1: skipped while any book order is pending adoption.
+        rebalance_intent = None
+        spy_quote = prices.get(CORE, 0.0)
+        if spy_quote <= 0 or bil_px <= 0:
+            # flag + once-per-outage alert now live in _note_quote_health
+            # (top of step, ahead of the payload gate - B1/B1b); here we
+            # only record the skip and take no weight decision
+            self._event("WARN",
+                        f"rebalance/valuation SKIPPED: missing quote "
+                        f"(SPY={spy_quote or None}, BIL={bil_px or None}) — "
+                        f"no weight decision is taken on absent prices")
+        elif pending_book:
+            pass                        # wait for the in-flight book order
+        elif (book := self.book_value(prices)) > 0:
+            w = self.sleeve_value(prices) / book
+            if abs(w - target) > band:
+                usd = round(abs(w - target) * book, 2)
+                direction = "core_to_sleeve" if w < target else "sleeve_to_core"
+                rebalance_intent = {"action": "REBALANCE",
+                                    "direction": direction, "usd": usd,
+                                    "reason": f"sleeve weight {w:.1%} outside "
+                                              f"{target:.0%} +-{band:.0%} band"}
+                if direction == "core_to_sleeve":
+                    # SPY sale proceeds land in sleeve cash -> swept to BIL.
+                    projected_cash += usd
+                    funds += usd
+                else:
+                    projected_cash -= usd
+                    funds -= usd
+
+        # 6) SINGLE PER-CYCLE CASH LEDGER resolution: everything above was
+        #    planned against one projected ledger; fund the total shortfall
+        #    with AT MOST one BIL sell clamped to holdings. If cash + BIL
+        #    cannot cover the plan, SKIP lowest-priority actions — the
+        #    rebalance first, then the newest entries — never overdraw.
+        if (funds < -CASH_EPS and rebalance_intent is not None
+                and rebalance_intent["direction"] == "sleeve_to_core"):
+            projected_cash += rebalance_intent["usd"]
+            funds += rebalance_intent["usd"]
+            self._event("WARN", f"rebalance deferred: cycle cash ledger cannot "
+                                f"fund the ${rebalance_intent['usd']:,.0f} "
+                                f"sleeve->core transfer alongside entries")
+            rebalance_intent = None
+        while funds < -CASH_EPS and entry_intents:
+            dropped = entry_intents.pop()               # newest entry first
+            cost = dropped["qty"] * _intent_size_ref(dropped)
+            projected_cash += cost
+            funds += cost
+            self._event("WARN", f"entry {dropped['symbol']} "
+                                f"(call {dropped['call_id']}) skipped: cycle "
+                                f"cash ledger cannot fund it")
+        bil_sell = 0
+        # The raise restores the cash reserve only IN SESSION: outside
+        # regular hours a BIL sell rests until the open and its journal
+        # (pending_book) would hold back an evening MOO for a session
+        # (counter-agent A1). Off-hours it raises only what the plan
+        # actually spends beyond the cash on hand.
+        need = (-projected_cash if regular_session_open()
+                else -(projected_cash + cash_reserve))
+        if (not pending_book and need > CASH_EPS
+                and bil_px > 0 and st.bil_qty > 0):
+            # the sell's own commission is netted out of the proceeds:
+            # when the raise funds a pre-fund, add headroom so the post-
+            # close settled-cash belt does not skip the ENTER by under a
+            # dollar (which would cost a full day). A rebalance raise
+            # stays exact (counter-agent round 2, LOW).
+            reserve = FUNDING_FEE_RESERVE_USD if prefund_now else 0.0
+            bil_sell = min(st.bil_qty, math.ceil((need + reserve) / bil_px))
+            projected_cash += bil_sell * bil_px
+        if projected_cash + cash_reserve < -CASH_EPS:
+            # Belt (should be unreachable): refuse rather than overdraw. The
+            # reserve is venue headroom, not a liability: a reserve the BIL
+            # raise could not restore this cycle (a book order in flight, no
+            # BIL held) is not an overdraw and drops nothing.
+            self._event("RED", "cash ledger still negative after BIL funding: "
+                               "dropping remaining sleeve actions")
+            for dropped in entry_intents:
+                projected_cash += dropped["qty"] * _intent_size_ref(dropped)
+            entry_intents = []
+            if (rebalance_intent is not None
+                    and rebalance_intent["direction"] == "sleeve_to_core"):
+                projected_cash += rebalance_intent["usd"]
+                rebalance_intent = None
+
+        # 7) core: idle core cash is always fully in SPY (buy-and-hold).
+        spy_px = prices.get(CORE, 0.0)
+        core_cash_proj = st.core_cash + (
+            rebalance_intent["usd"]
+            if (rebalance_intent is not None
+                and rebalance_intent["direction"] == "sleeve_to_core") else 0.0)
+        core_buy = None
+        if (not pending_book and spy_px > 0 and target < 1.0 - 1e-9
+                and core_cash_proj > max(MIN_ORDER_USD, spy_px)):
+            overnight = not regular_session_open()
+            px_for_size = (spy_px * (1.0 + (CORE_BUY_OVERNIGHT_HEADROOM
+                                            if overnight else 0.0))
+                           * (1.0 + MKT_BUY_CUSHION))   # the credit check's margin
+            qty = int(core_cash_proj // px_for_size)
+            if qty > 0:
+                core_buy = {"action": "CORE_BUY", "symbol": CORE, "qty": qty,
+                            "reason": ("invest idle core cash"
+                                       + (f" (rests for the open: sized "
+                                          f"{CORE_BUY_OVERNIGHT_HEADROOM:.0%} "
+                                          f"above the quote)" if overnight
+                                          else ""))}
+
+        # 8) BIL sweep of idle sleeve cash (buy) from the resolved ledger.
+        #    Under a budget cap, the sweep is clamped to the remaining gross
+        #    headroom — economically cash, but gross must never drift above
+        #    BLEND_BUDGET via the cash vehicle (counter-agent minor).
+        sweep_buy = None
+        # Pre-fund hold (round 1 -> round 2): cash raised mid-session for a
+        # deferred entry is held back from the sweep until the post-close
+        # cycle spends it or the date rolls. The hold is PERSISTED state, so
+        # a tracker blip (payload None -> no candidates) or a restart cannot
+        # re-sweep it; when the sizing loop already reserved the cost in
+        # projected_cash this double-counts and simply means no sweep.
+        held_back = st.prefund_usd          # already reduced by what was spent
+        sweepable = projected_cash - held_back      # net of the cash reserve
+        if (not pending_book and bil_px > 0
+                and sweepable > max(MIN_ORDER_USD, bil_px)):
+            # a market BUY: sized MKT_BUY_CUSHION above the quote, never to
+            # the last dollar (the 2026-10-07..26 refusals, see the note)
+            sweep_qty = int(sweepable // (bil_px * (1.0 + MKT_BUY_CUSHION)))
+            if budget > 0:
+                gross_proj = projected_gross
+                if (rebalance_intent is not None
+                        and rebalance_intent["direction"] == "core_to_sleeve"):
+                    gross_proj -= rebalance_intent["usd"]   # SPY sold for cash
+                if core_buy is not None and spy_px > 0:
+                    gross_proj += core_buy["qty"] * spy_px
+                headroom = budget - gross_proj
+                sweep_qty = min(sweep_qty, int(max(headroom, 0.0) // bil_px))
+            if sweep_qty > 0:
+                sweep_buy = {"action": "SWEEP", "symbol": CASH_VEHICLE,
+                             "qty": sweep_qty,
+                             "reserve_usd": round(cash_reserve, 2),
+                             "reason": "sweep idle sleeve cash to BIL"}
+
+        # Assemble in EXECUTION order (cash raised before it is spent).
+        intents.extend(exit_intents)
+        intents.extend(adjust_intents)
+        if bil_sell > 0:
+            intents.append({"action": "SWEEP", "symbol": CASH_VEHICLE,
+                            "qty": -bil_sell,
+                            "reason": "sell BIL to fund sleeve orders "
+                                      "(single per-cycle cash ledger)"})
+        intents.extend(entry_intents)
+        if rebalance_intent is not None:
+            intents.append(rebalance_intent)
+        if core_buy is not None:
+            intents.append(core_buy)
+        if sweep_buy is not None:
+            intents.append(sweep_buy)
+        for msg in alerts:
+            intents.append({"action": "ALERT", "level": "RED", "msg": msg})
+        return intents
+
+    # ---------- execution callbacks (run_cycle reports results) ----------
+
+    def record_pending_entry(self, intent: dict, today: str) -> None:
+        """Write-ahead journal: persisted BEFORE the MOO is placed so a crash
+        between placement and on_entered is reconciled on the next cycle via
+        the deterministic client_order_id — never a duplicate MOO."""
+        self.state.pending_entries[str(intent["call_id"])] = {
+            "intent": dict(intent), "date": today}
+        self.save()
+
+    def clear_pending_entry(self, call_id: int) -> None:
+        if self.state.pending_entries.pop(str(call_id), None) is not None:
+            self.save()
+
+    def record_pending_book_order(self, kind: str, symbol: str, qty: int,
+                                  today: str,
+                                  ref_price: float | None = None) -> str:
+        """Write-ahead journal for book-level orders (CORE_BUY, the
+        rebalance core-sell, BIL sweeps) — the same crash-window discipline
+        as sleeve entries (counter-agent N15). Persisted BEFORE placement;
+        returns the deterministic client_order_id. kind in
+        {core-buy, core-rebal-sell, sweep}; qty signed (+buy/-sell).
+
+        M1: the client id is deterministic PER INTENT, not per attempt —
+        while a journal for this kind is outstanding its cid is returned
+        UNCHANGED, so a retry can never mint a fresh venue identity for
+        the same intent; the seq only advances for a genuinely new intent
+        (the prior journal adopted or cleared by reconcile). ref_price is
+        stored so a pending sweep BUY's future cash debit can be reserved
+        from the spendable ledger."""
+        for cid, rec in self.state.pending_book_orders.items():
+            if rec["kind"] == kind:
+                return cid
+        self.state.book_order_seq += 1
+        cid = f"blend-{kind}-{today}-{self.state.book_order_seq}"
+        # A MKT/DAY order placed OUTSIDE regular hours legitimately rests
+        # until the next open; reconcile 2b must not count those cycles as
+        # "stuck" and cancel it (counter-agent round 1). Recorded here so the
+        # exemption survives a restart with the journal.
+        rests_for_open = not regular_session_open()
+        self.state.pending_book_orders[cid] = {
+            "kind": kind, "symbol": symbol, "qty": qty, "date": today,
+            "ref_price": ref_price, "rests_for_open": rests_for_open}
+        self.save()
+        return cid
+
+    def reserved_sleeve_cash(self) -> float:
+        """Sleeve cash a pending (working, not yet adopted) BIL sweep BUY
+        will debit at adoption — never spendable by entries (M1)."""
+        swept = sum(rec["qty"] * (rec.get("ref_price") or 0.0)
+                    for rec in self.state.pending_book_orders.values()
+                    if rec["kind"] == "sweep" and rec["qty"] > 0)
+        # A journaled ENTER that is resting for the open (MOO/OPG placed
+        # post-close) will debit its cost at adoption: a second fire the
+        # same evening must not size against that cash (counter-agent
+        # round 2 - the ledger went negative on two fires one night).
+        # ... and at the price the fill will DEBIT (`size_ref`, L-E1), not
+        # `entry_ref`: on a gapped-up quote the difference read as free cash
+        # to the second fire (merge review 2026-09-10, F2).
+        resting = sum(rec["intent"]["qty"] * _intent_size_ref(rec["intent"])
+                      for rec in self.state.pending_entries.values()
+                      if rec.get("intent"))
+        return swept + resting
+
+    def clear_pending_book_order(self, client_id: str) -> None:
+        if self.state.pending_book_orders.pop(client_id, None) is not None:
+            self.save()
+
+    def on_entered(self, intent: dict, fill_price: float, order_ref: str,
+                   today: str, commission: float = 0.0) -> None:
+        from datetime import date, timedelta
+
+        d = date.fromisoformat(today)
+        pos = BlendPosition(
+            call_id=intent["call_id"], symbol=intent["symbol"],
+            qty=intent["qty"], entry_ref=intent["entry_ref"],
+            fill_price=fill_price, entry_date=today,
+            time_stop=(d + timedelta(days=intent.get("time_stop_days",
+                                                     TIME_STOP_DAYS))).isoformat(),
+            stop_level=intent["stop_level"],
+            risk_per_share=max(intent["entry_ref"] - intent["stop_level"], 0.0))
+        key = str(pos.call_id)
+        # mf2-10: this row is built from a COMPLETE intent — no field of it
+        # was invented — so a register entry left by a retired row that
+        # held the same key must not park it. Without this the new row was
+        # flagged UNVERIFIABLE for good: never exited, never re-stopped,
+        # never flattened, blocking every entry, while the alert told the
+        # operator to restore values that were never invented for it.
+        self.state.stand_in_rows.pop(key, None)
+        self.state.positions[key] = pos
+        self.state.entered_ids.append(pos.call_id)
+        self.state.entered_ids = self.state.entered_ids[-2000:]
+        self.state.entered_symbols[key] = pos.symbol
+        keep = {str(i) for i in self.state.entered_ids}
+        self.state.entered_symbols = {k: v for k, v
+                                      in self.state.entered_symbols.items()
+                                      if k in keep}
+        self.state.pending_entries.pop(key, None)   # journal fulfilled
+        self.state.sleeve_cash -= pos.qty * fill_price
+        self._charge(commission, "sleeve", pos.qty * fill_price)
+        self._record_trade(pos.symbol, "BUY", pos.qty, fill_price, today,
+                           "entry")
+        self._event("INFO", f"ENTER {pos.symbol} x{pos.qty} @ {fill_price:.2f} "
+                            f"(call {pos.call_id}, stop {pos.stop_level:.2f})")
+        self.save()
+
+    def on_stop_placed(self, call_id: int, order_ref: str, level: float) -> None:
+        """`level` is the book's OWN level — already on the venue's price
+        grid, because `snap_stop_level` normalized it the moment the
+        tracker published it (round 20). It is deliberately NOT the price
+        the adapter reports back: the level recorded here is the one
+        `stop_client_id` re-derives to find this order and the one the
+        ratchet compares against, and a level that comes from anywhere
+        else can diverge from both (counter-agent, 2026-09-11)."""
+        pos = self.state.positions.get(str(call_id))
+        if pos is not None:
+            pos.stop_order_ref = order_ref
+            pos.stop_level = level
+            pos.stop_missing = False
+            pos.stop_cover_qty = 0      # every caller places the FULL qty;
+            self.save()                 # only the Z1 resize sets it back
+
+    def mark_stop_missing(self, call_id: int) -> None:
+        pos = self.state.positions.get(str(call_id))
+        if pos is not None:
+            pos.stop_missing = True
+            pos.stop_order_ref = None
+            pos.stop_cover_qty = 0
+            self._event("RED", f"STOP_MISSING: {pos.symbol} x{pos.qty} "
+                               f"(call {call_id}) has NO working stop")
+            self.save()
+
+    def record_orphan_stop(self, order_ref: str, info: dict) -> None:
+        """A retired stop whose cancel was never ACKed: it may still rest at
+        the venue. Retried every reconcile pass; the escalation alert is
+        re-armed every ORPHAN_REALERT_CYCLES retries (x7) and a fill on it
+        alerts RED. retry_n starts at 1 because every caller alerts as it
+        records — pass 3 must not duplicate that alert in the same cycle.
+        Tracking is cleared ONLY by a definitively ACKed cancel (X2)."""
+        prior = self.state.orphan_stop_refs.get(order_ref) or {}
+        self.state.orphan_stop_refs[order_ref] = {
+            **info, "ts": int(time.time()),
+            "retry_n": prior.get("retry_n", 1)}
+        self._event("WARN", f"retired stop {order_ref} could not be "
+                            f"cancelled; retried every cycle, re-alerted "
+                            f"every {ORPHAN_REALERT_CYCLES}")
+        self.save()
+
+    def on_exited(self, call_id: int, fill_price: float, reason: str,
+                  commission: float = 0.0) -> None:
+        """fill_price is REQUIRED (repo law: no silent zero). A missing fill
+        price must route through on_exit_unreconciled instead."""
+        if fill_price is None:
+            raise ValueError("on_exited requires a fill price; use "
+                             "on_exit_unreconciled for a missing one")
+        pos = self.state.positions.pop(str(call_id), None)
+        if pos is None:
+            return
+        self.state.stand_in_rows.pop(str(call_id), None)   # mf2-9/mf2-10
+        pnl = (fill_price - pos.fill_price) * pos.qty
+        self.state.sleeve_cash += pos.qty * fill_price
+        self._charge(commission, "sleeve", pos.qty * fill_price)
+        r_mult = ((fill_price - pos.fill_price) / pos.risk_per_share
+                  if pos.risk_per_share > 0 else None)
+        self._record_trade(pos.symbol, "SELL", pos.qty, fill_price,
+                           _utc_today(), reason, r_multiple=r_mult, pnl=pnl)
+        self._event("INFO", f"EXIT {pos.symbol} x{pos.qty} @ {fill_price:.2f} "
+                            f"({reason}) -> P&L ${pnl:+,.0f}")
+        self.save()
+
+    def on_partial_exit(self, call_id: int, shares: int, fill_price: float,
+                        reason: str, commission: float = 0.0) -> None:
+        """Book a PARTIAL stop fill (adapter review M3): ONLY the filled
+        shares leave the book; the remainder keeps the position — with the
+        stop marked MISSING, because a polled stop event is TERMINAL at the
+        venue (partially-filled-then-cancelled): nothing protects the rest
+        until reconcile pass 4 re-places it."""
+        if fill_price is None:
+            raise ValueError("on_partial_exit requires a fill price; use "
+                             "on_exit_unreconciled for a missing one")
+        pos = self.state.positions.get(str(call_id))
+        if pos is None or shares <= 0:
+            return
+        shares = min(shares, pos.qty)
+        if shares == pos.qty:
+            self.on_exited(call_id, fill_price, reason, commission=commission)
+            return
+        pnl = (fill_price - pos.fill_price) * shares
+        self.state.sleeve_cash += shares * fill_price
+        self._charge(commission, "sleeve", shares * fill_price)
+        pos.qty -= shares
+        pos.stop_order_ref = None
+        pos.stop_missing = True
+        pos.stop_cover_qty = 0          # the stop is terminal: nothing rests
+        r_mult = ((fill_price - pos.fill_price) / pos.risk_per_share
+                  if pos.risk_per_share > 0 else None)
+        self._record_trade(pos.symbol, "SELL", shares, fill_price,
+                           _utc_today(), f"{reason}_partial",
+                           r_multiple=r_mult, pnl=pnl)
+        self._event("WARN", f"PARTIAL {reason} {pos.symbol}: {shares} sold @ "
+                            f"{fill_price:.2f} (call {call_id}); {pos.qty} "
+                            f"remain UNPROTECTED until the stop re-places")
+        self.save()
+
+    def on_exit_unreconciled(self, call_id: int, reason: str) -> None:
+        """The position left the book at the venue but no fill price is
+        known: NOTHING is booked (never 0.0) — the trade is parked in
+        state.unreconciled for manual reconciliation and alerted RED."""
+        pos = self.state.positions.pop(str(call_id), None)
+        if pos is None:
+            return
+        self.state.stand_in_rows.pop(str(call_id), None)   # mf2-9/mf2-10
+        self.state.unreconciled[str(call_id)] = {**asdict(pos),
+                                                 "reason": reason,
+                                                 "ts": int(time.time())}
+        self.state.last_fill_ts = time.time()     # cash moved at the venue
+        self.state.cash_drift_cycles = 0
+        self._event("RED", f"UNRECONCILED exit {pos.symbol} x{pos.qty} "
+                           f"(call {call_id}): {reason} — proceeds NOT "
+                           f"booked, manual reconciliation required")
+        self.save()
+
+    def _charge(self, commission, bucket: str, notional: float = 0.0) -> None:
+        """Debit a venue-reported commission from the bucket that traded,
+        stamp the fill clock (quiet-cycle rule for reconcile_cash) and break
+        the drift-persistence chain. None = the venue had not reported the
+        commission when the fill was read: booked as 0, said once a day.
+        A commission beyond max($50, 2% of notional) is refused (IB's UNSET
+        sentinel is ~1.8e308) - counter-agent round 2."""
+        self.state.last_fill_ts = time.time()
+        self.state.cash_drift_cycles = 0
+        if commission is None or isinstance(commission, bool):
+            self.state.commissions_unreported += 1
+            self._event_once_today(
+                "WARN", "commission_unreported",
+                f"a fill's commission was not reported by the venue when "
+                f"booked - charged 0 ({self.state.commissions_unreported} "
+                f"such fills since the seed); the cash reconcile shows them "
+                f"as drift")
+            return
+        try:
+            c = float(commission)
+        except (TypeError, ValueError):
+            self.state.commissions_unreported += 1
+            self._event_once_today("WARN", "commission_garbage",
+                                   f"commission {commission!r} unreadable - "
+                                   f"booked 0, verify at the venue")
+            return
+        if c <= 0:
+            return
+        # IB's fixed schedule caps at 1% of trade value; the old $50 floor
+        # let a $49 commission through on a $150 sweep (round 3). $50 only
+        # when the notional is unknown.
+        n = abs(float(notional or 0.0))
+        cap = max(5.0, 0.01 * n) if n > 0 else 50.0
+        if c > cap:
+            self._event("WARN", f"commission {c:,.2f} refused (cap {cap:,.2f} "
+                                f"on notional {abs(float(notional or 0.0)):,.2f}) "
+                                f"- booked 0, verify at the venue")
+            return
+        if bucket == "core":
+            self.state.core_cash -= c
+        else:
+            self.state.sleeve_cash -= c
+        self.state.commissions_paid = round(self.state.commissions_paid + c, 4)
+
+    def on_core_trade(self, qty_delta: int, price: float,
+                      commission: float = 0.0) -> None:
+        self.state.spy_qty += qty_delta
+        self.state.core_cash -= qty_delta * price
+        self._charge(commission, "core", qty_delta * price)
+        self._record_trade(CORE, "BUY" if qty_delta > 0 else "SELL",
+                           qty_delta, price, _utc_today(), "core")
+        self.save()
+
+    def on_sweep(self, qty_delta: int, price: float,
+                 commission: float = 0.0) -> None:
+        self.state.bil_qty += qty_delta
+        self.state.sleeve_cash -= qty_delta * price
+        if qty_delta > 0 and self.state.sleeve_cash < 0:
+            # r5: a sweep BUY adopted at a venue fill above the journaled
+            # ref_price overdraws the reserved cash by the slippage —
+            # clamp to zero (slippage-bounded magnitude) and log it.
+            self._event("INFO", f"sweep slippage absorbed: sleeve cash "
+                                f"{self.state.sleeve_cash:.2f} clamped to 0")
+            self.state.sleeve_cash = 0.0
+        # the commission is charged AFTER the clamp: charging first let the
+        # clamp eat it, under-debiting the ledger by $1 per tight sweep
+        # while commissions_paid counted it (round 3)
+        self._charge(commission, "sleeve", qty_delta * price)
+        self._record_trade(CASH_VEHICLE, "BUY" if qty_delta > 0 else "SELL",
+                           qty_delta, price, _utc_today(), "sweep")
+        self.save()
+
+    def on_transfer(self, usd: float) -> None:
+        """+usd moves core -> sleeve; -usd moves sleeve -> core."""
+        self.state.sleeve_cash += usd
+        self.state.core_cash -= usd
+        # a transfer is a FLOW for the sleeve's tripwire index, never a
+        # gain or a loss (the book's index does not see it: internal)
+        self.state.trip_pending_sleeve += usd
+        self.save()
+
+    # ---------- control ----------
+
+    def halt(self, reason: str = "KILL") -> None:
+        self.state.halted = reason
+        self._event("RED", f"blend halted ({reason})")
+        self.save()
+
+    def request_flatten(self, today: str) -> None:
+        """/kill stage 1 (R2): journal the flatten request (persisted — a
+        restart resumes it, same doctrine as pending_entries) and halt the
+        book immediately (no new entries — and run_cycle's intent loop
+        abandons the rest of a plan made before the halt, MF2-5). Stage 2 —
+        the actual flatten —
+        runs on the blend LOOP thread's next cycle (execute_flatten): that
+        thread owns the adapter's ib_async event loop, while an API thread
+        pumping a fresh loop against the shared connection would time out
+        every wait and risk session corruption."""
+        self.state.flatten_request = {"ts": int(time.time()), "date": today}
+        # A kill revokes any standing seed authorization: /kill then /resume
+        # means "undo my kill", never "seed a second book" (re-review).
+        self.state.bootstrap_ack = False
+        self.state.bootstrap_ack_date = ""
+        # ...and any standing capital-adoption request, for the same reason:
+        # a /kill then /resume must never adopt cash into a book the
+        # operator just stopped (stage 2). Re-issue it after the review.
+        if self.state.capital_request is not None:
+            usd = _num_or_none(self.state.capital_request.get("usd"))
+            self.state.capital_request = None
+            self._event("WARN", f"kill: pending capital adoption request "
+                                f"(${(usd or 0.0):,.2f}) CANCELLED - re-issue "
+                                f"it after /resume if still intended")
+        self.state.halted = "KILL"
+        self._event("RED", "kill: halt engaged; flatten queued for the "
+                           "execution loop")
+        self.save()
+
+    def resume(self, today: str = "") -> None:
+        # ONLY the venue guard's own halt may be acknowledged here. A
+        # MODE_CHANGE_FROM_REAL resume must NOT grant it (counter-agent
+        # 2026-08-28, FATAL): that halt fires before anything has looked at
+        # the venue, so acking it there walks the double-deployment guard
+        # past the holdings it exists to protect - the probe seeded a
+        # second book and left 395 SPY / 286 BIL. A mode-change resume now
+        # clears only its own halt; the next cycle meets the venue guard on
+        # its own merits, and seeding on top of real holdings takes a
+        # SECOND, separately-informed /resume.
+        if self.state.halted == "FRESH_BOOK_VS_VENUE":
+            self.state.bootstrap_ack_date = today or ""
+            # Deliberate operator acknowledgement that a fresh book may
+            # seed even though the venue already holds CORE/CASH_VEHICLE.
+            # One-shot: cleared as soon as the book actually initializes,
+            # so it can never silently authorize a LATER re-seed.
+            self.state.bootstrap_ack = True
+            self._event("WARN", f"resume: bootstrap guard "
+                                f"({self.state.halted}) ACKNOWLEDGED — the "
+                                f"next cycle may seed a fresh book on top "
+                                f"of existing venue holdings")
+        self.state.halted = None
+        # The ACTION page promises a paused kind resumes on /resume. It did
+        # not - resume() never touched the breaker (counter-agent
+        # 2026-08-28). Make the promise true rather than deleting it: an
+        # operator who has read the page and acted is exactly the signal
+        # the breaker is waiting for.
+        intent_breaker_clear()
+        if self.state.flatten_request is not None:
+            # A queued kill-flatten must never fire against a RESUMED book.
+            self.state.flatten_request = None
+            self._event("WARN", "resume: queued kill-flatten request "
+                                "cleared before execution")
+        # /resume does NOT touch the cash clock (round 3): an alerted drift
+        # survives a resume; POST /blend/cash/rebaseline is the only lever.
+        if self.state.cash_alerted_drift is not None:
+            self._event("INFO", f"resume: the alerted cash drift "
+                                f"{self.state.cash_alerted_drift:+,.2f} stays "
+                                f"on the clock (rebaseline is a separate call)")
+        self._event("INFO", "blend resumed")
+        self.save()
+
+    def rebaseline_cash(self, reason: str = "operator", save: bool = True) -> None:
+        """Start the cash-reconcile delta clock over - and NOTHING else. The
+        drift page must never send an operator to /resume for this: /resume
+        clears every halt, re-arms the breakers and can grant a seed ack
+        (counter-agent round 2, HIGH). Exposed as POST /blend/cash/rebaseline."""
+        st = self.state
+        st.cash_baseline = None
+        st.cash_drift = None
+        st.cash_drift_ts = None
+        st.cash_drift_cycles = 0
+        st.cash_alerted_drift = None
+        st.cash_alerted_level = ""
+        self._event("INFO", f"cash reconcile re-baselined ({reason})")
+        if save:
+            self.save()
+
+    # ---------- capital (stage-2 cash adoption, 2026-10-05) ----------
+
+    def _seed_book_usd(self) -> float:
+        """What a FRESH book seeds with: BLEND_BOOK_USD clamped by
+        BLEND_BUDGET. One definition for the seed branch, the feed's
+        `initial_book_usd` and the pre-field inference of
+        `capital_contributed` (they used to compute it separately)."""
+        book = float(getattr(self.cfg, "blend_book_usd", 10_000.0) or 0.0)
+        budget = float(getattr(self.cfg, "blend_budget", 0.0) or 0.0)
+        if budget > 0 and book > 0:
+            book = min(book, budget)
+        return book
+
+    def request_capital_adoption(self, usd, today: str, kind: str = "deposit",
+                                 sleeve_usd=None) -> dict:
+        """Journal a stage-2 adoption request (API thread, under BLEND_LOCK).
+        VALIDATION ONLY - no ledger write, no venue call: the loop thread
+        executes it (adopt_capital) on a quiet cycle, against the venue.
+        A second request replaces the first (the operator's latest number
+        wins; nothing accumulates). Raises ValueError on a bad amount.
+        kind: "deposit" (new money: a FLOW - grows contributed capital, never
+        a gain) or "distribution" (dividends / BIL distributions / interest
+        the book earned: credited as RETURN, so the tripwire indices stay
+        total-return and contributed capital does not grow - TA6/TB2)."""
+        if kind not in ("deposit", "distribution"):
+            raise ValueError('kind must be "deposit" or "distribution"')
+        # A distribution is credited to the bucket that EARNED it (BIL
+        # distributions -> sleeve, SPY dividends -> core): `sleeve_usd` names
+        # the sleeve's share explicitly; omitted, it splits by the target
+        # (counter-agent note: a 30/70 split of BIL income under-credits the
+        # sleeve index ~1 pp/yr). Deposits always split by the target.
+        if sleeve_usd is not None:
+            if kind != "distribution":
+                raise ValueError("sleeve_usd applies to a distribution only")
+            sv = None if isinstance(sleeve_usd, bool) else _finite(sleeve_usd)
+            if sv is None or sv < 0:
+                raise ValueError("sleeve_usd must be a number >= 0")
+            sleeve_usd = round(sv, 2)
+        v = None if isinstance(usd, bool) else _num_or_none(usd)
+        if v is not None and math.isfinite(v):
+            v = round(v, 2)             # the amount that would be journaled
+        if v is None or not math.isfinite(v) or v < 0.01:
+            raise ValueError("usd must be a positive number (at least 0.01)")
+        if v > CAPITAL_REQUEST_MAX_USD:
+            raise ValueError(f"usd {v:,.2f} exceeds the endpoint's sanity "
+                             f"bound {CAPITAL_REQUEST_MAX_USD:,.0f} - raise "
+                             f"CAPITAL_REQUEST_MAX_USD deliberately if real")
+        prior = self.state.capital_request
+        if sleeve_usd is not None and sleeve_usd > round(v, 2):
+            raise ValueError("sleeve_usd cannot exceed usd")
+        # TD4: built fully, THEN published - save() dumps this dict live
+        req = {"usd": round(v, 2), "kind": kind, "ts": int(time.time()),
+               "date": today}
+        if sleeve_usd is not None:
+            req["sleeve_usd"] = sleeve_usd
+        self.state.capital_request = req
+        self._event("WARN", f"capital adoption REQUESTED ({kind}): ${v:,.2f}"
+                            + (f" (replaces the pending "
+                               f"${_num_or_none(prior.get('usd')) or 0:,.2f})"
+                               if prior else "")
+                            + " - executes on the next QUIET cycle once the "
+                              "venue confirms that much unowned, available "
+                              "cash and BLEND_BUDGET can hold it; expires "
+                              f"unexecuted after {CAPITAL_REQUEST_TTL_S / 86_400:.0f} "
+                              "days")
+        self.save()
+        return dict(self.state.capital_request)
+
+    def clear_capital_request(self, reason: str = "operator") -> dict | None:
+        """Withdraw a journaled request (never executed). Returns it."""
+        prior = self.state.capital_request
+        self.state.capital_request = None
+        if prior is not None:
+            self._event("INFO", f"capital adoption request "
+                                f"(${_num_or_none(prior.get('usd')) or 0:,.2f}) "
+                                f"cleared ({reason})")
+            self.save()
+        return prior
+
+    def capital_summary(self) -> dict:
+        """Public-safe: contributed capital, the capital events (dates and
+        amounts the OPERATOR supplied - never a venue level) and whether a
+        request is pending."""
+        st = self.state
+        req = st.capital_request
+        return {"contributed": (round(st.capital_contributed, 2)
+                                if st.capital_contributed is not None else None),
+                "events": [{"date": e.get("date"), "kind": e.get("kind"),
+                            "usd": e.get("usd"),
+                            "sleeve_usd": e.get("sleeve_usd"),
+                            "core_usd": e.get("core_usd")}
+                           for e in list(st.capital_events[-CAPITAL_EVENTS_MAX:])],
+                "request_pending": ({"usd": req.get("usd"), "date": req.get("date"),
+                                     "kind": req.get("kind") or "deposit",
+                                     "sleeve_usd": req.get("sleeve_usd"),
+                                     "age_s": round(time.time()
+                                                    - float(req.get("ts") or 0), 1)}
+                                    if req else None)}
+
+    def cash_summary(self) -> dict:
+        """Public-safe: ledger cash, the delta drift and its age, commissions.
+        Never the venue's cash LEVEL (the account may hold cash the book
+        does not own)."""
+        st = self.state
+        return {"ledger": round(st.sleeve_cash + st.core_cash, 2),
+                "drift": (round(st.cash_drift, 2)
+                          if st.cash_drift is not None else None),
+                "drift_age_s": (round(time.time() - st.cash_drift_ts, 1)
+                                if st.cash_drift_ts else None),
+                "baselined": st.cash_baseline is not None,
+                "baseline_age_s": (round(time.time() - float(st.cash_baseline.get("ts") or 0), 1)
+                                   if st.cash_baseline and st.cash_baseline.get("ts") else None),
+                "over_threshold_cycles": st.cash_drift_cycles,
+                "commissions_paid": round(st.commissions_paid, 2),
+                "commissions_unreported": st.commissions_unreported,
+                # why the last cycle did NOT compare (None = it did), and
+                # for how long that reason has held (round 3)
+                "skipped": getattr(self, "_cash_skip_reason", None),
+                "skipped_for_s": (round(time.time() - self._cash_skip_since, 1)
+                                  if getattr(self, "_cash_skip_reason", None) else None)}
+
+    def status_summary(self, prices: dict[str, float] | None = None) -> dict:
+        st = self.state
+        # B6: this method runs on a FastAPI WORKER thread while the loop
+        # thread mutates the book. Every shared container is snapshotted
+        # ONCE here and nothing below walks live state — the same discipline
+        # mf3-10 applied to `save()` and to nothing else. `sorted()`,
+        # `dict()` comprehensions and FastAPI's own JSON encoding are all
+        # Python-level walks, so handing the encoder a LIVE dict (as
+        # `unreconciled` did) moves the same crash into serialization,
+        # after the handler has returned 200.
+        positions = _snapshot(st.positions)
+        out = {
+            "enabled": True,
+            "halted": st.halted,
+            "flatten_pending": st.flatten_request is not None,
+            "initialized": st.initialized,
+            "quotes_missing_since": st.quotes_missing_since,
+            "positions": {k: asdict(v) for k, v in positions.items()},
+            "open_count": len(positions),
+            "stop_missing": [k for k, v in positions.items()
+                             if v.stop_missing or not v.stop_order_ref],
+            # Z-F: partial cover is NOT protection. A stop RESIZED below its
+            # position (Z1's pro-rata peer resize) leaves real shares bare,
+            # and `stop_missing` alone reported them as fully protected on
+            # the surface X3 added to make exactly this visible.
+            "unprotected": [k for k, v in positions.items()
+                            if _is_unprotected(v)],
+            "unverifiable": [k for k, v in positions.items()
+                             if v.history_gap],
+            # MF-B: WHY a row is unverifiable matters — a blackout row can
+            # be cleared by the next reconcile, a STAND-IN row never can.
+            # key -> the field names this build invented for it.
+            "stand_in_rows": _snapshot(st.stand_in_rows),
+            "pending_entries": sorted(_snapshot(st.pending_entries)),
+            "intent_breakers": intent_breaker_state(),
+            "bootstrap_ack": (st.bootstrap_ack_date
+                              if st.bootstrap_ack else None),
+            "pending_book_orders": sorted(_snapshot(st.pending_book_orders)),
+            "unreconciled": _snapshot(st.unreconciled),
+            "orphan_stops": sorted(_snapshot(st.orphan_stop_refs)),
+            "sleeve_cash": round(st.sleeve_cash, 2),
+            "bil_qty": st.bil_qty,
+            "spy_qty": st.spy_qty,
+            "core_cash": round(st.core_cash, 2),
+            "budget_cap": getattr(self.cfg, "blend_budget", 0.0) or None,
+            "cash": self.cash_summary(),     # public-safe by design (deltas)
+            "capital": self.capital_summary(),
+            "tripwires": self.tripwire_summary(),
+            "gate": st.last_gate,
+            "budget_utilization": None,
+            # A list SLICE is a C-level copy; the encoder never sees the
+            # live, appended-to list.
+            "events": list(st.events[-40:]),
+        }
+        if prices:
+            out["sleeve_value"] = round(self.sleeve_value(prices), 2)
+            out["core_value"] = round(self.core_value(prices), 2)
+            book = self.book_value(prices)
+            out["book_value"] = round(book, 2)
+            out["sleeve_weight"] = round(self.sleeve_value(prices) / book, 4) if book else None
+            util = self.budget_utilization(prices)
+            out["budget_utilization"] = (round(util, 4)
+                                         if util is not None else None)
+        return out
+
+    def feed(self, prices: dict[str, float], today: str) -> dict:
+        """Public-safe read-only feed body for the Execution dashboard.
+        BOOK STATE ONLY — no credentials, no account ids, no token material,
+        no order refs (the caller adds mode + last_cycle)."""
+        st = self.state
+        # B6: same worker-thread hazard as `status_summary` — snapshot once,
+        # walk nothing live, and hand the encoder copies.
+        positions = []
+        for pos in _snapshot(st.positions).values():
+            try:
+                days = (date.fromisoformat(today)
+                        - date.fromisoformat(pos.entry_date)).days
+            except (ValueError, TypeError):
+                days = None
+            positions.append({"symbol": pos.symbol, "qty": pos.qty,
+                              "entry": round(pos.fill_price, 4),
+                              "entry_date": pos.entry_date,
+                              "trail_level": round(pos.stop_level, 4),
+                              "days_held": days,
+                              # X3: a position the blackout guard cannot
+                              # resolve must be VISIBLE, not just alerted —
+                              # the Execution tab shows both flags.
+                              "unverifiable": bool(pos.history_gap),
+                              "unprotected": _is_unprotected(pos),
+                              "unverified_cycles": pos.unverified_cycles})
+        util = self.budget_utilization(prices)
+        book_usd = self._seed_book_usd()        # same clamp as first boot
+        capital = self.capital_summary()
+        return {
+            "halted": st.halted,
+            "gate": st.last_gate,
+            "book": {
+                "sleeve_cash": round(st.sleeve_cash, 2),
+                "core_qty": st.spy_qty,
+                "bil_qty": st.bil_qty,
+                "equity_estimate": (round(self.book_value(prices), 2)
+                                    if prices else None),
+                "budget_utilization": (round(util, 4)
+                                       if util is not None else None),
+                "initial_book_usd": book_usd or None,
+                # stage 2: seed + adopted deposits - the flow-adjusted basis
+                # for any drawdown read off the curve (a deposit is a step
+                # in the curve, not a gain)
+                "capital_contributed": capital["contributed"],
+            },
+            "capital_events": capital["events"],
+            "tripwires": self.tripwire_summary(today),
+            "positions": positions,
+            "trades": list(st.trades[-TRADE_LOG_MAX:]),
+            "equity_curve": list(st.equity_curve),
+            "unreconciled": len(st.unreconciled),
+            "unverifiable": sum(1 for p in positions if p["unverifiable"]),
+            "unprotected": sum(1 for p in positions if p["unprotected"]),
+            "cash": self.cash_summary(),
+        }
+
+
+# ---------- tracker poll + cycle execution ------------------------------------
+
+# Why a fetch produced no payload. The blind states are NOT equivalent and
+# must never be collapsed back into a bare None (2026-09-10: BLEND_ENABLED
+# was on, TRACKER_URL was never declared in render.yaml, and the executor
+# planned nothing for weeks while /health stayed green):
+#   ok        - a payload came back
+#   no_url    - TRACKER_URL unset; we never even ask. NEVER self-heals.
+#   bad_url   - TRACKER_URL is malformed or not http(s). NEVER self-heals, and
+#               it looks exactly like a transport failure if you only catch
+#               Exception (counter-agent T4/SB-9).
+#   auth      - 401/403: the token/password no longer matches. NEVER self-heals.
+#   redirect  - 3xx: httpx does not follow redirects, so a TRACKER_URL pointed
+#               at the alias host is permanent blindness one hop from a
+#               healthy tracker. NEVER self-heals.
+#   http_<n>  - any other non-2xx (5xx usually does self-heal)
+#   deadline  - the whole fetch blew its total deadline (feeds.with_deadline)
+#   decode    - a 200 that is not JSON: a tracker-side bug
+#   transport - DNS/connect/read failure: usually a redeploy, usually heals
+#   cache_skip- the negative cache suppressed the fetch. NOT AN ATTEMPT, and
+#               therefore neither evidence of blindness nor of recovery.
+TRACKER_CONFIG_REASONS = frozenset({"no_url", "bad_url", "auth", "redirect"})
+
+
+def _intents_reason(exc: Exception) -> str:
+    """Classify a failed intents fetch. Order matters: FeedDeadline is not an
+    httpx error, and json's decode error is a ValueError subclass."""
+    if isinstance(exc, FeedDeadline):
+        return "deadline"
+    if isinstance(exc, (httpx.InvalidURL, httpx.UnsupportedProtocol)):
+        # A typo'd or schemeless TRACKER_URL. It raises through the transport
+        # layer, so the generic fallback below would file it under "usually
+        # heals" and tell the operator the opposite of the truth.
+        return "bad_url"
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        if code in (401, 403):
+            return "auth"
+        if 300 <= code < 400:
+            # httpx's raise_for_status() raises on ANY non-2xx, 3xx included.
+            return "redirect"
+        # 404 is deliberately NOT a config reason. It looks like one (a wrong
+        # base URL answers 404), but promoting it would page 🚨🚨 "this will
+        # NOT self-heal" on a SINGLE poll for something a tracker deploy, a
+        # router or a WAF can emit transiently — and the justification for
+        # promoting it ("a tracker mid-deploy answers 502/503, not 404") is an
+        # assertion about Render's edge that nothing here establishes. House
+        # rule: do not publish a verdict conditioned on an input we do not
+        # have. It waits out the 10-minute transient threshold instead
+        # (re-review R18R-9).
+        return f"http_{code}"
+    if isinstance(exc, ValueError):     # json.JSONDecodeError subclasses this
+        return "decode"
+    return "transport"
+
+
+def _fetch_intents_impl(cfg) -> tuple[dict | None, str]:
+    """GET the tracker's intent set, with WHY when there is no payload.
+
+    A bare authenticated GET: no params, no body — the tracker never learns
+    positions or account equity. Returns (payload, "ok") or (None, reason)
+    from the taxonomy above; the caller pages on the reason, because a
+    reconcile-only cycle is otherwise indistinguishable from a healthy one
+    (see _tracker_watch in service.py).
+
+    MF-1: the loop runs one iteration per poll interval, and this is the
+    second of its two feeds. A 30s timeout whose failures were never cached
+    meant a dead tracker cost the loop 30s every cycle on top of NOAA's.
+    The timeout is now a few seconds and a failure is negative-cached per
+    URL for FEED_FAIL_TTL — shorter than the poll interval, so an ordinary
+    cycle is never denied a fetch; what it suppresses is re-paying the
+    timeout on a cycle woken moments later (a /kill wake, a retry).
+
+    MF-A: an httpx timeout is PER-OPERATION and never bounded the call, so
+    the fetch runs under a TOTAL deadline (feeds.with_deadline)."""
+    # .strip() first: TRACKER_URL is sync:false, i.e. hand-typed into the
+    # Render dashboard, and a leading/trailing space made httpx raise through
+    # the transport layer — filed as "transport", the self-healing bucket, for
+    # a config error that never heals (re-review R17R-3). Stripping fixes it
+    # outright rather than merely classifying it better.
+    base = (getattr(cfg, "tracker_url", "") or "").strip().rstrip("/")
+    if not base:
+        # The quietest blind state there is: no request, no exception, and
+        # nothing written to the negative cache. It used to leave no trace.
+        logger.warning("blend intents: TRACKER_URL is not set — the executor "
+                       "polls nothing and plans nothing")
+        return None, "no_url"
+    failed_at = _INTENTS_FAIL.get(base)
+    if failed_at and time.time() - failed_at < FEED_FAIL_TTL:
+        logger.warning("blend intents: %s failed <%ss ago; skipping the "
+                       "fetch this cycle", base, FEED_FAIL_TTL)
+        return None, "cache_skip"
+    kwargs: dict = {"timeout": FEED_TIMEOUT}
+    token = getattr(cfg, "tracker_api_token", "")
+    if token:
+        # Preferred: the dedicated read-only intents token — the executor
+        # never holds the dashboard password.
+        kwargs["headers"] = {"X-API-Token": token}
+    elif getattr(cfg, "tracker_user", ""):
+        kwargs["auth"] = (cfg.tracker_user, cfg.tracker_password)
+    try:
+        # MF-A: the deadline is on the WHOLE fetch, body included — the
+        # timeout in `kwargs` only bounds each individual socket operation.
+        r = with_deadline(FEED_TIMEOUT, httpx.get,
+                          f"{base}/blend3070/intents", **kwargs)
+        r.raise_for_status()
+        payload = r.json()
+        if not isinstance(payload, dict):
+            # r.json() returns None for a body of `null`, so this used to
+            # produce (None, "ok"): a payload-less HEALTHY poll, which is
+            # precisely the silent-blind shape this round exists to kill.
+            # ValueError routes it to "decode" (counter-agent SB-2/T1/CA-3).
+            raise ValueError(f"intents payload is "
+                             f"{type(payload).__name__}, not an object")
+        _INTENTS_FAIL.pop(base, None)
+        return payload, "ok"
+    except Exception as exc:  # noqa: BLE001
+        _INTENTS_FAIL[base] = time.time()
+        logger.warning("blend intents fetch failed: %s", exc)
+        return None, _intents_reason(exc)
+
+
+# The reason of the most recent fetch_intents() call. A module global rather
+# than a return value BECAUSE fetch_intents is the seam: tests/test_blend.py
+# and the MF-2 live-fire probes (tests/probes/mf2/scen.py) replace
+# `blend_mod.fetch_intents` wholesale, and a loop that called a NEW function
+# instead would sail straight past all seven of those patch sites — the
+# MF-1 slow-feed gate among them (counter-agent CA-1/CA-2).
+#
+# Threading, stated accurately (R18-6): this is written and read within ONE
+# fetch_intents_reason call, and only the loop thread calls it — but
+# _stop_loop joins with a timeout and logs when a thread outlives it, so a
+# superseded loop CAN briefly still be running. The window is one statement
+# wide and the worst case is a mislabelled reason on a single cycle, never a
+# wrong payload: the payload is a return value, not shared state.
+_LAST_INTENTS_REASON: dict = {"v": None}
+
+
+def fetch_intents(cfg) -> dict | None:
+    """Payload-only fetch. THE seam — patch this, not the impl."""
+    payload, reason = _fetch_intents_impl(cfg)
+    _LAST_INTENTS_REASON["v"] = reason
+    return payload
+
+
+def fetch_intents_reason(cfg) -> tuple[dict | None, str]:
+    """(payload, reason), going THROUGH fetch_intents so a replaced seam is
+    still honoured. A replacement cannot set the reason, so it is inferred
+    from the payload — conservatively, since a stub that returns None is
+    standing in for an unreachable tracker."""
+    _LAST_INTENTS_REASON["v"] = None
+    payload = fetch_intents(cfg)
+    reason = _LAST_INTENTS_REASON["v"]
+    if reason is None:                  # fetch_intents was replaced
+        reason = "ok" if payload is not None else "transport"
+    return payload, reason
+
+
+SLEEVE_TARGET_CONFIRM = 2   # consecutive polls a NEW published target must
+                            # agree before the book is re-weighted to it
+
+
+def _sleeve_target(mgr: "Blend3070Manager", payload: dict,
+                   alerts: list | None = None) -> float:
+    """The sleeve's target weight the book is run at.
+
+    The book PERSISTS its target (st.sleeve_target; seeded at TARGET_SLEEVE).
+    The tracker publishes BLEND_SLEEVE_TARGET as rebalance.target, null when
+    unset. Rules (2026-10-01, counter-agent HIGH):
+    - null / absent / non-numeric / outside (0, 1]: the persisted target is
+      used and NOTHING is re-weighted; a non-null bad value is a once-a-day
+      WARN. A tracker redeploy with the env unset therefore cannot flip a
+      sleeve-only book back to 30/70.
+    - a valid DIFFERENT value is adopted only after SLEEVE_TARGET_CONFIRM
+      consecutive polls agree, with a Telegram page naming the move (a
+      mid-deploy blip of one poll never sells or buys the core)."""
+    st = mgr.state
+    current = _persisted_sleeve_target(mgr)
+    reb = payload.get("rebalance") or {}
+    raw = reb.get("target")
+    if raw is None:
+        st.sleeve_target_seen = []
+        return current
+    try:
+        t = float(raw)
+    except (TypeError, ValueError):
+        t = float("nan")
+    if not (0.0 < t <= 1.0):
+        st.sleeve_target_seen = []
+        mgr._event_once_today("WARN", "sleeve_target_invalid",
+                              f"tracker published sleeve target {raw!r}; "
+                              f"book stays at {current:.0%}")
+        return current
+    if abs(t - current) < 1e-9:
+        st.sleeve_target_seen = []
+        return current
+    if not st.initialized:
+        # a fresh seed has nothing to re-weight: take the published value
+        st.sleeve_target, st.sleeve_target_seen = t, []
+        return t
+    seen = st.sleeve_target_seen or [None, 0]
+    n = (seen[1] + 1) if seen[0] is not None and abs(seen[0] - t) < 1e-9 else 1
+    if n < SLEEVE_TARGET_CONFIRM:
+        st.sleeve_target_seen = [t, n]
+        msg = (f"tracker publishes sleeve target {t:.0%} (book at "
+               f"{current:.0%}): re-weighting after {SLEEVE_TARGET_CONFIRM - n} "
+               f"more agreeing poll(s) - unset BLEND_SLEEVE_TARGET on the "
+               f"tracker now to abort")
+        mgr._event("INFO", msg)
+        if alerts is not None and n == 1:
+            alerts.append("⚠️ blend " + msg)          # the abort window
+        return current
+    st.sleeve_target, st.sleeve_target_seen = t, []
+    msg = (f"sleeve target {current:.0%} -> {t:.0%} adopted from the tracker: "
+           + ("the SPY core will be SOLD and swept to BIL"
+              if t > current else "SPY will be BOUGHT to rebuild the core")
+           + " from this cycle (BLEND_SLEEVE_TARGET on the tracker)")
+    mgr._event("WARN", msg)
+    if alerts is not None:
+        alerts.append("⚠️ blend " + msg)
+    return t
+
+
+def _persisted_sleeve_target(mgr: Blend3070Manager) -> float:
+    """The weight the book is RUN at. A state file from before the field
+    existed infers it from the book's SHAPE, never from the file's age - a
+    sleeve-only book loaded as 0.30 would rebuild its core (counter-agent
+    2026-10-01). One definition for the tracker-target pass and the stage-2
+    split (counter-agent B6: the split used TARGET_SLEEVE while step()
+    inferred 1.0 on the same cycle)."""
+    st = mgr.state
+    if st.sleeve_target is None and st.initialized:
+        st.sleeve_target = (1.0 if (st.spy_qty == 0 and not any(
+            r.get("kind") == "core-buy" for r in st.pending_book_orders.values()))
+            else TARGET_SLEEVE)
+        mgr._event("INFO", f"sleeve target inferred from the book: "
+                           f"{st.sleeve_target:.0%}")
+    return st.sleeve_target if st.sleeve_target is not None else TARGET_SLEEVE
+
+
+def payload_is_stale(payload: dict, today: str) -> bool:
+    """True when the tracker's as_of is too old to act on (its bar feed
+    stalled): reconciliation still runs, but no NEW decision is taken
+    against a possibly-stale gate or days-old fires."""
+    as_of = payload.get("as_of")
+    if not as_of:
+        return False
+    try:
+        return (date.fromisoformat(today)
+                - date.fromisoformat(str(as_of))).days > STALE_PAYLOAD_DAYS
+    except ValueError:
+        # A malformed as_of is a data bug on the tracker side: treat the
+        # payload as STALE (no new decisions), never as fresh
+        # (counter-agent minor).
+        logger.warning("blend: malformed payload as_of %r — treated as stale",
+                       as_of)
+        return True
+
+
+def reference_prices(adapter, mgr: Blend3070Manager, payload: dict | None) -> dict:
+    """Reference prices for every symbol the cycle can touch, via the
+    adapter (DryAdapter returns synthetic quotes offline)."""
+    rest = set()
+    rest.update(p.symbol for p in mgr.state.positions.values())
+    if payload:
+        rest.update(e["symbol"] for e in payload.get("entries", [])
+                    if e.get("symbol"))
+    rest -= {CORE, CASH_VEHICLE}
+    # L-E1: the entry_ref sanity band compares the tracker's reference
+    # against the adapter's quote, and DryAdapter answers a flat 100 for any
+    # symbol it has never filled — which would read as a 10x mispricing on a
+    # $9 stock and refuse every dry entry. Anchor dry quotes to the real
+    # references in the payload first (real adapters have no seed_price and
+    # are untouched); a real fill still wins over the seed.
+    seed = getattr(adapter, "seed_price", None)
+    if seed is not None and payload:
+        for e in payload.get("entries", []):
+            if e.get("symbol") and e.get("entry_ref"):
+                try:
+                    seed(e["symbol"], float(e["entry_ref"]))
+                except (TypeError, ValueError):
+                    pass
+    prices: dict[str, float] = {}
+    # CORE and the cash vehicle probe FIRST: when both are dark the feed is
+    # down and every further symbol would burn its full quote wait inside
+    # BLEND_LOCK - measured ~2x wait_s per symbol, up to minutes on a
+    # mature book, all while /kill blocks on the lock (counter-agent A5).
+    # Sleeve positions then take conservative stop-level marks, which is
+    # the existing degraded-mark path.
+    for s in (CORE, CASH_VEHICLE):
+        try:
+            prices[s] = adapter.spot(s)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("spot %s failed: %s", s, exc)
+    if not (prices.get(CORE) and prices.get(CASH_VEHICLE)):
+        logger.warning("core/cash quotes dark - skipping %d sleeve quote "
+                       "lookups this cycle (bounded lock hold)", len(rest))
+        return prices
+    for s in rest:
+        try:
+            prices[s] = adapter.spot(s)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("spot %s failed: %s", s, exc)
+    return prices
+
+
+def _ensure_stop(mgr: Blend3070Manager, adapter, pos: BlendPosition,
+                 alert) -> bool:
+    """Place pos's protective GTC stop with in-cycle retry/backoff. On final
+    failure the position is marked STOP_MISSING (blocks all new entries,
+    retried every cycle) and Telegram is alerted loudly. The deterministic
+    client_order_id makes the retry idempotent: a stop that actually reached
+    the venue on a crashed attempt is adopted, not duplicated.
+
+    ZF-2: only a duplicate the venue still reports WORKING is adoptable. A
+    deterministic stop id whose prior order already FILLED comes back
+    `{duplicate: True, status: "filled"}` from both adapters (DryAdapter's
+    dedupe covers working AND filled; IBAdapter returns `_trade_result` for
+    any prior that is not cancelled). Adopting that cleared `stop_missing`
+    and reported "protective stop restored" with NOTHING resting at the
+    venue — the position read protected on `/status`, on `/blend/feed` and
+    to `_is_unprotected`, and nothing would ever re-place. Nothing can be
+    placed under a spent id, so the honest end state is STOP_MISSING and
+    loud (the same call `_resize_peer_cover`'s restore path makes)."""
+    if pos.stop_level <= 0:
+        mgr.mark_stop_missing(pos.call_id)
+        alert(f"🚨🚨 blend STOP_MISSING: {pos.symbol} x{pos.qty} "
+              f"(call {pos.call_id}) has a non-positive stop level "
+              f"({pos.stop_level}) — no stop placeable; new entries BLOCKED")
+        return False
+    # `pos.stop_level` is NOT normalized here, even for a row journalled
+    # before round 20 with an off-grid level (the live GH position:
+    # 137.0507). `stop_client_id(call_id, stop_level)` is the position's
+    # ONLY durable handle on the venue — the persisted order ref is
+    # session-scoped (x13) — and rewriting the level re-mints the id: an
+    # un-ACKed placement that DID land under the old id (ack timeout, a
+    # container kill between placeOrder and on_stop_placed) could then never
+    # be adopted, and this placement would STACK a second stop on it — cover
+    # above held, a venue short on one tick (round 20 second pass, REGR-1 /
+    # MIGR-1, reproduced). The adapter snaps the PRICE to the grid; the id
+    # keeps naming whatever rests; the level goes on-grid at the first
+    # genuine ratchet, which re-mints the id in the one place that is
+    # allowed to (place new, then cancel old).
+    if any(i.get("call_id") == pos.call_id
+           for i in mgr.state.orphan_stop_refs.values()):
+        # The guard `_resize_peer_cover`'s restore leg already has, and this
+        # path lacked (MIGR-1): an earlier cover of THIS position was never
+        # ACK-cancelled and may still rest, so placing here could put cover
+        # above held. X2's machinery owns that residual and alerts on its
+        # own cadence; the honest state here is STOP_MISSING, without a
+        # second alert line per cycle.
+        mgr.mark_stop_missing(pos.call_id)
+        mgr._event("INFO", f"stop for {pos.symbol} (call {pos.call_id}) "
+                           f"not placed: a retired stop of this position is "
+                           f"still unconfirmed at the venue (orphan) — "
+                           f"placing could stack cover above held")
+        return False
+    last_exc: Exception | None = None
+    for attempt in range(STOP_RETRY_ATTEMPTS):
+        try:
+            rs = adapter.place_stock_order(
+                pos.symbol, -pos.qty, "STP", stop_price=pos.stop_level,
+                tif="GTC",
+                client_order_id=stop_client_id(pos.call_id, pos.stop_level))
+            if rs.get("duplicate") and rs.get("status") != "working":
+                mgr.mark_stop_missing(pos.call_id)
+                alert(f"🚨🚨 blend STOP_MISSING: {pos.symbol} x{pos.qty} "
+                      f"(call {pos.call_id}) — the venue's order under its "
+                      f"stop id is {rs.get('status')}, NOT working, so "
+                      f"nothing rests: the id is spent and no stop is "
+                      f"placeable at {pos.stop_level:.2f}. The position is "
+                      f"UNPROTECTED and new entries are BLOCKED — only you "
+                      f"can resolve it")
+                return False
+            mgr.on_stop_placed(pos.call_id, rs["order_ref"], pos.stop_level)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            logger.warning("stop placement %s attempt %d failed: %s",
+                           pos.symbol, attempt + 1, exc)
+            if attempt < STOP_RETRY_ATTEMPTS - 1:
+                time.sleep(STOP_RETRY_SLEEP_S * (attempt + 1))
+    mgr.mark_stop_missing(pos.call_id)
+    alert(f"🚨🚨 blend STOP_MISSING: {pos.symbol} x{pos.qty} "
+          f"(call {pos.call_id}) has NO working stop after "
+          f"{STOP_RETRY_ATTEMPTS} attempts ({last_exc}) — new entries "
+          f"BLOCKED, retrying every cycle until placed")
+    return False
+
+
+_UNVERIFIABLE_FILL_NOTE = (
+    " — NOTE: this position was UNVERIFIABLE (a blackout gap the book could "
+    "not close), so the shares it just sold were never PROVEN to be the "
+    "book's: if the account holds other shares of this symbol they may have "
+    "been YOURS — check your own share count at the venue")
+
+
+def _ingest_one_fill(mgr: Blend3070Manager, adapter, f: dict, alert) -> None:
+    """Book a single polled fill event against the book (venue truth).
+
+    Z2: the ACCOUNTING is deliberately unchanged for an UNVERIFIABLE
+    position — a fill is order-scoped venue truth and booking it is right,
+    consistent with reconcile pass 1b-i. Only the ALERT changes: a stop fill
+    on a position the guard could not prove ownership of must never read as
+    a clean green close."""
+    st = mgr.state
+    ref = f.get("order_ref")
+    pos = next((p for p in st.positions.values()
+                if p.stop_order_ref == ref), None)
+    if pos is not None:
+        # /kill tracks the stop as an orphan when its cancel raises, and the
+        # stop stays the position's: once its fill is booked here nothing
+        # rests, so the orphan goes too - left, pass 3 re-cancelled a filled
+        # stop forever ("already FILLED", "two stops may rest" every 4th
+        # cycle; verifier B, 2026-10-26)
+        st.orphan_stop_refs.pop(ref, None)
+        fill = f.get("fill_price")
+        held = pos.qty
+        gap_note = _UNVERIFIABLE_FILL_NOTE if pos.history_gap else ""
+        filled = abs(int(f.get("qty") or 0))
+        if fill is None:
+            mgr.on_exit_unreconciled(pos.call_id,
+                                     "stop filled WITHOUT a fill price")
+            alert(f"🚨 blend stop fill for {pos.symbol} "
+                  f"(call {pos.call_id}) carried NO fill price — trade "
+                  f"UNRECONCILED, proceeds NOT booked, manual "
+                  f"reconciliation needed")
+        elif 0 < filled < held:
+            # M3: partially-filled-then-cancelled stop — book ONLY the
+            # filled shares; the remainder stays held (and unprotected
+            # until pass 4 re-places its stop). Booking the full book qty
+            # here was the oversell/short the adapter review flagged.
+            mgr.on_partial_exit(pos.call_id, filled, fill, "stop_filled",
+                                commission=f.get("commission"))
+            alert(f"⚠️ blend stop PARTIAL fill {pos.symbol} {filled} of "
+                  f"{held} @ {fill:.2f} (call {pos.call_id}) — "
+                  f"{held - filled} remain held, "
+                  # Z-H: "no stop will be re-placed" is only true WHILE the
+                  # position stays flagged — the very same reconcile can
+                  # positively verify it and pass 4 then re-protects the
+                  # remainder, which used to make this alert read as a flat
+                  # contradiction of the "protective stop restored" line
+                  # three alerts later.
+                  + ("and NO stop will be re-placed while the position is "
+                     "UNVERIFIABLE (only a reconcile that POSITIVELY "
+                     "verifies it unparks it and re-protects the rest)"
+                     if gap_note else "stop re-placed by reconcile")
+                  + gap_note)
+        else:
+            mgr.on_exited(pos.call_id, fill, "stop_filled",
+                          commission=f.get("commission"))
+            alert(("🚨 blend stop FILLED " if gap_note
+                   else "🧬 blend STOP FILLED ")
+                  + f"{pos.symbol} x{held} @ {fill:.2f} "
+                    f"(call {pos.call_id}) — position closed at the venue"
+                  + gap_note)
+    elif ref in st.orphan_stop_refs:
+        info = st.orphan_stop_refs.pop(ref)
+        st.unreconciled[f"orphan-{ref}"] = {
+            **info, "fill_price": f.get("fill_price"), "ts": int(time.time()),
+            "reason": "retired stop filled after a failed cancel "
+                      "(possible short at the venue)"}
+        mgr.save()
+        alert(f"🚨🚨 blend: RETIRED stop {ref} FILLED "
+              f"({info.get('symbol')} {info.get('qty')}) — possible "
+              f"short at the venue, manual action needed")
+    elif ref in _journaled_order_refs(mgr, adapter):
+        # A venue that also streams MOO/MKT fills through the fill poll
+        # (real-venue contract note): a fill for a JOURNALED order is
+        # adopted by the journal reconcile passes, not here — no RED noise.
+        logger.info("blend: fill for journaled order %s handled by the "
+                    "journal reconcile", ref)
+    else:
+        alert(f"🚨 blend: fill for UNKNOWN order {ref} ({f}) — manual "
+              f"reconciliation needed")
+
+
+def _journaled_order_refs(mgr: Blend3070Manager, adapter) -> set:
+    """Venue order_refs belonging to journaled (pending) orders — their
+    fills are adopted by the journal passes, never the unknown-order path."""
+    refs = set()
+    ids = [entry_client_id(rec["intent"]["call_id"])
+           for rec in mgr.state.pending_entries.values()]
+    ids.extend(mgr.state.pending_book_orders)
+    for cid in ids:
+        try:
+            o = adapter.find_stock_order(cid)
+        except Exception:  # noqa: BLE001
+            continue
+        if o is not None:
+            refs.add(o.get("order_ref"))
+    return refs
+
+
+def _ingest_fills(mgr: Blend3070Manager, adapter, alert) -> None:
+    """Drain and book queued fill events. A mid-loop failure RE-QUEUES the
+    unprocessed fills on the adapter before re-raising — a raising save()
+    or alert callback can never silently lose a venue fill (counter-agent
+    N3). A fill whose booking completed before the failure may be seen
+    twice; the second pass lands in the detected unknown-order branch
+    (noise, never a double booking)."""
+    fills = adapter.poll_stock_fills()
+    for i, f in enumerate(fills):
+        try:
+            _ingest_one_fill(mgr, adapter, f, alert)
+        except Exception:
+            requeue = getattr(adapter, "requeue_stock_fills", None)
+            if requeue is not None:
+                requeue(fills[i:])
+            else:
+                logger.error("blend: fill ingestion failed and the adapter "
+                             "cannot re-queue — fills at risk: %s", fills[i:])
+            raise
+
+
+def _apply_book_order(mgr: Blend3070Manager, rec: dict, fill: float,
+                      commission: float = 0.0) -> None:
+    """Book a filled book-level order into the ledgers by journal kind."""
+    kind, qty = rec["kind"], rec["qty"]
+    if kind == "core-buy":
+        mgr.on_core_trade(qty, fill, commission=commission)
+    elif kind == "core-rebal-sell":
+        mgr.on_core_trade(qty, fill, commission=commission)  # qty < 0 (a sell)
+        mgr.on_transfer(-qty * fill)          # proceeds move core -> sleeve
+    elif kind == "sweep":
+        mgr.on_sweep(qty, fill, commission=commission)
+    else:  # unknown journal kind: freeze for manual reconciliation
+        mgr.state.unreconciled[f"book-{kind}-{int(time.time())}"] = {
+            **rec, "fill_price": fill, "ts": int(time.time()),
+            "reason": "unknown book-order journal kind"}
+        mgr.save()
+
+
+def _retire_blackout_stop(mgr: Blend3070Manager, adapter, pos: BlendPosition,
+                          venue_ref: str | None, alert,
+                          why: str = "while parking it after the blackout",
+                          note: str = "before parking it UNRECONCILED") -> str:
+    """Cancel the protective stop of a position about to be parked
+    UNRECONCILED by the blackout guard (counter-agent N1). A park that
+    leaves the stop resting abandons a -qty SELL order the book no longer
+    tracks: when it triggers it sells shares the account may not hold — the
+    naked short the guard exists to prevent, and it reaches the book only
+    as a post-hoc UNKNOWN-order alert. Anything short of an ACKed cancel
+    (a raise — pinned contract: the stop FILLED — or an ambiguous False, or
+    a stop the venue cannot locate by client id) routes into
+    orphan_stop_refs, the same retire-then-track pattern the /kill park
+    paths use: pass 3 retries the cancel and a fill on it alerts RED.
+
+    `why`/`note` name the ACTION being taken so the alerts stay honest when
+    the caller is not the park path (Z1 resizes cover the same way).
+
+    Returns what ACTUALLY happened so the caller's park alert can say it
+    honestly instead of claiming the stop was retired regardless (X4):
+    "retired" | "uncancelled" | "ambiguous" | "unlocatable" | "none"."""
+    if not venue_ref:
+        ref = pos.stop_order_ref
+        if not ref:
+            return "none"
+        # x13: the only ref left is the PERSISTED one, and IB orderIds are
+        # session-scoped — after the restart this guard exists for, that ref
+        # can address a DIFFERENT order. Never cancel by it; track it (a
+        # fill on it still alerts RED) and tell the operator to clear it by
+        # hand at the venue.
+        mgr.record_orphan_stop(ref, {"symbol": pos.symbol,
+                                     "qty": -_resting_cover(pos),
+                                     "call_id": pos.call_id,
+                                     "cancel_unsafe": True})
+        alert(f"🚨🚨 blend: the resting stop for {pos.symbol} (call "
+              f"{pos.call_id}) could NOT be located by its client id "
+              f"{why} — its persisted venue ref "
+              f"{ref} is session-scoped and may address a DIFFERENT order, "
+              f"so it was NOT cancelled: tracked (a fill on it alerts RED); "
+              f"cancel it by hand at the venue")
+        return "unlocatable"
+    try:
+        cancelled = adapter.cancel_stock_order(venue_ref)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("blackout park: stop cancel %s raised: %s",
+                       venue_ref, exc)
+        mgr.record_orphan_stop(venue_ref, {"symbol": pos.symbol,
+                                           "qty": -_resting_cover(pos),
+                                           "call_id": pos.call_id})
+        alert(f"🚨🚨 blend: the resting stop {venue_ref} for {pos.symbol} "
+              f"(call {pos.call_id}) could NOT be cancelled {why} "
+              f"({exc}) — it may still rest at the "
+              f"venue: tracked for retry, a fill on it alerts RED")
+        return "uncancelled"
+    if cancelled:
+        mgr._event("INFO", f"retired the resting stop {venue_ref} for "
+                           f"{pos.symbol} (call {pos.call_id}) {note}")
+        mgr.save()
+        return "retired"
+    # "not found / already cancelled": nothing SHOULD rest, but after a
+    # session boundary the venue answers False for a resting order it can no
+    # longer resolve by ref — indistinguishable from a gone one. Track it
+    # (X2: pass 3 keeps it until a cancel actually ACKs, and a fill on it
+    # routes to the RED "possible short" branch) and say so.
+    mgr.record_orphan_stop(venue_ref, {"symbol": pos.symbol,
+                                       "qty": -_resting_cover(pos),
+                                       "call_id": pos.call_id})
+    alert(f"🚨🚨 blend: the venue reports the resting stop {venue_ref} for "
+          f"{pos.symbol} (call {pos.call_id}) already gone but would NOT "
+          f"ACK the cancel {why} — it may "
+          f"still rest: tracked for retry, a fill on it alerts RED")
+    return "ambiguous"
+
+
+_RETIRE_NOTE = {
+    "retired": "its resting stop was CANCELLED at the venue, nothing sold",
+    "uncancelled": "its resting stop could NOT be cancelled and may STILL "
+                   "rest at the venue (tracked; a fill on it alerts RED), "
+                   "nothing sold",
+    "ambiguous": "the venue reported its resting stop already gone but "
+                 "would not ACK the cancel, so it may still rest (tracked; "
+                 "a fill on it alerts RED), nothing sold",
+    "unlocatable": "its resting stop could not be located by client id and "
+                   "was NOT cancelled (tracked; a fill on it alerts RED) — "
+                   "clear it by hand, nothing sold",
+    "none": "no resting stop was tracked for it, nothing sold",
+}
+
+
+def _resting_cover(pos: BlendPosition) -> int:
+    """Shares the position's resting stop actually covers (Z1): its full qty
+    normally, the resized allocation after a peer-shortfall resize."""
+    return int(pos.stop_cover_qty or pos.qty)
+
+
+def _is_unprotected(pos: BlendPosition) -> bool:
+    """Whether ANY of this position's shares rest without blend cover (Z-F).
+    A stop resized BELOW the position protects some of it: reporting that as
+    protected is the same silence Z2 removed from the alerts."""
+    if pos.stop_missing or not pos.stop_order_ref:
+        return True
+    return _resting_cover(pos) < pos.qty
+
+
+def _prorata_cover(same_symbol: list[BlendPosition], held: int) -> dict:
+    """Z1 allocation: `floor(held * qty / book_qty)` per same-symbol position,
+    the remainder handed out by LARGEST fractional part, ties by LOWEST
+    call_id. Pro rata deliberately makes NO attribution claim — which is
+    exactly what x5 established cannot be made about a peer shortfall — and
+    it sums to `held` exactly, so the invariant (cover <= held) is met with
+    the most protection that can honestly be left resting.
+
+    PRECONDITION: `0 <= held <= sum(qty)` — the only call site enters on
+    `held < book_qty` and additionally caps every result at the position's
+    own qty (`min(alloc[key], p.qty)`), so an allocation above a position's
+    own quantity can never reach the venue. A non-positive qty (impossible
+    for a real position) contributes NOTHING rather than a negative share
+    of the pool (Z-1c: a -3 qty used to yield {1: -6, 2: 8})."""
+    qtys = {str(p.call_id): max(int(p.qty), 0) for p in same_symbol}
+    book_qty = sum(qtys.values())
+    if book_qty <= 0 or held <= 0:
+        return {str(p.call_id): 0 for p in same_symbol}
+    exact = {k: held * q / book_qty for k, q in qtys.items()}
+    alloc = {k: int(v) for k, v in exact.items()}       # floor
+    ranked = sorted(same_symbol,
+                    key=lambda p: (-(exact[str(p.call_id)]
+                                     - alloc[str(p.call_id)]), p.call_id))
+    for p in ranked[:held - sum(alloc.values())]:
+        alloc[str(p.call_id)] += 1
+    return alloc
+
+
+def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
+                       same_symbol: list[BlendPosition], gap_stops: dict,
+                       alert) -> str:
+    """Z1 INVARIANT: for each symbol, the total quantity of blend-placed
+    RESTING SELL cover must never exceed the venue-verified `held` — the
+    executor must never CHOOSE to leave cover > held.
+
+    The peer-shortfall cell (x5: two or more same-symbol positions, book >
+    held, the shortfall attributable to none of them) used to leave every
+    stop resting at its full size: 9 shares of SELL orders against 6 held,
+    which trigger into a REAL venue short (-3) booked as two cheerful green
+    'position closed' alerts. Nobody may be sacrificed (x5 stands), so the
+    cover is RESIZED pro rata instead.
+
+    Ordering is CANCEL-OLD-THEN-PLACE-SMALLER, the opposite of the ratchet's
+    place-then-cancel: placing first would transiently rest 9 + 6 = 15
+    against 6 held, which is the exact harm. The brief unprotected window is
+    the accepted trade on a position that is already flagged UNVERIFIABLE
+    and already blocking new entries. A replace that fails leaves the
+    position STOP_MISSING + RED and is RETRIED on the next reconcile that
+    still sees the shortfall (see the alignment rule below) — never
+    silently naked, never silently over-covered.
+
+    Y1 CARVE-OUT (explicit): Y1 forbids resting cover the account may not be
+    able to honour on an UNVERIFIABLE position, because that is a short
+    path. Cover is never RESTORED above a peer's pro-rata allocation, and
+    never above the aggregate slack, which is provably short-safe by the
+    same arithmetic the whole function rests on: `sum(alloc) == held` by
+    construction, so if the reduce leg ran to the end of the book every peer
+    sits at `min(alloc, qty)` and the aggregate is exactly `held`; if it
+    stopped early the aggregate was already `<= held` when it stopped; and
+    each restore is capped at `held - running`. The per-symbol aggregate is
+    therefore `<= held` whichever direction an individual peer moved. That
+    is the exemption — "<= its pro-rata allocation", not "strictly reducing"
+    (counter-review Z-C / DEVIATION 1: leaving a real position at cover 0
+    forever because a re-place would be an *increase* is X3's unbounded
+    naked downside, and this branch already ruled that bounded protection
+    beats that). Cover is only ever RESTORED from ZERO, never stacked on top
+    of something that already rests, and never while an unACKed orphan of
+    this position's own cover may still rest at the venue.
+
+    ZF-1 (the other end of the same rule): protection is never REMOVED that
+    the aggregate did not require. The reduce leg runs only while the
+    running aggregate still exceeds `held`, so a peer that was already
+    inside the line keeps its full cover and is not flagged — cutting a
+    healthy peer for a peer whose restore is blocked anyway is a pure
+    subtraction, and the invariant it would serve already held.
+
+    DURABILITY (counter-review Z-A): a peer whose allocation is BELOW its
+    own qty is CAPPED, and a cap that only lives in `stop_cover_qty` is
+    undone by the first ordinary trail ratchet or pass-4 re-place on any
+    peer that is not itself flagged. Every capped peer is therefore marked
+    `history_gap = True` in the same breath — it is by definition part of
+    an unattributable shortfall, so the flag is honest, and it inherits the
+    Y1 ratchet guard, the pass-4 guard, the escalation cadence and the
+    restore-full-cover branch with no new state machine.
+
+    Where the venue will not ACK the cancel, cover > held can persist and is
+    unpreventable: that residual belongs to X2's `orphan_stop_refs` + RED
+    possible-short machinery, not to this function.
+
+    Returns a clause for the caller's escalation alert ('' when nothing was
+    resized)."""
+    st = mgr.state
+    order = sorted(same_symbol, key=lambda p: p.call_id)
+    cover: dict[str, tuple[int, str | None]] = {}
+    for p in order:
+        key = str(p.call_id)
+        stop = gap_stops.get(key)
+        if stop is not None:            # flagged: the venue's own answer
+            resting = stop.get("status") == "working"
+            ref = stop.get("order_ref") or p.stop_order_ref
+        else:                           # unflagged peer: the book's record
+            resting = bool(p.stop_order_ref) and not p.stop_missing
+            ref = p.stop_order_ref
+        cover[key] = (_resting_cover(p) if resting else 0, ref)
+    total = sum(c for c, _ in cover.values())
+    alloc = _prorata_cover(order, held)
+    # ZF-1: the TARGET cover per peer, decided before a single order moves.
+    # Reduce ONLY while the running aggregate still exceeds `held`, and
+    # restore ONLY into the slack the aggregate leaves. An earlier revision
+    # aligned every peer to its allocation unconditionally, which ran the
+    # reduce leg in cells where the invariant ALREADY held: measured cover 4
+    # against 5 held -> cover 2, because the healthy peer was cut and the
+    # zero-cover peer's restore was blocked by its own unACKed orphan. Two
+    # real shares lost their stop to satisfy an invariant that was already
+    # satisfied. Protection is never removed that the aggregate did not
+    # require, and never restored past the slack.
+    target: dict[str, int] = {}
+    running = total
+    for p in order:                 # reductions first: they free the slack
+        key = str(p.call_id)
+        cur = cover[key][0]
+        want = min(alloc[key], p.qty)
+        if cur > want and running > held:
+            target[key] = want
+            running -= cur - want
+        else:
+            target[key] = cur       # already inside the aggregate: leave it
+    for p in order:                 # restores take only what slack is left
+        key = str(p.call_id)
+        if cover[key][0] > 0:       # Z-C: only ever restored from ZERO
+            continue
+        want = min(alloc[key], p.qty, max(held - running, 0))
+        if want > 0:
+            target[key] = want
+            running += want
+    # Z-A: make the cap DURABLE before touching a single order — a capped
+    # peer that is not flagged has its cover restored to FULL by the next
+    # ratchet (step() §3) or by pass 4 in this very reconcile. Flagged on
+    # the TARGET, not the allocation: a peer this round leaves alone was not
+    # capped by it and must not be mothballed for a cap it never took.
+    newly_capped = [p for p in order
+                    if target[str(p.call_id)] < p.qty and not p.history_gap]
+    for p in newly_capped:
+        p.history_gap = True
+    if newly_capped:
+        mgr._event("RED", f"{order[0].symbol}: "
+                          + ", ".join(f"call {p.call_id}" for p in newly_capped)
+                          + f" flagged UNVERIFIABLE — their cover is CAPPED "
+                            f"below the booked quantity by the same-symbol "
+                            f"shortfall ({held} held), so full cover may "
+                            f"never be restored behind the book's back")
+        mgr.save()
+    lines: list[str] = []
+    unknown = 0            # old cover the venue would not let us cancel
+    for p in order:
+        key = str(p.call_id)
+        cur, ref = cover[key]
+        new = target[key]               # NEVER above the allocation
+        if new > cur:
+            # Cover BELOW the allocation: restore it, but only from ZERO —
+            # raising a stop that already rests would mean cancelling and
+            # re-placing (churn) or stacking (the exact harm), and the
+            # aggregate is already inside the invariant either way.
+            if cur > 0 or new <= 0:
+                continue
+            if (gap_stops.get(key) or {}).get("status") == "filled":
+                # This position's own stop at this level already FILLED (pass
+                # 1 or 1b-i booked what it covered), so its deterministic
+                # client id is spent: the venue would answer any placement
+                # under it with that same filled order. Nothing rests and
+                # nothing can be placed — the re-armed escalation reports the
+                # remainder as UNPROTECTED every cycle; do not re-alert here.
+                continue
+            if any(i.get("call_id") == p.call_id
+                   for i in st.orphan_stop_refs.values()):
+                # An earlier cover of THIS position was never ACK-cancelled
+                # and may still rest: placing now could put cover above
+                # `held` at the venue. X2's machinery owns that residual —
+                # and it is already alerting on its own re-armed cadence, so
+                # this adds NO line (a line every cycle would re-fire the
+                # headline forever for a cell only the operator can clear).
+                continue
+            try:
+                rs = adapter.place_stock_order(
+                    p.symbol, -new, "STP", stop_price=p.stop_level, tif="GTC",
+                    client_order_id=stop_client_id(p.call_id, p.stop_level))
+            except Exception as exc:  # noqa: BLE001
+                mgr._event("RED", f"cover for {p.symbol} (call {p.call_id}) "
+                                  f"could not be re-placed at its pro-rata "
+                                  f"allocation: {exc}")
+                alert(f"🚨🚨 blend: the {new}-share cover for {p.symbol} "
+                      f"(call {p.call_id}) — its PRO-RATA allocation of the "
+                      f"{held} share(s) the venue holds — was REJECTED "
+                      f"({exc}); the position stays UNPROTECTED and the "
+                      f"placement is retried every reconcile while the "
+                      f"shortfall lasts")
+                lines.append(f"call {p.call_id}: 0 -> 0 (re-place REJECTED, "
+                             f"still UNPROTECTED)")
+                continue
+            if rs.get("duplicate") and rs.get("status") == "filled":
+                # The idempotency key already belongs to a FILLED order —
+                # this position's own stop sold what it covered (pass 1 or
+                # 1b-i booked it). NOTHING rests, so there is no orphan to
+                # track, and no new cover is placeable at this level: say so
+                # instead of inventing an orphan the venue would raise on.
+                alert(f"🚨🚨 blend: no cover can be re-placed for {p.symbol} "
+                      f"(call {p.call_id}) — the venue's order under its "
+                      f"stop id already FILLED, so its remaining {p.qty} "
+                      f"share(s) are UNPROTECTED and only you can resolve "
+                      f"them")
+                lines.append(f"call {p.call_id}: 0 -> 0 (its stop at this "
+                             f"level already FILLED; UNPROTECTED)")
+                continue
+            if rs.get("duplicate"):
+                mgr.record_orphan_stop(rs["order_ref"],
+                                       {"symbol": p.symbol, "qty": -new,
+                                        "call_id": p.call_id})
+                alert(f"🚨🚨 blend: re-placing the {new}-share cover for "
+                      f"{p.symbol} (call {p.call_id}) returned an EXISTING "
+                      f"venue order of UNKNOWN size — not adopted, tracked "
+                      f"instead (a fill on it alerts RED); position "
+                      f"UNPROTECTED")
+                lines.append(f"call {p.call_id}: 0 -> UNKNOWN (venue "
+                             f"returned an existing order)")
+                continue
+            mgr.on_stop_placed(p.call_id, rs["order_ref"], p.stop_level)
+            p.stop_cover_qty = new if new < p.qty else 0
+            mgr.save()
+            lines.append(f"call {p.call_id}: 0 -> {new} (cover RE-PLACED at "
+                         f"its pro-rata allocation)")
+            continue
+        if cur <= 0 or new >= cur:
+            continue
+        why = "while resizing its cover to the shares the venue holds"
+        outcome = _retire_blackout_stop(mgr, adapter, p, ref, alert, why=why,
+                                        note="before resizing its cover")
+        mgr.mark_stop_missing(p.call_id)        # nothing of ours rests now
+        if outcome != "retired":
+            # The venue would not ACK: the old stop may STILL rest, so a
+            # smaller replacement would ADD cover instead of reducing it.
+            # X2's orphan machinery owns the residual; pass 3 retries the
+            # cancel every cycle and a fill on it alerts RED.
+            unknown += cur
+            lines.append(f"call {p.call_id}: {cur} -> UNKNOWN (the venue "
+                         f"would not ACK the cancel; tracked, cancel retried "
+                         f"every cycle)")
+            continue
+        if new <= 0:
+            lines.append(f"call {p.call_id}: {cur} -> 0 (stop RETIRED, this "
+                         f"position is UNPROTECTED)")
+            continue
+        try:
+            rs = adapter.place_stock_order(
+                p.symbol, -new, "STP", stop_price=p.stop_level, tif="GTC",
+                client_order_id=stop_client_id(p.call_id, p.stop_level))
+        except Exception as exc:  # noqa: BLE001
+            mgr._event("RED", f"resized stop for {p.symbol} (call "
+                              f"{p.call_id}) could not be placed: {exc}")
+            alert(f"🚨🚨 blend: the RESIZED {new}-share stop for {p.symbol} "
+                  f"(call {p.call_id}) was REJECTED ({exc}) — the old stop "
+                  f"is already cancelled, so the position is UNPROTECTED; "
+                  f"the placement is retried every reconcile while the "
+                  f"shortfall lasts (cover is never restored above its "
+                  f"pro-rata allocation)")
+            lines.append(f"call {p.call_id}: {cur} -> 0 (replace REJECTED, "
+                         f"UNPROTECTED)")
+            continue
+        if rs.get("duplicate"):
+            # Cannot happen after an ACKed cancel, but the invariant is not
+            # allowed to rest on that: an order of UNKNOWN size came back,
+            # so treat it as an untracked orphan rather than assume `new`.
+            mgr.record_orphan_stop(rs["order_ref"],
+                                   {"symbol": p.symbol, "qty": -cur,
+                                    "call_id": p.call_id})
+            alert(f"🚨🚨 blend: placing the RESIZED {new}-share stop for "
+                  f"{p.symbol} (call {p.call_id}) returned an EXISTING "
+                  f"venue order of UNKNOWN size — not adopted, tracked "
+                  f"instead (a fill on it alerts RED); position UNPROTECTED")
+            unknown += cur
+            lines.append(f"call {p.call_id}: {cur} -> UNKNOWN (venue "
+                         f"returned an existing order)")
+            continue
+        mgr.on_stop_placed(p.call_id, rs["order_ref"], p.stop_level)
+        p.stop_cover_qty = new
+        mgr.save()
+        lines.append(f"call {p.call_id}: {cur} -> {new}")
+    sym = order[0].symbol
+    # Z-A: a peer that was NOT flagged before now is, which blocks entries
+    # and stops its trail ratcheting. The operator hears that here, in the
+    # cycle it happens, not only from next cycle's escalation.
+    one = len(newly_capped) == 1
+    capped = (". " + ", ".join(f"call {p.call_id}" for p in newly_capped)
+              + (" is now flagged UNVERIFIABLE too: its cover is"
+                 if one else
+                 " are now flagged UNVERIFIABLE too: their cover is")
+              + " CAPPED below the booked quantity, so it may never be "
+                "restored behind the book's back — no trail ratchet, no "
+                "re-stop and NO NEW ENTRIES until you resolve the account"
+              if newly_capped else "")
+    if not lines:
+        # ZF-5: nothing was placed or cancelled — but the cap above may
+        # still have just mothballed a sleeve. This clause used to be
+        # assembled AFTER this early return, so that peer got no Telegram
+        # line at all in the cycle it was flagged. Never silent.
+        if newly_capped:
+            alert(f"🚨🚨 blend: {sym} resting SELL cover could not be changed "
+                  f"this cycle (nothing placeable or cancellable against the "
+                  f"{held} share(s) the venue holds)" + capped)
+        return ""
+    now = sum(_resting_cover(p) for p in order
+              if p.stop_order_ref and not p.stop_missing)
+    book_qty = sum(p.qty for p in order)
+    # X2 residual: a cancel the venue will not ACK may leave the OLD stop
+    # resting, so the headline may not claim a cover the book cannot prove.
+    residual = (f", BUT {unknown} share(s) of the OLD cover could not be "
+                f"cancelled and may STILL rest at the venue (tracked; a fill "
+                f"on them alerts RED), so cover THERE may still exceed "
+                f"{held} — clear them by hand" if unknown else "")
+    mgr._event("RED", f"{sym} resting stop cover RESIZED {total} -> {now} "
+                      f"to match the {held} shares the venue holds"
+                      + (f" ({unknown} share(s) uncancellable, tracked)"
+                         if unknown else ""))
+    alert(f"🚨🚨 blend: {sym} blend-tracked resting SELL cover RESIZED "
+          f"{total} -> {now} share(s) to match the {held} the venue actually "
+          f"holds ({book_qty} booked across {len(order)} same-symbol "
+          f"positions). Allocated PRO RATA, which claims NO attribution: "
+          f"{'; '.join(lines)}. {book_qty - held} share(s) of protection "
+          f"were REMOVED and the shortfall cannot be attributed to any one "
+          f"position — resolve the account manually" + residual + capped)
+    return (f"; resting SELL cover was resized {total} -> {now} share(s) pro "
+            f"rata so it can never exceed the {held} the venue holds"
+            + (f" ({unknown} share(s) of old cover uncancellable and tracked)"
+               if unknown else ""))
+
+
+def _venue_held(adapter, symbol: str) -> int | None:
+    """The account's net venue quantity for symbol, or None when the venue
+    cannot answer. `stock_position` sums EVERY account STK row, so this is
+    corroboration about the SYMBOL, never proof about the book's shares."""
+    get_held = getattr(adapter, "stock_position", None)
+    if get_held is None:
+        return None
+    try:
+        return get_held(symbol)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("blackout verify %s: venue positions unavailable "
+                       "(%s)", symbol, exc)
+        return None
+
+
+def _venue_share_note(held: int | None, symbol: str) -> str:
+    """Honest tail for a park alert: what the venue still holds and whether
+    a blend stop covers it (x8 — the filled+unpriced park used to say
+    nothing at all about the shares left behind)."""
+    if held is None:
+        return (f" (the venue's {symbol} position could not be read — "
+                f"check the account manually)")
+    if held <= 0:
+        return f" (the venue holds no {symbol} shares)"
+    return (f" — the venue still holds {held} {symbol} share(s) that NO "
+            f"blend stop covers: UNPROTECTED, handle them manually")
+
+
+def _flag_unverified(mgr: Blend3070Manager, pos: BlendPosition, detail: str,
+                     protected: bool, alert) -> None:
+    """Keep a blackout-flagged position parked AND LOUD (counter-review X3).
+
+    The guard's fail-closed cells refuse to sell, refuse to rest a NEW stop
+    on shares the book cannot prove it owns, and refuse to unpark — but only
+    the operator can resolve them, so silence is not an option: order-safety
+    law #3's liveness clause is honoured with a RE-ARMED escalation (every
+    UNVERIFIED_REALERT_CYCLES reconciles, the budget-alarm pattern) rather
+    than law #3's literal every-cycle alert, which for a cell that can never
+    self-heal would be pure spam (x7's complaint). The alert states honestly
+    whether a resting stop still protects the shares — and how MANY of them
+    it protects: Z-E, the `resized` wording was passed in from the
+    peer-shortfall branch only, so once the same cell flipped to conflation
+    a stop covering 3 of 5 shares was re-described as full protection. It is
+    read off the position instead, so every caller gets it right."""
+    resized = bool(pos.stop_cover_qty and pos.stop_cover_qty < pos.qty)
+    pos.unverified_cycles = int(pos.unverified_cycles or 0) + 1
+    mgr._event("WARN", f"{pos.symbol} (call {pos.call_id}) still "
+                       f"UNVERIFIABLE: {detail}")
+    mgr.save()
+    if (pos.unverified_cycles - 1) % UNVERIFIED_REALERT_CYCLES:
+        return
+    alert(f"🚨🚨 blend: {pos.symbol} x{pos.qty} (call {pos.call_id}) is "
+          f"UNRESOLVED after the blackout — {detail}. "
+          + (f"A RESIZED protective stop rests at the venue covering "
+             f"{_resting_cover(pos)} of these {pos.qty} share(s) — the rest "
+             f"is UNPROTECTED, because cover may never exceed what the "
+             f"account actually holds; the book will not sell or re-stop "
+             f"these shares."
+             if protected and resized else
+             "Its earlier protective stop is still WORKING at the venue and "
+             "has been LEFT RESTING (retiring it would strip real "
+             "protection), but the book will not sell or re-stop these "
+             "shares."
+             if protected else
+             "The position is UNPROTECTED: no blend stop rests at the venue "
+             "and none will be placed on shares the book cannot prove it "
+             "owns.")
+          + f" No exit and no /kill will touch it until you resolve it "
+            f"manually (unresolved for {pos.unverified_cycles} cycle(s); "
+            f"re-alerting every {UNVERIFIED_REALERT_CYCLES})")
+
+
+def _flag_stand_in(mgr: Blend3070Manager, key: str, pos: BlendPosition,
+                   adapter, alert) -> None:
+    """MF-C/MF-B: a row a schema-drift rebuild had to INVENT fields for is
+    kept out of reconcile pass 1b entirely, and stays flagged until a human
+    restores it.
+
+    MF-C — why it is not merely 'left flagged' but kept OUT of the venue
+    comparison: pass 1b addresses the venue WITH the row's own identity.
+    A defaulted `symbol` makes `stock_position("")` answer 0, so the book
+    concluded the 5 booked shares were gone, CANCELLED the real working GTC
+    stop on 5 REAL shares and deleted the row (measured `rows=[] venue=5`);
+    a defaulted `stop_level` builds the wrong `stop_client_id` and asks
+    about an order that never existed. An identity this build invented must
+    never be used to address, cancel or match a venue order.
+
+    MF-B — why the flag cannot clear here: pass 1b clears `history_gap` on
+    positive venue evidence about the QUANTITY (`held == book_qty`), which
+    is satisfied whenever `qty` is not the invented field. Nothing at the
+    venue can corroborate an invented `time_stop`, `fill_price`,
+    `entry_date`, `entry_ref` or `stop_level`.
+
+    Fail-closed is never fail-SILENT (X3): escalate on the same re-armed
+    cadence the blackout guard uses, until the row is restored by hand."""
+    stand_ins = mgr.state.stand_in_rows.get(key) or []
+    invented = ", ".join(stand_ins)
+    pos.unverified_cycles = int(pos.unverified_cycles or 0) + 1
+    mgr._event("WARN", f"book row {key} (call {pos.call_id}) still carries "
+                       f"STAND-IN values ({invented}): not exited, not "
+                       f"re-stopped, not flattened, and no venue answer "
+                       f"decides anything about it")
+    mgr.save()
+    if (pos.unverified_cycles - 1) % UNVERIFIED_REALERT_CYCLES:
+        return
+    # The venue count is read ONLY to tell the operator what is really
+    # there, and only when the row's own symbol was not invented — it
+    # decides nothing and cancels nothing. With an invented symbol there is
+    # no honest question to ask.
+    held = (None if "symbol" in stand_ins
+            else _venue_held(adapter, pos.symbol))
+    alert(f"🚨🚨 blend: book row {key} (call {pos.call_id}) was REBUILT from "
+          f"STAND-INS for {invented} — this build INVENTED those values, so "
+          f"nothing at the venue can verify them and no reconcile will "
+          f"clear the flag. The row is never exited, re-stopped, resized or "
+          f"flattened, and no venue answer is allowed to DECIDE anything "
+          f"about it: an invented `symbol` or `stop_level` addresses the "
+          f"WRONG order, and letting pass 1b act on one cancelled a real "
+          f"working stop on real shares. Whatever shares and resting stop "
+          f"this row has at the venue are LEFT EXACTLY AS THEY ARE"
+          + (f" — the account holds {held} shares vs {pos.qty} booked for "
+             f"{pos.symbol}" if held is not None else "")
+          + f". Read the real values off the preserved drifted file, "
+            f"restore them in {mgr.state_path}, delete this row's entry "
+            f"from `stand_in_rows` there, and restart — unresolved for "
+            f"{pos.unverified_cycles} cycle(s); re-alerting every "
+            f"{UNVERIFIED_REALERT_CYCLES}")
+
+
+def _history_proves_unfilled(adapter, rec: dict, today: str) -> bool:
+    """A None from find_stock_order means "the venue never saw it" ONLY
+    when the venue's completed-order history was readable, or the journal
+    is from today (today's execution reports cover it)."""
+    complete = getattr(adapter, "history_complete", lambda: True)()
+    return bool(complete or (rec.get("date") or "") >= today)
+
+
+def _adopt_filled_qty(mgr: Blend3070Manager, rec: dict, o: dict, alert,
+                      what: str) -> dict:
+    """A result resolved from execution reports carries filled_qty and
+    cannot prove completeness: the ledger books what actually executed,
+    never the journaled size (counter-agent 2026-09-08, HIGH). Returns the
+    record to adopt."""
+    fq = o.get("filled_qty")
+    if fq is None or abs(int(fq)) == abs(int(rec["qty"])):
+        return rec
+    # executions report SHARES (positive); the journal's sign says buy or
+    # sell (a core-rebal-sell / sweep sell journals qty < 0) - keep it
+    signed = int(math.copysign(abs(int(fq)), int(rec["qty"])))
+    msg = (f"{what}: venue executed {abs(int(fq))} of {abs(int(rec['qty']))} "
+           f"sh (remainder cancelled/unknown) - adopting {signed:+d}, verify "
+           f"at the venue")
+    mgr._event("RED", msg)
+    alert("🚨 blend partial fill: " + msg)
+    return {**rec, "qty": signed}
+
+
+def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
+    """Venue-truth-first pass, run BEFORE any decision in EVERY cycle —
+    including tracker-outage cycles (payload=None) and /kill:
+      1. ingest resting-stop fills — a stop that filled marks its position
+         CLOSED, so a later tracker exit/echo for it is a no-op;
+      1b. verify positions flagged UNVERIFIABLE by the blackout guard —
+         the position's OWN stop order first (order-scoped: filled+priced
+         books the exit — a PARTIAL of the shares the stop covered when it
+         was resized below the position, Z-B; working proves it never
+         filled), venue positions
+         only as corroboration (they sum every account STK row, so they
+         can be conflated by shares held outside the book). Anything
+         uncertain stays parked; a position parked UNRECONCILED has its
+         resting stop RETIRED first, never abandoned (N1/N2);
+      2. adopt or clear write-ahead entry intents (crash between placement
+         and persist), checked against venue order history by
+         client_order_id — never a duplicate MOO;
+      2b. adopt or clear write-ahead BOOK orders (CORE_BUY / rebalance
+         core-sell / BIL sweep) the same way — never a duplicate SPY/BIL
+         order (counter-agent N15); a venue-REJECTED journal (entry or
+         book order) is CLEARED loudly, never left pending forever
+         (adapter review m1);
+      3. retry cancelling retired stops whose cancel failed;
+      3b. re-verify each believed-working protective stop still WORKS at
+         the venue (adapter review m4): an IB-initiated GTC cancel
+         (corporate action, ack-limbo residue) demotes it to STOP_MISSING;
+      4. re-place any missing protective stop (STOP_MISSING).
+    COVER INVARIANT (Z1), checkable in one place: for each symbol, the total
+    quantity of blend-placed RESTING SELL cover must never exceed the
+    venue-verified `held`. The executor must never CHOOSE to leave cover >
+    held — a single-position shortfall retires its stop and parks (cover 0),
+    a same-symbol peer shortfall ALIGNS cover PRO RATA to `held`
+    (_resize_peer_cover: down where it is above the allocation, back up from
+    ZERO where the venue rejected an earlier placement, and every capped
+    peer marked `history_gap` so nothing restores it behind the book's
+    back), and conflation (held > booked) is already arithmetically safe.
+    Where the venue refuses to ACK a cancel the residual is unpreventable:
+    it is tracked in orphan_stop_refs and a fill on it alerts RED as a
+    possible short (X2), never pretended away.
+
+    Raises if the adapter cannot answer (ExecutorConnectionError while the
+    gateway is down): the cycle FAILS CLOSED — no decision against
+    unreconciled state. On success the venue-history horizon clock
+    (state.last_reconcile_ts) is stamped; the gap since the PREVIOUS
+    successful pass is kept on mgr._reconcile_gap_s for the blackout
+    guard in the exit/kill flatten paths (adapter review m2)."""
+    st = mgr.state
+    mgr._reconcile_gap_s = (time.time() - st.last_reconcile_ts
+                            if st.last_reconcile_ts else 0.0)
+
+    # 0) blackout-horizon guard (R1): a gap longer than what venue order
+    #    history serves means a stop fill INSIDE the blackout may be
+    #    invisible FOREVER — not just this cycle. Flag every held position
+    #    UNVERIFIABLE (persisted) BEFORE anything acts on it; the flag
+    #    clears ONLY on positive venue evidence (pass 1b), never because
+    #    a later reconcile stamped a fresh timestamp — and for a row
+    #    rebuilt from STAND-INS it never clears at all (MF-B).
+    if mgr._reconcile_gap_s > HISTORY_HORIZON_S:
+        newly = [p for p in st.positions.values() if not p.history_gap]
+        if newly:
+            for pos in newly:
+                pos.history_gap = True
+            mgr.save()
+            names = ", ".join(f"{p.symbol} x{p.qty}" for p in newly)
+            mgr._event("RED", f"blackout gap "
+                              f"{mgr._reconcile_gap_s / 86400.0:.1f}d exceeds "
+                              f"the venue-history horizon: {names} parked "
+                              f"UNVERIFIABLE until venue positions verify")
+            alert(f"🚨🚨 blend: no successful reconcile for "
+                  f"{mgr._reconcile_gap_s / 86400.0:.1f}d — order history "
+                  f"cannot prove what filled during the blackout. {names} "
+                  f"parked UNVERIFIABLE: no exit or /kill will MKT-sell "
+                  f"them until venue POSITIONS positively verify the shares")
+
+    # 1) stop fills
+    _ingest_fills(mgr, adapter, alert)
+
+    # 1b) positive verification of UNVERIFIABLE positions (R1). EVIDENCE
+    #     RANKING (counter-agent N2): the position's OWN protective stop
+    #     order comes FIRST — a lookup by its deterministic client id is
+    #     ORDER-SCOPED, so same-symbol shares held in the account OUTSIDE
+    #     the blend book (a manual position, another strategy) can neither
+    #     fake nor hide it:
+    #       filled + priced   -> book the exit AT the venue price;
+    #       filled, no price  -> park UNRECONCILED (never a silent 0.0);
+    #       working           -> the stop did NOT fill.
+    #     Venue POSITIONS (`stock_position` sums EVERY account STK row for
+    #     the symbol) are CORROBORATION, never proof: they confirm the
+    #     shares are there (held == book), contradict the book (held <
+    #     book: something sold inside the blackout), or are CONFLATED
+    #     (held > book: external shares — ownership of the BOOK's shares is
+    #     then UNPROVABLE even behind a working stop, counter-review X1).
+    #     An unanswerable positions query keeps the flag even behind a
+    #     WORKING stop: order evidence proves that stop did not fill, not
+    #     that nothing else sold the shares (m2/R1 fail-closed).
+    #     Every uncertain cell FAILS CLOSED: the flag stays (no exit, no
+    #     /kill sell, no fresh SELL stop on shares that may not be the
+    #     book's, entries blocked), or the position parks UNRECONCILED
+    #     with its resting stop RETIRED FIRST (counter-agent N1) — a park
+    #     that abandons a working -qty stop is a naked short waiting to
+    #     trigger. Fail-closed is never fail-SILENT (counter-review X3):
+    #     a cell that only the operator can resolve keeps escalating on a
+    #     re-armed cadence (_flag_unverified) and is surfaced by /status
+    #     and /blend/feed until it is resolved.
+    gap_stops: dict[str, dict | None] = {}
+    for key, pos in list(st.positions.items()):
+        if not pos.history_gap:
+            continue
+        if key in st.stand_in_rows:
+            # MF-C: this row's identity was INVENTED — it may not be used to
+            # address, cancel or match a venue order (see _flag_stand_in).
+            _flag_stand_in(mgr, key, pos, adapter, alert)
+            continue
+        gap_stops[key] = adapter.find_stock_order(
+            stop_client_id(pos.call_id, pos.stop_level))
+    # 1b-i) order-scoped resolution first: a FILLED stop settles ITS OWN
+    #       position whatever the account-wide rows say — and resolving
+    #       these before the positions comparison below keeps that
+    #       comparison honest when two same-symbol positions are parked.
+    for key, stop in list(gap_stops.items()):
+        pos = st.positions.get(key)
+        if pos is None or (stop or {}).get("status") != "filled":
+            continue
+        if not pos.stop_order_ref or pos.stop_missing:
+            # Z1: the book does NOT believe this stop still rests, so a
+            # 'filled' answer about it cannot settle the whole position —
+            # pass 1 already booked it (a partial fill leaves exactly this
+            # state), and a RETIRED stop's fill belongs to the orphan /
+            # possible-short branch. Booking the position out here would
+            # credit proceeds for shares the venue never sold. Fall through
+            # to the positions comparison below, which keeps it flagged and
+            # loud. (This guard also makes double-booking impossible: pass 1
+            # runs first and leaves every booked stop `stop_missing`.)
+            continue
+        fill = stop.get("fill_price")
+        covered = _resting_cover(pos)
+        if fill is not None and covered < pos.qty:
+            # Z-B: a RESIZED stop sold only the shares it COVERED. Keying
+            # the guard above on stop_order_ref/stop_missing let this cell
+            # through and booked the FULL position: measured, a 3-of-5
+            # cover credited $220 for a $132 sale, deleted the position and
+            # abandoned 2 real shares with no book row and no stop. Book a
+            # PARTIAL, exactly as the live fill-poll path does, and leave
+            # the position in `gap_stops` so the comparison below keeps it
+            # flagged, re-covers what it may, and stays loud.
+            booked = pos.qty
+            mgr.on_partial_exit(pos.call_id, covered, fill, "stop_filled",
+                                commission=(stop or {}).get("commission"))
+            alert(f"🚨 blend: {pos.symbol} — a RESIZED stop fill from the "
+                  f"blackout window recovered from venue history: booked "
+                  f"x{covered} @ {fill:.2f} (call {pos.call_id}), the "
+                  f"{booked - covered} share(s) it did NOT cover remain "
+                  f"held and UNPROTECTED" + _UNVERIFIABLE_FILL_NOTE)
+            continue
+        gap_stops.pop(key, None)
+        if fill is None:
+            # x8: state the venue quantity left behind, exactly as the
+            # held<booked park does — the shares that remain are
+            # UNPROTECTED and the operator has to handle them.
+            held_now = _venue_held(adapter, pos.symbol)
+            mgr.on_exit_unreconciled(
+                pos.call_id,
+                "blackout: the protective stop FILLED at the venue but "
+                "order history serves no fill price — UNVERIFIABLE")
+            alert(f"🚨🚨 blend: {pos.symbol} x{pos.qty} (call {pos.call_id}) "
+                  f"— its protective stop FILLED inside the blackout and "
+                  f"order history serves NO fill price: UNRECONCILED, "
+                  f"proceeds NOT booked, manual booking needed"
+                  + _venue_share_note(held_now, pos.symbol))
+        else:
+            mgr.on_exited(pos.call_id, fill, "stop_filled",
+                          commission=(stop or {}).get("commission"))
+            # Z2: the booking is right (order-scoped venue truth), the
+            # silence was not — this position was never PROVEN to own the
+            # shares its stop just sold.
+            alert(f"🚨 blend: {pos.symbol} stop fill from the blackout "
+                  f"window recovered from venue history — booked "
+                  f"x{pos.qty} @ {fill:.2f}" + _UNVERIFIABLE_FILL_NOTE)
+    # 1b-ii) the stop did not (visibly) fill: corroborate ownership against
+    #        the account's positions.
+    #
+    #        DECISION MATRIX for the account-row comparison (counter-review
+    #        X1/X3). `held` sums EVERY account STK row for the symbol:
+    #          held == booked, stop working  -> unpark, keep that stop;
+    #          held == booked, stop dead     -> unpark STOP_MISSING, pass 4
+    #                                           re-places (ownership is
+    #                                           corroborated exactly);
+    #          held <  booked, one position  -> park UNRECONCILED, stop
+    #                                           RETIRED first (N1);
+    #          held <  booked, same-symbol
+    #                          peers exist   -> the shortfall is NOT
+    #                                           attributable to any one
+    #                                           position (x5): NOTHING is
+    #                                           parked, all stay flagged and
+    #                                           LOUD — but resting SELL cover
+    #                                           is RESIZED PRO RATA down to
+    #                                           `held` (Z1), because leaving
+    #                                           9 shares of stops against 6
+    #                                           held is a venue short waiting
+    #                                           to trigger;
+    #          held >  booked (CONFLATION)   -> ownership of the BOOK's
+    #                                           shares is UNPROVABLE, whatever
+    #                                           the stop says: stay flagged
+    #                                           forever (no MKT sell, no
+    #                                           /kill sell, no NEW stop on
+    #                                           possibly-external shares), a
+    #                                           WORKING stop is LEFT RESTING
+    #                                           (retiring it would remove real
+    #                                           protection), and the operator
+    #                                           is re-alerted on a re-armed
+    #                                           cadence until they resolve it;
+    #          positions unanswerable        -> same stay-flagged-and-loud
+    #                                           treatment.
+    #        A working stop is order-scoped proof that THAT STOP did not
+    #        fill — never proof that the book's shares did not leave by
+    #        another route (manual sale from a pooled position, broker
+    #        liquidation, transfer). With extra same-symbol shares in the
+    #        account the two cases are indistinguishable, so the guard must
+    #        not convert "the stop is alive" into "the shares are ours".
+    resized: dict[str, str] = {}      # Z1: symbol -> park-alert clause, so
+                                      # the pro-rata resize runs ONCE per
+                                      # symbol and every peer reports it
+    for key, stop in gap_stops.items():
+        pos = st.positions.get(key)
+        if pos is None:
+            continue
+        status = (stop or {}).get("status")
+        protected = status == "working"
+        held = _venue_held(adapter, pos.symbol)
+        if held is None:
+            _flag_unverified(mgr, pos, "venue positions are unavailable, so "
+                                       "nothing corroborates the shares",
+                             protected, alert)
+            continue
+        same_symbol = [p for p in st.positions.values()
+                       if p.symbol == pos.symbol]
+        book_qty = sum(p.qty for p in same_symbol)
+        if held < book_qty and len(same_symbol) > 1:
+            # x5: `held` is account-wide and `book_qty` mixes same-symbol
+            # peers, so the shortfall cannot be attributed to any ONE of
+            # them. Sacrificing whichever came first in dict order retired
+            # a HEALTHY peer's stop and parked its real shares. Fail closed
+            # for all of them instead: nothing sold, nothing parked, every
+            # one stays flagged and keeps alerting.
+            #
+            # Z1: but leaving every stop resting at its FULL size leaves
+            # aggregate SELL cover ABOVE the shares the venue says exist
+            # (9 booked vs 6 held), and when they trigger that is a REAL
+            # venue short. Cover is RESIZED pro rata instead — nobody is
+            # sacrificed, no attribution is claimed, and the invariant
+            # (cover <= held) holds by construction. Once per symbol per
+            # cycle; peers reached later in this loop read the resized book.
+            if pos.symbol not in resized:
+                resized[pos.symbol] = _resize_peer_cover(
+                    mgr, adapter, held, same_symbol, gap_stops, alert)
+            # the resize may have retired THIS position's stop: report what
+            # protects it NOW, never the pre-resize answer.
+            protected = bool(pos.stop_order_ref) and not pos.stop_missing
+            _flag_unverified(mgr, pos,
+                             f"the account holds {held} of the {book_qty} "
+                             f"shares booked across {len(same_symbol)} "
+                             f"same-symbol positions and the shortfall "
+                             f"cannot be attributed to any one of them"
+                             + resized[pos.symbol],
+                             protected, alert)
+            continue
+        if held < book_qty:
+            # The account holds FEWER shares than the book claims and no
+            # priced fill explains it (N1's manual sale inside the
+            # blackout). The book qty is not trustworthy, so the position
+            # parks — but its stop is RETIRED FIRST: left resting, a -qty
+            # SELL stop against an account that no longer holds them is
+            # the naked short this guard exists to prevent. X4: the alert
+            # states what the retire ACTUALLY did, never "retired" flat.
+            outcome = _retire_blackout_stop(mgr, adapter, pos,
+                                            (stop or {}).get("order_ref"),
+                                            alert)
+            mgr.on_exit_unreconciled(
+                pos.call_id,
+                f"blackout: the venue holds {held} of the {book_qty} booked "
+                f"shares and no priced stop fill is visible — UNVERIFIABLE")
+            alert(f"🚨🚨 blend: {pos.symbol} (call {pos.call_id}) — the venue "
+                  f"holds {held} of the {book_qty} shares the book claims "
+                  f"after the blackout and order history serves no priced "
+                  f"fill: UNVERIFIABLE, parked for manual booking, "
+                  f"{_RETIRE_NOTE[outcome]}"
+                  # x6: the count is this position's own cover, not the
+                  # book-wide `held` (peers' stops may cover the rest).
+                  + (f" — the venue still holds {held} {pos.symbol} "
+                     f"share(s) and no blend stop covers this position's "
+                     f"{pos.qty}: UNPROTECTED, handle them manually"
+                     if held > 0 else ""))
+            continue
+        if held > book_qty:
+            # CONFLATION (X1/X3). Extra same-symbol shares in the account
+            # make ownership of the BOOK's shares unprovable — a working
+            # stop proves only that THAT stop did not fill. Stay flagged:
+            # no exit, no /kill sell, no fresh SELL stop. An existing
+            # working stop is LEFT RESTING (it is real protection); a dead
+            # one leaves the position genuinely UNPROTECTED, so drop the
+            # stale ref and mark it so /status and the feed show it.
+            if not protected and (pos.stop_order_ref or not pos.stop_missing):
+                pos.stop_missing = True
+                pos.stop_order_ref = None
+                mgr.save()
+            _flag_unverified(mgr, pos,
+                             f"the account holds {held} shares vs "
+                             f"{book_qty} booked, so the position rows are "
+                             f"conflated with external shares (same-symbol "
+                             f"shares OUTSIDE the blend book) and ownership "
+                             f"of the book's shares is UNPROVABLE",
+                             protected, alert)
+            continue
+        if protected and pos.stop_cover_qty and pos.stop_cover_qty < pos.qty:
+            # Z1: this stop was RESIZED below the position while the venue
+            # contradicted the book. The account now corroborates the FULL
+            # booked quantity, so the position may unpark — but the resized
+            # stop covers only part of it, and pass 4 would re-place on top
+            # of it (cover > held again). Retire it FIRST, then unpark
+            # STOP_MISSING so pass 4 places full cover. A cancel the venue
+            # will not ACK keeps the position parked: stacking a second stop
+            # on a possibly-resting one is exactly what the invariant bans.
+            outcome = _retire_blackout_stop(
+                mgr, adapter, pos, stop.get("order_ref"), alert,
+                why="while restoring its full cover after the blackout",
+                note="before restoring its full cover")
+            if outcome != "retired":
+                mgr.mark_stop_missing(pos.call_id)
+                _flag_unverified(mgr, pos,
+                                 f"the account holds the {book_qty} booked "
+                                 f"shares again, but the venue would not ACK "
+                                 f"the cancel of the RESIZED "
+                                 f"{pos.stop_cover_qty}-share stop, so full "
+                                 f"cover cannot be restored without risking "
+                                 f"two resting stops",
+                                 False, alert)
+                continue
+            pos.history_gap = False
+            pos.stop_missing = True
+            pos.unverified_cycles = 0
+            pos.stop_order_ref = None
+            pos.stop_cover_qty = 0
+            mgr.save()
+            alert(f"🧬 blend: {pos.symbol} x{pos.qty} (call {pos.call_id}) "
+                  f"POSITIVELY verified after the blackout — the account "
+                  f"holds exactly the {book_qty} booked shares again; its "
+                  f"RESIZED stop was retired and FULL cover is re-placing")
+            continue
+        if protected:
+            # held == book_qty: the account holds EXACTLY the booked shares
+            # and the stop is order-scoped proof it never filled — the
+            # position is genuinely still held AND protected.
+            pos.history_gap = False
+            pos.stop_missing = False
+            pos.unverified_cycles = 0
+            pos.stop_order_ref = (stop.get("order_ref")
+                                  or pos.stop_order_ref)
+            mgr.save()
+            alert(f"🧬 blend: {pos.symbol} x{pos.qty} (call {pos.call_id}) "
+                  f"POSITIVELY verified after the blackout — its protective "
+                  f"stop is still WORKING at the venue and the account "
+                  f"holds exactly the {book_qty} booked shares — unparked")
+            continue
+        # held == book_qty with a stop that no longer works: the account
+        # holds EXACTLY the booked shares — positions corroborate ownership
+        # and the position is NAKED; pass 4 re-places its stop (same cid,
+        # so a surviving order is adopted rather than duplicated).
+        pos.history_gap = False
+        pos.stop_missing = True
+        pos.unverified_cycles = 0
+        pos.stop_order_ref = None
+        mgr.save()
+        alert(f"🧬 blend: {pos.symbol} x{pos.qty} (call {pos.call_id}) "
+              f"POSITIVELY verified still held at the venue after the "
+              f"blackout — unparked (protective stop re-placing)")
+
+    # 2) write-ahead entry journal
+    for key, rec in list(st.pending_entries.items()):
+        it = rec["intent"]
+        o = adapter.find_stock_order(entry_client_id(it["call_id"]))
+        if o is None and not _history_proves_unfilled(adapter, rec, today):
+            # The venue's completed-order history is unavailable and the
+            # journal predates today: today's executions cannot prove it
+            # never filled. Clearing it would re-plan a duplicate buy.
+            # Left PENDING (it keeps blocking its call_id) and said once a
+            # day (counter-agent 2026-09-08, MED).
+            mgr._event_once_today(
+                "RED", f"unresolved_entry_{it['call_id']}",
+                f"pending entry {it['symbol']} (call {it['call_id']}, "
+                f"journaled {rec.get('date')}) cannot be resolved: venue "
+                f"completed-order history unavailable - left pending, "
+                f"verify at the venue")
+            continue
+        if o is not None and o.get("status") == "filled":
+            it = _adopt_filled_qty(mgr, it, o, alert, f"entry {it['symbol']} "
+                                                       f"(call {it['call_id']})")
+        if o is None:
+            mgr.clear_pending_entry(it["call_id"])
+            mgr._event("INFO", f"pending entry {it['symbol']} "
+                               f"(call {it['call_id']}) never reached the "
+                               f"venue; journal cleared")
+        elif o.get("status") == "filled":
+            fill = o.get("fill_price")
+            if fill is None:
+                fill = it["entry_ref"]
+                alert(f"⚠️ blend: reconciled entry {it['symbol']} "
+                      f"(call {it['call_id']}) has no venue fill price — "
+                      f"booked at entry_ref {fill:.2f} (basis provisional)")
+            mgr.on_entered(it, fill, o["order_ref"], rec.get("date", today),
+                           commission=o.get("commission"))
+            # THE entry outcome: a real fill. ENTER is async-outcome, so
+            # placement credits nothing - without this the counter only
+            # ever rises and a healthy book loses its entries for the day
+            # on 5 CUMULATIVE failures (counter-agent 2026-08-28 probe: 4
+            # clean fills interleaved and the breaker still opened).
+            _intent_success("ENTER")
+            mgr.mark_stop_missing(it["call_id"])   # stop placed in pass 4
+            alert(f"🧬 blend reconciled orphan ENTER {it['symbol']} "
+                  f"x{it['qty']} (call {it['call_id']}) from venue order "
+                  f"history (crash-window recovery)")
+        elif o.get("status") == "cancelled":
+            # m1: the venue REJECTED the journaled MOO — the journal must
+            # not sit pending forever (it consumes a max_open slot and
+            # blocks the call_id). Clear it, log a REJECTED trade row
+            # (display-only: nothing books), and alert; a republished fire
+            # retries cleanly (venue dedupe excludes cancelled priors).
+            mgr.clear_pending_entry(it["call_id"])
+            mgr._record_trade(it["symbol"], "BUY", it["qty"], 0.0,
+                              rec.get("date", today), "entry_rejected")
+            # The placement released the pre-fund hold ("spent") and the
+            # journal's resting-cost reserve went with the journal, so
+            # nothing held the cash and the sweep bought it back
+            # (2026-09-10: GH, BIL +10 at 16:19 ET; the entry lost a
+            # session). Re-arm the hold at the CHARGED cost. The breaker
+            # rolls on the UTC date and the window opens at or after that
+            # roll, so a burst of rejections pauses ENTER through the NEXT
+            # session; the release branch carries a hold across a pause,
+            # and the re-plan at that evening's window sizes from held
+            # cash (round 19 review, CLOCK-1).
+            # A cancelled order can carry EXECUTIONS (an OPG partially
+            # filled at the open, remainder cancelled): those shares are at
+            # the venue and NOT in the ledger - a pre-existing gap this
+            # branch never booked. Say so, loudly, and hold only the
+            # unexecuted remainder (round 19 review, CASH-3).
+            filled = int(o.get("filled_qty") or 0)
+            if filled > 0:
+                msg = (f"entry {it['symbol']} (call {it['call_id']}) was "
+                       f"cancelled at the venue with {filled} of "
+                       f"{it['qty']} sh EXECUTED - those shares are held at "
+                       f"the venue and NOT booked in the ledger; book them "
+                       f"by hand (basis: venue execution report)")
+                mgr._event("RED", msg)
+                alert(f"🚨🚨 blend: {msg}")
+            st.prefund_usd = round(
+                st.prefund_usd
+                + max(it["qty"] - filled, 0) * _intent_size_ref(it), 2)
+            st.prefund_date = _et_today()
+            # The venue's own words, when the adapter could read them
+            # (2026-09-03: five MRK rejections said only "status
+            # Cancelled" and the cause had to be inferred).
+            why = o.get("reason")
+            why_sfx = f" — venue: {why}" if why else ""
+            mgr._event("RED", f"entry {it['symbol']} (call {it['call_id']}) "
+                              f"REJECTED by the venue — journal cleared, "
+                              f"max_open slot released{why_sfx}")
+            mgr.save()
+            # This IS the ENTER outcome (placement only ever returned
+            # 'working'). Book it against the breaker, or a kind that
+            # fails this way every cycle never trips one — 2026-08-28,
+            # when a mid-session restart produced OPG-after-open
+            # rejections all day and the breaker never fired.
+            n = _intent_fail_counts.get("ENTER", 0) + 1
+            _intent_fail_counts["ENTER"] = n
+            if n == INTENT_BREAKER_N:
+                alert(f"🔴 ACTION NEEDED (you) — blend ENTER has been "
+                      f"REJECTED by the venue {n} times in a row (latest: "
+                      f"{it['symbol']}). Pausing ENTER planning; it resumes "
+                      f"on the next UTC day roll (20:00 ET, 19:00 ET in winter), a service restart, or "
+                      f"/resume.")
+            alert(f"🚨 blend ENTER {it['symbol']} (call {it['call_id']}) "
+                  f"REJECTED by the venue{why_sfx} — nothing entered; slot "
+                  f"released, journal cleared (a republished fire may retry)")
+        # status "working": an async MOO awaiting its fill — keep the journal.
+
+    # 2b) write-ahead BOOK-order journal (CORE_BUY / rebalance core-sell /
+    #     BIL sweep): the crash window between placement and the on_* booking
+    #     is closed the same way as entries — venue order history is checked
+    #     by the deterministic client id; a filled orphan is ADOPTED into the
+    #     ledgers, one that never reached the venue is cleared and re-planned
+    #     naturally by step() (counter-agent N15).
+    for cid, rec in list(st.pending_book_orders.items()):
+        o = adapter.find_stock_order(cid)
+        if o is None and not _history_proves_unfilled(adapter, rec, today):
+            mgr._event_once_today(
+                "RED", f"unresolved_book_{cid}",
+                f"pending {rec['kind']} {rec['symbol']} x{rec['qty']} "
+                f"(journaled {rec.get('date')}) cannot be resolved: venue "
+                f"completed-order history unavailable - left pending, "
+                f"verify at the venue")
+            continue
+        if o is not None and o.get("status") == "filled":
+            rec = _adopt_filled_qty(mgr, rec, o, alert,
+                                    f"{rec['kind']} {rec['symbol']}")
+        if o is None:
+            mgr.clear_pending_book_order(cid)
+            mgr._event("INFO", f"pending {rec['kind']} {rec['symbol']} "
+                               f"x{rec['qty']} never reached the venue; "
+                               f"journal cleared")
+        elif o.get("status") == "filled":
+            fill = o.get("fill_price")
+            if fill is None:
+                # A real venue holding/lacking SPY or BIL MUST be tracked —
+                # book at the current spot as a PROVISIONAL basis and say so
+                # loudly (same asymmetry as entry adoption: parking would
+                # desync the holdings themselves, worse than a fuzzy basis).
+                #
+                # CR-N2: "the current spot" stopped meaning that when B8
+                # added the previous-CLOSE fallback. A close is a price from
+                # a session that has ENDED — booking it here writes a basis
+                # nothing traded at, silently, on the one path whose whole
+                # justification is that a fuzzy basis beats a desynced book.
+                # Before B8 this raised and failed closed, and for the close
+                # case it fails closed again: the journal is KEPT, so the
+                # holding stays tracked and visible on /status, step() plans
+                # no competing order of this kind while it is pending (M1),
+                # and the very next cycle with a real quote adopts it. The
+                # alert fires ONCE per record (B4's lesson: an every-cycle
+                # alarm on a condition the operator cannot clear buries the
+                # channel it exists to serve).
+                fill = _fill_grade_price(adapter, rec["symbol"])
+                if fill is None:
+                    if not rec.get("noprice_alerted"):
+                        rec["noprice_alerted"] = True
+                        mgr.save()
+                        alert(f"🚨 blend: reconciled {rec['kind']} "
+                              f"{rec['symbol']} x{rec['qty']} has NO venue "
+                              f"fill price and no live quote to stand in for "
+                              f"one (only a previous CLOSE, which is not a "
+                              f"price anything traded at). NOT booked — the "
+                              f"order stays journalled and adopts on the next "
+                              f"cycle that has a real quote. The shares ARE "
+                              f"held at the venue")
+                    else:
+                        logger.info("book order %s still lacks a fill-grade "
+                                    "quote — journal kept, already alerted",
+                                    cid)
+                    continue
+                alert(f"🚨 blend: reconciled {rec['kind']} {rec['symbol']} "
+                      f"x{rec['qty']} has no venue fill price — booked at "
+                      f"spot {fill:.2f} (basis PROVISIONAL, verify manually)")
+            st.pending_book_orders.pop(cid, None)
+            _apply_book_order(mgr, rec, fill, o.get("commission"))
+            alert(f"🧬 blend reconciled orphan {rec['kind']} {rec['symbol']} "
+                  f"x{rec['qty']} @ {fill:.2f} from venue order history "
+                  f"(crash-window recovery)")
+        elif o.get("status") == "cancelled":
+            # m1: venue-REJECTED book order — clear the journal (it would
+            # otherwise accumulate forever while blocking its kind, M1)
+            # and let step() re-plan a fresh intent next cycle.
+            mgr.clear_pending_book_order(cid)
+            why = o.get("reason")
+            why_sfx = f" — venue: {why}" if why else ""
+            mgr._event("RED", f"{rec['kind']} {rec['symbol']} x{rec['qty']} "
+                              f"cancelled or REJECTED at the venue{why_sfx} — "
+                              f"journal cleared, re-planned next cycle")
+            alert(f"🚨 blend {rec['kind']} {rec['symbol']} x{rec['qty']} "
+                  f"cancelled or REJECTED at the venue{why_sfx} — journal "
+                  f"cleared, re-planned next cycle (an operator cancel in "
+                  f"the IBKR app lands here too)")
+        else:
+            # status "working": async order awaiting its fill - keep the
+            # journal (step() plans no new order of this kind, M1). But a
+            # book order (MKT/DAY) that stays "working" for cycles is stuck:
+            # the 2026-08-25 wedge was a warned-but-unresolved order sitting
+            # here forever. Resolution is CANCEL-CONFIRMATION, never assumed
+            # death: only a venue-ACKed cancel (True) or a definitive
+            # not-found (False) clears the journal; a raise (FILLED or
+            # ambiguous) leaves it for the next cycle's adoption to book.
+            # This is safe against ib_async's ValidationError warning
+            # overlay in BOTH directions - a live order gets cancelled
+            # before re-planning (no duplicate), a dead one gets confirmed
+            # dead (no wedge).
+            if rec.get("rests_for_open") and not regular_session_open():
+                # Placed outside regular hours and the open has not come:
+                # it is resting for the auction, not stuck. Counting starts
+                # once the session is open and it is STILL working.
+                continue
+            rec["stuck_cycles"] = rec.get("stuck_cycles", 0) + 1
+            mgr.save()
+            if rec["stuck_cycles"] >= BOOK_ORDER_STUCK_CYCLES:
+                try:
+                    adapter.cancel_stock_order(o["order_ref"])
+                except Exception as exc:  # noqa: BLE001
+                    mgr._event("WARN",
+                               f"stuck {rec['kind']} {rec['symbol']} cancel "
+                               f"unresolved ({exc}) — retrying next cycle")
+                    if ("REFUSED by IBKR" in str(exc)
+                            and not rec.get("refusal_alerted")):
+                        # once per journal: a refused cancel keeps the order
+                        # and blocks its kind (M1) until the venue settles
+                        # it - for an order dead at IBKR unseen, until the
+                        # next reconnect resyncs the session. WARN events
+                        # alone never page (verifiers A and B, round 2).
+                        rec["refusal_alerted"] = True
+                        mgr.save()
+                        alert(f"⚠️ blend {rec['kind']} {rec['symbol']} "
+                              f"x{rec['qty']}: IBKR REFUSED the cancel of "
+                              f"this stuck order ({exc}). It stays journaled "
+                              f"and no new {rec['kind']} is placed until the "
+                              f"venue settles it (a fill is booked; the next "
+                              f"gateway reconnect resyncs it). If it persists, "
+                              f"check the order in the IBKR app.")
+                else:
+                    mgr.clear_pending_book_order(cid)
+                    mgr._event("RED",
+                               f"{rec['kind']} {rec['symbol']} x{rec['qty']} "
+                               f"stuck {rec['stuck_cycles']} cycles — cancel "
+                               f"confirmed, journal cleared, re-planned")
+                    alert(f"🚨 blend {rec['kind']} {rec['symbol']} "
+                          f"x{rec['qty']} was stuck "
+                          f"{rec['stuck_cycles']} cycles — cancel-confirmed "
+                          f"and re-planned (venue reason, if any, was in the "
+                          f"placement alert)")
+
+    # 3) retired stops whose cancel never ACKed. Tracking is cleared ONLY by
+    #    a definitively ACKed cancel (True). A False is the venue saying
+    #    "not found / already cancelled" — after a session boundary it
+    #    cannot tell a gone order from a resting one it can no longer
+    #    resolve by ref, and clearing on it is exactly how the abandoned
+    #    stop was lost (counter-review X2: the ref was popped in the SAME
+    #    reconcile that recorded it, and pass 3 logged a "cancelled on
+    #    retry" the venue never said). A ref that is unsafe to cancel (x13)
+    #    is watched, never re-cancelled. Alerting is RE-ARMED every
+    #    ORPHAN_REALERT_CYCLES retries: never per-cycle spam, never silent.
+    for ref in list(st.orphan_stop_refs):
+        info = st.orphan_stop_refs.get(ref) or {}
+        info["retry_n"] = int(info.get("retry_n", 0)) + 1
+        st.orphan_stop_refs[ref] = info
+        due = (info["retry_n"] - 1) % ORPHAN_REALERT_CYCLES == 0
+        if info.get("cancel_unsafe"):
+            mgr.save()
+            if due:
+                alert(f"⚠️ blend: retired stop {ref} ({info.get('symbol')} "
+                      f"{info.get('qty')}) is still TRACKED and was NOT "
+                      f"re-cancelled — its venue ref is session-scoped and "
+                      f"may address a different order; cancel it by hand at "
+                      f"the venue (a fill on it alerts RED)")
+            continue
+        try:
+            cancelled = adapter.cancel_stock_order(ref)
+        except Exception as exc:  # noqa: BLE001
+            mgr.save()
+            if due:
+                alert(f"⚠️ blend: retired stop {ref} STILL uncancelled "
+                      f"({exc}) — two stops may rest at the venue; it stays "
+                      f"tracked and a fill on it alerts RED")
+            continue
+        if cancelled:
+            st.orphan_stop_refs.pop(ref, None)
+            mgr.save()
+            mgr._event("INFO", f"retired stop {ref} cancelled on retry")
+            continue
+        mgr.save()
+        if due:
+            alert(f"⚠️ blend: retired stop {ref} — the venue reports it not "
+                  f"found / already cancelled but will NOT ACK a cancel, so "
+                  f"it stays TRACKED (a fill on it alerts RED); confirm at "
+                  f"the venue that it is really gone")
+
+    # 3b) re-verify believed-working protective stops (m4): only POSITIVE
+    #     venue evidence demotes — an order KNOWN to the venue and reported
+    #     'cancelled' (an IB-initiated GTC cancel never surfaces through the
+    #     fill poll, which skips cancelled-no-shares stops by design) marks
+    #     the position STOP_MISSING for pass 4 to re-place. An unknown
+    #     lookup is left alone.
+    for pos in list(st.positions.values()):
+        if pos.stop_missing or not pos.stop_order_ref or pos.history_gap:
+            continue
+        o = adapter.find_stock_order(stop_client_id(pos.call_id,
+                                                    pos.stop_level))
+        if o is not None and o.get("status") == "cancelled":
+            mgr.mark_stop_missing(pos.call_id)
+            alert(f"🚨 blend: resting stop for {pos.symbol} "
+                  f"(call {pos.call_id}) was CANCELLED at the venue — "
+                  f"position naked; re-placing now")
+
+    # 4) missing protective stops. R1: never for an UNVERIFIABLE position —
+    #    a new SELL stop on shares the account may no longer hold is itself
+    #    a short path; pass 1b must positively verify first. (Z1's pro-rata
+    #    resize is the one exemption to that rule and it lives in pass 1b:
+    #    it never rests cover above a position's share of the shares the
+    #    venue says the account holds, so the aggregate stays <= held.)
+    #    Z-A: this pass is also the door that used to restore a CAPPED
+    #    peer to full -qty cover in the same reconcile that resized it —
+    #    the resize now flags every capped peer, so the guard below covers
+    #    them too.
+    for pos in list(st.positions.values()):
+        if pos.history_gap:
+            continue
+        if pos.stop_missing or not pos.stop_order_ref:
+            if _ensure_stop(mgr, adapter, pos, alert):
+                alert(f"🧬 blend: protective stop restored for {pos.symbol} "
+                      f"(call {pos.call_id}) at {pos.stop_level:.2f}")
+
+    # Reconciled against an answering venue: stamp the horizon clock (m2).
+    st.last_reconcile_ts = time.time()
+    mgr.save()
+
+
+def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
+    """Stage 1 cash reconcile: compare the ACCOUNT's cash to the book's two
+    buckets as DELTAS from a baseline, on quiet cycles, and ALERT ONLY.
+
+    Quiet = nothing in flight (no pending entry / book-order journal) and no
+    fill booked inside CASH_QUIET_S (T+1 settlement). The first quiet cycle
+    captures the baseline pair; each later one computes
+        drift = (venue - b.venue) - (ledger - b.ledger)
+    so cash the account holds that the book does not own contributes zero
+    while it sits still, and shows up as drift only when it MOVES. A drift
+    beyond max(CASH_WARN_USD, CASH_WARN_FRAC x book) for CASH_PERSIST_CYCLES
+    quiet cycles alerts once, and again only when it changes by more than
+    the threshold; beyond CASH_RED_FRAC x book it is RED. Nothing here
+    changes the ledger or any decision. Never raises (reporting must never
+    fail a cycle closed). Returns the drift record for tests, or None when
+    nothing was compared."""
+    st = mgr.state
+    try:
+        if not st.initialized:
+            return None            # a seed's own fills must never straddle a baseline
+        now = time.time()
+        skip = _cash_quiet_reason(st, now)
+        if skip:
+            st.cash_drift_cycles = 0     # persistence = CONSECUTIVE quiet cycles
+            _note_cash_skip(mgr, skip, now)
+            return None
+        _note_cash_skip(mgr, None, now)
+        venue = adapter.account_cash()
+        if not venue or venue.get("total_cash") is None:
+            mgr._event_once_today("WARN", "cash_no_claim",
+                                  "cash reconcile: the adapter returned no "
+                                  "account cash on a quiet cycle (no claim)")
+            return None
+        ledger = st.sleeve_cash + st.core_cash
+        if st.cash_baseline is None:
+            st.cash_baseline = {"venue": float(venue["total_cash"]),
+                                "ledger": round(ledger, 4),
+                                "ts": time.time()}
+            st.cash_drift, st.cash_drift_ts, st.cash_drift_cycles = 0.0, time.time(), 0
+            mgr._event("INFO", "cash reconcile baselined (venue vs ledger "
+                               "deltas from here on)")
+            mgr.save()
+            return {"drift": 0.0, "baselined": True}
+        b = st.cash_baseline
+        drift = (float(venue["total_cash"]) - b["venue"]) - (ledger - b["ledger"])
+        st.cash_drift, st.cash_drift_ts = round(drift, 4), time.time()
+        # the thresholds scale with the book's CAPITAL: contributed (seed +
+        # adopted deposits, stage 2) once known, else the seed config
+        book = float(st.capital_contributed
+                     or getattr(mgr.cfg, "blend_book_usd", 0.0) or 0.0)
+        warn_at = max(CASH_WARN_USD, CASH_WARN_FRAC * book)
+        red_at = max(warn_at, CASH_RED_FRAC * book)
+        if abs(drift) > warn_at:
+            st.cash_drift_cycles += 1
+        else:
+            st.cash_drift_cycles = 0
+            st.cash_alerted_drift = None
+        fired = None
+        level = "RED" if abs(drift) > red_at else "WARN"
+        if (st.cash_drift_cycles >= CASH_PERSIST_CYCLES
+                and (st.cash_alerted_drift is None
+                     or abs(drift - st.cash_alerted_drift) > warn_at
+                     or (level == "RED" and st.cash_alerted_level != "RED"))):
+            st.cash_alerted_drift = round(drift, 4)
+            st.cash_alerted_level = level
+            b_day = time.strftime("%Y-%m-%d", time.gmtime(float(b.get("ts") or 0)))
+            parked = sorted(_snapshot(st.unreconciled))
+            if drift > 0 and parked:
+                # TA2: a parked exit's proceeds (or an orphan stop's fill)
+                # show up here as positive drift - adopting them would book
+                # the same cash twice once the record is resolved
+                cause = (f"UNRECONCILED record(s) {', '.join(parked)} are "
+                         f"parked: this drift may be their proceeds. RESOLVE "
+                         f"THEM FIRST - do NOT adopt this amount")
+                tail = ""
+            elif drift > 0:
+                cause = ("Dividends/interest the ledger cannot see, or a "
+                         "deposit - it sits uninvested until adopted. Reinvest "
+                         "it with POST /blend/cash/adopt using the amounts on "
+                         "the activity statement (kind \"distribution\" for "
+                         "dividends/distributions on the BOOK's holdings - "
+                         "not the account's credit interest, which is mostly "
+                         "on cash the book does not own - \"deposit\" for "
+                         "new money), "
+                         "never this drift figure (it is net of fees and "
+                         "interest on cash the book does not own); adoption "
+                         "re-baselines by itself")
+                tail = (" Rebaseline (POST /blend/cash/rebaseline, EXEC_TOKEN) "
+                        "only if this is NOT the book's money - it erases the "
+                        "drift the next reinvestment would read.")
+            else:
+                cause = "Fees, slippage the ledger did not charge, or a withdrawal"
+                tail = (" Once accounted for, POST /blend/cash/rebaseline "
+                        "(EXEC_TOKEN) restarts the delta clock and touches "
+                        "nothing else.")
+            msg = (f"cash drift {drift:+,.2f}: the account's cash moved "
+                   f"{drift:+,.2f} more than the book's ledger since the "
+                   f"baseline of {b_day} ({st.cash_drift_cycles} quiet cycles). "
+                   + cause
+                   + ". Stage 1 is alert-only: nothing adopted."
+                   + (f" NOTE: the book is HALTED ({st.halted}) - that is "
+                      f"separate; do not /resume for this." if st.halted else "")
+                   + tail)
+            mgr._event(level, msg)
+            alert(("🚨🚨 " if level == "RED" else "⚠️ ") + "blend " + msg)
+            fired = level
+        mgr.save()
+        return {"drift": round(drift, 4), "fired": fired,
+                "cycles": st.cash_drift_cycles}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("reconcile_cash failed (ignored): %s", exc)
+        return None
+
+
+def _cash_quiet_reason(st: BlendState, now: float) -> str | None:
+    """Why the account's cash cannot be compared to the ledger right now
+    (None = quiet). Shared by the stage-1 reconcile and the stage-2
+    adoption: both read TotalCashValue, and both must wait out IB's
+    account-push lag after a fill and any journal whose cash is in flight.
+    A parked unreconciled record used to suspend the reconcile FOREVER
+    (nothing ever pops it): round 3 gates on its AGE - once the park is
+    older than the quiet window its proceeds simply show as drift, which
+    is what the alert is for."""
+    fresh_unrec = [k for k, r in st.unreconciled.items()
+                   if now - float((r or {}).get("ts") or 0) < CASH_QUIET_S]
+    return ("pending journals" if (st.pending_entries or st.pending_book_orders)
+            else "fresh unreconciled record" if fresh_unrec
+            else "recent fill" if (st.last_fill_ts and now - st.last_fill_ts < CASH_QUIET_S)
+            else None)
+
+
+def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
+                  today: str, alert) -> dict | None:
+    """Stage-2 cash adoption (2026-10-05): execute a journaled operator
+    request on the LOOP thread. Returns a record for tests - {status:
+    adopted | deferred | refused | expired, ...} - or None when no request
+    is pending. Never raises (a failing adoption must not fail the cycle
+    closed; the request stays journaled and is retried next cycle).
+
+    What it checks, in order - each a different failure with a different
+    remedy, so each has its own message:
+      expired   - older than CAPITAL_REQUEST_TTL_S: dropped, re-issue.
+      refused   - the book is not initialized, is halted or has a flatten
+                  queued; BLEND_BUDGET cannot hold the larger book; or the
+                  venue holds LESS unowned cash than requested. Dropped
+                  with a RED event + page: the operator must act first.
+      deferred  - not a quiet cycle (journals in flight, a fill inside
+                  CASH_QUIET_S); missing SPY/BIL quote while a budget cap
+                  needs gross exposure; the adapter has no cash claim; or
+                  the venue says less than the request is AVAILABLE to
+                  trade (settlement, a deposit hold). Kept, retried every
+                  cycle, said once a day.
+      adopted   - the ledger's two buckets are credited by the PERSISTED
+                  sleeve target, capital_contributed grows by the amount,
+                  a capital event is recorded, the stage-1 clock is
+                  re-baselined (the ledger just moved by design), and the
+                  SAME cycle's step() plans the SPY core buy and the BIL
+                  sweep from the idle cash.
+    Venue LEVELS are never written into events or pages (the stage-1
+    rule): every number here is the operator's own amount or a shortfall
+    against it."""
+    st = mgr.state
+    req = st.capital_request
+    if req is None:
+        return None
+    stage = "checking"      # for the honest log on an exception (A2)
+    try:
+        usd = _num_or_none(req.get("usd"))
+        now = time.time()
+
+        def _drop(level: str, status: str, msg: str) -> dict:
+            # The page goes out BEFORE the save (A2): a failing save must
+            # not also silence the operator; the in-memory state is the
+            # truth of this process either way and the next successful
+            # save persists it.
+            nonlocal stage
+            if st.capital_request is req:
+                st.capital_request = None
+            mgr._event(level, "capital adoption " + msg)
+            alert(("🚨🚨 " if level == "RED" else "⚠️ ")
+                  + "blend capital adoption " + msg)
+            stage = "dropped"
+            mgr.save()
+            return {"status": status, "usd": usd, "reason": msg}
+
+        def _defer(key: str, msg: str) -> dict:
+            # request KEPT; said once a day per reason (a stuck request is
+            # visible on /status as capital.request_pending with its age)
+            mgr._event_once_today("WARN", key, "capital adoption " + msg)
+            return {"status": "deferred", "usd": usd, "reason": msg}
+
+        if usd is None or usd <= 0 or not math.isfinite(usd):
+            return _drop("RED", "refused", f"request malformed ({req!r}): "
+                                           f"dropped, nothing adopted")
+        age = now - float(req.get("ts") or 0)
+        if age > CAPITAL_REQUEST_TTL_S:
+            return _drop("WARN", "expired",
+                         f"request for ${usd:,.2f} EXPIRED unexecuted after "
+                         f"{age / 86_400:.1f} days (it waited on the "
+                         f"conditions the events above name): nothing "
+                         f"adopted; re-issue it if still intended")
+        if not st.initialized:
+            return _drop("RED", "refused",
+                         f"${usd:,.2f} REFUSED: the book is not seeded - a "
+                         f"fresh book takes its capital from BLEND_BOOK_USD "
+                         f"at the seed, there is nothing to adopt into")
+        if st.halted or st.flatten_request is not None:
+            return _drop("WARN", "refused",
+                         f"${usd:,.2f} REFUSED: the book is halted "
+                         f"({st.halted}) or a flatten is queued - nothing "
+                         f"adopted; re-issue after /resume if still intended")
+        quiet = _cash_quiet_reason(st, now)
+        if quiet:
+            return _defer("capital_wait_quiet",
+                          f"${usd:,.2f} waits: not a quiet cycle ({quiet})")
+        if st.unreconciled:
+            # TA2: a parked exit's proceeds (or an orphan stop's fill) sit in
+            # the account's cash as "unowned" - adopting them now would book
+            # that cash twice once the record is resolved by hand. TC3: this
+            # wait needs the operator, so it PAGES (once a day), unlike the
+            # settlement wait that resolves itself.
+            msg = (f"${usd:,.2f} waits: unreconciled record(s) "
+                   f"{', '.join(sorted(_snapshot(st.unreconciled)))} are "
+                   f"parked - their proceeds may be in the account's cash; "
+                   f"resolve them first (waiting {age / 86_400:.1f} d of "
+                   f"{CAPITAL_REQUEST_TTL_S / 86_400:.0f}; it expires then)")
+            if mgr._event_once_today("WARN", "capital_wait_unreconciled",
+                                     "capital adoption " + msg):
+                alert("⚠️ blend capital adoption " + msg)
+            return {"status": "deferred", "usd": usd, "reason": msg}
+        budget = float(getattr(mgr.cfg, "blend_budget", 0.0) or 0.0)
+        if budget > 0:
+            spy_px = prices.get(CORE, 0.0) or 0.0
+            bil_px = prices.get(CASH_VEHICLE, 0.0) or 0.0
+            if spy_px <= 0 or bil_px <= 0:
+                # r7's rule: gross exposure computes LOW on a missing quote
+                return _defer("capital_wait_quotes",
+                              f"${usd:,.2f} waits: missing {CORE}/"
+                              f"{CASH_VEHICLE} quote - the BLEND_BUDGET "
+                              f"basis (gross exposure) is not computable")
+            gross = mgr.gross_exposure(prices)
+            if gross + usd > budget + CAPITAL_ADOPT_TOL_USD:
+                return _drop("RED", "refused",
+                             f"${usd:,.2f} REFUSED: BLEND_BUDGET "
+                             f"${budget:,.0f} cannot hold the book after it "
+                             f"(gross ${gross:,.0f} deployed + ${usd:,.0f} = "
+                             f"${gross + usd:,.0f}) - the sweep would be "
+                             f"clamped and entries blocked. Raise "
+                             f"BLEND_BUDGET first (after 16:00 ET: an env "
+                             f"change restarts the service) and re-issue")
+        venue = adapter.account_cash()
+        if not venue or venue.get("total_cash") is None:
+            return _defer("capital_wait_venue",
+                          f"${usd:,.2f} waits: the adapter returned no "
+                          f"account cash this cycle (no claim)")
+        ledger = st.sleeve_cash + st.core_cash
+        unowned = float(venue["total_cash"]) - ledger
+        # B2: the messages below carry NO figure the account's cash level
+        # could be derived from (usd is known, so a shortfall would hand it
+        # over by one subtraction) - the stage-1 rule holds on every
+        # surface: the operator reads the account's cash off TWS.
+        if unowned + CAPITAL_ADOPT_TOL_USD < usd:
+            return _drop("RED", "refused",
+                         f"${usd:,.2f} REFUSED: the account holds LESS cash "
+                         f"the book does not own than that - nothing "
+                         f"adopted. Read the account's cash off TWS, check "
+                         f"the deposit has landed, and re-issue an amount "
+                         f"the account actually holds")
+        avail = _num_or_none(venue.get("available_funds"))
+        if avail is not None and avail + CAPITAL_ADOPT_TOL_USD < usd:
+            # the cash is THERE but not yet usable (a cash account's T+1
+            # settlement, a deposit hold): adopting it now would plan a
+            # core buy the venue rejects. Wait; retried every cycle. An
+            # absent AvailableFunds claim does NOT block (fail-open on
+            # this guard only: the worst case is a venue-rejected MKT
+            # buy that reconcile 2b clears and re-plans).
+            return _defer("capital_wait_settle",
+                          f"${usd:,.2f} waits: the venue's available-to-"
+                          f"trade funds do not cover it yet (settlement / "
+                          f"deposit hold) - retried every cycle for "
+                          f"{CAPITAL_REQUEST_TTL_S / 86_400:.0f} days from "
+                          f"the request; no page while waiting, the age "
+                          f"is on /status")
+        # A1/B1 (MF2-5's rule): /kill takes no lock a cycle holds, so it can
+        # land DURING the venue round-trip above - cancelling the request
+        # and halting the book after the first check passed. Re-read
+        # immediately before the credit; the window is now a few
+        # statements, and the consequence past it is ledger-only.
+        if (st.capital_request is not req or st.halted
+                or st.flatten_request is not None):
+            return _drop("WARN", "refused",
+                         f"${usd:,.2f} REFUSED: a /kill (or a cancel) "
+                         f"landed while the venue was being read - nothing "
+                         f"adopted; re-issue after /resume if still intended")
+        target = _persisted_sleeve_target(mgr)
+        kind = req.get("kind") if req.get("kind") in ("deposit", "distribution") else "deposit"
+        named = _finite(req.get("sleeve_usd")) if kind == "distribution" else None
+        sleeve_usd = (round(min(max(named, 0.0), usd), 2) if named is not None
+                      else round(target * usd, 2))
+        core_usd = round(usd - sleeve_usd, 2)
+        stage = "mutating"
+        st.sleeve_cash += sleeve_usd
+        st.core_cash += core_usd
+        if kind == "deposit":
+            # flows for the tripwire indices: a deposit is never a new high
+            st.trip_pending_book += usd
+            st.trip_pending_sleeve += sleeve_usd
+            st.capital_contributed = round((st.capital_contributed or 0.0) + usd, 2)
+        # a distribution is RETURN the book earned: no flow, no contribution
+        st.capital_events.append({
+            "date": today, "ts": int(now),
+            "kind": "deposit_adopted" if kind == "deposit" else "distribution_adopted",
+            "usd": round(usd, 2), "sleeve_usd": sleeve_usd,
+            "core_usd": core_usd, "sleeve_target": target})
+        del st.capital_events[:-CAPITAL_EVENTS_MAX]
+        st.capital_request = None
+        # the ledger just moved by design: the stage-1 delta clock would
+        # read it as a -usd drift against the unchanged account
+        mgr.rebaseline_cash("capital adopted", save=False)
+        msg = (f"ADOPTED ${usd:,.2f} of account cash into the book as a "
+               f"{kind}: sleeve "
+               f"+${sleeve_usd:,.2f} / core +${core_usd:,.2f} at the book's "
+               f"{target:.0%} sleeve target; contributed capital now "
+               f"${(st.capital_contributed or 0.0):,.2f}"
+               + (" (a distribution is return, not a contribution)"
+                  if kind == "distribution" else "")
+               + ". The next planning cycle "
+               f"(this one, when a tracker payload is present) buys the "
+               f"{CORE} core and sweeps the sleeve's idle cash to "
+               f"{CASH_VEHICLE} (MKT; placed outside the session they rest "
+               f"for the open). New entries size off the larger sleeve from "
+               f"now on; open positions keep the size they were entered at")
+        mgr._event("WARN", "capital adoption " + msg)
+        stage = "mutated"
+        # page BEFORE the save (A2): the ledger is credited in this process
+        # whether or not the disk takes it; the operator must hear it
+        alert("💰 blend capital adoption " + msg)
+        mgr.save()
+        return {"status": "adopted", "usd": round(usd, 2),
+                "sleeve_usd": sleeve_usd, "core_usd": core_usd,
+                "contributed": st.capital_contributed}
+    except Exception as exc:  # noqa: BLE001
+        if stage == "checking":
+            logger.exception("adopt_capital failed before any ledger change "
+                             "(request kept, retried next cycle): %s", exc)
+        elif stage == "dropped":
+            # C2: the request is cleared in memory and the page went out,
+            # but the save failed - the on-disk file still carries the
+            # request, so a RESTART re-evaluates it once against the venue
+            # (the venue checks make a double credit impossible)
+            logger.exception("adopt_capital: request dropped in memory and "
+                             "paged, but the save failed - the on-disk copy "
+                             "still carries it; a restart re-evaluates it "
+                             "once: %s", exc)
+        else:
+            # the credit is in memory and the request is cleared; the next
+            # successful save persists both (nothing was placed: every
+            # placement journals with its own save first)
+            logger.exception("adopt_capital failed AFTER crediting the ledger "
+                             "in memory (stage %s): persisted by the next "
+                             "successful save: %s", stage, exc)
+        return None
+
+
+def _note_cash_skip(mgr: Blend3070Manager, reason, now: float) -> None:
+    """Track why the cash reconcile is not comparing, and say so once a day
+    when one reason has held for CASH_SKIP_WARN_S (round 3: silence was
+    indistinguishable from health)."""
+    if reason != getattr(mgr, "_cash_skip_reason", None):
+        mgr._cash_skip_reason, mgr._cash_skip_since = reason, now
+        return
+    if reason and now - mgr._cash_skip_since > CASH_SKIP_WARN_S:
+        mgr._event_once_today(
+            "WARN", "cash_suspended",
+            f"cash reconcile has not compared for "
+            f"{(now - mgr._cash_skip_since) / 3600:.0f}h ({reason}) - the "
+            f"account's cash is not being watched meanwhile")
+
+
+def _execute_enter(mgr: Blend3070Manager, adapter, it: dict, today: str,
+                   alert) -> None:
+    """Write-ahead journal -> MOO with deterministic client_order_id ->
+    persist fill -> protective stop (retry; STOP_MISSING on failure)."""
+    mgr.record_pending_entry(it, today)             # journal BEFORE placement
+    r = adapter.place_stock_order(it["symbol"], it["qty"], "MOO", tif="OPG",
+                                  ref_price=it["entry_ref"],
+                                  client_order_id=entry_client_id(it["call_id"]))
+    if r.get("status") != "filled":
+        # Async venue (real OPG fills at the next open): the journal stays;
+        # the reconcile pass adopts the fill once the venue reports it.
+        alert(f"🧬 blend ENTER {it['symbol']} x{it['qty']} MOO accepted, "
+              f"awaiting fill — reconciled next cycle")
+        return
+    fill = r.get("fill_price")
+    if fill is None:
+        # An ENTRY ack without a price still leaves a real position needing
+        # stop protection: book at the sizing reference and say so loudly
+        # (exits, where a silent default would vaporize proceeds, go to
+        # UNRECONCILED instead — see _execute_exit).
+        fill = it["entry_ref"]
+        alert(f"⚠️ blend ENTER {it['symbol']}: venue ack without fill price — "
+              f"booked at entry_ref {fill:.2f}, basis provisional")
+    mgr.on_entered(it, fill, r["order_ref"], today,
+                   commission=r.get("commission"))
+    _intent_success("ENTER")        # a real fill: see the reconcile branch
+    pos = mgr.state.positions[str(it["call_id"])]
+    _ensure_stop(mgr, adapter, pos, alert)
+    alert(f"🧬 blend ENTER {it['symbol']} x{it['qty']} MOO "
+          f"(stop {it['stop_level']:.2f}): {it['reason']}")
+
+
+def _execute_adjust_stop(mgr: Blend3070Manager, adapter, it: dict,
+                         alert) -> None:
+    """Cancel THEN place (round 21). The book never has two protective
+    stops resting for one position, not even for a second.
+
+    The original design placed the NEW stop first "so there is no naked
+    window", then cancelled the old. Live, 2026-09-11 14:09-14:45 ET: the
+    venue answered every second sell-stop against GH's six shares with
+    `Inactive` — accepted, not active, cancellable, able to go live later.
+    The adapter reported that as a rejection, the book kept the old stop,
+    recorded nothing, cancelled nothing, and the next cycle placed another:
+    four stops on six shares inside fifteen minutes, invisible to every
+    invariant (they were never the book's), each one a short on a trigger.
+    The operator cancelled them by hand and switched the book off.
+
+    Now: the old stop is cancelled and ACKed first; only then is the new
+    one placed. The naked window is the round-trip between the two acks,
+    measured in seconds, and if the new placement is refused the OLD level
+    is re-placed at once by `_ensure_stop` (its id is free again: the
+    venue holds only a cancelled prior under it). A cancel that raises
+    (FILLED, or an ambiguous ack) defers the whole ratchet: the old stop
+    is left exactly as it is and the next cycle tries again."""
+    sym, call_id, new_lvl = it["symbol"], it["call_id"], it["stop_level"]
+    old_ref = it.get("old_ref")
+    if old_ref:
+        try:
+            adapter.cancel_stock_order(old_ref)   # True, or False = already gone
+        except Exception as exc:  # noqa: BLE001
+            # FILLED (reconcile books it next pass) or state UNKNOWN: the
+            # old order may still rest, so nothing new may be placed.
+            mgr._event("WARN", f"stop ratchet for {sym} (call {call_id}) "
+                               f"deferred: cancel of {old_ref} unresolved "
+                               f"({exc})")
+            alert(f"⚠️ blend stop replace DEFERRED for {sym} at "
+                  f"{new_lvl:.2f}: the resting stop's cancel is unresolved "
+                  f"({exc}) — old stop left as is, retry next cycle")
+            return
+    try:
+        rs = adapter.place_stock_order(
+            sym, -it["qty"], "STP", stop_price=new_lvl, tif="GTC",
+            client_order_id=stop_client_id(call_id, new_lvl))
+        if rs.get("duplicate") and rs.get("status") != "working":
+            raise RuntimeError(f"the venue's order under the new stop id is "
+                               f"{rs.get('status')}, not working — id spent")
+    except Exception as exc:  # noqa: BLE001
+        # The old stop is already gone: the position is NAKED right now.
+        # Say so, and put the old level straight back — its id holds only
+        # a cancelled prior at the venue, so it is placeable again.
+        mgr._event("RED", f"stop ratchet for {sym} (call {call_id}) to "
+                          f"{new_lvl:.2f} REFUSED after the old stop was "
+                          f"cancelled ({exc}) — re-placing the old level")
+        alert(f"🚨🚨 blend stop replace REJECTED for {sym} at "
+              f"{new_lvl:.2f} ({exc}) — the old stop was already cancelled; "
+              f"re-placing the previous level NOW")
+        pos = mgr.state.positions.get(str(call_id))
+        if pos is not None:
+            mgr.mark_stop_missing(call_id)
+            if _ensure_stop(mgr, adapter, pos, alert):
+                alert(f"🧬 blend: protective stop restored for {sym} (call "
+                      f"{call_id}) at {pos.stop_level:.2f} — the ratchet to "
+                      f"{new_lvl:.2f} is retried next cycle")
+        return
+    mgr.on_stop_placed(call_id, rs["order_ref"], new_lvl)
+    mgr._event("INFO", f"stop ratchet {sym} (call {call_id}): "
+                       f"{it.get('reason', f'-> {new_lvl:.2f}')}")
+    alert(f"🧬 blend STOP {sym}: {it['reason']}")
+
+
+def _execute_exit(mgr: Blend3070Manager, adapter, it: dict,
+                  prices: dict[str, float], alert) -> bool:
+    """Cancel the resting stop (non-fatal), then MKT-sell. If the cancel
+    RAISES, the stop's state is unknown — the sell is deferred to the next
+    cycle rather than risking a double-sell on top of a possibly-working
+    stop (a fill meanwhile is ingested by the reconcile pass). A FALSE
+    cancel ("already gone") is VERIFIED before selling: queued fills are
+    ingested and only a still-held position is sold — idempotent with a
+    stop fill that won the race (counter-agent N2/N14). A sell fill without
+    a price goes to UNRECONCILED — never booked at 0.0.
+
+    M3: after ANY non-raising cancel (True or the ambiguous False), queued
+    venue fills are ingested FIRST — a partially-filled-then-cancelled stop
+    books its filled shares and the MKT sell below sizes from the book's
+    venue-truth REMAINING qty, never the step-time full qty (the oversell
+    the adapter review flagged).
+
+    m2 (venue-history horizon): a False cancel + verification showing
+    nothing + a reconcile gap > 1 day means the stop's fill may predate
+    visible order history — UNVERIFIABLE: park + alert, never a MKT sell.
+
+    Returns True only when the exit's proceeds actually BOOKED this cycle
+    (directly or via the racing stop fill) — a deferred or UNRECONCILED
+    exit returns False so run_cycle drops the entries its proceeds were
+    meant to fund (counter-agent N5)."""
+    key = str(it["call_id"])
+    pos0 = mgr.state.positions.get(key)
+    if pos0 is not None and pos0.history_gap:
+        # R1: UNVERIFIABLE since a blackout — its stop may have filled
+        # invisibly, so a MKT sell could short. Defer until reconcile pass
+        # 1b positively verifies the shares at the venue. MF-B: a row
+        # rebuilt from STAND-INS is flagged for a DIFFERENT reason and
+        # reconcile can never verify it, so say which one this is.
+        if key in mgr.state.stand_in_rows:
+            alert(f"🚨 blend EXIT {it['symbol']} deferred: this book row is "
+                  f"UNVERIFIABLE because it was REBUILT from STAND-INS for "
+                  f"{', '.join(mgr.state.stand_in_rows[key])} — nothing is "
+                  f"sold on invented values, and no reconcile can clear "
+                  f"that; restore the row by hand")
+        else:
+            alert(f"🚨 blend EXIT {it['symbol']} deferred: position is "
+                  f"UNVERIFIABLE after a venue-history blackout — nothing "
+                  f"sold until venue positions verify it")
+        return False
+    ref = it.get("stop_order_ref")
+    if ref:
+        try:
+            cancelled = adapter.cancel_stock_order(ref)
+        except Exception as exc:  # noqa: BLE001
+            alert(f"⚠️ blend EXIT {it['symbol']} deferred: stop cancel "
+                  f"failed ({exc}); position kept — retried next cycle "
+                  f"(a stop fill meanwhile reconciles first)")
+            return False
+        # The stop may have (partially) filled before the cancel landed:
+        # ingest venue fills so the book's qty is venue truth (M3).
+        _ingest_fills(mgr, adapter, alert)
+        if key not in mgr.state.positions:
+            alert(f"🧬 blend EXIT {it['symbol']} no-op: its stop had "
+                  f"already filled — booked from the venue fill")
+            return key not in mgr.state.unreconciled
+        if (not cancelled
+                and getattr(mgr, "_reconcile_gap_s", 0.0) > HISTORY_HORIZON_S):
+            # m2: "already gone", nothing verifiable, and the last
+            # successful reconcile predates what venue history serves —
+            # the stop may have filled INSIDE the blackout. A MKT sell
+            # here could short already-stopped-out shares. Park loudly.
+            mgr.on_exit_unreconciled(
+                it["call_id"],
+                f"{it['reason']}: stop already gone and the venue-history "
+                f"horizon was exceeded (reconcile gap "
+                f"{mgr._reconcile_gap_s / 86400.0:.1f}d) — UNVERIFIABLE")
+            alert(f"🚨🚨 blend EXIT {it['symbol']} UNVERIFIABLE after a "
+                  f"multi-day blackout: the stop is already gone but its "
+                  f"fill may predate visible order history — NOTHING sold; "
+                  f"verify the account manually and book by hand")
+            return False
+    pos = mgr.state.positions.get(key)
+    if pos is None:
+        return key not in mgr.state.unreconciled
+    qty = pos.qty        # M3: venue-truth remaining, never the step-time qty
+    try:
+        r = adapter.place_stock_order(it["symbol"], -qty, "MKT",
+                                      ref_price=prices.get(it["symbol"]),
+                                      client_order_id=exit_client_id(it["call_id"]))
+    except Exception:
+        if ref:
+            # m3: the working stop was retired above but the sell did not
+            # complete — the position must NOT be believed protected by a
+            # cancelled stop. STOP_MISSING is loud, blocks entries, and
+            # pass 4 re-places; a MKT that actually landed dedupes by its
+            # deterministic exit cid on the retry.
+            mgr.mark_stop_missing(it["call_id"])
+            alert(f"🚨 blend EXIT {it['symbol']}: stop cancelled but the "
+                  f"MKT sell failed — position UNPROTECTED (STOP_MISSING); "
+                  f"stop re-placed next reconcile, sell retried via the "
+                  f"exit cid")
+        raise
+    fill = r.get("fill_price")
+    if fill is None:
+        mgr.on_exit_unreconciled(it["call_id"],
+                                 f"{it['reason']}: venue ack without a fill "
+                                 f"price")
+        alert(f"🚨 blend EXIT {it['symbol']} x{qty} UNRECONCILED: no "
+              f"fill price from the venue — proceeds NOT booked, manual "
+              f"reconciliation needed")
+        return False
+    mgr.on_exited(it["call_id"], fill, it["reason"],
+                  commission=r.get("commission"))
+    alert(f"🧬 blend EXIT {it['symbol']} x{qty} ({it['reason']})")
+    return True
+
+
+def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
+    """/kill stage 2 (R2): the LOOP thread executes a journaled flatten
+    request — it owns the adapter's ib_async event loop, and run_cycle has
+    already reconciled (N14 reconcile-first still holds: stop fills are
+    booked, so only positions STILL actually held are closed). The K-d law
+    survives: a RAISING stop cancel means the stop likely FILLED — park,
+    never a MKT sell on top of it. R1 UNVERIFIABLE (history_gap) positions
+    stay parked untouched. The completion alert states exactly what closed
+    vs what parked — the kill switch never overclaims.
+
+    MF3-3: a pass that could not close a position keeps the journalled
+    request and the next cycle RETRIES it — an emergency stop does not give
+    up after one pass. Two corrections to how that shipped:
+
+    B1 (naked-short path): the no-double-sell law rests on two halves —
+    reconcile-first, and the deterministic `blend-{call_id}-kill` client id
+    the adapter dedupes by orderRef. BOTH failed together at a SESSION
+    boundary, because `place_stock_order` resolved that id against
+    `self.ib.trades()` (this process's list), which a restart empties. The
+    adapter now resolves it against the VENUE (open + completed orders)
+    whenever this session holds nothing binding, so the retry is idempotent
+    across the restart a Render deploy performs routinely.
+
+    B4/R-b: the retry is BOUNDED and it never promises convergence it
+    cannot deliver. A row parked BEFORE any venue call — a STAND-IN row,
+    whose own alert says no reconcile will ever clear it — can never be
+    closed by this service, so it does not keep the request queued at all.
+    Everything else keeps it queued for at most FLATTEN_MAX_ATTEMPTS
+    passes; then the request is dropped with one final alert and the book
+    stays HALTED. Unbounded, this cost >=576 Telegram messages a day for a
+    single parked row (288 cycles x 2 alerts) and ~1,150 for three,
+    forever, burying the emergency channel it exists to serve; and the
+    summary said "until every position is closed" about a row whose own
+    alert said nothing would ever close it. Per-row alerts are emitted once
+    per REASON per request (the reason changing is news; the same park on
+    pass 5 is not), and that record rides on the persisted request, so a
+    restart does not re-shout either."""
+    st = mgr.state
+    # MF-A: /kill's journal write no longer waits behind an in-flight
+    # cycle, so a SECOND kill can land while this flatten is running. Clear
+    # only the request THIS pass started with — blanket-clearing at the end
+    # would swallow the new one and leave the operator with a halted book
+    # and no queued flatten.
+    executing = st.flatten_request
+    # B4: attempt accounting rides on the persisted request itself, so the
+    # bound survives a restart the same way the request does.
+    if isinstance(executing, dict):
+        attempt = int(executing.get("attempts") or 0) + 1
+        executing["attempts"] = attempt
+        alerted = executing.setdefault("alerted", {})
+        if not isinstance(alerted, dict):       # a hand-edited/legacy record
+            alerted = {}
+            executing["alerted"] = alerted
+    else:                                       # defensive: never seen
+        attempt, alerted = 1, {}
+    closed: list[str] = []
+    parked: list[str] = []          # everything still held after this pass
+    retryable: list[str] = []       # ...of which another pass could close
+    terminal: list[str] = []        # ...and of which none ever will
+    unrec: list[str] = []
+    # L1-L5 (the naked-short class, five blockers with one root): the MKT
+    # sell below was sized from the BOOK's qty and NOTHING asked the venue
+    # what the account actually holds. Every route that leaves the book
+    # believing in shares the account has already sold — a stop that filled
+    # inside the cancel window, a `close_failed` park whose order did reach
+    # the venue, an adoption reconcile has not booked yet, a retry across a
+    # restart — turns this sell into a SHORT. CR-N1 is the same root seen
+    # from the other end: the completion alert then tells the operator to
+    # hand-sell a position the service already sold. The venue is the only
+    # authority on what is held. Ask it once per symbol per pass, never
+    # sell more than it reports, and treat an unanswerable venue as a
+    # reason to STOP rather than a licence to sell from the book's belief.
+    venue_qty: dict[str, int] = {}
+    venue_err: dict[str, str] = {}
+
+    def venue_held(sym: str) -> int | None:
+        """Net shares the ACCOUNT holds now, or None when the venue could
+        not be asked. Cached per pass, and decremented as this pass sells,
+        so two book rows on one symbol cannot both spend the same shares."""
+        if sym in venue_qty:
+            return venue_qty[sym]
+        if sym in venue_err:
+            return None
+        try:
+            held = int(adapter.stock_position(sym))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("kill flatten: venue position %s failed: %s",
+                             sym, exc)
+            venue_err[sym] = f"{type(exc).__name__}: {exc}"
+            return None
+        venue_qty[sym] = held
+        return held
+
+    def park(key, sym: str, reason: str, msg: str, can_retry: bool = True):
+        """Record a position this pass did NOT close, and alert ONCE per
+        reason per request (B4)."""
+        parked.append(sym)
+        (retryable if can_retry else terminal).append(sym)
+        if alerted.get(str(key)) != reason:
+            alerted[str(key)] = reason
+            alert(msg)
+        else:
+            logger.info("kill flatten: %s still parked (%s) on attempt %d — "
+                        "already alerted for this reason", key, reason,
+                        attempt)
+
+    for key in list(st.positions):
+        pos = st.positions.get(key)
+        if pos is None:
+            continue
+        sym = pos.symbol
+        if pos.history_gap:
+            # R1: its stop may have filled invisibly inside a blackout —
+            # a MKT sell could short. Stays parked until a reconcile
+            # positively verifies it at the venue. MF-B: a STAND-IN row is
+            # parked for a different reason and no reconcile can ever clear
+            # it — never tell the operator to wait for one.
+            if key in mgr.state.stand_in_rows:
+                # R-b: TERMINAL. This row is parked before any venue call
+                # and nothing this service can do will ever change that,
+                # so it must not hold the request open: cc03347 kept the
+                # request queued on it and re-alerted every cycle FOREVER.
+                park(key, sym, "stand_in",
+                     f"🚨🚨 blend kill: book row {key} (call "
+                     f"{pos.call_id}) NOT flattened — it was REBUILT from "
+                     f"STAND-INS for "
+                     f"{', '.join(mgr.state.stand_in_rows[key])}, so its "
+                     f"symbol/quantity may not be its own; no reconcile "
+                     f"will clear that. Flatten it MANUALLY at the venue "
+                     f"if you need it flat", can_retry=False)
+            else:
+                # A blackout row CAN come back: reconcile pass 1b clears
+                # `history_gap` on positive venue evidence, and the retry
+                # then closes it. Retryable — but inside the bound.
+                park(key, sym, "history_gap",
+                     f"🚨🚨 blend kill: {sym} NOT flattened — UNVERIFIABLE "
+                     f"after a venue-history blackout; parked until venue "
+                     f"positions verify it, verify the account manually")
+            continue
+        stop_ref = pos.stop_order_ref
+        if stop_ref:
+            cancel_raised = False
+            try:
+                cancelled = adapter.cancel_stock_order(stop_ref)
+            except Exception as exc:  # noqa: BLE001
+                # Pinned adapter contract: a RAISING cancel means the stop
+                # FILLED. Must never fall through to the MKT sell (K-d).
+                logger.exception("kill flatten: stop cancel %s raised "
+                                 "(stop likely FILLED): %s", key, exc)
+                cancel_raised = True
+                cancelled = False
+            # M3: whether the cancel succeeded or found the stop "already
+            # gone", it may have (partially) filled first — ingest venue
+            # fills so the sell below sizes from venue truth.
+            verify_ok = True
+            try:
+                _ingest_fills(mgr, adapter, alert)
+            except Exception as exc:  # noqa: BLE001
+                verify_ok = False
+                logger.exception("kill flatten: fill verify failed: %s", exc)
+            pos = st.positions.get(key)
+            if pos is None:
+                # Settled by its own stop fill (or parked priceless).
+                (unrec if key in st.unreconciled else closed).append(sym)
+                continue
+            if cancel_raised or not verify_ok:
+                # FAIL CLOSED (K-d): the stop signalled FILLED and/or venue
+                # truth is unverifiable — park loudly; reconcile settles it.
+                mgr.record_orphan_stop(stop_ref, {"symbol": sym,
+                                                  "qty": -pos.qty,
+                                                  "call_id": pos.call_id})
+                park(key, sym,
+                     "cancel_raised" if cancel_raised else "verify_failed",
+                     f"🚨🚨 blend kill: {sym} NOT flattened — stop cancel "
+                     f"{'raised (likely filled)' if cancel_raised else 'unverifiable'}; "
+                     f"position parked for reconcile, verify manually")
+                continue
+            if not cancelled:
+                if mgr._reconcile_gap_s > HISTORY_HORIZON_S:
+                    # m2 belt: "already gone" past the venue-history
+                    # horizon — UNVERIFIABLE, park loudly (R1's flag should
+                    # already have caught this; keep the belt).
+                    mgr.record_orphan_stop(stop_ref, {"symbol": sym,
+                                                      "qty": -pos.qty,
+                                                      "call_id": pos.call_id})
+                    park(key, sym, "stop_gone_past_horizon",
+                         f"🚨🚨 blend kill: {sym} NOT flattened — stop "
+                         f"already gone past the venue-history horizon: "
+                         f"UNVERIFIABLE, nothing sold; verify manually")
+                    continue
+                # Verified still held with a possibly-resting stop: track
+                # it so a later fill alerts RED and the cancel retries.
+                mgr.record_orphan_stop(stop_ref, {"symbol": sym,
+                                                  "qty": -pos.qty,
+                                                  "call_id": pos.call_id})
+        kill_cid = f"blend-{pos.call_id}-kill"
+        # Does an order under THIS row's kill id already bind at the venue?
+        # If it does, `place_stock_order` returns it instead of placing
+        # anything, so the call below creates NO new exposure and the
+        # venue-position ceiling does not apply to it — and a prior FILL is
+        # the honest exit for this row at a price the venue still knows even
+        # when this process no longer does (the B1 restart path). Asking
+        # here, before the ceiling, is what keeps the retry able to recover
+        # its own fill rather than writing the row off as unreconciled.
+        binding_prior = False
+        try:
+            prior = adapter.find_stock_order(kill_cid)
+            binding_prior = (prior is not None
+                             and prior.get("status") in ("filled", "working"))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("kill flatten: idempotency lookup %s failed: %s",
+                           kill_cid, exc)
+        # L1-L5: for a genuinely NEW order, what the VENUE holds is the
+        # ceiling on what may be sold.
+        held = int(pos.qty) if binding_prior else venue_held(sym)
+        if held is None:
+            # The positions query itself failed. Refusing to sell on that
+            # alone would let one flaky endpoint disable the EMERGENCY STOP,
+            # which is its own harm — so fall back to the verification the
+            # book already carries. A row that is not `history_gap` and sits
+            # inside the venue-history horizon was reconciled against the
+            # venue recently, and its qty is venue-derived; past the horizon
+            # nothing here is verified by anything, and that is the R1 case
+            # where the law is already park-never-sell.
+            if mgr._reconcile_gap_s > HISTORY_HORIZON_S:
+                park(key, sym, "venue_unreachable",
+                     f"🚨🚨 blend kill: {sym} NOT flattened — the venue would "
+                     f"not report its position "
+                     f"({venue_err.get(sym, 'unknown')}) and the last "
+                     f"reconcile is past the history horizon, so the book's "
+                     f"{pos.qty} shares are UNVERIFIED and a MKT sell could "
+                     f"SHORT the account. Parked — close it by hand at the "
+                     f"venue if you need it flat")
+                continue
+            logger.warning("kill flatten: venue position %s unavailable (%s) "
+                           "— selling the reconciled book qty %d",
+                           sym, venue_err.get(sym), pos.qty)
+            alert(f"⚠️ blend kill {sym}: the venue would not report its "
+                  f"position ({venue_err.get(sym, 'unknown')}) — selling the "
+                  f"{pos.qty} shares the last reconcile verified. Check the "
+                  f"account afterwards")
+            held = int(pos.qty)
+        if held <= 0:
+            # The account is already FLAT in this name: its stop filled, or
+            # an earlier pass (or an earlier process) sold it and the fill
+            # has not booked here. Selling now opens a naked short, and the
+            # completion alert would then name it as something for the
+            # operator to sell AGAIN (CR-N1). Book the row out as
+            # UNRECONCILED instead — the shares are gone, the price they
+            # went at is not known to this service, and that is exactly
+            # what the unreconciled ledger is for.
+            mgr.on_exit_unreconciled(pos.call_id,
+                                     "manual kill: venue reports 0 shares "
+                                     "held — nothing sold here")
+            unrec.append(sym)
+            alert(f"🚨 blend kill {sym} x{pos.qty}: the VENUE HOLDS NONE of "
+                  f"it — NOTHING SOLD (its stop had already filled). The row "
+                  f"is booked UNRECONCILED: the exit price is not known to "
+                  f"this service, so reconcile it from your statement. Do "
+                  f"NOT sell it by hand — the account is already flat in it")
+            continue
+        sell_qty = min(int(pos.qty), held)
+        overcount = int(pos.qty) - sell_qty
+        try:
+            # M3: pos.qty is the venue-truth REMAINING book qty (a partial
+            # stop fill above already reduced it); `sell_qty` clamps that
+            # again to what the account is actually holding right now.
+            #
+            # B1: this client id is the ONLY thing standing between a retry
+            # and a second sell of the same shares. The adapter resolves it
+            # against the venue, not against this process's trade list, so
+            # it still binds after a restart.
+            r = adapter.place_stock_order(
+                sym, -sell_qty, "MKT", client_order_id=kill_cid)
+            # Spend the venue budget whether or not a price came back: the
+            # shares left the account either way, and a second row on this
+            # symbol must not sell them again.
+            if sym in venue_qty:
+                venue_qty[sym] = max(venue_qty[sym] - sell_qty, 0)
+            if overcount:
+                alert(f"🚨 blend kill {sym}: the book claimed {pos.qty} "
+                      f"shares, the venue held {held} — sold {sell_qty} and "
+                      f"NOT the difference ({overcount}), which the account "
+                      f"does not have. The book was over-counting; verify "
+                      f"this name against your statement")
+            fill = r.get("fill_price")
+            if fill is None:
+                # Repo law: never book at a silent 0.0.
+                mgr.on_exit_unreconciled(pos.call_id,
+                                         "manual kill: venue ack without "
+                                         "a fill price")
+                unrec.append(sym)
+                alert(f"🚨 blend kill close {sym} x{sell_qty} UNRECONCILED: "
+                      f"no fill price — proceeds NOT booked, manual "
+                      f"reconciliation needed")
+            else:
+                mgr.on_exited(pos.call_id, fill, "manual kill",
+                              commission=r.get("commission"))
+                closed.append(sym)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("kill flatten close %s failed: %s", key, exc)
+            if stop_ref:
+                # The stop was retired above but the sell failed: the
+                # position must not be believed protected (m3 pattern) —
+                # pass 4 re-places while the book stays halted.
+                mgr.mark_stop_missing(pos.call_id)
+            park(key, sym, f"close_failed:{type(exc).__name__}",
+                 f"🚨 blend kill: MKT close {sym} FAILED ({exc}) — "
+                 f"position still held; book halted, close manually or "
+                 f"wait for reconcile")
+    # B4: what the operator is told about the NEXT pass must be what will
+    # actually happen. `retryable` is the only thing that can change at the
+    # venue; `terminal` never can; and the bound is a real bound.
+    keep_queued = bool(retryable) and attempt < FLATTEN_MAX_ATTEMPTS
+    # Honest completion summary: exactly what closed vs what did not — and
+    # it goes out BEFORE the journal is cleared. `flatten_request` is what
+    # /status publishes as `flatten_pending`, so clearing it first opens a
+    # window where the operator can see "no flatten pending" with no report
+    # of what the flatten did. The clear is in a `finally`: a Telegram
+    # outage can delay the report, never block the journal from clearing
+    # (a request left journalled re-runs next cycle against an already
+    # flat book — harmless, but it is not the alert's call to make).
+    try:
+        if parked or unrec:
+            if keep_queued:
+                next_step = (f". The flatten stays QUEUED and RETRIES on the "
+                             f"next cycle — attempt {attempt} of "
+                             f"{FLATTEN_MAX_ATTEMPTS}, then it STOPS and "
+                             f"tells you (each retry reconciles venue truth "
+                             f"first, and every close carries the same "
+                             f"idempotency key the venue dedupes on, so "
+                             f"nothing already sold is sold again)")
+            elif retryable:
+                next_step = (f". The flatten has now failed "
+                             f"{FLATTEN_MAX_ATTEMPTS} times and is NO LONGER "
+                             f"RETRYING — CLOSE {', '.join(sorted(set(retryable)))} "
+                             f"BY HAND at the venue. The book stays HALTED "
+                             f"until you /resume")
+            else:
+                next_step = (". NOTHING here can be closed by this service, "
+                             "so the flatten is NOT retrying — close what is "
+                             "listed by hand at the venue. The book stays "
+                             "HALTED until you /resume")
+            if terminal:
+                next_step += (f". {len(terminal)} of them "
+                              f"({', '.join(sorted(set(terminal)))}) can "
+                              f"NEVER be closed by this service — rebuilt "
+                              f"from STAND-INS, so the book does not know "
+                              f"what they really are")
+            alert(f"🔴 blend kill flatten finished WITH EXCEPTIONS: "
+                  f"{len(closed)} closed ({', '.join(closed) or 'none'})"
+                  + (f", {len(unrec)} sold but UNRECONCILED "
+                     f"({', '.join(unrec)})" if unrec else "")
+                  + f", {len(parked)} NOT closed ({', '.join(parked)}) — "
+                    f"parked positions need manual verification; book stays "
+                    f"halted until /resume"
+                  + next_step)
+        elif closed:
+            alert(f"🔴 blend kill flatten complete: {len(closed)} position(s) "
+                  f"closed ({', '.join(closed)}); book halted until /resume")
+        else:
+            alert("🔴 blend kill flatten complete: book was already flat; "
+                  "halted until /resume")
+    finally:
+        if st.flatten_request is executing and not keep_queued:
+            # Executed, or out of retries, or nothing left that a retry
+            # could change. Either way the outcomes have been alerted and
+            # the book stays HALTED — /resume is the only way out.
+            st.flatten_request = None
+        elif keep_queued:
+            logger.warning("kill flatten: %d position(s) not closed — "
+                           "request stays queued (attempt %d of %d)",
+                           len(parked), attempt, FLATTEN_MAX_ATTEMPTS)
+        # N3: re-assert the halt. If a /resume slipped in between the
+        # request and this execution, the book must still come out of a
+        # flatten HALTED — the operator resumes a flattened book
+        # explicitly, never races one.
+        st.halted = "KILL"
+        mgr.save()
+
+
+# Consecutive same-kind intent failures before that kind's planning is
+# paused for the rest of the process (a restart or a success resumes it).
+# Every failed attempt is a REAL venue order under the current semantics,
+# so an unbounded retry loop is not merely noisy (counter-agent 2026-08-25).
+INTENT_BREAKER_N = 5
+
+# (kind -> consecutive failures) and (kind -> last alerted reason). Module
+# state, in-memory by design: a restart retries once and re-alerts once,
+# which matches the gateway-restart-heals operational pattern.
+_intent_fail_counts: dict = {}
+_intent_alerted_reason: dict = {}
+_intent_breaker_date: str = ""      # trading date the counters belong to
+
+# Intents whose OUTCOME is decided asynchronously: place_stock_order returns
+# 'working' for an OPG/GTC order and the venue accepts or rejects it later.
+# For these, a clean placement is NOT success - crediting it as one is what
+# let a whole day of rejected ENTERs reset the breaker every cycle and never
+# trip it (2026-08-28). Their success/failure is booked by reconcile.
+_ASYNC_OUTCOME_KINDS = {"ENTER"}
+
+
+def intent_breaker_roll_date(today: str) -> None:
+    """Reset the breakers on a new trading date. Without this a kind that
+    trips stays paused FOREVER: the execution loop skips a paused kind, so
+    it is never retried, so no success can ever clear it - the ACTION page's
+    'one success resumes it' was unreachable (2026-08-28). A new day is the
+    natural retry boundary; a genuinely broken kind simply trips again."""
+    global _intent_breaker_date
+    if today and today != _intent_breaker_date:
+        _intent_breaker_date = today
+        _intent_fail_counts.clear()
+        _intent_alerted_reason.clear()
+
+
+def intent_breaker_state() -> dict:
+    """Open breakers, for /status and /blend/feed - a paused kind must be
+    visible from outside the process, not only in a Telegram page that has
+    scrolled away."""
+    return {k: v for k, v in _intent_fail_counts.items()
+            if v >= INTENT_BREAKER_N}
+
+
+def intent_breaker_clear() -> None:
+    _intent_fail_counts.clear()
+    _intent_alerted_reason.clear()
+
+
+def _buy_refusal_note(adapter, qty: int, px: float) -> str:
+    """For a market BUY the venue left `Inactive` without a reason: a YES/NO
+    on whether the account's AvailableFunds covers the order at the
+    MKT_BUY_CUSHION margin. Never a figure - the stage-1 rule: the account's
+    cash LEVEL is published on no surface (adopt_capital's DEFERRED wording
+    is the precedent for a bound, not a level). Never raises."""
+    try:
+        venue = adapter.account_cash()
+    except Exception:  # noqa: BLE001
+        venue = None
+    avail = _num_or_none((venue or {}).get("available_funds"))
+    if avail is None or not (px and px > 0):
+        return (" - the venue reported no available-funds figure, so a "
+                "cash-account credit refusal can be neither confirmed nor "
+                "ruled out")
+    if avail < qty * px * (1.0 + MKT_BUY_CUSHION):
+        return (f" - the account's available funds do NOT cover it at a "
+                f"{MKT_BUY_CUSHION:.0%} market-order margin: most likely a "
+                f"cash-account credit refusal (unsettled proceeds, or the "
+                f"book's cash ledger ahead of the account)")
+    return (f" - the account's available funds DO cover it at a "
+            f"{MKT_BUY_CUSHION:.0%} margin: either IBKR's margin is wider "
+            f"than the {MKT_BUY_CUSHION:.0%} the sizing assumes, or the "
+            f"refusal has another cause - the order's message is in the "
+            f"IBKR app (Orders, Inactive)")
+
+
+def _place_market_buy(adapter, symbol: str, qty: int, px: float, cid: str) -> dict:
+    """A book-level market BUY (CORE_BUY, the BIL sweep): the plain adapter
+    call, plus the funds note on a reasonless `Inactive` refusal (the
+    2026-10-07..26 BIL x56 pages said only 'status Inactive'). Anything
+    else - a reasoned rejection, a connection error - propagates unchanged."""
+    try:
+        return adapter.place_stock_order(symbol, qty, "MKT",
+                                         ref_price=px or None,
+                                         client_order_id=cid)
+    except RuntimeError as exc:
+        if not str(exc).endswith("(status Inactive): IBKR gave no reason"):
+            raise                       # a reasoned refusal speaks for itself
+        raise RuntimeError(f"{exc}{_buy_refusal_note(adapter, qty, px)}") from exc
+
+
+def _intent_failure_alert(mgr, it, exc, alert) -> None:
+    """Alert ONCE per (action, reason) - not per cycle. The read-only-mode
+    incident paged every 5 minutes with the identical [321] text, ~48
+    pages/hour, while saying nothing new after the first (counter-agent
+    2026-08-25). A CHANGED reason re-alerts immediately; a success clears."""
+    kind = str(it.get("action"))
+    reason = str(exc)
+    n = _intent_fail_counts.get(kind, 0) + 1
+    _intent_fail_counts[kind] = n
+    mgr._event("RED", f"intent failed ({kind} {it.get('symbol')}): {reason}")
+    if _intent_alerted_reason.get(kind) != reason:
+        _intent_alerted_reason[kind] = reason
+        alert(f"🚨 blend intent failed ({kind} {it.get('symbol')}): {reason}"
+              f"\n→ no action needed from you — forward this to Claude "
+              f"(repeat failures of this kind alert only on a CHANGED "
+              f"reason; all attempts land in /status events)")
+    if n == INTENT_BREAKER_N:
+        alert(f"🔴 ACTION NEEDED (you) — blend {kind} has failed "
+              f"{n} consecutive cycles (latest: {reason}). Pausing {kind} "
+              f"planning until the cause is fixed. It resumes on the next "
+              f"UTC day roll (20:00 ET, 19:00 ET in winter), on a service restart, or on /resume — a paused "
+              f"kind is never retried within the day, so it cannot clear "
+              f"itself. The book takes no {kind} decisions meanwhile.")
+
+
+def _intent_success(kind: str) -> None:
+    _intent_fail_counts.pop(kind, None)
+    _intent_alerted_reason.pop(kind, None)
+
+
+def intent_kind_paused(kind: str) -> bool:
+    return _intent_fail_counts.get(kind, 0) >= INTENT_BREAKER_N
+
+
+def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
+              today: str, alert=None) -> list[dict]:
+    """One blend cycle: RECONCILE (venue truth first) -> step -> execute
+    intents on the adapter -> callbacks. Every action alerts; any single
+    intent failing never blocks the rest."""
+    from .alerts import send as _send
+    alert = alert or _send
+
+    # MF-A: /kill journals its flatten WITHOUT waiting for BLEND_LOCK, so a
+    # request can now land in the middle of this cycle. Capture what was
+    # already pending when the cycle STARTED — see PHASE 0b.
+    pending_flatten = mgr.state.flatten_request
+
+    # PHASE 0 — reconciliation-first (order-safety law #1). Raises if the
+    # adapter cannot reconcile: the cycle fails closed.
+    # Roll BEFORE reconcile: reconcile is where a venue-rejected entry books
+    # its failure, and rolling afterwards wiped the day's first one every
+    # day (counter-agent 2026-08-28) — precisely the OPG-after-open case
+    # this counter exists to catch.
+    intent_breaker_roll_date(today)
+    reconcile(mgr, adapter, today, alert)
+    # Stage-1 cash reconcile: reporting only, never fails the cycle.
+    reconcile_cash(mgr, adapter, alert)
+
+    # PHASE 0b — a journaled /kill flatten request executes HERE, on the
+    # loop thread that owns the adapter's event loop (R2). Reconcile above
+    # already booked any stop fills; the book stays halted either way.
+    #
+    # N14, preserved under MF-A: only a request that was ALREADY journalled
+    # when this cycle started. One that landed mid-cycle would be executed
+    # against a reconcile that read the venue BEFORE the operator hit
+    # /kill — and a venue that went away in between would never get to make
+    # this cycle fail closed. Deferring costs nothing: /kill wakes the loop,
+    # so the next iteration starts at once and runs the flatten FIRST
+    # (MF-1), which is exactly what the /kill alert tells the operator.
+    if pending_flatten is not None and (mgr.state.flatten_request
+                                        is pending_flatten):
+        execute_flatten(mgr, adapter, alert)
+
+    if payload is not None and payload_is_stale(payload, today):
+        alert(f"⚠️ blend: tracker payload is stale (as_of "
+              f"{payload.get('as_of')}, today {today}) — no new decisions "
+              f"this cycle (book still reconciled and stop-protected)")
+        payload = None
+
+    prices = reference_prices(adapter, mgr, payload)
+
+    # BOOTSTRAP GUARD (2026-08-28). A book that is about to SEED (step's
+    # `not st.initialized` branch writes the full BLEND_BOOK_USD split and
+    # then buys CORE + sweeps CASH_VEHICLE as MKT/DAY orders, which fill
+    # intraday) must first prove the venue is not already holding those
+    # names. gross_exposure()/BLEND_BUDGET are computed from the BOOK's own
+    # ledger, so a fresh book is structurally blind to real holdings and
+    # would deploy a second full book on top of the first. The venue is the
+    # only ground truth. Fail CLOSED on an unanswerable query too: "I could
+    # not check" must never read as "nothing is there".
+    ack_live = (mgr.state.bootstrap_ack
+                and mgr.state.bootstrap_ack_date == today)
+    if mgr.state.bootstrap_ack and not ack_live:
+        # An ack is a same-day authorization. Left standing it becomes a
+        # durable, invisible permission: the re-review seeded 45->395 SPY
+        # on an ack granted 27 days earlier.
+        mgr.state.bootstrap_ack = False
+        mgr.state.bootstrap_ack_date = ""
+        mgr._event("WARN", "bootstrap ack EXPIRED (granted on a previous "
+                           "trading day) — a fresh seed needs a new /resume")
+        mgr.save()
+    if not mgr.state.initialized and not ack_live:
+        held = {sym: _venue_held(adapter, sym) for sym in (CORE, CASH_VEHICLE)}
+        blocking = {k: v for k, v in held.items() if v is None or v != 0}
+        if blocking:
+            detail = ", ".join(
+                f"{k}=" + ("UNKNOWN" if v is None else str(v))
+                for k, v in sorted(blocking.items()))
+            # Never downgrade a stronger halt: a KILL reinterpreted as
+            # FRESH_BOOK_VS_VENUE turned the operator's "undo my kill"
+            # /resume into a seed authorization (re-review).
+            if mgr.state.halted not in ("FRESH_BOOK_VS_VENUE", "KILL",
+                                        "SCHEMA_DRIFT"):
+                mgr.state.halted = "FRESH_BOOK_VS_VENUE"
+                mgr._event("RED", f"fresh book refused to seed: venue holds "
+                                  f"{detail}")
+                mgr.save()
+                alert(f"🚨🚨 blend: a FRESH book was about to seed "
+                      f"${getattr(mgr.cfg, 'blend_book_usd', 0):,.0f} while the "
+                      f"venue already holds {detail} — REFUSED (nothing "
+                      f"ordered). This is the double-deployment guard: the "
+                      f"book's ledger cannot see venue holdings, so seeding "
+                      f"would buy a second {CORE}/{CASH_VEHICLE} position on "
+                      f"top of the existing one. If the previous book state "
+                      f"was lost, restore it; if seeding on top IS intended, "
+                      f"/resume acknowledges and allows it once.")
+            return []
+
+    # STAGE-2 CAPITAL ADOPTION (2026-10-05): a journaled operator request is
+    # executed HERE - on the loop thread (it reads the venue), after the
+    # reconcile passes (the quiet-cycle rule needs their journals settled)
+    # and BEFORE the plan, so the same cycle's step() deploys what it
+    # adopts through the ordinary core-buy / sweep path.
+    adopt_capital(mgr, adapter, prices, today, alert)
+
+    intents = mgr.step(today, payload, prices)
+    exit_unsettled = False     # a funding exit deferred/UNRECONCILED (N5)
+    for i, it in enumerate(intents):
+        if mgr.state.halted:
+            # MF2-5: `step()` refuses to PLAN anything for a halted book,
+            # but that guard is behind us — the plan was made before the
+            # halt landed. Since MF-A a /kill halts the book the instant
+            # the operator hits it, in the middle of this loop, and nothing
+            # here re-read it: measured, a cycle placed four venue BUYs
+            # (AAA, BBB, SPY, BIL) with `halted='KILL'` and a flatten
+            # already journalled, while `request_flatten` promised "halt
+            # the book immediately (no new entries)". The rest of the plan
+            # is abandoned; the flatten runs on the next iteration, which
+            # /kill has already woken.
+            #
+            # MF3-4: the break stops ACTIONS — it must never suppress
+            # INFORMATION. `step()` assembles its ALERT intents LAST, so a
+            # halt landing at i=0 delivered [] instead of e.g. "REFUSED exit
+            # for call N: tracker says 'X' but book holds Y — tracker DB
+            # reset? ... manual review needed". Worse, two of those alerts
+            # consume a PERSISTED one-shot on the way in (`stale_alerted`,
+            # `quote_alert_armed` — both already saved to disk), so the
+            # warning was not merely deferred, it was gone for good. Every
+            # remaining ALERT is delivered here; only the ORDERS are dropped.
+            rest = intents[i:]
+            dropped = [x for x in rest if x.get("action") != "ALERT"]
+            alert(f"🛑 blend: HALTED ({mgr.state.halted}) mid-cycle — "
+                  f"{len(dropped)} planned action(s) "
+                  f"were NOT executed (the plan predates the halt). The "
+                  f"book stays reconciled and stop-protected"
+                  + ("; a queued /kill flatten runs on the next iteration."
+                     if mgr.state.flatten_request is not None else
+                     "; no flatten is queued — the book stays HELD and "
+                     "halted until you /resume."))
+            for x in rest:
+                if x.get("action") == "ALERT":
+                    alert(f"🚨 blend: {x['msg']}")
+            break
+        try:
+            act = it["action"]
+            if act != "ALERT" and intent_kind_paused(act):
+                # breaker open for this kind: skip quietly (the ACTION page
+                # already fired once); a restart or one success resumes
+                mgr._event("WARN", f"{act} skipped: breaker open "
+                                   f"({_intent_fail_counts.get(act)} fails)")
+                continue
+            if act == "ALERT":
+                alert(f"🚨 blend: {it['msg']}")
+            elif act == "ENTER":
+                if mgr.has_naked_position():
+                    # An earlier intent this cycle left a position naked:
+                    # stop adding risk immediately, not next cycle.
+                    alert(f"🚨 blend ENTER {it['symbol']} skipped: a "
+                          f"position is STOP_MISSING — protect the book "
+                          f"before adding risk")
+                    continue
+                if exit_unsettled:
+                    # The cycle plan counted an exit's proceeds that did NOT
+                    # book: those funds are phantom — never spend them.
+                    alert(f"⚠️ blend ENTER {it['symbol']} skipped: a funding "
+                          f"exit did not book this cycle — entry re-planned "
+                          f"once the exit settles")
+                    continue
+                if (it["qty"] * _intent_size_ref(it)
+                        > mgr.state.sleeve_cash
+                        - mgr.reserved_sleeve_cash() + CASH_EPS):
+                    # Belt: entries spend only SETTLED cash (exits + the BIL
+                    # raise have already booked by this point in intent
+                    # order), minus cash a pending sweep BUY will debit at
+                    # adoption (M1) — the ledger never goes negative.
+                    alert(f"⚠️ blend ENTER {it['symbol']} skipped: settled "
+                          f"sleeve cash ${mgr.state.sleeve_cash:,.2f} cannot "
+                          f"fund ${it['qty'] * _intent_size_ref(it):,.2f}")
+                    continue
+                _execute_enter(mgr, adapter, it, today, alert)
+            elif act == "ADJUST_STOP":
+                _execute_adjust_stop(mgr, adapter, it, alert)
+            elif act == "EXIT":
+                if not _execute_exit(mgr, adapter, it, prices, alert):
+                    exit_unsettled = True
+            elif act == "REBALANCE":
+                if _execute_rebalance(mgr, adapter, it, prices, today):
+                    alert(f"🧬 blend REBALANCE {it['direction']} "
+                          f"${it['usd']:,.0f}: {it['reason']}")
+            elif act == "CORE_BUY":
+                if any(rec["kind"] == "core-buy"
+                       for rec in mgr.state.pending_book_orders.values()):
+                    # M1 belt (step already suppresses planning): never
+                    # stack a second core buy on an unadopted working one.
+                    alert(f"🧬 blend CORE buy skipped: a prior core buy is "
+                          f"still awaiting adoption")
+                    continue
+                px = prices.get(CORE, 0.0)
+                qty = it["qty"]
+                if px > 0:   # never overdraw core cash on a short transfer,
+                    # and never size a market buy to the last dollar
+                    # (MKT_BUY_CUSHION note)
+                    qty = min(qty, int(max(mgr.state.core_cash, 0.0)
+                                       // (px * (1.0 + MKT_BUY_CUSHION))))
+                if qty > 0:
+                    # Write-ahead journal + deterministic client id: a crash
+                    # between placement and booking is adopted by reconcile
+                    # pass 2b, never re-bought (counter-agent N15).
+                    cid = mgr.record_pending_book_order("core-buy", CORE,
+                                                        qty, today,
+                                                        ref_price=px or None)
+                    r = _place_market_buy(adapter, CORE, qty, px, cid)
+                    if r.get("status") != "filled":
+                        alert(f"🧬 blend CORE buy {CORE} x{qty} accepted, "
+                              f"awaiting fill — reconciled next cycle")
+                        continue                # journal stays until adopted
+                    fill = r.get("fill_price")
+                    if fill is None:
+                        fill = px
+                    if not fill:
+                        # Journal kept: reconcile adopts at spot, loudly.
+                        raise RuntimeError("core buy fill price unknown")
+                    mgr.state.pending_book_orders.pop(cid, None)
+                    mgr.on_core_trade(qty, fill, commission=r.get("commission"))
+                    alert(f"🧬 blend CORE buy {CORE} x{qty}")
+            elif act == "SWEEP":
+                if any(rec["kind"] == "sweep"
+                       for rec in mgr.state.pending_book_orders.values()):
+                    # M1 belt (step already suppresses planning): never
+                    # stack a second sweep on an unadopted working one.
+                    alert(f"🧬 blend SWEEP skipped: a prior sweep is still "
+                          f"awaiting adoption")
+                    continue
+                qty = it["qty"]
+                if qty < 0:   # hard floor: never sell BIL beyond holdings
+                    qty = -min(-qty, mgr.state.bil_qty)
+                else:
+                    # A buy planned on proceeds that never booked (e.g. an
+                    # UNRECONCILED exit earlier this cycle) is clamped to
+                    # the cash actually held — the ledger never goes negative.
+                    # The same clamp keeps the plan's cash reserve and sizes
+                    # the market buy MKT_BUY_CUSHION above the quote.
+                    px = prices.get(CASH_VEHICLE) or 0.0
+                    if px > 0:
+                        # net of cash a resting MOO / pending sweep will
+                        # debit (the planner's own basis; counter-agent A4)
+                        spendable = (max(mgr.state.sleeve_cash, 0.0)
+                                     - mgr.reserved_sleeve_cash()
+                                     - float(it.get("reserve_usd") or 0.0))
+                        qty = min(qty, int(max(spendable, 0.0)
+                                           // (px * (1.0 + MKT_BUY_CUSHION))))
+                if qty != 0:
+                    cid = mgr.record_pending_book_order(
+                        "sweep", CASH_VEHICLE, qty, today,
+                        ref_price=prices.get(CASH_VEHICLE))
+                    if qty > 0:
+                        r = _place_market_buy(adapter, CASH_VEHICLE, qty,
+                                              prices.get(CASH_VEHICLE) or 0.0, cid)
+                    else:
+                        r = adapter.place_stock_order(CASH_VEHICLE, qty, "MKT",
+                                                      ref_price=prices.get(CASH_VEHICLE),
+                                                      client_order_id=cid)
+                    if r.get("status") != "filled":
+                        alert(f"🧬 blend SWEEP {CASH_VEHICLE} "
+                              f"{'+' if qty > 0 else ''}{qty} accepted, "
+                              f"awaiting fill — reconciled next cycle")
+                        continue                # journal stays until adopted
+                    fill = r.get("fill_price")
+                    if fill is None:
+                        # CR-N2: `prices` is built by `reference_prices`,
+                        # which since B8 can hand back a previous CLOSE.
+                        # Re-ask for a FILL-GRADE quote rather than adopting
+                        # whatever the valuation pass happened to get; with
+                        # none, this raises exactly as it did pre-B8 and the
+                        # journal carries the order to the next cycle.
+                        fill = _fill_grade_price(adapter, CASH_VEHICLE)
+                    if not fill:
+                        raise RuntimeError(
+                            "sweep fill price unknown and no fill-grade "
+                            "quote to stand in for it — order journalled, "
+                            "adopted next cycle")
+                    mgr.state.pending_book_orders.pop(cid, None)
+                    mgr.on_sweep(qty, fill, commission=r.get("commission"))
+                    alert(f"🧬 blend SWEEP {CASH_VEHICLE} "
+                          f"{'+' if qty > 0 else ''}{qty}")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("blend intent %s failed: %s", it, exc)
+            _intent_failure_alert(mgr, it, exc, alert)
+        else:
+            kind = str(it.get("action"))
+            if kind not in _ASYNC_OUTCOME_KINDS:
+                _intent_success(kind)
+    # Post-execution marks (fresh quotes for what the book NOW holds): the
+    # pre-cycle price set can miss names entered this cycle.
+    post_prices = reference_prices(adapter, mgr, None)
+    # M2: publish the mark cache the API threads (/status, /blend/feed)
+    # serve — they must NEVER touch the adapter/ib_async loop themselves.
+    mgr.mark_cache = {"prices": post_prices, "ts": time.time()}
+    mgr.record_equity_snapshot(today, post_prices)  # daily equity point
+    mgr.update_tripwires(today, post_prices, alert)  # kill-ledger lines (alert-only)
+    mgr.check_budget_alarm(post_prices, alert)      # 85% one-shot / 75% re-arm
+    mgr.save()
+    return intents
+
+
+def _execute_rebalance(mgr: Blend3070Manager, adapter, it: dict,
+                       prices: dict[str, float], today: str) -> bool:
+    """Returns True only when something actually moved (the REBALANCE alert
+    fires only then). sleeve_to_core NEVER sells BIL here — funding was
+    raised by this cycle's single BIL SWEEP (executed earlier in intent
+    order), and the transfer is clamped to the cash the sleeve holds."""
+    usd = it["usd"]
+    spy_px = prices.get(CORE, 0.0)
+    if it["direction"] == "core_to_sleeve":
+        if any(rec["kind"] == "core-rebal-sell"
+               for rec in mgr.state.pending_book_orders.values()):
+            # M1 belt (step already suppresses planning): never stack a
+            # second rebalance sell on an unadopted working one.
+            return False
+        # Sell SPY for ~usd, move the proceeds to the sleeve (swept to BIL
+        # by this cycle's SWEEP, which executes after the transfer).
+        if spy_px <= 0:
+            return False
+        qty = min(mgr.state.spy_qty, int(round(usd / spy_px)))
+        if mgr.state.sleeve_target is not None and mgr.state.sleeve_target >= 1.0 - 1e-9:
+            qty = mgr.state.spy_qty          # sleeve-only: never strand a share
+        if qty <= 0:
+            return False
+        # Write-ahead journal + deterministic client id (counter-agent N15):
+        # a crash after placement is adopted by reconcile pass 2b — the SPY
+        # sell and its core->sleeve transfer are never repeated.
+        cid = mgr.record_pending_book_order("core-rebal-sell", CORE, -qty,
+                                            today, ref_price=spy_px)
+        r = adapter.place_stock_order(CORE, -qty, "MKT", ref_price=spy_px,
+                                      client_order_id=cid)
+        if r.get("status") != "filled":
+            return False                    # journal stays until adopted
+        fill = r.get("fill_price")
+        if fill is None:
+            fill = spy_px
+        mgr.state.pending_book_orders.pop(cid, None)
+        mgr.on_core_trade(-qty, fill, commission=r.get("commission"))
+        mgr.on_transfer(qty * fill)
+        return True
+    moved = min(usd, max(mgr.state.sleeve_cash, 0.0))
+    if moved <= 0:
+        return False
+    mgr.on_transfer(-moved)
+    return True

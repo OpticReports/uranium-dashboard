@@ -1,0 +1,178 @@
+{
+ "generated_utc": "2026-09-28T18:43:44Z",
+ "hl_window": [
+  1718611200,
+  1790611200
+ ],
+ "fixture_end": 1785009600,
+ "rows": [
+  {
+   "cell": "A fixture, FULL 2022-02->2026-07",
+   "leg": "S3",
+   "n_bars": 9791,
+   "n_trades": 190,
+   "mean_bp_bar": 0.7981768937004613,
+   "ann_sd_pct": 20.78504546631839,
+   "ann_SR": 0.8409928186284747,
+   "kstar_p10": 1.109,
+   "prob_neg_edge": 0.04
+  },
+  {
+   "cell": "A fixture, FULL 2022-02->2026-07",
+   "leg": "S4",
+   "n_bars": 9791,
+   "n_trades": 128,
+   "mean_bp_bar": 1.3043310976171334,
+   "ann_sd_pct": 43.974462568114895,
+   "ann_SR": 0.6495781726398423,
+   "kstar_p10": 0.109,
+   "prob_neg_edge": 0.09
+  },
+  {
+   "cell": "A fixture, FULL 2022-02->2026-07",
+   "leg": "blend",
+   "n_bars": 9791,
+   "n_trades": null,
+   "mean_bp_bar": 0.9247154446796295,
+   "ann_sd_pct": 17.402876566069004,
+   "ann_SR": 1.1636736123250158,
+   "kstar_p10": 3.083,
+   "prob_neg_edge": 0.007
+  },
+  {
+   "cell": "B fixture, HL window only",
+   "leg": "S3",
+   "n_bars": 4401,
+   "n_trades": 89,
+   "mean_bp_bar": 0.8423052212926987,
+   "ann_sd_pct": 20.446721430013504,
+   "ann_SR": 0.902173211947453,
+   "kstar_p10": 0.235,
+   "prob_neg_edge": 0.097
+  },
+  {
+   "cell": "B fixture, HL window only",
+   "leg": "S4",
+   "n_bars": 4401,
+   "n_trades": 59,
+   "mean_bp_bar": 0.37580075009793046,
+   "ann_sd_pct": 41.65842513172543,
+   "ann_SR": 0.19755995098520907,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.39
+  },
+  {
+   "cell": "B fixture, HL window only",
+   "leg": "blend",
+   "n_bars": 4401,
+   "n_trades": null,
+   "mean_bp_bar": 0.7256791034940068,
+   "ann_sd_pct": 16.11560762261644,
+   "ann_SR": 0.9861478846268009,
+   "kstar_p10": 1.0,
+   "prob_neg_edge": 0.063
+  },
+  {
+   "cell": "C HL, HL window (= candC basis)",
+   "leg": "S3",
+   "n_bars": 4401,
+   "n_trades": 85,
+   "mean_bp_bar": 0.6457117122645669,
+   "ann_sd_pct": 19.809509738884305,
+   "ann_SR": 0.7138534312556116,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.16
+  },
+  {
+   "cell": "C HL, HL window (= candC basis)",
+   "leg": "S4",
+   "n_bars": 4401,
+   "n_trades": 28,
+   "mean_bp_bar": -1.0730159740470187,
+   "ann_sd_pct": 29.94970497157634,
+   "ann_SR": -0.7846170723194568,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.887
+  },
+  {
+   "cell": "C HL, HL window (= candC basis)",
+   "leg": "blend",
+   "n_bars": 4401,
+   "n_trades": null,
+   "mean_bp_bar": 0.21602979068667066,
+   "ann_sd_pct": 15.090222202796488,
+   "ann_SR": 0.3135177436394104,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.377
+  },
+  {
+   "cell": "D HL, full to 2026-09",
+   "leg": "S3",
+   "n_bars": 4790,
+   "n_trades": 96,
+   "mean_bp_bar": 0.6965507540552557,
+   "ann_sd_pct": 19.593303788134687,
+   "ann_SR": 0.7785548409170228,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.15
+  },
+  {
+   "cell": "D HL, full to 2026-09",
+   "leg": "S4",
+   "n_bars": 4790,
+   "n_trades": 28,
+   "mean_bp_bar": -0.985875428346749,
+   "ann_sd_pct": 28.707900123756037,
+   "ann_SR": -0.7520811967339728,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.887
+  },
+  {
+   "cell": "D HL, full to 2026-09",
+   "leg": "blend",
+   "n_bars": 4790,
+   "n_trades": null,
+   "mean_bp_bar": 0.2759442084547545,
+   "ann_sd_pct": 14.911776823247939,
+   "ann_SR": 0.4052621117382615,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.293
+  },
+  {
+   "cell": "E fixture, PRE-HL 2022-02->2024-06",
+   "leg": "S3",
+   "n_bars": 5180,
+   "n_trades": 97,
+   "mean_bp_bar": 0.8441381990217642,
+   "ann_sd_pct": 21.192731734205182,
+   "ann_SR": 0.872309751778678,
+   "kstar_p10": 0.411,
+   "prob_neg_edge": 0.07
+  },
+  {
+   "cell": "E fixture, PRE-HL 2022-02->2024-06",
+   "leg": "S4",
+   "n_bars": 5180,
+   "n_trades": 66,
+   "mean_bp_bar": 1.9424357379093173,
+   "ann_sd_pct": 45.88187122494025,
+   "ann_SR": 0.9271492536052174,
+   "kstar_p10": 0.0,
+   "prob_neg_edge": 0.107
+  },
+  {
+   "cell": "E fixture, PRE-HL 2022-02->2024-06",
+   "leg": "blend",
+   "n_bars": 5180,
+   "n_trades": null,
+   "mean_bp_bar": 1.1187125837436525,
+   "ann_sd_pct": 18.470948388571333,
+   "ann_SR": 1.326396732240611,
+   "kstar_p10": 2.539,
+   "prob_neg_edge": 0.037
+  }
+ ],
+ "data_effect_s4_annSR": 0.9821770233046658,
+ "window_effect_s4_annSR": 0.45201822165463323,
+ "verdict": "DATA or MIXED"
+}

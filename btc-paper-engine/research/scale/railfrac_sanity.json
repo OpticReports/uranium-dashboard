@@ -1,0 +1,101 @@
+{
+ "checks": [
+  {
+   "name": "without the clamp, h sets the bad-read bound (h=1.5 -> 1.50x, h=3 -> 3.00x)",
+   "pass": true,
+   "detail": "worst 1.50x / 3.00x"
+  },
+  {
+   "name": "with the clamp the bound is the SANITY MULT, independent of h",
+   "pass": true,
+   "detail": "worst 1.25x at h=3.0"
+  },
+  {
+   "name": "clamped design is TIGHTER than today's 1.333x cap ratio",
+   "pass": true,
+   "detail": "1.250x vs today's 1.333x - a safety GAIN, not a trade"
+  }
+ ],
+ "bad_read_rows": [
+  {
+   "e": 1.0,
+   "h1.5_noclamp": 15008.250000000002,
+   "h1.5_x": 1.0,
+   "h3_noclamp": 15008.250000000002,
+   "h3_x": 1.0,
+   "h3_clamp125": 15008.250000000002,
+   "h3_clamp_x": 1.0
+  },
+  {
+   "e": 1.1,
+   "h1.5_noclamp": 16509.075000000004,
+   "h1.5_x": 1.1,
+   "h3_noclamp": 16509.075000000004,
+   "h3_x": 1.1,
+   "h3_clamp125": 16509.075000000004,
+   "h3_clamp_x": 1.1
+  },
+  {
+   "e": 1.25,
+   "h1.5_noclamp": 18760.312500000004,
+   "h1.5_x": 1.25,
+   "h3_noclamp": 18760.312500000004,
+   "h3_x": 1.25,
+   "h3_clamp125": 18760.312500000004,
+   "h3_clamp_x": 1.25
+  },
+  {
+   "e": 1.5,
+   "h1.5_noclamp": 22512.375000000004,
+   "h1.5_x": 1.5,
+   "h3_noclamp": 22512.375000000004,
+   "h3_x": 1.5,
+   "h3_clamp125": 18760.312500000004,
+   "h3_clamp_x": 1.25
+  },
+  {
+   "e": 2.0,
+   "h1.5_noclamp": 22512.375000000004,
+   "h1.5_x": 1.5,
+   "h3_noclamp": 30016.500000000004,
+   "h3_x": 2.0,
+   "h3_clamp125": 18760.312500000004,
+   "h3_clamp_x": 1.25
+  },
+  {
+   "e": 5.0,
+   "h1.5_noclamp": 22512.375000000004,
+   "h1.5_x": 1.5,
+   "h3_noclamp": 45024.75000000001,
+   "h3_x": 3.0,
+   "h3_clamp125": 18760.312500000004,
+   "h3_clamp_x": 1.25
+  },
+  {
+   "e": 10.0,
+   "h1.5_noclamp": 22512.375000000004,
+   "h1.5_x": 1.5,
+   "h3_noclamp": 45024.75000000001,
+   "h3_x": 3.0,
+   "h3_clamp125": 18760.312500000004,
+   "h3_clamp_x": 1.25
+  },
+  {
+   "e": 100.0,
+   "h1.5_noclamp": 22512.375000000004,
+   "h1.5_x": 1.5,
+   "h3_noclamp": 45024.75000000001,
+   "h3_x": 3.0,
+   "h3_clamp125": 18760.312500000004,
+   "h3_clamp_x": 1.25
+  }
+ ],
+ "design": {
+  "max_account_lev": 0.2,
+  "equity_sanity_mult": 1.25,
+  "max_notional_usd": 45024.75000000001,
+  "target_gross": 15008.250000000002,
+  "bad_read_bound_clamped": 1.25,
+  "bad_read_bound_today_cap_ratio": 1.3333333333333333
+ }
+}

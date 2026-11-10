@@ -1,0 +1,29 @@
+
+[frozen] eval years ~20.4; episodes 7 (0.34/yr); firings 6; episodes with >=1 firing 6 (86%)
+   fire 2008-09-22  episode 2008-08-15..2009-06-04 (199 d)  |E_f|=121  firings-in-episode=1  s=1.00
+   fire 2010-06-03  episode 2010-05-19..2010-08-19 (65 d)  |E_f|=37  firings-in-episode=1  s=1.00
+   fire 2011-11-01  episode 2011-09-22..2012-02-27 (106 d)  |E_f|=80  firings-in-episode=1  s=1.00
+   fire 2012-06-07  episode 2012-05-25..2012-08-27 (65 d)  |E_f|=65  firings-in-episode=1  s=1.00
+   fire 2020-04-09  episode 2020-03-17..2020-07-06 (77 d)  |E_f|=43  firings-in-episode=1  s=1.00
+   fire 2022-07-28  episode 2022-04-28..2022-08-09 (71 d)  |E_f|=71  firings-in-episode=1  s=1.00
+   episode lengths (trading days): [62, 65, 65, 71, 77, 106, 199]
+
+[no_yield] eval years ~20.4; episodes 7 (0.34/yr); firings 7; episodes with >=1 firing 7 (100%)
+   fire 2008-09-22  episode 2008-08-15..2009-06-04 (199 d)  |E_f|=121  firings-in-episode=1  s=1.00
+   fire 2010-06-03  episode 2010-05-19..2010-08-19 (65 d)  |E_f|=37  firings-in-episode=1  s=1.00
+   fire 2011-10-07  episode 2011-09-22..2012-02-27 (106 d)  |E_f|=80  firings-in-episode=1  s=1.00
+   fire 2012-06-07  episode 2012-05-25..2012-08-27 (65 d)  |E_f|=65  firings-in-episode=1  s=1.00
+   fire 2020-04-09  episode 2020-03-17..2020-07-06 (77 d)  |E_f|=43  firings-in-episode=1  s=1.00
+   fire 2022-05-19  episode 2022-04-28..2022-08-09 (71 d)  |E_f|=71  firings-in-episode=1  s=1.00
+   fire 2022-11-21  episode 2022-09-26..2022-12-23 (62 d)  |E_f|=1  firings-in-episode=1  s=1.00
+   episode lengths (trading days): [62, 65, 65, 71, 77, 106, 199]
+
+[trailing] eval years ~17.4; episodes 8 (0.46/yr); firings 7; episodes with >=1 firing 7 (88%)
+   fire 2011-10-07  episode 2011-09-30..2011-12-30 (62 d)  |E_f|=60  firings-in-episode=1  s=1.43
+   fire 2015-02-19  episode 2015-02-19..2015-06-11 (79 d)  |E_f|=50  firings-in-episode=1  s=0.81
+   fire 2015-08-12  episode 2015-07-17..2015-08-18 (23 d)  |E_f|=3  firings-in-episode=1  s=0.81
+   fire 2016-06-03  episode 2016-05-31..2016-06-13 (10 d)  |E_f|=10  firings-in-episode=1  s=0.86
+   fire 2016-12-12  episode 2016-11-23..2017-02-13 (54 d)  |E_f|=51  firings-in-episode=1  s=0.95
+   fire 2020-04-16  episode 2020-03-12..2020-07-06 (80 d)  |E_f|=26  firings-in-episode=1  s=0.75
+   fire 2022-05-19  episode 2022-04-28..2022-12-23 (165 d)  |E_f|=133  firings-in-episode=1  s=0.86
+   episode lengths (trading days): [6, 10, 23, 54, 62, 79, 80, 165]

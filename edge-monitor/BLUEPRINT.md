@@ -96,6 +96,16 @@ replaces the Kelly clip. 'Restore 1.0' never overrides a lower Kelly level.
 Rationale: posterior-proportional fractional Kelly; binary kill loses the
 option value of a strategy that's merely regime-suppressed.
 
+Pinned rules (policy-cost referee, 2026-08-14): the return-CUSUM statistic
+RESETS on entering YELLOW (no-reset doubles null return drag, −2.9 vs
+−0.3pp/yr, for +8.5pp detection — reset wins and is now specification, not
+implementation accident). The RED→re-promotion lane must be operationally
+real: an alarm judged false gets a pre-written 60d-shadow → ramp path —
+~75-80% of the policy's measured null drag comes from false halts that
+never come back; with re-promotion priced, monitoring costs a healthy
+strategy ~0.35pp/yr and the breakeven prior on decay-to-negative is
+~20-32% within 5y (research_policy_sim.py + REFEREE.md round 2).
+
 **False-alarm budget** (back-solved, referee-measured): RED <1 false per
 strategy / 3y from DD p99 + dual-confirmation by construction. YELLOW: the
 return-CUSUM + DD pair alone ≈ 1.5/yr under null (measured: 0.5 + 0.97);

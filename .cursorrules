@@ -1,15 +1,14 @@
-<!-- MIRROR of CLAUDE.md — canonical source. Do not edit here; edit CLAUDE.md
-     and re-copy (all three files ship in the same commit). -->
-
-# Working conventions for this repo (agent rules)
+<!-- MIRROR of CLAUDE.md — DO NOT EDIT DIRECTLY. Regenerate from CLAUDE.md
+     in the same commit whenever it changes (see the SYNC RULE there). -->
 
 > SYNC RULE: this file is the CANONICAL copy. AGENTS.md and .cursorrules at
 > the repo root are byte-for-byte mirrors (plus a provenance header) so
 > Cursor/Composer and other AI tools load the same conventions. Whenever
 > this file changes — including from Casey's feedback on the methodology —
 > regenerate both mirrors IN THE SAME COMMIT:
->   `tail -n +2 CLAUDE.md | sed '1i # Working conventions for this repo (agent rules)'`
->   with the mirror header, written to AGENTS.md and copied to .cursorrules.
+>   `{ head -3 AGENTS.md; tail -n +3 CLAUDE.md; } > /tmp/m && cp /tmp/m AGENTS.md && cp /tmp/m .cursorrules`
+>   (the mirrors are the 2-line HTML provenance header + a blank line +
+>   CLAUDE.md from its SYNC RULE line on; verify with `diff AGENTS.md .cursorrules`).
 
 Monorepo of Casey's research dashboards (genomics-alpha-tracker,
 treasury-canary, btc-paper-engine, btc-executor, barbell-lab), deployed on
@@ -77,6 +76,30 @@ counts as done. Until the mirror trades, the rule binds the approved fixtures
   fact pack's UNKNOWN list. Origin: the Quaise SPV terms (valuation,
   class, fees) sat on page 1 of the Delta4 teaser while the dashboard
   said "waiting on valuation" for two revisions.
+- IC PROCESS runs on every deal (Casey, 2026-08-21; rev 1.2
+  2026-08-25). Protocol: venture-deal-analyzer/templates/ic-process.md
+  (v1.2); per-deal record into deals/<slug>/ic.md. Flow: **S1 intake
+  same day = the FULL analysis report, published to /deals immediately**
+  (fact pack, verification + counter-agents, panel, red team, EV, exit
+  odds — stamped "rev 1, pre-DD"; blind prior optional and
+  non-blocking), then CHASE THE DATA via the ranked DD list, then S2
+  the case at T+3 (a DIALOGUE run in rounds, not a presentation;
+  concessions logged live; output is the CRUXES), then S3 the decision
+  at T+10 (pre-mortem, kill criteria written BEFORE money moves,
+  forecasts dated into ledger.csv). Then the recurring half, which is
+  the point: R1 monthly position review and R2 quarterly calibration,
+  both scheduled as Routines. R1 covers EVERY ledger row in three
+  tracks — HELD, LIVE and PASSED — because a pass is a forecast, and
+  reviewing only what we bought makes the calibration record
+  survivorship-biased. Asks unanswered for 60 days are closed as
+  refused and priced as a negative signal.
+- PENDING DD QUESTIONS in EVERY report (Casey, 2026-08-25): each
+  report — intake, revision, memo, R1 diff, R2 calibration — carries a
+  section listing the open questions we need/want answered, RANKED BY
+  WEIGHT OF IMPORTANCE AND PRIORITY (P1 decision-gating / P2
+  score-moving / P3 completeness), each naming what it would move, with
+  asked/answered/refused/expired status carried forward as a living
+  ledger. 60-day expiry per question from first ask.
 - Counter-agent verification is MANDATORY (Casey, 2026-08-09): every
   research pass, dataset, scoring instrument, and analytical artifact gets
   an adversarial counter-agent review BEFORE its findings are acted on,
@@ -88,9 +111,57 @@ counts as done. Until the mirror trades, the rule binds the approved fixtures
 - Honesty rules: state measurement basis (trade-close vs MTM), in-sample
   caveats, and what was NOT modeled. Never present in-sample CAGR as a
   forecast.
+- HYPERLIQUID BALANCES: NEVER ask Casey to move funds (Casey, 2026-09-10,
+  after this was raised SEVERAL TIMES). The account's value is ~$100k of
+  **spot USDC** and it backs the perp book.
+  `clearinghouseState.marginSummary.accountValue` is the **PERP POOL ONLY**
+  — it reads ~$64 and is not buying power, not collateral, and not a balance
+  to top up. There has NEVER been a spot->perp `accountClassTransfer` on this
+  account and none is needed: the book has traded perps for weeks without
+  one, and there is no transfer procedure to hand over. Authoritative reads
+  are the `portfolio` endpoint's `accountValue`, or spot + perp — which is
+  exactly what `hl.py`'s `equity()` already does and documents in its own
+  docstring. Before raising ANY margin/funding/balance alarm, query
+  `portfolio` and `spotClearinghouseState` and quote them. The general form
+  of the error: a small number in ONE wallet is not a shortfall, and a chain
+  of consequences built on one unverified premise is not a finding.
 - Live trading separation of powers: strategy engines are ALWAYS keyless
   decision brains; credentials live only in executor services — btc-executor
   (trade-only Coinbase key) and ibkr-executor (IBKR connection; ALL
   automated IBKR trading routes through it). DRY_RUN defaults + staged
   rollout gates (EXECUTOR.md / ibkr-executor/README.md) are the law.
   Model IDs never appear in commits, PRs, or code comments.
+
+## Agent orchestration: cost discipline, never quality (STANDING)
+
+REPO-WIDE — every service here, not just the executors: treasury-canary,
+the research dashboards, edge-monitor and the deal analyzer included
+(Casey, 2026-09-16). Origin: one btc-executor task burned ~7.7M subagent
+tokens across three workflows. Cut the DUPLICATION, never the thinking.
+What is at stake differs by service and never changes the rule — real
+money on the executors; on the research side a wrong number Casey acts on,
+or a dashboard that misreports while looking healthy.
+
+- **Read once, pass down.** One digest pass maps the relevant code paths
+  and exact line ranges; downstream agents read only the functions they
+  are actually working on. In that task 24 verifiers each independently
+  read the same ~4k-line file — ~22% of the whole spend on re-reading.
+  EXCEPTION: an adversarial reviewer still reads the REAL code for what it
+  attacks; a summary can hide the bug it was sent to find.
+- **Scale the fan-out to severity.** Two independent verifiers for
+  BLOCKING/SERIOUS, one for MINOR, none for NOTE (record and move on).
+- **NEVER downgrade the model or the effort** (Casey's explicit call). Full
+  model, high effort on every stage touching correctness, tests, a number
+  Casey will act on, or live money — mechanical-looking stages included. This caps the achievable
+  saving at roughly a third rather than half; that is the intended trade.
+- **No speculative breadth.** Two candidate designs, not four, once a
+  measurement has ruled the others out. Never build a phase whose result
+  cannot change the decision.
+
+THE ONE PASS NEVER TO CUT: independent verification by agents that did not
+write the code. On that task it found nine defects the author's own
+self-review missed, including one that would have halted the live book on
+its first boot. The same applies to a study, a dataset or a scoring
+instrument — it is the counter-agent rule above, staffed properly. Note also that a mid-run spend limit kills agents whose
+tokens are already spent — prefer fewer, better-scoped agents over a wide
+fan-out that may die halfway.

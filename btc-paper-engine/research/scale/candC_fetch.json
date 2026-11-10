@@ -1,0 +1,620 @@
+{
+ "generated_utc": "2026-09-28T18:24:44Z",
+ "rule": {
+  "min_day_vlm_usd": 30000000.0,
+  "probe_notional_usd": 125000.0,
+  "max_probe_bps": 10.0
+ },
+ "vol_ok": [
+  "BTC",
+  "ETH",
+  "HYPE",
+  "ZEC",
+  "NEAR",
+  "SOL",
+  "PUMP",
+  "XRP",
+  "ENA",
+  "ONDO",
+  "SUI",
+  "LINK",
+  "WLD",
+  "XPL",
+  "UNI",
+  "LIT",
+  "TAO",
+  "HBAR",
+  "LTC",
+  "PONS",
+  "JUP",
+  "ARB",
+  "CASHCAT",
+  "DOGE",
+  "MON"
+ ],
+ "complete_history": [
+  "ARB",
+  "BTC",
+  "DOGE",
+  "ENA",
+  "ETH",
+  "JUP",
+  "LINK",
+  "LTC",
+  "ONDO",
+  "SOL",
+  "SUI",
+  "TAO",
+  "XRP"
+ ],
+ "later_listings_excluded": [
+  "CASHCAT",
+  "HBAR",
+  "HYPE",
+  "LIT",
+  "MON",
+  "NEAR",
+  "PONS",
+  "PUMP",
+  "UNI",
+  "WLD",
+  "XPL",
+  "ZEC"
+ ],
+ "eligible": [
+  "BTC",
+  "ETH",
+  "SOL",
+  "XRP",
+  "LTC",
+  "DOGE"
+ ],
+ "depth": {
+  "BTC": {
+   "mid": 83945.0,
+   "bid_depth_usd": 47603527.8855,
+   "ask_depth_usd": 34888692.04749999,
+   "buy_bps": 1.782819544924319,
+   "sell_bps": 0.5956280898211652,
+   "round_trip_bps": 2.378447634745484,
+   "spread_bps": 1.1912561796414318,
+   "fine_book_buy_bps": 1.4723157990181868,
+   "fine_book_complete": true,
+   "pass": true
+  },
+  "ETH": {
+   "mid": 2696.5,
+   "bid_depth_usd": 60030848.9956,
+   "ask_depth_usd": 58627878.8289,
+   "buy_bps": 4.821305240370055,
+   "sell_bps": 1.8542555164102748,
+   "round_trip_bps": 6.67556075678033,
+   "spread_bps": 3.708511032820323,
+   "fine_book_buy_bps": 1.0022423883260245,
+   "fine_book_complete": true,
+   "pass": true
+  },
+  "SOL": {
+   "mid": 119.85,
+   "bid_depth_usd": 34994652.406,
+   "ask_depth_usd": 43554514.965,
+   "buy_bps": 4.1718815185665115,
+   "sell_bps": 4.171881518565401,
+   "round_trip_bps": 8.343763037131913,
+   "spread_bps": 8.343763037130458,
+   "fine_book_buy_bps": 0.791767286518752,
+   "fine_book_complete": true,
+   "pass": true
+  },
+  "XRP": {
+   "mid": 1.5114999999999998,
+   "bid_depth_usd": 16070090.168,
+   "ask_depth_usd": 14472489.222,
+   "buy_bps": 3.307972213033583,
+   "sell_bps": 3.3425972446810004,
+   "round_trip_bps": 6.6505694577145835,
+   "spread_bps": 6.615944426067562,
+   "fine_book_buy_bps": 1.0169662935810564,
+   "fine_book_complete": true,
+   "pass": true
+  },
+  "ENA": {
+   "mid": 0.26239999999999997,
+   "bid_depth_usd": 869468.3598999998,
+   "ask_depth_usd": 1371962.0366,
+   "buy_bps": 10.356061797740512,
+   "sell_bps": 15.498561625596485,
+   "round_trip_bps": 25.854623423336996,
+   "spread_bps": 7.621951219513472,
+   "fine_book_buy_bps": null,
+   "fine_book_complete": false,
+   "pass": false
+  },
+  "ONDO": {
+   "mid": 0.51775,
+   "bid_depth_usd": 517962.9475,
+   "ask_depth_usd": 541364.8401999999,
+   "buy_bps": 8.967972237357014,
+   "sell_bps": 13.951727931138524,
+   "round_trip_bps": 22.919700168495538,
+   "spread_bps": 1.9314340898114724,
+   "fine_book_buy_bps": null,
+   "fine_book_complete": false,
+   "pass": false
+  },
+  "SUI": {
+   "mid": 1.1665,
+   "bid_depth_usd": 4314075.127199999,
+   "ask_depth_usd": 3756344.8842000007,
+   "buy_bps": 12.197429916400715,
+   "sell_bps": 8.079180662835528,
+   "round_trip_bps": 20.27661057923624,
+   "spread_bps": 8.572653236177555,
+   "fine_book_buy_bps": 7.09358221080203,
+   "fine_book_complete": true,
+   "pass": false
+  },
+  "LINK": {
+   "mid": 15.205,
+   "bid_depth_usd": 2028141.8590000002,
+   "ask_depth_usd": 1926789.7149999999,
+   "buy_bps": 5.703203624389808,
+   "sell_bps": 13.066136549357843,
+   "round_trip_bps": 18.76934017374765,
+   "spread_bps": 6.576783952648183,
+   "fine_book_buy_bps": 6.430933772807457,
+   "fine_book_complete": true,
+   "pass": false
+  },
+  "TAO": {
+   "mid": 305.55,
+   "bid_depth_usd": 964123.0914999999,
+   "ask_depth_usd": 1243914.0698000002,
+   "buy_bps": 7.010462262182493,
+   "sell_bps": 13.597197362889002,
+   "round_trip_bps": 20.607659625071495,
+   "spread_bps": 3.2727867779421613,
+   "fine_book_buy_bps": null,
+   "fine_book_complete": false,
+   "pass": false
+  },
+  "LTC": {
+   "mid": 69.465,
+   "bid_depth_usd": 330017.9696,
+   "ask_depth_usd": 443066.23029999994,
+   "buy_bps": 8.052587709010961,
+   "sell_bps": 8.512478694202574,
+   "round_trip_bps": 16.565066403213535,
+   "spread_bps": 1.439573886130442,
+   "fine_book_buy_bps": null,
+   "fine_book_complete": false,
+   "pass": true
+  },
+  "JUP": {
+   "mid": 0.3333,
+   "bid_depth_usd": 129094.25779999998,
+   "ask_depth_usd": 62608.48720000001,
+   "buy_bps": null,
+   "sell_bps": 33.03246891457334,
+   "round_trip_bps": null,
+   "spread_bps": 6.00060006000534,
+   "fine_book_buy_bps": null,
+   "fine_book_complete": false,
+   "pass": false
+  },
+  "ARB": {
+   "mid": 0.20765,
+   "bid_depth_usd": 713514.20992,
+   "ask_depth_usd": 1093668.89193,
+   "buy_bps": 15.384730040399752,
+   "sell_bps": 17.69847172341521,
+   "round_trip_bps": 33.08320176381496,
+   "spread_bps": 4.815795810257114,
+   "fine_book_buy_bps": null,
+   "fine_book_complete": false,
+   "pass": false
+  },
+  "DOGE": {
+   "mid": 0.094885,
+   "bid_depth_usd": 846548.2091199999,
+   "ask_depth_usd": 984388.15281,
+   "buy_bps": 1.7599259794454092,
+   "sell_bps": 6.072979061725325,
+   "round_trip_bps": 7.832905041170735,
+   "spread_bps": 1.0539073615425119,
+   "fine_book_buy_bps": 1.5453305189505606,
+   "fine_book_complete": true,
+   "pass": true
+  }
+ },
+ "venue_info": {
+  "BTC": {
+   "maxLeverage": 40,
+   "szDecimals": 5,
+   "marginTableId": 56,
+   "dayNtlVlm": 2639090091.7921743,
+   "markPx": 83926.0,
+   "openInterestUsd": 3163583285.2232003,
+   "funding_hourly": 1.25e-05
+  },
+  "ETH": {
+   "maxLeverage": 25,
+   "szDecimals": 4,
+   "marginTableId": 55,
+   "dayNtlVlm": 1202747690.8889635,
+   "markPx": 2695.7,
+   "openInterestUsd": 3015467107.378035,
+   "funding_hourly": 1.25e-05
+  },
+  "HYPE": {
+   "maxLeverage": 10,
+   "szDecimals": 2,
+   "marginTableId": 52,
+   "dayNtlVlm": 554061296.5748111,
+   "markPx": 88.671,
+   "openInterestUsd": 1824294218.3591402,
+   "funding_hourly": 1.25e-05
+  },
+  "ZEC": {
+   "maxLeverage": 10,
+   "szDecimals": 2,
+   "marginTableId": 52,
+   "dayNtlVlm": 462555956.43599874,
+   "markPx": 1525.0,
+   "openInterestUsd": 826943236.499996,
+   "funding_hourly": 1.25e-05
+  },
+  "NEAR": {
+   "maxLeverage": 10,
+   "szDecimals": 1,
+   "marginTableId": 52,
+   "dayNtlVlm": 418867556.90923035,
+   "markPx": 4.9355,
+   "openInterestUsd": 364722769.57799965,
+   "funding_hourly": 1.25e-05
+  },
+  "SOL": {
+   "maxLeverage": 20,
+   "szDecimals": 2,
+   "marginTableId": 54,
+   "dayNtlVlm": 356153753.08779997,
+   "markPx": 119.7856,
+   "openInterestUsd": 682459089.064192,
+   "funding_hourly": 1.25e-05
+  },
+  "PUMP": {
+   "maxLeverage": 10,
+   "szDecimals": 0,
+   "marginTableId": 52,
+   "dayNtlVlm": 257028289.95439416,
+   "markPx": 0.005266,
+   "openInterestUsd": 235905740.431056,
+   "funding_hourly": 5.88553e-05
+  },
+  "XRP": {
+   "maxLeverage": 20,
+   "szDecimals": 0,
+   "marginTableId": 53,
+   "dayNtlVlm": 253016549.7467,
+   "markPx": 1.5107,
+   "openInterestUsd": 285080589.44839996,
+   "funding_hourly": 1.25e-05
+  },
+  "ENA": {
+   "maxLeverage": 10,
+   "szDecimals": 0,
+   "marginTableId": 52,
+   "dayNtlVlm": 123712146.44555002,
+   "markPx": 0.262011,
+   "openInterestUsd": 156656373.755868,
+   "funding_hourly": 1.25e-05
+  },
+  "ONDO": {
+   "maxLeverage": 10,
+   "szDecimals": 0,
+   "marginTableId": 51,
+   "dayNtlVlm": 111935395.81386,
+   "markPx": 0.517354,
+   "openInterestUsd": 73139193.78763999,
+   "funding_hourly": 1.25e-05
+  },
+  "SUI": {
+   "maxLeverage": 10,
+   "szDecimals": 1,
+   "marginTableId": 52,
+   "dayNtlVlm": 84959061.15361004,
+   "markPx": 1.1658,
+   "openInterestUsd": 88876674.21252002,
+   "funding_hourly": 1.25e-05
+  },
+  "LINK": {
+   "maxLeverage": 10,
+   "szDecimals": 1,
+   "marginTableId": 52,
+   "dayNtlVlm": 69505673.93090004,
+   "markPx": 15.192,
+   "openInterestUsd": 111327863.21280003,
+   "funding_hourly": 1.25e-05
+  },
+  "WLD": {
+   "maxLeverage": 10,
+   "szDecimals": 1,
+   "marginTableId": 52,
+   "dayNtlVlm": 59897206.71111605,
+   "markPx": 0.49932,
+   "openInterestUsd": 81131981.139576,
+   "funding_hourly": 1.25e-05
+  },
+  "XPL": {
+   "maxLeverage": 10,
+   "szDecimals": 0,
+   "marginTableId": 51,
+   "dayNtlVlm": 57888105.91435302,
+   "markPx": 0.10076,
+   "openInterestUsd": 94120724.69976,
+   "funding_hourly": 2.3951e-05
+  },
+  "UNI": {
+   "maxLeverage": 10,
+   "szDecimals": 1,
+   "marginTableId": 52,
+   "dayNtlVlm": 54884323.75687006,
+   "markPx": 8.9038,
+   "openInterestUsd": 82561078.49308005,
+   "funding_hourly": 1.25e-05
+  },
+  "LIT": {
+   "maxLeverage": 5,
+   "szDecimals": 0,
+   "marginTableId": 5,
+   "dayNtlVlm": 46889579.84739998,
+   "markPx": 4.3698,
+   "openInterestUsd": 205168673.4396,
+   "funding_hourly": 1.25e-05
+  },
+  "TAO": {
+   "maxLeverage": 5,
+   "szDecimals": 3,
+   "marginTableId": 5,
+   "dayNtlVlm": 42826870.00561002,
+   "markPx": 305.35,
+   "openInterestUsd": 84486757.13749996,
+   "funding_hourly": 1.25e-05
+  },
+  "HBAR": {
+   "maxLeverage": 5,
+   "szDecimals": 0,
+   "marginTableId": 5,
+   "dayNtlVlm": 37663003.26015702,
+   "markPx": 0.1286,
+   "openInterestUsd": 18070800.2412,
+   "funding_hourly": 1.25e-05
+  },
+  "LTC": {
+   "maxLeverage": 10,
+   "szDecimals": 2,
+   "marginTableId": 52,
+   "dayNtlVlm": 36156942.70099,
+   "markPx": 69.4,
+   "openInterestUsd": 50661210.22799999,
+   "funding_hourly": 1.25e-05
+  },
+  "PONS": {
+   "maxLeverage": 3,
+   "szDecimals": 0,
+   "marginTableId": 3,
+   "dayNtlVlm": 35773040.29018991,
+   "markPx": 0.54,
+   "openInterestUsd": 54427685.400000006,
+   "funding_hourly": 8.585e-05
+  },
+  "JUP": {
+   "maxLeverage": 10,
+   "szDecimals": 0,
+   "marginTableId": 51,
+   "dayNtlVlm": 34637512.187080026,
+   "markPx": 0.33265,
+   "openInterestUsd": 19886091.7689,
+   "funding_hourly": 1.25e-05
+  },
+  "ARB": {
+   "maxLeverage": 10,
+   "szDecimals": 1,
+   "marginTableId": 51,
+   "dayNtlVlm": 34571989.405798,
+   "markPx": 0.20743,
+   "openInterestUsd": 27432435.625376,
+   "funding_hourly": 1.25e-05
+  },
+  "CASHCAT": {
+   "maxLeverage": 3,
+   "szDecimals": 0,
+   "marginTableId": 3,
+   "dayNtlVlm": 32633643.764269985,
+   "markPx": 0.18831,
+   "openInterestUsd": 46849906.6509,
+   "funding_hourly": 0.0001059797
+  },
+  "DOGE": {
+   "maxLeverage": 10,
+   "szDecimals": 0,
+   "marginTableId": 52,
+   "dayNtlVlm": 31338165.386023987,
+   "markPx": 0.094803,
+   "openInterestUsd": 109738000.11963,
+   "funding_hourly": 1.25e-05
+  },
+  "MON": {
+   "maxLeverage": 5,
+   "szDecimals": 0,
+   "marginTableId": 5,
+   "dayNtlVlm": 30366244.887172,
+   "markPx": 0.028962,
+   "openInterestUsd": 44865429.24168,
+   "funding_hourly": 4.26492e-05
+  }
+ },
+ "history": {
+  "BTC": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "ETH": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "HYPE": {
+   "first": 1733385600000,
+   "last": 1790611200000,
+   "n": 3975
+  },
+  "ZEC": {
+   "first": 1745020800000,
+   "last": 1790611200000,
+   "n": 3167
+  },
+  "NEAR": {
+   "first": 1718625600000,
+   "last": 1790611200000,
+   "n": 5000
+  },
+  "SOL": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "PUMP": {
+   "first": 1752105600000,
+   "last": 1790611200000,
+   "n": 2675
+  },
+  "XRP": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "ENA": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "ONDO": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "SUI": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "LINK": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "WLD": {
+   "first": 1718625600000,
+   "last": 1790611200000,
+   "n": 5000
+  },
+  "XPL": {
+   "first": 1755849600000,
+   "last": 1790611200000,
+   "n": 2415
+  },
+  "UNI": {
+   "first": 1718625600000,
+   "last": 1790611200000,
+   "n": 5000
+  },
+  "LIT": {
+   "first": 1766404800000,
+   "last": 1790611200000,
+   "n": 1682
+  },
+  "TAO": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "HBAR": {
+   "first": 1718625600000,
+   "last": 1790611200000,
+   "n": 5000
+  },
+  "LTC": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "PONS": {
+   "first": 1788134400000,
+   "last": 1790611200000,
+   "n": 173
+  },
+  "JUP": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "ARB": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "CASHCAT": {
+   "first": 1783742400000,
+   "last": 1790611200000,
+   "n": 478
+  },
+  "DOGE": {
+   "first": 1718611200000,
+   "last": 1790611200000,
+   "n": 5001
+  },
+  "MON": {
+   "first": 1759896000000,
+   "last": 1790611200000,
+   "n": 2134
+  }
+ },
+ "bars_written": {
+  "BTC": 5001,
+  "ETH": 5001,
+  "SOL": 5001,
+  "XRP": 5001,
+  "LTC": 5001,
+  "DOGE": 5001
+ },
+ "grid_gaps": {
+  "BTC": 0,
+  "ETH": 0,
+  "SOL": 0,
+  "XRP": 0,
+  "LTC": 0,
+  "DOGE": 0
+ },
+ "common_grid": {
+  "start": 1718611200,
+  "end": 1790611200,
+  "n": 5001
+ },
+ "fixture_integrity": {
+  "overlap_bars": 4612,
+  "median_rel_bp": {
+   "close": 4.895656032497958,
+   "high": 5.132280663783804,
+   "low": 5.304571442531409,
+   "open": 4.896718510649996
+  },
+  "max_rel_bp": {
+   "close": 92.79933017024838,
+   "high": 245.80269944035993,
+   "low": 806.5060218994739,
+   "open": 81.61243528204643
+  }
+ }
+}

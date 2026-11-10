@@ -48,3 +48,35 @@ scratchpad (`atk1_psr_null` … `atk6_bocd_stress`).
 - BOCD is blind to SR-sized mean shifts (pinned by an honesty gate —
   by design a corroborator, never first-line).
 - Extreme-skew PSR loses power (conservative direction).
+
+# Round 2 — policy-economics re-evaluation (2026-08-14)
+
+Question asked for the first time: what does the monitoring POLICY cost in
+return terms? Sim + counter-agent verdict (paired paths, scripts archived
+as research_policy_sim.py):
+
+- Null drag on a healthy SR-1.2 book: −1.33pp/yr as first simmed, but
+  ~75-80% of that was terminal false halts the blueprint doesn't have;
+  with the RED→60d-shadow re-promotion lane priced: **−0.35pp/yr**.
+- Halting an edge that dies to ZERO saves ~nothing (−0.13pp even then) —
+  the return case rests entirely on decay going NEGATIVE post-costs
+  (+1.22pp/yr saved). **Breakeven prior ≈ 20-32%** within 5y (first
+  quoted ~52% — corrected by the referee).
+- Tuning frontier searched: no static (YELLOW size, DD quantile) point
+  dominates; gains are inside baseline-seed noise → thresholds stay
+  frozen at (0.5, p95) per the meta-overfitting rule. CUSUM-only YELLOW
+  is strictly worse (interaction raises false-RED).
+- CUSUM reset-on-YELLOW pinned as specification (worth 1.6pp/yr).
+- F-findings: joint-policy MC at registration replaces additive YELLOW
+  budget (confirmed); behavior-drift tripwire admitted as ops-only;
+  vol-standardized downside CUSUM = trial with a vol-drift false-alarm
+  gate (naive version fails it on 100% of paths); time-underwater
+  duration rejected (redundant); e-process/confidence-sequence adopted
+  for the confirmatory lane — fixes the weekly-peeked PSR(0)<0.05 RED
+  trigger (real alpha-inflation hole); dual null (size off SR_bt×0.7)
+  directionally confirmed, second-order, frozen-convention caveat.
+- Fresh unasked questions logged: (1) correlated alarms across books +
+  where freed capital goes (decides countercyclical-protection vs
+  whipsaw-machine; unmodeled); (2) calibrate h to a conservative
+  quantile over baseline bootstrap resamples (h varied 14.4→17.3 across
+  seeds); (3) all detection-speed claims carry a step-decay assumption.

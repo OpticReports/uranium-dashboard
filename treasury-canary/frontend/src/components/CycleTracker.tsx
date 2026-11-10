@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip,
-  ReferenceLine, ReferenceArea, CartesianGrid,
+  ReferenceLine, ReferenceArea, CartesianGrid, ErrorBar,
 } from "recharts";
 import { api } from "../lib/api";
 import { Panel, InlineError, Loading } from "./ui";
@@ -16,9 +16,61 @@ interface CycleBoard {
   rec_spans: [string, string][];
   zeberg_check: { holds: boolean; current_ma_k: number | null;
                   min_at_recession_starts_k: number | null };
-  stats: { precision: number | null; recall: number | null; threshold: number };
-  current: { month: string; coincident: number; leading: number; phase: string };
+  stats: { precision: number | null; precision_post1990?: number | null; recall: number | null; threshold: number };
+  current: { month: string; coincident: number; leading: number; phase: string; members_in_latest?: number;
+             coincident_completed?: number | null; completed_band?: [number, number] | null };
+  components?: { coincident: CycleMember[]; leading: CycleMember[] };
+  read?: { headline: string; drivers: string; calculation: string; reliability: string;
+           next: string; nowcast: string; completed?: string; piger?: string; flags?: string };
+  nowcast?: CycleNowcast | null;
+  completed?: CycleCompleted | null;
+  piger?: { month: string; pct: number; state_3x80: string; fires_1m50: boolean } | null;
+  flags?: { umcsent_delayed: boolean; umcsent_month: string | null; umcsent_lag_months: number | null } | null;
+  realtime?: { provisional: boolean; provisional_note: string | null };
   basis: string;
+}
+
+/* cycle-nowcast-v2 (pre-registered, scored 2026-10-28): the reading exists on every
+   day; value is null only with a reason (v1 §2.4). */
+interface CycleNowcast {
+  month: string; value: number | null; bridge: number | null; claims: number | null;
+  phase: string | null; claims_trigger: boolean; info_set: string | null;
+  lags: Record<string, number | null> | null; K: string | null; dropped: string[];
+  members_bridged: Record<string, number>; reason: string | null;
+  stats: Record<string, number | string>;
+}
+
+interface CycleCompleted {
+  month: string; value: number | null; band: [number, number] | null;
+  pattern: Record<string, number> | null; dropped: string[]; source: string | null; reason?: string;
+}
+
+interface CycleMember { label: string; z: number | null; month: string | null; in_latest: boolean }
+
+function zColor(z: number | null): string {
+  if (z == null) return "#64748b";
+  if (z <= -0.75) return "#f87171";
+  if (z < 0) return "#fbbf24";
+  return "#34d399";
+}
+
+/* One chip per composite member: the sign/size of its latest z, dimmed with its
+   own month when it has not yet published for the headline month. */
+function MemberStrip({ title, members, month }: { title: string; members: CycleMember[]; month: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <span className="mr-1 text-[10px] uppercase tracking-wide text-slate-500">{title}</span>
+      {members.map((c) => (
+        <span key={c.label}
+          title={c.in_latest ? `${c.label}: ${c.month}` : `${c.label}: last published ${c.month} (not yet in ${month})`}
+          className={`rounded border border-panelborder px-1.5 py-0.5 font-mono text-[10px] ${c.in_latest ? "" : "opacity-60"}`}>
+          <span className="text-slate-400">{c.label} </span>
+          <span style={{ color: zColor(c.z) }}>{c.z == null ? "n/a" : `${c.z >= 0 ? "+" : ""}${c.z.toFixed(2)}σ`}</span>
+          {!c.in_latest && c.month && <span className="text-slate-500"> {c.month}</span>}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 const PHASE_COLOR: Record<string, string> = {
@@ -35,6 +87,7 @@ export default function CycleTracker() {
   const [analogErr, setAnalogErr] = useState<string | null>(null);
   const [range, setRange] = useState<"5y" | "full">(
     () => (localStorage.getItem("cycleRange") as any) || "5y");
+  const [more, setMore] = useState(false);
 
   useEffect(() => {
     api.cycle()                     // getJson: 4-retry cold-boot handling
@@ -59,10 +112,20 @@ export default function CycleTracker() {
       pay: board.payroll_ma12_k[cut + i],
       phase: board.phase[cut + i],
     }));
-    const nc = (board as any).nowcast;
-    if (nc && out.length && view === "composite") {
-      out[out.length - 1].proj = out[out.length - 1].coin;   // dashed connector
-      out.push({ m: `${nc.month}*`, proj: nc.value });
+    const nc = board.nowcast;
+    const cp = board.completed;
+    if (out.length && view === "composite") {
+      const last = out[out.length - 1];
+      // D-2: the bridge-completed coincident for the headline month, with its
+      // completion band (p10/p90), drawn on the last point of the solid line
+      if (cp && cp.value != null && cp.month === last.m) {
+        last.comp = cp.value;
+        if (cp.band) last.compBand = [cp.value - cp.band[0], cp.band[1] - cp.value];
+      }
+      if (nc && nc.value != null) {
+        last.proj = cp && cp.value != null && cp.month === last.m ? cp.value : last.coin;   // dashed connector
+        out.push({ m: `${nc.month}*`, proj: nc.value });
+      }
     }
     return out;
   }, [board, range, view]);
@@ -102,11 +165,51 @@ export default function CycleTracker() {
           {(board as any).realtime?.provisional && (
             <span className="ml-1 rounded border border-amber-500/60 px-1 text-[9px] text-amber-400"
               title={(board as any).realtime.provisional_note}>PROVISIONAL</span>
-          )} · coin {cur.coincident >= 0 ? "+" : ""}{cur.coincident.toFixed(2)}
+          )}{cur.coincident_completed != null ? (
+            <> · coin {cur.coincident_completed >= 0 ? "+" : ""}{cur.coincident_completed.toFixed(2)}
+            {cur.completed_band && (
+              <span className="text-slate-500"> [{cur.completed_band[0].toFixed(2)}, {cur.completed_band[1].toFixed(2)}]</span>
+            )}
+            <span className="text-slate-500" title={`mean of the ${cur.members_in_latest ?? "?"} of 4 members published for ${cur.month}; the phase label and alerts use this partial value`}>
+              {" "}(partial {cur.coincident >= 0 ? "+" : ""}{cur.coincident.toFixed(2)})</span></>
+          ) : (
+            <> · coin {cur.coincident >= 0 ? "+" : ""}{cur.coincident.toFixed(2)}</>
+          )}
           {" "}· lead {cur.leading >= 0 ? "+" : ""}{cur.leading.toFixed(2)} · {cur.month}
           <InfoTip term="cycle_phase" />
         </span>
       </div>
+      {board.read && (
+        <div className="mb-2 rounded border border-panelborder bg-slate-900/50 px-3 py-2 text-[11px] leading-relaxed text-slate-300">
+          <div><span className="font-semibold text-slate-100">Read: </span>{board.read.headline}</div>
+          {board.components && (
+            <div className="mt-1.5 flex flex-col gap-1">
+              <MemberStrip title="coincident" members={board.components.coincident} month={cur.month} />
+              <MemberStrip title="leading" members={board.components.leading} month={cur.month} />
+            </div>
+          )}
+          {board.read.completed && (
+            <div className="mt-1.5 text-[10px] text-slate-300">{board.read.completed}</div>
+          )}
+          <div className="mt-1 text-[10px] text-slate-400">{board.read.nowcast}</div>
+          {board.read.piger && (
+            <div className="mt-1 text-[10px] text-slate-500">{board.read.piger}</div>
+          )}
+          {board.read.flags && (
+            <div className="mt-1 text-[10px] text-amber-400/80">{board.read.flags}</div>
+          )}
+          <button onClick={() => setMore(!more)} className="mt-1 text-[10px] text-sky-400 hover:text-sky-300">
+            {more ? "hide the method" : "how it's calculated · how reliable · what would change the phase"}
+          </button>
+          {more && (
+            <div className="mt-1 space-y-1 text-[10px] leading-relaxed text-slate-400">
+              <p><span className="text-slate-300">Calculation.</span> {board.read.calculation}</p>
+              <p><span className="text-slate-300">Reliability.</span> {board.read.reliability}</p>
+              <p><span className="text-slate-300">What would change it.</span> {board.read.next}</p>
+            </div>
+          )}
+        </div>
+      )}
       {view === "analogs" ? (
         <AnalogView analog={analog} err={analogErr} />
       ) : (
@@ -114,14 +217,19 @@ export default function CycleTracker() {
         <ComposedChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -14 }}>
           <CartesianGrid stroke="#1e293b" strokeWidth={0.5} />
           <XAxis dataKey="m" tick={{ fontSize: 9, fill: "#64748b" }} minTickGap={40} />
+          {/* 5y view: tighter band so the lines are not a flat strip around zero;
+              full view keeps [-3, 2] so the recession troughs stay in frame. */}
           <YAxis tick={{ fontSize: 9, fill: "#64748b" }}
-            domain={view === "composite" ? [-3, 2] : ["auto", "auto"]}
+            domain={view === "composite"
+              ? (range === "5y" ? [(dataMin: number) => Math.min(-1.6, dataMin - 0.1), 1.6] : [-3, 2])
+              : ["auto", "auto"]}
             allowDataOverflow={view === "composite"} />
           <Tooltip contentStyle={{ background: "#111a2e", border: "1px solid #26334e",
             fontSize: 11 }} labelStyle={{ color: "#93a4bd" }}
             formatter={(v: any, n: any) =>
-              [typeof v === "number" ? v.toFixed(2) : v,
-               n === "coin" ? "coincident (z)" : n === "lead" ? "leading (z)"
+              [typeof v === "number" ? v.toFixed(2) : Array.isArray(v) ? "" : v,
+               n === "coin" ? "coincident, partial (z)" : n === "lead" ? "leading (z)"
+               : n === "comp" ? "coincident, completed (z)" : n === "proj" ? "nowcast (z)"
                : "payrolls 12m MA (k/mo)"]} />
           {recAreas.map(([s, e]) => (
             <ReferenceArea key={s} x1={s} x2={e} fill="#64748b" fillOpacity={0.18} />
@@ -133,10 +241,15 @@ export default function CycleTracker() {
                 label={{ value: "recession-consistent", fontSize: 8, fill: "#f87171",
                          position: "insideBottomLeft" }} />
               <ReferenceLine y={-0.5} stroke="#fbbf24" strokeDasharray="2 3"
-                label={{ value: "leading warn", fontSize: 8, fill: "#fbbf24",
-                         position: "insideTopLeft" }} />
+                label={{ value: "leading warn (−0.5)", fontSize: 8, fill: "#fbbf24",
+                         position: "insideTopRight" }} />
               <Line dataKey="coin" stroke="#38bdf8" dot={false} strokeWidth={1.8} />
               <Line dataKey="lead" stroke="#c084fc" dot={false} strokeWidth={1.4} />
+              {/* completed coincident for the headline month with its p10/p90 band */}
+              <Line dataKey="comp" stroke="#38bdf8" strokeWidth={0} dot={{ r: 3.5, fill: "#0ea5e9", stroke: "#e0f2fe", strokeWidth: 1 }}
+                isAnimationActive={false}>
+                <ErrorBar dataKey="compBand" width={5} strokeWidth={1.2} stroke="#7dd3fc" direction="y" />
+              </Line>
               <Line dataKey="proj" stroke="#fbbf24" strokeWidth={1.6}
                 strokeDasharray="5 4" dot={{ r: 3, fill: "#fbbf24" }} />
             </>
@@ -156,12 +269,20 @@ export default function CycleTracker() {
           Purple = leading (curve·permits·claims·hours·credit·sentiment).
           Below −0.75: {Math.round((board.stats.precision ?? 0) * 100)}% precision /
           {" "}{Math.round((board.stats.recall ?? 0) * 100)}% recall vs NBER months (grey).
-          {(board as any).nowcast && (
-            <> Amber* = <b>next-month nowcast</b> {(board as any).nowcast.value.toFixed(2)} ({(board as any).nowcast.phase}) —
-            payrolls/claims/rates print ~1 month before the composite; walk-forward 1972–2026
-            (QA-corrected): RMSE −24% vs persistence (−7% ex-2020), ~25% of phase transitions
-            called a month early [CI 18–34%], recession onsets earlier 5/7 · never missed.</>
+          {board.completed && board.completed.value != null && (
+            <> Dot with bar = <b>completed coincident</b> for {board.completed.month} (lagging members bridged;
+            80% completion band; the partial mean of the published members stays the phase/alert quantity).</>
           )}
+          {board.nowcast && board.nowcast.value != null ? (
+            <> Amber* = <b>next-month nowcast</b> {board.nowcast.value.toFixed(2)} ({board.nowcast.phase}),
+            information set {board.nowcast.info_set} — payrolls/claims/rates print before the composite;
+            pre-registered v2 (scored 2026-10-28, two verifiers): RMSE −30% vs persistence 1972–2026 (−12% ex-2020;
+            thin since 2013, ratio 0.94); true real time 2013+ (one recession): 0.234 vs 0.253 for the best
+            persistence actually in hand, worse than hindsight persistence (0.194). Calibrated ADS comparator:
+            ratio 0.71 (success ≤ 1.10).</>
+          ) : board.nowcast ? (
+            <> No nowcast for {board.nowcast.month}: {board.nowcast.reason}.</>
+          ) : null}
           <InfoTip term="cycle_composite" /></>
         ) : (
           <>12-month average of monthly payroll change. Now {zc.current_ma_k?.toFixed(0)}k/mo —

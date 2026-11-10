@@ -1,0 +1,5 @@
+metric,value,n_months,definition
+P(crisis start within next 12m | random month),0.422,659,"any is_crisis=1 start in (m, m+12]"
+P(crisis start within next 24m | random month),0.694,647,"any start in (m, m+24]"
+P(crisis peak-stress month within next 12m | random month),0.382,659,"any peak_stress in (m, m+12]"
+P(month is inside a crisis window),0.478,671,start<=m<=end

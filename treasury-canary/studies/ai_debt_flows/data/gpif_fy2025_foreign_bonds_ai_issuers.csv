@@ -1,0 +1,16 @@
+issuer_pattern,n_lines,market_value_jpy,share_of_foreign_bonds_pct,as_of,source
+Oracle,53,11057004289,0.015,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+Amazon,36,8601592639,0.012,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+Meta,20,4106016301,0.006,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+Alphabet,21,6410893451,0.009,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+Microsoft,18,1747755445,0.002,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+Nvidia,4,114478457,0.0,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+Broadcom,34,3658994442,0.005,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+AI-lab-or-neocloud (CoreWeave etc.),2,140154059,0.0,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+Micron,9,99942634,0.0,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+SK Hynix,1,442496031,0.001,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+Samsung,0,0,0.0,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+Equinix,10,914499564,0.001,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+Digital Realty,4,509213817,0.001,2026-03-31,https://www.gpif.go.jp/en/performance/73509681gpif/unyoujoukyou_2025_20_en_2.xlsx
+US TREASURY (all lines),297,36841418400192,50.59,2026-03-31,same
+TOTAL foreign bonds,10040,72821314917344,100,2026-03-31,same

@@ -1,0 +1,9 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic-settings>=2.2
+httpx>=0.27
+# PINNED, same SDK and reason as btc-executor: a live-money venue adapter must
+# not re-resolve its SDK on an image rebuild. A gate test asserts every SDK
+# method this service calls exists at this exact version.
+hyperliquid-python-sdk==0.24.0
+eth-account>=0.10.0

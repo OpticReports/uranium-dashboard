@@ -27,8 +27,13 @@ import json
 import urllib.request
 
 API = "https://treasury-canary.onrender.com"
+# period1 = -1325583000 is ^GSPC's first trade (1927-12-30). period1=0 (the v2/v3
+# pull) silently started at 1970-01-02, which left-censored the 1968-11 peak and
+# stamped a spurious 1970-03 "drawdown start" (found by the oil study's data
+# audit, 2026-09-15). Every event inside the evaluable windows (1976+) is
+# identical under both pulls, so the v2/v3 frozen numbers are unaffected.
 GSPC = ("https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC"
-        "?period1=0&period2=4102444800&interval=1d")
+        "?period1=-1325583000&period2=4102444800&interval=1d")
 FAST = {"credit_event", "plumbing", "basis_trade", "carry_unwind"}  # = pins.FAST_HIGH_MASS
 SLOW_LETHAL = {"oil_shock", "policy_shock"}  # Hamilton 10/11; every tightening cycle
 CURVE_FLAT_PP = 0.25
@@ -155,6 +160,20 @@ def main() -> None:
         if rule == "slow_window+curve":
             s = (len(winopen[m] & SLOW_LETHAL) >= 1) if has(SLOW_LETHAL) else None
             return None if (s is None or inv[m] is None) else (s and inv[m])
+        # v4 (2026-09-15, studies/oil-shock-recession-weight.md §5 "Always"):
+        # the slow-lethal pair split into its two channels, so oil is measured
+        # ALONE for the first time — window-open and red, with and without curve.
+        for cid in ("oil_shock", "policy_shock"):
+            if rule == f"{cid}_window":
+                return (cid in winopen[m]) if has({cid}) else None
+            if rule == f"{cid}_red":
+                return (m in red[cid]) if has({cid}) else None
+            if rule == f"{cid}_window+curve":
+                w = (cid in winopen[m]) if has({cid}) else None
+                return None if (w is None or inv[m] is None) else (w and inv[m])
+            if rule == f"{cid}_red+curve":
+                r = (m in red[cid]) if has({cid}) else None
+                return None if (r is None or inv[m] is None) else (r and inv[m])
         raise ValueError(rule)
 
     def evaluate(rule: str, events: list[str]) -> dict | None:
@@ -181,26 +200,36 @@ def main() -> None:
                     precision=prec, base=base, recall=f"{caught}/{len(evs)}")
 
     rules = ("count2", "fast_window", "fast_red", "slow_window",
-             "curve", "fast_red+curve", "slow_window+curve")
+             "curve", "fast_red+curve", "slow_window+curve",
+             # v4 split of the slow-lethal pair (oil isolated from policy)
+             "oil_shock_window", "oil_shock_red", "policy_shock_window", "policy_shock_red",
+             "oil_shock_window+curve", "oil_shock_red+curve",
+             "policy_shock_window+curve", "policy_shock_red+curve")
     for events, name in ((onsets, "RECESSION ONSETS"),
                          ([e for e, _ in dds], "DRAWDOWN STARTS (>=15%)")):
         print(f"\n=== vs {name} (P(event within {HORIZON}m | signal-month)) ===")
-        print(f"{'rule':18} {'window':18} {'months':>7} {'clusters':>9} "
+        print(f"{'rule':26} {'window':18} {'months':>7} {'clusters':>9} "
               f"{'precision':>10} {'base':>6} {'recall':>7}")
         for rule in rules:
             r = evaluate(rule, events)
             if r:
-                print(f"{r['rule']:18} {r['window']:18} {r['n_on']:>7} "
+                print(f"{r['rule']:26} {r['window']:18} {r['n_on']:>7} "
                       f"{r['cl_hits']}/{r['n_clusters']:<7} "
                       f"{r['precision']:>9.0%} {r['base']:>6.0%} {r['recall']:>7}")
 
-    print("\nfast_red+curve — per-drawdown detail (lead = months before the PEAK):")
-    for ev, depth in dds:
-        leads = [k for k in range(1, HORIZON + 1)
-                 if signal("fast_red+curve", add_m(ev, -k))]
-        tag = (f"caught, fired {max(leads)}-{min(leads)}m before the peak"
-               if leads else "MISSED")
-        print(f"  {ev} (-{depth}%): {tag}")
+    for rule in ("fast_red+curve", "oil_shock_red", "oil_shock_window+curve"):
+        print(f"\n{rule} — per-drawdown detail (lead = months before the PEAK):")
+        for ev, depth in dds:
+            leads = [k for k in range(1, HORIZON + 1)
+                     if signal(rule, add_m(ev, -k))]
+            tag = (f"caught, fired {max(leads)}-{min(leads)}m before the peak"
+                   if leads else "MISSED")
+            print(f"  {ev} (-{depth}%): {tag}")
+        print(f"{rule} — per-onset detail (lead = months before the onset):")
+        for ev in onsets:
+            leads = [k for k in range(1, HORIZON + 1) if signal(rule, add_m(ev, -k))]
+            tag = (f"caught, fired {max(leads)}-{min(leads)}m before" if leads else "MISSED")
+            print(f"  {ev}: {tag}")
 
 
 if __name__ == "__main__":

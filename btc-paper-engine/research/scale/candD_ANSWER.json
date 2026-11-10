@@ -1,0 +1,185 @@
+{
+  "candidate": "D - buy size back by fixing execution and carry",
+  "verdict": "promising-needs-work",
+  "one_line": "Fixing the entry to rest as a real maker buys 1.40x authorised size (paired-seed, 12/12 seeds, t=63) and is a cheap, safe, executor-only change - but the authorised-size number it multiplies collapses to zero under ANY perturbation of the input data series, so it must ship as a cost reduction, not as a size authorisation.",
+
+  "measured_on": {
+    "window": "2024-07 -> 2026-07 (the single-touch holdout; also the only window where perp/spot basis data exists)",
+    "basis": "PERP space, net of funding - NOT the spot basis every published number in this repo uses",
+    "equity": 100055.0,
+    "in_sample": true,
+    "note": "bars_4h_btcusd.csv already carries ~2515 prior trials per RESEARCH_PROTOCOL; every number here is an upper bound on honest size and none of it is a forecast."
+  },
+
+  "size_multiple": {
+    "live_today_authorised_gross_usd": 64535,
+    "fix1_maker_entry_authorised_gross_usd": 93051,
+    "ceiling_both_maker_authorised_gross_usd": 120066,
+    "ratio_reference_seed": 1.442,
+    "ratio_paired_seed_mean": 1.396,
+    "ratio_paired_seed_sd": 0.044,
+    "ratio_range": [1.33, 1.45],
+    "positive_of_seeds": "12/12",
+    "d_p10_mean": 0.1925, "d_p10_sd": 0.0106, "t_stat": 63.2,
+    "break_even_adverse_selection_bps": 2.88,
+    "break_even_note": "exact and analytic: a worse fill price and a higher fee enter the P&L through the SAME term, so there is no Kelly nonlinearity to discover. The sweep confirms it - at a 2.88 bps penalty rec_m returns to 0.43, identical to doing nothing."
+  },
+
+  "new_measurement_the_basis": {
+    "what": "Hyperliquid BTC perp close vs Bitstamp spot close, 4612 aligned 4h bars, 2024-06-17 -> 2026-07-25. Never measured in this repo before.",
+    "median_bps": 0.442, "mean_bps": 0.980,
+    "p10_bps": -7.605, "p90_bps": 10.397, "min_bps": -92.799, "max_bps": 35.158,
+    "frac_positive": 0.518,
+    "frac_abs_gt_288bps": 0.699,
+    "by_year_median_bps": {"2024": 3.014, "2025": -1.391, "2026": 1.646},
+    "cost_in_authorised_size": "-12% ($75,041 spot-space -> $66,036 perp-space)",
+    "per_trade_drag_bps": {"pullback": {"mean": -1.547, "sd": 6.32},
+                           "trend": {"mean": 2.609, "sd": 7.33}},
+    "why_it_matters": "70% of bars carry a basis larger than 2.88 bps - the ENTIRE prize from fixing the fee. The mis-pricing the fix corrects is smaller than the noise it sits in.",
+    "is_it_removable": "NO. Signalling on perp bars to eliminate it destroys the edge (rec_m 0.47 -> 0.00). The basis drag must be accepted, not engineered away."
+  },
+
+  "alo_rejection_mechanism": {
+    "root_cause_quoted_from_code": "mirror.py:4486 - 'The engine prices signals off SPOT but we trade a FUTURE; at a positive basis short limits are marketable and post-only is rejected.'",
+    "confirmed": "engine bars are Bitstamp/Kraken spot (app/sources/bitstamp.py); /exec/target publishes pend.limit = the raw spot bar close (main.py:103); the venue is the HL perp.",
+    "predicted_cross_rate_basis_only": 0.323,
+    "predicted_cross_rate_with_40s_latency": 0.372,
+    "predicted_cross_rate_with_80s_latency": 0.388,
+    "p_of_observing_4_of_4": 0.019,
+    "UNEXPLAINED": "The basis+latency model does NOT explain 4 of 4 rejections (p=0.019). Something else is acting and I will not guess it - see open questions.",
+    "latency_chain": "paper engine POLL_SECONDS=60 (render.yaml) + executor poll_seconds=20 (config.py:76) = up to 80s from bar close to the venue",
+    "basis_translation_is_NOT_the_fix": "translating the limit to the perp's own last price leaves a ~49% cross rate (bid-ask bounce plus drift) - WORSE than today's 32%. The order must rest on the PASSIVE side of the perp spread, not at its last price."
+  },
+
+  "funding_at_size": {
+    "headline": "Funding does NOT constrain the $1m target. It is a proportional haircut, not a ceiling - it scales with notional exactly like fees, so the ratio at $1m is identical to the ratio at $15k.",
+    "first_measurement_of_the_trend_leg": "phase 1 measured the pullback leg only and refused to guess the trend leg. Both are measured here.",
+    "full_funding_window_2023-05_to_2026-09": {
+      "pullback_pct_of_own_notional_per_year": -1.1225,
+      "trend_pct_of_own_notional_per_year": -4.0792,
+      "blend_pct_of_GROSS_per_year": -1.8617
+    },
+    "basis_window_2024-06_to_2026-07": {
+      "pullback_pct_of_own_notional_per_year": 0.0556,
+      "trend_pct_of_own_notional_per_year": -0.6943,
+      "blend_pct_of_GROSS_per_year": -0.1319
+    },
+    "by_year_blended_pct_of_gross": {"2023": -5.661, "2024": -3.273,
+                                     "2025": 0.306, "2026": 0.401},
+    "REGIME_WARNING": "The same book pays 5.66%/yr of gross in 2023 and EARNS 0.40% in 2026. A 14x swing with the window. Phase 1's +0.0202%/yr credit, my -0.13% and my -1.86% are three different windows of the same quantity and all three are correct. Funding is NOT a constant to quote.",
+    "dollars": {
+      "at_15k_gross": {"funding_per_year": -279, "fees_per_year": -497},
+      "at_100k_gross": {"funding_per_year": -1862, "fees_per_year": -3314},
+      "at_1m_gross": {"funding_per_year": -18617, "fees_per_year": -33136,
+                      "all_long_worst_90d_regime_bound": -146469}
+    },
+    "funding_as_share_of_fee_load": 0.562,
+    "kelly_cost": {
+      "full_window": "rec_m 0.77 -> 0.68, paired-seed ratio 0.937 (8/8 below 1.0)",
+      "basis_window": "rec_m 0.45 -> 0.44, paired-seed ratio 0.985 (4/8 below 1.0)"
+    },
+    "why_the_book_pays_despite_being_half_short": "the book is long-biased exactly when funding is hot (phase 1 found 62% long in hot regimes on the pullback leg). The two halves do not cancel over the full history - they only cancelled in the cool 2025-26 window phase 1 happened to measure."
+  },
+
+  "THE_BLOCKER": {
+    "what": "authorised size survives only on the exact price AND volume series the strategy was selected on",
+    "cells": {
+      "spot_price_spot_volume_LIVE": {"rec_m": 0.47, "p10": 0.47, "prob_negative_edge": 0.064, "mean_step_pct": 0.304, "n": 148, "gross": 70539},
+      "perp_price_perp_volume":      {"rec_m": 0.00, "p10": 0.00, "prob_negative_edge": 0.343, "mean_step_pct": 0.109, "n": 113, "gross": 0},
+      "perp_price_SPOT_volume":      {"rec_m": 0.00, "p10": 0.00, "prob_negative_edge": 0.191, "mean_step_pct": 0.219, "n": 117, "gross": 0},
+      "spot_price_PERP_volume":      {"rec_m": 0.00, "p10": 0.00, "prob_negative_edge": 0.110, "mean_step_pct": 0.255, "n": 145, "gross": 0}
+    },
+    "sample_size_is_controlled": "the spot_price+PERP_volume cell holds n at 145 against the live 148 and STILL zeroes the p10, so this is not a small-n artifact",
+    "kill_rule": "kelly.py kills at prob_negative_edge > 0.25. The perp/perp cell is at 0.343 - KILLED by the repo's own rule.",
+    "price_series_correlation": 0.999123,
+    "volume_series_correlation": 0.6118,
+    "signal_agreement": {"pullback_with_vol_filter": 0.691,
+                         "pullback_without_vol_filter": 0.936,
+                         "donchian_pure_price_control": 0.937},
+    "reading": "The price conditions transfer at 94% - the same as the pure-price donchian control. The volume filter drops agreement to 69%, and removing it takes rec_m from 0.47 to 0.00 on spot bars. The measured edge is concentrated in the single most venue-specific input the strategy reads.",
+    "consequence": "The 1.40x is a real multiple on a number that is not robust. Multiplying a fragile base by 1.40 does not make it less fragile."
+  },
+
+  "does_it_reach_1m": {
+    "answer": "NO",
+    "equity_needed_for_1m_gross": {
+      "today_unfixed": 1549000,
+      "after_fix1": 1075000,
+      "at_the_unachievable_ceiling": 833000
+    },
+    "note": "FIX 1 roughly halves the equity needed for $1m against phase 1's today-figure, but $1m on $100k equity is 10x gross/equity against a measured authorised 0.65-0.93x. Candidate D is an edge lever; it cannot substitute for capital.",
+    "rail_still_binds_first": "every arm measured, INCLUDING the un-fixed baseline at $64,535, exceeds MAX_NOTIONAL_USD $20,000. The fee fix cannot move one dollar of live size until the rail moves."
+  },
+
+  "code_change": {
+    "file": "btc-executor/app/hl.py",
+    "function": "place_limit (L690-712)",
+    "today": "on an Alo rejection it immediately re-sends Gtc at the same price rounded TOWARD aggression and pays taker",
+    "change": [
+      "on a venue-CONFIRMED 'post only' rejection (which means no order was created), read the live touch from l2Book",
+      "re-price to the PASSIVE side: best_bid for BUY, best_ask for SELL - NOT a basis-translated last price (measured 49% cross rate)",
+      "re-send Alo at that price with the SAME cloid",
+      "bound it: MAKER_REPRICE_MAX = 2 attempts",
+      "on exhaustion fall back to today's Gtc cross, unchanged, and still append to post_only_crosses so the ramp's coverage row sees it",
+      "ship behind MAKER_REPRICE_ENABLED defaulting to FALSE"
+    ],
+    "residual_cross_rate": {"after_1_reprice": 0.243, "after_2_reprices": 0.120},
+    "separation_of_powers": "the change lives ENTIRELY in the credentialed executor. The engine stays a keyless decision brain and keeps publishing the spot limit unchanged - it must not read the venue book, which is precisely why the re-pricing cannot live there.",
+    "unbooked_fill_unprotected_interaction": "a true maker fill lands LATER inside the bar than a crossing fill, so the window between fill and the engine's next bar-close booking gets SHORTER on average. The change does not create a new unprotected window and does not remove the existing structural one.",
+    "net_mirror_invariants": "the retry stays INSIDE place_limit under the SAME cloid, exactly as the existing Gtc retry already does, so the mirror still sees one cloid and one order and its identity/dedupe machinery (mirror.py L2600-2660) is untouched. Any non-post-only error still raises, as today.",
+    "new_operational_cost": "up to ~1s of extra wall clock inside place_limit before the mirror's _ostat(cloid) read, which can turn a CONFIRMED read into UNKNOWN. That is the SAFE direction - UNKNOWN is treated as possibly-live and the ref is kept - so the failure mode is a spurious entry_unconfirmed RED page, not a lost or duplicated order.",
+    "second_order_divergence": "the engine computes the stop from ITS limit (stop = limit +/- 2.5*ATR) and the mirror places that level regardless of our fill, so a re-priced fill carries a stop off by the fill offset: ~10 bps against a 414 bps median stop distance, i.e. ~2.4% of intended risk.",
+    "merge_blocking_gate_tests": [
+      "re-prices to the touch and re-sends Alo on a simulated 'post only' rejection, at most MAKER_REPRICE_MAX times",
+      "after exhaustion falls back to Gtc and appends exactly ONE entry to post_only_crosses",
+      "a non-post-only RuntimeError still raises and never re-prices",
+      "the cloid is unchanged across all attempts",
+      "with MAKER_REPRICE_ENABLED=False the path is byte-identical to today"
+    ]
+  },
+
+  "counter_agent_verification": {
+    "V1_bar_alignment": "CONFIRMED - basis sd 7.31 bps at shift 0 vs 98.68 / 99.42 bps at +/-1 bar. A mis-joined series would read as a 4h return difference; it does not.",
+    "V2_perp_transform": "CONFIRMED - closed form vs brute force, max abs diff 1.11e-16",
+    "V3_funding_sign": "CONFIRMED - sign and magnitude agree with phase 1's independent pullback figure on its own window",
+    "V4_trade_set_fee_invariant": "CONFIRMED - 93 pullback trades at 8.64 / 5.76 / 2.88 / 12.00 bps; the fee axis is a paired comparison, it changes what trades KEEP, never which trades happen",
+    "V5_basis_tails": "outliers sit in high-range bars, consistent with real basis rather than a join error (which V1 already excludes)",
+    "V6_blend_helper": "CONFIRMED - reproduces the committed fee_to_notional.blend_steps to 2.39e-16 on 155 steps",
+    "integrity": "reconstructed pnl_pct vs the engine's own: max abs diff 7.105e-15 pct-points"
+  },
+
+  "not_modelled": [
+    "queue-level adverse selection on a resting order - 4h bars cannot measure it. Stated as a tolerance (2.88 bps) instead of asserted to be zero.",
+    "the live fill prices of the 4 observed Alo crossings",
+    "cash_apy on the ~$100k spot USDC (inherited open question, still the largest single swing in authorised size)",
+    "intra-bar basis; entry basis is taken at the signal bar close and exit basis at the exit bar close (the open-basis variant moves rec_m by 0.00)",
+    "MTM drawdown - everything here is trade-close basis, and KELLY.md records MTM running 1-4pp worse"
+  ],
+
+  "open_questions_ranked": [
+    "P1 - The live pending limits and FILL PRICES for the 4 observed Alo crossings. My basis+latency model predicts a 32-39% cross rate and 4/4 is p=0.019, so a mechanism I cannot see is acting. It decides whether the fix is the ~15-line re-price proposed here or something upstream. The executor records cloids in hl.post_only_crosses and _watch_fill captures fill prices, so the order log may already hold it. I will not guess it.",
+    "P1 - Is the volume filter's contribution understood and intended? Removing it takes rec_m 0.47 -> 0.00, and it is the single most venue-specific input the strategy reads (volume series correlate 0.61 across venues vs 0.999 for prices). This is a strategy-design decision for Casey, not a research output, and it gates any size increase.",
+    "P1 - cash_apy on the ~$100k spot USDC. Inherited from phase 1, still unanswered. RESEARCH_FEES.md measured this one dimension moving S5's m from 0.30 to 0.79 - larger than everything in this study.",
+    "P2 - Which fee basis is the registered objective (engine default 12.00 bps vs measured 8.64)? It moves rec_m ~5x and commit 132e0a6 says re-registering it is a dated protocol amendment Casey signs.",
+    "P2 - Which window governs? All my basis-adjusted numbers are necessarily on 2024-07 -> 2026-07 because that is where perp candles reach. That is also the conservative holdout, so I defer to it - but it is a protocol call.",
+    "P3 - Is Casey adding capital? $1m of gross needs ~$1.07m of equity even after FIX 1. The deposit plan, not the edge, decides the $1m question."
+  ],
+
+  "artifacts": [
+    "candD_basis.py", "candD_basis.json", "candD_perp_4h.csv",
+    "candD_perp_bars.py", "candD_bars_4h_btcperp.csv",
+    "candD_perp_space.py", "candD_perp_space.json",
+    "candD_alo.py", "candD_alo.json",
+    "candD_fixaxis.py", "candD_fixaxis.json",
+    "candD_funding.py", "candD_funding.json",
+    "candD_funding_kelly.py", "candD_funding_kelly.json",
+    "candD_instrument.py", "candD_instrument.json",
+    "candD_signal_agree.py", "candD_signal_agree.json",
+    "candD_hybrid.py", "candD_hybrid.json",
+    "candD_verify.py", "candD_verify.json",
+    "candD_charts.py",
+    "candD_fig1_the_answer.png", "candD_fig2_mechanism.png",
+    "candD_fig3_adverse_selection.png", "candD_fig4_funding.png",
+    "candD_fig5_robustness.png"
+  ]
+}

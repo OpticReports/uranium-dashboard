@@ -1,0 +1,469 @@
+{
+ "live": {
+  "gross_usd": 15000.000000000002,
+  "equity": 100055.0,
+  "m_equiv": 0.09994503023337166,
+  "MAX_NOTIONAL_USD": 20000.0,
+  "rail_cap_usd": 20000.0
+ },
+ "fee_schedule": {
+  "taker_bps": 4.32,
+  "maker_bps": 1.44,
+  "S3_signal_exit_frac": 0.6526315789473685,
+  "S3_blended_maker_exit_bps": 2.440421052631579
+ },
+ "arms": {
+  "full|LIVE TODAY          entry taker, exit taker": {
+   "rt_S3": 8.64,
+   "rt_S4": 8.64,
+   "n": 318,
+   "m_star": 3.54,
+   "terms": {
+    "half": 1.77,
+    "p10": 1.96,
+    "c*m*": 2.9,
+    "dd30": 0.79
+   },
+   "binding": "dd30",
+   "recommended_m": 0.79,
+   "authorised_gross_usd": 118565.175,
+   "x_live": 7.904344999999999,
+   "x_live_authorised_vs_baseline_arm": 1.0,
+   "blend_maxdd_tradeclose": -0.21941169652689763,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.5,
+    "p_maxdd30_le_10pct": 0.79,
+    "analytic_dd20": 0.63,
+    "analytic_dd30": 0.95
+   },
+   "fees_usd_S3": 24225.005066680664,
+   "fees_usd_S4": 20216.11064363615,
+   "KELLY_M_equivalent_at_base_50k": 1.580869
+  },
+  "full|FIX 1: maker entry  entry maker, exit taker": {
+   "rt_S3": 5.76,
+   "rt_S4": 8.64,
+   "n": 318,
+   "m_star": 3.71,
+   "terms": {
+    "half": 1.85,
+    "p10": 2.12,
+    "c*m*": 3.08,
+    "dd30": 0.81
+   },
+   "binding": "dd30",
+   "recommended_m": 0.81,
+   "authorised_gross_usd": 121566.82500000001,
+   "x_live": 8.104455,
+   "x_live_authorised_vs_baseline_arm": 1.0253164556962024,
+   "blend_maxdd_tradeclose": -0.21811058415376894,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.52,
+    "p_maxdd30_le_10pct": 0.81,
+    "analytic_dd20": 0.66,
+    "analytic_dd30": 0.99
+   },
+   "fees_usd_S3": 16640.014043621803,
+   "fees_usd_S4": 20216.11064363615,
+   "KELLY_M_equivalent_at_base_50k": 1.620891
+  },
+  "full|FIX 1+2: + maker SIGNAL exits (S3 only, measured)": {
+   "rt_S3": 3.8804210526315788,
+   "rt_S4": 8.64,
+   "n": 318,
+   "m_star": 3.82,
+   "terms": {
+    "half": 1.91,
+    "p10": 2.23,
+    "c*m*": 3.21,
+    "dd30": 0.82
+   },
+   "binding": "dd30",
+   "recommended_m": 0.82,
+   "authorised_gross_usd": 123067.65,
+   "x_live": 8.204509999999999,
+   "x_live_authorised_vs_baseline_arm": 1.0379746835443038,
+   "blend_maxdd_tradeclose": -0.21726053360902742,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.52,
+    "p_maxdd30_le_10pct": 0.82,
+    "analytic_dd20": 0.67,
+    "analytic_dd30": 1.02
+   },
+   "fees_usd_S3": 11432.387650148521,
+   "fees_usd_S4": 20216.11064363615,
+   "KELLY_M_equivalent_at_base_50k": 1.6409019999999999
+  },
+  "full|FIX 1+2 RISK-ADJUSTED (measured net exit gain, not nominal)": {
+   "rt_S3": 5.048631578947369,
+   "rt_S4": 8.64,
+   "n": 318,
+   "m_star": 3.75,
+   "terms": {
+    "half": 1.88,
+    "p10": 2.16,
+    "c*m*": 3.15,
+    "dd30": 0.81
+   },
+   "binding": "dd30",
+   "recommended_m": 0.81,
+   "authorised_gross_usd": 121566.82500000001,
+   "x_live": 8.104455,
+   "x_live_authorised_vs_baseline_arm": 1.0253164556962024,
+   "blend_maxdd_tradeclose": -0.2177889558031666,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.52,
+    "p_maxdd30_le_10pct": 0.81,
+    "analytic_dd20": 0.66,
+    "analytic_dd30": 1.01
+   },
+   "fees_usd_S3": 14693.558010554152,
+   "fees_usd_S4": 20216.11064363615,
+   "KELLY_M_equivalent_at_base_50k": 1.620891
+  },
+  "full|CEILING: both legs fully maker (not achievable)": {
+   "rt_S3": 2.88,
+   "rt_S4": 2.88,
+   "n": 318,
+   "m_star": 3.95,
+   "terms": {
+    "half": 1.97,
+    "p10": 2.37,
+    "c*m*": 3.36,
+    "dd30": 0.83
+   },
+   "binding": "dd30",
+   "recommended_m": 0.83,
+   "authorised_gross_usd": 124568.47499999999,
+   "x_live": 8.304564999999998,
+   "x_live_authorised_vs_baseline_arm": 1.050632911392405,
+   "blend_maxdd_tradeclose": -0.21560365351634192,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.53,
+    "p_maxdd30_le_10pct": 0.83,
+    "analytic_dd20": 0.7,
+    "analytic_dd30": 1.06
+   },
+   "fees_usd_S3": 8574.459490996327,
+   "fees_usd_S4": 7014.539809138033,
+   "KELLY_M_equivalent_at_base_50k": 1.6609129999999999
+  },
+  "full|VIP tier 1 ($5m/14d) on top of FIX 1+2": {
+   "rt_S3": 3.237726315789473,
+   "rt_S4": 7.68,
+   "n": 318,
+   "m_star": 3.87,
+   "terms": {
+    "half": 1.93,
+    "p10": 2.28,
+    "c*m*": 3.25,
+    "dd30": 0.82
+   },
+   "binding": "dd30",
+   "recommended_m": 0.82,
+   "authorised_gross_usd": 123067.65,
+   "x_live": 8.204509999999999,
+   "x_live_authorised_vs_baseline_arm": 1.0379746835443038,
+   "blend_maxdd_tradeclose": -0.21676914264975522,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.53,
+    "p_maxdd30_le_10pct": 0.82,
+    "analytic_dd20": 0.68,
+    "analytic_dd30": 1.04
+   },
+   "fees_usd_S3": 9603.373558845553,
+   "fees_usd_S4": 18089.98167530932,
+   "KELLY_M_equivalent_at_base_50k": 1.6409019999999999
+  },
+  "full|VIP tier 2 ($25m/14d) on top of FIX 1+2": {
+   "rt_S3": 2.436378947368421,
+   "rt_S4": 6.72,
+   "n": 318,
+   "m_star": 3.92,
+   "terms": {
+    "half": 1.96,
+    "p10": 2.34,
+    "c*m*": 3.33,
+    "dd30": 0.83
+   },
+   "binding": "dd30",
+   "recommended_m": 0.83,
+   "authorised_gross_usd": 124568.47499999999,
+   "x_live": 8.304564999999998,
+   "x_live_authorised_vs_baseline_arm": 1.050632911392405,
+   "blend_maxdd_tradeclose": -0.2162056514716063,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.53,
+    "p_maxdd30_le_10pct": 0.83,
+    "analytic_dd20": 0.69,
+    "analytic_dd30": 1.05
+   },
+   "fees_usd_S3": 7287.580728727349,
+   "fees_usd_S4": 15934.688009054154,
+   "KELLY_M_equivalent_at_base_50k": 1.6609129999999999
+  },
+  "2y|LIVE TODAY          entry taker, exit taker": {
+   "rt_S3": 8.64,
+   "rt_S4": 8.64,
+   "n": 146,
+   "m_star": 2.88,
+   "terms": {
+    "half": 1.44,
+    "p10": 0.36,
+    "c*m*": 1.58,
+    "dd30": 0.88
+   },
+   "binding": "p10",
+   "recommended_m": 0.36,
+   "authorised_gross_usd": 54029.700000000004,
+   "x_live": 3.6019799999999997,
+   "x_live_authorised_vs_baseline_arm": 1.0,
+   "blend_maxdd_tradeclose": -0.21941168267938327,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.55,
+    "p_maxdd30_le_10pct": 0.88,
+    "analytic_dd20": 0.51,
+    "analytic_dd30": 0.77
+   },
+   "fees_usd_S3": 8556.625932976967,
+   "fees_usd_S4": 4708.404061772945,
+   "KELLY_M_equivalent_at_base_50k": 0.7203959999999999
+  },
+  "2y|FIX 1: maker entry  entry maker, exit taker": {
+   "rt_S3": 5.76,
+   "rt_S4": 8.64,
+   "n": 146,
+   "m_star": 3.08,
+   "terms": {
+    "half": 1.54,
+    "p10": 0.54,
+    "c*m*": 1.79,
+    "dd30": 0.89
+   },
+   "binding": "p10",
+   "recommended_m": 0.54,
+   "authorised_gross_usd": 81044.55,
+   "x_live": 5.40297,
+   "x_live_authorised_vs_baseline_arm": 1.5000000000000002,
+   "blend_maxdd_tradeclose": -0.2181106101165844,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.56,
+    "p_maxdd30_le_10pct": 0.89,
+    "analytic_dd20": 0.54,
+    "analytic_dd30": 0.83
+   },
+   "fees_usd_S3": 5781.045402740368,
+   "fees_usd_S4": 4708.404061772945,
+   "KELLY_M_equivalent_at_base_50k": 1.080594
+  },
+  "2y|FIX 1+2: + maker SIGNAL exits (S3 only, measured)": {
+   "rt_S3": 3.8804210526315788,
+   "rt_S4": 8.64,
+   "n": 146,
+   "m_star": 3.21,
+   "terms": {
+    "half": 1.6,
+    "p10": 0.66,
+    "c*m*": 1.93,
+    "dd30": 0.9
+   },
+   "binding": "p10",
+   "recommended_m": 0.66,
+   "authorised_gross_usd": 99054.45,
+   "x_live": 6.603629999999999,
+   "x_live_authorised_vs_baseline_arm": 1.8333333333333335,
+   "blend_maxdd_tradeclose": -0.2172605220107594,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.57,
+    "p_maxdd30_le_10pct": 0.9,
+    "analytic_dd20": 0.57,
+    "analytic_dd30": 0.86
+   },
+   "fees_usd_S3": 3928.766481049816,
+   "fees_usd_S4": 4708.404061772945,
+   "KELLY_M_equivalent_at_base_50k": 1.320726
+  },
+  "2y|FIX 1+2 RISK-ADJUSTED (measured net exit gain, not nominal)": {
+   "rt_S3": 5.048631578947369,
+   "rt_S4": 8.64,
+   "n": 146,
+   "m_star": 3.13,
+   "terms": {
+    "half": 1.57,
+    "p10": 0.57,
+    "c*m*": 1.85,
+    "dd30": 0.89
+   },
+   "binding": "p10",
+   "recommended_m": 0.57,
+   "authorised_gross_usd": 85547.025,
+   "x_live": 5.703134999999999,
+   "x_live_authorised_vs_baseline_arm": 1.5833333333333333,
+   "blend_maxdd_tradeclose": -0.21778896843345608,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.57,
+    "p_maxdd30_le_10pct": 0.89,
+    "analytic_dd20": 0.55,
+    "analytic_dd30": 0.84
+   },
+   "fees_usd_S3": 5083.843887575854,
+   "fees_usd_S4": 4708.404061772945,
+   "KELLY_M_equivalent_at_base_50k": 1.1406269999999998
+  },
+  "2y|CEILING: both legs fully maker (not achievable)": {
+   "rt_S3": 2.88,
+   "rt_S4": 2.88,
+   "n": 146,
+   "m_star": 3.37,
+   "terms": {
+    "half": 1.68,
+    "p10": 0.82,
+    "c*m*": 2.09,
+    "dd30": 0.92
+   },
+   "binding": "p10",
+   "recommended_m": 0.82,
+   "authorised_gross_usd": 123067.65,
+   "x_live": 8.204509999999999,
+   "x_live_authorised_vs_baseline_arm": 2.2777777777777777,
+   "blend_maxdd_tradeclose": -0.21560372628016444,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.59,
+    "p_maxdd30_le_10pct": 0.92,
+    "analytic_dd20": 0.59,
+    "analytic_dd30": 0.9
+   },
+   "fees_usd_S3": 2929.4936701669844,
+   "fees_usd_S4": 1594.885826276781,
+   "KELLY_M_equivalent_at_base_50k": 1.6409019999999999
+  },
+  "2y|VIP tier 1 ($5m/14d) on top of FIX 1+2": {
+   "rt_S3": 3.237726315789473,
+   "rt_S4": 7.68,
+   "n": 146,
+   "m_star": 3.27,
+   "terms": {
+    "half": 1.63,
+    "p10": 0.72,
+    "c*m*": 1.99,
+    "dd30": 0.91
+   },
+   "binding": "p10",
+   "recommended_m": 0.72,
+   "authorised_gross_usd": 108059.40000000001,
+   "x_live": 7.2039599999999995,
+   "x_live_authorised_vs_baseline_arm": 2.0,
+   "blend_maxdd_tradeclose": -0.21676918728776384,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.58,
+    "p_maxdd30_le_10pct": 0.91,
+    "analytic_dd20": 0.58,
+    "analytic_dd30": 0.88
+   },
+   "fees_usd_S3": 3287.885115629968,
+   "fees_usd_S4": 4196.443047185225,
+   "KELLY_M_equivalent_at_base_50k": 1.4407919999999999
+  },
+  "2y|VIP tier 2 ($25m/14d) on top of FIX 1+2": {
+   "rt_S3": 2.436378947368421,
+   "rt_S4": 6.72,
+   "n": 146,
+   "m_star": 3.33,
+   "terms": {
+    "half": 1.67,
+    "p10": 0.79,
+    "c*m*": 2.06,
+    "dd30": 0.91
+   },
+   "binding": "p10",
+   "recommended_m": 0.79,
+   "authorised_gross_usd": 118565.175,
+   "x_live": 7.904344999999999,
+   "x_live_authorised_vs_baseline_arm": 2.1944444444444446,
+   "blend_maxdd_tradeclose": -0.21620564796111996,
+   "P_dd_gt_30_at_that_m": {
+    "p_maxdd20_le_10pct": 0.58,
+    "p_maxdd30_le_10pct": 0.91,
+    "analytic_dd20": 0.59,
+    "analytic_dd30": 0.89
+   },
+   "fees_usd_S3": 2483.3773892265094,
+   "fees_usd_S4": 3681.7190426094962,
+   "KELLY_M_equivalent_at_base_50k": 1.580869
+  }
+ },
+ "governing": {
+  "LIVE TODAY          entry taker, exit taker": {
+   "recommended_m": 0.36,
+   "authorised_gross_usd": 54029.700000000004,
+   "x_live": 3.6019799999999997,
+   "per_window": {
+    "full": 0.79,
+    "2y": 0.36
+   }
+  },
+  "FIX 1: maker entry  entry maker, exit taker": {
+   "recommended_m": 0.54,
+   "authorised_gross_usd": 81044.55,
+   "x_live": 5.40297,
+   "per_window": {
+    "full": 0.81,
+    "2y": 0.54
+   }
+  },
+  "FIX 1+2: + maker SIGNAL exits (S3 only, measured)": {
+   "recommended_m": 0.66,
+   "authorised_gross_usd": 99054.45,
+   "x_live": 6.603629999999999,
+   "per_window": {
+    "full": 0.82,
+    "2y": 0.66
+   }
+  },
+  "FIX 1+2 RISK-ADJUSTED (measured net exit gain, not nominal)": {
+   "recommended_m": 0.57,
+   "authorised_gross_usd": 85547.025,
+   "x_live": 5.703134999999999,
+   "per_window": {
+    "full": 0.81,
+    "2y": 0.57
+   }
+  },
+  "CEILING: both legs fully maker (not achievable)": {
+   "recommended_m": 0.82,
+   "authorised_gross_usd": 123067.65,
+   "x_live": 8.204509999999999,
+   "per_window": {
+    "full": 0.83,
+    "2y": 0.82
+   }
+  },
+  "VIP tier 1 ($5m/14d) on top of FIX 1+2": {
+   "recommended_m": 0.72,
+   "authorised_gross_usd": 108059.40000000001,
+   "x_live": 7.2039599999999995,
+   "per_window": {
+    "full": 0.82,
+    "2y": 0.72
+   }
+  },
+  "VIP tier 2 ($25m/14d) on top of FIX 1+2": {
+   "recommended_m": 0.79,
+   "authorised_gross_usd": 118565.175,
+   "x_live": 7.904344999999999,
+   "per_window": {
+    "full": 0.83,
+    "2y": 0.79
+   }
+  }
+ },
+ "extra_authorised_vs_live_arm": {
+  "LIVE TODAY          entry taker, exit taker": 0.0,
+  "FIX 1: maker entry  entry maker, exit taker": 27014.85,
+  "FIX 1+2: + maker SIGNAL exits (S3 only, measured)": 45024.74999999999,
+  "FIX 1+2 RISK-ADJUSTED (measured net exit gain, not nominal)": 31517.32499999999,
+  "CEILING: both legs fully maker (not achievable)": 69037.94999999998,
+  "VIP tier 1 ($5m/14d) on top of FIX 1+2": 54029.700000000004,
+  "VIP tier 2 ($25m/14d) on top of FIX 1+2": 64535.475
+ }
+}

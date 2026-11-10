@@ -1,0 +1,162 @@
+{
+ "V1_funding_signed": {
+  "published_annual_frac": 0.00020203607530120264,
+  "recomputed_excl_open_annual_frac": 0.0002020360753077939,
+  "abs_diff_vs_published": 6.5912715823540635e-15,
+  "alt_convention_incl_open_annual_frac": 0.00022334219764329693,
+  "convention_sensitivity_annual_pct_of_notional": 0.002130612233550302,
+  "stamps_used_excl": 3676,
+  "stamps_used_incl": 3676,
+  "held_hours": 3676.0,
+  "verdict": "PASS",
+  "note": "both conventions are reported because the choice is a judgement call; the gap is the honest uncertainty on the funding line."
+ },
+ "V2_independent_capture": {
+  "n_raw_snapshots": 300,
+  "buy": {
+   "calm_p50": 0.5403622621613646,
+   "raw_p50": 0.4597764290015238,
+   "calm_worst": 2.785111501770743,
+   "raw_worst": 2.9236245042785214,
+   "calm_n_complete": 430,
+   "raw_n_complete": 294,
+   "calm_n_incomplete": 10,
+   "raw_n_incomplete": 6,
+   "p50_gap_bp": -0.0805858331598408
+  },
+  "sell": {
+   "calm_p50": 0.3995852059834881,
+   "raw_p50": 0.512207148635202,
+   "calm_worst": 3.7541718007894076,
+   "raw_worst": 2.806454897684718,
+   "calm_n_complete": 440,
+   "raw_n_complete": 299,
+   "calm_n_incomplete": 0,
+   "raw_n_incomplete": 1,
+   "p50_gap_bp": 0.11262194265171388
+  },
+  "verdict": "two separately-captured samples agree on the $1m cost to well inside 1 bp"
+ },
+ "V3_walk_unit_check": {
+  "vwap": 100.33112582781457,
+  "expected": 100.33112582781457,
+  "filled": 150,
+  "abs_err": 0.0,
+  "partial_level_handled": true,
+  "insufficient_book_case": 10.0,
+  "verdict": "PASS"
+ },
+ "V4_vol_scaling": {
+  "sigma_1min_bp": 4.17340081183814,
+  "measured_vs_sqrtT": {
+   "5min": {
+    "measured_bp": 9.944028494695502,
+    "sqrtT_prediction_bp": 9.33200791262289,
+    "ratio_measured_over_predicted": 1.065582947185971
+   },
+   "15min": {
+    "measured_bp": 16.008990639164068,
+    "sqrtT_prediction_bp": 16.16351184129763,
+    "ratio_measured_over_predicted": 0.9904401219456058
+   },
+   "30min": {
+    "measured_bp": 20.39791341539251,
+    "sqrtT_prediction_bp": 22.858657661541226,
+    "ratio_measured_over_predicted": 0.8923495735145979
+   }
+  },
+  "verdict": "MIXED, immaterial. sqrt(T) is within 7% at 5 min and OVERstates by 11% at 30 min (mild mean reversion). It is only used to solve the break-even window, which lands at 0.7-3.6 s -- a SUB-MINUTE extrapolation the candle data cannot test. The conclusion does not depend on it: measured sigma at the shortest horizon there IS data for (1 min, 4.17 bp) already exceeds the largest slip saving available (1.02 bp) by 4x, so any delay measured in minutes loses on measured numbers alone.",
+  "fat_tail_check": {
+   "1min": {
+    "p99_over_sigma": 3.5546478569216924
+   },
+   "5min": {
+    "p99_over_sigma": 3.7098023902580306
+   },
+   "30min": {
+    "p99_over_sigma": 3.3240639640707244
+   }
+  }
+ },
+ "V5_vs_RESEARCH_CARRY": {
+  "mine": {
+   "2023": 15.06472395918339,
+   "2024": 24.13965964508652,
+   "2025": 10.634234509999304,
+   "2026": 5.044523502677535
+  },
+  "published_in_RESEARCH_CARRY": {
+   "2023": 15.1,
+   "2024": 24.1,
+   "2025": 10.6
+  },
+  "abs_diff_pp": {
+   "2023": 0.03527604081661018,
+   "2024": 0.039659645086519646,
+   "2025": 0.03423450999930466
+  },
+  "2026_differs_expectedly": "RESEARCH_CARRY's 4.5% was YTD to 2026-08; mine is YTD to 2026-09-28 (5.04%)",
+  "verdict": "PASS"
+ },
+ "V6_invariance_and_tiers": {
+  "funding_pct_of_edge_at_each_notional": {
+   "15000": 0.09486628044213775,
+   "100000": 0.09486628044213775,
+   "250000": 0.09486628044213775,
+   "1000000": 0.09486628044213775
+  },
+  "all_equal": true,
+  "why": "funding, fees and gross P&L are all proportional to notional, so no ratio among them can depend on notional. The invariance is arithmetic, not an empirical result - it cannot fail, and claiming it as a finding would be circular. What is empirical is the LEVEL.",
+  "tier_volume_recheck": {
+   "15000": {
+    "published_14d_vol": 39411.24657534246,
+    "recomputed": 39411.24657534246,
+    "tier_published": 0
+   },
+   "100000": {
+    "published_14d_vol": 262741.6438356164,
+    "recomputed": 262741.6438356164,
+    "tier_published": 0
+   },
+   "250000": {
+    "published_14d_vol": 656854.1095890411,
+    "recomputed": 656854.1095890411,
+    "tier_published": 0
+   },
+   "1000000": {
+    "published_14d_vol": 2627416.4383561644,
+    "recomputed": 2627416.4383561644,
+    "tier_published": 0
+   },
+   "2000000": {
+    "published_14d_vol": 5254832.876712329,
+    "recomputed": 5254832.876712329,
+    "tier_published": 1
+   },
+   "10000000": {
+    "published_14d_vol": 26274164.383561645,
+    "recomputed": 26274164.383561645,
+    "tier_published": 2
+   }
+  },
+  "max_abs_tier_vol_err": 0.0,
+  "tier1_reachable_at_gross_notional_usd": 1903010.0927313357
+ },
+ "V7_reference_ret_basis": {
+  "n_matched": 89,
+  "gross_minus_optimized_ret_bp": {
+   "mean": 5.4613720977501865,
+   "median": 10.195151657907061,
+   "min": -126.81604294526451,
+   "max": 40.59482489623088
+  },
+  "gross_minus_limitref_ret_bp": {
+   "mean": 0.9859957183307558,
+   "median": 5.820135584267442,
+   "min": -73.9145584980698,
+   "max": 6.0046967071068424
+  },
+  "finding": "NOT a constant fee offset. The limit-entry reference tops out at exactly 6.00 bp below entry->exit gross (the modelled fee) but goes as far as -74 bp the other way, so `ret` is neither cleanly gross nor cleanly net of a fixed fee. The edge denominator used for funding-as-%-of-edge therefore carries a few-bp-per-trade ambiguity.",
+  "does_it_change_any_conclusion": "No. The funding line is 0.04 bp/round trip signed and 3.85 bp all-long against a 47-50 bp mean per-trade return; a 6 bp denominator ambiguity cannot move the ranking. It DOES matter for a Kelly re-fit, which should run off the replay engine rather than these CSVs."
+ }
+}

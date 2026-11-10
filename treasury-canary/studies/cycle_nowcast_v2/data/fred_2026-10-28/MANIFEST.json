@@ -1,0 +1,311 @@
+{
+ "_about": "F5: the ONE frozen run-day FRED pull for studies/cycle-nowcast-v2.md (SPEC v1 \u00a77.3 F5), keyless fredgraph CSV, same layout as fred_2026-10-20 (F3). Untrusted data; parsed only.",
+ "method": "curl, keyless, HTTP 200 each; sha256 of the file as served",
+ "pull_date": "2026-10-28",
+ "series": {
+  "AWHMAN": {
+   "bytes": 16872,
+   "bytes_reported": 16872,
+   "file": "AWHMAN.csv",
+   "http_status": 200,
+   "last_obs": "2026-09-01",
+   "last_obs_month": "2026-09",
+   "last_value": "42.0",
+   "n_rows": 1053,
+   "retrieved_utc": "2026-10-28T15:46:25Z",
+   "seconds": 0.238826,
+   "sha256": "10e14acf1b3a3ab537d5d4dce08ffded160acc752a79d5a3698f8db0ca9e65a1",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=AWHMAN",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-09-01",
+    "f3_last_value": "42.0",
+    "f3_sha256": "10e14acf1b3a3ab537d5d4dce08ffded160acc752a79d5a3698f8db0ca9e65a1",
+    "identical_to_f3": true,
+    "n_new_obs": 0,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  },
+  "BAA10YM": {
+   "bytes": 14137,
+   "bytes_reported": 14137,
+   "file": "BAA10YM.csv",
+   "http_status": 200,
+   "last_obs": "2026-09-01",
+   "last_obs_month": "2026-09",
+   "last_value": "1.48",
+   "n_rows": 882,
+   "retrieved_utc": "2026-10-28T15:46:26Z",
+   "seconds": 0.555118,
+   "sha256": "19f3a0dc9825dfa5714a911f1f68040b86f402f0a96fea91496da80889ab55b4",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAA10YM",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-09-01",
+    "f3_last_value": "1.48",
+    "f3_sha256": "19f3a0dc9825dfa5714a911f1f68040b86f402f0a96fea91496da80889ab55b4",
+    "identical_to_f3": true,
+    "n_new_obs": 0,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  },
+  "CMRMTSPL": {
+   "bytes": 16088,
+   "bytes_reported": 16088,
+   "file": "CMRMTSPL.csv",
+   "http_status": 200,
+   "last_obs": "2026-07-01",
+   "last_obs_month": "2026-07",
+   "last_value": "1598922.000",
+   "n_rows": 715,
+   "retrieved_utc": "2026-10-28T15:46:24Z",
+   "seconds": 0.394111,
+   "sha256": "c84bd6dc387d54f20fc125e77380a44562b8a50f2cb47e623e46f663b6537e0f",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CMRMTSPL",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-07-01",
+    "f3_last_value": "1598922.000",
+    "f3_sha256": "c84bd6dc387d54f20fc125e77380a44562b8a50f2cb47e623e46f663b6537e0f",
+    "identical_to_f3": true,
+    "n_new_obs": 0,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  },
+  "GS10": {
+   "bytes": 14206,
+   "bytes_reported": 14206,
+   "file": "GS10.csv",
+   "http_status": 200,
+   "last_obs": "2026-09-01",
+   "last_obs_month": "2026-09",
+   "last_value": "4.99",
+   "n_rows": 882,
+   "retrieved_utc": "2026-10-28T15:46:26Z",
+   "seconds": 0.222235,
+   "sha256": "40323f225e613a19a4eec7eef20523dec10764de21c70cd1416a7379fb7f13b6",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GS10",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-09-01",
+    "f3_last_value": "4.99",
+    "f3_sha256": "40323f225e613a19a4eec7eef20523dec10764de21c70cd1416a7379fb7f13b6",
+    "identical_to_f3": true,
+    "n_new_obs": 0,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  },
+  "ICSA": {
+   "bytes": 56202,
+   "bytes_reported": 56202,
+   "file": "ICSA.csv",
+   "http_status": 200,
+   "last_obs": "2026-10-17",
+   "last_obs_month": "2026-10",
+   "last_value": "194000",
+   "n_rows": 3120,
+   "retrieved_utc": "2026-10-28T15:46:25Z",
+   "seconds": 0.197441,
+   "sha256": "f3e28edbe435d0dc62665b435e8d1e2f9f8892315f78c8441ebaf04b6bfdcdaf",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=ICSA",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-10-10",
+    "f3_last_value": "199000",
+    "f3_sha256": "2b1eb1b4a5f5bf48779bffa43197db6e657349964bd7634c468b5ddf1e26b72d",
+    "identical_to_f3": false,
+    "n_new_obs": 1,
+    "n_revised_common": 1,
+    "revised_dates_first5": [
+     "2026-10-10"
+    ]
+   }
+  },
+  "INDPRO": {
+   "bytes": 24460,
+   "bytes_reported": 24460,
+   "file": "INDPRO.csv",
+   "http_status": 200,
+   "last_obs": "2026-09-01",
+   "last_obs_month": "2026-09",
+   "last_value": "103.9506",
+   "n_rows": 1293,
+   "retrieved_utc": "2026-10-28T15:46:23Z",
+   "seconds": 0.410027,
+   "sha256": "0fc53a503386efaf83f17cf0cc6d77b3980830a91c9dfa9ebab97b4cf1aa5feb",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=INDPRO",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-09-01",
+    "f3_last_value": "103.9506",
+    "f3_sha256": "0fc53a503386efaf83f17cf0cc6d77b3980830a91c9dfa9ebab97b4cf1aa5feb",
+    "identical_to_f3": true,
+    "n_new_obs": 0,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  },
+  "PAYEMS": {
+   "bytes": 18405,
+   "bytes_reported": 18405,
+   "file": "PAYEMS.csv",
+   "http_status": 200,
+   "last_obs": "2026-09-01",
+   "last_obs_month": "2026-09",
+   "last_value": "159044",
+   "n_rows": 1053,
+   "retrieved_utc": "2026-10-28T15:46:23Z",
+   "seconds": 0.391575,
+   "sha256": "c8c429818ed73de6db985f4ff565d64bd2a5ba66a6b651b39373a1532924fc0e",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PAYEMS",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-09-01",
+    "f3_last_value": "159044",
+    "f3_sha256": "c8c429818ed73de6db985f4ff565d64bd2a5ba66a6b651b39373a1532924fc0e",
+    "identical_to_f3": true,
+    "n_new_obs": 0,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  },
+  "PERMIT": {
+   "bytes": 12713,
+   "bytes_reported": 12713,
+   "file": "PERMIT.csv",
+   "http_status": 200,
+   "last_obs": "2026-09-01",
+   "last_obs_month": "2026-09",
+   "last_value": "1398",
+   "n_rows": 801,
+   "retrieved_utc": "2026-10-28T15:46:24Z",
+   "seconds": 0.168535,
+   "sha256": "b83f05a2d8cdcaeb64609c55ebb907398f7f25577c3ba78da8e9d8e4fde0d6a4",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PERMIT",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-09-01",
+    "f3_last_value": "1400",
+    "f3_sha256": "216dcf040c76d9a4bec4198083891fcdf50530d93217662886d1b8bb6bf1ffe8",
+    "identical_to_f3": false,
+    "n_new_obs": 0,
+    "n_revised_common": 1,
+    "revised_dates_first5": [
+     "2026-09-01"
+    ]
+   }
+  },
+  "T10Y3M": {
+   "bytes": 186385,
+   "bytes_reported": 186385,
+   "file": "T10Y3M.csv",
+   "http_status": 200,
+   "last_obs": "2026-10-27",
+   "last_obs_month": "2026-10",
+   "last_value": "0.77",
+   "n_rows": 11692,
+   "retrieved_utc": "2026-10-28T15:46:25Z",
+   "seconds": 0.235491,
+   "sha256": "6e8101f32e569d8c728d152b296cdf7dd517efd298e5283cc5b36d2ed1569982",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y3M",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-10-19",
+    "f3_last_value": "0.88",
+    "f3_sha256": "d16594e5fdf89ea462c506a46f8e907bd752ceab7c1bc6403f582a0170328393",
+    "identical_to_f3": false,
+    "n_new_obs": 6,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  },
+  "TB3MS": {
+   "bytes": 17865,
+   "bytes_reported": 17865,
+   "file": "TB3MS.csv",
+   "http_status": 200,
+   "last_obs": "2026-09-01",
+   "last_obs_month": "2026-09",
+   "last_value": "3.94",
+   "n_rows": 1113,
+   "retrieved_utc": "2026-10-28T15:46:26Z",
+   "seconds": 0.149521,
+   "sha256": "631bc444a8c5370c3a2df12f484a67ae7b9a68c00fe8a33215895fb49c8cc08c",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=TB3MS",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-09-01",
+    "f3_last_value": "3.94",
+    "f3_sha256": "631bc444a8c5370c3a2df12f484a67ae7b9a68c00fe8a33215895fb49c8cc08c",
+    "identical_to_f3": true,
+    "n_new_obs": 0,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  },
+  "UMCSENT": {
+   "bytes": 13438,
+   "bytes_reported": 13438,
+   "file": "UMCSENT.csv",
+   "http_status": 200,
+   "last_obs": "2026-09-01",
+   "last_obs_month": "2026-09",
+   "last_value": "48.1",
+   "n_rows": 887,
+   "retrieved_utc": "2026-10-28T15:46:25Z",
+   "seconds": 0.148784,
+   "sha256": "3076277f9f21f4bd3dc77fd68add84d417e5cce23f3adb96dc70313b3ad2dd46",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UMCSENT",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-08-01",
+    "f3_last_value": "51.7",
+    "f3_sha256": "27ce18aeda2ab875e799cf856913f95330bb6013fe75d8358c63a6f0c02a8e95",
+    "identical_to_f3": false,
+    "n_new_obs": 1,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  },
+  "USREC": {
+   "bytes": 26829,
+   "bytes_reported": 26829,
+   "file": "USREC.csv",
+   "http_status": 200,
+   "last_obs": "2026-09-01",
+   "last_obs_month": "2026-09",
+   "last_value": "0",
+   "n_rows": 2062,
+   "retrieved_utc": "2026-10-28T15:46:26Z",
+   "seconds": 0.194769,
+   "sha256": "a42a3581fe9c260dd3627febc84a7d563e5ed162cc7085a7518ebde99dc3c3b4",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=USREC",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-09-01",
+    "f3_last_value": "0",
+    "f3_sha256": "a42a3581fe9c260dd3627febc84a7d563e5ed162cc7085a7518ebde99dc3c3b4",
+    "identical_to_f3": true,
+    "n_new_obs": 0,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  },
+  "W875RX1": {
+   "bytes": 14961,
+   "bytes_reported": 14961,
+   "file": "W875RX1.csv",
+   "http_status": 200,
+   "last_obs": "2026-08-01",
+   "last_obs_month": "2026-08",
+   "last_value": "17046.6",
+   "n_rows": 812,
+   "retrieved_utc": "2026-10-28T15:46:24Z",
+   "seconds": 0.433675,
+   "sha256": "fa12b2e42b79f1bdcf5604403a828459ec9d4d5fd137c38058ffc968e440386a",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=W875RX1",
+   "vs_fred_2026-10-20": {
+    "f3_last_obs": "2026-08-01",
+    "f3_last_value": "17046.6",
+    "f3_sha256": "fa12b2e42b79f1bdcf5604403a828459ec9d4d5fd137c38058ffc968e440386a",
+    "identical_to_f3": true,
+    "n_new_obs": 0,
+    "n_revised_common": 0,
+    "revised_dates_first5": []
+   }
+  }
+ },
+ "source_url_pattern": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=<SERIES>"
+}

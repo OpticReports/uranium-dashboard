@@ -26,6 +26,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ .
 COPY --from=frontend /fe/dist ./static
+# The persistent disk mounts AT /app/data and shadows the image's copy of
+# backend/data (committed backtest results + campaign inputs). Keep a
+# read-only copy where the mount cannot hide it (routers/mirror_backtest.py
+# and scripts/backtest_executor_mirror.py fall back to it).
+COPY backend/data ./seed_data
 
 # FastAPI serves the SPA from ./static and persists SQLite + cache under ./data.
 ENV FRONTEND_DIST=/app/static

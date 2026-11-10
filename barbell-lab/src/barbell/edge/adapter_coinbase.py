@@ -1,0 +1,93 @@
+"""S5-live adapter: btc-executor /status -> canonical edge rows.
+
+KEYLESS trading-wise; needs only EXEC_TOKEN (the executor's read-status
+shared secret, sync:false env). Without it the feed is BLIND — reported as
+a first-class condition, never a crash.
+
+Sources inside /status:
+- marks[]           -> {d, equity}: executor _roll_day stamps equity at the
+                       START (00:00 UTC) of day d, so mark[d] IS the CLOSE of
+                       day d-1 -> nav_daily row for date d-1. Marks are the
+                       ONLY NAV source (referee 2026-08-14 bug 1: mixing
+                       midnight marks with intraday /status equity produced a
+                       same-date revision every day -> permanent-YELLOW
+                       deadlock, and contaminated returns with mixed bases).
+                       Today's NAV therefore lands tomorrow: one day of lag,
+                       inside the freshness budget, single coherent basis.
+- fills[]           -> {ts, leg, role, cloid, side, px, ref_px, slip_bps}
+                       (adverse-positive) -> edge_trades rows, trade_id=cloid+role
+"""
+from __future__ import annotations
+
+import os
+import sqlite3
+from datetime import date, datetime, timedelta, timezone
+
+import httpx
+
+from . import db
+
+STRATEGY_ID = "S5-live"
+STATUS_URL = os.environ.get("BTC_EXECUTOR_STATUS_URL",
+                            "https://btc-executor.onrender.com/status")
+
+
+class FeedBlind(RuntimeError):
+    pass
+
+
+def fetch_status() -> dict:
+    token = os.environ.get("EXEC_TOKEN", "")
+    if not token:
+        raise FeedBlind("EXEC_TOKEN unset — executor feed blind")
+    try:
+        r = httpx.get(STATUS_URL, headers={"X-Exec-Token": token}, timeout=30.0)
+        r.raise_for_status()
+        out = r.json()
+    except Exception as exc:  # noqa: BLE001
+        raise FeedBlind(f"executor status unreachable: {exc}") from exc
+    if not out.get("ready"):
+        raise FeedBlind("executor not ready")
+    return out
+
+
+def sync(con: sqlite3.Connection, status: dict | None = None) -> dict:
+    """Pull once, append-only. Returns a sync report incl. revision count."""
+    db.ensure_schema(con)
+    status = status or fetch_status()
+    rep = {"nav": 0, "trades": 0, "revisions": 0, "blind": False,
+           "live_equity_info": status.get("equity")}
+
+    for m in status.get("marks", []):
+        d = date.fromisoformat(m["d"]) - timedelta(days=1)   # mark = prior close
+        out = db.record_nav(con, STRATEGY_ID, d.isoformat(), float(m["equity"]),
+                            "executor_marks")
+        rep["nav"] += out == "inserted"
+        rep["revisions"] += out == "REVISION"
+
+    for f in status.get("fills", []):
+        # void fills are broken measurements, not executions (2026-08-26
+        # phantom incident: 1320bps of fictitious slippage against a
+        # days-stale reference, one fill that never happened at all). They
+        # must never enter the slip stats that authorize KELLY_M sizing.
+        # NOTE: rows ingested BEFORE this filter (and any slip_norms frozen
+        # from them) must be purged on the live DB - the filter alone only
+        # stops re-ingestion.
+        if f.get("void"):
+            rep["voided_skipped"] = rep.get("voided_skipped", 0) + 1
+            continue
+        t = {"trade_id": f"{f.get('cloid', '?')}:{f.get('role', '?')}",
+             "ts_utc": datetime.fromtimestamp(f["ts"], tz=timezone.utc).isoformat(),
+             "side": f.get("side"), "fill_px": f.get("px"),
+             "model_px": f.get("ref_px"), "slip_bps": f.get("slip_bps")}
+        out = db.record_trade(con, STRATEGY_ID, t)
+        rep["trades"] += out == "inserted"
+        rep["revisions"] += out == "REVISION"
+
+    con.execute("INSERT OR IGNORE INTO edge_strategies "
+                "(strategy_id, venue, cadence) VALUES (?,?,?)",
+                (STRATEGY_ID, "coinbase", "per_trade"))
+    db.kv_set(con, STRATEGY_ID, "last_sync_utc",
+              datetime.now(timezone.utc).isoformat())
+    con.commit()
+    return rep

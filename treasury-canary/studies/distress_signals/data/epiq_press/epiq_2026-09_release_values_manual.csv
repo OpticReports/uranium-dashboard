@@ -1,0 +1,15 @@
+period,measure,value_2026,value_2025_same_period,pct_change_recomputed,pct_change_as_printed,note
+2026-01..2026-09 YTD,total_filings,469719,423168,11.0,11,
+2026-01..2026-09 YTD,individual_filings,444252,399379,11.2,7,press release prints 7% but levels imply +11.2% (arithmetic error in release)
+2026-01..2026-09 YTD,individual_ch7,282413,249130,13.4,13,
+2026-01..2026-09 YTD,individual_ch13,160817,149347,7.7,8,
+2026-01..2026-09 YTD,commercial_filings,25467,23789,7.1,7,
+2026-01..2026-09 YTD,commercial_ch11,6560,5895,11.3,11,
+2026-01..2026-09 YTD,subchapter_v_elections,2442,1672,46.1,46,
+2026-09,total_filings,52299,49216,6.3,6,Sep-2025 base 49216 vs 49192 quoted in the Nov-6-2025 release (revision +24)
+2026-09,individual_filings,49672,46393,7.1,7,
+2026-09,individual_ch7,31250,28763,8.6,9,
+2026-09,individual_ch13,18320,17534,4.5,4,
+2026-09,commercial_filings,2627,2823,-6.9,-7,Sep-2025 commercial included 109 related filings of one long-term-care pharmacy provider (per release)
+2026-09,commercial_ch11,648,769,-15.7,-16,same related-filings caveat for Sep-2025 base
+2026-09,subchapter_v_elections,276,200,38.0,38,

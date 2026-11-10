@@ -1,0 +1,53 @@
+{
+ "n_book_samples": 440,
+ "how_calm_was_calm": {
+  "window_utc": [
+   "2026-09-28T17:25:43.258000Z",
+   "2026-09-28T17:47:39.797000Z"
+  ],
+  "n_1m_candles_in_window": 22,
+  "window_mean_abs_1m_move_bp": 4.522368915128583,
+  "window_mean_1m_hl_range_bp": 6.720485819242669,
+  "ten_day_1m_abs_move_bp": {
+   "p10": 0.0,
+   "p50": 1.5487806350727995,
+   "p90": 6.167080840191246,
+   "p99": 14.834764573001188
+  },
+  "ten_day_1m_hl_range_bp": {
+   "p10": 0.11906037551642439,
+   "p50": 2.5930247633864902,
+   "p90": 8.717676856924074,
+   "p99": 20.420472921874627
+  },
+  "window_percentile_vs_10d_by_abs_move": 82.64990328820116,
+  "window_percentile_vs_10d_by_hl_range": 83.92960742602978,
+  "worst_1m_move_in_10d_bp": 43.55525774182745,
+  "worst_1m_hl_range_in_10d_bp": 50.27640106747998
+ },
+ "liquidity_vs_vol_within_sample": {
+  "n": 426,
+  "trailing_60s_abs_move_bp": {
+   "p10": 0.33337153688051124,
+   "p50": 0.5361981759043899,
+   "p90": 0.7539204343856853,
+   "max": 1.0903042430328025
+  },
+  "corr_vol_vs_ask_depth": -0.07783400346618798,
+  "corr_vol_vs_1m_buy_slip": 0.09381431177977644,
+  "corr_vol_vs_spread": 0.05962325120189127,
+  "ols_ask_depth_usd_per_bp_of_60s_vol": -488443.84007448435,
+  "ols_1m_slip_bp_per_bp_of_60s_vol": 0.35250526214667766,
+  "extrapolation_illustrative": {
+   "slip_1m_bp_at_10d_p99_1m_vol": 5.795638999105518,
+   "slip_1m_bp_at_10d_worst_1m_vol": 15.919763972564484,
+   "caveat": "LINEAR extrapolation far outside the sampled vol range. In a real cascade makers pull entirely and the relation is not linear -- treat as a direction and a lower bound, not a number to size on."
+  }
+ },
+ "what_would_actually_characterise_a_stressed_book": [
+  "L2 snapshots recorded THROUGH a stress event: HL publishes raw historical L2 book data to the hyperliquid-archive S3 bucket (requester-pays). Pull the book for known cascades and recompute the same $1m walk. This is the only direct answer and it needs an AWS requester-pays account.",
+  "A standing sampler: run book_sampler.py continuously (1/min) and keep the worst decile by concurrent 1m vol. After one month there is a real thin-book sample and it costs nothing but uptime.",
+  "The executor's OWN fills: log realised slip vs mid on every entry/exit at live size. That is the measurement that actually governs, and it is free.",
+  "NOT a substitute: extrapolating a calm-window elasticity, which is what section 2 above does. It is reported to bound the direction, not to size on."
+ ]
+}

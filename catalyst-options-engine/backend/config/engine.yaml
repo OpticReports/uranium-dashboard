@@ -1,0 +1,49 @@
+# Engine tunables. Hot-reloaded on file change (config.load_yaml_config).
+
+# --- catalyst timing ---------------------------------------------------------
+horizon_days: 60              # only dated events inside this window are scored
+min_impact_for_event: 0.85    # days_to_event considers catalysts at/above this
+decay_half_life_days: 21      # exp(-ln2 * days/21) time factor in the score
+interim_watch_min_months_out: 12   # ANR phase-3 with PCD further out => watch
+
+# --- scoring / proposing -----------------------------------------------------
+min_score: 55                 # proposals only above this asymmetry score
+
+# --- paper book ---------------------------------------------------------------
+paper:
+  starting_equity: 100000
+  max_premium_bps: 50         # premium budget per setup = 50bps of paper equity
+  hold_after_event_trading_days: 3   # auto-close at min(expiry, event + 3td)
+
+# --- scheduler -----------------------------------------------------------------
+scan_interval_hours: 24            # daily prices + catalysts + scoring sweep
+chain_refresh_days_to_event: 21    # intraday chain refresh only for hot names
+
+# --- catalyst impact weights (same scale as the genomics tracker) -------------
+impact_weights:
+  pdufa: 1.0
+  interim_analysis: 0.95      # manual, operator-entered (POST /catalysts)
+  adcom: 0.95
+  phase3_readout: 0.9
+  interim_watch: 0.85         # undated watch rows (never scored — no date)
+  phase2_readout: 0.7
+  data_presentation: 0.5
+  phase1_readout: 0.4
+  earnings: 0.35
+  conference: 0.3
+  other: 0.2
+
+# --- honesty defaults ----------------------------------------------------------
+honesty_defaults:
+  # When the chain lane is dark, proposals are priced with Black-Scholes at
+  # this annualized IV and stamped pricing_basis="bs_scenario" — a SCENARIO,
+  # not a market price. 1.0 (100% vol) is deliberately conservative-expensive
+  # for big biotech pre-event; it overstates premium for megacaps (real cost
+  # basis for those requires the chain lane or human quotes).
+  scenario_iv: 1.0
+  note: >-
+    Every proposal and mark records its pricing basis. bs_scenario premiums
+    are scenario math, not fills; chain_ask/chain_bid are real quotes but
+    paper fills at quoted size are still optimistic vs. real biotech option
+    liquidity. r=0 in all Black-Scholes math. Exchange holidays not modeled
+    in trading-day arithmetic.

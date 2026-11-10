@@ -1,0 +1,267 @@
+{
+ "harness": {
+  "reproduced": false,
+  "S5": {
+   "book": "S5",
+   "current": "",
+   "n": 146,
+   "mean_pct": 0.272,
+   "sd_pct": 3.29,
+   "min_pct": -6.3,
+   "worst_feasible_m": 4.0,
+   "g_current": 0.00218,
+   "kelly_m": 2.61,
+   "g_at_kelly": 0.0035,
+   "bootstrap": {
+    "p10": 0.07,
+    "p50": 2.7,
+    "p90": 4.0,
+    "prob_negative_edge": 0.095
+   },
+   "half_kelly_m": 1.3,
+   "conservative_m": 0.07,
+   "shrinkage_c_star": 0.5,
+   "dd_constrained": {
+    "p_maxdd20_le_10pct": 0.54,
+    "p_maxdd30_le_10pct": 0.84,
+    "analytic_dd20": 0.46,
+    "analytic_dd30": 0.7
+   },
+   "dd_at_current": {
+    "p_dd_gt_20": 0.72,
+    "p_dd_gt_30": 0.203
+   },
+   "recommended_m": 0.07,
+   "verdict": "OVERSIZED: engine supports only ~0.1x current size"
+  },
+  "S6": {
+   "book": "S6",
+   "current": "",
+   "n": 146,
+   "mean_pct": 0.362,
+   "sd_pct": 4.38,
+   "min_pct": -8.41,
+   "worst_feasible_m": 4.0,
+   "g_current": 0.00267,
+   "kelly_m": 1.96,
+   "g_at_kelly": 0.0035,
+   "bootstrap": {
+    "p10": 0.06,
+    "p50": 2.02,
+    "p90": 3.79,
+    "prob_negative_edge": 0.095
+   },
+   "half_kelly_m": 0.98,
+   "conservative_m": 0.06,
+   "shrinkage_c_star": 0.5,
+   "dd_constrained": {
+    "p_maxdd20_le_10pct": 0.41,
+    "p_maxdd30_le_10pct": 0.63,
+    "analytic_dd20": 0.35,
+    "analytic_dd30": 0.53
+   },
+   "dd_at_current": {
+    "p_dd_gt_20": 0.921,
+    "p_dd_gt_30": 0.479
+   },
+   "recommended_m": 0.06,
+   "verdict": "OVERSIZED: engine supports only ~0.1x current size"
+  },
+  "binding_term": [
+   "bootstrap_p10",
+   0.07
+  ]
+ },
+ "ceilings": [
+  {
+   "name": "live config as deployed",
+   "frac": 0.1499484852323866,
+   "note": "KELLY_M x lev x base / equity",
+   "equity_for_100k": 666895.6998466665,
+   "equity_for_1m": 6668956.998466665,
+   "max_gross_at_current_equity": 15000.000000000004
+  },
+  {
+   "name": "repo cap MAX_EXPOSURE_FRAC",
+   "frac": 0.3,
+   "note": "KELLY_M_CAP x REFERENCE_LEV = 0.20 x 1.5",
+   "equity_for_100k": 333333.3333333334,
+   "equity_for_1m": 3333333.3333333335,
+   "max_gross_at_current_equity": 30010.306493099997
+  },
+  {
+   "name": "Kelly envelope NOW (n=146)",
+   "frac": 0.10500000000000001,
+   "note": "rec_m 0.07 x lev 1.5; bootstrap p10 binds",
+   "equity_for_100k": 952380.9523809523,
+   "equity_for_1m": 9523809.523809522,
+   "max_gross_at_current_equity": 10503.607272585
+  },
+  {
+   "name": "Kelly ceiling, DD30 budget",
+   "frac": 1.26,
+   "note": "dd30_m 0.84 x lev 1.5; the n->inf asymptote",
+   "equity_for_100k": 79365.07936507936,
+   "equity_for_1m": 793650.7936507936,
+   "max_gross_at_current_equity": 126043.28727101999
+  },
+  {
+   "name": "repo rail MAX_ACCOUNT_LEV",
+   "frac": 2.0,
+   "note": "2.0 x base, only equals 2.0x equity when base == equity",
+   "equity_for_100k": 50000.0,
+   "equity_for_1m": 500000.0,
+   "max_gross_at_current_equity": 200068.709954
+  },
+  {
+   "name": "Hyperliquid BTC max leverage",
+   "frac": 40.0,
+   "note": "meta.universe[BTC].maxLeverage = 40 (tier 1, < $150m)",
+   "equity_for_100k": 2500.0,
+   "equity_for_1m": 25000.0,
+   "max_gross_at_current_equity": 4001374.1990799997
+  }
+ ],
+ "dd_pricing": [
+  {
+   "scenario": "live as deployed",
+   "gross": 15000.000000000002,
+   "g_over_eq": 0.1499484852323866,
+   "m_eff": 0.09996565682159106,
+   "c_frac_full_kelly": 0.038301017939306924,
+   "emp_p_dd_gt_30": 0.0,
+   "thorp_p": 1.1647742090187552e-08,
+   "dd_at_p10": 0.04396104476256413
+  },
+  {
+   "scenario": "base=equity (free 2x)",
+   "gross": 30010.306493099997,
+   "g_over_eq": 0.3,
+   "m_eff": 0.19999999999999998,
+   "c_frac_full_kelly": 0.07662835249042145,
+   "emp_p_dd_gt_30": 0.0,
+   "thorp_p": 0.0001294079043861759,
+   "dd_at_p10": 0.08765444065996197
+  },
+  {
+   "scenario": "Kelly envelope now",
+   "gross": 10503.607272585,
+   "g_over_eq": 0.10500000000000001,
+   "m_eff": 0.07,
+   "c_frac_full_kelly": 0.026819923371647514,
+   "emp_p_dd_gt_30": 0.0,
+   "thorp_p": 4.0145929290395424e-12,
+   "dd_at_p10": 0.030812583108684843
+  },
+  {
+   "scenario": "DD30 ceiling (n->inf)",
+   "gross": 126043.28727101999,
+   "g_over_eq": 1.26,
+   "m_eff": 0.84,
+   "c_frac_full_kelly": 0.3218390804597701,
+   "emp_p_dd_gt_30": 0.1,
+   "thorp_p": 0.15570297939764197,
+   "dd_at_p10": 0.356987851638384
+  },
+  {
+   "scenario": "$100k on current equity",
+   "gross": 100000.0,
+   "g_over_eq": 0.9996565682159105,
+   "m_eff": 0.6664377121439403,
+   "c_frac_full_kelly": 0.25534011959537944,
+   "emp_p_dd_gt_30": 0.03,
+   "thorp_p": 0.08741841497935161,
+   "dd_at_p10": 0.28608787560277427
+  },
+  {
+   "scenario": "$1m on current equity",
+   "gross": 1000000.0,
+   "g_over_eq": 9.996565682159105,
+   "m_eff": 6.6643771214394025,
+   "c_frac_full_kelly": 2.553401195953794,
+   "emp_p_dd_gt_30": NaN,
+   "thorp_p": 1.0,
+   "dd_at_p10": null
+  }
+ ],
+ "rails": {
+  "TODAY": {
+   "base": 50000.0,
+   "max_notional": 20000.0,
+   "gross_target": 15000.000000000002,
+   "cap_notional": 20000.0,
+   "cap_clamp": false,
+   "delivered": 15000.000000000002,
+   "exposure_frac": 0.1499484852323866,
+   "exposure_pages": false,
+   "dd_halt_need": 17500.0,
+   "halt_incoherent": false,
+   "min_max_notional_required": 17500.0
+  },
+  "base->equity, rail untouched": {
+   "base": 100034.354977,
+   "max_notional": 20000.0,
+   "gross_target": 30010.306493100004,
+   "cap_notional": 20000.0,
+   "cap_clamp": true,
+   "delivered": 20000.0,
+   "exposure_frac": 0.30000000000000004,
+   "exposure_pages": false,
+   "dd_halt_need": 35012.02424195,
+   "halt_incoherent": true,
+   "min_max_notional_required": 35012.02424195
+  },
+  "base->equity, rail fixed": {
+   "base": 100034.354977,
+   "max_notional": 36000.0,
+   "gross_target": 30010.306493100004,
+   "cap_notional": 36000.0,
+   "cap_clamp": false,
+   "delivered": 30010.306493100004,
+   "exposure_frac": 0.30000000000000004,
+   "exposure_pages": false,
+   "dd_halt_need": 35012.02424195,
+   "halt_incoherent": false,
+   "min_max_notional_required": 35012.02424195
+  },
+  "chase $100k by base alone": {
+   "base": 333333.33333333326,
+   "max_notional": 20000.0,
+   "gross_target": 99999.99999999999,
+   "cap_notional": 20000.0,
+   "cap_clamp": true,
+   "delivered": 20000.0,
+   "exposure_frac": 0.9996565682159103,
+   "exposure_pages": true,
+   "dd_halt_need": 116666.66666666663,
+   "halt_incoherent": true,
+   "min_max_notional_required": 116666.66666666663
+  },
+  "$100k, rails+equity correct": {
+   "base": 333333.0,
+   "max_notional": 120000.0,
+   "gross_target": 99999.90000000001,
+   "cap_notional": 120000.0,
+   "cap_clamp": false,
+   "delivered": 99999.90000000001,
+   "exposure_frac": 0.30000000000000004,
+   "exposure_pages": false,
+   "dd_halt_need": 116666.54999999999,
+   "halt_incoherent": false,
+   "min_max_notional_required": 116666.54999999999
+  },
+  "$1m, rails+equity correct": {
+   "base": 3333333.0,
+   "max_notional": 1200000.0,
+   "gross_target": 999999.9000000001,
+   "cap_notional": 1200000.0,
+   "cap_clamp": false,
+   "delivered": 999999.9000000001,
+   "exposure_frac": 0.30000000000000004,
+   "exposure_pages": false,
+   "dd_halt_need": 1166666.5499999998,
+   "halt_incoherent": false,
+   "min_max_notional_required": 1166666.5499999998
+  }
+ }
+}

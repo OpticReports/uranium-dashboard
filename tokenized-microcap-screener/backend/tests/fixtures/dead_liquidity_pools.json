@@ -1,0 +1,98 @@
+[
+ {
+  "chainId": "ethereum",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/ethereum/0x92d9585f38bec98c0581ca23dc05ae3b34f0652c",
+  "pairAddress": "0x92D9585f38bec98c0581CA23dc05aE3b34f0652C",
+  "baseToken": {
+   "address": "0xe4cdc1ab5077900284FD537503dF5275df51cCE5",
+   "name": "Micron Technology Inc. Common Stock",
+   "symbol": "MU"
+  },
+  "quoteToken": {
+   "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+   "name": "Wrapped Ether",
+   "symbol": "WETH"
+  },
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h6": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h24": {
+    "buys": 1,
+    "sells": 0
+   }
+  },
+  "volume": {
+   "h24": 0.01,
+   "h6": 0,
+   "h1": 0,
+   "m5": 0
+  },
+  "priceChange": {},
+  "liquidity": {
+   "usd": 790077683.42,
+   "base": 499999,
+   "quote": 0.0001158
+  },
+  "fdv": 1580155367,
+  "pairCreatedAt": 1783058423000
+ },
+ {
+  "chainId": "ethereum",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/ethereum/0xa06ab30aade16eb1797c62ef94978f9b2724add5",
+  "pairAddress": "0xa06aB30aADE16eb1797c62Ef94978f9B2724aDd5",
+  "baseToken": {
+   "address": "0x2b283C923b870DEF25Aae71a4F22d498Bacd04CA",
+   "name": "Dell Technologies Inc.",
+   "symbol": "DELL"
+  },
+  "quoteToken": {
+   "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+   "name": "Wrapped Ether",
+   "symbol": "WETH"
+  },
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h6": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h24": {
+    "buys": 1,
+    "sells": 0
+   }
+  },
+  "volume": {
+   "h24": 0.01,
+   "h6": 0,
+   "h1": 0,
+   "m5": 0
+  },
+  "priceChange": {},
+  "liquidity": {
+   "usd": 301804480.41,
+   "base": 499999,
+   "quote": 0.0001072
+  },
+  "fdv": 603608961,
+  "pairCreatedAt": 1782887279000
+ }
+]

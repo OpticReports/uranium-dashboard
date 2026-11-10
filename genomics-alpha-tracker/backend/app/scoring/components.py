@@ -146,6 +146,36 @@ def volume_zscore_raw(volumes: Sequence[float | None], min_history: int = 20) ->
     return (latest - mean) / std
 
 
+def drift_zscore_raw(
+    closes: Sequence[float | None],
+    window_bars: int,
+    vol_bars: int = 20,
+) -> tuple[float | None, float | None]:
+    """Trailing-window return in units of what the name's OWN vol predicts.
+
+    drift_z = r_window / (realized_vol * sqrt(window/252)), where realized_vol
+    is the annualized std of the last `vol_bars` daily log returns. |drift_z|
+    near 0 = the price is NOT moving relative to its usual noise. Returns
+    (drift_z, realized_vol); (None, None) with insufficient or degenerate data
+    — never a silent zero.
+    """
+    import math
+
+    obs = [c for c in closes if c is not None and c > 0]
+    if len(obs) < max(vol_bars + 1, window_bars + 1):
+        return None, None
+    tail = obs[-(vol_bars + 1):]
+    rets = [math.log(b / a) for a, b in zip(tail, tail[1:])]
+    mean = sum(rets) / len(rets)
+    var = sum((r - mean) ** 2 for r in rets) / len(rets)
+    vol = (var ** 0.5) * math.sqrt(252.0)
+    if vol == 0:
+        return None, None
+    r_window = obs[-1] / obs[-(window_bars + 1)] - 1.0
+    expected = vol * math.sqrt(window_bars / 252.0)
+    return r_window / expected, vol
+
+
 def runway_penalty_magnitude(
     runway_quarters: float | None,
     threshold_quarters: float,

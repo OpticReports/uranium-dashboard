@@ -1,0 +1,42 @@
+{
+  "vol_filter_True": {
+    "n_common_bars": 4402,
+    "pullback": {
+      "spot_fires": 239,
+      "perp_fires": 231,
+      "both_fire": 192,
+      "same_side": 192,
+      "union": 278,
+      "jaccard_agreement": 0.6906474820143885,
+      "spot_only": 47,
+      "perp_only": 39
+    },
+    "donchian_control": {
+      "spot_fires": 434,
+      "perp_fires": 422,
+      "both_fire": 414,
+      "same_side": 414,
+      "jaccard_agreement": 0.9366515837104072
+    }
+  },
+  "vol_filter_False": {
+    "n_common_bars": 4402,
+    "pullback": {
+      "spot_fires": 593,
+      "perp_fires": 586,
+      "both_fire": 570,
+      "same_side": 570,
+      "union": 609,
+      "jaccard_agreement": 0.9359605911330049,
+      "spot_only": 23,
+      "perp_only": 16
+    },
+    "donchian_control": {
+      "spot_fires": 434,
+      "perp_fires": 422,
+      "both_fire": 414,
+      "same_side": 414,
+      "jaccard_agreement": 0.9366515837104072
+    }
+  }
+}

@@ -56,6 +56,131 @@ def test_init_db_adds_missing_column_to_preexisting_table(tmp_path, monkeypatch)
     assert display_confidence(calls[0]) == 62.0  # old calls keep a sane conviction
 
 
+def test_init_db_adds_ctgov_names_to_preexisting_security(tmp_path, monkeypatch):
+    db = _fresh_db_module(tmp_path, monkeypatch)
+
+    # Simulate the OLD production schema: security exists WITHOUT ctgov_names.
+    with db.engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE security ("
+            "symbol VARCHAR PRIMARY KEY, name VARCHAR, subsector JSON,"
+            "active BOOLEAN, created_at DATETIME, updated_at DATETIME)"
+        ))
+        conn.execute(text(
+            "INSERT INTO security (symbol, name, subsector, active, created_at,"
+            " updated_at) VALUES ('BNTX', 'BioNTech', '[\"mrna\"]', 1,"
+            " '2026-01-01', '2026-01-01')"
+        ))
+
+    db.init_db()
+
+    from sqlmodel import Session, select
+    from app.models import Security
+
+    with Session(db.engine) as s:
+        secs = s.exec(select(Security)).all()  # would raise before the fix
+    assert len(secs) == 1
+    assert secs[0].symbol == "BNTX"
+    # Backfilled as NULL; consumers read it as "no aliases" (fall back to name).
+    assert (secs[0].ctgov_names or []) == []
+
+
+def test_init_db_creates_universe_candidate_on_preexisting_db(tmp_path, monkeypatch):
+    db = _fresh_db_module(tmp_path, monkeypatch)
+
+    # Simulate a production DB from BEFORE discovery existed: security is
+    # there, universe_candidate is not. create_all must add the new table
+    # whole (no ALTER entries needed — see the _LIGHT_MIGRATIONS comment).
+    with db.engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE security ("
+            "symbol VARCHAR PRIMARY KEY, name VARCHAR, subsector JSON,"
+            "ctgov_names JSON, active BOOLEAN, created_at DATETIME,"
+            "updated_at DATETIME)"
+        ))
+
+    db.init_db()
+
+    from sqlmodel import Session, select
+    from app.models import UniverseCandidate
+
+    with Session(db.engine) as s:
+        s.add(UniverseCandidate(symbol="MRK", name="Merck", status="new",
+                                sources=["mover"], evidence={"move_pct": 10.5}))
+        s.commit()
+        cands = s.exec(select(UniverseCandidate)).all()  # would raise without the table
+    assert len(cands) == 1
+    assert cands[0].evidence == {"move_pct": 10.5}
+    assert cands[0].market_cap is None  # unset stays NULL (no data), never 0
+
+
+def test_init_db_adds_atr_at_entry_to_preexisting_trade_call(tmp_path, monkeypatch):
+    db = _fresh_db_module(tmp_path, monkeypatch)
+
+    # Simulate the pre-shadow-grader production schema: trade_call exists
+    # with confidence but WITHOUT atr_at_entry.
+    with db.engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE trade_call ("
+            "id INTEGER PRIMARY KEY, symbol VARCHAR, created_at DATETIME,"
+            "call_date DATE, direction VARCHAR, source VARCHAR, flag_type VARCHAR,"
+            "thesis VARCHAR, entry_price FLOAT, stop_price FLOAT, target_price FLOAT,"
+            "expires_on DATE, composite_at_call FLOAT, confidence FLOAT,"
+            "evidence JSON, status VARCHAR, closed_at DATETIME, exit_date DATE,"
+            "exit_price FLOAT, return_pct FLOAT, r_multiple FLOAT)"
+        ))
+        conn.execute(text(
+            "INSERT INTO trade_call (symbol, call_date, direction, source, entry_price,"
+            " stop_price, target_price, expires_on, status)"
+            " VALUES ('CRSP', '2026-07-14', 'long', 'auto_flag', 100.0, 94.0, 118.0,"
+            " '2026-08-28', 'open')"
+        ))
+
+    db.init_db()
+
+    from sqlmodel import Session, select
+    from app.models import TradeCall
+
+    with Session(db.engine) as s:
+        calls = s.exec(select(TradeCall)).all()  # would raise before the fix
+    assert len(calls) == 1
+    # Backfilled as NULL; the shadow grader recomputes it from bars later.
+    assert calls[0].atr_at_entry is None
+
+
+def test_init_db_creates_shadow_tables_on_preexisting_db(tmp_path, monkeypatch):
+    db = _fresh_db_module(tmp_path, monkeypatch)
+
+    # A production DB from BEFORE the shadow book existed: create_all must add
+    # shadow_grade and regime_log whole (no ALTER entries needed).
+    with db.engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE security ("
+            "symbol VARCHAR PRIMARY KEY, name VARCHAR, subsector JSON,"
+            "ctgov_names JSON, active BOOLEAN, created_at DATETIME,"
+            "updated_at DATETIME)"
+        ))
+
+    db.init_db()
+
+    from datetime import date
+
+    from sqlmodel import Session, select
+    from app.models import RegimeLog, ShadowGrade
+
+    with Session(db.engine) as s:
+        s.add(ShadowGrade(call_id=1, engine="trailing_3atr", status="stopped",
+                          exit_date=date(2026, 8, 19), exit_price=102.5,
+                          r_multiple=0.42))
+        s.add(RegimeLog(date=date(2026, 8, 19), xbi_close=95.0,
+                        above_50dma=True, above_200dma=False))
+        s.commit()
+        assert len(s.exec(select(ShadowGrade)).all()) == 1
+        row = s.exec(select(RegimeLog)).one()
+    assert row.above_200dma is False
+    assert row.above_50dma is True
+
+
 def test_init_db_idempotent_on_current_schema(tmp_path, monkeypatch):
     db = _fresh_db_module(tmp_path, monkeypatch)
     db.init_db()
@@ -63,3 +188,6 @@ def test_init_db_idempotent_on_current_schema(tmp_path, monkeypatch):
     from sqlalchemy import inspect
     cols = {c["name"] for c in inspect(db.engine).get_columns("trade_call")}
     assert "confidence" in cols
+    assert "atr_at_entry" in cols
+    sec_cols = {c["name"] for c in inspect(db.engine).get_columns("security")}
+    assert "ctgov_names" in sec_cols

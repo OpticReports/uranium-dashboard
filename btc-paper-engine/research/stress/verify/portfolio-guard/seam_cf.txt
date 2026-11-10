@@ -1,0 +1,12 @@
+== COVID K0.75
+   base (CSV seam: S3 long 84,121)    S3 halt True 2026-11-30 04:00 eq@halt   74486 (line 75,502) S3 end 74,486 min S3 eq 74,486 | 12m 138,629 maxDD -0.1559 halts 0 first pb trade 2026-10-07 04:00 @ 84,121
+   CF1 seam trade dropped             S3 halt False None eq@halt    None (line 75,502) S3 end 103,334 min S3 eq 76,307 | 12m 152,024 maxDD -0.1392 halts 0 first pb trade 2026-10-08 04:00 @ 82,478
+   CF2 S3 flat at t0 (fresh book)     S3 halt True 2026-11-30 04:00 eq@halt   74355 (line 75,502) S3 end 74,355 min S3 eq 74,355 | 12m 137,642 maxDD -0.1573 halts 0 first pb trade 2026-10-07 16:00 @ 83,706
+== 2008 K0.75
+   base (CSV seam: S3 long 84,121)    S3 halt False None eq@halt    None (line 75,502) S3 end 125,127 min S3 eq 95,366 | 12m 137,688 maxDD -0.0731 halts 0 first pb trade 2026-10-07 04:00 @ 84,121
+   CF1 seam trade dropped             S3 halt False None eq@halt    None (line 75,502) S3 end 128,185 min S3 eq 97,698 | 12m 138,045 maxDD -0.0729 halts 0 first pb trade 2026-10-07 16:00 @ 83,706
+   CF2 S3 flat at t0 (fresh book)     S3 halt False None eq@halt    None (line 75,502) S3 end 128,185 min S3 eq 97,698 | 12m 138,045 maxDD -0.0729 halts 0 first pb trade 2026-10-07 16:00 @ 83,706
+== 1999 K0.75
+   base (CSV seam: S3 long 84,121)    S3 halt True 2026-12-08 16:00 eq@halt   72086 (line 75,502) S3 end 72,086 min S3 eq 72,086 | 12m 121,608 maxDD -0.1445 halts 0 first pb trade 2026-10-07 04:00 @ 84,121
+   CF1 seam trade dropped             S3 halt True 2026-12-08 16:00 eq@halt   70981 (line 75,502) S3 end 70,981 min S3 eq 70,981 | 12m 120,477 maxDD -0.1461 halts 0 first pb trade 2026-10-08 08:00 @ 82,656
+   CF2 S3 flat at t0 (fresh book)     S3 halt True 2026-12-08 16:00 eq@halt   72693 (line 75,502) S3 end 72,693 min S3 eq 72,693 | 12m 122,402 maxDD -0.1434 halts 0 first pb trade 2026-10-07 16:00 @ 83,706

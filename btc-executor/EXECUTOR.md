@@ -21,8 +21,19 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
   on fill as a venue stop-limit.
 - **Trend leg**: engine channel-break pending -> market entry; chandelier
   trail mirrored as a venue stop, replaced when the trail ratchets >5bp.
-- **Exits**: engine position vanishes -> cancel stop, close at market. If the
-  venue stop fired first, the ledger reconciles without double-closing.
+- **Exits**: two paths, both cancel the stop and close at market, and the
+  ledger reconciles without double-closing if the venue stop fired first.
+  1. `position.exit_flag` set (the engine decided a SIGNAL/TIME exit at this
+     bar's close and will book the fill at the NEXT bar's open) -> close NOW.
+     The flag is terminal engine-side, so acting on it lands us at the
+     engine's own reference price instead of a full 4h bar later. Until
+     2026-09-09 this path did not exist and every close-based exit was one
+     bar late — three for three on the live record (research/exit_lag/).
+     A re-entry guard (`stopped_entry_ts`) holds until the engine catches up.
+  2. engine position vanishes (a stop the engine filled, a reset, anything
+     the flag did not cover) -> close at market.
+  Neither path is gated on `entries_ok` or on the engine book being halted:
+  an exit must always be able to run.
 - **Sizing**: leg notional = KELLY_M x 1.5 x weight x sizing base. The base
   is live account equity by default, or the fixed SIZING_BASE_USD when set —
   the small-deposit construction (e.g. ~$40k USDC trading a $128k base; the
@@ -33,20 +44,43 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
 - **Telemetry**: one equity/position mark per UTC day persists in state
   (/status "marks") — the raw series for live-vs-paper tracking error and
   funding-cost decomposition during the token phase. /pulse is a public,
-  non-sensitive heartbeat (flags only) for automated monitoring.
+  non-sensitive heartbeat (flags only) for automated monitoring. It carries
+  `red_events_24h` AND `red_kinds_24h` ({kind: count}, summing to it): the
+  phone ping for a persisting condition is throttled per kind (30 min,
+  mirror.RATE_LIMITED) but the LOG is not, on purpose, so the bare total
+  tracks how long a condition has stood rather than how many things are
+  wrong — on 2026-09-18 one stopless window took it 1 -> 28 in nine hours.
+  Read the breakdown, not the total; a kind that was not there before is
+  the signal. Kind names only — never the msg, which embeds qty and price.
 
 ## Safety rails
 
 | rail | behavior |
 |---|---|
 | DRY_RUN (default ON) | full state machine runs; orders only logged |
-| daily-loss halt | day loss > DAILY_LOSS_HALT_PCT (6%) **of the sizing base** -> cancel all, flatten, halt. Auto-rearms at UTC rollover at KELLY_M <= 0.30; MANUAL above. Boundary caveat: a rearm grants a fresh full day budget, so worst-case loss across a UTC boundary is ~2x the daily rail |
-| drawdown halt | equity below high-water minus DD_HALT_PCT (live: 0.35) **of the sizing base** -> same, manual resume |
-| kill switch | POST /kill -> same; POST /resume to clear (manual only) |
+| VENUE selector | `VENUE=coinbase` (default) or `hyperliquid`. Unset/blank keeps the ALREADY-DEPLOYED venue — a missing env can never move a live book. An UNKNOWN value RAISES rather than defaulting, so a typo becomes a loud repeating ACTION page instead of a silent wrong-exchange deploy. `sync:false` in render.yaml for the same reason DRY_RUN is. Published on `/pulse` as `venue`: a book on the wrong exchange is the one config error no ledger check can catch, so the unauthenticated surface has to say which one it is |
+| VENUE_CHANGED halt | the state file records which venue wrote it. A ledger is a claim about positions on ONE exchange, so carrying it across a switch would have boot reconcile "resolve" it against the WRONG venue — silently abandoning a real position, or adopting a phantom one onto the new venue. Checked BEFORE `_reconcile_boot`, which is skipped entirely on this halt. Clearing it is deliberately manual: flatten and cancel on the OLD venue, confirm it is empty, then start the new one from a clean state file. `/resume` alone must never clear this one |
+| AGENT_EXPIRED halt (Hyperliquid) | a Hyperliquid agent (API) wallet has a hard expiry the venue publishes (`extraAgents.validUntil`; ours 2027-02-24). Past it EVERY order is rejected — entries, stops, and the flatten itself — so a position open at expiry is naked and the executor cannot get itself out. The rail therefore fires at **T-1 day, while the key still works** and `_halt_locked`'s cancel/flatten can actually execute; RED pages start at T-14 days so the renewal is routine rather than an outage. The agent is matched by ADDRESS, never by the operator-editable display name, and a clean list that does not contain us (revoked, never approved, or a key belonging to another wallet) reads as expired-NOW rather than as healthy. An UNREADABLE expiry is a WARN after 6h dark, never a halt: an info-endpoint outage says nothing about whether our key can still sign, and halting a healthy book on a read failure is self-inflicted damage of the kind the halt exists to prevent. Checked hourly, not per poll. `/pulse` publishes `agent_days_left`. Coinbase has no such method and is untouched (duck-typed) |
+| **THE PERP WALLET IS NOT THE BALANCE** | `clearinghouseState.marginSummary.accountValue` reports the **PERP POOL ONLY**. On this account it reads ~$64 while the real account value is ~$100k of spot USDC — the `portfolio` endpoint's `accountValue` shows 99,931 for the same moment. `hl.py`'s `equity()` sums spot + perp precisely because of this, and says so in its docstring (2026-08-28: it read $0.00 against a real $998.99 in spot). **There has never been a spot->perp `accountClassTransfer` on this account** — the full non-funding ledger is one deposit and four spot sends — and perps have traded for weeks regardless, so spot is what backs the book. Do NOT read the perp figure as buying power, do NOT raise a margin alarm from it, and do NOT ask for a transfer: there is nothing to transfer and no procedure to give. Misread twice by an agent that had just quoted the `equity()` docstring; recorded here and in CLAUDE.md because reading the fix is evidently not the same as applying it |
+| **DISCLOSED LIMIT — the $10 floor (Hyperliquid)** | HL rejects any order under $10 notional (`MinTradeNtl`) and the docs grant reduce-only NO exemption, so a position whose remaining notional falls under $10 cannot be closed by ANY order we send — not its stop, not the halt's flatten. No order-level rail can fix this: there is no order the venue will accept. It is held away by SIZING, not by code — at KELLY_M 0.135 on a $1k base the smaller (trend) leg is ~$51, about 5x the floor, so reaching it needs an >80% partial-fill shortfall. The adapter raises a named `MinNotionalRejected` so the page says WHY rather than looking like a generic rejection storm; the residue is cleared by a manual close on the Hyperliquid UI. **Re-check this margin before lowering KELLY_M or SIZING_BASE_USD** — at KELLY_M 0.05 the trend leg is $18.75, under 2x the floor |
+| daily-loss halt | day loss > DAILY_LOSS_HALT_PCT (6%) **of the sizing base** -> cancel all, flatten, halt. Auto-rearms at UTC rollover **at every size** (since 2026-10-01; previously MANUAL above KELLY_M 0.30). Above KELLY_M 0.30 the threshold SCALES: 6% x effective KELLY_M / 0.30 (15% at 0.75) — `mirror._daily_loss_pct`. Boundary caveat: a rearm grants a fresh full day budget, so worst-case loss across a UTC boundary is ~2x the daily rail (~$30k at 0.75, the DRAWDOWN line) |
+| drawdown halt | equity below high-water minus DD_HALT_PCT (live: 0.30, $30k on the 100k base) **of the sizing base** -> same, manual resume (RESUME_PROTOCOL.md) |
+| loss halts need a real recovery, or an explicit forgiveness | A plain `/resume` on `DAILY_LOSS` or `DRAWDOWN` is REFUSED while the breach is still live, and says so. It used to clear the flag while leaving `high_water` and `day_start_equity` untouched, so `_check_halts` saw the same breach on the very next poll and re-halted — and since `_breach_count` is never reset it re-halted immediately, skipping the debounce. That was a loop, not a resume, escapable only by redeploy. Two ways out now: let equity recover above the line, or call **`/resume?reanchor=1`**, which moves both marks to current equity and pages `resume_reanchored`. Re-anchoring FORGIVES the drawdown — the next one is measured from the new, lower mark — so it needs its own flag, the same shape as `?adopt_venue=1`. A resume on an account whose equity cannot be read is refused outright: that is a guess, not a decision. Non-loss halts (KILL and the operational ones) still clear on a plain resume |
+| kill switch | POST /kill -> same; POST /resume to clear (manual only). Resume also verifies every stop ref against the venue and clears dead ones — but on a leg the ledger believes HOLDS, a dead ref is cleared only once the venue BACKS the ledger (clearing it hands the mirror a placement path that is not reduce-only: on a flat venue that arms a full-size NAKED stop). Divergence -> `LEDGER_DIVERGENCE` halt. Unreadable venue -> the ref is left STRICTLY ALONE: not cleared **and not cancelled**, because in a correlated outage (status UNKNOWN *and* position unreadable — one API failure, and what 2026-08-26 actually looked like) cancelling first killed a live stop and then went on believing in it, and the churn guard suppressed replacement forever. Pages `stop_ref_unverified` (ACTION) |
+| /resume?adopt_venue=1 | operator escape from a divergent ledger. Clears the halt ONLY when the venue is genuinely flat: if the venue holds something the ledger cannot attribute to a leg, the halt STANDS and no stop is cancelled (re-gate 2026-08-27 — un-halting there let the next poll's `_close_leg` market-close a leg the venue did not hold and open a naked position out of a flat venue, by the operator obeying this feature's own instructions). The response reports the OUTCOME in `adopted`, not the request. Why it exists: a halt whose flatten FAILED keeps its ledger on purpose (it is the only record of what we believe we hold), so `LEDGER_DIVERGENCE` re-fires on every plain /resume — a deadlock only a redeploy could break. On a genuinely FLAT venue it cancels the stops we still believe in, zeroes every leg, and clears the halt. On a venue holding an unattributable position it does none of that: entries are blocked, the halt stands, and the operator is told to flatten by hand and adopt again. Refuses outright if the venue cannot be read. On a RUNNING book (a `close_stuck` recovery, 2026-10-27) the same rule applies without the halt wording: a venue still holding another leg is refused and nothing is adopted — do not flatten a leg the book still manages to make adopt fit; close the stuck leg by hand instead and the next two polls book it from the position change. Deliberately NOT automatic: only a human who has just looked at the venue can tell "our belief is stale" from "the read is lying again" |
+| stop protection is BOUNDED | a position whose stop keeps failing is closed, not retried forever. One counter per position (`stop_vanish[leg:entry_ts]`, persisted so a crash-loop cannot reset it), one cap (`STOP_REPLACE_MAX` = 3), fed by BOTH failure doors: a stop the venue confirms then kills (`stop_vanished`), and a stop the venue never confirms — accept-then-cancel inside the ~1s confirm window, or a persistent UNKNOWN read (`stop_unconfirmed`). One poll counts ONE failure even when both doors open, and a placement the venue CONFIRMS resets the counter (unless that same poll recorded a failure — otherwise an accept-then-kill storm, where every placement confirms and every one dies a poll later, would reset forever and never trip the cap). Past the cap -> `STOP_UNPLACEABLE` halt, taken BEFORE the refs are cleared on that door so `_halt_locked`'s terminal-verification loop can still see the order it may have failed to cancel (the vanished-after-confirm door clears first, but it opens only on a venue-CONFIRMED `CANCELLED`, so there is nothing left to find). A stop the venue confirms RESTING for `STOP_OK_DECAY_POLLS` (20) consecutive polls clears the count: the pullback leg's engine stop is a fixed ATR level that never trails, so the churn guard returns before any placement and the reset-on-placement is unreachable there — without the decay, isolated fully-recovered blips accumulated over weeks into a false halt that force-flattened a healthy book |
+| stop placement CHOKE POINT | every path that sends a stop for a LEG — first placement, trail-ratchet replacement, post-vanish re-arm — passes one corroboration in `_maintain_stop` (drills call `place_stop` directly at `_drill_locked`, but refuse unless every leg is flat). It cannot live in the vanished-stop handler: that door only opens on a literal `CANCELLED` status, while a blind read returns UNKNOWN, falls through the churn guard, and once the chandelier ratchets past `stop_replace_bps` (5bp of $74k is $37 — routine for a trend leg) went straight to `place_stop` with no position read at all. Diverged -> `LEDGER_DIVERGENCE` halt; unreadable -> place NOTHING, page `stop_backing_blind`, retry next poll |
+| corroboration is AGGREGATE | `venue.position()` is the NET across both legs on one product, so it is compared against the ledger SUM (`sum(l.qty)`), never one leg. Per-leg comparison was wrong in both directions: it false-halted an ordinary S3-long/S4-short book (net 0 read as "the venue holds nothing", including on the silent 00:00 UTC rearm), and it let a phantom leg hide behind a real one (ledger 0.01 real + 0.01 phantom vs venue 0.01 — same sign, non-zero, so it passed, and 0.02 of stops went out against 0.01 of position). Divergence = the venue holds LESS than the ledger claims, or holds it the other way round. Holding MORE is fine **only when no leg opposes the sum** — the stop is sized on ONE leg while the check compares the SUM, and for a leg whose sign opposes the net the stop's side moves the net AWAY from zero, so it OPENS size instead of closing it (re-gate 2026-08-27: venue +0.34, ledger {+0.34, -0.14 phantom}, sum +0.20 read "ok" and armed 0.14 BTC of unmanaged long). With any opposed leg the venue must AGREE within one contract; a surplus cannot vouch for a leg pointing the other way. A ledger summing to ZERO is checked too — it is not vacuously safe, and the old early return skipped it in both directions. **DISCLOSED LIMIT (narrowed 2026-09-16):** on a netted venue a ledger whose legs cancel exactly is still indistinguishable from a wholly phantom one by a position read — both read 0. What rests on that belief is now NOTHING: no stop is armed for a cancelling book, no reduce-only close is sent, and exposure is re-opened only toward what the engine reports (see the netted-venue row). A forgotten ARMED order remains detectable only by an open-orders sweep (F1) |
+| halt on a BLIND venue | position unreadable at halt time -> cancel NOTHING (the resting stop stays alive), page ACTION-NEEDED, still halt trading. A halt may only cancel/flatten/zero after the venue confirms: probe -> cancel_all -> verify our orders terminal -> re-read (retried) -> flatten (2026-08-26 incident: the old order stripped the stop then aborted) |
 | stale engine | feed stale/degraded -> new entries blocked (RED alert, rate-limited), exits still run |
-| drift check | venue vs ledger position mismatch > 1% of equity (below one CDE contract) -> RED event |
+| a REFUSED close keeps its stop | `_close_leg` drops the protective stop only once it is committed to sending the close. (Since 2026-09-16 the opposed-book refusal this row was written for no longer occurs — the subordinate leg's exit is ledger-only, see the netted-venue row — so the invariant now guards the single-leg residue case only.) It used to cancel up front, so `close_refused_unbacked` — which fires with perfectly healthy reads whenever the exiting leg's sign opposes the venue net, or the legs net to ~zero — returned having stripped protection off a leg it had just declined to close, and nothing re-armed it: `_verify_stop_refs` runs only on resume and the day roll, `_check_drift` sees no drift (venue and ledger agree in AGGREGATE, which is the very state that triggers the refusal), and `_event` dedupes the RED line for 600s. The blind path had this invariant pinned since 2026-08-26; the unbacked path did not (counter-agent panel 2026-09-09, live in 35ec560). A stop that has already FILLED is absorbed instead — it is the exit, not protection. The `exit_flag` path additionally re-arms via `_maintain_stop` when a close is refused |
+| an UNREADABLE order status cancels anyway | `_cancel_entry` sends the cancel unless the venue CONFIRMS the order is FILLED. Cancelling an already-filled or expired order is a harmless no-op, so blindness resolves toward SENDING the cancel. **Correction (2026-09-09):** an earlier version of this row said the old code skipped the cancel when `order_status` returned `None` on an API failure. That was wrong about both shipping adapters — `hl.order_status` returns `{"status": "UNKNOWN"}` on any exception and documents that it never returns a bare `None` on error, and `cb.order_status` returns `None` ONLY on an order-map miss (no venue handle). UNKNOWN is truthy and is not FILLED, so the old predicate already cancelled. This is defence in depth for the no-handle case, not a fix for an observed live failure. **DISCLOSED LIMIT:** there is no page for a cancel that fails, because both adapters swallow cancel exceptions internally (`except Exception: logger.warning`); a caller can never see one. Making that page real requires the adapters to propagate |
+| **the venue holds ONE net position** (Hyperliquid, docs/NETTING_FIX_DESIGN.md, 2026-09-16) | Both 2026-09 halts (09-10 23:08:57, 09-14 00:03:34) came from per-leg reduce-only orders on a venue that nets both legs into one position — attributed order by order from the venue's own `historicalOrders` by inverting `hl.derive_cloid`. Rules now: (1) a maker fill the venue confirms is BOOKED the moment it is read (`entry_filled_early`), not at the engine's bar close up to 4h later — that lag alone caused halt #2; (2) on an OPPOSED book exactly ONE reduce-only stop rests, sized to the NET (`abs(sum)`), at the dominant leg's level; the subordinate leg carries no venue stop (`stop_mode: engine` — a resting one is `reduceOnlyCanceled` by the venue on the next fill, observed twice) and its level is enforced by the engine's 60s intrabar stop and mirrored within a poll; (3) a fill of OURS that nets the other leg away is absorbed by RE-ATTRIBUTING the venue's position across both legs (`_absorb_netted_fill`, from the position read — the venue's order record over-reports a clamped stop as fully filled), the netted-away leg moves to `netted_qty`, and it is re-opened ONLY toward what the engine still reports, through the entry-class `R` order (`_reestablish`: refs persisted before the send, booked only from a venue-confirmed read, capped at `REEST_MAX` per event, gated like every entry and on EXACT corroboration); (4) the subordinate's own exit is ledger-only (its exposure was inside the net) and the dominant is owed it back the same way. Costs: one taker fill on the consumed leg per netting event (upper bound ~25/yr from the 2022-26 overlap study; cents to a dollar at current size), ≤20s unmirrored normally, and a RED `leg_unmirrored` for as long as `entries_ok` is false or the executor is halted — never traded blind. **NOT solved:** a pullback maker fill has no engine stop level until the next bar, so on an opposed book the whole net is stopless for that window (`unbooked_fill_unprotected` RED, the pre-existing #31 window made loud); the strategy question of whether S3 and S4 should coexist at all is untouched (I11). Every reduce-only order is still reduce-only; the halt still flattens the NET off a second read. **Panel 2026-09-16 (docs/NETTING_FIX_PANEL.md):** 16 BLOCKING/SERIOUS findings reproduced and fixed on the same branch — the close (X) order is now persisted before the send and settled from the venue's answer; every `diverged` verdict takes a book-wide second look (any leg's FILLED stop, any in-flight close/R ref, a maker fill) and an order of ours still unconfirmed earns up to 3 polls of grace before a halt; a stop residue is re-protected; a net under the floor defers its close instead of storming; an exactly-cancelling book closes cleanly; a consumed partial is topped up toward the size its entry asked for (never toward a changed sizing); entry fills are booked by delta (`entry_booked`) so nothing is booked twice. **The panel's independent verify + mutation stages did not run (account spend limit); the fixes were self-verified against the panel's own repros. An independent pass is owed.** |
+| drift check | venue vs ledger position mismatch > 1% of equity (below one CDE contract) -> RED event. A FAILED venue read is itself a RED (venue_read_failed, 30-min cooldown) - blindness is never silent (2026-08-26: 3 silent days) |
 | orphan fills | our limit filled but paper cancelled -> unwound at market |
-| restart | ledger + order map persisted; reboot re-places nothing |
+| restart | ledger + order map persisted; reboot re-places nothing. Boot RECONCILES venue vs ledger: venue-confirmed-flat vs ledger-long -> adopt flat, cancel the trap stop, page (the phantom class); venue-holds vs ledger-flat -> page + BLOCK entries, adopt nothing; unreadable -> page, adopt nothing |
+| stop/chase/entry identity | every stop, chase AND entry order carries a persisted attempt counter in its client order id - a cancel-then-replace can never re-send an id the venue has seen. BELIEF ASYMMETRY, deliberate: a STOP is believed only after the venue confirms it OPEN (stop_unconfirmed pages otherwise; failing toward "no stop believed" is safe because the next step re-places under a fresh salt). An ENTRY is believed AT SEND and kept on an unverifiable read (failing toward "order believed live" is safe because the identity dedupe then suppresses re-sends - the round-3 review proved the opposite polarity re-sent full size every poll); an entry ref clears only on a venue-CONFIRMED terminal-and-unfilled read |
+| rollback | NEVER roll back to a pre-2026-08-26 image while executor_state.json exists (old loader wipes state on unknown fields); boot writes a one-time .pre-phantom-fix.bak snapshot |
 
 ## Setup
 
@@ -56,6 +90,12 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
 2. **Render**: deploy the `btc-executor` service from render.yaml. Enter
    secrets in the dashboard: `CB_API_KEY_NAME`, `CB_API_PRIVATE_KEY`,
    `EXEC_TOKEN` (same value as on btc-paper-engine).
+   Optionally also set `EXEC_READ_TOKEN` — a DIFFERENT random value. It
+   satisfies `GET /status` and nothing else in the service. `EXEC_TOKEN` is
+   a **trading** credential (`POST /drill` places real orders), so anything
+   that only needs to answer "what is the executor holding" — an assistant,
+   a dashboard, a monitor — gets the read token instead. Unset leaves
+   `/status` behaving exactly as before.
 3. **Product**: boot logs list every BTC futures product the key can trade
    (`BTC futures products visible to this key: [...]`). Set `CB_PRODUCT_ID`
    accordingly (INTX perp: `BTC-PERP-INTX`; US CFM contracts appear with a
@@ -90,19 +130,131 @@ most of the v2 staircase's reasoning. What they established, with numbers:
 
 ### The schedule
 
+**2026-10-01: ceiling RAISED to 0.75** (Casey, `btc-paper-engine/RESEARCH_SHARPE.md` addendum — modern-regime −30% budget, with the engine's vol-targeted entry multiplier). The history below is kept as written.
+
+**CAPPED AT STEP B (0.20) since 2026-09-10 — see "The ceiling" below.**
+
 | step | KELLY_M | advance at | pullback entry | max step |
 |---|---|---|---|---|
 | token (live) | 0.05 | — | $2,813 | — |
 | A | 0.10 | 4 trades | $5,625 | 2.0x |
-| B | 0.20 | 8 cumulative | $11,250 | 2.0x |
-| C | 0.35 | 12 cumulative | $19,688 | 1.75x |
-| D | 0.56 | 16 cumulative | $31,500 | 1.6x |
-| ceiling | up to 0.80 | +15-20 at 0.56, quarterly Kelly re-run | $45,000 | 1.4x |
+| **B — the ceiling** | **0.20** | 8 cumulative | $11,250 | 2.0x |
+| ~~C~~ | ~~0.35~~ | **RETIRED** — outside the Kelly envelope | ~~$19,688~~ | — |
+| ~~D~~ | ~~0.56~~ | **RETIRED** — outside the Kelly envelope | ~~$31,500~~ | — |
+| ~~ceiling~~ | ~~up to 0.80~~ | **RETIRED** — outside the Kelly envelope | ~~$45,000~~ | — |
+
+Live `KELLY_M` is **0.135**, which is not ramp progress and not a rung: it is
+the venue-mechanics floor (Hyperliquid's $10 `MinTradeNtl`), deliberately off
+the staircase and comfortably under the ceiling.
 
 Tested against the alternatives: this rung shape cuts deployed notional 25%
 and worst-trade loss 22% vs v2 at identical timing, and **strictly dominates
 it** on every risk metric. Sizes at SIZING_BASE_USD=50000; trend-leg entries
 are 1/3 of these.
+
+### The ceiling — why the ramp stops at 0.20
+
+**The advance criteria below are entirely EXECUTION evidence.** Trade count,
+cumulative P&L, fill quality, no halts, legs reconciled — every one of them
+answers "is the machinery working", and none of them answers "is this size
+inside the drawdown budget". Those are different questions, and only the
+first one has ever been checked here. That gap is what this ceiling closes.
+
+`btc-paper-engine/RESEARCH_FEES.md` (2026-09-10) re-fitted Kelly on returns
+charged the fee we ACTUALLY pay. Four of four intended-maker pullback entries
+crossed and paid taker, so the true round trip is 8.64 bps against a modelled
+6.00. On the conservative specification the binding recommended m is **0.30
+for S5** and **0.22 for S6**.
+
+`/exec/target` ships `{"w_trend": 0.25, "lev": 1.5}`, which is **S5** — so
+S5's 0.30 is the row that applies to the deployed blend. 0.20 clears the
+tighter of the two either way, and rung C (0.35) fails **both**, so the
+decision is robust to which row you read. The 0.135 → 0.20 step clears in
+every specification tested. Robustness on the crossing rate: at the study's
+registered 66% rather than the observed 100%, the binding cell reads 0.27 —
+same decision.
+
+Per KELLY.md's own doctrine, over-betting destroys growth faster than
+under-betting gives it up, so when defensible specifications disagree about
+size the smaller one governs.
+
+### What the cap does NOT do — read this before trusting it
+
+**Capping `KELLY_M` bounds one factor of a four-factor product.** Leg
+notional is `kelly_m × lev × weight × base`. Two counter-agents independently
+reached the retired rungs with `KELLY_M` pinned at exactly 0.20:
+
+| route | result at KELLY_M 0.20 | pages, before this change |
+|---|---|---|
+| `SIZING_BASE_USD` 1000 → 3000 | more than retired rung D | one generic `config_change` |
+| `SIZING_BASE_USD` 1000 → 10000 | ≈ KELLY_M 2.0 equivalent | none |
+| engine sends `blend.lev = 10` | 6.7× the authorised notional | **none at all** |
+
+So the invariant is now stated where the Kelly envelope actually lives —
+as a fraction of **capital**, not as one multiplier:
+
+- `MAX_EXPOSURE_FRAC = 1.125` (0.75 cap × 1.5, since 2026-10-01; 0.45 from 2026-09-30) — `_check_exposure` pages `exposure_over_cap`
+  when `kelly × lev × base / max(equity, high_water)` breaches it, naming
+  `SIZING_BASE_USD` rather than blaming `KELLY_M`. It **pages, it does not
+  clamp**: clamping on live equity would shrink entry size during a
+  drawdown, which is a real change to how the book trades and is Casey's
+  call, not a side effect. Corollary, stated so it is not a surprise — a
+  deep drawdown raises the ratio on its own and can page with the config
+  untouched. That is Kelly telling the truth.
+- `MAX_BLEND_LEV = 2.0` — `_sane_blend` clamps the engine's `lev` to
+  `(0, 2.0]` and `w_trend` to `[0, 1]` at the door. `/exec/target` was
+  parsed with no schema check, and `w_trend > 1` made the pullback weight
+  negative, which dropped a whole leg silently at `if qty <= 0: return`.
+
+**Enforced in code, not just here.** `mirror.KELLY_M_CAP` (0.20 at the time of writing; 0.30 2026-09-30; **0.75 2026-10-01**):
+
+- it **clamps**, it does not refuse to boot — but the reason is narrower than
+  first written. A crash-looping container does **not** leave a naked
+  position: HL stops are reduce-only and rest at the venue. What a refusal
+  loses is trail ratcheting, engine-exit mirroring and the halt machinery.
+  The real alternative is refusing new *entries* while over-cap; clamping
+  still wins, because over-cap is an operator config error rather than a
+  market condition, and refusing entries desynchronises the book from the
+  engine. Halting is ruled out outright — `halt()` flattens, i.e. sends real
+  market orders because an env var is wrong;
+- the page **repeats**. `kelly_over_cap` fires every poll under a 30-minute
+  phone throttle, like every other persistent RED here. A one-shot boot page
+  was swallowed entirely by a container recycle inside 10 minutes, because
+  `_event`'s dedupe compares against the *persisted* last event;
+- **open positions are never force-resized.** Sizing is consulted for NEW
+  entries only, so a leg opened above the cap exits on its own engine signal
+  rather than being part-closed by a deploy;
+- it is a **repo constant, not a Settings field**, and a test asserts the
+  literal `0.20`. Every other gate computes its expectation *from* the
+  constant, so the suite stayed green with the cap silently moved to 0.29 —
+  a +45% size raise as a one-character diff;
+- `advance_ok` on `/ramp` is **cap-aware**. It was pure execution evidence,
+  with the cap mentioned only in a prose note — so the machine-readable field
+  the dashboard reads could still say "advance" toward a retired rung;
+- fills record the `kelly_m` they were taken at, so trades booked while the
+  env sat over the cap cannot write mislabelled rungs into the RAMP v4
+  evidence base;
+- `/status` reports `kelly_m_effective`, `kelly_m_cap` and
+  `max_exposure_frac` alongside the configured value, so the readout can
+  never state a size the executor is not using.
+
+**Mutation-verified, including its own failures.** The protection was broken
+16 different ways; 13 were killed by exactly the gate written for them. Three
+survived the first sweep and are worth recording, because two were against
+the panel's own BLOCKING fixes: reverting `_roll_day` to the raw `KELLY_M`,
+reverting `advance_ok` to execution-only, and deleting `exposure_over_cap`'s
+ACTION entry all passed a green suite. Gates added, re-mutated, all three now
+die. A fix whose gate does not bind is a fix on paper.
+
+**Still env-only, and deliberately unresolved here:** `SIZING_BASE_USD`,
+`MAX_NOTIONAL_USD` and `MAX_ACCOUNT_LEV` have no repo ceiling. The exposure
+check makes a breach loud; it does not make it impossible. Bounding those in
+code is a separate decision about how much authority the dashboard keeps.
+
+**This is reversible, and the trigger is evidence, not a date.** The envelope
+behind 0.22 is in-sample, one cell of four, and rests on n=4 fills for the
+crossing rate. A Kelly re-fit on enough LIVE trades is what reopens rung C —
+not a calendar quarter, and not a good run of fills.
 
 ### Advance criteria (ALL must hold)
 
@@ -131,7 +283,7 @@ which the sample size cannot support.
 - **ramp drawdown <= -$5,000 -> step DOWN one.** The $17,500 DRAWDOWN halt
   fired in 0 of 382 simulated ramps — at step D it needs a 41.7% adverse
   move, i.e. it is unreachable during the ramp and cannot do this job;
-- **above KELLY_M 0.30 the daily-loss halt reverts to MANUAL resume.** At
+- **SUPERSEDED 2026-10-01** — the daily-loss halt now auto-rearms at every size and its threshold scales with KELLY_M above 0.30. Original rule: **above KELLY_M 0.30 the daily-loss halt reverts to MANUAL resume.** At
   steps C/D a single ordinary-bad trade (-15.6% on notional, the worst in six
   years) trips the $3,000 daily rail — and auto-rearm would silently clear
   the only breaker that is actually reachable during the ramp. IMPLEMENTED
@@ -179,6 +331,9 @@ so it is measured identically regardless of how fast the size ramps).
 
 - `GET /status` — mode, halts, per-leg ledger, last 50 events, dry-run intents
 - `POST /kill` / `POST /resume` — emergency stop / manual restart
+- A `DRAWDOWN` halt is resumed by RESUME_PROTOCOL.md (2026-10-27): 24h
+  cooling, classify the loss, then `KELLY_M` 0.30 and `/resume?reanchor=1`;
+  a second DRAWDOWN halt inside 180 days is the kill criterion.
 - Executor state: `/app/data/executor_state.json` (persistent disk)
 - The engine's `/exec/target` is token-protected; set EXEC_TOKEN on BOTH
   services or the feed 401s.
@@ -186,14 +341,31 @@ so it is measured identically regardless of how fast the size ramps).
 ## Halt automation (2026-08-07)
 
 - **DAILY_LOSS auto-rearms** at the UTC day rollover (informational ✅
-  alert) while KELLY_M <= 0.30; above that it holds for manual resume (ramp
-  v3 rule, enforced in code). Rearm caveat, disclosed: the new day gets a
+  alert) at every size since 2026-10-01 (it held for manual resume above
+  KELLY_M 0.30 until then); above 0.30 its threshold scales with size. Rearm caveat, disclosed: the new day gets a
   fresh full budget anchored at post-loss equity, and if the engine still
   holds its position the mirror re-enters it - worst case across a boundary
-  is roughly 2x the daily rail. Below 0.30 the dollar amounts are small and
-  this is accepted; above 0.30 the manual gate closes it.
+  is roughly 2x the daily rail (~$30k at 0.75 = the DRAWDOWN line). Since
+  2026-10-01 the scaled line is FROZEN at each rollover (a mid-day KELLY_M
+  change takes effect next day), DRAWDOWN is checked first, and a DAILY_LOSS
+  halt with equity under the DRAWDOWN line is relabelled DRAWDOWN (manual) -
+  at a poll or at the rollover - so it can never auto-rearm and re-buy.
+- **LEDGER_DIVERGENCE and STOP_UNPLACEABLE are protection failures, not
+  risk breaches** (2026-08-26), and are ALWAYS manual-resume at every
+  KELLY_M — the auto-rearm is keyed on `DAILY_LOSS` alone. `LEDGER_DIVERGENCE`
+  = the venue does not back a position the ledger claims, so replacing its
+  stop would OPEN one; `STOP_UNPLACEABLE` = protection for a live position
+  failed `STOP_REPLACE_MAX` times through either door (vanished-after-confirm
+  or never-confirmed). Both halt into the normal cancel/flatten sequence, so
+  the intended end state is a flat book — verify that on Coinbase before
+  resuming, because a halt on a blind venue deliberately flattens nothing.
+  If a plain `/resume` keeps re-halting `LEDGER_DIVERGENCE`, the flatten
+  failed and the ledger is stale: flatten on Coinbase yourself, then use
+  `/resume?adopt_venue=1` (see the safety-rails table). The auto-rearm
+  announces `auto_rearm_blocked`, never a ✅ "cleared", when this fires at
+  the UTC rollover.
 - **DRAWDOWN and KILL remain manual-resume**, deliberately: a circuit
-  breaker with automatic reset is a retry loop, and the −35%-of-base floor
+  breaker with automatic reset is a retry loop, and the −30%-of-base floor
   is only a floor because a human stands behind it. Resume is a
   capital-allocation decision (same size / smaller / stop).
 - **Transfer reconciliation:** when the whole book is flat (ledger empty,
@@ -202,3 +374,31 @@ so it is measured identically regardless of how fast the size ramps).
   instead of tripping the breaker. Any equity move while positions are
   open takes the normal halt path. Limitation: a transfer landing during a
   service restart is absorbed as baseline, not detected as a jump.
+
+
+## ETH carry sleeve in the same account (2026-10-01)
+
+carry-executor (its own agent key) holds long spot UETH and a short ETH perp in
+this main account (see `carry-executor/CARRY.md`). It changes three things here:
+
+- **Equity:** `hl.py equity()` = spot USDC (which carries every perp's uPnL,
+  verified live) plus non-USDC spot tokens at their spot mid.
+  - A held token that cannot be priced (no pair, no mid, or mid <= 0) stops
+    the equity read if it cost >= $50, or was worth >= $50 at the last mid
+    this process saw (bridged-in UETH carries no cost); otherwise it is dust
+    and skipped.
+  - An empty `spot_meta` raises and is never cached.
+  - `/pulse` publishes `equity_counts_spot_tokens: true` (a gate test ties it
+    to `equity()` calling `_spot_token_value`). carry-executor will not open
+    without it, and pages `sleeve_unseen` if it goes missing for 3 passes
+    while the sleeve is held. **Do not roll btc-executor back past this build
+    while the sleeve is on.**
+- **Margin:** the sleeve's short shares the USDC cross-margin pool. Nothing
+  here reads total margin; `_cap_room` sizes off the fixed base. HL rejecting
+  an order for insufficient margin is the only backstop, and the headroom is
+  large (carry review stress table: the short liquidates near ETH +227% with
+  BTC flat).
+- **Known gap:** while the BTC book is flat, an UNHEDGED UETH move larger than
+  the transfer floor (possible only after a carry hedge failure) is read by
+  `_reconcile_transfers` as a transfer, not a loss. Accepted: the hedged
+  sleeve nets to basis (sd ~$10 on $30k), and carry-executor pages `unhedged`.

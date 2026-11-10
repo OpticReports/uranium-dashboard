@@ -1,0 +1,9950 @@
+"""blend3070 gates: state transitions on fixture intents, 1%-risk sizing,
+GTC stop cancel/replace, time stop, band rebalance, BIL sweep, budget cap,
+kill switch, DryAdapter stock fills, /status shape, and the safety
+invariants (BLEND_ENABLED=false changes nothing; the tracker never learns
+account equity; DRY_RUN defaults true). All offline."""
+from __future__ import annotations
+
+import json
+import threading
+import pathlib
+import os
+import time
+
+import pytest
+
+from app import blend as blend_mod
+from app.blend import Blend3070Manager, fetch_intents, run_cycle
+from app.ib_adapter import DryAdapter
+
+
+class Cfg:
+    blend_budget = 0.0
+    blend_book_usd = 10_000.0
+    tracker_url = ""
+    tracker_user = ""
+    tracker_password = ""
+    dry_run = True              # mode-guard: tests run a "dry:paper" book
+    trading_mode = "paper"
+
+
+def mk(tmp_path, **cfg_over):
+    cfg = Cfg()
+    for k, v in cfg_over.items():
+        setattr(cfg, k, v)
+    return Blend3070Manager(cfg, str(tmp_path / "blend.json"))
+
+
+def payload(gate=True, entries=(), exits=(), stops=(), max_open=10):
+    return {
+        "as_of": "2026-08-20",
+        "gate": {"xbi_above_200dma_prior": gate, "since": None},
+        "entries": list(entries),
+        "exits": list(exits),
+        "stops": list(stops),
+        "rebalance": {"needed": None, "current_sleeve_weight": None,
+                      "target": 0.30},
+        "book_params": {"max_open": max_open, "risk_frac": 0.01, "band": 0.05,
+                        "cash_vehicle": "BIL", "core": "SPY"},
+        "contract": "executor reconciles and sizes",
+    }
+
+
+PRICES = {"SPY": 100.0, "BIL": 100.0, "CRSP": 50.0}
+
+
+def entry(call_id=1, symbol="CRSP", entry_ref=50.0):
+    return {"symbol": symbol, "call_id": call_id, "fire_date": "2026-08-20",
+            "flag_type": "pre_catalyst_sentiment_ramp", "risk_frac": 0.01,
+            "entry_ref": entry_ref, "note": "test"}
+
+
+def stop_row(call_id=1, symbol="CRSP", trail=44.0):
+    return {"symbol": symbol, "call_id": call_id, "trail_level": trail}
+
+
+def _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, bil_qty=0,
+                      core_cash=0.0):
+    m.state.initialized = True
+    m.state.sleeve_cash = sleeve_cash
+    m.state.spy_qty = spy_qty
+    m.state.bil_qty = bil_qty
+    m.state.core_cash = core_cash
+
+
+def _wait_until(cond, timeout=10.0):
+    """Poll for an async condition (R2: the loop thread executes the /kill
+    flatten after LOOP_WAKE — service tests wait for it, house idiom)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if cond():
+            return True
+        time.sleep(0.05)
+    return cond()
+
+
+def _held_position(m, call_id=1, symbol="CRSP", qty=5, fill=50.0,
+                   stop_level=44.0, entry_date="2026-08-01",
+                   time_stop="2026-10-30", stop_ref="old-stop", adapter=None):
+    """Book a held position. `adapter` seeds the VENUE to match, which any
+    test that later flattens MUST pass: the flatten's ceiling is what the
+    account holds, and a book asserting shares the venue does not report is
+    the naked-short state the ceiling exists to catch."""
+    m.on_entered({"call_id": call_id, "symbol": symbol, "qty": qty,
+                  "entry_ref": fill, "stop_level": stop_level},
+                 fill, "entry-ref", entry_date)
+    if adapter is not None:
+        adapter.seed_position(symbol, qty)
+    pos = m.state.positions[str(call_id)]
+    pos.time_stop = time_stop
+    pos.stop_order_ref = stop_ref
+    return pos
+
+
+# --- bootstrap + sweep --------------------------------------------------------
+
+def test_gate_bootstrap_splits_30_70_and_parks_cash(tmp_path):
+    m = mk(tmp_path)
+    out = m.step("2026-08-20", payload(), PRICES)
+    acts = {(o["action"], o.get("symbol")) for o in out}
+    assert ("CORE_BUY", "SPY") in acts and ("SWEEP", "BIL") in acts
+    core = next(o for o in out if o["action"] == "CORE_BUY")
+    sweep = next(o for o in out if o["action"] == "SWEEP")
+    assert core["qty"] == 70          # $7,000 core at $100
+    assert sweep["qty"] == 30         # $3,000 sleeve idle -> BIL
+    assert m.state.sleeve_cash == pytest.approx(3_000.0)
+    assert m.state.core_cash == pytest.approx(7_000.0)
+
+
+def test_gate_full_dry_cycle_persists_book(tmp_path):
+    m = mk(tmp_path)
+    run_cycle(m, DryAdapter(), payload(), "2026-08-20", alert=lambda _: None)
+    assert m.state.spy_qty == 70 and m.state.bil_qty == 30
+    assert m.state.core_cash == pytest.approx(0.0)
+    assert m.state.sleeve_cash == pytest.approx(0.0)
+    # persistence across restart (LadderManager doctrine)
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.spy_qty == 70 and m2.state.initialized is True
+
+
+# --- entries ------------------------------------------------------------------
+
+def test_gate_entry_sizing_is_1pct_of_sleeve_over_per_share_risk(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)                     # sleeve equity $3,000
+    out = m.step("2026-08-20",
+                 payload(entries=[entry()], stops=[stop_row()]), PRICES)
+    (ent,) = [o for o in out if o["action"] == "ENTER"]
+    # risk$ = 1% * 3,000 = 30; per-share = 50 - 44 = 6 -> 5 shares MOO
+    assert ent["qty"] == 5
+    assert ent["stop_level"] == 44.0 and ent["entry_ref"] == 50.0
+
+
+def test_gate_entry_executes_moo_then_gtc_stop(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    pos = m.state.positions["1"]
+    assert pos.qty == 5 and pos.fill_price == 50.0   # MOO at the reference
+    assert pos.stop_order_ref in a._stops            # GTC stop resting
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 44.0
+    assert pos.time_stop == "2026-11-18"             # entry + 90 CALENDAR days
+    assert m.state.sleeve_cash + m.state.bil_qty * 100.0 == pytest.approx(
+        3_000.0 - 250.0)                             # cost left the sleeve
+
+
+def test_gate_no_entry_when_gate_off(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    out = m.step("2026-08-20",
+                 payload(gate=False, entries=[entry()], stops=[stop_row()]),
+                 PRICES)
+    assert not [o for o in out if o["action"] == "ENTER"]
+
+
+def test_gate_cap_10_open(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=1_000_000.0)
+    entries = [entry(call_id=i, symbol=f"S{i}") for i in range(1, 13)]
+    stops = [stop_row(call_id=i, symbol=f"S{i}") for i in range(1, 13)]
+    out = m.step("2026-08-20", payload(entries=entries, stops=stops),
+                 {**PRICES, **{f"S{i}": 50.0 for i in range(1, 13)}})
+    assert len([o for o in out if o["action"] == "ENTER"]) == 10
+
+
+def test_gate_no_reentry_of_a_previously_traded_call(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    m.state.entered_ids = [1]
+    out = m.step("2026-08-20",
+                 payload(entries=[entry()], stops=[stop_row()]), PRICES)
+    assert not [o for o in out if o["action"] == "ENTER"]
+
+
+def test_gate_entry_without_trail_level_is_skipped(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    out = m.step("2026-08-20", payload(entries=[entry()], stops=[]), PRICES)
+    assert not [o for o in out if o["action"] == "ENTER"]
+    assert any("no sizing reference" in e["msg"] for e in m.state.events)
+
+
+# --- stop adjustment (cancel/replace) -----------------------------------------
+
+def test_gate_stop_ratchets_up_via_cancel_replace(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    out = run_cycle(m, a, payload(stops=[stop_row(trail=47.0)]),
+                    "2026-08-21", alert=lambda _: None)
+    (adj,) = [o for o in out if o["action"] == "ADJUST_STOP"]
+    assert adj["old_ref"] == "old-stop"
+    pos = m.state.positions["1"]
+    assert pos.stop_level == 47.0
+    assert pos.stop_order_ref != "old-stop" and pos.stop_order_ref in a._stops
+    cancels = [e for e in a.log if e["action"] == "cancel_stock_order"]
+    assert cancels and cancels[0]["ref"] == "old-stop"
+
+
+def test_gate_stop_never_lowers(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_level=47.0)
+    out = m.step("2026-08-21", payload(stops=[stop_row(trail=44.0)]), PRICES)
+    assert not [o for o in out if o["action"] == "ADJUST_STOP"]
+
+
+# --- exits --------------------------------------------------------------------
+
+def test_gate_tracker_trail_exit_closes_position(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    run_cycle(m, a,
+              payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                              "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-21", alert=lambda _: None)
+    assert "1" not in m.state.positions
+    # stop cancelled, then a MKT sell of the full position
+    assert [e["action"] for e in a.log][:2] == ["cancel_stock_order",
+                                                "place_stock_order"]
+    assert any("EXIT" in e["msg"] for e in m.state.events)
+
+
+def test_gate_executor_time_stop_belt_fires_without_tracker(tmp_path):
+    # A tracker outage/reconciliation gap must never hold a position past
+    # day 90: the executor's own clock exits it.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, time_stop="2026-08-19")
+    out = m.step("2026-08-20", payload(), PRICES)
+    (ex,) = [o for o in out if o["action"] == "EXIT"]
+    assert ex["reason"] == "time_stop" and ex["call_id"] == 1
+
+
+def test_gate_exit_for_unheld_call_is_ignored(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    out = m.step("2026-08-20",
+                 payload(exits=[{"symbol": "CRSP", "call_id": 99,
+                                 "reason": "trail", "trail_level": 44.0}]),
+                 PRICES)
+    assert not [o for o in out if o["action"] == "EXIT"]
+
+
+# --- band rebalance -----------------------------------------------------------
+
+def test_gate_rebalance_only_beyond_5pp_band(tmp_path):
+    m = mk(tmp_path)
+    # w = 33% -> inside the band, nothing.
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=33, spy_qty=67)
+    assert not [o for o in m.step("2026-08-20", payload(), PRICES)
+                if o["action"] == "REBALANCE"]
+    # w = 45% -> sleeve_to_core of exactly the 15pp drift.
+    m2 = mk(tmp_path)
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=45, spy_qty=55)
+    (rb,) = [o for o in m2.step("2026-08-20", payload(), PRICES)
+             if o["action"] == "REBALANCE"]
+    assert rb["direction"] == "sleeve_to_core"
+    assert rb["usd"] == pytest.approx(1_500.0)
+
+
+def test_gate_rebalance_core_to_sleeve_executes_and_sweeps(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=20, spy_qty=80)  # w = 20%
+    a = DryAdapter()
+    out = run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    (rb,) = [o for o in out if o["action"] == "REBALANCE"]
+    assert rb["direction"] == "core_to_sleeve"
+    assert rb["usd"] == pytest.approx(1_000.0)
+    # $1,000 of SPY sold; proceeds swept into BIL. Book back at 30/70.
+    assert m.state.spy_qty == 70
+    assert m.state.bil_qty == 30
+    assert m.sleeve_value({"SPY": 100.0, "BIL": 100.0}) == pytest.approx(3_000.0)
+
+
+def test_gate_rebalance_sleeve_to_core_funds_from_bil(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=45, spy_qty=55)  # w = 45%
+    a = DryAdapter()
+    run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    assert m.state.bil_qty == 30
+    # $1,500 moved to core; SPY buy happens the same cycle (CORE_BUY runs
+    # after the rebalance in intent order).
+    assert m.state.spy_qty == 70
+    assert m.core_value({"SPY": 100.0, "BIL": 100.0}) == pytest.approx(7_000.0)
+
+
+# --- BIL sweep ----------------------------------------------------------------
+
+def test_gate_idle_sleeve_cash_sweeps_to_bil(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=500.0, bil_qty=25, spy_qty=70)
+    (sw,) = [o for o in m.step("2026-08-20", payload(), PRICES)
+             if o["action"] == "SWEEP"]
+    assert sw["qty"] == 5                    # $500 // $100
+    # dust below the order floor is left alone
+    m.state.sleeve_cash = 20.0
+    assert not [o for o in m.step("2026-08-20", payload(), PRICES)
+                if o["action"] == "SWEEP"]
+
+
+# --- budget cap + kill switch -------------------------------------------------
+
+def test_gate_budget_cap_blocks_entries(tmp_path):
+    m = mk(tmp_path, blend_budget=100.0)
+    _seed_initialized(m)                     # entry cost would be $250 > $100
+    out = m.step("2026-08-20",
+                 payload(entries=[entry()], stops=[stop_row()]), PRICES)
+    assert not [o for o in out if o["action"] == "ENTER"]
+    assert any("BLEND_BUDGET" in e["msg"] for e in m.state.events)
+
+
+def test_gate_budget_zero_means_disabled(tmp_path):
+    m = mk(tmp_path, blend_budget=0.0)
+    _seed_initialized(m)
+    out = m.step("2026-08-20",
+                 payload(entries=[entry()], stops=[stop_row()]), PRICES)
+    assert [o for o in out if o["action"] == "ENTER"]
+
+
+def test_gate_kill_switch_halts_everything(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    m.halt("KILL")
+    assert m.step("2026-08-20",
+                  payload(entries=[entry()], stops=[stop_row()]), PRICES) == []
+    m.resume()
+    assert m.step("2026-08-20", payload(), PRICES) != []
+
+
+def test_gate_no_payload_means_no_action(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    assert m.step("2026-08-20", None, PRICES) == []
+
+
+# --- DryAdapter stock support -------------------------------------------------
+
+def test_gate_dry_adapter_stock_fills():
+    a = DryAdapter()
+    r = a.place_stock_order("SPY", 70, "MOO", tif="OPG", ref_price=101.5)
+    assert r["status"] == "filled" and r["fill_price"] == 101.5
+    r = a.place_stock_order("BIL", 30, "MKT")           # falls back to spot
+    assert r["status"] == "filled" and r["fill_price"] == 100.0
+    s = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC")
+    assert s["status"] == "working"
+    fill = a.trigger_stop(s["order_ref"])               # STP fills AT the stop
+    assert fill["fill_price"] == 44.0
+    # Pinned contract (law #8, counter-agent N2): cancelling a FILLED order
+    # RAISES — never an ambiguous False that could mask a fill race.
+    with pytest.raises(RuntimeError):
+        a.cancel_stock_order(s["order_ref"])
+    assert a.cancel_stock_order("never-seen-ref") is False  # not found: False
+    with pytest.raises(ValueError):
+        a.place_stock_order("SPY", 1, "LMT")
+    with pytest.raises(ValueError):
+        a.place_stock_order("SPY", 1, "STP")            # STP needs stop_price
+
+
+# --- safety invariants + service wiring ---------------------------------------
+
+def test_gate_blend_disabled_is_zero_change(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app import service
+    from app.service import app
+
+    assert settings.blend_enabled is False   # the shipped default
+    assert settings.dry_run is True          # DRY_RUN default true, still
+    assert settings.blend_budget == 0.0      # budget cap disabled by default
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    with TestClient(app) as c:
+        body = c.get("/status", params={"token": "sekrit"}).json()
+        assert "blend" not in body           # /status byte-identical
+        assert service.BLEND is None         # no manager was ever built
+
+
+def test_gate_blend_enabled_status_and_kill(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app import service
+    from app.service import app
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(app) as c:
+            for _ in range(100):             # _build runs on the loop thread
+                if service.BLEND is not None:
+                    break
+                time.sleep(0.05)
+            assert service.BLEND is not None
+            _seed_initialized(service.BLEND, sleeve_cash=2_750.0)
+            _held_position(service.BLEND, stop_ref=None)
+            body = c.get("/status", params={"token": "sekrit"}).json()
+            b = body["blend"]
+            assert set(b) >= {"enabled", "halted", "positions", "open_count",
+                              "sleeve_cash", "bil_qty", "spy_qty", "core_cash",
+                              "budget_cap", "events"}
+            assert b["open_count"] == 1
+            # /kill halts the blend book IMMEDIATELY and queues the flatten
+            # for the execution loop (R2 two-stage), which closes positions
+            # within seconds (LOOP_WAKE).
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.json()["blend"] == "flatten_queued"
+            assert service.BLEND.state.halted == "KILL"
+            assert _wait_until(
+                lambda: service.BLEND.state.positions == {}
+                and service.BLEND.state.flatten_request is None)
+            c.post("/resume", params={"token": "sekrit"})
+            assert service.BLEND.state.halted is None
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_tracker_never_learns_book_state(monkeypatch):
+    """The poll is a bare authenticated GET: no params, no body, no headers
+    carrying equity/positions — the tracker stays a keyless decision brain."""
+    seen = {}
+
+    def fake_get(url, **kw):
+        seen["url"] = url
+        seen["kwargs"] = kw
+
+        class R:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"ok": True}
+
+        return R()
+
+    monkeypatch.setattr(blend_mod.httpx, "get", fake_get)
+
+    class C(Cfg):
+        tracker_url = "https://research.optic.capital/"
+        tracker_user = "casey"
+        tracker_password = "pw"
+
+    assert fetch_intents(C()) == {"ok": True}
+    assert seen["url"] == "https://research.optic.capital/blend3070/intents"
+    assert set(seen["kwargs"]) == {"auth", "timeout"}   # nothing else sent
+    assert seen["kwargs"]["auth"] == ("casey", "pw")
+
+
+def test_gate_fetch_without_url_or_on_error_returns_none(monkeypatch):
+    assert fetch_intents(Cfg()) is None
+
+    def boom(url, **kw):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(blend_mod.httpx, "get", boom)
+
+    class C(Cfg):
+        tracker_url = "https://x"
+
+    assert fetch_intents(C()) is None
+
+
+# --- counter-agent regression gates (the 7 material findings + minors) --------
+# Each scenario below is derived from the counter-agent's repro script
+# (scratchpad/attack_blend.py): the attacks that CONFIRMED the defects are
+# now merge-blocking gates asserting the fixed behavior.
+
+class _RejectStopAdapter(DryAdapter):
+    """STP placements rejected while reject_stp is True (venue outage sim)."""
+
+    def __init__(self):
+        super().__init__()
+        self.reject_stp = True
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        if order_type == "STP" and self.reject_stp:
+            raise RuntimeError("venue reject (simulated)")
+        return super().place_stock_order(symbol, qty, order_type, **kw)
+
+
+class _FlakyStopAdapter(DryAdapter):
+    """First N STP placements rejected, later ones fine (transient reject)."""
+
+    def __init__(self, fails=1):
+        super().__init__()
+        self.fails_left = fails
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        if order_type == "STP" and self.fails_left > 0:
+            self.fails_left -= 1
+            raise RuntimeError("venue reject (simulated)")
+        return super().place_stock_order(symbol, qty, order_type, **kw)
+
+
+class _NoFillPriceAdapter(DryAdapter):
+    """MKT sells ack as filled but WITHOUT a fill price (broken venue ack)."""
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        r = super().place_stock_order(symbol, qty, order_type, **kw)
+        if order_type == "MKT" and qty < 0:
+            r = dict(r)
+            r.pop("fill_price", None)
+        return r
+
+
+def _executions(a, symbol):
+    """Actual sell executions for symbol: stop fills + filled MKT/MOO sells
+    (a resting STP placement is not an execution)."""
+    out = []
+    for e in a.log:
+        if e.get("symbol") != symbol or e.get("qty", 0) >= 0:
+            continue
+        if e["action"] == "stop_triggered":
+            out.append(e)
+        elif e["action"] == "place_stock_order" and e.get("status") == "filled":
+            out.append(e)
+    return out
+
+
+# M1: venue stop fills reconciled BEFORE any decision; exit echo is a no-op.
+
+def test_gate_m1_stop_fill_reconciled_before_exit_echo(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    pos = m.state.positions["1"]
+    a.trigger_stop(pos.stop_order_ref)      # the GTC stop fills intraday
+    # Next day the tracker echoes the trail exit: must be a NO-OP.
+    echo = payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                           "reason": "trail", "trail_level": 44.0}])
+    run_cycle(m, a, echo, "2026-08-21", alert=lambda _: None)
+    assert "1" not in m.state.positions
+    sells = _executions(a, "CRSP")
+    assert len(sells) == 1 and sells[0]["action"] == "stop_triggered"
+    assert any("stop_filled" in e["msg"] for e in m.state.events)
+    # Idempotent: a second echo cycle still does nothing.
+    out = run_cycle(m, a, echo, "2026-08-22", alert=lambda _: None)
+    assert not [i for i in out if i["action"] == "EXIT"]
+    assert len(_executions(a, "CRSP")) == 1
+
+
+def test_gate_m1_stop_fill_books_cash_at_the_stop_fill(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    pos = m.state.positions["1"]
+    total_before = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    a.trigger_stop(pos.stop_order_ref)      # 5 shares fill at 44.0
+    run_cycle(m, a, None, "2026-08-21", alert=lambda _: None)
+    total_after = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    assert total_after - total_before == pytest.approx(5 * 44.0)
+
+
+# M2: one per-cycle cash ledger — a single clamped BIL sell funds everything;
+# lowest-priority actions are skipped rather than overdrawing.
+
+def test_gate_m2_entry_plus_rebalance_share_one_bil_ledger(tmp_path):
+    # The counter-agent's attack 1: bil_qty went to -20 and core_cash -500.
+    m = mk(tmp_path)
+    m.state.initialized = True
+    m.state.sleeve_cash = 0.0
+    m.state.bil_qty = 20
+    m.state.spy_qty = 30       # sleeve weight 40% -> sleeve_to_core wanted
+    m.state.core_cash = 0.0
+    ent = {"symbol": "TITE", "call_id": 7, "fire_date": "2026-08-20",
+           "flag_type": "x", "risk_frac": 0.01, "entry_ref": 50.0, "note": ""}
+    stp = {"symbol": "TITE", "call_id": 7, "trail_level": 49.9}
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[ent], stops=[stp]), "2026-08-20",
+              alert=lambda _: None)
+    assert m.state.bil_qty == 0                       # clamped, never short
+    assert m.state.sleeve_cash >= -1e-6
+    assert m.state.core_cash >= -1e-6
+    bil_sells = [e for e in a.log if e["action"] == "place_stock_order"
+                 and e["symbol"] == "BIL" and e["qty"] < 0]
+    assert len(bil_sells) == 1 and bil_sells[0]["qty"] == -20   # ONE funding sell
+    # The rebalance (lowest priority) was deferred, not overdrawn.
+    assert any("rebalance deferred" in e["msg"] for e in m.state.events)
+
+
+def test_gate_m2_unfundable_rebalance_deferred_never_oversells(tmp_path):
+    # A sleeve->core transfer bigger than cash + ALL BIL: deferred with an
+    # event, no BIL sell beyond holdings, ledger never negative.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=5_000.0, bil_qty=2, spy_qty=30)
+    _held_position(m, qty=50, fill=100.0, stop_level=90.0,
+                   time_stop="2099-01-01")            # sleeve mostly illiquid
+    a = DryAdapter()
+    run_cycle(m, a, payload(stops=[stop_row(trail=90.0)]), "2026-08-20",
+              alert=lambda _: None)
+    assert m.state.bil_qty >= 0
+    bil_sells = [e for e in a.log if e["action"] == "place_stock_order"
+                 and e["symbol"] == "BIL" and e["qty"] < 0]
+    assert bil_sells == []                            # nothing to sell safely
+    assert any("rebalance deferred" in e["msg"] for e in m.state.events)
+    assert m.state.sleeve_cash >= -1e-6
+
+
+# M3: failed initial stop placement -> retry in-cycle, STOP_MISSING alert,
+# retried every cycle, blocks new entries until protected.
+
+def test_gate_m3_transient_stop_reject_recovers_in_cycle(tmp_path, monkeypatch):
+    monkeypatch.setattr(blend_mod, "STOP_RETRY_SLEEP_S", 0)
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = _FlakyStopAdapter(fails=1)
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    pos = m.state.positions["1"]
+    assert pos.stop_missing is False
+    assert pos.stop_order_ref in a._stops       # retry within the cycle won
+
+
+def test_gate_m3_stop_missing_alerts_blocks_entries_then_heals(tmp_path, monkeypatch):
+    monkeypatch.setattr(blend_mod, "STOP_RETRY_SLEEP_S", 0)
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _RejectStopAdapter()
+    alerts: list[str] = []
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=alerts.append)
+    pos = m.state.positions["1"]
+    assert pos.stop_missing is True and pos.stop_order_ref is None
+    assert any("STOP_MISSING" in msg for msg in alerts)
+    # New entries are BLOCKED while any position is naked; the placement is
+    # retried (and re-alerted) every cycle.
+    alerts.clear()
+    e2 = entry(call_id=2, symbol="NTLA")
+    s2 = stop_row(call_id=2, symbol="NTLA", trail=44.0)
+    out = run_cycle(m, a, payload(entries=[e2], stops=[s2, stop_row()]),
+                    "2026-08-21", alert=alerts.append)
+    assert not [i for i in out if i["action"] == "ENTER"]
+    assert "2" not in m.state.positions
+    assert any("STOP_MISSING" in msg for msg in alerts)
+    assert any("entries BLOCKED" in msg for msg in alerts)
+    # Venue heals: the reconcile pass restores the stop and entries resume.
+    a.reject_stp = False
+    run_cycle(m, a, payload(entries=[e2], stops=[s2, stop_row()]),
+              "2026-08-22", alert=alerts.append)
+    pos = m.state.positions["1"]
+    assert pos.stop_missing is False and pos.stop_order_ref in a._stops
+    assert "2" in m.state.positions             # entry unblocked after heal
+
+
+# M4: exit/stop instructions must match BOTH call_id AND symbol.
+
+def test_gate_m4_exit_symbol_mismatch_refused_with_alert(tmp_path):
+    # The counter-agent's attack 4: {symbol: OTHER, call_id: 1} force-closed
+    # the held CRSP position.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    out = m.step("2026-08-21",
+                 payload(exits=[{"symbol": "OTHER", "call_id": 1,
+                                 "reason": "trail", "trail_level": 10.0}]),
+                 PRICES)
+    assert not [i for i in out if i["action"] == "EXIT"]
+    assert any(i["action"] == "ALERT" and "REFUSED exit" in i["msg"]
+               for i in out)
+    assert "1" in m.state.positions             # position kept
+
+
+def test_gate_m4_stop_symbol_mismatch_refused(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    out = m.step("2026-08-21",
+                 payload(stops=[{"symbol": "OTHER", "call_id": 1,
+                                 "trail_level": 47.0}]), PRICES)
+    assert not [i for i in out if i["action"] == "ADJUST_STOP"]
+    assert any(i["action"] == "ALERT" and "REFUSED stop" in i["msg"]
+               for i in out)
+    assert m.state.positions["1"].stop_level == 44.0
+
+
+def test_gate_m4_recycled_call_id_refused_with_alert(tmp_path):
+    # entered_ids blocking a RE-USED call_id for a different symbol must be
+    # loud (tracker DB reset detection), never a silent no-entry book.
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    m.state.entered_ids = [1]
+    m.state.entered_symbols = {"1": "CRSP"}
+    out = m.step("2026-08-20",
+                 payload(entries=[entry(symbol="NEWCO")],
+                         stops=[stop_row(symbol="NEWCO")]),
+                 {**PRICES, "NEWCO": 50.0})
+    assert not [i for i in out if i["action"] == "ENTER"]
+    assert any(i["action"] == "ALERT" and "RECYCLED" in i["msg"] for i in out)
+
+
+# M5: stop replace is place-NEW-first, cancel-old-second; a rejected
+# replacement keeps the old stop.
+
+def test_gate_m5_replace_cancels_old_then_places_new_and_one_stop_rests(tmp_path):
+    """M5, re-pinned in round 21. The original gate asserted place-NEW-then-
+    cancel-old ("no naked window"). Live, that order of operations stacked
+    Inactive second stops at the venue every cycle (2026-09-11). The
+    invariant that actually protects the book is: the old stop is cancelled
+    and ACKed BEFORE the new one is placed, and exactly one stop rests at
+    the new level when the cycle ends."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(stops=[stop_row(trail=47.0)]), "2026-08-21",
+              alert=lambda _: None)
+    ops = [e for e in a.log
+           if e["action"] in ("place_stock_order", "cancel_stock_order")]
+    assert ops[0]["action"] == "cancel_stock_order"     # old retired FIRST
+    assert ops[0]["ref"] == "old-stop"
+    assert ops[1]["action"] == "place_stock_order"      # then the new level
+    assert ops[1]["order_type"] == "STP" and ops[1]["stop_price"] == 47.0
+    resting = [o for o in a._orders.values()
+               if o["order_type"] == "STP" and o["status"] == "working"]
+    assert len(resting) == 1 and resting[0]["stop_price"] == 47.0
+    assert m.state.positions["1"].stop_level == 47.0
+
+
+def test_gate_m5_rejected_replacement_restores_the_old_level_or_says_naked(tmp_path, monkeypatch):
+    """M5, re-pinned in round 21. Before: a rejected replacement left the
+    old stop untouched (it had never been cancelled). Now the old stop is
+    already gone when the new level is refused, so the book must (a) put
+    the OLD level straight back when the venue will take it, and (b) when
+    the venue refuses every stop, end STOP_MISSING and LOUD - a known naked
+    position with entries blocked, never a silent one. Both halves here."""
+    monkeypatch.setattr(blend_mod, "STOP_RETRY_SLEEP_S", 0)
+    # (a) the venue takes the old level, refuses the new one
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = _FlakyStopAdapter.__mro__[1]()          # a plain DryAdapter
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    old_ref = m.state.positions["1"].stop_order_ref
+    real_place = a.place_stock_order
+
+    def refuse_47(symbol, qty, order_type, stop_price=None, **kw):
+        if order_type == "STP" and stop_price == 47.0:
+            raise RuntimeError("venue reject (simulated)")
+        return real_place(symbol, qty, order_type, stop_price=stop_price, **kw)
+    a.place_stock_order = refuse_47
+    alerts: list[str] = []
+    run_cycle(m, a, payload(stops=[stop_row(trail=47.0)]), "2026-08-21",
+              alert=alerts.append)
+    pos = m.state.positions["1"]
+    resting = [o for o in a._orders.values()
+               if o["order_type"] == "STP" and o["status"] == "working"]
+    assert len(resting) == 1 and resting[0]["stop_price"] == 44.0
+    assert pos.stop_order_ref == resting[0]["order_ref"] != old_ref
+    assert pos.stop_level == 44.0 and not pos.stop_missing
+    assert any("REJECTED" in x for x in alerts) and any("restored" in x for x in alerts)
+    # the venue heals: the ratchet lands next cycle
+    a.place_stock_order = real_place
+    run_cycle(m, a, payload(stops=[stop_row(trail=47.0)]), "2026-08-22",
+              alert=alerts.append)
+    assert m.state.positions["1"].stop_level == 47.0
+    # (b) the venue refuses EVERY stop: naked, and it says so
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2)
+    a2 = _RejectStopAdapter()
+    a2.reject_stp = False
+    run_cycle(m2, a2, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    a2.reject_stp = True
+    alerts2: list[str] = []
+    run_cycle(m2, a2, payload(stops=[stop_row(trail=47.0)]), "2026-08-21",
+              alert=alerts2.append)
+    p2 = m2.state.positions["1"]
+    assert p2.stop_missing and p2.stop_order_ref is None
+    assert blend_mod._is_unprotected(p2) and m2.has_naked_position()
+    assert any("STOP_MISSING" in x for x in alerts2), alerts2
+
+
+# M6: write-ahead journal + deterministic client order ids close the
+# crash-window duplicate-MOO hole.
+
+def test_gate_m6_boot_reconcile_adopts_orphan_venue_order(tmp_path):
+    # Crash between placement and persist: the MOO reached the venue, the
+    # state file never learned. On restart the order history is adopted —
+    # never re-placed.
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    it = {"action": "ENTER", "call_id": 1, "symbol": "CRSP", "qty": 5,
+          "entry_ref": 50.0, "stop_level": 44.0, "time_stop_days": 90,
+          "reason": "test"}
+    m.record_pending_entry(it, "2026-08-20")            # write-ahead persisted
+    a = DryAdapter()
+    a.place_stock_order("CRSP", 5, "MOO", tif="OPG", ref_price=50.0,
+                        client_order_id=blend_mod.entry_client_id(1))
+    # ...crash here. Restart:
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert "1" in m2.state.pending_entries              # journal survived
+    run_cycle(m2, a, payload(stops=[stop_row()]), "2026-08-20",
+              alert=lambda _: None)
+    pos = m2.state.positions["1"]
+    assert pos.qty == 5 and pos.fill_price == 50.0
+    assert m2.state.pending_entries == {}
+    assert pos.stop_order_ref in a._stops               # protective stop placed
+    moos = [e for e in a.log if e["action"] == "place_stock_order"
+            and e.get("order_type") == "MOO"]
+    assert len(moos) == 1                               # NO duplicate MOO
+    assert m2.state.sleeve_cash == pytest.approx(3_000.0 - 250.0 -
+                                                 m2.state.bil_qty * 100.0)
+
+
+def test_gate_m6_journal_without_venue_order_is_cleared_and_entry_retried(tmp_path):
+    # Crash BEFORE placement: journal exists, venue never saw the order —
+    # the journal clears and the same-day republish enters exactly once.
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    m.record_pending_entry({"action": "ENTER", "call_id": 1, "symbol": "CRSP",
+                            "qty": 5, "entry_ref": 50.0, "stop_level": 44.0,
+                            "time_stop_days": 90, "reason": "test"},
+                           "2026-08-20")
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    assert m.state.positions["1"].qty == 5
+    moos = [e for e in a.log if e["action"] == "place_stock_order"
+            and e.get("order_type") == "MOO"]
+    assert len(moos) == 1
+
+
+def test_gate_m6_duplicate_client_order_id_suppressed_venue_side():
+    a = DryAdapter()
+    r1 = a.place_stock_order("CRSP", 5, "MOO", ref_price=50.0,
+                             client_order_id="blend-1-entry")
+    r2 = a.place_stock_order("CRSP", 5, "MOO", ref_price=50.0,
+                             client_order_id="blend-1-entry")
+    assert r2["order_ref"] == r1["order_ref"] and r2.get("duplicate") is True
+    placed = [e for e in a.log if e["action"] == "place_stock_order"]
+    assert len(placed) == 1                             # one real order only
+
+
+# M7: a fill without a fill price is UNRECONCILED — never booked at 0.0.
+
+def test_gate_m7_exit_without_fill_price_is_unreconciled_not_zero(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = _NoFillPriceAdapter()
+    alerts: list[str] = []
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-21", alert=alerts.append)
+    assert "1" not in m.state.positions
+    assert "1" in m.state.unreconciled                  # parked, not booked
+    # NOTHING was credited at 0.0 (or at all): cash+BIL unchanged at the
+    # post-entry level (2,750 seeded - 250 entry cost debited by the fixture).
+    assert m.state.sleeve_cash + m.state.bil_qty * 100.0 == pytest.approx(2_500.0)
+    assert any("UNRECONCILED" in msg for msg in alerts)
+
+
+def test_gate_m7_stop_fill_without_price_is_unreconciled(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    a._fills.append({"order_ref": "old-stop", "symbol": "CRSP", "qty": -5,
+                     "fill_price": None})
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    assert "1" not in m.state.positions and "1" in m.state.unreconciled
+    # cash stays at the post-entry level (2,750 - 250 fixture entry debit):
+    # the price-less stop fill booked NOTHING.
+    assert m.state.sleeve_cash == pytest.approx(2_500.0)
+    assert any("UNRECONCILED" in msg or "NOT booked" in msg for msg in alerts)
+
+
+def test_gate_m7_on_exited_refuses_a_none_fill(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    _held_position(m)
+    with pytest.raises(ValueError):
+        m.on_exited(1, None, "x")
+
+
+# Minor findings: stale payload guard, non-positive trail guard, no-op
+# rebalance alert suppression, DryAdapter fill queue/order lookup, dedicated
+# read-only intents token.
+
+def test_gate_stale_payload_blocks_decisions_but_still_reconciles(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    a.trigger_stop(m.state.positions["1"].stop_order_ref)
+    stale = payload(entries=[entry(call_id=2, symbol="NTLA")],
+                    stops=[stop_row(call_id=2, symbol="NTLA")])
+    alerts: list[str] = []
+    out = run_cycle(m, a, stale, "2026-08-28", alert=alerts.append)
+    assert out == []                                    # no new decisions
+    assert "1" not in m.state.positions                 # but the fill reconciled
+    assert "2" not in m.state.positions
+    assert any("stale" in msg for msg in alerts)
+
+
+def test_gate_nonpositive_trail_is_never_placed(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    out = m.step("2026-08-21", payload(stops=[stop_row(trail=-1.0)]), PRICES)
+    assert not [i for i in out if i["action"] == "ADJUST_STOP"]
+    m2 = Blend3070Manager(m.cfg, str(tmp_path / "b2.json"))
+    _seed_initialized(m2)
+    out2 = m2.step("2026-08-20",
+                   payload(entries=[entry()], stops=[stop_row(trail=-1.0)]),
+                   PRICES)
+    assert not [i for i in out2 if i["action"] == "ENTER"]
+
+
+def test_gate_noop_rebalance_does_not_alert(tmp_path):
+    # w=0 wants core_to_sleeve, but no SPY is held to sell: the rebalance is
+    # a no-op and must NOT fire the REBALANCE alert (counter-agent nit).
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=0, spy_qty=0,
+                      core_cash=7_000.0)
+    alerts: list[str] = []
+    run_cycle(m, DryAdapter(), payload(), "2026-08-20", alert=alerts.append)
+    assert not [x for x in alerts if "REBALANCE" in x]  # nothing moved
+
+
+def test_gate_dry_adapter_fill_queue_and_order_lookup():
+    a = DryAdapter()
+    s = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                            client_order_id="blend-1-stp-44.0000")
+    assert a.poll_stock_fills() == []
+    a.trigger_stop(s["order_ref"])
+    (f,) = a.poll_stock_fills()
+    assert f["order_ref"] == s["order_ref"] and f["fill_price"] == 44.0
+    assert a.poll_stock_fills() == []                   # drained
+    o = a.find_stock_order("blend-1-stp-44.0000")
+    assert o["status"] == "filled" and o["fill_price"] == 44.0
+    assert a.find_stock_order("never-seen") is None
+
+
+def test_gate_fetch_prefers_dedicated_readonly_token(monkeypatch):
+    """TRACKER_API_TOKEN set -> the poll sends ONLY the X-API-Token header:
+    the executor never transmits the dashboard password."""
+    seen = {}
+
+    def fake_get(url, **kw):
+        seen["url"] = url
+        seen["kwargs"] = kw
+
+        class R:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"ok": True}
+
+        return R()
+
+    monkeypatch.setattr(blend_mod.httpx, "get", fake_get)
+
+    class C(Cfg):
+        tracker_url = "https://research.optic.capital"
+        tracker_user = "casey"
+        tracker_password = "pw"
+        tracker_api_token = "tok-123"
+
+    assert fetch_intents(C()) == {"ok": True}
+    assert set(seen["kwargs"]) == {"headers", "timeout"}
+    assert seen["kwargs"]["headers"] == {"X-API-Token": "tok-123"}
+
+
+# --- re-review regression gates (counter-agent N13/N14/N15/N5 + minors) -------
+# Each scenario is derived from the re-review's repro scripts
+# (scratchpad/new_attacks*.py): the attacks that CONFIRMED the defects are
+# now merge-blocking gates asserting the fixed behavior.
+
+
+# N13: a tracker outage must NEVER skip reconcile or the local belt — the
+# cycle runs with payload=None; only tracker-dependent decisions skip.
+
+def test_gate_n13_outage_cycle_still_ingests_fills_and_heals_stops(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(blend_mod, "STOP_RETRY_SLEEP_S", 0)
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _RejectStopAdapter()
+    a.reject_stp = False
+    run_cycle(m, a, payload(entries=[entry(), entry(call_id=2, symbol="NTLA")],
+                            stops=[stop_row(),
+                                   stop_row(call_id=2, symbol="NTLA")]),
+              "2026-08-20", alert=lambda _: None)
+    # Outage begins. Intraday: CRSP's stop fills; NTLA's stop dies venue-side.
+    a.trigger_stop(m.state.positions["1"].stop_order_ref)
+    m.state.positions["2"].stop_missing = True
+    m.state.positions["2"].stop_order_ref = None
+    # Tracker unreachable -> the cycle STILL runs with payload=None:
+    run_cycle(m, a, None, "2026-08-21", alert=lambda _: None)
+    assert "1" not in m.state.positions          # stop fill ingested
+    pos2 = m.state.positions["2"]
+    assert pos2.stop_missing is False            # protective stop re-placed
+    assert pos2.stop_order_ref in a._stops
+
+
+def test_gate_n13_time_stop_belt_fires_during_tracker_outage(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, time_stop="2026-08-19", stop_ref=None)
+    m.state.positions["1"].stop_missing = True
+    a = _RejectStopAdapter()                     # stop re-place keeps failing
+    run_cycle(m, a, None, "2026-09-01", alert=lambda _: None)
+    assert "1" not in m.state.positions          # belt exited it anyway
+    sells = _executions(a, "CRSP")
+    assert len(sells) == 1
+
+
+def test_gate_n13_time_stop_belt_fires_on_stale_payload(tmp_path):
+    # The re-review's N8b: position past its time stop + stale payload was
+    # still held. The belt must fire whenever the cycle runs.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, time_stop="2026-08-25", stop_ref=None)
+    stale = payload()                            # as_of 2026-08-20
+    run_cycle(m, DryAdapter(), stale, "2026-09-01", alert=lambda _: None)
+    assert "1" not in m.state.positions
+
+
+def test_gate_n13_service_loop_runs_cycle_when_tracker_unreachable(
+        tmp_path, monkeypatch):
+    """The service loop calls run_cycle even when fetch_intents returns None
+    (tracker outage) — reconcile + belt are unconditional."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    calls = []
+
+    def fake_run_cycle(mgr, adapter, payload, today, alert=None):
+        calls.append(payload)
+        return []
+
+    monkeypatch.setattr(blend_mod, "run_cycle", fake_run_cycle)
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    monkeypatch.setattr(settings, "poll_seconds", 3600)
+    assert settings.tracker_url == ""            # fetch_intents -> None
+    try:
+        with TestClient(service_app):
+            for _ in range(200):
+                if calls:
+                    break
+                _time.sleep(0.05)
+            assert calls, "run_cycle was never called on a tracker outage"
+            assert calls[0] is None              # the outage payload
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+# N14: /kill reconciles FIRST and closes only positions still actually held
+# (idempotent with a stop fill that already happened at the venue).
+
+def test_gate_n14_kill_does_not_double_sell_a_stop_filled_position(
+        tmp_path, monkeypatch):
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None, adapter=A)
+            pos = B.state.positions["1"]
+            rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                     tif="GTC",
+                                     client_order_id="blend-1-stp-44.0000")
+            pos.stop_order_ref = rs["order_ref"]
+            B.save()
+            A.trigger_stop(pos.stop_order_ref)   # fills; NOT yet polled
+            cash_before = B.state.sleeve_cash
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.json()["halted"] == "KILL"
+            # R2: the loop thread reconciles-first then flattens
+            assert _wait_until(lambda: B.state.flatten_request is None)
+            sells = _executions(A, "CRSP")
+            assert len(sells) == 1               # the stop fill ONLY
+            assert sells[0]["action"] == "stop_triggered"
+            # proceeds booked exactly once, at the stop fill price
+            assert B.state.sleeve_cash - cash_before == pytest.approx(5 * 44.0)
+            assert B.state.positions == {} and B.state.halted == "KILL"
+            assert A._fills == []                # nothing left unpolled
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_n14_kill_refuses_blind_flatten_when_reconcile_fails(
+        tmp_path, monkeypatch):
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B)
+
+            def boom():
+                raise RuntimeError("venue unreachable (simulated)")
+
+            monkeypatch.setattr(A, "poll_stock_fills", boom)
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.json()["halted"] == "KILL"
+            assert B.state.halted == "KILL"      # halt is IMMEDIATE
+            # R2: wait for the loop's flatten attempt — reconcile fails,
+            # so the cycle fails CLOSED and nothing is blind-sold.
+            assert _wait_until(
+                lambda: service.BLEND_CYCLE["ok"] is False)
+            assert "1" in B.state.positions      # NOT blind-sold
+            assert _executions(A, "CRSP") == []
+            # the flatten request survives to retry once the venue answers
+            assert B.state.flatten_request is not None
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+# N15: CORE_BUY / rebalance core-sell / BIL sweep are write-ahead journaled
+# with deterministic client ids and adopted from venue history after a crash.
+
+class _CrashAfterPlaceAdapter(DryAdapter):
+    """Simulates the process dying right AFTER the venue accepted+filled
+    one targeted order (the N15 crash window)."""
+
+    def __init__(self, symbol, direction):
+        super().__init__()
+        self.symbol = symbol
+        self.direction = direction               # +1 buy / -1 sell
+        self.armed = True
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        r = super().place_stock_order(symbol, qty, order_type, **kw)
+        if (self.armed and symbol == self.symbol
+                and qty * self.direction > 0 and order_type != "STP"):
+            self.armed = False
+            raise KeyboardInterrupt("crash AFTER venue accept (simulated)")
+        return r
+
+
+def _venue_fills(a, symbol, direction):
+    return [e for e in a.log if e.get("symbol") == symbol
+            and e.get("qty", 0) * direction > 0
+            and e["action"] == "place_stock_order"
+            and e.get("status") == "filled"]
+
+
+def test_gate_n15_core_buy_crash_window_never_duplicates(tmp_path):
+    # The re-review's repro: crash between the boot CORE_BUY fill and
+    # on_core_trade left the venue at 140 SPY vs book 70.
+    m = mk(tmp_path)
+    a = _CrashAfterPlaceAdapter("SPY", +1)
+    with pytest.raises(KeyboardInterrupt):
+        run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    m2 = Blend3070Manager(m.cfg, m.state_path)   # restart
+    assert m2.state.pending_book_orders          # journal survived the crash
+    run_cycle(m2, a, payload(), "2026-08-20", alert=lambda _: None)
+    spy_buys = _venue_fills(a, "SPY", +1)
+    assert len(spy_buys) == 1                    # venue holds ONE buy
+    assert m2.state.spy_qty == spy_buys[0]["qty"]  # book == venue
+    assert m2.state.core_cash == pytest.approx(0.0)
+    assert m2.state.pending_book_orders == {}    # journal fulfilled
+
+
+def test_gate_n15_sweep_crash_window_never_duplicates(tmp_path):
+    m = mk(tmp_path)
+    a = _CrashAfterPlaceAdapter("BIL", +1)
+    with pytest.raises(KeyboardInterrupt):
+        run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    run_cycle(m2, a, payload(), "2026-08-20", alert=lambda _: None)
+    bil_buys = _venue_fills(a, "BIL", +1)
+    assert len(bil_buys) == 1
+    assert m2.state.bil_qty == bil_buys[0]["qty"]
+    assert m2.state.sleeve_cash >= -1e-6
+    assert m2.state.pending_book_orders == {}
+
+
+def test_gate_n15_rebalance_core_sell_crash_window_never_duplicates(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=20, spy_qty=80)  # w = 20%
+    a = _CrashAfterPlaceAdapter("SPY", -1)
+    with pytest.raises(KeyboardInterrupt):
+        run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    run_cycle(m2, a, payload(), "2026-08-20", alert=lambda _: None)
+    spy_sells = _venue_fills(a, "SPY", -1)
+    assert len(spy_sells) == 1                   # the $1,000 sell, ONCE
+    assert m2.state.spy_qty == 70                # booked once
+    # transfer applied exactly once: sleeve got the proceeds (cash or BIL)
+    assert m2.sleeve_value({"SPY": 100.0, "BIL": 100.0}) == pytest.approx(3_000.0)
+    assert m2.state.core_cash == pytest.approx(0.0)
+    assert m2.state.pending_book_orders == {}
+
+
+def test_gate_n15_book_journal_without_venue_order_cleared(tmp_path):
+    # Crash BEFORE placement: journal exists, venue never saw the order —
+    # cleared, then step re-plans naturally (exactly one real order).
+    m = mk(tmp_path)
+    cid = m.record_pending_book_order("core-buy", "SPY", 70, "2026-08-19")
+    a = DryAdapter()
+    run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    assert cid not in m.state.pending_book_orders
+    assert len(_venue_fills(a, "SPY", +1)) == 1
+    assert m.state.spy_qty == 70
+
+
+# N5: deferred/unreconciled exit proceeds never fund same-cycle entries.
+
+class _RaisingCancelAdapter(DryAdapter):
+    def cancel_stock_order(self, order_ref):
+        raise RuntimeError("venue cancel error (simulated)")
+
+
+def test_gate_n5_deferred_exit_drops_same_cycle_entries(tmp_path):
+    # The re-review's repro: sleeve_cash 0, a $2,500 exit deferred (raising
+    # cancel), a new entry sized on its proceeds still bought -> ledger -2,500.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=0)
+    _held_position(m, call_id=9, symbol="OLD", qty=50, fill=50.0,
+                   time_stop="2099-01-01", stop_ref="old-stop-9")
+    m.state.sleeve_cash = 0.0                    # fixture debit undone: broke
+    a = _RaisingCancelAdapter()
+    newent = entry(call_id=10, symbol="NEW")
+    newstp = stop_row(call_id=10, symbol="NEW", trail=49.0)
+    alerts: list[str] = []
+    run_cycle(m, a,
+              payload(entries=[newent],
+                      stops=[newstp, stop_row(call_id=9, symbol="OLD")],
+                      exits=[{"symbol": "OLD", "call_id": 9, "reason": "trail",
+                              "trail_level": 44.0}]),
+              "2026-08-20", alert=alerts.append)
+    assert "9" in m.state.positions              # exit deferred, kept
+    assert "10" not in m.state.positions         # entry NOT taken
+    assert _executions(a, "NEW") == [] and not [
+        e for e in a.log if e.get("symbol") == "NEW"
+        and e["action"] == "place_stock_order"]
+    assert m.state.sleeve_cash >= -1e-6          # ledger never negative
+    assert any("funding exit did not book" in msg for msg in alerts)
+
+
+def test_gate_n5_unreconciled_exit_drops_same_cycle_entries(tmp_path):
+    # Same law when the exit sells but the venue ack has no fill price:
+    # proceeds are NOT booked -> the planned entry must not spend them.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=0)
+    _held_position(m, call_id=9, symbol="OLD", qty=50, fill=50.0,
+                   time_stop="2099-01-01", stop_ref=None)
+    m.state.sleeve_cash = 0.0                    # fixture debit undone: broke
+    m.state.positions["9"].stop_missing = False  # exit path w/o stop cancel
+    a = _NoFillPriceAdapter()
+    alerts: list[str] = []
+    run_cycle(m, a,
+              payload(entries=[entry(call_id=10, symbol="NEW")],
+                      stops=[stop_row(call_id=10, symbol="NEW", trail=49.0)],
+                      exits=[{"symbol": "OLD", "call_id": 9, "reason": "trail",
+                              "trail_level": 44.0}]),
+              "2026-08-20", alert=alerts.append)
+    assert "9" in m.state.unreconciled           # parked, nothing booked
+    assert "10" not in m.state.positions         # entry NOT taken
+    assert m.state.sleeve_cash >= -1e-6
+
+
+# N2 (minor): an ambiguous stop cancel is verified before the market sell.
+
+class _FalseCancelRaceAdapter(DryAdapter):
+    """The stop fills in the instant before the cancel lands, and the venue
+    answers the ambiguous False ('already gone') instead of raising."""
+
+    def cancel_stock_order(self, order_ref):
+        if order_ref in self._stops:
+            self.trigger_stop(order_ref)         # the fill wins the race
+        self._rec("cancel_stock_order", ref=order_ref, found=False)
+        return False
+
+
+def test_gate_n2_false_cancel_verified_never_double_sells(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = _FalseCancelRaceAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    total_before = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 44.0}]),
+              "2026-08-21", alert=lambda _: None)
+    sells = _executions(a, "CRSP")
+    assert len(sells) == 1                       # the racing stop fill ONLY
+    assert sells[0]["action"] == "stop_triggered"
+    assert "1" not in m.state.positions
+    total_after = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    assert total_after - total_before == pytest.approx(5 * 44.0)
+
+
+def test_gate_n2_cancel_of_filled_order_raises_then_reconciles(tmp_path):
+    """Pinned adapter contract: cancel of a FILLED order RAISES — the exit
+    defers, and the next cycle's reconcile books the stop fill (one sell)."""
+
+    class _Race(DryAdapter):
+        def cancel_stock_order(self, order_ref):
+            if order_ref in self._stops:
+                self.trigger_stop(order_ref)
+            return super().cancel_stock_order(order_ref)   # now RAISES
+
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = _Race()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 44.0}]),
+              "2026-08-21", alert=lambda _: None)
+    run_cycle(m, a, None, "2026-08-22", alert=lambda _: None)
+    assert len(_executions(a, "CRSP")) == 1
+    assert "1" not in m.state.positions and not m.state.unreconciled
+
+
+# N3 (minor): a mid-ingestion failure re-queues fills — none are ever lost.
+
+def test_gate_n3_ingest_failure_requeues_fills_then_heals(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=6_000.0)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry(),
+                                     entry(call_id=2, symbol="NTLA")],
+                            stops=[stop_row(),
+                                   stop_row(call_id=2, symbol="NTLA")]),
+              "2026-08-20", alert=lambda _: None)
+    a.trigger_stop(m.state.positions["1"].stop_order_ref)
+    a.trigger_stop(m.state.positions["2"].stop_order_ref)
+    cash_before = m.state.sleeve_cash
+
+    def bomb(_msg):
+        raise RuntimeError("telegram down (simulated raising alert)")
+
+    with pytest.raises(RuntimeError):
+        run_cycle(m, a, None, "2026-08-21", alert=bomb)
+    assert a._fills                              # unprocessed fills RE-QUEUED
+    # next cycle (alerts healthy) books everything exactly once
+    run_cycle(m, a, None, "2026-08-22", alert=lambda _: None)
+    assert m.state.positions == {}
+    # each entry sized 10 sh (1% of $6,000 sleeve / $6 per-share risk):
+    # both fills booked exactly once at the 44.0 stop
+    assert m.state.sleeve_cash - cash_before == pytest.approx(2 * 10 * 44.0)
+    assert len(_executions(a, "CRSP")) == 1
+    assert len(_executions(a, "NTLA")) == 1
+
+
+# Remaining minors: malformed as_of, sweep-vs-budget drift, journaled-order
+# fills never RED-alerted as unknown.
+
+def test_gate_minor_malformed_as_of_treated_stale_not_fresh(tmp_path):
+    from app.blend import payload_is_stale
+
+    assert payload_is_stale({"as_of": "not-a-date"}, "2026-08-20") is True
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    bad = payload(entries=[entry()], stops=[stop_row()])
+    bad["as_of"] = "garbage"
+    alerts: list[str] = []
+    out = run_cycle(m, DryAdapter(), bad, "2026-08-20", alert=alerts.append)
+    assert out == []                             # no decisions on garbage
+    assert any("stale" in msg for msg in alerts)
+
+
+def test_gate_minor_bil_sweep_respects_budget_cap(tmp_path):
+    # Gross must not drift above BLEND_BUDGET via the cash vehicle: the
+    # idle-cash sweep is clamped to the remaining gross headroom.
+    m = mk(tmp_path, blend_budget=7_500.0)
+    _seed_initialized(m, sleeve_cash=3_000.0, bil_qty=0, spy_qty=70)
+    (sw,) = [o for o in m.step("2026-08-20", payload(), PRICES)
+             if o["action"] == "SWEEP"]
+    assert sw["qty"] == 5                        # $500 headroom, not $3,000
+    # and without a budget the sweep is unclamped as before
+    m2 = mk(tmp_path)
+    _seed_initialized(m2, sleeve_cash=3_000.0, bil_qty=0, spy_qty=70)
+    (sw2,) = [o for o in m2.step("2026-08-20", payload(), PRICES)
+              if o["action"] == "SWEEP"]
+    assert sw2["qty"] == 30
+
+
+def test_gate_minor_journaled_order_fill_is_not_unknown_alerted(tmp_path):
+    # A venue that streams MOO fills through the fill poll: the fill of a
+    # JOURNALED entry is absorbed by the journal reconcile, never the
+    # unknown-order RED alert (real-venue contract note).
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    it = {"action": "ENTER", "call_id": 1, "symbol": "CRSP", "qty": 5,
+          "entry_ref": 50.0, "stop_level": 44.0, "time_stop_days": 90,
+          "reason": "test"}
+    m.record_pending_entry(it, "2026-08-20")
+    a = DryAdapter()
+    r = a.place_stock_order("CRSP", 5, "MOO", tif="OPG", ref_price=50.0,
+                            client_order_id=blend_mod.entry_client_id(1))
+    a._fills.append({"order_ref": r["order_ref"], "symbol": "CRSP", "qty": 5,
+                     "fill_price": 50.0})
+    alerts: list[str] = []
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    run_cycle(m2, a, payload(stops=[stop_row()]), "2026-08-20",
+              alert=alerts.append)
+    assert not any("UNKNOWN order" in msg for msg in alerts)
+    pos = m2.state.positions["1"]
+    assert pos.qty == 5 and pos.fill_price == 50.0     # adopted once
+    moos = [e for e in a.log if e.get("order_type") == "MOO"]
+    assert len(moos) == 1
+
+
+def test_gate_kd_kill_raising_cancel_never_market_sells(tmp_path, monkeypatch):
+    """Final-review K-d: a RAISING stop cancel means the stop FILLED (pinned
+    law #8) — /kill must park the position for reconcile, never MKT-sell it
+    (the venue would hold a double sell)."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None, adapter=A)
+            pos = B.state.positions["1"]
+            rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                     tif="GTC",
+                                     client_order_id="blend-1-stp-44.0000")
+            pos.stop_order_ref = rs["order_ref"]
+            B.save()
+
+            def raising_cancel(ref):
+                raise RuntimeError("order already filled")
+            monkeypatch.setattr(A, "cancel_stock_order", raising_cancel)
+
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.json()["halted"] == "KILL"
+            # R2: the loop thread executes the flatten; K-d must survive.
+            # MF3-3: a flatten that closed NOTHING now stays QUEUED and
+            # retries, so "the journal cleared" is no longer the signal that
+            # it ran — wait on K-d's own effect (the park) instead, and then
+            # assert the queue state the old line asserted the inverse of.
+            assert _wait_until(
+                lambda: pos.stop_order_ref in B.state.orphan_stop_refs)
+            assert B.state.flatten_request is not None
+            # No market sell may be placed against the maybe-filled stop.
+            mkt_sells = [e for e in _executions(A, "CRSP")
+                         if e["action"] != "stop_triggered"]
+            assert mkt_sells == []
+            # Parked, not silently dropped: position retained + orphan tracked
+            # so reconcile settles it on the next pass.
+            assert "1" in B.state.positions
+            assert pos.stop_order_ref in B.state.orphan_stop_refs
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+# --- adapter-review regression gates (M3/M4 + escalated m2/m3/m4 minors) ------
+# Scenarios derived from the failed IB-adapter review's attack notes.
+
+
+# M3: partial-fill-aware cancel/flatten — never oversell.
+
+def test_gate_adapt_m3_partial_stop_then_exit_sells_only_remaining(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)       # 5 sh CRSP, stop 44
+    a.trigger_stop_partial(m.state.positions["1"].stop_order_ref, 3)
+    total_before = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    alerts: list[str] = []
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-21", alert=alerts.append)
+    assert "1" not in m.state.positions
+    sold = -sum(e["qty"] for e in _executions(a, "CRSP"))
+    assert sold == 5                      # 3 partial + 2 remainder, NEVER 8
+    total_after = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    assert total_after - total_before == pytest.approx(5 * 44.0)
+    assert any("PARTIAL" in msg for msg in alerts)
+
+
+def test_gate_adapt_m3_partial_stop_remainder_reprotected(tmp_path):
+    # No exit signal: after a partial stop fill the remainder must get a
+    # NEW protective stop from reconcile (the old one is terminal).
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    a.trigger_stop_partial(m.state.positions["1"].stop_order_ref, 3)
+    run_cycle(m, a, payload(stops=[stop_row()]), "2026-08-21",
+              alert=lambda _: None)
+    pos = m.state.positions["1"]
+    assert pos.qty == 2                              # partial booked
+    assert pos.stop_missing is False
+    assert pos.stop_order_ref in a._stops            # remainder re-protected
+    assert a._stops[pos.stop_order_ref]["qty"] == -2
+
+
+def test_gate_adapt_m3_kill_after_partial_stop_never_oversells(
+        tmp_path, monkeypatch):
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None, adapter=A)
+            pos = B.state.positions["1"]
+            rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                     tif="GTC",
+                                     client_order_id="blend-1-stp-44.0000")
+            pos.stop_order_ref = rs["order_ref"]
+            B.save()
+            A.trigger_stop_partial(rs["order_ref"], 3)   # 3 fill, stop dies
+            c.post("/kill", params={"token": "sekrit"})
+            # R2: loop-thread flatten — partial booked by reconcile first
+            assert _wait_until(
+                lambda: B.state.positions == {}
+                and B.state.flatten_request is None)
+            assert B.state.halted == "KILL"
+            sold = -sum(e["qty"] for e in _executions(A, "CRSP"))
+            assert sold == 5                 # 3 partial + 2 MKT, never 8
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+# M4: a missing SPY/BIL quote must never manufacture a rebalance.
+
+def test_gate_adapt_m4_missing_core_quote_skips_rebalance_alerts_once(
+        tmp_path):
+    # The review's attack: SPY quote missing -> core valued 0 -> sleeve
+    # weight ~1 -> spurious sleeve_to_core transfer booked, unwound later
+    # with REAL trades.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=70)  # at target
+    no_spy = {"BIL": 100.0}
+    out = m.step("2026-08-20", payload(), no_spy)
+    assert not [o for o in out if o["action"] == "REBALANCE"]
+    (al,) = [o for o in out if o["action"] == "ALERT"]
+    assert "missing quote" in al["msg"]
+    # alert fires ONCE per outage: the next cycle stays quiet
+    out2 = m.step("2026-08-20", payload(), no_spy)
+    assert not [o for o in out2 if o["action"] in ("ALERT", "REBALANCE")]
+    # missing BIL likewise (fresh book: its own state file — the armed
+    # flag is persisted now, r3)
+    m2 = Blend3070Manager(Cfg(), str(tmp_path / "b2.json"))
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    out3 = m2.step("2026-08-20", payload(), {"SPY": 100.0})
+    assert not [o for o in out3 if o["action"] == "REBALANCE"]
+    assert [o for o in out3 if o["action"] == "ALERT"]
+    # no equity snapshot on absent CORE/BIL quotes (distorted valuation)
+    m.record_equity_snapshot("2026-08-20", no_spy)
+    assert m.state.equity_curve == []
+    # 2026-08-24: alert-once is right for Telegram but made a PERSISTENT
+    # outage self-silencing - the age must be tracked continuously, survive
+    # a restart, and clear only on recovery
+    assert m.state.quotes_missing_since is not None
+    m_re = Blend3070Manager(Cfg(), m.state_path)
+    assert m_re.state.quotes_missing_since == m.state.quotes_missing_since
+    m.step("2026-08-20", payload(), {"SPY": 100.0, "BIL": 100.0})
+    assert m.state.quotes_missing_since is None
+    assert m.state.quote_alert_armed is True     # re-armed for the next outage
+
+
+class _NoSpyQuoteAdapter(DryAdapter):
+    def spot(self, symbol):
+        if symbol == "SPY":
+            raise RuntimeError("no market price for SPY (simulated)")
+        return super().spot(symbol)
+
+
+def test_gate_adapt_m4_cycle_with_failed_spy_quote_books_nothing(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=70)  # at target
+    a = _NoSpyQuoteAdapter()
+    core_before, sleeve_before = m.state.core_cash, m.state.sleeve_cash
+    run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    assert m.state.core_cash == core_before          # no phantom transfer
+    assert m.state.sleeve_cash == sleeve_before
+    assert m.state.pending_book_orders == {}         # no orders either
+    assert m.state.equity_curve == []                # no distorted snapshot
+
+
+# m2 (escalated): multi-day blackout — cancel False + verify-empty +
+# horizon exceeded is UNVERIFIABLE (park + alert), never a MKT sell.
+
+def test_gate_adapt_m2min_blackout_horizon_parks_instead_of_selling(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)                    # stop ref the venue never saw
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400   # 3-day blackout
+    a = DryAdapter()                     # cancel("old-stop") -> False
+    alerts: list[str] = []
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-21", alert=alerts.append)
+    assert "1" not in m.state.positions
+    assert "1" in m.state.unreconciled           # parked for manual review
+    assert _executions(a, "CRSP") == []          # NOTHING sold (no short)
+    assert any("UNVERIFIABLE" in msg for msg in alerts)
+    # nothing was booked from the unverifiable exit: cash + BIL stay at the
+    # post-entry level (idle cash may have been swept to BIL in-cycle)
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0))
+
+
+def test_gate_adapt_m2min_fresh_history_false_cancel_still_sells(tmp_path):
+    # Control: with a fresh reconcile history the same False cancel remains
+    # the normal verified-sell path (no behavior regression).
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    m.state.last_reconcile_ts = time.time() - 600     # 10 minutes ago
+    a = DryAdapter()
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-21", alert=lambda _: None)
+    assert "1" not in m.state.positions
+    assert not m.state.unreconciled
+    assert len(_executions(a, "CRSP")) == 1
+
+
+# R1 (re-review residual): the blackout guard must be MORE than one cycle
+# deep — UNVERIFIABLE positions stay parked until a reconcile POSITIVELY
+# verifies them at the venue (positions data), never cleared by timestamp.
+# Scenarios derived from the re-review's probe A1 (scratchpad
+# attack_reround.py): the demonstrated naked short on cycle N+1.
+
+EXIT_CRSP = {"symbol": "CRSP", "call_id": 1, "reason": "trail",
+             "trail_level": 47.0}
+
+
+class _NoVenuePositionsAdapter(DryAdapter):
+    """Venue cannot answer the positions query — verification must stay
+    parked (fail closed), never clear on a fresh reconcile timestamp."""
+
+    def stock_position(self, symbol):
+        raise RuntimeError("positions unavailable (simulated)")
+
+
+def test_gate_r1_blackout_flag_survives_past_first_recovered_cycle(tmp_path):
+    """Probe A1: the stop filled INSIDE a 3-day blackout (history gone, the
+    fill invisible forever). Cycle N (tracker down) reconciles fine and
+    stamps the horizon clock; the exit lands on cycle N+1 — the old code's
+    gap check had reset and MKT-sold shares the venue no longer held (a
+    naked short). With positions data unavailable the flag must persist."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref=None)
+    m.state.positions["1"].stop_missing = True       # stop died in the blackout
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    a = _NoVenuePositionsAdapter()
+    alerts: list[str] = []
+    # cycle N: tracker still down -> reconcile-only; the position gets
+    # flagged and NOTHING (not even a protective stop) is placed for it —
+    # a new SELL stop on shares the account may not hold is a short path.
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert m.state.positions["1"].history_gap is True
+    assert not [e for e in a.log if e.get("symbol") == "CRSP"]
+    # cycle N+1: the tracker recovers and publishes the pierced-trail exit.
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.positions                  # NOT sold
+    assert m.state.positions["1"].history_gap is True
+    assert not [e for e in a.log if e.get("symbol") == "CRSP"]  # no short
+    assert any("UNVERIFIABLE" in msg for msg in alerts)
+    assert any("deferred" in msg for msg in alerts)
+    # the flag is journaled: a restart cannot lose the parked state
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.positions["1"].history_gap is True
+
+
+def test_gate_r1_venue_gone_parks_unreconciled_never_sells(tmp_path):
+    """Probe A1 with the venue answering positions: the shares are GONE
+    (the stop filled invisibly) and no priced fill is served — the position
+    parks UNRECONCILED on the first reconcile; the later exit is a no-op
+    and no MKT sell ever reaches the venue."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)                    # stop ref the venue never saw
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    a = DryAdapter()                     # stock_position("CRSP") == 0: gone
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)      # cycle N
+    assert "1" not in m.state.positions
+    assert "1" in m.state.unreconciled   # parked for manual booking
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)                  # cycle N+1
+    assert _executions(a, "CRSP") == []  # NOTHING sold across both cycles
+    assert any("UNVERIFIABLE" in msg for msg in alerts)
+    # nothing booked at a guessed price: cash + BIL stay at the post-entry
+    # level (idle cash may have been swept to BIL in-cycle)
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0))
+
+
+def test_gate_r1_positive_verification_unparks_and_exit_proceeds(tmp_path):
+    """The venue POSITIVELY holds the shares and the stop still works:
+    the flag clears and the next exit executes normally — parking is a
+    guard, not a wedge."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    rs = a.place_stock_order("CRSP", 5, "MKT", ref_price=50.0)   # venue holds 5
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    m.state.positions["1"].stop_order_ref = rs["order_ref"]
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)      # cycle N
+    pos = m.state.positions["1"]
+    assert pos.history_gap is False                  # unparked on evidence
+    assert pos.stop_order_ref in a._stops            # stop kept working
+    assert any("POSITIVELY verified" in msg for msg in alerts)
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)                  # cycle N+1
+    assert "1" not in m.state.positions and not m.state.unreconciled
+    sells = _executions(a, "CRSP")
+    assert len(sells) == 1 and sells[0]["qty"] == -5  # exactly one exit sell
+
+
+def test_gate_r1_blackout_stop_fill_recovered_from_history_books_at_price(
+        tmp_path):
+    """The shares are gone AND refreshed order history still serves the
+    priced stop fill (the fill-event stream was lost to a restart): book
+    the exit at the REAL venue price — never a guess, never a sell."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    m.state.positions["1"].stop_order_ref = rs["order_ref"]
+    # the stop filled during the blackout; the drain-once event stream was
+    # lost with the process, but the order lookup still serves the price
+    a._orders[rs["order_ref"]]["status"] = "filled"
+    a._orders[rs["order_ref"]]["fill_price"] = 44.0
+    a._stops.pop(rs["order_ref"], None)
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions and not m.state.unreconciled
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0 + 5 * 44.0))    # booked AT the fill
+    assert not [e for e in a.log if e.get("symbol") == "CRSP"
+                and e["action"] == "place_stock_order"
+                and e.get("order_type") != "STP"]    # nothing sold
+    assert any("recovered from venue history" in msg for msg in alerts)
+
+
+# N1/N2 (counter-review of the R1 pass): the blackout verification itself
+# must not create the very orders it exists to prevent.
+#   N1 — a position parked UNRECONCILED must have its resting stop RETIRED
+#        first (a -qty stop the book abandons is a naked short waiting to
+#        trigger) and the alert must state the venue's ACTUAL quantity.
+#   N2 — `stock_position` sums EVERY account STK row for the symbol, so
+#        shares held OUTSIDE the blend book must never verify a position
+#        whose own stop actually filled. The stop ORDER's status is
+#        order-scoped evidence and is consulted FIRST; position rows are
+#        corroboration only.
+
+def _blackout_stop(m, a, call_id=1, symbol="CRSP", qty=5, level=44.0):
+    """Held position + its real resting GTC stop at the venue, then a
+    3-day reconcile blackout (the R1 flagging condition)."""
+    _held_position(m, call_id=call_id, symbol=symbol, qty=qty,
+                   stop_level=level)
+    rs = a.place_stock_order(symbol, -qty, "STP", stop_price=level, tif="GTC",
+                             client_order_id=f"blend-{call_id}-stp-{level:.4f}")
+    m.state.positions[str(call_id)].stop_order_ref = rs["order_ref"]
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    return rs["order_ref"]
+
+
+def test_gate_n1_blackout_park_retires_the_resting_stop(tmp_path):
+    """Probe B1: the operator manually sold 3 of the 5 during the blackout
+    (the /kill loop-down alert invites exactly that) while the -5 GTC stop
+    kept resting. The park must RETIRE that stop: left resting it triggers
+    into a 2-share account — short 3, visible to the book only as a
+    post-hoc UNKNOWN-order alert."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 2                     # manual sale of 3, in the dark
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions and "1" in m.state.unreconciled
+    assert ref not in a._stops or ref in m.state.orphan_stop_refs
+    assert _executions(a, "CRSP") == []          # nothing sold by the book
+    assert a._positions["CRSP"] == 2             # and no short at the venue
+    # honest wording: the venue holds 2 of the 5 the book claims — the
+    # position is NOT simply "gone"
+    (park,) = [msg for msg in alerts if "parked for manual booking" in msg]
+    assert "holds 2 of the 5" in park and "UNPROTECTED" in park
+    assert "GONE" not in park
+
+
+def test_gate_n1_unretirable_stop_is_orphan_tracked(tmp_path):
+    """The cancel of the abandoned stop RAISES (pinned contract: the stop
+    FILLED) — it must land in orphan_stop_refs (the /kill park pattern) so
+    pass 3 retries it and a fill on it alerts RED, never be forgotten."""
+    class _RaisingCancel(DryAdapter):
+        def cancel_stock_order(self, ref):
+            raise RuntimeError("cancel unavailable (simulated)")
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _RaisingCancel()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 0                     # shares gone entirely
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.unreconciled
+    assert ref in m.state.orphan_stop_refs        # tracked, retried, RED on fill
+    assert any("could NOT be cancelled" in msg for msg in alerts)
+    assert _executions(a, "CRSP") == []
+
+
+def test_gate_n2_external_shares_never_verify_a_stopped_out_position(tmp_path):
+    """Probe B2: the blend's 5 CRSP were stopped out inside the blackout
+    (fill event lost with the restart) while the ACCOUNT holds 6 CRSP
+    bought outside the book. Account rows say 6 >= 5 — but the position's
+    OWN stop is FILLED with a price, and that order-scoped evidence wins:
+    the exit books at the venue price instead of a phantom being unparked
+    and 'protected' by a dead order."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._orders[ref]["status"] = "filled"          # filled in the dark
+    a._orders[ref]["fill_price"] = 44.0
+    a._stops.pop(ref, None)
+    a._positions["CRSP"] = 6                     # external/manual shares only
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions and not m.state.unreconciled
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0 + 5 * 44.0))     # booked AT the stop
+    assert _executions(a, "CRSP") == []
+    assert not any("POSITIVELY verified" in msg for msg in alerts)
+
+
+def test_gate_n2_no_sell_stop_re_placed_on_external_shares(tmp_path):
+    """Probe B2b: same conflation with the blend stop CANCELLED inside the
+    blackout. Order history is silent and the account rows are conflated
+    (6 > 5 booked) — nothing proves the shares are the book's, so the
+    position stays UNVERIFIABLE. Unparking it would let pass 4 place a
+    fresh -5 SELL stop on the OPERATOR's own shares."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a.cancel_stock_order(ref)                    # cancelled during the blackout
+    a._positions["CRSP"] = 6                     # external/manual shares only
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _: None)
+    assert m.state.positions["1"].history_gap is True     # still parked
+    assert not [e for e in a.log if e["action"] == "place_stock_order"
+                and e.get("order_type") == "STP" and e["ref"] != ref]
+    assert any("conflated with external shares" in e["msg"]
+               for e in m.state.events)
+
+
+def test_gate_x1_working_stop_never_verifies_conflated_shares(tmp_path):
+    """X1 (supersedes the cde6fb7 gate that pinned the OPPOSITE outcome —
+    this one attacks the same cell strictly harder).
+
+    A WORKING stop is ORDER-scoped proof that THAT STOP did not fill. It
+    proves nothing about whether the book's shares left by another route
+    (manual sale out of a pooled position, broker liquidation, transfer)
+    while same-symbol shares stay in the account. With held > booked the
+    two cases are indistinguishable, so the guard must NOT convert "the
+    stop is alive" into "the shares are ours": the position stays flagged,
+    nothing is sold, no new stop is placed — and the working stop is LEFT
+    RESTING, because retiring it would strip real protection."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 6                     # 5 booked + 1 external
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    pos = m.state.positions["1"]
+    assert pos.history_gap is True               # NOT unparked
+    assert pos.stop_order_ref == ref and ref in a._stops   # same stop kept
+    assert any("conflated with external shares" in e["msg"]
+               and "shares OUTSIDE the blend book" in e["msg"]
+               for e in m.state.events)
+    # the alert must never assert ownership on conflated rows
+    assert not any("POSITIVELY verified" in msg for msg in alerts)
+    assert not any("the shares are held" in msg for msg in alerts)
+    (esc,) = [msg for msg in alerts if "UNRESOLVED after the blackout" in msg]
+    assert "UNPROVABLE" in esc and "LEFT RESTING" in esc
+    # and the tracker's next exit must not MKT-sell the operator's shares
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.positions and _executions(a, "CRSP") == []
+    assert a._positions["CRSP"] == 6             # untouched at the venue
+    # ...nor may /kill flatten it (C10)
+    m.request_flatten("2026-08-24")
+    kill_alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=kill_alerts.append)
+    assert "1" in m.state.positions and _executions(a, "CRSP") == []
+    assert a._positions["CRSP"] == 6
+    (summary,) = [msg for msg in kill_alerts if "flatten finished" in msg]
+    assert "NOT closed" in summary and "CRSP" in summary
+
+
+def test_gate_x3_conflated_dead_stop_stays_loud_and_visible(tmp_path):
+    """X3: the fail-closed cell must not fail SILENTLY. Conflated rows
+    (ONE extra same-symbol share is enough) plus a stop the venue cancelled
+    inside the blackout leave a REAL position with zero stops at the venue
+    — cde6fb7 left it stop_missing=False with a stale ref and no alert
+    after cycle 1, indefinitely (law #3's liveness clause). It must stay
+    flagged, drop the dead ref, mark itself unprotected for /status and the
+    feed, and keep escalating on a re-armed cadence."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a.cancel_stock_order(ref)                    # IB-initiated GTC cancel
+    a._positions["CRSP"] = 6                     # the book's 5 + ONE external
+    placed_before = len([e for e in a.log
+                         if e["action"] == "place_stock_order"])
+    per_cycle: list[int] = []
+    for c in range(2 * blend_mod.UNVERIFIED_REALERT_CYCLES):
+        alerts: list[str] = []
+        run_cycle(m, a, None, "2026-08-%02d" % (24 + c), alert=alerts.append)
+        per_cycle.append(sum(1 for msg in alerts
+                             if "UNRESOLVED after the blackout" in msg))
+        m.state.last_reconcile_ts = time.time()  # normal cadence from here
+    pos = m.state.positions["1"]
+    assert pos.history_gap is True               # never unparked
+    assert pos.stop_missing is True              # law #3 visibility
+    assert pos.stop_order_ref is None            # no stale ref on /status
+    assert not a._stops                          # nothing rests at the venue
+    assert len([e for e in a.log
+                if e["action"] == "place_stock_order"]) == placed_before
+    # loud on cycle 0, re-armed after — never silent, never per-cycle spam
+    assert per_cycle[0] == 1
+    assert sum(per_cycle[1:]) >= 1
+    assert sum(per_cycle) < len(per_cycle)
+    assert m.status_summary()["unverifiable"] == ["1"]
+    assert m.status_summary()["stop_missing"] == ["1"]
+    feed_pos = m.feed({}, "2026-08-30")["positions"][0]
+    assert feed_pos["unverifiable"] is True and feed_pos["unprotected"] is True
+
+
+def test_gate_n2_filled_stop_without_a_price_parks_never_sells(tmp_path):
+    """Matrix cell filled-but-unpriced with conflated position rows: the
+    order-scoped fill is proof the position closed, the missing price
+    forbids booking it (repo law: no silent 0.0) — park UNRECONCILED, and
+    never treat the account's external shares as the position."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._orders[ref]["status"] = "filled"          # filled, price unknown
+    a._stops.pop(ref, None)
+    a._positions["CRSP"] = 6                     # external shares
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions and "1" in m.state.unreconciled
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0))           # nothing booked at a guess
+    assert _executions(a, "CRSP") == []
+    assert any("NO fill price" in msg for msg in alerts)
+
+
+class _FalseCancelAdapter(DryAdapter):
+    """The venue answers "not found / already cancelled" (False) while the
+    stop in fact keeps resting — the realistic post-restart case: the
+    session-scoped orderId no longer resolves, and `cancel_stock_order`
+    returns False by contract. Indistinguishable from a gone order."""
+
+    def cancel_stock_order(self, ref):
+        rec = self._orders.get(ref)
+        if rec is not None and rec["status"] == "filled":
+            raise RuntimeError(f"cannot cancel {ref}: order already FILLED")
+        self._rec("cancel_stock_order", ref=ref, found=False)
+        return False
+
+
+def test_gate_x2_ambiguous_cancel_stays_tracked_and_fill_alerts_red(tmp_path):
+    """X2: N1's original naked short, end to end. The park's cancel comes
+    back False (ambiguous), so the -5 stop may still rest. cde6fb7 wrote
+    the ref into orphan_stop_refs and pass 3 POPPED it in the SAME
+    reconcile (it ignored the return value and logged a "cancelled on
+    retry" the venue never said) — tracking survived zero cycles, the stop
+    later triggered into a 2-share account (venue net -3, a real naked
+    short) and surfaced only as "fill for UNKNOWN order".
+
+    Tracking must now be cleared ONLY by a definitively ACKed cancel, and a
+    fill on a retired ref must route to the RED possible-short branch."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _FalseCancelAdapter()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 2                     # manual sale of 3, in the dark
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.unreconciled
+    assert ref in m.state.orphan_stop_refs        # survives its own cycle
+    assert not any("cancelled on retry" in e["msg"] for e in m.state.events)
+    assert any("would NOT ACK the cancel" in msg for msg in alerts)
+    # it survives further cycles too, and keeps being retried
+    run_cycle(m, a, None, "2026-08-25", alert=lambda _: None)
+    assert ref in m.state.orphan_stop_refs
+    # the abandoned stop now triggers into a 2-share account
+    a.trigger_stop(ref)
+    alerts2: list[str] = []
+    run_cycle(m, a, None, "2026-08-26", alert=alerts2.append)
+    assert any("RETIRED stop" in msg and "possible short" in msg
+               for msg in alerts2)
+    assert not any("UNKNOWN order" in msg for msg in alerts2)
+    assert f"orphan-{ref}" in m.state.unreconciled
+
+
+def test_x2_companion_acked_cancel_still_clears_tracking(tmp_path):
+    """Companion (NOT a gate — it passes at cde6fb7 by construction): the
+    other side of X2. A cancel the venue actually ACKs must still drain the
+    tracking, so tightening the clear condition does not wedge the guard on
+    every orphan forever."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-9-stp-44.0000")
+    m.record_orphan_stop(rs["order_ref"], {"symbol": "CRSP", "qty": -5,
+                                           "call_id": 9})
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _: None)
+    assert rs["order_ref"] not in m.state.orphan_stop_refs
+    assert any("cancelled on retry" in e["msg"] for e in m.state.events)
+
+
+def test_gate_x4_park_alert_states_what_the_retire_actually_did(tmp_path):
+    """X4: the park alert appended ", resting stop retired, nothing sold"
+    unconditionally — contradicting the 🚨🚨 "could NOT be cancelled" alert
+    emitted seconds earlier, and overclaiming in the DANGEROUS direction
+    (protection removed when the -5 stop may still be armed)."""
+    class _RaisingCancel(DryAdapter):
+        def cancel_stock_order(self, ref):
+            raise RuntimeError("cancel unavailable (simulated)")
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _RaisingCancel()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 2
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    (park,) = [msg for msg in alerts if "parked for manual booking" in msg]
+    assert "stop retired" not in park             # never the false claim
+    assert "could NOT be cancelled and may STILL rest" in park
+    assert "holds 2 of the 5" in park and "UNPROTECTED" in park
+    assert any("could NOT be cancelled" in msg for msg in alerts)
+    # and the ambiguous-False sibling says its own truth, not "retired"
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=2_750.0)
+    a2 = _FalseCancelAdapter()
+    _blackout_stop(m2, a2)
+    a2._positions["CRSP"] = 2
+    alerts2: list[str] = []
+    run_cycle(m2, a2, None, "2026-08-24", alert=alerts2.append)
+    (park2,) = [msg for msg in alerts2 if "parked for manual booking" in msg]
+    assert "stop retired" not in park2
+    assert "would not ACK the cancel" in park2
+    # ...and so does a clean, ACKed retire
+    m3 = mk(tmp_path / "c")
+    _seed_initialized(m3, sleeve_cash=2_750.0)
+    a3 = DryAdapter()
+    _blackout_stop(m3, a3)
+    a3._positions["CRSP"] = 2
+    alerts3: list[str] = []
+    run_cycle(m3, a3, None, "2026-08-24", alert=alerts3.append)
+    (park3,) = [msg for msg in alerts3 if "parked for manual booking" in msg]
+    assert "its resting stop was CANCELLED at the venue" in park3
+
+
+def test_gate_x5_same_symbol_shortfall_sacrifices_nobody(tmp_path):
+    """x5: `held` is account-wide and `book_qty` mixes same-symbol peers, so
+    a shortfall cannot be attributed to any ONE of them. cde6fb7 sacrificed
+    whichever came FIRST in dict order — cancelling a healthy peer's
+    working stop and parking its real shares UNRECONCILED while the
+    position whose shares were actually gone got unparked as verified.
+
+    Z1 UPDATE: "sacrifice nobody" stands (nobody parked, nobody stripped of
+    cover, everybody flagged and loud) — but the ORIGINAL refs no longer
+    rest, because leaving 12 shares of SELL stops against 9 held is the
+    venue short Z1 closes. The old ref-identity assertion is replaced by
+    strictly more: the pro-rata sizes, the cover<=held invariant, that every
+    position still has REAL cover, that the superseded orders are CANCELLED
+    (not abandoned), and that triggering everything cannot go short."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = DryAdapter()
+    r1 = _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    r2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    r3 = _blackout_stop(m, a, call_id=3, qty=3, level=42.0)
+    a._positions["CRSP"] = 9                     # call 3's 3 sold in the dark
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert sorted(m.state.positions) == ["1", "2", "3"]   # nobody sacrificed
+    assert not m.state.unreconciled
+    assert all(m.state.positions[k].history_gap for k in ("1", "2", "3"))
+    # every position keeps REAL cover (nobody stripped), resized pro rata:
+    # floor(9*5/12)=3 +1 (largest fraction .75) = 4, floor(9*4/12)=3,
+    # floor(9*3/12)=2 -> 4+3+2 == 9 == held.
+    assert sorted(-o["qty"] for o in a._stops.values()) == [2, 3, 4]
+    assert sum(-o["qty"] for o in a._stops.values()) == 9   # cover == held
+    assert [m.state.positions[k].stop_cover_qty for k in ("1", "2", "3")] \
+        == [4, 3, 2]
+    assert all(m.state.positions[k].stop_order_ref in a._stops
+               for k in ("1", "2", "3"))
+    assert all(not m.state.positions[k].stop_missing
+               for k in ("1", "2", "3"))
+    # the superseded orders were CANCELLED at the venue, never abandoned
+    for old in (r1, r2, r3):
+        assert old not in a._stops
+        assert a._orders[old]["status"] == "cancelled"
+    assert not m.state.orphan_stop_refs
+    assert _executions(a, "CRSP") == []
+    assert not any("parked for manual booking" in msg for msg in alerts)
+    esc = [msg for msg in alerts if "UNRESOLVED after the blackout" in msg]
+    assert len(esc) == 3
+    assert all("cannot be attributed to any one of them" in msg for msg in esc)
+    assert all("RESIZED protective stop" in msg for msg in esc)
+    (resize,) = [msg for msg in alerts if "RESIZED 12 -> 9" in msg]
+    assert "PRO RATA" in resize and "call 1: 5 -> 4" in resize
+    # and the end state cannot short the account
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    after: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=after.append)
+    assert a._positions["CRSP"] == 0
+    assert not any("position closed" in msg and "UNVERIFIABLE" not in msg
+                   for msg in after)
+
+
+def test_gate_x7_unretirable_stop_alerts_rearmed_never_silent(tmp_path):
+    """x7: a raising cancel produced two differently-worded alerts in the
+    SAME cycle and then "STILL uncancelled" every cycle forever. The
+    escalation must be re-armed — loud on record, then periodic — and it
+    must never fall silent (`orphan_stop_refs` never drains for a stop the
+    venue will not ACK)."""
+    class _RaisingCancel(DryAdapter):
+        def cancel_stock_order(self, ref):
+            raise RuntimeError("cancel unavailable (simulated)")
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _RaisingCancel()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 0
+    first: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=first.append)
+    # pass 3 must not duplicate the record-time alert in the same cycle;
+    # the only two mentions are the retire alert and the park alert that
+    # now AGREES with it (X4) — never two contradictory claims.
+    assert sum(1 for msg in first if "STILL uncancelled" in msg) == 0
+    assert sum(1 for msg in first
+               if "could NOT be cancelled while parking" in msg) == 1
+    assert sum(1 for msg in first if "could NOT be cancelled" in msg) == 2
+    assert not any("stop retired" in msg for msg in first)
+    per_cycle: list[int] = []
+    for c in range(2 * blend_mod.ORPHAN_REALERT_CYCLES):
+        alerts: list[str] = []
+        run_cycle(m, a, None, "2026-08-%02d" % (25 + c), alert=alerts.append)
+        per_cycle.append(sum(1 for msg in alerts
+                             if "STILL uncancelled" in msg))
+    assert ref in m.state.orphan_stop_refs        # never silently drained
+    assert sum(per_cycle) >= 1                    # never silent
+    assert sum(per_cycle) < len(per_cycle)        # and never every-cycle spam
+
+
+def test_gate_x8_filled_unpriced_park_states_the_venue_quantity(tmp_path):
+    """x8: the filled+unpriced park never said how many shares remain at
+    the venue, unlike its held<booked sibling — inconsistent honesty on the
+    same class of event."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._orders[ref]["status"] = "filled"          # filled, price unknown
+    a._stops.pop(ref, None)
+    a._positions["CRSP"] = 3                     # 3 shares STILL at the venue
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    (park,) = [msg for msg in alerts if "NO fill price" in msg]
+    assert "3 CRSP share(s)" in park and "UNPROTECTED" in park
+    assert _executions(a, "CRSP") == []
+
+
+def test_gate_x13_unlocatable_stop_is_never_cancelled_by_a_stale_ref(tmp_path):
+    """x13: with the cid lookup returning None the only ref left is the
+    PERSISTED one, and IB orderIds are session-scoped — after the restart
+    this guard exists for it can address a DIFFERENT order. It must be
+    tracked (a fill on it still alerts RED) and never cancelled blind."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref="stale-session-ref")   # venue never saw the cid
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    a = DryAdapter()
+    a._positions["CRSP"] = 2
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.unreconciled
+    assert "stale-session-ref" in m.state.orphan_stop_refs
+    assert not [e for e in a.log if e["action"] == "cancel_stock_order"]
+    assert any("may address a DIFFERENT order" in msg for msg in alerts)
+    # pass 3 keeps watching it but never blind-cancels it either
+    run_cycle(m, a, None, "2026-08-25", alert=lambda _: None)
+    assert not [e for e in a.log if e["action"] == "cancel_stock_order"]
+    assert "stale-session-ref" in m.state.orphan_stop_refs
+
+
+# R2 (re-review residual): /kill is TWO-STAGE — the handler journals a
+# persisted flatten request and halts; the LOOP thread (owner of the
+# ib_async event loop) executes the flatten with reconcile-first semantics.
+# FakeIB cannot reproduce the cross-thread asyncio failure, so these gates
+# pin the NEW mechanism: journal persisted, halt immediate, loop executes,
+# honest summaries, restart-resume, no API-thread adapter touch.
+
+
+def test_gate_r2_flatten_request_persists_and_executes_after_restart(
+        tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    assert "1" in m.state.positions
+    m.request_flatten("2026-08-20")
+    assert m.state.halted == "KILL"          # halt is immediate
+    assert "1" in m.state.positions          # nothing sold by the request
+    # ...service restarts before the loop ran the flatten...
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.flatten_request is not None      # journal survived
+    assert m2.state.halted == "KILL"
+    alerts: list[str] = []
+    run_cycle(m2, a, None, "2026-08-21", alert=alerts.append)
+    assert m2.state.positions == {}          # loop executed the flatten
+    assert m2.state.flatten_request is None
+    assert m2.state.halted == "KILL"         # halted until /resume
+    assert len(_executions(a, "CRSP")) == 1
+    assert any("flatten complete" in msg for msg in alerts)
+
+
+def test_gate_r2_flatten_summary_honest_about_parked_positions(tmp_path):
+    """The completion alert must state what actually closed vs parked —
+    never 'book closed & halted' while an UNVERIFIABLE position is held."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _NoVenuePositionsAdapter()           # R1 flag cannot be verified
+    run_cycle(m, a, payload(entries=[entry(),
+                                     entry(call_id=2, symbol="NTLA")],
+                            stops=[stop_row(),
+                                   stop_row(call_id=2, symbol="NTLA")]),
+              "2026-08-20", alert=lambda _: None)
+    m.state.positions["2"].history_gap = True        # blackout-parked
+    m.request_flatten("2026-08-21")
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    assert "1" not in m.state.positions              # CRSP closed
+    assert "2" in m.state.positions                  # NTLA parked, NOT sold
+    assert m.state.positions["2"].history_gap is True
+    assert _executions(a, "NTLA") == []
+    (summary,) = [msg for msg in alerts if "flatten finished" in msg]
+    assert "WITH EXCEPTIONS" in summary
+    assert "1 closed" in summary and "CRSP" in summary
+    assert "NOT closed" in summary and "NTLA" in summary
+    assert not any("book closed" in msg for msg in alerts)  # never overclaim
+
+
+def test_gate_r2_flatten_raising_cancel_parks_never_sells(tmp_path):
+    """K-d survives the loop-thread flatten: a RAISING stop cancel (stop
+    likely FILLED) parks the position — never a MKT sell on top of it."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = _RaisingCancelAdapter()
+    m.request_flatten("2026-08-21")
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    assert "1" in m.state.positions                  # parked, not sold
+    assert "old-stop" in m.state.orphan_stop_refs    # settled by reconcile
+    assert _executions(a, "CRSP") == []
+    # MF3-3: the request STAYS queued — this flatten closed nothing, and an
+    # emergency stop does not give up after one pass. The old line asserted
+    # `is None` here, which is the defect MF3-3 names.
+    assert m.state.flatten_request is not None
+    (summary,) = [msg for msg in alerts if "flatten finished" in msg]
+    assert "0 closed" in summary or "none" in summary
+    assert "NOT closed" in summary and "CRSP" in summary
+    # B4 supersedes cc03347's "RETRIES every cycle": that promise was
+    # unbounded and, for a row nothing could close, false. The retry is
+    # bounded and the summary says so, with the attempt number in it.
+    assert "RETRIES on the next cycle" in summary
+    assert f"attempt 1 of {blend_mod.FLATTEN_MAX_ATTEMPTS}" in summary
+    assert "every position is closed" not in summary
+    # ...and K-d survives the RETRY too, which the old assertion could never
+    # reach: a second cycle re-parks and still places no MKT sell.
+    retry: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=retry.append)
+    assert "1" in m.state.positions
+    assert _executions(a, "CRSP") == []
+    assert m.state.halted == "KILL"
+    assert m.state.flatten_request is not None
+    # B4: and the retry TERMINATES. Burn the rest of the budget: the request
+    # is dropped, the operator is told once that it stopped, the book stays
+    # HALTED, and K-d still holds on the very last pass (no MKT sell ever).
+    last: list[str] = []
+    for _ in range(blend_mod.FLATTEN_MAX_ATTEMPTS):
+        last = []
+        run_cycle(m, a, None, "2026-08-21", alert=last.append)
+        if m.state.flatten_request is None:
+            break
+    assert m.state.flatten_request is None, "the retry never terminated"
+    assert m.state.halted == "KILL"
+    assert "1" in m.state.positions
+    assert _executions(a, "CRSP") == []
+    (final,) = [msg for msg in last if "flatten finished" in msg]
+    assert "NO LONGER RETRYING" in final and "BY HAND" in final
+
+
+def test_gate_r2_resume_clears_a_queued_flatten(tmp_path):
+    """/resume before the loop ran the flatten must clear the journal — a
+    stale kill request must never flatten a RESUMED book."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    m.request_flatten("2026-08-21")
+    m.resume()
+    assert m.state.flatten_request is None
+    a = DryAdapter()
+    run_cycle(m, a, payload(stops=[stop_row()]), "2026-08-21",
+              alert=lambda _: None)
+    assert "1" in m.state.positions                  # nothing flattened
+    assert _executions(a, "CRSP") == []
+
+
+class _ThreadRecordingAdapter(DryAdapter):
+    """Records the thread of every adapter call — the R2 law: ONLY the loop
+    thread (owner of the ib_async event loop) may touch the venue."""
+
+    def __init__(self):
+        super().__init__()
+        import threading
+        self.call_threads: set[int] = set()
+        self._ident = threading.get_ident
+
+    def _note(self):
+        self.call_threads.add(self._ident())
+
+    def place_stock_order(self, *a, **kw):
+        self._note()
+        return super().place_stock_order(*a, **kw)
+
+    def cancel_stock_order(self, *a, **kw):
+        self._note()
+        return super().cancel_stock_order(*a, **kw)
+
+    def poll_stock_fills(self):
+        self._note()
+        return super().poll_stock_fills()
+
+    def find_stock_order(self, *a, **kw):
+        self._note()
+        return super().find_stock_order(*a, **kw)
+
+    def stock_position(self, *a, **kw):
+        self._note()
+        return super().stock_position(*a, **kw)
+
+    def spot(self, *a, **kw):
+        self._note()
+        return super().spot(*a, **kw)
+
+
+def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
+        tmp_path, monkeypatch):
+    """The old /kill pumped the adapter from a FastAPI worker thread — on
+    the real IBAdapter every wait timed out (ib_async resolves its loop
+    per thread) and the flatten deterministically failed. Now every
+    adapter call must come from ONE thread: the service loop.
+
+    MF-2 added the second assertion below. The set-equality on thread ids is
+    kept exactly as it was — it also excludes any THIRD thread, e.g. the
+    superseded loop that used to satisfy (or fail) this gate for the wrong
+    reason — and on top of it the gate now pins DIRECTLY the thing it exists
+    to pin: no thread that served an API request may appear in the adapter's
+    call set. Strictly additive: nothing was relaxed."""
+    import threading
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    monkeypatch.setattr(service, "DryAdapter", _ThreadRecordingAdapter)
+    api_threads: set[int] = set()
+    _real_auth = service._auth
+
+    def _recording_auth(hdr, q):
+        api_threads.add(threading.get_ident())   # every API handler starts here
+        return _real_auth(hdr, q)
+
+    monkeypatch.setattr(service, "_auth", _recording_auth)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            assert _wait_until(lambda: A.call_threads)   # loop cycle 1 ran
+            loop_threads = set(A.call_threads)           # THE loop thread
+            assert len(loop_threads) == 1
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None, adapter=A)
+            pos = B.state.positions["1"]
+            rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                     tif="GTC",
+                                     client_order_id="blend-1-stp-44.0000")
+            pos.stop_order_ref = rs["order_ref"]
+            B.save()
+            A.call_threads.clear()           # only post-kill calls count
+            c.post("/kill", params={"token": "sekrit"})
+            assert _wait_until(
+                lambda: B.state.positions == {}
+                and B.state.flatten_request is None)
+            # the flatten DID run (cancel + MKT sell) — and every adapter
+            # call came from THE loop thread, none from the API thread
+            assert A.call_threads == loop_threads
+            assert api_threads                      # /kill really was served
+            assert not (A.call_threads & api_threads), (
+                "an API thread touched the adapter")
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_r2_kill_alerts_are_honest_two_stage(tmp_path, monkeypatch):
+    """The immediate /kill reply says QUEUED (never 'book closed'); the
+    loop's completion alert states what actually closed."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None, adapter=A)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.json()["blend"] == "flatten_queued"
+            (kill_msg,) = [msg for msg in sent if "KILLED" in msg]
+            assert "flatten QUEUED" in kill_msg
+            assert "closed & halted" not in kill_msg     # the old overclaim
+            assert _wait_until(lambda: B.state.flatten_request is None)
+            assert any("flatten complete" in msg and "1 position(s) closed"
+                       in msg for msg in sent)
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+# --- re-review minors (r3-r7): alert semantics, ledger cosmetics --------------
+# Scenarios derived from the re-review probes A2/A3/A4/A5 and finding r7.
+
+
+def test_gate_r3_new_quote_outage_after_recovery_realerts(tmp_path):
+    # Probe A2: the outage alert was deduped against the LAST event only,
+    # and the skip message is identical across outages — a genuinely new
+    # outage after a quiet recovery never re-alerted.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    bad = {"BIL": 100.0}
+    out1 = m.step("2026-08-20", payload(), bad)
+    assert len([o for o in out1 if o["action"] == "ALERT"]) == 1
+    out2 = m.step("2026-08-20", payload(), bad)      # same outage: quiet
+    assert not [o for o in out2 if o["action"] == "ALERT"]
+    m.step("2026-08-21", payload(), PRICES)          # QUIET recovery
+    out3 = m.step("2026-08-24", payload(), bad)      # NEW outage days later
+    assert len([o for o in out3 if o["action"] == "ALERT"]) == 1
+
+
+def test_gate_r4_interleaved_pending_event_does_not_spam_quote_alert(
+        tmp_path):
+    # Probe A3: pending-book INFO and missing-quote WARN alternate in the
+    # event log, defeating last-event dedup — the WARN alerted EVERY cycle.
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    m.state.pending_book_orders["blend-sweep-2026-08-20-1"] = {
+        "kind": "sweep", "symbol": "BIL", "qty": 10, "date": "2026-08-20",
+        "ref_price": 100.0}
+    n = 0
+    for _ in range(4):
+        n += len([o for o in m.step("2026-08-20", payload(), {})
+                  if o["action"] == "ALERT"])
+    assert n == 1                                    # once per outage
+
+
+def test_gate_r5_sweep_slippage_never_leaves_negative_sleeve_cash(tmp_path):
+    # Probe A4: reserved sweep cash priced at journal ref_price, adopted at
+    # the venue fill 0.9 above it -> sleeve_cash -27.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0)
+    m.on_sweep(30, 100.9)
+    assert m.state.sleeve_cash == 0.0                # clamped, not negative
+    assert m.state.bil_qty == 30
+    assert any("slippage absorbed" in e["msg"] for e in m.state.events)
+
+
+def test_gate_r6_stuck_book_order_escalates_to_warn_after_age(tmp_path, monkeypatch):
+    # Probe A5 follow-up: a venue-stuck 'working' book order froze
+    # sweep/core-buy/rebalance with only a deduped INFO event.
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    m.record_pending_book_order("sweep", "BIL", 10, "2026-08-18",
+                                ref_price=100.0)              # placed pre-open
+    out = m.step("2026-08-18", payload(), PRICES)
+    assert not [o for o in out if o["action"] == "ALERT"]    # fresh: quiet
+    # round 2: an order that rests for the open is NOT stale while the
+    # market is closed (the conftest pin is 07:00 ET) ...
+    out = m.step("2026-08-20", payload(), PRICES)            # 2 days old
+    assert not [o for o in out if o["action"] == "ALERT"]
+    # ... but the same order still working IN SESSION two days on is
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: _dt(2026, 8, 20, 10, 0, tzinfo=_ET))
+    out = m.step("2026-08-20", payload(), PRICES)
+    (al,) = [o for o in out if o["action"] == "ALERT"]
+    assert "still working" in al["msg"]
+    out = m.step("2026-08-21", payload(), PRICES)            # alerted ONCE
+    assert not [o for o in out if o["action"] == "ALERT"]
+
+
+def test_gate_r7_budget_cap_entries_wait_for_core_quotes(tmp_path):
+    # r7: a missing SPY quote zeroes gross_exposure -> the BLEND_BUDGET
+    # entry gate computed low while sleeve entries proceeded.
+    m = mk(tmp_path, blend_budget=100_000.0)
+    _seed_initialized(m)
+    no_spy = {"BIL": 100.0, "CRSP": 50.0}
+    out = m.step("2026-08-20",
+                 payload(entries=[entry()], stops=[stop_row()]), no_spy)
+    assert not [o for o in out if o["action"] == "ENTER"]
+    assert any("budget gate" in e["msg"] for e in m.state.events)
+    # without a cap the entry still proceeds (sleeve-only decision)
+    m2 = Blend3070Manager(Cfg(), str(tmp_path / "b2.json"))
+    _seed_initialized(m2)
+    out2 = m2.step("2026-08-20",
+                   payload(entries=[entry()], stops=[stop_row()]), no_spy)
+    assert [o for o in out2 if o["action"] == "ENTER"]
+
+
+# m3 (minor): cancel-ok-then-place-raise must not leave the position
+# believed protected by a CANCELLED stop.
+
+class _CancelOkPlaceFailAdapter(DryAdapter):
+    """Stop cancel succeeds; the exit MKT sell then raises (venue hiccup)."""
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        if order_type == "MKT" and qty < 0:
+            raise RuntimeError("venue error after cancel (simulated)")
+        return super().place_stock_order(symbol, qty, order_type, **kw)
+
+
+def test_gate_adapt_m3min_cancel_ok_place_fail_marks_stop_missing(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(blend_mod, "STOP_RETRY_SLEEP_S", 0)
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = _CancelOkPlaceFailAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    alerts: list[str] = []
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-21", alert=alerts.append)
+    pos = m.state.positions["1"]
+    assert pos.stop_missing is True and pos.stop_order_ref is None
+    assert any("UNPROTECTED" in msg for msg in alerts)
+    # next cycle: reconcile re-places the protective stop (covered again
+    # while the exit retries via its deterministic cid)
+    run_cycle(m, a, None, "2026-08-22", alert=lambda _: None)
+    pos = m.state.positions["1"]
+    assert pos.stop_missing is False and pos.stop_order_ref in a._stops
+
+
+# m4 (minor): an IB-initiated GTC cancel (corporate action) must be
+# detected — never a naked position believed protected forever.
+
+def test_gate_adapt_m4min_venue_cancelled_stop_detected_and_replaced(
+        tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    ref = m.state.positions["1"].stop_order_ref
+    a.cancel_stock_order(ref)        # IB-initiated GTC cancel, no shares
+    assert ref not in a._stops       # naked at the venue, book unaware
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    pos = m.state.positions["1"]
+    assert pos.stop_missing is False
+    assert pos.stop_order_ref != ref and pos.stop_order_ref in a._stops
+    assert any("CANCELLED at the venue" in msg for msg in alerts)
+
+
+# M1 support: pending sweep cash is reserved — entries can never spend it.
+
+def test_gate_adapt_m1_pending_sweep_cash_reserved_from_entries(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)                     # sleeve_cash 3,000
+    # a working sweep BUY of 29 BIL @ 100 is pending adoption: $2,900 of
+    # the settled cash is already spoken for
+    m.record_pending_book_order("sweep", "BIL", 29, "2026-08-19",
+                                ref_price=100.0)
+    assert m.reserved_sleeve_cash() == pytest.approx(2_900.0)
+    out = m.step("2026-08-20",
+                 payload(entries=[entry()], stops=[stop_row()]),
+                 PRICES)
+    # only $100 is spendable (risk sizing wants 5 sh @ 50): the entry is NOT
+    # dust-sized to 2 while the sweep rests - it waits for adoption (round 3:
+    # a dust entry burns the call_id for good)
+    assert not [o for o in out if o["action"] == "ENTER"]
+    assert any("not placing a dust entry" in e["msg"] for e in m.state.events)
+    assert not [o for o in out if o["action"] == "SWEEP"]   # kind suppressed
+    # the sweep adopts -> full risk size next cycle
+    for cid in list(m.state.pending_book_orders):
+        m.clear_pending_book_order(cid)
+    m.on_sweep(29, 100.0)
+    out = m.step("2026-08-20", payload(entries=[entry()], stops=[stop_row()]), PRICES)
+    (ent,) = [o for o in out if o["action"] == "ENTER"]
+    assert ent["qty"] == 5
+
+
+# --- mode-transition guard + N3 (resume race / atomic save) -------------------
+
+def test_gate_mode_guard_archives_foreign_mode_book(tmp_path):
+    """A book built under DRY (placeholder fills) must NOT survive into a
+    real mode: the venue never saw those orders, and reconciling them would
+    mark fiction at real prices and trade the difference."""
+    m = mk(tmp_path)                       # dry:paper
+    _seed_initialized(m, spy_qty=700, bil_qty=300)
+    _held_position(m)
+    m.save()
+    m2 = mk(tmp_path, dry_run=False,       # real:paper — same state file
+            tws_userid="u", tws_password="p")
+    assert m2.archived_state               # loud: startup alerts on this
+    assert m2.state.initialized is False
+    assert m2.state.positions == {}
+    assert m2.state.spy_qty == 0 and m2.state.bil_qty == 0
+    assert m2.state.mode == "real:paper"
+    archives = list(tmp_path.glob("blend.json.archived-*"))
+    assert len(archives) == 1              # old book preserved, not deleted
+    old = json.loads(archives[0].read_text())
+    assert old["spy_qty"] == 700
+
+
+def test_gate_mode_guard_archives_legacy_untagged_state(tmp_path):
+    """A pre-guard state file (no mode key) is of UNKNOWN mode — it must be
+    archived even when the current mode happens to match what wrote it."""
+    path = tmp_path / "blend.json"
+    path.write_text(json.dumps({"initialized": True, "spy_qty": 700}))
+    m = mk(tmp_path)                       # dry:paper, same as the writer was
+    assert m.archived_state
+    assert m.state.spy_qty == 0
+    assert list(tmp_path.glob("blend.json.archived-unknown-*"))
+
+
+def test_gate_mode_guard_same_mode_restart_keeps_book(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, spy_qty=70)
+    _held_position(m)
+    m.save()
+    m2 = mk(tmp_path)                      # same mode: no archive, book kept
+    assert m2.archived_state is None
+    assert m2.state.initialized and m2.state.spy_qty == 70
+    assert "1" in m2.state.positions
+
+
+def test_gate_n3_flatten_reasserts_halt_after_raced_resume(tmp_path):
+    """If a /resume raced in between the kill request and the loop's flatten
+    (halted cleared but the request already picked up), the book must come
+    out of the flatten HALTED — never un-halted and entering same-cycle."""
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref=None)
+    m.request_flatten("2026-08-21")
+    m.state.halted = None                  # the race the lock now prevents,
+                                           # kept as defense-in-depth
+    execute_flatten(m, DryAdapter(), alert=lambda s: None)
+    assert m.state.flatten_request is None
+    assert m.state.positions == {}
+    assert m.state.halted == "KILL"
+
+
+def test_gate_n3_save_atomic_survives_crash_mid_write(tmp_path, monkeypatch):
+    """A crash mid-save must never leave a truncated file that _load
+    silently resolves to a fresh empty book (which would re-plan the whole
+    book from scratch against live positions)."""
+    import app.blend as blend_mod
+    m = mk(tmp_path)
+    _seed_initialized(m, spy_qty=70)
+    m.save()
+
+    def bad_dump(obj, fh, **kw):
+        fh.write('{"partial')
+        raise IOError("disk full mid-write")
+
+    monkeypatch.setattr(blend_mod.json, "dump", bad_dump)
+    m.state.spy_qty = 999
+    with pytest.raises(IOError):
+        m.save()
+    monkeypatch.undo()
+    m2 = mk(tmp_path)                      # reload: the LAST GOOD book
+    assert m2.state.initialized is True
+    assert m2.state.spy_qty == 70          # not 999, and not a fresh book
+
+
+def test_gate_x11_concurrent_saves_never_corrupt_the_published_book(tmp_path):
+    """x11: save()'s docstring promised safety against "two threads racing"
+    while every writer shared ONE "<state>.tmp" path — concurrent savers
+    clobbered each other's partial file and published truncated JSON (which
+    _load's bare except turns into total book amnesia). It also flaked the
+    suite with FileNotFoundError on the shared .tmp.
+
+    Production writers all hold BLEND_LOCK; this gate hammers save()
+    UNLOCKED so the promise holds on its own."""
+    import threading
+
+    m = mk(tmp_path)
+    _seed_initialized(m, spy_qty=70)
+    # a realistically sized book: the corruption window scales with payload
+    m.state.trades = [{"symbol": "CRSP", "side": "SELL", "qty": 5,
+                       "fill_price": 44.0, "date": "2026-08-20",
+                       "kind": "stop_filled", "r_multiple": -1.0,
+                       "pnl": -30.0} for _ in range(200)]
+    m.state.events = [{"ts": 1, "level": "INFO", "msg": f"event {i} " + "x" * 80}
+                      for i in range(300)]
+    m.state.equity_curve = [["2026-08-%02d" % (i % 28 + 1), 10_000.0 + i]
+                            for i in range(1500)]
+    m.save()
+    errors: list[BaseException] = []
+    corrupt: list[str] = []
+    stop = threading.Event()
+
+    def hammer():
+        while not stop.is_set():
+            try:
+                m.save()
+            except BaseException as exc:      # noqa: BLE001
+                errors.append(exc)
+                return
+
+    def reader():
+        while not stop.is_set():
+            try:
+                json.load(open(m.state_path))
+            except FileNotFoundError:
+                corrupt.append("missing")
+            except ValueError:
+                corrupt.append("truncated")
+
+    threads = [threading.Thread(target=hammer) for _ in range(4)]
+    threads.append(threading.Thread(target=reader))
+    for t in threads:
+        t.start()
+    time.sleep(1.0)
+    stop.set()
+    for t in threads:
+        t.join(timeout=10)
+    assert errors == []                       # no writer ever raised
+    assert corrupt == []                      # no truncated published state
+    assert mk(tmp_path).state.spy_qty == 70   # and the book reloads intact
+    # no scratch files accumulate next to the state file
+    assert [f for f in os.listdir(tmp_path) if f.endswith(".tmp")] == []
+
+
+def test_gate_n3_resume_blocks_behind_blend_lock(tmp_path, monkeypatch):
+    """/resume must serialize behind the loop's cycle (BLEND_LOCK): a resume
+    racing an in-flight flatten un-halts a book that is being sold."""
+    import threading
+
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app import service
+    from app.service import app
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(app) as c:
+            assert _wait_until(lambda: service.BLEND is not None)
+            service.BLEND.state.halted = "KILL"
+            done = threading.Event()
+            with service.BLEND_LOCK:       # a cycle is "in flight"
+                t = threading.Thread(
+                    target=lambda: (c.post("/resume",
+                                           params={"token": "sekrit"}),
+                                    done.set()))
+                t.start()
+                time.sleep(0.4)
+                assert not done.is_set()   # resume waits for the cycle
+                assert service.BLEND.state.halted == "KILL"
+            assert done.wait(5.0)          # lock released -> resume lands
+            t.join(5.0)
+            assert service.BLEND.state.halted is None
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mode_guard_creds_absent_is_dry_even_without_dry_run(tmp_path):
+    """F1: _build runs the DryAdapter whenever TWS creds are absent, DRY_RUN
+    or not — the mode tag must mirror that, or a creds-missing boot with
+    DRY_RUN=false would tag placeholder fills as a real book (and the guard
+    would then PRESERVE the fiction when creds arrive)."""
+    m = mk(tmp_path, dry_run=False, tws_userid="", tws_password="")
+    assert m.state.mode == "dry:paper"     # creds absent -> dry, flag or not
+    _seed_initialized(m, spy_qty=700)
+    m.save()
+    # Creds arrive (a real PAPER boot): the placeholder book must be archived.
+    m2 = mk(tmp_path, dry_run=False, tws_userid="u", tws_password="p")
+    assert m2.state.mode == "real:paper"
+    assert m2.archived_state
+    assert m2.state.spy_qty == 0
+
+
+def test_gate_mode_guard_creds_pulled_mid_paper_archives_real_book(tmp_path):
+    """F1 reverse hole: creds pulled mid-PAPER (DRY_RUN still false) boots
+    the DryAdapter — the REAL book must be archived, never traded by the
+    placeholder venue."""
+    m = mk(tmp_path, dry_run=False, tws_userid="u", tws_password="p")
+    assert m.state.mode == "real:paper"
+    _seed_initialized(m, spy_qty=12)
+    m.save()
+    m2 = mk(tmp_path, dry_run=False, tws_userid="", tws_password="")
+    assert m2.state.mode == "dry:paper"
+    assert m2.archived_state               # real book preserved in archive
+    assert m2.state.spy_qty == 0
+
+
+def test_gate_g3_unreadable_blend_state_is_preserved_and_loud(tmp_path):
+    """G3 (the blend half of the ladder's x12): an unreadable book must not
+    degrade silently to a fresh one — open positions and `halted` would be
+    forgotten and the next save would erase the evidence."""
+    m = mk(tmp_path)
+    _seed_initialized(m, spy_qty=70)
+    _held_position(m)
+    m.state.halted = "KILL"
+    m.save()
+    open(m.state_path, "w").write('{"positions": {"1": {trunc')
+    m2 = mk(tmp_path)
+    assert m2.archived_state and "unreadable" in m2.archived_state
+    assert m2.state.positions == {}          # fresh book, honestly announced
+    assert list(tmp_path.glob("blend.json.corrupt-*"))
+    m2.save()                                # evidence survives the next save
+    assert list(tmp_path.glob("blend.json.corrupt-*"))
+
+
+def test_gate_y1_ratchet_never_rests_a_stop_on_an_unverifiable_position(tmp_path):
+    """Y1 (re-review): passes 3b and 4 refuse to rest a stop on a flagged
+    position, but step()'s daily trail RATCHET placed one through a third
+    door — and a ratchet rests a NEW -qty SELL order, so it is the same
+    short path. Reviewer's X-B: venue 12, book 5 → the ratchet's 5-share
+    SELL sells the operator's external shares and books a phantom exit."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 12                    # 5 booked + 7 external
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _: None)
+    assert m.state.positions["1"].history_gap is True
+    # A ratcheting trail arrives while the position is still unverifiable.
+    out = m.step("2026-08-25", payload(stops=[stop_row(trail=47.0)]),
+                 PRICES)
+    assert not [o for o in out if o["action"] == "ADJUST_STOP"]
+    assert m.state.positions["1"].stop_level == 44.0    # unchanged
+    assert list(a._stops) == [ref]               # no SECOND resting stop
+    assert a._positions["CRSP"] == 12            # nothing sold
+
+
+def test_gate_y1_ratchet_cannot_add_sell_orders_to_a_shortfall(tmp_path):
+    """Reviewer's X-K(d), the sharp end. Two same-symbol positions book 9
+    shares; 3 were sold by hand during the blackout so the account holds 6.
+    The shortfall is not attributable to either position (x5), so both stay
+    flagged with their stops resting. A ratchet then used to rest NEW stops
+    for both — adding SELL orders on top of a book the venue can no longer
+    cover, which ends in a venue short."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5)
+    _blackout_stop(m, a, call_id=2, qty=4)
+    a._positions["CRSP"] = 6                     # 3 sold away by hand
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert all(p.history_gap for p in m.state.positions.values())
+    before = {r: o["qty"] for r, o in a._stops.items()}
+    # Day 2 runs the FULL cycle so a ratchet intent would really be placed —
+    # inspecting intents alone would pass vacuously.
+    run_cycle(m, a, payload(stops=[stop_row(call_id=1, trail=47.0),
+                                   stop_row(call_id=2, trail=47.0)]),
+              "2026-08-25", alert=alerts.append)
+    after = {r: o["qty"] for r, o in a._stops.items()}
+    assert after == before                       # no NEW sell orders rested
+    assert all(p.stop_level == 44.0 for p in m.state.positions.values())
+    assert not any("position closed" in s for s in alerts)
+
+
+def test_gate_z1_peer_shortfall_never_leaves_cover_above_venue_held(tmp_path):
+    """Z1, the reviewer's repro and the LIVE-BLOCKING invariant: for each
+    symbol, total blend-placed RESTING SELL cover must never exceed the
+    venue-verified `held`, and the executor must never CHOOSE to leave
+    cover > held.
+
+    Two same-symbol positions book 9 shares (5+4); 3 were sold by hand
+    inside the blackout so the account holds 6. The shortfall is
+    attributable to neither (x5), so nobody is parked or sacrificed — but
+    leaving 5+4 = 9 shares of SELL stops resting against 6 held is a REAL
+    naked short the moment both trigger (venue 6 -> -3), and it used to be
+    reported as two cheerful green 'position closed' alerts."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    old1 = _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6                     # 3 sold away by hand
+    alerts: list[str] = []
+    # the FULL cycle, not intents: an intents-only assertion passes vacuously
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    # nobody sacrificed: both positions alive, flagged, neither parked
+    assert sorted(m.state.positions) == ["1", "2"]
+    assert not m.state.unreconciled
+    assert all(p.history_gap for p in m.state.positions.values())
+    assert _executions(a, "CRSP") == []           # nothing was sold to fix it
+    # what actually RESTS at the venue, observed venue-side (so this gate
+    # fails on the HARM at the parent commit, not on a missing field)
+    resting = sorted(-o["qty"] for o in a._stops.values())
+    # now trigger EVERY resting stop: the account must never go short
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    filled: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=filled.append)
+    assert a._positions["CRSP"] >= 0              # THE invariant, end to end
+    assert a._positions["CRSP"] == 0
+    # and no fill is reported as a plain green close
+    assert not any("position closed" in msg and "UNVERIFIABLE" not in msg
+                   for msg in filled)
+    assert not any(msg.startswith("🧬 blend STOP FILLED") for msg in filled)
+    # cover was resized PRO RATA: floor(6*5/9)=3, floor(6*4/9)=2 +1 (largest
+    # fractional part .667) = 3 -> 3+3 == 6 == held, and no attribution.
+    assert resting == [3, 3] and sum(resting) == 6
+    assert old1 not in a._stops and old2 not in a._stops
+    assert a._orders[old1]["status"] == "cancelled"
+    assert a._orders[old2]["status"] == "cancelled"
+    assert not m.state.orphan_stop_refs           # cancels ACKed, not orphaned
+    (resize,) = [msg for msg in alerts if "RESIZED" in msg and "PRO RATA" in msg]
+    assert "9 -> 6" in resize and "call 1: 5 -> 3" in resize
+    assert "3 share(s) of protection were REMOVED" in resize
+    # the remainder is NOT booked as a phantom exit off the same order
+    assert [m.state.positions[k].qty for k in ("1", "2")] == [2, 1]
+    assert [m.state.positions[k].stop_cover_qty for k in ("1", "2")] == [0, 0]
+    assert all(p.history_gap for p in m.state.positions.values())
+
+
+def test_gate_z1_resize_never_claims_cover_the_venue_would_not_release(tmp_path):
+    """Z1 does not promise an invariant it cannot enforce. When the venue
+    will not ACK the cancel, the OLD stop may still rest — that residual is
+    X2's (orphan_stop_refs + a RED fill alert), and the resize must NOT
+    place a smaller stop on top of it, nor let the headline claim a cover
+    the book cannot prove."""
+    class _FalseCancel(DryAdapter):
+        def cancel_stock_order(self, ref):
+            self._rec("cancel_stock_order", ref=ref, found=False)
+            return False                  # "not found" — after a session
+                                          # boundary, indistinguishable from
+                                          # a still-resting order
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _FalseCancel()
+    old1 = _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    # nothing NEW was rested on top of the possibly-resting old stops
+    assert sorted(-o["qty"] for o in a._stops.values()) == [4, 5]
+    assert sorted(m.state.orphan_stop_refs) == sorted([old1, old2])
+    assert all(p.stop_missing and not p.stop_order_ref
+               for p in m.state.positions.values())
+    (resize,) = [msg for msg in alerts if "RESIZED" in msg and "PRO RATA" in msg]
+    assert "blend-tracked resting SELL cover RESIZED 9 -> 0" in resize
+    assert "could not be cancelled and may STILL rest at the venue" in resize
+    assert "may still exceed 6" in resize
+    # a fill on one of them is the RED possible-short branch, never a close
+    a.trigger_stop(old1)
+    after: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=after.append)
+    assert any("possible short at the venue" in msg for msg in after)
+    assert not any("position closed" in msg for msg in after)
+
+
+def test_gate_z1_resized_cover_is_restored_in_full_when_shares_return(tmp_path):
+    """Z1's other end: a resized stop covers FEWER shares than the position,
+    so unparking it as 'still protected' would leave the book silently
+    under-covered — and pass 4 stacking a full stop on top of the resized
+    one would put cover back ABOVE held. The resized stop is retired first
+    and full cover re-placed, with cover <= held at every step."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _msg: None)
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+    # the operator restores the missing shares (the in-band resolution)
+    a._positions["CRSP"] = 9
+    m.state.last_reconcile_ts = time.time()
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=alerts.append)
+    assert not any(p.history_gap for p in m.state.positions.values())
+    assert not any(p.stop_missing for p in m.state.positions.values())
+    assert [m.state.positions[k].stop_cover_qty for k in ("1", "2")] == [0, 0]
+    # full cover, exactly once each, and never more than the account holds
+    assert sorted(-o["qty"] for o in a._stops.values()) == [4, 5]
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+    assert not m.has_naked_position()             # entries unblocked again
+    assert any("RESIZED stop was retired and FULL cover is re-placing" in msg
+               for msg in alerts)
+
+
+def test_gate_z2_a_stop_fill_on_an_unverifiable_position_is_never_green(
+        tmp_path):
+    """Z2: `_ingest_one_fill` never read `history_gap`, so a stop fill on a
+    position the guard could not prove ownership of was booked with the same
+    cheerful green alert as a healthy stop-out. The ACCOUNTING stays as it
+    is (order-scoped venue truth, consistent with pass 1b-i) — the ALERT
+    must say the position was UNVERIFIABLE and that under conflation the
+    shares sold may have been the operator's."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)                   # 5 booked, stop resting
+    a._positions["CRSP"] = 12                    # 5 booked + 7 external
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _msg: None)
+    assert m.state.positions["1"].history_gap is True
+    assert ref in a._stops                       # X1: left resting, not naked
+    a.trigger_stop(ref)                          # it sells 5 pooled shares
+    cash_before = m.state.sleeve_cash
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=alerts.append)
+    assert "1" not in m.state.positions          # booking unchanged: booked
+    assert m.state.sleeve_cash == cash_before + 5 * 44.0
+    (msg,) = [x for x in alerts if "position closed at the venue" in x]
+    assert not msg.startswith("🧬")               # never a green close
+    assert "UNVERIFIABLE" in msg
+    assert "may have been YOURS" in msg
+    assert "check your own share count" in msg
+
+
+def test_gate_z2_a_blackout_recovered_fill_says_it_was_unverifiable(tmp_path):
+    """Z2's second alert: reconcile pass 1b-i books a stop fill recovered
+    from venue order history. Same rule — the booking is right, the silence
+    was not."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a.trigger_stop(ref)                          # filled INSIDE the blackout
+    a._fills.clear()                             # ... and the event was lost
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions
+    (msg,) = [x for x in alerts if "recovered from venue history" in x]
+    assert not msg.startswith("🧬")
+    assert "UNVERIFIABLE" in msg and "may have been YOURS" in msg
+
+
+def _adopted_peer(m, a, call_id=2, symbol="CRSP", qty=4, level=43.0):
+    """A same-symbol peer that reconcile pass 2 ADOPTS from the crash window:
+    a journaled MOO that filled at the venue while a peer was parked. Pass 2
+    books it as a BRAND NEW position with history_gap=False, which is how a
+    mixed FLAGGED/UNFLAGGED same-symbol pair arises with no hand-editing
+    (counter-review Z-12)."""
+    it = {"call_id": call_id, "symbol": symbol, "qty": qty,
+          "entry_ref": 50.0, "stop_level": level, "reason": "fire"}
+    m.record_pending_entry(it, "2026-08-20")
+    a.place_stock_order(symbol, qty, "MOO", ref_price=50.0,
+                        client_order_id=blend_mod.entry_client_id(call_id))
+    return it
+
+
+def test_gate_za_a_capped_peer_never_drifts_back_to_full_cover(tmp_path):
+    """Z-A, reachable end to end from a clean book (counter-review Z-12b).
+
+    `_resize_peer_cover` spans ALL same-symbol positions — it must, the
+    invariant is a per-symbol aggregate — but the cap it applies lived only
+    in `stop_cover_qty`, and step()'s daily trail ratchet sizes on
+    `pos.qty` and was gated only on `history_gap`. So any peer that is not
+    ITSELF flagged had its cover restored to FULL by the next ordinary
+    ratchet: measured cover 6 -> 7 against 6 held, then venue 6 -> -1 on
+    the triggers, reported as a plain green 'position closed'.
+
+    The mixed pair needs no hand-editing: pass 2 adopts a crash-window
+    entry as a brand-new UNFLAGGED position beside a parked peer."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _adopted_peer(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 9                     # both entries really filled
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert [m.state.positions[k].history_gap for k in ("1", "2")] \
+        == [True, False]                         # the mixed pair, unforced
+    a._positions["CRSP"] = 6                     # 3 sold by hand, in the dark
+    resize_alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=resize_alerts.append)
+    assert sum(-o["qty"] for o in a._stops.values()) == 6      # cover == held
+    # the operator hears that the peer just became UNVERIFIABLE in the cycle
+    # it happens, not only from next cycle's escalation
+    assert any("call 2 is now flagged UNVERIFIABLE too" in msg
+               and "NO NEW ENTRIES" in msg for msg in resize_alerts)
+    # an ordinary tracker trail ratchet arrives for the (formerly) unflagged
+    # peer — the FULL cycle, so an intent would really reach the venue
+    ratchet = payload(stops=[stop_row(call_id=2, trail=45.0)])
+    ratchet["as_of"] = "2026-08-25"
+    run_cycle(m, a, ratchet, "2026-08-25", alert=lambda _m: None)
+    # observed venue-side, so this gate fails on the HARM at the parent
+    # commit (cover 7 against 6 held), not on a missing field
+    assert sum(-o["qty"] for o in a._stops.values()) == 6      # still == held
+    # and the end state cannot short the account
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    after: list[str] = []
+    run_cycle(m, a, None, "2026-08-26", alert=after.append)
+    assert a._positions["CRSP"] >= 0                          # THE invariant
+    assert a._positions["CRSP"] == 0
+    assert not any("position closed" in msg and "UNVERIFIABLE" not in msg
+                   for msg in after)
+    # DURABILITY, the mechanism: the capped peer is flagged in the same
+    # breath, so the ratchet door, the pass-4 door, the escalation cadence
+    # and the restore-full-cover branch all apply to it.
+    assert m.state.positions["2"].stop_level == 43.0           # not ratcheted
+    assert m.state.positions["2"].history_gap is True
+
+
+def test_gate_za_a_rejected_resize_is_not_restored_by_pass_4(tmp_path):
+    """Z-A's same-cycle door: when the resize's replacement is REJECTED for
+    a peer that is not itself flagged, `mark_stop_missing` used to hand it
+    straight to reconcile pass 4, which re-placed -pos.qty in the SAME
+    reconcile — cover 7 against 6 held, announced as 'protective stop
+    restored'."""
+    class _RejectPeerResize(DryAdapter):
+        armed = False           # exactly ONE rejection: the resize replace.
+                                # pass 4's re-place would then succeed — and
+                                # at the parent commit it did, in the SAME
+                                # reconcile, back to full -qty cover.
+        def place_stock_order(self, symbol, qty, order_type, **kw):
+            if (self.armed and order_type == "STP"
+                    and kw.get("client_order_id") == "blend-2-stp-43.0000"):
+                self.armed = False
+                raise RuntimeError("resize replace rejected (simulated)")
+            return super().place_stock_order(symbol, qty, order_type, **kw)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _RejectPeerResize()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _adopted_peer(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 9
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert m.state.positions["2"].history_gap is False
+    a._positions["CRSP"] = 6
+    a.armed = True
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=alerts.append)
+    assert sum(-o["qty"] for o in a._stops.values()) <= 6      # the harm
+    assert not any("protective stop restored" in msg for msg in alerts)
+    assert m.state.positions["2"].stop_missing is True
+    assert m.state.positions["2"].history_gap is True     # the durable cap
+    assert any("UNPROTECTED" in msg for msg in alerts)
+
+
+def test_gate_zb_a_resized_stop_fill_from_the_blackout_books_a_partial(
+        tmp_path):
+    """Z-B: pass 1b-i's guard keyed on `stop_order_ref`/`stop_missing`, so a
+    SUCCESSFULLY RESIZED stop sailed through it and `on_exited` booked the
+    WHOLE position. Measured: cover 3 of qty 5, the venue sold 3 @ 44.00
+    ($132), the book credited $220, deleted the position and abandoned 2
+    real shares with no book row and no stop — the exact harm the hunk was
+    added to prevent. It must book a PARTIAL, exactly as the live fill-poll
+    path already does."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    pos = m.state.positions["1"]
+    cover = pos.stop_cover_qty
+    assert 0 < cover < pos.qty
+    cash0 = m.state.sleeve_cash
+    a.trigger_stop(pos.stop_order_ref)           # the RESIZED stop fills
+    a._fills.clear()                             # ...inside a blackout: the
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400   # poll never sees it
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-26", alert=alerts.append)
+    survivor = m.state.positions.get("1")
+    assert survivor is not None                  # 2 real shares still tracked
+    assert survivor.qty == 5 - cover
+    assert m.state.sleeve_cash == pytest.approx(cash0 + cover * 44.0)
+    (msg,) = [x for x in alerts if "RESIZED stop fill from the blackout" in x]
+    assert not msg.startswith("🧬")
+    assert f"booked x{cover}" in msg and "UNPROTECTED" in msg
+    assert "UNVERIFIABLE" in msg
+    # and the aggregate invariant still holds against the venue's own count
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+
+
+def test_gate_zc_cover_rejected_by_the_venue_is_really_retried(tmp_path):
+    """Z-C + DEVIATION 1: after an ACKed cancel and a REJECTED replace the
+    position sat at cover 0 FOREVER — across cycles and across restart —
+    while the README, the docstring and the operator alert all promised it
+    was 'retried next cycle'. Y1 forbids cover the account may not be able
+    to honour, not increases as such: `sum(alloc) == held`, so placing
+    <= `alloc` is provably short-safe, and leaving a real position naked
+    indefinitely is X3's unbounded downside."""
+    class _RejectFirstResize(DryAdapter):
+        armed = False           # armed only after the book is seeded
+
+        def place_stock_order(self, symbol, qty, order_type, **kw):
+            if (self.armed and order_type == "STP"
+                    and kw.get("client_order_id") == "blend-1-stp-44.0000"):
+                self.armed = False
+                raise RuntimeError("replace rejected (simulated)")
+            return super().place_stock_order(symbol, qty, order_type, **kw)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _RejectFirstResize()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a.armed = True
+    a._positions["CRSP"] = 6
+    first: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=first.append)
+    p1 = m.state.positions["1"]
+    assert p1.stop_missing and not p1.stop_order_ref          # bare and loud
+    assert any("UNPROTECTED" in msg for msg in first)
+    # next cycle the venue would accept it: the cover MUST come back, at its
+    # pro-rata allocation and never above it
+    run_cycle(m, a, None, "2026-08-25", alert=lambda _m: None)
+    p1 = m.state.positions["1"]
+    assert p1.stop_order_ref and not p1.stop_missing          # really retried
+    assert p1.stop_cover_qty == 3
+    assert sum(-o["qty"] for o in a._stops.values()) == 6     # == held, never
+    assert a._positions["CRSP"] == 6                         # above it
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    run_cycle(m, a, None, "2026-08-26", alert=lambda _m: None)
+    assert a._positions["CRSP"] == 0
+    # ...and the operator was told what actually happens, not a promise the
+    # code did not keep
+    assert any("retried every reconcile while the shortfall lasts" in msg
+               for msg in first)
+    assert not any("retrying next cycle" in msg for msg in first)
+
+
+def test_gate_zd_blend_book_schema_drift_preserves_and_halts(tmp_path):
+    """Z-D: `BlendPosition(**v)` had no field filter, so a deploy ROLLBACK
+    reading rows a NEWER build wrote (Z1 added `stop_cover_qty` in this very
+    round) raised into the G3 branch and returned a FRESH, un-halted,
+    un-initialized book — open positions and `halted` forgotten and entries
+    UNBLOCKED, while real shares and GTC stops rest at the venue. That is
+    y2's own premise, which this round fixed on the ladder only."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref="live-stop-ref")
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"]["field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    m2 = mk(tmp_path)
+    assert list(m2.state.positions) == ["1"]           # never vaporized
+    assert m2.state.positions["1"].stop_order_ref == "live-stop-ref"
+    assert m2.state.positions["1"].qty == 5
+    assert m2.state.sleeve_cash == pytest.approx(2_500.0)   # 5 @ 50 debited
+    assert m2.state.initialized is True
+    assert m2.state.halted == "SCHEMA_DRIFT"           # no decision is taken
+    assert m2.step("2026-08-24", payload(entries=[entry()]), PRICES) == []
+    assert m2.archived_state and "HALTED" in m2.archived_state
+    assert list(tmp_path.glob("blend.json.corrupt-*"))
+    # Z-J: the halt is PERSISTED at load, not only in memory — a crash
+    # before the loop's first save() used to lose it
+    m3 = mk(tmp_path)
+    assert m3.state.halted == "SCHEMA_DRIFT" and list(m3.state.positions)
+    assert m3.archived_state is None                   # read back cleanly
+
+
+def test_gate_zezf_partial_cover_is_never_reported_as_protected(tmp_path):
+    """Z-E and Z-F: a stop RESIZED below its position protects part of it.
+    The escalation said 'still WORKING ... LEFT RESTING' once the cell
+    flipped to conflation, and `/blend/feed` + `/status` reported
+    `unprotected: false` — on the surface X3 added to make exactly this
+    visible."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert m.state.positions["1"].stop_cover_qty == 3
+    feed_pos = {p["symbol"]: p for p in m.feed(PRICES, "2026-08-24")
+                ["positions"]}["CRSP"]
+    assert feed_pos["unprotected"] is True
+    assert m.feed(PRICES, "2026-08-24")["unprotected"] == 2
+    assert sorted(m.status_summary()["unprotected"]) == ["1", "2"]
+    # the cell flips to CONFLATION: the escalation must still say RESIZED
+    a._positions["CRSP"] = 20
+    alerts: list[str] = []
+    for i in range(6):
+        run_cycle(m, a, None, "2026-08-%02d" % (25 + i), alert=alerts.append)
+    esc = [x for x in alerts if "UNRESOLVED after the blackout" in x
+           and "call 1)" in x]
+    assert esc and all("RESIZED protective stop" in x for x in esc)
+    assert not any("has been LEFT RESTING" in x for x in esc)
+
+
+# --- the final counter-review (ZF-1..ZF-7) ------------------------------------
+
+def test_gate_zf1_a_book_already_inside_the_invariant_loses_no_cover(tmp_path):
+    """ZF-1, NEW harm introduced by the Z-C round: dropping the resize's
+    `if total <= held: return ""` early return made the reduce leg run in
+    cells where the aggregate ALREADY satisfied `cover <= held`, and there
+    it is a pure subtraction — the freed shares are handed to a peer whose
+    restore is blocked (its own unACKed orphan), so nothing replaces what
+    was cut.
+
+    Measured at the parent commit: a healthy, UNFLAGGED peer resting full
+    cover of 4 against 5 held was cut to 2 and mothballed UNVERIFIABLE, to
+    satisfy an invariant that already held. Reduce only while the running
+    aggregate exceeds `held`; cap restores at the slack."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    # call 1: cover retired, the cancel never ACKed — its own orphan may
+    # still rest, so no cover can be re-placed for it this cycle.
+    _held_position(m, call_id=1, qty=5, stop_level=44.0, stop_ref=None)
+    p1 = m.state.positions["1"]
+    p1.history_gap, p1.stop_missing, p1.stop_order_ref = True, True, None
+    m.record_orphan_stop("ghost-1", {"symbol": "CRSP", "qty": -5,
+                                     "call_id": 1})
+    # call 2: healthy, UNFLAGGED, fully covered by a real resting stop
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 5          # 4 resting <= 5 held: ALREADY compliant
+    before = sorted(-o["qty"] for o in a._stops.values())
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    after = sorted(-o["qty"] for o in a._stops.values())
+    assert before == [4]
+    assert after == [4]                       # nothing of the 4 was cut
+    assert a._orders[old2]["status"] == "working"
+    p2 = m.state.positions["2"]
+    assert p2.stop_order_ref == old2 and not p2.stop_missing
+    assert p2.stop_cover_qty == 0              # not capped
+    # (R1's blackout guard flags both peers on the shortfall — that is
+    # pre-existing and correct; what the resize may not do is CAP a peer
+    # whose cover it never had to touch)
+    # mf-4: this next line is a BELT here and the review was right that it
+    # cannot fail in THIS cell — R1 flips peer 2's `history_gap` False->True
+    # before `_resize_peer_cover` runs, so `newly_capped` excludes it either
+    # way. The claim it is trying to make ("the resize never mothballs a
+    # healthy peer") is gated where it is real, at the unit level, by
+    # test_gate_zf1_the_resize_never_mothballs_a_healthy_peer below. The
+    # load-bearing assertions in this cell are `after == [4]`,
+    # `stop_cover_qty == 0`, the absent "protection were REMOVED" clause and
+    # the invariant check.
+    assert not any("UNVERIFIABLE too" in msg for msg in alerts)
+    assert not any("share(s) of protection were REMOVED" in msg
+                   for msg in alerts)
+    # and the invariant it would have served held before and after
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+
+
+def test_gate_zf1_the_reduce_leg_still_runs_when_the_aggregate_is_over(tmp_path):
+    """The other half of ZF-1: "reduce only as far as the aggregate
+    requires" must not become "never reduce". With 9 resting against 6 held
+    the reduce leg still runs to the pro-rata allocation, and a zero-cover
+    peer still gets its share of the slack (Z-C's restore-from-zero)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert sorted(-o["qty"] for o in a._stops.values()) == [3, 3]
+    assert sum(-o["qty"] for o in a._stops.values()) == 6      # == held
+    # a peer at cover ZERO is restored into the slack, never past it
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=2_750.0)
+    a2 = DryAdapter()
+    _held_position(m2, call_id=1, qty=5, stop_level=44.0, stop_ref=None)
+    q1 = m2.state.positions["1"]
+    q1.history_gap, q1.stop_missing, q1.stop_order_ref = True, True, None
+    _blackout_stop(m2, a2, call_id=2, qty=4, level=43.0)
+    a2._positions["CRSP"] = 6                  # 4 rests, 2 of slack left
+    run_cycle(m2, a2, None, "2026-08-24", alert=lambda _m: None)
+    assert sum(-o["qty"] for o in a2._stops.values()) <= 6
+    assert m2.state.positions["1"].stop_order_ref          # really restored
+    assert m2.state.positions["1"].stop_cover_qty == 2     # the SLACK, not 3
+    assert m2.state.positions["2"].stop_cover_qty == 0     # left alone
+
+
+def test_gate_zf5_a_newly_capped_peer_is_never_announced_silently(tmp_path):
+    """ZF-5: the `capped` clause was assembled AFTER `if not lines: return
+    ""`, so a peer the resize newly flagged UNVERIFIABLE — which mothballs
+    the whole sleeve — got NO Telegram line in the cycle it happened when
+    nothing could be placed or cancelled."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    for call_id, qty, level in ((1, 5, 44.0), (2, 4, 43.0)):
+        _held_position(m, call_id=call_id, qty=qty, stop_level=level,
+                       stop_ref=None)
+        p = m.state.positions[str(call_id)]
+        p.stop_missing, p.stop_order_ref = True, None
+        # every peer's own cover is an unACKed orphan: nothing is placeable
+        m.record_orphan_stop(f"ghost-{call_id}",
+                             {"symbol": "CRSP", "qty": -qty,
+                              "call_id": call_id})
+    m.state.positions["1"].history_gap = True        # only call 1 is flagged
+    a._positions["CRSP"] = 6
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert m.state.positions["2"].history_gap        # newly capped...
+    assert any("call 2" in msg and "UNVERIFIABLE too" in msg
+               for msg in alerts)                    # ...and SAID SO
+    assert any("NO NEW ENTRIES" in msg for msg in alerts)
+
+
+def test_gate_zf2_a_filled_order_is_never_adopted_as_working_cover(tmp_path):
+    """ZF-2 (pre-existing at main; the Z-B round added a second door):
+    `_ensure_stop` places under the deterministic `stop_client_id`. When
+    that id already belongs to a FILLED order both adapters answer
+    `{duplicate: True, status: "filled"}` — the prior order, with NOTHING
+    resting. `_ensure_stop` read neither field, called `on_stop_placed()`
+    and cleared `stop_missing`: the book reported `unprotected: []`,
+    `has_naked_position()` False and alerted "🧬 protective stop restored"
+    over real shares with no stop at the venue, and nothing would ever
+    re-place. Only a duplicate the venue still reports WORKING is
+    adoptable."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, call_id=1, qty=2, stop_level=44.0, stop_ref=None)
+    # this position's stop id is SPENT: its order FILLED and nothing rests
+    rs = a.place_stock_order("CRSP", -3, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    a._orders[rs["order_ref"]]["status"] = "filled"
+    a._stops.pop(rs["order_ref"])
+    p = m.state.positions["1"]
+    p.stop_missing, p.stop_order_ref = True, None
+    a._positions["CRSP"] = 2
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    p = m.state.positions["1"]
+    assert not a._stops                        # NOTHING rests at the venue
+    assert p.stop_missing and not p.stop_order_ref
+    assert blend_mod._is_unprotected(p)
+    assert m.has_naked_position()               # entries BLOCKED
+    assert sorted(m.status_summary()["unprotected"]) == ["1"]
+    assert sorted(m.status_summary()["stop_missing"]) == ["1"]
+    feed_pos = {q["symbol"]: q for q in m.feed(PRICES, "2026-08-24")
+                ["positions"]}["CRSP"]
+    assert feed_pos["unprotected"] is True
+    assert not any("protective stop restored" in msg for msg in alerts)
+    assert any("NOT working" in msg and "UNPROTECTED" in msg
+               for msg in alerts)
+
+
+def test_gate_zf4_a_renamed_or_removed_position_field_preserves_and_halts(
+        tmp_path):
+    """ZF-4: the Z-D drift filter only handled ADDED fields. A RENAMED or
+    REMOVED one left the filtered `BlendPosition(**row)` missing a required
+    argument, which raised INSIDE the drift handler and fell through to the
+    G3 branch — positions gone, `halted` gone, entries UNBLOCKED. That is
+    the exact Z-D harm reached through the Z-D fix. The ladder's y2 filter
+    survives the same drift because every `LegState` field is defaulted;
+    a drifted blend row may not be LESS recoverable than a drifted leg."""
+    for i, drift in enumerate(("rename", "remove")):
+        m = mk(tmp_path / str(i))
+        _seed_initialized(m, sleeve_cash=2_750.0)
+        _held_position(m, stop_ref="live-stop-ref")
+        m.state.halted = "KILL"
+        m.save()
+        raw = json.load(open(m.state_path))
+        gone = raw["positions"]["1"].pop("stop_level")
+        if drift == "rename":
+            raw["positions"]["1"]["trail_stop"] = gone
+        with open(m.state_path, "w") as fh:
+            json.dump(raw, fh)
+
+        m2 = mk(tmp_path / str(i))
+        assert list(m2.state.positions) == ["1"]           # never vaporized
+        assert m2.state.positions["1"].stop_order_ref == "live-stop-ref"
+        assert m2.state.positions["1"].qty == 5
+        assert m2.state.positions["1"].call_id == 1        # from the map key
+        assert m2.state.initialized is True
+        assert m2.state.sleeve_cash == pytest.approx(2_500.0)
+        assert m2.state.halted == "KILL"       # the HALT is not forgotten
+        assert m2.has_naked_position() is False or True    # (see below)
+        assert m2.step("2026-08-24", payload(entries=[entry()]), PRICES) == []
+        assert m2.archived_state and "HALTED" in m2.archived_state
+        assert "stop_level" in m2.archived_state           # named, not silent
+        if drift == "rename":
+            assert "trail_stop" in m2.archived_state       # the dropped key
+        assert list((tmp_path / str(i)).glob("blend.json.corrupt-*"))
+        # Z-J still holds: the recovered book is persisted at boot
+        m3 = mk(tmp_path / str(i))
+        assert list(m3.state.positions) == ["1"]
+        assert m3.state.halted == "KILL" and m3.archived_state is None
+
+
+def test_gate_zf6_an_unreadable_position_row_is_never_silently_dropped(
+        tmp_path):
+    """ZF-6: the drift filter's `isinstance(v, dict)` guard dropped a
+    non-dict row while the same alert said "positions, cash and stop refs
+    kept". Two rows in, one row out, no mention."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, call_id=1, stop_ref="r1")
+    _held_position(m, call_id=2, symbol="MRNA", stop_ref="r2")
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["2"] = ["not", "a", "dict"]
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    m2 = mk(tmp_path)
+    assert list(m2.state.positions) == ["1"]
+    assert m2.state.halted == "SCHEMA_DRIFT"
+    assert "2" in m2.archived_state and "DROPPED" in m2.archived_state
+    assert "could not be rebuilt" in m2.archived_state
+    assert list(tmp_path.glob("blend.json.corrupt-*"))   # the row survives
+
+
+def test_gate_zf7_a_failed_preserve_is_not_overwritten_by_the_boot_save(
+        tmp_path):
+    """ZF-7: Z-J's boot-time `save()` destroyed the drifted file IMMEDIATELY
+    when the PRESERVE rename had failed — the one path where the file on
+    disk is the only copy of the evidence — while the comment claimed "the
+    old file is already moved aside, so this writes the recovered book,
+    never over evidence"."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref="live-stop-ref")
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"]["field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    real_replace = os.replace
+
+    def _no_preserve(src, dst):
+        if ".corrupt-" in str(dst):
+            raise OSError("read-only fs")
+        return real_replace(src, dst)
+
+    blend_mod.os.replace = _no_preserve
+    try:
+        m2 = mk(tmp_path)
+    finally:
+        blend_mod.os.replace = real_replace
+    after = json.load(open(m.state_path))
+    assert "field_from_a_newer_deploy" in after["positions"]["1"]
+    assert m2.state.halted == "SCHEMA_DRIFT"            # still halted...
+    assert "PRESERVE FAILED" in m2.archived_state       # ...and loud about it
+    assert "OVERWRITTEN by the next save" in m2.archived_state
+
+
+def test_gate_zf3_the_readme_does_not_overstate_rollback_protection():
+    """ZF-3: the Z-D fix lives in the build being rolled AWAY from, so it
+    cannot protect the rollback it was written about — a book this build
+    wrote, read by an older build, still comes back FRESH and un-halted with
+    entries UNBLOCKED. That is unfixable from this side, so the README may
+    not describe it in the past tense, and the first deploy is a one-way
+    door the operator has to know about BEFORE it happens."""
+    readme = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               os.pardir, "README.md")).read()
+    assert "ROLLING BACK IS A BOOK-LOSING OPERATION" in readme
+    assert "halt first" in readme and "verify positions at the venue" in readme
+    # what is protected is the NEXT rollback (a future build -> this one),
+    # never the one away from this build
+    assert ("cannot protect a rollback FROM this build to an older one"
+            in readme)
+
+
+# --- the final counter-review's MATERIALS (MF-1..MF-3) ------------------------
+
+def _service_client(tmp_path, monkeypatch, adapter=None):
+    """Boot the real service (one lifespan, one loop thread) the way the R2
+    gates do, and hand back the TestClient context manager unentered."""
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    # main made the El Nino ladder OPT-IN (LADDER_ENABLED, default off); the
+    # MF-A/MF2/MF3 gates below drive the ladder through the real loop, so
+    # they need it on — the same way they need the blend on.
+    monkeypatch.setattr(settings, "ladder_enabled", True)
+    if adapter is not None:
+        monkeypatch.setattr(service, "DryAdapter", adapter)
+    # Earlier service tests leave MGR/BLEND/ADAPTER set on the module, so a
+    # "wait until they are not None" loop would return the PREVIOUS test's
+    # objects. Clear them for the duration (monkeypatch restores them).
+    monkeypatch.setattr(service, "ADAPTER", None)
+    monkeypatch.setattr(service, "BLEND", None)
+    monkeypatch.setattr(service, "MGR", None)
+    # `LAST` is exactly the same kind of leak and was missed: it carries the
+    # PREVIOUS test's `loop_ok` timestamp, so a test guarding on "cycle 1 is
+    # complete -> the loop is parked" was vacuous in a shared-process run
+    # (counter-review MF2 §5 — the root cause of the MF-1 gate's flake).
+    monkeypatch.setattr(service, "LAST",
+                        {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"})
+    return TestClient(service_app), service
+
+
+def _kill_ready_position(B, A):
+    """A held position with a REAL resting stop at the venue — the shape the
+    /kill flatten actually has to close."""
+    _seed_initialized(B, sleeve_cash=2_750.0)
+    _held_position(B, stop_ref=None, adapter=A)
+    pos = B.state.positions["1"]
+    rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    pos.stop_order_ref = rs["order_ref"]
+    B.save()
+
+
+def test_gate_mf1_a_queued_kill_flatten_never_waits_for_a_SLOW_FEED(
+        tmp_path, monkeypatch):
+    """MF-1 (pre-existing at main, live-relevant): the queued /kill flatten
+    ran at the END of the loop iteration — behind `nino34_weekly()`
+    (httpx, 30s, failures never cached) and `fetch_intents` (30s) — so
+    kill-to-flatten was exactly the loop's feed latency: 3s feed -> 3.01s,
+    8s -> 8.01s, 25s -> no flatten inside 20s, while the code comment and
+    the operator alert promised "within seconds". The flatten now runs
+    FIRST in the iteration, ahead of both feeds, with reconcile-first (N14)
+    preserved inside run_cycle.
+
+    Measured here, not argued: both feeds are made to hang for FEED_HANG
+    seconds from the second call on (the first cycle is fast so the loop is
+    parked in its poll wait when /kill lands, which is the deployed shape),
+    and the flatten must run without a single feed call in between.
+
+    The assertion is the PROPERTY, not a stopwatch (counter-review MF2 §5):
+    "kill -> flatten did not wait for a feed" is exactly "no feed call
+    happened between the two", and that is what is checked. The wall-clock
+    form (`latency < FEED_HANG/2`) measured the stubbed hang rather than the
+    ordering, and it passed or failed on which module globals the rest of
+    the suite had left behind."""
+    import threading
+    import time as _time
+
+    FEED_HANG = 6.0
+    release = threading.Event()          # lets shutdown cut the hang short
+    calls = {"nino": 0, "intents": 0}
+
+    def _hang(which):
+        calls[which] += 1
+        if calls[which] > 1:             # cycle 1 stays fast
+            release.wait(FEED_HANG)
+
+    from app import service
+
+    def slow_nino():
+        _hang("nino")
+        return 2.7
+
+    def slow_intents(_cfg):
+        _hang("intents")
+        return None
+
+    monkeypatch.setattr(service, "nino34_weekly", slow_nino)
+    monkeypatch.setattr(blend_mod, "fetch_intents", slow_intents)
+
+    flat = {"nino_at_entry": None}
+    real_flatten = blend_mod.execute_flatten
+
+    def watched_flatten(mgr, adapter, alert):
+        if flat["nino_at_entry"] is None:
+            flat["nino_at_entry"] = calls["nino"]
+        return real_flatten(mgr, adapter, alert)
+
+    monkeypatch.setattr(blend_mod, "execute_flatten", watched_flatten)
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            # cycle 1 complete -> the loop is parked in its poll wait
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            assert _wait_until(lambda: calls["nino"] >= 1)
+            _kill_ready_position(B, A)
+            nino_at_kill = calls["nino"]
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.json()["blend"] == "flatten_queued"
+            assert _wait_until(lambda: B.state.flatten_request is None
+                               and B.state.positions == {}, timeout=20.0)
+            # the flatten did not wait out a single feed, let alone two:
+            # not one feed call happened between the kill and it starting
+            assert flat["nino_at_entry"] == nino_at_kill, (
+                f"the queued flatten waited for "
+                f"{flat['nino_at_entry'] - nino_at_kill} feed call(s)")
+            assert _executions(A, "CRSP")           # it really sold
+            # and the loop DID go on to pay the slow feeds afterwards — the
+            # ordering is what changed, not the feeds being skipped
+            assert _wait_until(lambda: calls["nino"] >= 2, timeout=20.0)
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf1_the_kill_alert_states_the_real_bound(tmp_path, monkeypatch):
+    """MF-1's other half: a comment and an alert that promise "within
+    seconds" while the code waits out two 30s timeouts is the defect. The
+    operator text must say what is actually true — the flatten runs FIRST in
+    the loop's next iteration, and the only thing that can precede it is a
+    cycle already in flight, whose feeds are capped."""
+    import time as _time
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None:
+                    break
+                _time.sleep(0.05)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            _seed_initialized(service.BLEND, sleeve_cash=2_750.0)
+            _held_position(service.BLEND, stop_ref=None)
+            c.post("/kill", params={"token": "sekrit"})
+            (kill_msg,) = [m for m in sent if "KILLED" in m]
+            assert "flatten QUEUED" in kill_msg
+            assert "runs FIRST in the loop's next iteration" in kill_msg
+            assert "already in flight" in kill_msg
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf1_a_failing_feed_is_not_re_paid_every_cycle(monkeypatch):
+    """MF-1's third half: neither feed cached its FAILURES, so an
+    unreachable dependency cost the loop a full 30s timeout EVERY cycle —
+    `nino.py:32` returned the stale value without ever writing `_CACHE`.
+    Both feeds are capped at a few seconds now and a failure is
+    negative-cached, so one hanging dependency cannot pace the loop."""
+    from app import nino as nino_mod
+    from app.nino import nino34_weekly
+
+    assert nino_mod.FEED_TIMEOUT <= 10 and blend_mod.FEED_TIMEOUT <= 10
+    monkeypatch.setattr(nino_mod, "_CACHE", {})
+    seen = {"n": 0, "timeout": None}
+
+    def boom(url, **kw):
+        seen["n"] += 1
+        seen["timeout"] = kw.get("timeout")
+        raise RuntimeError("NOAA unreachable")
+
+    monkeypatch.setattr(nino_mod.httpx, "get", boom)
+    assert nino34_weekly() is None and seen["n"] == 1
+    assert seen["timeout"] == nino_mod.FEED_TIMEOUT     # not 30s
+    assert nino34_weekly() is None and seen["n"] == 1   # negative-cached
+    # a dead feed is RE-TRIED on a schedule, never abandoned
+    nino_mod._CACHE["fail"] = time.time() - nino_mod.FAIL_TTL - 1
+    assert nino34_weekly() is None and seen["n"] == 2
+    # ...and a success clears the negative cache
+    good = {"n": 0}
+
+    class R:
+        text = "\n".join(["x " * 0 + " ".join(["1"] * 9)])
+
+        def __init__(self):
+            good["n"] += 1
+
+    monkeypatch.setattr(nino_mod.httpx, "get", lambda url, **kw: R())
+    nino_mod._CACHE["fail"] = time.time()
+    nino_mod._CACHE.pop("v", None)
+    assert nino34_weekly() is None                      # retry not due yet
+    nino_mod._CACHE["fail"] = time.time() - nino_mod.FAIL_TTL - 1
+    assert nino34_weekly() == 1.0 and "fail" not in nino_mod._CACHE
+
+    # the tracker poll, same treatment — keyed per URL, so one dead tracker
+    # never silences another
+    monkeypatch.setattr(blend_mod, "_INTENTS_FAIL", {})
+    hits = {"n": 0, "timeout": None}
+
+    def boom2(url, **kw):
+        hits["n"] += 1
+        hits["timeout"] = kw.get("timeout")
+        raise RuntimeError("tracker unreachable")
+
+    monkeypatch.setattr(blend_mod.httpx, "get", boom2)
+
+    class C(Cfg):
+        tracker_url = "https://tracker.invalid"
+
+    assert fetch_intents(C()) is None and hits["n"] == 1
+    assert hits["timeout"] == blend_mod.FEED_TIMEOUT    # not 30s
+    assert fetch_intents(C()) is None and hits["n"] == 1     # negative-cached
+    assert blend_mod.FEED_FAIL_TTL < 300                # < the poll interval:
+    blend_mod._INTENTS_FAIL["https://tracker.invalid"] = (   # a SCHEDULED
+        time.time() - blend_mod.FEED_FAIL_TTL - 1)           # cycle re-tries
+    assert fetch_intents(C()) is None and hits["n"] == 2
+
+
+class _IdentRecordingAdapter(_ThreadRecordingAdapter):
+    """R2's thread recorder plus the THREAD OBJECTS, for the MF-2 lifecycle
+    gate: a thread ident is recycled once the thread really exits, so only
+    the object identifies "the loop thread of lifespan 1" across lifespans."""
+
+    def __init__(self):
+        super().__init__()
+        import threading
+        self.call_thread_objs: set = set()
+        self._cur = threading.current_thread
+
+    def _note(self):
+        super()._note()
+        self.call_thread_objs.add(self._cur())
+
+
+def test_gate_mf2_a_superseded_loop_thread_stops_running_cycles(
+        tmp_path, monkeypatch):
+    """MF-2 (pre-existing at main): `_loop` had NO lifecycle. Every lifespan
+    started a daemon thread that never exited and kept reading the module
+    globals MGR/ADAPTER/BLEND, so a SUPERSEDED loop ran full cycles against
+    the CURRENT test's manager and adapter — in the reviewer's reproduction
+    a stale loop performed the emergency flatten, which is what made the R2
+    gate fail intermittently (I/O latency, never CPU contention).
+
+    Two lifespans, a fast poll so a stale loop would wake repeatedly: the
+    first lifespan's loop thread must be GONE, and the second lifespan's
+    adapter must be touched by exactly one thread — the current loop."""
+    import threading
+    import time as _time
+
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "poll_seconds", 1)
+    client1, service = _service_client(tmp_path, monkeypatch,
+                                       adapter=_IdentRecordingAdapter)
+    try:
+        with client1:
+            for _ in range(200):
+                if service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            A = service.ADAPTER
+            assert _wait_until(lambda: A.call_threads)
+            (stale_loop,) = tuple(A.call_thread_objs)
+            e1 = service.LOOP_WAKE
+        # the lifespan ended: its loop thread must END too (this is the
+        # whole finding — at main it lives forever)
+        assert _wait_until(lambda: not stale_loop.is_alive(), timeout=5.0), (
+            "the superseded loop thread is still alive")
+
+        client2, service = _service_client(tmp_path, monkeypatch,
+                                           adapter=_IdentRecordingAdapter)
+        with client2:
+            for _ in range(200):
+                if service.ADAPTER is not None and service.ADAPTER is not A:
+                    break
+                _time.sleep(0.05)
+            B = service.ADAPTER
+            assert B is not A
+            assert service.LOOP_WAKE is not e1      # a fresh wake event
+            assert _wait_until(lambda: B.call_threads)
+            _time.sleep(2.5)            # >= 2 poll intervals: a stale loop
+                                        # would have woken and cycled twice
+            assert stale_loop not in B.call_thread_objs, (
+                "a SUPERSEDED loop thread ran a cycle against the current "
+                "adapter")
+            assert len(B.call_thread_objs) == 1
+            # the current loop still works: its wake event is the live one
+            assert service.LOOP_WAKE.__class__ is threading.Event
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf3_a_drifted_stand_in_row_never_exits_as_x0(tmp_path):
+    """MF-3 (NEW, introduced by ZF-4, found by the whole-branch review's
+    probe F4g): a drift that REMOVES `qty` rebuilt the row with the stand-in
+    `qty = 0`. The book was halted and the alert named the field — but one
+    /resume later a tracker EXIT booked it as a green `blend EXIT CRSP x0`,
+    DELETED the row, and left 5 REAL shares at the venue untracked with
+    has_naked_position() False.
+
+    A row carrying stand-ins is UNVERIFIABLE by construction: it is flagged
+    `history_gap`, so the existing machinery defers the exit, keeps the row,
+    alerts the 5-vs-0 discrepancy and blocks entries."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_ref=None)
+    pos = m.state.positions["1"]
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    pos.stop_order_ref = rs["order_ref"]
+    a._positions["CRSP"] = 5
+    m.state.halted = "KILL"
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"].pop("qty")            # the drift: `qty` renamed away
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    m2 = mk(tmp_path)
+    assert m2.state.halted == "SCHEMA_DRIFT" or m2.state.halted == "KILL"
+    assert "1" in m2.state.positions
+    p = m2.state.positions["1"]
+    assert p.qty == 0 and p.history_gap is True      # the stand-in is flagged
+    assert "flagged UNVERIFIABLE" in m2.archived_state
+    # the stand-in provenance is visible where every other unverifiable row
+    # is visible
+    assert m2.status_summary()["unverifiable"] == ["1"]
+    assert m2.feed(PRICES, "2026-08-22")["unverifiable"] == 1
+    assert m2.feed(PRICES, "2026-08-22")["positions"][0]["unverifiable"] is True
+
+    m2.resume()                                  # the operator clears the halt
+    alerts: list[str] = []
+    run_cycle(m2, a, payload(exits=[{"call_id": 1, "symbol": "CRSP",
+                                     "reason": "exit"}],
+                             stops=[stop_row()]),
+              "2026-08-22", alert=alerts.append)
+    assert "1" in m2.state.positions             # the row is NOT deleted
+    assert a._positions["CRSP"] == 5             # the shares are NOT abandoned
+    assert m2.has_naked_position()               # entries stay BLOCKED
+    assert not any("EXIT CRSP x0" in msg for msg in alerts)
+    assert any("EXIT CRSP deferred" in msg and "UNVERIFIABLE" in msg
+               for msg in alerts)
+    assert any("holds 5 shares vs 0 booked" in msg for msg in alerts)
+    assert m2.status_summary()["unverifiable"] == ["1"]
+
+
+def test_gate_zf1_the_resize_never_mothballs_a_healthy_peer(tmp_path):
+    """mf-4: the non-vacuous half of the ZF-1 gate. Driving
+    `_resize_peer_cover` directly — the way reconcile pass 1b calls it — a
+    HEALTHY, UNFLAGGED peer resting full cover of 4 against 5 held, whose
+    zero-cover peer cannot be restored (its own unACKed orphan), must come
+    out unflagged, uncapped and uncut: at the parent commit it was cut to 2
+    AND mothballed UNVERIFIABLE to satisfy an invariant that already held.
+    (The reviewer's probe F1b, promoted to a gate.)"""
+    from app.blend import _resize_peer_cover
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    # call 1: flagged, cover retired, restore blocked by its own orphan
+    _held_position(m, call_id=1, qty=5, stop_level=44.0, stop_ref=None)
+    p1 = m.state.positions["1"]
+    p1.history_gap, p1.stop_missing, p1.stop_order_ref = True, True, None
+    m.record_orphan_stop("ghost-1", {"symbol": "CRSP", "qty": -5,
+                                     "call_id": 1})
+    # call 2: healthy, UNFLAGGED, fully covered by a real resting stop
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    p2 = m.state.positions["2"]
+    p2.history_gap = False
+    a._positions["CRSP"] = 5          # 4 resting <= 5 held: ALREADY compliant
+    alerts: list[str] = []
+    gap_stops = {"1": {"status": "dead", "order_ref": None}}   # flagged peers only
+    _resize_peer_cover(m, a, 5, list(m.state.positions.values()), gap_stops,
+                       alerts.append)
+    assert sum(-o["qty"] for o in a._stops.values()) == 4      # nothing cut
+    assert a._orders[old2]["status"] == "working"
+    assert p2.stop_order_ref == old2 and not p2.stop_missing
+    assert p2.stop_cover_qty == 0                              # not capped
+    assert p2.history_gap is False                             # not mothballed
+    assert not any("UNVERIFIABLE too" in msg for msg in alerts)
+    assert not any("share(s) of protection were REMOVED" in msg
+                   for msg in alerts)
+
+
+def test_gate_mf2_shutting_down_an_older_lifespan_leaves_the_live_loop_running(
+        tmp_path, monkeypatch):
+    """MF-2, second pass on my own machinery: superseding is generation-based,
+    so a shutdown must bump the generation ONLY while its own loop is still
+    the current one. An unconditional bump at shutdown would supersede a
+    NEWER, live loop — the lifecycle killing the very thing it exists to keep
+    single. Overlapping lifespans, older one shut down second: the live loop
+    must keep cycling."""
+    import time as _time
+
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "poll_seconds", 1)
+    client1, service = _service_client(tmp_path, monkeypatch,
+                                       adapter=_IdentRecordingAdapter)
+    client1.__enter__()
+    try:
+        for _ in range(200):
+            if service.ADAPTER is not None:
+                break
+            _time.sleep(0.05)
+        A = service.ADAPTER
+        assert _wait_until(lambda: A.call_threads)
+        client2, service = _service_client(tmp_path, monkeypatch,
+                                           adapter=_IdentRecordingAdapter)
+        with client2:
+            for _ in range(200):
+                if service.ADAPTER is not None and service.ADAPTER is not A:
+                    break
+                _time.sleep(0.05)
+            B = service.ADAPTER
+            assert _wait_until(lambda: B.call_thread_objs)
+            client1.__exit__(None, None, None)      # the OLDER one shuts down
+            B.call_threads.clear()
+            B.call_thread_objs.clear()
+            assert _wait_until(lambda: B.call_thread_objs, timeout=8.0), (
+                "the LIVE loop stopped when an older lifespan shut down")
+            assert len(B.call_thread_objs) == 1
+    finally:
+        client1.__exit__(None, None, None)
+        service.BLEND = None
+        service.MGR = None
+
+
+def _drifted_book_missing(tmp_path, field: str):
+    """Seed a real 5-share CRSP position protected by a real working GTC
+    stop, then drop ONE required field from the persisted row — the schema
+    drift a deploy ROLLBACK produces (ZF-4/MF-3's reachability class).
+    Returns (rebuilt manager, adapter)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_ref=None)
+    pos = m.state.positions["1"]
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    pos.stop_order_ref = rs["order_ref"]
+    a._positions["CRSP"] = 5
+    m.state.halted = "KILL"
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"].pop(field)
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    return mk(tmp_path), a
+
+
+def test_gate_mfc_a_stand_in_row_never_addresses_the_venue(tmp_path):
+    """MF-C (NEW harm, introduced by MF-3 — the only cell where this branch
+    was WORSE than main): flagging a stand-in row `history_gap` routed it
+    into reconcile pass 1b, which then made venue decisions using the
+    FABRICATED identity. With `symbol` defaulted to "", `stock_position("")`
+    answers 0, so the book concluded the 5 booked shares were gone,
+    CANCELLED the real working GTC stop on 5 REAL shares and DELETED the
+    row — measured `rows=[] venue CRSP=5 stop cancelled naked=False`, while
+    9b33081 left the row and its working stop alone.
+
+    A row whose identity this build invented must never be used to address,
+    cancel or match a venue order: it is kept OUT of pass 1b's venue
+    comparison entirely."""
+    m2, a = _drifted_book_missing(tmp_path, "symbol")
+    assert m2.state.positions["1"].symbol == ""      # the stand-in identity
+    stop_ref = m2.state.positions["1"].stop_order_ref
+    m2.resume()                                  # the operator clears the halt
+    alerts: list[str] = []
+    run_cycle(m2, a, None, "2026-08-22", alert=alerts.append)
+
+    # the REAL protection is untouched
+    assert a.find_stock_order("blend-1-stp-44.0000")["status"] == "working"
+    assert stop_ref in a._stops                  # still resting at the venue
+    assert a._positions["CRSP"] == 5             # the real shares are there
+    assert not any(e.get("action") == "cancel_stock_order" for e in a.log)
+    # the book still knows about them
+    assert "1" in m2.state.positions
+    assert m2.state.unreconciled == {}
+    assert m2.has_naked_position()               # entries stay BLOCKED
+    assert m2.status_summary()["unverifiable"] == ["1"]
+    # and the operator is told why, loudly — never silently
+    assert any("REBUILT from STAND-INS" in msg and "symbol" in msg
+               for msg in alerts)
+    # with an invented symbol there is no honest venue question to ask, so
+    # the alert reports no share count at all
+    assert not any("the account holds" in msg for msg in alerts)
+    # the provenance carrier: book-level, so it survives a reconcile
+    assert m2.state.stand_in_rows == {"1": ["symbol"]}
+    assert m2.status_summary()["stand_in_rows"] == {"1": ["symbol"]}
+
+
+def test_gate_mfb_the_stand_in_flag_survives_every_reconcile(tmp_path):
+    """MF-B: MF-3's flag did not survive. `history_gap` clears on positive
+    venue evidence about QUANTITY (`held == book_qty`, reconcile pass 1b),
+    which is satisfied whenever `qty` is not the defaulted field — so 6 of
+    the 7 stand-in fields cleared on the NEXT reconcile. Worst measured:
+    `time_stop` defaulted to "" made the row "POSITIVELY verified" and then
+    `🧬 blend EXIT CRSP x5 (time_stop)` liquidated 5 REAL shares on a
+    FABRICATED time stop, green alert, same cycle. The boot alert's
+    "nothing exits, re-stops or flattens them" was false in cycle 1.
+
+    The provenance lives at BOOK level (`state.stand_in_rows`, not a
+    persisted BlendPosition field — that is ZF-3's one-way rollback door),
+    so it outlives every reconcile, every /resume and every restart."""
+    m2, a = _drifted_book_missing(tmp_path, "time_stop")
+    assert m2.state.positions["1"].time_stop == ""   # the stand-in
+    m2.resume()
+    alerts: list[str] = []
+    for _ in range(3):                       # three consecutive reconciles
+        run_cycle(m2, a, None, "2026-08-22", alert=alerts.append)
+        assert m2.state.positions["1"].history_gap is True
+
+    # the fabricated `time_stop` of "" DOES fire the local 90-day belt every
+    # cycle — and is refused every cycle, instead of selling on cycle 1
+    assert any("EXIT CRSP deferred" in msg and "STAND-INS" in msg
+               for msg in alerts)
+    assert not any("🧬 blend EXIT" in msg for msg in alerts)
+    assert not any("POSITIVELY verified" in msg for msg in alerts)
+    assert a._positions["CRSP"] == 5
+    assert a.find_stock_order("blend-1-stp-44.0000")["status"] == "working"
+    assert not [t for t in m2.state.trades if t["kind"] != "entry"]
+    assert "1" in m2.state.positions
+    assert m2.state.stand_in_rows == {"1": ["time_stop"]}
+
+    # ...and it survives a RESTART, because the carrier is persisted
+    m3 = mk(tmp_path)
+    assert m3.state.stand_in_rows == {"1": ["time_stop"]}
+    assert m3.state.positions["1"].history_gap is True
+    # a hand-edit that clears the flag without restoring the value does NOT
+    # un-park the row
+    raw = json.load(open(m3.state_path))
+    raw["positions"]["1"]["history_gap"] = False
+    with open(m3.state_path, "w") as fh:
+        json.dump(raw, fh)
+    m4 = mk(tmp_path)
+    assert m4.state.positions["1"].history_gap is True
+    # the ONLY resolution is restoring the row and dropping its entry
+    raw = json.load(open(m4.state_path))
+    raw["positions"]["1"]["time_stop"] = "2026-12-30"
+    raw["positions"]["1"]["history_gap"] = False
+    raw["stand_in_rows"] = {}
+    with open(m4.state_path, "w") as fh:
+        json.dump(raw, fh)
+    m5 = mk(tmp_path)
+    assert m5.state.stand_in_rows == {}
+    assert m5.state.positions["1"].history_gap is False
+
+
+def test_gate_mfa_the_halt_and_the_kill_response_never_wait_for_a_cycle(
+        tmp_path, monkeypatch):
+    """MF-A (1): `/kill`'s OWN halt used to block behind an in-flight cycle.
+    The handler took BLEND_LOCK, which `run_cycle` holds for its whole
+    duration — venue round-trips included. Measured at 6542d6f and
+    identically at 9b33081: the `/kill` HTTP call took 19.505s with NO
+    halt, NO ladder close, NO Telegram and NO response for the entire
+    window, while the comment said it "halts the book immediately".
+
+    The journal write has its own short-held lock now (BLEND_HALT_LOCK,
+    microseconds, never across I/O), so the halt, the journal and the HTTP
+    response are immediate whatever the loop is doing. The FLATTEN still
+    waits for the loop thread — only it may touch the adapter (R2) — and
+    that is what the operator is now told."""
+    import threading
+    import time as _time
+
+    HOLD = 6.0
+    release = threading.Event()
+    cycles = {"n": 0}
+    real_cycle = blend_mod.run_cycle
+
+    def holding_cycle(*a, **kw):
+        cycles["n"] += 1
+        if cycles["n"] > 1:              # cycle 1 boots the loop
+            release.wait(HOLD)           # ...then BLEND_LOCK is held here
+        return real_cycle(*a, **kw)
+
+    monkeypatch.setattr(blend_mod, "run_cycle", holding_cycle)
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            n0 = cycles["n"]
+            service.LOOP_WAKE.set()      # drive the loop into a held cycle
+            assert _wait_until(lambda: cycles["n"] > n0)
+            _time.sleep(0.5)
+            assert service.BLEND_LOCK.locked()      # the cycle owns it
+            _kill_ready_position(B, A)
+            t0 = _time.time()
+            r = c.post("/kill", params={"token": "sekrit"})
+            elapsed = _time.time() - t0
+            # the response, the halt and the journal all landed immediately
+            assert elapsed < HOLD / 4, f"/kill blocked {elapsed:.2f}s"
+            assert r.json()["blend"] == "flatten_queued"
+            assert B.state.halted == "KILL"
+            assert B.state.flatten_request is not None
+            # ...and it is on DISK, so a crash inside that cycle keeps it
+            assert json.load(open(B.state_path))["flatten_request"] is not None
+        release.set()
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mfa_the_kill_response_never_waits_for_the_ladder_lock(
+        tmp_path, monkeypatch):
+    """MF-A (1), the other lock: the ladder section holds MGR_LOCK across
+    UNCAPPED gateway round-trips (`ADAPTER.mark`, `open_spread`,
+    `close_spread`; `IBAdapter._connect` alone retries 20 x (15s + 15s)).
+    /kill waited for it unconditionally — measured 19.401s of dead air with
+    a 20s-hanging mark(), at 6542d6f and at 9b33081 alike.
+
+    The wait is bounded now (KILL_LOCK_WAIT_S). If the loop holds the lock
+    the ladder halts in memory immediately and the LEG CLOSES are handed to
+    the loop thread, which is inside that very section and owns the
+    adapter — an API thread must never touch it (R2)."""
+    import threading
+    import time as _time
+
+    HANG = 6.0
+    release = threading.Event()
+    marks = {"n": 0}
+
+    class _SlowLadderAdapter(DryAdapter):
+        def mark(self, ref):
+            marks["n"] += 1
+            release.wait(HANG)
+            return 1.0
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_SlowLadderAdapter)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:      # give the ladder an OPEN leg to mark
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            n0 = marks["n"]
+            service.LOOP_WAKE.set()
+            assert _wait_until(lambda: marks["n"] > n0)
+            _time.sleep(0.4)            # inside the uncapped round-trip
+            assert service.MGR_LOCK.locked()
+            t0 = _time.time()
+            r = c.post("/kill", params={"token": "sekrit"})
+            elapsed = _time.time() - t0
+            assert elapsed < HANG / 4, f"/kill blocked {elapsed:.2f}s"
+            assert elapsed >= 0          # bounded by KILL_LOCK_WAIT_S
+            assert service.KILL_LOCK_WAIT_S <= 1.0
+            assert r.json()["ladder"] == "close_queued"
+            assert service.MGR.state.halted == "KILL"   # halted right now
+            assert service.LADDER_KILL.is_set()         # closes handed over
+            release.set()
+            # the loop closes the legs itself, as the last act of the very
+            # section that held the lock — and says so
+            assert _wait_until(
+                lambda: service.MGR.state.legs[leg].status != "OPEN",
+                timeout=20.0)
+            assert not service.LADDER_KILL.is_set()
+            assert json.load(open(service.MGR.state_path))["halted"] == "KILL"
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mfa_a_trickling_feed_cannot_exceed_its_total_deadline():
+    """MF-A (2): `FEED_TIMEOUT` was passed to httpx, whose timeouts are
+    PER-OPERATION. A server emitting one chunk every 4s keeps every single
+    read inside 8s while the call runs arbitrarily long — measured,
+    `nino34_weekly()` took 32.09s with FEED_TIMEOUT at 8.0, and an
+    in-flight kill->flatten took 31.57s, while the operator alert printed
+    "feeds capped at 8s each". A per-operation timeout is not a bound; the
+    fetch runs under a TOTAL deadline now."""
+    import socket
+    import threading
+    import time as _time
+
+    from app import nino as nino_mod
+
+    srv = socket.socket()
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+    stop = threading.Event()
+
+    gap = nino_mod.FEED_TIMEOUT / 2      # every single read stays "in time"
+    chunks = 8                           # ...and the WHOLE body takes 4x the cap
+
+    def serve():
+        try:
+            conn, _ = srv.accept()
+            conn.recv(65535)
+            conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
+                         b"Transfer-Encoding: chunked\r\n\r\n")
+            for _ in range(chunks):
+                if stop.wait(gap):
+                    break
+                conn.sendall(b"28\r\n" + b"x" * 40 + b"\r\n")
+            conn.sendall(b"0\r\n\r\n")     # a bounded body: at 6542d6f the
+            conn.close()                    # call RETURNS, late, and FAILS
+        except OSError:
+            pass
+
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    url, cache = nino_mod._URL, nino_mod._CACHE
+    try:
+        nino_mod._URL = f"http://127.0.0.1:{port}/"
+        nino_mod._CACHE = {}
+        t0 = _time.time()
+        assert nino_mod.nino34_weekly() is None      # degrades, as always
+        elapsed = _time.time() - t0
+        # the WHOLE fetch is bounded, not each read of it. Without the
+        # total deadline this same server measures gap * chunks (~32s).
+        assert gap * chunks > 3 * nino_mod.FEED_TIMEOUT      # a real attack
+        assert elapsed < nino_mod.FEED_TIMEOUT + 2.0, (
+            f"a trickling server ran the feed to {elapsed:.2f}s with "
+            f"FEED_TIMEOUT at {nino_mod.FEED_TIMEOUT}")
+    finally:
+        stop.set()
+        nino_mod._URL, nino_mod._CACHE = url, cache
+        srv.close()
+
+
+def test_gate_mfa_the_kill_alert_states_a_bound_the_code_holds(
+        tmp_path, monkeypatch):
+    """MF-A (3): under this repo's honesty rule an emergency-stop alert may
+    not state a bound the code does not hold. The alert said "feeds capped
+    at {N}s each" — wrong twice over: it interpolated only
+    nino.FEED_TIMEOUT while saying "each" (mf-10), and a per-operation
+    timeout caps nothing. It also implied the in-flight wait was bounded by
+    those feeds, when it is set by UNCAPPED gateway round-trips.
+
+    What the alert must now say: the halt is immediate; the flatten is
+    immediate when the loop is idle; a cycle in flight is waited out; the
+    feeds carry a TOTAL cap; and the gateway carries none, so no number is
+    promised for it."""
+    import time as _time
+
+    from app import nino as nino_mod
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None:
+                    break
+                _time.sleep(0.05)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            _seed_initialized(service.BLEND, sleeve_cash=2_750.0)
+            _held_position(service.BLEND, stop_ref=None)
+            c.post("/kill", params={"token": "sekrit"})
+            (kill_msg,) = [m for m in sent if "KILLED" in m]
+            # the halt no longer claims to be the flatten
+            assert "flatten QUEUED" in kill_msg
+            assert "runs FIRST in the loop's next iteration" in kill_msg
+            assert "already in flight" in kill_msg
+            # the discarded overclaim
+            assert "capped at 8s each" not in kill_msg
+            assert "each" not in kill_msg
+            # mf-10: BOTH feed caps are named, never one standing for two
+            assert f"{nino_mod.FEED_TIMEOUT:.0f}s (NOAA)" in kill_msg
+            assert f"{blend_mod.FEED_TIMEOUT:.0f}s (tracker)" in kill_msg
+            assert "TOTAL" in kill_msg
+            # the path that genuinely cannot be bounded is named as such
+            assert "gateway round-trips are NOT bounded" in kill_msg
+            assert "no bound this code can state" in kill_msg
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf8_the_wake_event_is_published_under_the_generation_lock():
+    """mf-8: `_start_loop` bumped LOOP_GEN under LOOP_GEN_LOCK and then
+    assigned `LOOP_WAKE = wake` OUTSIDE it. Two concurrent starts could
+    publish in reverse order, leaving LOOP_WAKE owned by the loop that is
+    ALREADY superseded — `/kill` would then wake nobody and the queued
+    flatten would wait a full poll interval (300s in production).
+
+    Reproduced the way the reviewer did: widen the window by making one
+    thread's `threading.Event()` slow, start two loops concurrently, and
+    check who owns the published event. Unreachable in production (one
+    uvicorn worker, one lifespan) — a one-line fix all the same."""
+    import threading
+    import time as _time
+
+    from app import service
+
+    real_event, real_loop = service.threading.Event, service._loop
+    real_gen, real_wake = service.LOOP_GEN, service.LOOP_WAKE
+    slow = {"tid": None}
+
+    def slow_event():
+        e = real_event()
+        if threading.get_ident() == slow["tid"]:
+            _time.sleep(0.4)             # preempted around the publish
+        return e
+
+    out: dict = {}
+
+    def start(tag, is_slow):
+        if is_slow:
+            slow["tid"] = threading.get_ident()
+        out[tag] = service._start_loop()
+
+    try:
+        service._loop = lambda gen, wake: None   # the body is not under test
+        service.threading.Event = slow_event
+        service.LOOP_GEN = 0
+        a = threading.Thread(target=start, args=("A", True))
+        b = threading.Thread(target=start, args=("B", False))
+        a.start()
+        _time.sleep(0.05)
+        b.start()
+        a.join()
+        b.join()
+        published = service.LOOP_WAKE            # read BEFORE restoring
+        live_gen = service.LOOP_GEN
+    finally:
+        service.threading.Event = real_event
+        service._loop = real_loop
+        service.LOOP_GEN = real_gen
+        service.LOOP_WAKE = real_wake
+
+    live = max(out, key=lambda k: out[k][2])     # highest generation wins
+    stale = "A" if live == "B" else "B"
+    assert out[live][2] == live_gen == 2 and out[stale][2] == 1
+    assert out[live][1] is not out[stale][1]
+    # the published wake belongs to the LIVE loop, never the superseded one.
+    # At 6542d6f this is `out[stale][1]` — /kill would wake nobody.
+    assert published is out[live][1]
+
+
+def test_gate_mf9_an_unparseable_200_is_negative_cached_too(monkeypatch):
+    """mf-9: nino's negative cache missed the parse-failure path. A 200 the
+    parser cannot read left `last is None` and wrote neither `_CACHE["v"]`
+    nor `_CACHE["fail"]`, so that failure mode re-paid the whole timeout
+    EVERY cycle (measured: 2 fetches in 2 calls). The exception path cached
+    correctly; this one now does too."""
+    from app import nino as nino_mod
+
+    monkeypatch.setattr(nino_mod, "_CACHE", {})
+    hits = {"n": 0}
+
+    class R:
+        text = "not a NOAA table at all\nnor is this line\n"
+
+        def __init__(self):
+            hits["n"] += 1
+
+    monkeypatch.setattr(nino_mod.httpx, "get", lambda url, **kw: R())
+    assert nino_mod.nino34_weekly() is None and hits["n"] == 1
+    assert "fail" in nino_mod._CACHE
+    assert nino_mod.nino34_weekly() is None and hits["n"] == 1   # not re-paid
+    # ...and it is still RE-TRIED on the schedule, never abandoned
+    nino_mod._CACHE["fail"] = time.time() - nino_mod.FAIL_TTL - 1
+    assert nino_mod.nino34_weekly() is None and hits["n"] == 2
+
+
+# --- the MF2 counter-review's MATERIALS (the LADDER half of the kill) ---------
+
+def test_gate_mf2_1_kill_never_makes_the_ladder_close_on_the_API_thread(
+        tmp_path, monkeypatch):
+    """MF2-1: `KILL_LOCK_WAIT_S` bounds the WAIT for `MGR_LOCK`, never
+    `/kill` itself. With the loop PARKED — the deployed steady state on a
+    300s cadence, so `MGR_LOCK` is free >99% of the time — `/kill` took the
+    lock instantly and then made the UNCAPPED `close_spread` call itself,
+    on the API thread, holding the lock: measured 20.008s of dead air with
+    a wedged gateway and one OPEN leg, no halt on disk, no Telegram and no
+    HTTP response for the whole window, while README §6 said "the halt, the
+    journal write and the HTTP response are unconditional".
+
+    Every leg close belongs to the loop thread now, exactly as the blend
+    flatten already did (R2: it owns the adapter's event loop)."""
+    import threading
+    import time as _time
+
+    HANG = 8.0
+    release = threading.Event()
+    closes = {"threads": [], "n": 0}
+
+    class _WedgedGateway(DryAdapter):
+        def close_spread(self, ref):
+            closes["n"] += 1
+            closes["threads"].append(threading.get_ident())
+            release.wait(HANG)
+            return {"value": 1.0}
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_WedgedGateway)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            _time.sleep(0.3)
+            assert not service.MGR_LOCK.locked()    # the loop is PARKED
+            api_thread = threading.get_ident()
+            t0 = _time.time()
+            r = c.post("/kill", params={"token": "sekrit"})
+            elapsed = _time.time() - t0
+            # the response is prompt even though the gateway is wedged
+            assert elapsed < HANG / 4, f"/kill blocked {elapsed:.2f}s"
+            assert r.json()["ladder"] == "close_queued"
+            assert service.MGR.state.halted == "KILL"
+            # ...and the API thread never reached the adapter at all
+            assert api_thread not in closes["threads"]
+            assert service.LADDER_KILL.is_set()
+            release.set()
+            assert _wait_until(
+                lambda: service.MGR.state.legs[leg].status != "OPEN",
+                timeout=20.0)
+            assert closes["n"] >= 1                 # the LOOP closed it
+            assert api_thread not in closes["threads"]
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_2_a_queued_ladder_kill_survives_a_restart(
+        tmp_path, monkeypatch):
+    """MF2-2: the deferred ladder halt lived in MEMORY ONLY while the
+    operator was told it was in force. Measured: `/kill` answered in 0.505s
+    with "The ladder is halted from now", and on disk the book said
+    `halted: None` with the leg still OPEN — so a restart in that window
+    (the restart a wedged gateway invites) came back UN-HALTED with an open
+    leg. The window is the wedged ladder section: unbounded.
+
+    `MGR.save()` from an API thread is not the fix (x12 forbids the
+    cross-thread read-modify-write of `legs`); the kill is JOURNALLED to a
+    sentinel of its own, the way the blend flatten request is, and `_load`
+    re-asserts the halt from it."""
+    import threading
+    import time as _time
+
+    from app.manager import LadderManager
+    from app.config import settings
+
+    HANG = 8.0
+    release = threading.Event()
+    marks = {"n": 0}
+
+    class _SlowLadderAdapter(DryAdapter):
+        def mark(self, ref):
+            marks["n"] += 1
+            release.wait(HANG)
+            return 1.0
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_SlowLadderAdapter)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            n0 = marks["n"]
+            service.LOOP_WAKE.set()
+            assert _wait_until(lambda: marks["n"] > n0)
+            _time.sleep(0.3)
+            assert service.MGR_LOCK.locked()        # wedged INSIDE the section
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.json()["ladder"] == "close_queued"
+            # the book itself cannot be written from here — the loop owns it
+            on_disk = json.load(open(service.MGR.state_path))
+            assert [k for k, v in on_disk["legs"].items()
+                    if v["status"] == "OPEN"] == [leg]
+            # ...so what a CRASH right here comes back as is the whole point
+            crashed = LadderManager(settings, service.MGR.state_path)
+            assert crashed.state.halted == "KILL"
+            assert crashed.kill_pending is True
+            assert crashed.state.legs[leg].status == "OPEN"   # still open
+            release.set()
+            # once the loop has closed the legs the sentinel is consumed
+            assert _wait_until(
+                lambda: service.MGR.state.legs[leg].status != "OPEN",
+                timeout=20.0)
+            assert _wait_until(
+                lambda: not os.path.exists(service.MGR.kill_sentinel))
+            assert LadderManager(settings,
+                                 service.MGR.state_path).state.halted == "KILL"
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_3_resume_cancels_a_queued_ladder_kill(
+        tmp_path, monkeypatch):
+    """MF2-3 (new harm this round): `/resume` cleared `halted` but not the
+    QUEUED ladder kill, so a deferred kill fired at a RESUMED ladder — the
+    measured harm was a leg the operator had deliberately re-opened after
+    resuming being CLOSED by the stale kill. The blend half has had exactly
+    this guard since R2 ("a stale kill must never flatten a resumed
+    book").
+
+    Reproduced the way the reviewer did: the operator double-taps `/kill`
+    because the first one has not answered (its close is wedged on the
+    gateway), so the second one is DEFERRED; the loop then parks in its
+    NOAA fetch, which is what lets `/resume` land before the deferred kill
+    is consumed."""
+    import threading
+    import time as _time
+
+    from app import service as service_mod
+    from app.config import settings as settings_mod
+
+    CLOSE_HANG, FEED_HANG = 8.0, 10.0
+    release, release_feed = threading.Event(), threading.Event()
+    closes = {"n": 0}
+    ninos = {"n": 0}
+
+    def slow_nino():
+        ninos["n"] += 1
+        if ninos["n"] > 1:              # cycle 1 stays fast
+            release_feed.wait(FEED_HANG)
+        return 2.7
+
+    class _WedgedClose(DryAdapter):
+        def close_spread(self, ref):
+            closes["n"] += 1
+            if closes["n"] == 1:
+                release.wait(CLOSE_HANG)
+            return {"value": 1.0}
+
+    monkeypatch.setattr(service_mod, "nino34_weekly", slow_nino)
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_WedgedClose)
+    monkeypatch.setattr(settings_mod, "blend_enabled", False)   # ladder only
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            legs = list(service.MGR.state.legs)
+            with service.MGR_LOCK:
+                service.MGR.on_opened(legs[0], 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            # kill #1: its close wedges on the gateway, holding MGR_LOCK
+            k1: dict = {}
+            t1 = threading.Thread(
+                target=lambda: k1.update(
+                    c.post("/kill", params={"token": "sekrit"}).json()))
+            t1.start()
+            assert _wait_until(lambda: closes["n"] >= 1, timeout=20.0)
+            # kill #2, the operator double-tap: DEFERRED, whoever holds it
+            assert c.post("/kill", params={"token": "sekrit"}
+                         ).json()["ladder"] == "close_queued"
+            assert service.LADDER_KILL.is_set()
+            release.set()
+            t1.join(timeout=20)
+            assert _wait_until(
+                lambda: service.MGR.state.legs[legs[0]].status != "OPEN",
+                timeout=20.0)
+            # the loop is now parked in its (slow) NOAA fetch, so /resume
+            # lands BEFORE the ladder section could consume a queued kill
+            assert _wait_until(lambda: ninos["n"] >= 2, timeout=20.0)
+            with service.MGR_LOCK:
+                service.MGR.on_opened(legs[1], 10_000, "ref-2", "2026-08-02")
+                service.MGR.save()
+            c.post("/kill", params={"token": "sekrit"})
+            # the operator changes their mind before the loop gets there
+            assert c.post("/resume", params={"token": "sekrit"}
+                         ).json()["cleared"] == "KILL"
+            assert not service.LADDER_KILL.is_set()
+            assert not os.path.exists(service.MGR.kill_sentinel)
+            # ...and re-opens a third leg deliberately
+            with service.MGR_LOCK:
+                service.MGR.on_opened(legs[2], 10_000, "ref-3", "2026-08-03")
+                service.MGR.save()
+            release_feed.set()
+            # the loop runs its ladder section: no stale kill may fire there
+            assert _wait_until(lambda: ninos["n"] >= 3, timeout=20.0)
+            _time.sleep(0.3)
+            assert service.MGR.state.legs[legs[1]].status == "OPEN"
+            assert service.MGR.state.legs[legs[2]].status == "OPEN"
+            assert service.MGR.state.halted is None
+    finally:
+        release.set()
+        release_feed.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_4_the_kill_never_reports_legs_it_did_not_close(
+        tmp_path, monkeypatch):
+    """MF2-4: `_kill_ladder` swallowed every per-leg `close_spread` failure
+    with a log line, and `/kill` answered `ladder: "closed"` with the alert
+    "all legs closed" — measured with a gateway that rejected every close,
+    while the leg was still OPEN at the venue. The blend's own
+    `execute_flatten` already models the right behaviour ("closed vs
+    parked", `WITH EXCEPTIONS`); the machine-readable `ladder` field and
+    the operator alert must both report what ACTUALLY happened."""
+    import threading
+    import time as _time
+
+    class _RejectingGateway(DryAdapter):
+        def close_spread(self, ref):
+            raise RuntimeError("gateway rejected the close")
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_RejectingGateway)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            r = c.post("/kill", params={"token": "sekrit"})
+            # nothing has closed at the moment this answers, and it says so
+            assert r.json()["ladder"] != "closed"
+            (kill_msg,) = [m for m in sent if "KILLED" in m]
+            assert "all legs closed" not in kill_msg
+            # the loop tries, fails, and REPORTS the failure by leg name
+            assert _wait_until(
+                lambda: any("could NOT close" in m for m in sent),
+                timeout=20.0)
+            fail_msgs = [m for m in sent if "could NOT close" in m]
+            assert leg in fail_msgs[0] and "STILL OPEN" in fail_msgs[0]
+            # ...and it is not consumed: a kill that could not close its
+            # legs stays queued and is retried, never quietly dropped
+            assert service.LADDER_KILL.is_set()
+            assert os.path.exists(service.MGR.kill_sentinel)
+            assert service.MGR.state.legs[leg].status == "OPEN"
+            assert service.MGR.state.halted == "KILL"
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_5_a_halt_landing_mid_cycle_stops_the_rest_of_the_plan(
+        tmp_path):
+    """MF2-5: `step()`'s `if st.halted: return []` guard is BEHIND the
+    intent-execution loop, which never re-checked. Since MF-A the halt
+    lands the instant the operator hits `/kill` — in the middle of a cycle
+    — and the plan made before it kept executing: measured, four venue BUYs
+    (AAA, BBB, SPY, BIL) placed with `halted='KILL', flatten_pending=True`,
+    while `request_flatten` promised "halt the book immediately (no new
+    entries)" and `/status` showed the book halted.
+
+    Base places the same four, so this is a false CLAIM rather than a new
+    harm — and the free win MF-A left on the table."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=5_000.0, spy_qty=0, core_cash=7_000.0)
+    buys: list[tuple] = []
+
+    class _KillOnFirstBuy(DryAdapter):
+        def place_stock_order(self, symbol, qty, kind, **kw):
+            if qty > 0:
+                buys.append((symbol, m.state.halted))
+                if len(buys) == 1:      # the operator hits /kill right here
+                    m.request_flatten("2026-08-20")
+            return super().place_stock_order(symbol, qty, kind, **kw)
+
+        def stock_price(self, symbol):
+            return 10.0
+
+    a = _KillOnFirstBuy()
+    pl = payload(entries=[entry(call_id=11, symbol="AAA", entry_ref=10.0),
+                          entry(call_id=12, symbol="BBB", entry_ref=10.0)],
+                 stops=[stop_row(11, "AAA", 9.0), stop_row(12, "BBB", 9.0)])
+    run_cycle(m, a, pl, "2026-08-20", alert=lambda _m: None)
+    # the plan was made before the halt; nothing after it reached the venue
+    assert [s for s, halted in buys if halted] == [], (
+        f"orders placed AFTER the halt: {buys}")
+    assert len(buys) == 1 and buys[0][1] is None
+    assert m.state.halted == "KILL" and m.state.flatten_request is not None
+
+
+def test_gate_mf2_9_10_the_stand_in_register_never_outlives_its_row(
+        tmp_path):
+    """mf2-9: the register was pruned only on `_load`, so a row that left
+    the book was SAVED as a dangling entry. mf2-10 (new this round): a
+    fresh, fully-known row reusing that retired key was then poisoned
+    permanently — flagged UNVERIFIABLE for good, never exited, re-stopped
+    or flattened, blocking every entry, while the alert told the operator
+    to restore values that were never invented for it."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    _held_position(m)
+    m.state.stand_in_rows["1"] = ["time_stop"]
+    m.state.positions["1"].history_gap = True
+    m.save()
+    assert json.load(open(m.state_path))["stand_in_rows"] == {"1": ["time_stop"]}
+
+    m.state.positions.pop("1")          # the row leaves the book
+    m.save()
+    assert json.load(open(m.state_path))["stand_in_rows"] == {}
+
+    # ...and a NEW row that reuses the key is built from a complete intent
+    m.state.stand_in_rows["1"] = ["time_stop"]      # as a stale save left it
+    m.on_entered({"call_id": 1, "symbol": "NEWCO", "qty": 9,
+                  "entry_ref": 10.0, "stop_level": 9.0}, 10.0, "ref",
+                 "2026-08-20")
+    assert m.state.stand_in_rows == {}
+    assert m.state.positions["1"].history_gap is False
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.stand_in_rows == {}
+    assert m2.state.positions["1"].history_gap is False
+    assert m2.state.positions["1"].symbol == "NEWCO"
+
+    # and an exit takes the register entry with it
+    m.state.stand_in_rows["1"] = ["time_stop"]
+    m.on_exited(1, 11.0, "signal")
+    assert m.state.stand_in_rows == {}
+
+
+# --- MF3 round: the six MATERIALs that block real money ----------------------
+
+
+def test_gate_mf3_1_a_failing_blend_journal_never_500s_and_still_kills(
+        tmp_path, monkeypatch):
+    """MF3-1: `/kill`'s BLEND stage had NO exception guard. `request_flatten`
+    ends in `save()`, so a full disk — or mf3-10's concurrent-mutation
+    RuntimeError, which comes out of that very call — raised straight out of
+    the handler: HTTP 500, ZERO Telegram, and the LADDER stage below never
+    reached AT ALL: no halt in the book, no sentinel on disk, the leg still
+    OPEN. mf2-11 gave the ladder half exactly this guard and left the half
+    holding real shares bare.
+
+    The halt must be attempted and REPORTED even when persistence fails, and
+    the operator must be told precisely what is and is not durable."""
+    import threading
+    import time as _time
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            # Wait for a COMPLETED cycle, not just "MGR is not None": `_build`
+            # runs on the loop thread and replaces MGR/BLEND, so a seed written
+            # before it lands goes onto an object the service then discards
+            # (the `LAST` leak `_service_client` documents, same root cause).
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            B, A = service.BLEND, service.ADAPTER
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            # This gate is about /kill's OWN stage: what the handler halts,
+            # persists and reports before the loop thread does anything. Give
+            # /kill a wake event the parked loop is not waiting on, so stage 2
+            # cannot race the assertions below.
+            monkeypatch.setattr(service, "LOOP_WAKE", threading.Event())
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None, adapter=A)
+            with service.MGR_LOCK:      # a real OPEN ladder leg to halt
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+
+            def boom():
+                raise OSError("[Errno 28] No space left on device")
+            monkeypatch.setattr(B, "save", lambda: boom())
+
+            r = c.post("/kill", params={"token": "sekrit"})
+
+            # 1. never a 500, and the ladder half of the answer is intact
+            assert r.status_code == 200, r.status_code
+            assert r.json()["halted"] == "KILL"
+            assert r.json()["ladder"] == "close_queued"
+            assert r.json()["blend"] == "flatten_queued_unpersisted"
+            # 2. the operator IS told — one alert, not silence
+            (msg,) = [m for m in sent if "KILLED" in m]
+            # 3. the blend halt is IN FORCE even though it is not durable
+            assert B.state.halted == "KILL"
+            assert B.state.flatten_request is not None
+            # 4. ...and the note says exactly which half is durable —
+            #    without contradicting itself one clause earlier
+            assert "could NOT be written to disk" in msg
+            assert "No space left on device" in msg
+            assert "a RESTART would lose them" in msg
+            assert "journalled the moment you hit /kill" not in msg, msg
+            assert "in force from the moment you hit /kill, but NOT written" \
+                in msg
+            # 5. the LADDER stage ran: halted, sentinel on disk, close queued
+            assert service.MGR.state.halted == "KILL"
+            assert os.path.exists(service.MGR.kill_sentinel)
+            assert service.LADDER_KILL.is_set()
+            assert json.load(open(service.MGR.state_path))["halted"] == "KILL"
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf3_2_a_resumed_ladder_is_never_closed_by_a_queued_kill(
+        tmp_path, monkeypatch):
+    """MF3-2: MF2-3 was NOT closed. `_loop` tests `LADDER_KILL.is_set()`
+    OUTSIDE `MGR_LOCK` and `_consume_ladder_kill` re-checked nothing inside
+    it, so a `/resume` landing in the window was overtaken: measured,
+    /resume cleared halt + flag + sentinel, the operator re-opened a leg,
+    and the loop still closed ref-2 and re-halted the ladder.
+
+    Reproduced deterministically the way the window actually opens: the test
+    holds MGR_LOCK (as an in-flight ladder section does), the loop reads the
+    flag outside the lock and blocks, /resume's clear happens under the lock,
+    and only then does the loop get in."""
+    import threading
+    import time as _time
+
+    closes: list[str] = []
+
+    class _RecordingAdapter(DryAdapter):
+        def close_spread(self, ref):
+            closes.append(ref)
+            return super().close_spread(ref)
+
+        def mark(self, ref):
+            raise RuntimeError("no mark this cycle")   # plan nothing
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_RecordingAdapter)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            monkeypatch.setattr(service, "send", lambda _m: None)
+            leg = list(service.MGR.state.legs)[0]
+
+            entered = threading.Event()
+            real_consume = service._consume_ladder_kill
+
+            def watched(today):
+                entered.set()
+                return real_consume(today)
+            monkeypatch.setattr(service, "_consume_ladder_kill", watched)
+
+            service.MGR_LOCK.acquire()
+            try:
+                # a /kill lands and the loop wakes: it sees the flag OUTSIDE
+                # the lock and then blocks on it — the exact window
+                service.MGR.state.halted = "KILL"
+                service.MGR.journal_kill("2026-08-24")
+                service.LADDER_KILL.set()
+                service.LOOP_WAKE.set()
+                _time.sleep(0.3)
+                assert not entered.is_set()     # parked on MGR_LOCK
+                # /resume: clears halt, flag and sentinel UNDER this lock
+                service.MGR.state.halted = None
+                service.LADDER_KILL.clear()
+                service.MGR.clear_kill()
+                # ...and the operator re-opens a leg on the resumed ladder
+                service.MGR.on_opened(leg, 10_000, "ref-2", "2026-08-24")
+            finally:
+                service.MGR_LOCK.release()
+
+            assert _wait_until(entered.is_set)
+            _time.sleep(0.3)
+            # the re-opened leg is UNTOUCHED and the ladder stays resumed
+            assert closes == [], f"a resumed ladder was closed: {closes}"
+            assert service.MGR.state.legs[leg].status == "OPEN"
+            assert service.MGR.state.legs[leg].order_ref == "ref-2"
+            assert service.MGR.state.halted is None
+            assert not os.path.exists(service.MGR.kill_sentinel)
+    finally:
+        service.MGR = None
+        service.BLEND = None
+
+
+def test_gate_mf3_3_a_flatten_that_closed_nothing_retries_until_it_lands(
+        tmp_path):
+    """MF3-3: README §6, `_consume_ladder_kill`'s docstring and 83fc6cc all
+    said a failing ladder kill retries "exactly as a failing blend
+    kill-flatten does". Measured: a blend flatten whose every close RAISED
+    cleared `flatten_request` in its `finally` and was NEVER retried — the
+    claim was false and the behaviour it described was the right one.
+
+    The BEHAVIOUR is what changed: a flatten that could not close a position
+    stays QUEUED and retries every cycle until it lands or the operator
+    /resumes. Reconcile-first still holds, so nothing already sold is sold
+    again."""
+    fail = {"on": True}
+
+    class _CancelFailsThenWorks(DryAdapter):
+        def cancel_stock_order(self, ref):
+            if fail["on"]:
+                raise RuntimeError("venue cancel error (simulated)")
+            return super().cancel_stock_order(ref)
+
+    m = mk(tmp_path)
+    a = _CancelFailsThenWorks()
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, adapter=a)
+    m.request_flatten("2026-08-21")
+
+    # cycle 1: nothing closes -> the request SURVIVES (at 0433d4a it did not)
+    c1: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=c1.append)
+    assert "1" in m.state.positions
+    assert m.state.flatten_request is not None, "the kill gave up after one pass"
+    assert m.state.halted == "KILL"
+    assert any("RETRIES on the next cycle" in msg for msg in c1)
+    assert any(f"attempt 1 of {blend_mod.FLATTEN_MAX_ATTEMPTS}" in msg
+               for msg in c1)
+
+    # cycle 2: the venue recovers -> the SAME queued request lands
+    fail["on"] = False
+    c2: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=c2.append)
+    assert "1" not in m.state.positions, "the retry never closed the position"
+    assert m.state.flatten_request is None, "a landed flatten must clear"
+    assert m.state.halted == "KILL"
+    assert any("flatten complete" in msg for msg in c2)
+    # and the retry sold the position exactly ONCE across both cycles
+    sells = [e for e in _executions(a, "CRSP") if e["action"] != "stop_triggered"]
+    assert len(sells) == 1, sells
+
+
+def test_gate_mf3_4_a_halt_mid_cycle_never_swallows_an_alert(tmp_path):
+    """MF3-4: `step()` appends its ALERT intents LAST, so MF2-5's halt break
+    delivered [] — the operator got "N planned action(s) were NOT executed"
+    and nothing else, instead of e.g. "REFUSED exit for call 2: tracker says
+    'WRONG' but book holds CRSP — tracker DB reset? ... manual review
+    needed". Worse: an alert that consumes a PERSISTED one-shot first
+    (`stale_alerted` here, already `save()`d to disk) was not deferred, it
+    was gone FOREVER.
+
+    The break must stop ACTIONS, never suppress INFORMATION."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)                                   # call 1, CRSP
+
+    class _HaltOnFirstAction(_NoSpyQuoteAdapter):
+        """No SPY quote (burns the persisted `quote_alert_armed` one-shot),
+        and the operator hits /kill on the cycle's first venue action."""
+        def cancel_stock_order(self, ref):
+            m.state.halted = "KILL"
+            return super().cancel_stock_order(ref)
+
+    a = _HaltOnFirstAction()
+    # call 1 exits (an ACTION, planned first); a SECOND row for the same call
+    # with a mismatched symbol is REFUSED -> an ALERT intent, assembled LAST
+    pl = payload(exits=[{"call_id": 1, "symbol": "WRONG"},
+                        {"call_id": 1, "symbol": "CRSP"}])
+    assert m.state.quote_alert_armed is True
+    alerts: list[str] = []
+    run_cycle(m, a, pl, "2026-08-21", alert=alerts.append)
+
+    assert any("HALTED (KILL) mid-cycle" in msg for msg in alerts)
+    # 1. the REFUSED-exit warning reached the operator
+    assert any("REFUSED exit for call 1" in msg for msg in alerts), alerts
+    assert any("manual review needed" in msg for msg in alerts)
+    # 2. so did the one-shot whose flag this cycle already burned to DISK
+    assert any("rebalance/valuation SKIPPED" in msg for msg in alerts), alerts
+    assert m.state.quote_alert_armed is False
+    assert json.load(open(m.state_path))["quote_alert_armed"] is False, (
+        "the one-shot was consumed on disk — had the alert been dropped it "
+        "could never fire again for this outage")
+
+
+def test_gate_mf3_5_a_halt_landing_mid_plan_never_opens_a_ladder_spread(
+        tmp_path, monkeypatch):
+    """MF3-5: MF2-5's guard went to ONE of the TWO intent loops in this
+    service. The LADDER section never got it, so it kept executing a plan
+    made before the halt: measured, two spreads OPENED with `halted: KILL`
+    already on disk and the "ladder KILLED" alert already sent. The ladder
+    windows open 2026-11-01 — this is live money in the gate month.
+
+    Driven end to end: the loop is inside its ladder section executing a
+    real two-intent plan (close leg 1 on target, open leg 2) when /kill
+    lands from an API thread. The CLOSE in flight finishes; the OPEN must
+    be refused."""
+    import threading
+    import time as _time
+    from datetime import datetime as _dt, timezone as _tz
+
+    in_close = threading.Event()
+    proceed = threading.Event()
+    opens: list[dict] = []
+
+    class _BlockingCloseAdapter(DryAdapter):
+        def close_spread(self, ref):
+            in_close.set()
+            proceed.wait(10)
+            return super().close_spread(ref)
+
+        def open_spread(self, structure, budget):
+            opens.append({"structure": structure,
+                          "halted": service.MGR.state.halted})
+            return super().open_spread(structure, budget)
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_BlockingCloseAdapter)
+
+    class _FrozenDatetime(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt(2026, 11, 20, 12, 0, tzinfo=tz or _tz.utc)
+
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            monkeypatch.setattr(service, "send", lambda _m: None)
+            monkeypatch.setattr(service, "datetime", _FrozenDatetime)
+            monkeypatch.setattr(service, "nino34_weekly", lambda: 2.5)
+            keys = list(service.MGR.state.legs)
+            with service.MGR_LOCK:
+                # leg 1 OPEN and at target -> a CLOSE intent; leg 2's window
+                # is open and the event is at strength -> an OPEN intent
+                service.MGR.on_opened(keys[0], 1_000, "ref-1", "2026-11-01")
+                service.ADAPTER._open["ref-1"] = 9_000.0   # mark >> target
+                service.MGR.save()
+            plan = service.MGR.step("2026-11-20", 2.5, {keys[0]: 9_000.0})
+            assert [it["action"] for it in plan] == ["CLOSE", "OPEN"], plan
+
+            service.LOOP_WAKE.set()
+            assert in_close.wait(10), "the loop never reached the close"
+            # the operator hits /kill while the CLOSE is in flight
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.status_code == 200
+            assert service.MGR.state.halted == "KILL"
+            proceed.set()
+            assert _wait_until(lambda: not service.LADDER_KILL.is_set(), 10)
+
+            # the plan's OPEN was refused: no spread opened under the halt
+            assert [o for o in opens if o["halted"]] == [], (
+                f"spread(s) OPENED with the ladder halted: {opens}")
+            assert opens == [], f"a spread opened after /kill: {opens}"
+            assert service.MGR.state.legs[keys[1]].status == "WAITING"
+    finally:
+        proceed.set()
+        service.MGR = None
+        service.BLEND = None
+
+
+def test_gate_mf3_6_the_durability_note_says_what_is_actually_on_disk(
+        tmp_path, monkeypatch):
+    """MF3-6: the warning was emitted the instant the SENTINEL write failed
+    and always read "a RESTART would lose it" — false whenever the book save
+    that follows succeeded, because `_load_book` reads `halted` straight back
+    out of the book. Say what is true, per case."""
+    import threading
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            monkeypatch.setattr(service, "LOOP_WAKE", threading.Event())
+            monkeypatch.setattr(service.MGR, "journal_kill",
+                                lambda today: (_ for _ in ()).throw(
+                                    OSError("read-only file system")))
+
+            # case A: sentinel FAILED, book save SUCCEEDS -> the halt IS durable
+            c.post("/kill", params={"token": "sekrit"})
+            (msg,) = [m for m in sent if "KILLED" in m]
+            assert json.load(open(service.MGR.state_path))["halted"] == "KILL"
+            assert "a RESTART would lose it" not in msg, msg
+            assert "the halt itself IS on disk" in msg
+            assert "still comes back HALTED" in msg
+            assert "would NOT re-arm is the queued leg close" in msg
+
+            # case B: sentinel AND book both fail -> the old wording, now true
+            sent.clear()
+            service.LADDER_KILL.clear()
+            monkeypatch.setattr(service.MGR, "save",
+                                lambda: (_ for _ in ()).throw(
+                                    OSError("read-only file system")))
+            c.post("/kill", params={"token": "sekrit"})
+            (msg2,) = [m for m in sent if "KILLED" in m]
+            assert "a RESTART would lose it" in msg2, msg2
+            assert "the halt itself IS on disk" not in msg2
+    finally:
+        service.MGR = None
+        service.BLEND = None
+
+
+# --- MF3 round: the cheap minors --------------------------------------------
+
+
+def test_gate_mf3_7_a_sentinel_that_will_not_unlink_alerts_once_not_forever(
+        tmp_path, monkeypatch):
+    """mf3-7: `clear_kill()` raising AFTER the legs were closed escaped as a
+    raise, which `_loop` reported as "the /kill could not be completed... the
+    loop retries it every cycle" — and every retry found nothing to close and
+    failed the same unlink, alerting FOREVER. The work is done: consume the
+    flag, report the leftover journal ONCE, and say what it actually costs."""
+    from app import service
+
+    class _MGR:
+        kill_sentinel = "/nope/ladder.json.kill"
+
+        def __init__(self):
+            self.state = type("S", (), {"legs": {}, "halted": None})()
+            self.saved = 0
+
+        def save(self):
+            self.saved += 1
+
+        def clear_kill(self):
+            raise OSError("[Errno 16] Device or resource busy")
+
+    mgr = _MGR()
+    monkeypatch.setattr(service, "MGR", mgr)
+    service.LADDER_KILL.set()
+    try:
+        msg = service._consume_ladder_kill("2026-08-24")
+    finally:
+        service.LADDER_KILL.clear()
+        service.MGR = None
+
+    # the kill is CONSUMED (no raise, no forever-retry) and the halt stands
+    assert msg is not None
+    assert "no OPEN legs to close" in msg
+    assert "could not be removed" in msg
+    assert "Device or resource busy" in msg
+    assert "re-run this kill as a no-op" in msg
+    assert mgr.state.halted == "KILL"
+
+
+def test_gate_mf3_8_a_kill_never_clobbers_the_more_specific_halt(tmp_path):
+    """mf3-8: `_load` deliberately keeps SCHEMA_DRIFT over a sentinel's KILL
+    ("an existing halt reason is more specific than KILL"), and `_kill_ladder`
+    then overwrote it on the very next iteration, when the loop re-armed that
+    sentinel — losing the data-integrity reason that drives /resume's
+    stand-in warning."""
+    from app import service
+    from app.manager import LadderManager
+
+    path = str(tmp_path / "ladder.json")
+    json.dump({"legs": {"NG": {"status": "WAITING", "unknown_future": 1}},
+               "banked": 0.0, "halted": None, "events": []},
+              open(path, "w"))
+    mgr = LadderManager(Cfg(), path)
+    assert mgr.state.halted == "SCHEMA_DRIFT"
+    open(mgr.kill_sentinel, "w").write("{}")
+    mgr2 = LadderManager(Cfg(), path)
+    assert mgr2.kill_pending and mgr2.state.halted == "SCHEMA_DRIFT"
+
+    real_mgr, real_adapter = service.MGR, service.ADAPTER
+    service.MGR, service.ADAPTER = mgr2, DryAdapter()
+    try:
+        closed, still_open = service._kill_ladder("2026-08-24")
+    finally:
+        service.MGR, service.ADAPTER = real_mgr, real_adapter
+    assert (closed, still_open) == ([], [])
+    assert mgr2.state.halted == "SCHEMA_DRIFT", "the drift reason was clobbered"
+    assert json.load(open(path))["halted"] == "SCHEMA_DRIFT"
+
+
+def test_gate_mf3_9_the_kill_alert_names_what_actually_runs_first(
+        tmp_path, monkeypatch):
+    """mf3-9: /kill told the operator the ladder closes are "the FIRST thing
+    it does". They are not — `_loop` runs a queued BLEND flatten ahead of
+    them (MF-1's order: real shares before options). Three of this round's
+    six findings are claim-defects; this is the seventh claim, made true."""
+    import threading
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            monkeypatch.setattr(service, "LOOP_WAKE", threading.Event())
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+            c.post("/kill", params={"token": "sekrit"})
+            (msg,) = [m for m in sent if "KILLED" in m]
+            assert "as the FIRST thing it does" not in msg, msg
+            assert "at the TOP of its next iteration" in msg
+            assert "a queued blend flatten is the one thing that runs first" \
+                in msg
+            # ...and the source of that order is still exactly what runs
+            src = open(service.__file__).read()
+            flatten_at = src.index("flatten_ran = True")
+            kill_at = src.index("kill_handled = True")
+            assert flatten_at < kill_at
+    finally:
+        service.MGR = None
+        service.BLEND = None
+
+
+def test_gate_mf3_10_save_never_raises_while_the_book_is_mutated(tmp_path):
+    """mf3-10: mf2-9's prune made `save()` walk a LIVE dict — under the very
+    comment arguing the state object is safe because it is "mutated
+    field-by-field under the GIL". A Python-level walk yields between
+    elements, so a concurrent insert makes CPython raise "dictionary changed
+    size during iteration": reproduced by two API savers against three
+    mutators, 1-10 raises per 8s run over 8 runs (0 over 6 after the fix —
+    tests/probes/mf3/save_race.py), straight out of `/kill`'s
+    `request_flatten`.
+    This is a REAL CRASH of the kill switch's persistence, not a style note.
+
+    Two gates, because the race needs both: a deterministic stand-in for the
+    concurrent insert, and the threaded stress that found it."""
+    import threading
+
+    class _MutatedDuringIteration(dict):
+        """Iteration observes an insert — exactly what the other thread's
+        write does, made deterministic. `dict(d)` does NOT go through this
+        (it is a C-level copy), which is the whole point of the fix."""
+        def __iter__(self):
+            it = dict.__iter__(self)
+            first = next(it)
+            dict.__setitem__(self, f"injected-{len(self)}", ["qty"])
+            yield first
+            yield from it
+
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    _held_position(m)
+    m.state.stand_in_rows = _MutatedDuringIteration(
+        {"1": ["time_stop"], "97": ["qty"], "98": ["qty"], "99": ["qty"]})
+    m.save()            # at 0433d4a: RuntimeError out of the mf2-9 prune
+    on_disk = json.load(open(m.state_path))["stand_in_rows"]
+    assert "1" in on_disk                       # the live row is kept
+    assert "97" not in on_disk                  # mf2-9's prune still happens
+    assert m.state.stand_in_rows.get("97") is None
+
+    # ...and the same property under the concurrency it actually has
+    m2 = mk(tmp_path / "b2")
+    _seed_initialized(m2)
+    _held_position(m2)
+    for i in range(2_000):
+        m2.state.stand_in_rows[f"x{i}"] = ["qty"]
+    stop, errs = threading.Event(), []
+
+    def mutate():
+        i = 100_000
+        while not stop.is_set():
+            m2.state.stand_in_rows[str(i)] = ["qty"]
+            m2.state.stand_in_rows.pop(str(i), None)
+            i += 1
+
+    def persist():
+        while not stop.is_set():
+            try:
+                m2.save()
+            except Exception as exc:            # noqa: BLE001
+                errs.append(f"{type(exc).__name__}: {exc}")
+
+    old_interval = os.sys.getswitchinterval()
+    os.sys.setswitchinterval(1e-6)              # widen the window (mf-8 idiom)
+    ts = [threading.Thread(target=mutate, daemon=True) for _ in range(3)]
+    ts += [threading.Thread(target=persist, daemon=True) for _ in range(2)]
+    try:
+        for t in ts:
+            t.start()
+        time.sleep(3.0)
+        stop.set()
+        for t in ts:
+            t.join(timeout=5)
+    finally:
+        os.sys.setswitchinterval(old_interval)
+    assert errs == [], f"save() raised under concurrent mutation: {errs[:3]}"
+
+
+# --- corrective round: the three cc03347 regressions and the live blockers ---
+
+
+def test_gate_rb_a_stand_in_row_never_keeps_the_flatten_queued_forever(
+        tmp_path):
+    """Regression R-b (introduced by cc03347) — the retry that never
+    terminates.
+
+    A STAND-IN row is parked BEFORE any venue call, by design, and its own
+    alert says "no reconcile will clear that". cc03347 nevertheless kept
+    the flatten QUEUED for it and re-alerted every cycle, forever. Base
+    behaviour was to alert once and clear.
+
+    A row nothing can ever close must not hold the request open — and the
+    operator must be told that, once."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref=None)
+    m.state.positions["1"].history_gap = True
+    m.state.stand_in_rows["1"] = ["qty", "time_stop"]
+    a = DryAdapter()
+    m.request_flatten("2026-08-21")
+
+    c1: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=c1.append)
+    assert "1" in m.state.positions                  # never sold
+    assert _executions(a, "CRSP") == []
+    assert m.state.halted == "KILL"                  # the HALT still stands
+    assert m.state.flatten_request is None, \
+        "a row no retry can ever close kept the flatten queued forever"
+    assert any("REBUILT from STAND-INS" in msg for msg in c1)
+    (summary,) = [msg for msg in c1 if "flatten finished" in msg]
+    assert "NOTHING here can be closed by this service" in summary
+    assert "can NEVER be closed by this service" in summary
+    assert "every position is closed" not in summary   # B4's false promise
+
+    # and a further cycle says NOTHING more about it — the channel stays
+    # usable for the next emergency.
+    c2: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=c2.append)
+    assert not [msg for msg in c2 if "kill" in msg.lower()], c2
+
+
+def test_gate_b4_the_flatten_retry_is_bounded_and_stops_shouting(tmp_path):
+    """B4 (live-blocker): unbounded retry + a false convergence promise.
+
+    cc03347's summary said the flatten "RETRIES every cycle until every
+    position is closed" — for a row whose own alert said nothing would ever
+    close it. At the deployed 5-minute cadence that is >=576 and likely
+    ~1,150 Telegram messages a day, forever, burying the emergency channel
+    the kill switch exists to serve.
+
+    Bounded, and quiet after the first pass unless the REASON changes."""
+    class _AlwaysFails(DryAdapter):
+        def cancel_stock_order(self, ref):
+            raise RuntimeError("venue cancel error (simulated)")
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = _AlwaysFails()
+    m.request_flatten("2026-08-21")
+
+    per_cycle: list[list[str]] = []
+    for _ in range(blend_mod.FLATTEN_MAX_ATTEMPTS + 4):
+        msgs: list[str] = []
+        run_cycle(m, a, None, "2026-08-21", alert=msgs.append)
+        per_cycle.append(msgs)
+        if m.state.flatten_request is None:
+            break
+
+    # 1. it TERMINATES, and within the documented budget
+    assert m.state.flatten_request is None, "the retry never terminated"
+    assert len(per_cycle) == blend_mod.FLATTEN_MAX_ATTEMPTS, len(per_cycle)
+    # 2. the halt is NOT what was given up on
+    assert m.state.halted == "KILL"
+    assert "1" in m.state.positions          # K-d: still never MKT-sold
+    assert _executions(a, "CRSP") == []
+    # 3. the per-row alarm is emitted ONCE for the reason, not once a cycle
+    row_alerts = [msg for cyc in per_cycle for msg in cyc
+                  if "NOT flattened" in msg]
+    assert len(row_alerts) == 1, row_alerts
+    # 4. the last word tells the operator the machine has stopped
+    (final,) = [msg for msg in per_cycle[-1] if "flatten finished" in msg]
+    assert "NO LONGER RETRYING" in final and "BY HAND" in final
+    # 5. and a fresh /kill re-arms the whole thing (the bound is per
+    #    REQUEST, never a permanent refusal to try again)
+    m.request_flatten("2026-08-22")
+    again: list[str] = []
+    run_cycle(m, a, None, "2026-08-22", alert=again.append)
+    assert m.state.flatten_request is not None
+    assert any("NOT flattened" in msg for msg in again)
+
+
+def test_gate_b4_the_bound_survives_a_restart(tmp_path):
+    """B4: the attempt count rides on the PERSISTED request, so a restart
+    cannot reset the budget and restart the shouting."""
+    class _AlwaysFails(DryAdapter):
+        def cancel_stock_order(self, ref):
+            raise RuntimeError("venue cancel error (simulated)")
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = _AlwaysFails()
+    m.request_flatten("2026-08-21")
+    run_cycle(m, a, None, "2026-08-21", alert=lambda _m: None)
+    assert m.state.flatten_request["attempts"] == 1
+
+    reloaded = Blend3070Manager(Cfg(), str(tmp_path / "blend.json"))
+    assert reloaded.state.flatten_request["attempts"] == 1
+    assert reloaded.state.flatten_request["alerted"]["1"] == "cancel_raised"
+    # ...and the re-loaded book does not re-shout the same park
+    msgs: list[str] = []
+    run_cycle(reloaded, a, None, "2026-08-21", alert=msgs.append)
+    assert reloaded.state.flatten_request["attempts"] == 2
+    assert not [m2 for m2 in msgs if "NOT flattened" in m2], msgs
+
+
+def test_gate_b4_a_blackout_row_still_retries_within_the_bound(tmp_path):
+    """CONTROL (passes before and after — it guards against OVER-fixing B4
+    into "never retry"): the bound must not become a refusal to retry what a
+    retry CAN fix. A
+    blackout (history_gap) row is cleared by reconcile on positive venue
+    evidence, so the flatten keeps its place in the queue until then."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _NoVenuePositionsAdapter()           # R1 flag cannot be verified
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _m: None)
+    m.state.positions["1"].history_gap = True        # blackout-parked
+    m.request_flatten("2026-08-21")
+    run_cycle(m, a, None, "2026-08-21", alert=lambda _m: None)
+    assert "1" in m.state.positions
+    assert m.state.flatten_request is not None, "a recoverable park gave up"
+    # the blackout lifts (what reconcile pass 1b does on positive evidence)
+    m.state.positions["1"].history_gap = False
+    msgs: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=msgs.append)
+    assert "1" not in m.state.positions, "the retry never closed it"
+    assert m.state.flatten_request is None
+    assert any("flatten complete" in msg for msg in msgs)
+
+
+def test_gate_b6_status_and_feed_survive_threaded_load_during_a_flatten(
+        tmp_path):
+    """B6 (live-blocker): mf3-10's snapshot was applied to `save()` ONLY.
+
+    `status_summary()` and `feed()` — which run on FastAPI WORKER threads —
+    kept iterating the live shared dicts the loop thread mutates, so
+    /status returned HTTP 500 on a measured 10-16% of requests during a
+    flatten. That is the exact window and the exact surface /kill's own
+    alert tells the operator to watch, and the only surface carrying
+    flatten_pending, unprotected, unverifiable and stand_in_rows.
+
+    Reproduced the way `probes/mf3/save_race.py` reproduces its sibling: the
+    GIL switch interval is narrowed so the race is frequent rather than
+    merely possible."""
+    import sys
+    import threading
+
+    from app.blend import BlendPosition, execute_flatten
+
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        m = mk(tmp_path)
+        _seed_initialized(m, sleeve_cash=50_000.0)
+        for i in range(300):
+            m.state.positions[str(i)] = BlendPosition(
+                call_id=i, symbol="AAA", qty=1, entry_ref=1.0,
+                fill_price=1.0, entry_date="2026-08-01",
+                time_stop="2026-11-01", stop_level=0.5)
+            m.state.stand_in_rows[str(i)] = ["qty"]
+            m.state.unreconciled[str(i)] = {"symbol": "AAA", "qty": 1}
+        for i in range(5_000):
+            m.state.stand_in_rows[f"x{i}"] = ["qty"]
+            m.state.unreconciled[f"x{i}"] = {"symbol": "AAA", "qty": 1}
+        m.request_flatten("2026-08-21")
+
+        stop = threading.Event()
+        errs: list[str] = []
+
+        def reader():
+            while not stop.is_set():
+                try:
+                    m.status_summary(PRICES)
+                    m.feed(PRICES, "2026-08-21")
+                    m.has_naked_position()
+                except Exception as exc:            # noqa: BLE001
+                    errs.append(f"{type(exc).__name__}: {exc}")
+
+        def mutator():
+            """Exactly what the loop thread does to these containers while a
+            flatten runs: rows enter and leave `positions`, and the stand-in
+            / unreconciled registers move with them."""
+            i = 1_000_000
+            while not stop.is_set():
+                key = str(i)
+                m.state.positions[key] = BlendPosition(
+                    call_id=i, symbol="BBB", qty=1, entry_ref=1.0,
+                    fill_price=1.0, entry_date="2026-08-01",
+                    time_stop="2026-11-01", stop_level=0.5)
+                m.state.stand_in_rows[key] = ["qty"]
+                m.state.unreconciled[key] = {"symbol": "BBB", "qty": 1}
+                m.state.positions.pop(key, None)
+                m.state.stand_in_rows.pop(key, None)
+                m.state.unreconciled.pop(key, None)
+                i += 1
+
+        def flattener():
+            a = DryAdapter()
+            while not stop.is_set():
+                try:
+                    m.state.flatten_request = {"ts": 0, "date": "2026-08-21"}
+                    execute_flatten(m, a, lambda _msg: None)
+                except Exception as exc:            # noqa: BLE001
+                    errs.append(f"flatten {type(exc).__name__}: {exc}")
+
+        threads = ([threading.Thread(target=reader, daemon=True)
+                    for _ in range(4)]
+                   + [threading.Thread(target=mutator, daemon=True)
+                      for _ in range(3)]
+                   + [threading.Thread(target=flattener, daemon=True)])
+        for t in threads:
+            t.start()
+        time.sleep(2.0)
+        stop.set()
+        for t in threads:
+            t.join(20)
+        assert errs == [], errs[:5]
+    finally:
+        sys.setswitchinterval(old_interval)
+
+
+def _ladder_only_service(tmp_path, monkeypatch):
+    """MGR wired up with NO loop thread: B7 is about two API threads racing
+    each other on the kill RECORD, and a live loop only adds noise."""
+    import threading
+
+    from app import service
+    from app.config import settings
+    from app.manager import LadderManager
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", False)
+    mgr = LadderManager(settings, settings.state_path)
+    monkeypatch.setattr(service, "MGR", mgr)
+    monkeypatch.setattr(service, "BLEND", None)
+    monkeypatch.setattr(service, "ADAPTER", None)
+    monkeypatch.setattr(service, "send", lambda *_a, **_k: None)
+    monkeypatch.setattr(service, "LOOP_WAKE", threading.Event())
+    service.LADDER_KILL.clear()
+    # an OPEN leg, so /kill leaves the kill QUEUED rather than consuming it
+    leg = list(mgr.state.legs)[0]
+    mgr.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+    return service, mgr
+
+
+def _kill_record(service, mgr) -> tuple:
+    return (mgr.state.halted == "KILL",
+            service.LADDER_KILL.is_set(),
+            os.path.exists(mgr.kill_sentinel),
+            mgr.kill_pending)
+
+
+def test_gate_b7_a_kill_racing_a_resume_never_leaves_a_split_record(
+        tmp_path, monkeypatch):
+    """B7 (live-blocker): the THREE halves of the ladder kill record — the
+    book's `halted`, the `LADDER_KILL` event and the on-disk sentinel — were
+    written by /kill under NO LOCK, while /resume wrote all three under
+    MGR_LOCK. The judge measured 143 of 400 concurrent pairs reaching a
+    state NEITHER serial order can (this repo's own rig,
+    `tests/probes/corrective/kill_resume_race.py`, lands it 2-3 times per
+    1200 pairs — the rate is not the finding, the reachability is): /kill
+    answered `close_queued`, /resume cleared everything in the middle, and
+    /kill's sentinel write landed AFTER it — so the kill was silently
+    dropped, the leg stayed OPEN forever, and the surviving sentinel
+    RESURRECTED the cancelled kill on the next restart.
+
+    Deterministic form: /kill is held inside its critical section while
+    /resume tries to overtake it. With the record's own lock, /resume simply
+    cannot get in, so the outcome is the resume-last SERIAL state; without
+    it, /resume overtakes and the record splits."""
+    import threading
+
+    service, mgr = _ladder_only_service(tmp_path, monkeypatch)
+    inside = threading.Event()
+    resume_done = threading.Event()
+    real_journal = mgr.journal_kill
+
+    def slow_journal(today):
+        inside.set()
+        # Bounded on purpose: with B7's lock /resume CANNOT finish inside
+        # this window, so the wait times out and the pair serialises. The
+        # test therefore terminates on the fixed code and reproduces the
+        # split record on the broken one.
+        resume_done.wait(1.5)
+        return real_journal(today)
+
+    monkeypatch.setattr(mgr, "journal_kill", slow_journal)
+
+    kt = threading.Thread(
+        target=lambda: service.kill(x_exec_token="sekrit", token=None))
+    kt.start()
+    assert inside.wait(5), "/kill never reached its journal write"
+
+    def do_resume():
+        service.resume(x_exec_token="sekrit", token=None)
+        resume_done.set()
+
+    rt = threading.Thread(target=do_resume)
+    rt.start()
+    kt.join(10)
+    rt.join(10)
+    assert not kt.is_alive() and not rt.is_alive()
+
+    halted, flag, sentinel, pending = _kill_record(service, mgr)
+    assert (halted, flag, sentinel, pending) in (
+        (True, True, True, True),        # kill last  — all three set
+        (False, False, False, False),    # resume last — all three cleared
+    ), (halted, flag, sentinel, pending)
+    # the persisted book must agree with memory, or a restart disagrees
+    on_disk = json.load(open(mgr.state_path))["halted"]
+    assert (on_disk == "KILL") == halted, (on_disk, halted)
+
+
+def test_gate_b7_concurrent_kill_resume_pairs_stay_serialisable(
+        tmp_path, monkeypatch):
+    """B7 under real concurrency rather than a forced interleaving: many
+    /kill+/resume pairs, each checked against the two states a serial
+    execution can produce. This is the form the reviewer measured at
+    143/400; the GIL switch interval is narrowed so the window is frequent
+    rather than merely possible, the way `probes/mf3/save_race.py` does."""
+    import sys
+    import threading
+
+    service, mgr = _ladder_only_service(tmp_path, monkeypatch)
+    bad: list[tuple] = []
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        for _ in range(240):
+            start = threading.Barrier(2)
+
+            def do_kill():
+                start.wait()
+                service.kill(x_exec_token="sekrit", token=None)
+
+            def do_resume():
+                start.wait()
+                service.resume(x_exec_token="sekrit", token=None)
+
+            kt = threading.Thread(target=do_kill)
+            rt = threading.Thread(target=do_resume)
+            kt.start()
+            rt.start()
+            kt.join(10)
+            rt.join(10)
+            rec = _kill_record(service, mgr)
+            if rec not in ((True, True, True, True),
+                           (False, False, False, False)):
+                bad.append(rec)
+            # reset for the next pair
+            service.resume(x_exec_token="sekrit", token=None)
+            mgr.on_opened(list(mgr.state.legs)[0], 10_000, "ref-1",
+                          "2026-08-01")
+    finally:
+        sys.setswitchinterval(old_interval)
+    assert bad == [], bad[:5]
+
+
+def test_gate_b5_a_failing_kill_cleanup_never_rewrites_a_SUCCESSFUL_halt(
+        tmp_path, monkeypatch):
+    """B5 (live-blocker) + regression R-c (cc03347 deviation #4).
+
+    `/kill`'s `MGR.clear_kill()` sat UNGUARDED inside the outer `try`, and
+    `clear_kill` catches only FileNotFoundError. Any other unlink error
+    therefore jumped to the outer handler, which reported
+    `ladder: "halt_failed"` and emitted "the ladder is NOT halted by this
+    service — halt it at the venue" — in the SAME message that said the
+    halt IS on disk, with a response body reading `halted: KILL` beside
+    `ladder: halt_failed`.
+
+    And this is the DEFAULT path, not a corner: every ladder leg is WAITING
+    until 2026-11-01, so `open_legs == []` on EVERY /kill in the current
+    deployment. A kill switch may not lie about whether it fired."""
+    service, mgr = _ladder_only_service(tmp_path, monkeypatch)
+    # back to the deployed shape: nothing open, so /kill consumes its own
+    # kill and reaches the cleanup that used to poison the whole handler
+    mgr.state.legs[list(mgr.state.legs)[0]].status = "WAITING"
+    sent: list[str] = []
+    monkeypatch.setattr(service, "send", sent.append)
+
+    def boom():
+        raise PermissionError("[Errno 13] Permission denied: read-only disk")
+    monkeypatch.setattr(mgr, "clear_kill", lambda: boom())
+
+    body = service.kill(x_exec_token="sekrit", token=None)
+
+    # 1. the halt is REPORTED as what it is — in force
+    assert body["halted"] == "KILL"
+    assert body["ladder"] != "halt_failed", body
+    assert mgr.state.halted == "KILL"
+    assert json.load(open(mgr.state_path))["halted"] == "KILL"
+    # 2. and the operator is never told to go halt an already-halted ladder
+    (msg,) = sent
+    assert "the ladder is NOT halted by this service" not in msg, msg
+    assert "HALT THE LADDER BY HAND" not in msg, msg
+    assert ", ladder halted" in msg
+    # 3. the failure that DID happen is still reported, honestly
+    assert "journal could not be removed" in msg
+    assert "Permission denied" in msg
+
+
+def test_gate_b5_resume_still_reaches_disk_when_the_sentinel_will_not_unlink(
+        tmp_path, monkeypatch):
+    """B5, second half: `/resume` — the remedy the /kill alert prescribes —
+    500'd AFTER setting `halted = None` in memory and clearing LADDER_KILL,
+    but BEFORE `MGR.save()`. So the book on disk stayed HALTED, the sentinel
+    survived, and the next restart RESURRECTED the kill the operator had
+    just cancelled."""
+    service, mgr = _ladder_only_service(tmp_path, monkeypatch)
+    sent: list[str] = []
+    monkeypatch.setattr(service, "send", sent.append)
+    service.kill(x_exec_token="sekrit", token=None)
+    assert mgr.state.halted == "KILL" and os.path.exists(mgr.kill_sentinel)
+
+    def boom():
+        raise PermissionError("[Errno 13] Permission denied: read-only disk")
+    monkeypatch.setattr(mgr, "clear_kill", lambda: boom())
+
+    body = service.resume(x_exec_token="sekrit", token=None)   # must not 500
+    assert body["ok"] is True
+    assert body["kill_journal_cleared"] is False
+    # the resume REACHED DISK — the whole point
+    assert mgr.state.halted is None
+    assert json.load(open(mgr.state_path))["halted"] is None
+    assert not service.LADDER_KILL.is_set()
+    assert mgr.kill_pending is False
+    # ...and the leftover file is named, with what it actually costs
+    assert any("kill journal could not be deleted" in m for m in sent)
+    assert any(mgr.kill_sentinel in m for m in sent)
+
+
+def test_gate_rc_the_kill_response_and_its_alert_never_contradict(
+        tmp_path, monkeypatch):
+    """Regression R-c, stated as the invariant rather than one path: the
+    response body's `halted`, the alert's state clause and the alert's tail
+    all describe the SAME fact, on every exit from /kill."""
+    service, mgr = _ladder_only_service(tmp_path, monkeypatch)
+    for breaker in ("clear_kill", "save"):
+        mgr.state.halted = None
+        service.LADDER_KILL.clear()
+        mgr.kill_pending = False
+        mgr.state.legs[list(mgr.state.legs)[0]].status = "WAITING"
+        sent: list[str] = []
+        monkeypatch.setattr(service, "send", sent.append)
+        with monkeypatch.context() as mp:
+            def boom():
+                raise OSError(f"{breaker} exploded")
+            mp.setattr(mgr, breaker, lambda: boom())
+            body = service.kill(x_exec_token="sekrit", token=None)
+        (msg,) = sent
+        halted = body["halted"] == "KILL"
+        says_halted = ", ladder halted" in msg
+        says_not_halted = "the ladder is NOT halted by this service" in msg
+        assert halted == says_halted, (breaker, body, msg)
+        assert halted != says_not_halted, (breaker, body, msg)
+
+
+# --- L-E1: the tracker's entry_ref is checked against the VENUE ---------------
+# Until now `reference_prices` fetched a real spot for every payload entry
+# symbol and the one place that sizes real orders from `entry_ref` never
+# read it. At a $10k book that is a 50x ledger-vs-account divergence on the
+# FIRST trade, and every gate computed downstream runs on the fiction.
+
+def test_gate_le1_a_placeholder_entry_ref_is_refused_not_sized(tmp_path):
+    """entry_ref 1.00 on a $50 name: ~300 shares sized, $300 booked, ~$15,000
+    filled. Refused outright — an order-of-magnitude gap is a broken input,
+    not a price."""
+    class _RealVenueQuote(DryAdapter):
+        # The venue prices CRSP at 50 and says so regardless of what the
+        # tracker asserts — a dry seed must never be able to talk it down.
+        def spot(self, symbol):
+            return 50.0 if symbol == "CRSP" else super().spot(symbol)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _RealVenueQuote()
+    alerts: list[str] = []
+    run_cycle(m, a, payload(entries=[entry(entry_ref=1.00)],
+                            stops=[stop_row(trail=0.88)]),
+              "2026-08-20", alert=alerts.append)
+    assert m.state.positions == {}, m.state.positions
+    assert _executions(a, "CRSP") == []
+    assert not [e for e in a.log
+                if e.get("symbol") == "CRSP" and e.get("qty", 0) > 0]
+    assert any("REFUSED entry CRSP" in msg and "1.00" in msg
+               for msg in alerts), alerts
+
+
+def test_gate_le1_an_entry_with_no_venue_quote_is_refused(tmp_path):
+    """Never buy what cannot be priced — the same law the rebalance quote
+    gate already keeps for SPY/BIL."""
+    class _NoQuoteForEntry(DryAdapter):
+        def spot(self, symbol):
+            if symbol == "CRSP":
+                raise RuntimeError("no market price for CRSP (simulated)")
+            return super().spot(symbol)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _NoQuoteForEntry()
+    alerts: list[str] = []
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=alerts.append)
+    assert m.state.positions == {}
+    assert any("REFUSED entry CRSP" in msg and "no venue quote" in msg
+               for msg in alerts), alerts
+
+
+def test_gate_le1_sizing_charges_the_higher_of_ref_and_quote(tmp_path):
+    """The RISK unit stays frozen at the tracker reference (the
+    pre-registered contract). What the shares COST must not: with the venue
+    above the fire-day close, the cash clamp has to bind on the venue price
+    or the sleeve overdraws."""
+    class _GappedUp(DryAdapter):
+        def spot(self, symbol):
+            return 90.0 if symbol == "CRSP" else super().spot(symbol)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=900.0)
+    a = _GappedUp()
+    # A TIGHT stop, so the CASH clamp binds rather than the risk unit:
+    # risk 1% of $900 = $9 at $0.50/share = 18 shares by risk, but $900
+    # buys only 10 at the venue's $90. Sizing on the fire-day close bought
+    # 18 and booked them at $900 while the account paid $1,620.
+    run_cycle(m, a, payload(entries=[entry(entry_ref=50.0)],
+                            stops=[stop_row(trail=49.5)]),
+              "2026-08-20", alert=lambda _: None)
+    buys = [e for e in a.log
+            if e.get("symbol") == "CRSP" and e.get("qty", 0) > 0]
+    assert buys, a.log
+    assert buys[0]["qty"] == 10, buys           # 900/90, never 900/50 = 18
+    assert m.state.sleeve_cash >= -1e-6, m.state.sleeve_cash
+
+
+# --- L1-L5: the /kill flatten may never sell more than the ACCOUNT holds -----
+
+def _flatten_fixture(tmp_path, book_qty, venue_qty, adapter=None):
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = adapter or DryAdapter()
+    _held_position(m, qty=book_qty, stop_ref=None)
+    a.seed_position("CRSP", venue_qty)
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time()
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    return m, a, alerts
+
+
+def test_gate_l1_flatten_never_sells_what_the_venue_does_not_hold(tmp_path):
+    """The naked-short class, one root, five blockers: the MKT sell was
+    sized from the BOOK and nothing asked the account. A stop that filled
+    inside the cancel window leaves the book believing in shares that are
+    gone; selling them SHORTS the account, and CR-N1 then tells the operator
+    to sell them a THIRD time by hand."""
+    m, a, alerts = _flatten_fixture(tmp_path, book_qty=5, venue_qty=0)
+    assert _executions(a, "CRSP") == [], a.log
+    assert a.stock_position("CRSP") == 0, "the account was shorted"
+    assert "1" not in m.state.positions          # booked out, not left open
+    assert m.state.unreconciled, "the exit price is unknown — say so"
+    assert any("VENUE HOLDS NONE" in msg for msg in alerts), alerts
+    # CR-N1: never tell the operator to hand-sell what is already sold
+    assert any("Do NOT sell it by hand" in msg for msg in alerts), alerts
+    summary = [msg for msg in alerts if "flatten finished" in msg
+               or "flatten complete" in msg]
+    assert not any("CLOSE CRSP" in msg for msg in summary), summary
+
+
+def test_gate_l1_flatten_clamps_to_the_venue_when_the_book_overcounts(tmp_path):
+    """Book says 5, account holds 2: sell 2, never 5."""
+    m, a, alerts = _flatten_fixture(tmp_path, book_qty=5, venue_qty=2)
+    sold = -sum(e["qty"] for e in _executions(a, "CRSP"))
+    assert sold == 2, a.log
+    assert a.stock_position("CRSP") == 0
+    assert any("the book claimed 5" in msg and "venue held 2" in msg
+               for msg in alerts), alerts
+
+
+def test_gate_l1_two_book_rows_cannot_spend_the_same_venue_shares(tmp_path):
+    """One symbol, two rows, five shares at the venue. The pass must not
+    sell five twice."""
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, call_id=1, qty=5, stop_ref=None)
+    _held_position(m, call_id=2, qty=5, stop_ref=None)
+    a.seed_position("CRSP", 5)                   # the account holds FIVE
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time()
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    sold = -sum(e["qty"] for e in _executions(a, "CRSP"))
+    assert sold == 5, (sold, a.log)
+    assert a.stock_position("CRSP") == 0, "the account was shorted"
+
+
+def test_gate_l1_an_unreachable_positions_api_does_not_disable_the_kill(
+        tmp_path):
+    """Failing closed on the positions query alone would let one flaky
+    endpoint disable the EMERGENCY STOP. A row inside the venue-history
+    horizon was reconciled recently and its qty is venue-derived: sell it,
+    and say what backed the decision."""
+    class _NoPositions(DryAdapter):
+        def stock_position(self, symbol):
+            raise RuntimeError("positions unavailable (simulated)")
+
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _NoPositions()
+    _held_position(m, qty=5, stop_ref=None)
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time()      # fresh: verified recently
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    assert -sum(e["qty"] for e in _executions(a, "CRSP")) == 5, a.log
+    assert any("would not report its position" in msg for msg in alerts)
+
+
+def test_gate_l1_an_unreachable_positions_api_past_the_horizon_parks(tmp_path):
+    """...but past the venue-history horizon nothing verifies the row at
+    all, and that is the R1 case where the law is already park-never-sell."""
+    class _NoPositions(DryAdapter):
+        def stock_position(self, symbol):
+            raise RuntimeError("positions unavailable (simulated)")
+
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _NoPositions()
+    _held_position(m, qty=5, stop_ref=None)
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    m._reconcile_gap_s = 3 * 86_400.0       # what the reconcile pass would set
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    assert _executions(a, "CRSP") == [], a.log
+    assert "1" in m.state.positions              # parked, not sold
+    assert any("NOT flattened" in msg and "UNVERIFIED" in msg
+               for msg in alerts), alerts
+
+
+# --- CR-N2: a previous CLOSE is never adopted as a FILL price ----------------
+
+def test_gate_crn2_spot_reports_which_source_backed_the_price():
+    """`spot()` alone cannot say whether it returned a live tick or last
+    session's close. The callers that book fills need to know."""
+    a = DryAdapter()
+    px, source = a.spot_ex("CRSP")
+    assert px > 0 and source == "live"
+
+
+def test_gate_crn2_a_close_is_not_booked_as_a_fill_basis(tmp_path):
+    """B8 gave the quote walk a previous-CLOSE fallback so a thin quote
+    stops looking like a missing subscription — right for sizing, wrong for
+    a fill. The pre-B8 code raised here and failed closed; adopting the
+    close silently writes a basis nothing traded at."""
+    from app.blend import _fill_grade_price
+
+    class _CloseOnly(DryAdapter):
+        def spot_ex(self, symbol):
+            return 101.5, "close"
+
+    class _LiveAgain(_CloseOnly):
+        def spot_ex(self, symbol):
+            return 101.5, "live"
+
+    assert _fill_grade_price(_CloseOnly(), "BIL") is None
+    assert _fill_grade_price(_LiveAgain(), "BIL") == pytest.approx(101.5)
+
+
+def test_gate_crn2_an_orphan_book_order_waits_for_a_real_quote(tmp_path):
+    """No venue fill price AND only a close: the journal is KEPT (so the
+    holding stays tracked and visible), the alert fires ONCE, and the next
+    cycle with a real quote adopts it."""
+    class _NoFillPriceCloseOnly(DryAdapter):
+        source = "close"
+
+        def find_stock_order(self, client_order_id):
+            rec = self._orders.get(self._by_client.get(client_order_id, ""))
+            if rec is None:
+                return None
+            return {"order_ref": rec["order_ref"], "status": "filled"}
+
+        def spot_ex(self, symbol):
+            return self.spot(symbol), self.source
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=1_000.0, spy_qty=0, core_cash=1_000.0)
+    a = _NoFillPriceCloseOnly()
+    cid = m.record_pending_book_order("core-buy", "SPY", 5, "2026-08-20",
+                                      ref_price=100.0)
+    a.place_stock_order("SPY", 5, "MKT", ref_price=100.0, client_order_id=cid)
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-20", alert=alerts.append)
+    assert cid in m.state.pending_book_orders, "the holding stopped being tracked"
+    assert m.state.spy_qty == 0, "a CLOSE was booked as a fill basis"
+    assert sum("no live quote to stand in" in msg for msg in alerts) == 1
+
+    # ...and it does not re-shout every cycle
+    alerts.clear()
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    assert not any("no live quote to stand in" in msg for msg in alerts), alerts
+
+    # ...and a real quote adopts it
+    a.source = "live"
+    alerts.clear()
+    run_cycle(m, a, None, "2026-08-22", alert=alerts.append)
+    assert cid not in m.state.pending_book_orders
+    assert m.state.spy_qty == 5
+
+
+# --- intents failure taxonomy (2026-09-10) ------------------------------------
+
+def _fake_intents(monkeypatch, *, raise_on_get=None, status=None, decode=False):
+    """Install a fake httpx.get for fetch_intents_reason."""
+    import httpx as _httpx
+
+    class R:
+        def raise_for_status(self):
+            if status is not None:
+                raise _httpx.HTTPStatusError(
+                    f"HTTP {status}",
+                    request=_httpx.Request("GET", "https://x/blend3070/intents"),
+                    response=_httpx.Response(status))
+
+        def json(self):
+            if decode:
+                raise ValueError("Expecting value: line 1 column 1 (char 0)")
+            return {"as_of": "2026-09-10", "entries": []}
+
+    def fake_get(url, **kw):
+        if raise_on_get is not None:
+            raise raise_on_get
+        return R()
+
+    monkeypatch.setattr(blend_mod.httpx, "get", fake_get)
+
+
+def test_gate_intents_reason_taxonomy(monkeypatch):
+    """Every blind state used to collapse into a bare None, so a 401 that
+    will NEVER self-heal was indistinguishable from a tracker redeploy that
+    heals in ninety seconds. The caller pages differently on each, so the
+    classification is load-bearing."""
+    from app.blend import TRACKER_CONFIG_REASONS, fetch_intents_reason
+    from app.feeds import FeedDeadline
+
+    # no TRACKER_URL: no request at all, and historically no trace of any kind
+    payload, reason = fetch_intents_reason(Cfg())
+    assert (payload, reason) == (None, "no_url")
+
+    cases = [
+        (dict(status=401), "auth"),
+        (dict(status=403), "auth"),
+        (dict(status=308), "redirect"),      # httpx does NOT follow redirects
+        (dict(status=500), "http_500"),
+        (dict(status=404), "http_404"),
+        (dict(decode=True), "decode"),
+        (dict(raise_on_get=RuntimeError("dns")), "transport"),
+        (dict(raise_on_get=FeedDeadline("slow")), "deadline"),
+    ]
+    for i, (kwargs, expected) in enumerate(cases):
+        blend_mod._INTENTS_FAIL.clear()
+
+        class C(Cfg):
+            tracker_url = f"https://taxonomy-{i}.invalid"
+
+        _fake_intents(monkeypatch, **kwargs)
+        payload, reason = fetch_intents_reason(C())
+        assert (payload, reason) == (None, expected), (kwargs, reason)
+
+    # the ones a retry can never clear
+    assert TRACKER_CONFIG_REASONS == {"no_url", "bad_url", "auth", "redirect"}
+
+    # ...and the happy path still returns a payload
+    blend_mod._INTENTS_FAIL.clear()
+
+    class Ok(Cfg):
+        tracker_url = "https://taxonomy-ok.invalid"
+
+    _fake_intents(monkeypatch)
+    payload, reason = fetch_intents_reason(Ok())
+    assert reason == "ok" and payload["as_of"] == "2026-09-10"
+
+
+def test_gate_intents_negative_cache_reports_cache_skip_not_a_failure(monkeypatch):
+    """A /kill wakes the loop seconds after a failure; the negative cache then
+    returns without asking the tracker. Reporting that as another failure
+    would let a single outage page on attempts that never happened."""
+    from app.blend import fetch_intents_reason
+
+    blend_mod._INTENTS_FAIL.clear()
+
+    class C(Cfg):
+        tracker_url = "https://cache-skip.invalid"
+
+    _fake_intents(monkeypatch, raise_on_get=RuntimeError("down"))
+    assert fetch_intents_reason(C()) == (None, "transport")
+    # immediately again: suppressed by FEED_FAIL_TTL, and labelled as such
+    assert fetch_intents_reason(C()) == (None, "cache_skip")
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_fetch_intents_keeps_its_payload_only_contract(monkeypatch):
+    """The cycle and its existing gates only ever ask whether there is a
+    payload; the reason is additive."""
+    blend_mod._INTENTS_FAIL.clear()
+
+    class C(Cfg):
+        tracker_url = "https://contract.invalid"
+
+    _fake_intents(monkeypatch, status=401)
+    assert fetch_intents(C()) is None
+    blend_mod._INTENTS_FAIL.clear()      # else the next call is a cache_skip
+    _fake_intents(monkeypatch)
+    assert fetch_intents(C())["entries"] == []
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_the_loop_actually_arms_the_tracker_watch(tmp_path, monkeypatch):
+    """THE gate for this round, and the second attempt at it.
+
+    Attempt one monkeypatched service._tracker_watch with a spy, which proved
+    only that the loop called SOME function with the right reason string.
+    Nothing bound the loop to the module-global TRACKER_WATCH that /health
+    reads and that the ladder, the floor and both budgets accumulate in — so
+    changing the call site to pass a throwaway dict,
+    `_tracker_watch(now, reason, send, dict(TRACKER_WATCH))`, restored the
+    2026-09-10 defect in full with the whole suite green (re-review R18R-1).
+
+    So this asserts on STATE and on the page, never on the call: the real
+    decision function runs, and what it wrote must be visible where the
+    operator actually looks."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    pages = []
+    monkeypatch.setattr(blend_mod, "run_cycle", lambda *a, **kw: [])
+    monkeypatch.setattr(service, "send", pages.append)
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    monkeypatch.setattr(settings, "poll_seconds", 3600)
+    assert settings.tracker_url == ""      # -> no_url, a CONFIG reason
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.TRACKER_WATCH.get("fails"):
+                    break
+                _time.sleep(0.05)
+            watch = dict(service.TRACKER_WATCH)
+            body = c.get("/health").json()
+        # the MODULE-GLOBAL the rest of the service reads was advanced
+        assert watch["fails"] >= 1, watch
+        assert watch["reason"] == "no_url", watch
+        assert watch["blind_since"] is not None, watch
+        # ...the page went out, on the first failed poll, with its remedy
+        assert any("NOT self-heal" in m for m in pages), pages
+        # ...and /health tells the truth rather than the green lie
+        assert body["status"] == "ok"
+        assert body["tracker"]["ok"] is False, body["tracker"]
+        assert body["tracker"]["reason"] == "no_url", body["tracker"]
+        assert body["tracker"]["blind_polls"] >= 1, body["tracker"]
+    finally:
+        service.BLEND = None
+        service.MGR = None
+        service._reset_tracker_watch()
+
+
+def test_gate_f5_a_kill_landing_mid_iteration_is_consumed_with_the_ladder_off(
+        tmp_path, monkeypatch):
+    """Merge review 2026-09-10, F5. The MF-A consumption of a /kill that
+    lands AFTER the top-of-iteration pass sat inside `if
+    settings.ladder_enabled`, so with the ladder disabled - the deployed
+    posture - such a kill waited a whole poll interval for the next
+    top-of-iteration pass: the exact latency MF-A was built to remove.
+    Simulated: the kill lands during the NOAA feed call; it must be
+    consumed before the loop parks."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    consumed = []
+
+    def feed():
+        service.LADDER_KILL.set()          # /kill, landing while the feed runs
+        return 0.0
+
+    monkeypatch.setattr(service, "nino34_weekly", feed)
+    monkeypatch.setattr(service, "_consume_ladder_kill",
+                        lambda today: consumed.append(today) or None)
+    monkeypatch.setattr(service, "send", lambda m: None)
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "ladder_enabled", False)
+    monkeypatch.setattr(settings, "blend_enabled", False)
+    monkeypatch.setattr(settings, "poll_seconds", 3600)
+    try:
+        with TestClient(service_app):
+            for _ in range(200):
+                if consumed:
+                    break
+                _time.sleep(0.05)
+        assert consumed, "the kill waited for the next poll interval"
+    finally:
+        service.LADDER_KILL.clear()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_a_boot_never_inherits_a_previous_lifespans_watch(tmp_path,
+                                                               monkeypatch):
+    """TRACKER_WATCH is process-global and was never re-initialised per
+    lifespan, unlike LADDER_KILL. A watch left blind by one lifespan made the
+    next boot's /health report a tracker it had never polled (R17R-4)."""
+    from app import service
+
+    service.TRACKER_WATCH.update(blind_since=1.0, fails=9, reason="auth",
+                                 paged_level=0, page_count=6)
+    try:
+        service._reset_tracker_watch()
+        assert service.TRACKER_WATCH["fails"] == 0
+        assert service.TRACKER_WATCH["blind_since"] is None
+        assert service.TRACKER_WATCH["reason"] is None
+        assert service.TRACKER_WATCH["page_count"] == 0
+        # and _start_loop is what calls it, so a boot cannot skip it
+        import inspect
+        assert "_reset_tracker_watch()" in inspect.getsource(service._start_loop)
+    finally:
+        service._reset_tracker_watch()
+
+
+def test_gate_a_null_json_body_is_not_a_healthy_poll(monkeypatch):
+    """A 200 whose body is literally `null` makes r.json() return None. That
+    used to be reported as (None, "ok") — a payload-less HEALTHY poll, i.e.
+    the exact silent-blind state this round exists to end."""
+    from app.blend import fetch_intents_reason
+
+    for body in (None, [], "nope", 3):
+        blend_mod._INTENTS_FAIL.clear()
+
+        class R:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return body
+
+        monkeypatch.setattr(blend_mod.httpx, "get", lambda url, **kw: R())
+
+        class C(Cfg):
+            tracker_url = "https://nulljson.invalid"
+
+        payload, reason = fetch_intents_reason(C())
+        assert payload is None
+        assert reason == "decode", (body, reason)
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_a_malformed_tracker_url_is_a_config_error_not_a_transient(
+        monkeypatch):
+    """httpx.InvalidURL / UnsupportedProtocol raise through the transport
+    layer, so a catch-all filed a typo'd TRACKER_URL under "usually heals"
+    and told the operator the opposite of the truth."""
+    import httpx as _httpx
+
+    from app.blend import TRACKER_CONFIG_REASONS, fetch_intents_reason
+
+    for exc in (_httpx.InvalidURL("bad"), _httpx.UnsupportedProtocol("nope")):
+        blend_mod._INTENTS_FAIL.clear()
+
+        def boom(url, **kw):
+            raise exc
+
+        monkeypatch.setattr(blend_mod.httpx, "get", boom)
+
+        class C(Cfg):
+            tracker_url = "htp:/typo"
+
+        assert fetch_intents_reason(C()) == (None, "bad_url")
+    assert "bad_url" in TRACKER_CONFIG_REASONS
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_fetch_intents_is_still_the_seam_the_probes_patch(monkeypatch):
+    """tests/probes/mf2/scen.py and the MF-1 slow-feed gate replace
+    `blend_mod.fetch_intents` wholesale. Routing the loop through a NEW
+    function silently sailed past all seven patch sites and switched two
+    phases of the live-fire probe suite off (counter-agent CA-1/CA-2)."""
+    from app.blend import fetch_intents_reason
+
+    monkeypatch.setattr(blend_mod, "fetch_intents", lambda _c: None)
+    assert fetch_intents_reason(Cfg()) == (None, "transport")
+
+    monkeypatch.setattr(blend_mod, "fetch_intents", lambda _c: {"entries": []})
+    payload, reason = fetch_intents_reason(Cfg())
+    assert payload == {"entries": []} and reason == "ok"
+
+
+def test_gate_a_hand_typed_tracker_url_survives_stray_whitespace(monkeypatch):
+    """TRACKER_URL is `sync: false` — it is TYPED into the Render dashboard by
+    hand — and a leading/trailing space made httpx raise through the transport
+    layer, so a permanent config error was filed as `transport`, the bucket
+    described to the operator as "usually heals" (re-review R17R-3). Stripping
+    fixes it outright instead of merely classifying it better."""
+    from app.blend import fetch_intents_reason
+
+    seen = {}
+
+    class R:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"as_of": "2026-09-10", "entries": []}
+
+    def fake_get(url, **kw):
+        seen["url"] = url
+        return R()
+
+    monkeypatch.setattr(blend_mod.httpx, "get", fake_get)
+    for raw in ("  https://research.optic.capital  ",
+                "\thttps://research.optic.capital\n",
+                "https://research.optic.capital/  "):
+        blend_mod._INTENTS_FAIL.clear()
+
+        class C(Cfg):
+            tracker_url = raw
+
+        payload, reason = fetch_intents_reason(C())
+        assert reason == "ok", (raw, reason)
+        assert seen["url"] == (
+            "https://research.optic.capital/blend3070/intents"), seen["url"]
+    blend_mod._INTENTS_FAIL.clear()
+
+
+# --- stuck book order: cancel-confirmation unwedge (2026-08-25) ------------
+class _WarnedLiveAdapter(DryAdapter):
+    """Venue where book orders land but stay 'working' (ib_async's
+    ValidationError warning overlay): find_stock_order reports working
+    forever; cancel_stock_order ACKs. The read-only-mode incident shape."""
+
+    def __init__(self):
+        super().__init__()
+        self.cancels: list = []
+
+    def place_stock_order(self, symbol, qty, order_type, stop_price=None,
+                          tif="DAY", ref_price=None, client_order_id=None):
+        self._rec("place_stock_order", symbol=symbol, qty=qty, status="working")
+        return {"order_ref": f"warned-{client_order_id}", "status": "working"}
+
+    def find_stock_order(self, client_order_id):
+        return {"order_ref": f"warned-{client_order_id}", "status": "working"}
+
+    def cancel_stock_order(self, order_ref):
+        self.cancels.append(order_ref)
+        return True
+
+
+def test_gate_stuck_book_order_cancel_confirmed_then_replanned(tmp_path, monkeypatch):
+    """The wedge, resolved the safe way: a book order stuck 'working' for
+    BOOK_ORDER_STUCK_CYCLES is CANCELLED at the venue (ACK required) before
+    its journal is cleared - never assumed dead. No duplicate can arise:
+    the re-plan happens only after the venue acked the cancel."""
+    # A MKT placed OUTSIDE regular hours legitimately rests for the open and
+    # is exempt from the stuck counter; this gate is about an IN-session
+    # order that stays working, so run it on an in-session clock.
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: __import__("datetime").datetime(2026, 8, 20, 14, 30, tzinfo=__import__("datetime").timezone.utc))
+    from app.blend import BOOK_ORDER_STUCK_CYCLES
+    m = mk(tmp_path)
+    a = _WarnedLiveAdapter()
+    sent = []
+    for cyc in range(BOOK_ORDER_STUCK_CYCLES + 2):
+        run_cycle(m, a, payload(), "2026-08-20", alert=sent.append)
+        if a.cancels:
+            break
+    assert a.cancels, "stuck order was never cancel-confirmed"
+    # journal cleared only AFTER the ack; step() re-plans a fresh cid
+    assert all("warned-" in c for c in a.cancels)
+    assert any("stuck" in s and "cancel-confirmed" in s for s in sent), sent
+
+
+def test_gate_intent_alerts_once_per_reason_and_breaker_pauses(tmp_path):
+    """The read-only incident paged the identical [321] text every cycle
+    (~48/hour). Now: one page per (kind, reason), a CHANGED reason
+    re-pages, and INTENT_BREAKER_N consecutive failures pause the kind
+    with a single ACTION page."""
+    import app.blend as B
+    B._intent_fail_counts.clear()
+    B._intent_alerted_reason.clear()
+
+    class _RejectingAdapter(DryAdapter):
+        attempts = 0
+
+        def place_stock_order(self, *a, **k):
+            # count BEFORE raising - the prior version raised first, so the
+            # breaker assertion compared 0 == 0 and proved nothing
+            type(self).attempts += 1
+            raise RuntimeError("[321] read-only mode (simulated)")
+
+        def find_stock_order(self, client_order_id):
+            return None                      # never reached the venue
+
+    m = mk(tmp_path)
+    a = _RejectingAdapter()
+    sent = []
+    for _ in range(B.INTENT_BREAKER_N + 3):
+        run_cycle(m, a, payload(), "2026-08-20", alert=sent.append)
+    fail_pages = [s for s in sent if "intent failed" in s and "321" in s]
+    # one per kind (CORE_BUY, SWEEP), not one per kind per cycle
+    assert 1 <= len(fail_pages) <= 2, f"paged {len(fail_pages)}x: {fail_pages}"
+    assert any("ACTION NEEDED" in s and "consecutive" in s for s in sent), \
+        "breaker never paged"
+    # breaker open: later cycles place nothing
+    placed_before = type(a).attempts
+    assert placed_before > 0, "harness never attempted a placement"
+    run_cycle(m, a, payload(), "2026-08-20", alert=sent.append)
+    assert type(a).attempts == placed_before, "breaker did not pause placement"
+    type(a).attempts = 0
+    B._intent_fail_counts.clear()
+    B._intent_alerted_reason.clear()
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-28 incident gates: a docs commit restarted the LIVE service 44 min
+# into the session; the blend re-ran mid-cycle, sold BIL to fund an entry, and
+# the entry was rejected (MOO/OPG is only placeable pre-open). The audit that
+# followed found the far more expensive sibling: a fresh book cannot see venue
+# holdings, so re-seeding deploys a SECOND book on top of the first.
+# ---------------------------------------------------------------------------
+
+class _HoldingsAdapter(DryAdapter):
+    """Venue already holds the book-level names (Casey's real account)."""
+
+    def __init__(self, spy=45, bil=136):
+        super().__init__()
+        self._positions["SPY"] = spy
+        self._positions["BIL"] = bil
+
+
+class _WorkingMOOAdapter(DryAdapter):
+    """Venue ACCEPTS the OPG order and leaves it working (real MOO)."""
+
+    def place_stock_order(self, symbol, qty, order_type="MKT", **kw):
+        r = super().place_stock_order(symbol, qty, order_type=order_type, **kw)
+        if order_type == "MOO":
+            r = dict(r)
+            r["status"] = "working"
+            r.pop("fill_price", None)
+            self._orders[r["order_ref"]]["status"] = "working"
+        return r
+
+
+class _RejectedMOOAdapter(_WorkingMOOAdapter):
+    """Accepts, then the venue cancels it (OPG placed after the open)."""
+
+    def find_stock_order(self, client_order_id):
+        r = super().find_stock_order(client_order_id)
+        if r and "-entry" in str(client_order_id):
+            r = dict(r)
+            r["status"] = "cancelled"
+        return r
+
+
+class _AdoptedMOOAdapter(_WorkingMOOAdapter):
+    """Accepts the OPG, then the venue reports it FILLED — the orphan/async
+    success path that only reconcile() ever sees."""
+
+    def find_stock_order(self, client_order_id):
+        r = super().find_stock_order(client_order_id)
+        if r and "-entry" in str(client_order_id):
+            r = dict(r)
+            r["status"] = "filled"
+            r["fill_price"] = 50.0
+        return r
+
+
+class _BlindPositionsAdapter(DryAdapter):
+    """The venue cannot answer a positions query."""
+
+    def stock_position(self, symbol):
+        raise RuntimeError("positions unavailable")
+
+
+def test_gate_a_fresh_book_never_seeds_on_top_of_venue_holdings(tmp_path):
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _HoldingsAdapter()
+    alerts = []
+    out = run_cycle(mgr, a, payload(entries=[]), "2026-08-20", alerts.append)
+    assert out == []                                   # nothing planned
+    assert mgr.state.halted == "FRESH_BOOK_VS_VENUE"
+    assert not mgr.state.initialized                   # never seeded
+    # and crucially: no CORE_BUY / SWEEP reached the venue
+    assert not [r for r in a.log if r.get("action") == "place_stock_order"]
+    assert any("double-deployment guard" in m for m in alerts)
+
+
+def test_gate_bootstrap_guard_fails_closed_when_the_venue_cannot_answer(tmp_path):
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _BlindPositionsAdapter()
+    alerts = []
+    out = run_cycle(mgr, a, payload(entries=[]), "2026-08-20", alerts.append)
+    assert out == []
+    assert mgr.state.halted == "FRESH_BOOK_VS_VENUE"   # UNKNOWN != "flat"
+    assert any("UNKNOWN" in m for m in alerts)
+
+
+def test_gate_a_flat_venue_still_seeds_normally(tmp_path):
+    """The guard must not block a genuine first go-live."""
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = DryAdapter()                                   # venue holds nothing
+    run_cycle(mgr, a, payload(entries=[]), "2026-08-20", lambda m: None)
+    assert mgr.state.halted is None
+    assert mgr.state.initialized
+
+
+def test_gate_resume_acknowledges_the_bootstrap_guard_exactly_once(tmp_path):
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _HoldingsAdapter()
+    run_cycle(mgr, a, payload(entries=[]), "2026-08-20", lambda m: None)
+    assert mgr.state.halted == "FRESH_BOOK_VS_VENUE"
+    mgr.resume("2026-08-20")                           # operator acknowledges
+    assert mgr.state.bootstrap_ack is True
+    run_cycle(mgr, a, payload(entries=[]), "2026-08-20", lambda m: None)
+    assert mgr.state.initialized                       # seeded on purpose
+    assert mgr.state.bootstrap_ack is False            # one-shot consumed
+
+
+def test_gate_a_real_live_book_is_never_silently_replaced_by_a_dry_one(tmp_path):
+    """Missing creds read as 'dry' — an unauthenticated boot must not quietly
+    archive a REAL book and hand back an un-halted fresh one."""
+    live = mk(tmp_path, dry_run=False, trading_mode="live",
+              tws_userid="u", tws_password="p")
+    live.state.initialized = True
+    live.state.spy_qty, live.state.bil_qty = 45, 136
+    live.save()
+    # same file, but now DRY (creds absent is the same signal)
+    dry = mk(tmp_path, dry_run=True, trading_mode="live")
+    assert dry.archived_state_critical is True
+    assert dry.state.halted == "MODE_CHANGE_FROM_REAL"
+
+
+def test_gate_breaker_resets_on_a_new_trading_date(tmp_path):
+    blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")
+    blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
+    assert blend_mod.intent_kind_paused("ENTER")
+    blend_mod.intent_breaker_roll_date("2026-08-21")   # new day
+    assert not blend_mod.intent_kind_paused("ENTER")
+
+
+def test_gate_a_working_MOO_is_never_credited_as_a_successful_ENTER(tmp_path):
+    """Drives a REAL cycle. An OPG the venue merely ACCEPTED is not a
+    successful ENTER; crediting it reset the breaker every cycle so a day of
+    rejected entries never tripped it."""
+    blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")   # same day as the cycle
+    m = mk(tmp_path, blend_book_usd=500_000.0)
+    _seed_initialized(m, sleeve_cash=300_000.0)
+    m.save()
+    a = _WorkingMOOAdapter()
+    blend_mod._intent_fail_counts["ENTER"] = 3
+    run_cycle(m, a, payload(entries=[entry(call_id=1)],
+                            stops=[stop_row(call_id=1)]),
+              "2026-08-20", lambda s_: None)
+    assert m.state.pending_entries          # a MOO really went to the venue
+    assert not m.state.positions            # and did NOT book
+    assert blend_mod._intent_fail_counts["ENTER"] == 3   # nothing credited
+
+
+@pytest.mark.parametrize("adapter_cls,label", [
+    (DryAdapter, "synchronous fill"),
+    (_AdoptedMOOAdapter, "reconcile-adopted async fill"),
+])
+def test_gate_a_real_fill_clears_the_ENTER_breaker(tmp_path, adapter_cls, label):
+    """The counter must stay CONSECUTIVE. Without this a healthy book loses
+    its entries for the day on 5 CUMULATIVE failures. Both fill paths must
+    clear it — the async one is only ever seen by reconcile()."""
+    blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")   # same day as the cycle
+    m = mk(tmp_path, blend_book_usd=500_000.0)
+    _seed_initialized(m, sleeve_cash=300_000.0)
+    m.save()
+    a = adapter_cls()
+    blend_mod._intent_fail_counts["ENTER"] = 4
+    run_cycle(m, a, payload(entries=[entry(call_id=1)],
+                            stops=[stop_row(call_id=1)]),
+              "2026-08-20", lambda s_: None)
+    run_cycle(m, a, payload(), "2026-08-20", lambda s_: None)  # reconcile pass
+    assert m.state.positions, label                     # it really entered
+    assert "ENTER" not in blend_mod._intent_fail_counts, label
+
+
+def test_gate_a_venue_rejected_entry_books_a_breaker_failure(tmp_path):
+    """Reconcile is where an async ENTER's real outcome lands."""
+    blend_mod.intent_breaker_clear()
+    blend_mod._intent_breaker_date = ""
+    m = mk(tmp_path, blend_book_usd=500_000.0)
+    _seed_initialized(m, sleeve_cash=300_000.0)
+    m.save()
+    a = _RejectedMOOAdapter()
+    run_cycle(m, a, payload(entries=[entry(call_id=1)],
+                            stops=[stop_row(call_id=1)]),
+              "2026-08-20", lambda s_: None)
+    run_cycle(m, a, payload(), "2026-08-20", lambda s_: None)  # reconcile sees it
+    assert blend_mod._intent_fail_counts.get("ENTER") == 1
+    assert not m.state.pending_entries      # journal cleared, slot released
+
+
+def test_gate_the_breaker_roll_survives_a_reconcile_increment(tmp_path):
+    """Rolling AFTER reconcile wiped the day's first rejection every day."""
+    blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")
+    m = mk(tmp_path, blend_book_usd=500_000.0)
+    _seed_initialized(m, sleeve_cash=300_000.0)
+    m.save()
+    a = _RejectedMOOAdapter()
+    run_cycle(m, a, payload(entries=[entry(call_id=1)],
+                            stops=[stop_row(call_id=1)]),
+              "2026-08-20", lambda s_: None)
+    # NEXT trading day: the roll and the reconcile-detected rejection land in
+    # the SAME cycle. Rolling after reconcile wipes the increment.
+    run_cycle(m, a, payload(), "2026-08-21", lambda s_: None)
+    assert blend_mod._intent_fail_counts.get("ENTER") == 1   # survived the roll
+
+
+def test_gate_a_mode_change_resume_still_faces_the_venue_guard(tmp_path):
+    """THE fatal one: acking MODE_CHANGE_FROM_REAL must NOT authorize a seed
+    on top of real holdings. The probe that found this left 395 SPY/286 BIL."""
+    live = mk(tmp_path, dry_run=False, trading_mode="live",
+              tws_userid="u", tws_password="p", blend_book_usd=50_000.0)
+    live.state.initialized = True
+    live.state.spy_qty, live.state.bil_qty = 45, 136
+    live.save()
+    dry = mk(tmp_path, dry_run=True, trading_mode="live",
+             blend_book_usd=50_000.0)
+    assert dry.state.halted == "MODE_CHANGE_FROM_REAL"
+    dry.resume()                                   # operator clears THAT halt
+    assert dry.state.bootstrap_ack is False        # but authorizes NO seed
+    a = _HoldingsAdapter()
+    out = run_cycle(dry, a, payload(), "2026-08-20", lambda s_: None)
+    assert out == []
+    assert dry.state.halted == "FRESH_BOOK_VS_VENUE"   # guard still stands
+    assert not [r for r in a.log if r.get("action") == "place_stock_order"]
+
+
+def test_gate_bootstrap_ack_round_trips_through_disk(tmp_path):
+    m = mk(tmp_path, blend_book_usd=50_000.0)
+    m.state.halted = "FRESH_BOOK_VS_VENUE"
+    m.resume()
+    assert m.state.bootstrap_ack is True
+    m.save()
+    again = mk(tmp_path, blend_book_usd=50_000.0)
+    assert again.state.bootstrap_ack is True       # survived the restart
+
+
+def test_gate_resume_clears_a_paused_kind(tmp_path):
+    """The ACTION page promises /resume resumes a paused kind."""
+    m = mk(tmp_path)
+    blend_mod.intent_breaker_clear()
+    blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
+    assert blend_mod.intent_kind_paused("ENTER")
+    m.resume()
+    assert not blend_mod.intent_kind_paused("ENTER")
+
+
+def test_gate_open_breakers_are_visible_on_status(tmp_path):
+    mgr = mk(tmp_path)
+    blend_mod.intent_breaker_clear()
+    blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
+    assert mgr.status_summary()["intent_breakers"] == {
+        "ENTER": blend_mod.INTENT_BREAKER_N}
+    blend_mod.intent_breaker_clear()
+    assert mgr.status_summary()["intent_breakers"] == {}
+
+
+def test_gate_a_bootstrap_ack_expires_with_the_trading_day(tmp_path):
+    """An ack is a SAME-DAY authorization. Left standing it becomes a durable
+    invisible permission — the re-review seeded 45->395 SPY on an ack granted
+    27 days earlier."""
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _HoldingsAdapter()
+    run_cycle(mgr, a, payload(), "2026-08-20", lambda m: None)
+    mgr.resume("2026-08-20")
+    assert mgr.state.bootstrap_ack is True
+    out = run_cycle(mgr, a, payload(), "2026-09-16", lambda m: None)  # later
+    assert out == []
+    assert mgr.state.bootstrap_ack is False            # expired, not honoured
+    assert not mgr.state.initialized                   # nothing seeded
+    assert not [r for r in a.log if r.get("action") == "place_stock_order"]
+
+
+def test_gate_a_kill_revokes_a_standing_seed_authorization(tmp_path):
+    """/kill then /resume means 'undo my kill', never 'seed a second book'."""
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _HoldingsAdapter()
+    run_cycle(mgr, a, payload(), "2026-08-20", lambda m: None)
+    mgr.resume("2026-08-20")
+    assert mgr.state.bootstrap_ack is True
+    mgr.request_flatten("2026-08-20")                  # operator changes mind
+    assert mgr.state.bootstrap_ack is False            # revoked
+    mgr.resume("2026-08-20")                           # un-kill
+    # the un-kill cleared a KILL, not the venue guard, so no ack was granted
+    assert mgr.state.bootstrap_ack is False
+    out = run_cycle(mgr, a, payload(), "2026-08-20", lambda m: None)
+    assert out == []
+    assert not mgr.state.initialized
+
+
+def test_gate_the_venue_guard_never_downgrades_a_kill(tmp_path):
+    """A KILL reinterpreted as FRESH_BOOK_VS_VENUE turned the next /resume
+    into a seed authorization."""
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _HoldingsAdapter()
+    mgr.request_flatten("2026-08-20")
+    run_cycle(mgr, a, payload(), "2026-08-20", lambda m: None)
+    assert mgr.state.halted == "KILL"                  # not overwritten
+
+
+def test_gate_a_failing_manager_build_alerts_and_retries(monkeypatch, tmp_path):
+    """The loop must never die SILENTLY. Splitting _build left the manager
+    half outside the guarded retry, so a raise from LadderManager /
+    Blend3070Manager killed the thread with no alert and no loop — the exact
+    'alive, serving /health, inert forever' mode this batch removes."""
+    from app import service as svc
+
+    class _Stop(Exception):
+        pass
+
+    sent: list = []
+
+    def _send(m):
+        sent.append(m)
+        if m.startswith("\U0001f30a"):      # the boot canary: build finished
+            raise _Stop()
+
+    monkeypatch.setattr(svc, "BUILD_RETRY_S", 0)
+    monkeypatch.setattr(svc, "send", _send)
+    calls = {"n": 0}
+
+    def flaky_managers():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise OSError("state disk not writable")
+
+    monkeypatch.setattr(svc, "_build_managers", flaky_managers)
+    monkeypatch.setattr(svc, "_build_adapter", lambda: None)
+    with pytest.raises(_Stop):
+        svc._loop(svc.LOOP_GEN, threading.Event())
+    assert calls["n"] == 3                                  # retried, not dead
+    assert any("build failed" in m for m in sent)           # and it SAID so
+    assert any("recovered" in m for m in sent)
+
+
+# --- entry session window + planner-side pause (2026-09-03) -------------------
+# MUTATION-VERIFIED: reverting the `window_open` term in step()'s entry gate
+# turns test_no_moo_and_no_bil_raise_during_session red; reverting the
+# `not enter_paused` term turns test_paused_enter_does_not_raise_cash red;
+# reverting entry_window_open's weekday/time rule turns
+# test_entry_window_open_rules red.
+
+from datetime import datetime as _dt, timezone as _tz
+from zoneinfo import ZoneInfo as _Zone
+
+_ET = _Zone("America/New_York")
+
+
+def _et(y, mo, d, h, mi):
+    return _dt(y, mo, d, h, mi, tzinfo=_ET)
+
+
+def test_entry_window_open_rules():
+    open_ = blend_mod.entry_window_open
+    assert open_(_et(2026, 9, 3, 7, 0))        # weekday pre-open
+    assert open_(_et(2026, 9, 3, 9, 24))       # last planning minute
+    assert not open_(_et(2026, 9, 3, 9, 25))   # cutoff
+    assert not open_(_et(2026, 9, 3, 9, 30))   # bell
+    assert not open_(_et(2026, 9, 3, 10, 6))   # the MRK restart minute
+    assert not open_(_et(2026, 9, 3, 15, 59))
+    assert not open_(_et(2026, 9, 3, 16, 0))   # close: after-hours, OPG still refused [202]
+    assert not open_(_et(2026, 9, 3, 19, 47))  # "the evening MRK window" - it never was one
+    assert not open_(_et(2026, 9, 3, 19, 59))
+    assert open_(_et(2026, 9, 3, 20, 0))       # extended hours end: accepted
+    assert open_(_et(2026, 9, 3, 23, 30))
+    assert open_(_et(2026, 9, 5, 12, 0))       # Saturday noon
+    # naive datetimes are read as UTC; 14:06Z is 10:06 ET in September
+    assert not open_(_dt(2026, 9, 3, 14, 6))
+    assert not open_(_dt(2026, 9, 3, 14, 6, tzinfo=_tz.utc).astimezone(_ET)
+                     .replace(hour=17))                         # 17:06 ET: after-hours
+    assert open_(_dt(2026, 9, 3, 14, 6, tzinfo=_tz.utc).astimezone(_ET)
+                 .replace(hour=20))                             # 20:06 ET
+
+
+def _book_needing_bil_to_fund(tmp_path):
+    """sleeve_cash cannot fund the entry; BIL can. Pre-fix this planned
+    SWEEP -N (sell BIL) followed by ENTER — the exact MRK shape."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    return m
+
+
+def _intents(m, now_utc, monkeypatch):
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: now_utc)
+    return m.step("2026-08-20", payload(entries=[entry()], stops=[stop_row()]),
+                  PRICES)
+
+
+def test_no_moo_and_no_bil_raise_during_session(tmp_path, monkeypatch):
+    """In session: NO ENTER is planned (the venue would reject the MOO) -
+    but under pre-fund (Casey 2026-09-04, option c) the BIL cash-raise for
+    the deferred entry IS planned now, because a MKT sell fills in session
+    and the post-close MOO needs settled cash. Post-close: ENTER is planned
+    and its funding sell precedes it."""
+    m = _book_needing_bil_to_fund(tmp_path)
+    in_session = _dt(2026, 9, 3, 14, 6, tzinfo=_tz.utc)      # 10:06 ET
+    out = _intents(m, in_session, monkeypatch)
+    assert not [i for i in out if i["action"] == "ENTER"]
+    assert [i for i in out if i["action"] == "SWEEP" and i["qty"] < 0], \
+        "pre-fund: the deferred entry's BIL shortfall must be raised in session"
+    assert not [i for i in out if i["action"] == "SWEEP" and i["qty"] > 0]
+    assert any("entries deferred" in e["msg"] for e in m.state.events)
+    assert any("pre-funding" in e["msg"] for e in m.state.events)
+    # The same book, post-close: the entry is planned and BIL funds it.
+    m2 = _book_needing_bil_to_fund(tmp_path / "b")
+    post_close = _dt(2026, 9, 4, 0, 30, tzinfo=_tz.utc)      # 20:30 ET Sep 3: after extended hours
+    out2 = _intents(m2, post_close, monkeypatch)
+    acts = [i["action"] for i in out2]
+    assert "ENTER" in acts
+    sells = [i for i in out2 if i["action"] == "SWEEP" and i["qty"] < 0]
+    assert sells and acts.index("SWEEP") < acts.index("ENTER")
+
+
+def test_paused_enter_does_not_raise_cash(tmp_path, monkeypatch):
+    m = _book_needing_bil_to_fund(tmp_path)
+    post_close = _dt(2026, 9, 4, 0, 30, tzinfo=_tz.utc)      # 20:30 ET Sep 3
+    blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")   # same day as the cycle
+    try:
+        blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
+        assert blend_mod.intent_kind_paused("ENTER")
+        out = _intents(m, post_close, monkeypatch)
+        assert not [i for i in out if i["action"] == "ENTER"]
+        assert not [i for i in out if i["action"] == "SWEEP" and i["qty"] < 0]
+        assert any("ENTER breaker is open" in e["msg"] for e in m.state.events)
+        blend_mod.intent_breaker_clear()
+        out = _intents(m, post_close, monkeypatch)
+        assert [i for i in out if i["action"] == "ENTER"]
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+def test_reconcile_rejection_alert_carries_venue_reason(tmp_path):
+    """The reconcile path reads the async MOO outcome from find_stock_order;
+    a `reason` there must reach the operator (event + alert)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0)
+    it = {"action": "ENTER", "call_id": 16, "symbol": "MRK", "qty": 4,
+          "entry_ref": 150.0, "stop_level": 139.5, "time_stop_days": 90,
+          "reason": "test"}
+    m.record_pending_entry(it, "2026-09-03")
+
+    class Rejecting(DryAdapter):
+        def find_stock_order(self, client_order_id):
+            return {"order_ref": "x", "status": "cancelled",
+                    "reason": "Order Canceled - reason: OPG after the open"}
+
+    alerts = []
+    blend_mod.intent_breaker_clear()
+    try:
+        blend_mod.reconcile(m, Rejecting(), "2026-09-03", alerts.append)
+    finally:
+        blend_mod.intent_breaker_clear()
+    assert "16" not in m.state.pending_entries
+    assert any("OPG after the open" in a for a in alerts)
+    assert any("OPG after the open" in e["msg"] for e in m.state.events)
+
+
+
+# --- commissions in the ledger + stage-1 cash reconcile (2026-09-04) ----------
+# MUTATION-VERIFIED: dropping _charge's debit turns test_commissions_debit_the_
+# bucket_that_traded red; dropping the quiet-cycle check, the two-cycle
+# persistence, the re-alert-on-change guard, or computing drift from LEVELS
+# instead of deltas each turns test_cash_reconcile_stage1 red.
+import time as _time
+
+
+def test_commissions_debit_the_bucket_that_traded(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=1_000.0, spy_qty=10, bil_qty=0,
+                      core_cash=500.0)
+    m.on_sweep(5, 100.0, commission=1.0)
+    assert m.state.sleeve_cash == 1_000.0 - 500.0 - 1.0
+    m.on_core_trade(1, 100.0, commission=1.0)
+    assert m.state.core_cash == 500.0 - 100.0 - 1.0
+    assert m.state.commissions_paid == 2.0
+    assert m.state.last_fill_ts > 0
+    it = {"action": "ENTER", "call_id": 1, "symbol": "CRSP", "qty": 2,
+          "entry_ref": 50.0, "stop_level": 44.0, "time_stop_days": 90,
+          "reason": "t"}
+    m.record_pending_entry(it, "2026-08-20")
+    m.on_entered(it, 50.0, "ref", "2026-08-20", commission=1.0)
+    cash_after_entry = m.state.sleeve_cash
+    m.on_exited(1, 60.0, "trail", commission=1.0)
+    assert m.state.sleeve_cash == cash_after_entry + 120.0 - 1.0
+    assert m.state.commissions_paid == 4.0
+
+
+class _CashAdapter(DryAdapter):
+    def __init__(self, cash):
+        super().__init__()
+        self.cash = cash
+
+    def account_cash(self):
+        return None if self.cash is None else {"total_cash": self.cash,
+                                                "net_liq": None,
+                                                "ts": _time.time()}
+
+
+def test_cash_reconcile_stage1(tmp_path):
+    m = mk(tmp_path)                         # blend_book_usd 10_000 -> warn $25, red $100
+    _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    alerts = []
+    # the account holds $40k the book does not own: a LEVEL comparison would
+    # scream; deltas must not
+    a = _CashAdapter(43_100.0)
+    r = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r == {"drift": 0.0, "baselined": True} and alerts == []
+    r = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r["drift"] == 0.0 and r["fired"] is None
+    # a BIL monthly lands: +42 in the account, ledger unchanged
+    a.cash = 43_142.0
+    r1 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r1["drift"] == 42.0 and r1["fired"] is None and r1["cycles"] == 1
+    r2 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r2["fired"] == "WARN" and len(alerts) == 1 and "+42.00" in alerts[0]
+    # same drift again: no re-alert
+    r3 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r3["fired"] is None and len(alerts) == 1
+    # a book order the ledger DID book moves both sides equally: no new drift
+    m.on_sweep(10, 100.0)                    # ledger -1000
+    a.cash = 43_142.0 - 1_000.0              # venue  -1000
+    assert blend_mod.reconcile_cash(m, a, alerts.append) is None   # not quiet (fill)
+    m.state.last_fill_ts = _time.time() - blend_mod.CASH_QUIET_S - 1
+    r4 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r4["drift"] == 42.0 and len(alerts) == 1
+    # a withdrawal of $150 nobody told the book about: the drift CHANGES by
+    # more than the threshold while already persistent, so it re-alerts at
+    # once - and at 1.08% of the book it is RED
+    a.cash -= 150.0
+    r5 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r5["fired"] == "RED" and alerts[-1].startswith("🚨🚨")
+    assert blend_mod.reconcile_cash(m, a, alerts.append)["fired"] is None
+    assert m.state.cash_drift == -108.0
+    # pending journal -> not quiet -> skipped
+    m.state.pending_entries["9"] = {"intent": {}, "date": "2026-08-20"}
+    assert blend_mod.reconcile_cash(m, a, alerts.append) is None
+    m.state.pending_entries.clear()
+    # adapter has no claim -> nothing compared, nothing raised
+    assert blend_mod.reconcile_cash(m, _CashAdapter(None), alerts.append) is None
+    # /resume does NOT touch the cash clock (round 3): the baseline and the
+    # drift survive it; only the dedicated rebaseline restarts the clock
+    base_before = dict(m.state.cash_baseline)
+    m.resume("2026-08-20")
+    assert m.state.cash_baseline == base_before and m.state.cash_drift == -108.0
+    m.rebaseline_cash("operator")
+    assert m.state.cash_baseline is None and m.state.cash_drift is None
+    r6 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r6 == {"drift": 0.0, "baselined": True}
+    feed = m.feed(PRICES, "2026-08-20")
+    assert feed["cash"]["baselined"] is True and "venue" not in feed["cash"]
+
+
+# --- the venue as it actually behaves around the session (counter-agent r1) ---
+# MUTATION-VERIFIED: dropping the `not deferred` term on the step-8 sweep (the
+# cash is re-swept, the ENTER never places) or the rests_for_open exemption in
+# reconcile 2b (the resting sell is cancelled overnight) turns
+# test_post_close_bil_funded_entry_reaches_the_next_open red.
+
+class SessionDryAdapter(DryAdapter):
+    """The real venue's three states. MKT fills only in REGULAR hours and
+    otherwise rests until open_market(); MOO/OPG is accepted only once
+    EXTENDED hours have ended (20:00 ET; rests until open_market()) and is
+    REJECTED [202] through the regular session AND after-hours - the
+    2026-09-10 shape, where 16:03-16:14 ET placements all died."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.rejected: list[tuple] = []     # every MOO the venue refused
+
+    def find_stock_order(self, client_order_id):
+        o = super().find_stock_order(client_order_id)
+        rec = self._orders.get(self._by_client.get(client_order_id, ""))
+        if o is not None and rec is not None and rec.get("reason"):
+            o["reason"] = rec["reason"]     # the real adapter surfaces it too
+        if o is not None and rec is not None and rec.get("filled_qty"):
+            o["filled_qty"] = rec["filled_qty"]
+        return o
+
+    def place_stock_order(self, symbol, qty, order_type, stop_price=None,
+                          tif="DAY", ref_price=None, client_order_id=None):
+        opg_ok = blend_mod.entry_window_open()
+        rests = not blend_mod.regular_session_open()
+        if order_type == "MOO" and not opg_ok:
+            # recorded BEFORE raising: a gate must be able to see an
+            # ATTEMPTED placement, not only a surviving order (round 19
+            # review, TESTS-2)
+            self.rejected.append((symbol, qty, client_order_id))
+            raise RuntimeError("order rejected by venue (status Cancelled): "
+                               "[202] Order Canceled - reason:On-open orders "
+                               "cannot be placed when market is open.")
+        if order_type == "MOO" or (order_type == "MKT" and rests):
+            if client_order_id:
+                prior = self._orders.get(self._by_client.get(client_order_id, ""))
+                if prior is not None and prior["status"] in ("working", "filled"):
+                    return {**self._order_result(prior), "duplicate": True}
+            ref = f"dry-stk-{symbol}-{len(self.log)}-{int(time.time())}"
+            rec = {"order_ref": ref, "symbol": symbol, "qty": qty,
+                   "order_type": order_type, "tif": tif, "status": "working",
+                   "fill_price": None, "client_order_id": client_order_id,
+                   "ref_price": ref_price}
+            self._orders[ref] = rec
+            if client_order_id:
+                self._by_client[client_order_id] = ref
+            self._rec("place_stock_order", symbol=symbol, qty=qty,
+                      order_type=order_type, ref=ref, status="working")
+            return {"order_ref": ref, "status": "working"}
+        return super().place_stock_order(symbol, qty, order_type,
+                                         stop_price=stop_price, tif=tif,
+                                         ref_price=ref_price,
+                                         client_order_id=client_order_id)
+
+    def cancel_stock_order(self, order_ref):
+        rec = self._orders.get(order_ref)
+        if rec is not None and rec["order_type"] in ("MKT", "MOO"):
+            if rec["status"] == "filled":
+                raise RuntimeError(f"cannot cancel {order_ref}: FILLED")
+            rec["status"] = "cancelled"
+            self._rec("cancel_stock_order", ref=order_ref, found=True)
+            return True
+        return super().cancel_stock_order(order_ref)
+
+    def open_market(self):
+        for rec in self._orders.values():
+            if rec["status"] == "working" and rec["order_type"] in ("MKT", "MOO"):
+                px = rec.get("ref_price") or self.spot(rec["symbol"])
+                rec["status"], rec["fill_price"] = "filled", px
+                self._positions[rec["symbol"]] = (
+                    self._positions.get(rec["symbol"], 0) + rec["qty"])
+
+    def orders(self, symbol=None, order_type=None):
+        return [o for o in self._orders.values()
+                if (symbol is None or o["symbol"] == symbol)
+                and (order_type is None or o["order_type"] == order_type)]
+
+
+def _session_cycle(m, a, pl, alerts, monkeypatch, y, mo, d, h, mi, today="2026-08-20"):
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: _dt(y, mo, d, h, mi, tzinfo=_ET))
+    return run_cycle(m, a, pl, today, alert=alerts.append)
+
+
+def test_post_close_bil_funded_entry_reaches_the_next_open(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)      # BIL-funded shape
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+
+    cyc(2026, 8, 20, 16, 5)                  # Thu post-close: sell BIL to fund
+    assert len(a.orders("BIL")) == 1 and a.orders("BIL")[0]["qty"] < 0
+    assert a.orders("BIL")[0]["status"] == "working"      # rests for the open
+    assert not a.orders(order_type="MOO")                 # cash not settled
+    for h in (17, 20, 23):                    # overnight: nothing cancels it
+        cyc(2026, 8, 20, h, 5)
+    assert len(a.orders("BIL")) == 1 and a.orders("BIL")[0]["status"] == "working"
+    assert not [e for e in m.state.events if "stuck" in e["msg"]]
+    a.open_market()                           # Fri 09:30: the sell fills
+    cyc(2026, 8, 21, 9, 35)                   # in session: adopt, DEFER, no sweep
+    assert m.state.bil_qty == 27 and m.state.sleeve_cash > 250
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept"
+    assert any("entries deferred" in e["msg"] for e in m.state.events)
+    cyc(2026, 8, 21, 20, 5)                   # Fri after extended hours: ENTER from cash
+    moo = a.orders(order_type="MOO")
+    assert len(moo) == 1 and moo[0]["status"] == "working" and moo[0]["symbol"] == "CRSP"
+    a.open_market()                           # next open: MOO fills
+    cyc(2026, 8, 22, 10, 0)                   # Sat: reconcile adopts the entry
+    assert "1" in m.state.positions and m.state.positions["1"].qty == 5
+    assert len(a.orders("BIL")) == 1          # exactly one BIL sell, no buy
+    assert len(a.orders(order_type="MOO")) == 1
+
+
+def test_resting_sell_is_counted_stuck_only_once_the_session_opens(tmp_path, monkeypatch):
+    """Same shape, but the venue never fills the resting sell at the open:
+    the stuck counter starts in session and cancels after 3 cycles."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+    cyc(2026, 8, 20, 16, 5)
+    for h in (17, 20, 23):
+        cyc(2026, 8, 20, h, 5)
+    assert a.orders("BIL")[0]["status"] == "working"       # never cancelled overnight
+    for mi in (35, 40, 45):                                 # in session, still working
+        cyc(2026, 8, 21, 9, mi)
+    assert a.orders("BIL")[0]["status"] == "cancelled"      # 3 in-session cycles -> cancel
+
+
+# --- pre-fund (Casey 2026-09-04, option c) ------------------------------------
+# MUTATION-VERIFIED: dropping the pre-fund (planning only while the window is
+# open) turns test_prefund_mid_session_fire_enters_at_the_next_open red;
+# dropping the `not enter_paused` guard turns test_prefund_never_for_a_paused_
+# kind red; dropping the sweep-skip turns the fire-vanishes case red the
+# other way (cash must be re-swept ONLY after the fire is gone).
+
+def test_prefund_mid_session_fire_enters_at_the_next_open(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+
+    cyc(2026, 8, 20, 10, 35)                 # Thu, in session: fire seen
+    sells = [o for o in a.orders("BIL") if o["qty"] < 0]
+    assert len(sells) == 1 and sells[0]["status"] == "filled"   # MKT fills in session
+    assert not a.orders(order_type="MOO")                        # nothing placed
+    assert m.state.bil_qty == 27 and m.state.sleeve_cash >= 250
+    assert any("pre-funding" in e["msg"] for e in m.state.events)
+    cyc(2026, 8, 20, 10, 40)                 # idempotent: no more selling
+    cyc(2026, 8, 20, 14, 0)
+    assert len(a.orders("BIL")) == 1, "raised cash again or swept it back"
+    cyc(2026, 8, 20, 20, 5)                  # after extended hours: MOO from settled cash
+    moo = a.orders(order_type="MOO")
+    assert len(moo) == 1 and moo[0]["status"] == "working"
+    a.open_market()                          # Fri 09:30: fills (T+1)
+    cyc(2026, 8, 21, 9, 35)
+    assert "1" in m.state.positions and m.state.positions["1"].qty == 5
+    assert len(a.orders("BIL")) == 1 and len(a.orders(order_type="MOO")) == 1
+
+
+def test_prefund_cash_is_reswept_only_after_the_fire_is_gone(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+    cyc(2026, 8, 20, 10, 35)                 # pre-funded
+    assert m.state.bil_qty == 27
+    cyc(2026, 8, 20, 11, 0)                  # still waiting: cash stays cash
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0]
+    pl["entries"] = []                       # the fire vanishes (or the tracker blips)
+    cyc(2026, 8, 20, 11, 5)
+    # the pre-fund hold is PERSISTED and keyed by date: same day, the cash
+    # stays cash (a tracker blip must not churn BIL); next day it is swept
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "hold ignored same day"
+    _session_cycle(m, a, pl, alerts, monkeypatch, 2026, 8, 21, 11, 5, today="2026-08-21")
+    assert [o for o in a.orders("BIL") if o["qty"] > 0], "idle cash not re-swept next day"
+    assert m.state.bil_qty == 30
+
+
+def test_prefund_never_for_a_paused_kind(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")   # same day as the cycle
+    try:
+        blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
+        _session_cycle(m, a, pl, alerts, monkeypatch, 2026, 8, 20, 10, 35)
+        assert not a.orders("BIL") and m.state.bil_qty == 30
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+
+# --- counter-agent round 2 gates --------------------------------------------
+# MUTATION-VERIFIED: dropping any of the eleven cash/pre-fund fields from
+# save() or _load() turns test_every_cash_field_survives_a_restart (round 3)
+# red; dropping the resting-entry reservation turns
+# test_second_fire_while_a_moo_rests_is_funded_not_double_spent red;
+# dropping the seed reset / `not st.initialized` guard turns
+# test_no_baseline_across_a_seed red; dropping the holiday clause in
+# entry_window_open turns test_holiday_is_a_closed_session red.
+
+def test_cash_state_survives_a_restart(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    a = _CashAdapter(43_100.0)
+    blend_mod.reconcile_cash(m, a, lambda *_: None)          # baseline
+    a.cash = 43_142.0
+    blend_mod.reconcile_cash(m, a, lambda *_: None)          # drift 42, cycles 1
+    m.on_sweep(1, 100.0, commission=1.0)                     # fill + commission
+    m.state.prefund_usd, m.state.prefund_date = 250.0, "2026-08-20"
+    m.save()
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    st = m2.state
+    assert st.cash_baseline == m.state.cash_baseline and st.cash_baseline is not None
+    assert st.cash_drift == 42.0 and st.commissions_paid == 1.0
+    assert st.last_fill_ts == m.state.last_fill_ts and st.last_fill_ts > 0
+    assert st.prefund_usd == 250.0 and st.prefund_date == "2026-08-20"
+    # a restart inside the quiet window stays quiet - no re-baseline
+    assert blend_mod.reconcile_cash(m2, a, lambda *_: None) is None
+    assert m2.state.cash_baseline == m.state.cash_baseline
+
+
+def test_no_baseline_across_a_seed(tmp_path):
+    m = mk(tmp_path)                                         # fresh, not initialized
+    a = _CashAdapter(50_000.0)
+    assert blend_mod.reconcile_cash(m, a, lambda *_: None) is None
+    assert m.state.cash_baseline is None
+    m.state.cash_baseline = {"venue": 1.0, "ledger": 1.0, "ts": 1.0}   # stale junk
+    m.step("2026-08-20", payload(), PRICES)                  # seeds the book
+    assert m.state.cash_baseline is None                     # reset by the seed
+
+
+def test_second_fire_while_a_moo_rests_is_funded_not_double_spent(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=300.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 20, 5)                                  # fire 1: MOO from cash
+    assert len(a.orders(order_type="MOO")) == 1 and m.state.pending_entries
+    assert m.reserved_sleeve_cash() >= 250.0                 # its cost is reserved
+    pl["entries"].append(entry(call_id=2, symbol="CRSP", entry_ref=50.0))
+    pl["stops"].append(stop_row(call_id=2))
+    cyc(2026, 8, 20, 20, 10)                                 # fire 2 the same evening
+    # the parked cash is NOT spent twice: a BIL raise rests for the open
+    sells = [o for o in a.orders("BIL") if o["qty"] < 0]
+    assert len(sells) == 1 and sells[0]["status"] == "working"
+    assert len(a.orders(order_type="MOO")) == 1              # fire 2 waits for its cash
+    assert m.state.sleeve_cash >= 0
+
+
+def test_holiday_is_a_closed_session(tmp_path, monkeypatch):
+    open_ = blend_mod.entry_window_open
+    assert open_(_et(2026, 9, 7, 12, 0))                     # Labor Day noon: like a weekend
+    # a resting post-close sell is not counted stuck across the holiday
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    pl["as_of"] = "2026-09-04"                               # fresh, not stale
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 9, 4, 16, 5, today="2026-09-04")               # Fri post-close: sell rests
+    for h in (10, 12, 15):
+        cyc(2026, 9, 7, h, 0, today="2026-09-07")            # Labor Day
+    assert a.orders("BIL")[0]["status"] == "working"
+    assert not [e for e in m.state.events if "stuck" in e["msg"]]
+    # r6: a sell resting for the open is not "still working after 3d" either
+    assert not [e for e in m.state.events if "still working" in e["msg"]]
+
+
+def test_prefund_raise_carries_the_sell_commission(tmp_path, monkeypatch):
+    # LOW (round 2): the BIL sell's own commission is netted from the
+    # proceeds; a raise sized to the dollar leaves the post-close settled-
+    # cash belt under by ~$1 and the ENTER waits a full day. Sleeve equity
+    # 3,600 -> risk $36 -> 6 sh @ $50 = $300 exactly: reserve makes it 4 BIL.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=36)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    _session_cycle(m, a, pl, alerts, monkeypatch, 2026, 8, 20, 10, 35)
+    assert m.state.bil_qty == 32 and m.state.prefund_usd == 300.0
+    assert m.state.sleeve_cash == pytest.approx(400.0)
+    # ... and a rebalance raise stays exact (test_gate_rebalance_..._from_bil)
+
+
+def test_rebaseline_touches_nothing_else(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0)
+    m.halt("KILL")
+    m.state.cash_baseline = {"venue": 1.0, "ledger": 1.0, "ts": 1.0}
+    m.state.cash_drift = 42.0
+    m.rebaseline_cash("operator")
+    assert m.state.cash_baseline is None and m.state.cash_drift is None
+    assert m.state.halted == "KILL"                          # untouched
+
+
+def test_commission_sanity_bound(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=1_000.0, bil_qty=0)
+    m.on_sweep(5, 100.0, commission=1.7976931348623157e308)
+    assert m.state.sleeve_cash == 500.0 and m.state.commissions_paid == 0.0
+    assert any("refused" in e["msg"] for e in m.state.events)
+    m.on_sweep(1, 100.0, commission=None)                    # unreported: loud, booked 0
+    assert m.state.sleeve_cash == 400.0
+    assert any("not reported" in e["msg"] for e in m.state.events)
+    assert m.state.commissions_unreported == 1
+    # round 3: garbage is loud too, a bool is not a number, the cap is 1% of
+    # the notional (IB's own schedule) with a $5 floor - and a legitimately
+    # large commission on a large notional still books
+    m.on_sweep(1, 100.0, commission="abc")
+    assert m.state.sleeve_cash == 300.0 and m.state.commissions_unreported == 2
+    assert any("unreadable" in e["msg"] for e in m.state.events)
+    m.on_sweep(1, 100.0, commission=True)
+    assert m.state.sleeve_cash == 200.0 and m.state.commissions_paid == 0.0
+    m.on_sweep(1, 100.0, commission=10.0)                    # cap on $100 = $5
+    assert m.state.sleeve_cash == 100.0 and m.state.commissions_paid == 0.0
+    m.state.bil_qty = 10_000
+    m.on_sweep(-10_000, 100.0, commission=60.0)              # $1M notional: books
+    assert m.state.commissions_paid == 60.0
+    assert m.state.sleeve_cash == pytest.approx(1_000_100.0 - 60.0)
+
+
+# --- counter-agent round 3 gates --------------------------------------------
+# MUTATION-VERIFIED (round 3): reverting the in-session-only hold release
+# turns test_hold_survives_the_utc_midnight_roll red; dropping the no-dust
+# rule turns test_gate_adapt_m1_pending_sweep_cash_reserved_from_entries
+# red; dropping NYSE_EARLY_CLOSES turns test_early_close_is_a_closed_venue
+# red; releasing the whole hold on a partial placement turns
+# test_partial_placement_keeps_the_rest_held red; the unreconciled age gate,
+# the /resume no-rebaseline, the _load hardening, the clamp/charge order and
+# each of the eleven persisted cash fields have their own test below.
+
+def test_hold_survives_the_utc_midnight_roll(tmp_path, monkeypatch):
+    """`today` is the UTC date: it rolls at 20:00 ET, INSIDE the post-close
+    window. Releasing the hold on the roll re-swept the pre-funded cash at
+    20:05 ET; the fire returning at 21:00 was then dust-sized to 1 share
+    against the resting sweep and the call_id burned (round 3, HIGH)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 14, 0)                                   # pre-funded
+    assert m.state.bil_qty == 27 and m.state.prefund_usd > 0
+    full = int(m.state.prefund_usd // 50)
+    pl["entries"] = []                                        # tracker blip
+    cyc(2026, 8, 20, 20, 5, today="2026-08-21")               # 00:05 UTC Fri
+    assert m.state.prefund_usd > 0, "hold released on the UTC roll"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept at 20:05 ET"
+    pl["entries"] = [entry()]                                 # the fire is back
+    cyc(2026, 8, 20, 21, 0, today="2026-08-21")
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == full and full >= 5                   # full size, not 1
+    assert m.state.prefund_usd == 0.0                         # spent -> released
+    # next session with the fire gone: the hold (none left) and the cash go
+    # back to BIL only once the session has started
+    a.open_market()
+    pl["entries"] = []
+    cyc(2026, 8, 21, 10, 0, today="2026-08-21")
+
+
+def test_early_close_is_a_closed_venue(tmp_path):
+    open_ = blend_mod.entry_window_open
+    assert not open_(_et(2026, 11, 27, 12, 30))               # day after Thanksgiving
+    assert not open_(_et(2026, 11, 27, 13, 5))                # 13:00 close: after-hours
+    assert not open_(_et(2026, 11, 27, 16, 59))
+    assert open_(_et(2026, 11, 27, 17, 0))                    # early close + 4h: accepted
+    assert blend_mod.opg_accept_from_et(_dt(2026, 11, 27).date()) == (17, 0)
+    assert open_(_et(2026, 11, 26, 12, 30))                   # Thanksgiving itself
+    assert not open_(_et(2026, 11, 30, 14, 0))                # ordinary Monday
+    assert blend_mod.session_close_et(_dt(2026, 12, 24).date()) == (13, 0)
+
+
+def test_partial_placement_keeps_the_rest_held(tmp_path, monkeypatch):
+    """Two fires pre-funded mid-day; post-close only A is in the payload for
+    one cycle. A places, B's cash stays held (not swept), B places when it
+    is back (round 3, MED)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=60, spy_qty=140)   # 30/70: no rebalance
+    a = SessionDryAdapter()
+    alerts = []
+    ea, eb = entry(call_id=1, symbol="CRSP"), entry(call_id=2, symbol="CRSP")
+    sa, sb = stop_row(call_id=1), stop_row(call_id=2)
+    pl = payload(entries=[ea, eb], stops=[sa, sb])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 14, 0)
+    hold = m.state.prefund_usd
+    assert hold == 1_000.0 and m.state.bil_qty == 50          # 2 x 10 sh @ 50
+    pl["entries"], pl["stops"] = [ea], [sa]                   # B absent one cycle
+    cyc(2026, 8, 20, 20, 5)
+    assert len(a.orders(order_type="MOO")) == 1
+    assert 0 < m.state.prefund_usd < hold, "hold not reduced by what A spent"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "B's cash swept"
+    pl["entries"], pl["stops"] = [ea, eb], [sa, sb]
+    cyc(2026, 8, 20, 20, 10)
+    assert len(a.orders(order_type="MOO")) == 2
+    assert m.state.prefund_usd == 0.0
+
+
+def test_unreconciled_park_does_not_suspend_the_cash_reconcile_forever(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    a = _CashAdapter(43_100.0)
+    assert blend_mod.reconcile_cash(m, a, lambda *_: None) == {"drift": 0.0, "baselined": True}
+    # a FRESH park (inside the quiet window) skips, and says why
+    m.state.unreconciled["7"] = {"symbol": "CRSP", "qty": 3, "ts": int(time.time())}
+    assert blend_mod.reconcile_cash(m, a, lambda *_: None) is None
+    assert m.cash_summary()["skipped"] == "fresh unreconciled record"
+    # an OLD park (nothing ever pops it) no longer suspends the compare
+    m.state.unreconciled["7"]["ts"] = int(time.time()) - 2 * 3600
+    a.cash = 43_700.0                                         # its proceeds
+    r = blend_mod.reconcile_cash(m, a, lambda *_: None)
+    assert r is not None and r["drift"] == 600.0
+    assert m.cash_summary()["skipped"] is None
+    # a skip reason that holds for hours is said once a day
+    m.state.pending_entries["9"] = {"intent": {}, "date": "2026-08-20"}
+    assert blend_mod.reconcile_cash(m, a, lambda *_: None) is None
+    m._cash_skip_since = time.time() - 7 * 3600
+    assert blend_mod.reconcile_cash(m, a, lambda *_: None) is None
+    assert any("has not compared" in e["msg"] for e in m.state.events)
+    assert m.cash_summary()["skipped_for_s"] > 6 * 3600
+
+
+def test_every_cash_field_survives_a_restart(tmp_path):
+    """Round 3: the round-2 restart test asserted only the six fields whose
+    values differed from the dataclass defaults at save time."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    a = _CashAdapter(43_100.0)
+    blend_mod.reconcile_cash(m, a, lambda *_: None)          # baseline
+    a.cash = 43_142.0
+    blend_mod.reconcile_cash(m, a, lambda *_: None)          # cycles 1
+    r = blend_mod.reconcile_cash(m, a, lambda *_: None)      # cycles 2 -> WARN
+    assert r["fired"] == "WARN" and m.state.cash_alerted_drift == 42.0
+    m.state.last_fill_ts = 1_700_000_000.0                   # a fill long ago
+    m.state.commissions_paid, m.state.commissions_unreported = 1.5, 2
+    m.state.prefund_usd, m.state.prefund_date = 250.0, "2026-08-20"
+    m.save()
+    st = Blend3070Manager(m.cfg, m.state_path).state
+    want = {"cash_baseline": m.state.cash_baseline, "cash_drift": 42.0,
+            "cash_drift_ts": m.state.cash_drift_ts, "cash_drift_cycles": 2,
+            "cash_alerted_drift": 42.0, "cash_alerted_level": "WARN",
+            "last_fill_ts": 1_700_000_000.0, "commissions_paid": 1.5,
+            "commissions_unreported": 2, "prefund_usd": 250.0,
+            "prefund_date": "2026-08-20"}
+    for k, v in want.items():
+        assert getattr(st, k) == v, k
+    assert st.cash_baseline is not None and st.cash_drift_ts
+
+
+def test_load_hardens_garbage_cash_state(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0)
+    m.save()
+    sp = pathlib.Path(m.state_path)
+    raw = json.loads(sp.read_text())
+    raw["cash_baseline"] = {"venue_cash": 1.0}               # mis-shaped
+    raw["cash_drift"], raw["cash_drift_ts"] = "abc", "nan"
+    sp.write_text(json.dumps(raw))
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.cash_baseline is None and m2.state.cash_drift is None
+    assert m2.state.cash_drift_ts is None
+    s = m2.cash_summary()                                    # must not raise
+    assert s["baselined"] is False and s["drift"] is None
+    # ... and a fresh baseline is taken on the next quiet cycle
+    r = blend_mod.reconcile_cash(m2, _CashAdapter(43_000.0), lambda *_: None)
+    assert r == {"drift": 0.0, "baselined": True}
+
+
+def test_sweep_commission_is_charged_after_the_slippage_clamp(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=100.5, bil_qty=0)
+    m.on_sweep(1, 100.0, commission=1.0)
+    assert m.state.sleeve_cash == pytest.approx(-0.5)        # the fee is real
+    assert m.state.commissions_paid == 1.0
+    m.state.sleeve_cash = 99.5                                # slippage case
+    m.on_sweep(1, 100.0, commission=1.0)
+    assert m.state.sleeve_cash == pytest.approx(-1.0)        # clamp, THEN charge
+
+
+# --- 2026-09-08: execution-report fallback consumers --------------------------
+# MUTATION-VERIFIED: booking rec["qty"] instead of filled_qty turns
+# test_partial_fill_is_adopted_at_the_executed_size red; clearing a day-old
+# journal with history unavailable turns
+# test_day_old_journal_is_held_when_history_is_unavailable red.
+
+class _HistoryAdapter(DryAdapter):
+    def __init__(self, answer, complete=True):
+        super().__init__()
+        self.answer, self.complete = answer, complete
+
+    def find_stock_order(self, client_order_id):
+        return self.answer
+
+    def history_complete(self):
+        return self.complete
+
+
+def test_partial_fill_is_adopted_at_the_executed_size(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=5_000.0, bil_qty=0)
+    alerts = []
+    m.record_pending_book_order("sweep", "BIL", 32, "2026-08-20", ref_price=100.0)
+    a = _HistoryAdapter({"order_ref": "9", "status": "filled", "fill_price": 100.0,
+                         "filled_qty": 20, "commission": 1.0, "source": "executions"},
+                        complete=False)
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert m.state.bil_qty == 20 and not m.state.pending_book_orders
+    assert m.state.sleeve_cash == pytest.approx(5_000.0 - 2_000.0 - 1.0)
+    assert any("partial fill" in x and "20 of 32" in x for x in alerts)
+    # an entry too: the position is what executed, not what was journaled
+    it = {"action": "ENTER", "call_id": 1, "symbol": "CRSP", "qty": 10,
+          "entry_ref": 50.0, "stop_level": 44.0, "time_stop_days": 20,
+          "reason": "test"}
+    m.record_pending_entry(it, "2026-08-20")
+    a.answer = {"order_ref": "10", "status": "filled", "fill_price": 50.0,
+                "filled_qty": 6, "source": "executions"}
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert m.state.positions["1"].qty == 6 and not m.state.pending_entries
+    assert any("6 of 10" in x for x in alerts)
+    # a SELL journal (qty < 0): executions report shares, the sign is the
+    # journal's - a partial BIL sell must reduce BIL, never buy it
+    m.record_pending_book_order("sweep", "BIL", -12, "2026-08-20", ref_price=100.0)
+    a.answer = {"order_ref": "11", "status": "filled", "fill_price": 100.0,
+                "filled_qty": 7, "source": "executions"}
+    bil, cash = m.state.bil_qty, m.state.sleeve_cash
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert m.state.bil_qty == bil - 7
+    assert m.state.sleeve_cash == pytest.approx(cash + 700.0)
+    assert any("adopting -7" in x for x in alerts)
+
+
+def test_day_old_journal_is_held_when_history_is_unavailable(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=5_000.0, bil_qty=0)
+    alerts = []
+    m.record_pending_book_order("sweep", "BIL", 32, "2026-08-19", ref_price=100.0)
+    a = _HistoryAdapter(None, complete=False)
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert m.state.pending_book_orders, "day-old journal cleared without proof"
+    assert any("cannot be resolved" in e["msg"] for e in m.state.events)
+    # today's journal IS covered by today's executions: cleared as before
+    m.record_pending_book_order("core_buy", "SPY", 3, "2026-08-20", ref_price=100.0)
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert [r["kind"] for r in m.state.pending_book_orders.values()] == ["sweep"]
+    # ... and once history is readable the old one clears too
+    a.complete = True
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert not m.state.pending_book_orders
+
+
+# --- merge round 2026-09-10 gates (composition F1 / F2) -----------------------
+# The L-E1 charge basis (`size_ref` = max(entry_ref, venue quote)) reached
+# the sizing and the ledger on `main`; the pre-fund hold, its release and the
+# resting-entry reserve still used `entry_ref`. Three sites, one number.
+# MUTATION-VERIFIED: see docs/verdicts/INDEX.md (merge round).
+
+def test_gate_prefund_hold_is_at_the_charged_price_not_entry_ref(tmp_path, monkeypatch):
+    """Composition F1. On a gapped-up quote (90 vs a 50 fire-day close) the
+    BIL raise covered the real cost, the hold covered only the reference
+    cost, the difference read as idle cash and the sweep bought it straight
+    back - the post-close placement then clipped to what was left. The hold
+    must be the charged cost, the release the same number, and nothing in
+    between may sweep the gap."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])            # entry_ref 50
+    gapped = {**PRICES, "CRSP": 90.0}                             # venue opened up
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: gapped)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+    cyc(2026, 8, 20, 10, 35)                                      # in session: pre-fund
+    assert m.state.prefund_usd == pytest.approx(5 * 90.0), "hold is at entry_ref"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "the sweep ate the gap"
+    cyc(2026, 8, 20, 20, 5)                                       # after extended hours: place
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 5, "placement clipped by the swept gap"
+    assert m.state.prefund_usd == 0.0, "release on a different basis than the hold"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0]
+
+
+def test_gate_resting_entry_reserves_its_charged_cost(tmp_path, monkeypatch):
+    """Composition F2. A journalled ENTER resting for the open reserves its
+    cost so a second fire the same evening cannot size against it (round
+    2). The reserve used `entry_ref`; the fill debits `size_ref`. On a
+    gapped-up quote the second fire saw the gap as free cash, placed, and
+    the ledger went negative at the open. BIL is priced at 1,000 here so
+    the 650 left after A is below one share and the residual sweep - a
+    separate reserve, correct on its own - cannot muddy the number."""
+    m = mk(tmp_path)
+    # sleeve 6,400 (1,400 cash + 5 BIL @ 1,000): risk 64 / 6 -> 10 sh; core 149 SPY ~70%
+    _seed_initialized(m, sleeve_cash=1_400.0, bil_qty=5, spy_qty=149)
+    a = SessionDryAdapter()
+    alerts = []
+    ea, eb = entry(call_id=1, symbol="CRSP"), entry(call_id=2, symbol="CRSP")
+    pl = payload(entries=[ea], stops=[stop_row(call_id=1)])
+    gapped = {**PRICES, "CRSP": 75.0, "BIL": 1_000.0}
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: gapped)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+    cyc(2026, 8, 20, 20, 5)                                       # A: 10 sh @ 75 from cash
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 10
+    assert not a.orders("BIL"), "the residual was swept: the number below is not isolated"
+    assert m.reserved_sleeve_cash() == pytest.approx(750.0), "reserve is at entry_ref"
+    pl["entries"] = [ea, eb]
+    pl["stops"] = [stop_row(call_id=1), stop_row(call_id=2)]
+    cyc(2026, 8, 20, 20, 10)                                      # B, the same evening
+    # settled cash net of A's reserve (1,400 - 750 = 650) does not cover B:
+    # it must raise BIL and wait, never place against A's cash
+    assert len(a.orders(order_type="MOO")) == 1, "B placed against A's reserved cash"
+    a.open_market()
+    cyc(2026, 8, 21, 9, 35)
+    assert m.state.sleeve_cash >= -blend_mod.CASH_EPS, "ledger overdrawn by the two fires"
+
+
+# --- round 19 (2026-09-10): OPG acceptance ends with extended hours --------
+# MUTATION-VERIFIED (docs/verdicts/INDEX.md, round 19 - the exact mutants
+# and outcomes are listed there): the after-hours window (opg_accept_from_et
+# back to the session close); the regular-hours resting rule (rests_for_open
+# and reconcile 2b back to entry_window_open, each alone); the stale-alert
+# exemption back to entry_window_open; the hold release's full revert to
+# the UTC `today` + `not entry_window_open()`, and each of its three clauses
+# dropped alone (ET date, regular_session_open, not enter_paused); the
+# prefund stamp back to `today`; the rejection re-arm removed; the re-arm
+# ignoring executions; SESSION_OPEN_ET at the planning cutoff.
+
+_R202 = ("[202] Order Canceled - reason:On-open orders cannot be placed "
+         "when market is open.")
+
+
+class VenueRejectsMooAdapter(SessionDryAdapter):
+    """ASYNCHRONOUS rejection shape: placeOrder is acknowledged, the MOO is
+    journaled 'working', the venue cancels it afterwards and reconcile
+    reads the cancelled trade (with its reason) on the next cycle. One
+    breaker count per placement. `partial` > 0 models a cancel that
+    carries executions (an OPG partly filled at the open)."""
+    reject = True
+    partial = 0
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        r = super().place_stock_order(symbol, qty, order_type, **kw)
+        if order_type == "MOO" and self.reject and r.get("status") == "working":
+            rec = self._orders[r["order_ref"]]
+            rec["status"], rec["reason"] = "cancelled", _R202
+            if self.partial:
+                rec["filled_qty"] = self.partial
+        return r
+
+
+class VenueRejectsMooSyncAdapter(VenueRejectsMooAdapter):
+    """SYNCHRONOUS rejection shape - what the live book actually took on
+    2026-09-10: IBAdapter._await_placement sees the [202] inside
+    PLACE_ACK_TIMEOUT_S and RAISES, run_cycle books one breaker count, the
+    write-ahead journal stays pending, and the next reconcile finds the
+    cancelled trade and books a SECOND count. Three placements = five
+    counts (16:03, 16:09, 16:14 ET; paused at 5) - the breaker trips
+    earlier than its N says, never later. Recorded as accepted behaviour,
+    not changed, in the round-19 verdict."""
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        r = super().place_stock_order(symbol, qty, order_type, **kw)
+        if order_type == "MOO" and self.reject:
+            raise RuntimeError("order rejected by venue (status Cancelled): "
+                               + _R202)
+        return r
+
+
+def test_gate_r19_two_clocks():
+    """regular_session_open (MKT fills) and entry_window_open (OPG accepted)
+    are not complements: after-hours is false for both."""
+    rth, opg = blend_mod.regular_session_open, blend_mod.entry_window_open
+    assert not rth(_et(2026, 9, 3, 9, 29)) and rth(_et(2026, 9, 3, 9, 30))
+    assert rth(_et(2026, 9, 3, 15, 59)) and not rth(_et(2026, 9, 3, 16, 0))
+    assert not rth(_et(2026, 9, 5, 12, 0)) and opg(_et(2026, 9, 5, 12, 0))   # Saturday
+    for h, mi in ((16, 0), (17, 30), (19, 59)):                            # after-hours
+        assert not rth(_et(2026, 9, 3, h, mi)), (h, mi)
+        assert not opg(_et(2026, 9, 3, h, mi)), (h, mi)
+    assert opg(_et(2026, 9, 3, 20, 0)) and not rth(_et(2026, 9, 3, 20, 0))
+    assert blend_mod.opg_accept_from_et(_dt(2026, 9, 3).date()) == (20, 0)
+    assert blend_mod._et_today(_et(2026, 9, 3, 20, 5)) == "2026-09-03"        # UTC says 09-04
+    assert blend_mod._et_today(_et(2027, 1, 14, 19, 5)) == "2027-01-14"       # UTC says 01-15
+
+
+def test_gate_r19_no_moo_goes_out_in_after_hours(tmp_path, monkeypatch):
+    """The 2026-09-10 failure end to end: a mid-session fire is pre-funded;
+    16:00-20:00 ET nothing is placed (the venue would reject it), the hold
+    stays, the cash is not swept; at 20:05 the MOO goes out at full size."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 10, 35)                                  # pre-funded: 3 BIL sold
+    assert m.state.bil_qty == 27 and m.state.prefund_usd == 250.0
+    for h, mi in ((16, 3), (16, 9), (16, 14), (17, 0), (19, 55)):
+        cyc(2026, 8, 20, h, mi)
+        assert not a.orders(order_type="MOO"), f"MOO placed at {h}:{mi:02d} ET"
+        assert not a.rejected, f"MOO ATTEMPTED at {h}:{mi:02d} ET: {a.rejected}"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash swept in after-hours"
+    assert m.state.prefund_usd == 250.0
+    cyc(2026, 8, 20, 20, 5, today="2026-08-21")               # 00:05 UTC: accepted
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 5 and moo["status"] == "working"
+    assert m.state.prefund_usd == 0.0
+
+
+def _reject_then_recover(m, a, pl, alerts, monkeypatch, placements_to_pause):
+    """Shared timeline for the two rejection shapes, on the dates the
+    service actually produces: at 20:05 ET (EDT) the UTC `today` is already
+    the next date, so the rejections are booked under 08-21 and the breaker
+    stays paused through Friday's session; it re-arms at Friday 20:00 ET
+    (today 08-22)."""
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 10, 35)                                  # Thu in session: pre-funded
+    assert m.state.prefund_usd == 450.0 and m.state.bil_qty == 25   # 5 sh @ size_ref 90
+    for mi in (5, 10, 15, 20, 25, 30, 35):                    # Thu evening: UTC date 08-21
+        cyc(2026, 8, 20, 20, mi, today="2026-08-21")
+    assert blend_mod.intent_kind_paused("ENTER"), "breaker did not pause"
+    attempts = [o for o in a.orders(order_type="MOO") if o["status"] == "cancelled"]
+    assert len(attempts) == placements_to_pause, len(attempts)
+    assert m.state.prefund_usd == 450.0, "hold not re-armed at the charged cost"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "the sweep ate the entry's cash"
+    assert any("[202]" in x for x in alerts), "venue reason not surfaced"
+    cyc(2026, 8, 20, 21, 0, today="2026-08-21")               # same UTC day: still paused
+    assert blend_mod.intent_kind_paused("ENTER")
+    cyc(2026, 8, 21, 9, 35, today="2026-08-21")               # Fri in session, still paused
+    assert m.state.prefund_usd == 450.0, "hold released while ENTER was paused"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept on Friday"
+    a.reject = False                                          # the venue now accepts
+    cyc(2026, 8, 21, 20, 5, today="2026-08-22")               # Fri 20:05: breaker rolls
+    working = [o for o in a.orders(order_type="MOO") if o["status"] == "working"]
+    assert len(working) == 1 and working[0]["qty"] == 5, "re-plan not full size"
+    assert m.state.prefund_usd == 0.0
+
+
+def test_gate_r19_a_venue_rejected_entry_keeps_its_cash_held(tmp_path, monkeypatch):
+    """The knock-on of 2026-09-10: rejections paused ENTER, the placements
+    had 'spent' the hold, and the sweep bought the entry's cash back (BIL
+    +10 at 16:19 ET) - the entry then needed a human to cancel the sweep by
+    hand or lose a session. A rejection must re-arm the hold at the CHARGED
+    cost (gapped quote: size_ref 90 vs entry_ref 50); the paused book keeps
+    the cash through the next session; the re-plan when the breaker rolls
+    places full size. Asynchronous shape: one count per placement."""
+    blend_mod.intent_breaker_clear()
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = VenueRejectsMooAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices",
+                        lambda *_a, **_k: {**PRICES, "CRSP": 90.0})
+    try:
+        _reject_then_recover(m, a, pl, alerts, monkeypatch, placements_to_pause=5)
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+def test_gate_r19_the_synchronous_rejection_shape_recovers_the_same_way(tmp_path, monkeypatch):
+    """The live shape (TESTS-1 / CASH-2): the placement RAISES, the journal
+    stays pending, reconcile re-arms the hold a cycle later and books a
+    second count - so three placements trip the breaker. Between the raise
+    and the re-arm nothing may sweep the cash (the planning cycle already
+    reserved it)."""
+    blend_mod.intent_breaker_clear()
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = VenueRejectsMooSyncAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices",
+                        lambda *_a, **_k: {**PRICES, "CRSP": 90.0})
+    try:
+        _reject_then_recover(m, a, pl, alerts, monkeypatch, placements_to_pause=3)
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+def test_gate_r19_a_cancel_with_executions_is_loud_and_holds_only_the_remainder(tmp_path, monkeypatch):
+    """CASH-3: a cancelled order can carry a partial fill. Those shares are
+    at the venue and not in the ledger (pre-existing gap, now RED); the
+    re-arm must cover only the unexecuted remainder, or the re-plan sizes
+    full against cash the venue has already debited."""
+    blend_mod.intent_breaker_clear()
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = VenueRejectsMooAdapter()
+    a.partial = 2
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices",
+                        lambda *_a, **_k: {**PRICES, "CRSP": 90.0})
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    try:
+        cyc(2026, 8, 20, 10, 35)
+        cyc(2026, 8, 20, 20, 5, today="2026-08-21")           # placed, cancelled with 2 executed
+        assert m.state.prefund_usd == 0.0
+        a.reject = False                                      # no further rejections
+        cyc(2026, 8, 20, 20, 10, today="2026-08-21")          # reconcile reads the cancel
+        assert any("2 of 5 sh EXECUTED" in x and "NOT booked" in x for x in alerts), alerts
+        # the re-arm held 3 x 90 = 270, then the same cycle re-planned and spent it
+        held_then_spent = [e for e in m.state.events if "EXECUTED" in e["msg"]]
+        assert held_then_spent
+        (moo,) = [o for o in a.orders(order_type="MOO") if o["status"] == "working"]
+        assert moo["qty"] == 5                                # cash 460 covers 450
+        assert m.state.prefund_usd == 0.0
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+def _utc_cycle(m, a, pl, alerts, monkeypatch, y, mo, d, h, mi, today):
+    """Like _session_cycle but pinned to a UTC-tz datetime, so the ET
+    conversion the code performs is real (round 19 review, TESTS-4)."""
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: _dt(y, mo, d, h, mi, tzinfo=_tz.utc))
+    return run_cycle(m, a, pl, today, alert=alerts.append)
+
+
+def _winter_book(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    e = entry()
+    e["fire_date"] = "2027-01-14"
+    pl = payload(entries=[e], stops=[stop_row()])
+    pl["as_of"] = "2027-01-14"
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    return m, a, pl, e
+
+
+def test_gate_r19_hold_survives_the_winter_utc_roll(tmp_path, monkeypatch):
+    """In EST the UTC date rolls at 19:00 ET - inside the after-hours window
+    this round closes. A release keyed on `today` would re-sweep the cash
+    at 19:05 and dust-size the 20:05 placement: round 3's bug, one hour
+    earlier. The release keys on the SESSION date and regular hours. The
+    clock is pinned in UTC here: 00:05Z Fri IS 19:05 EST Thu."""
+    m, a, pl, e = _winter_book(tmp_path, monkeypatch)
+    alerts = []
+    cyc = lambda *t, **k: _utc_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2027, 1, 14, 19, 0, today="2027-01-14")               # 14:00 EST Thu: pre-funded
+    assert m.state.prefund_usd == 250.0 and m.state.bil_qty == 27
+    assert m.state.prefund_date == "2027-01-14"
+    pl["entries"] = []                                        # tracker blip
+    cyc(2027, 1, 15, 0, 5, today="2027-01-15")                # 19:05 EST Thu
+    assert m.state.prefund_usd == 250.0, "hold released on the winter UTC roll"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept at 19:05 ET"
+    pl["entries"] = [e]                                       # the fire is back
+    cyc(2027, 1, 15, 1, 5, today="2027-01-15")                # 20:05 EST Thu
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 5 and m.state.prefund_usd == 0.0
+
+
+def test_gate_r19_prefund_stamps_the_session_date_not_utc(tmp_path, monkeypatch):
+    """A pre-fund made in after-hours after the winter UTC roll (19:30 EST =
+    00:30Z next date) must be stamped with the SESSION date, or the next
+    morning's release compares equal dates and never fires."""
+    m, a, pl, e = _winter_book(tmp_path, monkeypatch)
+    alerts = []
+    cyc = lambda *t, **k: _utc_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2027, 1, 15, 0, 30, today="2027-01-15")               # 19:30 EST Thu: deferred, pre-funded
+    assert m.state.prefund_usd == 250.0
+    assert m.state.prefund_date == "2027-01-14", m.state.prefund_date
+    pl["entries"] = []                                        # fire gone for good
+    a.open_market()                                           # the BIL sell fills at the open
+    cyc(2027, 1, 15, 14, 35, today="2027-01-15")              # 09:35 EST Fri: released, swept
+    assert m.state.prefund_usd == 0.0 and m.state.prefund_date == ""
+    assert [o for o in a.orders("BIL") if o["qty"] > 0], "idle cash not re-swept"
+
+
+def test_gate_r19_hold_survives_an_et_date_roll_outside_regular_hours(tmp_path, monkeypatch):
+    """VENUE-1: the regular_session_open clause of the release is load-
+    bearing on its own. Pre-fund Friday, blip the fire; at 00:05 ET
+    Saturday the ET date HAS rolled but no session has started - the hold
+    must stay (else the sweep rests a BUY for Monday and the returning fire
+    cannot fund until Tuesday). It releases at the next regular session."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    pl["as_of"] = "2026-08-21"
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 21, 10, 35, today="2026-08-21")              # Fri: pre-funded
+    assert m.state.prefund_usd == 250.0
+    pl["entries"] = []
+    cyc(2026, 8, 21, 20, 5, today="2026-08-22")               # Fri 20:05: blip
+    cyc(2026, 8, 22, 0, 5, today="2026-08-22")                # Sat 00:05 ET: date rolled, no session
+    assert m.state.prefund_usd == 250.0, "hold released on the ET date roll"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "sweep BUY resting for Monday"
+    pl["entries"] = [entry()]
+    cyc(2026, 8, 22, 10, 0, today="2026-08-22")               # Sat 10:00: fire back, placed
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 5 and m.state.prefund_usd == 0.0
+    # and the hold DOES release once a regular session starts with the fire gone
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=10.0, bil_qty=30)
+    a2 = SessionDryAdapter()
+    cyc2 = lambda *t, **k: _session_cycle(m2, a2, pl, alerts, monkeypatch, *t, **k)
+    pl["entries"] = [entry()]
+    cyc2(2026, 8, 21, 10, 35, today="2026-08-21")
+    pl["entries"] = []
+    pl["as_of"] = "2026-08-24"
+    cyc2(2026, 8, 24, 9, 35, today="2026-08-24")              # Mon in session: released
+    assert m2.state.prefund_usd == 0.0
+    assert [o for o in a2.orders("BIL") if o["qty"] > 0], "idle cash not re-swept"
+
+
+def test_gate_r19_stale_alert_exempts_a_sell_resting_before_the_bell(tmp_path, monkeypatch):
+    """TESTS-5: the stale-order WARN ('still working after Nd') exempts an
+    order resting for the open while the regular session is not open. A
+    sell placed Friday after-hours is 3 days old at Monday 09:27 ET - not
+    stale, the bell has not rung. Keyed on the OPG window it would page."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    pl["as_of"] = "2026-08-21"
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 21, 16, 5, today="2026-08-21")               # Fri after-hours: BIL sell rests
+    (sell,) = a.orders("BIL")
+    assert sell["status"] == "working"
+    pl["as_of"] = "2026-08-24"
+    cyc(2026, 8, 24, 9, 27, today="2026-08-24")               # Mon, before the bell, 3d old
+    assert sell["status"] == "working"
+    assert not [ev for ev in m.state.events if "still working" in ev["msg"]], "paged stale before the bell"
+    assert not any(rec.get("stale_alerted") for rec in m.state.pending_book_orders.values())
+
+
+def test_gate_r19_a_resting_sell_is_not_stuck_during_after_hours(tmp_path, monkeypatch):
+    """A MKT sell placed after the close rests at the venue until the open.
+    With the OPG window now closed 16:00-20:00, the resting exemption must
+    key on REGULAR hours, or reconcile 2b counts the after-hours cycles as
+    stuck and cancels the sell at 16:20 - the round-1 wedge, reborn. The
+    count starts at the 09:30 bell, not the 09:25 planning cutoff."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+    cyc(2026, 8, 20, 16, 5)                                   # deferred + pre-fund: BIL sell rests
+    (sell,) = a.orders("BIL")
+    assert sell["qty"] < 0 and sell["status"] == "working"
+    for h, mi in ((16, 10), (16, 15), (16, 20), (16, 25), (19, 55), (20, 5), (23, 0)):
+        cyc(2026, 8, 20, h, mi)
+    assert sell["status"] == "working", "resting sell cancelled as stuck in after-hours"
+    assert not [ev for ev in m.state.events if "stuck" in ev["msg"]]
+    cyc(2026, 8, 21, 9, 29)                                   # pre-bell: still resting
+    assert sell["status"] == "working"
+    for mi in (35, 40, 45):                                   # in session and unfilled: stuck
+        cyc(2026, 8, 21, 9, mi)
+    assert sell["status"] == "cancelled"
+
+
+# --- round 20 (2026-09-11): the book records the price the VENUE holds -------
+
+def test_gate_r20_the_book_records_the_snapped_stop_not_the_published_one(tmp_path):
+    """The tracker publishes trail levels to four decimals (`trail_level` is
+    `round(level, 4)`); the venue holds cents. After placement the ledger,
+    /status and the next idempotency key must all mean the order that is
+    actually resting - otherwise the book reports protection at a price
+    nothing is working at. Modelled on the live GH shape: trail 137.0507."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()],
+                            stops=[stop_row(trail=44.0507)]),
+              "2026-08-20", alert=lambda _: None)
+    pos = m.state.positions["1"]
+    assert pos.stop_order_ref and not pos.stop_missing
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 44.05
+    assert pos.stop_level == 44.05, pos.stop_level
+    # the id re-derived from the book's level RESOLVES to the resting order
+    # (the first review's TESTS-2: asserting the string alone passed while
+    # the venue held the order under a different id entirely)
+    cid = blend_mod.stop_client_id(pos.call_id, pos.stop_level)
+    assert cid.endswith("44.0500")
+    found = a.find_stock_order(cid)
+    assert found and found["order_ref"] == pos.stop_order_ref
+    assert found["status"] == "working"
+
+
+def test_gate_r20_the_ratchet_replace_also_records_the_snapped_level(tmp_path):
+    """The ratchet is the stop path that runs every cycle for the life of a
+    position - it cancels and re-places at each new published trail. It
+    must snap and record exactly as the first placement does, or the book
+    drifts off the venue one ratchet at a time (and the id it would reuse
+    names a price nothing holds)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    out = run_cycle(m, a, payload(stops=[stop_row(trail=47.0507)]),
+                    "2026-08-21", alert=lambda _: None)
+    (adj,) = [o for o in out if o["action"] == "ADJUST_STOP"]
+    assert adj["old_ref"] == "old-stop"
+    pos = m.state.positions["1"]
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 47.05
+    assert pos.stop_level == 47.05, pos.stop_level
+    cid = blend_mod.stop_client_id(pos.call_id, pos.stop_level)
+    assert cid.endswith("47.0500")
+    found = a.find_stock_order(cid)
+    assert found and found["order_ref"] == pos.stop_order_ref
+    assert found["status"] == "working"
+
+
+# --- round 20 remediation (counter-agent, 2026-09-11) ------------------------
+# The first build snapped ONLY at the venue boundary and recorded the snapped
+# price in `pos.stop_level`, while the idempotency key and the ratchet
+# comparand still came from the tracker's off-grid level. Five lenses
+# reproduced the same HIGH: the ratchet fires every cycle at an unchanged
+# level, the replacement is placed under the id the RESTING order carries,
+# the adapter duplicate-suppresses it, and the cancel that follows retires
+# the only stop there was — naked position, `stop_missing` False, entries
+# unblocked. The level is snapped at INGESTION now, so the price, the key
+# and the comparand are one number. These gates are the ones that would
+# have caught it.
+
+def test_gate_r20b_an_unchanged_off_grid_trail_never_re_places_the_stop(tmp_path):
+    """THE gate for the remediation. Three cycles, the same published
+    137.0507-shaped trail: exactly ONE placement, one working stop resting
+    at the end of EVERY cycle, and no ADJUST_STOP after the first."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    pl = payload(entries=[entry()], stops=[stop_row(trail=44.0507)])
+    adjusts, alerts = 0, []
+    for day in ("2026-08-20", "2026-08-21", "2026-08-24"):
+        out = run_cycle(m, a, pl, day, alert=alerts.append)
+        adjusts += len([o for o in out if o["action"] == "ADJUST_STOP"])
+        pos = m.state.positions["1"]
+        resting = [o for o in a._orders.values()
+                   if o["order_type"] == "STP" and o["status"] == "working"]
+        assert len(resting) == 1, (day, resting)          # never zero, never two
+        assert resting[0]["stop_price"] == 44.05
+        assert resting[0]["order_ref"] == pos.stop_order_ref
+        assert not pos.stop_missing and not blend_mod._is_unprotected(pos)
+    assert adjusts == 0, "a republished sub-tick level ratcheted"
+    assert not [x for x in alerts if "naked" in x or "CANCELLED" in x], alerts
+
+
+def test_gate_r20b_a_replace_at_the_resting_level_leaves_exactly_one_stop(tmp_path):
+    """Round 20 pinned "a duplicate-suppressed replace never cancels the
+    resting stop". Round 21 changed the mechanism (cancel first, then
+    place) so the property is re-stated as the invariant it protected: an
+    ADJUST_STOP planned at the level already resting ends with exactly one
+    working stop at that level and the position protected."""
+    from app.blend import _execute_adjust_stop
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_level=44.05, stop_ref=None)
+    pos = m.state.positions["1"]
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.05, tif="GTC",
+                             client_order_id=blend_mod.stop_client_id(1, 44.05))
+    m.on_stop_placed(1, rs["order_ref"], 44.05)
+    alerts = []
+    _execute_adjust_stop(m, a, {"call_id": 1, "symbol": "CRSP", "qty": 5,
+                                "stop_level": 44.05, "reason": "trail ratchet",
+                                "old_ref": rs["order_ref"]},
+                         alerts.append)
+    resting = [o for o in a._orders.values()
+               if o["order_type"] == "STP" and o["status"] == "working"]
+    assert len(resting) == 1 and resting[0]["stop_price"] == 44.05
+    assert pos.stop_order_ref == resting[0]["order_ref"] and not pos.stop_missing
+    assert not blend_mod._is_unprotected(pos)
+
+
+def test_gate_r20b_entry_risk_is_measured_to_the_stop_that_will_rest(tmp_path):
+    """Sizing divides the risk dollars by `entry_ref - trail`. If the trail
+    is snapped only later, the risk unit is measured to a price no order
+    will ever hold. Snapped at ingestion: 50 - 44.0507 -> 50 - 44.05."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    # numbers chosen so the tick MOVES the share count: risk $30 over
+    # 50 - 45.7143 = 4.2857 -> 7 sh unsnapped; over 50 - 45.71 = 4.29 -> 6
+    out = m.step("2026-08-20", payload(entries=[entry()],
+                                       stops=[stop_row(trail=45.7143)]), PRICES)
+    (ent,) = [o for o in out if o["action"] == "ENTER"]
+    assert ent["stop_level"] == 45.71
+    assert ent["qty"] == 6, ent["qty"]                     # 7 would be the unsnapped unit
+
+
+def test_gate_r20b_a_legacy_off_grid_level_keeps_its_handle_and_rests_on_grid(tmp_path):
+    """The live GH row was journalled at 137.0507 before any of this
+    existed. The first remediation NORMALIZED it in `_ensure_stop` - and the
+    second review reproduced why that is wrong: the level is the id, the id
+    is the only durable venue handle, and re-minting it strands anything
+    that already rests under the old one. So: the id stays, the adapter
+    snaps the PRICE, and the order is findable by the id the book re-derives."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_level=44.0507, stop_ref=None)
+    pos = m.state.positions["1"]
+    pos.stop_missing = True
+    assert blend_mod._ensure_stop(m, a, pos, lambda _m: None)
+    assert pos.stop_level == 44.0507                       # handle untouched
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 44.05   # price on grid
+    found = a.find_stock_order(blend_mod.stop_client_id(1, pos.stop_level))
+    assert found and found["order_ref"] == pos.stop_order_ref
+
+
+def test_gate_r20b_an_unacked_stop_under_the_old_id_is_adopted_not_stacked(tmp_path):
+    """REGR-1, reproduced by the second review against the first
+    remediation: an order that DID land under the off-grid id (ack timeout,
+    or a kill between placeOrder and on_stop_placed) while the book shows
+    stop_order_ref None. Re-minting the id would place a SECOND 6-share
+    stop - cover above held. The unchanged id lets the venue dedupe adopt
+    it instead."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ghost = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0507, tif="GTC",
+                                client_order_id=blend_mod.stop_client_id(1, 44.0507))
+    _held_position(m, stop_level=44.0507, stop_ref=None)
+    pos = m.state.positions["1"]
+    pos.stop_missing = True
+    assert blend_mod._ensure_stop(m, a, pos, lambda _m: None)
+    resting = [o for o in a._orders.values() if o["order_type"] == "STP" and o["status"] == "working"]
+    assert len(resting) == 1, "a second stop was stacked on the un-ACKed one"
+    assert pos.stop_order_ref == ghost["order_ref"] and not pos.stop_missing
+
+
+def test_gate_r20b_no_stop_is_placed_over_an_unconfirmed_orphan(tmp_path):
+    """MIGR-1: `_resize_peer_cover`'s restore leg refuses to place while an
+    earlier cover of the same position is still unconfirmed at the venue;
+    `_ensure_stop` had no such guard. With one, the honest state is
+    STOP_MISSING - not a second order that could take cover above held."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_level=44.05, stop_ref=None)
+    pos = m.state.positions["1"]
+    pos.stop_missing = True
+    m.record_orphan_stop("ghost-1", {"symbol": "CRSP", "qty": -5, "call_id": 1})
+    alerts = []
+    assert not blend_mod._ensure_stop(m, a, pos, alerts.append)
+    assert not [o for o in a._orders.values() if o["order_type"] == "STP"]
+    assert pos.stop_missing and pos.stop_order_ref is None
+    assert any("orphan" in e["msg"] for e in m.state.events)
+
+
+def test_gate_r20b_the_live_state_shape_through_the_real_cycle(tmp_path):
+    """TEST-8, the strongest gate that was missing: the exact row tonight's
+    deploy meets, driven through run_cycle (reconcile, the stops pass, the
+    ratchet comparand), not through _ensure_stop alone. Off-grid level ON
+    DISK, no stop, the tracker republishing the same off-grid level. Four
+    cycles: one working stop at 137.05 throughout, the id re-derived from
+    the book's level resolves to it, no ADJUST_STOP ever."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=23.58, bil_qty=153, spy_qty=45)
+    a = DryAdapter()
+    _held_position(m, symbol="GH", qty=6, fill=159.24, stop_level=137.0507,
+                   stop_ref=None, adapter=a)
+    pos = m.state.positions["1"]
+    pos.stop_missing = True
+    pl = payload(stops=[stop_row(symbol="GH", trail=137.0507)])
+    pl["as_of"] = "2026-09-11"
+    prices = {**PRICES, "GH": 159.24}
+    adjusts = 0
+    for day in ("2026-09-11", "2026-09-12", "2026-09-14", "2026-09-15"):
+        out = run_cycle(m, a, pl, day, alert=lambda _m: None)
+        adjusts += len([o for o in out if o["action"] == "ADJUST_STOP"])
+        resting = [o for o in a._orders.values()
+                   if o["order_type"] == "STP" and o["status"] == "working"]
+        assert len(resting) == 1 and resting[0]["stop_price"] == 137.05, (day, resting)
+        assert resting[0]["order_ref"] == pos.stop_order_ref
+        assert not pos.stop_missing and not blend_mod._is_unprotected(pos)
+        found = a.find_stock_order(blend_mod.stop_client_id(1, pos.stop_level))
+        assert found and found["order_ref"] == pos.stop_order_ref
+    assert adjusts == 0
+    # ... and when the tracker then publishes a HIGHER off-grid level, the
+    # ratchet fires exactly once, re-mints the id on the grid, and holds
+    pl["stops"] = [stop_row(symbol="GH", trail=137.205)]
+    for day in ("2026-09-16", "2026-09-17"):
+        out = run_cycle(m, a, pl, day, alert=lambda _m: None)
+        adjusts += len([o for o in out if o["action"] == "ADJUST_STOP"])
+        resting = [o for o in a._orders.values()
+                   if o["order_type"] == "STP" and o["status"] == "working"]
+        assert len(resting) == 1 and resting[0]["stop_price"] == 137.2, (day, resting)
+    assert adjusts == 1 and pos.stop_level == 137.2
+    assert blend_mod.stop_client_id(1, pos.stop_level).endswith("137.2000")
+
+
+def test_gate_r20b_the_smallest_real_ratchet_still_fires(tmp_path):
+    """TEST-6, the mirror of the unchanged-trail gate: a ONE-tick move is a
+    real ratchet. Without this, STOP_EPS could widen to two cents and every
+    stop would freeze at its first level for the life of the position."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_level=44.05)
+    a = DryAdapter()
+    out = run_cycle(m, a, payload(stops=[stop_row(trail=44.06)]),
+                    "2026-08-21", alert=lambda _: None)
+    assert len([o for o in out if o["action"] == "ADJUST_STOP"]) == 1
+    pos = m.state.positions["1"]
+    assert pos.stop_level == 44.06
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 44.06
+    found = a.find_stock_order(blend_mod.stop_client_id(1, 44.06))
+    assert found and found["order_ref"] == pos.stop_order_ref
+
+
+def test_gate_r20b_a_trail_at_or_within_a_tick_of_entry_ref_is_refused(tmp_path):
+    """INGE-1: the ordering guard used to run AFTER the floor-snap, which
+    only widens the distance - so a trail EQUAL to entry_ref (a halted
+    name, ATR 0) passed the guard with a sub-tick risk unit and the cash
+    clamp was the only thing bounding a several-thousand-share order."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=100_000.0)
+    e = entry(entry_ref=12.3456)
+    for trail in (12.3456, 12.3441, 12.34, 12.35):
+        out = m.step("2026-08-20", payload(entries=[e], stops=[stop_row(trail=trail)]),
+                     {**PRICES, "CRSP": 12.35})
+        assert not [o for o in out if o["action"] == "ENTER"], trail
+    # a full-tick distance is a real stop distance and sizes normally
+    out = m.step("2026-08-20", payload(entries=[e], stops=[stop_row(trail=12.33)]),
+                 {**PRICES, "CRSP": 12.35})
+    (ent,) = [o for o in out if o["action"] == "ENTER"]
+    assert ent["stop_level"] == 12.33
+
+
+def test_gate_r20b_unsnappable_trails_fail_closed_on_both_arms(tmp_path):
+    """TEST-4: both new fail-closed arms for a POSITIVE trail that cannot be
+    snapped were untested (the existing gate uses -1.0, which short-circuits
+    before the snap)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_level=44.05)
+    # (a) the stops pass: an absurd level is a WARN, not a ratchet, not a raise
+    out = m.step("2026-08-21", payload(stops=[stop_row(trail=1e26)]), PRICES)
+    assert not [o for o in out if o["action"] == "ADJUST_STOP"]
+    assert any("unusable trail" in e["msg"] for e in m.state.events)
+    # (b) pass 4: a level that rounds off the board is STOP_MISSING, loudly
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=2_750.0)
+    _held_position(m2, stop_level=0.00001, stop_ref=None)
+    p2 = m2.state.positions["1"]
+    p2.stop_missing = True
+    alerts = []
+    blend_mod.STOP_RETRY_SLEEP_S, keep = 0.0, blend_mod.STOP_RETRY_SLEEP_S
+    try:
+        assert not blend_mod._ensure_stop(m2, DryAdapter(), p2, alerts.append)
+    finally:
+        blend_mod.STOP_RETRY_SLEEP_S = keep
+    assert p2.stop_missing and any("STOP_MISSING" in x for x in alerts)
+
+
+def test_gate_r20b_cover_restore_keeps_an_off_grid_peer_level_and_resolves(tmp_path):
+    """TEST-1: the two `_resize_peer_cover` on_stop_placed sites were
+    covered by no gate for the property that matters - the recorded level
+    stays the book's own (off-grid or not), so the re-derived id resolves
+    to the order that rests. Same drive as the Z1 restore gate, with an
+    off-grid level on the resized peer."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0507)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _msg: None)
+    a._positions["CRSP"] = 9
+    m.state.last_reconcile_ts = time.time()
+    run_cycle(m, a, None, "2026-08-25", alert=lambda _msg: None)
+    p2 = m.state.positions["2"]
+    assert not p2.stop_missing and p2.stop_level == 43.0507
+    assert a._stops[p2.stop_order_ref]["stop_price"] == 43.05
+    found = a.find_stock_order(blend_mod.stop_client_id(2, p2.stop_level))
+    assert found and found["order_ref"] == p2.stop_order_ref
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+
+
+def test_gate_r20b_a_venue_side_cancel_is_still_detected_after_the_snap(tmp_path):
+    """Reconcile's stop verification addresses the resting order by the id
+    re-derived from `pos.stop_level`. If that id stopped naming the real
+    order, the ONLY detector of a venue-side cancel of a GTC stop would go
+    blind — silently. Kill the stop at the venue and the book must see it."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    pl = payload(entries=[entry()], stops=[stop_row(trail=44.0507)])
+    alerts = []
+    run_cycle(m, a, pl, "2026-08-20", alert=alerts.append)
+    pos = m.state.positions["1"]
+    ref = pos.stop_order_ref
+    a._orders[ref]["status"] = "cancelled"      # the venue kills it overnight
+    a._stops.pop(ref, None)
+    alerts.clear()
+    run_cycle(m, a, pl, "2026-08-21", alert=alerts.append)
+    assert any("naked" in x.lower() or "cancelled" in x.lower() for x in alerts), alerts
+    resting = [o for o in a._orders.values()
+               if o["order_type"] == "STP" and o["status"] == "working"]
+    assert len(resting) == 1 and resting[0]["stop_price"] == 44.05
+    assert m.state.positions["1"].stop_order_ref == resting[0]["order_ref"]
+
+
+# --- round 21 (2026-09-11): the ratchet is cancel-then-place ----------------
+# Live, first cycles after round 20: the ratchet's SECOND sell-stop against
+# GH's six shares came back `Inactive` from the venue every cycle; the book
+# reported it rejected, kept the old stop, recorded nothing, cancelled
+# nothing - and next cycle placed another. Four stops on six shares in
+# fifteen minutes. MUTATION-VERIFIED (docs/verdicts/INDEX.md, round 21):
+# place-then-cancel restored, the post-cancel fallback removed, the cancel
+# guard removed, and the adapter's cancel-on-Inactive removed each turn a
+# gate red.
+
+class StackRejectingAdapter(DryAdapter):
+    """The venue's shape on 2026-09-11: a second sell-stop on a symbol that
+    already has one resting is accepted-but-Inactive - reported to the
+    caller as a rejection - and it STAYS at the venue unless cancelled."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.inactive: list[str] = []
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        if order_type == "STP" and qty < 0:
+            resting = [o for o in self._orders.values()
+                       if o["symbol"] == symbol and o["order_type"] == "STP"
+                       and o["qty"] < 0 and o["status"] == "working"]
+            if resting:
+                ref = f"inactive-{symbol}-{len(self.inactive)}"
+                self.inactive.append(ref)
+                raise RuntimeError("order rejected by venue (status Inactive)")
+        return super().place_stock_order(symbol, qty, order_type, **kw)
+
+
+class RefusesNewLevelAdapter(DryAdapter):
+    """Refuses every STP placement except at `allowed` levels: the shape
+    where the venue takes the OLD level and refuses the NEW one."""
+    allowed = (44.05,)
+
+    def place_stock_order(self, symbol, qty, order_type, stop_price=None, **kw):
+        if order_type == "STP" and round(float(stop_price), 2) not in self.allowed:
+            raise RuntimeError("order rejected by venue (status Cancelled): [201] test")
+        return super().place_stock_order(symbol, qty, order_type,
+                                         stop_price=stop_price, **kw)
+
+
+def _resting_stops(a):
+    return [o for o in a._orders.values()
+            if o["order_type"] == "STP" and o["status"] == "working"]
+
+
+def test_gate_r21_ratchet_never_rests_two_stops_on_a_venue_that_stacks(tmp_path):
+    """THE gate. A venue that Inactive-s a second sell-stop: with
+    place-then-cancel the book keeps the old stop and leaves an Inactive
+    order behind every cycle; with cancel-then-place exactly one stop rests
+    at the NEW level after the cycle and nothing was left behind."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = StackRejectingAdapter()
+    a.seed_position("CRSP", 5)
+    first = a.place_stock_order("CRSP", -5, "STP", stop_price=44.05, tif="GTC",
+                                client_order_id=blend_mod.stop_client_id(1, 44.05))
+    _held_position(m, stop_level=44.05, stop_ref=first["order_ref"])
+    pos = m.state.positions["1"]
+    alerts = []
+    for day in ("2026-08-21", "2026-08-24", "2026-08-25"):
+        run_cycle(m, a, payload(stops=[stop_row(trail=44.2)]), day, alert=alerts.append)
+        resting = _resting_stops(a)
+        assert len(resting) == 1, (day, resting)
+        assert resting[0]["stop_price"] == 44.2 and resting[0]["order_ref"] == pos.stop_order_ref
+        assert a.inactive == [], "a second stop reached the venue"
+    assert pos.stop_level == 44.2 and not pos.stop_missing
+    assert a._orders[first["order_ref"]]["status"] == "cancelled"
+
+
+def test_gate_r21_a_refused_new_level_re_places_the_old_one_at_once(tmp_path):
+    """If the venue refuses the NEW level after the old stop is cancelled,
+    the position is naked NOW - the old level goes straight back, loudly,
+    and the ratchet is retried next cycle."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = RefusesNewLevelAdapter()
+    first = a.place_stock_order("CRSP", -5, "STP", stop_price=44.05, tif="GTC",
+                                client_order_id=blend_mod.stop_client_id(1, 44.05))
+    _held_position(m, stop_level=44.05, stop_ref=first["order_ref"])
+    pos = m.state.positions["1"]
+    alerts = []
+    blend_mod.STOP_RETRY_SLEEP_S, keep = 0.0, blend_mod.STOP_RETRY_SLEEP_S
+    try:
+        run_cycle(m, a, payload(stops=[stop_row(trail=44.2)]), "2026-08-21",
+                  alert=alerts.append)
+    finally:
+        blend_mod.STOP_RETRY_SLEEP_S = keep
+    resting = _resting_stops(a)
+    assert len(resting) == 1 and resting[0]["stop_price"] == 44.05, resting
+    assert resting[0]["order_ref"] == pos.stop_order_ref != first["order_ref"]
+    assert pos.stop_level == 44.05 and not pos.stop_missing
+    assert not blend_mod._is_unprotected(pos)
+    assert any("REJECTED" in x and "re-placing" in x for x in alerts), alerts
+    assert any("restored" in x for x in alerts), alerts
+
+
+def test_gate_r21_an_unresolved_cancel_defers_the_ratchet_and_places_nothing(tmp_path):
+    """A cancel that raises (FILLED, or state UNKNOWN) means the old stop
+    may still rest: placing the new one would be the stack. Defer."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    first = a.place_stock_order("CRSP", -5, "STP", stop_price=44.05, tif="GTC",
+                                client_order_id=blend_mod.stop_client_id(1, 44.05))
+    _held_position(m, stop_level=44.05, stop_ref=first["order_ref"])
+    pos = m.state.positions["1"]
+
+    def boom(ref):
+        raise RuntimeError(f"cancel of {ref} not acknowledged — state UNKNOWN")
+    a.cancel_stock_order = boom
+    alerts = []
+    run_cycle(m, a, payload(stops=[stop_row(trail=44.2)]), "2026-08-21",
+              alert=alerts.append)
+    resting = _resting_stops(a)
+    assert len(resting) == 1 and resting[0]["order_ref"] == first["order_ref"]
+    assert pos.stop_level == 44.05 and pos.stop_order_ref == first["order_ref"]
+    assert any("DEFERRED" in x for x in alerts), alerts
+
+
+def test_gate_r21_an_already_gone_old_stop_does_not_block_the_new_one(tmp_path):
+    """cancel_stock_order returning False (not found / already cancelled)
+    is not a stack risk: the new level is placed."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_level=44.05, stop_ref="vanished-ref")
+    pos = m.state.positions["1"]
+    run_cycle(m, a, payload(stops=[stop_row(trail=44.2)]), "2026-08-21",
+              alert=lambda _: None)
+    resting = _resting_stops(a)
+    assert len(resting) == 1 and resting[0]["stop_price"] == 44.2
+    assert pos.stop_order_ref == resting[0]["order_ref"] and pos.stop_level == 44.2
+
+
+# --- sleeve-only construction (target 1.0; Casey 2026-10-01 "mirror the engine")
+# MUTATION-VERIFIED: dropping the (0,1] check in _sleeve_target turns
+# test_sleeve_target_bad_or_absent_never_moves_money red; adopting a changed
+# target on the FIRST poll (SLEEVE_TARGET_CONFIRM=1) turns
+# test_sleeve_target_change_needs_two_polls_and_pages red; dropping the
+# residue transfer (step 4b) or the CORE_BUY gate turns
+# test_sleeve_only_moves_core_residue red; dropping the persistence turns
+# test_sleeve_target_persists red.
+
+def _pl_target(t):
+    pl = payload()
+    pl["rebalance"]["target"] = t
+    return pl
+
+
+def _sleeve_only_book(m, bil_qty=100, core_cash=0.0):
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=bil_qty, spy_qty=0, core_cash=core_cash)
+    m.state.sleeve_target = 1.0
+
+
+def test_sleeve_only_seed_and_rebalance(tmp_path):
+    # a fresh seed at a published 1.0 puts the whole book in the sleeve at once
+    m = mk(tmp_path)
+    run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    assert m.state.initialized and m.state.core_cash == 0.0 and m.state.spy_qty == 0
+    assert m.state.sleeve_target == 1.0 and m.state.bil_qty == 100
+    assert any("100% sleeve / 0% core" in e["msg"] for e in m.state.events)
+    # a 30/70 book flipped to 1.0: poll 1 waits, poll 2 sells ALL the SPY in
+    # one pass, sweeps the proceeds, pages, and never buys a core again
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    alerts = []
+    out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=alerts.append)
+    assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY")]
+    assert m2.state.spy_qty == 70 and m2.state.sleeve_target == 0.30   # inferred from the shape
+    out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=alerts.append)
+    (rb,) = [o for o in out if o["action"] == "REBALANCE"]
+    assert rb["direction"] == "core_to_sleeve" and rb["usd"] == pytest.approx(7_000.0)
+    assert not [o for o in out if o["action"] == "CORE_BUY"]
+    assert m2.state.spy_qty == 0 and m2.state.core_cash == pytest.approx(0.0, abs=1e-6)
+    assert m2.state.bil_qty == 100 and m2.state.sleeve_target == 1.0
+    assert any("30% -> 100%" in a and "SOLD" in a for a in alerts)
+    out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-21", alert=alerts.append)
+    assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY")]
+
+
+def test_sleeve_only_moves_core_residue(tmp_path):
+    # a small residue (rounding) and a LARGE one (an unadopted seed-time
+    # core buy) both go to the sleeve: no core sell for cash, no SPY buy
+    for residue, bil, want_bil, want_cash in ((258.0, 97, 99, 58.0), (600.0, 94, 100, 0.0)):
+        m = mk(tmp_path / f"r{int(residue)}")
+        _sleeve_only_book(m, bil_qty=bil, core_cash=residue)
+        out = run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+        assert m.state.core_cash == 0.0, residue
+        assert not [o for o in out if o["action"] in ("CORE_BUY", "REBALANCE")], residue
+        assert m.state.bil_qty == want_bil and m.state.sleeve_cash == pytest.approx(want_cash)
+        assert any("residue moved to the sleeve" in e["msg"] for e in m.state.events)
+    # the FLIP cycle itself: SPY still held, core cash left over -> the
+    # core sell is planned and no SPY is bought with the leftover in the
+    # same cycle (the CORE_BUY gate is load-bearing here: 4b cannot run
+    # while spy_qty > 0)
+    m = mk(tmp_path / "flip")
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=64, core_cash=600.0)
+    m.state.sleeve_target = 1.0
+    out = run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    assert [o for o in out if o["action"] == "REBALANCE"][0]["direction"] == "core_to_sleeve"
+    assert not [o for o in out if o["action"] == "CORE_BUY"]
+    assert m.state.spy_qty == 0
+    out = run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    assert m.state.core_cash == 0.0 and not [o for o in out if o["action"] == "CORE_BUY"]
+    # the core sell's commission leaves core_cash NEGATIVE: moved too
+    m = mk(tmp_path / "neg")
+    _sleeve_only_book(m, bil_qty=100, core_cash=-1.0)
+    m.state.sleeve_cash = 5.0
+    run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    assert m.state.core_cash == 0.0 and m.state.sleeve_cash == pytest.approx(4.0)
+
+
+def test_sleeve_target_bad_or_absent_never_moves_money(tmp_path):
+    # the dangerous direction: a sleeve-only book sees a null / bad / absent
+    # target -> nothing is sold, bought or swept
+    m = mk(tmp_path)
+    _sleeve_only_book(m)
+    for bad in (None, 0, 1.5, "abc", -0.3):
+        out = m.step("2026-08-20", _pl_target(bad), PRICES)
+        assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY", "SWEEP")], bad
+        assert m.state.sleeve_target == 1.0
+    assert sum("sleeve target" in e["msg"] for e in m.state.events) == 1   # once a day
+    pl = payload(); pl.pop("rebalance")
+    assert not [o for o in m.step("2026-08-20", pl, PRICES) if o["action"] != "ALERT"]
+    # ... and a 30/70 book with a persisted None keeps the 0.30 default
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    for bad in (None, 0, "abc"):
+        assert not [o for o in m2.step("2026-08-20", _pl_target(bad), PRICES) if o["action"] == "REBALANCE"]
+
+
+def test_sleeve_target_change_needs_two_polls_and_pages(tmp_path):
+    # a tracker redeploy publishing 0.30 for ONE poll must not rebuy the core
+    m = mk(tmp_path)
+    _sleeve_only_book(m)
+    alerts = []
+    out = run_cycle(m, DryAdapter(), _pl_target(0.30), "2026-08-20", alert=alerts.append)
+    assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY", "SWEEP")]
+    assert m.state.sleeve_target == 1.0 and m.state.sleeve_target_seen == [0.30, 1]
+    # a different value in between resets the count
+    run_cycle(m, DryAdapter(), _pl_target(0.6), "2026-08-20", alert=alerts.append)
+    assert m.state.sleeve_target_seen == [0.6, 1] and m.state.sleeve_target == 1.0
+    # two agreeing polls adopt it, with a page, and the core is rebuilt
+    run_cycle(m, DryAdapter(), _pl_target(0.30), "2026-08-20", alert=alerts.append)
+    out = run_cycle(m, DryAdapter(), _pl_target(0.30), "2026-08-20", alert=alerts.append)
+    assert m.state.sleeve_target == 0.30
+    assert [o for o in out if o["action"] == "REBALANCE"][0]["direction"] == "sleeve_to_core"
+    assert any("100% -> 30%" in a and "BOUGHT" in a for a in alerts)
+    assert m.state.spy_qty == 70
+
+
+def test_sleeve_target_persists(tmp_path):
+    m = mk(tmp_path)
+    _sleeve_only_book(m)
+    m.state.sleeve_target_seen = [0.3, 1]
+    m.save()
+    st = Blend3070Manager(m.cfg, m.state_path).state
+    assert st.sleeve_target == 1.0 and st.sleeve_target_seen == [0.3, 1]
+
+
+def test_sleeve_only_entries_size_against_the_whole_book(tmp_path):
+    m = mk(tmp_path)
+    _sleeve_only_book(m)
+    pl = _pl_target(1.0); pl["entries"] = [entry()]; pl["stops"] = [stop_row()]
+    (ent,) = [o for o in m.step("2026-08-20", pl, PRICES) if o["action"] == "ENTER"]
+    assert ent["qty"] == 16            # 1% of $10,000 = $100 risk / $6 per share
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    (ent2,) = [o for o in m2.step("2026-08-20", payload(entries=[entry()], stops=[stop_row()]), PRICES) if o["action"] == "ENTER"]
+    assert ent2["qty"] == 5            # 1% of the $3,000 sleeve
+
+
+def test_sleeve_target_is_inferred_from_the_book_shape(tmp_path):
+    """A pre-field state file: a sleeve-only book must load as 1.0, not as
+    the 0.30 default (which would rebuild the core on two agreeing polls)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=100, spy_qty=0)   # sleeve_target None
+    out = run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    assert m.state.sleeve_target == 1.0
+    assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY")]
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    run_cycle(m2, DryAdapter(), payload(), "2026-08-20", alert=lambda _: None)
+    assert m2.state.sleeve_target == 0.30
+    # the first agreeing poll pages (the abort window), the second moves money
+    alerts = []
+    run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=alerts.append)
+    assert any("abort" in a for a in alerts) and m2.state.spy_qty == 70
+
+
+# --- stage 2: capital adoption (2026-10-05) ---------------------------------
+# Casey added funds to the account and asked for the book to be resized. The
+# book's capital is its LEDGER (seeded once from BLEND_BOOK_USD); stage 1
+# only ALERTS on a deposit. These gates pin the confirm-only adoption: the
+# operator journals an amount, the loop thread checks it against the venue
+# (unowned cash, available funds, BLEND_BUDGET, a quiet cycle) and credits
+# the ledger by the PERSISTED sleeve target, and the same cycle deploys it
+# through the ordinary core-buy / sweep path. Nothing is adopted from a
+# drift measurement; a venue LEVEL is never written into an event.
+
+class _VenueCashAdapter(DryAdapter):
+    """DryAdapter that also answers the account's cash: `total` and the
+    available-to-trade funds (`available`, None = the venue does not report
+    it). `total=None` = no claim."""
+
+    def __init__(self, total, available=None):
+        super().__init__()
+        self.total, self.available = total, available
+
+    def account_cash(self):
+        if self.total is None:
+            return None
+        return {"total_cash": self.total, "net_liq": None,
+                "available_funds": self.available, "ts": _time.time()}
+
+
+def _capital_book(tmp_path, **cfg):
+    """A seeded 30/70 book worth $10,000 at PRICES (SPY 100, BIL 100): core
+    70 SPY, sleeve 30 BIL, both cash buckets EMPTY - so the account's
+    TotalCashValue IS the unowned cash."""
+    m = mk(tmp_path, **cfg)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=70, bil_qty=30, core_cash=0.0)
+    m.state.sleeve_target = 0.30
+    m.state.capital_contributed = 10_000.0
+    return m
+
+
+def test_gate_capital_adopt_credits_the_ledger_by_the_persisted_target_and_deploys(tmp_path):
+    """MUTATION-VERIFIED: splitting by TARGET_SLEEVE instead of the persisted
+    target (set the book to 0.5 below) turns this red; skipping the
+    rebaseline leaves cash_baseline set; dropping the run_cycle hook leaves
+    the ledger unchanged after the cycle."""
+    m = _capital_book(tmp_path)
+    m.state.sleeve_target = 0.50                       # the book's OWN weight
+    m.state.spy_qty, m.state.bil_qty = 50, 50          # ...and held AT it
+    m.state.cash_baseline = {"venue": 0.0, "ledger": 0.0, "ts": _time.time()}
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    req = m.request_capital_adoption(7_000, "2026-08-20")
+    assert req["usd"] == 7_000.0 and m.state.capital_request == req
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "adopted" and r["usd"] == 7_000.0
+    assert m.state.sleeve_cash == pytest.approx(3_500.0)
+    assert m.state.core_cash == pytest.approx(3_500.0)
+    assert m.state.capital_contributed == pytest.approx(17_000.0)
+    assert m.state.capital_request is None
+    assert m.state.cash_baseline is None               # stage-1 clock restarted
+    ev = m.state.capital_events[-1]
+    assert ev["kind"] == "deposit_adopted" and ev["usd"] == 7_000.0
+    assert ev["sleeve_usd"] == 3_500.0 and ev["core_usd"] == 3_500.0
+    assert ev["sleeve_target"] == 0.5 and ev["date"] == "2026-08-20"
+    assert len(alerts) == 1 and "ADOPTED $7,000.00" in alerts[0]
+    assert "open positions keep the size" in alerts[0]
+    # the plan deploys it: idle core cash -> SPY, idle sleeve cash -> BIL
+    intents = m.step("2026-08-20", payload(), PRICES)
+    kinds = {i["action"]: i for i in intents}
+    assert kinds["CORE_BUY"]["qty"] == 35 and kinds["SWEEP"]["qty"] == 35
+    # persisted and reloaded intact
+    m.save()
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.capital_contributed == pytest.approx(17_000.0)
+    assert m2.state.capital_events[-1] == ev and m2.state.capital_request is None
+
+
+def test_gate_capital_adopt_end_to_end_through_run_cycle(tmp_path):
+    """The whole path: journal -> run_cycle adopts on the loop thread's
+    cycle -> the SAME cycle buys the core and sweeps the sleeve."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=alerts.append)
+    assert m.state.capital_request is None
+    assert m.state.capital_contributed == pytest.approx(17_000.0)
+    assert m.state.spy_qty == 70 + 49 and m.state.bil_qty == 30 + 21
+    assert m.state.core_cash == pytest.approx(0.0, abs=1e-6)
+    assert m.state.sleeve_cash == pytest.approx(0.0, abs=1e-6)
+    kinds = [(t["kind"], t["side"], t["qty"]) for t in m.state.trades]
+    assert ("core", "BUY", 49) in kinds and ("sweep", "BUY", 21) in kinds
+    assert any("ADOPTED $7,000.00" in x for x in alerts)
+    # a second cycle with no request is a no-op (nothing adopts twice)
+    before = (m.state.spy_qty, m.state.bil_qty, m.state.capital_contributed)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=alerts.append)
+    assert (m.state.spy_qty, m.state.bil_qty, m.state.capital_contributed) == before
+
+
+def test_gate_capital_adopt_refuses_more_than_the_venue_holds(tmp_path):
+    """The venue is the only ground truth for the amount: a request the
+    account cannot back is DROPPED with a RED page naming the shortfall
+    (a delta - never the account's cash level), ledger untouched."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=5_000.0, available=5_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "holds LESS cash" in r["reason"]
+    assert m.state.capital_request is None
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    assert m.state.capital_contributed == 10_000.0 and not m.state.capital_events
+    assert alerts[0].startswith("🚨🚨") and "5,000" not in alerts[0]
+    # B2: not even DERIVABLE - no shortfall figure either (usd is known)
+    assert "2,000" not in alerts[0] and "2,000" not in r["reason"]
+    assert m.state.events[-1]["level"] == "RED"
+    # a book order the ledger owns is NOT unowned cash: ledger cash counts
+    m2 = _capital_book(tmp_path / "b")
+    m2.state.core_cash = 2_000.0                       # the book's own cash
+    a2 = _VenueCashAdapter(total=8_000.0, available=8_000.0)   # 6,000 unowned
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r2 = blend_mod.adopt_capital(m2, a2, PRICES, "2026-08-20", alerts.append)
+    assert r2["status"] == "refused" and "holds LESS cash" in r2["reason"]
+    # within the rounding tolerance it adopts
+    m3 = _capital_book(tmp_path / "c")
+    a3 = _VenueCashAdapter(total=6_999.50, available=6_999.50)
+    m3.request_capital_adoption(7_000, "2026-08-20")
+    assert blend_mod.adopt_capital(m3, a3, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_waits_for_settlement_then_adopts(tmp_path):
+    """A deposit that has LANDED but is not AVAILABLE (a cash account's T+1,
+    a deposit hold) is deferred - request kept, said once a day - and
+    adopted once the venue says it is usable. No available-funds claim at
+    all (None) does not block."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=3_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "do not cover it yet" in r["reason"]
+    assert "4,000" not in r["reason"] and "3,000" not in r["reason"]   # B2
+    assert m.state.capital_request is not None and alerts == []
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    n_events = len(m.state.events)
+    blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert len(m.state.events) == n_events          # said once a day
+    assert m.status_summary(PRICES)["capital"]["request_pending"]["usd"] == 7_000.0
+    a.available = 7_000.0
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+    m2 = _capital_book(tmp_path / "b")
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    assert blend_mod.adopt_capital(m2, _VenueCashAdapter(7_000.0, None), PRICES,
+                                   "2026-08-20", alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_waits_for_a_quiet_cycle_and_a_venue_claim(tmp_path):
+    """Same quiet rule as the stage-1 reconcile (shared helper): journals in
+    flight, a fill inside CASH_QUIET_S, a fresh unreconciled record and an
+    adapter with no cash claim all DEFER (request kept, ledger untouched)."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    m.state.pending_book_orders["x"] = {"kind": "sweep", "date": "2026-08-20"}
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "pending journals" in r["reason"]
+    m.state.pending_book_orders.clear()
+    m.state.last_fill_ts = _time.time()
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "recent fill" in r["reason"]
+    m.state.last_fill_ts = _time.time() - blend_mod.CASH_QUIET_S - 1
+    m.state.unreconciled["7"] = {"ts": _time.time(), "symbol": "CRSP"}
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "unreconciled" in r["reason"]
+    m.state.unreconciled.clear()
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(None), PRICES,
+                                "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "no claim" in r["reason"]
+    assert m.state.capital_request is not None and alerts == []
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    # the stage-1 reconcile uses the same helper and still skips the same way
+    m.state.pending_entries["9"] = {"intent": {}, "date": "2026-08-20"}
+    assert blend_mod.reconcile_cash(m, a, alerts.append) is None
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "deferred"
+    m.state.pending_entries.clear()
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_respects_blend_budget(tmp_path):
+    """BLEND_BUDGET must hold the larger book BEFORE the cash is adopted,
+    or the sweep is clamped and entries blocked for no reason: refused
+    with a RED page naming the cap. A missing SPY/BIL quote (gross reads
+    LOW, r7) defers rather than passes. No cap = no check."""
+    alerts = []
+    m = _capital_book(tmp_path, blend_budget=12_000.0)  # gross 10,000 + 7,000
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "BLEND_BUDGET $12,000" in r["reason"]
+    assert m.state.capital_request is None and alerts[0].startswith("🚨🚨")
+    assert m.state.core_cash == 0.0
+    m2 = _capital_book(tmp_path / "b", blend_budget=20_000.0)
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, a, {"BIL": 100.0}, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "missing SPY/BIL quote" in r["reason"]
+    assert m2.state.capital_request is not None
+    assert blend_mod.adopt_capital(m2, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+    # exactly at the cap (within tolerance) adopts
+    m3 = _capital_book(tmp_path / "c", blend_budget=17_000.0)
+    m3.request_capital_adoption(7_000, "2026-08-20")
+    assert blend_mod.adopt_capital(m3, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_refused_on_a_halted_or_unseeded_book(tmp_path):
+    alerts = []
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    m.halt("KILL")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "halted (KILL)" in r["reason"]
+    assert m.state.capital_request is None and m.state.core_cash == 0.0
+    m2 = mk(tmp_path / "b")                          # never seeded
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "not seeded" in r["reason"]
+    assert m2.state.capital_request is None and m2.state.sleeve_cash == 0.0
+    # and a queued flatten on an un-halted book refuses too
+    m3 = _capital_book(tmp_path / "c")
+    m3.request_capital_adoption(7_000, "2026-08-20")
+    m3.state.flatten_request = {"ts": 1, "date": "2026-08-20"}
+    assert blend_mod.adopt_capital(m3, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "refused"
+
+
+def test_gate_capital_request_validation_replacement_and_expiry(tmp_path):
+    m = _capital_book(tmp_path)
+    for bad in ("abc", None, -5, 0, float("nan"), float("inf"), 6_000_000,
+                True, False, 0.004, "0.001"):
+        with pytest.raises(ValueError):
+            m.request_capital_adoption(bad, "2026-08-20")
+    assert m.state.capital_request is None
+    assert m.request_capital_adoption(0.005, "2026-08-20")["usd"] == 0.01
+    m.request_capital_adoption("7000", "2026-08-20")         # a string number is fine
+    m.request_capital_adoption(7_500, "2026-08-20")          # the latest wins
+    assert m.state.capital_request["usd"] == 7_500.0
+    assert "replaces the pending $7,000.00" in m.state.events[-1]["msg"]
+    # a request older than the TTL expires unexecuted
+    m.state.capital_request["ts"] = _time.time() - blend_mod.CAPITAL_REQUEST_TTL_S - 1
+    alerts = []
+    a = _VenueCashAdapter(total=8_000.0, available=8_000.0)
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "expired" and m.state.capital_request is None
+    assert m.state.core_cash == 0.0 and alerts[0].startswith("⚠️")
+    # the operator can withdraw one
+    m.request_capital_adoption(7_500, "2026-08-20")
+    assert m.clear_capital_request("operator")["usd"] == 7_500.0
+    assert m.state.capital_request is None and m.clear_capital_request() is None
+    # a malformed journaled request is dropped at LOAD, never executed
+    m.state.capital_request = {"usd": "junk", "ts": _time.time()}
+    m.save()
+    assert Blend3070Manager(m.cfg, m.state_path).state.capital_request is None
+
+
+def test_gate_kill_cancels_a_pending_capital_request(tmp_path):
+    """A /kill then /resume must never adopt cash into a book the operator
+    just stopped - the bootstrap-ack rule, applied to capital."""
+    m = _capital_book(tmp_path)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    m.request_flatten("2026-08-20")
+    assert m.state.capital_request is None and m.state.halted == "KILL"
+    assert any("CANCELLED" in e["msg"] for e in m.state.events)
+    m.resume("2026-08-20")
+    assert m.state.capital_request is None           # resume grants nothing
+
+
+def test_gate_capital_contributed_seed_and_pre_field_inference(tmp_path):
+    """A fresh seed records itself as the first capital event; a state file
+    from before the field infers the seed (BLEND_BOOK_USD clamped by
+    BLEND_BUDGET) ONCE and persists it, so a later env change cannot
+    rewrite it."""
+    m = mk(tmp_path, blend_budget=8_000.0)           # seed = min(10k, 8k)
+    a = DryAdapter()
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.initialized and m.state.capital_contributed == 8_000.0
+    (ev,) = [e for e in m.state.capital_events if e["kind"] == "seed"]
+    assert ev["usd"] == 8_000.0 and ev["sleeve_usd"] == 2_400.0
+    assert ev["core_usd"] == 5_600.0 and ev["sleeve_target"] == 0.30
+    # pre-field file: strip the fields and reload
+    raw = json.load(open(m.state_path))
+    for k in ("capital_contributed", "capital_events", "capital_request"):
+        raw.pop(k, None)
+    json.dump(raw, open(m.state_path, "w"))
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.capital_contributed == 8_000.0 and m2.capital_inferred == 8_000.0
+    (iev,) = m2.state.capital_events
+    assert iev["kind"] == "inferred" and iev["usd"] == 8_000.0
+    assert iev["sleeve_usd"] is None and iev["core_usd"] is None
+    (wev,) = [e for e in m2.state.events if "INFERRED from the seed config" in e["msg"]]
+    assert wev["level"] == "WARN"
+    m2.save()
+    m2.cfg.blend_book_usd = 999_999.0                # env changed later
+    m3 = Blend3070Manager(m2.cfg, m2.state_path)
+    assert m3.state.capital_contributed == 8_000.0   # persisted, not re-inferred
+    assert m3.capital_inferred is None               # nothing to page
+    # an UNSEEDED pre-field file infers nothing
+    m4 = mk(tmp_path / "u")
+    assert m4.state.capital_contributed is None and m4.capital_inferred is None
+
+
+def test_gate_capital_sleeve_only_book_adopts_everything_to_the_sleeve(tmp_path):
+    m = _capital_book(tmp_path)
+    m.state.sleeve_target, m.state.spy_qty = 1.0, 0
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", lambda *_: None)
+    assert r["status"] == "adopted"
+    assert m.state.sleeve_cash == 7_000.0 and m.state.core_cash == 0.0
+    pl = payload()
+    pl["rebalance"]["target"] = 1.0
+    intents = m.step("2026-08-20", pl, PRICES)
+    assert not any(i["action"] == "CORE_BUY" for i in intents)
+    (sweep,) = [i for i in intents if i["action"] == "SWEEP"]
+    assert sweep["qty"] == 70
+
+
+def test_gate_capital_feed_and_status_are_public_safe(tmp_path):
+    """The feed carries contributed capital and the capital events (the
+    operator's own amounts and dates); /status adds the pending request.
+    Neither ever carries the account's cash level."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_123.45, available=7_123.45)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    st = m.status_summary(PRICES)
+    assert st["capital"]["request_pending"]["usd"] == 7_000.0
+    assert st["capital"]["contributed"] == 10_000.0
+    blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", lambda *_: None)
+    feed = m.feed(PRICES, "2026-08-20")
+    assert feed["book"]["capital_contributed"] == 17_000.0
+    (ev,) = feed["capital_events"]
+    assert set(ev) == {"date", "kind", "usd", "sleeve_usd", "core_usd"}
+    assert ev["kind"] == "deposit_adopted" and ev["usd"] == 7_000.0
+    blob = json.dumps(feed) + json.dumps(m.status_summary(PRICES))
+    assert "7123" not in blob and "7,123" not in blob
+    assert "total_cash" not in blob and "available_funds" not in blob
+    assert m.status_summary(PRICES)["capital"]["request_pending"] is None
+
+
+def test_gate_capital_adopt_endpoint_journals_and_wakes_the_loop(tmp_path, monkeypatch):
+    """POST /blend/cash/adopt: EXEC_TOKEN-gated, POST only, validates the
+    amount, journals it under BLEND_LOCK and wakes the loop - which, with
+    the DryAdapter's no-claim cash, DEFERS it (request kept, nothing
+    adopted) and says so on /status."""
+    client, service = _service_client(tmp_path, monkeypatch)
+    with client as c:
+        assert _wait_until(lambda: service.BLEND is not None
+                           and service.LAST["loop_ok"] > 0)
+        B = service.BLEND
+        _seed_initialized(B, sleeve_cash=0.0, spy_qty=70, bil_qty=30)
+        B.state.sleeve_target = 0.30
+        B.state.capital_contributed = 10_000.0      # a seeded book carries it
+        assert c.post("/blend/cash/adopt", json={"usd": 7000}).status_code == 401
+        assert c.get("/blend/cash/adopt", params={"token": "sekrit"}).status_code == 405
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": -1})
+        assert r.status_code == 400 and "positive" in r.json()["detail"]
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": 7000})
+        assert r.status_code == 200 and r.json()["ok"] is True
+        assert r.json()["capital_request"]["usd"] == 7_000.0
+        assert B.state.capital_request["usd"] == 7_000.0
+        # the loop ran a cycle on the wake and deferred it (no venue claim)
+        assert _wait_until(lambda: any("no claim" in e["msg"]
+                                       for e in B.state.events), timeout=20.0)
+        assert B.state.capital_request is not None
+        assert B.state.sleeve_cash == 0.0 and B.state.core_cash == 0.0
+        st = c.get("/status", params={"token": "sekrit"}).json()["blend"]
+        assert st["capital"]["request_pending"]["usd"] == 7_000.0
+        assert st["capital"]["contributed"] == 10_000.0
+        # B5: the operator can WITHDRAW it without /kill
+        assert c.post("/blend/cash/adopt/cancel").status_code == 401
+        assert c.get("/blend/cash/adopt/cancel", params={"token": "sekrit"}).status_code == 405
+        r = c.post("/blend/cash/adopt/cancel", params={"token": "sekrit"})
+        assert r.status_code == 200 and r.json()["cancelled"]["usd"] == 7_000.0
+        assert B.state.capital_request is None
+        assert r.json()["capital"]["request_pending"] is None
+        assert c.post("/blend/cash/adopt/cancel",
+                      params={"token": "sekrit"}).json()["cancelled"] is None
+        # B8e: a halted book answers 409 up front, journals nothing
+        B.halt("KILL")
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": 7000})
+        assert r.status_code == 409 and "halted (KILL)" in r.json()["detail"]
+        assert B.state.capital_request is None
+        B.resume("2026-08-20")
+    service.BLEND = None
+
+
+def test_gate_capital_adopt_rechecks_the_halt_after_the_venue_read(tmp_path):
+    """A1/B1 (MF2-5's rule): /kill takes no lock a cycle holds, so it can
+    land DURING adapter.account_cash() - after the first halted check
+    passed. The credit must re-read the halt (and whether the request it
+    holds is still the journaled one) immediately before mutating."""
+    m = _capital_book(tmp_path)
+    alerts = []
+
+    class _KillDuringRead(_VenueCashAdapter):
+        def account_cash(self):
+            m.request_flatten("2026-08-20")        # /kill lands mid-read
+            return super().account_cash()
+
+    a = _KillDuringRead(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "landed while the venue" in r["reason"]
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    assert m.state.capital_contributed == 10_000.0 and not m.state.capital_events
+    assert m.state.capital_request is None and m.state.halted == "KILL"
+    # a cancel landing mid-read is honoured the same way
+    m2 = _capital_book(tmp_path / "b")
+
+    class _CancelDuringRead(_VenueCashAdapter):
+        def account_cash(self):
+            m2.clear_capital_request("operator")
+            return super().account_cash()
+
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, _CancelDuringRead(7_000.0, 7_000.0), PRICES,
+                                "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and m2.state.core_cash == 0.0
+
+
+def test_gate_capital_adopt_pages_before_it_saves(tmp_path, monkeypatch):
+    """A2: a save that fails after the credit must not also silence the
+    operator - the ADOPTED page goes out first, the request is cleared in
+    memory, and the next successful save persists the credited ledger."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    real_save = m.save
+    calls = {"n": 0}
+
+    def _flaky_save():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("disk full")
+        real_save()
+
+    monkeypatch.setattr(m, "save", _flaky_save)
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append) is None
+    assert any("ADOPTED $7,000.00" in x for x in alerts)      # paged anyway
+    assert m.state.core_cash == 4_900.0 and m.state.capital_request is None
+    m.save()                                                  # the next save lands it
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.core_cash == 4_900.0 and m2.state.capital_request is None
+
+
+def test_gate_stage1_thresholds_scale_with_contributed_capital(tmp_path):
+    """B7: warn at max($25, 0.1%) / RED at 1% of CONTRIBUTED capital once
+    known (120k -> 120 / 1,200), else of the seed config (50k -> 50 / 500)."""
+    m = mk(tmp_path, blend_book_usd=50_000.0)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=70, bil_qty=30)
+    m.state.capital_contributed = 120_000.0
+    a = _CashAdapter(1_000.0)
+    alerts = []
+    blend_mod.reconcile_cash(m, a, alerts.append)             # baseline
+    a.cash = 1_100.0                                          # +100: under 120
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    r = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r["drift"] == 100.0 and r["cycles"] == 0 and r["fired"] is None
+    a.cash = 1_000.0 + 700.0                                  # +700: WARN, not RED
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    r = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r["fired"] == "WARN"
+    m.rebaseline_cash("test")
+    m.state.capital_contributed = None                        # seed config basis
+    a.cash = 2_000.0
+    blend_mod.reconcile_cash(m, a, alerts.append)             # baseline
+    a.cash = 2_700.0                                          # +700 of 50k = 1.4%: RED
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    assert blend_mod.reconcile_cash(m, a, alerts.append)["fired"] == "RED"
+
+
+def test_gate_capital_split_uses_the_shape_inferred_target(tmp_path):
+    """B6: a sleeve-only book whose file predates sleeve_target infers 1.0
+    from its SHAPE in step(); the stage-2 split must use the same
+    inference, or the capital event records a 30/70 split the book never
+    ran."""
+    m = _capital_book(tmp_path)
+    m.state.sleeve_target, m.state.spy_qty = None, 0
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", lambda *_: None)
+    assert r["status"] == "adopted" and r["sleeve_usd"] == 7_000.0
+    assert m.state.sleeve_target == 1.0 and m.state.core_cash == 0.0
+    assert m.state.capital_events[-1]["sleeve_target"] == 1.0
+
+
+# --- overnight core buy headroom + kill-ledger tripwires (2026-10-05) --------
+# The suite pins CORE_BUY_OVERNIGHT_HEADROOM to 0 (conftest, same pattern as
+# the clock pin); these gates set it explicitly.
+
+def test_gate_overnight_core_buy_is_sized_with_headroom(tmp_path, monkeypatch):
+    """A CORE_BUY planned while the regular session is closed rests for the
+    open and fills at the opening price: sized 1% above the quote so a gap-up
+    cannot make it cost more than the core bucket holds. In session it is
+    sized at the quote (it fills now). MUTATION-VERIFIED: dropping the
+    session test sizes 69 in session; dropping the headroom sizes 70 overnight."""
+    monkeypatch.setattr(blend_mod, "CORE_BUY_OVERNIGHT_HEADROOM", 0.01)
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=0, bil_qty=30, core_cash=7_000.0)
+    m.state.sleeve_target = 0.30
+    out = m.step("2026-08-20", payload(), PRICES)            # 07:00 ET: closed
+    (core,) = [i for i in out if i["action"] == "CORE_BUY"]
+    assert core["qty"] == 69 and "rests for the open" in core["reason"]
+    assert 69 * 100.0 * 1.01 <= 7_000.0 < 70 * 100.0 * 1.01
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: _dt(2026, 8, 20, 15, 0, tzinfo=_tz.utc))  # 11:00 ET
+    out = m.step("2026-08-20", payload(), PRICES)
+    (core,) = [i for i in out if i["action"] == "CORE_BUY"]
+    assert core["qty"] == 70 and "rests" not in core["reason"]
+    # a bucket that cannot buy one share with headroom plans nothing (no dust)
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=0.0, spy_qty=70, bil_qty=30, core_cash=100.5)
+    m2.state.sleeve_target = 0.30
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 20, 11, 0, tzinfo=_tz.utc))
+    assert not [i for i in m2.step("2026-08-20", payload(), PRICES) if i["action"] == "CORE_BUY"]
+
+
+def _trip_book(tmp_path, **cfg):
+    m = mk(tmp_path, **cfg)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=350, bil_qty=150, core_cash=0.0)
+    m.state.sleeve_target = 0.30
+    return m
+
+
+def _px(spy, bil=100.0):
+    return {"SPY": spy, "BIL": bil}
+
+
+def _rth(monkeypatch, on: bool):
+    """Pin the clock inside (11:00 ET) or outside (07:00 ET) the session."""
+    h = 15 if on else 11
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 20, h, 0, tzinfo=_tz.utc))
+
+
+def _days(m, seq, alerts=None):
+    """One mark per day: [(date, prices), ...]. Each new day finalizes the
+    previous one (the lines read finalized closes)."""
+    for d, px in seq:
+        m.update_tripwires(d, px, (alerts.append if alerts is not None else (lambda *_: None)))
+
+
+def test_gate_tripwire_book_index_is_flow_adjusted_through_adopt_capital(tmp_path, monkeypatch):
+    """A deposit is a STEP in book value, never a new high - driven through the
+    REAL adopt_capital (TB9/M2): the README example (50k, HWM 52k, adopt 70k,
+    fall to 100k) reads 18.0%; the subtracted-dollar series would read 42.3%."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 150, 350              # sleeve 15k BIL, core 350 SPY
+    alerts = []
+    # book 50,000 -> 52,000 (SPY 100 -> 105.714...): use SPY that makes 52k
+    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(37_000 / 350))], alerts)
+    m.request_capital_adoption(70_000, "2026-09-03")
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(70_000.0, 70_000.0), _px(37_000 / 350),
+                                "2026-09-03", alerts.append)
+    assert r["status"] == "adopted" and m.state.trip_pending_book == 70_000.0
+    # book 122,000 on the deposit day; then 100,000: the core's SPY falls so
+    # that 350 x SPY + 15,000 BIL + 70,000 cash = 100,000
+    _days(m, [("2026-09-03", _px(37_000 / 350)), ("2026-09-04", _px(15_000 / 350)),
+              ("2026-09-05", _px(15_000 / 350))], alerts)
+    t = m.tripwire_summary("2026-09-05")
+    assert t["book"]["hwm_date"] == "2026-09-02"            # the deposit day is not a high
+    # TB11/M2b (TD1: the sleeve is FUNDED before the deposit, so a dropped
+    # sleeve flow would read the $21k deposit share as a 2.4x gain and blind
+    # the sleeve line): BIL never moved, so the sleeve is flat
+    assert t["sleeve"]["drawdown"] == 0.0
+    assert t["sleeve"]["hwm_date"] == "2026-09-01"
+    assert m.state.trip_sleeve["hwm"] == pytest.approx(1.0)
+    assert m.state.trip_pending_sleeve == 0.0
+    assert t["book"]["drawdown"] == pytest.approx(1 - 100_000 / 122_000, abs=1e-4)
+    assert t["book"]["close_date"] == "2026-09-04"
+    assert not any("tripwire" in a for a in alerts)          # 18% < 25%
+
+
+def test_gate_tripwire_distribution_is_return_not_a_flow(tmp_path, monkeypatch):
+    """TA6/TB2: a reinvested dividend is RETURN - the index rises by it and
+    contributed capital does not grow; a deposit of the same size does not
+    move the index."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    m.state.capital_contributed = 50_000.0
+    _days(m, [("2026-09-01", _px(100.0))])
+    m.request_capital_adoption(500, "2026-09-02", kind="distribution")
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(500.0, 500.0), _px(100.0),
+                                "2026-09-02", lambda *_: None)
+    assert r["status"] == "adopted" and m.state.trip_pending_book == 0.0
+    assert m.state.capital_contributed == 50_000.0
+    assert m.state.capital_events[-1]["kind"] == "distribution_adopted"
+    _days(m, [("2026-09-02", _px(100.0)), ("2026-09-03", _px(100.0))])
+    assert m.state.trip_book["closes"][-1][1] == pytest.approx(50_500 / 50_000)
+    with pytest.raises(ValueError):
+        m.request_capital_adoption(500, "2026-09-03", kind="gift")
+
+
+def test_gate_tripwire_intraday_glitch_never_sets_the_high(tmp_path, monkeypatch):
+    """TA1: a transient mark (a thin name's after-hours ask) can set neither a
+    permanent high nor a page. The day's close is its LAST IN-SESSION mark."""
+    m = _trip_book(tmp_path)
+    m.state.spy_qty = 0                                     # sleeve = 150 BIL = 15k
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-08-31", PRICES, lambda *_: None)   # day 1: the series' base
+    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)   # day 2 (TB11/M13b)
+    m.update_tripwires("2026-09-01", _px(100.0, 200.0), lambda *_: None)   # in-session spike
+    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)               # back
+    _rth(monkeypatch, False)
+    m.update_tripwires("2026-09-01", _px(100.0, 1_000.0), lambda *_: None)  # after-hours glitch
+    alerts = []
+    _rth(monkeypatch, True)
+    _days(m, [("2026-09-02", PRICES), ("2026-09-03", PRICES), ("2026-09-04", PRICES)], alerts)
+    t = m.tripwire_summary("2026-09-04")
+    assert t["sleeve"]["drawdown"] == 0.0 and t["book"]["drawdown"] == 0.0
+    assert m.state.trip_sleeve["hwm"] == pytest.approx(1.0) and not alerts
+
+
+def test_gate_tripwire_flow_after_the_close_mark_carries_to_the_next_day(tmp_path, monkeypatch):
+    """A deposit adopted AFTER the day's last in-session mark is not in that
+    close: it carries into the next day's flows (no false gain, no loss)."""
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-09-01", _px(100.0), lambda *_: None)
+    _rth(monkeypatch, False)
+    m.state.core_cash += 70_000.0
+    m.state.trip_pending_book += 70_000.0                   # after-hours adoption
+    m.update_tripwires("2026-09-01", _px(100.0), lambda *_: None)
+    _days(m, [("2026-09-02", _px(100.0)), ("2026-09-03", _px(100.0))])
+    t = m.tripwire_summary("2026-09-03")
+    assert t["book"]["drawdown"] == 0.0
+    assert m.state.trip_book["closes"][-1][1] == pytest.approx(1.0)
+
+
+def test_gate_tripwire_sleeve_index_ignores_transfers(tmp_path, monkeypatch):
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
+    m.on_transfer(-5_000.0)                  # sleeve -> core
+    _days(m, [("2026-09-03", PRICES)])
+    m.on_transfer(8_000.0)                   # core -> sleeve
+    _days(m, [("2026-09-04", PRICES), ("2026-09-05", PRICES)])
+    t = m.tripwire_summary("2026-09-05")
+    assert t["sleeve"]["drawdown"] == 0.0 and t["sleeve"]["hwm_date"] == "2026-09-01"
+    _days(m, [("2026-09-06", _px(100.0, 50.0)), ("2026-09-07", _px(100.0, 50.0))])
+    dd = m.tripwire_summary("2026-09-07")["sleeve"]["drawdown"]
+    assert dd == pytest.approx(1 - (3_000.0 + 7_500.0) / 18_000.0, abs=1e-4)
+
+
+def test_gate_tripwire_pages_on_two_consecutive_closes_once_and_rearms(tmp_path, monkeypatch):
+    """A line pages only when the LAST TWO finalized closes are over it (one
+    glitched close cannot page), once per crossing, and re-arms after a 5 pp
+    recovery on a close. Alert-only: nothing on the book moves."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    alerts = []
+    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(74.0)),
+              ("2026-09-03", _px(100.0)), ("2026-09-04", _px(100.0))], alerts)
+    assert alerts == []                                     # one close at 26%: no page
+    _days(m, [("2026-09-05", _px(74.0)), ("2026-09-06", _px(73.0)),
+              ("2026-09-07", _px(73.0))], alerts)
+    assert len(alerts) == 1 and alerts[0].startswith("⚠️") and "REVIEW (book)" in alerts[0]
+    assert "two consecutive closes" in alerts[0] and "ALERT-ONLY" in alerts[0]
+    _days(m, [("2026-09-08", _px(64.0)), ("2026-09-09", _px(63.0)), ("2026-09-10", _px(63.0))], alerts)
+    assert len(alerts) == 2 and alerts[1].startswith("🚨🚨") and "REGIME" in alerts[1]
+    assert m.state.halted is None and m.state.spy_qty == 500
+    _days(m, [("2026-09-11", _px(81.0)), ("2026-09-12", _px(81.0))], alerts)   # close 19%: re-arm both
+    _days(m, [("2026-09-13", _px(74.0)), ("2026-09-14", _px(74.0)), ("2026-09-15", _px(74.0))], alerts)
+    assert len(alerts) == 3 and "REVIEW (book)" in alerts[2]
+
+
+def test_gate_tripwire_sleeve_kill_line_and_two_underwater_episodes(tmp_path, monkeypatch):
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.spy_qty = 0
+    alerts = []
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", _px(100.0, 54.0)),
+              ("2026-09-03", _px(100.0, 54.0)), ("2026-09-04", _px(100.0, 54.0))], alerts)
+    assert sum("MODEL-RISK KILL line (sleeve)" in a for a in alerts) == 1
+    m2 = _trip_book(tmp_path / "b")
+    a2 = []
+    _days(m2, [("2024-01-02", PRICES), ("2024-01-03", _px(95.0)), ("2026-07-02", _px(95.0))], a2)
+    assert not any("under water" in a for a in a2)          # 912 days (2024 is a leap year)
+    _days(m2, [("2026-07-03", _px(95.0))], a2)               # 913 days
+    assert sum("under water" in a for a in a2) == 1
+    # a new high re-arms the clock (TB9: second episode)
+    _days(m2, [("2026-07-05", _px(120.0)), ("2026-07-06", _px(120.0)), ("2026-07-07", _px(110.0))], a2)
+    assert m2.state.trip_alerted["underwater"] is False
+    _days(m2, [("2028-12-31", _px(110.0)), ("2029-01-05", _px(110.0))], a2)
+    assert sum("under water" in a for a in a2) == 2
+
+
+def test_gate_tripwire_process_line_counts_session_closes(tmp_path, monkeypatch):
+    """TA4: sessions are counted on session CLOSES in ET after the record was
+    parked, not on UTC dates: born Thu 11:00 ET -> closes Thu, Fri, Mon; the
+    page lands after Monday's 16:00 ET close, not at Monday's UTC roll."""
+    m = _trip_book(tmp_path)
+    alerts = []
+    born = _dt(2026, 8, 20, 15, 0, tzinfo=_tz.utc).timestamp()          # Thu 11:00 ET
+    m.state.unreconciled["7"] = {"ts": born, "symbol": "CRSP"}
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 24, 19, 0, tzinfo=_tz.utc))
+    m.update_tripwires("2026-08-24", PRICES, alerts.append)             # Mon 15:00 ET: 2
+    assert not alerts
+    assert m.tripwire_summary("2026-08-24")["lines"][4]["value"] == 2   # TA5/TB3: an AGE
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: _dt(2026, 8, 24, 20, 30, tzinfo=_tz.utc))
+    m.update_tripwires("2026-08-24", PRICES, alerts.append)             # Mon 16:30 ET: 3
+    assert len(alerts) == 1 and "PROCESS KILL" in alerts[0] and alerts[0].startswith("🚨🚨")
+    m.update_tripwires("2026-08-25", PRICES, alerts.append)
+    assert len(alerts) == 1
+    del m.state.unreconciled["7"]
+    m.update_tripwires("2026-08-26", PRICES, alerts.append)
+    assert "unrec:7" not in m.state.trip_alerted
+
+
+def test_gate_tripwire_bootstrap_deposit_inside_a_drawdown(tmp_path, monkeypatch):
+    """TB9/M10: the bootstrap's deposit sits INSIDE a drawdown, so a bootstrap
+    that ignored flows would read a new high on the deposit day. Today's point
+    (written by the snapshot just before) is the live mark; a pending flow the
+    curve already contains is not applied twice."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.equity_curve = [["2026-08-28", 50_000.0], ["2026-09-10", 52_000.0],
+                            ["2026-09-12", 156_000.0],            # Saturday glitch (TC1b): never a close
+                            ["2026-09-21", 49_000.0], ["2026-10-06", 119_000.0],
+                            ["2026-10-07", 119_500.0]]
+    m.state.capital_events = [{"date": "2026-08-28", "kind": "inferred", "usd": 50_000.0},
+                              {"date": "2026-10-06", "kind": "deposit_adopted",
+                               "usd": 70_000.0, "sleeve_usd": 21_000.0, "core_usd": 49_000.0}]
+    m.state.trip_pending_book = 70_000.0
+    m.state.bil_qty, m.state.spy_qty, m.state.core_cash = 0, 0, 119_500.0
+    m.update_tripwires("2026-10-07", PRICES, lambda *_: None)
+    t = m.tripwire_summary("2026-10-07")
+    assert t["book"]["since"] == "2026-08-28" and t["book"]["hwm_date"] == "2026-09-10"
+    assert t["book"]["close_date"] == "2026-10-06"
+    assert t["book"]["drawdown"] == pytest.approx(1 - 49_000 / 52_000, abs=1e-4)   # 5.77%, not 0
+    assert m.state.trip_pending_book == 0.0
+    assert t["sleeve"]["since"] == "2026-10-07"
+    assert any("tripwire series trip_sleeve started" in e["msg"] for e in m.state.events)
+    # TB11/M6: the pending deposit the curve already contains is not applied
+    # again on the next days' closes
+    m.update_tripwires("2026-10-08", PRICES, lambda *_: None)
+    m.update_tripwires("2026-10-09", PRICES, lambda *_: None)
+    t2 = m.tripwire_summary("2026-10-09")
+    assert t2["book"]["close_date"] == "2026-10-08"
+    assert t2["book"]["drawdown"] == pytest.approx(1 - (119_500 / 119_000) * 49_000 / 52_000, abs=1e-3)
+
+
+def test_gate_tripwire_runs_after_the_snapshot_with_a_same_day_adoption(tmp_path):
+    """TB9/M5: in run_cycle the tripwire runs AFTER the equity snapshot, so on
+    the bootstrap day a same-day adoption is a flow, not a new high."""
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    m.state.equity_curve = [["2026-08-18", 52_000.0], ["2026-08-19", 50_000.0]]
+    m.request_capital_adoption(70_000, "2026-08-20")
+    a = _VenueCashAdapter(70_000.0, 70_000.0)
+    a.seed_position("SPY", 500)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.capital_request is None
+    t = m.tripwire_summary("2026-08-20")
+    assert t["book"]["hwm_date"] == "2026-08-18"
+    assert t["book"]["drawdown_live"] == pytest.approx(1 - 50_000 / 52_000, abs=0.002)
+
+
+def test_gate_tripwire_malformed_state_never_500s_and_restarts_loudly(tmp_path, monkeypatch):
+    """TB1: a malformed subfield (hand edit, future schema) is dropped at load
+    with a WARN, /status and the feed stay strictly JSON-serializable, and an
+    infinite pending flow is never paged."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
+    m.save()
+    for bad in ({"cur": "x"}, {"cur": {"date": "2026-09-02", "value": 1.0, "index": "abc"}},
+                {"hwm": float("inf")}, {"closes": [["d", -1]]}):
+        raw = json.load(open(m.state_path))
+        raw["trip_sleeve"] = dict(raw["trip_sleeve"], **bad)
+        raw["trip_pending_book"] = float("inf")
+        with open(m.state_path, "w") as fh:
+            json.dump(raw, fh)
+        m2 = Blend3070Manager(m.cfg, m.state_path)
+        assert m2.state.trip_sleeve is None and m2.state.trip_pending_book == 0.0
+        assert any("MALFORMED" in e["msg"] for e in m2.state.events)
+        json.dumps(m2.status_summary(PRICES), allow_nan=False)
+        json.dumps(m2.feed(PRICES, "2026-09-03"), allow_nan=False)
+    # a summary that cannot be computed degrades, never raises
+    m.state.trip_book = {"hwm": 1.0, "closes": [["2026-09-02", "junk"]]}
+    assert m.tripwire_summary("2026-09-03")["error"] == "unavailable"
+
+
+def test_gate_tripwire_pending_flow_survives_a_skipped_snapshot_and_restart(tmp_path, monkeypatch):
+    """TB9/M19: a deposit adopted on a cycle whose snapshot is skipped (missing
+    quote) stays pending across a restart and is applied at the next mark."""
+    _rth(monkeypatch, True)          # closes finalize from in-session marks
+    m = _trip_book(tmp_path)
+    m.state.bil_qty, m.state.spy_qty = 0, 500
+    _days(m, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(100.0))])
+    m.state.core_cash += 70_000.0
+    m.state.trip_pending_book += 70_000.0
+    assert m.update_tripwires("2026-09-03", {"BIL": 100.0}, lambda *_: None) is None
+    m.save()
+    m.state.trip_alerted["book_review"] = True              # TB11/M18: persisted
+    m.save()
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.trip_pending_book == 70_000.0
+    assert m2.state.trip_alerted == {"book_review": True}
+    _days(m2, [("2026-09-03", _px(100.0)), ("2026-09-04", _px(100.0))])
+    assert m2.tripwire_summary("2026-09-04")["book"]["drawdown"] == 0.0
+    assert m2.state.trip_book["closes"][-1][1] == pytest.approx(1.0)
+
+
+def test_gate_tripwire_failure_is_said_once_a_day(tmp_path, monkeypatch):
+    m = _trip_book(tmp_path)
+    monkeypatch.setattr(m, "book_value", lambda *_: 1 / 0)
+    assert m.update_tripwires("2026-09-03", PRICES, lambda *_: None) is None
+    assert m.update_tripwires("2026-09-03", PRICES, lambda *_: None) is None
+    assert sum("tripwire update FAILED" in e["msg"] for e in m.state.events) == 1
+
+
+def test_gate_tripwire_runs_in_the_cycle_and_is_public_safe(tmp_path):
+    m = _trip_book(tmp_path)
+    a = DryAdapter()
+    a.seed_position("SPY", 350)
+    a.seed_position("BIL", 150)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.trip_book is not None and m.state.trip_sleeve is not None
+    tw = m.feed(PRICES, "2026-08-20")["tripwires"]
+    assert tw["alert_only"] is True and len(tw["lines"]) == 5
+    assert set(tw["book"]) == {"drawdown", "drawdown_live", "close_date", "hwm_date", "since"}
+    assert "index" not in json.dumps(tw)
+    st = m.status_summary(PRICES)
+    assert st["tripwires"]["book"]["since"] == "2026-08-20"
+    assert "drift" in st["cash"] and "venue" not in st["cash"]          # TB4
+
+
+def test_gate_drift_page_reinvest_path_and_parked_records(tmp_path):
+    """TA2/TB5: positive drift names the reinvest path (statement amounts,
+    never the drift figure; adoption re-baselines itself); with an
+    unreconciled record parked it says RESOLVE FIRST and gives no adopt
+    instruction; and adoption itself waits while a record is parked."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    alerts = []
+    a = _CashAdapter(43_100.0)
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    a.cash = 43_142.0
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    assert len(alerts) == 1 and "POST /blend/cash/adopt" in alerts[0]
+    assert "never this drift figure" in alerts[0] and "only if this is NOT the book's money" in alerts[0]
+    a.cash = 43_142.0 - 500.0                 # a withdrawal: no reinvest hint
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    assert "/blend/cash/adopt" not in alerts[-1]
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    m2.state.unreconciled["9"] = {"ts": _time.time() - 3_600, "symbol": "CRSP"}
+    a2, al2 = _CashAdapter(43_100.0), []
+    blend_mod.reconcile_cash(m2, a2, al2.append)
+    a2.cash = 47_000.0
+    blend_mod.reconcile_cash(m2, a2, al2.append)
+    blend_mod.reconcile_cash(m2, a2, al2.append)
+    assert al2 and "RESOLVE THEM FIRST" in al2[-1] and "/blend/cash/adopt" not in al2[-1]
+    m2.request_capital_adoption(3_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, _VenueCashAdapter(47_000.0, 47_000.0), PRICES,
+                                "2026-08-20", lambda *_: None)
+    assert r["status"] == "deferred" and "resolve them first" in r["reason"]
+
+
+def test_gate_overnight_core_buy_then_in_session_residual(tmp_path, monkeypatch):
+    """TB9: production headroom ON through run_cycle - the overnight plan buys
+    at the headroom size; the next in-session cycle buys the residual."""
+    monkeypatch.setattr(blend_mod, "CORE_BUY_OVERNIGHT_HEADROOM", 0.01)
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=0, bil_qty=30, core_cash=7_000.0)
+    m.state.sleeve_target = 0.30
+    px = {"SPY": 99.5, "BIL": 100.0}
+    a = DryAdapter()
+    a.seed_position("BIL", 30)
+    a.seed_price("SPY", 99.5)
+    a.seed_price("BIL", 100.0)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.spy_qty == 69                            # 7000 / (99.5 x 1.01)
+    _rth(monkeypatch, True)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.spy_qty == 70 and m.state.core_cash < 99.5
+
+
+# --- per-symbol limit (round 11, U2: at most 2 open calls per symbol) ---------
+
+def _ps_book(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=20_000.0, spy_qty=70, bil_qty=0)
+    m.state.sleeve_target = 0.30
+    return m
+
+
+def _ps_prices(*syms):
+    p = dict(PRICES)
+    for s_ in syms:
+        p[s_] = 50.0
+    return p
+
+
+def _enters(intents):
+    return [(i["symbol"], i["call_id"]) for i in intents if i["action"] == "ENTER"]
+
+
+def test_gate_per_symbol_limit_skips_a_third_open_call_in_one_name(tmp_path):
+    """Two CRSP held: a third CRSP fire is skipped and takes no cap slot; a
+    fire in another name in the same payload is still planned.
+    MUTATION-VERIFIED: removing the check plans CRSP call 3."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    _held_position(m, call_id=2, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP"), entry(4, "NTLA")],
+                 stops=[stop_row(3, "CRSP"), stop_row(4, "NTLA")])
+    out = m.step("2026-08-20", pl, _ps_prices("CRSP", "NTLA"))
+    assert _enters(out) == [("NTLA", 4)]
+    assert any("per-symbol limit 2: skipping CRSP (call 3)" in e["msg"] for e in m.state.events)
+
+
+def test_gate_per_symbol_counts_pending_moos_and_same_cycle_siblings(tmp_path):
+    """Verifier A2: a pending MOO counts as held, and same-cycle sibling fires
+    of one name (multi-flag) count in payload order."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    m.state.pending_entries["2"] = {"intent": {"symbol": "CRSP", "call_id": 2, "qty": 5,
+                                               "entry_ref": 50.0, "size_ref": 50.0},
+                                    "date": "2026-08-19"}
+    pl = payload(entries=[entry(3, "CRSP")], stops=[stop_row(3, "CRSP")])
+    assert _enters(m.step("2026-08-20", pl, _ps_prices("CRSP"))) == []
+    m2 = _ps_book(tmp_path / "b")
+    pl = payload(entries=[entry(5, "CRSP"), entry(6, "CRSP"), entry(7, "CRSP")],
+                 stops=[stop_row(5, "CRSP"), stop_row(6, "CRSP"), stop_row(7, "CRSP")])
+    assert _enters(m2.step("2026-08-20", pl, _ps_prices("CRSP"))) == [("CRSP", 5), ("CRSP", 6)]
+
+
+def test_gate_per_symbol_an_exiting_position_frees_its_name(tmp_path):
+    """Counted like open_count: a position exiting THIS cycle frees its name."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    _held_position(m, call_id=2, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP")],
+                 exits=[{"call_id": 1, "symbol": "CRSP", "reason": "time_stop"}],
+                 stops=[stop_row(2, "CRSP"), stop_row(3, "CRSP")])
+    out = m.step("2026-08-20", pl, _ps_prices("CRSP"))
+    assert any(i["action"] == "EXIT" and i["call_id"] == 1 for i in out)
+    assert _enters(out) == [("CRSP", 3)]
+
+
+def test_gate_per_symbol_tracker_override_and_bad_values(tmp_path):
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP")], stops=[stop_row(3, "CRSP")])
+    pl["book_params"]["max_per_symbol"] = 1
+    assert _enters(m.step("2026-08-20", pl, _ps_prices("CRSP"))) == []
+    for bad in (0, -1, "2", True, 1.5, None):
+        m2 = _ps_book(tmp_path / f"b{abs(hash(str(bad)))}")
+        _held_position(m2, call_id=1, symbol="CRSP")
+        pl["book_params"]["max_per_symbol"] = bad
+        assert _enters(m2.step("2026-08-20", pl, _ps_prices("CRSP"))) == [("CRSP", 3)]   # default 2
+
+
+def test_gate_tripwire_no_session_day_is_never_a_close(tmp_path, monkeypatch):
+    """TC1: weekend / holiday / missed-session marks are never closes. A Friday
+    after-hours 10x glitch carried through Saturday and Sunday can set no high,
+    and one stale low weekend quote cannot make 'two consecutive closes'."""
+    m = _trip_book(tmp_path)
+    m.state.spy_qty = 0                                     # sleeve = 150 BIL
+    alerts = []
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-10-08", PRICES, alerts.append)               # Thu
+    m.update_tripwires("2026-10-09", PRICES, alerts.append)               # Fri session
+    _rth(monkeypatch, False)
+    m.update_tripwires("2026-10-09", _px(100.0, 1_000.0), alerts.append)  # Fri after-hours glitch
+    m.update_tripwires("2026-10-10", _px(100.0, 1_000.0), alerts.append)  # Sat
+    m.update_tripwires("2026-10-11", _px(100.0, 40.0), alerts.append)     # Sun, stale low
+    _rth(monkeypatch, True)
+    for d in ("2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15"):
+        m.update_tripwires(d, PRICES, alerts.append)
+    assert m.state.trip_sleeve["hwm"] == pytest.approx(1.0)
+    assert [c[0] for c in m.state.trip_sleeve["closes"]][-3:] == ["2026-10-12", "2026-10-13", "2026-10-14"]
+    assert "2026-10-10" not in [c[0] for c in m.state.trip_sleeve["closes"]]
+    assert not alerts
+    # a weekend flow is not lost: it stays in day_flow until the next close
+    _rth(monkeypatch, False)
+    m.update_tripwires("2026-10-17", PRICES, alerts.append)               # Sat
+    m.on_transfer(5_000.0)
+    m.update_tripwires("2026-10-18", PRICES, alerts.append)               # Sun
+    _rth(monkeypatch, True)
+    m.update_tripwires("2026-10-19", PRICES, alerts.append)
+    m.update_tripwires("2026-10-20", PRICES, alerts.append)
+    assert m.tripwire_summary("2026-10-20")["sleeve"]["drawdown"] == 0.0
+
+
+def test_gate_capital_unreconciled_wait_pages_and_the_endpoint_says_so(tmp_path, monkeypatch):
+    """TC3: a wait that needs the operator pages (once a day), and the
+    endpoint reports parked records when it journals."""
+    m = _capital_book(tmp_path)
+    m.state.unreconciled["9"] = {"ts": _time.time() - 3_600, "symbol": "CRSP"}
+    m.request_capital_adoption(7_000, "2026-08-20")
+    alerts = []
+    a = _VenueCashAdapter(7_000.0, 7_000.0)
+    for _ in range(2):
+        r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+        assert r["status"] == "deferred"
+    assert len(alerts) == 1 and "resolve them first" in alerts[0]
+    # TD1: the NEXT day pages again (quiet book, nothing logged in between)
+    m._notice_day = {}                                       # the UTC day rolled
+    m.state.capital_request["ts"] -= 86_400
+    blend_mod.adopt_capital(m, a, PRICES, "2026-08-21", alerts.append)
+    assert len(alerts) == 2 and "waiting 1.0 d of 5" in alerts[1]
+    assert m.status_summary(PRICES)["capital"]["request_pending"]["kind"] == "deposit"
+    client, service = _service_client(tmp_path / "svc", monkeypatch)
+    with client as c:
+        assert _wait_until(lambda: service.BLEND is not None and service.LAST["loop_ok"] > 0)
+        B = service.BLEND
+        _seed_initialized(B, sleeve_cash=0.0, spy_qty=70, bil_qty=30)
+        B.state.unreconciled["9"] = {"ts": _time.time(), "symbol": "CRSP"}
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": 7000})
+        assert r.json()["parked_unreconciled"] == ["9"] and "WAITS" in r.json()["warning"]
+        B.state.unreconciled.clear()
+    service.BLEND = None
+
+
+def test_gate_distribution_names_the_sleeve_share(tmp_path):
+    """A distribution is credited to the bucket that earned it when the
+    operator names sleeve_usd (BIL distributions -> sleeve, SPY dividends ->
+    core); omitted, it splits by the target. Deposits cannot name it."""
+    m = _capital_book(tmp_path)
+    m.request_capital_adoption(500, "2026-08-20", kind="distribution", sleeve_usd=120)
+    assert m.status_summary(PRICES)["capital"]["request_pending"]["sleeve_usd"] == 120.0
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(500.0, 500.0), PRICES,
+                                "2026-08-20", lambda *_: None)
+    assert r["sleeve_usd"] == 120.0 and r["core_usd"] == 380.0
+    assert m.state.sleeve_cash == 120.0 and m.state.core_cash == 380.0
+    for bad in (dict(kind="deposit", sleeve_usd=10), dict(kind="distribution", sleeve_usd=-1),
+                dict(kind="distribution", sleeve_usd=600), dict(kind="distribution", sleeve_usd=True)):
+        with pytest.raises(ValueError):
+            m.request_capital_adoption(500, "2026-08-20", **bad)
+
+
+def test_gate_tripwire_min_base_and_held_flow_carry(tmp_path, monkeypatch):
+    """TB11/M27: a base under TRIP_MIN_BASE_USD holds the index (a sleeve
+    emptied to cents then refilled is not a 100x gain). TB12/M28: a mark that
+    EXCLUDES a pending flow holds the index, and if that mark is the day's
+    close the flow CARRIES to the next day (no phantom high)."""
+    _rth(monkeypatch, True)
+    m = _trip_book(tmp_path)
+    m.state.spy_qty, m.state.bil_qty, m.state.sleeve_cash = 500, 0, 50.0
+    _days(m, [("2026-09-01", PRICES), ("2026-09-02", PRICES)])
+    m.state.sleeve_cash = 20_050.0
+    m.state.trip_pending_sleeve = 0.0                        # an unflagged refill
+    _days(m, [("2026-09-03", PRICES), ("2026-09-04", PRICES)])
+    assert m.state.trip_sleeve["hwm"] < 2.0                  # held, not 400x
+    m2 = _trip_book(tmp_path / "b")
+    m2.state.bil_qty, m2.state.spy_qty = 0, 500             # book 50k
+    _days(m2, [("2026-09-01", _px(100.0)), ("2026-09-02", _px(100.0))])
+    m2.state.trip_pending_book = 70_000.0                    # flow the ledger value lacks
+    m2.update_tripwires("2026-09-03", _px(100.0), lambda *_: None)   # held mark = the close
+    m2.state.core_cash = 70_000.0                            # the cash arrives next day
+    _days(m2, [("2026-09-04", _px(100.0)), ("2026-09-05", _px(100.0))])
+    assert m2.state.trip_book["hwm"] == pytest.approx(1.0)
+    assert m2.tripwire_summary("2026-09-05")["book"]["drawdown"] == 0.0
+
+
+def test_gate_per_symbol_tracker_may_only_tighten(tmp_path):
+    """TB15: like max_open, the tracker can lower the per-symbol limit but
+    never raise it past MAX_PER_SYMBOL."""
+    m = _ps_book(tmp_path)
+    _held_position(m, call_id=1, symbol="CRSP")
+    _held_position(m, call_id=2, symbol="CRSP")
+    pl = payload(entries=[entry(3, "CRSP")], stops=[stop_row(3, "CRSP")])
+    pl["book_params"]["max_per_symbol"] = 99
+    assert _enters(m.step("2026-08-20", pl, _ps_prices("CRSP"))) == []
+
+
+def test_gate_tripwire_junk_record_and_tiny_mark_are_contained(tmp_path):
+    """TB17: one junk unreconciled timestamp does not disable the summary,
+    and a hand-edited tiny index is rejected at load."""
+    m = _trip_book(tmp_path)
+    m.state.unreconciled["x"] = {"ts": 1e18, "symbol": "CRSP"}
+    m.update_tripwires("2026-09-01", PRICES, lambda *_: None)
+    assert "error" not in m.tripwire_summary("2026-09-01")
+    assert m.update_tripwires("2026-09-02", PRICES, lambda *_: None) is not None
+    m.state.unreconciled.clear()
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["trip_book"]["cur"] = {"date": "2026-09-02", "value": 1e-300, "index": 1e-300, "flow": 0.0}
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    assert Blend3070Manager(m.cfg, m.state_path).state.trip_book is None

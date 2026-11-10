@@ -548,9 +548,11 @@ function loadRates(){fetch('api/ewm/rates').then(r=>r.json()).then(d=>{
   d.meetings.forEach(m=>{
     h+=`<tr><td>${lbl(m.date)}</td>`+d.buckets.map(b=>{
       const v=(m.blend||{})[b];
-      const tip=srcs.map(sx=>{const x=(m.sources[sx]||{})[b];
-        return x==null?null:`${sx}: ${(x*100).toFixed(0)}% (weight ${Math.round((W[sx]||0)*100)}%)`;})
-        .filter(Boolean).join('\n')
+      const tip=srcs.map(sx=>{const priced=m.sources[sx]&&Object.keys(m.sources[sx]).length;
+        const wt=Math.round((((W[sx]||{}).weight)||0)*100);
+        return priced?`${sx}: ${((((m.sources[sx]||{})[b])||0)*100).toFixed(0)}% (weight ${wt}%)`
+                     :`${sx}: ${(m.missing||{})[sx]||'not priced'}`;}).join('\n')
+        +(m.anchor?`\nfutures: ${m.anchor}`:'')+(m.soft?`\nfutures: ${m.soft}`:'')
         +'\n(weighted avg over sources with a market, renormalized)';
       return `<td class="cmid" title="${tip}">${v==null?'&mdash;':(v*100).toFixed(1)+'%'}</td>`;
     }).join('')
@@ -559,7 +561,7 @@ function loadRates(){fetch('api/ewm/rates').then(r=>r.json()).then(d=>{
   document.getElementById('ratetbl').innerHTML=h;
   document.getElementById('ratefoot').textContent=
     'Weights (accuracy-earned, inverse shrunk-Brier): '
-    + srcs.map(sx=>`${sx} ${Math.round((W[sx]||0)*100)}%`).join(' · ')
+    + srcs.map(sx=>`${sx} ${Math.round((((W[sx]||{}).weight)||0)*100)}%`).join(' · ')
     + '. Hover a cell for each source. Same ensemble as the canary panel.';
 }).catch(()=>{const el=document.getElementById('ratefoot');
   if(el)el.textContent='rate ensemble unavailable';});}

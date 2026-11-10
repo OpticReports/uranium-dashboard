@@ -1,0 +1,457 @@
+{
+ "n": 56,
+ "n_checked": 42,
+ "n_pass": 42,
+ "pass": true,
+ "ref_file": "alfred_first_vintage_2026.csv",
+ "rows": [
+  {
+   "computed": "2026-04-03",
+   "expected": "2026-04-03",
+   "month": "2026-03",
+   "pass": true,
+   "series": "PAYEMS",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-05-08",
+   "expected": "2026-05-08",
+   "month": "2026-04",
+   "pass": true,
+   "series": "PAYEMS",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-06-05",
+   "expected": "2026-06-05",
+   "month": "2026-05",
+   "pass": true,
+   "series": "PAYEMS",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-07-02",
+   "expected": "2026-07-02",
+   "month": "2026-06",
+   "pass": true,
+   "series": "PAYEMS",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-08-07",
+   "expected": "2026-08-07",
+   "month": "2026-07",
+   "pass": true,
+   "series": "PAYEMS",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-09-04",
+   "expected": "2026-09-04",
+   "month": "2026-08",
+   "pass": true,
+   "series": "PAYEMS",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-10-02",
+   "expected": "2026-10-02",
+   "month": "2026-09",
+   "pass": true,
+   "series": "PAYEMS",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-04-03",
+   "expected": "2026-04-03",
+   "month": "2026-03",
+   "pass": true,
+   "series": "AWHMAN",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-05-08",
+   "expected": "2026-05-08",
+   "month": "2026-04",
+   "pass": true,
+   "series": "AWHMAN",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-06-05",
+   "expected": "2026-06-05",
+   "month": "2026-05",
+   "pass": true,
+   "series": "AWHMAN",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-07-02",
+   "expected": "2026-07-02",
+   "month": "2026-06",
+   "pass": true,
+   "series": "AWHMAN",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-08-07",
+   "expected": "2026-08-07",
+   "month": "2026-07",
+   "pass": true,
+   "series": "AWHMAN",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-09-04",
+   "expected": "2026-09-04",
+   "month": "2026-08",
+   "pass": true,
+   "series": "AWHMAN",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-10-02",
+   "expected": "2026-10-02",
+   "month": "2026-09",
+   "pass": true,
+   "series": "AWHMAN",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-04-16",
+   "expected": "2026-04-16",
+   "month": "2026-03",
+   "pass": true,
+   "series": "INDPRO",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-05-15",
+   "expected": "2026-05-15",
+   "month": "2026-04",
+   "pass": true,
+   "series": "INDPRO",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-06-15",
+   "expected": "2026-06-15",
+   "month": "2026-05",
+   "pass": true,
+   "series": "INDPRO",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-07-17",
+   "expected": "2026-07-17",
+   "month": "2026-06",
+   "pass": true,
+   "series": "INDPRO",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-08-18",
+   "expected": "2026-08-18",
+   "month": "2026-07",
+   "pass": true,
+   "series": "INDPRO",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-09-18",
+   "expected": "2026-09-18",
+   "month": "2026-08",
+   "pass": true,
+   "series": "INDPRO",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-10-16",
+   "expected": "2026-10-16",
+   "month": "2026-09",
+   "pass": true,
+   "series": "INDPRO",
+   "status": "issue"
+  },
+  {
+   "computed": null,
+   "expected": "2026-04-29",
+   "month": "2026-03",
+   "pass": null,
+   "series": "PERMIT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-05-21",
+   "month": "2026-04",
+   "pass": null,
+   "series": "PERMIT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-06-16",
+   "month": "2026-05",
+   "pass": null,
+   "series": "PERMIT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-07-17",
+   "month": "2026-06",
+   "pass": null,
+   "series": "PERMIT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-08-18",
+   "month": "2026-07",
+   "pass": null,
+   "series": "PERMIT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-09-17",
+   "month": "2026-08",
+   "pass": null,
+   "series": "PERMIT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-10-20",
+   "month": "2026-09",
+   "pass": null,
+   "series": "PERMIT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": "2026-04-30",
+   "expected": "2026-04-30",
+   "month": "2026-03",
+   "pass": true,
+   "series": "W875RX1",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-05-28",
+   "expected": "2026-05-28",
+   "month": "2026-04",
+   "pass": true,
+   "series": "W875RX1",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-06-25",
+   "expected": "2026-06-25",
+   "month": "2026-05",
+   "pass": true,
+   "series": "W875RX1",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-07-30",
+   "expected": "2026-07-30",
+   "month": "2026-06",
+   "pass": true,
+   "series": "W875RX1",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-08-26",
+   "expected": "2026-08-26",
+   "month": "2026-07",
+   "pass": true,
+   "series": "W875RX1",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-09-30",
+   "expected": "2026-09-30",
+   "month": "2026-08",
+   "pass": true,
+   "series": "W875RX1",
+   "status": "issue"
+  },
+  {
+   "computed": null,
+   "expected": "NOT_YET_BY_2026-10-20",
+   "month": "2026-09",
+   "pass": true,
+   "series": "W875RX1",
+   "status": "no_row"
+  },
+  {
+   "computed": null,
+   "expected": "2026-03-28",
+   "month": "2026-03",
+   "pass": null,
+   "series": "UMCSENT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-04-24",
+   "month": "2026-04",
+   "pass": null,
+   "series": "UMCSENT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-05-22",
+   "month": "2026-05",
+   "pass": null,
+   "series": "UMCSENT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-06-26",
+   "month": "2026-06",
+   "pass": null,
+   "series": "UMCSENT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-07-31",
+   "month": "2026-07",
+   "pass": null,
+   "series": "UMCSENT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "2026-08-28",
+   "month": "2026-08",
+   "pass": null,
+   "series": "UMCSENT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": null,
+   "expected": "NOT_YET_BY_2026-10-20",
+   "month": "2026-09",
+   "pass": null,
+   "series": "UMCSENT",
+   "status": "not_pulled"
+  },
+  {
+   "computed": "2026-05-28",
+   "expected": "2026-05-28",
+   "month": "2026-03",
+   "pass": true,
+   "series": "CMRMTSPL",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-06-25",
+   "expected": "2026-06-25",
+   "month": "2026-04",
+   "pass": true,
+   "series": "CMRMTSPL",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-07-30",
+   "expected": "2026-07-30",
+   "month": "2026-05",
+   "pass": true,
+   "series": "CMRMTSPL",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-08-26",
+   "expected": "2026-08-26",
+   "month": "2026-06",
+   "pass": true,
+   "series": "CMRMTSPL",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-09-30",
+   "expected": "2026-09-30",
+   "month": "2026-07",
+   "pass": true,
+   "series": "CMRMTSPL",
+   "status": "issue"
+  },
+  {
+   "computed": null,
+   "expected": "NOT_YET_BY_2026-10-20",
+   "month": "2026-08",
+   "pass": true,
+   "series": "CMRMTSPL",
+   "status": "no_row"
+  },
+  {
+   "computed": null,
+   "expected": "NOT_YET_BY_2026-10-20",
+   "month": "2026-09",
+   "pass": true,
+   "series": "CMRMTSPL",
+   "status": "no_row"
+  },
+  {
+   "computed": "2026-05-01",
+   "expected": "2026-05-01",
+   "month": "2026-03",
+   "pass": true,
+   "series": "RECPROUSM156N",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-06-01",
+   "expected": "2026-06-01",
+   "month": "2026-04",
+   "pass": true,
+   "series": "RECPROUSM156N",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-07-01",
+   "expected": "2026-07-01",
+   "month": "2026-05",
+   "pass": true,
+   "series": "RECPROUSM156N",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-08-03",
+   "expected": "2026-08-03",
+   "month": "2026-06",
+   "pass": true,
+   "series": "RECPROUSM156N",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-09-01",
+   "expected": "2026-09-01",
+   "month": "2026-07",
+   "pass": true,
+   "series": "RECPROUSM156N",
+   "status": "issue"
+  },
+  {
+   "computed": "2026-10-01",
+   "expected": "2026-10-01",
+   "month": "2026-08",
+   "pass": true,
+   "series": "RECPROUSM156N",
+   "status": "issue"
+  },
+  {
+   "computed": null,
+   "expected": "NOT_YET_BY_2026-10-20",
+   "month": "2026-09",
+   "pass": true,
+   "series": "RECPROUSM156N",
+   "status": "no_row"
+  }
+ ]
+}

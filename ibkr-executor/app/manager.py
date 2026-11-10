@@ -24,8 +24,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 
 logger = logging.getLogger(__name__)
 
@@ -87,27 +88,181 @@ class LadderManager:
     def __init__(self, cfg, state_path: str):
         self.cfg = cfg
         self.state_path = state_path
+        # Set by _load when an unreadable state file could not be parsed —
+        # service startup turns it into a Telegram alert (the manager has no
+        # alert channel at construction time), same doctrine as the blend
+        # manager's mode-transition archive.
+        self.archived_state: str | None = None
+        # ZF-7: did the preserve rename actually SUCCEED? The Z-J boot save
+        # below is conditional on it.
+        self._evidence_preserved = False
+        # MF2-2: an operator /kill whose leg closes have not completed yet
+        # (the sentinel is still on disk). Set by _load; the service re-arms
+        # the deferred close from it after a restart.
+        self.kill_pending = False
         self.state = self._load()
+        if self.archived_state and self._evidence_preserved:
+            # Z-J: the corrupt/drift branches move the file aside and set
+            # `halted` IN MEMORY; `_build` never saves, so a crash before
+            # the loop's first save() lost the halt AND the preserved legs —
+            # next boot came back `halted: None` with every leg WAITING,
+            # precisely the y2 harm one crash earlier. Persist immediately;
+            # on THIS path the original file is already archived, so nothing
+            # is erased. When the rename FAILED the original is still the
+            # only copy of the drift, so the halt stays in memory rather
+            # than overwriting the evidence at boot (ZF-7).
+            self.save()
 
     def _load(self) -> LadderState:
+        st = self._load_book()
+        # MF2-2: /kill journals its halt as a SEPARATE sentinel file, because
+        # an API thread may not read-modify-write `legs` (x12) and so may not
+        # call save() at all when the loop holds MGR_LOCK. Measured before
+        # this: /kill answered "The ladder is halted from now" while the book
+        # on disk said halted=None with the leg still OPEN, so a restart in
+        # that window — the restart a wedged gateway invites — came back
+        # UN-halted. An existing halt reason is more specific than KILL
+        # (SCHEMA_DRIFT is a data-integrity halt), so it is kept; either way
+        # nothing trades until the operator /resume-s.
+        if os.path.exists(self.kill_sentinel):
+            self.kill_pending = True
+            st.halted = st.halted or "KILL"
+        return st
+
+    def _load_book(self) -> LadderState:
         try:
             raw = json.load(open(self.state_path))
-            st = LadderState(banked=raw.get("banked", 0.0),
-                             halted=raw.get("halted"))
-            st.legs = {k: LegState(**v) for k, v in raw.get("legs", {}).items()}
-            for s in LADDER:
-                st.legs.setdefault(s.key, LegState())
-            st.events = raw.get("events", [])[-300:]
-            return st
-        except Exception:  # noqa: BLE001
+        except FileNotFoundError:
             return LadderState()
+        except Exception as exc:  # noqa: BLE001
+            # x12: a corrupt file used to degrade SILENTLY to a fresh
+            # LadderState() — open legs and `halted` forgotten, and the next
+            # save() overwrote the evidence. Preserve the file and be loud;
+            # a halted ladder that comes back un-halted is the dangerous
+            # direction.
+            archive = f"{self.state_path}.corrupt-{int(time.time())}"
+            try:
+                os.replace(self.state_path, archive)
+                note = f"unreadable book preserved at {archive}"
+                self._evidence_preserved = True
+            except OSError as err:
+                note = (f"PRESERVE FAILED ({err}) — the unreadable book will "
+                        f"be OVERWRITTEN by the next save")
+            self.archived_state = (f"ladder state unreadable ({exc}); "
+                                   f"starting a FRESH ladder; {note}")
+            logger.error("[ladder] %s", self.archived_state)
+            return LadderState()
+        st = LadderState(banked=raw.get("banked", 0.0),
+                         halted=raw.get("halted"))
+        try:
+            st.legs = {k: LegState(**v) for k, v in raw.get("legs", {}).items()}
+        except TypeError as exc:
+            # y2: schema drift on a leg row — a deploy ROLLBACK reading rows
+            # a newer build wrote. This branch used to reset every leg to
+            # WAITING/order_ref=None and leave the file in place: the loop's
+            # next save() destroyed the evidence, and a leg reset to WAITING
+            # inside its window with nino34 >= NINO_ARM was re-OPENed by
+            # step() — a DUPLICATE live spread with the real one orphaned at
+            # the venue. Now, like the outer corrupt branch: PRESERVE the
+            # file, keep every field this build still understands (an OPEN
+            # leg's order_ref is the only handle on a live spread), and HALT
+            # so step() cannot act before the operator looks. `banked` and
+            # an existing `halted` reason are kept as they were.
+            known = {f.name for f in fields(LegState)}
+            st.legs = {k: LegState(**{kk: vv for kk, vv in v.items()
+                                      if kk in known})
+                       for k, v in (raw.get("legs") or {}).items()
+                       if isinstance(v, dict)}
+            archive = f"{self.state_path}.corrupt-{int(time.time())}"
+            try:
+                os.replace(self.state_path, archive)
+                note = f"drifted book preserved at {archive}"
+                self._evidence_preserved = True
+            except OSError as err:
+                note = (f"PRESERVE FAILED ({err}) — the drifted book will "
+                        f"be OVERWRITTEN by the next save")
+            st.halted = st.halted or "SCHEMA_DRIFT"
+            self.archived_state = (f"ladder leg rows unreadable ({exc}); "
+                                   f"ladder HALTED ({st.halted}) so no leg "
+                                   f"can be opened or closed before you "
+                                   f"look; banked/halted kept; {note}")
+            logger.error("[ladder] %s", self.archived_state)
+        for s in LADDER:
+            st.legs.setdefault(s.key, LegState())
+        st.events = raw.get("events", [])[-300:]
+        return st
+
+    @property
+    def kill_sentinel(self) -> str:
+        """MF2-2: the /kill journal, the ladder's answer to the blend's
+        `flatten_request`. A file of its OWN, next to the book: writing it
+        touches no field the loop thread is mutating, so /kill can make the
+        halt DURABLE without MGR_LOCK and without the cross-thread
+        read-modify-write of `legs` that save() performs (x12's law)."""
+        return f"{self.state_path}.kill"
+
+    def journal_kill(self, today: str) -> None:
+        """Record an operator /kill on disk. Atomic (same mkstemp + fsync +
+        rename as save()), takes NO lock, and is safe from any thread. The
+        record is consumed by the loop once the legs are actually closed,
+        and deleted by /resume."""
+        directory = os.path.dirname(self.state_path) or "."
+        os.makedirs(directory, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(
+            dir=directory, prefix=os.path.basename(self.kill_sentinel) + ".",
+            suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as fh:
+                json.dump({"ts": int(time.time()), "date": today}, fh)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_path, self.kill_sentinel)
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+        self.kill_pending = True
+
+    def clear_kill(self) -> None:
+        """Consume the sentinel: the kill has been executed (the loop closed
+        what it could) or the operator has /resume-d. The halt itself lives
+        in the book from here on."""
+        try:
+            os.unlink(self.kill_sentinel)
+        except FileNotFoundError:
+            pass
+        self.kill_pending = False
 
     def save(self) -> None:
-        os.makedirs(os.path.dirname(self.state_path) or ".", exist_ok=True)
-        json.dump({"legs": {k: asdict(v) for k, v in self.state.legs.items()},
+        """Atomic write with a UNIQUE temp file per writer (x12): the plain
+        json.dump(open(path,"w")) this replaced published a truncated file
+        on any interruption, and `_load` turned that into a fresh ladder —
+        open legs and `halted` forgotten on live paper money. The temp file
+        lives in the state directory so os.replace stays a same-filesystem
+        rename. Callers still serialize their MUTATIONS (service.MGR_LOCK):
+        this makes the WRITE safe, not the read-modify-write above it."""
+        directory = os.path.dirname(self.state_path) or "."
+        os.makedirs(directory, exist_ok=True)
+        payload = {"legs": {k: asdict(v) for k, v in self.state.legs.items()},
                    "banked": self.state.banked, "halted": self.state.halted,
-                   "events": self.state.events[-300:]},
-                  open(self.state_path, "w"), indent=1)
+                   "events": self.state.events[-300:]}
+        fd, tmp_path = tempfile.mkstemp(
+            dir=directory, prefix=os.path.basename(self.state_path) + ".",
+            suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as fh:
+                json.dump(payload, fh, indent=1)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_path, self.state_path)
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     def _event(self, level: str, msg: str) -> None:
         last = self.state.events[-1] if self.state.events else None

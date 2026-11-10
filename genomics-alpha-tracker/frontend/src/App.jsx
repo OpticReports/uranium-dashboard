@@ -8,14 +8,18 @@ import DeepDive from "./views/DeepDive";
 import Chat from "./views/Chat";
 import CallsLog from "./views/CallsLog";
 import Today from "./views/Today";
+import Discovery from "./views/Discovery";
+import Execution from "./views/Execution";
 
 const TABS = [
   { id: "today", label: "Today" },
   { id: "heatmap", label: "Sector Heatmap" },
   { id: "watchlist", label: "Watchlist" },
+  { id: "discovery", label: "Discovery" },
   { id: "catalysts", label: "Catalyst Calendar" },
   { id: "movers", label: "Movers in Narrative" },
   { id: "calls", label: "Calls Log" },
+  { id: "execution", label: "Execution" },
   { id: "chat", label: "Analyst Chat" },
 ];
 
@@ -39,10 +43,7 @@ export default function App() {
             <p className="text-xs text-gray-400">Forward-looking signal extraction for the genomics universe</p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Sibling research tools behind this same login gate */}
-            <a href="/canary/" className="text-xs text-gray-400 hover:text-sky-300">🐤 Canary</a>
-            <a href="/portfolio-optimizer/" className="text-xs text-gray-400 hover:text-sky-300">⚖️ Portfolio Optimizer</a>
-            <a href="/btc/" className="text-xs text-gray-400 hover:text-sky-300">₿ Paper Engine</a>
+            {/* Sibling tools live in the OpticNav hamburger (top left) */}
             <HealthBadge health={health} />
           </div>
         </div>
@@ -74,9 +75,11 @@ export default function App() {
             {tab === "today" && <Today onPick={pick} />}
             {tab === "heatmap" && <Heatmap onPick={pick} />}
             {tab === "watchlist" && <Watchlist onPick={pick} />}
+            {tab === "discovery" && <Discovery onPick={pick} />}
             {tab === "catalysts" && <CatalystCalendar onPick={pick} />}
             {tab === "movers" && <Movers onPick={pick} />}
             {tab === "calls" && <CallsLog onPick={pick} />}
+            {tab === "execution" && <Execution />}
             {tab === "chat" && <Chat onPick={pick} />}
           </>
         )}

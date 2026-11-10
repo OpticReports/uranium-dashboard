@@ -1,0 +1,80 @@
+{
+ "claim1": {
+  "signals_all_bars": 521,
+  "penetrated": 516,
+  "rate": 0.9904030710172744
+ },
+ "attackA": {
+  "depth_bps_p": {
+   "1": 1.4864542251234965,
+   "5": 6.011667702500272,
+   "10": 10.942764810316753,
+   "25": 26.163514588187464,
+   "50": 56.928984195188576
+  },
+  "depth_ticks_p": {
+   "1": 9.0,
+   "5": 27.602499999999964,
+   "10": 46.0,
+   "25": 107.60749999999825,
+   "50": 274.5
+  },
+  "mean_depth_bps": 87.79795544057988,
+  "frac_under_bps": {
+   "1": 0.005813953488372093,
+   "2": 0.011627906976744186,
+   "5": 0.040697674418604654,
+   "10": 0.09302325581395349
+  },
+  "worst_case_fill_rate_if_all_sub2bp_miss": 0.9788867562380038
+ },
+ "attackB": {
+  "uncond_long_fill_rate": 0.9836584618527219,
+  "uncond_short_fill_rate": 0.9844755387600858,
+  "bar_range_bps_median": 113.96176932657264,
+  "bar_range_bps_p10": 47.339184300707544
+ },
+ "attackC_S3": {
+  "mix": {
+   "SIGNAL": 124,
+   "STOP": 66
+  },
+  "n": 190,
+  "non_urgent_frac": 0.6526315789473685,
+  "blended_exit_bps": 2.440421052631579
+ },
+ "attackC_S4": {
+  "mix": {
+   "STOP": 128
+  },
+  "n": 128,
+  "non_urgent_frac": 0.0,
+  "blended_exit_bps": 4.32
+ },
+ "tighter_limit_tradeoff": {
+  "0": {
+   "fill_rate": 0.9904030710172744,
+   "expected_price_edge_bps": 0.0
+  },
+  "5": {
+   "fill_rate": 0.9500959692898272,
+   "expected_price_edge_bps": 4.750479846449136
+  },
+  "10": {
+   "fill_rate": 0.8982725527831094,
+   "expected_price_edge_bps": 8.982725527831093
+  },
+  "20": {
+   "fill_rate": 0.8042226487523992,
+   "expected_price_edge_bps": 16.084452975047984
+  },
+  "40": {
+   "fill_rate": 0.6084452975047985,
+   "expected_price_edge_bps": 24.337811900191937
+  },
+  "80": {
+   "fill_rate": 0.3723608445297505,
+   "expected_price_edge_bps": 29.78886756238004
+  }
+ }
+}

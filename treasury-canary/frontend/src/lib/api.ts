@@ -411,10 +411,21 @@ export interface TrackRecord {
 
 export type LeverageState =
   | "BLOWOFF"
+  | "POST_BLOWOFF"
   | "ELEVATED"
   | "NEUTRAL"
   | "SQUEEZE"
   | "WASHOUT";
+
+export interface LeveragePathCtx {
+  last_blowoff_month: string;
+  blowoff_peak_excess_pp: number | null;
+  months_since_blowoff: number;
+  window_m: number;
+  reinflate_rule: string;
+  squeeze_rule: string;
+  fizzle_rule: string;
+}
 
 export interface MarginPoint {
   date: string;
@@ -447,6 +458,11 @@ export interface LeverageCorroboration {
   flags: Record<string, boolean | null>;
   n_true: number;
   n_known: number;
+  /** per-flag "READING · bar · verdict" (hover/screen-reader) and `short`,
+   *  the compact "reading/bar" rendered ON the chip — a bare struck-through
+   *  label reads as a fault, and a hover does not exist on a phone. */
+  details?: Record<string, string | null>;
+  short?: Record<string, string | null>;
   values: Record<string, number | null>;
   stats: Record<string, { label: string; bears: number; n: number; prob_note: string }>;
   reading: string;
@@ -483,6 +499,7 @@ export interface MarginLeverage {
     excess_yoy: number | null;
     coverage: number | null;
     state: LeverageState | null;
+    path?: LeveragePathCtx | null;
   };
   playbook: Record<LeverageState, LeveragePlaybookEntry>;
   thresholds: Record<string, number>;
@@ -594,6 +611,74 @@ export interface MarginFast {
 export type RateShockState = "SPIKE" | "PLUNGE" | "NEUTRAL";
 export type CorrRegime = "POS" | "MIXED" | "NEG";
 
+/** INCOMPLETE = at least one rule has no value for the Board month (a missing
+    rule is never counted as unlit, so the Board cannot claim CLEAR) */
+export type LaborBoardState = "CLEAR" | "WATCH" | "ALERT" | "INCOMPLETE";
+
+export interface LaborBoardRule {
+  id: string;
+  leg: "A" | "B" | "C";
+  label: string;
+  threshold: number;
+  unit: string;
+  watch: number | null;
+  value: number | null;
+  month: string | null;
+  /** null when the rule has no value for the Board month */
+  lit: boolean | null;
+  /** the value shown is from an earlier month than the Board month */
+  stale: boolean;
+  /** value / threshold — 1.0 is the trigger line */
+  ratio: number | null;
+}
+
+export interface LaborStripItem {
+  key: string;
+  label: string;
+  month: string;
+  value: number | null;
+  chg_12m: number | null;
+  /** 12-month change direction; "flat" inside the ±0.05 dead band */
+  trend: "worse" | "better" | "flat" | null;
+  percentile: number | null;
+  pct_from: string | null;
+  unit: string;
+  worse: "up" | "down";
+  note: string;
+}
+
+export interface LaborBoard {
+  state: LaborBoardState | null;
+  /** rules lit this month (any single rule was lit in 40% of months since
+      2021, above the spec's 33% ceiling, so the panel shows this count rather
+      than a WATCH state) */
+  n_lit: number;
+  n_rules: number;
+  n_evaluated: number;
+  missing: string[];
+  c1_source: string;
+  month: string | null;
+  rules: LaborBoardRule[];
+  /** state is null for a CPS month no rule has reached yet */
+  history: Array<{ month: string; state: LaborBoardState | null } & Record<string, number | null | string>>;
+  strip: LaborStripItem[];
+  /** computed one-line answer to "is the headline rate too good?" */
+  strip_verdict: string | null;
+  record: {
+    hits: number;
+    peaks: number;
+    false_alarms_1972_2020: number;
+    sahm_false_alarms_1972_2020: number;
+    paired_timing_vs_sahm: number;
+    fired_2024: string;
+    red_gate: string;
+    text: string;
+  };
+  ledger: Array<{ month: string; kind: string; event: string; value?: number }>;
+  ledger_from: string;
+  note: string;
+}
+
 export interface RateShockCell {
   n: number;
   episodes: number;
@@ -622,6 +707,23 @@ export interface RateShock {
   shock_stats: Record<RateShockState, RateShockCell & { label: string }>;
   matrix: Record<RateShockState, Record<CorrRegime, RateShockCell>>;
   thresholds: Record<string, number>;
+  /** re-tested per-alert recession record (studies/rate-spike-recession.md) */
+  spike_recession?: {
+    episodes: number;
+    episode_hits: number;
+    episode_rate_pct: number;
+    base_pct: number;
+    hits_by: string;
+    since_1990: { from: string; episodes: number; hits: number };
+    alerts: { n: number; hits: number; lead: number; late: number };
+    gate_2x: string;
+    ex_volcker_ratio: number;
+    beyond_curve: string;
+    power_note: string;
+  };
+  /** live 12-month yield-curve recession probability (quoted beside spikes) */
+  curve_prob_pct?: number | null;
+  spike_label?: string;
   note: string;
 }
 
@@ -694,6 +796,34 @@ export interface SeverityBlock {
   label: string;
   score: number | null;
   components: SeverityComponent[];
+}
+
+export interface SeverityHistory {
+  series: Array<{ month: string; score: number | null; class: string | null; live: number; total: number; drawn: boolean }>;
+  blocks: Array<Record<string, number | string | null>>;
+  today: { score: number | null; class: string | null };
+  today_pctile: number | null;
+  pctile_from: string | null;
+  share_severe: number | null;
+  share_severe_all_inputs: number | null;
+  pctile_all_inputs: number | null;
+  all_inputs_from: string | null;
+  bands: { mild_below: number; severe_above: number };
+  recessions: Array<{ start: string; end: string; exogenous: boolean }>;
+  analogs: {
+    band: number;
+    recession_starts: Array<{
+      peak: string; trough: string; reading: number | null; class: string | null;
+      live: number | null; total: number | null; months?: number;
+      unemployment_rise_pp?: number; real_gdp_pct?: number; exogenous?: boolean;
+    }>;
+    nearest: Array<{
+      from: string; to: string; months: number; mean_reading: number; live: number; total: number;
+      already_in_recession: boolean; recession_within_24m: string | null;
+      unemployment_chg_24m: number | null;
+    }>;
+  };
+  method: string;
 }
 
 export interface SeverityIndex {
@@ -773,6 +903,12 @@ export interface RateEnsembleSource {
 export interface RateEnsembleMeeting {
   date: string;
   sources: Record<string, Record<string, number>>;
+  /** why a source is empty for this meeting — keyed by source id */
+  missing?: Record<string, string>;
+  /** set when the futures leg anchored on spot EFFR instead of a contract */
+  anchor?: string | null;
+  /** set when the futures leg had to solve a poorly-conditioned side */
+  soft?: string | null;
   blend: Record<string, number>;
 }
 
@@ -789,7 +925,116 @@ export interface RateEnsemble {
 // Endpoint bindings
 // ---------------------------------------------------------------------------
 
+export interface SqueezeCondition {
+  id: string;
+  label: string;
+  threshold: string;
+  state: "MET" | "PARTIAL" | "NOT_MET" | "UNVERIFIED" | "STALE";
+  value: number | null;
+  unit: string;
+  detail: string;
+  asof: string | null;
+  /** plain reading shown instead of value+unit when set (T1: "+66bp hikes priced") */
+  display?: string | null;
+}
+
+export interface SqueezeRadarData {
+  asof: string;
+  fuel: SqueezeCondition[];
+  triggers: SqueezeCondition[];
+  fuel_score: number;
+  trigger_score: number;
+  calendar: Array<{ event: string; date: string; estimated: boolean }>;
+  spec: string;
+  honesty: string[];
+}
+
+// ── Distress panel (studies/distress-signals.md) ────────────────────────────
+export interface DistressRuleState {
+  asof: string | null;
+  g: number | null;
+  on: boolean | null;
+  fresh_onset?: boolean;
+  onset_quarters: string[];
+}
+export interface DistressRecord {
+  role: string;
+  summary: string;
+  per_peak?: string[];
+  false_alarms?: string[];
+  rotation_p?: number;
+}
+export interface DistressBank {
+  id: string;
+  label: string;
+  asof: string;
+  latest: number;
+  rule: DistressRuleState;
+  role: string;
+  per_peak: string[];
+  false_alarms: string[];
+  rotation_p: number;
+  qualifiers: string[];
+  variant_note?: string;
+}
+export interface DistressStateRow {
+  state: string;
+  per_1000: number | null;
+  consumer_yoy: number | null;
+  business_ch7_yoy: number | null;
+  business_ch7_12m: number;
+}
+export interface DistressBottomingWatch {
+  asof?: string;
+  g?: number;
+  high?: number | null;
+  armed?: boolean;
+  rolled_over_now?: boolean;
+  signals?: string[];
+  status: string;
+  record?: {
+    role: string;
+    grade: string;
+    summary: string;
+    doc: string;
+    court_signals?: { release: string; kind: string }[];
+  } | null;
+}
+export interface Distress {
+  headline: string;
+  study: { doc: string; run: string; spec: string };
+  history_end: string;
+  live_quarters: string[];
+  national: {
+    consumer: {
+      asof: string;
+      filings_12m: number | null; // AO national row (incl. territories)
+      filings_12m_50dc: number; // 50 states + DC: the per-capita numerator
+      per_1000: number;
+      yoy_12m: number | null;
+      per_1000_by_year: Record<string, number>;
+      rule: DistressRuleState;
+      role: string;
+      record: DistressRecord;
+      g_path: { q: string; g: number | null }[];
+    };
+    business: {
+      rule: DistressRuleState;
+      role: string;
+      record: DistressRecord;
+      g_path: { q: string; g: number | null }[];
+    };
+    chapter11: { rule: DistressRuleState; note: string };
+  };
+  bank: DistressBank[];
+  states: { asof: string; rows: DistressStateRow[]; role: string; business_role: string | null; summary: string };
+  failure_liabilities: DistressRecord;
+  bottoming_watch?: DistressBottomingWatch;
+  alert: null;
+}
+
 export const api = {
+  squeezeRadar: () => getJson<SqueezeRadarData>("/squeeze/radar"),
   cycle: () => getJson<any>("/cycle"),
   cycleAnalog: () => getJson<any>("/cycle/analog"),
   health: () => getJson<Health>("/health"),
@@ -805,6 +1050,8 @@ export const api = {
     ),
   recessionModel: () => getJson<RecessionModel>("/recession-model"),
   laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
+  laborBoard: () => getJson<LaborBoard>("/labor/board"),
+  distress: () => getJson<Distress>("/distress"),
   marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
   marginFast: () => getJson<MarginFast>("/margin/fast"),
   ratesShock: () => getJson<RateShock>("/rates/shock"),
@@ -829,6 +1076,476 @@ export const api = {
   pinsHistory: () => getJson<PinHistory>("/pins/history"),
   trackRecord: () => getJson<TrackRecord>("/track-record"),
   severity: () => getJson<SeverityIndex>("/severity"),
+  severityHistory: () => getJson<SeverityHistory>("/severity/history"),
   refresh: () =>
     getJson<unknown>("/refresh", { method: "POST" }),
+  aiDebt: () => getJson<AiDebt>("/ai-debt"),
+  dollarWatch: () => getJson<DollarWatch>("/dollar-watch"),
 };
+
+// ---------------------------------------------------------------------------
+// AI debt (studies/ai-debt-flows.md; spec studies/ai_debt_flows/BUILD.md).
+// Context, not a signal: every block may be null or carry status "stale" /
+// "error" and the tab renders an "unavailable" state instead of throwing.
+// Missing numbers are null, never 0. Declared after `api` on purpose (append
+// only); TypeScript hoists type declarations.
+// ---------------------------------------------------------------------------
+
+export type AiDebtBlockStatus = "ok" | "stale" | "error";
+export type AiDebtVerif = "P" | "R" | "S";
+export type AiDebtProvenance = "primary" | "press" | "aggregator";
+export type AiDebtFlag = "refi" | "spv" | "convert" | "non_usd";
+
+// A dated series, either as parallel arrays or as a list of points.
+export type AiDebtSeries =
+  | { dates: string[]; values: Array<number | null> }
+  | Array<{ date: string; value: number | null }>;
+
+// A scalar reading with its as-of and source, optionally with history. `src`
+// is a map when the reading derives from several series (the CCC−B gap).
+export interface AiDebtReading {
+  latest: number | null;
+  asof: string | null;
+  series?: AiDebtSeries | null;
+  src?: string | Record<string, string | null> | null;
+  unit?: string | null;
+  note?: string | null;
+  hi_2026?: number | null;
+  lo_2026?: number | null;
+  end_2025?: number | null;
+}
+
+export interface AiDebtDeal {
+  date: string;
+  issuer: string;
+  bucket: string;
+  instrument?: string | null;
+  size_bn: number | null;
+  ccy: string | null;
+  size_usd_bn: number | null;
+  rating_bucket: string | null;
+  rating_at_issue?: string | null;
+  tranches?: string | null;
+  pricing?: string | null;
+  verif: AiDebtVerif | null;
+  src: string | null;
+  included: boolean;
+  flags?: AiDebtFlag[] | null;
+  note?: string | null;
+}
+
+export interface AiDebtShareYear {
+  hyperscaler_usd_bn: number | null;
+  all_ai_usd_bn: number | null;
+  sifma_us_corp_bn: number | null;
+  pct_hyperscaler: number | null;
+  pct_all: number | null;
+  src: string | null;
+}
+
+export interface AiDebtVsTreasury {
+  ai_bn: number | null;
+  net_marketable_ust_bn: number | null;
+  pct: number | null;
+  basis: string | null;
+}
+
+export interface AiDebtFiling {
+  filed: string;
+  issuer: string;
+  form: string;
+  url: string | null;
+  extracted: {
+    size_bn?: number | null;
+    ccy?: string | null;
+    partial?: boolean | null;
+    coupons?: Array<number | string | null> | null;
+    maturities?: Array<number | string> | null;
+    spreads?: Array<number | string | null> | null;
+    // per-tranche benchmark: UST, Bund, Gilt, GoC, swap, SOFR … (null = not stated)
+    tranches?: Array<{ maturity?: number | null; spread_bp?: number | null; benchmark?: string | null }> | null;
+  } | null;
+  status: string;
+}
+
+// {month, <bucket or rating>: $bn}; a key absent for a month means no deal.
+export type AiDebtMonthRow = { month: string } & Record<string, number | string | null | undefined>;
+
+export interface AiDebtIssuance {
+  status?: AiDebtBlockStatus;
+  seed_rev: string | null;
+  asof?: string | null;
+  deals: AiDebtDeal[] | null;
+  totals_by_year: Record<string, number | null> | null;
+  by_bucket_year: Record<string, Record<string, number | null>> | null;
+  by_rating_year: Record<string, Record<string, number | null>> | null;
+  by_month: AiDebtMonthRow[] | null;
+  by_month_rating?: AiDebtMonthRow[] | null;
+  share: Record<string, AiDebtShareYear> | null;
+  vs_treasury: Record<string, AiDebtVsTreasury> | null;
+  new_filings: AiDebtFiling[] | null;
+}
+
+export interface AiDebtPensionCell {
+  level: number | null;
+  flow_saar: number | null;
+  asof?: string | null;
+}
+
+export interface AiDebtHolders {
+  status?: AiDebtBlockStatus;
+  asof: string | null;
+  z1: {
+    levels: Record<string, number | null> | null;
+    flows_saar_last4: Record<string, Array<number | null> | null> | null;
+    flows_quarters?: string[] | null;
+    pensions: {
+      private?: AiDebtPensionCell | null;
+      state_local?: AiDebtPensionCell | null;
+    } | null;
+    labels?: Record<string, string> | null;
+    src?: string | null;
+  } | null;
+  note: string | null;
+}
+
+export interface AiDebtCountry {
+  name: string;
+  code: string | null;
+  treas_net_12m: number | null;
+  corp_net_12m: number | null;
+  treas_pos: number | null;
+  corp_pos: number | null;
+  corp_share_of_lt: number | null;
+  custody_centre: boolean;
+  treas_spark?: Array<number | null> | null;
+  corp_spark?: Array<number | null> | null;
+}
+
+export interface AiDebtTicPair {
+  treas: Array<number | null>;
+  corp: Array<number | null>;
+}
+
+export interface AiDebtForeignBid {
+  status?: AiDebtBlockStatus;
+  asof: string | null;
+  countries: AiDebtCountry[] | null;
+  series: {
+    months: string[];
+    grand_total?: AiDebtTicPair | null;
+    official?: AiDebtTicPair | null;
+    non_official?: AiDebtTicPair | null;
+    japan?: AiDebtTicPair | null;
+    all_countries?: AiDebtTicPair | null;
+  } | null;
+  bills_inclusive: {
+    japan_12m: number | null;
+    all_12m: number | null;
+    note: string | null;
+    asof?: string | null;
+    src?: string | null;
+  } | null;
+  src?: string | null;
+}
+
+export interface AiDebtJapan {
+  status?: AiDebtBlockStatus;
+  boj: {
+    months: string[];
+    total: Array<number | null>;
+    sovereign: Array<number | null>;
+    nonsovereign: Array<number | null>;
+    unit?: string | null;
+    asof?: string | null;
+    sum_12m?: { total: number | null; sovereign: number | null; nonsovereign: number | null } | null;
+    src?: string | null;
+  } | null;
+  mof_by_type: {
+    months: string[];
+    banks: Array<number | null>;
+    life: Array<number | null>;
+    trust_accounts: Array<number | null>;
+    inv_trusts: Array<number | null>;
+    all: Array<number | null>;
+    unit?: string | null;
+    asof?: string | null;
+    src?: string | null;
+  } | null;
+  mof_weekly: {
+    weeks: string[];
+    net: Array<number | null>;
+    unit?: string | null;
+    asof?: string | null;
+    src?: string | null;
+  } | null;
+  jgb: {
+    dates: string[];
+    y10: Array<number | null>;
+    y30: Array<number | null>;
+    asof?: string | null;
+    src?: string | null;
+  } | null;
+  read: string | null;
+}
+
+export interface AiDebtGpifIssuer {
+  issuer: string;
+  jpy_bn: number | null;
+  lines: number | null;
+}
+
+export interface AiDebtPublicFunds {
+  status?: AiDebtBlockStatus;
+  trust_accounts_12m_jpy_trn: number | null;
+  trust_accounts_asof?: string | null;
+  trust_accounts_src?: string | null;
+  // MOF investor-type view: monthly series plus `<key>_12m` sums (JPY trn)
+  mof_by_type?: ({ months?: string[] | null } & Record<string, unknown>) | null;
+  z1_pensions: {
+    private?: AiDebtPensionCell | null;
+    state_local?: AiDebtPensionCell | null;
+    src?: string | null;
+  } | null;
+  gpif: {
+    asof: string | null;
+    foreign_bonds_jpy_trn: number | null;
+    ai_issuers: AiDebtGpifIssuer[] | null;
+    ai_share_pct: number | null;
+    ust_jpy_trn: number | null;
+    ust_share_pct?: number | null;
+    lines_total?: number | null;
+    src: string | null;
+  } | null;
+  tic_official_corp: {
+    net_12m: number | null;
+    pos: number | null;
+    share_of_foreign_held: number | null;
+    asof?: string | null;
+    src?: string | null;
+  } | null;
+  imf_pip_japan: Record<string, unknown> | null;
+  can_see: string[] | null;
+  cannot_see: string[] | null;
+}
+
+export interface AiDebtUstFy {
+  net_marketable: number | null;
+  coupons: number | null;
+  bills: number | null;
+  basis?: string | null;
+}
+
+export interface AiDebtAuction {
+  date: string;
+  tenor: string;
+  high_yield: number | null;
+  btc: number | null;
+  indirect_pct: number | null;
+  reopening?: boolean | null;
+}
+
+export interface AiDebtCrowding {
+  status?: AiDebtBlockStatus;
+  ust: Record<string, AiDebtUstFy> | null;
+  ust_monthly?: {
+    months: string[];
+    marketable: Array<number | null>;
+    coupons: Array<number | null>;
+    bills: Array<number | null>;
+    unit?: string | null;
+    src?: string | null;
+  } | null;
+  term_premium: { kw10: AiDebtReading | null; acm10: AiDebtReading | null } | null;
+  yields: {
+    dgs10: AiDebtReading | null;
+    dgs30: AiDebtReading | null;
+    t10yie: AiDebtReading | null;
+  } | null;
+  fed_treast: AiDebtReading | null;
+  auctions: AiDebtAuction[] | null;
+  auctions_src?: string | null;
+}
+
+export interface AiDebtBdc {
+  ticker: string;
+  price: number | null;
+  asof: string | null;
+  nav: number | null;
+  nav_asof: string | null;
+  p_nav: number | null;
+  nav_src: string | null;
+  nav_note?: string | null;
+  px_src?: string | null;
+}
+
+export interface AiDebtSpreadAtIssue {
+  issuer: string;
+  date: string;
+  bp: number | null;
+  maturity?: number | string | null;
+  src: string | null;
+}
+
+export interface AiDebtEvent {
+  date: string;
+  text: string;
+  provenance: AiDebtProvenance | string;
+  src: string | null;
+  retrieved: string | null;
+  note?: string | null;
+}
+
+export interface AiDebtBreaking {
+  status?: AiDebtBlockStatus;
+  asof?: string | null;
+  spreads: Record<string, AiDebtReading> | null;
+  ccc_b_gap: AiDebtReading | null;
+  yields: { ig: AiDebtReading | null; hy: AiDebtReading | null } | null;
+  baa10y: AiDebtReading | null;
+  ebp: AiDebtReading | null;
+  ofr_fsi: AiDebtReading | null;
+  move: AiDebtReading | null;
+  bdc: AiDebtBdc[] | null;
+  spread_at_issue_30y: AiDebtSpreadAtIssue[] | null;
+  events: AiDebtEvent[] | null;
+}
+
+export interface AiDebt {
+  asof: string | null;
+  generated: string | null;
+  basis: Record<string, string | null> | null;
+  issuance: AiDebtIssuance | null;
+  holders: AiDebtHolders | null;
+  foreign_bid: AiDebtForeignBid | null;
+  japan: AiDebtJapan | null;
+  public_funds: AiDebtPublicFunds | null;
+  crowding: AiDebtCrowding | null;
+  breaking: AiDebtBreaking | null;
+  honesty: string[] | null;
+  sources: Record<string, string> | null;
+  status: Record<string, AiDebtBlockStatus | string> | null;
+}
+
+// ---------------------------------------------------------------------------
+// GET /dollar-watch — the Dollar watch tab (studies/dollar-watch.md §5).
+// Descriptive only. Every block may be null or carry status "stale"/"error";
+// the view reads everything defensively.
+// ---------------------------------------------------------------------------
+export type DwStatus = "ok" | "stale" | "error";
+export interface DwSeries { dates?: string[] | null; values?: Array<number | null> | null }
+export interface DwReading {
+  latest?: number | null; asof?: string | null; unit?: string | null; src?: string | Array<string | null> | null; basis?: string | null;
+  status?: DwStatus | null; pct_own_history?: number | null; n?: number | null; history_from?: string | null;
+  pct_10y?: number | null; n_10y?: number | null; chg_6m_pct?: number | null; chg_12m_pct?: number | null; pct_basis?: string | null;
+  intraday?: boolean | null;
+}
+export interface DwFundingRow extends DwReading {
+  id: string; label: string; median_1y?: number | null; direction?: string | null; note?: string | null;
+  chg_1m_pct?: number | null; off_52w_high_pct?: number | null;
+}
+export interface DwListRate { [k: string]: number | Record<string, number> | null | undefined }
+export interface DwExcursion { side: string; start: string; end: string; months: number; extreme: number | null; extreme_month: string; began_inside_crisis_A25: boolean }
+export interface DwOutcome { spx_pct?: number | null; emfx_pct?: number | null; baa10y_pp?: number | null; broad_dollar_pct?: number | null; baa_minus_10y_pp?: number | null; dxy_pct?: number | null }
+export type DwOutcomes = Record<string, DwOutcome | null>;
+export interface DwFiring {
+  date: string; roc20_max_pct?: number | null; roc20_max_date?: string | null; roc20_now_pct?: number | null; dollar?: number | null;
+  dollar_further_rise_pct?: number | null; dollar_peak_date?: string | null; spx_to_next_low_pct?: number | null; spx_low_date?: string | null;
+  vix_change_60d?: number | null; outcomes?: DwOutcomes | null; reading?: string | null; variant?: string | null;
+  observable_on?: string | null; spx_to_next_low_from_observable_pct?: number | null; spx_firing_to_observable_pct?: number | null;
+}
+export interface DwRuleState {
+  asof: string; dollar?: number | null; roc20_now_pct?: number | null; roc20_max_60d_pct?: number | null; roc20_max_date?: string | null;
+  ratio_now_to_max?: number | null; dollar_vs_60d_high_pct?: number | null; y10_now?: number | null; y10_ref?: number | null;
+  y10_ref_date?: string | null; gate_open?: boolean; climb_ge_4pct?: boolean; y10_falling?: boolean; decel_met?: boolean;
+  near_high_met?: boolean; episode_start?: string | null; episode_dollar_peak?: number | null; episode_dollar_peak_date?: string | null;
+}
+export interface DwIndicator { met?: boolean | null; rule?: string | null; [k: string]: unknown }
+export interface DwLedgerEntry { kind: string; date: string; recorded_on?: string | null; variants?: string[] | null; outcomes?: DwOutcomes | null; [k: string]: unknown }
+export interface DwD3Summary {
+  rows?: number | null; units?: number | null; matured?: number | null; in_sample_rows?: number | null; eligibility_unknown?: number | null;
+  with_p_u?: number | null;
+  unit_list?: Array<{ date: string; k?: number | null; matured?: boolean | null; hit?: boolean | null; p_u_zero?: number | null }> | null;
+}
+
+export interface DollarWatch {
+  generated?: string | null; frozen_on?: string | null; mode?: string | null; headline?: string | null;
+  status?: { overall?: DwStatus | null; blocks?: Record<string, DwStatus | null> | null } | null;
+  state?: {
+    status?: DwStatus | null;
+    dxy?: (DwReading & { provider?: string | null; band_position?: string | null;
+      monthly?: { months?: string[] | null; avg?: Array<number | null> | null; close?: Array<number | null> | null; frozen_through?: string | null;
+        month_to_date?: { month?: string | null; avg?: number | null; days?: number | null } | null;
+        splice_check?: { overlap_months?: number | null; max_abs_diff_pct?: number | null } | null; basis?: string | null } | null }) | null;
+    issues?: string[] | null;
+    band?: { lo?: number; hi?: number; label?: string | null; basis?: string | null; note?: string | null; excursions?: DwExcursion[] | null;
+      by_list?: Record<string, Record<string, number | null>> | null } | null;
+    broad?: { broad?: DwReading | null; afe?: DwReading | null; eme?: DwReading | null; high_since_2006?: { value?: number | null; date?: string | null } | null } | null;
+    momentum?: { month?: string | null; dxy_12m_pct?: number | null; signal?: boolean | null; threshold_pct?: number | null; last_signal_month?: string | null;
+      definition?: string | null; caveat?: string | null; episodes_history?: string[] | null; by_list?: Record<string, Record<string, number | null>> | null } | null;
+    quadrant?: { month?: string | null; dxy_3m_pct?: number | null; y10_3m_pp?: number | null; quadrant?: string | null; label?: string | null; definition?: string | null;
+      labels?: Record<string, string> | null; onsets_C16?: { counts?: Record<string, number> | null; n?: number | null } | null;
+      onsets_A25?: { counts?: Record<string, number> | null; n?: number | null } | null;
+      base_all_months?: { months?: number | null; counts?: Record<string, number> | null; shares?: Record<string, number> | null } | null } | null;
+    safe_haven?: { gold?: (DwReading & { provider?: string | null; off_52w_high_pct?: number | null; note?: string | null }) | null; chf?: DwReading | null; jpy?: DwReading | null;
+      note?: string | null;
+      gold_record?: { drawdowns?: Array<Record<string, string | number | null>> | null; ended_higher?: number | null; n_with_end?: number | null;
+        ended_higher_gt_1pct?: number | null; basis?: string | null } | null;
+      dollar_fell_at_peak_stress?: { n_crises?: number | null; fell?: number | null; basis?: string | null } | null } | null;
+    emfx?: (DwReading & { series?: DwSeries | null }) | null;
+    brent?: DwReading | null;
+    counter_examples?: Array<{ when: string; text: string }> | null;
+  } | null;
+  funding?: { status?: DwStatus | null; rows?: DwFundingRow[] | null; label?: string | null; basis?: string | null;
+    series?: { cp_fin?: DwSeries | null; ofr_funding?: DwSeries | null; swap_lines?: DwSeries | null } | null;
+    leadlag?: { basis?: string | null; dollar_peaks?: Record<string, string> | null; rows?: Array<Record<string, string>> | null } | null;
+    swap_events?: Array<{ date: string; text: string; url?: string | null }> | null } | null;
+  scramble?: { status?: DwStatus | null; state?: DwRuleState | null; gate_open?: boolean | null; fires_today?: Record<string, boolean> | null;
+    indicators?: { a_deceleration?: DwIndicator | null; b_funding_easing?: DwIndicator | null; c_risk_turn?: DwIndicator | null; note?: string | null } | null;
+    confirmations?: { dollar_off_peak_pct?: number | null; dollar_3pct_off_peak?: boolean | null; swap_now_bn?: number | null; swap_episode_peak_bn?: number | null;
+      swap_below_10pct_of_peak?: boolean | null; episode_start?: string | null; rule?: string | null } | null;
+    history?: DwFiring[] | null; history_unpatched?: string[] | null; live_firings?: DwLedgerEntry[] | null;
+    live_check?: { reproduces_frozen_rearm?: boolean | null; reproduces_frozen_unpatched?: boolean | null; note?: string | null } | null;
+    monthly_null?: { window?: string | null; firings?: number | null; dollar_peak_within_3m?: number | null; base_dollar_peak_within_3m?: number | null;
+      spx_up_12m?: number | null; base_spx_up_12m?: number | null } | null;
+    vspike_timing?: Array<Record<string, string | number | null>> | null;
+    end_of_scramble?: { order?: string[] | null; case_2008?: string | null; basis?: string | null } | null;
+    series?: { dates?: string[] | null; dollar?: Array<number | null> | null; roc20_pct?: Array<number | null> | null } | null;
+    series_long?: DwSeries | null; params?: Record<string, number | string> | null; variant_live?: string | null; wording?: string | null; basis?: string | null;
+    last_index_day?: string | null } | null;
+  slow?: { status?: DwStatus | null;
+    usd_credit?: { quarter?: string | null; total_tn?: number | null; yoy_pct?: number | null; eme_tn?: number | null; eme_yoy_pct?: number | null;
+      eme_share_pct?: number | null; label?: string | null; reading?: string | null; basis?: string | null; status?: DwStatus | null; src?: Array<string | null> | null;
+      series?: { quarters?: string[] | null; credit_yoy_pct?: Array<number | null> | null; dollar_yoy_pct?: Array<number | null> | null } | null;
+      history?: Record<string, number | string | null> | null } | null;
+    fx_swaps?: { period?: string | null; all_tn?: number | null; usd_leg_tn?: number | null; prev_period?: string | null; prev_all_tn?: number | null;
+      basis?: string | null; status?: DwStatus | null } | null;
+    policy_rates?: { rows?: Array<{ area: string; name: string; rate: number | null; month: string; vs_fed_pp?: number | null; chg_12m_pp?: number | null }> | null;
+      basis?: string | null; status?: DwStatus | null } | null;
+    us2y_vs_funds?: { dgs2?: number | null; dgs2_asof?: string | null; fed_upper?: number | null; gap_pp?: number | null; reading?: string | null; status?: DwStatus | null } | null;
+    treasury?: { y10?: DwReading | null; y10_chg_6m_pp?: number | null; term_premium?: DwReading | null; custody?: (DwReading & { chg_12m_pct?: number | null }) | null;
+      april_2025?: Record<string, string | number | null> | null; chain_2022?: Record<string, string | number | null> | null } | null } | null;
+  ledger?: { status?: DwStatus | null; frozen_momentum?: Array<{ month: string; dxy_12m_pct?: number | null; dxy?: number | null; outcomes?: DwOutcomes | null }> | null;
+    frozen_rule?: DwFiring[] | null; live?: DwLedgerEntry[] | null; frozen_on?: string | null; outcomes_through?: string | null; basis?: string | null;
+    frozen_momentum_basis?: string | null; cutoff_rule?: string | null; cutoff_momentum?: string | null; problem?: string | null;
+    emfx_withheld?: string | null } | null;
+  crisis_lists?: Record<string, { label?: string | null; onsets?: Array<{ month: string; name: string }> | null }> | null;
+  window_convention?: string | null;
+  pending_questions?: Array<{ rank: string; q: string; moves?: string | null; status?: string | null; first_asked?: string | null; expires?: string | null;
+    answer?: string | null; answered_on?: string | null }> | null;
+  forward?: {
+    status?: DwStatus | null; problems?: string[] | null;
+    freeze?: { freeze_date?: string | null; spec_version?: string | null; route?: string | null; primary_crisis_list?: string | null;
+      decel_primary_variant?: string | null; forward_onset_rule?: string | null; notification_licence?: string | null;
+      answered_by?: string | null; answered_on?: string | null } | null;
+    d3?: { units?: number | null; matured?: number | null; looks?: number[] | null; next_look_at?: number | null; status?: string | null; rule?: string | null;
+      calendar?: string | null; decel?: DwD3Summary | null; placebo?: DwD3Summary | null } | null;
+    onsets?: { historical?: string[] | null; historical_dollar_funding?: string[] | null; historical_note?: string | null;
+      live?: DwLedgerEntry[] | null; months_evaluated?: number | null; last_evaluated?: string | null; next_month?: string | null;
+      next_close?: string | null } | null;
+    fed_actions?: { n?: number | null; last?: string | null; reviewed_through?: string | null; sha256?: string | null; error?: string | null } | null;
+    garch?: Record<string, unknown> | null;
+  } | null;
+  honesty?: string[] | null;
+  build_error?: string | null;
+}

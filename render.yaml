@@ -26,6 +26,16 @@ services:
     plan: starter            # always-on (scheduler runs) + supports a persistent disk
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    buildFilter:
+      paths:
+        - genomics-alpha-tracker/**
     disk:
       name: data             # persists SQLite + cache across restarts/redeploys
       mountPath: /app/data
@@ -39,6 +49,8 @@ services:
         value: fmp
       - key: FMP_API_KEY
         sync: false            # <- you enter this secret in the Render dashboard
+      - key: TIINGO_API_KEY
+        sync: false            # Tiingo news lane (rate-budgeted; needs the paid News add-on - free-tier keys get 403 and the job skips gracefully)
       # Login gate (protects your proprietary signals on a public URL).
       # Enter both in the Render dashboard when prompted.
       - key: DASHBOARD_USER
@@ -71,6 +83,25 @@ services:
         value: https://barbell-lab.onrender.com
       - key: BTC_UPSTREAM
         value: https://btc-paper-engine.onrender.com
+      # Execution tab: reverse-proxy GET /api/execution/feed to the
+      # ibkr-executor's read-only /blend/feed. BLEND_READ_TOKEN must equal
+      # the executor's READ_TOKEN (injected server-side as X-Read-Token —
+      # the browser never sees it). Both sync:false: entered in the Render
+      # dashboard; unset = the Execution tab shows its "not connected" card.
+      - key: BLEND_UPSTREAM
+        sync: false
+      - key: BLEND_READ_TOKEN
+        sync: false
+      # The executor book's R2-A sleeve weight, published on
+      # /blend3070/intents (rebalance.target). 0.30 = the H13 30/70
+      # registration; 1.0 = sleeve only, no SPY core. UNSET publishes null
+      # and the executor keeps the weight its book already runs at (so a
+      # redeploy can never re-weight live money); a set value is adopted
+      # after two agreeing polls with a Telegram page, then the SPY is sold
+      # in one rebalance; no re-seed. sync:false: an allocation lever is
+      # never a blueprint literal a sync can revert.
+      - key: BLEND_SLEEVE_TARGET
+        sync: false
 
   # --- Barbell Lab (personal quant research platform) ------------------------
   # Lives at research.optic.capital/portfolio-optimizer behind the genomics
@@ -85,6 +116,16 @@ services:
     plan: starter
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    buildFilter:
+      paths:
+        - barbell-lab/**
     disk:
       name: data
       mountPath: /app/data
@@ -96,6 +137,25 @@ services:
         sync: false            # optional; public CSV fallback works without it
       - key: TIINGO_API_KEY
         sync: false            # optional third feed
+      - key: EXEC_TOKEN
+        sync: false            # btc-executor /status read secret (edge-monitor S5 feed; without it the feed reports BLIND, never crashes)
+      # WRITE AUTH for this app's own mutating routes (2026-09-21). Until
+      # this existed, src/barbell/web/app.py contained no auth construct of
+      # any kind and POST /api/promote - "this changes the live book's
+      # targets" - answered the public internet on the onrender.com origin.
+      # The module docstring says it is "served behind the optic.capital gate
+      # hub", and it is, but the origin was never the only door and the gate
+      # was doing all the work unknowingly. The typed-label confirmation was
+      # no defence either: GET /api/versions serves the label unauthenticated.
+      # UNSET MEANS WRITE ROUTES RETURN 503, not open - the opposite of
+      # btc-executor's EXEC_TOKEN, on purpose. That service refuses to run
+      # rather than leave a live position unmanaged, so fail-open is the
+      # lesser evil there; nothing here holds a position, so an unconfigured
+      # token must mean the promote button is OFF.
+      # To use the UI, open any page once as ?token=<value>; it is kept in
+      # sessionStorage and stripped from the address bar.
+      - key: BARBELL_TOKEN
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false            # chat analyst, native key (preferred if set)
       - key: OPENROUTER_API_KEY
@@ -126,15 +186,29 @@ services:
     plan: starter
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    buildFilter:
+      paths:
+        - treasury-canary/**
     disk:
       name: canary-data
       mountPath: /app/data
       sizeGB: 1
     envVars:
+      - key: TIINGO_API_KEY
+        sync: false            # Tiingo NEWS add-on (news pulse lane; absent = pulse reports unavailable, never crashes)
       - key: FRED_API_KEY
         sync: false            # <- enter your free FRED key on THIS service
       - key: FMP_API_KEY
         sync: false            # optional: enables gold (GLD) in the flow compass
+      - key: EDGAR_USER_AGENT
+        sync: false            # AI-debt tab EDGAR poll: "treasury-canary/1.0 (<contact address>)" — the SEC asks for a contact; never commit one
       - key: DATABASE_URL
         value: sqlite:////app/data/canary.db   # on the persistent disk
       - key: CACHE_DIR
@@ -167,6 +241,16 @@ services:
     plan: starter            # always-on: the engine polls 24/7
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    buildFilter:
+      paths:
+        - btc-paper-engine/**
     disk:
       name: btc-data
       mountPath: /app/data
@@ -188,6 +272,125 @@ services:
       # on the btc-executor service. Enter once in the Render dashboard.
       - key: EXEC_TOKEN
         sync: false
+      - key: EXEC_READ_TOKEN
+        sync: false            # read-only: /carry/target + /exec/target only;
+                               # carry-executor's ENGINE_READ_TOKEN (2026-10-01)
+      # Funding-regime monitor pages (RESEARCH_CARRY.md deployment policy:
+      # V6 carry sleeve parked until 30d INTX funding >= 8%/yr, hysteresis
+      # to 5%). Same Canary Optics bot as the executors — paste the same
+      # TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID here. Unset = silent no-op;
+      # /funding still serves the readings either way.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+
+  # --- Catalyst Options Engine (pre-catalyst asymmetry radar) ----------------
+  # PAPER ONLY + KEYLESS decision brain (born from the 2026-08-19 MRNA +130%
+  # melanoma-readout miss). No secrets exist on this service by design — all
+  # data lanes are keyless and degrade gracefully. Any future live options
+  # execution routes through ibkr-executor, never this service (CLAUDE.md
+  # separation-of-powers law). NOTE: the Nasdaq option-chain lane may be
+  # blocked from Render's datacenter IPs; the engine runs fine with that lane
+  # dark (scenario-IV Black-Scholes pricing, flagged on every affected row).
+  - type: web
+    name: catalyst-options-engine
+    runtime: docker
+    dockerfilePath: catalyst-options-engine/Dockerfile
+    dockerContext: catalyst-options-engine
+    plan: starter            # always-on: daily scan + market-hours chain refresh
+    healthCheckPath: /health
+    autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    buildFilter:
+      paths:
+        - catalyst-options-engine/**
+    disk:
+      name: options-data     # paper book + catalyst calendar survive deploys
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////app/data/options.db
+      - key: CACHE_DIR
+        value: /app/data/cache
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: LOG_LEVEL
+        value: INFO
+      # Future lane (NOT used today): FMP could backstop prices if the
+      # keyless stockanalysis lane ever goes dark from datacenter IPs.
+      # Optional — the service is fully functional without it.
+      - key: FMP_API_KEY
+        sync: false
+
+  # --- Tokenized Microcap Screener -----------------------------------------
+  # Screens DEX Screener for memecoins pooled against a TOKENIZED SHARE of a
+  # listed company (the FAMI/JINQIAN pattern on Robinhood Chain), maps the pool
+  # back to the US listing via the SEC ticker file, and ranks by how much of
+  # the equity move still looks to come.
+  #
+  # KEYLESS decision brain: no trading credential, no execution path. It names
+  # a ticker and a window; a human places the trade. FMP_API_KEY is the one
+  # OPTIONAL data key (market cap / float). Without it the service still runs
+  # and says on /health that the market-cap gate is degraded.
+  - type: web
+    name: tokenized-microcap-screener
+    runtime: docker
+    dockerfilePath: tokenized-microcap-screener/Dockerfile
+    dockerContext: tokenized-microcap-screener
+    plan: starter            # always-on: the 2-minute nanocap sweep is the point
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - tokenized-microcap-screener/**
+    disk:
+      name: screener-data    # registry + ladder history survive deploys, and
+      mountPath: /app/data   # the ladder history IS the lead-lag record
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////app/data/screener.db
+      - key: CACHE_DIR
+        value: /app/data/cache
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: LOG_LEVEL
+        value: INFO
+      # sec.gov answers 403 to a User-Agent with no contact address. Point this
+      # at a mailbox that is actually monitored before running at any volume.
+      - key: SEC_CONTACT
+        sync: false
+      # Optional market-cap / float enrichment. Absent => degraded, not broken.
+      - key: FMP_API_KEY
+        sync: false
+      # Alerts ride the SAME Telegram bot as treasury-canary and the
+      # executors — one bot, one chat, several services. Unset = no-op.
+      # TELEGRAM_MIN_SEVERITY (default WARN) filters what reaches the phone;
+      # set RED to mute the CLUSTER notices, which on the Farmmi timeline
+      # arrived 1.9h AFTER the tape moved, and keep only the two rungs that
+      # leave you time to act.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: TELEGRAM_MIN_SEVERITY
+        value: RED
+      # Optional second channel (Discord/Slack/ntfy webhook URL).
+      - key: ALERT_WEBHOOK_URL
+        sync: false
+      # Optional login gate, same convention as the sibling dashboards.
+      - key: DASHBOARD_USER
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false
 
   # NOTE: treasury-canary Telegram alerts — add the same TELEGRAM_BOT_TOKEN /
   # TELEGRAM_CHAT_ID secrets (plus optional TELEGRAM_MIN_SEVERITY, default
@@ -199,6 +402,99 @@ services:
   # is flipped to "false" by hand AFTER the dry-run shadow period checks out.
   # The API key must be created trade-only (view + trade; NO transfers).
   # Full runbook: btc-executor/EXECUTOR.md
+  # ---------------------------------------------------------------------
+  # code-agent: Telegram-driven coding agent (OpenRouter). Edits the REPO,
+  # never the running services.
+  #
+  # ISOLATION IS THE WHOLE DESIGN. This service deliberately holds NO
+  # trading credential - no HL_SECRET_KEY, no EXEC_TOKEN, no CB_API_*. An
+  # LLM driven from a chat app has attacker-reachable input by definition,
+  # and btc-executor's key can sign trades against real money. app/guard.py
+  # re-checks this at boot and REFUSES TO START if any of them are present,
+  # because the isolation is a deployment property and a blueprint is a file
+  # someone can edit - this repo has already had DRY_RUN flip silently on an
+  # unrelated sync.
+  #
+  # It pushes agent/* branches only. `main` auto-deploys a live book, so a
+  # human reviews and merges; that merge is the deploy.
+  #
+  # NOT a Telegram client. Slav owns the bot and calls this as a tool. A
+  # Telegram bot gets exactly ONE delivery mechanism - webhook or polling -
+  # so two services wanting the same bot steal it from each other silently,
+  # with no error either one can see. One assistant that both answers
+  # questions and writes code is the better shape anyway.
+  - type: web
+    name: code-agent
+    runtime: docker
+    dockerfilePath: code-agent/Dockerfile
+    # ROOT context: the test gate runs the REPO's suite, so the image needs
+    # btc-executor's dependencies too - unreachable from a code-agent/ context.
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    # NARROWED likewise. tests/ IS in the image - it is the gate the
+    # service runs - so a test change must rebuild. A restart also wipes the
+    # in-memory job store, losing the result of any task in flight.
+    buildFilter:
+      paths:
+        - code-agent/app/**
+        - code-agent/tests/**
+        - code-agent/Dockerfile
+        - code-agent/pytest.ini
+        - code-agent/requirements.txt
+        - btc-executor/requirements.txt
+    disk:
+      name: repo             # the checkout; a cold clone each boot is slow
+      mountPath: /app/data
+      sizeGB: 5
+    envVars:
+      - key: GITHUB_TOKEN
+        # FINE-GRAINED, this repo only, Contents: read+write. NOT a classic
+        # token: a classic PAT carries every repo the account can reach, and
+        # blast radius is the only thing standing between a bad edit and the
+        # rest of the account.
+        sync: false
+      - key: GITHUB_REPO
+        value: OpticReports/uranium-dashboard
+      - key: SLAV_LAB_TOKEN
+        # FINE-GRAINED, OpticReports/slav-lab ONLY, Contents: read+write — the
+        # sandbox's OWN token (guard.py policies()). Never the same token as
+        # GITHUB_TOKEN and never a fallback to it: a slav-lab token that cannot
+        # reach this repo is the isolation. Unset = slav-lab refused at task
+        # time. EXPIRES on a fixed date and GitHub does not tell the service:
+        # /health keeps saying token_ready (the var is set, just dead) and the
+        # first symptom is a failed push. On the expiry email, regenerate and
+        # paste the new value here. SLAV_LAB_REPO / SLAV_LAB_PUSH_MAIN are
+        # optional with safe defaults in code and deliberately NOT declared —
+        # a blueprint value would overwrite whatever the dashboard holds.
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: CODE_MODEL
+        # OPTIONAL. Has a default in code; this only exists so the model can
+        # be changed without a redeploy. NOT sync:false - it is not a secret,
+        # and prompting for it made it look mandatory. The value must be a
+        # string AIDER recognises (openrouter/<vendor>/<model>) - the model
+        # is a per-request field in the API, so something has to name it;
+        # there is no "set it once on the OpenRouter side" that removes this.
+        # A weak model here wastes tokens, it does not endanger the repo: the
+        # path/secret/test gates run on the OUTPUT regardless of who wrote it.
+        value: openrouter/moonshotai/kimi-k3
+      - key: AGENT_TOKEN
+        # Shared secret for POST /task. NOT optional: an unset value makes
+        # the service refuse every call (503) rather than serve an
+        # unauthenticated endpoint that can push to a repo which deploys a
+        # live trading book. Slav sends it as X-Agent-Token.
+        sync: false
+
   - type: web
     name: btc-executor
     runtime: docker
@@ -207,6 +503,23 @@ services:
     plan: starter            # always-on: mirrors stops 24/7
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    # NARROWED to what the image contains (the Dockerfile copies only
+    # requirements.txt and app/). btc-executor/** would still let a docs or
+    # tests-only commit restart a container holding live positions - which
+    # b6bb758 did today. Same reasoning as ibkr-executor below, which
+    # learned it the expensive way on 2026-08-28.
+    buildFilter:
+      paths:
+        - btc-executor/app/**
+        - btc-executor/Dockerfile
+        - btc-executor/requirements.txt
     disk:
       name: btc-exec-data
       mountPath: /app/data
@@ -216,6 +529,33 @@ services:
         value: https://btc-paper-engine.onrender.com
       - key: EXEC_TOKEN
         sync: false            # must match btc-paper-engine's EXEC_TOKEN
+      - key: VENUE
+        # coinbase | hyperliquid. sync:false for the same reason DRY_RUN is:
+        # a blueprint sync that flipped this would point a LIVE book at a
+        # different exchange, where its ledger positions and resting orders
+        # mean nothing. The code refuses that (VENUE_CHANGED halt, checked
+        # before boot reconcile can adopt or abandon anything), but the env
+        # must not be able to propose it in the first place. Unset = the
+        # code default, coinbase - an absent env can never move the book.
+        sync: false
+      # --- Hyperliquid (only read when VENUE=hyperliquid) ---
+      - key: HL_SECRET_KEY
+        # AGENT (API) wallet private key. Approve one in the HL UI under
+        # API; it can TRADE but CANNOT WITHDRAW - the same separation of
+        # powers as the Coinbase trade-only key, enforced by the venue
+        # rather than by our own care. NEVER the main account's key.
+        sync: false
+      - key: HL_ACCOUNT_ADDRESS
+        # REQUIRED for VENUE=hyperliquid, and it is the MAIN account's public
+        # address - NOT the agent wallet's. Positions are read by this
+        # address; the agent holds nothing, so pointing it at the agent would
+        # report the book permanently FLAT. The executor refuses to start
+        # rather than guess.
+        sync: false
+      - key: HL_COIN
+        sync: false            # perp symbol, e.g. BTC
+      - key: HL_TESTNET
+        sync: false            # "true" routes to the testnet API
       - key: CB_API_KEY_NAME
         sync: false            # CDP key name (trade-only key)
       - key: CB_API_PRIVATE_KEY
@@ -242,12 +582,166 @@ services:
       # the single source of truth; the executor pages on any change via the
       # config_change guard, and code defaults fail safe (kelly 0.05).
       # Ramp is a STAIRCASE - v3, EXECUTOR.md "Ramp schedule": 0.05 -> 0.10
-      # -> 0.20 -> 0.35 -> 0.56, advance after 4 trades at a rung AND
-      # cumulative ramp P&L >= 0; step DOWN a rung at -$5,000 ramp drawdown.
+      # -> 0.20, advance after 4 trades at a rung AND cumulative ramp P&L
+      # >= 0; step DOWN a rung at -$5,000 ramp drawdown.
+      #
+      # THE STAIRCASE NOW ENDS AT 0.20 (2026-09-10). Rungs 0.35 and 0.56 and
+      # the old 0.80 ceiling are RETIRED: btc-paper-engine/RESEARCH_FEES.md
+      # re-fitted Kelly on the fee we actually pay (8.64 bps round trip -
+      # 4 of 4 intended-maker entries crossed and paid taker, not the
+      # modelled 6.00) and the binding S6 envelope is 0.22. KELLY_M_CAP was
+      # raised to 0.30 on 2026-09-30 (RESEARCH_CAGR.md, Casey's approval).
+      # Setting KELLY_M above 0.30 here does NOT take effect: the cap clamps
+      # sizing to the cap and pages kelly_over_cap every poll (throttled to
+      # one phone ping per 30 min). The executor keeps running and keeps
+      # protecting open positions - it does not refuse to boot, because an
+      # unmanaged live book is worse than an over-sized one. Raising the
+      # ceiling is a repo change plus review, on purpose.
+      #
+      # BUT KELLY_M IS ONE FACTOR OF FOUR. Leg notional is
+      # kelly_m * lev * weight * SIZING_BASE_USD, so raising the BASE
+      # reproduces a retired rung with KELLY_M pinned at 0.20 - 1000 -> 3000
+      # deploys more than the old rung D. SIZING_BASE_USD, MAX_NOTIONAL_USD
+      # and MAX_ACCOUNT_LEV have NO repo ceiling; they are still yours to
+      # set. What the code does now is make a breach LOUD:
+      # mirror.MAX_EXPOSURE_FRAC (0.45 of the account's peak, gross) pages
+      # exposure_over_cap and names the base rather than blaming KELLY_M.
+      # Loud is not impossible. Treat a base change as a ramp step.
       # Change KELLY_M one step at a time, never alongside SIZING_BASE_USD.
-      # Current dashboard values (2026-08-11): KELLY_M 0.05,
-      # SIZING_BASE_USD 50000, MAX_NOTIONAL_USD 80000, MAX_ACCOUNT_LEV 2.0,
-      # DD_HALT_PCT 0.35 (% of sizing base; 0.30 at the $100k phase).
+      # Current dashboard values (2026-09-30, Hyperliquid live phase):
+      # KELLY_M 0.30, SIZING_BASE_USD 100000, MAX_NOTIONAL_USD 60000,
+      # MAX_ACCOUNT_LEV 2.0, DD_HALT_PCT 0.30 (% of sizing base),
+      # DAILY_LOSS_HALT_PCT 0.06. Engine blend 70/30 @1.5x.
+      # THE 0.30 STEP (Casey, 2026-09-30, RESEARCH_CAGR.md): gross
+      # 0.30 x 1.5 x 100000 = $45,000 (pullback 31,500 / trend 13,500).
+      # DD halt $30,000 (Casey's -30%) sits inside cap_notional 60,000, so the
+      # coherence guard is quiet. (Historical: 0.30 sat ON the old manual-
+      # resume line; that rule was replaced 2026-10-01 - see below.)
+      #
+      # THE 0.75 STEP (Casey, 2026-10-01, RESEARCH_SHARPE.md addendum):
+      # KELLY_M_CAP raised to 0.75 in the repo; the engine publishes a
+      # vol-targeted entry multiplier (0.5-1.0, only ever shrinks). Set in
+      # this order: MAX_NOTIONAL_USD 130000 FIRST (gross at 0.75 = 0.75 x
+      # 1.5 x 100000 = $112,500; backtest peak ~$124-128k), THEN KELLY_M
+      # 0.75 - ideally just after 00:00 UTC: the scaled daily line is frozen
+      # at each rollover, so it moves to 15% at the NEXT rollover after the
+      # change. DAILY_LOSS_HALT_PCT stays 0.06: the executor scales it to 15%
+      # ($15k) at 0.75 and it auto-rearms at every size. DD_HALT_PCT 0.30
+      # ($30k) unchanged.
+      #
+      # THE 2x BASE STEP (2026-09-28, Casey's call): base 50000 -> 100000 and
+      # cap 20000 -> 40000, TOGETHER. Gross deployed 15000 -> 30000 = 30.0% of
+      # the ~$100.1k account, which is MAX_EXPOSURE_FRAC exactly - the full
+      # authorised Kelly envelope, and the largest this book has carried.
+      # EVERY ratio is preserved because the cap doubled with the base:
+      #   base 2x | gross 2x | MAX_NOTIONAL 2x | DRAWDOWN halt 2x (17500 ->
+      #   35000, it is a % of base) | DAILY_LOSS 2x (3000 -> 6000)
+      # This is the point of expressing rails as percentages. MAX_NOTIONAL_USD
+      # is the ONE absolute dollar rail, so it is the one that has to be moved
+      # by hand - and the one that broke when the base moved alone.
+      #
+      # WHAT WENT WRONG ON THE WAY, recorded so it is not repeated: the base
+      # was first raised to 100000 with KELLY_M 0.22 and the cap left at
+      # 20000. That produced (a) kelly_over_cap x269 - 0.22 is over
+      # KELLY_M_CAP 0.20 and was silently clamped, so it bought nothing at
+      # all; (b) halt_config - the DRAWDOWN halt needed a 35000 loss against
+      # a 20000 cap_notional, i.e. a TOTAL loss of the largest permitted
+      # position could not fire the breaker (1.8x short); (c) cap_clamp
+      # waiting to fire, since the pullback leg alone wants 22500. The fix is
+      # the cap, not the halt percentage: DD_HALT_PCT was left at 0.35
+      # because it is already proportional. Lowering it to 0.175 - which was
+      # briefly proposed - would have TIGHTENED risk relative to the book
+      # rather than holding it constant, and Casey caught that.
+      #
+      # KELLY_M REACHED THE CEILING 2026-09-21 (Casey's call). 0.135 -> 0.20
+      # is step B of the v3 staircase and the last rung that exists: C and D
+      # are retired as outside the Kelly envelope. Pullback entry $11,250,
+      # trend $3,750, gross $15,000 = 15.0% of a ~$99.9k account, net $7,500
+      # = 7.5% when the legs oppose. KELLY_M_CAP is 0.20, so this sits ON the
+      # cap, not over it - kelly_over_cap does not fire, and there is no
+      # further step without a repo change plus review. Nothing else moved:
+      # raising SIZING_BASE_USD instead would reach the retired rungs, and
+      # the standing rule is one lever at a time.
+      #
+      # TAKEN WITH THE RAMP'S P&L GATE NOT MET, recorded rather than hidden:
+      # advance to B wants 8 cumulative trades AND cumulative ramp P&L >= 0.
+      # Trade count passed (11 non-drill closing fills); P&L did not, at
+      # -$12.11 gross and -$22.03 net of $9.92 in fees, still climbing out of
+      # the 09-10 halt sequence (-$38.29) and the 09-18 trail (-$42.68).
+      # Casey took the step anyway with tripwires instead of a gate:
+      # revert to 0.135 on realized P&L <= -$500 since 09-21, any new halt,
+      # a cap_clamp RED, equity <= $97,900, or exposure/kelly_over_cap.
+      # Those tripwires do the bounding here because the DRAWDOWN halt is
+      # LARGER than the whole gross book - a total loss of every open
+      # position still could not trip it. That was $17,500 vs $15,000 at the
+      # 50000 base and is $35,000 vs $30,000 at 100000: the same 1.167x
+      # ratio, preserved by the proportional step. Lowering DD_HALT_PCT to
+      # put the halt inside the book remains a separate decision from sizing.
+      # NOTE the interaction the coherence guard enforces: the halt is also
+      # compared against cap_notional, so MAX_NOTIONAL_USD must stay >= the
+      # halt threshold (40000 >= 35000) or the breaker is unreachable.
+      #
+      # THE 2x SIZE STEP (2026-09-16, Casey's call): base 25000 -> 50000 and
+      # cap 10000 -> 20000, TOGETHER. Net exposure 2.53% -> 5.07% of the
+      # ~$99.9k account; gross 5062 -> 10125. Arithmetic and the chart:
+      # btc-executor/docs/size_2x_chart.py -> docs/size_2x_plan.png.
+      # KELLY_M was deliberately NOT touched: 0.135 -> 0.27 does not double
+      # anything, it clamps to KELLY_M_CAP 0.20 (1.48x) and pages
+      # kelly_over_cap every poll. SIZING_BASE_USD is the lever. The cap had
+      # to move with it or the trend leg's room (0.03176 BTC with the
+      # pullback leg on) falls short of its want (0.03341) and cap_clamp
+      # REDs on every trend entry - and the DD halt (17500) would exceed the
+      # whole 10000 cap, firing the halt_config coherence WARN.
+      # Taken with the ramp gate NOT met (11/14, red_events_24h 1, two
+      # LEDGER_DIVERGENCE halts on 09-10 and 09-14): EXECUTOR.md's
+      # advancement criterion 4 fails. Recorded, not hidden.
+      # Open legs were NOT resized - _under_mirrored compares against the
+      # persisted target_qty, so the new size applies to the NEXT entry
+      # (test_gate_F4b_a_sizing_change_never_buys_into_an_open_position).
+      #
+      # SIZING_BASE_USD IS 25000, NOT 1000. This comment said 1000 until
+      # 2026-09-10 18:30 and it was stale by two days. Back-calculated from
+      # the venue rather than guessed: the 09-10 16:00 trend entry was
+      # 0.01638 BTC @ 77,221 = $1,264.88 and was NOT cap-clamped, and
+      # 1264.88 / (0.135 x 1.5 x 0.25) = $24,985. Cross-checks on the
+      # pullback: at base 1000 the 09-08 entry was $151, and at base 25000
+      # the 09-09 entry wanted $3,797 and got 0.02481 BTC - exactly
+      # min(2000, ...)/78557 minus the 0.00064 trend leg. Both agree.
+      #
+      # WHICH RAIL BINDS: cap_notional is
+      # min(MAX_NOTIONAL_USD, MAX_ACCOUNT_LEV x base) = min(20000, 100000)
+      # = 20000, so MAX_NOTIONAL_USD is STILL the binding rail and the lev
+      # ceiling still is not. That is deliberate: one number bounds the
+      # book. At 2000 it clamped ordinary sizing (the 09-09 entry took
+      # 0.02481 instead of 0.04833); at 20000 the gross target of
+      # 0.135 x 1.5 x 50000 = $10,125 fits under it with the same ~50%
+      # headroom the 10000/25000 pair had. Set by Casey in the dashboard;
+      # recorded here.
+      # (was 0.05 / 50000 / 80000 through the Coinbase phase.)
+      #
+      # KELLY_M 0.135 is deliberately OFF the ramp staircase, and is not
+      # ramp progress. It is a VENUE-MECHANICS floor, not an evidence-based
+      # step up: Hyperliquid rejects any order under $10 notional and grants
+      # reduce-only no exemption, so a position that falls under $10 cannot
+      # be closed by ANY order - not its stop, not the halt's flatten. At
+      # 0.05 on a $1k base the smaller (trend) leg is $18.75, under 2x that
+      # floor; at 0.135 it is $50.62, about 5x. Gross is $202 on a ~$999
+      # account (0.20x), so the absolute risk stays token.
+      #
+      # RAISING THE BASE INSTEAD WOULD HAVE DISARMED A HALT: reaching the
+      # same $50 via SIZING_BASE_USD 2700 puts the drawdown halt at 35% of
+      # 2700 = $945 on a $999 account, i.e. it could never fire before
+      # wipeout. The mirror's halt_config coherence guard warns on exactly
+      # this. At base 1000 the rails stay calibrated: DD -$350, daily -$60.
+      #
+      # AND THE RAILS MOVE WITH THE BASE, which is the point of expressing
+      # them as percentages: at base 50000 the DRAWDOWN halt is 0.35 x 50000
+      # = $17,500 (17.5% of the ~$99.9k account, up from $8,750 / 8.8%) and
+      # DAILY_LOSS is 0.06 x 50000 = $3,000 (up from $1,500). The rope grows
+      # in proportion to the book, so the percentages were left alone; to
+      # pin the DOLLAR ropes where they were instead, halve the percentages
+      # (DD_HALT_PCT 0.175). Both stay under cap_notional 20000, so the
+      # halt_config coherence guard is quiet.
       - key: KELLY_M
         sync: false
       - key: SIZING_BASE_USD
@@ -260,10 +754,75 @@ services:
         sync: false
       - key: STATE_PATH
         value: /app/data/executor_state.json
+      - key: AUTO_DRILL
+        # RAMP v4 auto-drill (RAMP_V4.md amendment 2026-08-17): executor runs
+        # its own min-size drills in flat windows until drill coverage is met.
+        # sync:false like every trading-behavior var - a blueprint literal
+        # could silently re-arm self-trading drills after Casey turns them
+        # off. Set "true" in the dashboard to arm; code default is off.
+        sync: false
       - key: LOG_LEVEL
         value: INFO
       # Telegram alerts (halts/REDs always; live trades when DRY_RUN=false).
       # Setup steps in btc-executor/app/alerts.py. Unset = silent no-op.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+
+  # --- Carry Executor (ETH funding carry, Casey 2026-10-01) -----------------
+  # Long spot UETH / short ETH perp in the MAIN Hyperliquid account, $30k,
+  # on while btc-paper-engine's funding monitor has HL ETH ARMED (30d funding
+  # >= 8%/yr, off < 5%) - GET /carry/target. The engine decides; this service
+  # holds its OWN agent wallet (not btc-executor's) and only executes.
+  # Ships DRY_RUN=true and CARRY_NOTIONAL_USD unset (= 0, never opens).
+  # Runbook: carry-executor/CARRY.md
+  - type: web
+    name: carry-executor
+    runtime: docker
+    dockerfilePath: carry-executor/Dockerfile
+    dockerContext: carry-executor
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - carry-executor/app/**
+        - carry-executor/Dockerfile
+        - carry-executor/requirements.txt
+    disk:
+      name: carry-exec-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: ENGINE_URL
+        value: https://btc-paper-engine.onrender.com
+      - key: ENGINE_READ_TOKEN
+        sync: false            # = btc-paper-engine's EXEC_READ_TOKEN. NEVER its
+                               # EXEC_TOKEN: that one can halt/reset the books
+                               # the live BTC executor mirrors
+      - key: BTC_EXECUTOR_URL
+        value: https://btc-executor.onrender.com   # opens only if its /pulse
+                                                    # says equity_counts_spot_tokens
+      - key: EXEC_TOKEN
+        sync: false            # THIS service's own /halt,/resume token - a new value
+      - key: EXEC_READ_TOKEN
+        sync: false
+      - key: HL_SECRET_KEY
+        sync: false            # a NEW agent wallet approved on the main account
+      - key: HL_ACCOUNT_ADDRESS
+        sync: false            # the MAIN account address (same as btc-executor)
+      # Every trading-behaviour variable is sync:false, as on btc-executor:
+      # the Render dashboard is the source of truth and a blueprint sync must
+      # never flip a live service. Code defaults fail safe.
+      - key: DRY_RUN
+        sync: false            # unset = true (sends nothing)
+      - key: CARRY_NOTIONAL_USD
+        sync: false            # unset = 0 (never opens); approved size 30000
+      - key: CARRY_ENABLED
+        sync: false            # false = unwind and stay flat
+      - key: STATE_PATH
+        value: /app/data/carry_state.json
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_CHAT_ID
@@ -284,6 +843,24 @@ services:
     plan: standard           # IB Gateway is Java; needs 2GB (won't fit starter)
     healthCheckPath: /health
     autoDeploy: true
+    # Restart this service ONLY for changes that actually affect it. Without
+    # a filter, autoDeploy restarts a LIVE trading container on EVERY push to
+    # the monorepo - a docs commit on 2026-08-28 restarted it 44 minutes into
+    # the session, which re-ran the blend mid-cycle, sold BIL to fund an entry
+    # and then had that entry rejected by the venue (MOO/OPG is only valid
+    # pre-open). A restart of this service is never free: it also forces a
+    # fresh gateway login, which blocks on a 2FA approval.
+    # Narrowed to what the IMAGE actually contains (Dockerfile copies only
+    # requirements.txt, app/, start.sh). A broad ibkr-executor/** still let a
+    # README or tests-only commit restart the live container and force a 2FA
+    # gateway login - the exact 2026-08-28 incident this filter exists to
+    # prevent (counter-agent).
+    buildFilter:
+      paths:
+        - ibkr-executor/app/**
+        - ibkr-executor/Dockerfile
+        - ibkr-executor/requirements.txt
+        - ibkr-executor/start.sh
     disk:
       name: ibkr-data
       mountPath: /app/data
@@ -293,6 +870,57 @@ services:
         sync: false          # PAPER username first (usually starts with 'D')
       - key: TWS_PASSWORD
         sync: false
+      # IB Gateway daily restart + 2FA behaviour (gnzsnz image -> IBC).
+      # 2026-09-02/03: unconfigured, the gateway's built-in daily restart
+      # fell to the image default (11:45 PM in the image's UTC clock =
+      # 19:45 ET) and landed as a PROCESS EXIT: the supervisor relaunched
+      # it, the fresh login needed an IB Key push, the push was missed, and
+      # the book sat blind 13 h then 12.9 h - two nights running. A restart
+      # scheduled THROUGH IBC reuses the session credentials and needs no
+      # 2FA (IBC user guide: "authentication is only required the first
+      # time during the week after 01:00 ET on Sunday"). All four are
+      # sync:false: they change login behaviour on a live account, and any
+      # edit restarts the container (set them after 16:00 ET only).
+      # Set the VALUES in the dashboard first (after 16:00 ET), then sync:
+      # a Blueprint sync does not add sync:false keys to an existing
+      # service and prompts for/blanks unset ones. TZ must accompany
+      # TIME_ZONE (the image example sets both; TIME_ZONE applies only while
+      # no jts.ini is persisted).
+      #   TZ=America/New_York               the container clock
+      #   TIME_ZONE=America/New_York        so AUTO_RESTART_TIME reads in ET
+      #   AUTO_RESTART_TIME=08:30 PM         format "hh:mm AM/PM"; any hour you
+      #                                      can answer SUNDAY's weekly push
+      #   TWOFA_TIMEOUT_ACTION=restart       the documented companion setting
+      #   RELOGIN_AFTER_TWOFA_TIMEOUT=yes    a missed push re-alerts ~3-minutely
+      #                                      until tapped, instead of stalling
+      - key: TZ
+        sync: false
+      - key: TIME_ZONE
+        sync: false
+      - key: AUTO_RESTART_TIME
+        sync: false
+      - key: TWOFA_TIMEOUT_ACTION
+        sync: false
+      - key: RELOGIN_AFTER_TWOFA_TIMEOUT
+        sync: false
+      # El Nino ladder is OPT-IN (Casey 2026-08-24: off for now). Code
+      # default is false; set LADDER_ENABLED=true in the dashboard before
+      # the Nov 2026 window to re-arm. sync:false - trading-behavior var.
+      - key: LADDER_ENABLED
+        sync: false
+      # Gateway-outage ledger + supervisor restart records. These MUST sit
+      # on the mounted disk (/app/data): the code defaults are ./data, which
+      # resolves to /opt/executor/data on the EPHEMERAL container layer, so
+      # with autoDeploy every push wiped the whole history - including, in
+      # its own motivating case, the open outage record when a human
+      # redeploys to fix a wedged gateway (counter-agent 2026-08-24).
+      - key: OUTAGE_LOG_PATH
+        value: /app/data/gateway_outages.json
+      - key: GATEWAY_RESTART_LOG
+        value: /app/data/gateway_restarts.jsonl
+      # the shell supervisor's own copy of the same path; they must agree
+      - key: IBGW_RESTART_LOG
+        value: /app/data/gateway_restarts.jsonl
       - key: TRADING_MODE
         # paper | live — read by gateway AND executor. sync:false: this is
         # HALF of the ibkr live gate (with DRY_RUN); as a blueprint literal a
@@ -303,15 +931,118 @@ services:
         # never blueprint-managed (see btc-executor note); dashboard owns it
         sync: false
       - key: READ_ONLY_API
-        # "no" = gateway accepts orders. sync:false so a defensive dashboard
-        # flip to "yes" mid-incident cannot be silently reverted by a sync.
+        # "no" = gateway accepts orders (IBC ReadOnlyApi, via the gnzsnz
+        # image). IBC DEFAULTS to read-only: every order the executor placed
+        # was refused with error 321 "API interface is currently in
+        # Read-Only mode" - the book's first live orders on 2026-08-25 died
+        # here. This is cause A of TWO (README "Error 321 has TWO causes");
+        # cause B is the Gateway's own write-access dialog, cured by the two
+        # keys below. sync:false (AUTO_DRILL precedent): an ARMING variable
+        # is never a blueprint literal a sync could silently re-arm after
+        # Casey disarms it in the dashboard.
+        sync: false
+      # Cause B of error 321, fixed 2026-09-10 (README runbook): the
+      # Gateway's settings store (.ibgzenc) lived on the ephemeral layer, so
+      # every login started from the factory default (Read-Only API ON), IBC
+      # clicked it off, and the Gateway then raised an "API client needs
+      # write access action confirmation" dialog IBC has no handler for -
+      # every placeOrder/cancelOrder returned 321 while /health was green.
+      # Persisting the settings on the mounted disk means the checkbox is
+      # already off at login and no dialog fires. The path is a literal:
+      # like the ledgers above it MUST be on the disk. The save cadence is
+      # sync:false ("Every 5 mins" for the fix; relax to "Every 30 mins"
+      # once two clean boots are on record).
+      - key: TWS_SETTINGS_PATH
+        value: /app/data/tws-settings
+      - key: SAVE_TWS_SETTINGS
         sync: false
       - key: EXEC_TOKEN
         sync: false          # /status /kill /resume auth (reuse existing)
+      - key: READ_TOKEN
+        sync: false          # READ-ONLY /blend/feed gate (Execution tab).
+                             # Separate from EXEC_TOKEN by design; same value
+                             # goes on genomics-alpha-tracker as
+                             # BLEND_READ_TOKEN. Unset = feed disabled (404)
       - key: LEG_BUDGET_USD
         sync: false          # $10k per ladder leg now; dashboard owns ramps
       - key: STATE_PATH
         value: /app/data/ladder_state.json
+      # Blend book state MUST live on the mounted disk (same lesson as
+      # OUTAGE_LOG_PATH above): the code default is ./data on the EPHEMERAL
+      # layer, so every deploy silently wiped the blend book — positions,
+      # stop journal, pending orders. Harmless in DRY (it just re-inits);
+      # FATAL for a live book, which must survive deploys (found 2026-08-27,
+      # pre-go-live).
+      - key: BLEND_STATE_PATH
+        # B2 (live-blocker): DECLARED, and onto the mounted disk above.
+        # Undeclared, app/config.py's default `./data/blend_state.json`
+        # resolved to the container's EPHEMERAL layer — NOT the ibkr-data
+        # disk mounted at /app/data, which STATE_PATH has always used. Every
+        # deploy (autoDeploy: true) therefore destroyed the live blend book
+        # and re-seeded a FRESH one on top of shares the account still held:
+        # positions forgotten, resting GTC stops orphaned, `halted` and any
+        # queued /kill flatten lost, and the entry ledger reset. That is
+        # also what made the restart-boundary double-sell (B1) a ROUTINE
+        # event rather than an exotic one — a deploy is a restart.
+        value: /app/data/blend_state.json
+      # blend3070 arming + sizing — trading-behavior vars, dashboard-owned
+      # (sync:false, AUTO_DRILL/DRY_RUN precedent). BLEND_BOOK_USD is read
+      # ONCE, when the live book first initializes; BLEND_BUDGET is the
+      # hard gross-notional cap the 85% utilization alarm binds on.
+      - key: BLEND_ENABLED
+        # The flag the whole blend path hangs off, and it was UNDECLARED here
+        # while every setting it gates was declared — the same defect class as
+        # B2 and TRACKER_URL below. config.py defaults it to false, so an
+        # environment built from this file alone runs the blend book not at
+        # all, silently. sync:false: the value stays operator-set in the
+        # dashboard, this only guarantees the key is not forgotten.
+        sync: false
+      - key: BLEND_BOOK_USD
+        sync: false
+      - key: BLEND_BUDGET
+        sync: false
+      - key: TRACKER_URL
+        # B2's twin, found 2026-09-10: UNDECLARED here while BLEND_ENABLED
+        # was on. It had been set BY HAND in the dashboard, so the live
+        # service was polling; an environment rebuilt from this file alone
+        # would not have been. app/config.py defaults tracker_url to "",
+        # and fetch_intents returns None the instant it is empty - before
+        # any request, with no exception and nothing written to the
+        # negative cache - and a cycle that decides nothing does not raise,
+        # so /health would have said blend_loop.ok: true throughout. The
+        # tracker-blind watch now pages that state (reason no_url); this
+        # declaration keeps the key from being forgotten. sync:false: the
+        # value stays operator-set.
+        # The host must be one the tracker answers on DIRECTLY: the
+        # canonical research.optic.capital, or the service's own
+        # onrender.com host (what the live service polls; 200 on
+        # 2026-09-10). genomics.optic.capital is 308-redirected to the
+        # canonical host (tracker REDIRECT_HOSTS) and httpx does not follow
+        # redirects, so that alias is permanent blindness one hop from a
+        # live tracker - the watch pages it as reason `redirect`.
+        sync: false
+      - key: TRACKER_API_TOKEN
+        # The tracker's BLEND_API_TOKEN — a dedicated READ-ONLY intents
+        # token, so the executor never holds the dashboard password
+        # (TRACKER_USER/TRACKER_PASSWORD remain the Basic-auth fallback).
+        # Rotating it on the tracker without rotating it here is a 401 on
+        # every poll: silent before this round, now an immediate page.
+        sync: false
+      - key: IB_CLIENT_ID
+        # B10: DECLARED so a rebuild from this file cannot lose it, and
+        # pinned to the code default (17) ON PURPOSE at the 2026-09-10
+        # merge: the branch chose 1701, but a blueprint sync would then
+        # flip the live session's client id on the same deploy that
+        # restarts the gateway - a second variable in a deploy that
+        # already needs an IB Key push. What a collision actually costs
+        # (corrected from the branch's comment): _connect retries 20 x
+        # (15s timeout + 15s sleep), ~10 min, then raises
+        # ExecutorConnectionError, which the boot-retry loop CATCHES and
+        # pages - the loop thread does not die. And the topology makes a
+        # collision unreachable: the gateway runs INSIDE this container
+        # with TrustedIPs=127.0.0.1, so no desktop TWS or notebook can hold
+        # this id. Change it only with the gateway idle (after 16:00 ET).
+        value: "17"
       - key: LOG_LEVEL
         value: INFO
       # Same Canary Optics bot as btc-executor/canary. Unset = silent no-op.

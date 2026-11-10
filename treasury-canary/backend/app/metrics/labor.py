@@ -77,8 +77,10 @@ def build_labor_metrics(bundle: dict[str, tuple[list, list]]) -> list[MetricResu
         asof=asof, unit="pp",
         delta_1d=delta(sahm_series, 1), delta_20d=delta(sahm_series, 3),
         percentile=percentile_rank(sahm_series, sahm_val),
-        note="3mo-avg unemployment minus its 12mo low. >=0.50 has flagged the START of "
-             "every recession since the 1970s. Confirms the curve's ~12mo lead.",
+        note="3mo-avg unemployment minus its 12mo low. Real-time series since 1972: >=0.50 "
+             "lit within 3 months after the start of 3 of 7 recessions (later for 1973, "
+             "1981, 1990, 2007) and without one in 1976 and 2024 "
+             "(studies/labor-stress-board.md). A confirmation signal, not a lead.",
         source_series=src))
 
     # --- Initial jobless claims: YoY % change of the 4-week MA (leading) ---

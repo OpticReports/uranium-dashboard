@@ -1,0 +1,36 @@
+{
+ "claims_only_window": [
+  "2025-10-16",
+  "2025-11-20"
+ ],
+ "conversion_seconds": 184.9,
+ "converted": "2026-10-20T19:42:19Z",
+ "first_month": "1960-03",
+ "first_vintage": "2008-12-05",
+ "header_order_sorted": true,
+ "last_month": "2026-10",
+ "last_vintage": "2026-10-16",
+ "matrix_file": "ads_monthly_matrix.npz",
+ "matrix_sha256": "dbecce8e7826d6f7a35c7ecfc2c7d093e930e78512e10c53d6c11169511d33cd",
+ "n_claims_only": 5,
+ "n_rows": 24330,
+ "n_shutdown_partial": 9,
+ "n_vintages": 1575,
+ "panel_file": "ads_vintage_panel.csv",
+ "panel_sha256": "e269190d2cdac3b453df72dd10a8921afa31b96aaf1668a32e8a70f513a913fd",
+ "ref_file": "ads_vintage_2010-12-03.csv",
+ "ref_rows": 18537,
+ "ref_sha256": "51c2b3a1b8d296e483f511477112323c3bc545f3a5c788e4bee3eaec3a06b1a7",
+ "ref_vintage": "2010-12-03",
+ "shutdown_partial_window": [
+  "2025-11-20",
+  "2025-12-23"
+ ],
+ "source_url": "https://www.philadelphiafed.org/-/media/FRBP/Assets/Surveys-And-Data/ads/ADS_All_Vintages-zip.zip",
+ "xlsx": "ADS_All_Vintages-zip.xlsx",
+ "xlsx_bytes": 203537617,
+ "xlsx_sha256": "21e27f38117d49cab4ab8ceccaec72b7d75c8ef7dfe63b1d320ae2ef5bfe35cb",
+ "zip": "ADS_All_Vintages.zip",
+ "zip_bytes": 168636837,
+ "zip_sha256": "d263487cab916b239c2865a20fa94f9bd5436eaeb8f06bc887765e289752b29f"
+}

@@ -9,8 +9,8 @@ RED from measurable proxies, so a spark is visible within days, not in
 hindsight. Each channel carries an honest certainty note.
 
 Channels (proxy -> historical basis):
-  OIL SHOCK       12m WTI change      Hamilton: oil spikes preceded ~10 of 11
-                                      postwar recessions.
+  OIL SHOCK       NOPI12 (3-yr-high   Hamilton's net oil price increase; measured
+                  net rise) + 12m WTI 2026-09: 6 of 11 onsets, 3 false positives.
   POLICY SHOCK    12m Fed-hike pace   Every deep tightening cycle has broken
                                       something; pace matters more than level.
   CREDIT EVENT    HY OAS 20d velocity Sudden spread gaps + banks hitting the
@@ -33,6 +33,7 @@ rate) — documented exposure sizes and episode counts, never fitted weights.
 from __future__ import annotations
 
 import datetime
+import math
 from dataclasses import dataclass, field
 
 RANK = {"GREEN": 0, "YELLOW": 1, "RED": 2}
@@ -120,18 +121,140 @@ def _change(vals: list, window: int) -> float | None:
     return c[-1] - c[-1 - window]
 
 
-def _pct_change(vals: list, window: int) -> float | None:
+def _pct_change(vals: list, window: int, min_base: float | None = None) -> float | None:
+    """Percent change over `window` observations. `min_base` refuses the reading
+    when the base is too small for a ratio to carry meaning (see
+    RESERVES_MIN_BASE_M) -> None -> STALE -> excluded from the channel score."""
     c = _clean(vals)
     if len(c) <= window or not c[-1 - window]:
         return None
-    return round((c[-1] - c[-1 - window]) / c[-1 - window] * 100.0, 1)
+    base = c[-1 - window]
+    # Gate on BOTH ends, never the base alone: a real drain that takes the level
+    # BELOW the gate must keep reporting, or the monitor goes quiet exactly after
+    # the worst outcome. Both ends are small only in the pre-QE regime.
+    if (min_base is not None and abs(base) < min_base
+            and abs(c[-1]) < min_base):
+        return None
+    return round((c[-1] - base) / base * 100.0, 1)
+
+
+def _monthly_means(dates: list, vals: list) -> dict[tuple[int, int], float]:
+    acc: dict[tuple[int, int], list[float]] = {}
+    for d, v in zip(dates, vals):
+        if d is None or v is None:
+            continue
+        acc.setdefault((d.year, d.month), []).append(float(v))
+    return {k: sum(x) / len(x) for k, x in acc.items()}
+
+
+NOPI_PRIOR_MONTHS = 36   # Hamilton (1996/2003): rise above the prior 3-year high
+NOPI_SUM_MONTHS = 12     # cumulated over the trailing year (studies/oil-shock-recession-weight.md D2)
+
+
+def nopi12_series(dates: list, vals: list) -> tuple[list[datetime.date], list[float]]:
+    """Hamilton net oil price increase, 12-month cumulative, on calendar-month means.
+
+    nopi_m = 100 * max(0, ln(mean_m) - max(ln(mean_{m-36..m-1})))  (log-pct)
+    NOPI12_m = sum(nopi_{m-11..m}).  A month needs all 36 prior calendar months
+    present (no gap-stretching) and NOPI12 needs 12 consecutive nopi values, so
+    the series starts 48 months into the data.  The current partial month is
+    included (its month-to-date mean is the live nowcast).  On a one-print-per-
+    month series (WTISPLC) this reproduces the study's nopi36_sum12 column exactly.
+    Returns ([date(y, m, 1)...], [values...]).
+    """
+    means = _monthly_means(dates, vals)
+    if not means:
+        return [], []
+    keys = sorted(means)
+    y0, m0 = keys[0]
+    y1, m1 = keys[-1]
+    n = (y1 * 12 + m1) - (y0 * 12 + m0) + 1
+    logs: list[float | None] = []
+    for i in range(n):
+        idx = y0 * 12 + (m0 - 1) + i
+        v = means.get((idx // 12, idx % 12 + 1))
+        logs.append(math.log(v) if v is not None and v > 0 else None)
+    nopi: list[float | None] = [None] * n
+    for i in range(NOPI_PRIOR_MONTHS, n):
+        window = logs[i - NOPI_PRIOR_MONTHS:i]
+        if logs[i] is None or any(x is None for x in window):
+            continue
+        nopi[i] = max(0.0, logs[i] - max(window)) * 100.0
+    out_d, out_v = [], []
+    for i in range(NOPI_SUM_MONTHS - 1, n):
+        window = nopi[i - NOPI_SUM_MONTHS + 1:i + 1]
+        if any(x is None for x in window):
+            continue
+        idx = y0 * 12 + (m0 - 1) + i
+        out_d.append(datetime.date(idx // 12, idx % 12 + 1, 1))
+        out_v.append(round(sum(window), 2))
+    return out_d, out_v
+
+
+def rank_pct(below: int, equal: int, n: int) -> float:
+    """Mid-rank plotting position (below + equal/2) / n, as a percentage.
+
+    Two defects in the naive rank/n this replaces:
+
+    1. It returns EXACTLY 100.0 whenever the value is the running maximum. The
+       percentile legs are anchored (50, 85, 95, 100), so any new all-time high
+       scored the EXTREME anchor by construction -- not because the reading was
+       extreme, but because it was the newest record. On the CFTC series that
+       was 87 of 953 weeks pinned at exactly 100.0.
+    2. Passing the HIGHEST rank in a tie block scores every member of the block
+       as if it were the top of it. Ties are dense on quoted series -- CCC OAS
+       is quoted to 2dp, and its percentile is the primary private-credit
+       driver -- so that bias is not cosmetic.
+
+    The mid-rank form fixes both. For an untied value that is itself in the
+    sample (equal == 1) it reduces EXACTLY to the Hazen position (rank - 0.5)/n,
+    so nothing moves on untied data; ties share the midpoint of their block
+    instead of all taking the top.
+
+    For any value drawn from the sample the result lies naturally in
+    [0.5/n, (n - 0.5)/n] -- it can never be 0 or 100. The clamp is the backstop
+    for any caller that ranks a value NOT in its own sample, where equal == 0 and
+    an all-time high gives below == n -> exactly 100.0. NOTE: it is NOT needed by
+    _expanding_pctl_vs_raw, as was first assumed -- that ranks a rolling mean over
+    a sub-window of `seen`, which is bounded by min(seen) <= avg <= max(seen) by
+    construction, so it can never land outside the range (verified: 0 occurrences
+    over the real 15,227-point EPU series). It IS reachable wherever a caller
+    ranks a transformed value against an untransformed series.
+
+    Every percentile on the PIN BOARD goes through here so the live board and the
+    hindcast cannot drift apart. base.py::percentile_rank and severity._pctile are
+    separate instruments and still use count(v <= x)/n.
+    """
+    if n <= 0:
+        return 0.0
+    pct = 100.0 * (below + equal / 2.0) / n
+    return min(max(pct, 100.0 * 0.5 / n), 100.0 * (n - 0.5) / n)
+
+
+def _round_pctl(p: float) -> float:
+    """Round to the DISPLAYED 1dp without crossing the attainable band.
+
+    rank_pct correctly stops at (n - 0.5)/n, but round() then threw that away:
+    round(99.9933, 1) is 100.0, so on any series with n >= 1000 the naive round
+    handed the leg back the exact ceiling this estimator exists to prevent --
+    which is every percentile leg on the board except the CFTC one. The band is
+    open at both ends, so the rounded value must be too.
+    """
+    r = round(p, 1)
+    if r >= 100.0:
+        return 99.9
+    if r <= 0.0 and p > 0.0:
+        return 0.1
+    return r
 
 
 def _percentile(vals: list, value: float | None) -> float | None:
     c = _clean(vals)
     if value is None or not c:
         return None
-    return round(100.0 * sum(1 for v in c if v <= value) / len(c), 1)
+    below = sum(1 for v in c if v < value)
+    equal = sum(1 for v in c if v == value)
+    return _round_pctl(rank_pct(below, equal, len(c)))
 
 
 # --- continuous severity scoring (0-100) --------------------------------------
@@ -160,7 +283,15 @@ def _pscore(value: float | None, benign: float, yellow: float, red: float,
         sc = 80.0 + 20.0 * (v - r) / (e - r) if e != r else 100.0
     else:
         sc = 100.0
-    return round(min(sc, cap), 1)
+    out = round(min(sc, cap), 1)
+    # Rounding must never MANUFACTURE the extreme. On a percentile leg anchored
+    # (.., 95, 100) the score is 80 + 4*(p - 95), so p >= 99.9875 rounds to
+    # 100.0 -- i.e. once n passed ~4000 an all-time high scored the EXTREME
+    # anchor again, by rounding, after rank_pct had just prevented exactly that.
+    # A value genuinely AT or beyond the extreme still scores 100.
+    if out >= 100.0 and v < e:
+        out = 99.9
+    return out
 
 
 def _status_from_score(score: float | None) -> str:
@@ -169,10 +300,40 @@ def _status_from_score(score: float | None) -> str:
     return "RED" if score >= 80.0 else "YELLOW" if score >= 50.0 else "GREEN"
 
 
+# Reserve balances (FRED WRESBAL, $M) only support a percent-change reading in the
+# ample-reserves regime. Pre-QE levels ran $2.8B-$47B through 2008-09-17, where a
+# 26-week % change is noise, not a drain: stdev 104% (vs 21% post-2009), hitting
+# the -15% RED anchor 26.1% of the time and the -25% extreme 30 times. Post-2009
+# the same reading has never gone below -24.8%, i.e. it has never reached the
+# extreme -- but only by 0.2pp, so do not read that as headroom.
+# The anchor below is documented as "beyond-2019 drain pace", i.e. calibrated for
+# the ample-reserves regime only. The honest case for the gate is not the stdev:
+# it is that plumbing was RED in 42 of the 53 months from 2003-11 to 2008-03 (79%
+# of the time), so "it caught 2007" was a stopped clock, not a signal.
+# The first >=$100B print is 2008-09-24 ($104.5B) as the crisis facilities
+# exploded; the post-2009-06 minimum is $692.5B. The boundary is monotone
+# (2008-09-17 $47B -> 2008-09-24 $104.5B), so no flicker exists in the data.
+# NOTE: a nominal-dollar constant will drift toward the ample regime as nominal
+# GDP grows -- see PIN_SATURATION.md DD Q11 for the reserves/GDP alternative.
+RESERVES_MIN_BASE_M = 100_000.0
+
 # (benign, yellow, red, extreme, higher_is_worse, cap) per part label.
 # Extreme anchors cite the episode that printed them.
 ANCHORS: dict[str, tuple] = {
-    "WTI, 12-month change": (0, 25, 50, 100, True, 100),                 # 1973/79/2022 ~ +100%
+    # Oil trigger leg (2026-09-16, studies/oil-shock-recession-weight.md §5): the
+    # 3-year-high net increase cumulated over 12 months. +10 = the study's
+    # pre-registered ON cut-off (Hamilton never dichotomises), +25 = its red
+    # anchor (1990 / 2000 / 2022 printed 52 / 30 / 48; 1990 was coincident with
+    # its onset, 2022 a false positive), extreme 104.4 = the 1973-74 embargo
+    # episode's peak
+    # (1974-01 on WTISPLC), the worst postwar reading. Measured on 1953-2025 it
+    # preceded 6 of 11 onsets with 3 named false positives; the 12-month rule
+    # below preceded 3 with 7. Anchors are episode readings, never hit rates.
+    "Net oil price increase, 12m (vs 3-yr high)": (0, 10, 25, 104.4, True, 100),
+    # Context gauge since 2026-09-16: caps at YELLOW. On its own the 12-month
+    # change reads at the base rate on recession onsets (18% vs 17%) but 51% vs
+    # 23% on >=15% S&P drawdown starts -- an accident tell, not a recession one.
+    "WTI, 12-month change": (0, 25, 50, 100, True, 79),                  # 1973/79/2022 ~ +100%
     "Fed funds, 12-month change": (0, 200, 300, 450, True, 100),         # 2022-23 pace ~ +450bps
     "HY OAS, 20d change": (0, 75, 150, 350, True, 100),                  # Mar-2020 ~ +350bps/20d
     "Discount-window borrowing": (0, 10, 50, 155, True, 100),            # Mar-2023 peak ~$153B
@@ -182,7 +343,19 @@ ANCHORS: dict[str, tuple] = {
     "Reserves, 26-week change": (0, -8, -15, -25, False, 100),           # beyond-2019 drain pace
     "RRP buffer": (600, 100, 20, 0, False, 79),                          # cushion leg: caps YELLOW
     "Leveraged-fund net short, UST futures": (2, 4, 5.5, 8, True, 100),  # ~2x the 2020 book
-    "Positioning percentile (vs 2010+)": (50, 85, 95, 100, True, 100),
+    # crowding gauge: caps YELLOW. The channel's own certainty note says the
+    # unwind trigger "arrives via the other channels" -- crowding alone must not
+    # take the channel RED. Uncapped, this leg also pinned at exactly 100 on every
+    # new expanding-window high, and leveraged-fund net short trends secularly, so
+    # it sat at the ceiling for long stretches (72% of the channel's 95+ months).
+    # The level leg above is the trigger and is uncapped.
+    "Positioning percentile (vs 2010+)": (50, 85, 95, 100, True, 79),
+    # Ranked against the FULL 1996+ history again. FRED truncated ICE BofA to a
+    # rolling 3 years in April 2026, silently turning these into 3-year
+    # percentiles -- CCC read 99.2 when its true full-history rank was ~62. The
+    # frozen reference in app/data/ice_reference restores the real distribution
+    # at the SOURCE layer, so this original calibration is valid once more and
+    # the interim absolute-level trigger leg has been removed. DD Q24.
     "CCC spread percentile (vs 1996+)": (50, 85, 95, 100, True, 100),
     "CCC−BBB dispersion percentile": (50, 85, 95, 100, True, 100),
     "Bank loans to NDFIs, m/m ann. growth": (10, 5, 0, -10, False, 100),
@@ -262,20 +435,55 @@ def build_pin_board(bundle: dict) -> dict:
     channels: list[PinChannel] = []
 
     # --- OIL SHOCK -----------------------------------------------------------
-    oil = bundle.get("oil", ([], []))[1]
+    # Re-measured 2026-09-16 on the full postwar record (studies/oil-shock-
+    # recession-weight.md, pre-registered, counter-agent verified). Trigger leg
+    # = Hamilton's net oil price increase cumulated over 12 months; the old
+    # 12-month % change stays as a context gauge capped at YELLOW.
+    oil_d, oil = bundle.get("oil", ([], []))
     oil_12m = _pct_change(oil, 252)
+    nopi_d, nopi_v = nopi12_series(oil_d, oil)
+    nopi12 = nopi_v[-1] if nopi_v else None
     channels.append(PinChannel(
         "oil_shock", "Oil / energy shock",
-        _grade(oil_12m, 25.0, 50.0),
-        [PinPart("WTI, 12-month change", oil_12m, "%", _grade(oil_12m, 25.0, 50.0),
-                 "Sustained +25-50% squeezes real incomes and forces the Fed's hand.")],
-        basis="Hamilton: oil price shocks preceded ~10 of 11 postwar recessions.",
-        certainty="High historical association; the proxy reads the spark in real time.",
-        mass="Household real income (~$20T consumption base)",
-        mass_trillions=20.0,
-        leverage="unlevered — a broad income squeeze, not a margin call",
-        speed="3–12 months",
-        kill_rate="Preceded ~10 of 11 postwar recessions (Hamilton)"))
+        _grade(nopi12, 10.0, 25.0),
+        [PinPart("Net oil price increase, 12m (vs 3-yr high)", nopi12, "log-%",
+                 _grade(nopi12, 10.0, 25.0),
+                 "Hamilton's transform: the last 12 months' rises above the prior 3-year "
+                 "high, summed (monthly means). +10 = the study's ON cut-off (new highs "
+                 "forming); +25 = its red anchor -- 1990 / 2000 / 2022 printed 52 / 30 / "
+                 "48, and 1990 was coincident, 2022 a false positive; 104 = the 1973-74 "
+                 "embargo."),
+         PinPart("WTI, 12-month change", oil_12m, "%", _grade(oil_12m, 25.0, 50.0),
+                 "Context gauge (caps at YELLOW): at the base rate on recession onsets, "
+                 "but a >=15% S&P drawdown began within a year of a +50% print in 51% "
+                 "of months vs 23% base (1953-2025).")],
+        basis="Hamilton 2011: all but one of the 11 recessions 1948-2007 followed an oil "
+              "price rise (exception 1960) -- a count that includes rises of +7-10% and "
+              "one coincident month. Re-measured on onsets 1953-2020: the NOPI rule "
+              "preceded 6 of 11 (3 named false positives, 1 coincident), a +50% 12-month "
+              "rise 3 of 11 (7 false positives, 2 coincident).",
+        certainty="Oil alone reads at the base rate on recession onsets (18% vs 17%) and "
+                  "added no out-of-sample skill to the curve probit on the pre-registered "
+                  "decision test (walk-forward 1970-2024, dAUC -0.015 to -0.035) -- the dial "
+                  "never blends it. It earned its keep on a flat curve (the 12-month rule's "
+                  "damage window + flat curve: 48%, 4 of 5 clusters on the 1987+ history, 3 "
+                  "legitimate -- measured before this leg switch; the NOPI leg is re-scored "
+                  "after deploy) and on market accidents. Regime note: the US has been a "
+                  "net petroleum exporter since 2020; on 2009+ data the onset effect of a "
+                  "+50% shock is unidentified (one episode) and consistent with at most "
+                  "half the 1953-2008 effect, and 2022 fired on every definition with no "
+                  "recession.",
+        mass="US petroleum bill ~$0.9T/yr (~3% of GDP vs ~8% in 1980; energy goods and "
+             "services ~4% of consumer spending vs ~9% in 1980) -- the income squeeze this "
+             "channel used to be sized at $20T of consumption is a fraction of that",
+        mass_trillions=0.9,
+        leverage="unlevered — a broad income squeeze, not a margin call; partly offset "
+                 "since 2020 by US producer income",
+        speed="3–12 months (Hamilton's narrative lags −1 to 15m); NOPI first-ON leads "
+              "4–44m, last-ON 1–12m",
+        kill_rate="Measured 1953-2020: NOPI rule 6 of 11 onsets preceded, 3 named false "
+                  "positives (1976, 1996, 2021); 12-month rule 3 of 11, 7 false positives. "
+                  "Hamilton's '10 of 11' (1948-2007) counts rises this channel would not trip."))
 
     # --- POLICY SHOCK --------------------------------------------------------
     effr = bundle.get("effr", ([], []))[1]
@@ -356,7 +564,7 @@ def build_pin_board(bundle: dict) -> dict:
     if _clean(sofr) and _clean(iorb):
         si = round((_clean(sofr)[-1] - _clean(iorb)[-1]) * 100.0, 1)
     res = bundle.get("reserves", ([], []))[1]
-    res_26w = _pct_change(res, 26)
+    res_26w = _pct_change(res, 26, min_base=RESERVES_MIN_BASE_M)
     rrp = bundle.get("rrp", ([], []))[1]
     rrp_bil = round(_clean(rrp)[-1], 1) if _clean(rrp) else None  # already $B
     parts = [
@@ -416,15 +624,22 @@ def build_pin_board(bundle: dict) -> dict:
     cm = {d: v for d, v in zip(ccc_d, ccc_v) if v is not None}
     bm = {d: v for d, v in zip(bbb_d, bbb_v) if v is not None}
     disp_series = [cm[d] - bm[d] for d in sorted(set(cm) & set(bm))]
-    disp_now = round(disp_series[-1], 2) if disp_series else None
-    disp_pctl = _percentile(disp_series, disp_now)
+    # Rank the UNROUNDED value; round only for display. Ranking the rounded one
+    # meant the current value was not in its own sample (equal == 0), so the
+    # mid-rank term did nothing on this leg and the live board and the hindcast
+    # (which ranks unrounded) were not computing the same statistic.
+    disp_raw = disp_series[-1] if disp_series else None
+    disp_now = round(disp_raw, 2) if disp_raw is not None else None
+    disp_pctl = _percentile(disp_series, disp_raw)
     ndfi = bundle.get("ndfi_loans", ([], []))[1]
     ndfi_now = _clean(ndfi)[-1] if _clean(ndfi) else None
     parts = [
         PinPart("CCC spread percentile (vs 1996+)", ccc_pctl, "%ile",
                 _grade(ccc_pctl, 85.0, 95.0),
                 f"CCC-and-lower OAS now {ccc_now if ccc_now is not None else 'n/a'}% — "
-                "where refinancing distress prices first; private-credit marks follow with a lag."),
+                "where refinancing distress prices first; private-credit marks follow with a lag. "
+                "Ranked against the full 1996+ distribution: FRED cut ICE BofA history to 3 years "
+                "in April 2026, and a frozen reference restores it (see PIN_SATURATION.md DD Q24)."),
         PinPart("CCC−BBB dispersion percentile", disp_pctl, "%ile",
                 _grade(disp_pctl, 85.0, 95.0),
                 f"Gap now {disp_now if disp_now is not None else 'n/a'}pp. IG priced for "
@@ -536,7 +751,13 @@ def build_pin_board(bundle: dict) -> dict:
               "or the central bank prints. Auction tails/weak bid-to-cover are the tape "
               "of that imbalance forming.",
         certainty="Auction data is exact but episodic (per-auction); custody is weekly. "
-                  "A weak single auction is noise — a weak RUN of them is the signal.",
+                  "A weak single auction is noise — a weak RUN of them is the signal. "
+                  "Petrodollar recycling, measured 2026-09-16: annual changes in the "
+                  "oil-exporter share of foreign Treasury holdings carry no reliable sign "
+                  "against oil (December-anchored r -0.12 / -0.42, June-anchored +0.09 / "
+                  "+0.20; n = 11 / 13); the 2014-16 crash saw the share RISE, and in 2022 "
+                  "the share rose 0.4pp while Fed custody fell 4.8% -- unmeasurable at "
+                  "this granularity, so treat oil as no reliable bid for Treasuries.",
         mass="$28T+ Treasury market; ~$3.3T foreign-official custody",
         mass_trillions=28.0,
         leverage="overlaps the fiscal pin — same underlying market",
@@ -667,22 +888,42 @@ def build_pin_board(bundle: dict) -> dict:
                  "on that market too but its $1.5T book is its own exposure."),
     }
 
-    # Accident composite (studies/pin-rule-hindcast v2, 1981-2026): a
-    # FAST_HIGH_MASS channel red while the daily 3m10y spread touched <+0.25pp
-    # within the trailing 183 days — the same instrument and window the study
-    # measured. In-sample: a >=15% SPX drawdown started within 12m in 44% of
-    # signal months vs a 20% base; 5 of 11 signal-clusters were followed by
-    # one (1998 LTCM 4m early, 2007 up to 12m, 2019 11m, 2025 12m; missed
-    # 2018 curve-steep and 2021 policy-driven). The sibling rule
-    # oil/policy-window+curve scores the same within noise — this is A
-    # measured configuration, not THE one. Descriptive, never calibrated.
+    # Accident composite (studies/pin-rule-hindcast v3, re-measured 2026-09-10
+    # after the plumbing/basis_trade anchor fixes and the ICE history
+    # restoration): a FAST_HIGH_MASS channel red while the daily 3m10y spread
+    # touched <+0.25pp within the trailing 183 days — the same instrument and
+    # window the study measured. In-sample: a >=15% SPX drawdown started
+    # within 12m in 34% of signal months vs a 20% base; 4 of 13 signal-clusters
+    # were followed by one (1998 LTCM 4m early, 2019 11-7m, 2025 12m; missed
+    # 2007, 2018 curve-steep and 2021 policy-driven). On recession onsets it
+    # scores 6% vs a 9% base — BELOW base rate. The v2 figures (44%, 5/11,
+    # "2007 up to 12m") included a 2007 catch that came entirely from the
+    # since-removed pre-QE reserves artifact. The sibling rule measured as
+    # "oil/policy window + curve" (45%, 5/6; 37%, 4/4) was the OIL channel's
+    # damage window alone (hindcast v4, 2026-09-15: the policy leg's history
+    # starts 2001 and contributed one signal): oil window + flat curve reads
+    # 48% / 4 of 5 on onsets (3 legitimate, the 2020 catch was the pandemic)
+    # and 42% / 4 of 5 on drawdowns -- measured on the 12-month rule's red
+    # episodes BEFORE the 2026-09-16 switch to the NOPI trigger leg; v5 re-runs
+    # against the deployed NOPI history.
+    # This remains A measured configuration, not THE one. Descriptive, never
+    # calibrated.
     # GREEN = disarmed, YELLOW = one condition met (armed), RED = both.
     fast_live = [ch for ch in channels if ch.channel_id in FAST_HIGH_MASS
                  and ch.status != "STALE"]
     fast_red_now = [ch.label for ch in fast_live if ch.status == "RED"]
-    # condition 1 is UNKNOWN (None) when no fast channel reports at all —
-    # "no data" must never display as "condition false"
-    fast_red: bool | None = bool(fast_red_now) if fast_live else None
+    fast_stale = [ch.label for ch in channels if ch.channel_id in FAST_HIGH_MASS
+                  and ch.status == "STALE"]
+    # condition 1 is UNKNOWN (None) whenever ANY fast channel is dark and none of
+    # the live ones is RED. Reporting False while a fast channel is unreadable is
+    # a silent all-clear -- the one failure mode this board must never have. Only
+    # an actual RED (which no amount of missing data can retract) reads True.
+    if fast_red_now:
+        fast_red: bool | None = True
+    elif fast_stale or not fast_live:
+        fast_red = None
+    else:
+        fast_red = False
     t3m = dict(zip(*bundle.get("3mo", ([], []))))
     t10 = dict(zip(*bundle.get("10y", ([], []))))
     pairs = [(d, round(t10[d] - t3m[d], 2)) for d in sorted(set(t3m) & set(t10))
@@ -715,15 +956,24 @@ def build_pin_board(bundle: dict) -> dict:
         "curve_flat": curve_flat,
         "unknown": [name for name, c in (("fast channels", fast_red),
                                          ("curve", curve_flat)) if c is None],
+        "fast_stale_channels": fast_stale,
         "curve_threshold_pp": 0.25,
         "spread_3m10y_now": spread_now,
         "spread_3m10y_min_6m": spread_min_6m,
-        "basis": ("Hindcast 1981-2026 (in-sample, ~11 signal clusters — wide "
-                  "error bars): this configuration preceded a >=15% drawdown "
-                  "start within 12m in 44% of months vs a 20% base; 5 of 11 "
-                  "clusters hit — 1998 LTCM flagged 4m early, 2007 up to 12m, "
-                  "2019 11m, 2025 12m. Missed 2018 (curve steep) and 2021 "
-                  "(policy-driven). Descriptive context, not a calibrated "
+        "basis": ("Hindcast 1981-2026, re-measured 2026-09-10 (in-sample, 13 "
+                  "signal clusters — wide error bars): this configuration preceded "
+                  "a >=15% drawdown start within 12m in 34% of months vs a 20% "
+                  "base; 4 of 13 clusters hit — 1998 LTCM flagged 4m early, 2019 "
+                  "11-7m, 2025 12m. Missed 2007, 2018 (curve steep) and 2021 "
+                  "(policy-driven). On recession onsets it scores 6% vs a 9% base, "
+                  "below base rate. The earlier 44% / 5-of-11 figure included a "
+                  "2007 catch that came from a since-removed pre-QE reserves "
+                  "artifact. The sibling rule measured as 'oil/policy window + curve' "
+                  "(45%, 5/6) was the oil channel's damage window alone (the policy "
+                  "leg contributed one signal in its history): oil window + flat "
+                  "curve reads 48% / 4 of 5 on onsets, 3 legitimate, and 42% / 4 of 5 "
+                  "on drawdowns (hindcast v4, 2026-09-15, on the 12-month rule's windows "
+                  "before the NOPI leg switch). Descriptive context, never a calibrated "
                   "probability."),
     }
 

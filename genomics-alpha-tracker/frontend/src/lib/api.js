@@ -90,10 +90,33 @@ export const api = {
   callsScorecard: () => req("/calls/scorecard"),
   callsPerformance: () => req("/calls/performance"),
   callsPaper: () => req("/calls/paper"),
+  callsBacktest: () => req("/calls/backtest"),
   createCall: (payload) =>
     req("/calls", { method: "POST", body: JSON.stringify(payload) }),
   closeCall: (id, payload = {}) =>
     req(`/calls/${id}/close`, { method: "POST", body: JSON.stringify(payload) }),
   evaluateCalls: () => req("/calls/evaluate", { method: "POST" }),
   generateCalls: () => req("/calls/generate", { method: "POST" }),
+
+  // Execution (ibkr-executor blend3070 book, reverse-proxied server-side)
+  executionFeed: () => req("/api/execution/feed"),
+
+  // Executor-mirror backtest (10y replay of the blend3070 book on the R2-A
+  // fire set). GET throws on 404 => "not run yet" empty state in the UI.
+  mirrorBacktest: () => req("/blend3070/mirror-backtest"),
+  mirrorBacktestStatus: () => req("/blend3070/mirror-backtest/status"),
+  runMirrorBacktest: () => req("/blend3070/mirror-backtest/run", { method: "POST" }),
+
+  // Universe discovery (the candidate queue)
+  discoveryCandidates: (status) =>
+    req(`/discovery/candidates${status ? `?status=${status}` : ""}`),
+  discoverySummary: () => req("/discovery/summary"),
+  runDiscovery: () => req("/discovery/run", { method: "POST" }),
+  promoteCandidate: (symbol) =>
+    req(`/discovery/candidates/${symbol}/promote`, { method: "POST" }),
+  dismissCandidate: (symbol, reason) =>
+    req(`/discovery/candidates/${symbol}/dismiss`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
 };

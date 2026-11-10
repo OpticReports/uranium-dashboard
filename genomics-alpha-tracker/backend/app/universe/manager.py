@@ -43,6 +43,7 @@ def upsert_security(
     name: str | None = None,
     subsector: list[str] | None = None,
     active: bool | None = None,
+    ctgov_names: list[str] | None = None,
     commit: bool = True,
 ) -> Security:
     """Insert or update a security WITHOUT touching its historical data."""
@@ -53,6 +54,7 @@ def upsert_security(
             symbol=symbol,
             name=name or symbol,
             subsector=subsector or [],
+            ctgov_names=ctgov_names or [],
             active=active if active is not None else True,
         )
         session.add(sec)
@@ -61,6 +63,8 @@ def upsert_security(
             sec.name = name
         if subsector is not None:
             sec.subsector = subsector
+        if ctgov_names is not None:
+            sec.ctgov_names = ctgov_names
         if active is not None:
             sec.active = active
         sec.updated_at = datetime.utcnow()
@@ -111,6 +115,7 @@ def sync_from_yaml(session: Session) -> dict:
             name=entry.get("name"),
             subsector=list(entry.get("subsector", [])),
             active=entry.get("active", True),
+            ctgov_names=[str(a) for a in entry.get("ctgov_names") or []],
             commit=False,
         )
         if existed:

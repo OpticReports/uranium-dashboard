@@ -6,6 +6,8 @@ import {
 import { api } from "../lib/api";
 import { fmtNum, fmtPct, fmtMoney, FLAG_LABELS } from "../lib/format";
 import InfoTip from "../components/InfoTip";
+import BacktestPanel from "../components/BacktestPanel";
+import ExecutorMirror from "../components/ExecutorMirror";
 
 // Calls Log: every exact trade call the tracker (or the desk) has made, graded
 // against what price actually did — the honest track record that tells us which
@@ -48,17 +50,33 @@ export default function CallsLog({ onPick }) {
   const [card, setCard] = useState(null);
   const [perf, setPerf] = useState(null);
   const [paper, setPaper] = useState(null);
+  const [backtest, setBacktest] = useState(null);
+  // null = not run yet (GET 404s); the panel still renders its window layout.
+  const [mirror, setMirror] = useState(null);
+  const [mirrorErr, setMirrorErr] = useState(null);   // a 500/401 is not "not run yet"
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
   const [showForm, setShowForm] = useState(false);
 
+  const loadMirror = useCallback(() => {
+    api.mirrorBacktest()
+      .then((d) => { setMirror(d); setMirrorErr(null); })
+      .catch((e) => { setMirror(null); setMirrorErr(e?.message || "request failed"); });
+  }, []);
   const load = useCallback(() => {
     api.calls().then(setCalls).catch(() => setCalls([]));
     api.callsScorecard().then(setCard).catch(() => setCard(null));
     api.callsPerformance().then(setPerf).catch(() => setPerf(null));
     api.callsPaper().then(setPaper).catch(() => setPaper(null));
-  }, []);
+    loadMirror();
+  }, [loadMirror]);
   useEffect(load, [load]);
+  // The replay summary is a frozen build artifact: fetch it once, not on
+  // every call mutation - and never hide a failure, because a silent absence
+  // is the one failure the gate tests cannot see at runtime.
+  useEffect(() => {
+    api.callsBacktest().then(setBacktest).catch((e) => setBacktest({ error: e.message }));
+  }, []);
 
   const run = async (fn, label) => {
     setBusy(true);
@@ -140,7 +158,17 @@ export default function CallsLog({ onPick }) {
 
       {card && <Scorecard card={card} />}
 
+      <ExecutorMirror data={mirror} onReload={loadMirror} loadError={mirrorErr} />
+
       {perf && <PerformanceOverTime perf={perf} />}
+
+      {backtest && (backtest.error ? (
+        <div className="bg-panel border border-edge rounded-xl p-4 text-xs text-amber-300/90">
+          10-year replay summary unavailable: {backtest.error}
+        </div>
+      ) : (
+        <BacktestPanel bt={backtest} />
+      ))}
 
       <div className="bg-panel border border-edge rounded-xl p-4">
         <h3 className="font-semibold mb-3">🔴 Open calls ({open.length})</h3>

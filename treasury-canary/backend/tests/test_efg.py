@@ -67,3 +67,46 @@ def test_foreign_custody_26w():
     assert selling.value is not None and selling.value <= -5.0
     assert selling.status is Status.RED
     assert build_foreign_metrics({})[0].status is Status.STALE
+
+def test_flight_to_quality_counts_carry_their_window():
+    """The card shows 'N of M down days' with dates; the fraction alone
+    ('0.000 frac') read as missing data, and a 20-day window is noisy."""
+    from datetime import date, timedelta
+    from app.metrics.crossasset import flight_to_quality_windows
+    n = 200
+    dates = [date(2026, 1, 1) + timedelta(days=i) for i in range(n)]
+    sp = [(-0.01 if i % 2 else 0.01) for i in range(n)]            # every other day down
+    br = [(0.001 if i < 150 else -0.001) for i in range(n)]         # bonds stop bidding at 150
+    ex = flight_to_quality_windows(dates, sp, br)
+    w = {x["days"]: x for x in ex["windows"]}
+    assert (w[20]["bid"], w[20]["down"]) == (0, 10)
+    assert w[20]["start"] == dates[-20].isoformat() and w[20]["end"] == dates[-1].isoformat()
+    assert (w[60]["bid"], w[60]["down"]) == (5, 30)
+    assert (w[120]["bid"], w[120]["down"]) == (35, 60)
+    assert w[20]["pctile"] < 30 and 0 < ex["base_rate"] < 1
+
+
+def test_flight_to_quality_status_uses_the_60_day_window():
+    """Casey 2026-09-30: status on 60d. Bonds bid on every down day of the
+    last 20 sessions but none of the 40 before: 20d reads 1.0 (GREEN), 60d
+    reads 1/3 (RED). The status must be RED."""
+    from datetime import date, timedelta
+    from app.metrics.crossasset import build_crossasset_metrics
+    n = 300
+    days = [date(2025, 1, 1) + timedelta(days=i) for i in range(n + 1)]
+    spx, y10, p, yld = [], [], 100.0, 4.0
+    for i in range(n + 1):
+        if i:
+            down = i % 2 == 1
+            p *= 0.99 if down else 1.0101
+            bid = (i > n - 20) if down else False
+            yld += -0.01 if bid else 0.01
+        spx.append(p)
+        y10.append(round(yld, 4))
+    m = next(x for x in build_crossasset_metrics({"sp500": (days, spx), "10y": (days, y10)})
+             if x.metric_id == "crossasset.flight_to_quality")
+    w = {x["days"]: x for x in m.extra["windows"]}
+    assert w[20]["bid"] == w[20]["down"]                       # fast window all bid
+    assert m.label == "Flight-to-quality (60d)"
+    assert abs(m.value - round(w[60]["bid"] / w[60]["down"], 2)) < 1e-9
+    assert m.status.value == "RED"

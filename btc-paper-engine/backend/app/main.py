@@ -11,10 +11,11 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from .config import settings
+from .config import LIVE_LEV, LIVE_W_TREND, settings
 from .live import ENGINE, start_background_loop
 from .store.db import (
-    BarRow, EquitySnapRow, EventRow, SignalRow, TradeRow, init_db, session_scope,
+    BarRow, EquitySnapRow, EventRow, SignalRow, TradeRow, init_db, log_event,
+    session_scope,
 )
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -26,6 +27,9 @@ async def lifespan(app: FastAPI):
     init_db()
     if settings.run_engine:
         start_background_loop()
+    if settings.run_funding_monitor:
+        from .funding_monitor import start_funding_monitor
+        start_funding_monitor()
     yield
 
 
@@ -50,14 +54,55 @@ def status():
     return ENGINE.status()
 
 
+@app.get("/funding")
+def funding():
+    """Funding-regime monitor state (RESEARCH_CARRY.md deployment policy):
+    30d trailing mean annualized BTC perp funding per venue, ARM/DISARM
+    hysteresis state, and the recent reading history."""
+    from .funding_monitor import MONITOR
+    return MONITOR.snapshot()
+
+
+@app.get("/carry/target")
+def carry_target(x_exec_token: str | None = Header(default=None)):
+    """Machine-readable carry decision for carry-executor (2026-10-01): the
+    funding monitor's HL ETH state, ARM >= 8% / DISARM < 5% on the 30d mean.
+    The engine decides; the executor holds the keys and only executes."""
+    _require_read_token(x_exec_token)
+    from .funding_monitor import MONITOR
+    return MONITOR.carry_target()
+
+
+def _require_read_token(x_exec_token: str | None) -> None:
+    """Read-only surfaces accept EXEC_TOKEN or EXEC_READ_TOKEN (review
+    2026-10-01 SERIOUS-2: carry-executor held the WRITE token to do a GET)."""
+    ok = {t for t in (settings.exec_token, settings.exec_read_token) if t}
+    if ok and x_exec_token not in ok:
+        raise HTTPException(status_code=401, detail="bad exec token")
+
+
+def _require_exec_token(x_exec_token: str | None) -> None:
+    """The book control surface (halt/resume/reset/resume-data) mutated a
+    live-feeding engine with NO auth on a public URL, while the runbook
+    named those very endpoints as the remedy for a halt (completeness
+    critic, 2026-09-08). Same rule as /exec/target: open only when no token
+    is configured (dev)."""
+    if settings.exec_token and x_exec_token != settings.exec_token:
+        raise HTTPException(status_code=401, detail="bad exec token")
+
+
 @app.get("/exec/target")
 def exec_target(x_exec_token: str | None = Header(default=None)):
     """Machine-readable desired state for the live executor: the S3 (pullback)
     and S4 (trend) legs of the S5 blend — pending limit orders, open positions
     with current protective levels, and data-health flags. The executor mirrors
     this; the paper engine itself never touches an exchange."""
-    if settings.exec_token and x_exec_token != settings.exec_token:
-        raise HTTPException(status_code=401, detail="bad exec token")
+    _require_read_token(x_exec_token)
+    if not ENGINE.booted:
+        # Fresh Book() defaults are not an engine state. Serving them read
+        # as halted=False / no position / bar_ts=0 to the executor while
+        # boot() restored the DB in the background (panel, 2026-09-08).
+        raise HTTPException(status_code=503, detail="engine booting")
 
     def _leg(book):
         b = ENGINE.books.get(book)
@@ -75,17 +120,26 @@ def exec_target(x_exec_token: str | None = Header(default=None)):
         if b.pending is not None:
             pend = {"side": b.pending.side, "limit": b.pending.limit,
                     "signal_ts": b.pending.signal_ts}
+        # Entry-size multiplier for the entry this leg is working or holds,
+        # frozen per signal bar (RESEARCH_SHARPE.md H1, down-only: 0.5-1.0).
+        # Leg-level, not inside pending/position, so those payloads keep
+        # their exact shape; an executor that predates it ignores it.
+        sig = (b.pending.signal_ts if b.pending is not None else
+               b.position.signal_ts if b.position is not None else None)
+        vm = ENGINE.size_mult_for(sig)
         return {"book": book, "halted": b.halted,
+                "halt_reason": b.halt_reason,
                 "state": ("HALTED" if b.halted else
                           b.position.side if b.position else
                           "PENDING" if b.pending else "FLAT"),
-                "pending": pend, "position": pos}
+                "pending": pend, "position": pos,
+                "size_mult": vm["m"], "size_mult_basis": vm["basis"]}
 
     return {"bar_ts": ENGINE.last_processed,
             "bar_iso": _iso(ENGINE.last_processed or None),
             "price": ENGINE.cur_price,
             "degraded": ENGINE.degraded, "data_halt": ENGINE.data_halt,
-            "blend": {"w_trend": 0.25, "lev": 1.5},
+            "blend": {"w_trend": LIVE_W_TREND, "lev": LIVE_LEV},
             "legs": {"pullback": _leg("S3"), "trend": _leg("S4")}}
 
 
@@ -192,27 +246,50 @@ def conditions():
 
 
 @app.post("/books/{book}/halt")
-def halt(book: str):
+def halt(book: str, x_exec_token: str | None = Header(default=None)):
+    _require_exec_token(x_exec_token)
     b = ENGINE.books.get(book)
     if not b:
         raise HTTPException(404)
+    # NOT under ENGINE._lock: poll() holds that lock across its network
+    # fetches (up to 30s per read), so a locked /halt could stall an operator
+    # for that long during an incident (panel, 2026-09-08). Ordering does the
+    # job instead: reason is written BEFORE the flag, so a scan that sees
+    # halted=True also sees why, and the announced-flag design means the
+    # page cannot be misattributed or lost to the race. Drop the pending:
+    # `halted` only blocks NEW pendings, so a resting one still filled on
+    # the next bar and a halted book opened a position the live executor
+    # then mirrored with real money.
+    b.halt_reason = "manual"
     b.halted = True
-    return {"book": book, "halted": True}
+    dropped = b.pending is not None
+    b.pending = None
+    with session_scope() as s:
+        log_event(s, "WARN", "book_halted_manual",
+                  f"pending dropped={dropped}", book=book)
+    return {"book": book, "halted": True, "pending_dropped": dropped}
 
 
 @app.post("/books/{book}/resume")
-def resume(book: str):
+def resume(book: str, x_exec_token: str | None = Header(default=None)):
+    _require_exec_token(x_exec_token)
     b = ENGINE.books.get(book)
     if not b:
         raise HTTPException(404)
     b.halted = False
+    b.halt_reason = None
+    b.halt_announced = False          # a later halt must page again
     b.peak_equity = b.equity          # manual reset re-anchors the dd baseline
+    with session_scope() as s:
+        log_event(s, "INFO", "book_resumed", "", book=book)
     return {"book": book, "halted": False}
 
 
 @app.post("/books/reset")
 def books_reset(window: str = "2y", start: str | None = None,
-                capital: float | None = None):
+                capital: float | None = None,
+                x_exec_token: str | None = Header(default=None)):
+    _require_exec_token(x_exec_token)
     """Re-baseline ALL books from one common inception (4y|2y|1y|6m|3m|1m or
     custom start=YYYY-MM-DD), replaying history through the live code path;
     live trading continues from now. Destructive: wipes current book state."""
@@ -224,11 +301,15 @@ def books_reset(window: str = "2y", start: str | None = None,
         t0 = int(datetime.now(timezone.utc).timestamp()) - spans.get(window, 730) * 86400
     if capital is not None:
         capital = max(1_000.0, min(100_000_000.0, capital))
-    return ENGINE.reset_books(t0, capital=capital)
+    try:
+        return ENGINE.reset_books(t0, capital=capital)
+    except ValueError as exc:            # a hole in the bar series
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @app.post("/resume-data")
-def resume_data():
+def resume_data(x_exec_token: str | None = Header(default=None)):
+    _require_exec_token(x_exec_token)
     ENGINE.data_halt = False
     return {"data_halt": False}
 
@@ -373,7 +454,7 @@ def replay_compare(window: str = "2y", start: str | None = None,
         st.update(_risk_stats(steps, yrs, total, b.mtm_max_dd))
         out[n] = st
     if "S3" in res.books and "S4" in res.books:
-        out["S5"] = _blend_stats("S5", res.books["S3"], res.books["S4"], 0.25, 1.5)
+        out["S5"] = _blend_stats("S5", res.books["S3"], res.books["S4"], LIVE_W_TREND, LIVE_LEV)
         out["S6"] = _blend_stats("S6", res.books["S3"], res.books["S4"], 0.25, 2.0)
     bars_win = [b for b in bars_ if t0 <= b.ts <= t1]
     hold = _hold_stats(bars_win, ENGINE.books_cfg[0].start_equity,
@@ -465,7 +546,7 @@ def kelly_compare(window: str = "2y"):
                for n, b in res.books.items()}
     descs = {n: b.cfg.strategy for n, b in res.books.items()}
     if "S3" in res.books and "S4" in res.books:
-        streams["S5"] = _blend_steps(res.books["S3"], res.books["S4"], 0.25, 1.5)
+        streams["S5"] = _blend_steps(res.books["S3"], res.books["S4"], LIVE_W_TREND, LIVE_LEV)
         streams["S6"] = _blend_steps(res.books["S3"], res.books["S4"], 0.25, 2.0)
         descs["S5"], descs["S6"] = "blend 75/25 @1.5x", "blend 75/25 @2.0x"
     books = {n: analyze(streams[n], n, descs.get(n, ""))

@@ -1,0 +1,67 @@
+{
+ "n_candidate_exits": 124,
+ "n_total_S3": 190,
+ "TTL1": {
+  "fill_rate": 0.9919354838709677,
+  "mean_bps_when_filled": -1.5935236432534703,
+  "mean_bps_when_missed": -22.72999162579256,
+  "mean_bps_all": -1.7639790302094307,
+  "sd_bps_all": 3.658426396992561,
+  "fee_saved_bps": 2.8567741935483872,
+  "net_bps": 1.0927951633389565,
+  "n": 124
+ },
+ "TTL2": {
+  "fill_rate": 0.9919354838709677,
+  "mean_bps_when_filled": -1.5935236432534703,
+  "mean_bps_when_missed": -137.5762651034813,
+  "mean_bps_all": -2.6901586550295016,
+  "sd_bps_all": 12.605740523901792,
+  "fee_saved_bps": 2.8567741935483872,
+  "net_bps": 0.16661553851888566,
+  "n": 124
+ },
+ "TTL3": {
+  "fill_rate": 0.9919354838709677,
+  "mean_bps_when_filled": -1.5935236432534703,
+  "mean_bps_when_missed": -138.7725804522072,
+  "mean_bps_all": -2.6998063594547106,
+  "sd_bps_all": 12.709841794684131,
+  "fee_saved_bps": 2.8567741935483872,
+  "net_bps": 0.15696783409367665,
+  "n": 124
+ },
+ "annual_fee_saving_usd": {
+  "15000": {
+   "fix1_entry_usd_per_yr": 137.78852006945155,
+   "fix2_exit_usd_per_yr": 89.92513941374732,
+   "both_usd_per_yr": 227.71365948319885
+  },
+  "20000": {
+   "fix1_entry_usd_per_yr": 183.71802675926872,
+   "fix2_exit_usd_per_yr": 119.90018588499643,
+   "both_usd_per_yr": 303.61821264426516
+  },
+  "54030": {
+   "fix1_entry_usd_per_yr": 496.31424929016447,
+   "fix2_exit_usd_per_yr": 323.91035216831784,
+   "both_usd_per_yr": 820.2246014584823
+  },
+  "100000": {
+   "fix1_entry_usd_per_yr": 918.5901337963436,
+   "fix2_exit_usd_per_yr": 599.500929424982,
+   "both_usd_per_yr": 1518.0910632213256
+  },
+  "250000": {
+   "fix1_entry_usd_per_yr": 2296.4753344908586,
+   "fix2_exit_usd_per_yr": 1498.752323562455,
+   "both_usd_per_yr": 3795.2276580533135
+  },
+  "1000000": {
+   "fix1_entry_usd_per_yr": 9185.901337963434,
+   "fix2_exit_usd_per_yr": 5995.00929424982,
+   "both_usd_per_yr": 15180.910632213254
+  }
+ },
+ "sample_years": 4.467716176135068
+}

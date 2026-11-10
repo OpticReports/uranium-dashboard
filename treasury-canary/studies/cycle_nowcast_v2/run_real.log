@@ -1,0 +1,17 @@
+[run_study] verifying frozen-input hashes
+[run_study] [cache] vintages_raw.tar.xz -> /tmp/cnv2_vintages_raw_rjlrkuh7/vintages_raw
+[run_study] F1 reproduction gate
+[run_study] ADS comparator reproduction gate
+[run_study] loading inputs
+[run_study] scoring sections: windows, lag_simulation, regime_i, bands, decision_D1, decision_D2, regime_ii, comparator, comparator_sensitivities, decision_D3, availability, chauvet_piger, honesty
+[run_study]   section windows
+[run_study]   section lag_simulation
+[run_study]   section regime_i
+[run_study]   section bands
+[run_study]   section decisions D1/D2
+[run_study]   section regime_ii
+[run_study]   section comparator
+[run_study]   section availability
+[run_study]   section chauvet_piger
+[run_study]   section honesty
+[run_study] written: /home/user/uranium-dashboard/treasury-canary/studies/cycle_nowcast_v2/results.json | decisions: PASS PASS SUCCESS

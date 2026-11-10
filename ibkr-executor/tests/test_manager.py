@@ -1,5 +1,9 @@
 """Ladder-manager gates: trigger discipline, kill rules, sequencing,
 house-money accounting. Pure state-machine tests — no broker, no network."""
+import json
+import os
+import time
+
 import pytest
 
 from app.manager import LadderManager, LADDER
@@ -87,3 +91,263 @@ def test_gate_house_money_accounting(tmp_path):
     m2 = LadderManager(m.cfg, m.state_path)
     assert m2.state.banked == pytest.approx(18_000)
     assert m2.state.legs["NG"].status == "CLOSED"
+
+
+# --- x12 (counter-review): persistence safety on the LIVE paper ladder --------
+# LadderManager.save() was a plain json.dump(..., open(path,"w")) — no temp
+# file, no fsync — and it IS genuinely raced in production (/kill and /resume
+# mutate from API threads while _loop() saves on the loop thread). A
+# truncated file then fell through _load's bare except to a FRESH
+# LadderState(): open legs and `halted` silently forgotten.
+
+
+def test_gate_x12_ladder_save_is_atomic_under_a_mid_write_crash(tmp_path):
+    import app.manager as manager_mod
+
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "ng-ref", "2026-11-05")
+    m.state.halted = "KILL"
+    m.save()
+    real_dump = manager_mod.json.dump
+
+    def bad_dump(obj, fh, **kw):
+        fh.write('{"partial')
+        raise IOError("disk full mid-write")
+
+    manager_mod.json.dump = bad_dump
+    try:
+        m.state.banked = 999.0
+        with pytest.raises(IOError):
+            m.save()
+    finally:
+        manager_mod.json.dump = real_dump
+    m2 = LadderManager(m.cfg, m.state_path)         # reload: LAST GOOD book
+    assert m2.state.legs["NG"].status == "OPEN"     # open leg not forgotten
+    assert m2.state.legs["NG"].order_ref == "ng-ref"
+    assert m2.state.halted == "KILL"                # and still halted
+    assert m2.state.banked == 0.0                   # not the failed write
+    assert m2.archived_state is None                # nothing was corrupt
+    # no scratch files left behind next to the state file
+    assert [f for f in os.listdir(tmp_path) if f.endswith(".tmp")] == []
+
+
+def test_gate_x12_ladder_concurrent_saves_never_publish_a_torn_file(tmp_path):
+    import threading
+
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "ng-ref", "2026-11-05")
+    m.state.events = [{"ts": 1, "level": "INFO", "msg": f"e{i} " + "x" * 120}
+                      for i in range(300)]
+    m.save()
+    errors: list[BaseException] = []
+    corrupt: list[str] = []
+    stop = threading.Event()
+
+    def hammer():
+        while not stop.is_set():
+            try:
+                m.save()
+            except BaseException as exc:            # noqa: BLE001
+                errors.append(exc)
+                return
+
+    def reader():
+        while not stop.is_set():
+            try:
+                json.load(open(m.state_path))
+            except FileNotFoundError:
+                corrupt.append("missing")
+            except ValueError:
+                corrupt.append("truncated")
+
+    threads = [threading.Thread(target=hammer) for _ in range(4)]
+    threads.append(threading.Thread(target=reader))
+    for t in threads:
+        t.start()
+    time.sleep(1.0)
+    stop.set()
+    for t in threads:
+        t.join(timeout=10)
+    assert errors == []
+    assert corrupt == []
+    assert LadderManager(m.cfg, m.state_path).state.legs["NG"].status == "OPEN"
+
+
+def test_gate_x12_unreadable_ladder_state_is_preserved_and_loud(tmp_path):
+    """A corrupt file must never degrade to a fresh, un-halted ladder in
+    silence: the file is preserved for forensics and the service alerts."""
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "ng-ref", "2026-11-05")
+    m.state.halted = "KILL"
+    m.save()
+    with open(m.state_path, "w") as fh:
+        fh.write('{"legs": {"NG": {"status": "OPE')     # truncated externally
+    m2 = LadderManager(m.cfg, m.state_path)
+    assert m2.archived_state and "unreadable" in m2.archived_state
+    assert [f for f in os.listdir(tmp_path) if ".corrupt-" in f]
+    assert m2.state.legs["NG"].status == "WAITING"      # fresh, but LOUD
+    m2.save()                                           # never overwrites it
+    assert [f for f in os.listdir(tmp_path) if ".corrupt-" in f]
+
+
+def test_gate_x12_kill_and_resume_serialize_behind_the_ladder_lock(
+        tmp_path, monkeypatch):
+    """/kill and /resume mutate legs/halted on API threads with no lock at
+    all while the loop steps and saves. They must serialize behind
+    MGR_LOCK, exactly as the blend's /kill and /resume do behind
+    BLEND_LOCK."""
+    import threading
+
+    from fastapi.testclient import TestClient
+
+    from app import service
+    from app.config import settings
+    from app.service import app
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", False)
+    monkeypatch.setattr(service, "send", lambda *_a, **_k: None)
+    with TestClient(app) as c:
+        for _ in range(200):
+            if service.MGR is not None:
+                break
+            time.sleep(0.05)
+        assert service.MGR is not None
+        for endpoint in ("/kill", "/resume"):
+            done = threading.Event()
+            with service.MGR_LOCK:                  # a cycle is "in flight"
+                t = threading.Thread(
+                    target=lambda: (c.post(endpoint, params={"token": "sekrit"}),
+                                    done.set()))
+                t.start()
+                assert not done.wait(0.4)           # blocked on the lock
+            assert done.wait(5)                     # released -> completes
+            t.join(timeout=5)
+
+
+def test_gate_y2_leg_row_schema_drift_preserves_and_halts(tmp_path):
+    """y2: a leg-row schema drift (a deploy ROLLBACK reading rows a newer
+    build wrote) reset every leg to WAITING/order_ref=None, left the file in
+    place for the loop's next save() to destroy, and left the ladder
+    UNHALTED — so step() re-OPENed a spread that is still live at the venue,
+    with the real one orphaned and never closed. The drifted book must be
+    preserved exactly as the outer corrupt branch does, the live leg's
+    handle kept, and the ladder HALTED before step() can act."""
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "live-spread-ref", "2026-11-05")
+    m.state.banked = 999.0
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["legs"]["NG"]["future_field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    m2 = LadderManager(m.cfg, m.state_path)
+    # the leg is inside its window with the event at strength: the old
+    # branch re-OPENed it here, duplicating a live spread
+    assert m2.step("2026-11-20", 2.4, {"NG": 9_000}) == []
+    assert m2.state.halted == "SCHEMA_DRIFT"        # step() cannot act
+    assert m2.state.legs["NG"].status == "OPEN"     # the live leg is not lost
+    assert m2.state.legs["NG"].order_ref == "live-spread-ref"
+    assert [f for f in os.listdir(tmp_path) if ".corrupt-" in f]   # evidence
+    assert m2.state.banked == 999.0
+    assert m2.archived_state and "HALTED" in m2.archived_state
+    m2.save()                                       # never overwrites it
+    assert [f for f in os.listdir(tmp_path) if ".corrupt-" in f]
+    assert json.load(open(m2.state_path))["halted"] == "SCHEMA_DRIFT"
+
+
+def test_gate_y2_schema_drift_keeps_an_existing_halt_reason(tmp_path):
+    """`banked`/`halted` semantics stay intact: a book already halted for a
+    REAL reason keeps that reason (SCHEMA_DRIFT never overwrites it), and
+    the ladder stays halted either way."""
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "live-spread-ref", "2026-11-05")
+    m.state.halted = "EVENT_COLLAPSE"
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["legs"]["SB"]["unknown_key"] = "x"
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    m2 = LadderManager(m.cfg, m.state_path)
+    assert m2.step("2026-11-20", 2.4, {"NG": 9_000}) == []
+    assert m2.state.legs["NG"].order_ref == "live-spread-ref"
+    assert m2.state.halted == "EVENT_COLLAPSE"
+    assert m2.archived_state and "EVENT_COLLAPSE" in m2.archived_state
+
+
+def test_gate_zj_drift_halt_survives_a_crash_before_the_first_save(tmp_path):
+    """Z-J: the drift branch moved the file to `.corrupt-*` and set `halted`
+    IN MEMORY, and `_build` never saved — a crash before the loop's first
+    save() lost both the halt and the preserved legs, so the next boot came
+    back `halted: None` with NG WAITING and no order_ref. That is the y2
+    harm one crash earlier. The recovered book is persisted at load."""
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "live-spread-ref", "2026-11-05")
+    m.state.banked = 999.0
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["legs"]["NG"]["future_field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    m2 = LadderManager(m.cfg, m.state_path)      # drift load, then a CRASH:
+    assert m2.state.halted == "SCHEMA_DRIFT"     # nothing else ever saves
+    del m2
+
+    m3 = LadderManager(Cfg(), str(tmp_path / "ladder.json"))
+    assert m3.state.halted == "SCHEMA_DRIFT"
+    assert m3.state.legs["NG"].status == "OPEN"
+    assert m3.state.legs["NG"].order_ref == "live-spread-ref"
+    assert m3.state.banked == 999.0
+    assert m3.archived_state is None             # a clean read this time
+    assert m3.step("2026-11-20", 2.4, {"NG": 9_000}) == []
+
+
+def test_gate_zf7_ladder_a_failed_preserve_is_not_overwritten_by_the_boot_save(
+        tmp_path):
+    """ZF-7 on the LADDER (the blend half is gated in test_blend.py; the
+    review docked this half for shipping ungated — mf-5). Z-J's boot-time
+    save() ran on `archived_state` alone, so on the one path where the file
+    on disk is the ONLY copy of the evidence — a failed PRESERVE rename —
+    the boot save destroyed it immediately, while the comment claimed "the
+    original file is already archived, so nothing is erased". The save is
+    now conditional on the rename having succeeded; the halt stays in
+    memory, is re-derived from the unchanged file on the next boot, and
+    `archived_state` says so."""
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "live-spread-ref", "2026-11-05")
+    m.state.banked = 999.0
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["legs"]["NG"]["future_field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    from app import manager as manager_mod
+    real_replace = os.replace
+
+    def _no_preserve(src, dst):
+        if ".corrupt-" in str(dst):
+            raise OSError("read-only fs")
+        return real_replace(src, dst)
+
+    manager_mod.os.replace = _no_preserve
+    try:
+        m2 = mk(tmp_path)
+    finally:
+        manager_mod.os.replace = real_replace
+    after = json.load(open(m.state_path))
+    assert "future_field_from_a_newer_deploy" in after["legs"]["NG"]  # evidence
+    assert m2.state.halted == "SCHEMA_DRIFT"            # still halted...
+    assert "PRESERVE FAILED" in m2.archived_state       # ...and loud about it
+    assert "OVERWRITTEN by the next save" in m2.archived_state
+    assert m2.step("2026-11-20", 2.4, {"NG": 9_000}) == []
+    # the halt is not lost by staying in memory: the next boot re-derives it
+    # from the file that was never overwritten
+    m3 = LadderManager(Cfg(), str(tmp_path / "ladder.json"))
+    assert m3.state.halted == "SCHEMA_DRIFT"
+    assert m3.state.legs["NG"].order_ref == "live-spread-ref"
+    assert m3.state.banked == 999.0

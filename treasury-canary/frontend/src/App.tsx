@@ -7,10 +7,12 @@ import StressGauge from "./components/StressGauge";
 import MetricTable from "./components/MetricTable";
 import ReSteepenAlert from "./components/ReSteepenAlert";
 import SahmChart from "./components/SahmChart";
+import LaborStressBoard from "./components/LaborStressBoard";
 import CycleTracker from "./components/CycleTracker";
 import LaborPanel from "./components/LaborPanel";
 import FlightToQuality from "./components/FlightToQuality";
 import FlowCompass from "./components/FlowCompass";
+import SqueezeRadar from "./components/SqueezeRadar";
 import MarginLeverageChart from "./components/MarginLeverageChart";
 import RateShockPanel from "./components/RateShockPanel";
 import RateShockSimulator from "./components/RateShockSimulator";
@@ -24,15 +26,19 @@ import RateEnsemble from "./components/RateEnsemble";
 import PlaybookTab from "./components/PlaybookTab";
 import SeverityTab from "./components/SeverityTab";
 import TrackRecordTab from "./components/TrackRecordTab";
+import AiDebtTab from "./components/AiDebtTab";
+import DollarTab from "./components/DollarTab";
 
 const POLL_MS = 60_000;
 
-type Tab = "monitor" | "playbook" | "severity" | "track";
+type Tab = "monitor" | "playbook" | "severity" | "aidebt" | "dollar" | "track";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "monitor", label: "Monitor" },
   { id: "playbook", label: "Playbook" },
   { id: "severity", label: "Severity" },
+  { id: "aidebt", label: "AI debt" },
+  { id: "dollar", label: "Dollar" },
   { id: "track", label: "Track record" },
 ];
 
@@ -151,12 +157,15 @@ export default function App() {
         <div className="flex flex-col gap-5">
           <StressGauge composite={composite} />
 
+          {/* Where we are in the cycle sits right under the stress gauge (Casey, 2026-10-20). */}
+          <CycleTracker />
+
           <RateEnsemble />
 
           <ReSteepenAlert />
 
-          <CycleTracker />
           <SahmChart />
+          <LaborStressBoard />
 
           {metrics ? (
             <LeadingStack metrics={metrics.metrics} />
@@ -200,6 +209,8 @@ export default function App() {
 
           <FlowCompass />
 
+          <SqueezeRadar />
+
           <RateShockPanel />
 
           <MarginLeverageChart />
@@ -219,6 +230,8 @@ export default function App() {
 
         {tab === "playbook" && <PlaybookTab />}
         {tab === "severity" && <SeverityTab />}
+        {tab === "aidebt" && <AiDebtTab />}
+        {tab === "dollar" && <DollarTab />}
         {tab === "track" && <TrackRecordTab />}
 
         <footer className="mt-8 border-t border-panelborder pt-4 text-center text-[10px] text-slate-600">

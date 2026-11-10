@@ -1,0 +1,10 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27
+pydantic>=2
+# the editing engine. Not rebuilt here on purpose: aider speaks OpenRouter,
+# understands git, and maps a repo - doing that badly is the expensive mistake.
+aider-chat>=0.60
+# pytest is a RUNTIME dependency, not a dev one: running the repo's
+# suite IS this service's gate. Without it every task refuses.
+pytest>=8

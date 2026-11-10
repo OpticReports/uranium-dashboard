@@ -14,6 +14,7 @@ class SecurityOut(BaseModel):
     symbol: str
     name: str
     subsector: list[str]
+    ctgov_names: list[str] = Field(default_factory=list)
     active: bool
     updated_at: DateTime
 
@@ -22,6 +23,8 @@ class SecurityCreate(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=12)
     name: Optional[str] = None  # auto-fetched from provider when omitted
     subsector: list[str] = Field(default_factory=list)
+    # ClinicalTrials.gov registered sponsor aliases when they differ from name.
+    ctgov_names: list[str] = Field(default_factory=list)
     active: bool = True
     backfill: bool = True       # kick an immediate backfill on insert
 
@@ -29,7 +32,38 @@ class SecurityCreate(BaseModel):
 class SecurityUpdate(BaseModel):
     name: Optional[str] = None
     subsector: Optional[list[str]] = None
+    ctgov_names: Optional[list[str]] = None
     active: Optional[bool] = None
+
+
+# --- Universe discovery (candidate queue) ------------------------------------
+
+class CandidateOut(BaseModel):
+    symbol: str
+    name: str
+    market_cap: Optional[float]      # None = screener had no cap (not $0)
+    last_price: Optional[float]
+    score: Optional[float]
+    status: str                      # new | watch | promoted | dismissed
+    status_reason: Optional[str]
+    sources: list[str]
+    genomics_tags: list[str]
+    evidence: dict[str, Any]
+    first_seen: Date
+    last_seen: Date
+    status_changed_at: DateTime
+
+
+class CandidateDismiss(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class DiscoverySummaryOut(BaseModel):
+    counts: dict[str, int]                 # candidates by status
+    auto_promote: bool                     # config toggle state
+    auto_promote_per_week: int
+    promoted_this_week: list[str]          # symbols (auto + manual, last 7d)
+    last_run: Optional[dict] = None        # most recent sweep summary
 
 
 # --- Catalysts --------------------------------------------------------------

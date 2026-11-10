@@ -62,6 +62,16 @@ class SignalCfg:
 class TradeCfg:
     stop_atr: float = 2.5
     time_stop_bars: int = 60
+    # PER SIDE; both Position construction sites charge 2 x this, so the
+    # round trip is 12.00 bps at this default. DELIBERATELY NOT MOVED to the
+    # 4.32 that RESEARCH_FEES.md measured (8.64 round trip), because this
+    # value IS the registered objective: research_basis_stats reproduces the
+    # reference backtest EXACTLY at 6.00 and at no other value (measured -
+    # S3 48.1/-14.2, S1 64.5/-22.3, S2 101.4/-22.9 land on the reference at
+    # 6.00; at 4.32 they read 50.3 / 68.3 / 106.6). Re-registering the
+    # objective at the measured fee restates every published MAR in the repo
+    # and is a dated protocol amendment Casey signs, not a default someone
+    # edits. See RESEARCH_SELF_LEARNING.md P1 question 4.
     taker_fee_bps: float = 6.0
     maker_fee_bps: float = 0.0
 
@@ -90,7 +100,12 @@ class Position:
     stop_price: float
     atr_at_entry: float
     signal_ts: int               # signal bar open ts
-    fee_bps: float = 6.0         # round-trip taker bps charged at exit
+    # ROUND-TRIP taker bps charged at exit. Both construction sites now pass
+    # this explicitly (core.py, donchian and pullback), so the default is a
+    # backstop for hand-built Positions in tests, never a live path. It is
+    # deliberately NOT lowered to the measured rate: a default that silently
+    # prices a real book is the defect this comment exists because of.
+    fee_bps: float = 6.0
     trail: float | None = None   # donchian chandelier level (ratchets)
 
 
@@ -130,6 +145,18 @@ class Book:
     equity: float = 0.0
     peak_equity: float = 0.0
     halted: bool = False
+    # Why `halted` is set: "dd_halt" (the book's own kill switch, set in
+    # _close_position) or "manual" (POST /books/<n>/halt). The halt page
+    # reads this so an operator halt is never reported as a drawdown that
+    # did not happen (counter-agent 2026-09-08, defect 6/8).
+    halt_reason: str | None = None
+    # Has the halt been paged? Compared against `halted` by
+    # live._announce_halts, so a halt is announced no matter WHICH code path
+    # set it (three in the engine, plus /halt and reset_books) and even if
+    # an exception intervened between the halting close and the scan - the
+    # snapshot-vs-now design the workflow panel broke needed every path
+    # bracketed by hand and lost the edge to any raise in between.
+    halt_announced: bool = False
     position: Position | None = None
     pending: Pending | None = None
     trades: list[ClosedTrade] = field(default_factory=list)
@@ -213,6 +240,7 @@ def _close_position(book: Book, pos: Position, exit_ts: int, exit_price: float,
     dd = book.equity / book.peak_equity - 1
     if dd <= -book.cfg.dd_halt:
         book.halted = True
+        book.halt_reason = "dd_halt"
 
 
 def _process_donchian(book: Book, bar: Bar, ind: Ind, tcfg: TradeCfg,
@@ -233,16 +261,28 @@ def _process_donchian(book: Book, bar: Bar, ind: Ind, tcfg: TradeCfg,
                     fee_bps=2 * tcfg.taker_fee_bps)
     pos = book.position
     if pos is not None:
-        if ind.atr14 is not None:
+        # 1) the RESTING stop is tested first. During bar t the venue holds the
+        #    trail published at close(t-1) (/exec/target -> btc-executor's
+        #    reduce-only stop). The old order ratcheted from close(t) FIRST and
+        #    tested bar t's own low against that higher level - a level no
+        #    resting order could have held while the low printed - so the
+        #    engine booked exits the venue never took and the executor chased
+        #    them at market (RESEARCH_CAGR.md H1, 2026-09-29). A bar that
+        #    opens through the stop fills at the open, not at the level.
+        if pos.trail is not None and bar.ts > pos.entry_ts:
+            hit = (bar.low <= pos.trail if pos.side == "L" else bar.high >= pos.trail)
+            if hit:
+                fill = (min(pos.trail, bar.open) if pos.side == "L"
+                        else max(pos.trail, bar.open))
+                _close_position(book, pos, bar.ts, fill, "STOP", tcfg)
+                pos = None
+        # 2) survivors ratchet the trail from this close, for the NEXT bar
+        if pos is not None and ind.atr14 is not None:
             lvl = (bar.close - book.cfg.trail_atr * ind.atr14 if pos.side == "L"
                    else bar.close + book.cfg.trail_atr * ind.atr14)
             pos.trail = (lvl if pos.trail is None else
                          (max(pos.trail, lvl) if pos.side == "L" else min(pos.trail, lvl)))
             pos.stop_price = pos.trail
-        if pos.trail is not None and bar.ts > pos.entry_ts:
-            hit = (bar.low <= pos.trail if pos.side == "L" else bar.high >= pos.trail)
-            if hit:
-                _close_position(book, pos, bar.ts, pos.trail, "STOP", tcfg)
     if (book.position is None and book.pending is None and not book.halted
             and signal is not None):
         book.pending = Pending(side=signal, limit=-1.0, signal_ts=bar.ts,
@@ -292,7 +332,21 @@ def _process_pullback(book: Book, bar: Bar, ind: Ind,
                 book.position = Position(
                     side=p.side, entry_ts=bar.ts, entry_price=p.limit,
                     qty=qty, notional=notional, stop_price=stop,
-                    atr_at_entry=a_e, signal_ts=p.signal_ts)
+                    atr_at_entry=a_e, signal_ts=p.signal_ts,
+                    # STAMPED FROM CONFIG, as the donchian path above already
+                    # does. Omitting it took Position's 6.0 default, so every
+                    # pullback book (S1, S2, S3 - and S5/S6, which are 75%
+                    # S3) priced fees at a constant no env var could reach.
+                    # Measured on the 10,002-bar fixture before the fix: S3's
+                    # equity and fees were identical TO THE CENT at
+                    # taker_fee_bps 4.32, 6.00, 8.00 and 20.00 - a 4.6x range
+                    # - while S4 moved 226,501 -> 112,461. The two legs of
+                    # one deployed blend were on different fee bases under
+                    # the same TradeCfg (S3 6.00 round trip, S4 12.00), and
+                    # RESEARCH_FEES.md's Kelly re-fit - the study that
+                    # retired three sizing rungs and set KELLY_M_CAP - ran on
+                    # that stream. See test_pullback_fees_track_config.
+                    fee_bps=2 * tcfg.taker_fee_bps)
             # Stop is NOT active on the fill bar itself (reference log has no
             # bars_held=0 trades) and the fill bar's close is exit-ineligible.
             return

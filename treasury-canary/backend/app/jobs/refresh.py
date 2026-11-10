@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date
 
 import httpx
 from sqlalchemy import select
@@ -71,14 +72,37 @@ def compute_all(bundle: dict, auctions: list[dict] | None = None):
     return metrics, analyses, composite, recession_starts
 
 
+# A failed read: a metric or squeeze condition with no data (STALE), or the
+# composite with none at all (NO_DATA).
+_NO_DATA = ("STALE", "NO_DATA")
+
+
 def _prev_status_map(session: Session) -> dict[str, str]:
-    rows = session.execute(select(MetricSnapshot).order_by(MetricSnapshot.asof.asc())).scalars().all()
+    """Flip baseline per metric: the status of its latest NON-STALE row.
+
+    A failed fetch persists a STALE row dated the refresh day (asof falls
+    back to today), and that row sorts AFTER the metric's real rows - a
+    daily series' last print, a weekly one's print day, a monthly one's
+    month start - until a newer print overtakes its date. As the baseline it
+    made every metric still RED on its real data "flip" STALE -> RED on
+    every refresh: one failed refresh (~04:28 UTC 2026-10-22) left STALE
+    rows that re-paged 21 RED alerts over five days. The squeeze radar's law
+    (below) applies here too: a STALE interlude is not a state, however long
+    it lasts - a metric RED before an outage and RED after it has not
+    flipped."""
+    rows = session.execute(
+        select(MetricSnapshot).where(MetricSnapshot.status.not_in(_NO_DATA))
+        .order_by(MetricSnapshot.asof.asc())).scalars().all()
     return {r.metric_id: r.status for r in rows}
 
 
 def _prev_band(session: Session) -> str | None:
+    """The composite's band at the last refresh that had data: a NO_DATA row
+    (a full outage) is skipped like a STALE metric row, or the first good
+    refresh after an outage pages "NO_DATA -> LOW"."""
     rows = session.execute(
         select(MetricSnapshot).where(MetricSnapshot.metric_id == "composite")
+        .where(MetricSnapshot.status.not_in(_NO_DATA))
         .order_by(MetricSnapshot.asof.asc())
     ).scalars().all()
     return rows[-1].status if rows else None
@@ -90,6 +114,14 @@ def _upsert_snapshot(session: Session, **kw) -> None:
         .where(MetricSnapshot.asof == kw["asof"])
     ).scalars().first()
     if existing:
+        if kw.get("status") in _NO_DATA and existing.status not in _NO_DATA:
+            # A failed read never erases a real one. A metric with no asof
+            # (vol.move_vix) is dated the refresh day, so an outage at the
+            # day's second refresh overwrote that day's reading; builders that
+            # keep the data's asof with no value overwrote the print itself.
+            # The flip baseline then fell back to an older state and could
+            # swallow a real RED re-entry (counter-agent, 2026-10-26).
+            return
         for k, v in kw.items():
             setattr(existing, k, v)
     else:
@@ -97,16 +129,37 @@ def _upsert_snapshot(session: Session, **kw) -> None:
 
 
 def _persist_event(session: Session, ev: Event) -> bool:
-    row = EventLog(
-        event_type=ev.event_type, severity=ev.severity, asof=ev.asof,
-        dedup_key=ev.dedup_key, rationale=ev.rationale, detail_json=ev.detail_json(),
-    )
-    session.add(row)
+    """Idempotent per (event_type, dedup_key): an event already logged is
+    skipped WITHOUT touching the rest of the refresh. (A session.rollback()
+    here used to discard every snapshot and event written earlier in the
+    same refresh whenever a detector re-emitted a known key — e.g. a curve
+    re-steepening held for weeks, or a labor ledger onset — while events
+    already paged were never stored, so they re-paged.)
+    INSERT ... ON CONFLICT DO NOTHING stays inside the refresh transaction,
+    so a crash before commit un-logs the row and the next refresh pages it
+    again (at-least-once). A SAVEPOINT would not: under pysqlite's deferred
+    BEGIN, a SAVEPOINT issued before any other write commits on RELEASE."""
+    values = dict(event_type=ev.event_type, severity=ev.severity, asof=ev.asof,
+                  dedup_key=ev.dedup_key, rationale=ev.rationale,
+                  detail_json=ev.detail_json())
+    dialect = session.get_bind().dialect.name
+    if dialect in ("sqlite", "postgresql"):
+        if dialect == "sqlite":
+            from sqlalchemy.dialects.sqlite import insert as _insert
+        else:
+            from sqlalchemy.dialects.postgresql import insert as _insert
+        res = session.execute(_insert(EventLog.__table__).values(**values)
+                              .on_conflict_do_nothing(index_elements=["event_type", "dedup_key"]))
+        return res.rowcount == 1
+    if session.execute(select(EventLog.id).where(          # other backends
+            EventLog.event_type == ev.event_type,
+            EventLog.dedup_key == ev.dedup_key)).first():
+        return False
     try:
-        session.flush()
+        with session.begin_nested():
+            session.add(EventLog(**values))
         return True
     except IntegrityError:
-        session.rollback()   # already logged this transition -> idempotent skip
         return False
 
 
@@ -202,6 +255,117 @@ def run_refresh(session: Session) -> dict:
                 rationale=msg, detail={"source": "business_cycle"}))
     except Exception as exc:  # noqa: BLE001
         logger.warning("cycle phase check failed: %s", exc)
+
+    # --- long-yield spike line (+75bp / 60 trading days) --------------------
+    # studies/rate-spike-recession.md: the words carry the measured record
+    # (3 of 20 episodes, all by 1990) and quote the curve model's probability,
+    # not "recession odds doubled". Stateless replay -> once per crossing; a
+    # crossing within 26 weeks of the last reads "re-crossing, same episode".
+    try:
+        from ..api.routes_rates import RATE_THRESHOLDS as RT
+        from ..api.routes_rates import spike_alert_template, spike_recross_template
+        from ..scoring.events import detect_rate_spike
+        ld, lv = bundle.get("30y", ([], []))
+        pts = [(d, v) for d, v in zip(ld, lv) if v is not None]
+        w = int(RT["window_bdays"])
+        sd = [pts[i][0] for i in range(w, len(pts))]
+        sv = [round((pts[i][1] - pts[i - w][1]) * 100) for i in range(w, len(pts))]
+        curve_pct = None
+        try:
+            from ..metrics.recession_model import cached_models_and_spread, predict
+            _m, _sp = cached_models_and_spread()
+            if _m.get(12) and _sp is not None:
+                curve_pct = predict(_m[12]["b0"], _m[12]["b1"], _m[12]["cov"],
+                                    _sp)["probability_pct"]
+        except Exception:  # noqa: BLE001
+            pass
+        new_events.extend(detect_rate_spike(
+            sd, sv, today, spike_bp=RT["spike_bp"], rearm_bp=RT["rearm_bp"],
+            approach_bp=RT["approach_bp"], approach_rearm_bp=RT["approach_rearm_bp"],
+            recent_days=10, spike_severity="WARN", approach_severity="INFO",
+            spike_text=spike_alert_template(curve_pct),
+            recross_text=spike_recross_template(curve_pct),
+            approach_text=("The 30-year yield is up {d60:+.0f}bp in 60 trading days "
+                           "(crossed on {date}), approaching the +75bp spike line. "
+                           "No odds claim attaches to this level.")))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("rate spike check failed: %s", exc)
+
+    # --- Labor Stress Board (studies/labor-stress-board.md): WARN on a new
+    # ALERT episode. The RED gate failed (it lit in Aug 2024 with no
+    # recession), so this never pages at RED; the text carries the record.
+    try:
+        from ..api.routes_labor import (_board_series, board_alert_event,
+                                        board_ledger_events, board_payload)
+        payload = board_payload(_board_series())
+        if payload.get("state") is None:
+            logger.warning("labor board unavailable: no jobs-report month (no CPS series "
+                           "returned data)")
+        elif payload.get("missing"):
+            logger.warning("labor board INCOMPLETE for %s: %s not available",
+                           payload.get("month"), ", ".join(payload["missing"]))
+        ev = board_alert_event(payload, today)
+        if ev:
+            new_events.append(ev)
+        new_events.extend(board_ledger_events(payload, today))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("labor board check failed: %s", exc)
+
+    # --- Duration Squeeze Radar: condition flips + calendar pre-briefs -------
+    # Pre-registered scorecard (docs/research/tlt-squeeze-2026, spec v2): a
+    # TRIGGER condition flipping to MET is the event the card exists for ->
+    # RED. Fuel flips and downgrades are context -> WARN. Two counter-agent
+    # laws encoded here: the flip baseline is the last NON-STALE state (a
+    # STALE interlude — deploy during a source outage — must not swallow a
+    # real MET->NOT_MET transition), and flip alerts debounce to one per
+    # (condition, state) per ISO week so a boundary oscillation cannot flood
+    # the channel. Pre-briefs fire once per (event, date) at T-minus-3.
+    try:
+        from ..alerts import squeeze_flip_text, squeeze_prebrief_text
+        from ..api.routes_squeeze import assemble_radar
+        radar = assemble_radar()
+        conds = radar["fuel"] + radar["triggers"]
+        sq_rows = session.execute(
+            select(MetricSnapshot)
+            .where(MetricSnapshot.metric_id.like("squeeze.%"))
+            .order_by(MetricSnapshot.asof.asc())).scalars().all()
+        prev_nonstale = {r.metric_id: r.status for r in sq_rows
+                         if r.status != "STALE"}
+        for c in conds:
+            mid = f"squeeze.{c['id'].lower()}"
+            _upsert_snapshot(
+                session, metric_id=mid, category="S", asof=today,
+                value=c.get("value"), status=c["state"], percentile=None,
+                note=c.get("detail"))
+            prev = prev_nonstale.get(mid)
+            if c["state"] == "STALE" or prev is None or prev == c["state"]:
+                continue
+            is_trigger = c["id"].startswith("T")
+            sev = "RED" if (c["state"] == "MET" and is_trigger) else "WARN"
+            iso_wk = "{}-W{:02d}".format(*today.isocalendar()[:2])
+            new_events.append(Event(
+                event_type="squeeze_condition_flip", severity=sev,
+                asof=today,
+                dedup_key=f"{c['id']}:{c['state']}:{iso_wk}",
+                rationale=squeeze_flip_text(c, prev, radar["fuel_score"],
+                                            radar["trigger_score"]),
+                detail=c))
+        for ev in radar.get("calendar", []):
+            try:
+                edate = date.fromisoformat(ev["date"])
+            except (KeyError, ValueError):
+                continue
+            days_out = (edate - today).days
+            if 0 <= days_out <= 3:
+                new_events.append(Event(
+                    event_type="squeeze_prebrief", severity="WARN", asof=today,
+                    dedup_key=f"{ev['event']}:{ev['date']}",
+                    rationale=squeeze_prebrief_text(
+                        ev["event"], edate, days_out, bool(ev.get("estimated")),
+                        radar["fuel_score"], radar["trigger_score"]),
+                    detail=ev))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("squeeze radar refresh failed: %s", exc)
 
     from ..alerts import format_event, should_send
     from ..alerts import send as _tg_send

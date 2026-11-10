@@ -1,0 +1,50 @@
+{
+ "btc_universe": {
+  "szDecimals": 5,
+  "name": "BTC",
+  "maxLeverage": 40,
+  "marginTableId": 56
+ },
+ "margin_table": {
+  "description": "tiered 40x",
+  "marginTiers": [
+   {
+    "lowerBound": "0.0",
+    "maxLeverage": 40
+   },
+   {
+    "lowerBound": "150000000.0",
+    "maxLeverage": 20
+   }
+  ]
+ },
+ "keys_present_in_meta": [
+  "universe",
+  "marginTables",
+  "collateralToken"
+ ],
+ "any_position_or_oi_cap_field_in_meta": [
+  "marginMode"
+ ],
+ "open_interest_btc": 37700.11354,
+ "mark_px": 83963.0,
+ "open_interest_usd": 3165414633.15902,
+ "day_notional_volume_usd": 2632115131.928771,
+ "funding_1h_now": 1.25e-05,
+ "premium_now": -0.0001178952,
+ "impact_pxs": [
+  "83962.0",
+  "83963.0"
+ ],
+ "sz_decimals": 5,
+ "min_size_increment_btc": 1e-05,
+ "one_million_as_pct_of_open_interest": 0.03159143795964638,
+ "one_million_as_pct_of_daily_volume": 0.03799225907216362,
+ "docs_stated_2026_09_28": {
+  "position_limit": "N/A for BTC (contract specifications page)",
+  "max_market_order_value_usd": 30000000,
+  "max_limit_order_value_usd": 300000000,
+  "funding_impact_notional_usdc": 20000,
+  "source": "hyperliquid.gitbook.io/hyperliquid-docs/trading/contract-specifications"
+ }
+}

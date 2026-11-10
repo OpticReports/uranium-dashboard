@@ -85,8 +85,10 @@ def test_worst_ignores_stale():
 
 
 def test_pin_board_oil_shock_red():
-    n = 260
-    oil = [60.0] * (n - 1) + [95.0]   # +58% vs 252 obs ago
+    # NOPI trigger leg (2026-09-16): needs 48 months to warm up, then a +58%
+    # jump to a new 3-year high = ln(95/60)*100 = 46 log-% cumulative -> RED
+    n = 365 * 5 + 90
+    oil = [60.0] * (n - 90) + [95.0] * 90
     bundle = {"oil": (_days(n), oil)}
     board = build_pin_board(bundle)
     by = {c["channel_id"]: c for c in board["channels"]}
@@ -137,7 +139,9 @@ def test_pin_board_empty_is_stale():
 
 def test_pin_board_private_credit_bifurcation():
     # 200 calm days of CCC ~7 / BBB ~1.5, then CCC gaps to 12 while BBB stays
-    # tight -> CCC pctile RED, dispersion pctile RED. NDFI growth stalls to -2 -> RED.
+    # tight, NDFI growth stalls to -2. The percentile legs carry RED again: the
+    # frozen 1996+ reference (DD Q24) restored the real distribution, so a 95th
+    # percentile means what it always meant rather than "worst in 3 years".
     days = _days(201)
     ccc = [7.0] * 200 + [12.0]
     bbb = [1.5] * 201
@@ -152,6 +156,7 @@ def test_pin_board_private_credit_bifurcation():
     assert parts["CCC spread percentile (vs 1996+)"]["status"] == "RED"
     assert parts["CCC−BBB dispersion percentile"]["status"] == "RED"
     assert parts["Bank loans to NDFIs, m/m ann. growth"]["status"] == "RED"
+    assert "CCC-and-lower OAS" not in parts, "the interim level leg should be gone"
     # attributes ride along for the frontend badges
     assert ch["mass"] and ch["speed"] and ch["kill_rate"]
 

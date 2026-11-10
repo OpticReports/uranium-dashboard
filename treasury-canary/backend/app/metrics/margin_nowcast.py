@@ -25,7 +25,7 @@ from datetime import date
 
 import numpy as np
 
-from .crossasset import leverage_state
+from .crossasset import POST_BLOWOFF_W, leverage_state, leverage_states_path
 
 FROZEN_BACKTEST = {
     "asof": "2026-08-03",
@@ -117,6 +117,20 @@ def build_margin_nowcast(margin_pair, spx_pair, schwab: dict | None = None,
     m_hat = m_by[last]
     prev = last
     cur = _month_add(last, 1)
+    # seed trailing PRINTED levels so the estimated months inherit the
+    # path-aware POST_BLOWOFF anchor (2026-08-15)
+    lvl_hist: list = []
+    mm = _month_add(cur, -POST_BLOWOFF_W)
+    while mm < cur:
+        b12 = _month_add(mm, -12)
+        if mm in m_by and b12 in m_by and mm in me and b12 in me:
+            y0 = (m_by[mm] / m_by[b12] - 1) * 100
+            s0 = (me[mm] / me[b12] - 1) * 100
+            lvl_hist.append(leverage_state(y0, y0 - s0))
+        else:
+            lvl_hist.append(None)
+        mm = _month_add(mm, 1)
+
     while cur <= _mk(today) and len(out_rows) < MAX_NOWCAST_MONTHS:
         if cur not in me or nd.get(cur, 0) < MIN_PARTIAL_DAYS:
             break
@@ -144,8 +158,11 @@ def build_margin_nowcast(margin_pair, spx_pair, schwab: dict | None = None,
             excess = yoy - spx_yoy
             band = max(1.0, FROZEN_BACKTEST["yoy_err_sd_pp"] if basis == "price-model"
                        else sd * 100)
-            st = leverage_state(yoy, excess)
-            near = any(leverage_state(yoy + dy, excess + dx) != st
+            lvl = leverage_state(yoy, excess)
+            st = ("POST_BLOWOFF" if lvl in ("ELEVATED", "NEUTRAL")
+                  and "BLOWOFF" in lvl_hist[-POST_BLOWOFF_W:] else lvl)
+            lvl_hist.append(lvl)
+            near = any(leverage_state(yoy + dy, excess + dx) != lvl
                        for dy, dx in ((band, band), (-band, -band),
                                       (band, -band), (-band, band)))
             row.update({"yoy_pct": round(yoy, 1), "excess_pp": round(excess, 1),

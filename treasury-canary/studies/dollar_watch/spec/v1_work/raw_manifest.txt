@@ -1,0 +1,14 @@
+9284f4198839eeb7  DCPF3M.csv
+88ca5f98fffb8aaa  DEXBZUS.csv
+784dd609d4e9d8bd  DEXCHUS.csv
+92cf1549cd82aa67  DEXINUS.csv
+9930e69d70d98edd  DEXKOUS.csv
+5973f83d7435a487  DEXMAUS.csv
+3e804107cdd35edb  DEXMXUS.csv
+e19d6a956ff60227  DEXSFUS.csv
+d363992043bc41ed  DEXTHUS.csv
+3b653f5fdb20c46b  DTB3.csv
+72bdd3c0ca53803f  SWPT.csv
+38e4dee3d14a0ea1  VIXCLS.csv
+d7a9764fa4722df5  fsi.csv
+3617fb5f8ee3ba4f  spx_daily.csv

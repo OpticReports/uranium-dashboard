@@ -1,0 +1,804 @@
+{
+ "funding_history": {
+  "n_hourly_stamps": 29088,
+  "first_utc": "2023-05-12T00:00:00.048000Z",
+  "last_utc": "2026-09-28T17:00:00.018000Z",
+  "gaps_over_1h": 88,
+  "mean_annualized_pct_full": 14.232174797615595,
+  "pct_hours_positive": 87.20434543454346,
+  "hourly_rate_pctiles_bp": {
+   "p1": -0.28354145999999997,
+   "p5": -0.108035,
+   "p25": 0.10020824999999998,
+   "p50": 0.125,
+   "p75": 0.125,
+   "p95": 0.65761835,
+   "p99": 1.1997717900000011
+  },
+  "mean_annualized_pct_by_year": {
+   "2023": 15.06472395918339,
+   "2024": 24.13965964508652,
+   "2025": 10.634234509999304,
+   "2026": 5.044523502677535
+  },
+  "rolling_30d_annualized_pct": {
+   "min": -10.864015976666625,
+   "p10": 1.8515718418333245,
+   "median": 10.921000567500148,
+   "p90": 32.43114595333322,
+   "max": 69.17940447499971,
+   "latest": 9.239263493333413,
+   "n_windows": 1182
+  },
+  "rolling_90d_annualized_pct": {
+   "min": -1.2610622655554757,
+   "p10": 2.8408219775555743,
+   "median": 11.917268331110687,
+   "p90": 32.8417590867773,
+   "max": 44.048693277221886,
+   "latest": 8.92117163055542,
+   "n_windows": 1122
+  }
+ },
+ "trade_window": {
+  "first_entry": "2024-07-25 08:00:00+00:00",
+  "last_exit": "2026-07-14 16:00:00+00:00",
+  "span_years": 1.9707762557077626,
+  "n_trades": 90,
+  "n_long": 44,
+  "n_short": 46,
+  "held_hours": 3676.0,
+  "time_in_market_pct": 21.29286376274328,
+  "trades_with_missing_funding_stamps": 0,
+  "mean_annualized_funding_pct_in_window": 10.690265066303061,
+  "gross_return_sum_frac_of_notional": 0.4197148851459947,
+  "gross_return_per_year_frac_of_notional": 0.21296932309307887,
+  "trades_per_year": 45.66728452270621
+ },
+ "funding_cost_bases": {
+  "1_always_long_24_7": {
+   "annual_frac_of_notional": -0.1069026506630306,
+   "note": "upper bound: long the whole window, never flat",
+   "annual_pct_of_notional": -10.690265066303061,
+   "bp_per_round_trip_equivalent": -23.409022844324713,
+   "vs_fee_rt_bp_8.64": -2.709377644019064,
+   "dollars_per_year": {
+    "15000": -1603.539759945459,
+    "100000": -10690.26506630306,
+    "250000": -26725.662665757653,
+    "1000000": -106902.65066303061
+   },
+   "pct_of_gross_edge": -50.19626728883788,
+   "net_after_fees_and_funding_pct_of_notional_per_yr": 6.661013860243011
+  },
+  "2_always_long_only_while_held": {
+   "annual_frac_of_notional": -0.017574557233317873,
+   "note": "the book's real time-in-market (21.3%), but every trade forced long",
+   "annual_pct_of_notional": -1.7574557233317873,
+   "bp_per_round_trip_equivalent": -3.84839112222222,
+   "vs_fee_rt_bp_8.64": -0.4454156391460902,
+   "dollars_per_year": {
+    "15000": -263.6183584997681,
+    "100000": -1757.4557233317873,
+    "250000": -4393.639308329468,
+    "1000000": -17574.55723331787
+   },
+   "pct_of_gross_edge": -8.252154337569483,
+   "net_after_fees_and_funding_pct_of_notional_per_yr": 15.593823203214283
+  },
+  "3_signed_actual_trades": {
+   "annual_frac_of_notional": 0.00020203607530120264,
+   "note": "THE HONEST NUMBER: 46 shorts receive funding, 44 longs pay it",
+   "annual_pct_of_notional": 0.020203607530120266,
+   "bp_per_round_trip_equivalent": 0.0442408777777773,
+   "vs_fee_rt_bp_8.64": 0.005120471965020521,
+   "dollars_per_year": {
+    "15000": 3.0305411295180398,
+    "100000": 20.203607530120262,
+    "250000": 50.50901882530066,
+    "1000000": 202.03607530120263
+   },
+   "pct_of_gross_edge": 0.09486628044213775,
+   "net_after_fees_and_funding_pct_of_notional_per_yr": 17.37148253407619
+  }
+ },
+ "fee_load": {
+  "round_trip_bp": 8.64,
+  "trades_per_year": 45.66728452270621,
+  "annual_pct_of_notional": 3.945653382761817,
+  "dollars_per_year": {
+   "15000": 591.8480074142725,
+   "100000": 3945.653382761817,
+   "250000": 9864.133456904543,
+   "1000000": 39456.53382761817
+  }
+ },
+ "size_invariance": {
+  "table": {
+   "15000": {
+    "funding_usd_per_yr": 3.0305411295180398,
+    "gross_edge_usd_per_yr": 3194.539846396183,
+    "fees_usd_per_yr": -591.8480074142725,
+    "funding_as_pct_of_gross_edge": 0.09486628044213775,
+    "notional_over_equity_at_100k_equity": 0.14991754535005747
+   },
+   "100000": {
+    "funding_usd_per_yr": 20.203607530120262,
+    "gross_edge_usd_per_yr": 21296.932309307886,
+    "fees_usd_per_yr": -3945.653382761817,
+    "funding_as_pct_of_gross_edge": 0.09486628044213775,
+    "notional_over_equity_at_100k_equity": 0.9994503023337165
+   },
+   "250000": {
+    "funding_usd_per_yr": 50.50901882530066,
+    "gross_edge_usd_per_yr": 53242.330773269714,
+    "fees_usd_per_yr": -9864.133456904543,
+    "funding_as_pct_of_gross_edge": 0.09486628044213775,
+    "notional_over_equity_at_100k_equity": 2.4986257558342913
+   },
+   "1000000": {
+    "funding_usd_per_yr": 202.03607530120263,
+    "gross_edge_usd_per_yr": 212969.32309307886,
+    "fees_usd_per_yr": -39456.53382761817,
+    "funding_as_pct_of_gross_edge": 0.09486628044213775,
+    "notional_over_equity_at_100k_equity": 9.994503023337165
+   }
+  },
+  "point": "funding, fees and gross edge are ALL linear in notional, so the RATIO is identical at $15k and $1m. Funding is an edge haircut, not a size constraint. It is invisible at $15k in dollars and equally invisible at $1m in proportion."
+ },
+ "stress_all_long_worst_90d_regime": {
+  "worst_90d_annualized_funding_pct": 44.048693277221886,
+  "window_mean_annualized_pct": 10.690265066303061,
+  "scale_factor": 4.120449119270991,
+  "annual_pct_of_notional": -7.2415068873602255,
+  "dollars_per_year": {
+   "15000": -1086.2260331040338,
+   "100000": -7241.506887360226,
+   "250000": -18103.767218400564,
+   "1000000": -72415.06887360226
+  },
+  "pct_of_gross_edge": -34.00258207232646,
+  "note": "hypothetical: an all-LONG book in the hottest 90d funding regime HL has ever printed, at this book's time-in-market. The real book is half short, so this is a bound, not a forecast."
+ },
+ "sign_regime_interaction": {
+  "trades_in_hot_funding_gt_10pct_ann": 45,
+  "hot_short_share_pct": 37.77777777777778,
+  "trades_in_cold_funding": 45,
+  "cold_short_share_pct": 64.44444444444444,
+  "hot_signed_funding_bp_mean": -1.4519801777777783,
+  "cold_signed_funding_bp_mean": 1.540461933333333,
+  "note": "if the book is short more often when funding is hot, funding is a net credit -- but this is an in-sample coincidence, not a rule."
+ },
+ "per_trade": [
+  {
+   "side": "L",
+   "hours": 24.0,
+   "funding_sum": 0.0003636744,
+   "signed_return": -0.0003636744,
+   "gross_return": 0.045382397003745335
+  },
+  {
+   "side": "L",
+   "hours": 36.0,
+   "funding_sum": 0.0004499999999999997,
+   "signed_return": -0.0004499999999999997,
+   "gross_return": -0.03899535744225593
+  },
+  {
+   "side": "L",
+   "hours": 36.0,
+   "funding_sum": 0.0006641689000000001,
+   "signed_return": -0.0006641689000000001,
+   "gross_return": -0.03833433952443046
+  },
+  {
+   "side": "S",
+   "hours": 140.0,
+   "funding_sum": 0.0016107660999999977,
+   "signed_return": 0.0016107660999999977,
+   "gross_return": 0.04698745224552168
+  },
+  {
+   "side": "S",
+   "hours": 12.0,
+   "funding_sum": 0.00011887330000000002,
+   "signed_return": 0.00011887330000000002,
+   "gross_return": 0.029957572667006584
+  },
+  {
+   "side": "S",
+   "hours": 48.0,
+   "funding_sum": 0.0006891555999999999,
+   "signed_return": 0.0006891555999999999,
+   "gross_return": -0.04078522747433446
+  },
+  {
+   "side": "S",
+   "hours": 84.0,
+   "funding_sum": 0.0006530803000000001,
+   "signed_return": 0.0006530803000000001,
+   "gross_return": -0.039318062949879405
+  },
+  {
+   "side": "L",
+   "hours": 24.0,
+   "funding_sum": 0.0008950646,
+   "signed_return": -0.0008950646,
+   "gross_return": -0.02561019254829735
+  },
+  {
+   "side": "L",
+   "hours": 4.0,
+   "funding_sum": 0.00010451310000000001,
+   "signed_return": -0.00010451310000000001,
+   "gross_return": -0.032797134384209524
+  },
+  {
+   "side": "L",
+   "hours": 120.0,
+   "funding_sum": 0.0014999999999999979,
+   "signed_return": -0.0014999999999999979,
+   "gross_return": 0.03288492429229759
+  },
+  {
+   "side": "L",
+   "hours": 32.0,
+   "funding_sum": 0.0007302024000000006,
+   "signed_return": -0.0007302024000000006,
+   "gross_return": 0.02698959802326293
+  },
+  {
+   "side": "L",
+   "hours": 44.0,
+   "funding_sum": 0.0005499999999999998,
+   "signed_return": -0.0005499999999999998,
+   "gross_return": 0.013771002113024268
+  },
+  {
+   "side": "L",
+   "hours": 72.0,
+   "funding_sum": 0.0009980403000000005,
+   "signed_return": -0.0009980403000000005,
+   "gross_return": 0.08635942368170854
+  },
+  {
+   "side": "L",
+   "hours": 24.0,
+   "funding_sum": 0.00031876029999999996,
+   "signed_return": -0.00031876029999999996,
+   "gross_return": -0.041597629601938156
+  },
+  {
+   "side": "L",
+   "hours": 20.0,
+   "funding_sum": 0.0005809696,
+   "signed_return": -0.0005809696,
+   "gross_return": 0.05150371699898835
+  },
+  {
+   "side": "L",
+   "hours": 4.0,
+   "funding_sum": 5e-05,
+   "signed_return": -5e-05,
+   "gross_return": 0.01987078268915341
+  },
+  {
+   "side": "L",
+   "hours": 44.0,
+   "funding_sum": 0.0010442145000000003,
+   "signed_return": -0.0010442145000000003,
+   "gross_return": 0.03472339092071084
+  },
+  {
+   "side": "L",
+   "hours": 20.0,
+   "funding_sum": 0.00039366119999999986,
+   "signed_return": -0.00039366119999999986,
+   "gross_return": -0.04384805039383335
+  },
+  {
+   "side": "S",
+   "hours": 84.0,
+   "funding_sum": 0.0010637306000000006,
+   "signed_return": 0.0010637306000000006,
+   "gross_return": -0.03232245205209296
+  },
+  {
+   "side": "S",
+   "hours": 32.0,
+   "funding_sum": 0.00029772609999999993,
+   "signed_return": 0.00029772609999999993,
+   "gross_return": -0.039181047110841825
+  },
+  {
+   "side": "L",
+   "hours": 4.0,
+   "funding_sum": 2.2454600000000004e-05,
+   "signed_return": -2.2454600000000004e-05,
+   "gross_return": -0.03589205546595
+  },
+  {
+   "side": "L",
+   "hours": 64.0,
+   "funding_sum": 0.0007201034000000001,
+   "signed_return": -0.0007201034000000001,
+   "gross_return": 0.04673932600155526
+  },
+  {
+   "side": "L",
+   "hours": 40.0,
+   "funding_sum": 0.0006692775,
+   "signed_return": -0.0006692775,
+   "gross_return": -0.03853759489682775
+  },
+  {
+   "side": "S",
+   "hours": 8.0,
+   "funding_sum": 0.00010000000000000002,
+   "signed_return": 0.00010000000000000002,
+   "gross_return": 0.011629628713636465
+  },
+  {
+   "side": "S",
+   "hours": 8.0,
+   "funding_sum": 0.00010000000000000002,
+   "signed_return": 0.00010000000000000002,
+   "gross_return": 0.017544600909649245
+  },
+  {
+   "side": "S",
+   "hours": 52.0,
+   "funding_sum": 0.0006500000000000001,
+   "signed_return": 0.0006500000000000001,
+   "gross_return": 0.01880707846688732
+  },
+  {
+   "side": "S",
+   "hours": 24.0,
+   "funding_sum": 3.56709e-05,
+   "signed_return": 3.56709e-05,
+   "gross_return": 0.0326107438363644
+  },
+  {
+   "side": "S",
+   "hours": 24.0,
+   "funding_sum": 0.00019201900000000006,
+   "signed_return": 0.00019201900000000006,
+   "gross_return": 0.09220986941323636
+  },
+  {
+   "side": "S",
+   "hours": 60.0,
+   "funding_sum": 0.0005954074,
+   "signed_return": 0.0005954074,
+   "gross_return": 0.033933826682343106
+  },
+  {
+   "side": "S",
+   "hours": 16.0,
+   "funding_sum": -0.00012590569999999994,
+   "signed_return": -0.00012590569999999994,
+   "gross_return": 0.02193973492282706
+  },
+  {
+   "side": "S",
+   "hours": 48.0,
+   "funding_sum": 0.00035641820000000007,
+   "signed_return": 0.00035641820000000007,
+   "gross_return": 0.014173747291035578
+  },
+  {
+   "side": "S",
+   "hours": 12.0,
+   "funding_sum": -0.00011377800000000001,
+   "signed_return": -0.00011377800000000001,
+   "gross_return": -0.022589000776960376
+  },
+  {
+   "side": "S",
+   "hours": 96.0,
+   "funding_sum": 8.067870000000006e-05,
+   "signed_return": 8.067870000000006e-05,
+   "gross_return": 0.018913424213603848
+  },
+  {
+   "side": "S",
+   "hours": 16.0,
+   "funding_sum": 0.00020000000000000006,
+   "signed_return": 0.00020000000000000006,
+   "gross_return": 0.048332377757446345
+  },
+  {
+   "side": "S",
+   "hours": 216.0,
+   "funding_sum": 0.0011576653999999973,
+   "signed_return": 0.0011576653999999973,
+   "gross_return": -0.025188398079026196
+  },
+  {
+   "side": "L",
+   "hours": 48.0,
+   "funding_sum": 0.00043430119999999964,
+   "signed_return": -0.00043430119999999964,
+   "gross_return": 0.025459314323284056
+  },
+  {
+   "side": "L",
+   "hours": 48.0,
+   "funding_sum": 0.0007322951000000005,
+   "signed_return": -0.0007322951000000005,
+   "gross_return": -0.02914773013764984
+  },
+  {
+   "side": "L",
+   "hours": 92.0,
+   "funding_sum": 0.0011617013,
+   "signed_return": -0.0011617013,
+   "gross_return": 0.01867210736099554
+  },
+  {
+   "side": "L",
+   "hours": 4.0,
+   "funding_sum": 5e-05,
+   "signed_return": -5e-05,
+   "gross_return": -0.027508585353123415
+  },
+  {
+   "side": "S",
+   "hours": 180.0,
+   "funding_sum": 0.0014320490999999989,
+   "signed_return": 0.0014320490999999989,
+   "gross_return": -0.01250150155219789
+  },
+  {
+   "side": "L",
+   "hours": 16.0,
+   "funding_sum": 0.00013907360000000002,
+   "signed_return": -0.00013907360000000002,
+   "gross_return": 0.009794714986787502
+  },
+  {
+   "side": "L",
+   "hours": 8.0,
+   "funding_sum": 0.00010000000000000002,
+   "signed_return": -0.00010000000000000002,
+   "gross_return": 0.01729513734857533
+  },
+  {
+   "side": "L",
+   "hours": 16.0,
+   "funding_sum": 0.00028533720000000005,
+   "signed_return": -0.00028533720000000005,
+   "gross_return": 0.01953576877306227
+  },
+  {
+   "side": "L",
+   "hours": 36.0,
+   "funding_sum": 0.0012783794,
+   "signed_return": -0.0012783794,
+   "gross_return": 0.022777469670710683
+  },
+  {
+   "side": "L",
+   "hours": 36.0,
+   "funding_sum": 0.0005255007999999998,
+   "signed_return": -0.0005255007999999998,
+   "gross_return": 0.007820750281099943
+  },
+  {
+   "side": "L",
+   "hours": 16.0,
+   "funding_sum": 0.00018643100000000003,
+   "signed_return": -0.00018643100000000003,
+   "gross_return": -0.024619272779537037
+  },
+  {
+   "side": "L",
+   "hours": 24.0,
+   "funding_sum": 0.00011102820000000002,
+   "signed_return": -0.00011102820000000002,
+   "gross_return": -0.029588487402189022
+  },
+  {
+   "side": "S",
+   "hours": 8.0,
+   "funding_sum": 0.00010000000000000002,
+   "signed_return": 0.00010000000000000002,
+   "gross_return": 0.008556308704497174
+  },
+  {
+   "side": "S",
+   "hours": 48.0,
+   "funding_sum": 0.0006,
+   "signed_return": 0.0006,
+   "gross_return": 0.010907156553021304
+  },
+  {
+   "side": "S",
+   "hours": 104.0,
+   "funding_sum": 0.0012023586999999995,
+   "signed_return": 0.0012023586999999995,
+   "gross_return": 0.017630319700590792
+  },
+  {
+   "side": "S",
+   "hours": 28.0,
+   "funding_sum": 0.0003499999999999999,
+   "signed_return": 0.0003499999999999999,
+   "gross_return": -0.021592895305807568
+  },
+  {
+   "side": "L",
+   "hours": 56.0,
+   "funding_sum": 0.0007000000000000002,
+   "signed_return": -0.0007000000000000002,
+   "gross_return": -0.02009548109845718
+  },
+  {
+   "side": "S",
+   "hours": 4.0,
+   "funding_sum": 4.5593499999999996e-05,
+   "signed_return": 4.5593499999999996e-05,
+   "gross_return": -0.019653028810683447
+  },
+  {
+   "side": "L",
+   "hours": 24.0,
+   "funding_sum": 0.0001100815,
+   "signed_return": -0.0001100815,
+   "gross_return": -0.03199055970253486
+  },
+  {
+   "side": "L",
+   "hours": 4.0,
+   "funding_sum": 0.0002465794,
+   "signed_return": -0.0002465794,
+   "gross_return": -0.046094396886765664
+  },
+  {
+   "side": "S",
+   "hours": 12.0,
+   "funding_sum": 5.67984e-05,
+   "signed_return": 5.67984e-05,
+   "gross_return": 0.017817853869560453
+  },
+  {
+   "side": "S",
+   "hours": 8.0,
+   "funding_sum": -2.0243799999999998e-05,
+   "signed_return": -2.0243799999999998e-05,
+   "gross_return": 0.04637948377090959
+  },
+  {
+   "side": "S",
+   "hours": 16.0,
+   "funding_sum": 0.00021292080000000004,
+   "signed_return": 0.00021292080000000004,
+   "gross_return": -0.02370975854680115
+  },
+  {
+   "side": "S",
+   "hours": 36.0,
+   "funding_sum": 0.0004499999999999997,
+   "signed_return": 0.0004499999999999997,
+   "gross_return": 0.020143760088962327
+  },
+  {
+   "side": "S",
+   "hours": 36.0,
+   "funding_sum": 0.0004499999999999997,
+   "signed_return": 0.0004499999999999997,
+   "gross_return": 0.023691733044621445
+  },
+  {
+   "side": "S",
+   "hours": 104.0,
+   "funding_sum": 0.0006704831,
+   "signed_return": 0.0006704831,
+   "gross_return": 0.04049465613490542
+  },
+  {
+   "side": "S",
+   "hours": 72.0,
+   "funding_sum": 0.0003976921999999999,
+   "signed_return": 0.0003976921999999999,
+   "gross_return": 0.003021927497789491
+  },
+  {
+   "side": "S",
+   "hours": 20.0,
+   "funding_sum": 9.217999999999997e-06,
+   "signed_return": 9.217999999999997e-06,
+   "gross_return": 0.015467407934531253
+  },
+  {
+   "side": "S",
+   "hours": 36.0,
+   "funding_sum": 0.00033768199999999996,
+   "signed_return": 0.00033768199999999996,
+   "gross_return": 0.03008093887312966
+  },
+  {
+   "side": "S",
+   "hours": 16.0,
+   "funding_sum": 0.00020000000000000006,
+   "signed_return": 0.00020000000000000006,
+   "gross_return": 0.02782547791950716
+  },
+  {
+   "side": "S",
+   "hours": 28.0,
+   "funding_sum": 9.32068e-05,
+   "signed_return": 9.32068e-05,
+   "gross_return": 0.013017630318753783
+  },
+  {
+   "side": "S",
+   "hours": 12.0,
+   "funding_sum": 0.0001248503,
+   "signed_return": 0.0001248503,
+   "gross_return": 0.01828238429462501
+  },
+  {
+   "side": "S",
+   "hours": 28.0,
+   "funding_sum": 0.0003429846999999999,
+   "signed_return": 0.0003429846999999999,
+   "gross_return": 0.016262551638115498
+  },
+  {
+   "side": "L",
+   "hours": 56.0,
+   "funding_sum": 0.0006843562000000001,
+   "signed_return": -0.0006843562000000001,
+   "gross_return": 0.014904362475616308
+  },
+  {
+   "side": "L",
+   "hours": 28.0,
+   "funding_sum": 6.183240000000003e-05,
+   "signed_return": -6.183240000000003e-05,
+   "gross_return": -0.022404008937779628
+  },
+  {
+   "side": "L",
+   "hours": 8.0,
+   "funding_sum": -6.77987e-05,
+   "signed_return": 6.77987e-05,
+   "gross_return": -0.025033297570752698
+  },
+  {
+   "side": "S",
+   "hours": 28.0,
+   "funding_sum": 0.0002721767000000001,
+   "signed_return": 0.0002721767000000001,
+   "gross_return": 0.021012779674427363
+  },
+  {
+   "side": "S",
+   "hours": 44.0,
+   "funding_sum": 0.00019234460000000007,
+   "signed_return": 0.00019234460000000007,
+   "gross_return": 0.01839983666802767
+  },
+  {
+   "side": "S",
+   "hours": 16.0,
+   "funding_sum": 2.0892299999999996e-05,
+   "signed_return": 2.0892299999999996e-05,
+   "gross_return": 0.022841595294759688
+  },
+  {
+   "side": "S",
+   "hours": 44.0,
+   "funding_sum": 0.00011467690000000005,
+   "signed_return": 0.00011467690000000005,
+   "gross_return": -0.053177131995968206
+  },
+  {
+   "side": "L",
+   "hours": 76.0,
+   "funding_sum": 0.00014666170000000005,
+   "signed_return": -0.00014666170000000005,
+   "gross_return": -0.040952675655510105
+  },
+  {
+   "side": "L",
+   "hours": 52.0,
+   "funding_sum": -0.00019548539999999996,
+   "signed_return": 0.00019548539999999996,
+   "gross_return": 0.026808538133148742
+  },
+  {
+   "side": "L",
+   "hours": 12.0,
+   "funding_sum": 0.00015000000000000004,
+   "signed_return": -0.00015000000000000004,
+   "gross_return": 0.021386321285372302
+  },
+  {
+   "side": "S",
+   "hours": 12.0,
+   "funding_sum": -9.985509999999999e-05,
+   "signed_return": -9.985509999999999e-05,
+   "gross_return": 0.03384581643382898
+  },
+  {
+   "side": "S",
+   "hours": 44.0,
+   "funding_sum": 1.3120499999999997e-05,
+   "signed_return": 1.3120499999999997e-05,
+   "gross_return": -0.026202729686579905
+  },
+  {
+   "side": "L",
+   "hours": 4.0,
+   "funding_sum": -1.69851e-05,
+   "signed_return": 1.69851e-05,
+   "gross_return": 0.01005497738169412
+  },
+  {
+   "side": "L",
+   "hours": 32.0,
+   "funding_sum": -0.00011893989999999998,
+   "signed_return": 0.00011893989999999998,
+   "gross_return": 0.008942172690344787
+  },
+  {
+   "side": "L",
+   "hours": 44.0,
+   "funding_sum": -0.00013510489999999997,
+   "signed_return": 0.00013510489999999997,
+   "gross_return": 0.019463389692025858
+  },
+  {
+   "side": "L",
+   "hours": 12.0,
+   "funding_sum": 7.31645e-05,
+   "signed_return": -7.31645e-05,
+   "gross_return": 0.010341622052341883
+  },
+  {
+   "side": "L",
+   "hours": 24.0,
+   "funding_sum": 0.00014373300000000003,
+   "signed_return": -0.00014373300000000003,
+   "gross_return": 0.030848434386383607
+  },
+  {
+   "side": "L",
+   "hours": 52.0,
+   "funding_sum": -0.0001716894,
+   "signed_return": 0.0001716894,
+   "gross_return": -0.029630857939604315
+  },
+  {
+   "side": "S",
+   "hours": 84.0,
+   "funding_sum": 0.0009085601000000006,
+   "signed_return": 0.0009085601000000006,
+   "gross_return": -0.04002554592994347
+  },
+  {
+   "side": "S",
+   "hours": 72.0,
+   "funding_sum": 0.0003714081999999999,
+   "signed_return": 0.0003714081999999999,
+   "gross_return": 0.03454970356965057
+  },
+  {
+   "side": "S",
+   "hours": 80.0,
+   "funding_sum": 0.0010064181000000007,
+   "signed_return": 0.0010064181000000007,
+   "gross_return": -0.0407337154087555
+  },
+  {
+   "side": "L",
+   "hours": 36.0,
+   "funding_sum": 0.0004491181999999997,
+   "signed_return": -0.0004491181999999997,
+   "gross_return": 0.029774066877850648
+  }
+ ]
+}

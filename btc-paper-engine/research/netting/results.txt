@@ -1,0 +1,38 @@
+LEG OVERLAP STUDY — S3 pullback vs S4 trend on a netted venue
+window: 2022-02-05 .. 2026-07-25 (4h bars, fixture, trading gated to >= 2022-01-01 after 210-bar warmup)
+bars: 9792   basis: trade-close (exit-step), IN-SAMPLE, cash_apy 0, S3 fee 6 bps / S4 fee 12 bps (core.py:246, conservative)
+
+BAR CLASSIFICATION (state after each bar = what the venue holds until next open)
+  both_flat         523 bars    5.34%
+  one_leg          7496 bars   76.55%
+  same_side         563 bars    5.75%
+  opposite_side    1210 bars   12.36%
+
+OPPOSITE-SIDE EPISODES (maximal runs of consecutive opposite bars)
+  n=110  median 9.0 bars (36h)  mean 11.0  max 52 bars (8.7d)  total 1210 bars
+  mix while opposed: S3 L / S4 S: 582, S3 S / S4 L: 628
+  (same-side episodes for scale: n=83 median 5.0 max 25)
+
+PER LEG: of the bars a leg is held, how often the other leg opposes it
+  S3: held 1969 bars; other leg OPPOSITE 61.5% / SAME 28.6%; 110/190 trades touch an opposite bar
+  S4: held 9073 bars; other leg OPPOSITE 13.3% / SAME 6.2%; 65/128 trades touch an opposite bar
+
+PER YEAR fraction of bars opposite: 2022: 8.4%  2023: 12.7%  2024: 13.9%  2025: 14.8%  2026: 10.9%
+
+BLEND P&L SHARE ON OPPOSITE-SIDE BARS (steps verbatim main.py:501-513, 75/25)
+  attribution: step's log(1+r) x fraction of its held bars that were opposite (primary)
+  lev 1.0: blend x2.351 over 318 steps | opposite share: prorata -15.6% (simple-sum -10.1%) | any-held-bar 18.5% | last-held-bar -44.1% | steps touching opposite 175/318
+  lev 1.5: blend x3.367 over 318 steps | opposite share: prorata -18.9% (simple-sum -10.1%) | any-held-bar 16.0% | last-held-bar -48.7% | steps touching opposite 175/318
+  lev 2.0: blend x4.614 over 318 steps | opposite share: prorata -22.5% (simple-sum -10.1%) | any-held-bar 13.3% | last-held-bar -53.8% | steps touching opposite 175/318
+  gross split (lev 1.0, log): gains 3.484 of which 36.9% on opposite bars; losses -2.629 of which 54.0% on opposite bars
+
+CAVEATS
+  - trade-close basis: P&L is booked at exit_ts and spread pro rata over held bars; MTM would differ.
+  - in-sample: same fixture the strategies were selected on; not a forecast.
+  - S4 fee is 12 bps round trip in this harness (core.py sets fee_bps=2*taker explicitly); known conservative bias.
+  - 'share of P&L' is a share of a compounded log return; when the blend total is small the ratio is unstable.
+  - a NEGATIVE share means opposite bars carried net losses in-sample. It is an ATTRIBUTION of the
+    realized path, NOT a counterfactual: forbidding coexistence would change entries, exits and the
+    equity each leg sizes from. Pricing a specific coexistence rule needs its own replay.
+  - a bar is 'opposite' only while BOTH legs hold; the executor's exposure to netting also includes
+    the one_leg->opposite transition bars (entries/exits), which this bar count does not single out.

@@ -1,0 +1,72 @@
+{
+  "n_entries": 93,
+  "half_spread_bps": 0.0595,
+  "sigma_1min_bps": 4.17,
+  "measured_basis_only": {
+    "cross_rate": 0.3225806451612903,
+    "cross_rate_long": 0.3409090909090909,
+    "cross_rate_short": 0.30612244897959184,
+    "note": "basis alone, no latency drift"
+  },
+  "latency_model": {
+    "0": {
+      "drift_sd_bps": 0.0,
+      "expected_cross_rate": 0.3225806451612903,
+      "p_all_four_cross": 0.010828124103295972
+    },
+    "20": {
+      "drift_sd_bps": 2.407550622520739,
+      "expected_cross_rate": 0.3582932001780654,
+      "p_all_four_cross": 0.016479888316158934
+    },
+    "40": {
+      "drift_sd_bps": 3.4047907424686175,
+      "expected_cross_rate": 0.37212130787524456,
+      "p_all_four_cross": 0.01917512283576218
+    },
+    "60": {
+      "drift_sd_bps": 4.17,
+      "expected_cross_rate": 0.38122505926169603,
+      "p_all_four_cross": 0.0211215488713494
+    },
+    "80": {
+      "drift_sd_bps": 4.815101245041478,
+      "expected_cross_rate": 0.3881861527592926,
+      "p_all_four_cross": 0.022707020775588588
+    }
+  },
+  "fix_basis_translated": {
+    "0": {
+      "drift_sd_bps": 0.0,
+      "expected_cross_rate": 0.0
+    },
+    "20": {
+      "drift_sd_bps": 2.407550622520739,
+      "expected_cross_rate": 0.4901415781920854
+    },
+    "40": {
+      "drift_sd_bps": 3.4047907424686175,
+      "expected_cross_rate": 0.4930286882917941
+    },
+    "60": {
+      "drift_sd_bps": 4.17,
+      "expected_cross_rate": 0.49430785125652144
+    },
+    "80": {
+      "drift_sd_bps": 4.815101245041478,
+      "expected_cross_rate": 0.4950704127694029
+    }
+  },
+  "fix_reprice_retry": {
+    "40": {
+      "p_cross_after_1_retry": 0.24307728747872706,
+      "p_cross_after_2_retries": 0.11984407619916414,
+      "note": "each retry re-prices to the CURRENT touch, so the basis term is gone and only fresh drift inside the retry round-trip can cross; retries are independent only if drift is, which is the optimistic reading"
+    },
+    "80": {
+      "p_cross_after_1_retry": 0.24509471359966695,
+      "p_cross_after_2_retries": 0.1213391410293857,
+      "note": "each retry re-prices to the CURRENT touch, so the basis term is gone and only fresh drift inside the retry round-trip can cross; retries are independent only if drift is, which is the optimistic reading"
+    }
+  }
+}

@@ -1,0 +1,41 @@
+== DRAWDOWN rail consumption, every headline run (variant A intrabar), both K
+  COVID K0.75 | off-28 dd 87% (3,789 @ 2027-06-24) daily 57% | off-14 dd 70% (8,877 @ 2027-06-10) daily 64% | off+0 dd 90% (3,051 @ 2027-05-27) daily 59% | off+14 dd 76% (7,075 @ 2027-05-13) daily 63% | off+28 dd 70% (8,869 @ 2027-04-29) daily 63%
+  COVID K0.3  | off-28 dd 33% (20,176 @ 2027-06-24) daily 57% | off-14 dd 27% (21,807 @ 2026-12-18) daily 64% | off+0 dd 34% (19,887 @ 2027-05-27) daily 59% | off+14 dd 30% (20,956 @ 2026-11-20) daily 63% | off+28 dd 28% (21,693 @ 2026-11-06) daily 62%
+  2008  K0.75 | off-28 dd 36% (19,191 @ 2027-07-23) daily 34% | off-14 dd 39% (18,375 @ 2027-09-25) daily 39% | off+0 dd 44% (16,737 @ 2027-10-07) daily 34% | off+14 dd 44% (16,737 @ 2027-09-23) daily 48% | off+28 dd 44% (16,651 @ 2027-09-09) daily 33%
+  2008  K0.3  | off-28 dd 14% (25,676 @ 2027-07-23) daily 34% | off-14 dd 16% (25,350 @ 2027-09-25) daily 39% | off+0 dd 18% (24,695 @ 2027-10-07) daily 34% | off+14 dd 18% (24,695 @ 2027-09-23) daily 48% | off+28 dd 18% (24,660 @ 2027-09-09) daily 33%
+  1999  K0.75 | off-28 dd 76% (7,236 @ 2026-11-10) daily 55% | off-14 dd 66% (10,244 @ 2026-10-29) daily 51% | off+0 dd 59% (12,313 @ 2026-12-27) daily 47% | off+14 dd 50% (15,086 @ 2026-12-13) daily 28% | off+28 dd 67% (9,937 @ 2026-12-03) daily 32%
+  1999  K0.3  | off-28 dd 24% (22,944 @ 2026-11-12) daily 54% | off-14 dd 20% (24,010 @ 2026-10-29) daily 50% | off+0 dd 22% (23,329 @ 2026-12-27) daily 45% | off+14 dd 19% (24,277 @ 2026-12-13) daily 27% | off+28 dd 27% (21,975 @ 2026-12-03) daily 32%
+  table column present for the drawdown rail: False
+
+== honesty line 9 (no-DRAWDOWN-halt margin claims) vs the sensitivities
+  headline COVID K0.75 (XBTUSD + funding) dd min_margin: {'budget': 30000.0, 'min_margin': 3051.45, 'date': '2027-05-27 20:00', 'used_pct': 0.8983}
+  no_btc_funding COVID K0.75 dd min_margin: {'budget': 30000.0, 'min_margin': 4457.81, 'date': '2027-05-27 20:00', 'used_pct': 0.8514}
+  no-carry-income, WITH BTC funding: dd rail {'budget': 30000.0, 'min_margin': 1940.05, 'date': '2027-05-27 20:00', 'used_pct': 0.9353}  12m 111,810  maxDD -22.16%  halts 0
+  no-carry-income, no funding      : dd rail {'budget': 30000.0, 'min_margin': 3346.42, 'date': '2027-05-27 20:00', 'used_pct': 0.8885}  12m 114,599
+  honesty[9]: The 'no DRAWDOWN halt' result does not depend on the carry sleeve: the 2.5/5-ATR stops keep the account above HW - 30k with or without it (no-carry runs clear the line by $5.8k at COVID K0.75 offset 0, the XBTUSD-funded run by $7.0k); the sleeve adds 5-6k of margin on the quanto-funded path. The guards did not fire; the stops did the work.
+  at closest approach 2027-05-27 20:00: worst intrabar eq 89,056, close eq 89,223, margin_dd 3,051, day_start 90,544, carry 31,454, funding cum -1,171
+  positions held then: [('trend', 'L', 0.3486, 87571.21, 'STOP', '2027-07-21 12:00')]
+  gross notional 29,255 -> a further 10.43% adverse move (or that much slippage) would have crossed the DRAWDOWN line
+
+== funding coverage per offset (headline XBTUSD)
+  COVID: off-28 cov 1.0 mean +8.9% neg 16.4%, off-14 cov 1.0 mean +9.5% neg 16.2%, off+0 cov 1.0 mean +10.9% neg 16.1%, off+14 cov 1.0 mean +12.9% neg 16.1%, off+28 cov 1.0 mean +12.3% neg 16.1%
+  2008: off-28 cov 1.0 mean +0.5% neg 41.8%, off-14 cov 1.0 mean +0.9% neg 40.8%, off+0 cov 1.0 mean +0.9% neg 40.6%, off+14 cov 1.0 mean -1.0% neg 42.4%, off+28 cov 1.0 mean -1.8% neg 44.1%
+  1999: off-28 cov 1.0 mean +8.1% neg 34.8%, off-14 cov 1.0 mean +5.6% neg 36.0%, off+0 cov 1.0 mean +6.7% neg 37.0%, off+14 cov 1.0 mean +1.6% neg 38.6%, off+28 cov 1.0 mean -5.8% neg 40.5%
+
+== 1999 K0.75 maxDD with funding -13.61% vs without -14.45%: timing
+  with     maxDD -13.6102% trough 2026-12-27 00:00 eq 88,448 from peak 2026-10-21 00:00 eq 102,382; funding cum at peak -845 at trough +135
+  without  maxDD -14.4487% trough 2026-12-27 00:00 eq 88,313 from peak 2026-10-21 00:00 eq 103,228; funding cum at peak +0 at trough +0
+
+== REVIEW.md quoted numbers vs results.json
+  no-engine-halts 12m COVID 128,193                       -> 128193.33
+  no-engine-halts 12m 2008 125,924                        -> 125923.63
+  no-engine-halts 12m 1999 105,439                        -> 105439.41
+  quanto COVID K0.75 135,840                              -> 135840.25
+  quanto 2008 K0.75 137,205                               -> 137205.47
+  COVID K0.75 range 103,701..127,699                      -> (103701.27, 127698.85)
+  1999 crash-only 116,600..123,023                        -> (116599.72, 123022.71)
+  1999 pending_live 117,116 / drop 115,762                -> {'csv': 116599.72, 'pending_live': 117115.8, 'drop_seam': 115762.4}
+  worst intrabar COVID -8,884 / 2008 -5,026 / 1999 -7,051 -> [-8884.01, -5025.76, -7050.68]
+  2008 XBTUSD gate on%: 9.6  COVID: 63.1
+  knife-edge threshold in run_all: 0.02 x peak = 2157.2 ; table footnote:   eng.halts (margin): the engine's own paper-book halt and how far the paper book crossed its line (-30% of the S3 book's 107,860 peak = 75,502); a sub-1k margin is a knife-edge, not a property of the
+  table rows carry the word KNIFE-EDGE: False

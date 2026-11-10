@@ -1,0 +1,1385 @@
+[
+ {
+  "key": "literature",
+  "research": {
+   "summary": "BOTTOM LINE: The evidence does not back bankruptcy filing counts (Epiq or US Courts totals, consumer or business) as an early-warning signal. Against unemployment and recessions they move at the same time or later. Changes in the law swamp them, and they fell during the 1981-82, 2001 and 2020 recessions. One bankruptcy-related series did lead: the dollar value of liabilities in business failures, which is driven by larger firms (NBER data for 1879-1938: average lead of 10.5 months at peaks; median lead of 7 months over 43 turning points). But its leads were long and erratic (26-28 months before the 1953 and 1957 peaks). It stopped working after 1948 and was dropped from the leading short list in 1966. Simple counts of failures, mostly small firms, moved roughly with the cycle. Casey's 'pre-cog' instinct is right about the size-weighted, large-firm part of distress and wrong about headline counts.\n\nLEAD/LAG BY TARGET:\n(a) Recessions (NBER peaks). Leading but erratic and fading: failure liabilities and large-firm failures. Coincident: counts of failures. Coincident or lagging: personal filings. Mixed: corporate default rates. They rose before 1990 and 2001 but sat near record lows before 2008 and 2020, and rose in 1986 and 2016 with no recession following.\n(b) Unemployment. Filings move with it (correlation 0.42-0.54 after removing trend) and peak after it does: NY Fed new bankruptcy notations peaked in 2010Q2, unemployment in Oct 2009. Jobless claims lead (median 6 months). Epiq's own head called filings 'largely a lagging economic indicator'.\n(c) Stock bear markets. The evidence runs the other way: stock returns and volatility forecast default rates and firm failures. No rigorous study shows filings predicting market drawdowns.\n(d) Credit spreads and default waves. Over 1866-2008, lagged spreads did not forecast default rates. Default rates persist and peak in or after recessions. The predictive power of spreads for the economy sits in the excess bond premium, not in expected defaults (in-sample result). The claim that the HY distress ratio leads defaults is contested.\n\nCONTAGION (Casey's mechanism): real, but local, industry-specific, small on average and slow.\n- Rivals and creditors lose about 0.4% to 2.3% of value.\n- Suppliers are hit, and the hit starts before the filing.\n- When a business is liquidated, other employers on the same Census block lose about 4% of jobs per year over 5 years (about 1.3 extra jobs lost per job lost), mostly where the neighbours were already weak.\n- The big second-round effects came through foreclosures and household leverage in 2007-09, amplified by banks and collateral. Corporate bond default crises had no significant effect on output. Consumer-bankruptcy debt relief raised employment by about 2% in 2007-10: the filing is often the shock absorber.\n- No study shows local filings leading local job losses. The state-panel evidence runs from labor-market recessions to filings.\n\nWHAT THIS MEANS FOR ALERTS:\n1. Do not alert on total filings. Show them as a confirmation and severity panel: per capita, detrended, with flags for legal breaks (2005 bankruptcy reform, COVID, the Subchapter V debt limit; Senate bill S.3977 passed Aug 3 2026 and is pending).\n2. If any bankruptcy series gets an alert, pre-register an out-of-sample test of the size-weighted large-firm measure and how widely it spreads across sectors. Expect long, variable leads and false alarms: 1986, 2016, and 2023-26 so far (785 large filings in 2025 per S&P, with no NBER-dated peak yet).\n3. Use flows, not stocks: new transitions into delinquency by loan type and state. The NY Fed showed in Aug 2026 that the stock of 90+ day card delinquency is inflated by charged-off debt that stays on credit reports. The one modern case where household distress clearly led (subprime mortgages from mid-2005) was confined to one segment.\n4. The signals that do lead are already mostly on the dashboard: market pricing and credit supply (stock drawdowns and volatility, excess bond premium and HY spreads, loan officer tightening) and the credit boom itself (credit-market sentiment, household debt growth). What bankruptcies add is a map of where stress is concentrated and a severity read.\n5. Statistical power is low: about 7 recessions, mostly in-sample results, and the classic failure-liabilities lead itself failed out of sample after 1948.\n\nCURRENT READ (Oct 2026): Epiq filings are up 11% year-to-date, but from a low base: NY Fed new bankruptcy notations were 137k in 2026Q2, about a third below the 2019 average. Large-company filings have run at 16-year highs for about three years. Flow delinquency is flat for cards and up slightly for auto and mortgages. That confirms softness; it does not show an accelerating wave.\n\nTwo notes: the AER paper by Fay, Hurst and White is from 2002, not 1998 (1998 was the working paper). Epiq's Oct 2026 release says individual filings rose 7%, but its own counts imply 11.2%.",
+   "findings": [
+    {
+     "claim": "[Classic 1938] Mitchell & Burns put total liabilities of business failures (inverted) on their list of the 21 most trustworthy indicators of revivals. Average lead: 9 months, measured at troughs only.",
+     "evidence": "NBER Bulletin 69 (1938), reprinted as Moore (1961) ch. 6. Series: Bradstreet's total liabilities of failures, inverted. Average lead 9 months. Covers 12 business cycles and 14 revivals: 13 leads, 1 lag, range -17 to +6 months. Erratic movements 'pronounced'. Lagged by 6 months at the 1901 revival. Bradstreet's compilation was discontinued in January 1933. Only revivals (troughs) were studied, not peaks.",
+     "sources": [
+      "https://www.nber.org/system/files/chapters/c4251/c4251.pdf",
+      "https://www.nber.org/system/files/chapters/c0726/c0726.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Classic 1950] Moore's 1950 list counted failure liabilities (inverted) among 8 leading series. Average lead was 10.5 months at peaks and 7.5 months at troughs over 1879-1938.",
+     "evidence": "Moore (1950), NBER Occasional Paper 31, reprinted as Moore (1961) ch. 7.\n- Table 7.11 (Dun's, 1879-1938). Peaks: 14 turns, 11 leads, average -10.5 months. Troughs: 16 turns, 14 leads, average -7.5 months.\n- Table 7.1, peaks before 1937: range -23 to +2, average -8. May 1937 peak: -4.\n- Postwar: inverted liabilities peaked in April 1945, about 43 months before the Nov 1948 business peak.",
+     "sources": [
+      "https://www.nber.org/system/files/chapters/c0727/c0727.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Classic 1961] The lead comes from large firms and dollar-weighted liabilities. Simple counts of failures, mostly small firms, are roughly coincident. Postwar leads were very long and erratic.",
+     "evidence": "Zarnowitz & Lerner (1961), Table 12.2, 1879-1938, inverted series:\n- Liabilities: -10.5 months at peaks (average deviation 8.0), -7.5 at troughs.\n- Number of failures: -5.0 at peaks with 5 lags out of 14 (average deviation 6.8); -0.5 at troughs.\n- Trading-company counts (small firms): -0.4 at peaks, +1.4 at troughs.\n- Large manufacturing failures (liabilities of $100k or more): -5.1 at peaks, -6.9 at troughs; anticipated 16 of 21 turns.\nPostwar: liabilities led the July 1953 peak by 28 months and the July 1957 peak by 26 months; 0 months at the Apr 1958 trough. Counts skipped the 1953-54 cycle.\nMechanism: failure liabilities track the share of firms with falling profits (profit diffusion). Failures are a symptom of an earlier, broad profit squeeze.",
+     "sources": [
+      "https://www.nber.org/system/files/chapters/c0732/c0732.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Classic, dropped] Failure liabilities were dropped from the leading short list in 1966 because they stopped working after 1948. No failure or bankruptcy series has been in the leading index since 1987.",
+     "evidence": "Moore & Shiskin (1967), Business Conditions Digest series 14, liabilities (inverted):\n- Total score 68: conformity 86, timing 66, smoothness 0.\n- Since 1879: 43 turns, 31 leads, 3 lags, median lead -7 months.\n- 1960-list record at peaks: -28 to +3 (median -7); -12 at the May 1960 peak; no matching turn at the Feb 1961 trough.\n- Reason for dropping it: 'poor timing and conformity record since 1948'. Since 1950 its movements were obscured by irregular swings and a strong upward trend.\nAfterwards:\n- Failure counts entered the 1975 leading index only inside the net business formation index (BCD May 1975). That index was suspended in March 1987 because one component was of poor quality and another's data was unavailable in time (Zarnowitz 1992, Table 11.5, notes aa and k).\n- The Jan 1989 BCD still charted series 14 under 'credit difficulties', but the revised index added no failure series.\n- The D&B annual series in Historical Statistics of the US ends in 1998.\n- Today's Conference Board leading index and its six-part Leading Credit Index (swap spread, LIBOR-bill spread, margin debt, AAII sentiment, loan officer survey, repo liabilities) contain no failure or default series.",
+     "sources": [
+      "https://www.nber.org/system/files/chapters/c1270/c1270.pdf",
+      "https://www.nber.org/system/files/chapters/c10382/c10382.pdf",
+      "https://fraser.stlouisfed.org/files/docs/publications/BusConD/70-79/BCD_051975.pdf",
+      "https://fraser.stlouisfed.org/files/docs/publications/BusConD/80-89/BCD_011989.pdf",
+      "https://www.conference-board.org/pdf_free/workingpapers/EPWP1105.pdf",
+      "https://www.nber.org/system/files/working_papers/w16872/w16872.pdf"
+     ],
+     "confidence": "verified-primary (the 1998 end date of the D&B series is secondary)"
+    },
+    {
+     "claim": "[Classic, comparison] In the same 1966 scoring, jobless claims and installment-loan delinquency led with shorter but cleaner leads. The 1950 leading group as a whole held up after the war.",
+     "evidence": "Moore & Shiskin (1967):\n- Initial jobless claims (inverted), from 1945: score 73; 10 turns; 6 leads; 1 lag; median lead -6 months.\n- Installment-loan delinquency (inverted), from 1948: score 59; 8 turns; 6 leads; 2 lags; median lead -3 months.\nMoore (1979), as summarised in Zarnowitz (1992) Table 10.6: the 1950 leading group (which included failure liabilities) averaged a 12-month lead at peaks over 1948-75, versus 6 months through 1938. That is group-level evidence only.",
+     "sources": [
+      "https://www.nber.org/system/files/chapters/c1270/c1270.pdf",
+      "https://www.nber.org/system/files/chapters/c10381/c10381.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Personal bankruptcy, cycle] In a state panel, personal bankruptcy rates rise throughout labor-market recessions and peak after they end. Recessions explain only about two-fifths of the rise; trend and legal factors dominate.",
+     "evidence": "Garrett & Wall (Macroeconomic Dynamics 2014; MPRA 42740). 45 states, 1988Q1-2004Q4, 3,105 observations. State labor-market recessions dated with a Markov-switching model on Philadelphia Fed coincident indexes.\n- Bankruptcy rate above trend by 6.4 per 100k after year 1 and 12.4 by year 3.\n- After a 1-year recession, the rate peaks about 6.8 above trend in the 2nd quarter of recovery, then falls below trend.\n- Recessions accounted for 12.6 of a 31.6-point rise.\n- The national rate fell during 2 of the 5 NBER recessions in 1980-2009 (the early-1980s one, written '1982-83' in the paper, and 2001).\n- The paper cites Fay et al. (2002), White (2009) and Fisher (2005) as finding filing decisions unrelated to local unemployment.",
+     "sources": [
+      "https://mpra.ub.uni-muenchen.de/42740/2/MPRA_paper_42740.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Personal bankruptcy, COVID] Before 2020, filings and unemployment moved together within the same quarter. In 2020 the link reversed: filings fell 31% during the worst job loss since the Depression.",
+     "evidence": "Wang, Yang, Iverson & Jiang (Mar 2021):\n- Detrended filings vs unemployment: correlation 0.42 (0.54 excluding 2005); 'largely contemporaneous at the quarterly level'.\n- 2020 vs 2019: total filings -31%; Chapter 7 about -25%; Chapter 13 about -55%.\n- Q2 2020: the historical relation implied 200k+ extra consumer filings; actual was 81k fewer. Business filings: about 5,500 more expected, 645 fewer actual.\n- States with larger unemployment increases saw larger filing declines.\n- Drivers: forbearance, stimulus, liquidity constraints.",
+     "sources": [
+      "https://conference.nber.org/conf_papers/f147955/f147955.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Personal bankruptcy, lag statements] A Fed regional note and the largest filings-data vendor both describe filings as lagging the economy.",
+     "evidence": "Chicago Fed Letter 52 (Eugeni 1991):\n- Filings 'sometimes respond to recessions with a lag'; laid-off workers 'do not file for bankruptcy immediately'.\n- National filings rose 20% in 1985 and 32% in 1986 with no national recession, driven by regional busts. New England filings rose about 65% in its 1989-90 slump.\nEpiq AACER (Chris Kruse, May 7 2020): filings data are 'largely a lagging economic indicator'; 'filings start to increase several months after the economy turns'.",
+     "sources": [
+      "https://www.chicagofed.org/publications/chicago-fed-letter/1991/december-52",
+      "https://www.epiqglobal.com/en-us/resource-center/news/bankruptcy-filings-in-april-down-39-percent"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Personal bankruptcy, legal breaks and lag in credit-report data] Legal changes dwarf the cycle. Consumer bankruptcies peaked after unemployment peaked and remain well below 2019 levels.",
+     "evidence": "National rate, per 1,000 people (Garrett & Wall): 0.3 in 1985Q1 rising to 1.2 in 2004Q4. Bankruptcy-reform rush: 2.2 in 2005Q4, then 0.4 in 2006Q1.\nNY Fed Consumer Credit Panel, new bankruptcy notations (thousands per quarter; sheet 'Page 17 Data'):\n- 949 in 2005Q4, then 214 in 2006Q1.\n- Rose from 259 to 352 during 2007, partly a mechanical rebound after the reform.\n- Peaked at 621 in 2010Q2, about 8 months after unemployment peaked at 10.0% in Oct 2009 (FRED UNRATE).\n- 94-136 in 2020-22.\n- 137 in 2026Q2, about 1/3 below the 2019 quarterly average of about 204.\nCitation fix: Fay, Hurst & White is AER 2002, 92(3):706-718. The 1998 item is the U. Michigan working paper 'The Bankruptcy Decision: Does Stigma Matter?'. Its full text is paywalled; its finding is cited here via Garrett & Wall.",
+     "sources": [
+      "https://mpra.ub.uni-muenchen.de/42740/2/MPRA_paper_42740.pdf",
+      "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/HHD_C_Report_2026Q2.xlsx",
+      "https://fred.stlouisfed.org/series/UNRATE",
+      "https://ideas.repec.org/a/aea/aecrev/v92y2002i3p706-718.html",
+      "https://ideas.repec.org/p/fth/michet/98-01.html"
+     ],
+     "confidence": "verified-primary (the Fay-Hurst-White finding itself is secondary)"
+    },
+    {
+     "claim": "[Corporate defaults, 150 years] Default cycles are persistent and only loosely tied to recessions. Stock prices and volatility forecast defaults; credit spreads do not.",
+     "evidence": "Giesecke, Longstaff, Schaefer & Strebulaev (NBER w15848; JFE 2011). Value-weighted bond defaults, 1866-2008.\n- 13 default cycles vs 31 NBER recessions. Average length 3.2 years vs 1.5.\n- Persistence (first-order autocorrelation): 0.574 for default cycles vs 0.267 for recessions.\n- Correlation between the recession and default-cycle indicators: only 0.263.\n- Lagged credit spreads have no predictive power for default rates.\n- Lagged stock returns (negative) and stock volatility (positive) do predict defaults.\n- A lagged recession indicator is significant only at 10% and drops out in the combined model.\n- Spreads are about twice expected losses (about an 80bp premium) and do not respond to realized defaults.",
+     "sources": [
+      "https://www.nber.org/system/files/working_papers/w15848/w15848.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Corporate defaults, modern timing] Junk-bond default rates rose before the 1990 and 2001 recessions, but sat near record lows before 2008 and 2020. Rises in 1986 and 2016 produced no recession. The Conference Board says default rates lag the cycle.",
+     "evidence": "Moody's 1920-2006 study, Exhibit 21, annual speculative-grade default rates:\n- 1988: 3.6%; 1989: 5.8%; 1990: 10.1%; 1991: 10.4%.\n- 1998: 3.5%; 1999: 5.8%; 2000: 6.3%; 2001: 10.6%; 2002: 8.3%.\n- 1986: 5.6%, with no recession.\n- 2006: 1.57%, the lowest since 1981.\nConference Board (2011): corporate spreads ranked low 'because they were lagging rather than leading... highly correlated with default rates, which tend to lag the business cycle'.\nSecondary (not opened):\n- 2016: 162 defaults worldwide (S&P), 66 in energy, the most since 2009, with no US recession following (Funds Europe).\n- Global 12-month default rate peaked in late 2009 at about 12-13% (press coverage, after the June 2009 trough).\nVerified side note: in Jan 2009, 13 months into the recession, Moody's raised its peak forecast from 10% to 15.4% within a month (Bond Vigilantes blog).",
+     "sources": [
+      "https://www.moodys.com/sites/products/DefaultResearch/2006400000429618.pdf",
+      "https://www.conference-board.org/pdf_free/workingpapers/EPWP1105.pdf",
+      "https://funds-europe.com/us-and-energy-firms-dominate-high-yield-defaults/",
+      "https://bondvigilantes.com/?p=279"
+     ],
+     "confidence": "verified-primary for the Moody's annual figures and the Conference Board quote; secondary for 2009 and 2016"
+    },
+    {
+     "claim": "[Large-company bankruptcies before 2001, 2008 and 2020] They led into 2001, were coincident in 2008, and gave no warning in 2020. Since 2023 they have been elevated with no recession dated yet.",
+     "evidence": "- 2001: public-company bankruptcies began rising around 1997 while total business bankruptcies were falling. 176 in 2000 (a record at the time), 257 in 2001 (+46%), concentrated in telecom and energy and in larger, more indebted firms (FDIC FYI, Jan 2002). This echoes the large-firm lead in Zarnowitz & Lerner.\n- 2008: 78 in 2007, then 136 in 2008 (+74%); 2001 later restated to 263 (AP/BankruptcyData, Jan 2009). 2006 was a low of 66 (secondary).\n- 2020: S&P GMI counted 579 in 2019 and 630 in 2020, later revised to 518. An external shock, not a signal.\n- Now (S&P GMI, secondary): 785 in 2025, the most since 828 in 2010; 372 in H1 2026 vs 371 in H1 2025.\n- The NBER's latest dated peak is still Feb 2020 (BCDC page checked today); the committee dates turns with long lags. Whether 2023-26 is a long lead or a false alarm is unresolved.",
+     "sources": [
+      "https://www.fdic.gov/analysis/archived-research/fyi/013102fyi.pdf",
+      "https://www.nbcnews.com/id/wbna28638645",
+      "https://www.securitasglobal.com/risk-perspectives/us-corporate-bankruptcies-16-year-high-2026/",
+      "https://www.nber.org/research/business-cycle-dating"
+     ],
+     "confidence": "verified-primary for FDIC and NBER; secondary for the BankruptcyData figures reported by AP and for the S&P GMI counts (S&P site returned 403)"
+    },
+    {
+     "claim": "[Spreads vs defaults as predictors] Credit spreads predict economic activity mainly through the excess bond premium, not through expected defaults. These are in-sample results.",
+     "evidence": "Gilchrist & Zakraj\u0161ek (NBER w17021; AER 2012), 1973:M1-2010:M9.\n- A 100bp rise in the GZ spread means about 3pp (annualized) lower industrial production growth over the next 3 months and more than 1.25pp lower GDP growth over the next 4 quarters.\n- The Baa-Aaa spread's predictive power is 'economically negligible' at one year.\n- 12-month unemployment, standardized coefficients: excess bond premium 0.414 vs predicted-default spread 0.213.\n- Not inconsistent with the Aug-2026 referee's rejection of the excess bond premium as a cycle-analog dimension, which was an out-of-sample test.",
+     "sources": [
+      "https://www.nber.org/system/files/working_papers/w17021/w17021.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[The boom comes first] The earliest documented signals are credit exuberance before the bust, not realized distress.",
+     "evidence": "- L\u00f3pez-Salido, Stein & Zakraj\u0161ek (NBER w21879; QJE 2017), 1929-2013: elevated credit-market sentiment in year t-2 predicts lower activity in t and t+1, through predictable spread widening.\n- Mian, Sufi & Verner (NBER w21581), 30 countries, 1960-2012: a medium-run rise in household debt/GDP predicts lower growth and higher unemployment.\n- Lown, Morgan & Rohatgi (FRBNY EPR 2000): 'four of the past five recessions were preceded by sharply tighter standards' in the loan officer survey; the exception was 1981-82.",
+     "sources": [
+      "https://www.nber.org/system/files/working_papers/w21879/w21879.pdf",
+      "https://www.nber.org/system/files/working_papers/w21581/w21581.pdf",
+      "https://www.newyorkfed.org/research/epr/00v06n2/0007lown.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Recession-risk research uses no bankruptcy series] Fed recession-risk work relies on unemployment, inflation and spreads, and stresses small samples.",
+     "evidence": "Kiley (FEDS Note, June 2022), 1965-2019, only 7 large-unemployment-increase episodes:\n- Beyond 4 quarters, unemployment and inflation predict recession risk better than financial variables.\n- The Baa spread is small and borderline at 4 quarters and insignificant at 8.\n- Composite leading indicators help only up to about 12 months.\nThe Fed recession-prediction indicator set seen via search (FEDS 2023-008) also has no bankruptcy series; that paper was not opened.",
+     "sources": [
+      "https://www.federalreserve.gov/econres/notes/feds-notes/financial-and-macroeconomic-indicators-of-recession-risk-20220621.html",
+      "https://www.federalreserve.gov/econres/feds/files/2023008pap.pdf"
+     ],
+     "confidence": "verified-primary (Kiley); secondary (FEDS 2023-008 list)"
+    },
+    {
+     "claim": "[Delinquency: flows, not stocks] The one modern case where household distress clearly led was confined to one segment and visible in delinquency flows. Stock-based delinquency rates can mislead.",
+     "evidence": "Mayer, Pence & Sherlund (FEDS 2008-59):\n- Mortgage trouble began in mid-2005.\n- Subprime serious delinquency: 5.6% in mid-2005, over 21% by July 2008.\n- All-loan serious delinquency: average 1.7% over 1979-2006, 4.5% by Q2 2008.\n- Foreclosure starts in H1 2008: 1.2 million (+79%).\nNY Fed consumer panel: new foreclosures rose from 220k (2006Q4) to 349k (2007Q4), before the Dec 2007 peak. Over the same period, bankruptcies were depressed after the 2005 reform and corporate defaults were at record lows.\nLiberty Street Economics (Aug 11 2026):\n- The stock of card balances 90+ days late rose from 7.6% (2022Q3) to 12.8% (2026Q1), mainly because charged-off debt stays on credit reports longer: about 40% still reported after 1 year in 2004-12, about 80% in 2024.\n- The flow into 90+ 'has remained relatively stable for almost two years'.\nNY Fed household debt report, 2026Q2: early-delinquency transitions up slightly for auto and mortgages, steady for cards; serious-delinquency transitions unchanged.",
+     "sources": [
+      "https://www.federalreserve.gov/pubs/feds/2008/200859/200859pap.pdf",
+      "https://libertystreeteconomics.newyorkfed.org/2026/08/how-distressed-are-consumers-reconciling-diverging-credit-card-delinquency-measures/",
+      "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/pdf/hhdc_2026q2.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Contagion: rivals, creditors, suppliers] Spillovers from a bankruptcy are real but specific to the industry or counterparty, small on average, and largely priced before or at the filing.",
+     "evidence": "- Lang & Stulz (JFE 1992): a bankruptcy announcement lowers a value-weighted portfolio of competitors by about 1% on average. Larger in highly indebted industries; positive (rivals gain) in concentrated, low-debt industries.\n- Jorion & Zhang (JFE 2007): Chapter 11 filings spread to rivals (their CDS spreads widen); Chapter 7 filings help rivals. Same-industry 11-day return: -0.41%.\n- Jorion & Zhang (JF 2009; FDIC working paper 2008-08), 251 bankruptcies 1999-2005: creditors' abnormal stock returns were -0.90% over 3 days and -1.90% over 11 days; industrial creditors -2.29%, financial creditors -0.34%. Average exposure about 0.3% of equity. Creditors were more likely to become distressed later: the literal 'someone else blows up next' channel, documented firm by firm.\n- Hertzel, Li, Officer & Rodgers (JFE 2008): significant losses for suppliers that begin before the filing and grow with industry contagion.",
+     "sources": [
+      "https://academicnewsletter.sufe.edu.cn/info/358266",
+      "https://ideas.repec.org/a/eee/jfinec/v84y2007i3p860-883.html",
+      "https://www.fdic.gov/analysis/cfr/working-papers/2008/2008-08.pdf",
+      "https://pure.psu.edu/en/publications/inter-firm-linkages-and-the-wealth-effects-of-financial-distress-/"
+     ],
+     "confidence": "Jorion & Zhang 2009: verified-primary. Lang & Stulz abstract: verified via a mirror. Jorion & Zhang 2007 and Hertzel et al.: secondary (abstract summaries)."
+    },
+    {
+     "claim": "[Contagion: local real effects] Second-round local damage is real, but slow, very local, concentrated where neighbours were already weak, and mostly runs through foreclosures and household leverage.",
+     "evidence": "- Bernstein, Colonnelli, Giroud & Iverson (NBER w23162; JFE 2019), using random judge assignment: liquidation (vs reorganization) cuts employment at other businesses in the same Census block by about 4% per year over 5 years, about 1.3 extra jobs lost per job lost. The effect fades at larger areas and is concentrated in services and other local-market businesses.\n- Benmelech et al. (NBER w20254; RFS 2019), stores 2005-09: a liquidating chain store at the same address raises neighbours' closure probability by 0.36pp (5.9% of the mean). Stores of less profitable parents (25th percentile) are 16.9-22.2% more likely to close; no significant effect at the 75th percentile.\n- Mian, Sufi & Trebbi (NBER w16685): foreclosures explain 20-30% of the 2007-09 fall in house prices, 15-25% of the fall in residential investment and 20-35% of the fall in auto sales.\n- Mian & Sufi (NBER w17830): household balance-sheet shocks in high-debt counties account for about 4 million (65%) of 2007-09 job losses.",
+     "sources": [
+      "https://www.nber.org/system/files/working_papers/w23162/w23162.pdf",
+      "https://www.nber.org/system/files/working_papers/w20254/w20254.pdf",
+      "https://www.nber.org/system/files/working_papers/w16685/w16685.pdf",
+      "https://www.nber.org/system/files/working_papers/w17830/w17830.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Contagion: limits] Corporate default waves alone barely move output; banks do the amplifying. Consumer-bankruptcy relief supported jobs rather than destroying them.",
+     "evidence": "- Giesecke et al. (NBER w17854; JFE 2014), 1866-2010: corporate bond default crises (20-50% of bonds defaulting) had no significant effect on GDP or industrial production. Banking crises had long-lasting effects. Bank lending rose after default crises as borrowers switched lenders.\n- Auclert, Dobbie & Goldsmith-Pinkham (NBER w25685): states with more generous bankruptcy exemptions lost fewer local-market jobs in 2007-10. Consumer-bankruptcy debt relief raised total employment by almost 2%.",
+     "sources": [
+      "https://www.nber.org/system/files/working_papers/w17854/w17854.pdf",
+      "https://www.nber.org/system/files/working_papers/w25685/w25685.pdf"
+     ],
+     "confidence": "verified-primary"
+    },
+    {
+     "claim": "[Regional panels] No study found shows rising local bankruptcy filings preceding local job losses. The evidence runs from labor-market recessions to filings.",
+     "evidence": "- Garrett & Wall: state bankruptcy rates respond to state labor-market recessions and peak in the recovery.\n- Eugeni (1991): state filings surged in states already in downturns.\n- Wang et al.: unemployment and filings moved together across states in 2007-09, in opposite directions in 2020.\n- Searches for state-panel causality or VAR tests of filings leading unemployment returned nothing. That is absence of evidence, not evidence of absence.",
+     "sources": [
+      "https://mpra.ub.uni-muenchen.de/42740/2/MPRA_paper_42740.pdf",
+      "https://www.chicagofed.org/publications/chicago-fed-letter/1991/december-52",
+      "https://conference.nber.org/conf_papers/f147955/f147955.pdf"
+     ],
+     "confidence": "verified-primary for the direction; the 'no study found' result is search-based (moderate)"
+    },
+    {
+     "claim": "[Stock bear markets] Stock markets lead failures and defaults, not the reverse. No rigorous evidence shows aggregate filings predicting drawdowns.",
+     "evidence": "- Giesecke et al.: lagged stock returns and volatility forecast default rates.\n- Campbell, Hilscher & Szilagyi (NBER w12362), 1963-2003: low past returns, high volatility and low market value predict firm failure, and their model 'captures much of the time variation in the aggregate failure rate'.\n- An informal regression of annual business bankruptcies on next-year market returns (1981-2003, 23 observations) found an R-squared of 0.031 and a t-statistic of 0.82 (dailyspeculations.com; not opened).",
+     "sources": [
+      "https://www.nber.org/system/files/working_papers/w15848/w15848.pdf",
+      "https://www.nber.org/system/files/working_papers/w12362/w12362.pdf",
+      "https://dailyspeculations.com/Letter/BankruptciesSummary.htm"
+     ],
+     "confidence": "verified-primary (Giesecke et al., Campbell et al.); unverified (informal regression)"
+    },
+    {
+     "claim": "[Practitioners: Epiq Oct 2026] The source of the 11% headline frames filings as a result of stress that is already visible and makes no leading-indicator claim. Its own figures contain an arithmetic slip.",
+     "evidence": "Epiq AACER, Oct 9 2026, first nine months of 2026 vs 2025:\n- Total: 469,719 (+11%).\n- Chapter 7: 282,413 (+13%). Chapter 13: 160,817 (+8%).\n- Commercial: 25,467 (+7%). Commercial Chapter 11: 6,560 (+11%). Subchapter V: 2,442 (+46%).\n- September alone: commercial Chapter 11 was 648, -16% year on year.\nEpiq (M. Hunter) cites borrowing costs, household expenses, delinquencies and a softer job market, and expects filings to keep rising into 2027. ABI (A. Quackenboss) cites inflation, borrowing costs and uncertainty.\nData check: the release says individual filings rose 7%, but its own counts (444,252 vs 399,379) imply +11.2%.",
+     "sources": [
+      "https://www.abfjournal.com/?p=173384"
+     ],
+     "confidence": "verified-primary (release as reprinted by ABF Journal)"
+    },
+    {
+     "claim": "[Practitioners: distress ratio] The claim that the high-yield distress ratio leads defaults by 6-12 months is contested.",
+     "evidence": "- Guggenheim (July 2024), seen only in a search snippet (the page now returns 404): high-yield distress ratio leads defaults by about 9-12 months (R-squared 74% since 1997); for loans the best fit is a 6-month lead (R-squared 46%).\n- FTI Consulting (Eisenband, Apr 4 2024): the distress ratio 'tends to move in tandem with corporate defaults without an obvious lead\u2013lag relationship'. Trailing 12-month default rates distort lead and lag. The correlation 'has broken down in the last year', with the distress ratio near 6% while defaults stayed high: the widest gap in 25 years.",
+     "sources": [
+      "https://www.guggenheiminvestments.com/page-types/sector-views/high-yield-and-bank-loan-outlook-july-2024",
+      "https://www.fticonsulting.com/en/canada/insights/articles/distressed-debt-levels-very-disconnected-from-default-activity-thats-first"
+     ],
+     "confidence": "FTI: verified-primary; Guggenheim: unverified"
+    },
+    {
+     "claim": "[Breaks to flag in any bankruptcy series] Legal and data-definition changes repeatedly create jumps larger than cyclical signals. One is pending now.",
+     "evidence": "- 2005 bankruptcy reform (BAPCPA): rush in late 2005, collapse in 2006.\n- COVID forbearance and stimulus, 2020-21.\n- Subchapter V: the higher debt limit expired in June 2024; the limit is now $3,424,000. Senate bill S.3977 ('Bankruptcy Threshold Adjustment Act of 2026') passed unanimously on Aug 3 2026 to restore $7.5M permanently. The House companion H.R.7730 left committee in March 2026. Enactment and any retroactivity are unconfirmed. If enacted, small-business Chapter 11 counts would jump mechanically.\n- D&B coverage expanded in 1939-40.\n- Net business formation degraded after the 1982 AT&T breakup and was suspended in 1987.\n- S&P GMI revises its counts (2020: 630, later 518).",
+     "sources": [
+      "https://www.bernsteinshur.com/insights-events/big-news-for-small-businesses-senate-passes-bill-to-permanently-increase-subchapter-v-debt-limit/",
+      "https://fred.stlouisfed.org/series/M0933CUSM144NNBR",
+      "https://www.nber.org/system/files/chapters/c10382/c10382.pdf",
+      "https://mpra.ub.uni-muenchen.de/42740/2/MPRA_paper_42740.pdf"
+     ],
+     "confidence": "verified-primary for the 2005 reform, D&B and net business formation items; secondary for the Subchapter V items (law-firm note) and the S&P revision"
+    }
+   ],
+   "open_questions": [
+    "P1. Get the postwar monthly D&B failure liabilities (BCD series 14, 1948-1989, from the FRASER BCD tables; annual Historical Statistics data to 1998). This is the only bankruptcy-related series with a documented leading record, and it needs a pre-registered out-of-sample re-test. It decides whether any bankruptcy series earns an alert.",
+    "P1. Find a modern size-weighted large-firm series with enough history. The S&P GMI tally appears to start in 2010 (start unconfirmed; site returned 403) and gets revised (2020: 630, later 518). The UCLA-LoPucki database (Oct 1979 to Dec 2022) is subscription-only and no longer updated. BankruptcyData is paywalled. Casey needs to decide whether to buy or obtain one of these; it decides whether that test is feasible.",
+    "P1. Status of S.3977 / H.R.7730, which would restore the $7.5M Subchapter V limit: enactment and any retroactivity. Either would create a jump in small-business Chapter 11 counts in late 2026 that any alert must flag.",
+    "P2. Primary confirmation of monthly default-rate peak dates for 2009 and 2020-21, and of the 2016 energy wave (currently press-only), plus access to the S&P or Fitch distress-ratio history to test the contested 6-12 month lead. This sets whether the distress ratio deserves a pre-registered test.",
+    "P2. Regional test, which would be new: US Courts filings by district or state and NY Fed state delinquency transition rates vs state payrolls or Philadelphia Fed state coincident indexes. Use Garrett & Wall-style trend and fixed-effect controls, and pre-register it, because the published evidence runs the other way (labor markets lead filings).",
+    "P2. Sources not read: the full text of Fay, Hurst & White (AER 2002, paywalled), the ABA Business Law Today 2022 piece on 2020-21 filings (403), the Guggenheim distress-ratio note (404), and S&P GMI articles (403). These could refine the strategic vs shock-driven filing picture and the practitioner claims.",
+    "P3. The claim that charge-offs lag was not verified from primary literature in this pass. It can be tested directly on FRED charge-off data (CORCCACBS) vs delinquency rates (DRCCLACBS) around 1990, 2001, 2008 and 2020.",
+    "P3. The specifics of the Conference Board's 1996 revision were not opened. The verified facts are that the 1989 revision added no failure series and that today's leading index and Leading Credit Index contain none."
+   ],
+   "datasets": [
+    {
+     "name": "Liabilities of business failures, all commercial, Dun's (NBER Macrohistory m09033a)",
+     "id_or_url": "FRED M0933AUSM144NNBR",
+     "frequency": "monthly",
+     "start": "1894-01",
+     "end": "1938-08",
+     "breaks": "Bradstreet vs Dun's coverage differences; Bradstreet's series ended Jan 1933",
+     "access_notes": "keyless FRED CSV with cosd=1800-01-01; millions of dollars; invert for leading analysis",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/literature/dl/fred/M0933AUSM144NNBR.csv"
+    },
+    {
+     "name": "Liabilities of business failures, all commercial, Dun's (m09033b)",
+     "id_or_url": "FRED M0933BUSM144NNBR",
+     "frequency": "monthly",
+     "start": "1934-06",
+     "end": "1939-12",
+     "breaks": "overlap segment that links to the post-1939 series",
+     "access_notes": "keyless FRED CSV",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/literature/dl/fred/M0933BUSM144NNBR.csv"
+    },
+    {
+     "name": "Liabilities of business failures, all commercial, Dun's (m09033c)",
+     "id_or_url": "FRED M0933CUSM144NNBR",
+     "frequency": "monthly",
+     "start": "1939-01",
+     "end": "1968-01",
+     "breaks": "1939-40 coverage broadened to include voluntary discontinuances with creditor losses and small failures; not seasonally adjusted; strong uptrend after 1950",
+     "access_notes": "keyless FRED CSV; data from Dun's Statistical Review and Business Trend News",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/literature/dl/fred/M0933CUSM144NNBR.csv"
+    },
+    {
+     "name": "Number of business failures, all commercial, Dun's (m09029c)",
+     "id_or_url": "FRED M0929CUSM474NNBR",
+     "frequency": "monthly",
+     "start": "1939-01",
+     "end": "1965-06",
+     "breaks": "same 1939-40 coverage change",
+     "access_notes": "keyless FRED CSV; counts",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/literature/dl/fred/M0929CUSM474NNBR.csv"
+    },
+    {
+     "name": "Number of manufacturing failures with liabilities of $100k or more ('large failures', m09069b)",
+     "id_or_url": "FRED M0969BUSM474NNBR",
+     "frequency": "monthly",
+     "start": "1934-06",
+     "end": "1962-10",
+     "breaks": "fixed nominal $100k threshold, so price drift raises the count over time",
+     "access_notes": "keyless FRED CSV; the large-firm series Zarnowitz & Lerner found led",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/literature/dl/fred/M0969BUSM474NNBR.csv"
+    },
+    {
+     "name": "Liabilities of manufacturing failures with liabilities of $100k or more (m09071b)",
+     "id_or_url": "FRED M0971BUSM144NNBR",
+     "frequency": "monthly",
+     "start": "1934-06",
+     "end": "1961-02",
+     "breaks": "fixed nominal threshold",
+     "access_notes": "keyless FRED CSV",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/literature/dl/fred/M0971BUSM144NNBR.csv"
+    },
+    {
+     "name": "BCD series 14: current liabilities of business failures (D&B)",
+     "id_or_url": "https://fraser.stlouisfed.org/ (Business Conditions Digest archive, e.g. BCD_011989.pdf)",
+     "frequency": "monthly",
+     "start": "1948 (postwar record in BCD; series from 1879)",
+     "end": "about 1989-1990 in BCD; D&B annual series to 1998 in Historical Statistics table Ch408-413",
+     "breaks": "dropped from the leading short list in 1966; D&B coverage and definition changes",
+     "access_notes": "only as scanned PDF tables (needs OCR or manual entry); D&B copyright notice in BCD",
+     "publication_lag": "historical only"
+    },
+    {
+     "name": "NY Fed Consumer Credit Panel/Equifax: consumers with new bankruptcy notations and new foreclosures",
+     "id_or_url": "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/HHD_C_Report_2026Q2.xlsx (sheet 'Page 17 Data')",
+     "frequency": "quarterly",
+     "start": "2003Q1",
+     "end": "2026Q2",
+     "breaks": "2005Q4 bankruptcy-reform spike (949k) then 2006Q1 collapse (214k); COVID suppression 2020-22; seasonal adjustment not stated",
+     "access_notes": "free xlsx; thousands of consumers; the same workbook has transitions into 30+ and 90+ delinquency by loan type and state, the preferred flow measures",
+     "publication_lag": "about 5-6 weeks after quarter end (2026Q2 released early Aug 2026)",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/literature/dl/hhdc_xlsx/HHD_C_Report_2026Q2.xlsx"
+    },
+    {
+     "name": "Moody's annual issuer-weighted corporate default rates by rating",
+     "id_or_url": "https://www.moodys.com/sites/products/DefaultResearch/2006400000429618.pdf (Exhibit 21)",
+     "frequency": "annual",
+     "start": "1920",
+     "end": "2006",
+     "breaks": "global, issuer-weighted; later editions not freely accessible",
+     "access_notes": "free PDF of the Feb 2007 study; later years only via paywalled studies or press",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/literature/dl/moodys_1920_2006.pdf"
+    },
+    {
+     "name": "Epiq AACER monthly US bankruptcy filings by chapter",
+     "id_or_url": "Epiq/ABI monthly press releases (e.g. https://www.abfjournal.com/?p=173384 for Sept 2026)",
+     "frequency": "monthly",
+     "start": "releases only (history not compiled here)",
+     "end": "2026-09",
+     "breaks": "2005 reform; COVID; Subchapter V limit changes (2020, June 2024, pending S.3977)",
+     "access_notes": "press releases; check arithmetic (Oct 2026 release misstates individual growth)",
+     "publication_lag": "about 1-2 weeks after month end"
+    },
+    {
+     "name": "UCLA-LoPucki Bankruptcy Research Database (large public companies, assets of $100M+ in 1980 dollars)",
+     "id_or_url": "https://www.lopucki.law.ufl.edu/",
+     "frequency": "event-level",
+     "start": "1979-10",
+     "end": "2022-12",
+     "breaks": "no longer updated after Dec 2022",
+     "access_notes": "cases table requires subscription or purchase"
+    },
+    {
+     "name": "S&P Global Market Intelligence US corporate bankruptcy tally",
+     "id_or_url": "https://www.spglobal.com/market-intelligence/en/news-insights/ (monthly articles)",
+     "frequency": "monthly",
+     "start": "2010 (unverified)",
+     "end": "2026-06 (latest seen, secondary)",
+     "breaks": "counts revised (2020: 630, later 518); criteria: public companies with at least $2M assets or liabilities, private companies with at least $10M",
+     "access_notes": "site returns 403 to scripted fetches; numbers only via secondary reports"
+    }
+   ]
+  },
+  "verification": {
+   "verdict": "The strand passes, but three issues must be fixed before the summary ships. It is genuinely sourced: every PDF and CSV it used is byte-identical to my fresh downloads (7 NBER chapters, 12 NBER working papers, Moody's 1920-2006, the NY Fed HHDC xlsx and the FRED CSVs). All 434 sha256s in MANIFEST.md match the files on disk, with no unlisted files. The classic lead/lag numbers check out to the decimal (Mitchell-Burns 1938, Moore 1950, Zarnowitz-Lerner 1961, Moore-Shiskin 1967, Zarnowitz 1992). Nothing is fabricated, and unverified items are labelled as such.\n\nThe three blocking issues:\n1. The legal-break list is stale and incomplete. H.R. 7730 has passed both chambers and gone to the President, according to the very Epiq release the strand cites. The bill also raises the Chapter 13 debt limit, which the strand omits.\n2. Open question P1 asks Casey to buy a size-weighted large-firm series. That is wrong: the FJC IDB has free case-level liabilities from FY2008, and LoPucki is no longer sold.\n3. The conclusion that the leading signals are \"already mostly on the dashboard\" is overstated. It also omits WARN advance-layoff notices, which have a documented short lead over claims and unemployment.\n\nMaterial corrections:\n- Filings did NOT fall in the 2001 or 1981-82 recessions. The AO data frozen in the repo show +19% in 2001 and business filings +44% in 1982; only 2020 fell.\n- Failure counts LED at business-cycle peaks (-5.0 months on average, unreliably). They were not coincident.\n- Zarnowitz-Lerner's \"large firms turn first\" result holds at troughs. At peaks, large-firm series were more consistent but not earlier.\n- Default rates before 2020 were rising and above their long-run average, not near record lows.\n\nThe core bottom line survives: do not alert on total filings. Dollar-weighted failure liabilities are the only bankruptcy-type series with a historical lead, and that lead is erratic and failed after 1948.",
+   "blocking": [
+    "LEGAL BREAKS ARE STALE AND INCOMPLETE. The strand says H.R.7730 'left committee in March 2026' and that enactment is unconfirmed, and it flags only the Subchapter V change. The release the strand itself cites (Epiq, Oct 8 2026; reprinted by ABF Journal Oct 9) says H.R. 7730 'passed the Senate on September 28' and 'has been sent to the president for signature'. ABI says the House passed it on Sept 16. Corrected: the bill permanently restores the Subchapter V debt limit to $7.5M AND raises the Chapter 13 debt limit to $2.75M, removing the secured/unsecured distinction. That is a second break, hitting individual Chapter 13 counts (about 36% of 2026 YTD individual filings; individual filings are about 95% of the total). Signature, effective date and retroactivity are unconfirmed as of 2026-10-12. Every filings panel or alert from Q4 2026 must carry break flags for small-business Chapter 11/Subchapter V AND for Chapter 13 (and the Ch7/Ch13 mix). P1 narrows to: signed? effective when? retroactive? Evidence: epiqglobal.com 'Small Business Subchapter V Elections Increase 46%...'; abi.org/node/1004060.",
+    "P1 ('Casey must buy or obtain S&P GMI, LoPucki or BankruptcyData; this decides whether the size-weighted test is feasible') IS WRONG. (a) The FJC Integrated Database is free and openly downloadable (2.36 GB). It is case-level: filing date, district and county, chapter, Subchapter V and small-business flags, estimated asset/liability ranges, and scheduled TOTASSTS/TOTLBLTS. It runs from FY2008 (Oct 2007) to the 2026-06-30 snapshot, posted 2026-09-02, so the lag is about 2 months. It supports a liabilities-weighted or large-case Chapter 11 series for 2007-2026 at no cost, and it is already recorded in the study's own MANIFEST.md. Limits: no NAICS field, and only two recessions in the window. (b) The LoPucki BRD is NOT for sale. Its site says it stopped updating after Jan 2023 and 'will no longer sell copies or subscriptions'. A free copy can be downloaded, but its terms restrict use to academic research, so this is a licence question for Casey, not a purchase. It holds 1,218 cases through Dec 2022 (about 28 a year). Only S&P GMI (history from about 2010, and revised) and BankruptcyData remain paid.",
+    "THE 'LEADING SIGNALS ARE ALREADY MOSTLY ON THE DASHBOARD' CONCLUSION (#4) IS OVERSTATED, AND THE STRAND OMITS THE MOST DIRECT 'SOMEONE ELSE IS ABOUT TO LOSE INCOME' SIGNAL. Per the dashboard context, stock drawdowns and volatility, credit-market sentiment (Lopez-Salido, Stein & Zakrajsek) and household-debt growth are not on the dashboard. The excess bond premium is shown descriptively only, after the Aug-2026 referee rejected it out of sample. WARN Act advance-layoff notices are missing entirely. Krolikowski & Lunsford (Cleveland Fed WP 20-03; revised 20-03R, 2022) find that the number of workers in WARN notices leads state initial claims and changes in the unemployment rate and employment, strongest at 1-2 months. The 2022 version also finds they improve pseudo-real-time unemployment forecasts. State-level data are free on openICPSR (E155161), updated twice monthly. This adds a candidate, and a regional map, to the pre-registered test."
+   ],
+   "corrections": [
+    {
+     "claim": "Bottom line: filings 'fell during the 1981-82, 2001 and 2020 recessions' (relayed from Garrett & Wall: the rate 'actually fell' in '1982-83 and 2001').",
+     "problem": "Contradicted by the AO filings data frozen in the repo, and by Eugeni (1991). The claim was passed on from the paper without checking it against the data.",
+     "correct_version": "Total filings rose in every recession since 1980 except 2020:\n- 1981: +9.9%.\n- 1982: total +4.5%, business +44.0%; only non-business filings dipped (-1.5%, after +9.8% in 1981).\n- 1990: +15.2%; 1991: +20.6%.\n- 2001: +19.0%. Non-business filings were up 16-25% y/y in every 2001 quarter; business +13.0%.\n- 2008: +31.4%; 2009: +31.8% (partly the post-2005-reform rebound).\n- 2020: -29.7%, from policy support.\nFilings fell 5.0% in 2000, the year before the recession, so the rises are coincident, not leading. Filings are a coincident confirmer that failed once (2020); they are not a series that falls in recessions.",
+     "evidence": "studies/distress_signals/data/derived/abi_annual_business_nonbusiness_1980_2025.csv and abi_quarterly_nonbusiness_by_chapter_1994_2025.csv (MANIFEST sha256 verified). Chicago Fed Letter 52: 'After increasing at the onset of the 1981-1982 recession, personal bankruptcy filings declined'."
+    },
+    {
+     "claim": "(a) Recessions (NBER peaks): 'Coincident: counts of failures'. Also: 'simple counts of failures, mostly small firms, moved roughly with the cycle'.",
+     "problem": "The strand's own source (Zarnowitz-Lerner Table 12.2) shows counts LED at business-cycle peaks on average. They were coincident only at troughs.",
+     "correct_version": "At business-cycle peaks:\n- All-firm failure counts led by -5.0 months on average: 8 leads, 1 coincidence, 5 lags in 14 turns (average deviation 6.8).\n- Small-manufacturing counts led by -6.9 months.\nAt troughs, counts were roughly coincident (-0.5; trading-company counts +1.4). So at peaks counts are an unreliable lead, not a coincident series.",
+     "evidence": "nber.org/system/files/chapters/c0732/c0732.pdf, Table 12.2 lines 9-12. Text: 'number of all failures and number of small manufacturing companies turn early at business cycle peaks only; at troughs, their timing is roughly coincident'."
+    },
+    {
+     "claim": "'The lead comes from large firms' / 'Casey's instinct is right about the size-weighted, large-firm part', used as the basis for a large-firm RECESSION alert (alert idea #2).",
+     "problem": "At peaks, which is the warning direction, Zarnowitz-Lerner's own numbers show the large-firm series were more consistent but NOT earlier. Their 'large firms first' evidence is at troughs.",
+     "correct_version": "At peaks:\n- Large-manufacturing counts: -5.1 months (8 of 10 lead, 1 lag). Small-manufacturing counts: -6.9 (5 of 10, 2 lags).\n- Large-manufacturing liabilities: -5.8 (9 of 10, 0 lags). Small: -7.9 (6 of 10, 1 lag).\nIn the direct large-vs-small comparison (Table 12.1B), large failures peak 6.4 months before small ones, which matters for revivals. At failure troughs (near business peaks) the two turn together (average 0). Z&L: 'At cyclical revivals, the lead in liabilities is due entirely to this factor.' Pre-register 'dollar-weighted liabilities vs counts' as the hypothesis, and test 'large firms turn first' rather than assume it.",
+     "evidence": "c0732 Table 12.1 lines 7-8; Table 12.2 lines 3-6 and 11-14; pp. 353-359."
+    },
+    {
+     "claim": "Corporate default rates 'sat near record lows before 2008 and 2020'.",
+     "problem": "True for 2008. Unsourced and wrong for 2020: the cited Moody's study ends in 2006.",
+     "correct_version": "Before 2008: Moody's global speculative-grade default rate was 1.57% in 2006, the lowest since 1981.\nBefore 2020: rates were rising and above the 1920-2006 mean of 2.69%. S&P's US speculative-grade rate went from 2.42% (2018) to 3.11% (2019), with 47 then 78 defaulters. Moody's global rate was 3.2% at end-2019.\nThe 2020 recession was an exogenous shock, so neither reading counts as evidence either way.",
+     "evidence": "Moody's 1920-2006, Exhibit 21 (spec-grade mean 2.685). S&P 2019 annual US default study and Moody's end-2019 rate, via search snippets (S&P site returns 403), so secondary."
+    },
+    {
+     "claim": "Summary: after a liquidation, neighbours on the same Census block lose about 4% of jobs a year, 'mostly where the neighbours were already weak' (Bernstein et al.).",
+     "problem": "Misattribution. The 'weak neighbours' result belongs to Benmelech et al. Bernstein compares liquidation with reorganization, not bankruptcy with no bankruptcy.",
+     "correct_version": "Bernstein et al.: conversion to Chapter 7 rather than Chapter 11 (instrumented by random judge assignment) cuts employment at other establishments on the same Census block by about 4% a year over 5 years (multiplier 1.3). The effect is concentrated in non-tradable and service sectors and in same-sector neighbours.\nBenmelech et al.: closures concentrate among neighbouring stores whose parents are less profitable. At the 25th percentile of profitability they are 16.9-22.2% more likely to close; at the 75th there is no effect. Sample is 2005-2010, not 2005-09.",
+     "evidence": "w23162 abstract and introduction. w20254 pp. 2 and 13 (0.36pp, 5.9% of the mean)."
+    },
+    {
+     "claim": "'Epiq's own head called filings largely a lagging economic indicator'.",
+     "problem": "Misattributed.",
+     "correct_version": "The phrase is Epiq's release text (May 7, 2020). Chris Kruse's own quote is: 'Unemployment claims historically correlate closely to bankruptcy filings, however, the speed of claims that occurred in April has thrown this correlation out of synchrony.'",
+     "evidence": "Epiq release 'Bankruptcy Filings in April Down 39%' (epiqglobal.com)."
+    },
+    {
+     "claim": "Consumer-bankruptcy debt relief 'raised employment by about 2% in 2007-10'.",
+     "problem": "Presented as an estimate, but it is a model output.",
+     "correct_version": "The reduced-form result is relative across states: more generous exemptions meant smaller non-tradable job losses (relative multiplier 1.81). The 'almost two percent' aggregate effect comes from a general-equilibrium model that requires substantial nominal rigidities and the zero lower bound.",
+     "evidence": "w25685 abstract and pp. 3-4."
+    },
+    {
+     "claim": "Dataset breaks for the D&B/NBER failure series:\n- M0933A: 'Bradstreet vs Dun's coverage differences; Bradstreet's series ended Jan 1933'.\n- BCD series 14: 'D&B coverage and definition changes'.\n- Only M0933C is noted as not seasonally adjusted.\n- Filing-series break list: 2005 reform, COVID, Subchapter V.",
+     "problem": "Wrong or missing breaks that a re-test must handle.",
+     "correct_version": "M0933A is Dun's series, not Bradstreet's. FRED notes say its monthly data from 1894 include BANK failures, and a 1933 revision excluded real-estate and insurance brokers and holding and finance companies. Liabilities in the 1907 and 1930-33 bank-panic months are therefore contaminated.\n\nAll FRED NBER failure series are not seasonally adjusted, whereas NBER's timing work used adjusted data.\n\nD&B moved to 'expanded coverage and new methodology' in 1984, 'not generally comparable' with earlier data, so any post-1966 test must split at 1984. The ERP series ends in 1997 ('Data are no longer published'). The HSUS Ch408-413 annual series runs 1857-1998.\n\nAdd the Bankruptcy Reform Act of 1978 (effective Oct 1, 1979) to the filing-series breaks. It inflates 1980-81, the pre-period for any 1981-82 test.",
+     "evidence": "FRED series notes for M0933AUSM144NNBR and M0933CUSM144NNBR. data/dnb_erp/ERP-2004-table96.htm footnotes. w16872 (Richardson & Gou) cites HSUS 'Table Ch408-41: ...1857-1998'."
+    },
+    {
+     "claim": "P1: 'Get the postwar monthly D&B failure liabilities (BCD series 14, 1948-1989)... only as scanned PDF tables (needs OCR)', framed as a pre-registered out-of-sample re-test.",
+     "problem": "It understates the data already in hand and mislabels part of the test window.",
+     "correct_version": "Already frozen in data/fred_nber:\n- 1939-1968 monthly liabilities (M0933C).\n- Postwar counts of large and small failures, 1948-69 (M09077/M09076).\n- Failure liabilities divided by nonfinancial corporate current liabilities, 1946-69 (Q0983A/B). This scaling removes the uptrend Moore & Shiskin blamed.\nThe June 1987 BCD issue (Appendix C) prints series 14 monthly for 1953-1986 in a single table. It matches M0933C to the decimal for 1953-54 and 1966, so the OCR can be validated against FRED. 1987-88 are in the Jan 1989 BCD.\n1948-66 is the period where Moore & Shiskin already found the series failing. The genuinely new evidence is 1967-1983 (4 peaks: 1969, 1973, 1980, 1981), plus 1984-97 on a non-comparable basis.\nThe strand's M0969B/M0971B files sit only in its scratch directory and are not frozen in the data directory.",
+     "evidence": "MANIFEST rows for fred_nber/M09077USM234NNBR, Q0983AUSQ156NNBR and Q0983BUSQ156NNBR. FRASER BCD_061987.pdf Appendix C. BCD_011989 finding guide: 'Historical data (issue date) 6/87' for series 14."
+    },
+    {
+     "claim": "NY Fed new bankruptcy notations: 'peaked at 621 in 2010Q2'; '94-136 in 2020-22'; 2026Q2 is 'about 1/3 below the 2019 average'.",
+     "problem": "The data are not seasonally adjusted, and the stated range is slightly off.",
+     "correct_version": "Q2 is the seasonal high: 2019Q2 was 234 against a 2019 average of 204. On 4-quarter sums, consumer filings still peak after unemployment did: the AO non-business 4-quarter sum peaks in 2010Q3, against an Oct-2009 unemployment peak of 10.0%. The 2020Q2-2022Q4 range is 91-136 (2020Q1 was 189). 2026Q2 (136.8k) is 33% below the 2019 average but 42% below 2019Q2.",
+     "evidence": "data/nyfed/HHD_C_Report_2026Q2.xlsx, sheet 'Page 17 Data' (sha ddfba16b...). data/derived/abi_quarterly_nonbusiness_by_chapter_1994_2025.csv. FRED UNRATE."
+    },
+    {
+     "claim": "'Searches for state-panel causality or VAR tests of filings leading unemployment returned nothing.' The contagion section covers rivals, creditors, suppliers and neighbours.",
+     "problem": "It misses one counter-citation and the direct channel to employees.",
+     "correct_version": "Hudson (1997, Applied Economics 29(5):647-654) reports significant Granger causality between company bankruptcies/births and output, unemployment, the balance of payments and inflation, in US and UK data. It is in-sample, and the abstract does not give the direction pair by pair. Cite it as weak supportive evidence for Casey's hypothesis.\nGraham, Kim, Li & Qiu (JF 2023): employees of bankrupt firms lose 13% of earnings in the first full year after the filing, and lost earnings over 6 years have a present value of 87% of one year's pre-bankruptcy pay. Losses are worse in thin labour markets. This is the literal first-round 'someone else loses income' channel.",
+     "evidence": "ideas.repec.org/a/taf/applec/v29y1997i5p647-654.html. nber.org/papers/w25922 (published-version figures via search snippet; secondary)."
+    },
+    {
+     "claim": "'Large-company filings have run at 16-year highs for about three years'; '785 large filings in 2025 per S&P... most since 828 in 2010' (sourced to Securitas); 'S&P GMI revises its counts (2020: 630, later 518)'.",
+     "problem": "The cited source does not contain these numbers, and the revision claim may be a conflation.",
+     "correct_version": "The Securitas page (Jul 15 2026) has only the H1 counts (372 in 2026 vs 371 in 2025). The 785 and 828 figures come from S&P's Jan-2026 release. 2024 was 687-694 (sources differ); each year since has been a post-2010 high, which is not the same as three years of '16-year highs'. The '2020 revised to 518' claim is unverified: 518 is also reported as the 2018 count. 2019 (579-589) was up from 2018, so large-firm filings were rising before 2020.",
+     "evidence": "WebFetch of the Securitas page. Search snippets of S&P releases (S&P site returns 403)."
+    },
+    {
+     "claim": "Minor accuracy items: (b) 'jobless claims lead (median 6 months)'; FDIC 2001 filings 'concentrated in telecom and energy'; net business formation entered 'the 1975 leading index'; Garrett & Wall '3,105 observations'; Epiq release 'Oct 9 2026' and September commercial Chapter 11 -16%; Jorion & Zhang 2007 '-0.41%'.",
+     "problem": "Small misstatements, or claims that cannot be verified from the cited source.",
+     "correct_version": "- Claims' -6-month median lead is measured against NBER turns over 1945-61 (10 turns), not against unemployment. The repo's own Labor Stress Board finds claims rules confirm rather than lead.\n- FDIC: 2001 public filings were 'distributed fairly evenly across industry sectors'. Telecom was 36 of 257 (14%) of the count; energy was 33% of assets.\n- The net business formation index, which includes inverted failure counts, was in BOTH the 1966 and 1975 lists until it was suspended in Mar 1987. Failure liabilities left the short list in 1966 but stayed on the full list.\n- Garrett & Wall's 67 quarters x 45 states = 3,015 (the paper's own arithmetic).\n- The Epiq release is dated Oct 8; ABF Journal reprinted it Oct 9. The September commercial Chapter 11 drop of -16% is a base effect: Sep-2025 included 109 related filings by one pharmacy provider.\n- The Jorion & Zhang 2007 '-0.41%' cannot be verified: the cited IDEAS page has no abstract.",
+     "evidence": "c1270 table rows; fdic.gov FYI 013102; c10382 Table 11.5 (page image) and notes aa and k; MPRA 42740 p.~12; Epiq Oct 8 2026 release; ideas.repec.org/a/eee/jfinec/v84y2007i3p860-883.html."
+    }
+   ],
+   "confirmed": [
+    "Source integrity and data: every PDF and CSV the strand used is byte-identical to my re-downloads (NBER chapters c4251, c0726, c0727, c0732, c1270, c10381, c10382; NBER working papers w12362, w15848, w16685, w16872, w17021, w17830, w17854, w20254, w21581, w21879, w23162, w25685; the Moody's PDF; the NY Fed xlsx; the FRED CSVs). MANIFEST.md: 434 of 434 sha256s match, with no unlisted files.",
+    "Mitchell & Burns 1938: total liabilities of business failures are on the 21-series 'most trustworthy' list. Average lead 9 months at revivals only; 12 cycles and 14 revivals; 13 leads and 1 lag; range -17 to +6. Erratic movements 'pronounced'; a 6-month lag at the 1901 upturn. Bradstreet's series was discontinued in January 1933.",
+    "Moore 1950: failure liabilities are one of 8 leading series. Table 7.11 (Dun's, 1879-1938): peaks 14 turns, 11 leads, -10.5 months; troughs 16 turns, 14 leads, -7.5 (first line peaks, per footnote b). Table 7.1: peaks -23 to +2, average -8; May 1937 -4. Inverted liabilities peaked Apr 1945 (FRED M0933C minimum is 0.98 in Apr 1945), 43 months before Nov 1948.",
+    "Zarnowitz & Lerner 1961: Table 12.2 figures as quoted (liabilities -10.5 with average deviation 8.0, and -7.5; counts -5.0 with 5 lags, and -0.5; trading companies -0.4 and +1.4; large-manufacturing counts -5.1 and -6.9, anticipating 16 of 21 turns). Postwar leads of 28 months (July 1953) and 26 months (July 1957); 0 at the Apr 1958 trough; counts skipped 1953-54. Profit-diffusion indexes lead failure liabilities.",
+    "Moore & Shiskin 1967: series 14 scores 68 (conformity 86, timing 66, smoothness 0); 43 turns, 31 leads, 3 lags, median -7. 1960-list peaks -28 to +3; -12 at May 1960; no matching turn at Feb 1961. Dropped from the short list for 'poor timing and conformity record since 1948'. Initial claims: 73, 10 turns, 6 leads, 1 lag, -6. Instalment delinquency: 59, 8 turns, 6 leads, 2 lags, -3.",
+    "Zarnowitz 1992: Table 11.5 note aa (dropped 1966) and note k (net business formation suspended March 1987; AT&T breakup). Table 10.6: the 1950 leading group went from -6 to -12 months at peaks over 1948-75. BCD May 1975 confirms the net business formation index includes inverted business failures. BCD Jan 1989 still charts series 14 under 'Credit Difficulties'. The 1989 list and the Conference Board's six-component Leading Credit Index contain no failure series.",
+    "Garrett & Wall (Macroeconomic Dynamics 18(7), 2014): 45 states, 1988-2004; +6.4 and +12.4 above trend; peak about 6.8 in the second quarter of recovery; 12.6 of 31.6 points. National rate 0.3 to 1.2 per 1,000; 2.2 in 2005Q4 to 0.4 in 2006Q1. Cites Fay et al., White and Fisher.",
+    "Wang, Yang, Iverson & Jiang (Mar 2021): correlation 0.42 (0.54 excluding 2005), 'largely contemporaneous'. Filings -31%; Chapter 7 about -25%; Chapter 13 about -55%. Over 200k expected vs 81k fewer consumer filings; 5,500 expected vs 645 fewer business filings. States with bigger unemployment rises saw bigger filing declines.",
+    "Eugeni (Chicago Fed Letter 52, 1991): 'sometimes respond to recessions with a lag'; 'do not file for bankruptcy immediately'. Filings +20% in 1985 and +32% in 1986 (ABI non-business data: +19.9% and +31.6%). New England +65% in 1989-90. Epiq May 2020 release text: 'largely a lagging economic indicator'.",
+    "Giesecke, Longstaff, Schaefer & Strebulaev 2011: 13 default cycles vs 31 recessions; 3.2 vs 1.5 years; persistence 0.574 vs 0.267; correlation 0.263. Lagged spreads have no incremental forecasting power. Stock returns and volatility do predict defaults. The recession dummy is significant at 10% and drops out in the combined model. Spreads about 2x expected losses (about 80bp). Giesecke et al. 2014: default crises of 20-50% of bonds had little or no GDP/IP effect, and bank lending rose after them.",
+    "Moody's 1920-2006, Exhibit 21: 1986 5.64%; 1988-91 3.60, 5.80, 10.08, 10.40; 1998-2002 3.52, 5.83, 6.27, 10.59, 8.25; 2006 1.57%, the lowest since 1981. Conference Board EPWP 11-05: spreads 'lagging rather than leading... default rates, which tend to lag the business cycle'. Bond Vigilantes (Jan 16 2009): Moody's peak forecast went from 10% to 15.4%.",
+    "Gilchrist & Zakrajsek: about 3.0pp annualized lower IP growth over 3 months and over 1.25pp lower GDP growth over 4 quarters per 100bp. Baa-Aaa 'economically negligible' at one year. EBP 0.414 vs predicted spread 0.213 for 12-month unemployment; sample 1973:M1-2010:M9; in-sample. Lopez-Salido, Stein & Zakrajsek (1929-2013, sentiment at t-2), Mian, Sufi & Verner (30 countries, 1960-2012) and Lown, Morgan & Rohatgi ('four of the past five', exception 1981-82) as quoted.",
+    "Kiley (June 2022): 7 large-unemployment-increase episodes over 1965-2019. Composite leading indicators are useful up to about 12 months only. The corporate spread is insignificant at 8 quarters. Results are full-sample, not real time.",
+    "Mayer, Pence & Sherlund: trouble from mid-2005; serious delinquency averaged 1.7% over 1979-2006 and reached 4.5%; subprime 5.6% to over 21%; 1.2M foreclosure starts in H1 2008 (+79%). Liberty Street Economics (Aug 11 2026): 7.6% to 12.8%; 40% to 80% of charged-off debt still reported; flow 'relatively stable for almost two years'. HHDC 2026Q2: early transitions up slightly for auto and mortgages, steady for cards, serious unchanged; about 137k bankruptcy notations.",
+    "NY Fed 'Page 17 Data': 948.6 (2005Q4); 213.9 (2006Q1); 258.8 to 352.3 during 2007; 621.4 (2010Q2); 136.8 (2026Q2); 2019 average 203.6. Foreclosures 220.2 (2006Q4) to 348.5 (2007Q4). UNRATE peak 10.0% in Oct 2009.",
+    "Contagion studies: Jorion & Zhang 2009: 251 Chapter 11 cases 1999-2005; creditors -0.90% (3 days) and -1.90% (11 days); industrial -2.29%, financial -0.34%; exposure about 0.3%. Lang & Stulz: -1% (abstract). Campbell, Hilscher & Szilagyi quote. Bernstein et al.: 4% a year, multiplier 1.3. Benmelech et al.: 0.36pp (5.9%) and 16.9-22.2%. Mian, Sufi & Trebbi: 20-30%, 15-25%, 20-35%. Mian & Sufi: about 4M of 6.2M jobs (65%).",
+    "Large-company filings: FDIC FYI (Jan 31 2002): 257 public-company filings in 2001 vs 176 in 2000 (+46%), running against the falling business-filing trend since about 1997. AP/BankruptcyData (Jan 13 2009): 136 in 2008 vs 78 in 2007 (+74%); record 263 in 2001.",
+    "Epiq release (Oct 8 2026), figures all match: 469,719 (+11%); individual 444,252 vs 399,379 is +11.2%, not the printed 7%; Chapter 7 282,413; Chapter 13 160,817; commercial 25,467; commercial Chapter 11 6,560; Subchapter V 2,442 (+46%); September commercial Chapter 11 648. S.3977 passed the Senate by unanimous consent on Aug 3 2026. The Subchapter V limit is $3,424,000.",
+    "FRED segment dates and units are as stated: M0933A 1894-01 to 1938-08; M0933B 1934-06 to 1939-12; M0933C 1939-01 to 1968-01; M0929C 1939-01 to 1965-06; M0969B 1934-06 to 1962-10; M0971B 1934-06 to 1961-02. Units are $mn or counts; all NSA. The 1939-40 coverage expansion is confirmed by FRED notes. Postwar 12-month averages show the strong uptrend.",
+    "Other items checked: the NBER's latest peak is Feb 2020 (BCDC page). Fay, Hurst & White is AER 2002, 92(3):706-718. HSUS Ch408-413 runs 1857-1998 (via Richardson & Gou 2011). FTI (Eisenband, Apr 4 2024): distress ratio moves 'in tandem... without an obvious lead-lag relationship'; correlation 'has broken down'; ratio about 6%; widest gap in 25 years; LTM measurement distorts lead/lag."
+   ]
+  }
+ },
+ {
+  "key": "data",
+  "research": {
+   "summary": "The data can support the study. The constraint is history: only a handful of recessions to test against.\n\n**What was downloaded**\n- 434 files (35 MB) went to /home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/.\n- MANIFEST.md lists every file with source URL, retrieval date (2026-10-12), sha256, row count, date range and notes. MANIFEST.csv holds the same table in machine-readable form.\n- Nothing is committed yet. The directory is untracked.\n\n**Coverage**\n- **Bankruptcy filings (US Courts Table F-2):** business vs non-business, by chapter, for 93\u201394 districts.\n  - Quarterly 2001Q1\u20132026Q2; monthly 2013-01\u20132026-06; county-level (Table F-5A) annual 2013\u20132025 plus the 12 months to June 2026.\n  - All 366 tables parsed and tie out: district rows sum to the national total, business + non-business = total, and monthly tables sum to quarterly.\n  - Quarterly business totals match the American Bankruptcy Institute (ABI) series exactly in 100 of 100 overlapping quarters.\n- **ABI compilations of court data:** quarterly business filings 1980Q1\u20132025Q4; quarterly non-business by chapter 1994Q1\u20132025Q4; annual 1980\u20132025.\n- **Epiq AACER monthly** (the source behind the ZeroHedge headline): national commercial filings by chapter and filings by district, 2006-01 to 2022-03, from workbooks ABI posts.\n  - After March 2022 only press-release text exists. 69 releases are archived.\n  - The September 2026 figures were hand-checked. The headline +11% year-to-date total is correct. The release's \"+7%\" for individual filings is an arithmetic error; its own levels give +11.2%.\n- **Dun & Bradstreet business failures:** monthly 1894\u20131968 (NBER, via FRED) and annual 1955\u20131997 (Economic Report of the President).\n- **NY Fed household credit (Q2-2026 report):** new bankruptcy and foreclosure notations, flows into 30+/90+ delinquency, data 2003\u20132026.\n- **Also downloaded:**\n  - 26 FRED series of bank delinquency and charge-off rates, 1985/87/91 onward.\n  - The Fed's GZ spread / excess bond premium CSV.\n  - FDIC bank failures 1934\u20132026.\n  - Test targets: recession dates, national and 51 state unemployment rates, jobless claims, Baa spreads, long equity indices.\n\n**Not openly available**\n- Moody's and S&P speculative-grade default rates.\n- S&P Global Market Intelligence large-bankruptcy counts and sector splits (article text only).\n- Industry/sector detail for business bankruptcies from any official source.\n- Epiq data files after March 2022.\n- Subchapter V counts, except in large court microdata or press releases.\n- The LoPucki large-company bankruptcy database requires accepting academic-use-only terms. I did not accept them.\n\n**Breaks any test must handle**\n- 1978 Bankruptcy Code; 1984, 1986 (Chapter 12) and 1994 law changes.\n- BAPCPA, October 2005: a rush to file, then a collapse and a permanent change in chapter mix.\n- Subchapter V from February 2020, with its debt limit changing in 2020, 2022 and 2024.\n- COVID support in 2020\u201321: filings fell while unemployment spiked. Student-loan delinquencies were hidden from credit reports 2020Q2\u20132024Q4.\n- Dun & Bradstreet definition changes in 1933, 1934\u201339, 1940 and 1984.\n- Bank data: the 2001 Call Report reform and the 2010Q1 accounting change for credit-card loans.\n- Arkansas districts combined, and the F-2 table layout changed, in 2018Q3.\n- The October 2025 shutdown: national and state unemployment are missing for that month.\n- First-print court counts get revised up later (up to 5% for business Chapter 11 in 2008\u201309). Real-time tests must use first prints.\n\n**Statistical power**\n- Court data covers six recessions. The 1980 one has no lead-in data. In 2020 filings fell because of policy support.\n- The Dun & Bradstreet monthly series adds 17 earlier recessions, but under a different bankruptcy law and definitions.\n\n**Two side findings**\n- The dashboard's \"CRE delinquency\" (backend/app/config.py:138 and severity.py:188) uses DRSREACBS. That series covers all real-estate-secured loans, residential mortgages included. Commercial real estate alone is DRCRELEXFACBS.\n- FRED requests with cosd=1900-01-01 silently drop pre-1900 data. 14 series were truncated on my first pass. Use cosd=1700-01-01.\n\nI re-hashed 60 files and cross-checked sources, but I am not an independent reviewer. Under the house rule, an independent agent must still check this before it is used.",
+   "findings": [
+    {
+     "claim": "Bankruptcy filing history is good and internally consistent: quarterly business filings since 1980Q1, quarterly non-business filings by chapter since 1994Q1, district-level business vs non-business by chapter quarterly since 2001Q1 and monthly since 2013-01.",
+     "evidence": "Downloaded 102 three-month, 102 twelve-month and 54 one-month US Courts F-2 tables plus 14 county tables; uscourts.gov pages for 1997\u20132000 return 404. Parsed all 366 tables with zero failures on the checks: district rows sum to national, business + non-business = total, monthly tables sum to quarterly. Business totals equal the ABI series in 100 of 100 overlapping quarters. Calendar-2025 twelve-month table: 574,314 total and 24,737 business, matching the ABI annual figures.",
+     "sources": [
+      "https://www.uscourts.gov/data-news/reports/statistical-reports/bankruptcy-filings-statistics",
+      "https://abi-org.s3.us-east-1.amazonaws.com/Newsroom/State_Filing_Trends/2026/QUARTERLY-BUSINESS-1980-PRESENT.pdf",
+      "https://abi-org.s3.us-east-1.amazonaws.com/Newsroom/State_Filing_Trends/2026/Quarterlynonbusinessfilingsbychapter1994-Present.pdf"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Epiq AACER monthly data is publicly available as files only from 2006-01 to 2022-03. After that it exists only as national figures in press-release text. Subchapter V counts are not published as an open file.",
+     "evidence": "The ABI archive has 13 pages with 240 workbook links (April 2012 to March 2022 releases). Each workbook carries several years of history: the Dec-2012 vintage covers 2006-01 to 2012-12 and the Mar-2022 vintage covers 2013-01 to 2022-03. Epiq's newsroom has 69 releases from Nov-2020 to Sep-2026 with no data attachments. ABI's Subchapter V page links only a Power BI dashboard. Auto-extraction from release text was tried and rejected as unreliable.",
+     "sources": [
+      "https://www.abi.org/newsroom/bankruptcy-statistics/epiq",
+      "https://www.epiqglobal.com/en-us/resource-center/news",
+      "https://www.abi.org/newsroom/bankruptcy-statistics"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "The headline +11% year-to-date rise in total filings for Jan\u2013Sep 2026 is correct, but the release's figure for individual filings is misprinted: +7% printed, +11.2% from its own levels.",
+     "evidence": "Epiq release of 2026-10-08: total 469,719 vs 423,168 (+11.0%); individual 444,252 vs 399,379 (+11.2%, printed +7%); commercial 25,467 vs 23,789 (+7.1%); commercial Ch 11 6,560 vs 5,895 (+11.3%); Subchapter V 2,442 vs 1,672 (+46.1%). September 2026 commercial filings were -6.9% and commercial Ch 11 -15.7% year on year, against a Sep-2025 base that included 109 related filings from one company.",
+     "sources": [
+      "https://www.epiqglobal.com/en-us/resource-center/news/small-business-subchapter-v-elections-increase-46-compared-to-last-year"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Epiq 'commercial' filings are a different measure from US Courts 'business' filings and cannot be spliced or mixed.",
+     "evidence": "Annual 2006\u20132021, Epiq commercial runs 1.23\u20131.72x US Courts business filings. Monthly 2013-01 to 2022-03, Epiq commercial Ch 13 runs 3.0\u20137.4x US Courts business Ch 13 (median 4.7x), while Epiq commercial Ch 11 runs 0.68\u20131.03x (median 0.88x). Epiq commercial jumps about 25\u201330% in early 2016 (2015H2 average 2,498 a month; 2016H1 average 3,292) while US Courts business rose about 4%. The 'Chapter 11 Summary' sheet means all Ch 11 in the 2012/2017 vintages but commercial-only in 2022. Revisions between vintages are small (\u22641.2% a year).",
+     "sources": [
+      "https://www.abi.org/newsroom/bankruptcy-statistics/epiq",
+      "https://www.uscourts.gov/data-news/reports/statistical-reports/bankruptcy-filings-statistics"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Speculative-grade default rates (Moody's, S&P) and S&P Global Market Intelligence large-bankruptcy counts with sector splits are not openly available as data. Neither US Courts nor the FJC publishes industry codes for business bankruptcies.",
+     "evidence": "Searches found only registration- or paywall-gated S&P research PDFs and article text. S&P GMI figures appear only in articles; secondary press reports 372 large filings in H1-2026 (not verified against S&P). The FJC codebook has only a coarse 'nature of business' field, and the F-2/F-5A tables have no industry dimension. Open proxies downloaded: GZ spread/EBP, BAA10YM, BAA\u2013AAA, FDIC failures, business Ch 11 counts.",
+     "sources": [
+      "https://www.spglobal.com/market-intelligence/en/news-insights/articles/2025/10/us-corporate-bankruptcies-decline-in-september-for-1st-time-since-april-93606336",
+      "https://www.fjc.gov/research/idb/bankruptcy-cases-filed-terminated-and-pending-fy-2008-present",
+      "https://www.federalreserve.gov/econres/notes/feds-notes/ebp_csv.csv"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Business-failure history before 1980 exists, but with hard breaks: Dun & Bradstreet monthly counts and liabilities 1894\u20131968 (Bradstreet's from 1893; quarterly from 1875) and annual failures and failure rate 1955\u20131997.",
+     "evidence": "33 NBER Macrohistory series via FRED. Notes document a 1933 redefinition, the 1933 Bradstreet\u2013Dun merger, a 1934\u201339 segment including Section 77-B reorganizations, a coverage expansion applied from 1939 (HSUS p. 909) and a 1940 industry reclassification. Monthly liabilities from 1894 include bank failures. Economic Report of the President 2004 Table B-96 (1955\u20131997) states that 1984+ uses expanded coverage and is not comparable. The census.gov copy of HSUS V 20-30 (1857\u20131970) is an image-only scan and was not extracted.",
+     "sources": [
+      "https://fred.stlouisfed.org/series/M0929CUSM474NNBR",
+      "https://data.nber.org/databases/macrohistory/contents/chapter09.html",
+      "https://www.govinfo.gov/content/pkg/ERP-2004/html/ERP-2004-table96.htm",
+      "https://www2.census.gov/library/publications/1975/compendia/hist_stats_colonial-1970/hist_stats_colonial-1970p2-chV.pdf"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "The dashboard's 'CRE delinquency' input is the wrong series. DRSREACBS covers all real-estate-secured loans, residential mortgages included. Commercial real estate alone is DRCRELEXFACBS (delinquency) / CORCREXFACBS (charge-off), from 1991Q1.",
+     "evidence": "backend/app/config.py:138 sets \"delinq_cre\": \"DRSREACBS\"  # CRE delinquency rate, and backend/app/metrics/severity.py:188 labels it 'CRE delinquency'. FRED's title for DRSREACBS is 'Delinquency Rate on Loans Secured by Real Estate, All Commercial Banks'.",
+     "sources": [
+      "https://fred.stlouisfed.org/series/DRSREACBS",
+      "https://fred.stlouisfed.org/series/DRCRELEXFACBS",
+      "/home/user/uranium-dashboard/treasury-canary/backend/app/config.py"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "FRED CSV requests with cosd=1900-01-01, as recommended in the task brief, silently drop pre-1900 observations.",
+     "evidence": "Re-downloading with cosd=1700-01-01 changed 14 files, e.g. USREC 1,522 \u2192 2,063 rows (starts 1854-12), Q09033USQ144NNBR 5 \u2192 105 rows, and the Cowles index M1125AUSM343NNBR 685 \u2192 1,033 rows.",
+     "sources": [
+      "https://fred.stlouisfed.org/graph/fredgraph.csv?id=USREC&cosd=1700-01-01"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Real-time tests must use first-print court counts, because later tables revise them up materially in surges.",
+     "evidence": "The 12-month table to 2008-09-30 shows business Ch 11 at 7,962, against 7,567 for the sum of the four first-print quarterly tables (+5.2%). Same pattern for 2008-12 (+4.2%) and 2009-03 (+3.1%). Every US Courts table carries the note 'database is continually updated'.",
+     "sources": [
+      "https://www.uscourts.gov/data-news/reports/statistical-reports/bankruptcy-filings-statistics"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Publication lags: Epiq national monthly 2\u201312 days after month end; US Courts quarterly tables (with monthly detail) about 3\u20134 weeks after quarter end; NY Fed household credit report about 5\u20136 weeks; Fed bank charge-off/delinquency about 8 weeks; FJC microdata about 2 months; ABI historical tables yearly; GZ/EBP about 1 week.",
+     "evidence": "Epiq releases in 2026: Jan 12 (Dec data) through Oct 8 (Sep data). US Courts file Last-Modified dates: Q4-2025 on 2026-01-30, Q1-2026 on 2026-04-22, Q2-2026 on 2026-07-27. FRED updated the Q2 bank series on 2026-08-25; the Fed says 'approximately sixty days'. The NY Fed Q2 report is dated August 2026. The FJC Jun-30-2026 snapshot was posted 2026-09-02. ebp_csv.csv Last-Modified is 2026-10-06 with September data. ABI PDFs are dated 2026-06-27 and end in 2025.",
+     "sources": [
+      "https://www.epiqglobal.com/en-us/resource-center/news",
+      "https://www.federalreserve.gov/releases/chargeoff/about.htm",
+      "https://www.newyorkfed.org/microeconomics/hhdc"
+     ],
+     "confidence": "medium"
+    },
+    {
+     "claim": "The NY Fed household data gives national bankruptcy and foreclosure notations and delinquency flows by product from 2003, but state detail only for 11 states. Its student-loan and COVID-era readings are policy-distorted.",
+     "evidence": "In the HHD_C_Report_2026Q2 workbook, p17 has new foreclosures and bankruptcies (thousands of consumers) 2003Q1\u20132026Q2, with 136.8k new bankruptcies in 2026Q2; p13/p14 are 4-quarter moving-sum flows, and student loans are absent before 2004. p39/p40 cover AZ CA FL IL MI NJ NV NY OH PA TX plus a national row. The all-states area_report_by_year file (2003\u20132025) has no bankruptcy series. The 2026Q2 report revised Q1 card balances and notes a mortgage servicer-transfer reporting gap.",
+     "sources": [
+      "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/HHD_C_Report_2026Q2.xlsx",
+      "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/area_report_by_year.xlsx"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "The ABI historical PDFs contain transcription errors, so the US Courts F-2 tables should be preferred from 2001 on.",
+     "evidence": "Against US Courts: 2001Q3 non-business Ch 13 (ABI 105,000 vs 105,100); 2003Q1 non-business Ch 7 (285,154 vs 285,883); 2010Q1 non-business total (373,551 vs 373,541); 2011Q1 non-business total (353,082 vs 353,802). No second source to check: 1995 quarters sum to 50,878 vs a printed 51,878; 1999Q3 non-business chapters exceed the total by 8,782. In 2019\u20132020 the Ch 7/Ch 13 split differs by up to 337 cases while totals agree.",
+     "sources": [
+      "https://abi-org.s3.us-east-1.amazonaws.com/Newsroom/State_Filing_Trends/2026/Quarterlynonbusinessfilingsbychapter1994-Present.pdf",
+      "https://abi-org.s3.us-east-1.amazonaws.com/Newsroom/State_Filing_Trends/2026/QUARTERLY-BUSINESS-1980-PRESENT.pdf"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Statistical power, not data access, limits any lead/lag claim for bankruptcies.",
+     "evidence": "Court filings from 1980 cover six recessions (1980, 1981\u201382, 1990\u201391, 2001, 2007\u201309, 2020). The 1980 recession has no lead-in data, and in 2020 filings collapsed (non-business 175,146 in 2020Q1 \u2192 119,241 in 2020Q2) while unemployment spiked. BAPCPA in 2005\u201306 breaks levels and chapter mix (Ch 7 share 80.0% in 2005, 58.4% in 2006). The Dun & Bradstreet monthly series adds 17 recessions (1895\u20131960 peaks) under the pre-1978 bankruptcy law and Dun & Bradstreet definitions.",
+     "sources": [
+      "https://fred.stlouisfed.org/series/USREC",
+      "https://abi-org.s3.us-east-1.amazonaws.com/Newsroom/State_Filing_Trends/2026/Quarterlynonbusinessfilingsbychapter1994-Present.pdf"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Unemployment for October 2025 is missing in UNRATE and all 51 state series, so state-panel and Sahm-type computations need explicit gap handling.",
+     "evidence": "The FRED CSVs have a blank 2025-10-01 value for UNRATE and every {ST}UR file (one missing observation each); this matches the October 2025 shutdown, when the CPS was not collected.",
+     "sources": [
+      "https://fred.stlouisfed.org/series/UNRATE",
+      "https://fred.stlouisfed.org/series/CAUR"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "A long monthly US equity index is openly available, but Shiller's current file could not be retrieved.",
+     "evidence": "FRED SPASTT01USM661N (OECD share prices, 1957-01..2026-08), NASDAQCOM (daily 1971-02-05..2026-10-09), and the NBER/Cowles M1125AUSM343NNBR (1871-01..1956-12) were downloaded. shillerdata.com resets through the proxy. The downloaded CDN copy of ie_data.xls ends 2024-09, and the Yale copy ends 2023-09.",
+     "sources": [
+      "https://fred.stlouisfed.org/series/SPASTT01USM661N",
+      "https://fred.stlouisfed.org/series/M1125AUSM343NNBR",
+      "http://www.econ.yale.edu/~shiller/data/ie_data.xls"
+     ],
+     "confidence": "high"
+    }
+   ],
+   "datasets": [
+    {
+     "name": "US Courts Table F-2, three months (business/non-business x chapter 7/11/13/other, by circuit and district)",
+     "id_or_url": "https://www.uscourts.gov/data-news/data-tables/YYYY/MM/DD/bankruptcy-filings/f-2-three-months (files under /sites/default/files/...)",
+     "frequency": "quarterly flows",
+     "start": "2001Q1",
+     "end": "2026Q2",
+     "publication_lag": "~3\u20134 weeks after quarter end (Q4-25 posted 2026-01-30; Q1-26 2026-04-22; Q2-26 2026-07-27)",
+     "breaks": "Revised continually; first prints understate surges (business Ch11 +3\u20135% later in 2008\u201309). Arkansas E/W combined as AR from 2018Q3 (94 to 93 districts); GUAM relabelled GU in 2021. Layout change in 2018Q3: the Ch 12 column became 'other chapters 9/12/15/304'; before that, Ch 9/15/304 appear only in the total. BAPCPA (Oct-2005) and COVID level breaks.",
+     "access_notes": "Worked: uscourts.gov data-table pages linking xls/xlsx with a generic browser UA. 100 of 102 quarters are spreadsheets; 2004Q4 and 2005Q1 are PDF only. 1997\u20132000 pages return 404. Parsed to derived/uscourts_f2_3month_by_district_2001Q1_2026Q2.csv; all checks passed, and business totals match ABI in 100/100 quarters. Subchapter V is not broken out.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/uscourts/f2_3month/"
+    },
+    {
+     "name": "US Courts Table F-2, 12 months ending (same layout)",
+     "id_or_url": "https://www.uscourts.gov/data-news/data-tables/YYYY/MM/DD/bankruptcy-filings/f-2",
+     "frequency": "quarterly (rolling 12-month)",
+     "start": "2001Q1",
+     "end": "2026Q2",
+     "publication_lag": "~3\u20134 weeks after quarter end",
+     "breaks": "Same as F-2 three months. A later vintage than the quarterly first prints. Calendar-2025 total of 574,314 equals the ABI annual figure.",
+     "access_notes": "102 files (2 PDF-only). Parsed to derived/uscourts_f2_12month_by_district_2001Q1_2026Q2.csv.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/uscourts/f2_12month/"
+    },
+    {
+     "name": "US Courts Table F-2, one month (monthly, by district and chapter)",
+     "id_or_url": "https://www.uscourts.gov/data-news/data-tables/YYYY/MM/DD/bankruptcy-filings/f-2-one-month",
+     "frequency": "monthly (published quarterly, 3 sheets per file)",
+     "start": "2013-01",
+     "end": "2026-06",
+     "publication_lag": "4\u201313 weeks (monthly detail arrives with the quarter)",
+     "breaks": "AR combined from 2018-07; layout change in 2018Q3; seasonal and not seasonally adjusted (Mar\u2013Apr peak).",
+     "access_notes": "54 xls/xlsx files. Parsed to derived/uscourts_f2_1month_by_district_2013M01_2026M06.csv (162 months); monthly sums equal the quarterly tables exactly.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/uscourts/f2_1month/"
+    },
+    {
+     "name": "US Courts Table F-5A, by county (FIPS) and chapter",
+     "id_or_url": "https://www.uscourts.gov/data-news/data-tables/YYYY/MM/DD/bankruptcy-filings/f-5a",
+     "frequency": "quarterly (rolling 12-month); December editions are calendar years",
+     "start": "2013 (12m to 2013-03-31 available; downloaded Dec-2013)",
+     "end": "12 months to 2026-06-30",
+     "publication_lag": "~3\u20134 weeks after quarter end",
+     "breaks": "County codes marked * are outside the filing district; AR combined from 2018.",
+     "access_notes": "Only December editions 2013\u20132025 plus Jun-2026 were downloaded (14 xlsx, 9.9 MB); all 54 quarters are available. Not parsed.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/uscourts/f5a_county/"
+    },
+    {
+     "name": "ABI quarterly US business bankruptcy filings (US Courts data)",
+     "id_or_url": "https://abi-org.s3.us-east-1.amazonaws.com/Newsroom/State_Filing_Trends/2026/QUARTERLY-BUSINESS-1980-PRESENT.pdf",
+     "frequency": "quarterly",
+     "start": "1980Q1",
+     "end": "2025Q4",
+     "publication_lag": "annual refresh (PDF dated 2026-06-27)",
+     "breaks": "1978 Code (series starts 1980); Ch 12 introduced late 1986 (1987Q2 spike); BAPCPA 2005Q4/2006Q1; 1995 quarters sum 1,000 below the printed total; ABI's annual totals differ from the quarterly sums by up to 679 (late processing).",
+     "access_notes": "PDF from ABI's open S3 bucket; parsed to derived/abi_quarterly_business_filings_1980_2025.csv.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/abi/QUARTERLY-BUSINESS-1980-PRESENT.pdf"
+    },
+    {
+     "name": "ABI quarterly non-business filings by chapter 7/11/13 (US Courts data)",
+     "id_or_url": "https://abi-org.s3.us-east-1.amazonaws.com/Newsroom/State_Filing_Trends/2026/Quarterlynonbusinessfilingsbychapter1994-Present.pdf",
+     "frequency": "quarterly",
+     "start": "1994Q1",
+     "end": "2025Q4",
+     "publication_lag": "annual refresh",
+     "breaks": "BAPCPA rush and collapse (2005Q4 654,633; 2006Q1 112,685); 1994 Reform Act; typos at 1999Q3, 2001Q3, 2003Q1, 2010Q1, 2011Q1 (see MANIFEST section 5).",
+     "access_notes": "PDF parsed to derived/abi_quarterly_nonbusiness_by_chapter_1994_2025.csv.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/abi/Quarterlynonbusinessfilingsbychapter1994-Present.pdf"
+    },
+    {
+     "name": "ABI annual total/business/non-business filings, plus Ch 9 (quarterly), Ch 12 (annual), Ch 15 (quarterly)",
+     "id_or_url": "https://abi-org.s3.us-east-1.amazonaws.com/Newsroom/State_Filing_Trends/2026/Total-Business-Consumer1980-Present.pdf (also Chapter9Filings1980-Current.pdf, Chapter12AnnualFilings.pdf, Chapter15Filings.pdf)",
+     "frequency": "annual (Ch 9 and Ch 15 quarterly)",
+     "start": "1980 (Ch 12 1986; Ch 15 2005Q4)",
+     "end": "2025",
+     "publication_lag": "annual",
+     "breaks": "Same legal breaks as above.",
+     "access_notes": "Annual table parsed to derived/abi_annual_business_nonbusiness_1980_2025.csv. ABI's 51 state-trend PDFs (~3 MB each) were not downloaded; the F-2 district tables cover states.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/abi/"
+    },
+    {
+     "name": "Epiq AACER monthly statistics workbooks (commercial filings by chapter 7/11/13/15 with filing days; filings by state YTD and by district monthly)",
+     "id_or_url": "https://www.abi.org/newsroom/bankruptcy-statistics/epiq (240 file links on abi-org-d10.s3.amazonaws.com)",
+     "frequency": "monthly",
+     "start": "2006-01",
+     "end": "2022-03",
+     "publication_lag": "2\u201312 days after month end",
+     "breaks": "Epiq 'commercial' differs from US Courts 'business' (1.23\u20131.72x annually; Ch 13 3\u20137x); unexplained +25\u201330% step in early 2016; the 'Chapter 11 Summary' sheet's definition changed between vintages (all Ch 11 vs commercial only); related-filing clusters.",
+     "access_notes": "Four vintages downloaded (Apr-2012, Dec-2012, Dec-2017, Mar-2022), each holding multi-year history. Commercial monthly by chapter extracted to derived/epiq_commercial_monthly_2006M01_2022M03.csv. District-monthly sheets were not parsed. Data \u00a9 Epiq, posted publicly by ABI.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/epiq_abi_archive/"
+    },
+    {
+     "name": "Epiq/ABI monthly press releases (national total, individual, individual Ch 7/13, commercial, commercial Ch 11, Subchapter V)",
+     "id_or_url": "https://www.epiqglobal.com/en-us/resource-center/news",
+     "frequency": "monthly (text)",
+     "start": "2020-11 (release Dec-2020)",
+     "end": "2026-09 (released 2026-10-08)",
+     "publication_lag": "2\u201312 days",
+     "breaks": "Subchapter V debt-limit changes (2020, 2022, 2024; permanent $7.5M bill pending as of 2026-10-08); related-filing clusters; printed % changes can be wrong.",
+     "access_notes": "No data files after Mar-2022. 69 releases archived as cleaned text JSON. Regex extraction was rejected as unreliable. The Sep-2026 and YTD values were hand-transcribed and checked in epiq_2026-09_release_values_manual.csv. ABI's Subchapter V stats are a Power BI dashboard with no open file.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/epiq_press/"
+    },
+    {
+     "name": "S&P Global Market Intelligence monthly large US corporate bankruptcies (with sector counts)",
+     "id_or_url": "https://www.spglobal.com/market-intelligence/en/news-insights/articles/ (monthly articles)",
+     "frequency": "monthly (article text)",
+     "start": "2010",
+     "end": "2026 (June/August seen in secondary press)",
+     "publication_lag": "~1\u20132 weeks",
+     "breaks": "S&P size and public-debt inclusion thresholds (not re-verified).",
+     "access_notes": "NOT DOWNLOADED: no open data file; counts and sector splits exist only in article text and charts. Secondary press: 372 filings in H1-2026 (highest since 2010), 72 each in May and June 2026 (unverified).",
+     "saved_path": ""
+    },
+    {
+     "name": "FJC Integrated Database, bankruptcy cases (case-level: filing date, district, chapter, nature of debt, debtor county FIPS, Subchapter V flags, small-business flag, assets/liabilities)",
+     "id_or_url": "https://www.fjc.gov/research/idb/bankruptcy-cases-filed-terminated-and-pending-fy-2008-present (cpbank08to17.zip, cpbank18on.zip)",
+     "frequency": "case-level, fiscal-year snapshots",
+     "start": "FY2008 (2007-10)",
+     "end": "2026-06-30 snapshot",
+     "publication_lag": "~2 months (posted 2026-09-02)",
+     "breaks": "Debtor ZIP/county/pro-se fields for FY2008 to Jun-2021 corrected in Nov-2021; intra-district transfers must be excluded with the filing indicator to match published tables.",
+     "access_notes": "NOT DOWNLOADED: open and keyless, but 1.47 GB + 0.89 GB zipped. Codebook saved. It is the only open route to county-level monthly and Subchapter V history. No NAICS field.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fjc/Bankruptcy_IDB_Online_Codebook_rev_02282023.pdf"
+    },
+    {
+     "name": "Florida-UCLA-LoPucki Bankruptcy Research Database (large public companies)",
+     "id_or_url": "https://lopucki.law.ufl.edu/download_cases_table_terms.php",
+     "frequency": "case-level",
+     "start": "1979-10",
+     "end": "2022-12 (no further updates)",
+     "publication_lag": "discontinued",
+     "breaks": "Size threshold of $100M in 1980 dollars.",
+     "access_notes": "NOT DOWNLOADED: free download requires accepting terms limited to academic research at subscribing institutions, with non-disclosure. Not accepted on Casey's behalf.",
+     "saved_path": ""
+    },
+    {
+     "name": "NBER Macrohistory ch. 9: number of business failures (Bradstreet's; Dun's/D&B all commercial segments a/b/c; manufacturing and trading; size classes)",
+     "id_or_url": "FRED M09028USM474NNBR, Q09028USQ474NNBR, Q09029USQ155NNBR, M0929AUSM155NNBR, M0929BUSM155NNBR, M0929CUSM474NNBR, M0930A/B/C, M0931A/B/C, M09076USM234NNBR, M09077USM234NNBR (mirrors of data.nber.org rectdata/09)",
+     "frequency": "monthly (quarterly 1875\u20131894)",
+     "start": "1875Q1 (quarterly); 1893-01 (monthly)",
+     "end": "1933-01 / 1938-08 / 1939-12 / 1965-06 / 1969-12 (by segment)",
+     "publication_lag": "historical",
+     "breaks": "1933 redefinition; Bradstreet\u2013Dun merger Mar-1933; Jun-1934 to 1939 includes 77-B reorganizations; coverage expansion applied from 1939; 1940 SIC reclassification; overlapping segments allow ratio splicing.",
+     "access_notes": "FRED CSV with cosd=1700-01-01 (cosd=1900 truncates). NBER .dat files at data.nber.org/databases/macrohistory/rectdata/09/ also work.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fred_nber/"
+    },
+    {
+     "name": "NBER Macrohistory ch. 9: liabilities of business failures, failure liabilities / NFC current liabilities, suspended banks, nonfarm foreclosures, instalment-loan delinquency",
+     "id_or_url": "FRED M09032USM144NNBR, Q09032USQ144NNBR, M0933AUSM144NNBR, M0933BUSM144NNBR, M0933CUSM144NNBR, Q09033USQ144NNBR, M0934A/B/C, M0935A/B/C, Q0983AUSQ156NNBR, Q0983BUSQ156NNBR, M09036USM155NNBR, Q09064USQ469NNBR, Q09065USQ144NNBR, M09075USM476NNBR, M09088USM156NNBR",
+     "frequency": "monthly/quarterly",
+     "start": "1875Q1 (liabilities quarterly); 1893-01 monthly",
+     "end": "1968-01 (liabilities); 1969Q1 (ratio); 1933-02 (suspended banks); 1963-03 (foreclosures); 1968-12 (instalment delinquency)",
+     "publication_lag": "historical",
+     "breaks": "Monthly liabilities from 1894 (m09033a) include bank failures; the quarterly series includes banks 1875\u20131892 but not 1893\u20131900; same D&B breaks as the number-of-failures series.",
+     "access_notes": "FRED CSV, cosd=1700-01-01.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fred_nber/"
+    },
+    {
+     "name": "Dun & Bradstreet annual business failures, failure rate per 10,000 listed enterprises, liabilities by size; new incorporations; net business formation index",
+     "id_or_url": "https://www.govinfo.gov/content/pkg/ERP-2004/html/ERP-2004-table96.htm (Economic Report of the President 2004, Table B-96)",
+     "frequency": "annual",
+     "start": "1955",
+     "end": "1997",
+     "publication_lag": "discontinued",
+     "breaks": "Commercial and industrial only through 1983; 1984+ expanded coverage and new methodology, not comparable; net formation index discontinued 1995.",
+     "access_notes": "HTML table (text); parsed to derived/dnb_business_failures_annual_1955_1997_erp2004_b96.csv. The pre-1955 failure rate (HSUS Colonial Times V 20-30, 1857\u20131970) exists only as an image scan on census.gov; no OCR available, so not extracted. HSUS Millennial is paywalled.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/dnb_erp/ERP-2004-table96.htm"
+    },
+    {
+     "name": "NY Fed Quarterly Report on Household Debt and Credit, 2026Q2 data workbook (new bankruptcy/foreclosure notations; flows into 30+/90+ by product; by age; 11-state panels)",
+     "id_or_url": "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/HHD_C_Report_2026Q2.xlsx",
+     "frequency": "quarterly",
+     "start": "2003Q1 (some sheets 1999Q1/Q2; student-loan flows 2004)",
+     "end": "2026Q2",
+     "publication_lag": "~5\u20136 weeks (2026Q2 report released Aug 2026)",
+     "breaks": "5% CCP/Equifax sample counting consumers (joint filers counted twice); student-loan delinquencies suppressed 2020Q2\u20132024Q4; 2020\u201321 moratoria; history restated each release; 2026Q2 mortgage servicer-transfer reporting gap.",
+     "access_notes": "Direct xlsx URL (the page is JS-rendered). Tidy extracts in derived/nyfed_hhdc_2026Q2_*.csv (pages 12, 13, 14, 17, 37\u201340).",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/nyfed/HHD_C_Report_2026Q2.xlsx"
+    },
+    {
+     "name": "NY Fed State Level Household Debt Statistics (all states: per-capita balances and % 90+ delinquent by product)",
+     "id_or_url": "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/area_report_by_year.xlsx",
+     "frequency": "annual (Q4)",
+     "start": "2003",
+     "end": "2025",
+     "publication_lag": "annual (Feb 2026 release)",
+     "breaks": "Student-loan reporting suppression 2020\u20132024.",
+     "access_notes": "No bankruptcy or foreclosure series in this file. State bankruptcy data exists only for 11 states in the quarterly workbook.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/nyfed/area_report_by_year.xlsx"
+    },
+    {
+     "name": "Fed bank delinquency rates, all commercial banks, SA (all loans, C&I, consumer, credit card, other consumer, SFR mortgage, real-estate-secured, CRE ex-farmland, agri production, farmland, leases, top-100, other banks)",
+     "id_or_url": "FRED DRALACBS, DRBLACBS, DRCLACBS, DRCCLACBS, DROCLACBS, DRSFRMACBS, DRSREACBS, DRCRELEXFACBS, DRFAPGACBS, DRFLACBS, DRLFRACBS, DRALT100S, DRALOBS",
+     "frequency": "quarterly (end of period)",
+     "start": "1985Q1 (DRALACBS, DRALT100S, DRALOBS); 1987Q1 (DRBLACBS, DRCLACBS, DRSREACBS, DRFAPGACBS, DRLFRACBS); 1991Q1 (DRCCLACBS, DROCLACBS, DRSFRMACBS, DRCRELEXFACBS, DRFLACBS)",
+     "end": "2026Q2",
+     "publication_lag": "~8 weeks (Q2 updated 2026-08-25)",
+     "breaks": "Mar-2001 Call Report reform (Fed imputations for small banks before it); FAS 166/167 in 2010Q1 (card loans); CARES \u00a74013/TDR relief 2020\u201321; delinquency = 30+ days past due and accruing, plus nonaccrual; small seasonal-factor revisions (ALFRED).",
+     "access_notes": "FRED keyless CSV. DRSREACBS is all real-estate-secured loans, not CRE (dashboard mislabel at config.py:138).",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fred/"
+    },
+    {
+     "name": "Fed bank net charge-off rates, all commercial banks, SA, annualized",
+     "id_or_url": "FRED CORALACBS, CORBLACBS, CORCACBS, CORCCACBS, COROCLACBS, CORSFRMACBS, CORSREACBS, CORCREXFACBS, CORLAGACBS, CORFLACBS, CORLFRACBS, CORALT100S, CORALOBS",
+     "frequency": "quarterly",
+     "start": "1985Q1 (most); 1991Q1 (CORSFRMACBS, CORCREXFACBS, CORFLACBS)",
+     "end": "2026Q2",
+     "publication_lag": "~8 weeks",
+     "breaks": "Same as the delinquency rates.",
+     "access_notes": "FRED keyless CSV.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fred/"
+    },
+    {
+     "name": "Gilchrist\u2013Zakrajsek credit spread, excess bond premium, implied recession probability",
+     "id_or_url": "https://www.federalreserve.gov/econres/notes/feds-notes/ebp_csv.csv",
+     "frequency": "monthly",
+     "start": "1973-01",
+     "end": "2026-09",
+     "publication_lag": "~1 week (Last-Modified 2026-10-06)",
+     "breaks": "Model-based estimates whose history can revise; no real-time vintages; an Aug-2026 referee rejected EBP as a cycle-analog dimension.",
+     "access_notes": "Direct CSV download worked.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fed/ebp_csv.csv"
+    },
+    {
+     "name": "Moody's / S&P speculative-grade corporate default rates",
+     "id_or_url": "Moody's Annual Default Study; S&P Annual Global Corporate Default and Rating Transition Study (spglobal.com/ratings)",
+     "frequency": "monthly (trailing 12m) / annual",
+     "start": "1920 (Moody's) / 1981 (S&P)",
+     "end": "current",
+     "publication_lag": "monthly reports",
+     "breaks": "",
+     "access_notes": "NOT AVAILABLE openly (paywall or registration). Proxies downloaded: GZ/EBP, BAA10YM, BAA\u2013AAA, FDIC failures, business Ch 11. Request the tables from Casey if he has access; do not approximate.",
+     "saved_path": ""
+    },
+    {
+     "name": "FDIC bank failures and assistance transactions",
+     "id_or_url": "https://banks.data.fdic.gov/api/failures?limit=10000&format=csv&fields=...",
+     "frequency": "event-level",
+     "start": "1934-04-19",
+     "end": "2026-07-17",
+     "publication_lag": "days (API index created 2026-08-25)",
+     "breaks": "Includes FSLIC/RTC thrift resolutions in the 1980s\u201390s; ASSISTANCE (open-bank) transactions differ from FAILURE; assets/deposits in $000.",
+     "access_notes": "Keyless JSON/CSV API worked; 4,117 records. The banklist.csv URL now returns HTML.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fdic/fdic_failures_and_assistance_1934_2026.csv"
+    },
+    {
+     "name": "NBER recession indicators",
+     "id_or_url": "FRED USREC, USRECQ",
+     "frequency": "monthly / quarterly",
+     "start": "1854-12 / 1854Q4",
+     "end": "2026-09 / 2026Q3",
+     "publication_lag": "NBER announces peaks ~4\u201312 months and troughs ~15\u201321 months after the fact",
+     "breaks": "Right-censored: recent zeros are provisional.",
+     "access_notes": "FRED CSV with cosd=1700-01-01 (cosd=1900 cut 541 monthly rows).",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fred_targets/"
+    },
+    {
+     "name": "Unemployment rate (national)",
+     "id_or_url": "FRED UNRATE",
+     "frequency": "monthly",
+     "start": "1948-01",
+     "end": "2026-09",
+     "publication_lag": "~1 week",
+     "breaks": "2025-10 missing (shutdown; no October-2025 CPS).",
+     "access_notes": "FRED CSV.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fred_targets/UNRATE.csv"
+    },
+    {
+     "name": "State unemployment rates (50 states + DC)",
+     "id_or_url": "FRED {ST}UR (ALUR ... WYUR, DCUR)",
+     "frequency": "monthly",
+     "start": "1976-01",
+     "end": "2026-08",
+     "publication_lag": "~3 weeks (next release 2026-10-20)",
+     "breaks": "2025-10 missing in all 51 series; LAUS annual benchmark revisions.",
+     "access_notes": "FRED CSV, 51 files.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fred_state_ur/"
+    },
+    {
+     "name": "Initial jobless claims (SA and NSA)",
+     "id_or_url": "FRED ICSA, ICNSA",
+     "frequency": "weekly (ending Saturday)",
+     "start": "1967-01-07",
+     "end": "2026-10-03",
+     "publication_lag": "5 days",
+     "breaks": "COVID 2020 spike; seasonal-factor revisions.",
+     "access_notes": "FRED CSV; already tracked on the dashboard, included as a test target.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fred_targets/"
+    },
+    {
+     "name": "Moody's seasoned Baa and Aaa yields; Baa minus 10y Treasury",
+     "id_or_url": "FRED BAA, AAA, BAA10YM",
+     "frequency": "monthly",
+     "start": "1919-01 (BAA/AAA); 1953-04 (BAA10YM)",
+     "end": "2026-09",
+     "publication_lag": "~1 day after month end",
+     "breaks": "Moody's seasoned-index methodology; data \u00a9 Moody's via FRED.",
+     "access_notes": "FRED CSV.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/fred_targets/"
+    },
+    {
+     "name": "Long equity price indices",
+     "id_or_url": "FRED SPASTT01USM661N (OECD), NASDAQCOM, M1125AUSM343NNBR (Cowles/S&P), M1125BUSM347NNBR, M1109BUSM293NNBR (DJIA); Shiller ie_data.xls",
+     "frequency": "monthly (NASDAQCOM daily)",
+     "start": "1871-01 (Cowles, Shiller); 1957-01 (OECD); 1971-02-05 (NASDAQ)",
+     "end": "2026-08 (OECD); 2026-10-09 (NASDAQ); 1956-12 (Cowles); 2024-09 (Shiller copy)",
+     "publication_lag": "OECD ~2 weeks",
+     "breaks": "Splice needed: Cowles to 1956, then OECD from 1957; Cowles has 4 missing months.",
+     "access_notes": "shillerdata.com connection reset via proxy. Shiller copy taken from img1.wsimg.com CDN (ends 2024-09); the Yale copy ends 2023-09.",
+     "saved_path": "/home/user/uranium-dashboard/treasury-canary/studies/distress_signals/data/shiller/ie_data.xls"
+    }
+   ],
+   "open_questions": [
+    "Independent check still required: CLAUDE.md requires a counter-agent review of this data audit before it is used. I re-hashed 60 files and cross-checked sources, but I cannot stand in for an independent reviewer.",
+    "Missing input (ask Casey): does he have S&P/Moody's or S&P Global Market Intelligence access? Without it there is no open speculative-grade default-rate series and no sector split of large bankruptcies.",
+    "LoPucki large-company bankruptcy database: is accepting its academic-research-only terms appropriate for Casey's use? This is his decision and was not taken on his behalf. The data also stops in December 2022.",
+    "Should a separate pass stream the 2.4 GB FJC microdata outside the repo into monthly county-level and Subchapter V aggregates? It is the only open route to those dimensions.",
+    "Repo weight: commit all 35 MB, or drop the US Courts county tables (F-5A, 9.9 MB) and re-fetch them from the manifest URLs when needed?",
+    "The dashboard's 'CRE delinquency' uses DRSREACBS (all real-estate-secured loans). Should the severity index switch to DRCRELEXFACBS (true CRE, starts 1991Q1), and should frozen severity results be re-run?",
+    "If the live tracker alerts on Epiq figures, which come out 2\u201312 days after month end, should Epiq monthly data for April 2022 to September 2026 be hand-transcribed and checked by a second reader? The alternative is to use US Courts monthly data, which lags 4\u201313 weeks, as the series of record.",
+    "Shiller's current file could not be fetched because shillerdata.com was blocked through the proxy. Is the OECD (1957+) plus Cowles (to 1956) splice acceptable as the long equity target?"
+   ]
+  },
+  "verification": {
+   "verdict": "The files are sound, but the strand needs fixes before the study uses it: 3 BLOCKING gaps and 9 corrections. Integrity holds. All 434 files match their MANIFEST sha256 and byte counts. I wrote my own parser for the US Courts (AO) F-2 tables. It reproduces the derived national rows exactly for 364 of the 366 tables; I checked the other 2 (PDF-only) against the derived rows by eye. Every tie-out reproduces. Epiq, NY Fed, FRED/NBER, the Economic Report of the President (ERP) table, FDIC, the excess bond premium (EBP), recession and unemployment files all match their sources. The Epiq '+7%' misprint and the DRSREACBS ('CRE delinquency') mislabel are real.\n\nBlocking:\n- **Regional history is missed.** ABI openly hosts AO district and state filings for 1980\u20132000, and quarterly consumer filings by district from 1996. The regional panel need not start in 2001.\n- **Epiq Subchapter V comparisons are biased.** Each release revises the prior-year Subchapter V base down 5\u201311%. Headline growth is inflated: +46% as printed, +38% on first prints.\n- **The BAPCPA break is mis-specified.** The chapter mix did not change permanently. The 2006\u201307 rebound overlaps the run-up to the 2008 recession and would create a false consumer-filing 'lead'.\n\nAlso wrong or missing:\n- The first-print miss is one quarter at about 20\u201324% (2008Q2, led by Delaware), not 3\u20135% spread over several.\n- The NY Fed panel and the bank-rate real-time vintages did not exist before about 2010\u201312.\n- Open sector proxies exist, and the derived F-2 file drops the clean Chapter 12 farm series after 2018Q3.\n- The LoPucki terms exclude Casey.\n- Several small numeric slips.\n\nOptional, not blocking: the monthly Challenger job-cut reports are free and list cuts by reason, including 'Bankruptcy' (Aug-2026: 380; 9,667 year to date). That is the most direct open measure of Casey's 'bankruptcy causes lost income' channel. My scripts and parsed outputs are in /tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/verify-data (scripts/, parsed_f2_*.json).",
+   "blocking": [
+    "REGIONAL HISTORY BEFORE 2001 WAS MISSED. The strand and MANIFEST say district data start in 2001Q1 ('Pages for 1997\u20132000 return 404, so there is no pre-2001 AO table online'). That is true only of uscourts.gov. ABI hosts the AO's district and state tables as open HTML: annual business and consumer filings by district for 1980\u201384, 1985\u201389, 1990\u201394 and 1995\u201399; annual business filings by district 1990\u20132006; annual consumer filings by chapter at state level 1980\u201394; and quarterly consumer filings by district for 1996\u201397, 1998\u20132000, 2001\u201305 and 2006\u201311. Example: https://www.abi.org/newsroom/stats/annual-business-and-non-business-filings-by-district-1980-1984. Its United States row (331,264 / 43,694 / 287,570) equals ABI's national 1980 totals, and the 1990\u201394 page's 1990 row (782,960 / 64,853 / 718,107) also matches. The 2026 'Filing_Trends_<State>.pdf' files cover only 2000\u20132025, so skipping those was right. With these tables, the regional panel can run annually from 1980, adding the 1981\u201382 and 1990\u201391 recessions plus the 1986 oil-patch, 1990\u201391 New England and 1991\u201393 California busts. Quarterly consumer data by district can start in 1996. This changes the regional design and the strand's 'power, not data' verdict. Download and parse the tables before the design is frozen.",
+    "EPIQ SUBCHAPTER V COMPARISONS MIX VINTAGES, AND THE BIAS RUNS ONE WAY. Each release quotes a prior-year base that has been revised down 5\u201311% since its first print. Jan\u2013Sep 2025 was 1,764 (Oct-7-2025 release), now 1,672 (Oct-8-2026). H1-2025 was 1,183, now 1,107. Calendar 2024 was 2,381, now 2,202. Jan-2025 was 171, now 152. May-2025 was 228, now 207. Jul-2025 was 206, now 188. Sep-2025 was 210, now 200. Sources are epiq_press/\u2026cleantext.json; I re-fetched the Oct-2025 and Oct-2026 pages live. Bases for total and commercial filings barely move (423,053 \u2192 423,168; 23,666 \u2192 23,789). So the strand's 'recomputed +46.1%' compares a 2026 first print with a revised 2025 base. First print against first print gives 2,442 / 1,764 = +38%. The Jan-2026 release's 'Subchapter V up 11% in 2025' is only +2.7% on first prints (2,446 vs 2,381). The strand's open question proposes transcribing Epiq release text into a series for alerting. Any such tracker must store each month's first print and compare like with like, or it will flag a spurious acceleration in the most alarming current reading.",
+    "THE BAPCPA BREAK IS MIS-SPECIFIED AND, AS WRITTEN, WOULD CREATE A FALSE LEAD BEFORE THE GFC. (a) 'Permanent change in chapter mix (Ch 7 80.0% in 2005 \u2192 58.4% in 2006)' is wrong. The 80% was the rush to file before the law changed (85.6% in 2005Q4). Before the reform the consumer Chapter 7 share ran 68\u201372% (1994\u20132004). It returned to 71.4%, 71.6% and 70.3% in 2009\u201311, was about 70% in 2020\u201321 and 58% in 2022\u201323. The share is cyclical, not permanently shifted. (b) The rule 'never compute YoY changes across 2005\u201306' is too narrow. After the 2006Q1 trough, consumer filings rose from 112,685 to 218,428 by 2007Q4, and business filings from 4,086 to 7,985, all before the Dec-2007 peak. Year-on-year rises of 27\u201366% through 2007 are mechanical: the queue of filers who rushed in early in 2005 refilling. Consequence: for quarterly consumer filings, which start in 1994, the 2007\u201309 episode is not a clean test and 2020 is distorted by policy, so 2001 is the only clean recession. 'Six recessions' holds for business filings only. The study must exclude or explicitly model roughly 2005Q2\u20132008 for court counts, not just the 2005\u201306 YoY window."
+   ],
+   "corrections": [
+    {
+     "claim": "First-print court counts get revised up later, by up to 5% for business Chapter 11 in 2008\u201309 (3\u20135% in surges).",
+     "problem": "The +5.2%, +4.2% and +3.1% figures are 12-month totals that all contain 2008Q2. The miss is essentially one quarter, it is about 4\u20135 times larger than stated, and it reversed the direction of the change.",
+     "correct_version": "Outside 2008, the 12-month table exceeds the sum of first-print quarters by a median of 0.28% for business Ch 11. The gaps of 395, 376 and 331 at 2008-09, 2008-12 and 2009-03 all come from 2008Q2. Its first print (1,658) was about 20\u201324% low, and Delaware accounts for 121\u2013126 of the gap on a first print of 45. The first print showed business Ch 11 falling from 1,812 to 1,658 between 2008Q1 and 2008Q2; the revised data show a rise. Real-time tests must use first prints. Revised data overstate how early the 2008 signal appeared.",
+     "evidence": "Comparing derived f2_3month with f2_12month, national and district rows (my independent parse matches both exactly). Gap at 12m 2008-06: 21; 2008-09: 395; 2009-06: 41. Delaware first prints 2008Q1\u2013Q4: 60, 45, 306, 531. Delaware's district gaps: 126 (2008-09), 126 (2008-12), 121 (2009-03)."
+    },
+    {
+     "claim": "BAPCPA: 'a permanent change in chapter mix'; Chapter 7 share 80.0% in 2005 and 58.4% in 2006; 'never compute YoY changes across 2005\u201306'.",
+     "problem": "Contradicted by the downloaded data. See blocking item 3.",
+     "correct_version": "Consumer Chapter 7 share by year: 68.3\u201372.1% (1994\u20132004), 79.9% (2005, the rush), 58.2% (2006), 60.9% (2007), 66.5% (2008), 71.4% (2009), 71.6% (2010), about 70% (2020\u201321), 58% (2022\u201323), 64.0% (2026 H1). There is no permanent composition break. The level distortion runs at least from 2005Q2 to 2007\u201308.",
+     "evidence": "abi/Quarterlynonbusinessfilingsbychapter1994-Present.pdf for 1994\u20132000; AO first-print F-2 tables for 2001 onward. The 1999Q3 row with the typo was dropped."
+    },
+    {
+     "claim": "NY Fed household credit data run 2003\u20132026 with about a 5\u20136 week lag; bank delinquency rates have ALFRED vintages.",
+     "problem": "Neither series existed in real time for the 2001 or 2007\u201309 episodes. That is look-ahead bias in exactly the episodes the study would test.",
+     "correct_version": "The first NY Fed Quarterly Report on Household Debt and Credit came out in August 2010 (for 2010Q2). The underlying credit panel reached the NY Fed in 2009, so 2003\u20132010 values are later reconstructions, restated with every release. ALFRED returns no vintage of DRCCLACBS, DRALACBS or DRSREACBS for 2001, 2005, 2008 or 2010; the first one I found is 2012-01-01. Treat these series like EBP before about 2010\u201312: descriptive only, not 'known at the time'.",
+     "evidence": "Liberty Street Economics (2015) via web search: 'our very first Quarterly Report \u2026 was published in August 2010'. ALFRED alfredgraph.csv queries in my scratch dl/ folder."
+    },
+    {
+     "claim": "Without S&P, Moody's or S&P Global Market Intelligence access there is no sector split of large bankruptcies; no official source gives sector detail.",
+     "problem": "Overstated. Open sector proxies exist, and the derived file throws one away.",
+     "correct_version": "(a) S&P Global Market Intelligence's public monthly articles give sector counts. H1-2026: industrials 50, consumer discretionary 35, healthcare 26, out of 372. These can be transcribed like the Epiq releases. (b) The Federal Judicial Center (FJC) case database has a nature-of-business field flagging every business case since 2006-10-17. Its categories include Single Asset Real Estate (a direct CRE-distress proxy) and Health Care, with county and filing date. (c) Chapter 12 (family farmers and fishermen) is a farm-sector series by district in every F-2 file. Before 2018Q3 it has its own column; from 2018Q3 it sits on a separate 'Table F-2. (9, 12, 15)' sheet, and F-5A has it by county. The derived F-2 CSVs fold it into 'other' (Ch 9+12+15+304) from 2018Q3, which breaks the farm series; Chapter 15 alone was 123 in 2024Q2. Rebuild that column from the second sheet. Note that Chapter 12 had lapses before 2005 (only 108 cases in 2004). Chapter 12 filings have risen from 33 in 2023Q4 to 115 in 2026Q2.",
+     "evidence": "FJC codebook (fjc/\u2026rev_02282023.pdf), nature-of-business values s/c/b/x/r/h/n/o. Every 2018-09-30 to 2026-06-30 f2_3month xlsx has the (9,12,15) sheet: Chapter 12 is 118 in 2018Q3, 33 in 2023Q4, 115 in 2026Q2. abi/Chapter12AnnualFilings.pdf. CFO Dive article on S&P's H1-2026 figures."
+    },
+    {
+     "claim": "LoPucki large-company database: free to download after accepting academic-use terms; whether to accept is Casey's decision.",
+     "problem": "Casey is not eligible under the terms, so it is not a choice to put to him.",
+     "correct_version": "The terms restrict access to 'students, faculty, and staff of the Subscribing Division', for academic research only, with non-disclosure. Clicking 'I agree' would misstate Casey's eligibility. Legitimate alternatives are the site's online aggregate tools (Run-a-Study, trend graphs) or a licence. The database covers cases filed through 2022-12-31 (1,218 cases).",
+     "evidence": "Text of lopucki.law.ufl.edu/download_cases_table_terms.php and updating.php, fetched 2026-10-12."
+    },
+    {
+     "claim": "Switch the dashboard's 'CRE delinquency' input to DRCRELEXFACBS (true CRE, from 1991Q1)? (open question)",
+     "problem": "The mislabel is real, but the open question leaves out the trade-off.",
+     "correct_version": "DRCRELEXFACBS starts in 1991Q1. Switching drops 1987Q1\u20131990Q4, the 1990 run-up that severity.py's own rationale cites ('The 1990-recession channel'). Either relabel DRSREACBS honestly as all real-estate-secured loans, or switch and state that the 1990 episode is lost.",
+     "evidence": "fred/DRSREACBS.csv starts 1987-01-01 and fred/DRCRELEXFACBS.csv starts 1991-01-01. backend/app/metrics/severity.py:188\u2013189."
+    },
+    {
+     "claim": "ABI's annual totals differ from the quarterly sums by up to 679 (late processing).",
+     "problem": "Wrong figure, and the gap is not always positive.",
+     "correct_version": "Annual business total minus the sum of the quarters reaches +685 in 2008, or +1,081 in 1995 because of the typo. It is negative in 1984 (\u221288), 1987 (\u2212403) and 2006 (\u2212119). The 679 is the 1992 gap between the quarterly table's own TOTAL column and the annual table. From 2000 on, the quarterly PDF's TOTAL column is the later-vintage annual figure, not the sum of its quarters.",
+     "evidence": "pdftotext of abi/QUARTERLY-BUSINESS-1980-PRESENT.pdf and abi/Total-Business-Consumer1980-Present.pdf."
+    },
+    {
+     "claim": "Dun & Bradstreet business failures: monthly 1894\u20131968. Also: every US Courts table carries the note 'database is continually updated'.",
+     "problem": "Both are imprecise.",
+     "correct_version": "Monthly failure counts for all commercial firms run 1894-01 to 1965-06 (M0929A/B/C). Liabilities run to 1968-01 (M0933C). The 1948\u20131969 size-class series (M09076/M09077) are average failures per week, not monthly counts. The 17-recession count (peaks 1895-12 to 1960-04) is correct. Only 141 of the 258 F-2 files carry the 'continually updated' note; most 2001\u20132009 files lack it. The evidence for revisions is the 3-month vs 12-month comparison, not the note.",
+     "evidence": "Date ranges in the fred_nber files; NBER docs m09076.txt ('AVERAGE NUMBER PER WEEK'); text scan of uscourts/f2_*."
+    },
+    {
+     "claim": "Epiq releases come 2\u201312 days after month end; 69 releases archived covering Nov-2020 to Sep-2026. Epiq's only discontinuity is an early-2016 step of +25\u201330%.",
+     "problem": "Minor gaps and an incomplete description of the discontinuity.",
+     "correct_version": "Releases come 1\u201312 days after month end (Sept 1, 2022 and Nov 1, 2023; median 3\u20134 days). The archive has 69 of 71 monthly releases: those for Dec-2020 and Aug-2021 data are missing. The ratio of Epiq 'commercial' to AO 'business' filings also drifts: about 1.6 in 2006\u201310, down to 1.22 in 2015, then 1.59\u20131.71 from 2016. In the Mar-2022 workbook, chapters 7+11+13+15 fall short of the commercial total in every month (2\u201336 cases, mean 0.6%); earlier vintages sum exactly.",
+     "evidence": "Datelines in epiq_press/\u2026cleantext.json; derived/epiq_commercial_monthly CSV against ABI annual business totals."
+    }
+   ],
+   "confirmed": [
+    "File integrity: all 434 files match the sha256 and byte counts in MANIFEST.csv; the MANIFEST.md table matches the CSV; the total is 35,093,056 bytes and there are no unlisted files.",
+    "AO F-2 tables: my own parser reproduces the derived national rows exactly for 102 three-month tables, 100 of 102 twelve-month tables (the 2 PDF-only tables checked by eye; 12m to 2004-12 = 1,597,462) and 162 monthly sheets. District rows sum to the national row, business + non-business = total, chapter identities hold, and the 3 monthly tables sum to the quarter in all 54 quarters. There are 94 districts through 2018Q2 and 93 from 2018Q3 (Arkansas combined); GUAM becomes GU from 2021Q1; the layout changes in 2018Q3.",
+    "AO first-print quarterly business totals equal ABI's quarterly series in 100 of 100 quarters. The 12 months to 2025-12 give 574,314 total and 24,737 business filings, matching ABI's annual figures.",
+    "ABI typos confirmed exactly: 2001Q3 Ch 13 (105,000 vs 105,100), 2003Q1 Ch 7 (285,154 vs 285,883), 2010Q1 total (373,551 vs 373,541), 2011Q1 total (353,082 vs 353,802). 1995 quarters sum to 50,878 against a printed 51,878. 1999Q3 chapters exceed the total by 8,782. 2019\u201320 Ch 7/Ch 13 splits differ by up to 337.",
+    "Levels confirmed: consumer filings 532,526 (2005Q3), 654,633 (2005Q4) and 112,685 (2006Q1); business 12,798 then 4,086; consumer 175,146 (2020Q1) then 119,241 (2020Q2); Chapter 12 = 6,125 in 1987; business 26,384 in 1987Q2.",
+    "Epiq release of 2026-10-08, checked in the archive and on the live page: total 469,719 vs 423,168 (+11.0%). Individual filings 444,252 vs 399,379 are printed as '7%' but are +11.2%. Commercial +7.1%, commercial Ch 11 +11.3%. September 2026 commercial \u22126.9% and Ch 11 \u221215.7%, against a September 2025 base that included 109 related filings.",
+    "Epiq workbooks: the derived monthly CSV equals the raw Business Summary blocks (0 mismatches over 195 months \u00d7 5 fields). Ratios to AO confirmed: annual 1.22\u20131.71; Ch 13 3.0\u20137.4\u00d7 (median 4.65); Ch 11 0.68\u20131.03\u00d7 (median 0.88). The early-2016 step is real: 2015H2 average 2,498 vs 2016H1 3,292, while AO rose 3.7%; 2016 year on year was Epiq +26.8% vs AO \u22122.5%. The Chapter 11 Summary sheet changed meaning (Jan-2016: 592 in the Dec-2017 workbook vs 494 in Mar-2022). Revisions between workbooks are at most 1.25% a year.",
+    "Dashboard side finding: config.py:138 reads '\"delinq_cre\": \"DRSREACBS\"  # CRE delinquency rate' and severity.py:188 labels it 'CRE delinquency'. FRED titles DRSREACBS 'Delinquency Rate on Loans Secured by Real Estate, All Commercial Banks'. DRCRELEXFACBS and CORCREXFACBS are the CRE ex-farmland series, starting 1991Q1.",
+    "FRED start date: with cosd=1900-01-01, USREC returns 1,522 lines starting 1900-01; with cosd=1700-01-01 it returns 2,063 lines starting 1854-12. The saved USREC.csv is byte-identical to a fresh download, and every series with pre-1900 history is complete.",
+    "FRED ranges and gaps: delinquency and charge-off start years (1985, 1987, 1991) and the 2026Q2 end match the strand. UNRATE and all 51 state unemployment series are blank only at 2025-10. ICSA/ICNSA run 1967-01-07 to 2026-10-03. BAA/AAA start 1919-01 and BAA10YM 1953-04. NASDAQ, OECD, Cowles (4 missing months in 1914) and DJIA ranges are as stated. ALFRED DRCCLACBS 1991Q1 moved from 5.24 to 5.26.",
+    "NBER notes confirm the breaks: the 1933 redefinition, the 1934\u201339 Section 77-B segment, the coverage expansion of March 1940 applied from 1939, and the 1940 industry reclassification. Liabilities include bank failures quarterly 1875\u20131892 and monthly from 1894, but not 1893\u20131900. There are 17 recession peaks from 1895-12 to 1960-04 within the monthly failure-count span.",
+    "ERP-2004 Table B-96 (1955\u20131997): commercial and industrial only through 1983; data from 1984 'not generally comparable'; the net business formation index discontinued in 1995. The derived CSV matches.",
+    "NY Fed: 36 data sheets. Page 17 shows 136.8k new bankruptcies in 2026Q2, with data from 2003Q1. Page 40 covers 11 states plus ALL. Student-loan flows are blank before 2004. The report PDF confirms the '4 Quarter Moving Sum' notes and the 'servicer transfer gap' mortgage note. The card-balance revision note is on page 3. area_report_by_year has no bankruptcy sheet.",
+    "FJC: cpbank08to17.zip is 1,472,459,553 bytes and cpbank18on.zip is 887,034,431 bytes, last modified 2026-09-02. The Nov-2021 correction note is on the page. The nature-of-business field is coarse and there is no NAICS field. Per-fiscal-year zips of about 106\u2013120 MB (e.g. cpbankjun26.zip) also exist, so a pull of recent years does not need the full 2.4 GB.",
+    "FDIC: 4,117 records from 1934-04-19 to 2026-07-17 (3,524 failures and 593 assistance transactions, FSLIC and RTC included). EBP CSV: 1973-01 to 2026-09, last modified 2026-10-06.",
+    "Publication lags: AO files last modified 2026-01-30, 2026-04-22 and 2026-07-27. The Fed's about page says 'approximately sixty days' and describes the March 2001 Call Report change. ABI PDFs last modified 2026-06-27. uscourts.gov F-2 URLs for 1999\u20132000 return 404. S&P Global Market Intelligence's H1-2026 count of 372 (vs 371 in H1-2025) is corroborated by CFO Dive. The Shiller copy ends 2024-09. No OCR tool is installed."
+   ]
+  }
+ },
+ {
+  "key": "current",
+  "research": {
+   "summary": "Primary source: the Epiq AACER/ABI release of 8 Oct 2026. ZeroHedge relays an Epoch Times piece, which relays that release. The \"11%\" is correct for TOTAL filings, Jan\u2013Sep 2026: 469,719 vs 423,168 (+11.0%). Individual filings also rose 11.2% (444,252 vs 399,379); the release misprints this as \"7%\". Other Jan\u2013Sep lines: Ch7 282,413 (+13.4%), Ch13 160,817 (+7.7%), commercial 25,467 (+7.1%), commercial Ch11 6,560 (+11.3%), Subchapter V 2,442 (+46.1%; +38% against the 2025 base as first published, which was later revised down 5.2%). September alone: total 52,299 (+6.3%), individual 49,672 (+7.1%), commercial 2,627 (-6.9%), commercial Ch11 648 (-15.7%; -1.8% excluding one 109-affiliate case in Sep-2025), Subchapter V 276 (+38%).\n\nMomentum is fading, not building. Year-over-year growth by quarter was Q1 +13.5%, Q2 +11.3%, Q3 +8.3%, with equal business days in each comparison. US Courts (AO) quarterly growth has ranged +9.6% to +20.3% since the upturn began in 2023, so Q3-2026 is likely the slowest quarter of the upturn.\n\nFilings are rising from an unusually low base. AO filings for the 12 months to Jun-2026 were 608,511, or 1.78 per 1,000 people. That compares with 2.34 (2019), 5.12 (2010) and 6.99 (2005), and is below even the 2006 trough after the 2005 bankruptcy reform (2.06). In level terms it is 79% of 2019, 38% of 2010 and 29% of 2005; Jan\u2013Sep is -19% vs 2019. The 2022 trough (1.14 per 1,000) is the lowest of 2001\u20132026.\n\nLarge corporates are elevated but flat:\n- S&P Global Market Intelligence: 372 in H1-2026 vs 371 in H1-2025, the highest first half since 2010 (secondary source). Its Jul\u2013Sep 2026 counts could not be obtained (spglobal.com returns 403).\n- Cornerstone (companies over $100M of assets): 100 in the 12 months to Jun-2026, -15% year on year but +22% vs its 2005\u20132025 average.\n\nRated and private credit defaults are drifting up in H2: Moody's US speculative-grade default rate 5.3% in Aug (5.0% in Jun), with its Dec-2026 forecast raised to 4.3% from 3.5%. Fitch's US private-credit default rate is a record 6.3%. The high-yield spread is +45bp since 17 Sep.\n\nBank loan books (Fed data) are benign: delinquency on all loans 1.42%, the 8th percentile. Credit-bureau flows into 90+ day delinquency (NY Fed) are elevated for auto, 3.00% and the highest since 2010Q1, and for cards, 6.97%, above 2007Q4. Initial claims are 197k (2nd percentile since 1967), so the filing rise is happening WITHOUT a layoff channel so far.\n\nConcentration:\n- Regions: Sun Belt consumers lead (FL +21%, TX +21%, NC and SC +18%, MD +17%). TX and FL together supply 23.5% of the national rise vs 13.4% of the base. This is corroborated by ATTOM foreclosure data (worst rates SC, NV, FL, TX, MD) and the NY Fed (TX has the largest share of debt 90+ days late, 4.58%). The Midwest and Northeast are flat to low.\n- Corporate sectors: industrials/manufacturing, healthcare, consumer discretionary, and finance/insurance/real estate (FIRE).\n\nMeasurement hazards are documented below:\n- Epiq revisions and arithmetic errors in its releases.\n- Clusters of affiliate (related) filings from single large cases.\n- Large-case venue choice distorting district business counts.\n- Epiq and AO definitions differ.\n- A pending law change (H.R. 7730) that would break the Subchapter V and Ch13 series.\n- The NY Fed's credit-report bankruptcy counts diverge from court filings.\n\nPartial independent check: all 10 AO national totals and every Epiq Sep-2026 value match the data strand's own parse. The mandatory counter-agent review still has to run before anyone acts on these numbers. Scratch files are in /tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/current (current_state_readings.csv is the master table with sources).",
+   "findings": [
+    {
+     "claim": "The '11%' headline is accurate for TOTAL US bankruptcy filings, Jan\u2013Sep 2026 vs Jan\u2013Sep 2025, on Epiq AACER's preliminary count. Chain: ZeroHedge relays The Epoch Times (Naveen Athrappully), which relays the Epiq/ABI release of 8 Oct 2026.",
+     "evidence": "Jan\u2013Sep 2026 vs 2025, % recomputed from the levels:\n- Total: 469,719 vs 423,168 (+11.0%)\n- Individual: 444,252 vs 399,379 (+11.2%; the release prints '7%', an arithmetic error; individual + commercial sum exactly to the total)\n- Individual Ch7: 282,413 vs 249,130 (+13.4%)\n- Individual Ch13: 160,817 vs 149,347 (+7.7%)\n- Commercial: 25,467 vs 23,789 (+7.1%)\n- Commercial Ch11: 6,560 vs 5,895 (+11.3%)\n- Subchapter V: 2,442 vs 1,672 (+46.1%)\n\nSeptember 2026 vs September 2025:\n- Total: 52,299 vs 49,216 (+6.3%)\n- Individual: 49,672 vs 46,393 (+7.1%)\n- Ch7: 31,250 vs 28,763 (+8.6%)\n- Ch13: 18,320 vs 17,534 (+4.5%)\n- Commercial: 2,627 vs 2,823 (-6.9%)\n- Commercial Ch11: 648 vs 769 (-15.7%). Sep-2025 included 109 related filings from one long-term-care pharmacy provider; excluding them, Ch11 is -1.8% and commercial -3.2%.\n- Subchapter V: 276 vs 200 (+38.0%)\n\nThe AO's independent series agrees: +12.2% for the 12 months to 30 Jun 2026 (608,511 vs 542,529).",
+     "sources": [
+      "https://www.epiqglobal.com/en-us/resource-center/news/small-business-subchapter-v-elections-increase-46-compared-to-last-year",
+      "http://www.zerohedge.com/personal-finance/us-bankruptcy-filings-rise-11-first-9-months-2026",
+      "https://www.uscourts.gov/data-news/judiciary-news/2026/07/28/bankruptcies-rise-122-percent"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Filing growth is decelerating: Q3 2026 at +8.3% would be the slowest quarter since the upturn began in 2023. Single months are noisy because of business-day counts and affiliate filings.",
+     "evidence": "Epiq first prints, summed by quarter (year-over-year):\n- Q1-2026: +13.5%\n- Q2-2026: +11.3%\n- Q3-2026: +8.3%\nBusiness days are equal in each comparison (61/61, 63/63, 64/64), so this is not a calendar effect.\n\nMonthly growth per business day: Jul +10.2%, Aug +8.4%, Sep +6.3%. The raw May (+7.2%) and June (+13.0%) prints are calendar effects; per business day they are +12.6% and +7.6%.\n\nCross-check against AO quarterly data: Q1 +13.6% vs Epiq +13.5%; Q2 +11.4% vs Epiq +11.3%. Since 2023Q1 the AO quarterly range is +9.6% (2025Q1) to +20.3% (2023Q4). Earlier single-digit monthly prints (Nov-2024 +6.2%, Feb-2025 +3.1%) had fewer business days than the year before.",
+     "sources": [
+      "https://www.epiqglobal.com/en-us/resource-center/news/july-small-business-filings-increase-24-year-over-year",
+      "https://www.epiqglobal.com/en-us/resource-center/news/august-small-business-filings-increase-63-year-over-year",
+      "https://www.epiqglobal.com/en-us/resource-center/news/small-business-filings-increase-50-year-over-year-in-first-half-of-2026",
+      "https://www.epiqglobal.com/en-us/resource-center/news/first-quarter-subchapter-v-small-business-filings-increase-67-over-previous-year",
+      "https://www.uscourts.gov/data-news/judiciary-news/2026/07/28/bankruptcies-rise-122-percent"
+     ],
+     "confidence": "high for the numbers; medium that the deceleration persists"
+    },
+    {
+     "claim": "Filings are rising from an unusually low base. Per person, the current rate is below every year from 2001 to 2019, including the 2006 trough after the 2005 bankruptcy reform (BAPCPA).",
+     "evidence": "AO 12 months to 30 Jun 2026: 608,511 filings = 1.78 per 1,000 population (FRED POPTHM). Comparison points:\n- CY2019: 774,940 (2.34 per 1,000)\n- CY2010: 1,593,081 (5.12); the post-reform peak was 1,596,355 in the 12 months to Sep-2010\n- CY2005: 2,078,415 (6.99)\n- CY2006 post-reform trough: 617,660 (2.06)\n- 12 months to Jun-2022 low: 380,634 (1.14), the lowest of 2001\u20132026\n\nCurrent level as a share of 2019 / 2010 / 2005: 79% / 38% / 29%.\n\nEpiq basis:\n- Jan\u2013Sep 2026 vs Jan\u2013Sep 2019 (ABI, 3 Oct 2019): total 469,719 vs 580,470 (-19.1%); individual vs noncommercial 444,252 vs 551,062 (-19.4%)\n- Trailing 12 months to Sep-2026: 612,310 vs Epiq CY2019 757,816 (-19.2%)\n\nThe business side has already normalized past 2019:\n- AO business filings: 26,941 vs 22,780 in CY2019 (+18%); 49th percentile since 2001, against a peak of 61,148 (12 months to Mar-2010)\n- Epiq commercial Ch11 Jan\u2013Sep: 6,560 vs 4,127 in 2019 (+59%), inflated by affiliate filings\n- Epiq commercial overall is still -13% vs 2019 (25,467 vs 29,408). Definitions differ from the AO's.",
+     "sources": [
+      "https://www.uscourts.gov/sites/default/files/statistics_import_dir/F00Dec06.pdf",
+      "https://www.uscourts.gov/sites/default/files/statistics_import_dir/F00dec05.pdf",
+      "https://www.uscourts.gov/file/10993/download",
+      "https://www.uscourts.gov/sites/default/files/bf_f2_1231.2019.pdf",
+      "https://www.uscourts.gov/sites/default/files/document/bf_f2_1231.2025.pdf",
+      "https://www.abi.org/node/280516",
+      "https://www.epiqglobal.com/en-us/resource-center/news/total-bankruptcy-filings-increase-11-in-calendar-year-2025",
+      "https://fred.stlouisfed.org/series/POPTHM"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "History context for the study (not a test result): national filings peaked AFTER the 2007\u201309 recession. The 2007 rebound was confounded by a policy trough, much as the 2023\u201326 rise is a rebound from the pandemic trough.",
+     "evidence": "AO 12-month totals:\n- Total filings peaked Sep-2010 (1,596,355), 15 months after the NBER trough in Jun-2009.\n- Business filings peaked Mar-2010 (61,148).\n- Year-over-year growth of the 12-month total ran +28% to +35% through 2008\u201309. It was +37.8% at Dec-2007, partly the rebound from the 2006 post-reform trough.\n- Since 2023Q2 growth has held at +10% to +17% for three years with no recession.\n\nThe current rise coincides with initial claims at the 2nd percentile, so income loss is not yet the driver.",
+     "sources": [
+      "https://www.uscourts.gov/data-news/judiciary-news/2026/07/28/bankruptcies-rise-122-percent",
+      "https://www.uscourts.gov/sites/default/files/statistics_import_dir/F00Dec10.pdf",
+      "https://fred.stlouisfed.org/series/ICSA"
+     ],
+     "confidence": "high for the facts; the lead/lag implication is for the testing strands to confirm"
+    },
+    {
+     "claim": "Large-corporate bankruptcies are elevated vs history but flat to down year over year; the largest firms are filing less. S&P counts after June 2026 could not be obtained.",
+     "evidence": "S&P Global Market Intelligence (via CFO Dive, 13 Jul 2026; spglobal.com returns 403):\n- H1-2026: 372 vs 371 in H1-2025, 'highest H1 since 2010'\n- FY2025: 785, the highest since 828 in 2010\n- Monthly 2026: Mar 70, Apr 50, May 72, Jun 72\n- H1-2026 sectors: industrials 50, consumer discretionary 35, healthcare 26\n- Private-equity-backed filings in H1: 24 vs 36 (S&P Aug-2026 article, seen only in search results)\n- Criteria per secondary coverage: public-debt filers with at least $2M of assets or liabilities, private companies with at least $10M (unverified on S&P's site)\n\nCornerstone Research Midyear 2026 (BankruptcyData; companies over $100M of assets; Ch7 + Ch11):\n- 100 filings in 2H-2025 to 1H-2026: -15% vs 117 the prior year, but 22% above the 2005\u20132025 average of 82\n- Mega cases (over $1B): 28 vs 32, against an average of 23\n- Public-company filers: 20 vs 36\n- Manufacturing, Services and FIRE each 21\u201322% of filings; FIRE was 9% in 2023\n- Southern District of Texas has overtaken Delaware as the top venue",
+     "sources": [
+      "https://www.cfodive.com/news/us-corporate-bankruptcies-hover-16-year-high-sp/825121/",
+      "https://www.cornerstone.com/wp-content/uploads/2026/10/Trends-in-Large-Corporate-Bankruptcy-and-Financial-Distress-Midyear-2026.pdf",
+      "https://www.spglobal.com/market-intelligence/en/news-insights/articles/2026/1/us-corporate-bankruptcy-filings-accelerate-further-in-december-2025-96788192"
+     ],
+     "confidence": "medium (S&P figures are secondary relays); high for Cornerstone"
+    },
+    {
+     "claim": "Rated and private-credit default rates are drifting up into H2 2026, and Moody's raised its year-end forecast.",
+     "evidence": "Moody's, via First Trust:\n- US speculative-grade default rate (trailing 12 months): 5.3% in Aug-2026, 5.0% in Jun, 5.1% in Apr\n- US Dec-2026 baseline raised to 4.3% (Sep 17), from 3.5% (Jul 22)\n- Global: 4.5% in Aug (preliminary) vs a historical average of 4.2%\n\nFitch, via a Fitch-bylined reprint dated 15 Sep 2026:\n- US private-credit default rate 6.3%, trailing 12 months to Aug-2026, a record\n- At or above 6.0% since Apr-2026\n- Healthcare providers 9.9%, industrial/manufacturing 9.9%, consumer products/services 8.7%\n\nNot verified: Fitch leveraged-loan 3.9% and high-yield 2.8% for Aug-2026.\n\nICE BofA high-yield spread (FRED BAMLH0A0HYM2): 2.70% on 17 Sep, 3.08% on 29 Sep, 3.15% on 8 Oct.",
+     "sources": [
+      "https://www.ftportfolios.com/retail/blogs/investmentinsights/index.aspx?ID=8926&Print=Y",
+      "https://www.ftportfolios.com/retail/blogs/investmentinsights/index.aspx?ID=8822&Print=Y",
+      "https://theleadpc.com/middle-market-private-credit-9-14-2026/",
+      "https://fred.stlouisfed.org/series/BAMLH0A0HYM2"
+     ],
+     "confidence": "medium (Moody's and Fitch via secondary relays)"
+    },
+    {
+     "claim": "Bank loan books show no broad distress. Delinquencies are low to mid-range against their own history; consumer charge-offs are moderately elevated.",
+     "evidence": "Fed charge-off and delinquency release, 2026Q2, seasonally adjusted, updated 25 Aug 2026. Percentiles are vs each series' full history.\n\nDelinquency rates:\n- All loans: 1.42% (8th percentile since 1985; 2019Q4 1.41; 2006Q4 1.69)\n- C&I: 1.27% (30th)\n- Credit card: 2.85% (32nd; down from 3.04% in 2025Q2)\n- Consumer: 2.62% (28th)\n- Other consumer: 2.33% (39th)\n- Residential: 1.86% (20th)\n- Commercial real estate excluding farmland: 1.53% (42nd; 2019Q4 0.67)\n- All real-estate loans: 1.68% (23rd)\n- Agricultural: 1.10% (15th)\n\nCharge-off rates:\n- All loans: 0.55% (34th)\n- C&I: 0.58% (57th)\n- Card: 3.82% (49th; 2019Q4 3.78)\n- Consumer: 2.66% (74th)\n- Other consumer: 1.21% (77th)\n- CRE: 0.14% (54th)\n- Residential: 0.00%\n\nDashboard mislabel, confirmed independently from the Fed table's column mapping: the code maps delinq_cre to DRSREACBS, which is ALL real-estate loans (1.68%). The CRE series is DRCRELEXFACBS (1.53%).",
+     "sources": [
+      "https://www.federalreserve.gov/releases/chargeoff/delallsa.htm",
+      "https://www.federalreserve.gov/releases/chargeoff/chgallsa.htm",
+      "https://fred.stlouisfed.org/series/DRCRELEXFACBS",
+      "https://fred.stlouisfed.org/series/DRSREACBS"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Household stress in credit-report data is concentrated in auto loans and cards, with mortgages rising from a low level. New bankruptcy and foreclosure notations are still low by history.",
+     "evidence": "NY Fed Household Debt and Credit Report, Q2-2026 (released 11 Aug 2026).\n\nFlow of balances into 90+ day delinquency (annualized), Q2-2025 to Q2-2026:\n- Auto: 2.93% to 3.00% (93rd percentile since 2003; highest since 2010Q1; 2007Q4 was 2.44)\n- Card: 6.93% to 6.97% (70th; above 2007Q4's 6.75)\n- Mortgage: 1.29% to 1.52% (highest since 2015Q4)\n- HELOC: 1.15% to 1.15%\n- Student loans: 12.88% to 7.83% (distorted by re-reporting of defaulted loans; 10.6% of balances are 90+ days late)\n- All debt: 2.91% to 2.57% (59th)\n\nOther readings:\n- 4.7% of debt is in some stage of delinquency.\n- New bankruptcy notations: 136.8k in Q2 (26th percentile; 131.3k in Q2-2025; 234.3k in Q2-2019). The four-quarter sum is 526k, vs 836k in 2019Q2 and a low of 379k.\n- New foreclosures: 55.2k (23rd percentile).\n- Collections: 4.9% of consumers.\n\nATTOM, Aug-2026: 40,277 properties with foreclosure filings (+13% year on year); starts 25,894 (+7%); bank repossessions 5,794 (+42%); 'below pre-pandemic norms'.",
+     "sources": [
+      "https://www.newyorkfed.org/newsevents/news/research/2026/20260811",
+      "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/pdf/hhdc_2026q2.pdf",
+      "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/HHD_C_Report_2026Q2.xlsx",
+      "https://www.attomdata.com/news/market-trends/foreclosures/august-2026-foreclosure-market-report/"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "The layoff channel is not active: claims are near record lows, so current filings are not being driven by job loss.",
+     "evidence": "- Initial claims: 197,000 for the week ending 3 Oct 2026 (2nd percentile since 1967; 0th percentile per person); 4-week average 198,000; -12% year on year.\n- Continuing claims: 1,716,000 (week ending 26 Sep; 11th percentile).\n- Unemployment rate: 4.2% in Sep-2026.",
+     "sources": [
+      "https://fred.stlouisfed.org/series/ICSA",
+      "https://fred.stlouisfed.org/series/CCSA",
+      "https://fred.stlouisfed.org/series/UNRATE"
+     ],
+     "confidence": "high"
+    },
+    {
+     "claim": "Regional concentration: consumer-filing growth is led by the Sun Belt (TX, FL, the Carolinas, CA) and MD. Three independent sources agree. The Midwest and Northeast lag.",
+     "evidence": "AO consumer (nonbusiness) filings, 12 months to Jun-2026 vs Jun-2025. National: +12.0%.\n\nFastest-growing states:\n- FL +21.2% (38,536 to 46,701)\n- TX +20.6% (Ch7 +29.1%)\n- NC +17.7%, SC +17.6%, MD +16.6%\n- CA +14.9%, CO +14.3%, WA +14.1%, GA +14.0%\n\nSlowest:\n- WI -0.7%, CT +2.5%, IA +4.4%, IL +4.8%\n- OH +5.8%, PA +6.4%, NY +7.0%\n\nTX and FL supply 23.5% of the national consumer increase but only 13.4% of the 2025 base.\n\nDistricts (consumer): TX-S +29.6%, FL-M +26.4%, FL-N +22.9%, NC-W +22.3%, LA-E +20.1%, TX-E +19.9%, TX-W +19.7%, CA-C +18.2%. FL-M alone accounts for 9.3% of the national increase in total filings.\n\nCorroboration:\n- ATTOM Aug-2026 worst foreclosure rates: SC (1 in 1,547 housing units), NV, FL, TX, MD; TX has the most bank repossessions (1,835; Houston 448, Dallas 402).\n- NY Fed (11 large states only): TX has the largest share of debt 90+ days late (4.58%, +0.65pp year on year); FL and TX have the highest 30+ day transition rates; NV's 90+ transition rose most (+0.90pp).\n\nWatch item (hypothesis only): DC consumer filings +37% (412 to 565), MD +16.6%, VA-W +15.2%, possibly linked to federal workforce cuts.\n\nSmall-base outliers: ND +52%, AK +61%.\n\nRegional data run only to 30 Jun 2026.",
+     "sources": [
+      "https://www.uscourts.gov/sites/default/files/document/bf_f2_0630.2026.xlsx",
+      "https://www.uscourts.gov/sites/default/files/document/bf_f2_0630.2025.xlsx",
+      "https://www.attomdata.com/news/market-trends/foreclosures/august-2026-foreclosure-market-report/",
+      "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/HHD_C_Report_2026Q2.xlsx"
+     ],
+     "confidence": "high for the numbers; medium for causal reading"
+    },
+    {
+     "claim": "Sector concentration: corporate distress is in industrials/manufacturing (tariffs, weak demand), healthcare (Medicaid changes), consumer discretionary/retail, and FIRE including office REITs. Small business is the fastest-rising filer group. Farm stress shows only in tiny Ch12 counts.",
+     "evidence": "- S&P H1-2026: industrials 50, consumer discretionary 35, healthcare 26 (secondary source).\n- Cornerstone: Manufacturing, Services and FIRE each 21\u201322% of large filings. 73% of mega cases cite reduced demand; tariffs are cited (QVC, Pretium, Trinseo); healthcare cases cite Medicaid; Office Properties Income Trust is among FIRE cases.\n- Fitch private-credit default rates by sector: healthcare providers 9.9%, industrial/manufacturing 9.9%.\n- Epiq Subchapter V: +46% year to date, +42% in Q3 alone.\n- Epiq Ch12 (family farm): 62 in Apr-2026 (+130%, highest since Feb-2020), then 29 in May.\n- Fed agricultural loan delinquency is 1.10% (15th percentile), so there is no broad farm stress in bank data.",
+     "sources": [
+      "https://www.cfodive.com/news/us-corporate-bankruptcies-hover-16-year-high-sp/825121/",
+      "https://www.cornerstone.com/wp-content/uploads/2026/10/Trends-in-Large-Corporate-Bankruptcy-and-Financial-Distress-Midyear-2026.pdf",
+      "https://theleadpc.com/middle-market-private-credit-9-14-2026/",
+      "https://www.epiqglobal.com/en-us/resource-center/news/april-commercial-chapter-11-bankruptcy-filings-increase-42-from-previous-year",
+      "https://www.federalreserve.gov/releases/chargeoff/delallsa.htm"
+     ],
+     "confidence": "medium"
+    },
+    {
+     "claim": "Measurement hazards that any bankruptcy alert must handle explicitly.",
+     "evidence": "(a) Revisions. Epiq first prints are revised:\n- Jan\u2013Sep 2025 total went from 423,053 (Oct-2025 release) to 423,168.\n- Sep-2025 went 49,182 to 49,192 to 49,216.\n- Commercial counts typically revise up about 1% the following month.\n- The Subchapter V 2025 base was revised down 5.2% (1,764 to 1,672).\n\n(b) Arithmetic errors in Epiq releases:\n- YTD individual printed '7%'; the levels imply 11.2%.\n- Aug-2026 Ch13 printed '10%'; the levels imply 6.4%.\n- Q1-2026 Ch7 level printed 82,259; the monthly prints sum to 89,266.\n\n(c) Affiliate clusters dominate commercial Ch11: 109 related filings in Sep-2025, 300+ in Jul-2025, large-corporate families in Jan/Feb 2026. This produces monthly swings of \u00b170%.\n\n(d) District business counts reflect where large cases choose to file, not where distress is: TX-S business +104%, Delaware -56%.\n\n(e) Epiq and AO differ. Epiq's 12 months to Jun-2026 is 600,003 vs AO 608,511 (-1.4%). Epiq 'commercial' is not AO 'business' (which is classified by the predominant nature of debt).\n\n(f) Policy breaks:\n- The 2005 bankruptcy reform (BAPCPA), effective Oct-2005\n- CARES Act and stimulus, 2020\u201321\n- Subchapter V created Feb-2020; its debt limit fell from $7.5M to $3.424M in Jun-2024\n- H.R. 7730 would restore $7.5M and set a single $2.75M Ch13 cap. It passed the House on 16 Sep and the Senate on 28 Sep 2026 and was sent to the President; a signature is NOT confirmed. Enactment would mechanically raise Subchapter V counts and shift the Ch7/Ch13 mix.\n\n(g) Credit-report counts diverge from court counts. NY Fed bankruptcy notations rose +4% year on year in Q2 (four-quarter sum +8.5%), vs about +11\u201312% for court consumer filings. They were flat from 2024Q2 to 2025Q2 (487k to 485k) while AO consumer filings rose 11.8%. This is unexplained.",
+     "sources": [
+      "https://www.epiqglobal.com/en-us/resource-center/news/year-to-date-individual-chapter-7-filings-increased-15-percent-compared-to-same-period-last-year",
+      "https://www.epiqglobal.com/en-us/resource-center/news/small-business-subchapter-v-elections-increase-46-compared-to-last-year",
+      "https://www.epiqglobal.com/en-us/resource-center/news/august-small-business-filings-increase-63-year-over-year",
+      "https://www.epiqglobal.com/en-us/resource-center/news/first-quarter-subchapter-v-small-business-filings-increase-67-over-previous-year",
+      "https://news.bloombergtax.com/bankruptcy-law/senate-approves-house-backed-small-business-bankruptcy-bill",
+      "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/HHD_C_Report_2026Q2.xlsx"
+     ],
+     "confidence": "high"
+    }
+   ],
+   "datasets": [
+    {
+     "name": "Epiq AACER / ABI monthly bankruptcy press releases (2026 first prints; Oct-2025 and CY2025 for revision checks)",
+     "id_or_url": "https://www.epiqglobal.com/en-us/resource-center/news",
+     "frequency": "monthly",
+     "start": "2026-01",
+     "end": "2026-09",
+     "publication_lag": "4-8 days after month end",
+     "breaks": "Preliminary and revised (commercial about +1% next month; Subchapter V base -5.2%). Arithmetic errors in some release text. Commercial Ch11 inflated by affiliate filings. Subchapter V limit changes (Jun-2024; H.R. 7730 pending).",
+     "access_notes": "curl with a generic User-Agent works on epiqglobal.com. The GlobeNewswire mirror returns 403. Percentages were recomputed from the levels.",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/current/epiq_monthly_2026_firstprint.csv; .../epiq_2026-10-08_numbers.csv; raw HTML/text in .../dl/epiq/ and .../dl/epiq_*.html"
+    },
+    {
+     "name": "AO (US Courts) Table F-2 / F, 12 months ending 30 Jun 2025 and 2026, by district and chapter",
+     "id_or_url": "https://www.uscourts.gov/sites/default/files/document/bf_f2_0630.2026.xlsx",
+     "frequency": "quarterly release of trailing 12-month windows",
+     "start": "2025-06-30",
+     "end": "2026-06-30",
+     "publication_lag": "about 4 weeks (Jun-2026 data released 28 Jul 2026; Sep-2026 due late Oct)",
+     "breaks": "District business counts reflect large-case venue choice. 'Business' is classified by predominant nature of debt.",
+     "access_notes": "xlsx parsed with a stdlib-only reader (python3 -I).",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/current/districts_12m_jun2025_jun2026.csv; .../states_consumer_filings_12m_jun2025_jun2026.csv"
+    },
+    {
+     "name": "AO national 12-month totals with per-person rates (calendar-year checkpoints 2004-2006, 2009-2010, 2019, 2025)",
+     "id_or_url": "https://www.uscourts.gov/sites/default/files/statistics_import_dir/F00Dec06.pdf (plus F00dec05.pdf, file/10993/download, bf_f2_1231.2019.pdf, bf_f2_1231.2025.pdf); population from FRED POPTHM",
+     "frequency": "quarterly (12-month windows)",
+     "start": "2001-03-31",
+     "end": "2026-06-30",
+     "publication_lag": "about 4 weeks",
+     "breaks": "2005 bankruptcy reform (BAPCPA, Oct-2005); 2020-21 stimulus",
+     "access_notes": "The series is built from the data strand's parse (studies/distress_signals/data/derived/uscourts_f2_12month_by_district_2001Q1_2026Q2.csv). 10 national totals were re-verified against primary AO tables (10/10 match).",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/current/ao_12m_national_percapita_2001_2026.csv"
+    },
+    {
+     "name": "Fed charge-off and delinquency rates, all commercial banks, seasonally adjusted (FRB release and FRED)",
+     "id_or_url": "https://www.federalreserve.gov/releases/chargeoff/delallsa.htm ; FRED DRALACBS, DRBLACBS, DRCCLACBS, DRCLACBS, DROCLACBS, DRSFRMACBS, DRCRELEXFACBS, DRSREACBS, DRFLACBS, CORALACBS, CORBLACBS, CORCCACBS, CORCACBS, COROCLACBS, CORSFRMACBS, CORCREXFACBS, CORFLACBS",
+     "frequency": "quarterly",
+     "start": "1985Q1 (varies by series: 1987Q1 or 1991Q1)",
+     "end": "2026Q2",
+     "publication_lag": "about 8 weeks (2026Q2 released 25 Aug 2026)",
+     "breaks": "FAS 159 (2008Q1); residential/CRE delinquency partially estimated for 1999Q3",
+     "access_notes": "FRED keyless CSV fails when a custom User-Agent is set (empty reply); use curl --http1.1 with no -A.",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/current/fed_chargeoff_delinq_latest.csv; .../dl/fred/*.csv; .../dl/frb/"
+    },
+    {
+     "name": "NY Fed Household Debt and Credit Report 2026Q2 workbook (bankruptcy notations, foreclosures, flows into 30+ and 90+ delinquency, state tables)",
+     "id_or_url": "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/HHD_C_Report_2026Q2.xlsx",
+     "frequency": "quarterly",
+     "start": "2003Q1",
+     "end": "2026Q2",
+     "publication_lag": "about 6 weeks (released 11 Aug 2026)",
+     "breaks": "Student-loan re-reporting distortion (2025-26). Credit-report bankruptcy counts diverge from court filings (2024-26).",
+     "access_notes": "State tables cover only 11 large states plus the US.",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/current/dl/nyfed/HHD_C_Report_2026Q2.xlsx; .../dl/nyfed/x/*.csv"
+    },
+    {
+     "name": "FRED initial claims, continuing claims, 4-week average, unemployment rate, ICE BofA high-yield spread, population",
+     "id_or_url": "https://fred.stlouisfed.org/series/ICSA (also CCSA, IC4WSA, UNRATE, BAMLH0A0HYM2, POPTHM)",
+     "frequency": "weekly / monthly / daily",
+     "start": "1967-01-07 (ICSA)",
+     "end": "2026-10-03 (ICSA); 2026-10-08 (high-yield spread)",
+     "publication_lag": "claims about 5 days; unemployment about 1 week",
+     "breaks": "The high-yield spread on FRED keyless CSV covers only Oct-2023 onward",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/current/dl/fred/"
+    },
+    {
+     "name": "Cornerstone Research, Trends in Large Corporate Bankruptcy and Financial Distress, Midyear 2026 (BankruptcyData; companies over $100M of assets)",
+     "id_or_url": "https://www.cornerstone.com/wp-content/uploads/2026/10/Trends-in-Large-Corporate-Bankruptcy-and-Financial-Distress-Midyear-2026.pdf",
+     "frequency": "semiannual",
+     "start": "2005",
+     "end": "2026-06-30",
+     "publication_lag": "about 3 months",
+     "breaks": "Asset values not adjusted for inflation",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/current/dl/cornerstone/midyear2026.pdf"
+    },
+    {
+     "name": "ATTOM US Foreclosure Market Report, August 2026",
+     "id_or_url": "https://www.attomdata.com/news/market-trends/foreclosures/august-2026-foreclosure-market-report/",
+     "frequency": "monthly",
+     "start": "2026-08",
+     "end": "2026-08",
+     "publication_lag": "about 17 days",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/current/dl/attom/august-2026.html"
+    },
+    {
+     "name": "Master current-state table (every reading with date, release date, historical context, source URL and verification status)",
+     "id_or_url": "derived from all of the above",
+     "frequency": "snapshot",
+     "start": "2026-10-12",
+     "end": "2026-10-12",
+     "access_notes": "S&P Global Market Intelligence, Moody's and Fitch rows are secondary relays and are marked as such",
+     "saved_path": "/tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/current/current_state_readings.csv"
+    }
+   ],
+   "open_questions": [
+    "S&P Global Market Intelligence large-company bankruptcy counts for Jul, Aug and Sep 2026 are missing. spglobal.com returns 403 from this environment and no secondary coverage was found. They are needed to say whether H2-2026 corporate filings are accelerating; Casey or someone with access should supply them.",
+    "Was H.R. 7730 signed, and on what date? It restores the $7.5M Subchapter V limit and sets a single $2.75M Ch13 cap. Enactment creates a structural break in the Subchapter V and Ch7/Ch13 series that any alert must mask.",
+    "AO data for the 12 months ending 30 Sep 2026 (due late Oct 2026) are needed to confirm the Q3 slowdown (Epiq +8.3%) and to update the regional ranking beyond June.",
+    "Why do the NY Fed's credit-report bankruptcy notations (flat 2024\u21922025; +4% year on year in Q2-2026) diverge from court consumer filings (+11\u201312%)? Which measure should an alert use?",
+    "Moody's and Fitch default rates were obtained only via secondary relays. Primary sources are still needed: the Moody's September 2026 default report (due mid-Oct) and Fitch's August leveraged-loan and high-yield rates (3.9% / 2.8% unverified).",
+    "Pre-2001 context is missing: is the 2022 trough (1.14 filings per 1,000) the lowest since the early 1980s? This needs the AO/ABI 1980\u20132000 annual table; the ABI page carries no data.",
+    "Fitch's subprime auto ABS 60+ day delinquency index after Feb-2026 (6.80%; record 6.90% in Jan-2026) was not found.",
+    "Are the DC (+37%) and MD (+17%) consumer-filing rises linked to federal workforce reductions? This is a candidate natural experiment for Casey's 'one group's income loss \u2192 others' bankruptcies' channel and should be tested, not assumed.",
+    "The ZeroHedge article's publication timestamp is not shown on the page; the underlying data date (8 Oct 2026) is confirmed."
+   ]
+  },
+  "verification": {
+   "verdict": "PASS WITH CORRECTIONS: 3 blocking items, all about interpretation or omissions. I found no fabricated or wrong headline numbers. I re-opened every primary source and re-downloaded the files: Epiq releases (Jan\u2013Oct 2026, Oct-2025, CY2025), the AO F-2 xlsx for Jun-2025 and Jun-2026, the uscourts release of 28 Jul 2026, FRED, the FRB charge-off pages, the NY Fed workbook, PDF, press release and Liberty Street Economics (LSE) post, the Cornerstone PDF, ATTOM, the First Trust and Fitch relays, and ZeroHedge. Every Epiq, AO, Fed, NY Fed, Cornerstone and ATTOM figure the strand quotes reproduces. My re-downloads of the NY Fed workbook, the AO xlsx and the Cornerstone PDF are byte-identical to the strand's copies. MANIFEST.csv: all 434 sha256 values match, and no files are unlisted. The problems:\n- The regional-concentration claim is overstated and mis-corroborated.\n- NY Fed measurement caveats are missing: 4-quarter moving sums, and a stock measure inflated by charged-off balances.\n- The Subchapter V break list is incomplete.\n- The upturn is misdated (it began 2022Q3, not 2023), so \"slowest quarter of the upturn\" is wrong.\n- There are smaller attribution and staleness slips.\nScratch work: /tmp/claude-0/-home-user-uranium-dashboard/2a5ba7c6-de7e-5470-a27d-d0386eb4bbf1/scratchpad/distress/verify-current (scripts/, dl/).",
+   "blocking": [
+    "REGIONAL CONCENTRATION IS OVERSTATED. 'Sun Belt leads; three independent sources agree' should not drive a regional panel or alert as written.\n(a) The NY Fed support cited (TX 90+ share 4.58%, +0.65pp) is the STOCK measure. The NY Fed's own LSE post (11 Aug 2026) says this measure is inflated by charged-off balances, which now stay on credit reports about 80% of the time a year later, versus about 40% in 2004\u201312. The FLOW measures the NY Fed recommends fell year on year: TX 90+ transition 3.97\u21923.33, TX 30+ 6.87\u21926.59, FL 90+ 3.52\u21923.11 (HHDC pp.37\u201338).\n(b) ATTOM's worst-rate states (NV, SC, FL) were the same in Aug-2025. FL's rate rose only 5% (1/2,512\u21921/2,397) against 12% nationally (1/3,987\u21921/3,569). ATTOM's H1-2026 top five includes IN, IL and DE, which contradicts 'Midwest flat'.\n(c) The growth leaders are low-level states. Consumer filings per 1,000 people: TX 1.18, NC 0.93, SC 0.98, DC 0.81, US 1.70. The highest-rate states (AL 4.12, TN 3.06, NV 2.90, GA 2.87) grew at or below the national rate. AZ, AL, TN, LA, MS, NM and OK all grew below the 12.0% national rate; WV grew 17.0%.\nThe only corroboration that holds is NY Fed bankruptcy notations (4-quarter sums): TX +13.8%, FL +14.0% vs US +6.6%. NV leads that measure at +25.2%.\nFix: rank regions on per-capita level against each state's own history, plus flow measures. Do not use growth ranks or stock delinquency.",
+    "NY FED SERIES NEED PRE-REGISTERED MEASUREMENT RULES before any lead/lag test or alert.\n- All flow and transition series (national HHDC pp.13\u201314, state pp.37\u201338) are 4-quarter moving sums, per the PDF chart notes and the LSE post. They are smoothed, carry a built-in lag of about 1.5 quarters, and overlap from quarter to quarter. The strand reports them as point-in-time quarterly readings ('auto highest since 2010Q1') without saying so.\n- Stock 90+ series (pp.12, 35) drift upward for non-economic reasons. Nationally, the whole year-on-year rise in 90+ including derogatory balances (3.04%\u21923.31%, p.11) comes from the severely-derogatory bucket (1.51%\u21921.99%).\n- Student-loan flows are broken from 2025Q1 by re-reporting (0.70% in 2024Q4, then 8.04%, peak 16.19%, now 7.83%).\nRule: flows only, align lags for the 4-quarter sum, mask student loans.",
+    "SUBCHAPTER V BREAK LIST IS INCOMPLETE, and the June 2024 level is misstated. The limit did not fall to $3.424M in Jun-2024. It reverted to $3,024,725 on 21 Jun 2024 and was indexed to $3,424,000 on 1 Apr 2025, which made about 13% more debt eligible.\nThat April 2025 step falls inside the Q1-2026 year-on-year window. Q1 growth was +67%, against +37% in Q2 (840 vs 615) and +42% in Q3 (812 vs 573), which are clean windows.\nAn alert must mask every break: Feb-2020 creation ($2.73M); Mar-2020 CARES ($7.5M); 27 Mar 2022 lapse; Jun-2022 restoration (partly retroactive); 21 Jun 2024 lapse; 1 Apr 2025 indexation; H.R. 7730 (pending). Chapter 13 limits moved on the same 2024 and 2025 dates.\nTwo further caveats on 'small business is the fastest-rising filer group':\n- It counts Subchapter V elections, which substitute for regular Ch11. Total commercial filings were only +7.1% Jan\u2013Sep and -6.9% in Sep.\n- The 2026 monthly first prints sum to 2,492, versus the year-to-date print of 2,442."
+   ],
+   "corrections": [
+    {
+     "claim": "Q3-2026 at +8.3% would be the slowest quarter since the upturn began in 2023 ('slowest quarter of the upturn'), so momentum is fading.",
+     "problem": "The upturn began in 2022Q3, not 2023. The AO's own release says total filings fell to a low of 380,634 in June 2022 and 'have increased each quarter since then'. AO 3-month year-on-year growth was +3.2% in 2022Q3 and +4.3% in 2022Q4. A similar dip (2024Q4 +11.5%, 2025Q1 +9.6%) re-accelerated to +13.6% by 2026Q1.",
+     "correct_version": "Q3-2026 would be the slowest year-on-year quarter since 2022Q4. The Q2\u2192Q3 slowdown is real: the sequential change is -0.9% against +1.8% a year earlier, and the 2-year stacked growth falls 24.5%\u219222.7%\u219220.2%. But it is a single quarter, and a dip like it has reversed before.",
+     "evidence": "derived/uscourts_f2_3month_by_district_2001Q1_2026Q2.csv, national rows: 2022Q3 101,715 vs 98,533; 2022Q4 95,416 vs 91,506. uscourts.gov release of 28 Jul 2026."
+    },
+    {
+     "claim": "Business days are equal in each comparison (61/61, 63/63, 64/64), so this is not a calendar effect.",
+     "problem": "Bankruptcy courts closed on 9 Jan 2025 for the Carter national day of mourning; CM/ECF stayed open. The strand's own bizdays.py flags this day but the summary drops it.",
+     "correct_version": "Q1-2026 growth per business day is between +11.7% and +13.5%, depending on how 9 Jan is treated, so Q1 is roughly equal to Q2 (+11.3%). Only the Q2\u2192Q3 slowdown is robust.",
+     "evidence": "Closure notices from N.D. Ohio, D.N.J., M.D.N.C. and others. 149,977/61 vs 132,092/60 = +11.7%."
+    },
+    {
+     "claim": "S&P (via CFO Dive, 13 Jul 2026): FY2025 785, highest since 828 in 2010; monthly Mar 70, Apr 50, May 72, Jun 72.",
+     "problem": "The CFO Dive article contains only H1 372 vs 371, 'highest since 2010', and the sector counts 50/35/26. The figure 785 appears in no saved source. S&P's Dec-2025 report gave 717 through November (2010 = 828). The monthly counts appear only in search-snippet relays (Bloomberg Law, Benzinga).",
+     "correct_version": "Mark FY2025 785 as unverified. It is plausible, implying about 68 in Dec-2025. Cite the monthly counts as secondary search relays, not CFO Dive.",
+     "evidence": "Re-fetched cfodive.com/news/us-corporate-bankruptcies-hover-16-year-high-sp/825121; web search results."
+    },
+    {
+     "claim": "Cornerstone: tariffs are cited (QVC, Pretium, Trinseo); sector list is manufacturing, healthcare, consumer discretionary, FIRE.",
+     "problem": "Cornerstone's tariff examples are Kl\u00f6ckner Pentaplast, First Brands and QVC; tariffs were cited in 5 of the 26 Ch11 mega cases. Pretium cited post-COVID demand normalization and destocking, not tariffs. Trinseo cited 'trade policy volatility' under reduced demand. The strand also omits two points: public-company large filers were 20 vs a 2005\u201325 average of 44 (below normal), and Transportation/Communications/Utilities rose to 18% of 1H-2026 filings with 7 mega cases, the second most.",
+     "correct_version": "'Tariff policy was cited in 5 of 26 Ch11 mega bankruptcies (e.g. Kl\u00f6ckner Pentaplast, First Brands, QVC).' Add the below-average public-company count and the TCU share.",
+     "evidence": "Re-downloaded Cornerstone PDF (sha256 d4486a96\u2026 identical to the strand's copy), pp. ii, 4\u20137."
+    },
+    {
+     "claim": "Rated and private-credit defaults are drifting up into H2. Moody's Dec-2026 forecast raised to 4.3% from 3.5%. Fitch private-credit default rate a record 6.3%.",
+     "problem": "Moody's US path: Apr 5.1%, Jun 5.0%, Jul 5.0%, Aug 5.3%, a single one-month uptick. Global: 4.5%, 4.4%, 4.4%, 4.5%, flat. The immediately prior US forecast was 3.7% (20 Aug), and Moody's still projects a decline to 4.3%. Fitch's private-credit default rate (PCDR) only began in Aug-2024, so 'record' means about 2 years of history with no recession. Its privately monitored component peaked at 10.0% in Mar-2026 and has slipped to 8.5%; the rise comes from the model-based component (5.2%\u21925.6%).",
+     "correct_version": "US speculative-grade defaults ticked up 0.3pp in August after holding flat Apr\u2013Jul; Moody's baseline still falls to 4.3%. Fitch's private-credit rate is at a high since its 2024 launch, and the series is too short to backtest.",
+     "evidence": "First Trust factoids of 5 Jun, 22 Jul, 20 Aug and 17 Sep 2026 (re-fetched); fundssociety relay ('highest since its inception in August 2024'); Webull relay of component values."
+    },
+    {
+     "claim": "Card flow into 90+ at 6.97% is elevated, above 2007Q4 (6.75%).",
+     "problem": "6.97% is about the 2003\u201307 average (6.78%), well below the 2009Q4 peak (10.96%), and down from 7.18% in 2024Q2 and 2024Q4. The NY Fed's own read is 'elevated but largely stable since 2024'. Auto (3.00% vs a 2003\u201307 average of 1.99%) is the one that is genuinely elevated.",
+     "correct_version": "Auto flows are elevated and still rising. Card flows are back at pre-GFC norms and flat-to-falling.",
+     "evidence": "HHDC 2026Q2 workbook p.14 (re-downloaded, sha256 ddfba16b\u2026 matches MANIFEST); LSE post of 11 Aug 2026."
+    },
+    {
+     "claim": "Initial claims 197,000, down 12% year on year.",
+     "problem": "Same week a year earlier was 233k (2025-10-04), so the change is -15.5%. The 4-week average is 198k vs 227.5k, -13.0%. '-12%' only matches comparing with the prior week (225k).",
+     "correct_version": "-15.5% year on year for the same week; -13% on the 4-week average.",
+     "evidence": "FRED ICSA and IC4WSA, re-downloaded."
+    },
+    {
+     "claim": "Fitch subprime auto ABS 60+ delinquency was 6.80% in Feb-2026, record 6.90% in Jan-2026; nothing later was found.",
+     "problem": "The cited source (tradingeconomics, from Fitch Auto ABS Indices) today shows Jul-2026 at 6.13% (Jun 5.80%) and an all-time high of 6.82% in Jan-2026.",
+     "correct_version": "Latest is Jul-2026 6.13%; the record is 6.82% (Jan-2026). The series is seasonal.",
+     "evidence": "Re-fetched tradingeconomics.com/united-states/car-loan-delinquency."
+    },
+    {
+     "claim": "Open question: pre-2001 context is missing, and the ABI page carries no data.",
+     "problem": "The repo already holds derived/abi_annual_business_nonbusiness_1980_2025.csv, parsed from ABI's PDF. It is MANIFEST-verified and matches the AO for 2005, 2006, 2010, 2019 and 2025.",
+     "correct_version": "Filings per 1,000 people (period-end population from FRED POPTHM): 1980 1.45, 1985 1.72, 2022 1.16. The 2022 trough is the lowest since at least 1980. The current 1.78 is about the 1985 level, below every year from 1986 to 2019. Close this question.",
+     "evidence": "derived/abi_annual_business_nonbusiness_1980_2025.csv; FRED POPTHM."
+    },
+    {
+     "claim": "Open question: the ZeroHedge article's publication timestamp is not shown.",
+     "problem": "The page's JSON-LD carries it.",
+     "correct_version": "datePublished is 2026-10-12T08:15:00-04:00.",
+     "evidence": "Re-fetched zerohedge.com page source."
+    },
+    {
+     "claim": "Watch item: DC +37%, MD +16.6% and VA-W +15.2% are possibly linked to federal workforce cuts.",
+     "problem": "VA-W (Roanoke, Lynchburg, Charlottesville) is not the federal-workforce hub. VA-E, which includes the Alexandria division and Northern Virginia, grew +11.1% (11,418\u219212,688), below the 12.0% national rate. ATTOM shows Washington-DC-metro foreclosure starts fell 38% (364\u2192227, Aug-2025 to Aug-2026). DC's base is tiny (412\u2192565) and its rate is 0.81 per 1,000, about 0.48 times the national rate.",
+     "correct_version": "Test this with VA-E, MD and DC alongside federal-employment data. Current evidence is mixed and leans against the hypothesis.",
+     "evidence": "Re-parsed AO F-2 Jun-2025 and Jun-2026 xlsx; ATTOM Aug-2026 report."
+    },
+    {
+     "claim": "Claims at the 2nd percentile mean income loss is not yet the driver.",
+     "problem": "This conflates job loss with income loss. Real average hourly earnings have been negative year on year since Apr-2026 (Apr -0.2%, May -0.8%, Aug -0.2%), as CPI rose from 2.4% in Feb to 4.2% in May during an oil shock: Brent was $67.7 on 2 Feb, peaked at $138.2 on 7 Apr, and was $125.4 on 6 Oct. The 'US-Iran war since late Feb' context is in the very ZeroHedge piece Casey cited. The current-state summary omits this macro regime entirely.",
+     "correct_version": "The job-loss channel is inactive, but a real-income squeeze has been active since Apr-2026. Filings decelerated during the squeeze, which is evidence on Casey's channel, not against tracking it.",
+     "evidence": "FRED CES0500000003, CPIAUCSL and DCOILBRENTEU (re-downloaded)."
+    }
+   ],
+   "confirmed": [
+    "Source chain: ZeroHedge relays The Epoch Times (Naveen Athrappully), which relays the ABI/Epiq release of 8 Oct 2026.",
+    "Epiq Jan\u2013Sep 2026 levels and recomputed percentages all match the release: total 469,719 vs 423,168 (+11.0%); individual 444,252 vs 399,379 (+11.2%, misprinted as '7%'; individual + commercial = total); Ch7 +13.4%; Ch13 +7.7%; commercial +7.1%; commercial Ch11 +11.3%; Subchapter V 2,442 vs 1,672 (+46.1%).",
+    "Epiq September 2026 values match, including the adjustment for the 109 related filings in Sep-2025: Ch11 -1.8% and commercial -3.2% excluding them.",
+    "Epiq revisions confirmed:\n- Jan\u2013Sep 2025 total 423,053\u2192423,168\n- Sep-2025 total 49,182\u219249,192\u219249,216\n- Subchapter V base 1,764\u21921,672 (-5.2%)\n- Commercial counts revise up 0.45% to 1.4% the next month",
+    "Epiq arithmetic errors confirmed:\n- Individual year-to-date printed '7%'; the levels give 11.2%\n- Aug Ch13 printed '10%'; the levels give 6.4%\n- Q1 Ch7 printed 82,259; the monthly prints sum to 89,266, while the Q1-2025 base (76,489) matches its monthly sum\n- Extra errors not in the strand: the Aug release says total and individual filings 'increased 5%' from July, but the levels show decreases",
+    "Quarterly sums of Epiq first prints: Q1 +13.5% (149,977/132,092), Q2 +11.3%, Q3 +8.3% (159,024/146,855). Monthly: Jul +10.2%, Aug +8.4%, Sep +6.3%. Per business day: May +12.6%, Jun +7.6%. Single-digit prints in Nov-2024 (+6.2%) and Feb-2025 (+3.1%) both had fewer business days.",
+    "AO national figures:\n- 12 months to Jun-2026: 608,511 vs 542,529 (+12.2%)\n- Business 26,941 vs 23,043 (+16.9%); nonbusiness 581,570 vs 519,486 (+12.0%)\n- Quarterly: Q1-2026 +13.6%, Q2 +11.4%; range 2023Q1\u20132026Q2 is +9.6% to +20.3%\n- Peaks: total 1,596,355 (Sep-2010); business 61,148 (Mar-2010); trough 380,634 (Jun-2022)\n- 12-month growth +28.9% to +35.0% in 2008\u201309, +37.8% at Dec-2007, and +10.0% to +16.8% since 2023Q2\n- Business filings at the 49th percentile since 2001",
+    "Per-capita and baseline figures:\n- Filings per 1,000 people: 1.78 now; 2.34 (2019); 5.12 (2010); 6.99 (2005); 2.06 (2006); 1.14 (Jun-2022)\n- Current level is 79% of 2019, 38% of 2010 and 29% of 2005\n- 2019 baselines from the ABI release of 3 Oct 2019: 580,470 total, 551,062 noncommercial, 29,408 commercial, 4,127 commercial Ch11",
+    "State and district consumer-filing figures were re-parsed from re-downloaded AO xlsx files, byte-identical to the strand's copies; district sums equal the national total.\n- States: FL +21.2% (38,536\u219246,701); TX +20.6% (Ch7 +29.1%); NC +17.7%; SC +17.6%; MD +16.6%; CA +14.9%; CO +14.3%; WA +14.1%; GA +14.0%\n- Slowest: WI -0.7%, CT +2.5%, IA +4.4%, IL +4.8%, OH +5.8%, PA +6.4%, NY +7.0%\n- TX and FL: 23.5% of the national increase vs 13.4% of the base\n- Districts: TX-S +29.6% down to CA-C +18.2%; FL-M is 9.3% of the total increase\n- Venue shifts: TX-S business +104%, Delaware -56%\n- Outliers: DC +37.1%, ND +51.6%, AK +61.3%",
+    "Fed 2026Q2 values and percentiles all reproduce from re-downloaded FRED and FRB data (released 25 Aug 2026; the FAS 159 and 1999Q3 notes are verbatim):\n- Delinquency: all loans 1.42% (8th pctl); C&I 1.27%; card 2.85% (2025Q2 3.04%); consumer 2.62%; residential 1.86%; CRE excl. farmland 1.53%; all real estate 1.68%; agricultural 1.10% (DRFAPGACBS)\n- Charge-offs: all 0.55%; C&I 0.58%; card 3.82%; consumer 2.66%; CRE 0.14%",
+    "Dashboard mislabel confirmed: backend/app/config.py:138 maps delinq_cre to DRSREACBS, whose FRED title is 'Delinquency Rate on Loans Secured by Real Estate, All Commercial Banks'. The CRE series is DRCRELEXFACBS (1.53%).",
+    "NY Fed household credit (workbook sha256 matches MANIFEST; released 11 Aug 2026):\n- Flow into 90+: auto 3.00% (2.93% a year earlier; highest since 2010Q1; 2007Q4 2.44%); card 6.97%; mortgage 1.52% (highest since 2015Q4); HELOC 1.15%; student loans 7.83%; all debt 2.57%\n- Student loans 10.6% of balances 90+ days late; 4.7% of all debt delinquent\n- Bankruptcy notations 136.8k vs 131.3k; 4-quarter sum 526k vs 836k (2019Q2), low 379k; flat 487k\u2192485k from 2024Q2 to 2025Q2\n- Foreclosures 55.2k; collections 4.9% of consumers\n- States: TX 90+ share 4.58% (+0.65pp); TX and FL highest 30+ transition levels; NV 90+ transition +0.90pp",
+    "Claims and unemployment: initial claims 197k (2.3rd percentile since 1967); 4-week average 198k; continuing claims 1.716M (11th percentile); unemployment 4.2%.",
+    "High-yield spread (FRED BAMLH0A0HYM2): 2.70 on 17 Sep, 3.08 on 29 Sep, 3.15 on 8 Oct (+45bp). Range since Oct-2023 is 2.59 to 4.61; FRED's keyless history starts 2023-10-10.",
+    "Cornerstone: 100 vs 117 large filings (-15%), 22% above the 2005\u201325 average of 82; mega cases 28 vs 32 (average 23); public-company filers 20 vs 36; manufacturing, services and FIRE each 21\u201322% of filings; FIRE was 9% in 2023; S.D. Texas has overtaken Delaware; 73% of 26 mega cases cite reduced demand.",
+    "S&P via CFO Dive: H1-2026 372 vs 371, highest since 2010; industrials 50, consumer discretionary 35, healthcare 26. Private-equity-backed filings 24 vs 36 (search relay of an S&P article dated 6 Aug 2026).",
+    "Moody's via First Trust: US 5.3% (Aug), 5.0% (Jun), 5.1% (Apr); Dec-2026 baseline 4.3% (17 Sep) vs 3.5% (22 Jul); global 4.5% vs a 4.2% average. Fitch private-credit default rate 6.3% (TTM to Aug), at or above 6.0% since April; healthcare 9.9%, industrial 9.9%, consumer 8.7%.",
+    "ATTOM Aug-2026: 40,277 properties with foreclosure filings (+13%); starts 25,894 (+7%); repossessions 5,794 (+42%); worst rates SC (1 in 1,547 housing units), NV, FL, TX, MD; TX repossessions 1,835 (Houston 448, Dallas 402); 'below pre-pandemic norms'. Aug-2026 is the latest monthly report.",
+    "H.R. 7730 passed the House on 16 Sep (voice vote) and the Senate on 28 Sep (unanimous consent). The bill tracker still shows 'Awaiting Signature', last action 28 Sep, so a signature is not confirmed.",
+    "Epiq Ch12: 62 filings in Apr-2026 (+130%, highest since Feb-2020), then 29 in May."
+   ]
+  }
+ }
+]

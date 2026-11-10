@@ -1,0 +1,680 @@
+{
+ "rules": {
+  "A1": {
+   "hits": 5,
+   "hits_ex2020": 4,
+   "per_peak": [
+    {
+     "peak": "1973-11",
+     "outcome": "HIT",
+     "onset": "1974-02",
+     "timing": 3
+    },
+    {
+     "peak": "1980-01",
+     "outcome": "HIT",
+     "onset": "1980-02",
+     "timing": 1
+    },
+    {
+     "peak": "1981-07",
+     "outcome": "LATE",
+     "onset": "1981-12"
+    },
+    {
+     "peak": "1990-07",
+     "outcome": "HIT",
+     "onset": "1990-09",
+     "timing": 2
+    },
+    {
+     "peak": "2001-03",
+     "outcome": "HIT",
+     "onset": "2001-03",
+     "timing": 0
+    },
+    {
+     "peak": "2007-12",
+     "outcome": "LATE",
+     "onset": "2008-04"
+    },
+    {
+     "peak": "2020-02",
+     "outcome": "HIT",
+     "onset": "2020-04",
+     "timing": 2
+    }
+   ],
+   "false_alarms": [],
+   "onsets_classified": {
+    "1974-02": "HIT",
+    "1980-02": "HIT",
+    "1981-12": "LATE",
+    "1990-09": "HIT",
+    "2001-03": "HIT",
+    "2008-04": "LATE",
+    "2020-04": "HIT"
+   },
+   "final_2021_2024": [],
+   "provisional_2024_2025": [],
+   "pending": [],
+   "duty_cycle": 0.223,
+   "label": "Insured unemployment (Richmond Fed SOS) \u2605",
+   "threshold": 0.2,
+   "first_month": "1972-06"
+  },
+  "A2": {
+   "hits": 6,
+   "hits_ex2020": 5,
+   "per_peak": [
+    {
+     "peak": "1973-11",
+     "outcome": "HIT",
+     "onset": "1974-02",
+     "timing": 3
+    },
+    {
+     "peak": "1980-01",
+     "outcome": "HIT",
+     "onset": "1979-11",
+     "timing": -2
+    },
+    {
+     "peak": "1981-07",
+     "outcome": "LATE",
+     "onset": "1981-11"
+    },
+    {
+     "peak": "1990-07",
+     "outcome": "HIT",
+     "onset": "1990-08",
+     "timing": 1
+    },
+    {
+     "peak": "2001-03",
+     "outcome": "HIT",
+     "onset": "2001-03",
+     "timing": 0
+    },
+    {
+     "peak": "2007-12",
+     "outcome": "HIT",
+     "onset": "2007-12",
+     "timing": 0
+    },
+    {
+     "peak": "2020-02",
+     "outcome": "HIT",
+     "onset": "2020-03",
+     "timing": 1
+    }
+   ],
+   "false_alarms": [],
+   "onsets_classified": {
+    "1974-02": "HIT",
+    "1979-11": "HIT",
+    "1981-11": "LATE",
+    "1990-08": "HIT",
+    "2001-03": "HIT",
+    "2007-12": "HIT",
+    "2020-03": "HIT"
+   },
+   "final_2021_2024": [
+    "2024-08"
+   ],
+   "provisional_2024_2025": [],
+   "pending": [],
+   "duty_cycle": 0.255,
+   "label": "Job losers, Sahm-style",
+   "threshold": 0.3,
+   "first_month": "1967-03"
+  },
+  "A3": {
+   "hits": 5,
+   "hits_ex2020": 4,
+   "per_peak": [
+    {
+     "peak": "1973-11",
+     "outcome": "HIT",
+     "onset": "1974-01",
+     "timing": 2
+    },
+    {
+     "peak": "1980-01",
+     "outcome": "HIT",
+     "onset": "1979-10",
+     "timing": -3
+    },
+    {
+     "peak": "1981-07",
+     "outcome": "LATE",
+     "onset": "1981-12"
+    },
+    {
+     "peak": "1990-07",
+     "outcome": "LIT-THROUGH"
+    },
+    {
+     "peak": "2001-03",
+     "outcome": "HIT",
+     "onset": "2000-12",
+     "timing": -3
+    },
+    {
+     "peak": "2007-12",
+     "outcome": "HIT",
+     "onset": "2008-02",
+     "timing": 2
+    },
+    {
+     "peak": "2020-02",
+     "outcome": "HIT",
+     "onset": "2020-03",
+     "timing": 1
+    }
+   ],
+   "false_alarms": [],
+   "onsets_classified": {
+    "1974-01": "HIT",
+    "1979-10": "HIT",
+    "1981-12": "LATE",
+    "1989-10": "EARLY",
+    "2000-12": "HIT",
+    "2008-02": "HIT",
+    "2020-03": "HIT"
+   },
+   "final_2021_2024": [
+    "2023-04"
+   ],
+   "provisional_2024_2025": [],
+   "pending": [],
+   "duty_cycle": 0.23,
+   "label": "Continuing claims y/y (not seasonally adj.)",
+   "threshold": 10.0,
+   "first_month": "1968-02"
+  },
+  "B1": {
+   "hits": 4,
+   "hits_ex2020": 3,
+   "per_peak": [
+    {
+     "peak": "1973-11",
+     "outcome": "LATE",
+     "onset": "1974-12"
+    },
+    {
+     "peak": "1980-01",
+     "outcome": "LATE",
+     "onset": "1980-05"
+    },
+    {
+     "peak": "1981-07",
+     "outcome": "HIT",
+     "onset": "1981-10",
+     "timing": 3
+    },
+    {
+     "peak": "1990-07",
+     "outcome": "HIT",
+     "onset": "1990-08",
+     "timing": 1
+    },
+    {
+     "peak": "2001-03",
+     "outcome": "EARLY",
+     "onset": "2000-08"
+    },
+    {
+     "peak": "2007-12",
+     "outcome": "HIT",
+     "onset": "2007-10",
+     "timing": -2
+    },
+    {
+     "peak": "2020-02",
+     "outcome": "HIT",
+     "onset": "2020-04",
+     "timing": 2
+    }
+   ],
+   "false_alarms": [],
+   "onsets_classified": {
+    "1974-12": "LATE",
+    "1980-05": "LATE",
+    "1981-10": "HIT",
+    "1990-08": "HIT",
+    "2000-08": "EARLY",
+    "2007-10": "HIT",
+    "2008-07": "LATE",
+    "2020-04": "HIT"
+   },
+   "final_2021_2024": [],
+   "provisional_2024_2025": [],
+   "pending": [],
+   "duty_cycle": 0.235,
+   "label": "Prime-age employment rate drawdown",
+   "threshold": 0.5,
+   "first_month": "1948-03"
+  },
+  "B2": {
+   "hits": 5,
+   "hits_ex2020": 4,
+   "per_peak": [
+    {
+     "peak": "1973-11",
+     "outcome": "LATE",
+     "onset": "1974-07"
+    },
+    {
+     "peak": "1980-01",
+     "outcome": "HIT",
+     "onset": "1980-03",
+     "timing": 2
+    },
+    {
+     "peak": "1981-07",
+     "outcome": "MISS",
+     "onset": null
+    },
+    {
+     "peak": "1990-07",
+     "outcome": "HIT",
+     "onset": "1990-09",
+     "timing": 2
+    },
+    {
+     "peak": "2001-03",
+     "outcome": "HIT",
+     "onset": "2000-10",
+     "timing": -5
+    },
+    {
+     "peak": "2007-12",
+     "outcome": "HIT",
+     "onset": "2007-08",
+     "timing": -4
+    },
+    {
+     "peak": "2020-02",
+     "outcome": "HIT",
+     "onset": "2020-03",
+     "timing": 1
+    }
+   ],
+   "false_alarms": [],
+   "onsets_classified": {
+    "1974-07": "LATE",
+    "1980-03": "HIT",
+    "1990-09": "HIT",
+    "2000-10": "HIT",
+    "2001-05": "HIT",
+    "2007-08": "HIT",
+    "2020-03": "HIT"
+   },
+   "final_2021_2024": [
+    "2024-08"
+   ],
+   "provisional_2024_2025": [],
+   "pending": [],
+   "duty_cycle": 0.243,
+   "label": "Participation-adjusted unemployment, Sahm-style",
+   "threshold": 0.5,
+   "first_month": "1948-03"
+  },
+  "C1": {
+   "hits": 5,
+   "hits_ex2020": 4,
+   "per_peak": [
+    {
+     "peak": "1973-11",
+     "outcome": "LATE",
+     "onset": "1974-07"
+    },
+    {
+     "peak": "1980-01",
+     "outcome": "HIT",
+     "onset": "1980-02",
+     "timing": 1
+    },
+    {
+     "peak": "1981-07",
+     "outcome": "LATE",
+     "onset": "1981-11"
+    },
+    {
+     "peak": "1990-07",
+     "outcome": "HIT",
+     "onset": "1990-10",
+     "timing": 3
+    },
+    {
+     "peak": "2001-03",
+     "outcome": "HIT",
+     "onset": "2001-06",
+     "timing": 3
+    },
+    {
+     "peak": "2007-12",
+     "outcome": "HIT",
+     "onset": "2008-02",
+     "timing": 2
+    },
+    {
+     "peak": "2020-02",
+     "outcome": "HIT",
+     "onset": "2020-04",
+     "timing": 2
+    }
+   ],
+   "false_alarms": [
+    "2003-07"
+   ],
+   "onsets_classified": {
+    "1974-07": "LATE",
+    "1980-02": "HIT",
+    "1981-11": "LATE",
+    "1990-10": "HIT",
+    "2001-06": "HIT",
+    "2003-07": "FALSE",
+    "2008-02": "HIT",
+    "2020-04": "HIT"
+   },
+   "final_2021_2024": [
+    "2024-07"
+   ],
+   "provisional_2024_2025": [],
+   "pending": [],
+   "duty_cycle": 0.231,
+   "label": "Sahm rule \u2605",
+   "threshold": 0.5,
+   "first_month": "1948-04"
+  }
+ },
+ "today": {
+  "A1": {
+   "month": "2026-08",
+   "value": 0.0,
+   "lit": false
+  },
+  "A2": {
+   "month": "2026-08",
+   "value": -0.026,
+   "lit": false
+  },
+  "A3": {
+   "month": "2026-08",
+   "value": -8.266,
+   "lit": false
+  },
+  "B1": {
+   "month": "2026-08",
+   "value": 0.4,
+   "lit": false
+  },
+  "B2": {
+   "month": "2026-08",
+   "value": 0.191,
+   "lit": false
+  },
+  "C1": {
+   "month": "2026-08",
+   "value": -0.07,
+   "lit": false
+  },
+  "board": {
+   "month": "2026-08",
+   "alert": false,
+   "watch": false
+  }
+ },
+ "composite": {
+  "hits": 5,
+  "hits_ex2020": 4,
+  "per_peak": [
+   {
+    "peak": "1973-11",
+    "outcome": "LATE",
+    "onset": "1974-07"
+   },
+   {
+    "peak": "1980-01",
+    "outcome": "HIT",
+    "onset": "1980-02",
+    "timing": 1
+   },
+   {
+    "peak": "1981-07",
+    "outcome": "LATE",
+    "onset": "1981-11"
+   },
+   {
+    "peak": "1990-07",
+    "outcome": "HIT",
+    "onset": "1990-08",
+    "timing": 1
+   },
+   {
+    "peak": "2001-03",
+    "outcome": "HIT",
+    "onset": "2000-12",
+    "timing": -3
+   },
+   {
+    "peak": "2007-12",
+    "outcome": "HIT",
+    "onset": "2007-12",
+    "timing": 0
+   },
+   {
+    "peak": "2020-02",
+    "outcome": "HIT",
+    "onset": "2020-03",
+    "timing": 1
+   }
+  ],
+  "false_alarms": [],
+  "onsets_classified": {
+   "1974-07": "LATE",
+   "1980-02": "HIT",
+   "1981-11": "LATE",
+   "1990-08": "HIT",
+   "2000-12": "HIT",
+   "2007-12": "HIT",
+   "2020-03": "HIT"
+  },
+  "final_2021_2024": [
+   "2024-08"
+  ],
+  "provisional_2024_2025": [],
+  "pending": [],
+  "duty_cycle": 0.24
+ },
+ "slack_leg_alone": {
+  "hits": 4,
+  "hits_ex2020": 3,
+  "per_peak": [
+   {
+    "peak": "1973-11",
+    "outcome": "LATE",
+    "onset": "1974-07"
+   },
+   {
+    "peak": "1980-01",
+    "outcome": "HIT",
+    "onset": "1980-02",
+    "timing": 1
+   },
+   {
+    "peak": "1981-07",
+    "outcome": "MISS",
+    "onset": null
+   },
+   {
+    "peak": "1990-07",
+    "outcome": "HIT",
+    "onset": "1990-08",
+    "timing": 1
+   },
+   {
+    "peak": "2001-03",
+    "outcome": "EARLY",
+    "onset": "2000-08"
+   },
+   {
+    "peak": "2007-12",
+    "outcome": "HIT",
+    "onset": "2007-08",
+    "timing": -4
+   },
+   {
+    "peak": "2020-02",
+    "outcome": "HIT",
+    "onset": "2020-03",
+    "timing": 1
+   }
+  ],
+  "false_alarms": [],
+  "onsets_classified": {
+   "1974-07": "LATE",
+   "1980-02": "HIT",
+   "1990-08": "HIT",
+   "2000-08": "EARLY",
+   "2007-08": "HIT",
+   "2020-03": "HIT"
+  },
+  "final_2021_2024": [
+   "2024-07"
+  ],
+  "provisional_2024_2025": [],
+  "pending": [],
+  "duty_cycle": 0.281
+ },
+ "sahm_current_vintage": {
+  "hits": 5,
+  "hits_ex2020": 4,
+  "per_peak": [
+   {
+    "peak": "1973-11",
+    "outcome": "LATE",
+    "onset": "1974-07"
+   },
+   {
+    "peak": "1980-01",
+    "outcome": "HIT",
+    "onset": "1980-02",
+    "timing": 1
+   },
+   {
+    "peak": "1981-07",
+    "outcome": "LATE",
+    "onset": "1981-11"
+   },
+   {
+    "peak": "1990-07",
+    "outcome": "HIT",
+    "onset": "1990-10",
+    "timing": 3
+   },
+   {
+    "peak": "2001-03",
+    "outcome": "HIT",
+    "onset": "2001-06",
+    "timing": 3
+   },
+   {
+    "peak": "2007-12",
+    "outcome": "HIT",
+    "onset": "2008-02",
+    "timing": 2
+   },
+   {
+    "peak": "2020-02",
+    "outcome": "HIT",
+    "onset": "2020-04",
+    "timing": 2
+   }
+  ],
+  "false_alarms": [
+   "2003-07"
+  ],
+  "onsets_classified": {
+   "1974-07": "LATE",
+   "1980-02": "HIT",
+   "1981-11": "LATE",
+   "1990-10": "HIT",
+   "2001-06": "HIT",
+   "2003-07": "FALSE",
+   "2008-02": "HIT",
+   "2020-04": "HIT"
+  },
+  "final_2021_2024": [
+   "2024-07"
+  ],
+  "provisional_2024_2025": [],
+  "pending": [],
+  "duty_cycle": 0.231
+ },
+ "paired_timing_vs_sahm": -2,
+ "bc_false_alarms_removed_or_moved": [],
+ "criteria": {
+  "c1_hits>=6": false,
+  "c2_fa<=sahm": true,
+  "c3_zero_final": false,
+  "c4_paired_timing<=+1": true,
+  "c6_no_hit_lost": true,
+  "c6_removes_bc_fa": false,
+  "c5_size_p<=0.10": true,
+  "c7_grid>=2/3": false,
+  "c8_popcontrol_same": true,
+  "ship_red_alert": false
+ },
+ "size": {
+  "n_rotations": 541,
+  "at_least_as_good": 0,
+  "p": 0.0018,
+  "observed": {
+   "hits": 5,
+   "fa": 0
+  }
+ },
+ "grid": {
+  "share_pass": 0.0,
+  "n": 81,
+  "passing": []
+ },
+ "popcontrol_sensitivity": {
+  "passes": false,
+  "hits": 5,
+  "fa": []
+ },
+ "sensitivities": {
+  "sahm_realtime": {
+   "hits": 5,
+   "false_alarms": [],
+   "final_2021_2024": [
+    "2024-08"
+   ]
+  },
+  "a3_covemp_normalized": {
+   "hits": 5,
+   "false_alarms": [],
+   "final_2021_2024": [
+    "2024-08"
+   ]
+  },
+  "a3_masked_1973_1980": {
+   "hits": 5,
+   "false_alarms": [],
+   "final_2021_2024": [
+    "2024-08"
+   ]
+  },
+  "window3": {
+   "hits": 5,
+   "false_alarms": [],
+   "final_2021_2024": [
+    "2024-08"
+   ]
+  }
+ }
+}
