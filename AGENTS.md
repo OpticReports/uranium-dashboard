@@ -50,6 +50,18 @@ edge, with its sample size, the mirrored/placebo check, and what it would
 take to use it. Origin: add. 53 found that "bad overnight -> better session"
 after oversold closes and first reported it only as "don't exit".
 
+ONE BRAIN, TWO BROKERS (Casey, 2026-11-10): the Composer symphonies also run
+on IBKR as a mirror (composer/IBKR_MIRROR.md), with Composer as the editor.
+"Every time a thesis or test or report is made and that item changes or
+updates the trading methodologies or gates or symphonies ... [it] should also
+be transferred over ... double checking that the composer side and the
+interactive brokers side is performing the same way." Any change to a
+symphony, a gate, a POLICY operation or the methodology lands on BOTH sides
+in the same change set, and the parity check (per engine: Composer's holdings
+vs the mirror's, and the day's returns) is run and reported before the change
+counts as done. Until the mirror trades, the rule binds the approved fixtures
+(composer/fixtures/approved), which are the mirror's source.
+
 ## Standing engineering conventions
 
 - Agent-governed pattern for studies/builds: research or counter-agent pass
