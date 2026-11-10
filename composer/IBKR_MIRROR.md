@@ -49,6 +49,14 @@ research/mirror/reviews/. Numbers: results/results.md addendum 55.
    sleeves of $1,200-$3,400, so the test measures plumbing and execution, not
    return. On a margin account $10k is the book's limit, not IBKR's.
 
+8. (11-10 evening) blend3070 is sold and switched off on Wed 11-11 REGARDLESS
+   of whether the mirror goes live that day (owner: "yes sell all tmr
+   regardless"). The mirror's real-money start is the same day at 15:54 ET
+   only if the replacement round-3 executor review is clean and the 15:15
+   attestation ran; otherwise the account sits in cash and it starts 11-12.
+   /kill also halts the mirror's books: lift that with POST /mirror/resume,
+   never /resume (which would lift the blend's halt).
+
 Starting weights: Composer's live split on the day (default, see below).
 
 Recommendation on the weights: seed at Composer's live split on the cutover
