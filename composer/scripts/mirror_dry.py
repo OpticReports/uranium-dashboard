@@ -539,14 +539,21 @@ class Sim:
         """new receivables for every dividend not seen before (shares held at the close before the
         ex-date: the sleeves as they stand before this session's plan when the ex-date is after the
         last session run, else the holdings kept for that day), then the settlement of every open
-        receivable due, BEFORE the plan, under self.rule. A paper account's cash always arrives.
-        Returns the cash credited to the sleeves"""
+        receivable that is due, BEFORE the plan, under self.rule. Due is the core's call
+        (mc.receivable_pay_date): a pay date not known yet is not due; a later listing of the same
+        dividend supplies it; one never learnt is assumed by the core after its give-up days. A paper
+        account's cash always arrives. Returns the cash credited to the sleeves"""
         for row in dividends or []:
             dv = mc.clean_dividend(row)
             if dv is None or dv["ex_date"] > d:
                 continue
             key = mc.dividend_key(dv["ticker"], dv["ex_date"])
             if key in self.div_seen:
+                if dv.get("pay_date"):                 # listed again, now with the pay date an earlier listing lacked
+                    for r in self.receivables:
+                        if r.get("status") == "open" and not r.get("pay_date") and \
+                                (r.get("ticker"), r.get("ex_date")) == (dv["ticker"], dv["ex_date"]):
+                            r["pay_date"] = dv["pay_date"]
                 continue
             self.div_seen.append(key)
             if self.last is None or dv["ex_date"] > self.last:
@@ -554,7 +561,7 @@ class Sim:
             else:
                 holdings = self._holdings_before(dv["ex_date"])
             for r in mc.dividend_receivables(holdings, dv):
-                r.update(status="open", seen=d, pay_date_given=dv["pay_date_given"])
+                r.update(status="open", seen=d)
                 self.receivables.append(r)
                 a = acct.get(r["sleeve"])
                 if a is not None:
@@ -562,8 +569,11 @@ class Sim:
                     a["accrued_by"][r["ticker"]] = round(a["accrued_by"].get(r["ticker"], 0.0) + r["total"], 4)
         credited = 0.0
         for r in self.receivables:
-            if r.get("status") != "open" or str(r.get("pay_date") or "9") > d:
+            due = mc.receivable_pay_date(r, d) if r.get("status") == "open" else None
+            if due is None or due > d:
                 continue
+            if not r.get("pay_date"):                  # never learnt: the core's assumed date, kept on the record
+                r.update(pay_date=due, pay_date_assumed=True)
             out = mc.settle_receivable(self.book, r, d, self.rule, cash_arrived=True)
             if isinstance(out.get("held"), bool):
                 r["held"] = out["held"]

@@ -463,7 +463,8 @@ function drawCost(){
   const odd = ev.filter(x => (x.core === 'credited') !== (x.treatment === 'HELD_THROUGH'));
   $('pDiv').textContent = `Rule "composer", the executor's default: a dividend is a receivable for the sleeve that held the payer at the close before the ex-date, credited on the first session on or after the pay date only if the sleeve still holds it. ` +
     `${same} of ${ev.length} entitlements land where Composer's own observed pay lags put them` +
-    (odd.length ? `; not ${odd.map(x => `${x.e}'s ${x.ticker} ex ${md(x.ex)} (${usd(x.usd)}: the core ${x.core === 'credited' ? 'credits it, held again on the pay date after a sale' : 'leaves it out'}; the observed lag says ${x.treatment === 'HELD_THROUGH' ? 'inside the symphony' : 'account cash'})`).join(', ')}` : '') +
+    (odd.length ? `; not ${odd.map(x => `${x.e}'s ${x.ticker} ex ${md(x.ex)} (${usd(x.usd)}: the core ${x.core === 'credited' ? 'credits it, held again on the pay date after a sale' : 'leaves it out'}; the pay-lag reading says ${x.treatment === 'HELD_THROUGH' ? 'inside the symphony' : 'account cash'}` +
+      (x.ticker === 'BIL' && x.ex === '2026-11-02' ? `; Composer's own cash on ${md(x.pay)} shows it credited it, so the core is right and the pay-lag reading is off (review B, round 2)` : '') + ')').join(', ')}` : '') +
     `. Rule "holder" would credit all of it and move the gap by ${bp(D.sens.rule.holder_minus_composer_bps)} bps over the window. ` +
     `Entitled: ${(dist.accrued_bps_yr / 100).toFixed(2)}% of the book a year.`;
   $('tbEv').innerHTML = `<thead><tr><th>Ex-date</th><th>Pay date</th><th>Engine</th><th>Fund</th><th class="n">Dollars</th><th class="n">bps of the sleeve</th><th>The core</th><th>Composer, by its observed lag</th></tr></thead><tbody>` +

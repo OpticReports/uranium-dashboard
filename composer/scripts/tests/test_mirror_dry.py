@@ -223,13 +223,48 @@ class M2Distributions(NoNetwork):
         # an ex-date before the sleeve held the payer (D1: bought at that day's close) owes nothing
         res = run(two_sleeves(), market(divs={"AAA": {D1: (1.0, D2)}}))
         self.assertEqual((sum(r["div_accrued"] for r in res["rows"]), res["receivables"]), (0.0, []))
-        # no pay date listed: the core takes ex-date + 7 calendar days, after this window -> still a receivable
+        # no pay date listed: the core never guesses one this early -> still a receivable when the window ends
         res = run(two_sleeves(), market(divs={"AAA": {D2: 1.0}}))
         hg = rows_of(res, "HG")
         self.assertEqual((hg[D3]["div"], hg[D3]["receivable_open"]), (0.0, 497.0))
-        self.assertEqual((res["receivables"][0]["status"], res["receivables"][0]["pay_date"], res["receivables"][0]["pay_date_given"]),
-                         ("open", "2026-03-10", False))
+        self.assertEqual((res["receivables"][0]["status"], res["receivables"][0]["pay_date"]), ("open", None))
         self.assertEqual(res["parity"]["book"]["distributions"]["open_usd"], 497.0)
+
+    def test_an_unknown_pay_date_waits_for_a_later_listing_or_for_the_cores_give_up_day(self):
+        t = {"HG": {"status": "ok", "target": {"AAA": 1.0}}}
+        px = {"AAA": 100.0}
+        row = {"ticker": "AAA", "ex_date": D2, "pay_date": None, "amount": 1.0}
+        ex = datetime.date.fromisoformat(D2)
+        day = lambda n: (ex + datetime.timedelta(days=n)).isoformat()   # noqa: E731
+
+        def book_at_the_ex_date():
+            sim = md.Sim(md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5}), 0.0)
+            sim.session(D1, t, px, px, px)
+            _, b = sim.session(D2, t, px, px, px, [row])
+            self.assertEqual((b["div_accrued"], b["div"], sim.receivables[0]["pay_date"]), (497.0, 0.0, None))
+            return sim
+        # (1) the same dividend listed again WITH its pay date: due from that date, not before
+        sim = book_at_the_ex_date()
+        _, b = sim.session(D3, t, px, px, px, [dict(row, pay_date=D4)])
+        self.assertEqual((b["div"], sim.receivables[0]["pay_date"], sim.receivables[0]["status"]), (0.0, D4, "open"))
+        _, b = sim.session(D4, t, px, px, px, [dict(row, pay_date=day(30))])   # a known date is not moved by a later listing
+        self.assertEqual((b["div"], sim.receivables[0]["status"], len(sim.receivables)), (497.0, "credited", 1))
+        self.assertEqual(sim.receivables[0]["pay_date"], D4)
+        # (2) never listed with one: nothing until the core's give-up day, then its assumed date applies
+        sim = book_at_the_ex_date()
+        n = mc.PAY_DATE_GIVE_UP_DAYS
+        _, b = sim.session(day(n - 1), t, px, px, px, [row])
+        self.assertEqual((b["div"], b["receivable_open"]), (0.0, 497.0))
+        self.assertIsNone(mc.receivable_pay_date(sim.receivables[0], day(n - 1)))
+        _, b = sim.session(day(n), t, px, px, px)
+        self.assertEqual((b["div"], b["receivable_open"], sim.receivables[0]["status"]), (497.0, 0.0, "credited"))
+        self.assertEqual((sim.receivables[0]["pay_date"], sim.receivables[0]["pay_date_assumed"]), (day(mc.DEFAULT_PAY_LAG_DAYS), True))
+        # twin: a listed pay date is honoured as it is, however far out (no give-up applies to it)
+        sim = md.Sim(md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5}), 0.0)
+        sim.session(D1, t, px, px, px)
+        sim.session(D2, t, px, px, px, [dict(row, pay_date=day(30))])
+        _, b = sim.session(day(n), t, px, px, px)
+        self.assertEqual((b["div"], b["receivable_open"]), (0.0, 497.0))
 
     def test_the_rows_are_the_brains_shape_and_window(self):
         sat = "2026-03-01"                                                 # no session that day: it is in D1's rows
@@ -417,7 +452,8 @@ class M4CloseModeDrivesMirrorCore(NoNetwork):
                 picks = rnd.sample(syms, rnd.randint(1, 3))
                 ws = [rnd.random() + 0.1 for _ in picks]
                 rows.append(led(d, e, {s: w / sum(ws) for s, w in zip(picks, ws)}))
-        divs = {"AAA": {days[5]: 0.4, days[12]: 0.4}, "CCC": {days[9]: 1.1}}
+        divs = {"AAA": {days[5]: (0.4, days[7]), days[12]: (0.4, days[13])}, "CCC": {days[9]: 1.1},   # CCC: no pay date listed
+                "BBB": {days[3]: (0.2, days[4]), days[15]: (0.2, days[18])}, "DDD": {days[8]: (0.9, days[9])}}
         mkt = md.Market(raw=raw, divs=divs, calendar=days)
         sim_seen = []
         real = md.Sim.session
