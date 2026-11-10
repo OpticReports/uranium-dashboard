@@ -1492,6 +1492,65 @@ class IBAdapter:
                 qty += int(p.position)
         return qty
 
+    def positions_snapshot(self) -> dict:
+        """Everything the ACCOUNT holds, for a strategy that must own the whole
+        account (the Composer mirror): {"stocks": {symbol: whole shares},
+        "other": [text]}. `other` names what is not a whole stock lot - an
+        option, a future, a fractional share - so the caller can refuse to
+        treat the account as its own. Read-only; raises when disconnected."""
+        self._require_connected()
+        self._pump()
+        stocks: dict[str, int] = {}
+        other: list[str] = []
+        for p in self.ib.positions():
+            c = getattr(p, "contract", None)
+            sym = getattr(c, "symbol", "?") if c is not None else "?"
+            try:
+                qty = float(p.position)
+            except (TypeError, ValueError):
+                other.append(f"{sym} unreadable position {p.position!r}")
+                continue
+            if qty == 0:
+                continue
+            sec = getattr(c, "secType", "STK") if c is not None else "?"
+            if sec not in ("", "STK"):
+                other.append(f"{sec} {sym} {qty:g}")
+            elif qty != int(qty):
+                other.append(f"STK {sym} fractional {qty:g}")
+            else:
+                stocks[sym] = stocks.get(sym, 0) + int(qty)
+        return {"stocks": {k: v for k, v in sorted(stocks.items()) if v},
+                "other": other}
+
+    def stock_order_fills(self, client_order_id: str) -> dict | None:
+        """What the order carrying this idempotency key EXECUTED, whatever
+        its status: {filled_qty, avg_price, commission}, or None when the
+        venue never saw it. avg_price is None when no usable price was
+        reported (never 0.0); commission is None until IB reports it.
+        find_stock_order answers a cancelled order with filled_qty and no
+        price; this is where a caller that must book that partial fill reads
+        the price. Read-only."""
+        self._require_connected()
+        self._pump()
+        trade = self._find_trade_by_client_id(client_order_id)
+        if trade is None or not (getattr(trade, "fills", None) or []):
+            trade = (self._find_trade_by_client_id(client_order_id,
+                                                   refresh=True) or trade)
+        if trade is None:
+            return None
+        fills = list(getattr(trade, "fills", []) or [])
+        shares = sum(int(f.execution.shares) for f in fills)
+        if shares <= 0:
+            try:
+                shares = int(getattr(trade.orderStatus, "filled", 0) or 0)
+            except (TypeError, ValueError):
+                shares = 0
+        px = _agg_fill_price(trade) if shares > 0 else None
+        comm = _agg_commission(trade) if _commission_reported(trade) else None
+        return {"filled_qty": int(shares),
+                "avg_price": float(px) if px is not None else None,
+                "commission": comm}
+
 
 class DryAdapter:
     """No gateway, no orders: synthesizes fills at the budget and marks flat.
@@ -1713,3 +1772,20 @@ class DryAdapter:
         every guard, which is exactly right and exactly not what those
         setups mean."""
         self._positions[symbol] = self._positions.get(symbol, 0) + int(qty)
+
+    def positions_snapshot(self) -> dict:
+        """Mirrors IBAdapter.positions_snapshot: the simulated account's whole
+        stock lots; nothing else can exist here."""
+        return {"stocks": {k: v for k, v in sorted(self._positions.items()) if v},
+                "other": []}
+
+    def stock_order_fills(self, client_order_id: str) -> dict | None:
+        """Mirrors IBAdapter.stock_order_fills for the simulated orders: a
+        filled order executed its whole quantity at its fill price."""
+        rec = self._orders.get(self._by_client.get(client_order_id, ""))
+        if rec is None:
+            return None
+        done = rec["status"] == "filled" and rec.get("fill_price") is not None
+        return {"filled_qty": abs(int(rec["qty"])) if done else 0,
+                "avg_price": float(rec["fill_price"]) if done else None,
+                "commission": 0.0 if done else None}

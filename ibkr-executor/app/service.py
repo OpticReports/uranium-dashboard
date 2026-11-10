@@ -157,6 +157,14 @@ LOOP_GEN_LOCK = threading.Lock()   # to leak a daemon loop thread that never
                                    # superseded: exit at the next checkpoint,
                                    # touch nothing".
 ADAPTER = None
+MIRROR: dict = {}                  # Composer mirror books ({"live": ..., "dry":
+                                   # ...}, app/mirror.py), ONLY when
+                                   # MIRROR_ENABLED. Empty (the default) = every
+                                   # mirror hook below is a falsy check and the
+                                   # service is exactly what it was. The books
+                                   # carry their own locks: an API thread only
+                                   # ever writes the halt file or the request
+                                   # inbox, never the book.
 LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
 # Boot retry (2026-08-28): _build() connects to the gateway, which cannot
 # finish logging in until a 2FA push is approved. A failed build is
@@ -780,6 +788,31 @@ def _build_managers():
                  f"adopted deposit is no longer counted - verify "
                  f"blend.capital.contributed on /status and restore it by "
                  f"hand from the ADOPTED page if needed")
+    if settings.mirror_enabled:
+        _build_mirror()
+
+
+def _build_mirror() -> None:
+    """The Composer mirror's books, built once with the other managers. A
+    mirror that cannot be built (a typo in MIRROR_WEIGHTS, an unreadable
+    disk) must never take the rest of the service down with it: it is left
+    OFF, loudly, and everything else boots as before."""
+    global MIRROR
+    try:
+        from . import mirror as mirror_mod
+        MIRROR = mirror_mod.build(settings, alert=lambda msg: send(msg))
+    except Exception as exc:  # noqa: BLE001
+        MIRROR = {}
+        logger.exception("mirror build failed: %s", exc)
+        send(f"🚨 mirror NOT built ({exc}) — MIRROR_ENABLED is set but the "
+             f"Composer mirror is OFF until this is fixed and the service "
+             f"restarts; the rest of the executor is unaffected")
+        return
+    for name, book in MIRROR.items():
+        if book.archived_state:
+            logger.error("mirror[%s]: %s", name, book.archived_state)
+            send(f"🚨🚨 {book.archived_state} — the book is HALTED; verify "
+                 f"the account's positions before anything trades again")
 
 
 def _build_adapter():
@@ -861,6 +894,99 @@ def _blend_cycle(payload: dict | None, today: str) -> None:
                  f"flatten QUEUED ({exc}) — nothing flattened "
                  f"yet; the loop retries next cycle, book "
                  f"stays halted")
+
+
+def _mirror_cycle(gen: int, wake: threading.Event) -> None:
+    """One pass of the Composer mirror's books, the LIVE one first. Each
+    tick is bounded, persists its own state, and never raises; every wait
+    inside it is on `wake`, so a /kill is never queued behind a retry."""
+    for name in ("live", "dry"):
+        book = MIRROR.get(name)
+        if book is None:
+            continue
+        if gen != LOOP_GEN:
+            return
+        book.tick(ADAPTER, wake=wake, stop=lambda: gen != LOOP_GEN)
+
+
+def _loop_wait() -> float:
+    """How long the loop may park: the poll interval, or sooner when a
+    mirror book needs the loop (its decision instant, an order in flight, a
+    queued flatten). With no mirror this IS settings.poll_seconds."""
+    wait = settings.poll_seconds
+    for book in MIRROR.values():
+        try:
+            w = book.next_wait()
+        except Exception:  # noqa: BLE001
+            w = None
+        if w is not None:
+            wait = min(wait, max(float(w), 0.5))
+    return wait
+
+
+def _kill_mirror() -> tuple[dict | None, str]:
+    """/kill's mirror stage: halt every mirror book and queue the LIVE
+    book's flatten for the loop thread (which owns the venue connection).
+    One atomic local write under the book's own halt lock - never a venue
+    call, never a lock a tick can hold - and it never raises. (None, "")
+    when the mirror is not enabled."""
+    if not MIRROR:
+        return None, ""
+    out: dict = {}
+    notes: list[str] = []
+    for name, book in MIRROR.items():
+        try:
+            h = book.halt("KILL", flatten=True)
+            queued = bool(h.get("flatten") and not h.get("flatten_done"))
+            out[name] = "flatten_queued" if queued else "halted"
+            notes.append(f"mirror[{name}] HALTED"
+                         + (", flatten QUEUED for the execution loop (sells "
+                            "go at once in the regular session, else at the "
+                            "next open)" if queued else ""))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("kill: the mirror[%s] halt failed: %s", name, exc)
+            out[name] = "halt_failed"
+            notes.append(f"🚨 the mirror[{name}] halt FAILED ({exc}) — it may "
+                         f"still trade: flatten its positions BY HAND")
+    try:
+        LOOP_WAKE.set()
+    except Exception:  # noqa: BLE001
+        pass
+    return out, " + " + "; ".join(notes)
+
+
+def _resume_mirror() -> tuple[dict | None, str]:
+    """/resume's mirror stage; (None, "") when the mirror is not enabled."""
+    if not MIRROR:
+        return None, ""
+    out: dict = {}
+    for name, book in MIRROR.items():
+        try:
+            r = book.resume()
+            out[name] = {"was_halted": bool(r.get("was_halted")),
+                         "flatten_cancelled": bool(r.get("flatten_cancelled"))}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("resume: the mirror[%s] failed: %s", name, exc)
+            out[name] = {"error": str(exc)}
+    try:
+        LOOP_WAKE.set()
+    except Exception:  # noqa: BLE001
+        pass
+    cleared = [n for n, r in out.items() if r.get("was_halted")]
+    return out, (f"; mirror resumed ({', '.join(cleared)})" if cleared else "")
+
+
+def _mirror_book(name: str | None):
+    """The mirror book a request names; the only one when it names none."""
+    if not MIRROR:
+        raise HTTPException(status_code=404, detail="not found")
+    if name is None and len(MIRROR) == 1:
+        return next(iter(MIRROR.values()))
+    if name not in MIRROR:
+        raise HTTPException(
+            status_code=400,
+            detail=f"name the book: one of {sorted(MIRROR)} (\"book\")")
+    return MIRROR[name]
 
 
 def _kill_ladder(today: str) -> tuple[list[str], list[str]]:
@@ -1067,7 +1193,10 @@ def _loop(gen: int, wake: threading.Event):
             "unset)")
          + (", blend ENABLED" if settings.blend_enabled else
             ", blend DISABLED" + (" — REAL BOOK ON DISK, see the alert above"
-                                  if DISABLED_BOOK else "")))
+                                  if DISABLED_BOOK else ""))
+         + ("".join(f", mirror[{n}] {'LIVE' if b.cfg.live else 'paper'} "
+                    f"{'/'.join(b.cfg.engines)}" for n, b in MIRROR.items())
+            if MIRROR else ""))
     if MGR.kill_pending:
         # MF2-2: a /kill whose leg closes had not completed when the
         # service went down. The halt came back with the book (the
@@ -1122,6 +1251,15 @@ def _loop(gen: int, wake: threading.Event):
                          f"completed ({exc}) — the ladder is HALTED, the "
                          f"kill stays queued and the loop retries it every "
                          f"cycle until it lands")
+            if MIRROR:
+                # The Composer mirror, AFTER the blend's and the ladder's
+                # emergency stops and AHEAD of both feeds: its decision is
+                # timed to the second, and a paper book never touches the
+                # venue. Its own halt and flatten are the first thing a
+                # tick does.
+                _mirror_cycle(gen, wake)
+                if _superseded(gen):
+                    return
             nino = nino34_weekly()
             if _superseded(gen):
                 return          # the feed call is the long park (MF-2)
@@ -1283,7 +1421,7 @@ def _loop(gen: int, wake: threading.Event):
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
             logger.exception("loop error: %s", exc)
-        wake.wait(settings.poll_seconds)        # /kill sets it to skip the
+        wake.wait(_loop_wait())                 # /kill sets it to skip the
         wake.clear()                            # wait (queued flatten)
 
 
@@ -1423,6 +1561,15 @@ def health():
         body["blend_disabled_book"] = {
             "present": True, "mode": db.get("mode"),
             "alert_age_s": round(time.time() - db.get("last_alert_ts", 0.0), 1)}
+    if MIRROR:
+        # Only when MIRROR_ENABLED. health() never raises; the guard is the
+        # belt this endpoint wears everywhere (a 500 here restarts the
+        # container).
+        try:
+            body["mirror"] = {n: b.health() for n, b in MIRROR.items()}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("mirror health block failed (ignored): %s", exc)
+            body["mirror"] = {"error": "unavailable"}
     if OUTAGES is not None:
         # Guarded: healthCheckPath is /health, so a raise here 500s the probe
         # and Render restarts the WHOLE container - executor included,
@@ -1475,10 +1622,104 @@ def status(x_exec_token: str | None = Header(default=None),
         ts = marks.get("ts")
         body["blend"]["marks_age_s"] = (round(time.time() - ts, 1)
                                         if ts else None)
+    if MIRROR:
+        # The published snapshot the loop thread last saved - never the
+        # adapter, never the book itself (this is an API thread).
+        body["mirror"] = {n: b.view(history=5) for n, b in MIRROR.items()}
     # /status is the operator's incident endpoint - it was the one place
     # blind to gateway state (counter-agent 2026-08-24)
     body.update(_gateway_report())
     return body
+
+
+@app.get("/mirror/feed")
+def mirror_feed(x_read_token: str | None = Header(default=None),
+                history: int = Query(default=30, ge=0, le=120)):
+    """READ-ONLY view of the Composer mirror's books for the parity monitor
+    (composer/scripts): per sleeve the shares, cash, rule and tree version,
+    and the last sessions' decisions and fills. Gated by READ_TOKEN via
+    X-Read-Token, like /blend/feed; 404 while MIRROR_ENABLED is off or no
+    read token is set."""
+    if not MIRROR or not settings.read_token:
+        raise HTTPException(status_code=404, detail="not found")
+    supplied = x_read_token or ""
+    if not secrets.compare_digest(supplied.encode("utf-8"),
+                                  settings.read_token.encode("utf-8")):
+        raise HTTPException(status_code=401, detail="bad read token")
+    return {"schema": 1, "kind": "composer-mirror-feed", "mode": LAST["mode"],
+            "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "books": {n: b.view(history=history) for n, b in MIRROR.items()}}
+
+
+@app.post("/mirror/halt")
+def mirror_halt(x_exec_token: str | None = Header(default=None),
+                token: str | None = Query(default=None)):
+    """Stop the mirror's books from trading WITHOUT selling anything (/kill
+    is the one that flattens). Positions stay; POST /mirror/resume or
+    /resume lifts it."""
+    _auth(x_exec_token, token)
+    if not MIRROR:
+        raise HTTPException(status_code=404, detail="not found")
+    out = {n: bool(b.halt("operator halt").get("halted"))
+           for n, b in MIRROR.items()}
+    LOOP_WAKE.set()
+    send("🛑 mirror HALTED by the operator (no flatten): "
+         + ", ".join(sorted(out)) + " — positions are kept; POST "
+         "/mirror/resume lifts it")
+    return {"ok": True, "halted": out}
+
+
+@app.post("/mirror/resume")
+def mirror_resume(x_exec_token: str | None = Header(default=None),
+                  token: str | None = Query(default=None)):
+    """Lift the mirror's halt and nothing else (the ladder and the blend
+    are untouched). A flatten not yet finished is cancelled."""
+    _auth(x_exec_token, token)
+    out, note = _resume_mirror()
+    if out is None:
+        raise HTTPException(status_code=404, detail="not found")
+    send("mirror resume requested" + (note or " (no book was halted)"))
+    return {"ok": True, "mirror": out}
+
+
+@app.post("/mirror/transfer")
+def mirror_transfer(body: dict | None = Body(default=None),
+                    x_exec_token: str | None = Header(default=None),
+                    token: str | None = Query(default=None)):
+    """Queue a move of capital between two sleeves of one mirror book:
+    {"from", "to", "amount", "note"?, "book"?}. It rides the next session's
+    plan - the POLICY operations that move money between symphonies on
+    Composer land here the same day (ONE BRAIN, TWO BROKERS)."""
+    _auth(x_exec_token, token)
+    body = body if isinstance(body, dict) else {}
+    book = _mirror_book(body.get("book"))
+    try:
+        req = book.request_transfer(body.get("from"), body.get("to"),
+                                    body.get("amount"), body.get("note") or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"ok": True, "book": book.cfg.name, "request": req,
+            "note": "queued; applied with the next session's plan"}
+
+
+@app.post("/mirror/credit")
+def mirror_credit(body: dict | None = Body(default=None),
+                  x_exec_token: str | None = Header(default=None),
+                  token: str | None = Query(default=None)):
+    """Queue a cash adjustment of one sleeve: {"sleeve", "amount", "note"?,
+    "book"?} - a dividend the account received for that sleeve's shares
+    (+), a fee (-). A live book takes a credit only from cash the account
+    holds beyond the book."""
+    _auth(x_exec_token, token)
+    body = body if isinstance(body, dict) else {}
+    book = _mirror_book(body.get("book"))
+    try:
+        req = book.request_credit(body.get("sleeve"), body.get("amount"),
+                                  body.get("note") or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"ok": True, "book": book.cfg.name, "request": req,
+            "note": "queued; applied before the next session's plan"}
 
 
 @app.get("/blend/feed")
@@ -1652,6 +1893,10 @@ def kill(x_exec_token: str | None = Header(default=None),
                           "code can state — watch /health and flatten manually "
                           "if nothing lands. A completion alert will state "
                           "what closed vs parked" + blend_warn + loop_warn)
+    # The Composer mirror's halt, only when MIRROR_ENABLED: after the blend
+    # (the book that holds real shares today) and before the ladder. One
+    # local write per book; it cannot raise and it reaches no venue.
+    mirror_state, mirror_note = _kill_mirror()
     # The LADDER halt is TWO-STAGE too, for the same reason the blend one
     # is (MF2-1/MF2-2). This handler used to call close_spread ITSELF
     # whenever MGR_LOCK happened to be free — the deployed steady state, a
@@ -1830,15 +2075,18 @@ def kill(x_exec_token: str | None = Header(default=None),
                 "(GET is refused — a link preview must never resume a "
                 "halted book)")
     send(f"🔴 ACTION NEEDED (you) — ibkr ladder KILLED: {ladder_note}"
-         f"{state_clause}{durability_warn}{blend_note}{tail}")
+         f"{state_clause}{durability_warn}{blend_note}{mirror_note}{tail}")
     # R-c: the body reports what THIS handler did, and it agrees with the
     # alert clause above by construction — both key off `halt_in_force`.
     # (Reading `MGR.state.halted` here instead would answer `None` to the
     # operator whose /kill DID halt the ladder, in the one case where a
     # concurrent /resume won the B7 race — /resume sends its own message.)
-    return {"ok": True,
+    resp = {"ok": True,
             "halted": "KILL" if halt_in_force else MGR.state.halted,
             "ladder": ladder_state, "blend": blend_state}
+    if mirror_state is not None:        # the key exists only when enabled
+        resp["mirror"] = mirror_state
+    return resp
 
 
 @app.api_route("/blend/cash/rebaseline", methods=["POST"])
@@ -1988,6 +2236,7 @@ def resume(x_exec_token: str | None = Header(default=None),
             breakers_cleared = sorted(intent_breaker_state())
             BLEND.resume(datetime.now(timezone.utc).date().isoformat())
             seed_acked = BLEND.state.bootstrap_ack
+    mirror_cleared, mirror_note = _resume_mirror()
     drift = "SCHEMA_DRIFT" in (prior, blend_prior)
     sentinel_note = ("" if sentinel_err is None else
                      f"\n⚠️ the kill journal could not be deleted "
@@ -2005,6 +2254,7 @@ def resume(x_exec_token: str | None = Header(default=None),
             if blend_prior else "")
          + (f"; blend intent breaker(s) RE-ARMED: {', '.join(breakers_cleared)}"
             if breakers_cleared else "")
+         + mirror_note
          + ("\n→ this ALSO authorized the blend to seed a fresh book on top "
             "of existing venue holdings, TODAY ONLY. If that is not what you "
             "meant, /kill revokes it." if seed_acked else "")
@@ -2017,5 +2267,8 @@ def resume(x_exec_token: str | None = Header(default=None),
             "never exited, re-stopped or flattened and no reconcile clears "
             "it — see `stand_in_rows` on /status." if drift else "")
          + sentinel_note)
-    return {"ok": True, "cleared": prior, "blend_cleared": blend_prior,
+    resp = {"ok": True, "cleared": prior, "blend_cleared": blend_prior,
             "kill_journal_cleared": sentinel_err is None}
+    if mirror_cleared is not None:      # the key exists only when enabled
+        resp["mirror"] = mirror_cleared
+    return resp

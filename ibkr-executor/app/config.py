@@ -85,5 +85,35 @@ class Settings(BaseSettings):
     outage_log_path: str = "./data/gateway_outages.json"
     gateway_restart_log: str = "./data/gateway_restarts.jsonl"
 
+    # Composer mirror (composer/IBKR_MIRROR.md; app/mirror.py). MIRROR_ENABLED
+    # =false is the default and leaves the service byte-for-byte as before:
+    # no manager, no polling, no /status section, no state file.
+    # Enabled, every engine runs in a PAPER book (a private DryAdapter: no
+    # venue, no account reads) until it is named in MIRROR_LIVE_ENGINES - and
+    # even then only when this service itself trades for real (TWS
+    # credentials, DRY_RUN=false). The staged rollout is: paper for at least
+    # ten sessions, then one engine at a time.
+    mirror_enabled: bool = False          # MIRROR_ENABLED
+    # The keyless brain (composer/scripts/mirror_brain.py --serve) and its
+    # READ-ONLY intents token (the brain's MIRROR_API_TOKEN). No broker
+    # credential is ever read by the mirror path.
+    mirror_brain_url: str = ""            # MIRROR_BRAIN_URL
+    mirror_api_token: str = ""            # MIRROR_API_TOKEN
+    # The capital the mirror runs, split across the sleeves by
+    # MIRROR_WEIGHTS (POLICY.md's targets). 0 = no sleeve can be seeded. A
+    # LIVE sleeve is seeded only from cash the account really holds beyond
+    # what the book already claims.
+    mirror_capital_usd: float = 0.0       # MIRROR_CAPITAL_USD
+    mirror_weights: str = "HG:0.29,KMLM:0.29,SLEEVE:0.27,HARV:0.15"
+    mirror_live_engines: str = ""         # MIRROR_LIVE_ENGINES e.g. "HARV"
+    # On Render both are overridden onto the mounted disk (/app/data): the
+    # default is the ephemeral container layer, where a deploy would forget
+    # a live book's positions.
+    mirror_state_path: str = "./data/mirror_state.json"
+    mirror_dry_state_path: str = "./data/mirror_dry_state.json"
+    mirror_decide_offset_s: float = 5.0   # act this long after the decision bar
+    mirror_cancel_before_close_s: float = 60.0   # leftovers cancelled then
+    mirror_quote_band: float = 0.015      # venue quote vs the brain's price
+
 
 settings = Settings()

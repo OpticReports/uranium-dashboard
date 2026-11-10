@@ -12,14 +12,24 @@ the call" label. One code path for the 15:15 preview, the shadow check and the m
 
   mirror_brain.py                      the payload for this minute (a session must be open)
   mirror_brain.py --at "2026-11-09 15:54"   a replay: only bars stamped at or before that ET minute
-  mirror_brain.py --serve [--port N]   HTTP: GET /health, GET /mirror/intents (X-API-Token ==
-                                       MIRROR_API_TOKEN; unset = 404). Stdlib only.
+  mirror_brain.py --serve [--port N]   HTTP: GET /health; GET /mirror/intents[?after=UTC] and GET
+                                       /mirror/session (X-API-Token == MIRROR_API_TOKEN; unset =
+                                       404). Stdlib only.
 
 Payload (schema 1): {schema, kind, session, asof_utc, asof_et, replay, close_et, engines: {NAME:
 {status: "ok" | "unavailable", symphony, version, rule: "daily" | "threshold", corridor, target:
 {ticker: weight}, label: "firm" | "close call" | "could flip", stale: [...], caveats: [...]}},
-quotes: {...}, problems: [...]}. An engine that cannot be decided is "unavailable" with a note; the
-executor then leaves that sleeve alone. Nothing here is a trade instruction for Composer.
+prices: {ticker: price the engines were evaluated on}, price_notes: {ticker: why that price is an
+estimate (rebuilt from a sibling fund, or the last trade carried)}, quotes: {...}, problems: [...]}.
+An engine that cannot be decided is "unavailable" with a note; the executor then leaves that sleeve
+alone. `prices` are the executor's sizing reference, never a fill. Nothing here is a trade
+instruction for Composer.
+
+/mirror/session (the executor's clock; no prices are read): {schema, kind, now_utc, session |
+null, open_utc, decide_bar_et, decide_utc, close_et, close_utc}. decide_utc is the END of the
+decision bar (shadow_runner.DECISION_MINUTE minutes before the close: 15:54 -> 15:55:00 ET), the
+first instant a payload can hold that bar. /mirror/intents?after=<UTC ISO> never answers with a
+payload computed before that instant: it recomputes instead.
 """
 import datetime
 import hmac
@@ -36,6 +46,7 @@ import shadow_runner as sr  # noqa: E402
 
 SCHEMA = 1
 KIND = "composer-mirror-intents"
+SESSION_KIND = "composer-mirror-session"
 WINDOW_FROM_MIN = 45      # --serve: recompute continuously from this many minutes before the close
 REFRESH_S = 20            # ... at least this often inside the window
 IDLE_TTL_S = 120          # outside the window: an on-demand payload is reused for this long
@@ -54,9 +65,10 @@ def build(now=None, quotes=None, fetch=None):
     e = sr.et_now(now)
     out = {"schema": SCHEMA, "kind": KIND, "session": None, "asof_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
            "asof_et": e.strftime("%H:%M:%S"), "replay": pc.is_replay(now), "close_et": None, "engines": {},
-           "quotes": None, "problems": []}
+           "prices": {}, "price_notes": {}, "quotes": None, "problems": []}
+    cap = {}
     try:
-        lines, alerts, led = pc.preview(now, lambda: [], None, fetch, quotes)
+        lines, alerts, led = pc.preview(now, lambda: [], None, fetch, quotes, capture=cap)
     except Exception as exc:  # noqa: BLE001
         out["problems"].append(f"brain failed: {pc.one_line(repr(exc))}")
         return _unavailable(out, cfg_all, e.date().isoformat(), "brain failed")
@@ -73,6 +85,15 @@ def build(now=None, quotes=None, fetch=None):
     if qrec:
         out["quotes"] = {k: qrec.get(k) for k in ("source", "fmp", "yahoo", "none", "failed", "short")}
     out["problems"] += [pc.one_line(a, 300) for a in alerts if "UNAVAILABLE" in a]
+    held = set()                                   # every ticker an approved tree can hold or read
+    for cfg in cfg_all.values():
+        held |= sr.tree_tickers(sr.load_tree(sr.era_for(cfg, day) or cfg["eras"][-1]))
+    for t in sorted(held):
+        px = (cap.get("prices") or {}).get(t)
+        if isinstance(px, (int, float)) and not isinstance(px, bool) and px > 0:
+            out["prices"][t] = round(float(px), 6)
+            if t in (cap.get("notes") or {}):
+                out["price_notes"][t] = pc.one_line(cap["notes"][t], 120)
     for eng, cfg in cfg_all.items():
         era = sr.era_for(cfg, day) or cfg["eras"][-1]
         rule, corridor = rule_of(cfg)
@@ -93,6 +114,34 @@ def _unavailable(out, cfg_all, day, note):
         rule, corridor = rule_of(cfg)
         out["engines"][eng] = {"symphony": cfg["symphony"], "version": era["version"], "rule": rule,
                                "corridor": corridor, "status": "unavailable", "note": note}
+    return out
+
+
+def _iso(dt):
+    return dt.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_utc(text):
+    """'YYYY-MM-DDTHH:MM:SSZ' -> an aware UTC datetime (ValueError otherwise)"""
+    return datetime.datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+
+
+def session_info(now=None):
+    """the executor's clock for today's session, from the exchange calendar alone (no prices): when
+    the decision bar ends and when the session closes. session None: the exchange is shut today"""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    e = sr.et_now(now)
+    day = e.date().isoformat()
+    out = {"schema": SCHEMA, "kind": SESSION_KIND, "now_utc": _iso(now), "session": None}
+    if e.weekday() >= 5 or day in sr.NYSE_HOLIDAYS:
+        return out
+    close = sr.session_close(day)
+
+    def at(hhmm):
+        return datetime.datetime.combine(e.date(), datetime.time(int(hhmm[:2]), int(hhmm[3:5])), tzinfo=e.tzinfo)
+    bar = sr._hm(sr._min(close) - sr.DECISION_MINUTE)
+    out.update(session=day, open_utc=_iso(at("09:30")), decide_bar_et=bar,
+               decide_utc=_iso(at(bar) + datetime.timedelta(minutes=1)), close_et=close, close_utc=_iso(at(close)))
     return out
 
 
@@ -125,10 +174,16 @@ class Cache:
                 with self.lock:
                     self.error = pc.one_line(repr(exc))
 
-    def get(self, max_age):
+    def get(self, max_age, after=None):
+        """(payload, its age in seconds, the last rebuild's error). after: a 'YYYY-MM-DDTHH:MM:SSZ'
+        stamp; a cached payload computed before it is not fresh, whatever its age"""
+        def fresh():
+            if self.payload is None or self.clock() - self.at > max_age:
+                return False
+            return after is None or str(self.payload.get("asof_utc") or "") >= after
         with self.lock:
-            fresh = self.payload is not None and self.clock() - self.at <= max_age
-        if not fresh:
+            ok = fresh()
+        if not ok:
             self.refresh()
         with self.lock:
             return self.payload, self.clock() - self.at, self.error
@@ -141,9 +196,11 @@ def in_window(now=None):
     return bool(ss and 0 < ss["left"] + pc.DECIDE_BEFORE <= WINDOW_FROM_MIN)
 
 
-def make_server(port, token, cache, window=in_window):
-    """the HTTP server (not started): GET /health is public; GET /mirror/intents needs X-API-Token ==
-    token (constant-time compare) and answers 404 while no token is configured"""
+def make_server(port, token, cache, window=in_window, clock_info=session_info, wall=None):
+    """the HTTP server (not started): GET /health is public; GET /mirror/intents and /mirror/session
+    need X-API-Token == token (constant-time compare) and answer 404 while no token is configured.
+    wall: the wall clock (a test seam; default the system's UTC)"""
+    wall = wall or (lambda: datetime.datetime.now(datetime.timezone.utc))
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     class H(BaseHTTPRequestHandler):
@@ -156,23 +213,47 @@ def make_server(port, token, cache, window=in_window):
             self.end_headers()
             self.wfile.write(data)
 
+        def _authorized(self):
+            """None when the token matches, else the (code, body) to answer with"""
+            if not token:
+                return 404, {"error": "intents disabled (MIRROR_API_TOKEN unset)"}
+            if not hmac.compare_digest(self.headers.get("X-API-Token", "").encode(), token.encode()):
+                return 401, {"error": "unauthorized"}
+            return None
+
         def do_GET(self):  # noqa: N802
-            path = self.path.split("?")[0]
+            path, _, query = self.path.partition("?")
             if path == "/health":
                 with cache.lock:
                     age = round(cache.clock() - cache.at, 1) if cache.payload else None
                     err = cache.error
                 return self._send(200, {"status": "ok", "service": "composer-brain", "in_window": window(),
                                         "payload_age_s": age, "last_error": err, "token_set": bool(token)})
+            if path == "/mirror/session":
+                refused = self._authorized()
+                if refused:
+                    return self._send(*refused)
+                return self._send(200, clock_info())
             if path == "/mirror/intents":
-                given = self.headers.get("X-API-Token", "")
-                if not token:
-                    return self._send(404, {"error": "intents disabled (MIRROR_API_TOKEN unset)"})
-                if not hmac.compare_digest(given.encode(), token.encode()):
-                    return self._send(401, {"error": "unauthorized"})
-                payload, age, err = cache.get(REFRESH_S * 2 if window() else IDLE_TTL_S)
+                refused = self._authorized()
+                if refused:
+                    return self._send(*refused)
+                after = None
+                for part in query.split("&"):
+                    if part.startswith("after="):
+                        after = part[len("after="):].replace("%3A", ":").replace("%3a", ":")
+                if after is not None:
+                    try:
+                        want = parse_utc(after)
+                    except ValueError:
+                        return self._send(400, {"error": "after must be YYYY-MM-DDTHH:MM:SSZ"})
+                    if want > wall() + datetime.timedelta(seconds=5):
+                        return self._send(409, {"error": "after is in the future: nothing can be computed yet"})
+                payload, age, err = cache.get(REFRESH_S * 2 if window() else IDLE_TTL_S, after)
                 if payload is None:
                     return self._send(503, {"error": err or "no payload yet"})
+                if after is not None and str(payload.get("asof_utc") or "") < after:
+                    return self._send(503, {"error": err or "no payload computed after the requested instant"})
                 return self._send(200, dict(payload, served_age_s=round(age, 1)))
             return self._send(404, {"error": "not found"})
 

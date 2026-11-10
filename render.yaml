@@ -985,6 +985,29 @@ services:
         # also what made the restart-boundary double-sell (B1) a ROUTINE
         # event rather than an exotic one — a deploy is a restart.
         value: /app/data/blend_state.json
+      # Composer mirror (composer/IBKR_MIRROR.md; ibkr-executor/app/mirror.py).
+      # Both books live on the mounted disk for the reason BLEND_STATE_PATH
+      # does: the code default is the ephemeral layer, where a deploy would
+      # forget a live book's positions and reset the paper record.
+      - key: MIRROR_STATE_PATH
+        value: /app/data/mirror_state.json
+      - key: MIRROR_DRY_STATE_PATH
+        value: /app/data/mirror_dry_state.json
+      # Everything that arms or sizes the mirror is dashboard-owned
+      # (sync:false), never a blueprint literal a sync could revert or
+      # switch on. Unset = MIRROR_ENABLED false: no book, no polling, the
+      # service exactly as it was. Enabled, every engine runs on PAPER until
+      # it is named in MIRROR_LIVE_ENGINES.
+      - key: MIRROR_ENABLED
+        sync: false
+      - key: MIRROR_BRAIN_URL
+        sync: false
+      - key: MIRROR_API_TOKEN
+        sync: false
+      - key: MIRROR_CAPITAL_USD
+        sync: false
+      - key: MIRROR_LIVE_ENGINES
+        sync: false
       # blend3070 arming + sizing — trading-behavior vars, dashboard-owned
       # (sync:false, AUTO_DRILL/DRY_RUN precedent). BLEND_BOOK_USD is read
       # ONCE, when the live book first initializes; BLEND_BUDGET is the

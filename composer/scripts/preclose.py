@@ -690,11 +690,13 @@ def append_ledger(rows, path=None):
         f.write("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in rows))
 
 
-def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
+def preview(now, get_meta, get_drift=None, fetch=None, quotes=None, capture=None):
     """(lines, alerts, ledger rows); get_meta() -> Composer's symphony-stats-meta list (may raise);
     get_drift(cfg_all) -> (engines whose live logic differs from the approved, failure notes);
     quotes(tickers, now) -> ({ticker: (price, time UTC)}, {ticker: problem}) live prices (may raise);
-    None: FMP's 1-minute bars when FMP_API_KEY is set, else Yahoo alone; False: Yahoo alone"""
+    None: FMP's 1-minute bars when FMP_API_KEY is set, else Yahoo alone; False: Yahoo alone.
+    capture: a dict that receives the prices the engines were evaluated on ({'prices': {ticker: price
+    now}, 'notes': {ticker: why a price is rebuilt or carried}}); the ledger rows are unchanged"""
     no_fmp = "FMP_API_KEY not set" if quotes is None else "FMP quotes off"
     quotes = quotes if quotes is not None else fmp_quotes()
     replay = is_replay(now)
@@ -753,6 +755,8 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None):
         more, _, _ = merge_quotes(more, live_q, today, now, horizon)
         data.update(more)
     prices, notes, carried = live_prices(data, today, now)
+    if capture is not None:
+        capture.update(prices={t: p[today] for t, p in prices.items() if today in p}, notes=dict(notes))
     ages = sorted((now - lt).total_seconds() / 60 for t in tick if t in data and t not in stale
                   for lt in [last_trade(data[t][2])] if lt)
     ss["lag"] = round(max(ages[len(ages) // 2], 0.0), 1) if ages else 0.0      # the move to price runs from the quote

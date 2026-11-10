@@ -13,6 +13,12 @@ Each behavioural test has a BROKEN-INPUT counterpart that must land on the other
   B5  the HTTP surface: /health public; /mirror/intents 404 with no token configured, 401 on a wrong
       token, 200 with the payload on the right one, 503 before any payload; the cache recomputes when
       stale, single flight, and keeps the last good payload when a rebuild fails
+  B6  the reference prices: every ticker a sleeve can hold is priced at the prices the engines were
+      evaluated on; a price rebuilt or carried is named in price_notes; none without a session
+  B7  the executor's clock: the decision bar's end and the close on a full day, a half-day, a holiday
+      and a weekend, across DST; /mirror/session behind the same token
+  B8  ?after=: a payload computed before the asked instant is never served (the cache recomputes), a
+      malformed or future instant is refused
 
 Run: python3 -m unittest composer.scripts.tests.test_mirror_brain -v
 """
@@ -128,6 +134,56 @@ class B3NoComposer(Base):
             self.assertNotIn("value", r)
 
 
+class B6Prices(Base):
+    def test_every_holdable_ticker_is_priced_on_the_evaluated_prices(self):
+        p = self.build()
+        man = sr.load_manifest()
+        held = set()
+        for cfg in man.values():
+            held |= sr.tree_tickers(sr.load_tree(cfg["eras"][-1]))
+        self.assertEqual(set(p["prices"]), held)
+        for r in p["engines"].values():
+            self.assertTrue(set(r["target"]) <= set(p["prices"]))
+        for t, px in p["prices"].items():                # the frozen session's own last price
+            self.assertAlmostEqual(px, self.fx["prices"][t]["2026-10-28"], places=4, msg=t)
+        self.assertEqual(p["price_notes"], {})
+
+    def test_an_estimated_price_is_named(self):
+        cap = {}
+        real = pc.preview
+
+        def spy(*a, **k):
+            out = real(*a, **k)
+            cap.update(k["capture"])
+            k["capture"]["notes"]["BIL"] = "BIL 15:01 (no fresh sibling: last price used)"
+            return out
+        with unittest.mock.patch.object(pc, "preview", side_effect=spy):
+            p = self.build()
+        self.assertIn("last price used", p["price_notes"]["BIL"])
+        self.assertEqual(set(p["price_notes"]), {"BIL"})
+
+    def test_no_prices_without_a_session(self):
+        p = self.build(et(2026, 10, 31, 12, 0))
+        self.assertEqual((p["prices"], p["price_notes"]), ({}, {}))
+
+
+class B7Clock(unittest.TestCase):
+    def test_full_day_half_day_holiday_weekend(self):
+        full = mb.session_info(datetime.datetime(2026, 11, 10, 15, 0, tzinfo=UTC))
+        self.assertEqual((full["session"], full["decide_bar_et"], full["decide_utc"], full["close_utc"], full["open_utc"]),
+                         ("2026-11-10", "15:54", "2026-11-10T20:55:00Z", "2026-11-10T21:00:00Z", "2026-11-10T14:30:00Z"))
+        half = mb.session_info(datetime.datetime(2026, 11, 27, 15, 0, tzinfo=UTC))
+        self.assertEqual((half["close_et"], half["decide_bar_et"], half["decide_utc"]), ("13:00", "12:54", "2026-11-27T17:55:00Z"))
+        summer = mb.session_info(datetime.datetime(2026, 7, 15, 13, 0, tzinfo=UTC))
+        self.assertEqual(summer["decide_utc"], "2026-07-15T19:55:00Z")          # EDT
+        for shut in ((2026, 11, 26), (2026, 11, 14), (2026, 11, 15)):
+            info = mb.session_info(datetime.datetime(*shut, 15, 0, tzinfo=UTC))
+            self.assertIsNone(info["session"])
+            self.assertNotIn("decide_utc", info)
+        self.assertEqual(full["kind"], mb.SESSION_KIND)
+        self.assertEqual(mb.parse_utc(full["decide_utc"]), datetime.datetime(2026, 11, 10, 20, 55, tzinfo=UTC))
+
+
 class B4ParseAt(unittest.TestCase):
     def test_et_wall_time(self):
         self.assertEqual(mb.parse_at("2026-11-09 15:54"), datetime.datetime(2026, 11, 9, 20, 54, tzinfo=UTC))
@@ -194,6 +250,44 @@ class B5Http(unittest.TestCase):
         self.assertEqual(p["n"], 2)                                         # the last good one, with its age
         self.assertEqual(age, 500.0)
         self.assertIn("feed down", err)
+
+    def test_session_clock_behind_the_token(self):
+        srv = mb.make_server(0, "s3cret", self.cache, window=lambda: False,
+                             clock_info=lambda: {"kind": mb.SESSION_KIND, "session": "2026-11-10"})
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        self.addCleanup(srv.server_close)
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+        self.assertEqual(self.get(base + "/mirror/session")[0], 401)
+        self.assertEqual(self.get(base + "/mirror/session", "s3cret"), (200, {"kind": mb.SESSION_KIND, "session": "2026-11-10"}))
+        self.assertEqual(self.calls, [])                                    # the clock reads no prices
+        off = self.serve("")
+        self.assertEqual(self.get(off + "/mirror/session", "x")[0], 404)
+
+    def test_after_never_serves_an_older_payload(self):
+        stamps = ["2026-11-10T20:54:40Z", "2026-11-10T20:55:06Z", "2026-11-10T20:55:06Z"]
+        calls = []
+
+        def builder():
+            calls.append(1)
+            return {"schema": 1, "asof_utc": stamps[len(calls) - 1]}
+        cache = mb.Cache(builder, clock=lambda: self.t[0])
+        srv = mb.make_server(0, "t", cache, window=lambda: True,
+                             wall=lambda: datetime.datetime(2026, 11, 10, 20, 59, tzinfo=UTC))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        self.addCleanup(srv.server_close)
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+        self.assertEqual(self.get(base + "/mirror/intents", "t")[1]["asof_utc"], stamps[0])
+        code, body = self.get(base + "/mirror/intents?after=2026-11-10T20:55:00Z", "t")
+        self.assertEqual((code, body["asof_utc"], len(calls)), (200, stamps[1], 2))       # fresh by age, rebuilt anyway
+        self.assertEqual(self.get(base + "/mirror/intents?after=2026-11-10T20:55:00Z", "t")[1]["asof_utc"], stamps[1])
+        self.assertEqual(len(calls), 2)                                     # the twin: already new enough, reused
+        self.assertEqual(self.get(base + "/mirror/intents?after=yesterday", "t")[0], 400)
+        self.assertEqual(self.get(base + "/mirror/intents?after=2999-01-01T00:00:00Z", "t")[0], 409)
+        # a rebuild that cannot reach the instant is a 503, never the older payload
+        code, body = self.get(base + "/mirror/intents?after=2026-11-10T20:58:00Z", "t")
+        self.assertEqual(code, 503)
 
     def test_no_payload_yet_is_a_503(self):
         self.fail = True

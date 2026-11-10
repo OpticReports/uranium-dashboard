@@ -2582,3 +2582,54 @@ def test_execution_refresh_reads_the_store_and_keeps_the_commission(ib_adapter):
     r = ib_adapter.find_stock_order("blend-sweep-y")
     assert r is not None and r["filled_qty"] == 9
     assert ib_adapter.history_complete() is False
+
+
+# --- Composer mirror: the two read-only surfaces it adds (app/mirror.py) -----
+
+def test_mirror_positions_snapshot_lists_whole_stock_lots_and_names_the_rest(ib_adapter):
+    ib_adapter.ib.position_rows = [
+        FakePosition("SPY", 10), FakePosition("SPY", 5), FakePosition("BIL", 0),
+        FakePosition("NG", 2, sec_type="FUT"), FakePosition("XYZ", 1.5),
+        FakePosition("TQQQ", -3)]
+    snap = ib_adapter.positions_snapshot()
+    assert snap["stocks"] == {"SPY": 15, "TQQQ": -3}        # a flat row is not a holding
+    assert len(snap["other"]) == 2 and any("FUT NG" in x for x in snap["other"])
+    assert any("fractional" in x for x in snap["other"])    # never truncated into a lot
+    ib_adapter.ib.position_rows = []
+    assert ib_adapter.positions_snapshot() == {"stocks": {}, "other": []}
+
+
+def test_mirror_stock_order_fills_prices_a_cancelled_orders_partial(ib_adapter):
+    cid = "mirror-2026-11-10-S-BIL"
+    o = ib_adapter.place_stock_order("BIL", -10, "MKT", client_order_id=cid)
+    assert o["status"] == "working"
+    assert ib_adapter.stock_order_fills(cid) == {"filled_qty": 0, "avg_price": None, "commission": None}
+    t = ib_adapter.ib.trade_by_ref(o["order_ref"])
+    t.fills.append(FakeFill(FakeExec(4, 91.25, "SLD"), 1.0))
+    t.fills.append(FakeFill(FakeExec(2, 91.31, "SLD"), 0.5))
+    t.orderStatus.filled = 6
+    t.orderStatus.status = "Cancelled"
+    found = ib_adapter.find_stock_order(cid)
+    assert found["status"] == "cancelled" and found["filled_qty"] == 6 and "fill_price" not in found
+    got = ib_adapter.stock_order_fills(cid)
+    assert got["filled_qty"] == 6 and got["commission"] == 1.5
+    assert got["avg_price"] == pytest.approx((4 * 91.25 + 2 * 91.31) / 6)
+    assert ib_adapter.stock_order_fills("mirror-never-sent") is None
+
+
+def test_mirror_stock_order_fills_never_reports_a_zero_price(ib_adapter):
+    cid = "mirror-2026-11-10-B-SPY"
+    o = ib_adapter.place_stock_order("SPY", 3, "MKT", client_order_id=cid)
+    t = ib_adapter.ib.trade_by_ref(o["order_ref"])
+    t.orderStatus.filled = 3                  # a completed-orders row: a count, no executions
+    t.orderStatus.status = "Filled"
+    got = ib_adapter.stock_order_fills(cid)
+    assert got == {"filled_qty": 3, "avg_price": None, "commission": None}
+
+
+def test_mirror_dry_adapter_mirrors_both_surfaces():
+    d = DryAdapter()
+    d.place_stock_order("BIL", 7, "MKT", ref_price=91.5, client_order_id="c1")
+    assert d.positions_snapshot() == {"stocks": {"BIL": 7}, "other": []}
+    assert d.stock_order_fills("c1") == {"filled_qty": 7, "avg_price": 91.5, "commission": 0.0}
+    assert d.stock_order_fills("nope") is None
