@@ -4,6 +4,12 @@ Status (2026-11-10): BUILT on the branch, NOT deployed, switched OFF by default.
 No order has been sent. Reaching production is a merge to main (the owner's
 call), then env vars on Render; the first stage after that is PAPER only.
 
+Two independent reviews found the first build SHIP-BLOCKED (reports and repro
+lists in research/mirror/reviews/). Their findings are fixed on the branch and
+this document describes the code AFTER those fixes. The fixes' own independent
+re-verification is recorded at the end; until it reads clean, nothing here
+should be merged.
+
 ## Owner decisions (Casey, 2026-11-10)
 
 1. Capital: the ~$118,000 in the IBKR account.
@@ -46,36 +52,60 @@ methods (the account's positions; what an order executed) and nothing else.
 
 ## One session
 
-1. The executor reads the brain's clock (/mirror/session): decision bar 15:54
-   ET (12:54 on a half-day), ending 15:55:00.
-2. At 15:55:05 the pre-trade gates run. LIVE book: the account must hold
-   exactly the book's shares and nothing else, the account's cash must cover
-   the book's, the blend must be off. Any failure: no trade that session, with
-   the reason.
-3. The intents are read. They must be for today, computed after the decision
-   bar closed, at most 90 seconds old, and not a replay. Otherwise the read is
-   repeated every 3 seconds until 15:58:00, after which the session is a
-   recorded NO TRADE.
-4. The plan: daily sleeves go to target; the threshold sleeve (KMLM, 10pp)
-   trades only when some asset sits further than the corridor from its target.
-   Opposite legs across sleeves cross internally; only the net goes out.
-5. LIVE: every symbol in the plan is checked against IBKR's own quote. Further
+1. The executor reads the brain's clock (/mirror/session). The decision
+   instant is 15:54:00 ET (12:54:00 on a half-day): the end of the decision
+   bar, the minute the shadow runner's calibration found closest to Composer's
+   own decision (Composer submits its orders at a median 15:53:04).
+2. In the morning the pre-trade gates run once, read-only, so a problem is
+   known before the afternoon. At 15:54:25 they run for real. LIVE book: the
+   account must hold exactly the book's shares and nothing else, the account's
+   cash must cover the book's, the blend must be off. A permanent reason (the
+   blend is on, no sleeve) skips the session at once; a transient one is
+   retried until 15:58:00.
+3. The intents are read with ?after=15:54:00. The brain answers with the
+   decision AS OF that instant: prices only from 1-minute bars ending at or
+   before it, the same answer whatever second it is computed, cached and never
+   rebuilt. It answers "not yet" until the decision minute is published (FMP
+   takes 10-25 s). The executor accepts only a pinned payload for today's
+   instant with a complete decision bar. An engine is unavailable when the
+   feed is dead, its data is short, or its tree is not the one Composer runs.
+4. Corporate actions first: a split rescales the sleeves' shares; a dividend
+   becomes a receivable for the sleeves that held the payer at the close
+   before the ex-date, credited from the pay date.
+5. The plan: daily sleeves go to target; the threshold sleeve (KMLM, 10pp)
+   trades only when some asset's invested weight sits further than the
+   corridor from its target. Opposite legs across sleeves cross internally;
+   only the net goes out.
+6. LIVE: every symbol in the plan is checked against IBKR's own quote. Further
    than 1.5% from the brain's price (5% when the brain's price is an
    estimate), or only a previous-close quote: that symbol's sleeves sit the
    session out, the others trade.
-6. Sells go first, as market DAY orders, each under an id written to disk
-   before IBKR sees it. When they are booked, buys are sized from the cash
-   actually received, never from expected proceeds.
-7. 15:59:00: anything still working is cancelled and booked at what filled.
-8. Afterwards the account is compared with the book. A mismatch seen twice,
+7. Sells go first, as market DAY orders, each under an id written to disk
+   before IBKR sees it. When they are booked, the buy symbols are quoted again
+   and the buys go out as DAY LIMIT orders at quote x 1.005, sized at that
+   limit from the cash actually received: a buy can never cost more than the
+   cash set aside for it.
+8. 15:59:00: anything still working is cancelled and booked at what filled. No
+   new order is sent after that instant.
+9. Afterwards the account is compared with the book. A mismatch seen twice,
    30 seconds apart, halts a live book.
+
+A halt or /kill is re-read before every single order: one that lands mid-plan
+stops everything not yet sent. An order whose fate the venue cannot prove is
+never guessed at: it stays unresolved, says so daily, and the operator books
+it with /mirror/resolve.
 
 ## Controls
 
 - POST /kill (existing): halts every mirror book; the LIVE book's positions
   are sold by the loop thread (at once in the regular session, else at the
-  next open). POST /resume lifts it.
+  next open), in up to five rounds until nothing the account holds is left.
+  POST /resume lifts it and says which halt it lifted.
 - POST /mirror/halt: stop trading, keep positions. POST /mirror/resume.
+- POST /mirror/resolve {id, filled, price}: book an order the venue could not
+  account for, at what the operator states.
+- POST /mirror/adjust {sleeve, symbol, shares, cash, note}: a signed
+  correction of one sleeve, for a divergence nothing else explains.
 - POST /mirror/transfer {from, to, amount}: capital between two sleeves, with
   the next session's plan. The POLICY operations that move money between
   symphonies on Composer land here the same day.
@@ -129,9 +159,11 @@ The brain needs a small always-on service: stdlib Python, no disk.
           - composer/scripts/**
           - composer/fixtures/approved/**
       envVars:
-        - key: MIRROR_API_TOKEN
+        - key: MIRROR_API_TOKEN       # the executor's read token
           sync: false
-        - key: FMP_API_KEY
+        - key: MIRROR_ATTEST_TOKEN    # the Composer-keyed routine's write token
+          sync: false
+        - key: FMP_API_KEY            # required: the pinned decision needs minute bars
           sync: false
 
 It is NOT in render.yaml yet: adding it creates a billable service on the next
@@ -143,7 +175,13 @@ same session it reaches main.
 
 - A symphony edited on Composer: the new tree passes the fidelity gate, the
   approved fixture is updated in the same change set, and the brain redeploys.
-  Until then the two sides run different logic.
+  Until then that engine's sleeve HOLDS on the mirror: a routine with the
+  Composer key (scripts/mirror_attest.py, about 15:50 ET) posts each
+  symphony's live version and tree hash to the brain, and an engine whose
+  approved tree does not hash equal is published unavailable, naming both
+  versions. With no attestation at all the brain says so and trades the
+  approved tree (set MIRROR_REQUIRE_ATTESTATION to make that a hold too). The
+  brain itself never holds the Composer key.
 - A POLICY operation that moves capital between symphonies: the same amount
   through /mirror/transfer the same day.
 - A gate or methodology change: it lives in the trees or in the shared
@@ -154,15 +192,32 @@ same session it reaches main.
 
 ## What is NOT the same on the two sides (honesty box)
 
-- Decision minute. The mirror decides on the 15:54 bar; Composer's own
-  decision lands somewhere in 15:50-15:55. About one engine-day in twelve is
-  close enough to flip.
+- Decision instant. The mirror decides as of 15:54:00; Composer's own instant
+  moves between 15:50:54 and 15:55:49 from day to day, so no fixed minute
+  reproduces it. Replayed on 83 sessions the 15:54:00 decision equals
+  Composer's holdings on 292 of 296 engine-sessions; expect 2-4% of
+  engine-days to differ whatever minute is chosen.
 - Composer skip days. On 10-26..10-28 Composer did not rebalance; the mirror
-  would have.
-- Fills. Market orders at about 15:55 on IBKR versus Composer's own execution.
-- Whole shares, a 0.3% cash reserve per sleeve, and drift trims under
-  max($25, 0.5% of the sleeve) are skipped.
-- Dividends land in the IBKR account, not in a sleeve. They are attributed by
-  hand through /mirror/credit until that is automated.
+  would have. That stretch alone is about 3 points of return difference in the
+  backfill, in Composer's favour that time.
+- Commissions. IBKR charges per share; Composer charges nothing. Estimated
+  $1,750-3,350 a year on $118k (1.5-2.8%), because the strategies turn the
+  book over about 130-170 times a year. It cannot be removed, only chosen
+  (tiered pricing) and accepted.
+- Fills. Sells are market orders at about 15:54:40; buys are limit orders 0.5%
+  above the quote, so on a fast up-move a buy can be left partly unfilled and
+  the cash waits a day.
+- Whole shares, a 0.1% cash reserve per sleeve, the 0.5% buy cushion, and
+  drift trims under max($25, 0.5% of the sleeve) are skipped.
+- Dividends follow Composer's own rule by default (MIRROR_DIVIDEND_RULE):
+  credited to the sleeve from the pay date only if it still holds the payer,
+  otherwise the cash stays unallocated in the account, as it does on Composer.
+- A threshold sleeve seeded from cash buys the target while Composer may be
+  sitting inside its corridor: on about one start day in five the holdings
+  differ by 6-10% of the sleeve for 2-4 sessions, then never again.
 - Paper fills are at the brain's price: the paper record measures decisions
   and holdings, not execution cost.
+- The account. The existing strategy's notes suggest a CASH account that has
+  refused market buys sized close to available cash. Whether it can fund a buy
+  from the same minute's sale proceeds is unverified and decides whether a
+  rotation completes the same day.

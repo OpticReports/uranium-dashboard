@@ -1008,6 +1008,11 @@ services:
         sync: false
       - key: MIRROR_LIVE_ENGINES
         sync: false
+      # "composer" (the default: a dividend is credited to a sleeve only if it
+      # still holds the payer on the pay date, as Composer's symphonies do) or
+      # "holder" (always credited).
+      - key: MIRROR_DIVIDEND_RULE
+        sync: false
       # blend3070 arming + sizing — trading-behavior vars, dashboard-owned
       # (sync:false, AUTO_DRILL/DRY_RUN precedent). BLEND_BOOK_USD is read
       # ONCE, when the live book first initializes; BLEND_BUDGET is the
