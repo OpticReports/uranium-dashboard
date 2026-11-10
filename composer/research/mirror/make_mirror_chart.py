@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Exhibit for the IBKR mirror's DRY parity measurement (composer/IBKR_MIRROR.md).
 Reads results/mirror/backfill-2026-11-10.json (research/mirror/parity_study.py);
-writes results/mirror-parity-2026-11-10.html (one self-contained file, no network)."""
+writes results/mirror-parity-2026-11-10.html (one self-contained file, no network).
+
+The first screen answers three questions with charts: does the mirror hold what Composer holds, does
+it earn what Composer earns, what does running on IBKR cost. Everything else is in collapsed sections."""
 import json
 import os
-import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RES = os.path.join(HERE, "..", "..", "results")
 SRC = os.path.join(RES, "mirror", "backfill-2026-11-10.json")
 PAGE = os.path.join(RES, "mirror-parity-2026-11-10.html")
 ENGINES = ("HG", "KMLM", "SLEEVE", "HARV")
-NO_REBALANCE = ("2026-10-26", "2026-10-27", "2026-10-28")
 LEG_CLASS = {"SQQQ": "inverse", "TLT": "bonds", "UVXY": "vol", "SOXL": "long", "TECL": "long"}
 
 
@@ -25,83 +26,120 @@ def leg_class(w):
     return LEG_CLASS.get(max(leg, key=leg.get), "other")
 
 
-def bar_kind(s):
-    c = s.get("cause") or ""
-    if any(s["d0"] < d <= s["date"] for d in NO_REBALANCE):
-        return "norebal"
-    if c.startswith("different holdings") or c.startswith("the holdings split"):
-        return "apart"
-    if c.startswith("no ledger row") or c.startswith("Composer pay-date"):
-        return "note"
-    return "plain"
+def chain(series):
+    """[[date, mirror cumulative, Composer cumulative]] from the chained spans, starting at 0"""
+    if not series:
+        return []
+    pts, m, c = [[series[0]["d0"], 0.0, 0.0]], 1.0, 1.0
+    for s in series:
+        m, c = m * (1 + s["mirror"]), c * (1 + s["composer"])
+        pts.append([s["date"], round(m - 1, 5), round(c - 1, 5)])
+    return pts
 
 
-def _classes(dis):
-    out = {}
-    for x in dis:
-        out[x["class"]] = out.get(x["class"], 0) + 1
+def bars(series, stretch):
+    out = []
+    for s in series:
+        c = s.get("cause") or ""
+        k = "norebal" if any(s["d0"] < d <= s["date"] for d in stretch) else \
+            "apart" if ("different holdings" in c or "the holdings split" in c) else "plain"
+        out.append({"d0": s["d0"], "d": s["date"], "n": s["n"], "v": s["diff_bps"], "k": k, "c": s.get("cause"),
+                    "m": s["mirror"], "o": s["composer"]})
     return out
 
 
-def minute_rows(blk):
-    rows = [{"label": "close", "decide": "close", "fill": "close", **blk["close_same_sessions"]["headline"]}]
-    for lab, v in blk["variants"].items():
-        rows.append({"label": lab, "decide": v["decide"], "fill": v["fill"], "info": {k: v["info"].get(k) for k in (
-            "covered", "fallbacks", "orders", "fallback_tickers", "stopped", "unavailable", "unpriced_skips", "labels")},
-            "classes": _classes(v["disagreements"]), **v["headline"]})
-    return rows
+def paired(rows, a, b, key="gain_bps"):
+    """mean, t (per engine-day and with one observation a day) of filling at minute a instead of minute b"""
+    import math
+
+    def st(xs):
+        n = len(xs)
+        if n < 2:
+            return {"n": n, "mean": None, "t": None}
+        m = sum(xs) / n
+        sd = math.sqrt(sum((x - m) ** 2 for x in xs) / (n - 1))
+        return {"n": n, "mean": round(m, 3), "t": round(m / (sd / math.sqrt(n)), 2) if sd > 0 else None}
+    d = [r[key][a] - r[key][b] for r in rows]
+    by = {}
+    for r in rows:
+        by.setdefault(r["date"], []).append(r[key][a] - r[key][b])
+    return dict(st(d), by_day=st([sum(v) / len(v) for v in by.values()]))
+
+
+def run_row(lab, v):
+    h, f = v["headline"], v["every_buy_fills"]
+    return {"label": lab, "decide": v["decide"], "fill": v["fill"], "limit_at": v["limit_at"], "dec": h["decisions"], "book": h["book"],
+            "ex": h["book_ex"], "gross_ex": h["book_gross_ex"], "gross": h["book_gross"], "costs": h["costs"], "limit": h["limit_buys"],
+            "cash": h["cash"], "dist": h["distributions"], "info": v.get("info"), "problems": h["problems"],
+            "overspent": len(h["overspent"]),
+            "filled": {"gap": f["book"]["cum_gap"], "ex": f["book_ex"]["cum_gap"], "sd": f["book"]["sd_bps"],
+                       "agree": f["decisions"]["ALL"]["agree"]}}
+
+
+def slim_headline(h):
+    return {"dec": h["decisions"]["ALL"], "book": h["book"], "ex": h["book_ex"], "gross_ex": h["book_gross_ex"],
+            "costs": {k: h["costs"][k] for k in ("commission_bps_yr", "slippage_bps_yr", "drag_bps_yr")},
+            "limit": h["limit_buys"], "dist": h["distributions"], "overspent": len(h["overspent"])}
 
 
 def main(src=SRC, page=PAGE):
-    r = json.load(open(src))
-    C, M, F = r["close"], r["minute"], r.get("minute_full")
-    sessions = sorted({x["date"] for x in C["rows"]})
+    with open(src) as f:
+        r = json.load(f)
+    P = r["primary_run"]
+    stretch = r["window"]["no_rebalance"]
+    sessions = sorted({x["date"] for x in P["rows"]})
     eng = {}
     for e in ENGINES:
-        rows = [x for x in C["rows"] if x["engine"] == e]
-        comp = [x for x in r["composer_record"].get(e, []) if x["dav"]]
-        base = next(x["date"] for x in comp if any(y["date"] == x["date"] for y in rows))
-        b_idx = next(y["index_px"] for y in rows if y["date"] == base)
-        b_dav = next(x["dav"] for x in comp if x["date"] == base)
-        level, mirror = 1.0, []
-        for y in rows:
-            if y["date"] > base:
-                level *= 1 + (y["ret"] or 0.0)
-            if y["date"] >= base:
-                mirror.append([y["date"], round(y["index_px"] / b_idx - 1, 5), round(level - 1, 5)])
-        blk = C["engines"][e]
-        eng[e] = {"base": base, "mirror": mirror,
-                  "composer": [[x["date"], round(x["dav"] / b_dav - 1, 5)] for x in comp if x["date"] >= base],
-                  "bars": [{"d0": s["d0"], "d": s["date"], "n": s["n"], "v": s["diff_bps"], "k": bar_kind(s), "c": s.get("cause"),
-                            "m": s["mirror"], "o": s["composer"]} for s in blk["series"]],
-                  "knife": [x["date"] for x in C["disagreements"] if x["engine"] == e and x["class"] == "knife-edge"],
-                  "t": blk["tracking"], "tx": blk["tracking_ex_no_rebalance"], "tg": blk["tracking_gross"],
-                  "tc": blk["tracking_with_pay_date_credits"], "tt": blk["tracking_total_basis"],
-                  "costs": blk["costs"], "dist": {k: v for k, v in blk["distributions"].items() if k != "events"},
-                  "flow_days": blk["flow_days"], "by_cause": blk["by_cause"], "actions": blk["actions"],
-                  "avg_equity": blk["avg_equity"]}
-    cls = {(x["date"], x["engine"]): x["class"] for x in C["disagreements"]}
-    kmlm = [{"d": k["date"], "ml": k["mirror_leg"], "cl": k["composer_leg"], "mc": leg_class(k["mirror"]), "cc": leg_class(k["composer"]),
-             "dist": k["dist"], "a": k["action"], "m": k["mirror"], "c": k["composer"], "gap": k["gap"],
-             "cls": cls.get((k["date"], "KMLM"))} for k in r["kmlm_path"]]
-    edge = r["edge"]
-    data = {"generated": r["generated"], "window": r["window"], "capital": r["capital"], "fractions": r["fractions"],
-            "slip_bps": r["slip_bps"], "sessions": sessions, "eng": eng, "kmlm": kmlm,
-            "book": {k: v for k, v in C["book"].items() if k != "series"}, "decisions": C["decisions"], "dis": C["disagreements"],
-            "episodes": C["episodes"].get("KMLM", []), "noise": C["headline"]["noise_floor"],
-            "minute": {"start": M["start"], "rows": minute_rows(M), "dis": M["variants"]["15:55"]["disagreements"]},
-            "full": {"start": F["start"], "rows": minute_rows(F), "dis": F["variants"]["15:55"]["disagreements"],
-                     "episodes": (F["variants"]["15:55"].get("episodes") or {}).get("KMLM", []),
-                     "late": [x for x in F["variants"]["15:45 -> close (MOC)"]["disagreements"] if x["class"] == "decision-minute"]}
-            if F else None,
-            "sens": r["sensitivity"], "fills": r.get("composer_fills"),
-            "edge": {"timing": edge["fill_timing"].get("summary"), "timing_1555": edge["fill_timing"].get("from_1555"),
-                     "knife": {e: {k: v for k, v in x.items() if k != "days"} for e, x in edge["knife_edge_carry"].items()},
-                     "asof": {k: v for k, v in edge["replay_as_of"].items() if k != "changed"},
-                     "asof_changed": len(edge["replay_as_of"].get("changed") or []),
-                     "asof_months": sorted({x["date"][:7] for x in edge["replay_as_of"].get("changed") or []})}}
+        blk = P["engines"][e]
+        eng[e] = {"pts": chain(blk["series"]), "bars": bars(blk["series"], stretch), "t": blk["tracking"],
+                  "tx": blk["tracking_ex_no_rebalance"], "tg": blk["tracking_gross"], "tp": blk["tracking_price_basis"],
+                  "costs": blk["costs"], "cash": blk["cash"], "dist": {k: v for k, v in blk["distributions"].items() if k != "events"},
+                  "events": blk["distributions"]["events"], "actions": blk["actions"], "avg_equity": blk["avg_equity"],
+                  "holder": r["sensitivity"]["dividend_rule"]["holder"]["engines"][e]}
+    B = P["book"]
+    sens = r["sensitivity"]
+    fm = r["edge"]["fill_minute"]
+    data = {
+        "generated": r["generated"], "window": r["window"], "capital": r["capital"], "fractions": r["fractions"],
+        "slip_bps": r["slip_bps"], "core": r["core"], "commission": r["commission"], "sessions": sessions,
+        "dec": P["decisions"],
+        "misses": [{"d": x["date"], "e": x["engine"], "c": x["class"], "note": x["note"], "dist": x["dist"], "m": x["mirror"],
+                    "o": x["composer"]} for x in P["disagreements"]],
+        "book": {"pts": chain(B["series"]), "bars": bars(B["series"], stretch), "t": B["tracking"], "tx": B["tracking_ex_no_rebalance"],
+                 "tg": B["tracking_gross"], "tgx": B["tracking_gross_ex_no_rebalance"], "tp": B["tracking_price_basis"],
+                 "tpx": B["tracking_price_basis_ex_no_rebalance"], "costs": B["costs"], "avg_equity": B["avg_equity"],
+                 "final_equity": B["final_equity"], "problems": B["problems"], "overspent": B["overspent"]},
+        "eng": eng, "costs": r["costs"], "info": P["info"],
+        "noise": P["headline"]["noise_floor"],
+        "runs": [run_row(lab, r["runs"][lab]) for lab in r["run_order"]],
+        "kmlm": [{"d": k["date"], "mc": leg_class(k["mirror"]), "cc": leg_class(k["composer"]), "dist": k["dist"], "a": k["action"],
+                  "m": k["mirror"], "c": k["composer"], "gap": k["gap"]} for k in r["kmlm_path"]],
+        "episodes": (P["episodes"] or {}).get("KMLM", []),
+        "unfilled": P["unfilled"], "unallocated": P["unallocated"],
+        "sens": {"rule": {"holder": slim_headline(sens["dividend_rule"]["holder"]["headline"]),
+                          "holder_minus_composer_bps": sens["dividend_rule"]["holder_minus_composer_bps"]},
+                 "limit": {"requote": slim_headline(sens["buy_limit"]["requoted_at_the_fill"]),
+                           "none": slim_headline(sens["buy_limit"]["no_limit"]),
+                           "unfilled_cost_bps": sens["buy_limit"]["unfilled_cost_bps"], "vs_requoted_bps": sens["buy_limit"]["vs_requoted_bps"]},
+                 "slip": {k: slim_headline(v) for k, v in sens["slip_bps"].items()},
+                 "gaps": slim_headline(sens["ledger_gaps_filled_from_the_tree"]), "seed": sens["seed"]},
+        "edge": {"minutes": fm.get("times"), "base": fm.get("base"), "n": len(fm.get("rows") or []),
+                 "days": len({x["date"] for x in fm.get("rows") or []}),
+                 "summary": {k: {kk: vv for kk, vv in v.items() if kk != "by_engine"} for k, v in (fm.get("summary") or {}).items()},
+                 "close_vs_minute": r["edge"]["fill_at_the_close_vs_a_minute_later"],
+                 "later": r["edge"]["later_fill_same_decisions"]["rows"],
+                 "vs_mirror": {x: {"actual": paired(fm.get("rows") or [], x, "15:55"),
+                                   "placebo": paired(fm.get("rows") or [], x, "15:55", "placebo_bps")}
+                               for x in ("15:56", "15:57", "15:58", "15:59", "16:00")},
+                 "knife": {e: {k: v for k, v in x.items() if k != "days"} for e, x in r["edge"]["knife_edge_carry"].items()}},
+        "fills": r.get("composer_fills"),
+        "replay": {k: v for k, v in r["replay_paths"].items() if k != "differ"}, "replay_differ": r["replay_paths"]["differ"][:12],
+        "replay_n": len(r["replay_paths"]["differ"]),
+        "cross": r["brain_cross_check"], "events": r["events"], "splits": r["splits_in_window"],
+        "splits_applied": len(P["splits_applied"])}
     html = TEMPLATE.replace("__DATA__", json.dumps(data, separators=(",", ":")))
-    open(page, "w").write(html)
+    with open(page, "w") as f:
+        f.write(html)
     print("wrote", page, f"({len(html) // 1024} KB)")
 
 
@@ -113,309 +151,438 @@ TEMPLATE = r"""<!doctype html>
 <title>Mirror parity measured</title>
 <style>
 :root{color-scheme:light;--page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--ring:rgba(11,11,11,.10);
---s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--ctx:#b9b7ae;--ctx2:#8e8c84;--neg:#e34948;--band:rgba(42,120,214,.18);--band2:rgba(237,161,0,.22)}
+--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--ctx:#b9b7ae;--ctx2:#8e8c84;--neg:#e34948;--band:rgba(42,120,214,.18);--band2:rgba(237,161,0,.20);--track:#ecebe5}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.10);
---s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--ctx:#5a5955;--ctx2:#7a7872;--neg:#e66767;--band:rgba(57,135,229,.22);--band2:rgba(201,133,0,.28)}}
+--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--ctx:#5a5955;--ctx2:#7a7872;--neg:#e66767;--band:rgba(57,135,229,.22);--band2:rgba(201,133,0,.26);--track:#262624}}
 :root[data-theme="dark"]{color-scheme:dark;--page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.10);
---s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--ctx:#5a5955;--ctx2:#7a7872;--neg:#e66767;--band:rgba(57,135,229,.22);--band2:rgba(201,133,0,.28)}
+--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--ctx:#5a5955;--ctx2:#7a7872;--neg:#e66767;--band:rgba(57,135,229,.22);--band2:rgba(201,133,0,.26);--track:#262624}
 *{box-sizing:border-box}
-body{margin:0;background:var(--page);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:1000px;margin:0 auto;padding:24px 16px 48px}
-h1{font-size:22px;margin:0 0 4px;font-weight:650}h2{font-size:16px;margin:0 0 2px;font-weight:600}h3{font-size:13.5px;margin:0 0 2px;font-weight:600}
-.sub-h{color:var(--ink2);margin:0 0 12px;font-size:14px}
-.card{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:16px;margin:0 0 16px;min-width:0}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0 16px}
-@media (max-width:760px){.kpis{grid-template-columns:1fr 1fr}}
-.kpi{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:12px 14px;min-width:0}
-.kpi b{display:block;font-size:22px;font-weight:650}.kpi span{color:var(--ink2);font-size:13px}
-.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:6px 0 8px;font-size:13px;color:var(--ink2)}
-.legend span{display:inline-flex;align-items:center;gap:6px}.sw{display:inline-block;width:14px;height:12px;border-radius:3px}.sw.ln{height:3px;border-radius:2px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
-@media (max-width:760px){.grid2{grid-template-columns:1fr}}
-.panel{min-width:0}.panel p{margin:0 0 2px;color:var(--ink2);font-size:12.5px}
-svg{display:block;width:100%;height:auto;overflow:visible}.ax{fill:var(--muted);font-size:11px}.lb{fill:var(--ink2);font-size:12px}.lbb{fill:var(--ink);font-size:12px;font-weight:600}
-table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{padding:5px 7px;text-align:left;border-bottom:1px solid var(--grid);vertical-align:top}
+body{margin:0;background:var(--page);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1068px;margin:0 auto;padding:18px 16px 40px}
+h1{font-size:22px;margin:0 0 2px;font-weight:650;line-height:1.25}h2{font-size:16px;margin:0 0 2px;font-weight:650}h3{font-size:13.5px;margin:10px 0 2px;font-weight:600}
+.sub-h{color:var(--ink2);margin:0 0 10px;font-size:14px}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:14px 16px;min-width:0}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
+.kpi{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:10px 14px;min-width:0}
+.kpi b{display:block;font-size:26px;font-weight:650;line-height:1.15;font-variant-numeric:tabular-nums}.kpi span{color:var(--ink2);font-size:13px;display:block;margin-top:2px;line-height:1.35}
+.top{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,8fr);gap:10px;align-items:start}
+.stack{display:grid;gap:10px;min-width:0}
+@media (max-width:820px){.kpis{grid-template-columns:1fr 1fr}.top{grid-template-columns:minmax(0,1fr)}}
+.q{color:var(--ink2);font-size:13px;margin:0 0 6px;line-height:1.35}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:4px 0 6px;font-size:12.5px;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}.sw{display:inline-block;width:12px;height:12px;border-radius:3px}.sw.ln{height:3px;border-radius:2px;width:16px}
+.arow{display:grid;grid-template-columns:62px 74px minmax(0,1fr);gap:8px;align-items:center;padding:3px 0;font-size:14px}
+.arow b{font-weight:650}.arow .ct{font-variant-numeric:tabular-nums;white-space:nowrap}.arow .ct small{color:var(--ink2);font-size:12px}
+.bar{height:12px;background:var(--track);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--s1);border-radius:4px}
+.miss{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;min-height:14px}.miss i{width:14px;height:14px;border-radius:3px;display:block;cursor:default}
+.crow{display:grid;grid-template-columns:minmax(0,186px) minmax(0,1fr) 54px;gap:8px;align-items:center;padding:3px 0;font-size:13.5px;line-height:1.25}
+@media (max-width:820px){.crow{grid-template-columns:minmax(0,150px) minmax(0,1fr) 54px}}
+.crow .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}.crow small{display:block;color:var(--ink2);font-size:12px}
+.cbar{height:14px;border-radius:4px;background:var(--s1);min-width:2px}.cbar.ctx{background:var(--ctx2)}
+.sum{border-top:1px solid var(--grid);margin-top:4px;padding-top:6px;font-size:13.5px;display:flex;justify-content:space-between;gap:8px}.sum b{font-variant-numeric:tabular-nums}
+.sm{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 12px;margin-top:6px}
+@media (max-width:820px){.sm{grid-template-columns:1fr 1fr}}
+.sm h3{margin:0}.sm p{margin:0;color:var(--ink2);font-size:12px}
+.cap{color:var(--ink2);font-size:12.5px;margin:6px 0 0;line-height:1.35}
+svg{display:block;width:100%;height:auto;overflow:visible}.ax{fill:var(--muted);font-size:11px}.lb{fill:var(--ink2);font-size:12px}.lbb{fill:var(--ink);font-size:12.5px;font-weight:600}
+.honest{margin:10px 0 0;padding:0;list-style:none;color:var(--ink2);font-size:13px;display:grid;gap:2px}
+.honest li::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ctx2);margin:0 8px 2px 2px}
+details{background:var(--surface);border:1px solid var(--ring);border-radius:10px;margin-top:8px;padding:0 16px}
+summary{cursor:pointer;padding:10px 0;font-weight:600;font-size:14.5px}summary span{font-weight:400;color:var(--ink2);margin-left:6px;font-size:13.5px}
+details[open]{padding-bottom:14px}details p{margin:4px 0 8px;font-size:13.5px;color:var(--ink2)}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:5px 7px;text-align:left;border-bottom:1px solid var(--grid);vertical-align:top}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}td.n{white-space:nowrap}
-thead th{color:var(--ink2);font-weight:600;font-size:12.5px;vertical-align:bottom}.tablewrap{overflow-x:auto}
-td.lab,th.lab{min-width:210px}td.note{color:var(--ink2);white-space:normal}#tbE td:first-child,#tbE3 td:first-child{min-width:185px}
-details{margin-top:8px;font-size:13.5px}summary{cursor:pointer;color:var(--ink2)}
-.notes{font-size:13.5px;color:var(--ink2)}.notes li{margin:3px 0}
-.neg{color:var(--neg)}
+thead th{color:var(--ink2);font-weight:600;font-size:12px;vertical-align:bottom}.tablewrap{overflow-x:auto}
+td.lab{min-width:150px}td.note{color:var(--ink2);min-width:220px}
+.notes{font-size:13.5px;color:var(--ink2);margin:6px 0;padding-left:18px}.notes li{margin:3px 0}
+.neg{color:var(--neg)}.mut{color:var(--ink2)}
 .tt{position:fixed;pointer-events:none;background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:6px 9px;font-size:13px;display:none;z-index:5;max-width:340px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
 </style>
 </head>
 <body>
 <main>
-<h1>The IBKR mirror, dry-run against Composer: same decisions, how close a return</h1>
+<h1>The IBKR mirror on paper, against Composer</h1>
 <p class="sub-h" id="lede"></p>
 <div class="kpis" id="kpis"></div>
+<div class="top">
+  <div class="stack">
+    <section class="card">
+      <h2>Does it hold what Composer holds?</h2>
+      <p class="q" id="qa"></p>
+      <div id="agree"></div>
+      <div class="legend" id="lgA"></div>
+    </section>
+    <section class="card">
+      <h2>What does running on IBKR cost?</h2>
+      <p class="q" id="qc"></p>
+      <div id="cost"></div>
+      <p class="cap" id="capc"></p>
+    </section>
+  </div>
+  <section class="card">
+    <h2>Does it earn what Composer earns?</h2>
+    <p class="q" id="qb"></p>
+    <div class="legend" id="lgB"></div>
+    <div id="cum"></div>
+    <h3>Daily difference, mirror minus Composer (bps of the book)</h3>
+    <div class="legend" id="lgD"></div>
+    <div id="diff"></div>
+    <div class="sm" id="sm"></div>
+  </section>
+</div>
+<ul class="honest" id="honest"></ul>
 
-<section class="card">
-<h2>A. Each engine since its first common close: Composer vs the mirror</h2>
-<p class="sub-h">Cumulative return, close mode (the ledger's close-price decision, filled at the close, net of the mirror's modelled costs). Composer: its own deposit-adjusted value from the monitor snapshot after each close. Mirror: price basis (distributions left out, as Composer's symphony figure mostly does); the thin line adds the distributions the sleeve would have collected. Each panel has its own range; all are linear from 0%.</p>
-<div class="legend" id="lgA"></div>
-<div class="grid2" id="gA"></div>
-</section>
-
-<section class="card">
-<h2>B. The daily return difference, mirror minus Composer</h2>
-<p class="sub-h">Close mode, price basis, in basis points of the sleeve; every panel on the same ±200 bps scale (a bar that runs off it carries its value). A wide bar is a stretch of several sessions between two Composer snapshots, compared as one. Triangles mark the sessions the shadow ledger calls a knife-edge (the call flips inside 15:50-15:55); the shaded band is 10-26..10-28, when Composer did not rebalance and the mirror followed the logic.</p>
-<div class="legend" id="lgB"></div>
-<div class="grid2" id="gB"></div>
-<div class="tablewrap" style="margin-top:10px"><table id="tbB"></table></div>
-</section>
-
-<section class="card">
-<h2>C. KMLM's corridor path: the 75% leg, Composer vs the mirror</h2>
-<p class="sub-h">KMLM rebalances only when a holding sits more than 10pp from its target, so the two books can drift apart without disagreeing on the logic. Lines: the weight of the switcher's leg (target 75%; the corridor's edges are outside this zoomed axis). Strips: what that leg held after each session. Shaded sessions: the two books' holdings differ by more than 3% (half-L1). Close mode.</p>
-<div class="legend" id="lgC"></div>
-<svg id="chC" role="img" aria-label="KMLM leveraged-leg weight over time for Composer and the mirror, with a strip of what the leg held and the sessions where they differ shaded"></svg>
-<div class="tablewrap" style="margin-top:10px"><table id="tbC"></table></div>
-</section>
-
-<section class="card">
-<h2>D. Every disagreement, classified</h2>
-<p class="sub-h" id="subD"></p>
-<div class="tablewrap"><table id="tbD1"></table></div>
-<details><summary>Table: the engine-days that differ, close mode</summary><div class="tablewrap"><table id="tbD"></table></div></details>
-<details><summary>Table: the engine-days that differ, deciding at 15:55 (whole window)</summary><div class="tablewrap"><table id="tbD2"></table></div></details>
-</section>
-
-<section class="card">
-<h2>E. Minute mode vs close mode on the same sessions</h2>
-<p class="sub-h" id="subE"></p>
-<div class="tablewrap"><table id="tbE"></table></div>
-<p class="sub-h" id="subE3" style="margin-top:14px"></p>
-<div class="tablewrap"><table id="tbE3"></table></div>
-</section>
-
-<section class="card">
-<h2>F. Where the difference comes from, and whether any of it is an edge</h2>
-<p class="sub-h">Close mode. Each stretch between Composer snapshots is put under the first cause that applies; sums are in bps of the sleeve over the window. Then the systematic candidates: a later fill (the close instead of 15:53, where Composer's fills cluster) with its placebo, deciding on the close (the session after a knife-edge), and the distributions.</p>
-<div class="tablewrap"><table id="tbF"></table></div>
-<div class="tablewrap" style="margin-top:12px"><table id="tbF2"></table></div>
-<div class="tablewrap" style="margin-top:12px"><table id="tbF3"></table></div>
-</section>
-
-<section class="card">
-<h2>G. Costs, turnover and sensitivities</h2>
-<p class="sub-h">The mirror's modelled costs: IBKR tiered commission ($0.0035 a share, $0.35 minimum, 1% cap) and slippage against the mirror on every venue order. Composer's realised returns already carry its own execution costs.</p>
-<div class="tablewrap"><table id="tbG"></table></div>
-<div class="tablewrap" style="margin-top:12px"><table id="tbG2"></table></div>
-</section>
-
-<section class="card notes">
-<h2 style="color:var(--ink)">Basis and limits</h2>
-<ul id="basis"></ul>
-</section>
-</main>
+<details id="dRuns"><summary>Every run: decision time and fill time<span id="sRuns"></span></summary>
+  <div class="tablewrap"><table id="tbRuns"></table></div>
+  <p id="pRuns"></p>
+</details>
+<details id="dMiss"><summary>The engine-days that differ, each one named<span id="sMiss"></span></summary>
+  <div class="tablewrap"><table id="tbMiss"></table></div>
+</details>
+<details id="dWorst"><summary>Largest return differences and their causes<span id="sWorst"></span></summary>
+  <div class="tablewrap"><table id="tbWorst"></table></div>
+  <h3>Per engine</h3>
+  <div class="tablewrap"><table id="tbEng"></table></div>
+  <p id="pWorst"></p>
+</details>
+<details id="dCost"><summary>Limit buys and distributions<span id="sCost"></span></summary>
+  <h3>Buys left unfilled at their limit</h3>
+  <div class="tablewrap"><table id="tbUnf"></table></div>
+  <p id="pUnf"></p>
+  <h3>Distributions, per engine</h3>
+  <div class="tablewrap"><table id="tbDiv"></table></div>
+  <p id="pDiv"></p>
+  <div class="tablewrap"><table id="tbEv"></table></div>
+</details>
+<details id="dKmlm"><summary>KMLM's corridor path<span id="sKmlm"></span></summary>
+  <div class="legend" id="lgK"></div>
+  <div id="kmlm"></div>
+  <p id="pKmlm"></p>
+</details>
+<details id="dEdge"><summary>Candidate edge: a later fill<span id="sEdge"></span></summary>
+  <div class="legend" id="lgE"></div>
+  <div id="edge"></div>
+  <div class="tablewrap"><table id="tbEdge"></table></div>
+  <h3>The mirror's own decisions, filled later</h3>
+  <div class="tablewrap"><table id="tbEdge2"></table></div>
+  <ul class="notes" id="nEdge"></ul>
+</details>
+<details id="dSens"><summary>Sensitivities<span id="sSens"></span></summary>
+  <div class="tablewrap"><table id="tbSens"></table></div>
+  <p id="pSens"></p>
+</details>
+<details id="dReplay"><summary>Is the replay the brain's own decision?<span id="sReplay"></span></summary>
+  <div class="tablewrap"><table id="tbCross"></table></div>
+  <ul class="notes" id="nReplay"></ul>
+</details>
+<details id="dBasis"><summary>Basis and limits<span> what was measured, what was not</span></summary>
+  <ul class="notes" id="nBasis"></ul>
+</details>
 <div class="tt" id="tt"></div>
+</main>
 <script>
 const D = __DATA__, NS = 'http://www.w3.org/2000/svg', tt = document.getElementById('tt'), ENG = ['HG', 'KMLM', 'SLEEVE', 'HARV'];
+const $ = id => document.getElementById(id);
 function el(t, a, p, x){const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (x != null) e.textContent = x; p.appendChild(e); return e;}
 function tip(ev, h){tt.innerHTML = h; tt.style.display = 'block'; tt.style.left = Math.max(8, Math.min(ev.clientX + 12, innerWidth - tt.offsetWidth - 8)) + 'px'; tt.style.top = Math.max(8, Math.min(ev.clientY + 12, innerHeight - tt.offsetHeight - 8)) + 'px';}
 function untip(){tt.style.display = 'none';}
-function legend(id, items){document.getElementById(id).innerHTML = items.map(([n, c, line]) => `<span>${c ? `<i class="sw${line ? ' ln' : ''}" style="background:${c}"></i>` : ''}${n}</span>`).join('');}
+function legend(id, items){$(id).innerHTML = items.map(([n, c, line]) => `<span>${c ? `<i class="sw${line ? ' ln' : ''}" style="background:${c}"></i>` : ''}${n}</span>`).join('');}
 const pc = (v, k = 1) => v == null ? '–' : (v * 100).toFixed(k) + '%', sg = (v, k = 1) => v == null ? '–' : (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(k) + '%';
-const bp = (v, k = 1) => v == null ? '–' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(k), n0 = v => v == null ? '–' : Math.round(v).toLocaleString('en-US'), f2 = v => v == null ? '–' : v.toFixed(2);
+const bp = (v, k = 1) => v == null ? '–' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(k), f2 = v => v == null ? '–' : (v < 0 ? '−' : '') + Math.abs(v).toFixed(2);
 const cls = v => v == null ? ' class="n"' : (v < 0 ? ' class="n neg"' : ' class="n"');
 const usd = v => v == null ? '–' : (v < 0 ? '−$' : '$') + Math.abs(Math.round(v)).toLocaleString('en-US');
-const fw = w => !w ? '–' : Object.entries(w).sort((a, b) => b[1] - a[1]).map(([t, x]) => `${t} ${Math.round(x * 100)}%`).join(', ');
-const S = D.sessions, SI = Object.fromEntries(S.map((d, i) => [d, i])), B = D.book, T = B.tracking, TX = B.tracking_ex_no_rebalance;
+const fw = w => !w ? '–' : (typeof w === 'string' ? w : Object.entries(w).sort((a, b) => b[1] - a[1]).map(([t, x]) => `${t} ${Math.round(x * 100)}%`).join(', '));
+const md = d => d ? d.slice(5) : '–';
+const S = D.sessions, SI = Object.fromEntries(S.map((d, i) => [d, i])), B = D.book, T = B.t, TX = B.tx, W = D.window, C = D.costs;
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const R55 = D.minute.rows.find(r => r.label === '15:55'), F55 = D.full ? D.full.rows.find(r => r.label === '15:55') : null;
-const NAMES = {'agree': 'same holdings (within 3%)', 'knife-edge': 'knife-edge (the ledger says so)', 'composer-no-rebalance': 'Composer no-rebalance day', 'corridor-path': 'KMLM corridor path', 'decision-minute': 'the call flipped after the mirror\'s decision minute', 'late-snapshot': 'Composer\'s holdings read the next afternoon', 'whole-share': 'whole shares / cash reserve', 'mirror-skip': 'the mirror had no decision', 'other': 'other (unexplained)'};
-function monthTicks(svg, X, y, i0 = 0){ let last = S[i0].slice(5, 7); S.forEach((d, i) => { const m = d.slice(5, 7); if (i > i0 && m !== last) { el('text', {x: X(i), y, 'text-anchor': 'middle', class: 'ax'}, svg, MON[+m - 1]); last = m; } }); }
-function width(node){ return Math.max(300, Math.floor(node.getBoundingClientRect().width)); }
+const P0 = D.runs[0];
+const NAMES = {'agree': 'same holdings', 'knife-edge': 'knife-edge call', 'composer-no-rebalance': 'Composer did not rebalance', 'corridor-path': 'KMLM corridor path', 'decision-minute': 'the call flipped after 15:54', 'late-snapshot': 'Composer read a day late', 'whole-share': 'whole shares / idle cash', 'mirror-skip': 'the mirror had no decision', 'other': 'unexplained'};
+const SHORT = {'knife-edge': 'knife-edge', 'composer-no-rebalance': 'Composer skipped', 'corridor-path': 'corridor path', 'decision-minute': 'flipped after 15:54', 'late-snapshot': 'read a day late', 'whole-share': 'whole shares', 'mirror-skip': 'no decision', 'other': 'unexplained'};
+const CCOL = {'composer-no-rebalance': 'var(--ctx2)', 'late-snapshot': 'var(--ctx)', 'decision-minute': 'var(--s4)', 'knife-edge': 'var(--s3)', 'corridor-path': 'var(--s2)', 'whole-share': 'var(--neg)', 'mirror-skip': 'var(--neg)', 'other': 'var(--neg)'};
+function width(node){ return Math.max(280, Math.floor(node.getBoundingClientRect().width)); }
 function niceStep(span, n){ const raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))); return [1, 2, 5, 10].map(k => k * p).find(s => s >= raw); }
-const worst = xs => usd(Math.min(...xs.flatMap(o => Object.values(o).filter(v => typeof v === 'number'))));
+function monthTicks(svg, X, y, i0, i1){ let last = S[i0].slice(5, 7); for (let i = i0 + 1; i <= i1; i++) { const m = S[i].slice(5, 7); if (m !== last) { el('text', {x: X(i), y, 'text-anchor': 'middle', class: 'ax'}, svg, MON[+m - 1]); last = m; } } }
+const stretch = [S[SI[W.no_rebalance[0]] - 1], S[SI[W.no_rebalance[W.no_rebalance.length - 1]] + 2] || S[S.length - 1]];
 
-document.getElementById('lede').textContent = `The mirror would trade $${n0(D.capital)} at IBKR on the four engines' approved logic (HG 29 / KMLM 29 / SLEEVE 27 / HARV 15), through the sleeve, netting and fill code the executor runs (mirror_core, unchanged). Here that code is driven over ${D.window.sessions} sessions (${D.window.start}..${D.window.end}) on public prices and compared with what Composer actually held and earned: ${D.decisions.ALL.n} engine-days from the shadow ledger, and Composer's deposit-adjusted values from the monitor's snapshots. Two ways of deciding: on the close (the ledger's own targets; charts A-C) and at 15:55 ET on minute bars with a fill a minute later, as the executor will (section E). Nothing was traded.`;
-(function(){
-  const k = [], b = F55 ? F55.book : T, x = F55 ? F55.book_ex : TX, c = F55 ? F55.costs : B.costs;
-  k.push([`${pc(F55 ? F55.decisions.ALL.share : D.decisions.ALL.share)} same holdings`, F55 ? `${F55.decisions.ALL.agree} of ${F55.decisions.ALL.n} engine-days within 3% of Composer's holdings when the mirror decides at 15:55; ${D.decisions.ALL.agree} (${pc(D.decisions.ALL.share)}) deciding on the close. Every difference is a knife-edge, a Composer no-rebalance day, KMLM's corridor or a late snapshot` : `${D.decisions.ALL.agree} of ${D.decisions.ALL.n} engine-days, deciding on the close`]);
-  k.push([`${b.sd_bps.toFixed(0)} bps a day`, `standard deviation of the book's daily return difference deciding at 15:55 (${b.n_daily} days; mean ${bp(b.mean_bps)} bps, correlation ${b.corr.toFixed(3)}, beta ${b.beta.toFixed(2)}); ${T.sd_bps.toFixed(0)} bps deciding and filling on the close. On days neither side trades, the comparison itself moves ${D.noise.all.sd.toFixed(0)} bps per engine`]);
-  k.push([`${sg(x.cum_gap, 2)} gap`, `book, cumulative, net of the mirror's costs, without the 10-23→10-30 stretch in which Composer did not rebalance for three sessions (15:55: mirror ${sg(x.cum_mirror)} vs Composer ${sg(x.cum_composer)}; close mode ${sg(TX.cum_gap, 2)}). With that stretch: ${sg(b.cum_gap, 2)} at 15:55, ${sg(T.cum_gap, 2)} on the close`]);
-  k.push([`${n0(c.drag_bps_yr)} bps a year`, `modelled cost drag at 15:55: commission ${n0(c.commission_bps_yr)} + ${D.slip_bps} bps slippage ${n0(c.slippage_bps_yr)}, on ${n0(c.turnover_venue_x_yr)}× yearly turnover (${c.orders} venue orders, ${c.orders_per_session} a session; legs crossed inside the book on ${c.sessions_with_a_cross} session${c.sessions_with_a_cross === 1 ? "" : "s"}). Close mode: ${n0(B.costs.drag_bps_yr)}`]);
-  k.forEach(([h, s]) => { const d = document.createElement('div'); d.className = 'kpi'; d.innerHTML = `<b>${h}</b><span>${s}</span>`; document.getElementById('kpis').appendChild(d); });
-})();
+// ---------- headline
+const yrs = W.annual_factor, costYr = (C.commission_bps_yr + C.slippage_bps_yr) / 100;
+$('lede').textContent = `${W.sessions} sessions, ${W.start} to ${W.end}, on $${D.capital.toLocaleString('en-US')} split ${ENG.map(e => Math.round(D.fractions[e] * 100)).join(' / ')}. ` +
+  `Each session the executor's own core decides at ${D.core.decide}:00 ET from the brain's pinned build, sells at market and buys with limit orders, filled at the bar ending a minute later.`;
+$('kpis').innerHTML = [
+  [`${D.dec.ALL.agree} / ${D.dec.ALL.n}`, `engine-days holding what Composer holds (${pc(D.dec.ALL.share)})`],
+  [`${T.sd_bps.toFixed(0)} bps`, `standard deviation of the book's daily return difference (correlation ${T.corr.toFixed(3)})`],
+  [sg(T.cum_gap), `mirror minus Composer; ${sg(TX.cum_gap)} without the no-rebalance stretch`],
+  [`${costYr.toFixed(1)}% a year`, `modelled cost on IBKR: slippage ${(C.slippage_bps_yr / 100).toFixed(1)}%, commission ${(C.commission_bps_yr / 100).toFixed(1)}%`]
+].map(([b, s]) => `<div class="kpi"><b>${b}</b><span>${s}</span></div>`).join('');
 
-// ---------- A: cumulative, four panels
-legend('lgA', [['Composer (deposit-adjusted)', 'var(--s2)', 1], ['mirror, price basis', 'var(--s1)', 1], ['mirror with distributions', 'var(--ctx2)', 1]]);
-function panelA(host, e){
-  const E = D.eng[e], W = width(host), H = 230, l = 44, r = 12, t = 10, b = 24;
-  host.innerHTML = `<h3>${e}</h3><p>from ${E.base}: Composer ${sg(E.t.cum_composer)}, mirror ${sg(E.t.cum_mirror)} (gap ${sg(E.t.cum_gap, 2)}); with distributions ${sg(E.mirror[E.mirror.length - 1][2])}</p>`;
-  const svg = el('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${e}: cumulative return of Composer and the mirror`}, host);
-  const i0 = SI[E.base], n = S.length - 1 - i0, X = i => l + (i - i0) / n * (W - l - r);
-  const all = E.mirror.flatMap(p => [p[1], p[2]]).concat(E.composer.map(p => p[1]), [0]);
-  let lo = Math.min(...all), hi = Math.max(...all); const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
-  const Y = v => t + (hi - v) / (hi - lo) * (H - t - b), step = niceStep(hi - lo, 4), dec = step < 0.0099 ? 1 : 0;
-  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) { el('line', {x1: l, x2: W - r, y1: Y(v), y2: Y(v), stroke: Math.abs(v) < 1e-9 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: l - 5, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, (Math.abs(v) < 1e-9 ? 0 : v * 100).toFixed(dec) + '%'); }
-  monthTicks(svg, X, H - 7, i0);
-  const line = (pts, col, wd) => el('polyline', {points: pts.map(p => `${X(SI[p[0]]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' '), fill: 'none', stroke: col, 'stroke-width': wd, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'}, svg);
-  line(E.mirror.map(p => [p[0], p[2]]), 'var(--ctx2)', 1.2); line(E.composer, 'var(--s2)', 2); line(E.mirror, 'var(--s1)', 2);
-  const cm = Object.fromEntries(E.composer.map(p => [p[0], p[1]])), mm = Object.fromEntries(E.mirror.map(p => [p[0], p]));
-  const cross = el('line', {y1: t, y2: H - b, stroke: 'var(--axis)', 'stroke-width': 1, visibility: 'hidden'}, svg);
-  const hit = el('rect', {x: l, y: t, width: W - l - r, height: H - t - b, fill: 'transparent'}, svg);
-  hit.addEventListener('mousemove', ev => { const bx = svg.getBoundingClientRect(), x = (ev.clientX - bx.left) / bx.width * W; const i = Math.max(i0, Math.min(S.length - 1, Math.round(i0 + (x - l) / (W - l - r) * n))), d = S[i], p = mm[d];
-    cross.setAttribute('x1', X(i)); cross.setAttribute('x2', X(i)); cross.setAttribute('visibility', 'visible');
-    tip(ev, `<b>${e} ${d}</b><br>mirror ${p ? sg(p[1], 2) : '–'} (with distributions ${p ? sg(p[2], 2) : '–'})<br>Composer ${cm[d] == null ? 'no snapshot that day' : sg(cm[d], 2)}`); });
-  hit.addEventListener('mouseleave', () => { cross.setAttribute('visibility', 'hidden'); untip(); });
+// ---------- (a) agreement
+function drawA(){
+  const present = [...new Set(D.misses.map(m => m.c))];
+  $('qa').textContent = `Weights within 3% of Composer's after each rebalance. One square per engine-day that differs (${D.misses.length}).`;
+  $('agree').innerHTML = ENG.map(e => { const d = D.dec[e]; const ms = D.misses.filter(m => m.e === e);
+    return `<div class="arow"><b>${e}</b><span class="ct">${d.agree} <small>/ ${d.n}</small></span><div><div class="bar"><i style="width:${(d.share * 100).toFixed(1)}%"></i></div>` +
+      `<div class="miss">${ms.map((m, i) => `<i data-e="${e}" data-i="${i}" style="background:${CCOL[m.c] || 'var(--neg)'}"></i>`).join('')}</div></div></div>`; }).join('');
+  $('agree').querySelectorAll('.miss i').forEach(n => { const m = D.misses.filter(x => x.e === n.dataset.e)[+n.dataset.i];
+    n.addEventListener('mousemove', ev => tip(ev, `<b>${m.e} ${m.d}</b>: ${NAMES[m.c] || m.c}<br>mirror ${fw(m.m)}<br>Composer ${fw(m.o)}`)); n.addEventListener('mouseleave', untip); });
+  legend('lgA', present.map(c => [`${SHORT[c] || c} (${D.misses.filter(m => m.c === c).length})`, CCOL[c] || 'var(--neg)']));
 }
-// ---------- B: daily difference bars, four panels on one scale
-legend('lgB', [['same holdings into the day', 'var(--s1)'], ['different holdings into the day, or split at that rebalance', 'var(--s2)'], ['the stretch with the no-rebalance days', 'var(--ctx2)'], ['a Composer pay-date credit, or a session without a ledger row', 'var(--s4)'], ['Composer did not rebalance', 'var(--band)'], ['▼ knife-edge session', null]]);
-const KCOL = {plain: 'var(--s1)', apart: 'var(--s2)', norebal: 'var(--ctx2)', note: 'var(--s4)'};
-function panelB(host, e){
-  const E = D.eng[e], W = width(host), H = 190, l = 42, r = 10, t = 16, b = 22, CL = 200;
-  host.innerHTML = `<h3>${e}</h3><p>${E.t.n_daily} daily differences: mean ${bp(E.t.mean_bps)} bps, sd ${E.t.sd_bps.toFixed(0)} bps, correlation ${E.t.corr.toFixed(3)}, beta ${E.t.beta.toFixed(2)}</p>`;
-  const svg = el('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${e}: daily return difference, mirror minus Composer, in basis points`}, host);
-  const n = S.length, gw = (W - l - r) / n, X = i => l + (i + 0.5) * gw, Y = v => t + (CL - Math.max(-CL, Math.min(CL, v))) / (2 * CL) * (H - t - b);
-  el('rect', {x: X(SI['2026-10-26']) - gw / 2, y: t, width: gw * 3, height: H - t - b, fill: 'var(--band)'}, svg);
-  [-200, -100, 0, 100, 200].forEach(v => { el('line', {x1: l, x2: W - r, y1: Y(v), y2: Y(v), stroke: v === 0 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: l - 5, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, (v > 0 ? '+' : '') + v); });
-  monthTicks(svg, X, H - 6);
-  E.knife.forEach(d => { const x = X(SI[d]); el('path', {d: `M${x - 3.5},${t - 10} L${x + 3.5},${t - 10} L${x},${t - 4} Z`, fill: 'var(--ink2)'}, svg); });
-  const placed = {top: [], bot: []}, labels = [];
-  E.bars.forEach(s => {
-    const i1 = SI[s.d], i0 = SI[s.d0] + 1, x0 = l + i0 * gw + Math.min(1, gw * 0.15), wd = Math.max(1.5, (i1 - i0 + 1) * gw - 2 * Math.min(1, gw * 0.15));
-    const y0 = Y(Math.max(0, s.v)), h = Math.max(1, Math.abs(Y(s.v) - Y(0)));
-    el('rect', {x: x0, y: y0, width: wd, height: h, rx: Math.min(2, wd / 2), fill: KCOL[s.k], opacity: s.n > 1 ? 0.75 : 1}, svg);
-    if (Math.abs(s.v) > CL) { const side = s.v > 0 ? 'top' : 'bot', x = Math.min(W - r - 14, Math.max(l + 16, x0 + wd / 2)); let k = 0; while (placed[side].some(p => p.k === k && Math.abs(p.x - x) < 34)) k++; placed[side].push({x, k}); labels.push([x, s.v > 0 ? t + 11 + 12 * k : H - b - 4 - 12 * k, bp(s.v, 0)]); }
-    const hr = el('rect', {x: x0 - 1, y: t, width: wd + 2, height: H - t - b, fill: 'transparent'}, svg);
-    hr.addEventListener('mousemove', ev => tip(ev, `<b>${e} ${s.n > 1 ? s.d0 + ' → ' + s.d + ' (' + s.n + ' sessions)' : s.d}</b><br>mirror ${sg(s.m, 2)}, Composer ${sg(s.o, 2)}: ${bp(s.v)} bps<br>${s.c || ''}`)); hr.addEventListener('mouseleave', untip);
-  });
-  labels.forEach(([x, y, txt]) => el('text', {x, y, 'text-anchor': 'middle', class: 'ax', style: 'fill:var(--ink);paint-order:stroke;stroke:var(--surface);stroke-width:3px;pointer-events:none'}, svg, txt));
-}
-function drawPanels(){
-  [['gA', panelA], ['gB', panelB]].forEach(([id, fn]) => { const g = document.getElementById(id); if (!g.children.length) ENG.forEach(() => { const d = document.createElement('div'); d.className = 'panel'; g.appendChild(d); }); ENG.forEach((e, i) => fn(g.children[i], e)); });
-}
-document.getElementById('tbB').innerHTML = '<thead><tr><th>close mode</th><th class="n">days</th><th class="n">mean, bps</th><th class="n">sd, bps</th><th class="n">t</th><th class="n">corr</th><th class="n">beta</th><th class="n">mirror</th><th class="n">Composer</th><th class="n">gap, net</th><th class="n">gap before costs</th><th class="n">gap without 10-23→10-30</th><th class="n">gap with Composer\'s pay-date credits added</th></tr></thead><tbody>' +
-  ENG.map(e => { const E = D.eng[e], t = E.t; return `<tr><td>${e}</td><td class="n">${t.n_daily}</td><td${cls(t.mean_bps)}>${bp(t.mean_bps)}</td><td class="n">${t.sd_bps.toFixed(1)}</td><td class="n">${f2(t.t)}</td><td class="n">${t.corr.toFixed(3)}</td><td class="n">${t.beta.toFixed(2)}</td><td${cls(t.cum_mirror)}>${sg(t.cum_mirror)}</td><td${cls(t.cum_composer)}>${sg(t.cum_composer)}</td><td${cls(t.cum_gap)}>${sg(t.cum_gap, 2)}</td><td${cls(E.tg.cum_gap)}>${sg(E.tg.cum_gap, 2)}</td><td${cls(E.tx.cum_gap)}>${sg(E.tx.cum_gap, 2)}</td><td${cls(E.tc.cum_gap)}>${sg(E.tc.cum_gap, 2)}</td></tr>`; }).join('') +
-  `<tr><td>Book</td><td class="n">${T.n_daily}</td><td${cls(T.mean_bps)}>${bp(T.mean_bps)}</td><td class="n">${T.sd_bps.toFixed(1)}</td><td class="n">${f2(T.t)}</td><td class="n">${T.corr.toFixed(3)}</td><td class="n">${T.beta.toFixed(2)}</td><td${cls(T.cum_mirror)}>${sg(T.cum_mirror)}</td><td${cls(T.cum_composer)}>${sg(T.cum_composer)}</td><td${cls(T.cum_gap)}>${sg(T.cum_gap, 2)}</td><td${cls(B.tracking_gross.cum_gap)}>${sg(B.tracking_gross.cum_gap, 2)}</td><td${cls(TX.cum_gap)}>${sg(TX.cum_gap, 2)}</td><td class="n">–</td></tr>` +
-  `<tr><td colspan="13" class="note">Book: both sides' engine returns at the mirror's sleeve weights. Worst stretches of the book: ` + T.worst.slice(0, 6).map(w => `${w.n > 1 ? w.d0.slice(5) + '→' : ''}${w.date.slice(5)} ${bp(w.diff_bps, 0)} bps (${(w.cause || '').replace(/ \([^)]*bps of the book\)/, '')})`).join('; ') + '.</td></tr></tbody>';
 
-// ---------- C: KMLM path
-const LEG = {long: ['3x long tech (SOXL, TECL)', 'var(--s1)'], half: ['half 3x long, half SVIX', 'var(--s3)'], inverse: ['3x inverse (SQQQ)', 'var(--s2)'], bonds: ['bonds (TLT)', 'var(--ctx)'], vol: ['long volatility (UVXY)', 'var(--s4)'], other: ['other', 'var(--ctx2)']};
-legend('lgC', [['Composer leg weight', 'var(--s2)', 1], ['mirror leg weight', 'var(--s1)', 1], ['holdings differ', 'var(--band2)']].concat(Object.values(LEG).slice(0, 5)));
+// ---------- (b) returns
+function lineChart(host, pts, o){
+  host.innerHTML = '';
+  const Wd = width(host), H = o.h, m = {l: o.small ? 34 : 42, r: o.small ? 6 : rightM(Wd), t: 8, b: 20};
+  const svg = el('svg', {viewBox: `0 0 ${Wd} ${H}`, role: 'img', 'aria-label': o.label}, host);
+  const i0 = SI[pts[0][0]], i1 = SI[pts[pts.length - 1][0]], X = i => m.l + (i - i0) / Math.max(1, i1 - i0) * (Wd - m.l - m.r);
+  const vals = pts.flatMap(p => [p[1], p[2]]); let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  const step = niceStep((hi - lo) || 0.01, o.small ? 3 : 4); lo = Math.floor(lo / step + 1e-9) * step; hi = Math.ceil(hi / step - 1e-9) * step;
+  const Y = v => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
+  for (let v = lo; v <= hi + 1e-9; v += step) { el('line', {x1: m.l, x2: Wd - m.r, y1: Y(v), y2: Y(v), stroke: Math.abs(v) < 1e-9 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: m.l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, (v * 100).toFixed(0) + '%'); }
+  if (SI[stretch[0]] >= i0) { const a = X(SI[stretch[0]]), b = X(Math.min(SI[stretch[1]], i1)); el('rect', {x: a, y: m.t, width: Math.max(2, b - a), height: H - m.t - m.b, fill: 'var(--band2)'}, svg); }
+  monthTicks(svg, X, H - 5, i0, i1);
+  const path = k => pts.map((p, j) => (j ? 'L' : 'M') + X(SI[p[0]]).toFixed(1) + ' ' + Y(p[k]).toFixed(1)).join('');
+  el('path', {d: path(2), fill: 'none', stroke: 'var(--s2)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'}, svg);
+  el('path', {d: path(1), fill: 'none', stroke: 'var(--s1)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round'}, svg);
+  const last = pts[pts.length - 1];
+  if (!o.small) { let ym = Y(last[1]), yc = Y(last[2]); if (Math.abs(ym - yc) < 15) { const mid = (ym + yc) / 2; if (ym <= yc) { ym = mid - 7.5; yc = mid + 7.5; } else { ym = mid + 7.5; yc = mid - 7.5; } }
+    [[1, 'var(--s1)', ym, 'mirror'], [2, 'var(--s2)', yc, 'Composer']].forEach(([k, c, y, n]) => { el('circle', {cx: X(i1), cy: Y(last[k]), r: 4, fill: c, stroke: 'var(--surface)', 'stroke-width': 2}, svg); el('text', {x: Wd - m.r + 9, y: y + 4, class: 'lbb'}, svg, sg(last[k]) + (Wd >= 560 ? ' ' + n : '')); }); }
+  const vl = el('line', {y1: m.t, y2: H - m.b, stroke: 'var(--ctx2)', 'stroke-dasharray': '3 3', visibility: 'hidden'}, svg);
+  const hit = el('rect', {x: m.l, y: m.t, width: Wd - m.l - m.r, height: H - m.t - m.b, fill: 'transparent'}, svg);
+  hit.addEventListener('mousemove', ev => { const r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) * Wd / r.width; let best = 0, bd = 1e9; pts.forEach((p, j) => { const dx = Math.abs(X(SI[p[0]]) - x); if (dx < bd) { bd = dx; best = j; } });
+    const p = pts[best]; vl.setAttribute('x1', X(SI[p[0]])); vl.setAttribute('x2', X(SI[p[0]])); vl.setAttribute('visibility', 'visible');
+    tip(ev, `<b>${p[0]}</b>${o.name ? ' ' + o.name : ''}<br>mirror ${sg(p[1])}<br>Composer ${sg(p[2])}<br>gap ${sg(p[1] - p[2], 2)}`); });
+  hit.addEventListener('mouseleave', () => { vl.setAttribute('visibility', 'hidden'); untip(); });
+}
+const KCOL = {plain: 'var(--s1)', apart: 'var(--s4)', norebal: 'var(--ctx2)'};
+function rightM(Wd){ return Wd >= 560 ? 124 : 60; }
+function diffBars(host, bars, clip){
+  host.innerHTML = '';
+  const Wd = width(host), H = 100, m = {l: 42, r: rightM(Wd), t: 12, b: 8};
+  const svg = el('svg', {viewBox: `0 0 ${Wd} ${H}`, role: 'img', 'aria-label': 'Daily return difference, mirror minus Composer, in basis points'}, host);
+  const i0 = SI[bars[0].d0], i1 = SI[bars[bars.length - 1].d], X = i => m.l + (i - i0) / Math.max(1, i1 - i0) * (Wd - m.l - m.r);
+  const Y = v => m.t + (clip - v) / (2 * clip) * (H - m.t - m.b), w1 = (Wd - m.l - m.r) / Math.max(1, i1 - i0);
+  [-clip, 0, clip].forEach(v => { el('line', {x1: m.l, x2: Wd - m.r, y1: Y(v), y2: Y(v), stroke: v ? 'var(--grid)' : 'var(--axis)'}, svg); el('text', {x: m.l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, (v > 0 ? '+' : '') + v); });
+  let lastLab = null;
+  bars.forEach(b => { const a = X(SI[b.d0]), z = X(SI[b.d]), v = Math.max(-clip, Math.min(clip, b.v)), y0 = Y(0), y1 = Y(v);
+    const g = el('rect', {x: a + 1, width: Math.max(1.5, z - a - 1.5), y: Math.min(y0, y1), height: Math.max(1, Math.abs(y1 - y0)), fill: KCOL[b.k], rx: 1.5}, svg);
+    if (Math.abs(b.v) > clip) { const x = (a + z) / 2, near = lastLab != null && x - lastLab < 34; lastLab = x;      // two clipped bars side by side: the labels step apart
+      el('text', {x: near ? x + 4 : x, y: b.v < 0 ? (near ? H - 14 : H - 1) : (near ? 22 : 9), 'text-anchor': near ? 'start' : 'middle', class: 'lb'}, svg, bp(b.v, 0)); }
+    const hit = el('rect', {x: a, width: Math.max(4, z - a), y: m.t, height: H - m.t - m.b, fill: 'transparent'}, svg);
+    hit.addEventListener('mousemove', ev => tip(ev, `<b>${b.n > 1 ? b.d0 + ' → ' : ''}${b.d}</b>${b.n > 1 ? ` (${b.n} sessions)` : ''}<br>mirror ${sg(b.m, 2)}, Composer ${sg(b.o, 2)}: ${bp(b.v)} bps<br>${b.c || ''}`));
+    hit.addEventListener('mouseleave', untip); });
+  el('text', {x: Wd - m.r + 9, y: Y(0) - 3, class: 'lb'}, svg, Wd >= 560 ? `mean ${bp(T.mean_bps)} bps` : bp(T.mean_bps));
+  el('text', {x: Wd - m.r + 9, y: Y(0) + 12, class: 'lb'}, svg, Wd >= 560 ? `SD ${T.sd_bps.toFixed(1)} bps` : '±' + T.sd_bps.toFixed(0));
+}
+function drawB(){
+  $('qb').textContent = `Cumulative return of the book, both sides at the mirror's sleeve weights. Before costs the gap is ${sg(B.tg.cum_gap)}, and ${sg(B.tgx.cum_gap)} outside the shaded stretch.`;
+  legend('lgB', [['mirror on paper, after costs', 'var(--s1)', 1], ['Composer, deposit-adjusted', 'var(--s2)', 1], [`Composer did not rebalance (${md(W.no_rebalance[0])} to ${md(W.no_rebalance[W.no_rebalance.length - 1])})`, 'var(--band2)']]);
+  lineChart($('cum'), B.pts, {h: 200, label: 'Cumulative return of the book, mirror and Composer'});
+  legend('lgD', [['same holdings into the day', KCOL.plain], ['different holdings into the day', KCOL.apart], ['the no-rebalance stretch', KCOL.norebal]]);
+  diffBars($('diff'), B.bars, 60);
+  $('sm').innerHTML = ENG.map(e => { const t = D.eng[e].t; return `<div><h3>${e} <span class="mut" style="font-weight:400">${sg(t.cum_gap)}</span></h3><p>${sg(t.cum_mirror)} vs ${sg(t.cum_composer)}</p><div id="sm${e}"></div></div>`; }).join('');
+  ENG.forEach(e => lineChart($('sm' + e), D.eng[e].pts, {h: 104, small: 1, name: e, label: `${e}: cumulative return, mirror and Composer`}));
+}
+
+// ---------- (c) costs
 function drawC(){
-  const svg = document.getElementById('chC'), W = width(svg.parentNode) - 34, H = 300, l = 58, r = 10, t = 12, pb = 190, sH = 16;
-  svg.innerHTML = ''; svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  const K = D.kmlm, n = S.length, gw = (W - l - r) / n, X = i => l + (i + 0.5) * gw, lo = 0.66, hi = 0.84, Y = v => t + (hi - Math.max(lo, Math.min(hi, v))) / (hi - lo) * (pb - t);
-  K.forEach(k => { if (k.dist != null && k.dist > 0.03) el('rect', {x: l + SI[k.d] * gw, y: t, width: gw, height: H - 26 - t, fill: 'var(--band2)'}, svg); });
-  [0.70, 0.75, 0.80].forEach(v => { el('line', {x1: l, x2: W - r, y1: Y(v), y2: Y(v), stroke: v === 0.75 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: l - 5, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, (v * 100).toFixed(0) + '%'); });
-  const step = (key, col) => { let d = '', pen = false; K.forEach(k => { const v = k[key]; if (v == null) { pen = false; return; } const x0 = l + SI[k.d] * gw, y = Y(v); d += (pen ? 'L' : 'M') + x0.toFixed(1) + ',' + y.toFixed(1) + 'L' + (x0 + gw).toFixed(1) + ',' + y.toFixed(1); pen = true; }); el('path', {d, fill: 'none', stroke: col, 'stroke-width': 2, 'stroke-linejoin': 'round'}, svg); };
-  step('cl', 'var(--s2)'); step('ml', 'var(--s1)');
-  [['cc', 'Composer', pb + 14], ['mc', 'mirror', pb + 14 + sH + 6]].forEach(([key, name, y]) => {
-    el('text', {x: l - 5, y: y + 12, 'text-anchor': 'end', class: 'ax'}, svg, name);
-    K.forEach(k => { if (k[key]) el('rect', {x: l + SI[k.d] * gw + 0.5, y, width: Math.max(1, gw - 1), height: sH, rx: 1.5, fill: LEG[k[key]][1]}, svg); });
-  });
-  monthTicks(svg, X, H - 8);
-  const hit = el('rect', {x: l, y: t, width: W - l - r, height: H - 26 - t, fill: 'transparent'}, svg);
-  hit.addEventListener('mousemove', ev => { const bx = svg.getBoundingClientRect(), x = (ev.clientX - bx.left) / bx.width * W, i = Math.max(0, Math.min(n - 1, Math.floor((x - l) / gw))), k = K.find(q => q.d === S[i]); if (!k) return;
-    tip(ev, `<b>KMLM ${k.d}</b><br>mirror (${k.a}${k.gap != null ? ', gap ' + (k.gap * 100).toFixed(1) + 'pp' : ''}): ${fw(k.m)}<br>Composer: ${k.c ? fw(k.c) : 'no ledger row'}${k.dist != null ? `<br>half-L1 ${(k.dist * 100).toFixed(1)}%` + (k.cls ? ` · ${NAMES[k.cls] || k.cls}` : '') : ''}`); });
-  hit.addEventListener('mouseleave', untip);
+  const U = C.unfilled, dist = C.distributions, cash = C.cash;
+  const rows = [
+    ['Slippage', `${D.slip_bps} bps a trade, assumed`, C.slippage_bps_yr, 0],
+    ['Commission', `IBKR tiered, ${C.orders} orders`, C.commission_bps_yr, 0],
+    ['Idle cash', `${pc(cash.mean_share_invested, 2)} of a sleeve, on average`, cash.drag_bps_yr, 0],
+    ['Unfilled limit buys', `${U.unfilled_orders} of ${U.buy_orders} buy orders`, U.cost_bps_yr, 0],
+    ['Dividends left unallocated', `${usd(dist.leaked_usd)} of ${usd(dist.accrued_usd)}`, dist.leaked_bps_yr, 1]];
+  const mx = Math.max(...rows.map(r => Math.abs(r[2])));
+  $('qc').textContent = `Percent of the book a year, at this window's ${C.turnover_x_yr.toFixed(0)}x turnover.`;
+  $('cost').innerHTML = rows.map(([n, s, v, ctx]) => `<div class="crow"><div>${n}<small>${s}</small></div><div><div class="cbar${ctx ? ' ctx' : ''}" style="width:${(Math.abs(v) / mx * 100).toFixed(1)}%"></div></div><div class="v">${(v / 100).toFixed(2)}%</div></div>`).join('') +
+    `<div class="sum"><span>Loss against Composer (the first two)</span><b>${costYr.toFixed(2)}%</b></div>`;
+  const bm = Object.entries(U.by_decision_minute).filter(([k]) => k !== D.core.decide).map(([, v]) => v.unfilled_orders);
+  $('capc').textContent = `A missed buy idles its sleeve for a session (${Math.min(...bm)} to ${Math.max(...bm)} at other decision minutes). Unallocated dividends stay in the account, as on Composer.`;
 }
-(function(){
-  const row = x => `<tr><td>${x.start}${x.end !== x.start ? ' → ' + x.end : ''}</td><td class="n">${x.sessions}</td><td>${NAMES[x.origin] || x.origin}</td><td${cls(x.returns_known ? x.cost_bps : null)}>${x.returns_known ? bp(x.cost_bps) : 'inside a multi-session stretch'}</td><td class="n">${x.returns_known} of ${x.sessions}</td></tr>`;
-  const sum = xs => xs.filter(x => x.returns_known).reduce((s, x) => s + x.cost_bps, 0), big = (D.eng.KMLM.bars.find(b => b.d === '2026-10-30') || {}).v;
-  document.getElementById('tbC').innerHTML = '<thead><tr><th>KMLM sessions apart, close mode</th><th class="n">sessions</th><th>how it started</th><th class="n">cost (−) or gain (+), bps of the sleeve</th><th class="n">daily returns known</th></tr></thead><tbody>' + D.episodes.map(row).join('') +
-    `<tr><td colspan="5" class="note">Cost: the mirror's return minus Composer's on the sessions entered with different holdings; the known ones sum to ${bp(sum(D.episodes), 0)} bps. The 10-26..10-29 stretch has no daily Composer value; over 10-23→10-30 the KMLM mirror trailed by ${bp(big, 0)} bps (Composer stayed in its 10-23 holdings and that paid). One side rebalanced and the other did not on: ` + (D.dis.filter(x => x.engine === 'KMLM' && x.class === 'corridor-path').map(x => `${x.date.slice(5)} (${x.note})`).join('; ') || 'no session') + '.' +
-    (D.full ? ` Deciding at 15:55 instead, KMLM is apart on ${D.full.episodes.length} stretches: ` + D.full.episodes.map(x => `${x.start.slice(5)}${x.end !== x.start ? '→' + x.end.slice(5) : ''} (${NAMES[x.origin] || x.origin}${x.returns_known ? ', ' + bp(x.cost_bps, 0) + ' bps' : ''})`).join('; ') + `; ${F55.classes['corridor-path'] || 0} corridor-path sessions.` : '') + '</td></tr></tbody>';
-})();
 
-// ---------- D: disagreements
-(function(){
-  const keys = Object.keys(NAMES).filter(k => D.decisions.ALL.classes[k] || (F55 && F55.classes[k])), LS = D.window.ledger_status || {};
-  document.getElementById('subD').textContent = `The mirror's post-trade weights against Composer's holdings after its rebalance, ${D.decisions.ALL.n} engine-days. Close mode: ${D.decisions.ALL.n - D.decisions.ALL.agree} differ by more than 3%; ${D.decisions.ALL.classes.other || 0} are unexplained and ${D.decisions.ALL.classes['whole-share'] || 0} come from whole shares or the cash reserve. (The ledger itself has ${LS['knife-edge'] || 0} knife-edge and ${LS['no-rebalance'] || 0} no-rebalance engine-days; on some of them the two books still hold the same.)` + (F55 ? ` Deciding at 15:55, ${F55.decisions.ALL.n - F55.decisions.ALL.agree} differ: most of the ledger's knife-edges disappear, and ${F55.classes['decision-minute'] || 0} new ones appear where the call flipped after 15:55.` : '');
-  document.getElementById('tbD1').innerHTML = '<thead><tr><th>class</th>' + ENG.map(e => `<th class="n">${e}</th>`).join('') + '<th class="n">all, close mode</th>' + (F55 ? '<th class="n">all, deciding at 15:55</th>' : '') + '</tr></thead><tbody>' +
-    keys.map(k => `<tr><td>${NAMES[k]}</td>` + ENG.map(e => `<td class="n">${D.decisions[e].classes[k] || 0}</td>`).join('') + `<td class="n">${D.decisions.ALL.classes[k] || 0}</td>` + (F55 ? `<td class="n">${k === 'agree' ? F55.decisions.ALL.agree : (F55.classes[k] || 0)}</td>` : '') + '</tr>').join('') +
-    '<tr><td>engine-days compared</td>' + ENG.map(e => `<td class="n">${D.decisions[e].n}</td>`).join('') + `<td class="n">${D.decisions.ALL.n}</td>` + (F55 ? `<td class="n">${F55.decisions.ALL.n}</td>` : '') + '</tr>' +
-    '<tr><td>share with the same holdings</td>' + ENG.map(e => `<td class="n">${pc(D.decisions[e].share)}</td>`).join('') + `<td class="n">${pc(D.decisions.ALL.share)}</td>` + (F55 ? `<td class="n">${pc(F55.decisions.ALL.share)}</td>` : '') + '</tr></tbody>';
-  const row = x => `<tr><td>${x.date}</td><td>${x.engine}</td><td>${NAMES[x.class] || x.class}</td><td class="n">${pc(x.dist)}</td><td>${fw(x.mirror)}</td><td>${fw(x.composer)}</td><td>${x.note}</td></tr>`;
-  const head = '<thead><tr><th>session</th><th>engine</th><th>class</th><th class="n">half-L1</th><th>mirror holds</th><th>Composer holds</th><th>why</th></tr></thead><tbody>';
-  document.getElementById('tbD').innerHTML = head + D.dis.map(row).join('') + '</tbody>';
-  document.getElementById('tbD2').innerHTML = head + (D.full ? D.full.dis : D.minute.dis).map(row).join('') + '</tbody>';
-})();
+// ---------- honesty, one line each
+$('honest').innerHTML = [
+  `In sample, one window: ${W.sessions} sessions in which Composer's book rose ${pc(T.cum_composer)}. Nothing here is a forecast.`,
+  `Fills are modelled, never executed: 1-minute bar closes, ${D.slip_bps} bps of slippage assumed, IBKR's tiered commission.`,
+  `Composer's side is its deposit-adjusted value in the monitor's snapshots: ${T.n_daily} one-day comparisons; sessions without a closing snapshot are compared as multi-day stretches.`
+].map(x => `<li>${x}</li>`).join('');
 
-// ---------- E: minute vs close
-(function(){
-  const lab = r => r.label === 'close' ? 'on the close, filled at the close (close mode)' : r.fill === 'close' ? `${r.decide}, filled at the close` : `${r.decide}, filled a minute later`;
-  const head = '<thead><tr><th>decided</th><th class="n">same holdings</th><th class="n">share</th><th class="n">HG · KMLM · SLEEVE · HARV</th><th class="n">days</th><th class="n">mean, bps</th><th class="n">sd, bps</th><th class="n">corr</th><th class="n">gap</th><th class="n">gap without 10-23→10-30</th><th class="n">orders filled at the close instead</th><th class="n">sessions with cash below zero (worst)</th></tr></thead><tbody>';
-  const over = r => r.overspent && r.overspent.length ? `${r.overspent.length} (${worst(r.overspent)})` : '0';
-  const row = r => `<tr><td>${lab(r)}</td><td class="n">${r.decisions.ALL.agree}/${r.decisions.ALL.n}</td><td class="n">${pc(r.decisions.ALL.share)}</td><td class="n">${ENG.map(e => r.decisions[e].agree).join(' · ')}</td><td class="n">${r.book.n_daily}</td><td${cls(r.book.mean_bps)}>${bp(r.book.mean_bps)}</td><td class="n">${r.book.sd_bps.toFixed(1)}</td><td class="n">${r.book.corr.toFixed(3)}</td><td${cls(r.book.cum_gap)}>${sg(r.book.cum_gap, 2)}</td><td${cls(r.book_ex.cum_gap)}>${sg(r.book_ex.cum_gap, 2)}</td><td class="n">${r.info ? (r.fill === 'close' ? 'all' : `${r.info.fallbacks} of ${r.info.orders}`) : 'all'}</td><td class="n">${over(r)}</td></tr>`;
-  const foot = x => `<tr><td colspan="12" class="note">Deciding at 15:55, by engine (mean / sd of the daily difference in bps, t, cumulative gap): ` + ENG.map(e => `${e} ${bp(x.engines[e].mean_bps)} / ${x.engines[e].sd_bps.toFixed(0)} / ${f2(x.engines[e].t)} / ${sg(x.engines[e].cum_gap, 2)}`).join('; ') + `. Orders that fell back to the close, by fund: ${Object.entries(x.info.fallback_tickers).map(([t, k]) => `${t} ${k}`).join(', ') || 'none'}. Cash below zero: the fill was above the sizing reference by more than mirror_core's 0.3% buy cushion, so the sleeve spent cash it did not have.</td></tr>`;
-  document.getElementById('subE').textContent = `Sessions ${D.minute.start}..${D.window.end} (${R55.info.covered}); the book arrives from close mode, invested. Minute mode decides with mirror_brain.build() on FMP's 1-minute trades up to the decision time (15:55 reads the bar that starts 15:54: the executor's decision instant) and fills at the close of the bar that starts then, or at the day's close when the fund did not trade that minute. The last rows fill at the official close instead (a market-on-close order; deciding near 15:45 and filling at the close was the first draft of the design, since replaced by the 15:54 bar and market orders). Tracking is the book at the mirror's weights, net of costs.`;
-  document.getElementById('tbE').innerHTML = head + D.minute.rows.map(row).join('') + foot(R55) + '</tbody>';
-  if (D.full) {
-    const r45 = D.full.rows.find(r => r.label === '15:45');
-    document.getElementById('subE3').textContent = `The same over the whole window (${D.full.start}..${D.window.end}, ${F55.info.covered} sessions, the book seeded in cash on the first): three times the engine-days, same construction. HARV has no approved tree before 07-22, so the brain gives it no decision on the first ${F55.info.unavailable.length} sessions.`;
-    document.getElementById('tbE3').innerHTML = head + D.full.rows.map(row).join('') + foot(F55) +
-      `<tr><td colspan="12" class="note">Why the 15:45 runs trail: mostly one session. Their worst stretches: ` + (r45.book_worst || []).slice(0, 3).map(w => `${w.n > 1 ? w.d0.slice(5) + '→' : ''}${w.date.slice(5)} ${bp(w.diff_bps, 0)} bps of the book (${(w.cause || '').replace(/ \([^)]*bps of the book\)/, '')})`).join('; ') + `. On 10-30 the tree read TECL at 15:45 and SQQQ by 15:54, as Composer did; the 15:55 run's worst after the no-rebalance stretch is ${(F55.book_worst || []).slice(1, 2).map(w => `${w.date.slice(5)} ${bp(w.diff_bps, 0)} bps`).join('')}.</td></tr></tbody>`;
-  }
-})();
+// ---------- collapsed: every run
+function runRow(r){ const d = r.dec, b = r.book;
+  return `<tr><td class="lab">${r.label === 'close' ? 'Close: the ledger\'s target, filled at the close' : r.fill === 'close' ? `${r.decide}, filled at the close` : `${r.decide}, filled a minute later`}</td>` +
+    `<td class="n">${d.ALL.agree} / ${d.ALL.n} (${pc(d.ALL.share)})</td><td class="n">${ENG.map(e => d[e].agree).join(' / ')}</td>` +
+    `<td${cls(b.mean_bps)}>${bp(b.mean_bps, 2)}</td><td class="n">${f2(b.sd_bps)}</td><td class="n">${b.corr == null ? '–' : b.corr.toFixed(3)}</td><td class="n">${f2(b.beta)}</td>` +
+    `<td${cls(b.cum_gap)}>${sg(b.cum_gap, 2)}</td><td${cls(r.ex.cum_gap)}>${sg(r.ex.cum_gap, 2)}</td><td${cls(r.gross_ex.cum_gap)}>${sg(r.gross_ex.cum_gap, 2)}</td>` +
+    `<td class="n">${r.limit_at === 'fill' ? 're-quoted' : r.limit.unfilled_orders + ' / ' + r.limit.buy_orders}</td><td${cls(r.filled.ex)}>${sg(r.filled.ex, 2)}</td></tr>`; }
+function drawRuns(){
+  $('sRuns').textContent = ` ${D.runs.length} runs; holdings agree on ${Math.min(...D.runs.map(r => r.dec.ALL.agree))} to ${Math.max(...D.runs.map(r => r.dec.ALL.agree))} of ${D.dec.ALL.n} engine-days`;
+  $('tbRuns').innerHTML = `<thead><tr><th>Run</th><th class="n">Same holdings</th><th class="n">HG / KMLM / SLEEVE / HARV</th><th class="n">Mean, bps a day</th><th class="n">SD</th><th class="n">Corr</th><th class="n">Beta</th><th class="n">Gap</th><th class="n">Gap without ${md(stretch[0])} to ${md(stretch[1])}</th><th class="n">The same before costs</th><th class="n">Buys unfilled</th><th class="n">Gap without the stretch if every buy fills</th></tr></thead><tbody>${D.runs.map(runRow).join('')}</tbody>`;
+  const fb = D.info.fallback_tickers, worst = D.runs.filter(r => r.limit_at !== 'fill').sort((a, b) => b.book.sd_bps - a.book.sd_bps)[0];
+  $('pRuns').textContent = `Book level, ${T.n_daily} one-day comparisons, booked basis against Composer's deposit-adjusted value, both sides at the mirror's sleeve weights, after modelled costs unless stated. ` +
+    `A buy left unfilled leaves its sleeve in cash until the next session: in the ${worst.label} run ${worst.limit.unfilled_orders} such buys make the SD ${f2(worst.book.sd_bps)} bps (${f2(worst.filled.sd)} when every buy fills). ` +
+    `The last column re-quotes each limit at the fill, as the live executor does after its sells, so every buy fills and only the timing differs; a fill at the close is shown that way only. ` +
+    `In the ${P0.decide} run ${D.info.fallbacks} of ${D.info.orders} orders had no trade in their fill minute and filled at the close (${Object.entries(fb).map(([t, n]) => `${t} ${n}`).join(', ')}).`;
+}
 
-// ---------- F: causes and edges
-(function(){
-  const causes = {}; ENG.forEach(e => Object.entries(D.eng[e].by_cause).forEach(([k, v]) => { const key = k.replace(/ on [0-9, -]+$/, ''); const c = (causes[key] = causes[key] || {}); c[e] = {n: ((c[e] || {}).n || 0) + v.n, s: ((c[e] || {}).s || 0) + v.sum_bps}; }));
-  const tot = k => ENG.reduce((s, e) => s + Math.abs((causes[k][e] || {}).s || 0), 0), order = Object.keys(causes).sort((a, b) => tot(b) - tot(a));
-  document.getElementById('tbF').innerHTML = '<thead><tr><th class="lab">cause of the stretch\'s difference (bps of the sleeve, summed; stretches)</th>' + ENG.map(e => `<th class="n">${e}</th>`).join('') + '</tr></thead><tbody>' +
-    order.map(k => `<tr><td class="lab">${k}</td>` + ENG.map(e => { const c = causes[k][e]; return c ? `<td${cls(c.s)}>${bp(c.s, 0)} (${c.n})</td>` : '<td class="n">–</td>'; }).join('') + '</tr>').join('') +
-    '<tr><td class="lab">all stretches</td>' + ENG.map(e => { const s = D.eng[e].bars.reduce((a, b) => a + b.v, 0); return `<td${cls(s)}>${bp(s, 0)} (${D.eng[e].bars.length})</td>`; }).join('') + '</tr>' +
-    '<tr><td class="lab">of which the mirror\'s modelled costs</td>' + ENG.map(e => { const c = -(D.eng[e].costs.commission + D.eng[e].costs.slippage) / D.eng[e].avg_equity * 1e4; return `<td${cls(c)}>${bp(c, 0)}</td>`; }).join('') + '</tr></tbody>';
-  const Tm = D.edge.timing, K = D.edge.knife, st = s => s && s.n ? `${bp(s.mean)} (t ${f2(s.t)}, n ${s.n})` : '–', FL = D.fills;
-  if (Tm) document.getElementById('tbF2').innerHTML = '<thead><tr><th class="lab">candidate: a fill at the close instead of at 15:53 (Composer\'s rotation engine-days; bps of the sleeve per rotation; + favours the close)</th><th class="n">actual</th><th class="n">placebo: the same trades on the previous session\'s last minutes</th></tr></thead><tbody>' +
-    [['all rotation engine-days', Tm.all], ...ENG.map(e => [e, Tm[e]]), ['days SPY fell', Tm.spy_down_day], ['days SPY rose', Tm.spy_up_day], ['SPY moved 1% or more', Tm.spy_move_over_1pct], ['SPY moved under 1%', Tm.spy_move_under_1pct]].map(([n, s]) => `<tr><td class="lab">${n}</td><td class="n">${st(s)}</td><td class="n">${st(s.placebo)}</td></tr>`).join('') +
-    `<tr><td class="lab">without the three largest (${Tm.without_top3.dropped.map(x => `${x[0].slice(5)} ${x[1]} ${bp(x[2], 0)}`).join(', ')})</td><td class="n">${st(Tm.without_top3)}</td><td class="n"></td></tr>` +
-    `<tr><td class="lab">one observation per day (engines averaged)</td><td class="n">${st(Tm.by_day_mean)}</td><td class="n"></td></tr>` +
-    (D.edge.timing_1555 ? `<tr><td class="lab">measured from 15:55 instead (the last five minutes only)</td><td class="n">${st(D.edge.timing_1555.all)}</td><td class="n">${st(D.edge.timing_1555.all.placebo)}</td></tr>` : '') +
-    `<tr><td colspan="3" class="note">` + (FL ? `Composer's own fills, ${FL.from}..${FL.to}: ${Object.entries(FL.by_minute).map(([m, k]) => `${m} ${k}`).join(', ')} (results/slippage-ledger.json). ` : '') + (Tm.vs_realised ? `Check against the realised difference on the same engine-days (close-mode mirror before its costs − Composer): correlation ${f2(Tm.vs_realised.corr)}, realised mean ${bp(Tm.vs_realised.realised_mean_bps)} bps vs ${bp(Tm.vs_realised.timing_mean_bps)} bps from the minute prices. ` : '') + `Read: the sign favours the later fill for HG and HARV, but HG's placebo is as large with the opposite sign, the pooled t is ${f2(Tm.all.t)}, and one observation per day gives t ${f2(Tm.by_day_mean.t)}. A candidate, not an edge.</td></tr></tbody>`;
-  document.getElementById('tbF3').innerHTML = '<thead><tr><th class="lab">other candidates</th>' + ENG.map(e => `<th class="n">${e}</th>`).join('') + '<th class="n">all</th></tr></thead><tbody>' +
-    '<tr><td class="lab">deciding on the close instead of in Composer\'s minutes: the session after a knife-edge, mirror − Composer, bps</td>' + ENG.map(e => `<td class="n">${st(K[e])}</td>`).join('') + `<td class="n">${st(K.all)}</td></tr>` +
-    '<tr><td class="lab">no trade on either side: the comparison\'s own noise, bps a day (mean ± sd, days)</td>' + [...ENG, 'all'].map(e => { const s = D.noise[e]; return `<td class="n">${s.n ? bp(s.mean) + ' ± ' + s.sd.toFixed(1) + ' (' + s.n + ')' : '–'}</td>`; }).join('') + '</tr>' +
-    '<tr><td class="lab">distributions the mirror sleeve would have collected (share of the average sleeve)</td>' + ENG.map(e => `<td class="n">${usd(D.eng[e].dist.usd)} (${pc(D.eng[e].dist.pct_of_sleeve, 2)})</td>`).join('') + `<td class="n">${usd(B.distributions_usd)} (${pc(B.distributions_usd / B.avg_equity, 2)})</td></tr>` +
-    '<tr><td class="lab">… that Composer books inside the symphony on the pay date (payer still held; add. 38 pay lags)</td>' + ENG.map(e => `<td class="n">${usd(D.eng[e].dist.held_through_usd)}</td>`).join('') + `<td class="n">${usd(ENG.reduce((s, e) => s + D.eng[e].dist.held_through_usd, 0))}</td></tr>` +
-    '<tr><td class="lab">… that lands in Composer\'s ACCOUNT cash, outside the symphony\'s figure</td>' + ENG.map(e => `<td class="n">${usd(D.eng[e].dist.leaked_usd + D.eng[e].dist.ambiguous_usd)}</td>`).join('') + `<td class="n">${usd(ENG.reduce((s, e) => s + D.eng[e].dist.leaked_usd + D.eng[e].dist.ambiguous_usd, 0))}</td></tr>` +
-    '<tr><td class="lab">gap on the total basis (mirror with distributions − Composer\'s symphony figure)</td>' + ENG.map(e => `<td${cls(D.eng[e].tt.cum_gap)}>${sg(D.eng[e].tt.cum_gap, 2)}</td>`).join('') + '<td class="n">–</td></tr></tbody>';
-})();
+// ---------- collapsed: the misses
+function drawMiss(){
+  const by = {}; D.misses.forEach(m => by[m.c] = (by[m.c] || 0) + 1);
+  $('sMiss').textContent = ' ' + Object.entries(by).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${n} ${NAMES[c] || c}`).join(', ');
+  $('tbMiss').innerHTML = `<thead><tr><th>Day</th><th>Engine</th><th>Cause</th><th>Mirror holds</th><th>Composer holds</th><th class="n">Apart</th><th>Note</th></tr></thead><tbody>` +
+    D.misses.map(m => `<tr><td class="n">${m.d}</td><td>${m.e}</td><td>${NAMES[m.c] || m.c}</td><td>${fw(m.m)}</td><td>${fw(m.o)}</td><td class="n">${pc(m.dist, 0)}</td><td class="note">${m.note}</td></tr>`).join('') + '</tbody>';
+}
 
-// ---------- G: costs and sensitivities
-(function(){
-  document.getElementById('tbG').innerHTML = '<thead><tr><th>close mode, ' + D.window.sessions + ' sessions</th><th class="n">average sleeve</th><th class="n">commission</th><th class="n">slippage</th><th class="n">drag, bps a year</th><th class="n">of which commission</th><th class="n">turnover a year</th><th class="n">trades / holds / no decision</th></tr></thead><tbody>' +
-    ENG.map(e => { const c = D.eng[e].costs, a = D.eng[e].actions; return `<tr><td>${e}</td><td class="n">${usd(D.eng[e].avg_equity)}</td><td class="n">${usd(c.commission)}</td><td class="n">${usd(c.slippage)}</td><td class="n">${n0(c.drag_bps_yr)}</td><td class="n">${n0(c.commission_bps_yr)}</td><td class="n">${n0(c.turnover_venue_x_yr)}×</td><td class="n">${a.trade || 0} / ${a.hold || 0} / ${a.skip || 0}</td></tr>`; }).join('') +
-    `<tr><td>Book</td><td class="n">${usd(B.avg_equity)}</td><td class="n">${usd(B.costs.commission)}</td><td class="n">${usd(B.costs.slippage)}</td><td class="n">${n0(B.costs.drag_bps_yr)}</td><td class="n">${n0(B.costs.commission_bps_yr)}</td><td class="n">${n0(B.costs.turnover_venue_x_yr)}×</td><td class="n">–</td></tr>` +
-    `<tr><td colspan="8" class="note">${B.costs.orders} venue orders (${B.costs.orders_per_session} a session); opposite legs crossed inside the book on ${B.costs.sessions_with_a_cross} sessions (${usd(B.costs.crossed)} of ${usd(B.costs.traded + B.costs.crossed)} traded). The commission is per share, so the cheap funds carry it: ZVOL near $7 pays about 5 bps a side, which is why HARV's commission alone is ${n0(D.eng.HARV.costs.commission_bps_yr)} bps a year.</td></tr></tbody>`;
-  const SL = D.sens.slip_bps, SD = D.sens.seed, GF = D.sens.ledger_gaps_filled_from_the_tree;
-  const rowS = (n, h) => `<tr><td class="lab">${n}</td><td${cls(h.book.cum_mirror)}>${sg(h.book.cum_mirror)}</td><td${cls(h.book.cum_composer)}>${sg(h.book.cum_composer)}</td><td${cls(h.book.cum_gap)}>${sg(h.book.cum_gap, 2)}</td><td${cls(h.book_ex.cum_gap)}>${sg(h.book_ex.cum_gap, 2)}</td><td${cls(h.book.mean_bps)}>${bp(h.book.mean_bps)}</td><td class="n">${h.book.sd_bps.toFixed(1)}</td><td class="n">${n0(h.costs.drag_bps_yr)}</td><td class="n">${h.decisions.ALL.agree}/${h.decisions.ALL.n}</td></tr>`;
-  const rowO = (n, v) => { const t = v.vs_composer_own_book, x = v.vs_composer_own_book_ex_no_rebalance; return `<tr><td class="lab">${n}</td><td${cls(t.cum_mirror)}>${sg(t.cum_mirror)}</td><td${cls(t.cum_composer)}>${sg(t.cum_composer)}</td><td${cls(t.cum_gap)}>${sg(t.cum_gap, 2)}</td><td${cls(x.cum_gap)}>${sg(x.cum_gap, 2)}</td><td${cls(t.mean_bps)}>${bp(t.mean_bps)}</td><td class="n">${t.sd_bps.toFixed(1)}</td><td class="n">–</td><td class="n">–</td></tr>`; };
-  document.getElementById('tbG2').innerHTML = '<thead><tr><th class="lab">sensitivity (close mode, book)</th><th class="n">mirror</th><th class="n">Composer</th><th class="n">gap</th><th class="n">gap without 10-23→10-30</th><th class="n">mean, bps a day</th><th class="n">sd</th><th class="n">cost drag, bps a year</th><th class="n">same holdings</th></tr></thead><tbody>' +
-    Object.entries(SL).map(([k, h]) => rowS(`slippage ${k} bps` + (+k === D.slip_bps ? ' (base)' : ''), h)).join('') + rowS('ledger gaps decided from the approved tree instead of standing still', GF) +
-    `<tr><td colspan="9" class="note">Against Composer's OWN book (its real engine weights: ${Object.entries(SD.composer_weights).map(([e, w]) => `${e} ${Math.round(w * 100)}`).join(' / ')} on ${SD.from}, drifting to ${Object.entries(SD.composer_weights_end).map(([e, w]) => `${e} ${Math.round(w * 100)}`).join(' / ')}), from ${SD.from}, the first session all four engines existed:</td></tr>` +
-    Object.entries(SD.runs).map(([k, v]) => rowO('seed: ' + k, v)).join('') + '</tbody>';
-})();
+// ---------- collapsed: worst days, per engine
+function drawWorst(){
+  const w = T.worst || [];
+  $('sWorst').textContent = w.length ? ` the largest: ${bp(w[0].diff_bps, 0)} bps over ${md(w[0].d0)} to ${md(w[0].date)}` : '';
+  $('tbWorst').innerHTML = `<thead><tr><th>From</th><th>To</th><th class="n">Sessions</th><th class="n">Mirror</th><th class="n">Composer</th><th class="n">Difference, bps</th><th>Largest part and its cause</th></tr></thead><tbody>` +
+    w.map(x => `<tr><td class="n">${x.d0}</td><td class="n">${x.date}</td><td class="n">${x.n}</td><td class="n">${sg(x.mirror, 2)}</td><td class="n">${sg(x.composer, 2)}</td><td${cls(x.diff_bps)}>${bp(x.diff_bps)}</td><td class="note">${x.cause || '–'}</td></tr>`).join('') + '</tbody>';
+  $('tbEng').innerHTML = `<thead><tr><th>Engine</th><th class="n">Same holdings</th><th class="n">Mirror</th><th class="n">Composer</th><th class="n">Gap</th><th class="n">Gap without the stretch</th><th class="n">Before costs</th><th class="n">Mean, bps a day</th><th class="n">SD</th><th class="n">Costs, % a year</th><th class="n">Turnover a year</th><th class="n">Idle cash</th></tr></thead><tbody>` +
+    ENG.map(e => { const x = D.eng[e], d = D.dec[e]; return `<tr><td>${e}</td><td class="n">${d.agree} / ${d.n}</td><td class="n">${sg(x.t.cum_mirror)}</td><td class="n">${sg(x.t.cum_composer)}</td><td${cls(x.t.cum_gap)}>${sg(x.t.cum_gap, 2)}</td><td${cls(x.tx.cum_gap)}>${sg(x.tx.cum_gap, 2)}</td><td${cls(x.tg.cum_gap)}>${sg(x.tg.cum_gap, 2)}</td><td${cls(x.t.mean_bps)}>${bp(x.t.mean_bps, 2)}</td><td class="n">${f2(x.t.sd_bps)}</td><td class="n">${(x.costs.drag_bps_yr / 100).toFixed(2)}</td><td class="n">${x.costs.turnover_venue_x_yr.toFixed(0)}x</td><td class="n">${pc(x.cash.mean_share_invested, 2)}</td></tr>`; }).join('') + '</tbody>';
+  const nf = D.noise.all;
+  $('pWorst').textContent = `On days neither side traded the difference still has an SD of ${nf.sd == null ? '–' : nf.sd.toFixed(1)} bps (${nf.n} engine-days): Composer's snapshot marks against official closes. That is the floor of this comparison.`;
+}
 
-// ---------- basis
-(function(){
-  const A = D.edge.asof || {}, I = F55 ? F55.info : R55.info, snaps = (D.window.composer_snapshots || {}).HG, moc = D.full ? D.full.rows.find(r => r.label === '15:45 -> close (MOC)') : null;
-  [`In sample, and short: ${D.window.sessions} sessions (${D.window.start}..${D.window.end}), ${T.n_daily} daily book observations, one window that holds a −27% KMLM day (11-05) and the three sessions Composer did not rebalance. The close-mode decisions are the shadow ledger's targets: the approved trees on that day's CLOSE, which no live mirror could know when it fills at that close. Close mode measures the sleeve, netting and booking code and its costs; the 15:55 runs are the realistic timing.`,
-   `Composer's daily return = deposit_adjusted_value(D) / deposit_adjusted_value(D−1) − 1 from the monitor snapshot taken after each close (16:35 or 17:35 ET; ${snaps} of the ${D.window.sessions} sessions have closing values; older snapshots are read from the git history of last-snapshot.json). Sessions without one (07-17, 07-22, 07-23, 09-11, 09-14, 10-26..10-29) are bridged as one stretch and never split into days, so 10-26..10-28 cannot be shown day by day: "without 10-23→10-30" removes that stretch whole. Composer's last_percent_change was not used (it differs from the value ratio by up to 36 bps and is the wrong day on a late snapshot).`,
-   `Deposit days: a symphony's raw value moved beyond its deposit-adjusted return on ${ENG.map(e => `${e} ${D.eng[e].flow_days.map(d => d.slice(5)).join(', ') || 'none'}`).join('; ')} (transfers between symphonies; the account's net deposits never changed). Those days use Composer's own adjustment; they are flagged, not removed.`,
-   `Modelled, not observed: every venue order fills whole at one price (the day's raw close, or the close of one 1-minute bar), ${D.slip_bps} bps against the mirror, plus IBKR's tiered commission; no partial fills, no auction imbalance, no margin, no exchange or regulatory fees, idle cash earns nothing, and the executor's venue-quote cross-check (1.5% band) is not simulated. The minute fill is the close of the bar that starts at the decision time, about a minute after it; the executor sends market orders 5 seconds after the decision bar ends, so its sells should fill nearer the reference than modelled here and its buys after the sells are booked. The executor's own paper stage fills at the brain's price with no slippage: it will read better than this simulation by the move in the fill minute and the ${D.slip_bps} bps.`,
-   `Distributions: credited on the ex-date on the shares held at the prior close (Yahoo's dividend events), not on the pay date; the price basis takes them out for the comparison. Composer credits a distribution inside the symphony 1-5 sessions after the ex-date only if the payer is still held, otherwise it lands in account cash outside the symphony's figure (add. 38); those pay-date credits are identified from the mirror's own holdings and the observed pay lags, never guessed for a fund without one. The owner receives the cash at either broker: the distribution rows are an accounting difference, not a return the mirror adds. At IBKR a sleeve only sees a distribution when it is posted through the executor's /mirror/credit.`,
-   `Book level: both sides' engine returns are combined at the MIRROR's sleeve weights at the start of each stretch, so the book numbers measure tracking, not allocation. Composer's own book ran other engine weights and moved capital between symphonies (HG −$64.5k on 07-21, SLEEVE +$16.9k on 07-16, HARV funded 07-21); that comparison is the seed rows of section G.`,
-   `Decision agreement compares weights at the close; Composer's holdings for 08-05 and 10-29 were read during the next session and carry its drift. HARV has no Composer record before 07-24. Five sessions have no shadow-ledger row: in close mode the mirror stands still on them (the gap-filled variant is in section G); the 15:55 runs decide on them, but there is nothing of Composer's to compare.`,
-   `Minute mode replays mirror_brain.build() with Yahoo's history rebased to the replayed day, as a live run saw it. The brain's own replay does not rebase: it reads a raw minute price against a history already lowered by every distribution paid since, so the replayed day opens with a jump that never happened. Left that way, ${D.edge.asof_changed} of ${A.engine_days} engine-days decide differently (all in ${D.edge.asof_months.map(m => MON[+m.slice(5) - 1]).join(', ')}; none in the last six weeks) and the whole-window agreement falls from ${A.as_of ? A.as_of.decisions.ALL.agree : '–'} to ${A.as_fetched_today ? A.as_fetched_today.decisions.ALL.agree : '–'} of ${A.as_of ? A.as_of.decisions.ALL.n : '–'}. A same-day run is not affected.`,
-   `Fills: FMP's 1-minute bars are trades only; a fund with no trade in the fill minute fills at the day's close (${I.fallbacks} of ${I.orders} orders at 15:55 over the whole window: ${Object.entries(I.fallback_tickers).map(([t, k]) => `${t} ${k}`).join(', ')}). mirror_core sizes buys on the reference price plus a 0.3% cushion: with a fill a minute later no sleeve's cash went negative in ${I.covered} sessions; with a fill at the close it did on ${moc ? moc.overspent.length : '–'} sessions of the 15:45 run (worst ${moc && moc.overspent.length ? worst(moc.overspent) : '–'}).`,
-   `Small numbers: ${D.dis.filter(x => x.class === 'knife-edge').length} knife-edge engine-days, ${D.episodes.length} KMLM stretches apart, ${D.edge.timing ? D.edge.timing.all.n : '–'} rotation engine-days on ${D.edge.timing ? D.edge.timing.by_day_mean.n : '–'} days for the fill-timing check, and the cumulative gaps turn on a handful of sessions (10-23→10-30, 11-04, 11-05, 08-31). No t-statistic here survives a correction for the comparisons made; read them as sizes, not findings.`,
-   `Generated ${D.generated}. Research only; nothing traded, Composer and IBKR untouched.`]
-   .forEach(s => document.getElementById('basis').insertAdjacentHTML('beforeend', `<li>${s}</li>`));
-})();
+// ---------- collapsed: limit buys and distributions
+function drawCost(){
+  const U = C.unfilled, dist = C.distributions, L = D.sens.limit;
+  $('sCost').textContent = ` ${U.unfilled_orders} of ${U.buy_orders} buys unfilled; ${usd(dist.credited_usd)} credited, ${usd(dist.leaked_usd)} left unallocated`;
+  $('tbUnf').innerHTML = D.unfilled.length ? `<thead><tr><th>Day</th><th>Buy</th><th>Sleeve</th><th class="n">Reference</th><th class="n">Limit</th><th class="n">Fill bar</th><th class="n">Over the limit, bps</th><th class="n">Dollars</th><th>While it kept working</th></tr></thead><tbody>` +
+    D.unfilled.map(u => `<tr><td class="n">${u.date}</td><td>${u.qty} ${u.symbol}</td><td>${Object.keys(u.asks).join(', ')}</td><td class="n">${f2(u.ref)}</td><td class="n">${f2(u.limit)}</td><td class="n">${f2(u.px)}</td><td class="n">${bp(u.over_limit_bps)}</td><td class="n">${usd(u.usd)}</td><td>${u.later ? `at or under the limit by ${u.later.at} (${f2(u.later.px)})` : 'never back under the limit before 15:59'}</td></tr>`).join('') + '</tbody>'
+    : '<tbody><tr><td>No buy was left unfilled.</td></tr></tbody>';
+  const bm = U.by_decision_minute;
+  $('pUnf').textContent = `A buy's limit is the ${D.core.decide}:00 reference price plus ${pc(D.core.buy_cushion)}, floored to the cent; it fills only if the bar ending a minute later closes at or under it. ` +
+    `Cost of the rule in this run: ${bp(L.unfilled_cost_bps)} bps of the book over the window against filling regardless, ${bp(L.vs_requoted_bps)} against a limit re-quoted at the fill, which is what the live executor does after its sells. ` +
+    `One small miss is luck: at the other decision minutes ` + Object.entries(bm).filter(([k]) => k !== D.core.decide).map(([k, v]) => `${k} left ${v.unfilled_orders} of ${v.buy_orders} unfilled (largest ${usd(v.largest_usd)}, SD of the daily difference ${f2(v.sd_bps)} bps against ${f2(v.sd_bps_every_buy_fills)} when every buy fills)`).join('; ') +
+    `. A missed buy leaves its sleeve in cash until the next session's plan; nothing retries it. The simulator's test is stricter than live (one bar, a limit set a minute early).`;
+  $('tbDiv').innerHTML = `<thead><tr><th>Engine</th><th class="n">Entitled</th><th class="n">Credited on the pay date</th><th class="n">Left unallocated</th><th class="n">Still owed</th><th class="n">Composer books inside, by its observed pay lags</th><th class="n">Composer leaves in account cash</th><th class="n">Rule "holder" credits</th></tr></thead><tbody>` +
+    ENG.map(e => { const x = D.eng[e].dist, h = D.eng[e].holder; return `<tr><td>${e}</td><td class="n">${usd(x.accrued_usd)}</td><td class="n">${usd(x.credited_usd)}</td><td class="n">${usd(x.leaked_usd)}</td><td class="n">${usd(x.open_usd)}</td><td class="n">${usd(x.observed_in_symphony_usd)}</td><td class="n">${usd(x.observed_account_cash_usd + x.observed_ambiguous_usd)}</td><td class="n">${usd(h.credited_usd)}</td></tr>`; }).join('') +
+    `<tr><td><b>Book</b></td><td class="n">${usd(dist.accrued_usd)}</td><td class="n">${usd(dist.credited_usd)}</td><td class="n">${usd(dist.leaked_usd)}</td><td class="n">${usd(dist.open_usd)}</td><td class="n">${usd(dist.observed_in_symphony_usd)}</td><td class="n">${usd(dist.observed_account_cash_usd + dist.observed_ambiguous_usd)}</td><td class="n">${usd(D.sens.rule.holder.dist.credited_usd)}</td></tr></tbody>`;
+  const ev = ENG.flatMap(e => D.eng[e].events.map(x => Object.assign({e}, x)));
+  const same = ev.filter(x => (x.core === 'credited') === (x.treatment === 'HELD_THROUGH')).length;
+  const odd = ev.filter(x => (x.core === 'credited') !== (x.treatment === 'HELD_THROUGH'));
+  $('pDiv').textContent = `Rule "composer", the executor's default: a dividend is a receivable for the sleeve that held the payer at the close before the ex-date, credited on the first session on or after the pay date only if the sleeve still holds it. ` +
+    `${same} of ${ev.length} entitlements land where Composer's own observed pay lags put them` +
+    (odd.length ? `; not ${odd.map(x => `${x.e}'s ${x.ticker} ex ${md(x.ex)} (${usd(x.usd)}: the core ${x.core === 'credited' ? 'credits it, held again on the pay date after a sale' : 'leaves it out'}; the observed lag says ${x.treatment === 'HELD_THROUGH' ? 'inside the symphony' : 'account cash'})`).join(', ')}` : '') +
+    `. Rule "holder" would credit all of it and move the gap by ${bp(D.sens.rule.holder_minus_composer_bps)} bps over the window. ` +
+    `Entitled: ${(dist.accrued_bps_yr / 100).toFixed(2)}% of the book a year.`;
+  $('tbEv').innerHTML = `<thead><tr><th>Ex-date</th><th>Pay date</th><th>Engine</th><th>Fund</th><th class="n">Dollars</th><th class="n">bps of the sleeve</th><th>The core</th><th>Composer, by its observed lag</th></tr></thead><tbody>` +
+    ev.sort((a, b) => a.ex < b.ex ? -1 : a.ex > b.ex ? 1 : 0).map(x => `<tr><td class="n">${x.ex}</td><td class="n">${x.pay || '–'}</td><td>${x.e}</td><td>${x.ticker}</td><td class="n">${usd(x.usd)}</td><td class="n">${x.bps.toFixed(0)}</td><td>${x.core || '–'}${x.settled ? ' ' + md(x.settled) : ''}</td><td>${x.treatment === 'HELD_THROUGH' ? 'inside the symphony' + (x.credit_on ? ' ' + md(x.credit_on) : '') : x.treatment === 'LEAKED' ? 'account cash' : 'unknown lag'}</td></tr>`).join('') + '</tbody>';
+}
 
-function drawAll(){ drawPanels(); drawC(); }
+// ---------- collapsed: KMLM
+const LEG = {long: ['3x long tech', 'var(--s1)'], half: ['half 3x long, half SVIX', 'var(--s3)'], inverse: ['3x inverse', 'var(--s2)'], bonds: ['bonds', 'var(--ctx)'], vol: ['long volatility', 'var(--s4)'], other: ['other', 'var(--ctx2)']};
+function drawK(){
+  const K = D.kmlm, apart = K.filter(k => k.dist != null && k.dist > 0.03).length, tr = K.filter(k => k.a === 'trade').length;
+  $('sKmlm').textContent = ` ${D.dec.KMLM.agree} of ${D.dec.KMLM.n} sessions the same; the mirror rebalanced on ${tr} of ${K.length}`;
+  const host = $('kmlm'); host.innerHTML = '';
+  if (!host.getBoundingClientRect().width) return;
+  const Wd = width(host), H = 96, m = {l: 74, r: 8, t: 6, b: 20}, cw = (Wd - m.l - m.r) / K.length;
+  const svg = el('svg', {viewBox: `0 0 ${Wd} ${H}`, role: 'img', 'aria-label': 'What the 75% leg of KMLM is in, the mirror and Composer, session by session'}, host);
+  [['mirror', 'mc', 'm'], ['Composer', 'cc', 'c']].forEach(([n, k, wk], r) => { const y = m.t + r * 28;
+    el('text', {x: m.l - 8, y: y + 15, 'text-anchor': 'end', class: 'lb'}, svg, n);
+    K.forEach((x, i) => { if (!x[k]) return; const c = el('rect', {x: m.l + i * cw + 0.5, y, width: Math.max(1, cw - 1), height: 22, fill: LEG[x[k]][1], rx: 1.5}, svg);
+      c.addEventListener('mousemove', ev => tip(ev, `<b>${x.d}</b><br>mirror ${fw(x.m)}${x.a === 'hold' ? ' (held' + (x.gap != null ? `, gap ${(x.gap * 100).toFixed(1)}pp` : '') + ')' : ''}<br>Composer ${fw(x.c)}`)); c.addEventListener('mouseleave', untip); }); });
+  K.forEach((x, i) => { if (x.dist != null && x.dist > 0.03) el('rect', {x: m.l + i * cw + 0.5, y: m.t + 60, width: Math.max(1, cw - 1), height: 5, fill: 'var(--neg)'}, svg); });
+  el('text', {x: m.l - 8, y: m.t + 66, 'text-anchor': 'end', class: 'ax'}, svg, 'apart');
+  monthTicks(svg, i => m.l + (i + 0.5) * cw, H - 4, 0, S.length - 1);
+  legend('lgK', [...new Set(K.flatMap(k => [k.mc, k.cc]).filter(Boolean))].map(c => LEG[c]).concat([['holdings more than 3% apart', 'var(--neg)']]));
+  const ep = D.episodes;
+  $('pKmlm').textContent = `KMLM rebalances only when an asset's invested weight is more than 10pp from its target; the core now reads that on invested weights, as Composer does, and trades a sleeve idling over ${pc(D.core.max_idle_cash_frac, 0)} in cash. ` +
+    (ep.length ? `${apart} session${apart === 1 ? '' : 's'} apart, in ${ep.length} run${ep.length === 1 ? '' : 's'}: ` + ep.map(x => `${md(x.start)}${x.end !== x.start ? ' to ' + md(x.end) : ''} (${x.classes.map(c => NAMES[c] || c).join(', ')}; ${bp(x.cost_bps, 0)} bps on the days that followed)`).join('; ') + '.' : 'No session apart.');
+}
+
+// ---------- collapsed: candidate edge
+function drawE(){
+  const E = D.edge, s = E.summary, c = s['16:00'], m55 = s['15:55'];
+  $('sEdge').textContent = c ? ` filling at the close instead of ${E.base}: ${bp(c.mean)} bps per rotation (n ${c.n}, t ${f2(c.t)}); placebo ${bp(c.placebo.mean)}` : '';
+  const host = $('edge'); host.innerHTML = '';
+  if (!host.getBoundingClientRect().width || !c) return;
+  const Wd = width(host), H = 190, m = {l: 42, r: 16, t: 10, b: 24}, X = i => m.l + i / (E.minutes.length - 1) * (Wd - m.l - m.r);
+  const svg = el('svg', {viewBox: `0 0 ${Wd} ${H}`, role: 'img', 'aria-label': 'Mean gain of filling at each minute instead of 15:53, with the placebo'}, host);
+  const vals = E.minutes.flatMap(x => [s[x].mean, s[x].placebo.mean]); let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  const step = niceStep((hi - lo) || 1, 4); lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const Y = v => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
+  for (let v = lo; v <= hi + 1e-9; v += step) { el('line', {x1: m.l, x2: Wd - m.r, y1: Y(v), y2: Y(v), stroke: Math.abs(v) < 1e-9 ? 'var(--axis)' : 'var(--grid)'}, svg); el('text', {x: m.l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'ax'}, svg, (v > 0 ? '+' : '') + v); }
+  E.minutes.forEach((x, i) => { if (i % 2 === 0 || Wd > 560) el('text', {x: X(i), y: H - 6, 'text-anchor': 'middle', class: 'ax'}, svg, x === '16:00' ? 'close' : x); });
+  [['placebo', 'var(--ctx2)', x => s[x].placebo.mean], ['actual', 'var(--s1)', x => s[x].mean]].forEach(([n, col, f]) => {
+    el('path', {d: E.minutes.map((x, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(f(x)).toFixed(1)).join(''), fill: 'none', stroke: col, 'stroke-width': 2, 'stroke-linejoin': 'round'}, svg);
+    E.minutes.forEach((x, i) => { const p = el('circle', {cx: X(i), cy: Y(f(x)), r: 4, fill: col, stroke: 'var(--surface)', 'stroke-width': 2}, svg);
+      const h = el('circle', {cx: X(i), cy: Y(f(x)), r: 12, fill: 'transparent'}, svg);
+      h.addEventListener('mousemove', ev => tip(ev, `<b>${x === '16:00' ? 'the close' : x}</b> instead of ${E.base}<br>actual ${bp(s[x].mean)} bps (t ${f2(s[x].t)}, n ${s[x].n})<br>placebo ${bp(s[x].placebo.mean)} bps (t ${f2(s[x].placebo.t)})<br>by day: t ${f2(s[x].by_day_mean.t)} (${s[x].by_day_mean.n} days)`)); h.addEventListener('mouseleave', untip); }); });
+  legend('lgE', [['rotation days: gain of filling at that minute instead of ' + E.base + ', bps of the sleeve', 'var(--s1)', 1], ['placebo: the same weights on the previous session', 'var(--ctx2)', 1]]);
+  $('tbEdge').innerHTML = `<thead><tr><th>Fill at</th><th class="n">Mean, bps of the sleeve</th><th class="n">t</th><th class="n">t, one observation a day</th><th class="n">Without the 3 largest</th><th class="n">Per dollar traded, bps</th><th class="n">Placebo</th><th class="n">Placebo t</th></tr></thead><tbody>` +
+    ['15:50', '15:55', '15:56', '15:58', '15:59', '16:00'].filter(x => s[x]).map(x => `<tr><td>${x === '16:00' ? 'the close' : x}${x === '15:55' ? ' (the mirror)' : ''}</td><td${cls(s[x].mean)}>${bp(s[x].mean, 2)}</td><td class="n">${f2(s[x].t)}</td><td class="n">${f2(s[x].by_day_mean.t)}</td><td${cls(s[x].without_top3.mean)}>${bp(s[x].without_top3.mean, 2)}</td><td${cls(s[x].per_traded_bps.mean)}>${bp(s[x].per_traded_bps.mean, 2)}</td><td${cls(s[x].placebo.mean)}>${bp(s[x].placebo.mean, 2)}</td><td class="n">${f2(s[x].placebo.t)}</td></tr>`).join('') + '</tbody>';
+  const LR = E.later, l56 = LR['+2'], lc = LR['close'];
+  $('tbEdge2').innerHTML = `<thead><tr><th>The ${D.core.decide} decisions, filled at</th><th class="n">Gap</th><th class="n">Gap without the stretch</th><th class="n">Against the 15:55 fill, bps of the book</th><th class="n">Mean, bps a day</th><th class="n">SD</th><th class="n">Same holdings</th></tr></thead><tbody>` +
+    Object.values(LR).map(x => `<tr><td>${x.fill_et === 'close' ? 'the close' : 'the bar ending ' + x.fill_et}</td><td${cls(x.cum_gap)}>${sg(x.cum_gap, 2)}</td><td${cls(x.cum_gap_ex)}>${sg(x.cum_gap_ex, 2)}</td><td${cls(x.vs_first_bps)}>${bp(x.vs_first_bps, 0)}</td><td${cls(x.mean_bps)}>${bp(x.mean_bps, 2)}</td><td class="n">${f2(x.sd_bps)}</td><td class="n">${x.agree}</td></tr>`).join('') + '</tbody>';
+  const F = D.fills, near = F ? ['15:52', '15:53'].reduce((a, k) => a + (F.by_minute[k] || 0), 0) : null;
+  $('nEdge').innerHTML = [
+    `What it is: on the ${E.n} engine-days Composer rotated (${E.days} sessions), what Composer bought was on average cheaper later in the last ten minutes than at ${E.base}, its usual fill minute${F ? ` (${near} of its ${F.n} recorded fills are at 15:52 or 15:53)` : ''}.`,
+    `Size: ${bp(c.mean)} bps of the sleeve per rotation by the close (t ${f2(c.t)}; ${f2(c.by_day_mean.t)} with one observation a day; ${bp(c.without_top3.mean)} without the three largest). The mirror's own minute, 15:55, is worth ${bp(m55.mean)} (t ${f2(m55.t)}).`,
+    `Placebo, the same weights a session earlier: ${bp(c.placebo.mean)} bps (t ${f2(c.placebo.t)}). The sign differs, but neither clears two standard errors.`,
+    `Against the mirror's own minute: on those rotation days a fill at 15:56 instead of 15:55 was worth ${bp(E.vs_mirror['15:56'].actual.mean)} bps of the sleeve (t ${f2(E.vs_mirror['15:56'].actual.t)}; ${f2(E.vs_mirror['15:56'].actual.by_day.t)} with one observation a day; placebo ${bp(E.vs_mirror['15:56'].placebo.mean)}, t ${f2(E.vs_mirror['15:56'].placebo.t)}), at the close ${bp(E.vs_mirror['16:00'].actual.mean)} (t ${f2(E.vs_mirror['16:00'].actual.t)}).`,
+    `In the simulator, with the mirror's own ${P0.decide} decisions and every buy filled: the bar ending 15:56 instead of 15:55 moves the book's gap by ${bp(l56.vs_first_bps, 0)} bps over the window, the close by ${bp(lc.vs_first_bps, 0)} (second table; one path, ${W.sessions} sessions, no standard error).`,
+    `What it would take to use: the decision stays at ${P0.decide}:00; only the executor's order time moves (a minute or more later, still ahead of its 15:59 cancel). First a forward test fixed in advance, alternating the order time by session, measured on real fills. One window, bar closes and no spread are not enough to move it on.`
+  ].map(x => `<li>${x}</li>`).join('');
+}
+
+// ---------- collapsed: sensitivities
+function drawSens(){
+  const X = D.sens, row = (lab, h, note) => `<tr><td class="lab">${lab}</td><td class="n">${h.dec.agree} / ${h.dec.n}</td><td${cls(h.book.cum_gap)}>${sg(h.book.cum_gap, 2)}</td><td${cls(h.ex.cum_gap)}>${sg(h.ex.cum_gap, 2)}</td><td${cls(h.gross_ex.cum_gap)}>${sg(h.gross_ex.cum_gap, 2)}</td><td class="n">${f2(h.book.sd_bps)}</td><td class="n">${(h.costs.drag_bps_yr / 100).toFixed(2)}</td><td class="note">${note}</td></tr>`;
+  const base = {dec: D.dec.ALL, book: T, ex: TX, gross_ex: B.tgx, costs: B.costs};
+  $('sSens').textContent = ` slippage 0 to 5 bps moves the gap from ${sg(X.slip['0'].book.cum_gap)} to ${sg(X.slip['5'].book.cum_gap)}`;
+  $('tbSens').innerHTML = `<thead><tr><th>Change to the ${P0.decide} run</th><th class="n">Same holdings</th><th class="n">Gap</th><th class="n">Without the stretch</th><th class="n">Before costs</th><th class="n">SD, bps</th><th class="n">Costs, % a year</th><th>What changes</th></tr></thead><tbody>` +
+    row('None (the run above)', base, 'rule "composer", limit at the reference, 2 bps') +
+    row('Slippage 0 bps', X.slip['0'], 'commission only') + row('Slippage 5 bps', X.slip['5'], '') +
+    row('Dividend rule "holder"', X.rule.holder, `every entitlement credited: ${usd(X.rule.holder.dist.credited_usd)}`) +
+    row('Buy limit re-quoted at the fill', X.limit.requote, `the live path; ${X.limit.requote.limit.unfilled_orders} unfilled`) +
+    row('No buy limit', X.limit.none, `a buy fills whatever its bar; a sleeve's cash below zero on ${X.limit.none.overspent} sessions`) +
+    row('Close mode, ledger gaps filled from the tree', X.gaps, 'decisions and fills at the close') + '</tbody>';
+  const sd = X.seed, a = sd.runs['policy 29/29/27/15'], b = sd.runs["Composer's weights that day"];
+  $('pSens').textContent = `Book mix, from ${sd.from}: seeded 29/29/27/15 the mirror is ${sg(a.vs_composer_own_book.cum_gap)} against Composer's own book (its real engine weights); seeded at Composer's weights that day (${ENG.map(e => Math.round(sd.composer_weights[e] * 100)).join(' / ')}) it is ${sg(b.vs_composer_own_book.cum_gap)}. The mix is an owner decision, not tracking error.`;
+}
+
+// ---------- collapsed: replay cross-checks
+function drawReplay(){
+  const R = D.replay, v = R.targets_vs_composer_holdings, X = D.cross;
+  $('sReplay').textContent = ` ${R.engine_sessions - D.replay_n} of ${R.engine_sessions} engine-sessions identical on both replay paths` + (X.length ? `; ${X.filter(x => x.engines_same === 4).length} of ${X.length} sessions match the brain's own --at` : '');
+  $('tbCross').innerHTML = X.length ? `<thead><tr><th>mirror_brain.py --at</th><th class="n">Engines with the same target</th><th class="n">Prices in both</th><th class="n">Identical</th><th class="n">Largest price difference</th><th>Dividends</th><th>Splits</th></tr></thead><tbody>` +
+    X.map(x => x.error ? `<tr><td>${x.at}</td><td colspan="6">not run: ${x.error}</td></tr>` : `<tr><td>${x.at} ET</td><td class="n">${x.engines_same} / 4</td><td class="n">${x.prices.both}</td><td class="n">${x.prices.identical}</td><td class="n">${x.prices.largest_rel_diff == null ? '–' : (x.prices.largest_rel_diff * 1e4).toFixed(2) + ' bps' + (x.prices.largest_rel_diff > 0 ? ' (' + x.prices.largest_on + ')' : '')}</td><td>${x.dividends.same ? 'same ' + x.dividends.brain + ' rows' : `differ (${x.dividends.simulator} vs ${x.dividends.brain})`}</td><td>${x.splits.same ? 'same' : 'differ'}</td></tr>`).join('') + '</tbody>' : '';
+  $('nReplay').innerHTML = [
+    `The numbers on this page use the simulator's own history path: the brain's build, pinned at ${D.core.decide}:00, fed FMP's traded 1-minute bars from a cache and Yahoo's daily history as it stood on the replayed day (nothing after it, rebased), with FMP's dividend and split lists applied as the brain applies them.`,
+    `Against the brain's own offline path (history as fetched today, the minute price scaled by the day's factor): ${D.replay_n} of ${R.engine_sessions} engine-sessions give a different target${D.replay_n ? ' (' + D.replay_differ.map(x => `${x.engine} ${md(x.date)}`).join(', ') + ')' : ''}; the largest price difference is ${(R.largest_price_difference.rel * 1e4).toFixed(2)} bps.`,
+    `Targets against Composer's holdings on the engine-sessions it rebalanced: ${v.as_of.same_or_within_3pct} of ${v.as_of.of} within 3% on this page's path and ${v.as_fetched.same_or_within_3pct} of ${v.as_fetched.of} on the brain's (${v.as_of.same} by the shadow runner's tighter 1.5% test for KMLM).`,
+    X.length ? `The table is the brain's own command line, run live (its own Yahoo and FMP fetch) against the simulator's payload for the same instant.` : `No live cross-check was run for this file.`
+  ].map(x => `<li>${x}</li>`).join('');
+}
+
+// ---------- collapsed: basis and limits
+$('nBasis').innerHTML = [
+  `Basis: each sleeve's booked return (equity as the executor's core books it, dividend credits included on the day they settle) against Composer's deposit-adjusted value. On a price-only basis the gap is ${sg(B.tp.cum_gap, 2)} (${sg(B.tpx.cum_gap, 2)} without the stretch).`,
+  `The book compares both sides at the mirror's sleeve weights, so the difference is tracking, not allocation. Marked at official closes (measurement basis: mark-to-market, daily).`,
+  `Code under test: ibkr-executor/app/mirror_core.py, unchanged, called in the executor's order (splits, receivables, settlement, plan, crosses, sells, transfers, buys sized at their limit, finish). After every session the book was checked against an independently kept account and its cash reconciled: ${B.problems.length} problems, ${B.overspent.length} sessions with a sleeve's cash below zero.`,
+  `Decision: mirror_brain.build pinned at ${D.core.decide}:00 ET on every session, no attestation (the approved trees). ${D.info.unavailable.length} sessions had an engine without a decision${D.info.unavailable.length ? ' (HARV before its first approved tree, ' + md(D.info.unavailable[0].date) + ' to ' + md(D.info.unavailable[D.info.unavailable.length - 1].date) + ')' : ''}.`,
+  `Limit buys in the simulator are stricter than live: the limit is set off the ${D.core.decide}:00 price and tested against one bar; the executor re-quotes after its sells and leaves the order working until 15:59.`,
+  `Events: Yahoo's chart events union FMP's dividend and split lists (${D.events.dividends_in_window} dividends in the window, ${D.events.fmp_only.length} listed by FMP only, ${D.events.without_pay_date} without a pay date). The split path ran ${D.splits_applied} times (no fund the book held split in the window); it is covered by tests only.`,
+  `Not modelled: the bid-ask spread beyond the ${D.slip_bps} bps assumed, partial fills, exchange and regulatory fees, market impact, borrow, taxes, the executor's venue-quote band, halts, and a brain or feed outage.`,
+  `Composer's record: ${Object.entries(W.composer_snapshots).map(([e, n]) => `${e} ${n}`).join(', ')} closing snapshots of ${W.sessions} sessions. A deposit or transfer day is in Composer's deposit-adjusted figure as it reports it.`,
+  `The no-rebalance stretch: on ${W.no_rebalance.map(md).join(', ')} Composer made no rebalance attempt and the mirror followed the logic. The stretch is shown, and every total is given with and without it.`,
+  `Generated ${D.generated} by composer/research/mirror/parity_study.py; deterministic from its cache.`
+].map(x => `<li>${x}</li>`).join('');
+
+// ---------- draw, redraw on resize and when a section opens
+const LAZY = {dRuns: drawRuns, dMiss: drawMiss, dWorst: drawWorst, dCost: drawCost, dKmlm: drawK, dEdge: drawE, dSens: drawSens, dReplay: drawReplay};
+function drawAll(){ drawA(); drawB(); drawC(); Object.values(LAZY).forEach(f => f()); }
+Object.entries(LAZY).forEach(([id, f]) => $(id).addEventListener('toggle', () => { if ($(id).open) f(); }));
 drawAll();
-let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawAll, 120); });
+let rz, lastW = innerWidth;      // a phone fires resize while it scrolls (its toolbar hides): redraw only when the width changed
+addEventListener('resize', () => { if (innerWidth === lastW) return; lastW = innerWidth; clearTimeout(rz); rz = setTimeout(drawAll, 120); });
 </script>
 </body>
 </html>
 """
 
+
 if __name__ == "__main__":
-    main(*sys.argv[1:3])
+    main()

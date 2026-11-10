@@ -710,6 +710,13 @@ class M6MinuteMode(NoNetwork):
         self.assertEqual((ref["AAA"], fills["AAA"], fb), (108.0, 109.0, []))   # a minute earlier: the bars starting 15:52 and 15:53
         ref, fills, fb = md.minute_prices(D2, "15:55", ["AAA"], FakeMinutes(self.bars), market())
         self.assertEqual((ref["AAA"], fb), (109.5, ["AAA"]))               # a minute later (the first run's instant): one bar on
+        # "+N": the bar ENDING N minutes after the instant; "+1" is "next"; past the last bar it is the close, counted
+        f = lambda fill: md.minute_prices(D2, "15:52", ["AAA"], FakeMinutes(self.bars), market(), fill)[1:]   # noqa: E731
+        self.assertEqual((f("+1"), f("next"), f("+2"), f("+3")), (({"AAA": 108.0}, []),) * 2 + (({"AAA": 109.0}, []), ({"AAA": 109.5}, [])))
+        self.assertEqual(f("+5"), ({"AAA": 110.0}, ["AAA"]))
+        for bad in ("+0", "2", "later", None):
+            with self.assertRaises(ValueError):
+                f(bad)
         # a print 30% off the day's close is not a fill (a split, a bad tick): the close, and counted
         bad = dict(self.bars)
         bad[("AAA", D2)] = {"15:53": 109.0, "15:54": 33.0}

@@ -794,9 +794,13 @@ def minute_prices(d, hhmm, symbols, minutes, market, fill="next", brain_prices=N
     those, so a symbol the brain does not price takes its sleeve out of the plan here too); otherwise
     the last traded minute at or before hh:mm, else the previous close. Fill ("next"): the close of
     the traded bar that starts at hh:mm; a ticker without one, or with a print more than FILL_SANITY
-    from the day's close, fills at the day's close and is listed in fallbacks. fill "close": every
-    order fills at the official close. Every price is the one the fund TRADED at that day: a replay's
-    bars are restated for later splits exactly as the closes are (Market.traded_factor undoes both)."""
+    from the day's close, fills at the day's close and is listed in fallbacks. fill "+N": the bar
+    ENDING N minutes after hh:mm ("+1" is "next"). fill "close": every order fills at the official
+    close. Every price is the one the fund TRADED at that day: a replay's bars are restated for later
+    splits exactly as the closes are (Market.traded_factor undoes both)."""
+    if fill not in ("next", "close") and not (isinstance(fill, str) and fill[:1] == "+" and fill[1:].isdigit() and int(fill) >= 1):
+        raise ValueError(f"fill must be 'next', '+N' or 'close', not {fill!r}")
+    at = hhmm if fill in ("next", "close") else sr._hm(sr._min(hhmm) + int(fill) - 1)
     closes, prev = market.closes(d), market.prev(d)
     prev_closes = market.closes(prev) if prev else {}
     ref, fills, fallbacks = {}, {}, []
@@ -804,7 +808,7 @@ def minute_prices(d, hhmm, symbols, minutes, market, fill="next", brain_prices=N
     for t in sorted(set(symbols)):
         c, k = _pos(closes.get(t)), market.traded_factor(t, d)
         try:
-            p_ref, p_bar = minutes.price_at(t, d, hhmm), minutes.bar(t, d, hhmm)
+            p_ref, p_bar = minutes.price_at(t, d, hhmm), minutes.bar(t, d, at)
         except Refused:
             raise
         except Exception:  # noqa: BLE001
@@ -1269,6 +1273,7 @@ def engine_parity(rows, book_rows, shadow, market, composer, cfg_all=None, exclu
                 drag[r["date"]] = (c / (1 - c) * (r["ret"] or 0.0), prev_row["equity"])
             prev_row = r
         shares = [r["cash_share"] for r in xs if r.get("cash_share") is not None]
+        held = [r["cash_share"] for r in xs if r.get("cash_share") is not None and r.get("weights")]
         idle[e] = drag
         agree = {(c["core"], c["treatment"]): 0 for c in credits}
         for c in credits:
@@ -1288,6 +1293,7 @@ def engine_parity(rows, book_rows, shadow, market, composer, cfg_all=None, exclu
                       "turnover_with_crosses_x_yr": _r((traded + crossed) / avg_eq * yr, 2) if avg_eq else None,
                       "traded": round(traded, 2), "crossed": round(crossed, 2)},
             "cash": {"mean_share": _r(sum(shares) / len(shares), 5) if shares else None,
+                     "mean_share_invested": _r(sum(held) / len(held), 5) if held else None,     # once the sleeve holds something
                      "max_share": _r(max(shares), 5) if shares else None,
                      "drag_bps": _r(sum(v for v, _ in drag.values()) * 1e4, 2),
                      "drag_bps_yr": _r(sum(v for v, _ in drag.values()) * 1e4 * yr, 2)},
@@ -1322,7 +1328,14 @@ def engine_parity(rows, book_rows, shadow, market, composer, cfg_all=None, exclu
             a[0], a[1] = a[0] + v * w, a[1] + w
     tot = sum(a[0] / a[1] for a in by_day.values() if a[1] > 0)
     cs = [b["cash"] / b["equity"] for b in book_live if b["equity"] > 0]
+    inv = {}
+    for r in live:
+        if r.get("weights") and r.get("cash_share") is not None:
+            a = inv.setdefault(r["date"], [0.0, 0.0])
+            a[0], a[1] = a[0] + r["cash_share"] * r["equity"], a[1] + r["equity"]
+    ci = [a[0] / a[1] for a in inv.values() if a[1] > 0]
     out["book"]["cash"] = {"mean_share": _r(sum(cs) / len(cs), 5) if cs else None, "max_share": _r(max(cs), 5) if cs else None,
+                           "mean_share_invested": _r(sum(ci) / len(ci), 5) if ci else None,
                            "drag_bps": _r(tot * 1e4, 2), "drag_bps_yr": _r(tot * 1e4 * yr, 2)}
     return out
 
@@ -1425,8 +1438,8 @@ def backfill(start=START, end=None, mode="close", *, minute_start=MINUTE_START, 
     mode "close": the decision is the shadow ledger's target for the engine-day, at the day's closes.
     mode "minute": close mode up to the session before minute_start (the book arrives invested, its
     corridor state included), then mirror_brain.build(pinned=True) AS OF `decide` ET (the instant: bars
-    ending at or before it) with minute fills (fill "next": the bar starting at that instant; "close":
-    the official close). rule: the dividend rule ("composer", the executor's default, or "holder").
+    ending at or before it) with minute fills (fill "next": the bar starting at that instant; "+N": the
+    bar ending N minutes after it; "close": the official close). rule: the dividend rule ("composer", the executor's default, or "holder").
     limit_buys / limit_at: the buy-limit rule (see Sim). fill_gaps: on a session the ledger has no row
     for, decide from the approved tree on that day's closes instead of standing still. Seams (tests,
     studies): shadow {(date, engine): row}, market, yahoo, minutes, build, composer (composer_record's
