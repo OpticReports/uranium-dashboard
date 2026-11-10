@@ -531,6 +531,8 @@ def test_c52_no_buys_when_the_books_cash_exceeds_the_accounts(tmp_path, slip):
     n = len(r.orders())
     r.tick("15:55:05", day=D2)
     r.tick("15:56:00", day=D2)
+    assert r.m.state["run"] and r.m.state["run"]["buys_blocked"]   # round 3b: HELD and re-read, not given up at once
+    r.tick("15:59:05", day=D2)                              # ... until the cancel instant: then the final state
     row = r.m.state["last_run"]
     sent = r.orders()[n:]
     assert sent and all(q < 0 for _, q in sent), sent       # the sells went; not one buy
@@ -551,6 +553,7 @@ def test_c52_no_buys_when_the_accounts_cash_cannot_be_read(tmp_path):
     r.venue.account_cash = lambda: None if len(r.orders()) > n else real()       # no claim once the sells are out
     r.tick("15:55:05", day=D2)
     r.tick("15:56:00", day=D2)
+    r.tick("15:59:05", day=D2)                              # round 3b: re-read until the cancel instant
     sent = r.orders()[n:]
     assert sent and all(q < 0 for _, q in sent), sent
     assert len([a for a in r.red() if "NO BUYS are sent this session" in a and "cannot be read" in a]) == 1
@@ -563,6 +566,7 @@ def test_c52_no_buys_when_the_accounts_cash_cannot_be_read(tmp_path):
     o.venue.account_cash = lambda: boom() if len(o.orders()) > m else real_o()
     o.tick("15:55:05", day=D2)
     o.tick("15:56:00", day=D2)
+    o.tick("15:59:05", day=D2)
     assert all(q < 0 for _, q in o.orders()[m:]) and [a for a in o.red() if "NO BUYS are sent this session" in a]
 
 

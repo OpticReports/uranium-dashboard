@@ -1661,6 +1661,43 @@ class IBAdapter:
                 qty += int(p.position)
         return qty
 
+    def open_sell_qty(self, symbol: str, exclude: str | None = None) -> int:
+        """Shares of stock `symbol` that SELL orders still OPEN at the venue
+        (any client, any order type) have yet to sell - the unfilled
+        remainder of each. `exclude`: an orderRef whose own orders are not
+        counted. For the mirror's flatten cap: a sell on top of one already
+        resting (a halted symbol) would take the position short when both
+        fill. Read-only and additive; bounded like the other history
+        requests; RAISES when the open orders do not answer (the caller
+        must then not sell)."""
+        self._require_connected()
+        self._pump()
+        prev = getattr(self.ib, "RequestTimeout", 0)
+        try:
+            self.ib.RequestTimeout = VENUE_HISTORY_TIMEOUT_S
+            opens = list(self.ib.reqAllOpenOrders() or [])
+        finally:
+            self.ib.RequestTimeout = prev
+        seen, qty = set(), 0
+        for t in list(self.ib.trades()) + opens:    # this session's own, then the venue's answer
+            key = (t.order.orderId, getattr(t.order, "permId", 0))
+            if key in seen:
+                continue
+            seen.add(key)
+            c = getattr(t, "contract", None)
+            if (c is None or getattr(c, "symbol", "") != symbol
+                    or getattr(c, "secType", "STK") not in ("", "STK")
+                    or getattr(t.order, "action", "") != "SELL"
+                    or _map_status(t.orderStatus.status) != "working"):
+                continue
+            if exclude and (getattr(t.order, "orderRef", "") or "") == exclude:
+                continue
+            left = (float(t.order.totalQuantity)
+                    - float(getattr(t.orderStatus, "filled", 0) or 0))
+            if left > 0:
+                qty += int(math.ceil(left))
+        return qty
+
     def positions_snapshot(self) -> dict:
         """Everything the ACCOUNT holds, for a strategy that must own the whole
         account (the Composer mirror): {"stocks": {symbol: whole shares},

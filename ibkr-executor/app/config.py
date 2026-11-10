@@ -2,6 +2,7 @@
 No creds -> OFFLINE dry mode: full decision loop, no gateway, no orders."""
 from __future__ import annotations
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -132,6 +133,16 @@ class Settings(BaseSettings):
     # else the cash stays unallocated in the account (what Composer's
     # symphonies do); "holder": whoever held the shares is always credited.
     mirror_dividend_rule: str = "composer"   # MIRROR_DIVIDEND_RULE
+
+    @field_validator("mirror_capital_usd", "mirror_max_book_usd", mode="before")
+    @classmethod
+    def _blank_is_default(cls, v, info):
+        """A dashboard field saved BLANK arrives as KEY='' and float('')
+        raised at import, stopping the WHOLE executor (blend included) for
+        one empty mirror setting. Blank means "not set": the default."""
+        if isinstance(v, str) and not v.strip():
+            return cls.model_fields[info.field_name].default
+        return v
 
 
 settings = Settings()

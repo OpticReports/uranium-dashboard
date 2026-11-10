@@ -153,6 +153,9 @@ FLATTEN_GAPS_S = (5.0, 15.0, 60.0)   # ... a new round no sooner than this after
 FLATTEN_GAP_LATE_S = 300.0     # ... and this after every later one
 FLATTEN_SEEN_CAP_S = 600.0     # two looks at a flatten further apart than this (or 2 x the loop cadence) count no open time
 FLATTEN_WAIT_S = 5.0           # the loop cadence of a flatten while the session is open
+FLATTEN_SLOW_ALERT_S = 600.0   # a flatten order still unbooked this long (wall time) is said in red, and again this often
+FLATTEN_EMPTY_LOOKS = 3        # an account that reads EMPTY while the book holds shares is read again this often first
+DIVIDEND_MAX_FRAC = 0.10       # F4: a dividend above this share of the position's value (shares x mark) is not credited
 PAPER_TICK_BUDGET_S = 20.0     # a PAPER tick never waits longer than this (it shares the loop with a live strategy)
 PAPER_RETRY_S = 10.0           # ... and asks the brain again this often
 PAPER_UNKNOWN_WAIT_S = 300.0   # session unknown: a paper book asks for the loop this often (UNKNOWN_WAIT_S from 15:30 ET)
@@ -189,9 +192,12 @@ def one_line(e, n: int = 200) -> str:
 
 
 def _num(x) -> float | None:
-    if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
+    try:
+        if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
+            return None
+        return float(x)
+    except OverflowError:                      # F7: an integer too large for a float is no number here
         return None
-    return float(x)
 
 
 def atomic_write(path: str, obj) -> None:
@@ -349,6 +355,9 @@ class MirrorManager:
         self._deferred: list | None = None     # journal lines and alerts of a plan not yet on disk
         self._view: dict = {}
         self._halt: dict = {}
+        self._flat_here: set = set()           # flatten ids THIS process armed (halt()): none of their orders can
+        #                                        have reached the venue from an earlier process
+        self._flat_empty: dict = {}            # flatten id -> looks at an account that read empty against a book with shares
         self._dry = None
         self.state = self._fresh()
         self.book = mc.Book()
@@ -376,11 +385,33 @@ class MirrorManager:
         """MIRROR_CAPITAL_USD: the capital of every configured sleeve (the weights sum to 1)"""
         return sum(v for v in (_num(x) for x in (self.cfg.capital or {}).values()) if v is not None and v > 0)
 
+    def _engines_capital_usd(self) -> float:
+        """the capital of the engines of THIS book only (a staged rollout: fewer than every sleeve)"""
+        cap = self.cfg.capital or {}
+        return sum(v for v in (_num(cap.get(e)) for e in self.cfg.engines) if v is not None and v > 0)
+
     def _book_cap_usd(self) -> float:
         """D-04: the most capital (seeded + credited) a LIVE book takes without force: MIRROR_MAX_BOOK_USD,
-        or MIRROR_CAPITAL_USD when that is 0 / unset"""
+        or - when that is 0 / unset - the capital of the engines THIS book runs (F2: not of every
+        configured sleeve; one engine live at $1,240 is not a $10,000 cap)"""
         cap = _num(self.cfg.max_book_usd)
-        return cap if cap is not None and cap > 0 else self._capital_usd()
+        return cap if cap is not None and cap > 0 else self._engines_capital_usd()
+
+    def _seed_cap_usd(self) -> float:
+        """D-05 / F3: the most the seeds may total: MIRROR_CAPITAL_USD, or MIRROR_MAX_BOOK_USD when that
+        is set below it"""
+        cap, most = self._capital_usd(), _num(self.cfg.max_book_usd)
+        return min(cap, most) if most is not None and most > 0 else cap
+
+    def _over_cap(self, amount: float) -> str | None:
+        """D-04: why a LIVE book does not take `amount` more capital without force, or None"""
+        funded = _num(self.state.get("funded_usd")) or 0.0
+        if funded + amount <= self._book_cap_usd() + SEED_TOL_USD:
+            return None
+        return (f"the live book has taken ${funded:,.2f} in seeds and credits; ${amount:,.2f} more "
+                f"would pass its cap of ${self._book_cap_usd():,.2f} (MIRROR_MAX_BOOK_USD, or the capital of "
+                f"this book's engines when that is unset). Check the amount (a slipped decimal?); "
+                f"raise the cap, or send it with \"force\": true if it is meant")
 
     def _seeded_usd(self) -> float:
         """what the sleeves the book holds now were seeded with"""
@@ -540,6 +571,7 @@ class MirrorManager:
                     h.pop("account_flat", None)    # the last flatten's account reading is not this one's
                     h.update(flatten=True, flatten_done=False, flatten_cancelled=False, flatten_ts=now,
                              flatten_id=self.clock().strftime("%Y%m%dT%H%M%S"))
+                    self._flat_here.add(h["flatten_id"])
             ok = self._write_halt(h)
             return dict(h, persisted=ok)
 
@@ -828,6 +860,18 @@ class MirrorManager:
                             f"(the next session would sell holdings to repair it). Check the amount; send it with "
                             f"\"force\": true if it is meant")
             return True
+        if self.cfg.live and cash > 0:
+            # F1 (D-04): cash added by /mirror/adjust is capital the book takes, exactly like a credit.
+            # Cash that only REPLACES shares the same adjustment removes (a sale by hand) is not new
+            # capital: the removed shares are netted off at the book's last mark, where it has one.
+            mark = _num(((self.state.get("marks") or {}).get("prices") or {}).get(sym)) if shares < 0 else None
+            added = round(max(cash - (-shares * mark if mark is not None and mark > 0 else 0.0), 0.0), 2)
+            why = None if r.get("force") is True or not added else self._over_cap(added)
+            if why:
+                self._refuse(r, why + (f" (${added:,.2f} is the cash beyond the {-shares} {sym} removed at the "
+                                       f"last mark {mark:g})" if added != round(cash, 2) else ""))
+                return True
+            self.state["funded_usd"] = round((_num(self.state.get("funded_usd")) or 0.0) + added, 2)
         if shares:
             if have + shares:
                 s.shares[sym] = have + shares
@@ -1189,13 +1233,20 @@ class MirrorManager:
                                      f"and the book already claims ${self.book.cash():,.2f}", key=f"seed-short:{name}")
                     self._seed_why = "the account's cash does not cover the sleeves' capital"
                     continue
-                if self.cfg.live and self._seeded_usd() + amt > self._capital_usd() + SEED_TOL_USD:
+                taken = max(self._seeded_usd(), _num(self.state.get("funded_usd")) or 0.0)
+                if self.cfg.live and taken + amt > self._seed_cap_usd() + SEED_TOL_USD:
                     # D-05: each seed is capital x the weight OF THAT DAY; a staged rollout with the weights
-                    # edited in between must still never seed more than the capital in total
-                    self._say("red", f"cannot seed {name} with ${amt:,.2f}: the sleeves this book holds were seeded "
-                                     f"with ${self._seeded_usd():,.2f} and MIRROR_CAPITAL_USD is "
-                                     f"${self._capital_usd():,.2f} (were MIRROR_WEIGHTS changed after a sleeve was "
-                                     f"funded?). Nothing is seeded beyond the capital.", key=f"seed-cap:{name}:{amt:.2f}")
+                    # edited in between must still never seed more than the capital in total. F2: what the
+                    # book has TAKEN counts (its seeds, or its seeds plus credits when that is more). F3: a
+                    # MIRROR_MAX_BOOK_USD below the capital bounds the seeds too.
+                    self._say("red", f"cannot seed {name} with ${amt:,.2f}: this book has already taken "
+                                     f"${taken:,.2f} (its sleeves were seeded with ${self._seeded_usd():,.2f}; seeds "
+                                     f"and credits total ${_num(self.state.get('funded_usd')) or 0.0:,.2f}) and "
+                                     f"MIRROR_CAPITAL_USD is ${self._capital_usd():,.2f}"
+                                     + (f", MIRROR_MAX_BOOK_USD ${self._seed_cap_usd():,.2f}"
+                                        if self._seed_cap_usd() < self._capital_usd() else "")
+                                     + " (were MIRROR_WEIGHTS changed after a sleeve was funded, or a credit taken?). "
+                                       "Nothing is seeded beyond that.", key=f"seed-cap:{name}:{amt:.2f}")
                     self._seed_why = "seeding the remaining sleeves would exceed MIRROR_CAPITAL_USD"
                     continue
                 self.book.sleeves[name] = mc.Sleeve(name=name, cash=amt)
@@ -1593,6 +1644,27 @@ class MirrorManager:
             if not r.get("pay_date"):              # never learnt: ex + 7 days is assumed, ten days after the ex-date
                 r.update(pay_date=due, pay_date_assumed=True)
                 self._journal("dividend_pay_date", id=r["id"], pay_date=due, assumed=True)
+            px = _num((payload.get("prices") or {}).get(r.get("ticker"))) if isinstance(payload.get("prices"), dict) else None
+            if px is None or px <= 0:
+                px = _num(((self.state.get("marks") or {}).get("prices") or {}).get(r.get("ticker")))
+            shares, total = _num(r.get("shares")) or 0.0, _num(r.get("total")) or 0.0
+            if px is None or px <= 0 or total > DIVIDEND_MAX_FRAC * shares * px + 1e-9:
+                # F4: a unit slip in the feed ($20 for $0.20) would be credited from the account's spare
+                # cash. A real distribution is far below 10% of the position; one above it (or one whose
+                # position cannot be priced) stays OUT of the book and is the operator's to credit.
+                r.update(status="refused", settled=session)
+                self._journal("dividend_refused", mark=px, **r)
+                self._say("red", f"dividend {r.get('ticker')} ex {r.get('ex_date')} is NOT credited to {r.get('sleeve')}: "
+                                 f"${_num(r.get('amount')) or 0.0:g} per share x {int(shares)} shares = ${total:,.2f} in "
+                                 f"total, which is " + ("more than " + f"{DIVIDEND_MAX_FRAC:.0%} of the position's value "
+                                                        f"({int(shares)} x ${px:,.2f} = ${shares * px:,.2f})"
+                                                        if px is not None and px > 0 else
+                                                        "not checkable: the book has no price for the symbol")
+                                 + ". Check the amount (a unit slip in the feed?). It stays out of the book; if it was "
+                                   "really paid, credit it with POST /mirror/credit.", key=f"div-big:{r.get('id')}")
+                notes.append(f"dividend {r.get('ticker')} ex {r.get('ex_date')} ${total:,.2f} for {r.get('sleeve')} NOT "
+                             f"credited: implausible against the position's value")
+                continue
             arrived = True
             if self.cfg.live:
                 if have is _UNKNOWN:
@@ -1654,13 +1726,9 @@ class MirrorManager:
                 if have is None or self.book.cash() + amt > have + CASH_TOL_USD:
                     ok, why = False, f"the account's cash ({have!r}) does not cover the book's plus the credit"
             funded = _num(self.state.get("funded_usd")) or 0.0
-            if ok and self.cfg.live and amt > 0 and r.get("force") is not True \
-                    and funded + amt > self._book_cap_usd() + SEED_TOL_USD:
+            if ok and self.cfg.live and amt > 0 and r.get("force") is not True and self._over_cap(amt):
                 # D-04: the account's spare cash is no bound on a typo; the capital the book was given is
-                ok, why = False, (f"the live book has taken ${funded:,.2f} in seeds and credits; ${amt:,.2f} more "
-                                  f"would pass its cap of ${self._book_cap_usd():,.2f} (MIRROR_MAX_BOOK_USD, or "
-                                  f"MIRROR_CAPITAL_USD when that is unset). Check the amount (a slipped decimal?); "
-                                  f"raise the cap, or send it with \"force\": true if it is meant")
+                ok, why = False, self._over_cap(amt)
             if ok:
                 if amt > 0:
                     self.state["funded_usd"] = round(funded + amt, 2)
@@ -1839,17 +1907,43 @@ class MirrorManager:
             if not past:
                 if self._halted():                 # D1: before any buy is sized
                     return False
+                # C-52: the ACCOUNT's cash must cover the book's before a buy is sized. It is no longer
+                # one look: the account's cash can lag the sell fills by seconds, so while it does not
+                # cover (or cannot be read) it is read again on every step until the cancel instant, and
+                # the buys go as soon as it does. (Transfers move cash between sleeves: the book's total,
+                # which is what is compared, is the same before and after them.)
+                why = self._buys_unfunded(ad, run)
+                if why:
+                    if run.get("buys_blocked") != why:
+                        first = not run.get("buys_blocked")
+                        run["buys_blocked"] = why
+                        run.setdefault("buys_blocked_utc", _iso(self.clock()))
+                        if first:
+                            self._save()
+                    return False
+                if run.get("buys_blocked"):
+                    waited = (self.clock() - (_parse(run.get("buys_blocked_utc")) or self.clock())).total_seconds()
+                    run.setdefault("notes", []).append(f"buys were held for {waited:.0f} s until the account's cash "
+                                                       f"covered the book's ({run['buys_blocked']})")
+                    self._say("warn", f"{run['session']}: the account's cash covers the book's again after "
+                                      f"{waited:.0f} s — the buys are sent now.", key=f"buys-funded:{run['session']}")
+                    run["buys_blocked"] = None
                 limits = self._buy_limits(ad, run, wake)
                 if limits is None:
                     return False                   # woken or halted between two quotes: nothing was changed
             if any(t["status"] == "planned" for t in plan["transfers"]) and not plan.get("transfers_applied"):
                 mc.apply_transfers(self.book, plan)
-            unfunded = None if past else self._buys_unfunded(ad, run)
-            if past or unfunded:
+            unfunded = None if abort else run.get("buys_blocked")
+            if past:
                 plan["buys"] = []
                 if plan["buy_asks"]:
                     run.setdefault("notes", []).append("buys NOT sent: " + (unfunded or run.get("aborted") or
                                                        "the window closed before the sells were booked"))
+                if unfunded:
+                    self._say("red", f"{run['session']}: NO BUYS are sent this session — {unfunded}, and it stayed so "
+                                     f"until the window closed. The sells are booked; the sleeves keep the cash until "
+                                     f"the next session. Compare the account with /status (a fee is debited with POST "
+                                     f"/mirror/credit).", key=f"buys-unfunded-final:{run['session']}")
             else:
                 mc.size_buys(self.book, plan, None, self.cfg.core, limits=limits)
             run["phase"] = "buys"
@@ -1863,7 +1957,8 @@ class MirrorManager:
         margin account the venue lends whatever the book over-counts (a sell booked at its reference
         with no price reported, a fee the book does not know), so the ACCOUNT's cash is read first: the
         buys go only if it covers the book's (within CASH_TOL_USD). Why not, or None. A paper book
-        has no account to read."""
+        has no account to read. Called on every step while it answers why not (_advance): said in red
+        once, when the buys are first held."""
         if self._dry is not None or not any(int(q) > 0 for asks in run["plan"]["buy_asks"].values() for q in asks.values()):
             return None
         try:
@@ -1879,9 +1974,10 @@ class MirrorManager:
                    f"buying from the book's figure would borrow on margin")
         else:
             return None
-        self._say("red", f"{run['session']}: NO BUYS are sent this session — {why}. The sells are booked; the "
-                         f"sleeves keep the cash until the next session. Compare the account with /status (a fee is "
-                         f"debited with POST /mirror/credit).", key=f"buys-unfunded:{run['session']}")
+        self._say("red", f"{run['session']}: the BUYS are HELD — {why}. The sells are booked. The account's cash "
+                         f"is read again on every step until {run.get('cancel_utc')} and the buys go as soon as it "
+                         f"covers the book's; if it never does, no buys are sent this session.",
+                  key=f"buys-unfunded:{run['session']}")
         return why
 
     def _work_all(self, ad, orders: list, recs: dict, cancel_at, abort: bool, wake) -> bool:
@@ -1982,14 +2078,20 @@ class MirrorManager:
         past = abort or (cancel_at is not None and self.clock() >= cancel_at)
         res = None
         if rec["state"] == "new":
-            if past:
+            # D-01: a flatten order goes out even when its write-ahead cannot be saved, so after a
+            # restart on a stale file "new" does NOT prove it was never sent: the venue is asked first
+            # (find_stock_order also reads today's executions) and its answer is settled, not repeated -
+            # BEFORE the order is booked "not sent" too (a /resume after such a restart must cancel the
+            # sell that rests at the venue, not forget it). Not asked for a flatten THIS process armed:
+            # "new" in this process's memory is then proof it was never sent, and the lookup costs a
+            # kill ~20 s per symbol on a gateway that does not answer for completed orders.
+            ask = emergency and self._dry is None \
+                and (self.state.get("flatten") or {}).get("id") not in self._flat_here
+            if past and not ask:
                 return self._book(o, rec, 0, None, 0.0, "not sent: " + ("stopped" if abort else "the window closed"))
-            if not self._may_place(emergency):
+            if not past and not self._may_place(emergency):
                 return False
-            if emergency and self._dry is None:
-                # D-01: a flatten order goes out even when its write-ahead cannot be saved, so after a
-                # restart on a stale file "new" does NOT prove it was never sent. The venue is asked first
-                # (find_stock_order also reads today's executions) and its answer is settled, not repeated.
+            if ask:
                 res = self._find(ad, oid, rec)
                 if res is _UNKNOWN:
                     self._say("red", f"flatten order {oid} is NOT sent yet: the venue could not be asked whether it "
@@ -2002,6 +2104,9 @@ class MirrorManager:
                                      f"the state file did not know it (a save had failed before a restart): it is "
                                      f"settled from the venue's record, not sent again", key=f"flat-found:{oid}")
                     return self._settle(ad, o, rec, res, past)
+                if past:
+                    return self._book(o, rec, 0, None, 0.0, "not sent: " + ("stopped" if abort else "the window closed")
+                                      + " (the venue holds no such order)")
             if emergency and not self._flatten_cap(ad, o, rec):
                 return bool(o.get("applied"))
             if not self._write_ahead(o, rec, emergency):
@@ -2068,17 +2173,33 @@ class MirrorManager:
                              f"{sym} short. Tried again on the next step.",
                       key=f"flat-cap-nopos:{oid}:{one_line(exc, 60)}")
             return False
-        want = int(o["qty"])
-        if held <= 0:
-            self._say("red", f"flatten order {oid} is NOT sent: the account holds {held} {sym} (the book asked to "
-                             f"sell {want}). Nothing is sold below zero; the book still shows the shares - compare "
-                             f"the account with /status.", key=f"flat-cap-zero:{oid}")
-            self._book(o, rec, 0, None, 0.0, f"not sent: the account holds {held} {sym}")
+        try:
+            # a SELL already open at the venue under ANOTHER id (an earlier flatten's, resting on a halted
+            # symbol; an order placed by hand) has spoken for its shares: both filling would be a short
+            resting = max(int(ad.open_sell_qty(sym, exclude=oid)), 0)
+        except Exception as exc:  # noqa: BLE001
+            rec["positions_error"] = one_line(exc, 160)
+            self._say("red", f"flatten order {oid} is NOT sent: the venue's open orders cannot be read "
+                             f"({rec['positions_error']}), and a sell on top of one already resting there could take "
+                             f"{sym} short. Tried again on the next step.",
+                      key=f"flat-cap-noopen:{oid}:{one_line(exc, 60)}")
             return False
-        if held < want:
-            o["qty"], rec["cut_from"] = held, want
-            self._say("red", f"flatten order {oid} cut from {want} to {held} {sym}: that is all the account holds "
-                             f"now", key=f"flat-cap-cut:{oid}:{held}")
+        want = int(o["qty"])
+        free = held - resting
+        if free <= 0:
+            what = f"the account holds {held} {sym}" + (f" and SELL orders for {resting} are already open at the "
+                                                        f"venue" if resting else "")
+            self._say("red", f"flatten order {oid} is NOT sent: {what} (the book asked to sell {want}). Nothing is "
+                             f"sold below zero; the book still shows the shares - compare the account with /status"
+                             + (" and cancel or wait for the open order(s)." if resting else "."),
+                      key=f"flat-cap-zero:{oid}")
+            self._book(o, rec, 0, None, 0.0, f"not sent: {what}")
+            return False
+        if free < want:
+            o["qty"], rec["cut_from"] = free, want
+            self._say("red", f"flatten order {oid} cut from {want} to {free} {sym}: the account holds {held}"
+                             + (f" and SELL orders for {resting} are already open at the venue" if resting else
+                                ", and that is all it holds now"), key=f"flat-cap-cut:{oid}:{free}")
         return True
 
     def _write_ahead(self, o: dict, rec: dict, emergency: bool) -> bool:
@@ -2473,6 +2594,7 @@ class MirrorManager:
                                       emergency=True):
                         waiting = True
                 if waiting:
+                    self._flatten_slow(fl)
                     # C-10: the budget bounds REFUSALS (open time between rounds). While an order is
                     # working (a halted symbol, a venue that cannot be read) no open time is counted:
                     # the clock starts again at the first look after they are all booked.
@@ -2491,6 +2613,27 @@ class MirrorManager:
             if step == "wait":
                 return False
         return False
+
+    def _flatten_slow(self, fl: dict) -> None:
+        """C-10: flatten orders still not booked FLATTEN_SLOW_ALERT_S of wall time after their round was
+        built (a halted symbol, a venue that does not answer) are said in red - one alert naming each
+        symbol and quantity - and again every FLATTEN_SLOW_ALERT_S while any stays so: the open-time
+        budget does not run while an order works, so nothing else would say it."""
+        now = self.clock()
+        since = _parse(fl.get("started_utc"))
+        last = _parse(fl.get("slow_said_utc")) or since
+        if since is None or (now - last).total_seconds() < FLATTEN_SLOW_ALERT_S:
+            return
+        recs = fl.get("recs") or {}
+        left = [f"SELL {o['qty']} {o['symbol']} ({o['id']}, state {(recs.get(o['id']) or {}).get('state', 'new')!r})"
+                for o in fl.get("orders") or [] if not o.get("applied")]
+        if not left:
+            return
+        fl["slow_said_utc"] = _iso(now)
+        self._say("red", f"flatten: STILL NOT BOOKED {(now - since).total_seconds() / 60:.0f} minutes after the round "
+                         f"was built: {'; '.join(left)}. The account may still hold these shares: check them at the "
+                         f"venue (a halted symbol? an order that rests?) and sell by hand if needed. Said again "
+                         f"every {FLATTEN_SLOW_ALERT_S / 60:.0f} minutes while it lasts.")
 
     def _flatten_tally(self, fl: dict) -> None:
         """once per round: what its orders sold, kept for the closing line; and (V2-B2) a holdings row,
@@ -2559,6 +2702,19 @@ class MirrorManager:
                 self._say("red", f"flatten: the account's positions cannot be read ({one_line(exc, 120)}); it is "
                                  f"tried again every {FLATTEN_WAIT_S:.0f} s", key=f"flat-nopos:{fid}:{one_line(exc, 60)}")
                 return "wait"
+        if n == 0 and venue is not None and any(s not in blocked for s in self.book.positions()) \
+                and not any(int(venue.get(s, 0) or 0) > 0 for s in self.book.positions()):
+            # before this flatten has sold anything, the account reads as holding NONE of what the book
+            # holds. Right after a reconnect the position cache can be empty for a moment: it is read
+            # again on the next looks before the flatten is allowed to end with nothing sold.
+            seen = self._flat_empty.get(fid, 0) + 1
+            self._flat_empty[fid] = seen
+            if seen <= FLATTEN_EMPTY_LOOKS:
+                self._say("red", f"flatten: the account reads as holding NONE of the book's {self.book.positions()} "
+                                 f"(a position list not yet synced after a reconnect?): nothing is sold on that; it is "
+                                 f"read again every {FLATTEN_WAIT_S:.0f} s ({FLATTEN_EMPTY_LOOKS} times) before the "
+                                 f"flatten gives up on them", key=f"flat-empty:{fid}")
+                return "wait"
         marks = (self.state.get("marks") or {}).get("prices") or {}
         orders = []
         for sym, total in self.book.positions().items():
@@ -2617,6 +2773,14 @@ class MirrorManager:
                 flat = not acct
             except Exception as exc:  # noqa: BLE001
                 acct = {"?": one_line(exc, 80)}
+        left = self.book.positions()
+        fl = self.state.get("flatten") or {}
+        if flat is True and left and not (fl.get("id") == self.halt_state().get("flatten_id")
+                                          and any(not str(x).startswith("0/") for x in fl.get("sold") or [])):
+            # the account read EMPTY, the book still holds shares and this flatten sold NOTHING: that
+            # reading agrees with nothing (a position list not yet synced after a reconnect, or shares
+            # sold by hand) and is not reported as "flat"
+            flat, acct = None, {"?": f"it reads empty while the book still holds {left} and nothing was sold"}
         with self.halt_lock:
             cur = dict(self._halt or {})
             if not (cur.get("flatten") and not cur.get("flatten_done")) or bool(cur.get("flatten_cancelled")) != cancelled:
@@ -2627,7 +2791,6 @@ class MirrorManager:
             self._write_halt(cur)
         fl = self.state.get("flatten") or {}
         sold = list(fl.get("sold") or []) if fl.get("id") == cur.get("flatten_id") else []
-        left = self.book.positions()
         self._journal("flatten_done", id=cur.get("flatten_id"), note=note, sold=sold, left=left, account=acct,
                       account_flat=flat, cash=self.book.cash())
         clean = cancelled or (flat is True and not left and not note)

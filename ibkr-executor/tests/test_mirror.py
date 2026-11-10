@@ -262,6 +262,12 @@ class Venue(DryAdapter):
             return None
         return super().find_stock_order(client_order_id)
 
+    def open_sell_qty(self, symbol, exclude=None):
+        """IBAdapter.open_sell_qty: the unfilled shares of the SELL orders still working for `symbol`"""
+        return sum(abs(r["qty"]) - r.get("filled_qty", 0) for r in self._orders.values()
+                   if r["symbol"] == symbol and r["qty"] < 0 and r["status"] == "working"
+                   and r.get("client_order_id") != exclude and r.get("client_order_id") not in self.forgotten)
+
     def cancel_stock_order(self, order_ref):
         rec = self._orders.get(order_ref)
         if rec is None or rec["status"] == "cancelled":
