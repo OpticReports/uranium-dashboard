@@ -5,21 +5,29 @@ a BROKEN-INPUT twin that must land on the other side (a gate that cannot fail is
 
   M1  costs: IBKR tiered commission ($0.0035 a share, the $0.35 minimum, the 1%-of-value cap) and
       slippage in the fill price, in the function and in the book's cash; twin: no slippage, no cost
-  M2  distributions: credited once, on the shares held at the prior close, and left out of the price
-      basis; twins: a payer that is not held, a day with no distribution, a re-run that does not pay twice
+  M2  distributions through the core: a receivable for the shares held at the close before the
+      ex-date, credited from the pay date to a sleeve that still holds the payer (rule "composer"),
+      else leaked to unallocated account cash; rule "holder" always credits; conservation (accrued =
+      credited + leaked + open); twins: not held, no pay date yet, a late row, the same row twice
   M3  a three-day backfill verified by hand, to the cent; twin: one changed close moves the answer
   M4  close mode: the decision IS the ledger's target and the bookings are mirror_core's own (the same
       shares as driving mirror_core directly; mc.check clean after every session); twins: no ledger row
       -> the sleeve stands still, a target that does not sum to 1 -> skipped, a tampered venue -> reported
   M5  Composer's record and the parity classes: snapshot -> session, deposit-adjusted spans, flow days;
       knife-edge / no-rebalance / corridor path / late snapshot / whole-share; return tracking; twins
-  M6  minute mode: the brain's payload decides, fills at the bar that starts at the decision time, the
-      close when there is none (counted), sized on the brain's published prices, a fill past the buy
-      cushion reported, half-days shift, a refusal stops cleanly; the as-of series
+  M6  minute mode: the brain's PINNED payload decides as of 15:54:00, fills at the bar that starts at
+      that instant, the close when there is none (counted), sized on the brain's published prices,
+      half-days shift, a refusal stops cleanly; the as-of series
   M7  daily(): seeds once, idempotent, force re-runs the last session without double booking, atomic,
-      never raises, MISMATCH only when the shadow ledger does not explain it
+      never raises, MISMATCH only when the shadow ledger does not explain it, the brain's own dividend
+      rows are the ones booked
   M8  the FMP store: one request per ticker-day, disk cache, throttle, refusal remembered, key never shown
-  M9  the brain through the real seams (mirror_brain.build on the frozen 2026-10-28 fixture)
+  M9  the brain through the real seams (mirror_brain.build pinned, on the frozen 2026-10-28 fixture)
+  M10 limit buys: sized at the core's limit floored to the venue's tick (equal to the executor's own
+      rounding); a buy fills only at or below its limit, never above it, else it is unfilled and the
+      cash stays; sells are market orders; twins: without the rule the same fill overspends
+  M11 splits: closes on the as-traded basis, the sleeves' shares rescaled by the core before the plan,
+      cash in lieu left unallocated; twins: the split not listed, listed twice, listed late
 
 Run: python3 -m unittest composer.scripts.tests.test_mirror_dry -v
 """
@@ -47,10 +55,10 @@ MAN = sr.load_manifest()
 SID = {e: c["symphony"] for e, c in MAN.items()}
 
 
-def market(aaa=(100.0, 100.0, 110.0, 121.0, 121.0), bbb=50.0, divs=None, extra=None):
+def market(aaa=(100.0, 100.0, 110.0, 121.0, 121.0), bbb=50.0, divs=None, extra=None, splits=None):
     raw = {"AAA": dict(zip(CAL, aaa)), "BBB": {d: bbb for d in CAL}, "SPY": {d: 500.0 for d in CAL}}
     raw.update(extra or {})
-    return md.Market(raw=raw, divs=divs or {}, calendar=CAL)
+    return md.Market(raw=raw, divs=divs or {}, calendar=CAL, splits=splits)
 
 
 def led(d, e, target, live=None, status="agree", **kw):
@@ -88,7 +96,8 @@ def rows_of(res, engine):
 class NoNetwork(unittest.TestCase):
     def setUp(self):
         boom = unittest.mock.Mock(side_effect=AssertionError("network call in a unit test"))
-        for target in ("mirror_dry._yahoo_chart", "shadow_runner.fetch_minutes", "shadow_runner._chart"):
+        for target in ("mirror_dry._yahoo_chart", "shadow_runner.fetch_minutes", "shadow_runner._chart",
+                       "shadow_runner.fetch_actions"):
             p = unittest.mock.patch(target, boom)
             p.start()
             self.addCleanup(p.stop)
@@ -98,7 +107,7 @@ class NoNetwork(unittest.TestCase):
 class M1Costs(NoNetwork):
     def test_commission_per_share_minimum_and_cap(self):
         self.assertAlmostEqual(md.commission(1000, 50.0), 3.50)            # 1000 x 0.0035
-        self.assertAlmostEqual(md.commission(498, 100.0), 1.743)
+        self.assertAlmostEqual(md.commission(497, 100.0), 1.7395)
         self.assertAlmostEqual(md.commission(50, 50.0), 0.35)              # 0.175 -> the $0.35 minimum
         self.assertAlmostEqual(md.commission(100, 50.0), 0.35)             # exactly at the minimum
         self.assertAlmostEqual(md.commission(10, 1.00), 0.10)              # the minimum is capped at 1% of $10
@@ -120,125 +129,232 @@ class M1Costs(NoNetwork):
         hg = rows_of(res, "HG")[D1]
         order = next(o for o in res["book"][0]["order_list"] if o["symbol"] == "AAA")
         q = order["filled"]
-        self.assertEqual(q, 498)                                           # floor(50,000 x 0.997 / 100)
+        # wanted floor(50,000 x 0.999 / 100) = 499; sized AT ITS LIMIT (100.50) from the cash less the 0.1%
+        # reserve: floor(499 x 49,950 / (499 x 100.50)) = 497
+        self.assertEqual(math.floor(499 * 49_950 / (499 * 100.5)), 497)
+        self.assertEqual((q, order["limit"]), (497, 100.5))
         self.assertAlmostEqual(order["price"], 100.02)
-        self.assertAlmostEqual(order["commission"], 1.743)
-        self.assertAlmostEqual(hg["slippage"], 498 * 0.02, places=4)
-        self.assertAlmostEqual(hg["commission"], 1.743, places=4)
-        self.assertAlmostEqual(hg["equity"], 50_000 - 498 * 0.02 - 1.743, places=2)
-        self.assertAlmostEqual(hg["ret_px_gross"], 0.0, places=9)           # before costs nothing happened
-        self.assertAlmostEqual(hg["ret_px"], -(498 * 0.02 + 1.743) / 50_000, places=9)
+        self.assertAlmostEqual(order["commission"], 1.7395)
+        self.assertAlmostEqual(hg["slippage"], 497 * 0.02, places=4)
+        self.assertAlmostEqual(hg["commission"], 1.7395, places=4)
+        self.assertAlmostEqual(hg["equity"], 50_000 - 497 * 0.02 - 1.7395, places=2)
+        self.assertAlmostEqual(hg["ret_gross"], 0.0, places=9)              # before costs nothing happened
+        self.assertAlmostEqual(hg["ret_px_gross"], 0.0, places=9)
+        self.assertAlmostEqual(hg["ret"], -(497 * 0.02 + 1.7395) / 50_000, places=7)
+        self.assertEqual(hg["ret"], hg["ret_px"])                           # no distribution: one basis
         # twin: no slippage -> the fill is the close and only the commission is paid
         res0 = run(two_sleeves((D1,)), slip=0.0, end=D1)
         hg0 = rows_of(res0, "HG")[D1]
         self.assertEqual(hg0["slippage"], 0.0)
-        self.assertAlmostEqual(hg0["equity"], 50_000 - 1.743, places=2)
+        self.assertAlmostEqual(hg0["equity"], 50_000 - 1.7395, places=2)
         self.assertGreater(hg0["equity"], hg["equity"])
 
     def test_a_sell_is_slipped_down_and_charged(self):
         sh = two_sleeves((D1, D2), hg={D2: {"BBB": 1.0}})
         res = run(sh, slip=5.0, end=D2)
         sell = next(o for o in res["book"][1]["order_list"] if o["side"] == mc.SELL)
-        self.assertEqual((sell["symbol"], sell["filled"]), ("AAA", 498))
+        self.assertEqual((sell["symbol"], sell["filled"], sell["limit"]), ("AAA", 497, None))   # a market order
         self.assertAlmostEqual(sell["price"], 110.0 * (1 - 5e-4))
-        self.assertAlmostEqual(sell["commission"], 1.743)
+        self.assertAlmostEqual(sell["commission"], 1.7395)
         buy = next(o for o in res["book"][1]["order_list"] if o["side"] == mc.BUY)
         self.assertAlmostEqual(buy["price"], 50.0 * (1 + 5e-4))
         self.assertEqual(res["book"][1]["problems"], [])
 
 
 # ------------------------------------------------------------------ M2 distributions
-class M2Distributions(NoNetwork):
-    def test_credited_once_on_prior_shares_and_left_out_of_the_price_basis(self):
-        res = run(two_sleeves(), market(divs={"AAA": {D2: 1.0}}))
-        hg = rows_of(res, "HG")
-        self.assertEqual(hg[D1]["div"], 0.0)
-        self.assertAlmostEqual(hg[D2]["div"], 498.0)                       # 498 shares held at the D1 close x $1
-        self.assertEqual(hg[D2]["div_by"], {"AAA": 498.0})
-        self.assertEqual(hg[D3]["div"], 0.0)                               # once: not again the next session
-        self.assertAlmostEqual(sum(r["div"] for r in res["rows"]), 498.0)
-        self.assertAlmostEqual(res["book"][1]["div"], 498.0)
-        # the price basis takes exactly the credit out of the day's return
-        self.assertAlmostEqual(hg[D2]["ret"] - hg[D2]["ret_px"], 498.0 / hg[D2]["equity_prev"], places=7)
-        self.assertAlmostEqual(hg[D2]["ret_px"], (hg[D2]["equity"] - 498.0) / hg[D2]["equity_prev"] - 1, places=7)
-        # ... and the credit stays in the book afterwards (it is cash the sleeve reinvests)
-        base = rows_of(run(two_sleeves()), "HG")
-        self.assertGreater(hg[D3]["equity"], base[D3]["equity"] + 498.0)   # $498 and what it earned on D3
-        self.assertAlmostEqual(hg[D1]["index_px"], base[D1]["index_px"])
+PAID = {"AAA": {D2: (1.0, D3)}}                    # AAA: ex D2, $1 a share, paid D3
 
-    def test_twins_not_held_and_no_distribution(self):
-        # BBB pays, but HG holds AAA: nothing for HG; HARV (997 BBB) collects
-        res = run(two_sleeves(), market(divs={"BBB": {D2: 0.25}}))
-        self.assertEqual(rows_of(res, "HG")[D2]["div"], 0.0)
-        self.assertAlmostEqual(rows_of(res, "HARV")[D2]["div"], 997 * 0.25)
+
+class M2Distributions(NoNetwork):
+    def test_a_receivable_at_the_ex_date_is_credited_from_the_pay_date(self):
+        res = run(two_sleeves(), market(divs=PAID))
+        hg = rows_of(res, "HG")
+        # ex-date: a receivable for the 497 shares held at the D1 close; no cash yet, so no return yet
+        self.assertEqual((hg[D1]["div_accrued"], hg[D2]["div_accrued"], hg[D2]["div"]), (0.0, 497.0, 0.0))
+        self.assertEqual(hg[D2]["accrued_by"], {"AAA": 497.0})
+        self.assertEqual(hg[D2]["receivable_open"], 497.0)
+        self.assertEqual(hg[D2]["ret"], hg[D2]["ret_px"])
+        # pay date: HG still holds AAA -> its cash is credited, once
+        self.assertEqual((hg[D3]["div"], hg[D3]["div_by"], hg[D3]["div_leaked"]), (497.0, {"AAA": 497.0}, 0.0))
+        self.assertEqual(hg[D3]["receivable_open"], 0.0)
+        self.assertAlmostEqual(sum(r["div"] for r in res["rows"]), 497.0)
+        self.assertEqual([b["div"] for b in res["book"]], [0.0, 0.0, 497.0])
+        self.assertEqual(res["unallocated"], 0.0)
+        # the price basis takes exactly the credit out of the day's return
+        self.assertAlmostEqual(hg[D3]["ret"] - hg[D3]["ret_px"], 497.0 / hg[D3]["equity_prev"], places=7)
+        self.assertAlmostEqual(hg[D3]["ret_px"], (hg[D3]["equity"] - 497.0) / hg[D3]["equity_prev"] - 1, places=7)
+        # ... and the credit is the sleeve's own cash from then on
+        base = rows_of(run(two_sleeves()), "HG")
+        self.assertAlmostEqual(hg[D3]["equity"] - base[D3]["equity"], 497.0, delta=5.0)   # $497, less what buying with it cost
+        self.assertEqual((hg[D2]["index"], hg[D2]["index_px"]), (base[D2]["index"], base[D2]["index_px"]))
+        rec = res["receivables"]
+        self.assertEqual([(r["id"], r["status"], r["settled"], r["shares"], r["total"]) for r in rec],
+                         [(f"div-AAA-{D2}-HG", "credited", D3, 497, 497.0)])
+
+    def test_the_composer_rule_leaks_what_the_sleeve_no_longer_holds_and_the_holder_rule_credits_it(self):
+        sh = two_sleeves(hg={D2: {"BBB": 1.0}, D3: {"BBB": 1.0}})          # HG sells AAA on its ex-date: entitled, then gone
+        res = run(sh, market(divs=PAID))
+        hg = rows_of(res, "HG")
+        self.assertEqual((hg[D2]["div_accrued"], hg[D3]["div"], hg[D3]["div_leaked"]), (497.0, 0.0, 497.0))
+        self.assertEqual(hg[D3]["leaked_by"], {"AAA": 497.0})
+        self.assertEqual((res["unallocated"], res["book"][2]["unallocated"], res["book"][2]["unallocated_change"]), (497.0, 497.0, 497.0))
+        self.assertEqual(res["receivables"][0]["status"], "leaked")
+        self.assertEqual(hg[D3]["ret"], hg[D3]["ret_px"])                   # nothing reached the sleeve
+        self.assertEqual(res["book"][2]["problems"], [])                   # and the book's cash still reconciles
+        # twin: rule "holder" credits whoever held the shares at the ex-date, whatever it holds now
+        held = run(sh, market(divs=PAID), rule="holder")
+        h2 = rows_of(held, "HG")
+        self.assertEqual((h2[D3]["div"], h2[D3]["div_leaked"], held["unallocated"]), (497.0, 0.0, 0.0))
+        self.assertAlmostEqual(h2[D3]["equity"] - hg[D3]["equity"], 497.0, delta=5.0)
+        self.assertEqual(held["receivables"][0]["status"], "credited")
+        with self.assertRaises(ValueError):
+            run(sh, market(divs=PAID), rule="everyone")
+
+    def test_twins_not_held_no_distribution_and_not_yet_paid(self):
+        # BBB pays, but HG holds AAA: nothing for HG; HARV (994 BBB) is owed and paid
+        res = run(two_sleeves(), market(divs={"BBB": {D2: (0.25, D3)}}))
+        self.assertEqual(rows_of(res, "HG")[D2]["div_accrued"], 0.0)
+        self.assertAlmostEqual(rows_of(res, "HARV")[D2]["div_accrued"], 994 * 0.25)
+        self.assertAlmostEqual(rows_of(res, "HARV")[D3]["div"], 994 * 0.25)
         # no distribution anywhere: both bases are the same number every day
         for r in run(two_sleeves())["rows"]:
-            self.assertEqual(r["div"], 0.0)
-            self.assertAlmostEqual(r["ret"], r["ret_px"], places=12)
-        # an ex-date before the sleeve held the payer (D1: bought at that day's close) pays nothing
-        res = run(two_sleeves(), market(divs={"AAA": {D1: 1.0}}))
-        self.assertEqual(sum(r["div"] for r in res["rows"]), 0.0)
+            self.assertEqual((r["div"], r["div_accrued"], r["div_leaked"]), (0.0, 0.0, 0.0))
+            self.assertEqual(r["ret"], r["ret_px"])
+        # an ex-date before the sleeve held the payer (D1: bought at that day's close) owes nothing
+        res = run(two_sleeves(), market(divs={"AAA": {D1: (1.0, D2)}}))
+        self.assertEqual((sum(r["div_accrued"] for r in res["rows"]), res["receivables"]), (0.0, []))
+        # no pay date listed: the core takes ex-date + 7 calendar days, after this window -> still a receivable
+        res = run(two_sleeves(), market(divs={"AAA": {D2: 1.0}}))
+        hg = rows_of(res, "HG")
+        self.assertEqual((hg[D3]["div"], hg[D3]["receivable_open"]), (0.0, 497.0))
+        self.assertEqual((res["receivables"][0]["status"], res["receivables"][0]["pay_date"], res["receivables"][0]["pay_date_given"]),
+                         ("open", "2026-03-10", False))
+        self.assertEqual(res["parity"]["book"]["distributions"]["open_usd"], 497.0)
 
-    def test_an_ex_date_between_sessions_is_paid_at_the_next_one(self):
-        sat = "2026-03-01"                                                 # no session: paid on D1... to holders at D0
-        m = market(divs={"AAA": {sat: 1.0, "2026-03-03": 0.5}})
-        self.assertEqual(m.dividends(D1, D2), {"AAA": 0.5})
-        self.assertEqual(m.dividends(D0, D1), {"AAA": 1.0})
-        self.assertEqual(m.dividends(D2, D3), {})                          # twin: nothing in (D2, D3]
-        self.assertEqual(m.dividends(None, D2), {"AAA": 0.5})
+    def test_the_rows_are_the_brains_shape_and_window(self):
+        sat = "2026-03-01"                                                 # no session that day: it is in D1's rows
+        m = market(divs={"AAA": {sat: (1.0, D2), D2: 0.5, "2026-02-10": 0.7}})
+        rows, splits = m.actions(D1)
+        self.assertEqual(rows, [{"ticker": "AAA", "ex_date": sat, "pay_date": D2, "amount": 1.0}])   # D2's is not due yet
+        self.assertEqual(splits, [])
+        self.assertEqual([x["ex_date"] for x in m.actions(D2)[0]], [sat, D2])     # ... and nothing older than 10 days
+        self.assertEqual(m.actions(D2)[0][1]["pay_date"], None)
+        self.assertEqual(m.actions("2026-03-20")[0], [])                   # twin: outside the window
+
+    def test_a_row_seen_twice_is_booked_once_and_a_late_row_reads_the_holdings_of_its_day(self):
+        both = {"HG": {"status": "ok", "target": {"AAA": 1.0}}, "HARV": {"status": "ok", "target": {"BBB": 1.0}}}
+        swap = {"HG": {"status": "ok", "target": {"AAA": 1.0}}, "HARV": {"status": "ok", "target": {"AAA": 1.0}}}
+        row = {"ticker": "AAA", "ex_date": D2, "pay_date": D3, "amount": 1.0}
+        m = market()
+        sim = md.Sim(md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5}), 0.0)
+        sim.session(D1, both, m.closes(D1), m.closes(D1), m.closes(D1))
+        sim.session(D2, swap, m.closes(D2), m.closes(D2), m.closes(D2))    # the ex-date passes with no row; HARV buys AAA at its close
+        self.assertGreater(sim.book.sleeves["HARV"].shares["AAA"], 400)
+        er, b = sim.session(D3, swap, m.closes(D3), m.closes(D3), m.closes(D3), [row, dict(row)])   # it surfaces late, twice
+        self.assertEqual([(r["sleeve"], r["shares"]) for r in sim.receivables], [("HG", 497)])   # the D1 close's holder alone
+        self.assertEqual((er[0]["div"], er[1]["div"], b["div"]), (497.0, 0.0, 497.0))
+        self.assertEqual(b["problems"], [])
+        _, b = sim.session(D4, swap, m.closes(D4), m.closes(D4), m.closes(D4), [row])       # and again the next session
+        self.assertEqual((b["div"], b["div_accrued"], len(sim.receivables)), (0.0, 0.0, 1))
+        # twin: published on its ex-date it reads the sleeves as they stand before that session's plan - the same answer
+        sim2 = md.Sim(md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5}), 0.0)
+        sim2.session(D1, both, m.closes(D1), m.closes(D1), m.closes(D1))
+        sim2.session(D2, swap, m.closes(D2), m.closes(D2), m.closes(D2), [row])
+        self.assertEqual([(r["sleeve"], r["shares"]) for r in sim2.receivables], [("HG", 497)])
+        # twin: an unusable row is ignored, never guessed at
+        sim2.session(D3, swap, m.closes(D3), m.closes(D3), m.closes(D3), [{"ticker": "AAA", "ex_date": D3, "amount": -1.0}, "junk", None])
+        self.assertEqual(len(sim2.receivables), 1)
+
+    def test_the_bookings_are_the_cores_own_calls(self):
+        sh = two_sleeves(hg={D3: {"BBB": 1.0}})
+        mkt = market(divs=PAID)
+        res = run(sh, mkt)
+        book, open_recs, leaked = mc.Book.seed(100_000.0, {"HG": 0.5, "HARV": 0.5}, md.rules_from_manifest()), [], 0.0
+        for d in (D1, D2, D3):
+            px = mkt.closes(d)
+            for row in mkt.actions(d)[0]:
+                if row["ex_date"] == d:
+                    open_recs += mc.dividend_receivables({n: dict(s.shares) for n, s in book.sleeves.items()}, row)
+            for r in list(open_recs):
+                out = mc.settle_receivable(book, r, d, "composer")
+                if out["action"] != "not_due":
+                    open_recs.remove(r)
+                    leaked += r["total"] if out["action"] == "leaked" else 0.0
+            t = {e: {"status": "ok", "target": sh[(d, e)]["target"], "version": "v1"} for e in ("HG", "HARV")}
+            plan = mc.build_plan(book, t, px, d)
+            mc.apply_crosses(book, plan)
+            for o in plan["sells"]:
+                mc.book_fill(book, o, o["qty"], o["ref"], md.commission(o["qty"], o["ref"]))
+            mc.apply_transfers(book, plan)
+            limits = {sym: md.tick_floor(mc.buy_limit(px[sym])) for asks in plan["buy_asks"].values() for sym in asks}
+            for o in mc.size_buys(book, plan, limits=limits):
+                mc.book_fill(book, o, o["qty"], o["ref"], md.commission(o["qty"], o["ref"]))
+            mc.finish(book, plan)
+        self.assertEqual(res["book_final"], book.to_dict())
+        self.assertEqual((open_recs, leaked, res["unallocated"]), ([], 0.0, 0.0))
 
 
 # ------------------------------------------------------------------ M3 three days by hand
 class M3ThreeDaysByHand(NoNetwork):
-    """HG $50,000: AAA 100 -> 110 (ex $1 a share) -> 121, then into BBB at 50. No slippage, so every
-    number below is integer shares x round prices and the tiered commission."""
+    """HG $50,000: AAA 100 -> 110 (ex $1 a share, paid the next session) -> 121, then into BBB at 50. No
+    slippage, so every number below is integer shares x round prices and the tiered commission. The
+    core's defaults: 0.1% cash reserve, buys sized at a limit 0.5% above the reference."""
 
     def test_to_the_cent(self):
         sh = two_sleeves(hg={D3: {"BBB": 1.0}})
-        res = run(sh, market(divs={"AAA": {D2: 1.0}}))
+        res = run(sh, market(divs=PAID))
         hg, harv = rows_of(res, "HG"), rows_of(res, "HARV")
-        # D1: floor(50,000 x 0.997 / 100) = 498 AAA at 100; commission 498 x 0.0035 = 1.743
-        e1 = 50_000 - 1.743
+        # D1: wanted floor(50,000 x 0.999 / 100) = 499; at the 100.50 limit the cash less its reserve buys
+        # floor(499 x 49,950 / 50,149.50) = 497 AAA at 100; commission 497 x 0.0035 = 1.7395
+        cash1 = 50_000 - 497 * 100 - 1.7395
+        e1 = cash1 + 497 * 100
         self.assertEqual((hg[D1]["action"], hg[D1]["target"]), ("trade", {"AAA": 1.0}))
         self.assertAlmostEqual(hg[D1]["equity"], round(e1, 2), places=2)
-        self.assertAlmostEqual(hg[D1]["ret"], -1.743 / 50_000, places=9)
-        # D2: +498 x $1 credited; AAA 110. Equity before trading 198.257 + 498 + 54,780 = 55,476.257;
-        # wanted floor(55,476.257 x 0.997 / 110) = 502 -> buy 4 at 110 (commission: the $0.35 minimum)
-        cash2 = (50_000 - 498 * 100 - 1.743) + 498.0
-        self.assertEqual(math.floor((cash2 + 498 * 110) * 0.997 / 110), 502)
-        cash2 -= 4 * 110 + 0.35
-        e2 = cash2 + 502 * 110
+        self.assertAlmostEqual(hg[D1]["ret"], -1.7395 / 50_000, places=7)
+        # D2: AAA 110, ex $1: a $497 receivable, no cash. Wanted floor(54,968.2605 x 0.999 / 110) = 499: the 2
+        # missing shares ($220) are under the dust floor (0.5% of the sleeve, $274.84): no trade
+        e2 = cash1 + 497 * 110
+        self.assertEqual(math.floor(e2 * 0.999 / 110), 499)
+        self.assertLess(2 * 110, 0.005 * e2)
+        self.assertEqual((hg[D2]["action"], hg[D2]["reason"]), ("hold", "at target"))
         self.assertAlmostEqual(hg[D2]["equity"], round(e2, 2), places=2)
-        self.assertAlmostEqual(hg[D2]["div"], 498.0)
+        self.assertEqual((hg[D2]["div"], hg[D2]["div_accrued"], hg[D2]["commission"]), (0.0, 497.0, 0.0))
         self.assertAlmostEqual(hg[D2]["ret"], e2 / e1 - 1, places=7)
-        self.assertAlmostEqual(hg[D2]["ret_px"], (e2 - 498.0) / e1 - 1, places=7)
-        self.assertAlmostEqual(hg[D2]["commission"], 0.35, places=4)
-        # D3: sell 502 AAA at 121 (commission 1.757), buy floor(60,997.907 x 0.997 / 50) = 1216 BBB (4.256)
-        cash3 = cash2 + 502 * 121 - 502 * 0.0035
-        self.assertEqual(math.floor((cash2 + 502 * 121) * 0.997 / 50), 1216)
-        cash3 -= 1216 * 50 + 1216 * 0.0035
-        e3 = cash3 + 1216 * 50
+        # D3: the $497 is credited BEFORE the plan (HG still holds AAA). Then sell 497 AAA at 121 (1.7395);
+        # wanted floor(60,932.2605 x 0.999 / 50) = 1217 BBB; at the 50.25 limit the cash less the reserve
+        # buys floor(1217 x (60,930.521 x 0.999) / (1217 x 50.25)) = 1211 (commission 4.2385)
+        cash3 = cash1 + 497.0 + 497 * 121 - 1.7395
+        self.assertEqual(math.floor((cash1 + 497.0 + 497 * 121) * 0.999 / 50), 1217)
+        self.assertEqual(math.floor(1217 * (cash3 * 0.999) / (1217 * 50.25)), 1211)
+        cash3 -= 1211 * 50 + 1211 * 0.0035
+        e3 = cash3 + 1211 * 50
         self.assertAlmostEqual(hg[D3]["equity"], round(e3, 2), places=2)
+        self.assertAlmostEqual(hg[D3]["div"], 497.0)
         self.assertAlmostEqual(hg[D3]["ret"], e3 / e2 - 1, places=7)
-        self.assertEqual(hg[D3]["weights"], {"BBB": round(1216 * 50 / e3, 6)})
-        self.assertEqual(res["book_final"]["sleeves"][0]["shares"], {"BBB": 1216})
-        # the price-basis index chains the three price returns; the total return is e3 / 50,000
-        want = (1 - 1.743 / 50_000) * ((e2 - 498.0) / e1) * (e3 / e2)
-        self.assertAlmostEqual(hg[D3]["index_px"], want, places=7)
-        # HARV: 997 BBB at 50 on D1 (commission 3.4895), then flat
-        self.assertAlmostEqual(harv[D3]["equity"], round(50_000 - 997 * 0.0035, 2), places=2)
+        self.assertAlmostEqual(hg[D3]["ret_px"], (e3 - 497.0) / e2 - 1, places=7)
+        self.assertAlmostEqual(hg[D3]["commission"], 1.7395 + 4.2385, places=4)
+        self.assertEqual(hg[D3]["weights"], {"BBB": round(1211 * 50 / e3, 6)})
+        self.assertEqual(res["book_final"]["sleeves"][0]["shares"], {"BBB": 1211})
+        # the booked index is e3 / 50,000; the price-basis one leaves the credit out of D3's return
+        self.assertAlmostEqual(hg[D3]["index"], e3 / 50_000, places=7)
+        self.assertAlmostEqual(hg[D3]["index_px"], (e2 / 50_000) * ((e3 - 497.0) / e2), places=7)
+        self.assertAlmostEqual(hg[D3]["index_gross"], (e3 + 1.7395 + 4.2385) / e1, places=7)   # each day before its own costs
+        # HARV: wanted 999 BBB, 994 at the 50.25 limit (commission 3.479), then flat
+        self.assertAlmostEqual(harv[D3]["equity"], round(50_000 - 994 * 0.0035, 2), places=2)
         self.assertEqual((harv[D2]["action"], harv[D3]["action"]), ("hold", "hold"))
-        # the book: equity is the two sleeves; venue orders D1 2, D2 1, D3 2; nothing crossed
-        self.assertAlmostEqual(res["book"][2]["equity"], round(e3 + 50_000 - 997 * 0.0035, 2), places=2)
-        self.assertEqual([b["orders"] for b in res["book"]], [2, 1, 2])
+        # the book: equity is the two sleeves; venue orders D1 2, D2 0, D3 2; nothing crossed, nothing unfilled
+        self.assertAlmostEqual(res["book"][2]["equity"], round(e3 + 50_000 - 994 * 0.0035, 2), places=2)
+        self.assertEqual([b["orders"] for b in res["book"]], [2, 0, 2])
         self.assertEqual([b["crosses"] for b in res["book"]], [0, 0, 0])
+        self.assertEqual([b["buys_unfilled"] for b in res["book"]], [0, 0, 0])
         self.assertEqual([b["problems"] for b in res["book"]], [[], [], []])
+        self.assertEqual([b["overspent"] for b in res["book"]], [{}, {}, {}])
 
     def test_twin_one_changed_close_moves_the_answer(self):
         sh = two_sleeves(hg={D3: {"BBB": 1.0}})
-        a = rows_of(run(sh, market(divs={"AAA": {D2: 1.0}})), "HG")[D3]["equity"]
-        b = rows_of(run(sh, market(aaa=(100.0, 100.0, 110.0, 120.0, 120.0), divs={"AAA": {D2: 1.0}})), "HG")[D3]["equity"]
-        self.assertAlmostEqual(a - b, 502 * 1.0, delta=1.0)                # 502 shares x the $1 lower exit
+        a = rows_of(run(sh, market(divs=PAID)), "HG")[D3]["equity"]
+        b = rows_of(run(sh, market(aaa=(100.0, 100.0, 110.0, 120.0, 120.0), divs=PAID)), "HG")[D3]["equity"]
+        self.assertAlmostEqual(a - b, 497 * 1.0, delta=1.0)                # 497 shares x the $1 lower exit
 
     def test_opposite_legs_cross_inside_the_book_at_no_cost(self):
         sh = two_sleeves(hg={D3: {"BBB": 1.0}}, harv={D3: {"AAA": 1.0}})   # the sleeves swap on D3
@@ -274,7 +390,9 @@ class M4CloseModeDrivesMirrorCore(NoNetwork):
             for o in plan["sells"]:
                 mc.book_fill(book, o, o["qty"], o["ref"], md.commission(o["qty"], o["ref"]))
             mc.apply_transfers(book, plan)
-            for o in mc.size_buys(book, plan):
+            limits = {sym: md.tick_floor(mc.buy_limit(px[sym])) for asks in plan["buy_asks"].values() for sym in asks}
+            for o in mc.size_buys(book, plan, limits=limits):
+                self.assertEqual(o["limit"], limits[o["symbol"]])
                 mc.book_fill(book, o, o["qty"], o["ref"], md.commission(o["qty"], o["ref"]))
             mc.finish(book, plan)
             self.assertEqual(mc.check(book, book.positions()), [])
@@ -315,8 +433,17 @@ class M4CloseModeDrivesMirrorCore(NoNetwork):
             self.assertEqual(problems, [], d)
             self.assertGreaterEqual(cash, -1e-6, d)                        # the book never borrows
         self.assertTrue(all(b["problems"] == [] for b in res["book"]))
+        self.assertTrue(all(b["overspent"] == {} for b in res["book"]))    # nor does any sleeve: buys are sized at their limit
         self.assertGreater(sum(b["crosses"] for b in res["book"]), 0)      # four sleeves, four funds: legs do cross
         self.assertAlmostEqual(sum(r["div"] for r in res["rows"]), sum(b["div"] for b in res["book"]), places=1)
+        # distributions are conserved: everything accrued was credited, leaked, or is still owed
+        acc, cred, leak = (sum(r[k] for r in res["rows"]) for k in ("div_accrued", "div", "div_leaked"))
+        owed = sum(r["total"] for r in res["receivables"] if r["status"] == "open")
+        self.assertGreater(acc, 0)
+        self.assertGreater(cred, 0)
+        self.assertAlmostEqual(acc, cred + leak + owed, places=1)
+        self.assertAlmostEqual(res["unallocated"], leak, places=1)
+        self.assertEqual({r["status"] for r in res["receivables"]} - {"open", "credited", "leaked"}, set())
         # the KMLM sleeve is the threshold one and does hold inside its corridor some days
         kmlm = [r for r in res["rows"] if r["engine"] == "KMLM"]
         self.assertTrue(any("corridor" in (r["reason"] or "") for r in kmlm))
@@ -361,7 +488,7 @@ class M4CloseModeDrivesMirrorCore(NoNetwork):
         self.assertTrue(any("no fill price for AAA" in p for p in b["problems"]))
         self.assertEqual(b["orders"], 0)
         _, b = sim.session(D2, t, px, px, px)                              # twin: with a price it fills
-        self.assertEqual((book.positions(), b["problems"], b["orders"]), ({"AAA": 498}, [], 1))
+        self.assertEqual((book.positions(), b["problems"], b["orders"]), ({"AAA": 497}, [], 1))
 
 
 # ------------------------------------------------------------------ M5 Composer's record and parity
@@ -432,7 +559,7 @@ class M5ComposerRecordAndParity(NoNetwork):
         other = next(x for x in res["parity"]["disagreements"] if x["class"] == "other")
         self.assertEqual((other["date"], other["engine"]), (D2, "HARV"))
         self.assertIn("Composer AAA 100%", other["note"])
-        # twin: Composer on the target everywhere -> every engine-day agrees (the 0.3% cash reserve is inside 3%)
+        # twin: Composer on the target everywhere -> every engine-day agrees (the idle cash is inside 3%)
         ok = run(two_sleeves())["parity"]["decisions"]
         self.assertEqual(ok["ALL"]["classes"], {"agree": 6})
 
@@ -488,8 +615,8 @@ class M5ComposerRecordAndParity(NoNetwork):
         sh = two_sleeves()
         base = run(sh)
         hg = rows_of(base, "HG")
-        # Composer earned exactly the mirror's price return -> zero difference; then 40 bps more on D3
-        comp = {"HG": {d: {"dav": 1000.0 * hg[d]["index_px"], "value": hg[d]["equity"], "holdings": {"AAA": 1.0}, "kind": "close",
+        # Composer earned exactly the mirror's booked return -> zero difference; then 40 bps more on D3
+        comp = {"HG": {d: {"dav": 1000.0 * hg[d]["index"], "value": hg[d]["equity"], "holdings": {"AAA": 1.0}, "kind": "close",
                            "taken_at": d} for d in (D1, D2, D3)}}
         t = run(sh, composer=comp)["parity"]["engines"]["HG"]["tracking"]
         self.assertEqual(t["n_daily"], 2)
@@ -518,7 +645,7 @@ class FakeMinutes(md.Minutes):
 
 
 def payload(**targets):
-    return {"schema": 1, "asof_et": "15:55:00", "replay": True, "problems": [], "quotes": {"source": "fmp-1m"},
+    return {"schema": 2, "pinned": True, "asof_et": "15:54:00", "replay": True, "problems": [], "quotes": {"source": "fmp-1m"},
             "engines": {e: ({"status": "ok", "target": t, "version": "v9", "label": "firm", "rule": "daily"} if t else
                             {"status": "unavailable", "note": "no prices for XYZ"}) for e, t in targets.items()}}
 
@@ -526,15 +653,17 @@ def payload(**targets):
 class M6MinuteMode(NoNetwork):
     def setUp(self):
         super().setUp()
-        self.bars = {("AAA", D2): {"15:53": 108.0, "15:54": 109.0, "15:55": 109.5, "15:59": 110.0},
-                     ("BBB", D2): {"15:30": 50.0},                         # thin: nothing at 15:54 or 15:55
-                     ("AAA", D3): {"15:54": 120.0, "15:55": 120.5}, ("BBB", D3): {"15:54": 50.0, "15:55": 50.1}}
-        self.asked = []
+        # a bar is keyed by the minute it STARTS: "15:53" ends at 15:54:00, the decision instant
+        self.bars = {("AAA", D2): {"15:52": 108.0, "15:53": 109.0, "15:54": 109.5, "15:59": 110.0},
+                     ("BBB", D2): {"15:30": 50.0},                         # thin: nothing at 15:53 or 15:54
+                     ("AAA", D3): {"15:53": 120.0, "15:54": 120.5}, ("BBB", D3): {"15:53": 50.0, "15:54": 50.1}}
+        self.asked, self.pinned = [], []
 
     def build(self, plan):
-        def fake(now, quotes=None, fetch=None):
+        def fake(now, quotes=None, fetch=None, pinned=False):
             e = sr.et_now(now)
-            self.asked.append((e.date().isoformat(), e.strftime("%H:%M")))
+            self.asked.append((e.date().isoformat(), e.strftime("%H:%M:%S")))
+            self.pinned.append(pinned)
             return payload(**plan[e.date().isoformat()])
         return fake
 
@@ -543,20 +672,23 @@ class M6MinuteMode(NoNetwork):
         plan = {D2: {"HG": {"BBB": 1.0}, "HARV": {"AAA": 1.0}}, D3: {"HG": {"BBB": 1.0}, "HARV": {"AAA": 1.0}}}
         res = md.backfill(D1, D3, "minute", minute_start=D2, shadow=sh, market=market(), minutes=FakeMinutes(self.bars),
                           build=self.build(plan), composer={}, slip_bps=0.0, capital=100_000.0, fractions={"HG": 0.5, "HARV": 0.5})
-        self.assertEqual(self.asked, [(D2, "15:55"), (D3, "15:55")])       # the warm-up day never asks the brain
+        self.assertEqual(self.asked, [(D2, "15:54:00"), (D3, "15:54:00")])  # the warm-up day never asks the brain
+        self.assertEqual(self.pinned, [True, True])                        # the decision AS OF that instant, never an ad hoc read
+        self.assertEqual(md.DECIDE, sr._hm(sr._min("16:00") - sr.DECISION_MINUTE))   # the instant the brain's clock publishes
         self.assertEqual([b["mode"] for b in res["book"]], ["close", "minute", "minute"])
         o = {x["symbol"] + x["side"]: x for x in res["book"][1]["order_list"]}
-        # the sleeves swap: AAA and BBB cross at the REFERENCE (the 15:54 bar's close 109.0; BBB's last trade 50.0)
+        # the sleeves swap: AAA and BBB cross at the REFERENCE (the bar ENDING 15:54:00, 109.0; BBB's last trade 50.0)
         self.assertEqual(res["book"][1]["crosses"], 2)
         self.assertAlmostEqual(o["AAASELL"]["ref"], 109.0)
-        self.assertAlmostEqual(o["AAASELL"]["px"], 109.5)                   # filled at the close of the bar that STARTS 15:55
-        self.assertAlmostEqual(o["BBBBUY"]["px"], 50.0)                     # no 15:55 bar: the day's close
+        self.assertAlmostEqual(o["AAASELL"]["ref"], sr.minute_price(self.bars[("AAA", D2)], "15:54"))   # shadow_runner's own read
+        self.assertAlmostEqual(o["AAASELL"]["px"], 109.5)                   # filled at the close of the bar that STARTS 15:54
+        self.assertAlmostEqual(o["BBBBUY"]["px"], 50.0)                     # no such bar: the day's close
         self.assertEqual(res["book"][1]["fill_fallbacks"], ["BBB"])
         self.assertEqual(res["minute"]["fallbacks"], 1)
         self.assertEqual(res["minute"]["fallback_tickers"], {"BBB": 1})
         self.assertEqual((res["minute"]["covered"], res["minute"]["stopped"]), (2, None))
         hg = rows_of(res, "HG")
-        self.assertEqual((hg[D2]["mode"], hg[D2]["decide"], hg[D2]["label"], hg[D2]["version"]), ("minute", "15:55", "firm", "v9"))
+        self.assertEqual((hg[D2]["mode"], hg[D2]["decide"], hg[D2]["label"], hg[D2]["version"]), ("minute", "15:54", "firm", "v9"))
         self.assertEqual(hg[D2]["target"], {"BBB": 1.0})                   # the brain's, not a ledger's (there is none)
         self.assertEqual(res["book"][1]["problems"], [])
         # valued at the official close: HARV now holds AAA, marked at 110.0, not at its 109.5 fill
@@ -571,18 +703,20 @@ class M6MinuteMode(NoNetwork):
         self.assertIn("Yahoo", str(cm.exception))
 
     def test_twin_fill_at_the_close_and_other_decision_times(self):
-        ref, fills, fb = md.minute_prices(D2, "15:55", ["AAA", "BBB"], FakeMinutes(self.bars), market(), "close")
+        ref, fills, fb = md.minute_prices(D2, "15:54", ["AAA", "BBB"], FakeMinutes(self.bars), market(), "close")
         self.assertEqual((fills, fb), ({"AAA": 110.0, "BBB": 50.0}, []))    # a market-on-close order: no fallback to count
         self.assertEqual(ref["AAA"], 109.0)
-        ref, fills, fb = md.minute_prices(D2, "15:54", ["AAA"], FakeMinutes(self.bars), market())
-        self.assertEqual((ref["AAA"], fills["AAA"], fb), (108.0, 109.0, []))   # a minute earlier: the 15:53 and 15:54 bars
+        ref, fills, fb = md.minute_prices(D2, "15:53", ["AAA"], FakeMinutes(self.bars), market())
+        self.assertEqual((ref["AAA"], fills["AAA"], fb), (108.0, 109.0, []))   # a minute earlier: the bars starting 15:52 and 15:53
+        ref, fills, fb = md.minute_prices(D2, "15:55", ["AAA"], FakeMinutes(self.bars), market())
+        self.assertEqual((ref["AAA"], fb), (109.5, ["AAA"]))               # a minute later (the first run's instant): one bar on
         # a print 30% off the day's close is not a fill (a split, a bad tick): the close, and counted
         bad = dict(self.bars)
-        bad[("AAA", D2)] = {"15:54": 109.0, "15:55": 33.0}
-        ref, fills, fb = md.minute_prices(D2, "15:55", ["AAA"], FakeMinutes(bad), market())
+        bad[("AAA", D2)] = {"15:53": 109.0, "15:54": 33.0}
+        ref, fills, fb = md.minute_prices(D2, "15:54", ["AAA"], FakeMinutes(bad), market())
         self.assertEqual((fills["AAA"], fb), (110.0, ["AAA"]))
         # no minute at all before the decision: the reference is the previous close
-        ref, _, _ = md.minute_prices(D2, "15:55", ["BBB"], FakeMinutes({}), market(bbb=50.0))
+        ref, _, _ = md.minute_prices(D2, "15:54", ["BBB"], FakeMinutes({}), market(bbb=50.0))
         self.assertEqual(ref["BBB"], 50.0)
 
     def test_the_brains_published_prices_are_the_sizing_reference(self):
@@ -590,7 +724,7 @@ class M6MinuteMode(NoNetwork):
         plan = {D2: {"HG": {"BBB": 1.0}, "HARV": {"BBB": 1.0}}}
 
         def build(prices):
-            def fake(now, quotes=None, fetch=None):
+            def fake(now, quotes=None, fetch=None, pinned=False):
                 return dict(payload(**plan[sr.et_now(now).date().isoformat()]), prices=prices)
             return fake
         kw = dict(minute_start=D2, shadow=sh, market=market(), composer={}, slip_bps=0.0, capital=100_000.0,
@@ -609,23 +743,10 @@ class M6MinuteMode(NoNetwork):
         self.assertEqual([(x["date"], x["engine"]) for x in res["minute"]["unpriced_skips"]], [(D2, "HG")])
         self.assertEqual(rows_of(res, "HARV")[D2]["action"], "hold")       # the other sleeve is untouched by it
 
-    def test_a_fill_past_the_buy_cushion_is_reported_not_hidden(self):
-        px = {"AAA": 100.0}
-        t = {"HG": {"status": "ok", "target": {"AAA": 1.0}}}
-        sim = md.Sim(md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5}), 0.0)
-        _, b = sim.session(D1, t, px, {"AAA": 101.0}, {"AAA": 101.0})       # sized at 100, filled 1% higher
-        self.assertEqual(b["problems"], [])                                # no invariant is broken ...
-        self.assertAlmostEqual(b["overspent"]["HG"], 50_000 - 498 * 101.0 - 1.743, places=2)   # ... but the sleeve borrowed $300
-        self.assertLess(b["cash_low"], -299)
-        sim = md.Sim(md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5}), 0.0)
-        _, b = sim.session(D1, t, px, {"AAA": 100.2}, {"AAA": 100.2})       # twin: inside the 0.3% cushion
-        self.assertEqual(b["overspent"], {})
-        self.assertGreaterEqual(b["cash_low"], 0)
-
     def test_half_days_keep_their_distance_to_the_close(self):
-        self.assertEqual(md.decide_at("2026-11-27"), "12:55")
+        self.assertEqual(md.decide_at("2026-11-27"), "12:54")
         self.assertEqual(md.decide_at("2026-11-27", "15:45"), "12:45")
-        self.assertEqual(md.decide_at("2026-11-25"), "15:55")               # twin: a full day
+        self.assertEqual(md.decide_at("2026-11-25"), "15:54")               # twin: a full day
         self.assertIn("2026-11-27", sr.HALF_DAYS)
 
     def test_an_unavailable_engine_stands_still_and_is_listed(self):
@@ -685,15 +806,17 @@ class M7Daily(NoNetwork):
         self.book, self.ledger = os.path.join(d, "out", "dry-book.json"), os.path.join(d, "out", "dry-ledger.jsonl")
         self.snaps, self.shadow = os.path.join(d, "monitor"), os.path.join(d, "shadow.jsonl")
         os.makedirs(self.snaps)
-        self.bars = {("AAA", x): {"15:54": p - 0.5, "15:55": p - 0.4} for x, p in zip(CAL, (100.0, 100.0, 110.0, 121.0, 121.0))}
-        self.bars.update({("BBB", x): {"15:54": 50.0, "15:55": 50.0} for x in CAL})
+        self.bars = {("AAA", x): {"15:53": p - 0.5, "15:54": p - 0.4} for x, p in zip(CAL, (100.0, 100.0, 110.0, 121.0, 121.0))}
+        self.bars.update({("BBB", x): {"15:53": 50.0, "15:54": 50.0} for x in CAL})
         self.plan = {x: {"HG": {"AAA": 1.0}, "HARV": {"BBB": 1.0}} for x in CAL}
-        self.divs, self.boom = {}, None
+        self.divs, self.boom, self.published = {}, None, None
 
-    def build(self, now, quotes=None, fetch=None):
+    def build(self, now, quotes=None, fetch=None, pinned=False):
         if self.boom:
             raise self.boom
-        return payload(**self.plan[sr.et_now(now).date().isoformat()])
+        self.assertTrue(pinned)
+        out = payload(**self.plan[sr.et_now(now).date().isoformat()])
+        return out if self.published is None else dict(out, dividends=self.published, splits=[])
 
     def day(self, d, **kw):
         kw.setdefault("minutes", FakeMinutes(self.bars))
@@ -719,18 +842,21 @@ class M7Daily(NoNetwork):
         lines, alerts = self.day(D1)
         self.assertEqual(alerts, [])
         self.assertTrue(1 <= len(lines) <= 3)
-        self.assertIn("MIRROR DRY 2026-03-02 (decided 15:55 ET)", lines[0])
+        self.assertIn("MIRROR DRY 2026-03-02 (decided 15:54 ET)", lines[0])
         self.assertIn("no snapshot", lines[-1])
         rows = self.rows()
         self.assertEqual([r["engine"] for r in rows], ["HG", "HARV", "BOOK"])
         hg, book = rows[0], rows[2]
-        self.assertEqual((hg["action"], hg["decide"], hg["mode"], hg["label"]), ("trade", "15:55", "minute", "firm"))
+        self.assertEqual((hg["action"], hg["decide"], hg["mode"], hg["label"]), ("trade", "15:54", "minute", "firm"))
         self.assertEqual(hg["parity"], "no Composer snapshot")
         saved = json.loads(read(self.book))
         self.assertEqual((saved["session"], saved["seeded_on"], saved["capital"]), (D1, D1, 100_000.0))
-        # sized on the 15:54 price (99.5), filled at the 15:55 bar's close (99.6), valued at the close (100.0)
-        q = math.floor(50_000 * 0.997 / 99.5)
-        self.assertEqual(q, 501)
+        self.assertEqual((saved["schema"], saved["rule"], saved["state"]["last"]), (2, "composer", D1))
+        # sized on the 15:54:00 price (99.5) at its limit (99.5 x 1.005 floored to the cent: 99.99), filled at
+        # the close of the bar ending 15:55 (99.6), valued at the close (100.0)
+        want = math.floor(50_000 * 0.999 / 99.5)
+        q = math.floor(want * 49_950 / (want * 99.99))
+        self.assertEqual((want, q, book["order_list"][0]["limit"]), (502, 499, 99.99))
         self.assertEqual(saved["book"]["sleeves"][0]["shares"], {"AAA": q})
         self.assertAlmostEqual(hg["equity"], round(50_000 - q * 99.6 - md.commission(q, 99.6) + q * 100.0, 2), places=2)
         self.assertEqual(book["overspent"], {})
@@ -770,9 +896,10 @@ class M7Daily(NoNetwork):
         self.assertEqual(read(self.book), book2)
 
     def test_force_reruns_the_last_session_without_booking_twice(self):
-        self.divs = {"AAA": {D2: 1.0}}
+        self.divs = {"AAA": {D2: (1.0, D2)}}                               # ex and paid on D2
         self.day(D1)
-        self.day(D2)
+        lines, _ = self.day(D2)
+        self.assertIn("distributions credited $499.00", lines[1])
         first = self.rows()
         book = json.loads(read(self.book))
         lines, alerts = self.day(D2, force=True)
@@ -781,8 +908,12 @@ class M7Daily(NoNetwork):
         self.assertEqual(len(again), 6)                                    # replaced, not appended
         self.assertEqual(again[3]["equity"], first[3]["equity"])
         self.assertEqual(again[3]["div"], first[3]["div"])                 # the distribution was paid once
-        self.assertGreater(again[3]["div"], 0)
-        self.assertEqual(json.loads(read(self.book))["book"], book["book"])
+        self.assertEqual(again[3]["div"], 499.0)
+        saved = json.loads(read(self.book))
+        self.assertEqual(saved["book"], book["book"])
+        self.assertEqual([(r["id"], r["status"]) for r in saved["state"]["receivables"]], [(f"div-AAA-{D2}-HG", "credited")])
+        self.assertEqual(saved["state"]["div_seen"], [f"div-AAA-{D2}"])
+        self.assertEqual(saved["before"]["state"]["receivables"], [])
         # twin: without the saved before-state a re-run WOULD double book: the trade is already done
         self.assertNotEqual(book["before"]["book"], book["book"])
         # a run that died after the book was written and before the ledger heals itself the same way
@@ -851,7 +982,7 @@ class M7Daily(NoNetwork):
         self.assertEqual((hg["parity"], harv["parity"]), ("MISMATCH", "same"))
         self.assertAlmostEqual(hg["composer_ret"], 0.10)                   # deposit-adjusted value 1000 -> 1100
         self.assertEqual(hg["composer_ret_basis"], "dav")
-        self.assertAlmostEqual(hg["diff_bps"], (hg["ret_px"] - 0.10) * 1e4, places=1)
+        self.assertAlmostEqual(hg["diff_bps"], (hg["ret"] - 0.10) * 1e4, places=1)
         # twin 1: the ledger calls it a knife-edge -> explained, no alert
         with open(self.shadow, "w") as f:
             f.write("")
@@ -864,7 +995,7 @@ class M7Daily(NoNetwork):
             f.write("")
         self.shadow_rows(led(D2, "HG", {"AAA": 1.0}, live={"BBB": 1.0}, status="no-rebalance"))
         self.assertEqual(self.day(D2, force=True)[1], [])
-        # ... and when the close logic sides with Composer, the alert says the call flipped after 15:55
+        # ... and when the close logic sides with Composer, the alert says the call flipped after 15:54
         with open(self.shadow, "w") as f:
             f.write("")
         self.shadow_rows(led(D2, "HG", {"BBB": 1.0}, status="agree"))
@@ -900,8 +1031,8 @@ class M7Daily(NoNetwork):
         self.day(D1)                                                       # HG now holds AAA
         real = self.build
 
-        def unpriced(now, quotes=None, fetch=None):
-            return dict(real(now), prices={"BBB": 50.0})                   # the trees no longer mention AAA
+        def unpriced(now, quotes=None, fetch=None, pinned=False):
+            return dict(real(now, pinned=pinned), prices={"BBB": 50.0})    # the trees no longer mention AAA
         self.build = unpriced
         self.plan[D2] = {"HG": {"BBB": 1.0}, "HARV": {"BBB": 1.0}}
         lines, alerts = self.day(D2)
@@ -909,7 +1040,7 @@ class M7Daily(NoNetwork):
         self.assertIn("MIRROR DRY SLEEVE LEFT OUT — HG", alerts[0])
         self.assertIn("no price for AAA", alerts[0])
         self.assertEqual(self.rows()[3]["action"], "skip")
-        self.build = lambda now, quotes=None, fetch=None: dict(real(now), prices={"AAA": 109.5, "BBB": 50.0})
+        self.build = lambda now, quotes=None, fetch=None, pinned=False: dict(real(now, pinned=pinned), prices={"AAA": 109.5, "BBB": 50.0})
         self.assertEqual(self.day(D2, force=True)[1], [])                  # twin: priced -> it trades, no alert
         self.assertEqual(self.rows()[3]["action"], "trade")
 
@@ -927,17 +1058,52 @@ class M7Daily(NoNetwork):
         self.day(D4, force=True)
         self.assertIn("diff_bps", self.rows()[6])
 
-    def test_half_day_decides_five_minutes_before_its_own_close(self):
+    def test_the_brains_published_dividends_are_the_ones_booked(self):
+        self.day(D1)                                                       # HG holds 499 AAA
+        self.divs = {"AAA": {D2: (9.0, D2)}}                               # the simulator's own list says $9 ...
+        self.published = [{"ticker": "AAA", "ex_date": D2, "pay_date": D2, "amount": 1.0}]   # ... the brain publishes $1
+        self.day(D2)
+        self.assertEqual(self.rows()[3]["div"], 499.0)                     # what the executor is given is what is booked
+        self.published = []                                                # twin: the brain publishes none -> none booked
+        self.day(D2, force=True)
+        self.assertEqual((self.rows()[3]["div"], self.rows()[3]["div_accrued"]), (0.0, 0.0))
+        self.published = None                                              # twin: a payload without the field (a seam's fake)
+        self.day(D2, force=True)                                           # falls back to the simulator's own list
+        self.assertEqual(self.rows()[3]["div"], 499 * 9.0)
+
+    def test_an_unfilled_limit_buy_is_reported_and_keeps_its_cash(self):
+        self.bars[("AAA", D1)] = {"15:53": 99.5, "15:54": 100.2}           # +70 bps in the minute: past the 99.99 limit
+        lines, alerts = self.day(D1)
+        self.assertEqual(alerts, [])
+        self.assertIn("1 limit buy(s) UNFILLED, cash kept: AAA x499 (limit 99.99, bar 100.20)", lines[0])
+        hg, book = self.rows()[0], self.rows()[2]
+        self.assertEqual((hg["weights"], hg["cash_share"], hg["unfilled"]), ({}, 1.0, {"AAA": 499}))
+        self.assertEqual((book["buys"], book["buys_unfilled"], book["overspent"]), (2, 1, {}))
+        lines, alerts = self.day(D2)                                       # the next session's plan buys it
+        self.assertEqual(self.rows()[3]["action"], "trade")
+        self.assertEqual(self.rows()[3]["weights"].keys(), {"AAA"})
+
+    def test_a_book_of_the_older_schema_is_refused_not_reseeded(self):
+        os.makedirs(os.path.dirname(self.book))
+        old = json.dumps({"schema": 1, "session": D1, "book": md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5}).to_dict()})
+        with open(self.book, "w") as f:
+            f.write(old)
+        lines, alerts = self.day(D2)
+        self.assertIn("MIRROR DRY FAILED", alerts[0])
+        self.assertIn("schema 1 is not 2", alerts[0])
+        self.assertEqual(read(self.book), old)
+
+    def test_half_day_decides_six_minutes_before_its_own_close(self):
         cal = ["2026-11-25", "2026-11-27"]
         mkt = md.Market(raw={"AAA": {d: 100.0 for d in cal}, "BBB": {d: 50.0 for d in cal}, "SPY": {d: 500.0 for d in cal}}, calendar=cal)
-        bars = {("AAA", "2026-11-27"): {"12:54": 99.5, "12:55": 99.6, "15:54": 90.0, "15:55": 90.0},
-                ("BBB", "2026-11-27"): {"12:54": 50.0, "12:55": 50.0}}
+        bars = {("AAA", "2026-11-27"): {"12:53": 99.5, "12:54": 99.6, "15:53": 90.0, "15:54": 90.0},
+                ("BBB", "2026-11-27"): {"12:53": 50.0, "12:54": 50.0}}
         self.plan["2026-11-27"] = self.plan[D1]
         lines, alerts = self.day("2026-11-27", market=mkt, minutes=FakeMinutes(bars))
         self.assertEqual(alerts, [])
-        self.assertIn("decided 12:55 ET", lines[0])
+        self.assertIn("decided 12:54 ET", lines[0])
         order = self.rows()[2]["order_list"][0]
-        self.assertEqual((order["symbol"], order["px"]), ("AAA", 99.6))     # the 12:55 bar, not the 15:55 one
+        self.assertEqual((order["symbol"], order["ref"], order["px"]), ("AAA", 99.5, 99.6))   # the bars around 12:54, not 15:54
 
 
 # ------------------------------------------------------------------ M8 the FMP store
@@ -1022,18 +1188,19 @@ class M9RealBrain(unittest.TestCase):
         return {"meta": {"regularMarketTime": int(datetime.datetime(2026, 11, 9, 21, 0, tzinfo=UTC).timestamp())},
                 "timestamp": ts, "indicators": {"quote": [{"close": close}], "adjclose": [{"adjclose": adj}]}, "events": {}}
 
-    def brain(self, scale=None):
+    def brain(self, scale=None, events=None, actions=None, bar="15:53"):
         import preclose as pc
         fam = set(self.fx["prices"])
-        bars = {(t, "2026-10-28"): {"15:53": s["2026-10-28"]} for t, s in self.fx["prices"].items() if "2026-10-28" in s}
+        bars = {(t, "2026-10-28"): {bar: s["2026-10-28"]} for t, s in self.fx["prices"].items() if "2026-10-28" in s}
 
         def fetch(t):
             res = self.chart(t)
+            res["events"] = (events or {}).get(t) or {}
             if scale and t in scale:                                       # history lowered by a later distribution
                 a = res["indicators"]["adjclose"][0]["adjclose"]
                 res["indicators"]["adjclose"][0]["adjclose"] = [x * scale[t] for x in a]
             return res
-        y = md.Yahoo(fetch=fetch)
+        y = md.Yahoo(fetch=fetch, actions=actions)
         mn = FakeMinutes(bars)
         self.assertTrue(fam)
         return md.brain_payload("2026-10-28", "15:54", y, mn), pc
@@ -1043,10 +1210,42 @@ class M9RealBrain(unittest.TestCase):
         self.assertTrue(p["replay"])
         self.assertEqual(p["session"], "2026-10-28")
         self.assertEqual((p["quotes"] or {}).get("source"), "fmp-1m")
+        # a PINNED build as of 15:54:00 ET, on the bar that ends at that instant
+        self.assertEqual((p["schema"], p["pinned"], p["asof_et"]), (2, True, "15:54:00"))
+        self.assertEqual(p["decision_bar"], {"end_utc": "2026-10-28T19:54:00Z", "spy_utc": "2026-10-28T19:54:00Z", "complete": True})
+        self.assertEqual(p["dividends"], [])                               # read through the seam (none in this fixture) ...
+        unread = " ".join(x for x in p["problems"] if "dividends and splits not read" in x)
+        self.assertFalse([t for t in self.fx["prices"] if f" {t}" in unread.replace(",", " ")])   # ... for every ticker it has
         for eng in ("HG", "SLEEVE", "HARV"):
             self.assertEqual(p["engines"][eng]["status"], "ok", p["engines"][eng])
             self.assertTrue(pc.same(p["engines"][eng]["target"], self.fx["expected"][eng]["2026-10-28"]), eng)
         self.assertEqual(p["engines"]["KMLM"]["rule"], "threshold")
+
+    def test_twin_a_decision_bar_that_has_not_printed_is_no_decision(self):
+        p, _ = self.brain(bar="15:52")                                     # SPY's last bar ends 15:53:00, a minute short
+        self.assertFalse(p["decision_bar"]["complete"])
+        self.assertEqual({r["status"] for r in p["engines"].values()}, {"unavailable"})
+
+    def test_dividends_reach_the_payload_through_the_seam_with_fmps_pay_dates(self):
+        import mirror_brain as mb
+        held = sorted(mb.era_tickers(sr.load_manifest()) & set(self.fx["prices"]))
+        t = "BIL" if "BIL" in held else held[0]
+        at = lambda d: int(datetime.datetime.fromisoformat(d + "T13:30:00+00:00").timestamp())   # noqa: E731
+        events = {t: {"dividends": {"a": {"date": at("2026-10-26"), "amount": 0.31}, "b": {"date": at("2026-09-01"), "amount": 0.30}}}}
+        fmp = {"dividends": [{"ex_date": "2026-10-26", "pay_date": "2026-10-29", "amount": 0.3085},
+                             {"ex_date": "2026-10-27", "pay_date": "2026-10-30", "amount": 0.11}], "splits": []}
+        p, _ = self.brain(events=events, actions=lambda x: fmp if x == t else None)
+        mine = [x for x in p["dividends"] if x["ticker"] == t]
+        # Yahoo's event with FMP's amount and pay date; the older one is outside the brain's window; FMP's second
+        # entry is a day from Yahoo's (the same event, never counted twice)
+        self.assertEqual(mine, [{"ticker": t, "ex_date": "2026-10-26", "pay_date": "2026-10-29", "amount": 0.3085}])
+        # twin: Yahoo's events alone -> the same ex-date, Yahoo's amount, no pay date (the core then assumes one)
+        p, _ = self.brain(events=events)
+        self.assertEqual([x for x in p["dividends"] if x["ticker"] == t],
+                         [{"ticker": t, "ex_date": "2026-10-26", "pay_date": None, "amount": 0.31}])
+        # twin: an event dated after the replayed session is not known yet
+        p, _ = self.brain(events={t: {"dividends": {"a": {"date": at("2026-10-29"), "amount": 0.31}}}})
+        self.assertEqual([x for x in p["dividends"] if x["ticker"] == t], [])
 
     def test_a_distribution_paid_since_does_not_change_the_replay(self):
         base, pc = self.brain()
@@ -1060,6 +1259,225 @@ class M9RealBrain(unittest.TestCase):
         a, _ = md.asof_series(adj, raw, "2026-10-28")
         self.assertAlmostEqual(a["2026-10-27"], raw["2026-10-27"], places=6)
         self.assertAlmostEqual(raw["2026-10-28"] / adj["2026-10-27"] / (raw["2026-10-28"] / raw["2026-10-27"]), 1 / 0.985, places=9)
+
+
+# ------------------------------------------------------------------ M10 limit buys
+class M10LimitBuys(NoNetwork):
+    T = {"HG": {"status": "ok", "target": {"AAA": 1.0}}}
+
+    def one(self, fill, slip=0.0, **kw):
+        """HG, $50,000 cash, buys AAA: reference 100.00 (limit 100.50, 497 shares), the fill bar prints `fill`"""
+        sim = md.Sim(md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5}), slip, **kw)
+        er, b = sim.session(D1, self.T, {"AAA": 100.0}, {"AAA": fill}, {"AAA": fill})
+        return sim, er[0], b
+
+    def test_a_buy_above_its_limit_is_unfilled_and_the_cash_stays(self):
+        sim, hg, b = self.one(100.51)                                      # a cent above the limit
+        self.assertEqual(sim.book.positions(), {})
+        self.assertEqual(sim.book.sleeves["HG"].cash, 50_000.0)
+        self.assertEqual(b["problems"], [])                                # not an error: the order is simply not filled
+        self.assertEqual((b["buys"], b["buys_unfilled"], b["orders"]), (1, 1, 0))
+        self.assertEqual(b["unfilled"], [{"symbol": "AAA", "qty": 497, "ref": 100.0, "limit": 100.5, "px": 100.51,
+                                          "asks": {"HG": 497}}])
+        self.assertEqual((hg["unfilled"], hg["weights"], hg["cash_share"]), ({"AAA": 497}, {}, 1.0))
+        self.assertEqual((hg["commission"], hg["slippage"], hg["traded"], hg["ret"]), (0.0, 0.0, 0.0, 0.0))
+        self.assertEqual(b["overspent"], {})
+        # the cash is still there, so the next session's plan buys again, at that day's limit
+        px = {"AAA": 101.0}
+        er, b2 = sim.session(D2, self.T, px, px, px)
+        want = math.floor(50_000 * 0.999 / 101.0)
+        self.assertEqual((er[0]["action"], sim.book.positions()), ("trade", {"AAA": math.floor(want * 49_950 / (want * 101.5))}))
+        self.assertEqual(b2["buys_unfilled"], 0)
+
+    def test_twin_at_or_below_the_limit_it_fills_and_never_above_it(self):
+        sim, hg, b = self.one(100.50)                                      # exactly at the limit: filled
+        self.assertEqual((sim.book.positions(), b["buys_unfilled"]), ({"AAA": 497}, 0))
+        self.assertAlmostEqual(sim.book.sleeves["HG"].cash, 50_000 - 497 * 100.5 - 1.7395, places=6)
+        self.assertGreaterEqual(sim.book.sleeves["HG"].cash, 0.0)          # sized at the limit: it cannot cost more than it has
+        sim, hg, b = self.one(100.20)
+        self.assertEqual(b["order_list"][0]["price"], 100.2)
+        # slippage is added to the fill, but a limit order never pays more than its limit
+        sim, hg, b = self.one(100.45, slip=20.0)                           # 100.45 x 1.002 = 100.6509
+        self.assertEqual((b["order_list"][0]["filled"], b["order_list"][0]["price"]), (497, 100.5))
+        self.assertAlmostEqual(hg["slippage"], 497 * 0.05, places=4)
+        self.assertEqual(b["overspent"], {})
+
+    def test_twin_without_the_rule_the_same_fill_overspends(self):
+        sim, hg, b = self.one(101.0, limit_buys=False)                     # the first run's behaviour: filled 1% above the reference
+        self.assertEqual(sim.book.positions(), {"AAA": 497})
+        self.assertEqual(b["problems"], [])
+        self.assertAlmostEqual(b["overspent"]["HG"], 50_000 - 497 * 101.0 - 1.7395, places=2)   # the sleeve borrowed $198.74
+        self.assertLess(b["cash_low"], -198)
+        sim, hg, b = self.one(101.0)                                       # with it: unfilled, nothing borrowed
+        self.assertEqual((sim.book.positions(), b["overspent"], b["buys_unfilled"]), ({}, {}, 1))
+        self.assertEqual(b["cash_low"], 50_000.0)
+
+    def test_a_limit_requoted_at_the_fill_is_sized_there_and_fills(self):
+        sim, hg, b = self.one(101.0, limit_at="fill")                      # what the live executor does after its sells
+        o = b["order_list"][0]
+        self.assertEqual((o["limit"], o["filled"], o["price"]), (101.5, math.floor(499 * 49_950 / (499 * 101.5)), 101.0))
+        self.assertEqual(o["filled"], 492)
+        self.assertEqual(b["buys_unfilled"], 0)
+        with self.assertRaises(ValueError):
+            md.Sim(md.seed_book(), limit_at="close")
+
+    def test_a_sell_is_a_market_order_however_far_the_price_moved(self):
+        sim, _, _ = self.one(100.0)
+        t = {"HG": {"status": "ok", "target": {"BBB": 1.0}}}
+        ref, fills = {"AAA": 100.0, "BBB": 50.0}, {"AAA": 80.0, "BBB": 50.0}   # AAA prints 20% under the reference
+        er, b = sim.session(D2, t, ref, fills, fills)
+        sell = next(o for o in b["order_list"] if o["side"] == mc.SELL)
+        self.assertEqual((sell["filled"], sell["price"], sell["limit"]), (497, 80.0, None))
+        # the buy is then sized from the cash the sell really raised, never from what was expected
+        buy = next(o for o in b["order_list"] if o["side"] == mc.BUY)
+        self.assertLessEqual(buy["filled"] * buy["limit"], 497 * 80.0 + 300)
+        self.assertEqual((b["overspent"], b["problems"]), ({}, []))
+
+    def test_the_limit_is_the_cores_floored_to_the_venues_tick_like_the_executors(self):
+        import ib_adapter                                                  # the executor's own rounding (pure; no connection)
+        for px in (0.5321, 0.91, 0.99995, 1.0, 7.02, 8.24, 33.333, 99.5, 158.65, 600.0, 4999.99):
+            core = mc.buy_limit(px)
+            mine = md.tick_floor(core)
+            self.assertEqual(mine, ib_adapter.round_limit_to_tick(core, "BUY"), px)
+            self.assertLessEqual(mine, core)                               # never loosened ...
+            self.assertGreater(mine, core - (0.01 if core >= 1 else 0.0001) - 1e-12)   # ... and within one tick
+        self.assertEqual(md.tick_floor(99.5 * 1.005), 99.99)                # 99.9975 -> 99.99, not 100.00
+        self.assertEqual(md.tick_floor(0.123456), 0.1234)
+        for bad in (0, -1.0, float("nan"), float("inf"), None, "x", 0.00004):
+            self.assertIsNone(md.tick_floor(bad), bad)
+        _, _, b = self.one(100.0)
+        self.assertEqual(b["order_list"][0]["limit"], md.tick_floor(mc.buy_limit(100.0)))
+        self.assertEqual((mc.Config().buy_cushion, mc.Config().cash_reserve_frac), (0.005, 0.001))   # what the numbers here assume
+
+    def test_no_filled_buy_ever_leaves_a_sleeve_in_debt(self):
+        import random
+        rnd = random.Random(5)
+        for i in range(300):
+            ref = round(rnd.uniform(0.6, 400.0), 4)
+            fill = ref * (1 + rnd.uniform(-0.02, 0.02))
+            sim = md.Sim(md.seed_book(rnd.uniform(500, 200_000), {"HG": 0.5, "HARV": 0.5}), rnd.choice((0.0, 2.0, 10.0)))
+            _, b = sim.session(D1, self.T, {"AAA": ref}, {"AAA": fill}, {"AAA": fill})
+            self.assertEqual(b["overspent"], {}, (ref, fill))
+            self.assertGreaterEqual(min(x.cash for x in sim.book.sleeves.values()), 0.0, (ref, fill))
+            o = b["order_list"][0] if b["order_list"] else None
+            if o and o["filled"]:
+                self.assertLessEqual(o["price"], o["limit"] + 1e-12)
+                self.assertLessEqual(o["px"], o["limit"] + 1e-9)
+            elif o:
+                self.assertGreater(o["px"], o["limit"])
+
+    def test_the_backfill_counts_every_unfilled_leg_and_says_whether_it_would_have_filled_later(self):
+        sh = two_sleeves((D1,))
+        plan = {D2: {"HG": {"BBB": 1.0}, "HARV": {"BBB": 1.0}}, D3: {"HG": {"BBB": 1.0}, "HARV": {"BBB": 1.0}}}
+        bars = {("AAA", D2): {"15:53": 109.0, "15:54": 109.5},
+                ("BBB", D2): {"15:53": 50.0, "15:54": 50.3, "15:55": 50.4, "15:56": 50.2, "15:58": 50.6},   # +60 bps in the minute
+                ("AAA", D3): {"15:53": 120.0, "15:54": 120.5}, ("BBB", D3): {"15:53": 50.0, "15:54": 50.1}}
+
+        def build(now, quotes=None, fetch=None, pinned=False):
+            return payload(**plan[sr.et_now(now).date().isoformat()])
+        kw = dict(minute_start=D2, shadow=sh, market=market(), build=build, composer={}, slip_bps=0.0, capital=100_000.0,
+                  fractions={"HG": 0.5, "HARV": 0.5})
+        res = md.backfill(D1, D3, "minute", minutes=FakeMinutes(bars), **kw)
+        hg = rows_of(res, "HG")
+        self.assertEqual(len(res["unfilled"]), 1)
+        u = res["unfilled"][0]
+        self.assertEqual((u["date"], u["symbol"], u["limit"], u["px"], u["asks"]), (D2, "BBB", 50.25, 50.3, {"HG": u["qty"]}))
+        self.assertEqual((u["over_limit_bps"], u["ref_to_fill_bps"]), (10.0, 60.0))
+        self.assertEqual(u["later"], {"at": "15:57", "px": 50.2})           # the order keeps working until 15:59:00
+        self.assertEqual((hg[D2]["weights"], hg[D2]["unfilled"]), ({}, {"BBB": u["qty"]}))   # AAA sold (a market order), all cash
+        self.assertEqual((hg[D3]["action"], hg[D3]["weights"].keys()), ("trade", {"BBB"}))   # bought the next session
+        lb = res["parity"]["book"]["limit_buys"]
+        self.assertEqual((lb["buy_orders"], lb["unfilled_orders"], lb["unfilled_legs"], lb["sessions"]), (2, 1, 1, 1))
+        self.assertAlmostEqual(lb["unfilled_usd"], u["qty"] * 50.3, places=2)
+        self.assertIn("a limit buy left unfilled into the day (BBB)", md.cause_labeller([], res["rows"], "HG")({"d0": D2, "d1": D3}))
+        # twin: the same minute inside the cushion fills, and nothing is listed
+        ok = dict(bars)
+        ok[("BBB", D2)] = {"15:53": 50.0, "15:54": 50.2}
+        res = md.backfill(D1, D3, "minute", minutes=FakeMinutes(ok), **kw)
+        self.assertEqual((res["unfilled"], res["parity"]["book"]["limit_buys"]["unfilled_orders"]), ([], 0))
+        self.assertEqual(rows_of(res, "HG")[D2]["weights"].keys(), {"BBB"})
+        # twin: no later bar at or below the limit -> it would not have filled by 15:59 either
+        never = dict(bars)
+        never[("BBB", D2)] = {"15:53": 50.0, "15:54": 50.3, "15:55": 50.4, "15:59": 50.0}
+        res = md.backfill(D1, D3, "minute", minutes=FakeMinutes(never), **kw)
+        self.assertIsNone(res["unfilled"][0]["later"])                     # the 15:59 bar ends at the close: after the cancel
+
+
+# ------------------------------------------------------------------ M11 splits
+class M11Splits(NoNetwork):
+    """SSS splits 2:1 on D3. It TRADED at 200, 200, 100, 100; the source restates the past: 100 throughout."""
+
+    def mkt(self, listed=True, restated=True):
+        sss = dict(zip(CAL, (100.0,) * 5 if restated else (200.0, 200.0, 200.0, 100.0, 100.0)))
+        return market(extra={"SSS": sss}, splits={"SSS": [(D3, 2, 1)]} if listed else None)
+
+    def test_closes_are_the_prices_the_fund_traded_at(self):
+        m = self.mkt()
+        self.assertEqual([m.closes(d)["SSS"] for d in CAL], [200.0, 200.0, 200.0, 100.0, 100.0])
+        self.assertEqual((m.traded_factor("SSS", D2), m.traded_factor("SSS", D3), m.traded_factor("AAA", D1)), (2.0, 1.0, 1.0))
+        self.assertEqual(m.actions(D3)[1], [{"ticker": "SSS", "date": D3, "ratio": 2.0}])
+        self.assertEqual(m.actions(D2)[1], [])                             # not before its day
+        # a split announced for a date the series does not reach yet is in no price: no factor
+        ahead = market(extra={"SSS": {d: 100.0 for d in CAL}}, splits={"SSS": [("2026-04-01", 2, 1)]})
+        self.assertEqual(ahead.closes(D1)["SSS"], 100.0)
+        # minute bars and the brain's prices are restated the same way in a replay, and come back the same way
+        bars = {("SSS", D2): {"15:53": 100.0, "15:54": 100.5}}
+        ref, fills, fb = md.minute_prices(D2, "15:54", ["SSS"], FakeMinutes(bars), m)
+        self.assertEqual((ref["SSS"], fills["SSS"], fb), (200.0, 201.0, []))
+        ref, _, _ = md.minute_prices(D2, "15:54", ["SSS"], FakeMinutes(bars), m, brain_prices={"SSS": 100.2})
+        self.assertEqual(ref["SSS"], 200.4)
+
+    def test_the_sleeves_shares_are_rescaled_by_the_core_before_the_plan(self):
+        sh = two_sleeves((D1, D2, D3, D4), hg={d: {"SSS": 1.0} for d in CAL})
+        res = run(sh, self.mkt(), end=D4)
+        hg = rows_of(res, "HG")
+        first = next(o for o in res["book"][0]["order_list"] if o["symbol"] == "SSS")
+        self.assertEqual((first["filled"], first["price"]), (248, 200.0))  # floor(249 x 49,950 / (249 x 201.00)), at what it traded at
+        self.assertEqual([x["after"] for x in res["splits_applied"]], [{"HG": 496}])
+        self.assertEqual(res["splits_applied"][0]["date"], D3)
+        # D3's plan then sees 496 shares at 100 and tops up the 3 the 200-dollar price could not buy
+        self.assertEqual([(o["side"], o["symbol"], o["filled"]) for o in res["book"][2]["order_list"]], [(mc.BUY, "SSS", 3)])
+        self.assertEqual(res["book_final"]["sleeves"][0]["shares"], {"SSS": 499})
+        self.assertEqual(res["state"]["venue"]["SSS"], 499)                # the 'account' was split too: mc.check stays clean
+        self.assertTrue(all(b["problems"] == [] for b in res["book"]))
+        self.assertAlmostEqual(hg[D3]["ret"], 0.0, places=4)               # nothing happened to the holder (a $0.35 commission)
+        self.assertAlmostEqual(hg[D4]["equity"], hg[D2]["equity"], delta=0.5)
+        self.assertEqual(res["unallocated"], 0.0)                          # 2:1 leaves no fraction
+        # twin: the same traded prices with the split NOT listed -> the book keeps the old count and halves
+        bad = rows_of(run(sh, self.mkt(listed=False, restated=False), end=D4), "HG")
+        self.assertAlmostEqual(bad[D3]["ret"], -0.5, places=2)
+
+    def test_a_reverse_split_floors_the_book_and_leaves_the_cash_in_lieu_unallocated(self):
+        book = md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5})
+        book.sleeves["HG"].shares["SSS"], book.sleeves["HARV"].shares["SSS"] = 15, 7
+        sim = md.Sim(book, 0.0)
+        hold = {}                                                          # no targets: both sleeves stand still
+        row = {"ticker": "SSS", "date": D2, "ratio": 0.1}
+        px = {"SSS": 30.0}
+        _, b = sim.session(D2, hold, px, px, px, None, [row])
+        self.assertEqual(b["splits"][0]["before"], {"HARV": 7, "HG": 15})
+        self.assertEqual(sum(b["splits"][0]["after"].values()), 2)         # floor(22 x 0.1); the core says who gets them
+        self.assertEqual(book.positions(), {"SSS": 2})
+        self.assertEqual(sim.venue, {"SSS": 2})
+        self.assertAlmostEqual(b["splits"][0]["fraction"], 0.2)
+        self.assertAlmostEqual(sim.unallocated, 0.2 * 30.0)                # the broker's cash in lieu: no sleeve's until credited
+        self.assertEqual((b["unallocated"], b["problems"]), (6.0, []))
+        self.assertEqual(book.cash(), 100_000.0)                           # the core books nothing in cash
+        _, b = sim.session(D3, hold, px, px, px, None, [row, row])         # twin: listed again -> not applied again
+        self.assertEqual((b["splits"], book.positions(), sim.unallocated), ([], {"SSS": 2}, 6.0))
+
+    def test_twin_a_split_that_surfaces_after_its_session_is_reported_not_applied(self):
+        book = md.seed_book(100_000.0, {"HG": 0.5, "HARV": 0.5})
+        book.sleeves["HG"].shares["SSS"] = 10
+        sim = md.Sim(book, 0.0)
+        px = {"SSS": 30.0}
+        sim.session(D2, {}, px, px, px)                                    # D2 ran, and the split dated D2 was not listed
+        _, b = sim.session(D3, {}, px, px, px, None, [{"ticker": "SSS", "date": D2, "ratio": 2.0}])
+        self.assertEqual(book.positions(), {"SSS": 10})
+        self.assertTrue(any("split SSS" in p and "not applied" in p for p in b["problems"]), b["problems"])
+        # twin: an unusable row, or a split of something nobody holds, changes nothing and says nothing
+        _, b = sim.session(D4, {}, px, px, px, None, [{"ticker": "SSS", "date": D4, "ratio": -2}, {"ticker": "ZZZ", "date": D4, "ratio": 2.0}, "junk"])
+        self.assertEqual((book.positions(), b["problems"], b["splits"]), ({"SSS": 10}, [], []))
 
 
 if __name__ == "__main__":
