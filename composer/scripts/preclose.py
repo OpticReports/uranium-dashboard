@@ -532,18 +532,24 @@ def render(ss, g, rows, notes, failures, spy_move=None, sides=None):
 
 
 # ------------------------------------------------------------------ I/O
-def fetch_live(t, rng="2y", tries=2):
+def fetch_live(t, rng="2y", tries=2, timeout=None):
     """({date: adjusted close}, {date: raw close}, chart meta) from Yahoo daily bars; in a session the
-    last bar is today's, at the latest trade (meta['regularMarketTime'])"""
+    last bar is today's, at the latest trade (meta['regularMarketTime']). timeout: seconds per attempt
+    (default shadow_runner._chart's 30). With FMP_API_KEY the dividends
+    and splits FMP lists and Yahoo has not booked are applied to the history too (shadow_runner.
+    parse_daily), and meta['corporateActions'] carries the ticker's dividends and splits, Yahoo's events
+    union FMP's lists (shadow_runner.corporate_actions; the mirror brain publishes the recent ones)"""
     url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(t)}"
            f"?range={rng}&interval=1d&events=div%2Csplit")
     err = None
+    acts = sr.fmp_actions(t)
     for k in range(tries):
         try:
-            res = sr._chart(url)
-            adj, raw = sr.parse_daily(res)
+            res = sr._chart(url) if timeout is None else sr._chart(url, timeout)
+            adj, raw = sr.parse_daily(res, acts)
             if adj:
-                return adj, raw, res.get("meta") or {}
+                return adj, raw, dict(res.get("meta") or {},
+                                      corporateActions=sr.corporate_actions(res.get("events") or {}, acts, max(raw)))
             err = "empty series"
         except Exception as e:  # noqa: BLE001
             err = e
@@ -622,10 +628,16 @@ def minute_quotes(tickers, now, key, fetch=None, workers=6, budget=None):
     return out, probs
 
 
-def fmp_quotes(key=None):
-    """a quotes callable (tickers, now) -> minute_quotes(), or None without a key (env FMP_API_KEY)"""
+def fmp_quotes(key=None, budget=None, fetch=None):
+    """a quotes callable (tickers, now) -> minute_quotes(), or None without a key (env FMP_API_KEY).
+    budget / fetch: passed to minute_quotes when given (the mirror brain's own, shorter FMP budget; the
+    preview keeps FMP_BUDGET)"""
     key = key or os.environ.get("FMP_API_KEY")
-    return (lambda tickers, now: minute_quotes(tickers, now, key)) if key else None
+    if not key:
+        return None
+    if budget is None and fetch is None:
+        return lambda tickers, now: minute_quotes(tickers, now, key)
+    return lambda tickers, now: minute_quotes(tickers, now, key, fetch=fetch, budget=budget)
 
 
 _DEFAULT = object()
@@ -637,13 +649,27 @@ def is_replay(now, wall=None):
     return (wall - now).total_seconds() > REPLAY_AFTER
 
 
-def merge_quotes(data, quotes, today, now, horizon=_DEFAULT):
+def day_factor(adj, raw, day):
+    """adjusted / raw close on `day` in Yahoo's series: 1 on the series' latest bar (a live run), below 1
+    on a past day by every dividend paid since (a replay). 1.0 where the day has no bar"""
+    a, r = adj.get(day), raw.get(day)
+    if not a or not r:
+        return 1.0
+    f = a / r
+    return 1.0 if abs(f - 1) < 1e-9 else f
+
+
+def merge_quotes(data, quotes, today, now, horizon=_DEFAULT, yahoo_today=True):
     """(data with FMP's price as today's wherever FMP's bar is from today, not stamped after `horizon`,
     and no more than SAME_MOMENT older than Yahoo's last sale; {ticker: 'fmp' | 'yahoo'}; [(ticker, FMP
     price, its time, Yahoo price, its time)] wherever Yahoo's sale falls within FMP's last traded minute
     (the same minute's trade), both fresh and more than DISAGREE apart). horizon: the latest stamp used,
     Yahoo's included; default now + FUTURE_SLACK; None: no cut (a live run, where nothing is the future).
-    Yahoo's history is kept"""
+    Yahoo's history is kept. FMP's price is raw; the adjusted series takes it times day_factor(), the
+    day's own adjusted/raw ratio in Yahoo's series, as shadow_runner.at_minutes does: 1 on a live run, and
+    on a replay of a past day what keeps every dividend paid since from reading as a return that day.
+    yahoo_today=False: Yahoo's own bar for today is never read (the mirror brain's pinned decision: a
+    last sale depends on the second it was fetched, a 1-minute bar does not)"""
     if horizon is _DEFAULT:
         horizon = now + datetime.timedelta(seconds=FUTURE_SLACK)
 
@@ -655,9 +681,10 @@ def merge_quotes(data, quotes, today, now, horizon=_DEFAULT):
     out, src, diff = {}, {}, []
     for t, (adj, raw, meta) in data.items():
         adj, raw = dict(adj), dict(raw)
+        factor = day_factor(adj, raw, today)
         ylt = last_trade(meta) if today in adj else None
-        if horizon is not None and ylt is not None and ylt > horizon:   # a replay: Yahoo's today is later
-            adj.pop(today, None)
+        if not yahoo_today or (horizon is not None and ylt is not None and ylt > horizon):   # a replay: Yahoo's
+            adj.pop(today, None)                                                              # today is later
             raw.pop(today, None)
             ylt = None
         q = quotes.get(t)
@@ -669,9 +696,27 @@ def merge_quotes(data, quotes, today, now, horizon=_DEFAULT):
         if q is None or (ylt is not None and (ylt - q[1]).total_seconds() > SAME_MOMENT):
             out[t], src[t] = (adj, raw, meta), "yahoo"
             continue
-        adj[today] = raw[today] = q[0]
+        raw[today], adj[today] = q[0], q[0] * factor
         out[t], src[t] = (adj, raw, dict(meta, regularMarketTime=int(q[1].timestamp()))), "fmp"
     return out, src, diff
+
+
+def price_stamps(data, notes, today):
+    """{ticker: (kind, when)} for the price live_prices() gives each ticker: 'trade' (a trade of today's
+    session; when: its time, UTC, or None if the feed gave none), 'rebuilt' (an estimate from a sibling
+    fund; when: the sibling's trade time) or 'previous' (no trade today: an earlier session's close
+    carried; when: that session's date)"""
+    out = {}
+    for t, (adj, _, meta) in data.items():
+        n = notes.get(t, "")
+        if " -> via " in n:
+            sib = data.get(n.split(" -> via ")[1])
+            out[t] = ("rebuilt", last_trade(sib[2]) if sib else None)
+        elif today in adj:
+            out[t] = ("trade", last_trade(meta))
+        else:
+            out[t] = ("previous", max((d for d in adj if d < today), default=None))
+    return out
 
 
 def previous_session(d):
@@ -690,13 +735,19 @@ def append_ledger(rows, path=None):
         f.write("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in rows))
 
 
-def preview(now, get_meta, get_drift=None, fetch=None, quotes=None, capture=None):
+def preview(now, get_meta, get_drift=None, fetch=None, quotes=None, capture=None, pin=False):
     """(lines, alerts, ledger rows); get_meta() -> Composer's symphony-stats-meta list (may raise);
     get_drift(cfg_all) -> (engines whose live logic differs from the approved, failure notes);
     quotes(tickers, now) -> ({ticker: (price, time UTC)}, {ticker: problem}) live prices (may raise);
     None: FMP's 1-minute bars when FMP_API_KEY is set, else Yahoo alone; False: Yahoo alone.
-    capture: a dict that receives the prices the engines were evaluated on ({'prices': {ticker: price
-    now}, 'notes': {ticker: why a price is rebuilt or carried}}); the ledger rows are unchanged"""
+    capture: a dict that receives what the engines were evaluated on (the ledger rows are unchanged):
+    'prices' {ticker: RAW price now}, 'notes' {ticker: why a price is rebuilt or carried}, 'stamps'
+    (price_stamps), 'src' {ticker: 'fmp' | 'yahoo'}, 'short' (tickers whose history lacks the previous
+    session), 'traded' (tickers with a trade of their own today), 'tick' (every ticker the trees read
+    or hold), 'today', 'problems' {ticker: FMP's}.
+    pin=True (the mirror brain's pinned decision): the read is AS OF `now` exactly, whatever the wall
+    clock: nothing stamped after `now` and never Yahoo's own bar for today (merge_quotes yahoo_today),
+    so two runs for one instant on the same bars agree. Default False: the 15:15 preview is unchanged"""
     no_fmp = "FMP_API_KEY not set" if quotes is None else "FMP quotes off"
     quotes = quotes if quotes is not None else fmp_quotes()
     replay = is_replay(now)
@@ -738,10 +789,11 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None, capture=None
             live_q, qprob = quotes(fam, now)
         except Exception as e:  # noqa: BLE001
             live_q, qfail = {}, one_line(e)
-    horizon = now if replay else None            # a live run cuts nothing: a late fetch or a lagging clock is not the future
-    yq = {t: (a[today], lt) for t, (a, _, m) in data.items() if today in a
-          for lt in [last_trade(m)] if horizon is None or lt is None or lt <= horizon}
-    data, qsrc, qdiff = merge_quotes(data, live_q, today, now, horizon)
+    horizon = now if (replay or pin) else None   # a live run cuts nothing: a late fetch or a lagging clock is not the future
+    yq = {} if pin else {t: (a[today], lt) for t, (a, _, m) in data.items() if today in a
+                         for lt in [last_trade(m)] if horizon is None or lt is None or lt <= horizon}
+    factors = {t: day_factor(a, r, today) for t, (a, r, _) in data.items()}
+    data, qsrc, qdiff = merge_quotes(data, live_q, today, now, horizon, yahoo_today=not pin)
     trading = sum(today in a for a, _, _ in data.values())
     if trading < TRADING_SHARE * len(data):
         return head, [f"PRE-CLOSE UNAVAILABLE — only {trading} of {len(data)} tickers show a trade today: the market may "
@@ -752,11 +804,15 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None, capture=None
         need |= set(family(t) or {}) - set(data)
     if need:
         more, _ = fetch_all(need, fetch)
-        more, _, _ = merge_quotes(more, live_q, today, now, horizon)
+        factors.update({t: day_factor(a, r, today) for t, (a, r, _) in more.items()})
+        more, _, _ = merge_quotes(more, live_q, today, now, horizon, yahoo_today=not pin)
         data.update(more)
     prices, notes, carried = live_prices(data, today, now)
-    if capture is not None:
-        capture.update(prices={t: p[today] for t, p in prices.items() if today in p}, notes=dict(notes))
+    if capture is not None:                      # raw prices: the adjusted value over the day's own factor (1 live)
+        capture.update(prices={t: p[today] / factors.get(t, 1.0) for t, p in prices.items() if today in p},
+                       notes=dict(notes), stamps=price_stamps(data, notes, today), src=dict(qsrc), short=list(short),
+                       traded=sorted(t for t, (a, _, _) in data.items() if today in a), tick=sorted(tick), today=today,
+                       problems=dict(qprob))
     ages = sorted((now - lt).total_seconds() / 60 for t in tick if t in data and t not in stale
                   for lt in [last_trade(data[t][2])] if lt)
     ss["lag"] = round(max(ages[len(ages) // 2], 0.0), 1) if ages else 0.0      # the move to price runs from the quote

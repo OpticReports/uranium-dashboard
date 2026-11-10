@@ -1,4 +1,6 @@
-"""Gate tests for mirror_brain.py (the Composer mirror's keyless decision brain; IBKR_MIRROR.md).
+"""Gate tests for mirror_brain.py (the Composer mirror's keyless decision brain; IBKR_MIRROR.md), on
+the frozen 2026-10-28 session (Yahoo's prices alone). The pinned decision, the dead-data rules, the
+tree-version gate, dividends and the replay are gated on real minute data in test_mirror_pinned.py.
 
 Each behavioural test has a BROKEN-INPUT counterpart that must land on the other side.
 
@@ -11,14 +13,18 @@ Each behavioural test has a BROKEN-INPUT counterpart that must land on the other
   B3  nothing about Composer's holdings leaks into the payload (the brain never reads Composer)
   B4  --at parses ET wall times across DST
   B5  the HTTP surface: /health public; /mirror/intents 404 with no token configured, 401 on a wrong
-      token, 200 with the payload on the right one, 503 before any payload; the cache recomputes when
-      stale, single flight, and keeps the last good payload when a rebuild fails
-  B6  the reference prices: every ticker a sleeve can hold is priced at the prices the engines were
-      evaluated on; a price rebuilt or carried is named in price_notes; none without a session
-  B7  the executor's clock: the decision bar's end and the close on a full day, a half-day, a holiday
-      and a weekend, across DST; /mirror/session behind the same token
-  B8  ?after=: a payload computed before the asked instant is never served (the cache recomputes), a
-      malformed or future instant is refused
+      token, 200 with the ad hoc payload on the right one, 503 before any payload; the cache recomputes
+      when stale, single flight (two overlapping requests share ONE build), and keeps the last good
+      payload when a rebuild fails
+  B6  the reference prices: every ticker of ANY era of the manifest is priced (a sleeve may still hold
+      what a newer tree dropped), the current trees' at the prices the engines were evaluated on, each
+      with the time it is from; a price rebuilt or carried is named in price_notes; none without a
+      session; an era-only ticker that cannot be priced is said
+  B7  the executor's clock (schema 2): decide_utc is the close minus DECISION_MINUTE exactly, the instant
+      shadow_runner.minute_price reads, on a full day, a half-day and across DST; a holiday and a weekend
+      have no session; a year past the calendar tables has none either, with the reason;
+      /mirror/session behind the same token
+  B8  ?after=: a malformed, future or off-the-minute instant is refused before anything is computed
 
 Run: python3 -m unittest composer.scripts.tests.test_mirror_brain -v
 """
@@ -44,17 +50,45 @@ from test_preclose import PreviewBase, et  # noqa: E402
 UTC = datetime.timezone.utc
 
 
+def attested(day, **override):
+    """an attestation store as mirror_attest.py would leave it: every engine's live tree == the approved"""
+    out = {}
+    for eng, cfg in sr.load_manifest().items():
+        era = mb.era_of(cfg, day)
+        out[eng] = dict({"version": era["version"], "tree_sha1": mb.approved_sha1(era), "paused": False,
+                         "attested_utc": f"{day}T20:50:00Z"}, **override.get(eng, {}))
+    return {day: {"engines": out}}
+
+
 class Base(PreviewBase):
-    def build(self, now=None):
-        return mb.build(now or self.now, quotes=self.quotes, fetch=self.fetch)
+    def setUp(self):
+        super().setUp()
+        cal = sorted(self.fx["prices"]["SPY"])
+        self.old = sorted(mb.era_tickers(sr.load_manifest()) - set(self.fx["prices"]))   # held by an earlier era only
+        for i, t in enumerate(self.old):
+            self.extra[t] = {d: 20.0 + i + 0.01 * k for k, d in enumerate(cal)}
+        self.attest = attested("2026-10-28")
+
+    def fetch_ca(self, t):
+        """as preclose.fetch_live: the chart's meta carries the ticker's dividends and splits"""
+        a, r, m = self.fetch(t)
+        return a, r, dict(m, corporateActions={"dividends": [], "splits": [], "fmp": True})
+
+    def build(self, now=None, **kw):
+        return mb.build(now or self.now, quotes=self.quotes, fetch=self.fetch_ca, attest=self.attest, **kw)
 
 
 class B1Payload(Base):
     def test_targets_rules_versions(self):
         p = self.build()
-        self.assertEqual((p["schema"], p["kind"], p["session"], p["close_et"]), (1, mb.KIND, "2026-10-28", "16:00"))
+        self.assertEqual((p["schema"], p["kind"], p["session"], p["close_et"]), (2, mb.KIND, "2026-10-28", "16:00"))
         self.assertTrue(p["replay"])
+        self.assertEqual((p["pinned"], p["decision_bar"]), (False, None))     # ad hoc: the executor refuses it
+        self.assertEqual(p["asof_utc"], "2026-10-28T19:15:00Z")
+        self.assertGreaterEqual(p["built_utc"], "2026-11-10T00:00:00Z")       # stamped by the wall clock at the end
         self.assertEqual(p["problems"], [])
+        self.assertEqual({s["state"] for s in p["sync"].values()}, {"ok"})
+        self.assertEqual((p["dividends"], p["splits"]), ([], []))
         man = sr.load_manifest()
         self.assertEqual(list(p["engines"]), list(man))
         for eng in ("HG", "SLEEVE", "HARV"):
@@ -140,13 +174,28 @@ class B6Prices(Base):
         man = sr.load_manifest()
         held = set()
         for cfg in man.values():
-            held |= sr.tree_tickers(sr.load_tree(cfg["eras"][-1]))
+            for era in cfg["eras"]:                      # ANY era: a sleeve may still hold what a newer tree dropped
+                held |= sr.tree_tickers(sr.load_tree(era))
+        self.assertTrue(self.old)                        # the manifest does have tickers no current tree prices
         self.assertEqual(set(p["prices"]), held)
         for r in p["engines"].values():
             self.assertTrue(set(r["target"]) <= set(p["prices"]))
         for t, px in p["prices"].items():                # the frozen session's own last price
-            self.assertAlmostEqual(px, self.fx["prices"][t]["2026-10-28"], places=4, msg=t)
+            src = self.fx["prices"].get(t) or self.extra[t]
+            self.assertAlmostEqual(px, src["2026-10-28"], places=4, msg=t)
         self.assertEqual(p["price_notes"], {})
+        self.assertEqual(set(p["price_times"]), set(p["prices"]))             # a time for every price
+        self.assertEqual(set(p["price_times"].values()), {"2026-10-28T19:13:00Z"})   # the feed's last trade, 2 min old
+        self.assertEqual(p["problems"], [])
+
+    def test_an_era_only_ticker_without_a_price_is_said(self):
+        gone = self.old[0]
+        del self.extra[gone]                             # broken: Yahoo has nothing for it
+        p = self.build()
+        self.assertNotIn(gone, p["prices"])
+        self.assertNotIn(gone, p["price_times"])
+        self.assertTrue(any("no price for " + gone in x for x in p["problems"]), p["problems"])
+        self.assertEqual({r["status"] for r in p["engines"].values()}, {"ok"})    # no current tree reads it
 
     def test_an_estimated_price_is_named(self):
         cap = {}
@@ -170,18 +219,51 @@ class B6Prices(Base):
 class B7Clock(unittest.TestCase):
     def test_full_day_half_day_holiday_weekend(self):
         full = mb.session_info(datetime.datetime(2026, 11, 10, 15, 0, tzinfo=UTC))
-        self.assertEqual((full["session"], full["decide_bar_et"], full["decide_utc"], full["close_utc"], full["open_utc"]),
-                         ("2026-11-10", "15:54", "2026-11-10T20:55:00Z", "2026-11-10T21:00:00Z", "2026-11-10T14:30:00Z"))
+        self.assertEqual((full["schema"], full["kind"]), (2, mb.SESSION_KIND))
+        self.assertEqual((full["session"], full["decide_et"], full["decide_utc"], full["close_utc"], full["open_utc"]),
+                         ("2026-11-10", "15:54", "2026-11-10T20:54:00Z", "2026-11-10T21:00:00Z", "2026-11-10T14:30:00Z"))
+        self.assertNotIn("decide_bar_et", full)                                 # schema 1's name is gone
         half = mb.session_info(datetime.datetime(2026, 11, 27, 15, 0, tzinfo=UTC))
-        self.assertEqual((half["close_et"], half["decide_bar_et"], half["decide_utc"]), ("13:00", "12:54", "2026-11-27T17:55:00Z"))
+        self.assertEqual((half["close_et"], half["decide_et"], half["decide_utc"]), ("13:00", "12:54", "2026-11-27T17:54:00Z"))
         summer = mb.session_info(datetime.datetime(2026, 7, 15, 13, 0, tzinfo=UTC))
-        self.assertEqual(summer["decide_utc"], "2026-07-15T19:55:00Z")          # EDT
+        self.assertEqual(summer["decide_utc"], "2026-07-15T19:54:00Z")          # EDT
         for shut in ((2026, 11, 26), (2026, 11, 14), (2026, 11, 15)):
             info = mb.session_info(datetime.datetime(*shut, 15, 0, tzinfo=UTC))
             self.assertIsNone(info["session"])
             self.assertNotIn("decide_utc", info)
-        self.assertEqual(full["kind"], mb.SESSION_KIND)
-        self.assertEqual(mb.parse_utc(full["decide_utc"]), datetime.datetime(2026, 11, 10, 20, 55, tzinfo=UTC))
+            self.assertNotIn("reason", info)                                    # a weekend or a listed holiday needs none
+        self.assertEqual(mb.parse_utc(full["decide_utc"]), datetime.datetime(2026, 11, 10, 20, 54, tzinfo=UTC))
+
+    def test_decide_utc_is_the_instant_the_calibration_reads(self):
+        """add. 50: the price 'at 15:54' is the close of the 1-minute bar ENDING 15:54:00 (the bar that starts
+        15:53). decide_utc is that instant, not the end of the next bar"""
+        s = mb.session_info(mb.parse_at("2026-11-09 12:00"))
+        label = sr._hm(sr._min(s["close_et"]) - sr.DECISION_MINUTE)
+        self.assertEqual((label, s["decide_et"]), ("15:54", "15:54"))
+        bars = {"15:52": 1.0, "15:53": 2.0, "15:54": 3.0}                       # keyed by bar START, as FMP sends them
+        self.assertEqual(sr.minute_price(bars, label), 2.0)                     # the shadow reads the bar starting 15:53
+        tz = sr.et_now(mb.parse_utc(s["decide_utc"])).tzinfo
+        self.assertEqual(pc.bar_end("2026-11-09", "15:53", tz), mb.parse_utc(s["decide_utc"]))    # ... which ends here
+        self.assertNotEqual(pc.bar_end("2026-11-09", "15:54", tz), mb.parse_utc(s["decide_utc"]))  # broken: schema 1's bar
+        close = mb.parse_utc(s["close_utc"])
+        self.assertEqual(close - mb.parse_utc(s["decide_utc"]), datetime.timedelta(minutes=sr.DECISION_MINUTE))
+
+    def test_a_year_past_the_calendar_tables_has_no_session_and_says_why(self):
+        """S4: the tables end in 2027. 2028-01-17 is a holiday they do not list and 2028-11-24 closes at 13:00"""
+        self.assertEqual(sr.calendar_through(), 2027)
+        for when in (datetime.datetime(2028, 1, 17, 17, 0, tzinfo=UTC), datetime.datetime(2028, 11, 24, 15, 0, tzinfo=UTC)):
+            info = mb.session_info(when)
+            self.assertIsNone(info["session"])
+            self.assertNotIn("decide_utc", info)
+            self.assertIn("ends in 2027", info["reason"])
+        last = mb.session_info(datetime.datetime(2027, 12, 31, 15, 0, tzinfo=UTC))   # the twin: the last covered year
+        self.assertEqual((last["session"], last.get("reason")), ("2027-12-31", None))
+        with unittest.mock.patch.dict(sr.HALF_DAYS, {"2028-11-24": "13:00"}):     # one table extended is not enough
+            self.assertIsNone(mb.session_info(datetime.datetime(2028, 11, 24, 15, 0, tzinfo=UTC))["session"])
+            with unittest.mock.patch.object(sr, "NYSE_HOLIDAYS", sr.NYSE_HOLIDAYS | {"2028-01-17"}):
+                info = mb.session_info(datetime.datetime(2028, 11, 24, 15, 0, tzinfo=UTC))
+                self.assertEqual((info["session"], info["close_et"], info["decide_utc"]), ("2028-11-24", "13:00", "2028-11-24T17:54:00Z"))
+                self.assertIsNone(mb.session_info(datetime.datetime(2028, 1, 17, 17, 0, tzinfo=UTC))["session"])
 
 
 class B4ParseAt(unittest.TestCase):
@@ -264,30 +346,45 @@ class B5Http(unittest.TestCase):
         off = self.serve("")
         self.assertEqual(self.get(off + "/mirror/session", "x")[0], 404)
 
-    def test_after_never_serves_an_older_payload(self):
-        stamps = ["2026-11-10T20:54:40Z", "2026-11-10T20:55:06Z", "2026-11-10T20:55:06Z"]
-        calls = []
-
-        def builder():
-            calls.append(1)
-            return {"schema": 1, "asof_utc": stamps[len(calls) - 1]}
-        cache = mb.Cache(builder, clock=lambda: self.t[0])
-        srv = mb.make_server(0, "t", cache, window=lambda: True,
+    def test_after_is_validated_before_anything_is_computed(self):
+        srv = mb.make_server(0, "t", self.cache, window=lambda: True,
                              wall=lambda: datetime.datetime(2026, 11, 10, 20, 59, tzinfo=UTC))
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         self.addCleanup(srv.shutdown)
         self.addCleanup(srv.server_close)
         base = f"http://127.0.0.1:{srv.server_address[1]}"
-        self.assertEqual(self.get(base + "/mirror/intents", "t")[1]["asof_utc"], stamps[0])
-        code, body = self.get(base + "/mirror/intents?after=2026-11-10T20:55:00Z", "t")
-        self.assertEqual((code, body["asof_utc"], len(calls)), (200, stamps[1], 2))       # fresh by age, rebuilt anyway
-        self.assertEqual(self.get(base + "/mirror/intents?after=2026-11-10T20:55:00Z", "t")[1]["asof_utc"], stamps[1])
-        self.assertEqual(len(calls), 2)                                     # the twin: already new enough, reused
         self.assertEqual(self.get(base + "/mirror/intents?after=yesterday", "t")[0], 400)
         self.assertEqual(self.get(base + "/mirror/intents?after=2999-01-01T00:00:00Z", "t")[0], 409)
-        # a rebuild that cannot reach the instant is a 503, never the older payload
-        code, body = self.get(base + "/mirror/intents?after=2026-11-10T20:58:00Z", "t")
-        self.assertEqual(code, 503)
+        self.assertEqual(self.get(base + "/mirror/intents?after=2026-11-10T20:59:06Z", "t")[0], 409)    # > 5 s ahead
+        code, body = self.get(base + "/mirror/intents?after=2026-11-10T20:54:30Z", "t")                # no bar ends there
+        self.assertEqual(code, 400)
+        self.assertIn("1-minute bar", body["error"])
+        self.assertEqual(self.get(base + "/mirror/intents?after=2026-11-10T20:54:00Z", "t")[0], 503)    # no pinned path here
+        self.assertEqual(self.calls, [])                                    # the ad hoc builder never stands in for it
+        self.assertEqual(self.get(base + "/mirror/intents?after=2026-11-10T20:54:00Z")[0], 401)
+
+    def test_overlapping_requests_share_one_build(self):
+        """S3: a request that arrives while a build runs waits for it and then USES it (the reviewer's B5e:
+        refresh() built again without looking)"""
+        n, gate = [0], threading.Event()
+
+        def builder():
+            n[0] += 1
+            gate.wait(5)
+            return {"n": n[0]}
+        cache = mb.Cache(builder)
+        got = []
+        ts = [threading.Thread(target=lambda: got.append(cache.get(60)[0]["n"])) for _ in range(4)]
+        for t in ts:
+            t.start()
+        import time
+        time.sleep(0.2)                                                     # all four are waiting on the first build
+        gate.set()
+        for t in ts:
+            t.join(5)
+        self.assertEqual((n[0], got), (1, [1, 1, 1, 1]))
+        cache.refresh()                                                     # the twin: an explicit refresh does rebuild
+        self.assertEqual(n[0], 2)
 
     def test_no_payload_yet_is_a_503(self):
         self.fail = True

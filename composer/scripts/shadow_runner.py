@@ -61,6 +61,7 @@ import math
 import os
 import sys
 import tempfile
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -86,6 +87,14 @@ FMP_MINUTES = "https://financialmodelingprep.com/stable/historical-chart/1min"
 FMP_DENSE, FMP_CUT = 20, 5   # a ticker with bars in >= 20 of the 30 minutes before its last bar that stops more than
                           # 5 minutes before the close is a cut feed, not a thin fund (flags 0 of 343 full FMP ticker-days)
 FMP_ALERT = 3             # sessions in a row with FMP's 1-minute bars unusable before an alert
+FMP_DIVIDENDS = "https://financialmodelingprep.com/stable/dividends"
+FMP_SPLITS = "https://financialmodelingprep.com/stable/splits"
+ACTIONS_NEAR = 4          # days: an FMP dividend or split with a Yahoo one this close to its date is the same event
+                          # (Yahoo's date stands). Measured 2026-11-10 on the manifest's 62 tickers over two years:
+                          # 617 of 627 FMP dividends on Yahoo's exact ex-date, none merely near, 10 Yahoo lacked (nine
+                          # ex 2026-11-02, still unbooked six sessions later; one not yet ex); every split on both
+ACTIONS_RETRY = 600       # seconds before a failed FMP dividend/split call for a ticker is tried again
+ACTIONS_TRIP = 5          # failures in a row (any tickers) before FMP's lists are left alone for ACTIONS_RETRY
 HALF_DAYS = {"2026-11-27": "13:00", "2026-12-24": "13:00", "2027-11-26": "13:00"}   # NYSE 13:00 closes
 KNIFE_SIGMA = 0.3         # fallback search radius without bars, in 20-session daily sigmas: p95 of the
                           # measured 15:45 ET -> official close move (add. 48 calibration)
@@ -570,6 +579,12 @@ def session_close(d):
     return HALF_DAYS.get(d, "16:00")
 
 
+def calendar_through():
+    """the last year BOTH exchange tables (NYSE_HOLIDAYS, HALF_DAYS) cover: a date in a later year
+    cannot be clocked from them (a holiday would read as a session, a 13:00 close as 16:00)"""
+    return min(max(int(d[:4]) for d in NYSE_HOLIDAYS), max(int(d[:4]) for d in HALF_DAYS))
+
+
 def decision_minutes(close="16:00"):
     """every minute of Composer's decision window: 15:50 .. 15:55 on a full day (12:50 .. 12:55 on a
     half-day), the measured 15:51-15:54 a minute either side (add. 50)"""
@@ -780,6 +795,19 @@ def first_diff(a, b, path="root"):
     return None if a == b else f"{path}: {short(a)} -> {short(b)}"
 
 
+def sha1_of(canon):
+    """sha1 of a canonical tree (canonical()'s output): JSON with sorted keys"""
+    return hashlib.sha1(json.dumps(canon, sort_keys=True).encode()).hexdigest()
+
+
+def tree_sha1(tree):
+    """the fingerprint of a tree's LOGIC: equal for two trees exactly when canonical() reads them the
+    same (display fields, number spelling and the like do not move it). ONE function for the approved
+    tree and for Composer's live one: the mirror's attestation (mirror_attest.py -> mirror_brain) and
+    the logic-drift check both hash through here"""
+    return sha1_of(canonical(tree))
+
+
 def check_drift(cfg_all, get, st_drift, e_now, load=None):
     """(alerts, notes): Composer's live tree vs the last approved era, for every engine, every run.
     One engine's failure (composerlib exits on HTTP errors) does not stop the others."""
@@ -803,7 +831,7 @@ def check_drift(cfg_all, get, st_drift, e_now, load=None):
                     notes.append(f"shadow: {eng} has a new version {head} with the approved logic (a rename?); "
                                  f"add it to fixtures/approved/manifest.json")
                 continue
-            h = hashlib.sha1(json.dumps(have, sort_keys=True).encode()).hexdigest()[:12]
+            h = sha1_of(have)[:12]
             prev = st_drift.get(eng) or {}
             if prev.get("hash") != h or (e_now.weekday() == 0 and prev.get("alerted") != today):
                 alerts.append(f"LOGIC DRIFT — {eng}: Composer's live logic (version {head or 'unknown'}) differs from the "
@@ -909,8 +937,168 @@ def apply_events(dates, adj, raw, events):
                 raw[j] *= m
 
 
-def parse_daily(res):
-    """({date: adjusted close}, {date: raw close}) from a Yahoo daily chart result; empty if no bars"""
+def _fmp_rows(url, t, key, timeout):
+    req = urllib.request.Request(f"{url}?" + urllib.parse.urlencode({"symbol": t, "apikey": key}),
+                                 headers={"user-agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        rows = json.load(r)
+    if not isinstance(rows, list):
+        raise RuntimeError(f"unexpected answer {str(rows).replace(key, '***')[:80]}")
+    return [x for x in rows if isinstance(x, dict)]
+
+
+def _day(v):
+    """'YYYY-MM-DD' from an FMP date field, or None"""
+    try:
+        return datetime.date.fromisoformat(str(v)[:10]).isoformat()
+    except ValueError:
+        return None
+
+
+def _pos(v):
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 else None
+
+
+def parse_actions(dividends, splits):
+    """FMP's dividend and split rows (its wire format) -> {'dividends': [{'ex_date', 'pay_date' | None,
+    'amount'}], 'splits': [{'date', 'numerator', 'denominator'}]}. amount: cash per share AS PAID (FMP's
+    'dividend'; its 'adjDividend' lags a new split: SOXX's 3:1 of 2026-11-05 was still missing from it
+    five days later). A malformed row is skipped"""
+    divs, spl = [], []
+    for x in dividends or []:
+        if not isinstance(x, dict):
+            continue
+        d, a = _day(x.get("date")), _pos(x.get("dividend")) or _pos(x.get("adjDividend"))
+        if d and a:
+            divs.append({"ex_date": d, "pay_date": _day(x.get("paymentDate")), "amount": a})
+    for x in splits or []:
+        if not isinstance(x, dict):
+            continue
+        d, n, m = _day(x.get("date")), _pos(x.get("numerator")), _pos(x.get("denominator"))
+        if d and n and m:
+            spl.append({"date": d, "numerator": n, "denominator": m})
+    return {"dividends": divs, "splits": spl}
+
+
+def fetch_actions(t, key, timeout=10):
+    """FMP's dividend and split lists for t (two GETs), as parse_actions gives them. The key never
+    appears in an error"""
+    try:
+        return parse_actions(_fmp_rows(FMP_DIVIDENDS, t, key, timeout), _fmp_rows(FMP_SPLITS, t, key, timeout))
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError(f"FMP dividends/splits {t}: {str(e).replace(key, '***')[:160]}") from None
+
+
+_ACTIONS = {"lock": threading.Lock(), "ok": {}, "bad": {}, "run": 0, "until": 0.0}
+
+
+def fmp_actions(t, key=None, fetch=None, clock=None):
+    """fetch_actions(t), asked once per ticker per UTC day and kept for the process. None without a key
+    (env FMP_API_KEY) or when FMP fails: the history is then Yahoo's events alone, as it always was. A
+    failure is retried after ACTIONS_RETRY seconds; ACTIONS_TRIP failures in a row stop every call for
+    that long (a dead FMP must not slow each Yahoo fetch by its timeout)"""
+    key = key or os.environ.get("FMP_API_KEY")
+    if not key:
+        return None
+    now = (clock or time.time)()
+    k = (t, _utc_date(now))
+    with _ACTIONS["lock"]:
+        if k in _ACTIONS["ok"]:
+            return _ACTIONS["ok"][k]
+        if now < _ACTIONS["until"] or now < _ACTIONS["bad"].get(t, 0.0):
+            return None
+    try:
+        got = (fetch or fetch_actions)(t, key)
+    except Exception:  # noqa: BLE001
+        with _ACTIONS["lock"]:
+            _ACTIONS["bad"][t] = now + ACTIONS_RETRY
+            _ACTIONS["run"] += 1
+            if _ACTIONS["run"] >= ACTIONS_TRIP:
+                _ACTIONS["until"], _ACTIONS["run"] = now + ACTIONS_RETRY, 0
+        return None
+    with _ACTIONS["lock"]:
+        for old in [x for x in _ACTIONS["ok"] if x[1] != k[1]]:      # yesterday's lists
+            del _ACTIONS["ok"][old]
+        _ACTIONS["ok"][k], _ACTIONS["run"] = got, 0
+        _ACTIONS["bad"].pop(t, None)
+    return got
+
+
+def _days_apart(a, b):
+    return abs((datetime.date.fromisoformat(a) - datetime.date.fromisoformat(b)).days)
+
+
+def corporate_actions(events, actions=None, last=None):
+    """one ticker's dividends and splits, Yahoo's chart events UNION FMP's lists (fetch_actions; None:
+    Yahoo's alone), oldest first: {'dividends': [{'ex_date', 'pay_date' | None, 'amount', 'adj',
+    'src'}], 'splits': [{'date', 'numerator', 'denominator', 'src'}], 'fmp': whether FMP's lists were
+    read}; src 'yahoo', 'fmp' or 'both'.
+    An FMP entry within ACTIONS_NEAR days of a Yahoo one is that same event (Yahoo's date kept), so a
+    disagreement about a date can never count an event twice. amount: cash per share as paid on the
+    ex-date (FMP's figure where it has one; Yahoo's are rounded and restated for later splits). adj:
+    the same cash on the basis of the price series, i.e. restated for every split after the ex-date up
+    to `last` (the series' last date; None: every listed split), which is what apply_events needs"""
+    ev = events or {}
+    ysp, ydv = {}, {}
+    for e in (ev.get("splits") or {}).values():
+        try:
+            n, m = _pos(e.get("numerator")), _pos(e.get("denominator"))
+            if n and m:
+                ysp[_utc_date(e["date"])] = (n, m)
+        except (KeyError, TypeError, ValueError, AttributeError):
+            continue
+    for e in (ev.get("dividends") or {}).values():
+        try:
+            a = _pos(e.get("amount"))
+            if a:
+                d = _utc_date(e["date"])
+                ydv[d] = ydv.get(d, 0.0) + a
+        except (KeyError, TypeError, ValueError, AttributeError):
+            continue
+    splits = {d: {"date": d, "numerator": n, "denominator": m, "src": "yahoo"} for d, (n, m) in ysp.items()}
+    for x in (actions or {}).get("splits") or []:
+        near = [d for d in ysp if _days_apart(d, x["date"]) <= ACTIONS_NEAR]
+        if near:
+            splits[min(near, key=lambda d: _days_apart(d, x["date"]))]["src"] = "both"
+        elif x["date"] not in splits:
+            splits[x["date"]] = dict(x, src="fmp")
+
+    def later(d):
+        """new shares per old share over the splits after d, through `last`"""
+        k = 1.0
+        for s in splits.values():
+            if s["date"] > d and (last is None or s["date"] <= last):
+                k *= s["numerator"] / s["denominator"]
+        return k
+    fdv = {}
+    for x in (actions or {}).get("dividends") or []:
+        f = fdv.setdefault(x["ex_date"], {"amount": 0.0, "pay_date": x.get("pay_date")})
+        f["amount"] += x["amount"]
+    divs = {d: {"ex_date": d, "pay_date": None, "amount": a * later(d), "adj": a, "src": "yahoo"} for d, a in ydv.items()}
+    for d, f in fdv.items():
+        near = [y for y in ydv if _days_apart(y, d) <= ACTIONS_NEAR]
+        if near:
+            y = min(near, key=lambda z: _days_apart(z, d))
+            if divs[y]["src"] == "yahoo":                            # the first FMP entry for it; a second near one is left
+                divs[y].update(pay_date=f["pay_date"], amount=f["amount"], adj=f["amount"] / later(y), src="both")
+        else:
+            divs[d] = {"ex_date": d, "pay_date": f["pay_date"], "amount": f["amount"], "adj": f["amount"] / later(d), "src": "fmp"}
+    return {"dividends": [divs[d] for d in sorted(divs)], "splits": [splits[d] for d in sorted(splits)],
+            "fmp": actions is not None}
+
+
+def _noon(d):
+    """an epoch second inside UTC day d, the shape of a Yahoo event's 'date'"""
+    return int(datetime.datetime.fromisoformat(d).replace(hour=14, minute=30, tzinfo=datetime.timezone.utc).timestamp())
+
+
+def parse_daily(res, actions=None):
+    """({date: adjusted close}, {date: raw close}) from a Yahoo daily chart result; empty if no bars.
+    actions: FMP's dividend and split lists for the ticker (fmp_actions). Yahoo's own events are applied
+    first, exactly as before; then the events FMP lists and Yahoo has NOT booked (corporate_actions: src
+    'fmp'), splits before dividends, through the same apply_events, which acts only where the series
+    still lacks the event (measured 2026-11-10: nine bond-fund dividends ex 2026-11-02 were missing from
+    Yahoo six sessions later, and CR(SHY,1) on the ex-date read -0.29% for a true +0.02%)"""
     q = res["indicators"]["quote"][0]
     adj = (res["indicators"].get("adjclose") or [{}])[0].get("adjclose")
     rows = {}
@@ -923,17 +1111,25 @@ def parse_daily(res):
     dates = sorted(rows)
     a_, r_ = [rows[d][0] for d in dates], [rows[d][1] for d in dates]
     apply_events(dates, a_, r_, res.get("events") or {})
+    if actions:
+        more = corporate_actions(res.get("events") or {}, actions, dates[-1])
+        apply_events(dates, a_, r_, {"splits": {i: dict(x, date=_noon(x["date"]))
+                                                for i, x in enumerate(more["splits"]) if x["src"] == "fmp"}})
+        apply_events(dates, a_, r_, {"dividends": {i: {"date": _noon(x["ex_date"]), "amount": x["adj"]}
+                                                   for i, x in enumerate(more["dividends"]) if x["src"] == "fmp"}})
     return dict(zip(dates, a_)), dict(zip(dates, r_))
 
 
 def fetch_yahoo(t, rng="2y", tries=3):
-    """({date: adjusted close}, {date: raw close}) from Yahoo daily bars"""
+    """({date: adjusted close}, {date: raw close}) from Yahoo daily bars, with the dividends and splits
+    FMP lists and Yahoo has not booked applied too (parse_daily; needs FMP_API_KEY, else Yahoo's alone)"""
     url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(t)}"
            f"?range={rng}&interval=1d&events=div%2Csplit")
     err = None
+    acts = fmp_actions(t)
     for k in range(tries):
         try:
-            adj, raw = parse_daily(_chart(url))
+            adj, raw = parse_daily(_chart(url), acts)
             if adj:
                 return adj, raw
             err = "empty series"
@@ -1022,19 +1218,20 @@ def bars_fetcher(rng="5d"):
     return get
 
 
-def fetch_minutes(t, d, key, tries=3, traded=False):
+def fetch_minutes(t, d, key, tries=3, traded=False, timeout=30):
     """{'HH:MM' bar start, ET: close} of t's FMP 1-minute bars on session d ({} if FMP has none that day).
     FMP answers a range with the last three calendar days up to `to`, and a day it lacks with the latest day it
     has, so only bars dated d are kept. The key never appears in an error. FMP also emits bars with no
     volume for thin funds, priced off quotes (PEJ: 324 of 386 on 2026-10-30); traded=True keeps only bars
     with volume, i.e. trades (the preview's freshness needs trade times). The shadow runner's window check
-    reads all bars, as measured in add. 50"""
+    reads all bars, as measured in add. 50. timeout: seconds per attempt (the mirror brain passes a short
+    one with tries=1: its decision cannot wait on a hanging call)"""
     url = f"{FMP_MINUTES}?" + urllib.parse.urlencode({"symbol": t, "from": d, "to": d, "apikey": key})
     err = None
     for k in range(tries):
         try:
             req = urllib.request.Request(url, headers={"user-agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=30) as r:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
                 rows = json.load(r)
             if not isinstance(rows, list):
                 raise RuntimeError(f"unexpected answer {str(rows).replace(key, '***')[:80]}")
