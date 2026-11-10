@@ -31,7 +31,10 @@ research/mirror/reviews/. Numbers: results/results.md addendum 55.
    to main; the merge is made after 16:00 ET, because it redeploys the live
    executor and that restart needs an IB Key approval with the gateway idle.
 
-Still open: the account type (believed margin; the owner is checking), the
+6. (11-10) The IBKR account is a CASH account. See "The cash account" below:
+   this decides whether a rotation completes the same day.
+
+Still open: whether the account is upgraded to margin before live, the
 starting sleeve weights (recommendation below), and the order in which
 engines get real money.
 
@@ -167,6 +170,36 @@ requires the account to hold exactly its book. So:
 
 Until step 4 the mirror's live book refuses to trade, by design.
 
+## The cash account
+
+A rotation sells one fund and buys another in the same minute, so the buy is
+paid for with sale proceeds that settle the next business day (T+1).
+
+- A MARGIN account makes sale proceeds available for trading at once (IBKR's
+  own statement). The mirror would still never borrow: buys are limit orders
+  sized to the cash the book holds.
+- A CASH account: IBKR's own pages disagree. One says a cash account has no
+  access to sale proceeds until settlement; another says they may fund a
+  purchase as long as the new position is held until the first sale settles
+  (selling it sooner is "free riding"); a third says the settled-cash check is
+  made when the order is entered. On THIS account the existing strategy
+  recorded market buys sized near available cash coming back refused within a
+  second, lists "unsettled same-day proceeds" among the causes it does not
+  cover, and was built to spend settled cash only.
+- If IBKR refuses a buy funded by the same minute's sale, the sleeve sits in
+  cash until the next session: every rotation loses a day, on exactly the days
+  the strategy is changing its mind. The mirror books the refusal and does not
+  borrow or retry; nothing breaks, but the two books stop matching.
+
+Recommendation: ask IBKR to change the account to a margin (Reg T) account
+before any engine is live. Two things change with it and should be accepted
+knowingly: a cash account cannot be overdrawn or sold short by mistake, a
+margin account can, so the mirror's own guards (limit buys sized to cash, the
+flatten ceiling, the account-versus-book check) carry that alone; and the
+existing strategy's settled-cash assumptions stop binding. If the account
+stays a cash account, the first live engine is the test: one rotation shows
+whether IBKR accepts the buy.
+
 ## Before live (gates, in order)
 
 1. Owner: confirm blend3070 is retired at cutover; the brain's hosting; the
@@ -176,10 +209,10 @@ Until step 4 the mirror's live book refuses to trade, by design.
    the executor's own paper book starts when MIRROR_ENABLED is set.
 3. An independent review of the round-2 fixes and of the code as it then
    stands. Round 2 is verified by its authors only.
-4. On the real account: one limit buy sized near available cash (the existing
-   strategy's notes record market buys that size coming back refused), and
-   whether a buy can be funded from the same minute's sale proceeds. If the
-   account is a cash account that cannot, every rotation lags a day.
+4. The account: it is a CASH account (owner, 11-10). Either it is upgraded to
+   margin first (recommended), or the first live engine's first rotation is
+   watched for a refused buy. Either way: one limit buy sized near available
+   cash, to see IBKR accept it.
 5. The attestation armed: MIRROR_ATTEST_TOKEN on the brain, and
    scripts/mirror_attest.py run by the 15:15 preview routine (an attestation
    older than an hour before the decision does not count). A live sleeve does
@@ -273,7 +306,6 @@ the repo or a chat):
   differ by 6-10% of the sleeve for 2-4 sessions, then never again.
 - Paper fills are at the brain's price: the paper record measures decisions
   and holdings, not execution cost.
-- The account. The existing strategy's notes suggest a CASH account that has
-  refused market buys sized close to available cash. Whether it can fund a buy
-  from the same minute's sale proceeds is unverified and decides whether a
-  rotation completes the same day.
+- The account is a CASH account. Whether IBKR lets it fund a buy from the same
+  minute's sale proceeds is unverified (its own pages disagree) and decides
+  whether a rotation completes the same day. Paper trading cannot show this.
