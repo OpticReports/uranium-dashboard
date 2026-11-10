@@ -7,6 +7,7 @@ routine; prints one block and a final ISSUES line.
 """
 import calendar
 import json
+import os
 import time
 import urllib.request
 
@@ -14,7 +15,7 @@ ADDR = "0xAb533E69e77881D89D0357166851C9653bC551e2"
 INFO = "https://api.hyperliquid.xyz/info"
 T1_SINCE_MS = calendar.timegm((2026, 9, 21, 0, 0, 0)) * 1000   # tripwire T1 window start
 T1_LIMIT = -3750.0
-HW_FLOOR = 101201.50              # monitor high water at the 2026-11-10 restart
+HW_FLOOR = 101835.27              # high water seen by 2026-11-10 18:25Z (fallback if the state file is lost)
 HW_SINCE_MS = 1794322184000       # 2026-11-10 14:49:44Z, the redeposit
 CARRY_OPEN_MS = 1794322731000     # 2026-11-10 14:58:51Z, the carry re-open
 KEY_WARN_DAYS = 14                # warn this long before an approved trading key expires
@@ -44,6 +45,29 @@ def get(url, body=None, tries=3):
 
 def info(body):
     return get(INFO, body)
+
+
+# The portfolio series coarsen as they age (94-min points, then 217-min), so an
+# old intraday peak can drop out of them; the high water is kept here so it
+# only ratchets up. Lost on a container replacement, then HW_FLOOR applies.
+STATE = os.path.expanduser("~/.cache/hl_monitor_state.json")
+
+
+def load_state():
+    try:
+        with open(STATE) as f:
+            return json.load(f)
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def save_state(st):
+    try:
+        os.makedirs(os.path.dirname(STATE), exist_ok=True)
+        with open(STATE, "w") as f:
+            json.dump(st, f)
+    except Exception as e:  # noqa: BLE001
+        print(f"(state not saved: {e})")
 
 
 def fills_since(start_ms):
@@ -122,11 +146,15 @@ else:
         issues.append("engine degraded or data_halt")
 ev = get("https://btc-paper-engine.onrender.com/events")
 items = ev if isinstance(ev, list) else (ev.get("events") or [])
+if isinstance(ev, dict) and "_err" in ev:
+    issues.append(f"engine /events unreadable ({ev['_err']})")
+# Last 24 h only: a bad event shows on up to four 6-hourly runs, then ages out.
+since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() - 86400))
 bad = [(e.get("ts"), e.get("event")) for e in items
        if e.get("event") in ("bar_gap", "bar_stuck", "degraded")
-       and str(e.get("ts", "")) >= "2026-11-10"]
+       and str(e.get("ts", "")) >= since]
 if bad:
-    issues.append(f"engine events {bad[:3]}")
+    issues.append(f"engine events in the last 24h {bad[:3]}")
 fd = get("https://btc-paper-engine.onrender.com/funding")
 gate = ((fd.get("venues") or {}).get("HL_ETH") or {}) if isinstance(fd, dict) else {}
 print("GATE HL_ETH", {k: gate.get(k) for k in ("armed", "mean_ann_pct", "coverage")})
@@ -173,7 +201,12 @@ day = (series.get("day") or {}).get("accountValueHistory") or []
 equity = float(day[-1][1]) if day else float("nan")
 pts = [float(v) for k in ("day", "week", "month", "allTime")
        for t, v in ((series.get(k) or {}).get("accountValueHistory") or []) if t >= HW_SINCE_MS]
-hw = max([HW_FLOOR] + pts)
+st = load_state()
+hw = max([HW_FLOOR, float(st.get("hw", 0))] + pts)
+st["hw"] = hw
+save_state(st)
+if equity != equity:
+    issues.append(f"portfolio equity unreadable ({pf.get('_err') if isinstance(pf, dict) else 'empty day series'})")
 print(f"T4 equity {equity:,.2f} | HW {hw:,.2f} | trip {0.9 * hw:,.2f}")
 if equity <= 0.9 * hw:
     issues.append(f"T4 equity {equity:,.2f} <= trip {0.9 * hw:,.2f}")
