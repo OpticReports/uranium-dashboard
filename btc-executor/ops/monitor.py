@@ -17,6 +17,7 @@ T1_LIMIT = -3750.0
 HW_FLOOR = 101201.50              # monitor high water at the 2026-11-10 restart
 HW_SINCE_MS = 1794322184000       # 2026-11-10 14:49:44Z, the redeposit
 CARRY_OPEN_MS = 1794322731000     # 2026-11-10 14:58:51Z, the carry re-open
+KEY_WARN_DAYS = 14                # warn this long before an approved trading key expires
 NEWS_KINDS = {"cap_clamp", "exposure_over_cap", "kelly_over_cap",
               "size_mult_fallback", "size_mult_invalid"}
 
@@ -80,7 +81,7 @@ else:
         issues.append(f"btc red kinds present {b['red_kinds_24h']} (new ones are news)")
     if not b.get("equity_counts_spot_tokens"):
         issues.append("btc equity_counts_spot_tokens is not true")
-    if (b.get("agent_days_left") or 99) < 7:
+    if (b.get("agent_days_left") or 99) < KEY_WARN_DAYS:
         issues.append(f"btc agent key expires in {b.get('agent_days_left')} days")
 
 c = get("https://carry-executor.onrender.com/pulse")
@@ -190,5 +191,21 @@ fu = info({"type": "userFunding", "user": ADDR, "startTime": CARRY_OPEN_MS})
 fund = sum(float(x["delta"]["usdc"]) for x in (fu if isinstance(fu, list) else [])
            if x.get("delta", {}).get("coin") == "ETH")
 print(f"ETH funding since the 2026-11-10 carry open ${fund:,.2f}")
+
+# Every approved agent key on the account (btc-executor's and carry-executor's are
+# separate). Carry's /pulse does not report its expiry, so read it from the venue.
+ag = info({"type": "extraAgents", "user": ADDR})
+if isinstance(ag, list):
+    now_ms = time.time() * 1000
+    keys = [(a.get("name"), a.get("address", ""), ((a.get("validUntil") or 0) - now_ms) / 86400000)
+            for a in ag]
+    print("KEYS", [(n, f"{ad[:6]}..{ad[-4:]}", f"{d:.0f}d") for n, ad, d in keys])
+    if not keys:
+        issues.append("no approved agent key on the account: neither executor can trade")
+    for n, ad, d in keys:
+        if d < KEY_WARN_DAYS:
+            issues.append(f"agent key {n} ({ad[:6]}..{ad[-4:]}) expires in {d:.1f} days")
+else:
+    issues.append(f"agent key list unreadable ({ag.get('_err') if isinstance(ag, dict) else ag})")
 
 print("ISSUES:", "; ".join(issues) if issues else "none")
