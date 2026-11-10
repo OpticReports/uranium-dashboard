@@ -4651,3 +4651,119 @@ sleeve's 2018 path days) and bond-ETF ex-dividends missing from Yahoo's series (
 path/ledger misses; a 0.3-0.5 pp read error at the SHY thresholds). The monitor's "harvester" label
 becomes "HARV day return". Open for the owner: the leg size; the sleeve's static vol leg; the IBKR
 genomics sleeve record (add. 52, still missing).
+
+## Addendum 55 — The IBKR mirror of the Composer book: build, two review rounds, and the paper backfill (2026-11-10)
+
+Status: BUILT on the branch, switched OFF by default, NOT deployed, no order ever sent. Composer is
+untouched. Paper stage cleared by two independent reviewers; live money is not (see 55.5). Design and
+rollout: composer/IBKR_MIRROR.md. Exhibits: results/mirror-parity-2026-11-10.html (paper backfill),
+research/mirror/reviews/review-B-timing-and-drag.png (decision minute and drag). Data:
+results/mirror/backfill-2026-11-10.json.
+
+### 55.1 What was built
+
+| Piece | File | Does |
+|---|---|---|
+| Brain (keyless) | scripts/mirror_brain.py | The approved trees evaluated AS OF 15:54:00 ET (12:54 on a half-day) from 1-minute bars; per engine: target, tree version, Composer's rebalance rule; prices, dividends, splits; refuses dead data and a drifted tree |
+| Tree attestation | scripts/mirror_attest.py | Composer-keyed, read-only: posts each symphony's live tree hash to the brain |
+| Core (pure) | ibkr-executor/app/mirror_core.py | Virtual sleeves, daily / threshold rule, netting, sells booked before buys are sized, dividends and splits |
+| Strategy | ibkr-executor/app/mirror.py | Session state machine, pre-trade gates, write-ahead order ids, halt and flatten, operator repair tools |
+| Paper simulator | scripts/mirror_dry.py | The same core on history and, from 11-10, once a day from monitor.py |
+
+### 55.2 Parity on paper (2026-07-15..11-09: 83 sessions, 308 engine-days, $118k split 29/29/27/15)
+
+Decision at 15:54:00 from the brain's pinned path, sells at market, buys as limit orders, fills at the
+bar ending a minute later, dividends under Composer's own rule, modelled costs.
+
+| | Mirror vs Composer |
+|---|---|
+| Same holdings (weights within 3%) | 297 of 308 engine-days (96.4%): HG 77/78, KMLM 73/78, SLEEVE 78/78, HARV 69/74 |
+| The 11 misses | 6 Composer no-rebalance days, 3 calls that flipped after 15:54, 1 knife-edge, 1 Composer read a day late; 0 unexplained |
+| Book return | +15.4% vs +20.4%: gap −5.05%; −1.99% outside 10-23..10-30; −0.60% before the mirror's own costs |
+| Daily difference | mean −2.1 bps (t −1.5 net, −0.4 before costs), SD 12.0 bps, correlation 0.998, beta 1.00 |
+| By engine (mirror vs Composer) | HG +35.4 / +37.6; KMLM +3.8 / +14.1; SLEEVE +14.5 / +15.2; HARV −3.8 / +0.7 |
+
+- 3.1 points of the gap is one event: Composer did not rebalance on 10-26..10-28 and kept a SOXL book
+  that then paid (KMLM −786 bps for the mirror). The mirror follows the logic; this cuts both ways.
+- Composer's own decision instant moves: it submitted at a median 15:53:04 (15:50:54 to 15:55:49, 81
+  sessions). Logic on a given minute's prices contradicts its real holdings on 5 of 296 engine-sessions
+  at 15:51 and 15:54, 7-10 at 15:52-15:53, 11-13 at 15:55-15:56, 22 at the close. The first build
+  decided at 15:55:05; it now decides as of 15:54:00, reproducibly.
+- Since the calibration window the 15:54 decision has missed 4 of 24 engine-sessions (0 of 272 inside
+  it), all KMLM and HARV on 11-02 and 11-06; 11-06 cost about 45 bp of the book. Small sample; HARV,
+  the planned first live engine, is the most minute-sensitive.
+- Timing (same holdings / gap outside the stretch): decide 15:54 297 / −1.99%; 15:50 288 / +1.21%;
+  15:45 283 / −2.38%; on the close 276 / +0.74%. Deciding at 15:45 is a cost (one session, 10-30).
+
+### 55.3 What running on IBKR costs (per year, estimates)
+
+| Source | Simulator, this window | Reviewer's 252-session hindcast on $118k |
+|---|---|---|
+| Commission (Composer charges none) | 1.28% | $1,788 tiered, $2,734 fixed, up to about $3,400 with pass-through fees (1.5-2.9%) |
+| Slippage | 2.55% at an ASSUMED 2 bps a side, 127x turnover | execution timing vs Composer's real fills 0 ± 1.6% |
+| Idle cash, whole shares, dust rule | 0.22% | 0.28% |
+| Limit buys left unfilled | 0.10% (1 of 174) | about 2% of buys fill late, essentially none unfilled (198 real buys) |
+| Distributions left unallocated | $1,079 of $1,858 entitled | $4,167 a year (3.5%), idle on BOTH brokers until swept |
+
+Composer credits a distribution to the symphony only if the payer is held on the pay date (read from
+its own fills on four BIL distributions); the mirror copies that rule by default, so the sleeve-level
+gap is about zero.
+
+### 55.4 Candidate edge, not established: send the orders a minute or two later
+
+The same 15:54 decisions filled at the bar ending 15:56 instead of 15:55 give −0.35% outside the
+stretch instead of −1.99% (about 160 bps of the book over the window). On Composer's 110 rotation
+engine-days a 15:56 fill beats its own 15:53 by 3.2 bps of the sleeve (t 1.2); placebo (the previous
+session, same weights) −3.3. Reading: what Composer buys is dearest around 15:53-15:55. One window,
+bar closes, no spread, n 110. To use it: keep the decision at 15:54:00, delay only the order time, and
+first run a pre-registered forward test alternating the order time by session on real fills
+(ideas-backlog 22).
+
+### 55.5 Verification record (counter-agent rule)
+
+| Round | Reviewer | Verdict | Findings |
+|---|---|---|---|
+| 1 | A: accounting, crash safety, kill path | SHIP-BLOCKED | 2 blocking (a halt mid-plan did not stop the plan; kill, resume, kill sold twice), 9 serious, 9 minor |
+| 1 | B: parity, data, timing | SHIP-BLOCKED | 4 blocking (decision one bar late; dead data published tradeable; distributions never reached sleeves; no tie to Composer's live tree), 7 serious, 3 minor |
+| 2 | A | PAPER clean, LIVE fix-then-ship | blocking fixes hold; 2 serious (operator tools accept impossible values; "flatten complete" with shares left), 2 minor |
+| 2 | B | PAPER clean, LIVE fix-then-ship | 4 serious (feed hiccup freezes the day; dividend repair can switch off; tree gate not armed; held-back sleeve too quiet), 3 minor |
+| 2 | V2: fresh, the six blocking fixes and the limit-order path only | all hold | 3 minor |
+
+Every finding of both rounds is fixed with a gate. Round-2 fixes are verified by their authors
+(the reviewers' repro sets re-run, 130 mutants killed) but NOT yet by an independent reviewer: that
+pass is a gate before any engine goes live. Tests: composer 492 pass; executor 880 pass, 1 fail
+(test_gate_mf3_5..., fails the same way on the untouched tree; it appears to open a ladder leg on
+the real calendar inside the ladder's November window, not investigated further). The parity backfill re-run from cache on the final
+code reproduces the committed numbers exactly. Reports: research/mirror/reviews/.
+
+### Honesty box
+
+- In sample, one window (83 sessions) in which Composer's book rose 20%; the gaps turn on about five
+  sessions. Nothing here is a forecast.
+- Fills are modelled (1-minute bar closes, 2 bps assumed slippage, tiered commission from memory),
+  never executed. No order has been sent to IBKR by this code.
+- Holdings parity is corroborated three ways (simulator 297/308; brain replay 292/296; 15 real pinned
+  payloads through the paper book 44/48). The return gap and cost split are the simulator's alone and
+  have had no independent review.
+- Not observed: FMP's publication timing at a live 15:54 (the market was closed during the build); a
+  half-day; IBKR's credit check on a limit buy sized close to cash; whether the account can fund a buy
+  from the same minute's sale proceeds.
+- The live service's paper stage fills at the brain's price: it measures decisions and holdings, not
+  execution.
+
+### DECISION
+
+Nothing trades. The mirror stays off until the owner merges and arms it. From 11-10 the monitor steps
+a paper book daily on the composer side (results/mirror/dry-ledger.jsonl), so the paper record starts
+now without any deploy. Open for the owner, ranked:
+- P1 (gating): confirm blend3070 is retired at cutover (/kill sells its SPY core and sleeve); the
+  account: margin or cash, one real limit buy sized near cash, and same-minute proceeds; the brain's
+  hosting (a small always-on service with the FMP key); the merge to main (redeploys the live executor,
+  mirror off).
+- P2 (moves the result): starting sleeve weights (policy 29/29/27/15 vs Composer's live
+  34.3/26.8/26.5/12.4: mean 9.7 bp a day of book difference either way); which engine goes live first
+  (HARV is the smallest and the most minute-sensitive; SLEEVE never missed); the dividend rule and
+  sweeping the unallocated cash; IBKR tiered pricing.
+- P3: the later-order-time forward test; KMLM's start day (seeded from cash it buys the target while
+  Composer may sit inside its corridor: 6-10% of the sleeve apart for 2-4 sessions on one start day in
+  five).

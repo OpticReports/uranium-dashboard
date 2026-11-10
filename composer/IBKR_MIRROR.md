@@ -4,11 +4,12 @@ Status (2026-11-10): BUILT on the branch, NOT deployed, switched OFF by default.
 No order has been sent. Reaching production is a merge to main (the owner's
 call), then env vars on Render; the first stage after that is PAPER only.
 
-Two independent reviews found the first build SHIP-BLOCKED (reports and repro
-lists in research/mirror/reviews/). Their findings are fixed on the branch and
-this document describes the code AFTER those fixes. The fixes' own independent
-re-verification is recorded at the end; until it reads clean, nothing here
-should be merged.
+Two independent reviews found the first build SHIP-BLOCKED. Their findings were
+fixed; a second round by three independent verifiers found the blocking fixes
+hold and read PAPER clean, LIVE fix-then-ship; that round's findings are fixed
+too. This document describes the code after both rounds. What is still owed
+before any engine trades real money is listed under "Before live". Reports:
+research/mirror/reviews/. Numbers: results/results.md addendum 55.
 
 ## Owner decisions (Casey, 2026-11-10)
 
@@ -65,10 +66,15 @@ methods (the account's positions; what an order executed) and nothing else.
 3. The intents are read with ?after=15:54:00. The brain answers with the
    decision AS OF that instant: prices only from 1-minute bars ending at or
    before it, the same answer whatever second it is computed, cached and never
-   rebuilt. It answers "not yet" until the decision minute is published (FMP
-   takes 10-25 s). The executor accepts only a pinned payload for today's
-   instant with a complete decision bar. An engine is unavailable when the
-   feed is dead, its data is short, or its tree is not the one Composer runs.
+   rebuilt once settled. It answers "not yet" until the decision minute is
+   published (FMP takes 10-25 s) and while the feed is incomplete; from two
+   minutes after the instant, if the market as a whole is priced, it settles
+   with only the affected engines unavailable. The executor accepts only a
+   pinned payload for today's instant with a complete decision bar. An engine
+   is unavailable when the feed is dead, a ticker it decides on has no trade
+   of its own, its data is short, or its tree is not the one Composer runs. A
+   LIVE book additionally refuses any sleeve whose tree was not attested that
+   day; a paper book trades it and says so.
 4. Corporate actions first: a split rescales the sleeves' shares; a dividend
    becomes a receivable for the sleeves that held the payer at the close
    before the ex-date, credited from the pay date.
@@ -102,10 +108,14 @@ it with /mirror/resolve.
   next open), in up to five rounds until nothing the account holds is left.
   POST /resume lifts it and says which halt it lifted.
 - POST /mirror/halt: stop trading, keep positions. POST /mirror/resume.
-- POST /mirror/resolve {id, filled, price}: book an order the venue could not
-  account for, at what the operator states.
+- POST /mirror/resolve {id, filled, price}: book an order the book has flagged
+  unresolved. The venue is asked once more and its own answer wins; a price
+  above the order's limit or far from its reference is refused.
 - POST /mirror/adjust {sleeve, symbol, shares, cash, note}: a signed
-  correction of one sleeve, for a divergence nothing else explains.
+  correction of one sleeve, for a divergence nothing else explains. One that
+  would put the sleeve in debt needs "force": true.
+- A flatten runs for up to 30 minutes of open session and never reports
+  complete while the account still holds stock.
 - POST /mirror/transfer {from, to, amount}: capital between two sleeves, with
   the next session's plan. The POLICY operations that move money between
   symphonies on Composer land here the same day.
@@ -142,7 +152,30 @@ requires the account to hold exactly its book. So:
 
 Until step 4 the mirror's live book refuses to trade, by design.
 
+## Before live (gates, in order)
+
+1. Owner: confirm blend3070 is retired at cutover; the brain's hosting; the
+   merge to main (it redeploys the live executor, mirror off).
+2. Paper for at least ten sessions. The monitor already steps a paper book
+   daily on the composer side (results/mirror/dry-ledger.jsonl, from 11-10);
+   the executor's own paper book starts when MIRROR_ENABLED is set.
+3. An independent review of the round-2 fixes and of the code as it then
+   stands. Round 2 is verified by its authors only.
+4. On the real account: one limit buy sized near available cash (the existing
+   strategy's notes record market buys that size coming back refused), and
+   whether a buy can be funded from the same minute's sale proceeds. If the
+   account is a cash account that cannot, every rotation lags a day.
+5. The attestation armed: MIRROR_ATTEST_TOKEN on the brain, and
+   scripts/mirror_attest.py run by the 15:15 preview routine (an attestation
+   older than an hour before the decision does not count). A live sleeve does
+   not trade without it.
+6. Engines live one at a time. HARV is the smallest and the most
+   minute-sensitive; SLEEVE never missed a session on paper.
+
 ## Deploying the brain
+
+MIRROR_BRAIN_URL must be https: the executor never sends its token over plain
+http except to localhost.
 
 The brain needs a small always-on service: stdlib Python, no disk.
 

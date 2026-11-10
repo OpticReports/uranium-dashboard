@@ -1769,3 +1769,15 @@ the account holds.
 - Paper trading account activated
 - October decision: Secure Login System opt-out for the API user
   (headless login; also restricts withdrawals - security win)
+
+## Composer mirror (off by default)
+
+`app/mirror.py`, `app/mirror_core.py`: the Composer book's four engines mirrored
+onto this account from a keyless decision brain. `MIRROR_ENABLED` unset (the
+default) builds nothing: no manager, no polling, no route answers, no file.
+Enabled, every engine runs in a PAPER book (a private DryAdapter: no order, no
+account read) until it is named in `MIRROR_LIVE_ENGINES`, and a live book
+refuses to trade while the blend is enabled or the account holds anything but
+its own book. `/kill` halts every mirror book and flattens the live one.
+Design, rollout gates, controls and what is NOT the same as Composer:
+`composer/IBKR_MIRROR.md`. Review record: `composer/research/mirror/reviews/`.

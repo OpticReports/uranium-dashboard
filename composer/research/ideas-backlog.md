@@ -278,3 +278,36 @@ deterministic rationale are listed.
     marked tested or not tested with the reason and the cost to obtain the data; a coverage
     critic in the counter-agent pass; reports lead with what was and was not tested. If it
     works, it becomes a CLAUDE.md convention (mirrors regenerated in the same commit).
+
+21. IN PROGRESS (add. 55, 2026-11-10): the IBKR mirror of the Composer book. Built, off by default,
+    not deployed. Gates left, in order: (a) owner: retire blend3070 at cutover, the brain's hosting,
+    the merge; (b) paper for at least ten sessions (the monitor's daily paper book from 11-10; the
+    executor's own paper book once deployed); (c) an independent review of the round-2 fixes and of
+    the final code before any engine is live; (d) on the real account: one limit buy sized near
+    cash, and whether same-minute sale proceeds fund a buy; (e) the attestation routine scheduled
+    (mirror_attest.py at the 15:15 preview) and MIRROR_ATTEST_TOKEN set; (f) engines live one at a
+    time. composer/IBKR_MIRROR.md is the runbook.
+
+22. CANDIDATE EDGE, forward test first (add. 55.4): the mirror's order time. Same 15:54 decisions
+    filled at the bar ending 15:56 instead of 15:55: about +160 bps of the book over 83 sessions;
+    on Composer's 110 rotation engine-days a 15:56 fill is +3.2 bps of the sleeve against its
+    15:53 (t 1.2), placebo -3.3. Mechanism to test: what Composer (and the crowd running the same
+    symphonies) buys is dearest at 15:53-15:55. Test: decision stays 15:54:00; alternate the order
+    delay by session (0 / 60 / 120 s) on real fills once an engine is live; pre-register 40
+    rotation days a side; measure fill against the 15:54 reference. Needs an executor setting for
+    the order delay (not built).
+
+23. Idle distributions on BOTH brokers (add. 55.3): a distribution whose payer is not held on the
+    pay date lands in account cash outside every symphony / sleeve. Hindcast on $118k: $4,167 a
+    year (3.5% of the book) idle until swept; the Composer book is about 2.6x that size. Not lost,
+    but uninvested. Candidate standing operation: sweep unallocated cash back into the engines pro
+    rata each month (Composer: an invest per symphony under POLICY; mirror: /mirror/credit). Check
+    the monitor's IDLE CASH alert covers it and size the drag before proposing the operation.
+
+24. Executor test hygiene on main (found while building the mirror, not touched):
+    tests/test_blend.py::test_gate_mf3_5_a_halt_landing_mid_plan_never_opens_a_ladder_spread fails
+    in this environment today, apparently on any real date inside the ladder's November window
+    (the loop seems to open a leg on the real calendar before the test freezes it; not
+    investigated further); and one of the blend /kill service-loop tests fails about one run
+    in 3-6 (a different one each time). Both predate the mirror.
+
