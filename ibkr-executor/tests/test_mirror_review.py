@@ -120,7 +120,7 @@ def test_a01b_a_halt_during_the_quote_check_drops_the_plan_and_restores_the_book
     queued for the plan that does run"""
     r = invested(tmp_path)
     r.venue.cash += 50.0
-    r.m.request_credit("HARV", 50.0, "interest")
+    r.m.request_credit("HARV", 50.0, "interest", force=True)   # round 3 (D-04): beyond the seeded cap, so forced
     r.m.request_transfer("HG", "HARV", 2000.0, "op")
     r.tick("15:56:00")                                 # both drained into the state, on disk
     before = (r.m.book.to_dict(), [q["kind"] for q in r.m.state["requests"]], disk(r)["seq"])
@@ -315,7 +315,9 @@ def test_a21_the_flatten_gives_up_loudly_after_thirty_minutes_of_open_session(tm
             break
         r.clock.now += timedelta(seconds=5)
     assert sent == [0, 5, 20, 80, 380, 680, 980, 1280, 1580]                   # the gaps widen: 5, 15, 60, then 300 s
-    assert gave_up == mm.FLATTEN_OPEN_BUDGET_S == 1800.0                       # ... for 30 minutes of open session
+    # round 3 (C-10): the budget counts open time BETWEEN rounds only. Each of the 9 rounds has one 5 s
+    # step in which its refused order is still unbooked, and that step is not counted: 1800 + 9 x 5.
+    assert mm.FLATTEN_OPEN_BUDGET_S == 1800.0 and gave_up == 1800.0 + 9 * 5    # ... for 30 minutes of open session
     assert [q for s, q in r.orders() if s == "SOXL" and q < 0] == [-soxl] * 9
     assert r.m.book.positions() == {"SOXL": soxl}
     done = [a for a in r.red() if "GAVE UP after 30 minutes of open session and 9 rounds" in a]
@@ -358,7 +360,9 @@ def test_n08_only_open_session_time_counts_towards_the_bound(tmp_path):
         r.m.tick(r.venue)
         r.clock.now += timedelta(seconds=5)
     used = r.m.state["flatten"]["open_s"]
-    assert 590 <= used <= 600 and not r.m.halt_state().get("flatten_done")
+    # round 3 (C-10): 5 rounds went out in these ten minutes; the 5 s step in which each one's refused
+    # order was still unbooked is not counted
+    assert 565 <= used <= 580 and not r.m.halt_state().get("flatten_done")
     for hms in ("16:00:30", "18:00:00", "23:00:00"):   # the session is shut: nothing is sent, nothing is counted
         r.tick(hms)
     r.tick("03:00:00", day=D2)
@@ -1168,7 +1172,7 @@ def test_a19_a_cancel_lead_of_four_minutes_is_clamped_not_a_silent_no_trade(tmp_
 def test_d8_credits_are_applied_debits_first(tmp_path):
     r = invested(tmp_path)
     r.venue.cash += 61.20 - 12.34                              # the account received a dividend and paid a fee
-    r.m.request_credit("HARV", 61.20, "PULS dividend")         # sent in the 'wrong' order: alone, the dividend
+    r.m.request_credit("HARV", 61.20, "PULS dividend", force=True)   # sent in the 'wrong' order: alone, the dividend
     r.m.request_credit("HG", -12.34, "fee")                    # exceeds what the account holds beyond the book
     r.brain.make = lambda now: payload(now, session=D2)
     r.tick("15:55:05", day=D2)

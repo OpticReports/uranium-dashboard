@@ -1006,6 +1006,14 @@ services:
         sync: false
       - key: MIRROR_CAPITAL_USD
         sync: false
+      # The split of MIRROR_CAPITAL_USD across the sleeves. Unset = the code
+      # default (POLICY.md's targets: HG:0.29,KMLM:0.29,SLEEVE:0.27,HARV:0.15).
+      - key: MIRROR_WEIGHTS
+        sync: false
+      # The most a LIVE book takes in seeds plus /mirror/credit without
+      # "force": true. Unset / 0 = MIRROR_CAPITAL_USD is the cap.
+      - key: MIRROR_MAX_BOOK_USD
+        sync: false
       - key: MIRROR_LIVE_ENGINES
         sync: false
       # "composer" (the default: a dividend is credited to a sleeve only if it

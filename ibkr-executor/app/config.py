@@ -106,6 +106,11 @@ class Settings(BaseSettings):
     # LIVE sleeve is seeded only from cash the account really holds beyond
     # what the book already claims.
     mirror_capital_usd: float = 0.0       # MIRROR_CAPITAL_USD
+    # The most capital a LIVE book takes in seeds plus operator credits
+    # (POST /mirror/credit) without "force": true. 0 = MIRROR_CAPITAL_USD is
+    # the cap: scaling the book up by a credit then needs this raised first
+    # (or force), so a slipped decimal cannot scale a real book tenfold.
+    mirror_max_book_usd: float = 0.0      # MIRROR_MAX_BOOK_USD
     mirror_weights: str = "HG:0.29,KMLM:0.29,SLEEVE:0.27,HARV:0.15"
     mirror_live_engines: str = ""         # MIRROR_LIVE_ENGINES e.g. "HARV"
     # On Render both are overridden onto the mounted disk (/app/data): the

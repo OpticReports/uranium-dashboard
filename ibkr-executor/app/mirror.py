@@ -157,6 +157,9 @@ PAPER_TICK_BUDGET_S = 20.0     # a PAPER tick never waits longer than this (it s
 PAPER_RETRY_S = 10.0           # ... and asks the brain again this often
 PAPER_UNKNOWN_WAIT_S = 300.0   # session unknown: a paper book asks for the loop this often (UNKNOWN_WAIT_S from 15:30 ET)
 RESOLVE_MAX_OFF_REF = 0.20     # an operator's resolve price further than this from the order's reference is refused
+RESOLVE_MAX_COMM_USD = 5.0     # C-01: an operator's resolve commission above max(this, RESOLVE_MAX_COMM_FRAC x quantity
+RESOLVE_MAX_COMM_FRAC = 0.01   # ... x price) is refused without "force": true
+SEED_TOL_USD = 1.0             # D-05 / D-04: the capital caps are checked with this tolerance
 LATCH_RETRY_S = 20.0           # a failed state save is retried this often
 LATCH_ALERT_EVERY_S = 600.0    # ... and said again this often while it fails
 UNKNOWN_WAIT_S = 60.0          # session unknown on a weekday 09:25-16:05 ET: ask for the loop this often
@@ -216,6 +219,7 @@ class MirrorConfig:
     blend_enabled: bool = False            # live: no trading while the blend runs in the same account
     dividend_rule: str = "composer"        # "composer": credit only a sleeve that still holds the payer; "holder": always
     poll_s: float = 300.0                  # the service loop's ordinary cadence (bounds an off-hours flatten wait)
+    max_book_usd: float = 0.0              # live: seeded + credited capital may not pass this without force (0: sum of capital)
     core: mc.Config = field(default_factory=mc.Config)
 
 
@@ -349,6 +353,11 @@ class MirrorManager:
         self.state = self._fresh()
         self.book = mc.Book()
         self._load()
+        if _num(self.state.get("funded_usd")) is None:
+            # a state file written before D-04 carries no total: the seeds it records are what is known
+            self.state["funded_usd"] = round(sum(_num((v or {}).get("amount")) or 0.0
+                                                 for v in (self.state.get("seeded") or {}).values()
+                                                 if isinstance(v, dict)), 2)
         if not cfg.live:
             from .ib_adapter import DryAdapter
             self._dry = DryAdapter()
@@ -361,7 +370,22 @@ class MirrorManager:
                 "seeded": {}, "frozen": [], "run": None, "last_run": None, "last_session": None, "history": [],
                 "requests": [], "seen_requests": [], "flatten": None, "marks": {"prices": {}, "asof": None},
                 "check": None, "commission_pending": [], "dividends": [], "div_seen": [], "splits_applied": [],
-                "seq": 0, "saved_utc": None}
+                "funded_usd": None, "seq": 0, "saved_utc": None}
+
+    def _capital_usd(self) -> float:
+        """MIRROR_CAPITAL_USD: the capital of every configured sleeve (the weights sum to 1)"""
+        return sum(v for v in (_num(x) for x in (self.cfg.capital or {}).values()) if v is not None and v > 0)
+
+    def _book_cap_usd(self) -> float:
+        """D-04: the most capital (seeded + credited) a LIVE book takes without force: MIRROR_MAX_BOOK_USD,
+        or MIRROR_CAPITAL_USD when that is 0 / unset"""
+        cap = _num(self.cfg.max_book_usd)
+        return cap if cap is not None and cap > 0 else self._capital_usd()
+
+    def _seeded_usd(self) -> float:
+        """what the sleeves the book holds now were seeded with"""
+        seeded = self.state.get("seeded") or {}
+        return sum(_num((seeded.get(n) or {}).get("amount")) or 0.0 for n in self.book.sleeves)
 
     def _load(self) -> None:
         path = self.cfg.state_path
@@ -599,7 +623,8 @@ class MirrorManager:
         return self._request({"kind": "credit", "sleeve": sleeve, "amount": amt, "note": one_line(note, 200),
                               "force": force is True})
 
-    def request_resolve(self, order_id: str, filled, price=None, commission=0.0, note: str = "") -> dict:
+    def request_resolve(self, order_id: str, filled, price=None, commission=0.0, note: str = "",
+                        force: bool = False) -> dict:
         """queue the operator's statement of what an UNRESOLVED order did: `filled` shares at `price`
         (commission optional). The loop thread takes it only for an order of the open run or flatten
         that is flagged unresolved, asks the venue once more first (an order still working is
@@ -617,8 +642,9 @@ class MirrorManager:
         comm = _num(commission if commission is not None else 0.0)
         if comm is None or comm < 0:
             raise ValueError("commission must be 0 or more")
+        # force: a commission above max($5, 1% of quantity x price) is refused without it (C-01; _resolve)
         return self._request({"kind": "resolve", "order": order_id.strip(), "filled": int(qty), "price": px,
-                              "commission": comm, "note": one_line(note, 200)})
+                              "commission": comm, "note": one_line(note, 200), "force": force is True})
 
     def request_adjust(self, sleeve: str, symbol, shares_delta, cash_delta, note: str = "", force: bool = False) -> dict:
         """queue a signed correction of ONE sleeve: shares of one symbol (shares_delta) and / or its
@@ -731,11 +757,27 @@ class MirrorManager:
             self._refuse(r, f"{px:g} is more than {RESOLVE_MAX_OFF_REF:.0%} from order {oid}'s reference {ref:g}: "
                             f"check the price (a slipped decimal?)")
             return True
+        if qty and r.get("force") is not True:
+            most = max(RESOLVE_MAX_COMM_USD, RESOLVE_MAX_COMM_FRAC * qty * px)
+            if comm > most + 1e-9:                 # C-01: a slipped decimal here debits the sleeves like a price would
+                self._refuse(r, f"a commission of ${comm:,.2f} on {qty} {o['symbol']} @{px:g} is more than "
+                                f"${most:,.2f} (the larger of ${RESOLVE_MAX_COMM_USD:g} and "
+                                f"{RESOLVE_MAX_COMM_FRAC:.0%} of the trade): check the amount (a slipped decimal?); "
+                                f"send it with \"force\": true if it is meant")
+                return True
         if self._dry is None:
             if ad is None:
                 return False                       # the venue cannot be asked now: it stays queued
             res = self._find(ad, oid, rec)         # ... asked ONCE MORE: its own answer wins
-            if res is not _UNKNOWN and res is not None:
+            if res is _UNKNOWN:
+                # C-02: a lookup that RAISED is not an answer: nothing is booked on the operator's word
+                # while the venue may still hold the order. The request stays queued and is asked again.
+                self._say("red", f"resolve request {r.get('id')} of order {oid} is NOT booked: the venue could not "
+                                 f"be asked about it ({rec.get('find_error') or 'the lookup failed'}). It stays "
+                                 f"queued and is applied (or refused) as soon as the venue answers.",
+                          key=f"resolve-noask:{r.get('id')}")
+                return False
+            if res is not None:
                 if res.get("status") == "working":
                     self._refuse(r, f"the venue still holds order {oid} as WORKING: cancel it at the venue first")
                     return True
@@ -1147,10 +1189,23 @@ class MirrorManager:
                                      f"and the book already claims ${self.book.cash():,.2f}", key=f"seed-short:{name}")
                     self._seed_why = "the account's cash does not cover the sleeves' capital"
                     continue
+                if self.cfg.live and self._seeded_usd() + amt > self._capital_usd() + SEED_TOL_USD:
+                    # D-05: each seed is capital x the weight OF THAT DAY; a staged rollout with the weights
+                    # edited in between must still never seed more than the capital in total
+                    self._say("red", f"cannot seed {name} with ${amt:,.2f}: the sleeves this book holds were seeded "
+                                     f"with ${self._seeded_usd():,.2f} and MIRROR_CAPITAL_USD is "
+                                     f"${self._capital_usd():,.2f} (were MIRROR_WEIGHTS changed after a sleeve was "
+                                     f"funded?). Nothing is seeded beyond the capital.", key=f"seed-cap:{name}:{amt:.2f}")
+                    self._seed_why = "seeding the remaining sleeves would exceed MIRROR_CAPITAL_USD"
+                    continue
                 self.book.sleeves[name] = mc.Sleeve(name=name, cash=amt)
                 self.state.setdefault("seeded", {})[name] = {"amount": amt, "utc": _iso(self.clock())}
+                self.state["funded_usd"] = round((_num(self.state.get("funded_usd")) or 0.0) + amt, 2)
                 self._journal("sleeve_seeded", sleeve=name, amount=amt)
-                self._say("info", f"sleeve {name} seeded with ${amt:,.2f} in cash")
+                # a LIVE sleeve claiming real cash is a warning, never a line that scrolls by
+                self._say("warn" if self.cfg.live else "info", f"sleeve {name} seeded with ${amt:,.2f} in cash"
+                          + (f" of the ACCOUNT's (the live book has now taken ${self.state['funded_usd']:,.2f} in "
+                             f"seeds and credits)" if self.cfg.live else ""))
                 changed = True
         if changed:
             self._save()
@@ -1598,7 +1653,23 @@ class MirrorManager:
                 have = _num((ad.account_cash() or {}).get("total_cash"))
                 if have is None or self.book.cash() + amt > have + CASH_TOL_USD:
                     ok, why = False, f"the account's cash ({have!r}) does not cover the book's plus the credit"
+            funded = _num(self.state.get("funded_usd")) or 0.0
+            if ok and self.cfg.live and amt > 0 and r.get("force") is not True \
+                    and funded + amt > self._book_cap_usd() + SEED_TOL_USD:
+                # D-04: the account's spare cash is no bound on a typo; the capital the book was given is
+                ok, why = False, (f"the live book has taken ${funded:,.2f} in seeds and credits; ${amt:,.2f} more "
+                                  f"would pass its cap of ${self._book_cap_usd():,.2f} (MIRROR_MAX_BOOK_USD, or "
+                                  f"MIRROR_CAPITAL_USD when that is unset). Check the amount (a slipped decimal?); "
+                                  f"raise the cap, or send it with \"force\": true if it is meant")
             if ok:
+                if amt > 0:
+                    self.state["funded_usd"] = round(funded + amt, 2)
+                if self.cfg.live:                  # every credit a live book takes is said (deferred until the plan is on disk)
+                    self._say("warn", f"sleeve {name} {'CREDITED' if amt > 0 else 'DEBITED'} ${abs(amt):,.2f} by the "
+                                      f"operator ({r.get('note') or 'no note'})"
+                                      + (" [FORCED]" if r.get("force") is True else "")
+                                      + f": seeds and credits now total ${_num(self.state.get('funded_usd')) or 0.0:,.2f} "
+                                        f"of a cap of ${self._book_cap_usd():,.2f}")
                 self.book.sleeves[name].cash += amt
                 notes.append(f"{name} {'credited' if amt > 0 else 'debited'} ${abs(amt):,.2f} ({r.get('note') or 'no note'})")
                 credits.append({"sleeve": name, "amount": amt, "kind": "credit", "id": r.get("id"), "note": r.get("note")})
@@ -1773,11 +1844,12 @@ class MirrorManager:
                     return False                   # woken or halted between two quotes: nothing was changed
             if any(t["status"] == "planned" for t in plan["transfers"]) and not plan.get("transfers_applied"):
                 mc.apply_transfers(self.book, plan)
-            if past:
+            unfunded = None if past else self._buys_unfunded(ad, run)
+            if past or unfunded:
                 plan["buys"] = []
                 if plan["buy_asks"]:
-                    run.setdefault("notes", []).append("buys NOT sent: " + (run.get("aborted") or "the window closed "
-                                                       "before the sells were booked"))
+                    run.setdefault("notes", []).append("buys NOT sent: " + (unfunded or run.get("aborted") or
+                                                       "the window closed before the sells were booked"))
             else:
                 mc.size_buys(self.book, plan, None, self.cfg.core, limits=limits)
             run["phase"] = "buys"
@@ -1785,6 +1857,32 @@ class MirrorManager:
         if run["phase"] == "buys":
             return self._work_all(ad, plan["buys"], run["orders"], cancel_at, abort, wake)
         return True
+
+    def _buys_unfunded(self, ad, run: dict) -> str | None:
+        """C-52 (live): the sells are booked and the buys are about to be sized from the BOOK's cash. On a
+        margin account the venue lends whatever the book over-counts (a sell booked at its reference
+        with no price reported, a fee the book does not know), so the ACCOUNT's cash is read first: the
+        buys go only if it covers the book's (within CASH_TOL_USD). Why not, or None. A paper book
+        has no account to read."""
+        if self._dry is not None or not any(int(q) > 0 for asks in run["plan"]["buy_asks"].values() for q in asks.values()):
+            return None
+        try:
+            have = _num((ad.account_cash() or {}).get("total_cash"))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("mirror[%s] account cash unreadable before the buys: %s", self.cfg.name, one_line(exc))
+            have = None
+        mine = self.book.cash()
+        if have is None:
+            why = "the account's cash cannot be read, so nothing proves it covers the buys"
+        elif mine > have + CASH_TOL_USD:
+            why = (f"the book's cash ${mine:,.2f} exceeds the account's ${have:,.2f} (by ${mine - have:,.2f}): "
+                   f"buying from the book's figure would borrow on margin")
+        else:
+            return None
+        self._say("red", f"{run['session']}: NO BUYS are sent this session — {why}. The sells are booked; the "
+                         f"sleeves keep the cash until the next session. Compare the account with /status (a fee is "
+                         f"debited with POST /mirror/credit).", key=f"buys-unfunded:{run['session']}")
+        return why
 
     def _work_all(self, ad, orders: list, recs: dict, cancel_at, abort: bool, wake) -> bool:
         waiting = False
@@ -1886,7 +1984,27 @@ class MirrorManager:
         if rec["state"] == "new":
             if past:
                 return self._book(o, rec, 0, None, 0.0, "not sent: " + ("stopped" if abort else "the window closed"))
-            if not self._may_place(emergency) or not self._write_ahead(o, rec, emergency):
+            if not self._may_place(emergency):
+                return False
+            if emergency and self._dry is None:
+                # D-01: a flatten order goes out even when its write-ahead cannot be saved, so after a
+                # restart on a stale file "new" does NOT prove it was never sent. The venue is asked first
+                # (find_stock_order also reads today's executions) and its answer is settled, not repeated.
+                res = self._find(ad, oid, rec)
+                if res is _UNKNOWN:
+                    self._say("red", f"flatten order {oid} is NOT sent yet: the venue could not be asked whether it "
+                                     f"already holds it ({rec.get('find_error')}); asked again on the next step",
+                              key=f"flat-noask:{oid}:{one_line(rec.get('find_error'), 60)}")
+                    return False
+                if res is not None:
+                    rec.update(state="placed", order_ref=res.get("order_ref"), found_at_venue=_iso(self.clock()))
+                    self._say("red", f"flatten order {oid} was ALREADY at the venue ({res.get('status')}) though "
+                                     f"the state file did not know it (a save had failed before a restart): it is "
+                                     f"settled from the venue's record, not sent again", key=f"flat-found:{oid}")
+                    return self._settle(ad, o, rec, res, past)
+            if emergency and not self._flatten_cap(ad, o, rec):
+                return bool(o.get("applied"))
+            if not self._write_ahead(o, rec, emergency):
                 return False
             res = self._place(ad, o, rec)
         elif rec["state"] == "intent":
@@ -1905,6 +2023,8 @@ class MirrorManager:
                                       + (f" ({rec['error']})" if rec.get("error") else ""))
                 if not self._may_place(emergency):
                     return False
+                if emergency and not self._flatten_cap(ad, o, rec):
+                    return bool(o.get("applied"))
                 res = self._place(ad, o, rec)
             else:
                 rec.update(state="placed", order_ref=res.get("order_ref"))
@@ -1927,6 +2047,39 @@ class MirrorManager:
         if res is None:
             return False
         return self._settle(ad, o, rec, res, past)
+
+    def _flatten_cap(self, ad, o: dict, rec: dict) -> bool:
+        """D-01: the last look before a flatten SELL goes to the venue of a live book. The account's
+        positions are read again and the order is cut to what the account holds NOW: a flatten can
+        never take a position below zero, whatever the state file believes (a restart on a stale
+        file, a sale by hand since the round was built). True: send o (its qty may have been cut).
+        False: nothing is sent - the order was booked at zero (the account holds none: o is applied),
+        or the positions could not be read (said in red; asked again on the next step)."""
+        if self._dry is not None or o.get("side") != mc.SELL:
+            return True
+        oid, sym = o["id"], o["symbol"]
+        try:
+            snap = ad.positions_snapshot()
+            held = int((snap.get("stocks") or {}).get(sym, 0) or 0)
+        except Exception as exc:  # noqa: BLE001
+            rec["positions_error"] = one_line(exc, 160)
+            self._say("red", f"flatten order {oid} is NOT sent: the account's positions cannot be read "
+                             f"({rec['positions_error']}), and a sell that is not checked against them could take "
+                             f"{sym} short. Tried again on the next step.",
+                      key=f"flat-cap-nopos:{oid}:{one_line(exc, 60)}")
+            return False
+        want = int(o["qty"])
+        if held <= 0:
+            self._say("red", f"flatten order {oid} is NOT sent: the account holds {held} {sym} (the book asked to "
+                             f"sell {want}). Nothing is sold below zero; the book still shows the shares - compare "
+                             f"the account with /status.", key=f"flat-cap-zero:{oid}")
+            self._book(o, rec, 0, None, 0.0, f"not sent: the account holds {held} {sym}")
+            return False
+        if held < want:
+            o["qty"], rec["cut_from"] = held, want
+            self._say("red", f"flatten order {oid} cut from {want} to {held} {sym}: that is all the account holds "
+                             f"now", key=f"flat-cap-cut:{oid}:{held}")
+        return True
 
     def _write_ahead(self, o: dict, rec: dict, emergency: bool) -> bool:
         """WRITE-AHEAD: the id is on disk before the venue sees it. 'intent' stands only if the save
@@ -2320,7 +2473,10 @@ class MirrorManager:
                                       emergency=True):
                         waiting = True
                 if waiting:
-                    self._flatten_clock(fl)
+                    # C-10: the budget bounds REFUSALS (open time between rounds). While an order is
+                    # working (a halted symbol, a venue that cannot be read) no open time is counted:
+                    # the clock starts again at the first look after they are all booked.
+                    fl["seen_utc"] = None
                     return False
             self._flatten_tally(fl)
             h = self.halt_state()
@@ -2614,7 +2770,8 @@ def build(settings, alert=None, brain=None, trading_day=None) -> dict:
                             cancel_before_close_s=float(settings.mirror_cancel_before_close_s),
                             quote_band=float(settings.mirror_quote_band),
                             blend_enabled=bool(settings.blend_enabled), dividend_rule=rule,
-                            poll_s=float(getattr(settings, "poll_seconds", 300) or 300), core=core)
+                            poll_s=float(getattr(settings, "poll_seconds", 300) or 300),
+                            max_book_usd=float(getattr(settings, "mirror_max_book_usd", 0.0) or 0.0), core=core)
     if live:
         out["live"] = MirrorManager(cfg("live", True, live, settings.mirror_state_path), brain=brain, alert=alert,
                                     trading_day=trading_day)
@@ -2624,4 +2781,38 @@ def build(settings, alert=None, brain=None, trading_day=None) -> dict:
     for book in out.values():
         if book.clamped:
             book._say("warn", "settings outside their range were clamped: " + "; ".join(book.clamped))
+    if "live" not in out:
+        _abandoned_live_state(settings, alert, asked, real)
     return out
+
+
+def _abandoned_live_state(settings, alert, asked: list, real: bool) -> None:
+    """D-03: no live book is built (MIRROR_LIVE_ENGINES names nothing, or the service is not trading
+    for real) while the LIVE state file still holds shares: nobody trades them, nobody checks them
+    and /kill has no book to flatten. Said in red at every boot, naming the holdings. Never raises."""
+    path = getattr(settings, "mirror_state_path", None)
+    if not path or not os.path.exists(path):
+        return
+    try:
+        with open(path) as f:
+            raw = json.load(f)
+        if not isinstance(raw, dict) or not raw.get("live"):
+            return
+        book = mc.Book.from_dict(raw["book"])
+        held, cash = book.positions(), book.cash()
+        if not held:
+            return
+        what = f"holds {held} and ${cash:,.2f} in cash (last saved {raw.get('saved_utc')})"
+    except Exception as exc:  # noqa: BLE001
+        what = f"cannot be read ({one_line(exc, 160)}) and may hold positions"
+    why = ("MIRROR_LIVE_ENGINES names no engine" if not asked else
+           "the service is not trading for real (DRY_RUN, or no TWS credentials)" if not real else
+           "no live engine is configured")
+    text = (f"🚨 mirror: NO LIVE BOOK is built ({why}) but the live book's state file {path} {what}. These are "
+            f"REAL positions in the account that nothing trades, nothing checks and /kill will NOT sell. Restore "
+            f"MIRROR_LIVE_ENGINES / DRY_RUN=false to manage them, or sell them by hand.")
+    logger.error(text)
+    try:
+        (alert or (lambda msg: None))(text)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("mirror alert failed: %s", exc)

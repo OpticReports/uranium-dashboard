@@ -320,10 +320,11 @@ def test_n02_an_account_that_cannot_be_read_or_holds_something_else_is_never_com
     r = invested(tmp_path)
     real = r.venue.positions_snapshot
     calls = {"n": 0}
+    sells = len(r.m.book.positions())                          # round 3 (D-01): + one read before each sell is sent
 
     def flaky():
         calls["n"] += 1
-        if calls["n"] >= 3:                                    # (1: the round, 2: the round that finds the book flat)
+        if calls["n"] >= 3 + sells:                            # (1: the round, 2: the round that finds the book flat)
             raise RuntimeError("positions request timed out")
         return real()
     r.venue.positions_snapshot = flaky
@@ -877,10 +878,11 @@ def test_gate_a_resume_that_lands_as_a_flatten_is_being_closed_is_reported_as_ca
     r = invested(tmp_path)
     r.m.halt("KILL", flatten=True)
     real, calls, answer = r.venue.positions_snapshot, {"n": 0}, {}
+    sells = len(r.m.book.positions())                          # round 3 (D-01): + one read before each sell is sent
 
     def racy():
         calls["n"] += 1
-        if calls["n"] == 3:                                    # the finish's own read of the account
+        if calls["n"] == 3 + sells:                            # the finish's own read of the account
             answer.update(r.m.resume())                        # /resume lands here: 'flatten_cancelled'
         return real()
     r.venue.positions_snapshot = racy

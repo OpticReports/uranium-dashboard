@@ -84,7 +84,7 @@ def scenario_credit(r):
     """day 2: a dividend credited to one sleeve and a fee debited from another (sent dividend first:
     debits are applied first), then the plan"""
     r.venue.cash += 61.20 - 12.34                        # the account really received / paid them
-    r.m.request_credit("HARV", 61.20, "PULS dividend")
+    r.m.request_credit("HARV", 61.20, "PULS dividend", force=True)   # round 3 (D-04): beyond the seeded cap, so forced
     r.m.request_credit("HG", -12.34, "fee")
     r.brain.make = lambda now: payload(now, session=D2, rules={})
     return [("15:55:05", D2), ("15:55:20", D2), ("15:56:00", D2)]

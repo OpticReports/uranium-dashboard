@@ -1779,5 +1779,6 @@ Enabled, every engine runs in a PAPER book (a private DryAdapter: no order, no
 account read) until it is named in `MIRROR_LIVE_ENGINES`, and a live book
 refuses to trade while the blend is enabled or the account holds anything but
 its own book. `/kill` halts every mirror book and flattens the live one.
+`MIRROR_MAX_BOOK_USD` (0 / unset = `MIRROR_CAPITAL_USD`) caps a live book's seeded-plus-credited capital: a `/mirror/credit` above it is refused without `"force": true`.
 Design, rollout gates, controls and what is NOT the same as Composer:
 `composer/IBKR_MIRROR.md`. Review record: `composer/research/mirror/reviews/`.

@@ -1798,8 +1798,11 @@ def mirror_credit(body: dict = Depends(_mirror_body),
     fee (-). Debits are applied first; a live book takes a credit only from
     cash the account holds beyond the book. A debit that would take the
     sleeve's cash below zero is REFUSED (journaled, alerted) unless the
-    request carries "force": true. (Dividends the brain lists are booked by
-    the book itself, as receivables.)"""
+    request carries "force": true - and so is a credit that would take a
+    LIVE book's seeded-plus-credited capital above MIRROR_MAX_BOOK_USD
+    (MIRROR_CAPITAL_USD when that is unset). Every credit a live book
+    takes is alerted. (Dividends the brain lists are booked by the book
+    itself, as receivables.)"""
     _mirror_off_404()
     _auth(x_exec_token, token)
     book = _mirror_book(body.get("book"))
@@ -1818,7 +1821,10 @@ def mirror_resolve(body: dict = Depends(_mirror_body),
                    x_exec_token: str | None = Header(default=None),
                    token: str | None = Query(default=None)):
     """State what an UNRESOLVED order of a mirror book did: {"id",
-    "filled", "price"?, "commission"?, "note"?, "book"?}. Only an order the
+    "filled", "price"?, "commission"?, "note"?, "force"?, "book"?}. A
+    commission above max($5, 1% of quantity x price) is refused unless the
+    request carries "force": true; a statement is never booked while the
+    venue cannot be asked (it stays queued). Only an order the
     book has flagged unresolved can be resolved. The loop thread asks the
     venue ONCE MORE first: an order still working is refused, an order the
     venue now answers for is booked at the VENUE's answer (and the alert
@@ -1831,7 +1837,8 @@ def mirror_resolve(body: dict = Depends(_mirror_body),
     try:
         req = book.request_resolve(body.get("id"), body.get("filled"),
                                    body.get("price"), body.get("commission"),
-                                   body.get("note") or "")
+                                   body.get("note") or "",
+                                   force=body.get("force") is True)
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     LOOP_WAKE.set()

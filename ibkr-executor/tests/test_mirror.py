@@ -1090,14 +1090,16 @@ def test_m14_a_transfer_rides_the_next_plan_and_is_zero_sum(tmp_path):
 
 def test_m14_a_credit_is_applied_once_and_only_from_cash_the_account_has(tmp_path):
     r = invested(tmp_path)
+    # round 3 (D-04): the book is seeded to its cap; a credit beyond it is meant, so it is forced
+    # (force lifts the capital cap only: the account's own cash still bounds the credit, as below)
     c0 = r.m.book.sleeves["HARV"].cash
-    r.m.request_credit("HARV", 61.20, "PULS dividend")
+    r.m.request_credit("HARV", 61.20, "PULS dividend", force=True)
     r.brain.make = lambda now: payload(now, session="2026-11-11")
     r.tick("15:55:05", day="2026-11-11")
     assert any("REFUSED" in n for n in r.m.state["last_run"]["notes"])        # the account never received it
     assert r.m.book.sleeves["HARV"].cash == pytest.approx(c0) and r.red()
     r.venue.cash += 61.20                                     # the twin: the dividend is in the account
-    r.m.request_credit("HARV", 61.20, "PULS dividend")
+    r.m.request_credit("HARV", 61.20, "PULS dividend", force=True)
     r.brain.make = lambda now: payload(now, session="2026-11-12")
     r.tick("15:55:05", day="2026-11-12")
     eq = mc.snapshot(r.m.book, PX)["sleeves"]["HARV"]

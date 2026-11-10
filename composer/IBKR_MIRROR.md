@@ -148,19 +148,31 @@ it with /mirror/resolve.
   POST /resume lifts it and says which halt it lifted.
 - POST /mirror/halt: stop trading, keep positions. POST /mirror/resume.
 - POST /mirror/resolve {id, filled, price}: book an order the book has flagged
-  unresolved. The venue is asked once more and its own answer wins; a price
-  above the order's limit or far from its reference is refused.
+  unresolved. The venue is asked once more and its own answer wins (while it
+  cannot be asked nothing is booked: the request stays queued); a price
+  above the order's limit or far from its reference is refused, and so is a
+  commission above max($5, 1% of the trade) without "force": true.
 - POST /mirror/adjust {sleeve, symbol, shares, cash, note}: a signed
   correction of one sleeve, for a divergence nothing else explains. One that
   would put the sleeve in debt needs "force": true.
-- A flatten runs for up to 30 minutes of open session and never reports
-  complete while the account still holds stock.
+- A flatten runs for up to 30 minutes of open session (counted between its
+  rounds, not while an order is working) and never reports complete while
+  the account still holds stock. Every flatten sell is checked against the
+  account's positions as it is sent: it is cut to what the account holds and
+  not sent at all when that is nothing or cannot be read.
 - POST /mirror/transfer {from, to, amount}: capital between two sleeves, with
   the next session's plan. The POLICY operations that move money between
   symphonies on Composer land here the same day.
 - POST /mirror/credit {sleeve, amount}: a dividend the account received for a
   sleeve's shares (or a fee, negative). A live book takes it only from cash
-  the account really holds beyond the book.
+  the account really holds beyond the book, and - without "force": true -
+  only while seeds plus credits stay within MIRROR_MAX_BOOK_USD (unset:
+  MIRROR_CAPITAL_USD, so on a fully seeded book every credit needs the cap
+  raised or force). Every credit a live book takes is alerted.
+- Live only: seeding never totals more than MIRROR_CAPITAL_USD; the buys of a
+  session are not sent when the book's cash exceeds the account's by more
+  than $1 or the account's cash cannot be read; a live state file that holds
+  shares while no live book is built is alerted in red at every boot.
 - GET /mirror/feed (READ_TOKEN): the books, for the parity monitor.
 - /status and /health carry a mirror block only when the mirror is enabled.
 
@@ -280,6 +292,7 @@ the repo or a chat):
   MIRROR_BRAIN_URL=https://<the brain's onrender.com host>,
   MIRROR_API_TOKEN (the same value as the brain's), MIRROR_CAPITAL_USD=118000,
   and MIRROR_WEIGHTS if not the policy split. MIRROR_LIVE_ENGINES stays unset.
+- ibkr-executor, optional: MIRROR_MAX_BOOK_USD - the cap on a live book's seeded-plus-credited capital (unset or 0 = MIRROR_CAPITAL_USD); a /mirror/credit above it is refused without "force": true.
 
 ## One brain: what a change must do
 
