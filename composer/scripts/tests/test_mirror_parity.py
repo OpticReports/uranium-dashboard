@@ -12,6 +12,10 @@ Each behavioural gate has a broken twin that must land on the other side.
   P6  configuration and the read: nothing set = nothing said; the token only over https (or
       localhost) and never in a message; a refused or failed read is an alert, not a silent day
   P7  it can never stop the monitor, and the monitor calls it after the paper book
+  P9  a POLICY transfer applied that session is not a return: the day's return is transfer-adjusted
+      (no false RETURN GAP on flat prices); a real gap that day still alarms; a session row that does
+      not say what it moved gets no return comparison, and the line says so
+  P10 the read token is never re-sent to where a redirect points
   P8  a real feed (a $10k paper book on the executor's own code, real brain decisions of 2026-11-06
       and 11-09) reads end to end: the fields this script needs are the fields the executor writes
 
@@ -194,6 +198,112 @@ class P5Returns(Base):
         lines, alerts = self.run_check(fd)
         self.assertNotIn("day return", "\n".join(lines))
         self.assertIn("2 of 2 engines hold the same", "\n".join(lines))
+
+
+class P9TransferDay(Base):
+    """the independent review's finding: on the session a POLICY transfer is applied, the giver's equity
+    falls and the taker's rises by the moved dollars with prices FLAT - at c740d160 that was a false
+    "RETURN GAP - HG -4.77%" (and the taker's twin)"""
+    MOVED = 18 * 91.5                                                          # 18 BIL sold by HG: $1,647.00
+    AFTER = {"HG": sleeve({"BIL": 352}), "HARV": sleeve({"PULS": 388}, cash=23.5)}     # HARV bought 33 PULS with it
+
+    def flat(self, day, syms):
+        return {s: PX[s] for s in syms}
+
+    def fd(self, transfers="absent", after=None):
+        kw = {} if transfers == "absent" else {"transfers": transfers}
+        return feed(live=book([row(D0, BIG), row(D, after or self.AFTER, **kw)]))
+
+    def setUp(self):
+        super().setUp()
+        for d in (D0, D):
+            for e in ("HG", "HARV"):
+                self.comp[d][e]["ret"] = 0.0
+
+    def test_a_policy_move_is_not_a_return(self):
+        t = [{"from": "HG", "to": "HARV", "amount": self.MOVED, "status": "moved", "moved": self.MOVED}]
+        lines, alerts = self.run_check(self.fd(t), closes=self.flat)
+        self.assertEqual(alerts, [])
+        recs = {r["engine"]: r for r in self.rows()}
+        self.assertAlmostEqual(recs["HG"]["diff_bps"], 0.0, delta=0.5)
+        self.assertAlmostEqual(recs["HARV"]["diff_bps"], 0.0, delta=0.5)
+        self.assertEqual((recs["HG"]["transfer_in"], recs["HARV"]["transfer_in"]), (-self.MOVED, self.MOVED))
+        self.assertIn("HG +0 bps", "\n".join(lines).replace("-0 bps", "+0 bps"))
+        # a partial move is adjusted by what MOVED, not by what was asked
+        t = [{"from": "HG", "to": "HARV", "amount": 5000.0, "status": "partial", "moved": self.MOVED},
+             {"from": "HARV", "to": "HG", "amount": 9.0, "status": "refused"}]
+        self.assertEqual(self.run_check(self.fd(t), closes=self.flat)[1], [])
+
+    def test_the_twins_the_same_change_with_no_transfer_and_a_real_gap_on_a_transfer_day_still_alarm(self):
+        for transfers in ("absent", [], [{"from": "KMLM", "to": "SLEEVE", "amount": 9.0, "status": "moved", "moved": 9.0}]):
+            _, alerts = self.run_check(self.fd(transfers), closes=self.flat)
+            self.assertEqual(sorted(a.split(" on ")[0] for a in alerts),
+                             ["MIRROR LIVE RETURN GAP — HARV", "MIRROR LIVE RETURN GAP — HG"], transfers)
+        self.assertIn("-4.86%", self.run_check(self.fd([]), closes=self.flat)[1][0])   # what c740d160 said of the move
+        # the move is taken out, and the 3% the giver ALSO lost that day is still a gap
+        t = [{"from": "HG", "to": "HARV", "amount": self.MOVED, "status": "moved", "moved": self.MOVED}]
+        lost = dict(self.AFTER, HG=sleeve({"BIL": 341}))
+        _, alerts = self.run_check(self.fd(t, lost), closes=self.flat)
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("RETURN GAP — HG", alerts[0])
+        self.assertIn("-2.97%", alerts[0])
+
+    def test_a_row_that_does_not_say_what_it_moved_gets_no_return_comparison_and_says_so(self):
+        for t in ([{"from": "HG", "to": "HARV", "amount": self.MOVED, "status": "moved"}],
+                  [{"from": "HG", "to": "HARV", "amount": self.MOVED, "status": "moved", "moved": "1647"}],
+                  [{"from": "HG", "to": "HARV", "amount": self.MOVED, "status": "moved", "moved": float("nan")}],
+                  [{"from": "HG", "to": "HARV", "amount": self.MOVED, "status": "?", "moved": self.MOVED}],
+                  ["HG->HARV"], {"HG": "HARV"}):
+            lines, alerts = self.run_check(self.fd(t), closes=self.flat)
+            self.assertEqual(alerts, [], t)
+            text = "\n".join(lines)
+            self.assertIn("day return NOT compared for HG, HARV", text)
+            self.assertIn("does not say what it moved", text)
+            recs = {r["engine"]: r for r in self.rows()}
+            self.assertNotIn("ret", recs["HG"])
+            self.assertIn("ret_skipped", recs["HARV"])
+            self.assertEqual(recs["HG"]["parity"], "same")                     # the holdings are still compared
+        # only the sleeves the unreadable transfer touched lose the comparison
+        self.assertEqual(mp.moved_in({"transfers": [{"from": "HG", "to": "HARV", "status": "moved"}]}, "KMLM"), 0.0)
+        self.assertIsNone(mp.moved_in({"transfers": [{"from": "HG", "to": "HARV", "status": "moved"}]}, "HARV"))
+        self.assertEqual(mp.moved_in({"transfers": [{"from": "HG", "to": "HARV", "status": "planned", "moved": 0.0}]}, "HG"), 0.0)
+
+
+class P10NoRedirect(unittest.TestCase):
+    def test_the_read_token_is_never_sent_on_to_where_a_redirect_points(self):
+        import http.server
+        import threading
+        got = []
+
+        class Other(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                got.append(self.headers.get("X-Read-Token"))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps(feed()).encode())
+
+            def log_message(self, *a):
+                pass
+
+        class Executor(Other):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header("Location", f"http://127.0.0.1:{other.server_port}/mirror/feed")
+                self.end_headers()
+
+        other = http.server.HTTPServer(("127.0.0.1", 0), Other)
+        executor = http.server.HTTPServer(("127.0.0.1", 0), Executor)
+        for srv in (other, executor):
+            threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True).start()
+            self.addCleanup(srv.server_close)
+            self.addCleanup(srv.shutdown)
+        with self.assertRaises(RuntimeError) as cm:
+            mp.fetch_feed(f"http://127.0.0.1:{executor.server_port}", "s3cret-read")
+        self.assertIn("HTTP 302", str(cm.exception))
+        self.assertIn("redirect", str(cm.exception))
+        self.assertEqual(got, [])                                            # at c740d160: ["s3cret-read"]
+        self.assertEqual(mp.fetch_feed(f"http://127.0.0.1:{other.server_port}", "s3cret-read")["kind"], mp.FEED_KIND)   # the twin
+        self.assertEqual(got, ["s3cret-read"])
 
 
 class P6Config(unittest.TestCase):

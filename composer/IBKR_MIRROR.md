@@ -165,8 +165,10 @@ it with /mirror/resolve.
   symphonies on Composer land here the same day: the daily routine sends
   them with composer/scripts/mirror_transfer.py under the transfer-only
   MIRROR_TRANSFER_TOKEN (header X-Transfer-Token), which opens this route
-  alone, is capped per ET day at MIRROR_TRANSFER_MAX_FRAC of the book's
-  equity and is alerted on every use; EXEC_TOKEN still works here, uncapped.
+  alone, is capped at MIRROR_TRANSFER_MAX_FRAC of the book's equity and 6
+  requests per cap period (until the ET date has changed AND the book has
+  run a session since: a weekend is one allowance), takes nothing below $1
+  and is alerted on every use; EXEC_TOKEN still works here, uncapped.
 - POST /mirror/credit {sleeve, amount}: a dividend the account received for a
   sleeve's shares (or a fee, negative). A live book takes it only from cash
   the account really holds beyond the book, and - without "force": true -
@@ -298,7 +300,7 @@ the repo or a chat):
   MIRROR_BRAIN_URL=https://<the brain's onrender.com host>,
   MIRROR_API_TOKEN (the same value as the brain's), MIRROR_CAPITAL_USD=118000,
   and MIRROR_WEIGHTS if not the policy split. MIRROR_LIVE_ENGINES stays unset.
-- ibkr-executor, for the POLICY routine's mirror leg: MIRROR_TRANSFER_TOKEN (a long random string of its own, at least 24 characters, never EXEC_TOKEN or READ_TOKEN; the routine holds the same value) and optionally MIRROR_TRANSFER_MAX_FRAC (default 0.25 of the book's equity per ET day).
+- ibkr-executor, for the POLICY routine's mirror leg: MIRROR_TRANSFER_TOKEN (a long random string of its own, at least 24 characters, never EXEC_TOKEN or READ_TOKEN; the routine holds the same value) and optionally MIRROR_TRANSFER_MAX_FRAC (default 0.25 of the book's equity per cap period: until the next session on a later ET date).
 - ibkr-executor, optional: MIRROR_MAX_BOOK_USD - the cap on a live book's seeded-plus-credited capital (unset or 0 = MIRROR_CAPITAL_USD); a /mirror/credit above it is refused without "force": true.
 
 ## One brain: what a change must do

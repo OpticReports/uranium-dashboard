@@ -48,20 +48,38 @@ def one_line(e, n=200):
     return " ".join(str(e).split())[:n]
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """a request that carries a token is never re-sent to wherever a 3xx points (urllib would copy the
+    X-...-Token header to the new host): the 3xx is raised as the HTTPError it is"""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, "redirect not followed", headers, fp)
+
+
+_NO_REDIRECT = urllib.request.build_opener(_NoRedirect)
+
+
+def urlopen_no_redirect(req, timeout=TIMEOUT_S):
+    """urllib.request.urlopen that never follows a redirect (mirror_transfer.py posts through it too)"""
+    return _NO_REDIRECT.open(req, timeout=timeout)
+
+
 def fetch_feed(url, token, history=30, timeout=TIMEOUT_S, opener=None):
     """the executor's /mirror/feed as a dict. https only (plain http to localhost for a local check):
-    the read token is never sent in the clear. Raises RuntimeError with a reason that never holds the
-    token"""
+    the read token is never sent in the clear, and never to another host on a redirect. Raises
+    RuntimeError with a reason that never holds the token"""
     base = (url or "").strip().rstrip("/")
     u = urllib.parse.urlparse(base)
     if u.scheme != "https" and not (u.scheme == "http" and (u.hostname or "") in LOCAL):
         raise RuntimeError("MIRROR_EXECUTOR_URL must be https (the read token is never sent over plain http)")
     req = urllib.request.Request(f"{base}/mirror/feed?history={int(history)}", headers={"X-Read-Token": token})
     try:
-        with (opener or urllib.request.urlopen)(req, timeout=timeout) as r:
+        with (opener or urlopen_no_redirect)(req, timeout=timeout) as r:
             body = json.load(r)
     except urllib.error.HTTPError as e:
         why = {401: "the read token was refused", 404: "the feed is not there (mirror off, or no READ_TOKEN on the executor)"}
+        if 300 <= e.code < 400:
+            raise RuntimeError(f"HTTP {e.code}: a redirect, which is never followed with the read token") from None
         raise RuntimeError(f"HTTP {e.code}: {why.get(e.code, 'the executor refused the read')}") from None
     except Exception as e:  # noqa: BLE001
         raise RuntimeError(one_line(str(e).replace(token, "***"), 160)) from None
@@ -88,6 +106,30 @@ def _value(sleeve, px):
             return None, {}
         vals[sym] = q * p
     return float(sleeve.get("cash") or 0.0) + sum(vals.values()), vals
+
+
+def moved_in(row, eng):
+    """the net dollars the session's applied transfers moved INTO sleeve `eng` (+ the taker, - the
+    giver), from the session row's "transfers" ([{"from", "to", "amount", "status", "moved"}], as
+    ibkr-executor's mirror_core.apply_transfers leaves them). 0.0 when none touched it; None when a
+    transfer that touched it does not say what it moved (the day's return cannot then be adjusted)"""
+    ts = row.get("transfers")
+    if ts is None:
+        return 0.0
+    if not isinstance(ts, list):
+        return None
+    net = 0.0
+    for t in ts:
+        if not isinstance(t, dict):
+            return None
+        if eng not in (t.get("from"), t.get("to")) or t.get("status") == "refused":
+            continue
+        m = t.get("moved")
+        if (isinstance(m, bool) or not isinstance(m, (int, float)) or m != m or abs(m) == float("inf") or m < 0
+                or t.get("status") not in ("moved", "partial", "planned") or t.get("from") == t.get("to")):
+            return None
+        net += m if t.get("to") == eng else -m
+    return net
 
 
 def weights_of(sleeve, px):
@@ -142,7 +184,9 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
     of d and of the session before; shadow: {(date, engine): ledger row}; closes(day, symbols) ->
     {symbol: official close} or None. The day's return is compared only as a number; it is ALARMED
     only when the two books went into the day holding the same (else the difference is yesterday's
-    mismatch, already reported then)"""
+    mismatch, already reported then). It is TRANSFER-ADJUSTED: capital a POLICY move brought into or
+    took out of the sleeve that session (moved_in) is not a return, as a deposit is not on Composer's
+    side; a session row that does not say what it moved gets no return comparison, and says so"""
     mode = "LIVE" if view.get("mode") == "live" else "PAPER"
     tag = f"MIRROR {mode}"
     rows = {r["session"]: r for r in _rows(view)}
@@ -155,7 +199,7 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
         return [f"{tag.lower()} {name} {d}: no trade ({one_line(row.get('reason') or row.get('outcome'), 120)})"], alerts, led
     px = row.get("prices") or {}
     same = compared = 0
-    diffs, parts = [], []
+    diffs, parts, unadjusted = [], [], []
     prev = rows.get(prev_d) if prev_d else None
     for eng, s in (row.get("sleeves") or {}).items():
         w, eq = weights_of(s, px)
@@ -196,8 +240,14 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
             c0 = closes(prev_d, set(p0.get("shares") or {}))
             e1, _ = _value(s, c1 or {}) if c1 is not None else (None, {})
             e0, _ = _value(p0, c0 or {}) if c0 is not None else (None, {})
-            if e1 and e0 and e0 > 0:
-                ret = e1 / e0 - 1
+            net = moved_in(row, eng)
+            if net is None:
+                rec["ret_skipped"] = "a transfer touched the sleeve and the session row does not say what it moved"
+                unadjusted.append(eng)
+            elif e1 and e0 and e0 > 0:
+                ret = (e1 - net) / e0 - 1
+                if net:
+                    rec["transfer_in"] = round(net, 2)
                 # did the two books go INTO the day holding the same?
                 w0, eq0 = weights_of(p0, prev.get("prices") or {})
                 cp = (comp_prev or {}).get(eng)
@@ -226,7 +276,9 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
                      + ("; day return, mirror - Composer: "
                         + ", ".join(f"{e} {x:+.0f} bps" + ("" if same_in else " (different holdings into the day)" if same_in is False
                                                           else " (yesterday not comparable)") for e, x, same_in in diffs)
-                        if diffs else ""))
+                        if diffs else "")
+                     + (f"; day return NOT compared for {', '.join(unadjusted)} (a transfer was applied and the session "
+                        f"row does not say what it moved)" if unadjusted else ""))
     else:
         lines.append(f"  parity vs Composer: no snapshot for {d} on disk yet")
     notes = [n for n in (row.get("notes") or []) if "not attested" not in str(n)]

@@ -21,6 +21,17 @@ hold EXEC_TOKEN (which can also /kill). Each gate has its broken twin on the oth
       note stays one line
   X7  the session applies a transfer queued by the token exactly like an exec-authorised one
   X8  settings: blank = default, clamped to 0..1; the deploy file declares both keys
+
+The independent review's findings (each gate below failed at c740d160):
+
+  T1  nothing below $1 is taken by the token, and the amount is rounded to cents before it is counted
+  T2  at most 6 transfers by token per book per cap period; refusals are logged, alerted a few times
+  T3  the cap period ends when the ET date has changed AND the book has run a session since (the x5
+      "period" gates): a weekend or a midnight is one allowance; a total dated in the future refuses;
+      a total written before the session key loads
+  T4  a refusal tells the token's holder nothing about the book (no equity, cap, total, path or name);
+      the specifics go to the log and the alert; the public schema does not describe the token
+  T5  control characters never reach the note
 """
 from __future__ import annotations
 
@@ -43,6 +54,9 @@ TT = "transfer-only-token-0123456789abcdef"            # 36 characters
 H = {"X-Transfer-Token": TT}
 E = {"X-Exec-Token": EXEC}
 MOVE = {"from": "HG", "to": "HARV", "amount": 1000.0, "note": "POLICY op 1"}
+OVER = "refused: over the day's transfer allowance"       # all a holder of the token is told (T4)
+BUSY = "refused: transfers by token are unavailable for this book right now"
+INVALID = "refused: not a valid transfer"
 
 
 def _service(monkeypatch, books, **over):
@@ -116,14 +130,14 @@ def test_x1_exec_auth_is_what_it_was_unmarked_uncapped_and_not_counted(tmp_path,
     assert sent == []                                     # no alert for the operator's own request, as before
     assert not os.path.exists(r.m._transfer_day_path())   # nothing counted
     assert post(c, dict(MOVE, amount=25_000.0)).status_code == 200                      # the token's whole day is still there
-    assert post(c, dict(MOVE, amount=0.01)).status_code == 400                          # the twin: now it is used up
+    assert post(c, dict(MOVE, amount=1.0)).status_code == 400                           # the twin: now it is used up
 
 
 def test_x1_a_request_carrying_both_credentials_is_treated_as_the_tokens(tmp_path, monkeypatch):
     r = paper(tmp_path)
     c, _, _ = _service(monkeypatch, {"dry": r.m})
     got = post(c, dict(MOVE, amount=60_000.0), headers=dict(H, **E))
-    assert got.status_code == 400 and "cap" in got.json()["detail"]                     # capped: the weaker one binds
+    assert got.status_code == 400 and got.json()["detail"] == OVER                      # capped: the weaker one binds
     assert post(c, headers=dict(H, **E)).json()["request"]["via"] == "transfer_token"
 
 
@@ -132,8 +146,10 @@ def test_x1_a_request_that_cannot_be_is_a_400_and_uses_none_of_the_day(tmp_path,
     c, _, sent = _service(monkeypatch, {"dry": r.m})
     for bad in (dict(MOVE, to="HG"), dict(MOVE, to="NOPE"), dict(MOVE, amount=-5), dict(MOVE, amount="1000"),
                 dict(MOVE, amount=None), dict(MOVE, book="live"), dict(MOVE, book=["dry"])):
-        assert post(c, bad).status_code == 400, bad
-    assert inbox(r.m) == [] and sent == [] and not os.path.exists(r.m._transfer_day_path())
+        got = post(c, bad)
+        assert got.status_code == 400 and got.json()["detail"] == INVALID, bad
+    assert inbox(r.m) == [] and not os.path.exists(r.m._transfer_day_path())
+    assert len(sent) == 5 and all("REFUSED" in m for m in sent)      # said to the operator (a book that is not: log only)
     assert post(c, dict(MOVE, amount=25_000.0)).status_code == 200
 
 
@@ -273,13 +289,14 @@ def test_x5_the_days_total_never_passes_the_cap(tmp_path, monkeypatch):
     assert post(c, dict(MOVE, amount=20_000.0)).status_code == 200
     over = post(c, dict(MOVE, amount=5_000.01))
     assert over.status_code == 400
-    msg = over.json()["detail"]
-    assert "$25,000.00" in msg and "$20,000.00 already used" in msg and "25.00%" in msg and "2026-11-10" in msg
-    assert "MIRROR_TRANSFER_MAX_FRAC" in msg
-    assert len(inbox(r.m)) == 1 and len(sent) == 1        # refused: not queued, not alerted, not counted
+    assert over.json()["detail"] == OVER                  # the caller reads no figure (T4) ...
+    msg = sent[1]                                         # ... the operator reads them all
+    assert "REFUSED" in msg and "$25,000.00" in msg and "$20,000.00 already used" in msg and "25.00%" in msg
+    assert "2026-11-10" in msg and "MIRROR_TRANSFER_MAX_FRAC" in msg
+    assert len(inbox(r.m)) == 1 and len(sent) == 2        # refused: not queued, not counted
     ok = post(c, dict(MOVE, amount=5_000.0))              # exactly to the cap
     assert ok.status_code == 200 and ok.json()["request"]["day_used"] == 25_000.0
-    assert post(c, dict(MOVE, amount=0.01)).status_code == 400
+    assert post(c, dict(MOVE, amount=1.0)).status_code == 400
     assert [x["amount"] for x in inbox(r.m)] == [20_000.0, 5_000.0]
     assert post(c, dict(MOVE, amount=40_000.0), headers=E).status_code == 200            # the operator is not capped
 
@@ -308,10 +325,19 @@ def test_x5_the_total_survives_a_restart(tmp_path, monkeypatch):
     ok = post(c, dict(MOVE, amount=5_000.0))
     assert ok.status_code == 200 and ok.json()["request"]["day_used"] == 25_000.0
     with open(r.m._transfer_day_path()) as f:
-        assert json.load(f) == {"day": "2026-11-10", "used": 25_000.0}
+        assert json.load(f) == {"day": "2026-11-10", "used": 25_000.0, "count": 2, "last_session": None}
 
 
-def test_x5_a_new_et_date_starts_at_zero_and_the_date_is_et_not_utc(tmp_path, monkeypatch):
+def _session(r, day):
+    """the book runs the session of `day`"""
+    r.brain.make = lambda now: payload(now, session=day)
+    r.tick("15:55:05", day=day)
+    assert r.m.view()["last_session"] == day
+
+
+def test_x5_the_period_ends_on_a_new_et_date_only_once_a_session_has_run(tmp_path, monkeypatch):
+    """T3: everything queued between two sessions rides ONE plan, so it shares one allowance. A new
+    calendar date alone (midnight; a weekend) is not a new allowance."""
     r = paper(tmp_path)
     c, _, _ = _service(monkeypatch, {"dry": r.m})
     r.clock.now = at("18:00")                             # 23:00Z on the 10th
@@ -321,11 +347,193 @@ def test_x5_a_new_et_date_starts_at_zero_and_the_date_is_et_not_utc(tmp_path, mo
     assert post(c, dict(MOVE, amount=1.0)).status_code == 400
     r.clock.now = at("23:59:59")
     assert post(c, dict(MOVE, amount=1.0)).status_code == 400
-    r.clock.now = at("00:00:01", day="2026-11-11")        # a new day in New York
-    ok = post(c, dict(MOVE, amount=25_000.0))
-    assert ok.status_code == 200
-    assert (ok.json()["request"]["day"], ok.json()["request"]["day_used"]) == ("2026-11-11", 25_000.0)
+    r.clock.now = at("00:00:01", day="2026-11-11")        # a new day in New York, no session since: the same allowance
+    got = post(c, dict(MOVE, **{"from": "KMLM", "amount": 25_000.0}))
+    assert got.status_code == 400 and got.json()["detail"] == OVER
+    r.clock.now = at("09:00", day="2026-11-11")
     assert post(c, dict(MOVE, amount=1.0)).status_code == 400
+    _session(r, "2026-11-11")                             # the plan that applied them has run
+    r.clock.now = at("16:35", day="2026-11-11")
+    ok = post(c, dict(MOVE, amount=20_000.0))
+    assert ok.status_code == 200
+    assert (ok.json()["request"]["day"], ok.json()["request"]["day_used"]) == ("2026-11-11", 20_000.0)
+    with open(r.m._transfer_day_path()) as f:
+        assert json.load(f) == {"day": "2026-11-11", "used": 20_000.0, "count": 1, "last_session": "2026-11-11"}
+
+
+def test_x5_friday_evening_the_weekend_and_monday_morning_share_one_allowance(tmp_path, monkeypatch):
+    r = Rig(tmp_path)
+    _session(r, "2026-11-13")                             # Friday's session
+    c, _, _ = _service(monkeypatch, {"dry": r.m})
+    eq = equity(r.m)
+    took = []
+    for hms, day, src, amount in (("16:35", "2026-11-13", "HG", 14_000.0), ("12:00", "2026-11-14", "KMLM", 25_000.0),
+                                  ("12:00", "2026-11-15", "SLEEVE", 25_000.0), ("09:00", "2026-11-16", "HG", 14_000.0),
+                                  ("09:01", "2026-11-16", "KMLM", 11_000.0)):
+        r.clock.now = at(hms, day)
+        got = post(c, {"from": src, "to": "HARV", "amount": amount})
+        took.append(got.status_code)
+        if got.status_code == 200:
+            assert got.json()["request"]["day"] == "2026-11-13"           # the period that began on Friday
+    assert took == [200, 400, 400, 400, 200]              # $25,000 in all into Monday's ONE plan, not $78,000
+    assert sum(x["amount"] for x in inbox(r.m)) == 25_000.0 == round(0.25 * eq, 2)
+    _session(r, "2026-11-16")
+    assert sum(t["moved"] for t in r.m.state["last_run"]["transfers"]) == pytest.approx(25_000.0, abs=1.0)
+    r.clock.now = at("16:35", "2026-11-16")
+    ok = post(c, {"from": "HG", "to": "HARV", "amount": 1_000.0})          # the twin: a session ran on a later date
+    assert ok.status_code == 200 and ok.json()["request"]["day_used"] == 1_000.0
+    sound(r)
+
+
+def test_x5_a_total_dated_in_the_future_refuses(tmp_path, monkeypatch):
+    r = paper(tmp_path)
+    c, _, sent = _service(monkeypatch, {"dry": r.m})
+    for junk in ('{"day": "2099-01-01", "used": 0}', '{"day": "2026-11-11", "used": 0, "count": 0, "last_session": null}',
+                 '{"day": "tomorrow", "used": 0}', '{"day": "2026-11-10", "used": 0, "count": -1}',
+                 '{"day": "2026-11-10", "used": 0, "count": "0"}', '{"day": "2026-11-10", "used": 0, "last_session": 5}'):
+        with open(r.m._transfer_day_path(), "w") as f:
+            f.write(junk)
+        got = post(c)
+        assert got.status_code == 400 and got.json()["detail"] == BUSY, junk
+    assert inbox(r.m) == [] and "cannot be read" in sent[0]
+    with open(r.m._transfer_day_path(), "w") as f:
+        f.write('{"day": "2026-11-10", "used": 0, "count": 0, "last_session": null}')       # the twin: today's
+    assert post(c).status_code == 200
+
+
+def test_x5_a_total_written_before_the_session_key_loads(tmp_path, monkeypatch):
+    """{"day", "used"} alone (what c740d160 wrote): no count yet, and the period ends when the date has
+    changed and the book's last session is on or after the record's date"""
+    r = paper(tmp_path)                                   # never ran a session
+    c, _, _ = _service(monkeypatch, {"dry": r.m})
+    with open(r.m._transfer_day_path(), "w") as f:
+        f.write('{"day": "2026-11-10", "used": 24000.0}')
+    assert post(c, dict(MOVE, amount=1_000.01)).status_code == 400                      # the same date: it counts
+    ok = post(c, dict(MOVE, amount=1_000.0))
+    assert ok.status_code == 200 and ok.json()["request"]["day_used"] == 25_000.0
+    with open(r.m._transfer_day_path(), "w") as f:
+        f.write('{"day": "2026-11-09", "used": 25000.0}')
+    assert post(c).status_code == 400                     # the date changed, no session on or after the 9th: kept
+    _session(r, "2026-11-10")
+    ok = post(c)
+    assert ok.status_code == 200 and ok.json()["request"]["day_used"] == 1_000.0        # a session since: a new period
+    with open(r.m._transfer_day_path()) as f:
+        assert json.load(f) == {"day": "2026-11-10", "used": 1_000.0, "count": 1, "last_session": "2026-11-10"}
+
+
+# --- T1..T5: the independent review's findings (each failed at c740d160) -------------------------------
+def test_t1_below_a_dollar_is_refused_and_the_amount_is_rounded_to_cents(tmp_path, monkeypatch):
+    r = paper(tmp_path)
+    c, _, _ = _service(monkeypatch, {"dry": r.m})
+    for dust in (0.01, 0.99, 0.994, 4e-10):
+        got = post(c, dict(MOVE, amount=dust))
+        assert got.status_code == 400 and got.json()["detail"] == INVALID, dust
+    assert inbox(r.m) == [] and not os.path.exists(r.m._transfer_day_path())
+    req = post(c, dict(MOVE, amount=1234.567)).json()["request"]
+    assert (req["amount"], req["day_used"]) == (1234.57, 1234.57)                       # counted as queued
+    assert post(c, dict(MOVE, amount=0.999)).json()["request"]["amount"] == 1.0
+    assert post(c, dict(MOVE, amount=1.0)).status_code == 200
+    with open(r.m._transfer_day_path()) as f:
+        assert json.load(f)["used"] == 1236.57
+    # the twin: the operator's path is what it was - no floor, no rounding
+    assert post(c, dict(MOVE, amount=0.014), headers=E).json()["request"]["amount"] == 0.014
+
+
+def test_t2_six_transfers_by_token_per_period_and_no_more(tmp_path, monkeypatch):
+    assert mm.TRANSFER_TOKEN_MAX_PER_DAY == 6
+    r = paper(tmp_path)
+    c, _, sent = _service(monkeypatch, {"dry": r.m})
+    took = [post(c, dict(MOVE, amount=1.0)).status_code for _ in range(40)]
+    assert took == [200] * 6 + [400] * 34                 # $6 of a $25,000 cap: the COUNT refuses
+    assert post(c, dict(MOVE, amount=1.0)).json()["detail"] == OVER
+    assert len(inbox(r.m)) == 6
+    with open(r.m._transfer_day_path()) as f:
+        assert json.load(f) == {"day": "2026-11-10", "used": 6.0, "count": 6, "last_session": None}
+    assert len([m for m in sent if "REFUSED" not in m]) == 6
+    assert post(c, dict(MOVE, amount=1.0), headers=E).status_code == 200                # the operator is not counted
+    r.clock.now = at("09:00", day="2026-11-11")           # a new date alone is not a new count (T3)
+    assert post(c, dict(MOVE, amount=1.0)).status_code == 400
+    _session(r, "2026-11-11")
+    r.clock.now = at("16:35", day="2026-11-11")
+    assert post(c, dict(MOVE, amount=1.0)).json()["request"]["day_used"] == 1.0         # the twin
+
+
+def test_t2_refusals_are_all_logged_and_alerted_only_a_few_times_a_day(tmp_path, monkeypatch, caplog):
+    r = paper(tmp_path)
+    c, _, sent = _service(monkeypatch, {"dry": r.m})
+    with caplog.at_level(logging.WARNING):
+        for _ in range(25):
+            assert post(c, dict(MOVE, amount=99_999.0)).status_code == 400
+    assert len([x for x in caplog.records if "REFUSED" in x.getMessage()]) == 25
+    assert len(sent) == mm.TRANSFER_TOKEN_MAX_PER_DAY and "not alerted" in sent[-1] and "not alerted" not in sent[0]
+    assert not any(TT in m for m in sent)
+
+
+LEAKS = ("100,000", "25,000", "20,000", "100000", "25000", "equity", "cap ", "MAX_FRAC", "mirror_dry", "transfer_day",
+         ".json", "dry", "KMLM", "SLEEVE", "['", "2026-")
+
+
+def test_t4_a_refusal_tells_the_tokens_holder_nothing_about_the_book(tmp_path, monkeypatch, caplog):
+    r = paper(tmp_path)
+    c, _, sent = _service(monkeypatch, {"dry": r.m})
+    assert str(tmp_path) and post(c, dict(MOVE, amount=20_000.0)).status_code == 200
+    seen = {}
+
+    def refused(body, want):
+        got = post(c, body)
+        assert got.status_code == 400 and got.json() == {"detail": want}, (body, got.text)
+        assert not [w for w in LEAKS + (str(tmp_path),) if w in got.text], got.text
+        seen[want] = seen.get(want, 0) + 1
+
+    with caplog.at_level(logging.WARNING):
+        refused(dict(MOVE, amount=99_999.0), OVER)        # at c740d160: "... equity of $100,000.00 ..."
+        refused(dict(MOVE, to="NOPE"), INVALID)           # "... is not a sleeve of the dry book"
+        refused(dict(MOVE, to="HG"), INVALID)
+        refused(dict(MOVE, amount="x"), INVALID)
+        refused(dict(MOVE, book="nope"), INVALID)         # "name the book: one of ['dry']"
+        with open(r.m._transfer_day_path(), "w") as f:
+            f.write("{not json")
+        refused(MOVE, BUSY)                               # "... (<the path>) cannot be read ..."
+        os.remove(r.m._transfer_day_path())
+        r.m._view["book"]["equity"] = None
+        refused(MOVE, BUSY)                               # "the dry book's equity cannot be computed ..."
+    assert seen == {OVER: 1, INVALID: 4, BUSY: 2}
+    said = " | ".join(x.getMessage() for x in caplog.records)
+    for part in ("$100,000.00", "cap $25,000.00", "$20,000.00 already used", "not a sleeve of the dry book",
+                 "name the book: one of ['dry']", r.m._transfer_day_path(), "equity cannot be computed"):
+        assert part in said, part                         # the operator's log has every specific
+    assert "$100,000.00" in " | ".join(sent) and all(m.startswith("⚠️") for m in sent)
+    # the twin: the operator's own request reads the reason as before
+    got = post(c, dict(MOVE, to="NOPE"), headers=E)
+    assert got.json()["detail"] == "'NOPE' is not a sleeve of the dry book"
+    assert "one of ['dry']" in post(c, dict(MOVE, book="nope"), headers=E).json()["detail"]
+
+
+def test_t4_the_public_schema_does_not_describe_the_transfer_token(tmp_path, monkeypatch):
+    r = paper(tmp_path)
+    c, _, _ = _service(monkeypatch, {"dry": r.m})
+    doc = c.get("/openapi.json")
+    assert doc.status_code == 200
+    text = doc.text.lower()
+    for word in ("transfer-token", "transfer_token", "transfer-only", "max_frac"):
+        assert word not in text, word
+    op = doc.json()["paths"]["/mirror/transfer"]["post"]
+    assert [p["name"] for p in op["parameters"]] == ["token", "x-exec-token"]            # what it listed before the feature
+    assert "Queue a move of capital" in op["description"]
+    assert post(c).status_code == 200                     # the twin: the header still works
+
+
+def test_t5_control_characters_never_reach_the_note_the_log_or_the_alert(tmp_path, monkeypatch, caplog):
+    r = paper(tmp_path)
+    c, _, sent = _service(monkeypatch, {"dry": r.m})
+    evil = "ok\x1b[31m red\x00nul\x7fdel\ttab\x08\x1b]0;title\x07 end"
+    with caplog.at_level(logging.WARNING):
+        got = post(c, dict(MOVE, note=evil))
+    note = got.json()["request"]["note"]
+    assert note == "ok [31m red nul del tab ]0;title end"
+    for text in (note, sent[0], inbox(r.m)[0]["note"], *[x.getMessage() for x in caplog.records]):
+        assert not [ch for ch in text if ord(ch) < 32 or ord(ch) == 127], repr(text)
+    assert "\x1b" in post(c, dict(MOVE, note=evil), headers=E).json()["request"]["note"]   # the operator's path: as it was
 
 
 def test_x5_each_book_has_its_own_day(tmp_path, monkeypatch):
@@ -345,12 +553,12 @@ def test_x5_a_book_without_equity_takes_no_transfer_by_token(tmp_path, monkeypat
     c, _, sent = _service(monkeypatch, {"dry": r.m})
     assert equity(r.m) == 0.0
     got = post(c, dict(MOVE, amount=1.0))
-    assert got.status_code == 400 and "equity" in got.json()["detail"]
+    assert got.status_code == 400 and got.json()["detail"] == BUSY
     r.tick("15:00")
     r.m._view["book"]["equity"] = None                    # a held symbol with no mark: the feed publishes none
     got = post(c, dict(MOVE, amount=1.0))
-    assert got.status_code == 400 and "equity" in got.json()["detail"]
-    assert inbox(r.m) == [] and sent == []
+    assert got.status_code == 400 and got.json()["detail"] == BUSY
+    assert inbox(r.m) == [] and len(sent) == 2 and all("REFUSED" in m and "equity" in m for m in sent)
     assert post(c, dict(MOVE, amount=1.0), headers=E).status_code == 200                # the operator still can
 
 
@@ -375,8 +583,8 @@ def test_x5_a_total_that_cannot_be_read_refuses_and_never_counts_from_zero(tmp_p
     with open(r.m._transfer_day_path(), "w") as f:
         f.write(junk)
     got = post(c)
-    assert got.status_code == 400 and "cannot be read" in got.json()["detail"]
-    assert inbox(r.m) == [] and sent == []
+    assert got.status_code == 400 and got.json()["detail"] == BUSY
+    assert inbox(r.m) == [] and len(sent) == 1 and "cannot be read" in sent[0]
     assert post(c, headers=E).status_code == 200          # exec auth does not depend on it
     os.remove(r.m._transfer_day_path())
     assert post(c).status_code == 200                     # the twin
@@ -393,8 +601,8 @@ def test_x5_a_total_that_cannot_be_written_queues_nothing(tmp_path, monkeypatch)
         return real(path, obj)
     monkeypatch.setattr(mm, "atomic_write", broken)
     got = post(c)
-    assert got.status_code == 400 and "cannot be written" in got.json()["detail"]
-    assert inbox(r.m) == [] and sent == []
+    assert got.status_code == 400 and got.json()["detail"] == BUSY
+    assert inbox(r.m) == [] and len(sent) == 1 and "cannot be written" in sent[0]
 
 
 def test_x5_concurrent_requests_cannot_pass_the_cap_together(tmp_path):

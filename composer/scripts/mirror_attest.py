@@ -109,16 +109,27 @@ def brain_url(base):
     return f"{u.scheme}://{u.netloc}{u.path.rstrip('/')}/mirror/attest"
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """the attest token is never re-sent to wherever a 3xx points: the 3xx is the answer (an HTTPError)"""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, "redirect not followed", headers, fp)
+
+
+_NO_REDIRECT = urllib.request.build_opener(_NoRedirect)
+
+
 def post(url, token, body, timeout=TIMEOUT_S):
-    """(HTTP status, parsed JSON body or {})"""
+    """(HTTP status, parsed JSON body or {}). A redirect is never followed (its 3xx is the status)"""
     req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                  headers={"Content-Type": "application/json", "X-Attest-Token": token,
                                           "user-agent": "composer-mirror-attest/1.0"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with _NO_REDIRECT.open(req, timeout=timeout) as r:
             code, text = r.status, r.read()
     except urllib.error.HTTPError as e:
-        code, text = e.code, e.read()
+        with e:
+            code, text = e.code, e.read()
     try:
         data = json.loads(text)
     except ValueError:

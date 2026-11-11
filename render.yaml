@@ -1019,7 +1019,7 @@ services:
       # At least 24 characters, different from EXEC_TOKEN and READ_TOKEN.
       - key: MIRROR_TRANSFER_TOKEN
         sync: false
-      # The most that token may move in one ET day, as a fraction of the
+      # The most that token may move in one transfer period (an ET day that includes a mirror session), as a fraction of the
       # book's equity. Unset = 0.25.
       - key: MIRROR_TRANSFER_MAX_FRAC
         sync: false

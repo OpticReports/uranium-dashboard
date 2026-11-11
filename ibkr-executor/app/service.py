@@ -1806,28 +1806,56 @@ async def _mirror_body(request: Request) -> dict:
     return body
 
 
+def _token_transfer_refused(book, public: str, why, body: dict):
+    """A request authorised by the transfer-only token that is not taken:
+    its caller reads only `public` - never the book's equity, the cap, the
+    total used, a file path or a book or sleeve name it did not send. The
+    specifics go to the log, and to the alert channel for the first few of
+    a day (MirrorManager.token_refusal_alert; no book found: log only)."""
+    def flat(x, n):
+        return " ".join(str(x).split())[:n]
+    asked = {k: body.get(k) for k in ("from", "to", "amount", "book")}
+    line = (f"mirror[{book.cfg.name if book is not None else '?'}] transfer "
+            f"by the TRANSFER TOKEN REFUSED ({public}): {flat(why, 400)} — "
+            f"asked: {flat(repr(asked), 200)}")
+    logger.warning(line)
+    more = book.token_refusal_alert() if book is not None else None
+    if more is not None:
+        send("⚠️ " + line + more)
+    raise HTTPException(status_code=400, detail=f"refused: {public}")
+
+
+# Auth of POST /mirror/transfer (kept out of the docstring, which is the
+# public OpenAPI description): EXEC_TOKEN as ever (no cap), OR the
+# transfer-only MIRROR_TRANSFER_TOKEN in the X-Transfer-Token header (never
+# a query parameter). That token opens this route alone; what it moves in
+# one cap period is capped at MIRROR_TRANSFER_MAX_FRAC of the book's equity
+# and at a few requests (mirror.TRANSFER_TOKEN_MAX_PER_DAY); each request it
+# authorises is alerted, and a refusal tells its caller nothing about the
+# book. A wrong or absent one falls through to the exec check, so the
+# answer never says whether the feature is on.
 @app.post("/mirror/transfer")
 def mirror_transfer(body: dict = Depends(_mirror_body),
                     x_exec_token: str | None = Header(default=None),
                     token: str | None = Query(default=None),
-                    x_transfer_token: str | None = Header(default=None)):
+                    x_transfer_token: str | None = Header(
+                        default=None, include_in_schema=False)):
     """Queue a move of capital between two sleeves of one mirror book:
     {"from", "to", "amount", "note"?, "book"?}. It rides the next session's
     plan - the POLICY operations that move money between symphonies on
     Composer land here the same day (ONE BRAIN, TWO BROKERS). A transfer
-    that moves less than asked is said and its remainder re-queued.
-
-    Auth: EXEC_TOKEN as ever (no cap), OR the transfer-only
-    MIRROR_TRANSFER_TOKEN in the X-Transfer-Token header (never a query
-    parameter). That token opens this route alone, and what it moves in one
-    ET day is capped at MIRROR_TRANSFER_MAX_FRAC of the book's equity; each
-    request it authorises is alerted. A wrong or absent one falls through to
-    the exec check, so the answer never says whether the feature is on."""
+    that moves less than asked is said and its remainder re-queued."""
     _mirror_off_404()
     by_token = _transfer_token_ok(x_transfer_token)
     if not by_token:
         _auth(x_exec_token, token)
-    book = _mirror_book(body.get("book"))
+    try:
+        book = _mirror_book(body.get("book"))
+    except HTTPException as exc:
+        if by_token and exc.status_code == 400:
+            _token_transfer_refused(None, "not a valid transfer",
+                                    exc.detail, body)
+        raise
     try:
         if by_token:
             req = book.request_transfer(
@@ -1839,12 +1867,16 @@ def mirror_transfer(body: dict = Depends(_mirror_body),
                                         body.get("amount"),
                                         body.get("note") or "")
     except (ValueError, TypeError) as exc:
+        if by_token:
+            _token_transfer_refused(
+                book, getattr(exc, "public", "not a valid transfer"), exc,
+                body)
         raise HTTPException(status_code=400, detail=str(exc))
     if by_token:
         line = (f"mirror[{book.cfg.name}] transfer requested by the TRANSFER "
                 f"TOKEN: ${req['amount']:,.2f} {req['from']} -> {req['to']} "
-                f"({req.get('note') or 'no note'}) — today's total by this "
-                f"token ${req['day_used']:,.2f} of the cap "
+                f"({req.get('note') or 'no note'}) — total by this token "
+                f"since {req['day']} ${req['day_used']:,.2f} of the cap "
                 f"${req['day_cap']:,.2f}; applied with the next session's "
                 f"plan")
         logger.warning(line)

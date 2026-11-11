@@ -169,6 +169,8 @@ UNKNOWN_WAIT_S = 60.0          # session unknown on a weekday 09:25-16:05 ET: as
 UNKNOWN_WAIT_LATE_S = 20.0     # ... and this often from 15:30 ET
 UNKNOWN_ALERT_AFTER_S = 600.0
 TRANSFER_TRIES = 3             # a transfer that moved less than asked is re-queued up to this many plans
+TRANSFER_TOKEN_MAX_PER_DAY = 6 # transfers taken by the transfer-only token per book per cap period (_request_capped)
+TRANSFER_TOKEN_MIN = 1.00      # ... and none of them below a dollar
 DIVIDEND_ALERT_SESSIONS = 7    # a receivable unpaid this many sessions after its pay date is said once
 QUOTE_SOURCES = ("live", "last", "bid", "ask")   # a venue quote from the previous close is no cross-check
 LIMITS = {"cancel_before_close_s": (20.0, 120.0), "decide_offset_s": (0.0, 120.0), "quote_band": (0.001, 0.05)}
@@ -185,6 +187,15 @@ def _parse(text) -> datetime | None:
         return datetime.strptime(str(text), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     except (TypeError, ValueError):
         return None
+
+
+class TransferRefused(ValueError):
+    """a transfer by the transfer-only token that is not taken: str() holds the specifics (the log and
+    the alert), .public the words its caller may read - no equity, cap, total, path or book name"""
+
+    def __init__(self, msg: str, public: str):
+        super().__init__(msg)
+        self.public = public
 
 
 def one_line(e, n: int = 200) -> str:
@@ -638,61 +649,106 @@ class MirrorManager:
                          max_frac=None) -> dict:
         """queue a move of capital between two sleeves; it rides the next session's plan (the giver's
         sells fund it, the taker's buys invest it). Raises ValueError on a request that cannot be.
-        `via` set (the service's transfer-only token): the request counts against the day's cap of
-        `max_frac` x the book's equity and is refused beyond it (_request_capped)."""
+        `via` set (the service's transfer-only token): the amount is rounded to cents and refused below
+        $1, the note loses its control characters, and the request counts against the period's
+        allowance of `max_frac` x the book's equity and TRANSFER_TOKEN_MAX_PER_DAY requests, refused
+        beyond either (_request_capped; TransferRefused)."""
         amt = _num(amount)
         if src == dst or amt is None or amt <= 0:
             raise ValueError("a transfer needs two different sleeves and a positive amount")
         for s in (src, dst):
             if s not in self.cfg.engines:
                 raise ValueError(f"{s!r} is not a sleeve of the {self.cfg.name} book")
-        row = {"kind": "transfer", "from": src, "to": dst, "amount": amt, "note": one_line(note, 200)}
         if via is None:
+            row = {"kind": "transfer", "from": src, "to": dst, "amount": amt, "note": one_line(note, 200)}
             return self._request(row)
+        amt = round(amt, 2)                    # cents: what is counted is what is queued
+        if amt < TRANSFER_TOKEN_MIN:
+            raise ValueError(f"a transfer by the transfer token is at least ${TRANSFER_TOKEN_MIN:,.2f} "
+                             f"(${amt:,.2f} asked)")
+        note = "".join(" " if ord(ch) < 32 or ord(ch) == 127 else ch for ch in str(note))
+        row = {"kind": "transfer", "from": src, "to": dst, "amount": amt, "note": one_line(note, 200)}
         return self._request_capped(row, max_frac)
 
     def _transfer_day_path(self) -> str:
         return f"{self.cfg.state_path}.transfer_day.json"
 
+    def token_refusal_alert(self) -> str | None:
+        """Whether a refused request by the transfer token is still ALERTED (every one is logged):
+        "" for the first TRANSFER_TOKEN_MAX_PER_DAY of an ET date, a closing remark with the last of
+        them, None after it - so a holder of the token cannot flood the alert channel with refusals.
+        In memory only (a restart starts the date's count again)."""
+        day = self.clock().astimezone(ET).date().isoformat()
+        with self.inbox_lock:
+            d, n = getattr(self, "_token_refusals", (None, 0))
+            n = n + 1 if d == day else 1
+            self._token_refusals = (day, n)
+        if n > TRANSFER_TOKEN_MAX_PER_DAY:
+            return None
+        return " (further refusals today are logged, not alerted)" if n == TRANSFER_TOKEN_MAX_PER_DAY else ""
+
     def _request_capped(self, row: dict, max_frac) -> dict:
-        """A transfer authorised by the transfer-only token: the amounts accepted this way on one ET
-        date never total more than `max_frac` (0..1) of the book's equity as last published (the
-        figure /mirror/feed shows). The day's total is its own small file beside the inbox, written
-        under inbox_lock BEFORE the request is queued (any thread; the state file is the loop
-        thread's alone): it survives a restart, a book that never had one starts at zero, and a new
-        ET date starts at zero. A file that cannot be read refuses (never an uncounted transfer)."""
+        """A transfer authorised by the transfer-only token: the amounts accepted this way in one cap
+        period never total more than `max_frac` (0..1) of the book's equity as last published (the
+        figure /mirror/feed shows), and never number more than TRANSFER_TOKEN_MAX_PER_DAY.
+
+        The period is NOT a calendar date: everything queued between two sessions is applied by ONE
+        plan, so a new period starts only when the ET date has changed AND the book has run a session
+        since the period began (Friday 16:35, the weekend and Monday 09:00 share one allowance; so do
+        23:59:59 and 00:00:01). The period's record - {"day": the ET date it began, "used", "count",
+        "last_session": the book's last session when it began} - is its own small file beside the
+        inbox, written under inbox_lock BEFORE the request is queued (any thread; the state file is
+        the loop thread's alone): it survives a restart and a book that never had one starts at zero.
+        A record without "last_session" (written before it existed) ends when the date has changed and
+        the book's last session is on or after the record's date. A file that cannot be read, or whose
+        date is in the future, refuses (never an uncounted transfer).
+
+        Raises TransferRefused: str() is for the log and the alert, .public for the caller."""
+        busy = "transfers by token are unavailable for this book right now"
+        over = "over the day's transfer allowance"
         frac = _num(max_frac)
         frac = 0.0 if frac is None else min(max(frac, 0.0), 1.0)
-        equity = _num(((self._view or {}).get("book") or {}).get("equity"))
+        view = self._view or {}
+        equity = _num((view.get("book") or {}).get("equity"))
         if equity is None or equity <= 0:
-            raise ValueError(f"the {self.cfg.name} book's equity cannot be computed (or is not above zero): a transfer "
-                             f"by the transfer token is capped as a fraction of it, so none is taken")
+            raise TransferRefused(f"the {self.cfg.name} book's equity cannot be computed (or is not above zero): a "
+                                  f"transfer by the transfer token is capped as a fraction of it, so none is taken", busy)
         amt, cap = row["amount"], round(frac * equity, 2)
         day = self.clock().astimezone(ET).date().isoformat()
+        ran = view.get("last_session") if isinstance(view.get("last_session"), str) else None
         path = self._transfer_day_path()
         with self.inbox_lock:
             try:
                 with open(path) as f:
                     rec = json.load(f)
-                used = _num(rec.get("used")) if rec.get("day") == day else 0.0
-                if used is None or used < 0 or not isinstance(rec.get("day"), str):
-                    raise ValueError("not a day's total")
+                start, used, count, since = rec.get("day"), _num(rec.get("used")), rec.get("count", 0), rec.get("last_session")
+                if (not isinstance(start, str) or used is None or used < 0 or isinstance(count, bool)
+                        or not isinstance(count, int) or count < 0 or not (since is None or isinstance(since, str))):
+                    raise ValueError("not a period's total")
+                if datetime.strptime(start, "%Y-%m-%d").date().isoformat() != start or start > day:
+                    raise ValueError(f"its date {one_line(start, 20)} is not a date up to today's {day}")
+                if start != day and ((ran or "") > (since or "") if "last_session" in rec else (ran or "") >= start):
+                    start, used, count, since = day, 0.0, 0, ran          # a session ran since: a new period
             except FileNotFoundError:
-                used = 0.0
+                start, used, count, since = day, 0.0, 0, ran
             except Exception as exc:  # noqa: BLE001
-                raise ValueError(f"the day's transfer-token total ({path}) cannot be read ({one_line(exc, 80)}): "
-                                 f"no transfer is taken by the transfer token until that file is removed")
+                raise TransferRefused(f"the transfer-token total ({path}) cannot be read ({one_line(exc, 80)}): no "
+                                      f"transfer is taken by the transfer token until that file is removed", busy)
+            if count >= TRANSFER_TOKEN_MAX_PER_DAY:
+                raise TransferRefused(f"over the count for transfers by the transfer token: {count} already taken since "
+                                      f"{start} (ET), {TRANSFER_TOKEN_MAX_PER_DAY} allowed until the {self.cfg.name} book "
+                                      f"has run a session on a later date (${amt:,.2f} asked)", over)
             if used + amt > cap + 1e-9:
-                raise ValueError(f"over the day's cap for transfers by the transfer token: ${amt:,.2f} asked, "
-                                 f"${used:,.2f} already used on {day} (ET), cap ${cap:,.2f} = {frac:.2%} of the "
-                                 f"{self.cfg.name} book's equity of ${equity:,.2f} (MIRROR_TRANSFER_MAX_FRAC)")
-            used = round(used + amt, 6)
+                raise TransferRefused(f"over the day's cap for transfers by the transfer token: ${amt:,.2f} asked, "
+                                      f"${used:,.2f} already used since {start} (ET), cap ${cap:,.2f} = {frac:.2%} of the "
+                                      f"{self.cfg.name} book's equity of ${equity:,.2f} (MIRROR_TRANSFER_MAX_FRAC)", over)
+            used = round(used + amt, 2)
             try:
-                atomic_write(path, {"day": day, "used": used})
+                atomic_write(path, {"day": start, "used": used, "count": count + 1, "last_session": since})
             except Exception as exc:  # noqa: BLE001
-                raise ValueError(f"the day's transfer-token total cannot be written ({one_line(exc, 80)}): "
-                                 f"the transfer is not taken")
-            return self._enqueue(dict(row, via="transfer_token", day=day, day_used=used, day_cap=cap))
+                raise TransferRefused(f"the transfer-token total cannot be written ({one_line(exc, 80)}): the transfer "
+                                      f"is not taken", busy)
+            return self._enqueue(dict(row, via="transfer_token", day=start, day_used=used, day_cap=cap))
 
     def request_credit(self, sleeve: str, amount, note: str = "", force: bool = False) -> dict:
         """queue a cash adjustment of one sleeve (cash the account received for it: +; a fee: -).

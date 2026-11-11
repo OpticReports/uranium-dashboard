@@ -13,11 +13,23 @@ in `CHANGELOG.md` with deploy IDs, and pushed.
 symphonies is followed, in the same run, by
 `scripts/mirror_transfer.py --from <giver> --to <taker> --composer-amount <the
 Composer amount> --composer-from-value <the giving symphony's value before the
-move>`, with the same from/to as the Composer move. The mirror moves the same
-FRACTION of its own sleeve, not the same dollars, and the script's summary
-line goes into the report. An operation that moves money to or from
-unallocated cash, or outside the four mirrored engines (HG, KMLM, SLEEVE,
-HARV), has no mirror leg and is reported as such.
+move> --composer-from-value-after <its value after the move>`, with the same
+from/to as the Composer move. Pass BOTH values: with the second the script
+refuses a "before" that is really the value after the move (it would move too
+large a fraction). The mirror moves the same FRACTION of its own sleeve, not
+the same dollars, and the script's summary line goes into the report. The leg
+goes to the LIVE book only: with no live book on the executor there is no
+mirror leg - the script exits 1 and the routine reports that line, nothing
+else (it does not name a paper book instead, and does not retry). The mirror
+applies a queued move at its NEXT session (15:54 ET on the next trading day),
+not the day Composer moved. The script sends a leg once: when a transfer for
+the same from/to is already queued it refuses (pass `--again` only when a
+second move of the same pair is meant), and a line saying UNKNOWN (the
+request left, the answer did not say whether it was queued) is resolved by
+running the same command again - it sends only when the executor does not
+hold the transfer. An operation that moves money to or from unallocated cash,
+or outside the four mirrored engines (HG, KMLM, SLEEVE, HARV), has no mirror
+leg and is reported as such.
 
 ## Pre-authorized operation 1 — sleeve monetization band
 

@@ -12,11 +12,20 @@ read and the POST are injected).
       is ever in a line or in the ledger
   T7  configuration: https only (or localhost), tokens required; a feed that cannot be read is refused
   T8  one ledger row per call, sent or not, with the fields the report needs
-  T9  the real HTTP helpers: the header that carries the token, and the URL
+  T9  the real HTTP helpers: the header that carries the token, and the URL; a redirect is never
+      followed with the transfer token (or the attest token); a JSON answer is told from one that is not
+  T10 a transfer already queued for the pair is not sent again (--again overrides); only an HTTP 4xx
+      with a JSON body is "not queued", anything else after the request left is "unknown", and a
+      re-run after an unknown is safe
+  T11 --composer-from-value-after refuses a "before" that is the value after the move; the help and
+      POLICY.md say to pass both, that the leg goes to the live book only, and when it is applied
+  (T9's redirect gates, T10 and T11 are the independent review's findings: each failed at c740d160)
 
 Run: python3 -m unittest tests.test_mirror_transfer -v
 """
+import contextlib
 import datetime
+import io
 import json
 import os
 import sys
@@ -243,6 +252,121 @@ class T6Refusals(Case):
         self.assertEqual(self.rows()[0]["outcome"], "unknown")
 
 
+class T10DoubleSend(Case):
+    """review items 6 and 7: a re-run never sends the same leg twice, and only an HTTP 4xx with a JSON
+    body is "not queued" - anything else after the request left is UNKNOWN"""
+    def held(self, **over):
+        row = dict({"kind": "transfer", "from": "HG", "to": "SLEEVE", "amount": 138.32, "note": "POLICY mirror leg",
+                    "via": "transfer_token", "id": "transfer-1794435400000-0", "utc": "2026-11-11T21:05:00Z"}, **over)
+        self.feed = feed(live=FULL)
+        self.feed["books"]["live"]["pending_requests"] = [row]
+        return row
+
+    def test_a_transfer_already_queued_for_the_pair_is_not_sent_again(self):
+        self.held()
+        code, line = self.run_it()
+        self.assertEqual((code, self.posts), (1, []))
+        self.assertIn("a transfer for this pair is already queued", line)
+        self.assertIn("$138.32 as transfer-1794435400000-0", line)
+        self.assertIn("--again", line)
+        self.assertEqual(self.rows()[0]["outcome"], "duplicate")
+        self.assertEqual(self.run_it(ARGS + ["--dry-run"])[0], 1)             # a dry run says what a run would do
+        code, line = self.run_it(ARGS + ["--again"])                         # a second move of the pair, meant
+        self.assertEqual((code, len(self.posts)), (0, 1))
+        self.assertEqual(self.rows()[-1]["outcome"], "sent")
+
+    def test_the_twins_other_pairs_other_authors_and_other_requests_are_not_duplicates(self):
+        for over in ({"from": "SLEEVE", "to": "HG"}, {"to": "HARV"}, {"via": None}, {"kind": "credit", "sleeve": "HG"}):
+            self.posts = []
+            row = self.held(**over)
+            if over.get("via", 1) is None:
+                del row["via"]                            # the operator's own transfer (EXEC_TOKEN): not this script's
+            self.assertEqual((self.run_it()[0], len(self.posts)), (0, 1), over)
+        self.feed = feed(live=FULL)
+        self.feed["books"]["live"]["pending_requests"] = []
+        self.assertEqual(self.run_it()[0], 0)
+        self.feed["books"]["live"]["pending_requests"] = "none"                # cannot be told: nothing is sent
+        code, line = self.run_it()
+        self.assertEqual(code, 1)
+        self.assertIn("pending_requests", line)
+        self.assertEqual(len(self.posts), 2)
+
+    def test_only_a_4xx_with_a_json_body_is_not_queued_everything_else_is_unknown(self):
+        for answer in ((502, None), (500, {"detail": "Internal Server Error"}), (503, {}), (200, None), (200, {}),
+                       (200, {"ok": False}), (404, None), (429, None), (204, None), ConnectionResetError("reset"),
+                       TimeoutError("timed out")):
+            self.answer = answer
+            code, line = self.run_it()
+            self.assertEqual(code, 1, answer)
+            self.assertIn("UNKNOWN whether the executor queued it", line, answer)
+            self.assertIn("check pending_requests before re-sending", line, answer)
+            self.assertNotIn("NOT QUEUED", line, answer)
+            self.assertEqual(self.rows()[-1]["outcome"], "unknown", answer)   # at c740d160: "refused" / NOT QUEUED
+        for answer in ((400, {"detail": "refused: over the day's transfer allowance"}), (401, {"detail": "bad exec token"}),
+                       (404, {"detail": "Not Found"}), (422, {}), (302, None), (307, {})):
+            self.answer = answer
+            code, line = self.run_it()
+            self.assertEqual(code, 1, answer)
+            self.assertIn(f"NOT QUEUED (HTTP {answer[0]}", line, answer)
+            self.assertNotIn("UNKNOWN", line, answer)
+            self.assertEqual(self.rows()[-1]["outcome"], "refused", answer)
+
+    def test_after_an_unknown_a_re_run_is_safe_either_way(self):
+        self.answer = (502, None)
+        self.assertEqual(self.run_it()[0], 1)             # unknown ...
+        self.held()                                       # ... and the executor HAD queued it
+        self.answer = (200, {"ok": True, "request": {"id": "transfer-2"}})
+        self.assertEqual(self.run_it()[0], 1)
+        self.assertEqual(len(self.posts), 1)              # not sent a second time
+        self.assertEqual([r["outcome"] for r in self.rows()], ["unknown", "duplicate"])
+        self.feed = feed(live=FULL)                       # the twin: it had NOT queued it
+        self.assertEqual(self.run_it()[0], 0)
+        self.assertEqual(len(self.posts), 2)
+
+
+class T11BeforeAndAfter(Case):
+    """review item 9: the value AFTER the move passed as "before" moves too large a fraction, silently"""
+    def test_the_after_value_passed_as_before_is_refused_when_both_are_given(self):
+        code, line = self.run_it(ARGS + ["--composer-from-value-after", "99827.05"])
+        self.assertEqual((code, self.posts[0][2]["amount"]), (0, 138.32))
+        self.assertEqual(self.rows()[0]["composer_from_value_after"], 99827.05)
+        wrong = ["--from", "HG", "--to", "SLEEVE", "--composer-amount", "5000", "--composer-from-value", "99827.05"]
+        code, line = self.run_it(wrong + ["--composer-from-value-after", "99827.05"])
+        self.assertEqual((code, len(self.posts)), (1, 1))
+        self.assertIn("BEFORE the move", line)
+        self.assertEqual(self.rows()[-1]["outcome"], "refused")
+        self.assertEqual(self.run_it(wrong)[0], 0)        # the twin, and why both should be passed: alone it goes ...
+        self.assertEqual(self.posts[-1][2]["amount"], 145.25)                 # ... 5.0% of the sleeve, not 4.77%
+
+    def test_the_tolerance_is_fifty_dollars_or_one_percent_of_before(self):
+        def go(amount, before, after):
+            return self.run_it(["--from", "HG", "--to", "SLEEVE", "--composer-amount", str(amount),
+                                "--composer-from-value", str(before), "--composer-from-value-after", str(after)])[0]
+        self.assertEqual(go(100, 1000, 850), 0)           # off by $50: the floor
+        self.assertEqual(go(100, 1000, 849), 1)
+        self.assertEqual(go(100, 1000, 950), 0)
+        self.assertEqual(go(100, 1000, 951), 1)
+        self.assertEqual(go(5000, 100000, 94000), 0)      # off by $1,000 = 1% of before
+        self.assertEqual(go(5000, 100000, 93999), 1)
+        self.assertEqual(go(5000, 100000, 96001), 1)
+        self.assertEqual(go(100, 1000, -1), 1)
+        self.assertEqual(go(100, 1000, "nan"), 1)
+
+    def test_the_help_and_the_policy_say_to_pass_both_and_where_the_leg_goes(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+            mt.parse(["--help"])
+        text = " ".join(out.getvalue().split())
+        self.assertIn("--composer-from-value-after", text)
+        self.assertIn("value AFTER the move. Pass it as well", text)
+        with open(os.path.join(HERE, "..", "..", "POLICY.md")) as f:
+            policy = " ".join(f.read().split())
+        para = policy[policy.index("**IBKR mirror.**"):policy.index("## Pre-authorized operation 1")]
+        for part in ("--composer-from-value-after", "LIVE book only", "no live book", "exits 1", "NEXT session",
+                     "15:54 ET", "next trading day", "--again", "UNKNOWN"):
+            self.assertIn(part, para, part)
+
+
 class T7Configuration(Case):
     def refused(self, env, argv=ARGS):
         code, line = self.run_it(argv, env=env)
@@ -324,7 +448,7 @@ class T9Http(unittest.TestCase):
             seen["req"] = req
             return Resp()
 
-        with unittest.mock.patch("urllib.request.urlopen", fake):
+        with unittest.mock.patch.object(mt.mp, "urlopen_no_redirect", fake):
             code, data = mt.post("https://exec.example/mirror/transfer", TOKEN, {"from": "HG"})
         self.assertEqual((code, data["request"]["id"]), (200, "transfer-9"))
         req = seen["req"]
@@ -332,6 +456,73 @@ class T9Http(unittest.TestCase):
         self.assertEqual(req.full_url, "https://exec.example/mirror/transfer")          # no token in the URL
         self.assertEqual(req.get_header("X-transfer-token"), TOKEN)
         self.assertEqual(json.loads(req.data), {"from": "HG"})
+
+    def _servers(self, status=302, body=b""):
+        """a local 'executor' answering `status` (a 3xx points at another local server); what that other
+        server was sent lands in the returned list"""
+        import http.server
+        import threading
+        got = []
+
+        class Other(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                got.append((self.command, self.headers.get("X-Transfer-Token"), self.headers.get("X-Attest-Token")))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"ok": true, "request": {"id": "stolen"}}')
+            do_POST = do_GET
+
+            def log_message(self, *a):
+                pass
+
+        class Executor(Other):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                self.send_response(status)
+                if 300 <= status < 400:
+                    self.send_header("Location", f"http://127.0.0.1:{other.server_port}/steal")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        other = http.server.HTTPServer(("127.0.0.1", 0), Other)
+        executor = http.server.HTTPServer(("127.0.0.1", 0), Executor)
+        for srv in (other, executor):
+            threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True).start()
+            self.addCleanup(srv.server_close)
+            self.addCleanup(srv.shutdown)
+        return f"http://127.0.0.1:{executor.server_port}", got
+
+    def test_a_redirect_is_never_followed_with_the_transfer_token(self):
+        for status in (301, 302, 303, 307, 308):
+            base, got = self._servers(status)
+            self.assertEqual(mt.post(base + "/mirror/transfer", TOKEN, {"from": "HG"}), (status, None))
+            self.assertEqual(got, [], status)             # at c740d160 a 302: [("GET", TOKEN, None)] and "(200, {})"
+
+    def test_a_redirect_is_never_followed_with_the_attest_token(self):
+        import mirror_attest as ma
+        base, got = self._servers(302)
+        self.assertEqual(ma.post(base + "/mirror/attest", "attest-token-CCCC", {"session": "x"}), (302, {}))
+        self.assertEqual(got, [])                         # at c740d160: [("GET", None, "attest-token-CCCC")]
+
+    def test_post_tells_a_json_answer_from_one_that_is_not(self):
+        for status, body, want in ((400, b'{"detail": "refused: not a valid transfer"}', {"detail": "refused: not a valid transfer"}),
+                                   (502, b"<html>Bad Gateway</html>", None), (200, b"ok", None), (200, b"[1]", None),
+                                   (200, b'{"ok": true}', {"ok": True})):
+            base, _ = self._servers(status, body)
+            self.assertEqual(mt.post(base + "/mirror/transfer", TOKEN, {"from": "HG"}), (status, want))
+
+    def test_a_redirecting_executor_end_to_end_is_refused_and_nothing_leaves(self):
+        base, got = self._servers(307)
+        with tempfile.TemporaryDirectory() as tmp:
+            code, line = mt.run(list(ARGS), env=dict(ENV, MIRROR_EXECUTOR_URL=base), fetch=lambda u, t: feed(live=FULL),
+                                now=NOW, ledger_path=os.path.join(tmp, "l.jsonl"))
+            with open(os.path.join(tmp, "l.jsonl")) as f:
+                self.assertEqual(json.loads(f.read())["outcome"], "refused")
+        self.assertEqual(code, 1)
+        self.assertIn("NOT QUEUED (HTTP 307", line)
+        self.assertIn("redirect", line)
+        self.assertEqual(got, [])
 
     def test_transfer_url(self):
         self.assertEqual(mt.transfer_url("https://e.example/"), "https://e.example/mirror/transfer")
