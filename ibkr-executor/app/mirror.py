@@ -745,7 +745,16 @@ class MirrorManager:
                         and not self._token_transfers_open()):
                     start, used, count, since = day, 0.0, 0, ran          # a session ran since, none waits: a new period
             except FileNotFoundError:
+                if self._token_transfers_open():
+                    # T3 D1: the total is gone while a transfer taken by the token still waits. Starting
+                    # at zero here would put a second allowance into the same plan.
+                    raise TransferRefused(f"the transfer-token total ({path}) is missing while a transfer taken by "
+                                          f"the transfer token is still unapplied: none is taken until the "
+                                          f"{self.cfg.name} book's next session has applied what waits", busy,
+                                          "total missing")
                 start, used, count, since = day, 0.0, 0, ran
+            except TransferRefused:
+                raise
             except Exception as exc:  # noqa: BLE001
                 raise TransferRefused(f"the transfer-token total ({path}) cannot be read ({one_line(exc, 80)}): no "
                                       f"transfer is taken by the transfer token until that file is removed", busy,
@@ -779,7 +788,14 @@ class MirrorManager:
         def held(rows) -> bool:
             return any(isinstance(r, dict) and r.get("kind") == "transfer" and r.get("via") == "transfer_token"
                        for r in (rows if isinstance(rows, list) else []))
-        if held(self._read_inbox()):
+        try:                                   # T3 N2: a strict read - an inbox that cannot be read may hold one
+            with open(self._inbox_path()) as f:
+                box = json.load(f)
+        except FileNotFoundError:
+            box = []
+        except Exception:  # noqa: BLE001
+            return True
+        if not isinstance(box, list) or held(box):
             return True
         for _ in range(3):
             seq = self.state.get("seq")

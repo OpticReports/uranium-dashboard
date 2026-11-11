@@ -162,8 +162,14 @@ def sent_already(path, day, book, src, dst):
         raise Refused(f"the transfer ledger cannot be read ({one_line(e, 120)}): whether this transfer was already "
                       f"sent today cannot be told. Check the executor's feed (pending_requests and today's session "
                       f"row) and pass --again only if the transfer is in neither") from None
+    # an "intent" row is written BEFORE the POST and answered by the call's final row (same "call"):
+    # an intent whose final row says the executor did not take it (refused) is settled and blocks nothing;
+    # an intent with NO final row (the process died after the POST) blocks like an unknown
+    settled = {r.get("call") for r in rows if r.get("call") and not r.get("intent")
+               and r.get("outcome") not in ("sent", "unknown")}
     return [r for r in rows if r.get("date") == day and r.get("book") == book and r.get("from") == src
-            and r.get("to") == dst and r.get("outcome") in ("sent", "unknown") and not r.get("dry_run")]
+            and r.get("to") == dst and r.get("outcome") in ("sent", "unknown") and not r.get("dry_run")
+            and not (r.get("intent") and r.get("call") in settled)]
 
 
 def transfer_url(base):
@@ -228,8 +234,40 @@ def post(url, token, body, timeout=TIMEOUT_S):
 def append_ledger(row, path=None):
     path = path or LEDGER_PATH
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    lead = ""
+    try:                                       # a ledger left without its last newline: never write onto that line
+        with open(path, "rb") as f:
+            f.seek(-1, os.SEEK_END)
+            lead = "" if f.read(1) == b"\n" else "\n"
+    except (FileNotFoundError, OSError):
+        pass
     with open(path, "a") as f:
-        f.write(json.dumps(row, sort_keys=True) + "\n")
+        f.write(lead + json.dumps(row, sort_keys=True) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
+class ledger_lock:
+    """one transfer run at a time on this machine (flock on <ledger>.lock): the check of the ledger and
+    the intent row that follows it are one step, so two runs started together cannot both send"""
+
+    def __init__(self, path=None):
+        self.path = (path or LEDGER_PATH) + ".lock"
+
+    def __enter__(self):
+        import fcntl
+        os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
+        self.f = open(self.path, "w")
+        fcntl.flock(self.f, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        import fcntl
+        try:
+            fcntl.flock(self.f, fcntl.LOCK_UN)
+        finally:
+            self.f.close()
+        return False
 
 
 def run(argv=None, env=None, fetch=None, send=None, now=None, ledger_path=None):
@@ -248,7 +286,8 @@ def run(argv=None, env=None, fetch=None, send=None, now=None, ledger_path=None):
             text = text.replace(t, "***")
         return one_line(text, n)
 
-    led = {"date": day, "utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "from": None, "to": None, "book": None,
+    locked = []
+    led = {"call": os.urandom(6).hex(), "date": day, "utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "from": None, "to": None, "book": None,
            "composer_amount": None, "composer_from_value": None, "fraction": None, "sleeve_equity": None,
            "amount": None, "outcome": None, "request_id": None, "dry_run": False}
     head = f"MIRROR TRANSFER {day}"
@@ -300,6 +339,9 @@ def run(argv=None, env=None, fetch=None, send=None, now=None, ledger_path=None):
                               + "; ".join(f"${r['amount']:,.2f} as {r.get('id') or '?'}" if isinstance(r.get("amount"), (int, float))
                                           else f"{r.get('amount')!r} as {r.get('id') or '?'}" for r in held[:3])
                               + "). Pass --again only if a second move of the same pair is meant")
+            lock = ledger_lock(ledger_path)
+            lock.__enter__()
+            locked.append(lock)
             if not a.again:
                 try:
                     mine = sent_already(ledger_path, day, name, src, dst)
@@ -318,6 +360,14 @@ def run(argv=None, env=None, fetch=None, send=None, now=None, ledger_path=None):
                 led["outcome"] = "dry_run"
                 code, line = 0, f"{head}: {what} | dry run: not sent; would POST {json.dumps(body, sort_keys=True)}"
             else:
+                # T3 D2: the intent is on disk BEFORE the token leaves. A run killed after the POST, or
+                # one whose final row cannot be written, still leaves a row that blocks the re-run.
+                try:
+                    append_ledger(dict(led, outcome="unknown", intent=True,
+                                       why="written before the POST; the call's final row follows"), ledger_path)
+                except Exception as e:  # noqa: BLE001
+                    raise Refused(f"{what} | NOT SENT: the transfer ledger cannot be written ({clean(e, 120)}), so "
+                                  f"a re-run could not tell this transfer had been sent") from None
                 try:
                     status, data = (send or post)(url, token, body)
                 except Exception as e:  # noqa: BLE001
@@ -350,6 +400,10 @@ def run(argv=None, env=None, fetch=None, send=None, now=None, ledger_path=None):
         append_ledger(led, ledger_path)
     except Exception as e:  # noqa: BLE001
         line += f" | the ledger row was NOT written ({clean(e, 120)})"
+        code = 1                               # T3 D2: never a clean exit without the record
+    finally:
+        for lock in locked:
+            lock.__exit__(None, None, None)
     return code, line
 
 
