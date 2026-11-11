@@ -1,20 +1,20 @@
 {
-  "taken_at": "2026-11-10T21:36:12+00:00",
+  "taken_at": "2026-11-11T21:35:36+00:00",
   "total_stats": {
     "pending_deploys_cash": 0,
-    "total_cash": 409.029981855,
-    "time_weighted_return": 0.8695400015043515,
-    "total_unallocated_cash": 102.269981855,
-    "portfolio_value": 305519.75,
+    "total_cash": 409.038489283,
+    "time_weighted_return": 0.9205735176706713,
+    "total_unallocated_cash": 102.268489283,
+    "portfolio_value": 313859.63,
     "net_deposits": 247000.0,
     "pending_net_deposits": 0.0,
-    "todays_percent_change": -0.003984600019903534,
-    "simple_return": 0.2369220795450857,
-    "todays_dollar_change": -1222.24417061187,
+    "todays_percent_change": 0.027032180362445184,
+    "simple_return": 0.2706867932672459,
+    "todays_dollar_change": 8260.997565052756,
     "metrics": {
-      "annualized_rate_of_return": 0.9617,
+      "annualized_rate_of_return": 1.0134,
       "max_drawdown": 0.2006,
-      "sharpe_ratio": 1.957,
+      "sharpe_ratio": 2.0253,
       "standard_deviation": 0.3839
     },
     "pending_withdrawals": 0.0
@@ -28,54 +28,55 @@
       "holdings": {
         "BIL": 0.999
       },
-      "next_rebalance_on": "2026-11-11",
+      "next_rebalance_on": "2026-11-12",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0002
+      "last_percent_change": 0.0001
     },
     "nNdBk7hc5NiBzeRvbI5T": {
       "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
-      "value": 81767.0,
-      "deposit_adjusted_value": 26313.8,
-      "cash": 81.73,
+      "value": 81770.42,
+      "deposit_adjusted_value": 26314.9,
+      "cash": 81.72,
       "holdings": {
         "BOXX": 0.999
       },
-      "next_rebalance_on": "2026-11-11",
+      "next_rebalance_on": "2026-11-12",
       "has_queued_deploy": null,
       "last_percent_change": 0.0001
     },
     "YPTSJFJwD2ZKfAeYJUbW": {
       "name": "KMLM switcher + VIX sleeve 75/25",
-      "value": 80576.21,
-      "deposit_adjusted_value": 30442.3,
+      "value": 88916.09,
+      "deposit_adjusted_value": 33593.17,
       "cash": 81.94,
       "holdings": {
-        "PULS": 0.2539,
-        "SOXL": 0.3783,
-        "TECL": 0.3667
+        "PULS": 0.2302,
+        "SOXL": 0.4053,
+        "TECL": 0.3636
       },
-      "next_rebalance_on": "2026-11-11",
+      "next_rebalance_on": "2026-11-12",
       "has_queued_deploy": null,
-      "last_percent_change": -0.0152
+      "last_percent_change": 0.1024
     },
     "ORQNCfZnA18wmsMWVhf8": {
       "name": "VIX Harvester + HYG Credit Guard",
-      "value": 38247.23,
-      "deposit_adjusted_value": 35138.71,
-      "cash": 38.26,
+      "value": 38243.81,
+      "deposit_adjusted_value": 35135.57,
+      "cash": 38.28,
       "holdings": {
-        "PULS": 0.999
+        "VXZ": 0.3594,
+        "PULS": 0.6396
       },
-      "next_rebalance_on": "2026-11-11",
+      "next_rebalance_on": "2026-11-12",
       "has_queued_deploy": null,
-      "last_percent_change": -0.0001
+      "last_percent_change": -0.0002
     }
   },
-  "book_drawdown": 0.0598,
-  "sleeve_weight": 0.1255,
+  "book_drawdown": 0.0284,
+  "sleeve_weight": 0.1239,
   "gate": {
-    "date": "2026-11-09",
-    "spy_vs_200d": 0.03393,
+    "date": "2026-11-10",
+    "spy_vs_200d": 0.02968,
     "zone": "near",
     "hg_holding": "BIL",
     "ungated_holding": "BIL",
@@ -83,13 +84,13 @@
     "closed_days": 0
   },
   "shadow": {
-    "date": "2026-11-10",
+    "date": "2026-11-11",
     "status": {
       "HG": "agree",
       "KMLM": "agree",
-      "SLEEVE": "knife-edge",
+      "SLEEVE": "agree",
       "HARV": "agree"
     }
   },
-  "vix_contango": 0.0606
+  "vix_contango": 0.1001
 }

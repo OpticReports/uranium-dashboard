@@ -1,24 +1,23 @@
 {
   "peaks": {
     "mbkiXcuNDjueXpiox5Av": 2341.85,
-    "nNdBk7hc5NiBzeRvbI5T": 26313.8,
+    "nNdBk7hc5NiBzeRvbI5T": 26314.9,
     "YPTSJFJwD2ZKfAeYJUbW": 40378.17,
     "ORQNCfZnA18wmsMWVhf8": 35223.93
   },
   "accident_gauge": "YELLOW",
   "peak_dates": {
     "YPTSJFJwD2ZKfAeYJUbW": "2026-08-17",
-    "nNdBk7hc5NiBzeRvbI5T": "2026-11-10",
-    "mbkiXcuNDjueXpiox5Av": "2026-11-10"
+    "nNdBk7hc5NiBzeRvbI5T": "2026-11-11",
+    "mbkiXcuNDjueXpiox5Av": "2026-11-11"
   },
   "book_peak": 100227.19000000002,
   "gate": {
     "override": false,
     "zone": "near",
-    "last_dist": 0.03393,
-    "last_date": "2026-11-09",
+    "last_dist": 0.02968,
+    "last_date": "2026-11-10",
     "live_hist": {
-      "2026-10-23": "BIL",
       "2026-10-29": "BIL",
       "2026-10-30": "BIL",
       "2026-11-02": "TECL",
@@ -27,7 +26,8 @@
       "2026-11-05": "USD",
       "2026-11-06": "TECL",
       "2026-11-09": "BIL",
-      "2026-11-10": "BIL"
+      "2026-11-10": "BIL",
+      "2026-11-11": "BIL"
     }
   },
   "shadow": {
@@ -40,10 +40,10 @@
     "status": {
       "HG": "agree",
       "KMLM": "agree",
-      "SLEEVE": "knife-edge",
+      "SLEEVE": "agree",
       "HARV": "agree"
     },
-    "last_date": "2026-11-10",
+    "last_date": "2026-11-11",
     "pending": [],
     "fmp": {}
   }
