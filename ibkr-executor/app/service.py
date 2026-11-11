@@ -809,6 +809,14 @@ def _build_mirror() -> None:
              f"Composer mirror is OFF until this is fixed and the service "
              f"restarts; the rest of the executor is unaffected")
         return
+    why = _transfer_token_off_why()
+    if why:
+        logger.warning("mirror: MIRROR_TRANSFER_TOKEN is set but NOT honoured "
+                       "(%s): the transfer-only credential is OFF", why)
+        send(f"⚠️ mirror: MIRROR_TRANSFER_TOKEN is set but NOT honoured "
+             f"({why}) — the transfer-only credential is OFF until it is a "
+             f"separate secret of at least 24 characters; /mirror/transfer "
+             f"still takes EXEC_TOKEN")
     for name, book in MIRROR.items():
         if book.archived_state:
             logger.error("mirror[%s]: %s", name, book.archived_state)
@@ -1020,6 +1028,36 @@ def _mirror_off_404() -> None:
     body an unknown path gets, BEFORE any auth (A-22)."""
     if not MIRROR:
         raise HTTPException(status_code=404, detail="Not Found")
+
+
+def _transfer_token_off_why() -> str | None:
+    """Why a configured MIRROR_TRANSFER_TOKEN is NOT honoured, or None (also
+    None when it is simply unset). It must be a credential of its own: at
+    least 24 characters, and never EXEC_TOKEN or READ_TOKEN under another
+    name - equal to the first it would be the master key in a weaker
+    holder's hands, equal to the second a read-only holder could move
+    capital."""
+    tok = settings.mirror_transfer_token
+    if not tok:
+        return None
+    if len(tok) < 24:
+        return "it is shorter than 24 characters"
+    if tok == settings.exec_token:
+        return "it equals EXEC_TOKEN"
+    if tok == settings.read_token:
+        return "it equals READ_TOKEN"
+    return None
+
+
+def _transfer_token_ok(supplied: str | None) -> bool:
+    """True only for the X-Transfer-Token HEADER equal to a usable
+    MIRROR_TRANSFER_TOKEN (constant-time, like READ_TOKEN at /blend/feed).
+    Used by POST /mirror/transfer and by nothing else."""
+    tok = settings.mirror_transfer_token
+    if not tok or supplied is None or _transfer_token_off_why():
+        return False
+    return secrets.compare_digest(supplied.encode("utf-8"),
+                                  tok.encode("utf-8"))
 
 
 def _mirror_book(name):
@@ -1771,20 +1809,46 @@ async def _mirror_body(request: Request) -> dict:
 @app.post("/mirror/transfer")
 def mirror_transfer(body: dict = Depends(_mirror_body),
                     x_exec_token: str | None = Header(default=None),
-                    token: str | None = Query(default=None)):
+                    token: str | None = Query(default=None),
+                    x_transfer_token: str | None = Header(default=None)):
     """Queue a move of capital between two sleeves of one mirror book:
     {"from", "to", "amount", "note"?, "book"?}. It rides the next session's
     plan - the POLICY operations that move money between symphonies on
     Composer land here the same day (ONE BRAIN, TWO BROKERS). A transfer
-    that moves less than asked is said and its remainder re-queued."""
+    that moves less than asked is said and its remainder re-queued.
+
+    Auth: EXEC_TOKEN as ever (no cap), OR the transfer-only
+    MIRROR_TRANSFER_TOKEN in the X-Transfer-Token header (never a query
+    parameter). That token opens this route alone, and what it moves in one
+    ET day is capped at MIRROR_TRANSFER_MAX_FRAC of the book's equity; each
+    request it authorises is alerted. A wrong or absent one falls through to
+    the exec check, so the answer never says whether the feature is on."""
     _mirror_off_404()
-    _auth(x_exec_token, token)
+    by_token = _transfer_token_ok(x_transfer_token)
+    if not by_token:
+        _auth(x_exec_token, token)
     book = _mirror_book(body.get("book"))
     try:
-        req = book.request_transfer(body.get("from"), body.get("to"),
-                                    body.get("amount"), body.get("note") or "")
+        if by_token:
+            req = book.request_transfer(
+                body.get("from"), body.get("to"), body.get("amount"),
+                body.get("note") or "", via="token",
+                max_frac=settings.mirror_transfer_max_frac)
+        else:
+            req = book.request_transfer(body.get("from"), body.get("to"),
+                                        body.get("amount"),
+                                        body.get("note") or "")
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    if by_token:
+        line = (f"mirror[{book.cfg.name}] transfer requested by the TRANSFER "
+                f"TOKEN: ${req['amount']:,.2f} {req['from']} -> {req['to']} "
+                f"({req.get('note') or 'no note'}) — today's total by this "
+                f"token ${req['day_used']:,.2f} of the cap "
+                f"${req['day_cap']:,.2f}; applied with the next session's "
+                f"plan")
+        logger.warning(line)
+        send("⚠️ " + line)
     return {"ok": True, "book": book.cfg.name, "request": req,
             "note": "queued; applied with the next session's plan"}
 

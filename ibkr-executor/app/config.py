@@ -133,8 +133,19 @@ class Settings(BaseSettings):
     # else the cash stays unallocated in the account (what Composer's
     # symphonies do); "holder": whoever held the shares is always credited.
     mirror_dividend_rule: str = "composer"   # MIRROR_DIVIDEND_RULE
+    # A TRANSFER-ONLY credential for POST /mirror/transfer (X-Transfer-Token
+    # header, constant-time compare): the daily POLICY routine mirrors a
+    # Composer capital move without holding EXEC_TOKEN. It opens no other
+    # route. Empty (default) = off; honoured only when at least 24 characters
+    # and different from EXEC_TOKEN and READ_TOKEN.
+    mirror_transfer_token: str = ""       # MIRROR_TRANSFER_TOKEN
+    # The most that transfers authorised by that token may move in one ET
+    # calendar day, as a fraction of the book's equity (clamped to 0..1).
+    # Transfers under EXEC_TOKEN are not counted and not capped.
+    mirror_transfer_max_frac: float = 0.25   # MIRROR_TRANSFER_MAX_FRAC
 
-    @field_validator("mirror_capital_usd", "mirror_max_book_usd", mode="before")
+    @field_validator("mirror_capital_usd", "mirror_max_book_usd",
+                     "mirror_transfer_max_frac", mode="before")
     @classmethod
     def _blank_is_default(cls, v, info):
         """A dashboard field saved BLANK arrives as KEY='' and float('')
@@ -143,6 +154,12 @@ class Settings(BaseSettings):
         if isinstance(v, str) and not v.strip():
             return cls.model_fields[info.field_name].default
         return v
+
+    @field_validator("mirror_transfer_max_frac", mode="after")
+    @classmethod
+    def _frac_in_range(cls, v):
+        """clamped to 0..1: a fraction of the book, never more than all of it"""
+        return min(max(v, 0.0), 1.0) if v == v else 0.0
 
 
 settings = Settings()

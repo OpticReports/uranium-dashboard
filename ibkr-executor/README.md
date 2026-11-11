@@ -1780,5 +1780,7 @@ account read) until it is named in `MIRROR_LIVE_ENGINES`, and a live book
 refuses to trade while the blend is enabled or the account holds anything but
 its own book. `/kill` halts every mirror book and flattens the live one.
 `MIRROR_MAX_BOOK_USD` (0 / unset = `MIRROR_CAPITAL_USD`) caps a live book's seeded-plus-credited capital: a `/mirror/credit` above it is refused without `"force": true`.
+`MIRROR_TRANSFER_TOKEN` (unset = off; at least 24 characters, different from `EXEC_TOKEN` and `READ_TOKEN`) is a transfer-only credential: sent as `X-Transfer-Token` it authorises `POST /mirror/transfer` and no other route, alerted on every use.
+`MIRROR_TRANSFER_MAX_FRAC` (default 0.25) caps what that token may move in one ET day, as a fraction of the book's equity; transfers under `EXEC_TOKEN` are not capped.
 Design, rollout gates, controls and what is NOT the same as Composer:
 `composer/IBKR_MIRROR.md`. Review record: `composer/research/mirror/reviews/`.

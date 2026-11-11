@@ -1014,6 +1014,15 @@ services:
       # "force": true. Unset / 0 = MIRROR_CAPITAL_USD is the cap.
       - key: MIRROR_MAX_BOOK_USD
         sync: false
+      # A TRANSFER-ONLY credential for POST /mirror/transfer (X-Transfer-Token):
+      # the daily POLICY routine holds this, never EXEC_TOKEN. Unset = off.
+      # At least 24 characters, different from EXEC_TOKEN and READ_TOKEN.
+      - key: MIRROR_TRANSFER_TOKEN
+        sync: false
+      # The most that token may move in one ET day, as a fraction of the
+      # book's equity. Unset = 0.25.
+      - key: MIRROR_TRANSFER_MAX_FRAC
+        sync: false
       - key: MIRROR_LIVE_ENGINES
         sync: false
       # "composer" (the default: a dividend is credited to a sleeve only if it

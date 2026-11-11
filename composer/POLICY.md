@@ -9,6 +9,16 @@ per-operation human request).
 Every auto-execution must be reported to the owner immediately after, logged
 in `CHANGELOG.md` with deploy IDs, and pushed.
 
+**IBKR mirror.** Every operation below that moves capital between two
+symphonies is followed, in the same run, by
+`scripts/mirror_transfer.py --from <giver> --to <taker> --composer-amount <the
+Composer amount> --composer-from-value <the giving symphony's value before the
+move>`, with the same from/to as the Composer move. The mirror moves the same
+FRACTION of its own sleeve, not the same dollars, and the script's summary
+line goes into the report. An operation that moves money to or from
+unallocated cash, or outside the four mirrored engines (HG, KMLM, SLEEVE,
+HARV), has no mirror leg and is reported as such.
+
 ## Pre-authorized operation 1 — sleeve monetization band
 
 - Instrument: Crash Convexity Sleeve `nNdBk7hc5NiBzeRvbI5T`.

@@ -613,10 +613,14 @@ class MirrorManager:
     # -------------------------------------------------------------- requests (any thread)
     def _request(self, row: dict) -> dict:
         with self.inbox_lock:
-            box = self._read_inbox()
-            row = dict(row, id=f"{row['kind']}-{int(time.time() * 1000)}-{len(box)}", utc=_iso(self.clock()))
-            box.append(row)
-            atomic_write(self._inbox_path(), box)
+            return self._enqueue(row)
+
+    def _enqueue(self, row: dict) -> dict:
+        """append one request to the inbox file. THE CALLER HOLDS inbox_lock."""
+        box = self._read_inbox()
+        row = dict(row, id=f"{row['kind']}-{int(time.time() * 1000)}-{len(box)}", utc=_iso(self.clock()))
+        box.append(row)
+        atomic_write(self._inbox_path(), box)
         return row
 
     def _read_inbox(self) -> list:
@@ -630,16 +634,65 @@ class MirrorManager:
             logger.error("mirror[%s] inbox unreadable: %s", self.cfg.name, exc)
             return []
 
-    def request_transfer(self, src: str, dst: str, amount, note: str = "") -> dict:
+    def request_transfer(self, src: str, dst: str, amount, note: str = "", via: str | None = None,
+                         max_frac=None) -> dict:
         """queue a move of capital between two sleeves; it rides the next session's plan (the giver's
-        sells fund it, the taker's buys invest it). Raises ValueError on a request that cannot be."""
+        sells fund it, the taker's buys invest it). Raises ValueError on a request that cannot be.
+        `via` set (the service's transfer-only token): the request counts against the day's cap of
+        `max_frac` x the book's equity and is refused beyond it (_request_capped)."""
         amt = _num(amount)
         if src == dst or amt is None or amt <= 0:
             raise ValueError("a transfer needs two different sleeves and a positive amount")
         for s in (src, dst):
             if s not in self.cfg.engines:
                 raise ValueError(f"{s!r} is not a sleeve of the {self.cfg.name} book")
-        return self._request({"kind": "transfer", "from": src, "to": dst, "amount": amt, "note": one_line(note, 200)})
+        row = {"kind": "transfer", "from": src, "to": dst, "amount": amt, "note": one_line(note, 200)}
+        if via is None:
+            return self._request(row)
+        return self._request_capped(row, max_frac)
+
+    def _transfer_day_path(self) -> str:
+        return f"{self.cfg.state_path}.transfer_day.json"
+
+    def _request_capped(self, row: dict, max_frac) -> dict:
+        """A transfer authorised by the transfer-only token: the amounts accepted this way on one ET
+        date never total more than `max_frac` (0..1) of the book's equity as last published (the
+        figure /mirror/feed shows). The day's total is its own small file beside the inbox, written
+        under inbox_lock BEFORE the request is queued (any thread; the state file is the loop
+        thread's alone): it survives a restart, a book that never had one starts at zero, and a new
+        ET date starts at zero. A file that cannot be read refuses (never an uncounted transfer)."""
+        frac = _num(max_frac)
+        frac = 0.0 if frac is None else min(max(frac, 0.0), 1.0)
+        equity = _num(((self._view or {}).get("book") or {}).get("equity"))
+        if equity is None or equity <= 0:
+            raise ValueError(f"the {self.cfg.name} book's equity cannot be computed (or is not above zero): a transfer "
+                             f"by the transfer token is capped as a fraction of it, so none is taken")
+        amt, cap = row["amount"], round(frac * equity, 2)
+        day = self.clock().astimezone(ET).date().isoformat()
+        path = self._transfer_day_path()
+        with self.inbox_lock:
+            try:
+                with open(path) as f:
+                    rec = json.load(f)
+                used = _num(rec.get("used")) if rec.get("day") == day else 0.0
+                if used is None or used < 0 or not isinstance(rec.get("day"), str):
+                    raise ValueError("not a day's total")
+            except FileNotFoundError:
+                used = 0.0
+            except Exception as exc:  # noqa: BLE001
+                raise ValueError(f"the day's transfer-token total ({path}) cannot be read ({one_line(exc, 80)}): "
+                                 f"no transfer is taken by the transfer token until that file is removed")
+            if used + amt > cap + 1e-9:
+                raise ValueError(f"over the day's cap for transfers by the transfer token: ${amt:,.2f} asked, "
+                                 f"${used:,.2f} already used on {day} (ET), cap ${cap:,.2f} = {frac:.2%} of the "
+                                 f"{self.cfg.name} book's equity of ${equity:,.2f} (MIRROR_TRANSFER_MAX_FRAC)")
+            used = round(used + amt, 6)
+            try:
+                atomic_write(path, {"day": day, "used": used})
+            except Exception as exc:  # noqa: BLE001
+                raise ValueError(f"the day's transfer-token total cannot be written ({one_line(exc, 80)}): "
+                                 f"the transfer is not taken")
+            return self._enqueue(dict(row, via="transfer_token", day=day, day_used=used, day_cap=cap))
 
     def request_credit(self, sleeve: str, amount, note: str = "", force: bool = False) -> dict:
         """queue a cash adjustment of one sleeve (cash the account received for it: +; a fee: -).
