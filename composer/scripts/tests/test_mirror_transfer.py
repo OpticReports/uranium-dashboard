@@ -26,6 +26,13 @@ read and the POST are injected).
       taken); --again overrides; a ledger that cannot be read refuses, one that does not exist is
       empty; the UNKNOWN line and POLICY.md say NOT to simply re-run; the leg is applied at the
       mirror's next session, which is today's before about 15:54 ET
+  T13 the final check (T3 D2 / N5; each gate failed at 7d6a2c23): one run at a time (a lock beside the
+      ledger, held from the ledger's check to the end), so two runs started together POST once; an
+      "intent" row is on disk BEFORE the POST and the call's final row follows it (same "call"), so a
+      run killed after the POST - or one whose final row cannot be written, which is exit 1 - still
+      blocks the re-run; a ledger that cannot take the intent row (or cannot be locked) sends nothing;
+      an executor refusal does not block the retry and --again still sends; a row is never written
+      onto a line that lacks its newline; the refusal names ONE row per call
 
 Run: python3 -m unittest tests.test_mirror_transfer -v
 """
@@ -36,6 +43,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 import unittest.mock
 
@@ -70,7 +78,7 @@ class Case(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.ledger = os.path.join(self.tmp.name, "transfer-ledger.jsonl")
-        self.posts, self.fetches = [], []
+        self.posts, self.fetches, self.at_post = [], [], []
         self.answer = (200, {"ok": True, "book": "live", "request": {"id": "transfer-1-0", "kind": "transfer"}})
         self.feed = feed(live=FULL)
 
@@ -82,6 +90,7 @@ class Case(unittest.TestCase):
 
     def send(self, url, token, body):
         self.posts.append((url, token, body))
+        self.at_post.append(self.rows_or_none())          # what the ledger held when the token left
         if isinstance(self.answer, Exception):
             raise self.answer
         return self.answer
@@ -99,6 +108,49 @@ class Case(unittest.TestCase):
             return []
         with open(self.ledger) as f:
             return [json.loads(x) for x in f]
+
+    def rows_or_none(self):
+        try:
+            return self.rows()
+        except (OSError, ValueError):                     # a ledger these tests made unreadable on purpose
+            return None
+
+    def finals(self):
+        """one row per call: what the call came to (the intent rows written before a POST are not these)"""
+        return [r for r in self.rows() if not r.get("intent")]
+
+    def intents(self):
+        return [r for r in self.rows() if r.get("intent")]
+
+    def check_intents(self, ledger=True):
+        """every POST found ITS intent row already on disk, as the ledger's last row: outcome unknown,
+        the POST's own pair, book and amount, and a call that had no other row yet. And (ledger=True:
+        the ledger was not removed meanwhile) the ledger holds one intent per POST and no other, each
+        directly followed by nothing or by its call's one final row"""
+        self.assertEqual(len(self.at_post), len(self.posts))
+        calls = []
+        for (_, _, body), rows in zip(self.posts, self.at_post):
+            self.assertTrue(rows, "POSTed with no row in the ledger")
+            last = rows[-1]
+            self.assertEqual((last.get("intent"), last["outcome"], last["dry_run"]), (True, "unknown", False), last)
+            self.assertEqual({k: last[k] for k in ("from", "to", "book", "amount")},
+                             {k: body[k] for k in ("from", "to", "book", "amount")})
+            self.assertIsInstance(last["call"], str)
+            self.assertEqual([r for r in rows[:-1] if r.get("call") == last["call"]], [], "the call had a row already")
+            self.assertIsNone(last["request_id"])
+            calls.append(last["call"])
+        self.assertEqual(len(set(calls)), len(calls))
+        if ledger:
+            rows = self.rows()
+            self.assertEqual([r["call"] for r in rows if r.get("intent")], calls)
+            for call in calls:
+                mine = [i for i, r in enumerate(rows) if r.get("call") == call]
+                self.assertIn(len(mine), (1, 2), call)
+                self.assertTrue(rows[mine[0]].get("intent"))
+                if len(mine) == 2:
+                    self.assertEqual(mine[1], mine[0] + 1)
+                    self.assertNotIn("intent", rows[mine[1]])
+        return calls
 
 
 class T1Arithmetic(Case):
@@ -242,7 +294,9 @@ class T6Refusals(Case):
         for text in (line, ledger):
             self.assertNotIn(TOKEN, text)
             self.assertNotIn(READ, text)
-        self.assertEqual(self.rows()[0]["outcome"], "refused")
+        self.assertEqual([r["outcome"] for r in self.finals()], ["refused"])
+        self.assertEqual(len(self.rows()), 2)             # the intent row written before the POST, and the final row
+        self.check_intents()
 
     def test_a_bad_token_answer_is_exit_1(self):
         self.answer = (401, {"detail": "bad exec token"})
@@ -260,7 +314,9 @@ class T6Refusals(Case):
         self.assertEqual(code, 1)
         self.assertIn("UNKNOWN whether the executor queued it", line)
         self.assertNotIn(TOKEN, line)
-        self.assertEqual(self.rows()[0]["outcome"], "unknown")
+        self.assertEqual([r["outcome"] for r in self.finals()], ["unknown"])    # the call's own row, not only the intent
+        with open(self.ledger) as f:
+            self.assertNotIn(TOKEN, f.read())
 
 
 class T10DoubleSend(Case):
@@ -334,12 +390,15 @@ class T10DoubleSend(Case):
         self.answer = (200, {"ok": True, "request": {"id": "transfer-2"}})
         self.assertEqual(self.run_it()[0], 1)
         self.assertEqual(len(self.posts), 1)              # not sent a second time
-        self.assertEqual([r["outcome"] for r in self.rows()], ["unknown", "duplicate"])
+        self.assertEqual([r["outcome"] for r in self.finals()], ["unknown", "duplicate"])
+        self.assertEqual(len(self.check_intents()), 1)    # one POST, one intent row before it; the duplicate has none
         self.feed = feed(live=FULL)                       # the feed does not list it: in the inbox still, taken by a
         self.assertEqual(self.run_it()[0], 1)             # plan, or never queued - the feed's list cannot say which
         self.assertEqual(len(self.posts), 1)
         self.assertEqual(self.run_it(ARGS + ["--again"])[0], 0)               # the operator read the feed: it is in neither
         self.assertEqual(len(self.posts), 2)
+        self.assertEqual([r["outcome"] for r in self.finals()], ["unknown", "duplicate", "duplicate", "sent"])
+        self.assertEqual(len(self.check_intents()), 2)
 
 
 class T12LedgerGuard(Case):
@@ -351,13 +410,17 @@ class T12LedgerGuard(Case):
         code, line = self.run_it()                        # the feed is what it was: the POST is in the inbox
         self.assertEqual((code, len(self.posts)), (1, 1))                     # at 6b7d4683: (0, 2)
         self.assertIn("NOT SENT: this script's ledger already has this pair for 2026-11-11 in book live", line)
-        self.assertIn("sent at 2026-11-11T21:10:00Z as transfer-1-0", line)
+        self.assertIn("in book live (sent at 2026-11-11T21:10:00Z as transfer-1-0). Read", line)   # ONE row for the one send
+        self.assertNotIn("unknown at", line)              # the call's intent row is not a second reason
         self.assertIn("pending_requests and today's session row", line)
         self.assertIn("--again", line)
-        self.assertEqual([r["outcome"] for r in self.rows()], ["sent", "duplicate"])
+        self.assertEqual([r["outcome"] for r in self.finals()], ["sent", "duplicate"])
+        self.assertEqual(len(self.check_intents()), 1)
         self.assertEqual(self.run_it(ARGS + ["--dry-run"])[0], 1)             # a dry run says what a run would do
         self.assertEqual(self.run_it()[0], 1)             # a duplicate row is not itself a reason, the sent one still is
         self.assertEqual((self.run_it(ARGS + ["--again"])[0], len(self.posts)), (0, 2))
+        self.assertEqual([r["outcome"] for r in self.finals()], ["sent", "duplicate", "duplicate", "duplicate", "sent"])
+        self.assertEqual(len(self.check_intents()), 2)
 
     def test_an_unknown_row_is_a_duplicate_too(self):
         self.answer = TimeoutError("timed out")           # it may have been queued
@@ -365,8 +428,9 @@ class T12LedgerGuard(Case):
         self.answer = (200, {"ok": True, "request": {"id": "transfer-2"}})
         code, line = self.run_it()
         self.assertEqual((code, len(self.posts)), (1, 1))                     # at 6b7d4683: (0, 2)
-        self.assertIn("unknown at 2026-11-11T21:10:00Z", line)
-        self.assertEqual(self.rows()[-1]["outcome"], "duplicate")
+        self.assertIn("in book live (unknown at 2026-11-11T21:10:00Z). Read", line)       # one row, not the intent too
+        self.assertEqual([r["outcome"] for r in self.finals()], ["unknown", "duplicate"])
+        self.assertEqual(len(self.check_intents()), 1)
 
     def test_the_twins_what_is_not_the_same_leg_is_sent(self):
         def row(**over):
@@ -405,13 +469,22 @@ class T12LedgerGuard(Case):
             self.assertEqual((code, self.posts), (1, []), junk)               # at 6b7d4683: sent
             self.assertIn("the transfer ledger cannot be read", line, junk)
             self.assertIn("--again", line, junk)
-            self.assertEqual((self.run_it(ARGS + ["--again"])[0], len(self.posts)), (0, 1), junk)
-            if junk is None:
+            code, line = self.run_it(ARGS + ["--again"])
+            if junk is None:                              # --again skips the READ, never the record: no intent row
+                self.assertEqual((code, self.posts), (1, []))                 # can be written, so nothing is sent
+                self.assertIn("NOT SENT: the transfer ledger cannot be written", line)        # at 7d6a2c23: sent, exit 0
                 os.rmdir(self.ledger)
+            else:
+                self.assertEqual((code, len(self.posts)), (0, 1), junk)
+                with open(self.ledger) as f:
+                    tail = [json.loads(x) for x in f.read().splitlines()[-2:]]            # each on its own line
+                self.assertEqual([(r.get("intent"), r["outcome"]) for r in tail], [(True, "unknown"), (None, "sent")])
+                self.assertEqual(tail[0]["call"], tail[1]["call"])
         self.forget()
         with open(self.ledger, "w") as f:
             f.write("\n\n")                               # blank lines are no rows
-        self.assertEqual((self.run_it()[0], len(self.posts)), (0, 2))
+        self.posts = []
+        self.assertEqual((self.run_it()[0], len(self.posts)), (0, 1))
 
     def test_an_unreadable_ledger_is_outcome_duplicate_in_the_row_that_follows(self):
         with open(self.ledger, "w") as f:
@@ -454,12 +527,187 @@ class T12LedgerGuard(Case):
             self.assertNotIn("15:54 ET on the next trading day", text)
 
 
+class T13OneRunOneIntent(Case):
+    """the final check (T3 D2, N5). At 7d6a2c23 the ledger was read, then the POST made, then the row
+    written - with nothing between two runs: two started together both sent, and a run that died (or
+    could not write) after the POST left no row, so the re-run sent the leg a second time"""
+    def test_two_runs_started_together_post_once(self):
+        both_read, in_send, two_in_send, out = threading.Barrier(2), [], threading.Event(), []
+
+        def fetch(url, token):
+            both_read.wait(10)                            # both runs HAVE started: each has read the feed
+            return feed(live=FULL)
+
+        def send(url, token, body):
+            self.posts.append((url, token, body))
+            self.at_post.append(self.rows_or_none())
+            in_send.append(1)
+            if len(in_send) >= 2:
+                two_in_send.set()
+            two_in_send.wait(1.0)                         # the window: held open until the other is here too
+            return self.answer
+
+        def one():
+            out.append(mt.run(list(ARGS), env=dict(ENV), fetch=fetch, send=send, now=NOW, ledger_path=self.ledger))
+        threads = [threading.Thread(target=one) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(30)
+        self.assertEqual(sorted(c for c, _ in out), [0, 1])
+        self.assertEqual(len(self.posts), 1)              # at 7d6a2c23: 2
+        self.assertFalse(two_in_send.is_set())
+        self.assertEqual(sorted(r["outcome"] for r in self.finals()), ["duplicate", "sent"])
+        self.assertEqual([r["outcome"] for r in self.finals()], ["sent", "duplicate"])    # the loser read the winner's row
+        self.assertIn("this script's ledger already has this pair", [line for c, line in out if c == 1][0])
+        self.assertEqual(len(self.check_intents()), 1)
+
+    def test_the_lock_is_beside_the_ledger_and_is_let_go(self):
+        self.assertEqual(self.run_it()[0], 0)
+        self.assertTrue(os.path.exists(self.ledger + ".lock"))
+        self.assertEqual(self.run_it()[0], 1)             # a refusal lets it go too (a held lock would hang here)
+        self.assertEqual(self.run_it(ARGS + ["--dry-run"])[0], 1)
+        with mt.ledger_lock(self.ledger):                 # free now
+            pass
+        got = []
+        with mt.ledger_lock(self.ledger):                 # and while it is held, a run waits
+            t = threading.Thread(target=lambda: got.append(self.run_it(ARGS + ["--again"])))
+            t.start()
+            t.join(0.3)
+            self.assertTrue(t.is_alive())
+            self.assertEqual(len(self.posts), 1)
+        t.join(30)
+        self.assertEqual((got[0][0], len(self.posts)), (0, 2))
+
+    def test_a_run_killed_after_the_post_blocks_the_re_run(self):
+        real = mt.append_ledger
+
+        def dies(row, path=None):                         # the POST was answered; the process ends before the final row
+            if self.posts:
+                raise KeyboardInterrupt()
+            return real(row, path)
+        with unittest.mock.patch.object(mt, "append_ledger", dies), self.assertRaises(KeyboardInterrupt):
+            self.run_it()
+        self.assertEqual(len(self.posts), 1)
+        self.assertEqual([(r.get("intent"), r["outcome"]) for r in self.rows()], [(True, "unknown")])
+        code, line = self.run_it()                        # the feed lists nothing (the request is in the inbox still)
+        self.assertEqual((code, len(self.posts)), (1, 1))                     # at 7d6a2c23: (0, 2)
+        self.assertIn("NOT SENT: this script's ledger already has this pair", line)
+        self.assertIn("unknown at 2026-11-11T21:10:00Z", line)
+        self.assertEqual(self.run_it(ARGS + ["--dry-run"])[0], 1)
+        self.assertEqual([r["outcome"] for r in self.finals()], ["duplicate", "duplicate"])
+        self.assertEqual((self.run_it(ARGS + ["--again"])[0], len(self.posts)), (0, 2))   # the operator read the feed
+        self.assertEqual(len(self.check_intents()), 2)
+
+    def test_only_the_intent_row_of_a_dead_run_blocks_and_only_its_own_leg(self):
+        def intent(**over):
+            self.forget()
+            self.posts, self.at_post = [], []
+            mt.append_ledger(dict({"call": "aaaaaaaaaaaa", "date": "2026-11-11", "book": "live", "from": "HG", "to": "SLEEVE",
+                                   "outcome": "unknown", "intent": True, "dry_run": False, "utc": "2026-11-11T14:05:00Z",
+                                   "amount": 138.32, "request_id": None}, **over), self.ledger)
+        intent()
+        self.assertEqual((self.run_it()[0], self.posts), (1, []))
+        for over in ({"date": "2026-11-10"}, {"book": "dry"}, {"from": "KMLM"}, {"to": "HARV"}, {"from": "SLEEVE", "to": "HG"}):
+            intent(**over)
+            self.assertEqual((self.run_it()[0], len(self.posts)), (0, 1), over)           # the twins: another leg
+        for final, blocks in (("refused", False), ("duplicate", False), ("sent", True), ("unknown", True)):
+            intent()
+            mt.append_ledger({"call": "aaaaaaaaaaaa", "date": "2026-11-11", "book": "live", "from": "HG", "to": "SLEEVE",
+                              "outcome": final, "dry_run": False, "utc": "2026-11-11T14:05:01Z", "request_id": None},
+                             self.ledger)
+            code, line = self.run_it()
+            self.assertEqual((code, len(self.posts)), (1, 0) if blocks else (0, 1), final)
+            if blocks:                                    # the final row is the reason, named once
+                self.assertIn(f"in book live ({final} at 2026-11-11T14:05:01Z). Read", line)
+        intent()                                          # another call's refusal settles nothing of this one
+        mt.append_ledger({"call": "bbbbbbbbbbbb", "date": "2026-11-11", "book": "live", "from": "HG", "to": "SLEEVE",
+                          "outcome": "refused", "dry_run": False, "utc": "2026-11-11T14:06:00Z"}, self.ledger)
+        self.assertEqual((self.run_it()[0], self.posts), (1, []))
+        intent(call=["not", "a", "string"])               # a row someone edited: a refusal, never a traceback
+        self.assertEqual((self.run_it()[0], self.posts), (1, []))
+
+    def test_an_executor_refusal_does_not_block_the_retry(self):
+        for answer in ((400, {"detail": "refused: over the day's transfer allowance"}), (401, {"detail": "bad exec token"}),
+                       (307, None)):
+            self.forget()
+            self.posts, self.at_post = [], []
+            self.answer = answer
+            code, line = self.run_it()
+            self.assertEqual(code, 1, answer)
+            self.assertIn(f"NOT QUEUED (HTTP {answer[0]}", line)
+            self.answer = (200, {"ok": True, "request": {"id": "transfer-2"}})
+            code, line = self.run_it()                    # the cause was mended: the same command again
+            self.assertEqual((code, len(self.posts)), (0, 2), (answer, line))
+            self.assertEqual([r["outcome"] for r in self.finals()], ["refused", "sent"])
+            self.assertEqual(len(self.check_intents()), 2)                    # each POST had its intent (at 7d6a2c23: none)
+            self.assertEqual((self.run_it()[0], len(self.posts)), (1, 2))     # and NOW it is a duplicate
+
+    def test_again_still_sends_and_leaves_its_intent(self):
+        self.assertEqual(self.run_it()[0], 0)
+        self.assertEqual((self.run_it(ARGS + ["--again"])[0], len(self.posts)), (0, 2))
+        self.assertEqual((self.run_it(ARGS + ["--again"])[0], len(self.posts)), (0, 3))
+        self.assertEqual([r["outcome"] for r in self.finals()], ["sent"] * 3)
+        self.assertEqual(len(self.check_intents()), 3)
+        self.assertEqual((self.run_it()[0], len(self.posts)), (1, 3))
+
+    def test_an_intent_row_that_cannot_be_written_sends_nothing(self):
+        os.mkdir(self.ledger)                             # really unwritable; --again, so the read is not what refuses
+        code, line = self.run_it(ARGS + ["--again"])
+        self.assertEqual((code, self.posts), (1, []))     # at 7d6a2c23: (0, one POST)
+        self.assertIn("REFUSED", line)
+        self.assertIn("NOT SENT: the transfer ledger cannot be written", line)
+        self.assertIn("ledger row was NOT written", line)
+        self.assertNotIn(TOKEN, line)
+        os.rmdir(self.ledger)
+        self.assertEqual((self.run_it(ARGS + ["--again"])[0], len(self.posts)), (0, 1))   # the twin
+
+    def test_a_ledger_that_cannot_be_locked_sends_nothing_and_is_a_line_not_a_traceback(self):
+        with open(os.path.join(self.tmp.name, "afile"), "w") as f:
+            f.write("x")
+        self.ledger = os.path.join(self.tmp.name, "afile", "transfer-ledger.jsonl")       # its directory cannot be made
+        for extra in ([], ["--again"]):
+            code, line = self.run_it(ARGS + extra)
+            self.assertEqual((code, self.posts), (1, []), extra)              # at 7d6a2c23 with --again: sent, exit 0
+            self.assertTrue(line.startswith("MIRROR TRANSFER 2026-11-11 HG -> SLEEVE: REFUSED"), line)
+            self.assertIn("NOT SENT: the transfer ledger cannot be locked", line)
+
+    def test_a_row_is_never_written_onto_a_line_without_its_newline(self):
+        old = {"date": "2026-11-10", "book": "live", "from": "HG", "to": "SLEEVE", "outcome": "sent", "dry_run": False}
+        with open(self.ledger, "w") as f:
+            f.write(json.dumps(old))                      # a whole row, but the newline never reached the disk
+        self.assertEqual((self.run_it()[0], len(self.posts)), (0, 1))
+        rows = self.rows()                                # at 7d6a2c23: the new row glued to the old - no JSON at all
+        self.assertEqual([(r.get("intent"), r["outcome"]) for r in rows], [(None, "sent"), (True, "unknown"), (None, "sent")])
+        self.assertEqual(rows[0], old)
+        self.assertEqual((self.run_it()[0], len(self.posts)), (1, 1))         # so the guard still reads it
+        self.forget()
+        self.posts, self.at_post = [], []
+        cut = '{"date": "2026-11-11", "book": "live", "from": "HG", "to": "SLEEVE", "outcome": "se'
+        with open(self.ledger, "w") as f:
+            f.write(cut)                                  # a row cut short: refused ...
+        code, line = self.run_it()
+        self.assertEqual((code, self.posts), (1, []))
+        self.assertIn("the transfer ledger cannot be read", line)
+        with open(self.ledger) as f:
+            lines = f.read().split("\n")
+        self.assertEqual((lines[0], len(lines), lines[2]), (cut, 3, ""))      # ... the cut line is left as it was ...
+        self.assertEqual(json.loads(lines[1])["outcome"], "duplicate")        # ... and this run's row is its own line
+        self.assertEqual((self.run_it()[0], self.posts), (1, []))             # still refused until someone mends it
+        with open(self.ledger, "w") as f:
+            pass                                          # an empty file is an empty ledger
+        mt.append_ledger({"a": 1}, self.ledger)
+        mt.append_ledger({"a": 2}, self.ledger)
+        with open(self.ledger) as f:
+            self.assertEqual(f.read(), '{"a": 1}\n{"a": 2}\n')
+
+
 class T11BeforeAndAfter(Case):
     """review item 9: the value AFTER the move passed as "before" moves too large a fraction, silently"""
     def test_the_after_value_passed_as_before_is_refused_when_both_are_given(self):
         code, line = self.run_it(ARGS + ["--composer-from-value-after", "99827.05"])
         self.assertEqual((code, self.posts[0][2]["amount"]), (0, 138.32))
-        self.assertEqual(self.rows()[0]["composer_from_value_after"], 99827.05)
+        self.assertEqual(self.finals()[0]["composer_from_value_after"], 99827.05)
         wrong = ["--from", "HG", "--to", "SLEEVE", "--composer-amount", "5000", "--composer-from-value", "99827.05"]
         code, line = self.run_it(wrong + ["--composer-from-value-after", "99827.05"])
         self.assertEqual((code, len(self.posts)), (1, 1))
@@ -534,8 +782,13 @@ class T8Ledger(Case):
         self.run_it(ARGS + ["--dry-run"])
         self.run_it()
         self.run_it(["--from", "HG", "--to", "SLEEVE", "--composer-amount", "9", "--composer-from-value", "10"])
-        rows = self.rows()
+        rows = self.finals()
         self.assertEqual([r["outcome"] for r in rows], ["dry_run", "sent", "refused"])
+        self.assertEqual(len({r["call"] for r in rows}), 3)                   # one final row per call ...
+        self.assertEqual([(r.get("intent"), r["outcome"], r["call"]) for r in self.rows()],   # ... and one row more, written
+                         [(None, "dry_run", rows[0]["call"]), (True, "unknown", rows[1]["call"]),     # BEFORE the one POST
+                          (None, "sent", rows[1]["call"]), (None, "refused", rows[2]["call"])])
+        self.assertEqual(self.check_intents(), [rows[1]["call"]])
         sent = rows[1]
         self.assertEqual({k: sent[k] for k in ("date", "from", "to", "composer_amount", "composer_from_value", "sleeve_equity",
                                                "amount", "request_id", "book")},
@@ -547,11 +800,37 @@ class T8Ledger(Case):
         self.assertIn("why", rows[2])
 
     def test_a_ledger_that_cannot_be_written_never_hides_the_outcome(self):
+        """T3 D2: at 7d6a2c23 this was exit 0 and SENT - with no row, the re-run sent it again"""
         with unittest.mock.patch.object(mt, "append_ledger", side_effect=OSError(28, "No space left on device")):
             code, line = self.run_it()                    # the ledger is not there to read (empty) and cannot be written
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 1)
+        self.assertEqual(self.posts, [])                  # unwritable BEFORE the POST: nothing leaves
+        self.assertIn("NOT SENT: the transfer ledger cannot be written", line)
+        self.assertIn("No space left on device", line)
+        self.assertIn("ledger row was NOT written", line)                     # nor could the refusal's own row be
+        with unittest.mock.patch.object(mt, "append_ledger", side_effect=OSError(28, "No space left on device")):
+            code, line = self.run_it(ARGS + ["--dry-run"])                    # what is not a POST keeps its line, exit 1
+        self.assertEqual((code, self.posts), (1, []))
+        self.assertIn("dry run: not sent", line)
         self.assertIn("ledger row was NOT written", line)
-        self.assertEqual(len(self.posts), 1)
+
+    def test_a_final_row_that_cannot_be_written_is_exit_1_and_says_what_happened(self):
+        real = mt.append_ledger
+
+        def second_fails(row, path=None):                 # the disk fills once the POST has been answered
+            if self.posts:
+                raise OSError(28, "No space left on device")
+            return real(row, path)
+        with unittest.mock.patch.object(mt, "append_ledger", second_fails):
+            code, line = self.run_it()
+        self.assertEqual((code, len(self.posts)), (1, 1))                     # at 7d6a2c23: exit 0
+        self.assertIn("queued as transfer-1-0", line)                         # the outcome is not hidden
+        self.assertIn("ledger row was NOT written (", line)
+        self.assertEqual([(r.get("intent"), r["outcome"]) for r in self.rows()], [(True, "unknown")])
+        code, line = self.run_it()                        # and the row that IS there blocks the re-run
+        self.assertEqual((code, len(self.posts)), (1, 1))
+        self.assertIn("in book live (unknown at 2026-11-11T21:10:00Z). Read", line)
+        self.check_intents()
 
     def test_the_default_ledger_is_in_results_mirror(self):
         self.assertTrue(os.path.normpath(mt.LEDGER_PATH).endswith(os.path.join("composer", "results", "mirror", "transfer-ledger.jsonl")))
@@ -647,7 +926,10 @@ class T9Http(unittest.TestCase):
             code, line = mt.run(list(ARGS), env=dict(ENV, MIRROR_EXECUTOR_URL=base), fetch=lambda u, t: feed(live=FULL),
                                 now=NOW, ledger_path=os.path.join(tmp, "l.jsonl"))
             with open(os.path.join(tmp, "l.jsonl")) as f:
-                self.assertEqual(json.loads(f.read())["outcome"], "refused")
+                rows = [json.loads(x) for x in f]
+            self.assertEqual([(r.get("intent"), r["outcome"]) for r in rows], [(True, "unknown"), (None, "refused")])
+            self.assertEqual(rows[0]["call"], rows[1]["call"])
+            self.assertNotIn(TOKEN, json.dumps(rows))
         self.assertEqual(code, 1)
         self.assertIn("NOT QUEUED (HTTP 307", line)
         self.assertIn("redirect", line)

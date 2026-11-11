@@ -44,6 +44,15 @@ The second independent review's findings (each gate below failed at 6b7d4683):
   M2  a refusal because the BOOK cannot take a transfer by token (total unreadable, dated in the
       future, unwritable; equity not computable) is alerted once per ET date per book per reason and
       is outside the bound of 6 refusal alerts a day
+
+The final check's findings (each gate below failed at 7d6a2c23):
+
+  D1  the total file REMOVED (the remedy the "cannot be read" refusal names) while a transfer taken by
+      the token still waits - in the inbox or in the book's queue - does not start a fresh period:
+      the token is refused ("unavailable", alerted once), the next session applies exactly ONE
+      allowance, and then the token works again from zero
+  N2  an inbox that cannot be read (or is not a list) may hold a transfer by token: the period does
+      not renew over it, and a missing total is not a fresh start over it either
 """
 from __future__ import annotations
 
@@ -845,6 +854,79 @@ def test_s1_a_healthy_book_renews_every_day(tmp_path):
         assert _tok(e, CAP, "16:36", day, *pair) is None
     sound(r)
     sound(e)
+
+
+# --- D1 / N2: the final check ------------------------------------------------------------------------
+@pytest.mark.parametrize("where", ["inbox", "queue"])
+def test_d1_the_total_removed_while_a_token_transfer_waits_is_not_a_fresh_allowance(tmp_path, monkeypatch, where):
+    r = _daily(tmp_path)
+    c, _, sent = _service(monkeypatch, {"dry": r.m})
+    r.clock.now = at("09:05", D1)
+    assert post(c, dict(MOVE, amount=CAP)).status_code == 200             # the whole allowance, waiting for D1's plan
+    if where == "queue":
+        r.tick("09:06", D1)                               # the loop took it from the inbox into the book's queue
+        assert inbox(r.m) == []
+    assert _waiting(r) == CAP
+    os.remove(r.m._transfer_day_path())                   # what the "cannot be read" refusal tells the operator to do
+    del sent[:]
+    r.clock.now = at("09:07", D1)
+    for _ in range(3):
+        got = post(c, {"from": "KMLM", "to": "HARV", "amount": CAP, "note": "again"})
+        assert got.status_code == 400 and got.json()["detail"] == BUSY    # at 7d6a2c23: 200 - 50% for one plan
+    assert len(sent) == 1 and "REFUSED" in sent[0] and "is missing while a transfer taken by the transfer token" in sent[0]
+    assert "not alerted" not in sent[0]                   # the book's own reason: once a day, outside the bound (M2)
+    with pytest.raises(mm.TransferRefused) as exc:
+        r.m.request_transfer("KMLM", "HARV", 1.0, "d1", via="token", max_frac=0.25)
+    assert exc.value.unavailable == "total missing" and exc.value.public == BUSY[len("refused: "):]
+    assert _waiting(r) == CAP and not os.path.exists(r.m._transfer_day_path())      # nothing taken, nothing counted
+    assert post(c, dict(MOVE, amount=5.0), headers=E).status_code == 200            # the operator still can
+    r.tick("15:55:05", D1)
+    assert r.m.state["last_session"] == D1 and _moved(r) == CAP + 5.0     # ONE allowance (and the operator's own $5)
+    assert _waiting(r) == 0.0
+    r.clock.now = at("16:35", D1)
+    ok = post(c, {"from": "KMLM", "to": "HARV", "amount": CAP, "note": "after"})    # applied: the token works again,
+    assert ok.status_code == 200 and (kept(ok)["day"], kept(ok)["day_used"]) == (D1, CAP)     # from zero
+    with open(r.m._transfer_day_path()) as f:
+        assert json.load(f) == {"day": D1, "used": CAP, "count": 1, "last_session": D1}
+    sound(r)
+
+
+def test_d1_the_twin_a_total_removed_while_nothing_by_token_waits_starts_at_zero(tmp_path):
+    """(held at 7d6a2c23 too: it guards the fix - the refusal cannot stick on a book with nothing waiting)"""
+    r = _daily(tmp_path)
+    assert _tok(r, CAP, "09:05", D1)
+    r.tick("15:55:05", D1)
+    assert _moved(r) == CAP
+    r.m.request_transfer("HG", "HARV", 7_000.0, "exec")   # the operator's own waits: nobody's allowance
+    os.remove(r.m._transfer_day_path())
+    assert _tok(r, CAP, "16:35", D1, "KMLM", "HARV")["day_used"] == CAP
+
+
+@pytest.mark.parametrize("junk", ["{not json", "", '{"kind": "transfer"}', '"x"', "7"])
+def test_n2_an_inbox_that_cannot_be_read_does_not_renew_the_period(tmp_path, junk):
+    r = _daily(tmp_path)
+    assert _tok(r, CAP, "09:05", D1)
+    r.tick("15:55:05", D1)
+    assert _moved(r) == CAP and _waiting(r) == 0.0        # applied: D2 would be a new period ...
+    with open(r.m._inbox_path(), "w") as f:
+        f.write(junk)                                     # ... but what the inbox holds cannot be told
+    with r.m.inbox_lock:
+        assert r.m._token_transfers_open() is True        # at 7d6a2c23: False
+    assert _tok(r, CAP, "09:05", D2, "KMLM", "HARV") is None              # at 7d6a2c23: taken
+    assert _tok(r, 1.0, "09:06", D2, "KMLM", "HARV") is None
+    with open(r.m._transfer_day_path()) as f:
+        rec = json.load(f)
+    assert (rec["day"], rec["used"], rec["count"]) == (D1, CAP, 1)
+    with open(r.m._inbox_path()) as f:
+        assert f.read() == junk                           # refused before anything was queued over it
+    os.remove(r.m._transfer_day_path())                   # nor is a missing total a fresh start over it (D1)
+    with pytest.raises(mm.TransferRefused) as exc:
+        r.m.request_transfer("KMLM", "HARV", 1.0, "n2", via="token", max_frac=0.25)
+    assert exc.value.unavailable == "total missing"
+    os.remove(r.m._inbox_path())                          # the twin: no inbox is an empty one
+    with r.m.inbox_lock:
+        assert r.m._token_transfers_open() is False
+    assert _tok(r, CAP, "09:07", D2, "KMLM", "HARV")["day"] == D2
 
 
 # --- M1 / M2 -----------------------------------------------------------------------------------------

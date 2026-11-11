@@ -31,7 +31,9 @@ move of the same pair is meant). A line saying UNKNOWN (the request left, the
 answer did not say whether it was queued) is NOT resolved by simply running
 the command again: read the executor's feed (the book's `pending_requests`
 and today's session row) and re-send with `--again` only if the transfer is
-in neither. An operation that moves money to or from unallocated cash,
+in neither. The script writes its intent to that ledger before it sends and
+exits 1 whenever the ledger cannot be written, so the ledger must be committed
+with the day's snapshot. An operation that moves money to or from unallocated cash,
 or outside the four mirrored engines (HG, KMLM, SLEEVE, HARV), has no mirror
 leg and is reported as such.
 

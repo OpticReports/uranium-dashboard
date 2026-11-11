@@ -163,13 +163,13 @@ def sent_already(path, day, book, src, dst):
                       f"sent today cannot be told. Check the executor's feed (pending_requests and today's session "
                       f"row) and pass --again only if the transfer is in neither") from None
     # an "intent" row is written BEFORE the POST and answered by the call's final row (same "call"):
-    # an intent whose final row says the executor did not take it (refused) is settled and blocks nothing;
-    # an intent with NO final row (the process died after the POST) blocks like an unknown
-    settled = {r.get("call") for r in rows if r.get("call") and not r.get("intent")
-               and r.get("outcome") not in ("sent", "unknown")}
+    # an intent whose call HAS a final row is settled and is never itself a reason - the final row says
+    # what happened (refused: nothing blocks; sent or unknown: that row blocks, and is the ONE row the
+    # refusal names); an intent with NO final row (the process died after the POST) blocks like an unknown
+    settled = {r["call"] for r in rows if isinstance(r.get("call"), str) and not r.get("intent")}
     return [r for r in rows if r.get("date") == day and r.get("book") == book and r.get("from") == src
             and r.get("to") == dst and r.get("outcome") in ("sent", "unknown") and not r.get("dry_run")
-            and not (r.get("intent") and r.get("call") in settled)]
+            and not (r.get("intent") and isinstance(r.get("call"), str) and r["call"] in settled)]
 
 
 def transfer_url(base):
@@ -340,7 +340,11 @@ def run(argv=None, env=None, fetch=None, send=None, now=None, ledger_path=None):
                                           else f"{r.get('amount')!r} as {r.get('id') or '?'}" for r in held[:3])
                               + "). Pass --again only if a second move of the same pair is meant")
             lock = ledger_lock(ledger_path)
-            lock.__enter__()
+            try:
+                lock.__enter__()
+            except Exception as e:  # noqa: BLE001  a refusal with its line, never a traceback
+                raise Refused(f"{what} | NOT SENT: the transfer ledger cannot be locked ({clean(e, 120)}), so "
+                              f"whether this transfer was already sent cannot be told") from None
             locked.append(lock)
             if not a.again:
                 try:
