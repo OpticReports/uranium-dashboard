@@ -194,7 +194,9 @@ The two strategies cannot share the account: the blend reconciles the
 account's positions and cash against its own book every cycle, and the mirror
 requires the account to hold exactly its book. So:
 
-1. POST /kill: the blend flattens its SPY core and sleeve (and halts).
+1. POST /kill: the blend halts and sells its SLEEVE positions only. Its SPY core and
+   its BIL sweep are NOT sold by /kill (seen live 2026-11-11: five sleeve names
+   sold, SPY 108 and BIL 178 left): sell those two by hand at IBKR.
 2. Set BLEND_ENABLED=false on Render. Archive the blend's state file, or the
    service will alert about a real book on disk.
 3. Confirm the account is all cash (/status, IBKR).
