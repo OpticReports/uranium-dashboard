@@ -21,13 +21,17 @@ the same dollars, and the script's summary line goes into the report. The leg
 goes to the LIVE book only: with no live book on the executor there is no
 mirror leg - the script exits 1 and the routine reports that line, nothing
 else (it does not name a paper book instead, and does not retry). The mirror
-applies a queued move at its NEXT session (15:54 ET on the next trading day),
-not the day Composer moved. The script sends a leg once: when a transfer for
-the same from/to is already queued it refuses (pass `--again` only when a
-second move of the same pair is meant), and a line saying UNKNOWN (the
-request left, the answer did not say whether it was queued) is resolved by
-running the same command again - it sends only when the executor does not
-hold the transfer. An operation that moves money to or from unallocated cash,
+applies a queued move at the mirror's next session - today's if the request
+is queued before about 15:54 ET on a session day, otherwise the next trading
+day's. The script sends a leg once: when a transfer for the same from/to is
+already queued on the executor, or the script's own ledger
+(`results/mirror/transfer-ledger.jsonl`) says one was sent or may have been
+sent that day, it refuses as a duplicate (pass `--again` only when a second
+move of the same pair is meant). A line saying UNKNOWN (the request left, the
+answer did not say whether it was queued) is NOT resolved by simply running
+the command again: read the executor's feed (the book's `pending_requests`
+and today's session row) and re-send with `--again` only if the transfer is
+in neither. An operation that moves money to or from unallocated cash,
 or outside the four mirrored engines (HG, KMLM, SLEEVE, HARV), has no mirror
 leg and is reported as such.
 

@@ -1811,7 +1811,9 @@ def _token_transfer_refused(book, public: str, why, body: dict):
     its caller reads only `public` - never the book's equity, the cap, the
     total used, a file path or a book or sleeve name it did not send. The
     specifics go to the log, and to the alert channel for the first few of
-    a day (MirrorManager.token_refusal_alert; no book found: log only)."""
+    a day - and once a day per reason, outside that bound, when it is the
+    BOOK that cannot take one (MirrorManager.token_refusal_alert; no book
+    found: log only)."""
     def flat(x, n):
         return " ".join(str(x).split())[:n]
     asked = {k: body.get(k) for k in ("from", "to", "amount", "book")}
@@ -1819,7 +1821,8 @@ def _token_transfer_refused(book, public: str, why, body: dict):
             f"by the TRANSFER TOKEN REFUSED ({public}): {flat(why, 400)} — "
             f"asked: {flat(repr(asked), 200)}")
     logger.warning(line)
-    more = book.token_refusal_alert() if book is not None else None
+    more = (book.token_refusal_alert(getattr(why, "unavailable", None))
+            if book is not None else None)
     if more is not None:
         send("⚠️ " + line + more)
     raise HTTPException(status_code=400, detail=f"refused: {public}")
@@ -1881,6 +1884,10 @@ def mirror_transfer(body: dict = Depends(_mirror_body),
                 f"plan")
         logger.warning(line)
         send("⚠️ " + line)
+        # the token's holder is not told the period's cap or total (they
+        # give the book's equity away); the stored row and the alert keep them
+        req = {k: v for k, v in req.items()
+               if k not in ("day", "day_used", "day_cap")}
     return {"ok": True, "book": book.cfg.name, "request": req,
             "note": "queued; applied with the next session's plan"}
 

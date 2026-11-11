@@ -167,7 +167,8 @@ it with /mirror/resolve.
   MIRROR_TRANSFER_TOKEN (header X-Transfer-Token), which opens this route
   alone, is capped at MIRROR_TRANSFER_MAX_FRAC of the book's equity and 6
   requests per cap period (until the ET date has changed AND the book has
-  run a session since: a weekend is one allowance), takes nothing below $1
+  run a session since AND no transfer sent with the token is still waiting
+  to be applied: a weekend is one allowance), takes nothing below $1
   and is alerted on every use; EXEC_TOKEN still works here, uncapped.
 - POST /mirror/credit {sleeve, amount}: a dividend the account received for a
   sleeve's shares (or a fee, negative). A live book takes it only from cash

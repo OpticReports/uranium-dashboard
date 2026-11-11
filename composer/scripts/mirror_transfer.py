@@ -31,14 +31,19 @@ otherwise, the ledger's "outcome" saying which:
 
   refused    nothing was sent, or the executor answered an HTTP 4xx with a JSON body (its own words,
              never a token), or a redirect (never followed: the token goes to the one host only)
-  duplicate  the book's pending_requests already hold a transfer by this token for the same from/to:
-             nothing is sent unless --again says a second move of the pair is meant
+  duplicate  the book's pending_requests already hold a transfer by this token for the same from/to,
+             OR this script's own ledger has a row of the same ET date, book, from and to that was
+             sent or is unknown (a request sits in the executor's inbox for up to a minute before the
+             feed lists it, and leaves the list once a plan takes it): nothing is sent unless --again
+             says a second move of the pair is meant. A ledger that cannot be read refuses the same way
   unknown    the request left and what came back does not say whether it was queued (a 5xx, an answer
-             that is not JSON, a 200 without "ok", a timeout, a dropped connection): check
-             pending_requests before re-sending - and running this again does exactly that (it sends
-             only when the executor does not hold the transfer)
+             that is not JSON, a 200 without "ok", a timeout, a dropped connection): do NOT simply
+             re-run (a re-run is refused as a duplicate). Read the executor's feed - the book's
+             pending_requests and today's session row - and re-send with --again only if the transfer
+             is in neither
 
-The executor applies a queued move with its NEXT session's plan (15:54 ET on the next trading day).
+The executor applies a queued move at the mirror's next session: today's if the request is queued
+before about 15:54 ET on a session day, otherwise the next trading day's.
 One JSON line per call, sent or not, is appended to results/mirror/transfer-ledger.jsonl.
 
 Env: MIRROR_EXECUTOR_URL (https; http only for localhost), MIRROR_READ_TOKEN, MIRROR_TRANSFER_TOKEN.
@@ -92,7 +97,8 @@ def parse(argv):
     p.add_argument("--book", default=None, help="the executor's book; default: the one live book")
     p.add_argument("--note", default=None)
     p.add_argument("--again", action="store_true",
-                   help="send although a transfer by this token for the same from/to is already queued")
+                   help="send although a transfer by this token for the same from/to is already queued, or this "
+                        "script's ledger says one was sent (or may have been) today")
     p.add_argument("--dry-run", action="store_true")
     return p.parse_args(argv)
 
@@ -132,6 +138,32 @@ def queued_already(view, src, dst):
                       "queued cannot be told")
     return [r for r in pend if isinstance(r, dict) and r.get("kind", "transfer") == "transfer"
             and r.get("from") == src and r.get("to") == dst and r.get("via") == "transfer_token"]
+
+
+UNKNOWN_NEXT = ("do NOT simply re-run: read the executor's feed (the book's pending_requests and today's session "
+                "row) and re-send with --again only if the transfer is in neither")
+
+
+def sent_already(path, day, book, src, dst):
+    """this script's own ledger rows of the same ET date, book, from and to that left for the executor
+    (outcome "sent" or "unknown", not a dry run), or raises Refused when the ledger cannot be read as
+    one (never taken as empty). A ledger that does not exist yet is empty. The feed alone cannot tell:
+    a request waits in the executor's inbox until its loop's next tick before pending_requests lists
+    it, and leaves pending_requests once a plan has taken it"""
+    path = path or LEDGER_PATH
+    try:
+        with open(path) as f:
+            rows = [json.loads(x) for x in f if x.strip()]
+        if not all(isinstance(r, dict) for r in rows):
+            raise ValueError("a line is not a JSON object")
+    except FileNotFoundError:
+        return []
+    except Exception as e:  # noqa: BLE001
+        raise Refused(f"the transfer ledger cannot be read ({one_line(e, 120)}): whether this transfer was already "
+                      f"sent today cannot be told. Check the executor's feed (pending_requests and today's session "
+                      f"row) and pass --again only if the transfer is in neither") from None
+    return [r for r in rows if r.get("date") == day and r.get("book") == book and r.get("from") == src
+            and r.get("to") == dst and r.get("outcome") in ("sent", "unknown") and not r.get("dry_run")]
 
 
 def transfer_url(base):
@@ -268,6 +300,20 @@ def run(argv=None, env=None, fetch=None, send=None, now=None, ledger_path=None):
                               + "; ".join(f"${r['amount']:,.2f} as {r.get('id') or '?'}" if isinstance(r.get("amount"), (int, float))
                                           else f"{r.get('amount')!r} as {r.get('id') or '?'}" for r in held[:3])
                               + "). Pass --again only if a second move of the same pair is meant")
+            if not a.again:
+                try:
+                    mine = sent_already(ledger_path, day, name, src, dst)
+                except Refused:
+                    led["outcome"] = "duplicate"
+                    raise
+                if mine:
+                    led["outcome"] = "duplicate"
+                    raise Refused(f"{what} | NOT SENT: this script's ledger already has this pair for {day} in book "
+                                  f"{name} (" + "; ".join(f"{r.get('outcome')} at {r.get('utc') or '?'}"
+                                                         + (f" as {r['request_id']}" if r.get("request_id") else "")
+                                                         for r in mine[:3])
+                                  + "). Read the executor's feed (pending_requests and today's session row); pass "
+                                    "--again only if that transfer is in neither, or a second move of the pair is meant")
             if a.dry_run:
                 led["outcome"] = "dry_run"
                 code, line = 0, f"{head}: {what} | dry run: not sent; would POST {json.dumps(body, sort_keys=True)}"
@@ -277,8 +323,7 @@ def run(argv=None, env=None, fetch=None, send=None, now=None, ledger_path=None):
                 except Exception as e:  # noqa: BLE001
                     led["outcome"] = "unknown"
                     raise Refused(f"{what} | the POST failed ({clean(e, 160)}): UNKNOWN whether the executor queued it — "
-                                  f"check pending_requests before re-sending (running this again does: it sends only "
-                                  f"when the executor does not hold the transfer)") from None
+                                  f"{UNKNOWN_NEXT}") from None
                 said = data if isinstance(data, dict) else {}
                 if 300 <= status < 400:
                     raise Refused(f"{what} | NOT QUEUED (HTTP {status}: the executor's URL answered with a redirect, "
@@ -290,13 +335,13 @@ def run(argv=None, env=None, fetch=None, send=None, now=None, ledger_path=None):
                     led["outcome"] = "unknown"
                     raise Refused(f"{what} | HTTP {status} "
                                   + ("without \"ok\"" if isinstance(data, dict) else "and an answer that is not JSON")
-                                  + ": UNKNOWN whether the executor queued it — check pending_requests before re-sending "
-                                    "(running this again does: it sends only when the executor does not hold the transfer)")
+                                  + f": UNKNOWN whether the executor queued it — {UNKNOWN_NEXT}")
                 data = said
                 req = data.get("request") if isinstance(data.get("request"), dict) else {}
                 led.update({"outcome": "sent", "request_id": req.get("id")})
-                code, line = 0, (f"{head}: {what} queued as {req.get('id') or '?'}; the executor applies it with its "
-                                 f"NEXT session's plan (15:54 ET on the next trading day)")
+                code, line = 0, (f"{head}: {what} queued as {req.get('id') or '?'}; the executor applies it at the "
+                                 f"mirror's next session (today's if this is before about 15:54 ET on a session day, "
+                                 f"otherwise the next trading day's)")
     except Refused as e:
         led["outcome"] = led["outcome"] or "refused"
         led["why"] = clean(e)

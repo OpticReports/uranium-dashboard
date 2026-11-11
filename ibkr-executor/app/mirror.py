@@ -193,9 +193,10 @@ class TransferRefused(ValueError):
     """a transfer by the transfer-only token that is not taken: str() holds the specifics (the log and
     the alert), .public the words its caller may read - no equity, cap, total, path or book name"""
 
-    def __init__(self, msg: str, public: str):
+    def __init__(self, msg: str, public: str, unavailable: str | None = None):
         super().__init__(msg)
         self.public = public
+        self.unavailable = unavailable         # the BOOK cannot take one (which reason); None: the request was over
 
 
 def one_line(e, n: int = 200) -> str:
@@ -673,13 +674,22 @@ class MirrorManager:
     def _transfer_day_path(self) -> str:
         return f"{self.cfg.state_path}.transfer_day.json"
 
-    def token_refusal_alert(self) -> str | None:
+    def token_refusal_alert(self, unavailable: str | None = None) -> str | None:
         """Whether a refused request by the transfer token is still ALERTED (every one is logged):
         "" for the first TRANSFER_TOKEN_MAX_PER_DAY of an ET date, a closing remark with the last of
         them, None after it - so a holder of the token cannot flood the alert channel with refusals.
+        `unavailable` (TransferRefused.unavailable: the BOOK cannot take a transfer by token - its
+        total unreadable, dated in the future or unwritable, its equity not computable) is not one of
+        those: it is alerted ONCE per ET date per reason, whatever was refused before it, and does
+        not count against them - a real problem is never hidden behind the bound.
         In memory only (a restart starts the date's count again)."""
         day = self.clock().astimezone(ET).date().isoformat()
         with self.inbox_lock:
+            if unavailable:
+                d, said = getattr(self, "_token_unavailable", (None, ()))
+                said = said if d == day else ()
+                self._token_unavailable = (day, said + (unavailable,) if unavailable not in said else said)
+                return None if unavailable in said else ""
             d, n = getattr(self, "_token_refusals", (None, 0))
             n = n + 1 if d == day else 1
             self._token_refusals = (day, n)
@@ -695,7 +705,10 @@ class MirrorManager:
         The period is NOT a calendar date: everything queued between two sessions is applied by ONE
         plan, so a new period starts only when the ET date has changed AND the book has run a session
         since the period began (Friday 16:35, the weekend and Monday 09:00 share one allowance; so do
-        23:59:59 and 00:00:01). The period's record - {"day": the ET date it began, "used", "count",
+        23:59:59 and 00:00:01) AND no transfer taken by the token is still unapplied
+        (_token_transfers_open: a session that was skipped, a request that arrived while the session's
+        plan was being built or run, and the re-queued remainder of a partial transfer all leave one
+        waiting for the next plan, which must not also carry a fresh allowance). The period's record - {"day": the ET date it began, "used", "count",
         "last_session": the book's last session when it began} - is its own small file beside the
         inbox, written under inbox_lock BEFORE the request is queued (any thread; the state file is
         the loop thread's alone): it survives a restart and a book that never had one starts at zero.
@@ -712,7 +725,8 @@ class MirrorManager:
         equity = _num((view.get("book") or {}).get("equity"))
         if equity is None or equity <= 0:
             raise TransferRefused(f"the {self.cfg.name} book's equity cannot be computed (or is not above zero): a "
-                                  f"transfer by the transfer token is capped as a fraction of it, so none is taken", busy)
+                                  f"transfer by the transfer token is capped as a fraction of it, so none is taken", busy,
+                                  "equity")
         amt, cap = row["amount"], round(frac * equity, 2)
         day = self.clock().astimezone(ET).date().isoformat()
         ran = view.get("last_session") if isinstance(view.get("last_session"), str) else None
@@ -727,13 +741,16 @@ class MirrorManager:
                     raise ValueError("not a period's total")
                 if datetime.strptime(start, "%Y-%m-%d").date().isoformat() != start or start > day:
                     raise ValueError(f"its date {one_line(start, 20)} is not a date up to today's {day}")
-                if start != day and ((ran or "") > (since or "") if "last_session" in rec else (ran or "") >= start):
-                    start, used, count, since = day, 0.0, 0, ran          # a session ran since: a new period
+                if (start != day and ((ran or "") > (since or "") if "last_session" in rec else (ran or "") >= start)
+                        and not self._token_transfers_open()):
+                    start, used, count, since = day, 0.0, 0, ran          # a session ran since, none waits: a new period
             except FileNotFoundError:
                 start, used, count, since = day, 0.0, 0, ran
             except Exception as exc:  # noqa: BLE001
                 raise TransferRefused(f"the transfer-token total ({path}) cannot be read ({one_line(exc, 80)}): no "
-                                      f"transfer is taken by the transfer token until that file is removed", busy)
+                                      f"transfer is taken by the transfer token until that file is removed", busy,
+                                      "total dated in the future" if isinstance(exc, ValueError) and "up to today's" in str(exc)
+                                      else "total unreadable")
             if count >= TRANSFER_TOKEN_MAX_PER_DAY:
                 raise TransferRefused(f"over the count for transfers by the transfer token: {count} already taken since "
                                       f"{start} (ET), {TRANSFER_TOKEN_MAX_PER_DAY} allowed until the {self.cfg.name} book "
@@ -747,8 +764,31 @@ class MirrorManager:
                 atomic_write(path, {"day": start, "used": used, "count": count + 1, "last_session": since})
             except Exception as exc:  # noqa: BLE001
                 raise TransferRefused(f"the transfer-token total cannot be written ({one_line(exc, 80)}): the transfer "
-                                      f"is not taken", busy)
+                                      f"is not taken", busy, "total unwritable")
             return self._enqueue(dict(row, via="transfer_token", day=start, day_used=used, day_cap=cap))
+
+    def _token_transfers_open(self) -> bool:
+        """Whether a transfer taken by the transfer token is still UNAPPLIED: in the inbox, among the
+        book's queued requests, or in the open run's plan (until that run has finished, when what it
+        did not move is queued again, still marked). THE CALLER HOLDS inbox_lock. A plan takes every
+        queued transfer and a run always finishes, so on a book that runs its sessions this is False
+        again after each of them. Read off the loop thread, which only ever REPLACES these lists: the
+        run first, then the published view (it still lists a transfer while the plan that took it is
+        being built), then the queue; read again if the state was saved meanwhile, and "yes" when it
+        will not hold still."""
+        def held(rows) -> bool:
+            return any(isinstance(r, dict) and r.get("kind") == "transfer" and r.get("via") == "transfer_token"
+                       for r in (rows if isinstance(rows, list) else []))
+        if held(self._read_inbox()):
+            return True
+        for _ in range(3):
+            seq = self.state.get("seq")
+            if (held((self.state.get("run") or {}).get("transfer_reqs")) or held((self._view or {}).get("pending_requests"))
+                    or held(self.state.get("requests"))):
+                return True
+            if self.state.get("seq") == seq:
+                return False
+        return True
 
     def request_credit(self, sleeve: str, amount, note: str = "", force: bool = False) -> dict:
         """queue a cash adjustment of one sleeve (cash the account received for it: +; a fee: -).
@@ -2590,6 +2630,8 @@ class MirrorManager:
                 nxt = {"kind": "transfer", "from": t.get("from"), "to": t.get("to"), "amount": left,
                        "note": r.get("note") or "", "id": f"{base}-r{tries + 1}", "of": base, "tries": tries + 1,
                        "utc": _iso(self.clock())}
+                if r.get("via"):                   # still the token's: it keeps the period open (_request_capped)
+                    nxt["via"] = r["via"]
                 self.state["requests"] = list(self.state.get("requests") or []) + [nxt]
                 self._journal("transfer_requeued", **nxt)
 
