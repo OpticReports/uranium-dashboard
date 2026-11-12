@@ -151,6 +151,7 @@ class VenueIB(tia.FakeIB):
 
 class IBRig:
     """one account, one state directory; boot() = a new process and a new gateway session"""
+    ib_cls = None                       # a VenueIB subclass (tests/test_mirror_connection.py)
 
     def __init__(self, tmp_path, monkeypatch, cash=100_000.0, engines=tm.ENGINES, **cfg):
         self.tmp, self.mp, self.engines, self.cfg_over = tmp_path, monkeypatch, tuple(engines), cfg
@@ -167,7 +168,7 @@ class IBRig:
         if next_day:
             self.acct.execs = []                      # reqExecutions answers for the current day only
         old = getattr(self, "ib", None)
-        self.ib = VenueIB(self.acct, tm.PX)
+        self.ib = (self.ib_cls or VenueIB)(self.acct, tm.PX)
         self.ib.completed_available = completed_available
         self.ib.bare_completed = bare_completed
         if old is not None:

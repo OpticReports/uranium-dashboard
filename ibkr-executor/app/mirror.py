@@ -117,7 +117,7 @@ import httpx
 
 from . import mirror_core as mc
 from .feeds import FeedDeadline, with_deadline
-from .ib_adapter import round_limit_to_tick
+from .ib_adapter import ExecutorConnectionError, ExecutorNotSyncedError, round_limit_to_tick
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +172,8 @@ TRANSFER_TRIES = 3             # a transfer that moved less than asked is re-que
 TRANSFER_TOKEN_MAX_PER_DAY = 6 # transfers taken by the transfer-only token per book per cap period (_request_capped)
 TRANSFER_TOKEN_MIN = 1.00      # ... and none of them below a dollar
 DIVIDEND_ALERT_SESSIONS = 7    # a receivable unpaid this many sessions after its pay date is said once
+MORNING_RETRY_S = 600.0        # the morning check: a gateway that is not connected (or an account that cannot be
+MORNING_RETRY_EVERY_S = 60.0   # ... read) is looked at again this often, and said only if still so after MORNING_RETRY_S
 QUOTE_SOURCES = ("live", "last", "bid", "ask")   # a venue quote from the previous close is no cross-check
 LIMITS = {"cancel_before_close_s": (20.0, 120.0), "decide_offset_s": (0.0, 120.0), "quote_band": (0.001, 0.05)}
 _UNKNOWN = object()
@@ -363,6 +365,8 @@ class MirrorManager:
         self._held: tuple | None = None        # (session, decide_utc, payload): today's validated intents
         self._unknown: dict | None = None      # {"day", "since"}: today's session is unknown
         self._prechecked: str | None = None
+        self._precheck_since: tuple | None = None  # (session, the first look that found the gateway/account unreadable)
+        self._acct_unread = False                  # the last _pretrade_account refusal was a connection-type failure
         self._seed_why: str | None = None
         self._deferred: list | None = None     # journal lines and alerts of a plan not yet on disk
         self._view: dict = {}
@@ -1250,6 +1254,9 @@ class MirrorManager:
             if not info.get("session") or self.state.get("last_session") == info["session"]:
                 return None
             left = (info["decide_at"] - now).total_seconds()
+            pend = self._precheck_since
+            if pend and pend[0] == info["session"] and left > 0:
+                return min(left + 0.2, MORNING_RETRY_EVERY_S)   # the morning check is being retried
             return max(left, 0.0) + 0.2 if left > 0 else 2.0
         except Exception:  # noqa: BLE001
             return None
@@ -1391,9 +1398,9 @@ class MirrorManager:
             if self.cfg.live:
                 cash = ad.account_cash()
                 if not cash or _num(cash.get("total_cash")) is None:
-                    self._say("warn", f"cannot seed {', '.join(want)}: the account reports no cash claim",
+                    self._say("warn", f"cannot seed {', '.join(want)}: {self._no_cash_why(ad)[0]}",
                               key=f"seed-noclaim:{','.join(want)}")
-                    self._seed_why = "the account reports no cash claim to seed from"
+                    self._seed_why = f"{self._no_cash_why(ad)[0]} to seed from"
                     want = []
                 else:
                     avail = float(cash["total_cash"])
@@ -1463,9 +1470,31 @@ class MirrorManager:
             return "the blend strategy is still enabled in this account (the mirror observes only)"
         return None
 
+    @staticmethod
+    def _no_cash_why(ad) -> tuple:
+        """(why account_cash() made no claim, True when that is a connection-type failure). The adapter
+        never raises there and keeps its reason (last_cash_error / last_cash_kind); an adapter without
+        one gets the old wording."""
+        why, kind = getattr(ad, "last_cash_error", None), getattr(ad, "last_cash_kind", None)
+        if kind == "disconnected":
+            return "the IB gateway is not connected", True
+        if kind == "unreadable":
+            return f"the account's cash could not be read: {one_line(why, 160)}", True
+        return "the account reports no cash claim" + (f" ({one_line(why, 160)})" if why else ""), False
+
     def _pretrade_account(self, ad) -> str | None:
-        """why the ACCOUNT stops this book now, or None (it can clear: retried inside the window)"""
-        probs = self._venue_problems(ad)
+        """why the ACCOUNT stops this book now, or None (it can clear: retried inside the window).
+        _acct_unread says whether the refusal is a connection-type failure (the gateway not connected,
+        the positions or the cash unreadable) rather than a finding about the account."""
+        self._acct_unread = False
+        try:
+            probs = self._venue_problems(ad)
+        except ExecutorNotSyncedError as exc:
+            self._acct_unread = True
+            return f"the account's positions could not be read: {one_line(exc, 200)}"
+        except (ExecutorConnectionError, ConnectionError) as exc:
+            self._acct_unread = True
+            return f"the IB gateway is not connected ({one_line(exc, 200)})"
         if probs:
             return ("the account does not hold exactly the mirror book: " + "; ".join(probs[:5])
                     + " (repair a real divergence with POST /mirror/adjust)")
@@ -1473,7 +1502,8 @@ class MirrorManager:
             cash = ad.account_cash()
             have = _num((cash or {}).get("total_cash"))
             if have is None:
-                return "the account reports no cash claim"
+                why, self._acct_unread = self._no_cash_why(ad)
+                return why
             # the book as the plan will see it: a queued DEBIT (a fee the account already paid) is applied
             # before anything is planned, so it must be able to clear this gate - not be locked out by it
             mine = self.book.cash() + sum(amt for _, amt in self._debits_that_apply())
@@ -1507,11 +1537,29 @@ class MirrorManager:
         session = info["session"]
         if self._prechecked == session or now < info["open_at"]:
             return
-        self._prechecked = session
+        self._acct_unread = False
         try:
             why = self._pretrade(ad)
+            unread = self._acct_unread
         except Exception as exc:  # noqa: BLE001
             why = f"the pre-trade gates could not be read ({one_line(exc, 160)})"
+            unread = isinstance(exc, (ExecutorConnectionError, ConnectionError, TimeoutError))
+        if why and unread:
+            # 2026-11-12: a gateway that is not connected at the open (its nightly restart) is not a finding
+            # about the account. It is looked at again on later ticks (next_wait: every MORNING_RETRY_EVERY_S)
+            # and said only if still so after MORNING_RETRY_S - with the real reason. A book or account
+            # MISMATCH is said at once, as before.
+            since = self._precheck_since
+            if not since or since[0] != session:
+                self._precheck_since = since = (session, now)
+            waited = (now - since[1]).total_seconds()
+            if waited < MORNING_RETRY_S:
+                logger.warning("mirror[%s] morning check not yet possible (%s); retried for another %.0f s before "
+                               "it is said", self.cfg.name, why, MORNING_RETRY_S - waited)
+                return
+            why += f" (still so {waited / 60:.0f} min after the first look at the open)"
+        self._prechecked = session
+        self._precheck_since = None
         if why:
             self._say(self._loud(), f"{session}: today's decision will be refused unless fixed: {why}",
                       key=f"precheck:{session}")

@@ -130,12 +130,26 @@ OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
 # case is resolved by CANCEL-CONFIRMATION in the blend's pass 2b, never
 # by assuming death from a status ib_async's own docs call live.
 _IB_CANCELLED = ("Cancelled", "ApiCancelled", "Inactive")
+# 2026-11-12 (the mirror's morning check passed on yesterday's positions):
+# ib_async's sync facade only learns that the socket closed when its event
+# loop RUNS, and one pump reads at most a few hundred kB - a close queued
+# behind a night of account updates survives it. _drain pumps until a pump
+# receives nothing; past this bound the read fails closed.
+DRAIN_MAX_S = 5.0
+POSITIONS_SYNC_TIMEOUT_S = 10.0  # bound on the explicit position download of a
+                                 # session whose connect-time one did not end
 
 
 class ExecutorConnectionError(RuntimeError):
     """The gateway connection is down: every stock-order surface raises this
     instead of guessing — the blend cycle FAILS CLOSED on it (reconcile
     raises, no decision is taken against unreconciled venue state)."""
+
+
+class ExecutorNotSyncedError(ExecutorConnectionError):
+    """Connected, but this gateway session's account state cannot be read
+    yet (its position download has not ended, or a backlog is still being
+    read): the caller gets an error, never an empty or a cached answer."""
 
 
 def _usable_px(value) -> float | None:
@@ -411,6 +425,13 @@ class IBAdapter:
         self._next_reconnect_ts = 0.0
         self._disconnected_since: float | None = None
         self._outage_alerted = False
+        # the position list of THIS session is trusted only once its
+        # download is known to have ended (_session_positions); and why the
+        # last account_cash() made no claim (it never raises): kind is
+        # "disconnected" | "unreadable" | "no_claim"
+        self._positions_synced = False
+        self.last_cash_error: str | None = None
+        self.last_cash_kind: str | None = None
         # Persisted outage ledger (optional). Observability must never be
         # able to break trading, so every call site tolerates None.
         self.outages = outage_log
@@ -582,7 +603,7 @@ class IBAdapter:
         pre-B8 code raised and failed closed. The source is the caller's
         only way to tell, so it is returned rather than merely logged."""
         from ib_async import Future, Stock
-        self._require_connected()
+        self._require_live()
         # Symbols outside the El Nino table (SPY/BIL/sleeve names from the
         # blend book) quote as plain SMART/USD stocks.
         sec_type, exch, cur, _ = UNDERLYINGS.get(
@@ -832,6 +853,7 @@ class IBAdapter:
         # quote-dead again after each daily gateway restart (counter-agent
         # 2026-08-24, CRITICAL).
         self._apply_market_data_type()
+        self._positions_synced = False  # a new session: its own download counts
         if hasattr(self, "_order_errors"):
             self._order_errors.clear()  # order ids restart at nextValidId
         if hasattr(self, "_cancel_replies"):
@@ -872,6 +894,109 @@ class IBAdapter:
     def _pump(self) -> None:
         """Process pending gateway messages (ib_async sync facade)."""
         self.ib.sleep(0)
+
+    def _recv_bytes(self) -> int | None:
+        """Bytes this session has received so far; None when that cannot be
+        told (not connected, or a client without the counter)."""
+        try:
+            return int(self.ib.client.connectionStats().numBytesRecv)
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _drain(self) -> None:
+        """Pump until nothing more is waiting on the socket, so that a
+        connection that died while nobody pumped is SEEN dead before anything
+        is read from the session's caches.
+
+        ib_async 2.1 (verified in its source and against a socket): the sync
+        facade runs the event loop only inside ib.sleep()/a request, so
+        IB.isConnected() stays True and positions()/accountValues() keep the
+        dead session's values until the loop runs; the close is processed in
+        stream order, AFTER whatever the gateway sent before it, and one
+        ib.sleep(0) reads a bounded amount - behind a backlog of a few
+        hundred kB (a night of account updates) the first pump leaves the
+        session looking connected with its old caches (2026-11-12: the
+        mirror's position check passed on them). The pump that does process
+        the close can itself raise ConnectionError("Socket disconnect").
+        Does not detect a connection that is silently half-open (no FIN, no
+        RST): nothing arrives on one, so only a request can."""
+        deadline = time.monotonic() + DRAIN_MAX_S
+        while True:
+            before = self._recv_bytes()
+            try:
+                self._pump()
+            except Exception as exc:  # noqa: BLE001
+                if self.ib.isConnected():
+                    raise
+                logger.warning("IB gateway connection found closed while "
+                               "pumping: %s", exc)
+                return
+            if not self.ib.isConnected():
+                return
+            after = self._recv_bytes()
+            if before is None or after is None or after == before:
+                return
+            if time.monotonic() >= deadline:
+                raise ExecutorNotSyncedError(
+                    f"IB gateway backlog still being read after "
+                    f"{DRAIN_MAX_S:.0f}s - nothing is read from the session "
+                    f"behind it (retried on the next call)")
+
+    def _require_live(self) -> None:
+        """Pump FIRST, then require connected (reconnecting through
+        _reconnect's backoff): the gate of every surface the Composer mirror
+        reads or trades through. _require_connected alone trusts
+        isConnected(), which is stale until the loop is pumped."""
+        self._drain()
+        self._require_connected()
+
+    def keepalive(self) -> bool:
+        """Cheap liveness pass for the service loop when nothing else touches
+        the adapter (the mirror alone trades once a day): notices an
+        overnight drop and reconnects through the same backoff, outage
+        ledger and alerts as any other surface. Never raises; False while
+        the gateway is unreachable."""
+        try:
+            self._require_live()
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("IB keepalive: %s", exc)
+            return False
+
+    def _positions_pending(self) -> bool | None:
+        """Has this session's connect-time position download NOT ended?
+        None when it cannot be told. ib_async 2.1: IB.connectAsync starts
+        reqPositionsAsync (wrapper.startReq("positions")) and waits for it
+        with a timeout it only LOGS; wrapper.positionEnd pops the request
+        (_endReq), so the key is present exactly while positionEnd has not
+        arrived."""
+        try:
+            return "positions" in self.ib.wrapper._futures
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _session_positions(self) -> list:
+        """ib.positions() of THIS gateway session, once its position download
+        is known to have ended. IB.connect() returns "connected" even when
+        the download timed out, and an account that reads EMPTY for that
+        reason cannot be told from a flat one: the download is then asked for
+        once more, bounded, and a session that still has not delivered it
+        RAISES (never an empty or a cached list)."""
+        if not getattr(self, "_positions_synced", False):
+            if self._positions_pending() is not False:
+                prev = getattr(self.ib, "RequestTimeout", 0)
+                try:
+                    self.ib.RequestTimeout = POSITIONS_SYNC_TIMEOUT_S
+                    self.ib.reqPositions()
+                except Exception as exc:  # noqa: BLE001
+                    raise ExecutorNotSyncedError(
+                        f"the account's positions are not yet synced on this "
+                        f"gateway session ({type(exc).__name__}: {exc})"
+                    ) from exc
+                finally:
+                    self.ib.RequestTimeout = prev
+            self._positions_synced = True
+        return list(self.ib.positions())
 
     def _stock_contract(self, symbol: str):
         c = self._stock_contracts.get(symbol)
@@ -1176,9 +1301,8 @@ class IBAdapter:
         qty = int(qty)
         if qty == 0:
             raise ValueError("qty must be non-zero (signed +buy/-sell)")
-        self._require_connected()
+        self._require_live()
         if client_order_id:
-            self._pump()
             # B1 (live-blocker, naked-short path): the idempotency key must
             # be resolved against the VENUE, not against this process's
             # trade list. `_find_trade_by_client_id` with the default
@@ -1290,9 +1414,8 @@ class IBAdapter:
             raise ValueError("qty must be non-zero (signed +buy/-sell)")
         action = "BUY" if qty > 0 else "SELL"
         placed_limit = round_limit_to_tick(limit_price, action)
-        self._require_connected()
+        self._require_live()
         if client_order_id:
-            self._pump()
             prior = self._binding_prior(client_order_id)
             if prior is not None:
                 logger.info("limit order %s duplicate-suppressed by orderRef "
@@ -1331,8 +1454,7 @@ class IBAdapter:
         It proves nothing about an order of an earlier day - that is the
         caller's check. Read-only and additive: bounded like the other
         history requests, but it never drops the session on a timeout."""
-        self._require_connected()
-        self._pump()
+        self._require_live()
         if self._find_trade_by_client_id(client_order_id) is not None:
             return False
         prev = getattr(self.ib, "RequestTimeout", 0)
@@ -1371,8 +1493,7 @@ class IBAdapter:
         path is long gone. True when a cancel was sent; False when no order
         under the key is Inactive. No ack is awaited: the caller re-reads the
         order. Raises when disconnected."""
-        self._require_connected()
-        self._pump()
+        self._require_live()
         trade = self._find_trade_by_client_id(client_order_id)
         if trade is None:
             trade = self._find_trade_by_client_id(client_order_id,
@@ -1396,8 +1517,7 @@ class IBAdapter:
         race, counter-agent N2/N14). A cancel IB REFUSES is no ack: unless the
         venue's own Filled or Cancelled follows inside the window, it RAISES
         (_undo_refusal_overlay, _cancel_refusal)."""
-        self._require_connected()
-        self._pump()
+        self._require_live()
         trade = self._find_trade_by_ref(order_ref)
         if trade is None:
             trade = self._find_trade_by_ref(order_ref, refresh=True)
@@ -1557,8 +1677,7 @@ class IBAdapter:
         """Look up a stock order by its idempotency key (IB orderRef).
         Returns {order_ref, status, fill_price?} or None if the venue never
         saw it — the boot/crash reconcile checks this before re-placing."""
-        self._require_connected()
-        self._pump()
+        self._require_live()
         trade = self._find_trade_by_client_id(client_order_id)
         if trade is None:
             trade = self._find_trade_by_client_id(client_order_id,
@@ -1582,10 +1701,16 @@ class IBAdapter:
         stage 2, 2026-10-05) as `available_funds`, None when the venue does
         not report it: the capital adoption waits on it so a deposit that
         has landed but not settled is not spent before the venue would let
-        it be."""
+        it be.
+
+        WHY a call made no claim is kept for the caller that must say it
+        (the mirror's gates): last_cash_error (text; None after a claim) and
+        last_cash_kind - "disconnected" (the gateway session is down),
+        "unreadable" (connected, the values did not come) or "no_claim" (the
+        account itself gives none: several accounts, no TotalCashValue)."""
+        self.last_cash_error, self.last_cash_kind = None, None
         try:
-            self._require_connected()
-            self._pump()
+            self._require_live()
             # accountValues() is the connect-time subscription: non-blocking
             # (accountSummary() issues a request with no timeout and could
             # wedge the loop thread - counter-agent round 2). Fall back to
@@ -1612,7 +1737,8 @@ class IBAdapter:
                 # across sub-accounts - never a claim (round 3)
                 logger.warning("account_cash: %d managed accounts (%s) - no "
                                "claim", len(accts), accts)
-                return None
+                return self._no_cash(f"{len(accts)} managed accounts on this "
+                                     f"login", "no_claim")
             want = accts[0] if accts else None
             vals: dict[str, float] = {}
             seen_accts: set = set()
@@ -1633,9 +1759,11 @@ class IBAdapter:
             if len(seen_accts) > 1:
                 logger.warning("account_cash: %d accounts report cash (%s) - "
                                "no claim", len(seen_accts), sorted(seen_accts))
-                return None
+                return self._no_cash(f"{len(seen_accts)} accounts report cash",
+                                     "no_claim")
             if "TotalCashValue" not in vals or vals["TotalCashValue"] != vals["TotalCashValue"]:
-                return None
+                return self._no_cash("the gateway reports no TotalCashValue in "
+                                     "USD for this account", "no_claim")
             avail = vals.get("AvailableFunds")
             if avail is not None and avail != avail:      # NaN -> no claim
                 avail = None
@@ -1645,16 +1773,27 @@ class IBAdapter:
                     "ts": time.time()}
         except Exception as exc:  # noqa: BLE001
             logger.warning("account_cash unavailable (no claim): %s", exc)
-            return None
+            down = (isinstance(exc, ConnectionError)
+                    or (isinstance(exc, ExecutorConnectionError)
+                        and not isinstance(exc, ExecutorNotSyncedError)))
+            try:
+                down = down or not self.ib.isConnected()
+            except Exception:  # noqa: BLE001
+                pass
+            return self._no_cash(f"{type(exc).__name__}: {exc}",
+                                 "disconnected" if down else "unreadable")
+
+    def _no_cash(self, why: str, kind: str) -> None:
+        self.last_cash_error, self.last_cash_kind = why, kind
+        return None
 
     def stock_position(self, symbol: str) -> int:
         """Net venue holding for a SMART/USD stock — what the ACCOUNT
         actually holds NOW. The R1 blackout guard's positive-verification
         basis: order history has a horizon, positions do not."""
-        self._require_connected()
-        self._pump()
+        self._require_live()
         qty = 0
-        for p in self.ib.positions():
+        for p in self._session_positions():
             c = getattr(p, "contract", None)
             if (c is not None and getattr(c, "symbol", "") == symbol
                     and getattr(c, "secType", "STK") in ("", "STK")):
@@ -1670,8 +1809,7 @@ class IBAdapter:
         fill. Read-only and additive; bounded like the other history
         requests; RAISES when the open orders do not answer (the caller
         must then not sell)."""
-        self._require_connected()
-        self._pump()
+        self._require_live()
         prev = getattr(self.ib, "RequestTimeout", 0)
         try:
             self.ib.RequestTimeout = VENUE_HISTORY_TIMEOUT_S
@@ -1703,12 +1841,13 @@ class IBAdapter:
         account (the Composer mirror): {"stocks": {symbol: whole shares},
         "other": [text]}. `other` names what is not a whole stock lot - an
         option, a future, a fractional share - so the caller can refuse to
-        treat the account as its own. Read-only; raises when disconnected."""
-        self._require_connected()
-        self._pump()
+        treat the account as its own. Read-only; raises when disconnected, and
+        when this gateway session has not delivered its positions
+        (ExecutorNotSyncedError) - never the list of a dead session."""
+        self._require_live()
         stocks: dict[str, int] = {}
         other: list[str] = []
-        for p in self.ib.positions():
+        for p in self._session_positions():
             c = getattr(p, "contract", None)
             sym = getattr(c, "symbol", "?") if c is not None else "?"
             try:
@@ -1755,8 +1894,7 @@ class IBAdapter:
         (the store is read as it stands); a trade the session does not know
         costs the bounded open/completed-orders refresh and one bounded
         reqExecutions, either of which FAILS CLOSED by raising. Read-only."""
-        self._require_connected()
-        self._pump()
+        self._require_live()
         trade = self._find_trade_by_client_id(client_order_id)
         in_session = trade is not None
         if trade is None:

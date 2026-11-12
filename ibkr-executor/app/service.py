@@ -921,6 +921,35 @@ def _mirror_cycle(gen: int, wake: threading.Event) -> None:
         book.tick(ADAPTER, wake=wake, stop=lambda: gen != LOOP_GEN)
 
 
+def _mirror_keepalive() -> None:
+    """Keep the gateway session alive when ONLY the mirror trades.
+
+    2026-11-12: with the blend disabled nothing touched the adapter between
+    one day's close and the next morning's check, so the gateway's nightly
+    restart was first met at the open, on a connection ib_async still
+    believed in. The blend cycle used to reconnect within one loop interval
+    of any drop, around the clock, as a side effect; this is that side
+    effect, on purpose: one pump + require-connected per loop iteration
+    (the loop parks at most poll_seconds), at all hours, through the
+    adapter's own backoff, outage ledger and DOWN/RECONNECTED alerts.
+
+    Runs on the loop thread - the thread that built the adapter and owns
+    its ib_async event loop - BETWEEN mirror ticks, never inside one: no
+    order of a run or a flatten is mid-wait while it pumps. Bounded by the
+    adapter's connect timeout and backoff. Not run while the blend is
+    enabled (its cycle already touches the adapter every iteration), nor on
+    a DryAdapter (no gateway). Never raises."""
+    if MIRROR.get("live") is None or BLEND is not None:
+        return
+    keepalive = getattr(ADAPTER, "keepalive", None)
+    if keepalive is None:
+        return
+    try:
+        keepalive()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("IB keepalive failed (ignored): %s", exc)
+
+
 def _loop_wait() -> float:
     """How long the loop may park: the poll interval, or sooner when a
     mirror book needs the loop (its decision instant, an order in flight, a
@@ -1343,6 +1372,7 @@ def _loop(gen: int, wake: threading.Event):
                 _mirror_cycle(gen, wake)
                 if _superseded(gen):
                     return
+                _mirror_keepalive()
             nino = nino34_weekly()
             if _superseded(gen):
                 return          # the feed call is the long park (MF-2)

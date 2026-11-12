@@ -219,6 +219,10 @@ class FakeIB:
     def trades(self):
         return list(self._trades)
 
+    def reqPositions(self):
+        # ib_async IB.reqPositions(): blocking; the list once positionEnd is in
+        return list(self.positions())
+
     def reqAllOpenOrders(self):
         return []
 
