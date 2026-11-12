@@ -262,6 +262,68 @@ whether IBKR accepts the buy.
 6. Engines live one at a time. HARV is the smallest and the most
    minute-sensitive; SLEEVE never missed a session on paper.
 
+## Scaling the live book
+
+The live book starts at $10,000 (owner decision 7) and is scaled up by one
+cash credit per sleeve, at Composer's split. The owner's gates before it is
+scaled (11-12), all three met first:
+
+1. The IB connection fix is live on the executor.
+2. At least two clean sessions on it: no halt, no unresolved order, no
+   account-versus-book problem, every sleeve traded or held by its rule.
+3. A real sell-then-buy rotation filled on the live book and matched
+   Composer's holdings that day.
+
+The plan comes from `python3 composer/scripts/mirror_scale.py --to 50000`
+(`--json` for the same plan as JSON). It is read-only: it reads Composer's
+split from the monitor's last snapshot (the four engines' values; unallocated
+cash left out; a snapshot more than 3 days old is warned about) and the live
+book from the executor's feed, sends nothing and holds no exec token. Per
+engine: target = round(to x Composer weight, 2), credit = round(target - the
+sleeve's equity, 2). It refuses, on one line starting "MIRROR SCALE REFUSED",
+while the book is halted or has an open run, an unresolved order, an error, a
+queued request (a POLICY transfer included: scale on another day) or a sleeve
+missing or frozen; when --to is not above the book or is more than 10x it; and
+when an engine is already above its Composer share at that size (it names the
+smallest --to at which none is). Then, in order:
+
+(a) The cap. The executor refuses a credit that takes the live book's
+    funded_usd (its seeds plus every positive credit and what /mirror/adjust
+    added) above MIRROR_MAX_BOOK_USD + $1, credit by credit, smallest first
+    (mirror.py _over_cap, _apply_credits). The plan prints the value to set:
+    (funded + the credits) x 1.05, rounded up to the next $500 - $53,000 for
+    $10,000 -> $50,000. The feed does not publish funded_usd; the plan
+    estimates it from the seeds and the credits in the feed's session rows,
+    and the line in (b) checks the executor's own figure. Render ->
+    ibkr-executor -> Environment: MIRROR_MAX_BOOK_USD = the cap, "Save,
+    rebuild and deploy", never between 15:15 and 16:05 ET (12:15-13:05 on a
+    half-day). The restart logs the IB gateway in again: approve the IB Key
+    push.
+(b) The credits. When the executor is back, paste the plan's ONE line into
+    Render -> ibkr-executor -> Shell, once. It runs with the executor's own
+    Python (/opt/executor/venv/bin/python3: httpx and its CA bundle, the
+    client the executor itself uses), reads EXEC_TOKEN inside the container
+    (it never appears on screen or in the repo), and sends nothing unless
+    MIRROR_MAX_BOOK_USD there covers the book's own funded_usd (its state
+    file) plus the credits and no credit is already queued (the state's
+    requests or its inbox: a second paste sends nothing). Then it POSTs
+    {"sleeve", "amount", "note", "book"} per engine to
+    https://<executor>/mirror/credit with the header X-Exec-Token, prints
+    each answer and stops at the first that is not 200. The note reads
+    "scale-up to $<to> at Composer's split of <snapshot date>".
+(c) The executor applies them at its next session's decision (15:54 ET,
+    12:54 on a half-day; a credit queued after the decision waits for the
+    next session), smallest first, each only if the account's cash (IBKR's
+    TotalCashValue) covers the book's cash plus it - the plan prints that
+    minimum; check it at IBKR before (b) - and the cap holds. The same plan
+    invests them: the daily sleeves go to target, and KMLM trades too (idle
+    cash above 5% of a threshold sleeve overrides its corridor). Every credit
+    taken is alerted. A refused credit is alerted in red and dropped, NOT
+    retried: fix the cause, re-run the planner and paste its new line.
+(d) That night's parity check against Composer (mirror_parity.py) removes
+    the operator credits from that day's return, so the scale-up day is not
+    read as a gain.
+
 ## Deploying the brain
 
 MIRROR_BRAIN_URL must be https: the executor never sends its token over plain

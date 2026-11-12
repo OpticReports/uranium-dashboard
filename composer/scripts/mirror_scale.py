@@ -548,6 +548,8 @@ def render(p):
                   f" - {usd(p['residual'])} (rounding each target and equity to cents leaves {usd(p['residual'])} "
                   f"unallocated)" if p["residual"] > 0 else
                   f" + {usd(-p['residual'])} (rounding each target and equity to cents adds {usd(-p['residual'])})"))
+    out.append(f"the credits are fixed dollars and the sleeves move until the session applies them: the book lands "
+               f"within that move of its {usd(t['book_equity'])}, not on {usd(p['to'])} to the cent")
     c, f = p["cap"], p["funded"]
     out += ["", f"CAP: MIRROR_MAX_BOOK_USD = {c['set']}",
             f"  {c['rule']}",

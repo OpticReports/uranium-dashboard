@@ -200,7 +200,8 @@ class S1Arithmetic(Case):
 
     def test_rounding_never_leaves_more_than_a_few_cents(self):
         rnd = random.Random(20261112)
-        for _ in range(300):
+        done = 0
+        while done < 300:
             raw = {e: rnd.uniform(200, 9000) for e in EQUITY}
             v = view()
             for e, x in raw.items():
@@ -209,6 +210,9 @@ class S1Arithmetic(Case):
             vals = {e: rnd.uniform(1000, 200000) for e in VALUES}
             w = {e: vals[e] / sum(vals.values()) for e in vals}
             lo = ms.smallest_to(w, {e: round(x, 2) for e, x in raw.items()}, v["book"]["equity"])
+            if lo >= 9 * v["book"]["equity"]:
+                continue                                                         # no plan inside the 10x bound
+            done += 1
             to = round(rnd.uniform(lo, 9 * v["book"]["equity"]), 2)
             for e, x in vals.items():
                 self.snap["symphonies"][IDS[e]]["value"] = x
@@ -417,10 +421,22 @@ class S5PlanRefusals(Case):
         line = self.refused(to="10100")
         self.assertIn("HG is already above its Composer share (target $3,389.23, equity $3,429.20)", line)
         low = float(re.search(r"the smallest --to at which every credit is >= 0 is ([0-9.]+)", line).group(1))
-        self.assertEqual(low, 10219.11)
+        self.assertEqual(low, 10219.10)          # HG: round(10219.10 x weight, 2) = $3,429.20, its equity: credit $0
         p = self.plan(to=f"{low:.2f}")
         self.assertTrue(all(r["credit"] >= 0 for r in p["engines"]), p["engines"])
         self.assertIn("already above its Composer share", self.refused(to=f"{low - 0.01:.2f}"))
+
+    def test_the_smallest_to_is_the_smallest_on_random_books(self):
+        rnd = random.Random(7)
+        for _ in range(300):
+            eq = {e: round(rnd.uniform(200, 9000), 2) for e in EQUITY}
+            vals = {e: rnd.uniform(1000, 200000) for e in VALUES}
+            w = {e: vals[e] / sum(vals.values()) for e in vals}
+            book = round(sum(eq.values()), 2)
+            lo = ms.smallest_to(w, eq, book)
+            self.assertTrue(lo > book and all(c >= 0 for _, c in ms.credits_at(lo, w, eq).values()))
+            below = round(lo - 0.01, 2)
+            self.assertTrue(below <= book or any(c < 0 for _, c in ms.credits_at(below, w, eq).values()), (lo, eq, w))
 
     def test_a_slipped_zero_is_refused(self):
         self.assertIn("50.2x book live's $9,965.85: more than 10x is refused", self.refused(to="500000"))
@@ -840,7 +856,7 @@ class S10OutputAndDoc(Case):
     def test_the_doc_has_the_scaling_section(self):
         with open(os.path.join(REPO, "composer", "IBKR_MIRROR.md")) as f:
             doc = f.read()
-        self.assertIn("## Scaling the live book", doc)
+        self.assertTrue("\n## Scaling the live book\n" in doc, "IBKR_MIRROR.md has no section \"Scaling the live book\"")
         sec = doc.split("## Scaling the live book")[1].split("\n## ")[0]
         flat = " ".join(sec.split())
         for text in ("scripts/mirror_scale.py --to", "MIRROR_MAX_BOOK_USD", "connection fix", "two clean sessions",
