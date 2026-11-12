@@ -323,9 +323,12 @@ def credits_at(to, weights, equities):
 
 
 def smallest_to(weights, equities, book_equity):
-    """the smallest --to, in cents, at which every credit is >= 0 and the book grows"""
-    to = math.ceil(round(max(equities[e] / weights[e] for e, _ in ENGINES) * 100, 6)) / 100
-    for _ in range(10000):
+    """the smallest --to, in cents, at which every credit is >= 0 and the book grows. A credit is >= 0
+    once round(to x weight, 2) reaches the equity, i.e. from about (equity - half a cent) / weight: the
+    scan starts a cent below that bound and walks up a cent at a time (credits never fall as --to rises)"""
+    start = max((equities[e] - 0.01) / weights[e] for e, _ in ENGINES)
+    to = math.floor(max(start, book_equity) * 100) / 100
+    for _ in range(100000):
         if to > book_equity and all(c >= 0 for _, c in credits_at(to, weights, equities).values()):
             return to
         to = round(to + 0.01, 2)

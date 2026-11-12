@@ -620,6 +620,8 @@ class P11CreditDay(Base):
         self.assertEqual(mp.credited_in({"credits": [cr(float("nan"), "KMLM"), cr(5.0)]}, "HG"), (5.0, None))
         self.assertEqual(mp.credited_in({}, "HG"), (0.0, None))
         self.assertEqual(mp.credited_in({"credits": [cr(1e300)]}, "HG"), (1e300, None))
+        self.assertEqual(mp.credited_in({"credits": [cr(1e308), cr(1e308)]}, "HG"),
+                         (None, "the credits to the sleeve do not add up to a finite amount"))
 
 
 GOLDEN_Y = {"HG": sleeve({"BIL": 370}), "HARV": sleeve({"PULS": 355}), "SLEEVE": sleeve({"BOXX": 30}, cash=25.0),

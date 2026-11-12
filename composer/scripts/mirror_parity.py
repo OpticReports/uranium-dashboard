@@ -176,6 +176,8 @@ def credited_in(row, eng):
                           f"a credit to the sleeve is of kind {one_line(repr(kind), 40)}, neither an operator credit nor a dividend")
         if kind == "credit":
             net += amt
+    if not math.isfinite(net):
+        return None, "the credits to the sleeve do not add up to a finite amount"
     return round(net, 2), None
 
 
