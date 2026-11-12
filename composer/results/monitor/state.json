@@ -1,24 +1,24 @@
 {
   "peaks": {
-    "mbkiXcuNDjueXpiox5Av": 2341.85,
-    "nNdBk7hc5NiBzeRvbI5T": 26314.9,
+    "mbkiXcuNDjueXpiox5Av": 2342.11,
+    "nNdBk7hc5NiBzeRvbI5T": 26321.53,
     "YPTSJFJwD2ZKfAeYJUbW": 40378.17,
-    "ORQNCfZnA18wmsMWVhf8": 35223.93
+    "ORQNCfZnA18wmsMWVhf8": 35275.17
   },
   "accident_gauge": "YELLOW",
   "peak_dates": {
     "YPTSJFJwD2ZKfAeYJUbW": "2026-08-17",
-    "nNdBk7hc5NiBzeRvbI5T": "2026-11-11",
-    "mbkiXcuNDjueXpiox5Av": "2026-11-11"
+    "nNdBk7hc5NiBzeRvbI5T": "2026-11-12",
+    "mbkiXcuNDjueXpiox5Av": "2026-11-12",
+    "ORQNCfZnA18wmsMWVhf8": "2026-11-12"
   },
   "book_peak": 100227.19000000002,
   "gate": {
     "override": false,
-    "zone": "near",
-    "last_dist": 0.02968,
-    "last_date": "2026-11-10",
+    "zone": "far",
+    "last_dist": 0.04276,
+    "last_date": "2026-11-11",
     "live_hist": {
-      "2026-10-29": "BIL",
       "2026-10-30": "BIL",
       "2026-11-02": "TECL",
       "2026-11-03": "BIL",
@@ -27,7 +27,8 @@
       "2026-11-06": "TECL",
       "2026-11-09": "BIL",
       "2026-11-10": "BIL",
-      "2026-11-11": "BIL"
+      "2026-11-11": "BIL",
+      "2026-11-12": "BIL"
     }
   },
   "shadow": {
@@ -43,7 +44,7 @@
       "SLEEVE": "agree",
       "HARV": "agree"
     },
-    "last_date": "2026-11-11",
+    "last_date": "2026-11-12",
     "pending": [],
     "fmp": {}
   }
