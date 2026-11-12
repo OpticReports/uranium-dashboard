@@ -2203,6 +2203,10 @@ class MirrorManager:
         if self._dry is not None or not any(int(q) > 0 for asks in run["plan"]["buy_asks"].values() for q in asks.values()):
             return None
         try:
+            # the session is proven first (K3a N2): one that died silently after the last sell still
+            # serves the cash it last reported, blind to anything done by hand since. A failure here
+            # is cash that cannot be read: the buys are held and it is asked again on the next step.
+            self._prove(ad)
             have = _num((ad.account_cash() or {}).get("total_cash"))
         except Exception as exc:  # noqa: BLE001
             logger.warning("mirror[%s] account cash unreadable before the buys: %s", self.cfg.name, one_line(exc))
@@ -2350,6 +2354,8 @@ class MirrorManager:
                                       + " (the venue holds no such order)")
             if not (self._flatten_cap(ad, o, rec) if emergency else self._sell_check(ad, o, rec)):
                 return bool(o.get("applied"))
+            if not self._may_place(emergency):     # K3a: a halt that landed during the check's round trips
+                return False
             if not self._write_ahead(o, rec, emergency):
                 return False
             res = self._place(ad, o, rec)
@@ -2371,6 +2377,8 @@ class MirrorManager:
                     return False
                 if not (self._flatten_cap(ad, o, rec) if emergency else self._sell_check(ad, o, rec)):
                     return bool(o.get("applied"))
+                if not self._may_place(emergency):  # K3a: a halt that landed during the check's round trips
+                    return False
                 res = self._place(ad, o, rec)
             else:
                 rec.update(state="placed", order_ref=res.get("order_ref"))
@@ -2427,10 +2435,19 @@ class MirrorManager:
         book = int(self.book.positions().get(sym, 0) or 0)
         what = (f"the book holds {book} {sym}, the account holds {held}"
                 + (f" and SELL orders for {resting} are already open at the venue" if resting else ""))
-        self._say("red", f"order {oid} (SELL {want} {sym}) is NOT sent: {what}. The book and the account disagree, "
-                         f"so nothing is sold for {sym} (never below zero, and never a guessed quantity); the buys "
-                         f"are sized from the cash the book really has. Compare the account with /status and "
-                         f"repair the difference with POST /mirror/adjust.", key=f"sell-check:{oid}")
+        if resting and held >= max(book, want):
+            # K3a: the account holds the book's shares; only orders resting at the venue (a stop placed by
+            # hand) stand in the way. That is not a difference to repair: say what is in the way.
+            self._say("red", f"order {oid} (SELL {want} {sym}) is NOT sent: {what}. Those open SELL orders for "
+                             f"{resting} {sym} are not this run's, and selling {want} on top of them could take {sym} "
+                             f"short, so nothing is sold for {sym} today; the buys are sized from the cash the book "
+                             f"really has. Cancel the open order(s) for {resting} {sym} at the venue, or let them "
+                             f"fill.", key=f"sell-check:{oid}")
+        else:
+            self._say("red", f"order {oid} (SELL {want} {sym}) is NOT sent: {what}. The book and the account "
+                             f"disagree, so nothing is sold for {sym} (never below zero, and never a guessed quantity); "
+                             f"the buys are sized from the cash the book really has. Compare the account with /status "
+                             f"and repair the difference with POST /mirror/adjust.", key=f"sell-check:{oid}")
         self._book(o, rec, 0, None, 0.0, f"not sent: {what}")
         return False
 
@@ -2809,6 +2826,9 @@ class MirrorManager:
         if last and (now - last).total_seconds() < CHECK_GAP_S:
             return
         try:
+            # a round trip first (K3a): a session that died silently after the run still serves the
+            # positions it was last sent, and "done, no problems" must never be concluded from those
+            self._prove(ad)
             probs = self._venue_problems(ad)
         except (ExecutorConnectionError, ConnectionError, TimeoutError) as exc:
             # not a finding about the account and not a failed tick: no strike, nothing recorded; the

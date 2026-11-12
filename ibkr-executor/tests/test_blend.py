@@ -85,11 +85,17 @@ def _wait_until(cond, timeout=10.0):
 
 def _held_position(m, call_id=1, symbol="CRSP", qty=5, fill=50.0,
                    stop_level=44.0, entry_date="2026-08-01",
-                   time_stop="2026-10-30", stop_ref="old-stop", adapter=None):
+                   time_stop="2099-01-01", stop_ref="old-stop", adapter=None):
     """Book a held position. `adapter` seeds the VENUE to match, which any
     test that later flattens MUST pass: the flatten's ceiling is what the
     account holds, and a book asserting shares the venue does not report is
-    the naked-short state the ceiling exists to catch."""
+    the naked-short state the ceiling exists to catch.
+
+    The default time stop is far in the future (K3b): the service tests run
+    the real loop thread, whose cycles use the REAL date, and with a past
+    default ("2026-10-30") its 90-day time-stop belt exited the position in
+    the middle of a test that was seeding it. Gates of the belt itself pass
+    their own time_stop."""
     m.on_entered({"call_id": call_id, "symbol": symbol, "qty": qty,
                   "entry_ref": fill, "stop_level": stop_level},
                  fill, "entry-ref", entry_date)

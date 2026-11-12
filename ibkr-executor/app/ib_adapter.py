@@ -137,6 +137,8 @@ _IB_CANCELLED = ("Cancelled", "ApiCancelled", "Inactive")
 # receives nothing; past this bound the read fails closed.
 DRAIN_MAX_S = 5.0
 PROVE_LIVE_TIMEOUT_S = 5.0     # bound on the liveness round trip (prove_live)
+PROVE_FRESH_S = 2.0            # a session THIS connection proved less than this ago is
+#                                not asked again (prove_live: ib_insync #479)
 QUALIFY_TIMEOUT_S = 10.0       # bound on spot_ex's contract lookup: a gateway that
 #                                stops answering must not wedge the loop thread
 POSITIONS_FAIL_MEMO_S = 30.0   # a position download that timed out is not asked
@@ -436,6 +438,7 @@ class IBAdapter:
         self.reconnect_backoff_max_s = RECONNECT_BACKOFF_MAX_S
         self.mirror_only = False
         self._in_keepalive = False
+        self._proven: tuple | None = None   # (monotonic, connection) of the last answered prove_live
         self._positions_failed: tuple | None = None   # (monotonic, why)
         self._disconnected_since: float | None = None
         self._outage_alerted = False
@@ -846,6 +849,7 @@ class IBAdapter:
         exceeds OUTAGE_ALERT_S (the daily gateway restart stays a
         non-event); sends a recovery notice after an alerted outage."""
         now = time.monotonic()
+        self._proven = None             # whatever happens next, the proven session is gone
         if self._disconnected_since is None:
             self._disconnected_since = now
             logger.warning("IB gateway connection lost — reconnecting with "
@@ -932,9 +936,10 @@ class IBAdapter:
             send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} min "
                  f"— the Composer mirror cannot read the account or trade. "
                  f"It keeps NO resting stops at the venue: the positions stay "
-                 f"as they are, and a session whose decision (15:54 ET) finds "
-                 f"the gateway still down will NOT trade; a /kill flatten "
-                 f"waits for the gateway too. Auto-reconnect keeps retrying "
+                 f"as they are, and if the gateway is still down at the "
+                 f"decision, 6 minutes before the close, that session will NOT "
+                 f"trade; a /kill flatten waits for the gateway too. "
+                 f"Auto-reconnect keeps retrying "
                  f"with backoff; check the gateway container if this persists")
             return
         send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} min "
@@ -1025,12 +1030,31 @@ class IBAdapter:
         (the connect handshake is itself a round trip); raises
         ExecutorConnectionError while the gateway cannot be reached. Called
         where a stale read would be acted on (the keepalive, the mirror's
-        pre-trade account gate, a flatten round) - not on every surface."""
+        pre-trade account gate, a flatten round) - not on every surface.
+
+        FRESH (K3b): the mirror's account gate proves the session and the
+        service loop's keepalive proves it again a few ms later. A gateway
+        that ignores a reqCurrentTime sent within about a second of the one
+        before (ib_insync #479, TWS 10.16.1f) would turn every such pair into
+        a 5 s stall and the disconnect of a healthy session. So once the
+        drain above has run (a FIN or an RST is still seen at every call), a
+        session that THIS connection proved less than PROVE_FRESH_S ago is
+        not asked again. The record is (monotonic time, _connection()) of the
+        last answered request; it is cleared before every request (a request
+        that fails leaves none) and by every reconnect (_reconnect), and
+        another connection never matches it."""
         self._require_live()
+        proven, conn = getattr(self, "_proven", None), self._connection()
+        if (proven is not None and conn is not None and proven[1] is conn
+                and 0.0 <= time.monotonic() - proven[0] < PROVE_FRESH_S):
+            return
+        self._proven = None
         prev = getattr(self.ib, "RequestTimeout", 0)
         try:
             self.ib.RequestTimeout = timeout
             self.ib.reqCurrentTime()
+            conn = self._connection()
+            self._proven = (time.monotonic(), conn) if conn is not None else None
             return
         except Exception as exc:  # noqa: BLE001
             logger.warning("IB gateway session did not answer a liveness "
@@ -1046,12 +1070,32 @@ class IBAdapter:
         self._positions_synced = False
         self._require_connected()
 
+    def _connection(self):
+        """The object that is THIS gateway connection's and no other's, or
+        None. ib_async 2.1.0: client.conn is ONE Connection for the client's
+        whole life (client.py:103) and is reused by every connect
+        (client.py:216), so it says nothing about the session; its
+        `transport` is the asyncio transport of the current TCP connection:
+        made by each connect (connection.py:38, loop.create_connection), set
+        to None by Connection.reset() at the start of every connect
+        (connection.py:25-26, 35) and by connection_lost (connection.py:62-63).
+        A reconnect therefore always brings a different object, and the
+        reference _proven keeps holds the old one alive, so `is` can never
+        take one for the other. A client without it (a test double): None,
+        and such a session is never taken as proven."""
+        try:
+            return self.ib.client.conn.transport
+        except Exception:  # noqa: BLE001
+            return None
+
     def keepalive(self) -> bool:
         """Cheap liveness pass for the service loop when nothing else touches
         the adapter (the mirror alone trades once a day): notices an
         overnight drop and reconnects through the same backoff, outage
-        ledger and alerts as any other surface. Never raises; False while
-        the gateway is unreachable."""
+        ledger and alerts as any other surface. One prove_live: a round
+        trip, or none when the session was proven less than PROVE_FRESH_S
+        ago (the mirror's own gate, a moment before). Never raises; False
+        while the gateway is unreachable."""
         self._in_keepalive = True
         try:
             self.prove_live()
@@ -1916,20 +1960,60 @@ class IBAdapter:
         """Shares of stock `symbol` that SELL orders still OPEN at the venue
         (any client, any order type) have yet to sell - the unfilled
         remainder of each. `exclude`: an orderRef whose own orders are not
-        counted. For the mirror's flatten cap: a sell on top of one already
-        resting (a halted symbol) would take the position short when both
-        fill. Read-only and additive; bounded like the other history
-        requests; RAISES when the open orders do not answer (the caller
-        must then not sell)."""
+        counted. For the mirror's checks before a sell (a run's, a
+        flatten's): a sell on top of one already resting (a halted symbol, a
+        stop placed by hand) would take the position short when both fill.
+        Read-only and additive; bounded like the other history requests;
+        RAISES when the open orders do not answer (the caller must then not
+        sell). A request that TIMES OUT drops the session first, as
+        _all_trades does: the next call reconnects (backoff, outage ledger,
+        alerts) instead of waiting another 20 s on a session that answers
+        the liveness round trip but never openOrderEnd.
+
+        What is counted (K3a): (a) every order in THIS call's
+        reqAllOpenOrders answer and (b) this client's own orders that the
+        session still holds as working - never the rest of the session's
+        cache. ib_async 2.1.0 caches every open order it is told of, whoever
+        placed it (wrapper.py:685-712), keeps only this client's in sync
+        (ib.py:942-948: other clients' orders "will not be kept in sync"),
+        and a later completedOrder never replaces an order it already knows
+        (wrapper.py:728-730): a sell placed by hand and cancelled after an
+        earlier read in the same session counted for ever (a run's sell
+        refused; a flatten refusing the symbol until it gave up).
+        Why neither source misses a live order (an undercount allows a short):
+          (a) is the venue's own list of the orders open NOW, any client's,
+              complete once openOrderEnd ends the request; each entry comes
+              with its status and fill (openOrder + orderStatus);
+          (b) covers an order of ours the venue does not list yet (sent a
+              moment ago: PendingSubmit). Every status change of this
+              clientId's orders is sent to this client (wrapper.py:735-792,
+              ib_async sets order.clientId at placeOrder: ib.py:805), so one
+              the session still holds as working may still fill.
+        An order of another client that only the cache still holds is not on
+        the venue's list: it is no longer open and can sell nothing more."""
         self._require_live()
         prev = getattr(self.ib, "RequestTimeout", 0)
         try:
             self.ib.RequestTimeout = VENUE_HISTORY_TIMEOUT_S
             opens = list(self.ib.reqAllOpenOrders() or [])
+        except (TimeoutError, asyncio.TimeoutError) as exc:
+            self._proven = None
+            try:
+                self.ib.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
+            raise ExecutorConnectionError(
+                f"reqAllOpenOrders timed out after {VENUE_HISTORY_TIMEOUT_S:.0f}s: "
+                f"the venue's open orders are unavailable (the session is "
+                f"dropped and reconnected; restart the gateway if this "
+                f"persists)") from exc
         finally:
             self.ib.RequestTimeout = prev
+        cid = getattr(self.cfg, "ib_client_id", None)
+        mine = [t for t in list(self.ib.trades())
+                if cid is not None and getattr(t.order, "clientId", None) == cid]
         seen, qty = set(), 0
-        for t in list(self.ib.trades()) + opens:    # this session's own, then the venue's answer
+        for t in opens + mine:              # the venue's answer, then this client's own
             key = (t.order.orderId, getattr(t.order, "permId", 0))
             if key in seen:
                 continue

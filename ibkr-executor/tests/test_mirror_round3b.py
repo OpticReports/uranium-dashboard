@@ -105,8 +105,9 @@ def test_g1_the_adapter_counts_the_unfilled_remainder_of_open_sells_only(tmp_pat
     r.boot(completed_available=False)                        # a new session learns of it from the venue's open orders
     assert r.ad.open_sell_qty("TECL") == held - 3
     monkeypatch.setattr(VenueIB, "reqAllOpenOrders", lambda self: (_ for _ in ()).throw(TimeoutError("no openOrderEnd")))
-    with pytest.raises(TimeoutError):
-        r.ad.open_sell_qty("TECL")
+    with pytest.raises(ib_mod.ExecutorConnectionError, match="reqAllOpenOrders timed out"):
+        r.ad.open_sell_qty("TECL")                           # still raises (no sell on it), and (K3a) the wedged
+    assert not r.ib.isConnected()                            # session is dropped: the next call reconnects
 
 
 def test_g1_no_flatten_sell_while_the_open_orders_cannot_be_read_and_the_cut_twin(tmp_path):

@@ -932,9 +932,13 @@ def _mirror_keepalive() -> None:
     restart was first met at the open, on a connection ib_async still
     believed in. The blend cycle used to reconnect within one loop interval
     of any drop, around the clock, as a side effect; this is that side
-    effect, on purpose: one pump + require-connected per loop iteration
-    (the loop parks at most poll_seconds), at all hours, through the
-    adapter's own backoff, outage ledger and DOWN/RECONNECTED alerts.
+    effect, on purpose: one liveness ROUND TRIP per loop iteration (the
+    adapter's prove_live: the socket is drained, then a reqCurrentTime
+    bounded at PROVE_LIVE_TIMEOUT_S, skipped when this connection answered
+    one less than PROVE_FRESH_S ago - a session that does not answer is
+    dropped and reconnected; the loop parks at most poll_seconds), at all
+    hours, through the adapter's own backoff, outage ledger and
+    DOWN/RECONNECTED alerts.
 
     Runs on the loop thread - the thread that built the adapter and owns
     its ib_async event loop - BETWEEN mirror ticks, never inside one: no
@@ -982,10 +986,13 @@ def _loop_wait() -> float:
 MIRROR_KILL_BOUND = (
     "a mirror tick in flight hands the loop back within ONE venue call of "
     "the kill: a brain read or a retry wait is dropped at once, a quote "
-    "read finishes (8s cap), an order being placed finishes its ack/fill "
+    "read finishes (8s cap), a liveness round trip finishes (5s cap; a "
+    "session that fails it is dropped and reconnected, up to the 15s "
+    "connect timeout), an order being placed finishes its ack/fill "
     "wait (10s / 6.5s) - longer only if the gateway's order-history lookup "
-    "stalls (20s per request); the mirror's own flatten then sends its "
-    "sells one by one under the same per-order waits")
+    "stalls (20s per request); the mirror's own flatten then proves the "
+    "session the same way and sends its sells one by one under the same "
+    "per-order waits")
 
 
 def _kill_mirror() -> tuple[dict | None, str]:

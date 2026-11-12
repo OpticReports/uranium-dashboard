@@ -31,12 +31,14 @@ live MirrorManager over it; R1-R4 drive the real IBAdapter over the INSTALLED ib
 """
 from __future__ import annotations
 
+import copy
 import inspect
 import socket
 import struct
 import threading
 import time
 import types
+from datetime import timedelta
 
 import pytest
 
@@ -616,6 +618,9 @@ class Gateway:
         self.silent = False                         # True: every session stops answering (and never closes)
         self.mute = False                           # True: a NEW connection's handshake is never answered
         self.time_requests = 0
+        self.time_min_gap = 0.0                     # > 0: a reqCurrentTime asked sooner than this after the last
+        self.time_dropped = 0                       # one answered is read and ignored (ib_insync #479, K3b's
+        self._time_answered = None                  # fake_gw3 'rate49'), on every session
         threading.Thread(target=self._accept, daemon=True).start()
 
     def _accept(self):
@@ -675,6 +680,12 @@ class Gateway:
                         c.sendall(_enc(55, 1, f[2]))
                     elif f[0] == "49":                                  # reqCurrentTime
                         self.time_requests += 1
+                        now = time.monotonic()
+                        if (self.time_min_gap and self._time_answered is not None
+                                and now - self._time_answered < self.time_min_gap):
+                            self.time_dropped += 1                      # never answered
+                            continue
+                        self._time_answered = now
                         c.sendall(_enc(49, 1, int(time.time())))
         except OSError:
             return
@@ -970,15 +981,18 @@ def test_d2_a_sell_already_resting_at_the_venue_counts_against_what_the_account_
 
 def test_d2_a_normal_rotation_is_unchanged_but_for_one_venue_read_per_sell(tmp_path, monkeypatch):
     """the same orders, in the same order, the book and the account sound; the only additions are one
-    reqAllOpenOrders per sell (before it is placed) and one reqCurrentTime per account gate"""
+    reqAllOpenOrders per sell (before it is placed), one reqCurrentTime per account gate and (K3a N2) one
+    before the buys' cash is read - free on a session proven < PROVE_FRESH_S before; this double has no
+    connection object, so every proof is a round trip here"""
     r = Rig(tmp_path, monkeypatch).invested()
     r.brain.make = lambda now: payload(now, dict(tm.T1, HG={"TQQQ": 1.0}, KMLM={"PULS": 1.0},
                                                  SLEEVE={"TECL": 1.0}), session=D2)
     n = len(r.ib.placed)
     order: list = []
-    real_place, real_open = r.ib.placeOrder, r.ib.reqAllOpenOrders
+    real_place, real_open, real_time = r.ib.placeOrder, r.ib.reqAllOpenOrders, r.ib.reqCurrentTime
     monkeypatch.setattr(r.ib, "placeOrder", lambda c, o: (order.append(f"{o.action} {c.symbol}"), real_place(c, o))[1])
     monkeypatch.setattr(r.ib, "reqAllOpenOrders", lambda: (order.append("open?"), real_open())[1])
+    monkeypatch.setattr(r.ib, "reqCurrentTime", lambda: (order.append("alive?"), real_time())[1])
     del r.ib.requests[:]
     r.tick("15:55:05", day=D2)
     assert [(s, a, q) for s, a, q, _ in r.ib.placed[n:]] == [
@@ -987,7 +1001,9 @@ def test_d2_a_normal_rotation_is_unchanged_but_for_one_venue_read_per_sell(tmp_p
     for sym in ("BIL", "BOXX", "SOXL"):              # each sell: the venue is asked, then it is placed
         i = order.index(f"SELL {sym}")
         assert order[i - 1] == "open?"
-    assert r.ib.requests.count("reqCurrentTime") == 1                # the decision's account gate, once
+    assert r.ib.requests.count("reqCurrentTime") == 2
+    gate, cash = [i for i, x in enumerate(order) if x == "alive?"]   # the decision's account gate; the buys' cash
+    assert gate < order.index("SELL BIL") and order.index("SELL SOXL") < cash < order.index("BUY PULS")
     assert not r.red() and r.m.state["last_run"]["outcome"] == "traded"
     sound(r)
 
@@ -1124,6 +1140,9 @@ def test_d1_r5_a_healthy_session_is_proven_with_one_message_and_nothing_else_cha
     assert time.monotonic() - t0 < 1.0
     assert a.ib.client.connectionStats().numMsgSent == sent + 1 and gw.time_requests == 1
     assert a.connects == [] and gw.sessions == 1 and a.ib.RequestTimeout == 0
+    # the loop's keepalive right after it: this connection answered < PROVE_FRESH_S ago - no message (K3b)
+    assert a.keepalive() is True and gw.time_requests == 1 and a.connects == []
+    a._proven = (a._proven[0] - ib_mod.PROVE_FRESH_S, a._proven[1])      # ... and once that is older: one
     assert a.keepalive() is True and gw.time_requests == 2 and a.connects == []
     assert a.positions_snapshot() == {"stocks": {"BIL": 20, "SPY": 10}, "other": []}
     assert a.ib.client.connectionStats().numMsgSent == sent + 2      # the read itself still sends nothing
@@ -1378,3 +1397,451 @@ def test_d2_a_session_that_goes_silent_inside_the_run_is_reconnected_and_the_sel
     red = r.red()
     assert len(red) == 1 and "is NOT sent: the account's open orders cannot be read" in red[0]
     sound(r)
+
+
+# =========================================================================== the independent review of d51ad80a
+# Two reviewers (K3a: the run-sell check; K3b: the liveness round trip and the reconnect backoff) found nothing
+# blocking. What they did find, each with the gate that fails on d51ad80a:
+#   K3b     the account gate and the loop's keepalive prove the session ms apart: on a gateway that ignores a
+#           reqCurrentTime asked < ~1 s after the last one (ib_insync #479, TWS 10.16.1f) every such pair cost a
+#           5 s stall and the disconnect of a healthy session -> PROVE_FRESH_S
+#   K3a M2  open_sell_qty never dropped a session whose reqAllOpenOrders timed out: every sell waited 20 s again
+#   K3a M4  open_sell_qty counted the session's cache: a hand sell cancelled since an earlier read still counted
+#   K3a M3  the post-trade check read the positions of a session that had died silently
+#   K3a N2  the buys' cash read did too (pre-existing): $20,000 withdrawn by hand -> the account at -$19,369
+#   K3a M1  a sell held up only by orders resting at the venue was called a disagreement, to repair with adjust
+#   K3a N1  a halt that landed during the check's round trips did not stop the sell
+ROT = dict(tm.T1, HG={"TQQQ": 1.0}, KMLM={"PULS": 1.0}, SLEEVE={"TECL": 1.0})    # 3 sells, 3 buys; TECL crosses
+AFTER = ("15:56:40", "15:57:40", "15:58:40", "15:59:30", "16:00:40", "16:01:40", "16:03:00")
+
+
+def _hand_order(r, sym, qty, filled=0, status="Submitted"):
+    """a SELL placed by hand (another client): it rests at the venue under no orderRef"""
+    t = tia.FakeTrade(tia.FakeStock(sym, "SMART", "USD"), tia.FakeMarketOrder("SELL", qty))
+    t.order.orderId, t.order.orderRef, t.order.permId = 0, "", 70000 + len(r.acct.orders)
+    t.orderStatus.status, t.orderStatus.filled = status, filled
+    r.acct.orders.append(t)
+    if filled:
+        r.acct.pos[sym] -= filled
+        r.acct.cash += filled * tm.PX[sym]
+    return t
+
+
+class ProvenIB(StaleIB):
+    """StaleIB with what prove_live's freshness keys on, as ib_async 2.1.0 has it (client.conn.transport: a new
+    object per TCP connection, None once it is closed - IBAdapter._connection), and a gateway that ignores a
+    reqCurrentTime asked less than 1 s after the last one it answered (ib_insync #479; K3b's fake_gw3 'rate49'):
+    only the caller's own timeout ends such a request. Time is the test's (ib_mod.time.monotonic)."""
+
+    def __init__(self, acct, prices):
+        super().__init__(acct, prices)
+        self.client = types.SimpleNamespace(connectionStats=self._stats, conn=types.SimpleNamespace(transport=None))
+        self.answered_at, self.time_dropped = None, 0
+
+    def _closed(self):
+        super()._closed()
+        self.client.conn.transport = None
+
+    def connect(self, host, port, clientId, timeout=15):
+        super().connect(host, port, clientId, timeout)
+        self.client.conn.transport = object()        # a new TCP connection
+
+    def reqCurrentTime(self):
+        self._req("reqCurrentTime")
+        now = ib_mod.time.monotonic()
+        if self.answered_at is not None and 0.0 <= now - self.answered_at < 1.0:
+            self.time_dropped += 1
+            raise TimeoutError()
+        self.answered_at = now
+        return tia.FakeIB.reqCurrentTime(self)
+
+
+class ProvenRig(Rig):
+    ib_cls = ProvenIB
+
+
+def test_k3b_the_gate_and_the_loops_keepalive_prove_the_session_once_not_twice(tmp_path, monkeypatch):
+    """K3b (S4 and its spacing probe), deterministic: the real mirror ticks, each followed by the service loop's
+    keepalive as service._loop runs them, on a gateway that ignores a reqCurrentTime asked < 1 s after the last
+    one it answered; the test's clock stands still inside an iteration (the calls are ms apart). Before: in every
+    iteration the second proof went unanswered - a 5 s stall, then the disconnect of a healthy session and a
+    full resync (K3b measured 4 reconnects in 4 pairs; a flatten tick proves three times)."""
+    r = ProvenRig(tmp_path, monkeypatch).invested()
+    service = _mirror_only_service(monkeypatch, r)
+    mono = [ib_mod.time.monotonic() + 3600.0]
+    monkeypatch.setattr(ib_mod.time, "monotonic", lambda: mono[0])
+    connects = r.ib.connect_calls
+
+    def iteration(hms, day=D2):
+        mono[0] += 30.0                              # the loop parked since the last iteration
+        n = r.ib.requests.count("reqCurrentTime")
+        r.tick(hms, day=day)
+        service._mirror_keepalive()
+        return r.ib.requests.count("reqCurrentTime") - n
+
+    assert iteration("09:30:05") == 1 and r.m._prechecked == D2 and not r.red()      # the morning check
+    r.brain.make = lambda now: payload(now, tm.T1, session=D2)                        # nothing to trade
+    assert iteration("15:55:05") == 1 and r.m.state["last_run"]["outcome"] == "held"
+    assert iteration("15:56:40") == 1 and r.m.state["check"]["done"]                 # the post-trade check
+    r.m.halt("kill", flatten=True)
+    assert iteration("10:00:00", day="2026-11-12") == 1                               # a flatten tick
+    assert r.venue_pos() == {} and r.m.halt_state().get("flatten_done")
+    assert r.ib.time_dropped == 0 and r.ib.connect_calls == connects                  # no stall, no reconnect
+    # a session proven 3 s ago is proven again; one proven 1.9 s ago is not
+    mono[0] += 3.0
+    n = r.ib.requests.count("reqCurrentTime")
+    assert r.ad.keepalive() is True and r.ib.requests.count("reqCurrentTime") == n + 1
+    mono[0] += 1.9
+    assert r.ad.keepalive() is True and r.ib.requests.count("reqCurrentTime") == n + 1
+    # a reconnect invalidates the record: the new session (1.9 s after that proof) gets its own round trip
+    r.ib.drop()                                      # the gateway closed the session (a FIN)
+    assert r.ad.keepalive() is True and r.ib.connect_calls == connects + 1
+    assert r.ib.requests.count("reqCurrentTime") == n + 2 and r.ib.time_dropped == 0
+
+
+@needs_ib_async
+def test_k3b_r9_gate_then_keepalive_on_a_gateway_that_ignores_a_second_request_within_1s(real):
+    """the same on the installed ib_async, against a socket gateway with K3b's 'rate49' (s4_pairing.py). Before:
+    each gate-then-keepalive pair = an unanswered request, a 5 s stall, a disconnect and a full resync."""
+    a, gw = real
+    gw.time_min_gap = 1.0
+    a.ib.connect("x", 0, clientId=17)
+    a.connects.clear()
+    took = []
+    for i in range(2):
+        if i:
+            time.sleep(2.1)                          # the loop parks between iterations (2 s during a run)
+        t0 = time.monotonic()
+        a.prove_live()                               # the account gate (_pretrade_account -> _prove)
+        a.positions_snapshot(), a.account_cash()     # what the gate reads: the session's caches
+        assert a.keepalive() is True                 # service._mirror_keepalive, right after the tick
+        took.append(time.monotonic() - t0)
+    assert gw.time_dropped == 0 and a.connects == [] and gw.sessions == 1 and max(took) < 1.0
+    assert gw.time_requests == 2                     # one per iteration: the second's gate proved it again
+    # a reconnect invalidates the record: the new session gets its own round trip at once (the gateway's
+    # 1 s rule is off here - its last answer was the old session's, a moment ago)
+    gw.time_min_gap = 0.0
+    old = a.ib.client.conn.transport
+    gw.drop()
+    a.prove_live()
+    assert len(a.connects) == 1 and gw.sessions == 2 and a.ib.client.conn.transport is not old
+    assert gw.time_requests == 3 and a._proven[1] is a.ib.client.conn.transport
+
+
+class WedgedIB(StaleIB):
+    """K3a's probe 4d: the CURRENT session answers the liveness round trip but never openOrderEnd - every
+    reqAllOpenOrders times out after its RequestTimeout, charged to the rig's clock; a NEW session answers"""
+    clock = None
+
+    def __init__(self, acct, prices):
+        super().__init__(acct, prices)
+        self.wedged, self.open_timeouts = False, 0
+
+    def reqAllOpenOrders(self):
+        if self.wedged and self.connected and not self.dead:
+            self.open_timeouts += 1
+            if self.clock is not None:
+                self.clock.now += timedelta(seconds=float(self.RequestTimeout or 0))
+            raise TimeoutError()
+        return super().reqAllOpenOrders()
+
+    def connect(self, host, port, clientId, timeout=15):
+        super().connect(host, port, clientId, timeout)
+        self.wedged = False
+
+
+class WedgedRig(Rig):
+    ib_cls = WedgedIB
+
+
+def test_k3a_open_orders_that_time_out_drop_the_session_and_the_sells_go_inside_the_window(tmp_path, monkeypatch):
+    """K3a MINOR-2 (probe 4d). Before: open_sell_qty let the raw TimeoutError out and kept the session; the check's
+    liveness pass found it answering, so every step asked it again - 20 s per sell - until the window closed:
+    BIL, BOXX and SOXL 'not sent: the window closed', no buy at all. The old path recovered because placement
+    dropped such a session (_all_trades); a timeout in open_sell_qty now does the same."""
+    r = WedgedRig(tmp_path, monkeypatch).invested()
+    r.ib.clock = r.clock
+    r.brain.make = lambda now: payload(now, ROT, session=D2)
+    n = len(r.ib.placed)
+    stamps: list = []
+    real = r.ib.placeOrder
+    monkeypatch.setattr(r.ib, "placeOrder", lambda c, o: (stamps.append(r.clock.now), real(c, o))[1])
+    r.ib.wedged = True
+    r.tick("15:55:05", day=D2)
+    for hms in AFTER[:3]:
+        r.tick(hms, day=D2)
+    row = r.m.state["last_run"]
+    assert row["session"] == D2 and row["outcome"] == "traded"
+    assert sorted((s, a, q) for s, a, q, _ in r.ib.placed[n:]) == [
+        ("BIL", "SELL", 315), ("BOXX", "SELL", 237), ("PULS", "BUY", 438), ("SOXL", "SELL", 270),
+        ("TECL", "BUY", 161), ("TQQQ", "BUY", 360)]
+    assert r.ib.open_timeouts == 1 and r.ib.connect_calls == 2       # one 20 s wait, then a new session
+    assert max(stamps) < tm.at("15:59:00", D2)                       # inside the window (the cancel instant)
+    red = [a for a in r.red() if "is NOT sent" in a]
+    assert len(red) == 1 and "the account's open orders cannot be read (reqAllOpenOrders timed out" in red[0]
+    sound(r)
+
+
+class CachingIB(StaleIB):
+    """what ib_async 2.1.0 does with ANOTHER client's open orders (wrapper.py:685-712, 728-730; ib.py:942-948):
+    each one a reqAllOpenOrders answer lists is stored in the session's trade list - a copy, refreshed only while
+    the venue still lists it; a later cancel or fill is never sent to this client. This client's own orders are
+    the venue's objects themselves (kept in sync), as in VenueIB. (K3a's FaithfulIB.)"""
+
+    def _closed(self):
+        super()._closed()
+        self._snaps = {}
+
+    def reqAllOpenOrders(self):
+        self._req("reqAllOpenOrders")
+        snaps = self.__dict__.setdefault("_snaps", {})
+        out = []
+        for t in self.acct.orders:
+            if t.orderStatus.status not in ("Submitted", "PreSubmitted"):
+                continue
+            if any(t is x for x in self._trades) or t.order.orderRef:
+                out.append(t)                        # this client's own: the same object
+                continue
+            s = snaps.get(t.order.permId)
+            if s is None:
+                s = snaps[t.order.permId] = tia.FakeTrade(t.contract, copy.copy(t.order))
+                self._trades.append(s)
+            s.orderStatus.status, s.orderStatus.filled = t.orderStatus.status, t.orderStatus.filled
+            out.append(s)
+        return out
+
+
+class CachingRig(Rig):
+    ib_cls = CachingIB
+
+
+def test_k3a_a_hand_sell_cancelled_since_an_earlier_read_no_longer_blocks_the_run(tmp_path, monkeypatch):
+    """K3a MINOR-4 (test_k3_stale_snapshot.py, the run). After the plan two SELLs are placed by hand, 270 SOXL and
+    100 BOXX. The first sell's check (BIL) reads the venue's open orders - both are listed, and cached - and the
+    operator then cancels the SOXL one. Before: SOXL was refused all the same ('SELL orders for 270 are already
+    open') on the session's stale copy. Now it is sold; the BOXX order, still live, still blocks BOXX."""
+    r = CachingRig(tmp_path, monkeypatch).invested()
+    r.brain.make = lambda now: payload(now, ROT, session=D2)
+    n = len(r.ib.placed)
+    hand: dict = {}
+
+    def by_hand():
+        hand["SOXL"], hand["BOXX"] = _hand_order(r, "SOXL", 270), _hand_order(r, "BOXX", 100)
+    _after_the_plan(r, monkeypatch, by_hand)
+    real = r.ib.placeOrder
+
+    def place(contract, order):
+        t = real(contract, order)
+        if contract.symbol == "BIL" and "SOXL" in hand:
+            hand["SOXL"].orderStatus.status = "Cancelled"        # cancelled by hand at the venue
+        return t
+    monkeypatch.setattr(r.ib, "placeOrder", place)
+    r.tick("15:55:05", day=D2)
+    for hms in AFTER[:3]:
+        r.tick(hms, day=D2)
+    assert [t.orderStatus.status for t in r.ib.trades()
+            if t.order.permId == hand["SOXL"].order.permId] == ["Submitted"]      # the premise: a stale copy
+    assert [(s, q) for s, a, q, _ in r.ib.placed[n:] if a == "SELL"] == [("BIL", 315), ("SOXL", 270)]
+    said = [a for a in r.red() if "is NOT sent" in a]
+    assert len(said) == 1 and "S-BOXX" in said[0] and "SELL orders for 100 are already open at the venue" in said[0]
+    _never_short(r)
+
+
+def test_k3a_a_flatten_sells_a_symbol_once_its_hand_sell_is_cancelled(tmp_path, monkeypatch):
+    """K3a MINOR-4, the flatten: round one does not sell SOXL - a hand SELL 270 rests there - and the operator
+    cancels it, as the alert asks. Before: every later round still counted the session's stale copy, until the
+    flatten 'GAVE UP after 30 minutes' with 270 SOXL still held. Now round two sells it."""
+    r = CachingRig(tmp_path, monkeypatch).invested()
+    stop = _hand_order(r, "SOXL", 270)
+    r.m.halt("kill", flatten=True)
+    r.tick("11:00:00", day=D2)
+    assert r.venue_pos() == {"SOXL": 270}
+    assert any("NOT sent: the account holds 270 SOXL and SELL orders for 270 are already open" in a for a in r.red())
+    stop.orderStatus.status = "Cancelled"
+    for hms in ("11:00:10", "11:00:30", "11:01:00", "11:02:30"):
+        r.tick(hms, day=D2)
+    h = r.m.halt_state()
+    assert r.venue_pos() == {} and h.get("flatten_done") and h.get("account_flat") is True
+    _never_short(r)
+
+
+def test_k3a_open_sell_qty_counts_the_venues_answer_and_this_clients_working_orders(tmp_path, monkeypatch):
+    """K3a MINOR-4 at the adapter: counted are (a) the venue's answer to THIS request and (b) this client's own
+    orders still working in the session - never another client's order that only the cache still holds. A live
+    order is never missed (that would allow a short)."""
+    r = CachingRig(tmp_path, monkeypatch).invested()
+    hand = _hand_order(r, "BIL", 100)
+    assert r.ad.open_sell_qty("BIL") == 100                      # a live hand sell: on the venue's list
+    mine = tia.FakeTrade(tia.FakeStock("BIL", "SMART", "USD"), tia.FakeMarketOrder("SELL", 50))
+    mine.order.orderId, mine.order.permId, mine.order.orderRef = 990, 0, "mirror-x-S-BIL"
+    mine.order.clientId = tia._Cfg.ib_client_id                  # ib_async sets it at placeOrder (ib.py:805)
+    mine.orderStatus.status = "PendingSubmit"                    # just sent: the venue does not list it yet
+    r.ib._trades.append(mine)
+    assert r.ad.open_sell_qty("BIL") == 150                      # this client's own working sell counts too
+    assert r.ad.open_sell_qty("BIL", exclude="mirror-x-S-BIL") == 100
+    hand.orderStatus.status = "Cancelled"                        # cancelled by hand since the last read
+    assert [t.orderStatus.status for t in r.ib.trades() if t.order.permId == hand.order.permId] == ["Submitted"]
+    assert r.ad.open_sell_qty("BIL") == 50                       # Before: 150 - the stale copy counted
+    mine.orderStatus.status = "Cancelled"
+    assert r.ad.open_sell_qty("BIL") == 0
+    # this client's own sell RESTING at the venue: on the venue's list and in the session as ours - counted once
+    r.ib.hold.add("BIL")
+    r.ad.place_stock_order("BIL", -30, "MKT", client_order_id="k3a-own-resting")
+    own = next(t for t in r.ib.trades() if t.order.orderRef == "k3a-own-resting")
+    own.order.clientId = tia._Cfg.ib_client_id
+    assert own.orderStatus.status == "Submitted" and r.ad.open_sell_qty("BIL") == 30
+
+
+@pytest.mark.parametrize("blackhole", [False, True])
+def test_k3a_the_post_trade_check_proves_the_session_before_it_reads_the_positions(tmp_path, monkeypatch, blackhole):
+    """K3a MINOR-3 (probe 5b): the run is booked, then the session dies with no FIN and the TQQQ just bought is
+    sold by hand. Before: the check read the dead session's cached positions and concluded 'done, no problems' -
+    the book kept 360 TQQQ the account no longer held, and traded on. Now it proves the session first (which
+    reconnects it) and finds the difference: two strikes, halted."""
+    r = Rig(tmp_path, monkeypatch).invested()
+    real = r.m._finish
+
+    def finish(ad):
+        out = real(ad)
+        r.ib.drop(silent=True, blackhole=blackhole)
+        r.sell_by_hand("TQQQ")
+        return out
+    monkeypatch.setattr(r.m, "_finish", finish)
+    r.tick("15:55:05", day=D2)
+    assert r.m.state["last_run"]["outcome"] == "traded" and r.m.state.get("check") is None
+    r.tick("15:56:40", day=D2)
+    chk = r.m.state["check"]
+    assert chk["strikes"] == 1 and not chk["done"] and "TQQQ: the book holds 360, the venue 0" in chk["problems"]
+    assert r.ib.connect_calls == 2 and not r.ib.dead
+    r.tick("15:57:40", day=D2)
+    assert r.m.state["check"]["done"] and r.m.halt_state().get("halted")
+    assert any("the account does NOT hold the mirror book" in a and "TQQQ" in a for a in r.red())
+
+
+def test_k3a_the_buys_cash_read_proves_the_session_first(tmp_path, monkeypatch):
+    """K3a N2 (probe P-cash, pre-existing): the session dies with no FIN right after the last sell fills, and
+    $20,000 leaves the account by hand. Before: the buys were sized against the dead session's cached cash -
+    PULS 438, TECL 161, TQQQ 360 bought, the account left at -$19,369 (borrowed on margin). Now the cash read
+    proves the session first: on the new session the account's cash does not cover the book's and the buys
+    are HELD until the window closes."""
+    r = Rig(tmp_path, monkeypatch).invested()
+    r.brain.make = lambda now: payload(now, ROT, session=D2)
+    n = len(r.ib.placed)
+    real = r.ib.placeOrder
+
+    def place(contract, order):
+        t = real(contract, order)
+        if contract.symbol == "SOXL" and order.action == "SELL":      # the last sell has filled
+            r.ib.drop(silent=True)
+            r.acct.cash -= 20_000.0                                    # withdrawn by hand meanwhile
+        return t
+    monkeypatch.setattr(r.ib, "placeOrder", place)
+    r.tick("15:55:05", day=D2)
+    for hms in AFTER:
+        r.tick(hms, day=D2)
+    assert [(s, q) for s, a, q, _ in r.ib.placed[n:] if a == "SELL"] == [("BIL", 315), ("BOXX", 237), ("SOXL", 270)]
+    assert [x for x in r.ib.placed[n:] if x[1] == "BUY"] == [] and r.acct.cash >= 0
+    assert any("the BUYS are HELD" in a and "exceeds the account's" in a for a in r.red())
+    assert any("NO BUYS are sent this session" in a for a in r.red())
+    assert not [a for a in r.red() if "tick failed" in a]
+    # a proof that FAILS is cash that cannot be read: held, asked again on every step, sent once it answers
+    r2 = Rig(tmp_path / "down", monkeypatch).invested()
+    r2.brain.make = lambda now: payload(now, ROT, session=D2)
+    n2 = len(r2.ib.placed)
+    real2 = r2.ib.placeOrder
+
+    def place2(contract, order):
+        t = real2(contract, order)
+        if contract.symbol == "SOXL" and order.action == "SELL":
+            r2.ib.drop(silent=True)
+            r2.ib.gateway_up = False                                    # ... and the gateway is gone
+        return t
+    monkeypatch.setattr(r2.ib, "placeOrder", place2)
+    r2.tick("15:55:05", day=D2)
+    assert [x for x in r2.ib.placed[n2:] if x[1] == "BUY"] == [] and r2.m.state["run"]["buys_blocked"]
+    assert any("the BUYS are HELD — the account's cash cannot be read" in a for a in r2.red())
+    r2.ib.gateway_up = True
+    r2.tick("15:56:40", day=D2)
+    assert [(s, a) for s, a, _, _ in r2.ib.placed[n2:] if a == "BUY"] == [("PULS", "BUY"), ("TECL", "BUY"), ("TQQQ", "BUY")]
+    assert not [a for a in r2.red() if "tick failed" in a]
+    sound(r2)
+    # a normal day: the buys still go at the same instant as the sells, in the decision's first step
+    r3 = Rig(tmp_path / "normal", monkeypatch).invested()
+    r3.brain.make = lambda now: payload(now, ROT, session=D2)
+    n3, stamps = len(r3.ib.placed), []
+    real3 = r3.ib.placeOrder
+    monkeypatch.setattr(r3.ib, "placeOrder", lambda c, o: (stamps.append((o.action, r3.clock.now)), real3(c, o))[1])
+    r3.tick("15:55:05", day=D2)
+    assert [(s, a, q) for s, a, q, _ in r3.ib.placed[n3:]] == [
+        ("BIL", "SELL", 315), ("BOXX", "SELL", 237), ("SOXL", "SELL", 270),
+        ("PULS", "BUY", 438), ("TECL", "BUY", 161), ("TQQQ", "BUY", 360)]
+    assert {t for _, t in stamps} == {tm.at("15:55:05", D2)} and not r3.red()
+    sound(r3)
+
+
+def test_k3a_a_sell_held_up_only_by_orders_resting_at_the_venue_is_not_called_a_disagreement(tmp_path, monkeypatch):
+    """K3a MINOR-1 (probe 2e): the account holds exactly the book's 315 BIL, and a SELL stop for 315 placed by
+    hand rests there. Before: 'The book and the account disagree ... repair the difference with POST
+    /mirror/adjust' - there was nothing to repair. A real shortfall keeps that text."""
+    r = Rig(tmp_path, monkeypatch).invested()
+    n = len(r.ib.placed)
+    _hand_order(r, "BIL", 315)
+    r.tick("15:55:05", day=D2)
+    said = [a for a in r.red() if "mirror-2026-11-11-S-BIL" in a and "is NOT sent" in a]
+    assert len(said) == 1 and [x for x in r.ib.placed[n:] if x[1] == "SELL"] == []
+    s = said[0]
+    assert "the book holds 315 BIL, the account holds 315 and SELL orders for 315 are already open at the venue" in s
+    assert "Cancel the open order(s) for 315 BIL at the venue, or let them fill" in s
+    assert "nothing is sold for BIL today" in s
+    assert "disagree" not in s and "/mirror/adjust" not in s
+    # a real shortfall: a hand SELL 200 of which 50 have filled - the account holds 265 of the book's 315
+    r2 = Rig(tmp_path / "short", monkeypatch).invested()
+    _after_the_plan(r2, monkeypatch, lambda: _hand_order(r2, "BIL", 200, filled=50))
+    r2.tick("15:55:05", day=D2)
+    said2 = [a for a in r2.red() if "mirror-2026-11-11-S-BIL" in a and "is NOT sent" in a]
+    assert len(said2) == 1 and "the book holds 315 BIL, the account holds 265 and SELL orders for 150" in said2[0]
+    assert "The book and the account disagree" in said2[0] and "repair the difference with POST /mirror/adjust" in said2[0]
+
+
+def test_k3a_a_halt_landing_during_the_sells_check_stops_that_sell(tmp_path, monkeypatch):
+    """K3a N1 (probe 4c): a halt (no flatten) lands while the check asks the venue. Before: SELL 315 BIL went out
+    after it - the halt had been read before the check's round trips, not after them. Both places a run sell is
+    sent from: a new order, and one whose first placement never reached the venue."""
+    r = Rig(tmp_path, monkeypatch).invested()
+    n = len(r.ib.placed)
+    real_open = r.ad.open_sell_qty
+
+    def open_sell_qty(sym, exclude=None):
+        if sym == "BIL" and not r.m._halted():
+            r.m.halt("operator: stop trading (no flatten)")
+        return real_open(sym, exclude=exclude)
+    monkeypatch.setattr(r.ad, "open_sell_qty", open_sell_qty)
+    r.tick("15:55:05", day=D2)
+    assert r.ib.placed[n:] == [] and r.m._halted()
+    r.tick("15:55:30", day=D2)
+    bil = next(o for o in r.m.state["last_run"]["orders"] if o["symbol"] == "BIL")
+    assert bil["filled"] == 0 and bil["how"] == "not sent: stopped" and r.ib.placed[n:] == []
+    # the re-placement of an order that never reached the venue (state 'intent'), on the next step
+    r2 = Rig(tmp_path / "intent", monkeypatch).invested()
+    n2, lost = len(r2.ib.placed), []
+    real_place, real_open2 = r2.ib.placeOrder, r2.ad.open_sell_qty
+
+    def place(contract, order):
+        if contract.symbol == "BIL" and not lost:
+            lost.append(1)
+            r2.ib._closed()                          # the socket died under the write: nothing reached the venue
+            raise ConnectionError("Socket disconnect")
+        return real_place(contract, order)
+
+    def open_sell_qty2(sym, exclude=None):
+        if sym == "BIL" and lost and not r2.m._halted():
+            r2.m.halt("operator: stop trading (no flatten)")
+        return real_open2(sym, exclude=exclude)
+    monkeypatch.setattr(r2.ib, "placeOrder", place)
+    monkeypatch.setattr(r2.ad, "open_sell_qty", open_sell_qty2)
+    r2.tick("15:55:05", day=D2)
+    assert lost and r2.m._halted() and r2.ib.placed[n2:] == []
+    r2.tick("15:55:30", day=D2)
+    bil = next(o for o in r2.m.state["last_run"]["orders"] if o["symbol"] == "BIL")
+    assert bil["filled"] == 0 and bil["how"].startswith("never reached the venue") and r2.ib.placed[n2:] == []
+    _never_short(r2)
