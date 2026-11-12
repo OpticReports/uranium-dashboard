@@ -301,7 +301,7 @@ the repo or a chat):
   MIRROR_BRAIN_URL=https://<the brain's onrender.com host>,
   MIRROR_API_TOKEN (the same value as the brain's), MIRROR_CAPITAL_USD=118000,
   and MIRROR_WEIGHTS if not the policy split. MIRROR_LIVE_ENGINES stays unset.
-- ibkr-executor, for the POLICY routine's mirror leg: MIRROR_TRANSFER_TOKEN (a long random string of its own, at least 24 characters, never EXEC_TOKEN or READ_TOKEN; the routine holds the same value) and optionally MIRROR_TRANSFER_MAX_FRAC (default 0.25 of the book's equity per cap period: until the next session on a later ET date).
+- ibkr-executor, for the POLICY routine's mirror leg: MIRROR_TRANSFER_TOKEN (a long random string of its own, at least 24 characters, never EXEC_TOKEN or READ_TOKEN). The routine side holds the same value as a NETWORK SECRET on the cloud environment (set 2026-11-12: host ibkr-executor.onrender.com, header X-Transfer-Token, no prefix), never as an environment variable: the platform adds it to requests to that host and replaces a stand-in, so the routine runs `MIRROR_TRANSFER_TOKEN=via-network-secret python3 composer/scripts/mirror_transfer.py ...` and the real value is never readable in a session. Verified 2026-11-12 with a request naming no book: "refused: not a valid transfer" (the password passed; nothing queued) with no header and with a stand-in. And optionally MIRROR_TRANSFER_MAX_FRAC (default 0.25 of the book's equity per cap period: until the next session on a later ET date).
 - ibkr-executor, optional: MIRROR_MAX_BOOK_USD - the cap on a live book's seeded-plus-credited capital (unset or 0 = MIRROR_CAPITAL_USD); a /mirror/credit above it is refused without "force": true.
 
 ## One brain: what a change must do
