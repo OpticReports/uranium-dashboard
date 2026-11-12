@@ -13,8 +13,9 @@ book and per engine, answers three questions:
     need on a small sleeve); a difference the shadow ledger explains (knife-edge, no-rebalance) is
     said, not alarmed
   3 did it earn what Composer earned that day (the sleeve's shares and cash valued at the official
-    closes, against Composer's deposit-adjusted value), and what the fills cost against the decision
-    price
+    closes, against Composer's deposit-adjusted value; capital that came in or went out that session -
+    a POLICY transfer, an operator's credit or debit - is not a return, a dividend is), and what the
+    fills cost against the decision price
 
   mirror_parity.py                 today's check, printed (exit 2 when something needs a human)
   monitor.py calls check() after the shadow runner and the paper book; it can never stop the monitor.
@@ -24,6 +25,7 @@ no broker call, no Composer call; one ledger row per book and engine in results/
 """
 import datetime
 import json
+import math
 import os
 import sys
 import urllib.error
@@ -132,6 +134,79 @@ def moved_in(row, eng):
     return net
 
 
+CREDIT_KINDS = ("credit", "dividend")     # the kinds a session row's "credits" carry (ibkr-executor app/mirror.py)
+
+
+def _finite(x):
+    """a JSON number that is a finite float: not a bool, not NaN or infinite, not an integer too large for a float"""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return False
+    try:
+        return math.isfinite(x)
+    except OverflowError:
+        return False
+
+
+def credited_in(row, eng):
+    """(net, None): the net dollars the OPERATOR put into sleeve `eng` that session with POST /mirror/credit
+    (kind "credit": + capital added, - a fee or a debit), to the cent, from the session row's "credits"
+    ([{"sleeve", "amount", "kind", "id", "note"?}], as ibkr-executor's mirror._apply_credits (kind "credit")
+    and mirror._dividends (kind "dividend") leave them); 0.0 when none touched it. A dividend the book
+    credited itself is a RETURN, as on Composer's side, and is not counted. (None, why) when an entry that
+    touches the sleeve - or one that cannot say which sleeve it touches - cannot be read: the day's return
+    cannot then be adjusted (moved_in's None)"""
+    cs = row.get("credits")
+    if cs is None:
+        return 0.0, None
+    if not isinstance(cs, list):
+        return None, "the session row's credits are not a list"
+    net = 0.0
+    for c in cs:
+        if not isinstance(c, dict):
+            return None, "a credits entry is not a record"
+        if not isinstance(c.get("sleeve"), str):
+            return None, "a credits entry does not name its sleeve"
+        if c["sleeve"] != eng:
+            continue
+        amt, kind = c.get("amount"), c.get("kind")
+        if not _finite(amt):
+            return None, f"a credit to the sleeve has no finite amount: {one_line(repr(amt), 40)}"
+        if kind not in CREDIT_KINDS:
+            return None, ("a credit to the sleeve does not say its kind" if kind is None else
+                          f"a credit to the sleeve is of kind {one_line(repr(kind), 40)}, neither an operator credit nor a dividend")
+        if kind == "credit":
+            net += amt
+    return round(net, 2), None
+
+
+def day_return(e0, e1, net, cred, sleeve, px):
+    """(return, basis) of one sleeve on the day: e0 its row of the session before at that day's closes, e1
+    this session's row at today's; net the dollars transfers moved in (moved_in), cred the operator's net
+    credit (credited_in). Neither is a return. Without a credit: (e1 - net) / e0 - 1, basis None, exactly
+    as before. With one:
+      "chained" - the sleeve TRADED: the credited dollars were invested with the rest at the plan's prices
+          (px, the row's "prices"), so the day is chained there: (V - net - cred) / e0 * e1 / V - 1, V the
+          sleeve after the session at those prices. What the credited dollars themselves earned from the
+          plan's prices to the close goes out with them (at face value, a credit of 4x the sleeve would
+          turn a 0.4% move into the close into a 160 bps 'gap' against Composer)
+      "face" - the sleeve held or sat out (the credit stayed cash and earned nothing), or the row cannot
+          price the sleeve at its own prices: (e1 - net - cred) / e0 - 1, the credit removed as a transfer is
+    Equal whenever the closes are the plan's prices."""
+    if not cred:
+        return (e1 - net) / e0 - 1, None
+    flows = net + cred
+    if sleeve.get("action") == "trade":
+        v, _ = _value(sleeve, px)
+        if v is not None and v > 0 and v - flows > 0:
+            return (v - flows) / e0 * (e1 / v) - 1, "chained"
+    return (e1 - flows) / e0 - 1, "face"
+
+
+def _paren(*parts):
+    got = [p for p in parts if p]
+    return f" ({'; '.join(got)})" if got else ""
+
+
 def weights_of(sleeve, px):
     eq, vals = _value(sleeve, px)
     if not eq or eq <= 0:
@@ -186,7 +261,10 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
     only when the two books went into the day holding the same (else the difference is yesterday's
     mismatch, already reported then). It is TRANSFER-ADJUSTED: capital a POLICY move brought into or
     took out of the sleeve that session (moved_in) is not a return, as a deposit is not on Composer's
-    side; a session row that does not say what it moved gets no return comparison, and says so"""
+    side; a session row that does not say what it moved gets no return comparison, and says so. It is
+    CREDIT-ADJUSTED the same way (credited_in, day_return): the operator's credits and debits are taken
+    out, the line says so; a dividend the book credited stays in; credits that cannot be read get no
+    return comparison, and the line says why"""
     mode = "LIVE" if view.get("mode") == "live" else "PAPER"
     tag = f"MIRROR {mode}"
     rows = {r["session"]: r for r in _rows(view)}
@@ -199,7 +277,7 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
         return [f"{tag.lower()} {name} {d}: no trade ({one_line(row.get('reason') or row.get('outcome'), 120)})"], alerts, led
     px = row.get("prices") or {}
     same = compared = 0
-    diffs, parts, unadjusted = [], [], []
+    diffs, parts, unadjusted, uncredited = [], [], [], {}
     prev = rows.get(prev_d) if prev_d else None
     for eng, s in (row.get("sleeves") or {}).items():
         w, eq = weights_of(s, px)
@@ -241,13 +319,23 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
             e1, _ = _value(s, c1 or {}) if c1 is not None else (None, {})
             e0, _ = _value(p0, c0 or {}) if c0 is not None else (None, {})
             net = moved_in(row, eng)
+            cred, unread = credited_in(row, eng)
             if net is None:
                 rec["ret_skipped"] = "a transfer touched the sleeve and the session row does not say what it moved"
                 unadjusted.append(eng)
+            elif cred is None:
+                rec["ret_skipped"] = unread
+                uncredited.setdefault(unread, []).append(eng)
             elif e1 and e0 and e0 > 0:
-                ret = (e1 - net) / e0 - 1
+                ret, basis = day_return(e0, e1, net, cred, s, px)
                 if net:
                     rec["transfer_in"] = round(net, 2)
+                note = ""
+                if cred:
+                    rec.update(credit_in=cred, credit_basis=basis)
+                    many = sum(x.get("sleeve") == eng and x.get("kind") == "credit" for x in row["credits"]) > 1
+                    note = (f"${abs(cred):,.2f}{' net' if many else ''} {'credited' if cred > 0 else 'debited'} by the "
+                            f"operator removed from the day's return")
                 # did the two books go INTO the day holding the same?
                 w0, eq0 = weights_of(p0, prev.get("prices") or {})
                 cp = (comp_prev or {}).get(eng)
@@ -257,10 +345,10 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
                     carried = sr.distance(w0, cp["holdings"])[0] <= tol0
                 rec.update(ret=round(ret, 6), composer_ret=round(c["ret"], 6), diff_bps=round((ret - c["ret"]) * 1e4, 1),
                            carried_same=carried)
-                diffs.append((eng, rec["diff_bps"], carried))
+                diffs.append((eng, rec["diff_bps"], carried, note))
                 if carried and abs(rec["diff_bps"]) > RETURN_ALARM_BPS:
                     alerts.append(f"{tag} RETURN GAP — {eng} on {d} (book {name}): {ret:+.2%} against Composer's {c['ret']:+.2%} "
-                                  f"though both went into the day holding the same: look at the fills and the booking.")
+                                  f"though both went into the day holding the same{_paren(note)}: look at the fills and the booking.")
         led.append(rec)
         parts.append(f"{eng} {s.get('action')}")
     orders = row.get("orders") or []
@@ -274,11 +362,13 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
     if compared:
         lines.append(f"  parity vs Composer: {same} of {compared} engines hold the same"
                      + ("; day return, mirror - Composer: "
-                        + ", ".join(f"{e} {x:+.0f} bps" + ("" if same_in else " (different holdings into the day)" if same_in is False
-                                                          else " (yesterday not comparable)") for e, x, same_in in diffs)
+                        + ", ".join(f"{e} {x:+.0f} bps" + _paren("" if same_in else "different holdings into the day" if same_in is False
+                                                                 else "yesterday not comparable", note)
+                                    for e, x, same_in, note in diffs)
                         if diffs else "")
                      + (f"; day return NOT compared for {', '.join(unadjusted)} (a transfer was applied and the session "
-                        f"row does not say what it moved)" if unadjusted else ""))
+                        f"row does not say what it moved)" if unadjusted else "")
+                     + "".join(f"; day return NOT compared for {', '.join(es)} ({why})" for why, es in uncredited.items()))
     else:
         lines.append(f"  parity vs Composer: no snapshot for {d} on disk yet")
     notes = [n for n in (row.get("notes") or []) if "not attested" not in str(n)]
