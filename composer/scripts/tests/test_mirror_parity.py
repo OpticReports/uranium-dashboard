@@ -534,6 +534,27 @@ class P11CreditDay(Base):
         self.assertEqual(rec["credit_basis"], "face")
         self.assertAlmostEqual(rec["ret"], 66 * 40.0 * 0.004 / e0, delta=1e-6)             # the old SOXL's +0.4%, on the old $
 
+    def test_the_credit_goes_in_at_the_fills_not_at_the_plans_price(self):
+        """the same sleeve's buys fill 0.3% above the plan's price (the market moved between the quote and the fill) and
+        SOXL closes there. Chained at the plan's price, that 0.3% on the credited $11,850 is charged to the old $2,650:
+        -134 bps. The old SOXL earned +0.3%, as Composer did"""
+        f = 11850.0
+        self.comp = {d: {"KMLM": {"holdings": {"SOXL": 1.0}, "ret": 0.0, "basis": "dav", "kind": "close", "taken_at": "x"}}
+                     for d in (D0, D)}
+        self.comp[D]["KMLM"]["ret"] = 0.003
+        fill = 40.0 * 1.003
+        before = {"KMLM": sleeve({"SOXL": 66})}
+        traded = {"KMLM": sleeve({"SOXL": 66 + 295}, cash=10.0 + f - 295 * fill)}
+        buy = {"id": "mirror-x-B-SOXL", "side": "BUY", "symbol": "SOXL", "qty": 295, "filled": 295, "price": fill, "ref": 40.0,
+               "limit": 40.2, "commission": 0.0, "cost_bps": 30.0, "how": "filled", "split": {"KMLM": 295}}
+        _, alerts = self.run_check(self.fd([cr(f, "KMLM")], traded, before, orders=[buy]), closes=self.moved("SOXL", 0.003))
+        self.assertEqual(alerts, [])
+        rec = self.recs()["KMLM"]
+        self.assertEqual(rec["credit_basis"], "chained")
+        self.assertAlmostEqual(rec["diff_bps"], 0.0, delta=0.5)
+        self.assertEqual(mp.session_prices({"prices": dict(PX), "orders": [buy, dict(buy, filled=0, price=None, symbol="BIL")]}),
+                         dict(PX, SOXL=fill))                                           # an unfilled order keeps the plan's
+
     def test_a_dividend_stays_in_the_return(self):
         div = {"sleeve": "HG", "amount": 55.5, "kind": "dividend", "id": "dividend-BIL-2026-11-03-HG"}
         both = dict(BIG, HG=sleeve({"BIL": 512}, cash=10.0 + 55.5 + CREDIT - 142 * 91.5))
@@ -630,7 +651,7 @@ GOLDEN_T = {"HG": sleeve({"BIL": 352}), "HARV": sleeve({"PULS": 388}, cash=23.5)
             "KMLM": sleeve({"SOXL": 30, "TECL": 12, "PULS": 20}, cash=40.0, action="hold",
                            reason="inside the corridor: largest gap 2.0% vs 10%"),
             "SLEEVE": sleeve({"BOXX": 30}, cash=25.0, action="hold", reason="at target")}
-# what mirror_parity.book_parity printed for this day at f54ddeb9, before the credits were read
+# what mirror_parity.book_parity printed for this day before it read credits (its code of 6b7d4683, unchanged to b7c0849d)
 GOLDEN_LINES = [
     "mirror live live 2026-11-10: HG trade | HARV trade | KMLM hold | SLEEVE hold; 0 order(s)",
     "  parity vs Composer: 3 of 4 engines hold the same; day return, mirror - Composer: HG -1 bps, HARV +218 bps, KMLM +43 bps "

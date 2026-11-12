@@ -374,7 +374,7 @@ def paste_line(url, book, credits, note):
     total = round(sum(a for _, a in credits), 2)
     pairs = "".join(f"({_lit(e)},{a!r})," for e, a in credits)
     code = ";".join([
-        "import os,json,httpx",
+        "import os,json,pathlib,httpx",
         "E=os.environ",
         'T=E.get("EXEC_TOKEN") or ""',
         f"P=E.get({_lit(var)}) or {_lit(default)}",
@@ -384,8 +384,9 @@ def paste_line(url, book, credits, note):
         f"A=({pairs})",
         f"D={total!r}",
         "X=os.path.exists",
-        'I=json.load(open(P+".inbox.json")) if X(P+".inbox.json") else []',      # the inbox first: a request moves
-        "S=json.load(open(P)) if X(P) else None",                                   # from it into the state
+        "R=lambda f:json.loads(pathlib.Path(f).read_text())",
+        'I=R(P+".inbox.json") if X(P+".inbox.json") else []',                     # the inbox first: a request moves
+        "S=R(P) if X(P) else None",                                                 # from it into the state
         'Q=[r for r in list(I)+list((S or {}).get("requests") or []) if isinstance(r,dict) and r.get("kind")=="credit"]',
         'C=float(E.get("MIRROR_MAX_BOOK_USD") or 0)',
         'F=float((S or {"funded_usd":0})["funded_usd"])',              # none in the state: an error, nothing sent

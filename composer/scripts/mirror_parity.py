@@ -181,19 +181,32 @@ def credited_in(row, eng):
     return round(net, 2), None
 
 
+def session_prices(row):
+    """the prices the session's money moved at: each symbol's average fill from the row's venue orders,
+    the plan's price (the row's "prices") for every symbol that did not fill"""
+    px, got, orders = dict(row.get("prices") or {}), {}, row.get("orders")
+    for o in orders if isinstance(orders, list) else []:
+        q, p = (o.get("filled"), o.get("price")) if isinstance(o, dict) else (None, None)
+        if isinstance(o, dict) and isinstance(o.get("symbol"), str) and _finite(q) and q > 0 and _finite(p) and p > 0:
+            n, v = got.get(o["symbol"], (0.0, 0.0))
+            got[o["symbol"]] = (n + q, v + q * p)
+    px.update({s: v / n for s, (n, v) in got.items()})
+    return px
+
+
 def day_return(e0, e1, net, cred, sleeve, px):
     """(return, basis) of one sleeve on the day: e0 its row of the session before at that day's closes, e1
     this session's row at today's; net the dollars transfers moved in (moved_in), cred the operator's net
     credit (credited_in). Neither is a return. Without a credit: (e1 - net) / e0 - 1, basis None, exactly
     as before. With one:
-      "chained" - the sleeve TRADED: the credited dollars were invested with the rest at the plan's prices
-          (px, the row's "prices"), so the day is chained there: (V - net - cred) / e0 * e1 / V - 1, V the
-          sleeve after the session at those prices. What the credited dollars themselves earned from the
-          plan's prices to the close goes out with them (at face value, a credit of 4x the sleeve would
-          turn a 0.4% move into the close into a 160 bps 'gap' against Composer)
+      "chained" - the sleeve TRADED: the credited dollars went in with the rest at the session's prices
+          (px, session_prices), so the day is chained there: (V - net - cred) / e0 * e1 / V - 1, V the
+          sleeve after the session at those prices. What the credited dollars themselves earned from
+          there to the close goes out with them (at face value, a credit of 4x the sleeve would turn a
+          0.4% move into the close into a 160 bps 'gap' against Composer)
       "face" - the sleeve held or sat out (the credit stayed cash and earned nothing), or the row cannot
-          price the sleeve at its own prices: (e1 - net - cred) / e0 - 1, the credit removed as a transfer is
-    Equal whenever the closes are the plan's prices."""
+          price the sleeve: (e1 - net - cred) / e0 - 1, the credit taken out as a transfer is
+    The two are equal whenever the closes are the session's prices."""
     if not cred:
         return (e1 - net) / e0 - 1, None
     flows = net + cred
@@ -329,7 +342,7 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
                 rec["ret_skipped"] = unread
                 uncredited.setdefault(unread, []).append(eng)
             elif e1 and e0 and e0 > 0:
-                ret, basis = day_return(e0, e1, net, cred, s, px)
+                ret, basis = day_return(e0, e1, net, cred, s, session_prices(row) if cred else px)
                 if net:
                     rec["transfer_in"] = round(net, 2)
                 note = ""
