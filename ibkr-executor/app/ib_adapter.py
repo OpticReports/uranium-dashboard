@@ -1166,12 +1166,45 @@ class IBAdapter:
             self._stock_contracts[symbol] = c
         return c
 
+    def _open_orders_unanswered(self) -> bool:
+        """K4: is an earlier open-orders request still unanswered on this
+        session? ib_async keys EVERY open-orders request "openOrders"
+        (ib.py:2263-2271), a new request replaces a pending one
+        (wrapper.py:370-377), and openOrderEnd carries no request id
+        (decoder.py:85), so it ends whichever request is current
+        (wrapper.py:384-395, 719-720). While an earlier request is
+        unanswered - the connect-time sync's (a timeout there is only
+        logged, ib.py:2077-2082) or one that timed out and kept the session
+        (order_absent_today) - ITS late end would end a new request with a
+        partial list, and a partial "open orders" answer reads a working
+        order as gone: a resting SELL undercounted (a short), or an order
+        called absent and placed again. No such request = an honest answer."""
+        futures = getattr(getattr(self.ib, "wrapper", None), "_futures", None)
+        return isinstance(futures, dict) and "openOrders" in futures
+
+    def _drop_session(self) -> None:
+        """Disconnect so the next surface reconnects on a fresh session
+        (ib_async's disconnect resets the wrapper's requests and caches,
+        ib.py:405-406)."""
+        self._proven = None
+        try:
+            self.ib.disconnect()
+        except Exception:  # noqa: BLE001
+            pass
+
     def _all_trades(self, refresh: bool = False) -> list:
         """This session's trades; refresh=True additionally asks the venue
         for open + completed orders (covers orders placed in a previous
         session that the connect-time sync missed)."""
         trades = list(self.ib.trades())
         if refresh:
+            if self._open_orders_unanswered():
+                self._drop_session()
+                raise ExecutorConnectionError(
+                    "an earlier open-orders request is still unanswered on "
+                    "this session, so the venue's answer could not be told "
+                    "from that request's late end: the session is dropped "
+                    "and reconnected (order history unavailable this time)")
             seen = {(t.order.orderId, getattr(t.order, "permId", 0))
                     for t in trades}
             # BOUNDED (2026-09-08): RequestTimeout=0 waits forever, and a
@@ -1609,10 +1642,21 @@ class IBAdapter:
         has no execution today filled nothing, whatever became of it.
         It proves nothing about an order of an earlier day - that is the
         caller's check. Read-only and additive: bounded like the other
-        history requests, but it never drops the session on a timeout."""
+        history requests, but it never drops the session on a timeout of
+        its own. An EARLIER open-orders request still unanswered (K4,
+        _open_orders_unanswered) is different: this request's answer could
+        be ended by that one's late reply with a partial list and call a
+        working order absent, so nothing is proven (None) and the session is
+        dropped, so the next ask runs on a fresh one."""
         self._require_live()
         if self._find_trade_by_client_id(client_order_id) is not None:
             return False
+        if self._open_orders_unanswered():
+            logger.warning("order_absent_today: an earlier open-orders "
+                           "request is still unanswered on this session - "
+                           "nothing proven; the session is dropped")
+            self._drop_session()
+            return None
         prev = getattr(self.ib, "RequestTimeout", 0)
         try:
             self.ib.RequestTimeout = VENUE_HISTORY_TIMEOUT_S
@@ -1990,8 +2034,19 @@ class IBAdapter:
               ib_async sets order.clientId at placeOrder: ib.py:805), so one
               the session still holds as working may still fill.
         An order of another client that only the cache still holds is not on
-        the venue's list: it is no longer open and can sell nothing more."""
+        the venue's list: it is no longer open and can sell nothing more.
+
+        That completeness holds only when no EARLIER open-orders request is
+        unanswered (K4, _open_orders_unanswered): its late end could finish
+        this request with a partial list. Then the session is dropped and
+        this read fails closed (the caller holds the sell and asks again)."""
         self._require_live()
+        if self._open_orders_unanswered():
+            self._drop_session()
+            raise ExecutorConnectionError(
+                "an earlier open-orders request is still unanswered on this "
+                "session, so the venue's answer could not be told from that "
+                "request's late end: the session is dropped and reconnected")
         prev = getattr(self.ib, "RequestTimeout", 0)
         try:
             self.ib.RequestTimeout = VENUE_HISTORY_TIMEOUT_S

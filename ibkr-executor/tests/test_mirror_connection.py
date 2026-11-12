@@ -1845,3 +1845,42 @@ def test_k3a_a_halt_landing_during_the_sells_check_stops_that_sell(tmp_path, mon
     bil = next(o for o in r2.m.state["last_run"]["orders"] if o["symbol"] == "BIL")
     assert bil["filled"] == 0 and bil["how"].startswith("never reached the venue") and r2.ib.placed[n2:] == []
     _never_short(r2)
+
+
+# ------------------------------------------------------------------ K4: an earlier open-orders request left unanswered
+# ib_async keys EVERY open-orders request "openOrders" and openOrderEnd carries no request id: an earlier request
+# still unanswered (the connect-time sync's, whose timeout is only logged, or one that timed out and kept the
+# session) would end the next one with a PARTIAL list - a resting hand SELL read as gone (a short), or an order
+# read as absent and placed again. Every open-orders read fails closed while one is pending and drops the session.
+def test_k4_the_sell_count_fails_closed_while_an_earlier_open_orders_request_is_unanswered(real):
+    a, gw = real
+    a.ib.connect("x", 0, clientId=17)
+    a.connects.clear()
+    assert a.open_sell_qty("TECL") == 0 and a.connects == []           # the twin: nothing pending, an honest answer
+    a.ib.wrapper.startReq("openOrders")                               # an earlier request, still unanswered
+    with pytest.raises(ib_mod.ExecutorConnectionError, match="still unanswered"):
+        a.open_sell_qty("TECL")
+    assert not a.ib.isConnected() and a._proven is None
+    assert a.open_sell_qty("TECL") == 0                               # the next read runs on a fresh session
+    assert a.ib.isConnected() and len(a.connects) == 1 and "openOrders" not in a.ib.wrapper._futures
+
+
+def test_k4_order_absent_today_proves_nothing_while_an_earlier_open_orders_request_is_unanswered(real):
+    a, gw = real
+    a.ib.connect("x", 0, clientId=17)
+    a.connects.clear()
+    a.ib.wrapper.startReq("openOrders")
+    assert a.order_absent_today("mirror-2026-11-12-S-TECL") is None   # nothing proven: never "absent"
+    assert not a.ib.isConnected()
+    assert a.order_absent_today("mirror-2026-11-12-S-TECL") is True   # fresh session: both requests answered
+    assert len(a.connects) == 1
+
+
+def test_k4_the_order_history_refresh_fails_closed_while_an_earlier_open_orders_request_is_unanswered(real):
+    a, gw = real
+    a.ib.connect("x", 0, clientId=17)
+    assert isinstance(a._all_trades(refresh=True), list)              # the twin: a normal refresh
+    a.ib.wrapper.startReq("openOrders")
+    with pytest.raises(ib_mod.ExecutorConnectionError, match="still unanswered"):
+        a._all_trades(refresh=True)
+    assert not a.ib.isConnected()
