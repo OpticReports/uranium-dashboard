@@ -136,6 +136,11 @@ _IB_CANCELLED = ("Cancelled", "ApiCancelled", "Inactive")
 # behind a night of account updates survives it. _drain pumps until a pump
 # receives nothing; past this bound the read fails closed.
 DRAIN_MAX_S = 5.0
+PROVE_LIVE_TIMEOUT_S = 5.0     # bound on the liveness round trip (prove_live)
+QUALIFY_TIMEOUT_S = 10.0       # bound on spot_ex's contract lookup: a gateway that
+#                                stops answering must not wedge the loop thread
+POSITIONS_FAIL_MEMO_S = 30.0   # a position download that timed out is not asked
+#                                for again (10 s of blocking each) for this long
 POSITIONS_SYNC_TIMEOUT_S = 10.0  # bound on the explicit position download of a
                                  # session whose connect-time one did not end
 
@@ -423,6 +428,15 @@ class IBAdapter:
         # path (spot() goes through the same gate).
         self._reconnect_backoff = RECONNECT_BACKOFF_S
         self._next_reconnect_ts = 0.0
+        # the backoff's ceiling. The default is the blend's (one attempt per
+        # cycle); the service lowers it when ONLY the Composer mirror trades
+        # through this adapter (mirror_only): one decision a day, timed to
+        # the minute, and a /kill flatten must not wait five minutes for the
+        # next connect attempt. mirror_only also words the outage alerts.
+        self.reconnect_backoff_max_s = RECONNECT_BACKOFF_MAX_S
+        self.mirror_only = False
+        self._in_keepalive = False
+        self._positions_failed: tuple | None = None   # (monotonic, why)
         self._disconnected_since: float | None = None
         self._outage_alerted = False
         # the position list of THIS session is trusted only once its
@@ -602,6 +616,7 @@ class IBAdapter:
         reported price were booking a close as a fill basis where the
         pre-B8 code raised and failed closed. The source is the caller's
         only way to tell, so it is returned rather than merely logged."""
+        import asyncio
         from ib_async import Future, Stock
         self._require_live()
         # Symbols outside the El Nino table (SPY/BIL/sleeve names from the
@@ -615,7 +630,20 @@ class IBAdapter:
             c = sorted(self.ib.reqContractDetails(c),
                        key=lambda d: d.contract.lastTradeDateOrContractMonth
                        )[0].contract
-        self.ib.qualifyContracts(c)
+        # bounded: ib_async's sync calls wait forever by default
+        # (RequestTimeout 0), and a gateway that went silent without closing
+        # the socket would park the loop thread here
+        prev = getattr(self.ib, "RequestTimeout", 0)
+        try:
+            self.ib.RequestTimeout = QUALIFY_TIMEOUT_S
+            self.ib.qualifyContracts(c)
+        except (TimeoutError, asyncio.TimeoutError) as exc:
+            raise ExecutorConnectionError(
+                f"IB gateway did not answer the contract lookup for {symbol} "
+                f"within {QUALIFY_TIMEOUT_S:.0f}s (a session that stopped "
+                f"answering)") from exc
+        finally:
+            self.ib.RequestTimeout = prev
         # B8 + the market-data posture (2026-08-24), composed at the merge:
         #  * a data type is requested BEFORE subscribing (B8: without it an
         #    unentitled request gets error 354 and never a single field,
@@ -826,8 +854,11 @@ class IBAdapter:
             # wall clock, not monotonic: the ledger outlives this process
             self._outage("start", time.time())
         # a blocked adapter call - NOT a cycle: this guard fronts six
-        # surfaces and reference_prices loops per symbol
-        self._outage("blocked_call")
+        # surfaces and reference_prices loops per symbol. The keepalive is
+        # not a call anything was waiting on: it runs every loop iteration
+        # and would only count the outage's length in iterations.
+        if not getattr(self, "_in_keepalive", False):
+            self._outage("blocked_call")
         if now < self._next_reconnect_ts:
             self._maybe_outage_alert(now)
             return
@@ -840,11 +871,16 @@ class IBAdapter:
             self.ib.connect(self.cfg.ib_host, port,
                             clientId=self.cfg.ib_client_id, timeout=15)
         except Exception as exc:  # noqa: BLE001
-            self._next_reconnect_ts = now + self._reconnect_backoff
-            self._reconnect_backoff = min(self._reconnect_backoff * 2,
-                                          RECONNECT_BACKOFF_MAX_S)
+            # from the END of the attempt: a connect that hangs for its 15 s
+            # timeout used to eat the whole first backoff step
+            ended = time.monotonic()
+            self._next_reconnect_ts = ended + self._reconnect_backoff
+            self._reconnect_backoff = min(
+                self._reconnect_backoff * 2,
+                float(getattr(self, "reconnect_backoff_max_s",
+                              RECONNECT_BACKOFF_MAX_S)))
             logger.warning("IB gateway reconnect failed (next attempt in "
-                           "%.0fs): %s", self._next_reconnect_ts - now, exc)
+                           "%.0fs): %s", self._next_reconnect_ts - ended, exc)
             self._maybe_outage_alert(now)
             return
         # IB's market-data type is PER SESSION: without this, the fresh
@@ -854,6 +890,7 @@ class IBAdapter:
         # 2026-08-24, CRITICAL).
         self._apply_market_data_type()
         self._positions_synced = False  # a new session: its own download counts
+        self._positions_failed = None
         if hasattr(self, "_order_errors"):
             self._order_errors.clear()  # order ids restart at nextValidId
         if hasattr(self, "_cancel_replies"):
@@ -864,9 +901,15 @@ class IBAdapter:
                     down_s)
         if self._outage_alerted:
             from .alerts import send
-            send(f"🧬 IB gateway RECONNECTED after {down_s / 60:.0f} min — "
-                 f"executor resumed (cycles were failing closed meanwhile; "
-                 f"GTC stops rested at the venue throughout)")
+            if getattr(self, "mirror_only", False):
+                send(f"🧬 IB gateway RECONNECTED after {down_s / 60:.0f} min — "
+                     f"executor resumed (the Composer mirror could not read "
+                     f"the account or trade meanwhile; it keeps no resting "
+                     f"stops at the venue)")
+            else:
+                send(f"🧬 IB gateway RECONNECTED after {down_s / 60:.0f} min — "
+                     f"executor resumed (cycles were failing closed meanwhile; "
+                     f"GTC stops rested at the venue throughout)")
         # State resets come FIRST. Closing the ledger before them meant a
         # raise inside end() left the adapter permanently believing it was
         # mid-outage while actually connected - the next real drop would then
@@ -885,6 +928,15 @@ class IBAdapter:
         self._outage_alerted = True
         self._outage("mark_alerted")
         from .alerts import send
+        if getattr(self, "mirror_only", False):
+            send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} min "
+                 f"— the Composer mirror cannot read the account or trade. "
+                 f"It keeps NO resting stops at the venue: the positions stay "
+                 f"as they are, and a session whose decision (15:54 ET) finds "
+                 f"the gateway still down will NOT trade; a /kill flatten "
+                 f"waits for the gateway too. Auto-reconnect keeps retrying "
+                 f"with backoff; check the gateway container if this persists")
+            return
         send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} min "
              f"— executor is failing closed (no entries/exits/stop "
              f"ratchets); GTC stops still rest at the venue. Auto-reconnect "
@@ -950,18 +1002,65 @@ class IBAdapter:
         self._drain()
         self._require_connected()
 
+    def prove_live(self, timeout: float = PROVE_LIVE_TIMEOUT_S) -> None:
+        """A bounded liveness ROUND TRIP. _require_live only listens: on a
+        connection that died without a FIN (a host that vanished, a dropped
+        NAT mapping, a gateway that stopped answering) nothing arrives, the
+        session keeps reading "connected" and its caches keep the last
+        values it was sent. Only an answered request proves the session.
+
+        ib_async 2.1.0: IB.reqCurrentTime (ib.py:865-871) is
+        _run(reqCurrentTimeAsync()); _run passes IB.RequestTimeout to
+        util.run (ib.py:427-428), which wraps the request in asyncio.wait_for
+        when the timeout is non-zero (util.py:350-351) and lets its
+        TimeoutError out of run_until_complete (util.py:359-360). The request
+        is one message (client.py:912-913: send(49, 1)); the answer ends the
+        "currentTime" future (wrapper.py:1515-1517). A socket found closed
+        meanwhile fails that future with ConnectionError("Socket disconnect")
+        (wrapper.py:361-365).
+
+        No answer in time, or any error: the session is treated as dead -
+        disconnected, then the existing reconnect path (backoff, outage
+        ledger, alerts). Returns on a proven or a freshly connected session
+        (the connect handshake is itself a round trip); raises
+        ExecutorConnectionError while the gateway cannot be reached. Called
+        where a stale read would be acted on (the keepalive, the mirror's
+        pre-trade account gate, a flatten round) - not on every surface."""
+        self._require_live()
+        prev = getattr(self.ib, "RequestTimeout", 0)
+        try:
+            self.ib.RequestTimeout = timeout
+            self.ib.reqCurrentTime()
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("IB gateway session did not answer a liveness "
+                           "request within %.0fs (%s: %s) - treated as dead: "
+                           "disconnecting and reconnecting", timeout,
+                           type(exc).__name__, exc)
+        finally:
+            self.ib.RequestTimeout = prev
+        try:
+            self.ib.disconnect()
+        except Exception:  # noqa: BLE001
+            pass
+        self._positions_synced = False
+        self._require_connected()
+
     def keepalive(self) -> bool:
         """Cheap liveness pass for the service loop when nothing else touches
         the adapter (the mirror alone trades once a day): notices an
         overnight drop and reconnects through the same backoff, outage
         ledger and alerts as any other surface. Never raises; False while
         the gateway is unreachable."""
+        self._in_keepalive = True
         try:
-            self._require_live()
+            self.prove_live()
             return True
         except Exception as exc:  # noqa: BLE001
             logger.warning("IB keepalive: %s", exc)
             return False
+        finally:
+            self._in_keepalive = False
 
     def _positions_pending(self) -> bool | None:
         """Has this session's connect-time position download NOT ended?
@@ -984,17 +1083,30 @@ class IBAdapter:
         RAISES (never an empty or a cached list)."""
         if not getattr(self, "_positions_synced", False):
             if self._positions_pending() is not False:
+                # a download that just timed out is not asked for again at
+                # once: every read would block the loop thread a fresh
+                # POSITIONS_SYNC_TIMEOUT_S (a decision retries its gate, a
+                # flatten its round). The failure stands for a short while.
+                failed = getattr(self, "_positions_failed", None)
+                if failed and 0 <= time.monotonic() - failed[0] < POSITIONS_FAIL_MEMO_S:
+                    raise ExecutorNotSyncedError(
+                        f"the account's positions are not yet synced on this "
+                        f"gateway session ({failed[1]}; asked again "
+                        f"{POSITIONS_FAIL_MEMO_S:.0f}s after that failure)")
                 prev = getattr(self.ib, "RequestTimeout", 0)
                 try:
                     self.ib.RequestTimeout = POSITIONS_SYNC_TIMEOUT_S
                     self.ib.reqPositions()
                 except Exception as exc:  # noqa: BLE001
+                    self._positions_failed = (
+                        time.monotonic(), f"{type(exc).__name__}: {exc}")
                     raise ExecutorNotSyncedError(
                         f"the account's positions are not yet synced on this "
                         f"gateway session ({type(exc).__name__}: {exc})"
                     ) from exc
                 finally:
                     self.ib.RequestTimeout = prev
+            self._positions_failed = None
             self._positions_synced = True
         return list(self.ib.positions())
 
@@ -2184,6 +2296,11 @@ class DryAdapter:
         every guard, which is exactly right and exactly not what those
         setups mean."""
         self._positions[symbol] = self._positions.get(symbol, 0) + int(qty)
+
+    def prove_live(self, timeout: float = 0.0) -> None:
+        """Mirrors IBAdapter.prove_live: no gateway behind a paper adapter,
+        so there is no session to prove."""
+        return None
 
     def positions_snapshot(self) -> dict:
         """Mirrors IBAdapter.positions_snapshot: the simulated account's whole

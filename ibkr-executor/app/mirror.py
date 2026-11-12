@@ -1489,6 +1489,10 @@ class MirrorManager:
         the positions or the cash unreadable) rather than a finding about the account."""
         self._acct_unread = False
         try:
+            # one liveness round trip per evaluation, BEFORE anything is read: a session that died with
+            # no FIN still reads "connected" and serves its last positions and cash (the adapter's
+            # prove_live reconnects it, or raises a connection error)
+            self._prove(ad)
             probs = self._venue_problems(ad)
         except ExecutorNotSyncedError as exc:
             self._acct_unread = True
@@ -1518,6 +1522,11 @@ class MirrorManager:
 
     def _pretrade(self, ad) -> str | None:
         return self._pretrade_static() or self._pretrade_account(ad)
+
+    def _prove(self, ad) -> None:
+        """the adapter's liveness round trip, where it has one (a paper book has no gateway)"""
+        if self._dry is None and hasattr(ad, "prove_live"):
+            ad.prove_live()
 
     def _debits_that_apply(self) -> list:
         """[(request, amount)] of the queued DEBITS the next plan will apply, in the order it applies
@@ -2339,7 +2348,7 @@ class MirrorManager:
                 if past:
                     return self._book(o, rec, 0, None, 0.0, "not sent: " + ("stopped" if abort else "the window closed")
                                       + " (the venue holds no such order)")
-            if emergency and not self._flatten_cap(ad, o, rec):
+            if not (self._flatten_cap(ad, o, rec) if emergency else self._sell_check(ad, o, rec)):
                 return bool(o.get("applied"))
             if not self._write_ahead(o, rec, emergency):
                 return False
@@ -2360,7 +2369,7 @@ class MirrorManager:
                                       + (f" ({rec['error']})" if rec.get("error") else ""))
                 if not self._may_place(emergency):
                     return False
-                if emergency and not self._flatten_cap(ad, o, rec):
+                if not (self._flatten_cap(ad, o, rec) if emergency else self._sell_check(ad, o, rec)):
                     return bool(o.get("applied"))
                 res = self._place(ad, o, rec)
             else:
@@ -2385,6 +2394,54 @@ class MirrorManager:
             return False
         return self._settle(ad, o, rec, res, past)
 
+    def _sell_check(self, ad, o: dict, rec: dict) -> bool:
+        """The last look before a SELL of a RUN goes to the venue of a live book: every sell is checked
+        against the ACCOUNT, as a flatten sell is (_flatten_cap) - the plan was sized from the book, and
+        the pre-trade gate that compared the two can be minutes old (a gateway outage inside the window,
+        a sale by hand meanwhile). The venue's open SELL orders for the symbol are read (one round
+        trip: it also proves the session answers), then the account's positions. Unlike a flatten, a
+        run sell is never CUT: if the account holds fewer shares than the order would sell, the book
+        and the account disagree, and nothing is sold for that symbol - it is booked "not sent" (so the
+        buys are sized from the cash the book really has) and the post-trade check finds the mismatch.
+        True: send o. False: nothing is sent - o was booked at zero (applied), or the account could
+        not be read (said in red; asked again on the next step, until the window closes)."""
+        if self._dry is not None or o.get("side") != mc.SELL:
+            return True
+        oid, sym, want = o["id"], o["symbol"], int(o["qty"])
+        what = "open orders"
+        try:
+            resting = max(int(ad.open_sell_qty(sym, exclude=oid)), 0)     # first: see _flatten_cap
+            what = "positions"
+            held = int((ad.positions_snapshot().get("stocks") or {}).get(sym, 0) or 0)
+        except Exception as exc:  # noqa: BLE001
+            rec["positions_error"] = one_line(exc, 160)
+            self._say("red", f"order {oid} (SELL {want} {sym}) is NOT sent: the account's {what} cannot be read "
+                             f"({rec['positions_error']}), and a sell that is not checked against the account could "
+                             f"take {sym} short. Tried again on the next step, until the window closes.",
+                      key=f"sell-check-unread:{oid}:{what}:{one_line(exc, 60)}")
+            self._reprove(ad)
+            return False
+        rec.pop("positions_error", None)
+        if held - resting >= want:
+            return True
+        book = int(self.book.positions().get(sym, 0) or 0)
+        what = (f"the book holds {book} {sym}, the account holds {held}"
+                + (f" and SELL orders for {resting} are already open at the venue" if resting else ""))
+        self._say("red", f"order {oid} (SELL {want} {sym}) is NOT sent: {what}. The book and the account disagree, "
+                         f"so nothing is sold for {sym} (never below zero, and never a guessed quantity); the buys "
+                         f"are sized from the cash the book really has. Compare the account with /status and "
+                         f"repair the difference with POST /mirror/adjust.", key=f"sell-check:{oid}")
+        self._book(o, rec, 0, None, 0.0, f"not sent: {what}")
+        return False
+
+    def _reprove(self, ad) -> None:
+        """after an account read failed right before an order: one liveness round trip, so a session
+        that died silently is reconnected before the next step asks again (it never raises here)"""
+        try:
+            self._prove(ad)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("mirror[%s] the gateway session could not be proven live: %s", self.cfg.name, one_line(exc))
+
     def _flatten_cap(self, ad, o: dict, rec: dict) -> bool:
         """D-01: the last look before a flatten SELL goes to the venue of a live book. The account's
         positions are read again and the order is cut to what the account holds NOW: a flatten can
@@ -2407,6 +2464,7 @@ class MirrorManager:
                              f"({rec['positions_error']}), and a sell on top of one already resting there could take "
                              f"{sym} short. Tried again on the next step.",
                       key=f"flat-cap-noopen:{oid}:{one_line(exc, 60)}")
+            self._reprove(ad)
             return False
         try:
             snap = ad.positions_snapshot()
@@ -2417,6 +2475,7 @@ class MirrorManager:
                              f"({rec['positions_error']}), and a sell that is not checked against them could take "
                              f"{sym} short. Tried again on the next step.",
                       key=f"flat-cap-nopos:{oid}:{one_line(exc, 60)}")
+            self._reprove(ad)
             return False
         want = int(o["qty"])
         free = held - resting
@@ -2749,7 +2808,19 @@ class MirrorManager:
         last = _parse(chk.get("utc")) if chk.get("session") == session else None
         if last and (now - last).total_seconds() < CHECK_GAP_S:
             return
-        probs = self._venue_problems(ad)
+        try:
+            probs = self._venue_problems(ad)
+        except (ExecutorConnectionError, ConnectionError, TimeoutError) as exc:
+            # not a finding about the account and not a failed tick: no strike, nothing recorded; the
+            # check is made again on the next tick. Said once per session and reason.
+            why = ("the account's positions could not be read: " + one_line(exc, 160)
+                   if isinstance(exc, ExecutorNotSyncedError) else
+                   "the IB gateway is not connected" + ("" if type(exc) is ExecutorConnectionError
+                                                        else f" ({one_line(exc, 160)})"))
+            self._say("warn", f"{session}: the post-trade check (does the account hold the book?) could NOT be "
+                              f"made — {why}. Nothing is concluded from that; it is made again on every tick until "
+                              f"the account answers.", key=f"postcheck-unread:{session}:{type(exc).__name__}")
+            return
         strikes = (int(chk.get("strikes") or 0) + 1) if (probs and chk.get("session") == session) else (1 if probs else 0)
         chk = {"session": session, "utc": _iso(now), "strikes": strikes, "problems": probs[:8],
                "done": not probs or strikes >= CHECK_STRIKES}
@@ -2933,6 +3004,7 @@ class MirrorManager:
         venue = None
         if hasattr(ad, "positions_snapshot"):
             try:
+                self._prove(ad)                     # a round trip first: never a dead session's cached list
                 venue = ad.positions_snapshot().get("stocks") or {}
             except Exception as exc:  # noqa: BLE001
                 self._say("red", f"flatten: the account's positions cannot be read ({one_line(exc, 120)}); it is "

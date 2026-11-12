@@ -921,6 +921,9 @@ def _mirror_cycle(gen: int, wake: threading.Event) -> None:
         book.tick(ADAPTER, wake=wake, stop=lambda: gen != LOOP_GEN)
 
 
+MIRROR_RECONNECT_BACKOFF_MAX_S = 30.0   # see _mirror_keepalive
+
+
 def _mirror_keepalive() -> None:
     """Keep the gateway session alive when ONLY the mirror trades.
 
@@ -944,6 +947,17 @@ def _mirror_keepalive() -> None:
     keepalive = getattr(ADAPTER, "keepalive", None)
     if keepalive is None:
         return
+    # Only the mirror trades through this adapter: its reconnect backoff is
+    # capped well under the blend's 300 s (one decision a day, timed to the
+    # minute; a /kill flatten waits for the next connect attempt), and its
+    # DOWN/RECONNECTED alerts say what is true for the mirror (no resting
+    # stops). Set here, every iteration: this is the one place that already
+    # holds exactly that condition. Not while the options ladder is enabled:
+    # it shares the adapter and keeps the backoff and wording it had.
+    if (hasattr(ADAPTER, "reconnect_backoff_max_s")
+            and not getattr(settings, "ladder_enabled", False)):
+        ADAPTER.reconnect_backoff_max_s = MIRROR_RECONNECT_BACKOFF_MAX_S
+        ADAPTER.mirror_only = True
     try:
         keepalive()
     except Exception as exc:  # noqa: BLE001

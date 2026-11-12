@@ -176,6 +176,10 @@ class FakeIB:
     def isConnected(self):
         return self.connected
 
+    def reqCurrentTime(self):             # the adapter's liveness round trip
+        self.time_requests = getattr(self, "time_requests", 0) + 1
+        return 0
+
     # contracts / quotes
     def qualifyContracts(self, *contracts):
         return list(contracts)
