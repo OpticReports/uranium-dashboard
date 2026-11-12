@@ -1398,9 +1398,10 @@ class MirrorManager:
             if self.cfg.live:
                 cash = ad.account_cash()
                 if not cash or _num(cash.get("total_cash")) is None:
-                    self._say("warn", f"cannot seed {', '.join(want)}: {self._no_cash_why(ad)[0]}",
+                    no_cash = self._no_cash_why(ad)
+                    self._say("warn", f"cannot seed {', '.join(want)}: {no_cash[0]}",
                               key=f"seed-noclaim:{','.join(want)}")
-                    self._seed_why = f"{self._no_cash_why(ad)[0]} to seed from"
+                    self._seed_why = no_cash[0] if no_cash[1] else "the account reports no cash claim to seed from"
                     want = []
                 else:
                     avail = float(cash["total_cash"])
@@ -1492,7 +1493,10 @@ class MirrorManager:
         except ExecutorNotSyncedError as exc:
             self._acct_unread = True
             return f"the account's positions could not be read: {one_line(exc, 200)}"
-        except (ExecutorConnectionError, ConnectionError) as exc:
+        except ExecutorConnectionError:
+            self._acct_unread = True
+            return "the IB gateway is not connected (the executor keeps reconnecting, with backoff)"
+        except ConnectionError as exc:
             self._acct_unread = True
             return f"the IB gateway is not connected ({one_line(exc, 200)})"
         if probs:
