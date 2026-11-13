@@ -30,7 +30,11 @@ $1 at the mirror's size (nothing is sent: the expected outcome on a small book) 
 otherwise, the ledger's "outcome" saying which:
 
   refused    nothing was sent, or the executor answered an HTTP 4xx with a JSON body (its own words,
-             never a token), or a redirect (never followed: the token goes to the one host only)
+             never a token), or a redirect (never followed: the token goes to the one host only). Among
+             the reasons nothing is sent: operator credits (kind "credit": POST /mirror/credit, e.g. a
+             scale-up) still queued for either sleeve of the move - the FROM sleeve's equity it is sized on
+             is pre-credit until the session applies them: size the move after the session applies them;
+             re-run after that session
   duplicate  the book's pending_requests already hold a transfer by this token for the same from/to,
              OR this script's own ledger has a row of the same ET date, book, from and to that was
              sent or is unknown (a request sits in the executor's inbox for up to a minute before the
@@ -138,6 +142,23 @@ def queued_already(view, src, dst):
                       "queued cannot be told")
     return [r for r in pend if isinstance(r, dict) and r.get("kind", "transfer") == "transfer"
             and r.get("from") == src and r.get("to") == dst and r.get("via") == "transfer_token"]
+
+
+def credits_queued(view, src, dst):
+    """the operator credits (kind "credit": POST /mirror/credit, a fee debit included) the book still holds
+    for either sleeve of the move (pending_requests), or raises Refused when the feed's list cannot be read
+    as one. Until a session applies them the sleeves' equity on the feed is pre-credit, and the move is a
+    fraction of the FROM sleeve's equity"""
+    pend = view.get("pending_requests")
+    if pend is None:
+        return []
+    if not isinstance(pend, list):
+        raise Refused("the book's pending_requests on the feed is not a list: whether operator credits are queued "
+                      "cannot be told")
+    return [r for r in pend if isinstance(r, dict) and r.get("kind") == "credit" and r.get("sleeve") in (src, dst)]
+
+
+CREDITS_NEXT = "size the move after the session applies them; re-run after that session"
 
 
 UNKNOWN_NEXT = ("do NOT simply re-run: read the executor's feed (the book's pending_requests and today's session "
@@ -324,6 +345,14 @@ def run(argv=None, env=None, fetch=None, send=None, now=None, ledger_path=None):
         led.update({"sleeve_equity": eq, "amount": amount})
         what = (f"Composer moved ${a.composer_amount:,.2f} of ${a.composer_from_value:,.2f} ({frac:.4%}); the mirror's "
                 f"{src} sleeve (book {name}) is ${eq:,.2f}: ${amount:,.2f}")
+        pending = credits_queued(view, src, dst)
+        if pending:
+            raise Refused(f"{what} | NOT SENT: operator credit(s) are queued on the executor for "
+                          + "; ".join(f"{r.get('sleeve')} "
+                                      + (f"${r['amount']:,.2f}" if isinstance(r.get("amount"), (int, float))
+                                         and not isinstance(r.get("amount"), bool) else repr(r.get("amount")))
+                                      + f" as {r.get('id') or '?'}" for r in pending[:4])
+                          + f" - the {src} sleeve's equity is pre-credit: {CREDITS_NEXT}")
         if amount < MIN_AMOUNT:
             led["outcome"] = "below_min"
             code, line = 0, f"{head}: {what} is below $1 at the mirror's size — nothing sent"

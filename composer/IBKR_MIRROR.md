@@ -283,9 +283,16 @@ engine: target = round(to x Composer weight, 2), credit = round(target - the
 sleeve's equity, 2). It refuses, on one line starting "MIRROR SCALE REFUSED",
 while the book is halted or has an open run, an unresolved order, an error, a
 queued request (a POLICY transfer included: scale on another day) or a sleeve
-missing or frozen; when --to is not above the book or is more than 10x it; and
-when an engine is already above its Composer share at that size (it names the
-smallest --to at which none is). Then, in order:
+missing or frozen; unless the account's post-trade check of the book's last
+session was made, is done and found no problem (the executor clears that
+check at the end of every run and on /mirror/adjust: re-run the planner after
+the next session's check); when --to is not above the book or is more than
+10x it; and when an engine is already above its Composer share at that size
+(it names the smallest --to at which none is, or says it is beyond 10x). The
+plan is for ONE session: the first after the book's last that it can still be
+pasted for, and the line expires with it. The credits are fixed dollars: the
+book lands at the size asked plus whatever its current holdings move before
+that session, less that session's commissions. Then, in order:
 
 (a) The cap. The executor refuses a credit that takes the live book's
     funded_usd (its seeds plus every positive credit and what /mirror/adjust
@@ -300,29 +307,53 @@ smallest --to at which none is). Then, in order:
     half-day). The restart logs the IB gateway in again: approve the IB Key
     push.
 (b) The credits. When the executor is back, paste the plan's ONE line into
-    Render -> ibkr-executor -> Shell, once. It runs with the executor's own
-    Python (/opt/executor/venv/bin/python3: httpx and its CA bundle, the
-    client the executor itself uses), reads EXEC_TOKEN inside the container
-    (it never appears on screen or in the repo), and sends nothing unless
-    MIRROR_MAX_BOOK_USD there covers the book's own funded_usd (its state
-    file) plus the credits and no credit is already queued (the state's
-    requests or its inbox: a second paste sends nothing). Then it POSTs
-    {"sleeve", "amount", "note", "book"} per engine to
-    https://<executor>/mirror/credit with the header X-Exec-Token, prints
-    each answer and stops at the first that is not 200. The note reads
-    "scale-up to $<to> at Composer's split of <snapshot date>".
-(c) The executor applies them at its next session's decision (15:54 ET,
-    12:54 on a half-day; a credit queued after the decision waits for the
-    next session), smallest first, each only if the account's cash (IBKR's
-    TotalCashValue) covers the book's cash plus it - the plan prints that
-    minimum; check it at IBKR before (b) - and the cap holds. The same plan
-    invests them: the daily sleeves go to target, and KMLM trades too (idle
-    cash above 5% of a threshold sleeve overrides its corridor). Every credit
-    taken is alerted. A refused credit is alerted in red and dropped, NOT
-    retried: fix the cause, re-run the planner and paste its new line.
+    Render -> ibkr-executor -> Shell, once, before 15:00 ET on a weekday
+    (12:00 on a half-day) or any time on a weekend, and by the cutoff of the
+    plan's session (the plan prints it): the credits must be queued before
+    the session that applies them, so the evening POLICY routine never sizes
+    a transfer on pre-credit equity. The line is plain python3 and the
+    standard library only (`python3 -c 'exec("""...""")'`, one line). It
+    reads EXEC_TOKEN inside the container and sends it ONLY to the executor
+    in that same container, http://127.0.0.1:$PORT/mirror/credit (PORT as
+    start.sh's uvicorn reads it, 8000 when unset; http.client: no proxy, no
+    redirect followed): the token never leaves the container, and never
+    appears on screen or in the repo. It sends NOTHING - one line starting
+    "NOTHING SENT", exit 1 - when EXEC_TOKEN or the book's state file is not
+    there; outside the hours above, the reason said; after the plan's
+    session cutoff, or once the book has run a session since the plan
+    (re-run the planner); when any request is queued, whatever its kind (the
+    state's requests or its inbox, each listed: a second paste sends
+    nothing); when MIRROR_MAX_BOOK_USD there is not a number above 0 (the
+    executor would then cap the book at MIRROR_CAPITAL_USD and refuse the
+    credits); or unless that cap covers the book's own funded_usd (its state
+    file) plus the credits to the cent - no $1 slack. Then it POSTs
+    {"sleeve", "amount", "note", "book"} per engine with the header
+    X-Exec-Token and prints each answer. At the first error or answer that is
+    not 200 it STOPS at once - "STOPPED: <sleeve> <reason>", exit 2 - naming
+    the credits answered 200 above it (queued) and saying that the one not
+    answered may have been queued all the same and which were not sent:
+    whatever was queued applies at the next session and cannot be withdrawn;
+    after that session, re-run the planner and paste its new line. The note
+    reads "scale-up to $<to> at Composer's split of <snapshot date>".
+(c) The executor applies them at that session's decision (15:54 ET, 12:54
+    on a half-day): first the dividends due, then the credits, smallest
+    first, each only if the account's cash (IBKR's TotalCashValue) covers
+    the book's cash plus it, within $1, and the cap holds. The plan prints
+    the account's minimum - the book's cash + the dividends due by that
+    session + the credits + a margin of max($100, 0.5% of the credits);
+    check it at IBKR before (b). Short by even $1 of the first three, the
+    executor refuses the LARGEST credit whole and the book trades mis-split
+    until a new plan lands. The same plan invests them: the daily sleeves go
+    to target, and KMLM trades too (idle cash above 5% of a threshold sleeve
+    overrides its corridor). Every credit taken is alerted. A refused credit
+    is alerted in red and dropped, NOT retried: fix the cause, re-run the
+    planner and paste its new line.
 (d) That night's parity check against Composer (mirror_parity.py) removes
     the operator credits from that day's return, so the scale-up day is not
-    read as a gain.
+    read as a gain: chained through the session's fills when the sleeve's
+    credited buys filled, at face value when they did not. A POLICY transfer
+    leg (mirror_transfer.py) is refused while operator credits are queued
+    for either of its sleeves: it is sized after the session applies them.
 
 ## Deploying the brain
 

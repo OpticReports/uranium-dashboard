@@ -6,30 +6,53 @@ It sends nothing to the executor and holds no exec token. It reads Composer's sp
 monitor's snapshot and the live book from the executor's read-only feed (GET
 {MIRROR_EXECUTOR_URL}/mirror/feed, header X-Read-Token = MIRROR_READ_TOKEN, through
 mirror_parity.fetch_feed: https only, a redirect never followed), and prints the owner's steps: the
-cap to set on the executor, then ONE line to paste into the executor's own Shell on Render, which
-reads EXEC_TOKEN inside the container and queues one cash credit per sleeve (POST /mirror/credit).
+cap to set on the executor, then ONE line to paste into the executor's own Shell on Render. That line
+is plain python3 and the standard library only; it reads EXEC_TOKEN inside the container and sends
+it to the executor in that same container ONLY - http://127.0.0.1:$PORT/mirror/credit, no proxy, no
+redirect followed - one cash credit per sleeve. The token never leaves the container.
 
   mirror_scale.py --to 50000 [--snapshot composer/results/monitor/last-snapshot.json] [--book live]
                   [--headroom 0.05] [--json]
 
 1 Composer's split: the four engines' "value" in the snapshot, by symphony id; weight = value / the
   four's sum (unallocated cash and anything else left out). Refused unless all four are positive
-  numbers; a snapshot more than 3 calendar days old (ET) is warned about, not refused.
+  numbers summing to a finite one; a snapshot more than 3 calendar days old (ET) is warned about.
 2 The mirror: the one book whose mode is "live" (--book names it). Refused unless it is not halted
   (no flatten pending), has no open run, no unresolved order, no last_error, no failed save, nothing
-  queued (pending_requests), no account-versus-book problem, and holds the four sleeves and no other,
-  none frozen, each valued.
+  queued (pending_requests), holds the four sleeves and no other, none frozen, each valued - and the
+  account's post-trade check of its LAST session was made, is done and found no problem (mirror.py
+  _post_check). The executor clears that check at the end of every run (_finish) and on
+  /mirror/adjust (_adjust): a missing or stale one says to re-run after the next session's check.
 3 The plan: target = round(to x weight, 2); credit = round(target - the sleeve's equity, 2), the
   equity at the book's marks of its last decision. Refused when --to is not above the book's equity,
   is more than 10x it (a slipped zero), or any credit is negative (the line names the smallest --to
-  at which none is).
-4 The cap: the executor refuses a credit that takes a live book's funded_usd (its seeds plus every
+  at which none is, or says it is beyond 10x the book).
+4 The session: the credits are applied at the first NYSE session after the book's last one that the
+  line can still be pasted for. The planner computes, in UTC, the windows in which the line may be
+  pasted until then: every hour but a weekday's from 15:00 ET (12:00 on a half-day) to midnight, up to
+  that session's own cutoff - so the line itself needs no time zone, and expires with its session.
+5 The cap: the executor refuses a credit that takes a live book's funded_usd (its seeds plus every
   positive credit and what /mirror/adjust added) above MIRROR_MAX_BOOK_USD + $1, credit by credit,
   smallest first, and drops it (ibkr-executor/app/mirror.py _over_cap, _apply_credits). The feed does
   not publish funded_usd (mirror.py _publish): it is estimated as the seeds the feed lists plus the
   operator credits in its session rows. Cap to set = (funded + the credits) x (1 + headroom), rounded
   up to the next $500. The pasted line checks the executor's OWN funded_usd against the cap it was
-  deployed with before it sends anything.
+  deployed with, in cents and with no $1 slack, before it sends anything.
+6 The cash: at the decision the executor credits the open dividend receivables that are due, then
+  takes each credit only if the account's cash (IBKR's TotalCashValue) covers the book's cash plus it
+  (within CASH_TOL_USD, $1), smallest first (mirror.py _dividends, _apply_credits). The plan prints the
+  account's minimum: the book's cash + the dividends due by that session + the credits + a margin of
+  max($100, 0.5% of the credits). Short by even $1 of the first three, the LARGEST credit is refused.
+
+The pasted line sends NOTHING (one line starting "NOTHING SENT", exit 1) when EXEC_TOKEN or the book's
+state is not there, PORT is not a port, it is pasted outside its windows (a weekday from 15:00 ET,
+12:00 on a half-day; after the cutoff of the session it was planned for), the book has run a session
+since the plan, any request is queued (the state's requests or its inbox, whatever its kind),
+MIRROR_MAX_BOOK_USD is not a number above 0, or it does not cover the book's funded_usd plus the
+credits. Then one POST per credit, each answer printed; at the first error or answer that is not 200
+it stops ("STOPPED: <sleeve> <reason>", exit 2) and says what answered 200 (queued: applied at the
+next session, not to be withdrawn) and that the one not answered may have been queued too: after that
+session, re-run this planner and paste its new line. All of it answered 200: exit 0.
 
 Exit 0 with a plan (human text, or --json); 1 with one line starting "MIRROR SCALE REFUSED".
 Env: MIRROR_EXECUTOR_URL (https), MIRROR_READ_TOKEN. Nothing is written anywhere.
@@ -40,7 +63,6 @@ import json
 import math
 import os
 import re
-import shlex
 import sys
 import urllib.parse
 
@@ -48,7 +70,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, HERE)
 import mirror_parity as mp  # noqa: E402  (fetch_feed: the one reader of the executor's feed)
-import shadow_runner as sr  # noqa: E402  (et_now; HALF_DAYS)
+import shadow_runner as sr  # noqa: E402  (et_now; HALF_DAYS; NYSE_HOLIDAYS)
 
 # engine -> Composer symphony id, in the book's order (= composer/fixtures/approved/manifest.json: a gate pins it)
 ENGINES = (("HG", "mbkiXcuNDjueXpiox5Av"), ("KMLM", "YPTSJFJwD2ZKfAeYJUbW"),
@@ -59,17 +81,29 @@ HEADROOM = 0.05
 CAP_STEP_USD = 500               # the cap is rounded UP to a multiple of this
 MAX_FACTOR = 10.0                # --to above this many times the book's equity: refused (a slipped zero)
 SEED_TOL_USD = 1.0               # ibkr-executor/app/mirror.py SEED_TOL_USD: _over_cap allows the cap plus this
+CASH_TOL_USD = 1.0               # ibkr-executor/app/mirror.py CASH_TOL_USD: _apply_credits allows the account this short
+CASH_MARGIN_USD, CASH_MARGIN_FRAC = 100.0, 0.005   # the account's minimum: + max($100, 0.5% of the credits)
 HISTORY = 120                    # session rows asked of the feed: its most (service.py; mirror.py HISTORY_KEEP)
 EQUITY_TOL_USD = 0.05            # the book's equity vs the four sleeves' (each published rounded to cents)
-# the executor's own interpreter (ibkr-executor/Dockerfile: WORKDIR /opt/executor, python3 -m venv venv): it has
-# httpx with its CA bundle, the client the executor itself uses for https (app/alerts.py). The image's system
-# python3 is installed --no-install-recommends and is not known to have a CA store
-EXEC_PY = "/opt/executor/venv/bin/python3"
+# ibkr-executor/app/mirror_core.py receivable_pay_date: a receivable is due from its pay date; one whose pay
+# date never became known is taken to pay ex + DEFAULT_PAY_LAG_DAYS once PAY_DATE_GIVE_UP_DAYS have passed
+DEFAULT_PAY_LAG_DAYS, PAY_DATE_GIVE_UP_DAYS = 7, 10
+# the pasted line: plain python3 (ibkr-executor/Dockerfile apt-installs it; the standard library only), posting
+# to the executor in its own container. ibkr-executor/start.sh: uvicorn --host 0.0.0.0 --port "${PORT:-8000}"
+# (Dockerfile: ENV PORT=8000; Render sets PORT): the line reads PORT the same way. A relative
+# MIRROR_STATE_PATH is the executor's, from its working directory (Dockerfile WORKDIR, start.sh cd)
+LINE_PY = "python3"
+LINE_HOST = "127.0.0.1"
+PORT_DEFAULT = "8000"
+EXEC_DIR = "/opt/executor"
+PASTE_CUTOFF, PASTE_CUTOFF_HALF = 15, 12   # ET hour from which a weekday paste is refused (a half-day: 13:00 close)
 # a book -> (the env var naming its state file, the default): ibkr-executor/app/config.py; render.yaml sets
-# MIRROR_STATE_PATH=/app/data/mirror_state.json. Its inbox is <state>.inbox.json (mirror.py _inbox_path)
+# MIRROR_STATE_PATH=/app/data/mirror_state.json. Its inbox is <state>.inbox.json, its halt file <state>.halt
+# (mirror.py _inbox_path, _halt_path)
 STATE_ENV = {"live": ("MIRROR_STATE_PATH", "./data/mirror_state.json")}
 DEPLOY_QUIET = ("15:15", "16:05")          # no deploy then: the 15:15 attestation, the 15:54 decision, its orders
 DEPLOY_QUIET_HALF = ("12:15", "13:05")     # ... on a 13:00 half-day
+TTY_LINE_MAX = 4095                        # a canonical-mode terminal line (N_TTY_BUF_SIZE 4096, its newline)
 
 
 def one_line(e, n=200):
@@ -81,10 +115,13 @@ def usd(x):
 
 
 def num(x):
-    """a finite number, or None (bools are not numbers here)"""
-    if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
+    """a finite number, or None (bools are not numbers here; nor is an integer too large for a float)"""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
         return None
-    return float(x)
+    try:
+        return float(x) if math.isfinite(x) else None
+    except OverflowError:
+        return None
 
 
 class Refused(Exception):
@@ -120,6 +157,14 @@ def parse_ts(text):
     return t if t.tzinfo else t.replace(tzinfo=datetime.timezone.utc)
 
 
+def et_date(t):
+    """the US/Eastern date of an aware datetime, or None when it cannot be converted (out of range)"""
+    try:
+        return sr.et_now(t).date()
+    except (OverflowError, ValueError):
+        return None
+
+
 def composer_split(path, now):
     """{"path", "taken_at", "date" (ET), "age_days", "values", "weights", "warnings"} from the monitor's
     snapshot, or raises Refused"""
@@ -134,7 +179,8 @@ def composer_split(path, now):
     if not isinstance(snap, dict) or not isinstance(snap.get("symphonies"), dict):
         raise Refused(f"{shown} is not a monitor snapshot (no \"symphonies\")")
     taken = parse_ts(snap.get("taken_at"))
-    if taken is None:
+    day = et_date(taken) if taken is not None else None
+    if day is None:
         raise Refused(f"{shown} has no readable taken_at ({one_line(repr(snap.get('taken_at')), 60)}): the date of "
                       f"Composer's split cannot be told")
     values, bad = {}, []
@@ -142,14 +188,18 @@ def composer_split(path, now):
         row = snap["symphonies"].get(sid)
         v = num(row.get("value")) if isinstance(row, dict) else None
         if v is None or v <= 0:
-            bad.append(f"{eng} ({sid}): " + ("missing" if not isinstance(row, dict) else f"value {row.get('value')!r}"))
+            bad.append(f"{eng} ({sid}): " + ("missing" if not isinstance(row, dict) else
+                                             f"value {one_line(repr(row.get('value')), 40)}"))
         else:
             values[eng] = v
     if bad:
         raise Refused(f"Composer's split cannot be read from {shown}: " + "; ".join(bad)
                       + " (each of the four engines needs a positive value)")
     total = sum(values.values())
-    day = sr.et_now(taken).date()
+    weights = {e: values[e] / total for e in values} if math.isfinite(total) and total > 0 else {}
+    if not weights or not all(math.isfinite(w) and w > 0 for w in weights.values()):
+        raise Refused(f"Composer's four values in {shown} do not sum to a finite positive number with every engine a "
+                      f"share of it ({one_line(repr(total), 40)}): the split cannot be computed")
     age = (sr.et_now(now).date() - day).days
     warnings = []
     if age > STALE_DAYS:
@@ -158,7 +208,7 @@ def composer_split(path, now):
     elif age < 0:
         warnings.append(f"Composer's snapshot is dated in the future ({snap['taken_at']}): check the file and the clock")
     return {"path": shown, "taken_at": snap["taken_at"], "date": day.isoformat(), "age_days": age,
-            "values": values, "weights": {e: values[e] / total for e in values}, "warnings": warnings}
+            "values": values, "weights": weights, "warnings": warnings}
 
 
 def rel(path):
@@ -189,6 +239,31 @@ def pick_book(feed, name):
     if live[0] not in STATE_ENV or not re.fullmatch(r"[A-Za-z0-9_-]+", live[0]):
         raise Refused(f"book {live[0]!r} is not one whose state file the pasted line knows ({', '.join(STATE_ENV)})")
     return live[0], view
+
+
+RECHECK = ("re-run this planner after the next session's post-trade check (the executor clears the check at the end "
+           "of every run and on /mirror/adjust, and makes it again after the session)")
+
+
+def check_problem(view):
+    """why the account's post-trade check does not clear this book for a scale-up, or None: it must be a
+    record of the book's LAST session, done, with no problem (mirror.py _post_check writes
+    {"session", "utc", "strikes", "problems", "done"}; _finish and _adjust reset it to None)"""
+    chk, last = view.get("check"), view.get("last_session")
+    if not isinstance(chk, dict):
+        return (f"the account has not been checked against the book since its last session {last} (the post-trade "
+                f"check is {'not on the feed' if chk is None else 'not a record: ' + one_line(repr(chk), 60)}): {RECHECK}")
+    probs = chk.get("problems")
+    if probs:
+        probs = probs if isinstance(probs, list) else [probs]
+        return (f"the account does not hold the book (check of {chk.get('session')}): "
+                + "; ".join(one_line(p, 80) for p in probs[:3]) + f" - {RECHECK}")
+    if chk.get("session") != last:
+        return (f"the last post-trade check is of {chk.get('session')}, not of the book's last session {last}: "
+                f"{RECHECK}")
+    if chk.get("done") is not True:
+        return f"the post-trade check of {chk.get('session')} is not done (done {chk.get('done')!r}): {RECHECK}"
+    return None
 
 
 def health_problems(view):
@@ -227,11 +302,9 @@ def health_problems(view):
         out.append(f"a state save failed and the book is latched ({one_line(view['save_latched'], 120)})")
     if view.get("archived_state"):
         out.append(f"its state file was archived: {one_line(view['archived_state'], 160)}")
-    chk = view.get("check") if isinstance(view.get("check"), dict) else {}
-    if chk.get("problems"):
-        probs = chk["problems"] if isinstance(chk["problems"], list) else [chk["problems"]]
-        out.append(f"the account does not hold the book (check of {chk.get('session')}): "
-                   + "; ".join(one_line(p, 80) for p in probs[:3]))
+    chk = check_problem(view)
+    if chk:
+        out.append(chk)
     return out
 
 
@@ -256,12 +329,12 @@ def sleeve_equities(view):
     for e in names:
         v = num(sleeves[e].get("equity"))
         if v is None or v <= 0:
-            raise Refused(f"the sleeve {e} has no usable equity on the feed ({sleeves[e].get('equity')!r}): a price "
-                          f"is missing from the book's marks")
+            raise Refused(f"the sleeve {e} has no usable equity on the feed ({one_line(repr(sleeves[e].get('equity')), 40)}): "
+                          f"a price is missing from the book's marks")
         eq[e] = v
     total = num(book.get("equity"))
     if total is None or total <= 0:
-        raise Refused(f"the book has no usable equity on the feed ({book.get('equity')!r})")
+        raise Refused(f"the book has no usable equity on the feed ({one_line(repr(book.get('equity')), 40)})")
     if abs(sum(eq.values()) - total) > EQUITY_TOL_USD:
         raise Refused(f"the book's equity {usd(total)} is not its four sleeves' {usd(sum(eq.values()))}: the feed does "
                       f"not add up")
@@ -273,12 +346,13 @@ def funded_estimate(view):
     cap counts (mirror.py _over_cap): the seeds, plus every positive operator credit (_apply_credits),
     plus what /mirror/adjust added. Taken from the feed when it publishes it; otherwise the seeds the
     feed lists plus the operator credits in its session rows (dividends are not counted: the cap does
-    not count them either)"""
+    not count them either). A row whose "credits" is not a list, and an entry that is not a record, are
+    skipped"""
     pub = view.get("funded_usd")
     if pub is not None:
         v = num(pub)
         if v is None or v < 0:
-            raise Refused(f"the feed's funded_usd is not a number ({pub!r})")
+            raise Refused(f"the feed's funded_usd is not a number ({one_line(repr(pub), 40)})")
         return round(v, 2), "the executor's funded_usd, published on the feed", []
     seeded = view.get("seeded")
     if not isinstance(seeded, dict) or not seeded:
@@ -287,17 +361,24 @@ def funded_estimate(view):
     for name, row in seeded.items():
         a = num(row.get("amount")) if isinstance(row, dict) else None
         if a is None or a < 0:
-            raise Refused(f"the feed's seed of {name} is not an amount ({row!r})")
+            raise Refused(f"the feed's seed of {name} is not an amount ({one_line(repr(row), 80)})")
         seeds += a
     history = view.get("history") if isinstance(view.get("history"), list) else []
     rows = [r for r in history + [view.get("last_run")] if isinstance(r, dict)]
     taken = {}
     for r in rows:
-        for c in r.get("credits") or []:
-            a = num(c.get("amount")) if isinstance(c, dict) else None
-            if a is None or a <= 0 or c.get("kind") != "credit":
+        cs = r.get("credits")
+        if not isinstance(cs, list):
+            continue
+        for c in cs:
+            if not isinstance(c, dict) or c.get("kind") != "credit":
                 continue
-            taken[c.get("id") or (r.get("session"), c.get("sleeve"), a)] = a
+            a = num(c.get("amount"))
+            if a is None or a <= 0:
+                continue
+            cid = c.get("id")
+            key = ("id", cid) if isinstance(cid, str) and cid else ("row", str(r.get("session")), str(c.get("sleeve")), a)
+            taken[key] = a
     credits = sum(taken.values())
     sessions = sorted({r.get("session") for r in rows if isinstance(r.get("session"), str)})
     span = f"{sessions[0]}..{sessions[-1]}" if sessions else "none"
@@ -312,6 +393,72 @@ def funded_estimate(view):
     return round(seeds + credits, 2), how, warnings
 
 
+# ------------------------------------------------------------------ the session and the cash
+def trading_day(d):
+    return d.weekday() < 5 and d.isoformat() not in sr.NYSE_HOLIDAYS
+
+
+def paste_cutoff(day_iso):
+    """the ET hour from which a paste on that weekday is refused: 15, 12 on a half-day"""
+    return PASTE_CUTOFF_HALF if day_iso in sr.HALF_DAYS else PASTE_CUTOFF
+
+
+def credit_session(last_session, now):
+    """the session the credits are applied at when the line is pasted at the earliest it may be: the
+    first NYSE session after the book's last one that is today (ET) - when it is still before today's
+    paste cutoff - or later (weekdays less shadow_runner.NYSE_HOLIDAYS)"""
+    et = sr.et_now(now)
+    first = et.date()
+    if trading_day(first) and et.hour >= paste_cutoff(first.isoformat()):
+        first += datetime.timedelta(days=1)
+    try:
+        after = datetime.date.fromisoformat(last_session) + datetime.timedelta(days=1)
+    except (TypeError, ValueError):
+        after = first
+    d = max(first, after)
+    while not trading_day(d):
+        d += datetime.timedelta(days=1)
+    return d.isoformat()
+
+
+def _date(text):
+    try:
+        return datetime.date.fromisoformat(text) if isinstance(text, str) else None
+    except ValueError:
+        return None
+
+
+def dividends_due(view, session):
+    """(total, [rows due], warnings): the open dividend receivables (the feed's dividends_open) the executor
+    credits to the sleeves at `session` BEFORE it takes the credits (mirror.py _plan: _dividends, then
+    _apply_credits): those due on or before it - from the pay date, or, when the pay date never became
+    known, ex + DEFAULT_PAY_LAG_DAYS once PAY_DATE_GIVE_UP_DAYS have passed since the ex-date
+    (mirror_core.receivable_pay_date). Every one is counted: whether its sleeve still holds the payer, and
+    whether the account received it, the cash minimum does not guess"""
+    rows = view.get("dividends_open")
+    if rows is None:
+        return 0.0, [], []
+    if not isinstance(rows, list):
+        return 0.0, [], [f"the feed's dividends_open is not a list ({one_line(repr(rows), 60)}): the cash minimum "
+                         f"does not count the dividends due"]
+    day = _date(session)
+    due, warn = [], []
+    for r in rows:
+        total = num(r.get("total")) if isinstance(r, dict) else None
+        ex = _date(r.get("ex_date")) if isinstance(r, dict) else None
+        if total is None or total <= 0 or ex is None:
+            warn.append(f"a dividend receivable on the feed cannot be read ({one_line(repr(r), 80)}): it is not in "
+                        f"the cash minimum")
+            continue
+        pay = _date(r.get("pay_date"))
+        if pay is None and (day - ex).days >= PAY_DATE_GIVE_UP_DAYS:
+            pay = ex + datetime.timedelta(days=DEFAULT_PAY_LAG_DAYS)
+        if pay is not None and pay <= day:
+            due.append({"id": r.get("id"), "sleeve": r.get("sleeve"), "ticker": r.get("ticker"),
+                        "total": round(total, 2), "due": pay.isoformat()})
+    return round(sum(r["total"] for r in due), 2), due, warn
+
+
 # ------------------------------------------------------------------ the plan
 def credits_at(to, weights, equities):
     """{engine: (target, credit)}: target = round(to x weight, 2), credit = round(target - equity, 2)"""
@@ -322,17 +469,47 @@ def credits_at(to, weights, equities):
     return out
 
 
+def _first_cent(eq, w):
+    """the smallest whole-cent --to, in cents, at which round(to x w, 2) >= eq (round is monotone in to),
+    or None"""
+    try:
+        c = math.floor((eq - 0.005) / w * 100)
+    except (ZeroDivisionError, OverflowError, ValueError):
+        return None
+    for _ in range(1000):                          # down while it already holds ...
+        if round(c / 100 * w, 2) < eq:
+            break
+        c -= 1
+    else:
+        return None
+    for _ in range(1000):                          # ... then up to the first cent where it does
+        c += 1
+        if round(c / 100 * w, 2) >= eq:
+            return c
+    return None
+
+
 def smallest_to(weights, equities, book_equity):
-    """the smallest --to, in cents, at which every credit is >= 0 and the book grows. A credit is >= 0
-    once round(to x weight, 2) reaches the equity, i.e. from about (equity - half a cent) / weight: the
-    scan starts a cent below that bound and walks up a cent at a time (credits never fall as --to rises)"""
-    start = max((equities[e] - 0.01) / weights[e] for e, _ in ENGINES)
-    to = math.floor(max(start, book_equity) * 100) / 100
-    for _ in range(100000):
+    """the smallest --to, in cents, at which every credit is >= 0 and the book grows, or None when that is
+    beyond MAX_FACTOR x the book's equity (no --to this planner takes would do). Per engine the first cent
+    at which round(to x weight, 2) reaches its equity; the answer is the largest of those and the first
+    cent above the book"""
+    limit = MAX_FACTOR * book_equity
+    cents = [_first_cent(equities[e], weights[e]) for e, _ in ENGINES]
+    if any(c is None for c in cents):
+        return None
+    above = int(round(book_equity * 100))
+    if above / 100 <= book_equity:
+        above += 1
+    best = max(cents + [above])
+    for _ in range(100):                           # float rounding: confirm on the planner's own arithmetic
+        to = best / 100
+        if to > limit:
+            return None
         if to > book_equity and all(c >= 0 for _, c in credits_at(to, weights, equities).values()):
             return to
-        to = round(to + 0.01, 2)
-    return to
+        best += 1
+    return None
 
 
 def cap_to_set(need, headroom):
@@ -342,69 +519,140 @@ def cap_to_set(need, headroom):
     return ((cents + step - 1) // step) * CAP_STEP_USD
 
 
-def credit_url(base):
-    """https://<host of MIRROR_EXECUTOR_URL>/mirror/credit, or raises Refused: the pasted line sends
-    EXEC_TOKEN, so https only, and nothing in it that could leave the line's quotes"""
-    u = urllib.parse.urlparse((base or "").strip())
-    host = u.hostname or ""
-    if (u.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+", host) or u.username or u.password or u.query
-            or u.fragment or not re.fullmatch(r"[A-Za-z0-9/_.-]*", u.path)):
-        raise Refused("MIRROR_EXECUTOR_URL must be a plain https URL of the executor (the pasted line sends EXEC_TOKEN "
-                      "to it)")
-    try:
-        port = u.port
-    except ValueError:
-        raise Refused("MIRROR_EXECUTOR_URL has a bad port") from None
-    return f"https://{host}{f':{port}' if port else ''}{u.path.rstrip('/')}/mirror/credit"
+def feed_url_ok(base):
+    """mirror_parity.fetch_feed's rule, said before anything is fetched: the READ token goes over https
+    only (plain http to this machine only)"""
+    u = urllib.parse.urlparse(base)
+    if u.scheme != "https" and not (u.scheme == "http" and (u.hostname or "") in mp.LOCAL):
+        raise Refused("MIRROR_EXECUTOR_URL must be https (the read token is never sent over plain http)")
 
 
-def _lit(s):
-    """a Python string literal with no single quote in it (the line is single-quoted for the shell)"""
-    return json.dumps(str(s), ensure_ascii=True).replace("'", "\\x27")
+def _py(x):
+    """a Python literal of a str, a number or a tuple of them, strings in double quotes"""
+    if isinstance(x, str):
+        return json.dumps(x, ensure_ascii=True)
+    if isinstance(x, tuple):
+        return "(" + ",".join(_py(v) for v in x) + ("," if len(x) == 1 else "") + ")"
+    if isinstance(x, (int, float)) and not isinstance(x, bool):
+        return repr(x)
+    raise TypeError(f"no literal for {x!r}")
 
 
-def paste_line(url, book, credits, note):
-    """(the shell line, its Python code). The code runs in the executor's container with the executor's
-    own Python: it reads EXEC_TOKEN there and sends NOTHING unless the token is set, the book's state
-    file is there, no credit is already queued (the state's requests and its inbox: the line was pasted
-    before), and MIRROR_MAX_BOOK_USD covers the book's own funded_usd plus these credits (the executor's
-    _over_cap: funded + amount <= cap + $1). Then one POST per credit, each answer printed, stopping at
-    the first that is not 200. credits: [(engine, amount)], amounts > 0"""
+# The pasted line's program. It runs in the executor's container under plain python3 and reads the
+# executor's own files and env; nothing here is filled in but the first line's constants. Every check
+# comes before the first POST; the POSTs go to the executor in the same container only.
+LINE_PROGRAM = r'''W=[]
+def R(f,z):
+ try:
+  with open(f) as h:return json.load(h)
+ except FileNotFoundError:return z
+ except Exception as e:W.append("%s unreadable (%s)"%(f,e));return False
+def F(r):return "%s %s %s"%(r.get("kind"),r.get("sleeve") or r.get("order") or r.get("from"),r.get("id")) if isinstance(r,dict) else repr(r)[:60]
+try:
+ T=E.get("EXEC_TOKEN");O=E.get("PORT") or "8000";t=time.time()
+ if not T:W.append("EXEC_TOKEN is not set: paste this in the Shell of ibkr-executor on Render")
+ if not(O.isdigit() and 0<int(O)<65536):W.append("PORT %r is not a port"%O)
+ if t>=Z[-1][1]:W.append("this line was for the session of %s (paste by %s): re-run the planner (%s)"%(V,Y,G))
+ elif not any(a<=t<b for a,b in Z):W.append("it is a weekday from 15:00 ET (12:00 on a half-day): the credits must be queued before that day's session (paste in the morning, or any time on a weekend), so the evening POLICY routine never sizes a transfer on pre-credit equity")
+ P=os.path.join("/opt/executor",E.get("MIRROR_STATE_PATH") or "./data/mirror_state.json");S=R(P,None);I=R(P+".inbox.json",[])
+ if S is None:W.append("no book state at "+P)
+ elif S is not False and not(isinstance(S,dict) and S.get("name")==B and S.get("live")):W.append(P+" is not the live book");S=False
+ if isinstance(S,dict):
+  q=S.get("requests") or [];Q=(I if isinstance(I,list) else [] if I is False else [I])+(q if isinstance(q,list) else [q])
+  if S.get("last_session")!=M:W.append("the book ran a session (%s) after the plan: re-run the planner (%s)"%(S.get("last_session"),G))
+  if Q:W.append("%d request(s) queued, not yet applied: %s - nothing is added until a session applies them"%(len(Q),"; ".join(map(F,Q[:8]))))
+ c=(E.get("MIRROR_MAX_BOOK_USD") or "").strip()
+ try:C=float(c)
+ except ValueError:C=0.0
+ if not(math.isfinite(C) and C>0):W.append("MIRROR_MAX_BOOK_USD %r is not above 0: the executor then caps the book at MIRROR_CAPITAL_USD and refuses these credits; set it (step a), deploy first"%c)
+ elif isinstance(S,dict):
+  f=S.get("funded_usd")
+  if type(f) not in(int,float) or not math.isfinite(f) or f<0:W.append("the book state has no funded_usd (%r)"%(f,))
+  elif round(f*100)+D>round(C*100):W.append("MIRROR_MAX_BOOK_USD %.2f is below funded_usd %.2f + these credits %.2f = %.2f: the executor takes credits smallest first while within the cap, so it would DROP the largest and the book would trade mis-split; set the cap (step a), deploy first"%(C,f,D/100,f+D/100))
+except Exception as e:W.append("the checks failed (%r)"%e)
+if W:print("NOTHING SENT: "+"; ".join(W));sys.exit(1)
+ok=[]
+for i,(s,a) in enumerate(A):
+ w=None
+ try:
+  h=hc.HTTPConnection("127.0.0.1",int(O),timeout=30)
+  h.request("POST","/mirror/credit",json.dumps({"sleeve":s,"amount":a,"note":N,"book":B}),{"Content-Type":"application/json","X-Exec-Token":T})
+  y=h.getresponse();c,b=y.status,y.read();h.close()
+  print(s,a,c,b.decode("utf-8","replace")[:300])
+  if c!=200:w="answered HTTP %s"%c
+ except BaseException as e:w="got no answer (%r)"%e
+ if w:print("STOPPED: %s %s. Queued (answered 200 above): %s. %s may have been queued anyway; not sent: %s. What was queued applies at the next session and cannot be withdrawn: after it, re-run the planner (%s) and paste its new line (a re-paste sends nothing while anything is queued)"%(s,w,", ".join(ok) or "none",s,", ".join(z for z,_ in A[i+1:]) or "none",G));sys.exit(2)
+ ok.append("%s %.2f"%(s,a))
+print("ALL %d CREDITS QUEUED (%s) for the session of %s"%(len(A),", ".join(ok),V))'''
+
+
+def paste_windows(now, session):
+    """(windows, until): the UTC epoch-second intervals [start, end) in which the line may be pasted, from a
+    day before `now` (clock skew) up to the paste cutoff of `session` - every hour but a weekday's from its
+    cutoff (15:00 ET, 12:00 on a half-day) to midnight - and that last cutoff as the owner reads it. ET
+    offsets are whole hours, so UTC hours classify exactly (shadow_runner.et_now, with its no-tz-database
+    fallback)"""
+    h = now.astimezone(datetime.timezone.utc).replace(minute=0, second=0, microsecond=0) - datetime.timedelta(days=1)
+    windows, open_at = [], None
+    for _ in range(24 * 40):
+        e = sr.et_now(h)
+        day = e.date().isoformat()
+        if day > session or (day == session and e.hour >= paste_cutoff(day)):
+            break
+        ok = not (e.weekday() < 5 and e.hour >= paste_cutoff(day))
+        if ok and open_at is None:
+            open_at = h
+        elif not ok and open_at is not None:
+            windows.append((int(open_at.timestamp()), int(h.timestamp())))
+            open_at = None
+        h += datetime.timedelta(hours=1)
+    else:
+        raise Refused(f"internal: the session of {session} is more than 40 days away")
+    if open_at is None:
+        raise Refused(f"internal: no paste window before the session of {session}")
+    windows.append((int(open_at.timestamp()), int(h.timestamp())))
+    until = f"{paste_cutoff(session)}:00 ET on {datetime.date.fromisoformat(session).strftime('%a')} {session}"
+    return tuple(windows), until
+
+
+def paste_program(book, credits, note, session, last_session, windows, until, rerun):
+    """the line's program: the constants, then LINE_PROGRAM. credits: [(engine, amount)], amounts > 0
+    rounded to cents; D is their total in whole cents; Z the paste windows, Y their end as the owner reads
+    it; V the session the credits are for; M the book's last session the plan was made after"""
     var, default = STATE_ENV[book]
-    total = round(sum(a for _, a in credits), 2)
-    pairs = "".join(f"({_lit(e)},{a!r})," for e, a in credits)
-    code = ";".join([
-        "import os,json,pathlib,httpx",
-        "E=os.environ",
-        'T=E.get("EXEC_TOKEN") or ""',
-        f"P=E.get({_lit(var)}) or {_lit(default)}",
-        f"U={_lit(url)}",
-        f"B={_lit(book)}",
-        f"N={_lit(note)}",
-        f"A=({pairs})",
-        f"D={total!r}",
-        "X=os.path.exists",
-        "R=lambda f:json.loads(pathlib.Path(f).read_text())",
-        'I=R(P+".inbox.json") if X(P+".inbox.json") else []',                     # the inbox first: a request moves
-        "S=R(P) if X(P) else None",                                                 # from it into the state
-        'Q=[r for r in list(I)+list((S or {}).get("requests") or []) if isinstance(r,dict) and r.get("kind")=="credit"]',
-        'C=float(E.get("MIRROR_MAX_BOOK_USD") or 0)',
-        'F=float((S or {"funded_usd":0})["funded_usd"])',              # none in the state: an error, nothing sent
-        'W="NOTHING SENT: EXEC_TOKEN is not set here (paste this line in the Shell of ibkr-executor on Render)" if not T '
-        'else "NOTHING SENT: no book state at %s (paste this line in the Shell of ibkr-executor on Render)"%P if S is None '
-        'else "NOTHING SENT: %d credit(s) already queued, so this line was sent before: %r"%(len(Q),[(r.get("sleeve"),'
-        'r.get("amount"),r.get("id")) for r in Q]) if Q '
-        'else "NOTHING SENT: MIRROR_MAX_BOOK_USD here is %.2f; the book has taken %.2f and these credits add %.2f, '
-        '%.2f in all: set the cap (step a) and deploy first"%(C,F,D,F+D) if F+D>C+1 else ""',
-        'print(W) if W else print("ALL %d CREDITS QUEUED: the executor applies them at its next session"%len(A) '
-        'if all((lambda r:(print(s,a,r.status_code,r.text),r.status_code==200)[1])(httpx.post(U,json={"sleeve":s,'
-        '"amount":a,"note":N,"book":B},headers={"X-Exec-Token":T},timeout=30)) for s,a in A) '
-        'else "STOPPED at the first answer that is not 200: the lines above show what was queued; do NOT paste '
-        'this line again")',
-    ])
-    if "'" in code:                                # never: _lit escapes it; the shell quoting depends on it
+    if (var, default) != ("MIRROR_STATE_PATH", "./data/mirror_state.json"):
+        raise Refused(f"internal: the pasted line reads MIRROR_STATE_PATH, not {var}")
+    cents = sum(int(round(a * 100)) for _, a in credits)
+    head = (f"import http.client as hc,json,math,os,sys,time\n"
+            f"E=os.environ;B={_py(book)};N={_py(note)};A={_py(tuple((e, a) for e, a in credits))};D={cents};"
+            f"Z={_py(tuple(windows))};Y={_py(until)};V={_py(session)};M={_py(last_session)};G={_py(rerun)}\n")
+    return head + LINE_PROGRAM
+
+
+def exec_literal(program):
+    """the program as ONE Python string literal on one line, with no single quote in it: triple-double-quoted
+    (a double quote needs no escape there), every backslash doubled, every newline as \\n, every single quote
+    as \\x27; json-escaped instead when it holds a triple quote, ends in a quote or holds a character outside
+    printable ASCII"""
+    body = program.replace("\\", "\\\\").replace("\n", "\\n").replace("'", "\\x27")
+    if '"""' in body or body.endswith('"') or any(not 32 <= ord(ch) <= 126 for ch in body):
+        return json.dumps(program, ensure_ascii=True).replace("'", "\\x27")
+    return '"""' + body + '"""'
+
+
+def paste_line(book, credits, note, session, last_session, windows, until, rerun):
+    """(the shell line, its python3 -c code, the program the code runs). ONE physical line the owner
+    pastes into the executor's Shell: python3 -c 'exec(<the program as one literal>)' (exec_literal), so
+    the shell's single quotes hold"""
+    program = paste_program(book, credits, note, session, last_session, windows, until, rerun)
+    code = "exec(" + exec_literal(program) + ")"
+    if "'" in code or "\n" in code:                # never: the escaping above; the shell quoting depends on it
         raise Refused("internal: the pasted line would not be quoted safely")
-    return f"{EXEC_PY} -c {shlex.quote(code)}", code
+    line = f"{LINE_PY} -c '{code}'"
+    if len(line.encode()) > TTY_LINE_MAX:
+        raise Refused(f"internal: the pasted line is {len(line.encode())} bytes, more than a terminal line holds "
+                      f"({TTY_LINE_MAX})")
+    return line, code, program
 
 
 def quiet_window(now):
@@ -427,7 +675,7 @@ def build(a, env, fetch, now):
     token = (env.get("MIRROR_READ_TOKEN") or "").strip()
     if not base or not token:
         raise Refused("MIRROR_EXECUTOR_URL and MIRROR_READ_TOKEN must both be set (the executor's read-only feed)")
-    url = credit_url(base)
+    feed_url_ok(base)
     try:
         feed = (fetch or (lambda u, t: mp.fetch_feed(u, t, history=HISTORY)))(base, token)
     except Exception as e:  # noqa: BLE001
@@ -452,84 +700,121 @@ def build(a, env, fetch, now):
         low = smallest_to(w, eq, book_eq)
         raise Refused(f"at {usd(to)} " + "; ".join(f"{e} is already above its Composer share (target {usd(at[e][0])}, "
                                                     f"equity {usd(eq[e])})" for e in neg)
-                      + f": the smallest --to at which every credit is >= 0 is {low:.2f}")
+                      + (f": the smallest --to at which every credit is >= 0 is {low:.2f}" if low is not None else
+                         f": the smallest --to at which every credit is >= 0 is beyond {MAX_FACTOR:g}x the book "
+                         f"({usd(MAX_FACTOR * book_eq)}), more than this planner takes - Composer's split and the "
+                         f"book's are too far apart (check the snapshot)"))
     sent = [(e, at[e][1]) for e, _ in ENGINES if at[e][1] > 0]
     zero = [e for e, _ in ENGINES if at[e][1] == 0]
     if not sent:
         raise Refused(f"at {usd(to)} every credit rounds to $0.00: nothing to send")
     credit_total = round(sum(c for _, c in at.values()), 2)
+    sent_total = round(sum(c for _, c in sent), 2)
     residual = round(to - book_eq - credit_total, 2)
     funded, how, more = funded_estimate(view)
-    need = round(funded + sum(c for _, c in sent), 2)
+    need = round(funded + sent_total, 2)
     cap = cap_to_set(need, headroom)
+    book = view.get("book") or {}
+    book_cash = num(book.get("cash"))
+    if book_cash is None:
+        raise Refused(f"the book's cash on the feed is not a number ({one_line(repr(book.get('cash')), 40)})")
+    session = credit_session(view.get("last_session"), now)
+    div_total, div_rows, div_warn = dividends_due(view, session)
+    margin = round(max(CASH_MARGIN_USD, CASH_MARGIN_FRAC * sent_total), 2)
+    cash_exec = round(book_cash + div_total + sent_total, 2)
+    cash_need = round(cash_exec + margin, 2)
     to_text = f"{to:,.0f}" if to == int(to) else f"{to:,.2f}"
     note = one_line(f"scale-up to ${to_text} at Composer's split of {comp['date']}", 200)
-    line, code = paste_line(url, name, sent, note)
-    book_cash = num((view.get("book") or {}).get("cash"))
-    if book_cash is None:
-        raise Refused(f"the book's cash on the feed is not a number ({(view.get('book') or {}).get('cash')!r})")
-    cash_need = round(book_cash + sum(c for _, c in sent), 2)
-    chk = view.get("check") if isinstance(view.get("check"), dict) else {}
+    to_arg = f"{to:.2f}"
+    rerun = f"mirror_scale.py --to {to_arg[:-3] if to_arg.endswith('.00') else to_arg}"
+    today = sr.et_now(now).date().isoformat()
+    half_days = tuple(sorted(d for d in sr.HALF_DAYS if d >= today))
+    last = view.get("last_session")
+    if not isinstance(last, str) or _date(last) is None:
+        raise Refused(f"the book's last session on the feed is not a date ({one_line(repr(last), 40)})")
+    windows, until = paste_windows(now, session)
+    line, code, program = paste_line(name, sent, note, session, last, windows, until, rerun)
+    chk = view["check"]
     health = ("not halted, no open run, no unresolved order, no error, nothing queued, the four sleeves present and "
-              "not frozen; " + (f"the account held the book at the check of {chk.get('session')}" if chk.get("session")
-                                else "no account check on the feed yet"))
-    book = view.get("book") or {}
+              f"not frozen; the account held the book at the post-trade check of {chk.get('session')} (done, no "
+              f"problem)")
     marks = book.get("marks_asof")
-    warnings = list(comp["warnings"]) + more
+    warnings = list(comp["warnings"]) + more + div_warn
     m = parse_ts(marks)
-    if m is None:
-        warnings.append(f"the book's marks have no readable date ({marks!r}): its equity is of an unknown day")
-    elif (sr.et_now(now).date() - sr.et_now(m).date()).days > STALE_DAYS:
+    mday = et_date(m) if m is not None else None
+    if mday is None:
+        warnings.append(f"the book's marks have no readable date ({one_line(repr(marks), 40)}): its equity is of an "
+                        f"unknown day")
+    elif (sr.et_now(now).date() - mday).days > STALE_DAYS:
         warnings.append(f"the book's equity is valued at the marks of {marks} (its last decision, "
                         f"{view.get('last_session')}): it has not run a session since")
     if zero:
         warnings.append(f"{', '.join(zero)} is exactly at its target: no credit is sent for it")
+    holdings = round(book_eq - book_cash, 2)
     rows = [{"engine": e, "symphony": sid, "composer_value": round(comp["values"][e], 2), "weight": round(w[e], 6),
              "equity": round(eq[e], 2), "target": at[e][0], "credit": at[e][1]} for e, sid in ENGINES]
+    cut = (f"before {PASTE_CUTOFF}:00 ET on a weekday ({PASTE_CUTOFF_HALF}:00 on a half-day"
+           + (f": {', '.join(half_days[:2])}" if half_days else "") + ") or any time on a weekend, by " + until)
     steps = [
         f"(a) Render -> ibkr-executor -> Environment: set MIRROR_MAX_BOOK_USD = {cap}, then \"Save, rebuild and "
         f"deploy\". {quiet_window(now)}: the attestation, the decision and its orders run then. The "
         f"restart logs the IB gateway in again: approve the IB Key push on your phone.",
         f"(b) When the executor is back (the deploy live, /health answering), open Render -> ibkr-executor -> Shell and "
-        f"paste this ONE line, ONCE. It runs with the executor's own Python and reads EXEC_TOKEN inside the container "
-        f"(it never appears on screen); it sends NOTHING unless MIRROR_MAX_BOOK_USD there covers the book's own "
-        f"funded_usd plus these credits and no credit is already queued; then it queues the {len(sent)} credit(s) and "
-        f"prints each answer, stopping at the first that is not 200:",
-        f"(c) The executor applies them at its next session's decision (15:54 ET, 12:54 on a half-day; queued after the "
-        f"decision on a session day: the next session's), smallest first, each only if the account's cash covers the "
-        f"book's cash plus it and the cap holds, and invests them in the same plan (the daily sleeves go to target; "
-        f"KMLM trades too: idle cash above 5% of a threshold sleeve overrides its corridor). Every credit taken is "
-        f"alerted. A refused one is alerted in red and dropped, NOT retried: fix the cause, re-run this planner and "
-        f"paste its new line.",
+        f"paste this ONE line, ONCE, {cut}, for the session of {session}: the credits must be queued before the "
+        f"session that applies them, so the evening POLICY routine never sizes a transfer on pre-credit equity. It is "
+        f"plain python3 (the standard library only); it reads EXEC_TOKEN inside the container and sends it ONLY to the "
+        f"executor in that same container (http://{LINE_HOST}:$PORT/mirror/credit, no proxy, no redirect followed): the "
+        f"token never leaves the container and never appears on screen. It sends NOTHING (a line starting NOTHING "
+        f"SENT) outside those hours or after {until}, once the book has run a session since this plan, while any "
+        f"request is queued (whatever its kind), or unless MIRROR_MAX_BOOK_USD there covers the book's own funded_usd "
+        f"plus these credits to the cent; then it queues the {len(sent)} credit(s) and prints each answer. At the "
+        f"first error or answer that is not 200 it STOPS: the credits answered 200 above it are queued and the one "
+        f"not answered may have been - they apply at the next session and cannot be withdrawn; after that session, "
+        f"re-run this planner and paste its new line (the line sends nothing while anything is queued):",
+        f"(c) The executor applies them at the decision of {session} (15:54 ET, 12:54 on a half-day): first the "
+        f"dividends due, then the credits, smallest first, each only if the account's cash covers the book's cash "
+        f"plus it (the CASH minimum above) and the cap holds, and invests them in the same plan (the daily sleeves go "
+        f"to target; KMLM trades too: idle cash above 5% of a threshold sleeve overrides its corridor). Every credit "
+        f"taken is alerted. A refused one is alerted in red and dropped, NOT retried: fix the cause, re-run this "
+        f"planner and paste its new line.",
         "(d) That night's parity check against Composer (mirror_parity.py) removes the operator credits from that day's "
         "return, so the scale-up is not read as a gain.",
     ]
     return {
         "ok": True, "book": name, "to": round(to, 2), "factor": round(to / book_eq, 4), "note": note,
+        "session": session, "paste_until": until, "paste_windows": windows,
         "snapshot": {k: comp[k] for k in ("path", "taken_at", "date", "age_days")},
         "feed_utc": feed.get("utc"), "marks_asof": marks, "last_session": view.get("last_session"),
         "health": health, "engines": rows,
         "total": {"composer_value": round(sum(comp["values"].values()), 2), "weight": 1.0,
                   "equity": round(sum(eq.values()), 2), "book_equity": round(book_eq, 2),
                   "target": round(sum(r["target"] for r in rows), 2), "credit": credit_total},
-        "residual": residual,
+        "residual": residual, "holdings": holdings,
         "funded": {"now": funded, "how": how, "credits": round(need - funded, 2), "after": need},
         "cap": {"headroom": headroom, "need": need, "with_headroom": round(need * (1 + headroom), 2), "set": cap,
                 "rule": "the executor refuses a credit to a live book that takes funded_usd above MIRROR_MAX_BOOK_USD "
                         "+ $1, credit by credit, smallest first, and drops it (ibkr-executor/app/mirror.py _over_cap, "
-                        "_book_cap_usd, _apply_credits)"},
-        "cash": {"book_cash": round(book_cash, 2), "need": cash_need,
-                 "rule": "the executor also refuses a credit the account's cash (IBKR's TotalCashValue) does not cover "
-                         "on top of the book's cash, read at the decision, credit by credit (mirror.py _apply_credits). "
-                         "The feed does not show the account's cash: check it at IBKR before (b)"},
-        "url": url, "paste": line, "code": code, "steps": steps, "warnings": warnings,
+                        "_book_cap_usd, _apply_credits); the pasted line refuses unless the cap covers funded_usd plus "
+                        "the credits to the cent"},
+        "cash": {"book_cash": round(book_cash, 2), "dividends": div_total, "dividends_due": div_rows,
+                 "credits": sent_total, "executor_need": cash_exec, "margin": margin, "need": cash_need,
+                 "rule": "at the decision the executor credits the dividends due, then refuses a credit the account's "
+                         "cash (IBKR's TotalCashValue) does not cover on top of the book's cash within $1, credit by "
+                         "credit, smallest first (mirror.py _dividends, _apply_credits). The feed does not show the "
+                         "account's cash: check it at IBKR before (b)",
+                 "short": f"If the account's spare cash is short by even $1 (more than the executor's $1.00 tolerance "
+                          f"below the book's cash + the dividends due + the credits, {usd(cash_exec)}), the executor "
+                          f"refuses the LARGEST credit whole and the book trades mis-split until a new plan lands."},
+        "post_to": f"http://{LINE_HOST}:$PORT/mirror/credit (the executor in its own container; PORT as start.sh "
+                   f"reads it, {PORT_DEFAULT} when unset)",
+        "paste": line, "code": code, "program": program, "steps": steps, "warnings": warnings,
     }
 
 
 def render(p):
     """the plan as the owner reads it"""
     out = [f"MIRROR SCALE PLAN — book {p['book']}: {usd(p['total']['book_equity'])} -> {usd(p['to'])} "
-           f"(x{p['factor']:.2f}) at Composer's split of {p['snapshot']['date']}",
+           f"(x{p['factor']:.2f}) at Composer's split of {p['snapshot']['date']}, for the session of {p['session']}",
            f"Composer: {p['snapshot']['path']}, taken {p['snapshot']['taken_at']} ({p['snapshot']['age_days']} day(s) old); "
            f"unallocated cash left out",
            f"mirror: the executor's feed of {p['feed_utc']}, equity at the marks of {p['marks_asof']} (last session "
@@ -549,17 +834,22 @@ def render(p):
                   f" - {usd(p['residual'])} (rounding each target and equity to cents leaves {usd(p['residual'])} "
                   f"unallocated)" if p["residual"] > 0 else
                   f" + {usd(-p['residual'])} (rounding each target and equity to cents adds {usd(-p['residual'])})"))
-    out.append(f"the credits are fixed dollars and the sleeves move until the session applies them: the book lands "
-               f"within that move of its {usd(t['book_equity'])}, not on {usd(p['to'])} to the cent")
-    c, f = p["cap"], p["funded"]
+    out.append(f"the credits are fixed dollars: the book lands at {usd(p['to'])} plus whatever its current "
+               f"{usd(p['holdings'])} of holdings moves before the session, less that session's commissions")
+    c, f, k = p["cap"], p["funded"], p["cash"]
     out += ["", f"CAP: MIRROR_MAX_BOOK_USD = {c['set']}",
             f"  {c['rule']}",
             f"  funded_usd now {usd(f['now'])}: {f['how']}",
             f"  after the credits {usd(f['now'])} + {usd(f['credits'])} = {usd(c['need'])}; x {1 + c['headroom']:g} = "
             f"{usd(c['with_headroom'])}; up to the next ${CAP_STEP_USD}",
-            f"CASH: the account must hold at least {usd(p['cash']['need'])} in cash at the decision (the book's "
-            f"{usd(p['cash']['book_cash'])} + the credits)",
-            f"  {p['cash']['rule']}",
+            f"CASH: the account must hold at least {usd(k['need'])} in cash at the decision of {p['session']}: the "
+            f"book's {usd(k['book_cash'])} + the dividends due by then {usd(k['dividends'])} + the credits "
+            f"{usd(k['credits'])} + a margin of {usd(k['margin'])} (the larger of ${CASH_MARGIN_USD:,.0f} and "
+            f"{CASH_MARGIN_FRAC:.1%} of the credits)"]
+    for r in k["dividends_due"]:
+        out.append(f"  dividend due {r['due']}: {r['sleeve']} {r['ticker']} {usd(r['total'])} ({r['id']})")
+    out += [f"  {k['short']}",
+            f"  {k['rule']}",
             "", "STEPS, in order:", p["steps"][0], p["steps"][1], "", p["paste"], "", p["steps"][2], p["steps"][3]]
     return "\n".join(out)
 

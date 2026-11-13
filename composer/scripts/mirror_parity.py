@@ -194,23 +194,47 @@ def session_prices(row):
     return px
 
 
-def day_return(e0, e1, net, cred, sleeve, px):
+def bought_in(row, eng):
+    """whether sleeve `eng`'s BUYS actually filled that session: a venue BUY whose split gives it shares and
+    that filled (the split is of the filled quantity: mirror_core.book_fill; the row's "orders" as
+    mirror._summary leaves them), or an internal cross it bought in (crosses fill at the plan's price:
+    mirror_core.apply_crosses). Only then did credited dollars go into shares at the session's prices. A
+    sleeve whose plan traded but whose buys were all refused, rejected or unfilled kept its credit as cash.
+    An order or a cross that cannot be read is no evidence of a fill"""
+    orders, crosses = row.get("orders"), row.get("crosses")
+    for o in orders if isinstance(orders, list) else []:
+        if not isinstance(o, dict) or o.get("side") != "BUY" or not isinstance(o.get("split"), dict):
+            continue
+        q, f = o["split"].get(eng), o.get("filled")
+        if _finite(q) and q > 0 and _finite(f) and f > 0:
+            return True
+    for c in crosses if isinstance(crosses, list) else []:
+        b = c.get("buyers") if isinstance(c, dict) else None
+        q = b.get(eng) if isinstance(b, dict) else None
+        if _finite(q) and q > 0:
+            return True
+    return False
+
+
+def day_return(e0, e1, net, cred, sleeve, px, bought=False):
     """(return, basis) of one sleeve on the day: e0 its row of the session before at that day's closes, e1
     this session's row at today's; net the dollars transfers moved in (moved_in), cred the operator's net
     credit (credited_in). Neither is a return. Without a credit: (e1 - net) / e0 - 1, basis None, exactly
     as before. With one:
-      "chained" - the sleeve TRADED: the credited dollars went in with the rest at the session's prices
-          (px, session_prices), so the day is chained there: (V - net - cred) / e0 * e1 / V - 1, V the
-          sleeve after the session at those prices. What the credited dollars themselves earned from
-          there to the close goes out with them (at face value, a credit of 4x the sleeve would turn a
-          0.4% move into the close into a 160 bps 'gap' against Composer)
-      "face" - the sleeve held or sat out (the credit stayed cash and earned nothing), or the row cannot
-          price the sleeve: (e1 - net - cred) / e0 - 1, the credit taken out as a transfer is
+      "chained" - the sleeve TRADED and its buys FILLED (bought: bought_in): the credited dollars went in
+          with the rest at the session's prices (px, session_prices), so the day is chained there:
+          (V - net - cred) / e0 * e1 / V - 1, V the sleeve after the session at those prices. What the
+          credited dollars themselves earned from there to the close goes out with them (at face value, a
+          credit of 4x the sleeve would turn a 0.4% move into the close into a 160 bps 'gap' against
+          Composer). Only while the old capital is worth something there (V - net - cred > 0)
+      "face" - the sleeve held or sat out, or traded but no buy of it filled (the credit stayed cash and
+          earned nothing: chained, that cash would dilute the old capital's move into the close), or the
+          row cannot price the sleeve: (e1 - net - cred) / e0 - 1, the credit taken out as a transfer is
     The two are equal whenever the closes are the session's prices."""
     if not cred:
         return (e1 - net) / e0 - 1, None
     flows = net + cred
-    if sleeve.get("action") == "trade":
+    if sleeve.get("action") == "trade" and bought:
         v, _ = _value(sleeve, px)
         if v is not None and v > 0 and v - flows > 0:
             return (v - flows) / e0 * (e1 / v) - 1, "chained"
@@ -342,7 +366,8 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
                 rec["ret_skipped"] = unread
                 uncredited.setdefault(unread, []).append(eng)
             elif e1 and e0 and e0 > 0:
-                ret, basis = day_return(e0, e1, net, cred, s, session_prices(row) if cred else px)
+                ret, basis = day_return(e0, e1, net, cred, s, session_prices(row) if cred else px,
+                                        bought=bool(cred) and bought_in(row, eng))
                 if net:
                     rec["transfer_in"] = round(net, 2)
                 note = ""
