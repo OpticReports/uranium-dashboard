@@ -1239,14 +1239,16 @@ def bars_fetcher(rng="5d"):
     return get
 
 
-def fetch_minutes(t, d, key, tries=3, traded=False, timeout=30):
+def fetch_minutes(t, d, key, tries=3, traded=False, timeout=30, quiet=False):
     """{'HH:MM' bar start, ET: close} of t's FMP 1-minute bars on session d ({} if FMP has none that day).
     FMP answers a range with the last three calendar days up to `to`, and a day it lacks with the latest day it
     has, so only bars dated d are kept. The key never appears in an error. FMP also emits bars with no
     volume for thin funds, priced off quotes (PEJ: 324 of 386 on 2026-10-30); traded=True keeps only bars
     with volume, i.e. trades (the preview's freshness needs trade times). The shadow runner's window check
     reads all bars, as measured in add. 50. timeout: seconds per attempt (the mirror brain passes a short
-    one with tries=1: its decision cannot wait on a hanging call)"""
+    one with tries=1: its decision cannot wait on a hanging call). quiet=True (with traded): the starts of the
+    bars left out for having no volume ride along under '_quiet' (sorted), when there are any: the mirror
+    brain's half-day evidence that FMP is still publishing a ticker (every reader skips '_' keys)"""
     url = f"{FMP_MINUTES}?" + urllib.parse.urlencode({"symbol": t, "from": d, "to": d, "apikey": key})
     err = None
     for k in range(tries):
@@ -1256,7 +1258,7 @@ def fetch_minutes(t, d, key, tries=3, traded=False, timeout=30):
                 rows = json.load(r)
             if not isinstance(rows, list):
                 raise RuntimeError(f"unexpected answer {str(rows).replace(key, '***')[:80]}")
-            out = {}
+            out, still = {}, set()
             for b in rows:                          # a row that is not a bar of d is skipped, never fatal
                 if not isinstance(b, dict) or not str(b.get("date", "")).startswith(d):
                     continue
@@ -1265,8 +1267,12 @@ def fetch_minutes(t, d, key, tries=3, traded=False, timeout=30):
                     continue
                 v = b.get("volume")
                 if traded and (isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0):
+                    still.add(hm)
                     continue
                 out[hm] = float(c)
+            still -= set(out)
+            if quiet and traded and still:
+                out["_quiet"] = sorted(still)
             return out
         except Exception as e:  # noqa: BLE001
             err = str(e).replace(key, "***")

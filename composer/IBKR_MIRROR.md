@@ -114,6 +114,15 @@ methods (the account's positions; what an order executed) and nothing else.
    of its own, its data is short, or its tree is not the one Composer runs. A
    LIVE book additionally refuses any sleeve whose tree was not attested that
    day; a paper book trades it and says so.
+   On a half-day (12:54:00, a 13:00 close: 12:54:25 to act, 12:59:00 to
+   cancel) FMP can stop carrying VOLUME after 12:45 while it keeps publishing
+   the bars (its archive of all three 2025 half-days; SPY itself on
+   2025-11-28), which the dead-feed rules refused. There, and only there, a
+   ticker with a bar without volume in the two minutes to the instant counts
+   as trading when its own last trade is at most 15 minutes old, the price
+   being that trade's; SPY's decision bar likewise. Each is named in the
+   payload's `problems`; no bars, or older trades, are still refused
+   (mirror_brain.py's docstring; tests/test_mirror_halfday.py on both sides).
 4. Corporate actions first: a split rescales the sleeves' shares; a dividend
    becomes a receivable for the sleeves that held the payer at the close
    before the ex-date, credited from the pay date.
@@ -177,9 +186,39 @@ it with /mirror/resolve.
   MIRROR_CAPITAL_USD, so on a fully seeded book every credit needs the cap
   raised or force). Every credit a live book takes is alerted.
 - Live only: seeding never totals more than MIRROR_CAPITAL_USD; the buys of a
-  session are not sent when the book's cash exceeds the account's by more
-  than $1 or the account's cash cannot be read; a live state file that holds
-  shares while no live book is built is alerted in red at every boot.
+  session are not sent while the book's cash exceeds what the account is
+  shown to hold by more than $1, or while the account's cash cannot be read.
+  "Shown to hold": IB's TotalCashValue, except while it still reads what it
+  read before the session's sells - IB's update lag (sent on a position
+  change, otherwise every 3 minutes), not a fact about the account - AND the
+  account's positions, read again before the buys, are exactly what it held
+  at the pre-trade check less the shares the sells were booked at. Then it is
+  that reading plus what the sells executed (a commission IB has not reported
+  yet counted at 1.1% of the fill + $10; a sell with no reported price, or one
+  booked by /mirror/resolve, at nothing until TotalCashValue shows it). When
+  the positions differ - a sale booked that never executed, an execution
+  counted twice, a trade by hand - or cannot be read: TotalCashValue alone,
+  the rule before. (IB reports a corrected execution as one more execution
+  whose execId differs only after the last period; the adapter keeps the
+  latest correction alone.) Positions come on IB's position subscription,
+  not on the 3-minute cycle; if on the live gateway they trail the fills, the
+  buys wait the step or two it takes (unverified there until the first live
+  rotation). Keep at least 1.1% of a day's sells + $10 an order outside the
+  book (about $1.3k on a $117k rotation): below that, a commission IB had not
+  reported when its sell was booked holds a lagging day's buys. A live state
+  file that holds shares while no live book is built is alerted in red at
+  every boot.
+- The guard's one hole, and the operating rule that closes it: cash that
+  leaves the account with NO position moving - a withdrawal by hand, a fee -
+  inside IB's update lag is seen by nothing (TotalCashValue does not show it
+  yet, no position moves). The buys can then borrow as much as it exceeds the
+  account's cash outside the book; the rule before this held such a day's
+  buys until IB caught up. So: never withdraw cash or trade by hand in the
+  mirror's account during a session's run, roughly 15:45-16:05 ET (12:45-13:05
+  on a half-day). (A trade by hand moves a position: the guard then waits for
+  TotalCashValue, and the post-trade check finds the difference and halts the
+  book.) A PRICE correction IB sends after its sell was booked is not seen by
+  the book.
 - GET /mirror/feed (READ_TOKEN): the books, for the parity monitor.
 - /status and /health carry a mirror block only when the mirror is enabled.
 

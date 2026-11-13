@@ -621,7 +621,16 @@ class Gateway:
         self.time_min_gap = 0.0                     # > 0: a reqCurrentTime asked sooner than this after the last
         self.time_dropped = 0                       # one answered is read and ignored (ib_insync #479, K3b's
         self._time_answered = None                  # fake_gw3 'rate49'), on every session
+        self.oo_policy = None                       # K5: n (the session's n-th open-orders request) -> seconds
+        self._lock = threading.Lock()               # before its end is sent (0 = at once), None = never
         threading.Thread(target=self._accept, daemon=True).start()
+
+    def _send(self, c, data):
+        try:
+            with self._lock:                        # a late answer is sent from a timer thread
+                c.sendall(data)
+        except OSError:
+            pass
 
     def _accept(self):
         while True:
@@ -638,7 +647,7 @@ class Gateway:
                         for i, (s, q) in enumerate(sorted(self.pos.items()))) + _enc(62, 1)
 
     def _serve(self, c):
-        buf, shook = b"", False
+        buf, shook, n_oo = b"", False, 0
         try:
             while True:
                 d = c.recv(65536)
@@ -654,7 +663,7 @@ class Gateway:
                     if len(buf) < 4 or len(buf) < 4 + struct.unpack(">I", buf[:4])[0]:
                         continue
                     buf = buf[4 + struct.unpack(">I", buf[:4])[0]:]
-                    c.sendall(_enc(176, "20261112 09:00:00 EST"))
+                    self._send(c, _enc(176, "20261112 09:00:00 EST"))
                     shook = True
                 while len(buf) >= 4:
                     n = struct.unpack(">I", buf[:4])[0]
@@ -662,22 +671,29 @@ class Gateway:
                         break
                     f, buf = buf[4:4 + n].decode().split("\0"), buf[4 + n:]
                     if f[0] == "71":                                    # startApi
-                        c.sendall(_enc(15, 1, "DU1") + _enc(9, 1, 1))
+                        self._send(c, _enc(15, 1, "DU1") + _enc(9, 1, 1))
                     elif f[0] == "61":                                  # reqPositions
                         self.position_requests += 1
                         if self.position_requests > self.skip_position_requests:
-                            c.sendall(self._positions())
+                            self._send(c, self._positions())
                     elif f[0] in ("5", "16"):                           # open orders
-                        c.sendall(_enc(53, 1))
+                        n_oo += 1
+                        delay = self.oo_policy(n_oo) if self.oo_policy else 0
+                        if delay is None:
+                            continue                                    # never answered
+                        if delay > 0:                                   # answered late
+                            threading.Timer(delay, self._send, (c, _enc(53, 1))).start()
+                        else:
+                            self._send(c, _enc(53, 1))
                     elif f[0] == "99":                                  # completed orders
-                        c.sendall(_enc(102))
+                        self._send(c, _enc(102))
                     elif f[0] == "6":                                   # account updates
-                        c.sendall(_enc(6, 2, "TotalCashValue", self.cash, "USD", "DU1")
-                                  + _enc(6, 2, "AvailableFunds", self.cash, "USD", "DU1") + _enc(54, 1, "DU1"))
+                        self._send(c, _enc(6, 2, "TotalCashValue", self.cash, "USD", "DU1")
+                                   + _enc(6, 2, "AvailableFunds", self.cash, "USD", "DU1") + _enc(54, 1, "DU1"))
                     elif f[0] == "76":                                  # account updates multi
-                        c.sendall(_enc(74, 1, f[2]))
+                        self._send(c, _enc(74, 1, f[2]))
                     elif f[0] == "7":                                   # executions
-                        c.sendall(_enc(55, 1, f[2]))
+                        self._send(c, _enc(55, 1, f[2]))
                     elif f[0] == "49":                                  # reqCurrentTime
                         self.time_requests += 1
                         now = time.monotonic()
@@ -686,7 +702,7 @@ class Gateway:
                             self.time_dropped += 1                      # never answered
                             continue
                         self._time_answered = now
-                        c.sendall(_enc(49, 1, int(time.time())))
+                        self._send(c, _enc(49, 1, int(time.time())))
         except OSError:
             return
 
@@ -1851,22 +1867,30 @@ def test_k3a_a_halt_landing_during_the_sells_check_stops_that_sell(tmp_path, mon
 # ib_async keys EVERY open-orders request "openOrders" and openOrderEnd carries no request id: an earlier request
 # still unanswered (the connect-time sync's, whose timeout is only logged, or one that timed out and kept the
 # session) would end the next one with a PARTIAL list - a resting hand SELL read as gone (a short), or an order
-# read as absent and placed again. Every open-orders read fails closed while one is pending and drops the session.
-def test_k4_the_sell_count_fails_closed_while_an_earlier_open_orders_request_is_unanswered(real):
+# read as absent and placed again. Every open-orders read fails closed while one is pending and drops the session
+# (K5: after waiting for it, at most VENUE_HISTORY_TIMEOUT_S per read - scaled to K4_BOUND_S here).
+K4_BOUND_S = 0.3
+
+
+def test_k4_the_sell_count_fails_closed_while_an_earlier_open_orders_request_is_unanswered(real, monkeypatch):
     a, gw = real
+    monkeypatch.setattr(ib_mod, "VENUE_HISTORY_TIMEOUT_S", K4_BOUND_S)
     a.ib.connect("x", 0, clientId=17)
     a.connects.clear()
     assert a.open_sell_qty("TECL") == 0 and a.connects == []           # the twin: nothing pending, an honest answer
     a.ib.wrapper.startReq("openOrders")                               # an earlier request, still unanswered
+    t = time.monotonic()
     with pytest.raises(ib_mod.ExecutorConnectionError, match="still unanswered"):
         a.open_sell_qty("TECL")
+    assert time.monotonic() - t < K4_BOUND_S + 0.5                     # K5: the wait is bounded
     assert not a.ib.isConnected() and a._proven is None
     assert a.open_sell_qty("TECL") == 0                               # the next read runs on a fresh session
     assert a.ib.isConnected() and len(a.connects) == 1 and "openOrders" not in a.ib.wrapper._futures
 
 
-def test_k4_order_absent_today_proves_nothing_while_an_earlier_open_orders_request_is_unanswered(real):
+def test_k4_order_absent_today_proves_nothing_while_an_earlier_open_orders_request_is_unanswered(real, monkeypatch):
     a, gw = real
+    monkeypatch.setattr(ib_mod, "VENUE_HISTORY_TIMEOUT_S", K4_BOUND_S)
     a.ib.connect("x", 0, clientId=17)
     a.connects.clear()
     a.ib.wrapper.startReq("openOrders")
@@ -1876,11 +1900,302 @@ def test_k4_order_absent_today_proves_nothing_while_an_earlier_open_orders_reque
     assert len(a.connects) == 1
 
 
-def test_k4_the_order_history_refresh_fails_closed_while_an_earlier_open_orders_request_is_unanswered(real):
+def test_k4_the_order_history_refresh_fails_closed_while_an_earlier_open_orders_request_is_unanswered(real,
+                                                                                                       monkeypatch):
     a, gw = real
+    monkeypatch.setattr(ib_mod, "VENUE_HISTORY_TIMEOUT_S", K4_BOUND_S)
     a.ib.connect("x", 0, clientId=17)
     assert isinstance(a._all_trades(refresh=True), list)              # the twin: a normal refresh
     a.ib.wrapper.startReq("openOrders")
     with pytest.raises(ib_mod.ExecutorConnectionError, match="still unanswered"):
         a._all_trades(refresh=True)
     assert not a.ib.isConnected()
+
+
+# ------------------------------------------------------------------ K5 (finding D1): the guard's reconnect loop
+# Every session's connect-time open-orders request is the one IB.connect sends (reqOpenOrders) and only LOGS when it
+# times out (ib.py:2077-2084). Before: a gateway that answered it late, or never, on EVERY session had every guarded
+# read drop the session, every reconnect counted as a recovery, and nothing paged - the mirror never traded, quietly.
+# After: the late end is waited for (bounded), a session whose sync has not ended does not end the outage (the
+# 30-min DOWN page, once, naming the cause), and the reconnects run on the backoff instead of on every read.
+_REAL_CONNECT = ib_mod.IBAdapter._connect           # captured before the `real` fixture stubs it out
+
+
+def _counted_drops(a):
+    a.drops = 0
+    orig = a._drop_session
+
+    def drop():
+        a.drops += 1
+        orig()
+    a._drop_session = drop
+
+
+def _scaled(a, gw, monkeypatch, tmp_path, policy, sent):
+    """bound 0.3 s (20 s), connect sync 0.3 s (15 s), backoff 0.6 s up to 1.2 s (15 s up to the mirror's 30 s),
+    the DOWN page after 2.5 s (30 min); the outage ledger and the alerts recorded"""
+    import app.alerts as alerts_mod
+    monkeypatch.setattr(alerts_mod, "send", sent.append)
+    monkeypatch.setattr(ib_mod, "VENUE_HISTORY_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(ib_mod, "OUTAGE_ALERT_S", 2.5)
+    monkeypatch.setattr(ib_mod, "RECONNECT_BACKOFF_S", 0.6)
+    a._reconnect_backoff, a.reconnect_backoff_max_s, a.mirror_only = 0.6, 1.2, True
+    a.outages = OutageLog(str(tmp_path / "outages.json"))
+    a.connect_timeout = 0.3
+    gw.oo_policy = policy
+    _counted_drops(a)
+
+
+def _decision_reads(a, seconds, said=None):
+    """the mirror's sell checks for `seconds`: open_sell_qty, and after a failed one the liveness round trip
+    (_sell_check / _reprove); (reads, answers, slowest step). said: collects what the mirror's red alert would
+    quote of each failure (mirror.one_line(exc, 160))"""
+    reads, answers, slowest = 0, [], 0.0
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        reads += 1
+        t = time.monotonic()
+        try:
+            answers.append(a.open_sell_qty("TECL"))
+        except ib_mod.ExecutorConnectionError as exc:
+            if said is not None:
+                said.add(mm.one_line(exc, 160))
+            try:
+                a.prove_live()
+            except ib_mod.ExecutorConnectionError:
+                pass
+        slowest = max(slowest, time.monotonic() - t)
+        time.sleep(0.05)
+    return reads, answers, slowest
+
+
+@needs_ib_async
+def test_k5_slow_first_a_late_connect_time_open_orders_end_is_waited_for_not_a_drop_per_read(real, monkeypatch,
+                                                                                              tmp_path):
+    """slow_first: the connect gives up on the connect-time request (0.3 s), its end arrives 0.45 s after it was
+    sent; later requests are answered at once. Before: every read dropped the session and every new session
+    brought the same late request back. After: the first read waits for that end, then every read is answered on
+    the one session."""
+    a, gw = real
+    sent = []
+    _scaled(a, gw, monkeypatch, tmp_path, lambda n: 0.45 if n == 1 else 0, sent)
+    a.ib.connect("x", 0, clientId=17)
+    assert "openOrders" in a.ib.wrapper._futures                      # the connect only logged its timeout
+    a.connects.clear()
+    t = time.monotonic()
+    assert a.open_sell_qty("TECL") == 0
+    assert time.monotonic() - t < 0.3 + 0.2                           # ended by the late end, inside the bound
+    reads, answers, slowest = _decision_reads(a, 1.0)
+    assert answers == [0] * reads and slowest < 0.1                   # nothing pending any more: no wait at all
+    assert a.order_absent_today("mirror-2026-11-12-S-TECL") is True
+    assert a.drops == 0 and a.connects == [] and gw.sessions == 1
+    assert not sent and not a.outages.open and a.outages.history == []
+
+
+@needs_ib_async
+def test_k5_never_first_a_gateway_that_never_answers_the_connect_time_request_pages_once(real, monkeypatch, tmp_path):
+    """never_first: no session's connect-time request is ever answered, later ones are. Every read must still fail
+    closed (K4: a new request's answer could be ended by that request's late reply). Before: a drop and a
+    reconnect on every read, each reconnect a "recovery", no page ever. After: the outage stays open across the
+    reconnects, the existing 30-min DOWN page goes out ONCE and names the cause, the drops follow the backoff;
+    and once a session's sync does end, the outage closes with the RECONNECTED notice."""
+    a, gw = real
+    sent = []
+    _scaled(a, gw, monkeypatch, tmp_path, lambda n: None if n == 1 else 0, sent)
+    a.ib.connect("x", 0, clientId=17)
+    a.connects.clear()
+    said = set()
+    reads, answers, slowest = _decision_reads(a, 4.0, said)
+    assert answers == []                                              # never an answer
+    assert slowest < 0.3 + 0.3 + 0.5                                  # one wait (bound) + one connect, at most
+    downs = [m for m in sent if "DOWN for over" in m]
+    assert len(downs) == 1 and "CAUSE" in downs[0] and "open-orders request" in downs[0]
+    assert not any("RECONNECTED" in m for m in sent)
+    assert 2 <= a.drops <= reads // 4, (a.drops, reads)              # not one per read
+    assert a.outages.open and a.outages.history == []                # ONE outage, still open
+    gw.oo_policy = None                                               # the gateway is restarted: answers again
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        try:
+            assert a.open_sell_qty("TECL") == 0
+            break
+        except ib_mod.ExecutorConnectionError:
+            time.sleep(0.1)                                           # waits out the backoff
+    assert a.open_sell_qty("TECL") == 0 and a._disconnected_since is None
+    assert [m for m in sent if "RECONNECTED" in m] and len([m for m in sent if "DOWN for over" in m]) == 1
+    assert not a.outages.open and len(a.outages.history) == 1 and a.outages.history[0]["alerted"] is True
+    guard = [m for m in said if "still unanswered" in m]               # what the mirror's red alert quotes
+    assert guard and all("restart the gateway if this persists" in m for m in guard)
+
+
+@needs_ib_async
+def test_k5_never_all_a_gateway_that_answers_no_open_orders_request_fails_closed_and_pages_once(real, monkeypatch,
+                                                                                                 tmp_path):
+    """never_all: not one open-orders request is answered. No read may ever return a count; the outage pages once."""
+    a, gw = real
+    sent = []
+    _scaled(a, gw, monkeypatch, tmp_path, lambda n: None, sent)
+    a.ib.connect("x", 0, clientId=17)
+    reads, answers, _ = _decision_reads(a, 3.5)
+    assert reads >= 5 and answers == []
+    try:
+        absent = a.order_absent_today("mirror-2026-11-12-S-TECL")
+    except ib_mod.ExecutorConnectionError:
+        absent = None
+    assert absent is not True                                         # nothing proven, ever
+    assert len([m for m in sent if "DOWN for over" in m]) == 1 and a.outages.open
+    assert a.drops <= reads // 4, (a.drops, reads)
+
+
+@needs_ib_async
+def test_k5_boot_a_session_whose_open_orders_sync_did_not_end_runs_the_outage_clock_until_it_does(real, monkeypatch,
+                                                                                                    tmp_path):
+    """the service's own connect (_connect) is held to the same rule as a reconnect: an unended open-orders sync
+    starts the outage clock, and the keepalive's drain closes it once the late end has arrived (no page: short)"""
+    a, gw = real
+    sent = []
+    _scaled(a, gw, monkeypatch, tmp_path, lambda n: 0.8 if n == 1 else 0, sent)
+    _REAL_CONNECT(a)
+    assert a.ib.isConnected() and a._disconnected_since is not None and a.outages.open
+    time.sleep(1.0)                                                   # the late end waits in the socket buffer
+    assert a.keepalive() is True
+    assert a._disconnected_since is None and not a.outages.open and len(a.outages.history) == 1
+    assert a.open_sell_qty("TECL") == 0 and a.drops == 0 and not sent
+
+
+@needs_ib_async
+def test_k5_idle_an_unsynced_session_is_kept_and_pages_once_without_a_reconnect(real, monkeypatch, tmp_path):
+    """the overnight shape: the session the service connected (or the nightly restart's) never gets its open-orders
+    sync answered, and nothing reads open orders until the decision. The keepalive keeps that session (positions,
+    cash and the liveness round trip all work on it) and the outage clock reaches the DOWN page once - no drop, no
+    reconnect, no storm. Before: nothing noticed it until the decision's first sell check."""
+    a, gw = real
+    sent = []
+    _scaled(a, gw, monkeypatch, tmp_path, lambda n: None if n == 1 else 0, sent)
+    _REAL_CONNECT(a)
+    a.connects.clear()
+    end = time.monotonic() + 3.5
+    while time.monotonic() < end:
+        assert a.keepalive() is True
+        assert a.positions_snapshot()["stocks"] == {"BIL": 20, "SPY": 10}
+        time.sleep(0.2)
+    downs = [m for m in sent if "DOWN for over" in m]
+    assert len(downs) == 1 and "CAUSE" in downs[0]
+    assert a.drops == 0 and a.connects == [] and gw.sessions == 1 and a.outages.open
+
+
+@needs_ib_async
+def test_k5_healthy_a_normal_day_is_unchanged_no_wait_no_drop_no_outage(real, monkeypatch, tmp_path):
+    """the twin (passes before and after): every request answered at once"""
+    a, gw = real
+    sent = []
+    _scaled(a, gw, monkeypatch, tmp_path, None, sent)
+    _REAL_CONNECT(a)                                                  # the service's own connect
+    a.connects.clear()
+    for _ in range(10):
+        t = time.monotonic()
+        assert a.open_sell_qty("TECL") == 0 and a.order_absent_today("mirror-2026-11-12-S-TECL") is True
+        assert isinstance(a._all_trades(refresh=True), list)
+        assert time.monotonic() - t < 0.1
+        time.sleep(0.2)                     # under ib_async's 45 requests/s client throttle (client.py:85-86)
+    assert a.drops == 0 and a.connects == [] and gw.sessions == 1 and not sent
+    assert not a.outages.open and a.outages.history == [] and a._disconnected_since is None
+
+
+class _FifoAdapter(ib_mod.IBAdapter):
+    """K4's probe (probe_osq): the INSTALLED ib_async session - IB, Client, Wrapper, util.run, the trades cache -
+    with only Client.send replaced by a FIFO gateway that answers each open-orders request in order, after its own
+    delay, through the real Wrapper callbacks (openOrder, orderStatus, openOrderEnd). venue: the orders open at the
+    venue; delays: per request, consumed in order: (start delay, gap between messages)."""
+
+    def _connect(self):
+        import asyncio
+        from ib_async import Order, OrderState
+        from ib_async.client import Client
+        self.venue, self.delays = [], []
+        ib, loop, busy = self.ib, asyncio.get_event_loop(), [0.0]
+        ib.client._apiReady, ib.client.connState, ib.client._serverVersion = True, Client.CONNECTED, 176
+        ib.wrapper.clientId = ib.client.clientId = 17
+        ib.client.conn.transport = types.SimpleNamespace(write=lambda d: None, write_eof=lambda: None,
+                                                         close=lambda: None)
+        ib.client._reqIdSeq = 1000
+
+        def send(*fields, makeEmpty=True):
+            mid, now = int(fields[0]), loop.time()
+            if mid in (5, 16):                   # reqOpenOrders (this client's) / reqAllOpenOrders (every client's)
+                start_delay, gap = self.delays.pop(0) if self.delays else (0.01, 0.0)
+                t = max(now, busy[0]) + start_delay
+                for o in [o for o in self.venue if mid == 16 or o.clientId == 17]:
+                    oo = Order(orderId=o.orderId, clientId=o.clientId, permId=o.permId, action=o.action,
+                               totalQuantity=o.totalQuantity, orderType=o.orderType, auxPrice=o.auxPrice)
+                    c = real_ib_async.Stock("TECL", "SMART", "USD")
+                    c.conId = 12345
+                    loop.call_at(t, ib.wrapper.openOrder, oo.orderId, c, oo, OrderState(status="Submitted"))
+                    loop.call_at(t, ib.wrapper.orderStatus, oo.orderId, "Submitted", 0.0,
+                                 float(oo.totalQuantity), 0.0, oo.permId, 0, 0.0, oo.clientId, "", 0.0)
+                    t += gap
+                loop.call_at(t, ib.wrapper.openOrderEnd)
+                busy[0] = t
+            elif mid == 7:                           # reqExecutions
+                loop.call_at(max(now, busy[0]) + 0.001, ib.wrapper.execDetailsEnd, int(fields[2]))
+        ib.client.send = send
+
+
+@pytest.fixture
+def fifo(monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, "ib_async", real_ib_async)
+    monkeypatch.setattr(ib_mod, "VENUE_HISTORY_TIMEOUT_S", K4_BOUND_S)
+
+    def make():
+        a = _FifoAdapter(_RealCfg())
+        a.venue.append(real_ib_async.Order(orderId=0, clientId=0, permId=70001, action="SELL", totalQuantity=50,
+                                           orderType="STP", auxPrice=40.0))   # a stop placed by hand, resting
+        return a
+    return make
+
+
+def _sleep_until(a, t_loop):
+    import asyncio
+    d = t_loop - asyncio.get_event_loop().time()
+    if d > 0:
+        a.ib.sleep(d)
+
+
+@needs_ib_async
+def test_k5_k4_a_late_end_inside_the_wait_never_undercounts_a_resting_sell(fifo):
+    """K4's two bad cases, now answered instead of refused - and answered RIGHT: the earlier request's late end is
+    waited for, so the new request's own (complete) answer is what counts. S2: order_absent_today's request timed
+    out (kept the session) and its late answer straddles the sell check; S3: the connect-time request timed out."""
+    import asyncio
+    a, loop = fifo(), asyncio.get_event_loop()
+    a.delays[:] = [(0.35, 0.10)]                  # S2: the answer starts after the 0.3 s bound, its end at +0.45 s
+    t0 = loop.time()
+    assert a.order_absent_today("mirror-2026-11-12-S-BOXX") is None
+    _sleep_until(a, t0 + 0.37)                    # the hand order's openOrder is in; the stale end is not
+    assert "openOrders" in a.ib.wrapper._futures
+    assert a.open_sell_qty("TECL") == 50          # never 0: the resting SELL counted
+    b = fifo()
+    b.delays[:] = [(0.5, 0.0)]                    # S3: the connect-time sync's end arrives at +0.5 s
+    b.ib.RequestTimeout = 0.3
+    with pytest.raises((TimeoutError, asyncio.TimeoutError)):
+        b.ib.reqOpenOrders()
+    b.ib.RequestTimeout = 0
+    assert b.open_sell_qty("TECL") == 50
+
+
+@needs_ib_async
+def test_k5_k4_a_late_end_after_the_wait_fails_closed_never_a_partial_count(fifo):
+    """the twin: the earlier request's end comes after the bound - the read fails closed (no count at all), the
+    session is dropped; it never returns the 0 a late end could have cut the new answer down to"""
+    import asyncio
+    a = fifo()
+    a.delays[:] = [(1.2, 0.0)]
+    a.ib.RequestTimeout = 0.3
+    with pytest.raises((TimeoutError, asyncio.TimeoutError)):
+        a.ib.reqOpenOrders()
+    a.ib.RequestTimeout = 0
+    t = time.monotonic()
+    with pytest.raises(ib_mod.ExecutorConnectionError, match="still unanswered"):
+        a.open_sell_qty("TECL")
+    assert time.monotonic() - t < K4_BOUND_S + 0.3 and not a.ib.isConnected()

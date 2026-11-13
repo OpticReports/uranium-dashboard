@@ -275,6 +275,15 @@ def _is_trading_day(d) -> bool:
         return d.weekday() < 5
 
 
+def _session_close_et(d) -> tuple:
+    """(hour, minute) ET of the regular close on d: blend's early-close table (13:00), else 16:00"""
+    try:
+        from .blend import session_close_et
+        return session_close_et(d)
+    except Exception:  # noqa: BLE001
+        return (16, 0)
+
+
 def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
                    send_fn, state: dict | None = None) -> list[str]:
     """Pure: returns which pages fired ('stall', 'loop', 'unreadable',
@@ -801,7 +810,7 @@ def _build_mirror() -> None:
     try:
         from . import mirror as mirror_mod
         MIRROR = mirror_mod.build(settings, alert=lambda msg: send(msg),
-                                  trading_day=_is_trading_day)
+                                  trading_day=_is_trading_day, session_close=_session_close_et)
     except Exception as exc:  # noqa: BLE001
         MIRROR = {}
         logger.exception("mirror build failed: %s", exc)

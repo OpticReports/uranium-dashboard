@@ -12,7 +12,9 @@ tests/test_mirror.py's (Venue), tests/ibrig.py's (the REAL IBAdapter over FakeIB
   G4   flatten orders that just keep working are said in red after 10 minutes, and every 10 minutes
   G5   an account that reads EMPTY against a book with shares is read again before the flatten ends,
        and a flatten that sold nothing never reports account_flat True
-  G6   C-52 is not one look: the buys are held while the account's cash lags and go when it covers
+  G6   C-52 is not one look: the buys are held while the account's cash does not cover and go when it
+       does (2026-11-12: a reading that has not moved since before the sells is IB's lag, not a
+       shortfall, and holds nothing - the sells' executed proceeds are counted on it; tests below)
   G7   /mirror/adjust: cash added to a live book is capped like a credit (F1)
   G8   staged rollout: credits are capped at the capital of THIS book's engines, and a seed counts
        what the book has already taken (F2)
@@ -288,13 +290,15 @@ def test_g5_a_flatten_that_sold_nothing_never_reports_the_account_flat(tmp_path,
 
 
 # =============================================================================================== G6
-def _rotation(tmp_path, stale_reads):
-    """day two: HG rotates BIL -> TQQQ. After the sell fills the account's cash is reported as it stood
-    BEFORE the fill for the first `stale_reads` reads (None: for ever)."""
+def _rotation(tmp_path, stale_reads, shows=("BIL",)):
+    """day two: HG rotates BIL -> TQQQ and SLEEVE BOXX -> TQQQ. After the sells fill, the account's cash is
+    reported as it stood BEFORE them plus what the sells in `shows` brought, for the first `stale_reads`
+    reads (None: for ever). shows=("BIL",): a TotalCashValue that has caught up with one sale and not the
+    other (it moved, and does not cover); shows=(): one that lags both (it reads what it read before)."""
     r = Rig(tmp_path, live=True, venue_cash=100_000.0)
     r.tick("15:00"); r.tick("15:55:05")
     assert r.m.state["last_run"]["outcome"] == "traded"
-    r.brain.make = lambda now: payload(now, dict(T1, HG={"TQQQ": 1.0}), session=D2)
+    r.brain.make = lambda now: payload(now, dict(T1, HG={"TQQQ": 1.0}, SLEEVE={"TQQQ": 1.0}), session=D2)
     r.tick("15:00", day=D2)
     stale, real, seen = r.venue.account_cash(), r.venue.account_cash, {"n": 0}
 
@@ -302,7 +306,9 @@ def _rotation(tmp_path, stale_reads):
         if r.m.state.get("run") and r.m.state["run"]["phase"] == "sells":
             seen["n"] += 1
             if stale_reads is None or seen["n"] <= stale_reads:
-                return dict(stale)
+                part = sum(x["filled_qty"] * x["fill_price"] - x.get("commission", 0.0) for x in r.venue._orders.values()
+                           if x["symbol"] in shows and x["qty"] < 0 and x.get("filled_qty"))
+                return dict(stale, total_cash=stale["total_cash"] + part)
         return real()
     r.venue.account_cash = cash
     return r, seen
@@ -320,6 +326,18 @@ def test_g6_the_buys_wait_for_the_accounts_cash_and_go_when_it_covers(tmp_path):
     assert len([a for a in r.red() if "BUYS are HELD" in a]) == 1 and not [a for a in r.red() if "NO BUYS" in a]
     assert len([a for a in r.alerts if "covers the book's again" in a]) == 1
     assert any("buys were held for" in n for n in r.m.state["last_run"]["notes"])
+    tm.sound(r)
+
+
+def test_g6_a_reading_that_lags_every_fill_holds_nothing_since_c52_counts_the_fills(tmp_path):
+    """2026-11-12 (C-52 re-done): a TotalCashValue that still reads what it read before the sells is a lag,
+    not a shortfall - the buys used to be held until it caught up (for good, past the cancel instant); the
+    guard now counts the sells' executed proceeds on the cash read before them, and they go at once"""
+    r, seen = _rotation(tmp_path, stale_reads=None, shows=())
+    t0 = r.clock.now = at("15:55:05", D2)
+    r.m.tick(r.venue)
+    assert _bought(r) and seen["n"] == 1 and r.clock.now == t0 and not [a for a in r.alerts if "HELD" in a]
+    assert r.m.state["last_run"]["outcome"] == "traded" and not [n for n in r.m.state["last_run"]["notes"] if "buys" in n]
     tm.sound(r)
 
 
