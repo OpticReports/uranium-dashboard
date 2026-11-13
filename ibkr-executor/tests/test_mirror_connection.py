@@ -1997,8 +1997,13 @@ def test_k5_never_first_a_gateway_that_never_answers_the_connect_time_request_pa
     """never_first: no session's connect-time request is ever answered, later ones are. Every read must still fail
     closed (K4: a new request's answer could be ended by that request's late reply). Before: a drop and a
     reconnect on every read, each reconnect a "recovery", no page ever. After: the outage stays open across the
-    reconnects, the existing 30-min DOWN page goes out ONCE and names the cause, the drops follow the backoff;
-    and once a session's sync does end, the outage closes with the RECONNECTED notice."""
+    reconnects, the existing 30-min DOWN page goes out ONCE and names the cause; and once a session's sync does
+    end, the outage closes with the RECONNECTED notice.
+    D1 round 4 (changed on purpose): a session whose own connect-time sync is the unanswered request is KEPT (its
+    late end could still land) - but for the ONE fresh session an outage allows (_unsynced_replace_due) - and a
+    read after that session's first full wait fails at once. So: the first read drops the session the adapter
+    did not connect itself (it cannot know whose request that is), then exactly one replacement, then no reconnect
+    per read. Recovery is a gateway restart, as the page says: its FIN, then a gateway that answers."""
     a, gw = real
     sent = []
     _scaled(a, gw, monkeypatch, tmp_path, lambda n: None if n == 1 else 0, sent)
@@ -2011,9 +2016,11 @@ def test_k5_never_first_a_gateway_that_never_answers_the_connect_time_request_pa
     downs = [m for m in sent if "DOWN for over" in m]
     assert len(downs) == 1 and "CAUSE" in downs[0] and "open-orders request" in downs[0]
     assert not any("RECONNECTED" in m for m in sent)
-    assert 2 <= a.drops <= reads // 4, (a.drops, reads)              # not one per read
+    assert a.drops == 2 and len(a.connects) == 2 and gw.sessions == 3, (a.drops, a.connects, reads)
+    assert reads >= 20                                                # the kept session's reads fail at once
     assert a.outages.open and a.outages.history == []                # ONE outage, still open
     gw.oo_policy = None                                               # the gateway is restarted: answers again
+    gw.drop()                                                         # (its restart closes the session)
     deadline = time.monotonic() + 3.0
     while time.monotonic() < deadline:
         try:
@@ -2064,11 +2071,14 @@ def test_k5_boot_a_session_whose_open_orders_sync_did_not_end_runs_the_outage_cl
 
 
 @needs_ib_async
-def test_k5_idle_an_unsynced_session_is_kept_and_pages_once_without_a_reconnect(real, monkeypatch, tmp_path):
+def test_k5_idle_an_unsynced_session_is_replaced_once_then_kept_and_pages_once(real, monkeypatch, tmp_path):
     """the overnight shape: the session the service connected (or the nightly restart's) never gets its open-orders
-    sync answered, and nothing reads open orders until the decision. The keepalive keeps that session (positions,
-    cash and the liveness round trip all work on it) and the outage clock reaches the DOWN page once - no drop, no
-    reconnect, no storm. Before: nothing noticed it until the decision's first sell check."""
+    sync answered, and nothing reads open orders until the decision. Positions, cash and the liveness round trip
+    all work on it; the outage clock reaches the DOWN page once - no storm. Before: nothing noticed it until the
+    decision's first sell check.
+    D1 round 4 (changed on purpose): the keepalive replaces such a session ONCE per outage, 2 x the bound after the
+    connect (a one-off lost answer is then cured with no page); a gateway whose fresh session does not sync either
+    keeps that one, and its single DOWN page says a fresh session was already tried."""
     a, gw = real
     sent = []
     _scaled(a, gw, monkeypatch, tmp_path, lambda n: None if n == 1 else 0, sent)
@@ -2080,8 +2090,9 @@ def test_k5_idle_an_unsynced_session_is_kept_and_pages_once_without_a_reconnect(
         assert a.positions_snapshot()["stocks"] == {"BIL": 20, "SPY": 10}
         time.sleep(0.2)
     downs = [m for m in sent if "DOWN for over" in m]
-    assert len(downs) == 1 and "CAUSE" in downs[0]
-    assert a.drops == 0 and a.connects == [] and gw.sessions == 1 and a.outages.open
+    assert len(downs) == 1 and "CAUSE" in downs[0] and "fresh gateway session was already tried" in downs[0]
+    assert a.drops == 1 and len(a.connects) == 1 and gw.sessions == 2 and a.outages.open
+    assert a.outages.history == [] and not any("RECONNECTED" in m for m in sent)
 
 
 @needs_ib_async

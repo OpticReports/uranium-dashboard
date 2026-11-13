@@ -31,6 +31,9 @@ redirect followed - one cash credit per sleeve. The token never leaves the conta
   line can still be pasted for. The planner computes, in UTC, the windows in which the line may be
   pasted until then: every hour but a weekday's from 15:00 ET (12:00 on a half-day) to midnight, up to
   that session's own cutoff - so the line itself needs no time zone, and expires with its session.
+  Refused on a session day from its paste cutoff while that day's session has not run yet (the
+  book's last session is before today): a line printed then would be for the NEXT session, and the
+  session of today, run in between, would make it refuse; re-run after it and its post-trade check.
 5 The cap: the executor refuses a credit that takes a live book's funded_usd (its seeds plus every
   positive credit and what /mirror/adjust added) above MIRROR_MAX_BOOK_USD + $1, credit by credit,
   smallest first, and drops it (ibkr-executor/app/mirror.py _over_cap, _apply_credits). The feed does
@@ -44,17 +47,24 @@ redirect followed - one cash credit per sleeve. The token never leaves the conta
   account's minimum: the book's cash + the dividends due by that session + the credits + a margin of
   max($100, 0.5% of the credits). Short by even $1 of the first three, the LARGEST credit is refused.
 
-The pasted line sends NOTHING (one line starting "NOTHING SENT", exit 1) when EXEC_TOKEN or the book's
-state is not there, PORT is not a port, it is pasted outside its windows (a weekday from 15:00 ET,
-12:00 on a half-day; after the cutoff of the session it was planned for), the book has run a session
-since the plan, any request is queued (the state's requests or its inbox, whatever its kind),
+The pasted line sends NOTHING (one line starting "NOTHING SENT", exit 1) when EXEC_TOKEN is not there or
+is not printable ASCII (it is never printed), the book's state is not there, PORT is not a port, it is
+pasted outside its windows (a weekday from 15:00 ET, 12:00 on a half-day; after the cutoff of the
+session it was planned for), the book has run a session since the plan, any request is queued (the
+inbox, read first, or the state's requests, whatever its kind), the book is halted or a flatten is
+pending (<state>.halt), a run is open, the post-trade check of the plan's last session is not done and
+clean (an applied /mirror/adjust clears it), a sleeve it credits is frozen or no longer in the book,
 MIRROR_MAX_BOOK_USD is not a number above 0, or it does not cover the book's funded_usd plus the
-credits. Then one POST per credit, each answer printed; at the first error or answer that is not 200
-it stops ("STOPPED: <sleeve> <reason>", exit 2) and says what answered 200 (queued: applied at the
-next session, not to be withdrawn) and that the one not answered may have been queued too: after that
-session, re-run this planner and paste its new line. All of it answered 200: exit 0.
+credits. Then one POST per credit, each answer printed; at the first error or answer that is not 200 it
+stops ("STOPPED: <sleeve> <reason>", exit 2), names what answered 200 (queued: applied at the next
+session, not to be withdrawn) and says whether the one that failed was NOT queued (an HTTP 4xx: the
+executor's /mirror/credit refuses before it queues; connection refused: nothing listened) or may have
+been (any other failure). Nothing queued at all: fix the cause and paste the line again; otherwise,
+after that session, re-run this planner and paste its new line. All of it answered 200: exit 0. An
+error is printed as its type and its message with EXEC_TOKEN masked, never as its repr.
 
-Exit 0 with a plan (human text, or --json); 1 with one line starting "MIRROR SCALE REFUSED".
+Exit 0 with a plan (human text, or --json); 1 with one line starting "MIRROR SCALE REFUSED" - also for a
+feed whose dollar figures are not finite or beyond MAX_USD ($1e9: a malformed feed, never planned on).
 Env: MIRROR_EXECUTOR_URL (https), MIRROR_READ_TOKEN. Nothing is written anywhere.
 """
 import argparse
@@ -85,6 +95,7 @@ CASH_TOL_USD = 1.0               # ibkr-executor/app/mirror.py CASH_TOL_USD: _ap
 CASH_MARGIN_USD, CASH_MARGIN_FRAC = 100.0, 0.005   # the account's minimum: + max($100, 0.5% of the credits)
 HISTORY = 120                    # session rows asked of the feed: its most (service.py; mirror.py HISTORY_KEEP)
 EQUITY_TOL_USD = 0.05            # the book's equity vs the four sleeves' (each published rounded to cents)
+MAX_USD = 1e9                    # a feed dollar figure (or --to) beyond this, or not finite: malformed, refused
 # ibkr-executor/app/mirror_core.py receivable_pay_date: a receivable is due from its pay date; one whose pay
 # date never became known is taken to pay ex + DEFAULT_PAY_LAG_DAYS once PAY_DATE_GIVE_UP_DAYS have passed
 DEFAULT_PAY_LAG_DAYS, PAY_DATE_GIVE_UP_DAYS = 7, 10
@@ -122,6 +133,12 @@ def num(x):
         return float(x) if math.isfinite(x) else None
     except OverflowError:
         return None
+
+
+def plausible(x):
+    """a number of dollars this planner can plan on: finite and within MAX_USD either way (bools are not)"""
+    v = num(x)
+    return v is not None and abs(v) <= MAX_USD
 
 
 class Refused(Exception):
@@ -346,13 +363,16 @@ def funded_estimate(view):
     cap counts (mirror.py _over_cap): the seeds, plus every positive operator credit (_apply_credits),
     plus what /mirror/adjust added. Taken from the feed when it publishes it; otherwise the seeds the
     feed lists plus the operator credits in its session rows (dividends are not counted: the cap does
-    not count them either). A row whose "credits" is not a list, and an entry that is not a record, are
-    skipped"""
+    not count them either). A row whose "credits" is not a list, an entry that is not a record and an
+    amount that is not a number are skipped; an operator credit whose amount is a number but not a
+    plausible one (not finite, or beyond MAX_USD), like such a seed or funded_usd, is refused, and so is
+    an estimate beyond MAX_USD"""
     pub = view.get("funded_usd")
     if pub is not None:
         v = num(pub)
-        if v is None or v < 0:
-            raise Refused(f"the feed's funded_usd is not a number ({one_line(repr(pub), 40)})")
+        if v is None or v < 0 or not plausible(v):
+            raise Refused(f"the feed's funded_usd is not a number of dollars from 0 to {usd(MAX_USD)} "
+                          f"({one_line(repr(pub), 40)})")
         return round(v, 2), "the executor's funded_usd, published on the feed", []
     seeded = view.get("seeded")
     if not isinstance(seeded, dict) or not seeded:
@@ -360,8 +380,9 @@ def funded_estimate(view):
     seeds = 0.0
     for name, row in seeded.items():
         a = num(row.get("amount")) if isinstance(row, dict) else None
-        if a is None or a < 0:
-            raise Refused(f"the feed's seed of {name} is not an amount ({one_line(repr(row), 80)})")
+        if a is None or a < 0 or not plausible(a):
+            raise Refused(f"the feed's seed of {name} is not an amount from 0 to {usd(MAX_USD)} "
+                          f"({one_line(repr(row), 80)})")
         seeds += a
     history = view.get("history") if isinstance(view.get("history"), list) else []
     rows = [r for r in history + [view.get("last_run")] if isinstance(r, dict)]
@@ -373,7 +394,12 @@ def funded_estimate(view):
         for c in cs:
             if not isinstance(c, dict) or c.get("kind") != "credit":
                 continue
-            a = num(c.get("amount"))
+            raw = c.get("amount")
+            if isinstance(raw, (int, float)) and not isinstance(raw, bool) and not plausible(raw):
+                raise Refused(f"an operator credit in the feed's session row of {one_line(r.get('session'), 20)} is not "
+                              f"a plausible amount ({one_line(repr(raw), 40)}): the capital the cap counts cannot be "
+                              f"estimated")
+            a = num(raw)
             if a is None or a <= 0:
                 continue
             cid = c.get("id")
@@ -390,6 +416,9 @@ def funded_estimate(view):
         warnings.append(f"the feed's history is full ({len(history)} rows from {sessions[0] if sessions else '?'}): an "
                         f"operator credit older than that is not in the cap estimate; the pasted line checks the "
                         f"executor's own total before it sends")
+    if not plausible(seeds + credits):
+        raise Refused(f"the feed's seeds and operator credits total {one_line(repr(seeds + credits), 40)}: not a "
+                      f"plausible amount (more than {usd(MAX_USD)}, or not finite)")
     return round(seeds + credits, 2), how, warnings
 
 
@@ -419,6 +448,19 @@ def credit_session(last_session, now):
     while not trading_day(d):
         d += datetime.timedelta(days=1)
     return d.isoformat()
+
+
+def session_still_to_run(last_session, now):
+    """today (ET) when it is a session day, at or past its paste cutoff (15:00 ET, 12:00 on a half-day),
+    whose session has not run yet (the book's last session is before it); else None. A plan then is for
+    the NEXT session (credit_session), and its line can never send: blocked until midnight, then refused
+    because today's session ran after the plan (the line's last-session check)"""
+    et = sr.et_now(now)
+    today = et.date().isoformat()
+    if trading_day(et.date()) and et.hour >= paste_cutoff(today) and isinstance(last_session, str) \
+            and last_session < today:
+        return today
+    return None
 
 
 def _date(text):
@@ -513,8 +555,12 @@ def smallest_to(weights, equities, book_equity):
 
 
 def cap_to_set(need, headroom):
-    """need x (1 + headroom), rounded UP to the next multiple of CAP_STEP_USD (in whole cents: exact)"""
-    cents = int(round(need * (1.0 + headroom) * 100))
+    """need x (1 + headroom), rounded UP to the next multiple of CAP_STEP_USD (in whole cents: exact); raises
+    Refused when that is not a finite number (build bounds the need first)"""
+    x = need * (1.0 + headroom) * 100
+    if not math.isfinite(x):
+        raise Refused(f"the cap cannot be computed from a need of {one_line(repr(need), 40)}: the feed is malformed")
+    cents = int(round(x))
     step = CAP_STEP_USD * 100
     return ((cents + step - 1) // step) * CAP_STEP_USD
 
@@ -538,50 +584,59 @@ def _py(x):
     raise TypeError(f"no literal for {x!r}")
 
 
-# The pasted line's program. It runs in the executor's container under plain python3 and reads the
-# executor's own files and env; nothing here is filled in but the first line's constants. Every check
-# comes before the first POST; the POSTs go to the executor in the same container only.
-LINE_PROGRAM = r'''W=[]
+# The pasted line's program. It runs in the executor's container under plain python3 and reads the executor's own
+# files and env; nothing here is filled in but the first line's constants (G is the whole "re-run mirror_scale.py
+# --to ..." phrase). The state file's book is mirror_core.Book.to_dict(): its "sleeves" a LIST of sleeve records,
+# each with its "name". Every check comes before the first POST; the POSTs go to the executor in the same container
+# only. The inbox is read BEFORE the state: _drain_inbox saves a request into the state before it takes it out of
+# the inbox (mirror.py), so a drain between the two reads cannot hide it. The halt file, the open run, the
+# post-trade check and the frozen sleeves are the planner's own preconditions (health_problems, check_problem,
+# sleeve_equities), re-read here because an operator or the executor can change them between the plan and the paste.
+# X() prints an error as its type and message with EXEC_TOKEN masked (never its repr: http.client's would carry the
+# header value). A failed POST is "NOT queued" only where that is proven: an HTTP 4xx (/mirror/credit raises every
+# one before request_credit queues: service.py _mirror_off_404, _auth, _mirror_book, request_credit's ValueError;
+# _mirror_body's 422) or a refused connection (nothing listened); any other failure may have queued it. Kept under a
+# terminal line (TTY_LINE_MAX): a gate in test_mirror_scale pins the longest line of a 45-day sweep of plan times.
+LINE_PROGRAM = r'''W=[];L=W.append;ok=[];T=E.get("EXEC_TOKEN")or""
+def X(e):s=str(e);return"%s(%r)"%(type(e).__name__,T and s.replace(T,"***")or s)
 def R(f,z):
- try:
-  with open(f) as h:return json.load(h)
+ try:return json.load(open(f))
  except FileNotFoundError:return z
- except Exception as e:W.append("%s unreadable (%s)"%(f,e));return False
-def F(r):return "%s %s %s"%(r.get("kind"),r.get("sleeve") or r.get("order") or r.get("from"),r.get("id")) if isinstance(r,dict) else repr(r)[:60]
+ except Exception as e:L("%s unreadable (%s)"%(f,X(e)));return False
 try:
- T=E.get("EXEC_TOKEN");O=E.get("PORT") or "8000";t=time.time()
- if not T:W.append("EXEC_TOKEN is not set: paste this in the Shell of ibkr-executor on Render")
- if not(O.isdigit() and 0<int(O)<65536):W.append("PORT %r is not a port"%O)
- if t>=Z[-1][1]:W.append("this line was for the session of %s (paste by %s): re-run the planner (%s)"%(V,Y,G))
- elif not any(a<=t<b for a,b in Z):W.append("it is a weekday from 15:00 ET (12:00 on a half-day): the credits must be queued before that day's session (paste in the morning, or any time on a weekend), so the evening POLICY routine never sizes a transfer on pre-credit equity")
- P=os.path.join("/opt/executor",E.get("MIRROR_STATE_PATH") or "./data/mirror_state.json");S=R(P,None);I=R(P+".inbox.json",[])
- if S is None:W.append("no book state at "+P)
- elif S is not False and not(isinstance(S,dict) and S.get("name")==B and S.get("live")):W.append(P+" is not the live book");S=False
- if isinstance(S,dict):
-  q=S.get("requests") or [];Q=(I if isinstance(I,list) else [] if I is False else [I])+(q if isinstance(q,list) else [q])
-  if S.get("last_session")!=M:W.append("the book ran a session (%s) after the plan: re-run the planner (%s)"%(S.get("last_session"),G))
-  if Q:W.append("%d request(s) queued, not yet applied: %s - nothing is added until a session applies them"%(len(Q),"; ".join(map(F,Q[:8]))))
- c=(E.get("MIRROR_MAX_BOOK_USD") or "").strip()
+ O=E.get("PORT")or"8000";t=(time.time()-K)/3600;c=(E.get("MIRROR_MAX_BOOK_USD")or"").strip()
+ if not T:L("EXEC_TOKEN is not set: paste this in the Shell of ibkr-executor")
+ elif not(T.isascii()and T.isprintable()):L("EXEC_TOKEN is not printable ASCII")
+ if not(O.isdigit()and 0<int(O)<65536):L("PORT %r is not a port"%O)
+ if t>=Z[-1][1]:L("this line was for the session of %s (paste by %s): "%(V,Y)+G)
+ elif not any(a<=t<b for a,b in Z):L("it is a weekday from 15:00 ET (12:00 on a half-day): paste on a morning or a weekend")
+ P=os.path.join("/opt/executor",E.get("MIRROR_STATE_PATH")or"./data/mirror_state.json");I=R(P+".inbox.json",[]);S=R(P,None);H=R(P+".halt",{})
+ if S is not False and not(type(S)==dict and S.get("name")==B and S.get("live")):L(P+(" is not there"if S is None else" is not the live book"));S=0
+ if type(H)!=dict or H.get("halted")or H.get("flatten")and not(H.get("flatten_done")or H.get("flatten_cancelled")):L("the book is halted or flattening: "+G+" after it resumes")
+ if S:
+  g=S.get;q=g("requests")or[];Q=(I if type(I)==list else[]if I is False else[I])+(q if type(q)==list else[q]);k=g("check")or{};f=g("funded_usd")
+  if g("last_session")!=M:L("the book ran a session (%s) after the plan: "%g("last_session")+G)
+  if Q:L("%d request(s) queued, not yet applied: %s"%(len(Q),"; ".join("%s %s %s"%(r.get("kind"),r.get("sleeve")or r.get("order")or r.get("from"),r.get("id"))if type(r)==dict else repr(r)[:60]for r in Q[:8])))
+  if g("run"):L("a run is open: "+G+" after it")
+  if not(k.get("session")==M and k.get("done")is True and not k.get("problems")):L("no clean post-trade check of %s: "%M+G+" after the next session")
+  x=[s for s,a in A if s in(g("frozen")or[])or s not in[v["name"]for v in g("book")["sleeves"]]]
+  if x:L(", ".join(x)+" frozen or not in the book: "+G)
  try:C=float(c)
- except ValueError:C=0.0
- if not(math.isfinite(C) and C>0):W.append("MIRROR_MAX_BOOK_USD %r is not above 0: the executor then caps the book at MIRROR_CAPITAL_USD and refuses these credits; set it (step a), deploy first"%c)
- elif isinstance(S,dict):
-  f=S.get("funded_usd")
-  if type(f) not in(int,float) or not math.isfinite(f) or f<0:W.append("the book state has no funded_usd (%r)"%(f,))
-  elif round(f*100)+D>round(C*100):W.append("MIRROR_MAX_BOOK_USD %.2f is below funded_usd %.2f + these credits %.2f = %.2f: the executor takes credits smallest first while within the cap, so it would DROP the largest and the book would trade mis-split; set the cap (step a), deploy first"%(C,f,D/100,f+D/100))
-except Exception as e:W.append("the checks failed (%r)"%e)
+ except ValueError:C=0
+ if not 0<C<1e999:L("MIRROR_MAX_BOOK_USD %r is not above 0: set it (step a), deploy first"%c)
+ elif S:
+  if type(f)not in(int,float)or not 0<=f<1e999:L("the book state has no funded_usd (%r)"%(f,))
+  elif round(f*100)+D>round(C*100):L("MIRROR_MAX_BOOK_USD %.2f is below funded_usd %.2f + these credits %.2f = %.2f: the largest would be DROPPED; set the cap (step a), deploy first"%(C,f,D/100,f+D/100))
+except Exception as e:L("the checks failed (%s)"%X(e))
 if W:print("NOTHING SENT: "+"; ".join(W));sys.exit(1)
-ok=[]
-for i,(s,a) in enumerate(A):
- w=None
+for i,(s,a)in enumerate(A):
+ w=u=0
  try:
-  h=hc.HTTPConnection("127.0.0.1",int(O),timeout=30)
-  h.request("POST","/mirror/credit",json.dumps({"sleeve":s,"amount":a,"note":N,"book":B}),{"Content-Type":"application/json","X-Exec-Token":T})
-  y=h.getresponse();c,b=y.status,y.read();h.close()
-  print(s,a,c,b.decode("utf-8","replace")[:300])
-  if c!=200:w="answered HTTP %s"%c
- except BaseException as e:w="got no answer (%r)"%e
- if w:print("STOPPED: %s %s. Queued (answered 200 above): %s. %s may have been queued anyway; not sent: %s. What was queued applies at the next session and cannot be withdrawn: after it, re-run the planner (%s) and paste its new line (a re-paste sends nothing while anything is queued)"%(s,w,", ".join(ok) or "none",s,", ".join(z for z,_ in A[i+1:]) or "none",G));sys.exit(2)
+  h=hc.HTTPConnection("127.0.0.1",int(O),timeout=30);h.request("POST","/mirror/credit",json.dumps({"sleeve":s,"amount":a,"note":N,"book":B}),{"Content-Type":"application/json","X-Exec-Token":T});y=h.getresponse();c=y.status;print(s,a,c,y.read().decode("utf-8","replace")[:300])
+  if c!=200:w="answered HTTP %s"%c;u=399<c<500
+ except ConnectionRefusedError as e:w,u="got no answer (%s)"%X(e),1
+ except BaseException as e:w="got no answer (%s)"%X(e)
+ if w:print("STOPPED: %s %s. Queued: %s. %s %s; not sent: %s. "%(s,w,", ".join(ok)or"none",s,"was NOT queued"if u else"may have been queued anyway",", ".join(z for z,_ in A[i+1:])or"none")+("Nothing is queued: fix the cause and paste this line again"if u and not ok else"What is queued applies at the next session and cannot be withdrawn: after it, "+G));sys.exit(2)
  ok.append("%s %.2f"%(s,a))
 print("ALL %d CREDITS QUEUED (%s) for the session of %s"%(len(A),", ".join(ok),V))'''
 
@@ -617,15 +672,21 @@ def paste_windows(now, session):
 
 def paste_program(book, credits, note, session, last_session, windows, until, rerun):
     """the line's program: the constants, then LINE_PROGRAM. credits: [(engine, amount)], amounts > 0
-    rounded to cents; D is their total in whole cents; Z the paste windows, Y their end as the owner reads
-    it; V the session the credits are for; M the book's last session the plan was made after"""
+    rounded to cents; D is their total in whole cents; Z the paste windows [start, end) in whole hours from the
+    epoch second K (paste_windows cuts them on whole UTC hours), Y their end as the owner reads it; V the session the credits are for; M the book's last session the plan was made after; G what to do
+    then: "re-run <rerun>" (rerun: "mirror_scale.py --to <to>") """
     var, default = STATE_ENV[book]
     if (var, default) != ("MIRROR_STATE_PATH", "./data/mirror_state.json"):
         raise Refused(f"internal: the pasted line reads MIRROR_STATE_PATH, not {var}")
     cents = sum(int(round(a * 100)) for _, a in credits)
-    head = (f"import http.client as hc,json,math,os,sys,time\n"
+    base = int(windows[0][0])                      # Z: each window in whole hours from K (the line: t = (now - K) / 3600)
+    if any((x - base) % 3600 for w in windows for x in w):
+        raise Refused("internal: a paste window does not start and end on a whole hour")
+    hours = tuple(((a - base) // 3600, (b - base) // 3600) for a, b in windows)
+    head = (f"import http.client as hc,json,os,sys,time\n"
             f"E=os.environ;B={_py(book)};N={_py(note)};A={_py(tuple((e, a) for e, a in credits))};D={cents};"
-            f"Z={_py(tuple(windows))};Y={_py(until)};V={_py(session)};M={_py(last_session)};G={_py(rerun)}\n")
+            f"K={base};Z={_py(hours)};Y={_py(until)};V={_py(session)};M={_py(last_session)};"
+            f"G={_py('re-run ' + rerun)}\n")
     return head + LINE_PROGRAM
 
 
@@ -666,8 +727,8 @@ def quiet_window(now):
 def build(a, env, fetch, now):
     """the plan as a dict for the parsed arguments `a`, or raises Refused"""
     to, headroom = num(a.to), num(a.headroom)
-    if to is None or to <= 0:
-        raise Refused(f"--to must be a positive number of dollars ({a.to!r})")
+    if to is None or to <= 0 or not plausible(to):
+        raise Refused(f"--to must be a positive number of dollars up to {usd(MAX_USD)} ({a.to!r})")
     if headroom is None or not 0 <= headroom <= 1:
         raise Refused(f"--headroom must be a fraction from 0 to 1 ({a.headroom!r})")
     comp = composer_split(a.snapshot or SNAPSHOT, now)
@@ -686,6 +747,15 @@ def build(a, env, fetch, now):
     problems = health_problems(view)
     if problems:
         raise Refused(f"book {name} is not in a state to scale: " + "; ".join(problems))
+    last = view.get("last_session")
+    if not isinstance(last, str) or _date(last) is None:
+        raise Refused(f"the book's last session on the feed is not a date ({one_line(repr(last), 40)})")
+    today_left = session_still_to_run(last, now)
+    if today_left:
+        raise Refused(f"today's session has not run yet: re-run after it and its post-trade check (it is "
+                      f"{sr.et_now(now):%H:%M} ET on {today_left}, a session day past its {paste_cutoff(today_left)}:00 "
+                      f"paste cutoff, and the book's last session is {last}: a line printed now would be for the "
+                      f"session after today's, which runs first and voids it)")
     eq, book_eq = sleeve_equities(view)
     if to <= book_eq:
         raise Refused(f"book {name} is already {usd(book_eq)}: --to {usd(to)} is not above it (this planner only "
@@ -713,13 +783,20 @@ def build(a, env, fetch, now):
     residual = round(to - book_eq - credit_total, 2)
     funded, how, more = funded_estimate(view)
     need = round(funded + sent_total, 2)
+    if not plausible(need):
+        raise Refused(f"funded_usd {one_line(repr(funded), 40)} + the credits {usd(sent_total)} is not a plausible "
+                      f"amount (more than {usd(MAX_USD)}): the cap cannot be computed")
     cap = cap_to_set(need, headroom)
     book = view.get("book") or {}
     book_cash = num(book.get("cash"))
-    if book_cash is None:
-        raise Refused(f"the book's cash on the feed is not a number ({one_line(repr(book.get('cash')), 40)})")
-    session = credit_session(view.get("last_session"), now)
+    if book_cash is None or not plausible(book_cash):
+        raise Refused(f"the book's cash on the feed is not a number of dollars within {usd(MAX_USD)} "
+                      f"({one_line(repr(book.get('cash')), 40)})")
+    session = credit_session(last, now)
     div_total, div_rows, div_warn = dividends_due(view, session)
+    if not plausible(div_total):
+        raise Refused(f"the dividends due on the feed by {session} total {one_line(repr(div_total), 40)}: not a "
+                      f"plausible amount (more than {usd(MAX_USD)}, or not finite): a receivable on the feed is malformed")
     margin = round(max(CASH_MARGIN_USD, CASH_MARGIN_FRAC * sent_total), 2)
     cash_exec = round(book_cash + div_total + sent_total, 2)
     cash_need = round(cash_exec + margin, 2)
@@ -729,9 +806,6 @@ def build(a, env, fetch, now):
     rerun = f"mirror_scale.py --to {to_arg[:-3] if to_arg.endswith('.00') else to_arg}"
     today = sr.et_now(now).date().isoformat()
     half_days = tuple(sorted(d for d in sr.HALF_DAYS if d >= today))
-    last = view.get("last_session")
-    if not isinstance(last, str) or _date(last) is None:
-        raise Refused(f"the book's last session on the feed is not a date ({one_line(repr(last), 40)})")
     windows, until = paste_windows(now, session)
     line, code, program = paste_line(name, sent, note, session, last, windows, until, rerun)
     chk = view["check"]
@@ -766,11 +840,15 @@ def build(a, env, fetch, now):
         f"executor in that same container (http://{LINE_HOST}:$PORT/mirror/credit, no proxy, no redirect followed): the "
         f"token never leaves the container and never appears on screen. It sends NOTHING (a line starting NOTHING "
         f"SENT) outside those hours or after {until}, once the book has run a session since this plan, while any "
-        f"request is queued (whatever its kind), or unless MIRROR_MAX_BOOK_USD there covers the book's own funded_usd "
-        f"plus these credits to the cent; then it queues the {len(sent)} credit(s) and prints each answer. At the "
-        f"first error or answer that is not 200 it STOPS: the credits answered 200 above it are queued and the one "
-        f"not answered may have been - they apply at the next session and cannot be withdrawn; after that session, "
-        f"re-run this planner and paste its new line (the line sends nothing while anything is queued):",
+        f"request is queued (whatever its kind), while the book is halted or a flatten is pending, a run is open or "
+        f"a sleeve it credits is frozen or gone, unless the account's post-trade check of {last} is still on record "
+        f"done and clean (an applied /mirror/adjust clears it), and unless MIRROR_MAX_BOOK_USD there covers the "
+        f"book's own funded_usd plus these credits to the cent; then it queues the {len(sent)} credit(s) and prints "
+        f"each answer. At the first error or answer that is not 200 it STOPS and says which were queued (they apply "
+        f"at the next session and cannot be withdrawn) and whether the one that failed was NOT queued (an HTTP 4xx, "
+        f"or nothing listening) or may have been. Nothing queued at all: fix the cause and paste the line again; "
+        f"otherwise, after that session, re-run this planner and paste its new line (the line sends nothing while "
+        f"anything is queued):",
         f"(c) The executor applies them at the decision of {session} (15:54 ET, 12:54 on a half-day): first the "
         f"dividends due, then the credits, smallest first, each only if the account's cash covers the book's cash "
         f"plus it (the CASH minimum above) and the cap holds, and invests them in the same plan (the daily sleeves go "

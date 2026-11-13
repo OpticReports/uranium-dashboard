@@ -50,6 +50,32 @@ pasted line runs against a real HTTP server on this machine).
       max($100, 0.5% of the credits); the one sentence about a $1 shortfall
   P9  item 9: malformed input is a refusal or a warning, never a traceback
   P10 item 10: the landing sentence
+  The third review's items (each gate failed at 1de7535c; R11 and R12 are twins that pass there too):
+  R0  pins: the executor's lines the new paste-time checks read (the state's book a LIST of named sleeve
+      records, the frozen list, the halt file and its rules, the drain's order, the credit route's 4xx)
+  R1  item 1(a): NOTHING SENT unless the post-trade check of the plan's last session is on record, done,
+      with no problem (an applied /mirror/adjust clears it); twins: the plan's clean check sends
+  R2  item 1(b): NOTHING SENT while <state>.halt says halted or a flatten is pending, or cannot be read or
+      is not a record (a halt to the executor); twins: resumed, cancelled, finished, absent send
+  R3  item 1(c): NOTHING SENT while a run is open
+  R4  item 1(d): NOTHING SENT when a sleeve it credits is frozen or not in the book; twin: a frozen sleeve it
+      does not credit
+  R5  item 2: the planner refuses on a session day from its paste cutoff while that day's session has not
+      run ("today's session has not run yet: re-run after it and its post-trade check"), the half-day too;
+      twins: before the cutoff, after the session, a holiday, a weekend
+  R6  item 3: a dollar figure that is not finite or is beyond $1e9 (seeds, credit rows, funded_usd, book
+      cash, due dividends, --to) is a one-line refusal, never a traceback or an absurd plan; twins: large
+      but plausible figures plan
+  R7  item 5: the inbox is read before the state: a drain between the two reads cannot hide a request
+  R8  item 5: an EXEC_TOKEN that is not printable ASCII sends nothing and is never printed
+  R9  item 5: an error is printed as its type and message with the token masked, never its repr
+  R10 item 5: STOPPED says NOT queued for an HTTP 4xx or a refused connection (and "nothing is queued: fix
+      the cause and paste this line again" when nothing is); twins: a 5xx, a redirect, no answer
+  R11 item 5, the surviving mutants: a state named live whose live flag is false sends nothing; a dividend
+      with no pay date exactly PAY_DATE_GIVE_UP_DAYS after its ex-date is in the cash minimum
+  R12 the hard limit: the line fits a terminal line (4,095 bytes) over a 45-day sweep of plan times; the
+      longest and its margin are printed
+  R13 the doc says the new rules
 
 Run: python3 -m unittest tests.test_mirror_scale -v   (from composer/scripts)
 """
@@ -88,7 +114,8 @@ IDS = {"HG": "mbkiXcuNDjueXpiox5Av", "KMLM": "YPTSJFJwD2ZKfAeYJUbW", "SLEEVE": "
 VALUES = {"HG": 104838.5, "KMLM": 87396.31, "SLEEVE": 81791.0, "HARV": 38395.76}           # Composer, 2026-11-12
 EQUITY = {"HG": 3429.2, "KMLM": 2645.67, "SLEEVE": 2649.66, "HARV": 1241.32}              # the live book, 11-12
 CREDITS = {"HG": 13349.17, "KMLM": 11341.25, "SLEEVE": 10440.19, "HARV": 4903.54}         # at $50,000
-RERUN = "re-run the planner (mirror_scale.py --to 50000)"
+RERUN = "re-run mirror_scale.py --to 50000"
+WIDE = ((0, 3600 * 2 ** 28),)                                        # a paste window open now (whole hours from 0)
 
 
 def snapshot(**over):
@@ -892,8 +919,16 @@ class LineCase(Case):
                     "MIRROR_MAX_BOOK_USD": "53000", "PORT": str(self.ex.port)}
 
     def write_state(self, funded=10000.0, requests=(), inbox=None, last_session="2026-11-12", **over):
+        """the executor's state file with the fields the line reads, as mirror.py writes them: its book is
+        mirror_core.Book.to_dict() ("sleeves" a LIST of records, each with its "name"; pinned in S6), nothing
+        frozen, no run open, and the post-trade check of its last session done and clean"""
         st = dict({"schema": 1, "name": "live", "live": True, "funded_usd": funded, "requests": list(requests),
-                   "last_session": last_session, "seq": 42, "run": None}, **over)
+                   "last_session": last_session, "seq": 42, "run": None, "frozen": [],
+                   "check": {"session": last_session, "utc": "2026-11-12T21:10:00Z", "strikes": 0, "problems": [],
+                             "done": True},
+                   "book": {"schema": 1, "sleeves": [{"name": e, "cash": 30.0, "shares": {"BIL": 1}, "rule": "daily",
+                                                      "corridor": None, "version": None, "last_trade": None}
+                                                     for e in CREDITS]}}, **over)
         with open(self.state, "w") as f:
             json.dump(st, f)
         if inbox is not None:
@@ -948,11 +983,11 @@ class S7PastedLine(LineCase):
         del env["EXEC_TOKEN"]
         rc, out = self.exec_line(env)
         self.assertEqual((rc, self.posts()), (1, []))
-        self.assertIn("NOTHING SENT: EXEC_TOKEN is not set: paste this in the Shell of ibkr-executor on Render", out)
+        self.assertIn("NOTHING SENT: EXEC_TOKEN is not set: paste this in the Shell of ibkr-executor", out)
         nope = os.path.join(self.tmp.name, "nope.json")
         rc, out = self.exec_line(dict(self.env, MIRROR_STATE_PATH=nope))
         self.assertEqual((rc, self.posts()), (1, []))
-        self.assertIn(f"NOTHING SENT: no book state at {nope}", out)
+        self.assertIn(f"NOTHING SENT: {nope} is not there", out)
         self.write_state(name="dry", live=False)                                 # the paper book's state
         rc, out = self.exec_line()
         self.assertEqual((rc, self.posts()), (1, []))
@@ -964,13 +999,13 @@ class S7PastedLine(LineCase):
         self.assertIn(f"{self.state} unreadable", out)
 
     def test_a_relative_state_path_is_the_executors_working_directory(self):
-        self.assertIn('P=os.path.join("/opt/executor",E.get("MIRROR_STATE_PATH") or "./data/mirror_state.json")',
+        self.assertIn('P=os.path.join("/opt/executor",E.get("MIRROR_STATE_PATH")or"./data/mirror_state.json")',
                       self.p["program"])
         env = dict(self.env)
         del env["MIRROR_STATE_PATH"]
         rc, out = self.exec_line(env)
         self.assertEqual(rc, 1)
-        self.assertIn("no book state at /opt/executor/./data/mirror_state.json", out)
+        self.assertIn("/opt/executor/./data/mirror_state.json is not there", out)
 
     def test_the_line_sends_nothing_when_the_book_ran_a_session_since_the_plan(self):
         self.write_state(last_session="2026-11-13")
@@ -981,7 +1016,7 @@ class S7PastedLine(LineCase):
     def test_the_line_names_only_the_engines_with_a_credit(self):
         line, code, program = ms.paste_line("live", [("HG", 10.5), ("HARV", 0.01)],
                                             "scale-up to $10,000 at Composer's split of 2026-11-12", "2026-11-13",
-                                            "2026-11-12", ((0, 2 ** 40),), "15:00 ET on Fri 2026-11-13",
+                                            "2026-11-12", WIDE, "15:00 ET on Fri 2026-11-13",
                                             "mirror_scale.py --to 10000")
         self.assertIn('A=(("HG",10.5),("HARV",0.01));D=1051;', program)
         self.assertEqual(shlex.split(line)[2], code)
@@ -996,7 +1031,7 @@ class L1L2TokenStaysInTheContainer(LineCase):
         prog = self.p["program"]
         self.assertEqual(prog.count("HTTPConnection("), 1)
         self.assertIn('h=hc.HTTPConnection("127.0.0.1",int(O),timeout=30)', prog)
-        self.assertIn('O=E.get("PORT") or "8000"', prog)                         # start.sh: --port "${PORT:-8000}"
+        self.assertIn('O=E.get("PORT")or"8000"', prog)                         # start.sh: --port "${PORT:-8000}"
         self.assertIn('h.request("POST","/mirror/credit",', prog)
         self.assertEqual(prog.count("X-Exec-Token"), 1)
         for word in ("exec.example", "http://", "https://", "urlopen", "MIRROR_EXECUTOR_URL", "Proxy", "proxy"):
@@ -1059,8 +1094,8 @@ class L1L2TokenStaysInTheContainer(LineCase):
         compile(prog, "<the line's program>", "exec")
         self.assertEqual(eval(code[len("exec("):-1]), prog)                      # the literal is the program
         imports = re.findall(r"^import (.+)$", prog, re.M)
-        self.assertEqual(imports, ["http.client as hc,json,math,os,sys,time"])
-        for name in ("http", "json", "math", "os", "sys", "time"):
+        self.assertEqual(imports, ["http.client as hc,json,os,sys,time"])
+        for name in ("http", "json", "os", "sys", "time"):
             self.assertIn(name, sys.stdlib_module_names)
         for word in ("httpx", "venv", "/opt/executor/venv", "pathlib", "import requests"):
             self.assertNotIn(word, line)
@@ -1080,7 +1115,7 @@ class L1L2TokenStaysInTheContainer(LineCase):
                     os.remove(self.inbox)
                 self.ex.requests.clear()
                 line, code, prog = ms.paste_line("live", list(CREDITS.items()), self.p["note"], "2026-11-13", "2026-11-12",
-                                                 ((0, 2 ** 40),), "15:00 ET on Fri 2026-11-13",
+                                                 WIDE, "15:00 ET on Fri 2026-11-13",
                                                  "mirror_scale.py --to 50000")
                 proxy = f"http://127.0.0.1:{trap.port}"
                 env = dict(self.env, PATH=os.environ.get("PATH", "/usr/bin:/bin"), HTTP_PROXY=proxy, http_proxy=proxy)
@@ -1117,7 +1152,6 @@ class L3AnythingQueued(LineCase):
                     self.assertEqual((rc, self.posts()), (1, []))
                     self.assertTrue(out.startswith("NOTHING SENT: 1 request(s) queued, not yet applied: "), out)
                     self.assertIn(f"{kind} {row.get('sleeve') or row.get('order') or row.get('from')} {row['id']}", out)
-                    self.assertIn("nothing is added until a session applies them", out)
 
     def test_every_queued_request_is_listed(self):
         self.write_state(requests=[self.ROWS["transfer"], self.ROWS["adjust"]], inbox=[self.ROWS["credit"], "junk"])
@@ -1151,9 +1185,7 @@ class L4PasteWindows(LineCase):
     left that evening's POLICY routine sizing a transfer on pre-credit equity. The plan (NOW: Thu 2026-11-12
     17:00 ET, after the session) is for Fri 2026-11-13, pasteable until 15:00 ET that day"""
 
-    REASON = ("it is a weekday from 15:00 ET (12:00 on a half-day): the credits must be queued before that day's "
-              "session (paste in the morning, or any time on a weekend), so the evening POLICY routine never sizes a "
-              "transfer on pre-credit equity")
+    REASON = "it is a weekday from 15:00 ET (12:00 on a half-day): paste on a morning or a weekend"
 
     def at(self, ts):
         if os.path.exists(self.inbox):
@@ -1256,9 +1288,7 @@ class L5Cap(LineCase):
                 rc, out = self.exec_line(dict(self.env, MIRROR_MAX_BOOK_USD=cap))
                 self.assertEqual((rc, self.posts()), (1, []))
                 self.assertIn(f"MIRROR_MAX_BOOK_USD {float(cap):.2f} is below funded_usd 10000.00 + these credits "
-                              f"40034.15 = 50034.15: the executor takes credits smallest first while within the cap, so it "
-                              f"would DROP the largest and the book would trade mis-split; set the cap (step a), deploy "
-                              f"first", out)
+                              f"40034.15 = 50034.15: the largest would be DROPPED; set the cap (step a), deploy first", out)
         self.write_state(funded=13500.0)                     # the executor has taken more than the feed showed
         rc, out = self.exec_line()
         self.assertEqual((rc, self.posts()), (1, []))
@@ -1274,8 +1304,8 @@ class L5Cap(LineCase):
                     env["MIRROR_MAX_BOOK_USD"] = cap
                 rc, out = self.exec_line(env)
                 self.assertEqual((rc, self.posts()), (1, []))
-                self.assertIn(f"MIRROR_MAX_BOOK_USD {(cap or '').strip()!r} is not above 0: the executor then caps the book "
-                              f"at MIRROR_CAPITAL_USD and refuses these credits; set it (step a), deploy first", out)
+                self.assertIn(f"MIRROR_MAX_BOOK_USD {(cap or '').strip()!r} is not above 0: set it (step a), deploy first",
+                              out)
 
     def test_a_funded_usd_that_is_not_an_amount_sends_nothing(self):
         for funded in (None, "10000", True, -1.0, float("nan"), float("inf")):
@@ -1307,10 +1337,9 @@ class L6Stops(LineCase):
         rc, out = self.exec_line()
         self.assertEqual((rc, len(self.posts())), (2, 2))
         self.assertIn('KMLM 11341.25 500 {"detail": "Internal Server Error"}', out)
-        self.assertIn("STOPPED: KMLM answered HTTP 500. Queued (answered 200 above): HG 13349.17. KMLM may have been "
-                      "queued anyway; not sent: SLEEVE, HARV. What was queued applies at the next session and cannot be "
-                      f"withdrawn: after it, {RERUN} and paste its new line (a re-paste sends nothing while anything is "
-                      "queued)", out)
+        self.assertIn("STOPPED: KMLM answered HTTP 500. Queued: HG 13349.17. KMLM may have been queued anyway; not sent: "
+                      f"SLEEVE, HARV. What is queued applies at the next session and cannot be withdrawn: after it, {RERUN}",
+                      out)
         self.assertNotIn("ALL", out)
         rc, out = self.exec_line()                           # pasted again: HG is in the inbox
         self.assertEqual((rc, len(self.posts())), (1, 2))
@@ -1321,15 +1350,14 @@ class L6Stops(LineCase):
         rc, out = self.exec_line()
         self.assertEqual((rc, len(self.posts())), (2, 3))
         self.assertIn("STOPPED: SLEEVE got no answer (RemoteDisconnected(", out)
-        self.assertIn("Queued (answered 200 above): HG 13349.17, KMLM 11341.25. SLEEVE may have been queued anyway; "
-                      "not sent: HARV.", out)
+        self.assertIn("Queued: HG 13349.17, KMLM 11341.25. SLEEVE may have been queued anyway; not sent: HARV.", out)
         self.ex.close()                                      # the executor is not there at all: nothing was queued
         os.remove(self.inbox)
         rc, out = self.exec_line()
         self.assertEqual(rc, 2)
         self.assertIn("STOPPED: HG got no answer (ConnectionRefusedError(", out)
-        self.assertIn("Queued (answered 200 above): none. HG may have been queued anyway; not sent: KMLM, SLEEVE, HARV.",
-                      out)
+        self.assertIn("Queued: none. HG was NOT queued; not sent: KMLM, SLEEVE, HARV. Nothing is queued: fix the cause "
+                      "and paste this line again", out)                # R10: a refused connection queued nothing
 
     def test_an_error_inside_a_post_is_caught_and_stops(self):
         def boom(*a, **kw):
@@ -1337,7 +1365,7 @@ class L6Stops(LineCase):
         with unittest.mock.patch("http.client.HTTPConnection.getresponse", boom):
             rc, out = self.exec_line()
         self.assertEqual(rc, 2)
-        self.assertIn("STOPPED: HG got no answer (KeyboardInterrupt())", out)
+        self.assertIn("STOPPED: HG got no answer (KeyboardInterrupt(''))", out)
         for _ in range(200):                                 # the request left before the answer was asked for:
             if self.posts():                                 # the executor gets it (and queues it) all the same
                 break
@@ -1381,7 +1409,7 @@ class P9Malformed(Case):
         rows = [{"session": "2026-11-10", "credits": 5}, {"session": "2026-11-11", "credits": "HG 500"},
                 {"session": "2026-11-12", "credits": {"sleeve": "HG", "amount": 500.0, "kind": "credit"}},
                 {"session": "2026-11-12", "credits": [{"sleeve": ["HG"], "amount": 7.0, "kind": "credit", "id": ["x"]},
-                                                     {"sleeve": "HG", "amount": 10 ** 400, "kind": "credit"},
+                                                     {"sleeve": "HG", "amount": "500", "kind": "credit"},
                                                      "junk", None]}]
         self.feed = feed(live=view(history=rows, last_run=None))
         p = self.plan()
@@ -1534,6 +1562,462 @@ class S10OutputAndDoc(Case):
             self.assertIn(words, text, words)
         for stale in ("/opt/executor/venv/bin/python3", "httpx", "https://<executor>/mirror/credit"):
             self.assertNotIn(stale, text, stale)
+
+
+# ------------------------------------------------------------------ the third review (R1-R12; R11, R12: twins)
+class R0WhatTheLineReads(unittest.TestCase):
+    """the executor's lines the new paste-time checks read, pinned (each unique in its file): the state file's
+    book layout, the frozen list, the halt file and its rules, the drain's order, and the credit route, whose
+    every 4xx is raised before the request is queued (R10's 'NOT queued')"""
+    PINS = {
+        ("ibkr-executor", "app", "mirror.py"): (
+            '"seeded": {}, "frozen": [], "run": None,',
+            'return f"{self.cfg.state_path}.halt"',
+            'self._halt = h if isinstance(h, dict) else {"halted": True, "reason": "unreadable halt file"}',
+            'self._halt = {"halted": True, "reason": f"unreadable halt file: {one_line(exc)}", "ts": _iso(self.clock())}',
+            'return bool(h.get("flatten") and not h.get("flatten_done") and not h.get("flatten_cancelled"))',
+            'self._save() # on disk in the state BEFORE the inbox forgets them',
+            's.cash += cash self.state["check"] = None',
+            'self.state["frozen"] = list(self.state.get("frozen") or []) + [name]',
+            'if sleeve not in self.cfg.engines: raise ValueError(f"{sleeve!r} is not a sleeve of the {self.cfg.name} book")',
+        ),
+        ("ibkr-executor", "app", "mirror_core.py"): (
+            'return {"schema": SCHEMA, "sleeves": [s.to_dict() for s in self.sleeves.values()]}',
+            'return {"name": self.name, "cash": self.cash, "shares": dict(self.shares), "rule": self.rule,',
+        ),
+        ("ibkr-executor", "app", "service.py"): (
+            '_mirror_off_404() _auth(x_exec_token, token) book = _mirror_book(body.get("book")) try: req = book.request_credit(',
+            'except (ValueError, TypeError) as exc: raise HTTPException(status_code=400, detail=str(exc)) return {"ok": True, '
+            '"book": book.cfg.name, "request": req, "note": "queued; applied before the next session\'s plan"}',
+            'raise HTTPException(status_code=401, detail="bad exec token")',
+        ),
+    }
+
+    def test_the_executor_still_writes_what_the_line_reads(self):
+        if not os.path.isdir(os.path.join(REPO, "ibkr-executor")):
+            self.skipTest("ibkr-executor/ is not in this checkout")
+        for path, pins in self.PINS.items():
+            src = flat(*path)
+            for text in pins:
+                with self.subTest(file="/".join(path), pin=text[:60]):
+                    self.assertEqual(src.count(text), 1, f"{text!r} occurs {src.count(text)} times in {'/'.join(path)}")
+
+
+class R1PostTradeCheckAtPaste(LineCase):
+    """item 1(a): at 1de7535c the line never read the post-trade check: an /mirror/adjust applied between the
+    plan and the paste (it clears the check: mirror.py _adjust) still let it queue all four (the e2e run's K5:
+    HG landed $499 above its target)"""
+
+    def test_a_check_that_is_not_the_plans_done_and_clean_sends_nothing(self):
+        for chk in (None, {"session": "2026-11-11", "done": True, "problems": []},
+                    {"session": "2026-11-12", "done": False, "problems": []},
+                    {"session": "2026-11-12", "problems": []},
+                    {"session": "2026-11-12", "done": True, "problems": ["BIL: book 37, account 36"]},
+                    {"session": "2026-11-12", "done": True, "problems": "BOXX off"}, "done"):
+            with self.subTest(check=chk):
+                self.write_state(check=chk)
+                rc, out = self.exec_line()
+                self.assertEqual((rc, self.posts()), (1, []), out)
+                self.assertTrue(out.startswith("NOTHING SENT: "), out)
+                if not isinstance(chk, str):
+                    self.assertIn(f"no clean post-trade check of 2026-11-12: {RERUN} after the next session", out)
+
+    def test_the_twins_the_plans_check_done_and_clean_sends(self):
+        for chk in ({"session": "2026-11-12", "done": True, "problems": []}, {"session": "2026-11-12", "done": True},
+                    {"session": "2026-11-12", "done": True, "problems": None, "strikes": 1}):
+            with self.subTest(check=chk):
+                if os.path.exists(self.inbox):
+                    os.remove(self.inbox)
+                self.ex.requests.clear()
+                self.write_state(check=chk)
+                self.assertEqual(self.exec_line()[0], 0)
+                self.assertEqual(len(self.posts()), 4)
+
+
+class R2HaltAtPaste(LineCase):
+    """item 1(b): at 1de7535c the line never read <state>.halt: it queued the credits on a halted book (the e2e
+    run's HALT1), which runs no session until /mirror/resume. A halt file that cannot be read, or is not a
+    record, is a halt to the executor (mirror.py _load), so to the line too"""
+
+    def halt(self, h):
+        with open(self.state + ".halt", "w") as f:
+            f.write(h if isinstance(h, str) else json.dumps(h))
+
+    def test_a_halt_or_a_flatten_pending_sends_nothing(self):
+        for h in ({"halted": True, "reason": "operator halt", "by": "operator", "ts": "2026-11-13T14:00:00Z"},
+                  {"halted": True, "flatten": True, "flatten_done": False, "flatten_cancelled": False},
+                  {"halted": False, "flatten": True, "flatten_done": False},          # a flatten still wanted
+                  "[not json", [1], None):
+            with self.subTest(halt=h):
+                self.halt(h)
+                rc, out = self.exec_line()
+                self.assertEqual((rc, self.posts()), (1, []), out)
+                self.assertIn(f"the book is halted or flattening: {RERUN} after it resumes", out)
+
+    def test_the_twins_resumed_cancelled_or_finished_sends(self):
+        for h in ({"halted": False, "resumed_ts": "2026-11-13T14:30:00Z"},
+                  {"halted": False, "flatten": True, "flatten_done": False, "flatten_cancelled": True},
+                  {"halted": False, "flatten": True, "flatten_done": True}, {}):
+            with self.subTest(halt=h):
+                if os.path.exists(self.inbox):
+                    os.remove(self.inbox)
+                self.ex.requests.clear()
+                self.halt(h)
+                rc, out = self.exec_line()
+                self.assertEqual((rc, len(self.posts())), (0, 4), out)
+
+
+class R3RunAtPaste(LineCase):
+    """item 1(c): at 1de7535c an open run (a stuck one keeps last_session where the plan saw it) let the line
+    queue behind it"""
+
+    def test_an_open_run_sends_nothing(self):
+        self.write_state(run={"session": "2026-11-13", "phase": "buys", "orders": {}})
+        rc, out = self.exec_line()
+        self.assertEqual((rc, self.posts()), (1, []), out)
+        self.assertIn(f"a run is open: {RERUN} after it", out)
+
+
+class R4FrozenAtPaste(LineCase):
+    """item 1(d): at 1de7535c a sleeve frozen or dropped after the deploy of step (a) (taken out of
+    MIRROR_LIVE_ENGINES: mirror.py _reconcile_sleeves) got the first credits queued and the next one refused
+    400 - a 3-of-4 set that cannot be withdrawn (the e2e run's FROZEN)"""
+
+    def test_a_sleeve_it_credits_frozen_or_gone_sends_nothing(self):
+        self.write_state(frozen=["HARV"])
+        rc, out = self.exec_line()
+        self.assertEqual((rc, self.posts()), (1, []), out)
+        self.assertIn(f"HARV frozen or not in the book: {RERUN}", out)
+        self.write_state()
+        st = json.load(open(self.state))
+        st["book"]["sleeves"] = [r for r in st["book"]["sleeves"] if r["name"] != "KMLM"]
+        json.dump(st, open(self.state, "w"))
+        rc, out = self.exec_line()
+        self.assertEqual((rc, self.posts()), (1, []), out)
+        self.assertIn(f"KMLM frozen or not in the book: {RERUN}", out)
+
+    def test_the_twin_a_frozen_sleeve_it_does_not_credit_sends(self):
+        line, code, _ = ms.paste_line("live", [("HG", 10.5)], "scale-up to $10,000 at Composer's split of 2026-11-12",
+                                      "2026-11-13", "2026-11-12", WIDE, "15:00 ET on Fri 2026-11-13",
+                                      "mirror_scale.py --to 10000")
+        self.write_state(frozen=["KMLM"])
+        rc, out = self.exec_line(code=code)
+        self.assertEqual((rc, len(self.posts())), (0, 1), out)
+
+
+class R5TodaysSessionStillToRun(Case):
+    """item 2: at 1de7535c a plan made on a session day from its paste cutoff, before that day's session ran,
+    was printed for the NEXT session: its line was blocked until midnight and then refused, because today's
+    session ran in between (the e2e run's T-dead; on the half-day, credit_session(last 11-25, Fri 11-27
+    12:30 ET) gave Mon 11-30 while Friday's 12:54 session was still to run)"""
+
+    def at(self, last, *ymdhm):
+        self.feed = feed(live=view(last_session=last, check=dict(view()["check"], session=last)))
+        return datetime.datetime.fromtimestamp(et(*ymdhm), UTC)
+
+    def test_a_plan_past_the_cutoff_before_that_days_session_is_refused(self):
+        for last, when in (("2026-11-11", (2026, 11, 12, 15, 0)), ("2026-11-11", (2026, 11, 12, 15, 30)),
+                           ("2026-11-11", (2026, 11, 12, 16, 0)), ("2026-11-11", (2026, 11, 12, 23, 59)),
+                           ("2026-11-10", (2026, 11, 12, 15, 30)),                 # a session missed before: today's still runs
+                           ("2026-11-25", (2026, 11, 27, 12, 30)),                 # the half-day (13:00 close; Thanksgiving before)
+                           ("2026-11-25", (2026, 11, 27, 12, 0)),
+                           ("2026-12-23", (2026, 12, 24, 12, 59))):               # Christmas Eve, a half-day
+            with self.subTest(last=last, et=when):
+                line = self.refused(now=self.at(last, *when))
+                self.assertIn("MIRROR SCALE REFUSED — today's session has not run yet: re-run after it and its post-trade "
+                              f"check (it is {when[3]:02d}:{when[4]:02d} ET on {when[0]}-{when[1]:02d}-{when[2]:02d}", line)
+                self.assertIn(f"the book's last session is {last}", line)
+        self.assertIsNone(ms.session_still_to_run("2026-11-12", datetime.datetime.fromtimestamp(et(2026, 11, 12, 15, 30), UTC)))
+        self.assertEqual(ms.session_still_to_run("2026-11-25", datetime.datetime.fromtimestamp(et(2026, 11, 27, 12, 30), UTC)),
+                         "2026-11-27")
+
+    def test_the_twins_plan_for_the_session_that_comes_next(self):
+        for last, when, session in (("2026-11-11", (2026, 11, 12, 14, 59), "2026-11-12"),   # before the cutoff: today's
+                                    ("2026-11-12", (2026, 11, 12, 17, 0), "2026-11-13"),    # today's ran
+                                    ("2026-11-25", (2026, 11, 26, 16, 0), "2026-11-27"),    # Thanksgiving: no session that day
+                                    ("2026-11-25", (2026, 11, 27, 11, 59), "2026-11-27"),   # the half-day's morning
+                                    ("2026-11-27", (2026, 11, 27, 13, 30), "2026-11-30"),   # the half-day's session ran
+                                    ("2026-11-13", (2026, 11, 14, 10, 0), "2026-11-16")):   # a weekend
+            with self.subTest(last=last, et=when):
+                self.assertEqual(self.plan(now=self.at(last, *when))["session"], session)
+
+
+class R6MalformedDollars(Case):
+    """item 3: at 1de7535c a finite but absurd dollar figure on the feed (1e308) made need x (1 + headroom) x 100
+    infinite: int(round(inf)) raised an OverflowError that run() did not catch - a traceback, not the one
+    refusal line; a book cash or a due dividend of 1e308 printed an exit-0 plan with a $1e308 cash minimum"""
+
+    def test_implausible_dollar_figures_are_one_line_refusals_never_a_traceback(self):
+        def due(total):
+            return div(ex="2026-11-10", pay="2026-11-12", total=total)
+        cases = (
+            ("a seed of 1e308", dict(seeded=dict(view()["seeded"], HG={"amount": 1e308, "utc": "x"})),
+             "the feed's seed of HG is not an amount from 0 to $1,000,000,000.00"),
+            ("two seeds of 1e308 (an infinite sum)", dict(seeded=dict(view()["seeded"], HG={"amount": 1e308},
+                                                                     KMLM={"amount": 1e308})), "the feed's seed of"),
+            ("seeds within $1e9 each that sum beyond it", dict(seeded={"HG": {"amount": 9e8}, "KMLM": {"amount": 9e8}}),
+             "the feed's seeds and operator credits total 1800000000.0: not a plausible amount"),
+            ("a published funded_usd of 1e308", dict(funded_usd=1e308),
+             "the feed's funded_usd is not a number of dollars from 0 to $1,000,000,000.00 (1e+308)"),
+            ("an operator credit of 1e308 in a session row",
+             dict(last_run={"session": "2026-11-12", "credits": [{"kind": "credit", "sleeve": "HG", "amount": 1e308,
+                                                                   "id": "c1"}]}),
+             "an operator credit in the feed's session row of 2026-11-12 is not a plausible amount (1e+308)"),
+            ("an operator credit too large for a float", dict(last_run={"session": "2026-11-12", "credits": [
+                {"kind": "credit", "sleeve": "HG", "amount": 10 ** 400}]}), "is not a plausible amount (1000000"),
+            ("an operator debit of -1e308", dict(last_run={"session": "2026-11-12", "credits": [
+                {"kind": "credit", "sleeve": "HG", "amount": -1e308}]}), "is not a plausible amount (-1e+308)"),
+            ("a due dividend of 1e308", dict(dividends_open=[due(1e308)]),
+             "the dividends due on the feed by 2026-11-13 total 1e+308: not a plausible amount"),
+            ("two due dividends of 1e308 (an infinite sum)", dict(dividends_open=[due(1e308), due(1e308)]),
+             "the dividends due on the feed by 2026-11-13 total inf: not a plausible amount"),
+        )
+        for why, over, words in cases:
+            with self.subTest(why=why):
+                self.feed = feed(live=view(**over))
+                self.assertIn(words, self.refused())
+        for cash in (1e308, -1e308):
+            with self.subTest(book_cash=cash):
+                v = view()
+                v["book"]["cash"] = cash
+                self.feed = feed(live=v)
+                self.assertIn("the book's cash on the feed is not a number of dollars within $1,000,000,000.00", self.refused())
+        self.feed = feed(live=view())
+        self.assertIn("--to must be a positive number of dollars up to $1,000,000,000.00", self.refused(to="1e10"))
+        with self.assertRaises(ms.Refused):
+            ms.cap_to_set(float("inf"), 0.05)
+        self.assertTrue(ms.plausible(1e9) and ms.plausible(-1e9) and not ms.plausible(1e9 + 1) and not ms.plausible(True))
+
+    def test_the_twins_large_but_plausible_figures_plan(self):
+        self.feed = feed(live=view(funded_usd=123456.78))
+        self.assertEqual(self.plan()["funded"]["now"], 123456.78)
+        self.feed = feed(live=view(last_run={"session": "2026-11-12", "credits": [
+            {"kind": "credit", "sleeve": "HG", "amount": 5000.0, "id": "c1"}]}))
+        self.assertEqual(self.plan()["funded"]["now"], 15000.0)
+
+
+class R7InboxReadFirst(LineCase):
+    """item 5: at 1de7535c the line read the state, then the inbox. _drain_inbox saves the state with a request
+    BEFORE it rewrites the inbox without it (mirror.py, pinned in R0): a drain between the two reads hid the
+    request from both, and the line sent while it was queued"""
+
+    def test_a_drain_between_the_two_reads_cannot_hide_a_request(self):
+        req = {"kind": "credit", "sleeve": "HG", "amount": 5.0, "note": "a refund", "id": "credit-9"}
+        self.write_state(inbox=[req])
+        real_open, seen = builtins.open, []
+
+        def drain():                                   # the executor's order: the state first, then the inbox
+            st = json.load(real_open(self.state))
+            st["requests"] = [req]
+            with real_open(self.state, "w") as f:
+                json.dump(st, f)
+            with real_open(self.inbox, "w") as f:
+                json.dump([], f)
+
+        def opener(file, *a, **kw):
+            if file in (self.state, self.inbox):
+                seen.append(file)
+                if len(seen) == 2:
+                    drain()                            # lands between the line's two reads
+            return real_open(file, *a, **kw)
+
+        with unittest.mock.patch.object(builtins, "open", opener):
+            rc, out = self.exec_line()
+        self.assertEqual(seen[:2], [self.inbox, self.state])
+        self.assertEqual((rc, self.posts()), (1, []), out)
+        self.assertIn("credit HG credit-9", out)
+
+
+class R8R9TokenNeverOnScreen(LineCase):
+    """item 5: at 1de7535c a token http.client could not put in a header (a character outside Latin-1, a CR or
+    LF) was printed in full in the STOPPED line (repr(e) of the error carries the header value); now such a
+    token sends nothing and is never printed, and every error is printed as its type and message with the
+    token masked"""
+    CANARY = "EXEC-CANARY-q7Zp9xV2"
+
+    def test_a_token_that_is_not_printable_ascii_sends_nothing_and_is_never_printed(self):
+        for tok in (self.CANARY + "€", self.CANARY + "\r\n", self.CANARY + "\n", "\t" + self.CANARY, self.CANARY + "é"):
+            with self.subTest(token=tok[-3:]):
+                rc, out = self.exec_line(dict(self.env, EXEC_TOKEN=tok))
+                self.assertEqual((rc, self.posts()), (1, []), out)
+                self.assertIn("NOTHING SENT: EXEC_TOKEN is not printable ASCII", out)
+                self.assertNotIn(self.CANARY, out)
+        if shutil.which("bash"):                       # as pasted: the shell, a separate python3
+            env = dict(self.env, PATH=os.environ.get("PATH", "/usr/bin:/bin"), EXEC_TOKEN=self.CANARY + "€")
+            line, _, _ = ms.paste_line("live", list(CREDITS.items()), self.p["note"], "2026-11-13", "2026-11-12", WIDE,
+                                       "15:00 ET on Fri 2026-11-13", "mirror_scale.py --to 50000")
+            r = subprocess.run(["bash", "-c", line], env=env, capture_output=True, text=True, timeout=120, cwd=self.tmp.name)
+            self.assertEqual((r.returncode, self.posts()), (1, []), r.stdout + r.stderr)
+            self.assertNotIn(self.CANARY, r.stdout + r.stderr)
+
+    def test_an_error_that_carries_the_token_is_printed_with_it_masked(self):
+        tok = self.env["EXEC_TOKEN"]
+
+        def boom(*a, **kw):
+            raise ValueError(f"Invalid header value b'{tok}'")
+        with unittest.mock.patch("http.client.HTTPConnection.request", boom):
+            rc, out = self.exec_line()
+        self.assertEqual((rc, self.posts()), (2, []), out)
+        self.assertIn("STOPPED: HG got no answer (ValueError(\"Invalid header value b'***'\"))", out)
+        self.assertNotIn(tok, out)
+
+        def bad_load(f, *a, **kw):                     # a reader error that would carry it
+            raise ValueError(f"cannot parse {tok}")
+        with unittest.mock.patch("json.load", bad_load):
+            rc, out = self.exec_line()
+        self.assertEqual((rc, self.posts()), (1, []), out)
+        self.assertIn(f"{self.state} unreadable (ValueError('cannot parse ***'))", out)
+        self.assertNotIn(tok, out)
+
+
+class R10StoppedSaysWhatWasNotQueued(LineCase):
+    """item 5: at 1de7535c the STOPPED line said the failed credit 'may have been queued anyway' even when the
+    cause proves it was not - a 4xx (the credit route raises every one before request_credit queues: pinned in
+    R0) or a refused connection - and sent the owner to wait for a session with nothing queued"""
+
+    def fresh(self, answers):
+        if os.path.exists(self.inbox):
+            os.remove(self.inbox)
+        self.ex.requests.clear()
+        self.ex.answers = answers
+
+    def test_a_4xx_or_a_refused_connection_is_not_queued(self):
+        for status in (401, 400, 404, 422):
+            with self.subTest(status=status):
+                self.fresh([(status, '{"detail": "no"}')])
+                rc, out = self.exec_line()
+                self.assertEqual((rc, len(self.posts())), (2, 1), out)
+                self.assertIn(f"STOPPED: HG answered HTTP {status}. Queued: none. HG was NOT queued; not sent: KMLM, SLEEVE, "
+                              f"HARV. Nothing is queued: fix the cause and paste this line again", out)
+        self.fresh([])                                 # ... and it is so: the same line, pasted again, sends
+        self.assertEqual(self.exec_line()[0], 0)
+        self.assertEqual(len(self.posts()), 4)
+        self.fresh([(200, None)] * 3 + [(400, '{"detail": "\'HARV\' is not a sleeve of the live book"}')])
+        rc, out = self.exec_line()
+        self.assertEqual((rc, len(self.posts())), (2, 4), out)
+        self.assertIn("STOPPED: HARV answered HTTP 400. Queued: HG 13349.17, KMLM 11341.25, SLEEVE 10440.19. HARV was NOT "
+                      f"queued; not sent: none. What is queued applies at the next session and cannot be withdrawn: after "
+                      f"it, {RERUN}", out)
+        self.fresh([])
+        rc, out = self.exec_line(dict(self.env, PORT=str(self._dead_port())))
+        self.assertEqual(rc, 2, out)
+        self.assertIn("STOPPED: HG got no answer (ConnectionRefusedError(", out)
+        self.assertIn("HG was NOT queued; not sent: KMLM, SLEEVE, HARV. Nothing is queued: fix the cause and paste this "
+                      "line again", out)
+
+    def test_the_twins_a_5xx_a_redirect_or_no_answer_may_have_been_queued(self):
+        for answers, why in (([(500, '{"detail": "x"}')], "answered HTTP 500"), ([(503, "")], "answered HTTP 503"),
+                             ([("redirect", "http://127.0.0.1:9/")], "answered HTTP 302"),
+                             (["drop"], "got no answer (RemoteDisconnected(")):
+            with self.subTest(why=why):
+                self.fresh(answers)
+                rc, out = self.exec_line()
+                self.assertEqual(rc, 2, out)
+                self.assertIn(f"STOPPED: HG {why}", out)                 # (in the words 1de7535c used too)
+                self.assertIn("HG may have been queued anyway; not sent: KMLM, SLEEVE, HARV.", out)
+                self.assertIn("applies at the next session and cannot be withdrawn: after it, re-run", out)
+
+    @staticmethod
+    def _dead_port():
+        import socket
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        return port
+
+
+class R11MutationGaps(LineCase):
+    """item 5, the reviewers' surviving mutants (twins: these pass at 1de7535c and fail on the mutant): dropping
+    the line's live-flag check, and the give-up boundary of a dividend with no pay date (>= made >)"""
+
+    def test_a_state_named_live_whose_live_flag_is_false_sends_nothing(self):
+        for flag in (False, None, 0):
+            with self.subTest(live=flag):
+                self.write_state(live=flag)
+                rc, out = self.exec_line()
+                self.assertEqual((rc, self.posts()), (1, []), out)
+                self.assertIn(f"{self.state} is not the live book", out)
+
+    def test_a_receivable_with_no_pay_date_exactly_the_give_up_days_after_its_ex_date_is_in_the_cash_minimum(self):
+        ex = (datetime.date(2026, 11, 13) - datetime.timedelta(days=ms.PAY_DATE_GIVE_UP_DAYS)).isoformat()
+        self.feed = feed(live=view(dividends_open=[div(ex=ex, pay=None, total=3.3)]))
+        c = self.plan()["cash"]
+        self.assertEqual((c["dividends"], [r["due"] for r in c["dividends_due"]]), (3.3, ["2026-11-10"]))
+        self.feed = feed(live=view(dividends_open=[div(ex="2026-11-04", pay=None, total=3.3)]))   # a day short of it
+        self.assertEqual(self.plan()["cash"]["dividends"], 0.0)
+
+
+class R12LineLength(Case):
+    """the hard limit (a twin: it holds at 1de7535c too): the printed line stays under a canonical terminal
+    line, TTY_LINE_MAX bytes, for every plan of a 45-day sweep of plan times (every hour at :10 from Fri
+    2026-11-13 00:10 ET: Thanksgiving and its half-day, Christmas Eve's half-day, Christmas, New Year's Day),
+    the book's last session the latest one finished by then; at $50,000 and at just under 10x the book (the
+    longest note and amounts), and for a book five times larger at just under 10x it (a later scale-up)"""
+
+    @staticmethod
+    def last_session_at(now):
+        e = sr.et_now(now)
+        d = e.date()
+        while True:
+            if d.weekday() < 5 and d.isoformat() not in sr.NYSE_HOLIDAYS:
+                end = (13, 5) if d.isoformat() in sr.HALF_DAYS else (16, 5)
+                if d < e.date() or (e.hour, e.minute) >= end:
+                    return d.isoformat()
+            d -= datetime.timedelta(days=1)
+
+    @staticmethod
+    def scaled(k, **over):
+        v = view(**over)
+        for s in v["book"]["sleeves"].values():
+            s["equity"], s["cash"] = round(s["equity"] * k, 2), round(s["cash"] * k, 2)
+        v["book"]["equity"], v["book"]["cash"] = round(v["book"]["equity"] * k, 2), round(v["book"]["cash"] * k, 2)
+        v["seeded"] = {e: dict(r, amount=r["amount"] * k) for e, r in v["seeded"].items()}
+        return v
+
+    def test_the_longest_line_of_a_45_day_sweep_fits_a_terminal_line(self):
+        start = datetime.datetime(2026, 11, 13, 5, 10, tzinfo=UTC)
+        worst, n = (0, None), 0
+        for k in range(45 * 24):
+            now = start + datetime.timedelta(hours=k)
+            last = self.last_session_at(now)
+            over = dict(last_session=last, check=dict(view()["check"], session=last),
+                        history=[{"session": last, "outcome": "traded", "credits": []}],
+                        last_run={"session": last, "outcome": "traded", "credits": []})
+            for book, to in ((view(**over), "50000"), (view(**over), "99658.49"), (self.scaled(5, **over), "498292.49")):
+                self.feed = feed(live=book)
+                code, text = self.run_it("--json", to=to, now=now)
+                if code:
+                    self.assertIn("today's session has not run yet", text)
+                    continue
+                p = json.loads(text)
+                n += 1
+                size = len(p["paste"].encode())
+                if size > worst[0]:
+                    worst = (size, f"{sr.et_now(now):%a %Y-%m-%d %H:%M} ET, --to {to}, {len(p['paste_windows'])} window(s)")
+        margin = ms.TTY_LINE_MAX - worst[0]
+        sys.stderr.write(f"\n  R12: {n} plans; the longest pasted line is {worst[0]} bytes ({worst[1]}): {margin} bytes "
+                         f"under the {ms.TTY_LINE_MAX}-byte terminal line\n")
+        self.assertGreater(n, 3000)
+        self.assertLessEqual(worst[0], ms.TTY_LINE_MAX)
+        self.assertGreaterEqual(margin, 32, "keep a margin for longer amounts: compact the line, never drop a check")
+
+
+class R13DocSaysIt(unittest.TestCase):
+    def test_the_scaling_section_has_the_third_reviews_rules(self):
+        with open(os.path.join(REPO, "composer", "IBKR_MIRROR.md")) as f:
+            sec = " ".join(f.read().split("## Scaling the live book")[1].split("\n## ")[0].split())
+        for words in ("today's session has not run yet: re-run after it and its post-trade check",
+                      "not finite or is beyond $1,000,000,000", "not printable ASCII (it is never printed)",
+                      "its inbox, read first", "while the book is halted or a flatten is pending (its halt file), a run "
+                      "is open, or a sleeve it credits is frozen or no longer in the book",
+                      "post-trade check of the plan's last session is still on record, done and clean",
+                      "whether the one that failed was NOT queued (an HTTP 4xx", "or nothing listening on PORT",
+                      "Nothing queued at all: fix the cause and paste the line again",
+                      "printed as its type and message with the token masked",
+                      "the credited cash was only partly invested", "the holdings still are compared",
+                      "A leg below $1 even once they are applied is below $1 at the mirror's size: nothing is sent, exit 0"):
+            self.assertIn(words, sec, words)
 
 
 if __name__ == "__main__":

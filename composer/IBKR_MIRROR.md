@@ -117,12 +117,23 @@ methods (the account's positions; what an order executed) and nothing else.
    On a half-day (12:54:00, a 13:00 close: 12:54:25 to act, 12:59:00 to
    cancel) FMP can stop carrying VOLUME after 12:45 while it keeps publishing
    the bars (its archive of all three 2025 half-days; SPY itself on
-   2025-11-28), which the dead-feed rules refused. There, and only there, a
-   ticker with a bar without volume in the two minutes to the instant counts
-   as trading when its own last trade is at most 15 minutes old, the price
-   being that trade's; SPY's decision bar likewise. Each is named in the
-   payload's `problems`; no bars, or older trades, are still refused
+   2025-11-28), which the dead-feed rules refused on two of the three
+   (12-24 passed by one ticker). There, and only there, a ticker with a bar
+   without volume in the two minutes to the instant counts as trading when
+   its own last trade is at most 15 minutes old, the price being that
+   trade's, and one of its bars without volume since moved off that price;
+   SPY's decision bar likewise (the executor accepts SPY priced before the
+   instant only on an early close by its own calendar). All of it only while
+   at least half the trees' tickers really traded in those two minutes (77%,
+   75% and 81% on 2025's three). Each ticker counted so is named in the
+   payload's `problems`, and its breadth gives the real trades and these
+   apart; no bars, older trades, bars whose price never moved (a frozen
+   feed), or too few real trades are refused as on a full day
    (mirror_brain.py's docstring; tests/test_mirror_halfday.py on both sides).
+   Known, not built: a session's close counts as final only from 16:15 ET
+   (shadow_runner.FINAL_AFTER), on a half-day too, so a parity check or a
+   paper-book run made by hand between 13:15 and 16:15 on one still reads
+   the session before; the scheduled 16:35 ET runs are unaffected.
 4. Corporate actions first: a split rescales the sleeves' shares; a dividend
    becomes a receivable for the sleeves that held the payer at the close
    before the ex-date, credited from the pay date.
@@ -195,30 +206,55 @@ it with /mirror/resolve.
   at the pre-trade check less the shares the sells were booked at. Then it is
   that reading plus what the sells executed (a commission IB has not reported
   yet counted at 1.1% of the fill + $10; a sell with no reported price, or one
-  booked by /mirror/resolve, at nothing until TotalCashValue shows it). When
-  the positions differ - a sale booked that never executed, an execution
-  counted twice, a trade by hand - or cannot be read: TotalCashValue alone,
-  the rule before. (IB reports a corrected execution as one more execution
+  booked by /mirror/resolve, at nothing until TotalCashValue shows it). That
+  commission bound assumes IBKR's per-order maximum (1% of the trade plus the
+  fees passed through): it does not hold for a name under about $3.40 a share
+  or on another pricing plan. When the positions differ - a sale booked that
+  never executed, an execution counted twice, a trade by hand IB has
+  reported - or cannot be read: TotalCashValue alone, the rule before. A
+  TotalCashValue that has moved but shows only some of the sells (an IB
+  update landing between them) gets the rule before too: the buys wait for
+  IB's next update. (IB reports a corrected execution as one more execution
   whose execId differs only after the last period; the adapter keeps the
-  latest correction alone.) Positions come on IB's position subscription,
-  not on the 3-minute cycle; if on the live gateway they trail the fills, the
-  buys wait the step or two it takes (unverified there until the first live
-  rotation). Keep at least 1.1% of a day's sells + $10 an order outside the
-  book (about $1.3k on a $117k rotation): below that, a commission IB had not
-  reported when its sell was booked holds a lagging day's buys. A live state
-  file that holds shares while no live book is built is alerted in red at
-  every boot.
-- The guard's one hole, and the operating rule that closes it: cash that
-  leaves the account with NO position moving - a withdrawal by hand, a fee -
-  inside IB's update lag is seen by nothing (TotalCashValue does not show it
-  yet, no position moves). The buys can then borrow as much as it exceeds the
-  account's cash outside the book; the rule before this held such a day's
-  buys until IB caught up. So: never withdraw cash or trade by hand in the
-  mirror's account during a session's run, roughly 15:45-16:05 ET (12:45-13:05
-  on a half-day). (A trade by hand moves a position: the guard then waits for
-  TotalCashValue, and the post-trade check finds the difference and halts the
-  book.) A PRICE correction IB sends after its sell was booked is not seen by
-  the book.
+  latest correction alone and logs each correction it sees once, raw, at
+  WARNING.) Positions come on IB's position subscription, not on the 3-minute
+  cycle. While TotalCashValue lags, the buys wait as long as the positions
+  trail the fills, rounded up to the next 1.5 s poll; beyond the window, the
+  rule before (measured in simulation: 5 / 30 / 120 s behind
+  cost 6 / 30 / 120 s; unverified on the live gateway until the first live
+  rotation, which records it: the run's buy_cash.positions_confirmed_after_s,
+  the seconds from the last sell's booking to the positions confirming the
+  sells, also logged at INFO, since the run record is dropped when the run
+  ends). Such a hold is alerted as a warning ("not yet confirmed by the
+  account's positions; re-read every step") and in red only once it has
+  lasted 10 s. Keep at least 1.1% of a day's sells + $10 an order outside
+  the book (about $1.3k on a $117k rotation): below that, a commission IB had
+  not reported when its sell was booked holds a lagging day's buys. A live
+  state file that holds shares while no live book is built is alerted in red
+  at every boot.
+- What the guard cannot see, and the operating rule. While TotalCashValue
+  lags, three things move the account's cash with nothing the guard reads
+  showing them, and the buys can then borrow beyond the account's cash
+  outside the book (each measured by the 2026-11-13 safety review): (1) cash
+  leaving with no position moving - a withdrawal, a fee - as much as it
+  exceeds that cash; (2) a trade by hand that IB has not yet reported as a
+  position when the guard reads - a purchase, as much as its cost exceeds
+  that cash; (3) a price correction or bust of a sell after it was booked -
+  up to its size beyond that cash. The rule before this held such a day's
+  buys until IB caught up only when the day's sells exceeded the cash outside
+  the book. Operating rule, for (1) and (2): no withdrawal pending or
+  posting, and no trade by hand, in the mirror's account on a session day
+  until that session's run is done (the run: roughly 15:45-16:05 ET;
+  12:45-13:05 on a half-day). When IBKR posts a withdrawal is not verified
+  here: one asked for earlier in the day may post during the run. (A
+  trade by hand moves a position once IB has reported its position: the
+  guard then waits for TotalCashValue, and the post-trade check finds the
+  difference and halts the book.) Nothing closes (3): it needs a correction
+  larger than the cash outside the book inside TotalCashValue's lag. The
+  book never sees a correction after booking (the post-trade check compares
+  shares, not cash): its cash stays over by it until it is debited with POST
+  /mirror/credit, and the pre-trade gate refuses a session only once that
+  over-count exceeds the cash outside the book.
 - GET /mirror/feed (READ_TOKEN): the books, for the parity monitor.
 - /status and /health carry a mirror block only when the mirror is enabled.
 
@@ -325,13 +361,18 @@ queued request (a POLICY transfer included: scale on another day) or a sleeve
 missing or frozen; unless the account's post-trade check of the book's last
 session was made, is done and found no problem (the executor clears that
 check at the end of every run and on /mirror/adjust: re-run the planner after
-the next session's check); when --to is not above the book or is more than
-10x it; and when an engine is already above its Composer share at that size
-(it names the smallest --to at which none is, or says it is beyond 10x). The
-plan is for ONE session: the first after the book's last that it can still be
-pasted for, and the line expires with it. The credits are fixed dollars: the
-book lands at the size asked plus whatever its current holdings move before
-that session, less that session's commissions. Then, in order:
+the next session's check); on a session day from its paste cutoff (15:00 ET,
+12:00 on a half-day) while that day's session has not run yet ("today's
+session has not run yet: re-run after it and its post-trade check": a line
+printed then would be for the next session, and today's, run in between,
+would void it); when --to is not above the book or is more than 10x it; when
+an engine is already above its Composer share at that size (it names the
+smallest --to at which none is, or says it is beyond 10x); and when a dollar
+figure on the feed is not finite or is beyond $1,000,000,000 (a malformed
+feed). The plan is for ONE session: the first after the book's last that it
+can still be pasted for, and the line expires with it. The credits are fixed
+dollars: the book lands at the size asked plus whatever its current holdings
+move before that session, less that session's commissions. Then, in order:
 
 (a) The cap. The executor refuses a credit that takes the live book's
     funded_usd (its seeds plus every positive credit and what /mirror/adjust
@@ -357,23 +398,33 @@ that session, less that session's commissions. Then, in order:
     start.sh's uvicorn reads it, 8000 when unset; http.client: no proxy, no
     redirect followed): the token never leaves the container, and never
     appears on screen or in the repo. It sends NOTHING - one line starting
-    "NOTHING SENT", exit 1 - when EXEC_TOKEN or the book's state file is not
-    there; outside the hours above, the reason said; after the plan's
-    session cutoff, or once the book has run a session since the plan
-    (re-run the planner); when any request is queued, whatever its kind (the
-    state's requests or its inbox, each listed: a second paste sends
-    nothing); when MIRROR_MAX_BOOK_USD there is not a number above 0 (the
-    executor would then cap the book at MIRROR_CAPITAL_USD and refuse the
-    credits); or unless that cap covers the book's own funded_usd (its state
-    file) plus the credits to the cent - no $1 slack. Then it POSTs
-    {"sleeve", "amount", "note", "book"} per engine with the header
-    X-Exec-Token and prints each answer. At the first error or answer that is
-    not 200 it STOPS at once - "STOPPED: <sleeve> <reason>", exit 2 - naming
-    the credits answered 200 above it (queued) and saying that the one not
-    answered may have been queued all the same and which were not sent:
-    whatever was queued applies at the next session and cannot be withdrawn;
-    after that session, re-run the planner and paste its new line. The note
-    reads "scale-up to $<to> at Composer's split of <snapshot date>".
+    "NOTHING SENT", exit 1 - when EXEC_TOKEN is not there or is not printable
+    ASCII (it is never printed), or the book's state file is not there;
+    outside the hours above, the reason said; after the plan's session
+    cutoff, or once the book has run a session since the plan (re-run the
+    planner); when any request is queued, whatever its kind (its inbox, read
+    first, and the state's requests, each listed: a second paste sends
+    nothing); while the book is halted or a flatten is pending (its halt
+    file), a run is open, or a sleeve it credits is frozen or no longer in the
+    book; unless the account's post-trade check of the plan's last session is
+    still on record, done and clean (an applied /mirror/adjust clears it:
+    re-run the planner after the next session's check); when
+    MIRROR_MAX_BOOK_USD there is not a number above 0 (the executor would then
+    cap the book at MIRROR_CAPITAL_USD and refuse the credits); or unless that
+    cap covers the book's own funded_usd (its state file) plus the credits to
+    the cent - no $1 slack. Then it POSTs {"sleeve", "amount", "note", "book"}
+    per engine with the header X-Exec-Token and prints each answer. At the
+    first error or answer that is not 200 it STOPS at once - "STOPPED:
+    <sleeve> <reason>", exit 2 - naming the credits answered 200 above it
+    (queued), which were not sent, and whether the one that failed was NOT
+    queued (an HTTP 4xx: the executor's /mirror/credit refuses before it
+    queues; or nothing listening on PORT) or may have been queued all the
+    same (any other failure). Nothing queued at all: fix the cause and paste
+    the line again. Otherwise whatever was queued applies at the next session
+    and cannot be withdrawn: after that session, re-run the planner and paste
+    its new line. An error is printed as its type and message with the token
+    masked. The note reads "scale-up to $<to> at Composer's split of
+    <snapshot date>".
 (c) The executor applies them at that session's decision (15:54 ET, 12:54
     on a half-day): first the dividends due, then the credits, smallest
     first, each only if the account's cash (IBKR's TotalCashValue) covers
@@ -390,9 +441,15 @@ that session, less that session's commissions. Then, in order:
 (d) That night's parity check against Composer (mirror_parity.py) removes
     the operator credits from that day's return, so the scale-up day is not
     read as a gain: chained through the session's fills when the sleeve's
-    credited buys filled, at face value when they did not. A POLICY transfer
-    leg (mirror_transfer.py) is refused while operator credits are queued
-    for either of its sleeves: it is sized after the session applies them.
+    credit went in whole (its buys filled, its cash after the session at most
+    5% of it, no buy of the session short), at face value when none of its
+    buys filled. A credit only partly invested gets no day-return comparison
+    that day ("the credited cash was only partly invested": neither reading
+    is right then); the holdings still are compared. A POLICY transfer leg
+    (mirror_transfer.py) is refused while operator credits are queued for
+    either of its sleeves: it is sized after the session applies them. A leg
+    below $1 even once they are applied is below $1 at the mirror's size:
+    nothing is sent, exit 0.
 
 ## Deploying the brain
 

@@ -38,6 +38,9 @@ read and the POST are injected).
       --again included, a move below $1 too - saying to size the move after the session applies them and
       re-run after that session; a credit to a third sleeve, a transfer or a dividend does not; POLICY.md
       says it
+  T15 the third review (failed at 1de7535c): a leg below $1 even at the size the session would apply it at
+      (the FROM sleeve's equity plus the credits queued for it) is below_min, exit 0, nothing sent; a leg
+      that is $1 or more after the credit is still refused (T14); POLICY.md says it
 
 Run: python3 -m unittest tests.test_mirror_transfer -v
 """
@@ -780,6 +783,40 @@ class T14CreditsQueued(Case):
         self.assertIn("While operator credits (POST /mirror/credit, e.g. a scale-up) are queued on the executor for "
                       "either sleeve, the script refuses the leg (exit 1, nothing sent): size the move after the "
                       "session applies them; re-run after that session.", policy)
+
+
+class T15DustStaysDust(Case):
+    """the third review (item 5; failed at 1de7535c): with a credit queued, a leg below $1 even at the size the
+    session would apply it at (the FROM sleeve's equity plus the credits queued for it) was REFUSED, exit 1,
+    where it had been below_min, exit 0: a routine alarm for a move the mirror's dust floors drop either way.
+    The twin (T14, unchanged): a leg below $1 now that is $1 or more after the credit is still refused"""
+    DUST = ["--from", "HG", "--to", "SLEEVE", "--composer-amount", "0.5", "--composer-from-value", "104827.05"]
+    queue = T14CreditsQueued.queue
+    credit = staticmethod(T14CreditsQueued.credit)
+
+    def test_a_leg_below_a_dollar_even_after_the_credits_is_below_min_exit_0(self):
+        for rows, words in (((self.credit("HG"),), "$0.01 is below $1 at the mirror's size ($0.08 once the operator "
+                                                    "credit(s) queued now are applied) — nothing sent"),
+                            ((self.credit("SLEEVE"),), "$0.01 is below $1 at the mirror's size ($0.01 once the operator "
+                                                        "credit(s) queued now are applied) — nothing sent")):
+            with self.subTest(queued=rows[0]["sleeve"]):
+                self.forget()
+                self.posts = []
+                self.queue(*rows)
+                code, line = self.run_it(self.DUST)
+                self.assertEqual((code, self.posts), (0, []), line)
+                self.assertIn(words, line)
+                self.assertEqual(self.finals()[-1]["outcome"], "below_min")
+        self.queue(dict(self.credit("HG"), amount="13349.17"))               # an amount that cannot be read: refused
+        self.assertEqual(self.run_it(self.DUST)[0], 1)
+        self.assertEqual(mt.leg_after_credits(0.5 / 104827.05, 2900.0, [self.credit("HG")], "HG"), 0.08)
+        self.assertEqual(mt.leg_after_credits(0.01, 2900.0, [self.credit("KMLM")], "HG"), 29.0)
+
+    def test_policy_says_it(self):
+        with open(os.path.join(HERE, "..", "..", "POLICY.md")) as f:
+            policy = " ".join(f.read().split("\n## ")[0].split())
+        self.assertIn("A leg below $1 even once those credits are applied is below $1 at the mirror's size: nothing is "
+                      "sent, exit 0 (no re-run).", policy)
 
 
 class T11BeforeAndAfter(Case):

@@ -37,6 +37,7 @@ def simulate(tmp, seed, rule, allow_split=True, skip_p=0.2):
     rnd = random.Random(seed)
     r = tm.Rig(tmp, live=True, dividend_rule=rule)
     v = r.venue
+    applied = {}             # this simulation's own record of the splits its model applied (before_split_fix)
     px = dict(tm.PX)
     # ---- the schedule
     divs = []
@@ -123,7 +124,7 @@ def simulate(tmp, seed, rule, allow_split=True, skip_p=0.2):
                     continue
                 seen_at[key] = day
                 if d["ex_date"] == day:
-                    hold = before_split_fix(before, splits, day, r)        # holdings as the plan saw them
+                    hold = before_split_fix(before, splits, day, applied)  # holdings as the plan saw them
                 else:
                     prev = [x for x in traded if x < d["ex_date"]]
                     hold = close_sleeves.get(prev[-1], {}) if prev else {}
@@ -142,7 +143,7 @@ def simulate(tmp, seed, rule, allow_split=True, skip_p=0.2):
                             "not_before": None if d["pay_date"] else (date.fromisoformat(d["ex_date"]) + timedelta(
                                 days=mc.PAY_DATE_GIVE_UP_DAYS)).isoformat()}
             # ---- settlement in the model (first traded session on or after the due date; held is read before the trades)
-            now_hold = before_split_fix(before, splits, day, r)
+            now_hold = before_split_fix(before, splits, day, applied)
             for key, o in owed.items():
                 if key in model_status or o["due"] > day or (o["not_before"] and day < o["not_before"]):
                     continue
@@ -155,14 +156,13 @@ def simulate(tmp, seed, rule, allow_split=True, skip_p=0.2):
     return r, divs, splits, owed, model_status, in_lieu, log
 
 
-APPLIED = {}
-
-
-def before_split_fix(before, splits, day, r):
+def before_split_fix(before, splits, day, done):
     """the plan sees the sleeves AFTER every split dated up to today that the book had not applied yet
-    (a split whose own session was skipped is applied at the next plan)"""
+    (a split whose own session was skipped is applied at the next plan). `done` is the calling
+    simulation's own {split index: the day the model applied it}. It used to be a module-level dict keyed
+    by id(r.venue): a venue that reused a freed one's id inherited that simulation's record, so the model
+    applied a split twice or never (the 2026-11-13 flake: book 29, model 5)."""
     out = {n: dict(sh) for n, sh in before.items()}
-    done = APPLIED.setdefault(id(r.venue), {})
     for k, s in enumerate(splits):
         if s["date"] <= day and done.get(k, day) == day:
             done[k] = day
@@ -226,6 +226,32 @@ def test_dividends_and_splits_property(tmp_path_factory, rule):
             bad.append(f"seed {seed}: {str(exc)[:400]} | {log[-5:]}")
     assert stats["credited"] > 40 and stats["splits"] > 15 and stats["divs"] > 100, stats      # not vacuous
     assert not bad, f"{len(bad)} of {N} histories fail; first 6:\n" + "\n".join(bad[:6])
+
+
+def test_a_recycled_venue_never_hands_one_simulation_another_ones_split_record(tmp_path_factory, monkeypatch):
+    """GATE (the 2026-11-13 flake; fails before the fix, passes after): the model's record of the splits it
+    applied was a module-level dict keyed by id(r.venue), so a simulation whose venue got a freed venue's
+    id inherited that simulation's record. In a full run that came up as seed 27 [composer]: its PULS
+    split (x0.2, 11-11) applied a second time on 11-12 - book 29 shares, model 5. Forced here in its
+    strongest form: both simulations' accounts are ONE object (re-initialised: a fresh account at the
+    same address). Seed 4's model applies its own split, index 0 (SOXL, 11-12), on 11-12; seed 27 must
+    then come out exactly as it does alone."""
+    shared = tm.Venue()
+    kind = type(shared)
+
+    def one_account(cash=0.0):
+        kind.__init__(shared, cash)
+        return shared
+    monkeypatch.setattr(tm, "Venue", one_account)
+    first = simulate(tmp_path_factory.mktemp("recycled_a"), 4, "composer")
+    assert first[0].venue is shared and [s["date"] for s in first[2]] == ["2026-11-12"]
+    r, divs, splits, owed, model, in_lieu, log = simulate(tmp_path_factory.mktemp("recycled_b"), 27, "composer")
+    assert r.venue is shared and splits == [{"ticker": "PULS", "date": "2026-11-11", "ratio": 0.2}]
+    got = {(x["ticker"], x["ex_date"], x["sleeve"]): x for x in r.m.state["dividends"]}
+    assert set(got) == set(owed), (sorted(set(got) - set(owed)), sorted(set(owed) - set(got)))
+    wrong = {k: (got[k]["shares"], o["shares"]) for k, o in owed.items() if got[k]["shares"] != o["shares"]}
+    assert not wrong, f"(book shares, model shares) differ: {wrong}"
+    assert ("PULS", "2026-11-12", "KMLM") in owed and owed[("PULS", "2026-11-12", "KMLM")]["shares"] == 29
 
 
 def test_phantom_receivable_after_a_flatten(tmp_path):

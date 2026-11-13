@@ -36,7 +36,9 @@ exits 1 whenever the ledger cannot be written, so the ledger must be committed
 with the day's snapshot. While operator credits (POST /mirror/credit, e.g. a
 scale-up) are queued on the executor for either sleeve, the script refuses
 the leg (exit 1, nothing sent): size the move after the session applies them;
-re-run after that session. An operation that moves money to or from unallocated cash,
+re-run after that session. A leg below $1 even once those credits are applied
+is below $1 at the mirror's size: nothing is sent, exit 0 (no re-run). An
+operation that moves money to or from unallocated cash,
 or outside the four mirrored engines (HG, KMLM, SLEEVE, HARV), has no mirror
 leg and is reported as such.
 

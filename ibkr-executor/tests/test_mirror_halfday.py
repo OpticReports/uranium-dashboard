@@ -14,17 +14,28 @@ are Fri 2026-11-27 and Thu 2026-12-24. The doubles are tests/test_mirror.py's.
       window ends at 13:00), and the day's NO TRADE is recorded at 13:00, not 16:00. Twin: a regular day
       at 12:40 keeps the ordinary cadence and records nothing at 13:00
   E4  the service builds the books with its own early-close calendar (blend.session_close_et)
+  E5  a decision bar whose SPY price is from BEFORE the instant (the brain's half-day rule: FMP's SPY bar at
+      12:54 without volume, SPY at its own last trade) is traded only on an early close by the service's
+      OWN calendar and at most 15 minutes before; a 16:00 day, no calendar, 16 minutes, a SPY time after
+      the instant or none, or a bar not ending at the instant are refused. Twins: SPY at the instant trades
+      on both days
+  E6  the service's calendar (blend.NYSE_EARLY_CLOSES / NYSE_HOLIDAYS) and the brain's (shadow_runner.HALF_DAYS
+      / NYSE_HOLIDAYS, read from its source) agree on every date both cover, and end in the same year
 """
 from __future__ import annotations
 
+import ast
 import os
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
+from app import blend
 from app import mirror as mm
 from app.blend import session_close_et
-from test_mirror import T1, Rig, at, payload, sound
+from test_mirror import T1, Rig, at, decide_utc, payload, sound
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 HALF = "2026-11-27"                       # the Friday after Thanksgiving: a 13:00 close
 WED, THU, MON = "2026-11-25", "2026-11-26", "2026-11-30"
@@ -149,3 +160,140 @@ def test_e4_the_service_builds_the_books_with_its_early_close_calendar(tmp_path,
         assert service.MIRROR and all(b._session_close is service._session_close_et for b in service.MIRROR.values())
     assert (service._session_close_et(date(2026, 11, 27)), service._session_close_et(date(2026, 12, 24)),
             service._session_close_et(date(2026, 11, 20))) == ((13, 0), (13, 0), (16, 0))
+
+
+def _decided(path, day, close, calendar, bar):
+    """a paper book on `day` (the brain's clock: a `close` close), asked at the close minus 3 minutes for a payload
+    carrying `bar` as its decision bar"""
+    os.makedirs(path, exist_ok=True)
+    r = HalfRig(path, calendar)
+    r.brain.close = close
+    r.brain.make = lambda now: payload(now, session=day, close=close, decision_bar=bar)
+    r.tick("12:57:00" if close == "13:00" else "15:57:00", day=day)
+    return r
+
+
+@pytest.mark.parametrize("day, close, calendar, spy_before, end_before, why", [
+    (HALF, "13:00", session_close_et, 8, 0, None),                     # 2025-11-28's shape: SPY at its 12:46 trade
+    (HALF, "13:00", session_close_et, 15, 0, None),                    # ... to the bound
+    (HALF, "13:00", session_close_et, 0, 0, None),                     # twin: SPY at the instant, on a half-day
+    (FRI, "16:00", session_close_et, 0, 0, None),                      # twin: ... and on a regular day
+    (FRI, "16:00", session_close_et, 8, 0, "only an early close by this service's own calendar"),
+    (HALF, "13:00", None, 8, 0, "only an early close by this service's own calendar"),     # no calendar: 16:00
+    (HALF, "13:00", lambda d: (16, 0), 8, 0, "only an early close by this service's own calendar"),
+    (HALF, "13:00", session_close_et, 16, 0, "SPY's price is from"),
+    (HALF, "13:00", session_close_et, -1, 0, "SPY's price is from"),   # a SPY time after the instant
+    (HALF, "13:00", session_close_et, None, 0, "SPY's price is from"),
+    (HALF, "13:00", session_close_et, 1, 1, "the decision bar ends"),  # a bar that does not end at the instant
+])
+def test_e5_spy_before_the_instant_only_on_an_early_close_by_the_services_own_calendar(tmp_path, day, close, calendar,
+                                                                                       spy_before, end_before, why):
+    t = mm._parse(decide_utc(day, close))
+    end = mm._iso(t - timedelta(minutes=end_before))
+    spy = None if spy_before is None else mm._iso(t - timedelta(minutes=spy_before))
+    r = _decided(tmp_path / "r", day, close, calendar, {"end_utc": end, "spy_utc": spy, "complete": True})
+    if why is None:
+        row = r.m.state["last_run"]
+        assert (r.m.state["last_session"], row["outcome"]) == (day, "traded") and r.orders()
+        assert row["decision_bar"] == {"end_utc": end, "spy_utc": spy, "complete": True}
+        return
+    assert r.orders() == [] and r.m.state.get("last_session") != day and why in r.m._why
+    ok = _decided(tmp_path / "twin", day, close, calendar, {"end_utc": mm._iso(t), "spy_utc": mm._iso(t), "complete": True})
+    assert ok.m.state["last_run"]["outcome"] == "traded"                      # the same day, SPY at the instant: traded
+
+
+def _brain_calendar():
+    """shadow_runner's HALF_DAYS and NYSE_HOLIDAYS, read from its source (ast: none of its imports needed)"""
+    path = os.path.join(REPO, "composer", "scripts", "shadow_runner.py")
+    if not os.path.isfile(path):
+        pytest.skip("composer/scripts is not in this checkout")
+    with open(path) as f:
+        tree = ast.parse(f.read())
+    got = {n.targets[0].id: ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
+           and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name) and n.targets[0].id in ("HALF_DAYS", "NYSE_HOLIDAYS")}
+    return {d: tuple(map(int, hm.split(":"))) for d, hm in got["HALF_DAYS"].items()}, set(got["NYSE_HOLIDAYS"])
+
+
+def calendar_disagreements(early, holidays, half, closed):
+    """([(date, the service's day, the brain's day)] for every date both calendars cover where they differ, the
+    last year each covers, as shadow_runner.calendar_through counts it: the year BOTH its tables reach): from the
+    later of the two calendars' first entries to the end of the earlier last year"""
+    ours, theirs = set(early) | set(holidays), set(half) | set(closed)
+    last = lambda *tables: min(max(int(d[:4]) for d in t) for t in tables)   # noqa: E731
+    years = (last(early, holidays), last(half, closed))
+    d, hi = date.fromisoformat(max(min(ours), min(theirs))), date(min(years), 12, 31)
+    out = []
+    while d <= hi:
+        k = d.isoformat()
+        a = "closed" if k in holidays else early.get(k, (16, 0))
+        b = "closed" if k in closed else half.get(k, (16, 0))
+        if a != b:
+            out.append((k, a, b))
+        d += timedelta(days=1)
+    return out, years
+
+
+def test_e6_the_services_calendar_and_the_brains_agree_on_every_date_both_cover():
+    half, closed = _brain_calendar()
+    diff, years = calendar_disagreements(blend.NYSE_EARLY_CLOSES, blend.NYSE_HOLIDAYS, half, closed)
+    assert diff == [], f"the service's calendar (app/blend.py) and the brain's (shadow_runner.py) differ: {diff}"
+    assert years[0] == years[1], f"the calendars end in different years {years}: extend both together"
+    assert "2026-11-27" in half and blend.session_close_et(date(2026, 11, 27)) == (13, 0)   # not vacuous: a half-day in range
+    # the comparison itself catches a one-sided edit: a half-day the service lacks, a holiday the brain lacks
+    missing = {k: v for k, v in blend.NYSE_EARLY_CLOSES.items() if k != "2026-12-24"}
+    assert calendar_disagreements(missing, blend.NYSE_HOLIDAYS, half, closed)[0] == [("2026-12-24", (16, 0), (13, 0))]
+    assert calendar_disagreements(blend.NYSE_EARLY_CLOSES, blend.NYSE_HOLIDAYS, half, closed - {"2026-11-26"})[0] == \
+        [("2026-11-26", "closed", (16, 0))]
+
+
+@pytest.fixture(scope="module")
+def brain_half_day():
+    """the brain's OWN pinned payload for the half-day 2025-11-28 (composer/scripts/tests/test_mirror_halfday.py: FMP's
+    archive, SPY's bar at 12:54 without volume, SPY at its 12:46 trade), built by the brain's code on its fixture"""
+    scripts = os.path.join(REPO, "composer", "scripts")
+    if not os.path.isdir(scripts):
+        pytest.skip("composer/scripts is not in this checkout")
+    import importlib.util
+    import sys
+    added = [p for p in (scripts, os.path.join(scripts, "tests")) if p not in sys.path]
+    sys.path[:0] = added
+    try:                                       # the brain's test module shares this one's name: loaded under its own
+        spec = importlib.util.spec_from_file_location("composer_test_mirror_halfday",
+                                                      os.path.join(scripts, "tests", "test_mirror_halfday.py"))
+        th = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(th)
+
+        class Build(th.HalfDay):
+            def runTest(self):
+                pass
+        b = Build()
+        b.setUpClass()
+        b.setUp()
+        try:
+            p, err = b.pinned("2025-11-28")
+        finally:
+            b.doCleanups()
+    except Exception as exc:  # noqa: BLE001  the brain side's helper is not what this gate was written against
+        pytest.skip(f"the brain's half-day fixture build is not available here: {exc!r}")
+    finally:
+        for p_ in added:
+            if p_ in sys.path:
+                sys.path.remove(p_)
+    assert err is None and p["decision_bar"]["spy_utc"] != p["decision_bar"]["end_utc"]
+    return p
+
+
+@pytest.mark.parametrize("calendar, traded", [(lambda d: (13, 0) if d == date(2025, 11, 28) else (16, 0), True),
+                                              (session_close_et, False)])      # blend's table: 2025 is not in it
+def test_e7_the_brains_own_half_day_payload_trades_only_on_the_services_early_close(tmp_path, brain_half_day, calendar,
+                                                                                   traded):
+    p = brain_half_day
+    r = _decided(tmp_path / "r", "2025-11-28", "13:00", calendar, p["decision_bar"])
+    r.brain.make = lambda now: dict(p)
+    r.tick("12:57:00", day="2025-11-28")
+    if traded:
+        row = r.m.state["last_run"]
+        assert (row["session"], row["outcome"], row["decision_bar"]) == ("2025-11-28", "traded", p["decision_bar"])
+        assert {n: s["action"] for n, s in row["sleeves"].items()} == dict.fromkeys(p["engines"], "trade")
+    else:
+        assert r.orders() == [] and "only an early close by this service's own calendar" in r.m._why

@@ -42,6 +42,9 @@ LEDGER_PATH = os.path.join(md.OUT_DIR, "parity-ledger.jsonl")
 TOL = sr.TOL_DAILY               # same holdings: half-L1 within 3% ...
 CASH_SLACK = 0.01                # ... plus the reserve and buy cushion a sleeve keeps in cash
 RETURN_ALARM_BPS = 150.0         # same holdings on both days and a day return this far apart: look at the fills
+IDLE_CASH_FRAC = 0.05            # ibkr-executor/app/mirror_core.py MAX_IDLE_CASH_FRAC: a credited sleeve keeping more cash than
+#                                  this share of itself after the session did not invest its credit (partly_invested)
+PARTLY = "the credited cash was only partly invested"
 TIMEOUT_S = 15
 LOCAL = ("localhost", "127.0.0.1")
 
@@ -216,11 +219,40 @@ def bought_in(row, eng):
     return False
 
 
+def partly_invested(row, sleeve, px):
+    """whether a credited sleeve whose buys filled (bought_in) still kept part of its credit as cash: its cash
+    after the session is more than IDLE_CASH_FRAC of V (the sleeve at the session's prices px), or a venue
+    BUY of the row filled less than its qty, or one whose qty or fill cannot be read, or the row's orders
+    are not a list. Row-wide: the row's split is of the FILLED quantity (mirror_core.book_fill), so a BUY
+    that filled nothing names no sleeve and whose it was cannot be told. Chained through the close, the
+    idle part of the credit dilutes the old capital's move; at face value the invested part's move is
+    counted as the old capital's: neither reading is right, and the day's return is not compared (the
+    holdings still are). False when V cannot be read (day_return then takes the credit out at face value)"""
+    v, _ = _value(sleeve, px)
+    if v is None or not _finite(v) or v <= 0:
+        return False
+    cash = sleeve.get("cash") or 0.0
+    if not _finite(cash) or cash > IDLE_CASH_FRAC * v:
+        return True
+    orders = row.get("orders")
+    if orders is None:
+        return False
+    if not isinstance(orders, list):
+        return True
+    for o in orders:
+        if isinstance(o, dict) and o.get("side") == "BUY":
+            q, f = o.get("qty"), o.get("filled")
+            if not (_finite(q) and _finite(f)) or f < q:
+                return True
+    return False
+
+
 def day_return(e0, e1, net, cred, sleeve, px, bought=False):
     """(return, basis) of one sleeve on the day: e0 its row of the session before at that day's closes, e1
     this session's row at today's; net the dollars transfers moved in (moved_in), cred the operator's net
     credit (credited_in). Neither is a return. Without a credit: (e1 - net) / e0 - 1, basis None, exactly
-    as before. With one:
+    as before. With one (book_parity first skips a positive credit that was only partly invested:
+    partly_invested):
       "chained" - the sleeve TRADED and its buys FILLED (bought: bought_in): the credited dollars went in
           with the rest at the session's prices (px, session_prices), so the day is chained there:
           (V - net - cred) / e0 * e1 / V - 1, V the sleeve after the session at those prices. What the
@@ -302,8 +334,9 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
     took out of the sleeve that session (moved_in) is not a return, as a deposit is not on Composer's
     side; a session row that does not say what it moved gets no return comparison, and says so. It is
     CREDIT-ADJUSTED the same way (credited_in, day_return): the operator's credits and debits are taken
-    out, the line says so; a dividend the book credited stays in; credits that cannot be read get no
-    return comparison, and the line says why"""
+    out, the line says so; a dividend the book credited stays in; credits that cannot be read, and a
+    credit whose buys filled but that was only partly invested (partly_invested), get no return
+    comparison, and the line says why"""
     mode = "LIVE" if view.get("mode") == "live" else "PAPER"
     tag = f"MIRROR {mode}"
     rows = {r["session"]: r for r in _rows(view)}
@@ -365,6 +398,10 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
             elif cred is None:
                 rec["ret_skipped"] = unread
                 uncredited.setdefault(unread, []).append(eng)
+            elif (cred > 0 and s.get("action") == "trade" and bought_in(row, eng)
+                  and partly_invested(row, s, session_prices(row))):
+                rec.update(credit_in=cred, ret_skipped=PARTLY)
+                uncredited.setdefault(PARTLY, []).append(eng)
             elif e1 and e0 and e0 > 0:
                 ret, basis = day_return(e0, e1, net, cred, s, session_prices(row) if cred else px,
                                         bought=bool(cred) and bought_in(row, eng))

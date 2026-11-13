@@ -30,6 +30,11 @@ Each behavioural gate has a broken twin that must land on the other side.
       out at face value - chained, its cash diluted the old capital's move into a false RETURN GAP; a
       chained day whose old capital is worth nothing at the session's prices (V - flows <= 0) falls back
       to face value
+  P14 the third review (each gate failed at 1de7535c): a credit whose buys filled only part of it (the
+      sleeve's cash after the session above 5% of it, or a BUY of the row short) gets no day-return
+      comparison ("the credited cash was only partly invested"; the holdings still are): no false RETURN
+      GAP on a move into the close; twins: full investment still chains, nothing filled is still face, a
+      debit reads as before
   P8  a real feed (a $10k paper book on the executor's own code, real brain decisions of 2026-11-06
       and 11-09) reads end to end: the fields this script needs are the fields the executor writes
 
@@ -781,15 +786,13 @@ class P13ChainedOnlyWhenTheBuysFilled(CreditRows, Base):
         chained = (v - self.F) / self.e0 * ((66 * 40.0 * 1.02 + 10.0 + self.F) / v) - 1
         self.assertLess((chained - 0.02) * 1e4, -mp.RETURN_ALARM_BPS)
 
-    def test_a_sleeve_whose_buys_filled_is_chained_even_partly(self):
+    def test_a_sleeve_whose_buys_filled_is_chained(self):
         full = {"KMLM": sleeve({"SOXL": 66 + 296}, cash=10.0 + self.F - 296 * 40.0)}
         lines, alerts, rec = self.kmlm(full, [buy("KMLM", "SOXL", 296)])
         self.assertEqual(rec["credit_basis"], "chained")
         self.assertAlmostEqual(rec["diff_bps"], 0.0, delta=1.0)
         self.assertEqual(alerts, [])
-        part = {"KMLM": sleeve({"SOXL": 66 + 10}, cash=10.0 + self.F - 10 * 40.0)}   # 10 of 296 filled at the cancel
-        lines, alerts, rec = self.kmlm(part, [buy("KMLM", "SOXL", 296, filled=10)])
-        self.assertEqual(rec["credit_basis"], "chained")
+        # (10 of 296 filled at the cancel: only partly invested, not compared - P14)
         # a netted buy of two sleeves: its split names this one
         both = [dict(buy("KMLM", "SOXL", 296), qty=300, filled=300, split={"KMLM": 296, "HG": 4})]
         self.assertEqual(self.kmlm(full, both)[2]["credit_basis"], "chained")
@@ -833,6 +836,94 @@ class P13ChainedOnlyWhenTheBuysFilled(CreditRows, Base):
         is 5.55e-17 in floats, a 'credit' that changed the ledger row and the line (P12 holds it byte for byte)"""
         self.assertEqual(mp.credited_in({"credits": [cr(0.1), cr(0.2), cr(-0.3)]}, "HG"), (0.0, None))
         self.assertEqual(mp.credited_in({"credits": [cr(0.105), cr(0.2)]}, "HG"), (0.3, None))
+
+
+class P14PartlyInvested(CreditRows, Base):
+    """the third review (item 4; each gate failed at 1de7535c): a credit whose buys filled only PART of it was
+    chained, and the credited cash left idle diluted the old capital's move into the close: on the executor's
+    own rows a false 'RETURN GAP - KMLM' (-165 bps against a no-credit twin's -7). Neither basis is right then
+    (face value counts the invested part's move as the old capital's): the day's return is not compared, and
+    the line says why; the holdings still are. Chained only when the credit was essentially fully invested:
+    the sleeve's cash after the session at most IDLE_CASH_FRAC of it, and no BUY of the row short"""
+    F = 11850.0
+    PARTLY = "the credited cash was only partly invested"                   # mp.PARTLY (a literal: the gate reads behaviour)
+
+    def setUp(self):
+        super().setUp()
+        self.comp = {d: {"KMLM": {"holdings": {"SOXL": 1.0}, "ret": 0.0, "basis": "dav", "kind": "close", "taken_at": "x"}}
+                     for d in (D0, D)}
+        self.comp[D]["KMLM"]["ret"] = 0.02                                       # SOXL +2% after the plan's prices
+        self.before = {"KMLM": sleeve({"SOXL": 66})}                            # $2,650.00
+        self.e0 = 66 * 40.0 + 10.0
+
+    def kmlm(self, after, orders, credit=None, before=None):
+        lines, alerts = self.run_check(self.fd([cr(credit or self.F, "KMLM")], after, before or self.before, orders=orders),
+                                       closes=self.moved("SOXL", 0.02))
+        return lines, alerts, self.recs()["KMLM"]
+
+    def test_a_partly_invested_credit_with_a_move_into_the_close_raises_no_return_gap(self):
+        part = {"KMLM": sleeve({"SOXL": 66 + 10}, cash=10.0 + self.F - 10 * 40.0)}   # 10 of 296 filled at the cancel
+        for why, orders in (("10 of 296 filled", [buy("KMLM", "SOXL", 296, filled=10)]),
+                            ("one buy filled, the other rejected", [buy("KMLM", "SOXL", 10),
+                                                                     buy("KMLM", "TECL", 115, filled=0)])):
+            with self.subTest(why=why):
+                lines, alerts, rec = self.kmlm(part, orders)
+                self.assertFalse([a for a in alerts if "RETURN GAP" in a], alerts)
+                self.assertEqual((rec.get("ret_skipped"), rec.get("credit_in")), (self.PARTLY, self.F))
+                self.assertNotIn("ret", rec)
+                self.assertNotIn("credit_basis", rec)
+                self.assertIn("; day return NOT compared for KMLM (the credited cash was only partly invested)",
+                              "\n".join(lines))
+                self.assertEqual(rec["parity"], "MISMATCH")                  # the holdings are still compared ...
+                self.assertTrue(any("MISMATCH — KMLM" in a for a in alerts))  # ... and said
+        # what 1de7535c read: chained, the $11,460 of idle cash took the old $2,650's +2% to +0.42%: -158 bps, alarmed
+        v = 76 * 40.0 + 10.0 + self.F - 400.0
+        chained = (v - self.F) / self.e0 * ((76 * 40.0 * 1.02 + 10.0 + self.F - 400.0) / v) - 1
+        self.assertLess((chained - 0.02) * 1e4, -mp.RETURN_ALARM_BPS)
+
+    def test_little_cash_left_but_a_buy_short_anywhere_in_the_row_is_not_compared_either(self):
+        near = {"KMLM": sleeve({"SOXL": 66 + 290, "TECL": 1}, cash=10.0 + self.F - 290 * 40.0 - 100.0)}   # $160: 1.1%
+        for why, orders in (("its own TECL buy filled 1 of 2", [buy("KMLM", "SOXL", 290), buy("KMLM", "TECL", 2, filled=1)]),
+                            ("another sleeve's buy filled nothing: it names no sleeve", [buy("KMLM", "SOXL", 290),
+                             buy("KMLM", "TECL", 1), buy("HG", "BIL", 3, filled=0)])):
+            with self.subTest(why=why):
+                lines, alerts, rec = self.kmlm(near, orders)
+                self.assertEqual(rec.get("ret_skipped"), self.PARTLY, why)
+                self.assertFalse([a for a in alerts if "RETURN GAP" in a], alerts)
+
+    def test_the_twins_full_investment_chains_nothing_filled_is_face_and_a_debit_reads_as_before(self):
+        full = {"KMLM": sleeve({"SOXL": 66 + 296}, cash=10.0 + self.F - 296 * 40.0)}      # $20 idle
+        lines, alerts, rec = self.kmlm(full, [buy("KMLM", "SOXL", 296)])
+        self.assertEqual((rec["credit_basis"], alerts), ("chained", []))
+        self.assertAlmostEqual(rec["diff_bps"], 0.0, delta=1.0)
+        kept = {"KMLM": sleeve({"SOXL": 66}, cash=10.0 + self.F)}
+        lines, alerts, rec = self.kmlm(kept, [buy("KMLM", "SOXL", 296, filled=0)])
+        self.assertEqual(rec["credit_basis"], "face")
+        self.assertFalse([a for a in alerts if "RETURN GAP" in a], alerts)
+        # a fee DEBIT on a day a buy of the sleeve filled short: nothing was credited to invest, so it reads as before
+        before = {"KMLM": sleeve({"SOXL": 66}, cash=100.0)}
+        after = {"KMLM": sleeve({"SOXL": 68}, cash=100.0 - 5.0 - 2 * 40.0)}
+        lines, alerts, rec = self.kmlm(after, [buy("KMLM", "SOXL", 3, filled=2)], credit=-5.0, before=before)
+        self.assertEqual((rec["credit_in"], rec["credit_basis"]), (-5.0, "chained"))
+        self.assertNotIn("ret_skipped", rec)
+
+    def test_partly_invested_reads_only_what_the_row_says(self):
+        px = {"SOXL": 40.0}
+        s = sleeve({"SOXL": 95}, cash=200.0)                                     # V = $4,000: 5% is $200
+        self.assertFalse(mp.partly_invested({"orders": []}, s, px))             # exactly 5%: invested
+        self.assertTrue(mp.partly_invested({"orders": []}, dict(s, cash=200.01), px))
+        self.assertFalse(mp.partly_invested({}, s, px))                         # no orders at all (a cross only)
+        for orders in ("x", [dict(buy("KMLM", "SOXL", 3), qty=None)], [dict(buy("KMLM", "SOXL", 3), filled=float("nan"))],
+                       [buy("HG", "SOXL", 3, filled=2)]):
+            self.assertTrue(mp.partly_invested({"orders": orders}, s, px), orders)
+        self.assertFalse(mp.partly_invested({"orders": [None, "BUY", dict(buy("KMLM", "SOXL", 3), side="SELL", filled=0)]},
+                                            s, px))                             # not BUYs: a short SELL is no credit's
+        self.assertFalse(mp.partly_invested({"orders": []}, sleeve({"ZZZ": 1}), px))     # V cannot be read: face
+        self.assertEqual((mp.IDLE_CASH_FRAC, mp.PARTLY), (0.05, self.PARTLY))
+        core = os.path.join(HERE, "..", "..", "..", "ibkr-executor", "app", "mirror_core.py")
+        if os.path.isfile(core):
+            with open(core) as f:
+                self.assertIn("MAX_IDLE_CASH_FRAC = 0.05", f.read())
 
 
 if __name__ == "__main__":

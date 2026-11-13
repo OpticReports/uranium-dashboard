@@ -166,6 +166,15 @@ def _pos(x):
     return float(x) if _num(x) and x > 0 else None
 
 
+def _quiet_bars(q):
+    """{'HH:MM' bar start: close} of the bars FMP published WITHOUT volume (fetch_minutes quiet=True's
+    '_quiet'; 'quiet' on disk), sorted; anything else - an earlier list of bar starts without their closes
+    included - is no evidence: {}"""
+    if not isinstance(q, dict):
+        return {}
+    return {k: float(v) for k, v in sorted((k, v) for k, v in q.items() if isinstance(k, str)) if _pos(v)}
+
+
 # ------------------------------------------------------------------ prices: Yahoo daily
 def _yahoo_chart(t, tries=3):
     url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(t)}"
@@ -343,9 +352,10 @@ class Minutes:
     """FMP's 1-minute bars WITH VOLUME (trades) for a ticker-day, one request each: kept in memory,
     and on disk under cache_dir so a rerun costs nothing; throttled to FMP_RATE requests a second.
     A refusal or rate limit raises Refused and is remembered in .refused (the caller stops cleanly);
-    any other failure is remembered in .errors. The key never appears in a message. The starts of the
-    bars FMP published WITHOUT volume are kept beside them (.still; 'quiet' on disk): the brain's
-    half-day evidence, read through quotes().quiet exactly as the live brain reads its own."""
+    any other failure is remembered in .errors. The key never appears in a message. The bars FMP
+    published WITHOUT volume, {bar start: close}, are kept beside them (.still; 'quiet' on disk): the
+    brain's half-day evidence, read through quotes().quiet exactly as the live brain reads its own. A
+    'quiet' on disk in any other form (a list of bar starts without their closes) is no evidence."""
 
     def __init__(self, key=None, cache_dir=None, rate=FMP_RATE, fetch=None, budget=600, clock=time.time, sleep=time.sleep,
                  now=None):
@@ -377,7 +387,7 @@ class Minutes:
                 bars = {k: float(v) for k, v in j["bars"].items()}
                 with self.lock:
                     self.mem[(t, d)] = bars
-                    self.still[(t, d)] = [x for x in j.get("quiet") or [] if isinstance(x, str)]
+                    self.still[(t, d)] = _quiet_bars(j.get("quiet"))
                 return bars
             except (OSError, ValueError, KeyError, TypeError, AttributeError):
                 pass
@@ -401,8 +411,7 @@ class Minutes:
                 raise Refused(msg) from None
             self.errors[(t, d)] = msg
             raise RuntimeError(msg) from None
-        still = (bars or {}).get("_quiet") if isinstance(bars, dict) else None
-        still = [x for x in still if isinstance(x, str)] if isinstance(still, list) else []
+        still = _quiet_bars((bars or {}).get("_quiet") if isinstance(bars, dict) else None)
         bars = {k: float(v) for k, v in (bars or {}).items() if not k.startswith("_") and _pos(v)}
         with self.lock:
             self.mem[(t, d)] = bars
@@ -416,14 +425,16 @@ class Minutes:
         return bars
 
     def quiet(self, tickers, now):
-        """{ticker: UTC end of its last bar WITHOUT volume ending at or before `now`} on now's session, in
-        what get() read: mirror_brain.build's half-day evidence (mirror_brain.last_quiet)"""
+        """{ticker: mirror_brain.quiet_evidence(...) = (UTC end of its last bar WITHOUT volume ending at or
+        before `now`, moved)} on now's session, in what get() read (its traded bars and, with their closes,
+        the bars without volume): mirror_brain.build's half-day evidence"""
         import mirror_brain as mb
         e = sr.et_now(now)
         d = e.date().isoformat()
         with self.lock:
-            got = {t: self.still.get((t, d)) for t in tickers}
-        return {t: x for t, q in got.items() if q for x in [mb.last_quiet({"_quiet": q}, d, e.tzinfo, now)] if x is not None}
+            got = {t: (self.mem.get((t, d)), self.still.get((t, d))) for t in tickers}
+        return {t: x for t, (bars, q) in got.items() if q
+                for x in [mb.quiet_evidence(dict(bars or {}, _quiet=q), d, e.tzinfo, now)] if x is not None}
 
     def quotes(self):
         """the `quotes` seam of mirror_brain.build / preclose.preview: preclose.minute_quotes itself, on

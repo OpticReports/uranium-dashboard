@@ -24,7 +24,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Reques
 from .alerts import send
 from .outages import OutageLog
 from .config import settings
-from .ib_adapter import DryAdapter, ExecutorConnectionError
+from .ib_adapter import KIND_OPEN_ORDERS_UNSYNCED, DryAdapter, ExecutorConnectionError
 from .manager import LadderManager
 from .nino import FEED_TIMEOUT, nino34_weekly
 
@@ -294,7 +294,18 @@ def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
     transition (a flapping gateway paged every flap); the stall diagnosis
     needs a READABLE restart log and names the crash-loop / breaker-open
     shape separately; the pre-open page needs PREOPEN_MIN_DOWN_S of outage
-    and stays quiet on NYSE holidays."""
+    and stays quiet on NYSE holidays.
+
+    K5 (D1 round 4): an outage whose cause the ledger names as
+    open_orders_unsynced (summary currently_down_kind) is a gateway that is
+    connected, logged in and answering - only no session's open-orders sync
+    ends. The adapter's own DOWN page names that cause; the login-stall,
+    crash-loop and unreadable-log diagnoses would contradict it ("NOT logged
+    in - almost always a missed IB Key push"), so none of them runs for it,
+    and the pre-open page says what is true of it. Those diagnoses count
+    from when the CURRENT cause began (currently_down_kind_since), so a
+    gateway that drops in the middle of an unsynced outage is not paged as
+    stalled at once."""
     st = GW_WATCH if state is None else state
     if summary is None:
         return []
@@ -308,18 +319,25 @@ def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
                   unreadable_paged=False)
     fired: list[str] = []
     down_for = now - float(down_since)
+    unsynced = summary.get("currently_down_kind") == KIND_OPEN_ORDERS_UNSYNCED
+    try:
+        cause_since = float(summary.get("currently_down_kind_since") or down_since)
+    except (TypeError, ValueError):
+        cause_since = float(down_since)
+    diag_for = now - cause_since
     r = restarts or {}
     poll = float(getattr(settings, "poll_seconds", 300) or 300)
     # the supervisor logs an exit BEFORE the adapter notices the drop: look
     # back one poll interval plus grace
-    grace_from = float(down_since) - poll - 120
+    grace_from = cause_since - poll - 120
     since_drop = sum(1 for t in (r.get("recent_ts") or []) if t >= grace_from)
     # the breaker flag is the LAST record's reason, any age: a log whose tail
     # is a breaker trip from a previous outage must not diagnose this one as
     # crash-looping (round 3) - it counts only if it tripped since the drop
     circuit = bool(r.get("circuit_open")) and _num_ts(r.get("last") or {}) >= grace_from
     mins = int(down_for // 60)
-    if (down_for > STALL_DIAG_S and not st.get("loop_paged")
+    # unsynced: no diagnosis here - the adapter's DOWN page is this outage's
+    if (not unsynced and diag_for > STALL_DIAG_S and not st.get("loop_paged")
             and (circuit or since_drop > 1)):
         # its own flag: a crash loop that develops AFTER a stall diagnosis in
         # the same outage still pages (counter-agent round 2)
@@ -333,7 +351,7 @@ def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
                 f"on a push. Check credentials/config, then Render → "
                 f"ibkr-executor → Restart service.")
         fired.append("loop")
-    if down_for > STALL_DIAG_S and not st.get("diagnosed"):
+    if not unsynced and diag_for > STALL_DIAG_S and not st.get("diagnosed"):
         if not r.get("readable", False):
             # its own flag (round 3): if the log becomes readable later in
             # the same outage the stall page ("tap the phone") still fires
@@ -363,11 +381,20 @@ def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
         if st.get("preopen_paged") != key:
             st["preopen_paged"] = key
             left = PREOPEN_TO[0] * 60 + PREOPEN_TO[1] - (et.hour * 60 + et.minute)
-            send_fn(f"🚨🚨 PRE-OPEN: IB gateway down {mins} min, still down "
-                    f"at {et.strftime('%H:%M')} ET, market opens in {left} "
-                    f"min. Restart it NOW (Render → ibkr-executor → Restart "
-                    f"service, then approve the IBKR push). After 09:30 a "
-                    f"restart re-runs the blend mid-session.")
+            if unsynced:
+                send_fn(f"🚨🚨 PRE-OPEN: IB gateway logged in, but its "
+                        f"open-orders sync never ends ({mins} min so far): "
+                        f"nothing can be sold or bought. Still so at "
+                        f"{et.strftime('%H:%M')} ET, market opens in {left} "
+                        f"min. Restart the gateway NOW (Render → ibkr-executor "
+                        f"→ Restart service, then approve the IBKR push). "
+                        f"After 09:30 a restart re-runs the blend mid-session.")
+            else:
+                send_fn(f"🚨🚨 PRE-OPEN: IB gateway down {mins} min, still down "
+                        f"at {et.strftime('%H:%M')} ET, market opens in {left} "
+                        f"min. Restart it NOW (Render → ibkr-executor → Restart "
+                        f"service, then approve the IBKR push). After 09:30 a "
+                        f"restart re-runs the blend mid-session.")
             fired.append("preopen")
     return fired
 
@@ -933,7 +960,7 @@ def _mirror_cycle(gen: int, wake: threading.Event) -> None:
 MIRROR_RECONNECT_BACKOFF_MAX_S = 30.0   # see _mirror_keepalive
 
 
-def _mirror_keepalive() -> None:
+def _mirror_keepalive() -> bool:
     """Keep the gateway session alive when ONLY the mirror trades.
 
     2026-11-12: with the blend disabled nothing touched the adapter between
@@ -954,12 +981,13 @@ def _mirror_keepalive() -> None:
     order of a run or a flatten is mid-wait while it pumps. Bounded by the
     adapter's connect timeout and backoff. Not run while the blend is
     enabled (its cycle already touches the adapter every iteration), nor on
-    a DryAdapter (no gateway). Never raises."""
+    a DryAdapter (no gateway) - an OPEN outage gets its keepalive anyway
+    (_outage_keepalive). Never raises; True when it ran the keepalive."""
     if MIRROR.get("live") is None or BLEND is not None:
-        return
+        return False
     keepalive = getattr(ADAPTER, "keepalive", None)
     if keepalive is None:
-        return
+        return False
     # Only the mirror trades through this adapter: its reconnect backoff is
     # capped well under the blend's 300 s (one decision a day, timed to the
     # minute; a /kill flatten waits for the next connect attempt), and its
@@ -975,6 +1003,51 @@ def _mirror_keepalive() -> None:
         keepalive()
     except Exception as exc:  # noqa: BLE001
         logger.warning("IB keepalive failed (ignored): %s", exc)
+    return True
+
+
+def _outage_keepalive() -> bool:
+    """The adapter's keepalive while an outage is OPEN, whatever trades.
+
+    D1 round 4: an outage is ended only by an adapter call - a surface, or
+    the keepalive - so with nothing driving the adapter (no live mirror
+    book, the blend and the ladder off) one stayed open for good: a boot
+    whose open-orders sync ended just late (a healthy gateway) showed /health
+    down_since forever and drew a false stall page and a PRE-OPEN page every
+    trading morning. Now the loop runs ADAPTER.keepalive() on every iteration
+    that finds the ledger (or the adapter) with an outage open, unless
+    _mirror_keepalive already ran it in that iteration. A healthy gateway
+    never reaches it (no open outage: no call, nothing extra on the wire).
+
+    What it costs while one is open: one prove_live - the socket drained,
+    then either the outage's end (a session whose sync has ended), one
+    reqCurrentTime round trip (PROVE_LIVE_TIMEOUT_S cap), or, with no
+    session, one reconnect attempt through the adapter's SAME backoff
+    (_reconnect returns at once inside it). A gateway that is not logged in
+    refuses the API connection or never completes its handshake, so an
+    attempt fails within the connect timeout (15 s) and the next one waits
+    out the doubling backoff - the attempts the blend's own surfaces would
+    make, never more of them. Once per outage it may also replace a session
+    whose open-orders sync never ended (the adapter's keepalive: one
+    reconnect, its connect waiting up to 15 s for that sync again). Its
+    alerts are the adapter's own (DOWN once
+    past OUTAGE_ALERT_S, RECONNECTED after an alerted outage); it counts no
+    blocked call (keepalive). It does not touch the mirror-only backoff cap
+    or wording (_mirror_keepalive's). On the loop thread, after the cycles
+    and before the gateway watch, never inside a mirror tick or a blend
+    cycle. Never raises; True when it ran the keepalive."""
+    open_ = bool(getattr(OUTAGES, "open", None)) or (
+        getattr(ADAPTER, "_disconnected_since", None) is not None)
+    if not open_:
+        return False
+    keepalive = getattr(ADAPTER, "keepalive", None)
+    if keepalive is None:
+        return False
+    try:
+        keepalive()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("IB keepalive (open outage) failed (ignored): %s", exc)
+    return True
 
 
 def _loop_wait() -> float:
@@ -1000,9 +1073,11 @@ MIRROR_KILL_BOUND = (
     "worst, the connect handshake and then ib_async's startup sync), an "
     "order being placed finishes its ack/fill "
     "wait (10s / 6.5s) - longer only if the gateway's order-history lookup "
-    "stalls (20s per request); the mirror's own flatten then proves the "
-    "session the same way and sends its sells one by one under the same "
-    "per-order waits")
+    "stalls (20s per request), and an open-orders read can first wait up to "
+    "20s for an earlier open-orders request still unanswered (once per "
+    "gateway session when it is the session's start-up sync); the mirror's "
+    "own flatten then proves the session the same way and sends its sells "
+    "one by one under the same per-order waits")
 
 
 def _kill_mirror() -> tuple[dict | None, str]:
@@ -1394,6 +1469,7 @@ def _loop(gen: int, wake: threading.Event):
                          f"completed ({exc}) — the ladder is HALTED, the "
                          f"kill stays queued and the loop retries it every "
                          f"cycle until it lands")
+            kept_alive = False
             if MIRROR:
                 # The Composer mirror, AFTER the blend's and the ladder's
                 # emergency stops and AHEAD of both feeds: its decision is
@@ -1403,7 +1479,7 @@ def _loop(gen: int, wake: threading.Event):
                 _mirror_cycle(gen, wake)
                 if _superseded(gen):
                     return
-                _mirror_keepalive()
+                kept_alive = _mirror_keepalive()
             nino = nino34_weekly()
             if _superseded(gen):
                 return          # the feed call is the long park (MF-2)
@@ -1550,6 +1626,11 @@ def _loop(gen: int, wake: threading.Event):
                             # is venue I/O with no deadline)
             try:
                 if OUTAGES is not None:
+                    if not kept_alive:
+                        # D1 round 4: an open outage is ended by an adapter
+                        # call; with nothing else driving the adapter it was
+                        # never ended (_outage_keepalive)
+                        _outage_keepalive()
                     _gateway_watch(time.time(), OUTAGES.summary(),
                                    _gateway_restarts(), send)
                 if DISABLED_BOOK and (time.time() - DISABLED_BOOK.get(
@@ -1727,6 +1808,9 @@ def health():
             summ = OUTAGES.summary() or {}
             body["gateway"] = {
                 "down_since": summ.get("currently_down_since"),
+                # why it is down: None = no session; "open_orders_unsynced" =
+                # connected and logged in, its open-orders sync never ended
+                "down_kind": summ.get("currently_down_kind"),
                 "outages_30d": summ.get("outages"),
                 "self_healed_30d": summ.get("self_healed"),
                 "needed_a_restart_30d": summ.get("needed_a_restart"),
