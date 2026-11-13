@@ -41,6 +41,8 @@ read and the POST are injected).
   T15 the third review (failed at 1de7535c): a leg below $1 even at the size the session would apply it at
       (the FROM sleeve's equity plus the credits queued for it) is below_min, exit 0, nothing sent; a leg
       that is $1 or more after the credit is still refused (T14); POLICY.md says it
+  T16 the fourth review (a mutation pin: it passes at 170191c0): a debit queued for the FROM sleeve that takes
+      a leg of $1 or more now below $1 at the session's size is refused, never sent and never below_min
 
 Run: python3 -m unittest tests.test_mirror_transfer -v
 """
@@ -817,6 +819,24 @@ class T15DustStaysDust(Case):
             policy = " ".join(f.read().split("\n## ")[0].split())
         self.assertIn("A leg below $1 even once those credits are applied is below $1 at the mirror's size: nothing is "
                       "sent, exit 0 (no re-run).", policy)
+
+
+class T16DebitTakesTheLegBelowADollar(Case):
+    """the fourth review (its V1; a MUTATION PIN, not a regression gate: it passes at 170191c0 and kills mutant
+    X02, the `amount >= MIN_AMOUNT or` clause dropped): a DEBIT queued for the FROM sleeve that takes a leg of $1
+    or more now below $1 at the session's size is REFUSED - never sent, never below_min: until that session
+    applies the debit the leg is sized on the equity before it"""
+    ARGS = ["--from", "HG", "--to", "SLEEVE", "--composer-amount", "4", "--composer-from-value", "10000"]   # 0.04%
+
+    def test_a_queued_debit_that_takes_a_one_dollar_leg_below_a_dollar_is_refused_not_sent(self):
+        self.feed = feed(live=FULL)                          # HG $2,900: the leg is $1.16 now
+        self.feed["books"]["live"]["pending_requests"] = [T14CreditsQueued.credit("HG", -500.0)]
+        code, line = self.run_it(self.ARGS)                  # at the session: 0.0004 x $2,400 = $0.96
+        self.assertEqual((code, self.posts), (1, []), line)
+        self.assertIn("NOT SENT: operator credit(s) are queued on the executor for HG $-500.00", line)
+        self.assertNotIn("below $1", line)
+        self.assertEqual(self.finals()[-1]["outcome"], "refused")
+        self.assertEqual(mt.leg_after_credits(4 / 10000, 2900.0, [T14CreditsQueued.credit("HG", -500.0)], "HG"), 0.96)
 
 
 class T11BeforeAndAfter(Case):

@@ -129,7 +129,7 @@ UNSYNCED_REPLACE_WAITS = 2.0  # K5 (D1 round 4): a session whose connect-time
                              # open-orders sync has still not ended this many
                              # VENUE_HISTORY_TIMEOUT_S after the connect gave
                              # up on it (40 s; ~55 s after the request was
-                             # sent) is replaced ONCE per outage, by the
+                             # sent) is replaced by a fresh one, by the
                              # keepalive or the guarded read that meets it
                              # first (_unsynced_replace_due). Twice the
                              # bound a guarded read waits for the same answer:
@@ -140,6 +140,23 @@ UNSYNCED_REPLACE_WAITS = 2.0  # K5 (D1 round 4): a session whose connect-time
                              # enough that one met at the decision is replaced
                              # well inside its window (decide_at to cancel_at
                              # is 275 s), backoff and connect included.
+                             # That is the FIRST replacement of an unsynced
+                             # spell; each later one waits twice as long as the
+                             # one before it (D1 round 5: 40, 80, 160, 320, 640
+                             # s), never longer than UNSYNCED_REPLACE_MAX_S
+                             # (_unsynced_replace_interval).
+UNSYNCED_REPLACE_MAX_S = 15 * 60.0  # K5 (D1 round 5): the replacement interval's
+                             # cap. Round 4 replaced ONCE per outage, so a fresh
+                             # session that lost its answer too was kept for as
+                             # long as it lived: every guarded read failed - no
+                             # trade, no /kill flatten sell - where one more
+                             # fresh session would have synced. A schedule keeps
+                             # that cure without churn: a gateway that never
+                             # answers sees one fresh session per ~15 min once
+                             # the doubling reaches the cap (each connect holds
+                             # the loop thread for its 15 s sync wait), and two
+                             # lost answers met at the decision (15:54:25) still
+                             # trade about 2.5 min later, before plan_by.
 
 # IB order states that mean the order can no longer fill.
 # Terminal-dead order statuses - and ONLY these. CORRECTION (2026-08-25,
@@ -562,17 +579,19 @@ class IBAdapter:
         self._outage_alerted = False
         # K5: the outage is a session up but with its open-orders sync unended
         self._open_orders_unsynced = False
-        # K5 (D1 round 4), all per gateway session unless said otherwise:
+        # K5 (D1 rounds 4-5), all per gateway session unless said otherwise:
         # when THIS session was found with its connect-time open-orders sync
         # unended (None: it has ended, or it never was) - while set, the
         # pending open-orders request IS that sync (K4: no other is sent
         # while one is pending); whether a guarded read already waited one
-        # full VENUE_HISTORY_TIMEOUT_S for it on this session; whether the
-        # keepalive's one fresh session of the open OUTAGE is spent; and
-        # whether the open outage saw a reconnect (the recovery notice's words)
+        # full VENUE_HISTORY_TIMEOUT_S for it on this session; how many
+        # unsynced sessions the open OUTAGE has replaced since it last had no
+        # session at all (the replacement schedule's step,
+        # _unsynced_replace_interval); and whether the open outage saw a
+        # reconnect (the recovery notice's words)
         self._sync_pending_since: float | None = None
         self._sync_wait_failed = False
-        self._unsynced_replaced = False
+        self._unsynced_replacements = 0
         self._outage_reconnected = False
         # the position list of THIS session is trusted only once its
         # download is known to have ended (_session_positions); and why the
@@ -1047,6 +1066,21 @@ class IBAdapter:
                 # not a stalled login the moment it drops)
                 self._outage("mark_kind", None)
             self._open_orders_unsynced = False  # no session at all: a plain outage
+            # ... and the replacement schedule starts over (D1 round 5): an
+            # unsynced session that a LATER connect brings is its spell's
+            # first, replaced UNSYNCED_REPLACE_WAITS x the bound after it.
+            # KNOWN, NOT BUILT (D1 round 5, recorded): only a FAILED attempt
+            # restarts it. A session the gateway closed (its FIN) followed by
+            # a reconnect that succeeds at once keeps the spell's interval (up
+            # to 15 min): a gateway-only restart already back by the attempt
+            # its FIN triggers, whose first session loses its answer, is not
+            # replaced in the decision's window (scripted gateway, after an
+            # unsynced night: no trade). A real restart refuses connections
+            # for tens of seconds (the JVM, the login), so that attempt fails
+            # first and lands here (scripted with a 30 s refusal: traded
+            # 161 s after decide_at). The fix would restart the schedule when
+            # the GATEWAY closed the session, not this adapter.
+            self._unsynced_replacements = 0
             self._next_reconnect_ts = ended + self._reconnect_backoff
             self._reconnect_backoff = min(
                 self._reconnect_backoff * 2,
@@ -1076,9 +1110,9 @@ class IBAdapter:
             # (once per session) and then fails closed, KEEPING the session
             # for its late end (_open_orders_refusal). NOT a recovery: the
             # outage stays open (ledger with its cause, the 30-min DOWN
-            # page) until the sync ends (_require_connected), one fresh
-            # session per outage is tried (_unsynced_replace_due), and the
-            # next attempt waits out the backoff as after a failed one. It
+            # page) until the sync ends (_require_connected), a kept session
+            # is replaced on the doubling schedule (_unsynced_replace_due),
+            # and the next attempt waits out the backoff as after a failed one. It
             # used to count as recovered: on a gateway that never answers
             # that request every read dropped the session, every reconnect
             # "recovered", nothing paged.
@@ -1094,7 +1128,8 @@ class IBAdapter:
             logger.warning("IB gateway reconnected, but the new session's "
                            "open-orders sync did not end: still not usable "
                            "(next fresh session no sooner than %.0fs)",
-                           self._next_reconnect_ts - ended)
+                           max(self._next_reconnect_ts - ended,
+                               self._unsynced_replace_interval()))
             self._maybe_outage_alert(ended)
             return
         self._recovered(now)
@@ -1153,7 +1188,7 @@ class IBAdapter:
         self._disconnected_since = None
         self._outage_alerted = False
         self._outage_reconnected = False
-        self._unsynced_replaced = False
+        self._unsynced_replacements = 0     # the next unsynced outage's schedule starts over
         self._reconnect_backoff = RECONNECT_BACKOFF_S
         self._next_reconnect_ts = 0.0
         self._outage("end", time.time())
@@ -1171,9 +1206,16 @@ class IBAdapter:
             # open orders that are not, so nothing can be sold or bought.
             # The service's gateway watch skips its login-stall diagnosis
             # for this cause (the ledger's kind): this page is the one page.
-            tried = (" A fresh gateway session was already tried and its sync "
-                     "did not end either."
-                     if getattr(self, "_unsynced_replaced", False) else "")
+            n = int(getattr(self, "_unsynced_replacements", 0) or 0)
+            tried = ""
+            if n:
+                tried = (" A fresh gateway session was already tried and its "
+                         "sync did not end either;" if n == 1 else
+                         f" {n} fresh gateway sessions were already tried and "
+                         f"none synced;")
+                tried += (f" another is tried after a wait that doubles each "
+                          f"time, up to {UNSYNCED_REPLACE_MAX_S / 60:.0f} min, "
+                          f"until one syncs.")
             why = (f" CAUSE: the gateway connects and answers, but the "
                    f"open-orders request each new session sends at connect goes "
                    f"unanswered, so no open-orders read can be trusted and "
@@ -1360,11 +1402,13 @@ class IBAdapter:
         ago (the mirror's own gate, a moment before). Never raises; False
         while the gateway is unreachable.
 
-        K5 (D1 round 4): a session whose connect-time open-orders sync has
-        not ended is replaced ONCE per outage, when it is old enough and the
-        backoff allows (_unsynced_replace_due) - a one-off lost answer is
-        then cured overnight, before any page, instead of at the decision's
-        first read. A healthy session never reaches that step."""
+        K5 (D1 rounds 4-5): a session whose connect-time open-orders sync
+        has not ended is replaced when the replacement schedule says it is old
+        enough and the backoff allows (_unsynced_replace_due) - a one-off lost
+        answer is then cured overnight, before any page, instead of at the
+        decision's first read, and a gateway whose answers come back without
+        a restart is found by the next fresh session. A healthy session never
+        reaches that step."""
         self._in_keepalive = True
         try:
             if getattr(self, "_sync_pending_since", None) is not None:
@@ -1378,30 +1422,51 @@ class IBAdapter:
             self._in_keepalive = False
 
     def _unsynced_replace_due(self) -> bool:
-        """K5 (D1 round 4): is the current session - its connect-time
-        open-orders sync unended - due to be replaced by a fresh one? Once
-        per outage record, when that sync is UNSYNCED_REPLACE_WAITS x
-        VENUE_HISTORY_TIMEOUT_S old (counted from when the connect gave up
-        on it) and the reconnect backoff allows an attempt now. Spent by
+        """K5 (D1 rounds 4-5): is the current session - its connect-time
+        open-orders sync unended - due to be replaced by a fresh one? When
+        that sync has been unended for the schedule's current interval
+        (_unsynced_replace_interval, counted from when the connect gave up on
+        it) and the reconnect backoff allows an attempt now. Taken by
         whichever call meets it first: the keepalive (an idle night) or a
-        guarded read that must refuse (a one-off met at the decision).
+        guarded read that must refuse (a decision, a /kill flatten, a blend
+        cycle).
 
-        Why once: the outage stays open across that reconnect (_reconnect's
-        K5 branch), so a fresh session that syncs ends it - no DOWN page, no
-        wait at the decision - while one whose sync does not end either (a
-        gateway that never answers that request) is KEPT: the outage then
-        reaches its one DOWN page with one cause, with no reconnect churn
-        (each connect blocks the loop thread for its 15 s sync wait)."""
+        Why a schedule. The outage stays open across a replacement
+        (_reconnect's K5 branch), so a fresh session that syncs ends it - no
+        DOWN page, no wait at the decision - while one whose sync does not end
+        either is KEPT for its late end until the next replacement is due.
+        Round 4 replaced once per outage: when that fresh session lost its
+        answer too (a gateway still warming up after its nightly restart, a
+        spell of unanswered syncs that cleared with no FIN), it was kept for
+        as long as it lived and every guarded read failed - the mirror did
+        not trade and a /kill flatten could not sell - where one more fresh
+        session would have synced. The doubling keeps a gateway that never
+        answers that request free of churn (each connect blocks the loop
+        thread for its 15 s sync wait): two replacements are never closer
+        together than the current interval, since each is counted from the
+        connect of the session it replaces, which came after the one before.
+        The schedule starts over when the outage has no session at all
+        (_reconnect's failure branch) and when the outage ends (_recovered)."""
         since = getattr(self, "_sync_pending_since", None)
-        if (since is None or getattr(self, "_unsynced_replaced", False)
-                or getattr(self, "_disconnected_since", None) is None):
+        if since is None or getattr(self, "_disconnected_since", None) is None:
             return False
         now = time.monotonic()
-        return (now - since >= UNSYNCED_REPLACE_WAITS * VENUE_HISTORY_TIMEOUT_S
+        return (now - since >= self._unsynced_replace_interval()
                 and now >= getattr(self, "_next_reconnect_ts", 0.0))
 
+    def _unsynced_replace_interval(self) -> float:
+        """K5 (D1 round 5): how long the current session's connect-time sync
+        may stay unended, from when the connect gave up on it, before the
+        session is replaced: UNSYNCED_REPLACE_WAITS x VENUE_HISTORY_TIMEOUT_S
+        for the spell's first replacement (40 s), twice the previous interval
+        for each later one (80, 160, 320, 640 s), never more than
+        UNSYNCED_REPLACE_MAX_S (15 min)."""
+        first = UNSYNCED_REPLACE_WAITS * VENUE_HISTORY_TIMEOUT_S
+        n = max(int(getattr(self, "_unsynced_replacements", 0) or 0), 0)
+        return min(first * 2.0 ** min(n, 32), max(UNSYNCED_REPLACE_MAX_S, first))
+
     def _replace_unsynced_session(self) -> None:
-        """K5 (D1 round 4), the keepalive's half of _unsynced_replace_due:
+        """K5 (D1 rounds 4-5), the keepalive's half of _unsynced_replace_due:
         drop the session so that prove_live's reconnect tries a FRESH one.
         The socket is drained first: a late end already waiting in it means
         the sync HAS ended (prove_live's _require_connected then ends the
@@ -1414,11 +1479,18 @@ class IBAdapter:
         self._spend_unsynced_replacement()
 
     def _spend_unsynced_replacement(self) -> None:
-        self._unsynced_replaced = True
+        """One step of the replacement schedule: count it (the next interval
+        doubles) and drop the session; the caller's next venue call
+        reconnects through _reconnect, whose backoff _unsynced_replace_due
+        has already found clear."""
+        waited = time.monotonic() - (self._sync_pending_since or 0.0)
+        self._unsynced_replacements = int(getattr(self, "_unsynced_replacements", 0) or 0) + 1
         logger.warning("IB gateway session's open-orders sync has not ended "
-                       "%.0fs after the connect: one fresh session is tried "
-                       "(the outage stays open until a session syncs)",
-                       time.monotonic() - (self._sync_pending_since or 0.0))
+                       "%.0fs after the connect: fresh session %d of this "
+                       "unsynced outage is tried (if its sync does not end "
+                       "either, it is replaced %.0fs after its connect; the "
+                       "outage stays open until a session syncs)", waited,
+                       self._unsynced_replacements, self._unsynced_replace_interval())
         self._drop_session()
 
     def _positions_pending(self) -> bool | None:
@@ -1566,16 +1638,18 @@ class IBAdapter:
                 return None
 
     def _open_orders_refusal(self, why: str) -> str:
-        """K5 (D1 round 4): what a guarded read that must NOT send its
+        """K5 (D1 rounds 4-5): what a guarded read that must NOT send its
         open-orders request (_open_orders_unanswered said why) does with the
         session, and the text it fails closed with.
           "request": DROPPED, so the next read runs on a fresh session (that
                      request's late end can never reach a new one).
           "sync":    KEPT. Its late end can still land (a gateway answering
                      every session's sync 45 s late now trades), and a drop
-                     cannot help when every new session sends the same
-                     request - except the ONE fresh session per outage that
-                     _unsynced_replace_due allows (a one-off lost answer).
+                     on every read cannot help when every new session sends
+                     the same request - except when the replacement schedule
+                     says it is due (_unsynced_replace_due): the read then
+                     takes the replacement itself, so a decision or a /kill
+                     flatten that meets a lost answer recovers in-process.
           "closed":  nothing to drop; the next call reconnects.
         K4 is untouched either way: nothing is sent while a request is
         pending, and a drop resets the wrapper's requests (ib.py:405-406)."""
@@ -1591,7 +1665,7 @@ class IBAdapter:
             if self._unsynced_replace_due():
                 self._spend_unsynced_replacement()
                 return ("this session's connect-time open-orders sync is still "
-                        "unanswered: nothing is read, and one fresh session is "
+                        "unanswered: nothing is read, and a fresh session is "
                         "tried (restart the gateway if this persists)")
             return ("this session's connect-time open-orders sync is still "
                     "unanswered: nothing read, session kept for its late answer "

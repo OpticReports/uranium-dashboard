@@ -426,8 +426,8 @@ class Minutes:
 
     def quiet(self, tickers, now):
         """{ticker: mirror_brain.quiet_evidence(...) = (UTC end of its last bar WITHOUT volume ending at or
-        before `now`, moved)} on now's session, in what get() read (its traded bars and, with their closes,
-        the bars without volume): mirror_brain.build's half-day evidence"""
+        before `now`, moved, distinct, run)} on now's session, in what get() read (its traded bars and, with
+        their closes, the bars without volume): mirror_brain.build's half-day evidence"""
         import mirror_brain as mb
         e = sr.et_now(now)
         d = e.date().isoformat()

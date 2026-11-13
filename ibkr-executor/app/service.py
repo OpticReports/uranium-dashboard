@@ -320,6 +320,12 @@ def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
     fired: list[str] = []
     down_for = now - float(down_since)
     unsynced = summary.get("currently_down_kind") == KIND_OPEN_ORDERS_UNSYNCED
+    # KNOWN, NOT BUILT (D1 round 5, recorded): this clock restarts at EVERY
+    # flip between the unsynced cause and a plain outage, so a gateway that
+    # alternates logged-in-but-unsynced sessions with crashes, faster than
+    # STALL_DIAG_S, never gets the crash-loop ('loop') page; the adapter's
+    # DOWN page and the PRE-OPEN page still fire. The fix would count the
+    # supervisor's relaunches from the outage's start for 'loop' only.
     try:
         cause_since = float(summary.get("currently_down_kind_since") or down_since)
     except (TypeError, ValueError):
@@ -1027,10 +1033,11 @@ def _outage_keepalive() -> bool:
     refuses the API connection or never completes its handshake, so an
     attempt fails within the connect timeout (15 s) and the next one waits
     out the doubling backoff - the attempts the blend's own surfaces would
-    make, never more of them. Once per outage it may also replace a session
-    whose open-orders sync never ended (the adapter's keepalive: one
-    reconnect, its connect waiting up to 15 s for that sync again). Its
-    alerts are the adapter's own (DOWN once
+    make, never more of them. It may also replace a session whose
+    open-orders sync never ended, on the adapter's doubling schedule (40 s
+    after the connect gave up, then 80, 160 ... s, the interval capped at 15
+    min: one reconnect each, its connect waiting up to 15 s for that sync
+    again). Its alerts are the adapter's own (DOWN once
     past OUTAGE_ALERT_S, RECONNECTED after an alerted outage); it counts no
     blocked call (keepalive). It does not touch the mirror-only backoff cap
     or wording (_mirror_keepalive's). On the loop thread, after the cycles
@@ -1077,7 +1084,11 @@ MIRROR_KILL_BOUND = (
     "20s for an earlier open-orders request still unanswered (once per "
     "gateway session when it is the session's start-up sync); the mirror's "
     "own flatten then proves the session the same way and sends its sells "
-    "one by one under the same per-order waits")
+    "one by one under the same per-order waits. Between ticks the loop's "
+    "keepalive can be inside one reconnect attempt, which holds the loop up "
+    "to 15s against a gateway at its login prompt (the connect handshake's "
+    "timeout) or for a fresh session whose start-up sync does not end (that "
+    "sync's timeout), then up to 5s for its round trip")
 
 
 def _kill_mirror() -> tuple[dict | None, str]:

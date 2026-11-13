@@ -121,15 +121,29 @@ methods (the account's positions; what an order executed) and nothing else.
    (12-24 passed by one ticker). There, and only there, a ticker with a bar
    without volume in the two minutes to the instant counts as trading when
    its own last trade is at most 15 minutes old, the price being that
-   trade's, and one of its bars without volume since moved off that price;
-   SPY's decision bar likewise (the executor accepts SPY priced before the
-   instant only on an early close by its own calendar). All of it only while
-   at least half the trees' tickers really traded in those two minutes (77%,
-   75% and 81% on 2025's three). Each ticker counted so is named in the
-   payload's `problems`, and its breadth gives the real trades and these
-   apart; no bars, older trades, bars whose price never moved (a frozen
-   feed), or too few real trades are refused as on a full day
-   (mirror_brain.py's docstring; tests/test_mirror_halfday.py on both sides).
+   trade's, and one of its bars without volume since moved off that price.
+   For the book that is all "frozen" means: every bar without volume since
+   the ticker's last trade closed at that trade's own price. A feed stuck at
+   another price (a tick off, a half-cent) is counted; what bounds it is the
+   floor below and the 15-minute age. SPY's decision bar counts the same way
+   with a stricter rule, because it is the decision bar: SPY's bars without
+   volume since its last trade must also close at two or more prices, and
+   not three or more in a row at one price up to the instant (2025-11-28,
+   the one real day SPY leaned: 8 prices in 8 bars). The executor accepts
+   SPY priced before the instant only on an early close by its own calendar
+   that the payload's close_et and the brain's clock also give. All of it
+   only while at least half the trees' tickers really traded in those two
+   minutes (77%, 75% and 81% on 2025's three); that floor is the book's, not
+   each engine's (recorded, not built: at the floor an engine can be decided
+   with none of its own decision tickers really trading). Each ticker counted
+   so is named in the payload's `problems`, and its breadth gives the real
+   trades and these apart; no bars, older trades, bars frozen at the last
+   trade's price (SPY: or failing its stricter rule), or too few real trades
+   are refused as on a full day (mirror_brain.py's docstring;
+   tests/test_mirror_halfday.py on both sides). Below the floor the brain has
+   read the whole book: its "not yet" is held 10 s like any other (not
+   re-read on every 3-second request), and says "FMP has not answered for
+   ..." when unanswered tickers are why.
    Known, not built: a session's close counts as final only from 16:15 ET
    (shadow_runner.FINAL_AFTER), on a half-day too, so a parity check or a
    paper-book run made by hand between 13:15 and 16:15 on one still reads
@@ -208,53 +222,70 @@ it with /mirror/resolve.
   yet counted at 1.1% of the fill + $10; a sell with no reported price, or one
   booked by /mirror/resolve, at nothing until TotalCashValue shows it). That
   commission bound assumes IBKR's per-order maximum (1% of the trade plus the
-  fees passed through): it does not hold for a name under about $3.40 a share
-  or on another pricing plan. When the positions differ - a sale booked that
-  never executed, an execution counted twice, a trade by hand IB has
-  reported - or cannot be read: TotalCashValue alone, the rule before. A
-  TotalCashValue that has moved but shows only some of the sells (an IB
-  update landing between them) gets the rule before too: the buys wait for
-  IB's next update. (IB reports a corrected execution as one more execution
-  whose execId differs only after the last period; the adapter keeps the
-  latest correction alone and logs each correction it sees once, raw, at
-  WARNING.) Positions come on IB's position subscription, not on the 3-minute
-  cycle. While TotalCashValue lags, the buys wait as long as the positions
-  trail the fills, rounded up to the next 1.5 s poll; beyond the window, the
-  rule before (measured in simulation: 5 / 30 / 120 s behind
-  cost 6 / 30 / 120 s; unverified on the live gateway until the first live
-  rotation, which records it: the run's buy_cash.positions_confirmed_after_s,
-  the seconds from the last sell's booking to the positions confirming the
-  sells, also logged at INFO, since the run record is dropped when the run
-  ends). Such a hold is alerted as a warning ("not yet confirmed by the
-  account's positions; re-read every step") and in red only once it has
-  lasted 10 s. Keep at least 1.1% of a day's sells + $10 an order outside
-  the book (about $1.3k on a $117k rotation): below that, a commission IB had
-  not reported when its sell was booked holds a lagging day's buys. A live
-  state file that holds shares while no live book is built is alerted in red
-  at every boot.
+  fees passed through): it may not hold for a large order of a name under
+  about $3.40 a share, and does not on another pricing plan. When the
+  positions differ - a sale booked that never executed, an execution counted
+  twice, a trade by hand IB has reported - or cannot be read: TotalCashValue
+  alone, the rule before. A TotalCashValue that has moved but shows only some
+  of the sells (an IB update landing between them) gets the rule before too:
+  on a day the sells it does not show yet exceed the cash outside the book,
+  the buys wait for IB's next update. (IB reports a corrected execution as
+  one more execution whose execId differs only after the last period; the
+  adapter keeps the latest correction alone and logs each correction it sees
+  once, raw, at WARNING.) Positions come on IB's position subscription, not
+  on the 3-minute cycle. While TotalCashValue lags, on a day the sells exceed
+  the cash outside the book, the buys wait as long as the positions trail the
+  fills, rounded up to the next 1.5 s poll; beyond the window, the rule
+  before (measured in simulation: 5 / 30 / 120 s behind cost 6 / 30 / 120 s).
+  On any other day TotalCashValue alone covers the book and the buys go at
+  the first look. How far the positions trail is unverified on the live
+  gateway. The run's buy_cash.positions_confirmed_after_s records it - the
+  seconds from the last sell's booking, to the second, to the first look at
+  which the positions agree: an upper bound on how far they trailed that
+  booking, to a 1.5 s step - only when TotalCashValue had not yet moved at
+  that look (None otherwise, nothing logged); it is also logged at INFO,
+  since the run record is dropped when the run ends. Such a hold is alerted
+  as a warning ("not yet confirmed by the account's positions; re-read every
+  step": IB's lag, or a real difference) and in red only once it has lasted
+  10 s; a disagreement reading the positions again cannot change (no record
+  of them from before the run, a holding that is not a whole stock lot) in
+  red at once, and no warning follows a red already sent. Keep at least 1.1%
+  of a day's sells + $10 an order outside the book (about $1.3k on a $117k
+  rotation): below that, a commission IB had not reported when its sell was
+  booked holds a lagging day's buys. A live state file that holds shares
+  while no live book is built is alerted in red at every boot.
 - What the guard cannot see, and the operating rule. While TotalCashValue
   lags, three things move the account's cash with nothing the guard reads
   showing them, and the buys can then borrow beyond the account's cash
-  outside the book (each measured by the 2026-11-13 safety review): (1) cash
-  leaving with no position moving - a withdrawal, a fee - as much as it
-  exceeds that cash; (2) a trade by hand that IB has not yet reported as a
-  position when the guard reads - a purchase, as much as its cost exceeds
-  that cash; (3) a price correction or bust of a sell after it was booked -
-  up to its size beyond that cash. The rule before this held such a day's
-  buys until IB caught up only when the day's sells exceeded the cash outside
-  the book. Operating rule, for (1) and (2): no withdrawal pending or
-  posting, and no trade by hand, in the mirror's account on a session day
+  outside the book: (1) cash leaving with no position moving - a withdrawal,
+  a fee - as much as it exceeds that cash; (2) a trade by hand that IB has
+  not yet reported as a position when the guard reads - a purchase, as much
+  as its cost exceeds that cash; (3) a price correction of a sell after it
+  was booked - up to its size beyond that cash. The 2026-11-13 safety review
+  measured (1), (2) and, of (3), corrections of the price. For (1) and (2),
+  the rule before this held such a day's buys until IB caught up only when
+  the day's sells exceeded the cash outside the book. (3) is new with this
+  guard: the rule before never borrowed on it (a correction is at most the
+  day's sells), and it can happen only on a day the sells exceed the cash
+  outside the book. A bust of a sell moves a position (its shares come back):
+  it is closed once IB reports that position (the guard takes TotalCashValue
+  alone; the post-trade check halts on the shares); before that it is (2)'s
+  exposure - at most the day's sells, so, like (3), new with this guard and
+  only on such a day. Operating rule, for (1) and (2): no withdrawal pending
+  or posting, and no trade by hand, in the mirror's account on a session day
   until that session's run is done (the run: roughly 15:45-16:05 ET;
   12:45-13:05 on a half-day). When IBKR posts a withdrawal is not verified
-  here: one asked for earlier in the day may post during the run. (A
-  trade by hand moves a position once IB has reported its position: the
-  guard then waits for TotalCashValue, and the post-trade check finds the
-  difference and halts the book.) Nothing closes (3): it needs a correction
-  larger than the cash outside the book inside TotalCashValue's lag. The
-  book never sees a correction after booking (the post-trade check compares
-  shares, not cash): its cash stays over by it until it is debited with POST
-  /mirror/credit, and the pre-trade gate refuses a session only once that
-  over-count exceeds the cash outside the book.
+  here: one asked for earlier in the day may post during the run. (A trade
+  by hand moves a position once IB has reported its position: the guard then
+  takes TotalCashValue alone and waits for it only on a day the sells exceed
+  the cash outside the book; on any other day a purchase TotalCashValue does
+  not yet show is (2)'s exposure, as under the rule before, and the
+  post-trade check then halts the book.) Nothing closes (3): it needs a
+  correction larger than the cash outside the book inside TotalCashValue's
+  lag. The book never sees a correction after booking (the post-trade check
+  compares shares, not cash): its cash stays over by it until it is debited
+  with POST /mirror/credit, and the pre-trade gate refuses a session only
+  once that over-count exceeds the cash outside the book.
 - GET /mirror/feed (READ_TOKEN): the books, for the parity monitor.
 - /status and /health carry a mirror block only when the mirror is enabled.
 
@@ -363,9 +394,10 @@ session was made, is done and found no problem (the executor clears that
 check at the end of every run and on /mirror/adjust: re-run the planner after
 the next session's check); on a session day from its paste cutoff (15:00 ET,
 12:00 on a half-day) while that day's session has not run yet ("today's
-session has not run yet: re-run after it and its post-trade check": a line
-printed then would be for the next session, and today's, run in between,
-would void it); when --to is not above the book or is more than 10x it; when
+session has not run yet: re-run after it and its post-trade check (if the
+executor missed today's session, re-run after midnight ET)": a line printed
+then would be for the next session, and today's, run in between, would void
+it); when --to is not above the book or is more than 10x it; when
 an engine is already above its Composer share at that size (it names the
 smallest --to at which none is, or says it is beyond 10x); and when a dollar
 figure on the feed is not finite or is beyond $1,000,000,000 (a malformed
@@ -384,8 +416,12 @@ move before that session, less that session's commissions. Then, in order:
     and the line in (b) checks the executor's own figure. Render ->
     ibkr-executor -> Environment: MIRROR_MAX_BOOK_USD = the cap, "Save,
     rebuild and deploy", never between 15:15 and 16:05 ET (12:15-13:05 on a
-    half-day). The restart logs the IB gateway in again: approve the IB Key
-    push.
+    half-day). Change only MIRROR_MAX_BOOK_USD in that deploy, not
+    MIRROR_LIVE_ENGINES: a sleeve it drops stays in the book's state, not
+    frozen, until the executor's first tick with the IB gateway logged in
+    (mirror.py _reconcile_sleeves), so a line pasted before then queues the
+    other credits and stops at that one. The restart logs the IB gateway in
+    again: approve the IB Key push.
 (b) The credits. When the executor is back, paste the plan's ONE line into
     Render -> ibkr-executor -> Shell, once, before 15:00 ET on a weekday
     (12:00 on a half-day) or any time on a weekend, and by the cutoff of the
@@ -424,7 +460,12 @@ move before that session, less that session's commissions. Then, in order:
     and cannot be withdrawn: after that session, re-run the planner and paste
     its new line. An error is printed as its type and message with the token
     masked. The note reads "scale-up to $<to> at Composer's split of
-    <snapshot date>".
+    <snapshot date>". Re-run the planner after ANY /mirror/adjust and paste
+    only its new line: an adjust on the evening of the plan's last session is
+    followed by that evening's tick making that session's post-trade check
+    again - clean when the shares are as booked (it compares shares, not
+    cash) - so an older line would still send, its credits sized on the book
+    before the adjust.
 (c) The executor applies them at that session's decision (15:54 ET, 12:54
     on a half-day): first the dividends due, then the credits, smallest
     first, each only if the account's cash (IBKR's TotalCashValue) covers
@@ -481,6 +522,15 @@ The brain needs a small always-on service: stdlib Python, no disk.
 It is in render.yaml (owner, 11-10); the block above is its shape. Because it
 redeploys when fixtures/approved changes, an approved symphony change reaches
 the mirror the same session it reaches main.
+
+The half-day rule (2026-11-13: round 4 and its round-5 fixes): redeploy
+composer-brain and ibkr-executor TOGETHER, and before Fri 2026-11-27, the
+next half-day.
+The executor's own half-day check is about the calendar and SPY's time only
+(mirror.py _validate); the frozen-feed and real-trade floors live in the
+brain. A patched executor with the earlier brain accepts what that brain
+still publishes on a half-day with no trade after 12:40 (prices moving) or
+with a frozen tail, and trades it: a review measured both traded.
 
 After the merge, in the Render dashboard (values are typed there, never in
 the repo or a chat):

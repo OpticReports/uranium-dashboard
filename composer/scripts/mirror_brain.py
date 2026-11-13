@@ -79,15 +79,28 @@ NEVER A TRADEABLE DECISION ON DEAD DATA (measured on 83 sessions of FMP minutes,
   own last trade is at most QUIET_TRADE_MAX_S old (the preview's FRESH_MIN: the price it is given is that
   trade's, as on any day), AND at least one of its bars without volume since that trade, up to the
   instant, closed off the trade's price (any bar, not the one at the instant: a live fund can close a
-  minute where it last traded). A feed that keeps publishing bars at volume 0 and a frozen price is
-  frozen, not quiet: every ticker so counted on 2025's half-days moved. SPY's decision bar counts as
-  published when FMP's SPY bar ending AT the instant has no volume and SPY passes the same tests. All of
-  it applies only while at least HALF_DAY_REAL_MIN of the trees' tickers REALLY traded within
-  BREADTH_AGE_S (2025's half-days: 77%, 75%, 81%): below that the full-day rule alone decides, and
-  refuses. Every ticker counted that way is named in `problems`, and quotes.breadth then gives the real
-  trades ('recent') and the counted-on-bars-without-volume ('leaned') apart. No bar near the instant, a
-  last trade older than that, bars whose price never moved, or too few real trades count as on a full
-  day: a dead, stale or frozen feed on a half-day is still refused, and a full day's payload is unchanged.
+  minute where it last traded). For the book that is ALL "frozen" means: every bar without volume since
+  the ticker's last trade closed at that trade's own price (a feed replaying its last print at volume 0);
+  every ticker counted on 2025's half-days moved. A feed stuck at ANOTHER price (a tick off, a half-cent)
+  passes that test and is counted: it is bounded by the floor below and the 15-minute age, its price being
+  its own last trade's. SPY has a stricter rule, because its bar is the decision bar: SPY's decision bar
+  counts as published when FMP's SPY bar ending AT the instant has no volume, SPY passes the same tests,
+  AND its bars without volume since its last trade closed at SPY_QUIET_DISTINCT_MIN or more different
+  prices with fewer than SPY_QUIET_STUCK_RUN in a row at one price up to the instant (spy_frozen; on
+  2025-11-28, the one real day SPY leaned, 8 different closes in 8 bars, the last one unrepeated; across
+  the 18 archived sessions (2024's and 2025's half-days and the sessions next to them) SPY's real closes
+  ended a run of 3 or more alike at 12 of 5,940 minutes). The book is not held to it: of the 7,381
+  ticker-minutes the book's rule would count on those 18 days (10:00 to the instant), 18.4% have a single
+  close and 9.7% end in 4 or more alike. All of it applies only while at least HALF_DAY_REAL_MIN of the
+  trees' tickers REALLY traded within BREADTH_AGE_S (2025's half-days: 77%, 75%, 81%): below that the
+  full-day rule alone decides, and refuses. That floor is the book's, not each engine's (recorded, not
+  built): at the floor an engine can be decided with none of its own decision tickers really trading (a
+  review's construction on 2025's half-days, 24 of 48 really trading: HARV, both of its decision tickers
+  counted on bars without volume). Every ticker counted that way is named in `problems`, and
+  quotes.breadth then gives the real trades ('recent') and the counted-on-bars-without-volume ('leaned')
+  apart. No bar near the instant, a last trade older than that, bars frozen at the last trade's price
+  (SPY: or failing its stricter rule), or too few real trades count as on a full day: a dead, stale or
+  frozen feed on a half-day is still refused, and a full day's payload is unchanged.
 
 THE TREE-VERSION GATE. A Composer-keyed job (mirror_attest.py) posts each symphony's live version and
 the sha1 of its canonical live tree (shadow_runner.tree_sha1, the one function used for the approved
@@ -113,9 +126,10 @@ ratio}] (the last ACTIONS_DAYS calendar days), actions_complete (FMP's dividend 
 read for every ticker), sync, quotes, problems}. quotes.breadth: {recent (the trees' tickers with a trade
 within within_s of the instant), of, share (the share counted, against min_share), min_share, within_s},
 and on a half-day whose rule weighed bars without volume also leaned (counted on them), counted (recent +
-leaned: share's numerator), frozen (bars without volume near the instant whose price never moved: not
-counted), real_share (recent / of) and real_min_share. On a half-day decision_bar.complete can hold with
-spy_utc before end_utc (by at most QUIET_TRADE_MAX_S): SPY priced at its own last trade.
+leaned: share's numerator), frozen (weighed and NOT counted, a frozen feed: every bar without volume since
+the ticker's last trade closed at that trade's own price; SPY: or failing its stricter rule), real_share
+(recent / of) and real_min_share. On a half-day decision_bar.complete can hold with spy_utc before end_utc
+(by at most QUIET_TRADE_MAX_S): SPY priced at its own last trade.
 `prices` are the executor's sizing reference, never a fill. Nothing here is a trade instruction for Composer.
 """
 import datetime
@@ -147,7 +161,11 @@ QUIET_TRADE_MAX_S = pc.FRESH_MIN * 60   # half-day only: a ticker FMP shows a ba
 HALF_DAY_REAL_MIN = 0.50  # ... and only while at least this share of the trees' tickers REALLY traded (a bar with volume)
                           # within BREADTH_AGE_S of the instant (2025's three half-days: 77%, 75%, 81%)
 QUIET_MOVE_TOL = 1e-9     # a bar without volume "moved" off its ticker's last trade when its close differs from that
-                          # trade's by more than this fraction (float noise only: a cent on a $1,000 fund is 1e-5)
+                          # trade's by more than this fraction (float noise only: a cent on a $1,000 fund is 1e-5);
+                          # two closes within it of each other are one price
+SPY_QUIET_DISTINCT_MIN = 2  # SPY only (its bar is the decision bar): its bars without volume since its last trade close
+                          # at at least this many different prices ...
+SPY_QUIET_STUCK_RUN = 3   # ... and fewer than this many of them in a row, up to the instant, at one price (spy_frozen)
 LAG_MAX = 0.15            # still publishing: more than this share of the recently traded tickers have their last
                           # bar ending a minute BEFORE the instant (complete days: median 2%, max 6.5% of 83)
 SETTLE_S = 45             # seconds after the instant a bar still being published is waited for; then what FMP
@@ -388,10 +406,16 @@ def quiet_evidence(bars, day, tz, now):
     """the half-day evidence in ONE FMP answer for a ticker (fetch_minutes quiet=True: its traded bars, and
     under '_quiet' {bar start: close} the bars it published WITHOUT volume), as of `now` on session `day`
     (tz: ET): None when no bar without volume ends at or before `now`; else (the UTC end of the last one,
-    moved). moved: at least one bar without volume ending after the ticker's last TRADED bar (the last
-    ending at or before `now`) and at or before `now` closed off that trade's price by more than
-    QUIET_MOVE_TOL. Any bar, not the one at the instant: a live fund can close a minute at its last trade's
-    price; a feed replaying the last print at volume 0 never moves. No traded bar: moved is False"""
+    moved, distinct, run), over its bars without volume ending after its last TRADED bar (the last ending
+    at or before `now`) and at or before `now`:
+      moved     at least one closed off that trade's price by more than QUIET_MOVE_TOL. Any bar, not the
+                one at the instant: a live fund can close a minute at its last trade's price; a feed
+                replaying the last print at volume 0 never moves
+      distinct  how many different prices they closed at
+      run       how many of them in a row, ending with the latest, closed at the latest one's price
+    (closes within QUIET_MOVE_TOL of each other are one price). The book's tickers are held to moved; SPY,
+    whose bar is the decision bar, to all three (spy_frozen). No traded bar: moved False, and the counts
+    are over every bar without volume up to now"""
     quiet = bars.get("_quiet") if isinstance(bars, dict) else None
     if not isinstance(quiet, dict):
         return None
@@ -408,16 +432,50 @@ def quiet_evidence(bars, day, tz, now):
         end = end_of(hm)
         if end is not None and end <= now and (trade is None or end > trade[0]):
             trade = (end, float(c))
-    last, moved = None, False
+    last, since = None, []
     for hm, c in quiet.items():
         end = end_of(hm) if isinstance(hm, str) and _pos(c) else None
         if end is None or end > now:
             continue
         if last is None or end > last:
             last = end
-        if trade is not None and end > trade[0] and abs(float(c) - trade[1]) > QUIET_MOVE_TOL * trade[1]:
-            moved = True
-    return None if last is None else (last, moved)
+        if trade is None or end > trade[0]:
+            since.append((end, float(c)))
+    if last is None:
+        return None
+    closes = [c for _, c in sorted(since)]
+
+    def one(a, b):
+        return abs(a - b) <= QUIET_MOVE_TOL * max(a, b)
+    moved = trade is not None and any(abs(c - trade[1]) > QUIET_MOVE_TOL * trade[1] for c in closes)
+    distinct, ref = 0, None
+    for c in sorted(closes):
+        if ref is None or not one(c, ref):
+            distinct, ref = distinct + 1, c
+    run = 0
+    for c in reversed(closes):
+        if not one(c, closes[-1]):
+            break
+        run += 1
+    return last, moved, distinct, run
+
+
+def spy_frozen(ev):
+    """None when SPY's half-day evidence (quiet_evidence) reads as a live feed; else why not, the words a
+    refusal carries. SPY's bar is the decision bar, so SPY alone is held to more than the book: its bars
+    without volume since its last trade moved off that trade's price, closed at SPY_QUIET_DISTINCT_MIN or
+    more different prices, and fewer than SPY_QUIET_STUCK_RUN of them in a row up to the instant closed at
+    one price (a feed stuck one tick off, or on a half-cent, never moves the way a live SPY does)"""
+    if not isinstance(ev, tuple) or len(ev) != 4:
+        return "no evidence that SPY's bars without volume move"
+    _, moved, distinct, run = ev
+    if not moved:
+        return "none of SPY's bars without volume since that trade moved off its price"
+    if distinct < SPY_QUIET_DISTINCT_MIN:
+        return "every one of SPY's bars without volume since that trade closed at one price, not the trade's"
+    if run >= SPY_QUIET_STUCK_RUN:
+        return f"the last {run} of SPY's bars without volume, up to the instant, closed at one price"
+    return None
 
 
 def _stamp_iso(stamp, tz):
@@ -461,9 +519,10 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
     wall clock (a test seam); budget: seconds for FMP's minutes (default FMP_BUDGET_S); diag: a dict
     that receives 'feed' {engine: why it is unavailable for a reason a later read of the feed could
     change} (the pinned path settles on it; not part of the payload). quiet: (tickers, now) -> {ticker:
-    quiet_evidence(...) = (UTC end of its last 1-minute bar WITHOUT volume ending at or before now, moved)},
-    read only on a half-day (the module docstring); default: the quotes seam's own `quiet` attribute, or,
-    when this build reads FMP itself, what those reads saw."""
+    quiet_evidence(...) = (UTC end of its last 1-minute bar WITHOUT volume ending at or before now, moved,
+    distinct, run)}, read only on a half-day (the module docstring; an answer of any other shape is no
+    evidence); default: the quotes seam's own `quiet` attribute, or, when this build reads FMP itself, what
+    those reads saw."""
     wall = wall or _utcnow
     started = wall()
     now = now or started
@@ -553,13 +612,14 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
     tick = list(cap.get("tick") or [])
     short = set(cap.get("short") or [])
     traded = set(cap.get("traded") or [])
-    still = {}                                     # half-day: {ticker: (end of its last bar WITHOUT volume, moved)}
-    if half_day(day):
+    still = {}                                     # half-day: {ticker: quiet_evidence(...): (end of its last bar WITHOUT
+    if half_day(day):                              # volume, moved, distinct, run)}; any other shape is no evidence
         src = quiet if quiet is not None else getattr(quotes, "quiet", None)
         try:
             got = (src(sorted(set(tick) | {pc.GATE[0]}), now) or {}) if callable(src) else {}
-            still = {t: (v[0], v[1] is True) for t, v in got.items()
-                     if isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], datetime.datetime) and v[0] <= now}
+            still = {t: (v[0], v[1] is True, v[2], v[3]) for t, v in got.items()
+                     if isinstance(v, tuple) and len(v) == 4 and isinstance(v[0], datetime.datetime) and v[0] <= now
+                     and all(isinstance(x, int) and not isinstance(x, bool) for x in v[2:])}
         except Exception:  # noqa: BLE001
             still = {}
 
@@ -576,19 +636,25 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
     def quiet_near(t):
         """half-day only (still is empty otherwise): FMP published a bar for t WITHOUT volume within
         BREADTH_AGE_S of the instant, and t's own last trade, its price, is at most QUIET_TRADE_MAX_S old
-        (whether one of its bars without volume since moved off that price: still[t][1])"""
+        (whether its bars without volume since read as a live feed: lively(t))"""
         a, q = age(t), still.get(t)
         return a is not None and a <= QUIET_TRADE_MAX_S and q is not None and (now - q[0]).total_seconds() <= BREADTH_AGE_S
+
+    def lively(t):
+        """t's bars without volume since its last trade are not a frozen feed: one of them moved off that trade's
+        price (the book); SPY, whose bar is the decision bar, also passes spy_frozen"""
+        q = still.get(t)
+        return q is not None and q[1] and (t != pc.GATE[0] or spy_frozen(q) is None)
     n_real = sum(1 for t in tick if real(t))
     relax = bool(still) and bool(tick) and n_real >= HALF_DAY_REAL_MIN * len(tick)   # below the floor: the full-day rule
 
     def recent(t):
-        return real(t) or (relax and quiet_near(t) and still[t][1])
+        return real(t) or (relax and quiet_near(t) and lively(t))
     live = [t for t in tick if recent(t)]
     share = len(live) / len(tick) if tick else 0.0
     weighed = sorted(t for t in tick if quiet_near(t) and not real(t))  # what the half-day rule weighed ...
     leaned = [t for t in weighed if recent(t)]                          # ... counted
-    frozen = [t for t in weighed if not still[t][1]]                    # ... its bars never moved: not counted
+    frozen = [t for t in weighed if not lively(t)]                      # ... a frozen feed: not counted
     breadth = out["quotes"]["breadth"] = {"recent": len(live), "of": len(tick), "share": round(share, 4),
                                           "min_share": BREADTH_MIN, "within_s": BREADTH_AGE_S}
     halt, half, spy_quiet = [], [], False
@@ -598,15 +664,15 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
         sq = still.get(pc.GATE[0])
         spy_quiet = (spy is not None and spy != now and sq is not None and sq[0] == now      # half-day: SPY's bar at the
                      and (now - spy).total_seconds() <= QUIET_TRADE_MAX_S)                    # instant, without volume
-        bar = spy == now or (spy_quiet and relax and sq[1])
+        stuck = spy_frozen(sq) if spy_quiet else None                                         # ... not a frozen feed
+        bar = spy == now or (spy_quiet and relax and stuck is None)
         out["decision_bar"] = {"end_utc": _iso(now), "spy_utc": _iso(spy) if spy else None, "complete": bar}
         if not bar:
             halt.append(f"SPY's price is not from the bar ending {e:%H:%M:%S} ET (its last traded bar ends "
                         f"{sr.et_now(spy).strftime('%H:%M:%S') if spy else 'nowhere today'})")
             if spy_quiet and relax:
-                half.append(f"half-day: FMP's SPY bar ending {e:%H:%M:%S} ET has no volume, but none of SPY's bars without "
-                            f"volume since its last trade (bar ending {sr.et_now(spy):%H:%M:%S} ET) moved off that trade's "
-                            f"price: a frozen feed is not taken as the decision bar")
+                half.append(f"half-day, a frozen feed: {stuck} (its last trade: the bar ending {sr.et_now(spy):%H:%M:%S} "
+                            f"ET; FMP's SPY bar ending {e:%H:%M:%S} ET has no volume): not taken as the decision bar")
         elif spy != now:
             half.append(f"half-day: FMP's SPY bar ending {e:%H:%M:%S} ET has no volume; the decision bar is taken as "
                         f"published and SPY is priced at its own last trade (bar ending {sr.et_now(spy):%H:%M:%S} ET; a "
@@ -629,9 +695,13 @@ def build(now=None, quotes=None, fetch=None, pinned=False, attest=None, wall=Non
                     f"really traded in the {BREADTH_AGE_S // 60} minutes: "
                     + ", ".join(f"{t} {sr.et_now(stamps[t][1]):%H:%M}" for t in leaned))
     if frozen:
+        why = spy_frozen(still[pc.GATE[0]]) if pc.GATE[0] in frozen and still[pc.GATE[0]][1] else None   # SPY's own rule
         half.append(f"half-day ({out['close_et']} close): {len(frozen)} ticker(s) with bars without volume near "
-                    f"{e:%H:%M:%S} ET NOT counted: none of their bars since their last trade moved off its price (a "
-                    f"frozen feed): " + ", ".join(f"{t} {sr.et_now(stamps[t][1]):%H:%M}" for t in frozen))
+                    f"{e:%H:%M:%S} ET NOT counted: "
+                    + (f"a frozen feed ({why}" + ("; the others' never moved off their last trade's price" if len(frozen) > 1
+                                                  else "") + ")" if why else
+                       "none of their bars since their last trade moved off its price (a frozen feed)")
+                    + ": " + ", ".join(f"{t} {sr.et_now(stamps[t][1]):%H:%M}" for t in frozen))
     out["problems"] += halt + half
     need = require_attestation()
     unattested, aged = [], []
@@ -806,7 +876,8 @@ class Bars:
 
     def quiet(self, tickers, now):
         """{ticker: quiet_evidence(...) = (UTC end of its last bar WITHOUT volume ending at or before now,
-        moved)} in what was read: the evidence build() weighs on a half-day (the module docstring)"""
+        moved, distinct, run)} in what was read: the evidence build() weighs on a half-day (the module
+        docstring)"""
         with self.lock:
             got = {t: self.got.get(t) for t in tickers}
         return {t: x for t, b in got.items() for x in [quiet_evidence(b, self.day, self.tz, now)] if x is not None}
@@ -814,10 +885,12 @@ class Bars:
     def load(self, tickers, tick=None):
         """read every ticker's last traded bar ending at or before T. NotPublished while SPY's bar ending
         at T is not in (one call); on a half-day, a SPY bar ending at T WITHOUT volume is in when SPY's
-        own last trade is at most QUIET_TRADE_MAX_S old and one of SPY's bars without volume since that
-        trade moved off its price, and - once the book is read - while at least HALF_DAY_REAL_MIN of `tick`
-        (the trees' tickers: tree_universe) REALLY traded within BREADTH_AGE_S of T; below that floor the
-        answer is the full-day one, word for word (build() takes the same rule)"""
+        own last trade is at most QUIET_TRADE_MAX_S old and its bars without volume since that trade are
+        not a frozen feed (spy_frozen: the refusal says so first), and - once the book is read - while at
+        least HALF_DAY_REAL_MIN of `tick` (the trees' tickers: tree_universe) REALLY traded within
+        BREADTH_AGE_S of T (build() takes the same rule). Below that floor: NotSettled while FMP has not
+        answered for one of `tick` (it may have traded); else the full-day answer, word for word. Either is
+        held REBUILD_EVERY_S: the book was read whole, and the next request must not read it again at once"""
         try:
             q, probs = pc.minute_quotes({pc.GATE[0]}, self.T, self.key, fetch=self.fetch, budget=self.budget)
         except Exception as exc:  # noqa: BLE001
@@ -826,18 +899,21 @@ class Bars:
         if spy != self.T:
             ev = self.quiet([pc.GATE[0]], self.T).get(pc.GATE[0]) if half_day(self.day) else None
             at_T = ev is not None and ev[0] == self.T and (self.T - spy).total_seconds() <= QUIET_TRADE_MAX_S
-            if not (at_T and ev[1]):
+            why = spy_frozen(ev) if at_T else None
+            if not at_T or why:                        # the key words first: the executor keeps 160 characters of it
                 raise NotPublished(f"SPY's last traded bar ends {sr.et_now(spy):%H:%M:%S} ET"
-                                   + (" (half-day: FMP's SPY bar ending at the instant has no volume, and none of SPY's "
-                                      "bars without volume since that trade moved off its price: a frozen feed)"
-                                      if at_T else ""))
+                                   + (f" (half-day, a frozen feed: {why}; FMP's SPY bar ending at the instant has no "
+                                      f"volume)" if at_T else ""))
         self.q, self.probs = pc.minute_quotes(tickers, self.T, self.key, fetch=self.fetch, budget=self.budget)
         now_spy = (self.q.get(pc.GATE[0]) or (None, spy))[1]
         if now_spy != self.T and tick is not None:      # SPY's decision bar leans on the half-day rule: its floor
             tick = sorted(set(tick))
             real = sum(1 for t in tick if t in self.q and (self.T - self.q[t][1]).total_seconds() <= BREADTH_AGE_S)
             if not tick or real < HALF_DAY_REAL_MIN * len(tick):
-                raise NotPublished(f"SPY's last traded bar ends {sr.et_now(now_spy):%H:%M:%S} ET")
+                late = self.unanswered(tick)
+                if late:
+                    raise NotSettled(late)
+                raise NotPublished(f"SPY's last traded bar ends {sr.et_now(now_spy):%H:%M:%S} ET", retry_s=REBUILD_EVERY_S)
 
     def unanswered(self, matter=None):
         """None, or the tickers FMP has not answered for (refused, failed, slower than the budget).
@@ -1012,8 +1088,10 @@ class Pinned:
 def pinned_attempt(history=None, attest=None, key=None, wall=None, fetch_minutes=None, settle_s=SETTLE_S,
                    wait_s=SETTLE_WAIT_S):
     """the attempt(T) of a Pinned. FMP's bars as of T are loaded (kept per T across attempts, so a retry
-    asks only for what was missing). NotPublished while SPY's bar ending at T is not in, or, for settle_s
-    past T by the wall clock, while the minute is still being published. NotSettled while FMP has not
+    asks only for what was missing). NotPublished while SPY's bar ending at T is not in (on a half-day also
+    on a frozen SPY, and while SPY leans on the half-day rule below its floor of real trades - NotSettled
+    when FMP has not answered for one of the trees' tickers: Bars.load), or, for settle_s past T by the
+    wall clock, while the minute is still being published. NotSettled while FMP has not
     answered for a ticker a tree reads or can hold (no build is made on a partial answer), and after a
     build in which the decision bar is not complete or an engine is unavailable for a feed reason:
     until wait_s past T, whatever the reason; from then on only while a BOOK-level reason stands (SPY's

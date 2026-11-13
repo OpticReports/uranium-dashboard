@@ -399,13 +399,18 @@ def test_r1_oneoff_a_lost_connect_time_answer_is_replaced_before_any_page_and_th
 
 
 @needs_ib_async
-def test_r2_never_first_one_page_one_cause_one_fresh_session_then_every_read_fails_at_once(wire):
+def test_r2_never_first_one_page_one_cause_fresh_sessions_on_the_schedule_then_every_read_fails_at_once(wire):
     """never_first, the overnight shape then the decision: no session's connect-time request is ever answered.
-    ONE fresh session is tried (it does not sync either) and kept; the outage pages ONCE, naming the cause in true
-    words (open orders unreadable; positions and cash ARE read); the service's watch adds no diagnosis at any
-    point. At the decision the first read waits the bound for the session's sync, every later one fails at once on
-    the same session (before: 20 s each, and a drop + a 15 s reconnect for most), nothing is ever sent while a
-    request is pending, and the gateway restart the page asks for ends it."""
+    Fresh sessions are tried (none syncs) and each is kept until the next is due; the outage pages ONCE, naming the
+    cause in true words (open orders unreadable; positions and cash ARE read); the service's watch adds no
+    diagnosis at any point. At the decision the first read waits the bound for the session's sync, every later one
+    fails at once on the same session (before: 20 s each, and a drop + a 15 s reconnect for most), nothing is ever
+    sent while a request is pending, and the gateway restart the page asks for ends it.
+    D1 round 5 (counts re-baselined on purpose): round 4 tried ONE fresh session and kept it for good; the schedule
+    replaces a kept one 2 x the bound after its connect, then 4 x, 8 x ... So over the 3.5 s night (scaled: the bound
+    0.3 s, the connect's sync wait 0.3 s, a keepalive every ~0.1 s): 2 drops, 2 reconnects - the boot session
+    (sync given up at ~0 s) at ~0.6 s, the next (~0.9 s) at ~2.1 s - and 3 gateway sessions; the third is due
+    only 8 x the bound after its connect (~4.8 s), after the decision's reads below."""
     import app.service as svc
     a, gw = wire(lambda s, n: None if n == 1 else 0)
     pages, st = [], {}
@@ -422,9 +427,9 @@ def test_r2_never_first_one_page_one_cause_one_fresh_session_then_every_read_fai
     assert len(wire.sent) == 1 and "DOWN for over" in wire.sent[0], wire.sent
     page = wire.sent[0]
     assert ("open orders unreadable" in page and "positions and cash are read normally" in page
-            and "CAUSE" in page and "fresh gateway session was already tried" in page
+            and "CAUSE" in page and "fresh gateway session" in page and "already tried" in page
             and "Restart the gateway" in page and "cannot read the account" not in page), page
-    assert a.drops == 1 and a.connects == 1 and gw.sessions == 2        # replaced ONCE, then kept
+    assert a.drops == 2 and a.connects == 2 and gw.sessions == 3, (a.drops, a.connects)   # on the schedule
     assert a.outages.history == []                                      # ONE outage, still open
     t = time.monotonic()
     with pytest.raises(ib_mod.ExecutorConnectionError, match="still unanswered"):
@@ -438,7 +443,7 @@ def test_r2_never_first_one_page_one_cause_one_fresh_session_then_every_read_fai
         with pytest.raises(ib_mod.ExecutorConnectionError, match="still unanswered"):
             a._all_trades(refresh=True)
         assert time.monotonic() - t < 0.15                              # all three at once: no second wait
-    assert a.drops == 1 and gw.sessions == 2 and len(wire.sent) == 1   # no churn, no second page
+    assert a.drops == 2 and gw.sessions == 3 and len(wire.sent) == 1   # no churn, no second page
     assert gw.count("16") == 0 and a.k4_violations == 0 and a.k4_sent == 0
     gw.policy = lambda s, n: 0                          # the gateway restart the page asks for:
     gw.drop()                                           # its FIN, then a gateway that answers
@@ -741,23 +746,43 @@ def test_m3_oneoff_overnight_is_cured_before_any_page_and_the_decision_trades_wi
     sound(r)
 
 
-def test_m4_never_first_overnight_then_the_decision_one_page_one_session_one_wait(tmp_path, monkeypatch):
-    """never_first from the nightly restart on: the keepalive tries ONE fresh session (it does not sync either)
-    and keeps it; the DOWN page goes out once overnight, naming the cause; at the decision nothing is sold or
-    bought (fail closed), the first guarded read waits its bound once and every later one fails at once on the
-    same session - before, every read waited 20 s and most dropped the session for a 15 s reconnect."""
+def test_m4_never_first_overnight_then_the_decision_one_page_fresh_sessions_on_the_schedule(tmp_path, monkeypatch):
+    """never_first from the nightly restart on: the keepalive tries fresh sessions (none syncs) and keeps each until
+    the next is due; the DOWN page goes out once overnight, naming the cause; at the decision nothing is sold or
+    bought (fail closed), each session met there waits its bound once and every later read on it fails at once -
+    before, every read waited 20 s and most dropped the session for a 15 s reconnect.
+    D1 round 5 (counts re-baselined on purpose): round 4 tried ONE fresh session all night and kept it for good (2
+    sessions); the schedule replaces a kept one 40 s after its connect gave up, then 80, 160, 320, 640 s, then every
+    900 s (the cap), each at the first keepalive (every 300 s here, the loop's poll) once due. So 41 sessions from
+    23:45 to 09:30: the reconnect after the nightly drop (23:45:00), five doubling steps (23:50:15, 23:55:30,
+    00:00:45, 00:11:00, 00:26:15), then one per 915 s - the 900 s cap met by the 300 s keepalive cadence after the
+    15 s connect - 35 more (00:41:30 ... 09:20:00): 3.9 sessions an hour, each holding the loop 15 s. At the
+    decision the session kept since 09:20 is overdue (this harness runs no keepalive between 09:30 and 15:54): the
+    first guarded read waits its bound for it, then takes the replacement; the fresh session's first read waits
+    its bound; every later read fails at once - 2 full waits, 1 reconnect, 42 sessions in all. The next
+    replacement is due 900 s after that connect, past the window."""
     r = _rig(tmp_path, monkeypatch)
+    connects = []
+    real_connect = r.ib.connect
+
+    def connect(*args, **kw):
+        connects.append(r.vt.now())
+        return real_connect(*args, **kw)
+    monkeypatch.setattr(r.ib, "connect", connect)
     _night(r, lambda n: None)
     downs = [m for m in r.sent if "DOWN for over" in m]
     assert len(downs) == 1 and "open orders unreadable" in downs[0] and "already tried" in downs[0], r.sent
-    assert r.ib.n_sessions == 2 and r.ad.outages.open is not None and r.ad.outages.history == []
+    assert r.ib.n_sessions == len(connects) == 41, len(connects)
+    gaps = [round(b - a) for a, b in zip(connects, connects[1:])]
+    assert gaps[:5] == [315, 315, 315, 615, 915] and set(gaps[5:]) == {915}, gaps
+    assert r.ad.outages.open is not None and r.ad.outages.history == []
     assert r.ad.outages.summary()["currently_down_kind"] == UNSYNCED
     placed, _ = _decision(r, monkeypatch)
     assert placed == [] and r.ib.violations == 0
     assert r.m.state["last_run"]["session"] == D2
     waits = [p for p in r.guard_pumps if p > 0]
-    assert len(waits) == 1 and len(r.guard_pumps) > 10, r.guard_pumps        # ONE full wait, then at once
-    assert r.ib.n_sessions == 2                                             # no reconnect at the decision
+    assert len(waits) == 2 and len(r.guard_pumps) > 10, r.guard_pumps        # one full wait per session, then at once
+    assert r.ib.n_sessions == 42                                            # one replacement at the decision
     assert len([m for m in r.sent if "DOWN" in m]) == 1 and not [m for m in r.sent if "RECONNECTED" in m]
 
 

@@ -21,6 +21,13 @@ are Fri 2026-11-27 and Thu 2026-12-24. The doubles are tests/test_mirror.py's.
       on both days
   E6  the service's calendar (blend.NYSE_EARLY_CLOSES / NYSE_HOLIDAYS) and the brain's (shadow_runner.HALF_DAYS
       / NYSE_HOLIDAYS, read from its source) agree on every date both cover, and end in the same year
+  E7  the brain's OWN half-day payload (built by its code on its fixture) trades only on the service's early close
+  E8  SPY before the instant is traded only when the payload's close_et and the brain's clock give the service's
+      early close too
+  E9  the brain's own frozen-feed refusal, carried as any 503 into the recorded NO TRADE, keeps 'a frozen feed'
+      and why
+  E10 the brain-side build behind E7 / E9 skips only when composer/scripts is absent: any other failure fails
+  E11 HALF_DAY_SPY_MAX_S is the brain's QUIET_TRADE_MAX_S (read with ast; the brain's H10 from its side)
 """
 from __future__ import annotations
 
@@ -28,6 +35,7 @@ import ast
 import os
 from datetime import date, timedelta
 
+import httpx
 import pytest
 
 from app import blend
@@ -246,10 +254,12 @@ def test_e6_the_services_calendar_and_the_brains_agree_on_every_date_both_cover(
         [("2026-11-26", "closed", (16, 0))]
 
 
-@pytest.fixture(scope="module")
-def brain_half_day():
-    """the brain's OWN pinned payload for the half-day 2025-11-28 (composer/scripts/tests/test_mirror_halfday.py: FMP's
-    archive, SPY's bar at 12:54 without volume, SPY at its 12:46 trade), built by the brain's code on its fixture"""
+def _brain_build(day="2025-11-28", edit=None):
+    """(payload, the brain's NotPublished) of the brain's OWN pinned build at `day`'s 12:54 instant, by the brain's
+    code on its fixture (composer/scripts/tests/test_mirror_halfday.py: FMP's archive), after `edit` (HalfDay -> None,
+    an edit of FMP's rows). Skipped ONLY when composer/scripts is not in this checkout: anything else that goes wrong
+    on the brain's side fails the test that asked, so a moved fixture or a changed helper can never turn a gate into a
+    silent skip"""
     scripts = os.path.join(REPO, "composer", "scripts")
     if not os.path.isdir(scripts):
         pytest.skip("composer/scripts is not in this checkout")
@@ -270,15 +280,22 @@ def brain_half_day():
         b.setUpClass()
         b.setUp()
         try:
-            p, err = b.pinned("2025-11-28")
+            if edit is not None:
+                edit(b)
+            return b.pinned(day)
         finally:
             b.doCleanups()
-    except Exception as exc:  # noqa: BLE001  the brain side's helper is not what this gate was written against
-        pytest.skip(f"the brain's half-day fixture build is not available here: {exc!r}")
     finally:
         for p_ in added:
             if p_ in sys.path:
                 sys.path.remove(p_)
+
+
+@pytest.fixture(scope="module")
+def brain_half_day():
+    """the brain's OWN pinned payload for the half-day 2025-11-28 (FMP's archive: SPY's bar at 12:54 without volume,
+    SPY at its 12:46 trade)"""
+    p, err = _brain_build()
     assert err is None and p["decision_bar"]["spy_utc"] != p["decision_bar"]["end_utc"]
     return p
 
@@ -297,3 +314,104 @@ def test_e7_the_brains_own_half_day_payload_trades_only_on_the_services_early_cl
         assert {n: s["action"] for n, s in row["sleeves"].items()} == dict.fromkeys(p["engines"], "trade")
     else:
         assert r.orders() == [] and "only an early close by this service's own calendar" in r.m._why
+
+
+@pytest.mark.parametrize("clock, close_et, traded", [
+    ("13:00", "13:00", True),            # twin: the service's calendar, the brain's clock and the payload agree: traded
+    ("16:00", "16:00", False),           # the brain's clock and the payload a 16:00 close (decided 15:54): refused
+    ("13:00", "16:00", False),           # the payload's close_et against the brain's clock and the service's calendar
+    ("16:00", "13:00", False),           # the brain's clock against the payload and the service's calendar
+    ("13:00", None, False),              # a payload that gives no close
+])
+def test_e8_spy_before_the_instant_needs_the_payloads_close_and_the_brains_clock_at_the_services_early_close(
+        tmp_path, clock, close_et, traded):
+    """defence in depth: SPY priced 8 minutes before the instant on Fri 11-27 (13:00 by the service's own calendar) is
+    traded only when the payload's own close_et and the brain's clock close at 13:00 too"""
+    t = mm._parse(decide_utc(HALF, clock))
+    bar = {"end_utc": mm._iso(t), "spy_utc": mm._iso(t - timedelta(minutes=8)), "complete": True}
+    os.makedirs(tmp_path / "r", exist_ok=True)
+    r = HalfRig(tmp_path / "r", session_close_et)
+    r.brain.close = clock
+    r.brain.make = lambda now: payload(now, session=HALF, close=clock, decision_bar=bar, close_et=close_et)
+    r.tick("12:57:00" if clock == "13:00" else "15:57:00", day=HALF)
+    if traded:
+        row = r.m.state["last_run"]
+        assert (row["session"], row["outcome"], row["decision_bar"]) == (HALF, "traded", bar) and r.orders()
+        return
+    assert r.orders() == [] and r.m.state.get("last_session") != HALF
+    assert "this service's calendar closes at 13:00, but" in r.m._why and "only an early close they agree on" in r.m._why
+
+
+def test_e9_the_brains_frozen_feed_refusal_keeps_its_key_words_in_the_recorded_no_trade(tmp_path, monkeypatch):
+    """the brain's OWN 503 for a frozen SPY (2025-11-28, SPY's bars after 12:44 at its last trade's price, without
+    volume: built by the brain's code on its fixture), read through HttpBrain as any 503 is (_reason: its error and
+    detail, each cut at 160 characters) and recorded at plan_by as the day's NO TRADE (_skip: cut at 400): 'a frozen
+    feed', and why, survive both cuts"""
+    p, err = _brain_build(edit=lambda b: b.freeze("2025-11-28", "12:44", {"SPY"}))
+    assert p is None and err.error == "decision bar not published yet" and "a frozen feed" in err.detail
+    body = err.body()
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        assert url.endswith("/mirror/intents") and headers == {"X-API-Token": "tok"}
+        return httpx.Response(503, json=body, request=httpx.Request("GET", url))
+    monkeypatch.setattr(mm.httpx, "get", fake_get)
+    r = HalfRig(tmp_path, session_close_et)
+    r.brain.close = "13:00"
+    r.brain.intents = mm.HttpBrain("https://brain.invalid", "tok").intents      # the real client reads the brain's 503
+    for hms in ("12:54:25", "12:57:00", "12:58:00"):
+        r.tick(hms, day=HALF)
+    row = r.m.state["last_run"]
+    assert (row["session"], row["outcome"]) == (HALF, "skipped") and r.orders() == []
+    assert "the brain is not ready (503: decision bar not published yet — SPY's last traded bar ends 12:45:00 ET" \
+        in row["reason"], row["reason"]
+    assert "(half-day, a frozen feed: none of SPY's bars without volume since that trade moved off its price" \
+        in row["reason"], row["reason"]                                       # the key words, and why
+
+
+def test_e10_a_brain_side_failure_fails_the_gate_it_feeds_and_never_skips_it():
+    """_brain_build (the brain_half_day fixture's build) skips only when composer/scripts is not in the checkout: a
+    failure on the brain's side (here an edit that raises, as a moved fixture or a renamed helper would) reaches the
+    test as the error it is"""
+    def broken(b):
+        raise LookupError("the brain side changed under this gate")
+    try:
+        _brain_build(edit=broken)
+    except LookupError:
+        return
+    except pytest.skip.Exception as exc:
+        pytest.fail(f"a brain-side failure became a skip: {exc}")
+    pytest.fail("the brain-side failure was swallowed")
+
+
+def _module_number(path, name):
+    """the module-level constant `name` of the python file `path`, read with ast (none of its imports run): a number,
+    or a sum, product or quotient of numbers and of `pc.<NAME>` (preclose.py's, beside it)"""
+    with open(path) as f:
+        tree = ast.parse(f.read())
+    node = next((n.value for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1
+                 and isinstance(n.targets[0], ast.Name) and n.targets[0].id == name), None)
+    assert node is not None, f"{name} is not a module constant of {path}"
+
+    def val(x):
+        if isinstance(x, ast.Constant) and isinstance(x.value, (int, float)) and not isinstance(x.value, bool):
+            return x.value
+        if isinstance(x, ast.Attribute) and isinstance(x.value, ast.Name) and x.value.id == "pc":
+            return _module_number(os.path.join(os.path.dirname(path), "preclose.py"), x.attr)
+        if isinstance(x, ast.BinOp) and isinstance(x.op, (ast.Mult, ast.Add, ast.Sub, ast.Div)):
+            a, b = val(x.left), val(x.right)
+            return {ast.Mult: a * b, ast.Add: a + b, ast.Sub: a - b, ast.Div: a / b if b else None}[type(x.op)]
+        raise AssertionError(f"{name} in {path} is not a plain number: {ast.dump(x)}")
+    return val(node)
+
+
+def test_e11_the_bound_on_spy_before_the_instant_is_the_brains_quiet_trade_max():
+    """drift guard (passes before and after): HALF_DAY_SPY_MAX_S is the brain's QUIET_TRADE_MAX_S (composer/scripts/
+    mirror_brain.py: the preview's FRESH_MIN in seconds, both read with ast); the brain's H10 is the same check from
+    its side. A one-sided change of either fails here"""
+    path = os.path.join(REPO, "composer", "scripts", "mirror_brain.py")
+    if not os.path.isfile(path):
+        pytest.skip("composer/scripts is not in this checkout")
+    brain = _module_number(path, "QUIET_TRADE_MAX_S")
+    assert brain == _module_number(os.path.join(REPO, "composer", "scripts", "preclose.py"), "FRESH_MIN") * 60
+    assert mm.HALF_DAY_SPY_MAX_S == brain, (f"the executor's HALF_DAY_SPY_MAX_S {mm.HALF_DAY_SPY_MAX_S} and the brain's "
+                                            f"QUIET_TRADE_MAX_S {brain} differ: change both together")

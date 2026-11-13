@@ -23,6 +23,9 @@ redirect followed - one cash credit per sleeve. The token never leaves the conta
   account's post-trade check of its LAST session was made, is done and found no problem (mirror.py
   _post_check). The executor clears that check at the end of every run (_finish) and on
   /mirror/adjust (_adjust): a missing or stale one says to re-run after the next session's check.
+  Re-run it after ANY /mirror/adjust and paste only the new line: an adjust on the evening of the
+  book's last session is followed by that evening's tick making that session's check again (clean
+  when the shares are as booked: it compares shares, not cash), so an older line would still send.
 3 The plan: target = round(to x weight, 2); credit = round(target - the sleeve's equity, 2), the
   equity at the book's marks of its last decision. Refused when --to is not above the book's equity,
   is more than 10x it (a slipped zero), or any credit is negative (the line names the smallest --to
@@ -33,14 +36,18 @@ redirect followed - one cash credit per sleeve. The token never leaves the conta
   that session's own cutoff - so the line itself needs no time zone, and expires with its session.
   Refused on a session day from its paste cutoff while that day's session has not run yet (the
   book's last session is before today): a line printed then would be for the NEXT session, and the
-  session of today, run in between, would make it refuse; re-run after it and its post-trade check.
+  session of today, run in between, would make it refuse; re-run after it and its post-trade check
+  (if the executor missed today's session, re-run after midnight ET).
 5 The cap: the executor refuses a credit that takes a live book's funded_usd (its seeds plus every
   positive credit and what /mirror/adjust added) above MIRROR_MAX_BOOK_USD + $1, credit by credit,
   smallest first, and drops it (ibkr-executor/app/mirror.py _over_cap, _apply_credits). The feed does
   not publish funded_usd (mirror.py _publish): it is estimated as the seeds the feed lists plus the
   operator credits in its session rows. Cap to set = (funded + the credits) x (1 + headroom), rounded
   up to the next $500. The pasted line checks the executor's OWN funded_usd against the cap it was
-  deployed with, in cents and with no $1 slack, before it sends anything.
+  deployed with, in cents and with no $1 slack, before it sends anything. That deploy changes
+  MIRROR_MAX_BOOK_USD only, not MIRROR_LIVE_ENGINES: a sleeve it dropped stays in the book's state,
+  not frozen, until the executor's first tick with the gateway logged in (mirror.py
+  _reconcile_sleeves), so a line pasted before then would queue the others and stop at that one.
 6 The cash: at the decision the executor credits the open dividend receivables that are due, then
   takes each credit only if the account's cash (IBKR's TotalCashValue) covers the book's cash plus it
   (within CASH_TOL_USD, $1), smallest first (mirror.py _dividends, _apply_credits). The plan prints the
@@ -752,10 +759,11 @@ def build(a, env, fetch, now):
         raise Refused(f"the book's last session on the feed is not a date ({one_line(repr(last), 40)})")
     today_left = session_still_to_run(last, now)
     if today_left:
-        raise Refused(f"today's session has not run yet: re-run after it and its post-trade check (it is "
-                      f"{sr.et_now(now):%H:%M} ET on {today_left}, a session day past its {paste_cutoff(today_left)}:00 "
-                      f"paste cutoff, and the book's last session is {last}: a line printed now would be for the "
-                      f"session after today's, which runs first and voids it)")
+        raise Refused(f"today's session has not run yet: re-run after it and its post-trade check (if the executor "
+                      f"missed today's session, re-run after midnight ET). It is {sr.et_now(now):%H:%M} ET on "
+                      f"{today_left}, a session day past its {paste_cutoff(today_left)}:00 paste cutoff, and the "
+                      f"book's last session is {last}: a line printed now would be for the session after today's, "
+                      f"which runs first and voids it")
     eq, book_eq = sleeve_equities(view)
     if to <= book_eq:
         raise Refused(f"book {name} is already {usd(book_eq)}: --to {usd(to)} is not above it (this planner only "
@@ -831,8 +839,11 @@ def build(a, env, fetch, now):
            + (f": {', '.join(half_days[:2])}" if half_days else "") + ") or any time on a weekend, by " + until)
     steps = [
         f"(a) Render -> ibkr-executor -> Environment: set MIRROR_MAX_BOOK_USD = {cap}, then \"Save, rebuild and "
-        f"deploy\". {quiet_window(now)}: the attestation, the decision and its orders run then. The "
-        f"restart logs the IB gateway in again: approve the IB Key push on your phone.",
+        f"deploy\". Change only MIRROR_MAX_BOOK_USD in that deploy, not MIRROR_LIVE_ENGINES: a sleeve it drops stays "
+        f"in the book's state, not frozen, until the executor's first tick with the IB gateway logged in, so a line "
+        f"pasted before then queues the other credits and stops at that one. {quiet_window(now)}: the attestation, "
+        f"the decision and its orders run then. The restart logs the IB gateway in again: approve the IB Key push on "
+        f"your phone.",
         f"(b) When the executor is back (the deploy live, /health answering), open Render -> ibkr-executor -> Shell and "
         f"paste this ONE line, ONCE, {cut}, for the session of {session}: the credits must be queued before the "
         f"session that applies them, so the evening POLICY routine never sizes a transfer on pre-credit equity. It is "
@@ -848,7 +859,9 @@ def build(a, env, fetch, now):
         f"at the next session and cannot be withdrawn) and whether the one that failed was NOT queued (an HTTP 4xx, "
         f"or nothing listening) or may have been. Nothing queued at all: fix the cause and paste the line again; "
         f"otherwise, after that session, re-run this planner and paste its new line (the line sends nothing while "
-        f"anything is queued):",
+        f"anything is queued). After any /mirror/adjust, re-run this planner and paste only its new line: an adjust "
+        f"on the evening of {last} is followed by a new post-trade check of {last}, clean when the shares are as "
+        f"booked, so this line would still send, sized on the book before the adjust:",
         f"(c) The executor applies them at the decision of {session} (15:54 ET, 12:54 on a half-day): first the "
         f"dividends due, then the credits, smallest first, each only if the account's cash covers the book's cash "
         f"plus it (the CASH minimum above) and the cap holds, and invests them in the same plan (the daily sleeves go "

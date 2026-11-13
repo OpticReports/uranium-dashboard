@@ -76,6 +76,15 @@ pasted line runs against a real HTTP server on this machine).
   R12 the hard limit: the line fits a terminal line (4,095 bytes) over a 45-day sweep of plan times; the
       longest and its margin are printed
   R13 the doc says the new rules
+  The fourth review's NOTEs (R16-R18 and R5's words: each gate failed at 170191c0; R14, R15 and the twins pass there):
+  R14 (its V2, a mutation pin: kills P13) funded_usd near $1e9 plus credits beyond it is the one refusal line
+  R15 (its V3, a mutation pin: kills L10) a post-trade check whose done is truthy but not True sends nothing
+  R16 the plan-time refusal says "(if the executor missed today's session, re-run after midnight ET)"; R5
+      reads its new words; twin: after midnight a missed day plans for the next session
+  R17 step (a) changes MIRROR_MAX_BOOK_USD only, not MIRROR_LIVE_ENGINES (the plan, the doc, the docstring);
+      twin: the executor's lines it rests on
+  R18 re-run the planner after ANY /mirror/adjust (the plan's step (b), the doc, the docstring); twin: the
+      executor's lines it rests on
 
 Run: python3 -m unittest tests.test_mirror_scale -v   (from composer/scripts)
 """
@@ -1725,7 +1734,8 @@ class R5TodaysSessionStillToRun(Case):
             with self.subTest(last=last, et=when):
                 line = self.refused(now=self.at(last, *when))
                 self.assertIn("MIRROR SCALE REFUSED — today's session has not run yet: re-run after it and its post-trade "
-                              f"check (it is {when[3]:02d}:{when[4]:02d} ET on {when[0]}-{when[1]:02d}-{when[2]:02d}", line)
+                              "check (if the executor missed today's session, re-run after midnight ET). "
+                              f"It is {when[3]:02d}:{when[4]:02d} ET on {when[0]}-{when[1]:02d}-{when[2]:02d}", line)
                 self.assertIn(f"the book's last session is {last}", line)
         self.assertIsNone(ms.session_still_to_run("2026-11-12", datetime.datetime.fromtimestamp(et(2026, 11, 12, 15, 30), UTC)))
         self.assertEqual(ms.session_still_to_run("2026-11-25", datetime.datetime.fromtimestamp(et(2026, 11, 27, 12, 30), UTC)),
@@ -2018,6 +2028,125 @@ class R13DocSaysIt(unittest.TestCase):
                       "the credited cash was only partly invested", "the holdings still are compared",
                       "A leg below $1 even once they are applied is below $1 at the mirror's size: nothing is sent, exit 0"):
             self.assertIn(words, sec, words)
+
+
+# ------------------------------------------------------------------ the fourth review (2026-11-13; R14, R15: pins)
+class R14NeedBeyondTheBound(Case):
+    """its V2 - a MUTATION PIN, not a regression gate (it passes at 170191c0; it kills mutant P13, the need's
+    bound removed): funded_usd within $1e9 plus credits that take the need beyond it is the one refusal line,
+    never a plan carrying a ~$2e9 cap"""
+
+    def test_funded_near_the_bound_plus_the_credits_is_refused(self):
+        v = R12LineLength.scaled(12000.0)                    # a book of ~$119.6M: --to up to 10x it is accepted
+        v["funded_usd"] = 9.9e8
+        self.feed = feed(live=v)
+        text = self.refused(to="999000000")
+        self.assertIn("is not a plausible amount (more than $1,000,000,000.00): the cap cannot be computed", text)
+
+
+class R15DoneMustBeTrue(LineCase):
+    """its V3 - a MUTATION PIN (passes at 170191c0; kills mutant L10, the line's `done is True` relaxed to truthy):
+    a post-trade check whose done is truthy but not True sends nothing - the line is exactly as strict as the
+    planner (check_problem: done is not True -> refused). The executor writes a bool (mirror.py _post_check)"""
+
+    def test_a_truthy_done_that_is_not_true_sends_nothing(self):
+        for done in (1, "yes", [1]):
+            with self.subTest(done=done):
+                self.write_state(check={"session": "2026-11-12", "done": done, "problems": []})
+                rc, out = self.exec_line()
+                self.assertEqual((rc, self.posts()), (1, []), out)
+                self.assertIn("no clean post-trade check of 2026-11-12", out)
+
+
+def scaling_section():
+    with open(os.path.join(REPO, "composer", "IBKR_MIRROR.md")) as f:
+        return " ".join(f.read().split("## Scaling the live book")[1].split("\n## ")[0].split())
+
+
+class R16MissedSessionRefusal(Case):
+    """its NOTE 1 (a GATE: fails at 170191c0): the plan-time refusal also fires on a session day whose decision
+    window passed without the executor recording the session (its gateway down through it: mirror.py returns on
+    `ad is None` before _session and _skip), when no session will run today: the refusal says to re-run after
+    midnight ET then. The twin: after midnight such a day plans for the next session"""
+
+    def test_the_refusal_says_what_to_do_when_the_executor_missed_todays_session(self):
+        for last, when in (("2026-11-13", (2026, 11, 16, 16, 30)),          # Mon: its session was missed
+                           ("2026-11-12", (2026, 11, 13, 15, 0)),           # Fri, before its session
+                           ("2026-11-25", (2026, 11, 27, 12, 30))):         # the half-day
+            with self.subTest(last=last, et=when):
+                self.feed = feed(live=view(last_session=last, check=dict(view()["check"], session=last)))
+                line = self.refused(now=datetime.datetime.fromtimestamp(et(*when), UTC))
+                self.assertIn("MIRROR SCALE REFUSED — today's session has not run yet: re-run after it and its "
+                              "post-trade check (if the executor missed today's session, re-run after midnight ET). "
+                              f"It is {when[3]:02d}:{when[4]:02d} ET on {when[0]}-{when[1]:02d}-{when[2]:02d}", line)
+        self.assertIn("(\"today's session has not run yet: re-run after it and its post-trade check (if the executor "
+                      "missed today's session, re-run after midnight ET)\"", scaling_section())
+        self.assertIn("(if the executor missed today's session, re-run after midnight ET)", " ".join(ms.__doc__.split()))
+
+    def test_the_twin_after_midnight_the_missed_day_plans_for_the_next_session(self):
+        self.feed = feed(live=view(last_session="2026-11-13", check=dict(view()["check"], session="2026-11-13")))
+        p = self.plan(now=datetime.datetime.fromtimestamp(et(2026, 11, 17, 0, 30), UTC))      # Tue 00:30 ET
+        self.assertEqual((p["session"], p["last_session"]), ("2026-11-17", "2026-11-13"))
+
+
+class R17StepAChangesOnlyTheCap(Case):
+    """its NOTE 4 (a GATE: fails at 170191c0): step (a)'s deploy changes MIRROR_MAX_BOOK_USD only. A sleeve it drops
+    from MIRROR_LIVE_ENGINES stays in the book's state, not frozen, until the executor's first tick with the IB
+    gateway logged in (mirror.py _reconcile_sleeves, after `ad is None`), and /mirror/credit refuses it (400): a line
+    pasted before then queues the other credits and stops at that one (the e2e run's FRZ2). The twin pins the
+    executor's lines this rests on"""
+    WORDS = ("Change only MIRROR_MAX_BOOK_USD in that deploy, not MIRROR_LIVE_ENGINES: a sleeve it drops stays in the "
+             "book's state, not frozen, until the executor's first tick with the IB gateway logged in")
+
+    def test_the_plan_and_the_doc_say_to_change_only_the_cap(self):
+        step = self.plan()["steps"][0]
+        self.assertTrue(step.startswith("(a) Render -> ibkr-executor -> Environment: set MIRROR_MAX_BOOK_USD = 53000, "
+                                        "then \"Save, rebuild and deploy\". " + self.WORDS + ", so a line pasted before "
+                                        "then queues the other credits and stops at that one. Never between"), step)
+        code, text = self.run_it()
+        self.assertEqual(code, 0)
+        self.assertIn(self.WORDS, text)
+        a = scaling_section().split("(a) The cap.")[1].split("(b) The credits.")[0]
+        self.assertIn(self.WORDS + " (mirror.py _reconcile_sleeves), so a line pasted before then queues the other "
+                      "credits and stops at that one.", a)
+        self.assertIn("That deploy changes MIRROR_MAX_BOOK_USD only, not MIRROR_LIVE_ENGINES", " ".join(ms.__doc__.split()))
+
+    def test_the_twin_the_executor_freezes_a_dropped_sleeve_only_in_a_tick_with_the_gateway(self):
+        with open(os.path.join(REPO, "ibkr-executor", "app", "mirror.py")) as f:
+            src = f.read()
+        for pin in ('        if ad is None:\n            return\n        if not self.state.get("run"):\n'
+                    '            self._reconcile_sleeves(ad)\n',
+                    '            raise ValueError("a credit needs a non-zero amount")\n        if sleeve not in '
+                    'self.cfg.engines:\n            raise ValueError(f"{sleeve!r} is not a sleeve of the {self.cfg.name} '
+                    'book")\n'):
+            self.assertEqual(src.count(pin), 1, pin)
+
+
+class R18ReRunAfterAnyAdjust(Case):
+    """its NOTE 5 (a GATE: fails at 170191c0): re-run the planner after ANY /mirror/adjust. A cash adjust applied on
+    the evening of the plan's last session is followed by that evening's tick making that session's post-trade
+    check again, clean (it compares shares, not cash), so an older line would still send, its credits sized on
+    the book before the adjust (the e2e run's ADJ1). The plan's step (b), the module's docstring and
+    IBKR_MIRROR.md say it; the twin pins the executor's lines this rests on"""
+
+    def test_the_plan_and_the_doc_say_to_re_run_after_any_adjust(self):
+        step = self.plan()["steps"][1]
+        self.assertIn("After any /mirror/adjust, re-run this planner and paste only its new line: an adjust on the "
+                      "evening of 2026-11-12 is followed by a new post-trade check of 2026-11-12, clean when the shares "
+                      "are as booked, so this line would still send, sized on the book before the adjust:", step)
+        self.assertIn("Re-run the planner after ANY /mirror/adjust and paste only its new line: an adjust on the evening "
+                      "of the plan's last session is followed by that evening's tick making that session's post-trade "
+                      "check again - clean when the shares are as booked (it compares shares, not cash) - so an older "
+                      "line would still send, its credits sized on the book before the adjust.", scaling_section())
+        self.assertIn("Re-run it after ANY /mirror/adjust and paste only the new line", " ".join(ms.__doc__.split()))
+
+    def test_the_twin_the_executor_clears_the_check_on_an_adjust_and_makes_it_again_that_day(self):
+        with open(os.path.join(REPO, "ibkr-executor", "app", "mirror.py")) as f:
+            src = f.read()
+        for pin in ('        s.cash += cash\n        self.state["check"] = None ',
+                    '        if self.state.get("last_session") == session:\n            self._post_check(ad, session, wake)\n',
+                    '        if chk.get("session") == session and chk.get("done"):\n            return\n'):
+            self.assertEqual(src.count(pin), 1, pin)
 
 
 if __name__ == "__main__":

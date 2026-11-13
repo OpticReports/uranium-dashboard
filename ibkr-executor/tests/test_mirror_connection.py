@@ -1999,11 +1999,16 @@ def test_k5_never_first_a_gateway_that_never_answers_the_connect_time_request_pa
     reconnect on every read, each reconnect a "recovery", no page ever. After: the outage stays open across the
     reconnects, the existing 30-min DOWN page goes out ONCE and names the cause; and once a session's sync does
     end, the outage closes with the RECONNECTED notice.
-    D1 round 4 (changed on purpose): a session whose own connect-time sync is the unanswered request is KEPT (its
-    late end could still land) - but for the ONE fresh session an outage allows (_unsynced_replace_due) - and a
-    read after that session's first full wait fails at once. So: the first read drops the session the adapter
-    did not connect itself (it cannot know whose request that is), then exactly one replacement, then no reconnect
-    per read. Recovery is a gateway restart, as the page says: its FIN, then a gateway that answers."""
+    D1 round 4: a session whose own connect-time sync is the unanswered request is KEPT (its late end could still
+    land), and a read after that session's first full wait fails at once.
+    D1 round 5 (counts re-baselined on purpose): a kept session is replaced on the doubling schedule
+    (_unsynced_replace_due) instead of once per outage, and the recovery step is again 1de7535c's - the gateway
+    answers again with NO restart and no FIN: round 4 kept its one fresh session for good and never answered here.
+    Counts over the 4 s of reads (scaled: the bound 0.3 s, the connect's sync wait 0.3 s): 3 drops and 3 reconnects
+    - the first read drops the session the adapter did not connect itself (it cannot know whose request that is,
+    "request") at ~0.3 s; the reconnect's session (sync given up ~0.6 s) is replaced 2 x the bound later (~1.2 s),
+    the next 4 x the bound after its own connect (~2.7 s); the fourth would be due 8 x the bound after its
+    connect (~5.4 s), past the reads - so 4 gateway sessions in all, the test's own first connect included."""
     a, gw = real
     sent = []
     _scaled(a, gw, monkeypatch, tmp_path, lambda n: None if n == 1 else 0, sent)
@@ -2016,11 +2021,10 @@ def test_k5_never_first_a_gateway_that_never_answers_the_connect_time_request_pa
     downs = [m for m in sent if "DOWN for over" in m]
     assert len(downs) == 1 and "CAUSE" in downs[0] and "open-orders request" in downs[0]
     assert not any("RECONNECTED" in m for m in sent)
-    assert a.drops == 2 and len(a.connects) == 2 and gw.sessions == 3, (a.drops, a.connects, reads)
-    assert reads >= 20                                                # the kept session's reads fail at once
+    assert a.drops == 3 and len(a.connects) == 3 and gw.sessions == 4, (a.drops, a.connects, reads)
+    assert reads >= 20                                                # a kept session's reads fail at once
     assert a.outages.open and a.outages.history == []                # ONE outage, still open
-    gw.oo_policy = None                                               # the gateway is restarted: answers again
-    gw.drop()                                                         # (its restart closes the session)
+    gw.oo_policy = None                                               # the gateway answers again: no restart, no FIN
     deadline = time.monotonic() + 3.0
     while time.monotonic() < deadline:
         try:
@@ -2071,14 +2075,18 @@ def test_k5_boot_a_session_whose_open_orders_sync_did_not_end_runs_the_outage_cl
 
 
 @needs_ib_async
-def test_k5_idle_an_unsynced_session_is_replaced_once_then_kept_and_pages_once(real, monkeypatch, tmp_path):
+def test_k5_idle_an_unsynced_session_is_replaced_on_the_schedule_and_pages_once(real, monkeypatch, tmp_path):
     """the overnight shape: the session the service connected (or the nightly restart's) never gets its open-orders
     sync answered, and nothing reads open orders until the decision. Positions, cash and the liveness round trip
     all work on it; the outage clock reaches the DOWN page once - no storm. Before: nothing noticed it until the
     decision's first sell check.
-    D1 round 4 (changed on purpose): the keepalive replaces such a session ONCE per outage, 2 x the bound after the
-    connect (a one-off lost answer is then cured with no page); a gateway whose fresh session does not sync either
-    keeps that one, and its single DOWN page says a fresh session was already tried."""
+    D1 round 4: the keepalive replaces such a session 2 x the bound after the connect (a one-off lost answer is then
+    cured with no page), and its single DOWN page says a fresh session was already tried.
+    D1 round 5 (counts re-baselined on purpose): the replacements follow the doubling schedule instead of stopping
+    after one. Over the 3.5 s (scaled: the bound 0.3 s, the connect's sync wait 0.3 s, a keepalive every ~0.2 s):
+    2 drops and 2 reconnects - the boot session (sync given up ~0.3 s) is replaced 2 x the bound later (~0.9 s),
+    the fresh one (~1.2 s) 4 x the bound after its connect (~2.4 s); the third would be due 8 x the bound after its
+    connect (~5.1 s), past the 3.5 s - so 3 gateway sessions, the boot's included."""
     a, gw = real
     sent = []
     _scaled(a, gw, monkeypatch, tmp_path, lambda n: None if n == 1 else 0, sent)
@@ -2090,8 +2098,9 @@ def test_k5_idle_an_unsynced_session_is_replaced_once_then_kept_and_pages_once(r
         assert a.positions_snapshot()["stocks"] == {"BIL": 20, "SPY": 10}
         time.sleep(0.2)
     downs = [m for m in sent if "DOWN for over" in m]
-    assert len(downs) == 1 and "CAUSE" in downs[0] and "fresh gateway session was already tried" in downs[0]
-    assert a.drops == 1 and len(a.connects) == 1 and gw.sessions == 2 and a.outages.open
+    assert (len(downs) == 1 and "CAUSE" in downs[0] and "fresh gateway session" in downs[0]
+            and "already tried" in downs[0]), downs
+    assert a.drops == 2 and len(a.connects) == 2 and gw.sessions == 3 and a.outages.open, (a.drops, a.connects)
     assert a.outages.history == [] and not any("RECONNECTED" in m for m in sent)
 
 
