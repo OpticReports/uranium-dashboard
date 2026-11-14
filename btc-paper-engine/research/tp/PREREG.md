@@ -133,3 +133,34 @@ Before this file was committed, variants were executed only inside gate G4
 (look-ahead: trade-list identity between truncated and full runs, pass/fail);
 no performance figure for any variant had been computed or seen. The
 baseline was run for the harness gates (G1–G3).
+
+## AMENDMENT 1 — Round 4, "take profit and stand aside"
+
+Registered 2026-11-14, after Rounds 1–3 had run (0 of 40 eligible) and
+BEFORE Round 4 ran. A post-hoc extension, labelled as one.
+
+**Why.** The statistics counter-agent found that ~90% of full take-profit
+exits re-entered on the same side within one bar: a TP fires on a fresh
+20-bar extreme, so the breakout entry re-arms and buys back higher. Rounds
+1–3 therefore tested "take profit and re-enter at once", never "take profit
+and stand aside". Casey asked not to stop at the first null; this is the
+one gap the review found that could change the answer.
+
+**Variants (22, `variants.ROUND4`):** every full-exit rule of Rounds 1 and 3
+(F1 ×5, F5a ×3, F5b ×3, F6 ×3, F8 ×2, F9 ×4, F10 ×2), each with a 30-bar
+(5-day) same-side stand-aside after a profit-taking full exit (TP, EXT,
+RSI, TIME, CLIMAX, ER, VOLX). Stop-type exits (trail, breakeven, channel)
+re-arm at once, as today. Gates G4 (no look-ahead) and G7 (stand-aside
+plumbing) cover every Round 4 config; 125/125 pass.
+
+**Decision rule:** §6 unchanged. **Null:** N = 62 cumulative. Each
+repetition's best-of-62 takes the original 40 placebo draws plus 22
+stand-aside placebos (full random exits with the same 30-bar stand-aside,
+`variants.placebos_sa`).
+
+**Status of an eligible result:** because this round was added after
+seeing Rounds 1–3, an eligible config is a CANDIDATE only. Before any §8
+adoption it would need a fresh single-touch confirmation on data not yet
+seen (the BTC forward window as it accrues), on top of Casey's sign-off.
+
+**Trials:** +22 (62 for the study). **Stop after Round 4, whatever it shows.**

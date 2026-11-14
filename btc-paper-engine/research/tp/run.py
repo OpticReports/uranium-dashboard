@@ -13,7 +13,7 @@ import time
 from harness import (BASE, LIVE_LEV, LIVE_W_TREND, S4_CFG, T_2013, T_2022,
                      T_FWD, T_IS_END, blend_exit_step, blend_mtm,
                      curve_stats, load_asset, run_s3, run_s4, trade_stats)
-from variants import ROUND1, ROUND3, family, placebos, round2
+from variants import ROUND1, ROUND3, ROUND4, family, placebos, placebos_sa, round2
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NOHALT = dataclasses.replace(S4_CFG, dd_halt=1.0)
@@ -88,6 +88,19 @@ def judge(r, base, q95):
 def main():
     what = sys.argv[1]
     t0 = time.time()
+    if what == "null4":                       # AMENDMENT 1: extend to N = 62
+        nj = json.load(open(os.path.join(HERE, "null.json")))
+        base_e = nj["base_exit_mar"]
+        reps = []
+        for rep, ds in enumerate(nj["reps"]):
+            extra = [mar(crit_a(v, exit_only=True)) - base_e for v in placebos_sa(22, rep)]
+            reps.append(ds + extra)
+        best = sorted(max(ds) for ds in reps)
+        q = dict(q95=best[int(0.95 * len(best)) - 1], median=best[len(best) // 2])
+        json.dump(dict(base_exit_mar=base_e, q={"62": q}, reps_extra=[r[40:] for r in reps]),
+                  open(os.path.join(HERE, "null4.json"), "w"))
+        print("null4", json.dumps(q), f"{time.time() - t0:.0f}s")
+        return
     if what == "null":
         base_e = mar(crit_a(BASE, exit_only=True))
         reps = []
@@ -104,6 +117,8 @@ def main():
         return
     base = evaluate(BASE)
     nullq = json.load(open(os.path.join(HERE, "null.json")))["q"]
+    if what == "r4":
+        nullq.update(json.load(open(os.path.join(HERE, "null4.json")))["q"])
     if what == "r1":
         vs, n = ROUND1, "30"
     elif what == "r2":
@@ -114,8 +129,10 @@ def main():
         top = sorted(best.values(), key=lambda r: -r["judge"]["dA_exit"])[:3]
         by_name = {v.name: v for v in ROUND1}
         vs, n = round2([by_name[r["name"]] for r in top]), "34"
-    else:
+    elif what == "r3":
         vs, n = ROUND3, "40"
+    else:
+        vs, n = ROUND4, "62"
     q95 = nullq[n]["q95"]
     rows = []
     for v in vs:

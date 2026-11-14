@@ -16,7 +16,7 @@ from harness import (BASE, S3_CFG, S4_CFG, T_2013, T_2022, T_IS_END, Book,
                      prepare, run_s3, run_s4)
 from app.engine.core import _close_position
 from app.engine.replay import run_replay
-from variants import ROUND1, ROUND3
+from variants import ROUND1, ROUND3, ROUND4
 
 ASSETS = {s: load_asset(s) for s in ("btc", "eth", "ltc", "xrp", "bch")}
 NOHALT = dataclasses.replace(S4_CFG, dd_halt=1.0)
@@ -72,7 +72,7 @@ def test_g3_blend_matches_bench():
 
 # G4: no look-ahead. Truncating the future changes nothing that closed
 # before the cut, for every registered variant.
-@pytest.mark.parametrize("v", ROUND1 + ROUND3, ids=lambda v: v.name)
+@pytest.mark.parametrize("v", ROUND1 + ROUND3 + ROUND4, ids=lambda v: v.name)
 def test_g4_no_lookahead(v):
     A = ASSETS["btc"]
     full, _ = run_s4(A, v, T_2022, None, cfg=NOHALT)
@@ -122,3 +122,24 @@ def test_g6_noop_is_base(v):
     a, _ = run_s4(A, BASE, None, None, cfg=NOHALT)
     b, _ = run_s4(A, v, None, None, cfg=NOHALT)
     assert _same(a.trades, b.trades)
+
+
+# G7 (AMENDMENT 1): stand-aside only ever blocks entries after a profit exit.
+# A never-firing take-profit with a cooldown is the baseline; a zero cooldown
+# is the underlying rule; the cooldown leaves stop-outs re-arming at once.
+@pytest.mark.parametrize("v", ROUND4, ids=lambda v: v.name)
+def test_g7_cooldown_plumbing(v):
+    A = ASSETS["btc"]
+    base, _ = run_s4(A, BASE, None, None, cfg=NOHALT)
+    never, _ = run_s4(A, V(name="n", tp_k=1e9, cool_n=30), None, None, cfg=NOHALT)
+    assert _same(base.trades, never.trades)
+    under = dataclasses.replace(v, cool_n=None)
+    zero = dataclasses.replace(v, cool_n=0)
+    a, _ = run_s4(A, under, None, None, cfg=NOHALT)
+    b, _ = run_s4(A, zero, None, None, cfg=NOHALT)
+    assert _same(a.trades, b.trades)
+    c, _ = run_s4(A, v, None, None, cfg=NOHALT)
+    # no same-side entry lands within 30 bars of a profit exit on that side
+    for t1, t2 in zip(c.trades, c.trades[1:]):
+        if t1.exit_reason in ("TP", "EXT", "RSI", "TIME", "CLIMAX", "ER", "VOLX") and t2.side == t1.side:
+            assert t2.entry_ts - t1.exit_ts > 30 * 14400 - 1

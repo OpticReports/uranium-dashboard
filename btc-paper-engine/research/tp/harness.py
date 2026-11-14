@@ -123,9 +123,14 @@ class V:
     placebo_q: float | None = None   # null: per-bar hazard of a random exit
     placebo_f: float = 1.0           # fraction closed by a placebo exit
     seed: int = 0
+    cool_n: int | None = None        # AMENDMENT 1: after a profit-taking full exit,
+    #                                  block same-side entries for n bars ("stand aside")
 
 
 BASE = V()
+# Full exits that take profit (AMENDMENT 1). Stop-type exits - the trail,
+# breakeven and channel stops - re-arm entries at once, exactly as today.
+PROFIT_EXITS = {"TP", "EXT", "RSI", "TIME", "CLIMAX", "ER", "VOLX", "PLACEBO"}
 
 
 # --------------------------------------------------------------- accounting
@@ -157,6 +162,8 @@ def _close_part(book: Book, pos: Position, qty: float, exit_ts: int,
 def _close_full(book: Book, pos: Position, exit_ts: int, exit_price: float,
                 reason: str, tcfg) -> None:
     _close_position(book, pos, exit_ts, exit_price, reason, tcfg)
+    if reason in PROFIT_EXITS:
+        book._cool = (pos.side, exit_ts)
 
 
 # ------------------------------------------------------------------ S4 step
@@ -295,7 +302,11 @@ def s4_step(book: Book, bar: Bar, ind: Ind, i: int, A: Asset, tcfg,
                 if rng.random() < v.placebo_q:
                     st["flag"], st["flag_f"] = "PLACEBO", v.placebo_f
                     st["placebo_done"] = True
-    # (5) new entry - engine verbatim
+    # (5) new entry - engine verbatim, plus AMENDMENT 1's stand-aside
+    cool = getattr(book, "_cool", None)
+    if (v.cool_n and cool is not None and signal == cool[0]
+            and bar.ts - cool[1] < v.cool_n * BAR_SECONDS):
+        signal = None
     if (book.position is None and book.pending is None and not book.halted
             and signal is not None):
         book.pending = Pending(side=signal, limit=-1.0, signal_ts=bar.ts,

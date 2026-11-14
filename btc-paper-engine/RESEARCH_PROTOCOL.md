@@ -22,8 +22,8 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | CAGR study: 7 registered + 11 diagnostic trend-share sweep (2026-09-28) | 18 | RESEARCH_CAGR.md |
 | Sharpe study (registered 2026-10-01) | 5 | research/sharpe/PREREG.md |
 | Sharpe study counter-agent diagnostics: 8 new rule configs (SMA 150/250d, H1 down-only, up-only, cap 1.2, vol window 90/360, H1+H2); +100-shuffle placebo and ~30 re-slices/nulls not counted as rules | 8 | RESEARCH_SHARPE.md |
-| Take-profit study, S4 exits (registered 2026-11-14; 30 + up to 4 + 6 if escalated; counted at registration as 40) | 40 | research/tp/PREREG.md |
-| **Total** | **~2,586** | |
+| Take-profit study, S4 exits (registered 2026-11-14; rounds 1-3: 30 + 4 + 6; AMENDMENT 1 round 4: +22 stand-aside variants) | 62 | research/tp/PREREG.md |
+| **Total** | **~2,608** | |
 
 Fee-study note (2026-09-10): the fee row counts 24, not the 14 its
 pre-registration declared — 14 registered grid arms, plus 8 Kelly re-fits

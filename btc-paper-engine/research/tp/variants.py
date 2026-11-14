@@ -37,6 +37,14 @@ ROUND3 = (
 )
 assert len(ROUND3) == 6
 
+# AMENDMENT 1 (registered before it ran): every full-exit rule of rounds 1
+# and 3, with a 30-bar (5-day) same-side stand-aside after it takes profit.
+FULL_EXIT = ("tp_k", "ext_z", "rsi_l", "time_n", "climax_k", "er_k", "volx_v")
+ROUND4 = [dataclasses.replace(v, name=v.name + "_sa30", cool_n=30)
+          for v in ROUND1 + ROUND3
+          if any(getattr(v, f) is not None for f in FULL_EXIT)]
+assert len(ROUND4) == 22, len(ROUND4)
+
 FIELDS = ("tp_k", "ptp_k", "ptp_f", "lock_k", "lock_m", "be_k", "ext_z",
           "rsi_l", "time_n", "chan_n", "climax_k", "er_k", "er_x", "volx_v")
 
@@ -80,3 +88,12 @@ def placebos(n, rep):
         out.append(V(name=f"PLC{rep}_{j}", placebo_q=q, placebo_f=f,
                      seed=rng.randrange(1 << 30)))
     return out
+
+
+def placebos_sa(n, rep):
+    """AMENDMENT 1 null draws: full random exits with the same 30-bar
+    stand-aside as ROUND4 (log-uniform hazard as above)."""
+    rng = random.Random(7_000_003 * rep + 29)
+    return [V(name=f"PLCSA{rep}_{j}", placebo_q=10 ** rng.uniform(-2.5229, -1.0969),
+              placebo_f=1.0, seed=rng.randrange(1 << 30), cool_n=30)
+            for j in range(n)]
