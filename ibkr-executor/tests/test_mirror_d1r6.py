@@ -209,8 +209,9 @@ def test_g1_an_alerted_k5_outage_cured_by_a_replacement_is_announced_with_its_tr
     """GATE. The gateway never answers a new session's connect-time request from 23:45; the DOWN page goes out at
     00:15; at 01:00 it answers again with no restart and no FIN, and the session the schedule tries next syncs. ONE
     notice ends the outage. 33850e01: 'RECONNECTED ... the Composer mirror could not read the account or trade
-    meanwhile' - but the DOWN page had said positions and cash ARE read, and they were. Now it names the outage's last
-    cause: the open orders were unreadable (no trade, no flatten); positions and cash were read."""
+    meanwhile' - but the DOWN page had said positions and cash ARE read, and they were. Now it names the outage's
+    cause (D1 round 7: every cause it had - here this one alone, test_mirror_d1r7): the open orders were unreadable
+    (no trade, no flatten); positions and cash were read."""
     r = d4._rig(tmp_path, monkeypatch)
     _replaced_on_vt(r)
     r.vt.advance((tm.at("23:45:00", tm.DAY) - r.clock.now).total_seconds())
@@ -271,7 +272,8 @@ def test_g2_every_k5_recovery_notice_is_worded_from_that_last_cause(monkeypatch,
 @pytest.mark.parametrize("mirror_only", [True, False])
 @pytest.mark.parametrize("reconnected", [True, False])
 def test_g2_twin_a_plain_outages_notice_is_unchanged_to_the_letter(monkeypatch, mirror_only, reconnected):
-    """TWIN (passes before and after): the last cause was no session at all - the words stay what they were"""
+    """TWIN (passes before and after): the outage had no session at all, only the plain cause - the words stay
+    what they were (round 7 words the notice from every cause the outage had, not its last one)"""
     msg = _bare(mirror_only, False, reconnected, monkeypatch)
     if mirror_only:
         assert msg == ("🧬 IB gateway RECONNECTED after 60 min — executor resumed (the Composer mirror could not "
@@ -366,15 +368,16 @@ def test_g4_the_down_page_counts_a_session_a_gateway_fin_brought(tmp_path, monke
 
 def test_g3_twin_a_never_answering_night_counts_the_fresh_sessions_as_before(tmp_path, monkeypatch):
     """TWIN (passes before and after): no refusal, no FIN - every session after the first came from a replacement,
-    so the count is what it was: at 00:15 the fifth session is up and four fresh ones were tried"""
+    so the count is what it was: at 00:15 the fifth session is up and four fresh ones were tried (the wait's words
+    that follow the count changed in D1 round 7: test_mirror_d1r7 p1-p2)"""
     r = d4._rig(tmp_path, monkeypatch)
     r.vt.advance((tm.at("23:45:00", tm.DAY) - r.clock.now).total_seconds())
     r.ib.policy = lambda n: None
     r.ib.drop()
     page, sessions, step = _night_until_the_page(r, snap=lambda: getattr(r.ad, "_unsynced_replacements", None))
     assert (sessions, step) == (5, 4), (sessions, step)
-    assert " 4 fresh gateway sessions were already tried and none synced; another is tried after a wait that " \
-           "doubles each time, up to 15 min, until one syncs." in page, page
+    assert " 4 fresh gateway sessions were already tried and none synced; another is tried at the executor's next " \
+           "check once a wait has passed" in page, page
 
 
 def test_g3_twin_a_boot_into_a_gateway_that_never_answers_counts_its_own_session_as_the_first(tmp_path,

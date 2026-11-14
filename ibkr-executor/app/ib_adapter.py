@@ -160,13 +160,18 @@ UNSYNCED_REPLACE_MAX_S = 15 * 60.0  # K5 (D1 round 5): the replacement interval'
                              # KNOWN, NOT BUILT (D1 round 6, recorded): an
                              # answer that has not come by the interval is taken
                              # as LOST, never as late - the adapter cannot tell
-                             # the two apart before it drops the session. A
-                             # gateway that answers EVERY new session's sync a
-                             # fixed ~125-220 s late after a drop at the decision
-                             # therefore does not trade (round 4 kept session 2
-                             # and did), and more than ~15 min late overnight
-                             # never ends the outage. The record, with the cap's
-                             # own costs: _unsynced_replace_interval.
+                             # the two apart before it drops the session (both
+                             # are the reviews' scripts: neither a lost nor a
+                             # late connect-time answer has been seen on a real
+                             # gateway). A gateway that answers EVERY new
+                             # session's sync a fixed 123-218 s late (129-224 s
+                             # with the loop ticking) after a drop at the
+                             # decision therefore sends no order, where round 4
+                             # kept session 2 and traded (in full to 217 s, 223
+                             # s ticking; its sells alone one second later),
+                             # and more than ~15 min late overnight never ends
+                             # the outage. The record, with the cap's own
+                             # costs: _unsynced_replace_interval.
 
 # IB order states that mean the order can no longer fill.
 # Terminal-dead order statuses - and ONLY these. CORRECTION (2026-08-25,
@@ -608,6 +613,13 @@ class IBAdapter:
         self._unsynced_replacements = 0
         self._unsynced_sessions = 0
         self._outage_reconnected = False
+        # the open outage's causes, for the recovery notice's words only (D1
+        # round 7; reset when it closes): it had a spell with no session (a
+        # failed connect, or a wait for the backoff with no session), and it
+        # had a session whose connect-time open-orders sync did not end. The
+        # cause a DOWN page states is recorded with them when it is sent.
+        self._outage_had_no_session = False
+        self._outage_had_unsynced = False
         # the position list of THIS session is trusted only once its
         # download is known to have ended (_session_positions); and why the
         # last account_cash() made no claim (it never raises): kind is
@@ -752,6 +764,7 @@ class IBAdapter:
                                    "sync did not end: not usable until it does")
                     self._disconnected_since = time.monotonic()
                     self._open_orders_unsynced = True
+                    self._outage_had_unsynced = True     # the notice's words (_recovered)
                     self._unsynced_sessions = int(getattr(self, "_unsynced_sessions", 0) or 0) + 1
                     self._outage("start", time.time())
                     self._outage("mark_kind", KIND_OPEN_ORDERS_UNSYNCED)
@@ -1060,6 +1073,7 @@ class IBAdapter:
         if not getattr(self, "_in_keepalive", False):
             self._outage("blocked_call")
         if now < self._next_reconnect_ts:
+            self._outage_had_no_session = True  # waiting out the backoff with no session (_recovered's words)
             self._maybe_outage_alert(now)
             return
         try:
@@ -1082,6 +1096,7 @@ class IBAdapter:
                 # not a stalled login the moment it drops)
                 self._outage("mark_kind", None)
             self._open_orders_unsynced = False  # no session at all: a plain outage
+            self._outage_had_no_session = True  # ... and the outage had such a spell (_recovered's words)
             # ... and the replacement schedule starts over (D1 round 5): an
             # unsynced session that a LATER connect brings is its spell's
             # first, replaced UNSYNCED_REPLACE_WAITS x the bound after it.
@@ -1140,6 +1155,7 @@ class IBAdapter:
             if not getattr(self, "_open_orders_unsynced", False):
                 self._outage("mark_kind", KIND_OPEN_ORDERS_UNSYNCED)
             self._open_orders_unsynced = True
+            self._outage_had_unsynced = True    # the notice's words (_recovered)
             self._unsynced_sessions = int(getattr(self, "_unsynced_sessions", 0) or 0) + 1
             self._next_reconnect_ts = ended + self._reconnect_backoff
             self._reconnect_backoff = min(
@@ -1170,20 +1186,38 @@ class IBAdapter:
         sync has ended. Recovery notice after an alerted outage, state
         resets, ledger closed. The notice says RECONNECTED only when the
         outage saw a reconnect: an unsynced outage whose late sync ended on
-        the session it began on was never a reconnect (D1 round 4). Its words
-        come from the outage's LAST cause (D1 round 6): an alerted unsynced
-        outage now usually ends through a replacement - a reconnect - and the
-        plain outage's "could not read the account" contradicted the DOWN
-        page ("positions and cash are read normally"). After an unsynced one:
-        the open orders were unreadable, so nothing was traded or flattened;
-        the positions and the cash were read. Recorded, not built: an outage
-        whose cause changed is worded by the last one only. An unsynced page
-        followed by a spell with no session at all (a gateway restart that
-        refused connects; a gateway that refuses each reconnect made right
-        after a replacement's drop, IB's 326) ends with the plain words; a
-        plain page followed by unsynced sessions ends with these."""
+        the session it began on was never a reconnect (D1 round 4).
+
+        Its words name EVERY cause the outage had (D1 round 7), so they are
+        true of the whole outage and never contradict its DOWN page, whose
+        cause is always one of them (_maybe_outage_alert records it):
+          - only spells with no session (the gateway down, not logged in, or
+            refusing connects): the account could not be read - the plain
+            words, unchanged;
+          - only sessions whose connect-time open-orders sync did not end:
+            the open orders were unreadable, so nothing was traded or
+            flattened; positions and cash were read (D1 round 6: the plain
+            words contradicted that DOWN page, "positions and cash are read
+            normally");
+          - both: each "at times", since neither held for the whole outage -
+            a plain page, then a first session back that lost its answer (a
+            gateway still warming up); an unsynced page, then a reconnect the
+            gateway refused (IB's 326 after a replacement's drop, a restart
+            refusing connects), or a session lost inside the backoff.
+        Round 6 took the LAST cause alone, which in both mixed cases
+        contradicted the page and claimed something false of most of the
+        outage (D1 round 6 review). The page's cause alone would too: a
+        plain page, then an unsynced tail, would say the account could not
+        be read where it was. "READABLE again" (no reconnect) never comes
+        with a spell with no session, which only a reconnect ends. A spell
+        with no session that no call met (a FIN while the loop was parked,
+        the next attempt accepted at once) is not seen; no wording claims a
+        session was up throughout. An outage that was never paged sends no
+        notice."""
         unsynced = getattr(self, "_open_orders_unsynced", False)
         reconnected = getattr(self, "_outage_reconnected", False)
+        had_unsynced = unsynced or getattr(self, "_outage_had_unsynced", False)
+        had_no_session = getattr(self, "_outage_had_no_session", False)
         self._open_orders_unsynced = False
         self._sync_pending_since = None
         self._sync_wait_failed = False
@@ -1194,7 +1228,20 @@ class IBAdapter:
                     "session's open-orders sync ended", down_s)
         if self._outage_alerted:
             from .alerts import send
-            if unsynced:
+            if had_unsynced and had_no_session:
+                meanwhile = (
+                    " (the Composer mirror could not trade or flatten "
+                    "meanwhile: at times no gateway session was up, so the "
+                    "account could not be read; at others open orders were "
+                    "unreadable while positions and cash were read; it keeps "
+                    "no resting stops at the venue)"
+                    if getattr(self, "mirror_only", False) else
+                    " (cycles were failing closed meanwhile: at times no "
+                    "gateway session was up, so the account could not be "
+                    "read; at others open orders were unreadable while "
+                    "positions and cash were read; GTC stops rested at the "
+                    "venue throughout)")
+            elif had_unsynced:
                 meanwhile = (
                     " (open orders were unreadable, so the Composer mirror "
                     "could not trade or flatten meanwhile; positions and cash "
@@ -1203,6 +1250,9 @@ class IBAdapter:
                     " (open orders were unreadable, so cycles were failing "
                     "closed meanwhile; positions and cash were read; GTC stops "
                     "rested at the venue throughout)")
+            else:
+                meanwhile = None
+            if meanwhile is not None:
                 if reconnected:
                     send(f"🧬 IB gateway RECONNECTED after {down_s / 60:.0f} "
                          f"min — executor resumed" + meanwhile)
@@ -1228,6 +1278,8 @@ class IBAdapter:
         self._disconnected_since = None
         self._outage_alerted = False
         self._outage_reconnected = False
+        self._outage_had_no_session = False     # the next outage's causes start over
+        self._outage_had_unsynced = False
         self._unsynced_replacements = 0     # the next unsynced outage's schedule starts over
         self._unsynced_sessions = 0         # ... and its count of the sessions tried
         self._reconnect_backoff = RECONNECT_BACKOFF_S
@@ -1251,17 +1303,27 @@ class IBAdapter:
             # unsynced but the first (D1 round 6: the schedule's own step
             # restarts at a failed connect and skips a session a gateway FIN
             # brought, so the page under-counted - it said none was tried when
-            # each reconnect after a replacement was refused once).
+            # each reconnect after a replacement was refused once). The wait
+            # is the schedule's (_unsynced_replace_interval) as it runs: it
+            # doubles with each replacement and goes back to its first step
+            # after a failed connect (D1 round 7: "doubles each time" was
+            # false where each reconnect after a replacement is refused once,
+            # IB's 326, and the wait stays at its first step).
+            self._outage_had_unsynced = True    # the cause this page states (_recovered's words)
             n = max(int(getattr(self, "_unsynced_sessions", 0) or 0) - 1, 0)
             tried = ""
             if n:
+                first = UNSYNCED_REPLACE_WAITS * VENUE_HISTORY_TIMEOUT_S
                 tried = (" A fresh gateway session was already tried and its "
                          "sync did not end either;" if n == 1 else
                          f" {n} fresh gateway sessions were already tried and "
                          f"none synced;")
-                tried += (f" another is tried after a wait that doubles each "
-                          f"time, up to {UNSYNCED_REPLACE_MAX_S / 60:.0f} min, "
-                          f"until one syncs.")
+                tried += (f" another is tried at the executor's next check "
+                          f"once a wait has passed ({first:.0f} s at first, "
+                          f"doubling with each replacement up to "
+                          f"{UNSYNCED_REPLACE_MAX_S / 60:.0f} min, back to "
+                          f"{first:.0f} s after a failed connect), until one "
+                          f"syncs.")
             why = (f" CAUSE: the gateway connects and answers, but the "
                    f"open-orders request each new session sends at connect goes "
                    f"unanswered, so no open-orders read can be trusted and "
@@ -1283,6 +1345,9 @@ class IBAdapter:
                  f"cycles fail closed (no entries/exits/stop ratchets), GTC "
                  f"stops still rest at the venue." + why)
             return
+        # this page is only ever sent with no session up (_reconnect, waiting
+        # out the backoff or after a failed connect): its cause, recorded
+        self._outage_had_no_session = True  # (_recovered's words)
         if getattr(self, "mirror_only", False):
             send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} min "
                  f"— the Composer mirror cannot read the account or trade. "
@@ -1512,18 +1577,21 @@ class IBAdapter:
         clock and on scripted gateways, never on a real IB gateway):
         - LATE versus LOST. Both are an unended sync, and the adapter cannot
           tell them apart before it drops the session; the schedule takes
-          the answer as lost, the failure actually observed (round 4 waited
-          for a late one by keeping its second session for good, and when
-          that session's answer was lost too nothing traded). Cost: a gateway
-          that answers EVERY new session's connect-time open-orders request
-          a fixed time late, after a drop at the decision (15:54:20): up to
-          ~95 s late it trades as round 4 did (the same sessions, the same
-          instants); ~95-125 s late it trades ~95 s later, close to the
-          cancel instant (buys as late as 15:58:59); ~125-220 s late it does
-          not trade (round 4 kept session 2, its late end landed and it
-          traded); later than that neither does. The simulated clock's edges:
-          122/123 and 215/220 s with the loop parked until decide_at, 128/129
-          and 220/225 s with it ticking at the drop. Overnight, more than ~15
+          the answer as lost, the failure the reviews scripted (neither a
+          lost nor a late connect-time answer has been seen on a real
+          gateway; round 4 waited for a late one by keeping its second
+          session for good, and when that session's answer was lost too
+          nothing traded). Cost: a gateway that answers EVERY new session's
+          connect-time open-orders request a fixed time late, after a drop
+          at the decision (15:54:20; measured on the simulated clock at 1-s
+          steps with the loop parked until decide_at, and in brackets with
+          it ticking at the drop): up to 95 s late it trades as round 4 did
+          (the same sessions, the same instants); 96-122 s (96-128 s) late
+          it trades ~95 s later, close to the cancel instant (buys as late as
+          15:58:59); from 123 s (129 s) it sends nothing, where round 4,
+          keeping session 2 for its late end, still traded in full up to
+          217 s (223 s) and sent its sells alone, no buy, at 218 s (224 s);
+          from 219 s (225 s) neither sends anything. Overnight, more than ~15
           min late never ends the outage (66 replacements by the next
           decision, one DOWN page, that decision not traded; round 4 kept its
           second session, closed the outage when the late end landed and
@@ -1537,9 +1605,13 @@ class IBAdapter:
           keepalive), ~72 attempts and 36 sessions an hour during a /kill
           flatten, bounded by the reconnect backoff (30 s; 45 s between
           attempts at the least, with a refused connect modelled as waiting
-          out its 15 s) - no storm, though the DOWN page's "doubles each
-          time" is then not what happens. Its count of the sessions tried
-          stays true (_unsynced_sessions).
+          out its 15 s) - no storm. The DOWN page words the wait as it runs
+          (D1 round 7: 40 s at first, doubling with each replacement, back
+          to 40 s after a failed connect; round 6's "doubles each time" was
+          false here) and says the next session comes at the executor's next
+          check once that wait has passed (when idle, the keepalive every
+          poll_seconds, 300 s), and its count of the sessions tried stays
+          true (_unsynced_sessions).
         - The cap's cost. After a spell long enough to reach 900 s, a
           gateway that heals with no FIN is found up to ~15 min later. Three
           lost answers met at the decision do not trade (the 4th session is

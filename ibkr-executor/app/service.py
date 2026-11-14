@@ -1074,9 +1074,11 @@ def _loop_wait() -> float:
 
 # The /kill alert quotes this once. Measured (D1 round 6, tests/test_mirror_d1r6.py
 # w1): with the live and the dry book and the blend's notes, over every branch the
-# handler words, at most 3,615 characters with full-disk exception texts, against
-# alerts.send's 4,000-character cut; it passes the cut only when the exception
-# texts it quotes average more than 206 characters, and then loses its tail first.
+# handler words, about 3,600-3,700 characters with full-disk exception texts
+# (3,615-3,707 by the paths those texts name; mkstemp's temp names and
+# os.replace's two-path text are the longest), against alerts.send's
+# 4,000-character cut; it passes the cut only when the exception texts it quotes
+# average more than 206 characters, and then loses its tail first.
 MIRROR_KILL_BOUND = (
     "a mirror tick in flight hands the loop back within ONE venue call of "
     "the kill: a brain read or a retry wait is dropped at once, a quote "

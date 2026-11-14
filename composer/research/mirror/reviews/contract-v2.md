@@ -47,11 +47,13 @@ Payload:
                                        # half-days) and SPY is priced at its own last trade: only while SPY's
                                        # bars without volume since that trade moved off its price, closed at 2
                                        # or more prices and not 3 or more in a row at one price up to T (amended
-                                       # 2026-11-13, round 5: SPY's own, stricter rule; round 6: those tests
-                                       # only when that trade ends more than 2 minutes before T - a trade within
-                                       # them, the 2 minutes included, is a recent one and needs none), and at
-                                       # least half the trees' tickers really traded in the 2 minutes to T
-                                       # (mirror_brain.py's docstring). On a full day spy_utc == end_utc == T.
+                                       # 2026-11-13, round 5: SPY's own, stricter rule; round 6: a trade ending
+                                       # within 2 minutes of T, the 2 minutes included, needs none of those
+                                       # tests; round 7: only while at least one other ticker of the trees - not
+                                       # a sibling - really traded in the bar ending AT T, else the tests apply
+                                       # to it too), and at least half the trees' tickers really traded in the 2
+                                       # minutes to T (mirror_brain.py's docstring). On a full day spy_utc ==
+                                       # end_utc == T.
      "replay": false, "close_et": "16:00",
      "engines": {NAME: {"status": "ok" | "unavailable", "symphony", "version", "rule", "corridor",
                         "target": {ticker: weight}, "label", "stale": [...], "caveats": [...],
