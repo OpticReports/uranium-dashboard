@@ -483,12 +483,17 @@ def test_d7_a_withdrawal_is_outside_a1_or_a3():
 def test_d8_the_doc_says_the_warnings_words_and_the_red_at_once(guard_doc):
     """round 6 (the round-5 review's NOTE): all three red-at-once reasons (an unreadable record too, as the code
     says: UNCONFIRMED_NO_RECORD), 'not expected to change' (a non-stock lot can go away on a later look), and the
-    no-warning-after-a-red rule is per process (self._said): after a restart the new process warns once more"""
+    no-warning-after-a-red rule is per process (self._said), but the hold's start is on disk (run.buys_blocked_utc):
+    a new process warns once more only when its first look comes within the 10 s grace (the final cross-patch
+    review; tests/test_mirror_final.py pins both cases)"""
     assert ('as a warning ("not yet confirmed by the account\'s positions; re-read every step": IB\'s lag, or a real '
             'difference) and in red only once it has lasted 10 s; a disagreement reading the positions again is not '
             'expected to change (no record of them from before the run, a record of them that cannot be read, a '
             'holding that is not a whole stock lot) in red at once, and no warning follows a red this process already '
-            'sent (after a restart the new process warns once more, then its red comes)') in guard_doc
+            "sent (the hold's start, run.buys_blocked_utc, is kept on disk: after a restart, a new process whose "
+            "first look comes within 10 s of it warns once more, then its red comes; later, its first look is red at "
+            "once, as after any real restart)") in guard_doc
+    assert "after a restart the new process warns once more, then its red comes)" not in guard_doc
     assert "no warning follows a red already sent" not in guard_doc
 
 

@@ -275,12 +275,22 @@ def _is_trading_day(d) -> bool:
         return d.weekday() < 5
 
 
+_CLOSE_UNREAD_SAID = False
+
+
 def _session_close_et(d) -> tuple:
-    """(hour, minute) ET of the regular close on d: blend's early-close table (13:00), else 16:00"""
+    """(hour, minute) ET of the regular close on d: blend's early-close table (13:00), else 16:00. A table that
+    cannot be read falls back to 16:00 and says so once at WARNING: the mirror then refuses every half-day lean
+    (mirror.py _validate), and the NO TRADE line alone would not say why"""
+    global _CLOSE_UNREAD_SAID
     try:
         from .blend import session_close_et
         return session_close_et(d)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        if not _CLOSE_UNREAD_SAID:
+            _CLOSE_UNREAD_SAID = True
+            logger.warning("the early-close calendar (blend.session_close_et) could not be read: %s; "
+                           "taking 16:00 ET, so the mirror refuses any half-day lean", exc)
         return (16, 0)
 
 

@@ -506,8 +506,11 @@ def test_n6_twin_a_short_mixed_outage_sends_nothing_and_leaves_no_cause_to_the_n
 
 
 # ============================================================================== P: the DOWN page's wait
-NEW_WAIT = (" another is tried at the executor's next check once a wait has passed (40 s at first, doubling with each "
-            "replacement up to 15 min, back to 40 s after a failed connect), until one syncs.")
+NEW_WAIT = (" another is tried at the executor's next check once the wait and the reconnect backoff have passed (the "
+            "wait 40 s at first, doubling with each replacement up to 15 min, back to 40 s after a failed connect), "
+            "until one syncs.")
+# (the final cross-patch review's NOTE: a replacement also waits out the reconnect backoff - up to 300 s with the
+# blend or the ladder on - so the page names both)
 # (round 7's review NOTE: the wait is the replacement interval; when idle the next session comes only at the next
 # keepalive once it has passed - 300, 300, 300, 600, 900 s on a real-socket night - so the page says "at the
 # executor's next check once a wait has passed", not "after a wait")

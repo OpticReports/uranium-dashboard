@@ -1319,7 +1319,8 @@ class IBAdapter:
                          f" {n} fresh gateway sessions were already tried and "
                          f"none synced;")
                 tried += (f" another is tried at the executor's next check "
-                          f"once a wait has passed ({first:.0f} s at first, "
+                          f"once the wait and the reconnect backoff have passed "
+                          f"(the wait {first:.0f} s at first, "
                           f"doubling with each replacement up to "
                           f"{UNSYNCED_REPLACE_MAX_S / 60:.0f} min, back to "
                           f"{first:.0f} s after a failed connect), until one "
@@ -1609,7 +1610,7 @@ class IBAdapter:
           (D1 round 7: 40 s at first, doubling with each replacement, back
           to 40 s after a failed connect; round 6's "doubles each time" was
           false here) and says the next session comes at the executor's next
-          check once that wait has passed (when idle, the keepalive every
+          check once that wait and the reconnect backoff have passed (when idle, the keepalive every
           poll_seconds, 300 s), and its count of the sessions tried stays
           true (_unsynced_sessions).
         - The cap's cost. After a spell long enough to reach 900 s, a

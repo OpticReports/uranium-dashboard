@@ -284,11 +284,13 @@ it with /mirror/resolve.
   10 s; a disagreement reading the positions again is not expected to change
   (no record of them from before the run, a record of them that cannot be
   read, a holding that is not a whole stock lot) in red at once, and no
-  warning follows a red this process already sent (after a restart the new
-  process warns once more, then its red comes). Keep at least 1.1% of a
-  day's sells + $10 an order outside the book (about $1.3k on a $117k
-  rotation): below that, a commission IB had not reported when its sell was
-  booked holds a lagging day's buys. A live state file that holds shares
+  warning follows a red this process already sent (the hold's start,
+  run.buys_blocked_utc, is kept on disk: after a restart, a new process whose
+  first look comes within 10 s of it warns once more, then its red comes;
+  later, its first look is red at once, as after any real restart). Keep at
+  least 1.1% of a day's sells + $10 an order outside the book (about $1.3k on
+  a $117k rotation): below that, a commission IB had not reported when its
+  sell was booked holds a lagging day's buys. A live state file that holds shares
   while no live book is built is alerted in red at every boot.
 - What the guard cannot see, and the operating rule. While TotalCashValue
   lags, three things move the account's cash with nothing the guard reads
@@ -339,19 +341,22 @@ the connect gave up on it, then 80, 160, 320, 640 s, capped at 15 min; it
 starts over when a connect fails and when the outage ends. Two lost answers
 met at the decision still trade before 15:58:00 (12:58:00 on a half-day). Past
 30 min the outage pages once (DOWN: the cause, how many fresh sessions this
-outage tried, and when the next comes: at the executor's next check once a
-wait has passed - 40 s at first, doubling with each replacement up to 15 min,
-back to 40 s after a failed connect; when idle the check is the keepalive,
-every 300 s, so at night the sessions come 300-900 s apart). Its end is
-announced with every cause the outage had that a call met (a spell with no
+outage tried, and when the next comes: at the executor's next check once
+the wait and the reconnect backoff have passed - the wait 40 s at first,
+doubling with each replacement up to 15 min, back to 40 s after a failed
+connect; the backoff at most 30 s with the mirror alone, 300 s with the
+blend or the ladder on; when idle the check is the keepalive, every 300 s,
+so at night the sessions come 300-900 s apart). Its end is announced with
+every cause the outage had that a call met (a spell with no
 session that no call met is not seen), so the notice never contradicts the
 page: no session (the account could not be read), sessions whose open orders
 were unreadable (positions and cash were read), or both, each "at times".
-Pre-existing: a K5 session lost to a FIN leaves the K5 cause set until a
-connect fails, so if the 30-minute mark falls inside the reconnect backoff
-right after such a FIN (at most 30 s for the mirror, 300 s for the blend) the
-page goes out with the K5 words ("positions and cash are read normally")
-while no session is up; the notice that ends the outage names both causes
+New with this change set (rounds 4-5: c1aaca77 sends no K5 page), not
+fixed: a K5 session lost to a FIN leaves the K5 cause set until a connect
+fails, so if the 30-minute mark falls inside the reconnect backoff right
+after such a FIN (at most 30 s with the mirror alone, 300 s with the blend
+or the ladder on) the page goes out with the K5 words ("positions and cash
+are read normally") while no session is up; the notice that ends the outage names both causes
 (ibkr-executor/app/ib_adapter.py _recovered and
 _unsynced_replace_interval; ibkr-executor/tests/test_mirror_d1r5.py,
 test_mirror_d1r6.py and test_mirror_d1r7.py).
@@ -378,7 +383,8 @@ never on a real IB gateway):
   immediate same-clientId reconnect (IB error 326), the interval never
   doubles past 40 s: measured ~12 connect attempts and 6 sessions an hour
   idle, ~72 attempts and 36 sessions an hour during a /kill flatten, bounded
-  by the reconnect backoff (a 45 s minimum gap). The DOWN page's wait says
+  by the reconnect backoff (a 45 s minimum gap) - with the mirror alone;
+  with the blend or the ladder on, the 300 s backoff bounds them. The DOWN page's wait says
   so (back to 40 s after a failed connect).
 - The cap's cost: after a spell long enough to reach 900 s, a gateway that
   heals with no FIN is found up to ~15 min later. Three lost answers met at
@@ -386,6 +392,21 @@ never on a real IB gateway):
   a /kill flatten sells after ~322 s with three lost, ~658 s with four.
 - A gateway-only restart that accepts the next connect at once keeps the
   interval: the schedule does not restart on a gateway FIN.
+- Against c1aaca77, the code that traded the live book before this change
+  set (at every guarded read that met an unanswered open-orders request it
+  dropped the session and reconnected at once): it cured LOST answers
+  faster. Met at the decision, one lost answer began trading at 15:54:38
+  there (15:55:15 here), two at 15:54:53 (15:56:50), three at 15:55:10
+  (here: nothing that session); a /kill flatten during a spell that heals
+  with no FIN sold ~15 s after the heal there, here up to the replacement
+  interval later (measured 7 min 45 s after a long spell). In exchange this
+  schedule lets a LATE answer land at the decision and in a flatten (met
+  there, c1aaca77 dropped every session before one could), pages once
+  (c1aaca77 sent no page) and makes no reconnect storm (c1aaca77: ~226
+  sessions an hour, one every 15-20 s, during a /kill flatten on a gateway
+  that never answers; idle, it kept its one session). Accepted; the first step inside the decision window and during
+  a flatten (below) would narrow it. Measured by the final cross-patch
+  review (composer/research/mirror/reviews/rounds4-7-2026-11-14.md).
 - Considered, not built: the first step inside the decision window and
   during a flatten (it costs the late band from ~55 s), a reset on a gateway
   FIN, a ~1 s pause before the reconnect.

@@ -367,7 +367,8 @@ def test_g4_the_down_page_counts_a_session_a_gateway_fin_brought(tmp_path, monke
 
 
 def test_g3_twin_a_never_answering_night_counts_the_fresh_sessions_as_before(tmp_path, monkeypatch):
-    """TWIN (passes before and after): no refusal, no FIN - every session after the first came from a replacement,
+    """TWIN in round 6 (the final review reworded the page sentence it pins, so it now fails on 4f4282c1): no
+    refusal, no FIN - every session after the first came from a replacement,
     so the count is what it was: at 00:15 the fifth session is up and four fresh ones were tried (the wait's words
     that follow the count changed in D1 round 7: test_mirror_d1r7 p1-p2)"""
     r = d4._rig(tmp_path, monkeypatch)
@@ -377,7 +378,7 @@ def test_g3_twin_a_never_answering_night_counts_the_fresh_sessions_as_before(tmp
     page, sessions, step = _night_until_the_page(r, snap=lambda: getattr(r.ad, "_unsynced_replacements", None))
     assert (sessions, step) == (5, 4), (sessions, step)
     assert " 4 fresh gateway sessions were already tried and none synced; another is tried at the executor's next " \
-           "check once a wait has passed" in page, page
+           "check once the wait and the reconnect backoff have passed" in page, page
 
 
 def test_g3_twin_a_boot_into_a_gateway_that_never_answers_counts_its_own_session_as_the_first(tmp_path,
