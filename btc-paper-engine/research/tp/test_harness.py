@@ -76,7 +76,7 @@ def test_g3_blend_matches_bench():
 def test_g4_no_lookahead(v):
     A = ASSETS["btc"]
     full, _ = run_s4(A, v, T_2022, None, cfg=NOHALT)
-    for cut in (20000, 26000, 31000):
+    for cut in (24000, 27500, 31000):          # all inside the 2022+ run (G4 cut fix)
         At = prepare("btc", A.bars[:cut])
         part, _ = run_s4(At, v, T_2022, None, cfg=NOHALT)
         last = A.bars[cut - 1].ts

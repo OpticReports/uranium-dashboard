@@ -81,7 +81,11 @@ def test_stand_aside_blocks_same_side_only():
     b._st = {}
     b._cool = ("S", 0)
     v = V(tp_k=3.0, cool_n=30)
-    for side, i, blocked in (("S", 5, True), ("L", 5, False), ("S", 31, False)):
+    # same side blocked through bar 29 after the exit bar (signals at bars
+    # 0..29 suppressed, so the earliest re-entry fills at bar 31); the
+    # opposite side is never blocked
+    for side, i, blocked in (("S", 5, True), ("L", 5, False), ("S", 29, True),
+                             ("L", 29, False), ("S", 30, False), ("S", 31, False)):
         b.pending = None
         s4_step(b, Bar(ts=i * H, open=100, high=100, low=100, close=100, volume=1),
                 A.inds[i], i, A, RESEARCH_TRADE, side, v, random.Random(0))

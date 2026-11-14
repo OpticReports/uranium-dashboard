@@ -82,9 +82,15 @@ the best close. That give-back buys the long runs that make all the money.
 **The one pattern worth watching:** exit after 20 days, then stand aside 5.
 On BTC it improved the live mix in every year 2022–26 (marked to market
 +86/+93/−2/+25/+23% vs +44/+88/−3/+22/+16%). But:
-- it was flat on BTC 2013–26;
-- it helped only 2 of the 4 other coins;
-- it scores no better than the best of 62 random rules (44th percentile).
+- **It failed out of sample.** It did better on only 2 of 4 coins, with a
+  mean change of −0.17 and ETH at −0.51.
+- **It added nothing on BTC's longer history:** flat across 2013–26.
+- **Its own family is erratic:** the 5-, 10- and 20-day versions score +0.30,
+  −0.71 and +0.48.
+- **It is within luck.** As a single pre-registered test it would beat 97% of
+  random stand-aside rules. In fact it was the best of 22 post-hoc variants,
+  and the best of 62 random-exit rules (22 of them standing aside the same
+  way) typically scores as high (median of maxima +0.51).
 
 Under §9a and AMENDMENT 1 it can only become a candidate on fresh data.
 
@@ -113,6 +119,12 @@ Under §9a and AMENDMENT 1 it can only become a candidate on fresh data.
     does the same);
   - the profit lock tightens one bar after it triggers;
   - the best close used for lock, breakeven and ER excludes the fill bar.
+- **Stand-aside conventions** (AMENDMENT 1, as coded; counter-agent A):
+  - the same-side block runs 30 bars after the exit bar, so the earliest
+    re-entry fills on bar 31 (≈5.2 days);
+  - it expires only with time: an opposite-side trade in between does not
+    re-arm it. The alternative reading moves A by up to −0.18 with no
+    pass/fail change.
 - **Not tested:** stand-asides other than 5 days, re-entry rules other than
   the engine's breakout, size scaling, regime filters.
 - **DSR** (protocol §2 basis, N = 2,608): live mix 0.16, best rule 0.42.
@@ -147,7 +159,20 @@ Under §9a and AMENDMENT 1 it can only become a candidate on fresh data.
   - The re-entry design: became round 4.
   - The partial TP's higher win rate (2013–26: 45% → 53%) must carry its
     costs: it does, in the table.
-- **A, round 4 pass:** PENDING.
+- **A, round 4 pass:** the stand-aside code does what AMENDMENT 1 says,
+  with no look-ahead.
+  - BASE and rounds 1–3 are bit-identical to before it (366 runs).
+  - An independent stand-aside simulator reproduced all 22 judge rows
+    exactly; 0/22 eligible.
+  - The null placements reproduced exactly.
+  - Defect, MINOR: G7 could not tell a same-side block from a both-sides
+    block or a 29-bar cooldown. Fixed: the G8 boundary cases kill both
+    mutants, and the G4 cut moved inside the run.
+  - NOTE: run.py's catch-all round argument now errors on unknown input.
+  - Wording: "best of 62 random-exit rules (22 standing aside)" is the
+    accurate form.
+- **Gates now:** 132/132 (G1–G8). The four planted mutants are each killed
+  by G8.
 
 ## What to do
 

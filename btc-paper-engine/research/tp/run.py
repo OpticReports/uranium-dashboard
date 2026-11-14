@@ -131,8 +131,10 @@ def main():
         vs, n = round2([by_name[r["name"]] for r in top]), "34"
     elif what == "r3":
         vs, n = ROUND3, "40"
-    else:
+    elif what == "r4":
         vs, n = ROUND4, "62"
+    else:
+        raise SystemExit(f"unknown round {what!r}")
     q95 = nullq[n]["q95"]
     rows = []
     for v in vs:
