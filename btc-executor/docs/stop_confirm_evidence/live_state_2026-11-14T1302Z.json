@@ -1,0 +1,46 @@
+{
+ "captured_utc": "2026-11-14T13:02Z",
+ "btc_position": [
+  {
+   "coin": "BTC",
+   "szi": "-0.45387",
+   "leverage": {
+    "type": "cross",
+    "value": 20
+   },
+   "entryPx": "74375.0",
+   "positionValue": "30363.44913",
+   "unrealizedPnl": "3393.13212",
+   "returnOnEquity": "2.0103529412",
+   "liquidationPx": "232974.3852557988",
+   "marginUsed": "1518.172456",
+   "maxLeverage": 40,
+   "cumFunding": {
+    "allTime": "-26.068643",
+    "sinceOpen": "-26.068643",
+    "sinceChange": "-26.068643"
+   }
+  }
+ ],
+ "btc_mid": "66921.5",
+ "open_btc_orders": [
+  {
+   "coin": "BTC",
+   "side": "B",
+   "limitPx": "74092.0",
+   "sz": "0.45387",
+   "oid": 604661226721,
+   "timestamp": 1794628893123,
+   "triggerCondition": "Price above 72639",
+   "isTrigger": true,
+   "triggerPx": "72639.0",
+   "children": [],
+   "isPositionTpsl": false,
+   "reduceOnly": true,
+   "orderType": "Stop Market",
+   "origSz": "0.45387",
+   "tif": null,
+   "cloid": "0xd871b4e78d492af91a2e8b6a66e1b525"
+  }
+ ]
+}

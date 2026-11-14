@@ -137,6 +137,22 @@ SLIP_SANITY_MAX_BPS = 15.0
 # into: at poll_seconds=20 an unbounded replace loop placed 4,320 live orders
 # and 4,320 pages per day (counter-agent 2026-08-24).
 STOP_REPLACE_MAX = 3
+# THE POST-PLACEMENT STOP CONFIRM (2026-11-14). Sleeps between re-reads of a
+# stop we have JUST placed while the venue shows no record of it - reads at
+# about 0, 0.5, 1.25, 2.0 and 3.0 s, so at most 3.0 s of sleep and 4 extra
+# reads. At 04:01:10 that day the single confirm read, a fraction of a second
+# after the exchange accepted T-1794182400-S72638-45, found no record of it
+# (unknownOid), took that for a dead stop, and the executor's own
+# cancel-before-clear killed a healthy stop - 8 such self-cancels since
+# 2026-09-03, three of them in a row on 2026-09-18, one read short of
+# STOP_UNPLACEABLE and a forced flatten. A stop still not OPEN/FILLED after
+# the window takes the old path unchanged (count, cancel-before-clear,
+# stop_unconfirmed, the cap).
+STOP_CONFIRM_DELAYS_S = (0.5, 0.75, 0.75, 1.0)
+# `raw` that an adapter puts on a status answer carrying NO venue record
+# (hl.order_status: the info node said unknownOid). Same literal as
+# hl.NO_RECORD_RAW; the mirror does not import a venue adapter.
+NO_RECORD_RAW = "unknownOid"
 # consecutive polls of a venue-CONFIRMED resting stop that clear the
 # per-position failure count. ~20 polls is minutes, not months: long enough
 # that a genuine accept-then-cancel storm never reaches it (every poll of a
@@ -196,7 +212,10 @@ class Venue(Protocol):
     def place_limit(self, side: str, qty: float, px: float, cloid: str,
                     post_only: bool = True) -> None: ...
     def place_stop(self, side: str, qty: float, trigger_px: float,
-                   cloid: str) -> None: ...
+                   cloid: str) -> dict | None: ...
+    # ^ the exchange's acknowledgement when the adapter has one (hl.py:
+    #   {"accepted", "oid"}), else None. For the page only - it never
+    #   confirms a stop
     def place_market(self, side: str, qty: float, cloid: str,
                      reduce_only: bool = False) -> dict | None: ...
     # ^ the exchange's own answer to the order when the adapter has one
@@ -1369,6 +1388,50 @@ class Executor:
             st = self.venue.order_status(cloid)
             stat = (st or {}).get("status", "UNKNOWN") if st else "UNKNOWN"
         return stat
+
+    def _confirm_placed(self, cloid: str) -> tuple[str, int, float, str | None]:
+        """Status of a stop WE JUST PLACED, read with read-after-write
+        patience (2026-11-14). Returns (status, reads, seconds, raw).
+
+        The venue's info side can lag its own exchange: right after the
+        exchange accepts an order, a status read may find NO RECORD of it
+        (hl: unknownOid, reported as CANCELLED / 0 with raw=NO_RECORD_RAW).
+        One such read used to be taken for a dead stop. So:
+          - OPEN or FILLED on ANY read confirms, at once. Reads behind a
+            load balancer are not monotonic: nothing is read after a hit,
+            so a later miss can never undo it;
+          - a CANCELLED that carries a venue RECORD (any raw but
+            NO_RECORD_RAW, or no raw at all - Coinbase, DryRun) is final at
+            once: the venue knows the order and says it is dead;
+          - no record, UNKNOWN, no handle (None) or a read that RAISES is
+            re-read after each delay in STOP_CONFIRM_DELAYS_S, and returned
+            as it stands if it never resolves - the caller then takes the
+            old not-confirmed path unchanged.
+        A raise is read as UNKNOWN here: escaping, it left a possibly-live
+        stop neither believed nor cancelled, and a later poll could place a
+        second one beside it. Used ONLY at the stop placement in
+        _maintain_stop; _ostat (halt verify, resume, entry confirm) is
+        unchanged."""
+        t0 = time.monotonic()
+        reads, stat, raw = 0, "UNKNOWN", None
+        for delay in (0.0,) + tuple(STOP_CONFIRM_DELAYS_S):
+            if delay:
+                time.sleep(delay)
+            try:
+                st = self.venue.order_status(cloid)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("confirm read of %s raised: %s", cloid, exc)
+                st = None
+            if not isinstance(st, dict):
+                st = None                  # not an answer: read as UNKNOWN
+            reads += 1
+            stat = (st or {}).get("status", "UNKNOWN") if st else "UNKNOWN"
+            raw = (st or {}).get("raw") if st else None
+            if stat in ("OPEN", "FILLED"):
+                break
+            if stat == "CANCELLED" and raw != NO_RECORD_RAW:
+                break
+        return stat, reads, time.monotonic() - t0, raw
 
     def _event(self, level: str, kind: str, msg: str) -> None:
         last = self.state.events[-1] if self.state.events else None
@@ -3081,10 +3144,12 @@ class Executor:
         (fusion gate 2026-08-26, BLOCKING): a stop the venue confirms and
         then kills, and a stop the venue never confirms at all. Only the
         first was bounded, so a venue that accepts-then-cancels inside the
-        ~1s confirm window - or that simply reads UNKNOWN forever - produced
-        one fresh salted placement per poll, 4,320/day, with no cap and no
-        halt. One counter, one cap: whichever way protection keeps failing,
-        it fails at most STOP_REPLACE_MAX times before STOP_UNPLACEABLE."""
+        confirm window (one read then, ~1s; a bounded re-read window of up
+        to 3.0 s since 2026-11-14, see _confirm_placed) - or that simply
+        reads UNKNOWN forever - produced one fresh salted placement per
+        poll, 4,320/day, with no cap and no halt. One counter, one cap:
+        whichever way protection keeps failing, it fails at most
+        STOP_REPLACE_MAX times before STOP_UNPLACEABLE."""
         key = f"{leg}:{pos.get('entry_ts')}"
         sv = getattr(self.state, "stop_vanish", None)
         if sv is None:
@@ -4056,9 +4121,10 @@ class Executor:
         if led.stop_cloid:
             self.venue.cancel(led.stop_cloid)
         placed = True
+        ack = None                         # the exchange's own "accepted"
         try:
-            self.venue.place_stop(_close_side(led.qty), size_for_stop,
-                                  trigger, cloid)
+            ack = self.venue.place_stop(_close_side(led.qty), size_for_stop,
+                                        trigger, cloid)
         except Exception as exc:  # noqa: BLE001
             # A RAISE bypassed the whole STOP_UNPLACEABLE machinery
             # (2026-08-29 review): every guard below is reachable only if
@@ -4078,7 +4144,26 @@ class Executor:
         # after the venue confirms the order is genuinely working. A venue
         # that deduped/rejected/failed the place leaves refs clear, pages,
         # and the next step retries under a fresh salt.
-        stat = self._ostat(cloid) if placed else "REJECTED"
+        #
+        # ...but "not confirmed" must not be decided on ONE read
+        # (2026-11-14): right after the exchange accepts a stop, the info
+        # side can still answer "no such order", and everything below then
+        # CANCELS the healthy stop it was asked about. _confirm_placed
+        # re-reads a no-record/UNKNOWN answer for up to
+        # sum(STOP_CONFIRM_DELAYS_S) = 3.0 s; an OPEN/FILLED read confirms
+        # and an explicit venue record of death is final at once. What is
+        # still unconfirmed after that takes the path below UNCHANGED.
+        if placed:
+            stat, reads, waited, raw = self._confirm_placed(cloid)
+        else:
+            stat, reads, waited, raw = "REJECTED", 0, 0.0, None
+        seen = ""                          # what the confirm saw, for humans
+        if reads:
+            seen = (f" ({reads} status read(s) over {waited:.1f}s"
+                    + (f", last raw {raw}" if raw else "")
+                    + (f", venue ack {ack.get('accepted')} oid "
+                       f"{ack.get('oid')}" if isinstance(ack, dict) else "")
+                    + ")")
         if stat not in ("OPEN", "FILLED"):
             # BOUNDED (fusion gate 2026-08-26): this branch used to return
             # unbounded. STOP_REPLACE_MAX only ever covered the
@@ -4129,11 +4214,19 @@ class Executor:
             self._event("RED", "stop_unconfirmed",
                         f"{leg} stop {cloid} not confirmed working "
                         f"(status={stat}) - cancelled best-effort; position "
-                        f"may be UNPROTECTED; attempt {n}")
+                        f"may be UNPROTECTED; attempt {n}{seen}")
             return
         self._watch_fill(leg, "stop", cloid, trigger, _close_side(led.qty))
         led.stop_cloid, led.stop_px = cloid, trigger
         led.stop_qty, led.stop_mode = size_for_stop, "venue"
+        if reads > 1:
+            # confirmed only on a RE-read (a first no-record read is what
+            # the old confirm cancelled on). Logged, not paged, so the window
+            # can be tuned from live data: nothing measured the lag's length
+            # before this event existed.
+            self._event("INFO", "stop_confirm_lag",
+                        f"{leg} stop {cloid} confirmed {stat} on read "
+                        f"{reads}{seen}")
         # Protection that WORKED resets the counter - but only if this poll
         # did not itself record a failure (re-gate N1). Without the reset,
         # four isolated read blips spread over twenty healthy ratchets

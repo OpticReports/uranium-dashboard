@@ -2940,8 +2940,14 @@ def test_gate_confirm_blip_cancels_before_clearing(tmp_path):
     led = ex.state.legs["trend"]
     _hold(v)
     led.qty = 0.01
-    v.blips = 2                          # confirm read + its retry both blip
+    # EVERY confirm read of this attempt blips: the read + its retry before
+    # 2026-11-14 (2), the whole bounded re-read window since
+    # (1 + len(STOP_CONFIRM_DELAYS_S)); then the read path heals. Updated,
+    # not deleted, when the window landed: what it pins - an attempt that
+    # never confirms is cancelled BEFORE its refs clear - is unchanged.
+    v.blips = 1 + len(getattr(mirror, "STOP_CONFIRM_DELAYS_S", (0.0,)))
     ex._maintain_stop("trend", led, _long_pos())
+    v.blips = 0
     assert led.stop_cloid is None, "must not believe an unconfirmed stop"
     placed = [c for c in v.orders if "-S" in c]
     assert placed and placed[0] in v.cancels, \
@@ -2973,10 +2979,11 @@ def test_gate_resume_unknown_ref_cancelled_not_abandoned(tmp_path):
 # ---------------------------------------------------------------------------
 # Fusion gate (2026-08-26) BLOCKING 2: STOP_REPLACE_MAX only ever watched the
 # confirmed-then-vanished door. A stop that never confirms — killed inside the
-# ~1s confirm window, or read UNKNOWN forever — cleared its refs and returned,
-# so the next poll placed another under a fresh salt, unbounded: 4,320 orders
-# a day, the exact storm the cap exists to stop, arriving through the door the
-# cap did not watch.
+# ~1s confirm window (a bounded <=3.0 s re-read window since 2026-11-14,
+# tests/test_stop_confirm_gates.py), or read UNKNOWN forever — cleared its
+# refs and returned, so the next poll placed another under a fresh salt,
+# unbounded: 4,320 orders a day, the exact storm the cap exists to stop,
+# arriving through the door the cap did not watch.
 class _AcceptThenCancelVenue(FakeVenue):
     """Accepts every stop, then kills it before the confirm read lands."""
     def place_stop(self, side, qty, trigger_px, cloid):

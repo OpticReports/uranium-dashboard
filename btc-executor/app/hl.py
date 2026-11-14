@@ -60,6 +60,13 @@ DEFAULT_SLIPPAGE = 0.02
 # - not by its stop, not by the halt's flatten. See MinNotionalRejected.
 MIN_NOTIONAL_USD = 10.0
 
+# `raw` on an order_status answer that carries NO venue record (the info
+# node replied unknownOid, or something that is not a reply at all). Status
+# stays CANCELLED for every caller; only a caller that placed the order a
+# moment ago may read this as "not visible yet" (mirror.NO_RECORD_RAW is the
+# same literal - the mirror never imports this adapter).
+NO_RECORD_RAW = "unknownOid"
+
 
 class MinNotionalRejected(RuntimeError):
     """An order was refused for being under the venue's $10 minimum.
@@ -609,7 +616,11 @@ class HyperliquidVenue:
         Same contract cb.py had to be dragged to: an API failure is NOT
         "no such order". None means only "we have no handle" - and since
         cloids are derived deterministically we always have a handle, so in
-        practice None never happens here."""
+        practice None never happens here.
+
+        A reply with NO venue record reads CANCELLED / 0 with
+        raw=NO_RECORD_RAW; every other CANCELLED carries the venue's own
+        word in `raw` (see the no-record branch below)."""
         try:
             from hyperliquid.utils.types import Cloid
             r = self.info.query_order_by_cloid(
@@ -618,8 +629,26 @@ class HyperliquidVenue:
             logger.warning("order_status(%s) failed: %s", cloid, exc)
             return {"status": "UNKNOWN", "filled_qty": 0.0, "avg_price": None}
         if not isinstance(r, dict) or r.get("status") == "unknownOid":
-            # the venue affirmatively does not know this id
-            return {"status": "CANCELLED", "filled_qty": 0.0, "avg_price": None}
+            # NO RECORD on the info node that answered. That means one of
+            # two things and only the caller knows which (2026-11-14):
+            #  - an OLD id: the venue never had it. A cancelled or filled
+            #    order keeps answering with its own record ('canceled',
+            #    'filled', ...) - checked live on the incident's cloid;
+            #  - an order the exchange accepted A MOMENT AGO: this node has
+            #    not indexed it yet (read-after-write lag). At 04:01:10 the
+            #    post-placement confirm took that for a dead stop and the
+            #    executor's own cancel-before-clear killed a healthy one
+            #    (8 such self-cancels since 2026-09-03).
+            # Status stays CANCELLED / 0 because every other caller relies
+            # on it (the close's affirmative zero past CLOSE_SETTLE_MIN_AGE_S,
+            # the R order's settle, the halt verify). `raw` lets a caller that
+            # JUST placed the order tell "not visible yet" from a terminal
+            # record (mirror._confirm_placed).
+            if not isinstance(r, dict):
+                logger.warning("order_status(%s): reply is %s, not a record - "
+                               "read as no record", cloid, type(r).__name__)
+            return {"status": "CANCELLED", "filled_qty": 0.0,
+                    "avg_price": None, "raw": NO_RECORD_RAW}
         o = (r.get("order") or {})
         inner = (o.get("order") or {})
         raw = (o.get("status") or "").lower()
@@ -680,7 +709,9 @@ class HyperliquidVenue:
                 avg = num / den
         # `raw` is the venue's own word (e.g. reduceOnlyCanceled vs
         # canceled) so a CANCELLED read can be told apart in the event log
-        # (docs/NETTING_FIX_DESIGN.md N10); no caller branches on it.
+        # (docs/NETTING_FIX_DESIGN.md N10). ONE caller branches on it: the
+        # post-placement stop confirm (mirror._confirm_placed) re-reads a
+        # NO_RECORD_RAW answer and takes any venue word as final.
         return {"status": status, "filled_qty": filled,
                 "avg_price": float(avg) if avg else None, "raw": raw}
 
@@ -820,7 +851,7 @@ class HyperliquidVenue:
                 raise
 
     def place_stop(self, side: str, qty: float, trigger_px: float,
-                   cloid: str) -> None:
+                   cloid: str) -> dict | None:
         """Protective stop as a native REDUCE-ONLY trigger order.
 
         reduce_only=True is the single most important line in this file. On
@@ -830,7 +861,16 @@ class HyperliquidVenue:
         fires against a flat or opposite book cancels instead of trading.
         It is defence in depth, NOT a licence to skip the mirror's
         corroboration - a stop that silently cancels is still a position
-        left unprotected, which the mirror must still notice."""
+        left unprotected, which the mirror must still notice.
+
+        RETURNS the exchange's own acknowledgement (2026-11-14):
+        {"accepted": "resting" | "filled" | <the venue's word>, "oid": N or
+        None}, or None when the reply carries none. EVIDENCE ONLY: it goes
+        on the stop_unconfirmed page and the stop_confirm_lag event so the
+        operator can see the venue took the order. It decides nothing - the
+        reply shape for a trigger order has never been captured live here,
+        and a venue that accepts and then kills orders would be believed if
+        an acceptance alone could confirm a stop."""
         px = float(trigger_px)
         # isMarket=True: fire at market on trigger. The limit_px is the
         # crossing bound the SDK uses for the resulting IOC.
@@ -840,12 +880,32 @@ class HyperliquidVenue:
         # fires, so snap toward aggression: a bound rounded back inside the
         # spread turns a protective stop into a resting order, which is not
         # protection at all.
-        self._send(cloid, is_buy=(side == "BUY"), sz=self._sz(qty),
-                   limit_px=self._px(bound, "up" if side == "BUY" else "down"),
-                   reduce_only=True,
-                   order_type={"trigger": {"triggerPx": self._px(px),
-                                          "isMarket": True,
-                                           "tpsl": "sl"}})
+        r = self._send(cloid, is_buy=(side == "BUY"), sz=self._sz(qty),
+                       limit_px=self._px(bound, "up" if side == "BUY"
+                                         else "down"),
+                       reduce_only=True,
+                       order_type={"trigger": {"triggerPx": self._px(px),
+                                               "isMarket": True,
+                                               "tpsl": "sl"}})
+        return self._ack_from_response(r)
+
+    @staticmethod
+    def _ack_from_response(r) -> dict | None:
+        """The exchange's acknowledgement of a placed order, for the
+        operator's eyes only (see place_stop). Never raises."""
+        try:
+            statuses = (((r.get("response") or {}).get("data") or {})
+                        .get("statuses") or [])
+            s0 = statuses[0] if statuses else None
+            if isinstance(s0, dict):
+                for k in ("resting", "filled"):
+                    if isinstance(s0.get(k), dict):
+                        return {"accepted": k, "oid": s0[k].get("oid")}
+            elif isinstance(s0, str) and s0:
+                return {"accepted": s0[:40], "oid": None}
+        except Exception:  # noqa: BLE001 - evidence only: an odd reply shape
+            pass           # (e.g. `statuses` a dict -> KeyError) must never
+        return None        # turn an order the exchange ACCEPTED into a raise
 
     def place_market(self, side: str, qty: float, cloid: str,
                      reduce_only: bool = False) -> dict | None:
@@ -893,9 +953,9 @@ class HyperliquidVenue:
                         "resting": False}
             if isinstance(s0, dict) and "resting" in s0:
                 return {"filled_qty": 0.0, "avg_px": None, "resting": True}
-        except (TypeError, ValueError, AttributeError, IndexError):
-            pass
-        return None
+        except Exception:  # noqa: BLE001 - None = "no usable answer, settle
+            pass           # later" (place_market): an odd reply shape must
+        return None        # not raise after the IOC has already executed
 
     def cancel(self, cloid: str) -> None:
         from hyperliquid.utils.types import Cloid
