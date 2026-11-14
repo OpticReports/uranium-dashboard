@@ -408,6 +408,12 @@ def test_d1_a_bust_is_not_exposure_3_and_measured_is_what_was_measured(guard_doc
     assert ("A bust of a sell moves a position (its shares come back): it is closed once IB reports that position "
             "(the guard takes TotalCashValue alone; the post-trade check halts on the shares); before that it is (2)'s "
             "exposure") in guard_doc
+    # round 6 (the round-5 review's NOTE): the operating rule covers withdrawals and trades by hand, not IB's busts
+    for where, text in (("KNOWN LIMITS", KNOWN), ("IBKR_MIRROR.md", guard_doc)):
+        assert ("Nothing closes a bust before IB reports it, by the guard's first look (in the step the sells are "
+                "booked): the operating rule covers withdrawals and trades by hand, not IB's busts.") in text, where
+    assert ("nothing closes a bust before IB reports it, by the first look (the operating rule below covers "
+            "withdrawals and trades by hand, not IB's busts)") in PROOF
 
 
 def test_d2_exposure_3_is_new_with_this_guard_and_the_comparison_stays_for_1_and_2(guard_doc):
@@ -475,10 +481,15 @@ def test_d7_a_withdrawal_is_outside_a1_or_a3():
 
 
 def test_d8_the_doc_says_the_warnings_words_and_the_red_at_once(guard_doc):
+    """round 6 (the round-5 review's NOTE): all three red-at-once reasons (an unreadable record too, as the code
+    says: UNCONFIRMED_NO_RECORD), 'not expected to change' (a non-stock lot can go away on a later look), and the
+    no-warning-after-a-red rule is per process (self._said): after a restart the new process warns once more"""
     assert ('as a warning ("not yet confirmed by the account\'s positions; re-read every step": IB\'s lag, or a real '
-            'difference) and in red only once it has lasted 10 s; a disagreement reading the positions again cannot '
-            'change (no record of them from before the run, a holding that is not a whole stock lot) in red at once, '
-            'and no warning follows a red already sent') in guard_doc
+            'difference) and in red only once it has lasted 10 s; a disagreement reading the positions again is not '
+            'expected to change (no record of them from before the run, a record of them that cannot be read, a '
+            'holding that is not a whole stock lot) in red at once, and no warning follows a red this process already '
+            'sent (after a restart the new process warns once more, then its red comes)') in guard_doc
+    assert "no warning follows a red already sent" not in guard_doc
 
 
 # ============================================================================== T1: exposure (3), measured

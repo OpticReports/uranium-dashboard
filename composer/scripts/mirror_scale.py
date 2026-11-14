@@ -47,7 +47,8 @@ redirect followed - one cash credit per sleeve. The token never leaves the conta
   deployed with, in cents and with no $1 slack, before it sends anything. That deploy changes
   MIRROR_MAX_BOOK_USD only, not MIRROR_LIVE_ENGINES: a sleeve it dropped stays in the book's state,
   not frozen, until the executor's first tick with the gateway logged in (mirror.py
-  _reconcile_sleeves), so a line pasted before then would queue the others and stop at that one.
+  _reconcile_sleeves), so a line pasted before then would queue only the credits before that sleeve in
+  the line's order (HG, KMLM, SLEEVE, HARV) and stop there; the ones after it would not be sent.
 6 The cash: at the decision the executor credits the open dividend receivables that are due, then
   takes each credit only if the account's cash (IBKR's TotalCashValue) covers the book's cash plus it
   (within CASH_TOL_USD, $1), smallest first (mirror.py _dividends, _apply_credits). The plan prints the
@@ -841,7 +842,8 @@ def build(a, env, fetch, now):
         f"(a) Render -> ibkr-executor -> Environment: set MIRROR_MAX_BOOK_USD = {cap}, then \"Save, rebuild and "
         f"deploy\". Change only MIRROR_MAX_BOOK_USD in that deploy, not MIRROR_LIVE_ENGINES: a sleeve it drops stays "
         f"in the book's state, not frozen, until the executor's first tick with the IB gateway logged in, so a line "
-        f"pasted before then queues the other credits and stops at that one. {quiet_window(now)}: the attestation, "
+        f"pasted before then queues only the credits before that sleeve in the line's order (HG, KMLM, SLEEVE, HARV) "
+        f"and stops there; the ones after it are not sent. {quiet_window(now)}: the attestation, "
         f"the decision and its orders run then. The restart logs the IB gateway in again: approve the IB Key push on "
         f"your phone.",
         f"(b) When the executor is back (the deploy live, /health answering), open Render -> ibkr-executor -> Shell and "

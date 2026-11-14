@@ -1760,8 +1760,14 @@ def _daily(date, book_path, ledger_path, force, now, yahoo, minutes, build, mark
     unavailable = [e for e in engines if (targets.get(e) or {}).get("status") != "ok"]
     if unavailable:
         why = (targets.get(unavailable[0]) or {}).get("note") or (payload.get("problems") or [None])[0] or "no decision"
+        why = " ".join(str(why).split())[:160]
+        import mirror_brain as mb
+        frozen = next((x for x in payload.get("problems") or [] if isinstance(x, str) and x.startswith(mb.FROZEN_FEED)),
+                      None)                           # half-day: SPY's bar refused as a frozen feed; every engine's note
+        if frozen:                                    # leads with the halt line, the brain's why is this one
+            why = f"{' '.join(frozen.split())[:300]}; {why}"
         alerts.append(f"MIRROR DRY NO DECISION — {d} {hh} ET: {', '.join(unavailable)} had no target from the brain "
-                      f"({' '.join(str(why).split())[:160]}); those sleeves stood still.")
+                      f"({why}); those sleeves stood still.")
     for r in er:
         e = r["engine"]
         p, c, s = targets.get(e) or {}, comp.get(e), shadow.get((d, e)) or {}

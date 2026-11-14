@@ -28,6 +28,9 @@ are Fri 2026-11-27 and Thu 2026-12-24. The doubles are tests/test_mirror.py's.
       and why
   E10 the brain-side build behind E7 / E9 skips only when composer/scripts is absent: any other failure fails
   E11 HALF_DAY_SPY_MAX_S is the brain's QUIET_TRADE_MAX_S (read with ast; the brain's H10 from its side)
+  E12 the brain's OWN payload with FMP's volume gone from SPY's last 1 or 2 bars only (its trade 60 or 120 s
+      old, those bars frozen at its price: the brain tests no such SPY, round 6), read through the real HttpBrain,
+      is traded on the service's early close
 """
 from __future__ import annotations
 
@@ -366,6 +369,37 @@ def test_e9_the_brains_frozen_feed_refusal_keeps_its_key_words_in_the_recorded_n
         in row["reason"], row["reason"]
     assert "(half-day, a frozen feed: none of SPY's bars without volume since that trade moved off its price" \
         in row["reason"], row["reason"]                                       # the key words, and why
+
+
+@pytest.mark.parametrize("cut, k", [("12:52", 1), ("12:51", 2)])
+def test_e12_spys_trade_one_or_two_minutes_old_is_traded_through_the_http_client(tmp_path, monkeypatch, cut, k):
+    """the brain's OWN pinned build of 2025-07-03 (FMP's archive) with SPY's trades after the bar starting `cut` gone and
+    its k bars without volume up to the instant frozen at that trade's price: SPY's trade ends 60 or 120 s before the
+    instant, what the full-day rule counts as recent, so the brain asks no evidence of a live feed (33850e01 refused
+    both: 'none of SPY's bars ... moved'). Its payload, served as a 200 to the real HttpBrain, passes _validate (SPY 1
+    or 2 minutes before the instant on the service's early close, the payload's close_et and the brain's clock agreeing)
+    and is traded"""
+    d = "2025-07-03"
+    p, err = _brain_build(day=d, edit=lambda b: b.spy_quiet(d, cut, lambda i, n, tr, c: tr))
+    assert err is None and p is not None, err and err.detail
+    t = mm._parse(p["asof_utc"])
+    assert p["decision_bar"] == {"end_utc": mm._iso(t), "spy_utc": mm._iso(t - timedelta(minutes=k)), "complete": True}
+    assert p["close_et"] == "13:00" and set(s["status"] for s in p["engines"].values()) == {"ok"}
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        assert url.endswith("/mirror/intents") and headers == {"X-API-Token": "tok"}
+        assert params == {"after": mm._iso(t)}, params
+        return httpx.Response(200, json=p, request=httpx.Request("GET", url))
+    monkeypatch.setattr(mm.httpx, "get", fake_get)
+    os.makedirs(tmp_path / "r", exist_ok=True)
+    r = HalfRig(tmp_path / "r", lambda day: (13, 0) if day == date(2025, 7, 3) else (16, 0))
+    r.brain.close = "13:00"
+    r.brain.intents = mm.HttpBrain("https://brain.invalid", "tok").intents      # the real client reads the brain's 200
+    r.tick("12:57:00", day=d)
+    row = r.m.state["last_run"]
+    assert (row["session"], row["outcome"], row["decision_bar"]) == (d, "traded", p["decision_bar"]), r.m._why
+    assert {n: s["action"] for n, s in row["sleeves"].items()} == dict.fromkeys(p["engines"], "trade")
+    assert r.orders()
 
 
 def test_e10_a_brain_side_failure_fails_the_gate_it_feeds_and_never_skips_it():

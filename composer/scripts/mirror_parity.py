@@ -45,6 +45,8 @@ RETURN_ALARM_BPS = 150.0         # same holdings on both days and a day return t
 IDLE_CASH_FRAC = 0.05            # ibkr-executor/app/mirror_core.py MAX_IDLE_CASH_FRAC: a credited sleeve keeping more cash than
 #                                  this share of itself after the session did not invest its credit (partly_invested)
 PARTLY = "the credited cash was only partly invested"
+NOTES_SHOWN = 3                  # a session's notes printed in full; the rest are counted ("... and N more"), never dropped
+PROBLEMS_SHOWN = 2               # the same for the brain's problems lines
 TIMEOUT_S = 15
 LOCAL = ("localhost", "127.0.0.1")
 
@@ -452,10 +454,15 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
     unattested = len(row.get("notes") or []) - len(notes)
     if unattested:
         lines.append(f"  note: {unattested} sleeve(s) traded on a tree nobody attested today (paper only; a live book refuses)")
-    for n in notes[:3]:
+    for n in notes[:NOTES_SHOWN]:
         lines.append(f"  note: {one_line(n, 200)}")
-    for pr in (row.get("problems") or [])[:2]:
+    if len(notes) > NOTES_SHOWN:                     # never a silent cap: the rest are in the executor's feed
+        lines.append(f"  note: ... and {len(notes) - NOTES_SHOWN} more (all of them are in the executor's feed)")
+    problems = row.get("problems") or []
+    for pr in problems[:PROBLEMS_SHOWN]:
         lines.append(f"  brain: {one_line(pr, 200)}")
+    if len(problems) > PROBLEMS_SHOWN:
+        lines.append(f"  brain: ... and {len(problems) - PROBLEMS_SHOWN} more (all of them are in the executor's feed)")
     return lines, alerts, led
 
 

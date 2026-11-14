@@ -126,10 +126,21 @@ methods (the account's positions; what an order executed) and nothing else.
    the ticker's last trade closed at that trade's own price. A feed stuck at
    another price (a tick off, a half-cent) is counted; what bounds it is the
    floor below and the 15-minute age. SPY's decision bar counts the same way
-   with a stricter rule, because it is the decision bar: SPY's bars without
-   volume since its last trade must also close at two or more prices, and
-   not three or more in a row at one price up to the instant (2025-11-28,
-   the one real day SPY leaned: 8 prices in 8 bars). The executor accepts
+   with a stricter rule, because it is the decision bar: when SPY's last
+   trade is more than two minutes old, its bars without volume since must
+   also close at two or more prices, and not three or more in a row at one
+   price up to the instant (2025-11-28, the one real day SPY leaned, its
+   trade 8 minutes old: 8 prices in 8 bars). A SPY trade within those two
+   minutes (FMP's volume gone from SPY's last one or two bars; a trade
+   ending exactly two minutes before the instant included) needs no such
+   evidence: it is what the full-day rule and the floor count as really
+   trading, SPY is priced at it, and one or two closes cannot show a live
+   feed (on real SPY minutes the stricter tests refused 99.9% of the
+   one-bar instants and 4% of the two-bar ones; "moved" alone 4% of the
+   one-bar ones). Let through by design, bounded by the 15-minute age (SPY
+   priced at its own last trade) and the floor: SPY frozen at one price but
+   for one bar among the last three, and two stale prices alternating
+   (mirror_brain.spy_frozen). The executor accepts
    SPY priced before the instant only on an early close by its own calendar
    that the payload's close_et and the brain's clock also give. All of it
    only while at least half the trees' tickers really traded in those two
@@ -247,10 +258,12 @@ it with /mirror/resolve.
   since the run record is dropped when the run ends. Such a hold is alerted
   as a warning ("not yet confirmed by the account's positions; re-read every
   step": IB's lag, or a real difference) and in red only once it has lasted
-  10 s; a disagreement reading the positions again cannot change (no record
-  of them from before the run, a holding that is not a whole stock lot) in
-  red at once, and no warning follows a red already sent. Keep at least 1.1%
-  of a day's sells + $10 an order outside the book (about $1.3k on a $117k
+  10 s; a disagreement reading the positions again is not expected to change
+  (no record of them from before the run, a record of them that cannot be
+  read, a holding that is not a whole stock lot) in red at once, and no
+  warning follows a red this process already sent (after a restart the new
+  process warns once more, then its red comes). Keep at least 1.1% of a
+  day's sells + $10 an order outside the book (about $1.3k on a $117k
   rotation): below that, a commission IB had not reported when its sell was
   booked holds a lagging day's buys. A live state file that holds shares
   while no live book is built is alerted in red at every boot.
@@ -271,7 +284,10 @@ it with /mirror/resolve.
   it is closed once IB reports that position (the guard takes TotalCashValue
   alone; the post-trade check halts on the shares); before that it is (2)'s
   exposure - at most the day's sells, so, like (3), new with this guard and
-  only on such a day. Operating rule, for (1) and (2): no withdrawal pending
+  only on such a day. Nothing closes a bust before IB reports it, by the
+  guard's first look (in the step the sells are booked): the operating rule
+  covers withdrawals and trades by hand, not IB's busts. Operating rule, for
+  (1) and (2): no withdrawal pending
   or posting, and no trade by hand, in the mirror's account on a session day
   until that session's run is done (the run: roughly 15:45-16:05 ET;
   12:45-13:05 on a half-day). When IBKR posts a withdrawal is not verified
@@ -288,6 +304,64 @@ it with /mirror/resolve.
   once that over-count exceeds the cash outside the book.
 - GET /mirror/feed (READ_TOKEN): the books, for the parity monitor.
 - /status and /health carry a mirror block only when the mirror is enabled.
+
+## A gateway session whose open orders cannot be read (K5)
+
+Each new IB API session asks for its open orders at connect. Until that answer
+has ended no open-orders read can be trusted (its late end would cut a later
+request's list short), so nothing is sold or bought (a /kill flatten included)
+while the positions and the cash are still read. Such a session is kept for
+its late answer and replaced by a fresh one on a doubling schedule: 40 s after
+the connect gave up on it, then 80, 160, 320, 640 s, capped at 15 min; it
+starts over when a connect fails and when the outage ends. Two lost answers
+met at the decision still trade before 15:58:00 (12:58:00 on a half-day). Past
+30 min the outage pages once (DOWN: the cause, and how many fresh sessions
+this outage tried), and its end is announced from its last cause: after an
+unsynced spell, open orders were unreadable, positions and cash were read
+(ibkr-executor/app/ib_adapter.py _unsynced_replace_interval;
+ibkr-executor/tests/test_mirror_d1r5.py and test_mirror_d1r6.py).
+
+Known, not built (measured on the simulated clock and on scripted gateways,
+never on a real IB gateway):
+- Late versus lost. The adapter cannot tell a lost answer from a late one
+  before it drops a session, and the schedule takes it as lost, the failure
+  actually observed. A gateway that answers EVERY new session's request a
+  fixed time late, after a drop at the decision: up to ~95 s late it trades
+  as before (the same sessions and instants as round 4); ~95-125 s late it
+  trades ~95 s later, close to the 15:59:00 cancel (buys as late as
+  15:58:59); ~125-220 s late it does not trade (round 4 kept the second
+  session for good and traded); later than that neither does. More than ~15
+  min late overnight the outage never closes (66 replacements, one DOWN
+  page, the next decision not traded). Keeping both (a probe session on a
+  second clientId before the kept one is dropped) is not built. Pinned by
+  ibkr-executor/tests/test_mirror_d1r6.py.
+- A failed connect restarts the schedule. If a real gateway refuses an
+  immediate same-clientId reconnect (IB error 326), the interval never
+  doubles past 40 s: measured ~12 connect attempts and 6 sessions an hour
+  idle, ~72 attempts and 36 sessions an hour during a /kill flatten, bounded
+  by the reconnect backoff (a 45 s minimum gap).
+- The cap's cost: after a spell long enough to reach 900 s, a gateway that
+  heals with no FIN is found up to ~15 min later. Three lost answers met at
+  the decision do not trade (the 4th session is due ~325 s after decide_at);
+  a /kill flatten sells after ~322 s with three lost, ~658 s with four.
+- A gateway-only restart that accepts the next connect at once keeps the
+  interval: the schedule does not restart on a gateway FIN.
+- Considered, not built: the first step inside the decision window and
+  during a flatten (it costs the late band from ~55 s), a reset on a gateway
+  FIN, a ~1 s pause before the reconnect.
+- The end notice follows the outage's last cause only: an unsynced page
+  followed by a spell with no session at all (a refused reconnect included)
+  ends with the plain words, and the converse ends with the unsynced ones.
+- Pre-existing: a session lost to an outage inside the window ends with an
+  info-level "traded" summary (sold 0/N ...); the loud lines are the
+  per-order red "NOT sent" alerts.
+- The /kill alert, measured with the live and dry books and the blend's
+  notes over every branch it words (3,456, each write failing as on a full
+  disk): 3,615 characters at most against alerts.send's 4,000 cut (2,032 with
+  nothing failing; 1,382 with the live book alone and the blend off). It can
+  pass the cut only when the exception texts it quotes average more than 206
+  characters (a full disk's is 70); its last line, the resume instruction,
+  is then what is cut first.
 
 ## Rollout (executor law: staged, one step at a time)
 
@@ -419,9 +493,10 @@ move before that session, less that session's commissions. Then, in order:
     half-day). Change only MIRROR_MAX_BOOK_USD in that deploy, not
     MIRROR_LIVE_ENGINES: a sleeve it drops stays in the book's state, not
     frozen, until the executor's first tick with the IB gateway logged in
-    (mirror.py _reconcile_sleeves), so a line pasted before then queues the
-    other credits and stops at that one. The restart logs the IB gateway in
-    again: approve the IB Key push.
+    (mirror.py _reconcile_sleeves), so a line pasted before then queues only
+    the credits before that sleeve in the line's order (HG, KMLM, SLEEVE,
+    HARV) and stops there; the ones after it are not sent. The restart logs
+    the IB gateway in again: approve the IB Key push.
 (b) The credits. When the executor is back, paste the plan's ONE line into
     Render -> ibkr-executor -> Shell, once, before 15:00 ET on a weekday
     (12:00 on a half-day) or any time on a weekend, and by the cutoff of the
@@ -523,9 +598,9 @@ It is in render.yaml (owner, 11-10); the block above is its shape. Because it
 redeploys when fixtures/approved changes, an approved symphony change reaches
 the mirror the same session it reaches main.
 
-The half-day rule (2026-11-13: round 4 and its round-5 fixes): redeploy
-composer-brain and ibkr-executor TOGETHER, and before Fri 2026-11-27, the
-next half-day.
+The half-day rule (2026-11-13: round 4 and its round-5 and round-6 fixes):
+redeploy composer-brain and ibkr-executor TOGETHER, and before Fri
+2026-11-27, the next half-day.
 The executor's own half-day check is about the calendar and SPY's time only
 (mirror.py _validate); the frozen-feed and real-trade floors live in the
 brain. A patched executor with the earlier brain accepts what that brain

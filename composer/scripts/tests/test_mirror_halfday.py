@@ -32,20 +32,27 @@ rate and 5-13 tickers (SPY on 11-28) carry no volume at all; the bars themselves
       tickers the rule leans on frozen, the real trades untouched, are not counted; twin: half the book
       without volume from 12:44 with FMP's real, moving closes settles, the same bars frozen do not; any bar
       moved counts, not only the bar at the instant. SPY, whose bar is the decision bar, is held to more on
-      every path: a constant price off its trade's, a tick off, a stuck half-cent, moved once then back, 3 in
-      a row at one price up to the instant are refused; oscillating between two prices, 2 in a row, the real
-      days settle. The book is not held to SPY's rule (a ticker stuck a tick off is still counted)
+      every path when its last trade is older than 2 minutes: a constant price off its trade's, a tick off, a
+      stuck half-cent, moved once then back, 3 in a row at one price up to the instant are refused, each named
+      in the breadth's NOT-counted line in SPY's own words; oscillating between two prices, 2 in a row, the
+      real days settle. SPY's trade 1 or 2 minutes old (its volume gone from the last 1 or 2 bars) needs no
+      such evidence: one close, two equal closes, frozen at the trade's price or a tick off all settle on
+      every path, and the same shapes 3 minutes old are refused. The book is not held to SPY's rule (a ticker
+      stuck a tick off is still counted). Units: the 2-minute boundary, QUIET_MOVE_TOL (one price within it),
+      the residual shapes the rule lets through by design
   H8  the floor of REAL trades: no trade after 12:40 (or 12:44) anywhere, prices moving, is refused as the
       full-day rule refuses it, word for word; so is every ticker but SPY without a trade after 12:40 (the
       build's own floor; the `--at` path and the paper book too); a frozen tail; half the trees' tickers
       really trading settles, one fewer is refused; bars without volume 12 minutes before the instant are
-      no evidence, with the floor held
+      no evidence, with the floor held; SPY's trade 1 or 2 minutes old, SPY's exemption, does not lift the
+      floor on any path
   H9  quotes.breadth gives the real trades and the leaned ones apart, the leaned named in `problems`
   H10 the brain's calendar and the executor's (blend.py, read with ast) agree on every date both cover; the
-      executor's bound on SPY before the instant (mirror.py, read with ast) is this side's QUIET_TRADE_MAX_S
+      executor's bound on SPY before the instant (mirror.py, read with ast by the executor's E11 evaluator: an
+      equivalent expression such as 15 * 60.0 reads the same) is this side's QUIET_TRADE_MAX_S
   H11 below the floor the brain has read the whole book: its refusal is held REBUILD_EVERY_S (a book asking
       every 3 s gets one read in four, not 63 FMP calls each time), and says "FMP has not answered" when
-      unanswered tickers are why
+      unanswered tickers of the trees are why (a sibling no tree reads, unanswered, never is)
 
 The whole book without volume from 12:44 with moving prices (a reviewer's twin) is REFUSED here: no
 ticker really traded within 2 minutes of the instant, below the floor (H8). The twin kept is half the
@@ -61,6 +68,7 @@ import gzip
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -84,6 +92,7 @@ HALF = ("2025-07-03", "2025-11-28", "2025-12-24")
 REGULAR = "2025-07-02"
 HOLIDAYS = {"2025-07-04", "2025-11-27", "2025-12-25"}        # NYSE 2025: the sessions before these half-days are right
 ENGINES = ("HG", "KMLM", "SLEEVE", "HARV")
+FROZEN = "half-day, a frozen feed: "     # the words that lead SPY's refusal under its rule (mirror_brain.FROZEN_FEED)
 SEC = datetime.timedelta(seconds=1)
 LEANED = {                      # the tickers the rule counts on bars without volume at 12:54 on the real days (each moved)
     "2025-07-03": ["CORP", "HYG", "KIE", "LABU", "LQD", "PEJ", "PULS", "SVXY", "UDOW"],
@@ -438,7 +447,7 @@ class H7Frozen(HalfDay):
     def test_h7_a_frozen_feed_is_refused_spy_alone_the_whole_book_all_but_spy(self):
         """on every path: the live pinned path refuses it; the `--at` path and the paper book (mirror_dry), which read
         no Bars (build() is their only guard), publish nothing tradeable, and a frozen SPY's bar is never taken as
-        the decision bar (a reviewer's R2 on this fixture)"""
+        the decision bar (a reviewer's R2 on this fixture); the breadth's NOT-counted line names SPY's own reason"""
         everyone = set(self.fx["minutes"][HALF[0]])
         for d in HALF:
             for who, tickers in (("SPY alone", {"SPY"}), ("the whole book", None), ("all but SPY", everyone - {"SPY"})):
@@ -456,18 +465,24 @@ class H7Frozen(HalfDay):
                             if who != "all but SPY":
                                 self.assertFalse(q["decision_bar"]["complete"], f"{path}: a frozen SPY bar taken as the "
                                                                                 f"decision bar {q['decision_bar']}")
+                                # SPY not counted, in SPY's own words (spy_frozen's), not the book's generic ones
+                                line = next(x for x in q["problems"] if "NOT counted: " in x)
+                                self.assertIn("SPY", self.named(q, "NOT counted: "), path)
+                                self.assertIn("NOT counted: a frozen feed (none of SPY's bars without volume since that "
+                                              "trade moved off its price", line, path)
                             self.assertEqual(set(statuses(q).values()), {"unavailable"}, f"{path}: tradeable on a frozen "
                                                                                        f"feed: {statuses(q)}")
 
     def test_h7_spy_is_held_to_more_than_moved_on_every_path(self):
-        """SPY's bar is the decision bar: its bars without volume since its last trade must close at 2 or more
-        different prices, fewer than 3 in a row at one price up to the instant. On 11-28 (SPY leaning for real: its 8
-        bars 12:46-12:53 after its 12:45 trade at 682.02) and on 07-03 and 12-24 with SPY's trades after 12:44 (or
-        12:51) gone: constant at a price off the trade's (682.361 on 11-28), one tick off, a stuck half-cent, moved
-        once and then back at the trade's price, FMP's own closes with the last 3 at the trade's price, two bars a
-        tick off -> refused on the pinned path, the `--at` path and the paper book, saying why. Twins that settle on
-        all three: SPY oscillating between two prices; FMP's own closes with only the last 2 at the trade's price; two
-        bars at two prices"""
+        """SPY's bar is the decision bar: when its last trade is older than 2 minutes, its bars without volume since
+        that trade must close at 2 or more different prices, fewer than 3 in a row at one price up to the instant. On
+        11-28 (SPY leaning for real: its 8 bars 12:46-12:53 after its 12:45 trade at 682.02) and on 07-03 and 12-24 with
+        SPY's trades after 12:44 gone: constant at a price off the trade's (682.361 on 11-28), one tick off, a stuck
+        half-cent, moved once and then back at the trade's price, FMP's own closes with the last 3 at the trade's price
+        -> refused on the pinned path, the `--at` path and the paper book, saying why, and the breadth's NOT-counted
+        line names SPY in the same words. Twins that settle on all three: SPY oscillating between two prices; FMP's own
+        closes with only the last 2 at the trade's price; two bars at two prices; two bars a tick off (SPY's trades after
+        12:51 gone: its trade 2 minutes old is not tested, round 6)"""
         one = "every one of SPY's bars without volume since that trade closed at one price, not the trade's"
         run = "of SPY's bars without volume, up to the instant, closed at one price"
         cases = (  # (SPY's bars without volume, its trades gone after the bar starting (07-03, 12-24), close,
@@ -478,7 +493,7 @@ class H7Frozen(HalfDay):
             ("moved once, then the trade's price", "12:44", lambda i, n, tr, c: round(tr + 0.341, 4) if i == 0 else tr, run),
             ("FMP's own closes, the last 3 at the trade's price", "12:44", lambda i, n, tr, c: tr if i >= n - 3 else c,
              "the last 3 " + run),
-            ("two bars, one tick off", "12:51", lambda i, n, tr, c: round(tr + 0.01, 2), one),   # the distinct rule alone
+            ("two bars, one tick off", "12:51", lambda i, n, tr, c: round(tr + 0.01, 2), None),  # its trade 120 s old
             ("oscillating between two prices", "12:44", lambda i, n, tr, c: tr if i % 2 else round(tr + 0.01, 2), None),
             ("FMP's own closes, the last 2 at the trade's price", "12:44", lambda i, n, tr, c: tr if i >= n - 2 else c, None),
             ("two bars, two prices off the trade's", "12:51", lambda i, n, tr, c: round(tr + 0.01 * (i + 1), 2), None))
@@ -512,11 +527,15 @@ class H7Frozen(HalfDay):
                         self.assertIn("half-day, a frozen feed: ", said)
                         self.assertIn(why, said)
                         self.assertIn("FMP's SPY bar ending 12:54:00 ET has no volume): not taken as the decision bar", said)
-                        # ... and its breadth says the same: SPY is not counted on those bars (unless it really traded)
+                        # ... and its breadth says the same: SPY is not counted on those bars (unless it really traded),
+                        # in the same words (spy_frozen's), never the book's 'none of their bars ... moved'
                         self.assertNotIn("SPY", self.named(q, "counted as trading on a bar FMP published without volume"))
                         if cut == "12:44":
                             self.assertIn("SPY", self.named(q, "with bars without volume near 12:54:00 ET NOT counted"))
                             self.assertGreaterEqual(q["quotes"]["breadth"]["frozen"], 1, path)
+                            line = next(x for x in q["problems"] if "NOT counted: " in x)
+                            self.assertIn("NOT counted: a frozen feed (", line, path)
+                            self.assertIn(why, line, path)
         # the margin on the real day: SPY's 8 bars without volume closed at 8 different prices, the last one unrepeated
         d = "2025-11-28"
         self.rows = copy.deepcopy(self.fx["minutes"])
@@ -524,6 +543,58 @@ class H7Frozen(HalfDay):
         ev = mb.quiet_evidence(sr.fetch_minutes("SPY", d, "k", tries=1, traded=True, quiet=True), d, sr.et_now(T).tzinfo, T)
         self.assertEqual(ev, (T, True, 8, 1))
         self.assertIsNone(mb.spy_frozen(ev))
+
+    def test_h7_spys_trade_one_or_two_minutes_old_needs_no_evidence_on_every_path(self):
+        """FMP's volume gone from SPY's last 1 or 2 bars only (07-03 and 12-24, where SPY really trades to the instant:
+        its trades after the bar starting 12:52 or 12:51 gone), its trade 60 or 120 s old - what the full-day rule and
+        the floor count as REALLY trading, the 120 s included: whatever those bars close at (one close or two equal ones,
+        frozen at the trade's price, a tick off) the day settles on the pinned path, the `--at` path and the paper book
+        with one decision, SPY priced at that trade and counted as a real trade (33850e01 refused every one of them: one
+        close is one price). Twins (pins, refused before and after): the same shapes with SPY's trade 3 minutes old"""
+        shapes = (("equal closes (FMP's own close of the first)", None),
+                  ("frozen at the trade's price", lambda i, n, tr, c: tr),
+                  ("one tick off", lambda i, n, tr, c: round(tr + 0.01, 2)))
+        why = {"equal closes (FMP's own close of the first)": "every one of SPY's bars without volume since that trade "
+                                                              "closed at one price, not the trade's",
+               "frozen at the trade's price": "none of SPY's bars without volume since that trade moved off its price",
+               "one tick off": "every one of SPY's bars without volume since that trade closed at one price, not the "
+                               "trade's"}
+        for d in ("2025-07-03", "2025-12-24"):
+            T = self.instant(d)
+            for k, cut in ((1, "12:52"), (2, "12:51"), (3, "12:50")):
+                first = sr._hm(sr._min(cut) + 1)                               # the first bar without volume
+                for name, close in shapes:
+                    with self.subTest(d=d, k=k, spy=name):
+                        self.rows = copy.deepcopy(self.fx["minutes"])
+                        c0 = next(c for hm, c, v in self.rows[d]["SPY"] if hm == first)
+                        trade = self.spy_quiet(d, cut, close or (lambda i, n, tr, c: c0))
+                        quiet = [c for hm, c, v in self.rows[d]["SPY"] if cut < hm < "12:54"]
+                        self.assertEqual((len(quiet), len(set(quiet))), (k, 1))          # k bars, one price
+                        p, err = self.pinned(d, waits=(30, 60))
+                        if k == 3:                                             # older than 120 s: SPY's rule applies
+                            self.assertIsNone(p, p and p["decision_bar"])
+                            self.assertEqual(err.error, "decision bar not published yet")
+                            self.assertIn(f"{FROZEN}{why[name]}", err.detail[:160])
+                            for path, q in (("--at", self.at_path(d)), ("paper", self.paper_path(d))):
+                                self.assertFalse(q["decision_bar"]["complete"], path)
+                                self.assertEqual(set(statuses(q).values()), {"unavailable"}, path)
+                                self.assertIn(f"{FROZEN}{why[name]}", " ".join(q["problems"]), path)
+                            continue
+                        self.assertIsNone(err, err and err.detail)
+                        self.assertEqual(statuses(p), dict.fromkeys(ENGINES, "ok"))
+                        self.assertEqual(p["decision_bar"], {"end_utc": mb._iso(T), "complete": True,
+                                                             "spy_utc": mb._iso(T - datetime.timedelta(minutes=k))})
+                        self.assertEqual(p["prices"]["SPY"], trade)                   # priced at that trade
+                        said = " ".join(p["problems"])
+                        self.assertIn(f"SPY is priced at its own last trade (bar ending {sr._hm(sr._min('12:54') - k)}:00 ET; "
+                                      f"within the 2 minutes the full-day rule counts a trade as recent: its bars without "
+                                      f"volume since are not tested)", said)
+                        self.assertNotIn(FROZEN, said)
+                        self.assertNotIn("SPY", self.named(p, "counted as trading on a bar FMP published without volume"))
+                        self.assertNotIn("SPY", self.named(p, "NOT counted: "))          # a real trade, counted as one
+                        for path, q in (("--at", self.at_path(d)), ("paper", self.paper_path(d))):
+                            self.assertEqual((targets(q), q["prices"], q["decision_bar"], statuses(q)),
+                                             (targets(p), p["prices"], p["decision_bar"], statuses(p)), path)
 
     def test_h7_the_book_is_not_held_to_spys_rule(self):
         """twin (passes before and after the SPY rule): the tickers the rule leans on for real, SPY aside, each with its
@@ -611,6 +682,82 @@ class H7Frozen(HalfDay):
         self.assertEqual((p["decision_bar"], targets(p)), (live["decision_bar"], targets(live)))
 
 
+class H7Units(unittest.TestCase):
+    """SPY's rule and its evidence as units, on hand-built FMP answers (no fixture): the 2-minute boundary of the trade
+    that needs no evidence (round 6), QUIET_MOVE_TOL (closes within it of each other are one price), and the shapes
+    the rule lets through by design (recorded in spy_frozen's docstring)"""
+    D = "2026-11-27"                                    # a half-day of the static calendar (13:00)
+
+    def setUp(self):
+        self.T = mb.parse_at(f"{self.D} 12:54")
+        self.tz = sr.et_now(self.T).tzinfo
+
+    def ev(self, trade_hm, trade_px, closes, start):
+        """quiet_evidence at 12:54 of an answer: SPY's trade in the bar starting trade_hm, then a bar without volume a
+        minute from `start` for each close"""
+        m0 = sr._min(start)
+        bars = {trade_hm: trade_px, "_quiet": {sr._hm(m0 + i): c for i, c in enumerate(closes)}}
+        return mb.quiet_evidence(bars, self.D, self.tz, self.T)
+
+    def test_h7_units_a_trade_at_most_two_minutes_old_is_not_tested_the_boundary_on_the_exempt_side(self):
+        """spy_frozen(ev, age): every frozen-feed shape passes when SPY's last trade ends 60 or 120 s before the instant
+        (120 s, the bar ending exactly BREADTH_AGE_S before it: the side real() and the floor count as REALLY trading),
+        and is held to the tests at 180 s, a hair past 120 s, an unknown age (the default: fail-closed), a bool, a
+        negative age or text; no evidence at all is refused whatever the age"""
+        one = "every one of SPY's bars without volume since that trade closed at one price, not the trade's"
+        still = "none of SPY's bars without volume since that trade moved off its price"
+        shapes = {"one bar at the trade's price": (self.ev("12:52", 682.02, [682.02], "12:53"), still),
+                  "one bar off the trade's price": (self.ev("12:52", 682.02, [682.03], "12:53"), one),
+                  "two equal closes": (self.ev("12:51", 682.02, [682.03, 682.03], "12:52"), one),
+                  "two at the trade's price": (self.ev("12:51", 682.02, [682.02, 682.02], "12:52"), still)}
+        self.assertEqual(mb.BREADTH_AGE_S, 120)
+        for name, (ev, why) in shapes.items():
+            with self.subTest(name):
+                self.assertEqual(ev[0], self.T)
+                for age in (60, 60.0, 120, 120.0, 0):
+                    self.assertIsNone(mb.spy_frozen(ev, age), age)
+                    self.assertIsNone(mb.spy_frozen(ev, age=age), age)
+                for age in (180, 180.0, 120.001, None, True, -60, "60"):
+                    self.assertEqual(mb.spy_frozen(ev, age), why, age)
+                self.assertEqual(mb.spy_frozen(ev), why)
+        for bad in (None, (self.T, True), [self.T, True, 1, 1], "x"):
+            self.assertEqual(mb.spy_frozen(bad, 60), "no evidence that SPY's bars without volume move")
+        self.assertEqual((mb.spy_trade_recent(120), mb.spy_trade_recent(120.5), mb.spy_trade_recent(None)), (True, False, False))
+
+    def test_h7_units_closes_within_quiet_move_tol_are_one_price(self):
+        """QUIET_MOVE_TOL (1e-9 of the price): closes within it of each other are ONE price for the distinct count and
+        for the run at the instant, and a close within it of the trade's has not moved; 1e-8 apart they are two (pins,
+        passing before and after: an exact comparison in one() or in the distinct count fails them)"""
+        p = 100.0
+        hair, apart = 101.0 * (1 + 1e-10), 101.0 * (1 + 1e-8)
+        for closes, want in (([101.0, hair, 101.0], (True, 1, 3)), ([101.0, 101.0, hair], (True, 1, 3)),
+                             ([hair, 101.0, 101.0], (True, 1, 3)), ([101.0, apart, 101.0], (True, 2, 1)),
+                             ([101.0, 101.0, apart], (True, 2, 1))):
+            with self.subTest(closes=closes):
+                self.assertEqual(self.ev("12:45", p, closes, "12:51"), (self.T,) + want)
+        self.assertFalse(self.ev("12:45", p, [p * (1 + 1e-10)] * 3, "12:51")[1])          # within it: not moved
+        self.assertTrue(self.ev("12:45", p, [p * (1 + 1e-8)] * 3, "12:51")[1])
+
+    def test_h7_units_the_shapes_let_through_by_design(self):
+        """recorded in spy_frozen's docstring and pinned here (pass before and after): with SPY's trade 8 minutes old,
+        SPY frozen at that trade's price but for one bar among the last three (a one-tick blip: the run at the instant is
+        then at most 2), and two stale prices alternating, read as a live feed; the blip one bar earlier (a run of 3 at
+        the instant) does not"""
+        tr, n = 682.02, 8
+
+        def frozen_but(j):                              # bar j (0 the first) a tick off
+            return [round(tr + 0.01, 2) if i == j else tr for i in range(n)]
+        for name, closes in (("blip_last", frozen_but(n - 1)), ("blip_second_last", frozen_but(n - 2)),
+                             ("blip_third_last", frozen_but(n - 3)),
+                             ("two_stale_alt", [round(tr + (0.11 if i % 2 else 0.12), 2) for i in range(n)])):
+            with self.subTest(name):
+                ev = self.ev("12:45", tr, closes, "12:46")
+                self.assertEqual(ev[0], self.T)
+                self.assertIsNone(mb.spy_frozen(ev), (name, ev))
+        self.assertEqual(mb.spy_frozen(self.ev("12:45", tr, frozen_but(n - 4), "12:46")),
+                         "the last 3 of SPY's bars without volume, up to the instant, closed at one price")
+
+
 class H8Floor(HalfDay):
     """the floor of REAL trades: the rule applies only while at least HALF_DAY_REAL_MIN of the trees' tickers traded
     within BREADTH_AGE_S; below it the full-day rule decides, word for word"""
@@ -657,6 +804,31 @@ class H8Floor(HalfDay):
                 self.assertEqual(set(statuses(p).values()), {"unavailable"})
                 self.assertIn("the feed looks dead: 0 of 48 tickers traded", " ".join(p["problems"]))
                 self.assertIn("below the 50% the half-day rule needs", " ".join(p["problems"]))
+
+    def test_h8_the_floor_holds_for_spys_trade_one_or_two_minutes_old(self):
+        """round 6's exemption is SPY's, never the floor's: SPY's trades after the bar starting 12:52 or 12:51 gone (its
+        trade 60 or 120 s old; its bars without volume frozen at that trade's price, or FMP's own closes) while every
+        other ticker has no trade after 12:40 (prices moving) -> refused on the pinned path exactly as the full-day rule
+        refuses the same bars, and not tradeable on the `--at` path and the paper book: the decision bar not complete,
+        below the 50% the half-day rule needs (33850e01 refused these too, the one-bar ones and those frozen at the
+        trade's price at SPY's own check, in the frozen-feed words)"""
+        d = "2025-07-03"
+        everyone = set(self.fx["minutes"][d])
+        for k, cut in ((1, "12:52"), (2, "12:51")):
+            for shape, close in (("frozen at the trade's price", lambda i, n, tr, c: tr), ("FMP's own closes", None)):
+                with self.subTest(k=k, spy=shape):
+                    self.rows = copy.deepcopy(self.fx["minutes"])
+                    self.mute(d, "12:40", everyone - {"SPY"})
+                    self.spy_quiet(d, cut, close or (lambda i, n, tr, c: c))
+                    p, err = self.pinned(d, waits=(30, 130))
+                    self.assertIsNone(p, p and f"settled below the floor: breadth {p['quotes']['breadth']}")
+                    _, full = self.full_day_answer(d)
+                    self.assertEqual((err.error, err.detail), (full.error, full.detail))
+                    self.assertEqual(err.detail, f"SPY's last traded bar ends {sr._hm(sr._min('12:54') - k)}:00 ET")
+                    for path, q in (("--at", self.at_path(d)), ("paper", self.paper_path(d))):
+                        self.assertFalse(q["decision_bar"]["complete"], path)
+                        self.assertEqual(set(statuses(q).values()), {"unavailable"}, path)
+                        self.assertIn("below the 50% the half-day rule needs", " ".join(q["problems"]), path)
 
     def test_h8_a_frozen_tail_is_refused(self):
         """halfday_b's D2: every bar after 12:40 without volume at the last traded close"""
@@ -781,6 +953,26 @@ class H11FloorHeld(HalfDay):
                 self.assertEqual(len(made), len(range(25, 201, 12)))           # one attempt in four asks: 15, not 59
                 self.assertLessEqual(sum(n for _, n, _, _ in asks), whole * len(made))
 
+    def test_h11_a_sibling_unanswered_keeps_the_floors_own_answer(self):
+        """below the floor (D1: no trade after 12:40 anywhere, prices moving) with FMP not answering, all along, for a
+        SIBLING only (a ticker no tree reads or can hold, asked only to rebuild a stale price from): every 503 is still
+        the floor's own, the full-day answer word for word, never 'FMP has not answered' (a pin, passing before and
+        after: the floor's unanswered check run over every ticker instead of the trees' fails it)"""
+        cfg = sr.load_manifest()
+        for d in HALF:
+            sib = sorted(mb.feed_tickers(cfg, d) - mb.era_tickers(cfg) - mb.tree_universe(cfg, d))
+            with self.subTest(d=d, sibling=sib[:1]):
+                self.assertTrue(sib)
+                self.rows = copy.deepcopy(self.fx["minutes"])
+                self.mute(d, "12:40")
+                _, full = self.full_day_answer(d)
+                n = len(self.calls)
+                asks, p = self.ask(d, slow=({sib[0]}, 10 ** 6))
+                self.assertIsNone(p)
+                self.assertIn((sib[0], d), self.calls[n:])                    # asked, and FMP never answered it
+                self.assertEqual({tuple(sorted(a[2].items())) for a in asks},
+                                 {(("detail", full.detail), ("error", full.error))})
+
     def test_h11_below_the_floor_while_fmp_has_not_answered_the_503_says_so(self):
         """the real 11-28 (SPY leaning on the half-day rule), 30 of FMP's 62 answers timing out until 12:55:00: below
         the floor only for want of answers -> 'decision not settled yet: FMP has not answered for ...' (as before the
@@ -878,19 +1070,70 @@ class H10Calendars(unittest.TestCase):
         self.assertEqual((sr.session_close("2026-11-27"), early.get("2026-11-27")), ("13:00", "13:00"))   # not vacuous
 
     def test_h10_the_executors_bound_on_spy_before_the_instant_is_the_brains_quiet_trade_max(self):
-        """ibkr-executor/app/mirror.py HALF_DAY_SPY_MAX_S (read with ast) is this side's QUIET_TRADE_MAX_S (the
-        preview's FRESH_MIN in seconds): the executor accepts SPY priced exactly as long before the instant as the
-        brain leans on (the executor's E11 is the same check from its side; a drift guard, it passes before and after)"""
+        """ibkr-executor/app/mirror.py HALF_DAY_SPY_MAX_S (read with ast by module_number, the executor's E11 evaluator)
+        is this side's QUIET_TRADE_MAX_S (the preview's FRESH_MIN in seconds): the executor accepts SPY priced exactly as
+        long before the instant as the brain leans on (the executor's E11 is the same check from its side; a drift
+        guard, it passes before and after)"""
         path = os.path.join(HERE, "..", "..", "..", "ibkr-executor", "app", "mirror.py")
         if not os.path.isfile(path):
             self.skipTest("ibkr-executor is not in this checkout")
         with open(path) as f:
             tree = ast.parse(f.read())
-        got = [ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1
-               and isinstance(n.targets[0], ast.Name) and n.targets[0].id == "HALF_DAY_SPY_MAX_S"]
-        self.assertEqual(len(got), 1, "HALF_DAY_SPY_MAX_S is not one plain number in app/mirror.py")
-        self.assertEqual((float(got[0]), mb.QUIET_TRADE_MAX_S), (float(pc.FRESH_MIN * 60), pc.FRESH_MIN * 60),
+        n = sum(1 for x in tree.body if isinstance(x, ast.Assign) and len(x.targets) == 1
+                and isinstance(x.targets[0], ast.Name) and x.targets[0].id == "HALF_DAY_SPY_MAX_S")
+        self.assertEqual(n, 1, "HALF_DAY_SPY_MAX_S is not assigned exactly once at module level in app/mirror.py")
+        got = module_number(path, "HALF_DAY_SPY_MAX_S")
+        self.assertEqual((float(got), mb.QUIET_TRADE_MAX_S), (float(pc.FRESH_MIN * 60), pc.FRESH_MIN * 60),
                          "the executor's HALF_DAY_SPY_MAX_S and the brain's QUIET_TRADE_MAX_S differ: change both together")
+
+    def test_h10_the_bound_written_as_an_equivalent_expression_still_passes(self):
+        """the drift guard above, run on app/mirror.py with HALF_DAY_SPY_MAX_S written another way (its source read
+        through a stand-in of open(); nothing on disk changes): 15 * 60.0, 900 and 60 * 15 pass, as the executor's
+        E11 already reads them; 16 * 60.0 and 960.0 still fail as drift (33850e01's ast.literal_eval raised on any
+        expression)"""
+        path = os.path.normpath(os.path.join(HERE, "..", "..", "..", "ibkr-executor", "app", "mirror.py"))
+        if not os.path.isfile(path):
+            self.skipTest("ibkr-executor is not in this checkout")
+        with open(path) as f:
+            src = f.read()
+        real_open = open
+        for text, same in (("15 * 60.0", True), ("900", True), ("60 * 15", True), ("16 * 60.0", False), ("960.0", False)):
+            with self.subTest(text):
+                edited, n = re.subn(r"^HALF_DAY_SPY_MAX_S = [0-9.]+", f"HALF_DAY_SPY_MAX_S = {text}", src, flags=re.M)
+                self.assertEqual(n, 1)
+
+                def stand_in(p, *a, **k):
+                    if isinstance(p, str) and os.path.normpath(p) == path:
+                        return io.StringIO(edited)
+                    return real_open(p, *a, **k)
+                with unittest.mock.patch("builtins.open", stand_in):
+                    if same:
+                        self.test_h10_the_executors_bound_on_spy_before_the_instant_is_the_brains_quiet_trade_max()
+                    else:
+                        with self.assertRaises(AssertionError):
+                            self.test_h10_the_executors_bound_on_spy_before_the_instant_is_the_brains_quiet_trade_max()
+
+
+def module_number(path, name):
+    """the module-level constant `name` of the python file `path`, read with ast (none of its imports run): a number,
+    or a sum, difference, product or quotient of numbers and of `pc.<NAME>` (preclose.py's, beside it). The executor's
+    E11 evaluator (ibkr-executor/tests/test_mirror_halfday.py _module_number), the same code on this side"""
+    with open(path) as f:
+        tree = ast.parse(f.read())
+    node = next((n.value for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1
+                 and isinstance(n.targets[0], ast.Name) and n.targets[0].id == name), None)
+    assert node is not None, f"{name} is not a module constant of {path}"
+
+    def val(x):
+        if isinstance(x, ast.Constant) and isinstance(x.value, (int, float)) and not isinstance(x.value, bool):
+            return x.value
+        if isinstance(x, ast.Attribute) and isinstance(x.value, ast.Name) and x.value.id == "pc":
+            return module_number(os.path.join(os.path.dirname(path), "preclose.py"), x.attr)
+        if isinstance(x, ast.BinOp) and isinstance(x.op, (ast.Mult, ast.Add, ast.Sub, ast.Div)):
+            a, b = val(x.left), val(x.right)
+            return {ast.Mult: a * b, ast.Add: a + b, ast.Sub: a - b, ast.Div: a / b if b else None}[type(x.op)]
+        raise AssertionError(f"{name} in {path} is not a plain number: {ast.dump(x)}")
+    return val(node)
 
 
 if __name__ == "__main__":

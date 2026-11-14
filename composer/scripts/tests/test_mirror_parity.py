@@ -926,5 +926,37 @@ class P14PartlyInvested(CreditRows, Base):
                 self.assertIn("MAX_IDLE_CASH_FRAC = 0.05", f.read())
 
 
+class P15NoSilentCap(Base):
+    """2026-11-13, the $50k scale-up: four credit notes, and the monitor printed three of them with nothing to say a
+    fourth existed. Notes past NOTES_SHOWN (and problems past PROBLEMS_SHOWN) are counted, never dropped."""
+
+    def note_lines(self, r):
+        lines, _ = self.run_check(feed(live=book([r])))
+        return [x for x in lines if x.startswith("  note: ")], [x for x in lines if x.startswith("  brain: ")]
+
+    def test_notes_and_problems_past_the_cap_are_counted(self):
+        notes = [f"{e} credited $1,000.00 (scale-up)" for e in ("HARV", "SLEEVE", "KMLM", "HG")]
+        problems = ["SPY: one", "SPY: two", "SPY: three"]
+        shown, brain = self.note_lines(row(D, BIG, notes=notes, problems=problems))
+        self.assertEqual(shown, [f"  note: {n}" for n in notes[:3]]
+                         + ["  note: ... and 1 more (all of them are in the executor's feed)"])
+        self.assertEqual(brain, [f"  brain: {p}" for p in problems[:2]]
+                         + ["  brain: ... and 1 more (all of them are in the executor's feed)"])
+
+    def test_the_twins_at_or_under_the_cap_print_exactly_as_before(self):
+        notes = [f"{e} credited $1,000.00 (scale-up)" for e in ("HARV", "SLEEVE", "KMLM")]
+        shown, brain = self.note_lines(row(D, BIG, notes=notes, problems=["SPY: one", "SPY: two"]))
+        self.assertEqual(shown, [f"  note: {n}" for n in notes])
+        self.assertEqual(brain, ["  brain: SPY: one", "  brain: SPY: two"])
+        shown, brain = self.note_lines(row(D, BIG))
+        self.assertEqual((shown, brain), ([], []))
+
+    def test_unattested_notes_are_still_summed_apart_and_do_not_count_toward_the_cap(self):
+        notes = ["HG not attested today", "KMLM not attested today"] + [f"n{i}" for i in range(3)]
+        shown, _ = self.note_lines(row(D, BIG, notes=notes))
+        self.assertEqual(shown, ["  note: 2 sleeve(s) traded on a tree nobody attested today (paper only; a live book refuses)",
+                                 "  note: n0", "  note: n1", "  note: n2"])
+
+
 if __name__ == "__main__":
     unittest.main()

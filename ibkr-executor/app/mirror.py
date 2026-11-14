@@ -107,7 +107,9 @@ KNOWN LIMITS, recorded by the second review round (not built)
   correction is at most the day's sells). A bust of a sell moves a position (its shares come back):
   it is closed once IB reports that position (the guard takes TotalCashValue alone; the post-trade
   check halts on the shares); before that it is 2's exposure - at most the day's sells, so, like 3,
-  new with this guard and only on such a day. Operating rule, for 1 and 2: on a session day, no
+  new with this guard and only on such a day. Nothing closes a bust before IB reports it, by the
+  guard's first look (in the step the sells are booked): the operating rule covers withdrawals and
+  trades by hand, not IB's busts. Operating rule, for 1 and 2: on a session day, no
   withdrawal pending or posting and no trade by hand in the mirror's account until that session's
   run is done (the run: about 15:45-16:05 ET; 12:45-13:05 on a half-day). A purchase or a sale by
   hand moves a position once IB has reported its position: the guard then takes TotalCashValue alone
@@ -2502,7 +2504,9 @@ class MirrorManager:
         it can happen only on a day the sells exceed the cash outside the book. A bust of a sell moves
         a position (its shares come back): once IB reports it, P differs and L = F (the post-trade
         check then halts on the shares); before that it is outside (A5), as the second - at most the
-        day's sells, so, like the third, new with this guard and only on such a day. Hence the
+        day's sells, so, like the third, new with this guard and only on such a day; nothing closes
+        a bust before IB reports it, by the first look (the operating rule below covers withdrawals
+        and trades by hand, not IB's busts). Hence the
         operating rule in composer/IBKR_MIRROR.md for the first two: on a session day, no withdrawal
         pending or posting and no trade by hand in the mirror's account until that session's run is
         done (about 15:45-16:05 ET; 12:45-13:05 on a half-day). Nothing closes the third.

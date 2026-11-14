@@ -2093,22 +2093,28 @@ class R17StepAChangesOnlyTheCap(Case):
     """its NOTE 4 (a GATE: fails at 170191c0): step (a)'s deploy changes MIRROR_MAX_BOOK_USD only. A sleeve it drops
     from MIRROR_LIVE_ENGINES stays in the book's state, not frozen, until the executor's first tick with the IB
     gateway logged in (mirror.py _reconcile_sleeves, after `ad is None`), and /mirror/credit refuses it (400): a line
-    pasted before then queues the other credits and stops at that one (the e2e run's FRZ2). The twin pins the
-    executor's lines this rests on"""
+    pasted before then queues only the credits before that sleeve in the line's order (HG, KMLM, SLEEVE, HARV) and
+    stops there, the ones after it not sent (the e2e runs' FRZ2, HARV dropped, and FRZ3, each sleeve dropped in
+    turn). The twin pins the executor's lines this rests on"""
+    STOPS = ("so a line pasted before then queues only the credits before that sleeve in the line's order (HG, KMLM, "
+             "SLEEVE, HARV) and stops there; the ones after it are not sent.")
     WORDS = ("Change only MIRROR_MAX_BOOK_USD in that deploy, not MIRROR_LIVE_ENGINES: a sleeve it drops stays in the "
              "book's state, not frozen, until the executor's first tick with the IB gateway logged in")
 
     def test_the_plan_and_the_doc_say_to_change_only_the_cap(self):
         step = self.plan()["steps"][0]
         self.assertTrue(step.startswith("(a) Render -> ibkr-executor -> Environment: set MIRROR_MAX_BOOK_USD = 53000, "
-                                        "then \"Save, rebuild and deploy\". " + self.WORDS + ", so a line pasted before "
-                                        "then queues the other credits and stops at that one. Never between"), step)
+                                        "then \"Save, rebuild and deploy\". " + self.WORDS + ", " + self.STOPS
+                                        + " Never between"), step)
+        self.assertNotIn("queues the other credits", step)
         code, text = self.run_it()
         self.assertEqual(code, 0)
         self.assertIn(self.WORDS, text)
         a = scaling_section().split("(a) The cap.")[1].split("(b) The credits.")[0]
-        self.assertIn(self.WORDS + " (mirror.py _reconcile_sleeves), so a line pasted before then queues the other "
-                      "credits and stops at that one.", a)
+        self.assertIn(self.WORDS + " (mirror.py _reconcile_sleeves), " + self.STOPS, a)
+        self.assertNotIn("queues the other credits", " ".join(ms.__doc__.split()))
+        self.assertIn("would queue only the credits before that sleeve in the line's order (HG, KMLM, SLEEVE, HARV) and "
+                      "stop there; the ones after it would not be sent.", " ".join(ms.__doc__.split()))
         self.assertIn("That deploy changes MIRROR_MAX_BOOK_USD only, not MIRROR_LIVE_ENGINES", " ".join(ms.__doc__.split()))
 
     def test_the_twin_the_executor_freezes_a_dropped_sleeve_only_in_a_tick_with_the_gateway(self):
