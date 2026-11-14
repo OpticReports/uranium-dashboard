@@ -22,7 +22,8 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | CAGR study: 7 registered + 11 diagnostic trend-share sweep (2026-09-28) | 18 | RESEARCH_CAGR.md |
 | Sharpe study (registered 2026-10-01) | 5 | research/sharpe/PREREG.md |
 | Sharpe study counter-agent diagnostics: 8 new rule configs (SMA 150/250d, H1 down-only, up-only, cap 1.2, vol window 90/360, H1+H2); +100-shuffle placebo and ~30 re-slices/nulls not counted as rules | 8 | RESEARCH_SHARPE.md |
-| **Total** | **~2,546** | |
+| Take-profit study, S4 exits (registered 2026-11-14; 30 + up to 4 + 6 if escalated; counted at registration as 40) | 40 | research/tp/PREREG.md |
+| **Total** | **~2,586** | |
 
 Fee-study note (2026-09-10): the fee row counts 24, not the 14 its
 pre-registration declared — 14 registered grid arms, plus 8 Kelly re-fits
@@ -157,6 +158,12 @@ trigger. Ties break toward NOT deploying.
   (63 counting the post-hoc and placebo grids). §8 requires a single-touch
   holdout for adoption, so the §8 adoption path for the S4 exit family is
   **closed**, not deferred. Any future work there needs genuinely new data.
+- **§7 overridden by the owner, 2026-11-14 (take-profit study).** Casey asked
+  for a multi-variable search for when the S4 trend leg should take profit.
+  Recorded as an owner-authorized exception for that study only, not a
+  waiver of §7. Per the bullet above, BTC is in-sample for it end to end; its
+  out-of-sample test is cross-asset (ETH, LTC, XRP, BCH, parameters frozen
+  from BTC) plus a reported-only BTC forward window (research/tp/PREREG.md §0).
 
 ## 10. ETH transfer test — pre-registered, executed 2026-07-26: DO NOT ADOPT
 
