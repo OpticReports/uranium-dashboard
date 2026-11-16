@@ -35,6 +35,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import mirror_dry as md  # noqa: E402
+import mirror_firstbuy as fb  # noqa: E402
 import shadow_runner as sr  # noqa: E402
 
 FEED_KIND = "composer-mirror-feed"
@@ -437,7 +438,8 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
                  + (f", fills {sum(cost) / len(cost):+.1f} bps vs the decision price" if cost and mode == "LIVE" else "")
                  + (f"; NOT FULLY FILLED: {', '.join(short)}" if short else ""))
     if short and mode == "LIVE":
-        alerts.append(f"{tag} UNFILLED — book {name} on {d}: {', '.join(short)}. The cash waits for the next session.")
+        alerts.append(f"{tag} UNFILLED — book {name} on {d}: {', '.join(short)}. The cash waits for the next session."
+                      + fb.discard_hint(orders))
     if compared:
         lines.append(f"  parity vs Composer: {same} of {compared} engines hold the same"
                      + ("; day return, mirror - Composer: "
