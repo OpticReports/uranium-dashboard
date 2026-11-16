@@ -23,7 +23,8 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | Sharpe study (registered 2026-10-01) | 5 | research/sharpe/PREREG.md |
 | Sharpe study counter-agent diagnostics: 8 new rule configs (SMA 150/250d, H1 down-only, up-only, cap 1.2, vol window 90/360, H1+H2); +100-shuffle placebo and ~30 re-slices/nulls not counted as rules | 8 | RESEARCH_SHARPE.md |
 | Take-profit study, S4 exits (registered 2026-11-14; rounds 1-3: 30 + 4 + 6; AMENDMENT 1 round 4: +22 stand-aside variants) | 62 | research/tp/PREREG.md |
-| **Total** | **~2,608** | |
+| EXIT2: adaptive / regime-conditional / multivariate S4 exits (registered 2026-11-16; holdout = 12 fresh coins, single touch) | 28 | research/exit2/PREREG.md |
+| **Total** | **~2,636** | |
 
 Fee-study note (2026-09-10): the fee row counts 24, not the 14 its
 pre-registration declared — 14 registered grid arms, plus 8 Kelly re-fits
@@ -164,6 +165,12 @@ trigger. Ties break toward NOT deploying.
   waiver of §7. Per the bullet above, BTC is in-sample for it end to end; its
   out-of-sample test is cross-asset (ETH, LTC, XRP, BCH, parameters frozen
   from BTC) plus a reported-only BTC forward window (research/tp/PREREG.md §0).
+- **§7 overridden by the owner again, 2026-11-16 (EXIT2).** Casey asked for
+  research-backed adaptive / regime-conditional / multivariate exits. Same
+  standing: an owner-authorized exception for that study only. Because the
+  TP study spent the four alts, EXIT2 selects on BTC + ETH/LTC/XRP/BCH and
+  holds out 12 coins never used for an S4 exit, touched once by at most 3
+  finalists (research/exit2/PREREG.md §0).
 
 ## 10. ETH transfer test — pre-registered, executed 2026-07-26: DO NOT ADOPT
 
