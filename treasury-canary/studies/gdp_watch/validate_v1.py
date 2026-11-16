@@ -152,6 +152,7 @@ if __name__ == "__main__":
         ax.plot(xs, [r["actual"] - r[m] for r in rc], color=SLOTS[i], linewidth=1.4, linestyle="--",
                 label=f"{c} forecast made 4 quarters earlier")
     ax.axvspan(2020.0, 2022.0, color=GRID, alpha=0.6, linewidth=0)
+    ax.set_xticks(range(2008, 2027, 2), [str(y) for y in range(2008, 2027, 2)])   # whole years, not 2007.5
     ax.text(2020.1, ax.get_ylim()[1] * 0.9, "pandemic\n(excluded from scores)", color=MUTED, fontsize=7)
     ax.set_ylabel("real GDP, % on a year earlier", color=MUTED, fontsize=8)
     ax.set_title("What the rule said a year ahead vs what happened (China: its 10-year trend lags the slowdown)",
