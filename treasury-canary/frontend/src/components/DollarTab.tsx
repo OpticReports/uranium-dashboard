@@ -849,7 +849,8 @@ export function DollarView({ data }: { data: DollarWatch }) {
           <span className="ml-auto font-mono text-[11px] text-slate-500">generated {str(d.generated) ?? "n/a"} · reference cut-off {str(d.frozen_on) ?? "n/a"}</span>
         </div>
         <p className="mt-1 text-[12px] leading-snug text-slate-300">{str(d.headline) ?? "No live reading."}</p>
-        {str(d.build_error) && <p className="mt-1 text-[11px] text-slate-500">The last rebuild failed ({d.build_error}); showing the previous build.</p>}
+        {str(d.build_error) && <p className="mt-1 text-[11px] text-slate-500">The last rebuild failed ({d.build_error}); {d.build_fallback === "empty"
+          ? "no live data: only the frozen record applies." : "showing the previous build."}</p>}
       </div>
       <Section title="1 · Dollar state" tip={DW.layer_state} summary={d.summaries?.state} subtitle="ICE DXY, the Fed broad index, the dollar-yield quadrant, momentum, safe havens, EM FX, oil" status={b.state ?? d.state?.status}>
         <StateLayer d={d} />

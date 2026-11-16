@@ -43,7 +43,7 @@ def _run(payload, state, day="d", on=True):
     def allowed(sev):
         levels.append(sev)
         return on and sev == "WARN"                 # the default TELEGRAM_MIN_SEVERITY: anything below WARN is dropped
-    msgs = dh.notify(payload, state, day, out.append, allowed)
+    msgs = dh.notify(payload, state, day, lambda m: out.append(m) or True, allowed)      # delivered
     assert all(lv == "WARN" for lv in levels)
     return msgs, out
 
@@ -80,11 +80,17 @@ def test_one_root_cause_is_one_problem(tmp_path):
                                   "inputs not archived for 2 rows (2026-11-02, 2026-11-03)",
                                   "1 months dated after their deadline, not point in time (2026-11)"]}}
     pr = dh.problems(p)
-    assert list(pr) == ["ledger"] and "onset rows not saved" in pr["ledger"]
+    assert pr == {"ledger": "Forward ledger: a write failed (OSError: No space left on device)."}
     assert "archived" not in pr["ledger"] and "deadline" not in pr["ledger"]   # not asked for: shown on the tab only
-    unreadable = {"ledger": {"status": "error", "problem": "the ledger file is unreadable or wrongly shaped: nothing is being recorded"},
-                  "forward": {"problems": ["the ledger file is unreadable or wrongly shaped: nothing is being recorded"]}}
-    assert list(dh.problems(unreadable)) == ["ledger"] and dh.problems(unreadable)["ledger"].count("unreadable") == 1
+    crashed = {"forward": {"problems": ["KeyError: 'ofr_fsi'"]}}       # a record-writing step crashed: no row gets written
+    assert dh.problems(crashed) == {"ledger": "Forward ledger: a recording step failed (KeyError)."}
+
+
+def test_a_real_unreadable_ledger_is_one_plain_line(inputs, tmp_path):
+    led = tmp_path / "dollar_ledger.json"
+    led.write_text("{not json", encoding="utf-8")
+    p = dw.build_dollar_watch(inputs, today="2026-11-02", ledger_file=str(led))
+    assert dh.problems(p) == {"ledger": dh.UNREADABLE}
 
 
 def test_each_cp_cause_is_one_problem_whose_text_follows_the_cause(inputs, tmp_path):
@@ -105,7 +111,7 @@ def test_each_cp_cause_is_one_problem_whose_text_follows_the_cause(inputs, tmp_p
     y = json.loads(json.dumps(inputs))
     y["fred"]["DCPF3M"] = {"dates": [], "values": [], "status": "error"}
     none = dw.build_dollar_watch(y, today="2026-11-02", ledger_file=str(tmp_path / "d.json"))
-    assert dh.problems(none)["cp"].startswith("No CP data at all")
+    assert dh.problems(none)["cp"].startswith("No CP spread: the CP or bill series is empty")
     # a month-long blank that has ended is not a problem: the data are flowing again
     back = dw.build_dollar_watch(_cut(inputs, "2020-05-08"), today="2020-05-08", ledger_file=str(tmp_path / "e.json"))
     assert dh.problems(back) == {}
@@ -133,30 +139,57 @@ def test_nothing_builds_at_all_still_pings_once(monkeypatch, tmp_path):
     from app import alerts
     from app.api import routes_dollar as rd
     sent: list[str] = []
-    monkeypatch.setattr(alerts, "send", sent.append)
+    monkeypatch.setattr(alerts, "send_now", lambda m: sent.append(m) or True)
     monkeypatch.setattr(alerts, "should_send", lambda sev: sev == "WARN")
     monkeypatch.setenv("DOLLAR_LEDGER_PATH", str(tmp_path / "dollar_ledger.json"))
     monkeypatch.setattr(rd, "_cache", {"ts": 0.0, "data": None, "retry_after": 0.0})
+    monkeypatch.setattr(rd, "fetch_all", lambda: {})          # offline: the build itself is what fails
     monkeypatch.setattr(rd, "build_dollar_watch", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("REF unavailable")))
     for _ in range(2):
         with pytest.raises(Exception):
             rd.warm_dollar_watch(force=True)
     assert len(sent) == 1 and "no fallback build was possible; the tab is down" in sent[0]
+    assert "RuntimeError: REF unavailable" in sent[0] and "HTTPException" not in sent[0]   # the real error, not the wrapper
+
+
+def test_a_cold_failure_says_there_is_no_live_data_end_to_end(monkeypatch, tmp_path):
+    from app import alerts
+    from app.api import routes_dollar as rd
+    sent: list[str] = []
+    monkeypatch.setattr(alerts, "send_now", lambda m: sent.append(m) or True)
+    monkeypatch.setattr(alerts, "should_send", lambda sev: sev == "WARN")
+    monkeypatch.setenv("DOLLAR_LEDGER_PATH", str(tmp_path / "dollar_ledger.json"))
+    monkeypatch.setattr(rd, "_cache", {"ts": 0.0, "data": None, "retry_after": 0.0})
+    monkeypatch.setattr(rd, "fetch_all", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    rd.warm_dollar_watch(force=True)
+    rd.warm_dollar_watch(force=True)                          # still failing: the cached empty build stays "empty"
+    assert len(sent) == 1 and "the tab has no live data" in sent[0]
+    assert rd._cache["data"]["build_fallback"] == "empty"
+
+
+def test_opened_and_resolved_in_one_run_are_one_message(tmp_path):
+    st = str(tmp_path / "s.json")
+    cp_gap = {"funding": {"rows": [{"id": "cp_fin", "mean_5d_stale_why": "gap", "mean_5d_to": "2020-03-26"}]}}
+    _run(LEDGER_FAIL, st)
+    out = _run(cp_gap, st)[1]
+    assert len(out) == 1 and out[0].startswith(dh.HEAD) and "Resolved:" in out[0] and "• Was: Forward ledger" in out[0]
 
 
 def test_only_the_scheduler_pings(monkeypatch, tmp_path):
     from app import alerts
     from app.api import routes_dollar as rd
     calls: list[dict] = []
+    sent: list[str] = []
     real = dh.notify
     monkeypatch.setattr(dh, "notify", lambda p, *a, **k: calls.append(p) or real(p, *a, **k))
-    monkeypatch.setattr(alerts, "send", lambda m: None)
+    monkeypatch.setattr(alerts, "send_now", lambda m: sent.append(m) or True)
+    monkeypatch.setattr(alerts, "should_send", lambda sev: sev == "WARN")
     monkeypatch.setenv("DOLLAR_LEDGER_PATH", str(tmp_path / "dollar_ledger.json"))
     monkeypatch.setattr(rd, "_cache", {"ts": 0.0, "data": None, "retry_after": 0.0})
     monkeypatch.setattr(rd, "fetch_all", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
     rd.dollar_watch_payload(force=True)                       # a page-path rebuild, forced
     rd.dollar_watch_payload()                                 # a page view
-    assert calls == []
+    assert calls == [] and sent == [] and not os.path.exists(tmp_path / dh.STATE_NAME)
     rd.warm_dollar_watch(force=True)
     assert len(calls) == 1 and calls[0].get("build_fallback") in ("empty", "previous")
     assert os.path.exists(tmp_path / dh.STATE_NAME)            # beside the ledger, on the persistent disk
@@ -177,8 +210,10 @@ def test_a_wrongly_shaped_state_file_is_survived(tmp_path):
 
 
 def test_the_severity_filter_is_respected(tmp_path):
-    msgs, out = _run(LEDGER_FAIL, str(tmp_path / "s.json"), on=False)
+    st = str(tmp_path / "s.json")
+    msgs, out = _run(LEDGER_FAIL, st, on=False)
     assert len(msgs) == 1 and out == []                       # TELEGRAM_MIN_SEVERITY above WARN: nothing sent
+    assert _run({}, st)[1] == []                              # never announced, so never "resolved"
 
 
 def test_pings_are_data_alarms_in_plain_words(inputs, tmp_path):
@@ -197,3 +232,80 @@ def test_pings_are_data_alarms_in_plain_words(inputs, tmp_path):
         assert not HOLE.search(t) and not STATUS_WORDS.search(t), t
         for phrase in FORBIDDEN:
             assert phrase not in t.lower(), (phrase, t)
+
+
+# ---------------------------------------------------------------------------- the second review (2026-11-16)
+def test_an_undelivered_ping_is_retried_never_recorded(tmp_path):
+    """review: alerts.send was fire-and-forget, so an open was recorded even when Telegram never got it."""
+    st = str(tmp_path / "s.json")
+    failed: list[str] = []
+    assert len(dh.notify(LEDGER_FAIL, st, "d", lambda m: failed.append(m) or False, lambda s: True)) == 1
+    assert len(failed) == 1 and not os.path.exists(st)        # tried, refused: nothing recorded as announced
+    out = _run(LEDGER_FAIL, st)[1]
+    assert len(out) == 1 and out[0].startswith(dh.HEAD)        # the retry goes out as the open, never an orphan resolve
+    dh.notify({}, st, "d", lambda m: False, lambda s: True)    # the resolve is refused: still open
+    assert "ledger" in json.load(open(st, encoding="utf-8"))["open"]
+    out = _run({}, st)[1]
+    assert len(out) == 1 and out[0].startswith(dh.DONE)
+
+
+def test_a_worse_fallback_pings_again_a_better_one_does_not(tmp_path):
+    st = str(tmp_path / "s.json")
+    fb = {k: {"build_error": "RuntimeError: boom", "build_fallback": k} for k in ("previous", "empty", "none")}
+    assert len(_run(fb["previous"], st)[1]) == 1
+    out = _run(fb["none"], st)[1]                              # a restart into nothing building at all
+    assert len(out) == 1 and "• Worse: The last rebuild failed" in out[0] and "the tab is down" in out[0]
+    assert _run(fb["none"], st)[1] == [] and _run(fb["empty"], st)[1] == []      # persisting, then better: silent
+    assert _run(fb["none"], st)[1][0].count("• Worse:") == 1
+
+
+def test_a_ping_never_names_the_row_or_step(tmp_path):
+    """review: most ledger rows are written only when a firing appears, so naming the row would announce it (Q6)."""
+    firing_day = {"ledger": {"status": "error",
+                             "problem": "matured outcomes not saved: OSError: [Errno 28] No space left on device; "
+                                        "scramble-rule rows not saved: OSError: [Errno 28] No space left on device"},
+                  "forward": {"problems": ["OSError: momentum outcomes_250d not saved: OSError: [Errno 28] No space left on device",
+                                           "KeyError: 'momentum'", "placebo maturity not saved: OSError: [Errno 28] No space left on device"]}}
+    text = dh.problems(firing_day)["ledger"]
+    assert text == "Forward ledger: a write failed (OSError: [Errno 28] No space left on device); a recording step failed (KeyError)."
+    for word in ("scramble", "momentum", "placebo", "maturity", "matured", "onset", "firing", "rule"):
+        assert word not in text.lower(), word
+
+
+def test_the_disk_probe_raises_the_ledger_problem_without_waiting_for_a_row(tmp_path):
+    blocker = tmp_path / "not_a_dir"
+    blocker.write_text("x", encoding="utf-8")
+    bad = str(blocker / "dollar_ledger.json")                  # its directory cannot exist: every write there fails
+    assert dh.probe(bad) and "Error" in dh.probe(bad)
+    st = str(tmp_path / "s.json")
+    out: list[str] = []
+    dh.notify({}, st, "d", lambda m: out.append(m) or True, lambda s: True, ledger_file=bad)
+    assert len(out) == 1 and "Forward ledger: the disk refused a test write" in out[0] and dh.TAG in out[0]
+    good = str(tmp_path / "dollar_ledger.json")
+    assert dh.probe(good) is None and not os.path.exists(tmp_path / dh.PROBE_NAME)
+    dh.notify({}, st, "d", lambda m: out.append(m) or True, lambda s: True, ledger_file=good)
+    assert len(out) == 2 and out[1].startswith(dh.DONE)        # the disk takes writes again: resolved
+    dh._MEMORY.clear()
+    st2 = str(tmp_path / "s2.json")                           # during a failed build too, the disk alarm opens
+    msgs = dh.notify({"build_error": "RuntimeError: boom", "build_fallback": "previous"}, st2, "d", lambda m: True,
+                     lambda s: True, ledger_file=bad)
+    assert "the disk refused a test write" in msgs[0] and "rebuild failed" in msgs[0]
+    dh._MEMORY.clear()
+    st3 = str(tmp_path / "s3.json")                           # a stale copy's old ledger problem never re-opens
+    stale = {**LEDGER_FAIL, "build_error": "RuntimeError: boom", "build_fallback": "previous"}
+    msgs = dh.notify(stale, st3, "d", lambda m: True, lambda s: True, ledger_file=good)
+    assert len(msgs) == 1 and "Forward ledger" not in msgs[0]
+
+
+def test_the_scheduler_sends_synchronously_and_probes_the_ledger_disk(monkeypatch, tmp_path):
+    from app import alerts
+    from app.api import routes_dollar as rd
+    seen: dict = {}
+    real = dh.notify
+    monkeypatch.setattr(dh, "notify", lambda p, *a, **k: seen.update(k) or real(p, *a, **k))
+    monkeypatch.setattr(alerts, "send_now", lambda m: True)
+    monkeypatch.setenv("DOLLAR_LEDGER_PATH", str(tmp_path / "dollar_ledger.json"))
+    monkeypatch.setattr(rd, "_cache", {"ts": 0.0, "data": None, "retry_after": 0.0})
+    monkeypatch.setattr(rd, "fetch_all", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    rd.warm_dollar_watch(force=True)
+    assert seen["send"] is alerts.send_now and seen["ledger_file"] == str(tmp_path / "dollar_ledger.json")
