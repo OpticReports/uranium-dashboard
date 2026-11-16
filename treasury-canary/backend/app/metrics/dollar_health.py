@@ -137,7 +137,8 @@ def _save(path: str, open_now: dict) -> None:
 def probe(ledger_file: str) -> str | None:
     """None if the ledger's directory takes an atomic write (temp file, fsync, replace: how the ledger is rewritten)
     the size of the ledger plus a margin for the rows a firing would add; else the error. Run on every scheduler pass,
-    so a disk alarm never waits for a row to be written. It holds the ledger lock, so it never starves a real write."""
+    so a disk alarm never waits for a row to be written. It holds the ledger lock, so it never starves a real write.
+    That lock is not reentrant: never call this (or notify) while holding dollar_watch._LEDGER_LOCK."""
     from .dollar_watch import _LEDGER_LOCK
     d = os.path.dirname(os.path.abspath(ledger_file))
     p = os.path.join(d, PROBE_NAME)
