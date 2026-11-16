@@ -47,6 +47,22 @@ def send(text: str) -> None:
     threading.Thread(target=_post, daemon=True).start()
 
 
+def send_now(text: str) -> bool:
+    """Synchronous send for a caller that must know the message arrived (the Dollar data-health pings record a
+    change as announced only once Telegram accepted it). False when unset, refused or unreachable."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not token or not chat:
+        return False
+    try:
+        r = httpx.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                       json={"chat_id": chat, "text": text[:4000]}, timeout=10)
+        return r.status_code == 200 and bool((r.json() or {}).get("ok"))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("telegram send failed: %s", exc)
+        return False
+
+
 # Plain-English headers. The phone should read like a note from an analyst,
 # not a log line: no event-type slugs, no [WARN] tags.
 _TITLE = {

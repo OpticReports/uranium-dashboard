@@ -51,7 +51,8 @@ def _rebuild() -> dict:
             prev = _cache["data"]
             _cache["retry_after"] = time.time() + _TTL_DEGRADED
         if prev is not None:              # serve the last good payload, but never as if it were fresh
-            stale = dict(prev, build_error=f"{type(exc).__name__}: {str(exc)[:200]}", build_fallback="previous",
+            stale = dict(prev, build_error=f"{type(exc).__name__}: {str(exc)[:200]}",
+                         build_fallback=prev.get("build_fallback") or "previous",   # an empty cold build stays "empty"
                          status={**(prev.get("status") or {}), "overall": "stale"})
             with _lock:
                 _cache["data"] = stale
@@ -115,7 +116,8 @@ def warm_dollar_watch(force: bool = False) -> dict:
     try:
         data = dollar_watch_payload(force=force)
     except Exception as exc:                              # nothing builds at all: still ping, then fail as before
-        _health_ping({"build_error": f"{type(exc).__name__}: {str(exc)[:200]}", "build_fallback": "none"})
+        root = exc.__cause__ or exc                       # the real error, not the 503 wrapper
+        _health_ping({"build_error": f"{type(root).__name__}: {str(root)[:200]}", "build_fallback": "none"})
         raise
     _health_ping(data)
     return data
@@ -128,7 +130,7 @@ def _health_ping(payload: dict) -> None:
         from .. import alerts
         from ..metrics import dollar_health
         dollar_health.notify(payload, dollar_health.state_path(ledger_path()), datetime.now(timezone.utc).date().isoformat(),
-                             send=alerts.send, allowed=alerts.should_send)
+                             send=alerts.send_now, allowed=alerts.should_send, ledger_file=ledger_path())
     except Exception as exc:  # noqa: BLE001  (a ping must never break the warm-up)
         logger.warning("Dollar-watch health ping failed: %s", exc)
 
