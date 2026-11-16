@@ -23,10 +23,13 @@ A session, in the loop thread
   1 the brain's clock (/mirror/session) says when the decision bar ENDS (decide_utc, used as given)
     and when the session closes. An unreadable clock is never a silent day: the loop is asked back
     every minute (a PAPER book: every five, it shares the loop with a live strategy), it is said
-    after ten, and a recorded NO TRADE is written at 16:00 ET. The brain is asked only over https
+    after ten, and a recorded NO TRADE is written at 16:00 ET (13:00 on an early close by the
+    service's own calendar, which also ends the fallback clock's session). The brain is asked only over https
     (or on this machine): the API token never rides plain http
-  2 at decision + offset: the intents (schema 2: PINNED to the decision instant, its bar complete,
-    built after that instant and not in the future). A pinned payload is immutable - the brain
+  2 at decision + offset: the intents (schema 2: PINNED to the decision instant, its bar complete with
+    SPY priced from it - on an early close by the service's own calendar, which the payload's close_et
+    and the brain's clock also give, at SPY's own last trade up to 15 minutes before it, the brain's
+    half-day rule - built after that instant and not in the future). A pinned payload is immutable - the brain
     caches it by its instant and never rebuilds it - so its AGE is no test: a restart at 15:57 is
     given the payload built at 15:54:32 and trades it. Lateness is bounded by plan_by, price drift by
     the venue quote band and by the fresh quote the limit buys are priced on. Until the decision bar
@@ -86,6 +89,38 @@ KNOWN LIMITS, recorded by the second review round (not built)
   its corridor through the idle-cash rule (mirror_core's docstring has the measured frequency).
 - The 0.1% cash reserve is below IBKR's $0.005 a share for a name under about $5; the cheapest
   holdable names today are above $6.
+- C-52: the buys' cash guard counts the run's own fills from their execution reports, not from a
+  TotalCashValue that lags them, once the account's POSITIONS show exactly the shares the sells were
+  booked at (_cash_cover). While TotalCashValue lags, three things move the account's cash with
+  nothing the guard reads showing them, and the buys can then borrow beyond the account's cash
+  outside the book (the 2026-11-13 safety review measured 1, 2 and, of 3, corrections of the price):
+    1 cash that leaves with no position moving - a withdrawal, a fee: as much as it exceeds that cash
+    2 a trade by hand that IB has not yet reported as a position when the guard reads the positions -
+      a purchase: as much as its cost exceeds that cash
+    3 a price correction of a sell after it was booked: up to its size beyond that cash. The book
+      never sees it (the post-trade check compares shares, not cash): its cash stays over by the
+      correction until that is debited by hand (POST /mirror/credit, a negative amount), and the
+      pre-trade gate refuses a session only once the over-count exceeds the cash outside the book
+  For 1 and 2, the rule before this held such a day's buys until IB caught up only on a day the
+  sells exceeded the account's cash outside the book. 3 is new with this guard: the rule before never
+  borrowed on it, and it can happen only on a day the sells exceed the cash outside the book (a
+  correction is at most the day's sells). A bust of a sell moves a position (its shares come back):
+  it is closed once IB reports that position (the guard takes TotalCashValue alone; the post-trade
+  check halts on the shares); before that it is 2's exposure - at most the day's sells, so, like 3,
+  new with this guard and only on such a day. Nothing closes a bust before IB reports it, by the
+  guard's first look (in the step the sells are booked): the operating rule covers withdrawals and
+  trades by hand, not IB's busts. Operating rule, for 1 and 2: on a session day, no
+  withdrawal pending or posting and no trade by hand in the mirror's account until that session's
+  run is done (the run: about 15:45-16:05 ET; 12:45-13:05 on a half-day). A purchase or a sale by
+  hand moves a position once IB has reported its position: the guard then takes TotalCashValue alone
+  and waits for it only on a day the sells exceed the cash outside the book; on any other day a
+  purchase TotalCashValue does not yet show is 2's exposure, as under the rule before, and the
+  post-trade check then halts the book. Nothing closes 3: it needs a correction larger than the cash
+  outside the book inside TotalCashValue's lag.
+- C-52: a commission IB has not reported is counted at COMMISSION_WORST_FRAC x value +
+  COMMISSION_WORST_USD. That bound assumes IBKR's per-order maximum (1% of the trade plus the fees
+  passed through): it may not hold for a large order of a name under about $3.40 a share, and does
+  not on another pricing plan.
 
 OWNER QUESTIONS, still open (rollout notes, not built here)
 - The account is believed to be a CASH account. The buys are marketable limits sized inside the
@@ -145,6 +180,22 @@ TRUE_UP_EVERY_S = 600.0        # late commissions are asked for at most this oft
 COMMISSION_GIVE_UP_S = 3 * 86400.0
 TERMS_TRIES = 3                # a fill whose price lookup RAISES is retried this often before the reference is used
 CASH_TOL_USD = 1.0             # the book's cash may exceed the account's by at most this
+COMMISSION_WORST_FRAC = 0.011  # C-52: a run's fill whose commission IB has not reported is taken to cost at most this
+                               # share of its value (IBKR's per-order maximum is 1% of trade value; +0.1% for the fees
+                               # passed through on top of it) ...
+COMMISSION_WORST_USD = 10.0    # ... plus this per order (FINRA's trading activity fee alone caps at $8.30 an order).
+                               # Valid only at IBKR's per-order maximum: the per-share fees (about $0.0034 a share) outgrow
+                               # the 0.1% under about $3.40 a share, so it may not hold for a large order of such a name;
+                               # another pricing plan voids it (KNOWN LIMITS)
+BUYS_UNCONFIRMED_GRACE_S = 10.0  # C-52: buys held only because the account's positions do not confirm the booked sells
+                               # YET are said as a warning, and in red once that has lasted this long (alerts only;
+                               # not for a reason reading them again cannot change, UNCONFIRMED_FINAL: red at once)
+# C-52 (_sells_confirmed): why the account's positions do not confirm the booked sells, where reading them again
+# cannot change it - such a hold is said in red at once, never as a wait (_buys_unfunded)
+UNCONFIRMED_NO_POS0 = "this run has no record of the account's positions before its sells"
+UNCONFIRMED_NO_RECORD = "this run's record of its positions cannot be read"
+UNCONFIRMED_NOT_STOCK = "the account holds what is not a whole stock lot"
+UNCONFIRMED_FINAL = (UNCONFIRMED_NO_POS0, UNCONFIRMED_NO_RECORD, UNCONFIRMED_NOT_STOCK)
 CHECK_GAP_S = 30.0             # the post-session account check: two strikes this far apart halt
 CHECK_STRIKES = 2
 HISTORY_KEEP = 120
@@ -158,15 +209,19 @@ FLATTEN_EMPTY_LOOKS = 3        # an account that reads EMPTY while the book hold
 DIVIDEND_MAX_FRAC = 0.25       # F4: a dividend above this share of the position's value (shares x mark) is not credited
 PAPER_TICK_BUDGET_S = 20.0     # a PAPER tick never waits longer than this (it shares the loop with a live strategy)
 PAPER_RETRY_S = 10.0           # ... and asks the brain again this often
-PAPER_UNKNOWN_WAIT_S = 300.0   # session unknown: a paper book asks for the loop this often (UNKNOWN_WAIT_S from 15:30 ET)
+PAPER_UNKNOWN_WAIT_S = 300.0   # session unknown: a paper book asks for the loop this often (UNKNOWN_WAIT_S from 30 min
+                               # before the close: 15:30 ET, 12:30 on an early close by the service's own calendar)
 RESOLVE_MAX_OFF_REF = 0.20     # an operator's resolve price further than this from the order's reference is refused
 RESOLVE_MAX_COMM_USD = 5.0     # C-01: an operator's resolve commission above max(this, RESOLVE_MAX_COMM_FRAC x quantity
 RESOLVE_MAX_COMM_FRAC = 0.01   # ... x price) is refused without "force": true
 SEED_TOL_USD = 1.0             # D-05 / D-04: the capital caps are checked with this tolerance
 LATCH_RETRY_S = 20.0           # a failed state save is retried this often
 LATCH_ALERT_EVERY_S = 600.0    # ... and said again this often while it fails
-UNKNOWN_WAIT_S = 60.0          # session unknown on a weekday 09:25-16:05 ET: ask for the loop this often
-UNKNOWN_WAIT_LATE_S = 20.0     # ... and this often from 15:30 ET
+UNKNOWN_WAIT_S = 60.0          # session unknown on a weekday from 09:25 ET to 5 min after the close (16:05; 13:05 on
+                               # an early close by the service's own calendar): ask for the loop this often
+UNKNOWN_WAIT_LATE_S = 20.0     # ... and this often from 30 min before the close (15:30 ET; 12:30 on an early close)
+HALF_DAY_SPY_MAX_S = 900.0     # contract v2, half-days: SPY priced at most this long before the decision instant (the
+                               # brain's QUIET_TRADE_MAX_S), and only on an early close by the service's own calendar
 UNKNOWN_ALERT_AFTER_S = 600.0
 TRANSFER_TRIES = 3             # a transfer that moved less than asked is re-queued up to this many plans
 TRANSFER_TOKEN_MAX_PER_DAY = 6 # transfers taken by the transfer-only token per book per cap period (_request_capped)
@@ -338,9 +393,11 @@ class HttpBrain:
 
 # ------------------------------------------------------------------ the manager
 class MirrorManager:
-    def __init__(self, cfg: MirrorConfig, brain=None, alert=None, clock=None, sleep=None, trading_day=None):
+    def __init__(self, cfg: MirrorConfig, brain=None, alert=None, clock=None, sleep=None, trading_day=None,
+                 session_close=None):
         self.cfg = cfg
         self._trading_day = trading_day        # date -> bool: the service's holiday calendar (None: weekdays)
+        self._session_close = session_close    # date -> (hour, minute): the service's early-close calendar (None: 16:00)
         self._budget_s = TICK_BUDGET_S if cfg.live else PAPER_TICK_BUDGET_S
         self._retry_s = INTENTS_RETRY_S if cfg.live else PAPER_RETRY_S
         self.clamped = clamp_config(cfg)
@@ -367,6 +424,8 @@ class MirrorManager:
         self._prechecked: str | None = None
         self._precheck_since: tuple | None = None  # (session, the first look that found the gateway/account unreadable)
         self._acct_unread = False                  # the last _pretrade_account refusal was a connection-type failure
+        self._pre_cash: float | None = None        # C-52: the account's cash the last _pretrade_account read (live)
+        self._pre_pos: dict | None = None          # ... and the positions it had just proven the account to hold
         self._seed_why: str | None = None
         self._deferred: list | None = None     # journal lines and alerts of a plan not yet on disk
         self._view: dict = {}
@@ -998,10 +1057,14 @@ class MirrorManager:
                                         f"with the price from the statement, or wait: the book keeps asking")
                         return True
         snap = self.book.to_dict()
+        # C-52: booked on the operator's word, not on an execution report: the buys' cash guard never counts
+        # its proceeds before IB's own cash shows them (_cash_cover). Set before _book so its save carries it.
+        rec["operator_terms"] = True
         try:
             self._book(o, rec, qty, px if qty else None, comm if qty else 0.0,
                        "resolved by the operator" + (f" ({r['note']})" if r.get("note") else ""))
         except mc.MirrorError:
+            rec.pop("operator_terms", None)
             self.book = mc.Book.from_dict(snap)
             raise
         self._journal("resolve", where=where, **r)
@@ -1243,9 +1306,12 @@ class MirrorManager:
             s = self._sess
             known = s is not None and s["day"] == e.date().isoformat() and (s["info"] if s.get("ok") else s.get("kept")) is not None
             if not known:
-                # D6: an unreadable clock must not park the loop for 300 s against a 3-minute window
-                if e.weekday() < 5 and (9, 25) <= (e.hour, e.minute) < (16, 5):
-                    late = (e.hour, e.minute) >= (15, 30)
+                # D6: an unreadable clock must not park the loop for 300 s against a 3-minute window (on an
+                # early close too: the window then ends at 13:00)
+                ch, cm = self._close_hm(e.date())
+                hm, close = e.hour * 60 + e.minute, ch * 60 + cm
+                if e.weekday() < 5 and 9 * 60 + 25 <= hm < close + 5:
+                    late = hm >= close - 30
                     if not self.cfg.live:          # a paper book shares the loop with a live strategy (N-09)
                         return UNKNOWN_WAIT_S if late else PAPER_UNKNOWN_WAIT_S
                     return UNKNOWN_WAIT_LATE_S if late else UNKNOWN_WAIT_S
@@ -1318,15 +1384,29 @@ class MirrorManager:
 
     def _rth(self, now: datetime) -> bool:
         """is the regular session open now: the brain's clock when it KNOWS today, else the plain
-        weekday 09:30-16:00 ET (the kill path must not depend on the brain; a "no session" that
-        comes with a reason is the brain not knowing)"""
+        weekday 09:30 to the close by the service's own calendar, 16:00 ET or an early close's 13:00
+        (the kill path must not depend on the brain; a "no session" that comes with a reason is the
+        brain not knowing). The brain's clock is not read while a flatten is pending, so from the day
+        after a /kill on, a flatten runs on this fallback"""
         info = self._today_info(now)
         if info and info.get("session"):
             return info["open_at"] <= now < info["close_at"]
         if info is not None and not info.get("reason"):
             return False
         e = now.astimezone(ET)
-        return self._is_day(e.date()) and (9, 30) <= (e.hour, e.minute) < (16, 0)
+        return self._is_day(e.date()) and (9, 30) <= (e.hour, e.minute) < self._close_hm(e.date())
+
+    def _close_hm(self, d) -> tuple:
+        """the regular close on d, ET, by the service's own early-close calendar when it was given one
+        (13:00 on an NYSE half-day), else 16:00: the fallback clock's, while the brain's does not know today"""
+        if self._session_close is not None:
+            try:
+                h, m = self._session_close(d)
+                if (10, 0) <= (int(h), int(m)) <= (16, 0):
+                    return int(h), int(m)
+            except Exception:  # noqa: BLE001
+                pass
+        return 16, 0
 
     def _is_day(self, d) -> bool:
         """a trading day by the service's own calendar when it was given one (a weekday holiday is not
@@ -1361,11 +1441,13 @@ class MirrorManager:
         if not u or u["day"] != day:
             u = self._unknown = {"day": day, "since": now}
         why = (self.brain_status.get("session") or {}).get("reason") or "no answer"
-        if hm < (16, 5) and (now - u["since"]).total_seconds() >= UNKNOWN_ALERT_AFTER_S:
+        ch, cm = self._close_hm(e.date())                # 16:00, or the service's early close (13:00)
+        close, at = ch * 60 + cm, e.hour * 60 + e.minute
+        if at < close + 5 and (now - u["since"]).total_seconds() >= UNKNOWN_ALERT_AFTER_S:
             self._say("red", f"the brain's clock has been unreadable since {u['since'].astimezone(ET).strftime('%H:%M')} ET "
                              f"({why}): the book does not know whether today is a session or when to decide. "
                              f"Nothing is traded until it answers; it keeps being asked.", key=f"clock:{day}")
-        if hm >= (16, 0) and (self.state.get("last_session") or "") < day:
+        if at >= close and (self.state.get("last_session") or "") < day:
             self._skip(day, f"the brain's clock was unreadable all session (since "
                             f"{u['since'].astimezone(ET).strftime('%H:%M')} ET: {why}); if today was a session, no "
                             f"trade was made")
@@ -1488,6 +1570,7 @@ class MirrorManager:
         _acct_unread says whether the refusal is a connection-type failure (the gateway not connected,
         the positions or the cash unreadable) rather than a finding about the account."""
         self._acct_unread = False
+        self._pre_cash = self._pre_pos = None
         try:
             # one liveness round trip per evaluation, BEFORE anything is read: a session that died with
             # no FIN still reads "connected" and serves its last positions and cash (the adapter's
@@ -1512,6 +1595,10 @@ class MirrorManager:
             if have is None:
                 why, self._acct_unread = self._no_cash_why(ad)
                 return why
+            self._pre_cash = have                  # C-52: the run's baseline (_plan), read before any of its orders
+            # ... and its positions then: _venue_problems has just found the account holding exactly the
+            # book's (every symbol either side holds; nothing that is not a whole stock lot)
+            self._pre_pos = dict(self.book.positions())
             # the book as the plan will see it: a queued DEBIT (a fee the account already paid) is applied
             # before anything is planned, so it must be able to clear this gate - not be locked out by it
             mine = self.book.cash() + sum(amt for _, amt in self._debits_that_apply())
@@ -1581,8 +1668,12 @@ class MirrorManager:
     def _validate(self, p, info: dict, now: datetime) -> str | None:
         """contract_v2 'Executor checks' (as clarified once the brain side was finished): schema, kind,
         pinned, not a replay, today's session, asof_utc == decide_utc exactly, the decision bar
-        complete, built_utc not in the future and not before the instant it decides (each within the
-        clock-skew allowance), engines and prices present. NOT the payload's age: a pinned payload
+        complete, ending at that instant, with SPY priced from it (spy_utc == end_utc) - on an EARLY
+        CLOSE by this service's own calendar SPY may instead be priced at its own last trade up to
+        HALF_DAY_SPY_MAX_S before it (the brain's half-day rule; never on a 16:00 day, nor without a
+        calendar, and only when the payload's own close_et and the brain's clock close at that same
+        early close) - built_utc not in the future and not before the instant it decides (each within
+        the clock-skew allowance), engines and prices present. NOT the payload's age: a pinned payload
         is immutable, and a restart late in the window must be able to trade the one built at 15:54."""
         if not isinstance(p, dict) or p.get("kind") != INTENTS_KIND or p.get("schema") != SCHEMA:
             return f"not a mirror intents payload (schema {SCHEMA})"
@@ -1599,6 +1690,25 @@ class MirrorManager:
         bar = p.get("decision_bar")
         if not isinstance(bar, dict) or bar.get("complete") is not True:
             return "the decision bar is not complete"
+        end, spy = _parse(bar.get("end_utc")), _parse(bar.get("spy_utc"))
+        if end != asof:
+            return f"the decision bar ends {bar.get('end_utc')!r}, not at the instant it decides ({info['decide_utc']})"
+        if spy != end:
+            if spy is None or spy > end or (end - spy).total_seconds() > HALF_DAY_SPY_MAX_S:
+                return f"SPY's price is from {bar.get('spy_utc')!r}, not the decision bar ending {info['decide_utc']}"
+            early = self._close_hm(datetime.strptime(info["session"], "%Y-%m-%d").date())
+            if early >= (16, 0):
+                return (f"SPY's price is from the bar ending {_iso(spy)}, not the decision bar ending {info['decide_utc']}: "
+                        f"only an early close by this service's own calendar allows that")
+            ours = f"{early[0]:02d}:{early[1]:02d}"
+            clock = info.get("close_at")           # the brain's clock (_read_session); a hand-made info may lack it
+            theirs = [("the payload's close_et", p.get("close_et"))] + (
+                [("the brain's clock", clock.astimezone(ET).strftime("%H:%M"))] if isinstance(clock, datetime) else [])
+            off = [f"{name} {value!r}" for name, value in theirs if value != ours]
+            if off:
+                return (f"SPY's price is from the bar ending {_iso(spy)}, not the decision bar ending {info['decide_utc']}: "
+                        f"this service's calendar closes at {ours}, but {' and '.join(off)} - only an early close they "
+                        f"agree on allows that")
         built = _parse(p.get("built_utc"))
         if built is None:
             return "the payload has no built_utc"
@@ -2094,6 +2204,9 @@ class MirrorManager:
                              "price_times": {s: t for s, t in (payload.get("price_times") or {}).items()
                                              if s in plan["prices"]} if isinstance(payload.get("price_times"), dict) else {},
                              "dropped": dropped, "quotes": payload.get("quotes")}
+        if self.cfg.live:                          # C-52: the account's cash and positions before this run's first order
+            self.state["run"]["cash0"] = self._pre_cash
+            self.state["run"]["pos0"] = self._pre_pos
         marks = dict((self.state.get("marks") or {}).get("prices") or {})
         marks.update(prices)
         self.state["marks"] = {"prices": marks, "asof": payload.get("asof_utc")}
@@ -2148,11 +2261,13 @@ class MirrorManager:
             if not past:
                 if self._halted():                 # D1: before any buy is sized
                     return False
-                # C-52: the ACCOUNT's cash must cover the book's before a buy is sized. It is no longer
-                # one look: the account's cash can lag the sell fills by seconds, so while it does not
-                # cover (or cannot be read) it is read again on every step until the cancel instant, and
-                # the buys go as soon as it does. (Transfers move cash between sleeves: the book's total,
-                # which is what is compared, is the same before and after them.)
+                # C-52: the ACCOUNT's cash must cover the book's before a buy is sized - its cash before
+                # the run plus what the run's sells executed, once its positions confirm them
+                # (_cash_cover), never a TotalCashValue that merely lags the fills, never the book's word
+                # alone. While it does not cover (or cannot be read) it is read again on
+                # every step until the cancel instant, and the buys go as soon as it does. (Transfers
+                # move cash between sleeves: the book's total, which is what is compared, is the same
+                # before and after them.)
                 why = self._buys_unfunded(ad, run)
                 if why:
                     if run.get("buys_blocked") != why:
@@ -2196,10 +2311,17 @@ class MirrorManager:
     def _buys_unfunded(self, ad, run: dict) -> str | None:
         """C-52 (live): the sells are booked and the buys are about to be sized from the BOOK's cash. On a
         margin account the venue lends whatever the book over-counts (a sell booked at its reference
-        with no price reported, a fee the book does not know), so the ACCOUNT's cash is read first: the
-        buys go only if it covers the book's (within CASH_TOL_USD). Why not, or None. A paper book
-        has no account to read. Called on every step while it answers why not (_advance): said in red
-        once, when the buys are first held."""
+        with no price reported, a fee the book does not know, shares booked as sold that never were),
+        so the ACCOUNT's cash is read first: the
+        buys go only if what the account is shown to hold (_cash_cover) covers the book's cash (within
+        CASH_TOL_USD). Why not, or None. A paper book has no account to read. Called on every step
+        while it answers why not (_advance): said in red once, when the buys are first held - except
+        a hold only because the account's positions do not confirm the booked sells YET (IB's lag, or
+        a real difference: reading them again can tell), which is said as a warning first and in red
+        once it has lasted BUYS_UNCONFIRMED_GRACE_S (_say_unconfirmed). A disagreement reading them
+        again cannot change (UNCONFIRMED_FINAL: no record of the positions before the run, or one that
+        cannot be read, a holding that is not a whole stock lot) is said in red at once. What is
+        decided, and the why returned, are the same either way."""
         if self._dry is not None or not any(int(q) > 0 for asks in run["plan"]["buy_asks"].values() for q in asks.values()):
             return None
         try:
@@ -2212,18 +2334,262 @@ class MirrorManager:
             logger.warning("mirror[%s] account cash unreadable before the buys: %s", self.cfg.name, one_line(exc))
             have = None
         mine = self.book.cash()
+        unconfirmed = None
         if have is None:
             why = "the account's cash cannot be read, so nothing proves it covers the buys"
-        elif mine > have + CASH_TOL_USD:
-            why = (f"the book's cash ${mine:,.2f} exceeds the account's ${have:,.2f} (by ${mine - have:,.2f}): "
-                   f"buying from the book's figure would borrow on margin")
         else:
-            return None
+            cover, est, how, seen = self._cash_cover(run, have, ad)
+            run["buy_cash"] = {"book": round(mine, 2), "cover": round(cover, 2), "account": round(have, 2),
+                               "before": _num(run.get("cash0")), "estimate": None if est is None else round(est, 2),
+                               "positions": seen, **self._positions_confirmed(run, seen)}
+            if mine <= cover + CASH_TOL_USD:
+                return None
+            why = (f"the book's cash ${mine:,.2f} exceeds the account's ${cover:,.2f} (by ${mine - cover:,.2f}; "
+                   f"{how}): buying from the book's figure would borrow on margin")
+            if seen not in (None, "agree") and not str(seen).startswith(UNCONFIRMED_FINAL):
+                unconfirmed = (seen, have, est, mine)  # _cash_cover took F alone: the positions do not confirm the sells YET
+        if unconfirmed is not None:
+            self._say_unconfirmed(run, *unconfirmed)
+            return why
         self._say("red", f"{run['session']}: the BUYS are HELD — {why}. The sells are booked. The account's cash "
                          f"is read again on every step until {run.get('cancel_utc')} and the buys go as soon as it "
                          f"covers the book's; if it never does, no buys are sent this session.",
                   key=f"buys-unfunded:{run['session']}")
         return why
+
+    def _say_unconfirmed(self, run: dict, seen: str, have: float, est, mine: float) -> None:
+        """C-52 (2026-11-13 liveness review): the buys are held because the account's positions do not
+        confirm the booked sells (_sells_confirmed: why not, `seen`, one reading them again can change)
+        while IB's TotalCashValue (`have`) still reads what it read before them, so F alone was taken.
+        A positions stream that trails the fills by seconds is IB's latency; a real difference reads the
+        same at first: said as a warning in words that name both, and in red once the hold has lasted
+        BUYS_UNCONFIRMED_GRACE_S (from run["buys_blocked_utc"], the first look that held them; _advance
+        stamps it after the first look). No warning once this hold was said in red (a generic red
+        before the positions disagreed: the key buys-unfunded:<session>, which the red here shares).
+        Alerts only: what is sent is decided in _cash_cover alone."""
+        stamp = run.get("buys_blocked_utc")
+        since = _parse(stamp)
+        if stamp is None:
+            held = 0.0                             # the first look of this hold
+        elif since is None:
+            held = BUYS_UNCONFIRMED_GRACE_S        # a stamp that cannot be read: no grace
+        else:
+            held = max(0.0, (self.clock() - since).total_seconds())
+        what = (f"the booked sells are not yet confirmed by the account's positions; re-read every step. Until they "
+                f"are, the estimate from the sells" + ("" if est is None else f" (${est:,.2f})") + f" is not used: "
+                f"{seen} (IB's lag, or a real difference). IB's TotalCashValue still reads ${have:,.2f}, as before "
+                f"the sells: ${mine - have:,.2f} short of the book's ${mine:,.2f}. The buys go as soon as the "
+                f"positions confirm the sells or that cash covers the book's")
+        if held < BUYS_UNCONFIRMED_GRACE_S:
+            if f"buys-unfunded:{run['session']}" in self._said:
+                return                             # this hold was already said in red: no warning after it
+            self._say("warn", f"{run['session']}: the buys WAIT — {what}. Said in red if this lasts "
+                              f"{BUYS_UNCONFIRMED_GRACE_S:.0f} s.", key=f"buys-unconfirmed:{run['session']}")
+            return
+        self._say("red", f"{run['session']}: the BUYS are HELD — after {held:.0f} s {what}, until "
+                         f"{run.get('cancel_utc')}; if neither happens by then, no buys are sent this session.",
+                  key=f"buys-unfunded:{run['session']}")
+
+    def _positions_confirmed(self, run: dict, seen) -> dict:
+        """C-52, observability only (2026-11-13): for the buy_cash record (how far IB's position stream
+        trails its execution reports is unverified on the live gateway), the first look of the guard at
+        which the account's positions confirmed the booked sells (_sells_confirmed agreed) - recorded
+        only when TotalCashValue had not moved at that look (None otherwise, and nothing logged: the
+        cross-check is made only while F has not moved, so not once an account update IB sends on a
+        position change has arrived) - and its seconds from the booking of the run's last sell that
+        executed (the instant this book saw its fill, to the second): an upper bound on how far the
+        positions trailed that booking, to an ORDER_POLL_S step. Carried on every later look. Never
+        raises, a damaged record included (one that is not a dict is read as none)."""
+        prev = run.get("buy_cash")
+        prev = prev if isinstance(prev, dict) else {}
+        keep = {k: prev.get(k) for k in ("positions_confirmed_utc", "positions_confirmed_after_s")}
+        if seen != "agree" or keep["positions_confirmed_utc"]:
+            return keep
+        try:
+            now, last = self.clock(), None
+            for o in run["plan"]["sells"]:
+                if int(o.get("filled") or 0) > 0:
+                    t = _parse(((run.get("orders") or {}).get(o["id"]) or {}).get("booked_utc"))
+                    last = t if t is not None and (last is None or t > last) else last
+            after = None if last is None else round((now - last).total_seconds(), 1)
+            if after is not None:                  # (no sell executed: nothing to measure)
+                logger.info("mirror[%s] %s: the account's positions confirmed the booked sells %.1f s after the "
+                            "last sell was booked", self.cfg.name, run.get("session"), after)
+            return {"positions_confirmed_utc": _iso(now), "positions_confirmed_after_s": after}
+        except Exception as exc:  # noqa: BLE001  - a record, never in the way of the guard
+            logger.warning("mirror[%s] the positions' confirmation could not be recorded: %s", self.cfg.name,
+                           one_line(exc, 160))
+            return keep
+
+    def _cash_cover(self, run: dict, have: float, ad=None) -> tuple:
+        """C-52: (L, E, how, positions) - L the most the ACCOUNT's cash is shown to hold now, E the
+        estimate below (None for a run without B), how in words, positions what the cross-check of the
+        booked sells against the account found ("agree", why not, or None when it was not needed).
+        `have` is the TotalCashValue just read: F. `ad` is read only for the positions, and only when E
+        could be used.
+
+        IB's TotalCashValue lags the fills: IB documents its account updates as sent on a position
+        change and otherwise every three minutes, and ib_async keeps only the last value, with no time
+        (wrapper.updateAccountValue; updateAccountTime is dropped). Compared alone, it held the day's
+        buys until it caught up - past the cancel instant on a long lag - once the day's sells exceeded
+        the account's cash outside the book. So:
+          B  = the TotalCashValue the pre-trade gate read before this run existed (run["cash0"])
+          E  = B + for each of the run's sells: the shares it was booked at x the price IB's execution
+               reports gave (0 when they gave none - the book then used the reference - and 0 for a
+               sell booked on the operator's word, /mirror/resolve: a stated price is no report) - its
+               commission as reported, or COMMISSION_WORST_FRAC x value + COMMISSION_WORST_USD while
+               not yet reported
+          P0 = the account's positions at that pre-trade read (run["pos0"]: the gate had just found the
+               account holding exactly the book); P = its positions read now
+          L  = max(E, F) while F still equals B (it has not moved since before the run: IB's lag, not a
+               fact about the account) AND P is P0 less every share the run's sells were booked as
+               having sold, plus every share its buys were booked as having bought (none exists yet:
+               they are sized after this), with nothing that is not a whole stock lot. F otherwise: once
+               F has moved, for a run without B or P0, and whenever P cannot be read or differs - the
+               rule before this.
+        Why P: E takes the sells' shares from the book's record, and while F has not moved nothing
+        else tests that record. The 2026-11-12 review made it fund buys on margin twice: an operator's
+        resolve stating shares that never executed (its S2: $28,288.50 borrowed at 97% of the account)
+        and an IB execution correction counted as a second fill (R5). P is not on TotalCashValue's
+        three-minute cycle: ib_async opens IB's position subscription at connect and never cancels it
+        (ib.py connectAsync -> reqPositionsAsync; wrapper.position replaces the row in place), and IB
+        documents it as sending an update "when a position has changed". A P that lags the execution
+        reports leaves the buys on the rule before this (F alone) for as long as it lags: on a day the
+        sells exceed the account's cash outside the book they wait that long, rounded up to the next
+        ORDER_POLL_S step, and beyond the cancel instant it is the rule before (measured by the
+        2026-11-13 liveness review: a P 5 / 30 / 120 s behind the fills cost 6 / 30 / 120 s); on any
+        other day F alone covers the book and they go at the first look. It is read again on every
+        step. No sell is counted twice: B and P0 predate every order of the run, and each sell order
+        counts once, at the shares it was booked at.
+        Not min(E, F) once F has moved: a moved F already shows the real proceeds and commissions of
+        the fills it reflects, and an outflow F does not show, E does not show either - the min would
+        only hold buys the rule before this sent (a sell with no reported price, a late commission).
+        max(E, F) while it has not: F is what the rule before this trusted, so nothing it sent is held.
+
+        NEVER BORROWS - proof. Let T be the account's cash now. Assume (A1) B was not above the
+        account's cash when read; (A2) IB's execution reports give each sell's true price (the adapter
+        keeps one execution per IB execId, a correction in place of what it corrects), those prices
+        are final (no correction of a sell's price arrives after it was booked), and a commission not
+        yet reported is within the bound above (IBKR's per-order maximum: KNOWN LIMITS); (A3) every
+        movement of the account's cash since B other than the run's own fills either is shown by F or
+        moves a position (a purchase or a sale by hand moves one, and so does a bust of a sell; a
+        withdrawal or a fee does not); (A4) the buys' own commissions fit in what size_buys leaves
+        unspent (the sleeves' reserves: the book's standing assumption, KNOWN LIMITS); (A5) P reflects
+        every position change up to the instant it is read (IB's position update for each of the run's
+        fills, for every trade by hand since P0 and for a bust of a sell, has reached this session).
+        Then T = B + X - W, X the net cash of the run's fills (each sell's proceeds less its commission:
+        > 0), W the other net outflow, and F = B + X' - W with 0 <= X' <= X: F shows W and some of the
+        fills, so F <= T.
+          F = B and P agrees: P moved by exactly the booked sells (A5), so no trade by hand moved a
+                 position (one that exactly cancels a mis-booked sale is taken as impossible), and
+                 every sell sold exactly the shares it was booked at; W is then shown by F (A3), so
+                 X' = W - an outflow equal, to the half-cent, to the fills F shows: taken as impossible
+                 unless both are 0. So W = 0, and each sell's counted proceeds are at most its true
+                 ones (A2; 0 without a report), its counted commission at least its true one:
+                 E <= B + X = T, and L = max(E, F) <= T.
+          otherwise: L = F <= T.
+        The buys spend at most the book's cash (size_buys caps each sleeve at its cash less its
+        reserve and all of them at the book's cash; each buy is a LIMIT costed at its limit), so with
+        book <= L + CASH_TOL_USD and (A4) the account keeps at least T - book >= -CASH_TOL_USD.
+        Outside the assumptions, while F lags, NO reading sees three things, and the buys can then
+        borrow beyond the account's cash outside the book (the 2026-11-13 safety review measured the
+        first two and, of the third, corrections of the price): outside (A1) or (A3), cash that leaves
+        with no position moving - a withdrawal by hand, a fee - as much as it exceeds that cash;
+        outside (A5), a trade by hand IB has not yet reported as a position when P is read - a
+        purchase, as much as its cost exceeds that cash; outside (A2), a price correction of a sell
+        after it was booked - up to its size beyond that cash. The first two the rule before this
+        caught only on a day the sells exceeded the account's cash outside the book, by holding every
+        such day's buys until IB caught up: the stall this replaces. The third is new with this
+        guard: a correction is at most the day's sells, so the rule before never borrowed on it, and
+        it can happen only on a day the sells exceed the cash outside the book. A bust of a sell moves
+        a position (its shares come back): once IB reports it, P differs and L = F (the post-trade
+        check then halts on the shares); before that it is outside (A5), as the second - at most the
+        day's sells, so, like the third, new with this guard and only on such a day; nothing closes
+        a bust before IB reports it, by the first look (the operating rule below covers withdrawals
+        and trades by hand, not IB's busts). Hence the
+        operating rule in composer/IBKR_MIRROR.md for the first two: on a session day, no withdrawal
+        pending or posting and no trade by hand in the mirror's account until that session's run is
+        done (about 15:45-16:05 ET; 12:45-13:05 on a half-day). Nothing closes the third.
+
+        LIVENESS: once F has moved, exactly the rule before this (an F that shows only some of the
+        fills holds the buys until it shows them all, as before, on a day the fills it does not show
+        yet exceed the cash outside the book). While F lags, the buys go in the step the sells are
+        booked whenever P already shows the sales and the account's cash outside the book at the
+        pre-trade read covers E's margins: the bounds on the commissions not yet reported and the
+        proceeds of any sell booked at its reference or on the operator's word. On a day the sells
+        exceed the cash outside the book, a P that trails the sales holds them until the first step
+        at which it shows them (above; on any other day F alone covers the book and they go at the
+        first look); that hold is said as a warning first (_buys_unfunded: BUYS_UNCONFIRMED_GRACE_S),
+        or in red at once for a reason reading P again cannot change (UNCONFIRMED_FINAL)."""
+        base = _num(run.get("cash0"))
+        if base is None:
+            return have, None, "its cash as read now; this run has no reading from before its sells", None
+        est, net, worst, stated = base, 0.0, 0, 0
+        for o in run["plan"]["sells"]:
+            q = int(o.get("filled") or 0)
+            if q <= 0:
+                continue
+            rec = (run.get("orders") or {}).get(o["id"]) or {}
+            px = _num(o.get("price"))
+            if rec.get("operator_terms") or rec.get("price_estimated") or px is None or px <= 0:
+                proceeds, basis = 0.0, q * (px or _num(o.get("ref")) or 0.0)
+                stated += bool(rec.get("operator_terms"))
+            else:
+                proceeds = basis = q * px
+            if rec.get("commission_unreported"):
+                fee, worst = COMMISSION_WORST_FRAC * basis + COMMISSION_WORST_USD, worst + 1
+            else:
+                fee = max(_num(o.get("commission")) or 0.0, 0.0)
+            net += proceeds - fee
+        est += net
+        unrep = f" ({worst} not yet reported, counted at their maximum)" if worst else ""
+        unrep += f" ({stated} resolved by the operator, counted at nothing until IB's cash shows them)" if stated else ""
+        sells = f"${base:,.2f} before the sells + ${net:,.2f} they executed, net of commissions{unrep} = ${est:,.2f}"
+        if abs(have - base) >= 0.005:
+            return have, est, f"its TotalCashValue, which has moved since the sells; the sells alone: {sells}", None
+        ok, seen = self._sells_confirmed(run, ad)
+        if not ok:
+            return have, est, (f"its TotalCashValue, which still reads ${have:,.2f} as before the sells; the "
+                               f"estimate from the sells ({sells}) is not used: {seen}"), seen
+        if est < have:
+            return have, est, (f"its TotalCashValue, which still reads ${have:,.2f} as before the sells (more than "
+                               f"the estimate from the sells: {sells})"), "agree"
+        return est, est, (f"{sells}; its TotalCashValue still reads ${have:,.2f}, as before the sells, and its "
+                          f"positions show exactly the shares the sells were booked at"), "agree"
+
+    def _sells_confirmed(self, run: dict, ad) -> tuple:
+        """C-52 (_cash_cover): (True, "agree") when the account's positions read now are exactly the
+        positions before the run (run["pos0"]) less every share the run's sells were booked as having
+        sold, plus every share its buys were booked as having bought, and it holds nothing that is not
+        a whole stock lot; else (False, why not). Never raises: a positions read that fails is a no."""
+        pos0 = run.get("pos0")
+        if not isinstance(pos0, dict):
+            return False, UNCONFIRMED_NO_POS0
+        try:
+            want: dict = {}
+            for s, q in pos0.items():
+                want[s] = want.get(s, 0) + int(q)
+            for o in run["plan"]["sells"] + (run["plan"].get("buys") or []):
+                q = int(o.get("filled") or 0)
+                if q:
+                    want[o["symbol"]] = want.get(o["symbol"], 0) + (q if o["side"] == mc.BUY else -q)
+            want = {s: q for s, q in sorted(want.items()) if q}
+        except (TypeError, ValueError, KeyError, AttributeError) as exc:
+            return False, f"{UNCONFIRMED_NO_RECORD} ({one_line(exc, 120)})"
+        try:
+            snap = ad.positions_snapshot() or {}
+            held = {s: int(q) for s, q in sorted((snap.get("stocks") or {}).items()) if int(q or 0)}
+            other = list(snap.get("other") or [])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("mirror[%s] account positions unreadable before the buys: %s", self.cfg.name, one_line(exc))
+            return False, f"the account's positions cannot be read ({one_line(exc, 120)})"
+        if other:
+            return False, UNCONFIRMED_NOT_STOCK + ": " + ", ".join(map(str, other[:3]))
+        if held != want:
+            diff = [f"{s}: the sells leave {want.get(s, 0)}, the account holds {held.get(s, 0)}"
+                    for s in sorted(set(want) | set(held)) if want.get(s, 0) != held.get(s, 0)]
+            return False, "the account's positions are not what the booked sells leave (" + "; ".join(diff[:4]) + ")"
+        return True, "agree"
 
     def _work_all(self, ad, orders: list, recs: dict, cancel_at, abort: bool, wake) -> bool:
         waiting = False
@@ -2356,6 +2722,17 @@ class MirrorManager:
                 return bool(o.get("applied"))
             if not self._may_place(emergency):     # K3a: a halt that landed during the check's round trips
                 return False
+            if cancel_at is not None and self.clock() >= cancel_at:
+                # D1 round 4: the check's venue reads can outlast the window (an open-orders read may first
+                # wait up to 20 s for an earlier request): the cancel instant is looked at again, here, and
+                # the order is booked exactly as one met past it at entry above.
+                # KNOWN, NOT BUILT (D1 round 5, recorded): the adapter's dedupe refresh INSIDE the placement
+                # (place_stock_order / place_limit_order: reqAllOpenOrders, then reqCompletedOrders, 20 s
+                # each at worst) runs after this check, so an order can still reach the venue up to about
+                # 40 s past the cancel instant on a slow gateway. The fix would pass a deadline into the
+                # adapter's placement.
+                return self._book(o, rec, 0, None, 0.0, "not sent: the window closed"
+                                  + (" (the venue holds no such order)" if ask else ""))
             if not self._write_ahead(o, rec, emergency):
                 return False
             res = self._place(ad, o, rec)
@@ -2379,6 +2756,11 @@ class MirrorManager:
                     return bool(o.get("applied"))
                 if not self._may_place(emergency):  # K3a: a halt that landed during the check's round trips
                     return False
+                if cancel_at is not None and self.clock() >= cancel_at:
+                    # D1 round 4: the venue reads above can outlast the window - booked exactly as an order
+                    # found past it before them
+                    return self._book(o, rec, 0, None, 0.0, "never reached the venue"
+                                      + (f" ({rec['error']})" if rec.get("error") else ""))
                 res = self._place(ad, o, rec)
             else:
                 rec.update(state="placed", order_ref=res.get("order_ref"))
@@ -3229,11 +3611,12 @@ def parse_weights(text: str) -> dict:
     return out
 
 
-def build(settings, alert=None, brain=None, trading_day=None) -> dict:
+def build(settings, alert=None, brain=None, trading_day=None, session_close=None) -> dict:
     """{"live": MirrorManager, "dry": MirrorManager} per the settings (either may be absent). An engine
     is LIVE only when it is named in MIRROR_LIVE_ENGINES AND the service itself trades for real (TWS
     credentials, DRY_RUN off); every other engine runs in the paper book. The timing and band settings
-    are clamped to the range the book is built for (MirrorManager, with a log line)."""
+    are clamped to the range the book is built for (MirrorManager, with a log line). trading_day /
+    session_close: the service's holiday and early-close calendars (the fallback clock's)."""
     weights = parse_weights(settings.mirror_weights)
     capital = {e: float(settings.mirror_capital_usd) * w for e, w in weights.items()}
     asked = [e.strip() for e in (settings.mirror_live_engines or "").split(",") if e.strip()]
@@ -3263,10 +3646,10 @@ def build(settings, alert=None, brain=None, trading_day=None) -> dict:
                             max_book_usd=float(getattr(settings, "mirror_max_book_usd", 0.0) or 0.0), core=core)
     if live:
         out["live"] = MirrorManager(cfg("live", True, live, settings.mirror_state_path), brain=brain, alert=alert,
-                                    trading_day=trading_day)
+                                    trading_day=trading_day, session_close=session_close)
     if paper:
         out["dry"] = MirrorManager(cfg("dry", False, paper, settings.mirror_dry_state_path), brain=brain, alert=alert,
-                                   trading_day=trading_day)
+                                   trading_day=trading_day, session_close=session_close)
     for book in out.values():
         if book.clamped:
             book._say("warn", "settings outside their range were clamped: " + "; ".join(book.clamped))

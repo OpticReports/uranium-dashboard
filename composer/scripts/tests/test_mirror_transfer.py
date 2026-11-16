@@ -33,6 +33,16 @@ read and the POST are injected).
       blocks the re-run; a ledger that cannot take the intent row (or cannot be locked) sends nothing;
       an executor refusal does not block the retry and --again still sends; a row is never written
       onto a line that lacks its newline; the refusal names ONE row per call
+  T14 the scale-up review (item 14; each gate failed at 6b122160): operator credits (kind "credit") queued
+      for either sleeve of the move refuse the leg - outcome refused, exit 1, nothing sent, a dry run and
+      --again included, a move below $1 too - saying to size the move after the session applies them and
+      re-run after that session; a credit to a third sleeve, a transfer or a dividend does not; POLICY.md
+      says it
+  T15 the third review (failed at 1de7535c): a leg below $1 even at the size the session would apply it at
+      (the FROM sleeve's equity plus the credits queued for it) is below_min, exit 0, nothing sent; a leg
+      that is $1 or more after the credit is still refused (T14); POLICY.md says it
+  T16 the fourth review (a mutation pin: it passes at 170191c0): a debit queued for the FROM sleeve that takes
+      a leg of $1 or more now below $1 at the session's size is refused, never sent and never below_min
 
 Run: python3 -m unittest tests.test_mirror_transfer -v
 """
@@ -343,7 +353,8 @@ class T10DoubleSend(Case):
         self.assertEqual(self.rows()[-1]["outcome"], "sent")
 
     def test_the_twins_other_pairs_other_authors_and_other_requests_are_not_duplicates(self):
-        for over in ({"from": "SLEEVE", "to": "HG"}, {"to": "HARV"}, {"via": None}, {"kind": "credit", "sleeve": "HG"}):
+        for over in ({"from": "SLEEVE", "to": "HG"}, {"to": "HARV"}, {"via": None},
+                     {"kind": "credit", "sleeve": "KMLM"}):          # a credit to neither sleeve (one to HG: T14)
             self.posts = []
             self.forget()
             row = self.held(**over)
@@ -700,6 +711,132 @@ class T13OneRunOneIntent(Case):
         mt.append_ledger({"a": 2}, self.ledger)
         with open(self.ledger) as f:
             self.assertEqual(f.read(), '{"a": 1}\n{"a": 2}\n')
+
+
+class T14CreditsQueued(Case):
+    """a scale-up's credits wait in pending_requests until the next session applies them. The leg is a
+    fraction of the FROM sleeve's equity on the feed: before that session it is the pre-credit equity, and
+    the move would be sized on a book that is about to be several times larger"""
+    WHY = "size the move after the session applies them; re-run after that session"
+
+    def queue(self, *rows):
+        self.feed = feed(live=FULL)
+        self.feed["books"]["live"]["pending_requests"] = list(rows)
+
+    @staticmethod
+    def credit(sleeve, amount=13349.17, n=0):
+        return {"kind": "credit", "sleeve": sleeve, "amount": amount, "note": "scale-up to $50,000", "force": False,
+                "id": f"credit-1794520000000-{n}", "utc": "2026-11-13T15:00:00Z"}
+
+    def test_credits_queued_for_either_sleeve_refuse_the_leg_and_send_nothing(self):
+        for sleeve in ("HG", "SLEEVE"):
+            with self.subTest(sleeve=sleeve):
+                self.forget()
+                self.posts = []
+                self.queue(self.credit(sleeve), self.credit("KMLM", 11341.25, 1))
+                code, line = self.run_it()
+                self.assertEqual((code, self.posts), (1, []))
+                self.assertIn("REFUSED", line)
+                self.assertIn(f"NOT SENT: operator credit(s) are queued on the executor for {sleeve} $13,349.17 as "
+                              f"credit-1794520000000-0 - the HG sleeve's equity is pre-credit: {self.WHY}", line)
+                self.assertNotIn("KMLM $11,341.25", line)                       # a third sleeve's is not named
+                rows = self.finals()
+                self.assertEqual(rows[-1]["outcome"], "refused")
+                self.assertIn("NOT SENT: operator credit(s) are queued on the executor for", rows[-1]["why"])
+                self.assertEqual(self.intents(), [])                           # nothing was about to leave
+
+    def test_a_dry_run_again_and_a_move_below_a_dollar_are_refused_too(self):
+        self.queue(self.credit("HG"))
+        for extra in (["--dry-run"], ["--again"]):
+            with self.subTest(extra=extra):
+                code, line = self.run_it(ARGS + extra)
+                self.assertEqual((code, self.posts), (1, []))
+                self.assertIn(self.WHY, line)
+        tiny = ["--from", "HG", "--to", "SLEEVE", "--composer-amount", "10", "--composer-from-value", "104827.05"]
+        code, line = self.run_it(tiny)                                         # $0.28 now: maybe not after the credit
+        self.assertEqual((code, self.posts), (1, []))
+        self.assertIn(self.WHY, line)
+        self.assertNotIn("below $1", line)
+
+    def test_a_debit_queued_refuses_too_and_what_is_not_an_operator_credit_does_not(self):
+        self.queue(self.credit("SLEEVE", -25.0))                               # a fee debit: kind "credit" too
+        code, line = self.run_it()
+        self.assertEqual((code, self.posts), (1, []))
+        self.assertIn("SLEEVE $-25.00 as credit-1794520000000-0", line)
+        for row in (self.credit("KMLM"), self.credit("HARV"), dict(self.credit("HG"), kind="dividend"),
+                    dict(self.credit("HG"), kind="adjust"), {"kind": "credit", "amount": 5.0}, "credit HG"):
+            with self.subTest(row=row):
+                self.forget()
+                self.posts = []
+                self.queue(row)
+                code, line = self.run_it()
+                self.assertEqual((code, len(self.posts)), (0, 1), line)
+
+    def test_pending_requests_that_cannot_be_read_refuse(self):
+        self.feed = feed(live=FULL)
+        self.feed["books"]["live"]["pending_requests"] = {"credit": "HG"}
+        code, line = self.run_it()
+        self.assertEqual((code, self.posts), (1, []))
+        self.assertIn("pending_requests on the feed is not a list", line)
+
+    def test_policy_says_it(self):
+        with open(os.path.join(HERE, "..", "..", "POLICY.md")) as f:
+            policy = " ".join(f.read().split("\n## ")[0].split())
+        self.assertIn("While operator credits (POST /mirror/credit, e.g. a scale-up) are queued on the executor for "
+                      "either sleeve, the script refuses the leg (exit 1, nothing sent): size the move after the "
+                      "session applies them; re-run after that session.", policy)
+
+
+class T15DustStaysDust(Case):
+    """the third review (item 5; failed at 1de7535c): with a credit queued, a leg below $1 even at the size the
+    session would apply it at (the FROM sleeve's equity plus the credits queued for it) was REFUSED, exit 1,
+    where it had been below_min, exit 0: a routine alarm for a move the mirror's dust floors drop either way.
+    The twin (T14, unchanged): a leg below $1 now that is $1 or more after the credit is still refused"""
+    DUST = ["--from", "HG", "--to", "SLEEVE", "--composer-amount", "0.5", "--composer-from-value", "104827.05"]
+    queue = T14CreditsQueued.queue
+    credit = staticmethod(T14CreditsQueued.credit)
+
+    def test_a_leg_below_a_dollar_even_after_the_credits_is_below_min_exit_0(self):
+        for rows, words in (((self.credit("HG"),), "$0.01 is below $1 at the mirror's size ($0.08 once the operator "
+                                                    "credit(s) queued now are applied) — nothing sent"),
+                            ((self.credit("SLEEVE"),), "$0.01 is below $1 at the mirror's size ($0.01 once the operator "
+                                                        "credit(s) queued now are applied) — nothing sent")):
+            with self.subTest(queued=rows[0]["sleeve"]):
+                self.forget()
+                self.posts = []
+                self.queue(*rows)
+                code, line = self.run_it(self.DUST)
+                self.assertEqual((code, self.posts), (0, []), line)
+                self.assertIn(words, line)
+                self.assertEqual(self.finals()[-1]["outcome"], "below_min")
+        self.queue(dict(self.credit("HG"), amount="13349.17"))               # an amount that cannot be read: refused
+        self.assertEqual(self.run_it(self.DUST)[0], 1)
+        self.assertEqual(mt.leg_after_credits(0.5 / 104827.05, 2900.0, [self.credit("HG")], "HG"), 0.08)
+        self.assertEqual(mt.leg_after_credits(0.01, 2900.0, [self.credit("KMLM")], "HG"), 29.0)
+
+    def test_policy_says_it(self):
+        with open(os.path.join(HERE, "..", "..", "POLICY.md")) as f:
+            policy = " ".join(f.read().split("\n## ")[0].split())
+        self.assertIn("A leg below $1 even once those credits are applied is below $1 at the mirror's size: nothing is "
+                      "sent, exit 0 (no re-run).", policy)
+
+
+class T16DebitTakesTheLegBelowADollar(Case):
+    """the fourth review (its V1; a MUTATION PIN, not a regression gate: it passes at 170191c0 and kills mutant
+    X02, the `amount >= MIN_AMOUNT or` clause dropped): a DEBIT queued for the FROM sleeve that takes a leg of $1
+    or more now below $1 at the session's size is REFUSED - never sent, never below_min: until that session
+    applies the debit the leg is sized on the equity before it"""
+    ARGS = ["--from", "HG", "--to", "SLEEVE", "--composer-amount", "4", "--composer-from-value", "10000"]   # 0.04%
+
+    def test_a_queued_debit_that_takes_a_one_dollar_leg_below_a_dollar_is_refused_not_sent(self):
+        self.feed = feed(live=FULL)                          # HG $2,900: the leg is $1.16 now
+        self.feed["books"]["live"]["pending_requests"] = [T14CreditsQueued.credit("HG", -500.0)]
+        code, line = self.run_it(self.ARGS)                  # at the session: 0.0004 x $2,400 = $0.96
+        self.assertEqual((code, self.posts), (1, []), line)
+        self.assertIn("NOT SENT: operator credit(s) are queued on the executor for HG $-500.00", line)
+        self.assertNotIn("below $1", line)
+        self.assertEqual(self.finals()[-1]["outcome"], "refused")
+        self.assertEqual(mt.leg_after_credits(4 / 10000, 2900.0, [T14CreditsQueued.credit("HG", -500.0)], "HG"), 0.96)
 
 
 class T11BeforeAndAfter(Case):

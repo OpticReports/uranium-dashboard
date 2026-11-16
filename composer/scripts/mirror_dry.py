@@ -166,6 +166,15 @@ def _pos(x):
     return float(x) if _num(x) and x > 0 else None
 
 
+def _quiet_bars(q):
+    """{'HH:MM' bar start: close} of the bars FMP published WITHOUT volume (fetch_minutes quiet=True's
+    '_quiet'; 'quiet' on disk), sorted; anything else - an earlier list of bar starts without their closes
+    included - is no evidence: {}"""
+    if not isinstance(q, dict):
+        return {}
+    return {k: float(v) for k, v in sorted((k, v) for k, v in q.items() if isinstance(k, str)) if _pos(v)}
+
+
 # ------------------------------------------------------------------ prices: Yahoo daily
 def _yahoo_chart(t, tries=3):
     url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(t)}"
@@ -343,15 +352,18 @@ class Minutes:
     """FMP's 1-minute bars WITH VOLUME (trades) for a ticker-day, one request each: kept in memory,
     and on disk under cache_dir so a rerun costs nothing; throttled to FMP_RATE requests a second.
     A refusal or rate limit raises Refused and is remembered in .refused (the caller stops cleanly);
-    any other failure is remembered in .errors. The key never appears in a message."""
+    any other failure is remembered in .errors. The key never appears in a message. The bars FMP
+    published WITHOUT volume, {bar start: close}, are kept beside them (.still; 'quiet' on disk): the
+    brain's half-day evidence, read through quotes().quiet exactly as the live brain reads its own. A
+    'quiet' on disk in any other form (a list of bar starts without their closes) is no evidence."""
 
     def __init__(self, key=None, cache_dir=None, rate=FMP_RATE, fetch=None, budget=600, clock=time.time, sleep=time.sleep,
                  now=None):
         self.key = key if key is not None else os.environ.get("FMP_API_KEY")
         self.cache_dir, self.rate, self.budget = cache_dir, rate, budget
-        self._fetch = fetch or (lambda t, d, k: sr.fetch_minutes(t, d, k, traded=True))
+        self._fetch = fetch or (lambda t, d, k: sr.fetch_minutes(t, d, k, traded=True, quiet=True))
         self.clock, self.sleep, self._now = clock, sleep, now
-        self.mem, self.errors, self.refused, self.requests = {}, {}, None, 0
+        self.mem, self.still, self.errors, self.refused, self.requests = {}, {}, {}, None, 0
         self.lock, self.tlock, self.next_at = threading.Lock(), threading.Lock(), 0.0
 
     def _path(self, t, d):
@@ -371,11 +383,13 @@ class Minutes:
         if path and os.path.isfile(path):
             try:
                 with open(path) as f:
-                    bars = {k: float(v) for k, v in json.load(f)["bars"].items()}
+                    j = json.load(f)
+                bars = {k: float(v) for k, v in j["bars"].items()}
                 with self.lock:
                     self.mem[(t, d)] = bars
+                    self.still[(t, d)] = _quiet_bars(j.get("quiet"))
                 return bars
-            except (OSError, ValueError, KeyError, TypeError):
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
                 pass
         if self.refused:
             raise Refused(self.refused)
@@ -397,22 +411,43 @@ class Minutes:
                 raise Refused(msg) from None
             self.errors[(t, d)] = msg
             raise RuntimeError(msg) from None
+        still = _quiet_bars((bars or {}).get("_quiet") if isinstance(bars, dict) else None)
         bars = {k: float(v) for k, v in (bars or {}).items() if not k.startswith("_") and _pos(v)}
         with self.lock:
             self.mem[(t, d)] = bars
+            self.still[(t, d)] = still
         if path and self._final(d):
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            _write_atomic(path, json.dumps({"ticker": t, "date": d, "bars": bars}, separators=(",", ":")))
+            rec = {"ticker": t, "date": d, "bars": bars}
+            if still:
+                rec["quiet"] = still
+            _write_atomic(path, json.dumps(rec, separators=(",", ":")))
         return bars
+
+    def quiet(self, tickers, now):
+        """{ticker: mirror_brain.quiet_evidence(...) = (UTC end of its last bar WITHOUT volume ending at or
+        before `now`, moved, distinct, run)} on now's session, in what get() read (its traded bars and, with
+        their closes, the bars without volume): mirror_brain.build's half-day evidence"""
+        import mirror_brain as mb
+        e = sr.et_now(now)
+        d = e.date().isoformat()
+        with self.lock:
+            got = {t: (self.mem.get((t, d)), self.still.get((t, d))) for t in tickers}
+        return {t: x for t, (bars, q) in got.items() if q
+                for x in [mb.quiet_evidence(dict(bars or {}, _quiet=q), d, e.tzinfo, now)] if x is not None}
 
     def quotes(self):
         """the `quotes` seam of mirror_brain.build / preclose.preview: preclose.minute_quotes itself, on
-        this store's cached fetch (None without a key and without a cache: no FMP)"""
+        this store's cached fetch (None without a key and without a cache: no FMP). Its .quiet is this
+        store's quiet(): the bars without volume the brain weighs on a half-day"""
         if not self.key and not self.cache_dir:
             return None
         import preclose as pc
-        return lambda tickers, now: pc.minute_quotes(tickers, now, self.key or "-", fetch=lambda t, d, k: self.get(t, d),
-                                                     budget=self.budget)
+
+        def quotes(tickers, now):
+            return pc.minute_quotes(tickers, now, self.key or "-", fetch=lambda t, d, k: self.get(t, d), budget=self.budget)
+        quotes.quiet = self.quiet
+        return quotes
 
     def price_at(self, t, d, hhmm):
         """the last traded price at hh:mm: the close of the latest bar ending at or before it (None if none)"""
@@ -1725,8 +1760,14 @@ def _daily(date, book_path, ledger_path, force, now, yahoo, minutes, build, mark
     unavailable = [e for e in engines if (targets.get(e) or {}).get("status") != "ok"]
     if unavailable:
         why = (targets.get(unavailable[0]) or {}).get("note") or (payload.get("problems") or [None])[0] or "no decision"
+        why = " ".join(str(why).split())[:160]
+        import mirror_brain as mb
+        frozen = next((x for x in payload.get("problems") or [] if isinstance(x, str) and x.startswith(mb.FROZEN_FEED)),
+                      None)                           # half-day: SPY's bar refused as a frozen feed; every engine's note
+        if frozen:                                    # leads with the halt line, the brain's why is this one
+            why = f"{' '.join(frozen.split())[:300]}; {why}"
         alerts.append(f"MIRROR DRY NO DECISION — {d} {hh} ET: {', '.join(unavailable)} had no target from the brain "
-                      f"({' '.join(str(why).split())[:160]}); those sleeves stood still.")
+                      f"({why}); those sleeves stood still.")
     for r in er:
         e = r["engine"]
         p, c, s = targets.get(e) or {}, comp.get(e), shadow.get((d, e)) or {}

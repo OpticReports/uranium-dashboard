@@ -16,6 +16,25 @@ Each behavioural gate has a broken twin that must land on the other side.
       (no false RETURN GAP on flat prices); a real gap that day still alarms; a session row that does
       not say what it moved gets no return comparison, and the line says so
   P10 the read token is never re-sent to where a redirect points
+  P11 an operator's credit or debit (POST /mirror/credit; the session row's "credits", kind "credit")
+      is not a return: the scale-up day reads ~0 bps, not +400%; a real move that day is compared as
+      the true return (the credited dollars' own move after the plan's prices goes out with them); a
+      real gap still alarms; a dividend the book credited (kind "dividend") stays in; a fee debit is
+      taken out; with a transfer the same day both come out; credits that cannot be read get no
+      return comparison, and the line says why
+  P12 a day without credits reads byte for byte as before the credits were read; so does one whose
+      credits net to zero in floats (0.1 + 0.2 - 0.3: rounded to the cent before it is read)
+  P13 the second review (each gate failed at 6b122160 or on the mutant it names): the chained basis only
+      when the sleeve's credited buys FILLED (a venue BUY whose split gives it shares and that filled, or a
+      cross it bought in); a sleeve whose buys were rejected or never filled, or that only sold, is taken
+      out at face value - chained, its cash diluted the old capital's move into a false RETURN GAP; a
+      chained day whose old capital is worth nothing at the session's prices (V - flows <= 0) falls back
+      to face value
+  P14 the third review (each gate failed at 1de7535c): a credit whose buys filled only part of it (the
+      sleeve's cash after the session above 5% of it, or a BUY of the row short) gets no day-return
+      comparison ("the credited cash was only partly invested"; the holdings still are): no false RETURN
+      GAP on a move into the close; twins: full investment still chains, nothing filled is still face, a
+      debit reads as before
   P8  a real feed (a $10k paper book on the executor's own code, real brain decisions of 2026-11-06
       and 11-09) reads end to end: the fields this script needs are the fields the executor writes
 
@@ -413,6 +432,530 @@ class P8RealFeed(Base):
             "HARV": {"PULS": 0.64, "ZVOL": 0.36}}.items()}
         _, alerts = self.run_check(fd, date="2026-11-06", now=datetime.datetime(2026, 11, 6, 21, 40, tzinfo=datetime.timezone.utc))
         self.assertEqual(sorted(a.split(" on ")[0] for a in alerts), ["MIRROR PAPER MISMATCH — HARV", "MIRROR PAPER MISMATCH — KMLM"])
+
+
+CREDIT = 13021.40                                                          # the operator scales HG up
+
+
+def cr(amount=CREDIT, sleeve="HG", kind="credit", **kw):
+    """one entry of a session row's "credits", as ibkr-executor's mirror._apply_credits writes it"""
+    return dict({"sleeve": sleeve, "amount": amount, "kind": kind, "id": f"{kind}-{sleeve}", "note": "scale to $50k"}, **kw)
+
+
+UP = dict(BIG, HG=sleeve({"BIL": 370 + 142}, cash=10.0 + CREDIT - 142 * 91.5))   # HG bought 142 BIL ($12,993.00) with it
+
+
+def buy(eng, sym, qty, filled=None, price=None):
+    """one venue BUY of a session row's "orders", as ibkr-executor's mirror._summary writes it: its split is
+    of the FILLED quantity (mirror_core.book_fill)"""
+    f = qty if filled is None else filled
+    px = price if price is not None else PX[sym]
+    return {"id": f"mirror-{D}-B-{sym}", "side": "BUY", "symbol": sym, "qty": qty, "filled": f, "price": px if f else None,
+            "ref": PX[sym], "limit": round(PX[sym] * 1.005, 2), "commission": 0.0, "cost_bps": 0.0 if f else None,
+            "how": "filled" if f == qty else "cancelled", "split": {eng: f} if f else {}}
+
+
+def buys(before, after, prices=None):
+    """the BUYs, filled in full, of a session that took the sleeves from `before` to `after`"""
+    out = []
+    for eng, sl in after.items():
+        for sym, q in sl["shares"].items():
+            d = q - (before.get(eng) or {}).get("shares", {}).get(sym, 0)
+            if d > 0:
+                out.append(buy(eng, sym, d, price=(prices or PX)[sym]))
+    return out
+
+
+class CreditRows:
+    """the rows of a credit day (P11, P13)"""
+
+    def flat(self, day, syms):
+        return {s: PX[s] for s in syms}
+
+    @staticmethod
+    def moved(sym, by):
+        """closes with `sym` up `by` on D, after the plan's prices (the row's "prices" are PX)"""
+        return lambda day, syms: {s: PX[s] * (1 + by if day == D and s == sym else 1.0) for s in syms}
+
+    def fd(self, credits="absent", after=None, before=None, **kw):
+        if credits != "absent":
+            kw["credits"] = credits
+        kw.setdefault("orders", buys(before or BIG, after or UP, kw.get("prices")))   # what the session's buys were
+        return feed(live=book([row(D0, before or BIG), row(D, after or UP, **kw)]))
+
+    def recs(self):
+        return {r["engine"]: r for r in self.rows()}
+
+    @staticmethod
+    def text(lines):
+        return "\n".join(lines).replace("-0 bps", "+0 bps")
+
+
+class P11CreditDay(CreditRows, Base):
+    """the scale-up: POST /mirror/credit queues a credit, the executor applies it to the sleeve's cash
+    before that session's plan and lists it in the session row's "credits". Before the credits were
+    read, the credit was the sleeve's return: on the executor's own code, $10k credited to $50k was four
+    false "RETURN GAP +400.00%" alerts"""
+
+    def setUp(self):
+        super().setUp()
+        for d in (D0, D):
+            for e in ("HG", "HARV"):
+                self.comp[d][e]["ret"] = 0.0
+
+    def test_a_scale_up_credit_is_not_a_return(self):
+        lines, alerts = self.run_check(self.fd([cr()]), closes=self.flat)
+        self.assertEqual(alerts, [])
+        recs = self.recs()
+        self.assertAlmostEqual(recs["HG"]["diff_bps"], 0.0, delta=0.05)
+        self.assertEqual((recs["HG"]["credit_in"], recs["HG"]["credit_basis"]), (CREDIT, "chained"))
+        self.assertNotIn("credit_in", recs["HARV"])
+        self.assertIn("day return, mirror - Composer: HG +0 bps ($13,021.40 credited by the operator removed from the "
+                      "day's return), HARV +0 bps", self.text(lines))
+        # the twin: the same day with no record of the credit reads it as a +38% day (what every credit read as before)
+        _, alerts = self.run_check(self.fd(), closes=self.flat)
+        self.assertEqual([a.split(" on ")[0] for a in alerts], ["MIRROR LIVE RETURN GAP — HG"])
+        self.assertIn("+38.45% against Composer's +0.00%", alerts[0])
+
+    def test_a_real_move_on_the_scale_up_day_is_compared_as_the_true_return(self):
+        up = self.moved("BIL", 0.01)                                     # BIL +1% between the plan's prices and the close
+        self.comp[D]["HG"]["ret"] = 0.01
+        lines, alerts = self.run_check(self.fd([cr()]), closes=up)
+        self.assertEqual(alerts, [])
+        hg = self.recs()["HG"]
+        self.assertAlmostEqual(hg["ret"], 0.01, delta=0.0001)          # removed at face value it read +1.38%: the credited
+        self.assertAlmostEqual(hg["diff_bps"], 0.0, delta=1.0)         # $13k's own +1% counted as the old $34k's
+        # a real gap on a credit day still alarms, and says the credit was taken out
+        self.comp[D]["HG"]["ret"] = -0.01
+        _, alerts = self.run_check(self.fd([cr()]), closes=up)
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("RETURN GAP — HG", alerts[0])
+        self.assertIn("+1.00% against Composer's -1.00% though both went into the day holding the same ($13,021.40 "
+                      "credited by the operator removed from the day's return): look at", alerts[0])
+        # the move came BEFORE the plan (its prices are the closes): the credit bought at the moved price, and the chained
+        # return is the face-value one, to the cent
+        px = dict(PX, BIL=91.5 * 1.01)
+        after = dict(BIG, HG=sleeve({"BIL": 370 + 140}, cash=10.0 + CREDIT - 140 * px["BIL"]))
+        self.comp[D]["HG"]["ret"] = 0.01
+        _, alerts = self.run_check(feed(live=book([row(D0, BIG), row(D, after, buys(BIG, after, px), prices=px,
+                                                            credits=[cr()])])), closes=up)
+        self.assertEqual(alerts, [])
+        e0, e1 = 370 * 91.5 + 10.0, 510 * px["BIL"] + after["HG"]["cash"]
+        hg = self.recs()["HG"]
+        self.assertEqual(hg["credit_basis"], "chained")
+        self.assertAlmostEqual(hg["ret"], (e1 - CREDIT) / e0 - 1, delta=1e-6)
+        self.assertAlmostEqual(hg["ret"], 0.01, delta=0.0001)
+
+    def test_the_credited_dollars_own_move_into_the_close_goes_out_with_them(self):
+        """at the live book's size: a $2,650 sleeve in SOXL credited 4.5x ($11,850, the $50k scale-up), SOXL +0.4% between the
+        plan's prices and the close. At face value the $11,850's own +0.4% reads as +179 bps on the old $2,650: a false gap"""
+        f = 11850.0
+        self.comp = {d: {"KMLM": {"holdings": {"SOXL": 1.0}, "ret": 0.0, "basis": "dav", "kind": "close", "taken_at": "x"}}
+                     for d in (D0, D)}
+        self.comp[D]["KMLM"]["ret"] = 0.004
+        late = self.moved("SOXL", 0.004)
+        before = {"KMLM": sleeve({"SOXL": 66})}                                              # $2,650.00
+        traded = {"KMLM": sleeve({"SOXL": 66 + 296}, cash=10.0 + f - 296 * 40.0)}           # it bought 296 SOXL with it
+        _, alerts = self.run_check(self.fd([cr(f, "KMLM")], traded, before), closes=late)
+        self.assertEqual(alerts, [])
+        rec = self.recs()["KMLM"]
+        self.assertEqual(rec["credit_basis"], "chained")
+        self.assertAlmostEqual(rec["ret"], 0.004, delta=0.0001)
+        self.assertAlmostEqual(rec["diff_bps"], 0.0, delta=1.0)
+        e0, e1 = 66 * 40.0 + 10.0, 362 * 40.0 * 1.004 + traded["KMLM"]["cash"]
+        self.assertGreater(((e1 - f) / e0 - 1 - 0.004) * 1e4, mp.RETURN_ALARM_BPS)        # what face value alarms on
+        # the twin: a sleeve that sat out kept the credit as cash, which earned nothing: face value is exact for it (chained,
+        # the cash would dilute the old SOXL's move)
+        out = {"KMLM": sleeve({"SOXL": 66}, cash=10.0 + f, action="skip", reason="tree not attested")}
+        _, alerts = self.run_check(self.fd([cr(f, "KMLM")], out, before), closes=late)
+        self.assertFalse(any("RETURN GAP" in a for a in alerts))
+        rec = self.recs()["KMLM"]
+        self.assertEqual(rec["credit_basis"], "face")
+        self.assertAlmostEqual(rec["ret"], 66 * 40.0 * 0.004 / e0, delta=1e-6)             # the old SOXL's +0.4%, on the old $
+
+    def test_the_credit_goes_in_at_the_fills_not_at_the_plans_price(self):
+        """the same sleeve's buys fill 0.3% above the plan's price (the market moved between the quote and the fill) and
+        SOXL closes there. Chained at the plan's price, that 0.3% on the credited $11,850 is charged to the old $2,650:
+        -134 bps. The old SOXL earned +0.3%, as Composer did"""
+        f = 11850.0
+        self.comp = {d: {"KMLM": {"holdings": {"SOXL": 1.0}, "ret": 0.0, "basis": "dav", "kind": "close", "taken_at": "x"}}
+                     for d in (D0, D)}
+        self.comp[D]["KMLM"]["ret"] = 0.003
+        fill = 40.0 * 1.003
+        before = {"KMLM": sleeve({"SOXL": 66})}
+        traded = {"KMLM": sleeve({"SOXL": 66 + 295}, cash=10.0 + f - 295 * fill)}
+        buy = {"id": "mirror-x-B-SOXL", "side": "BUY", "symbol": "SOXL", "qty": 295, "filled": 295, "price": fill, "ref": 40.0,
+               "limit": 40.2, "commission": 0.0, "cost_bps": 30.0, "how": "filled", "split": {"KMLM": 295}}
+        _, alerts = self.run_check(self.fd([cr(f, "KMLM")], traded, before, orders=[buy]), closes=self.moved("SOXL", 0.003))
+        self.assertEqual(alerts, [])
+        rec = self.recs()["KMLM"]
+        self.assertEqual(rec["credit_basis"], "chained")
+        self.assertAlmostEqual(rec["diff_bps"], 0.0, delta=0.5)
+        self.assertEqual(mp.session_prices({"prices": dict(PX), "orders": [buy, dict(buy, filled=0, price=None, symbol="BIL")]}),
+                         dict(PX, SOXL=fill))                                           # an unfilled order keeps the plan's
+
+    def test_a_dividend_stays_in_the_return(self):
+        div = {"sleeve": "HG", "amount": 55.5, "kind": "dividend", "id": "dividend-BIL-2026-11-03-HG"}
+        both = dict(BIG, HG=sleeve({"BIL": 512}, cash=10.0 + 55.5 + CREDIT - 142 * 91.5))
+        lines, alerts = self.run_check(self.fd([cr(), div], both), closes=self.flat)
+        self.assertEqual(alerts, [])
+        hg = self.recs()["HG"]
+        self.assertEqual(hg["credit_in"], CREDIT)                                            # the dividend is not a credit
+        self.assertAlmostEqual(hg["diff_bps"], 55.5 / (370 * 91.5 + 10.0) * 1e4, delta=0.1)  # +16.4 bps: it is the return
+        self.assertIn("HG +16 bps ($13,021.40 credited by the operator removed from the day's return)", self.text(lines))
+        # a dividend alone reads exactly as a day the row lists no credits at all
+        paid = dict(BIG, HG=sleeve({"BIL": 370}, cash=10.0 + 55.5))
+        lines, alerts = self.run_check(self.fd([div], paid), closes=self.flat)
+        led = self.rows()
+        self.assertEqual((lines, alerts, led), self.run_check(self.fd(after=paid), closes=self.flat) + (self.rows(),))
+        self.assertIn("HG +16 bps, HARV +0 bps", self.text(lines))
+        self.assertNotIn("credit_in", led[0])
+
+    def test_a_fee_debit_is_taken_out(self):
+        before = dict(BIG, HG=sleeve({"BIL": 370}, cash=100.0))
+        fee = dict(BIG, HG=sleeve({"BIL": 370}, cash=75.0, action="hold", reason="at target"))
+        lines, alerts = self.run_check(self.fd([cr(-25.0, note="IBKR market data fee")], fee, before), closes=self.flat)
+        self.assertEqual(alerts, [])
+        hg = self.recs()["HG"]
+        self.assertAlmostEqual(hg["diff_bps"], 0.0, delta=0.05)                             # before: -7.4 bps
+        self.assertEqual((hg["credit_in"], hg["credit_basis"]), (-25.0, "face"))
+        self.assertIn("HG +0 bps ($25.00 debited by the operator removed from the day's return)", self.text(lines))
+        # a fee and a credit the same session: their net comes out, and the line says it is a net
+        both = dict(BIG, HG=sleeve({"BIL": 370}, cash=575.0, action="hold", reason="at target"))
+        lines, alerts = self.run_check(self.fd([cr(-25.0), cr(500.0)], both, before), closes=self.flat)
+        self.assertEqual(alerts, [])
+        self.assertEqual(self.recs()["HG"]["credit_in"], 475.0)
+        self.assertIn("HG +0 bps ($475.00 net credited by the operator removed from the day's return)", self.text(lines))
+
+    def test_a_credit_and_a_transfer_on_the_same_day(self):
+        moved = 18 * 91.5                                                                   # HG sells 18 BIL for HARV
+        t = [{"from": "HG", "to": "HARV", "amount": moved, "status": "moved", "moved": moved}]
+        c = [cr(), cr(6000.0, "HARV")]
+        after = {"HG": sleeve({"BIL": 370 - 18 + 142}, cash=10.0 + CREDIT - 142 * 91.5),
+                 "HARV": sleeve({"PULS": 355 + 154}, cash=10.0 + 6000.0 + moved - 154 * 49.5)}
+        _, alerts = self.run_check(self.fd(c, after, transfers=t), closes=self.flat)
+        self.assertEqual(alerts, [])
+        recs = self.recs()
+        for e, tin, cin in (("HG", -moved, CREDIT), ("HARV", moved, 6000.0)):
+            self.assertAlmostEqual(recs[e]["diff_bps"], 0.0, delta=0.05, msg=e)
+            self.assertEqual((recs[e]["transfer_in"], recs[e]["credit_in"]), (tin, cin), e)
+        # PULS +1% after the plan's prices: both flows go out with what they earned, the old $17.6k earned 1%
+        self.comp[D]["HARV"]["ret"] = 0.01
+        _, alerts = self.run_check(self.fd(c, after, transfers=t), closes=self.moved("PULS", 0.01))
+        self.assertEqual(alerts, [])
+        self.assertAlmostEqual(self.recs()["HARV"]["ret"], 0.01, delta=0.0002)
+
+    def test_credits_that_cannot_be_read_get_no_return_comparison_and_say_why(self):
+        no_amount = "a credit to the sleeve has no finite amount: "
+        bad_hg = [(no_amount + "'13021.40'", [cr("13021.40")]),
+                  (no_amount + "nan", [cr(float("nan"))]),
+                  (no_amount + "inf", [cr(float("inf"))]),
+                  (no_amount + "True", [cr(True)]),
+                  (no_amount + "None", [cr(None)]),
+                  (no_amount + "1000000000", [cr(10 ** 400)]),                         # no float holds it
+                  (no_amount + "nan", [cr(), cr(float("nan"), kind="dividend")]),        # a dividend's amount too
+                  ("a credit to the sleeve does not say its kind", [{k: v for k, v in cr().items() if k != "kind"}]),
+                  ("a credit to the sleeve does not say its kind", [cr(kind=None)]),
+                  ("a credit to the sleeve is of kind 'bonus', neither an operator credit nor a dividend", [cr(kind="bonus")])]
+        bad_row = [("the session row's credits are not a list", {"HG": CREDIT}),
+                   ("the session row's credits are not a list", "HG +13021.40"),
+                   ("a credits entry is not a record", [cr(), "HG +13021.40"]),
+                   ("a credits entry does not name its sleeve", [{"amount": CREDIT, "kind": "credit"}]),
+                   ("a credits entry does not name its sleeve", [cr(sleeve=None)])]
+        cases = [(why, c, "HG") for why, c in bad_hg] + [(why, c, "HG, HARV") for why, c in bad_row]
+        for why, credits, who in cases:
+            lines, alerts = self.run_check(self.fd(credits), closes=self.flat)
+            self.assertEqual(alerts, [], why)                                                # never alarmed on
+            text = "\n".join(lines)
+            self.assertIn("2 of 2 engines hold the same", text)                              # the holdings are still compared
+            self.assertIn(f"; day return NOT compared for {who} ({why}", text, why)
+            recs = self.recs()
+            self.assertNotIn("ret", recs["HG"], why)
+            self.assertTrue(recs["HG"]["ret_skipped"].startswith(why), why)
+            self.assertEqual("ret" in recs["HARV"], who == "HG", why)                       # only the sleeves it may touch
+        # an unreadable entry for a sleeve this book does not hold stops nobody
+        lines, alerts = self.run_check(self.fd([cr(), cr(float("nan"), "KMLM")]), closes=self.flat)
+        self.assertEqual(alerts, [])
+        self.assertNotIn("NOT compared", "\n".join(lines))
+        self.assertEqual(mp.credited_in({"credits": [cr(float("nan"), "KMLM"), cr(5.0)]}, "HG"), (5.0, None))
+        self.assertEqual(mp.credited_in({}, "HG"), (0.0, None))
+        self.assertEqual(mp.credited_in({"credits": [cr(1e300)]}, "HG"), (1e300, None))
+        self.assertEqual(mp.credited_in({"credits": [cr(1e308), cr(1e308)]}, "HG"),
+                         (None, "the credits to the sleeve do not add up to a finite amount"))
+
+
+GOLDEN_Y = {"HG": sleeve({"BIL": 370}), "HARV": sleeve({"PULS": 355}), "SLEEVE": sleeve({"BOXX": 30}, cash=25.0),
+            "KMLM": sleeve({"SOXL": 30, "TECL": 12, "PULS": 20}, cash=40.0)}
+GOLDEN_T = {"HG": sleeve({"BIL": 352}), "HARV": sleeve({"PULS": 388}, cash=23.5),
+            "KMLM": sleeve({"SOXL": 30, "TECL": 12, "PULS": 20}, cash=40.0, action="hold",
+                           reason="inside the corridor: largest gap 2.0% vs 10%"),
+            "SLEEVE": sleeve({"BOXX": 30}, cash=25.0, action="hold", reason="at target")}
+# what mirror_parity.book_parity printed for this day before it read credits (its code of 6b7d4683, unchanged to b7c0849d)
+GOLDEN_LINES = [
+    "mirror live live 2026-11-10: HG trade | HARV trade | KMLM hold | SLEEVE hold; 0 order(s)",
+    "  parity vs Composer: 3 of 4 engines hold the same; day return, mirror - Composer: HG -1 bps, HARV +218 bps, KMLM +43 bps "
+    "(different holdings into the day), SLEEVE -2 bps (yesterday not comparable)"]
+GOLDEN_ALERTS = [
+    "MIRROR LIVE RETURN GAP — HARV on 2026-11-10 (book live): +2.18% against Composer's +0.00% though both went into the day "
+    "holding the same: look at the fills and the booking.",
+    "MIRROR LIVE MISMATCH — KMLM on 2026-11-10 (book live): the mirror holds SOXL 35%, TECL 35%, PULS 29%; Composer holds SOXL "
+    "38%, TECL 38%, PULS 25% (half-L1 4.4%, allowed 3.8%). The shadow ledger says nothing for this session. The sleeve held "
+    "(inside the corridor: largest gap 2.0% vs 10%): the two books may be on different corridor paths."]
+GOLDEN_LEDGER = (
+    '[{"action":"trade","book":"live","carried_same":true,"cash":10.0,"composer":{"BIL":1.0},"composer_ret":0.0001,'
+    '"date":"2026-11-10","diff_bps":-1.0,"dist":0.0002,"engine":"HG","equity":32218.0,"mode":"live","parity":"same",'
+    '"reason":"to target","ret":0.0,"shadow":null,"shares":{"BIL":352},"tol":0.03,"transfer_in":-1647.0,"version":"v1",'
+    '"weights":{"BIL":0.9996896145012105}},{"action":"trade","book":"live","carried_same":true,"cash":23.5,'
+    '"composer":{"PULS":1.0},"composer_ret":0.0,"date":"2026-11-10","diff_bps":218.5,"dist":0.0006,"engine":"HARV",'
+    '"equity":19229.5,"mode":"live","parity":"same","reason":"to target","ret":0.021847,"shadow":null,'
+    '"shares":{"PULS":388},"tol":0.03,"transfer_in":1647.0,"version":"v1","weights":{"PULS":0.9987779193426766}},'
+    '{"action":"hold","book":"live","carried_same":false,"cash":40.0,"composer":{"PULS":0.25,"SOXL":0.375,"TECL":0.375},'
+    '"composer_ret":0.0123,"date":"2026-11-10","diff_bps":43.2,"dist":0.0445,"engine":"KMLM","equity":3430.0,'
+    '"mode":"live","parity":"MISMATCH","reason":"inside the corridor: largest gap 2.0% vs 10%","ret":0.016618,'
+    '"shadow":null,"shares":{"PULS":20,"SOXL":30,"TECL":12},"tol":0.0376,"version":"v1","weights":'
+    '{"PULS":0.2886297376093295,"SOXL":0.3498542274052478,"TECL":0.3498542274052478}},{"action":"hold","book":"live",'
+    '"carried_same":null,"cash":25.0,"composer":{"BOXX":1.0},"composer_ret":0.0002,"date":"2026-11-10","diff_bps":-2.0,'
+    '"dist":0.0037,"engine":"SLEEVE","equity":3415.0,"mode":"live","parity":"same","reason":"at target","ret":0.0,'
+    '"shadow":null,"shares":{"BOXX":30},"tol":0.03,"version":"v1","weights":{"BOXX":0.9926793557833089}}]')
+
+
+class P12NoCreditsUnchanged(unittest.TestCase):
+    def test_a_day_without_credits_reads_exactly_as_before(self):
+        """a transfer, a +2% / +3.1% move, every suffix of the line, a RETURN GAP and a MISMATCH: lines, alerts and ledger
+        rows equal what the parity monitor wrote before it read credits - with no "credits" in the row, an empty list, a
+        dividend (a return: not read into the number), a credit to a sleeve this book does not hold, a credit and its undo"""
+        comp = {"HG": {"holdings": {"BIL": 1.0}, "ret": 0.0001, "kind": "close"},
+                "HARV": {"holdings": {"PULS": 1.0}, "ret": 0.0, "kind": "close"},
+                "KMLM": {"holdings": {"SOXL": 0.375, "TECL": 0.375, "PULS": 0.25}, "ret": 0.0123, "kind": "close"},
+                "SLEEVE": {"holdings": {"BOXX": 1.0}, "ret": 0.0002, "kind": "close"}}
+        comp_prev = {"HG": {"holdings": {"BIL": 1.0}}, "HARV": {"holdings": {"PULS": 1.0}},
+                     "KMLM": {"holdings": {"SOXL": 0.75, "PULS": 0.25}}}
+
+        def closes(day, syms):
+            p = dict(PX, PULS=49.5 * 1.02, SOXL=40.0 * 1.031) if day == D else dict(PX)
+            return {s: p[s] for s in syms}
+        t = [{"from": "HG", "to": "HARV", "amount": 1647.0, "status": "moved", "moved": 1647.0}]
+        for credits in ("absent", [], [cr(12.5, "HARV", "dividend")], [cr(500.0, "ZZZ")], [cr(500.0), cr(-500.0)],
+                        [cr(0.1), cr(0.2), cr(-0.3)]):                              # 5.55e-17 in floats: rounded, 0
+            kw = {"transfers": t} if credits == "absent" else {"transfers": t, "credits": credits}
+            view = book([row(D0, GOLDEN_Y), row(D, GOLDEN_T, **kw)])
+            lines, alerts, led = mp.book_parity("live", view, D, comp, {}, closes, D0, comp_prev)
+            self.assertEqual(lines, GOLDEN_LINES, credits)
+            self.assertEqual(alerts, GOLDEN_ALERTS, credits)
+            self.assertEqual(json.dumps(led, sort_keys=True, separators=(",", ":")), GOLDEN_LEDGER, credits)
+
+
+
+class P13ChainedOnlyWhenTheBuysFilled(CreditRows, Base):
+    """item 12: at 6b122160 a sleeve that TRADED was chained even when none of its buys filled (the deposit not
+    usable yet: every buy rejected; or the buy rested and was cancelled). Its credit stayed cash, and chained
+    through the close that cash diluted the old capital's move: a false RETURN GAP. The executor's own
+    verification run (scenario E18) read KMLM -123 bps against a no-credit twin's -7"""
+    F = 11850.0
+
+    def setUp(self):
+        super().setUp()
+        self.comp = {d: {"KMLM": {"holdings": {"SOXL": 1.0}, "ret": 0.0, "basis": "dav", "kind": "close", "taken_at": "x"}}
+                     for d in (D0, D)}
+        self.comp[D]["KMLM"]["ret"] = 0.02                                       # SOXL +2% after the plan's prices
+        self.before = {"KMLM": sleeve({"SOXL": 66})}                            # $2,650.00
+        self.e0 = 66 * 40.0 + 10.0
+
+    def kmlm(self, after, orders, **kw):
+        lines, alerts = self.run_check(self.fd([cr(self.F, "KMLM")], after, self.before, orders=orders, **kw),
+                                       closes=self.moved("SOXL", 0.02))
+        return lines, alerts, self.recs()["KMLM"]
+
+    def test_a_sleeve_whose_buys_never_filled_is_taken_out_at_face_value(self):
+        kept = {"KMLM": sleeve({"SOXL": 66}, cash=10.0 + self.F)}                # the plan traded; the cash is all there
+        for why, orders in (("every buy rejected", [buy("KMLM", "SOXL", 296, filled=0)]),
+                            ("no order at all", []),
+                            ("a buy of another sleeve filled", [buy("HG", "SOXL", 296)]),
+                            ("a sell of this sleeve filled", [dict(buy("KMLM", "SOXL", 5), side="SELL")]),
+                            ("a buy whose split cannot be read", [dict(buy("KMLM", "SOXL", 296), split="KMLM")]),
+                            ("a buy that says it filled none", [dict(buy("KMLM", "SOXL", 296), filled=0)]),
+                            ("orders that are not a list", "SOXL 296")):
+            with self.subTest(why=why):
+                lines, alerts, rec = self.kmlm(kept, orders)
+                self.assertEqual(rec["credit_basis"], "face", why)
+                self.assertAlmostEqual(rec["ret"], 66 * 40.0 * 0.02 / self.e0, delta=1e-6)   # the old SOXL's +2%
+                self.assertAlmostEqual(rec["diff_bps"], -0.8, delta=0.1)                      # its $10 of cash
+                self.assertFalse([a for a in alerts if "RETURN GAP" in a], alerts)
+        # what 6b122160 read: chained, the $11,850 of cash dilutes the old $2,650's +2% to +0.36%: -164 bps, alarmed
+        v = 66 * 40.0 + 10.0 + self.F
+        chained = (v - self.F) / self.e0 * ((66 * 40.0 * 1.02 + 10.0 + self.F) / v) - 1
+        self.assertLess((chained - 0.02) * 1e4, -mp.RETURN_ALARM_BPS)
+
+    def test_a_sleeve_whose_buys_filled_is_chained(self):
+        full = {"KMLM": sleeve({"SOXL": 66 + 296}, cash=10.0 + self.F - 296 * 40.0)}
+        lines, alerts, rec = self.kmlm(full, [buy("KMLM", "SOXL", 296)])
+        self.assertEqual(rec["credit_basis"], "chained")
+        self.assertAlmostEqual(rec["diff_bps"], 0.0, delta=1.0)
+        self.assertEqual(alerts, [])
+        # (10 of 296 filled at the cancel: only partly invested, not compared - P14)
+        # a netted buy of two sleeves: its split names this one
+        both = [dict(buy("KMLM", "SOXL", 296), qty=300, filled=300, split={"KMLM": 296, "HG": 4})]
+        self.assertEqual(self.kmlm(full, both)[2]["credit_basis"], "chained")
+
+    def test_a_cross_it_bought_in_is_a_filled_buy(self):
+        full = {"KMLM": sleeve({"SOXL": 66 + 296}, cash=10.0 + self.F - 296 * 40.0)}
+        cross = [{"symbol": "SOXL", "qty": 296, "price": 40.0, "sellers": {"HG": 296}, "buyers": {"KMLM": 296}}]
+        lines, alerts, rec = self.kmlm(full, [], crosses=cross)
+        self.assertEqual(rec["credit_basis"], "chained")
+        self.assertAlmostEqual(rec["diff_bps"], 0.0, delta=1.0)
+        sold = [dict(cross[0], sellers={"KMLM": 296}, buyers={"HG": 296})]       # it SOLD in the cross: no buy of it
+        self.assertEqual(self.kmlm({"KMLM": sleeve({"SOXL": 66}, cash=10.0 + self.F)}, [], crosses=sold)[2]["credit_basis"],
+                         "face")
+
+    def test_bought_in_reads_only_what_the_row_says(self):
+        self.assertTrue(mp.bought_in({"orders": [buy("KMLM", "SOXL", 3)]}, "KMLM"))
+        self.assertFalse(mp.bought_in({"orders": [buy("KMLM", "SOXL", 3)]}, "HG"))
+        for orders in (None, "x", [None, 5, "BUY"], [dict(buy("KMLM", "SOXL", 3), filled=float("nan"))],
+                       [dict(buy("KMLM", "SOXL", 3), split={"KMLM": True})], [dict(buy("KMLM", "SOXL", 3), side=None)]):
+            self.assertFalse(mp.bought_in({"orders": orders}, "KMLM"), orders)
+        for crosses in (None, "x", [None], [{"buyers": "KMLM"}], [{"buyers": {"KMLM": 0}}]):
+            self.assertFalse(mp.bought_in({"crosses": crosses}, "KMLM"), crosses)
+        self.assertTrue(mp.bought_in({"crosses": [{"buyers": {"KMLM": 2}}]}, "KMLM"))
+
+    def test_v_minus_the_flows_at_or_below_zero_falls_back_to_face(self):
+        """item 13: no test failed with the guard v - flows > 0 dropped (a surviving mutant). Chained, an old
+        capital worth nothing at the session's prices divides nothing by e0 and multiplies it out"""
+        s = sleeve({"SOXL": 24}, cash=0.0)                                      # after the session: $960 at 40.0
+        px = {"SOXL": 40.0}
+        for cred, net in ((960.0, 0.0), (1000.0, 0.0), (900.0, 60.0), (900.0, 100.0)):
+            with self.subTest(cred=cred, net=net):
+                ret, basis = mp.day_return(10.0, 1005.0, net, cred, s, px, bought=True)
+                self.assertEqual((ret, basis), ((1005.0 - net - cred) / 10.0 - 1, "face"))
+        ret, basis = mp.day_return(10.0, 1005.0, 0.0, 900.0, s, px, bought=True)                # $60 of old capital
+        self.assertEqual(basis, "chained")
+        self.assertAlmostEqual(ret, (960.0 - 900.0) / 10.0 * (1005.0 / 960.0) - 1, places=12)
+        self.assertEqual(mp.day_return(10.0, 1005.0, 0.0, 900.0, s, px)[1], "face")             # bought defaults to no
+
+    def test_the_credit_rounded_to_the_cent_before_it_is_read(self):
+        """item 13: no test failed with credited_in's round(net, 2) dropped (a surviving mutant): 0.1 + 0.2 - 0.3
+        is 5.55e-17 in floats, a 'credit' that changed the ledger row and the line (P12 holds it byte for byte)"""
+        self.assertEqual(mp.credited_in({"credits": [cr(0.1), cr(0.2), cr(-0.3)]}, "HG"), (0.0, None))
+        self.assertEqual(mp.credited_in({"credits": [cr(0.105), cr(0.2)]}, "HG"), (0.3, None))
+
+
+class P14PartlyInvested(CreditRows, Base):
+    """the third review (item 4; each gate failed at 1de7535c): a credit whose buys filled only PART of it was
+    chained, and the credited cash left idle diluted the old capital's move into the close: on the executor's
+    own rows a false 'RETURN GAP - KMLM' (-165 bps against a no-credit twin's -7). Neither basis is right then
+    (face value counts the invested part's move as the old capital's): the day's return is not compared, and
+    the line says why; the holdings still are. Chained only when the credit was essentially fully invested:
+    the sleeve's cash after the session at most IDLE_CASH_FRAC of it, and no BUY of the row short"""
+    F = 11850.0
+    PARTLY = "the credited cash was only partly invested"                   # mp.PARTLY (a literal: the gate reads behaviour)
+
+    def setUp(self):
+        super().setUp()
+        self.comp = {d: {"KMLM": {"holdings": {"SOXL": 1.0}, "ret": 0.0, "basis": "dav", "kind": "close", "taken_at": "x"}}
+                     for d in (D0, D)}
+        self.comp[D]["KMLM"]["ret"] = 0.02                                       # SOXL +2% after the plan's prices
+        self.before = {"KMLM": sleeve({"SOXL": 66})}                            # $2,650.00
+        self.e0 = 66 * 40.0 + 10.0
+
+    def kmlm(self, after, orders, credit=None, before=None):
+        lines, alerts = self.run_check(self.fd([cr(credit or self.F, "KMLM")], after, before or self.before, orders=orders),
+                                       closes=self.moved("SOXL", 0.02))
+        return lines, alerts, self.recs()["KMLM"]
+
+    def test_a_partly_invested_credit_with_a_move_into_the_close_raises_no_return_gap(self):
+        part = {"KMLM": sleeve({"SOXL": 66 + 10}, cash=10.0 + self.F - 10 * 40.0)}   # 10 of 296 filled at the cancel
+        for why, orders in (("10 of 296 filled", [buy("KMLM", "SOXL", 296, filled=10)]),
+                            ("one buy filled, the other rejected", [buy("KMLM", "SOXL", 10),
+                                                                     buy("KMLM", "TECL", 115, filled=0)])):
+            with self.subTest(why=why):
+                lines, alerts, rec = self.kmlm(part, orders)
+                self.assertFalse([a for a in alerts if "RETURN GAP" in a], alerts)
+                self.assertEqual((rec.get("ret_skipped"), rec.get("credit_in")), (self.PARTLY, self.F))
+                self.assertNotIn("ret", rec)
+                self.assertNotIn("credit_basis", rec)
+                self.assertIn("; day return NOT compared for KMLM (the credited cash was only partly invested)",
+                              "\n".join(lines))
+                self.assertEqual(rec["parity"], "MISMATCH")                  # the holdings are still compared ...
+                self.assertTrue(any("MISMATCH — KMLM" in a for a in alerts))  # ... and said
+        # what 1de7535c read: chained, the $11,460 of idle cash took the old $2,650's +2% to +0.42%: -158 bps, alarmed
+        v = 76 * 40.0 + 10.0 + self.F - 400.0
+        chained = (v - self.F) / self.e0 * ((76 * 40.0 * 1.02 + 10.0 + self.F - 400.0) / v) - 1
+        self.assertLess((chained - 0.02) * 1e4, -mp.RETURN_ALARM_BPS)
+
+    def test_little_cash_left_but_a_buy_short_anywhere_in_the_row_is_not_compared_either(self):
+        near = {"KMLM": sleeve({"SOXL": 66 + 290, "TECL": 1}, cash=10.0 + self.F - 290 * 40.0 - 100.0)}   # $160: 1.1%
+        for why, orders in (("its own TECL buy filled 1 of 2", [buy("KMLM", "SOXL", 290), buy("KMLM", "TECL", 2, filled=1)]),
+                            ("another sleeve's buy filled nothing: it names no sleeve", [buy("KMLM", "SOXL", 290),
+                             buy("KMLM", "TECL", 1), buy("HG", "BIL", 3, filled=0)])):
+            with self.subTest(why=why):
+                lines, alerts, rec = self.kmlm(near, orders)
+                self.assertEqual(rec.get("ret_skipped"), self.PARTLY, why)
+                self.assertFalse([a for a in alerts if "RETURN GAP" in a], alerts)
+
+    def test_the_twins_full_investment_chains_nothing_filled_is_face_and_a_debit_reads_as_before(self):
+        full = {"KMLM": sleeve({"SOXL": 66 + 296}, cash=10.0 + self.F - 296 * 40.0)}      # $20 idle
+        lines, alerts, rec = self.kmlm(full, [buy("KMLM", "SOXL", 296)])
+        self.assertEqual((rec["credit_basis"], alerts), ("chained", []))
+        self.assertAlmostEqual(rec["diff_bps"], 0.0, delta=1.0)
+        kept = {"KMLM": sleeve({"SOXL": 66}, cash=10.0 + self.F)}
+        lines, alerts, rec = self.kmlm(kept, [buy("KMLM", "SOXL", 296, filled=0)])
+        self.assertEqual(rec["credit_basis"], "face")
+        self.assertFalse([a for a in alerts if "RETURN GAP" in a], alerts)
+        # a fee DEBIT on a day a buy of the sleeve filled short: nothing was credited to invest, so it reads as before
+        before = {"KMLM": sleeve({"SOXL": 66}, cash=100.0)}
+        after = {"KMLM": sleeve({"SOXL": 68}, cash=100.0 - 5.0 - 2 * 40.0)}
+        lines, alerts, rec = self.kmlm(after, [buy("KMLM", "SOXL", 3, filled=2)], credit=-5.0, before=before)
+        self.assertEqual((rec["credit_in"], rec["credit_basis"]), (-5.0, "chained"))
+        self.assertNotIn("ret_skipped", rec)
+
+    def test_partly_invested_reads_only_what_the_row_says(self):
+        px = {"SOXL": 40.0}
+        s = sleeve({"SOXL": 95}, cash=200.0)                                     # V = $4,000: 5% is $200
+        self.assertFalse(mp.partly_invested({"orders": []}, s, px))             # exactly 5%: invested
+        self.assertTrue(mp.partly_invested({"orders": []}, dict(s, cash=200.01), px))
+        self.assertFalse(mp.partly_invested({}, s, px))                         # no orders at all (a cross only)
+        for orders in ("x", [dict(buy("KMLM", "SOXL", 3), qty=None)], [dict(buy("KMLM", "SOXL", 3), filled=float("nan"))],
+                       [buy("HG", "SOXL", 3, filled=2)]):
+            self.assertTrue(mp.partly_invested({"orders": orders}, s, px), orders)
+        self.assertFalse(mp.partly_invested({"orders": [None, "BUY", dict(buy("KMLM", "SOXL", 3), side="SELL", filled=0)]},
+                                            s, px))                             # not BUYs: a short SELL is no credit's
+        self.assertFalse(mp.partly_invested({"orders": []}, sleeve({"ZZZ": 1}), px))     # V cannot be read: face
+        self.assertEqual((mp.IDLE_CASH_FRAC, mp.PARTLY), (0.05, self.PARTLY))
+        core = os.path.join(HERE, "..", "..", "..", "ibkr-executor", "app", "mirror_core.py")
+        if os.path.isfile(core):
+            with open(core) as f:
+                self.assertIn("MAX_IDLE_CASH_FRAC = 0.05", f.read())
+
+
+class P15NoSilentCap(Base):
+    """2026-11-13, the $50k scale-up: four credit notes, and the monitor printed three of them with nothing to say a
+    fourth existed. Notes past NOTES_SHOWN (and problems past PROBLEMS_SHOWN) are counted, never dropped."""
+
+    def note_lines(self, r):
+        lines, _ = self.run_check(feed(live=book([r])))
+        return [x for x in lines if x.startswith("  note: ")], [x for x in lines if x.startswith("  brain: ")]
+
+    def test_notes_and_problems_past_the_cap_are_counted(self):
+        notes = [f"{e} credited $1,000.00 (scale-up)" for e in ("HARV", "SLEEVE", "KMLM", "HG")]
+        problems = ["SPY: one", "SPY: two", "SPY: three"]
+        shown, brain = self.note_lines(row(D, BIG, notes=notes, problems=problems))
+        self.assertEqual(shown, [f"  note: {n}" for n in notes[:3]]
+                         + ["  note: ... and 1 more (all of them are in the executor's feed)"])
+        self.assertEqual(brain, [f"  brain: {p}" for p in problems[:2]]
+                         + ["  brain: ... and 1 more (all of them are in the executor's feed)"])
+
+    def test_the_twins_at_or_under_the_cap_print_exactly_as_before(self):
+        notes = [f"{e} credited $1,000.00 (scale-up)" for e in ("HARV", "SLEEVE", "KMLM")]
+        shown, brain = self.note_lines(row(D, BIG, notes=notes, problems=["SPY: one", "SPY: two"]))
+        self.assertEqual(shown, [f"  note: {n}" for n in notes])
+        self.assertEqual(brain, ["  brain: SPY: one", "  brain: SPY: two"])
+        shown, brain = self.note_lines(row(D, BIG))
+        self.assertEqual((shown, brain), ([], []))
+
+    def test_unattested_notes_are_still_summed_apart_and_do_not_count_toward_the_cap(self):
+        notes = ["HG not attested today", "KMLM not attested today"] + [f"n{i}" for i in range(3)]
+        shown, _ = self.note_lines(row(D, BIG, notes=notes))
+        self.assertEqual(shown, ["  note: 2 sleeve(s) traded on a tree nobody attested today (paper only; a live book refuses)",
+                                 "  note: n0", "  note: n1", "  note: n2"])
 
 
 if __name__ == "__main__":

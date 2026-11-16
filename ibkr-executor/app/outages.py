@@ -28,6 +28,13 @@ logger = logging.getLogger("ibkr-executor.outages")
 HISTORY_MAX = 500
 # blocked-call bookkeeping is chatty; persist it at most this often
 SAVE_THROTTLE_S = 60.0
+# An open outage can carry its cause (mark_kind), when it is not the plain
+# "no session" one. The only one today, K5 (D1 round 4), is the adapter's
+# ib_adapter.KIND_OPEN_ORDERS_UNSYNCED: the gateway is connected, logged in and
+# answering, but no session's connect-time open-orders sync ends, so nothing
+# can be traded. The adapter keeps the outage open for it and its own DOWN
+# page names the cause; the service's gateway watch must not diagnose it as a
+# login stall or a crash loop (service._gateway_watch).
 
 
 def _never_raises(fn):
@@ -151,6 +158,21 @@ class OutageLog:
             self._save()
 
     @_never_raises
+    def mark_kind(self, kind: str | None, ts: float | None = None) -> None:
+        """The open outage's CURRENT cause: ib_adapter.KIND_OPEN_ORDERS_UNSYNCED,
+        or None for the plain one (no gateway session). `kind_since` is when the
+        current cause began: a gateway that restarts in the middle of an
+        unsynced outage starts the login-stall clock of the gateway watch
+        afresh, instead of being paged as stalled the moment it drops. A
+        closed record keeps the last cause. No-op without an open outage or
+        when the cause is unchanged."""
+        if not self.open or self.open.get("kind") == kind:
+            return
+        self.open["kind"] = kind
+        self.open["kind_since"] = ts or time.time()
+        self._save()
+
+    @_never_raises
     def end(self, ts: float | None = None) -> dict | None:
         if not self.open:
             return None
@@ -195,4 +217,7 @@ class OutageLog:
                                      for r in recent)),
             "alerted": sum(1 for r in recent if r.get("alerted")),
             "currently_down_since": (self.open or {}).get("start_ts"),
+            # the open outage's current cause (mark_kind): None = no session
+            "currently_down_kind": (self.open or {}).get("kind"),
+            "currently_down_kind_since": (self.open or {}).get("kind_since"),
         }

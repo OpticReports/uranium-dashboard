@@ -16,10 +16,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import threading
 import time
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, InvalidOperation
 
 logger = logging.getLogger(__name__)
+
+# The outage ledger's cause for a K5 outage (OutageLog.mark_kind): the gateway
+# is connected, logged in and answering, but no session's connect-time
+# open-orders sync ends, so nothing can be traded. The service's gateway watch
+# reads it (service._gateway_watch). Defined HERE, not imported from
+# .outages: this module is also loaded on its own, outside the package, for
+# its pure rounding helpers (composer/scripts/tests/test_mirror_dry.py).
+KIND_OPEN_ORDERS_UNSYNCED = "open_orders_unsynced"
 
 UNDERLYINGS = {
     # symbol -> (secType, exchange, currency, option multiplier)
@@ -116,6 +125,53 @@ OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
                              # daily IB gateway auto-restart is far shorter
                              # and must be a non-event (fail closed, then
                              # auto-recover silently)
+UNSYNCED_REPLACE_WAITS = 2.0  # K5 (D1 round 4): a session whose connect-time
+                             # open-orders sync has still not ended this many
+                             # VENUE_HISTORY_TIMEOUT_S after the connect gave
+                             # up on it (40 s; ~55 s after the request was
+                             # sent) is replaced by a fresh one, by the
+                             # keepalive or the guarded read that meets it
+                             # first (_unsynced_replace_due). Twice the
+                             # bound a guarded read waits for the same answer:
+                             # an answer that late is taken as lost, not slow
+                             # (a 45-s-late one still lands, at 30 s); far under
+                             # OUTAGE_ALERT_S, so a one-off lost answer is
+                             # replaced long before the DOWN page is due; short
+                             # enough that one met at the decision is replaced
+                             # well inside its window (decide_at to cancel_at
+                             # is 275 s), backoff and connect included.
+                             # That is the FIRST replacement of an unsynced
+                             # spell; each later one waits twice as long as the
+                             # one before it (D1 round 5: 40, 80, 160, 320, 640
+                             # s), never longer than UNSYNCED_REPLACE_MAX_S
+                             # (_unsynced_replace_interval).
+UNSYNCED_REPLACE_MAX_S = 15 * 60.0  # K5 (D1 round 5): the replacement interval's
+                             # cap. Round 4 replaced ONCE per outage, so a fresh
+                             # session that lost its answer too was kept for as
+                             # long as it lived: every guarded read failed - no
+                             # trade, no /kill flatten sell - where one more
+                             # fresh session would have synced. A schedule keeps
+                             # that cure without churn: a gateway that never
+                             # answers sees one fresh session per ~15 min once
+                             # the doubling reaches the cap (each connect holds
+                             # the loop thread for its 15 s sync wait), and two
+                             # lost answers met at the decision (15:54:25) still
+                             # trade about 2.5 min later, before plan_by.
+                             # KNOWN, NOT BUILT (D1 round 6, recorded): an
+                             # answer that has not come by the interval is taken
+                             # as LOST, never as late - the adapter cannot tell
+                             # the two apart before it drops the session (both
+                             # are the reviews' scripts: neither a lost nor a
+                             # late connect-time answer has been seen on a real
+                             # gateway). A gateway that answers EVERY new
+                             # session's sync a fixed 123-218 s late (129-224 s
+                             # with the loop ticking) after a drop at the
+                             # decision therefore sends no order, where round 4
+                             # kept session 2 and traded (in full to 217 s, 223
+                             # s ticking; its sells alone one second later),
+                             # and more than ~15 min late overnight never ends
+                             # the outage. The record, with the cap's own
+                             # costs: _unsynced_replace_interval.
 
 # IB order states that mean the order can no longer fill.
 # Terminal-dead order statuses - and ONLY these. CORRECTION (2026-08-25,
@@ -310,14 +366,106 @@ def _trade_errors(trade, dead: bool = False, venue: str = "") -> str:
     return "; ".join(out[-3:])
 
 
+def _correction_key(fill) -> tuple:
+    """(base, n) of an execution IB can correct, else (None, None). IB: "A
+    correction is indicated by an ExecId which differs from a previous ExecId
+    in only the digits after the final period, e.g. an ExecId ending in ".02"
+    would be a correction of a previous execution with an ExecId ending in
+    ".01"" (TWS API reference, IBApi.Execution.ExecId), delivered "as an
+    additional execDetails callback with all parameters identical except for
+    the execID" (TWS API, Executions and Commissions). Real execIds look like
+    0000e0d5.6556c9f3.01.01: base = everything before the final period, n =
+    the digits after it."""
+    ex = getattr(fill, "execution", None)
+    eid = str(getattr(ex, "execId", "") or "") if ex is not None else ""
+    base, dot, tail = eid.rpartition(".")
+    if not dot or not base or not tail.isdigit():
+        return None, None
+    return base, int(tail)
+
+
+def _current_fills(fills) -> list:
+    """A trade's executions with every CORRECTION in place of what it
+    corrects. ib_async 2.1.0 stores each execution under its full execId
+    (wrapper.execDetails: `if execId not in self.fills` -> self.fills[execId]
+    and trade.fills.append), so a correction is one MORE Fill on the trade:
+    summed, a 100-share execution corrected once read as 200 shares (and two
+    prices, two commissions). Kept: for each base execId only the execution
+    with the highest correction number (the first seen of equal ones); an
+    execution whose execId has no such form is kept as it is. Order kept.
+    Each correction seen is logged once, raw (_log_corrections)."""
+    fills = list(fills or [])
+    best: dict = {}
+    for i, f in enumerate(fills):
+        base, n = _correction_key(f)
+        if base is not None and (base not in best or n > best[base][1]):
+            best[base] = (i, n)
+    keep = {i for i, _ in best.values()}
+    try:
+        _log_corrections(fills, best)
+    except Exception as exc:  # noqa: BLE001  - observability only: never in the way of the count
+        logger.debug("execution correction log failed: %s", exc)
+    return [f for i, f in enumerate(fills)
+            if _correction_key(f)[0] is None or i in keep]
+
+
+# The execIds of executions seen CORRECTED (_current_fills), each logged once per process. Corrections
+# are rare; the set is cleared past _CORRECTIONS_KEEP so it cannot grow without bound.
+_CORRECTIONS_LOGGED: set = set()
+_CORRECTIONS_LOCK = threading.Lock()
+_CORRECTIONS_KEEP = 10_000
+
+
+def _raw_fill(f) -> str:
+    """one execution as IB reported it: execId, side, shares, price, commission (or that none came yet)"""
+    ex = getattr(f, "execution", None)
+    rep_ = getattr(f, "commissionReport", None)
+    reported = rep_ is not None and bool(getattr(rep_, "execId", None))
+    comm = (f"commission {getattr(rep_, 'commission', None)!r} {getattr(rep_, 'currency', '') or ''}".rstrip()
+            if reported else "commission not reported yet")
+    return (f"execId {getattr(ex, 'execId', None)!r} {getattr(ex, 'side', None)} {getattr(ex, 'shares', None)!r}"
+            f" @ {getattr(ex, 'price', None)!r}, {comm} (orderId {getattr(ex, 'orderId', None)}, permId "
+            f"{getattr(ex, 'permId', None)}, orderRef {getattr(ex, 'orderRef', None)!r}, time "
+            f"{getattr(ex, 'time', None) or getattr(f, 'time', None)})")
+
+
+def _log_corrections(fills: list, best: dict) -> None:
+    """2026-11-13 (the buying guard's review): WARNING once per corrected execId - the raw executions
+    of its base (execIds, shares, prices, commissions as seen now, and which one is counted), so the
+    first correction IB sends a live order can be checked against IB's rule (_correction_key) and
+    against what the adapter booked. Nothing here changes what _current_fills returns. A correction
+    that arrives after its order was booked reaches this only if something reads that order's fills
+    again (a late commission's true-up); ib_async's wrapper logs each execDetails and each
+    commissionReport it can match at INFO (wrapper.execDetails / wrapper.commissionReport)."""
+    groups: dict = {}
+    for f in fills:
+        base, _ = _correction_key(f)
+        if base is not None:
+            groups.setdefault(base, []).append(f)
+    for base, group in groups.items():
+        ids = {str(f.execution.execId) for f in group}
+        if len(ids) < 2:
+            continue                # one execution (or the same one twice): nothing was corrected
+        kept = str(fills[best[base][0]].execution.execId)
+        with _CORRECTIONS_LOCK:
+            new = sorted(ids - {kept} - _CORRECTIONS_LOGGED)
+            if not new:
+                continue
+            if len(_CORRECTIONS_LOGGED) >= _CORRECTIONS_KEEP:
+                _CORRECTIONS_LOGGED.clear()
+            _CORRECTIONS_LOGGED.update(new)
+        logger.warning("execution CORRECTED by IB: %s superseded by %r, which alone is counted. Raw, as seen: %s",
+                       ", ".join(map(repr, new)), kept, "; ".join(_raw_fill(f) for f in group))
+
+
 def _agg_commission(trade) -> float:
     """Total commission the venue reported on a trade's executions (each
     ib_async Fill carries a commissionReport once IB sends it; 0.0 until
     then). The book debits this from the bucket that traded - before
     2026-09-04 the ledger booked price x qty and silently drifted $1/order
-    from the account."""
+    from the account. A corrected execution counts once (_current_fills)."""
     total = 0.0
-    for f in (getattr(trade, "fills", []) or []):
+    for f in _current_fills(getattr(trade, "fills", []) or []):
         rep_ = getattr(f, "commissionReport", None)
         c = getattr(rep_, "commission", None) if rep_ is not None else None
         cur = getattr(rep_, "currency", "") if rep_ is not None else ""
@@ -337,8 +485,9 @@ def _agg_commission(trade) -> float:
 
 def _commission_reported(trade) -> bool:
     """True when every execution carries a commissionReport with an execId
-    - IB delivers the report a moment AFTER the fill."""
-    fills = list(getattr(trade, "fills", []) or [])
+    - IB delivers the report a moment AFTER the fill. Of a corrected
+    execution, the correction's (_current_fills)."""
+    fills = _current_fills(getattr(trade, "fills", []) or [])
     if not fills:
         return False    # a completed-orders Trade carries no fills: no report
     for f in fills:
@@ -349,10 +498,11 @@ def _commission_reported(trade) -> bool:
 
 
 def _agg_fill_price(trade) -> float | None:
-    """Share-weighted average price over a trade's executions. None when the
+    """Share-weighted average price over a trade's executions (a corrected
+    one counted once, at its correction: _current_fills). None when the
     venue reported no usable price — NEVER 0.0 (repo law: a silent zero fill
     price would vaporize proceeds downstream)."""
-    fills = list(getattr(trade, "fills", []) or [])
+    fills = _current_fills(getattr(trade, "fills", []) or [])
     shares = sum(int(f.execution.shares) for f in fills)
     if shares > 0:
         num = sum(int(f.execution.shares) * float(f.execution.price)
@@ -442,6 +592,34 @@ class IBAdapter:
         self._positions_failed: tuple | None = None   # (monotonic, why)
         self._disconnected_since: float | None = None
         self._outage_alerted = False
+        # K5: the outage is a session up but with its open-orders sync unended
+        self._open_orders_unsynced = False
+        # K5 (D1 rounds 4-5), all per gateway session unless said otherwise:
+        # when THIS session was found with its connect-time open-orders sync
+        # unended (None: it has ended, or it never was) - while set, the
+        # pending open-orders request IS that sync (K4: no other is sent
+        # while one is pending); whether a guarded read already waited one
+        # full VENUE_HISTORY_TIMEOUT_S for it on this session; how many
+        # unsynced sessions the open OUTAGE has replaced since it last had no
+        # session at all (the replacement schedule's step,
+        # _unsynced_replace_interval); how many sessions the open outage
+        # found with their connect-time sync unended, reset only when it
+        # closes (the DOWN page's count, D1 round 6: the step restarts at a
+        # failed connect and skips a session a gateway FIN brought, so it
+        # under-counted); and whether the open outage saw a reconnect (the
+        # recovery notice's words)
+        self._sync_pending_since: float | None = None
+        self._sync_wait_failed = False
+        self._unsynced_replacements = 0
+        self._unsynced_sessions = 0
+        self._outage_reconnected = False
+        # the open outage's causes, for the recovery notice's words only (D1
+        # round 7; reset when it closes): it had a spell with no session (a
+        # failed connect, or a wait for the backoff with no session), and it
+        # had a session whose connect-time open-orders sync did not end. The
+        # cause a DOWN page states is recorded with them when it is sent.
+        self._outage_had_no_session = False
+        self._outage_had_unsynced = False
         # the position list of THIS session is trusted only once its
         # download is known to have ended (_session_positions); and why the
         # last account_cash() made no claim (it never raises): kind is
@@ -574,6 +752,22 @@ class IBAdapter:
                                 clientId=self.cfg.ib_client_id, timeout=15)
                 logger.info("connected to IB gateway (%s)", self.cfg.trading_mode)
                 self._apply_market_data_type()
+                if self._note_connect_sync():
+                    # K5: the boot session's open-orders sync did not
+                    # end - not usable for open-orders reads until it does:
+                    # the outage clock starts now (_reconnect's rule), its
+                    # cause on the ledger (the gateway watch reads it). Ended
+                    # by the first adapter call or keepalive after the late
+                    # end lands - the service loop runs the keepalive while
+                    # the ledger is open, whatever trades (D1 round 4).
+                    logger.warning("IB gateway connected, but its open-orders "
+                                   "sync did not end: not usable until it does")
+                    self._disconnected_since = time.monotonic()
+                    self._open_orders_unsynced = True
+                    self._outage_had_unsynced = True     # the notice's words (_recovered)
+                    self._unsynced_sessions = int(getattr(self, "_unsynced_sessions", 0) or 0) + 1
+                    self._outage("start", time.time())
+                    self._outage("mark_kind", KIND_OPEN_ORDERS_UNSYNCED)
                 return
             except Exception as exc:  # noqa: BLE001
                 logger.info("gateway not ready (%d/20): %s", attempt + 1, exc)
@@ -832,6 +1026,19 @@ class IBAdapter:
 
     def _require_connected(self) -> None:
         if self.ib.isConnected():
+            if getattr(self, "_disconnected_since", None) is not None:
+                # K5: connected while the outage is still open - this
+                # session's open-orders sync had not ended (_reconnect,
+                # _connect). Over once it has; until then the clock runs
+                # on to the 30-min DOWN page (once). Only the connect-time
+                # sync holds the outage open: a request a guarded read sent
+                # after it ended is that read's business (_open_orders_refusal).
+                now = time.monotonic()
+                if (self._open_orders_pending()
+                        and getattr(self, "_sync_pending_since", None) is not None):
+                    self._maybe_outage_alert(now)
+                else:
+                    self._recovered(now)
             return
         # M5: the gateway dropped (e.g. its daily auto-restart) — try to
         # reconnect with backoff instead of staying wedged. Still raises
@@ -847,7 +1054,9 @@ class IBAdapter:
     def _reconnect(self) -> None:
         """One backed-off reconnect attempt. Alerts only when the outage
         exceeds OUTAGE_ALERT_S (the daily gateway restart stays a
-        non-event); sends a recovery notice after an alerted outage."""
+        non-event); sends a recovery notice after an alerted outage. A
+        session whose open-orders sync has not ended does not end the
+        outage (K5)."""
         now = time.monotonic()
         self._proven = None             # whatever happens next, the proven session is gone
         if self._disconnected_since is None:
@@ -864,6 +1073,7 @@ class IBAdapter:
         if not getattr(self, "_in_keepalive", False):
             self._outage("blocked_call")
         if now < self._next_reconnect_ts:
+            self._outage_had_no_session = True  # waiting out the backoff with no session (_recovered's words)
             self._maybe_outage_alert(now)
             return
         try:
@@ -878,6 +1088,34 @@ class IBAdapter:
             # from the END of the attempt: a connect that hangs for its 15 s
             # timeout used to eat the whole first backoff step
             ended = time.monotonic()
+            self._sync_pending_since = None
+            if getattr(self, "_open_orders_unsynced", False):
+                # no session at all now: a plain outage again - and the
+                # gateway watch's login-stall clock starts here, not at the
+                # unsynced outage's start (a gateway restarting mid-outage is
+                # not a stalled login the moment it drops)
+                self._outage("mark_kind", None)
+            self._open_orders_unsynced = False  # no session at all: a plain outage
+            self._outage_had_no_session = True  # ... and the outage had such a spell (_recovered's words)
+            # ... and the replacement schedule starts over (D1 round 5): an
+            # unsynced session that a LATER connect brings is its spell's
+            # first, replaced UNSYNCED_REPLACE_WAITS x the bound after it.
+            # KNOWN, NOT BUILT (D1 round 5, recorded): only a FAILED attempt
+            # restarts it. A session the gateway closed (its FIN) followed by
+            # a reconnect that succeeds at once keeps the spell's interval (up
+            # to 15 min): a gateway-only restart already back by the attempt
+            # its FIN triggers, whose first session loses its answer, is not
+            # replaced in the decision's window (scripted gateway, after an
+            # unsynced night: no trade). A real restart refuses connections
+            # for tens of seconds (the JVM, the login), so that attempt fails
+            # first and lands here (scripted with a 30 s refusal: traded
+            # 161 s after decide_at). The fix would restart the schedule when
+            # the GATEWAY closed the session, not this adapter. The converse
+            # (D1 round 6, recorded): a gateway that refuses the reconnect
+            # made right after each replacement's drop (IB's 326) restarts it
+            # every time - _unsynced_replace_interval's record. The DOWN page
+            # counts the sessions tried with _unsynced_sessions, not this step.
+            self._unsynced_replacements = 0
             self._next_reconnect_ts = ended + self._reconnect_backoff
             self._reconnect_backoff = min(
                 self._reconnect_backoff * 2,
@@ -899,13 +1137,131 @@ class IBAdapter:
             self._order_errors.clear()  # order ids restart at nextValidId
         if hasattr(self, "_cancel_replies"):
             self._cancel_replies.clear()    # same: a stale 161 must label nothing
+        self._outage_reconnected = True     # the outage saw a reconnect (_recovered's words)
+        if self._note_connect_sync():
+            # K5: connected, but this session's connect-time open-orders
+            # sync did not end (IB.connect only LOGS that timeout,
+            # ib.py:2077-2084), so a guarded open-orders read waits for it
+            # (once per session) and then fails closed, KEEPING the session
+            # for its late end (_open_orders_refusal). NOT a recovery: the
+            # outage stays open (ledger with its cause, the 30-min DOWN
+            # page) until the sync ends (_require_connected), a kept session
+            # is replaced on the doubling schedule (_unsynced_replace_due),
+            # and the next attempt waits out the backoff as after a failed one. It
+            # used to count as recovered: on a gateway that never answers
+            # that request every read dropped the session, every reconnect
+            # "recovered", nothing paged.
+            ended = time.monotonic()
+            if not getattr(self, "_open_orders_unsynced", False):
+                self._outage("mark_kind", KIND_OPEN_ORDERS_UNSYNCED)
+            self._open_orders_unsynced = True
+            self._outage_had_unsynced = True    # the notice's words (_recovered)
+            self._unsynced_sessions = int(getattr(self, "_unsynced_sessions", 0) or 0) + 1
+            self._next_reconnect_ts = ended + self._reconnect_backoff
+            self._reconnect_backoff = min(
+                self._reconnect_backoff * 2,
+                float(getattr(self, "reconnect_backoff_max_s",
+                              RECONNECT_BACKOFF_MAX_S)))
+            logger.warning("IB gateway reconnected, but the new session's "
+                           "open-orders sync did not end: still not usable "
+                           "(next fresh session no sooner than %.0fs)",
+                           max(self._next_reconnect_ts - ended,
+                               self._unsynced_replace_interval()))
+            self._maybe_outage_alert(ended)
+            return
+        self._recovered(now)
+
+    def _note_connect_sync(self) -> bool:
+        """K5: right after a connect, is THIS session's connect-time
+        open-orders sync still unended (IB.connect only logged its timeout)?
+        Recorded per session (_sync_pending_since): while it stands, the
+        pending open-orders request is known to be that sync."""
+        pending = self._open_orders_pending()
+        self._sync_pending_since = time.monotonic() if pending else None
+        self._sync_wait_failed = False
+        return pending
+
+    def _recovered(self, now: float) -> None:
+        """The outage is over: a session is connected and its open-orders
+        sync has ended. Recovery notice after an alerted outage, state
+        resets, ledger closed. The notice says RECONNECTED only when the
+        outage saw a reconnect: an unsynced outage whose late sync ended on
+        the session it began on was never a reconnect (D1 round 4).
+
+        Its words name EVERY cause the outage had (D1 round 7), so they are
+        true of the whole outage and never contradict its DOWN page, whose
+        cause is always one of them (_maybe_outage_alert records it):
+          - only spells with no session (the gateway down, not logged in, or
+            refusing connects): the account could not be read - the plain
+            words, unchanged;
+          - only sessions whose connect-time open-orders sync did not end:
+            the open orders were unreadable, so nothing was traded or
+            flattened; positions and cash were read (D1 round 6: the plain
+            words contradicted that DOWN page, "positions and cash are read
+            normally");
+          - both: each "at times", since neither held for the whole outage -
+            a plain page, then a first session back that lost its answer (a
+            gateway still warming up); an unsynced page, then a reconnect the
+            gateway refused (IB's 326 after a replacement's drop, a restart
+            refusing connects), or a session lost inside the backoff.
+        Round 6 took the LAST cause alone, which in both mixed cases
+        contradicted the page and claimed something false of most of the
+        outage (D1 round 6 review). The page's cause alone would too: a
+        plain page, then an unsynced tail, would say the account could not
+        be read where it was. "READABLE again" (no reconnect) never comes
+        with a spell with no session, which only a reconnect ends. A spell
+        with no session that no call met (a FIN while the loop was parked,
+        the next attempt accepted at once) is not seen; no wording claims a
+        session was up throughout. An outage that was never paged sends no
+        notice."""
+        unsynced = getattr(self, "_open_orders_unsynced", False)
+        reconnected = getattr(self, "_outage_reconnected", False)
+        had_unsynced = unsynced or getattr(self, "_outage_had_unsynced", False)
+        had_no_session = getattr(self, "_outage_had_no_session", False)
+        self._open_orders_unsynced = False
+        self._sync_pending_since = None
+        self._sync_wait_failed = False
         down_s = now - self._disconnected_since
-        logger.info("IB gateway reconnected after %.0fs (same clientId: "
-                    "orderIds stay monotone, drain-once keys persist)",
-                    down_s)
+        logger.info("IB gateway %s after %.0fs (same clientId: orderIds stay "
+                    "monotone, drain-once keys persist)",
+                    "reconnected" if reconnected else
+                    "session's open-orders sync ended", down_s)
         if self._outage_alerted:
             from .alerts import send
-            if getattr(self, "mirror_only", False):
+            if had_unsynced and had_no_session:
+                meanwhile = (
+                    " (the Composer mirror could not trade or flatten "
+                    "meanwhile: at times no gateway session was up, so the "
+                    "account could not be read; at others open orders were "
+                    "unreadable while positions and cash were read; it keeps "
+                    "no resting stops at the venue)"
+                    if getattr(self, "mirror_only", False) else
+                    " (cycles were failing closed meanwhile: at times no "
+                    "gateway session was up, so the account could not be "
+                    "read; at others open orders were unreadable while "
+                    "positions and cash were read; GTC stops rested at the "
+                    "venue throughout)")
+            elif had_unsynced:
+                meanwhile = (
+                    " (open orders were unreadable, so the Composer mirror "
+                    "could not trade or flatten meanwhile; positions and cash "
+                    "were read; it keeps no resting stops at the venue)"
+                    if getattr(self, "mirror_only", False) else
+                    " (open orders were unreadable, so cycles were failing "
+                    "closed meanwhile; positions and cash were read; GTC stops "
+                    "rested at the venue throughout)")
+            else:
+                meanwhile = None
+            if meanwhile is not None:
+                if reconnected:
+                    send(f"🧬 IB gateway RECONNECTED after {down_s / 60:.0f} "
+                         f"min — executor resumed" + meanwhile)
+                else:
+                    send(f"🧬 IB gateway open orders READABLE again after "
+                         f"{down_s / 60:.0f} min — the session's late "
+                         f"open-orders sync ended (no reconnect was needed): "
+                         f"executor resumed" + meanwhile)
+            elif getattr(self, "mirror_only", False):
                 send(f"🧬 IB gateway RECONNECTED after {down_s / 60:.0f} min — "
                      f"executor resumed (the Composer mirror could not read "
                      f"the account or trade meanwhile; it keeps no resting "
@@ -921,6 +1277,11 @@ class IBAdapter:
         # multi-hour duration (counter-agent 2026-08-24, CRITICAL).
         self._disconnected_since = None
         self._outage_alerted = False
+        self._outage_reconnected = False
+        self._outage_had_no_session = False     # the next outage's causes start over
+        self._outage_had_unsynced = False
+        self._unsynced_replacements = 0     # the next unsynced outage's schedule starts over
+        self._unsynced_sessions = 0         # ... and its count of the sessions tried
         self._reconnect_backoff = RECONNECT_BACKOFF_S
         self._next_reconnect_ts = 0.0
         self._outage("end", time.time())
@@ -932,6 +1293,62 @@ class IBAdapter:
         self._outage_alerted = True
         self._outage("mark_alerted")
         from .alerts import send
+        if getattr(self, "_open_orders_unsynced", False):
+            # K5: the gateway is up and logged in, so say what is true of it
+            # (D1 round 4): the positions and the cash ARE read; it is the
+            # open orders that are not, so nothing can be sold or bought.
+            # The service's gateway watch skips its login-stall diagnosis
+            # for this cause (the ledger's kind): this page is the one page.
+            # The fresh sessions tried are every session this outage found
+            # unsynced but the first (D1 round 6: the schedule's own step
+            # restarts at a failed connect and skips a session a gateway FIN
+            # brought, so the page under-counted - it said none was tried when
+            # each reconnect after a replacement was refused once). The wait
+            # is the schedule's (_unsynced_replace_interval) as it runs: it
+            # doubles with each replacement and goes back to its first step
+            # after a failed connect (D1 round 7: "doubles each time" was
+            # false where each reconnect after a replacement is refused once,
+            # IB's 326, and the wait stays at its first step).
+            self._outage_had_unsynced = True    # the cause this page states (_recovered's words)
+            n = max(int(getattr(self, "_unsynced_sessions", 0) or 0) - 1, 0)
+            tried = ""
+            if n:
+                first = UNSYNCED_REPLACE_WAITS * VENUE_HISTORY_TIMEOUT_S
+                tried = (" A fresh gateway session was already tried and its "
+                         "sync did not end either;" if n == 1 else
+                         f" {n} fresh gateway sessions were already tried and "
+                         f"none synced;")
+                tried += (f" another is tried at the executor's next check "
+                          f"once the wait and the reconnect backoff have passed "
+                          f"(the wait {first:.0f} s at first, "
+                          f"doubling with each replacement up to "
+                          f"{UNSYNCED_REPLACE_MAX_S / 60:.0f} min, back to "
+                          f"{first:.0f} s after a failed connect), until one "
+                          f"syncs.")
+            why = (f" CAUSE: the gateway connects and answers, but the "
+                   f"open-orders request each new session sends at connect goes "
+                   f"unanswered, so no open-orders read can be trusted and "
+                   f"nothing is sold or bought.{tried} Restart the gateway "
+                   f"(Render → ibkr-executor → Restart service, then approve "
+                   f"the IBKR push).")
+            if getattr(self, "mirror_only", False):
+                send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} "
+                     f"min for trading — logged in, but the Composer mirror "
+                     f"cannot trade: open orders unreadable (positions and cash "
+                     f"are read normally). It keeps NO resting stops at the "
+                     f"venue: the positions stay as they are, and if this lasts "
+                     f"to the decision, 6 minutes before the close, that session "
+                     f"will NOT trade; a /kill flatten cannot sell either." + why)
+                return
+            send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} min "
+                 f"for trading — logged in, but the executor cannot trade: open "
+                 f"orders unreadable (positions and cash are read normally); "
+                 f"cycles fail closed (no entries/exits/stop ratchets), GTC "
+                 f"stops still rest at the venue." + why)
+            return
+        # this page is only ever sent with no session up (_reconnect, waiting
+        # out the backoff or after a failed connect): its cause, recorded
+        self._outage_had_no_session = True  # (_recovered's words)
         if getattr(self, "mirror_only", False):
             send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} min "
                  f"— the Composer mirror cannot read the account or trade. "
@@ -1095,9 +1512,19 @@ class IBAdapter:
         ledger and alerts as any other surface. One prove_live: a round
         trip, or none when the session was proven less than PROVE_FRESH_S
         ago (the mirror's own gate, a moment before). Never raises; False
-        while the gateway is unreachable."""
+        while the gateway is unreachable.
+
+        K5 (D1 rounds 4-5): a session whose connect-time open-orders sync
+        has not ended is replaced when the replacement schedule says it is old
+        enough and the backoff allows (_unsynced_replace_due) - a one-off lost
+        answer is then cured overnight, before any page, instead of at the
+        decision's first read, and a gateway whose answers come back without
+        a restart is found by the next fresh session. A healthy session never
+        reaches that step."""
         self._in_keepalive = True
         try:
+            if getattr(self, "_sync_pending_since", None) is not None:
+                self._replace_unsynced_session()
             self.prove_live()
             return True
         except Exception as exc:  # noqa: BLE001
@@ -1105,6 +1532,136 @@ class IBAdapter:
             return False
         finally:
             self._in_keepalive = False
+
+    def _unsynced_replace_due(self) -> bool:
+        """K5 (D1 rounds 4-5): is the current session - its connect-time
+        open-orders sync unended - due to be replaced by a fresh one? When
+        that sync has been unended for the schedule's current interval
+        (_unsynced_replace_interval, counted from when the connect gave up on
+        it) and the reconnect backoff allows an attempt now. Taken by
+        whichever call meets it first: the keepalive (an idle night) or a
+        guarded read that must refuse (a decision, a /kill flatten, a blend
+        cycle).
+
+        Why a schedule. The outage stays open across a replacement
+        (_reconnect's K5 branch), so a fresh session that syncs ends it - no
+        DOWN page, no wait at the decision - while one whose sync does not end
+        either is KEPT for its late end until the next replacement is due.
+        Round 4 replaced once per outage: when that fresh session lost its
+        answer too (a gateway still warming up after its nightly restart, a
+        spell of unanswered syncs that cleared with no FIN), it was kept for
+        as long as it lived and every guarded read failed - the mirror did
+        not trade and a /kill flatten could not sell - where one more fresh
+        session would have synced. The doubling keeps a gateway that never
+        answers that request free of churn (each connect blocks the loop
+        thread for its 15 s sync wait): two replacements are never closer
+        together than the current interval, since each is counted from the
+        connect of the session it replaces, which came after the one before.
+        The schedule starts over when the outage has no session at all
+        (_reconnect's failure branch) and when the outage ends (_recovered)."""
+        since = getattr(self, "_sync_pending_since", None)
+        if since is None or getattr(self, "_disconnected_since", None) is None:
+            return False
+        now = time.monotonic()
+        return (now - since >= self._unsynced_replace_interval()
+                and now >= getattr(self, "_next_reconnect_ts", 0.0))
+
+    def _unsynced_replace_interval(self) -> float:
+        """K5 (D1 round 5): how long the current session's connect-time sync
+        may stay unended, from when the connect gave up on it, before the
+        session is replaced: UNSYNCED_REPLACE_WAITS x VENUE_HISTORY_TIMEOUT_S
+        for the spell's first replacement (40 s), twice the previous interval
+        for each later one (80, 160, 320, 640 s), never more than
+        UNSYNCED_REPLACE_MAX_S (15 min).
+
+        KNOWN, NOT BUILT (D1 round 6, recorded; measured on the simulated
+        clock and on scripted gateways, never on a real IB gateway):
+        - LATE versus LOST. Both are an unended sync, and the adapter cannot
+          tell them apart before it drops the session; the schedule takes
+          the answer as lost, the failure the reviews scripted (neither a
+          lost nor a late connect-time answer has been seen on a real
+          gateway; round 4 waited for a late one by keeping its second
+          session for good, and when that session's answer was lost too
+          nothing traded). Cost: a gateway that answers EVERY new session's
+          connect-time open-orders request a fixed time late, after a drop
+          at the decision (15:54:20; measured on the simulated clock at 1-s
+          steps with the loop parked until decide_at, and in brackets with
+          it ticking at the drop): up to 95 s late it trades as round 4 did
+          (the same sessions, the same instants); 96-122 s (96-128 s) late
+          it trades ~95 s later, close to the cancel instant (buys as late as
+          15:58:59); from 123 s (129 s) it sends nothing, where round 4,
+          keeping session 2 for its late end, still traded in full up to
+          217 s (223 s) and sent its sells alone, no buy, at 218 s (224 s);
+          from 219 s (225 s) neither sends anything. Overnight, more than ~15
+          min late never ends the outage (66 replacements by the next
+          decision, one DOWN page, that decision not traded; round 4 kept its
+          second session, closed the outage when the late end landed and
+          traded). A design that keeps both (probe a new session on a second
+          clientId before dropping the kept one) is not built. Pinned:
+          tests/test_mirror_d1r6.py part P.
+        - A failed connect restarts the schedule (_reconnect). If a real
+          gateway refuses an immediate same-clientId reconnect (IB error
+          326), the interval never doubles past 40 s: measured ~12 connect
+          attempts and 6 sessions an hour idle (one attempt per 300 s
+          keepalive), ~72 attempts and 36 sessions an hour during a /kill
+          flatten, bounded by the reconnect backoff (30 s; 45 s between
+          attempts at the least, with a refused connect modelled as waiting
+          out its 15 s) - no storm. The DOWN page words the wait as it runs
+          (D1 round 7: 40 s at first, doubling with each replacement, back
+          to 40 s after a failed connect; round 6's "doubles each time" was
+          false here) and says the next session comes at the executor's next
+          check once that wait and the reconnect backoff have passed (when idle, the keepalive every
+          poll_seconds, 300 s), and its count of the sessions tried stays
+          true (_unsynced_sessions).
+        - The cap's cost. After a spell long enough to reach 900 s, a
+          gateway that heals with no FIN is found up to ~15 min later. Three
+          lost answers met at the decision do not trade (the 4th session is
+          due ~325 s after decide_at, past the cancel instant); a /kill
+          flatten sells after ~322 s with three lost, ~658 s with four.
+        - A gateway-only restart that accepts at once keeps the interval:
+          the schedule does not restart on a gateway FIN (_reconnect's
+          record).
+        - Considered, not built: the first step (40 s) inside the decision
+          window and during a flatten (it costs the late band from ~55 s:
+          every answer later than that is replaced before it lands); a reset
+          on a gateway FIN; a ~1 s pause between a replacement's drop and
+          its reconnect.
+        - Pre-existing (mirror.py _summary/_finish): a session lost to an
+          outage inside the window ends with an info-level "traded" summary
+          (sold 0/N ...); the loud lines are the per-order red "NOT sent"
+          alerts."""
+        first = UNSYNCED_REPLACE_WAITS * VENUE_HISTORY_TIMEOUT_S
+        n = max(int(getattr(self, "_unsynced_replacements", 0) or 0), 0)
+        return min(first * 2.0 ** min(n, 32), max(UNSYNCED_REPLACE_MAX_S, first))
+
+    def _replace_unsynced_session(self) -> None:
+        """K5 (D1 rounds 4-5), the keepalive's half of _unsynced_replace_due:
+        drop the session so that prove_live's reconnect tries a FRESH one.
+        The socket is drained first: a late end already waiting in it means
+        the sync HAS ended (prove_live's _require_connected then ends the
+        outage) and nothing is replaced."""
+        if not self._unsynced_replace_due() or not self.ib.isConnected():
+            return
+        self._drain()
+        if not self.ib.isConnected() or not self._open_orders_pending():
+            return
+        self._spend_unsynced_replacement()
+
+    def _spend_unsynced_replacement(self) -> None:
+        """One step of the replacement schedule: count it (the next interval
+        doubles) and drop the session; the caller's next venue call
+        reconnects through _reconnect, whose backoff _unsynced_replace_due
+        has already found clear."""
+        waited = time.monotonic() - (self._sync_pending_since or 0.0)
+        self._unsynced_replacements = int(getattr(self, "_unsynced_replacements", 0) or 0) + 1
+        logger.warning("IB gateway session's open-orders sync has not ended "
+                       "%.0fs after the connect: fresh session %d of this "
+                       "unsynced outage is tried (if its sync does not end "
+                       "either, it is replaced %.0fs after its connect; the "
+                       "outage stays open until a session syncs)", waited,
+                       max(int(getattr(self, "_unsynced_sessions", 0) or 0), 1),
+                       self._unsynced_replace_interval())
+        self._drop_session()
 
     def _positions_pending(self) -> bool | None:
         """Has this session's connect-time position download NOT ended?
@@ -1166,7 +1723,15 @@ class IBAdapter:
             self._stock_contracts[symbol] = c
         return c
 
-    def _open_orders_unanswered(self) -> bool:
+    def _open_orders_pending(self) -> bool:
+        """Is an open-orders request of this session unanswered right now
+        (no wait)? The key stays in wrapper._futures until an openOrderEnd
+        pops it (wrapper.py:384-395, 719-720) or the session is reset; a
+        request that timed out leaves it there, its future cancelled."""
+        futures = getattr(getattr(self.ib, "wrapper", None), "_futures", None)
+        return isinstance(futures, dict) and "openOrders" in futures
+
+    def _open_orders_unanswered(self) -> str | None:
         """K4: is an earlier open-orders request still unanswered on this
         session? ib_async keys EVERY open-orders request "openOrders"
         (ib.py:2263-2271), a new request replaces a pending one
@@ -1178,15 +1743,114 @@ class IBAdapter:
         (order_absent_today) - ITS late end would end a new request with a
         partial list, and a partial "open orders" answer reads a working
         order as gone: a resting SELL undercounted (a short), or an order
-        called absent and placed again. No such request = an honest answer."""
-        futures = getattr(getattr(self.ib, "wrapper", None), "_futures", None)
-        return isinstance(futures, dict) and "openOrders" in futures
+        called absent and placed again. No such request = an honest answer.
+
+        PROTOCOL ASSUMPTION the whole argument rests on (IB's documented
+        behaviour; NOT verified against a live gateway - every test here runs
+        on scripted ones): the gateway sends exactly ONE openOrderEnd per
+        open-orders request, after that request's rows. An unsolicited
+        openOrderEnd arriving inside a later request's answer would end it
+        early with a partial list, and ib_async 2.1 offers no client-side
+        defence (the message carries no request id). K4 had the same
+        exposure; nothing here widens it.
+
+        K5: a pending one is first WAITED for, pumping, at most
+        VENUE_HISTORY_TIMEOUT_S per read: once its own end has arrived (the
+        key popped) no late end can follow - every request site refuses to
+        start one while the key is there, so at most one is ever
+        outstanding - and the new request is honest. Without the wait a
+        gateway that answers the connect-time request late on every session
+        had every read drop the session, and the mirror never traded.
+        Nothing pending (a normal day): no wait, no pump - one dict lookup.
+        A session's connect-time sync is waited for in FULL once per session
+        (D1 round 4): once one read has waited the whole bound for it, a
+        later read on the same session fails at once while it is still
+        pending (_require_live has drained the socket first, so an end that
+        has arrived is seen), instead of blocking the loop thread another
+        VENUE_HISTORY_TIMEOUT_S on every guarded read for as long as the
+        session lasts.
+
+        Returns None when nothing is pending (send the request), else why
+        the read must fail closed - what _open_orders_refusal acts on:
+          "sync"    this session's connect-time sync (_sync_pending_since)
+          "request" an earlier request of this session's own guarded reads
+                    (order_absent_today's timed-out one), or one this adapter
+                    did not see start (a session it did not connect itself)
+          "closed"  the session closed during the wait: nothing answered here
+
+        KNOWN, NOT BUILT (D1 round 4, recorded): a gateway that answers the
+        connect-time request but never a LATER reqAllOpenOrders makes every
+        read time out and drop the session, and every reconnect counts as
+        recovered - the outage never lasts, so no DOWN page (the mirror's
+        red alerts still quote "restart the gateway if this persists"). The
+        fix would track answered open-orders requests across sessions."""
+        if not self._open_orders_pending():
+            self._sync_pending_since = None     # if it was the sync, it has ended
+            return None
+        sync = getattr(self, "_sync_pending_since", None) is not None
+        if sync and getattr(self, "_sync_wait_failed", False):
+            return "sync"                       # waited for in full once on this session already
+        deadline = time.monotonic() + VENUE_HISTORY_TIMEOUT_S
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                if sync:
+                    self._sync_wait_failed = True
+                return "sync" if sync else "request"
+            try:
+                self.ib.sleep(min(WAIT_TICK_S, left))
+            except Exception:  # noqa: BLE001
+                return "closed"     # the pump that met the close (_drain): nothing answered here
+            if not self.ib.isConnected():
+                return "closed"
+            if not self._open_orders_pending():
+                self._sync_pending_since = None
+                return None
+
+    def _open_orders_refusal(self, why: str) -> str:
+        """K5 (D1 rounds 4-5): what a guarded read that must NOT send its
+        open-orders request (_open_orders_unanswered said why) does with the
+        session, and the text it fails closed with.
+          "request": DROPPED, so the next read runs on a fresh session (that
+                     request's late end can never reach a new one).
+          "sync":    KEPT. Its late end can still land (a gateway answering
+                     every session's sync 45 s late now trades), and a drop
+                     on every read cannot help when every new session sends
+                     the same request - except when the replacement schedule
+                     says it is due (_unsynced_replace_due): the read then
+                     takes the replacement itself, so a decision or a /kill
+                     flatten that meets a lost answer recovers in-process.
+          "closed":  nothing to drop; the next call reconnects.
+        K4 is untouched either way: nothing is sent while a request is
+        pending, and a drop resets the wrapper's requests (ib.py:405-406)."""
+        if why == "request":
+            self._drop_session()
+            return (f"an earlier open-orders request is still unanswered after "
+                    f"a {VENUE_HISTORY_TIMEOUT_S:.0f}s wait: the session is "
+                    f"dropped and reconnected (restart the gateway if this "
+                    f"persists)")
+        # each text fits the 160 characters the mirror's red alert quotes of
+        # it (mirror.one_line(exc, 160)): the remedy must not be cut off
+        if why == "sync":
+            if self._unsynced_replace_due():
+                self._spend_unsynced_replacement()
+                return ("this session's connect-time open-orders sync is still "
+                        "unanswered: nothing is read, and a fresh session is "
+                        "tried (restart the gateway if this persists)")
+            return ("this session's connect-time open-orders sync is still "
+                    "unanswered: nothing read, session kept for its late answer "
+                    "(restart the gateway if this persists)")
+        return ("the IB gateway session closed while this read waited for an "
+                "earlier open-orders request: nothing was read (the next call "
+                "reconnects)")
 
     def _drop_session(self) -> None:
         """Disconnect so the next surface reconnects on a fresh session
         (ib_async's disconnect resets the wrapper's requests and caches,
         ib.py:405-406)."""
         self._proven = None
+        self._sync_pending_since = None
+        self._sync_wait_failed = False
         try:
             self.ib.disconnect()
         except Exception:  # noqa: BLE001
@@ -1198,13 +1862,14 @@ class IBAdapter:
         session that the connect-time sync missed)."""
         trades = list(self.ib.trades())
         if refresh:
-            if self._open_orders_unanswered():
-                self._drop_session()
-                raise ExecutorConnectionError(
-                    "an earlier open-orders request is still unanswered on "
-                    "this session, so the venue's answer could not be told "
-                    "from that request's late end: the session is dropped "
-                    "and reconnected (order history unavailable this time)")
+            why = self._open_orders_unanswered()
+            if why:
+                raise ExecutorConnectionError(self._open_orders_refusal(why))
+            # the wait above may have pumped: a late sync can have delivered
+            # one of OUR earlier orders, which may have filled since and so be
+            # in neither answer below - the dedupe must still see it
+            # (place_stock_order: a second SELL of the same shares is a short)
+            trades = list(self.ib.trades())
             seen = {(t.order.orderId, getattr(t.order, "permId", 0))
                     for t in trades}
             # BOUNDED (2026-09-08): RequestTimeout=0 waits forever, and a
@@ -1224,6 +1889,15 @@ class IBAdapter:
                 # answered from the venue's EXECUTION reports instead (see
                 # find_stock_order), which the connect-time sync already
                 # delivers and reqExecutions refreshes reliably.
+                # KNOWN, NOT BUILT (D1 round 4, recorded): completed orders
+                # share K4's key hazard - ib_async keys every such request
+                # "completedOrders" (ib.py:2273-2276) and completedOrdersEnd
+                # carries no request id (wrapper.py:727-733), so a timed-out
+                # connect-time reqCompletedOrders answering late could end
+                # this one with the connect-time list while history_complete()
+                # still reads True. Its weak link: an order that completed
+                # after the connect and that this session does not know.
+                # The fix would be the K4/K5 pending check on that key.
                 for fn, args, required in (("reqAllOpenOrders", (), True),
                                            ("reqCompletedOrders", (False,), False)):
                     try:
@@ -1253,6 +1927,26 @@ class IBAdapter:
                             f"venue order history unavailable - cycle fails "
                             f"closed (restart the gateway if this persists)"
                         ) from exc
+                    except ConnectionError as exc:
+                        if required:
+                            # D1 round 4 (NOTE 6): the session died while the
+                            # REQUIRED request was in flight ("Socket
+                            # disconnect", wrapper.py:361-365; "Not
+                            # connected", client.py:250-251). It used to be
+                            # logged at debug and skipped, so the caller got
+                            # this session's cached trades WITHOUT the venue's
+                            # list: cancel_stock_order could then answer "not
+                            # found" (False) for an order still resting. The
+                            # same exception as a timeout or _require_live's;
+                            # every caller already handles it from this call.
+                            raise ExecutorConnectionError(
+                                f"{fn} failed: the IB gateway session closed "
+                                f"while it was in flight ({exc}): venue order "
+                                f"history unavailable (the next call "
+                                f"reconnects)") from exc
+                        logger.debug("%s failed: %s", fn, exc)
+                        self._completed_orders_unavailable = True
+                        continue
                     except Exception as exc:  # noqa: BLE001
                         logger.debug("%s failed: %s", fn, exc)
                         if not required:
@@ -1285,8 +1979,8 @@ class IBAdapter:
         # one orderRef can span a rejected-then-retried attempt: the LATEST
         # orderId is the order that binds (counter-agent LOW)
         latest = max(getattr(f.execution, "orderId", 0) for f in by_id.values())
-        fs = [f for f in by_id.values()
-              if getattr(f.execution, "orderId", 0) == latest]
+        fs = _current_fills([f for f in by_id.values()     # a correction counts once
+                             if getattr(f.execution, "orderId", 0) == latest])
         trade = type("_Synth", (), {})()
         trade.fills = fs
         trade.order = type("_O", (), {})()
@@ -1646,16 +2340,17 @@ class IBAdapter:
         its own. An EARLIER open-orders request still unanswered (K4,
         _open_orders_unanswered) is different: this request's answer could
         be ended by that one's late reply with a partial list and call a
-        working order absent, so nothing is proven (None) and the session is
-        dropped, so the next ask runs on a fresh one."""
+        working order absent, so it is waited for (K5, bounded), and if it
+        stays unanswered nothing is proven (None); the session is dropped
+        when that request was a guarded read's, kept when it is the
+        session's own connect-time sync (_open_orders_refusal)."""
         self._require_live()
         if self._find_trade_by_client_id(client_order_id) is not None:
             return False
-        if self._open_orders_unanswered():
-            logger.warning("order_absent_today: an earlier open-orders "
-                           "request is still unanswered on this session - "
-                           "nothing proven; the session is dropped")
-            self._drop_session()
+        why = self._open_orders_unanswered()
+        if why:
+            logger.warning("order_absent_today: nothing proven - %s",
+                           self._open_orders_refusal(why))
             return None
         prev = getattr(self.ib, "RequestTimeout", 0)
         try:
@@ -1845,7 +2540,7 @@ class IBAdapter:
                 keys.add(str(perm))
             if keys & self._emitted_fill_keys:
                 continue                      # never re-emit
-            fills = list(getattr(trade, "fills", []) or [])
+            fills = _current_fills(getattr(trade, "fills", []) or [])   # a correction counts once
             shares = sum(int(f.execution.shares) for f in fills)
             if shares <= 0:
                 # cancelled untouched: no event, and NOT marked emitted - a
@@ -2037,16 +2732,17 @@ class IBAdapter:
         the venue's list: it is no longer open and can sell nothing more.
 
         That completeness holds only when no EARLIER open-orders request is
-        unanswered (K4, _open_orders_unanswered): its late end could finish
-        this request with a partial list. Then the session is dropped and
-        this read fails closed (the caller holds the sell and asks again)."""
+        unanswered (K4, _open_orders_unanswered; it also rests on IB sending
+        one openOrderEnd per request, see there): its late end could finish
+        this request with a partial list. It is waited for (at most
+        VENUE_HISTORY_TIMEOUT_S, K5); still unanswered, this read fails
+        closed (the caller holds the sell and asks again) and the session is
+        dropped - or kept, when the unanswered one is the session's own
+        connect-time sync (_open_orders_refusal)."""
         self._require_live()
-        if self._open_orders_unanswered():
-            self._drop_session()
-            raise ExecutorConnectionError(
-                "an earlier open-orders request is still unanswered on this "
-                "session, so the venue's answer could not be told from that "
-                "request's late end: the session is dropped and reconnected")
+        why = self._open_orders_unanswered()
+        if why:
+            raise ExecutorConnectionError(self._open_orders_refusal(why))
         prev = getattr(self.ib, "RequestTimeout", 0)
         try:
             self.ib.RequestTimeout = VENUE_HISTORY_TIMEOUT_S
@@ -2151,7 +2847,7 @@ class IBAdapter:
         if trade is None:
             trade = self._find_trade_by_client_id(client_order_id,
                                                   refresh=True)
-        own = list(getattr(trade, "fills", []) or []) if trade is not None else []
+        own = _current_fills(getattr(trade, "fills", []) or []) if trade is not None else []
         own_shares = sum(int(f.execution.shares) for f in own)
         by_id: dict = {}
         for f in own:
@@ -2181,7 +2877,9 @@ class IBAdapter:
         if trade is None and not by_id:
             return None
         src = type("_Fills", (), {})()
-        src.fills = list(by_id.values())
+        # a correction and what it corrects can come one from each source:
+        # the merged list counts each execution once, at its latest correction
+        src.fills = _current_fills(list(by_id.values()))
         src.orderStatus = (trade.orderStatus if trade is not None
                            else type("_S", (), {"avgFillPrice": 0.0})())
         shares = sum(int(f.execution.shares) for f in src.fills)

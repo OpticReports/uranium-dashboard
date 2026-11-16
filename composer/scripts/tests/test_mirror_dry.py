@@ -1070,6 +1070,38 @@ class M7Daily(NoNetwork):
         self.assertEqual(self.rows()[3]["action"], "skip")
         self.assertEqual(self.rows()[3]["weights"].keys(), {"AAA"})
 
+    def test_a_half_day_frozen_feed_refusal_is_named_in_the_no_decision_alert(self):
+        """the brain refused SPY's half-day bar as a frozen feed (mirror_brain.build: every engine's note leads with the
+        halt line, the why is the problems line led by 'half-day, a frozen feed: '): the alert quotes that line, the
+        reason whole, then the note (33850e01 quoted the halt line alone). Twin: the same refusal without that line
+        quotes the note as before"""
+        self.day(D1)
+        halt = "SPY's price is not from the bar ending 15:54:00 ET (its last traded bar ends 15:46:00)"
+        why = "every one of SPY's bars without volume since that trade closed at one price, not the trade's"
+        line = (f"half-day, a frozen feed: {why} (its last trade: the bar ending 15:46:00 ET; FMP's SPY bar ending "
+                f"15:54:00 ET has no volume): not taken as the decision bar")
+        real = self.build
+
+        def refused(with_line):
+            def build(now, quotes=None, fetch=None, pinned=False):
+                p = real(now, pinned=pinned)
+                p["engines"] = {e: {"status": "unavailable", "note": halt} for e in p["engines"]}
+                p["problems"] = [halt] + ([line] if with_line else [])
+                return p
+            return build
+        self.build = refused(True)
+        lines, alerts = self.day(D2)
+        self.assertEqual(len(alerts), 1, alerts)
+        self.assertTrue(alerts[0].startswith(f"MIRROR DRY NO DECISION — {D2} 15:54 ET: HG, HARV had no target from the "
+                                             f"brain (half-day, a frozen feed: {why} (its last trade: "), alerts[0])
+        self.assertIn(f"not taken as the decision bar; {halt}); those sleeves stood still.", alerts[0])
+        self.build = refused(False)
+        lines, alerts = self.day(D2, force=True)
+        self.assertEqual(alerts, [f"MIRROR DRY NO DECISION — {D2} 15:54 ET: HG, HARV had no target from the brain ({halt}); "
+                                  f"those sleeves stood still."])
+        import mirror_brain as mb
+        self.assertTrue(line.startswith(mb.FROZEN_FEED))                     # the words the brain leads that line with
+
     def test_a_sleeve_the_brain_does_not_price_is_alerted(self):
         self.day(D1)                                                       # HG now holds AAA
         real = self.build

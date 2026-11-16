@@ -40,7 +40,20 @@ Payload:
      "asof_utc": T,                    # the instant the decision is as of
      "built_utc": ISO,                 # wall clock when the build FINISHED
      "decision_bar": {"end_utc": T, "spy_utc": ISO, "complete": true},
-                                       # spy_utc: end of the bar SPY's price is from; complete: it is T
+                                       # spy_utc: end of the bar SPY's price is from; complete: it is T.
+                                       # NYSE HALF-DAY (amended 2026-11-13; the brain's shadow_runner.HALF_DAYS):
+                                       # complete may also hold with spy_utc BEFORE T, by at most 15 minutes,
+                                       # when FMP's SPY bar ending at T has no volume (FMP drops volume on
+                                       # half-days) and SPY is priced at its own last trade: only while SPY's
+                                       # bars without volume since that trade moved off its price, closed at 2
+                                       # or more prices and not 3 or more in a row at one price up to T (amended
+                                       # 2026-11-13, round 5: SPY's own, stricter rule; round 6: a trade ending
+                                       # within 2 minutes of T, the 2 minutes included, needs none of those
+                                       # tests; round 7: only while at least one other ticker of the trees - not
+                                       # a sibling - really traded in the bar ending AT T, else the tests apply
+                                       # to it too), and at least half the trees' tickers really traded in the 2
+                                       # minutes to T (mirror_brain.py's docstring). On a full day spy_utc ==
+                                       # end_utc == T.
      "replay": false, "close_et": "16:00",
      "engines": {NAME: {"status": "ok" | "unavailable", "symphony", "version", "rule", "corridor",
                         "target": {ticker: weight}, "label", "stale": [...], "caveats": [...],
@@ -60,8 +73,13 @@ Payload:
      "quotes": {...}, "problems": [...]}
 
 Engine status rules (brain):
-- every engine "unavailable" unless decision_bar.complete (SPY priced from the bar ending at T) and
-  the feed is alive (breadth rule, measured: see the fix brief);
+- every engine "unavailable" unless decision_bar.complete (SPY priced from the bar ending at T; on a
+  half-day, as amended above) and the feed is alive (breadth rule, measured: see the fix brief; on a
+  half-day quotes.breadth gives the real trades ('recent') and the ones counted on bars without volume
+  ('leaned') apart, and 'frozen': those weighed and NOT counted, every bar without volume since the
+  ticker's last trade at that trade's own price - SPY: or failing its stricter rule. A ticker of the book
+  stuck at another price is counted, bounded by the floor of real trades and the 15-minute age; the
+  floor is the book's, not each engine's);
 - an engine is "unavailable" when its indicators are a session short (a decision ticker in `short`);
 - an engine is "unavailable" with a note naming both versions when sync state is "drift"; when the
   state is "none" (no attestation for this session) it trades with a line in `problems`, unless env
@@ -82,7 +100,14 @@ and posts it.
 ## Executor checks (lead)
 
 schema == 2, kind, pinned is true, replay false, session == today's, asof_utc == decide_utc,
-decision_bar.complete, built_utc at most 90 s old and not in the future, engines and prices are
-dicts. Default decide offset 25 s (FMP publishes a bar 10-25 s after it ends).
+decision_bar.complete with end_utc == decide_utc and spy_utc == end_utc - or, ONLY on an early close
+by the executor's OWN calendar (app/blend.py NYSE_EARLY_CLOSES) that the payload's close_et and the
+brain's clock (/mirror/session close_utc) also give, spy_utc before end_utc by at most 15 minutes
+(HALF_DAY_SPY_MAX_S = the brain's QUIET_TRADE_MAX_S, tied by E11 / composer H10; app/mirror.py
+_validate; tests/test_mirror_halfday.py E5, E8) - built_utc not in the future and not before the
+instant it decides, each within the 60 s clock-skew allowance (its age is NOT checked: a pinned payload
+is immutable, and a restart late in the window trades the one built at the instant), engines and prices
+are dicts. Default decide offset 25 s (FMP publishes a bar 10-25 s after it ends). The two calendars
+(shadow_runner.HALF_DAYS / NYSE_HOLIDAYS and blend's) are tied by a test on each side (E6; composer H10).
 Dividends: a receivable per sleeve from the shares it held at the prior close of the ex-date;
 credited from the pay date. Splits: sleeve shares rescaled before the pre-trade check.
