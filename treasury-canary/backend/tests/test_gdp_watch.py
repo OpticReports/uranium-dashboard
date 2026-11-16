@@ -273,10 +273,11 @@ def test_a_line_outside_its_own_band_is_flagged_with_its_record(payload):
     assert list(flagged) == ["CHN"] and flagged["CHN"]["forecast"]["line_vs_band"] == "above"
     r = flagged["CHN"]["record"]
     assert (r["n_over_h4"], r["n_h4"]) == (31, 32) and r["median_miss_h4"] == gw.BACKTEST["bias_h4"]["CHN"]["median"]
-    assert ("For China the line sits above its band: the rule over-projected it in 31 of 32 backtests (median miss "
-            f"{gw._f(r['median_miss_h4'], sign=True)} points)") in " ".join(payload["summaries"])
+    assert ("For China the line sits above its 50% band: the rule over-projected it in 31 of 32 backtests (median miss "
+            f"{gw._f(r['median_miss_h4'], sign=True)} points), so past outcomes landed below the line, where the band "
+            "sits.") in " ".join(payload["summaries"])
     tab = open(os.path.join(ROOT, "frontend", "src", "components", "GdpTab.tsx"), encoding="utf-8").read()
-    assert "line_vs_band" in tab and "its own band" in tab
+    assert "line_vs_band" in tab and "its own 50% band" in tab and "landed in the band" not in tab   # 50% band, named
 
 
 def test_the_rule_vs_trend_choice_is_recorded_as_fragile():
@@ -302,6 +303,8 @@ def test_population_breaks_are_noted_and_the_note_matches_the_series(snap, paylo
     assert f"({min(sau):+.1f}% to {max(sau):+.1f}%)" in notes["SAU"]
     assert f"drops {-g['POL'][2021]:.1f}% in 2021" in notes["POL"]
     assert abs(g["POL"][2020]) < 0.5 and abs(g["POL"][2022]) < 0.5
+    smooth = {str(y): 100.0 * 1.01 ** (y - 2000) for y in range(2000, 2031)}          # a vintage without the breaks
+    assert gw.pop_note("SAU", smooth) is None and gw.pop_note("POL", smooth) is None
 
 
 # ---------------------------------------------------------------------------- the build review's fixes (2026-11-16)

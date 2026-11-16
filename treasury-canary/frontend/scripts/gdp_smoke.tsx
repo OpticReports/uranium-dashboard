@@ -46,7 +46,7 @@ const b = run("two", GDP_FIXTURE, { selected: ["USA", "CHN"] });
 eq("two", count(b, AREAS), 4, "drawn band areas");
 const usF = fx("USA").forecast!, cnB = fx("CHN").forecast!.band80.gdp![3]!;
 must("two", b, [`${pct(usF.gdp[3]!)} (${usF.quarters[3]})`, `${pct(cnB[0])} to ${pct(cnB[1])}‡`]);   // the fixture's numbers
-must("two", b, [">USA</text>", ">CHN</text>", "80% band", "(line above its band*)", "* China: the line sits above its own band",
+must("two", b, [">USA</text>", ">CHN</text>", "80% band", "(line above its 50% band*)", "* China: the line sits above its own 50% band",
   "in 31 of 32 backtests (median miss -1.2 points)", "‡ China: band in-sample only"]);
 if (b.includes("United States: the line sits")) throw new Error("two: only China's line sits outside its band");
 
@@ -66,7 +66,7 @@ if (f.includes("population series")) throw new Error("fiscal-pop: population not
 const g = run("fiscal-pop-pc", GDP_FIXTURE, { selected: ["IND", "SAU", "POL"], measure: "per_capita" });
 must("fiscal-pop-pc", g, ["Saudi Arabia: the IMF population series swings", "Poland: the IMF population series drops 2.3% in 2021"]);
 const h = run("past-range", GDP_FIXTURE, { range: "custom", from: "2008-01-01", to: "2010-12-31", selected: ["CHN"] });
-must("past-range", h, [")*</td>", "* China: the line sits above its own band"]);  // the table keeps its marks
+must("past-range", h, [")*</td>", "* China: the line sits above its own 50% band"]);  // the table keeps its marks
 
 // 4. a custom range in the past: no projection, and the page says why
 const d = run("custom-past", GDP_FIXTURE, { range: "custom", from: "2008-01-01", to: "2010-12-31", selected: ["USA"] });

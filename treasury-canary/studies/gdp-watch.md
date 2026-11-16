@@ -19,7 +19,7 @@ Shipped as the **GDP** tab on treasury-canary (`GET /gdp-watch`). Study code and
 - **Sample:** 20 economies, origins 2006-Q1 to 2025-Q3: 1,340 projections per horizon with the pandemic quarters out, 1,500 with them in. The pool is not uniform: China's origins start in 2015-Q4 (32 at 4q), Saudi Arabia's in 2015-Q1 (35).
 - **Against naive, four quarters ahead:** the rule does better in 18 of 20 economies, a median of 29% less error across all 20 (from +43% UK to +6% Brazil among the 18). That 18 is a point count: in 14 of the 20, the block-bootstrap 95% interval clears zero.
 - **Naive did better** in China (−14%) and Indonesia (−20%). Neither interval excludes zero. Both official series are very smooth.
-- **Against trend-only, it is noise.** AR(1) is 2.9% better with the pandemic out (95% interval −1% to +8%). Trend had the lower error in 12 of 20 economies. With the pandemic in, trend wins at every horizon (2.16 vs 2.24 at 4q), and the selection rule would have picked it by 3.0%. Today the two lines differ by at most 0.4 points.
+- **Against trend-only, it is noise.** AR(1) is about 3% better with the pandemic out (95% interval −1% to +8%). Trend had the lower error in 12 of 20 economies. With the pandemic in, trend wins at every horizon (2.16 vs 2.24 at 4q), and the selection rule would have picked it, by about 3%. Today the two lines differ by at most 0.4 points.
 - **Bands, tested out of sample.** Fitted on origins up to 2015-Q4 and tested on 2016 onward, on 18 economies:
 
   | Band | Pandemic out (n = 553) | Pandemic in (n = 697) |
@@ -30,7 +30,7 @@ Shipped as the **GDP** tab on treasury-canary (`GET /gdp-watch`). Study code and
   - By economy at 4q, the 80% band held from 58% (France) to 100% (Germany).
   - China and Saudi Arabia have too little history before 2016, so their bands are in-sample only.
   - The bands drawn on the tab use every miss since 2006, so they are in-sample too.
-- **China's line sits above its own band.** The rule over-projected China in 31 of 32 backtests (median miss −1.19). The tab flags this in the legend, the table and the takeaways. No correction was applied (§2).
+- **China's line sits above its own 50% band.** The rule over-projected China in 31 of 32 backtests (median miss −1.19), so past outcomes landed below the line, where the band sits. The tab flags this in the legend, the table, the hover and the takeaways. No correction was applied (§2).
 - **The rule lags slowdowns.** Since 2023 its 4q projections ran too high in most economies. Mean miss, n = 14–15 per economy:
 
   | Germany | Poland | China | Turkey | Netherlands |
@@ -48,10 +48,12 @@ All checks are point in time, at 4q, with the pandemic out (`studies/gdp_watch/e
 
 | Candidate | n | Result | Mirror / placebo |
 |---|---|---|---|
-| Shift each line by its own past median miss (8 or more past misses whose target had printed) | 1,120 | **+12.0% error (worse)**; worse at every horizon (+4.0% at 1q to +12.0% at 4q) | Sign flipped: +9.5%. Another economy's miss: +10.0% |
+| Shift each line by its own past median miss (8 or more past misses whose target had printed) | 1,120 | **+12.0% error (worse)**; worse at every horizon (+4.0% at 1q to +12.0% at 4q) | Sign flipped: +9.5%. Another economy's miss: +10.0% (n = 1,067) |
 | Same shift, China only | 21 | −31% (better) | Picked because China looked biased. It helped in only 2 of 20 economies (China, and Australia at −1.6%) |
 | Gap between the 5-year and 10-year trend predicts the miss | 1,340 | r = −0.01 | — |
 
+- **Past bias slightly anti-predicts.** The own-history shift does worse than both its mirror and its placebo at every horizon.
+- **The estimator doesn't change it.** Variants the statistics reviewer tried (mean of the last 20 misses, median of the last 20, mean of all, mean of the last 8; all point in time, n = 1,120) are all worse pooled, by +12% to +27%. For China alone they are all better, by −31% to −41%.
 - **To use the China shift,** it would have to be pre-registered and scored on quarters not yet published. It is not adopted.
 - **No market edge:** no asset return was tested.
 
@@ -81,7 +83,7 @@ All checks are point in time, at 4q, with the pandemic out (`studies/gdp_watch/e
 - **Pandemic quarters** (2020-Q1 to 2021-Q4) never enter μ or φ.
 - **Forecast path:** trend and AR(1) roll the published YoY forward one quarter at a time, so the quarters already published count.
 - **Selection rule:** lowest mean MAE over h = 1–4, pandemic out. A method within 2% of a simpler one loses to it.
-- **Outcome:** AR(1) won by 2.9% over trend. That is inside the noise (§1).
+- **Outcome:** AR(1) won by about 3% over trend. That is inside the noise (§1).
 - **Parity:** the tab's code equals the study's at every origin (a merge-blocking gate).
 
 ## 5. Honesty box
@@ -107,7 +109,7 @@ All checks are point in time, at 4q, with the pandemic out (`studies/gdp_watch/e
   - band coverage needed disclosure;
   - India's IMF figures are fiscal years;
   - WEO historical vintages do exist.
-- **Its bias-correction check** gave +18% (n = 1,120). This memo's point-in-time version gives +12.0% on the same n. Both say worse.
+- **Its bias-correction check** gave +18% (n = 1,120), against this memo's +12.0% on the same n. The two use different estimators (the mean of the last 20 misses vs the median of all past misses). Both are point in time. Every estimator tried is worse pooled (+12% to +27%) and better for China alone (−31% to −41%).
 
 **Build and wording review (2026-11-16): PASS_WITH_FIXES.**
 - **SERIOUS:** the IMF years were read from the wall clock, so a gate would have gone red on 1 January. They now come from the data's projection window, with a gate.
@@ -131,7 +133,18 @@ All checks are point in time, at 4q, with the pandemic out (`studies/gdp_watch/e
   - the tab bar scrolls on a phone;
   - dead code is removed.
 
-**Re-verification of both SERIOUS fixes:** pending, by two independent verifiers.
+**Re-verification (2026-11-16):**
+- **Statistics reviewer: all items CLOSED.**
+  - Both SERIOUS fixes hold: China's band flag as first verifier, the IMF years as second.
+  - It reproduced the edge checks, the 14-of-20 intervals and every memo number.
+  - One new MINOR, fixed: this log had described its check as not point in time.
+  - NOTEs, folded in:
+    - "landed in the band" now reads "landed below the line, where the band sits";
+    - the hover, legend and table all name the 50% band;
+    - the placebo's n is stated;
+    - "2.9%" now reads "about 3%";
+    - the population notes are worded from the series served.
+- **Build reviewer:** pending.
 
 ## 7. Open questions (ranked)
 

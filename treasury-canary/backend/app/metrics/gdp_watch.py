@@ -69,10 +69,22 @@ def _f(x: float, d: int = 1, sign: bool = False) -> str:
 
 
 FISCAL = {"IND": "fiscal years (April-March): 2026 means FY2026/27"}
-POP_NOTE = {"SAU": "Saudi Arabia: the IMF population series swings by several points a year from 2018 to 2022 (-2.5% "
-                   "to +5.0%), so per-person growth in those years moves with population as much as with output.",
-            "POL": "Poland: the IMF population series drops 2.3% in 2021 (a one-year level break; the years either side "
-                   "move by under 0.5%), so the per-person rate around 2021 jumps with population, not output."}
+def pop_note(code: str, pop: dict) -> str | None:
+    """the known population-series breaks that move per-person growth, checked against and worded from the series
+    actually served (a later IMF vintage that smooths a break drops its note)."""
+    g = {y: 100 * (pop[str(y)] / pop[str(y - 1)] - 1) for y in range(2001, 2031)
+         if isinstance(pop.get(str(y)), (int, float)) and isinstance(pop.get(str(y - 1)), (int, float)) and pop[str(y - 1)]}
+    if code == "SAU":
+        w = [g[y] for y in range(2018, 2023) if y in g]
+        if len(w) == 5 and max(w) - min(w) > 4:
+            return (f"Saudi Arabia: the IMF population series swings by several points a year from 2018 to 2022 "
+                    f"({_f(min(w), sign=True)}% to {_f(max(w), sign=True)}%), so per-person growth in those years moves "
+                    "with population as much as with output.")
+    if code == "POL" and all(y in g for y in (2020, 2021, 2022)):
+        if g[2021] < -1.5 and abs(g[2020]) < 0.5 and abs(g[2022]) < 0.5:
+            return (f"Poland: the IMF population series drops {_f(-g[2021])}% in 2021 (a one-year level break; the years "
+                    "either side move by under 0.5%), so the per-person rate around 2021 jumps with population, not output.")
+    return None
 
 
 # ---------------------------------------------------------------------------- the frozen rule (== study)
@@ -190,7 +202,7 @@ def country_block(code: str, inp: dict, share: float | None, imf_years: list[str
     years = imf_years or sorted({qs(last_i + h)[:4] for h in H})     # the calendar years the projection reaches
     blk["imf"] = {yr: wg.get(yr) for yr in years} if wg else None
     blk["imf_basis"] = FISCAL.get(code, "calendar years")
-    blk["pop_note"] = POP_NOTE.get(code)
+    blk["pop_note"] = pop_note(code, pop_annual)
     blk["record"] = _record(code)
     return blk
 
@@ -219,10 +231,10 @@ def summaries(countries: list[dict]) -> list[str]:
         side, rec = (c.get("forecast") or {}).get("line_vs_band"), c.get("record") or {}
         if side and rec.get("n_h4"):
             word = "over" if side == "above" else "under"
-            out.append(f"For {c['name']} the line sits {side} its band: the rule {word}-projected it in "
+            out.append(f"For {c['name']} the line sits {side} its 50% band: the rule {word}-projected it in "
                        f"{rec['n_over_h4'] if side == 'above' else rec['n_h4'] - rec['n_over_h4']} of {rec['n_h4']} "
-                       f"backtests (median miss {_f(rec['median_miss_h4'], sign=True)} points), so outcomes have landed in "
-                       f"the band, {'below' if side == 'above' else 'above'} the line.")
+                       f"backtests (median miss {_f(rec['median_miss_h4'], sign=True)} points), so past outcomes landed "
+                       f"{'below' if side == 'above' else 'above'} the line, where the band sits.")
     flagged = [c["name"] for c in countries if (c.get("record") or {}).get("naive_better")]
     if flagged:
         names = flagged[0] if len(flagged) == 1 else ", ".join(flagged[:-1]) + " and " + flagged[-1]

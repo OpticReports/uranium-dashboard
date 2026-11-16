@@ -46,7 +46,7 @@ const TIPS: Record<string, GlossaryEntry> = {
   band: {
     title: "The shaded band",
     what: "Where outcomes landed around this rule's past projections: 10th-90th percentile shaded light, 25th-75th darker, by quarters ahead (pandemic quarters excluded).",
-    read: "If the band sits below or above the line, the rule has run too high or too low for that economy before (China, for one: its line sits above its own band). Shown for up to three economies at a time.",
+    read: "If the band sits below or above the line, the rule has run too high or too low for that economy before (China, for one: its line sits above its own 50% band). Shown for up to three economies at a time.",
     caveat: "Since 2016 the light band held about 85-88% of outcomes outside the pandemic and about 73-76% with it, tested on 18 economies; China's and Saudi Arabia's bands are in-sample only (too short a history to test). The bands drawn use every backtest miss from 2006 on, so they are in-sample too.",
   },
   imf: {
@@ -153,7 +153,9 @@ function ChartTooltip({ active, label, payload, names }: {
     const f = row?.[`${code}_f`];
     const b = row?.[`${code}_b80`];
     const projected = !isNum(a) && isNum(f);
-    return { code, v: isNum(a) ? a : isNum(f) ? f : null, projected, band: projected && Array.isArray(b) ? b : null };
+    const b50 = row?.[`${code}_b50`];
+    return { code, v: isNum(a) ? a : isNum(f) ? f : null, projected, band: projected && Array.isArray(b) ? b : null,
+      band50: projected && Array.isArray(b50) ? b50 : null };
   }).filter((x) => x.v !== null);
   if (!items.length) return null;
   return (
@@ -164,7 +166,7 @@ function ChartTooltip({ active, label, payload, names }: {
           <span className="inline-block h-2 w-3 rounded-sm" style={{ background: payload.find((p) => p.dataKey === x.code || p.dataKey === `${x.code}_f`)?.color }} />
           <span className="min-w-[7rem]">{names[x.code]}</span>
           <span className="font-mono tabular-nums">{pct(x.v as number)}</span>
-          {x.projected && <span className="text-slate-500">rule{x.band ? ` (80%: ${pct(x.band[0])} to ${pct(x.band[1])})` : ""}{x.band && (x.v as number) > x.band[1] ? ", above its band: the rule ran high here before" : x.band && (x.v as number) < x.band[0] ? ", below its band: the rule ran low here before" : ""}</span>}
+          {x.projected && <span className="text-slate-500">rule{x.band ? ` (80%: ${pct(x.band[0])} to ${pct(x.band[1])})` : ""}{x.band50 && (x.v as number) > x.band50[1] ? ", above its 50% band: the rule ran high here before" : x.band50 && (x.v as number) < x.band50[0] ? ", below its 50% band: the rule ran low here before" : ""}</span>}
         </div>
       ))}
     </div>
@@ -210,7 +212,7 @@ function tableNotes(sel: GdpCountry[], m: GdpMeasure): string[] {
     const r = c.record;
     if (side && r && isNum(r.n_h4) && isNum(r.n_over_h4) && isNum(r.median_miss_h4)) {
       const k = side === "above" ? r.n_over_h4 : r.n_h4 - r.n_over_h4;
-      out.push(`* ${c.name}: the line sits ${side} its own band. The rule ${side === "above" ? "over" : "under"}-projected it in ${k} of ${r.n_h4} backtests (median miss ${pct(r.median_miss_h4).replace("%", "")} points), so outcomes have landed in the band, ${side === "above" ? "below" : "above"} the line.`);
+      out.push(`* ${c.name}: the line sits ${side} its own 50% band. The rule ${side === "above" ? "over" : "under"}-projected it in ${k} of ${r.n_h4} backtests (median miss ${pct(r.median_miss_h4).replace("%", "")} points), so past outcomes landed ${side === "above" ? "below" : "above"} the line, where the band sits.`);
     }
   }
   const ins = sel.filter((c) => c.forecast && c.record?.band_in_sample_only).map((c) => c.name);
@@ -418,7 +420,7 @@ export function GdpView({ data, initial }: { data: GdpWatch; initial?: GdpInitia
                 <span className="inline-block h-2 w-3 rounded-sm" style={{ background: SLOTS[slots[code]] }} />
                 {c.name} <span className="font-mono text-slate-400">{pct(v?.[v.length - 1])}</span>
                 {fcOn && f && <span className="font-mono text-slate-500">rule: {pct(f[f.length - 1])} in {c.forecast?.quarters[3]}</span>}
-                {fcOn && f && c.forecast?.line_vs_band && <span className="text-slate-500">(line {c.forecast.line_vs_band} its band*)</span>}
+                {fcOn && f && c.forecast?.line_vs_band && <span className="text-slate-500">(line {c.forecast.line_vs_band} its 50% band*)</span>}
               </span>
             );
           })}
