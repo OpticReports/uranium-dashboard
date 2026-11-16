@@ -109,8 +109,19 @@ def dollar_watch_payload(force: bool = False) -> dict:
 
 def warm_dollar_watch(force: bool = False) -> dict:
     """Scheduler entry point (main._start_scheduler): rebuild off the page path.
-    It also appends any new live firing to the forward ledger the day it appears."""
-    return dollar_watch_payload(force=force)
+    It also appends any new live firing to the forward ledger the day it appears, and sends the
+    data-health pings (metrics/dollar_health.py: data alarms only, never a market signal)."""
+    data = dollar_watch_payload(force=force)
+    try:
+        from datetime import datetime, timezone
+
+        from .. import alerts
+        from ..metrics import dollar_health
+        dollar_health.notify(data, dollar_health.state_path(ledger_path()), datetime.now(timezone.utc).date().isoformat(),
+                             send=alerts.send, allowed=alerts.should_send)
+    except Exception as exc:  # noqa: BLE001  (a ping must never break the warm-up)
+        logger.warning("Dollar-watch health ping failed: %s", exc)
+    return data
 
 
 @router.get("/dollar-watch")
