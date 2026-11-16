@@ -1471,6 +1471,8 @@ export interface DwD3Summary {
 export interface DollarWatch {
   generated?: string | null; frozen_on?: string | null; mode?: string | null; headline?: string | null;
   status?: { overall?: DwStatus | null; blocks?: Record<string, DwStatus | null> | null } | null;
+  /** plain-language takeaways per layer (state, funding, scramble, slow, ledger, forward) and for the page; descriptive only */
+  summaries?: Record<string, string[] | null> | null;
   state?: {
     status?: DwStatus | null;
     dxy?: (DwReading & { provider?: string | null; band_position?: string | null;

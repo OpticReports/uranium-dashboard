@@ -12,7 +12,9 @@ trimmed to 2019+). Gates:
   - EM FX outcomes are shown (forward_only withdrew the test they could steer); forbidden language never appears;
   - the frozen pre-registration (SPEC v1): eligibility after the freeze date, units from the first firing, the
     placebo, one onset row per month at its close, revisions logged never re-dated, the Fed list and SPEC hashes;
-  - the all-null payload ships every block plus the frozen record; nothing crashes on partial data.
+  - the all-null payload ships every block plus the frozen record; nothing crashes on partial data;
+  - the plain-language summaries cover every layer, restate the panel's own numbers, judge funding on the frozen
+    SPEC v1 §5.3 lines, and degrade by dropping a sentence, never by printing a hole.
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ import gzip
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 from datetime import date, timedelta
@@ -35,7 +38,11 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))            # treasury-can
 STUDY = os.path.join(ROOT, "studies", "dollar_watch")
 REF_FILE = os.path.join(ROOT, "backend", "app", "sources", "dollar_reference.json")
 TAB_SOURCES = [os.path.join(ROOT, "frontend", "src", "components", "DollarTab.tsx"),
-               os.path.join(ROOT, "frontend", "src", "lib", "dollarFixture.ts")]
+               os.path.join(ROOT, "frontend", "src", "lib", "dollarFixture.ts"),
+               os.path.join(ROOT, "frontend", "src", "lib", "dollarGlossary.ts")]
+
+# status language: the tab is descriptive, so no alarm vocabulary even in negations or tooltip cards (wording review 2026-11-03)
+STATUS_WORDS = re.compile(r"\b(warning|alert|danger)\w*", re.I)
 
 # memo §5 and the wording review: never on the panel
 FORBIDDEN = ["probability of", "p(crisis", "chance of a crisis", "% chance", "crisis subsided", "subsided",
@@ -429,8 +436,10 @@ def test_failed_ledger_write_is_reported(inputs, tmp_path, monkeypatch):
 def test_gold_note_requires_quiet_funding(payload, inputs, tmp_path):
     g = payload["state"]["safe_haven"]["gold"]
     cp = {r["id"]: r for r in payload["funding"]["rows"]}["cp_fin"]
-    assert g["off_52w_high_pct"] <= -15 and g["note"] == (f"with dollar funding quiet (financial CP minus bill at its {dw._ord(cp['pct_own_history'])} "
-                                                           "percentile): outside the crisis pattern below")
+    assert cp["mean_5d"] <= 1.0 and dw._funding_word({r["id"]: r for r in payload["funding"]["rows"]}) in ("quiet", "usual")
+    assert g["off_52w_high_pct"] <= -15 and g["note"] == ("with no sign of a dollar-funding squeeze (the CP spread's 5-print average under "
+                                                           "1pp, it and the OFR funding index under their 80th percentiles, swap lines "
+                                                           "under $50bn): outside the crisis pattern below")
     stressed = json.loads(json.dumps(inputs))
     stressed["fred"]["DCPF3M"]["values"][-1] = (stressed["fred"]["DTB3"]["values"][-1] or 4.0) + 3.05     # CP-bill at a Lehman-sized print
     p = dw.build_dollar_watch(stressed, today="2026-11-02", ledger_file=str(tmp_path / "s.json"))
@@ -483,6 +492,232 @@ def test_forbidden_language_absent(payload, tmp_path):
         src = open(path, encoding="utf-8").read().lower()
         for phrase in FORBIDDEN:
             assert phrase not in src, (os.path.basename(path), phrase)
+        assert not STATUS_WORDS.search(src), (os.path.basename(path), STATUS_WORDS.search(src).group(0))
+    assert not STATUS_WORDS.search(text), STATUS_WORDS.search(text).group(0)
+
+
+# ---------------------------------------------------------------------------- plain-language summaries (Casey, 2026-11-03)
+SUMMARY_KEYS = ("state", "funding", "scramble", "slow", "ledger", "forward", "page")
+HOLE = re.compile(r"\bNone\b(?! of\b)|\bnan\b|\binf\b|[{}]")          # a Python None/nan/inf or a stray f-string brace; "None of" is English
+
+
+def _summary_lines(p):
+    s = p.get("summaries") or {}
+    assert set(SUMMARY_KEYS) <= set(s), set(SUMMARY_KEYS) - set(s)
+    for k in SUMMARY_KEYS:
+        assert isinstance(s[k], list) and s[k] and all(isinstance(x, str) and x.strip() for x in s[k]), k
+    return [x for k in SUMMARY_KEYS for x in s[k]]
+
+
+def test_summaries_cover_every_layer_restate_the_panel_and_never_print_a_hole(payload, inputs, tmp_path):
+    lines = _summary_lines(payload)
+    s, dx = payload["summaries"], payload["state"]["dxy"]
+    assert f"{dx['latest']:.1f}" in s["state"][0] and dw._ord(dx["pct_own_history"]) + " percentile" in s["state"][0]
+    cp = next(r for r in payload["funding"]["rows"] if r["id"] == "cp_fin")
+    cpf = dw.spread(dw.pairs(inputs["fred"]["DCPF3M"]), dw.pairs(inputs["fred"]["DTB3"]))
+    assert cp["mean_5d"] == dw.r(sum(v for _, v in cpf[-5:]) / 5, 3)          # SPEC v1 §5.3's line is on the unrounded 5-day mean
+    assert f"{cp['latest']:.2f}pp" in s["funding"][0] and f"{cp['mean_5d']:.2f}pp" in s["funding"][1]
+    assert f"{payload['scramble']['state']['roc20_max_60d_pct']:+.1f}%" in s["scramble"][0]
+    assert s["page"][0].startswith("The dollar is ") and "not a forecast" in s["page"][1]
+    null = dw.build_dollar_watch({}, today="2026-11-02", ledger_file=str(tmp_path / "n.json"))
+    more = _summary_lines(null)
+    assert null["summaries"]["page"][0].startswith("Live data unavailable")
+    assert [x[:17] for x in null["summaries"]["funding"]] == ["What it tells you"]                       # no reading, no verdict
+    # each source down in turn, and each series the summaries read: a sentence drops, nothing prints a hole
+    for key in [k for k in inputs if not k.startswith("_")]:
+        part = {k: v for k, v in inputs.items() if k != key}
+        more += _summary_lines(dw.build_dollar_watch(part, today="2026-11-02", ledger_file=str(tmp_path / f"{key}.json")))
+    for sid in ("DTWEXBGS", "DGS10", "DCPF3M", "DTB3", "SWPT", "WMTSECL1", "SOFR", "IORB"):
+        part = {**inputs, "fred": {k: v for k, v in inputs["fred"].items() if k != sid}}
+        more += _summary_lines(dw.build_dollar_watch(part, today="2026-11-02", ledger_file=str(tmp_path / f"{sid}.json")))
+    for x in lines + more:
+        assert not HOLE.search(x), x
+        for phrase in FORBIDDEN:
+            assert phrase not in x.lower(), (phrase, x)
+
+
+def test_every_glossary_entry_is_wired_into_the_tab(payload):
+    """Casey, 2026-11-03: a '?' on every indicator. Each dollarGlossary entry is used by the tab, directly or as a funding row's id."""
+    gloss = open(TAB_SOURCES[2], encoding="utf-8").read()
+    tab = open(TAB_SOURCES[0], encoding="utf-8").read()
+    keys = re.findall(r"^  ([a-z0-9_]+): \{", gloss, re.M)
+    row_ids = {r["id"] for r in payload["funding"]["rows"]}
+    assert len(keys) >= 40 and row_ids <= set(keys), row_ids - set(keys)
+    assert "DW[r.id]" in tab
+    assert [k for k in keys if f"DW.{k}" not in tab and k not in row_ids] == []
+    for k in re.findall(r"DW\.([a-z0-9_]+)", tab):
+        assert k in keys, k
+
+
+def test_summaries_judge_funding_on_the_5_day_cp_line_never_on_the_swap_stock():
+    """Wording review 2026-11-03 (S1, S4): 'strained' is SPEC v1 §5.3's CP line on the 5-day average; swap-line usage is a lagging
+    stock (above $50bn until Sep-2009 and Sep-2020 with prices calm) and never sets the word; one print moves the 5-day average by a fifth."""
+    spec = open(os.path.join(STUDY, "spec", "SPEC_v1.md"), encoding="utf-8").read()
+    assert "FRED SWPT > 50,000 ($m)" in spec and "trailing 5-observation mean of DCPF3M − DTB3" in spec and "> 1.00 on any day" in spec
+
+    def rows(cp5, cp, sw, of):
+        return {"cp_fin": {"latest": cp, "mean_5d": cp5, "median_1y": 0.2}, "swap_lines": {"latest": sw},
+                "ofr_funding": {"latest": of, "median_1y": 0.0}}
+    assert dw._funding_word(rows(1.01, 0.9, 0.1, -1)) == "strained"      # the CP-bill 5-day mean past 1.00
+    assert dw._funding_word(rows(1.00, 1.0, 0.1, -1)) == "usual"         # at the line is not past it
+    assert dw._funding_word(rows(0.1, 0.1, 450.0, -1)) == "quiet"        # a large swap stock with calm prices is not strain
+    assert dw._funding_word(rows(0.1, 0.9, 0.1, -1)) == "quiet"          # one high print does not flip the 5-day average
+    assert dw._funding_word(rows(0.1, 0.1, 0.1, 0.5)) == "usual"         # OFR funding above its 1-year median
+    assert dw._funding_word(rows(0.1, 0.1, 0.1, None)) is None           # not enough data to say
+    # re-check N1: 2009-01-15 on the long replay. CP's 5-day mean 0.42 sat under its crisis-year median (1.08) and OFR funding
+    # 2.69 under its 3.37, so the medians alone read 'quiet'; OFR funding was at its 91st own-history percentile
+    crisis = {"cp_fin": {"latest": 0.8, "mean_5d": 0.42, "median_1y": 1.08, "pct_5d_own_history": 60},
+              "ofr_funding": {"latest": 2.69, "median_1y": 3.37, "pct_own_history": 91}, "swap_lines": {"latest": 510.5, "prev_4w": 560.0}}
+    assert dw._funding_word(crisis) == "elevated"
+    crisis["ofr_funding"]["pct_own_history"], crisis["cp_fin"]["pct_5d_own_history"] = 79, 80
+    assert dw._funding_word(crisis) == "elevated"                         # CP on its 5-day average, at the 80th
+    crisis["cp_fin"]["pct_5d_own_history"] = 79
+    assert dw._funding_word(crisis) == "quiet"
+    # second verifier, finding 4: 2008-01-14's true 5-day mean was 1.004; rounding to 2 dp read it 'usual', 'below both'
+    on_line = {"cp_fin": {"latest": 1.0, "mean_5d": 1.004, "median_1y": 0.5}, "ofr_funding": {"latest": 0.0, "median_1y": 0.0}}
+    assert dw._funding_word(on_line) == "strained"
+    f = dw.summaries({}, {"rows": [{"id": "cp_fin", "label": "c", "latest": 1.0, "mean_5d": 1.004, "median_1y": 0.5},
+                                   {"id": "swap_lines", "label": "s", "latest": 24.0}]}, {}, {}, {}, {})["funding"]
+    assert "average 1.004pp and swap lines are $24.00bn, past the 1pp line." in f[1]
+    row = lambda i, v, p, **k: {"id": i, "label": i, "latest": v, "pct_own_history": p, "history_from": "1997-01-02", **k}   # noqa: E731
+    ofr = row("ofr_funding", -1.0, 20, median_1y=0.0)
+    hot = dw.summaries({}, {"rows": [row("cp_fin", 1.3, 99, mean_5d=1.2, median_1y=0.2), row("swap_lines", 0.1, 10), ofr]}, {}, {}, {}, {})
+    assert hot["funding"][0].startswith("Dollar funding is under strain") and hot["funding"][1].endswith("past the 1pp line.")
+    assert "dollar funding is under strain" in hot["page"][0].lower()
+    calm_cp = row("cp_fin", 0.12, 40, mean_5d=0.1, median_1y=0.2, pct_5d_own_history=30)
+    tail = dw.summaries({}, {"rows": [calm_cp, row("swap_lines", 450.0, 99, prev_4w=520.0), ofr]}, {}, {}, {}, {})
+    assert tail["funding"][0].startswith("Dollar funding is quiet") and "past the $50bn line" in tail["funding"][1]
+    assert tail["funding"][2].startswith("Swap-line borrowing is above the $50bn line but falling") and "tail of a squeeze" in tail["funding"][2]
+    assert "strain" not in tail["page"][0] and "swap-line borrowing above $50bn but falling" in tail["page"][0]
+    # re-check N2: Dec-2011 to Feb-2012 the stock was being drawn with CP calm: new demand, never 'the tail of a squeeze'
+    new = dw.summaries({}, {"rows": [calm_cp, row("swap_lines", 108.8, 99, prev_4w=103.3), ofr]}, {}, {}, {}, {})
+    assert not any("tail of a squeeze" in x for x in new["funding"]) and not any("rising" in x for x in new["funding"])   # +5%: a plateau
+    assert "swap-line borrowing above $50bn and roughly flat" in new["page"][0]
+    drawn = dw.summaries({}, {"rows": [calm_cp, row("swap_lines", 54.3, 99, prev_4w=2.3), ofr]}, {}, {}, {}, {})
+    assert any("and rising ($2.30bn four weeks earlier): dollar demand abroad" in x for x in drawn["funding"])   # 2 dp under $10bn
+    assert "swap-line borrowing above $50bn and rising" in drawn["page"][0]
+
+
+def test_one_month_end_print_moves_the_word_by_a_fifth(inputs, tmp_path):
+    """Re-check M1: FRED's 2026-10-30 print (4.38 - 3.99 = 0.39pp) lifts the 5-day mean, never the word to elevated or strained,
+    and the gold tile keeps its note: its claim is 'no squeeze', which still holds."""
+    x = json.loads(json.dumps(inputs))
+    for sid, v in (("DCPF3M", 4.38), ("DTB3", 3.99)):
+        assert x["fred"][sid]["dates"][-1] < "2026-10-30"
+        x["fred"][sid]["dates"].append("2026-10-30")
+        x["fred"][sid]["values"].append(v)
+    p = dw.build_dollar_watch(x, today="2026-11-02", ledger_file=str(tmp_path / "m.json"))
+    rows = {r["id"]: r for r in p["funding"]["rows"]}
+    cpf = dw.spread(dw.pairs(x["fred"]["DCPF3M"]), dw.pairs(x["fred"]["DTB3"]))
+    assert rows["cp_fin"]["latest"] == 0.39 and rows["cp_fin"]["mean_5d"] == dw.r(sum(v for _, v in cpf[-5:]) / 5, 3) < 0.2
+    assert dw._funding_word(rows) in ("quiet", "usual") and p["state"]["safe_haven"]["gold"]["note"]
+    state = {"safe_haven": {"gold": {"off_52w_high_pct": -27.2}}}
+    big = [dict(r, latest=320.0) if r["id"] == "swap_lines" else r for r in p["funding"]["rows"]]
+    assert dw.gold_funding_note(state, {"rows": big}) is None                         # a $320bn swap stock is a squeeze sign
+    assert not any(w in p["summaries"]["page"][0] for w in ("elevated", "strain"))
+
+
+def _cut(inputs, day):
+    """the fixture as a build on `day` would have seen it (every dated series cut at day)."""
+    out = json.loads(json.dumps(inputs))
+    for s in list(out["fred"].values()) + [out["dxy"], out["gold"], out["emb"]]:
+        keep = [i for i, d in enumerate(s["dates"]) if d <= day]
+        s["dates"], s["values"] = [s["dates"][i] for i in keep], [s["values"][i] for i in keep]
+    o = out["ofr"]
+    keep = [i for i, d in enumerate(o["dates"]) if d <= day]
+    for c in [c for c in o if c != "dates" and isinstance(o[c], list) and len(o[c]) == len(o["dates"])]:
+        o[c] = [o[c][i] for i in keep]
+    o["dates"] = [o["dates"][i] for i in keep]
+    return out
+
+
+def test_stale_cp_prints_set_no_word_and_say_so(inputs, tmp_path):
+    """Round-3 S1: FRED left DCPF3M blank 2020-03-27 to 2020-05-06 and 2023-03-03 to 2023-03-16 while bills printed. The
+    'last five prints' were weeks old; they must not read as today's strain (2020) or calm (SVB week)."""
+    for day, last in (("2020-05-06", "2020-03-26"), ("2023-03-15", "2023-03-02")):
+        p = dw.build_dollar_watch(_cut(inputs, day), today=day, ledger_file=str(tmp_path / f"{day}.json"))
+        cp = {r["id"]: r for r in p["funding"]["rows"]}["cp_fin"]
+        assert cp["mean_5d_stale"] is True and cp["mean_5d_to"] == last, (day, cp.get("mean_5d_to"))
+        f, page = " ".join(p["summaries"]["funding"]), p["summaries"]["page"][0]
+        assert f"The CP spread has no print since {last}" in f and "Latest: the last five CP prints" not in f
+        assert not any(w in f + page for w in ("under strain", "quiet")), (day, f, page)
+        assert p["state"]["safe_haven"]["gold"]["note"] is None
+    fresh = {r["id"]: r for r in dw.build_dollar_watch(inputs, today="2026-11-02", ledger_file=str(tmp_path / "f.json"))["funding"]["rows"]}
+    assert fresh["cp_fin"]["mean_5d_stale"] is False and fresh["cp_fin"]["mean_5d_to"] == "2026-10-29"
+    # round-4 review: since 2021 the rate is blank on ~2 days in 5, so five fresh prints can span 12 business days (2025-09-05,
+    # a same-day print): that is fresh, never "no print since" the day it printed
+    p = dw.build_dollar_watch(_cut(inputs, "2025-09-05"), today="2025-09-05", ledger_file=str(tmp_path / "w.json"))
+    cp = {r["id"]: r for r in p["funding"]["rows"]}["cp_fin"]
+    assert cp["mean_5d_to"] == "2025-09-05" and cp["mean_5d_stale"] is False
+    assert "no print since" not in " ".join(p["summaries"]["funding"]) and "Latest: the last five CP prints" in p["summaries"]["funding"][1]
+    # the first print after the 2020 gap: fresh, but the five reach back to March, so the CP test waits
+    p = dw.build_dollar_watch(_cut(inputs, "2020-05-07"), today="2020-05-07", ledger_file=str(tmp_path / "g.json"))
+    cp = {r["id"]: r for r in p["funding"]["rows"]}["cp_fin"]
+    assert cp["mean_5d_stale_why"] == "outage" and "resumed on 2020-05-07 after no print since 2020-03-26" in " ".join(p["summaries"]["funding"])
+    p8 = dw.build_dollar_watch(_cut(inputs, "2020-05-08"), today="2020-05-08", ledger_file=str(tmp_path / "g8.json"))
+    assert "resumed on 2020-05-07 after no print since 2020-03-26" in " ".join(p8["summaries"]["funding"])   # final check M1
+    assert "waits until five recent prints accumulate" in p8["summaries"]["funding"][1] and "waits for fresh prints" not in p8["summaries"]["funding"][1]
+    assert "under strain" not in " ".join(p["summaries"]["funding"]) + p["summaries"]["page"][0]
+    for day in ("2026-10-28", "2026-10-26"):                   # second verifier: CP printed that day; the old span test called it stale
+        cp = {r["id"]: r for r in dw.build_dollar_watch(_cut(inputs, day), today=day, ledger_file=str(tmp_path / f"{day}.json"))["funding"]["rows"]}["cp_fin"]
+        assert cp["mean_5d_to"] == day and cp["mean_5d_stale"] is False, (day, cp.get("mean_5d_stale_why"))
+    # after the March-2020 squeeze the swap stock kept rising into May: the lag, never 'new demand'
+    p = dw.build_dollar_watch(_cut(inputs, "2020-05-15"), today="2020-05-15", ledger_file=str(tmp_path / "l.json"))
+    f = " ".join(p["summaries"]["funding"])
+    assert "need not show" not in f and "the lag after a squeeze, not new demand" in f
+    # final check S1: never 'not new demand' while the squeeze itself runs (2020-03-27: $0.04bn -> $206bn, CP strained)
+    p = dw.build_dollar_watch(_cut(inputs, "2020-03-27"), today="2020-03-27", ledger_file=str(tmp_path / "q.json"))
+    assert "not new demand" not in " ".join(p["summaries"]["funding"]) + p["summaries"]["page"][0]
+    oct08 = {"cp_fin": {"id": "cp_fin", "label": "c", "latest": 2.6, "mean_5d": 2.5, "median_1y": 0.9, "mean_5d_max_12m": 2.5,
+                        "mean_5d_max_12m_date": "2008-09-19", "mean_5d_from": "2008-09-29", "mean_5d_to": "2008-10-03"},
+             "swap_lines": {"id": "swap_lines", "label": "s", "latest": 286.0, "prev_4w": 62.0}}
+    assert "not new demand" not in " ".join(dw.summaries({}, {"rows": list(oct08.values())}, {}, {}, {}, {})["funding"])
+    oct08["cp_fin"].update(mean_5d=0.6, latest=0.6)                    # prices back under the line, but the peak is 10 days old
+    oct08["cp_fin"]["mean_5d_max_12m_date"] = "2008-09-26"
+    assert "not new demand" not in " ".join(dw.summaries({}, {"rows": list(oct08.values())}, {}, {}, {}, {})["funding"])
+    # FRED itself a week behind: four-week-old prints never read as 'Latest'
+    p = dw.build_dollar_watch(inputs, today="2026-11-20", ledger_file=str(tmp_path / "o.json"))
+    f = " ".join(p["summaries"]["funding"])
+    assert "FRED data end 2026-10-29 (the fetch is behind)" in f and "Latest:" not in f and "quiet" not in f
+    assert "funding data end 2026-10-29 (the fetch is behind)" in p["summaries"]["page"][0]
+    # only the CP fetch failed: the cause is the fetch, not the Fed
+    x = _cut(inputs, "2026-11-02")
+    x["fred"]["DCPF3M"] = {**x["fred"]["DCPF3M"], "status": "stale",
+                           "dates": [d for d in x["fred"]["DCPF3M"]["dates"] if d <= "2026-10-06"]}
+    x["fred"]["DCPF3M"]["values"] = inputs["fred"]["DCPF3M"]["values"][:len(x["fred"]["DCPF3M"]["dates"])]
+    f = " ".join(dw.build_dollar_watch(x, today="2026-11-02", ledger_file=str(tmp_path / "c.json"))["summaries"]["funding"])
+    assert "the CP fetch failed; showing the last good copy" in f and "the Fed publishes no rate" not in f
+
+
+def test_summaries_follow_the_state_they_describe():
+    """Wording review 2026-11-03 (M14, M15, M19, M20): the open gate names the clause that fails; 'what would change' never lists
+    the state the page already shows; the gauge count leaves out EMB; each branch says its own implication."""
+    scr = {"gate_open": True, "state": {"roc20_max_60d_pct": 7.4},
+           "indicators": {"a_deceleration": {"met": False, "dollar_vs_60d_high_pct": -4.89, "ratio_now_to_max": 0.2},
+                          "b_funding_easing": {"met": True}, "c_risk_turn": {"met": None}}}
+    s = dw.summaries({}, {"rows": []}, scr, {}, {}, {})
+    assert "4.9% below its 60-day high, so the climb has reversed" in s["scramble"][0]
+    assert "gauge opening" not in s["page"][-1] and "the scramble gauge closing" in s["page"][-1]
+    scr["indicators"]["a_deceleration"] = {"met": False, "dollar_vs_60d_high_pct": -0.4, "ratio_now_to_max": 0.8}
+    assert "still above half its peak" in dw.summaries({}, {"rows": []}, scr, {}, {}, {})["scramble"][0]
+    closed = dw.summaries({}, {"rows": []}, {"gate_open": False, "state": {"roc20_max_60d_pct": 2.9}}, {}, {}, {})
+    assert "the scramble gauge opening" in closed["page"][-1]
+    slow = {"usd_credit": {"total_tn": 14.0, "yoy_pct": -1.2, "quarter": "2027-Q1"},
+            "treasury": {"custody": {"latest": 2700.0, "chg_12m_pct": 3.1, "pct_10y": 40}}}
+    w = dw.summaries({}, {"rows": []}, {}, slow, {}, {})["slow"]
+    assert "a contraction" in w[0] and "records in calm years" not in w[0] and "A fall can mean" not in w[1]
+    mom = {"momentum": {"dxy_12m_pct": 11.2, "signal": True, "month": "2027-03",
+                        "by_list": {"C16": {"episodes_followed_12m": 5, "episodes": 11, "base_12m": 0.283}}}}
+    assert "8 of the 11 began during a crisis already under way" in dw.summaries(mom, {"rows": []}, {}, {}, {}, {})["state"][0]
+    edge = {"momentum": {"dxy_12m_pct": 10.0, "signal": False, "month": "2027-03"}}       # momentum_now rounds to 1 dp; > 10% fires
+    assert "+10.0%, just short of the line" in dw.summaries(edge, {"rows": []}, {}, {}, {}, {})["state"][0]
+    scr["indicators"]["a_deceleration"] = {"met": True}
+    s = dw.summaries({}, {"rows": []}, scr, {}, {}, {})
+    assert "the dollar 3% off its episode peak (the first confirmation)" in s["page"][-1] and "being met" not in s["page"][-1]
+    rows = [{"id": "emb", "label": "EMB", "latest": 90.0, "pct_own_history": None},
+            {"id": "sofr_iorb", "label": "SOFR minus interest on reserves", "latest": 3.0, "pct_own_history": 97, "history_from": "2021-07-29"}]
+    f = dw.summaries({}, {"rows": rows}, {}, {}, {}, {})["funding"]
+    assert any(x.startswith("1 of 1 gauges with a percentile") and "history from 2021" in x for x in f)
 
 
 # ============================================================================ the frozen pre-registration (SPEC v1)

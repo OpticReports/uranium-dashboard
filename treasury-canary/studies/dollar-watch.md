@@ -524,4 +524,52 @@ Two independent verifiers reviewed the checkpoint build (`a46874d4`). Neither wr
   - Data: PASS_WITH_FIXES. Its SERIOUS was fixed: a month could be dated before its last H.10 day was
     released. The confirm pass then returned PASS.
 
+### 9.8 Readability layer (2026-11-03): tooltips and "What this means"
+
+Display only. It changes no rule, threshold, ledger row or score, and the frozen SPEC is untouched.
+
+What shipped:
+- 44 tooltip entries (`frontend/src/lib/dollarGlossary.ts`): what each indicator is, how it is computed,
+  how to read it, and its caveat. Every entry is wired into the tab, and a gate checks that.
+- `summaries()` in the backend writes per-layer bullets and a page box. They use only numbers the panel
+  already shows. A missing input drops its sentence; it never prints a hole.
+
+Funding is summarised in one word:
+
+| Word | Condition |
+|---|---|
+| under strain | the CP spread's 5-print average is above 1pp (SPEC §5.3's line) |
+| elevated | below that line, but CP or the OFR funding index is at or above its 80th own-history percentile |
+| quiet | both are at or below their 1-year medians |
+| in its usual range | anything else; about three days in five since 2020 |
+
+Two further rules:
+- **Swap lines never set the word.** The stock lags prices: it stayed above $50bn until Sep-2009 and
+  Sep-2020.
+- **Stale CP sets no word, and the text says why.** The Fed publishes no CP rate when too few trades
+  print, on about two days in five since 2021. CP counts as stale when:
+  - the newest print is more than 5 business days behind the bill rate, or
+  - the five prints straddle a blank of more than 15 business days (2020-03/05, 2024-02), or
+  - FRED itself is a week behind.
+
+**Counter-agent record.** Two independent reviewers ran 6 rounds, replaying every build day from 2000 to
+2026 on FRED/OFR history through the real code.
+
+| Round | Verdict | Fixed |
+|---|---|---|
+| 1 | PASS_WITH_FIXES (4 SERIOUS, 19 MINOR) | the swap stock read as "strain"; "three biggest spikes" was false; tooltip percentile bases came from the trimmed fixture; "firmer" flipped weekly |
+| 2 | PASS_WITH_FIXES (2 SERIOUS; the second reviewer found them independently) | 1-year medians read "quiet" in early 2009; "tail of a squeeze" fired on fresh draws |
+| 3 | PASS_WITH_FIXES (1 SERIOUS) | weeks-old CP prints were shown as "today" |
+| 4 | PASS_WITH_FIXES (1 SERIOUS, both reviewers) | a span test flagged fresh prints and hid 11 real strain days |
+| 5 | PASS_WITH_FIXES (1 SERIOUS, both reviewers) | the "lag after a squeeze" sentence fired during squeezes |
+| 6 | **PASS, both reviewers** | — |
+
+The lag sentence now fires on 2020-05-13 to 05-19 only. Every 2007–12 balance-sheet probe reads
+elevated or strained.
+
+Honesty:
+- The summaries are descriptive. None of these readings is a validated early warning, and the page says
+  so.
+- Dev screenshots use the trimmed fixture, so CP history starts in 2019; production starts in 1997.
+
 Redeploy: **treasury-canary**.
