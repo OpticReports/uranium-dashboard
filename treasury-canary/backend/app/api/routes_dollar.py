@@ -51,7 +51,7 @@ def _rebuild() -> dict:
             prev = _cache["data"]
             _cache["retry_after"] = time.time() + _TTL_DEGRADED
         if prev is not None:              # serve the last good payload, but never as if it were fresh
-            stale = dict(prev, build_error=f"{type(exc).__name__}: {str(exc)[:200]}",
+            stale = dict(prev, build_error=f"{type(exc).__name__}: {str(exc)[:200]}", build_fallback="previous",
                          status={**(prev.get("status") or {}), "overall": "stale"})
             with _lock:
                 _cache["data"] = stale
@@ -62,6 +62,7 @@ def _rebuild() -> dict:
             logger.exception("Dollar-watch all-null build failed too: %s", exc2)
             raise HTTPException(status_code=503, detail="Dollar-watch payload unavailable; see server log") from exc2
         data["build_error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+        data["build_fallback"] = "empty"                  # cold: no previous build to serve
     with _lock:
         _cache.update(ts=time.time(), data=data)
     return data
@@ -111,17 +112,25 @@ def warm_dollar_watch(force: bool = False) -> dict:
     """Scheduler entry point (main._start_scheduler): rebuild off the page path.
     It also appends any new live firing to the forward ledger the day it appears, and sends the
     data-health pings (metrics/dollar_health.py: data alarms only, never a market signal)."""
-    data = dollar_watch_payload(force=force)
+    try:
+        data = dollar_watch_payload(force=force)
+    except Exception as exc:                              # nothing builds at all: still ping, then fail as before
+        _health_ping({"build_error": f"{type(exc).__name__}: {str(exc)[:200]}", "build_fallback": "none"})
+        raise
+    _health_ping(data)
+    return data
+
+
+def _health_ping(payload: dict) -> None:
     try:
         from datetime import datetime, timezone
 
         from .. import alerts
         from ..metrics import dollar_health
-        dollar_health.notify(data, dollar_health.state_path(ledger_path()), datetime.now(timezone.utc).date().isoformat(),
+        dollar_health.notify(payload, dollar_health.state_path(ledger_path()), datetime.now(timezone.utc).date().isoformat(),
                              send=alerts.send, allowed=alerts.should_send)
     except Exception as exc:  # noqa: BLE001  (a ping must never break the warm-up)
         logger.warning("Dollar-watch health ping failed: %s", exc)
-    return data
 
 
 @router.get("/dollar-watch")
