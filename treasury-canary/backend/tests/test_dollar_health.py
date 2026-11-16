@@ -309,3 +309,44 @@ def test_the_scheduler_sends_synchronously_and_probes_the_ledger_disk(monkeypatc
     monkeypatch.setattr(rd, "fetch_all", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
     rd.warm_dollar_watch(force=True)
     assert seen["send"] is alerts.send_now and seen["ledger_file"] == str(tmp_path / "dollar_ledger.json")
+
+
+# ---------------------------------------------------------------------------- the re-check (2026-11-16)
+def test_a_disk_outage_reads_the_same_whether_or_not_a_write_was_pending(tmp_path):
+    """re-check OPEN item: on a full disk a pass that tried a write (a firing) read differently from a quiet one, and
+    the resolve quoted the last silently saved text."""
+    blocker = tmp_path / "not_a_dir"
+    blocker.write_text("x", encoding="utf-8")
+    bad, ok = str(blocker / "dollar_ledger.json"), str(tmp_path / "dollar_ledger.json")
+    firing = {"ledger": {"status": "error", "problem": "scramble-rule rows not saved: OSError: [Errno 28] No space left on device"},
+              "forward": {"problems": ["OSError: momentum outcomes_250d not saved: OSError: [Errno 28] No space left on device"]}}
+    assert dh.problems(firing, dh.probe(bad)) == dh.problems({}, dh.probe(bad))
+    st, out = str(tmp_path / "s.json"), []
+
+    def send(m):
+        out.append(m)
+        return True
+    dh.notify({}, st, "d1", send, lambda s: True, ledger_file=bad)                         # opens on a quiet pass
+    dh.notify({"forward": {"problems": ["KeyError: 'x'"]}}, st, "d2", send, lambda s: True, ledger_file=ok)  # text moves
+    dh.notify({}, st, "d3", send, lambda s: True, ledger_file=ok)                            # resolves
+    assert len(out) == 2 and "• Was: Forward ledger: the disk refused a test write" in out[1] and "KeyError" not in out[1]
+
+
+def test_an_old_state_file_never_fakes_a_worsening(tmp_path):
+    st = tmp_path / "s.json"
+    st.write_text(json.dumps({"open": {"build": {"since": "d", "text": "The last rebuild failed (X); the tab is down."}}}),
+                  encoding="utf-8")
+    assert _run({"build_error": "RuntimeError: boom", "build_fallback": "empty"}, str(st))[1] == []
+
+
+def test_the_probe_waits_for_the_ledger_lock_and_leaves_nothing(tmp_path):
+    import threading
+    import time
+    done: list = []
+    with dw._LEDGER_LOCK:
+        th = threading.Thread(target=lambda: done.append(dh.probe(str(tmp_path / "dollar_ledger.json"))))
+        th.start()
+        time.sleep(0.2)
+        assert done == []                                       # never writes alongside a real ledger rewrite
+    th.join(5)
+    assert done == [None] and sorted(os.listdir(tmp_path)) == []
