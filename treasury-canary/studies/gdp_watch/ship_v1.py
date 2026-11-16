@@ -20,7 +20,9 @@ def record(out: str) -> dict:
     val = json.load(open(os.path.join(out, "validation_v1.json"), encoding="utf-8"))
     sens = json.load(open(os.path.join(out, "sensitivity_v1.json"), encoding="utf-8"))
     return {**{k: bt[k] for k in KEYS}, "coverage": val["coverage"], "coverage_split": val["split"],
-            "recent_bias_h4_since_2023": val["recent_bias_h4_since_2023"], "sensitivity": sens}
+            "coverage_tested": val["coverage_tested"], "coverage_by_country_h4": val["coverage_by_country_h4"],
+            "recent_bias_h4_since_2023": val["recent_bias_h4_since_2023"], "bias_h4": val["bias_h4"],
+            "choice": val["choice"], "sensitivity": sens}
 
 
 if __name__ == "__main__":

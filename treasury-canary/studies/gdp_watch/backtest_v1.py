@@ -7,8 +7,8 @@ are used, BUT on today's revised data, not real-time vintages: errors are unders
 Methods (nothing is tuned on outcomes):
   N  naive   YoY(t+h) = YoY(t).
   T  trend   each coming quarter grows at mu(t), the median quarter-on-quarter growth of the 40 quarters to t.
-  A  AR(1)   quarter-on-quarter growth decays toward mu(t): q(t+i) = mu + phi^i (q(t) - mu), phi(t) the OLS slope
-             on the 40 quarters to t, clipped to [0, 0.8].
+  A  AR(1)   quarter-on-quarter growth decays toward mu(t): q(t+i) = mu + phi^i (q(t) - mu), phi(t) the least-squares
+             slope through the origin of the deviations on the 40 quarters to t, clipped to [0, 0.8].
   The pandemic quarters 2020-Q1..2021-Q4 never enter mu or phi.
 T and A roll the published YoY forward one quarter at a time, so the quarters already in hand count:
   1 + YoY(t+h) = (1 + YoY(t+h-1)) (1 + q(t+h)) / (1 + q(t+h-4)).
@@ -43,7 +43,8 @@ def qs(i: int) -> str:
 
 
 def trend_phi(q: dict, t: int) -> tuple[float | None, float]:
-    """mu(t): median q/q of the WINDOW quarters to t; phi(t): OLS slope of deviations, both without pandemic quarters."""
+    """mu(t): median q/q of the WINDOW quarters to t; phi(t): least-squares slope through the origin (no intercept)
+    of the deviations, both without pandemic quarters."""
     win = [qs(i) for i in range(t - WINDOW + 1, t + 1)]
     vals = [q[s] for s in win if s in q and s not in PANDEMIC]
     if len(vals) < MIN_WINDOW:

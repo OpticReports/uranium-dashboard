@@ -716,6 +716,128 @@
    "p90": 1.851
   }
  },
+ "bias_h4": {
+  "AUS": {
+   "mean": -0.208,
+   "median": -0.313,
+   "n": 70,
+   "n_over": 48
+  },
+  "BRA": {
+   "mean": -1.172,
+   "median": -0.493,
+   "n": 70,
+   "n_over": 41
+  },
+  "CAN": {
+   "mean": -0.329,
+   "median": -0.248,
+   "n": 71,
+   "n_over": 43
+  },
+  "CHE": {
+   "mean": -0.42,
+   "median": -0.363,
+   "n": 70,
+   "n_over": 42
+  },
+  "CHN": {
+   "mean": -1.205,
+   "median": -1.19,
+   "n": 32,
+   "n_over": 31
+  },
+  "DEU": {
+   "mean": -0.464,
+   "median": -0.228,
+   "n": 71,
+   "n_over": 42
+  },
+  "ESP": {
+   "mean": -0.342,
+   "median": -0.06,
+   "n": 71,
+   "n_over": 36
+  },
+  "FRA": {
+   "mean": -0.315,
+   "median": -0.066,
+   "n": 71,
+   "n_over": 37
+  },
+  "GBR": {
+   "mean": -0.171,
+   "median": -0.029,
+   "n": 71,
+   "n_over": 37
+  },
+  "IDN": {
+   "mean": 0.147,
+   "median": 0.02,
+   "n": 71,
+   "n_over": 33
+  },
+  "IND": {
+   "mean": -0.403,
+   "median": -0.234,
+   "n": 70,
+   "n_over": 38
+  },
+  "ITA": {
+   "mean": -0.384,
+   "median": -0.009,
+   "n": 71,
+   "n_over": 36
+  },
+  "JPN": {
+   "mean": -0.062,
+   "median": 0.126,
+   "n": 71,
+   "n_over": 33
+  },
+  "KOR": {
+   "mean": -0.869,
+   "median": -0.645,
+   "n": 71,
+   "n_over": 49
+  },
+  "MEX": {
+   "mean": -0.411,
+   "median": -0.504,
+   "n": 71,
+   "n_over": 44
+  },
+  "NLD": {
+   "mean": -0.23,
+   "median": 0.293,
+   "n": 71,
+   "n_over": 30
+  },
+  "POL": {
+   "mean": -0.098,
+   "median": -0.021,
+   "n": 71,
+   "n_over": 37
+  },
+  "SAU": {
+   "mean": 0.145,
+   "median": -0.269,
+   "n": 35,
+   "n_over": 18
+  },
+  "TUR": {
+   "mean": -1.476,
+   "median": -1.065,
+   "n": 70,
+   "n_over": 46
+  },
+  "USA": {
+   "mean": -0.376,
+   "median": -0.036,
+   "n": 71,
+   "n_over": 38
+  }
+ },
  "by_country_ex_pandemic": {
   "AUS": {
    "A": {
@@ -2398,6 +2520,30 @@
    ]
   }
  },
+ "choice": {
+  "margin_if_pandemic_in": 0.0304,
+  "pick_if_pandemic_in": "T",
+  "t_better_in": [
+   "CAN",
+   "CHN",
+   "DEU",
+   "FRA",
+   "IDN",
+   "IND",
+   "JPN",
+   "KOR",
+   "MEX",
+   "NLD",
+   "TUR",
+   "USA"
+  ],
+  "t_vs_a_bootstrap": {
+   "block": 8,
+   "hi": 0.0801,
+   "lo": -0.0096,
+   "reps": 1000
+  }
+ },
  "chosen": "A",
  "coverage": {
   "1": {
@@ -2449,7 +2595,101 @@
    }
   }
  },
+ "coverage_by_country_h4": {
+  "AUS": {
+   "in_80": 0.83,
+   "n": 30
+  },
+  "BRA": {
+   "in_80": 0.83,
+   "n": 30
+  },
+  "CAN": {
+   "in_80": 0.81,
+   "n": 31
+  },
+  "CHE": {
+   "in_80": 0.83,
+   "n": 30
+  },
+  "DEU": {
+   "in_80": 1.0,
+   "n": 31
+  },
+  "ESP": {
+   "in_80": 0.87,
+   "n": 31
+  },
+  "FRA": {
+   "in_80": 0.58,
+   "n": 31
+  },
+  "GBR": {
+   "in_80": 0.94,
+   "n": 31
+  },
+  "IDN": {
+   "in_80": 0.94,
+   "n": 31
+  },
+  "IND": {
+   "in_80": 0.93,
+   "n": 30
+  },
+  "ITA": {
+   "in_80": 0.9,
+   "n": 31
+  },
+  "JPN": {
+   "in_80": 0.97,
+   "n": 31
+  },
+  "KOR": {
+   "in_80": 0.94,
+   "n": 31
+  },
+  "MEX": {
+   "in_80": 0.94,
+   "n": 31
+  },
+  "NLD": {
+   "in_80": 0.87,
+   "n": 31
+  },
+  "POL": {
+   "in_80": 0.74,
+   "n": 31
+  },
+  "TUR": {
+   "in_80": 0.87,
+   "n": 30
+  },
+  "USA": {
+   "in_80": 0.9,
+   "n": 31
+  }
+ },
  "coverage_split": "2015-Q4",
+ "coverage_tested": [
+  "AUS",
+  "BRA",
+  "CAN",
+  "CHE",
+  "DEU",
+  "ESP",
+  "FRA",
+  "GBR",
+  "IDN",
+  "IND",
+  "ITA",
+  "JPN",
+  "KOR",
+  "MEX",
+  "NLD",
+  "POL",
+  "TUR",
+  "USA"
+ ],
  "first_origin": "2006-Q1",
  "pandemic_targets_excluded": [
   "2020-Q1",
@@ -2623,23 +2863,23 @@
  },
  "recent_bias_h4_since_2023": {
   "AUS": {
-   "mean_error": -0.53,
+   "mean_error": -0.533,
    "n": 14
   },
   "BRA": {
-   "mean_error": 0.9,
+   "mean_error": 0.904,
    "n": 14
   },
   "CAN": {
-   "mean_error": -0.55,
+   "mean_error": -0.548,
    "n": 15
   },
   "CHE": {
-   "mean_error": -0.4,
+   "mean_error": -0.398,
    "n": 14
   },
   "CHN": {
-   "mean_error": -1.15,
+   "mean_error": -1.148,
    "n": 15
   },
   "DEU": {
@@ -2647,11 +2887,11 @@
    "n": 15
   },
   "ESP": {
-   "mean_error": -0.12,
+   "mean_error": -0.117,
    "n": 15
   },
   "FRA": {
-   "mean_error": -0.24,
+   "mean_error": -0.241,
    "n": 15
   },
   "GBR": {
@@ -2663,78 +2903,88 @@
    "n": 15
   },
   "IND": {
-   "mean_error": 0.68,
+   "mean_error": 0.676,
    "n": 14
   },
   "ITA": {
-   "mean_error": -0.16,
+   "mean_error": -0.159,
    "n": 15
   },
   "JPN": {
-   "mean_error": 0.21,
+   "mean_error": 0.208,
    "n": 15
   },
   "KOR": {
-   "mean_error": -0.92,
+   "mean_error": -0.919,
    "n": 15
   },
   "MEX": {
-   "mean_error": -0.38,
+   "mean_error": -0.378,
    "n": 15
   },
   "NLD": {
-   "mean_error": -1.04,
+   "mean_error": -1.036,
    "n": 15
   },
   "POL": {
-   "mean_error": -1.39,
+   "mean_error": -1.389,
    "n": 15
   },
   "SAU": {
-   "mean_error": -0.39,
+   "mean_error": -0.395,
    "n": 15
   },
   "TUR": {
-   "mean_error": -1.05,
+   "mean_error": -1.053,
    "n": 14
   },
   "USA": {
-   "mean_error": 0.13,
+   "mean_error": 0.134,
    "n": 15
   }
  },
  "sensitivity": {
   "common_origins_from": "2016-Q4",
+  "twenty_better_in": [
+   "BRA",
+   "CHE",
+   "CHN",
+   "DEU",
+   "GBR",
+   "KOR",
+   "TUR"
+  ],
   "windows": {
    "20": {
     "by_country_mae_A_h4": {
-     "AUS": 0.842,
-     "BRA": 1.056,
-     "CAN": 1.225,
-     "CHE": 1.047,
-     "CHN": 0.942,
-     "DEU": 1.03,
-     "ESP": 1.115,
-     "FRA": 0.957,
-     "GBR": 1.137,
-     "IDN": 0.467,
-     "IND": 3.027,
-     "ITA": 0.776,
+     "AUS": 0.837,
+     "BRA": 1.058,
+     "CAN": 1.228,
+     "CHE": 1.05,
+     "CHN": 1.103,
+     "DEU": 1.032,
+     "ESP": 1.227,
+     "FRA": 0.985,
+     "GBR": 1.152,
+     "IDN": 0.488,
+     "IND": 3.069,
+     "ITA": 0.839,
      "JPN": 0.86,
-     "KOR": 0.965,
-     "MEX": 1.965,
-     "NLD": 1.221,
-     "POL": 1.922,
-     "SAU": 3.735,
-     "TUR": 2.345,
-     "USA": 0.581
+     "KOR": 0.961,
+     "MEX": 1.813,
+     "NLD": 1.338,
+     "POL": 1.993,
+     "SAU": 3.835,
+     "TUR": 2.317,
+     "USA": 0.578
     },
+    "min_pairs": 6,
     "n_per_horizon": 555,
     "pooled_mae_A": [
-     0.463,
-     0.76,
-     1.073,
-     1.358
+     0.477,
+     0.779,
+     1.102,
+     1.386
     ]
    },
    "40": {
@@ -2760,6 +3010,7 @@
      "TUR": 2.386,
      "USA": 0.569
     },
+    "min_pairs": 12,
     "n_per_horizon": 555,
     "pooled_mae_A": [
      0.463,

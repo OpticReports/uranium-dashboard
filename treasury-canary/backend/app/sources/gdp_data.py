@@ -85,12 +85,23 @@ def fetch_all() -> dict:
     for key, t in (("yoy", "GY"), ("qoq", "G1")):
         u = OECD_URL.format(codes=codes, t=t)
         body, st = fred_csv.download_cached(f"gdp_oecd_{t}.csv", u, TTL_OECD, headers=OECD_HEADERS, validate=_ok_oecd)
-        data = parse_oecd(body, COUNTRIES + AGGREGATES) if body else {}
+        data = {}
+        if body:
+            try:
+                data = parse_oecd(body, COUNTRIES + AGGREGATES)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("OECD %s unparseable: %s", t, exc)
         if not data:
             data, st = snap.get(key) or {}, ("snapshot" if snap.get(key) else "error")
+        else:                                   # an economy missing from a live reply keeps its snapshot copy, and says so
+            missing = [c for c in COUNTRIES + AGGREGATES if c not in data and (snap.get(key) or {}).get(c)]
+            if missing:
+                data = {**data, **{c: snap[key][c] for c in missing}}
+                st = "partial"
+                out.setdefault("filled", {})[key] = missing
         out[key], out["status"][key], out["src"][key] = data, st, u
     for key, ind, keep in (("pop", "LP", COUNTRIES), ("ngdpd", "NGDPD", COUNTRIES + ["WEOWORLD"]),
-                           ("weo_growth", "NGDP_RPCH", COUNTRIES + ["WEOWORLD", "G20"])):
+                           ("weo_growth", "NGDP_RPCH", COUNTRIES + ["WEOWORLD"])):
         u = IMF_URL.format(ind=ind)
         body, st = fred_csv.download_cached(f"gdp_imf_{ind}.json", u, TTL_IMF, validate=_ok_imf)
         data = {}

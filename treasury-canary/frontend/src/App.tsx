@@ -115,12 +115,12 @@ export default function App() {
         </header>
 
         {/* Tab bar (segmented control) */}
-        <div className="mb-4 inline-flex overflow-hidden rounded-lg border border-panelborder">
+        <div className="mb-4 inline-flex max-w-full overflow-x-auto rounded-lg border border-panelborder">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`border-r px-4 py-1.5 text-xs font-semibold transition-colors last:border-r-0 ${
+              className={`shrink-0 whitespace-nowrap border-r px-4 py-1.5 text-xs font-semibold transition-colors last:border-r-0 ${
                 tab === t.id
                   ? "border-sky-500 bg-sky-500/10 text-sky-300"
                   : "border-panelborder text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"

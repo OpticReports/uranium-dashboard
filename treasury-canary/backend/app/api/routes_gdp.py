@@ -44,9 +44,11 @@ def _rebuild() -> dict:
         with _lock:
             prev = _cache["data"]
             _cache["retry_after"] = time.time() + _TTL_DEGRADED
-        if prev is not None:
+        if prev is not None:                    # serve the last payload; "ok" turns "stale", a snapshot stays a snapshot
+            was = (prev.get("status") or {}).get("overall")
             stale = dict(prev, build_error=f"{type(exc).__name__}: {str(exc)[:200]}",
-                         status={**(prev.get("status") or {}), "overall": "stale"})
+                         build_fallback=prev.get("build_fallback") or "previous",
+                         status={**(prev.get("status") or {}), "overall": "stale" if was == "ok" else was})
             with _lock:
                 _cache["data"] = stale
             return stale
@@ -56,6 +58,7 @@ def _rebuild() -> dict:
             logger.exception("GDP-watch snapshot build failed too: %s", exc2)
             raise HTTPException(status_code=503, detail="GDP-watch payload unavailable; see server log") from exc2
         data["build_error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+        data["build_fallback"] = "snapshot"                # cold: the frozen snapshot, never "the previous build"
     with _lock:
         _cache.update(ts=time.time(), data=data)
     return data
@@ -80,14 +83,14 @@ def gdp_watch_payload(force: bool = False) -> dict:
                 _building["on"] = True
                 threading.Thread(target=_rebuild_in_background, name="gdp-watch-rebuild", daemon=True).start()
             return cached
-        wait = cached is None and not force and _building["on"]
+        wait = _building["on"]          # a cold page view or a forced warm-up while a build runs: wait for that one
         if not wait:
             _building["on"] = True
     if wait:
         while True:
             time.sleep(0.5)
             with _lock:
-                if _cache["data"] is not None or not _building["on"]:
+                if not _building["on"] or (cached is None and _cache["data"] is not None):
                     break
         with _lock:
             if _cache["data"] is not None:

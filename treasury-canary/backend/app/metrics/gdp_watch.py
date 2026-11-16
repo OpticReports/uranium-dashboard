@@ -20,6 +20,7 @@ import math
 import os
 import statistics
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ NAMES = {"USA": "United States", "CHN": "China", "DEU": "Germany", "JPN": "Japan
          "KOR": "South Korea", "AUS": "Australia", "MEX": "Mexico", "TUR": "Turkey", "IDN": "Indonesia",
          "NLD": "Netherlands", "SAU": "Saudi Arabia", "CHE": "Switzerland", "POL": "Poland",
          "G20": "G20 (OECD aggregate)", "OECD": "OECD total"}
-_RANK = {"ok": 0, "stale": 1, "snapshot": 2, "error": 3}
+_RANK = {"ok": 0, "stale": 1, "partial": 2, "snapshot": 3, "error": 4}
 
 
 def _load(path: str) -> tuple[dict, str | None]:
@@ -59,6 +60,19 @@ def qs(i: int) -> str:
 
 def _r(x, k=2):
     return None if x is None or (isinstance(x, float) and not math.isfinite(x)) else round(x, k)
+
+
+def _f(x: float, d: int = 1, sign: bool = False) -> str:
+    """half-up text for a recorded number (2.25 -> 2.3, 1.285 -> 1.29), never binary half-even."""
+    q = Decimal(str(x)).quantize(Decimal(1).scaleb(-d), rounding=ROUND_HALF_UP)
+    return f"{'+' if sign and q > 0 else ''}{q}"
+
+
+FISCAL = {"IND": "fiscal years (April-March): 2026 means FY2026/27"}
+POP_NOTE = {"SAU": "Saudi Arabia: the IMF population series swings by several points a year from 2018 to 2022 (-2.5% "
+                   "to +5.0%), so per-person growth in those years moves with population as much as with output.",
+            "POL": "Poland: the IMF population series drops 2.3% in 2021 (a one-year level break; the years either side "
+                   "move by under 0.5%), so the per-person rate around 2021 jumps with population, not output."}
 
 
 # ---------------------------------------------------------------------------- the frozen rule (== study)
@@ -127,9 +141,12 @@ def _record(code: str) -> dict | None:
     if a4 is None or not n4:
         return None
     rb = ((BACKTEST.get("recent_bias_h4_since_2023") or {}).get(code) or {}).get("mean_error")
+    bias = (BACKTEST.get("bias_h4") or {}).get(code) or {}
     return {"mae_h1": ((bc.get("A") or {}).get("1") or {}).get("mae"), "mae_h4": a4, "naive_mae_h4": n4,
             "skill_h4_pct": _r(100 * (1 - a4 / n4), 0), "naive_better": a4 > n4, "origins": bc.get("origins"),
-            "mean_miss_h4_since_2023": rb}
+            "mean_miss_h4_since_2023": rb, "n_h4": bias.get("n"), "n_over_h4": bias.get("n_over"),
+            "median_miss_h4": bias.get("median"),
+            "band_in_sample_only": code not in (BACKTEST.get("coverage_tested") or [])}
 
 
 def _shares(ngdpd: dict, year: str) -> dict[str, float]:
@@ -137,7 +154,7 @@ def _shares(ngdpd: dict, year: str) -> dict[str, float]:
     return {c: 100 * v[year] / w for c, v in ngdpd.items() if c != "WEOWORLD" and w and isinstance(v.get(year), (int, float))}
 
 
-def country_block(code: str, inp: dict, share: float | None) -> dict:
+def country_block(code: str, inp: dict, share: float | None, imf_years: list[str] | None = None) -> dict:
     y, q = (inp.get("yoy") or {}).get(code) or {}, (inp.get("qoq") or {}).get(code) or {}
     quarters = sorted(y)
     blk: dict = {"code": code, "name": NAMES.get(code, code), "share_world_pct": _r(share, 1),
@@ -165,9 +182,15 @@ def country_block(code: str, inp: dict, share: float | None) -> dict:
                            "band80": {"gdp": band(path, "p10", "p90"), "per_capita": band(pc, "p10", "p90") if pc else None},
                            "band50": {"gdp": band(path, "p25", "p75"), "per_capita": band(pc, "p25", "p75") if pc else None},
                            "band_basis": basis, "trend_qoq_pct": _r(mu, 3), "phi": _r(phi, 2)}
+        b50 = blk["forecast"]["band50"]["gdp"][3]
+        v4 = blk["forecast"]["gdp"][3]
+        blk["forecast"]["line_vs_band"] = (None if not b50 or v4 is None else
+                                           "above" if v4 > b50[1] else "below" if v4 < b50[0] else None)
     wg = (inp.get("weo_growth") or {}).get(code) or {}
-    yr = datetime.now(timezone.utc).year
-    blk["imf"] = {str(yr): wg.get(str(yr)), str(yr + 1): wg.get(str(yr + 1))} if wg else None
+    years = imf_years or sorted({qs(last_i + h)[:4] for h in H})     # the calendar years the projection reaches
+    blk["imf"] = {yr: wg.get(yr) for yr in years} if wg else None
+    blk["imf_basis"] = FISCAL.get(code, "calendar years")
+    blk["pop_note"] = POP_NOTE.get(code)
     blk["record"] = _record(code)
     return blk
 
@@ -188,10 +211,18 @@ def summaries(countries: list[dict]) -> list[str]:
                        + (f"; the United States and China alone are about {us_cn:.0f}%." if us_cn else "."))
     pooled = (BACKTEST.get("pooled_ex_pandemic") or {}).get(BACKTEST.get("chosen") or "A") or {}
     naive = (BACKTEST.get("pooled_ex_pandemic") or {}).get("N") or {}
-    if pooled.get("4") and naive.get("4"):
+    if pooled.get("4") and naive.get("4") and any(c.get("forecast") for c in countries):
         out.append(f"The dashed projection is a simple rule, not a forecast service: four quarters ahead its typical miss was "
-                   f"{pooled['4']['mae']:.1f} points ({naive['4']['mae']:.1f} for 'last value holds'), and it cannot see "
+                   f"{_f(pooled['4']['mae'])} points ({_f(naive['4']['mae'])} for 'last value holds'), and it cannot see "
                    "shocks like 2020 coming.")
+    for c in countries:
+        side, rec = (c.get("forecast") or {}).get("line_vs_band"), c.get("record") or {}
+        if side and rec.get("n_h4"):
+            word = "over" if side == "above" else "under"
+            out.append(f"For {c['name']} the line sits {side} its band: the rule {word}-projected it in "
+                       f"{rec['n_over_h4'] if side == 'above' else rec['n_h4'] - rec['n_over_h4']} of {rec['n_h4']} "
+                       f"backtests (median miss {_f(rec['median_miss_h4'], sign=True)} points), so outcomes have landed in "
+                       f"the band, {'below' if side == 'above' else 'above'} the line.")
     flagged = [c["name"] for c in countries if (c.get("record") or {}).get("naive_better")]
     if flagged:
         names = flagged[0] if len(flagged) == 1 else ", ".join(flagged[:-1]) + " and " + flagged[-1]
@@ -200,35 +231,85 @@ def summaries(countries: list[dict]) -> list[str]:
     return out
 
 
+def gw_untested(tested: list[str]) -> list[str]:
+    from ..sources.gdp_data import COUNTRIES
+    return [c for c in COUNTRIES if tested and c not in tested]
+
+
 def _span(vals: list[float]) -> str:
     lo, hi = round(100 * min(vals)), round(100 * max(vals))
     return f"{lo}%" if lo == hi else f"{lo}-{hi}%"
 
 
-def honesty() -> list[str]:
-    """The caveats, with every number read from the frozen study record."""
+def honesty(max_rule_vs_trend: float | None = None) -> list[str]:
+    """The caveats, with every number read from the frozen study record (and today's rule-vs-trend gap)."""
     cov = BACKTEST.get("coverage") or {}
     ex = [v["ex_pandemic"]["in_80"] for v in cov.values() if (v.get("ex_pandemic") or {}).get("in_80") is not None]
     al = [v["all"]["in_80"] for v in cov.values() if (v.get("all") or {}).get("in_80") is not None]
     rb = sorted(((v.get("mean_error"), NAMES.get(c, c)) for c, v in (BACKTEST.get("recent_bias_h4_since_2023") or {}).items()
                  if isinstance(v.get("mean_error"), (int, float))))
-    worst = ", ".join(f"{n} {e:+.1f}" for e, n in rb[:3] if e < 0)
+    worst = ", ".join(f"{n} {_f(e, sign=True)}" for e, n in rb[:3] if e < 0)
     sens = ((BACKTEST.get("sensitivity") or {}).get("windows") or {})
     w40, w20 = (sens.get("40") or {}).get("pooled_mae_A"), (sens.get("20") or {}).get("pooled_mae_A")
     out = ["The record is on today's revised data, not real-time vintages: first releases get revised, so real-time "
            "errors run larger than shown."]
+    tested = BACKTEST.get("coverage_tested") or []
+    per = BACKTEST.get("coverage_by_country_h4") or {}
     if ex and al:
+        lo_c = min(per.items(), key=lambda kv: kv[1]["in_80"]) if per else None
+        hi_c = max(per.items(), key=lambda kv: kv[1]["in_80"]) if per else None
         out.append(f"The pandemic quarters (2020-Q1 to 2021-Q4) are left out of the scores and the bands, and a shock like "
                    f"that falls outside them: fitted on origins to {BACKTEST.get('coverage_split')}, the 80% band held "
-                   f"{_span(ex)} of later outcomes without the pandemic and {_span(al)} with it.")
+                   f"{_span(ex)} of later outcomes without the pandemic and {_span(al)} with it"
+                   + (f", tested on {len(tested)} economies (per economy, four quarters ahead: {round(100 * lo_c[1]['in_80'])}% "
+                      f"{NAMES.get(lo_c[0], lo_c[0])} to {round(100 * hi_c[1]['in_80'])}% {NAMES.get(hi_c[0], hi_c[0])})"
+                      if lo_c and hi_c else "") + "."
+                   + (f" {' and '.join(NAMES.get(c, c) for c in gw_untested(tested))} have too short a history for that "
+                      "test, so their bands are in-sample only." if gw_untested(tested) else "")
+                   + f" The bands drawn use every backtest miss from {BACKTEST.get('first_origin')} on, so they are "
+                     "in-sample too; the split test is how far to trust them.")
+    ch = BACKTEST.get("choice") or {}
+    bs = ch.get("t_vs_a_bootstrap") or {}
+    pooled = BACKTEST.get("pooled_ex_pandemic") or {}
+    if bs and pooled.get("A") and pooled.get("T"):
+        margin = statistics.fmean(pooled["T"][str(h)]["mae"] for h in H) / statistics.fmean(pooled["A"][str(h)]["mae"] for h in H) - 1
+        out.append(f"The rule was chosen in-sample, on the same data: it beat 'trend only' by about {_f(100 * margin, 0)}% on "
+                   f"the scores, inside the noise (95% interval {_f(100 * bs['lo'], 0, True)}% to "
+                   f"{_f(100 * bs['hi'], 0, True)}%); with the pandemic quarters in, trend "
+                   f"would have been chosen, and trend had the lower error in {len(ch.get('t_better_in') or [])} of 20 economies."
+                   + (f" Today the two differ by at most {_f(max_rule_vs_trend, 1)} points." if max_rule_vs_trend is not None else ""))
     if worst:
+        tb = (BACKTEST.get("sensitivity") or {}).get("twenty_better_in") or []
         out.append(f"The trend is a 10-year median, so it lags slowdowns: since 2023 the projection four quarters ahead ran "
                    f"too high in most economies (mean miss {worst} points)."
-                   + (f" A 5-year window cuts China's error but raises the pooled error four quarters ahead "
-                      f"({w20[-1]:.2f} vs {w40[-1]:.2f}), so the frozen 10-year rule stands." if w40 and w20 else ""))
-    out += ["The IMF projections beside it are an independent reference and are not backtested here.",
+                   + (f" A 5-year window does better in {len(tb)} of 20 economies (China among them) but worse pooled "
+                      f"({_f(w20[-1], 2)} vs {_f(w40[-1], 2)} points four quarters ahead, on the origins both windows "
+                      f"share, {(BACKTEST.get('sensitivity') or {}).get('common_origins_from')} on), so the frozen "
+                      "10-year rule stands."
+                      if w40 and w20 else ""))
+    out += ["Per person, the line is the GDP projection less IMF population growth, and its band is the GDP band moved "
+            "with it: the per-person version was not backtested on its own.",
+            "The IMF projections beside it are an independent reference and are not backtested here.",
             "Descriptive macro context: no trading signal or market edge was tested in this study."]
     return out
+
+
+def _max_rule_vs_trend(inp: dict) -> float | None:
+    """the largest gap, any economy and horizon, between today's rule path and the trend-only path (phi = 0)."""
+    gaps = []
+    for c, y in (inp.get("yoy") or {}).items():
+        q = (inp.get("qoq") or {}).get(c) or {}
+        if c in ("G20", "OECD") or not y or not q:
+            continue
+        t = qi(max(y, key=qi))
+        path, mu, phi = forecast_path(y, q, t)
+        if not path or mu is None:
+            continue
+        level = 1 + y[qs(t)] / 100
+        for h, v in zip(H, path):
+            level = level * (1 + mu / 100) / (1 + q[qs(t + h - 4)] / 100)
+            gaps.append(abs(v - 100 * (level - 1)))
+    return max(gaps) if gaps else None
 
 
 def build_gdp_watch(inp: dict, today: str | None = None) -> dict:
@@ -238,25 +319,30 @@ def build_gdp_watch(inp: dict, today: str | None = None) -> dict:
     today = today or datetime.now(timezone.utc).date().isoformat()
     share_year = str(int(today[:4]) - 1)
     shares = _shares(inp.get("ngdpd") or {}, share_year)
-    blocks = [country_block(c, inp, shares.get(c)) for c in COUNTRIES]
+    # one set of IMF years for every row: those the projection from the latest quarter reaches (never the clock)
+    latest = max((max(y, key=qi) for c, y in (inp.get("yoy") or {}).items() if c in COUNTRIES and y), default=None, key=qi)
+    imf_years = sorted({qs(qi(latest) + h)[:4] for h in H}) if latest else None
+    blocks = [country_block(c, inp, shares.get(c), imf_years) for c in COUNTRIES]
     ranked = sorted((b for b in blocks if b["series"]), key=lambda b: -(b["share_world_pct"] or 0))
     for b in blocks:
         b["default"] = b in ranked[:DEFAULT_N]
     aggs = [dict(country_block(a, inp, None), default=False) for a in AGGREGATES]
     st = inp.get("status") or {}
-    overall = max((st.get(k) or "error" for k in ("yoy", "qoq", "pop", "ngdpd", "weo_growth")), key=lambda s: _RANK.get(s, 3))
+    overall = max((st.get(k) or "error" for k in ("yoy", "qoq", "pop", "ngdpd", "weo_growth")), key=lambda s: _RANK.get(s, 4))
     lastq = max((b["last"] for b in blocks if b["last"]), default=None, key=qi)
     payload = {
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"), "as_of": lastq, "share_year": share_year,
-        "status": {"overall": overall, "inputs": st}, "src": inp.get("src"), "snapshot_as_of": inp.get("snapshot_as_of"),
+        "status": {"overall": overall, "inputs": st, "filled": inp.get("filled") or None}, "src": inp.get("src"),
+        "snapshot_as_of": inp.get("snapshot_as_of"),
         "countries": blocks, "aggregates": aggs,
-        "method": {"name": "AR(1) toward the 10-year median quarter-on-quarter growth, rolled into the year-on-year rate",
+        "method": {"name": "AR(1) toward the 10-year median quarter-on-quarter growth (slope through the origin of deviations "
+                           "from that median), rolled into the year-on-year rate",
                    "window_quarters": WINDOW, "phi_max": PHI_MAX, "pandemic_excluded": sorted(PANDEMIC),
                    "study": "studies/gdp-watch.md (backtest v1, frozen " + str(BACKTEST.get("as_of")) + ")"},
         "record": {"pooled_ex_pandemic": BACKTEST.get("pooled_ex_pandemic"), "pooled_all": BACKTEST.get("pooled_all"),
                    "coverage": BACKTEST.get("coverage"), "sensitivity": BACKTEST.get("sensitivity"),
                    "first_origin": BACKTEST.get("first_origin"), "chosen": BACKTEST.get("chosen")},
-        "honesty": honesty(),
+        "honesty": honesty(_max_rule_vs_trend(inp)),
     }
     payload["summaries"] = summaries(blocks)
     return payload
