@@ -18,7 +18,6 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
-import numpy as np
 import pandas as pd
 
 from .. import db
@@ -78,6 +77,8 @@ def total_return_series(con: sqlite3.Connection, ticker: str,
         if len(pre) < 2:
             raise SeriesError(f"{ticker}: proxy {proxy} has <2 rows before splice {effective:%Y-%m-%d}")
         post = frame.loc[frame.index >= effective]
+        if post.empty:
+            raise SeriesError(f"{ticker}: no live rows on or after splice {effective:%Y-%m-%d}")
         anchor_date = post.index[0]
         anchor = float(post["close_adj"].iloc[0])
         last_pre = pre.index[-1]
