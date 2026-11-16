@@ -231,11 +231,11 @@ def summaries(countries: list[dict]) -> list[str]:
         side, rec = (c.get("forecast") or {}).get("line_vs_band"), c.get("record") or {}
         if side and rec.get("n_h4"):
             word = "over" if side == "above" else "under"
-            out.append(f"For {c['name']} the line sits {side} its 50% band: the rule {word}-projected it in "
+            out.append(f"For {c['name']} the line sits {side} its 50% band four quarters ahead: the rule {word}-projected it in "
                        f"{rec['n_over_h4'] if side == 'above' else rec['n_h4'] - rec['n_over_h4']} of {rec['n_h4']} "
                        f"backtests (median miss {_f(rec['median_miss_h4'], sign=True)} points), so past outcomes landed "
                        f"{'below' if side == 'above' else 'above'} the line, where the band sits.")
-    flagged = [c["name"] for c in countries if (c.get("record") or {}).get("naive_better")]
+    flagged = [c["name"] for c in countries if (c.get("record") or {}).get("naive_better") and c.get("forecast")]
     if flagged:
         names = flagged[0] if len(flagged) == 1 else ", ".join(flagged[:-1]) + " and " + flagged[-1]
         out.append(f"For {names} the rule did worse than 'last value holds' in the backtest: read those projections with "

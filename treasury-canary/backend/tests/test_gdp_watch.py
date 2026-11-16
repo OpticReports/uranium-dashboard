@@ -273,7 +273,7 @@ def test_a_line_outside_its_own_band_is_flagged_with_its_record(payload):
     assert list(flagged) == ["CHN"] and flagged["CHN"]["forecast"]["line_vs_band"] == "above"
     r = flagged["CHN"]["record"]
     assert (r["n_over_h4"], r["n_h4"]) == (31, 32) and r["median_miss_h4"] == gw.BACKTEST["bias_h4"]["CHN"]["median"]
-    assert ("For China the line sits above its 50% band: the rule over-projected it in 31 of 32 backtests (median miss "
+    assert ("For China the line sits above its 50% band four quarters ahead: the rule over-projected it in 31 of 32 backtests (median miss "
             f"{gw._f(r['median_miss_h4'], sign=True)} points), so past outcomes landed below the line, where the band "
             "sits.") in " ".join(payload["summaries"])
     tab = open(os.path.join(ROOT, "frontend", "src", "components", "GdpTab.tsx"), encoding="utf-8").read()
@@ -346,7 +346,7 @@ def test_no_projection_means_no_word_about_one(inputs):
     q["qoq"] = {}                                                # yoy and q/q out of step: nothing can be projected
     p = gw.build_gdp_watch(q, today="2026-11-16")
     assert all(c["forecast"] is None for c in p["countries"])
-    assert not any("dashed projection" in s for s in p["summaries"])
+    assert not any("dashed projection" in s or "projections" in s for s in p["summaries"])
 
 
 def test_the_honesty_box_says_what_is_in_sample_and_what_was_not_tested(payload):

@@ -188,13 +188,17 @@ function EndLabels({ labels, formattedGraphicalItems }: { labels: EndLabel[]; fo
     if (last) pts.push({ ...lab, x: last.x as number, y: last.y as number });
   }
   pts.sort((a, b) => a.y - b.y);
+  const y0 = pts.map((p) => p.y);                                   // where each line really ends
   for (let i = 1; i < pts.length; i++) if (pts[i].y - pts[i - 1].y < 12) pts[i].y = pts[i - 1].y + 12;
   return (
     <g>
-      {pts.map((p) => (
-        <text key={p.key} x={p.x + 6} y={p.y} dy={3} fontSize={10} fill="#cbd5e1">
-          <tspan fill={p.color}>■ </tspan>{p.text}
-        </text>
+      {pts.map((p, i) => (
+        <g key={p.key}>
+          {Math.abs(p.y - y0[i]) > 3 && <line x1={p.x + 1} y1={y0[i]} x2={p.x + 5} y2={p.y} stroke={p.color} strokeWidth={1} />}
+          <text x={p.x + 6} y={p.y} dy={3} fontSize={10} fill="#cbd5e1">
+            <tspan fill={p.color}>■ </tspan>{p.text}
+          </text>
+        </g>
       ))}
     </g>
   );
@@ -212,7 +216,7 @@ function tableNotes(sel: GdpCountry[], m: GdpMeasure): string[] {
     const r = c.record;
     if (side && r && isNum(r.n_h4) && isNum(r.n_over_h4) && isNum(r.median_miss_h4)) {
       const k = side === "above" ? r.n_over_h4 : r.n_h4 - r.n_over_h4;
-      out.push(`* ${c.name}: the line sits ${side} its own 50% band. The rule ${side === "above" ? "over" : "under"}-projected it in ${k} of ${r.n_h4} backtests (median miss ${pct(r.median_miss_h4).replace("%", "")} points), so past outcomes landed ${side === "above" ? "below" : "above"} the line, where the band sits.`);
+      out.push(`* ${c.name}: four quarters ahead, the line sits ${side} its own 50% band. The rule ${side === "above" ? "over" : "under"}-projected it in ${k} of ${r.n_h4} backtests (median miss ${pct(r.median_miss_h4).replace("%", "")} points), so past outcomes landed ${side === "above" ? "below" : "above"} the line, where the band sits.`);
     }
   }
   const ins = sel.filter((c) => c.forecast && c.record?.band_in_sample_only).map((c) => c.name);
@@ -420,7 +424,7 @@ export function GdpView({ data, initial }: { data: GdpWatch; initial?: GdpInitia
                 <span className="inline-block h-2 w-3 rounded-sm" style={{ background: SLOTS[slots[code]] }} />
                 {c.name} <span className="font-mono text-slate-400">{pct(v?.[v.length - 1])}</span>
                 {fcOn && f && <span className="font-mono text-slate-500">rule: {pct(f[f.length - 1])} in {c.forecast?.quarters[3]}</span>}
-                {fcOn && f && c.forecast?.line_vs_band && <span className="text-slate-500">(line {c.forecast.line_vs_band} its 50% band*)</span>}
+                {fcOn && f && c.forecast?.line_vs_band && <span className="text-slate-500">(line {c.forecast.line_vs_band} its 50% band at 4q*)</span>}
               </span>
             );
           })}
@@ -428,7 +432,7 @@ export function GdpView({ data, initial }: { data: GdpWatch; initial?: GdpInitia
 
         {rows.length > 1 ? (
           <div ref={chartRef} style={{ width: "100%", height: 340 }} className="mt-2" data-testid="gdp-chart" role="img"
-            aria-label={`${measure === "gdp" ? "Real GDP growth" : "Real GDP growth per person"}, % on a year earlier, ${rows[0]?.q} to ${rows[rows.length - 1]?.q}: ${visible.map((c) => byCode[c].name).join(", ")}. The table below has the values.`}>
+            aria-label={`${measure === "gdp" ? "Real GDP growth" : "Real GDP growth per person"}, % on a year earlier, ${rows[0]?.q} to ${rows[rows.length - 1]?.q}: ${visible.map((c) => byCode[c].name).join(", ")}. The table below has each economy's latest value and the rule's value four quarters on.`}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={rows} margin={{ top: 8, right: 44, bottom: 0, left: 0 }}>
                 <CartesianGrid stroke={GRID} vertical={false} />

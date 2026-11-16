@@ -144,7 +144,14 @@ All checks are point in time, at 4q, with the pandemic out (`studies/gdp_watch/e
     - the placebo's n is stated;
     - "2.9%" now reads "about 3%";
     - the population notes are worded from the series served.
-- **Build reviewer:** pending.
+- **Build reviewer: all 12 GDP items CLOSED.**
+  - Second verifier on China's band flag: CLOSED. Sign and counts recomputed, and only China's line sits outside its bands at any horizon.
+  - NOTEs, folded in:
+    - the flag now says "four quarters ahead" (China's line is inside its band at the first projected quarter);
+    - the smoke test no longer counts one-point areas as bands;
+    - end labels moved off their line get a leader line;
+    - the chart's accessible label says what the table holds;
+    - the takeaways never mention projections that aren't there.
 
 ## 7. Open questions (ranked)
 
