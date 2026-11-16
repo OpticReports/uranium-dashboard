@@ -3,7 +3,8 @@
 Simulation model: portfolio holdings drift with daily asset returns;
 rebalancing decisions are evaluated at MONTH-END only (spec granularity).
 Modes:
-  threshold — rebalance a sleeve only when |weight/target − 1| > band
+  threshold — when ANY holding's |weight/target − 1| > band, rebalance ALL
+              holdings back to target (whole-portfolio, not one sleeve)
   calendar  — rebalance every `calendar_months` months
   none      — buy and hold from the start weights
 Every trade (including the initial buy) pays the per-ticker one-way cost in
