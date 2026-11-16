@@ -5,8 +5,10 @@ Data alarms only, never a market signal: the gauge itself may colour or notify o
 
 - the forward ledger could not be written, or is unreadable, or a step that writes the pre-registration record
   crashed, or the ledger's disk refuses a test write (one problem, whatever the step that hit it). The text never
-  names the row or step: most rows are written only when a firing appears, so naming one would announce a firing
-  (Q6). The test write runs on every scheduler pass, so a disk alarm never waits for a firing to surface;
+  names the row or step, and while the disk test fails it carries the disk error alone, since whether a write was
+  also attempted would say a firing was pending: most rows are written only when a firing appears, so naming one
+  would announce a firing (Q6). The test write runs on every scheduler pass, so a disk alarm never waits for a
+  firing to surface. A resolve quotes the problem as first announced, never a later silent edit;
 - the CP rate behind the funding word is stale or missing: FRED itself more than a week behind, the CP fetch
   failed, the Fed publishing no rate for over 5 business days (n.a. when too few trades print), or no CP data at all;
 - the rebuild failed (the tab is serving the previous build, has no live data, or is down).
@@ -41,6 +43,7 @@ UNREADABLE = "Forward ledger: the ledger file is unreadable or wrongly shaped; n
 _EXC = re.compile(r"^([A-Za-z_]\w*(?:Error|Exception)): ")
 _FALLBACK_RANK = {"previous": 1, "empty": 2, "none": 3}                  # how bad a failed build's fallback is
 PROBE_NAME = ".dollar_health_probe"
+PROBE_MARGIN = 64 * 1024                      # bytes beyond the ledger's size: the rows one pass could add, with room
 _MEMORY: dict[str, dict] = {}                                          # state path -> the last open set, this process
 
 
@@ -70,6 +73,8 @@ def _cp_text(payload: dict) -> str | None:
 
 def _ledger_text(msgs: list[str], probe_error: str | None) -> str | None:
     """one generic line: the cause (the OS error, or the crash's exception type), never the row or step named."""
+    if probe_error:                               # the disk error alone: "a write was also tried" would mean a firing
+        return f"Forward ledger: the disk refused a test write ({probe_error})."
     if any("unreadable" in m for m in msgs):
         return UNREADABLE                         # one root cause, one fixed line
     causes: list[str] = []
@@ -81,8 +86,6 @@ def _ledger_text(msgs: list[str], probe_error: str | None) -> str | None:
             c = f"a recording step failed ({x.group(1)})" if x else "a recording step failed"
         if c not in causes:
             causes.append(c)
-    if probe_error:
-        causes.append(f"the disk refused a test write ({probe_error})")
     return ("Forward ledger: " + "; ".join(causes) + ".") if causes else None
 
 
@@ -132,21 +135,22 @@ def _save(path: str, open_now: dict) -> None:
 
 
 def probe(ledger_file: str) -> str | None:
-    """None if the ledger's disk takes a write the size of the ledger (it is rewritten whole) and the ledger file is
-    writable; else the error. Run on every scheduler pass, so a disk alarm never waits for a row to be written."""
+    """None if the ledger's directory takes an atomic write (temp file, fsync, replace: how the ledger is rewritten)
+    the size of the ledger plus a margin for the rows a firing would add; else the error. Run on every scheduler pass,
+    so a disk alarm never waits for a row to be written. It holds the ledger lock, so it never starves a real write."""
+    from .dollar_watch import _LEDGER_LOCK
     d = os.path.dirname(os.path.abspath(ledger_file))
     p = os.path.join(d, PROBE_NAME)
     try:
-        size = os.path.getsize(ledger_file) if os.path.exists(ledger_file) else 0
-        os.makedirs(d, exist_ok=True)
-        with open(p + ".tmp", "wb") as fh:
-            fh.write(b"\0" * min(max(size, 4096), 8 << 20))
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(p + ".tmp", p)
-        os.remove(p)
-        if size and not os.access(ledger_file, os.W_OK):
-            return "PermissionError: the ledger file is not writable"
+        with _LEDGER_LOCK:
+            size = os.path.getsize(ledger_file) if os.path.exists(ledger_file) else 0
+            os.makedirs(d, exist_ok=True)
+            with open(p + ".tmp", "wb") as fh:
+                fh.write(b"\0" * min(size + PROBE_MARGIN, 8 << 20))
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(p + ".tmp", p)
+            os.remove(p)
         return None
     except Exception as exc:  # noqa: BLE001
         try:
@@ -173,16 +177,18 @@ def notify(payload: dict, state_path: str, today: str, send: Callable[[str], obj
         now = {"build": now["build"], **kept, **({"ledger": disk} if disk and "ledger" not in kept else {})}
     opened = [k for k in now if k not in prev]
     resolved = [k for k in prev if k not in now]
-    worse = [k for k in now if k in prev and _rank(payload, k) > int(prev[k].get("rank") or 0)]
+    worse = [k for k in now if k in prev and "rank" in prev[k] and _rank(payload, k) > int(prev[k]["rank"] or 0)]
     parts = []
     if opened or worse:
         parts.append(HEAD + "\n" + "\n".join([f"• {now[k]}" for k in opened] + [f"• Worse: {now[k]}" for k in worse]))
     if resolved:
-        lines = "\n".join(f"• Was: {prev[k].get('text') or k}" for k in resolved)
+        lines = "\n".join(f"• Was: {prev[k].get('announced') or prev[k].get('text') or k}" for k in resolved)
         parts.append((DONE + "\n" if not parts else "Resolved:\n") + lines)
     msgs = ["\n".join(parts)] if parts else []
     delivered = bool(msgs) and allowed(LEVEL) and bool(send(msgs[0]))
-    state = {k: {"since": (prev.get(k) or {}).get("since") or today, "text": t, "rank": _rank(payload, k)}
+    state = {k: {"since": (prev.get(k) or {}).get("since") or today, "text": t, "rank": _rank(payload, k),
+                 "announced": t if k in opened or k in worse else (prev.get(k) or {}).get("announced")
+                 or (prev.get(k) or {}).get("text") or t}
              for k, t in now.items()}
     if msgs and not delivered:                   # unannounced: retry next run (an open unsaved, a resolve or a
         state = {k: v for k, v in state.items() if k not in opened}           # worsening kept as it was)
