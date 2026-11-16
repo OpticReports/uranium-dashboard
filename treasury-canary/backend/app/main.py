@@ -60,6 +60,11 @@ def _start_scheduler(app: FastAPI) -> None:
             warm_dollar_watch(force=True)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Dollar-watch warm-up failed: %s", exc)
+        try:   # GDP tab: OECD quarterly accounts + IMF WEO, a few seconds of keyless fetches
+            from .api.routes_gdp import warm_gdp_watch
+            warm_gdp_watch(force=True)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("GDP-watch warm-up failed: %s", exc)
 
     from datetime import datetime, timedelta, timezone
     sched.add_job(_job, IntervalTrigger(minutes=settings.refresh_interval_minutes),
@@ -91,7 +96,7 @@ app.add_middleware(
 )
 
 from .api import (  # noqa: E402
-    routes_ai_debt, routes_composite, routes_cycle, routes_distress, routes_dollar, routes_events, routes_flows,
+    routes_ai_debt, routes_composite, routes_cycle, routes_distress, routes_dollar, routes_events, routes_flows, routes_gdp,
     routes_labor, routes_margin,
     routes_margin_fast, routes_rate_ensemble, routes_rates, routes_shock_sim,
     routes_metrics, routes_news, routes_pins, routes_severity, routes_statregime,
@@ -121,6 +126,7 @@ from .api import routes_squeeze  # noqa: E402
 app.include_router(routes_squeeze.router)
 app.include_router(routes_ai_debt.router)
 app.include_router(routes_dollar.router)
+app.include_router(routes_gdp.router)
 
 
 @app.post("/telegram/webhook")

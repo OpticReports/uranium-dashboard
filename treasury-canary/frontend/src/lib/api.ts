@@ -1081,6 +1081,7 @@ export const api = {
     getJson<unknown>("/refresh", { method: "POST" }),
   aiDebt: () => getJson<AiDebt>("/ai-debt"),
   dollarWatch: () => getJson<DollarWatch>("/dollar-watch"),
+  gdpWatch: () => getJson<GdpWatch>("/gdp-watch"),
 };
 
 // ---------------------------------------------------------------------------
@@ -1550,4 +1551,38 @@ export interface DollarWatch {
   } | null;
   honesty?: string[] | null;
   build_error?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// GDP tab (GET /gdp-watch; studies/gdp-watch.md)
+// ---------------------------------------------------------------------------
+export type GdpMeasure = "gdp" | "per_capita";
+export type GdpRange = [number, number] | null;
+export interface GdpSeries { quarters: string[]; gdp: Array<number | null>; per_capita: Array<number | null> | null }
+export interface GdpBands { gdp: GdpRange[] | null; per_capita: GdpRange[] | null }
+export interface GdpForecast {
+  from: string; quarters: string[]; gdp: Array<number | null>; per_capita: Array<number | null> | null;
+  band80: GdpBands; band50: GdpBands; band_basis?: string | null; trend_qoq_pct?: number | null; phi?: number | null;
+}
+export interface GdpRecord {
+  mae_h1?: number | null; mae_h4?: number | null; naive_mae_h4?: number | null; skill_h4_pct?: number | null;
+  naive_better?: boolean | null; origins?: string[] | null; mean_miss_h4_since_2023?: number | null;
+}
+export interface GdpCountry {
+  code: string; name: string; share_world_pct: number | null; aggregate: boolean; first: string | null; last: string | null;
+  default?: boolean; series: GdpSeries | null; forecast: GdpForecast | null; imf: Record<string, number | null> | null;
+  record: GdpRecord | null;
+}
+export interface GdpMae { n?: number; mae?: number; rmse?: number; bias?: number }
+export interface GdpWatch {
+  generated?: string | null; as_of?: string | null; share_year?: string | null; snapshot_as_of?: string | null;
+  build_error?: string | null; status?: { overall?: string | null; inputs?: Record<string, string> | null } | null;
+  countries?: GdpCountry[] | null; aggregates?: GdpCountry[] | null;
+  method?: { name?: string; window_quarters?: number; phi_max?: number; pandemic_excluded?: string[]; study?: string } | null;
+  record?: {
+    pooled_ex_pandemic?: Record<string, Record<string, GdpMae>> | null; pooled_all?: Record<string, Record<string, GdpMae>> | null;
+    coverage?: Record<string, { ex_pandemic?: { n?: number; in_80?: number; in_50?: number }; all?: { n?: number; in_80?: number; in_50?: number } }> | null;
+    first_origin?: string | null; chosen?: string | null;
+  } | null;
+  honesty?: string[] | null; summaries?: string[] | null;
 }
