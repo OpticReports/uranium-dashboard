@@ -423,6 +423,26 @@ never on a real IB gateway):
   characters (a full disk's is 70); its last line, the resume instruction,
   is then what is cut first.
 
+## A fund IBKR will not let the account open (first buys)
+
+2026-11-16: the mirror's first ever ZVOL buy (760, limit 6.77) came back "[202] Order Canceled -
+reason:Order was discarded." That is all the API carries. Client Portal's (i) on the order said:
+"Rejected by System: Not allowed to open a position: To accept your order in this security, please
+login to Client Portal and verify with the token we emailed you." Trading permissions were already
+in place (Stocks; Complex or Leveraged ETPs). IBKR can ask for this one-time verification the first
+time an account opens a security, so the risk sits with funds the live account has never bought:
+23 of the 30 the four live trees can hold, on 2026-11-16.
+
+- The 15:15 preview (preclose.py, mirror_firstbuy.py) reads the executor's feed (read token, GET only)
+  and alerts "FIRST BUY ON IBKR" for any engine set to buy a fund the account has never bought, so the
+  routine pushes it ~35 minutes before the decision. The set of funds bought is kept in
+  results/mirror/ibkr-bought.json (union of the feed's positions and filled buys).
+- The 16:35 parity UNFILLED alert adds the fix when an order died with IBKR's bare "discarded".
+- A rejected buy leaves that part of the sleeve in cash (book and account agree) and the mirror buys
+  again at the next session. No substitute fund is bought: that would change the strategy on one side.
+- Owner action when it fires: verify the emailed token in Client Portal. Do not place a test order in
+  the mirror account (the executor refuses an account holding anything outside its book).
+
 ## Rollout (executor law: staged, one step at a time)
 
 | Stage | Settings | What happens |
