@@ -143,3 +143,63 @@ def test_psar_tightens_and_binds():
     _step(b, A, E, 6, x, open=lvl - 0.5, high=lvl + 1, low=lvl - 1, close=lvl)
     t = b.trades[-1]
     assert t.exit_reason == "SAR" and t.exit_price == max(lvl, lvl - 0.5)   # touched: fills at the level
+
+
+# G8 additions (counter-agent C, defect 4): long side, V1 floor, V2 step,
+# and the V5 training cutoff.
+def _long_book(qty=1.0):
+    b = Book(cfg=S4_CFG)
+    b.position = Position(side="L", entry_ts=0, entry_price=100.0, qty=qty, notional=100.0 * qty,
+                          stop_price=90.0, atr_at_entry=1.0, signal_ts=-H, fee_bps=12.0, trail=90.0)
+    st = _fresh_state(1.0, 100.0)
+    st.update(qty0=qty, frac=1.0, vol0=0.01, sar=None, ep=None, af=None)
+    b._st = st
+    return b
+
+
+def test_trend_flip_exits_long_when_trend_turns_down():
+    A, E = _asset(), _E(6, t=-3.0)
+    b, x = _long_book(), X(ts_set=(30,), ts_div=2.0, ts_mode="flip")
+    _step(b, A, E, 1, x)
+    _step(b, A, E, 2, x, open=99.3)
+    assert b.trades[-1].exit_reason == "TREND" and b.trades[-1].exit_price == 99.3
+    A, E = _asset(), _E(6, t=+3.0)                         # trend still up: no exit
+    b = _long_book()
+    _step(b, A, E, 1, x)
+    assert b._st["flag"] is None
+
+
+def test_volscale_floor_is_quarter():
+    A, E = _asset(), _E(6, rv=0.10)                       # vol x10 -> 1/10, floored at 0.25
+    b, x = _short_book(), X(vs_band=0.10, vs_kind="rv")
+    _step(b, A, E, 1, x)
+    assert abs(b._st["flag_f"] - 0.75) < 1e-12
+
+
+def test_trend_scale_needs_quarter_step():
+    A, E = _asset(), _E(6, t=-1.7)                        # short: aligned signal 0.85 -> step 0.15 < 0.25
+    b, x = _short_book(), X(ts_set=(30,), ts_div=2.0, ts_mode="scale")
+    _step(b, A, E, 1, x)
+    assert b._st["flag"] is None
+    A, E = _asset(), _E(6, t=-1.0)                        # aligned 0.5 -> step 0.5 >= 0.25: scale to 0.5
+    b = _short_book()
+    _step(b, A, E, 1, x)
+    assert b._st["flag"] == "SCALE" and abs(b._st["flag_f"] - 0.5) < 1e-12
+
+
+def test_v5_trains_only_on_trades_closed_before_the_year():
+    import harness2 as h
+    from harness2 import year_start
+    rng = random.Random(3)
+    early = [(year_start(2020) - 1000 * k, [rng.gauss(0, 1) for _ in range(11)], float(rng.random() < 0.3))
+             for k in range(1, 700)]
+    late = [(year_start(2020) + 1000 * k, [rng.gauss(2, 1) for _ in range(11)], 1.0) for k in range(700)]
+    saved = dict(h.MODELS)
+    try:
+        h.train_models(early + late, years=[2020])
+        got = h.MODELS[2020]
+        ref = h._fit_logistic([f for _, f, _ in early], [l for _, _, l in early])
+        assert all(abs(a - b) < 1e-12 for a, b in zip(got[2], ref[2])) and abs(got[3] - ref[3]) < 1e-12
+    finally:
+        h.MODELS.clear()
+        h.MODELS.update(saved)

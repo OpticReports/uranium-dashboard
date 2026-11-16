@@ -75,8 +75,8 @@ ax.set_xlabel(f"Change in MAR on BTC, live strategy mix 2022-26 (baseline {base[
 ax.set_ylabel("Avg MAR change on ETH, LTC, XRP, BCH")
 ax.legend(loc="lower right", frameon=False, fontsize=8, labelcolor=INK2)
 title(ax, "0 of 28 adaptive exits made the cut",
-      "Each dot is one registered exit rule. The 12 fresh holdout coins were never touched: "
-      "nothing qualified to be tested on them.")
+      "Each dot is one registered exit rule. No rule was run on the 12 fresh holdout coins: "
+      "none qualified.")
 fig.tight_layout()
 fig.savefig(os.path.join(HERE, "exit2_fig1_map.png"), facecolor=SURF)
 
@@ -101,8 +101,8 @@ ax.annotate("regime-based trails: more growth on BTC 2013-26,\nbut worse on the 
             arrowprops=dict(arrowstyle="-", color=INK2, lw=0.8))
 ax.set_ylim(top=6e4)
 title(ax, "Keeping more of each run: some exits won on BTC's history, none held up elsewhere",
-      "Each dot is a rule (BTC trend leg alone, 2013 to Jul 2026, in-sample). "
-      "No rule beat today's trail on BTC and on the other coins.")
+      "Each dot is a rule (BTC trend leg alone, 2013 to Jul 2026, in-sample; the two Parabolic SAR rules "
+      "went below zero and are not shown). None also held up on the other coins.")
 fig.tight_layout()
 fig.savefig(os.path.join(HERE, "exit2_fig2_keep_vs_growth.png"), facecolor=SURF)
 
