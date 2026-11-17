@@ -437,15 +437,21 @@ time an account opens a security, so the risk sits with funds the live account h
   8 s timeout, after the preview's own lines are printed) and alerts "FIRST BUY ON IBKR" for any live,
   unfrozen engine set to buy a fund the account has never bought, so the routine pushes it ~35
   minutes before the decision. For a threshold engine whose corridor does not trip, the target's funds
-  are also checked when the mirror sleeve will trade to target anyway under mirror_core.decide_sleeve's
-  rule: cash over 5% of equity, in debt, holding nothing, or the largest single-asset gap on INVESTED
-  weights (cash excluded) over the corridor, read with a 1-point slack because the feed's marks are a
-  session old. A gate test checks this rule against the executor's own decide_sleeve on a grid of
-  sleeves. The set of funds bought is kept in results/mirror/ibkr-bought.json (union of the live feed's
+  are also checked when the mirror sleeve will trade to target anyway: a pending transfer naming it
+  (build_plan forces it), or - after adding pending credits and open dividend receivables to its cash,
+  as _plan does before deciding - cash over 5% of equity, debt, no holdings, or the largest single-asset
+  gap on INVESTED weights (cash excluded) over the corridor (mirror_core.decide_sleeve). The sleeve is
+  re-marked at the preview's own live prices (the feed's marks are the last planned session's, often a
+  day or more old), with a half-point slack on idle cash and a one-point slack on the gap for the
+  minutes left. A gate test checks the rule against the executor's own decide_sleeve on a grid of
+  sleeves built exactly as the feed publishes them, at both the feed's marks and live prices. The set of funds bought is kept in results/mirror/ibkr-bought.json (union of the live feed's
   positions and filled buys, with the live engines; committed by the daily monitor). A paper or dry-run
-  book never teaches it, and a feed with no live book alerts nothing. An unread feed falls back to the
-  saved set and its engines (a fund bought since then can alert once). Missing env vars print one
-  line, never silence. The alert names the decision time (12:50 on a half-day).
+  book never teaches it, and a feed with no live book alerts nothing. An unread feed (8 s per socket
+  operation, 12 s in all) falls back to the saved set and checks every engine; one not live at the
+  last save alerts with a note (a fund bought since then can alert once). Missing env vars, an unsaved
+  set, and a day with no preview rows each print one line, never silence. The alert names the
+  decision time (12:50 on a half-day). The read token is refused before sending if it holds a
+  control character, and redacted raw or escaped from any error.
 - The 16:35 parity UNFILLED alert adds the likely fix when an order died with IBKR's bare "discarded".
 - A rejected buy leaves that part of the sleeve in cash (book and account agree) until its rule next
   trades: a daily sleeve at the next session, a threshold sleeve when its cash is over 5% or its gap
@@ -456,7 +462,12 @@ time an account opens a security, so the risk sits with funds the live account h
   counter-agent, PASS WITH CORRECTIONS): SERIOUS - the corridor check read equity weights, not invested
   weights, and missed debt/empty sleeves, so it could miss a first buy; fixed and gated against
   decide_sleeve. Minor: wrong-typed saved file raised; no-live-book feeds alerted daily; 15:50
-  hard-coded; output not flushed before the feed read; routines now push FIRST BUY alerts. 26 gate tests.
+  hard-coded; output not flushed before the feed read; routines now push FIRST BUY alerts. Two verifiers
+  of those fixes (PASS WITH CORRECTIONS each): SERIOUS - queued transfers, credits and dividends were
+  ignored, so a forced or cash-raised sleeve could buy a new fund unwarned; MINOR - stale marks (re-marked
+  now), the fallback skipped engines newer than the save, a token with CR/LF could be printed; notes on
+  the saved date, a silent save failure, malformed sleeves, the feed deadline. All applied, each gated
+  (mutation-checked: removing any fix fails its test). 38 gate tests.
   Known limit: a target fund whose allocation is under one share is never bought and alerts each session.
 - Owner action when it fires: verify the emailed token in Client Portal. Do not place a test order in
   the mirror account (the executor refuses an account holding anything outside its book).
