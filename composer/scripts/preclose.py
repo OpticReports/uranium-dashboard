@@ -941,28 +941,50 @@ def decision_at(led):
         return "15:50"
 
 
-def first_buy(led, env=None, fetch=None, path=None, save=True):
+FEED_DEADLINE_S = 12          # the whole first-buy feed read, not per socket operation
+
+
+def _within(fn, seconds):
+    """fn() in a daemon thread, or TimeoutError after `seconds` (main's os._exit never waits on it)"""
+    import threading
+    box = {}
+
+    def run():
+        try:
+            box["v"] = fn()
+        except BaseException as e:  # noqa: BLE001  re-raised in the caller's thread
+            box["e"] = e
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(seconds)
+    if t.is_alive():
+        raise TimeoutError(f"no answer within {seconds:g} s")
+    if "e" in box:
+        raise box["e"]
+    return box.get("v")
+
+
+def first_buy(led, env=None, fetch=None, path=None, save=True, prices=None, deadline=FEED_DEADLINE_S):
     """(lines, alerts): live engines about to buy a fund the live IBKR mirror has never bought
     (mirror_firstbuy.py; IBKR may reject a first buy until a one-time token is verified). Read-only:
-    one GET of the executor's /mirror/feed with the read token (8 s timeout). Without the env vars: one
-    line saying it was not checked. Never raises; never prints the token."""
+    one GET of the executor's /mirror/feed with the read token (8 s per socket operation, `deadline`
+    seconds in all). prices: the preview's live raw prices (capture['prices']), to re-mark threshold
+    sleeves. Without the env vars: one line saying it was not checked. Never raises; never prints the
+    token."""
     env = os.environ if env is None else env
     url, token = (env.get("MIRROR_EXECUTOR_URL") or "").strip(), (env.get("MIRROR_READ_TOKEN") or "").strip()
     try:
         import mirror_firstbuy as fb
         feed, why = None, None
+        if fetch is None and url and token:
+            import mirror_parity as mp
+
+            def fetch():
+                return mp.fetch_feed(url, token, history=120, timeout=8)
         if fetch is not None:
             try:
-                feed = fetch()
-            except RuntimeError as e:
-                why = f"the mirror feed was not read ({one_line(str(e), 120)})"
-            except Exception:  # noqa: BLE001
-                why = "the mirror feed was not read"
-        elif url and token:
-            import mirror_parity as mp
-            try:
-                feed = mp.fetch_feed(url, token, history=120, timeout=8)
-            except RuntimeError as e:          # fetch_feed's reasons never hold the token
+                feed = _within(fetch, deadline)
+            except (RuntimeError, TimeoutError) as e:   # fetch_feed's reasons never hold the token
                 why = f"the mirror feed was not read ({one_line(str(e), 120)})"
             except Exception:  # noqa: BLE001
                 why = "the mirror feed was not read"
@@ -972,7 +994,8 @@ def first_buy(led, env=None, fetch=None, path=None, save=True):
         rows = [dict(r, corridor=(cfg.get(r.get("engine")) or {}).get("corridor"))
                 for r in led if r.get("engine") != "GATE"]
         today = next((r.get("date") for r in led if r.get("date")), None)
-        return fb.preview_check(rows, feed, path, save=save, why=why, today=today, at=decision_at(led))
+        return fb.preview_check(rows, feed, path, save=save, why=why, today=today, at=decision_at(led),
+                                prices=prices if isinstance(prices, dict) else None)
     except Exception as e:  # noqa: BLE001
         return [f"first-buy check failed: {one_line(repr(e))}"], []
 
@@ -996,17 +1019,20 @@ def main():
                     out.add(eng)
                 notes += [x.replace("shadow: ", "") for x in n if "unavailable" in x]
         return out, notes
+    cap = {}                                               # the prices the engines were evaluated on (ledger unchanged)
     try:
-        lines, alerts, led = preview(now, get_meta, get_drift)
+        lines, alerts, led = preview(now, get_meta, get_drift, capture=cap)
     except (Exception, SystemExit) as e:  # noqa: BLE001  the routine must hear about a failed preview
         lines, alerts, led = [], [f"PRE-CLOSE UNAVAILABLE — the preview failed: {one_line(repr(e))}"], []
     print("\n".join(lines))
     sys.stdout.flush()                                     # written out before the feed read, whatever happens to it
     if led and "--no-first-buy" not in sys.argv:          # after the preview's own lines (a slow feed holds back nothing)
-        fl, fa = first_buy(led, save="--no-ledger" not in sys.argv)
+        fl, fa = first_buy(led, save="--no-ledger" not in sys.argv, prices=cap.get("prices"))
         if fl:
             print("\n".join(fl))
         alerts += fa
+    elif not led and "--no-first-buy" not in sys.argv and any("UNAVAILABLE" in a for a in alerts):
+        print("first-buy check: not run (no preview rows)")
     if alerts:
         print(f"\n{len(alerts)} ALERT(S):")
         for a in alerts:

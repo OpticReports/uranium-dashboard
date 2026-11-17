@@ -80,6 +80,10 @@ def fetch_feed(url, token, history=30, timeout=TIMEOUT_S, opener=None):
     u = urllib.parse.urlparse(base)
     if u.scheme != "https" and not (u.scheme == "http" and (u.hostname or "") in LOCAL):
         raise RuntimeError("MIRROR_EXECUTOR_URL must be https (the read token is never sent over plain http)")
+    if not token or not token.isprintable():
+        # review 2026-11-17: http.client rejects a header holding CR/LF with an error that quotes the value
+        # ESCAPED, which the plain replace() below cannot redact - so such a token is never sent at all
+        raise RuntimeError("the read token is empty or holds a control or non-printable character: not sent")
     req = urllib.request.Request(f"{base}/mirror/feed?history={int(history)}", headers={"X-Read-Token": token})
     try:
         with (opener or urlopen_no_redirect)(req, timeout=timeout) as r:
@@ -90,7 +94,10 @@ def fetch_feed(url, token, history=30, timeout=TIMEOUT_S, opener=None):
             raise RuntimeError(f"HTTP {e.code}: a redirect, which is never followed with the read token") from None
         raise RuntimeError(f"HTTP {e.code}: {why.get(e.code, 'the executor refused the read')}") from None
     except Exception as e:  # noqa: BLE001
-        raise RuntimeError(one_line(str(e).replace(token, "***"), 160)) from None
+        msg = str(e)
+        for form in (token, repr(token)[1:-1], repr(token.encode())[2:-1]):   # the token, raw and escaped
+            msg = msg.replace(form, "***") if form else msg
+        raise RuntimeError(one_line(msg, 160)) from None
     if not isinstance(body, dict) or body.get("kind") != FEED_KIND or not isinstance(body.get("books"), dict):
         raise RuntimeError("the answer is not a mirror feed")
     return body
