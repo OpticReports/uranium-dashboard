@@ -46,9 +46,11 @@ def test_known_persists_across_the_feed_window(tmp_path):
 
 def test_missing_or_corrupt_store_is_empty(tmp_path):
     p = tmp_path / "x.json"
-    assert fb.load_known(p) == (set(), None)
-    p.write_text("not json")
-    assert fb.load_known(p) == (set(), None)
+    assert fb.load_known(p) == (set(), None, None)
+    for bad in ("not json", '{"bought": 5}', '{"bought": true}', "[1, 2]", '{"bought": ["BIL"], "saved": 7}'):
+        p.write_text(bad)
+        known, saved, eng = fb.load_known(p)      # never raises (re-check: a wrong-typed file escaped as TypeError)
+        assert saved is None and known in (set(), {"BIL"})
 
 
 def test_a_paper_book_never_teaches_the_set(tmp_path):
@@ -100,6 +102,57 @@ def test_corridor_target_is_checked_when_the_sleeve_idles_cash():
     assert len(alerts) == 1 and "ZVOL" in alerts[0]
 
 
+def test_corridor_gap_is_on_invested_weights_not_equity_weights():
+    """re-check SERIOUS: invested A 0.52 / C 0.48 with 4.5% cash; target A 0.40 / X 0.08 / C 0.52.
+    On equity weights the gap reads 0.097 (< 0.10, 'no buy'); on invested weights it is 0.12 (> 0.10):
+    the executor trades and buys X, so the warning must alert"""
+    cash_frac = 0.045
+    sl = {"KMLM": {"equity": 10000, "cash": 10000 * cash_frac,
+                   "weights": {"A": 0.52 * (1 - cash_frac), "C": 0.48 * (1 - cash_frac)}}}
+    r = row("KMLM", after={"A": 0.52, "C": 0.48}, target={"A": 0.40, "X": 0.08, "C": 0.52}, corridor=0.1)
+    lines, alerts = fb.first_buy_alerts([r], {"A", "C"}, feed(sleeves=sl))
+    assert len(alerts) == 1 and "X" in alerts[0]
+
+
+def test_corridor_debt_or_empty_sleeve_trades():
+    target = {"A": 0.9, "X": 0.1}
+    r = row("KMLM", after={"A": 1.0}, target=target, corridor=0.1)
+    for sleeve in ({"equity": 10000, "cash": -5.0, "weights": {"A": 1.0}},      # in debt
+                   {"equity": 10000, "cash": 0.0, "weights": {}}):              # holds nothing
+        lines, alerts = fb.first_buy_alerts([r], {"A"}, feed(sleeves={"KMLM": sleeve}))
+        assert len(alerts) == 1, sleeve
+
+
+def test_warning_rule_matches_the_executor_decide_sleeve():
+    """the warning's threshold rule against the executor's own mirror_core.decide_sleeve on a grid of
+    sleeves: whenever the executor trades, the warning must say it will (a false positive is allowed
+    only inside the 1-point slack)"""
+    import importlib.util
+    path = os.path.join(SCRIPTS, "..", "..", "ibkr-executor", "app", "mirror_core.py")
+    spec = importlib.util.spec_from_file_location("mirror_core_for_test", path)
+    mc = importlib.util.module_from_spec(spec)
+    sys.modules["mirror_core_for_test"] = mc
+    spec.loader.exec_module(mc)
+    cfg = mc.Config()
+    prices = {"A": 50.0, "C": 25.0, "X": 10.0}
+    target = {"A": 0.40, "X": 0.08, "C": 0.52}
+    misses, checked = [], 0
+    for a_sh in range(40, 140, 7):
+        for c_sh in range(80, 260, 11):
+            for cash in (-10.0, 0.0, 150.0, 400.0, 700.0):
+                sl = mc.Sleeve(name="KMLM", rule=mc.RULE_THRESHOLD, corridor=0.10, cash=cash,
+                               shares={"A": a_sh, "C": c_sh})
+                d = mc.decide_sleeve(sl, target, prices, cfg)
+                eq = mc.equity(sl, prices)
+                w = {k: v for k, v in mc.weights(sl, prices).items() if k != "cash"}
+                feed_sleeve = {"equity": eq, "cash": cash, "weights": w}
+                warn = fb._sleeve_will_reach_target(feed_sleeve, target, 0.10)
+                checked += 1
+                if d["action"] == "trade" and not warn:
+                    misses.append((a_sh, c_sh, cash, round(d["gap"], 4)))
+    assert checked > 100 and misses == []
+
+
 def test_corridor_target_not_tripping_is_a_line_not_an_alert():
     sl = {"KMLM": {"equity": 10000, "cash": 10, "weights": {"SQQQ": 0.75, "PULS": 0.25}}}
     r = row("KMLM", after={"SQQQ": 0.75, "PULS": 0.25}, target={"SQQQ": 0.75, "ZVOL": 0.05, "PULS": 0.20}, corridor=0.1)
@@ -112,6 +165,29 @@ def test_unread_feed_falls_back_to_the_saved_set(tmp_path):
     fb.save_known(KNOWN_1116, p, "2026-11-16")
     lines, alerts = fb.preview_check([row("HARV", {"ZVOL": 1.0})], None, p, why="the mirror feed was not read (HTTP 401)")
     assert len(alerts) == 1 and "saved set of 2026-11-16" in lines[0] and "HTTP 401" in lines[0]
+
+
+def test_a_feed_with_no_live_book_never_alerts(tmp_path):
+    p = tmp_path / "k.json"
+    fb.save_known({"BIL"}, p, "2026-11-16", {"HARV"})
+    f = {"kind": "mirror-feed", "books": {"dry": {"mode": "paper"}}}
+    lines, alerts = fb.preview_check([row("HARV", {"ZVOL": 1.0})], f, p)
+    assert alerts == [] and "no live IBKR book" in lines[0]
+
+
+def test_the_fallback_uses_the_engines_saved_with_the_set(tmp_path):
+    p = tmp_path / "k.json"
+    fb.save_known({"BIL"}, p, "2026-11-16", {"HG", "HARV"})
+    lines, alerts = fb.preview_check([row("SLEEVE", {"NEW": 1.0}), row("HARV", {"ZVOL": 1.0})], None, p)
+    assert len(alerts) == 1 and "HARV" in alerts[0]
+
+
+def test_the_half_day_decision_time_reaches_the_message(tmp_path):
+    led = [{"engine": "GATE", "date": "2026-11-27", "time": "12:15", "left": 35}, row("HARV", {"ZVOL": 1.0})]
+    assert preclose.decision_at(led) == "12:50"
+    lines, alerts = preclose.first_buy(led, env={}, fetch=lambda: feed({"PULS": 1}), path=tmp_path / "k.json")
+    assert "at ~12:50" in alerts[0]
+    assert preclose.decision_at([{"engine": "GATE"}]) == "15:50"
 
 
 def test_unread_feed_and_no_saved_set_is_a_line(tmp_path):
@@ -144,9 +220,9 @@ def test_preclose_attaches_the_manifest_corridor(tmp_path):
     seen = {}
     real = fb.first_buy_alerts
 
-    def spy(rows, known, f=None):
+    def spy(rows, *a, **k):
         seen.update({r["engine"]: r.get("corridor") for r in rows})
-        return real(rows, known, f)
+        return real(rows, *a, **k)
     fb.first_buy_alerts = spy
     try:
         preclose.first_buy([row("KMLM", {"SQQQ": 1.0}), row("HG", {"BIL": 1.0})], env={},
@@ -159,6 +235,7 @@ def test_preclose_attaches_the_manifest_corridor(tmp_path):
 def test_main_flag_skips_the_check():
     src = open(os.path.join(SCRIPTS, "preclose.py")).read()
     assert '"--no-first-buy" not in sys.argv' in src and 'save="--no-ledger" not in sys.argv' in src
+    assert src.index("sys.stdout.flush()") < src.index("fl, fa = first_buy(")
 
 
 # ---- the parity UNFILLED hint -----------------------------------------------------------------

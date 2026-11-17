@@ -37,12 +37,15 @@ error a day, 8.9% on 10-30, worse than the stale price itself.)
 
 Alerts (exit 2): the gate flips today or sits within 2 sigma of flipping; SPY 2% or more off
 yesterday's close (a big day: read the whole preview); no usable preview (no live prices, the market
-shows no trading today, Yahoo's SPY history stops short of the previous session, or the run fails).
-Otherwise exit 0. Report-only: GET from Composer, FMP and Yahoo; it never trades, edits a symphony or
-writes state. Each run appends one line per engine, and one for the gate, to
-composer/results/monitor/preclose-ledger.jsonl.
+shows no trading today, Yahoo's SPY history stops short of the previous session, or the run fails);
+FIRST BUY ON IBKR (a live engine is set to buy a fund the live IBKR mirror account has never bought:
+IBKR may reject it until a one-time emailed token is verified; mirror_firstbuy.py).
+Otherwise exit 0. Report-only: GET from Composer, FMP and Yahoo, and one GET of the IBKR executor's
+/mirror/feed with MIRROR_READ_TOKEN; it never trades or edits a symphony. Each run appends one line per
+engine, and one for the gate, to composer/results/monitor/preclose-ledger.jsonl, and updates the set of
+funds the mirror has bought (composer/results/mirror/ibkr-bought.json); --no-ledger writes neither.
 
-Usage: preclose.py [--no-ledger]
+Usage: preclose.py [--no-ledger] [--no-first-buy]
 """
 import concurrent.futures
 import datetime
@@ -926,6 +929,18 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None, capture=None
     return lines, alerts, led
 
 
+def decision_at(led):
+    """the decision time (HH:MM ET) from the ledger stamp: the preview's time plus its minutes left
+    (12:50 on a half-day); '15:50' when the stamp cannot be read"""
+    try:
+        r = next(r for r in led if r.get("time") and r.get("left") is not None)
+        h, m = (int(x) for x in str(r["time"])[:5].split(":"))
+        t = h * 60 + m + int(round(float(r["left"])))
+        return f"{t // 60:02d}:{t % 60:02d}"
+    except Exception:  # noqa: BLE001
+        return "15:50"
+
+
 def first_buy(led, env=None, fetch=None, path=None, save=True):
     """(lines, alerts): live engines about to buy a fund the live IBKR mirror has never bought
     (mirror_firstbuy.py; IBKR may reject a first buy until a one-time token is verified). Read-only:
@@ -957,7 +972,7 @@ def first_buy(led, env=None, fetch=None, path=None, save=True):
         rows = [dict(r, corridor=(cfg.get(r.get("engine")) or {}).get("corridor"))
                 for r in led if r.get("engine") != "GATE"]
         today = next((r.get("date") for r in led if r.get("date")), None)
-        return fb.preview_check(rows, feed, path, save=save, why=why, today=today)
+        return fb.preview_check(rows, feed, path, save=save, why=why, today=today, at=decision_at(led))
     except Exception as e:  # noqa: BLE001
         return [f"first-buy check failed: {one_line(repr(e))}"], []
 
@@ -986,6 +1001,7 @@ def main():
     except (Exception, SystemExit) as e:  # noqa: BLE001  the routine must hear about a failed preview
         lines, alerts, led = [], [f"PRE-CLOSE UNAVAILABLE — the preview failed: {one_line(repr(e))}"], []
     print("\n".join(lines))
+    sys.stdout.flush()                                     # written out before the feed read, whatever happens to it
     if led and "--no-first-buy" not in sys.argv:          # after the preview's own lines (a slow feed holds back nothing)
         fl, fa = first_buy(led, save="--no-ledger" not in sys.argv)
         if fl:
