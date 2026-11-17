@@ -46,12 +46,21 @@ with no live price keeps its implied mark) - and counted as trading if EITHER re
 keep a slack (1 point on the gap, half a point on idle cash) for the minutes left.
 
 Alternatives (round-4 verifiers): the preview's own other outcomes - a flip of the closest decision
-('flip.instead'), a market move of 1-2 sigma ('market'), and for HG the gate's two sides - are
-checked too, in ONE combined "FIRST BUY ON IBKR (if a call flips)" alert. 2026-11-10: SLEEVE was
-'firm' at 15:15, a 2-sigma SHY flip gave {BOXX .5, UVXY .5}, and the decision took it. For a
-threshold engine these are Composer's end states, not the sleeve's alternative targets: a small
-alternative change inside Composer's corridor that the mirror sleeve trades to on its own rule is
-not seen (documented limit).
+('flip.instead'), a market move of 1-2 sigma ('market'), and for HG the gate's two sides when the
+gate is within reach - are checked too. 2026-11-06: HARV was PULS 1.0 at 15:16, 'could flip' (SPY
+-0.36%, 1.6 sigma) to {PULS .64, ZVOL .36}, and Composer took it. They go in ONE combined "FIRST BUY
+ON IBKR (if a call flips)" alert, naming what flips each one, except on a 'firm' call, where they
+are a line only (round 5: of 6 sessions with an alternative first buy, the one that happened was a
+'could flip'; on 2026-11-10 a 'firm' SLEEVE showed a 2-sigma SHY flip to {BOXX .5, UVXY .5} that
+SHY crossed only by the close, after the decision, and Composer stayed in BOXX). For a daily engine
+an alternative is a target, read with floor 0; for a threshold engine it is Composer's end state,
+not the sleeve's alternative target, so a small alternative change inside Composer's corridor that
+the mirror sleeve trades to on its own rule is not seen (documented limit).
+
+What the owner can do with it: IBKR asked for the verification on 2026-11-16 only after an order
+was placed ("To accept your order in this security ... verify with the token we emailed you").
+Whether a fund can be cleared BEFORE its first order is asked of IBKR. Until then the alert means:
+watch for IBKR's email after the decision, verify it in Client Portal, and the next session buys.
 
 A false positive is acceptable; a miss is not. Known limits: a request queued in the last minutes
 before 15:15 may still be in the executor's inbox (not yet in the feed); a split dated today is
@@ -242,17 +251,20 @@ def _new(weights, known: set[str], floor: float = MIN_WEIGHT) -> list[str]:
                   if isinstance(w, (int, float)) and not isinstance(w, bool) and w > 0 and w >= floor and t not in known)
 
 
-def _alternatives(r: dict) -> list[dict]:
-    """the preview's other outcomes for one engine row: the closest flip's end state, the 1-2 sigma
-    market end states, and any 'alts' attached by the caller (HG: the gate's two sides)"""
+def _alternatives(r: dict) -> list[tuple[dict, str, bool]]:
+    """the preview's other outcomes for one engine row, as (holdings, what flips it, gate side): the
+    closest flip's end state, the 1-2 sigma market end states, and any 'alts' attached by the caller
+    (HG: the gate's two sides, attached only when the gate is within reach)"""
     out = []
     fl = r.get("flip")
     if isinstance(fl, dict) and isinstance(fl.get("instead"), dict):
-        out.append(fl["instead"])
+        mv, sg = _num(fl.get("move")), _num(fl.get("sigma"))
+        out.append((fl["instead"], f"{fl.get('ticker') or 'a ticker'}"
+                    + (f" {mv:+.2%}" if mv is not None else "") + (f", {sg:g} sigma" if sg is not None else ""), False))
     mk = r.get("market")
     if isinstance(mk, dict):
-        out += [v for v in mk.values() if isinstance(v, dict)]
-    out += [x for x in (r.get("alts") or []) if isinstance(x, dict)]
+        out += [(v, f"market {k} sigma", False) for k, v in mk.items() if isinstance(v, dict)]
+    out += [(x, "SPY across its 200-day", True) for x in (r.get("alts") or []) if isinstance(x, dict)]
     return out
 
 
@@ -303,17 +315,27 @@ def first_buy_alerts(rows: list[dict], known: set[str], feed: dict | None = None
                                  f"its own rule does not trade it today, so no buy is expected")
         if new:
             alerts.append(f"FIRST BUY ON IBKR — {eng} is set to buy {', '.join(new)} at ~{at}, which the live "
-                          f"mirror account has never bought. IBKR may reject a first buy until you verify a token it "
-                          f"emails you (2026-11-16: ZVOL). Check your email / Client Portal now; a rejected buy leaves "
-                          f"that part of the sleeve in cash until its rule next trades." + note)
-        alt = sorted(set().union(*[set(_new(a, known)) for a in _alternatives(r)]) - set(new)) if _alternatives(r) else []
-        if alt:
-            maybe.append(f"{eng} {', '.join(alt)} ({r.get('label') or 'alternative'})" + note)
+                          f"mirror account has never bought. IBKR may hold a first order for a one-time verification "
+                          f"(2026-11-16: ZVOL): it then emails you a token - verify it in Client Portal (Orders & "
+                          f"Trades, the order's (i)) and the sleeve buys at the next session; until then that part "
+                          f"stays in cash." + note)
+        floor = 0.0 if corridor is None else MIN_WEIGHT     # a daily engine's alternative is a target
+        label = r.get("label") or "alternative"
+        seen = set(new)
+        for holdings, why, gate_side in _alternatives(r):
+            funds = [t for t in _new(holdings, known, floor) if t not in seen]
+            if not funds:
+                continue
+            seen |= set(funds)
+            if label == "firm" and not gate_side:              # round 5: a firm call's alternative is a line
+                lines.append(f"first-buy check: {eng} could buy {', '.join(funds)} if {why} (a firm call: not pushed)")
+            else:
+                maybe.append(f"{eng} {', '.join(funds)} ({label}; {why})" + note)
     if maybe:
         alerts.append(f"FIRST BUY ON IBKR (if a call flips) — at ~{at}: " + "; ".join(maybe) + ". The preview's "
-                      f"alternative outcome would buy these and the live mirror account has never bought them. IBKR "
-                      f"may reject a first buy until you verify a token it emails you; verify now if you want them "
-                      f"covered.")
+                      f"alternative outcome would buy these, and the live mirror account has never bought them. If "
+                      f"one is bought and IBKR holds it for a one-time verification, it emails you a token: verify "
+                      f"it in Client Portal and the next session buys.")
     return lines, alerts
 
 

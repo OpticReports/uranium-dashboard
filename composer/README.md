@@ -355,6 +355,7 @@ yesterday's close), PRE-CLOSE UNAVAILABLE. Report-only: overrides are the owner'
 call in the Composer app (RUNBOOK). Ledger: `results/monitor/preclose-ledger.jsonl`,
 one line per engine, and one for the gate, per run. `python3 composer/scripts/preclose.py --no-ledger`
 prints a read without writing. FIRST BUY ON IBKR (2026-11-16): alerts when a live engine is set to buy a
-fund the IBKR mirror account has never bought - IBKR may reject a first buy until a one-time emailed
-token is verified in Client Portal (composer/IBKR_MIRROR.md; `--no-first-buy` skips the check).
+fund the IBKR mirror account has never bought - IBKR may hold a first order until a one-time emailed
+token is verified in Client Portal - and FIRST BUY ON IBKR (if a call flips) when only the preview's
+alternative outcomes would (composer/IBKR_MIRROR.md; `--no-first-buy` skips the check).
 Tests: `python3 -m unittest composer.scripts.tests.test_preclose`.

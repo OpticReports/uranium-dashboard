@@ -450,8 +450,12 @@ time an account opens a security, so the risk sits with funds the live account h
     fund; a fund with no live price keeps its implied mark); either reading trading counts. Slack: a
     point on the gap, half a point on idle cash.
   - The preview's alternative outcomes are checked too (the closest flip, the 1-2 sigma market moves,
-    HG's two gate sides) in ONE combined "FIRST BUY ON IBKR (if a call flips)" alert. 2026-11-10:
-    SLEEVE was "firm", a 2-sigma SHY flip gave {BOXX .5, UVXY .5}, and the decision took it.
+    and HG's two gate sides when the gate is within 3 sigma or flipping) in ONE combined "FIRST BUY ON
+    IBKR (if a call flips)" alert that names what flips each one. 2026-11-06: HARV was PULS 1.0 at
+    15:16, "could flip" (SPY -0.36%, 1.6 sigma) to {PULS .64, ZVOL .36}, and Composer took it. A
+    "firm" call's alternative is a line, not a push: on 2026-11-10 a firm SLEEVE showed a 2-sigma SHY
+    flip to {BOXX .5, UVXY .5} that SHY crossed only by the close, after the decision; Composer stayed
+    in BOXX. Of 6 past sessions with an alternative first buy, the one that happened was a could-flip.
   - A live engine whose preview is unavailable prints "NOT checked"; missing env vars, an unsaved set,
     and a day with no preview rows each print one line, never silence. The alert names the decision
     time (12:50 on a half-day). The read token is refused before sending if it holds a control
@@ -461,6 +465,10 @@ time an account opens a security, so the risk sits with funds the live account h
     back) and committed by that routine. A paper or dry-run book never teaches it; a feed with no live
     book alerts nothing. An unread feed falls back to the saved set and checks EVERY engine; one not
     live at the last save alerts with a note. A fund bought since the save can then alert once.
+  - What the owner can do: on 2026-11-16 IBKR asked for the verification only after the order was
+    placed. Whether a fund can be cleared BEFORE its first order is asked of IBKR (open). Until then the
+    alert means: watch for IBKR's email after the decision, verify it in Client Portal, and the next
+    session buys; that part of the sleeve waits in cash meanwhile.
   - Known limits: for a threshold engine the alternatives are Composer's end states, so a small
     alternative change inside Composer's corridor that the mirror sleeve trades to on its own rule is
     not seen; a request queued in the minutes before 15:15 may still sit in the executor's inbox; a
@@ -484,8 +492,19 @@ time an account opens a security, so the risk sits with funds the live account h
      SERIOUS - the preview's alternative outcomes were ignored (2026-11-10 SLEEVE/UVXY); minor -
      unavailable previews silent, the wiring of the re-mark untested; notes - adjust/resolve
      requests, the executor's own rule, target weights under 0.5%, implied marks, either-reading,
-     latin-1 redaction, SystemExit in the fetch, the daemon deadline thread, this file's wording.
-  53 gate tests.
+     latin-1 redaction, SystemExit in the fetch, the daemon deadline thread, this file's wording;
+  5. two verifiers, PASS WITH CORRECTIONS each, nothing SERIOUS (400,000 end-to-end scenarios through the
+     executor's real code: 0 regressions, 0 misses with current prices); pushed to main as cbce2731.
+     Minor, applied after: five behaviours had no test that failed without them (market alternatives,
+     the threshold target floor, both directions of the rule merge, the no-corridor guard); HG's gate
+     sides pushed however far the gate was; this file claimed the 2026-11-10 flip was taken (it was
+     not); notes - alternatives name what flips them, a daily engine's alternative read with floor 0,
+     a fund already alerted is not repeated, the outer SystemExit guard tested, POLICY.md and RUNBOOK.md
+     push lists name FIRST BUY. Owner-call default (alert fatigue, 6 of 12 past sessions): a firm call's
+     alternative is a line. Open follow-ups: a held fund with no 15:15 price and marks ~8% stale (5 of
+     400,000); a dividend first listed at the decision and due that day; a brain manifest changed after
+     the last plan; recurring alternatives of a fund verified but never bought.
+  61 gate tests; every fix above is mutation-checked (removing it fails a test).
 - Owner action when it fires: verify the emailed token in Client Portal. Do not place a test order in
   the mirror account (the executor refuses an account holding anything outside its book).
 

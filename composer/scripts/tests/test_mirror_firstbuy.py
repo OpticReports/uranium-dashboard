@@ -343,22 +343,47 @@ def _ledger_row(date, engine, label=None):
             and (label is None or r.get("label") == label)][-1]
 
 
-def test_the_2026_11_10_sleeve_uvxy_flip_alerts():
-    """SLEEVE was 'firm' at 15:15 on 2026-11-10; a 2-sigma SHY flip gave {BOXX .5, UVXY .5} and the
-    decision took it. IBKR has never bought UVXY: the alternative must alert"""
+def test_the_2026_11_06_harv_zvol_flip_alerts():
+    """the real case: HARV was PULS 1.0 at 15:16 on 2026-11-06, 'could flip' (SPY -0.36%, 1.6 sigma) to
+    {PULS .64, ZVOL .36}, and Composer took it. IBKR has never bought ZVOL: the alternative alerts and
+    names what flips it"""
+    r = _ledger_row("2026-11-06", "HARV", "could flip")
+    lines, alerts = fb.first_buy_alerts([r], KNOWN_1116, feed())
+    assert len(alerts) == 1 and alerts[0].startswith("FIRST BUY ON IBKR (if a call flips) —")
+    assert "HARV ZVOL (could flip; SPY -0.36%, 1.63 sigma)" in alerts[0]
+
+
+def test_a_firm_calls_alternative_is_a_line_not_a_push():
+    """2026-11-10: SLEEVE was 'firm'; its 2-sigma SHY alternative {BOXX .5, UVXY .5} was crossed only by
+    the close, after the decision, and Composer stayed in BOXX (shadow ledger: knife-edge). A firm
+    call's alternative is shown, not pushed (round 5: alert fatigue)"""
     r = _ledger_row("2026-11-10", "SLEEVE")
     assert r["label"] == "firm" and r["flip"]["instead"] == {"BOXX": 0.5, "UVXY": 0.5}
     lines, alerts = fb.first_buy_alerts([r], KNOWN_1116, feed())
-    assert len(alerts) == 1 and alerts[0].startswith("FIRST BUY ON IBKR (if a call flips) —")
-    assert "SLEEVE UVXY (firm)" in alerts[0]
+    assert alerts == [] and lines and "SLEEVE could buy UVXY if SHY" in lines[0] and "not pushed" in lines[0]
 
 
 def test_alternatives_combine_into_one_alert_and_known_funds_stay_quiet():
     harv = _ledger_row("2026-11-06", "HARV", "could flip")
     sleeve = _ledger_row("2026-11-10", "SLEEVE")
-    lines, alerts = fb.first_buy_alerts([harv, sleeve], KNOWN_1116, feed())
-    assert len(alerts) == 1 and "HARV ZVOL (could flip)" in alerts[0] and "SLEEVE UVXY (firm)" in alerts[0]
-    assert fb.first_buy_alerts([harv, sleeve], KNOWN_1116 | {"ZVOL", "UVXY"}, feed()) == ([], [])
+    k1103 = _ledger_row("2026-11-03", "KMLM")                  # a close call whose ZVOL is only in 'market'
+    lines, alerts = fb.first_buy_alerts([harv, sleeve, k1103], KNOWN_1116, feed())
+    assert len(alerts) == 1 and "HARV ZVOL (could flip" in alerts[0] and "KMLM ZVOL (close call; market" in alerts[0]
+    assert "SLEEVE" not in alerts[0] and any("SLEEVE could buy UVXY" in x for x in lines)
+    assert fb.first_buy_alerts([harv, sleeve, k1103], KNOWN_1116 | {"ZVOL", "UVXY"}, feed()) == ([], [])
+
+
+def test_gate_sides_only_when_the_gate_is_within_reach(tmp_path):
+    """round 5: a far gate's other side (e.g. TQQQ in a relief rally) must not push every session"""
+    def led(sigma, open_now=True, open_prev=True):
+        return [{"engine": "GATE", "date": "2026-11-17", "time": "15:15", "left": 35, "sigma": sigma, "open": open_now,
+                 "open_prev": open_prev, "sides": [{"BIL": 1.0}, {"TQQQ": 1.0}]}, dict(row("HG", {"BIL": 1.0}), label="firm")]
+    far = preclose.first_buy(led(13.1), env={}, fetch=lambda: feed({"BIL": 1}), path=tmp_path / "a.json")
+    near = preclose.first_buy(led(1.5), env={}, fetch=lambda: feed({"BIL": 1}), path=tmp_path / "b.json")
+    flipping = preclose.first_buy(led(13.1, True, False), env={}, fetch=lambda: feed({"BIL": 1}), path=tmp_path / "c.json")
+    assert far[1] == []
+    assert len(near[1]) == 1 and "HG TQQQ (firm; SPY across its 200-day)" in near[1][0]   # a gate side pushes even when firm
+    assert len(flipping[1]) == 1
 
 
 def test_hg_gets_the_gate_sides_through_preclose(tmp_path):
@@ -641,3 +666,54 @@ def test_main_says_when_no_preview_ran_but_not_on_a_no_session_day(monkeypatch, 
     assert "first-buy check: not run (no preview rows)" in out and seen == {}
     code, out, seen = _run_main(monkeypatch, capsys, [])                  # no session: the single line only
     assert out.strip() == "PRE-CLOSE line" and code == 0
+
+
+# ---- round-5 verifiers: untested behaviours, now gated --------------------------------------------
+def test_market_alternatives_are_read():
+    r = {"engine": "HARV", "status": "ok", "after": {"PULS": 1.0}, "target": {"PULS": 1.0}, "label": "close call",
+         "market": {"-2": {"PULS": 0.3, "ZVOL": 0.7}}}
+    lines, alerts = fb.first_buy_alerts([r], {"PULS"}, feed())
+    assert len(alerts) == 1 and "HARV ZVOL (close call; market -2 sigma)" in alerts[0]
+
+
+def test_a_fund_in_the_main_alert_is_not_repeated_in_the_combined_one():
+    r = {"engine": "HARV", "status": "ok", "after": {"ZVOL": 1.0}, "target": {"ZVOL": 1.0}, "label": "could flip",
+         "flip": {"ticker": "SPY", "move": -0.003, "sigma": 1.2, "instead": {"ZVOL": 0.5, "SVIX": 0.5}}}
+    lines, alerts = fb.first_buy_alerts([r], set(), feed())
+    assert len(alerts) == 2 and "ZVOL" in alerts[0] and "SVIX" in alerts[1] and "ZVOL" not in alerts[1]
+
+
+def test_a_daily_engines_alternative_is_read_with_floor_zero():
+    r = {"engine": "HARV", "status": "ok", "after": {"PULS": 1.0}, "target": {"PULS": 1.0}, "label": "could flip",
+         "flip": {"ticker": "SPY", "move": -0.003, "sigma": 1.2, "instead": {"PULS": 0.996, "NEW": 0.004}}}
+    assert "HARV NEW" in fb.first_buy_alerts([r], {"PULS"}, feed())[1][0]
+
+
+def test_threshold_path_reads_the_target_with_floor_zero():
+    fs = {"equity": 10000.0, "cash": 800.0, "shares": {"A": 92}, "weights": {"A": 0.92}, "rule": "threshold", "corridor": 0.1}
+    r = row("KMLM", after={"A": 1.0}, target={"A": 0.996, "X": 0.004}, corridor=0.10)
+    lines, alerts = fb.first_buy_alerts([r], {"A"}, feed(sleeves={"KMLM": fs}), prices={"A": 100.0})
+    assert len(alerts) == 1 and "X" in alerts[0]
+
+
+def test_rule_merge_both_directions_and_no_corridor():
+    base = {"equity": 10000.0, "cash": 0.0, "shares": {"A": 100}, "weights": {"A": 1.0}, "rule": "threshold", "corridor": 0.1}
+    target = {"A": 0.95, "X": 0.05}                                   # gap 0.05: a 0.10 corridor holds
+    # manifest daily (row corridor None), feed threshold: daily wins
+    assert fb.first_buy_alerts([row("KMLM", after={"A": 1.0}, target=target)], {"A"}, feed(sleeves={"KMLM": base}))[1]
+    # manifest's corridor the smaller one (0.04): it is used
+    assert fb.first_buy_alerts([row("KMLM", after={"A": 1.0}, target=target, corridor=0.04)], {"A"},
+                               feed(sleeves={"KMLM": base}))[1]
+    # a threshold with no corridor (None or 0) trades daily, and never raises
+    for c in (None, 0):
+        lines, alerts = fb.first_buy_alerts([row("KMLM", after={"A": 1.0}, target=target, corridor=0.10)], {"A"},
+                                            feed(sleeves={"KMLM": dict(base, corridor=c)}))
+        assert len(alerts) == 1, c
+
+
+def test_an_exit_inside_preview_check_never_escapes_first_buy(tmp_path, monkeypatch):
+    def boom(*a, **k):
+        raise SystemExit("x")
+    monkeypatch.setattr(fb, "preview_check", boom)
+    lines, alerts = preclose.first_buy([row("HARV", {"ZVOL": 1.0})], env={}, fetch=lambda: feed(), path=tmp_path / "k.json")
+    assert alerts == [] and lines[0].startswith("first-buy check failed")
