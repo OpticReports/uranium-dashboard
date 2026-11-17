@@ -40,8 +40,9 @@ yesterday's close (a big day: read the whole preview); no usable preview (no liv
 shows no trading today, Yahoo's SPY history stops short of the previous session, or the run fails);
 FIRST BUY ON IBKR (a live engine is set to buy a fund the live IBKR mirror account has never bought:
 IBKR may hold it until a one-time emailed token is verified; mirror_firstbuy.py), and FIRST BUY ON IBKR
-(if a call flips) for funds only the preview's alternative outcomes would buy (a firm call's are a
-line, not an alert).
+(if a call flips) for funds only the preview's alternative outcomes would buy (a firm call's flip
+and market alternatives are a line, not an alert; HG's gate sides alert whenever the gate is within
+FLIP_MAX sigma or flipping).
 Otherwise exit 0. Report-only: GET from Composer, FMP and Yahoo, and one GET of the IBKR executor's
 /mirror/feed with MIRROR_READ_TOKEN; it never trades or edits a symphony. Each run appends one line per
 engine, and one for the gate, to composer/results/monitor/preclose-ledger.jsonl, and updates the set of

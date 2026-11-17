@@ -20,10 +20,12 @@ Everything here was decided with data, in advance. Addenda cited.
 - 3:15 PM ET pre-close preview (add. 49): what the ~3:50 rebalance is about
   to do, before it does it. It gives the gate on live SPY, each symphony's
   expected holdings and dollars, and how close each call is. It pushes on
-  a gate flip, a gate on the line, a 2%+ SPY day, an engine flip, no
-  preview at all, or a fund the IBKR mirror account has never bought (IBKR
-  may hold that first order until you verify a token it emails you; a firm
-  call's alternative is shown, not pushed; composer/IBKR_MIRROR.md).
+  a gate flip, a gate on the line, a 2%+ SPY day, an engine line that
+  changes holdings (current -> target), no preview at all, or a fund the
+  IBKR mirror account has never bought (IBKR may hold that first order
+  until you verify a token it emails you; a firm call's flip and market
+  alternatives are shown, not pushed, but HG's gate sides always push when
+  the gate is within 3 sigma; composer/IBKR_MIRROR.md).
   It is there so nothing surprises you, not as a cue to act. Step 1 below
   still holds.
 - You get a push notification for anything that matters.

@@ -51,9 +51,10 @@ gate is within reach - are checked too. 2026-11-06: HARV's 15:16 preview ended i
 flip' (SPY -0.36%, 1.6 sigma) to {PULS .64, ZVOL .36}, and Composer took it. They go in ONE combined
 "FIRST BUY ON IBKR (if a call flips)" alert, naming what flips each one, except a 'firm' call's flip
 and market alternatives, which are a line only; HG's gate sides push whenever the gate is within 3
-sigma or flipping, and are read first so a firm flip's line never swallows them. (Round 5: of 6
+sigma or flipping, and on a firm call are read first so the firm flip's line never swallows them. (Round 5: of 6
 sessions with an alternative first buy, the one that happened was a 'could flip'; the firm rule
-quiets 1 of the 6 - 16 -> 15 FIRST BUY pushes in 12 sessions. On 2026-11-10 a 'firm' SLEEVE showed
+quiets 1 of the 6 - 16 -> 15 FIRST BUY pushes in 12 sessions, one 15:15 run per session with the
+2026-11-16 bought set; 20 -> 19 over all 14 runs. On 2026-11-10 a 'firm' SLEEVE showed
 a 2-sigma SHY flip to {BOXX .5, UVXY .5} that SHY crossed only by the close, after the decision,
 and Composer stayed in BOXX.) For a daily engine
 an alternative is a target, read with floor 0; for a threshold engine it is Composer's end state,
@@ -322,12 +323,15 @@ def first_buy_alerts(rows: list[dict], known: set[str], feed: dict | None = None
             alerts.append(f"FIRST BUY ON IBKR — {eng} is set to buy {', '.join(new)} at ~{at}, which the live "
                           f"mirror account has never bought. IBKR may hold a first order for a one-time verification "
                           f"(2026-11-16: ZVOL): it then emails you a token - verify it in Client Portal (Orders & "
-                          f"Trades, the order's (i)) and the sleeve buys it when its rule next trades (a daily sleeve "
-                          f"at the next session); until then that part stays in cash." + note)
+                          f"Trades, the order's (i)) and the sleeve buys {'it' if len(new) == 1 else 'them'} when "
+                          f"its rule next trades (a daily sleeve at the next session); until then that part stays in "
+                          f"cash." + note)
         floor = 0.0 if corridor is None else MIN_WEIGHT     # a daily engine's alternative is a target
         label = r.get("label") or "alternative"
         seen = set(new)
-        for holdings, why, gate_side in sorted(_alternatives(r), key=lambda a: not a[2]):   # gate sides first
+        for holdings, why, gate_side in sorted(_alternatives(r), key=lambda a: label == "firm" and not a[2]):
+            # a firm call: gate sides first, so a firm flip's line never swallows a gate side's push;
+            # otherwise the preview's order (the closest flip first) names the nearer trigger
             funds = [t for t in _new(holdings, known, floor) if t not in seen]
             if not funds:
                 continue
