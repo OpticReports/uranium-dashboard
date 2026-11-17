@@ -437,18 +437,27 @@ time an account opens a security, so the risk sits with funds the live account h
   8 s timeout, after the preview's own lines are printed) and alerts "FIRST BUY ON IBKR" for any live,
   unfrozen engine set to buy a fund the account has never bought, so the routine pushes it ~35
   minutes before the decision. For a threshold engine whose corridor does not trip, the target's funds
-  are also checked when the mirror sleeve will trade to target anyway (cash over 5%, or its own gap over
-  the corridor). The set of funds bought is kept in results/mirror/ibkr-bought.json (union of the live
-  feed's positions and filled buys; committed with composer/results/mirror/ by the daily monitor). A
-  paper or dry-run book never teaches it. An unread feed falls back to the saved set (a fund bought
-  since then can alert once; never a miss). Missing env vars print one line, never silence.
+  are also checked when the mirror sleeve will trade to target anyway under mirror_core.decide_sleeve's
+  rule: cash over 5% of equity, in debt, holding nothing, or the largest single-asset gap on INVESTED
+  weights (cash excluded) over the corridor, read with a 1-point slack because the feed's marks are a
+  session old. A gate test checks this rule against the executor's own decide_sleeve on a grid of
+  sleeves. The set of funds bought is kept in results/mirror/ibkr-bought.json (union of the live feed's
+  positions and filled buys, with the live engines; committed by the daily monitor). A paper or dry-run
+  book never teaches it, and a feed with no live book alerts nothing. An unread feed falls back to the
+  saved set and its engines (a fund bought since then can alert once). Missing env vars print one
+  line, never silence. The alert names the decision time (12:50 on a half-day).
 - The 16:35 parity UNFILLED alert adds the likely fix when an order died with IBKR's bare "discarded".
 - A rejected buy leaves that part of the sleeve in cash (book and account agree) until its rule next
   trades: a daily sleeve at the next session, a threshold sleeve when its cash is over 5% or its gap
   over the corridor. No substitute fund is bought: that would change the strategy on one side.
 - Review 2026-11-17 (one counter-agent, PASS WITH CORRECTIONS): D1-D8 applied (env-missing line, saved-set
   fallback, corridor targets, live/unfrozen engines only, paper books never learned, no save on
-  --no-ledger, wording, 8 s timeout after the preview's lines, tests). 20 gate tests.
+  --no-ledger, wording, 8 s timeout after the preview's lines, tests). Re-check of those fixes (one
+  counter-agent, PASS WITH CORRECTIONS): SERIOUS - the corridor check read equity weights, not invested
+  weights, and missed debt/empty sleeves, so it could miss a first buy; fixed and gated against
+  decide_sleeve. Minor: wrong-typed saved file raised; no-live-book feeds alerted daily; 15:50
+  hard-coded; output not flushed before the feed read; routines now push FIRST BUY alerts. 26 gate tests.
+  Known limit: a target fund whose allocation is under one share is never bought and alerts each session.
 - Owner action when it fires: verify the emailed token in Client Portal. Do not place a test order in
   the mirror account (the executor refuses an account holding anything outside its book).
 

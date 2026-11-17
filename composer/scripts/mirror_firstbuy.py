@@ -24,11 +24,16 @@ feed's history window has moved on. Only a feed whose live book is in mode "live
 against the saved set alone: a fund bought since the last save can then alert once (a false
 positive), never the reverse.
 
-What the mirror buys today (review 2026-11-17, D3): Composer's expected holdings ('after'). For a
-threshold engine whose corridor does not trip, 'after' is Composer's current holdings, but the
-mirror's sleeve still trades to the full target when its own gap exceeds the corridor or it idles
-more than 5% in cash (mirror_core.py, MAX_IDLE_CASH_FRAC) - the state a rejected first buy leaves.
-So for a corridor row the target's funds are checked too when the live sleeve is in that state.
+What the mirror buys today (review 2026-11-17, D3; re-check 2026-11-17): Composer's expected
+holdings ('after'). For a threshold engine whose corridor does not trip, 'after' is Composer's
+current holdings, but the mirror's sleeve still trades to the full target under its own rule
+(mirror_core.decide_sleeve): it idles more than 5% of equity in cash (MAX_IDLE_CASH_FRAC) - the state a
+rejected first buy leaves - or is in debt, or holds nothing, or the largest single-asset gap between
+the target and its INVESTED weights (cash excluded) exceeds the corridor. The feed publishes EQUITY
+weights (cash is the remainder), so they are renormalised to invested weights here, and the corridor
+is read with preclose's 1-point slack because the feed's marks are a session old at 15:15 (a false
+positive is acceptable; a miss is not). For a corridor row the target's funds are checked when the
+sleeve will trade.
 """
 from __future__ import annotations
 
@@ -39,6 +44,8 @@ import pathlib
 KNOWN_PATH = pathlib.Path(__file__).resolve().parent.parent / "results" / "mirror" / "ibkr-bought.json"
 MIN_WEIGHT = 0.005          # a holding under half a percent is a rounding remnant, not a buy to warn about
 IDLE_CASH_FRAC = 0.05       # mirror_core.MAX_IDLE_CASH_FRAC: a sleeve idling more than this trades to target
+DEBT_TOL_USD = 0.005        # mirror_core.DEBT_TOL_USD: cash below minus this is a debt, and a sleeve in debt trades
+CORRIDOR_SLACK = 0.01       # shadow_runner.CORRIDOR_SLACK: the feed's marks are a session old at 15:15
 DISCARD_MARKERS = ("order was discarded", "not allowed to open a position", "verify with the token")
 
 
@@ -72,34 +79,47 @@ def live_engines(feed: dict | None) -> set[str] | None:
 
 
 def _sleeve_will_reach_target(sleeve: dict | None, target: dict, corridor: float | None) -> bool:
-    """the mirror's own threshold rule: trade to target when the sleeve idles over 5% in cash or its
-    largest gap to the target exceeds the corridor (unknown sleeve: assume it may)"""
-    if not sleeve:
+    """mirror_core.decide_sleeve's threshold rule, read from the feed: the sleeve trades to target when
+    it is in debt, holds nothing, idles over 5% of equity in cash, or the largest single-asset gap
+    between the target and its INVESTED weights exceeds the corridor (read with a 1-point slack).
+    Unknown sleeve or corridor: assume it trades."""
+    if not sleeve or corridor is None:
         return True
-    eq = float(sleeve.get("equity") or 0)
-    if eq > 0 and float(sleeve.get("cash") or 0) / eq > IDLE_CASH_FRAC:
+    eq, cash = float(sleeve.get("equity") or 0), float(sleeve.get("cash") or 0)
+    w = {str(k): float(v) for k, v in (sleeve.get("weights") or {}).items() if isinstance(v, (int, float)) and v > 0}
+    if cash < -DEBT_TOL_USD or not w:
         return True
-    w = sleeve.get("weights") or {}
-    gap = max([abs(float(target.get(t, 0)) - float(w.get(t, 0))) for t in set(target) | set(w)] or [0.0])
-    return corridor is not None and gap > float(corridor)
+    if eq > 0 and cash / eq > IDLE_CASH_FRAC:
+        return True
+    tot = sum(w.values())
+    inv = {k: v / tot for k, v in w.items()}
+    gap = max(abs(float(target.get(t, 0) or 0) - inv.get(t, 0.0)) for t in set(target) | set(inv))
+    return gap > float(corridor) - CORRIDOR_SLACK
 
 
-def load_known(path: pathlib.Path | None = None) -> tuple[set[str], str | None]:
+def load_known(path: pathlib.Path | None = None) -> tuple[set[str], str | None, set[str] | None]:
+    """(funds bought, the date saved, the live unfrozen engines then). Anything unreadable or of the
+    wrong shape is an empty set (the check then says so), never an exception."""
     p = path or KNOWN_PATH
     try:
         data = json.loads(p.read_text())
     except (OSError, ValueError):
-        return set(), None
-    if not isinstance(data, dict):
-        return set(), None
-    return {str(t) for t in (data.get("bought") or [])}, data.get("saved")
+        return set(), None, None
+    if not isinstance(data, dict) or not isinstance(data.get("bought"), list):
+        return set(), None, None
+    saved = data.get("saved") if isinstance(data.get("saved"), str) else None
+    eng = data.get("engines")
+    engines = {str(e) for e in eng} if isinstance(eng, list) else None
+    return {str(t) for t in data["bought"] if isinstance(t, str)}, saved, engines
 
 
-def save_known(known: set[str], path: pathlib.Path | None = None, saved: str | None = None) -> None:
+def save_known(known: set[str], path: pathlib.Path | None = None, saved: str | None = None,
+               engines: set[str] | None = None) -> None:
     p = path or KNOWN_PATH
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"bought": sorted(known), "saved": saved}, indent=1) + "\n")
+    tmp.write_text(json.dumps({"bought": sorted(known), "saved": saved,
+                               "engines": sorted(engines) if engines is not None else None}, indent=1) + "\n")
     os.replace(tmp, p)
 
 
@@ -108,11 +128,13 @@ def _new(weights: dict, known: set[str]) -> list[str]:
                   if isinstance(w, (int, float)) and w >= MIN_WEIGHT and t not in known)
 
 
-def first_buy_alerts(rows: list[dict], known: set[str], feed: dict | None = None) -> tuple[list[str], list[str]]:
+def first_buy_alerts(rows: list[dict], known: set[str], feed: dict | None = None, at: str = "15:50",
+                     engines: set[str] | None = None) -> tuple[list[str], list[str]]:
     """(lines, alerts): one alert per engine about to buy a fund outside `known`. Rows that are not an
     engine's preview (the GATE row, unavailable engines) and engines the live book does not trade
-    (paper-only under staged rollout, or frozen) are skipped."""
-    engines = live_engines(feed)
+    (paper-only under staged rollout, or frozen; from the feed, else `engines`) are skipped. `at`: the
+    decision time for the message (12:50 on a half-day)."""
+    engines = live_engines(feed) if feed else engines
     sleeves = ((_live(feed).get("book") or {}).get("sleeves") or {}) if feed else {}
     lines, alerts = [], []
     for r in rows or []:
@@ -130,7 +152,7 @@ def first_buy_alerts(rows: list[dict], known: set[str], feed: dict | None = None
                     lines.append(f"first-buy check: {eng}'s target holds {', '.join(extra)} (never bought on IBKR); "
                                  f"its corridor does not trip today, so no buy is expected")
         if new:
-            alerts.append(f"FIRST BUY ON IBKR — {eng} is set to buy {', '.join(new)} at ~15:50, which the live "
+            alerts.append(f"FIRST BUY ON IBKR — {eng} is set to buy {', '.join(new)} at ~{at}, which the live "
                           f"mirror account has never bought. IBKR may reject a first buy until you verify a token it "
                           f"emails you (2026-11-16: ZVOL). Check your email / Client Portal now; a rejected buy leaves "
                           f"that part of the sleeve in cash until its rule next trades.")
@@ -151,20 +173,25 @@ def discard_hint(orders: list[dict]) -> str:
 
 
 def preview_check(rows: list[dict], feed: dict | None, path: pathlib.Path | None = None, save: bool = True,
-                  why: str | None = None, today: str | None = None) -> tuple[list[str], list[str]]:
-    """(lines, alerts) for the 15:15 preview. A readable live feed teaches the persisted set; an unread
-    feed (or one whose live book is not trading for real) falls back to the saved set."""
-    saved, saved_on = load_known(path)
+                  why: str | None = None, today: str | None = None, at: str = "15:50") -> tuple[list[str], list[str]]:
+    """(lines, alerts) for the 15:15 preview. A readable feed with a live book in mode "live" teaches
+    the persisted set. A readable feed with NO live book (DRY_RUN, no credentials): nothing can be
+    sent to IBKR, so one line and no alerts. An unread feed, or a live book not in live mode, falls
+    back to the saved set and the engines saved with it."""
+    saved, saved_on, saved_eng = load_known(path)
+    if feed is not None and "live" not in ((feed.get("books") or {})):
+        return ["first-buy check: the executor has no live IBKR book: nothing to check"], []
     if not is_live_book(feed):
         reason = why or ("the live book is not in live mode" if feed else "the mirror feed was not read")
         if not saved:
             return [f"first-buy check: {reason}, and no saved set: funds new to IBKR not checked"], []
-        lines, alerts = first_buy_alerts(rows, saved, None)
+        lines, alerts = first_buy_alerts(rows, saved, None, at, saved_eng)
         return [f"first-buy check: {reason}; checked against the saved set" + (f" of {saved_on}" if saved_on else "")] + lines, alerts
     known = saved | known_from_feed(feed)
-    if save and (known != saved or saved_on is None):
+    eng = live_engines(feed)
+    if save and (known != saved or saved_on is None or eng != saved_eng):
         try:
-            save_known(known, path, today or saved_on)
+            save_known(known, path, today or saved_on, eng)
         except OSError:
             pass
-    return first_buy_alerts(rows, known, feed)
+    return first_buy_alerts(rows, known, feed, at)
