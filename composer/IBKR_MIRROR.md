@@ -480,9 +480,9 @@ time an account opens a security, so the risk sits with funds the live account h
     alternative change inside Composer's corridor that the mirror sleeve trades to on its own rule is
     not seen; a request queued in the minutes before 15:15 may still sit in the executor's inbox; a
     split dated today is applied at the decision; a target fund whose allocation is under one share is
-    never bought and alerts each session; on a call that is not firm a market move is named in stored
-    order (-2 before -1), so a fund reachable at -1 sigma can be named after the -2 sigma move
-    (attribution only: the fund still pushes).
+    never bought and alerts each session; on a call that is not firm the trigger named is the first in
+    the preview's order (the one-ticker flip, then the market moves -2 before -1, then the gate
+    sides), not always the nearest (attribution only: the fund still pushes).
 - The 16:35 parity UNFILLED alert says what did not fill waits until its sleeve's rule next trades
   (a daily sleeve at the next session), and adds the likely fix when an order died with IBKR's bare
   "discarded".
@@ -538,9 +538,16 @@ time an account opens a security, so the risk sits with funds the live account h
      runs the inner pytest without PYTEST_ADDOPTS / PYTEST_CURRENT_TEST and skips itself only inside
      pytest; a gate at an unknown distance also attaches the sides; the owner's own words in POLICY;
      the basis of 16 -> 15. Not changed (follow-ups): the market-move attribution order (Known limits).
+  9. its narrow check (docs, a comment and the guard), PASS: the docstring-stripped code of
+     mirror_firstbuy.py and preclose.py is unchanged; the guard FAILED under unittest in every case
+     tried (a failing test; PYTEST_CURRENT_TEST or PYTEST_ADDOPTS inherited; a deselecting
+     pytest.ini; no pytest; a 3.11 venv) and skipped itself under pytest; pushed to main as a38ea990.
+     Notes logged, not changed: coloured pytest output (PY_COLORS / FORCE_COLOR) makes the guard fail
+     closed; a first-buy test that skipped or xfailed would not fail it (none does). The first-buy
+     review closes here: a later change to this code starts its own review.
   66 gate tests (pytest: `pytest -p no:cacheprovider composer/scripts/tests/test_mirror_firstbuy.py`;
-  under `python3 -m unittest` one extra test runs them through the PATH pytest, whose interpreter may
-  differ - 3.13 here; on 2026-11-17 the first-buy, parity and preclose tests also passed on 3.11.18,
+  under `python3 -m unittest` one extra test runs them through pytest - python3's own if it has one,
+  else the PATH (or ~/.local/bin) pytest, whose interpreter may differ - 3.13 here; on 2026-11-17 the first-buy, parity and preclose tests also passed on 3.11.18,
   the routine's python3). Every behavioural fix above is mutation-checked (removing it fails a test);
   doc fixes and the unittest guard itself cannot be (deleting the guard silently drops the 66 tests
   from `python3 -m unittest` again).
