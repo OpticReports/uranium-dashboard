@@ -451,11 +451,14 @@ time an account opens a security, so the risk sits with funds the live account h
     point on the gap, half a point on idle cash.
   - The preview's alternative outcomes are checked too (the closest flip, the 1-2 sigma market moves,
     and HG's two gate sides when the gate is within 3 sigma or flipping) in ONE combined "FIRST BUY ON
-    IBKR (if a call flips)" alert that names what flips each one. 2026-11-06: HARV was PULS 1.0 at
-    15:16, "could flip" (SPY -0.36%, 1.6 sigma) to {PULS .64, ZVOL .36}, and Composer took it. A
-    "firm" call's alternative is a line, not a push: on 2026-11-10 a firm SLEEVE showed a 2-sigma SHY
-    flip to {BOXX .5, UVXY .5} that SHY crossed only by the close, after the decision; Composer stayed
-    in BOXX. Of 6 past sessions with an alternative first buy, the one that happened was a could-flip.
+    IBKR (if a call flips)" alert that names what flips each one. 2026-11-06: HARV's 15:16 preview
+    ended in PULS 1.0, "could flip" (SPY -0.36%, 1.6 sigma) to {PULS .64, ZVOL .36}, and Composer took
+    it. A "firm" call's flip and market alternatives are a line, not a push (HG's gate sides excepted:
+    they push whenever the gate is within 3 sigma or flipping): on 2026-11-10 a firm SLEEVE showed a
+    2-sigma SHY flip to {BOXX .5, UVXY .5} that SHY crossed only by the close, after the decision;
+    Composer stayed in BOXX. Of 6 past sessions with an alternative first buy, the one that happened
+    was a could-flip; the firm rule quiets 1 of the 6 (16 -> 15 FIRST BUY pushes in 12 sessions) and
+    lost no first buy that happened.
   - A live engine whose preview is unavailable prints "NOT checked"; missing env vars, an unsaved set,
     and a day with no preview rows each print one line, never silence. The alert names the decision
     time (12:50 on a half-day). The read token is refused before sending if it holds a control
@@ -467,8 +470,8 @@ time an account opens a security, so the risk sits with funds the live account h
     live at the last save alerts with a note. A fund bought since the save can then alert once.
   - What the owner can do: on 2026-11-16 IBKR asked for the verification only after the order was
     placed. Whether a fund can be cleared BEFORE its first order is asked of IBKR (open). Until then the
-    alert means: watch for IBKR's email after the decision, verify it in Client Portal, and the next
-    session buys; that part of the sleeve waits in cash meanwhile.
+    alert means: watch for IBKR's email after the decision, verify it in Client Portal, and the sleeve
+    buys it when its rule next trades (a daily sleeve at the next session); that part waits in cash.
   - Known limits: for a threshold engine the alternatives are Composer's end states, so a small
     alternative change inside Composer's corridor that the mirror sleeve trades to on its own rule is
     not seen; a request queued in the minutes before 15:15 may still sit in the executor's inbox; a
@@ -504,7 +507,14 @@ time an account opens a security, so the risk sits with funds the live account h
      alternative is a line. Open follow-ups: a held fund with no 15:15 price and marks ~8% stale (5 of
      400,000); a dividend first listed at the decision and due that day; a brain manifest changed after
      the last plan; recurring alternatives of a fund verified but never bought.
-  61 gate tests; every fix above is mutation-checked (removing it fails a test).
+  6. one verifier of those follow-ups, PASS WITH CORRECTIONS, nothing SERIOUS (main alerts identical to
+     cbce2731 on all 14 ledger runs; 20 of 24 mutants killed); pushed to main as 8984f11f. Applied
+     after: MINOR - a firm HG flip that IS the gate crossing swallowed the gate side's push (gate sides
+     are read first now); MINOR - the 3-sigma radius was untested; notes - market keys signed, HARV
+     11-06 wording, the firm rule's measured effect, "buys when its rule next trades", POLICY/RUNBOOK
+     name the flip push, one row lists a fund once. Remaining NOTE-level follow-ups are listed above;
+     no further review round is planned unless a change touches behaviour.
+  64 gate tests; every fix above is mutation-checked (removing it fails a test).
 - Owner action when it fires: verify the emailed token in Client Portal. Do not place a test order in
   the mirror account (the executor refuses an account holding anything outside its book).
 

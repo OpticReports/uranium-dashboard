@@ -197,9 +197,11 @@ unchanged vs disciplined manual resets).
   each symphony's expected holdings with the dollars that move and how
   close the call is. Relay the lines as written. Push only for GATE CLOSES
   / REOPENS AT TODAY'S REBALANCE, GATE ON THE LINE, BIG DAY, PRE-CLOSE
-  UNAVAILABLE and FIRST BUY ON IBKR (both forms: a live IBKR mirror engine
-  may buy a fund the account has never bought, which IBKR can hold for a
-  one-time emailed verification; composer/IBKR_MIRROR.md). Never trade, pause or edit a symphony on it: an override
+  UNAVAILABLE, any engine flip line (owner, 2026-11-02) and FIRST BUY ON
+  IBKR (both forms: a live IBKR mirror engine may buy a fund the account
+  has never bought, which IBKR can hold for a one-time emailed
+  verification; a firm call's alternative is a line, not a push;
+  composer/IBKR_MIRROR.md). Never trade, pause or edit a symphony on it: an override
   is the owner's call in the Composer app (RUNBOOK.md).
 
 ## Standing exclusions
