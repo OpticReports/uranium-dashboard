@@ -47,12 +47,15 @@ keep a slack (1 point on the gap, half a point on idle cash) for the minutes lef
 
 Alternatives (round-4 verifiers): the preview's own other outcomes - a flip of the closest decision
 ('flip.instead'), a market move of 1-2 sigma ('market'), and for HG the gate's two sides when the
-gate is within reach - are checked too. 2026-11-06: HARV was PULS 1.0 at 15:16, 'could flip' (SPY
--0.36%, 1.6 sigma) to {PULS .64, ZVOL .36}, and Composer took it. They go in ONE combined "FIRST BUY
-ON IBKR (if a call flips)" alert, naming what flips each one, except on a 'firm' call, where they
-are a line only (round 5: of 6 sessions with an alternative first buy, the one that happened was a
-'could flip'; on 2026-11-10 a 'firm' SLEEVE showed a 2-sigma SHY flip to {BOXX .5, UVXY .5} that
-SHY crossed only by the close, after the decision, and Composer stayed in BOXX). For a daily engine
+gate is within reach - are checked too. 2026-11-06: HARV's 15:16 preview ended in PULS 1.0, 'could
+flip' (SPY -0.36%, 1.6 sigma) to {PULS .64, ZVOL .36}, and Composer took it. They go in ONE combined
+"FIRST BUY ON IBKR (if a call flips)" alert, naming what flips each one, except a 'firm' call's flip
+and market alternatives, which are a line only; HG's gate sides push whenever the gate is within 3
+sigma or flipping, and are read first so a firm flip's line never swallows them. (Round 5: of 6
+sessions with an alternative first buy, the one that happened was a 'could flip'; the firm rule
+quiets 1 of the 6 - 16 -> 15 FIRST BUY pushes in 12 sessions. On 2026-11-10 a 'firm' SLEEVE showed
+a 2-sigma SHY flip to {BOXX .5, UVXY .5} that SHY crossed only by the close, after the decision,
+and Composer stayed in BOXX.) For a daily engine
 an alternative is a target, read with floor 0; for a threshold engine it is Composer's end state,
 not the sleeve's alternative target, so a small alternative change inside Composer's corridor that
 the mirror sleeve trades to on its own rule is not seen (documented limit).
@@ -60,7 +63,8 @@ the mirror sleeve trades to on its own rule is not seen (documented limit).
 What the owner can do with it: IBKR asked for the verification on 2026-11-16 only after an order
 was placed ("To accept your order in this security ... verify with the token we emailed you").
 Whether a fund can be cleared BEFORE its first order is asked of IBKR. Until then the alert means:
-watch for IBKR's email after the decision, verify it in Client Portal, and the next session buys.
+watch for IBKR's email after the decision, verify it in Client Portal, and the sleeve buys it when
+its rule next trades (a daily sleeve at the next session).
 
 A false positive is acceptable; a miss is not. Known limits: a request queued in the last minutes
 before 15:15 may still be in the executor's inbox (not yet in the feed); a split dated today is
@@ -263,7 +267,8 @@ def _alternatives(r: dict) -> list[tuple[dict, str, bool]]:
                     + (f" {mv:+.2%}" if mv is not None else "") + (f", {sg:g} sigma" if sg is not None else ""), False))
     mk = r.get("market")
     if isinstance(mk, dict):
-        out += [(v, f"market {k} sigma", False) for k, v in mk.items() if isinstance(v, dict)]
+        out += [(v, f"market {k if str(k)[:1] in '+-' else '+' + str(k)} sigma", False)
+                for k, v in mk.items() if isinstance(v, dict)]
     out += [(x, "SPY across its 200-day", True) for x in (r.get("alts") or []) if isinstance(x, dict)]
     return out
 
@@ -317,12 +322,12 @@ def first_buy_alerts(rows: list[dict], known: set[str], feed: dict | None = None
             alerts.append(f"FIRST BUY ON IBKR — {eng} is set to buy {', '.join(new)} at ~{at}, which the live "
                           f"mirror account has never bought. IBKR may hold a first order for a one-time verification "
                           f"(2026-11-16: ZVOL): it then emails you a token - verify it in Client Portal (Orders & "
-                          f"Trades, the order's (i)) and the sleeve buys at the next session; until then that part "
-                          f"stays in cash." + note)
+                          f"Trades, the order's (i)) and the sleeve buys it when its rule next trades (a daily sleeve "
+                          f"at the next session); until then that part stays in cash." + note)
         floor = 0.0 if corridor is None else MIN_WEIGHT     # a daily engine's alternative is a target
         label = r.get("label") or "alternative"
         seen = set(new)
-        for holdings, why, gate_side in _alternatives(r):
+        for holdings, why, gate_side in sorted(_alternatives(r), key=lambda a: not a[2]):   # gate sides first
             funds = [t for t in _new(holdings, known, floor) if t not in seen]
             if not funds:
                 continue
@@ -335,7 +340,7 @@ def first_buy_alerts(rows: list[dict], known: set[str], feed: dict | None = None
         alerts.append(f"FIRST BUY ON IBKR (if a call flips) — at ~{at}: " + "; ".join(maybe) + ". The preview's "
                       f"alternative outcome would buy these, and the live mirror account has never bought them. If "
                       f"one is bought and IBKR holds it for a one-time verification, it emails you a token: verify "
-                      f"it in Client Portal and the next session buys.")
+                      f"it in Client Portal and it is bought when that sleeve's rule next trades.")
     return lines, alerts
 
 

@@ -344,7 +344,7 @@ def _ledger_row(date, engine, label=None):
 
 
 def test_the_2026_11_06_harv_zvol_flip_alerts():
-    """the real case: HARV was PULS 1.0 at 15:16 on 2026-11-06, 'could flip' (SPY -0.36%, 1.6 sigma) to
+    """the real case: HARV's 15:16 preview on 2026-11-06 ended in PULS 1.0, 'could flip' (SPY -0.36%, 1.6 sigma) to
     {PULS .64, ZVOL .36}, and Composer took it. IBKR has never bought ZVOL: the alternative alerts and
     names what flips it"""
     r = _ledger_row("2026-11-06", "HARV", "could flip")
@@ -674,6 +674,8 @@ def test_market_alternatives_are_read():
          "market": {"-2": {"PULS": 0.3, "ZVOL": 0.7}}}
     lines, alerts = fb.first_buy_alerts([r], {"PULS"}, feed())
     assert len(alerts) == 1 and "HARV ZVOL (close call; market -2 sigma)" in alerts[0]
+    r2 = dict(r, market={"2": {"PULS": 0.3, "SVIX": 0.7}})                      # a positive key reads with its sign
+    assert "HARV SVIX (close call; market +2 sigma)" in fb.first_buy_alerts([r2], {"PULS"}, feed())[1][0]
 
 
 def test_a_fund_in_the_main_alert_is_not_repeated_in_the_combined_one():
@@ -717,3 +719,32 @@ def test_an_exit_inside_preview_check_never_escapes_first_buy(tmp_path, monkeypa
     monkeypatch.setattr(fb, "preview_check", boom)
     lines, alerts = preclose.first_buy([row("HARV", {"ZVOL": 1.0})], env={}, fetch=lambda: feed(), path=tmp_path / "k.json")
     assert alerts == [] and lines[0].startswith("first-buy check failed")
+
+
+# ---- final round (verifier of the round-5 follow-ups) ----------------------------------------------
+def test_a_gate_side_pushes_even_when_hgs_own_firm_flip_is_the_gate(tmp_path):
+    """with the gate 2-3 sigma away, HG's closest flip IS the gate crossing and HG is 'firm': the gate
+    side must still push (the firm flip's line must not swallow it)"""
+    led = [{"engine": "GATE", "date": "2026-11-18", "time": "15:15", "left": 35, "sigma": 2.5, "open": False,
+            "open_prev": False, "sides": [{"TQQQ": 1.0}, {"BIL": 1.0}]},
+           dict(row("HG", {"BIL": 1.0}), label="firm",
+                flip={"ticker": "SPY", "move": 0.0061, "sigma": 2.5, "instead": {"TQQQ": 1.0}})]
+    lines, alerts = preclose.first_buy(led, env={}, fetch=lambda: feed({"BIL": 1}), path=tmp_path / "k.json")
+    assert len(alerts) == 1 and "HG TQQQ (firm; SPY across its 200-day)" in alerts[0]
+
+
+def test_the_gate_side_radius_is_flip_max(tmp_path):
+    def led(sigma):
+        return [{"engine": "GATE", "date": "2026-11-18", "time": "15:15", "left": 35, "sigma": sigma, "open": True,
+                 "open_prev": True, "sides": [{"BIL": 1.0}, {"TQQQ": 1.0}]}, dict(row("HG", {"BIL": 1.0}), label="firm")]
+    inside = preclose.first_buy(led(preclose.FLIP_MAX - 0.1), env={}, fetch=lambda: feed({"BIL": 1}), path=tmp_path / "a.json")
+    outside = preclose.first_buy(led(preclose.FLIP_MAX + 0.1), env={}, fetch=lambda: feed({"BIL": 1}), path=tmp_path / "b.json")
+    assert len(inside[1]) == 1 and outside[1] == []
+
+
+def test_one_rows_alternatives_list_a_fund_once():
+    r = {"engine": "HARV", "status": "ok", "after": {"PULS": 1.0}, "target": {"PULS": 1.0}, "label": "close call",
+         "flip": {"ticker": "SPY", "move": -0.003, "sigma": 1.2, "instead": {"PULS": 0.5, "ZVOL": 0.5}},
+         "market": {"-2": {"PULS": 0.3, "ZVOL": 0.7}, "-1": {"PULS": 0.4, "ZVOL": 0.6}}}
+    alerts = fb.first_buy_alerts([r], {"PULS"}, feed())[1]
+    assert len(alerts) == 1 and alerts[0].count("ZVOL") == 1
