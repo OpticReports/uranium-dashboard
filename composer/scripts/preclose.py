@@ -986,17 +986,20 @@ def first_buy(led, env=None, fetch=None, path=None, save=True, prices=None, dead
                 feed = _within(fetch, deadline)
             except (RuntimeError, TimeoutError) as e:   # fetch_feed's reasons never hold the token
                 why = f"the mirror feed was not read ({one_line(str(e), 120)})"
-            except Exception:  # noqa: BLE001
+            except (Exception, SystemExit):  # noqa: BLE001  never end main() before the ALERT block
                 why = "the mirror feed was not read"
         else:
             why = "MIRROR_EXECUTOR_URL / MIRROR_READ_TOKEN not set"
         cfg = sr.load_manifest()
-        rows = [dict(r, corridor=(cfg.get(r.get("engine")) or {}).get("corridor"))
+        gate = next((r for r in led if r.get("engine") == "GATE"), {}) or {}
+        sides = [x for x in (gate.get("sides") or []) if isinstance(x, dict)]
+        rows = [dict(r, corridor=(cfg.get(r.get("engine")) or {}).get("corridor"),
+                     **({"alts": sides} if r.get("engine") == "HG" and sides else {}))
                 for r in led if r.get("engine") != "GATE"]
         today = next((r.get("date") for r in led if r.get("date")), None)
         return fb.preview_check(rows, feed, path, save=save, why=why, today=today, at=decision_at(led),
                                 prices=prices if isinstance(prices, dict) else None)
-    except Exception as e:  # noqa: BLE001
+    except (Exception, SystemExit) as e:  # noqa: BLE001  never end main() before the ALERT block
         return [f"first-buy check failed: {one_line(repr(e))}"], []
 
 

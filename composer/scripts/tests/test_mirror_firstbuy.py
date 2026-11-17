@@ -100,10 +100,14 @@ def test_no_alert_when_every_fund_is_known():
     assert fb.first_buy_alerts([row("HG", {"BIL": 1.0})], {"BIL"}, feed()) == ([], [])
 
 
-def test_skips_gate_unavailable_dust_and_non_numbers():
+def test_skips_gate_dust_and_non_numbers_and_says_when_a_preview_is_unavailable():
     rows = [row("GATE", {"NEW": 1.0}), row("SLEEVE", {"NEW": 1.0}, status="unavailable"),
-            row("HG", {"BIL": 0.997, "DUST": 0.003, "ODD": "x"})]
-    assert fb.first_buy_alerts(rows, {"BIL"}, feed()) == ([], [])
+            row("HG", {"BIL": 0.997, "DUST": 0.003, "ODD": "x"}, target={"BIL": 1.0})]
+    lines, alerts = fb.first_buy_alerts(rows, {"BIL"}, feed())
+    assert alerts == [] and lines == ["first-buy check: SLEEVE NOT checked (its preview is unavailable)"]
+    # a paper-only engine's unavailable preview says nothing
+    lines, alerts = fb.first_buy_alerts([row("SLEEVE", {"NEW": 1.0}, status="unavailable")], set(), feed(engines=("HG",)))
+    assert (lines, alerts) == ([], [])
 
 
 def test_engines_the_live_book_does_not_trade_are_skipped():
@@ -229,9 +233,202 @@ def test_queued_transfer_credit_and_dividend_each_make_the_sleeve_trade():
 
 
 def test_queued_debit_into_debt_makes_it_trade():
-    assert fb.queued(feed(pending=[{"kind": "credit", "sleeve": "KMLM", "amount": -200.0}]), "KMLM") == (False, -200.0)
+    assert fb.queued(feed(pending=[{"kind": "credit", "sleeve": "KMLM", "amount": -200.0}]), "KMLM") == (False, -200.0, 0.0)
     fs = {"equity": 10000.0, "cash": 100.0, "shares": {"A": 100}, "weights": {"A": 0.99}}
-    assert fb.sleeve_will_reach_target(fs, {"A": 0.95, "X": 0.05}, 0.10, add_cash=-200.0, prices={"A": 99.0}) is True
+    assert fb.sleeve_will_reach_target(fs, {"A": 0.95, "X": 0.05}, 0.10, lo=-200.0, prices={"A": 99.0}) is True
+
+
+def test_a_debt_is_not_hidden_by_credits_or_receivables_the_executor_may_skip():
+    """round-4 verifier SERIOUS (a regression of e3f6e91f): KMLM at -3.00 with a $36.20 receivable not yet
+    due, or a $50 credit the executor refuses - the executor repairs the debt by trading; summing every
+    queued amount into one figure read +33.20 and said 'no buy'. The interval tests debt at its low end."""
+    fs = {"equity": 9997.0, "cash": -3.0, "shares": {"A": 100, "C": 100}, "weights": {"A": 0.5, "C": 0.5}}
+    target = {"A": 0.47, "C": 0.47, "X": 0.06}
+    r = row("KMLM", after={"A": 0.5, "C": 0.5}, target=target, corridor=0.1)
+    for f in (feed(sleeves={"KMLM": fs}, dividends=[{"sleeve": "KMLM", "total": 36.2, "status": "open"}]),
+              feed(sleeves={"KMLM": fs}, pending=[{"kind": "credit", "sleeve": "KMLM", "amount": 50.0}])):
+        lines, alerts = fb.first_buy_alerts([r], {"A", "C"}, f, prices={"A": 50.0, "C": 50.0})
+        assert len(alerts) == 1 and "X" in alerts[0]
+    # a refused unforced debit beside a forced credit: lo is deep in debt -> trades (conservative)
+    fs2 = dict(fs, cash=-1.35, equity=9998.65)
+    f = feed(sleeves={"KMLM": fs2}, pending=[{"kind": "credit", "sleeve": "KMLM", "amount": 3027.90, "force": True},
+                                              {"kind": "credit", "sleeve": "KMLM", "amount": -2154.11}])
+    assert fb.first_buy_alerts([r], {"A", "C"}, f, prices={"A": 50.0, "C": 50.0})[1]
+
+
+def test_any_subset_of_the_queue_the_executor_applies_is_covered():
+    """the interval property against the executor's own decide_sleeve: for random sleeves and queues of
+    credits, debits and receivables, whichever SUBSET the executor ends up applying, if it trades the
+    warning (given the whole queue) must say so"""
+    import itertools
+    import random
+    mc = load_mirror_core()
+    cfg = mc.Config()
+    rnd = random.Random(20261117)
+    target = {"A": 0.47, "C": 0.47, "X": 0.06}
+    prices = {"A": 50.0, "C": 40.0, "X": 10.0}
+    misses = trades = 0
+    for _ in range(1500):
+        a_sh, c_sh = rnd.randint(60, 140), rnd.randint(80, 170)
+        base = rnd.choice([-60.0, -3.0, -0.004, 0.0, 20.0, 120.0, 300.0, 520.0])
+        items = [round(rnd.choice([-1, 1]) * rnd.uniform(1, 700), 2) for _ in range(rnd.randint(1, 3))]
+        lo, hi = sum(x for x in items if x < 0), sum(x for x in items if x > 0)
+        sl0 = mc.Sleeve(name="KMLM", rule=mc.RULE_THRESHOLD, corridor=0.10, cash=base, shares={"A": a_sh, "C": c_sh})
+        fs = published(mc, sl0, prices)
+        warn = fb.sleeve_will_reach_target(fs, target, 0.10, lo=lo, hi=hi, prices=prices)
+        for k in range(len(items) + 1):
+            for sub in itertools.combinations(items, k):
+                sl = mc.Sleeve(name="KMLM", rule=mc.RULE_THRESHOLD, corridor=0.10, cash=base + sum(sub),
+                               shares={"A": a_sh, "C": c_sh})
+                if mc.decide_sleeve(sl, target, prices, cfg)["action"] == "trade":
+                    trades += 1
+                    misses += not warn
+    assert trades > 500 and misses == 0
+
+
+def test_adjust_and_resolve_requests_force_a_trade():
+    assert fb.queued(feed(pending=[{"kind": "adjust", "sleeve": "KMLM", "cash": 10.0}]), "KMLM")[0] is True
+    assert fb.queued(feed(pending=[{"kind": "adjust", "sleeve": "HG", "cash": 10.0}]), "KMLM")[0] is False
+    assert fb.queued(feed(pending=[{"kind": "resolve", "order": "x"}]), "KMLM")[0] is True
+
+
+def test_either_reading_trading_counts():
+    """the feed's marks say the gap is out, the live prices pull it back in: still counted as a trade
+    (never miss a case the stale reading caught)"""
+    fs = {"equity": 10000.0, "cash": 0.0, "shares": {"S": 100, "P": 100}, "weights": {"S": 0.60, "P": 0.40}}
+    target = {"S": 0.70, "P": 0.27, "Z": 0.03}       # at marks: P .40 vs .27 = .13 > .09 -> trades
+    live = {"S": 69.0, "P": 31.0}                     # live: S .69 / P .31 -> largest gap .04 -> holds
+    assert fb.sleeve_will_reach_target({k: v for k, v in fs.items() if k != "weights"} | {"weights": {"S": 0.69, "P": 0.31}},
+                                       target, 0.10, prices=live) is False                # the live reading alone holds
+    assert fb.sleeve_will_reach_target(fs, target, 0.10, prices=live) is True             # either reading: trades
+
+
+def test_a_fund_with_no_live_price_keeps_its_implied_mark():
+    """round-4 verifier note: one missing preview price must not throw away the live reading for the
+    whole sleeve; the missing fund keeps its implied mark (weight x equity / shares)"""
+    mc = load_mirror_core()
+    cfg = mc.Config()
+    target = {"S": 0.75, "P": 0.20, "Z": 0.05}
+    sl = mc.Sleeve(name="KMLM", rule=mc.RULE_THRESHOLD, corridor=0.10, cash=50.0, shares={"S": 143, "P": 285})
+    marks, now = {"S": 50.0, "P": 10.0, "Z": 10.0}, {"S": 50.0, "P": 11.0, "Z": 10.0}
+    assert mc.decide_sleeve(sl, target, now, cfg)["action"] == "trade"
+    fs = published(mc, sl, marks)
+    assert fb.sleeve_will_reach_target(fs, target, 0.10, prices={"P": 11.0}) is True     # S has no live price
+    assert fb.sleeve_will_reach_target(fs, target, 0.10, prices={}) is False             # marks only: holds
+
+
+def test_the_executor_rule_daily_wins_and_the_smaller_corridor_is_used():
+    target = {"A": 0.9, "X": 0.1}
+    fs = {"equity": 10000.0, "cash": 0.0, "shares": {"A": 100}, "weights": {"A": 1.0}}
+    r = row("KMLM", after={"A": 1.0}, target=target, corridor=0.10)          # gap 0.10: inside the slack? no: 0.10 > 0.09
+    lines, alerts = fb.first_buy_alerts([r], {"A"}, feed(sleeves={"KMLM": dict(fs, rule="daily", corridor=None)}))
+    assert len(alerts) == 1                                                  # the executor trades it daily
+    near = {"A": 0.95, "X": 0.05}                                            # gap 0.05: holds at 0.10, trades at 0.04
+    r2 = row("KMLM", after={"A": 1.0}, target=near, corridor=0.10)
+    assert fb.first_buy_alerts([r2], {"A"}, feed(sleeves={"KMLM": dict(fs, rule="threshold", corridor=0.10)}))[1] == []
+    assert fb.first_buy_alerts([r2], {"A"}, feed(sleeves={"KMLM": dict(fs, rule="threshold", corridor=0.04)}))[1]
+
+
+def test_a_small_target_weight_on_a_daily_engine_is_a_buy():
+    """round-4 note: MIN_WEIGHT filters end-state remnants, never a TARGET weight"""
+    r = row("HARV", after={"PULS": 0.996, "NEW": 0.004}, target={"PULS": 0.996, "NEW": 0.004})
+    assert len(fb.first_buy_alerts([r], {"PULS"}, feed())[1]) == 1
+
+
+# ---- alternatives: the preview's other outcomes (round-4 verifiers SERIOUS) --------------------------
+def _ledger_row(date, engine, label=None):
+    path = os.path.join(SCRIPTS, "..", "results", "monitor", "preclose-ledger.jsonl")
+    rows = [json.loads(x) for x in open(path) if x.strip()]
+    return [r for r in rows if r.get("date") == date and r.get("engine") == engine
+            and (label is None or r.get("label") == label)][-1]
+
+
+def test_the_2026_11_10_sleeve_uvxy_flip_alerts():
+    """SLEEVE was 'firm' at 15:15 on 2026-11-10; a 2-sigma SHY flip gave {BOXX .5, UVXY .5} and the
+    decision took it. IBKR has never bought UVXY: the alternative must alert"""
+    r = _ledger_row("2026-11-10", "SLEEVE")
+    assert r["label"] == "firm" and r["flip"]["instead"] == {"BOXX": 0.5, "UVXY": 0.5}
+    lines, alerts = fb.first_buy_alerts([r], KNOWN_1116, feed())
+    assert len(alerts) == 1 and alerts[0].startswith("FIRST BUY ON IBKR (if a call flips) —")
+    assert "SLEEVE UVXY (firm)" in alerts[0]
+
+
+def test_alternatives_combine_into_one_alert_and_known_funds_stay_quiet():
+    harv = _ledger_row("2026-11-06", "HARV", "could flip")
+    sleeve = _ledger_row("2026-11-10", "SLEEVE")
+    lines, alerts = fb.first_buy_alerts([harv, sleeve], KNOWN_1116, feed())
+    assert len(alerts) == 1 and "HARV ZVOL (could flip)" in alerts[0] and "SLEEVE UVXY (firm)" in alerts[0]
+    assert fb.first_buy_alerts([harv, sleeve], KNOWN_1116 | {"ZVOL", "UVXY"}, feed()) == ([], [])
+
+
+def test_hg_gets_the_gate_sides_through_preclose(tmp_path):
+    led = [{"engine": "GATE", "date": "2026-11-17", "time": "15:15", "left": 35, "sides": [{"BIL": 1.0}, {"QLD": 1.0}]},
+           row("HG", {"BIL": 1.0}), row("HARV", {"PULS": 1.0})]
+    lines, alerts = preclose.first_buy(led, env={}, fetch=lambda: feed({"BIL": 1, "PULS": 1}), path=tmp_path / "k.json")
+    assert len(alerts) == 1 and "HG QLD" in alerts[0] and "HARV" not in alerts[0]
+
+
+# ---- wiring and failure paths (round-4 verifier 2) ---------------------------------------------------
+def _stale_case():
+    mc = load_mirror_core()
+    target = {"S": 0.75, "P": 0.20, "Z": 0.05}
+    sl = mc.Sleeve(name="KMLM", rule=mc.RULE_THRESHOLD, corridor=0.10, cash=50.0, shares={"S": 143, "P": 285})
+    fs = published(mc, sl, {"S": 50.0, "P": 10.0, "Z": 10.0})
+    fs.update(rule="threshold", corridor=0.10)
+    led = [{"engine": "GATE", "date": "2026-11-17", "time": "15:15", "left": 35},
+           row("KMLM", after={"S": 0.715, "P": 0.285}, target=target)]
+    return led, feed({"S": 143, "P": 285}, sleeves={"KMLM": fs})
+
+
+def test_preclose_threads_the_preview_prices_to_the_re_mark(tmp_path):
+    """kills the surviving mutations: first_buy or preview_check dropping `prices` silently turns the
+    re-mark off and the sleeve is read at stale marks again"""
+    led, f = _stale_case()
+    lines, alerts = preclose.first_buy(led, env={}, fetch=lambda: f, path=tmp_path / "a.json",
+                                       prices={"S": 50.0, "P": 11.0, "Z": 10.0})
+    assert len(alerts) == 1 and "Z" in alerts[0]
+    lines, alerts = preclose.first_buy(led, env={}, fetch=lambda: f, path=tmp_path / "b.json", prices=None)
+    assert alerts == [] and "does not trade it today" in lines[0]
+
+
+def test_the_feed_error_reason_reaches_the_line(tmp_path):
+    def boom():
+        raise RuntimeError("HTTP 401: the read token was refused")
+    lines, alerts = preclose.first_buy([row("HARV", {"ZVOL": 1.0})], env={}, fetch=boom, path=tmp_path / "k.json")
+    assert "HTTP 401" in lines[0]
+
+
+def test_a_system_exit_inside_the_fetch_never_escapes(tmp_path):
+    def exits():
+        raise SystemExit("x")
+    lines, alerts = preclose.first_buy([row("HARV", {"ZVOL": 1.0})], env={}, fetch=exits, path=tmp_path / "k.json")
+    assert alerts == [] and "not read" in lines[0]
+
+
+def test_fetch_feed_redacts_a_latin1_escaped_token():
+    import mirror_parity as mp
+    tok = "s3cr\u00e9t-y"
+
+    def boom(req, timeout=None):
+        raise ValueError(f"bad header {tok.encode('latin-1')!r}")
+    try:
+        mp.fetch_feed("https://e.example", tok, opener=boom)
+        raise AssertionError("no error")
+    except RuntimeError as e:
+        assert "s3cr" not in str(e) and "***" in str(e)
+
+
+def test_the_deadline_thread_is_a_daemon(tmp_path):
+    import threading
+    import time
+
+    def slow():
+        time.sleep(3)
+        return feed()
+    preclose.first_buy([row("HARV", {"ZVOL": 1.0})], env={}, fetch=slow, path=tmp_path / "k.json", deadline=0.2)
+    others = [t for t in threading.enumerate() if t is not threading.main_thread() and t.is_alive()]
+    assert others and all(t.daemon for t in others)
+
 
 
 def test_malformed_sleeve_assumes_a_trade_and_keeps_other_engines():
