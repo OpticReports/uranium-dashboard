@@ -358,4 +358,6 @@ prints a read without writing. FIRST BUY ON IBKR (2026-11-16): alerts when a liv
 fund the IBKR mirror account has never bought - IBKR may hold a first order until a one-time emailed
 token is verified in Client Portal - and FIRST BUY ON IBKR (if a call flips) when only the preview's
 alternative outcomes would (composer/IBKR_MIRROR.md; `--no-first-buy` skips the check).
-Tests: `python3 -m unittest composer.scripts.tests.test_preclose`.
+Tests: `python3 -m unittest composer.scripts.tests.test_preclose`. The first-buy gate tests are pytest
+functions: `pytest -p no:cacheprovider composer/scripts/tests/test_mirror_firstbuy.py` (under
+`python3 -m unittest` that file runs itself through pytest, and fails if pytest is missing).

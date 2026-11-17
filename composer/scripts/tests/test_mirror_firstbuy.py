@@ -94,6 +94,7 @@ def test_the_2026_11_16_case_alerts_both_engines():
     assert len(alerts) == 2
     assert alerts[0].startswith("FIRST BUY ON IBKR — KMLM") and "ZVOL" in alerts[0]
     assert alerts[1].startswith("FIRST BUY ON IBKR — HARV")
+    assert all("the sleeve buys it when its rule next trades (a daily sleeve at the next session)" in a for a in alerts)
 
 
 def test_no_alert_when_every_fund_is_known():
@@ -351,6 +352,7 @@ def test_the_2026_11_06_harv_zvol_flip_alerts():
     lines, alerts = fb.first_buy_alerts([r], KNOWN_1116, feed())
     assert len(alerts) == 1 and alerts[0].startswith("FIRST BUY ON IBKR (if a call flips) —")
     assert "HARV ZVOL (could flip; SPY -0.36%, 1.63 sigma)" in alerts[0]
+    assert "it is bought when that sleeve's rule next trades." in alerts[0]
 
 
 def test_a_firm_calls_alternative_is_a_line_not_a_push():
@@ -739,7 +741,8 @@ def test_the_gate_side_radius_is_flip_max(tmp_path):
                  "open_prev": True, "sides": [{"BIL": 1.0}, {"TQQQ": 1.0}]}, dict(row("HG", {"BIL": 1.0}), label="firm")]
     inside = preclose.first_buy(led(preclose.FLIP_MAX - 0.1), env={}, fetch=lambda: feed({"BIL": 1}), path=tmp_path / "a.json")
     outside = preclose.first_buy(led(preclose.FLIP_MAX + 0.1), env={}, fetch=lambda: feed({"BIL": 1}), path=tmp_path / "b.json")
-    assert len(inside[1]) == 1 and outside[1] == []
+    edge = preclose.first_buy(led(preclose.FLIP_MAX), env={}, fetch=lambda: feed({"BIL": 1}), path=tmp_path / "c.json")
+    assert len(inside[1]) == 1 and outside[1] == [] and len(edge[1]) == 1     # the gate sigma is rounded: 3.00 occurs
 
 
 def test_one_rows_alternatives_list_a_fund_once():
@@ -748,3 +751,51 @@ def test_one_rows_alternatives_list_a_fund_once():
          "market": {"-2": {"PULS": 0.3, "ZVOL": 0.7}, "-1": {"PULS": 0.4, "ZVOL": 0.6}}}
     alerts = fb.first_buy_alerts([r], {"PULS"}, feed())[1]
     assert len(alerts) == 1 and alerts[0].count("ZVOL") == 1
+
+
+# ---- verifier of the final round (2026-11-17) --------------------------------------------------------
+def test_several_new_funds_read_them():
+    _, alerts = fb.first_buy_alerts([row("HARV", {"ZVOL": 0.5, "UVXY": 0.5})], KNOWN_1116, feed())
+    assert len(alerts) == 1 and "UVXY, ZVOL" in alerts[0] and "the sleeve buys them when its rule next trades" in alerts[0]
+
+
+def test_a_non_firm_row_names_the_nearer_flip_not_the_gate():
+    """gate sides go first only on a firm call; on a close call the preview's closest flip (here 0.28 sigma)
+    is named, not the farther gate crossing (verifier's NOTE, 2026-11-17)"""
+    r = dict(row("HG", {"BIL": 1.0}), label="close call", alts=[{"QLD": 1.0}, {"BIL": 1.0}],
+             flip={"ticker": "TQQQ", "move": -0.002, "sigma": 0.28, "instead": {"QLD": 1.0}})
+    _, alerts = fb.first_buy_alerts([r], {"BIL"}, feed())
+    assert len(alerts) == 1 and "HG QLD (close call; TQQQ -0.20%, 0.28 sigma)" in alerts[0]
+    assert "SPY across its 200-day" not in alerts[0]
+    firm = dict(r, label="firm")                                   # firm: the gate side is read first and pushes
+    lines, alerts = fb.first_buy_alerts([firm], {"BIL"}, feed())
+    assert len(alerts) == 1 and "HG QLD (firm; SPY across its 200-day)" in alerts[0] and lines == []
+
+
+import unittest  # noqa: E402
+
+
+class TestRunsUnderPytest(unittest.TestCase):
+    """The tests above are pytest functions (tmp_path, monkeypatch, capsys) that `python3 -m unittest`
+    does not collect: it reported 'Ran 0 tests ... OK' for this file (verifier, 2026-11-17). Under
+    unittest this one test runs the file with pytest, and fails if pytest is missing or any test fails."""
+
+    def test_the_first_buy_gate_tests_run_under_pytest(self):
+        if os.environ.get("PYTEST_CURRENT_TEST"):     # already inside pytest: the functions above ran
+            self.skipTest("running under pytest")
+        import importlib.util
+        import shutil
+        import subprocess
+        if importlib.util.find_spec("pytest") is not None:
+            cmd = [sys.executable, "-m", "pytest"]
+        else:
+            exe = shutil.which("pytest") or os.path.expanduser("~/.local/bin/pytest")
+            if not os.path.exists(exe):
+                self.fail("pytest not found: the first-buy gate tests in this file did not run")
+            cmd = [exe]
+        r = subprocess.run(cmd + ["-q", "-p", "no:cacheprovider", os.path.abspath(__file__)], capture_output=True,
+                           text=True, timeout=900, cwd=os.path.dirname(os.path.dirname(SCRIPTS)))
+        out = r.stdout + r.stderr
+        self.assertEqual(r.returncode, 0, out[-3000:])
+        self.assertRegex(out, r"\b\d+ passed")
+        self.assertNotRegex(out, r"\b\d+ (failed|error)")

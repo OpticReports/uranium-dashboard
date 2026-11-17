@@ -189,6 +189,8 @@ class P4Health(Base):
         orders = [{"symbol": "BIL", "qty": 370, "filled": 200, "side": "BUY", "cost_bps": 1.5}]
         lines, alerts = self.run_check(feed(live=book([row(D, BIG, orders)])))
         self.assertTrue(any("UNFILLED" in a and "BIL 200/370" in a for a in alerts))
+        self.assertTrue(any("What did not fill waits until its sleeve's rule next trades (a daily sleeve at the next "
+                            "session)." in a for a in alerts))           # not "the next session" for every sleeve
         self.assertIn("+1.5 bps vs the decision price", "\n".join(lines))
         _, alerts = self.run_check(feed(dry=book([row(D, BIG, orders)], mode="paper")))
         self.assertFalse(any("UNFILLED" in a for a in alerts))               # paper: a line, not an alert

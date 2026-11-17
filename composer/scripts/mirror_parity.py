@@ -446,7 +446,8 @@ def book_parity(name, view, d, comp, shadow, closes=None, prev_d=None, comp_prev
                  + (f", fills {sum(cost) / len(cost):+.1f} bps vs the decision price" if cost and mode == "LIVE" else "")
                  + (f"; NOT FULLY FILLED: {', '.join(short)}" if short else ""))
     if short and mode == "LIVE":
-        alerts.append(f"{tag} UNFILLED — book {name} on {d}: {', '.join(short)}. The cash waits for the next session."
+        alerts.append(f"{tag} UNFILLED — book {name} on {d}: {', '.join(short)}. What did not fill waits until its "
+                      f"sleeve's rule next trades (a daily sleeve at the next session)."
                       + fb.discard_hint(orders))
     if compared:
         lines.append(f"  parity vs Composer: {same} of {compared} engines hold the same"
