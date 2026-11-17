@@ -551,7 +551,14 @@ time an account opens a security, so the risk sits with funds the live account h
   the routine's python3). Every behavioural fix above is mutation-checked (removing it fails a test);
   doc fixes and the unittest guard itself cannot be (deleting the guard silently drops the 66 tests
   from `python3 -m unittest` again).
-- Owner action when it fires: verify the emailed token in Client Portal. Do not place a test order in
+- 2026-11-17: IBKR's app showed the discarded ZVOL order as held (purple, "accepted ... but not working")
+  with Cancel/Modify until the 16:00 close, although the API had reported [202] cancelled at 15:54:49 and
+  the mirror booked it so. Verifying the emailed token in that window could release and fill it after the
+  book recorded it cancelled (shares outside the book). The owner found no place to enter the token at
+  login. Follow-up (an executor change: its own review and the owner's OK): send an explicit cancel for an
+  order IBKR discards with [202], so a held order cannot fill later.
+- Owner action when it fires: verify the emailed token in Client Portal after the 16:00 close (never
+  while the order is held), or ask IBKR to clear the fund for API orders. Do not place a test order in
   the mirror account (the executor refuses an account holding anything outside its book).
 
 ## Rollout (executor law: staged, one step at a time)
