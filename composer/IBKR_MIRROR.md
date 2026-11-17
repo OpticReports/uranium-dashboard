@@ -433,13 +433,22 @@ in place (Stocks; Complex or Leveraged ETPs). IBKR can ask for this one-time ver
 time an account opens a security, so the risk sits with funds the live account has never bought:
 23 of the 30 the four live trees can hold, on 2026-11-16.
 
-- The 15:15 preview (preclose.py, mirror_firstbuy.py) reads the executor's feed (read token, GET only)
-  and alerts "FIRST BUY ON IBKR" for any engine set to buy a fund the account has never bought, so the
-  routine pushes it ~35 minutes before the decision. The set of funds bought is kept in
-  results/mirror/ibkr-bought.json (union of the feed's positions and filled buys).
-- The 16:35 parity UNFILLED alert adds the fix when an order died with IBKR's bare "discarded".
-- A rejected buy leaves that part of the sleeve in cash (book and account agree) and the mirror buys
-  again at the next session. No substitute fund is bought: that would change the strategy on one side.
+- The 15:15 preview (preclose.py, mirror_firstbuy.py) reads the executor's feed (read token, GET only,
+  8 s timeout, after the preview's own lines are printed) and alerts "FIRST BUY ON IBKR" for any live,
+  unfrozen engine set to buy a fund the account has never bought, so the routine pushes it ~35
+  minutes before the decision. For a threshold engine whose corridor does not trip, the target's funds
+  are also checked when the mirror sleeve will trade to target anyway (cash over 5%, or its own gap over
+  the corridor). The set of funds bought is kept in results/mirror/ibkr-bought.json (union of the live
+  feed's positions and filled buys; committed with composer/results/mirror/ by the daily monitor). A
+  paper or dry-run book never teaches it. An unread feed falls back to the saved set (a fund bought
+  since then can alert once; never a miss). Missing env vars print one line, never silence.
+- The 16:35 parity UNFILLED alert adds the likely fix when an order died with IBKR's bare "discarded".
+- A rejected buy leaves that part of the sleeve in cash (book and account agree) until its rule next
+  trades: a daily sleeve at the next session, a threshold sleeve when its cash is over 5% or its gap
+  over the corridor. No substitute fund is bought: that would change the strategy on one side.
+- Review 2026-11-17 (one counter-agent, PASS WITH CORRECTIONS): D1-D8 applied (env-missing line, saved-set
+  fallback, corridor targets, live/unfrozen engines only, paper books never learned, no save on
+  --no-ledger, wording, 8 s timeout after the preview's lines, tests). 20 gate tests.
 - Owner action when it fires: verify the emailed token in Client Portal. Do not place a test order in
   the mirror account (the executor refuses an account holding anything outside its book).
 
