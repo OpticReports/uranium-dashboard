@@ -25,7 +25,7 @@ Everything here was decided with data, in advance. Addenda cited.
   IBKR mirror account has never bought (IBKR may hold that first order
   until you verify a token it emails you; a firm call's flip and market
   alternatives are shown, not pushed, but HG's gate sides always push when
-  the gate is within 3 sigma; composer/IBKR_MIRROR.md).
+  the gate is within 3 sigma or flipping; composer/IBKR_MIRROR.md).
   It is there so nothing surprises you, not as a cue to act. Step 1 below
   still holds.
 - You get a push notification for anything that matters.

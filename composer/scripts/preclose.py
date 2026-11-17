@@ -42,7 +42,7 @@ FIRST BUY ON IBKR (a live engine is set to buy a fund the live IBKR mirror accou
 IBKR may hold it until a one-time emailed token is verified; mirror_firstbuy.py), and FIRST BUY ON IBKR
 (if a call flips) for funds only the preview's alternative outcomes would buy (a firm call's flip
 and market alternatives are a line, not an alert; HG's gate sides alert whenever the gate is within
-FLIP_MAX sigma or flipping).
+FLIP_MAX sigma, flipping, or at an unknown distance).
 Otherwise exit 0. Report-only: GET from Composer, FMP and Yahoo, and one GET of the IBKR executor's
 /mirror/feed with MIRROR_READ_TOKEN; it never trades or edits a symphony. Each run appends one line per
 engine, and one for the gate, to composer/results/monitor/preclose-ledger.jsonl, and updates the set of

@@ -778,10 +778,11 @@ import unittest  # noqa: E402
 class TestRunsUnderPytest(unittest.TestCase):
     """The tests above are pytest functions (tmp_path, monkeypatch, capsys) that `python3 -m unittest`
     does not collect: it reported 'Ran 0 tests ... OK' for this file (verifier, 2026-11-17). Under
-    unittest this one test runs the file with pytest, and fails if pytest is missing or any test fails."""
+    unittest this one test runs the file with pytest (without an inherited PYTEST_ADDOPTS or
+    PYTEST_CURRENT_TEST), and fails if pytest is missing or any test fails or is deselected."""
 
     def test_the_first_buy_gate_tests_run_under_pytest(self):
-        if os.environ.get("PYTEST_CURRENT_TEST"):     # already inside pytest: the functions above ran
+        if os.environ.get("PYTEST_CURRENT_TEST") and "_pytest" in sys.modules:   # inside pytest: they ran
             self.skipTest("running under pytest")
         import importlib.util
         import shutil
@@ -793,9 +794,10 @@ class TestRunsUnderPytest(unittest.TestCase):
             if not os.path.exists(exe):
                 self.fail("pytest not found: the first-buy gate tests in this file did not run")
             cmd = [exe]
+        env = {k: v for k, v in os.environ.items() if k not in ("PYTEST_ADDOPTS", "PYTEST_CURRENT_TEST")}
         r = subprocess.run(cmd + ["-q", "-p", "no:cacheprovider", os.path.abspath(__file__)], capture_output=True,
-                           text=True, timeout=900, cwd=os.path.dirname(os.path.dirname(SCRIPTS)))
+                           text=True, timeout=900, cwd=os.path.dirname(os.path.dirname(SCRIPTS)), env=env)
         out = r.stdout + r.stderr
         self.assertEqual(r.returncode, 0, out[-3000:])
         self.assertRegex(out, r"\b\d+ passed")
-        self.assertNotRegex(out, r"\b\d+ (failed|error)")
+        self.assertNotRegex(out, r"\b\d+ (failed|errors?|deselected)\b")

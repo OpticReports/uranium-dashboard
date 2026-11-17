@@ -51,10 +51,11 @@ gate is within reach - are checked too. 2026-11-06: HARV's 15:16 preview ended i
 flip' (SPY -0.36%, 1.6 sigma) to {PULS .64, ZVOL .36}, and Composer took it. They go in ONE combined
 "FIRST BUY ON IBKR (if a call flips)" alert, naming what flips each one, except a 'firm' call's flip
 and market alternatives, which are a line only; HG's gate sides push whenever the gate is within 3
-sigma or flipping, and on a firm call are read first so the firm flip's line never swallows them. (Round 5: of 6
-sessions with an alternative first buy, the one that happened was a 'could flip'; the firm rule
-quiets 1 of the 6 - 16 -> 15 FIRST BUY pushes in 12 sessions, one 15:15 run per session with the
-2026-11-16 bought set; 20 -> 19 over all 14 runs. On 2026-11-10 a 'firm' SLEEVE showed
+sigma, flipping or at an unknown distance, and on a firm call are read first so the firm flip's line
+never swallows them. (Round 5: of 6 sessions with an alternative first buy, the one that happened
+was a 'could flip'; the firm rule quiets 1 of the 6 - 16 -> 15 FIRST BUY pushes in 12 sessions, one
+15:15 run per session with the 2026-11-16 bought set and a feed without sleeve data; 20 -> 19 over
+all 14 runs. On 2026-11-10 a 'firm' SLEEVE showed
 a 2-sigma SHY flip to {BOXX .5, UVXY .5} that SHY crossed only by the close, after the decision,
 and Composer stayed in BOXX.) For a daily engine
 an alternative is a target, read with floor 0; for a threshold engine it is Composer's end state,
@@ -331,7 +332,8 @@ def first_buy_alerts(rows: list[dict], known: set[str], feed: dict | None = None
         seen = set(new)
         for holdings, why, gate_side in sorted(_alternatives(r), key=lambda a: label == "firm" and not a[2]):
             # a firm call: gate sides first, so a firm flip's line never swallows a gate side's push;
-            # otherwise the preview's order (the closest flip first) names the nearer trigger
+            # otherwise the preview's own order: its closest one-ticker flip, then the market moves as
+            # stored (-2 before -1), then the gate sides
             funds = [t for t in _new(holdings, known, floor) if t not in seen]
             if not funds:
                 continue
