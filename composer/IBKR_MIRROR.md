@@ -450,7 +450,7 @@ time an account opens a security, so the risk sits with funds the live account h
     fund; a fund with no live price keeps its implied mark); either reading trading counts. Slack: a
     point on the gap, half a point on idle cash.
   - The preview's alternative outcomes are checked too (the closest flip, the 1-2 sigma market moves,
-    and HG's two gate sides when the gate is within 3 sigma or flipping) in ONE combined "FIRST BUY ON
+    and HG's two gate sides when the gate is within 3 sigma, flipping or at an unknown distance) in ONE combined "FIRST BUY ON
     IBKR (if a call flips)" alert that names what flips each one. 2026-11-06: HARV's 15:16 preview
     ended in PULS 1.0, "could flip" (SPY -0.36%, 1.6 sigma) to {PULS .64, ZVOL .36}, and Composer took
     it. A "firm" call's flip and market alternatives are a line, not a push (HG's gate sides excepted:
@@ -458,7 +458,8 @@ time an account opens a security, so the risk sits with funds the live account h
     2-sigma SHY flip to {BOXX .5, UVXY .5} that SHY crossed only by the close, after the decision;
     Composer stayed in BOXX. Of 6 past sessions with an alternative first buy, the one that happened
     was a could-flip; the firm rule quiets 1 of the 6 (16 -> 15 FIRST BUY pushes in 12 sessions, one
-    15:15 run per session with the 2026-11-16 bought set; 20 -> 19 over all 14 runs) and lost no first
+    15:15 run per session with the 2026-11-16 bought set and a feed without sleeve data; 20 -> 19 over
+    all 14 runs) and lost no first
     buy that happened. On a firm call HG's gate sides are read before the flip, so a firm flip that IS
     the gate crossing cannot turn the gate side's push into a line; otherwise the closest flip is read
     first and named.
@@ -479,7 +480,9 @@ time an account opens a security, so the risk sits with funds the live account h
     alternative change inside Composer's corridor that the mirror sleeve trades to on its own rule is
     not seen; a request queued in the minutes before 15:15 may still sit in the executor's inbox; a
     split dated today is applied at the decision; a target fund whose allocation is under one share is
-    never bought and alerts each session.
+    never bought and alerts each session; on a call that is not firm a market move is named in stored
+    order (-2 before -1), so a fund reachable at -1 sigma can be named after the -2 sigma move
+    (attribution only: the fund still pushes).
 - The 16:35 parity UNFILLED alert says what did not fill waits until its sleeve's rule next trades
   (a daily sleeve at the next session), and adds the likely fix when an order died with IBKR's bare
   "discarded".
@@ -523,13 +526,24 @@ time an account opens a security, so the risk sits with funds the live account h
      POLICY/RUNBOOK omitted the gate-side exception; the alert wording and the exact 3.0-sigma edge
      had no test; `python3 -m unittest` ran 0 of this file's tests and said OK (the file now runs itself
      through pytest under unittest, and fails if pytest is missing); notes - gate sides go first only
-     on a firm call (a close call names the nearer flip), the parity UNFILLED alert no longer says
+     on a firm call (otherwise the preview's order: its closest flip first), the parity UNFILLED alert no longer says
      "the next session" for every sleeve, "buys them" for several funds, the basis of 16 -> 15.
      Remaining NOTE-level follow-ups are listed above; no further review round is planned unless a
      change touches behaviour.
+  8. one verifier of item 7's fixes, PASS WITH CORRECTIONS, nothing SERIOUS (40,000 random row sets
+     against 8984f11f and ea789927: identical main alerts, no fund lost, no push turned into a line;
+     the unittest guard fails on a failing test and on a missing pytest); pushed to main as bc97781d.
+     Applied after (docs, a comment and the guard only; no behaviour change): MINOR - RUNBOOK dropped
+     "or flipping"; MINOR - a comment claimed the nearer trigger is always named; notes - the guard now
+     runs the inner pytest without PYTEST_ADDOPTS / PYTEST_CURRENT_TEST and skips itself only inside
+     pytest; a gate at an unknown distance also attaches the sides; the owner's own words in POLICY;
+     the basis of 16 -> 15. Not changed (follow-ups): the market-move attribution order (Known limits).
   66 gate tests (pytest: `pytest -p no:cacheprovider composer/scripts/tests/test_mirror_firstbuy.py`;
-  under `python3 -m unittest` one extra test runs them through pytest); every fix above is
-  mutation-checked (removing it fails a test).
+  under `python3 -m unittest` one extra test runs them through the PATH pytest, whose interpreter may
+  differ - 3.13 here; on 2026-11-17 the first-buy, parity and preclose tests also passed on 3.11.18,
+  the routine's python3). Every behavioural fix above is mutation-checked (removing it fails a test);
+  doc fixes and the unittest guard itself cannot be (deleting the guard silently drops the 66 tests
+  from `python3 -m unittest` again).
 - Owner action when it fires: verify the emailed token in Client Portal. Do not place a test order in
   the mirror account (the executor refuses an account holding anything outside its book).
 

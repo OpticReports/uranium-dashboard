@@ -198,7 +198,8 @@ unchanged vs disciplined manual resets).
   close the call is. Relay the lines as written. Push only for GATE CLOSES
   / REOPENS AT TODAY'S REBALANCE, GATE ON THE LINE, BIG DAY, PRE-CLOSE
   UNAVAILABLE, any engine line that changes holdings ("current -> target";
-  owner, 2026-11-02) and FIRST BUY ON IBKR (both forms: a live IBKR
+  owner, 2026-11-02: "ping me if the 15:15 preview shows a flip") and
+  FIRST BUY ON IBKR (both forms: a live IBKR
   mirror engine may buy a fund the account has never bought, which IBKR
   can hold for a one-time emailed verification; a firm call's flip and
   market alternatives are a line, not a push, but HG's gate sides push
