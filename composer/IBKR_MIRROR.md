@@ -434,41 +434,58 @@ time an account opens a security, so the risk sits with funds the live account h
 23 of the 30 the four live trees can hold, on 2026-11-16.
 
 - The 15:15 preview (preclose.py, mirror_firstbuy.py) reads the executor's feed (read token, GET only,
-  8 s timeout, after the preview's own lines are printed) and alerts "FIRST BUY ON IBKR" for any live,
-  unfrozen engine set to buy a fund the account has never bought, so the routine pushes it ~35
-  minutes before the decision. For a threshold engine whose corridor does not trip, the target's funds
-  are also checked when the mirror sleeve will trade to target anyway: a pending transfer naming it
-  (build_plan forces it), or - after adding pending credits and open dividend receivables to its cash,
-  as _plan does before deciding - cash over 5% of equity, debt, no holdings, or the largest single-asset
-  gap on INVESTED weights (cash excluded) over the corridor (mirror_core.decide_sleeve). The sleeve is
-  re-marked at the preview's own live prices (the feed's marks are the last planned session's, often a
-  day or more old), with a half-point slack on idle cash and a one-point slack on the gap for the
-  minutes left. A gate test checks the rule against the executor's own decide_sleeve on a grid of
-  sleeves built exactly as the feed publishes them, at both the feed's marks and live prices. The set of funds bought is kept in results/mirror/ibkr-bought.json (union of the live feed's
-  positions and filled buys, with the live engines; committed by the daily monitor). A paper or dry-run
-  book never teaches it, and a feed with no live book alerts nothing. An unread feed (8 s per socket
-  operation, 12 s in all) falls back to the saved set and checks every engine; one not live at the
-  last save alerts with a note (a fund bought since then can alert once). Missing env vars, an unsaved
-  set, and a day with no preview rows each print one line, never silence. The alert names the
-  decision time (12:50 on a half-day). The read token is refused before sending if it holds a
-  control character, and redacted raw or escaped from any error.
+  8 s per socket operation, 12 s in all, after the preview's own lines are printed) and alerts "FIRST
+  BUY ON IBKR" for any live, unfrozen engine set to buy a fund the account has never bought, so the
+  routine pushes it ~35 minutes before the decision.
+  - What counts as "set to buy": Composer's expected holdings; for a DAILY engine (by the manifest or
+    by the executor's own published rule - daily on either side wins) its whole target; for a
+    threshold engine, its target too whenever the mirror sleeve will trade to it under
+    mirror_core.decide_sleeve: a pending transfer naming it (build_plan forces it), a pending adjust
+    naming it or any pending resolve; debt at the LOW end of its cash interval (cash + pending debits);
+    or, at the HIGH end (cash + pending credits + open dividend receivables), idle cash over 5% of
+    equity or the largest single-asset gap on INVESTED weights over the corridor (the smaller of the
+    manifest's and the executor's). The interval exists because the executor may refuse a credit or a
+    debit, or skip a receivable not yet due or not yet arrived (a single summed figure hid a debt).
+  - The sleeve is read at the feed's marks AND re-marked at the preview's own live prices (fund by
+    fund; a fund with no live price keeps its implied mark); either reading trading counts. Slack: a
+    point on the gap, half a point on idle cash.
+  - The preview's alternative outcomes are checked too (the closest flip, the 1-2 sigma market moves,
+    HG's two gate sides) in ONE combined "FIRST BUY ON IBKR (if a call flips)" alert. 2026-11-10:
+    SLEEVE was "firm", a 2-sigma SHY flip gave {BOXX .5, UVXY .5}, and the decision took it.
+  - A live engine whose preview is unavailable prints "NOT checked"; missing env vars, an unsaved set,
+    and a day with no preview rows each print one line, never silence. The alert names the decision
+    time (12:50 on a half-day). The read token is refused before sending if it holds a control
+    character, and redacted (raw, escaped, UTF-8 or latin-1 bytes) from any error.
+  - The set of funds bought is results/mirror/ibkr-bought.json: written by the 15:15 preview (union of
+    the live feed's positions and filled buys, with the live engines and the date, which never moves
+    back) and committed by that routine. A paper or dry-run book never teaches it; a feed with no live
+    book alerts nothing. An unread feed falls back to the saved set and checks EVERY engine; one not
+    live at the last save alerts with a note. A fund bought since the save can then alert once.
+  - Known limits: for a threshold engine the alternatives are Composer's end states, so a small
+    alternative change inside Composer's corridor that the mirror sleeve trades to on its own rule is
+    not seen; a request queued in the minutes before 15:15 may still sit in the executor's inbox; a
+    split dated today is applied at the decision; a target fund whose allocation is under one share is
+    never bought and alerts each session.
 - The 16:35 parity UNFILLED alert adds the likely fix when an order died with IBKR's bare "discarded".
 - A rejected buy leaves that part of the sleeve in cash (book and account agree) until its rule next
   trades: a daily sleeve at the next session, a threshold sleeve when its cash is over 5% or its gap
   over the corridor. No substitute fund is bought: that would change the strategy on one side.
-- Review 2026-11-17 (one counter-agent, PASS WITH CORRECTIONS): D1-D8 applied (env-missing line, saved-set
-  fallback, corridor targets, live/unfrozen engines only, paper books never learned, no save on
-  --no-ledger, wording, 8 s timeout after the preview's lines, tests). Re-check of those fixes (one
-  counter-agent, PASS WITH CORRECTIONS): SERIOUS - the corridor check read equity weights, not invested
-  weights, and missed debt/empty sleeves, so it could miss a first buy; fixed and gated against
-  decide_sleeve. Minor: wrong-typed saved file raised; no-live-book feeds alerted daily; 15:50
-  hard-coded; output not flushed before the feed read; routines now push FIRST BUY alerts. Two verifiers
-  of those fixes (PASS WITH CORRECTIONS each): SERIOUS - queued transfers, credits and dividends were
-  ignored, so a forced or cash-raised sleeve could buy a new fund unwarned; MINOR - stale marks (re-marked
-  now), the fallback skipped engines newer than the save, a token with CR/LF could be printed; notes on
-  the saved date, a silent save failure, malformed sleeves, the feed deadline. All applied, each gated
-  (mutation-checked: removing any fix fails its test). 38 gate tests.
-  Known limit: a target fund whose allocation is under one share is never bought and alerts each session.
+- Reviews 2026-11-16/17, each by agents that did not write the code, every finding gated by a test
+  (mutation-checked: removing any fix fails its test):
+  1. one counter-agent, PASS WITH CORRECTIONS: D1-D8 (env-missing line, saved-set fallback, corridor
+     targets, live/unfrozen engines only, paper books never learned, no save on --no-ledger, wording,
+     the timeout after the preview's lines);
+  2. its re-check, PASS WITH CORRECTIONS: SERIOUS - equity weights read as invested, debt and empty
+     sleeves missed; minor - wrong-typed saved file, no-live-book feeds, 15:50 hard-coded, no flush;
+  3. two verifiers, PASS WITH CORRECTIONS each: SERIOUS - queued transfers, credits and dividends
+     ignored; minor - stale marks, fallback skipped newer engines, a CR/LF token could print;
+  4. two verifiers, PASS WITH CORRECTIONS each: SERIOUS - round 3's single summed cash figure could
+     hide a debt (a regression, now an interval, gated by a subset property against decide_sleeve);
+     SERIOUS - the preview's alternative outcomes were ignored (2026-11-10 SLEEVE/UVXY); minor -
+     unavailable previews silent, the wiring of the re-mark untested; notes - adjust/resolve
+     requests, the executor's own rule, target weights under 0.5%, implied marks, either-reading,
+     latin-1 redaction, SystemExit in the fetch, the daemon deadline thread, this file's wording.
+  53 gate tests.
 - Owner action when it fires: verify the emailed token in Client Portal. Do not place a test order in
   the mirror account (the executor refuses an account holding anything outside its book).
 

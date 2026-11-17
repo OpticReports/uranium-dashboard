@@ -95,7 +95,8 @@ def fetch_feed(url, token, history=30, timeout=TIMEOUT_S, opener=None):
         raise RuntimeError(f"HTTP {e.code}: {why.get(e.code, 'the executor refused the read')}") from None
     except Exception as e:  # noqa: BLE001
         msg = str(e)
-        for form in (token, repr(token)[1:-1], repr(token.encode())[2:-1]):   # the token, raw and escaped
+        for form in (token, repr(token)[1:-1], repr(token.encode())[2:-1],      # the token, raw and escaped
+                     repr(token.encode("latin-1", "backslashreplace"))[2:-1]):   # (http.client encodes latin-1)
             msg = msg.replace(form, "***") if form else msg
         raise RuntimeError(one_line(msg, 160)) from None
     if not isinstance(body, dict) or body.get("kind") != FEED_KIND or not isinstance(body.get("books"), dict):
