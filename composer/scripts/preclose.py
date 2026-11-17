@@ -926,28 +926,38 @@ def preview(now, get_meta, get_drift=None, fetch=None, quotes=None, capture=None
     return lines, alerts, led
 
 
-def first_buy(led, env=None, fetch=None, path=None):
-    """(lines, alerts): engines about to buy a fund the live IBKR mirror has never bought
+def first_buy(led, env=None, fetch=None, path=None, save=True):
+    """(lines, alerts): live engines about to buy a fund the live IBKR mirror has never bought
     (mirror_firstbuy.py; IBKR may reject a first buy until a one-time token is verified). Read-only:
-    one GET of the executor's /mirror/feed with the read token. Without the env vars: nothing (the
-    preview runs on machines without them). Never raises."""
+    one GET of the executor's /mirror/feed with the read token (8 s timeout). Without the env vars: one
+    line saying it was not checked. Never raises; never prints the token."""
     env = os.environ if env is None else env
     url, token = (env.get("MIRROR_EXECUTOR_URL") or "").strip(), (env.get("MIRROR_READ_TOKEN") or "").strip()
-    if fetch is None and (not url or not token):
-        return [], []
     try:
         import mirror_firstbuy as fb
-        feed = None
-        try:
-            if fetch is not None:
+        feed, why = None, None
+        if fetch is not None:
+            try:
                 feed = fetch()
-            else:
-                import mirror_parity as mp
-                feed = mp.fetch_feed(url, token, history=30)
-        except Exception:  # noqa: BLE001  never the token: the reason is not printed
-            feed = None
-        rows = [r for r in led if r.get("engine") != "GATE"]
-        return fb.preview_check(rows, feed, path)
+            except RuntimeError as e:
+                why = f"the mirror feed was not read ({one_line(str(e), 120)})"
+            except Exception:  # noqa: BLE001
+                why = "the mirror feed was not read"
+        elif url and token:
+            import mirror_parity as mp
+            try:
+                feed = mp.fetch_feed(url, token, history=120, timeout=8)
+            except RuntimeError as e:          # fetch_feed's reasons never hold the token
+                why = f"the mirror feed was not read ({one_line(str(e), 120)})"
+            except Exception:  # noqa: BLE001
+                why = "the mirror feed was not read"
+        else:
+            why = "MIRROR_EXECUTOR_URL / MIRROR_READ_TOKEN not set"
+        cfg = sr.load_manifest()
+        rows = [dict(r, corridor=(cfg.get(r.get("engine")) or {}).get("corridor"))
+                for r in led if r.get("engine") != "GATE"]
+        today = next((r.get("date") for r in led if r.get("date")), None)
+        return fb.preview_check(rows, feed, path, save=save, why=why, today=today)
     except Exception as e:  # noqa: BLE001
         return [f"first-buy check failed: {one_line(repr(e))}"], []
 
@@ -975,11 +985,12 @@ def main():
         lines, alerts, led = preview(now, get_meta, get_drift)
     except (Exception, SystemExit) as e:  # noqa: BLE001  the routine must hear about a failed preview
         lines, alerts, led = [], [f"PRE-CLOSE UNAVAILABLE — the preview failed: {one_line(repr(e))}"], []
-    if led and "--no-first-buy" not in sys.argv:
-        fl, fa = first_buy(led)
-        lines += fl
-        alerts += fa
     print("\n".join(lines))
+    if led and "--no-first-buy" not in sys.argv:          # after the preview's own lines (a slow feed holds back nothing)
+        fl, fa = first_buy(led, save="--no-ledger" not in sys.argv)
+        if fl:
+            print("\n".join(fl))
+        alerts += fa
     if alerts:
         print(f"\n{len(alerts)} ALERT(S):")
         for a in alerts:
