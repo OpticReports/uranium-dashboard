@@ -52,9 +52,11 @@ the intended fraction of the giving sleeve's equity.
 
 ## Allocation (owner decision 2026-11-18; results.md addendum 56)
 
-- **HARV is closed as a separate engine** (owner, 2026-11-18: "close it out"). Its whole capital
+- **HARV is closed as a separate engine** (owner, 2026-11-18: "close it out"). Its capital
   moves pro rata into the other three (29 : 29 : 27) in one owner-approved session on both brokers
-  (`research/zvol_2026-11/MOVE_PLAN.md`; logged in CHANGELOG.md). The copy of the same rule inside
+  (`research/zvol_2026-11/MOVE_PLAN.md`; logged in CHANGELOG.md). A $100 stub on Composer and
+  about $6 of cash in the mirror's sleeve stay until the engine-retirement change is reviewed (the
+  daily tooling still reads HARV; the plan says why), then go too. The copy of the same rule inside
   the KMLM symphony (its 25% VIX sleeve) is unchanged.
 - **Targets: HG 34.1 / KMLM 34.1 / SLEEVE 31.8** (29/85, 29/85, 27/85). HARV has no target: until
   its exit has filled, and for any dust left afterwards, every operation here leaves it alone.
