@@ -1,0 +1,225 @@
+<title>B.5 Overlay Study</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* layout: one reading column; verdict first, then each claim with the chart that carries it */
+:root{
+  --plane:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7;
+  --ring:rgba(11,11,11,.10); --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --neutral:#52514e;
+  --bad:#d03b3b; --good:#006300; --wash:rgba(42,120,214,.10);
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --plane:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+  --ring:rgba(255,255,255,.10); --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --neutral:#c3c2b7;
+  --bad:#e66767; --good:#0ca30c; --wash:rgba(57,135,229,.14); color-scheme:dark } }
+:root[data-theme="dark"]{
+  --plane:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+  --ring:rgba(255,255,255,.10); --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --neutral:#c3c2b7;
+  --bad:#e66767; --good:#0ca30c; --wash:rgba(57,135,229,.14); color-scheme:dark }
+body{background:var(--plane);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5}
+.wrap{max-width:940px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:28px}
+h1{font-size:26px;line-height:1.2;margin:0;text-wrap:balance;font-weight:650}
+h2{font-size:18px;margin:0;text-wrap:balance;font-weight:650}
+p{margin:0;max-width:68ch}
+.eyebrow{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.lede{color:var(--ink2);font-size:16px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile .l{font-size:12.5px;color:var(--ink2)} .tile .v{font-size:26px;font-weight:650;font-variant-numeric:tabular-nums} .tile .d{font-size:12.5px;color:var(--muted)}
+section{display:flex;flex-direction:column;gap:10px}
+figure{margin:0;background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:14px 14px 10px;min-width:0;position:relative}
+figcaption{font-size:12.5px;color:var(--muted);margin-top:6px;max-width:90ch}
+.ft{font-size:14px;font-weight:600;margin-bottom:2px} .fs{font-size:12.5px;color:var(--ink2);margin-bottom:8px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--ink2);margin-bottom:4px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.legend i.dot{width:9px;height:9px;border-radius:50%}
+svg{display:block;width:100%;height:auto;overflow:visible} svg text{font-family:var(--sans);fill:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+svg text.lab{fill:var(--ink2)} svg text.halo{paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round} svg text.strong{fill:var(--ink);font-weight:600}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:8px 10px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.12);z-index:5;min-width:150px;max-width:300px;font-variant-numeric:tabular-nums}
+.tip b{font-weight:600} .tip .r{display:flex;justify-content:space-between;gap:14px} .tip .r span:first-child{color:var(--ink2)} .tip i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+ul{margin:0;padding-left:20px;max-width:72ch;display:flex;flex-direction:column;gap:5px}
+.tw{overflow-x:auto} table{border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums;width:100%}
+th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--grid);white-space:nowrap} th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+th{color:var(--ink2);font-weight:600} td:nth-child(2){white-space:normal;min-width:220px}
+details summary{cursor:pointer;color:var(--ink2);font-size:13px} details summary:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+.box{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:14px 16px}
+.verdict{font-size:13px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--ink);border:1px solid var(--axis);border-radius:999px;padding:3px 12px;align-self:flex-start}
+</style>
+<div class="wrap">
+<header style="display:flex;flex-direction:column;gap:10px">
+  <span class="eyebrow">Barbell Lab · research · 2026-11-18 · IBKR …3321</span>
+  <h1>B.5 Enhanced: do exit, stop or harvest rules improve the book?</h1>
+  <span class="verdict">Nothing survives · keep the live rule</span>
+  <p class="lede" id="lede"></p>
+</header>
+<div class="tiles" id="tiles"></div>
+
+<section><h2>What the rules did to the equity curve</h2>
+<p id="t1"></p>
+<figure id="f_eq"></figure><figure id="f_dd"></figure><figure id="f_exp"></figure></section>
+
+<section><h2>Crash protection is paid back in the rebound</h2>
+<p id="t2"></p><figure id="f_ep"></figure></section>
+
+<section><h2>All 53 rules against a static book with the same exposure</h2>
+<p id="t3"></p><figure id="f_forest"></figure>
+<details><summary>Table view: every rule</summary><div class="tw" id="tbl"></div></details></section>
+
+<section><h2>Holding less beats timing</h2>
+<p id="t4"></p><div class="two"><figure id="f_fr1"></figure><figure id="f_fr2"></figure></div></section>
+
+<section><h2>What optimizing would have paid</h2>
+<p id="t5"></p><figure id="f_wf"></figure></section>
+
+<section><h2>Which legs pull their weight</h2>
+<p id="t6"></p><div class="two"><figure id="f_loo1"></figure><figure id="f_loo2"></figure></div></section>
+
+<section><h2>Candidate edges found on the way</h2>
+<p id="t7"></p><div class="two"><figure id="f_e1"></figure><figure id="f_e2"></figure></div>
+<ul id="edges"></ul></section>
+
+<section><h2>Limits of this study</h2><div class="box"><ul id="honesty"></ul></div></section>
+</div>
+<script>
+const D = /*DATA*/;
+const $ = id => document.getElementById(id);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent, text){ const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; }
+function head(fig, title, sub, legend){
+  fig.innerHTML = ""; const t = document.createElement("div"); t.className = "ft"; t.textContent = title; fig.appendChild(t);
+  if (sub){ const s = document.createElement("div"); s.className = "fs"; s.textContent = sub; fig.appendChild(s); }
+  if (legend && legend.length > 1){ const l = document.createElement("div"); l.className = "legend";
+    legend.forEach(x => { const sp = document.createElement("span"); const i = document.createElement("i"); if (x.dot) i.className = "dot"; i.style.background = `var(${x.c})`; sp.appendChild(i); sp.appendChild(document.createTextNode(x.name)); l.appendChild(sp); }); fig.appendChild(l); }
+}
+function tipFor(fig){ let t = fig.querySelector(".tip"); if (!t){ t = document.createElement("div"); t.className = "tip"; t.hidden = true; fig.appendChild(t); } return t; }
+function placeTip(fig, t, ev){ const r = fig.getBoundingClientRect(); t.hidden = false; let x = ev.clientX - r.left + 14, y = ev.clientY - r.top + 12;
+  if (x + t.offsetWidth > r.width - 6) x = ev.clientX - r.left - t.offsetWidth - 14; if (x < 4) x = 4; t.style.left = x + "px"; t.style.top = y + "px"; }
+function cap(fig, text){ if (!text) return; const c = document.createElement("figcaption"); c.textContent = text; fig.appendChild(c); }
+function ticks(lo, hi, n){ const span = hi - lo, step0 = Math.pow(10, Math.floor(Math.log10(span / n))); const err = span / n / step0;
+  const step = step0 * (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1); const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10)); return out; }
+const pct = (v, d = 0) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d) + "%";
+const fmtDate = t => new Date(t).toISOString().slice(0, 10);
+
+function lineChart(fig, o){
+  head(fig, o.title, o.sub, o.series.map(s => ({name: s.name, c: s.c})));
+  const W = Math.max(320, fig.clientWidth - 28), H = o.h || 300, m = {l: 46, r: o.endLabels ? 96 : 14, t: 8, b: 24};
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": o.title}, null); fig.appendChild(svg);
+  const xs = o.t, x0 = xs[0], x1 = xs[xs.length - 1]; const X = t => m.l + (t - x0) / (x1 - x0) * (W - m.l - m.r);
+  let lo = Infinity, hi = -Infinity; o.series.forEach(s => s.v.forEach(v => { if (v != null){ lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
+  if (o.ymin != null) lo = o.ymin; if (o.ymax != null) hi = o.ymax;
+  const f = o.log ? Math.log : (v => v); const Y = v => m.t + (1 - (f(v) - f(lo)) / (f(hi) - f(lo))) * (H - m.t - m.b);
+  const yt = o.yticks || ticks(lo, hi, 5);
+  yt.forEach(v => { el("line", {x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: css("--grid"), "stroke-width": 1}, svg); el("text", {x: m.l - 6, y: Y(v) + 4, "text-anchor": "end"}, svg, o.yfmt(v)); });
+  for (let y = new Date(x0).getUTCFullYear() + 1; y <= new Date(x1).getUTCFullYear(); y++){ if (y % (W < 520 ? 4 : 2)) continue; const t = Date.UTC(y, 0, 1); el("text", {x: X(t), y: H - 6, "text-anchor": "middle"}, svg, y); el("line", {x1: X(t), x2: X(t), y1: H - m.b, y2: H - m.b + 4, stroke: css("--axis")}, svg); }
+  el("line", {x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, stroke: css("--axis")}, svg);
+  const ends = [];
+  o.series.slice().reverse().forEach(s => { let d = ""; let pen = false; s.v.forEach((v, i) => { if (v == null){ pen = false; return; } const px = X(xs[i]), py = Y(v);
+      if (o.step && pen){ d += `H${px.toFixed(1)}V${py.toFixed(1)}`; } else d += (pen ? "L" : "M") + px.toFixed(1) + "," + py.toFixed(1); pen = true; });
+    if (o.area) el("path", {d: d + `V${Y(lo)}H${X(x0)}Z`, fill: css("--wash"), stroke: "none"}, svg);
+    el("path", {d, fill: "none", stroke: css(s.c), "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}, svg);
+    const lv = s.v[s.v.length - 1]; ends.push({s, y: Y(lv), v: lv}); });
+  if (o.endLabels){ ends.sort((a, b) => a.y - b.y); let prev = -99; ends.forEach(e => { e.ly = Math.max(e.y, prev + 15); prev = e.ly; });
+    ends.forEach(e => { el("circle", {cx: X(x1), cy: e.y, r: 4, fill: css(e.s.c), stroke: css("--surface"), "stroke-width": 2}, svg);
+      if (Math.abs(e.ly - e.y) > 2) el("line", {x1: X(x1) + 5, y1: e.y, x2: X(x1) + 10, y2: e.ly, stroke: css("--axis")}, svg);
+      el("text", {x: X(x1) + 12, y: e.ly + 4, class: "lab"}, svg, `${e.s.short || e.s.name} ${o.endfmt(e.v)}`); }); }
+  const cross = el("line", {y1: m.t, y2: H - m.b, stroke: css("--axis"), "stroke-width": 1, visibility: "hidden"}, svg); const tip = tipFor(fig);
+  const hit = el("rect", {x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent"}, svg);
+  hit.addEventListener("pointermove", ev => { const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * W / r.width; const t = x0 + (px - m.l) / (W - m.l - m.r) * (x1 - x0);
+    let i = 0, best = Infinity; for (let k = 0; k < xs.length; k++){ const dd = Math.abs(xs[k] - t); if (dd < best){ best = dd; i = k; } }
+    cross.setAttribute("x1", X(xs[i])); cross.setAttribute("x2", X(xs[i])); cross.setAttribute("visibility", "visible");
+    tip.innerHTML = `<b>${fmtDate(xs[i])}</b>` + o.series.map(s => `<div class="r"><span><i style="background:var(${s.c})"></i>${s.name}</span><span>${s.v[i] == null ? "–" : o.tipfmt(s.v[i])}</span></div>`).join(""); placeTip(fig, tip, ev); });
+  hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); tip.hidden = true; });
+  cap(fig, o.cap);
+}
+
+function forest(fig, o){
+  const groups = o.groups || []; head(fig, o.title, o.sub, groups.map(g => ({name: g.name, c: g.c, dot: true})));
+  const W = Math.max(320, fig.clientWidth - 28), rh = o.rh || 17, lw = Math.min(o.lw || 250, W * .46), m = {l: lw, r: 16, t: 20, b: 22}, H = m.t + m.b + rh * o.rows.length;
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": o.title}, null); fig.appendChild(svg);
+  const lo = o.lo, hi = o.hi, X = v => m.l + (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * (W - m.l - m.r);
+  (o.ticks || ticks(lo, hi, 6)).forEach(v => { el("line", {x1: X(v), x2: X(v), y1: m.t, y2: H - m.b, stroke: css(v === 0 ? "--axis" : "--grid"), "stroke-width": 1}, svg); el("text", {x: X(v), y: H - 6, "text-anchor": "middle"}, svg, o.xfmt(v)); });
+  if (o.axisLabel){ el("text", {x: X(lo), y: 12, "text-anchor": "start"}, svg, o.axisLabel[0]); el("text", {x: X(hi), y: 12, "text-anchor": "end"}, svg, o.axisLabel[1]); }
+  const tip = tipFor(fig);
+  o.rows.forEach((r, i) => { const y = m.t + rh * i + rh / 2, c = css(r.c || "--s1");
+    let lab = r.label; const maxc = Math.floor((lw - 12) / 6.1); if (lab.length > maxc) lab = lab.slice(0, maxc - 1) + "…";
+    el("text", {x: m.l - 8, y: y + 4, "text-anchor": "end", class: r.strong ? "strong" : "lab"}, svg, lab);
+    if (r.lo != null) el("line", {x1: X(r.lo), x2: X(r.hi), y1: y, y2: y, stroke: c, "stroke-width": 2, "stroke-linecap": "round", opacity: .55}, svg);
+    el("circle", {cx: X(r.v), cy: y, r: 4, fill: c, stroke: css("--surface"), "stroke-width": 2}, svg);
+    const hit = el("rect", {x: 0, y: y - rh / 2, width: W, height: rh, fill: "transparent"}, svg);
+    hit.addEventListener("pointermove", ev => { tip.innerHTML = `<b>${r.label}</b>` + r.tip.map(([k, v]) => `<div class="r"><span>${k}</span><span>${v}</span></div>`).join(""); placeTip(fig, tip, ev); });
+    hit.addEventListener("pointerleave", () => { tip.hidden = true; }); });
+  cap(fig, o.cap);
+}
+
+function bars(fig, o){
+  head(fig, o.title, o.sub, o.series.map(s => ({name: s.name, c: s.c, dot: true})));
+  const W = Math.max(320, fig.clientWidth - 28), H = o.h || 280, m = {l: 44, r: 10, t: 14, b: 26};
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": o.title}, null); fig.appendChild(svg);
+  let lo = 0, hi = 0; o.series.forEach(s => s.v.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); })); const pad = (hi - lo) * .08; lo -= lo < 0 ? pad : 0; hi += pad;
+  const Y = v => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b); const n = o.cats.length, k = o.series.length, band = (W - m.l - m.r) / n;
+  const bw = Math.min(24, (band * .78 - 2 * (k - 1)) / k); const tip = tipFor(fig);
+  ticks(lo, hi, 5).forEach(v => { el("line", {x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: css(v === 0 ? "--axis" : "--grid")}, svg); el("text", {x: m.l - 6, y: Y(v) + 4, "text-anchor": "end"}, svg, o.yfmt(v)); });
+  o.cats.forEach((c, i) => { const cx = m.l + band * (i + .5); const lab = (o.catEvery && i % o.catEvery) ? "" : c; if (lab) el("text", {x: cx, y: H - 8, "text-anchor": "middle", class: "lab"}, svg, lab);
+    o.series.forEach((s, j) => { const v = s.v[i], x = cx - (k * bw + (k - 1) * 2) / 2 + j * (bw + 2), y0 = Y(0), y1 = Y(v), h = Math.abs(y1 - y0), r = Math.min(4, bw / 2, h);
+      const top = Math.min(y0, y1); const d = v >= 0 ? `M${x},${y0}V${top + r}Q${x},${top} ${x + r},${top}H${x + bw - r}Q${x + bw},${top} ${x + bw},${top + r}V${y0}Z`
+        : `M${x},${y0}V${y1 - r}Q${x},${y1} ${x + r},${y1}H${x + bw - r}Q${x + bw},${y1} ${x + bw},${y1 - r}V${y0}Z`;
+      el("path", {d, fill: css(s.c)}, svg); });
+    const hit = el("rect", {x: m.l + band * i, y: m.t, width: band, height: H - m.t - m.b, fill: "transparent"}, svg);
+    hit.addEventListener("pointermove", ev => { tip.innerHTML = `<b>${c}</b>${o.catNote ? `<div class="r"><span>${o.catNote[i]}</span></div>` : ""}` + o.series.map(s => `<div class="r"><span><i style="background:var(${s.c})"></i>${s.name}</span><span>${o.tipfmt(s.v[i])}</span></div>`).join(""); placeTip(fig, tip, ev); });
+    hit.addEventListener("pointerleave", () => { tip.hidden = true; }); });
+  cap(fig, o.cap);
+}
+
+function scatter(fig, o){
+  head(fig, o.title, o.sub, o.groups.map(g => ({name: g.name, c: g.c, dot: !g.line})));
+  const W = Math.max(300, fig.clientWidth - 28), H = o.h || 300, m = {l: 44, r: 14, t: 10, b: 36};
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": o.title}, null); fig.appendChild(svg);
+  const X = v => m.l + (v - o.x[0]) / (o.x[1] - o.x[0]) * (W - m.l - m.r), Y = v => m.t + (1 - (v - o.y[0]) / (o.y[1] - o.y[0])) * (H - m.t - m.b);
+  ticks(o.y[0], o.y[1], 5).forEach(v => { el("line", {x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: css("--grid")}, svg); el("text", {x: m.l - 6, y: Y(v) + 4, "text-anchor": "end"}, svg, o.yfmt(v)); });
+  ticks(o.x[0], o.x[1], 5).forEach(v => { el("text", {x: X(v), y: H - m.b + 15, "text-anchor": "middle"}, svg, o.xfmt(v)); });
+  el("line", {x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, stroke: css("--axis")}, svg);
+  el("text", {x: (m.l + W - m.r) / 2, y: H - 4, "text-anchor": "middle"}, svg, o.xlabel);
+  if (o.line){ el("path", {d: o.line.map((p, i) => (i ? "L" : "M") + X(p.x) + "," + Y(p.y)).join(""), fill: "none", stroke: css("--neutral"), "stroke-width": 2, "stroke-linecap": "round"}, svg); }
+  const tip = tipFor(fig);
+  const draw = (p, r) => { const c = el("circle", {cx: X(p.x), cy: Y(p.y), r, fill: css(p.c), stroke: css("--surface"), "stroke-width": 2}, svg);
+    const hit = el("circle", {cx: X(p.x), cy: Y(p.y), r: 11, fill: "transparent"}, svg);
+    hit.addEventListener("pointermove", ev => { tip.innerHTML = `<b>${p.label}</b>` + p.tip.map(([k, v]) => `<div class="r"><span>${k}</span><span>${v}</span></div>`).join(""); placeTip(fig, tip, ev); });
+    hit.addEventListener("pointerleave", () => { tip.hidden = true; }); };
+  o.pts.forEach(p => draw(p, 4.5));
+  (o.line || []).forEach(p => { draw(Object.assign({c: "--neutral"}, p), 5); el("text", {x: X(p.x) + (p.dx || 8), y: Y(p.y) + (p.dy || -8), class: "lab halo", "text-anchor": p.anchor || "start"}, svg, p.short); });
+  (o.callouts || []).forEach(p => el("text", {x: X(p.x) + 8, y: Y(p.y) + 4, class: "lab halo"}, svg, p.short));
+  cap(fig, o.cap);
+}
+
+function render(){
+  $("lede").textContent = D.text.lede; ["t1","t2","t3","t4","t5","t6","t7"].forEach(k => $(k).textContent = D.text[k]);
+  $("tiles").innerHTML = D.tiles.map(t => `<div class="tile"><span class="l">${t.l}</span><span class="v">${t.v}</span><span class="d">${t.d}</span></div>`).join("");
+  const S = [{k: "live", name: "Live book", short: "Live", c: "--s1"}, {k: "a2", name: "Closest rule: each leg vs its 10-month average", short: "10m rule", c: "--s2"},
+             {k: "b8", name: "Book stop 6%", short: "Stop 6%", c: "--s3"}, {k: "wf", name: "Walk-forward pick", short: "Walk-fwd", c: "--s4"}];
+  lineChart($("f_eq"), {title: "Growth of $1, log scale", sub: D.text.eq_sub, t: D.eq.t, log: true, endLabels: true,
+    series: S.map(s => ({name: s.name, short: s.short, c: s.c, v: D.eq[s.k]})), yticks: [1, 1.5, 2, 3, 4, 5], yfmt: v => "$" + v, endfmt: v => "$" + v.toFixed(2), tipfmt: v => "$" + v.toFixed(2), cap: D.text.eq_cap});
+  lineChart($("f_dd"), {title: "Drawdown from the prior peak", sub: D.text.dd_sub, t: D.eq.t, h: 230, ymax: 0, series: S.slice(0, 3).map(s => ({name: s.name, c: s.c, v: D.dd[s.k]})),
+    yfmt: v => v + "%", tipfmt: v => v.toFixed(1) + "%", cap: D.text.dd_cap});
+  lineChart($("f_exp"), {title: "When the 10-month rule was in the market", sub: "Share of the book held in its seven legs, weekly average; the rest sits in T-bills", t: D.eq.t, h: 150, ymin: 0, ymax: 100, step: true, area: true,
+    series: [{name: "Invested share", c: "--s2", v: D.exp}], yticks: [0, 50, 100], yfmt: v => v + "%", tipfmt: v => v.toFixed(0) + "% invested"});
+  bars($("f_ep"), {title: "Total return in each episode", sub: D.text.ep_sub, cats: D.ep.cats, catNote: D.ep.notes, series: D.ep.series, yfmt: v => v + "%", tipfmt: v => pct(v, 1), cap: D.text.ep_cap});
+  const G = [{name: "Whole-book rules", c: "--s1"}, {name: "Per-leg rules", c: "--s2"}, {name: "Macro gates", c: "--s3"}];
+  forest($("f_forest"), {title: "Sharpe change vs a static book with the same average exposure", sub: "Dot = point estimate, bar = 95% bootstrap interval, 2007-06 to 2026-11. Every interval that reaches a gain also contains zero.",
+    rows: D.forest, groups: G, lw: 360, lo: -.8, hi: .5, ticks: [-.8, -.6, -.4, -.2, 0, .2, .4], xfmt: v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1), axisLabel: ["← worse than static", "better →"], cap: D.text.forest_cap});
+  $("tbl").innerHTML = "<table><thead><tr>" + D.table.head.map(h => `<th>${h}</th>`).join("") + "</tr></thead><tbody>" + D.table.rows.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("") + "</tbody></table>";
+  [["f_fr1", "ext"], ["f_fr2", "conf"]].forEach(([id, k]) => scatter($(id), Object.assign({groups: G.concat([{name: "Static book + T-bills", c: "--neutral", line: true}]),
+    xfmt: v => v + "%", yfmt: v => v + "%", xlabel: "Max drawdown (further right = shallower)"}, D.frontier[k])));
+  bars($("f_wf"), {title: "Calendar-year return: live book vs the rule that looked best up to the prior year-end", sub: D.text.wf_sub, cats: D.wf.years, catEvery: 2, catNote: D.wf.picks,
+    series: [{name: "Live book", c: "--s1", v: D.wf.live}, {name: "Walk-forward pick", c: "--s4", v: D.wf.wf}], yfmt: v => v + "%", tipfmt: v => pct(v, 1), cap: D.text.wf_cap});
+  forest($("f_loo1"), Object.assign({rh: 26, lw: 130, groups: [], xfmt: v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1)}, D.loo.sharpe));
+  forest($("f_loo2"), Object.assign({rh: 26, lw: 130, groups: [], xfmt: v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v)}, D.loo.dd));
+  forest($("f_e1"), Object.assign({rh: 26, lw: 130, groups: [], xfmt: v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v)}, D.edges.os));
+  forest($("f_e2"), Object.assign({rh: 26, lw: 130, groups: [], xfmt: v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v)}, D.edges.ob));
+  $("edges").innerHTML = D.text.edges.map(x => `<li>${x}</li>`).join(""); $("honesty").innerHTML = D.text.honesty.map(x => `<li>${x}</li>`).join("");
+}
+render(); let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(render, 150); });
+new MutationObserver(render).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+</script>
