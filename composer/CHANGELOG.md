@@ -7,6 +7,25 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-18 — Owner decision: retire HARV pro rata; sleeve is one engine; cap 44% (policy change set; NO money moved yet)
+
+- Decision (owner, in session): "treat it as one engine, go ahead with full pro rata". HARV's capital
+  moves 29 : 29 : 27 into HG / KMLM / SLEEVE in staged, per-session-approved moves on both brokers
+  (research/zvol_2026-11/MOVE_PLAN.md). Basis: results.md addendum 56 and its second review.
+- Change set: POLICY.md (new "Allocation" section; Operation 1 sleeve band RETIRED; Operation 2
+  scale-up RETIRED, its tracking check kept report-only; Operation 3 note; Operation 5 cap 40% ->
+  44% and targets 29/29/27/15 -> HG 34.1 / KMLM 34.1 / SLEEVE 31.8 with HARV left out of the reset);
+  `scripts/monitor.py` (ENGINE_CAP 0.44, the new targets in the breach line, HARV excluded, the
+  family-book band off by default, `sleeve_weight` = share of the Composer book);
+  `scripts/tests/test_monitor_policy.py` (7 gate tests); RUNBOOK.md; a note on mirror_dry.FRACTIONS.
+- Before / after on the 11-17 close: cap check HG 32.7% / KMLM 30.1% / SLEEVE 25.5% (no breach under
+  either cap); sleeve band 12.3% of "engines + $346k IBKR equities" (inside 7-15%) -> not measured
+  (25.5% of the Composer book, recorded only).
+- Known consequences: no automatic sleeve trim below 44% of the book; the 44% cap over three engines
+  is not re-simulated; the monitor's `sleeve_weight` series changes meaning from 2026-11-18.
+- Not done here: any transfer; the engine-retirement change; the daily routine's prompt (updated
+  once this change set is verified).
+
 ## 2026-11-18 — Harvester (ZVOL) review: keep / move / kill study (owner request; report-only)
 
 - Change: none to any symphony, gate, POLICY operation or the mirror. New study under

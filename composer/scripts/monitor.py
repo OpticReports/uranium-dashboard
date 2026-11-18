@@ -49,6 +49,37 @@ DD_TIERS = {
 }
 BOOK_DD_ALERT = 0.17    # 55y-conservative p90 of book 12m maxDD (add. 21b)
 
+# POLICY.md operation 5 (owner decision 2026-11-18: HARV's capital moves pro rata into the other three).
+# Targets are 29:29:27 of the book once HARV is retired; the cap keeps ~10 points of headroom above the
+# largest target (the headroom codicil). HARV has no target while it is being retired: it is left out
+# of the reset and cannot breach.
+ENGINE_CAP = 0.44
+ENGINE_TARGETS = "HG 34.1 / KMLM 34.1 / SLEEVE 31.8 (HARV retiring: left out)"
+RETIRING = ("ORQNCfZnA18wmsMWVhf8",)
+
+
+def cap_alerts(meta, book_total, cap=ENGINE_CAP):
+    """CONCENTRATION CAP BREACH lines: any symphony above `cap` of the whole book (symphonies + cash)"""
+    out = []
+    if book_total > 0:
+        for s in meta:
+            share = s["value"] / book_total
+            if share > cap and s["id"] not in RETIRING:
+                out.append(f"CONCENTRATION CAP BREACH: {s['name'][:40]} [{s['id'][:8]}] at {share:.1%} of book "
+                           f"(> {cap:.0%}) — POLICY.md operation 5: rebalance the engines to {ENGINE_TARGETS} "
+                           "(guarded CLI, staged windows)")
+    return out
+
+
+def sleeve_share(meta, sleeve_id, outside=0.0):
+    """the sleeve's share of the Composer symphonies (plus `outside`, 0 since 2026-11-18: the family-book
+    band was retired with the owner's decision that the sleeve is one engine sized by its target weight)"""
+    total = sum(s["value"] for s in meta)
+    band = next((s for s in meta if s["id"] == sleeve_id), None)
+    if not band or total <= 0:
+        return None, None
+    return band, band["value"] / (total + outside)
+
 
 def run_diagnostic(acct, sid, name):
     """Tier-1 auto-diagnostic: live-vs-model divergence for a breached engine.
@@ -162,11 +193,11 @@ def main():
     # crash-sleeve monetization band (results.md addendum 7): alert when the
     # sleeve's share of the book leaves [lo, hi] so a human can rebalance it
     p.add_argument("--band-symphony", default="nNdBk7hc5NiBzeRvbI5T")
-    p.add_argument("--band-lo", type=float, default=0.07)
-    p.add_argument("--band-hi", type=float, default=0.15)
+    p.add_argument("--band-lo", type=float, default=None)      # retired 2026-11-18 (POLICY operation 1)
+    p.add_argument("--band-hi", type=float, default=None)
     # POLICY.md denominator: family crash-exposed assets = Composer engines +
     # owner-reported IBKR equities (update on owner reports; last 2026-07-07)
-    p.add_argument("--ibkr-equities", type=float, default=346000)
+    p.add_argument("--ibkr-equities", type=float, default=0.0)   # was 346000 (owner-reported 2026-07-07; sold 11-11)
     p.add_argument("--canary-url", default="https://treasury-canary.onrender.com",
                    help="public canary API for the accident-composite check")
     # The vol harvester's known failure mode is a SLOW BLEED (sim: -20.9% across
@@ -292,25 +323,17 @@ def main():
 
     # POLICY.md operation 5: engine concentration cap (pre-authorized reset)
     book_total = sum(s["value"] for s in meta) + idle + pending
-    if book_total > 0:
-        for s in meta:
-            share = s["value"] / book_total
-            if share > 0.40:
-                alerts.append(f"CONCENTRATION CAP BREACH: {s['name'][:40]} "
-                              f"[{s['id'][:8]}] at {share:.1%} of book (> 40%) — "
-                              "POLICY.md operation 5: rebalance ALL engines to "
-                              "29/29/27/15 targets (guarded CLI, staged windows)")
+    alerts.extend(cap_alerts(meta, book_total))
 
-    total_value = sum(s["value"] for s in meta)
-    band = next((s for s in meta if s["id"] == a.band_symphony), None)
-    if band and total_value > 0:
-        crash_exposed = (total_value - band["value"]) + a.ibkr_equities
-        w = band["value"] / (crash_exposed + band["value"])
+    # The sleeve's share of the Composer book, recorded daily. The family-book band (operation 1) is
+    # retired (2026-11-18): no alert unless --band-lo / --band-hi are passed explicitly.
+    band, w = sleeve_share(meta, a.band_symphony, a.ibkr_equities)
+    if band is not None:
         snap["sleeve_weight"] = round(w, 4)
-        if w > a.band_hi:
+        if a.band_hi is not None and w > a.band_hi:
             alerts.append(f"SLEEVE BAND BREACH: {w:.1%} > {a.band_hi:.1%} — "
                           f"harvest: trim {band['name'][:30]} back to target (sells the pop)")
-        elif w < a.band_lo:
+        elif a.band_lo is not None and w < a.band_lo:
             alerts.append(f"SLEEVE BAND BREACH: {w:.1%} < {a.band_lo:.1%} — "
                           f"re-enter: top {band['name'][:30]} back up to target")
 

@@ -84,7 +84,7 @@ import shadow_runner as sr  # noqa: E402
 
 SCHEMA = 2                        # the dry book's file: 2 since the core books distributions (receivables in the state)
 CAPITAL = 118_000.0
-FRACTIONS = {"HG": 0.29, "KMLM": 0.29, "SLEEVE": 0.27, "HARV": 0.15}       # POLICY targets
+FRACTIONS = {"HG": 0.29, "KMLM": 0.29, "SLEEVE": 0.27, "HARV": 0.15}       # the paper book's SEED split (POLICY targets until 2026-11-18; the HARV retirement is not replayed here: this book compares holdings and returns per engine, not sizes)
 START = "2026-07-15"              # the shadow ledger's first session
 MINUTE_START = "2026-10-05"
 DECIDE = sr._hm(sr._min("16:00") - sr.DECISION_MINUTE)   # 15:54 ET on a full day: the END of the decision bar

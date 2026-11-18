@@ -1,9 +1,10 @@
 # Standing Capital Policy — pre-authorized operations
 
 Granted by the account owner in-session on **2026-07-06** ("For 2 and 3 can
-you have those ready to execute without asking me for approvals"). These two
-operations — and only these — may be executed by the agent **without
-per-trade approval**. Everything else stays governed by README §2 (explicit
+you have those ready to execute without asking me for approvals"). As of
+2026-11-18 the only operation that may trade **without per-trade approval**
+is **Operation 5** (the engine concentration cap); Operations 1 and 2 are
+retired and Operation 3 is report-only. Everything else stays governed by README §2 (explicit
 per-operation human request).
 
 Every auto-execution must be reported to the owner immediately after, logged
@@ -42,70 +43,55 @@ operation that moves money to or from unallocated cash,
 or outside the four mirrored engines (HG, KMLM, SLEEVE, HARV), has no mirror
 leg and is reported as such.
 
-## Pre-authorized operation 1 — sleeve monetization band
+## Allocation (owner decision 2026-11-18; results.md addendum 56)
 
-- Instrument: Crash Convexity Sleeve `nNdBk7hc5NiBzeRvbI5T`.
-- Sizing denominator (updated 2026-07-07, owner decision): the sleeve is
-  sized against the **family book's crash-exposed assets** — Composer
-  engines + owner-reported IBKR equities — not the Composer account alone.
-  - Current figures: IBKR equities ≈ $346k (owner-reported 2026-07-07;
-    refresh whenever the owner reports new numbers) + Composer engines.
-  - Target: **10% of crash-exposed assets** (≈ $53k at current figures).
-    Band: **7% – 15%** of the same measure.
-  - Operationally, monitor.py's band check runs on Composer-visible values;
-    the dollar target is recorded here and updated on owner reports.
-- 2026-07-16: TAIL proceeds ($17,011) arrived and were deployed to the
-  SLEEVE on the owner's direction ("use this additional capital as a
-  correlation hedge against my broader portfolio") — sleeve now ~11.8% of
-  crash-exposed assets: above the 10% target, inside the 7–15% band, so no
-  auto-trim fires. The Jan-2027 review still governs any further scale-up.
-- Trigger: at the daily post-close check, sleeve outside the band (7–15% of
-  crash-exposed assets; dollar equivalents recorded above).
-- Action: rebalance the sleeve back to the 10% target:
-  - Over the band → withdraw the excess from the sleeve; invest proceeds into
-    whichever engine (HG `mbkiXcuNDjueXpiox5Av` or P5 `YPTSJFJwD2ZKfAeYJUbW`)
-    is furthest **below** its target (HG 55% / P5 35%).
-  - Under the band → withdraw the shortfall from whichever engine is furthest
-    **above** its target; invest into the sleeve.
-  - Two-leg timing: the withdraw executes at the next trading window; the
-    invest is placed as soon as the proceeds appear as buying power
-    (typically the same evening). Pending legs are completed at the next
-    daily check.
-- **Error guard (not a judgment gate):** if a single rebalance would move
-  more than **25% of total portfolio value**, or the API values imply a
-  >50% one-day change in any position, assume data problems — do NOT trade;
-  alert the owner instead.
+- **HARV is being retired as a separate engine.** Its capital moves pro rata into the other three
+  (29 : 29 : 27) in staged sessions, each one approved by the owner with exact amounts first and
+  logged in CHANGELOG.md. Both brokers move the same fraction in the same session (the mirror leg:
+  "IBKR mirror" above; `mirror_transfer.py` takes at most half of the giving sleeve per leg, so a
+  stub stays in HARV on both brokers until the engine-retirement change is built, reviewed and
+  approved). The copy of the same rule inside the KMLM symphony (its 25% VIX sleeve) is unchanged.
+- **Targets once HARV is empty: HG 34.1 / KMLM 34.1 / SLEEVE 31.8** (29/85, 29/85, 27/85). While the
+  stub exists HARV has no target: it is left where it is by every operation here.
+- **The crash sleeve is one engine of the strategy, sized by its target weight** (owner, 2026-11-18:
+  "treat it as one engine"). It is no longer sized against holdings outside this book: the IBKR
+  equities figure the old band used ($346k, reported 2026-07-07) no longer exists (blend3070 was
+  sold on 2026-11-11 and IBKR now runs the same strategy as a mirror).
 
-## Pre-authorized operation 2 — sleeve scale-up to 15%
+## Operation 1 — sleeve monetization band: RETIRED 2026-11-18
 
-- Review date: first daily check on or after **2027-01-22** (the day the
-  measurement window below first reaches 120 trading days; was 2027-01-06,
-  moved 2026-10-05 with the window change), and monthly thereafter until it
-  passes or the owner cancels.
-- Criterion (measured by `divergence.py nNdBk7hc5NiBzeRvbI5T --start
-  2026-08-01` on the sleeve; distribution-aware since 2026-10-05 — add. 38):
-  - Window starts **2026-08-01** (owner decision 2026-10-05): the sleeve was
-    edited live on 2026-07-31 (BIL → BOXX) and the backtest is always the
-    current version, so the 07-07..07-31 days compare two different
-    strategies. Do not read Op 2 off the full live history.
-  - ≥120 trading days of live history inside that window, AND
-  - live~backtest daily-return correlation ≥ **0.90**, AND
-  - annualized live-vs-model gap ≥ **−10%/yr** (live may lag the model by up
-    to 10 points annualized; worse than that = fail).
-- Action on pass: raise sleeve target to **15%** (band 11% – 20%), execute
-  the top-up per Operation 1 mechanics, and update this file + monitor
-  defaults in the same commit.
-- Action on fail: keep 10%, report the numbers, re-check monthly. A second
-  consecutive fail with correlation < 0.75 = flag to the owner that the
-  sleeve is not tracking and should be re-evaluated, not scaled.
-- Scale-up beyond 15% (to 20%) requires a fresh owner decision — not
-  pre-authorized.
+Not pre-authorized any more; nothing here is executed. The band (7% - 15% of "Composer engines +
+IBKR equities", target 10%) trimmed the sleeve after a crash pop and topped it up when it lagged.
+With the outside figure gone the measure no longer exists (against the Composer book alone the
+sleeve is ~25%, which the old band would read as a breach). The mechanical reset that remains is
+Operation 5's cap: a sleeve that pops above 44% of the book resets every engine to target, which
+sells the pop. Harvesting beyond that in a crash stays the owner's call (RUNBOOK.md).
+`monitor.py` still records the sleeve's share of the Composer book each day (`sleeve_weight`) and
+raises a band line only if `--band-lo` / `--band-hi` are passed.
+
+## Operation 2 — sleeve scale-up to 15%: RETIRED 2026-11-18 (its tracking check stays, report-only)
+
+The scale-up was defined on the retired band's measure (10% -> 15% of "Composer engines + IBKR
+equities") and is superseded by the allocation above (SLEEVE target 31.8% of this book). No trade
+is authorized under this operation.
+
+- What stays, as a REPORT only: on the first daily check on or after **2027-01-22**, and monthly
+  until the owner closes it, run `divergence.py nNdBk7hc5NiBzeRvbI5T --start 2026-08-01`
+  (window from 2026-08-01: the sleeve was edited live on 2026-07-31, BIL -> BOXX) and report live
+  days, live~backtest daily-return correlation (was required >= 0.90) and the annualized
+  live-vs-model gap (was required >= -10%/yr). Two consecutive reads with correlation < 0.75 =
+  flag to the owner that the sleeve is not tracking.
 
 ## Pre-authorized operation 3 — KMLM earn-back monitor (rewritten 2026-07-22)
 
 Owner moved the book to 29/29/27/15 after adversarial QA — the tripwire's
 target allocation is now the DEFAULT, so this operation inverts: it now
 monitors whether KMLM EARNS BACK the higher 19/39/27/15 weight.
+2026-11-18: with HARV retiring the default is HG 34.1 / KMLM 34.1 / SLEEVE 31.8
+("Allocation" above); the earn-back question is unchanged in kind (KMLM +10
+points funded from HG) and stays REPORT-ONLY. Any such upshift would put
+KMLM's target near 44%, so it would need Operation 5's cap reset in the same
+owner decision (headroom codicil).
 
 - Check date: first daily check on or after **2026-08-07**, then MONTHLY.
 - Measurement: `divergence.py YPTSJFJwD2ZKfAeYJUbW` (live vs backtest;
@@ -137,13 +123,18 @@ tail where one engine's hot streak concentrates the book (bootstrapped
 conservative DD p95 68.6% unmanaged vs 37.5% capped; expected CAGR
 unchanged vs disciplined manual resets).
 
-- Trigger: at the daily post-close check, ANY symphony's value exceeds
-  **40% of total Composer book value** (symphonies + unallocated cash).
-- Action: mechanically rebalance ALL FOUR symphonies back to target
-  weights **HG 29 / KMLM 29 / SLEEVE 27 / HARV 15** via the guarded CLI:
-  withdraw from overweights first; invest proceeds into underweights when
-  the cash settles (typically next evening; complete pending legs at the
-  next daily check). Recompute all amounts from live values at execution.
+- Trigger: at the daily post-close check, ANY of HG / KMLM / SLEEVE exceeds
+  **44% of total Composer book value** (symphonies + unallocated cash).
+  (Was 40% over 29/29/27/15 until 2026-11-18. HARV, retiring, is not
+  measured against the cap.)
+- Action: mechanically rebalance **HG, KMLM and SLEEVE** back to target
+  weights **HG 34.1 / KMLM 34.1 / SLEEVE 31.8** of what the three hold
+  between them (29 : 29 : 27), via the guarded CLI: withdraw from
+  overweights first; invest proceeds into underweights when the cash
+  settles (typically next evening; complete pending legs at the next daily
+  check). Recompute all amounts from live values at execution. **HARV is
+  left out of the reset**: nothing is invested into it or withdrawn from it
+  (its stub is emptied only by the owner-approved retirement sessions).
 - Error guards (unchanged): 25% single-move cap per move (stage larger
   resets across windows), >50% one-day-change data-anomaly no-trade rule.
 - Every firing: CHANGELOG entry with deploy IDs, push notification, and
@@ -153,14 +144,19 @@ unchanged vs disciplined manual resets).
   same decision.
 - Drift-protocol note (2026-08-01, addendum 21): if a future owner
   decision raises any engine's TARGET near the cap (e.g., KMLM to 39%
-  via the earn-back), a subsequent drift breach of 40% still triggers
+  via the earn-back), a subsequent drift breach of the cap still triggers
   THIS operation's full reset to the then-current targets — no
   ambiguity, no special case.
 - Headroom codicil (2026-08-06, addendum 29 — measured): the cap must
   keep >=10pp of headroom above the largest engine target (a 40% cap
   over a 38% target fired 5.4x/yr in simulation — thrash). Any decision
   raising a target above 30% must reset the cap to target+10pp in the
-  same decision. Verification status: independently recomputed and
+  same decision. Applied 2026-11-18: largest target 34.1%, cap **44%**
+  (owner-approved; 9.9pp of headroom, rounded from 44.1). The codicil's
+  measurement was made on four engines at 29/29/27/15 with a 40% cap; the
+  44% cap over three engines has NOT been re-simulated (expect a firing
+  rate of the same order, ~1.5/yr; re-measure at the next quarterly
+  regime-bootstrap run). Verification status: independently recomputed and
   CONFIRMED (P(cap-40 beats monthly)=99-100% per-path, conservative
   lens; daily-resolution cross-check consistent; expect ~1.5 fires/yr).
 
@@ -216,7 +212,7 @@ above. Owner override requests (RUNBOOK.md "Owner override requests",
 in-session instruction the assistant runs `risk-off` (go-to-cash) or
 `risk-on` (rebalance-now) on the approved symphonies via the guarded CLI,
 confirmed once, logged in results/monitor/override-ledger.jsonl. A request,
-not automation. During a suspected regime break (e.g., sleeve above 20% of book in a
-crash), the band still executes its mechanical trim, but the owner is
-notified prominently that discretionary harvesting beyond the band is their
-call (results.md addendum 7).
+not automation. During a suspected regime break (e.g., the sleeve popping in a
+crash), the only mechanical trim left is Operation 5's 44% cap (the sleeve band
+was retired 2026-11-18); the owner is notified prominently that discretionary
+harvesting beyond it is their call (results.md addendum 7).

@@ -12,8 +12,9 @@ Everything here was decided with data, in advance. Addenda cited.
   without anyone's help. (The harvester has no HYG credit guard despite
   its name: none was ever saved, add. 48.)
 - 5:35 PM ET daily check: two-tier DD alerts (anomaly thresholds are
-  conservative-calibrated), book-level 17% alarm, sleeve band, 40%
-  concentration cap (full reset, pre-authorized), 25% single-move and
+  conservative-calibrated), book-level 17% alarm, 44% concentration cap
+  (HG / KMLM / SLEEVE reset to 34.1 / 34.1 / 31.8, pre-authorized; the
+  sleeve band was retired 2026-11-18), 25% single-move and
   >50% data-anomaly guards. Trades only what POLICY.md pre-authorizes.
   The shadow runner (add. 48) checks that Composer holds what each
   symphony's approved logic says and flags a session with no rebalance.
@@ -48,9 +49,10 @@ Everything here was decided with data, in advance. Addenda cited.
    (ordinary year: 22-27%; tail: high-30s — add. 21b), which engines
    rotated defensive, gauge status, and any POLICY action taken.
 3. The ONE discretionary decision that is yours (add. 7): if the crash
-   sleeve has spiked above ~20% of book, the band will trim mechanically
-   — but harvesting FURTHER (monetizing convexity beyond the band into
-   crushed engines) is owner judgment. The runbook's guidance: do it in
+   sleeve has spiked, nothing trims it mechanically until it passes 44%
+   of the book (the cap then resets all three engines to target; the
+   sleeve band was retired 2026-11-18) — harvesting EARLIER or FURTHER
+   (monetizing convexity into crushed engines) is owner judgment. The runbook's guidance: do it in
    thirds across multiple windows, never all at once.
 4. DO NOT: cancel pending automation mid-flight, force-run symphonies,
    liquidate to cash (the engines' recovery capture IS the edge — HG's

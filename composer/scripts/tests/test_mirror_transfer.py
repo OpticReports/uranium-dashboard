@@ -517,7 +517,7 @@ class T12LedgerGuard(Case):
         self.assertNotIn("running this again does exactly that", doc)
         with open(os.path.join(HERE, "..", "..", "POLICY.md")) as f:
             policy = " ".join(f.read().split())
-        para = policy[policy.index("**IBKR mirror.**"):policy.index("## Pre-authorized operation 1")]
+        para = policy[policy.index("**IBKR mirror.**"):policy.index("## Allocation (owner decision 2026-11-18")]   # the section that follows the paragraph
         for part in ("NOT resolved by simply running the command again", "`pending_requests` and today's session row",
                      "re-send with `--again` only if the transfer is in neither", "transfer-ledger.jsonl"):
             self.assertIn(part, para, part)
@@ -878,7 +878,7 @@ class T11BeforeAndAfter(Case):
         self.assertIn("value AFTER the move. Pass it as well", text)
         with open(os.path.join(HERE, "..", "..", "POLICY.md")) as f:
             policy = " ".join(f.read().split())
-        para = policy[policy.index("**IBKR mirror.**"):policy.index("## Pre-authorized operation 1")]
+        para = policy[policy.index("**IBKR mirror.**"):policy.index("## Allocation (owner decision 2026-11-18")]   # the section that follows the paragraph
         for part in ("--composer-from-value-after", "LIVE book only", "no live book", "exits 1", "next session",
                      "15:54 ET", "next trading day", "--again", "UNKNOWN"):
             self.assertIn(part, para, part)
