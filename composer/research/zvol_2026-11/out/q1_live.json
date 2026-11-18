@@ -1,0 +1,196 @@
+{
+ "HARV": {
+  "from": "2026-07-22",
+  "to": "2026-11-17",
+  "sessions": 83,
+  "value_last": 37611.18,
+  "twr_displayed": -0.009903724928366775,
+  "pnl_displayed_usd": -362.9575157565521,
+  "distributions_paid_outside_usd": 1674.8798671570894,
+  "pnl_with_distributions_usd": 1311.9223514005373,
+  "distribution_rows": [
+   [
+    "2026-07-31",
+    "PULS",
+    129.0
+   ],
+   [
+    "2026-08-19",
+    "ZVOL",
+    1193.0
+   ],
+   [
+    "2026-08-31",
+    "PULS",
+    132.0
+   ],
+   [
+    "2026-09-30",
+    "PULS",
+    82.0
+   ],
+   [
+    "2026-10-30",
+    "PULS",
+    138.0
+   ]
+  ],
+  "tbills_same_dollars_usd": 446.1339184088516,
+  "holdings_source_days": {
+   "snapshot": 73,
+   "backtest": 10
+  },
+  "parts_usd_displayed_basis": {
+   "sleeve": -550.3303871657906,
+   "switcher": 0.0
+  },
+  "parts_usd_total_return": {
+   "sleeve": 1151.4036132913034,
+   "switcher": 0.0
+  },
+  "legs_usd_total_return": {
+   "VXZ": 10.0,
+   "PULS": 335.0,
+   "ZVOL": 806.0
+  },
+  "part_twr": {
+   "sleeve": [
+    0.03138670251590425,
+    83
+   ],
+   "switcher": [
+    0,
+    0
+   ]
+  },
+  "model_same_dates": -0.0009447320808212423,
+  "model_windows": {
+   "n": 817,
+   "share_below_live_displayed": 0.042839657282741736,
+   "p10": 0.007370076485279764,
+   "median": 0.07545197662441505,
+   "p90": 0.1456996442630698,
+   "share_negative": 0.06487148102815178
+  },
+  "same_dollars_in_switcher_usd": 14841.929745081854,
+  "same_dollars_in_kmlm_symphony_usd": 14078.18055019118,
+  "live_stats": {
+   "harv": {
+    "n": 83,
+    "cagr": -0.02976699933104454,
+    "total": -0.009903724928366664,
+    "vol": 0.09405364712795013,
+    "sharpe": -0.2745452590329139,
+    "maxdd": 0.04028422301762624,
+    "cvar5": -0.018224114172831846,
+    "worst": -0.027823468965578635
+   },
+   "switcher": {
+    "n": 83,
+    "cagr": 0.6772110130738502,
+    "total": 0.1856905196771501,
+    "vol": 1.0933931049147196,
+    "sharpe": 1.0881579747206147,
+    "maxdd": 0.5174959108107909,
+    "cvar5": -0.19225393978424832,
+    "worst": -0.3870726043066261
+   },
+   "kmlm_symphony": {
+    "n": 83,
+    "cagr": 1.1881234568491572,
+    "total": 0.2942190337336066,
+    "vol": 0.8160689042700254,
+    "sharpe": 1.3923306374945792,
+    "maxdd": 0.36250327584817854,
+    "cvar5": -0.13952509482745362,
+    "worst": -0.2681944694330044
+   }
+  },
+  "live_corr_with_switcher": -0.1267683702020396
+ },
+ "KMLM": {
+  "from": "2026-07-07",
+  "to": "2026-11-17",
+  "sessions": 94,
+  "value_last": 96473.3,
+  "twr_displayed": 0.3077983494797272,
+  "pnl_displayed_usd": 22781.030958594874,
+  "distributions_paid_outside_usd": 1144.2357239388184,
+  "pnl_with_distributions_usd": 23925.266682533693,
+  "distribution_rows": [
+   [
+    "2026-07-31",
+    "PULS",
+    81.0
+   ],
+   [
+    "2026-08-19",
+    "ZVOL",
+    778.0
+   ],
+   [
+    "2026-08-31",
+    "PULS",
+    82.0
+   ],
+   [
+    "2026-09-22",
+    "SOXL",
+    22.0
+   ],
+   [
+    "2026-09-30",
+    "PULS",
+    79.0
+   ],
+   [
+    "2026-10-30",
+    "PULS",
+    102.0
+   ]
+  ],
+  "tbills_same_dollars_usd": 1209.2271783220767,
+  "holdings_source_days": {
+   "snapshot": 76,
+   "backtest": 18
+  },
+  "parts_usd_displayed_basis": {
+   "sleeve": -316.8895304131895,
+   "switcher": 14198.58315276663
+  },
+  "parts_usd_total_return": {
+   "sleeve": 822.5460400918485,
+   "switcher": 14222.504135249143
+  },
+  "legs_usd_total_return": {
+   "SOXL": -31881.0,
+   "TLT": -245.0,
+   "VXZ": 213.0,
+   "PULS": 239.0,
+   "ZVOL": 371.0,
+   "UVXY": 2855.0,
+   "SVIX": 3538.0,
+   "TECL": 18391.0,
+   "SQQQ": 21563.0
+  },
+  "part_twr": {
+   "sleeve": [
+    0.03776457452884063,
+    94
+   ],
+   "switcher": [
+    0.20213391944363202,
+    94
+   ]
+  },
+  "model_same_dates": 0.2439464828466742,
+  "model_windows": {
+   "n": 806,
+   "share_below_live_displayed": 0.2692307692307692,
+   "p10": 0.017306130113790674,
+   "median": 0.5801863446108042,
+   "p90": 1.3228164332939545,
+   "share_negative": 0.09305210918114144
+  }
+ }
+}

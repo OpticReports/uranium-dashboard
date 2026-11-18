@@ -65,49 +65,56 @@ def curve_on(panel, d):
     return [(e, s[d]) for e, s in panel if e > d and d in s]
 
 
-def midterm_index(panel):
-    """Daily EXCESS return of the S&P 500 VIX Mid-Term Futures index (long 4th-7th month, rolling the 4th
-    into the 7th evenly over each roll period) from Cboe settlements, plus the day's weights.
-    Roll period: from the Tuesday before one monthly settlement (exclusive) to the Tuesday before the next.
-    Returns {date: {"ret": r, "w": [w4, w5, w6, w7], "F": [F4..F7], "dr": days left, "dt": days in period}}"""
+def vx_index(panel, first=4, last=7):
+    """Daily EXCESS return of an S&P 500 VIX futures index from Cboe settlements: long the `first`..`last`
+    nearest monthly contracts, rolling the nearest into the farthest evenly over each roll period
+    (mid-term: 4..7; short-term: 1..2). Roll period: from the Tuesday before one monthly settlement
+    (exclusive) to the Tuesday before the next. Where a needed contract was not listed (2006-08) the
+    day's return is the mean return of the listed contracts in the same span of months ("approx": True).
+    Returns {date: {"ret", "w", "F", "dr", "dt", "approx"}}"""
     exps = [e for e, _ in panel]
     tue = [(dt.date.fromisoformat(e) - dt.timedelta(days=1)).isoformat() for e in exps]   # roll dates
     days = sorted({d for _, s in panel for d in s})
-    out, prev = {}, None
+    k = last - first + 1
+    out, prev_d = {}, None
+    import bisect
     for d in days:
-        # the roll period containing d: (tue[i-1], tue[i]] -> front month = contract i
-        i = next((k for k, t in enumerate(tue) if d <= t), None)
-        if i is None or i == 0 or i + 6 >= len(panel):
-            prev = None; continue
-        period = [x for x in days if tue[i - 1] < x <= tue[i]]
-        n = len(period); k = period.index(d) + 1 if d in period else None
-        if k is None:
-            prev = None; continue
-        dr = n - k                                    # business days left in the roll period after today
-        # contracts 4..7 counted from the front month i (1st = i)
-        c = [panel[i + j] for j in (3, 4, 5, 6)]
-        if any(d not in s for _, s in c):
-            prev = None; continue
-        F = [s[d] for _, s in c]
-        w = [dr / n / 3.0, 1 / 3.0, 1 / 3.0, (n - dr) / n / 3.0]     # weights AFTER today's roll
-        if prev is not None and prev["ids"] == [e for e, _ in c]:
-            num = sum(pw * s[d] for pw, (_, s) in zip(prev["w"], c))
-            den = sum(pw * s[prev["d"]] for pw, (_, s) in zip(prev["w"], c))
-            r = num / den - 1.0
-        elif prev is not None:
-            # first day of a new roll period: yesterday's weights were [0, 1/3, 1/3, 1/3] on old 4..7 =
-            # today's contracts shifted by one (old 5,6,7 = new 4,5,6)
-            cc = c[:3]
-            if all(prev["d"] in s for _, s in cc):
-                r = sum(s[d] for _, s in cc) / sum(s[prev["d"]] for _, s in cc) - 1.0
-            else:
-                r = None
+        i = bisect.bisect_left(tue, d)                 # first contract whose roll date is >= d: the front month
+        if i == 0 or i + last >= len(panel):
+            prev_d = d; continue
+        lo = bisect.bisect_right(days, tue[i - 1]); hi = bisect.bisect_right(days, tue[i])
+        n = hi - lo; pos = bisect.bisect_left(days, d) - lo + 1
+        dr = n - pos
+        c = [panel[i + j] for j in range(first - 1, last)]              # today's first..last
+        if k == 1:
+            w = [1.0]
         else:
-            r = None
+            w = [dr / n / (k - 1)] + [1.0 / (k - 1)] * (k - 2) + [(n - dr) / n / (k - 1)]
+        r, approx = None, False
+        if prev_d is not None:
+            # weights held from yesterday's close: yesterday's post-roll weights on yesterday's contracts
+            j = bisect.bisect_left(tue, prev_d)
+            lo2 = bisect.bisect_right(days, tue[j - 1]) if j > 0 else 0; hi2 = bisect.bisect_right(days, tue[j])
+            n2 = hi2 - lo2; dr2 = n2 - (bisect.bisect_left(days, prev_d) - lo2 + 1)
+            pc = [panel[j + q] for q in range(first - 1, last)] if j + last < len(panel) else []
+            pw = ([1.0] if k == 1 else [dr2 / n2 / (k - 1)] + [1.0 / (k - 1)] * (k - 2) + [(n2 - dr2) / n2 / (k - 1)]) if pc else []
+            use = [(x, s) for x, (_, s) in zip(pw, pc) if x > 1e-12]
+            if use and all(d in s and prev_d in s for _, s in use):
+                r = sum(x * s[d] for x, s in use) / sum(x * s[prev_d] for x, s in use) - 1.0
+            else:
+                near = [s for q in range(first - 2, last + 1) if 0 <= i + q < len(panel)
+                        for _, s in [panel[i + q]] if d in s and prev_d in s]
+                if len(near) >= (1 if k == 1 else 2):
+                    r = sum(s[d] / s[prev_d] - 1.0 for s in near) / len(near); approx = True
         if r is not None:
-            out[d] = {"ret": r, "w": w, "F": F, "dr": dr, "dt": n}
-        prev = {"d": d, "w": w, "ids": [e for e, _ in c]}
+            F = [s.get(d) for _, s in c]
+            out[d] = {"ret": r, "w": w, "F": F, "dr": dr, "dt": n, "approx": approx}
+        prev_d = d
     return out
+
+
+def midterm_index(panel):
+    return vx_index(panel, 4, 7)
 
 
 def const_maturity(panel, d, months):
@@ -181,3 +188,22 @@ def nw_t(y, x, lags):
     V = XtXi @ S @ XtXi
     r2 = 1 - (e @ e) / ((y - y.mean()) @ (y - y.mean()))
     return b[1], b[1] / math.sqrt(V[1, 1]), r2
+
+
+# ---- Composer backtests ---------------------------------------------------------------------------
+def load_bt(path):
+    """{dates, value, ret{date: r}, w{ticker: {date: weight}}} from a saved Composer backtest JSON.
+    tdvm_weights[t][d] is the weight held INTO session d+1 (set at d's rebalance) - verified in
+    analyze.py by rebuilding the backtest's own returns from weights x total returns."""
+    bt = json.load(open(path))
+    dvm = bt["dvm_capital"]; key = next(iter(bt.get("legend") or dvm)); s = dvm[key]
+    e0 = dt.date(1970, 1, 1)
+    days = sorted(int(d) for d in s)
+    dates = [(e0 + dt.timedelta(days=d)).isoformat() for d in days]
+    val = {dates[i]: s[str(days[i])] for i in range(len(days))}
+    keep = [d for d in dates if d <= END]
+    r = {keep[i]: val[keep[i]] / val[keep[i - 1]] - 1 for i in range(1, len(keep))}
+    w = {}
+    for t, m in (bt.get("tdvm_weights") or {}).items():
+        w[t] = {(e0 + dt.timedelta(days=int(d))).isoformat(): float(x) for d, x in m.items()}
+    return {"dates": keep, "value": val, "ret": r, "w": w}

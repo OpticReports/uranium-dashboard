@@ -60,6 +60,8 @@ def vx_contract(y, m, cache):
     """{date: settle} for one monthly VX contract, or None. Cboe names the file by settlement date."""
     base = vx_expiry(y, m)
     p = os.path.join(cache, f"vx_{y}-{m:02d}.csv")
+    if not os.path.exists(p) and y <= 2012:
+        open(p, "w").write("")                         # Cboe serves these only from the archive
     if not os.path.exists(p):
         raw = None
         for off in (0, -1, 1, -2):
@@ -75,25 +77,24 @@ def vx_contract(y, m, cache):
             open(p, "w").write("")
         else:
             open(p, "wb").write(raw)
-    txt = open(p).read()
-    if not txt and y <= 2013:
-        txt = vx_archive(y, m, cache)
-    if not txt:
-        return None
     out = {}
-    for r in csv.DictReader(io.StringIO(txt)):
-        try:
-            s = float(r["Settle"])
-        except (KeyError, ValueError):
-            continue
-        d = r["Trade Date"].strip()
-        if "/" in d:                                   # archive files: MM/DD/YYYY
-            mm, dd, yy = d.split("/")
-            d = f"{yy}-{int(mm):02d}-{int(dd):02d}"
-        if s > 0:
-            out[d] = s / 10.0 if d < "2007-03-26" else s      # quoted x10 before the 2007-03-26 rescale
-    exp = max(out) if out else None
-    return {"settle": out, "expiry": exp}
+    # 2013-14 contracts: the per-contract file starts in 2013, the archive holds their 2012-13 rows.
+    # Archive first, so the current file wins where both have a date.
+    for txt in ((vx_archive(y, m, cache) if y <= 2014 else ""), open(p).read()):
+        for r in csv.DictReader(io.StringIO(txt)):
+            try:
+                s = float(r["Settle"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            d = (r.get("Trade Date") or "").strip()
+            if "/" in d:                                   # archive files: MM/DD/YYYY
+                mm, dd, yy = d.split("/")
+                d = f"{yy}-{int(mm):02d}-{int(dd):02d}"
+            if s > 0 and d:
+                out[d] = s / 10.0 if d < "2007-03-26" else s      # quoted x10 before the 2007-03-26 rescale
+    if not out:
+        return None
+    return {"settle": out, "expiry": max(out)}
 
 
 def vx_archive(y, m, cache):
