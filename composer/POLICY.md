@@ -41,18 +41,23 @@ re-run after that session. A leg below $1 even once those credits are applied
 is below $1 at the mirror's size: nothing is sent, exit 0 (no re-run). An
 operation that moves money to or from unallocated cash,
 or outside the four mirrored engines (HG, KMLM, SLEEVE, HARV), has no mirror
-leg and is reported as such.
+leg and is reported as such. **One symphony giving to several** (a cap reset,
+the HARV exit): run ONE leg per taker, each with `--composer-from-value` = the
+giver's value before ANY of the legs and `--composer-from-value-after` = that
+value minus THIS leg's amount. The script sizes every leg on the mirror
+sleeve's equity as the feed shows it, which queued legs do not reduce, so
+"before" values that shrink leg by leg would move too much (2026-11-18 review:
+61.7% where 50% was meant). Before sending, the dry-run amounts must sum to
+the intended fraction of the giving sleeve's equity.
 
 ## Allocation (owner decision 2026-11-18; results.md addendum 56)
 
-- **HARV is being retired as a separate engine.** Its capital moves pro rata into the other three
-  (29 : 29 : 27) in staged sessions, each one approved by the owner with exact amounts first and
-  logged in CHANGELOG.md. Both brokers move the same fraction in the same session (the mirror leg:
-  "IBKR mirror" above; `mirror_transfer.py` takes at most half of the giving sleeve per leg, so a
-  stub stays in HARV on both brokers until the engine-retirement change is built, reviewed and
-  approved). The copy of the same rule inside the KMLM symphony (its 25% VIX sleeve) is unchanged.
-- **Targets once HARV is empty: HG 34.1 / KMLM 34.1 / SLEEVE 31.8** (29/85, 29/85, 27/85). While the
-  stub exists HARV has no target: it is left where it is by every operation here.
+- **HARV is closed as a separate engine** (owner, 2026-11-18: "close it out"). Its whole capital
+  moves pro rata into the other three (29 : 29 : 27) in one owner-approved session on both brokers
+  (`research/zvol_2026-11/MOVE_PLAN.md`; logged in CHANGELOG.md). The copy of the same rule inside
+  the KMLM symphony (its 25% VIX sleeve) is unchanged.
+- **Targets: HG 34.1 / KMLM 34.1 / SLEEVE 31.8** (29/85, 29/85, 27/85). HARV has no target: until
+  its exit has filled, and for any dust left afterwards, every operation here leaves it alone.
 - **The crash sleeve is one engine of the strategy, sized by its target weight** (owner, 2026-11-18:
   "treat it as one engine"). It is no longer sized against holdings outside this book: the IBKR
   equities figure the old band used ($346k, reported 2026-07-07) no longer exists (blend3070 was
@@ -63,9 +68,19 @@ leg and is reported as such.
 Not pre-authorized any more; nothing here is executed. The band (7% - 15% of "Composer engines +
 IBKR equities", target 10%) trimmed the sleeve after a crash pop and topped it up when it lagged.
 With the outside figure gone the measure no longer exists (against the Composer book alone the
-sleeve is ~25%, which the old band would read as a breach). The mechanical reset that remains is
-Operation 5's cap: a sleeve that pops above 44% of the book resets every engine to target, which
-sells the pop. Harvesting beyond that in a crash stays the owner's call (RUNBOOK.md).
+sleeve is ~25%, which the old band would read as a breach).
+
+What this takes away, stated plainly:
+- **No automatic harvest of a sleeve pop.** The old band trimmed when the sleeve had gained about
+  26% against a flat rest of book. Operation 5's cap is the only mechanical reset left and it is far
+  away: from a 31.8% target the sleeve passes 44% only if (1 + sleeve return) / (1 + rest-of-book
+  return) exceeds 1.69: +69% with the rest flat, +35% with the rest down 20%, +18% with the rest
+  down 30%. In 2023-01..2026-10 the sleeve's best run against HG was x1.30 over 5 sessions and x1.55
+  over 63, so in practice harvesting a crash pop is now entirely the owner's call (RUNBOOK.md).
+- **No automatic top-up** when the sleeve lags (the band's lower edge).
+- What the band was measured to add (results.md addendum 7, real book 2023+, band vs drift): Sharpe
+  2.56 vs 2.49, max drawdown 14.6% vs 15.8%, CAGR -7.3 points, 7 trades; addendum 25: variants
+  within +/-0.4pp of CAGR. "Band on top of the cap" was never measured.
 `monitor.py` still records the sleeve's share of the Composer book each day (`sleeve_weight`) and
 raises a band line only if `--band-lo` / `--band-hi` are passed.
 
@@ -108,7 +123,8 @@ owner decision (headroom codicil).
     (fast detectors for a live tail fatter than modeled);
   - live max drawdown within model expectation (backstop: < 39%, the 55y
     conservative p90; method sensitivity ±5pp documented in add. 21b).
-  Then REPORT to the owner that the 19/39 upgrade is statistically
+  Then REPORT to the owner that the KMLM upgrade (+10 points from HG: 24.1 / 44.1 / 31.8 on the
+  2026-11-18 targets; was 19/39) is statistically
   earned — do NOT execute; the upshift is an owner decision. A criteria
   miss only delays the report (~20% false-block chance over 2y of
   monthly checks — acceptable; it never forces a downshift).
@@ -121,27 +137,37 @@ owner decision (headroom codicil).
 Owner-approved (chat, addendum 18). Purpose: delete the unmanaged-drift
 tail where one engine's hot streak concentrates the book (bootstrapped
 conservative DD p95 68.6% unmanaged vs 37.5% capped; expected CAGR
-unchanged vs disciplined manual resets).
+unchanged vs disciplined manual resets). Those figures are the 40% cap over
+four engines at 29/29/27/15. The 44% cap over three engines (2026-11-18) has
+not been re-run through that bootstrap; addendum 18's only other point is a
+50% cap (DD p95 47.1%, +3.6 points of CAGR), so expect the tail between the
+two.
 
 - Trigger: at the daily post-close check, ANY of HG / KMLM / SLEEVE exceeds
   **44% of total Composer book value** (symphonies + unallocated cash).
   (Was 40% over 29/29/27/15 until 2026-11-18. HARV, retiring, is not
   measured against the cap.)
 - Action: mechanically rebalance **HG, KMLM and SLEEVE** back to target
-  weights **HG 34.1 / KMLM 34.1 / SLEEVE 31.8** of what the three hold
-  between them (29 : 29 : 27), via the guarded CLI: withdraw from
-  overweights first; invest proceeds into underweights when the cash
-  settles (typically next evening; complete pending legs at the next daily
-  check). Recompute all amounts from live values at execution. **HARV is
-  left out of the reset**: nothing is invested into it or withdrawn from it
-  (its stub is emptied only by the owner-approved retirement sessions).
+  weights **HG 34.1 / KMLM 34.1 / SLEEVE 31.8** (29 : 29 : 27) of the base
+  B = the three symphonies' values + this reset's withdrawn cash not yet
+  reinvested, via the guarded CLI: withdraw from overweights first; invest
+  the proceeds into underweights when the cash settles (typically next
+  evening; complete pending legs at the next daily check). Recompute the
+  amounts from live values at each step ON THAT BASE (without the withdrawn
+  cash in it, a recompute on the invest day would leave the giver overweight
+  and under-invest). **HARV is left out of the reset**: nothing is invested
+  into it or withdrawn from it. Mirror legs: one per taker ("IBKR mirror"
+  above, "One symphony giving to several").
 - Error guards (unchanged): 25% single-move cap per move (stage larger
   resets across windows), >50% one-day-change data-anomaly no-trade rule.
 - Every firing: CHANGELOG entry with deploy IDs, push notification, and
-  report to the owner. Expected frequency ~once every 1-2 years.
-- The target weights above are the same allocation-B targets; if the
-  owner changes the book's target allocation, update this block in the
-  same decision.
+  report to the owner. Expected frequency: roughly 1.5-2 a year (a
+  reviewer's replay of the documented engine returns, 2023-01..2026-10,
+  backtest pace, in-sample: 1.45/yr under the old rule, 1.74/yr under this
+  one, every firing KMLM-triggered; the sleeve triggers ~1% of years).
+- The target weights above are the 2026-11-18 allocation; if the owner
+  changes the book's target allocation, update this block in the same
+  decision.
 - Drift-protocol note (2026-08-01, addendum 21): if a future owner
   decision raises any engine's TARGET near the cap (e.g., KMLM to 39%
   via the earn-back), a subsequent drift breach of the cap still triggers
@@ -152,11 +178,10 @@ unchanged vs disciplined manual resets).
   over a 38% target fired 5.4x/yr in simulation — thrash). Any decision
   raising a target above 30% must reset the cap to target+10pp in the
   same decision. Applied 2026-11-18: largest target 34.1%, cap **44%**
-  (owner-approved; 9.9pp of headroom, rounded from 44.1). The codicil's
-  measurement was made on four engines at 29/29/27/15 with a 40% cap; the
-  44% cap over three engines has NOT been re-simulated (expect a firing
-  rate of the same order, ~1.5/yr; re-measure at the next quarterly
-  regime-bootstrap run). Verification status: independently recomputed and
+  (owner-approved; ~10pp of headroom: 44 against 44.1). The codicil's
+  measurement and its "CONFIRMED" status below are for the 40% cap over
+  four engines; the 44% cap over three has NOT been through the regime
+  bootstrap (re-measure at the next quarterly run). Verification status: independently recomputed and
   CONFIRMED (P(cap-40 beats monthly)=99-100% per-path, conservative
   lens; daily-resolution cross-check consistent; expect ~1.5 fires/yr).
 
@@ -206,7 +231,7 @@ unchanged vs disciplined manual resets).
 
 Never auto-executed under any circumstances: changes to symphony logic,
 investing in new/unapproved symphonies, liquidations, go-to-cash, direct
-single-asset trades, bank transfers, or any trade outside the two operations
+single-asset trades, bank transfers, or any trade outside Operation 5
 above. Owner override requests (RUNBOOK.md "Owner override requests",
 2026-11-06) are the one human-request path through that list: on an explicit
 in-session instruction the assistant runs `risk-off` (go-to-cash) or

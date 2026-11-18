@@ -78,5 +78,49 @@ class Sleeve(unittest.TestCase):
         self.assertNotIn("> 0.40", src)
 
 
+class Args:
+    band_symphony = SL; band_lo = None; band_hi = None; ibkr_equities = 0.0
+
+
+class Wiring(unittest.TestCase):
+    """P6  what main() runs: policy_checks is the one call (verifier, 2026-11-18: the pure helpers were
+    tested, the wiring was not)"""
+
+    def test_p6_policy_checks_uses_the_cap_the_cash_and_records_the_share(self):
+        snap = {}
+        got = monitor.policy_checks(meta(45, 30, 25, 0), 0.0, Args, snap)
+        self.assertEqual(len(got), 1)
+        self.assertIn("(> 44%)", got[0])
+        self.assertAlmostEqual(snap["sleeve_weight"], 0.25)
+        self.assertEqual(monitor.policy_checks(meta(45, 30, 25, 0), 10.0, Args, {}), [])     # cash is in the book
+        self.assertEqual(monitor.policy_checks(meta(41, 33, 26, 0), 0.0, Args, {}), [])      # 40% is not the cap
+        s2 = {}
+        monitor.policy_checks(meta(104.9, 96.4, 81.8, 37.5), 0.1, Args, s2)
+        self.assertAlmostEqual(s2["sleeve_weight"], round(81.8 / 320.6, 4))                 # nothing outside counted
+
+    def test_p6_queued_deploys_are_not_added_to_the_book(self):
+        import inspect
+        sig = inspect.signature(monitor.policy_checks)
+        self.assertEqual(list(sig.parameters), ["meta", "idle", "a", "snap"])               # no `pending` to add
+        src = inspect.getsource(monitor.policy_checks)
+        self.assertIn('sum(s["value"] for s in meta) + idle)', src)
+
+    def test_p6_main_calls_policy_checks_once_and_nothing_else_for_the_cap(self):
+        src = open(os.path.join(HERE, "..", "monitor.py"), encoding="utf-8").read()
+        self.assertEqual(src.count("alerts.extend(policy_checks(meta, idle, a, snap))"), 1)
+        self.assertEqual(src.count("cap_alerts("), 2)                                       # its def and the call in policy_checks
+        self.assertNotIn("+ idle + pending", src)
+
+    def test_p6_an_explicit_band_still_alerts(self):
+        class B(Args):
+            band_lo = 0.07; band_hi = 0.15
+        got = monitor.policy_checks(meta(40, 30, 30, 0), 0.0, B, {})
+        self.assertTrue(any(x.startswith("SLEEVE BAND BREACH: 30.0% > 15.0%") for x in got))
+        class L(Args):
+            band_lo = 0.35; band_hi = 0.60
+        got = monitor.policy_checks(meta(40, 30, 30, 0), 0.0, L, {})
+        self.assertTrue(any(x.startswith("SLEEVE BAND BREACH: 30.0% < 35.0%") for x in got))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -71,6 +71,25 @@ def cap_alerts(meta, book_total, cap=ENGINE_CAP):
     return out
 
 
+def policy_checks(meta, idle, a, snap):
+    """The POLICY lines of the daily check, as a pure function of the symphony rows, the account's
+    unallocated cash and the parsed arguments: the engine cap (operation 5) and the sleeve's recorded
+    share. The book is the symphonies plus unallocated cash (POLICY.md); queued deploys are NOT added
+    (verifier, 2026-11-18: `+ pending` overstated shares x1.33 on 07-20 and understated them x0.80 on
+    07-21, when a queued withdraw and a queued invest were counted twice)."""
+    alerts = cap_alerts(meta, sum(s["value"] for s in meta) + idle)
+    band, w = sleeve_share(meta, a.band_symphony, a.ibkr_equities)
+    if band is not None:
+        snap["sleeve_weight"] = round(w, 4)
+        if a.band_hi is not None and w > a.band_hi:
+            alerts.append(f"SLEEVE BAND BREACH: {w:.1%} > {a.band_hi:.1%} — "
+                          f"harvest: trim {band['name'][:30]} back to target (sells the pop)")
+        elif a.band_lo is not None and w < a.band_lo:
+            alerts.append(f"SLEEVE BAND BREACH: {w:.1%} < {a.band_lo:.1%} — "
+                          f"re-enter: top {band['name'][:30]} back up to target")
+    return alerts
+
+
 def sleeve_share(meta, sleeve_id, outside=0.0):
     """the sleeve's share of the Composer symphonies (plus `outside`, 0 since 2026-11-18: the family-book
     band was retired with the owner's decision that the sleeve is one engine sized by its target weight)"""
@@ -190,13 +209,14 @@ def main():
     p.add_argument("--dd-alert", type=float, default=0.15)
     p.add_argument("--move-alert", type=float, default=0.08)
     p.add_argument("--keep", type=int, default=30)
-    # crash-sleeve monetization band (results.md addendum 7): alert when the
-    # sleeve's share of the book leaves [lo, hi] so a human can rebalance it
+    # the crash sleeve's share of the Composer book is recorded daily as `sleeve_weight`. The
+    # monetization band (results.md addendum 7; POLICY operation 1) was retired on 2026-11-18:
+    # a band line is raised only when --band-lo / --band-hi are passed explicitly.
     p.add_argument("--band-symphony", default="nNdBk7hc5NiBzeRvbI5T")
     p.add_argument("--band-lo", type=float, default=None)      # retired 2026-11-18 (POLICY operation 1)
     p.add_argument("--band-hi", type=float, default=None)
-    # POLICY.md denominator: family crash-exposed assets = Composer engines +
-    # owner-reported IBKR equities (update on owner reports; last 2026-07-07)
+    # holdings outside this book to add to the sleeve's denominator: none since 2026-11-18 (was the
+    # owner-reported IBKR equities, $346k on 2026-07-07; that book was sold on 2026-11-11)
     p.add_argument("--ibkr-equities", type=float, default=0.0)   # was 346000 (owner-reported 2026-07-07; sold 11-11)
     p.add_argument("--canary-url", default="https://treasury-canary.onrender.com",
                    help="public canary API for the accident-composite check")
@@ -321,21 +341,9 @@ def main():
                           "review all live-vs-model diagnostics")
 
 
-    # POLICY.md operation 5: engine concentration cap (pre-authorized reset)
-    book_total = sum(s["value"] for s in meta) + idle + pending
-    alerts.extend(cap_alerts(meta, book_total))
-
-    # The sleeve's share of the Composer book, recorded daily. The family-book band (operation 1) is
-    # retired (2026-11-18): no alert unless --band-lo / --band-hi are passed explicitly.
-    band, w = sleeve_share(meta, a.band_symphony, a.ibkr_equities)
-    if band is not None:
-        snap["sleeve_weight"] = round(w, 4)
-        if a.band_hi is not None and w > a.band_hi:
-            alerts.append(f"SLEEVE BAND BREACH: {w:.1%} > {a.band_hi:.1%} — "
-                          f"harvest: trim {band['name'][:30]} back to target (sells the pop)")
-        elif a.band_lo is not None and w < a.band_lo:
-            alerts.append(f"SLEEVE BAND BREACH: {w:.1%} < {a.band_lo:.1%} — "
-                          f"re-enter: top {band['name'][:30]} back up to target")
+    # POLICY.md operation 5 (engine cap, pre-authorized reset) and the sleeve's recorded share. The
+    # family-book band (operation 1) is retired: no band line unless --band-lo / --band-hi are passed.
+    alerts.extend(policy_checks(meta, idle, a, snap))
 
     check_accident_gauge(state, alerts, a.canary_url.rstrip("/"), now)
 

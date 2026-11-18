@@ -92,11 +92,12 @@ its own guards:
    guard and append to `results/monitor/override-ledger.jsonl`; the request
    grammar and timing are in [`RUNBOOK.md`](RUNBOOK.md) "Owner override
    requests".
-3. **One human request = one operation** — with two standing exceptions
-   pre-authorized by the owner on 2026-07-06 and codified in
-   [`POLICY.md`](POLICY.md): the sleeve monetization band and the
-   criterion-gated sleeve scale-up to 15%. Those execute without per-trade
-   approval but are always reported and logged. Everything else: "move $X
+3. **One human request = one operation** — with one standing exception
+   pre-authorized by the owner and codified in [`POLICY.md`](POLICY.md):
+   Operation 5, the 44% engine concentration cap (the sleeve monetization
+   band and the sleeve scale-up, pre-authorized on 2026-07-06, were retired
+   on 2026-11-18). It executes without per-trade approval but is always
+   reported and logged. Everything else: "move $X
    from A to B"-style instructions only, confirmed before executing.
 4. **Transfers are not atomic.** A symphony-to-symphony transfer is
    withdraw → settle → invest across up to two trading days (deploys queue
