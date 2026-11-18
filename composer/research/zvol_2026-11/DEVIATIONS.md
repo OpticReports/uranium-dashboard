@@ -20,3 +20,15 @@
    return of the rule (b), and the dollars going ex-distribution on 2026-11-18 (c).
 9. The live symphony series runs to 2026-11-17; Composer's symphony-stats on 2026-11-18 (intraday, an
    ex-distribution day for ZVOL) is quoted only as "what the app shows today".
+10. After the two independent reviews (VERIFICATION.md): q1 was corrected (snapshot carried forward on days
+    without one, switcher part as the residual, payouts counted as "outside" only when the fund was sold
+    before the pay date), which moved the haircut anchor from +64%/yr to +121%/yr; q4 and q7 were re-run.
+    The live books B, C and D now use the live residual switcher, not the model's (supersedes item 7).
+11. q8_robust.py was added after the reviews and is not pre-registered: sub-periods, one-close-late
+    execution, the cost ladder, live fills against the close, the plain RSI(2) trigger, T-bills against
+    the harvester at other paces, the break-even switcher pace, a live-volatility lens, other
+    destinations, exposure on the worst short-volatility days, the trailing year over bills.
+12. PREREG names the analysis file analyze.py; it became q1_live.py .. q8_robust.py.
+13. The pre-registered "supported" rule's drawdown limb (no more than 3 points worse at the top of the
+    range) cannot be met by any move from an 11%-volatility sleeve into a 76%-volatility engine. It is
+    reported as failed, with that caveat, not re-drawn.

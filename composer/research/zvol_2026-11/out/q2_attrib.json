@@ -137,10 +137,10 @@
   "worst": -0.047189473447350694
  },
  "zvol_leg_carry_vs_curve": {
-  "days": 183,
-  "carry": 0.06290334555026932,
-  "curve_change": 0.6316816149440625,
-  "fund_total": 0.6418362557665048
+  "days": 184,
+  "carry": 0.06301805390923386,
+  "curve_change": 0.6070655881511144,
+  "fund_total": 0.6172934704988596
  },
  "midterm_carry_all_days_per_year": 0.1847619823649763
 }

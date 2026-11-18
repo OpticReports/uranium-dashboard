@@ -311,3 +311,15 @@ deterministic rationale are listed.
     investigated further); and one of the blend /kill service-loop tests fails about one run
     in 3-6 (a different one each time). Both predate the mirror.
 
+
+25. Harvester (add. 56, 2026-11-18): owner decision open on keep / move / T-bills. Watch items, none
+    acted on: (a) live ZVOL fills against the official close (median +12.7 bps worse, n 22; the
+    rule's break-even is ~11 bps a trade) - re-measure at 50 fills; (b) the oversold-close bounce in
+    short mid-term vol is the rule's whole edge and dies one close late - any vehicle with a
+    tighter tick than ZVOL is worth a look; (c) dropping the VXZ leg trims drawdown 4-8 pts in three
+    windows, not significant - revisit in a year; (d) SVXY for ZVOL: real era only; (e) ZVOL fund
+    risk (AUM $20.6M, ~82%/yr payout): a payout cut or closure notice should trigger a review;
+    (f) payouts strand in account cash when the rule sells between ex- and pay-date (item 23).
+    Method checklist from this study: total return in dollars at the account; sub-periods; dumb
+    benchmarks and the bare trigger; placebo + mirror + one-close-late + cost ladder; live fills
+    vs the assumed price; haircut both sides; count the candidates; break-even paces.

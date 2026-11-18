@@ -1,0 +1,182 @@
+<h1>Is the ZVOL harvester worth its capital?</h1>
+<p class="sub">Study run 2026-11-18 on data to the 11-17 close. Pre-registered, then checked by two independent reviewers whose corrections are applied here. Report-only: nothing was traded or changed.</p>
+
+<div class="card verdict">
+<b>Short answer: your instinct is closer to right than the earlier "keep" studies said. It is not losing money, but outside two strong stretches it has earned about what T-bills earn, on an edge that depends on being filled at the close in a very small fund. Moving its money into KMLM would probably raise return and would certainly deepen drawdowns; that is a risk choice the data cannot make for you.</b>
+<ul>
+<li><b>Live, it is about level with T-bills.</b> Composer shows HARV at {{harv_disp}} since July. One ZVOL payout of {{harv_dist}} landed in account cash, outside the symphony. Counting it, HARV made {{harv_true}} against {{harv_bills}} for T-bills over 83 sessions. That gap is inside the noise.</li>
+<li><b>Your "dog" read has a base rate behind it.</b> From 2010 to 2019 the rule lost {{sub_1019_abs}} a year net for ten years. Its return sits in 2007–2009 and 2020–2025, and it was picked on the second of those. A flat year like 2026 is the normal case; 2023–2025 was the outlier.</li>
+<li><b>The timing is real but fragile.</b> It is the familiar bounce after an oversold close, and it beats shuffled versions of itself in every era. Acted on one close late, the 2006–2023 return falls from {{lag0}} to {{lag1}} a year. At 10 bps a trade it falls to {{cost10}}. Live ZVOL fills have been a median {{fill_med}} bps worse than the close.</li>
+<li><b>It has not been shown to be worse than cash.</b> At its 2023–2026 pace, swapping it for T-bills lowers book return by {{e_meas}} a year. At its long-run pace the difference is {{e_long}}, which cannot be told from zero. On HARV's $37.5k that is about {{usd_meas}} a year over bills at the recent pace, {{usd_long}} at the long-run pace, and {{usd_1019}} at the 2010–2019 pace.</li>
+<li><b>Moving HARV into the KMLM symphony is a risk trade.</b> With the switcher held to its live pace the book earns {{a_dcagr}} more a year, and the worst drawdown is {{a_ddd}} deeper (nearer +10 points at the switcher's live volatility). Live since July it would have made {{live_a}} against {{live_keep}}, with a {{live_a_dd}} drawdown against {{live_keep_dd}}. By the rule fixed in advance this is <b>inconclusive</b>: the return test passes, the drawdown test fails.</li>
+<li><b>No refinement earned a recommendation.</b> Term-structure, variance-premium, VVIX and credit variables did not clear the bar set in advance; only SPY's 2-day RSI, the rule's own trigger, did.</li>
+</ul>
+</div>
+
+<div class="card">
+<b>What the app shows today (11-18) is mostly a payout.</b> ZVOL went ex-distribution this morning: $0.485 a share, about 7.5% of its price, paid 11-19. HARV held 60% ZVOL into it, so Composer shows HARV down about {{ex_harv_drop}} for that reason alone (about {{ex_harv}}), and the KMLM symphony down about {{ex_kmlm_drop}} ({{ex_kmlm}}). If the rule still holds ZVOL on 11-19 the cash is credited inside the symphony and the figure recovers. If it sells at today's close, the cash lands in the account instead, as it did on 08-19.
+</div>
+
+<div class="kpis">
+<div class="kpi"><b>{{harv_true}}</b><span>HARV live since 07-22 with the ZVOL payout counted; T-bills made {{harv_bills}}</span></div>
+<div class="kpi"><b>{{sub_1019}} / yr</b><span>the rule's net return over the ten years 2010–2019</span></div>
+<div class="kpi"><b>{{lag1}} / yr</b><span>2006–2023 return if every trade is one close late (on time: {{lag0}})</span></div>
+<div class="kpi"><b>{{a_ddd_pt}}</b><span>deeper worst drawdown if HARV's 15% moves into KMLM (90% range {{a_ddd_rng}})</span></div>
+</div>
+
+<h2>1. The live record, in dollars</h2>
+<p>The same rule runs in two places: the HARV symphony ($37.5k, 11.7% of the book) and the 25% "VIX sleeve" inside the KMLM symphony (about $23k). Together they are about 19% of the Composer book.</p>
+{{t_live}}
+<div class="chart"><h4>HARV's live profit and loss since 07-22</h4><p class="cap">Dollars. The step between the top two lines is the 08-19 ZVOL payout, which went to account cash.</p><div id="c_live"></div></div>
+<ul class="note">
+<li>HARV's {{harv_true}} against {{harv_bills}} for bills is a difference of a few hundred dollars over 83 sessions: about two or three ordinary days for this sleeve. It neither proves nor refutes "dog".</li>
+<li>The model made about zero over the same dates, so the weak four months belong to the strategy, not to execution.</li>
+<li>The same dollars in the switcher part of KMLM would have made {{harv_sw}}, through a {{sw_dd}} drawdown and a {{sw_worst}} worst day (11-05).</li>
+<li>Measurement basis: Composer's deposit-adjusted series. The KMLM split uses each day's snapshot holdings; the switcher part is what the symphony showed minus what its sleeve showed. A payout is counted as "outside" only when the fund was sold before its pay date (PULS payouts were credited inside).</li>
+</ul>
+
+<h2>2. Why the app and the price chart both read worse than the truth</h2>
+<div class="chart"><h4>ZVOL since launch: price against total return</h4><p class="cap">Indexed to 100 on 2023-04-19. The fund has paid $0.485 a share every month since January 2024.</p><div id="c_zvol"></div></div>
+<ul>
+<li><b>A price chart of ZVOL is wrong by design.</b> Price is down 57% since launch; total return is up 56%. Anything that uses price reads each monthly payout as a loss.</li>
+<li><b>Composer's symphony curve can lose a payout for good.</b> When the rule sells ZVOL between the ex-date and the pay date, the cash goes to the account and the symphony's curve never gets it back. That has happened once (08-19) and may happen again tomorrow.</li>
+<li><b>Held every day, ZVOL has been poor since 2024:</b> +9.3%, −10.7% and +5.1% by year, after +52% in 2023. The rule holds it on about one day in five.</li>
+</ul>
+
+<h2>3. Where in history the return sits</h2>
+{{t_sub}}
+<div class="chart"><h4>The rule's net return by calendar year</h4><p class="cap">Net of 5 bps per trade. 2006 from July, 2026 to 11-17. Losing years: 2010, 2012, 2013, 2018.</p><div id="c_years"></div></div>
+<div class="chart"><h4>The rule over twenty years, against holding the short position every day</h4><p class="cap">Growth of 1, log scale. Before 2023-04 ZVOL is a calibrated stand-in built from VIXM and VIX futures; the shaded years use the real fund.</p><div id="c_long"></div></div>
+<ul>
+<li><b>Three regimes, not one pace.</b> Strong in 2007–2009, flat to negative for the whole of 2010–2019, strong again in 2020–2025. The "{{pre_cagr}} a year before ZVOL existed" average hides that; without 2008 it is {{sub_no08}}.</li>
+<li><b>It was chosen on its best stretch.</b> HARV came from 41 ranked community candidates (addendum 11) on a 2023+ backtest. The best of 41 no-skill strategies over 3.6 years would show a Sharpe near 1.1; this one shows 1.57. The years before 2023 are new to us, though not necessarily to the rule's author.</li>
+<li><b>The last year is ordinary.</b> Over the last 252 sessions it earned {{roll_last}} net, about zero over bills, which is the {{roll_ex_pct}}rd percentile of its one-year results before 2023. A third of those years were negative.</li>
+<li><b>2008's +58% is the weakest number here:</b> it rests on thinly traded back-month futures, with some index days approximated. Read it as direction only.</li>
+</ul>
+<div class="chart"><h4>The rule's trailing one-year return, 2007–2026</h4><p class="cap">Net of 5 bps per trade. Shaded: the years real ZVOL has existed.</p><div id="c_roll"></div></div>
+
+<h2>4. What the edge is</h2>
+{{t_legs}}
+<ul>
+<li><b>It is a bounce trade, not a harvest.</b> On ZVOL days about 6 points of the 64-point total came from the futures curve rolling down; the rest came from volatility falling back after a sell-off. A permanent short earned +30% a year in 2011–2017 while this rule earned +3.9%.</li>
+<li><b>The trigger alone carries it.</b> Holding ZVOL for one session after SPY's 2-day RSI closes under 25 earned {{pt_pre}} bps a day before 2023 and {{pt_real}} since, against {{pt_all}} and 6 on all days. The nine voters mainly smooth that.</li>
+<li><b>Against shuffled copies of itself</b> (same positions, moved in time) the rule comes out ahead with p under 0.01 in each of four eras; run backwards it loses {{mirror}} a year. Same funds with no timing: {{static}} a year, below cash.</li>
+<li><b>Trading costs are large and already counted:</b> 137 times the capital traded a year. At Composer's 5 bps that is about 7 points of capital a year, a 9-point gap in compounded return.</li>
+</ul>
+{{t_eras}}
+<p class="note">"Placebo p": the share of time-shifted copies of the rule's own position path that did as well as the real one, before costs. "Same funds, no timing": each fund at the rule's average weight.</p>
+
+<h2>5. How fragile the edge is</h2>
+{{t_frag}}
+<ul>
+<li><b>One close late and the long-run edge is gone.</b> The trade earns its money in the first session after the signal. A missed or delayed fill is not a small leak; it removes the trade. The IBKR mirror's two blocked ZVOL orders are exactly this case.</li>
+<li><b>Cost per trade matters more than anything else.</b> Break-even on the 2006–2023 path is about 11 bps a trade.</li>
+<li><b>Live ZVOL fills against the official close:</b> median {{fill_med}} bps worse, {{fill_nw}} weighted by size, {{fill_adv}} of 22 adverse. One cent is 15 bps at $6.46, and each payout makes that larger. PULS fills cost about nothing, so priced fund by fund (ZVOL 14 / VXZ 3 / PULS 0) the net return is close to the flat 5 bps case ({{cost_fund}} before 2023). With 22 fills this bounds the cost only loosely.</li>
+</ul>
+
+<h2>6. "Not on when volatility is around"</h2>
+<div class="chart"><h4>Share of the harvester in ZVOL around a day when VIX jumps 15% or more</h4><p class="cap">Day 0 is the spike. Weights are those held into each day.</p><div id="c_event"></div></div>
+<ul>
+<li><b>You are right that it is mostly out.</b> It is in cash-like PULS 68% of the time. Into a spike day it holds {{ev_w0}} ZVOL against an everyday average of {{ev_wavg}}: it does not dodge spikes better than chance, it is simply small. It held ZVOL on {{worst_held}} of the 40 worst days for a short-volatility position.</li>
+<li><b>It buys the day after</b> (40–45% ZVOL) and over the next ten sessions earns {{ev_after}} before 2023 against its usual {{usual_pre}} for any ten sessions, and {{ev_after_real}} against {{usual_real}} since.</li>
+<li><b>When it is caught in, it hurts:</b> −10.3% on 2018-02-05, −6.1% on 2018-10-10, −5.2% on 2025-04-04 (real). Its two losing years of 23–26% (2010, 2018) were sell-offs that kept going after it re-entered.</li>
+<li><b>The recent streak:</b> six of the last seven ZVOL entries lost, ending with −4.7% on 11-16/17. The 2026 win rate is 69% (29 entries) against 71% over twenty years.</li>
+</ul>
+{{t_ep}}
+
+<h2>7. The decision: where the money works hardest</h2>
+<p>Books rebalanced daily to fixed weights, 2023-04-20 to 2026-11-17, from Composer's own backtests. The switcher's backtest pace (+295% a year here) is not credible as a forecast, so the main table holds it to its live pace since July ({{sw_live_ann}} a year, from 94 sessions), keeping its backtest volatility.</p>
+{{t_books_a}}
+<div class="two">
+<div class="chart"><h4>Change in yearly return against KEEP</h4><p class="cap">Points with 90% ranges; switcher at its live pace.</p><div id="c_forest_cagr"></div></div>
+<div class="chart"><h4>Change in worst drawdown against KEEP</h4><p class="cap">Percentage points; right of zero is deeper.</p><div id="c_forest_dd"></div></div>
+</div>
+<ul>
+<li><b>Moving it into KMLM (A) or the pure switcher (B) probably adds return.</b> Break-even is the switcher compounding above about {{be_meas}} a year (about {{be_long}} if the harvester runs at its long-run pace). The 94-session live pace is very noisy: its standard error is well over 100 points a year.</li>
+<li><b>It certainly adds drawdown.</b> {{a_ddd}} here. This lens keeps the switcher's backtest volatility (76%); live it has run at about 109%. Scaled to that, KEEP's worst drawdown is about {{lv_keep_dd}} and A's about {{lv_a_dd}}.</li>
+<li><b>Book A moves less than it looks:</b> a quarter of the KMLM symphony is the same rule, so about $28k reaches the switcher and $9k stays in the harvester.</li>
+<li><b>Against T-bills (book E)</b> the answer depends on which pace you believe:</li>
+</ul>
+{{t_pace}}
+<p class="note">Switcher at its live pace throughout. These ranges use 1,000 resamples, so the first row differs slightly from the main table's 2,000.</p>
+<h3>Other places the money could go (switcher at its live pace; not pre-registered)</h3>
+{{t_alt}}
+<div class="chart"><h4>Live since July: the book as it is, and with HARV's 15% in the KMLM symphony</h4><p class="cap">Indexed to 100 on 07-22; live symphony returns, HARV with its ZVOL payout. The 5-point gap is under one standard error.</p><div id="c_livebook"></div></div>
+{{t_livebooks}}
+<details><summary>The same table with the switcher at its backtest pace, and at half its live pace</summary>
+<h3>As measured (switcher at +295% a year)</h3>{{t_books_m}}
+<h3>Switcher at half its live pace</h3>{{t_books_b}}
+</details>
+<p class="note">Pre-registered rule: "supported" needed more return with the range above zero (met at the live pace: {{a_dcagr}}) and a drawdown no more than 3 points worse at the top of its range (not met: {{a_ddd}}). That drawdown limit could never be met by moving money from an 11%-volatility sleeve into a 76%-volatility engine; I set it badly. "Refuted" needed KEEP ahead on Sharpe and drawdown in every lens; the Sharpe range touches zero at the backtest pace. So: inconclusive.</p>
+
+<h2>8. Beyond price: what predicts the short-volatility return</h2>
+<p>Eight variables named in advance, each known at the close, tested against the next 1, 5 and 21 sessions of the short mid-term position, 2008–2026. A variable passes (✔) only if it survives a correction for running 24 tests and also forecasts out of sample.</p>
+{{t_pred}}
+<ul>
+<li><b>Only the rule's own trigger passes.</b> Roll yield, VIX6M/VIX3M and the variance premium have the signs the literature predicts, with uncorrected t-statistics of 2.0 to 2.7 at one week to one month. That is weak evidence that carry matters at monthly horizons. It says little about a trade held under two days, and on the rule's entry days none of the eight separates good entries from bad.</li>
+<li>The bar was strict (24 correlated tests, an early burn-in window), and it was set in advance. This agrees with the earlier no-builds (addenda 25, 31, 39).</li>
+</ul>
+<h3>Refinements named in advance</h3>
+{{t_ref}}
+<ul>
+<li><b>SVXY in place of ZVOL</b> wins in 2023–2026 and loses before; not robust.</li>
+<li><b>Dropping the long-volatility leg (VXZ)</b> trims drawdown by 4 to 8 points in all three windows for a little less return, but no range excludes zero.</li>
+<li>A carry gate was not run: no carry variable passed the bar that would have defined it.</li>
+</ul>
+
+<h2>9. Risks the backtest does not carry</h2>
+<ul>
+<li><b>ZVOL itself.</b> A $20.6M fund paying out about 82% of its value a year, almost all return of capital. A payout cut, reverse split or closure looks likely within a year or two. It became "actively managed" in October 2025, though it still tracks −1× mid-term futures (beta 0.93–1.00 by half-year). Its prospectus warns of a total loss in a single day, and it cuts exposure around fiscal quarter-ends.</li>
+<li><b>Tail risk is larger than 2023–2026 shows:</b> worst day −10.3% and worst drawdown 32% on the long path, against −5.2% and 10% in the real era.</li>
+<li><b>The tick is growing.</b> Every payout lowers the price, so one cent of slippage costs more each month.</li>
+<li><b>The same rule is held twice,</b> and HARV has no HYG guard despite its name. Earlier "keep" studies (addenda 13, 16, 34) used a guarded history for it.</li>
+<li><b>The IBKR mirror cannot buy ZVOL yet</b> (orders held on 11-16 and 11-17), so the two brokers currently differ on exactly this fund.</li>
+<li><b>Size.</b> One entry is about $36k of ZVOL across both symphonies against roughly $0.7M traded a day: about 5% of volume.</li>
+</ul>
+
+<h2>10. Options</h2>
+<div class="tw"><table><thead><tr><th>Option</th><th>What you get</th><th>What you give up or take on</th></tr></thead><tbody>
+<tr><td><b>Keep, with kill rules written now</b></td><td>The lowest book drawdown of the set; a sleeve that barely moves with the engines (correlation 0.04–0.13)</td><td>Expect roughly $0–3k a year over bills on $37.5k, not $7k; ZVOL fund risk; mirror friction</td></tr>
+<tr><td><b>Move HARV into the KMLM symphony</b></td><td>Probably more return (break-even: switcher above about {{be_meas}} a year); live +5 points since July</td><td>Worst drawdown about 5–10 points deeper; more of the book in the engine with a 47% live drawdown in four months</td></tr>
+<tr><td><b>Move half</b></td><td>{{g_dcagr}} a year at the switcher's live pace</td><td>{{g_ddd}} points of drawdown</td></tr>
+<tr><td><b>Spread it pro rata over the other three</b></td><td>{{f_dcagr}} a year</td><td>{{f_ddd}} points of drawdown</td></tr>
+<tr><td><b>Move it into SLEEVE</b></td><td>No more drawdown than today; no ZVOL</td><td>A return change that cannot be told from zero</td></tr>
+<tr><td><b>Replace with T-bills</b></td><td>No ZVOL fund risk, no mirror friction, one less moving part</td><td>Between nothing and about 4 points of book return a year, depending on which pace you believe</td></tr>
+<tr><td><b>Strip the duplicate</b> (the VIX sleeve inside KMLM)</td><td>One copy of the rule</td><td>{{c_ddd}} points of drawdown; {{c_dcagr}} a year</td></tr>
+</tbody></table></div>
+<p><b>My read.</b> The case for keeping it is thinner than the earlier studies made it: it is a small, fragile, cash-like sleeve that was sized on its best three years. The case for moving it into KMLM is a case for running a riskier book, which is your call and a reasonable one; the data only says what it costs (about 5–10 points of drawdown) and what it needs (the switcher compounding above roughly 10% a year). If you keep it, these would make sensible kill rules, for you to set: ZVOL assets under a floor or a payout cut announced; live fills more than 20 bps worse than the close over 20 trades; a trailing year below bills by more than a set amount. Any change goes to both brokers in the same change set.</p>
+
+<h2>11. What this taught us about testing</h2>
+<ol>
+<li><b>Measure total return, in dollars, at the account.</b> Price charts and the symphony curve both misread a fund that pays out 7% a month. And check which payouts really left: I first counted PULS payouts that had been credited inside.</li>
+<li><b>Ask where in history the return sits.</b> One average pace hid a flat decade. Sub-periods and calendar years go in every study.</li>
+<li><b>Benchmark against the dumb version:</b> the same funds without timing, a permanent position, cash, and the bare trigger.</li>
+<li><b>Test timing with placebos and a mirror,</b> then test the execution: one close late, and costs from 5 to 30 bps. An edge that dies at lag one is an execution bet.</li>
+<li><b>Compare live fills with the price the backtest assumes,</b> fund by fund.</li>
+<li><b>Haircut both sides.</b> I cut the switcher to its live pace and left the harvester at its best-years pace; the reviewer caught it.</li>
+<li><b>Count the candidates.</b> A rule picked as the best of 41 needs a higher bar than one tested alone.</li>
+<li><b>Name predictors in advance and correct for the count.</b> Three of eight looked good until corrected and tested out of sample.</li>
+<li><b>Judge a sleeve by what it does to the book,</b> in dollars at the real weights, with ranges, and say what pace would flip the answer (the break-even).</li>
+<li><b>Write the decision rule first, and check it can be met.</b> One of mine could not.</li>
+<li><b>Keep the independent review.</b> It reversed two headline numbers and changed the tone of this report.</li>
+</ol>
+
+<h2>12. Edges and open questions</h2>
+<ul>
+<li><b>Candidate edge (the rule's own, now measured on 20 years):</b> after SPY's 2-day RSI closes under 25, the short mid-term position earns about 30 bps the next session against 2 on all days (t −4.9, survives correction, positive out of sample; n 4,749). It needs a fill at that close and a vehicle with a tighter tick than ZVOL. Weaker over non-overlapping 5-day windows (t −2.1).</li>
+<li><b>Candidate, not robust:</b> SVXY instead of ZVOL, +7.2 points a year in 2023–2026 [+2.1, +12.4], negative before.</li>
+<li><b>Candidate, not significant:</b> dropping the VXZ leg lowers drawdown in all three windows.</li>
+<li><b>Open:</b> more live fills (22 is too few to bound the cost); what the rule does if ZVOL closes; whether IBKR will clear ZVOL for the mirror; the HYG guard (rename or add); sweeping stranded payouts back in.</li>
+</ul>
+
+<h2>Honesty box</h2>
+<ul class="note">
+<li>Every figure is in-sample; none is a forecast. Real ZVOL history is 3.6 years, chosen after the fact; on its own it supports neither keeping nor killing.</li>
+<li>Before 2023-04 the ZVOL leg is a stand-in (−1× VIXM plus collateral interest less fees, calibrated to the real fund; futures-built before 2011, with 281 approximated index days). With those days zeroed, 2006–2010 falls from +11.8% to +4.9% a year and the whole pre-ZVOL path from +8.9% to +7.0%.</li>
+<li>Backtests fill at the close the signal uses and charge 5 bps per trade. Live trades at about 15:50.</li>
+<li>Book comparisons rebalance daily to fixed target weights (HARV 15%); the real book does not rebalance daily and HARV is 11.7% of it today. The switcher's live pace comes from 94 sessions.</li>
+<li>Not modelled: taxes (Act 60), a ZVOL closure or payout cut, liquidity at larger size, intraday paths.</li>
+<li>Deviations from the pre-registration are in <code>DEVIATIONS.md</code>; scripts, frozen inputs and both reviews are in <code>composer/research/zvol_2026-11/</code>.</li>
+</ul>
+<h2>Independent review</h2>
+{{verification}}

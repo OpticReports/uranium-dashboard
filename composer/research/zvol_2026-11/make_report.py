@@ -5,7 +5,8 @@ import lib, sim
 
 D, OUT = sys.argv[1], sys.argv[2]
 C = D + "/cache"
-J = {k: json.load(open(f"out/{k}.json")) for k in ("q1_live", "q2_attrib", "q2b_long", "q3_events", "q4_books", "q5_predict", "q6_refine", "q7_extra")}
+J = {k: json.load(open(f"out/{k}.json")) for k in ("q1_live", "q2_attrib", "q2b_long", "q3_events", "q4_books", "q5_predict", "q6_refine", "q7_extra", "q8_robust")}
+q8 = J["q8_robust"]
 q1, q2, q2b, q3, q4, q5, q6, q7 = (J[k] for k in ("q1_live", "q2_attrib", "q2b_long", "q3_events", "q4_books", "q5_predict", "q6_refine", "q7_extra"))
 pc = lambda x, d=1: f"{x * 100:+.{d}f}%"
 pu = lambda x, d=1: f"{x * 100:.{d}f}%"
@@ -37,7 +38,7 @@ for i in range(1, len(hds)):
     a += hv[i - 1] * (hda[i] / hda[i - 1] - 1); b += hv[i - 1] * (hda[i] / hda[i - 1] - 1) + dist.get(hds[i], 0.0); c += hv[i - 1] * bil.get(hds[i], 0.0)
     p_disp.append([hds[i], a]); p_tr.append([hds[i], b]); p_bil.append([hds[i], c])
 CH["c_live"] = {"type": "line", "yfmt": "usd", "zero": True, "series": [
-    {"name": "HARV incl. distributions paid to account cash", "slot": 1, "pts": p_tr},
+    {"name": "HARV incl. the ZVOL payout that went to account cash", "slot": 1, "pts": p_tr},
     {"name": "HARV as Composer displays it", "slot": 2, "pts": p_disp},
     {"name": "T-bills on the same dollars", "slot": 3, "pts": p_bil}]}
 
@@ -105,15 +106,36 @@ def table(head, body, cls=""):
 
 
 H, K = q1["HARV"], q1["KMLM"]
-t_live = table(["Since funding, to 11-17", "HARV", "VIX sleeve inside KMLM", "Switcher part of KMLM"],
-               [["Window", f"{H['from']} → {H['to']} ({H['sessions']} sessions)", f"{K['from']} → {K['to']} ({K['sessions']} sessions)", "same as sleeve"],
+t_live = table(["Since funding, to 11-17", "HARV", "VIX sleeve inside KMLM (from holdings, before trading costs)", "Switcher part of KMLM (the remainder)"],
+               [["Window", f"{H['from']} → {H['to']} ({H['sessions']} sessions)", f"{K['from']} → {K['to']} ({K['sessions']} sessions)", "same"],
                 ["As Composer displays it", f"{usd(H['pnl_displayed_usd'])} ({pc(H['twr_displayed'])})", usd(K["parts_usd_displayed_basis"]["sleeve"]), usd(K["parts_usd_displayed_basis"]["switcher"])],
-                ["Distributions paid to account cash", usd(H["distributions_paid_outside_usd"]), "≈ +$1,139 of the symphony's $1,144", "≈ +$22"],
-                ["Including those distributions", f"<b>{usd(H['pnl_with_distributions_usd'])}</b>", f"<b>{usd(K['parts_usd_total_return']['sleeve'])}</b> ({pc(K['part_twr']['sleeve'][0])})", f"<b>{usd(K['parts_usd_total_return']['switcher'])}</b> ({pc(K['part_twr']['switcher'][0])})"],
-                ["T-bills on the same dollars", usd(H["tbills_same_dollars_usd"]), "n/a", "n/a"],
-                ["The model on the same dates", pc(H["model_same_dates"], 2), "n/a", "n/a"],
+                ["ZVOL payout that went to account cash (08-19)", usd(H["distributions_paid_outside_usd"]), usd(K["distributions_paid_outside_usd"]), "—"],
+                ["Including it", f"<b>{usd(H['pnl_with_distributions_usd'])}</b> ({pc(H['twr_with_distributions_approx'])})", f"<b>{usd(K['parts_usd_total_return']['sleeve'])}</b>", f"<b>{usd(K['parts_usd_total_return']['switcher'])}</b> ({pc(K['part_twr']['switcher'][0])})"],
+                ["T-bills on the same dollars", usd(H["tbills_same_dollars_usd"]), "", ""],
+                ["The model on the same dates", pc(H["model_same_dates"], 2), "", ""],
                 ["HARV's dollars in the switcher instead", usd(H["same_dollars_in_switcher_usd"]), "", ""],
-                ["Worst drawdown / worst day", f"{pu(H['live_stats']['harv']['maxdd'])} / {pc(H['live_stats']['harv']['worst'])}", "", f"{pu(H['live_stats']['switcher']['maxdd'])} / {pc(H['live_stats']['switcher']['worst'])}"]])
+                ["Worst drawdown / worst day", f"{pu(H['live_stats']['harv']['maxdd'])} / {pc(H['live_stats']['harv']['worst'])}", "", f"{pu(H['live_stats']['switcher']['maxdd'])} / {pc(H['live_stats']['switcher']['worst'])} (in HARV's window)"]])
+
+SPN = {"2006-07..2009": "2006-07 → 2009", "2010..2019": "<b>2010 → 2019</b>", "2020..2023-04-18": "2020 → 2023-04", "2023-04-19..2025": "2023-04 → 2025 (real ZVOL)", "2026 to 11-17": "<b>2026 to 11-17</b>",
+       "all before ZVOL, without 2008": "All before ZVOL, without 2008", "all before ZVOL": "All before ZVOL existed"}
+t_sub = table(["Period", "Sessions", "Rule, net/yr", "Over T-bills/yr", "Sharpe", "Max DD"],
+              [[SPN[k], v["n"], pc(v["cagr"]), pc(v["excess_cagr"]), f"{v['sharpe']:.2f}", pu(v["maxdd"], 0)] for k, v in q8["subperiods"].items()])
+L8, C8 = q8["lag"], q8["cost"]
+t_frag = table(["Change to the test", "2006-07 → 2023-04, net/yr", "2023-04 → 2026-11, net/yr"],
+               [["As modelled: trade at the signal's close, 5 bps a trade", pc(L8["all before ZVOL | lag 0"]["cagr"]), pc(L8["real era | lag 0"]["cagr"])],
+                ["<b>Every trade one close late</b>", f"<b>{pc(L8['all before ZVOL | lag 1']['cagr'])}</b>", pc(L8["real era | lag 1"]["cagr"])],
+                ["ZVOL bps per held day: on time → one close late", f"{L8['all before ZVOL | lag 0']['zvol_bps_when_held']:.0f} → {L8['all before ZVOL | lag 1']['zvol_bps_when_held']:.0f}", f"{L8['real era | lag 0']['zvol_bps_when_held']:.0f} → {L8['real era | lag 1']['zvol_bps_when_held']:.0f}"]]
+               + [[f"{c} bps a trade", pc(C8[c]["all before ZVOL"]), pc(C8[c]["real era"])] for c in ("0", "10", "15", "20", "30")]
+               + [["Priced by fund: ZVOL 14 / VXZ 3 / PULS 0 bps", pc(C8["ZVOL 14 / VXZ 3 / PULS 0"]["all before ZVOL"]), pc(C8["ZVOL 14 / VXZ 3 / PULS 0"]["real era"])]])
+BV = q8["bills_vs_harvester"]
+rng3 = lambda v, d=1: f"{pc(v[0], d)} [{pc(v[1], d)}, {pc(v[2], d)}]"
+pts3 = lambda v: f"{v[0] * 100:+.1f} [{v[1] * 100:+.1f}, {v[2] * 100:+.1f}]"
+t_pace = table(["If the harvester earns…", "Its pace", "Book return if it were T-bills instead [90%]", "Book return if it moved into KMLM [90%]", "On HARV's $37.5k, per year over bills"],
+               [[{"as measured 2023-26": "what it did in 2023–2026", "long-run pace before ZVOL": "its 2006–2023 margin over bills", "2010-19 pace": "its 2010–2019 margin over bills"}[k], pc(v["harvester_cagr"]),
+                 rng3(v["E_minus_KEEP_cagr"]), rng3(v["A_minus_KEEP_cagr"]), usd(round(v["usd_per_year_over_bills_on_37.5k"], -2))] for k, v in BV.items()])
+OD = q8["other_destinations"]
+t_alt = table(["Book", "Return/yr", "Max DD", "Δ return vs KEEP [90%]", "Δ Sharpe [90%]", "Δ max DD, pts [90%]"],
+              [[html.escape(k), pc(v["cagr"]), pu(v["maxdd"]), rng3(v["d_cagr"]), f"{v['d_sharpe'][0]:+.2f} [{v['d_sharpe'][1]:+.2f}, {v['d_sharpe'][2]:+.2f}]", pts3(v["d_maxdd"])] for k, v in OD.items()])
 
 E = q2b["eras"]
 def era_row(k, label):
@@ -178,25 +200,39 @@ t_legs = table(["Leg (real era, before trading costs)", "2023 (from 04-20)", "20
 X = q7["ex_date_2026_11_18"]; RM = q7["risk_matched"][LA]; RO = q7["rolling_1y"]
 A = q4["lenses"][LA]["A  HARV -> KMLM symphony"]["vs_keep"]; Em = q4["lenses"]["as-measured"]["E  HARV -> T-bills"]["vs_keep"]; Am = q4["lenses"]["as-measured"]["A  HARV -> KMLM symphony"]["vs_keep"]
 pre = E["pre-ZVOL all (2006-07..2023-04-18)"]; real = E["real ZVOL era (2023-04-19..2026-11-17)"]
-VERIF = open("VERIFICATION.md").read() if __import__("os").path.exists("VERIFICATION.md") else ""
 BODY = open("report_body.html").read()
+Cb = q4["lenses"][LA]["C  strip the VIX sleeve only"]["vs_keep"]
+G8 = OD["G  half of HARV -> KMLM symphony"]; F8 = OD["F  HARV -> pro rata to HG / KMLM / SLEEVE"]
+EMV = BV["as measured 2023-26"]["E_minus_KEEP_cagr"]; ELV = BV["long-run pace before ZVOL"]["E_minus_KEEP_cagr"]
+FZ = q8["zvol_fills_vs_close"]; LV = q8["live_vol_lens"]; SUBP = q8["subperiods"]
+VER = open("VERIFICATION.html").read()
+BODY = BODY.replace("{{main}}", open("report_main.html").read())
 subs = {
     "{{t_live}}": t_live, "{{t_eras}}": t_eras, "{{t_books_a}}": t_books_a, "{{t_books_m}}": t_books_m, "{{t_books_b}}": t_books_b, "{{t_livebooks}}": t_livebooks,
-    "{{t_pred}}": t_pred, "{{t_ref}}": t_ref, "{{t_ep}}": t_ep, "{{t_legs}}": t_legs,
+    "{{t_pred}}": t_pred, "{{t_ref}}": t_ref, "{{t_ep}}": t_ep, "{{t_legs}}": t_legs, "{{t_sub}}": t_sub, "{{t_frag}}": t_frag, "{{t_pace}}": t_pace, "{{t_alt}}": t_alt,
     "{{harv_disp}}": usd(H["pnl_displayed_usd"]), "{{harv_dist}}": usd(H["distributions_paid_outside_usd"]).lstrip("+"), "{{harv_true}}": usd(H["pnl_with_distributions_usd"]),
     "{{harv_bills}}": usd(H["tbills_same_dollars_usd"]), "{{harv_sw}}": usd(H["same_dollars_in_switcher_usd"]), "{{sw_dd}}": pu(H["live_stats"]["switcher"]["maxdd"], 0), "{{sw_worst}}": pc(H["live_stats"]["switcher"]["worst"], 0),
     "{{ex_harv}}": f"${X['HARV']['distribution_usd']:,.0f}", "{{ex_kmlm}}": f"${X['KMLM']['distribution_usd']:,.0f}", "{{ex_harv_drop}}": pu(X["HARV"]["displayed_drop"]), "{{ex_kmlm_drop}}": pu(X["KMLM"]["displayed_drop"]),
-    "{{pre_cagr}}": pc(pre["net"]["cagr"]), "{{pre_sharpe}}": f"{pre['net']['sharpe']:.2f}", "{{pre_dd}}": pu(pre["net"]["maxdd"], 0), "{{real_cagr}}": pc(real["net"]["cagr"]), "{{real_gross}}": pc(real["gross"]["cagr"]),
-    "{{roll_last}}": pc(RO["last"]), "{{roll_pct}}": f"{RO['share_of_pre_ZVOL_windows_below'] * 100:.0f}", "{{roll_med}}": pc(RO["pre_ZVOL_median"]), "{{roll_neg}}": f"{RO['share_negative_pre_ZVOL'] * 100:.0f}",
+    "{{pre_cagr}}": pc(pre["net"]["cagr"]), "{{sub_1019}}": pc(SUBP["2010..2019"]["cagr"]), "{{sub_1019_abs}}": pu(abs(SUBP["2010..2019"]["cagr"])), "{{sub_no08}}": pc(SUBP["all before ZVOL, without 2008"]["cagr"]),
+    "{{lag0}}": pc(L8["all before ZVOL | lag 0"]["cagr"]), "{{lag1}}": pc(L8["all before ZVOL | lag 1"]["cagr"]), "{{cost10}}": pc(C8["10"]["all before ZVOL"]), "{{cost_fund}}": pc(C8["ZVOL 14 / VXZ 3 / PULS 0"]["all before ZVOL"]),
+    "{{fill_med}}": f"{FZ['median_bps']:.0f}", "{{fill_nw}}": f"{FZ['notional_weighted_bps']:.0f}", "{{fill_adv}}": f"{round(FZ['share_adverse'] * FZ['n'])}",
+    "{{e_meas}}": "%.1f points [%.1f to %.1f]" % (-EMV[0] * 100, -EMV[2] * 100, -EMV[1] * 100),
+    "{{e_long}}": "%+.1f points [%+.1f, %+.1f]" % (ELV[0] * 100, ELV[1] * 100, ELV[2] * 100),
+    "{{usd_meas}}": usd(round(BV["as measured 2023-26"]["usd_per_year_over_bills_on_37.5k"], -2)).lstrip("+"), "{{usd_long}}": usd(round(BV["long-run pace before ZVOL"]["usd_per_year_over_bills_on_37.5k"], -2)).lstrip("+"), "{{usd_1019}}": usd(round(BV["2010-19 pace"]["usd_per_year_over_bills_on_37.5k"], -2)),
+    "{{a_ddd_pt}}": f"{A['maxdd']['point'] * 100:+.1f} pts", "{{a_ddd_rng}}": f"{A['maxdd']['lo'] * 100:.1f} to {A['maxdd']['hi'] * 100:.1f}",
+    "{{roll_last}}": pc(RO["last"]), "{{roll_ex_pct}}": f"{q8['rolling_excess_1y']['pctile_pre_ZVOL'] * 100:.0f}",
     "{{a_dcagr}}": f"{pc(A['cagr']['point'])} [{pc(A['cagr']['lo'])}, {pc(A['cagr']['hi'])}]", "{{a_ddd}}": f"{A['maxdd']['point'] * 100:+.1f} pts [{A['maxdd']['lo'] * 100:+.1f}, {A['maxdd']['hi'] * 100:+.1f}]",
-    "{{a_dsh}}": f"{A['sharpe']['point']:+.2f} [{A['sharpe']['lo']:+.2f}, {A['sharpe']['hi']:+.2f}]", "{{am_dcagr}}": f"{pc(Am['cagr']['point'])} [{pc(Am['cagr']['lo'])}, {pc(Am['cagr']['hi'])}]",
-    "{{e_dcagr}}": f"{pc(Em['cagr']['point'])} [{pc(Em['cagr']['lo'])}, {pc(Em['cagr']['hi'])}]",
-    "{{rm_x}}": pu(RM["switcher_share"]), "{{rm_keep}}": pc(RM["keep"]["cagr"]), "{{rm_alt}}": pc(RM["matched"]["cagr"]),
+    "{{c_dcagr}}": f"{pc(Cb['cagr']['point'])} [{pc(Cb['cagr']['lo'])}, {pc(Cb['cagr']['hi'])}]", "{{c_ddd}}": f"{Cb['maxdd']['point'] * 100:+.1f} [{Cb['maxdd']['lo'] * 100:+.1f}, {Cb['maxdd']['hi'] * 100:+.1f}]",
+    "{{g_dcagr}}": rng3(G8["d_cagr"]), "{{g_ddd}}": pts3(G8["d_maxdd"]), "{{f_dcagr}}": rng3(F8["d_cagr"]), "{{f_ddd}}": pts3(F8["d_maxdd"]),
+    "{{be_meas}}": pc(q8["breakeven_switcher_cagr"]["harvester as measured"], 0), "{{be_long}}": pc(q8["breakeven_switcher_cagr"]["harvester at its long-run pace"], 0),
+    "{{lv_keep_dd}}": pu(LV["live pace"]["keep"]["maxdd"], 0), "{{lv_a_dd}}": pu(LV["live pace"]["A"]["maxdd"], 0), "{{sw_live_ann}}": pc(q4["switcher_live_annualised"], 0),
     "{{live_keep}}": pc(lw["KEEP 29/29/27/15"]["with distributions"]["total"]), "{{live_a}}": pc(lw["A  HARV -> KMLM symphony"]["with distributions"]["total"]),
     "{{live_keep_dd}}": pu(lw["KEEP 29/29/27/15"]["with distributions"]["maxdd"]), "{{live_a_dd}}": pu(lw["A  HARV -> KMLM symphony"]["with distributions"]["maxdd"]),
-    "{{ev_d0}}": pc(ev_pre["harv_day0_mean"], 2), "{{ev_short_d0}}": pc(ev_pre["always_short_day0_mean"], 1), "{{ev_after}}": pc(ev_pre["harv_d1_10_mean"], 2), "{{ev_after_real}}": pc(ev_real["harv_d1_10_mean"], 2),
-    "{{cost_drag}}": pu(q2["cost_drag_per_year"]), "{{static}}": pc(q2["static_mix"]["cagr"]), "{{mirror}}": pc(q2["mirror_rule"]["cagr"], 0),
-    "{{verification}}": VERIF, "{{charts}}": json.dumps(CH, separators=(",", ":")),
+    "{{ev_w0}}": pu(ev_pre["profile"]["0"]["zvol"], 0), "{{ev_wavg}}": pu(q8["worst_short_vol_days"]["avg_weight_all_days"], 0), "{{worst_held}}": str(q8["worst_short_vol_days"]["held_zvol_on"]),
+    "{{ev_after}}": pc(ev_pre["harv_d1_10_mean"], 2), "{{ev_after_real}}": pc(ev_real["harv_d1_10_mean"], 2), "{{usual_pre}}": pc(q8["usual_10_sessions"]["pre"], 2), "{{usual_real}}": pc(q8["usual_10_sessions"]["real"], 2),
+    "{{pt_pre}}": f"{q8['plain_trigger']['pre']['zvol_bps_next_day']:.0f}", "{{pt_real}}": f"{q8['plain_trigger']['real']['zvol_bps_next_day']:.0f}", "{{pt_all}}": f"{q8['plain_trigger']['pre']['all_days_bps']:.0f}",
+    "{{static}}": pc(q2["static_mix"]["cagr"]), "{{mirror}}": pc(q2["mirror_rule"]["cagr"], 0).lstrip("-").lstrip("+"),
+    "{{verification}}": VER, "{{charts}}": json.dumps(CH, separators=(",", ":")),
 }
 for k, v in subs.items():
     BODY = BODY.replace(k, v)

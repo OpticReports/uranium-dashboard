@@ -94,16 +94,19 @@ def weights(P, d, short_fund="ZVOL", long_leg=True, gate=None):
     return w
 
 
-def run(P, short_fund="ZVOL", long_leg=True, gate=None, cost_bps=0.0, start=None, end=None):
-    """{days, ret (net of cost), gross, w: [dict per day, held INTO that day]}"""
+def run(P, short_fund="ZVOL", long_leg=True, gate=None, cost_bps=0.0, start=None, end=None, lag=0, fund_cost=None):
+    """{days, ret (net of cost), gross, w: [dict per day, held INTO that day]}
+    lag=1 acts one close late (the signal of d-1 is traded at d's close). fund_cost {fund: bps} prices each
+    fund's trades separately instead of the flat cost_bps."""
     days = [d for d in P["days"] if (start or "") <= d <= (end or "9999")]
     out = {"days": [], "ret": [], "gross": [], "w": [], "turn": []}
     prev = None
-    for i in range(1, len(days)):
-        d0, d1 = days[i - 1], days[i]
+    for i in range(1 + lag, len(days)):
+        d0, d1 = days[i - 1 - lag], days[i]
         w = weights(P, d0, short_fund, long_leg, gate)
         g = sum(x * P[t][d1] for t, x in w.items())
         tn = sum(abs(w[t] - (prev or w)[t]) for t in w)
-        out["days"].append(d1); out["gross"].append(g); out["ret"].append(g - cost_bps / 1e4 * tn)
+        c = (sum(fund_cost.get(t, 0.0) * abs(w[t] - (prev or w)[t]) for t in w) if fund_cost else cost_bps * tn)
+        out["days"].append(d1); out["gross"].append(g); out["ret"].append(g - c / 1e4)
         out["w"].append(w); out["turn"].append(tn); prev = w
     return out

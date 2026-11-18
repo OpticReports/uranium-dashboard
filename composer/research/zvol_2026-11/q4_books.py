@@ -33,12 +33,16 @@ def shift_for(target_cagr):
     return math.log(1 + target_cagr) / 252.0 - lg
 
 
-def book_rets(wts, idx, shift):
+def book_rets(wts, idx, shift, harv_shift=0.0, sw_scale=1.0):
+    """harv_shift: constant daily log shift on the harvester (HARV, and the sleeve share of KMLM);
+    sw_scale: multiplies the switcher's daily returns (volatility) before the shift"""
     out = []
     for i in idx:
-        sw = (1 + R["SWITCHER"][i]) * math.exp(shift) - 1
-        km = R["KMLM"][i] + WS[i] * ((1 + R["SWITCHER"][i]) * (math.exp(shift) - 1))      # only its switcher part is cut
-        v = {"HG": R["HG"][i], "KMLM": km, "SLEEVE": R["SLEEVE"][i], "HARV": R["HARV"][i], "SWITCHER": sw, "BIL": R["BIL"][i]}
+        s0 = R["SWITCHER"][i] * sw_scale
+        sw = (1 + s0) * math.exp(shift) - 1
+        km = R["KMLM"][i] + WS[i] * (sw - R["SWITCHER"][i]) + (1 - WS[i]) * ((1 + R["HARV"][i]) * (math.exp(harv_shift) - 1))
+        hv = (1 + R["HARV"][i]) * math.exp(harv_shift) - 1
+        v = {"HG": R["HG"][i], "KMLM": km, "SLEEVE": R["SLEEVE"][i], "HARV": hv, "SWITCHER": sw, "BIL": R["BIL"][i]}
         out.append(sum(w * v[k] for w, k in zip(wts, ORDER)))
     return out
 
@@ -57,9 +61,9 @@ out = {"window": [days[0], days[-1], n], "switcher_live_annualised": live_ann,
        "switcher_backtest_cagr": lib.stats(R["SWITCHER"])["cagr"], "lenses": {}, "engines": {k: metrics(R[k], R["BIL"]) for k in E},
        "corr": {a + "/" + b: lib.corr(R[a], R[b]) for a in E for b in E if a < b}}
 rng = random.Random(20261118)
-paths = [lib.stationary_bootstrap_idx(n, 10, rng) for _ in range(2000)]
+paths = [lib.stationary_bootstrap_idx(n, 10, rng) for _ in range(2000 if __name__ == "__main__" else 0)]
 allidx = list(range(n))
-for ln, sh in LENSES.items():
+for ln, sh in (LENSES.items() if __name__ == "__main__" else []):
     res = {}
     base = {b: metrics(book_rets(w, allidx, sh), R["BIL"]) for b, w in BOOKS.items()}
     diffs = {b: {m: [] for m in ("cagr", "sharpe", "maxdd", "cvar5")} for b in BOOKS if not b.startswith("KEEP")}
@@ -80,43 +84,43 @@ for ln, sh in LENSES.items():
                                      "share_above_0": sum(1 for x in v if x > 0) / len(v)} for q, v in diffs[b].items()}
     out["lenses"][ln] = res
 
-# live window: actual symphony returns since HARV was funded
-live = json.load(open(D + "/live.json"))
-def lser(k):
-    v = live[k]; ds = [dt.datetime.fromtimestamp(m / 1000, tz=dt.timezone.utc).date().isoformat() for m in v["epoch_ms"]]
-    return {ds[i]: v["deposit_adjusted_series"][i] / v["deposit_adjusted_series"][i - 1] - 1 for i in range(1, len(ds)) if ds[i] <= lib.END}
-L = {k: lser(k) for k in ("HG", "KMLM", "SLEEVE", "HARV")}
-ld = sorted(d for d in L["HARV"] if all(d in L[k] for k in L))
-q1 = json.load(open("out/q1_live.json"))
-# HARV on a total-return basis: spread the distributions paid outside over their ex-dates
-harv_tr = dict(L["HARV"])
-hv = live["HARV"]; hds = [dt.datetime.fromtimestamp(m / 1000, tz=dt.timezone.utc).date().isoformat() for m in hv["epoch_ms"]]
-hval = dict(zip(hds, hv["series"]))
-for d, t, usd in q1["HARV"]["distribution_rows"]:
-    i = hds.index(d)
-    harv_tr[d] = harv_tr.get(d, 0.0) + usd / hval[hds[i - 1]]
-sw_live = {}
-# switcher part of live KMLM: rebuilt in q1 (holdings x total returns); re-derive here from the backtest weights
-sw_bt = E["SWITCHER"]["ret"]
-lv = {}
-for b, w in BOOKS.items():
-    for basis, hr in (("displayed", L["HARV"]), ("with distributions", harv_tr)):
-        r = [w[0] * L["HG"][d] + w[1] * L["KMLM"][d] + w[2] * L["SLEEVE"][d] + w[3] * hr[d] + w[4] * sw_bt.get(d, 0.0) + w[5] * bil.get(d, 0.0) for d in ld]
-        lv.setdefault(b, {})[basis] = {"total": math.prod(1 + x for x in r) - 1, "maxdd": lib.stats(r)["maxdd"], "worst_day": min(r), "vol": lib.stats(r)["vol"]}
-out["live_window"] = {"from": ld[0], "to": ld[-1], "n": len(ld), "books": lv,
-                      "note": "pure-switcher returns in books B, C, D are the model's (Composer backtest) on those dates; every other engine is live"}
-json.dump(out, open("out/q4_books.json", "w"), indent=1)
-pc = lambda x: f"{x:+.1%}"
-print("window", out["window"], "| switcher backtest CAGR", pc(out["switcher_backtest_cagr"]), "| live annualised", pc(live_ann))
-print("engines:", {k: (pc(v["cagr"]), f"Sh {v['sharpe']:.2f}", f"DD {v['maxdd']:.1%}") for k, v in out["engines"].items()})
-print("corr:", {k: round(v, 3) for k, v in out["corr"].items()})
-for ln, res in out["lenses"].items():
-    print("==", ln)
-    for b, v in res.items():
-        p = v["point"]; s = f"  {b:30s} CAGR {pc(p['cagr'])} vol {p['vol']:.1%} Sharpe {p['sharpe']:.2f} maxDD {p['maxdd']:.1%} CVaR5 {p['cvar5']:.2%} worst21 {pc(p['worst21'])} worst day {pc(p['worst_day'])}"
-        if "vs_keep" in v:
-            k = v["vs_keep"]; s += f" | dCAGR {pc(k['cagr']['point'])} [{pc(k['cagr']['lo'])}, {pc(k['cagr']['hi'])}] | dSharpe {k['sharpe']['point']:+.2f} [{k['sharpe']['lo']:+.2f}, {k['sharpe']['hi']:+.2f}] | dMaxDD {k['maxdd']['point']:+.1%} [{k['maxdd']['lo']:+.1%}, {k['maxdd']['hi']:+.1%}]"
-        print(s)
-print("== live", out["live_window"]["from"], out["live_window"]["to"], out["live_window"]["n"])
-for b, v in lv.items():
-    print(f"  {b:30s}", {k: (pc(x["total"]), f"DD {x['maxdd']:.1%}", f"worst {pc(x['worst_day'])}") for k, x in v.items()})
+if __name__ == "__main__":
+    # live window: actual symphony returns since HARV was funded
+    live = json.load(open(D + "/live.json"))
+    def lser(k):
+        v = live[k]; ds = [dt.datetime.fromtimestamp(m / 1000, tz=dt.timezone.utc).date().isoformat() for m in v["epoch_ms"]]
+        return {ds[i]: v["deposit_adjusted_series"][i] / v["deposit_adjusted_series"][i - 1] - 1 for i in range(1, len(ds)) if ds[i] <= lib.END}
+    L = {k: lser(k) for k in ("HG", "KMLM", "SLEEVE", "HARV")}
+    ld = sorted(d for d in L["HARV"] if all(d in L[k] for k in L))
+    q1 = json.load(open("out/q1_live.json"))
+    # HARV on a total-return basis: spread the distributions paid outside over their ex-dates
+    harv_tr = dict(L["HARV"])
+    hv = live["HARV"]; hds = [dt.datetime.fromtimestamp(m / 1000, tz=dt.timezone.utc).date().isoformat() for m in hv["epoch_ms"]]
+    hval = dict(zip(hds, hv["series"]))
+    for d, t, usd in q1["HARV"]["distribution_rows"]:
+        i = hds.index(d)
+        harv_tr[d] = harv_tr.get(d, 0.0) + usd / hval[hds[i - 1]]
+    # the pure switcher's live return: the residual of the live KMLM symphony after its sleeve (q1), not the model's
+    sw_bt = dict(q1["KMLM"]["switcher_live_daily"])
+    lv = {}
+    for b, w in BOOKS.items():
+        for basis, hr in (("displayed", L["HARV"]), ("with distributions", harv_tr)):
+            r = [w[0] * L["HG"][d] + w[1] * L["KMLM"][d] + w[2] * L["SLEEVE"][d] + w[3] * hr[d] + w[4] * sw_bt.get(d, 0.0) + w[5] * bil.get(d, 0.0) for d in ld]
+            lv.setdefault(b, {})[basis] = {"total": math.prod(1 + x for x in r) - 1, "maxdd": lib.stats(r)["maxdd"], "worst_day": min(r), "vol": lib.stats(r)["vol"]}
+    out["live_window"] = {"from": ld[0], "to": ld[-1], "n": len(ld), "books": lv,
+                          "note": "pure-switcher returns in books B, C, D are the live KMLM symphony's residual after its sleeve (q1); every other engine is live"}
+    json.dump(out, open("out/q4_books.json", "w"), indent=1)
+    pc = lambda x: f"{x:+.1%}"
+    print("window", out["window"], "| switcher backtest CAGR", pc(out["switcher_backtest_cagr"]), "| live annualised", pc(live_ann))
+    print("engines:", {k: (pc(v["cagr"]), f"Sh {v['sharpe']:.2f}", f"DD {v['maxdd']:.1%}") for k, v in out["engines"].items()})
+    print("corr:", {k: round(v, 3) for k, v in out["corr"].items()})
+    for ln, res in out["lenses"].items():
+        print("==", ln)
+        for b, v in res.items():
+            p = v["point"]; s = f"  {b:30s} CAGR {pc(p['cagr'])} vol {p['vol']:.1%} Sharpe {p['sharpe']:.2f} maxDD {p['maxdd']:.1%} CVaR5 {p['cvar5']:.2%} worst21 {pc(p['worst21'])} worst day {pc(p['worst_day'])}"
+            if "vs_keep" in v:
+                k = v["vs_keep"]; s += f" | dCAGR {pc(k['cagr']['point'])} [{pc(k['cagr']['lo'])}, {pc(k['cagr']['hi'])}] | dSharpe {k['sharpe']['point']:+.2f} [{k['sharpe']['lo']:+.2f}, {k['sharpe']['hi']:+.2f}] | dMaxDD {k['maxdd']['point']:+.1%} [{k['maxdd']['lo']:+.1%}, {k['maxdd']['hi']:+.1%}]"
+            print(s)
+    print("== live", out["live_window"]["from"], out["live_window"]["to"], out["live_window"]["n"])
+    for b, v in lv.items():
+        print(f"  {b:30s}", {k: (pc(x["total"]), f"DD {x['maxdd']:.1%}", f"worst {pc(x['worst_day'])}") for k, x in v.items()})

@@ -94,7 +94,9 @@ def vx_contract(y, m, cache):
                 out[d] = s / 10.0 if d < "2007-03-26" else s      # quoted x10 before the 2007-03-26 rescale
     if not out:
         return None
-    return {"settle": out, "expiry": max(out)}
+    # an expired contract's last row is its settlement day; one still trading on the study date keeps
+    # its scheduled expiry (verifier A: max(out) shortened the last roll period)
+    return {"settle": out, "expiry": max(max(out), base.isoformat()) if base.isoformat() > max(out) and max(out) >= "2026-11-10" else max(out)}
 
 
 def vx_archive(y, m, cache):

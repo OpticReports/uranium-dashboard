@@ -4767,3 +4767,92 @@ now without any deploy. Open for the owner, ranked:
 - P3: the later-order-time forward test; KMLM's start day (seeded from cash it buys the target while
   Composer may sit inside its corridor: 6-10% of the sleeve apart for 2-4 sessions on one start day in
   five).
+
+
+## Addendum 56 — Is the volatility harvester (ZVOL) worth its capital? (2026-11-18)
+
+Owner thesis: "this ZVOL strat ... has been a dog ... a cost centre"; proposal: move its money into the
+KMLM switcher. Pre-registered (research/zvol_2026-11/PREREG.md, commit c3335cd9), run, then reviewed
+by two independent agents (VERIFICATION.md: both PASS WITH CORRECTIONS, all applied). Report with
+charts: results/zvol-harvester-2026-11-18.html. Report-only; nothing traded or changed.
+
+VERDICTS BY THE PRE-REGISTERED RULES
+- "Move it to the KMLM switcher": INCONCLUSIVE. Return test passes with the switcher at its live pace
+  (book A, HARV 15% -> KMLM symphony: +13.9%/yr [+1.9, +30.4]); drawdown test fails (+4.6 pts
+  [+2.9, +9.6] against a 3-pt limit that this kind of move could never meet). Not "refuted": KEEP's
+  Sharpe lead touches zero at the switcher's backtest pace.
+- "Cost centre": NOT SUPPORTED as pre-registered (T-bills in HARV's place: -4.2%/yr of book return
+  [-6.7, -2.0] at HARV's 2023-26 pace), but with the harvester at its long-run pace the gap is
+  -1.9 [-4.1, +0.4]: not distinguishable from T-bills.
+
+LIVE (to 2026-11-17; Composer deposit-adjusted series)
+- HARV 07-22 -> 11-17 (83 sessions): displayed -$363 (-0.99%); one ZVOL payout ($1,193, ex 08-19) went
+  to account cash; with it +$830 (+2.2%) vs T-bills +$446. PULS payouts were credited inside. Model on
+  the same dates -0.09%. The same dollars in the switcher part of KMLM: +$18.7k (47% drawdown, -36% day).
+- KMLM symphony 07-07 -> 11-17: +30.8%, $22.8k: sleeve about +$1.0k (from holdings), switcher +$22.6k
+  (+34.5% in 94 sessions, +121%/yr annualised: the haircut anchor; very noisy).
+- 2026-11-18 is a ZVOL ex-date ($0.485, ~7.5%): about -4.5% displayed on HARV ($1,691), -0.9% on KMLM
+  ($887); credited inside only if ZVOL is still held on 11-19.
+
+WHERE THE RETURN SITS (exact rule simulated 2006-07..2026-11; matches Composer's HARV weights on 899 of
+899 real-era sessions; ZVOL before 2023-04 is a calibrated stand-in, futures-built before 2011)
+- Net of 5 bps: 2006-07..2009 +24.4%/yr; 2010..2019 -1.8%/yr (Sharpe -0.11, maxDD 32%); 2020..2023-04
+  +29.4%; 2023-04..2025 +29.9%; 2026 to 11-17 +5.9% (+2.2% over bills). All before ZVOL: +8.9%/yr,
+  Sharpe 0.64 (+6.4% without 2008). 17 of 21 calendar years positive; 2010 -23.0%, 2018 -25.7%.
+- Real era: gross +32.3%, Composer net +23.2%; legs ZVOL +61.7 / VXZ +28.0 / PULS +12.2 pts; ZVOL 61 bps
+  per held day vs 6.5 on all days; same funds at average weights, no timing: +3.0%/yr; mirror rule
+  -21%/yr; circular-shift placebo p < 0.01 in each of four eras (gross). Carry is 0.06 of the ZVOL
+  leg's 0.64: a rebound trade, not a carry trade. RSI(SPY,2) < 25 alone earns 30 bps the next session
+  before 2023 (56 since) against 2 (6) on all days.
+- Fragility: one close late, pre-ZVOL +8.9% -> -0.1%/yr (real era 23.5 -> 18.5); at 10 bps a trade
+  +2.0%, break-even ~11 bps; live ZVOL fills vs the official close: median +12.7 bps worse, notional-
+  weighted +14.3, n 22 (PULS ~0; priced by fund the net is close to the flat 5 bps case).
+- Around VIX +15% days (173 before 2023): holds 13% ZVOL into the day (everyday average 12%), 40-45% the
+  day after; next ten sessions +0.50% vs a usual +0.37% (real era +1.65% vs +0.89%). Held ZVOL on 6 of
+  the 40 worst short-vol days. Worst days -10.3% (2018-02-05), -6.1%, -5.2% (2025-04-04, real).
+
+BOOKS (daily rebalance to fixed weights, 2023-04-20..2026-11-17, switcher at its live pace +121%/yr;
+stationary bootstrap, mean block 10, 2,000 paired draws, 90% intervals; changes vs KEEP 29/29/27/15)
+- A HARV -> KMLM symphony: +13.9% [+1.9, +30.4], Sharpe -0.19 [-0.31, -0.07], maxDD +4.6 [+2.9, +9.6].
+- B -> pure switcher: +18.3% [+2.3, +40.6], maxDD +7.1 [+4.0, +12.6]. C strip the sleeve only: +8.6%
+  [+1.3, +18.5], maxDD +2.7 [+1.6, +6.1]. D none anywhere: +26.6% [+2.7, +60.9], maxDD +11.9 [+6.5, +18.5].
+- E -> T-bills: -4.2% [-6.7, -2.0]. Not pre-registered: pro rata to the other three +9.1% [+2.2, +18.2],
+  maxDD +2.0; half into KMLM +7.0% [+0.9, +14.9], maxDD +1.9; into SLEEVE +2.5% [-2.6, +8.4], maxDD -0.2.
+- Break-even for A: the switcher compounding above ~+10%/yr (~+1% with the harvester at its long-run
+  pace). At the switcher's live volatility (109% vs 76% modelled): KEEP maxDD ~14%, A ~24%.
+- Live 07-23..11-17: KEEP +27.0%, A +32.1% (drawdown 10.5% vs 16.4%); the gap is under one standard error.
+- On HARV's actual $37.5k (11.7% of the book): about $7.0k/yr over bills at the 2023-26 pace, $3.0k at
+  the long-run pace, -$0.8k at the 2010-19 pace.
+
+BEYOND PRICE (8 predictors named in advance x 3 horizons, 2008-2026; Newey-West, Holm across 24 tests,
+walk-forward out-of-sample R2): only RSI(SPY,2) clears the bar (1 and 5 sessions; t -4.9 / -3.7; weaker
+non-overlapping, t -2.1). Roll yield, VIX6M/VIX3M and VRP are right-signed at t 2.0-2.7 uncorrected at
+5-21 sessions, negative out of sample; none separates the rule's good entries from bad (|t| <= 1.7).
+REFINEMENTS: SVXY for ZVOL +7.2%/yr in the real era [+2.1, +12.4], -1.2% before: not robust. No VXZ leg:
+maxDD -3.6 to -7.8 pts in all three windows, no interval excludes zero. Carry gate not run (nothing to
+define it). No refinement recommended.
+
+CANDIDATE EDGES (EDGE rule): (1) the oversold-close bounce in short mid-term vol, above; needs a fill at
+that close and a tighter tick than ZVOL. (2) SVXY variant: real era only. (3) no-VXZ variant: not
+significant.
+
+OUTSIDE THE BACKTEST: ZVOL is a $20.6M fund paying ~82%/yr of NAV (return of capital), "actively managed"
+since 2025-10 (still beta 0.93-1.00 to -1x mid-term); payout cut / reverse split / closure risk; payouts
+strand in account cash when the rule sells between ex- and pay-date; the rule is held twice (~19% of the
+book); HARV has no HYG guard (addenda 13/16/34 used a guarded history); the IBKR mirror's ZVOL orders
+were held 11-16 and 11-17.
+
+CORRECTIONS TO EARLIER ADDENDA: add. 37's "holds ZVOL ~6% of days" is the live ex-date overlap, not the
+model (20% of days, mean weight 11%); add. 12's guard "never fired" is trivially true (no guard exists);
+add. 16's KEEP rested on HARV at its 2023+ pace plus a guarded synthetic history.
+
+HONESTY BOX: all in-sample; real ZVOL history is 3.6 years, chosen after the fact (best of 41 ranked
+candidates, add. 11). Backtests fill at the signal's close at 5 bps. Books rebalance daily to target
+weights the real book does not hold. The switcher's live pace is 94 sessions. 2008 (+58%) rests on
+thin back-month futures with approximated index days: direction only; with the 281 approximated days
+zeroed, pre-ZVOL falls from +8.9% to +7.0%/yr. Not modelled: taxes (Act 60), fund closure or payout
+cut, size, intraday paths. Deviations: research/zvol_2026-11/DEVIATIONS.md.
+
+OWNER DECISIONS OPEN: keep with kill rules / move all or half into KMLM / pro rata / T-bills / SLEEVE;
+strip the duplicate sleeve; HYG guard (rename or add); sweep stranded payouts. Any change lands on both
+brokers in the same change set (ONE BRAIN, TWO BROKERS). No service to redeploy.

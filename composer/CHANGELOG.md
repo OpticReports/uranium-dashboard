@@ -7,6 +7,22 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-18 — Harvester (ZVOL) review: keep / move / kill study (owner request; report-only)
+
+- Change: none to any symphony, gate, POLICY operation or the mirror. New study under
+  `research/zvol_2026-11/` (pre-registration, scripts, frozen inputs, outputs, deviations, both
+  reviews) and `results/zvol-harvester-2026-11-18.html`.
+- Finding: not losing money, but about level with T-bills live (+$830 vs +$446 with the stranded ZVOL
+  payout counted; Composer shows -$363) and flat for 2010-2019 on a 20-year simulation; the edge is
+  an oversold-close bounce that disappears one close late. Moving HARV into KMLM: more return if the
+  switcher compounds above ~10%/yr, +5 to +10 pts of book drawdown. Pre-registered verdict:
+  inconclusive.
+- Counter-agents: two independent reviewers, both PASS WITH CORRECTIONS; two serious errors in the live
+  scorecard fixed (PULS payouts double-counted; the switcher's live return understated on four days
+  without snapshots), five analyses added.
+- Owner decisions open: allocation of HARV's capital; the duplicate sleeve inside KMLM; the HYG guard;
+  sweeping stranded payouts. Artifacts: results.md addendum 56; ideas-backlog item 25.
+
 ## 2026-10-06 — divergence.py — add.-38 conditions closed; Op 2 window from 2026-08-01 (add. 38b)
 
 - Change (instrument + POLICY Op 2 wording; no symphony mutated):
