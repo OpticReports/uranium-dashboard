@@ -48,7 +48,10 @@ value minus THIS leg's amount. The script sizes every leg on the mirror
 sleeve's equity as the feed shows it, which queued legs do not reduce, so
 "before" values that shrink leg by leg would move too much (2026-11-18 review:
 61.7% where 50% was meant). Before sending, the dry-run amounts must sum to
-the intended fraction of the giving sleeve's equity.
+the intended fraction of the giving sleeve's equity. HARV exit only: the
+amount passed is scaled (MOVE_PLAN step 4) so the mirror leaves $6 where
+Composer leaves its stub; those ledger rows' composer_amount is not a
+Composer amount.
 
 ## Allocation (owner decision 2026-11-18; results.md addendum 56)
 

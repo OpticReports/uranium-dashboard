@@ -88,3 +88,15 @@ Two reviewers, both PASS WITH CORRECTIONS. Nothing was moved.
 
 Outcome: the recommendation is restated as "any spread across the other engines is similar; the choice
 is how much more engine risk to run", with the policy rewrite and staging as preconditions.
+
+## The exit plan (MOVE_PLAN.md), 2026-11-18 evening
+
+| Rev | Reviewer | Verdict | What it found |
+|---|---|---|---|
+| 1 (two halving sessions) | plan reviewer B | FAIL | mirror legs moved 61.7% where 50% was meant; withdraw cutoff too late; C undefined; impossible pass criterion |
+| 2 (one session, $100 stub) | independent, ran the real transfer script and executor core | PASS WITH CORRECTIONS | 1 blocking (a $100 stub and "V1 <= $150" tighter than HARV's normal move in the hour: 6-29% false stop, over-withdraw tail), 2 serious (the 11-19 ZVOL payout larger than both tolerances; recovery re-sends above the script's 50% limit), 8 minor/notes. Mirror mechanics, caps, order of sells/transfers/buys, no automatic capital action, no cap breach: confirmed |
+| 3 (1.5% stub; legs sized 29:29:27 of the sleeve) | independent narrow re-check, ran `mirror_transfer.run()` and `build_plan` offline | PASS WITH CORRECTIONS, no blocking | the new sizing gives the intended dollars on 8 named and 4,000 random (V0, E) pairs; queued legs do not change sizing; normal and payout cases never overlap. 8 wording fixes (the payout exception must replace one test, not both; half a sleeve floors, not rounds; same-day `--again`; a note in double quotes loses "$6"; POLICY says the scaled amount is not a Composer amount) |
+
+Rev 3.1 applies the last eight. Not verified by anyone and settled only on the day: Composer's same-day
+cutoff (read from the withdraw's response), whether Composer accepts a 98.5% withdraw without turning
+it into a liquidation, the deployed transfer cap (owner reads it in Render), where the payout posts.

@@ -2,7 +2,8 @@
 
 Owner: "treat it [the crash sleeve] as one engine, go ahead with full pro rata"; then "I'd prefer to be
 out of it asap, just close it out ... just test and execute". Basis: results.md addendum 56 and
-VERIFICATION.md. Rev 3 of this plan. Rev 1 (two halving sessions) FAILED its review (the mirror legs
+VERIFICATION.md. Rev 3.1 of this plan (rev 3 PASSED its narrow re-check WITH CORRECTIONS, all wording,
+applied here). Rev 1 (two halving sessions) FAILED its review (the mirror legs
 moved 61.7% where 50% was meant; the withdraw cutoff was too late). Rev 2 (one session) PASSED WITH
 CORRECTIONS on 2026-11-18 (mirror mechanics confirmed by running the real script and the real executor
 core); rev 3 applies them: a 1.5% stub in place of $100, the 11-19 ZVOL payout, an earlier submit time,
@@ -36,7 +37,7 @@ commission). A sleeve under about $10 holds no shares and sends no order (it can
    - `composer-api.py symphony-stats`: four symphonies, none paused, no queued deploy on HARV, no
      value implying a >50% one-day change. `market-hours`: a regular session today.
    - Record: V0 = HARV's value; cash0 = `total-stats.total_unallocated_cash`; the other three's values.
-   - The ZVOL payout (ex 11-18, paid 11-19; D = HARV's ZVOL shares x $0.485, about $1,690; KMLM's is
+   - The ZVOL payout (ex 11-18, paid 11-19; D = the ZVOL shares HARV held into the ex-date, at the 11-17 close, x $0.485, about $1,690; KMLM's is
      about $870). Where is it? Inside HARV (its `cash` about D above the usual ~$36, V0 about D higher
      than last night's $36,267 adjusted for the day): the normal case, it leaves with W. In account cash
      (cash0 about D or D + KMLM's above last night's $102): it is in cash0, so it does not disturb C;
@@ -57,23 +58,27 @@ commission). A sleeve under about $10 holds no shares and sends no order (it can
    Read the response (`deploy_time` / `deploy_on_market_open` and the deploy id): it must be scheduled
    for TODAY's window. If Composer schedules it for the next open, or converts it to a liquidation
    that waits a day, tell the owner at once; the day it fills becomes Day A and the rest shifts.
-   If it fills at an open, run steps 3-6 that day before 15:30 ET, not after 16:35.
+   If it fills at an open, run steps 3-6 that day before 15:30 ET, not after 16:35; wherever a step
+   names a date or "after 16:35", read "the latest closed session".
    A liquidation makes HARV disappear from the symphony list: the monitor's book-drawdown line is then
    an expected artifact (empty-HARV check), not a stop.
 3. After the 16:35 ET check: V1 = HARV's value, C = `total_unallocated_cash` - cash0, with
    `pending_deploys_cash` == 0 and HARV's `has_queued_deploy` false (`pending_withdrawals` stayed 0.0
    with HG's withdraw queued on 07-20: it is not the signal). Require |C - W| <= max($50, 0.5% of W)
    and V1 <= 3% of V0.
-   The one recognised exception is the ZVOL payout arriving after step 1: C - W within $60 of D (or
-   of D + KMLM's payout), or V1 - (V0 - W) between D - 1.5% of V0 and D + 1.5% of V0. Then proceed
-   with W as C; the payout stays where it landed (account cash, or the stub) and is reported to the
-   owner for a separate instruction. Any other gap: STOP. The cash sits, the mirror is untouched, the
+   The one recognised exception is the ZVOL payout arriving after step 1; each form replaces ONE test
+   and the other still holds. (a) In account cash: C - W within $60 of D (or of D + KMLM's payout)
+   AND V1 <= 3% of V0: proceed with W as C. (b) In the stub: |C - W| within tolerance AND
+   V1 - (V0 - W) between D - 1.5% of V0 and D + 1.5% of V0: proceed with C as measured.
+   The payout stays where it landed and is reported to the owner for a separate instruction.
+   Any other gap: STOP. The cash sits, the mirror is untouched, the
    owner is told.
 4. Same evening, before anything is sent, the mirror dry-runs.
    - Feed (GET): last session 2026-11-19, no run open, not halted, check clean, `pending_requests`
      empty, no queued operator credits (an open run would skip Day B's session).
-   - E = the `sleeve_equity` the dry-run prints tonight (marks only change at a session, so it holds
-     until Day B's plan), NOT step 1's reading. T = E - 6.00.
+   - E = the HARV sleeve's `equity` on this feed GET (the number the script sizes on; marks only
+     change at a session, so it holds until Day B's plan), NOT step 1's reading; each dry-run line
+     must repeat it ("HARV sleeve ... is $E"). T = E - 6.00.
      m1 = m2 = floor(T x 29/85 x 100)/100, m3 = T - m1 - m2  (the mirror dollars, 29 : 29 : 27).
    - EVERY leg uses the same "before" (POLICY "One symphony giving to several"), and a composer
      amount scaled so the script's own formula (fraction = amount / V0, dollars = round(fraction x E, 2))
@@ -88,15 +93,17 @@ commission). A sleeve under about $10 holds no shares and sends no order (it can
      through), T = E - 150 instead and the rest is swept in a later session.
 5. The Composer invests, all three, one after another (each with COMPOSER_ALLOW_CAPITAL=1, --yes, -o;
    read the deploy id and when each is scheduled to execute):
-   I1 = I2 = floor(C x 29/85 x 100)/100, I3 = C - I1 - I2  (C is W in the payout exception).
+   I1 = I2 = floor(C x 29/85 x 100)/100, I3 = C - I1 - I2  (C is W in payout case (a)).
    - `invest mbkiXcuNDjueXpiox5Av --amount I1`
    - `invest YPTSJFJwD2ZKfAeYJUbW --amount I2`
    - `invest nNdBk7hc5NiBzeRvbI5T --amount I3`
 6. The mirror legs, only after all three invests returned a deploy id: send them one at a time
-   (`MIRROR_TRANSFER_TOKEN=via-network-secret`,
-   `--note "HARV exit 2026-11-19: mirror sized to leave $6 (29:29:27 of the sleeve); Composer invested I_i"`),
-   each printed amount equal to its dry-run amount, waiting until each shows in the feed's
-   `pending_requests`. All three queued before Day B 15:30 ET (they are applied at Day B's 15:54
+   (`MIRROR_TRANSFER_TOKEN=via-network-secret`, and a SINGLE-QUOTED note with the real figure, e.g.
+   `--note 'HARV exit 2026-11-19: mirror sized to leave 6 USD (29:29:27 of the sleeve); Composer invested 12345.67'`),
+   waiting until each shows in the feed's `pending_requests`. GET the feed again just before leg 1:
+   if HARV's equity is not E, redo step 4. A printed amount a cent or two off its dry-run amount is
+   not a stop (each leg is a fraction of the feed's equity, so about $6 still remains); more than
+   that: send no further leg and read the feed. All three queued before Day B 15:30 ET (they are applied at Day B's 15:54
    session, when Composer's invests also execute). Commit `results/mirror/transfer-ledger.jsonl`.
 
 ## Day B (planned Fri 2026-11-20)
@@ -104,7 +111,8 @@ commission). A sleeve under about $10 holds no shares and sends no order (it can
    payout left there); the mirror's session row shows three transfers moved in full and its account
    check clean; the HARV sleeve holds no shares and under $10; HG and SLEEVE parity "same"; KMLM no
    gap beyond the ZVOL the mirror cannot buy; HARV reads MISMATCH (see expected lines).
-8. CHANGELOG entry with deploy ids and both brokers' before/after; report to the owner.
+8. CHANGELOG entry with deploy ids and both brokers' before/after, saying that the three transfer-
+   ledger rows' `composer_amount` is the scaled a_i, not the Composer invest; report to the owner.
 
 ## If something goes wrong
 - Withdraw not filled, or outside tolerance: stop before any invest or leg.
@@ -115,7 +123,8 @@ commission). A sleeve under about $10 holds no shares and sends no order (it can
   owner; the fallback is the owner posting m1, m2, m3 to the executor's transfer route with his own
   credential before Day B 15:30. This session never holds that credential.
 - Leg 3 refused for the book's transfer cap (MIRROR_TRANSFER_MAX_FRAC below 13%): legs 1 and 2 stay;
-  tell the owner; leg 3 goes when the cap period rolls or the owner raises the cap.
+  tell the owner; leg 3 goes when the cap period rolls or the owner raises the cap (as two legs, below:
+  it is then nearly all of what is left in the sleeve).
 - UNKNOWN: POLICY's procedure (read the feed's `pending_requests` and today's row; `--again` only
   if the transfer is in neither).
 - A leg partly applied by Day B's plan: the executor re-queues the remainder itself (up to 3 plans):
@@ -124,8 +133,10 @@ commission). A sleeve under about $10 holds no shares and sends no order (it can
 - A leg refused whole by Day B's plan (the sleeve fell more than the $6 of headroom: about 13 cents on
   PULS), or any later sweep: what is left is then more than 50% of the sleeve, which the script refuses
   as one leg. Tell the owner first, then send it as TWO legs to the same taker, both sized on the same
-  feed equity E': the first at 50% of E', the second with `--again` (the script's "a second move of
-  the same pair is meant") for the rest, the two summing to E' - 6. Dry-run both and check the sum
+  feed equity E': the first at floor(E' x 50)/100 (a cent over half is refused), the second with
+  `--again` (the script's "a second move of the same pair is meant") for the rest, the two summing
+  to E' - 6. If the pair already has a sent row on that ET date, the first leg needs `--again` too.
+  Never send the second leg unless the first is in `pending_requests`. Dry-run both and check the sum
   first; the composer values passed are synthetic (V = E', amounts = the mirror dollars) and the note
   says so. This is the only use of `--again` outside POLICY's UNKNOWN procedure.
 - The mirror session is skipped or halted: the legs stay queued; do not re-send; tell the owner.
@@ -144,7 +155,7 @@ rule's funds). No cap breach is expected: HG / KMLM / SLEEVE are about 33.0 / 29
 on Day A's evening and 36.9 / 33.7 / 29.4% after Day B, against 44%.
 
 ## After the exit (separate change, own review, owner approval)
-- Liquidate the $100 stub on Composer once the tooling can live without HARV: the monitor's
+- Liquidate the ~1.5% stub on Composer once the tooling can live without HARV: the monitor's
   book-drawdown base and peak (ex-HARV), a `retired_from` the shadow runner honours, the first-buy
   check, the paper mirror, mirror_scale's engine list.
 - Executor (operator, in Render, one deploy outside 15:15-16:05 ET, only when the sleeve holds no
