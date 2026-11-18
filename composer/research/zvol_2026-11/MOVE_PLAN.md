@@ -9,6 +9,7 @@ CORRECTIONS on 2026-11-18 (mirror mechanics confirmed by running the real script
 core); rev 3 applies them: a 1.5% stub in place of $100, the 11-19 ZVOL payout, an earlier submit time,
 a recovery path the script will actually accept, the right completion signal.
 Every dollar amount is recomputed from live values at execution.
+Owner, 2026-11-18 evening, on rev 3.1 with the stub explained: "ok go ahead tomorrow, keep the stub".
 
 ## Outcome
 | | Before | After Day B | After the retirement change (separate, reviewed) |
