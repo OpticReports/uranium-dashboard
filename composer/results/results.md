@@ -4853,6 +4853,15 @@ thin back-month futures with approximated index days: direction only; with the 2
 zeroed, pre-ZVOL falls from +8.9% to +7.0%/yr. Not modelled: taxes (Act 60), fund closure or payout
 cut, size, intraday paths. Deviations: research/zvol_2026-11/DEVIATIONS.md.
 
+PRO-RATA CHECK (second review, same day; VERIFICATION.md): at ACTUAL weights (HARV 11.7%) pro rata is
++7.1%/yr [+2.0, +15.1] for +1.5 pts of maxDD (all into KMLM +11.0% [+1.7, +24.7] for +3.0); with all
+engines marked down alike, +5.1% [+0.8, +11.1] for +2.7 pts; in a harsh case not distinguishable from
+zero. It is the other three run ~13% larger: every loss measure scales 16-20%. Pro rata cannot be told
+from all-into-HG or half-into-KMLM; only all-into-KMLM is clearly riskier (and breaches the 40% cap on
+day one). PRECONDITIONS for any move: rewrite POLICY Op 5 (targets, cap; else a breach re-funds HARV,
+73% likely within 63 sessions), refresh Op 1's IBKR equities figure ($346k from 07-07), stage the
+mirror leg (mirror_transfer.py caps a leg at 50% of the giving sleeve).
+
 OWNER DECISIONS OPEN: keep with kill rules / move all or half into KMLM / pro rata / T-bills / SLEEVE;
 strip the duplicate sleeve; HYG guard (rename or add); sweep stranded payouts. Any change lands on both
 brokers in the same change set (ONE BRAIN, TWO BROKERS). No service to redeploy.

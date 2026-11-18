@@ -44,3 +44,47 @@ attribution, placebo, long path, books and bootstrap, predictors, refinements. A
 
 Every added analysis is in q8_robust.py, reproduced by the author from the reviewers' descriptions, and
 labelled as not pre-registered.
+
+# Second review (2026-11-18, commit 4d103d01): the "move it pro rata" recommendation
+
+Two reviewers, both PASS WITH CORRECTIONS. Nothing was moved.
+
+## Reviewer A - recomputation from the frozen backtests with its own code
+- Engines, the switcher shift and every point estimate match to five decimals; intervals (5,000 draws,
+  its own seed) within ~0.5 pt of the study's.
+- SERIOUS: the headline figures describe a 15-point move out of 29/29/27/15; HARV is 11.7% of the real
+  book. At actual weights, switcher at its live pace: pro rata +7.1%/yr [+2.0, +15.1], maxDD +1.5 pts
+  [+1.1, +3.6]; all into KMLM +11.0% [+1.7, +24.7], +3.0 pts [+2.1, +7.4].
+- Pro rata minus all-into-KMLM, paired: maxDD -2.6 pts [-5.8, -0.9] (P 0.99); return -4.8 pts
+  [-14.2, +2.3] (not distinguishable). Pro rata vs KEEP: P(more return) 0.99, P(lower Sharpe) 0.995.
+- The sample drawdown deltas sit low in their own bootstrap distributions (medians +2.7 and +5.5 pts on
+  the 15-point move). "Two-thirds of the return for under half the drawdown" holds only at the live-
+  pace lens on target weights; honest form: about half the extra drawdown, half to nine-tenths of the
+  extra return depending on the switcher's pace.
+- No bug in book_rets or the other-destinations block.
+
+## Reviewer B - assumptions and what the comparison leaves out
+- BLOCKING (execution): POLICY Operation 5 rebalances all four engines to 29/29/27/15 on a 40% breach
+  and its headroom codicil ties the cap to the largest target + 10 pts. After a pro-rata move HG sits
+  at 36.7% of the book: a breach is 27% likely within 21 sessions and 73% within 63, and it would
+  re-fund HARV. All-into-KMLM (41.8%) breaches on day one. Targets are also hard-coded in monitor.py
+  and mirror_dry.py. mirror_transfer.py refuses any leg above 50% of the giving sleeve, so the mirror
+  cannot empty HARV in one change set.
+- SERIOUS: with every engine marked down alike (40% of backtest excess, the switcher's own ratio), pro
+  rata is +6.6%/yr [+1.1, +14.1] for +3.4 pts on the 15-point move (48% of all-into-KMLM's return for
+  57% of its drawdown), and half-into-KMLM matches it. In a harsh case (HG and switcher +20%/yr, SLEEVE
+  +10%) it is +1.3% [-2.5, +6.7] for +5.1 pts. "Shallower than all-into-KMLM" holds in every case;
+  "better return per unit of drawdown" does not.
+- SERIOUS: pro rata is the other three engines run about 13% larger at actual weights (18% on targets):
+  volatility, CVaR and worst stretches all scale 16-20%, in the same episodes.
+- SERIOUS: Operation 1's sleeve band reads 12.3% now and 14.1% after the SLEEVE leg (15% auto-trim), on
+  an IBKR equities figure of $346k last reported 2026-07-07; Operations 2 and 3 reserve the SLEEVE and
+  KMLM increases for their own evidence gates.
+- Pro rata is not distinguishable from all-into-HG, half-into-KMLM or 65%-into-KMLM. Live window:
+  pro rata +31.6% vs KEEP +27.0% (1.1 standard errors) and A +32.1%.
+- Daily rebalancing is not manufacturing the result (+8.5 monthly, +8.2 quarterly, +5.7 buy-and-hold).
+- Suggested: stage it - half pro rata after the 11-19 ZVOL credit, inside the mirror's 50% limit, the
+  rest on a dated review; rewrite Operation 5 in the same change set; refresh the IBKR figure.
+
+Outcome: the recommendation is restated as "any spread across the other engines is similar; the choice
+is how much more engine risk to run", with the policy rewrite and staging as preconditions.
