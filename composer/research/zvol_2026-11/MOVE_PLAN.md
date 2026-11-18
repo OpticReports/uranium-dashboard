@@ -52,6 +52,8 @@ commission). A sleeve under about $10 holds no shares and sends no order (it can
    - Owner, in Render (read only): MIRROR_TRANSFER_MAX_FRAC on ibkr-executor is unset (default 0.25)
      or at least 0.13. The three legs need 12% of the mirror book in one cap period; the feed does not
      show the cap. Unconfirmed is not a stop: a lower cap refuses leg 3 at send (see recovery).
+     CONFIRMED by the owner 2026-11-18 evening: not listed in ibkr-executor's environment, so the
+     default 0.25 applies.
 2. Push the owner: "HARV exit: withdrawing $W now; reinvesting 29:29:27 tonight". Submit by 14:45 ET
    (the same-day cutoff is not verified live: RUNBOOK says "expected"; the one same-day partial
    withdraw on record was a morning request, and a 15:49 request went to the next open):
