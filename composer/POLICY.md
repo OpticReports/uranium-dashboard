@@ -54,7 +54,7 @@ the intended fraction of the giving sleeve's equity.
 
 - **HARV is closed as a separate engine** (owner, 2026-11-18: "close it out"). Its capital
   moves pro rata into the other three (29 : 29 : 27) in one owner-approved session on both brokers
-  (`research/zvol_2026-11/MOVE_PLAN.md`; logged in CHANGELOG.md). A $100 stub on Composer and
+  (`research/zvol_2026-11/MOVE_PLAN.md`; logged in CHANGELOG.md). A stub of about 1.5% (~$550) on Composer and
   about $6 of cash in the mirror's sleeve stay until the engine-retirement change is reviewed (the
   daily tooling still reads HARV; the plan says why), then go too. The copy of the same rule inside
   the KMLM symphony (its 25% VIX sleeve) is unchanged.
