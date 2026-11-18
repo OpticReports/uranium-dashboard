@@ -7,22 +7,19 @@ import common as C, arms as A, engine as E, run as RUN
 p = C.load_panel(); q = copy.copy(p); q["ret"] = p["ret"].copy()
 q["ret"]["DISVX"] = np.where(p["ret"]["SCZ"].notna(), p["ret"]["SCZ"], p["ret"]["EFA"])
 q["ret"]["DFEMX"] = p["ret"]["EEM"]
+KEYS = ("A1", "A2", "A6", "A7", "A8", "A10", "A15")
 out = {}
-for name, panel in (("mutual_fund_proxies", p), ("etf_proxies", q)):
-    tp = RUN.Tape(panel, "T1"); arms, _ = A.build(panel, tp.t, tp.nav)
-    res = {"live": {w: tp.met(tp.base, w) for w in ("EXT", "DISC")}}
-    for k in ("A1", "A2", "A6", "A7", "A8", "A10", "A15"):
-        e = RUN.eval_arm(tp, arms[k]["mult"], wins=("EXT", "DISC")); e0 = RUN.eval_arm(tp, arms[k]["mult"], lag=0, wins=("EXT", "DISC"))
-        a0, a1 = tp.win["EXT"]; offs = np.arange(63, (a1 - a0) - 63, dtype=np.int64)
-        pl = E.placebo_shift(tp.R, np.ascontiguousarray(e["W"][a0:a1]), C.BASE.copy(), tp.cost, tp.me, C.BAND, C.CAL_DAYS, 1e-9, True,
-                             RUN.NOMASK, 0.0, a0, a1, offs, tp.c)
-        res[k] = {w: dict(d=e["win"][w]["d"], arm=e["win"][w]["arm"], ctrl=e["win"][w]["ctrl"], d_lag0=e0["win"][w]["d"]) for w in ("EXT", "DISC")}
-        res[k]["placebo_pct_maxdd_EXT"] = float((pl[:, 1] < e["win"]["EXT"]["arm"]["maxdd"]).mean() * 100)
-        res[k]["placebo_pct_sharpe_EXT"] = float((pl[:, 0] < e["win"]["EXT"]["arm"]["sharpe"]).mean() * 100)
-    out[name] = res
-json.dump(out, open(os.path.join(C.STUDY, "d12_etf_proxy.json"), "w"), indent=1)
-for k in ("A1", "A2", "A6", "A7", "A8", "A10", "A15"):
-    for n in out:
-        x = out[n][k]
-        print(f"{k:4s} {n:20s} EXT dS {x['EXT']['d']['d_sharpe']:+.3f} dDD {x['EXT']['d']['d_maxdd']*100:+5.1f} dCAGR {x['EXT']['d']['d_cagr']*100:+5.2f} dUlc {x['EXT']['d']['d_ulcer']*100:+5.2f} | DISC dS {x['DISC']['d']['d_sharpe']:+.3f} dDD {x['DISC']['d']['d_maxdd']*100:+5.1f} dUlc {x['DISC']['d']['d_ulcer']*100:+5.2f} | lag0 EXT dS {x['EXT']['d_lag0']['d_sharpe']:+.3f} | plc DD {x['placebo_pct_maxdd_EXT']:.1f} Sh {x['placebo_pct_sharpe_EXT']:.1f} | arm DD {x['EXT']['arm']['maxdd']*100:.1f} CAGR {x['EXT']['arm']['cagr']*100:.2f}")
-print({n: {w: (round(out[n]['live'][w]['cagr']*100,2), round(out[n]['live'][w]['maxdd']*100,1), round(out[n]['live'][w]['sharpe'],2)) for w in ('EXT','DISC')} for n in out})
+for v in ("T1", "T2"):
+    res, _ = RUN.run_tape(q, v)
+    A_ = res["arms"]
+    out[v] = dict(live=res["live"], n_survive=sum(a["verdict"]["survives"]["pass"] for a in A_.values()),
+                  n_drawdown_tool=sum(a["verdict"]["drawdown_tool"]["pass"] for a in A_.values()),
+                  arms={k: dict(verdict=A_[k]["verdict"], d={w: A_[k]["win"][w]["d"] for w in ("EXT", "DISC", "CONF")},
+                                arm={w: A_[k]["win"][w]["arm"] for w in ("EXT", "DISC", "CONF")},
+                                lag0_conf=A_[k]["stress"]["lag0"]["CONF"],
+                                placebo={kk: vv for kk, vv in A_[k]["win"]["EXT"]["placebo"].items()}) for k in KEYS})
+    print(v, "passes: sharpe", out[v]["n_survive"], "drawdown tool", out[v]["n_drawdown_tool"])
+    for k in KEYS:
+        x = out[v]["arms"][k]; dt = x["verdict"]["drawdown_tool"]
+        print(f"  {k:4s} dDD EXT {x['d']['EXT']['d_maxdd']*100:+5.1f} DISC {x['d']['DISC']['d_maxdd']*100:+5.1f} CONF {x['d']['CONF']['d_maxdd']*100:+5.1f} | dUlc DISC {x['d']['DISC']['d_ulcer']*100:+5.2f} CONF {x['d']['CONF']['d_ulcer']*100:+5.2f} | dS EXT {x['d']['EXT']['d_sharpe']:+.3f} | p_fw {dt['p_fw']:.3f} pz53 {x['placebo']['pz_fw53_maxdd']:.3f} | fails: {[c for c in ('dd2_both','ulcer_both','cagr_within','p_fw_lt_10','lag2') if not dt[c]]}")
+json.dump(RUN._rnd(json.loads(json.dumps(out, default=float))), open(os.path.join(C.STUDY, "d12_etf_proxy.json"), "w"), separators=(",", ":"))

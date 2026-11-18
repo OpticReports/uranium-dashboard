@@ -181,9 +181,12 @@ def run_tape(p, variant, full=True):
             for stat, col, key in (("maxdd", 1, "maxdd"), ("sharpe", 0, "sharpe")):
                 imp = np.column_stack([store[k][:, col] - ev[k]["win"][w]["ctrl"][key] for k in fam])
                 mx = imp.max(1)
-                for k in fam:
+                mu = imp.mean(0); sd = imp.std(0, ddof=1); sd = np.where(sd > 1e-12, sd, np.nan)
+                mz = np.nanmax((imp - mu) / sd, axis=1)                    # studentised sensitivity (post-result note N3)
+                for j, k in enumerate(fam):
                     act = ev[k]["win"][w]["arm"][key] - ev[k]["win"][w]["ctrl"][key]
                     rows[k]["win"][w]["placebo"][f"p_{fam_name}_{stat}"] = float((mx >= act).mean())
+                    rows[k]["win"][w]["placebo"][f"pz_{fam_name}_{stat}"] = float((mz >= (act - mu[j]) / sd[j]).mean()) if sd[j] == sd[j] else 1.0
         plc[w] = store
         if w == "EXT":
             for k in ids:

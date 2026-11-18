@@ -44,3 +44,24 @@ D14 (clarifications). DISC/CONF is a sub-period consistency check, not a holdout
    configuration. Volume indicators use the volume-source ETF's own return for day direction and are computed
    per source then spliced 60 trading days after the leg's ETF goes live. LEG tier is measured from 1996-01-02
    (252d warm-up after the 1995 data start).
+
+## Post-result notes - 2026-11-18, AFTER results (none changes a verdict)
+N1 (engine conventions the PREREG did not spell out; surfaced by the independent recomputation). The initial
+   purchase is made before the first tape day's return (2005-01-03, outside every measured window). When a
+   signal re-entry cannot be funded from BIL the whole book rebalances to target and the 12-month clock resets
+   (19 of 97 A2 signal trades, 44 of 133 for M1, 72 of 145 for B3). Both slightly handicap the overlays
+   (at most 0.13 pt/yr CAGR, 0.01 Sharpe on the three rules recomputed).
+N2 (D12 run late). The ETF-proxy rerun for near-passers was owed under D12 and was run only after the first
+   results and the audit (code/d12_etf_proxy.py, d12_etf_proxy.json): 0 passes on either tape.
+N3 (family-wise placebo). Implemented on raw drawdown points (per-offset maximum across the family), with
+   exploratory rules judged against all 53 rather than the primary 8 (stricter than D5's wording). The audit
+   noted the maximum is unstudentised; a studentised version is now stored beside it (pz_* fields) and reported.
+   Under it only A6 (within the primary 8) is below 0.10.
+N4 (stress tests). +1 day of lag and 2x costs are tested separately, not jointly. DRAWDOWN TOOL "holds at +2
+   days lag" is implemented as a positive drawdown gain in both halves at that lag.
+N5 (data). CAPE is Shiller's series as republished by multpl.com. UNRATE has no October 2025 observation, so
+   the 12-month average spans 13 calendar months there. The day-12 rule is early for three delayed releases
+   (2013-09, 2025-09, 2025-11); the flag did not change in those windows.
+N6 (isolation). Conditional forward returns are compared in-state vs out-of-state days, not vs all days.
+N7 (verification). Counter-agent verdicts: design review PASS WITH CORRECTIONS (amendment 1); independent
+   recomputation PASS; code-and-claims audit PASS WITH CORRECTIONS (no code defect; README corrections applied).
