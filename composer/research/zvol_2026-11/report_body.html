@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZVOL Harvester Review</title>
+<style>
+:root{color-scheme:light;--bg:#f6f5f2;--surface:#fcfcfb;--line:#e4e2dc;--grid:#ebe9e3;--t1:#0b0b0b;--t2:#52514e;--t3:#7a7872;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--good:#0a7a3d;--warn:#9a5b00;--shade:rgba(42,120,214,.07)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#121211;--surface:#1a1a19;--line:#2e2d2a;--grid:#262523;--t1:#f0efec;--t2:#c3c2b7;--t3:#908e85;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--good:#4cc38a;--warn:#e0a84a;--shade:rgba(57,135,229,.10)}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#121211;--surface:#1a1a19;--line:#2e2d2a;--grid:#262523;--t1:#f0efec;--t2:#c3c2b7;--t3:#908e85;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--good:#4cc38a;--warn:#e0a84a;--shade:rgba(57,135,229,.10)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t1);font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:28px 16px 80px}
+h1{font-size:30px;line-height:1.15;margin:0 0 6px;letter-spacing:-.01em}
+h2{font-size:21px;margin:44px 0 10px;letter-spacing:-.005em}
+h3{font-size:16px;margin:22px 0 6px}
+p{margin:8px 0}.sub{color:var(--t2);margin:0 0 18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+.verdict{border-left:4px solid var(--s1)}
+.verdict li{margin:6px 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:14px 0}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpi b{display:block;font-size:24px;line-height:1.2;font-variant-numeric:tabular-nums}.kpi span{color:var(--t2);font-size:13px}
+.tw{overflow-x:auto;margin:10px 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 10px 6px 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--t2);font-weight:600;font-size:12.5px}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 14px 8px;margin:14px 0;position:relative}
+.chart h4{margin:0 0 2px;font-size:15px}.chart .cap{color:var(--t2);font-size:13px;margin:0 0 6px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--t2);margin:2px 0 4px}
+.legend i{display:inline-block;width:16px;height:0;border-top:2.5px solid;vertical-align:middle;margin-right:6px}
+svg{display:block;width:100%;height:auto}
+svg text{fill:var(--t2);font-size:11.5px;font-family:inherit}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.12);display:none;white-space:nowrap;z-index:5}
+.tip b{font-variant-numeric:tabular-nums}.tip .d{color:var(--t2);margin-bottom:2px}.tip i{display:inline-block;width:12px;border-top:2.5px solid;vertical-align:middle;margin-right:6px}
+.note{color:var(--t2);font-size:13.5px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+details{margin:8px 0}summary{cursor:pointer;color:var(--t2);font-size:14px}
+code{font-size:.92em}
+ol li,ul li{margin:4px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>Is the ZVOL harvester worth its capital?</h1>
+<p class="sub">Study run 2026-11-18 on data to the 11-17 close. Pre-registered, then checked by two independent reviewers. Report-only: nothing was traded or changed.</p>
+
+<div class="card verdict">
+<b>Short answer: it is not a cost centre, but it is a much more modest earner than its 2023–2025 backtest suggested, and moving its money into KMLM buys more return only by taking clearly more drawdown.</b>
+<ul>
+<li><b>Live, it has made money, not lost it.</b> Composer shows HARV at {{harv_disp}} since July. That leaves out {{harv_dist}} of fund distributions that were paid to account cash, outside the symphony. Counting them, HARV made about {{harv_true}}, against {{harv_bills}} for T-bills on the same dollars.</li>
+<li><b>Your "dog" read is right for 2026 and wrong for the rule.</b> Over the last 252 sessions the rule earned {{roll_last}} net, which sits at the {{roll_pct}}th percentile of its one-year results back to 2006. The 2023–2025 pace ({{real_cagr}} a year net) was the unusual stretch. Its long-run pace before ZVOL existed is about {{pre_cagr}} a year with a {{pre_dd}} worst drawdown.</li>
+<li><b>Its timing is real.</b> In every era back to 2006 the rule beat every placebo version of itself, and ZVOL earned 35–61 bps a day on the days the rule held it against 2–7 bps on all days. Holding the same funds without the timing earns about cash.</li>
+<li><b>Moving HARV's 15% into the KMLM symphony is a risk trade.</b> Live since July it would have made {{live_a}} against {{live_keep}}, with a {{live_a_dd}} drawdown against {{live_keep_dd}}. With the switcher held to its live pace, the extra return is {{a_dcagr}} a year (the range spans zero) while the worst drawdown deepens by {{a_ddd}}. By the rule fixed in advance the thesis is <b>inconclusive, leaning against</b>.</li>
+<li><b>No refinement earned a recommendation.</b> Term-structure, variance-premium, VVIX and credit variables did not predict the short-volatility return well enough to trade; only SPY's 2-day RSI, the rule's own trigger, did.</li>
+</ul>
+</div>
+
+<div class="card">
+<b>What the app shows today (11-18) is mostly a payout.</b> ZVOL went ex-distribution this morning: $0.485 a share, about 7.5% of its price, paid 11-19. HARV held 60% ZVOL into it, so Composer shows HARV down about {{ex_harv_drop}} for that reason alone (about {{ex_harv}}), and the KMLM symphony down about {{ex_kmlm_drop}} ({{ex_kmlm}}). The cash arrives in the account, outside both symphonies.
+</div>
+
+<div class="kpis">
+<div class="kpi"><b>{{harv_true}}</b><span>HARV live since 07-22, distributions counted (Composer shows {{harv_disp}})</span></div>
+<div class="kpi"><b>{{pre_cagr}} / yr</b><span>the rule's net pace 2006–2023, before ZVOL existed (Sharpe {{pre_sharpe}})</span></div>
+<div class="kpi"><b>{{e_dcagr}}</b><span>book return change if HARV were T-bills (2023–2026 backtest, 90% range)</span></div>
+<div class="kpi"><b>{{a_ddd}}</b><span>deeper worst drawdown if HARV's 15% goes into KMLM (switcher at live pace)</span></div>
+</div>
+
+<h2>1. The live record, in dollars</h2>
+<p>The same rule runs in two places: the HARV symphony and the 25% "VIX sleeve" inside the KMLM symphony. Together they are about 19% of the Composer book.</p>
+{{t_live}}
+<div class="chart"><h4>HARV's live profit and loss since 07-22</h4><p class="cap">Dollars. The gap between the top two lines is fund distributions paid to account cash.</p><div id="c_live"></div></div>
+<ul class="note">
+<li>The model itself was flat over these dates ({{harv_true}} live against roughly zero for the model), so the weak four months are the strategy's, not an execution failure.</li>
+<li>The same dollars in the switcher part of KMLM would have made {{harv_sw}}, through a {{sw_dd}} drawdown and a {{sw_worst}} worst day (11-05).</li>
+<li>Measurement basis: Composer's deposit-adjusted series; the sleeve/switcher split uses each day's snapshot holdings (model weights on 18 days with no snapshot). Distribution dollars are estimated from holdings and are within $1 of the 08-19 amount recorded in addendum 37.</li>
+</ul>
+
+<h2>2. Why it looks worse than it is</h2>
+<div class="chart"><h4>ZVOL since launch: price against total return</h4><p class="cap">Indexed to 100 on 2023-04-19. The fund has paid $0.485 a share every month since January 2024.</p><div id="c_zvol"></div></div>
+<ul>
+<li><b>A price chart of ZVOL is wrong by design.</b> Price is down 57% since launch; total return is up 56%. Any chart, moving average or app figure that uses price reads each monthly payout as a loss.</li>
+<li><b>Composer's symphony figures have the same hole.</b> The payout lands in account cash, so the symphony's own curve never gets it back. HARV's displayed return is understated by about 3 points so far and by about 4.5 more after today.</li>
+<li><b>ZVOL held every day has been poor since 2024:</b> +8.5%, −11.4% and +5.0% by year, after +52% in 2023. That is the fund, not the rule: the rule holds ZVOL on about one day in five.</li>
+</ul>
+<div class="chart"><h4>The rule's trailing one-year return, 2007–2026</h4><p class="cap">Net of 5 bps per trade. Shaded: the years real ZVOL has existed. A third of all one-year windows before 2023 were negative.</p><div id="c_roll"></div></div>
+
+<h2>3. Where the return comes from</h2>
+{{t_legs}}
+<ul>
+<li><b>Timing is the whole strategy.</b> The same three funds at their average weights, with no timing, earned {{static}} a year, below cash. The rule earned {{real_gross}} before costs. Run backwards (long volatility where it is short and the reverse) it loses {{mirror}} a year.</li>
+<li><b>It is a rebound trade, not a carry trade.</b> On ZVOL days, about 6 points of the 64-point total came from the futures curve rolling down; the rest came from volatility falling back after a sell-off.</li>
+<li><b>Trading costs are large and already counted:</b> about {{cost_drag}} a year at Composer's 5 bps, on roughly 137 times the capital traded per year. Recorded live ZVOL fills average +2.5 bps (22 fills), so the assumption is not flattering.</li>
+</ul>
+<div class="chart"><h4>The rule over twenty years, against holding the short position every day</h4><p class="cap">Growth of 1, log scale. Before 2023-04 ZVOL is a calibrated stand-in built from VIXM and VIX futures; shaded years use the real fund.</p><div id="c_long"></div></div>
+{{t_eras}}
+<p class="note">"Placebo p": the share of shifted copies of the rule's own position path (same holdings, same run lengths, moved in time) that did as well as the real one. "Same funds, no timing": each fund at the rule's average weight.</p>
+<div class="chart"><h4>The rule's net return by calendar year</h4><p class="cap">2006 from July, 2026 to 11-17. Losing years: 2010, 2012, 2013 and 2018.</p><div id="c_years"></div></div>
+
+<h2>4. "Not on when volatility is around"</h2>
+<div class="chart"><h4>Share of the harvester in ZVOL around a day when VIX jumps 15% or more</h4><p class="cap">Day 0 is the spike. Weights are those held into each day.</p><div id="c_event"></div></div>
+<ul>
+<li><b>That is the design, and it is the part that works.</b> On the spike day the rule holds about 13% ZVOL and loses {{ev_d0}} on average, where a permanent short loses {{ev_short_d0}}. It buys the day after (40–45% ZVOL) and earns {{ev_after}} over the next ten sessions in 2006–2023 and {{ev_after_real}} in 2023–2026.</li>
+<li><b>The losses come from sell-offs that keep going.</b> Worst holdings: May 2012 (−15%), late January 2018 (−15%), May 2010 (−14%), October 2018 (−10%). In those the rule re-enters into a market that has not finished falling; 2010 and 2018 were its two losing years of 23–26%.</li>
+<li><b>The recent streak:</b> six of the last seven ZVOL entries lost, ending with −4.7% on 11-16/17. The 2026 win rate is still 69% (29 entries) against 71% over twenty years.</li>
+</ul>
+{{t_ep}}
+
+<h2>5. The decision: where the 15% works hardest</h2>
+<p>Six books, rebalanced daily to fixed weights, 2023-04-20 to 2026-11-17, from Composer's own backtests. The switcher's backtest return (+295% a year here) is not credible as a forecast, so the main table holds it to its live pace since July (+64% a year), keeping its volatility.</p>
+{{t_books_a}}
+<div class="two">
+<div class="chart"><h4>Change in yearly return against KEEP</h4><p class="cap">Points with 90% ranges; switcher at its live pace.</p><div id="c_forest_cagr"></div></div>
+<div class="chart"><h4>Change in worst drawdown against KEEP</h4><p class="cap">Percentage points; right of zero is deeper.</p><div id="c_forest_dd"></div></div>
+</div>
+<ul>
+<li><b>Replacing HARV with T-bills (book E) costs return</b> in every lens: {{e_dcagr}} a year as measured. So it is doing better than cash.</li>
+<li><b>Moving it into KMLM (A) or the pure switcher (B) adds return only if the switcher keeps a pace near its backtest.</b> As measured: {{am_dcagr}} a year. At its live pace: {{a_dcagr}}, with Sharpe {{a_dsh}} and drawdown {{a_ddd}}. Drawdown gets worse in every lens, with ranges that exclude zero.</li>
+<li><b>At equal risk the harvester wins (exploratory, not pre-registered).</b> The book's volatility with HARV at 15% equals a book with {{rm_x}} more switcher and the rest in T-bills, and KEEP earns {{rm_keep}} against {{rm_alt}}. The harvester adds almost no book risk because it barely moves with the other engines (correlation 0.04 to 0.13).</li>
+</ul>
+<div class="chart"><h4>Live since July: the book as it is, and with HARV's 15% in the KMLM symphony</h4><p class="cap">Indexed to 100 on 07-22; live symphony returns, HARV with its distributions.</p><div id="c_livebook"></div></div>
+{{t_livebooks}}
+<details><summary>The same table with the switcher at its backtest pace, and at half its live pace</summary>
+<h3>As measured (switcher at +295% a year)</h3>{{t_books_m}}
+<h3>Switcher at half its live pace (+32% a year)</h3>{{t_books_b}}
+</details>
+
+<h2>6. Beyond price: what predicts the short-volatility return</h2>
+<p>Eight variables named in advance, each known at the close, tested against the next 1, 5 and 21 sessions of the short mid-term position, 2008–2026. A variable "works" (✔) only if it survives a correction for running 24 tests and also forecasts out of sample.</p>
+{{t_pred}}
+<ul>
+<li><b>Only the rule's own trigger passes.</b> The carry and risk-premium variables have the signs the literature predicts (steeper curve and a larger variance premium are better for the short), with t-statistics of 2 to 2.7 at one month, but none forecasts out of sample and none separates the rule's good entries from its bad ones.</li>
+<li><b>Reading:</b> these variables describe a slow, monthly premium. The harvester is a two-day rebound trade, so they have little to say about it. This agrees with the earlier no-builds (addenda 25, 31, 39).</li>
+</ul>
+<h3>Refinements named in advance</h3>
+{{t_ref}}
+<ul>
+<li><b>SVXY in place of ZVOL</b> wins in 2023–2026 and loses before; not robust.</li>
+<li><b>Dropping the long-volatility leg (VXZ)</b> trims drawdown by 4 to 8 points in all three windows for a little less return, but no range excludes zero. It is the one candidate worth keeping on the backlog.</li>
+<li>A carry gate was not run: no carry variable passed the bar that would have defined it.</li>
+</ul>
+
+<h2>7. Costs and risks the backtest does not carry</h2>
+<ul>
+<li><b>ZVOL itself.</b> A $20.6M fund paying out about 82% of its value a year, almost all return of capital. A payout cut, reverse split or closure within a year or two is likely. The fund also became "actively managed" in October 2025, though it still tracks −1× mid-term futures (beta 0.93–1.00 by half-year). Its prospectus warns of a total loss in a single day.</li>
+<li><b>Tail risk is larger than 2023–2026 shows.</b> The rule's worst day in the long path is −10.3% (February 2018) against −5.2% in the real era, and its worst drawdown 32% against 10%. The real ZVOL record has no crash deeper than −37% for the fund.</li>
+<li><b>Distributions leak.</b> About $1,675 (HARV) and $1,144 (KMLM) so far, plus about {{ex_harv}} and {{ex_kmlm}} today, sit in account cash unless they are swept back in.</li>
+<li><b>The same rule is held twice,</b> so the true harvester weight is about 19% of the book, not 15%.</li>
+<li><b>HARV has no HYG guard,</b> despite its name. Earlier "keep" studies (addenda 13, 16, 34) used a guarded history for it.</li>
+<li><b>The IBKR mirror cannot buy ZVOL yet</b> (orders held on 11-16 and 11-17), so the two brokers currently differ on exactly this fund.</li>
+<li><b>Size.</b> One entry is about $36k of ZVOL across both symphonies against roughly $0.7M traded a day: about 5% of volume.</li>
+</ul>
+
+<h2>8. Options, with what each costs</h2>
+<div class="tw"><table><thead><tr><th>Option</th><th>What you get</th><th>What you give up</th></tr></thead><tbody>
+<tr><td><b>Keep as is</b></td><td>Lowest book drawdown of the six; a sleeve that beats cash and barely moves with the engines</td><td>About 9% a year is the honest expectation for it, not 23%; ZVOL fund risk; mirror friction</td></tr>
+<tr><td><b>Keep, fix the plumbing</b></td><td>Sweep distributions back in; settle the missing HYG guard (rename or add); track HARV on total return</td><td>Small recurring effort</td></tr>
+<tr><td><b>Remove the duplicate</b> (strip the VIX sleeve from KMLM, keep HARV)</td><td>One copy of the rule; a cleaner KMLM</td><td>Book drawdown +4 pts [+2, +7] at the switcher's live pace; return change spans zero</td></tr>
+<tr><td><b>Move HARV into KMLM</b></td><td>More return if the switcher holds a pace near its backtest (+6 pts live since July)</td><td>Worst drawdown about 7 pts deeper, lower Sharpe in every lens; more of the book in one overfit-prone engine</td></tr>
+<tr><td><b>Replace with T-bills</b></td><td>No ZVOL fund risk, no mirror friction</td><td>About 4 to 5 pts of book return a year in the backtest</td></tr>
+</tbody></table></div>
+<p>My read: the data does not support moving it for "better returns" unless you are choosing to run a riskier book, and that choice is better made directly (how much switcher do you want?) than by retiring the one sleeve that is uncorrelated with it. The plumbing fixes are worth doing either way. Any change would go to both brokers in the same change set.</p>
+
+<h2>9. What this taught us about testing</h2>
+<ol>
+<li><b>Measure total return, in dollars, at the account.</b> Price charts and the symphony curve both misread a fund that pays out 7% a month. Every live scorecard now needs "distributions paid outside" as a line.</li>
+<li><b>Benchmark against the dumb version.</b> A strategy's return means little until it is set against the same funds without timing, against a permanent position, and against cash.</li>
+<li><b>Test timing with placebos and a mirror.</b> Shift the positions in time; run the rule backwards. Skill survives both; luck does not.</li>
+<li><b>Go outside the adoption window.</b> The rule was chosen on 2023+ results. Twenty years of futures data showed the same edge at a third of the pace. The earlier figure was never a forecast.</li>
+<li><b>Decompose the return.</b> Carry against price change told us this is a rebound trade, which is why carry variables do not help it.</li>
+<li><b>Name predictors in advance and correct for the count.</b> Eight variables at three horizons give 24 chances to be fooled; three looked good until corrected and tested out of sample.</li>
+<li><b>Judge a sleeve by what it does to the book.</b> Its own return is the wrong yardstick; change in book return and drawdown, with ranges, at equal risk, is the right one.</li>
+<li><b>Haircut any backtest that is too good.</b> Decisions that only work at the switcher's backtest pace are bets on that backtest.</li>
+<li><b>Write the decision rule first.</b> It kept this from becoming a search for the answer either of us expected.</li>
+<li><b>Count what the backtest leaves out:</b> fund structure, payouts, broker friction, duplication, size.</li>
+</ol>
+
+<h2>10. Edges and open questions</h2>
+<ul>
+<li><b>Candidate edge (the rule's own, now measured on 20 years):</b> after SPY's 2-day RSI closes in its lowest fifth, the short mid-term position earns +37 bps the next session against about −5 on other days (t −4.9, survives correction, positive out of sample; n 4,749). Using it elsewhere would need a cheaper or more liquid short-volatility vehicle than ZVOL.</li>
+<li><b>Candidate, not robust:</b> SVXY instead of ZVOL, +7.2 pts a year in 2023–2026 [+2.1, +12.4], negative before. Needs more live years.</li>
+<li><b>Candidate, not significant:</b> dropping the VXZ leg lowers drawdown in all windows. Revisit after another year.</li>
+<li><b>Open:</b> how much of the edge depends on trading at the close the signal is read from (the live record tracks the model so far; 83 sessions); what happens to the rule if ZVOL closes; whether IBKR will clear ZVOL for the mirror's orders.</li>
+</ul>
+
+<h2>Honesty box</h2>
+<ul class="note">
+<li>Every figure is in-sample; none is a forecast. Real ZVOL history is 3.6 years.</li>
+<li>Before 2023-04 the ZVOL leg is a stand-in (−1× VIXM plus collateral interest less fees, calibrated to the real fund; futures-built before 2011, with 281 approximated index days in 2006–2008). 2008's +58% rests on that and should be read as direction only.</li>
+<li>Backtests fill at the close the signal uses and charge 5 bps per trade. Live trades at about 15:50.</li>
+<li>Book comparisons rebalance daily to fixed weights, which the real book does not do. The pure switcher has no live account; its "live" figures are the model's on those dates.</li>
+<li>Not modelled: taxes (Act 60), a ZVOL closure or payout cut, liquidity at larger size, intraday paths.</li>
+<li>Deviations from the pre-registration are listed in <code>DEVIATIONS.md</code>; scripts and frozen inputs are in <code>composer/research/zvol_2026-11/</code>.</li>
+</ul>
+{{verification}}
+</main>
+<script>
+const CH={{charts}};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const NS="http://www.w3.org/2000/svg";
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e}
+function fmt(v,f){if(f==="usd")return (v<0?"-":"")+"$"+Math.abs(Math.round(v)).toLocaleString();if(f==="pct")return (v*100).toFixed(1)+"%";if(f==="pct0")return Math.round(v*100)+"%";if(f==="pp")return (v>0?"+":"")+(Math.abs(v*100)>=10||v===0?(v*100).toFixed(0):(v*100).toFixed(1));if(f==="mult")return (v>=10?v.toFixed(0):v.toFixed(2))+"×";return v.toFixed(v>=100?0:1)}
+function ticks(lo,hi,n){const s=(hi-lo)/n,p=Math.pow(10,Math.floor(Math.log10(s))),m=[1,2,2.5,5,10].find(x=>x*p>=s)*p,o=[];for(let v=Math.ceil(lo/m)*m;v<=hi+1e-9;v+=m)o.push(+v.toFixed(10));return o}
+function tipFor(box){let t=box.querySelector(".tip");if(!t){t=document.createElement("div");t.className="tip";box.appendChild(t)}return t}
+function legend(box,series){if(series.length<2)return;const l=document.createElement("div");l.className="legend";series.forEach(s=>{const sp=document.createElement("span"),i=document.createElement("i");i.style.borderColor=css("--s"+s.slot);sp.appendChild(i);sp.appendChild(document.createTextNode(s.name));l.appendChild(sp)});box.appendChild(l)}
+function line(id,c){const box=document.getElementById(id);box.textContent="";legend(box,c.series);const W=920,H=300,m={l:54,r:16,t:10,b:26};const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img"},box);
+ const X=c.xnum?(d=>d):(d=>Date.parse(d));let xs=[],ys=[];c.series.forEach(s=>s.pts.forEach(p=>{xs.push(X(p[0]));ys.push(p[1])}));
+ const x0=Math.min(...xs),x1=Math.max(...xs);let y0=Math.min(...ys),y1=Math.max(...ys);if(c.zero){y0=Math.min(y0,0);y1=Math.max(y1,0)}
+ const T=c.log?(v=>Math.log10(v)):(v=>v);const pad=(T(y1)-T(y0))*0.06;const ty0=T(y0)-pad,ty1=T(y1)+pad;
+ const px=v=>m.l+(v-x0)/(x1-x0)*(W-m.l-m.r),py=v=>H-m.b-(T(v)-ty0)/(ty1-ty0)*(H-m.t-m.b);
+ if(c.shade){el("rect",{x:px(X(c.shade[0])),y:m.t,width:px(X(c.shade[1]))-px(X(c.shade[0])),height:H-m.t-m.b,fill:css("--shade")},svg);const t=el("text",{x:px(X(c.shade[0]))+4,y:m.t+12},svg);t.textContent=c.shade[2]}
+ const yt=c.log?[.25,.5,1,2,4,8,16,32].filter(v=>T(v)>=ty0&&T(v)<=ty1):ticks(c.log?y0:ty0,c.log?y1:ty1,5);
+ yt.forEach(v=>{el("line",{x1:m.l,x2:W-m.r,y1:py(v),y2:py(v),stroke:css(v===0&&c.zero?"--t3":"--grid"),"stroke-width":1},svg);const t=el("text",{x:m.l-6,y:py(v)+4,"text-anchor":"end"},svg);t.textContent=fmt(v,c.yfmt)});
+ if(c.xnum){for(let v=x0;v<=x1;v++){const t=el("text",{x:px(v),y:H-8,"text-anchor":"middle"},svg);t.textContent=(v>0?"+":"")+v}}
+ else{const a=new Date(x0).getUTCFullYear(),b=new Date(x1).getUTCFullYear();const span=b-a;const step=span>12?4:span>6?2:1;if(span>=2){for(let y=a+1;y<=b;y+=step){const xx=px(Date.UTC(y,0,1));if(xx<m.l)continue;const t=el("text",{x:xx,y:H-8,"text-anchor":"middle"},svg);t.textContent=y}}else{const mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];let d=new Date(x0);d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1));while(+d<=x1){const t=el("text",{x:px(+d),y:H-8,"text-anchor":"middle"},svg);t.textContent=mo[d.getUTCMonth()];d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1))}}}
+ c.series.forEach(s=>{el("path",{d:s.pts.map((p,i)=>(i?"L":"M")+px(X(p[0])).toFixed(1)+" "+py(p[1]).toFixed(1)).join(""),fill:"none",stroke:css("--s"+s.slot),"stroke-width":2,"stroke-linejoin":"round","stroke-linecap":"round"},svg);const e=s.pts[s.pts.length-1];el("circle",{cx:px(X(e[0])),cy:py(e[1]),r:4,fill:css("--s"+s.slot),stroke:css("--surface"),"stroke-width":2},svg)});
+ const hair=el("line",{y1:m.t,y2:H-m.b,stroke:css("--t3"),"stroke-width":1,visibility:"hidden"},svg);const tip=tipFor(box.parentNode);const ov=el("rect",{x:m.l,y:m.t,width:W-m.l-m.r,height:H-m.t-m.b,fill:"transparent"},svg);
+ const base=c.series[0].pts;
+ ov.addEventListener("pointermove",ev=>{const r=svg.getBoundingClientRect();const vx=x0+((ev.clientX-r.left)/r.width*W-m.l)/(W-m.l-m.r)*(x1-x0);let bi=0,bd=1e99;base.forEach((p,i)=>{const d=Math.abs(X(p[0])-vx);if(d<bd){bd=d;bi=i}});const xv=X(base[bi][0]);hair.setAttribute("x1",px(xv));hair.setAttribute("x2",px(xv));hair.setAttribute("visibility","visible");
+  tip.textContent="";const d=document.createElement("div");d.className="d";d.textContent=c.xnum?("day "+(base[bi][0]>0?"+":"")+base[bi][0]):base[bi][0];tip.appendChild(d);
+  c.series.forEach(s=>{let p=s.pts[0],dd=1e99;s.pts.forEach(q=>{const k=Math.abs(X(q[0])-xv);if(k<dd){dd=k;p=q}});const row=document.createElement("div"),i=document.createElement("i"),b=document.createElement("b");i.style.borderColor=css("--s"+s.slot);b.textContent=fmt(p[1],c.yfmt);row.appendChild(i);row.appendChild(b);row.appendChild(document.createTextNode("  "+s.name));tip.appendChild(row)});
+  const pr=box.parentNode.getBoundingClientRect();tip.style.display="block";let lx=ev.clientX-pr.left+14;if(lx+tip.offsetWidth>pr.width-6)lx=ev.clientX-pr.left-tip.offsetWidth-14;tip.style.left=Math.max(4,lx)+"px";tip.style.top=(ev.clientY-pr.top-10)+"px"});
+ ov.addEventListener("pointerleave",()=>{hair.setAttribute("visibility","hidden");tip.style.display="none"})}
+function bars(id,c){const box=document.getElementById(id);box.textContent="";const W=920,H=280,m={l:54,r:10,t:10,b:26};const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img"},box);const y0=Math.min(0,...c.vals),y1=Math.max(0,...c.vals),pad=(y1-y0)*.08;const py=v=>H-m.b-(v-(y0-pad))/((y1+pad)-(y0-pad))*(H-m.t-m.b);const bw=(W-m.l-m.r)/c.cats.length,w=Math.min(24,bw-4);
+ ticks(y0,y1,5).forEach(v=>{el("line",{x1:m.l,x2:W-m.r,y1:py(v),y2:py(v),stroke:css(v===0?"--t3":"--grid"),"stroke-width":1},svg);const t=el("text",{x:m.l-6,y:py(v)+4,"text-anchor":"end"},svg);t.textContent=fmt(v,"pct0")});
+ const tip=tipFor(box.parentNode);c.cats.forEach((k,i)=>{const v=c.vals[i],x=m.l+i*bw+(bw-w)/2,yt=Math.min(py(v),py(0)),h=Math.max(1,Math.abs(py(v)-py(0)));const r=Math.min(4,h);const top=v>=0;const d=top?`M${x} ${py(0)}V${yt+r}q0 ${-r} ${r} ${-r}h${w-2*r}q${r} 0 ${r} ${r}V${py(0)}Z`:`M${x} ${py(0)}V${yt+h-r}q0 ${r} ${r} ${r}h${w-2*r}q${r} 0 ${r} ${-r}V${py(0)}Z`;
+  const b=el("path",{d,fill:css("--s1"),tabindex:0},svg);const hit=el("rect",{x:m.l+i*bw,y:m.t,width:bw,height:H-m.t-m.b,fill:"transparent"},svg);
+  const show=ev=>{tip.textContent="";const dd=document.createElement("div");dd.className="d";dd.textContent=k+(c.note&&c.note[k]?" ("+c.note[k]+")":"");const bb=document.createElement("b");bb.textContent=(v>0?"+":"")+fmt(v,"pct");tip.appendChild(dd);tip.appendChild(bb);const pr=box.parentNode.getBoundingClientRect();tip.style.display="block";tip.style.left=Math.min(pr.width-tip.offsetWidth-6,ev.clientX-pr.left+12)+"px";tip.style.top=(ev.clientY-pr.top-8)+"px";b.setAttribute("opacity",.75)};
+  hit.addEventListener("pointermove",show);hit.addEventListener("pointerleave",()=>{tip.style.display="none";b.setAttribute("opacity",1)});
+  if(i%2===0||c.cats.length<14){const t=el("text",{x:x+w/2,y:H-8,"text-anchor":"middle"},svg);t.textContent=k}})}
+function forest(id,c){const box=document.getElementById(id);box.textContent="";const W=460,rh=34,m={l:132,r:16,t:8,b:24},H=m.t+m.b+rh*c.rows.length;const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img"},box);let lo=0,hi=0;c.rows.forEach(r=>{lo=Math.min(lo,r.v[1]);hi=Math.max(hi,r.v[2])});const pad=(hi-lo)*.06;lo-=pad;hi+=pad;const px=v=>m.l+(v-lo)/(hi-lo)*(W-m.l-m.r);
+ ticks(lo,hi,4).forEach(v=>{el("line",{x1:px(v),x2:px(v),y1:m.t,y2:H-m.b,stroke:css(v===0?"--t3":"--grid"),"stroke-width":1},svg);const t=el("text",{x:px(v),y:H-8,"text-anchor":"middle"},svg);t.textContent=fmt(v,"pp")});
+ const tip=tipFor(box.parentNode);c.rows.forEach((r,i)=>{const y=m.t+rh*i+rh/2;const t=el("text",{x:4,y:y+4},svg);t.textContent=r.name.replace(/\s+/g," ");el("line",{x1:px(r.v[1]),x2:px(r.v[2]),y1:y,y2:y,stroke:css("--s1"),"stroke-width":2,"stroke-linecap":"round"},svg);el("circle",{cx:px(r.v[0]),cy:y,r:5,fill:css("--s1"),stroke:css("--surface"),"stroke-width":2},svg);
+  const hit=el("rect",{x:0,y:y-rh/2,width:W,height:rh,fill:"transparent"},svg);hit.addEventListener("pointermove",ev=>{tip.textContent="";const d=document.createElement("div");d.className="d";d.textContent=r.name.replace(/\s+/g," ");const b=document.createElement("b");b.textContent=fmt(r.v[0],"pp")+" pts  ["+fmt(r.v[1],"pp")+", "+fmt(r.v[2],"pp")+"]";tip.appendChild(d);tip.appendChild(b);const pr=box.parentNode.getBoundingClientRect();tip.style.display="block";tip.style.left=Math.min(pr.width-tip.offsetWidth-6,ev.clientX-pr.left+12)+"px";tip.style.top=(ev.clientY-pr.top-8)+"px"});hit.addEventListener("pointerleave",()=>tip.style.display="none")})}
+function draw(){for(const id in CH){const c=CH[id];(c.type==="line"?line:c.type==="bars"?bars:forest)(id,c)}}
+draw();matchMedia("(prefers-color-scheme: dark)").addEventListener("change",draw);
+</script>
+</body>
+</html>
