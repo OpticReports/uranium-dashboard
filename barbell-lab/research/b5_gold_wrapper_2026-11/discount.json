@@ -93,7 +93,8 @@
     "days": null
    }
   ],
-  "in_2026": 11
+  "in_2026_closed": 10,
+  "lasting_2_days_or_less": 8
  },
  "nav_level_lag": {
   "since GLDM launch": {
@@ -145,6 +146,16 @@
    "discount_end": -2.81
   }
  },
+ "discount_change_on_big_gold_days_3y": {
+  "falls_over_2pct": {
+   "n": 43,
+   "mean_change": -0.2123255813953489
+  },
+  "rises_over_2pct": {
+   "n": 39,
+   "mean_change": -0.001282051282051266
+  }
+ },
  "corr_daily_price_phys_gldm": {
   "since_2018": 0.9689937102615143,
   "last_year": 0.9962205837837699
@@ -158,7 +169,7 @@
   "trading_cost": 52.45344,
   "unrealised_pnl": -9913.737600000006,
   "ounces": 14.454199109719715,
-  "saving_fee_only": 158.02862399999998,
+  "saving_fee_only": 152.11497599999998,
   "hist_nav_gap": 0.005581388913410201,
   "saving_hist_gap": 292.7630484862272,
   "gldm_shares_at_asof": 712.1020552837957,
@@ -166,25 +177,25 @@
    "stays where it is": {
     "target": -2.81,
     "forgone_usd": 0.0,
-    "breakeven_years_fee_only": 0.3319236646647003,
+    "breakeven_years_fee_only": 0.3448275862068966,
     "breakeven_years_hist_gap": 0.17916687324858085
    },
    "returns to its 1-year median": {
     "target": -2.39,
     "forgone_usd": 226.6729919999999,
-    "breakeven_years_fee_only": 1.7663029958420693,
+    "breakeven_years_fee_only": 1.8349700952521595,
     "breakeven_years_hist_gap": 0.9534209779658418
    },
    "returns to its 3-year median": {
     "target": -1.84,
     "forgone_usd": 523.506672,
-    "breakeven_years_fee_only": 3.644656881907673,
+    "breakeven_years_fee_only": 3.786347190430481,
     "breakeven_years_hist_gap": 1.9673251627146366
    },
    "closes to zero": {
     "target": 0.0,
     "forgone_usd": 1516.5502559999998,
-    "breakeven_years_fee_only": 9.928604428018053,
+    "breakeven_years_fee_only": 10.31459056339068,
     "breakeven_years_hist_gap": 5.359295526237876
    }
   }

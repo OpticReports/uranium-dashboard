@@ -72,7 +72,8 @@ while i < len(v):
     i += 1
 done = [e["days"] for e in ep if e["days"] is not None]
 out["episodes_wider_than_2p7"] = dict(n=len(ep), closed=len(done), median_days=float(np.median(done)), max_days=int(max(done)), open_now=[e for e in ep if e["days"] is None],
-                                      in_2026=sum(e["start"].startswith("2026") for e in ep))
+                                      in_2026_closed=sum(e["start"].startswith("2026") for e in ep if e["days"] is not None),
+                                      lasting_2_days_or_less=sum(1 for x in done if x <= 2))
 # NAV-level lag: PHYS NAV vs GLDM (which trades within a few bps of its NAV) over the same dates
 g = yahoo("GLDM"); gl = yahoo("GLD"); lag = {}
 for k, a in (("since GLDM launch", "2018-06-26"), ("5y", str((asof - pd.DateOffset(years=5)).date())), ("3y", str((asof - pd.DateOffset(years=3)).date())), ("1y", str((asof - pd.DateOffset(years=1)).date()))):
@@ -81,10 +82,13 @@ for k, a in (("since GLDM launch", "2018-06-26"), ("5y", str((asof - pd.DateOffs
     lag[k] = dict(start=str(x.index[0].date()), years=n, **{c: float(ann[c]) for c in x}, nav_gap=float(ann["gldm"] - ann["phys_nav"]), price_gap=float(ann["gldm"] - ann["phys_price"]),
                   discount_start=float(d.reindex(x.index).iloc[0]), discount_end=now)
 out["nav_level_lag"] = lag
+gm = pd.concat([d.diff(), gl.pct_change()], axis=1, keys=["dd", "gold"], sort=True).dropna().loc[asof - pd.DateOffset(years=3):]
+out["discount_change_on_big_gold_days_3y"] = dict(falls_over_2pct=dict(n=int((gm.gold < -.02).sum()), mean_change=float(gm.dd[gm.gold < -.02].mean())),
+                                                 rises_over_2pct=dict(n=int((gm.gold > .02).sum()), mean_change=float(gm.dd[gm.gold > .02].mean())))
 y1 = pd.concat([S["price"].pct_change(), g.pct_change()], axis=1, sort=True).dropna(); out["corr_daily_price_phys_gldm"] = dict(since_2018=float(y1.corr().iloc[0, 1]), last_year=float(y1.loc[asof - pd.DateOffset(years=1):].corr().iloc[0, 1]))
 
 val = SHARES * price; navval = SHARES * nav; trade = val * (COST_BPS["PHYS"] + COST_BPS["GLDM"]) / 1e4
-save_fee = navval * FEES["PHYS"] - val * FEES["GLDM"]                      # fees accrue on NAV; after the swap the position is the sale proceeds
+save_fee = val * (FEES["PHYS"] - FEES["GLDM"])                              # one basis (market value), i.e. at a constant discount
 gap_hist = float(np.median([lag[k]["nav_gap"] for k in lag])); save_hist = val * gap_hist
 econ = dict(shares=SHARES, market_value=val, nav_value=navval, discount_usd=navval - val, usd_per_point_of_discount=navval / 100, trading_cost=trade,
             unrealised_pnl=SHARES * (price - AVG_COST), ounces=SHARES * 3804356 / 492711798,                    # trust ounces / units outstanding, Sprott page
