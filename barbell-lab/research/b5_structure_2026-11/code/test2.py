@@ -50,8 +50,17 @@ def test_p1_respects_cap_and_keeps_tail(tape):
 
 def test_erc_equalises_risk_and_caps():
     rng = np.random.default_rng(3); A = rng.normal(size=(400, 5)) * np.array([1, 2, .5, 1.5, 3]); cov = np.cov(A.T)
-    w = L.erc(cov); rc = w * (cov @ w); rc /= rc.sum(); assert np.abs(rc - .2).max() < 2e-3
-    w = L.erc(cov, cap=.30); assert w.max() <= .30 + 1e-9 and abs(w.sum() - 1) < 1e-9 and w.min() > 0
+    w = L.erc(cov); rc = w * (cov @ w); rc /= rc.sum(); assert np.abs(rc - .2).max() < 1e-5 and abs(w.sum() - 1) < 1e-9
+    w = L.erc(cov, cap=.30); rc = w * (cov @ w); free = w < .30 - 1e-9
+    assert w.max() <= .30 + 1e-9 and abs(w.sum() - 1) < 1e-9 and w.min() > 0 and np.ptp(rc[free]) < 1e-6 * rc.sum()
+
+
+def test_erc_handles_a_negatively_correlated_asset():
+    """The case that broke the first solver (2008: trend negatively correlated with equity): the hedge must get a
+    positive weight with an equal risk share, not be driven to zero."""
+    v = np.array([.25, .18, .12]); corr = np.array([[1, .8, -.5], [.8, 1, -.4], [-.5, -.4, 1.0]]); cov = corr * np.outer(v, v)
+    w = L.erc(cov); rc = w * (cov @ w); rc /= rc.sum()
+    assert w.min() > .05 and np.abs(rc - 1 / 3).max() < 1e-5 and w[2] == w.max()
 
 
 def test_gross_one_reproduces_the_unlevered_book(tape):

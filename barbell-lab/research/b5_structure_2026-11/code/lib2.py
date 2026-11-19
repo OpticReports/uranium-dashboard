@@ -78,27 +78,38 @@ def lever(r_unlev, c, g, spread, reset_cost=5e-4):
 
 
 # ---------- risk balance
+def _erc_block(S_uu, lin, budget):
+    """Unique equal-risk-contribution weights for the free assets (convex log-barrier form): w_i * (S_uu w + lin)_i equal
+    for all i, sum(w) = budget. `lin` is the covariance with assets already fixed at the cap."""
+    n = len(S_uu)
+    def solve(lam):
+        f = lambda w: 0.5 * w @ S_uu @ w + lin @ w - lam * np.log(w).sum()
+        g = lambda w: S_uu @ w + lin - lam / w
+        return minimize(f, np.full(n, budget / n), jac=g, bounds=[(1e-10, None)] * n, method="L-BFGS-B", options={"ftol": 1e-16, "gtol": 1e-12, "maxiter": 5000}).x
+    lo, hi = 1e-12, 1.0
+    while solve(hi).sum() < budget:
+        hi *= 10
+    for _ in range(80):
+        mid = np.sqrt(lo * hi); (lo, hi) = (mid, hi) if solve(mid).sum() < budget else (lo, mid)
+    w = solve(np.sqrt(lo * hi)); return w * budget / w.sum()
+
+
 def erc(cov, cap=1.0):
-    """Equal risk contribution; a per-asset cap is enforced inside the solver (D3). With a binding cap the
-    contributions cannot all be equal: the solver then minimises their squared spread."""
-    n = len(cov); b = np.full(n, 1.0 / n)
-    def f(w):
-        rc = w * (cov @ w); rc = rc / rc.sum(); return ((rc - b) ** 2).sum() * 1e4
-    best = None
-    for x0 in (np.full(n, 1.0 / n), np.minimum(1 / np.sqrt(np.diag(cov)) / (1 / np.sqrt(np.diag(cov))).sum(), cap)):
-        res = minimize(f, x0 / x0.sum(), bounds=[(1e-6, cap)] * n, constraints=[{"type": "eq", "fun": lambda w: w.sum() - 1}], method="SLSQP",
-                       options={"ftol": 1e-15, "maxiter": 1000})
-        if best is None or res.fun < best.fun:
-            best = res
-    w = np.clip(best.x, 0, cap)
-    for _ in range(50):                                            # exact sum-to-one without breaching the cap
-        gap = 1.0 - w.sum(); free = w < cap - 1e-12
-        if abs(gap) < 1e-14 or not free.any():
+    """Equal risk contribution with the per-asset cap inside the solver (D3): solve the unique ERC; if a weight exceeds
+    the cap, fix it at the cap and re-solve equal risk contribution among the rest for the remaining budget."""
+    cov = np.asarray(cov, float); n = len(cov); fixed = []; w = np.zeros(n)
+    while True:
+        free = [i for i in range(n) if i not in fixed]; wf = np.full(len(fixed), cap)
+        lin = cov[np.ix_(free, fixed)] @ wf if fixed else np.zeros(len(free))
+        wu = _erc_block(cov[np.ix_(free, free)], lin, 1.0 - cap * len(fixed))
+        w[:] = 0.0; w[fixed] = cap; w[free] = wu
+        over = [i for i in free if w[i] > cap + 1e-9]
+        if not over:
             break
-        w[free] += gap * w[free] / w[free].sum(); w = np.clip(w, 0, cap)
-    rc = w * (cov @ w); rc /= rc.sum()
-    if w.max() < cap - 1e-6 and np.abs(rc - b).max() > 2e-3:
-        raise RuntimeError(f"ERC did not converge: {rc}")
+        fixed.append(max(over, key=lambda i: w[i]))
+    rc = w * (cov @ w); rc_free = rc[[i for i in range(n) if i not in fixed]]
+    if rc_free.max() - rc_free.min() > 1e-6 * abs(rc.sum()) + 1e-12:
+        raise RuntimeError(f"ERC did not converge: {rc / rc.sum()}")
     return w
 
 

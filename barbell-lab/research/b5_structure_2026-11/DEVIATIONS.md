@@ -66,3 +66,13 @@ Stated before results (reviewer notes)
   performance-chasing unless the long history agrees.
 - The bootstrap cannot see stand-in bias. Costs x2 is a near-empty test for static arms.
 - P2's realized volatility will not equal L's in any given year.
+
+## Post-result notes - 2026-11-19, AFTER the first results
+N1 (solver defect, found by the author on first reading the results). The first risk-balance solver minimised the
+   squared spread of risk contributions with the cap as a bound. With a negatively correlated leg (2008: the
+   trend stand-in vs equity) that problem has more than one local answer and the solver returned a degenerate one
+   for the 2009 targets (KMLM driven to about 0 before the halfway shrink). It was replaced by the unique convex
+   form (log barrier; a leg above the cap is fixed at the cap and the rest re-solved) with a test for exactly that
+   case. Effect on P1: Sharpe difference +0.005 -> -0.013, Sortino +0.010 -> -0.028; S1b -0.004 -> -0.023; P2
+   +0.008 -> -0.008. The defect had FLATTERED P1 (less trend, more equity in the 2009 rebound). No verdict
+   changed (P1 was NO before and after). First results kept in _cache/results2_prefix.json (not committed).
