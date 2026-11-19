@@ -176,3 +176,26 @@ on Day A's evening and 36.9 / 33.7 / 29.4% after Day B, against 44%.
   with the transfer key. The research-side and executor paper books are not moved.
 - No automatic sleeve trim below 44% of the book, and no automatic top-up (the band is retired).
 - First live use of the mirror's transfer key.
+
+## Rev 3.2 (2026-11-19 evening): mirror legs move one session, behind a scale-up of the mirror
+Owner, 11-19: "lets allocate all of the remaining cash in account 7910 ... I want this money allocated
+ASAP", then, with the trade-off stated (new money into the HARV sleeve for one session; legs Monday):
+"yes, do the friday scale up". Independent check of this order: PASS WITH CORRECTIONS, no blocking
+finding (planner numbers reproduced; the credit/transfer exclusion is in the scripts on both sides;
+IBKR_MIRROR.md "scale on another day").
+- Composer side unchanged and done: withdrawal filled 11-19, three invests execute 11-20.
+- Fri 11-20 session: the mirror is scaled $51,707 -> $117,000 at Composer's split of 11-18 (the last
+  snapshot before the withdrawal; on a later one the HARV credit would be negative and the planner
+  refuses): credits HG 21,831.82 / KMLM 19,224.72 / SLEEVE 17,029.90 / HARV 7,206.31. Cap 121,500;
+  account cash needed at the decision >= $74,480.05. Owner sets the cap and pastes the line.
+  This credits $7,206 into the sleeve being closed, against POLICY "Allocation" (HARV has no target):
+  a one-session deviation the owner approved in those words.
+- Fri evening, after that session applied the credits and its check is clean: steps 4 and 6 as written,
+  with E' = the HARV sleeve's equity then (about $13.3k), "last session" = 2026-11-20, the real date in
+  the note, and the legs queued before Mon 11-23 15:30 ET. Headroom: $2 + 3 cents per PULS share held
+  (the $6 was sized for 49 PULS); if the sleeve holds ZVOL, leave 5% of the ZVOL's value instead.
+- Until Monday's close the mirror's three engines sit about 3.5-3.9 points under Composer's weights.
+- If the paste is missed or refused, or Friday's session is skipped: nothing is lost; the legs go as
+  soon as nothing is queued and the scale-up is re-planned (`--snapshot` must be passed on any re-run).
+- Do not clear IBKR's ZVOL verification before Mon 16:00 ET (the HARV sleeve would buy ZVOL).
+

@@ -38,6 +38,12 @@ Format per entry:
   share the queue with transfers (IBKR_MIRROR.md "scale on another day"). Awaiting his yes/no on
   the order: scale-up Fri then legs Fri evening (apply Mon), or legs now and the scale-up later.
   Deadline for the legs under rev 3.1: queued before Fri 11-20 15:30 ET.
+- Owner, 11-19 evening: "yes, do the friday scale up" (MOVE_PLAN rev 3.2). Mirror scale-up planned for
+  the 11-20 session: $51,707.26 -> $117,000 at Composer's split of 11-18; credits HG $21,831.82, KMLM
+  $19,224.72, SLEEVE $17,029.90, HARV $7,206.31 (= $65,292.75); MIRROR_MAX_BOOK_USD 121500; account
+  cash needed >= $74,480.05. Owner's steps: cap in Render tonight, paste the planner's line Fri
+  00:00-15:00 ET. HARV legs follow Fri evening for Monday's session. Independently checked (PASS
+  WITH CORRECTIONS); about $18.5k will still be idle Friday night because IBKR discards ZVOL.
 - Mirror session 11-19: first SPXL buy filled (51 sh); ZVOL discarded again (0/1,464).
 
 ## 2026-11-18 — Owner decision: retire HARV pro rata; sleeve is one engine; cap 44% (policy change set; NO money moved yet)
