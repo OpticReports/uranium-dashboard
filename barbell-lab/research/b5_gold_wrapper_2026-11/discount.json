@@ -1,129 +1,192 @@
 {
- "anchor": {
-  "date": "2026-11-18",
-  "nav": 28.83,
-  "close": 28.02,
-  "discount": -0.0281,
-  "mer_phys": 0.0039,
-  "source": "sprott.com PHYS page, 'As of November 18, 2026'"
- },
+ "as_of": "2026-11-18",
+ "price": 28.02,
+ "nav": 28.83,
+ "discount": -2.81,
  "fees": {
   "PHYS": 0.0039,
-  "GLD": 0.004,
   "GLDM": 0.001,
-  "IAUM": 0.0009
+  "IAUM": 0.0009,
+  "GLD": 0.004
  },
- "now": -0.028095717732789516,
+ "sources": {
+  "PHYS_fee_nav_discount": "https://sprott.com/investment-strategies/physical-bullion-trusts/gold/net-asset-value-premium-discount/",
+  "GLDM": "https://www.ssga.com/us/en/intermediary/etfs/spdr-gold-minishares-trust-gldm (expense ratio 0.10%, net assets $28.8B, 30-day median bid/ask spread 0.01%, custodian JPMorgan; read 2026-11-19)",
+  "IAUM": "https://stockanalysis.com/etf/iaum/ (0.09%, $7.8B)"
+ },
+ "n_days": 4254,
+ "first": "2010-02-25",
  "windows": {
   "1y": {
-   "median": -0.024132845417079496,
-   "mean": -0.023300524510887533,
-   "p10": -0.028095717732789516,
-   "p90": -0.016430701616534038,
-   "min": -0.03388806012670331,
-   "max": -0.013652072566375684,
-   "share_wider_than_now": 0.099601593625498,
+   "median": -2.39,
+   "min": -4.36,
+   "max": -1.15,
+   "share_wider_than_now": 0.16334661354581673,
+   "days_wider": 41,
    "n": 251
   },
   "3y": {
-   "median": -0.014604886949110552,
-   "mean": -0.01512416137639857,
-   "p10": -0.02570845517958239,
-   "p90": -0.004989670012409253,
-   "min": -0.037882574613984143,
-   "max": 0.0011174036732164438,
-   "share_wider_than_now": 0.03856382978723404,
+   "median": -1.84,
+   "min": -4.36,
+   "max": -0.42,
+   "share_wider_than_now": 0.0678191489361702,
+   "days_wider": 51,
    "n": 752
   },
   "5y": {
-   "median": -0.01107032171820932,
-   "mean": -0.012025799326036864,
-   "p10": -0.024599229078153394,
-   "p90": -0.002453644420288146,
-   "min": -0.037882574613984143,
-   "max": 0.011844441058292299,
-   "share_wider_than_now": 0.023125996810207338,
+   "median": -1.72,
+   "min": -4.36,
+   "max": 0.15,
+   "share_wider_than_now": 0.06379585326953748,
+   "days_wider": 80,
    "n": 1254
-  },
-  "10y": {
-   "median": -0.002265701776501372,
-   "mean": -0.0013597992559688295,
-   "p10": -0.019951891513387787,
-   "p90": 0.01600691559488057,
-   "min": -0.037882574613984143,
-   "max": 0.0494582548368252,
-   "share_wider_than_now": 0.011544585987261146,
-   "n": 2512
-  },
-  "since_2012": {
-   "median": 0.010085367965818604,
-   "mean": 0.008712215224090252,
-   "p10": -0.01645880428083927,
-   "p90": 0.030842982117445232,
-   "min": -0.037882574613984143,
-   "max": 0.09247911959049415,
-   "share_wider_than_now": 0.00774986638161411,
-   "n": 3742
   }
  },
  "by_year": {
-  "2010": 0.10543916984682045,
-  "2011": 0.0616709823406042,
-  "2012": 0.05198910909740706,
-  "2013": 0.021081282927278733,
-  "2014": 0.020199178349903146,
-  "2015": 0.018918884297595473,
-  "2016": 0.02591136261247995,
-  "2017": 0.016401518513643243,
-  "2018": 0.013690498231361703,
-  "2019": 0.008853809570091076,
-  "2020": 0.00854310392040114,
-  "2021": -0.0007080923516044058,
-  "2022": -0.00607996293898716,
-  "2023": -0.00654984843453138,
-  "2024": -0.007681192401647496,
-  "2025": -0.014780837503588773,
-  "2026": -0.024596466345054302
+  "2019": -1.07,
+  "2020": -0.59,
+  "2021": -1.19,
+  "2022": -1.56,
+  "2023": -1.49,
+  "2024": -1.49,
+  "2025": -1.72,
+  "2026": -2.435
  },
- "monthly_ar1": 0.919687563707025,
- "half_life_months": 8.279224263188928,
- "economics": {
-  "position_usd": 52453.44,
-  "shares": 1872,
-  "fee_gap": 0.0029,
-  "saving_per_year": 152.11497599999998,
-  "discount_cost_now_vs_nav": 1473.9416640000002,
-  "trading_cost_est": 31.472064,
-  "breakeven_years": {
-   "stays where it is": {
-    "target_discount": -0.0281,
-    "forgone_usd": 0.0,
-    "years": 0.20689655172413796
-   },
-   "returns to its 1-year median": {
-    "target_discount": -0.024132845417079496,
-    "forgone_usd": 208.0909048859457,
-    "years": 1.574880890662243
-   },
-   "returns to its 3-year median": {
-    "target_discount": -0.014604886949110552,
-    "forgone_usd": 707.8651027080466,
-    "years": 4.860383810651535
-   },
-   "closes to zero": {
-    "target_discount": 0.0,
-    "forgone_usd": 1473.9416640000002,
-    "years": 9.896551724137934
-   }
+ "daily_change_sd": 0.3846815664542832,
+ "sprott_annualised_returns": {
+  "PHYS (NAV)": {
+   "1 MO*": -6.82,
+   "YTD": -10.72,
+   "1 YR": -3.74,
+   "3 YR": 24.18,
+   "5 YR": 16.08,
+   "10 YR": 11.06,
+   "15 YR": 4.99
+  },
+  "PHYS (Market Price)": {
+   "1 MO*": -6.14,
+   "YTD": -11.11,
+   "1 YR": -3.29,
+   "3 YR": 23.72,
+   "5 YR": 15.79,
+   "10 YR": 10.69,
+   "15 YR": 4.67
+  },
+  "Benchmark: Spot Gold Price": {
+   "1 MO*": -6.8,
+   "YTD": -10.3,
+   "1 YR": -3.21,
+   "3 YR": 25.0,
+   "5 YR": 16.79,
+   "10 YR": 11.74,
+   "15 YR": 5.58
   }
  },
- "realized_since_gldm": {
-  "start": "2018-06-26",
-  "years": 8.396988364134154,
-  "PHYS": 0.12762218215463328,
-  "GLD": 0.13335223690299425,
-  "GLDM": 0.13638440214470493,
-  "phys_discount_at_start": 0.015014918588424964,
-  "gap_from_discount_change": -0.0051558577863553
+ "episodes_wider_than_2p7": {
+  "n": 22,
+  "closed": 21,
+  "median_days": 4.0,
+  "max_days": 44,
+  "open_now": [
+   {
+    "start": "2026-11-18",
+    "days": null
+   }
+  ],
+  "in_2026": 11
+ },
+ "nav_level_lag": {
+  "since GLDM launch": {
+   "start": "2018-06-26",
+   "years": 8.396988364134154,
+   "phys_nav": 0.13066716448461602,
+   "phys_price": 0.12762218346945975,
+   "gldm": 0.13638440214470493,
+   "gld": 0.13335223690299425,
+   "nav_gap": 0.005717237660088914,
+   "price_gap": 0.008762218675245181,
+   "discount_start": -0.63,
+   "discount_end": -2.81
+  },
+  "5y": {
+   "start": "2021-11-18",
+   "years": 4.999315537303217,
+   "phys_nav": 0.1422169579117507,
+   "phys_price": 0.1383466549247565,
+   "gldm": 0.1476624980784822,
+   "gld": 0.1442670096720815,
+   "nav_gap": 0.0054455401667314884,
+   "price_gap": 0.00931584315372569,
+   "discount_start": -1.15,
+   "discount_end": -2.81
+  },
+  "3y": {
+   "start": "2023-11-20",
+   "years": 2.9952087611225187,
+   "phys_nav": 0.22705244676467728,
+   "phys_price": 0.21935499727230212,
+   "gldm": 0.23420508271473217,
+   "gld": 0.23036262858693957,
+   "nav_gap": 0.007152635950054886,
+   "price_gap": 0.01485008544243005,
+   "discount_start": -0.93,
+   "discount_end": -2.81
+  },
+  "1y": {
+   "start": "2025-11-18",
+   "years": 0.999315537303217,
+   "phys_nav": -0.08944563997161559,
+   "phys_price": -0.09619160066139754,
+   "gldm": -0.08582002947385448,
+   "gld": -0.08863811337146876,
+   "nav_gap": 0.0036256104977611114,
+   "price_gap": 0.01037157118754306,
+   "discount_start": -2.08,
+   "discount_end": -2.81
+  }
+ },
+ "corr_daily_price_phys_gldm": {
+  "since_2018": 0.9689937102615143,
+  "last_year": 0.9962205837837699
+ },
+ "economics": {
+  "shares": 1872,
+  "market_value": 52453.44,
+  "nav_value": 53969.759999999995,
+  "discount_usd": 1516.3199999999924,
+  "usd_per_point_of_discount": 539.6976,
+  "trading_cost": 52.45344,
+  "unrealised_pnl": -9913.737600000006,
+  "ounces": 14.454199109719715,
+  "saving_fee_only": 158.02862399999998,
+  "hist_nav_gap": 0.005581388913410201,
+  "saving_hist_gap": 292.7630484862272,
+  "gldm_shares_at_asof": 712.1020552837957,
+  "scenarios": {
+   "stays where it is": {
+    "target": -2.81,
+    "forgone_usd": 0.0,
+    "breakeven_years_fee_only": 0.3319236646647003,
+    "breakeven_years_hist_gap": 0.17916687324858085
+   },
+   "returns to its 1-year median": {
+    "target": -2.39,
+    "forgone_usd": 226.6729919999999,
+    "breakeven_years_fee_only": 1.7663029958420693,
+    "breakeven_years_hist_gap": 0.9534209779658418
+   },
+   "returns to its 3-year median": {
+    "target": -1.84,
+    "forgone_usd": 523.506672,
+    "breakeven_years_fee_only": 3.644656881907673,
+    "breakeven_years_hist_gap": 1.9673251627146366
+   },
+   "closes to zero": {
+    "target": 0.0,
+    "forgone_usd": 1516.5502559999998,
+    "breakeven_years_fee_only": 9.928604428018053,
+    "breakeven_years_hist_gap": 5.359295526237876
+   }
+  }
  }
 }
