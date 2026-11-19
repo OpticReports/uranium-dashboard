@@ -124,6 +124,10 @@ Sortino point estimates are grid-averaged; their intervals are from the register
    Its five serious reporting findings (Sortino grid, timing noise, TAIL-removal share, power, warm-up) and the
    minor ones are applied here and logged as N1-N7.
 
+## Decisions (Casey, 2026-11-19)
+- No shadow track for the BTAL swap. Leverage dropped. Nothing changes on the live book from this study.
+- Gold wrapper: proposal requested -> ../b5_gold_wrapper_2026-11/PROPOSAL.md (pending go-ahead).
+
 ## Files
 PREREG.md, DEVIATIONS.md, HYPOTHESES.md, gates.json, results2.json, phase_check.json, risk_shares.json, charts/,
 code/ (prep2, lib2, run2, phase_check, charts2, test2 - 11 gate tests). Raw caches not committed.
