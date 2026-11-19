@@ -22,7 +22,23 @@ Format per entry:
   preview: sell PULS 289.2 of 292.2 and ZVOL 3,501.4 of 3,580.7, symphony left at ~$591 (a partial,
   not a liquidation).
 - Planned reinvestment if it fills as requested: HG $12,468.63, KMLM $12,468.63, SLEEVE $11,608.74.
-- Mirror: nothing sent yet (legs go tonight after the fill is confirmed).
+- **FILLED at the 11-19 window**: account cash $102.27 -> $36,648.28 (C = $36,546.01, W = $36,546);
+  HARV left at $316.03 (PULS 16% / ZVOL 86%; it fell 0.65% between the reading and the window, inside
+  the 1.5% stub). `pending_deploys_cash` 0, nothing queued.
+- The 16:35 monitor's BOOK DRAWDOWN 62.6%, HARV DRAWDOWN ANOMALY 180% and MOVE -185% are artifacts
+  of the withdrawal, not losses: Composer's deposit-adjusted value for HARV went from +$33,320 to
+  -$28,405 while the real book (symphonies + cash) rose from $317,938 to $322,165 on the day. The
+  plan lists the drawdown alarm as a stop; it was checked against the real book and overridden.
+- **Invests submitted 16:4x ET** (execute at the 11-20 window): HG $12,468.63 [4130f3c6-5ae4-40c8-
+  902e-e516cadb0fb6], KMLM $12,468.63 [f56831c1-d74f-4f82-8c1b-6734afb7fc6a], SLEEVE $11,608.75
+  [962eeb2f-bca8-4704-9c72-04f22fb7a7cf]; `pending_deploys_cash` +36,546.01.
+- Mirror: the three legs were DRY-RUN only (HARV sleeve $6,144.17 = 19 PULS + $5,202.53 cash;
+  $2,094.19 / $2,094.19 / $1,949.79 = $6,138.17, leaving $6.00). NOT SENT: the owner asked on
+  11-19 to allocate the rest of account ...7910 ASAP, and a scale-up at Friday's session cannot
+  share the queue with transfers (IBKR_MIRROR.md "scale on another day"). Awaiting his yes/no on
+  the order: scale-up Fri then legs Fri evening (apply Mon), or legs now and the scale-up later.
+  Deadline for the legs under rev 3.1: queued before Fri 11-20 15:30 ET.
+- Mirror session 11-19: first SPXL buy filled (51 sh); ZVOL discarded again (0/1,464).
 
 ## 2026-11-18 — Owner decision: retire HARV pro rata; sleeve is one engine; cap 44% (policy change set; NO money moved yet)
 
