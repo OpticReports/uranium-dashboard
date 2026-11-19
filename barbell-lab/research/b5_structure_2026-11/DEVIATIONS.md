@@ -68,11 +68,33 @@ Stated before results (reviewer notes)
 - P2's realized volatility will not equal L's in any given year.
 
 ## Post-result notes - 2026-11-19, AFTER the first results
-N1 (solver defect, found by the author on first reading the results). The first risk-balance solver minimised the
-   squared spread of risk contributions with the cap as a bound. With a negatively correlated leg (2008: the
-   trend stand-in vs equity) that problem has more than one local answer and the solver returned a degenerate one
-   for the 2009 targets (KMLM driven to about 0 before the halfway shrink). It was replaced by the unique convex
-   form (log barrier; a leg above the cap is fixed at the cap and the rest re-solved) with a test for exactly that
-   case. Effect on P1: Sharpe difference +0.005 -> -0.013, Sortino +0.010 -> -0.028; S1b -0.004 -> -0.023; P2
-   +0.008 -> -0.008. The defect had FLATTERED P1 (less trend, more equity in the 2009 rebound). No verdict
-   changed (P1 was NO before and after). First results kept in _cache/results2_prefix.json (not committed).
+N1 (capped risk-balance objective changed after the first results; found by the author on first reading them).
+   D3 said "25% cap applied inside the solver" without fixing the objective. The first implementation minimised
+   the squared spread of risk contributions with the cap as a bound; its answer for the 2009 targets drove KMLM
+   to about 0 (the audit confirmed that was the true optimum of THAT objective when a leg is negatively
+   correlated, as the 2008 trend stand-in was). That contradicts the purpose of risk balancing, so it was
+   replaced by: solve the unique equal-risk weights; fix any leg above the cap at the cap; re-solve equal risk
+   among the rest. Effect on P1: Sharpe change +0.005 -> -0.013, Sortino +0.010 -> -0.028; S1b -0.004 -> -0.023;
+   P2 +0.008 -> -0.008. Only the 2009 targets moved. The first version had FLATTERED P1 (less trend, more equity
+   in the 2009 rebound). No verdict changed (P1 NO both ways). First results: _cache/results2_prefix.json.
+N2 (rebalance-timing noise; raised by the independent recompute). Under the band rule an arm and the live book
+   rebalance on different days, so their difference carries timing luck of roughly +/-0.02 Sharpe. phase_check.json
+   restates every static arm with (a) daily constant weights and (b) both books rebalanced every month-end.
+   P3: Sharpe +0.030 -> +0.028 / +0.026; halves +0.041 / +0.018 -> +0.007 / +0.045. P5's second half: -0.003 ->
+   +0.003 / +0.002, i.e. P5 is NO by a margin inside timing noise. Registered verdicts are unchanged.
+N3 (Sortino grid; audit). The registered 21-day Sortino depends on where the grid starts; the registered start
+   happened to be the most favourable of the 21 for 2017+ (live 1.43 vs 1.17 averaged over all starts, range
+   0.97-1.43). Every table now carries the grid-averaged figure, and a Sortino p-value using the grid-averaged
+   estimate with draws centred on their own mean (P3 adjusted p 0.12 registered, 0.34 grid-free).
+N4 (hold-less-TAIL controls; audit). C3 (TAIL -> T-bills 5.9%) and C7 (5 pts of TAIL -> T-bills) added, with
+   paired bootstraps of P3 over C3 and E7 over C7. Post-result diagnostics; they never adjudicate.
+N5 (warm-up; audit). P1 equals the live book through 2008 because 52 weeks of trend-stand-in data first exist at
+   the end of 2008. X1 (hindsight: P1's final weights held from 2007-06) is reported beside it.
+N6 (calibration; audit). The printed power was for the Sharpe test alone. The joint power of the Sharpe-and-
+   Sortino significance leg for a true +0.05 Sharpe is now printed as well.
+N7 (smaller items; audit). S5c is also run at T-bills + 0.50%; COMBO on tape 2 now uses tape 1's selection as D11
+   says (same components); the SPY + T-bills mix is rebalanced daily, not monthly as registered; the tape-2 and
+   2x-cost conditions are uninformative for P3 (its window is identical on both tapes; static arms barely trade).
+N8 (verification). Design review: PASS WITH CORRECTIONS (amendment 1). Independent recompute with its own
+   engine: PASS, every requested number reproduced. Code-and-claims audit: PASS WITH CORRECTIONS, no code bug or
+   look-ahead, no verdict flips; N1 wording, N2-N7 and the README corrections are its findings, applied.

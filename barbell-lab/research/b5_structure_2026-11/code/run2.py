@@ -61,7 +61,7 @@ def lever_changes(tape, base_changes, r_base, r_live, cap=1.30, min_days=252):
 
 
 def stats(r, c):
-    m = E.metrics(r, c); m["sortino_m"] = L.sortino(r - c); return m
+    m = E.metrics(r, c); m["sortino_m"] = L.sortino(r - c); m["sortino_avg"] = L.sortino_avg(r - c); return m
 
 
 def scaled_live(rl, c, k, spread=0.015):
@@ -69,7 +69,7 @@ def scaled_live(rl, c, k, spread=0.015):
     return k * rl + (1 - k) * c - max(k - 1, 0) * spread / 252
 
 
-def run_tape(p, variant, cost_mult=1.0, light=False):
+def run_tape(p, variant, cost_mult=1.0, light=False, sel_override=None):
     tape = L.build(p, variant); cal = tape["cal"]; T = len(cal); c = tape["R"]["BIL"].values; cost = L.COST * cost_mult
     sim = lambda W, spread=None: L.sim(tape, W, cost, spread)
     ix = lambda d: int(cal.searchsorted(pd.Timestamp(d)))
@@ -108,8 +108,9 @@ def run_tape(p, variant, cost_mult=1.0, light=False):
     add("P5", "10% Treasuries (IEF) funded from equity", L.path(cal, swap(IEF=.10, **eq)), fam=True)
     eqb = dict(eq); add("S5b", "5% IEF + 5% TIPS funded from equity", L.path(cal, swap(IEF=.05, TIP=.05, **eqb)), kind="secondary")
     w5c = LIVE.copy(); w5c[IX["IEF"]] = .10; w5c[-1] = -.10
-    add("S5c", "Live book + 10% IEF, financed at T-bills + 1.5%", L.path(cal, w5c), kind="secondary", spread=0.015,
-        r=rl + .10 * (tape["R"]["IEF"].values - c - .015 / 252) - .10 * 2e-4 / 252)
+    for s, k in ((0.015, "S5c"), (0.005, "S5clo")):
+        add(k, f"Live book + 10% IEF, financed at T-bills + {s * 100:.1f}%", L.path(cal, w5c), kind="secondary", spread=s,
+            r=rl + .10 * (tape["R"]["IEF"].values - c - s / 252) - .10 * 2e-4 / 252)
     # ---- P6 (D6: large value is primary)
     add("P6", "8 pts of AVUV to large value (AVLV)", L.path(cal, swap(AVUV=-.08, AVLVc=.08)), fam=True)
     add("S6a", "8 pts of AVUV to QUAL", L.path(cal, swap(AVUV=-.08, QUAL=.08)), kind="secondary")
@@ -119,11 +120,17 @@ def run_tape(p, variant, cost_mult=1.0, light=False):
     add("E7", "5% long dollar (UUP) from TAIL", L.path(cal, LIVE, [(tape["first"]["UUP"], swap(TAIL=-.05, UUP=.05))]), kind="exploratory")
     add("E9a", "QUAL replaced by zero-cost collar index (CLLZ)", L.path(cal, swap(QUAL=-.153, CLLZ=.153)), kind="exploratory")
     add("E9b", "QUAL replaced by put-protected index (PPUT)", L.path(cal, swap(QUAL=-.153, PPUT=.153)), kind="exploratory")
+    # ---- post-result diagnostics requested by the audit (N4, N5): never adjudicate
+    add("C3", "Control: TAIL into T-bills (5.9%)", L.path(cal, LIVE, [(b0, swap(TAIL=-.059, BIL=.059))]), win=(ic, T), split=mid3, kind="control")
+    add("C7", "Control: 5 pts of TAIL into T-bills", L.path(cal, LIVE, [(tape["first"]["UUP"], swap(TAIL=-.05, BIL=.05))]), kind="control")
+    wfin = LIVE.copy(); wfin[SIXI] = [w1[str(cal[-1].year)][l] for l in SIX]
+    add("X1", "Hindsight: idea 1's final weights held from 2007", L.path(cal, wfin), kind="posthoc")
 
     def window_stats(k, a, b, r=None):
         r = arms[k]["r"] if r is None else r
         ma = stats(r[a:b], c[a:b]); ml = stats(rl[a:b], c[a:b])
         return dict(arm=ma, live=ml, d_sharpe=ma["sharpe"] - ml["sharpe"], d_sortino=ma["sortino_m"] - ml["sortino_m"],
+                    d_sortino_avg=ma["sortino_avg"] - ml["sortino_avg"],
                     d_cagr=ma["cagr"] - ml["cagr"], d_maxdd=ma["maxdd"] - ml["maxdd"], d_vol=ma["vol"] - ml["vol"])
 
     def episodes(r):
@@ -137,13 +144,15 @@ def run_tape(p, variant, cost_mult=1.0, light=False):
     res = dict(variant=variant, cost_mult=cost_mult, p1_weights=w1, p1_weights_noshrink=w1b, p1_weights_semi=w1c, gross=gross,
                live={w: stats(rl[a:b], c[a:b]) for w, (a, b) in (("EXT", (i0, T)), ("DISC", (i0, ic)), ("CONF", (ic, T)))},
                live_episodes=episodes(rl), arms={})
-    sel = []
-    for k in ("P6", "P5", "P3", "P4", "P1"):
+    sel = []; sel_marg = {}
+    for k in (("P6", "P5", "P3", "P4", "P1") if sel_override is None else ()):
         a, b = (ix(b0), ic) if k == "P3" else ((max(i0, arms[k]["win"][0]), ic))
-        s = window_stats(k, a, b)
+        s = window_stats(k, a, b); sel_marg[k] = dict(d_sharpe=s["d_sharpe"], d_sortino=s["d_sortino"])
         if s["d_sharpe"] > 0 and s["d_sortino"] > 0:
             sel.append(k)
+    sel = sel if sel_override is None else list(sel_override)       # D11: tape 2 uses tape 1's selection
     res["combo_selected_on_disc"] = sel
+    res["combo_selection_margins"] = sel_marg
     wc = LIVE.copy(); ch = []
     for k in sel:
         if k in ("P6", "P5", "P4"):
@@ -182,8 +191,8 @@ def run_tape(p, variant, cost_mult=1.0, light=False):
         # controls for CAGR / drawdown (D13) and the SPY + T-bills benchmark at the arm's volatility
         ra = a["r"][w0:w1_]; kk = ra.std() / rl[w0:w1_].std(); ks = ra.std() / spy[w0:w1_].std()
         sl = stats(scaled_live(rl[w0:w1_], c[w0:w1_], kk), c[w0:w1_]); sm = stats(scaled_live(spy[w0:w1_], c[w0:w1_], ks), c[w0:w1_])
-        o["live_at_arm_vol"] = dict(k=float(kk), cagr=sl["cagr"], maxdd=sl["maxdd"], sharpe=sl["sharpe"], sortino_m=sl["sortino_m"])
-        o["spy_bills_at_arm_vol"] = dict(k=float(ks), cagr=sm["cagr"], maxdd=sm["maxdd"], sharpe=sm["sharpe"], sortino_m=sm["sortino_m"])
+        o["live_at_arm_vol"] = dict(k=float(kk), cagr=sl["cagr"], maxdd=sl["maxdd"], sharpe=sl["sharpe"], sortino_m=sl["sortino_m"], sortino_avg=sl["sortino_avg"])
+        o["spy_bills_at_arm_vol"] = dict(k=float(ks), cagr=sm["cagr"], maxdd=sm["maxdd"], sharpe=sm["sharpe"], sortino_m=sm["sortino_m"], sortino_avg=sm["sortino_avg"])
         res["arms"][k] = o
     if light:
         return res, None
@@ -199,7 +208,7 @@ def run_tape(p, variant, cost_mult=1.0, light=False):
         idx = E.block_index(n, blk, DRAWS, SEED); dS, dO = L.boot2(np.ascontiguousarray(A), np.ascontiguousarray(B), V, idx)
         for nm, dr, ob in (("sharpe", dS, obsS), ("sortino", dO, obsO)):
             se, raw, adj, crit = L.pvals(dr, ob, fam)
-            bs[(blk, nm)] = dict(se=se, raw=raw, adj=adj, crit=crit, ci=np.nanpercentile(dr, [2.5, 97.5], axis=0))
+            bs[(blk, nm)] = dict(se=se, raw=raw, adj=adj, crit=crit, ci=np.nanpercentile(dr, [2.5, 97.5], axis=0), draws=dr)
     for j, k in enumerate(keys):
         o = res["arms"][k]
         for nm in ("sharpe", "sortino"):
@@ -211,6 +220,28 @@ def run_tape(p, variant, cost_mult=1.0, light=False):
             se = o[f"boot_{nm}"]["se"]; crit = o[f"boot_{nm}"]["crit"]
             o[f"boot_{nm}"]["mde80"] = float((crit + .8416) * se)
             o[f"boot_{nm}"]["power_at_plus_0.05"] = float(1 - norm.cdf(crit - 0.05 / se)) if nm == "sharpe" else None
+        # N3: Sortino p with the grid-free estimate (phase-averaged observed change, draws centred on their own mean)
+        dr = bs[(21, "sortino")]["draws"][:, j]; se_o = np.nanstd(dr, ddof=1); z = (dr - np.nanmean(dr)) / se_o
+        o["boot_sortino"]["p_raw_avg"] = float(np.nanmean(z >= o["full"]["d_sortino_avg"] / se_o)); o["boot_sortino"]["boot_mean"] = float(np.nanmean(dr))
+        if j in fam:
+            Zf = bs[(21, "sortino")]["draws"][:, fam]; Zf = (Zf - np.nanmean(Zf, 0)) / np.nanstd(Zf, 0, ddof=1); mx = np.nanmax(Zf, 1)
+            o["boot_sortino"]["p_adj_avg"] = float((mx >= o["full"]["d_sortino_avg"] / se_o).mean())
+            # N6: joint power of IMPROVES' significance leg for a true +0.05 Sharpe (Sortino shifted in proportion)
+            zs = (bs[(21, "sharpe")]["draws"][:, j] - obsS[j]) / bs[(21, "sharpe")]["se"][j]; zo = (dr - obsO[j]) / bs[(21, "sortino")]["se"][j]
+            ratio = o["full"]["live"]["sortino_m"] / o["full"]["live"]["sharpe"]
+            o["joint_power_at_plus_0.05"] = float(np.nanmean((zs + .05 / bs[(21, "sharpe")]["se"][j] > bs[(21, "sharpe")]["crit"]) &
+                                                             (zo + .05 * ratio / bs[(21, "sortino")]["se"][j] > bs[(21, "sortino")]["crit"])))
+    # N4: increments over a "just hold less TAIL" control (arm minus control, paired bootstrap, 21d blocks)
+    res["increments"] = {}
+    pairs = [("P3", "C3"), ("E7", "C7")]; Ai = np.column_stack([arms[a]["r"][i0:] - c[i0:] for a, _ in pairs]); Bi = np.column_stack([arms[b]["r"][i0:] - c[i0:] for _, b in pairs])
+    Vi = np.column_stack([V[:, keys.index(a)] for a, _ in pairs]); dSi, dOi = L.boot2(np.ascontiguousarray(Ai), np.ascontiguousarray(Bi), np.ascontiguousarray(Vi), E.block_index(n, 21, DRAWS, SEED))
+    for j, (a, b) in enumerate(pairs):
+        w0, w1_ = arms[a]["win"]; xa = arms[a]["r"][w0:w1_] - c[w0:w1_]; xb = arms[b]["r"][w0:w1_] - c[w0:w1_]
+        ds_ = E.sharpe(xa) - E.sharpe(xb); se_ = np.nanstd(dSi[:, j], ddof=1)
+        res["increments"][f"{a}_over_{b}"] = dict(d_sharpe=ds_, d_sortino=L.sortino(xa) - L.sortino(xb), d_sortino_avg=L.sortino_avg(xa) - L.sortino_avg(xb),
+                                                  ci_sharpe=[float(np.nanpercentile(dSi[:, j], 2.5)), float(np.nanpercentile(dSi[:, j], 97.5))],
+                                                  ci_sortino=[float(np.nanpercentile(dOi[:, j], 2.5)), float(np.nanpercentile(dOi[:, j], 97.5))],
+                                                  p_raw_sharpe=float(np.nanmean((dSi[:, j] - ds_) / se_ >= ds_ / se_)))
     series = dict(cal=cal, live=rl, cash=c, spy=spy, arms={k: arms[k]["r"] for k in keys}, W={k: arms[k]["W"] for k in ("P1", "S1b", "P2", "COMBO")},
                   win={k: arms[k]["win"] for k in keys})
     return res, series
@@ -265,8 +296,8 @@ def _rnd(o):
 def main():
     p = L.load()
     R1, S1 = run_tape(p, "T1"); log("tape 1 done")
-    R2, S2 = run_tape(p, "T2"); log("tape 2 done")
-    R1c, _ = run_tape(p, "T1", cost_mult=2.0, light=True); log("costs x2 done")
+    R2, S2 = run_tape(p, "T2", sel_override=R1["combo_selected_on_disc"]); log("tape 2 done")
+    R1c, _ = run_tape(p, "T1", cost_mult=2.0, light=True, sel_override=R1["combo_selected_on_disc"]); log("costs x2 done")
     out = dict(meta=dict(end=str(p["end"].date()), seed=SEED, draws=DRAWS, family=[k for k, a in R1["arms"].items() if a["family"]],
                          gates=json.load(open(os.path.join(L.STUDY, "gates.json")))),
                T1=R1, T2=R2, T1_costs_x2=R1c, verdicts=verdicts(R1, R2, R1c), context_1993_2007=context_1993(p))

@@ -129,6 +129,12 @@ def sortino(ex):
     m = chunks21(ex); return float(m.mean() * 12 / (np.sqrt((np.minimum(m, 0) ** 2).mean()) * np.sqrt(12)))
 
 
+def sortino_avg(ex):
+    """Sortino averaged over the 21 possible starts of the 21-day grid (post-result note N3: the single-grid
+    figure depends on where the grid starts; this one does not)."""
+    ex = np.asarray(ex, float); return float(np.mean([sortino(ex[o:]) for o in range(21)]))
+
+
 @njit(parallel=True, cache=True)
 def boot2(A, B, V, idx):
     """A: T x K arm excess returns, B: T x K control excess returns, V: T x K validity (1 = inside the arm's window).
