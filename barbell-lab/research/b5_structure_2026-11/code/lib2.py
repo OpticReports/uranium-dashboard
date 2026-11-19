@@ -70,15 +70,34 @@ def sim(tape, W, cost=COST, spread=None):
     return E.simulate(R, np.ascontiguousarray(W), cost, tape["me"], C.BAND, C.CAL_DAYS, 1e-9, False, np.zeros(N, bool), 0.0, 0, T)[0]
 
 
+def lever(r_unlev, c, g, spread, reset_cost=5e-4):
+    """Constant-gross leverage, reset daily (what a stacked ETF, a futures overlay or a managed loan does; D15):
+    g x the unlevered book, the borrowed (g-1) pays T-bills + spread, and the daily reset trade g(g-1)|r| pays reset_cost."""
+    g = np.asarray(g, float) if not np.isscalar(g) else np.full(len(r_unlev), g)
+    return g * r_unlev - (g - 1) * (c + spread / 252.0) - g * (g - 1) * np.abs(r_unlev) * reset_cost
+
+
 # ---------- risk balance
-def erc(cov, budget=None):
-    n = len(cov); b = np.full(n, 1.0 / n) if budget is None else np.asarray(budget, float)
+def erc(cov, cap=1.0):
+    """Equal risk contribution; a per-asset cap is enforced inside the solver (D3). With a binding cap the
+    contributions cannot all be equal: the solver then minimises their squared spread."""
+    n = len(cov); b = np.full(n, 1.0 / n)
     def f(w):
         rc = w * (cov @ w); rc = rc / rc.sum(); return ((rc - b) ** 2).sum() * 1e4
-    res = minimize(f, np.full(n, 1.0 / n), bounds=[(1e-6, 1)] * n, constraints=[{"type": "eq", "fun": lambda w: w.sum() - 1}], method="SLSQP",
-                   options={"ftol": 1e-14, "maxiter": 500})
-    w = res.x / res.x.sum(); rc = w * (cov @ w); rc /= rc.sum()
-    if np.abs(rc - b).max() > 1e-3:
+    best = None
+    for x0 in (np.full(n, 1.0 / n), np.minimum(1 / np.sqrt(np.diag(cov)) / (1 / np.sqrt(np.diag(cov))).sum(), cap)):
+        res = minimize(f, x0 / x0.sum(), bounds=[(1e-6, cap)] * n, constraints=[{"type": "eq", "fun": lambda w: w.sum() - 1}], method="SLSQP",
+                       options={"ftol": 1e-15, "maxiter": 1000})
+        if best is None or res.fun < best.fun:
+            best = res
+    w = np.clip(best.x, 0, cap)
+    for _ in range(50):                                            # exact sum-to-one without breaching the cap
+        gap = 1.0 - w.sum(); free = w < cap - 1e-12
+        if abs(gap) < 1e-14 or not free.any():
+            break
+        w[free] += gap * w[free] / w[free].sum(); w = np.clip(w, 0, cap)
+    rc = w * (cov @ w); rc /= rc.sum()
+    if w.max() < cap - 1e-6 and np.abs(rc - b).max() > 2e-3:
         raise RuntimeError(f"ERC did not converge: {rc}")
     return w
 
@@ -87,55 +106,56 @@ def semicov(X):
     D = np.minimum(X, 0.0); return D.T @ D / len(D)
 
 
-def cap25(w, to=EQ, cap=0.25):
-    """Any position above the cap is cut to it; the excess goes to the `to` legs in live equity proportions."""
-    w = w.copy()
-    for _ in range(10):
-        over = np.where(w[:-1] > cap + 1e-12)[0]
-        if not len(over):
-            break
-        ex = (w[over] - cap).sum(); w[over] = cap
-        for l, pr in zip(to, EQP):
-            w[IX[l]] += ex * pr
-    return w
-
-
 # ---------- statistics
+def chunks21(ex):
+    """Consecutive 21-trading-day compounded excess returns (the 'monthly' returns of D8); a trailing partial chunk is dropped."""
+    ex = np.asarray(ex, float); n = len(ex) // 21
+    return np.prod(1 + ex[:n * 21].reshape(n, 21), 1) - 1
+
+
 def sortino(ex):
-    ex = np.asarray(ex, float); return float(ex.mean() * 252 / (np.sqrt((np.minimum(ex, 0) ** 2).mean()) * np.sqrt(252)))
+    """Sortino on 21-day chunks: annualised mean over annualised downside deviation (target 0 excess)."""
+    m = chunks21(ex); return float(m.mean() * 12 / (np.sqrt((np.minimum(m, 0) ** 2).mean()) * np.sqrt(12)))
 
 
 @njit(parallel=True, cache=True)
 def boot2(A, B, V, idx):
     """A: T x K arm excess returns, B: T x K control excess returns, V: T x K validity (1 = inside the arm's window).
-    idx: D x T resampled rows. Returns D x K differences (arm - control) of Sharpe and of Sortino on the valid rows."""
+    idx: D x T resampled rows. Returns D x K differences (arm - control) of daily Sharpe and of 21-day-chunk Sortino,
+    both computed on the valid resampled rows in resampled order."""
     D, T = idx.shape; K = A.shape[1]
     dS = np.empty((D, K)); dO = np.empty((D, K))
     for d in prange(D):
         for k in range(K):
-            n = 0; sa = 0.0; sa2 = 0.0; sb = 0.0; sb2 = 0.0; da = 0.0; db = 0.0
+            n = 0; sa = 0.0; sa2 = 0.0; sb = 0.0; sb2 = 0.0
+            ca = 1.0; cb = 1.0; c = 0; nm = 0; ma_ = 0.0; mb_ = 0.0; da = 0.0; db = 0.0
             for t in range(T):
                 j = idx[d, t]
                 if V[j, k]:
                     a = A[j, k]; b = B[j, k]; n += 1
                     sa += a; sa2 += a * a; sb += b; sb2 += b * b
-                    if a < 0:
-                        da += a * a
-                    if b < 0:
-                        db += b * b
-            if n < 30:
+                    ca *= 1.0 + a; cb *= 1.0 + b; c += 1
+                    if c == 21:
+                        xa = ca - 1.0; xb = cb - 1.0; nm += 1; ma_ += xa; mb_ += xb
+                        if xa < 0:
+                            da += xa * xa
+                        if xb < 0:
+                            db += xb * xb
+                        ca = 1.0; cb = 1.0; c = 0
+            if n < 60 or nm < 6:
                 dS[d, k] = np.nan; dO[d, k] = np.nan; continue
             ma = sa / n; mb = sb / n
             va = (sa2 - n * ma * ma) / (n - 1); vb = (sb2 - n * mb * mb) / (n - 1)
             dS[d, k] = (ma / np.sqrt(va) - mb / np.sqrt(vb)) * np.sqrt(252.0)
-            dO[d, k] = (ma / np.sqrt(da / n) - mb / np.sqrt(db / n)) * np.sqrt(252.0) if da > 0 and db > 0 else np.nan
+            dO[d, k] = ((ma_ / nm) / np.sqrt(da / nm) - (mb_ / nm) / np.sqrt(db / nm)) * np.sqrt(12.0) if da > 0 and db > 0 else np.nan
     return dS, dO
 
 
 def pvals(draws, obs, fam):
-    """One-sided, centred, studentised. Returns se, raw p per arm, single-step max-T adjusted p for arms in `fam`, crit."""
+    """One-sided, centred, studentised by each arm's bootstrap SE (D7). Returns se, raw p per arm, single-step
+    max-T adjusted p for the arms in `fam`, and the family's 90% critical value."""
     se = np.nanstd(draws, 0, ddof=1); t = obs / se; Z = (draws - obs) / se
     raw = np.array([np.nanmean(Z[:, k] >= t[k]) for k in range(len(obs))])
-    mx = np.nanmax(np.where(np.isnan(Z[:, fam]), -9, Z[:, fam]), 1)
+    mx = np.nanmax(np.where(np.isnan(Z[:, fam]), -9.0, Z[:, fam]), 1)
     adj = {k: float((mx >= t[k]).mean()) for k in fam}
     return se, raw, adj, float(np.percentile(mx, 90))

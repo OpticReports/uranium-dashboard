@@ -55,6 +55,12 @@ D13 "Same-volatility comparison" is restated: Sharpe and Sortino differences vs 
 D14 Leverage gate tests added: gross 1.0 reproduces P1 exactly; S2b's Sharpe equals L's minus the analytic
    financing drag within 0.005; years in which the 1.30 cap binds and the range of realized gross are reported.
 
+D15 (found by the D14 gate test, before any arm result) Leverage is modelled as CONSTANT GROSS, reset daily:
+   g x the unlevered book, the borrowed part pays T-bills + spread, the daily reset trade pays 5 bps. That is
+   what a stacked ETF, a futures overlay or a managed loan does. Run through the band engine instead, a 1.2x
+   loan is not rebalanced until a leg drifts 20%, so gross floats up in drawdowns; that unmanaged version is
+   kept as a secondary (P2drift) to show the cost of not managing the loan. S5c uses the same constant-mix form.
+
 Stated before results (reviewer notes)
 - The leg ranking behind P1 and P6 comes from one regime; cutting small value after it lagged is
   performance-chasing unless the long history agrees.
