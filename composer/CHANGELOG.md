@@ -7,6 +7,23 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-19 — HARV exit, Day A: withdrawal submitted (owner-approved; MOVE_PLAN rev 3.1)
+
+- Owner: "ok go ahead tomorrow, keep the stub" (11-18 evening), "ok go ahead" (11-19, 14:2x ET).
+- Pre-checks 14:11-14:29 ET clean: regular session; four symphonies, none paused, nothing queued;
+  account cash $102.27; mirror live, no halt, 11-18 check clean, nothing pending; mirror HARV
+  sleeve $6,144.41 (49 PULS + $3,716.22 cash). The ZVOL payout posted INSIDE HARV this morning
+  (cash $36 -> $1,746.10; KMLM's $875 inside KMLM too), so it leaves with the withdrawal.
+- Reading at 14:29 ET: HARV V0 = $37,102.67 (HG $104,907.15, KMLM $97,964.80, SLEEVE $81,829.71;
+  book $321,906.60). W = floor(0.985 x V0) = **$36,546** (stub $556.67).
+- Submitted 14:29:33 ET: `withdraw ORQNCfZnA18wmsMWVhf8 --amount 36546`, deploy
+  abf6f4d2-c938-4f43-a2b3-1b4ad0e1425b. Response `deploy_time` null and no market-open flag (a
+  next-open deploy carried an explicit time on 11-06), `pending_deploys_cash` -36,546. Composer's
+  preview: sell PULS 289.2 of 292.2 and ZVOL 3,501.4 of 3,580.7, symphony left at ~$591 (a partial,
+  not a liquidation).
+- Planned reinvestment if it fills as requested: HG $12,468.63, KMLM $12,468.63, SLEEVE $11,608.74.
+- Mirror: nothing sent yet (legs go tonight after the fill is confirmed).
+
 ## 2026-11-18 — Owner decision: retire HARV pro rata; sleeve is one engine; cap 44% (policy change set; NO money moved yet)
 
 - Decision (owner, in session): "treat it as one engine, go ahead with full pro rata". HARV's capital
