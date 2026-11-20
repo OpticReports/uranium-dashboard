@@ -1,9 +1,75 @@
-## Why it is built this way
+## What it is for
 
-_The reasons are being compiled from the study record (started 2026-11-19); until then this page carries only the approved-version notes._
+The book's trend and rebound engine: "the only validated trend engine ... simultaneously the largest
+validated CAGR source and the largest drawdown source" (results.md addendum 18b). Live since
+2025-12-05. Target weight 34.1% of the book since 2026-11-18 (POLICY.md "Allocation"); before that
+29% (07-22), 19% (07-20), 55% (07-06), 79% (07-05) (CHANGELOG those dates).
+
+It reads only TQQQ, SOXL and SPY prices and RSI. It has no macro or rates input (addendum 33).
+
+## Why each block is there
+
+| Block | What it does | The reason on record | Source |
+|---|---|---|---|
+| Trend basket | TQQQ 10d average above 20d: hold the strongest of TQQQ, UPRO, UDOW, SSO, TNA | Its money is "made in post-crash rebound days no causal trend signal can pre-identify"; chop losses are the price of that | add. 19b |
+| Long-vol pop | TQQQ RSI(10) above 80: hold the weakest of UVXY, VIXY, VIXM | Labelled a melt-up hedge; no fuller reason is recorded | architecture doc; add. 19b |
+| Dip-buys | Below trend and TQQQ RSI(10) under 30: hold the weakest of TECL, QLD, LABU, USD, SMH | "The RSI dip-buys at 3x are HG's bear-market engine ... never de-lever the dip-buys" | add. 42 |
+| Cash route | SOXL RSI(10) under 30, or TQQQ under its 20d average: BIL | Worth about 37 CAGR points and half the max drawdown over 11.2 years. For the SOXL test specifically no reason is recorded | add. 30 |
+| SPY 200-day gate | Each of the two trend baskets only while SPY is above its 200-day average, else BIL | "Insurance against a 2000/2008-type bear, about two episodes deep"; "the one leverage gate with robust long-history evidence" | add. 40, 42, 44, 45 |
 
 ## What changed, and why
 
-- `6jq2MZNf` (from 2026-06-30): VBF bond baskets
-- `bP4mvRy6` (from 2026-07-31): bond baskets -> BIL (CHANGELOG 2026-07-31); bI6tlUMw (VCIT, 2026-07-30 20:50 ET) was superseded before any rebalance
-- `2oyXahw1` (from 2026-10-19): SPY 200-day gate (addendum 45)
+- **`6jq2MZNf`** (saved 2026-06-30): bond baskets of BSV, TLT, LQD, VBF, SPAB, ANGL as the defensive
+  leg. What it changed from the December 2025 original, and why, is not recorded. See "Open items".
+- **`bP4mvRy6`** (live from 2026-07-31): both bond baskets replaced by BIL. Reason (add. 17): the
+  book's duration risk lived only in those two baskets; "the bond basket only pays in deflationary
+  crashes ... cash is regime-neutral", and the crash sleeve already fills that role. Measured:
+  CAGR +105.3% vs +103.2%, max drawdown 35.9% vs 36.4%, 2022 +45.2% vs +15.4%. An intermediate
+  version `bI6tlUMw` (VBF swapped for VCIT because VBF was the binding liquidity limit, add. 15b)
+  was superseded the same evening before any rebalance.
+- **`2oyXahw1`** (saved 2026-10-18, first used 10-19): the SPY 200-day gate on the two trend baskets;
+  everything else byte-for-byte the same (51 nodes became 63). Owner: "okay, deploy this". Decided
+  through addenda 39 C2, 40, 42, 44, 45. Composer backtest 2015-06..2026-10: CAGR 103.3% to 85.8%,
+  Sharpe 1.73 to 1.62, max drawdown 35.8% unchanged. Long proxy panel 1990-2026: CAGR +49.5% to
+  +55.5%, Sharpe 1.00 to 1.16, max drawdown 72% to 60%. Rollback copy:
+  `fixtures/hg-live-pre-gate-2026-10-18.raw.json`.
+
+## Studied and not built
+
+| Idea | Verdict | Source |
+|---|---|---|
+| Other trend gates (QQQ 200d, SPY 60d momentum, 150/250d) | every one cut CAGR in every multi-year window | add. 19b |
+| Vol targeting | CAGR 105% to 78%, Sharpe flat | add. 20b, 21 |
+| Drawdown-exit rules | CAGR 82% to 45% | add. 21 |
+| No cash route | +67.6% a year with a 78% drawdown | add. 30 |
+| Per-instrument regime gating | trend Sharpe 0.89 to 0.22 | add. 32 |
+| Rate-hike overlays | 0 of 92 variants helped | add. 33 |
+| Macro-conditioned or graded gates (CAPE, curve, credit, oil; votes, ramps) | not better than the plain gate | add. 40 |
+| Gating the dip-buys or every leveraged long; VIX or CAPE gates | rejected | add. 42 |
+| Canary signals | no change; CAPE of 35 or more is a watch item only | add. 43 |
+| Overnight or pre-open exits | every rule negative | add. 53, 54.2 |
+
+## Known quirks and limits
+
+- All in sample for 2015-2026; "the gate itself is in sample everywhere on this panel" (add. 44).
+  The gated rules had been live 0.2 years when that was written.
+- The gate "does nothing for a gap crash": the 36% drawdown is the 2020 gap (add. 40, 42).
+- Reconstructed on long history it draws down about 70% in 2000-02 and 2007-09 (add. 39).
+- Composer evaluates the gate on adjusted prices (204 cash days against 234 unadjusted, add. 45).
+- The ranked picks are knife-edge: a tie or near-tie in RSI changes the fund (add. 28, 45).
+
+## Numbers on record (in sample; none is a forecast)
+
+- Live vs model to 2026-10-02: +89.2% vs +78.9%, correlation 0.960 (add. 36).
+- Backtest 2015-06..2026-10 with the gate: CAGR 85.8%, Sharpe 1.62, max drawdown 35.8%.
+- Synthetic 1997-2026: +64.7% a year with a 60% drawdown (add. 47).
+
+## Open items in the record
+
+- **Which version ran before 07-31.** The manifest lists `6jq2MZNf` as live from 2026-06-30. Addendum
+  41 says that edit "was never deployed" and the December 2025 original (`0DeB193g`) "ran until the
+  07-30/31 update", on the evidence that live HG earned XLV's return on 07-02, a leaf only the
+  original has. The original's tree is not on file. Unresolved; it affects only dates before 07-31.
+- **Trend gates were rejected, then one was built.** Addendum 19b ("no gate ships") and RUNBOOK's
+  list of interventions that "amputate" the engines predate the 10-18 gate and were not updated.
+- Where the symphony came from in the community, and what "Modified #1" changed: not recorded.

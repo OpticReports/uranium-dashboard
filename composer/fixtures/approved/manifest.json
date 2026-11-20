@@ -1,5 +1,5 @@
 {
-  "_doc": "Approved logic per live symphony, by era (shadow_runner.py; results.md addendum 48). 'from' is the first session whose ~15:50 ET rebalance ran that version (created_at is ET). The shadow evaluates the era covering each date; the live check compares Composer's current version head and tree against the LAST era. Approving a logic change = add an era here (tree fetched from GET /symphonies/{id}/score) in the same commit as the CHANGELOG entry.",
+  "_doc": "Approved logic per live symphony, by era (shadow_runner.py; results.md addendum 48). 'from' is the first session whose ~15:50 ET rebalance ran that version (created_at is ET). The shadow evaluates the era covering each date; the live check compares Composer's current version head and tree against the LAST era. Approving a logic change = add an era here (tree fetched from GET /symphonies/{id}/score) in the same commit as the CHANGELOG entry. The same commit also carries the reason in symphonies/why/<ENGINE>.md (naming the new version id) and the regenerated logic book (python3 composer/scripts/symphony_book.py): tests/test_symphony_book.py fails otherwise.",
   "engines": {
     "HG": {
       "symphony": "mbkiXcuNDjueXpiox5Av",

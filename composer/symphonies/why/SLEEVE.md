@@ -1,8 +1,69 @@
-## Why it is built this way
+## What it is for
 
-_The reasons are being compiled from the study record (started 2026-11-19); until then this page carries only the approved-version notes._
+The crisis hedge: "the only component with negative correlation to equities" (architecture doc).
+Built 2026-07-06 as an equal blend of two community signal strategies, to the owner's brief of "best
+per-dollar crash payout with minimal bleed" (CHANGELOG 07-06). Target weight 31.8% since 2026-11-18,
+as one engine of the book: the old band and the scheduled scale-up are retired (POLICY operations 1
+and 2). Before that 27% (07-22), and 10% at funding.
+
+How to read it (add. 54.3): "a bond/credit-and-sector-shock hedge, not a VIX or broad-index crash
+hedge"; its return "arrives in the 5-20 sessions after the crash day".
+
+## Why each block is there
+
+| Block | What it does | The reason on record | Source |
+|---|---|---|---|
+| InverseHold (50%) | When RSI(8) of IEF is below RSI(45) of PSQ: the two calmer of LABD-or-BOXX and TMV-or-BOXX, each held only while its RSI(20) is below RSI(10) of KMLM. Otherwise BOXX | "Free hedge; slow-bear specialist" | add. 4 |
+| FrontrunBonds (50%) | A ladder of one-day shocks in HYG, TLT, SHY, TMF, LQD and RSI extremes in CORP, PEJ, KIE, LQD, each choosing among UVXY, SVXY, SOXL, SOXS, UGL, TQQQ, SPXL, KIE, TMF. Otherwise BOXX | "Free hedge; fast-spike specialist" | add. 4 |
+| 50 / 50 blend | Half each | Positive in all four SPY falls of more than 8% since 2022; correlation to HG -0.12; "robust to weights" | add. 4, 4b |
+| Daily rebalance | Rebalanced every session | "Essentially a wash ... matches the components' native setting" | add. 4c |
+| BOXX as the resting fund | Cash-like leg | Tax: BOXX turns taxable distributions into untaxed gains (Act 60) | add. 17 |
+
+The individual thresholds (1.75%, 23, 78 and so on) were set by the community authors in 2023-2025.
+No reason for any of them is recorded.
 
 ## What changed, and why
 
-- `GtCP9qyw` (from 2026-07-06): BIL legs, daily rebalance
-- `yHJkdePZ` (from 2026-07-31): BIL -> BOXX (CHANGELOG 2026-07-31)
+- **`GtCP9qyw`** (saved 2026-07-06): rebalance changed from threshold-with-corridor to daily, BIL as
+  the resting fund. Backtest +49.2% / Sharpe 1.59 / max drawdown 14.8% against +48.2% / 1.56 / 14.8%
+  (add. 4c).
+- **`yHJkdePZ`** (live from 2026-07-31): the four BIL nodes became BOXX, "signal conditions
+  untouched". Reason: about $590 a year of tax saved at that size (add. 17). "Identical behavior over
+  the 2023+ window"; the accountant's confirmation of BOXX's treatment was left with the owner
+  (CHANGELOG 07-31). Side effect: BOXX's short history truncates Composer's backtest to about
+  2023-01, so research uses the BIL copy (`research/sleeve_tree_bil.json`).
+
+## Studied and not built
+
+| Idea | Verdict | Source |
+|---|---|---|
+| Other weights, a third leg, a 20% VIX leg | not better | add. 4b |
+| Monthly or quarterly rebalance | "destroyed the sleeve": +48% to -1% and -11% | add. 4b |
+| Pop-harvest rule | "zero edge over the band, 5x the trades" | add. 7 |
+| CAPE-scaled sizing; valuation conditioning | not adopted | add. 9, 26 |
+| Vol targeting | Sharpe 1.41 to 0.51 | add. 21 |
+| Leverage gates | "nothing moves" | add. 42 |
+| Book-wide rate gate | costs the sleeve -19.9% a year | add. 33 |
+| A static VIXM leg | left as the owner's question | add. 54.3 |
+
+## Known quirks and limits
+
+- History before 2026-07 is "rule-replay, not live record"; out of sample only from 2024-06 (add. 4c).
+- The 2008 result rests on modelled VIX legs; "with those legs in cash it is -1% / -14% / -29%: read
+  that as the floor" (add. 39).
+- It paid in 4 of 8 crash episodes and sat out 2026-11-05 (0 of 21 triggers) (add. 54.3).
+- The +896% bootstrap figure is "a methodological ceiling, not a forecast" (add. 6).
+- No automatic harvest or top-up since 2026-11-18 (POLICY).
+
+## Numbers on record (in sample; none is a forecast)
+
+- Live vs model to 2026-10-02: +18.0% vs +15.9%, correlation 0.969 (add. 36).
+- Backtest 2022-01..2026-07: +49.3% a year, Sharpe 1.59, max drawdown 14.8% (add. 5).
+- Synthetic path from 1995: +19.5% a year with a 51% drawdown (add. 54.3).
+
+## Open items in the record
+
+- The architecture doc (2026-08-31) describes the halves as "short equity/credit" and "duration (TMF
+  long / TMV short)". The tree holds LABD, TMV or BOXX in one half and the fund list above in the
+  other. The tree is right.
+- The old band's lower edge is written 7.5% in CHANGELOG and 7% in POLICY. The band is retired.
