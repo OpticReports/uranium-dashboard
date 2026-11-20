@@ -7,6 +7,16 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-20 — Mirror scale-up queued for today's session (owner pasted the planner's line)
+
+- Owner set MIRROR_MAX_BOOK_USD = 121500 on ibkr-executor (11-19 ~16:38 ET, IB Key approved, back
+  LIVE 16:43) and pasted the planner's line in the executor's Shell at 14:53:49 ET today: all four
+  credits answered 200 (HG $21,831.82, KMLM $19,224.72, SLEEVE $17,029.90, HARV $7,206.31 =
+  $65,292.75; ids credit-1795204429285-0 .. -3). On the feed's `pending_requests` from the 14:58
+  loop. Owner reads the account's cash at about $76,300 (needed at the decision: $74,153).
+- Applied at the 15:54 ET session. The HARV mirror legs are NOT sent today (credits and transfers
+  cannot share a queue): they go this evening for Monday's session (MOVE_PLAN rev 3.2).
+
 ## 2026-11-19 — The symphony logic book (owner ask: "save all of the logic and reasoning ... a record that's updating")
 
 - New `composer/symphonies/`: one page per engine (HG, KMLM, SLEEVE, HARV) with what it is for, the
