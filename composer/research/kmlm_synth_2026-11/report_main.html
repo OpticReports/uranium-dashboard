@@ -1,85 +1,94 @@
-<h1>The KMLM switcher on 30 years of rebuilt history</h1>
-<p class="sub">Study of 2026-11-20 (addendum 58). The KMLM fund is 6 years old, so it was rebuilt from its index rules and 22 futures markets, checked against the real fund, and the switcher study re-run back to 1991. In sample; nothing here is a forecast.</p>
+<h1>Rebuilding the KMLM fund to test the switcher on a longer history</h1>
+<p class="sub">Study of 2026-11-20 (addendum 58), corrected after two independent reviews. The KMLM fund is 6 years old, so it was rebuilt from its index rules and 22 futures markets and checked against the real fund. In sample; nothing here is a forecast.</p>
 
 <div class="card verdict">
 <ul>
-<li><b>The rebuilt fund behaves like the real one.</b> The switch reads the same way on {{f2}} of days (the old stand-in: {{f2_old}}). The whole symphony run on it holds the same funds on {{f4}} of sessions and ends within {{f4_gap}} of the real run. It ranks the 74 variants the same way (rank correlation {{f5}}). One bar of five was missed on the full overlap: daily correlation {{f1}} against 0.90 ({{f1_late}} since April 2022, when the fund stopped being actively managed).</li>
-<li><b>History reached: 1991, not 50 years.</b> A third of this symphony trades volatility funds and the VIX starts in 1990. 2008 to 2020 is a true replication (every market traded and has data). 1991 to 2008 is partly a model and is shown separately.</li>
-<li><b>Same answer, on three times the evidence: keep the 10-day switch.</b> None of the {{n_cells}} variants ({{n_chall}} of them different from the live rule) passes on {{yrs_joined}} years of replication plus real data. Windows of 9 to 12 days are level with 10. Shorter windows are behind (t {{short_t}}). All 26 moving-average and momentum forms are behind. Longer windows were ahead in 2008-2020 and behind in 2021-2026: zero over both.</li>
-<li><b>The test is about three times sharper.</b> It can now see a gain of {{mde_near}} log-points a year in a neighbouring window (before: {{mde_near_old}}).</li>
-<li><b>By-product worth knowing: the live rule's past is rougher than its last five years.</b> 2008-2020: {{r_cagr}} a year with a {{r_dd}} drawdown (late 2018). Modelled 1991-2008: {{m_cagr}} a year, {{m_dd}} drawdown, under water from 2002 to 2008. Real years: {{a_cagr}} a year, {{a_dd}} drawdown.</li>
+<li><b>Keep the 10-day switch.</b> That verdict rests on the real fund (addendum 57). Re-run here on corrected fund data, nothing in it changes.</li>
+<li><b>The rebuilt fund is a far better stand-in than the old one, but it did not pass the bars set in advance.</b> Daily correlation with the real fund is {{f1}} against a bar of 0.90 (old stand-in: {{f1_old}}). The switch reads the same way on {{f2}} of days (old: {{f2_old}}), and the symphony run on it holds the same funds on {{f4}} of sessions. Because a bar was missed, the rebuilt years are read for shape, not as evidence.</li>
+<li><b>Read for shape, the rebuilt years agree with the real ones.</b> On 2008-2020 no variant can be told from the live rule: the best reaches t {{r_best_t}} where {{r_crit}} was needed. Shorter windows and moving averages lean behind. Longer windows lean ahead there and are behind on the real fund.</li>
+<li><b>The switch itself held up outside the years it was fitted on.</b> On 2008-2020 the live rule beat staying risk-on by {{sw_on}} log-points a year and the inverted switch by {{sw_inv}} (t {{sw_inv_t}}); {{sw_plc}} of 60 scrambled switches did as well. About {{sw_ratio}} of the edge seen on the real years.</li>
+<li><b>The live rule's past is rougher than its last five years.</b> Rebuilt 2008-2020: {{r_cagr}} a year with a {{r_dd}} drawdown. Modelled 1991-2008: {{m_cagr}} a year, {{m_dd}} drawdown. Real years: {{a_cagr}} a year, {{a_dd}} drawdown.</li>
+<li><b>History reached: 1991, not 50 years.</b> A third of this symphony trades volatility funds and the VIX starts in 1990.</li>
+<li><b>Correction.</b> My first build read stale futures closes in 2009-2020. The construction review caught it; the numbers I gave earlier today from that build are withdrawn and everything here is from the corrected data.</li>
 </ul>
 </div>
 
 <div class="kpis">
-<div class="kpi"><b>{{f2}}</b><span>days the switch reads the same on the rebuilt fund (old stand-in {{f2_old}})</span></div>
-<div class="kpi"><b>{{f4}}</b><span>sessions the symphony holds the same funds</span></div>
-<div class="kpi"><b>0 of {{n_cells}}</b><span>variants pass on {{yrs_joined}} years</span></div>
-<div class="kpi"><b>{{power_x}}×</b><span>sharper test than the real-fund years alone</span></div>
+<div class="kpi"><b>{{f1}}</b><span>daily correlation, rebuilt against real fund (bar 0.90; old stand-in {{f1_old}})</span></div>
+<div class="kpi"><b>{{f2}}</b><span>days the switch reads the same (old stand-in {{f2_old}})</span></div>
+<div class="kpi"><b>0 of {{n_chall}}</b><span>variants distinguishable from the live rule on the rebuilt years</span></div>
+<div class="kpi"><b>t {{sw_inv_t}}</b><span>live switch against its mirror image, 2008-2020</span></div>
 </div>
 
 <h2>1. Does the rebuilt fund behave like the real one?</h2>
-<p>Built from the fund's index rules with nothing fitted to the fund: 22 futures markets, each long or short by whether its price is above its one-year average, phased in over 21 days, in the published basket weights, plus T-bills, less fees. One number was calibrated, the overall exposure ({{exposure}}×), and it was set on the published index before the fund existed.</p>
+<p>Built from the fund's index rules with nothing fitted to the fund: 22 futures markets, each long or short by whether its price is above its one-year average, phased in over 21 days, in the published basket weights, plus T-bills, less fees. One number was calibrated, the overall exposure ({{exposure}}×), on the published index before the fund existed.</p>
 {{ch_overlap}}
 {{ch_index}}
 {{t_bars}}
-<p class="note">The bars were written down before the build. The missed one: daily correlation is {{f1_2021}} in 2021 and {{f1_late}} from April 2022; the prospectus says the fund was actively managed until then. Over 5-day periods it is {{f1_5d}}. The rebuilt fund is also calmer than the real one ({{vol_s}} against {{vol_f}} a year) while matching the index's own volatility. These diagnostics were run after the bars were scored.</p>
+<p class="note">Bars were written before the build and are read on the whole overlap. The two later windows are shown because the pre-registration named a second half; the 2022-08 split was chosen after rough scouting numbers had been seen, and the 2023-12 one has only {{n_late}} sessions. Diagnostics run afterwards: correlation is {{f1_2021}} in 2021 and {{f1_2023}} in 2023, and {{f1_5d}} on 5-day returns. The rebuilt series trends a little from day to day where the fund's closing price does not, so an RSI reads them slightly differently.</p>
 
 <h2>2. How far back, and what is real</h2>
 {{t_stretch}}
-<p class="note">Before 1990 there is no VIX, so the volatility third of the tree has nothing to stand on: 50 years is not reachable for this symphony. The futures markets themselves go back to the 1970s. The published index before 2005 followed older rules (monthly, fewer markets), so it is not a check on today's rules there.</p>
+<p class="note">Before 1990 there is no VIX, so the volatility third of the tree has nothing to stand on. The futures files hold December-only crude, corn and wheat and November-only soybeans where the fund holds nearer contracts (9% of the notional). In the modelled years the bond basket is two or three markets and there is no euro before 2000.</p>
 
 <h2>3. The window, on each stretch</h2>
-<p>Same comparison as addendum 57: the 10-day RSI of XLK against the 10-day RSI of the KMLM fund, at fifteen windows. Zero is the live rule.</p>
+<p>The 10-day RSI of XLK against the 10-day RSI of the KMLM fund, at fifteen windows. Zero is the live rule.</p>
 {{ch_surface}}
 {{t_groups}}
-<p class="note">Log-points a year: 0.10 is roughly 10% more growth a year. "Ahead" counts the variants in the group that beat the live rule on that stretch. The joined column is replication plus real years, the sample the verdict is read on.</p>
+<p class="note">Log-points a year: 0.10 is roughly 10% more growth a year. "Ahead" counts variants in the group that beat the live rule on that stretch. The t values are for the group average, not adjusted for the number of groups, and the groups were formed after the fact.</p>
 
-<h2>4. Every variant</h2>
+<h2>4. Every variant on the rebuilt years</h2>
 {{ch_cells}}
-<p>Best by t: {{best}} at {{best_t}} (needed {{crit}}; family-wise p {{best_p}}). {{n_ahead}} of {{n_chall}} are ahead on the joined sample, none by more than {{max_ahead}} log-points a year. Only the 11 and 12-day windows are ahead on all three stretches, by {{near_lo}} to {{near_hi}}.</p>
-<details><summary>All {{n_cells}} variants</summary>{{t_cells}}</details>
+<p>On 2008-2020 alone the best is {{r_best}} at t {{r_best_t}} (needed {{r_crit}}; family-wise p {{r_best_p}}); {{r_ahead}} of {{n_chall}} are ahead of the live rule, none distinguishably. {{r_worse}}</p>
+<details><summary>All {{n_cells}} variants, by stretch</summary>{{t_cells}}</details>
 
-<h2>5. What the live rule did over 35 years</h2>
+<h2>5. Does the switch itself earn its keep?</h2>
+<p>A check the reviewer added. The live rule against three alternatives that never use the signal properly: always on the risk-on side, always on the risk-off side, and the switch turned upside down.</p>
+{{t_switch}}
+<p class="note">Live rule minus the alternative, log-points a year (t in brackets). Placebo: the same switch slid along the calendar 60 times; the count is how many did at least as well as the real one. The rule's author fitted it on 2022, so the real years flatter it and 2008-2020 is the fairer read. The modelled years show no edge.</p>
+
+<h2>6. What the live rule did over 35 years</h2>
 {{ch_growth}}
 {{ch_dd}}
 {{t_live}}
-<p class="note">Growth compounds a simulated, in-sample rule whose author fitted it on 2022; no account could have earned it (several funds did not exist, and size would have moved prices). Read the shape: where it stalled and how deep it fell. Addendum 57's stand-in showed {{old_c_cagr}} a year and a {{old_c_dd}} drawdown for 2007-2020; that stand-in's switch agreed with the rebuilt fund's on only {{old_agree}} of days.</p>
+<p class="note">Growth compounds a simulated, in-sample rule; no account could have earned it (several funds did not exist, and size would have moved prices). Read the shape. The 2018 fall is in real funds (SOXL, SQQQ, SPXL), not a modelled leg; the long panel carries a stale VXZ price series in 2018, which the reviewer replaced without changing a holding. The modelled stretch ends {{m_end_dd}} below its peak; carried on into the next stretch it makes a new high in {{m_rec}}. Addendum 57's old stand-in showed {{old_c_cagr}} a year and a {{old_c_dd}} drawdown for 2007-2020; its switch agreed with the rebuilt fund's on {{old_agree}} of days.</p>
 
-<h2>6. How much sharper the test is</h2>
-{{t_power}}
-<p class="note">The smallest true gain (log-points a year) the test would catch half the time after allowing for all the tries.</p>
+<h2>7. What the rebuilt years can and cannot resolve</h2>
+<p>On the days both exist, does the rebuilt fund reproduce each variant's daily gain or loss against the live rule?</p>
+{{t_res}}
+<p class="note">Large effects carry over (the moving-average forms). The small differences between neighbouring windows mostly do not, so the rebuilt years cannot say whether 11 or 12 days is better than 10. They do not make the test for a neighbouring window sharper.</p>
 
-<h2>7. Candidate edges checked on the way</h2>
+<h2>8. Candidate edges checked on the way</h2>
 <p>None clears the bar. Listed because the standing rule is to report them.</p>
 <ul>
-<li><b>11 and 12-day windows.</b> The only variants ahead on all three stretches: {{near_lo}} to {{near_hi}} log-points a year, t at most {{near_t}}, family-wise p {{near_p}} or worse. A gain that small would need decades more to confirm. Not actionable.</li>
-<li><b>Longer windows (14 to 60 days).</b> Ahead in 2008-2020 in {{long_r_n}} variants (average {{long_r}}, t {{long_r_t}}); behind in 2021-2026 in all ({{long_a}}); behind in the modelled years. Zero over replication plus real. This is what addendum 57's stand-in years hinted at; the real fund does not repeat it.</li>
-<li><b>200-day averages in the modelled years.</b> Ahead by about 0.15 before 2008 (t 1.2 to 1.4), behind in both later stretches.</li>
-<li><b>Sizing, not edge:</b> a 50% fall in this sleeve has happened on replicated data (Q4 2018). At a third of the book that is about 16 points of book.</li>
+<li><b>The switch itself</b> (section 5). The one positive: it kept its sign on years it was not fitted on, at about {{sw_ratio}} of the real-years size. Nothing to change; it re-rates what to expect from this symphony.</li>
+<li><b>Longer windows (14 to 60 days).</b> Ahead on 2008-2020 in {{long_r_n}} variants (average {{long_r}}, t {{long_r_t}}); behind on the real fund in {{long_a_n}} ({{long_a}}). One pattern counted many times, not repeated on the real fund.</li>
+<li><b>11 and 12-day windows.</b> {{near_txt}}</li>
+<li><b>Sizing, not edge:</b> a {{r_dd}} fall in this sleeve has happened on rebuilt data (late 2018). At 34% of the book that is about {{book_pts}} points of book.</li>
 </ul>
 
-<h2>8. What this does not settle</h2>
+<h2>9. What this does not settle</h2>
 <ul>
-<li><b>The rebuilt fund is the rules plus the data, not the fund.</b> It misses one fidelity bar on the full overlap, and a fit on 2021-2024 does not prove the same fidelity in 1995. The signal rule was read off the fund's holdings; the index rulebook is not public.</li>
-<li><b>Futures data ends 2024-03.</b> The check against the real fund covers three years, not six. The futures files are a public research dataset whose terms were not verified.</li>
-<li><b>Before 2008 several legs are models.</b> VIX funds before 2004 model futures that did not trade; the euro, JGB and Bund legs are missing for part of it. Those years cannot carry a verdict.</li>
-<li><b>Threshold variants were not re-run.</b> The 12 pop and dip variants were calibrated on 1990-2020 data, so they have no clean long history.</li>
-<li><b>Decisions are simulated at the close</b>, as in addendum 57.</li>
+<li><b>The rebuilt years are not evidence-grade.</b> One bar missed on the whole overlap; fidelity of the switch cannot be checked before 2021 at all.</li>
+<li><b>The real years are in sample for the live rule</b> (fitted on 2022), and they carry most of every "behind" result for short windows and moving averages.</li>
+<li><b>Data.</b> Futures files end 2024-03 and are a public research dataset whose terms were not verified. A few market-years could not be matched to an independent close (heating oil 2016 and 2020, gasoline 2009, 2010 and 2020, the JGB throughout). Four commodity markets hold a later contract than the fund.</li>
+<li><b>Before 2008 several legs are models</b>; SVIX and ZVOL are modelled through 2008-2020 as well.</li>
+<li><b>Not covered:</b> the 12 threshold variants on the long history; 2020-12 to 2021-05; decisions other than at the close.</li>
 </ul>
 
-<h2>9. Addendum 57, corrected data</h2>
-<p>Yahoo's adjusted KMLM price understates the December 2022 distribution ($2.48 against the $4.04 paid). Re-run on the corrected series: the switch differs on {{err_days}} sessions, no variant changes sign, the same five are ahead, the ranking is unchanged (rank correlation {{err_rho}}). Addendum 57's conclusions stand. The live rule's simulated growth rises slightly ({{err_old}} to {{err_new}} a year).</p>
+<h2>10. Addendum 57, corrected fund data</h2>
+<p>Yahoo's adjusted KMLM price understates the December 2022 distribution ($2.48 against the $4.04 paid; the fund's site could not be reached to confirm at source, but $4.04 reproduces the prospectus's 2022 return). Re-run on the corrected series: the switch differs on {{err_days}} sessions, no variant changes sign, the same five are ahead, the ranking is unchanged (rank correlation {{err_rho}}). Individual long-window results moved by up to {{err_max}} log-points a year. Addendum 57's conclusions stand; the live rule's simulated return moves from {{err_old}} to {{err_new}} a year.</p>
 
-<h2>10. Open questions</h2>
+<h2>11. Open questions</h2>
 {{t_open}}
 
-<h2>11. Method notes for next time</h2>
+<h2>12. Method notes for next time</h2>
 <ul>
-<li>Rebuild the short-lived instrument first. The stand-in used before agreed with the rebuilt fund on four days in five, and gave a different picture of the live rule's past.</li>
-<li>Set the fidelity bars before building, and calibrate on something other than the thing you validate against (here: the index, then the fund).</li>
-<li>Check the instrument's own distribution record against the data vendor's adjusted prices.</li>
-<li>Say how far back is replication and where it turns into a model; judge only on the first.</li>
+<li>A check against the real instrument certifies only the years it covers. Check the raw data against an independent source in every year before building on it: the stale closes sat in 2009-2020, outside the overlap.</li>
+<li>The reviewer who did not write the loader found the defect in it. Keep that pass.</li>
+<li>Set the fidelity bars before building, and hold to them when the result is close.</li>
+<li>A rebuilt series can reproduce large effects and still not resolve small ones; measure that on the overlap before claiming more power.</li>
+<li>Check a fund's own distribution record against the data vendor's adjusted prices.</li>
 </ul>
 
 <details open><summary>Independent verification</summary>

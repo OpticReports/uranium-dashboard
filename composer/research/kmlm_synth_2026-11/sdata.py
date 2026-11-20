@@ -15,6 +15,7 @@ index_monthly()  the KFA MLM Index's published monthly returns, 1988-01..2025-03
 tbill()       daily T-bill return from the 13-week yield (^IRX / 100 / 252).
 """
 import csv
+import math
 import hashlib
 import json
 import os
@@ -49,26 +50,122 @@ def _get(kind, m):
     return path
 
 
-def futures(m):
-    """({day: back-adjusted price}, {day: held contract's price}) with the last print of each day"""
-    adj, px = {}, {}
+REF = {"CORN": "ZC=F", "CRUDE_W": "CL=F", "COPPER": "HG=F", "GOLD": "GC=F", "HEATOIL": "HO=F", "LIVECOW": "LE=F", "GAS_US": "NG=F",
+       "SOYBEAN": "ZS=F", "SUGAR11": "SB=F", "WHEAT": "ZW=F", "GASOILINE": "RB=F", "GBP": "6B=F", "CAD": "6C=F", "AUD": "6A=F",
+       "EUR": "6E=F", "JPY": "6J=F", "CHF": "6S=F", "US10": "ZN=F"}
+BOND_REF = {"CAD10": 0, "BUND": 0, "GILT": 0, "JGB": 1}          # reference = the US 10y, this many sessions earlier
+READINGS = ("mark", "intraday", "mark_next", "per_day")
+_fut = {}
+
+
+def _rows(m):
+    """[(stamp, adjusted)] and [(stamp, held contract's price)] as filed"""
+    adj, px = [], []
     with open(_get("adj", m)) as f:
         rd = csv.reader(f)
         next(rd)
         for r in rd:
             if len(r) > 1 and r[1] != "":
                 try:
-                    adj[r[0][:10]] = float(r[1])
+                    adj.append((r[0], float(r[1])))
                 except ValueError:
                     pass
     with open(_get("mp", m)) as f:
         for r in csv.DictReader(f):
             if r["PRICE"] != "":
                 try:
-                    px[r["DATETIME"][:10]] = float(r["PRICE"])
+                    px.append((r["DATETIME"], float(r["PRICE"])))
                 except ValueError:
                     pass
     return adj, px
+
+
+def _readings(rows):
+    """{reading: {day: value}} (DEVIATIONS.md 13)"""
+    mark, intra = {}, {}
+    for stamp, v in rows:
+        (mark if stamp[11:] == "23:00:00" else intra)[stamp[:10]] = v
+    md = sorted(mark)
+    return {"mark": mark, "intraday": intra, "mark_next": {a: mark[b] for a, b in zip(md, md[1:])}}
+
+
+def _per_day(mark, intra):
+    """{day: 'mark' | 'intraday'}: the filed close is kept unless it sits nearer the day before's value than
+    the day's own last print (then it is yesterday's close and the last print is used)"""
+    out, prev = {}, None
+    for d in sorted(set(mark) | set(intra)):
+        if d in mark and d in intra and prev is not None and abs(mark[d] - intra[d]) > abs(mark[d] - prev):
+            out[d] = "intraday"
+        else:
+            out[d] = "mark" if d in mark else "intraday"
+        prev = (mark if out[d] == "mark" else intra)[d]
+    return out
+
+
+def _rets(x):
+    ds = sorted(x)
+    return {b: x[b] / x[a] - 1 for a, b in zip(ds, ds[1:]) if x[a] > 0}
+
+
+def _corr(a, b):
+    n = len(a)
+    if n < 60:
+        return None
+    ma, mb = sum(a) / n, sum(b) / n
+    va, vb = sum((x - ma) ** 2 for x in a), sum((y - mb) ** 2 for y in b)
+    return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / math.sqrt(va * vb) if va > 0 and vb > 0 else None
+
+
+def _reference(m):
+    if m in REF:
+        r = _rets(kdata.series(REF[m], field="close"))
+        return {d: v for d, v in r.items() if abs(v) < 0.15}
+    us = _rets(futures("US10")[0])
+    ds = sorted(us)
+    k = BOND_REF[m]
+    return {ds[i]: us[ds[i - k]] for i in range(k, len(ds))}
+
+
+def futures(m):
+    """({day: back-adjusted price}, {day: held contract's price}), each year read the way that matches an
+    independent daily close best (DEVIATIONS.md 13). The choices are kept in choices(m)."""
+    if m in _fut:
+        return _fut[m][0], _fut[m][1]
+    adj_rows, px_rows = _rows(m)
+    A, P = _readings(adj_rows), _readings(px_rows)
+    which = _per_day(A["mark"], A["intraday"])
+    for X in (A, P):
+        X["per_day"] = {d: X[k][d] for d, k in which.items() if d in X[k]}
+    ref = _reference(m)
+    years = sorted({d[:4] for d in A["mark"]} | {d[:4] for d in A["intraday"]})
+    R = {k: _rets(v) for k, v in A.items()}
+    pick = {}
+    for y in years:
+        cs = {}
+        for k in READINGS:
+            ds = [d for d in R[k] if d[:4] == y and d in ref]
+            cs[k] = _corr([R[k][d] for d in ds], [ref[d] for d in ds])
+        ok = {k: v for k, v in cs.items() if v is not None}
+        best = max(ok, key=ok.get) if ok else "mark"
+        pick[y] = {"reading": best, "corr": {k: (None if v is None else round(v, 3)) for k, v in cs.items()}}
+    adj, px = {}, {}
+    for src, out in ((A, adj), (P, px)):
+        for y in years:
+            k = pick[y]["reading"]
+            for d, v in src[k].items():
+                if d[:4] == y:
+                    out[d] = v
+            if k != "mark":                               # a day the chosen reading lacks keeps its filed close
+                for d, v in src["mark"].items():
+                    if d[:4] == y and d not in out and k == "intraday":
+                        out[d] = v
+    _fut[m] = (adj, px, pick)
+    return adj, px
+
+
+def choices(m):
+    futures(m)
+    return _fut[m][2]
 
 
 def xr_index(m):
@@ -110,7 +207,11 @@ def manifest():
     for m in MARKETS:
         adj, px = futures(m)
         ds = sorted(set(adj) & set(px))
+        ch = choices(m)
         out[m] = {"first": ds[0], "last": ds[-1], "days": len(ds),
+                  "reading_by_year": {y: v["reading"] for y, v in ch.items()},
+                  "corr_with_reference_by_year": {y: v["corr"][v["reading"]] for y, v in ch.items() if v["corr"][v["reading"]] is not None},
+                  "unresolved_years": [y for y, v in ch.items() if v["corr"][v["reading"]] is not None and v["corr"][v["reading"]] < 0.5],
                   "sha256_adj": hashlib.sha256(open(_get("adj", m), "rb").read()).hexdigest()[:16],
                   "sha256_mp": hashlib.sha256(open(_get("mp", m), "rb").read()).hexdigest()[:16]}
     return out

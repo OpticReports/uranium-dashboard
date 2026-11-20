@@ -69,7 +69,8 @@ def main():
     rym = kdata.series("RYMFX", V1)
     synth_px = ky.level(ky.build(exposure, start="2015-01-01"))
     out["vs_fund"] = {}
-    for name, lo, hi in (("whole overlap", V0, V1), ("first part", V0, "2022-07-31"), ("second part", V_MID, V1)):
+    for name, lo, hi in (("whole overlap", V0, V1), ("first part", V0, "2022-07-31"), ("second part", V_MID, V1),
+                         ("pre-registered second half", "2023-12-01", V1)):
         days = [d for d in sorted(fr) if lo <= d <= hi and d in s]
         a, b = [s[d] for d in days], [fr[d] for d in days]
         fa, fs_ = flags(fund, xlk, lo, hi), flags(synth_px, xlk, lo, hi)
@@ -78,7 +79,7 @@ def main():
         flips = [d1 for d0, d1 in zip(common, common[1:]) if fa[d0] != fa[d1]]
         ca, cb = ann(a), ann(b)
         fma, fmb = ky.monthly({d: s[d] for d in days}), ky.monthly({d: fr[d] for d in days})
-        mm = sorted(fma)[1:-1]
+        mm = sorted(fma)[1:-1] if len(fma) > 6 else sorted(fma)
         ry = kdata.rets(rym)
         dr = [d for d in days if d in ry]
         out["vs_fund"][name] = {
@@ -90,7 +91,7 @@ def main():
             "rymfx": {"daily_corr": corr([ry[d] for d in dr], [fr[d] for d in dr]),
                       "flag_agreement": sum(fa[d] == fy[d] for d in fa if d in fy) / sum(1 for d in fa if d in fy)},
             "constant_flag_agreement": max(sum(fa.values()), len(fa) - sum(fa.values())) / len(fa)}
-    for part in ("whole overlap", "second part"):
+    for part in ("whole overlap", "second part", "pre-registered second half"):
         v = out["vs_fund"][part]
         v["bars"] = {"F1_daily_corr>=0.90": v["daily_corr"] >= 0.90, "F2_flag>=0.95": v["flag_agreement"] >= 0.95,
                      "F3_vol_within_15pct": abs(v["vol_ratio"] - 1) <= 0.15, "F3_return_within_3pts": abs(v["return_gap"]) <= 0.03}

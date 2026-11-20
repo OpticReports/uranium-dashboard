@@ -66,3 +66,37 @@ RYMFX), where longer windows averaged +0.087 log/yr (t 1.6).
     also ahead; (4) max drawdown no more than 5 points worse than the live rule's in each stretch;
     (5) still ahead at double cost. Also reported: each cell's MODEL-years result, the long (14-60) and
     short (3-8) window group averages per stretch, and the smallest gain the test could see.
+
+## After the independent construction review (2026-11-20): a data defect, and the rule for fixing it
+
+The review found the loader BLOCKING-wrong: `sdata.futures()` took the last row of each day, and in many
+market-years the day's `23:00:00` row is the PREVIOUS session's close (CAD 2009-20, CHF 2010-20, heating
+oil 2012-20, gasoline 2010-20, Canadian 10y, parts of copper, wheat, crude, corn, US 10y). It is staleness,
+not look-ahead, but it corrupts the daily series the RSI reads in 2009-2020, mostly outside the window the
+fidelity bars were scored on. Everything computed from the first build (out/fidelity.json, symphony.json,
+long.json, extras.json as of commit 4b5652f7 and its report draft) is withdrawn.
+
+13. **The loader's new rule, fixed here before it is run.** Per market and calendar year, three readings of
+    the same files are built: (a) the `23:00:00` row of the day; (b) the last other print of the day;
+    (c) the `23:00:00` row of the NEXT recorded day (a close stamped a day late). The reading used that
+    year is the one whose daily returns correlate best, same day, with an INDEPENDENT daily close: Yahoo's
+    front-month future for 18 markets; for the Canadian 10y, Bund and gilt the US 10y as fixed by this
+    rule; for the JGB the US 10y of the day before (Tokyo closes before New York opens). Years with no
+    reference (before about 2000) use (a). The real fund is never consulted. The table of choices and
+    correlations is written to out/data_manifest.json, and any market-year whose best correlation is under
+    0.5 is listed as unresolved.
+14. **Not fixable from this data, disclosed (review S1):** the files hold December-only crude, corn and
+    wheat and November-only soybeans, where the fund holds nearer contracts (47 of 154 market-dates differ
+    on the fund's quarter-end filings). Those four are 9% of the notional. Effects under about 0.05
+    log-points a year on the synthetic years are to be read as unresolved.
+15. **Bars, corrected reading (review S3, minor 1).** The pre-registration's second half starts 2023-12-01;
+    the 2022-08-01 split of deviation 2 was written after the scout's rough numbers had been seen. All three
+    windows are reported (whole overlap, 2022-08-01 on, 2023-12-01 on). The bars are read on the WHOLE
+    overlap; a bar that misses there is a miss.
+13b. **A fourth reading was added after rule 13's first table was seen** (heating oil, gasoline and cattle
+    still had years under 0.5): (d) per day, the filed close unless it sits nearer the previous day's value
+    than the day's own last print, in which case the last print. The choice among the four is still rule
+    13's (best same-day correlation with the independent close, per market-year); the fund is still never
+    consulted. Left unresolved and listed in the manifest: heating oil 2016 and 2020, gasoline 2009, 2010
+    and 2020 (best 0.30-0.41; the files hold a deferred contract and the reference is the front month), the
+    JGB throughout and the gilt in 2009 and 2020 (no independent close; the US 10y is a weak reference).

@@ -14,7 +14,7 @@ import wsim as w  # noqa: E402
 from q2_stats import boot_idx, stat  # noqa: E402
 
 WT = {"HG": 0.341, "KMLM": 0.341, "SLEEVE": 0.318}
-SPLIT = ("2008-02-01", "2023-02-01")            # book MODEL | REPLICATION (some engine rebuilt) | REAL (all three real)
+SPLIT = ("2021-06-01", "2023-02-01")            # book: rebuilt years (shape only) | KMLM and HG real, sleeve part rebuilt | all three real
 KS = w.kdata.SCRATCH + "/kmlm_synth"
 
 
