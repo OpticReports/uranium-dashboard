@@ -1,0 +1,3401 @@
+{
+ "n_sessions": 1376,
+ "tier_b": [
+  "2021-06-02",
+  "2023-04-19"
+ ],
+ "tier_a": [
+  "2023-04-19",
+  "2026-11-20"
+ ],
+ "base": {
+  "all": {
+   "cagr": 3.1347198204748983,
+   "maxdd": 0.37822501675724096,
+   "sharpe": 2.687662843406471,
+   "n": 1376
+  },
+  "A": {
+   "cagr": 2.0451097026793694,
+   "maxdd": 0.37822501675724074,
+   "sharpe": 2.226147426919873,
+   "n": 902
+  },
+  "B": {
+   "cagr": 6.40014826527704,
+   "maxdd": 0.3338293452789466,
+   "sharpe": 3.502497478193999,
+   "n": 474
+  },
+  "turnover": 808.0765432296387,
+  "trades": 705,
+  "flips": 130,
+  "knife_share": 0.037037037037037035
+ },
+ "cells": {
+  "F1a.rsi3": {
+   "family": "F1a",
+   "all": {
+    "cagr": 1.8737269318620071,
+    "maxdd": 0.4240293984579905,
+    "sharpe": 2.0873127356133327,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.4242635273558104,
+    "maxdd": 0.4240293984579909,
+    "sharpe": 1.8181620671816892,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.9719926904744582,
+    "maxdd": 0.30862521272741505,
+    "sharpe": 2.5785264072087046,
+    "n": 474
+   },
+   "dlog_per_yr": -0.3638097982600099,
+   "dlog_A": -0.2280091494616166,
+   "dlog_B": -0.6222321299396529,
+   "t": -1.9750595459085731,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi5-",
+   "passes": false,
+   "turnover": 950.7666710082248,
+   "trades": 769,
+   "flips": 316,
+   "knife_share": 0.08714596949891068
+  },
+  "F1b.rsi3": {
+   "family": "F1b",
+   "all": {
+    "cagr": 1.412928758463167,
+    "maxdd": 0.4397273343432301,
+    "sharpe": 1.8047808105216823,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.3924670537674286,
+    "maxdd": 0.4397273343432302,
+    "sharpe": 1.804448920840362,
+    "n": 902
+   },
+   "B": {
+    "cagr": 1.4523510426522344,
+    "maxdd": 0.34535006474328434,
+    "sharpe": 1.8041204662677863,
+    "n": 474
+   },
+   "dlog_per_yr": -0.5385783059774734,
+   "dlog_A": -0.24121185404536896,
+   "dlog_B": -1.1044528621858243,
+   "t": -2.593465061247395,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi5-",
+   "passes": false,
+   "turnover": 1052.0849452662924,
+   "trades": 854,
+   "flips": 316,
+   "knife_share": 0.08714596949891068
+  },
+  "F1a.rsi5": {
+   "family": "F1a",
+   "all": {
+    "cagr": 2.378290692725652,
+    "maxdd": 0.41494875473629766,
+    "sharpe": 2.3618676778885015,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.355071718081486,
+    "maxdd": 0.4149487547362981,
+    "sharpe": 1.7618293594340437,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.712376279276226,
+    "maxdd": 0.23319174617535565,
+    "sharpe": 3.4802793490043324,
+    "n": 474
+   },
+   "dlog_per_yr": -0.20204969876475806,
+   "dlog_A": -0.25696574712293363,
+   "dlog_B": -0.09754700758527651,
+   "t": -1.4560641135389967,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi3-, rsi7-",
+   "passes": false,
+   "turnover": 908.2039576736655,
+   "trades": 749,
+   "flips": 238,
+   "knife_share": 0.07116920842411038
+  },
+  "F1b.rsi5": {
+   "family": "F1b",
+   "all": {
+    "cagr": 2.2918566979859722,
+    "maxdd": 0.3855684014784634,
+    "sharpe": 2.339977986622107,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.3935702658225453,
+    "maxdd": 0.3855684014784634,
+    "sharpe": 1.7959289482860328,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.036701308882677,
+    "maxdd": 0.2637908478918194,
+    "sharpe": 3.372411179509763,
+    "n": 474
+   },
+   "dlog_per_yr": -0.2279678166463744,
+   "dlog_A": -0.2407508413114558,
+   "dlog_B": -0.2036423140136669,
+   "t": -1.4492774212120711,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi3-, rsi7-",
+   "passes": false,
+   "turnover": 955.0392939588264,
+   "trades": 788,
+   "flips": 238,
+   "knife_share": 0.07116920842411038
+  },
+  "F1a.rsi7": {
+   "family": "F1a",
+   "all": {
+    "cagr": 2.604486987269853,
+    "maxdd": 0.4285130420981633,
+    "sharpe": 2.4451918566546915,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.468899497248937,
+    "maxdd": 0.42851304209816354,
+    "sharpe": 1.8383595083566067,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.40585067334229,
+    "maxdd": 0.2577897246602885,
+    "sharpe": 3.546541855947179,
+    "n": 474
+   },
+   "dlog_per_yr": -0.1372401134114067,
+   "dlog_A": -0.20976442398386633,
+   "dlog_B": 0.0007702835007420514,
+   "t": -1.46832057699486,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi5-, rsi8-",
+   "passes": false,
+   "turnover": 865.8962003143646,
+   "trades": 732,
+   "flips": 182,
+   "knife_share": 0.053013798111837325
+  },
+  "F1b.rsi7": {
+   "family": "F1b",
+   "all": {
+    "cagr": 2.4817048640697283,
+    "maxdd": 0.43616728669972304,
+    "sharpe": 2.4105471900331095,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.4078551132652941,
+    "maxdd": 0.4361672866997234,
+    "sharpe": 1.795214673460937,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.023798628711461,
+    "maxdd": 0.22537381487555164,
+    "sharpe": 3.5647192835066,
+    "n": 474
+   },
+   "dlog_per_yr": -0.17189749084162123,
+   "dlog_A": -0.23480057093880918,
+   "dlog_B": -0.05219584896891333,
+   "t": -1.6454007028298885,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi5-, rsi8-",
+   "passes": false,
+   "turnover": 884.9564630726418,
+   "trades": 749,
+   "flips": 182,
+   "knife_share": 0.053013798111837325
+  },
+  "F1a.rsi8": {
+   "family": "F1a",
+   "all": {
+    "cagr": 2.551549901958911,
+    "maxdd": 0.4285130420981629,
+    "sharpe": 2.408677158200755,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.5616619794233686,
+    "maxdd": 0.4285130420981633,
+    "sharpe": 1.901109835340203,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.613625684789411,
+    "maxdd": 0.32427139533305405,
+    "sharpe": 3.3146970588886573,
+    "n": 474
+   },
+   "dlog_per_yr": -0.15203546782296576,
+   "dlog_A": -0.17288066910778657,
+   "dlog_B": -0.11236801727674563,
+   "t": -1.9495328452263665,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi7-, rsi9-",
+   "passes": false,
+   "turnover": 839.6417408243094,
+   "trades": 722,
+   "flips": 164,
+   "knife_share": 0.03848946986201888
+  },
+  "F1b.rsi8": {
+   "family": "F1b",
+   "all": {
+    "cagr": 2.561685442295757,
+    "maxdd": 0.41045967865126476,
+    "sharpe": 2.4295562855247725,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.535743323597821,
+    "maxdd": 0.4104596786512652,
+    "sharpe": 1.8791208260671852,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.7988721986025595,
+    "maxdd": 0.29475906140878394,
+    "sharpe": 3.4416656563682806,
+    "n": 474
+   },
+   "dlog_per_yr": -0.14918569645854063,
+   "dlog_A": -0.18305010930515395,
+   "dlog_B": -0.0847432905774328,
+   "t": -1.7188629411386984,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi7-, rsi9-",
+   "passes": false,
+   "turnover": 850.543403659342,
+   "trades": 732,
+   "flips": 164,
+   "knife_share": 0.03848946986201888
+  },
+  "F1a.rsi9": {
+   "family": "F1a",
+   "all": {
+    "cagr": 3.0394093953841628,
+    "maxdd": 0.34573433641350826,
+    "sharpe": 2.629091335526308,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.856881082412555,
+    "maxdd": 0.3457343364135078,
+    "sharpe": 2.0930072064407277,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.808561081271522,
+    "maxdd": 0.32427139533305416,
+    "sharpe": 3.586883756871746,
+    "n": 474
+   },
+   "dlog_per_yr": -0.02332107610777051,
+   "dlog_A": -0.06380642851980373,
+   "dlog_B": 0.05372067046533909,
+   "t": -0.49826958825396384,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi8-, rsi10+",
+   "passes": false,
+   "turnover": 812.8665719774876,
+   "trades": 709,
+   "flips": 144,
+   "knife_share": 0.04429920116194626
+  },
+  "F1b.rsi9": {
+   "family": "F1b",
+   "all": {
+    "cagr": 3.023026635676856,
+    "maxdd": 0.34573433641350826,
+    "sharpe": 2.641543006066793,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.7722778125706622,
+    "maxdd": 0.34573433641350804,
+    "sharpe": 2.038867859317477,
+    "n": 902
+   },
+   "B": {
+    "cagr": 7.171301822916709,
+    "maxdd": 0.29475906140878383,
+    "sharpe": 3.7477297693199114,
+    "n": 474
+   },
+   "dlog_per_yr": -0.027385054337727886,
+   "dlog_A": -0.09386763037444437,
+   "dlog_B": 0.09912820217096044,
+   "t": -0.48667763777331163,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi8-, rsi10+",
+   "passes": false,
+   "turnover": 819.3832295603929,
+   "trades": 714,
+   "flips": 144,
+   "knife_share": 0.04429920116194626
+  },
+  "F1a.rsi10": {
+   "family": "F1a",
+   "all": {
+    "cagr": 3.1347198204748983,
+    "maxdd": 0.37822501675724096,
+    "sharpe": 2.687662843406471,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.0451097026793694,
+    "maxdd": 0.37822501675724074,
+    "sharpe": 2.226147426919873,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.40014826527704,
+    "maxdd": 0.3338293452789466,
+    "sharpe": 3.502497478193999,
+    "n": 474
+   },
+   "dlog_per_yr": 0.0,
+   "dlog_A": 0.0,
+   "dlog_B": 0.0,
+   "t": 0.0,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": null,
+    "2_beats_in_A_and_B": null,
+    "3_plateau": null,
+    "4_maxdd_within_5pts": null,
+    "5_positive_at_2x_cost": null
+   },
+   "plateau_note": "neighbours rsi9-, rsi11+",
+   "passes": null,
+   "turnover": 808.0765432296387,
+   "trades": 705,
+   "flips": 130,
+   "knife_share": 0.037037037037037035
+  },
+  "F1b.rsi10": {
+   "family": "F1b",
+   "all": {
+    "cagr": 3.1347198204748983,
+    "maxdd": 0.37822501675724096,
+    "sharpe": 2.687662843406471,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.0451097026793694,
+    "maxdd": 0.37822501675724074,
+    "sharpe": 2.226147426919873,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.40014826527704,
+    "maxdd": 0.3338293452789466,
+    "sharpe": 3.502497478193999,
+    "n": 474
+   },
+   "dlog_per_yr": 0.0,
+   "dlog_A": 0.0,
+   "dlog_B": 0.0,
+   "t": 0.0,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": null,
+    "2_beats_in_A_and_B": null,
+    "3_plateau": null,
+    "4_maxdd_within_5pts": null,
+    "5_positive_at_2x_cost": null
+   },
+   "plateau_note": "neighbours rsi9-, rsi11+",
+   "passes": null,
+   "turnover": 808.0765432296387,
+   "trades": 705,
+   "flips": 130,
+   "knife_share": 0.037037037037037035
+  },
+  "F1a.rsi11": {
+   "family": "F1a",
+   "all": {
+    "cagr": 3.1480718982194444,
+    "maxdd": 0.3782250167572405,
+    "sharpe": 2.6861120520847246,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.0575473723877002,
+    "maxdd": 0.37822501675724096,
+    "sharpe": 2.2240377828166435,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.412016879346155,
+    "maxdd": 0.3585381090734253,
+    "sharpe": 3.505712900473367,
+    "n": 474
+   },
+   "dlog_per_yr": 0.0032240553097881877,
+   "dlog_A": 0.0040761546245717305,
+   "dlog_B": 0.0016025498626684649,
+   "t": 0.0907264296929814,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": true,
+    "3_plateau": true,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": true
+   },
+   "plateau_note": "neighbours rsi10+, rsi12+",
+   "passes": false,
+   "turnover": 795.1586055764034,
+   "trades": 701,
+   "flips": 122,
+   "knife_share": 0.034858387799564274
+  },
+  "F1b.rsi11": {
+   "family": "F1b",
+   "all": {
+    "cagr": 3.2784308381793856,
+    "maxdd": 0.3688127607248437,
+    "sharpe": 2.743218441613681,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.2116345084402016,
+    "maxdd": 0.3688127607248438,
+    "sharpe": 2.3144262465725256,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.384368658478501,
+    "maxdd": 0.3585381090734254,
+    "sharpe": 3.5028557899274118,
+    "n": 474
+   },
+   "dlog_per_yr": 0.03416674764335192,
+   "dlog_A": 0.05324307254243019,
+   "dlog_B": -0.002134613240548058,
+   "t": 0.8045994133307781,
+   "p_fw": 0.9874,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": true,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": true
+   },
+   "plateau_note": "neighbours rsi10+, rsi12+",
+   "passes": false,
+   "turnover": 774.7706602733113,
+   "trades": 687,
+   "flips": 122,
+   "knife_share": 0.034858387799564274
+  },
+  "F1a.rsi12": {
+   "family": "F1a",
+   "all": {
+    "cagr": 3.2701851470167584,
+    "maxdd": 0.37822501675724074,
+    "sharpe": 2.733747014476821,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.2264251509020365,
+    "maxdd": 0.37822501675724063,
+    "sharpe": 2.3169797653178645,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.279204867472791,
+    "maxdd": 0.3585381090734253,
+    "sharpe": 3.472289268148723,
+    "n": 474
+   },
+   "dlog_per_yr": 0.03223761812481246,
+   "dlog_A": 0.05783783222652484,
+   "dlog_B": -0.016478401115154983,
+   "t": 0.7437256914851169,
+   "p_fw": 0.9902,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": true
+   },
+   "plateau_note": "neighbours rsi11+, rsi14-",
+   "passes": false,
+   "turnover": 788.3530188019386,
+   "trades": 699,
+   "flips": 116,
+   "knife_share": 0.032679738562091505
+  },
+  "F1b.rsi12": {
+   "family": "F1b",
+   "all": {
+    "cagr": 3.4859574006225955,
+    "maxdd": 0.3688127607248436,
+    "sharpe": 2.827322206821295,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.445325080769311,
+    "maxdd": 0.3688127607248436,
+    "sharpe": 2.450423244419865,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.412779550741817,
+    "maxdd": 0.3585381090734252,
+    "sharpe": 3.488435049008724,
+    "n": 474
+   },
+   "dlog_per_yr": 0.08153237184849144,
+   "dlog_A": 0.12348133541632103,
+   "dlog_B": 0.0017054411772207565,
+   "t": 1.4887111306211263,
+   "p_fw": 0.8392,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": true,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": true
+   },
+   "plateau_note": "neighbours rsi11+, rsi14-",
+   "passes": false,
+   "turnover": 756.3104611895226,
+   "trades": 683,
+   "flips": 116,
+   "knife_share": 0.032679738562091505
+  },
+  "F1a.rsi14": {
+   "family": "F1a",
+   "all": {
+    "cagr": 3.1067674814109747,
+    "maxdd": 0.4122217706342045,
+    "sharpe": 2.675639013514768,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.25858030833878,
+    "maxdd": 0.3215980351079786,
+    "sharpe": 2.3381980541175973,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.378125629319498,
+    "maxdd": 0.4122217706342045,
+    "sharpe": 3.2744721413794426,
+    "n": 474
+   },
+   "dlog_per_yr": -0.00678334995196927,
+   "dlog_A": 0.06775468462103527,
+   "dlog_B": -0.14862577017317205,
+   "t": -0.09139231130995439,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi12+, rsi17-",
+   "passes": false,
+   "turnover": 791.0668578946131,
+   "trades": 699,
+   "flips": 114,
+   "knife_share": 0.032679738562091505
+  },
+  "F1b.rsi14": {
+   "family": "F1b",
+   "all": {
+    "cagr": 2.9524142154376776,
+    "maxdd": 0.42295281634859505,
+    "sharpe": 2.606028342238896,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.2367631824896193,
+    "maxdd": 0.35644487469129305,
+    "sharpe": 2.339297779578652,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.780249468160449,
+    "maxdd": 0.42295281634859505,
+    "sharpe": 3.0718096335091154,
+    "n": 474
+   },
+   "dlog_per_yr": -0.045092982140918954,
+   "dlog_A": 0.06103688503788561,
+   "dlog_B": -0.24705319352336985,
+   "t": -0.4986832868064648,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi12+, rsi17-",
+   "passes": false,
+   "turnover": 745.8565562070075,
+   "trades": 669,
+   "flips": 114,
+   "knife_share": 0.032679738562091505
+  },
+  "F1a.rsi17": {
+   "family": "F1a",
+   "all": {
+    "cagr": 2.490155452685993,
+    "maxdd": 0.45678194149257745,
+    "sharpe": 2.406910796316654,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.101797947040625,
+    "maxdd": 0.32695913072175964,
+    "sharpe": 2.250291398017363,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.3685317245400466,
+    "maxdd": 0.45678194149257745,
+    "sharpe": 2.68666778912436,
+    "n": 474
+   },
+   "dlog_per_yr": -0.16947329059353122,
+   "dlog_A": 0.018444998616942116,
+   "dlog_B": -0.5270730730151492,
+   "t": -1.4309434788838264,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi14-, rsi20-",
+   "passes": false,
+   "turnover": 800.5249665216461,
+   "trades": 702,
+   "flips": 116,
+   "knife_share": 0.023238925199709513
+  },
+  "F1b.rsi17": {
+   "family": "F1b",
+   "all": {
+    "cagr": 2.3230376500437697,
+    "maxdd": 0.47459664193787043,
+    "sharpe": 2.325559711386329,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.9754064032767262,
+    "maxdd": 0.3443486082732182,
+    "sharpe": 2.1981350157732638,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.100681526076599,
+    "maxdd": 0.47459664193787043,
+    "sharpe": 2.5506722142681726,
+    "n": 474
+   },
+   "dlog_per_yr": -0.21854024868796507,
+   "dlog_A": -0.023156291854139328,
+   "dlog_B": -0.5903468500890428,
+   "t": -1.6489833700818266,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi14-, rsi20-",
+   "passes": false,
+   "turnover": 749.1934281366308,
+   "trades": 668,
+   "flips": 116,
+   "knife_share": 0.023238925199709513
+  },
+  "F1a.rsi20": {
+   "family": "F1a",
+   "all": {
+    "cagr": 2.7914648500493193,
+    "maxdd": 0.46262958696792766,
+    "sharpe": 2.5509164692799917,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.335873117928219,
+    "maxdd": 0.34119690908344,
+    "sharpe": 2.381490586561469,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.837338913993716,
+    "maxdd": 0.46262958696792766,
+    "sharpe": 2.8533648982826914,
+    "n": 474
+   },
+   "dlog_per_yr": -0.08666711974107852,
+   "dlog_A": 0.09119752191360377,
+   "dlog_B": -0.4251352774890182,
+   "t": -0.6648534949268072,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi17-, rsi25-",
+   "passes": false,
+   "turnover": 790.5520222841351,
+   "trades": 700,
+   "flips": 110,
+   "knife_share": 0.04066811909949165
+  },
+  "F1b.rsi20": {
+   "family": "F1b",
+   "all": {
+    "cagr": 2.667530271044526,
+    "maxdd": 0.4451260673710673,
+    "sharpe": 2.49628043595815,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.228165278659443,
+    "maxdd": 0.336803709744243,
+    "sharpe": 2.3530117264289423,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.675536852346041,
+    "maxdd": 0.4451260673710673,
+    "sharpe": 2.7485386221177914,
+    "n": 474
+   },
+   "dlog_per_yr": -0.11990108326831612,
+   "dlog_A": 0.05837702299890816,
+   "dlog_B": -0.45915604498358215,
+   "t": -0.8226292025820318,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi17-, rsi25-",
+   "passes": false,
+   "turnover": 724.031179072511,
+   "trades": 661,
+   "flips": 110,
+   "knife_share": 0.04066811909949165
+  },
+  "F1a.rsi25": {
+   "family": "F1a",
+   "all": {
+    "cagr": 2.9281245358712513,
+    "maxdd": 0.3636810674433555,
+    "sharpe": 2.610553927468381,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.9435330618107072,
+    "maxdd": 0.3636810674433556,
+    "sharpe": 2.1653580811206656,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.80230980246628,
+    "maxdd": 0.2879988901834658,
+    "sharpe": 3.403993429007791,
+    "n": 474
+   },
+   "dlog_per_yr": -0.051257473491613,
+   "dlog_A": -0.03392634610005321,
+   "dlog_B": -0.08423780451943359,
+   "t": -0.31374913436793966,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi20-, rsi30-",
+   "passes": false,
+   "turnover": 746.1564114159164,
+   "trades": 684,
+   "flips": 88,
+   "knife_share": 0.026143790849673203
+  },
+  "F1b.rsi25": {
+   "family": "F1b",
+   "all": {
+    "cagr": 2.850056263687103,
+    "maxdd": 0.4042851260464837,
+    "sharpe": 2.5788831211777583,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.8965880967128737,
+    "maxdd": 0.4042851260464837,
+    "sharpe": 2.168174775004522,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.616597509154967,
+    "maxdd": 0.32139411392810835,
+    "sharpe": 3.285649955384814,
+    "n": 474
+   },
+   "dlog_per_yr": -0.07133180599517883,
+   "dlog_A": -0.05000340168890939,
+   "dlog_B": -0.11191876946407138,
+   "t": -0.40210369016686154,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi20-, rsi30-",
+   "passes": false,
+   "turnover": 681.1984200575387,
+   "trades": 644,
+   "flips": 88,
+   "knife_share": 0.026143790849673203
+  },
+  "F1a.rsi30": {
+   "family": "F1a",
+   "all": {
+    "cagr": 2.9760389194198944,
+    "maxdd": 0.3314394227677111,
+    "sharpe": 2.626502016341176,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.4225592999417054,
+    "maxdd": 0.3314394227677111,
+    "sharpe": 2.4202593086273425,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.288496610210328,
+    "maxdd": 0.2879988901834657,
+    "sharpe": 2.994914420516738,
+    "n": 474
+   },
+   "dlog_per_yr": -0.0391334907998787,
+   "dlog_A": 0.11685167686363718,
+   "dlog_B": -0.33596602504564077,
+   "t": -0.2313474844430139,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi25-, rsi40-",
+   "passes": false,
+   "turnover": 731.1440646677299,
+   "trades": 674,
+   "flips": 74,
+   "knife_share": 0.013798111837327523
+  },
+  "F1b.rsi30": {
+   "family": "F1b",
+   "all": {
+    "cagr": 2.9415592656845524,
+    "maxdd": 0.3346847947366046,
+    "sharpe": 2.621181643759534,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.364019442985709,
+    "maxdd": 0.3346847947366045,
+    "sharpe": 2.4349083675092946,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.328555177818919,
+    "maxdd": 0.31182806305760913,
+    "sharpe": 2.9465258429593293,
+    "n": 474
+   },
+   "dlog_per_yr": -0.047843170400582724,
+   "dlog_A": 0.09959959415086654,
+   "dlog_B": -0.328419908006927,
+   "t": -0.2580677855123337,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi25-, rsi40-",
+   "passes": false,
+   "turnover": 654.0076391417233,
+   "trades": 631,
+   "flips": 74,
+   "knife_share": 0.013798111837327523
+  },
+  "F1a.rsi40": {
+   "family": "F1a",
+   "all": {
+    "cagr": 2.5870940351128007,
+    "maxdd": 0.3789408416875937,
+    "sharpe": 2.451121900958164,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.065180174123351,
+    "maxdd": 0.37894084168759357,
+    "sharpe": 2.2233140184729074,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.8382609159549634,
+    "maxdd": 0.2879988901834657,
+    "sharpe": 2.859662739806544,
+    "n": 474
+   },
+   "dlog_per_yr": -0.14207715439440158,
+   "dlog_A": 0.006569424374600459,
+   "dlog_B": -0.42494469458351514,
+   "t": -0.7935761352879912,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi30-, rsi60-",
+   "passes": false,
+   "turnover": 714.2890385241906,
+   "trades": 670,
+   "flips": 66,
+   "knife_share": 0.013798111837327523
+  },
+  "F1b.rsi40": {
+   "family": "F1b",
+   "all": {
+    "cagr": 2.499016511984511,
+    "maxdd": 0.334247347915382,
+    "sharpe": 2.4109477712930074,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.9648066578593015,
+    "maxdd": 0.334247347915382,
+    "sharpe": 2.2114854898958525,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.7958188380937337,
+    "maxdd": 0.31182806305760924,
+    "sharpe": 2.75585041606512,
+    "n": 474
+   },
+   "dlog_per_yr": -0.1669376357002119,
+   "dlog_A": -0.02672510548374361,
+   "dlog_B": -0.4337555729475837,
+   "t": -0.8358714483477169,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi30-, rsi60-",
+   "passes": false,
+   "turnover": 629.8658848400578,
+   "trades": 608,
+   "flips": 66,
+   "knife_share": 0.013798111837327523
+  },
+  "F1a.rsi60": {
+   "family": "F1a",
+   "all": {
+    "cagr": 2.683436281987399,
+    "maxdd": 0.3193511100988584,
+    "sharpe": 2.4772154391210393,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.055416927723964,
+    "maxdd": 0.3193511100988585,
+    "sharpe": 2.1871812521337715,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.257024923095368,
+    "maxdd": 0.2879988901834659,
+    "sharpe": 3.0081840582818806,
+    "n": 474
+   },
+   "dlog_per_yr": -0.11557347936689613,
+   "dlog_A": 0.0033791295331758904,
+   "dlog_B": -0.34193477309656894,
+   "t": -0.6061101804660717,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi40-",
+   "passes": false,
+   "turnover": 693.9104048280611,
+   "trades": 672,
+   "flips": 56,
+   "knife_share": 0.015250544662309368
+  },
+  "F1b.rsi60": {
+   "family": "F1b",
+   "all": {
+    "cagr": 2.5470853550535377,
+    "maxdd": 0.31182806305760935,
+    "sharpe": 2.4241143955753297,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.8778814056103124,
+    "maxdd": 0.30422246267939923,
+    "sharpe": 2.141959636725605,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.280285908600488,
+    "maxdd": 0.31182806305760935,
+    "sharpe": 2.9110895698562307,
+    "n": 474
+   },
+   "dlog_per_yr": -0.15329332861800227,
+   "dlog_A": -0.056482527272922835,
+   "dlog_B": -0.3375197902493557,
+   "t": -0.7191160151321865,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours rsi40-",
+   "passes": false,
+   "turnover": 587.2191267734904,
+   "trades": 584,
+   "flips": 56,
+   "knife_share": 0.015250544662309368
+  },
+  "F2.vote8-10-12": {
+   "family": "F2",
+   "all": {
+    "cagr": 3.1347198204748983,
+    "maxdd": 0.37822501675724096,
+    "sharpe": 2.687662843406471,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.0451097026793694,
+    "maxdd": 0.37822501675724074,
+    "sharpe": 2.226147426919873,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.40014826527704,
+    "maxdd": 0.3338293452789466,
+    "sharpe": 3.502497478193999,
+    "n": 474
+   },
+   "dlog_per_yr": 0.0,
+   "dlog_A": 0.0,
+   "dlog_B": 0.0,
+   "t": 0.0,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "vs member median +0.000/yr",
+   "passes": false,
+   "turnover": 808.0765432296387,
+   "trades": 705,
+   "flips": 130,
+   "knife_share": 0.037037037037037035
+  },
+  "F2.split8-10-12": {
+   "family": "F2",
+   "all": {
+    "cagr": 2.99978811094776,
+    "maxdd": 0.3940502232066452,
+    "sharpe": 2.647362818066913,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.9526116786345922,
+    "maxdd": 0.3940502232066454,
+    "sharpe": 2.1821622465577155,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.126964525313969,
+    "maxdd": 0.33923613384342555,
+    "sharpe": 3.470931257226661,
+    "n": 474
+   },
+   "dlog_per_yr": -0.03317818067904089,
+   "dlog_A": -0.03084683418228057,
+   "dlog_B": -0.037614624856420226,
+   "t": -1.1558489541969434,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "vs member median +0.000/yr",
+   "passes": false,
+   "turnover": 813.3439566242187,
+   "trades": 735,
+   "flips": null,
+   "knife_share": null
+  },
+  "F2.vote5-10-20": {
+   "family": "F2",
+   "all": {
+    "cagr": 3.0910034160677853,
+    "maxdd": 0.3338293452789466,
+    "sharpe": 2.6776632316629243,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.1240615870896953,
+    "maxdd": 0.3306123325392194,
+    "sharpe": 2.275423537675621,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.834161262272701,
+    "maxdd": 0.3338293452789466,
+    "sharpe": 3.3889316376252583,
+    "n": 474
+   },
+   "dlog_per_yr": -0.010629294165642615,
+   "dlog_A": 0.02559701829495737,
+   "dlog_B": -0.07956628538813458,
+   "t": -0.3480487528572505,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": true,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "vs member median -0.087/yr",
+   "passes": false,
+   "turnover": 822.5467047339595,
+   "trades": 710,
+   "flips": 140,
+   "knife_share": 0.04502541757443718
+  },
+  "F2.split5-10-20": {
+   "family": "F2",
+   "all": {
+    "cagr": 2.843613727974707,
+    "maxdd": 0.30765057500438675,
+    "sharpe": 2.707620499686687,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.9199587600190666,
+    "maxdd": 0.30765057500438686,
+    "sharpe": 2.2199548412322225,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.484582490103974,
+    "maxdd": 0.27869451432236947,
+    "sharpe": 3.626570434326629,
+    "n": 474
+   },
+   "dlog_per_yr": -0.07300656907319766,
+   "dlog_A": -0.04196743476608641,
+   "dlog_B": -0.13207260102470472,
+   "t": -1.1374194759102045,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": true,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "vs member median -0.087/yr",
+   "passes": false,
+   "turnover": 839.5080527810574,
+   "trades": 804,
+   "flips": null,
+   "knife_share": null
+  },
+  "F2.vote7-10-14-20-30": {
+   "family": "F2",
+   "all": {
+    "cagr": 3.047670457309584,
+    "maxdd": 0.4122217706342045,
+    "sharpe": 2.6509287001407325,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.2212647071307607,
+    "maxdd": 0.321598035107979,
+    "sharpe": 2.3176204036930255,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.250829771632759,
+    "maxdd": 0.4122217706342045,
+    "sharpe": 3.242554631766527,
+    "n": 474
+   },
+   "dlog_per_yr": -0.02127804822889573,
+   "dlog_A": 0.05623712096814447,
+   "dlog_B": -0.1687858174603942,
+   "t": -0.28539859970551473,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": true,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "vs member median -0.039/yr",
+   "passes": false,
+   "turnover": 791.0415225733428,
+   "trades": 698,
+   "flips": 116,
+   "knife_share": 0.03776325344952796
+  },
+  "F2.split7-10-14-20-30": {
+   "family": "F2",
+   "all": {
+    "cagr": 2.992977185292245,
+    "maxdd": 0.3382796386492356,
+    "sharpe": 2.754366108702099,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.1244457654977755,
+    "maxdd": 0.3382796386492356,
+    "sharpe": 2.339004576598371,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.368054165696482,
+    "maxdd": 0.325034001549094,
+    "sharpe": 3.519860467209117,
+    "n": 474
+   },
+   "dlog_per_yr": -0.03488245374390169,
+   "dlog_A": 0.025719984752988357,
+   "dlog_B": -0.15020608143207648,
+   "t": -0.5232954112452797,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": true,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "vs member median -0.039/yr",
+   "passes": false,
+   "turnover": 801.7727880254249,
+   "trades": 810,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3a.pops5": {
+   "family": "F3",
+   "all": {
+    "cagr": 2.7757618317205326,
+    "maxdd": 0.3338293452789468,
+    "sharpe": 2.5508939127827897,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.9536443796207874,
+    "maxdd": 0.3330056613039881,
+    "sharpe": 2.1960338888887114,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.024870504869348,
+    "maxdd": 0.3338293452789468,
+    "sharpe": 3.170505585474491,
+    "n": 474
+   },
+   "dlog_per_yr": -0.09081739606535337,
+   "dlog_A": -0.030497136848967082,
+   "dlog_B": -0.20560404967965815,
+   "t": -0.8995422238486656,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours pops7-",
+   "passes": false,
+   "turnover": 839.3139180494998,
+   "trades": 708,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3b.dips5": {
+   "family": "F3",
+   "all": {
+    "cagr": 2.664456700053748,
+    "maxdd": 0.5228235381188144,
+    "sharpe": 2.4856568778892734,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.0319134264777072,
+    "maxdd": 0.5228235381188145,
+    "sharpe": 2.2215858028060707,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.255438637473722,
+    "maxdd": 0.3338293452789467,
+    "sharpe": 2.9505561837775045,
+    "n": 474
+   },
+   "dlog_per_yr": -0.12073948387729995,
+   "dlog_A": -0.004343013565451078,
+   "dlog_B": -0.34223656451292794,
+   "t": -1.137882591418034,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": true,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours dips7+",
+   "passes": false,
+   "turnover": 824.0967954074065,
+   "trades": 713,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3c.both5": {
+   "family": "F3",
+   "all": {
+    "cagr": 2.395928403242695,
+    "maxdd": 0.48860048638074716,
+    "sharpe": 2.3722287669593904,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.006813295210286,
+    "maxdd": 0.48860048638074727,
+    "sharpe": 2.230047194545015,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.2808848805800253,
+    "maxdd": 0.3338293452789468,
+    "sharpe": 2.622707513929695,
+    "n": 474
+   },
+   "dlog_per_yr": -0.19684238257887315,
+   "dlog_A": -0.01265611563978932,
+   "dlog_B": -0.5473402998342606,
+   "t": -1.327770866767884,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours both7-",
+   "passes": false,
+   "turnover": 862.2484501541485,
+   "trades": 716,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3a.pops7": {
+   "family": "F3",
+   "all": {
+    "cagr": 2.779113231035105,
+    "maxdd": 0.3687734446008557,
+    "sharpe": 2.536742870331802,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.6826788704540485,
+    "maxdd": 0.3687734446008559,
+    "sharpe": 2.010745838706867,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.254204112260984,
+    "maxdd": 0.3338293452789467,
+    "sharpe": 3.4602059605163764,
+    "n": 474
+   },
+   "dlog_per_yr": -0.0899301809872554,
+   "dlog_A": -0.12672105386095844,
+   "dlog_B": -0.019918857501854178,
+   "t": -1.0694298568200509,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours pops5-, pops14-",
+   "passes": false,
+   "turnover": 841.6540388351261,
+   "trades": 716,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3b.dips7": {
+   "family": "F3",
+   "all": {
+    "cagr": 3.1826281392453373,
+    "maxdd": 0.3782250167572405,
+    "sharpe": 2.7055593853095483,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.5806902984248827,
+    "maxdd": 0.37822501675724096,
+    "sharpe": 2.5048191231794816,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.621669522526746,
+    "maxdd": 0.3338293452789469,
+    "sharpe": 3.0613533100529913,
+    "n": 474
+   },
+   "dlog_per_yr": 0.011520222275034775,
+   "dlog_A": 0.162018674948743,
+   "dlog_B": -0.27487134800278124,
+   "t": 0.15638689364659838,
+   "p_fw": 0.9998,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": true
+   },
+   "plateau_note": "neighbours dips5-, dips14-",
+   "passes": false,
+   "turnover": 816.9293135356005,
+   "trades": 707,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3c.both7": {
+   "family": "F3",
+   "all": {
+    "cagr": 2.822587384310958,
+    "maxdd": 0.3687734446008555,
+    "sharpe": 2.554571525236012,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 2.1545143338422674,
+    "maxdd": 0.3687734446008557,
+    "sharpe": 2.2900163728196428,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.509487057857068,
+    "maxdd": 0.3338293452789469,
+    "sharpe": 3.020401992487182,
+    "n": 474
+   },
+   "dlog_per_yr": -0.0784920490600043,
+   "dlog_A": 0.03529762108778458,
+   "dlog_B": -0.29502850997415114,
+   "t": -0.7020704937471942,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours both5-, both14-",
+   "passes": false,
+   "turnover": 851.247121775448,
+   "trades": 718,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3a.pops14": {
+   "family": "F3",
+   "all": {
+    "cagr": 2.3768624934967892,
+    "maxdd": 0.45436864570793534,
+    "sharpe": 2.355440672960112,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.3615952048485767,
+    "maxdd": 0.4543686457079351,
+    "sharpe": 1.8007150683847544,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.668945007745658,
+    "maxdd": 0.3338293452789468,
+    "sharpe": 3.31716655573048,
+    "n": 474
+   },
+   "dlog_per_yr": -0.20247254609649662,
+   "dlog_A": -0.25419960271068154,
+   "dlog_B": -0.10403835819355411,
+   "t": -2.1847542005485225,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours pops7-, pops20-",
+   "passes": false,
+   "turnover": 795.2087452187773,
+   "trades": 696,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3b.dips14": {
+   "family": "F3",
+   "all": {
+    "cagr": 2.7121477586901777,
+    "maxdd": 0.39605994662219457,
+    "sharpe": 2.48663605671865,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.872343024954275,
+    "maxdd": 0.3960599466221947,
+    "sharpe": 2.0954134372920747,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.04774203828313,
+    "maxdd": 0.3338293452789468,
+    "sharpe": 3.1901744958363407,
+    "n": 474
+   },
+   "dlog_per_yr": -0.10780894831944138,
+   "dlog_A": -0.058408845953358456,
+   "dlog_B": -0.20181505029034177,
+   "t": -1.5810268593411712,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours dips7+, dips20-",
+   "passes": false,
+   "turnover": 803.2263056079963,
+   "trades": 700,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3c.both14": {
+   "family": "F3",
+   "all": {
+    "cagr": 2.0880274966606764,
+    "maxdd": 0.41403761499848735,
+    "sharpe": 2.192478180530633,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.2904224966592546,
+    "maxdd": 0.41403761499848757,
+    "sharpe": 1.7297427783570227,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.452792769598244,
+    "maxdd": 0.3338293452789468,
+    "sharpe": 3.0076654073977593,
+    "n": 474
+   },
+   "dlog_per_yr": -0.2918870316508779,
+   "dlog_A": -0.2848006307588594,
+   "dlog_B": -0.30537212364370653,
+   "t": -2.6364924226738573,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours both7-, both20-",
+   "passes": false,
+   "turnover": 791.869332187706,
+   "trades": 692,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3a.pops20": {
+   "family": "F3",
+   "all": {
+    "cagr": 2.36128899749701,
+    "maxdd": 0.4118385958482773,
+    "sharpe": 2.3578200599813846,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.4559502628308105,
+    "maxdd": 0.41183859584827687,
+    "sharpe": 1.8847567995020105,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.107343284740751,
+    "maxdd": 0.3338293452789468,
+    "sharpe": 3.1693198026845395,
+    "n": 474
+   },
+   "dlog_per_yr": -0.2070950375174886,
+   "dlog_A": -0.21502316887595121,
+   "dlog_B": -0.1920081715146757,
+   "t": -1.941175323662475,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours pops14-",
+   "passes": false,
+   "turnover": 775.2770949285492,
+   "trades": 691,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3b.dips20": {
+   "family": "F3",
+   "all": {
+    "cagr": 2.4549665495139017,
+    "maxdd": 0.4646377844098064,
+    "sharpe": 2.347775821504282,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.7211657149331794,
+    "maxdd": 0.4646377844098065,
+    "sharpe": 1.9923060262440087,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.4420048974218025,
+    "maxdd": 0.2813991927758478,
+    "sharpe": 2.9818794473231227,
+    "n": 474
+   },
+   "dlog_per_yr": -0.1796067927215598,
+   "dlog_A": -0.11247656750149007,
+   "dlog_B": -0.30735249556650246,
+   "t": -1.639499030006785,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours dips14-",
+   "passes": false,
+   "turnover": 796.5112424147997,
+   "trades": 705,
+   "flips": null,
+   "knife_share": null
+  },
+  "F3c.both20": {
+   "family": "F3",
+   "all": {
+    "cagr": 1.8271750813361392,
+    "maxdd": 0.4645638431079112,
+    "sharpe": 2.036392356768537,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.2156790772239279,
+    "maxdd": 0.4645638431079109,
+    "sharpe": 1.6754039410069566,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.4954424239931496,
+    "maxdd": 0.2813991927758479,
+    "sharpe": 2.6610363029219815,
+    "n": 474
+   },
+   "dlog_per_yr": -0.380141559490384,
+   "dlog_A": -0.31797799001522564,
+   "dlog_B": -0.49843594697264737,
+   "t": -2.546913846416569,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours both14-",
+   "passes": false,
+   "turnover": 762.2206652248301,
+   "trades": 691,
+   "flips": null,
+   "knife_share": null
+  },
+  "F4.mom5": {
+   "family": "F4",
+   "all": {
+    "cagr": 1.9635368288990684,
+    "maxdd": 0.4067880934281397,
+    "sharpe": 2.16823700710936,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 0.9062710378712602,
+    "maxdd": 0.4067880934281397,
+    "sharpe": 1.434057993917355,
+    "n": 902
+   },
+   "B": {
+    "cagr": 5.862227343730582,
+    "maxdd": 0.22190433339592786,
+    "sharpe": 3.455846335399732,
+    "n": 474
+   },
+   "dlog_per_yr": -0.3330361384633053,
+   "dlog_A": -0.46838793009238205,
+   "dlog_B": -0.07546796114383832,
+   "t": -1.693621465872822,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours mom10-",
+   "passes": false,
+   "turnover": 913.0366287350898,
+   "trades": 749,
+   "flips": 250,
+   "knife_share": 0.06753812636165578
+  },
+  "F4.mom10": {
+   "family": "F4",
+   "all": {
+    "cagr": 2.4054177354367914,
+    "maxdd": 0.36524700096457197,
+    "sharpe": 2.4328583075063537,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.6838364567898676,
+    "maxdd": 0.36524700096457174,
+    "sharpe": 2.097266311229009,
+    "n": 902
+   },
+   "B": {
+    "cagr": 4.357511269169291,
+    "maxdd": 0.3533340941750698,
+    "sharpe": 3.0026531886386794,
+    "n": 474
+   },
+   "dlog_per_yr": -0.19405195310859027,
+   "dlog_A": -0.12628964305406332,
+   "dlog_B": -0.323000484056235,
+   "t": -1.174736854412896,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours mom5-, mom20-",
+   "passes": false,
+   "turnover": 857.3906057812355,
+   "trades": 721,
+   "flips": 153,
+   "knife_share": 0.034858387799564274
+  },
+  "F4.mom20": {
+   "family": "F4",
+   "all": {
+    "cagr": 2.631849696027281,
+    "maxdd": 0.4009122818869898,
+    "sharpe": 2.5110001209892405,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.533771774254721,
+    "maxdd": 0.37825178212213395,
+    "sharpe": 1.949945027670529,
+    "n": 902
+   },
+   "B": {
+    "cagr": 6.205670513717497,
+    "maxdd": 0.4009122818869898,
+    "sharpe": 3.478824082582874,
+    "n": 474
+   },
+   "dlog_per_yr": -0.12967749150245497,
+   "dlog_A": -0.1838279152311413,
+   "dlog_B": -0.02663174845757094,
+   "t": -0.8091556299752856,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours mom10-, mom40-",
+   "passes": false,
+   "turnover": 791.7487165849719,
+   "trades": 703,
+   "flips": 92,
+   "knife_share": 0.025417574437182282
+  },
+  "F4.mom40": {
+   "family": "F4",
+   "all": {
+    "cagr": 2.1050634842025686,
+    "maxdd": 0.3243287034338048,
+    "sharpe": 2.2189562742085953,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.5637319941353707,
+    "maxdd": 0.32432870343380493,
+    "sharpe": 1.94061229508595,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.4708711255171982,
+    "maxdd": 0.30394070606308676,
+    "sharpe": 2.705664884692061,
+    "n": 474
+   },
+   "dlog_per_yr": -0.2863854071584321,
+   "dlog_A": -0.17207292053851306,
+   "dlog_B": -0.5039167635532993,
+   "t": -1.3634772157375108,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours mom20-, mom60-",
+   "passes": false,
+   "turnover": 740.5505144586393,
+   "trades": 689,
+   "flips": 68,
+   "knife_share": 0.013071895424836602
+  },
+  "F4.mom60": {
+   "family": "F4",
+   "all": {
+    "cagr": 1.7221999967385138,
+    "maxdd": 0.4913877483712571,
+    "sharpe": 1.9846542491980272,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.207947934456496,
+    "maxdd": 0.4913877483712574,
+    "sharpe": 1.6528561654898537,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.0546921313671334,
+    "maxdd": 0.3065538916795598,
+    "sharpe": 2.5817775025365086,
+    "n": 474
+   },
+   "dlog_per_yr": -0.4179791924150614,
+   "dlog_A": -0.3214733799377694,
+   "dlog_B": -0.6016252743866168,
+   "t": -1.8083273603015793,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours mom40-, mom120-",
+   "passes": false,
+   "turnover": 700.9360457953928,
+   "trades": 673,
+   "flips": 59,
+   "knife_share": 0.013798111837327523
+  },
+  "F4.mom120": {
+   "family": "F4",
+   "all": {
+    "cagr": 1.6832403969466108,
+    "maxdd": 0.4384136680666465,
+    "sharpe": 1.9256259560576379,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.2494435104922856,
+    "maxdd": 0.43841366806664617,
+    "sharpe": 1.6335970308955092,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.7531534242881364,
+    "maxdd": 0.2879988901834658,
+    "sharpe": 2.482903531394376,
+    "n": 474
+   },
+   "dlog_per_yr": -0.43239440064850404,
+   "dlog_A": -0.30285407070994647,
+   "dlog_B": -0.678903636101202,
+   "t": -1.8391597745477002,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours mom60-",
+   "passes": false,
+   "turnover": 651.7851691569288,
+   "trades": 666,
+   "flips": 48,
+   "knife_share": 0.00944081336238199
+  },
+  "F5.sma10": {
+   "family": "F5",
+   "all": {
+    "cagr": 1.2756489119489718,
+    "maxdd": 0.42765167439293583,
+    "sharpe": 1.7053910909532433,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 0.7774866517971972,
+    "maxdd": 0.42765167439293583,
+    "sharpe": 1.3003403847508666,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.641582125263347,
+    "maxdd": 0.31754853725274235,
+    "sharpe": 2.418523181519545,
+    "n": 474
+   },
+   "dlog_per_yr": -0.5971543203804123,
+   "dlog_A": -0.5383365545357809,
+   "dlog_B": -0.7090817988442462,
+   "t": -2.897735165979544,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours sma20-",
+   "passes": false,
+   "turnover": 907.3209000086003,
+   "trades": 739,
+   "flips": 241,
+   "knife_share": 0.09731299927378359
+  },
+  "F5.ema10": {
+   "family": "F5",
+   "all": {
+    "cagr": 1.2518466993151947,
+    "maxdd": 0.48224055140926225,
+    "sharpe": 1.6778181356517163,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 0.8274035798185069,
+    "maxdd": 0.4822405514092617,
+    "sharpe": 1.3399405046559842,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.350772863515191,
+    "maxdd": 0.3886321023331105,
+    "sharpe": 2.277307981339284,
+    "n": 474
+   },
+   "dlog_per_yr": -0.6076689333006713,
+   "dlog_A": -0.5106407771167273,
+   "dlog_B": -0.7923090111021862,
+   "t": -3.081734146395197,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours ema20-",
+   "passes": false,
+   "turnover": 917.8791522149174,
+   "trades": 741,
+   "flips": 259,
+   "knife_share": 0.08641975308641975
+  },
+  "F5.sma20": {
+   "family": "F5",
+   "all": {
+    "cagr": 1.687848013394727,
+    "maxdd": 0.4727422059043651,
+    "sharpe": 1.9919846845329026,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.0856413036728059,
+    "maxdd": 0.4727422059043652,
+    "sharpe": 1.6032592707048487,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.3555575653967153,
+    "maxdd": 0.33065232834539193,
+    "sharpe": 2.6533148602061836,
+    "n": 474
+   },
+   "dlog_per_yr": -0.43067868970637396,
+   "dlog_A": -0.3784605400083866,
+   "dlog_B": -0.530047404954443,
+   "t": -2.2162006215768857,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours sma10-, sma50-",
+   "passes": false,
+   "turnover": 828.7463577466601,
+   "trades": 708,
+   "flips": 153,
+   "knife_share": 0.054466230936819175
+  },
+  "F5.ema20": {
+   "family": "F5",
+   "all": {
+    "cagr": 1.5188635681078546,
+    "maxdd": 0.42674213699298935,
+    "sharpe": 1.8737039138739988,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.3065540546122403,
+    "maxdd": 0.3352347404787801,
+    "sharpe": 1.7664128685504792,
+    "n": 902
+   },
+   "B": {
+    "cagr": 1.9783484647499967,
+    "maxdd": 0.42674213699298935,
+    "sharpe": 2.0625424049322247,
+    "n": 474
+   },
+   "dlog_per_yr": -0.49561173336133796,
+   "dlog_A": -0.277782268150489,
+   "dlog_B": -0.9101310954292402,
+   "t": -2.566502223782447,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours ema10-, ema50-",
+   "passes": false,
+   "turnover": 836.353988425575,
+   "trades": 708,
+   "flips": 165,
+   "knife_share": 0.04938271604938271
+  },
+  "F5.sma50": {
+   "family": "F5",
+   "all": {
+    "cagr": 2.0157623916884386,
+    "maxdd": 0.40445096402757097,
+    "sharpe": 2.168648646000767,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.7372864648043653,
+    "maxdd": 0.29910675615337257,
+    "sharpe": 2.060390715567266,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.6263310927554118,
+    "maxdd": 0.40445096402757097,
+    "sharpe": 2.360011992238794,
+    "n": 474
+   },
+   "dlog_per_yr": -0.3155669036872647,
+   "dlog_A": -0.10656983928966245,
+   "dlog_B": -0.713278616950212,
+   "t": -1.5297629227634026,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours sma20-, sma100-",
+   "passes": false,
+   "turnover": 757.213643189888,
+   "trades": 699,
+   "flips": 87,
+   "knife_share": 0.037037037037037035
+  },
+  "F5.ema50": {
+   "family": "F5",
+   "all": {
+    "cagr": 2.272248681971024,
+    "maxdd": 0.3959062648040176,
+    "sharpe": 2.297998055524303,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.9773331850010623,
+    "maxdd": 0.34513793629418166,
+    "sharpe": 2.188809647850523,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.9165465678390765,
+    "maxdd": 0.3959062648040176,
+    "sharpe": 2.4920916803537967,
+    "n": 474
+   },
+   "dlog_per_yr": -0.23394214923299683,
+   "dlog_A": -0.02250893217611175,
+   "dlog_B": -0.6362897479361824,
+   "t": -1.1602370663455912,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours ema20-, ema100-",
+   "passes": false,
+   "turnover": 740.7789777824571,
+   "trades": 687,
+   "flips": 87,
+   "knife_share": 0.030501089324618737
+  },
+  "F5.sma100": {
+   "family": "F5",
+   "all": {
+    "cagr": 1.6198872281365628,
+    "maxdd": 0.3686375800479189,
+    "sharpe": 1.9003941445603574,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.3992145573986323,
+    "maxdd": 0.35728115452651643,
+    "sharpe": 1.7729264886128457,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.0974273821242866,
+    "maxdd": 0.3686375800479189,
+    "sharpe": 2.131178490223168,
+    "n": 474
+   },
+   "dlog_per_yr": -0.4562882939821169,
+   "dlog_A": -0.23839551162584752,
+   "dlog_B": -0.870928145638984,
+   "t": -2.0058074458901145,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours sma50-, sma200-",
+   "passes": false,
+   "turnover": 710.6305065107264,
+   "trades": 679,
+   "flips": 65,
+   "knife_share": 0.02251270878721859
+  },
+  "F5.ema100": {
+   "family": "F5",
+   "all": {
+    "cagr": 1.8956064738686287,
+    "maxdd": 0.35728115452651654,
+    "sharpe": 2.058655106818515,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.5142217080023195,
+    "maxdd": 0.3572811545265163,
+    "sharpe": 1.8414980353398445,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.7884279980069744,
+    "maxdd": 0.35640411124526383,
+    "sharpe": 2.455343226838406,
+    "n": 474
+   },
+   "dlog_per_yr": -0.35622498893775856,
+   "dlog_A": -0.19157363204517627,
+   "dlog_B": -0.6695488790582419,
+   "t": -1.5950781399929232,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours ema50-, ema200-",
+   "passes": false,
+   "turnover": 700.5481811280429,
+   "trades": 675,
+   "flips": 71,
+   "knife_share": 0.017429193899782137
+  },
+  "F5.sma200": {
+   "family": "F5",
+   "all": {
+    "cagr": 1.6605908446804154,
+    "maxdd": 0.5404043220544985,
+    "sharpe": 1.8902277384487183,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.1841420269022578,
+    "maxdd": 0.5404043220544983,
+    "sharpe": 1.559486394926336,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.873075100919182,
+    "maxdd": 0.3564041112452636,
+    "sharpe": 2.544106453662436,
+    "n": 474
+   },
+   "dlog_per_yr": -0.44087134794432836,
+   "dlog_A": -0.33231384126424,
+   "dlog_B": -0.647451244622471,
+   "t": -1.8633075634177148,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours sma100-",
+   "passes": false,
+   "turnover": 630.2401307322124,
+   "trades": 651,
+   "flips": 27,
+   "knife_share": 0.008714596949891068
+  },
+  "F5.ema200": {
+   "family": "F5",
+   "all": {
+    "cagr": 1.652895793224347,
+    "maxdd": 0.5385836445268443,
+    "sharpe": 1.8690358391520019,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.2064164949455747,
+    "maxdd": 0.538583644526844,
+    "sharpe": 1.5664063847197867,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.7672001606551007,
+    "maxdd": 0.2876307026289713,
+    "sharpe": 2.460251509124065,
+    "n": 474
+   },
+   "dlog_per_yr": -0.44376777259357203,
+   "dlog_A": -0.3221672236821416,
+   "dlog_B": -0.6751679732646902,
+   "t": -1.8334160693777874,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours ema100-",
+   "passes": false,
+   "turnover": 632.1182452970049,
+   "trades": 658,
+   "flips": 29,
+   "knife_share": 0.011619462599854757
+  },
+  "F6.sma5x20": {
+   "family": "F6",
+   "all": {
+    "cagr": 2.0263182023837407,
+    "maxdd": 0.33799191569523457,
+    "sharpe": 2.2093002310358236,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.3641783146846298,
+    "maxdd": 0.3175643509859899,
+    "sharpe": 1.850134033816154,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.8414628193259377,
+    "maxdd": 0.33799191569523457,
+    "sharpe": 2.8151969769020413,
+    "n": 474
+   },
+   "dlog_per_yr": -0.3120728021868341,
+   "dlog_A": -0.2531064017425727,
+   "dlog_B": -0.42428312539511237,
+   "t": -1.5348156169125993,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours sma10x20-",
+   "passes": false,
+   "turnover": 772.0347386480819,
+   "trades": 713,
+   "flips": 83,
+   "knife_share": 0.012345679012345678
+  },
+  "F6.ema5x20": {
+   "family": "F6",
+   "all": {
+    "cagr": 2.064987355452921,
+    "maxdd": 0.35979467669559906,
+    "sharpe": 2.203937842430615,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.6216927420696692,
+    "maxdd": 0.3597946766955986,
+    "sharpe": 2.0045410510925463,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.1260850920365737,
+    "maxdd": 0.31415507941021004,
+    "sharpe": 2.548041159751341,
+    "n": 474
+   },
+   "dlog_per_yr": -0.2993761242170991,
+   "dlog_A": -0.1497167337558835,
+   "dlog_B": -0.5841709980483574,
+   "t": -1.5713976946866874,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours ema10x20-",
+   "passes": false,
+   "turnover": 741.5684980724747,
+   "trades": 700,
+   "flips": 71,
+   "knife_share": 0.012345679012345678
+  },
+  "F6.sma10x20": {
+   "family": "F6",
+   "all": {
+    "cagr": 1.8601685598221795,
+    "maxdd": 0.4464614280515038,
+    "sharpe": 2.0874919504224607,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.4539775657893528,
+    "maxdd": 0.36325639823539413,
+    "sharpe": 1.909880899788705,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.828054221375347,
+    "maxdd": 0.4464614280515038,
+    "sharpe": 2.3907755346419632,
+    "n": 474
+   },
+   "dlog_per_yr": -0.36853900803698464,
+   "dlog_A": -0.21582672331359745,
+   "dlog_B": -0.6591433979536405,
+   "t": -1.7833713301997787,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours sma5x20-, sma10x50-",
+   "passes": false,
+   "turnover": 759.5464570537288,
+   "trades": 701,
+   "flips": 67,
+   "knife_share": 0.006535947712418301
+  },
+  "F6.ema10x20": {
+   "family": "F6",
+   "all": {
+    "cagr": 2.122388778402345,
+    "maxdd": 0.36884925689579817,
+    "sharpe": 2.2251300327163577,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.9035650755961036,
+    "maxdd": 0.35356523708045373,
+    "sharpe": 2.1720858240376835,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.5853822543461753,
+    "maxdd": 0.36884925689579817,
+    "sharpe": 2.3232056930979232,
+    "n": 474
+   },
+   "dlog_per_yr": -0.28082122515635627,
+   "dlog_A": -0.047597609275814204,
+   "dlog_B": -0.7246349414522393,
+   "t": -1.4342796715717432,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours ema5x20-, ema10x50-",
+   "passes": false,
+   "turnover": 719.040947372055,
+   "trades": 691,
+   "flips": 51,
+   "knife_share": 0.008714596949891068
+  },
+  "F6.sma10x50": {
+   "family": "F6",
+   "all": {
+    "cagr": 1.6996280467586398,
+    "maxdd": 0.392434335435081,
+    "sharpe": 1.9783504527637783,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.3343541970280564,
+    "maxdd": 0.3797276929856678,
+    "sharpe": 1.7740102975813887,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.560008632965875,
+    "maxdd": 0.392434335435081,
+    "sharpe": 2.335273322948575,
+    "n": 474
+   },
+   "dlog_per_yr": -0.42630556507211365,
+   "dlog_A": -0.26580164994708394,
+   "dlog_B": -0.7317370660062418,
+   "t": -1.9273194614708702,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours sma10x20-, sma20x50-",
+   "passes": false,
+   "turnover": 709.0134720566475,
+   "trades": 679,
+   "flips": 36,
+   "knife_share": 0.004357298474945534
+  },
+  "F6.ema10x50": {
+   "family": "F6",
+   "all": {
+    "cagr": 1.7352926709927345,
+    "maxdd": 0.4168820667384383,
+    "sharpe": 1.9780065473175785,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.2833841285341085,
+    "maxdd": 0.40852175301392324,
+    "sharpe": 1.7087183250251867,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.856937501655517,
+    "maxdd": 0.4168820667384383,
+    "sharpe": 2.4534270319829012,
+    "n": 474
+   },
+   "dlog_per_yr": -0.41318112848021255,
+   "dlog_A": -0.28787831823348486,
+   "dlog_B": -0.6516265606374877,
+   "t": -1.8773292657998286,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours ema10x20-, ema20x50-",
+   "passes": false,
+   "turnover": 701.4390944223137,
+   "trades": 679,
+   "flips": 35,
+   "knife_share": 0.006535947712418301
+  },
+  "F6.sma20x50": {
+   "family": "F6",
+   "all": {
+    "cagr": 1.3905213819942897,
+    "maxdd": 0.35338482938863525,
+    "sharpe": 1.7770061696497277,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.2218059139982218,
+    "maxdd": 0.35338482938863536,
+    "sharpe": 1.6822909596439493,
+    "n": 902
+   },
+   "B": {
+    "cagr": 1.7477732652414648,
+    "maxdd": 0.3077154203578921,
+    "sharpe": 1.945462438631902,
+    "n": 474
+   },
+   "dlog_per_yr": -0.5479080745188956,
+   "dlog_A": -0.3152165876985156,
+   "dlog_B": -0.9907091739112647,
+   "t": -2.2863375902001946,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours sma10x50-, sma50x200-",
+   "passes": false,
+   "turnover": 685.2296155692748,
+   "trades": 665,
+   "flips": 28,
+   "knife_share": 0.0014524328249818446
+  },
+  "F6.ema20x50": {
+   "family": "F6",
+   "all": {
+    "cagr": 1.4670061243501413,
+    "maxdd": 0.3846759875981378,
+    "sharpe": 1.791827547113536,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 1.19297706373762,
+    "maxdd": 0.3846759875981375,
+    "sharpe": 1.6125539287876156,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.0865969677909897,
+    "maxdd": 0.3657558779862551,
+    "sharpe": 2.1178757160637827,
+    "n": 474
+   },
+   "dlog_per_yr": -0.5164142480794742,
+   "dlog_A": -0.3282769171363184,
+   "dlog_B": -0.8744308567518931,
+   "t": -2.224027958180806,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": true,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours ema10x50-, ema50x200-",
+   "passes": false,
+   "turnover": 665.9385630010713,
+   "trades": 672,
+   "flips": 27,
+   "knife_share": 0.005083514887436456
+  },
+  "F6.sma50x200": {
+   "family": "F6",
+   "all": {
+    "cagr": 1.2263056313297236,
+    "maxdd": 0.5865523626535778,
+    "sharpe": 1.6050953814270577,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 0.6949503286361831,
+    "maxdd": 0.5865523626535778,
+    "sharpe": 1.152276618157443,
+    "n": 902
+   },
+   "B": {
+    "cagr": 2.740652882881916,
+    "maxdd": 0.3042464154326918,
+    "sharpe": 2.5269067513978434,
+    "n": 474
+   },
+   "dlog_per_yr": -0.6190760240171063,
+   "dlog_A": -0.5858834919017961,
+   "dlog_B": -0.6822398720508825,
+   "t": -2.382232057735411,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours sma20x50-",
+   "passes": false,
+   "turnover": 615.4163077979476,
+   "trades": 649,
+   "flips": 4,
+   "knife_share": 0.0
+  },
+  "F6.ema50x200": {
+   "family": "F6",
+   "all": {
+    "cagr": 1.3781613999518045,
+    "maxdd": 0.5865523626535777,
+    "sharpe": 1.7042198473839008,
+    "n": 1376
+   },
+   "A": {
+    "cagr": 0.7951059651628152,
+    "maxdd": 0.5865523626535774,
+    "sharpe": 1.2400739641353726,
+    "n": 902
+   },
+   "B": {
+    "cagr": 3.061528058385199,
+    "maxdd": 0.3013972250439291,
+    "sharpe": 2.6439685376537687,
+    "n": 474
+   },
+   "dlog_per_yr": -0.553091900026197,
+   "dlog_A": -0.5284728739506795,
+   "dlog_B": -0.5999407639926888,
+   "t": -2.1157671250697185,
+   "p_fw": 1.0,
+   "conditions": {
+    "1_fw_p<0.10": false,
+    "2_beats_in_A_and_B": false,
+    "3_plateau": false,
+    "4_maxdd_within_5pts": false,
+    "5_positive_at_2x_cost": false
+   },
+   "plateau_note": "neighbours ema20x50-",
+   "passes": false,
+   "turnover": 607.1979164651468,
+   "trades": 648,
+   "flips": 4,
+   "knife_share": 0.0
+  }
+ },
+ "beside": {
+  "pbo": {
+   "pbo": 0.44047619047619047,
+   "n_splits": 252.0,
+   "sampled": 0.0,
+   "logit_mean": 0.3343472396400584,
+   "winner_is_sharpe_mean": 0.185353425993948,
+   "winner_oos_sharpe_mean": 0.15115906654661992
+  },
+  "best_by_t": "F1b.rsi12",
+  "deflated_sharpe_of_best_difference": {
+   "sr0": 0.061041020287664415,
+   "dsr": 0.1963870355228099,
+   "p_value": 0.8036129644771901,
+   "n_trials": 101,
+   "n_obs": 1376
+  },
+  "fragile": {
+   "f1a_cells_more_than_50pts_from_live_on_A": [
+    "F1a.rsi3",
+    "F1a.rsi5",
+    "F1a.rsi7"
+   ],
+   "share": 0.21428571428571427,
+   "supported": false
+  },
+  "max_stat_95": 3.8275732141655388,
+  "max_stat_90": 3.3622116086599707
+ },
+ "passing": [],
+ "tier_c": {
+  "span": [
+   "2007-09-05",
+   "2020-12-01"
+  ],
+  "base": {
+   "cagr": 0.5062934020894965,
+   "maxdd": 0.6587587400890079,
+   "sharpe": 1.0152116914167975,
+   "n": 3335
+  },
+  "cells": {
+   "F1a.rsi3": {
+    "cagr": 0.440464680053414,
+    "maxdd": 0.7758164151902587,
+    "sharpe": 0.9432844231490588,
+    "n": 3335,
+    "dlog_per_yr": -0.044686176492139094
+   },
+   "F1b.rsi3": {
+    "cagr": 0.4760679098560603,
+    "maxdd": 0.7927086786925576,
+    "sharpe": 0.9841341743493174,
+    "n": 3335,
+    "dlog_per_yr": -0.02027019799946371
+   },
+   "F1a.rsi5": {
+    "cagr": 0.5806359992894792,
+    "maxdd": 0.7126892347423319,
+    "sharpe": 1.10952426743558,
+    "n": 3335,
+    "dlog_per_yr": 0.048175364733881135
+   },
+   "F1b.rsi5": {
+    "cagr": 0.5624827271681889,
+    "maxdd": 0.7327014360932251,
+    "sharpe": 1.0866267352822296,
+    "n": 3335,
+    "dlog_per_yr": 0.03662411544803833
+   },
+   "F1a.rsi7": {
+    "cagr": 0.47493131323859683,
+    "maxdd": 0.6936764152904547,
+    "sharpe": 0.9787384544279292,
+    "n": 3335,
+    "dlog_per_yr": -0.021040511095293157
+   },
+   "F1b.rsi7": {
+    "cagr": 0.49427222108646673,
+    "maxdd": 0.690759159727633,
+    "sharpe": 1.001724373711632,
+    "n": 3335,
+    "dlog_per_yr": -0.008012652831878868
+   },
+   "F1a.rsi8": {
+    "cagr": 0.5224230621014128,
+    "maxdd": 0.7119394031852271,
+    "sharpe": 1.0361740646604174,
+    "n": 3335,
+    "dlog_per_yr": 0.010651252894575086
+   },
+   "F1b.rsi8": {
+    "cagr": 0.5439980373346511,
+    "maxdd": 0.7129214222129541,
+    "sharpe": 1.0609202835887002,
+    "n": 3335,
+    "dlog_per_yr": 0.02472324793854335
+   },
+   "F1a.rsi9": {
+    "cagr": 0.5209574943849591,
+    "maxdd": 0.6857249545450781,
+    "sharpe": 1.033921878542878,
+    "n": 3335,
+    "dlog_per_yr": 0.009688134544740446
+   },
+   "F1b.rsi9": {
+    "cagr": 0.543963951846318,
+    "maxdd": 0.6777981327405576,
+    "sharpe": 1.0610511829943277,
+    "n": 3335,
+    "dlog_per_yr": 0.024701171573319993
+   },
+   "F1a.rsi10": {
+    "cagr": 0.5062934020894965,
+    "maxdd": 0.6587587400890079,
+    "sharpe": 1.0152116914167975,
+    "n": 3335,
+    "dlog_per_yr": 0.0
+   },
+   "F1b.rsi10": {
+    "cagr": 0.5062934020894965,
+    "maxdd": 0.6587587400890079,
+    "sharpe": 1.0152116914167975,
+    "n": 3335,
+    "dlog_per_yr": 0.0
+   },
+   "F1a.rsi11": {
+    "cagr": 0.5141352516114288,
+    "maxdd": 0.6043131389528895,
+    "sharpe": 1.0241732215504058,
+    "n": 3335,
+    "dlog_per_yr": 0.005192552475647604
+   },
+   "F1b.rsi11": {
+    "cagr": 0.5313826609956125,
+    "maxdd": 0.6077011134416186,
+    "sharpe": 1.0457250470068344,
+    "n": 3335,
+    "dlog_per_yr": 0.016519094803557517
+   },
+   "F1a.rsi12": {
+    "cagr": 0.5112521056454946,
+    "maxdd": 0.6372834125988944,
+    "sharpe": 1.0206717069769016,
+    "n": 3335,
+    "dlog_per_yr": 0.003286583752784609
+   },
+   "F1b.rsi12": {
+    "cagr": 0.541105259507509,
+    "maxdd": 0.6038533054020181,
+    "sharpe": 1.057164601594803,
+    "n": 3335,
+    "dlog_per_yr": 0.022847927473334438
+   },
+   "F1a.rsi14": {
+    "cagr": 0.5855688169873514,
+    "maxdd": 0.621110005836685,
+    "sharpe": 1.1095157754533895,
+    "n": 3335,
+    "dlog_per_yr": 0.051291285512953165
+   },
+   "F1b.rsi14": {
+    "cagr": 0.6473823725483863,
+    "maxdd": 0.6177788689544066,
+    "sharpe": 1.1801955007804017,
+    "n": 3335,
+    "dlog_per_yr": 0.0895356547959704
+   },
+   "F1a.rsi17": {
+    "cagr": 0.5586056676365043,
+    "maxdd": 0.698263389861826,
+    "sharpe": 1.077129299292996,
+    "n": 3335,
+    "dlog_per_yr": 0.03413968627751902
+   },
+   "F1b.rsi17": {
+    "cagr": 0.6629775220603367,
+    "maxdd": 0.6108786519759729,
+    "sharpe": 1.1971909591536296,
+    "n": 3335,
+    "dlog_per_yr": 0.09895775111242457
+   },
+   "F1a.rsi20": {
+    "cagr": 0.5209566604693683,
+    "maxdd": 0.7107156895484649,
+    "sharpe": 1.0323156081226765,
+    "n": 3335,
+    "dlog_per_yr": 0.009687586261291903
+   },
+   "F1b.rsi20": {
+    "cagr": 0.6226190430989116,
+    "maxdd": 0.6101171520839752,
+    "sharpe": 1.1530374466397353,
+    "n": 3335,
+    "dlog_per_yr": 0.07438960456655005
+   },
+   "F1a.rsi25": {
+    "cagr": 0.6696311808468856,
+    "maxdd": 0.7106147150147071,
+    "sharpe": 1.201106776076915,
+    "n": 3335,
+    "dlog_per_yr": 0.10295081973855394
+   },
+   "F1b.rsi25": {
+    "cagr": 0.7318205263903799,
+    "maxdd": 0.6259442874596474,
+    "sharpe": 1.2738954591372895,
+    "n": 3335,
+    "dlog_per_yr": 0.13952125008772048
+   },
+   "F1a.rsi30": {
+    "cagr": 0.6751987877496273,
+    "maxdd": 0.673306751623775,
+    "sharpe": 1.2041475118108345,
+    "n": 3335,
+    "dlog_per_yr": 0.1062799049817938
+   },
+   "F1b.rsi30": {
+    "cagr": 0.7263218308367652,
+    "maxdd": 0.6144714046561317,
+    "sharpe": 1.264195532036983,
+    "n": 3335,
+    "dlog_per_yr": 0.13634110328069254
+   },
+   "F1a.rsi40": {
+    "cagr": 0.6393816464246596,
+    "maxdd": 0.7121594577074988,
+    "sharpe": 1.1618574024915773,
+    "n": 3335,
+    "dlog_per_yr": 0.08466719336688919
+   },
+   "F1b.rsi40": {
+    "cagr": 0.6912399896601968,
+    "maxdd": 0.6675462598646922,
+    "sharpe": 1.227073769403342,
+    "n": 3335,
+    "dlog_per_yr": 0.11581004907831985
+   },
+   "F1a.rsi60": {
+    "cagr": 0.6300486719340017,
+    "maxdd": 0.6355800741286897,
+    "sharpe": 1.145508400833788,
+    "n": 3335,
+    "dlog_per_yr": 0.07895794194815801
+   },
+   "F1b.rsi60": {
+    "cagr": 0.6473508719472063,
+    "maxdd": 0.6159804109582969,
+    "sharpe": 1.173235940945388,
+    "n": 3335,
+    "dlog_per_yr": 0.08951653300440622
+   },
+   "F2.vote8-10-12": {
+    "cagr": 0.504946412908557,
+    "maxdd": 0.6587587400890079,
+    "sharpe": 1.0135809046495363,
+    "n": 3335,
+    "dlog_per_yr": -0.0008946409808165605
+   },
+   "F2.split8-10-12": {
+    "cagr": 0.5176250136006575,
+    "maxdd": 0.6683008719166137,
+    "sharpe": 1.0340874635967297,
+    "n": 3335,
+    "dlog_per_yr": 0.007494689336886931
+   },
+   "F2.vote5-10-20": {
+    "cagr": 0.5348036439129886,
+    "maxdd": 0.6646444499505001,
+    "sharpe": 1.050979880659757,
+    "n": 3335,
+    "dlog_per_yr": 0.018750521074946798
+   },
+   "F2.split5-10-20": {
+    "cagr": 0.5489853028288432,
+    "maxdd": 0.6916458841934023,
+    "sharpe": 1.0855989453544497,
+    "n": 3335,
+    "dlog_per_yr": 0.02794814071549328
+   },
+   "F2.vote7-10-14-20-30": {
+    "cagr": 0.5882505144252201,
+    "maxdd": 0.6732443967590719,
+    "sharpe": 1.1130144964120776,
+    "n": 3335,
+    "dlog_per_yr": 0.05298117255189537
+   },
+   "F2.split7-10-14-20-30": {
+    "cagr": 0.5615863591335597,
+    "maxdd": 0.6675399111467603,
+    "sharpe": 1.0961310828058122,
+    "n": 3335,
+    "dlog_per_yr": 0.03605026894563108
+   },
+   "F4.mom5": {
+    "cagr": 0.5182231856272044,
+    "maxdd": 0.7257755712582217,
+    "sharpe": 1.035198941397728,
+    "n": 3335,
+    "dlog_per_yr": 0.007888761764117798
+   },
+   "F4.mom10": {
+    "cagr": 0.5972309272463108,
+    "maxdd": 0.5929719999887266,
+    "sharpe": 1.1234781851408298,
+    "n": 3335,
+    "dlog_per_yr": 0.05861952692746168
+   },
+   "F4.mom20": {
+    "cagr": 0.7789551817232638,
+    "maxdd": 0.5597259101487139,
+    "sharpe": 1.3237453213031942,
+    "n": 3335,
+    "dlog_per_yr": 0.16637428289892683
+   },
+   "F4.mom40": {
+    "cagr": 0.6767904365424744,
+    "maxdd": 0.5800138076424012,
+    "sharpe": 1.2102347859915779,
+    "n": 3335,
+    "dlog_per_yr": 0.10722957922354613
+   },
+   "F4.mom60": {
+    "cagr": 0.4962065572622729,
+    "maxdd": 0.7825935330535221,
+    "sharpe": 0.9990414688725175,
+    "n": 3335,
+    "dlog_per_yr": -0.006718989449559629
+   },
+   "F4.mom120": {
+    "cagr": 0.5140475887999207,
+    "maxdd": 0.6662750134154722,
+    "sharpe": 1.0082501422781716,
+    "n": 3335,
+    "dlog_per_yr": 0.005134654510992368
+   },
+   "F5.sma10": {
+    "cagr": 0.38991047097292775,
+    "maxdd": 0.8473602668273873,
+    "sharpe": 0.8703807178006764,
+    "n": 3335,
+    "dlog_per_yr": -0.08041259681068648
+   },
+   "F5.ema10": {
+    "cagr": 0.47676604687476765,
+    "maxdd": 0.816104512646586,
+    "sharpe": 0.982073805857615,
+    "n": 3335,
+    "dlog_per_yr": -0.019797339015893676
+   },
+   "F5.sma20": {
+    "cagr": 0.566485917967593,
+    "maxdd": 0.7147898833936863,
+    "sharpe": 1.086715035698202,
+    "n": 3335,
+    "dlog_per_yr": 0.03918290937513161
+   },
+   "F5.ema20": {
+    "cagr": 0.5434812854773625,
+    "maxdd": 0.6861377140233125,
+    "sharpe": 1.0606526306589164,
+    "n": 3335,
+    "dlog_per_yr": 0.024388507648432367
+   },
+   "F5.sma50": {
+    "cagr": 0.5517799751225199,
+    "maxdd": 0.6481041538765244,
+    "sharpe": 1.0678960484026974,
+    "n": 3335,
+    "dlog_per_yr": 0.029750710597365063
+   },
+   "F5.ema50": {
+    "cagr": 0.5411046129677792,
+    "maxdd": 0.6853258031408717,
+    "sharpe": 1.0528020878347892,
+    "n": 3335,
+    "dlog_per_yr": 0.022847507943349898
+   },
+   "F5.sma100": {
+    "cagr": 0.6393695692918615,
+    "maxdd": 0.6853642199537684,
+    "sharpe": 1.1633097286982628,
+    "n": 3335,
+    "dlog_per_yr": 0.08465982645674298
+   },
+   "F5.ema100": {
+    "cagr": 0.6548043547447613,
+    "maxdd": 0.6921323369865888,
+    "sharpe": 1.176571665740728,
+    "n": 3335,
+    "dlog_per_yr": 0.0940308546784701
+   },
+   "F5.sma200": {
+    "cagr": 0.5650297143698448,
+    "maxdd": 0.635985024904844,
+    "sharpe": 1.0714609383293037,
+    "n": 3335,
+    "dlog_per_yr": 0.03825287812274229
+   },
+   "F5.ema200": {
+    "cagr": 0.6029763921809181,
+    "maxdd": 0.6539039256744641,
+    "sharpe": 1.1109444150336831,
+    "n": 3335,
+    "dlog_per_yr": 0.06221021373876071
+   },
+   "F6.sma5x20": {
+    "cagr": 0.45726131395890657,
+    "maxdd": 0.6401925654009852,
+    "sharpe": 0.9514151171601508,
+    "n": 3335,
+    "dlog_per_yr": -0.03309307068280966
+   },
+   "F6.ema5x20": {
+    "cagr": 0.5715501638860234,
+    "maxdd": 0.6033602287818426,
+    "sharpe": 1.0925652384658948,
+    "n": 3335,
+    "dlog_per_yr": 0.042410565261069025
+   },
+   "F6.sma10x20": {
+    "cagr": 0.5622991716728774,
+    "maxdd": 0.6361524032238339,
+    "sharpe": 1.0820416503654553,
+    "n": 3335,
+    "dlog_per_yr": 0.03650663173143719
+   },
+   "F6.ema10x20": {
+    "cagr": 0.6068705448976086,
+    "maxdd": 0.574867706661581,
+    "sharpe": 1.1310289765058263,
+    "n": 3335,
+    "dlog_per_yr": 0.06463659400145631
+   },
+   "F6.sma10x50": {
+    "cagr": 0.559900057076619,
+    "maxdd": 0.5715085226483055,
+    "sharpe": 1.0796674226751468,
+    "n": 3335,
+    "dlog_per_yr": 0.034969820725687405
+   },
+   "F6.ema10x50": {
+    "cagr": 0.549385497712191,
+    "maxdd": 0.6810485122124292,
+    "sharpe": 1.0634959258756613,
+    "n": 3335,
+    "dlog_per_yr": 0.02820646672702418
+   },
+   "F6.sma20x50": {
+    "cagr": 0.6712346472764075,
+    "maxdd": 0.5936147262870293,
+    "sharpe": 1.2021850064795199,
+    "n": 3335,
+    "dlog_per_yr": 0.10391073051326827
+   },
+   "F6.ema20x50": {
+    "cagr": 0.6904707834827819,
+    "maxdd": 0.6042390960441704,
+    "sharpe": 1.2190656660180827,
+    "n": 3335,
+    "dlog_per_yr": 0.11535512774276954
+   },
+   "F6.sma50x200": {
+    "cagr": 0.5343760651268994,
+    "maxdd": 0.6130420939714134,
+    "sharpe": 1.0389597571120595,
+    "n": 3335,
+    "dlog_per_yr": 0.01847189366997899
+   },
+   "F6.ema50x200": {
+    "cagr": 0.5817049429631052,
+    "maxdd": 0.6603769267398037,
+    "sharpe": 1.083192505973707,
+    "n": 3335,
+    "dlog_per_yr": 0.04885141057072141
+   }
+  }
+ }
+}
