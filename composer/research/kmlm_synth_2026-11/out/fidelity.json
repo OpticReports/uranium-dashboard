@@ -1,0 +1,123 @@
+{
+ "exposure": 3.0945625273438107,
+ "calibration": {
+  "months": [
+   "2008-03",
+   "2020-11"
+  ],
+  "n": 153,
+  "all_22_markets_from": "2008-02-01"
+ },
+ "vs_index_monthly": {
+  "2008-2020 (all 22 markets, today's rules)": {
+   "months": 153,
+   "corr": 0.9739802696303205,
+   "synthetic_vol": 0.14673140733175183,
+   "index_vol": 0.15048077279990338,
+   "tracking_error": 0.034104286156249025,
+   "mean_gap_per_yr": 0.0033207337056203406
+  },
+  "2005-2007 (EV rules, markets missing)": {
+   "months": 39,
+   "corr": 0.9551014739428444,
+   "synthetic_vol": 0.09877540530591404,
+   "index_vol": 0.09012982000115886,
+   "tracking_error": 0.02956643763721337,
+   "mean_gap_per_yr": 0.06726089671228601
+  },
+  "1988-2004 (the index used OLDER rules)": {
+   "months": 143,
+   "corr": 0.6858122403067761,
+   "synthetic_vol": 0.11178070614640417,
+   "index_vol": 0.18705916948075943,
+   "tracking_error": 0.1371347206487489,
+   "mean_gap_per_yr": 0.0010191554339680391
+  }
+ },
+ "vs_fund": {
+  "whole overlap": {
+   "sessions": 776,
+   "daily_corr": 0.8735253168740664,
+   "monthly_corr": 0.9731118790379976,
+   "flag_agreement": 0.9612903225806452,
+   "flag_days": 775,
+   "flips": 62,
+   "flips_matched_same_day": 41,
+   "synthetic": {
+    "return": 0.08925358313361853,
+    "vol": 0.14218424212200168
+   },
+   "fund": {
+    "return": 0.08431151611481069,
+    "vol": 0.16722481075652762
+   },
+   "vol_ratio": 0.850258053686878,
+   "return_gap": 0.004942067018807839,
+   "rymfx": {
+    "daily_corr": 0.6124495664402029,
+    "flag_agreement": 0.8696774193548387
+   },
+   "constant_flag_agreement": 0.5496774193548387,
+   "bars": {
+    "F1_daily_corr>=0.90": false,
+    "F2_flag>=0.95": true,
+    "F3_vol_within_15pct": true,
+    "F3_return_within_3pts": true
+   }
+  },
+  "first part": {
+   "sessions": 358,
+   "daily_corr": 0.8433676325715466,
+   "monthly_corr": 0.9625654038602964,
+   "flag_agreement": 0.9439775910364145,
+   "flag_days": 357,
+   "flips": 29,
+   "flips_matched_same_day": 13,
+   "synthetic": {
+    "return": 0.21133600829872767,
+    "vol": 0.1475584508025446
+   },
+   "fund": {
+    "return": 0.1952436836633813,
+    "vol": 0.18087849618612173
+   },
+   "vol_ratio": 0.8157876912615902,
+   "return_gap": 0.016092324635346378,
+   "rymfx": {
+    "daily_corr": 0.6265175544820816,
+    "flag_agreement": 0.896358543417367
+   },
+   "constant_flag_agreement": 0.5098039215686274
+  },
+  "second part": {
+   "sessions": 418,
+   "daily_corr": 0.9072995611374675,
+   "monthly_corr": 0.97605444412461,
+   "flag_agreement": 0.9760765550239234,
+   "flag_days": 418,
+   "flips": 33,
+   "flips_matched_same_day": 28,
+   "synthetic": {
+    "return": -0.005474996136893506,
+    "vol": 0.1373290397923195
+   },
+   "fund": {
+    "return": -0.0024749828933239293,
+    "vol": 0.1545935164392873
+   },
+   "vol_ratio": 0.888323410679723,
+   "return_gap": -0.003000013243569577,
+   "rymfx": {
+    "daily_corr": 0.6049251092041621,
+    "flag_agreement": 0.84688995215311
+   },
+   "constant_flag_agreement": 0.583732057416268,
+   "bars": {
+    "F1_daily_corr>=0.90": true,
+    "F2_flag>=0.95": true,
+    "F3_vol_within_15pct": true,
+    "F3_return_within_3pts": true
+   }
+  }
+ }
+}
