@@ -31,6 +31,12 @@ def calendar():
     return _cache["cal"]
 
 
+def set_calendar(days):
+    """use another session calendar (the long panel's, which starts before SPY traded)"""
+    _cache.clear()
+    _cache["cal"] = sorted(days)
+
+
 def on_calendar(x, cal):
     """the series carried forward onto the calendar (a market closed on a US session keeps its last level)"""
     ds, out = sorted(x), {}

@@ -33,3 +33,36 @@ RYMFX on the same days: 0.612 and 86.9%.
    same" = the same set of funds in the live rule's target that session; growth = the live rule's total log
    growth. F5 = Spearman rank correlation, across the 74 variants, of total log growth minus the live
    rule's. The synthetic is cut to the fund's own first day so both runs warm up on the same sessions.
+
+## The long-history run: design fixed before it was run (2026-11-20)
+
+Fidelity as scored: F2-F5 pass on both windows; F1 (daily correlation >= 0.90) is 0.874 on the whole
+overlap and 0.907 on the second part. On the pre-registration's own reading (the later window) all five
+pass; on deviation 2's whole-window reading F1 misses. So the long history is run and judged as
+pre-registered, and anything that passes on it is a CANDIDATE to be ruled on by the independent
+verifiers, not a settled finding. Seen before this run: addendum 57's stand-in years (2007-09..2020-12 on
+RYMFX), where longer windows averaged +0.087 log/yr (t 1.6).
+
+9.  **Panel.** `research/longrun/long_panel.build_long_prices()` (main mode `ts_synth`), with its KMLM
+    series replaced by the synthetic (today's rules; exposure as calibrated; deviation 7 for markets with
+    no data yet). The synthetic's calendar is the long panel's SPY sessions; it must reproduce the
+    fidelity run's series on every later day (checked in code).
+10. **Three stretches, never pooled across the model line.**
+    REAL 2021-06-01..2026-11-19: the real fund (corrected total return), as addendum 57.
+    REPLICATION 2008-02-01..2020-12-01: every one of the 22 markets has data and VIX-fund returns come
+    from the real VIX term structure. (Leveraged and sector funds before their launch are their index
+    times the leverage, as the long panel builds them.)
+    MODEL 1991-04-01..2008-01-31: VIX funds are a model of futures that did not trade (before 2004) or of
+    a curve fitted from the VIX alone (to 2006-07); the euro, JGB and Bund legs are missing for part of it;
+    sector funds before 1998 are industry portfolios. Shown, with the two other VIX-model modes as a
+    range; it cannot carry a verdict.
+    1991 is as far as the VIX itself goes back (1990) plus the warm-up: 50 years is not reachable for THIS
+    symphony because a third of its tree trades volatility funds.
+11. **Cells.** The 62 switch-type variants. The 12 threshold variants (F3) are not run before 2021: their
+    thresholds were calibrated on 1990-2020 data.
+12. **Verdict rule** (the five conditions of addendum 57 on REPLICATION + REAL joined, 62 cells):
+    (1) ahead, family-wise p < 0.10, max-statistic stationary bootstrap (mean block 10, 5,000 draws,
+    studentised, centred); (2) ahead in REPLICATION and in REAL separately; (3) neighbours on its grid
+    also ahead; (4) max drawdown no more than 5 points worse than the live rule's in each stretch;
+    (5) still ahead at double cost. Also reported: each cell's MODEL-years result, the long (14-60) and
+    short (3-8) window group averages per stretch, and the smallest gain the test could see.
