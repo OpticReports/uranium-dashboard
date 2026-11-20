@@ -1,0 +1,87 @@
+<h1>KMLM switcher: is there a better time frame?</h1>
+<p class="sub">Study of 2026-11-20. {{n_cells}} variants declared before any was run, on {{n_sess}} sessions with the real KMLM fund ({{span_b}} to {{end}}). In sample; none of this is a forecast.</p>
+
+<div class="card verdict">
+<ul>
+<li><b>No better time frame was found.</b> None of the {{n_cells}} variants passes the five tests set in advance. Only {{n_ahead}} of {{n_chall}} are even ahead of the live rule, all by amounts well inside the noise.</li>
+<li><b>The 10-day window is not a fluke setting.</b> Windows of 9 to 12 days behave the same. Shorter windows (3 to 8) are clearly worse. Longer ones (14 to 60) look better in one half of the data and worse in the other.</li>
+<li><b>Every moving-average version is worse.</b> Simple or exponential, price-above-average or crossover, 10 to 200 days: all 20 lag the live rule, as do all 6 relative-momentum versions.</li>
+<li><b>No macro input earns a place.</b> Six inputs named in advance (credit, financial stress, stock-bond correlation, the dollar, the yield curve, real rates): none predicts the returns of the switcher's risk-on side on 16 years of data.</li>
+<li><b>Recommendation: leave the switcher as it is.</b> What this test cannot rule out, and what would change the answer, is at the end.</li>
+</ul>
+</div>
+
+<div class="kpis">
+<div class="kpi"><b>{{n_pass}} of {{n_cells}}</b><span>variants pass the pre-set tests</span></div>
+<div class="kpi"><b>{{best_t}}</b><span>best t-statistic ({{best}}); it needed {{crit}}</span></div>
+<div class="kpi"><b>0 of 26</b><span>moving-average or momentum versions ahead of the live rule</span></div>
+<div class="kpi"><b>0 of 6</b><span>macro inputs that predict the risk-on side</span></div>
+</div>
+
+<h2>1. The window</h2>
+<p>The switch compares the 10-day RSI of XLK with the 10-day RSI of the KMLM fund. This is the same comparison at fifteen windows, everything else unchanged. The two periods are drawn separately because the earlier one (2021-06 to 2023-04) was not looked at before the test.</p>
+{{ch_surface}}
+<p>From 9 to 12 days the three lines sit on zero. Below 9 the rule flips more often (up to two and a half times as often at 3 days) and loses in both periods. Above 12 the periods disagree: ahead since 2023, behind before it. A setting that only works in one period is not a better time frame.</p>
+{{t_win}}
+<p class="note">Return a year is the simulated symphony on both periods pooled (the live rule: {{live_cagr}} a year, {{live_dd}} max drawdown; {{live_b}} in the first period, which contains 2022, the year its author fitted it on, and {{live_a}} since). "Family-wise p" is the chance of a t that large among {{n_cells}} tries if none were better. "Knife-edge days": days the flip would differ with XLK 0.3% higher or lower.</p>
+
+<h2>2. Every variant, ranked</h2>
+{{ch_cells}}
+{{t_fam}}
+<p class="note">The five tests: beat the live rule after correcting for {{n_cells}} tries; beat it in each half; neighbours on the same grid also beat it; drawdown no more than 5 points worse; still ahead at double the trading cost. Probability that picking the best variant in-sample disappoints out of sample: {{pbo}}. Deflated Sharpe of the best difference: {{dsr}} (1.0 would be a real improvement).</p>
+
+<h2>3. What the paths looked like</h2>
+{{ch_equity}}
+{{ch_dd}}
+<p>The nearest miss ({{best}}, t {{best_t}}, family-wise p {{best_p}}) tracks the live rule for the whole of the first period and pulls ahead only in 2025-26. The best moving-average form ({{ma}}) returns {{ma_cagr}} a year against {{live_cagr}} (t {{ma_t}}).</p>
+
+<h2>4. Before the KMLM fund existed</h2>
+<p>The KMLM fund launched in December 2020. On {{c_span}} the switch has to read an older managed-futures fund that agrees with it about 84% of the time, and SVIX and ZVOL are modelled. There the 10-day rule returned {{c_cagr}} a year with a {{c_dd}} drawdown, and {{c_ahead}} of {{c_n}} variants were ahead of it, the longer windows most.</p>
+{{ch_surface_c}}
+<p>This cannot pick a window: it is a different signal. What it does say is that nothing about "10" is special outside the fund's own five years. Put with section 1: the window barely matters; the fund the switch reads matters a great deal.</p>
+
+<h2>5. Macro</h2>
+<p>Each input was first asked a simple question on {{mac_span}}: when its state is favourable, does the risk-on basket (TECL and SOXL) do better over the next 1, 5 and 21 sessions? Only an input that passed would have been built into the tree. Inputs that work: <b>{{mac_works}}</b>.</p>
+{{ch_macro}}
+{{t_mac}}
+<p>Five of the six point the wrong way for a confirmation filter: the risk-on side did better after the unfavourable state. The largest is financial stress: {{stress_off}} over the next 21 sessions when stress was elevated against {{stress_on}} otherwise (t {{stress_t}}, placebo p {{stress_mp}}). That is the dip-buying the symphony already does with price, and it is not significant. A macro veto would have removed the entries that paid best.</p>
+<p class="note">Not re-run because earlier studies answered them: VIX term structure (addenda 2, 39), rate-hike vetoes (33), CAPE (26, 40), volatility gates on the long leg (42, 54.1).</p>
+
+<h2>6. The whole book</h2>
+<p>KMLM is 34.1% of a three-engine book. On {{book_span}} that book returned {{book_cagr}} a year with a {{book_dd}} drawdown with the live rule. Swapping in the window-voting versions moves it by less than the uncertainty.</p>
+{{ch_book}}
+{{t_book}}
+<p class="note">* The 12-day cell is shown because it had the highest t. It was chosen after the results were seen, on the half of the data where it did best, so its interval overstates it. It is an illustration of the nearest miss, not a candidate.</p>
+
+<h2>7. Edges looked for on the way</h2>
+<ul>
+<li><b>Elevated financial stress, then leveraged tech.</b> Risk-on basket {{stress_off}} over 21 sessions after stress vs {{stress_on}} otherwise, 2010-2026, t {{stress_t}}, placebo p {{stress_mp}}. Not an edge by the bar set (Holm p 1.0); the symphony's own dip-buys already trade it. To use it would need more independent episodes than 16 years hold.</li>
+<li><b>Longer windows on the stand-in years.</b> 25 to 30-day windows ran about 0.10 to 0.14 log-points a year ahead on 2007-2020, but they are behind on the first real period and the signal there is a different fund. Not usable.</li>
+<li>Nothing else cleared a placebo.</li>
+</ul>
+
+<h2>8. What this does not settle</h2>
+<ul>
+<li><b>Small improvements are invisible.</b> With five and a half years of data, a variant would need to add roughly 0.5 log-points a year to stand out from 74 tries. A real improvement a third that size could be there and this test would not see it. The honest reading is "no evidence for a change", not "proof the 10-day rule is best".</li>
+<li><b>The first period flatters the live rule.</b> Its author fitted it on 2022. A challenger had to win on the incumbent's home ground.</li>
+<li><b>Decisions are simulated at the close.</b> Composer decides a few minutes earlier; 8 of 83 live KMLM sessions were knife-edges.</li>
+<li><b>What would change the answer:</b> another two or three years of live data, or a managed-futures signal with a longer real history than the KMLM fund.</li>
+</ul>
+
+<h2>9. Method notes for next time</h2>
+<ul>
+<li>Declaring the 74 variants first is what kept "longer is better since 2023" from becoming a finding: the unseen period reversed it.</li>
+<li>Checking the simulator against Composer's own engine on three variants, not only the live rule, is what makes the moving-average results trustworthy.</li>
+<li>A macro input has to predict returns on its own, on long history, before it goes near the tree.</li>
+</ul>
+
+<details><summary>Simulator checks</summary>
+{{t_gate}}
+<p class="note">Costs: 5.856 bps per unit of turnover, fitted to Composer's backtest. Modelled funds: SVIX before 2022-03-30 and ZVOL before 2023-04-19 (the repo's long panel).</p>
+</details>
+
+<details open><summary>Independent verification</summary>
+{{verification}}
+</details>
+</content>
+</invoke>
