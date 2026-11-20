@@ -60,6 +60,19 @@ vs the mirror's, and the day's returns) is run and reported before the change
 counts as done. Until the mirror trades, the rule binds the approved fixtures
 (composer/fixtures/approved), which are the mirror's source.
 
+SYNTHETIC HISTORY BEFORE SHORT SAMPLES (Casey, 2026-11-20; raised before): "if you can understand and
+be exacting with the logic and reasoning and how the instruments function, you can create a synthetic
+version of that instrument and then backtest it with quite a bit of accuracy ... That's what we should
+be doing." When a study's instruments or signals are younger than the history the question needs, the
+first move is to BUILD a rules-exact synthetic (a fund's published index method applied to its
+underlying markets; leverage, financing and fees for levered funds), validate it against the real
+instrument on the overlap against fidelity bars set in advance, and run the long history. Accepting the
+short sample and reporting low power is the fallback, not the default. Per leg, state how far back it
+is REPLICATION (the underlying market traded) and where it becomes a MODEL of a market that did not
+exist (VIX futures before 2004), and never present the modelled stretch as equal evidence. Origin:
+add. 57 judged 74 KMLM variants on 5.5 years because the fund launched in 2020 and its stand-in was a
+different fund (84% agreement), when the fund's index is rules-based and could have been rebuilt.
+
 ## Standing engineering conventions
 
 - Agent-governed pattern for studies/builds: research or counter-agent pass
