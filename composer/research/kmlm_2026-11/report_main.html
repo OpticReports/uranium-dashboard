@@ -48,7 +48,7 @@
 <p class="note">Point in time: each state uses data from the session before (two for the stress index, six for the weekly dollar index). The stress and FRED series are today's vintage; the stress index is revised after publication. Not re-run because earlier studies answered them: VIX term structure (addenda 2, 39), rate-hike vetoes (33), CAPE (26, 40), volatility gates on the long leg (42, 54.1). Because no input passed, none was built into the tree.</p>
 
 <h2>6. The whole book</h2>
-<p>KMLM is 34.1% of a three-engine book. On {{book_span}} that book returned {{book_cagr}} a year with a {{book_dd}} drawdown with the live rule. Swapping in the window-voting versions moves it by less than the uncertainty, in either direction.</p>
+<p>KMLM is 34.1% of a three-engine book. On {{book_span}} that book returned {{book_cagr}} a year with a {{book_dd}} drawdown with the live rule. Swapping in the window-voting versions moves it by less than the uncertainty, in either direction. (The 8-10-12 vote turns out to be the live rule on every session.)</p>
 {{ch_book}}
 {{t_book}}
 <p class="note">* The 12-day cell is shown because it had the highest t. It was picked after the results were seen. Allowing for that pick, its lower bound is about −7 points, not +1 (independent review). It is an illustration of the nearest miss, not a candidate.</p>
@@ -81,7 +81,7 @@
 
 <details><summary>Simulator checks</summary>
 {{t_gate}}
-<p class="note">Costs: 5.856 bps per unit of turnover, fitted to Composer's backtest. Modelled funds: SVIX before 2022-03-30 and ZVOL before 2023-04-19 (the repo's long panel).</p>
+<p class="note">Costs: 5.856 bps per unit of turnover as set in advance; Composer's own backtest implies 5.19 in this window, which is the whole of the simulator's small shortfall to it. No variant changes sign at Composer's rate or at zero cost. Modelled funds: SVIX before 2022-03-30 and ZVOL before 2023-04-19 (the repo's long panel). The 2007-2020 panel carries Yahoo's stale VXZ for 2018; re-run with modelled data by the reviewer, no sign changed. Data ends 2026-11-19, the last fully settled close.</p>
 </details>
 
 <details open><summary>Independent verification</summary>

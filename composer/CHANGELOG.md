@@ -7,6 +7,19 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-20 — Study: KMLM switcher windows, moving averages and macro inputs (results.md addendum 57)
+
+- Owner question (15:2x ET): is there a superior time frame / EMA / SMA window for the switcher's
+  bullish-bearish flip, and does a macro input improve it; for the symphony and for the book.
+- Pre-registered 74 variants and six macro inputs before any run; simulator gated on Composer's own
+  backtests (live rule and seven variants, 898/898 sessions each); two independent reviews, both PASS
+  WITH CORRECTIONS, all applied (`research/kmlm_2026-11/VERIFICATION.md`, `DEVIATIONS.md`).
+- Result: none passes; nearby windows cannot be told apart from 10; every SMA/EMA/momentum form is
+  below the live rule; no macro input detectable. The test cannot see gains under about +0.12..0.19
+  log/yr for neighbouring windows. Recommendation: keep the switcher as is.
+- NO change to any symphony, gate, POLICY operation or the mirror. Logic book: `symphonies/why/KMLM.md`
+  "Studied and not built" gains the rows. Report: `results/kmlm-switcher-windows-2026-11-20.html`.
+
 ## 2026-11-20 — Mirror scale-up queued for today's session (owner pasted the planner's line)
 
 - Owner set MIRROR_MAX_BOOK_USD = 121500 on ibkr-executor (11-19 ~16:38 ET, IB Key approved, back

@@ -16,7 +16,7 @@ sys.path.insert(0, HERE)
 import data  # noqa: E402
 import ksim as ks  # noqa: E402
 
-END = "2026-11-20"
+END = "2026-11-19"            # the 11-20 bar was not final when fetched (review A, M1; DEVIATIONS.md 12)
 B_START, A_START = "2021-06-01", "2023-04-19"
 C_START, C_END = "2007-09-04", "2020-12-01"
 CAL_END = "2020-12-01"                 # quantile-matched thresholds are calibrated on history to here
@@ -130,10 +130,13 @@ def flips(flag, days):
 def run(P, start, end, tier_c=False):
     tree = ks.approved()
     flags = switch_flags(P)
-    cells = {}
+    cells, days_ref = {}, [None]
 
     def add(cid, family, tr, fl=None, note=None):
         r = ks.simulate(tr, P, start, end, flags=[fl[0]] if fl else None)
+        if cells and r["days"] != days_ref[0]:          # an undefined flag would drop a session silently (review A, N2)
+            raise RuntimeError(f"{cid}: not the base's sessions")
+        days_ref[0] = days_ref[0] or r["days"]
         c = {"family": family, "ret": r["ret"], "to": r["turnover"], "turnover": sum(r["turnover"]),
              "trades": r["trades"]}
         if fl:

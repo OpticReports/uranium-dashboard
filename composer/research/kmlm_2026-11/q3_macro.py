@@ -33,7 +33,7 @@ import data  # noqa: E402
 import ksim as ks  # noqa: E402
 import lib  # noqa: E402
 
-END = "2026-11-20"
+END = "2026-11-19"
 MAC = data.SCRATCH + "/kmlm/macro"
 SHIFTS, SEED = 1000, 20261120
 

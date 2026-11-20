@@ -90,6 +90,8 @@ def _chain_back(real, syn_rets, days):
 
 
 def panel_ab(end):
+    """NOT for dates before 2018-02-28: SVXY was -1x until then (the long panel switches there); every span
+    this study uses starts later"""
     P = {t: series(t, end) for t in TREE_TICKERS}
     svxy, vxz = series("SVXY", end), series("VXZ", end)
     days = sorted(svxy)

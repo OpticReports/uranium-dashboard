@@ -44,7 +44,7 @@ CH["c_surface_c"] = {"type": "line", "yfmt": "pp", "zero": True, **XL, "series":
     {"name": "Switch and ranked picks", "slot": 2, "pts": [[i, 0.0 if n == 10 else tc[f"F1b.rsi{n}"]["dlog_per_yr"]] for i, n in enumerate(F1_N)]}]}
 
 # ---- 2. every cell's t against the live rule
-order = sorted((c for c in C if c not in LIVE), key=lambda c: C[c]["t"])
+order = sorted((c for c in C if c not in LIVE and not (C[c]["dlog_per_yr"] == 0.0 and C[c]["t"] == 0.0)), key=lambda c: C[c]["t"])
 short = lambda c: c.split(".", 1)[1]                                                       # noqa: E731
 FAM = {"F1a": "RSI switch", "F1b": "RSI switch+picks", "F2": "vote", "F3": "pops/dips", "F4": "momentum", "F5": "price vs MA", "F6": "MA cross"}
 CH["c_cells"] = {"type": "bars", "yfmt": "raw", "cats": [f"{short(c)} ({FAM[C[c]['family']]})" for c in order],
@@ -141,10 +141,11 @@ for k, nm in (("rsi14", "14-day RSI switch"), ("sma50", "Price above 50-day simp
                       f"{pc(g4[k]['sim']['cagr'], 1)} vs {pc(g4[k]['composer']['cagr'], 1)}"])
 t_gate = table(["Check", "Same holdings", "Daily-return correlation", "Return a year: simulator vs Composer"], gate_rows)
 
+SAME = [c for c in C if c not in LIVE and C[c]["dlog_per_yr"] == 0.0 and C[c]["t"] == 0.0]     # identical to the live rule
 n_ahead = sum(C[c]["dlog_per_yr"] > 0 for c in C if c not in LIVE)
 c_ahead = sum(v["dlog_per_yr"] > 0 for k, v in tc.items() if k not in LIVE)
 subs = {
-    "{{n_cells}}": "74", "{{n_pass}}": str(len(st["passing"])), "{{n_ahead}}": str(n_ahead), "{{n_chall}}": str(len(C) - 2),
+    "{{n_cells}}": "74", "{{n_pass}}": str(len(st["passing"])), "{{n_ahead}}": str(n_ahead), "{{n_chall}}": str(len(C) - 2 - len(SAME)),
     "{{best}}": short(best), "{{best_t}}": lg(C[best]["t"]), "{{best_p}}": f"{C[best]['p_fw']:.2f}", "{{best_d}}": lg(C[best]["dlog_per_yr"]),
     "{{crit}}": f"{st['beside']['max_stat_90']:.2f}", "{{live_cagr}}": pc(B["all"]["cagr"]), "{{live_dd}}": pu(B["all"]["maxdd"]),
     "{{live_a}}": pc(B["A"]["cagr"]), "{{live_b}}": pc(B["B"]["cagr"]), "{{ma}}": short(ma), "{{ma_t}}": lg(C[ma]["t"]), "{{ma_cagr}}": pc(C[ma]["all"]["cagr"]),
@@ -171,7 +172,7 @@ subs = {
                             "Log-points a year ×100; zero is the live 10-day rule. Below zero means slower growth."),
     "{{ch_surface_c}}": chart("c_surface_c", "The same surface on 2007 to 2020, where the switch reads a stand-in fund",
                               "Log-points a year ×100 against the 10-day rule. A different signal: shape only, never used to choose."),
-    "{{ch_cells}}": chart("c_cells", "All 72 challengers, ranked", f"t-statistic of growth against the live rule. To count after 74 tries a bar must pass +{st['beside']['max_stat_90']:.2f}."),
+    "{{ch_cells}}": chart("c_cells", "Every challenger, ranked", f"t-statistic of growth against the live rule. To count after 74 tries a bar must pass +{st['beside']['max_stat_90']:.2f}."),
     "{{ch_equity}}": chart("c_equity", "Growth of $1 (log scale)", "Simulated on the symphony's own rules, costs included. Shaded: the period where every fund is real."),
     "{{ch_dd}}": chart("c_dd", "Drawdown", "Fall from the running peak."),
     "{{ch_macro}}": chart("c_macro", "Do macro states predict the risk-on side?", "Risk-on basket (TECL and SOXL), next 21 sessions: return when the state is favourable minus when it is not. None is significant. M1 credit, M2 stress, M3 stock-bond, M4 dollar, M5 curve, M6 real rates."),

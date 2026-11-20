@@ -323,3 +323,14 @@ deterministic rationale are listed.
     Method checklist from this study: total return in dollars at the account; sub-periods; dumb
     benchmarks and the bare trigger; placebo + mirror + one-close-late + cost ladder; live fills
     vs the assumed price; haircut both sides; count the candidates; break-even paces.
+
+26. KMLM switcher windows / moving averages / macro (add. 57, 2026-11-20): CLOSED, no build. 0 of 74
+    pre-registered variants pass; windows 5-60 are not distinguishable from 10 on 5.5 years; all 26
+    SMA/EMA/momentum forms below the live rule; no macro state detectable as a predictor. REOPEN only
+    with (a) two or three more years of live data (the test sees +0.19 log/yr at best today), or (b) a
+    managed-futures signal with a longer real history than the KMLM fund. Watch items, none an edge:
+    OFR stress >= 0 then the TECL/SOXL basket (+8.5% vs +3.6% over 21 sessions, t -1.79, 13 episodes);
+    the 12-day switch+picks cell (t +1.49, family-wise p 0.84). Tooling left behind:
+    `research/kmlm_2026-11/ksim.py` (variant builders + corridor path, gated on Composer's own
+    backtests) for any later tree study.
+

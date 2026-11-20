@@ -23,6 +23,19 @@
    longest indicator needs), for the same reason as deviation 1.
 10. **"Worst month" in the book table is the worst of consecutive 21-session blocks** (last block
    shorter), not a calendar month and not a rolling window.
+12. **After the independent review (simulation): every series ends 2026-11-19, not 11-20.** The 11-20 bar
+   was fetched 29 minutes after the close and 12 of 24 tickers moved afterwards (up to 59 bp). One
+   session shorter (1,375); no sign changed. Macro's sample ends the same day.
+13. **F2.vote8-10-12 IS the live rule** on every session of tiers A and B (its flag equals the 10-day
+   flag on 1,377 of 1,377 days). So 71 cells are distinct challengers, not 72; the trial count for
+   multiplicity stays at the 74 declared.
+14. **Tier C carries Yahoo's stale VXZ (and so a flat ZVOL) for 2018-01-25..2019-01-31.** Both sit in the
+   VIX sleeve every cell shares. The reviewer re-ran tier C with the repo's modelled series: base CAGR
+   50.6% -> 50.9%, largest change in any cell's difference 0.024 log-points, no sign change.
+15. **Cost: 5.856 bps per unit of turnover as pre-registered; Composer's backtest implies 5.19 in this
+   window.** That is the whole of the simulator's 3-point CAGR shortfall to Composer. The bias on a cell
+   is 0.67 bp times its turnover gap to the live rule (at most 1.6% in total); no sign changes at 5.19
+   or at zero cost (independent review).
 11. **The overfitting probability is computed with the live rule as one of the columns** (75 columns:
    74 cells of which two are the live rule, plus the base). With one copy of the live rule it is 0.42;
    on the RSI windows alone 0.50 (independent review).

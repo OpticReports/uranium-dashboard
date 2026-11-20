@@ -4865,3 +4865,64 @@ mirror leg (mirror_transfer.py caps a leg at 50% of the giving sleeve).
 OWNER DECISIONS OPEN: keep with kill rules / move all or half into KMLM / pro rata / T-bills / SLEEVE;
 strip the duplicate sleeve; HYG guard (rename or add); sweep stranded payouts. Any change lands on both
 brokers in the same change set (ONE BRAIN, TWO BROKERS). No service to redeploy.
+
+
+## Addendum 57 — KMLM switcher: is there a better time frame, moving average or macro input? (2026-11-20)
+
+Owner: "is there a superior time frame to be looking at when executing, flipping this bullish or
+bearish ... it doesn't have any sort of macro outlook ... check around EMAs and SMAs". Pre-registered
+(`research/kmlm_2026-11/PREREG.md`, commit ceb707bc, before any analysis; 27 scouting cells disclosed),
+15 deviations logged, two independent reviews (both PASS WITH CORRECTIONS, `VERIFICATION.md`).
+Report with charts: `results/kmlm-switcher-windows-2026-11-20.html`.
+
+VERDICT: **no superior time frame, moving average or macro input is supported; nearby windows cannot be
+told apart from 10. Keep the switcher as is.** None of the 74 declared variants passes the five
+pre-registered conditions.
+
+METHOD: 74 variants of the 75% block (the VIX sleeve never touched): RSI windows 3..60 on the switch
+with and without the ranked picks (30), window votes and splits (6), pops/dips at 5/7/14/20 days with
+frequency-matched thresholds (12), relative momentum (6), price vs SMA/EMA 10..200 (10), SMA/EMA
+crossovers (10). Simulator = shadow_runner's evaluator + the 10-point corridor path + 5.856 bps x
+turnover. Gates: live rule vs Composer's own backtest 898/898 sessions' holdings, corr 1.00000; seven variants
+backtested on Composer itself (three by the study, four by the reviewer), each 898/898. Sample:
+1,375 sessions 2021-06-02..2026-11-19 with the real KMLM fund (tier B to 2023-04-19, never looked at before the test; tier A
+after). Stand-in years 2007-09..2020-12 (RYMFX flag) for shape only.
+
+RESULTS (symphony alone, simulated, in sample):
+- Live rule: +321%/yr, maxDD 38%, Sharpe 2.72 (+640% in tier B, which holds 2022, the year its author fitted it on; +213% in tier A).
+- Ahead of it on point estimate: 5 of 71 distinct challengers (rsi11, rsi11, rsi12, rsi12, dips7). Best: rsi12 (switch and picks) +0.082 log/yr, t +1.49, family-wise p 0.84; the max-statistic bar is t 3.41 (90%).
+- Windows 9-12: within -0.03..+0.08 log/yr of the live rule. Windows 3-8: -0.22 (tier A, t -1.8) and -0.28 (tier B, t -1.3); only the 3-day window is distinguishable after multiplicity. Windows 14-60: +0.02 in tier A (t +0.2: zero) and -0.34 in tier B (t -1.2), 49% of that shortfall one session (2022-11-10).
+- All 26 moving-average and momentum forms are below the live rule in both tiers (t -0.8..-3.1; least bad 20-day momentum -0.13, least bad moving average ema50 -0.23); only price vs the 10 and 20-day averages are distinguishable after multiplicity (post-hoc lower tail).
+- Pops/dips at other windows: 11 of 12 below. Window votes/splits: at or just below the live rule; the 8-10-12 vote IS the live rule on every session.
+- Overfitting probability 0.50 (picking the best variant in sample is a coin flip out of sample); deflated Sharpe of the best difference 0.20 against a 0.95 bar. "Fragile to its window" at the pre-registered bar: not supported (3 of 14).
+- Stand-in years: longer windows +0.09 log/yr (t 1.6; best cell family-wise p 0.25; ten sessions carry 91% of it); 51 of 60 ahead is one correlated pattern. Not repeated on the real fund.
+- POWER: to clear the bar half the time a neighbouring window needed +0.12 log/yr, the 12-day cell +0.19, the median variant +0.55. Smaller true gains are invisible on 5.5 years.
+
+MACRO (2010-03-12..2026-11-19, six pre-named 0/1 states, 36 tests): none detectable (every Holm p 1.0, largest |t| 1.87); the
+bar needed roughly 45-75 bp a day of state difference against a 23 bp average day. At 21 sessions 4 of 6
+lean against a confirmation filter, none significantly. Step 2 (macro inside the tree) not run, as
+pre-registered. Not re-run: VIX term structure (add. 2, 39), rate vetoes (33), CAPE (26, 40), vol
+gates (42, 54.1).
+
+BOOK (34.1/34.1/31.8, HG and SLEEVE from Composer's backtests, 2023-04-20..2026-11-17): live book +108%/yr,
+maxDD 10.7%. Window votes/splits: -3.6..+3.9 points of book return (daily-fixed), -6.9..+4.8
+(drift with the 44% cap), every interval spanning zero. Illustration only: the best-t cell +8.8 [+1.0, +18.0]
+unadjusted; allowing for its selection from 71 the lower bound is about -7 (review B).
+
+CANDIDATE EDGES (none clears the bar; reported per the standing rule):
+- Financial stress then leveraged tech: basket +8.5% over 21 sessions after OFR FSI >= 0 vs +3.6% otherwise; 941 stressed sessions, ~13 episodes, t -1.79 (about -1.4 on logs), placebo p 0.08, Holm 1.0, latest-vintage index. Would need more independent episodes and the as-published index.
+- rsi12 switch and picks: above; three sessions carry it. 7-day dip-buys: tier A t ~+2.2, tier B ~-1.8, pooled 0.2. Dollar below its average: t +1.20 at the true weekly lag.
+
+HONESTY BOX: all in sample, none a forecast; 5.5 years, ~25 switch flips a year, one bear market on which
+the rule was fitted; decisions simulated at the close (Composer decides ~15:51-15:54; 8 of 83 live KMLM
+sessions were knife-edges); SVIX and ZVOL modelled in tier B; cost constant 13% above Composer's in this
+window (no sign changes at Composer's rate or zero); the stand-in years read a different fund and carry
+a stale VXZ in 2018. Not modelled: intraday paths, taxes, capacity. Measurement basis: daily
+mark-to-market of the simulated symphony.
+
+LESSONS: declare the cells before running them (the scouting pass's "longer is better since 2023" did
+not survive the unseen period); gate the simulator on variants, not only the live rule; state the
+smallest detectable effect beside every "nothing passed"; a macro input must predict on long history
+before it goes near the tree, and the bar must be set with the sample size in view.
+
+NO CHANGE to any symphony, gate, POLICY operation or the mirror. No service to redeploy.
