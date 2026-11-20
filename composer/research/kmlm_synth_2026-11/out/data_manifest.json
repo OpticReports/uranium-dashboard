@@ -1,0 +1,156 @@
+{
+ "CORN": {
+  "first": "1972-10-18",
+  "last": "2024-03-28",
+  "days": 13022,
+  "sha256_adj": "f8b59d6fc0a75cd0",
+  "sha256_mp": "47183abccaa9e260"
+ },
+ "CRUDE_W": {
+  "first": "1990-10-16",
+  "last": "2024-03-28",
+  "days": 8604,
+  "sha256_adj": "10dcfbdd9ee3f975",
+  "sha256_mp": "64a8c9f46998830e"
+ },
+ "COPPER": {
+  "first": "1995-09-01",
+  "last": "2024-03-28",
+  "days": 7622,
+  "sha256_adj": "2944c5130d66043f",
+  "sha256_mp": "8c31c285cb11f85d"
+ },
+ "GOLD": {
+  "first": "1975-04-01",
+  "last": "2024-03-28",
+  "days": 12400,
+  "sha256_adj": "fc85606ff457b752",
+  "sha256_mp": "5e02e932c5c17aa7"
+ },
+ "HEATOIL": {
+  "first": "1980-02-19",
+  "last": "2024-03-28",
+  "days": 11614,
+  "sha256_adj": "794c6ea0ad64a4e2",
+  "sha256_mp": "7ec8e0d1a69927e5"
+ },
+ "LIVECOW": {
+  "first": "1971-10-21",
+  "last": "2024-03-28",
+  "days": 13192,
+  "sha256_adj": "07262d299b52b16c",
+  "sha256_mp": "6ce89008d010338e"
+ },
+ "GAS_US": {
+  "first": "1990-07-26",
+  "last": "2024-03-28",
+  "days": 8536,
+  "sha256_adj": "73d3adbc85d8249a",
+  "sha256_mp": "8d1b2ad71db68931"
+ },
+ "SOYBEAN": {
+  "first": "1985-09-20",
+  "last": "2024-03-28",
+  "days": 9703,
+  "sha256_adj": "a49d86c4525892c5",
+  "sha256_mp": "911a09de70eca193"
+ },
+ "SUGAR11": {
+  "first": "1970-02-16",
+  "last": "2024-03-28",
+  "days": 13543,
+  "sha256_adj": "135750af247587ca",
+  "sha256_mp": "a6d626bd104d15b7"
+ },
+ "WHEAT": {
+  "first": "1973-12-19",
+  "last": "2024-03-28",
+  "days": 12752,
+  "sha256_adj": "8dd359d49569e157",
+  "sha256_mp": "a038800ee43cc86d"
+ },
+ "GASOILINE": {
+  "first": "1985-01-15",
+  "last": "2024-03-28",
+  "days": 10592,
+  "sha256_adj": "d3928aae303dee80",
+  "sha256_mp": "f318010f57b22d38"
+ },
+ "GBP": {
+  "first": "1975-12-16",
+  "last": "2024-03-28",
+  "days": 12326,
+  "sha256_adj": "dce2f5261d98e875",
+  "sha256_mp": "f61d177dba02bcef"
+ },
+ "CAD": {
+  "first": "1972-09-14",
+  "last": "2024-03-28",
+  "days": 13744,
+  "sha256_adj": "c1dc5a3417299b0f",
+  "sha256_mp": "27162d51813c0538"
+ },
+ "AUD": {
+  "first": "1987-06-16",
+  "last": "2024-03-28",
+  "days": 9405,
+  "sha256_adj": "ee02dfaffcb6fc8b",
+  "sha256_mp": "56a8f1efdeab6228"
+ },
+ "EUR": {
+  "first": "1999-06-15",
+  "last": "2024-03-28",
+  "days": 6246,
+  "sha256_adj": "52f2757baa6d785e",
+  "sha256_mp": "eca74f7e539041b9"
+ },
+ "JPY": {
+  "first": "1977-06-14",
+  "last": "2024-03-28",
+  "days": 11901,
+  "sha256_adj": "985fed2f4f619ecd",
+  "sha256_mp": "bd93c15eb89d979c"
+ },
+ "CHF": {
+  "first": "1972-09-14",
+  "last": "2024-03-28",
+  "days": 13715,
+  "sha256_adj": "4c3e7e510faeffd7",
+  "sha256_mp": "7361c5d0e61a4390"
+ },
+ "CAD10": {
+  "first": "1993-05-21",
+  "last": "2024-03-28",
+  "days": 7717,
+  "sha256_adj": "d5476ae8062f750e",
+  "sha256_mp": "acafc5c1784e8871"
+ },
+ "BUND": {
+  "first": "2006-12-01",
+  "last": "2024-03-28",
+  "days": 4474,
+  "sha256_adj": "ee0602bfabc3e8aa",
+  "sha256_mp": "73814080f7f35583"
+ },
+ "JGB": {
+  "first": "2001-12-04",
+  "last": "2024-03-29",
+  "days": 5596,
+  "sha256_adj": "8ecfd95eb3fe774f",
+  "sha256_mp": "2f12c32c5430ea74"
+ },
+ "GILT": {
+  "first": "1983-03-25",
+  "last": "2024-03-28",
+  "days": 10364,
+  "sha256_adj": "055ad1ee0f53253d",
+  "sha256_mp": "849f279faab9f7be"
+ },
+ "US10": {
+  "first": "1982-08-30",
+  "last": "2024-03-28",
+  "days": 10559,
+  "sha256_adj": "09fffacf7d7b1ce7",
+  "sha256_mp": "bfe2cb8e45770926"
+ }
+}
