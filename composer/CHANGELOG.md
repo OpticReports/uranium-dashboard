@@ -16,6 +16,23 @@ Format per entry:
   loop. Owner reads the account's cash at about $76,300 (needed at the decision: $74,153).
 - Applied at the 15:54 ET session. The HARV mirror legs are NOT sent today (credits and transfers
   cannot share a queue): they go this evening for Monday's session (MOVE_PLAN rev 3.2).
+- **15:54 session: all four credits applied, every order filled** (BIL 183 and SPXL 51 sold; USD
+  1,085, TECL 269, PULS 404, BOXX 142 bought; the first USD buy was not held by IBKR; no ZVOL order
+  today: the rule chose PULS). Post-trade check clean. Book $115,774.91, cash $801.12: HG $38,663.84
+  (USD), KMLM $33,632.85 (TECL 269, PULS 168), SLEEVE $30,128.41 (BOXX), HARV $13,349.81 (PULS 267).
+  Parity vs Composer: 4 of 4 engines hold the same.
+- **Composer, HARV exit Day B: the three invests filled** at the 11-20 window: HG $116,929.58,
+  KMLM $101,578.99, SLEEVE $93,473.08, HARV stub $303.50; account cash back to $102.25. Shares of the
+  book 37.4 / 32.5 / 29.9: no cap breach. The 16:35 monitor's BOOK DRAWDOWN 64.6% and HARV DRAWDOWN
+  ANOMALY are the same artifact of the withdrawal as on 11-19 (real book $312,387 vs $322,165: -3.0%
+  on a day SPY fell about 3%).
+- **HARV mirror legs queued 16:37-16:38 ET** for Monday 11-23's session (MOVE_PLAN rev 3.2; first
+  live use of the transfer key, all three answered "queued"): HARV -> HG $4,551.22
+  [transfer-1795210651170-0], HARV -> KMLM $4,551.22 [transfer-1795210657575-1], HARV -> SLEEVE
+  $4,237.36 [transfer-1795210657983-2] = $13,339.80 of the sleeve's $13,349.81, leaving $10.01
+  (headroom $2 + 3 cents x 267 PULS). The ledger rows' composer_amount (12,649.05 / 12,649.05 /
+  11,776.75) is the scaled figure that makes the script move those dollars, NOT a Composer amount:
+  Composer invested 12,468.63 / 12,468.63 / 11,608.75.
 
 ## 2026-11-19 — The symphony logic book (owner ask: "save all of the logic and reasoning ... a record that's updating")
 
