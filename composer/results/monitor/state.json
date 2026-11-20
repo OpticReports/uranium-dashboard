@@ -1,25 +1,24 @@
 {
   "peaks": {
     "mbkiXcuNDjueXpiox5Av": 2343.77,
-    "nNdBk7hc5NiBzeRvbI5T": 26335.1,
+    "nNdBk7hc5NiBzeRvbI5T": 26343.88,
     "YPTSJFJwD2ZKfAeYJUbW": 40378.17,
     "ORQNCfZnA18wmsMWVhf8": 35392.92
   },
   "accident_gauge": "YELLOW",
   "peak_dates": {
     "YPTSJFJwD2ZKfAeYJUbW": "2026-08-17",
-    "nNdBk7hc5NiBzeRvbI5T": "2026-11-18",
+    "nNdBk7hc5NiBzeRvbI5T": "2026-11-20",
     "mbkiXcuNDjueXpiox5Av": "2026-11-19",
     "ORQNCfZnA18wmsMWVhf8": "2026-11-16"
   },
   "book_peak": 100227.19000000002,
   "gate": {
     "override": false,
-    "zone": "tight",
-    "last_dist": 0.00024,
-    "last_date": "2026-11-18",
+    "zone": "closed",
+    "last_dist": -0.01962,
+    "last_date": "2026-11-19",
     "live_hist": {
-      "2026-11-06": "TECL",
       "2026-11-09": "BIL",
       "2026-11-10": "BIL",
       "2026-11-11": "BIL",
@@ -28,8 +27,11 @@
       "2026-11-16": "BIL",
       "2026-11-17": "BIL",
       "2026-11-18": "BIL",
-      "2026-11-19": "BIL"
-    }
+      "2026-11-19": "BIL",
+      "2026-11-20": "USD"
+    },
+    "closed_since": "2026-11-19",
+    "closed_days": 1
   },
   "shadow": {
     "drift": {
@@ -44,7 +46,7 @@
       "SLEEVE": "agree",
       "HARV": "agree"
     },
-    "last_date": "2026-11-19",
+    "last_date": "2026-11-20",
     "pending": [],
     "fmp": {}
   }
