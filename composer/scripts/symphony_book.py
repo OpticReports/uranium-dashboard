@@ -33,6 +33,7 @@ import argparse
 import difflib
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -43,7 +44,7 @@ APPROVED = os.path.join(ROOT, "fixtures", "approved")
 BOOK = os.path.join(ROOT, "symphonies")
 WHY = os.path.join(BOOK, "why")
 PINS = os.path.join(BOOK, "tree-pins.json")
-WHY_MIN = 60                 # characters an approved version's own entry in the why file must run to
+WHY_MIN = 40                 # letters and digits an approved version's own entry in the why file must run to
 BLOCK_MIN_LINES = 3          # a named group repeated at least twice and this long is printed once
 
 FN = {"relative-strength-index": "RSI", "moving-average-price": "moving-average price",
@@ -216,9 +217,11 @@ class Outline:
             if n.get("select-fn") not in ("top", "bottom"):
                 raise BookError(f"unknown select {n.get('select-fn')!r}")
             k = int(n.get("select-n"))
+            if not 1 <= k <= len(ch):                  # the evaluator gives each w/k: no line could say that
+                raise BookError(f"a ranked pick of {k} from {len(ch)}")
             pick = f"the {n.get('select-fn')} {k} by {sort_text(n)}"
             names = all(c.get("step") == "asset" for c in ch)
-            if k >= len(ch):                           # a pick that can never drop a candidate
+            if k == len(ch):                           # a pick that can never drop a candidate
                 note = f"({pick}, of {len(ch)}: nothing is ever dropped)"
                 if names:
                     held = ch[0]["ticker"] if len(ch) == 1 else f"equal weights of {', '.join(c['ticker'] for c in ch)}"
@@ -309,19 +312,37 @@ def census(tree):
     return tests, filters, sorted(tickers), nodes
 
 
+WHY_SECTION = "## What changed, and why"
+
+
 def why_entry(why, version):
-    """the text of the version's own entry in a why file (a bullet starting - **`<first 8>`**, up to
-    the next bullet or heading), or None"""
-    key = f"- **`{version[:8]}`**"
-    lines, out = why.split("\n"), None
-    for x in lines:
-        if x.startswith(key):
-            out = [x[len(key):]]
-        elif out is not None:
-            if x.startswith(("- ", "#")):
-                break
+    """the text of the version's own entry in a why file, or None: a bullet starting - **`<first 8>`**
+    inside the "What changed, and why" section (not in a comment or a code fence, which a reader of
+    the page would not see as the reason), up to the next bullet, heading or blank line"""
+    text = re.sub(r"<!--.*?-->", "", why, flags=re.S)
+    text = re.sub(r"^```.*?^```[^\n]*$", "", text, flags=re.S | re.M)
+    lines = text.split("\n")
+    try:
+        start = lines.index(WHY_SECTION) + 1
+    except ValueError:
+        return None
+    key, out = f"- **`{version[:8]}`**", None
+    for x in lines[start:]:
+        if x.startswith("## "):
+            break
+        if out is None:
+            if x.startswith(key):
+                out = [x[len(key):]]
+        elif not x.strip() or x.startswith("- "):
+            break
+        else:
             out.append(x)
     return None if out is None else " ".join(" ".join(out).split())
+
+
+def says_something(entry):
+    """an entry counts when it has at least WHY_MIN letters and digits (dots and dashes are not a reason)"""
+    return entry is not None and sum(c.isalnum() for c in entry) >= WHY_MIN
 
 
 def check_pins(manifest):
@@ -361,9 +382,11 @@ def load(path):
 def rebalance_text(tree, cfg):
     r = tree.get("rebalance")
     if r == "daily":
-        return "daily (~15:50 ET)"
+        return "daily (near the close; see the timing note under the logic)"
     if r == "none":
-        c = cfg.get("corridor", tree.get("rebalance-corridor-width"))
+        c = tree.get("rebalance-corridor-width")
+        if c is None:
+            raise BookError("a threshold symphony whose tree has no rebalance-corridor-width")
         return (f"threshold: trades only when a holding is more than {100 * float(c):.0f} percentage points of the "
                 f"symphony's own value from its target weight (absolute reading, inferred from Composer's "
                 f"backtests: results.md addendum 48); the signals are still read every session")
@@ -374,6 +397,9 @@ def engine_page(eng, cfg, why_text):
     eras = cfg["eras"]
     trees = [load(os.path.join(APPROVED, e["tree"])) for e in eras]
     cur, tree = eras[-1], trees[-1]
+    own = tree.get("rebalance-corridor-width")
+    if cfg.get("corridor") is not None and (own is None or abs(float(own) - float(cfg["corridor"])) > 1e-12):
+        raise BookError(f"{eng}: the manifest's corridor {cfg['corridor']!r} is not its current tree's {own!r}")
     main, blocks = Outline(tree).render()
     tests, filters, tickers, nodes = census(tree)
     out = [f"# {eng}: {' '.join(tree.get('name', eng).split())}", "",
@@ -397,7 +423,8 @@ def engine_page(eng, cfg, why_text):
         for name, body in blocks:
             out += [f"**[{name}]**", "", "```"] + body + ["```", ""]
     out += ["## Funds it can hold", "",
-            "Descriptions are this repo's, not Composer's labels.", "", "| Ticker | What it is |", "|---|---|"]
+            "Descriptions are this repo's, not Composer's labels. Multiples such as 3x and -1x are of the "
+            "DAILY move.", "", "| Ticker | What it is |", "|---|---|"]
     out += [f"| {t} | {FUNDS[t]} |" for t in tickers] + [""]
     out += ["## Approved versions", "",
             "Each entry is an approved era in the manifest. The diff under it is that version's rebalance "
@@ -425,6 +452,7 @@ def index_page(manifest):
     for eng, cfg in manifest["engines"].items():
         cur = cfg["eras"][-1]
         name = " ".join(load(os.path.join(APPROVED, cur["tree"])).get("name", eng).split())
+        name = name.replace("|", "\\|")              # HG's saved name holds table bars
         out.append(f"| [{eng}]({eng}.md) | {name} | `{cur['version'][:8]}` | {cur['from']} | {len(cfg['eras'])} |")
     out += ["", "## How it stays current", "",
             "- The logic on each page is rendered from the approved tree, so it cannot differ from what the",
@@ -458,7 +486,7 @@ def build():
                 why = f.read()
         except FileNotFoundError:
             raise BookError(f"symphonies/why/{eng}.md is missing: every engine needs its reasons on file") from None
-        missing = [e["version"][:8] for e in cfg["eras"] if len(why_entry(why, e["version"]) or "") < WHY_MIN]
+        missing = [e["version"][:8] for e in cfg["eras"] if not says_something(why_entry(why, e["version"]))]
         if missing:
             raise BookError(f"symphonies/why/{eng}.md has no entry of its own for the approved version(s) "
                             f"{', '.join(missing)}: under \"What changed, and why\" write a bullet starting "

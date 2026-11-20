@@ -6,7 +6,7 @@
 |---|---|
 | Symphony id | `mbkiXcuNDjueXpiox5Av` |
 | Approved version | `2oyXahw1VWpFtV15dhIi`, in force from the 2026-10-19 session |
-| Rebalance | daily (~15:50 ET) |
+| Rebalance | daily (near the close; see the timing note under the logic) |
 | Size of the logic | 7 conditions, 4 ranked picks, 14 funds, 63 nodes |
 | Approved versions on file | 3 |
 
@@ -37,11 +37,12 @@ fund. It has no macro or rates input (addendum 33).
   not in the trend or dip-buy logic" (add. 44) and had an XLV leaf this version lacks (add. 41); its
   tree is not on file and the reason for the change is not recorded. See "Open items".
 - **`bP4mvRy6`** (live from 2026-07-31): both bond baskets replaced by BIL. Reason (add. 17): the
-  book's duration risk lived only in those two baskets; "the bond basket only pays in deflationary
+  book's duration risk lived only in those two baskets; "the bond basket only pays in DEFLATIONARY
   crashes ... cash is regime-neutral", and the crash sleeve already fills that role. Measured on the
   2015-06..2026-07 backtest against the VCIT-basket variant: CAGR +105.3% vs +103.2%, max drawdown
   35.9% vs 36.4%, 2022 +45.2% vs +15.4% (add. 17). Against the VBF tree on file the CAGR is flat
-  (+105.3% vs +105.5%, max drawdown 35.9% vs 36.2%; add. 15b). An intermediate
+  (+105.3%, add. 17, vs +105.5%, the add. 15b baseline; max drawdown 35.9% vs 36.2%; two runs a day
+  apart). An intermediate
   version `bI6tlUMw` (VBF swapped for VCIT because VBF was the binding liquidity limit, add. 15b)
   was superseded the same evening before any rebalance.
 - **`2oyXahw1`** (saved 2026-10-18, first used 10-19): the SPY 200-day gate on the two trend baskets;
@@ -88,8 +89,9 @@ fund. It has no macro or rates input (addendum 33).
   41 says that edit "was never deployed" and the December 2025 original (`0DeB193g`) "ran until the
   07-30/31 update", on the evidence that live HG earned XLV's return on 07-02, a leaf only the
   original has. Against that, the shadow runner's backfill reproduces live HG on `6jq2MZNf` for all nine
-  backfilled sessions from 07-15 to 07-30 (`results/monitor/shadow-ledger.jsonl`), which narrows the
-  doubt to 06-30..07-14. The original's tree is not on file, so it cannot be settled from the repo.
+  backfilled sessions from 07-15 to 07-30 (`results/monitor/shadow-ledger.jsonl`; eight of them in the
+  bond baskets). That fits `6jq2MZNf` being live by 07-15 and leaves 06-30..07-14 in doubt; whether the
+  original would have held the same funds on those days cannot be checked without its tree.
 - **Trend gates were rejected, then one was built.** Addendum 19b ("no gate ships") and RUNBOOK's
   list of interventions that "amputate" the engines predate the 10-18 gate and were not updated.
 - Where the symphony came from, and what "Modified #1" changed: not recorded. The tree's own
@@ -121,7 +123,7 @@ ELSE:
 
 ## Funds it can hold
 
-Descriptions are this repo's, not Composer's labels.
+Descriptions are this repo's, not Composer's labels. Multiples such as 3x and -1x are of the DAILY move.
 
 | Ticker | What it is |
 |---|---|

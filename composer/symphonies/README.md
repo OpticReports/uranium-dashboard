@@ -6,7 +6,7 @@ What each live symphony does, why, and how it has changed. One page per engine.
 
 | Engine | Symphony | Approved version | Since | Versions on file |
 |---|---|---|---|---|
-| [HG](HG.md) | The Holy Grail w Sorts & Safe Sectors 139 | 38 | 2015 (Modified #1) | `2oyXahw1` | 2026-10-19 | 3 |
+| [HG](HG.md) | The Holy Grail w Sorts & Safe Sectors 139 \| 38 \| 2015 (Modified #1) | `2oyXahw1` | 2026-10-19 | 3 |
 | [KMLM](KMLM.md) | KMLM switcher + VIX sleeve 75/25 | `MVfHI8Og` | 2026-07-06 | 1 |
 | [SLEEVE](SLEEVE.md) | Crash Convexity Sleeve — InverseHold + Bond Frontrunner 50/50 | `yHJkdePZ` | 2026-07-31 | 2 |
 | [HARV](HARV.md) | VIX Harvester + HYG Credit Guard | `XVtsDTV1` | 2026-07-22 | 1 |

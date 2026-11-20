@@ -6,7 +6,7 @@
 |---|---|
 | Symphony id | `ORQNCfZnA18wmsMWVhf8` |
 | Approved version | `XVtsDTV1R6iuYDEg8XZK`, in force from the 2026-07-22 session |
-| Rebalance | daily (~15:50 ET) |
+| Rebalance | daily (near the close; see the timing note under the logic) |
 | Size of the logic | 27 conditions, 0 ranked picks, 3 funds, 139 nodes |
 | Approved versions on file | 1 |
 
@@ -77,8 +77,8 @@ The rule has no backwardation input and no credit input.
 - **The name claims a guard no version has.** Addendum 12 records a guarded symphony as "built +
   saved"; addendum 48 found "no HYG condition in any saved version". Older documents call the UVXY
   test "the credit guard". It is not a credit test. Settled as fact by addenda 48 and 56; what is
-  open is only the owner's choice to rename it or add the guard, which applies equally to the live
-  copy inside KMLM.
+  open is only the owner's choice to rename it or add the guard. Adding it would apply equally to
+  the copy of the rule inside KMLM, which has no HYG condition either.
 - The architecture doc (2026-08-31) says the voters are equally weighted and that the short-vol leg
   "carries an average weight of only 6.4%". The tree's weights are above, and addendum 56 puts the
   mean ZVOL weight at 11% (held on 20% of days).
@@ -160,7 +160,7 @@ ELSE:
 
 ## Funds it can hold
 
-Descriptions are this repo's, not Composer's labels.
+Descriptions are this repo's, not Composer's labels. Multiples such as 3x and -1x are of the DAILY move.
 
 | Ticker | What it is |
 |---|---|

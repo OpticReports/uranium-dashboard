@@ -62,16 +62,27 @@ class Current(unittest.TestCase):
             for era in cfg["eras"]:
                 entry = sb.why_entry(why, era["version"])
                 self.assertIsNotNone(entry, f"{eng}: no entry for {era['version']}")
-                self.assertGreaterEqual(len(entry), sb.WHY_MIN, f"{eng}: the entry for {era['version']} says nothing")
+                self.assertTrue(sb.says_something(entry), f"{eng}: the entry for {era['version']} says nothing")
 
     def test_b2_a_mention_is_not_an_entry(self):
-        why = ("## What changed, and why\n\n- **`AAAAaaaa`** (live from 2026-01-01): the first version, with "
+        long = "a reason with enough words in it to count as one for the version"
+        why = ("## What it is for\n\n- **`EEEEeeee`** " + long + "\n\n"
+               "## What changed, and why\n\n- **`AAAAaaaa`** (live from 2026-01-01): the first version, with "
                "enough words to count as a reason for it.\n  A second line that belongs to it; it also names "
-               "`BBBBbbbb` in passing.\n- **`CCCCcccc`**: x\n<!-- DDDDdddd -->\n")
+               "`BBBBbbbb` in passing.\n- **`CCCCcccc`**: x\n- **`FFFFffff`** " + " ." * 60 + "\n"
+               "- **`GGGGgggg`**\n\nAn unrelated paragraph, " + long + ".\n"
+               "<!-- DDDDdddd -->\n<!--\n- **`HHHHhhhh`** " + long + "\n-->\n"
+               "```\n- **`IIIIiiii`** " + long + "\n```\n\n## Later\n\n- **`JJJJjjjj`** " + long + "\n")
+        ok = lambda v: sb.says_something(sb.why_entry(why, v + "XXXX"))                  # noqa: E731
         self.assertIn("A second line that belongs to it", sb.why_entry(why, "AAAAaaaaXXXX"))
-        self.assertIsNone(sb.why_entry(why, "BBBBbbbbXXXX"))
-        self.assertLess(len(sb.why_entry(why, "CCCCccccXXXX")), sb.WHY_MIN)
-        self.assertIsNone(sb.why_entry(why, "DDDDddddXXXX"))
+        self.assertTrue(ok("AAAAaaaa"))
+        for v, what in (("BBBBbbbb", "a mention in passing"), ("CCCCcccc", "one letter"),
+                        ("DDDDdddd", "a comment"), ("EEEEeeee", "a bullet in another section"),
+                        ("FFFFffff", "dots"), ("GGGGgggg", "an empty bullet before an unrelated paragraph"),
+                        ("HHHHhhhh", "a bullet inside a comment"), ("IIIIiiii", "a bullet inside a code fence"),
+                        ("JJJJjjjj", "a bullet in a later section")):
+            self.assertFalse(ok(v), what)
+        self.assertIsNone(sb.why_entry("no such section\n- **`AAAAaaaa`** " + long, "AAAAaaaaXXXX"))
 
     def test_b2_a_new_era_without_its_reason_is_refused(self):
         real = sb.load
@@ -192,6 +203,40 @@ class Pinned(unittest.TestCase):
         self.assertIn("-rebalance: daily", page)
         self.assertIn("+rebalance: threshold", page)
         self.assertNotIn("Logic identical", page)
+
+    def test_b8_the_corridor_printed_is_the_trees_and_the_manifest_must_agree(self):
+        era = lambda v, f: {"version": v * 20, "from": f, "created_at": "t", "tree": "kmlm-MVfHI8Og.json",  # noqa: E731
+                            "note": "n"}
+        real = sb.load
+        seen = []
+
+        def fake(path):
+            d = real(path)
+            seen.append(1)
+            if len(seen) == 2:
+                d["rebalance-corridor-width"] = 0.2
+            return d
+        sb.load = fake
+        try:
+            page = sb.engine_page("X", {"symphony": "x", "eras": [era("A", "2026-01-01"), era("B", "2026-02-01")]}, "why")
+        finally:
+            sb.load = real
+        self.assertIn("more than 20 percentage points", page.split("## Approved versions")[0])
+        self.assertIn("-rebalance: threshold: trades only when a holding is more than 10 percentage", page)
+        self.assertNotIn("Logic identical", page)
+        with self.assertRaises(sb.BookError):
+            sb.engine_page("X", {"symphony": "x", "corridor": 0.25, "eras": [era("A", "2026-01-01")]}, "why")
+
+    def test_b9_a_pick_of_more_than_there_are_is_refused_and_the_index_table_is_whole(self):
+        fl = {"step": "filter", "select-fn": "bottom", "select-n": "2", "sort-by-fn": "cumulative-return",
+              "sort-by-fn-params": {"window": 1}, "children": [{"step": "asset", "ticker": "AAA"}]}
+        with self.assertRaises(sb.BookError):
+            sb.Outline({"step": "root", "children": [fl]}).render()
+        with open(os.path.join(sb.BOOK, "README.md"), encoding="utf-8") as f:
+            rows = [x for x in f.read().split("\n") if x.startswith("| [")]
+        self.assertEqual(len(rows), len(manifest()["engines"]))
+        for x in rows:
+            self.assertEqual(len(re.split(r"(?<!\\)\|", x)), 7, x)        # 5 cells: 6 bars, 7 pieces
 
 
 class Faithful(unittest.TestCase):

@@ -15,8 +15,8 @@
 The regime switcher: long tech, short vol, short tech or long bonds, decided by one comparison. "The
 largest single source of book return and book variance" (architecture doc). Created 2026-07-05 from
 the community "Simons KMLM switcher (single pops)" with 25% of it given to a separate VIX strategy.
-Funded at the 07-07 window ($27,870, from the HG withdrawal) and the 07-08 window ($41,463, from the
-original's liquidation) (CHANGELOG 07-06, 07-07). Target weight 34.1% since 2026-11-18; before that
+Funded at the 07-07 window ($27,870, queued the day HG's $49,076 withdrawal executed) and the 07-08
+window ($41,463, from the original's liquidation) (CHANGELOG 07-06, 07-07). Target weight 34.1% since 2026-11-18; before that
 29% (07-22), 39% (set 07-20, its top-up cancelled by the owner) and 35% (07-06).
 
 ## Why each block is there
@@ -24,7 +24,7 @@ original's liquidation) (CHANGELOG 07-06, 07-07). Target weight 34.1% since 2026
 | Block | What it does | The reason on record | Source |
 |---|---|---|---|
 | Overbought scan | RSI(10) above 79-80 on any of eleven equity funds (75 for XLP): hold UVXY | The pops "fire on equity overbought signals, which historically preceded the vol spikes the original was harvesting with UVXY" | results.md first study |
-| Dip-buys ("Combined Pop Bot") | RSI(10) under 30 on TQQQ, SOXL or SPXL (25 for LABU): hold TECL, SOXL, SPXL or LABU | No design reason is recorded. The SOXL branch "has no measured return (n 212, +0.14%/day, t 0.2 ...)" but removing it is worse, so it "stays as built" | add. 54.1 |
+| Dip-buys ("Combined Pop Bot") | RSI(10) under 30 on TQQQ, SOXL or SPXL (25 for LABU): hold TECL, SOXL, SPXL or LABU | No design reason is recorded. The SOXL branch "has no measured return (n 212, +0.14%/day, t 0.2 ...)" but removing it is worse in the rules' own years (2015-26), so it "stays as built" | add. 54.1 |
 | The switch | RSI(10) of XLK above RSI(10) of KMLM: the two weakest of TECL, SOXL, SVIX; else the stronger of SQQQ, TLT | "Disabling the switch takes CAGR from +258% to -9%". Its "edge is concentrated on exact flag timing ... a design fact" | add. 33, 39 |
 | 75 / 25 split | 75% switcher, 25% VIX sleeve | "Diversification beats modification": "better on every risk measure over every window tested", for about a third of the matched-window CAGR | add. 2 |
 | VIX sleeve | The same nine-voter rule as HARV: see [HARV](HARV.md) | One rule held twice; this copy is unchanged by HARV's closing | POLICY "Allocation"; add. 56 |
@@ -195,7 +195,7 @@ ELSE:
 
 ## Funds it can hold
 
-Descriptions are this repo's, not Composer's labels.
+Descriptions are this repo's, not Composer's labels. Multiples such as 3x and -1x are of the DAILY move.
 
 | Ticker | What it is |
 |---|---|

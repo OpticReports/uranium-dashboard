@@ -39,7 +39,7 @@ No reason for any of them is recorded.
 | Idea | Verdict | Source |
 |---|---|---|
 | Other weights, a third leg | not better | add. 4b |
-| A 20% VIX-strategy leg (40/40/20) | best recent risk-adjusted profile (Sharpe 1.82, drawdown 8.1% after 2024-06) but cut full-window CAGR to +30% and history to 2023 on; left as an optional future upgrade | add. 4b |
+| A 20% VIX-strategy leg (40/40/20) | best recent risk-adjusted profile (Sharpe 1.82, drawdown 8.1% after 2024-06) but cut full-window CAGR to +30% and history to 2023 on; left as an "optional future upgrade if its live record holds" | add. 4b |
 | Monthly or quarterly rebalance | "destroyed the sleeve": +48% to -1% and -11% | add. 4b |
 | Pop-harvest rule | "zero edge over the band, 5x the trades" | add. 7 |
 | CAPE-scaled sizing; valuation conditioning | not adopted | add. 9, 26 |

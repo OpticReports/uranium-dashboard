@@ -6,7 +6,7 @@
 |---|---|
 | Symphony id | `nNdBk7hc5NiBzeRvbI5T` |
 | Approved version | `yHJkdePZUWBT6eMCgO9m`, in force from the 2026-07-31 session |
-| Rebalance | daily (~15:50 ET) |
+| Rebalance | daily (near the close; see the timing note under the logic) |
 | Size of the logic | 24 conditions, 16 ranked picks, 12 funds, 191 nodes |
 | Approved versions on file | 2 |
 
@@ -51,7 +51,7 @@ No reason for any of them is recorded.
 | Idea | Verdict | Source |
 |---|---|---|
 | Other weights, a third leg | not better | add. 4b |
-| A 20% VIX-strategy leg (40/40/20) | best recent risk-adjusted profile (Sharpe 1.82, drawdown 8.1% after 2024-06) but cut full-window CAGR to +30% and history to 2023 on; left as an optional future upgrade | add. 4b |
+| A 20% VIX-strategy leg (40/40/20) | best recent risk-adjusted profile (Sharpe 1.82, drawdown 8.1% after 2024-06) but cut full-window CAGR to +30% and history to 2023 on; left as an "optional future upgrade if its live record holds" | add. 4b |
 | Monthly or quarterly rebalance | "destroyed the sleeve": +48% to -1% and -11% | add. 4b |
 | Pop-harvest rule | "zero edge over the band, 5x the trades" | add. 7 |
 | CAPE-scaled sizing; valuation conditioning | not adopted | add. 9, 26 |
@@ -154,7 +154,7 @@ split by fixed weights:
 
 ## Funds it can hold
 
-Descriptions are this repo's, not Composer's labels.
+Descriptions are this repo's, not Composer's labels. Multiples such as 3x and -1x are of the DAILY move.
 
 | Ticker | What it is |
 |---|---|

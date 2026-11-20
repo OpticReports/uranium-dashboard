@@ -30,6 +30,13 @@ Format per entry:
   repo's); "the gated rules had been live 0.2 years" was wrong (the gate had never been live when
   addendum 44 was written); a tree edited in place passed every test (now pinned); plus 20 smaller
   wording, quote and attribution fixes, all applied.
+- Narrow re-check of those corrections: PASS WITH CORRECTIONS, nothing wrong on the pages as
+  committed; all 36 fund descriptions confirmed against the repo's own instrument fits. Applied from
+  it (17 tests now): a ranked pick of more than there are candidates is refused; the corridor printed
+  is the tree's own and must match the manifest's; a version's reason must be a real bullet in the
+  "What changed, and why" section (not a comment, a code fence, dots or another section); the index
+  table no longer breaks on HG's name; five wordings tightened. Known and accepted: the pins are a
+  tripwire (visible as a diff to `tree-pins.json`), not a lock.
 - No symphony, policy, gate or mirror behaviour changed: documentation and a test only.
 - Record conflicts surfaced while compiling it (listed on each page under "Open items"): which HG
   version ran before 07-31 (manifest vs addendum 41); the HYG guard that addendum 12 calls "built +
