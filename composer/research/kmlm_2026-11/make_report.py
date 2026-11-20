@@ -9,7 +9,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 J = lambda k: json.load(open(os.path.join(HERE, "out", f"{k}.json")))                     # noqa: E731
-st, mac, bk, ab, g1, g4 = J("stats"), J("macro"), J("book"), J("cells_ab"), J("gates"), J("g4")
+st, mac, bk, ab, g1, g4, rb = J("stats"), J("macro"), J("book"), J("cells_ab"), J("gates"), J("g4"), J("robust")
 OUT = sys.argv[1]
 pc = lambda x, d=0: f"{x * 100:+.{d}f}%"                                                   # noqa: E731
 pu = lambda x, d=0: f"{x * 100:.{d}f}%"                                                    # noqa: E731
@@ -156,6 +156,16 @@ subs = {
     "{{mac_span}}": " to ".join(mac["sample"]), "{{mac_works}}": ", ".join(mac["works"]) or "none",
     "{{stress_on}}": pc(mac["inputs"]["M2_stress"]["on.h21"]["on_mean"], 1), "{{stress_off}}": pc(mac["inputs"]["M2_stress"]["on.h21"]["off_mean"], 1),
     "{{stress_t}}": lg(mac["inputs"]["M2_stress"]["on.h21"]["t_nw"]), "{{stress_mp}}": f"{mac['inputs']['M2_stress']['on.h21']['mirror_p']:.2f}",
+    "{{short_a}}": lg(rb["short"]["A_per_yr"]), "{{short_b}}": lg(rb["short"]["B_per_yr"]), "{{short_at}}": f"{rb['short']['A_t']:+.1f}",
+    "{{short_bt}}": f"{rb['short']['B_t']:+.1f}", "{{long_a}}": lg(rb["long"]["A_per_yr"]), "{{long_at}}": f"{rb['long']['A_t']:+.1f}",
+    "{{long_b}}": lg(rb["long"]["B_per_yr"]), "{{long_bt}}": f"{rb['long']['B_t']:+.1f}", "{{long_day}}": rb["long"]["B_worst_days"][0][0],
+    "{{c_long}}": lg(rb["tier_c"]["long_per_yr"]), "{{c_long_t}}": f"{rb['tier_c']['long_t']:.1f}", "{{c_best_p}}": f"{rb['tier_c']['best_p_fw']:.2f}",
+    "{{c_top10}}": pu(rb["tier_c"]["top10_days_share"]),
+    "{{mac_neg}}": str(sum(mac["inputs"][k]["on.h21"]["diff"] < 0 for k in MN)),
+    "{{dollar_on}}": pc(mac["inputs"]["M4_dollar"]["on.h21"]["on_mean"], 1), "{{dollar_off}}": pc(mac["inputs"]["M4_dollar"]["on.h21"]["off_mean"], 1),
+    "{{dollar_t}}": lg(mac["inputs"]["M4_dollar"]["on.h21"]["t_nw"]),
+    "{{mde_near}}": f"{rb['power']['F1a.rsi11']['mde50']:.2f}", "{{mde_best}}": f"{rb['power'][best]['mde50']:.2f}",
+    "{{mde_med}}": f"{rb['power_median_mde50']:.2f}",
     "{{t_fam}}": t_fam, "{{t_win}}": t_win, "{{t_mac}}": t_mac, "{{t_book}}": t_book, "{{t_gate}}": t_gate,
     "{{ch_surface}}": chart("c_surface", "Growth against the live rule, by switch window (real KMLM fund)",
                             "Log-points a year ×100; zero is the live 10-day rule. Below zero means slower growth."),
@@ -164,7 +174,7 @@ subs = {
     "{{ch_cells}}": chart("c_cells", "All 72 challengers, ranked", f"t-statistic of growth against the live rule. To count after 74 tries a bar must pass +{st['beside']['max_stat_90']:.2f}."),
     "{{ch_equity}}": chart("c_equity", "Growth of $1 (log scale)", "Simulated on the symphony's own rules, costs included. Shaded: the period where every fund is real."),
     "{{ch_dd}}": chart("c_dd", "Drawdown", "Fall from the running peak."),
-    "{{ch_macro}}": chart("c_macro", "Do macro states predict the risk-on side?", "Risk-on basket (TECL and SOXL), next 21 sessions: return when the state is favourable minus when it is not. None is significant."),
+    "{{ch_macro}}": chart("c_macro", "Do macro states predict the risk-on side?", "Risk-on basket (TECL and SOXL), next 21 sessions: return when the state is favourable minus when it is not. None is significant. M1 credit, M2 stress, M3 stock-bond, M4 dollar, M5 curve, M6 real rates."),
     "{{ch_book}}": chart("c_book", "At the level of the whole book", "Change in the three-engine book's yearly return, points, with 90% intervals. * chosen after the fact: illustration only.", narrow=True),
     "{{charts}}": json.dumps(CH, separators=(",", ":")),
 }

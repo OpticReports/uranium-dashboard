@@ -9,6 +9,10 @@ Test per (input, target, horizon): Newey-West regression of the forward return o
 walk-forward out-of-sample R2 against the expanding mean (first third burn-in, refit every 21 sessions
 on closed windows), Holm across the 36 tests, and a mirror: the state circularly shifted 1,000 times.
 An input "works" only if Holm p < 0.05 AND out-of-sample R2 > 0 (on any of its six tests).
+Point in time: prices, the curve and TIPS yields are used at a one-session lag; the OFR index at two; the
+broad dollar index at six, because it is released weekly (corrected after review: at one session its
+21-session t was 1.5, at six 1.2). The OFR index and the FRED series are the latest vintage: OFR revises
+its index, so the stress state is not exactly what was published on the day (DEVIATIONS.md 7).
 """
 import csv
 import io
@@ -102,7 +106,7 @@ def states(days):
         "M1_credit": ({d: ratio[d] > r50[d] for d in ratio if r50.get(d) is not None}, 1),
         "M2_stress": ({d: v < 0 for d, v in ofr().items()}, 2),
         "M3_stockbond": ({d: v < 0 for d, v in corr60.items()}, 1),
-        "M4_dollar": ({d: usd[d] < u50[d] for d in usd if u50.get(d) is not None}, 1),
+        "M4_dollar": ({d: usd[d] < u50[d] for d in usd if u50.get(d) is not None}, 6),   # released weekly (review)
         "M5_curve": ({d: v > 0 for d, v in fred("T10Y3M").items()}, 1),
         "M6_realrate": ({d: v < 0.25 for d, v in tchg.items()}, 1),
     }

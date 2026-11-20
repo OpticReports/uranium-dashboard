@@ -3,11 +3,11 @@
 
 <div class="card verdict">
 <ul>
-<li><b>No better time frame was found.</b> None of the {{n_cells}} variants passes the five tests set in advance. Only {{n_ahead}} of {{n_chall}} are even ahead of the live rule, all by amounts well inside the noise.</li>
-<li><b>The 10-day window is not a fluke setting.</b> Windows of 9 to 12 days behave the same. Shorter windows (3 to 8) are clearly worse. Longer ones (14 to 60) look better in one half of the data and worse in the other.</li>
-<li><b>Every moving-average version is worse.</b> Simple or exponential, price-above-average or crossover, 10 to 200 days: all 20 lag the live rule, as do all 6 relative-momentum versions.</li>
-<li><b>No macro input earns a place.</b> Six inputs named in advance (credit, financial stress, stock-bond correlation, the dollar, the yield curve, real rates): none predicts the returns of the switcher's risk-on side on 16 years of data.</li>
-<li><b>Recommendation: leave the switcher as it is.</b> What this test cannot rule out, and what would change the answer, is at the end.</li>
+<li><b>No better time frame is supported.</b> None of the {{n_cells}} variants passes the five tests set in advance. Only {{n_ahead}} of {{n_chall}} are ahead of the live rule at all, each by an amount well inside the noise.</li>
+<li><b>Nearby windows cannot be told apart from 10.</b> Windows of 9 to 12 days are within a hair of it. Shorter windows (3 to 8) are lower in both periods, but only the 3-day version is clearly worse once 74 tries are allowed for. Longer windows (14 to 60) are level with it since 2023 and lower before.</li>
+<li><b>Every moving-average and momentum version is behind.</b> All 20 moving-average forms (simple or exponential, 10 to 200 days) and all 6 relative-momentum forms are below the live rule in both periods. The 10 and 20-day price-against-average forms are clearly worse; the rest are worse on the numbers but not provably so.</li>
+<li><b>No macro input could be shown to help.</b> Six inputs named in advance (credit, financial stress, stock-bond correlation, the dollar, the yield curve, real rates): none predicts the returns of the switcher's risk-on side on 16 years of data at the bar set.</li>
+<li><b>Recommendation: leave the switcher as it is.</b> Five and a half years of data cannot see small improvements; section 8 says how small.</li>
 </ul>
 </div>
 
@@ -15,64 +15,68 @@
 <div class="kpi"><b>{{n_pass}} of {{n_cells}}</b><span>variants pass the pre-set tests</span></div>
 <div class="kpi"><b>{{best_t}}</b><span>best t-statistic ({{best}}); it needed {{crit}}</span></div>
 <div class="kpi"><b>0 of 26</b><span>moving-average or momentum versions ahead of the live rule</span></div>
-<div class="kpi"><b>0 of 6</b><span>macro inputs that predict the risk-on side</span></div>
+<div class="kpi"><b>0 of 6</b><span>macro inputs detectable as predictors</span></div>
 </div>
 
 <h2>1. The window</h2>
 <p>The switch compares the 10-day RSI of XLK with the 10-day RSI of the KMLM fund. This is the same comparison at fifteen windows, everything else unchanged. The two periods are drawn separately because the earlier one (2021-06 to 2023-04) was not looked at before the test.</p>
 {{ch_surface}}
-<p>From 9 to 12 days the three lines sit on zero. Below 9 the rule flips more often (up to two and a half times as often at 3 days) and loses in both periods. Above 12 the periods disagree: ahead since 2023, behind before it. A setting that only works in one period is not a better time frame.</p>
+<p>From 9 to 12 days the three lines sit on zero. Shorter windows flip more often (two and a half times as often at 3 days) and average {{short_a}} log-points a year since 2023 and {{short_b}} before (t {{short_at}} and {{short_bt}}): lower, not provably so. Longer windows average {{long_a}} since 2023 (t {{long_at}}), which is zero, and {{long_b}} before (t {{long_bt}}); half of that earlier shortfall is one session, {{long_day}}.</p>
 {{t_win}}
-<p class="note">Return a year is the simulated symphony on both periods pooled (the live rule: {{live_cagr}} a year, {{live_dd}} max drawdown; {{live_b}} in the first period, which contains 2022, the year its author fitted it on, and {{live_a}} since). "Family-wise p" is the chance of a t that large among {{n_cells}} tries if none were better. "Knife-edge days": days the flip would differ with XLK 0.3% higher or lower.</p>
+<p class="note">Return a year is the simulated symphony on both periods pooled (the live rule: {{live_cagr}} a year, {{live_dd}} max drawdown; {{live_b}} in the earlier period, which contains 2022, the year its author fitted it on, and {{live_a}} since). "Family-wise p" is the chance of a t that large among {{n_cells}} tries if none were better. "Knife-edge days": days the flip would differ with XLK 0.3% higher or lower.</p>
 
 <h2>2. Every variant, ranked</h2>
 {{ch_cells}}
 {{t_fam}}
-<p class="note">The five tests: beat the live rule after correcting for {{n_cells}} tries; beat it in each half; neighbours on the same grid also beat it; drawdown no more than 5 points worse; still ahead at double the trading cost. Probability that picking the best variant in-sample disappoints out of sample: {{pbo}}. Deflated Sharpe of the best difference: {{dsr}} (1.0 would be a real improvement).</p>
+<p class="note">The five tests: beat the live rule after correcting for {{n_cells}} tries; beat it in each period; neighbours on the same grid also beat it; drawdown no more than 5 points worse; still ahead at double the trading cost. Picking the best variant in sample is close to a coin flip out of sample (probability of backtest overfitting {{pbo}}). Deflated Sharpe of the best difference: {{dsr}}, against a usual bar of 0.95.</p>
 
 <h2>3. What the paths looked like</h2>
 {{ch_equity}}
 {{ch_dd}}
-<p>The nearest miss ({{best}}, t {{best_t}}, family-wise p {{best_p}}) tracks the live rule for the whole of the first period and pulls ahead only in 2025-26. The best moving-average form ({{ma}}) returns {{ma_cagr}} a year against {{live_cagr}} (t {{ma_t}}).</p>
+<p>The nearest miss ({{best}}, t {{best_t}}, family-wise p {{best_p}}) is level with the live rule through the earlier period and ahead in 2023, 2024 and 2026; without its three best days it is level. The best moving-average form ({{ma}}) returns {{ma_cagr}} a year against {{live_cagr}} (t {{ma_t}}).</p>
 
 <h2>4. Before the KMLM fund existed</h2>
-<p>The KMLM fund launched in December 2020. On {{c_span}} the switch has to read an older managed-futures fund that agrees with it about 84% of the time, and SVIX and ZVOL are modelled. There the 10-day rule returned {{c_cagr}} a year with a {{c_dd}} drawdown, and {{c_ahead}} of {{c_n}} variants were ahead of it, the longer windows most.</p>
+<p>The KMLM fund launched in December 2020. On {{c_span}} the switch has to read an older managed-futures fund that agrees with it about 84% of the time, and SVIX and ZVOL are modelled. There the 10-day rule returned {{c_cagr}} a year with a {{c_dd}} drawdown, and the longer windows ran ahead of it on the numbers.</p>
 {{ch_surface_c}}
-<p>This cannot pick a window: it is a different signal. What it does say is that nothing about "10" is special outside the fund's own five years. Put with section 1: the window barely matters; the fund the switch reads matters a great deal.</p>
+<p>The longer windows average {{c_long}} log-points a year ahead there (t {{c_long_t}}); the best single one has a family-wise p of {{c_best_p}}, and ten sessions carry {{c_top10}} of the gap. The {{c_ahead}} of {{c_n}} variants ahead are one pattern counted many times, not that many confirmations. It does not repeat with the real fund. So: no sign that 10 is special on the stand-in years, and no case for another window either.</p>
 
 <h2>5. Macro</h2>
-<p>Each input was first asked a simple question on {{mac_span}}: when its state is favourable, does the risk-on basket (TECL and SOXL) do better over the next 1, 5 and 21 sessions? Only an input that passed would have been built into the tree. Inputs that work: <b>{{mac_works}}</b>.</p>
+<p>Each input was first asked a simple question on {{mac_span}}: when its state is favourable, does the risk-on basket (TECL and SOXL) do better over the next 1, 5 and 21 sessions? Only an input that passed would have been built into the tree. Inputs that pass: <b>{{mac_works}}</b>.</p>
 {{ch_macro}}
 {{t_mac}}
-<p>Five of the six point the wrong way for a confirmation filter: the risk-on side did better after the unfavourable state. The largest is financial stress: {{stress_off}} over the next 21 sessions when stress was elevated against {{stress_on}} otherwise (t {{stress_t}}, placebo p {{stress_mp}}). That is the dip-buying the symphony already does with price, and it is not significant. A macro veto would have removed the entries that paid best.</p>
-<p class="note">Not re-run because earlier studies answered them: VIX term structure (addenda 2, 39), rate-hike vetoes (33), CAPE (26, 40), volatility gates on the long leg (42, 54.1).</p>
+<p>None is detectable. The bar was high: with 36 tests an input needed to move the basket by roughly 45 to 75 basis points a day to pass, against an average day of 23. So this says no large macro effect exists, not that none does. At 21 sessions {{mac_neg}} of the six lean against a confirmation filter (the basket did better after the unfavourable state), none significantly.</p>
+<p class="note">Point in time: each state uses data from the session before (two for the stress index, six for the weekly dollar index). The stress and FRED series are today's vintage; the stress index is revised after publication. Not re-run because earlier studies answered them: VIX term structure (addenda 2, 39), rate-hike vetoes (33), CAPE (26, 40), volatility gates on the long leg (42, 54.1). Because no input passed, none was built into the tree.</p>
 
 <h2>6. The whole book</h2>
-<p>KMLM is 34.1% of a three-engine book. On {{book_span}} that book returned {{book_cagr}} a year with a {{book_dd}} drawdown with the live rule. Swapping in the window-voting versions moves it by less than the uncertainty.</p>
+<p>KMLM is 34.1% of a three-engine book. On {{book_span}} that book returned {{book_cagr}} a year with a {{book_dd}} drawdown with the live rule. Swapping in the window-voting versions moves it by less than the uncertainty, in either direction.</p>
 {{ch_book}}
 {{t_book}}
-<p class="note">* The 12-day cell is shown because it had the highest t. It was chosen after the results were seen, on the half of the data where it did best, so its interval overstates it. It is an illustration of the nearest miss, not a candidate.</p>
+<p class="note">* The 12-day cell is shown because it had the highest t. It was picked after the results were seen. Allowing for that pick, its lower bound is about −7 points, not +1 (independent review). It is an illustration of the nearest miss, not a candidate.</p>
 
-<h2>7. Edges looked for on the way</h2>
+<h2>7. Candidate edges checked on the way</h2>
+<p>None clears the bar. Listed because the standing rule is to report them.</p>
 <ul>
-<li><b>Elevated financial stress, then leveraged tech.</b> Risk-on basket {{stress_off}} over 21 sessions after stress vs {{stress_on}} otherwise, 2010-2026, t {{stress_t}}, placebo p {{stress_mp}}. Not an edge by the bar set (Holm p 1.0); the symphony's own dip-buys already trade it. To use it would need more independent episodes than 16 years hold.</li>
-<li><b>Longer windows on the stand-in years.</b> 25 to 30-day windows ran about 0.10 to 0.14 log-points a year ahead on 2007-2020, but they are behind on the first real period and the signal there is a different fund. Not usable.</li>
-<li>Nothing else cleared a placebo.</li>
+<li><b>Financial stress, then leveraged tech.</b> After the stress index was at or above zero the risk-on basket made {{stress_off}} over 21 sessions against {{stress_on}} otherwise: 941 stressed sessions in about 13 episodes, 2010-2026, t {{stress_t}} (about −1.4 on log returns), placebo p {{stress_mp}}, Holm p 1.0. Same sign in each third of the sample. To use it would take more independent episodes than 16 years hold, and the published-on-the-day index.</li>
+<li><b>12-day switch and ranked picks.</b> t {{best_t}}, family-wise p {{best_p}}; level in the earlier period; three sessions carry it.</li>
+<li><b>Dip-buys on a 7-day RSI.</b> Ahead since 2023 (t about 2.2), behind before (t about −1.8); pooled t 0.2.</li>
+<li><b>Longer windows on the stand-in years.</b> Section 4: t {{c_long_t}}, not repeated on the real fund.</li>
+<li><b>Dollar below its average.</b> Basket {{dollar_on}} vs {{dollar_off}} over 21 sessions, t {{dollar_t}}.</li>
 </ul>
 
 <h2>8. What this does not settle</h2>
 <ul>
-<li><b>Small improvements are invisible.</b> With five and a half years of data, a variant would need to add roughly 0.5 log-points a year to stand out from 74 tries. A real improvement a third that size could be there and this test would not see it. The honest reading is "no evidence for a change", not "proof the 10-day rule is best".</li>
-<li><b>The first period flatters the live rule.</b> Its author fitted it on 2022. A challenger had to win on the incumbent's home ground.</li>
+<li><b>Small improvements are invisible.</b> To stand out from 74 tries half the time, a neighbouring window would have had to add {{mde_near}} log-points a year (the 12-day cell: {{mde_best}}, roughly 80 points of yearly return on the live rule's {{live_cagr}}); the typical variant {{mde_med}}. A real gain a third that size could be there unseen. The reading is "no evidence for a change", not "proof that 10 is best".</li>
+<li><b>The earlier period flatters the live rule.</b> Its author fitted it on 2022, and single sessions there carry much of the gap (2022-11-10: the live rule +20% in a day).</li>
 <li><b>Decisions are simulated at the close.</b> Composer decides a few minutes earlier; 8 of 83 live KMLM sessions were knife-edges.</li>
 <li><b>What would change the answer:</b> another two or three years of live data, or a managed-futures signal with a longer real history than the KMLM fund.</li>
 </ul>
 
 <h2>9. Method notes for next time</h2>
 <ul>
-<li>Declaring the 74 variants first is what kept "longer is better since 2023" from becoming a finding: the unseen period reversed it.</li>
+<li>Declaring the 74 variants first mattered: the scouting pass had shown longer windows ahead since 2023, and the period nobody had seen did not agree.</li>
 <li>Checking the simulator against Composer's own engine on three variants, not only the live rule, is what makes the moving-average results trustworthy.</li>
-<li>A macro input has to predict returns on its own, on long history, before it goes near the tree.</li>
+<li>State the smallest effect a test can see next to its verdict. "Nothing passed" means little without it.</li>
+<li>A macro input has to predict returns on its own, on long history, before it goes near the tree; and the bar for that should be set with the sample size in view.</li>
 </ul>
 
 <details><summary>Simulator checks</summary>

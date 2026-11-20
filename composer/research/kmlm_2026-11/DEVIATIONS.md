@@ -13,3 +13,16 @@
 5. **M4 uses FRED's broad dollar index (DTWEXBGS)** as pre-registered; no deviation. Recorded because the
    Yahoo dollar index was also fetched and is NOT used.
 6. **G4 was run on four trees, not three:** the approved tree was added as a control on the request.
+7. **After the independent review (statistics): the dollar state is lagged six sessions, not one.** The
+   broad dollar index is released weekly. Its 21-session t went from 1.5 to 1.2; no verdict changed.
+   The OFR stress index and the FRED series are the latest vintage (the stress index is revised after
+   publication); this is disclosed, not corrected.
+8. **q5_robust.py was added after the review:** the smallest gain the test could see, the longer and
+   shorter windows averaged into one series per period, and tier C's family-wise p. It selects nothing.
+9. **Tier C starts 2007-09-04, not 2007-02-22** (the stand-in fund's first close plus the 121 closes the
+   longest indicator needs), for the same reason as deviation 1.
+10. **"Worst month" in the book table is the worst of consecutive 21-session blocks** (last block
+   shorter), not a calendar month and not a rolling window.
+11. **The overfitting probability is computed with the live rule as one of the columns** (75 columns:
+   74 cells of which two are the live rule, plus the base). With one copy of the live rule it is 0.42;
+   on the RSI windows alone 0.50 (independent review).
