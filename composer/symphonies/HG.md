@@ -12,12 +12,13 @@
 
 ## What it is for
 
-The book's trend and rebound engine: "the only validated trend engine ... simultaneously the largest
-validated CAGR source and the largest drawdown source" (results.md addendum 18b). Live since
+The book's trend and rebound engine: "the only VALIDATED trend engine ... simultaneously the largest
+validated CAGR source AND the largest DD source" (results.md addendum 18b). Live since
 2025-12-05. Target weight 34.1% of the book since 2026-11-18 (POLICY.md "Allocation"); before that
 29% (07-22), 19% (07-20), 55% (07-06), 79% (07-05) (CHANGELOG those dates).
 
-It reads only TQQQ, SOXL and SPY prices and RSI. It has no macro or rates input (addendum 33).
+Its conditions read only TQQQ, SOXL and SPY; its ranked picks also read the 10d RSI of each candidate
+fund. It has no macro or rates input (addendum 33).
 
 ## Why each block is there
 
@@ -27,16 +28,20 @@ It reads only TQQQ, SOXL and SPY prices and RSI. It has no macro or rates input 
 | Long-vol pop | TQQQ RSI(10) above 80: hold the weakest of UVXY, VIXY, VIXM | Labelled a melt-up hedge; no fuller reason is recorded | architecture doc; add. 19b |
 | Dip-buys | Below trend and TQQQ RSI(10) under 30: hold the weakest of TECL, QLD, LABU, USD, SMH | "The RSI dip-buys at 3x are HG's bear-market engine ... never de-lever the dip-buys" | add. 42 |
 | Cash route | SOXL RSI(10) under 30, or TQQQ under its 20d average: BIL | Worth about 37 CAGR points and half the max drawdown over 11.2 years. For the SOXL test specifically no reason is recorded | add. 30 |
-| SPY 200-day gate | Each of the two trend baskets only while SPY is above its 200-day average, else BIL | "Insurance against a 2000/2008-type bear, about two episodes deep"; "the one leverage gate with robust long-history evidence" | add. 40, 42, 44, 45 |
+| SPY 200-day gate | Each of the two trend baskets only while SPY is above its 200-day average, else BIL | "Insurance against a 2000/2008-type bear, about two episodes deep" (add. 44); "the one leverage gate with robust long-history evidence" (CHANGELOG 2026-10-18) | add. 40, 42, 44, 45 |
 
 ## What changed, and why
 
 - **`6jq2MZNf`** (saved 2026-06-30): bond baskets of BSV, TLT, LQD, VBF, SPAB, ANGL as the defensive
-  leg. What it changed from the December 2025 original, and why, is not recorded. See "Open items".
+  leg. Of the December 2025 original the record says only that it "differed in its defensive branch,
+  not in the trend or dip-buy logic" (add. 44) and had an XLV leaf this version lacks (add. 41); its
+  tree is not on file and the reason for the change is not recorded. See "Open items".
 - **`bP4mvRy6`** (live from 2026-07-31): both bond baskets replaced by BIL. Reason (add. 17): the
   book's duration risk lived only in those two baskets; "the bond basket only pays in deflationary
-  crashes ... cash is regime-neutral", and the crash sleeve already fills that role. Measured:
-  CAGR +105.3% vs +103.2%, max drawdown 35.9% vs 36.4%, 2022 +45.2% vs +15.4%. An intermediate
+  crashes ... cash is regime-neutral", and the crash sleeve already fills that role. Measured on the
+  2015-06..2026-07 backtest against the VCIT-basket variant: CAGR +105.3% vs +103.2%, max drawdown
+  35.9% vs 36.4%, 2022 +45.2% vs +15.4% (add. 17). Against the VBF tree on file the CAGR is flat
+  (+105.3% vs +105.5%, max drawdown 35.9% vs 36.2%; add. 15b). An intermediate
   version `bI6tlUMw` (VBF swapped for VCIT because VBF was the binding liquidity limit, add. 15b)
   was superseded the same evening before any rebalance.
 - **`2oyXahw1`** (saved 2026-10-18, first used 10-19): the SPY 200-day gate on the two trend baskets;
@@ -59,12 +64,13 @@ It reads only TQQQ, SOXL and SPY prices and RSI. It has no macro or rates input 
 | Macro-conditioned or graded gates (CAPE, curve, credit, oil; votes, ramps) | not better than the plain gate | add. 40 |
 | Gating the dip-buys or every leveraged long; VIX or CAPE gates | rejected | add. 42 |
 | Canary signals | no change; CAPE of 35 or more is a watch item only | add. 43 |
-| Overnight or pre-open exits | every rule negative | add. 53, 54.2 |
+| Overnight or pre-open exits | 44 of 47 rules lowered CAGR (the 3 positives are mirror controls, t of 1.3 or less); every conditioned exit with 5 or more cases negative | add. 53, 54.2 |
 
 ## Known quirks and limits
 
 - All in sample for 2015-2026; "the gate itself is in sample everywhere on this panel" (add. 44).
-  The gated rules had been live 0.2 years when that was written.
+  When that was written the gate had never been live (it went in on 2026-10-18); the ungated July
+  version had 0.2 years live and HG as a whole 0.8.
 - The gate "does nothing for a gap crash": the 36% drawdown is the 2020 gap (add. 40, 42).
 - Reconstructed on long history it draws down about 70% in 2000-02 and 2007-09 (add. 39).
 - Composer evaluates the gate on adjusted prices (204 cash days against 234 unadjusted, add. 45).
@@ -72,7 +78,7 @@ It reads only TQQQ, SOXL and SPY prices and RSI. It has no macro or rates input 
 
 ## Numbers on record (in sample; none is a forecast)
 
-- Live vs model to 2026-10-02: +89.2% vs +78.9%, correlation 0.960 (add. 36).
+- Live vs model to 2026-10-02 (window as in add. 36's table): +89.2% vs +78.9%, correlation 0.960.
 - Backtest 2015-06..2026-10 with the gate: CAGR 85.8%, Sharpe 1.62, max drawdown 35.8%.
 - Synthetic 1997-2026: +64.7% a year with a 60% drawdown (add. 47).
 
@@ -81,14 +87,17 @@ It reads only TQQQ, SOXL and SPY prices and RSI. It has no macro or rates input 
 - **Which version ran before 07-31.** The manifest lists `6jq2MZNf` as live from 2026-06-30. Addendum
   41 says that edit "was never deployed" and the December 2025 original (`0DeB193g`) "ran until the
   07-30/31 update", on the evidence that live HG earned XLV's return on 07-02, a leaf only the
-  original has. The original's tree is not on file. Unresolved; it affects only dates before 07-31.
+  original has. Against that, the shadow runner's backfill reproduces live HG on `6jq2MZNf` for all nine
+  backfilled sessions from 07-15 to 07-30 (`results/monitor/shadow-ledger.jsonl`), which narrows the
+  doubt to 06-30..07-14. The original's tree is not on file, so it cannot be settled from the repo.
 - **Trend gates were rejected, then one was built.** Addendum 19b ("no gate ships") and RUNBOOK's
   list of interventions that "amputate" the engines predate the 10-18 gate and were not updated.
-- Where the symphony came from in the community, and what "Modified #1" changed: not recorded.
+- Where the symphony came from, and what "Modified #1" changed: not recorded. The tree's own
+  description says only "(Created with Composer AI)".
 
 ## The logic, as approved (version `2oyXahw1`)
 
-Read top to bottom; the first branch whose test is true is taken. `Nd` is N trading days. RSI is Wilder's. Decided on prices about ten minutes before the close.
+Within each IF / ELSE IF / ELSE chain the first true test is taken; each part of a split is decided separately and held at its share. `Nd` is N trading days. RSI is Wilder's. Decided on prices a few minutes before the close (measured about 15:51-15:54 ET, results.md addendum 50; Composer does not publish the time).
 
 ```
 IF 10d moving-average price of TQQQ > 20d moving-average price of TQQQ:
@@ -112,26 +121,28 @@ ELSE:
 
 ## Funds it can hold
 
-| Ticker | Fund |
+Descriptions are this repo's, not Composer's labels.
+
+| Ticker | What it is |
 |---|---|
-| BIL |  |
-| LABU |  |
-| QLD |  |
-| SMH |  |
-| SSO |  |
-| TECL |  |
-| TNA |  |
-| TQQQ |  |
-| UDOW |  |
-| UPRO |  |
-| USD |  |
-| UVXY |  |
-| VIXM |  |
-| VIXY |  |
+| BIL | 1-3 month Treasury bills |
+| LABU | 3x biotech |
+| QLD | 2x Nasdaq-100 |
+| SMH | semiconductor stocks |
+| SSO | 2x S&P 500 |
+| TECL | 3x technology |
+| TNA | 3x Russell 2000 |
+| TQQQ | 3x Nasdaq-100 |
+| UDOW | 3x Dow 30 |
+| UPRO | 3x S&P 500 |
+| USD | 2x semiconductors |
+| UVXY | 1.5x short-term VIX futures (long volatility) |
+| VIXM | mid-term VIX futures (long volatility) |
+| VIXY | short-term VIX futures (long volatility) |
 
 ## Approved versions
 
-Each row is a version that ran live. The diff under it is the outline of that version against the one before (`-` removed, `+` added).
+Each entry is an approved era in the manifest. The diff under it is that version's rebalance rule and outline against the one before (`-` removed, `+` added).
 
 ### `6jq2MZNfQcEWZjQFq5v9`: from the 2026-06-30 session
 
@@ -146,7 +157,7 @@ First approved version on file.
 - bond baskets -> BIL (CHANGELOG 2026-07-31); bI6tlUMw (VCIT, 2026-07-30 20:50 ET) was superseded before any rebalance
 
 ```diff
-@@ -8,5 +8,5 @@
+@@ -9,5 +9,5 @@
  ELSE IF RSI(SOXL, 10d) < 30:
 -  the bottom 1 by 10d RSI of BSV, TLT, LQD, VBF, SPAB, ANGL
 +  BIL
@@ -162,7 +173,7 @@ First approved version on file.
 - SPY 200-day gate (addendum 45)
 
 ```diff
-@@ -3,4 +3,6 @@
+@@ -4,4 +4,6 @@
      the bottom 1 by 10d RSI of UVXY, VIXY, VIXM
 +  ELSE IF price of SPY > 200d moving-average price of SPY:
 +    the top 1 by 10d RSI of TQQQ, UPRO, UDOW, SSO, TNA
@@ -170,7 +181,7 @@ First approved version on file.
 -    the top 1 by 10d RSI of TQQQ, UPRO, UDOW, SSO, TNA
 +    BIL
  ELSE IF RSI(TQQQ, 10d) < 30:
-@@ -11,3 +13,5 @@
+@@ -12,3 +14,5 @@
    BIL
 +ELSE IF price of SPY > 200d moving-average price of SPY:
 +  the top 1 by 10d RSI of TQQQ, UPRO, UDOW, SSO, TNA

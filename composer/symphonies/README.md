@@ -15,10 +15,17 @@ What each live symphony does, why, and how it has changed. One page per engine.
 
 - The logic on each page is rendered from the approved tree, so it cannot differ from what the
   shadow runner and the IBKR mirror run.
-- Approving a logic change: fetch the new tree into `fixtures/approved/`, add its era to
-  `manifest.json`, write what changed and why in `symphonies/why/<ENGINE>.md` (naming the new
-  version id), run `python3 composer/scripts/symphony_book.py`, and commit all of it with the
-  CHANGELOG entry. `tests/test_symphony_book.py` fails until that is done.
+- Approving a logic change: save the new tree as a NEW file in `fixtures/approved/` (an approved
+  tree is never edited in place), add its era to `manifest.json` and its fingerprint to
+  `symphonies/tree-pins.json`, write what changed and why as a bullet starting
+  ``- **`<first 8 of the id>`**`` in `symphonies/why/<ENGINE>.md`, describe any new fund in
+  `symphony_book.FUNDS`, run `python3 composer/scripts/symphony_book.py`, and commit all of it
+  with the CHANGELOG entry. Also refresh the shadow runner's frozen fixture
+  (`tests/test_shadow_runner.py` S4 pins the current version of each engine).
+- `tests/test_symphony_book.py` fails until that is done. The repo has no CI or commit hook, so
+  a failing test is a signal, not a lock.
 - A change made on Composer without that is caught daily: the shadow runner's LOGIC DRIFT alert.
 - The why files are hand-written and cite the study behind each choice (`results/results.md`
-  addenda, `CHANGELOG.md`). Numbers in them are in-sample records, not forecasts.
+  addenda, `CHANGELOG.md`). Numbers in them are in-sample records, not forecasts. No test can
+  tell whether that text (weights, status, live numbers) is still true: it is re-read whenever
+  POLICY or an engine's status changes.

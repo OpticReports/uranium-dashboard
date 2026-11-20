@@ -4,7 +4,7 @@ The crisis hedge: "the only component with negative correlation to equities" (ar
 Built 2026-07-06 as an equal blend of two community signal strategies, to the owner's brief of "best
 per-dollar crash payout with minimal bleed" (CHANGELOG 07-06). Target weight 31.8% since 2026-11-18,
 as one engine of the book: the old band and the scheduled scale-up are retired (POLICY operations 1
-and 2). Before that 27% (07-22), and 10% at funding.
+and 2). Before that 27% (from the 07-20 allocation), and 10% at funding.
 
 How to read it (add. 54.3): "a bond/credit-and-sector-shock hedge, not a VIX or broad-index crash
 hedge"; its return "arrives in the 5-20 sessions after the crash day".
@@ -13,11 +13,11 @@ hedge"; its return "arrives in the 5-20 sessions after the crash day".
 
 | Block | What it does | The reason on record | Source |
 |---|---|---|---|
-| InverseHold (50%) | When RSI(8) of IEF is below RSI(45) of PSQ: the two calmer of LABD-or-BOXX and TMV-or-BOXX, each held only while its RSI(20) is below RSI(10) of KMLM. Otherwise BOXX | "Free hedge; slow-bear specialist" | add. 4 |
-| FrontrunBonds (50%) | A ladder of one-day shocks in HYG, TLT, SHY, TMF, LQD and RSI extremes in CORP, PEJ, KIE, LQD, each choosing among UVXY, SVXY, SOXL, SOXS, UGL, TQQQ, SPXL, KIE, TMF. Otherwise BOXX | "Free hedge; fast-spike specialist" | add. 4 |
+| InverseHold (50%) | When RSI(8) of IEF is below RSI(45) of PSQ: both LABD-or-BOXX and TMV-or-BOXX, half each, LABD and TMV each held only while its RSI(20) is below RSI(10) of KMLM (the tree ranks the two by volatility but keeps both, so the ranking does nothing). Otherwise BOXX | "Free hedge; slow-bear specialist" | add. 4 |
+| FrontrunBonds (50%) | A ladder of one-day shocks in HYG, TLT, SHY, TMF, KIE, LQD and RSI extremes in CORP, PEJ, KIE, LQD, each choosing among UVXY, SVXY, SOXL, SOXS, UGL, TQQQ, SPXL, KIE, TMF. Otherwise BOXX | "Free hedge; fast-spike specialist" | add. 4 |
 | 50 / 50 blend | Half each | Positive in all four SPY falls of more than 8% since 2022; correlation to HG -0.12; "robust to weights" | add. 4, 4b |
 | Daily rebalance | Rebalanced every session | "Essentially a wash ... matches the components' native setting" | add. 4c |
-| BOXX as the resting fund | Cash-like leg | Tax: BOXX turns taxable distributions into untaxed gains (Act 60) | add. 17 |
+| BOXX as the resting fund | Cash-like leg | Tax: BOXX pays its return as price gain rather than taxable distributions (Act 60) | CHANGELOG 2026-07-31; add. 17 |
 
 The individual thresholds (1.75%, 23, 78 and so on) were set by the community authors in 2023-2025.
 No reason for any of them is recorded.
@@ -28,7 +28,8 @@ No reason for any of them is recorded.
   the resting fund. Backtest +49.2% / Sharpe 1.59 / max drawdown 14.8% against +48.2% / 1.56 / 14.8%
   (add. 4c).
 - **`yHJkdePZ`** (live from 2026-07-31): the four BIL nodes became BOXX, "signal conditions
-  untouched". Reason: about $590 a year of tax saved at that size (add. 17). "Identical behavior over
+  untouched". Reason: about $590 a year of tax saved at that size (CHANGELOG 2026-07-31; add. 17
+  for the tax-deferral case). "Identical behavior over
   the 2023+ window"; the accountant's confirmation of BOXX's treatment was left with the owner
   (CHANGELOG 07-31). Side effect: BOXX's short history truncates Composer's backtest to about
   2023-01, so research uses the BIL copy (`research/sleeve_tree_bil.json`).
@@ -37,7 +38,8 @@ No reason for any of them is recorded.
 
 | Idea | Verdict | Source |
 |---|---|---|
-| Other weights, a third leg, a 20% VIX leg | not better | add. 4b |
+| Other weights, a third leg | not better | add. 4b |
+| A 20% VIX-strategy leg (40/40/20) | best recent risk-adjusted profile (Sharpe 1.82, drawdown 8.1% after 2024-06) but cut full-window CAGR to +30% and history to 2023 on; left as an optional future upgrade | add. 4b |
 | Monthly or quarterly rebalance | "destroyed the sleeve": +48% to -1% and -11% | add. 4b |
 | Pop-harvest rule | "zero edge over the band, 5x the trades" | add. 7 |
 | CAPE-scaled sizing; valuation conditioning | not adopted | add. 9, 26 |
@@ -48,7 +50,7 @@ No reason for any of them is recorded.
 
 ## Known quirks and limits
 
-- History before 2026-07 is "rule-replay, not live record"; out of sample only from 2024-06 (add. 4c).
+- Its pre-creation history is "rule-replay, not live record"; out of sample only from 2024-06 (add. 4c).
 - The 2008 result rests on modelled VIX legs; "with those legs in cash it is -1% / -14% / -29%: read
   that as the floor" (add. 39).
 - It paid in 4 of 8 crash episodes and sat out 2026-11-05 (0 of 21 triggers) (add. 54.3).
@@ -57,7 +59,7 @@ No reason for any of them is recorded.
 
 ## Numbers on record (in sample; none is a forecast)
 
-- Live vs model to 2026-10-02: +18.0% vs +15.9%, correlation 0.969 (add. 36).
+- Live vs model to 2026-10-02 (window as in add. 36's table): +18.0% vs +15.9%, correlation 0.969.
 - Backtest 2022-01..2026-07: +49.3% a year, Sharpe 1.59, max drawdown 14.8% (add. 5).
 - Synthetic path from 1995: +19.5% a year with a 51% drawdown (add. 54.3).
 

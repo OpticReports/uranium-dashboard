@@ -16,8 +16,8 @@
 until the tooling can run without it (`research/zvol_2026-11/MOVE_PLAN.md`). The same rule still runs
 as the 25% VIX sleeve inside [KMLM](KMLM.md).
 
-A community strategy picked from a sweep of 41 candidates as a "pure stabilizer" (add. 11), funded
-2026-07-21 at a 15% target. Its saved description is the community author's: "a very simple strategy
+A community strategy picked from a sweep of 41 candidates as a "pure stabilizer" (add. 11). Its
+first deploy was submitted 2026-07-21 and filled at the 07-22 window, at a 15% target. Its saved description is the community author's: "a very simple strategy
 that earns from VIX ... SPY RSI predicts whether to short or go long VIX Mid-Term Futures ETPs".
 
 ## Why each block is there
@@ -25,18 +25,18 @@ that earns from VIX ... SPY RSI predicts whether to short or go long VIX Mid-Ter
 | Block | What it does | The reason on record | Source |
 |---|---|---|---|
 | Nine voters | Wilder RSI of SPY over 2 to 10 days, weighted 36 / 16 / 8 / 8 / 8 / 8 / 8 / 4 / 4 | The group is named "SPY RSI predicts VIX moves over different RSI time periods". No reason for those weights is recorded | tree; add. 56 |
-| RSI under 25: ZVOL | Short mid-term volatility after an oversold close | "A rebound trade, not a carry trade"; the edge "disappears one close late" | add. 56 |
+| RSI under 25: ZVOL | Short mid-term volatility after an oversold close | "A rebound trade, not a carry trade". Traded one close late it falls to about zero on the pre-ZVOL simulation, and from 23.5% to 18.5% a year in the real ZVOL era | add. 56 |
 | RSI above 80: VXZ | Long mid-term volatility after an overbought close | The author's "short or go long"; the leg added 28 points in the real era | add. 56 |
 | Otherwise PULS | Cash-like | | tree |
-| "Black Swan Catcher" | UVXY RSI(14) above 70: PULS in place of ZVOL | "Surgical (35 of 812 ZVOL days), and it caught the one catastrophe": it kept the rule out on 2018-02-06 (-31%) | add. 31 |
+| "Black Swan Catcher" | UVXY RSI(14) above 70: PULS in place of ZVOL | "Surgical (35/812 ZVOL days), and it caught the one catastrophe": it kept the rule out on 2018-02-06 (-31%) | add. 31 |
 
 The rule has no backwardation input and no credit input.
 
 ## What changed, and why
 
 - **`XVtsDTV1`** (live from 2026-07-22): the only approved version. Two earlier saves (`J6evkY1V`, and
-  `uQf3HrDb`, which ran on 07-21) are logically identical to it and to the community copy (add. 48).
-  No logic change was ever made.
+  `uQf3HrDb`, the version in place on 07-21 before any money was in it) are logically identical to it
+  and to the community copy (add. 48). No logic change was ever made.
 
 ## Studied and not built
 
@@ -56,7 +56,8 @@ The rule has no backwardation input and no credit input.
 
 - "Harvester" is a misnomer: carry is 0.06 of the ZVOL leg's 0.64 (add. 56 verification).
 - ZVOL pays about 82% of its value a year in distributions. A payout lands in account cash, outside
-  the symphony, if the rule sold between ex-date and pay-date ($1,970 on 08-19/20, add. 37-38).
+  the symphony, if the rule sold between ex-date and pay-date ($1,970 across the account on 08-19/20,
+  $1,193 of it HARV's; add. 38, 56).
   ZVOL is a $20.6M fund: payout-cut and closure risk.
 - Live ZVOL fills ran a median 12.7 bps worse than the close (n 22) against a break-even near 11 bps.
 - On the IBKR mirror every ZVOL buy has been discarded by IBKR (11-16 to 11-19).
@@ -65,7 +66,8 @@ The rule has no backwardation input and no credit input.
 
 - Live 07-22 to 11-17 (83 sessions): -$363 as displayed, +$830 with the stranded payout, against
   +$446 for T-bills on the same dollars (add. 56).
-- Backtest 2023-04-19..2026-11-17: +23.2% a year, Sharpe 1.97, max drawdown 9.5%.
+- Backtest 2023-04-19..2026-11-17: +23.2% a year, Sharpe 1.97, max drawdown 9.5%
+  (`research/zvol_2026-11/PREREG.md`).
 - Longer simulation net of 5 bps: 2010-2019 -1.8% a year; all years before ZVOL existed +8.9% a year,
   Sharpe 0.64; traded one close late, -0.1% a year (add. 56).
 - "All in-sample; real ZVOL history is 3.6 years, chosen after the fact" (add. 56).
@@ -74,15 +76,17 @@ The rule has no backwardation input and no credit input.
 
 - **The name claims a guard no version has.** Addendum 12 records a guarded symphony as "built +
   saved"; addendum 48 found "no HYG condition in any saved version". Older documents call the UVXY
-  test "the credit guard". It is not a credit test.
-- The architecture doc (2026-08-31) says the voters are equally weighted and that ZVOL is held about
-  6% of the time. The tree's weights are above, and addendum 56 corrects the second to "20% of days,
-  mean weight 11%".
+  test "the credit guard". It is not a credit test. Settled as fact by addenda 48 and 56; what is
+  open is only the owner's choice to rename it or add the guard, which applies equally to the live
+  copy inside KMLM.
+- The architecture doc (2026-08-31) says the voters are equally weighted and that the short-vol leg
+  "carries an average weight of only 6.4%". The tree's weights are above, and addendum 56 puts the
+  mean ZVOL weight at 11% (held on 20% of days).
 - No record links this symphony's id to the strategy inside KMLM, beyond "one rule held twice".
 
 ## The logic, as approved (version `XVtsDTV1`)
 
-Read top to bottom; the first branch whose test is true is taken. `Nd` is N trading days. RSI is Wilder's. Decided on prices about ten minutes before the close.
+Within each IF / ELSE IF / ELSE chain the first true test is taken; each part of a split is decided separately and held at its share. `Nd` is N trading days. RSI is Wilder's. Decided on prices a few minutes before the close (measured about 15:51-15:54 ET, results.md addendum 50; Composer does not publish the time).
 
 ```
 [SPY RSI predicts VIX moves over different RSI time periods]
@@ -156,15 +160,17 @@ ELSE:
 
 ## Funds it can hold
 
-| Ticker | Fund |
+Descriptions are this repo's, not Composer's labels.
+
+| Ticker | What it is |
 |---|---|
-| PULS | PGIM Ultra Short Bond ETF |
-| VXZ | iPath Series B S&P 500 VIX Mid-Term Futures ETN |
-| ZVOL | ProShares Ultra VIX Short-Term Futures ETF |
+| PULS | ultra-short bonds (cash-like) |
+| VXZ | mid-term VIX futures note (long volatility) |
+| ZVOL | about -1x mid-term VIX futures (short volatility); pays a large monthly distribution |
 
 ## Approved versions
 
-Each row is a version that ran live. The diff under it is the outline of that version against the one before (`-` removed, `+` added).
+Each entry is an approved era in the manifest. The diff under it is that version's rebalance rule and outline against the one before (`-` removed, `+` added).
 
 ### `XVtsDTV1R6iuYDEg8XZK`: from the 2026-07-22 session
 
