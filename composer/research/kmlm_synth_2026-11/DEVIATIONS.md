@@ -27,3 +27,9 @@ RYMFX on the same days: 0.612 and 86.9%.
    page): Yahoo's adjusted close understates the 2022-12-28 distribution ($2.481 for $4.037692).
 7. **Before a market's data starts, its basket is split among the markets that have data** (equal within
    the basket; basket shares unchanged). The index committee's actual historical market list is not public.
+8. **How F4 and F5 are scored (written before either was computed).** Window: 2021-06-01 (the first day
+   every variant's indicator exists on the real fund, as in addendum 57) to 2024-03-28; the second part
+   (2022-08-01 on) beside it. The real-fund run uses the corrected total-return series (6). F4 "holds the
+   same" = the same set of funds in the live rule's target that session; growth = the live rule's total log
+   growth. F5 = Spearman rank correlation, across the 74 variants, of total log growth minus the live
+   rule's. The synthetic is cut to the fund's own first day so both runs warm up on the same sessions.
