@@ -1,0 +1,85 @@
+<h1>Macro states as a risk-on / risk-off layer across the symphonies</h1>
+<p class="sub">Study of 2026-11-21 (addendum 61). Thirty macro states in nine families (rates and curve, inflation, valuation, gold, credit, dollar, volume, liquidity, oil), five cross-engine signals and three re-entry signals, all defined before any was joined to an engine path. Simulated, in sample; nothing here is a forecast.</p>
+
+<div class="card verdict">
+<ul>
+<li><b>No macro state gives a usable risk-off switch for the book.</b> Cutting the book to half while a state is on fails the rule set in advance for {{n_fail}} of the {{n_scored}} family composites that could be scored (volume shocks are too rare since 2015). The one that cleared it by the letter, liquidity, rests on two regimes and is not confirmed.</li>
+<li><b>Why: the book is already counter-cyclical.</b> It has earned more, not less, in the states an overlay would call risk-off. With the S&P 500 below its 200-day average it grew {{t1_on}} log-points a year against {{t1_off}} above it since 2015 (0.10 is roughly 10% more growth a year), and {{t1_on_s}} against {{t1_off_s}} on the rebuilt years before. De-risking there costs {{t1_p1}} a year against holding the same cash evenly.</li>
+<li><b>The symphonies are not working against each other.</b> While Holy Grail's trend gate is off, the other two engines earned {{x1_v}} log-points a year more than otherwise, on all four stretches of history. Holy Grail itself also earns well on those days, so moving its weight to the others adds almost nothing ({{rd_dg}} a year, with a deeper fall).</li>
+<li><b>Gold: a candidate, with the opposite sign to the one I registered.</b> Since 2015 the book grew {{g_on}} a year while gold was strong against {{g_off}} while it was not, in all three engines, and not only in 2020-2022. Before 2015 (rebuilt) there is nothing, and since 2021-06 alone the gap is not distinguishable. Not a rule.</li>
+<li><b>Liquidity: a candidate that rests on one episode.</b> The book grew less while money growth was slowing or the Fed's balance sheet shrinking ({{l_on}} against {{l_off}}), but that is two regimes; without 2020-2021 it is not distinguishable.</li>
+<li><b>Nothing in yields and the curve, inflation, CAPE, the dollar or oil.</b> None is distinguishable on both the recent and the rebuilt years.</li>
+<li><b>Macro as a re-entry signal for Holy Grail's gate: no.</b> None of three re-entry states picks the gate-off days worth taking.</li>
+</ul>
+</div>
+
+<div class="kpis">
+<div class="kpi"><b>0 of {{n_scored}}</b><span>macro composites confirmed as a book-level risk-off state</span></div>
+<div class="kpi"><b>{{t1_on}} vs {{t1_off}}</b><span>book growth, log-points a year, S&P below vs above its 200-day average, since 2015</span></div>
+<div class="kpi"><b>{{g_on}} vs {{g_off}}</b><span>book growth with gold strong vs not, since 2015 (candidate)</span></div>
+<div class="kpi"><b>{{x1_v}}</b><span>more a year for the other two engines while Holy Grail's gate is off</span></div>
+</div>
+
+<h2>1. What was tested, and on what</h2>
+<p>Each state is yes/no every session and uses only data published before that session. A family's composite is on when at least half its states are on. Engines: the live rules' simulated daily returns from addenda 58 to 60; the book at 34.1 / 34.1 / 31.8.</p>
+{{t_design}}
+<p class="note">"Recent" is 2015-06 on for the book and the sleeve, 2006-07 on for Holy Grail, 2021-06 on for KMLM (its real fund); "rebuilt" is everything before, where funds or signals are rebuilt and results are shape only. The book's recent sample is eleven years with about one of each macro regime: a macro rule cannot be confirmed on it. p-values compare each result with 1,000 time-shifted copies of the same state, which keep its persistence. Earlier studies rejected de-risking overlays ten times (addenda 19b to 53); this one covers indicators and book-level questions those did not.</p>
+
+<h2>2. The map: what the book earned in each state</h2>
+{{t_map}}
+{{ch_map}}
+<p class="note">Growth in log-points a year while the state is on and while it is off. The book as a whole grew {{book_g}} a year on 2015-06 on, with a deepest fall of {{book_dd}} (simulated). "p" is against time-shifted copies, two-sided; "after 11" corrects for the eleven composites. "Regimes" merges on-spells less than a quarter apart; the raw count of switches is in brackets. A negative difference is what a risk-off state should show.</p>
+{{ch_t1}}
+{{ch_gold}}
+{{ch_liq}}
+<p class="note">"Gold strong" is at least three of: gold above its 200-day average, gold beating the S&P 500, gold up more than 10% in a year after inflation, gold beating copper, gold up more than 10% in a quarter. "Liquidity tight" is either of: M2 growth below 5% and slowing, the Fed's balance sheet smaller than six months before.</p>
+<details><summary>All thirty single states (a map, not a test)</summary>{{t_singles}}</details>
+<details><summary>Gold and liquidity year by year</summary>{{t_years}}</details>
+
+<h2>3. De-risking on a state against holding the same cash all the time</h2>
+<p>The book at half size while the state is on, the rest in T-bills, compared with a book that always holds the same average amount of T-bills.</p>
+{{t_p1}}
+<p class="note">Positive growth difference means timing the cash beat spreading it evenly. The rule set in advance: beat the even mix on growth (or cut the deepest fall by 3 points without less growth), stand above the time-shifted copies after correcting for 11 states, agree in sign on the rebuilt years, beat the mirror, and have at least 8 episodes. Liquidity clears it by the letter ({{l_dg}} a year), but its 21 switches are two regimes, its timed book still falls {{l_ddp}} points deeper than the evenly-held one and grows {{l_pol}} against the full book's {{l_full}}, and without 2020-2021 its gain is {{l_wo}}. I report it as a candidate, which is a downgrade against the letter of the rule made after seeing the result. The dollar composite cut the deepest fall on the recent years and deepened it on the rebuilt ones.</p>
+
+<h2>4. Across the engines</h2>
+<h3>Does one engine's state say anything about the others?</h3>
+{{t_cross}}
+<p class="note">The other two engines' growth (at their book weights) on days after the signal is on, against other days; the signalling engine is left out. Scored this way after the first results, because the registered book target contained the signalling engine. For the gate, the first and second other engines are KMLM and the sleeve; for the ladder, Holy Grail and KMLM.</p>
+<details><summary>The other three registered signals, engine by engine</summary>{{t_cross2}}</details>
+<h3>Moving weight out of Holy Grail while its gate is off</h3>
+{{t_redeploy}}
+<p class="note">Defined after seeing the table above. Holy Grail on gate-off days is not idle: its dip-buying rules still trade, and it earned {{own_on}} log-points a year on those days since 2015. So the other engines are not better places for its weight.</p>
+<h3>A tilt between engines by macro state</h3>
+{{t_p2}}
+<p class="note">While a state is on, 15 points move from the engine that did worst to the one that did best in that state's earlier days. The gains are not specific to the state: the mirror (tilting when the state is off) gains as much, because the rule mostly just leans toward KMLM, the engine with the highest simulated return.</p>
+
+<h2>5. Macro as a re-entry signal</h2>
+{{t_re}}
+<p class="note">Holy Grail's tree without its SPY gate, on days the gate is off, less T-bills. By-product, already on record (addenda 44 and 45): the gate gave up {{re_v}} log-points a year on its off-days since 2006 and {{re_s}} before; it was adopted for the 2000-02 and 2007-09 type of bear market.</p>
+
+<h2>6. Candidate edges</h2>
+<ul>
+<li><b>The book earns more when the S&P 500 is below its 200-day average.</b> Sample: {{t1_share}} of days since 2015, 10 regimes; {{t1_on}} against {{t1_off}} a year (p &lt;0.001), since 2021-06 alone {{t1_real}}, rebuilt years {{t1_on_s}} against {{t1_off_s}} (p {{t1_ps}}). By engine since each one's own recent start: {{t1_eng}}. Mirror: de-risking while the S&P is ABOVE its average beats evenly-held cash by {{t1_mirror}} a year. Those days also hold {{t1_falls}} of the book's deepest-fall days: more growth and more of the falls. Tested after seeing this (book at half size normally, full size while the S&P is below its average, {{lean_exp}} invested on average): since 2015 it grew {{lean_v}}; on the rebuilt years {{lean_s}}. The timing is real, but the reserve costs more growth than it saves in falls: a plain smaller book does better on both. It would only pay with borrowed money in weak markets, which is not on the table.</li>
+<li><b>Gold strong as a risk-on state.</b> Since 2015: book {{g_on}} against {{g_off}} a year (p {{g_p}}; {{g_reg}} regimes); more with gold strong in each engine on those years ({{g_eng}}); still there without 2020-2022 ({{g_wo}}). Mirror: cutting the book to half while gold is NOT strong beat evenly-held cash by {{g_p1}} a year (p {{g_p1p}}), with a deepest fall {{g_p1dd}} deeper. Against it: the sign is the opposite of the one registered, the test was chosen after seeing the map, 1994-2015 shows nothing ({{g_shape}}), and since 2021-06 alone the gap is {{g_real}}. What it would take: the next two or three gold regimes, tracked from today with the definition frozen.</li>
+<li><b>Tight liquidity as risk-off.</b> Section 3: {{l_on}} against {{l_off}} a year (p {{l_p}}; {{l_holm}} after 11). Two regimes; needs another cycle.</li>
+<li><b>While the sleeve's shock ladder is out of cash.</b> The other two engines earned more on 2015-2020 ({{x3_e4}}) and on the rebuilt years ({{x3_s}}), and less since 2021-06 ({{x3_r}}). Inconsistent.</li>
+<li><b>While Holy Grail's gate is off, the other two engines earn more.</b> {{x1_all}}. Section 4 shows it is not usable by moving Holy Grail's weight.</li>
+<li><b>Volume shocks.</b> On the {{vol_share}} of days since 2006 with the volume composite on ({{vol_ep}} episodes), Holy Grail earned at a rate of {{vol_hg}} log-points a year (p {{vol_p}} after 11). A risk-on reading, the opposite of the registered one; too rare to size on.</li>
+</ul>
+
+<h2>7. What this does not settle</h2>
+<ul>
+<li><b>Eleven recent years hold about one of each macro regime.</b> The study can rule states out and rank candidates; it cannot confirm a macro rule.</li>
+<li><b>The recent years are in sample for all three engines.</b> KMLM supplies {{kmlm_share}} of the book's simulated growth since 2015, and {{top2}} are the two biggest years ({{top2_share}} of the total); any state that lines up with those years looks good.</li>
+<li><b>Revised data.</b> CPI, M2 and the financial conditions index are today's vintages, not what was published then.</li>
+<li><b>Thresholds were fixed once, not tuned</b>, so a better-placed threshold could exist; searching for it on this sample would prove nothing.</li>
+<li><b>Before 2015 the book is largely rebuilt</b> (shape only), and daily gold starts in 2000.</li>
+<li><b>Measurement basis:</b> daily close to close; the state is known before the session it applies to; 5.9 basis points per unit of turnover.</li>
+</ul>
+
+<h2>8. Open questions</h2>
+{{t_open}}
+
+<details open><summary>Independent verification</summary>
+{{verification}}
+</details>
