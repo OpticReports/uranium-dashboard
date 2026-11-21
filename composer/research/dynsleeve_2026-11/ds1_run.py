@@ -22,7 +22,7 @@ pos = {d: i for i, d in enumerate(days)}
 E = md.engines()
 LATE = fd.late_engines()
 PRIMARY = ["VA", "V3", "RA", "R1", "OA", "SU.SPY.s.50", "SD.SPY.s.50", "SU.QQQ.s.50", "TA.SPY"]
-SAMPLES = {"verdict": ("2015-06-01", "9999"), "shape": ("1994-06-02", "2015-06-01"), "real": ("2021-06-02", "9999")}
+SAMPLES = {"verdict": ("2015-06-01", "9999"), "shape": ("1994-06-02", "2015-06-01"), "real": ("2021-06-02", "9999"), "mid": ("2015-06-01", "2020-12-02")}   # "mid" added after review
 
 
 def ema(x, n):
@@ -76,6 +76,9 @@ def states():
     S["RB"] = md.flag(y10 > md.sma(y10, 252), ~np.isnan(md.sma(y10, 252)))
     oil = md.asof(md.fred("DCOILWTICO"), 4)
     oil = np.where(oil > 5, oil, np.nan)
+    for i in range(1, len(oil)):                                               # the negative print of 2020-04-20 must not blank 200 sessions (review M1)
+        if np.isnan(oil[i]) and not np.isnan(oil[i - 1]) and i > int(np.argmax(~np.isnan(oil))):
+            oil[i] = oil[i - 1]
     S["OA"] = md.flag(oil > md.sma(oil, 200), ~np.isnan(md.sma(oil, 200)))
     S["OB"] = md.flag(md.roc(oil, 63) > 0.25, ~np.isnan(md.roc(oil, 63)))
     PX = {"SPY": md.asof(md.yahoo("^GSPC"), 1), "QQQ": md.asof(qqq_level(), 1)}
@@ -128,9 +131,13 @@ def score(s, H, K, Sl, ds, flip=False):
     o = np.sort(d)[::-1]
     yrs = np.array([x[:4] for x in ds])
     keep = ~np.isin(yrs, ("2020", "2022"))
-    return {"avg_weight": float(wt.mean()), "growth": g(pol), "growth_benchmark": g(ben), "d_growth": g(pol) - g(ben), "maxdd": maxdd(pol), "maxdd_benchmark": maxdd(ben),
+    # without 2020 and 2022: the benchmark's weight is re-averaged on the days kept (review M3)
+    wk = wt[keep].mean() if keep.any() else wt.mean()
+    dk = np.log1p(pol[keep]) - np.log1p((1 - wk) * ((H + K) / 2)[keep] + wk * Sl[keep])
+    by_year = {y: float(d[yrs == y].sum()) for y in sorted(set(yrs))}
+    return {"by_year": by_year,"avg_weight": float(wt.mean()), "growth": g(pol), "growth_benchmark": g(ben), "d_growth": g(pol) - g(ben), "maxdd": maxdd(pol), "maxdd_benchmark": maxdd(ben),
             "d_maxdd": maxdd(pol) - maxdd(ben), "p_newey_west": nw_p(d), "sum_of_daily_edge": float(d.sum()), "best_20_sessions": float(o[:20].sum()), "worst_20_sessions": float(o[-20:].sum()),
-            "d_growth_without_2020_2022": float(d[keep].mean() * 252) if keep.sum() > 250 else None,
+            "d_growth_without_2020_2022": float(dk.mean() * 252) if keep.sum() > 250 else None,
             "sharpe": float(pol.mean() / pol.std(ddof=1) * math.sqrt(252)), "sharpe_benchmark": float(ben.mean() / ben.std(ddof=1) * math.sqrt(252))}
 
 
@@ -159,7 +166,8 @@ def run_state(sv, sample, lag, late=False):
         return None
     H, K, Sl = (np.array([src[e][d] for d in ds]) for e in ("HG", "KMLM", "SLEEVE"))
     spread = Sl - (H + K) / 2
-    out = {"n": len(ds), "span": [ds[0], ds[-1]], "on_share": float(s.mean()), "switches_per_yr": float(np.abs(np.diff(s)).sum() / len(s) * 252), "regimes": merged(s),
+    out = {"n": len(ds), "span": [ds[0], ds[-1]], "on_share": float(s.mean()), "switches_per_yr": float(np.abs(np.diff(s)).sum() / len(s) * 252), "regimes": merged(s), "regimes_off": merged(1 - s),
+           "spread_vol": {"on": float(spread[s == 1].std()), "off": float(spread[s == 0].std())},
            "sleeve_minus_others_per_yr": {"on": float(spread[s == 1].mean() * 252), "off": float(spread[s == 0].mean() * 252)},
            "on_high": score(s, H, K, Sl, ds), "on_low": score(s, H, K, Sl, ds, flip=True), "p_shift": shift_p(s, H, K, Sl)}
     return out, ds, s, (H, K, Sl)
@@ -176,11 +184,14 @@ def holm(ps, m):
 
 def main():
     S = states()
-    out = {"meta": {"high": HIGH, "low": LOW, "primary": PRIMARY, "states": list(S)}, "states": {}, "curves": {}, "fixed": {}}
+    out = {"meta": {"high": HIGH, "low": LOW, "primary": PRIMARY, "states": list(S)}, "states": {}, "curves": {}, "fixed": {}, "fixed_late": {}}
     for sample, (lo, hi) in SAMPLES.items():
         ds = [d for d in sorted(E["BOOK"]) if lo <= d < hi]
         H, K, Sl = (np.array([E[e][d] for d in ds]) for e in ("HG", "KMLM", "SLEEVE"))
         out["fixed"][sample] = {f"{wt:.3f}": {"growth": float(np.log1p((1 - wt) / 2 * (H + K) + wt * Sl).mean() * 252), "maxdd": maxdd((1 - wt) / 2 * (H + K) + wt * Sl)} for wt in (LOW, 0.318, HIGH)}
+        dl = [d for d in ds if all(d in LATE[e] for e in ("HG", "KMLM", "SLEEVE"))]
+        Hl, Kl, Sll = (np.array([LATE[e][d] for d in dl]) for e in ("HG", "KMLM", "SLEEVE"))
+        out["fixed_late"][sample] = {f"{wt:.3f}": {"growth": float(np.log1p((1 - wt) / 2 * (Hl + Kl) + wt * Sll).mean() * 252), "maxdd": maxdd((1 - wt) / 2 * (Hl + Kl) + wt * Sll)} for wt in (LOW, 0.318, HIGH)}
     for sid, sv in S.items():
         row = {}
         for sample in SAMPLES:
@@ -194,19 +205,24 @@ def main():
                     row[sample][tag] = {k: {a: x[0][k][a] for a in ("d_growth", "d_maxdd", "p_newey_west")} for k in ("on_high", "on_low")}
         out["states"][sid] = row
         if sid in PRIMARY:
-            # running sum of the policy's daily edge over the whole history (1994 on), for the chart
-            lo = SAMPLES["shape"][0]
-            dsa = [d for d in sorted(E["BOOK"]) if d >= lo]
-            s = np.array([sv[pos[d] - 1] for d in dsa])
-            ok = ~np.isnan(s)
-            dsa, s = [d for d, k in zip(dsa, ok) if k], s[ok]
-            H, K, Sl = (np.array([E[e][d] for d in dsa]) for e in ("HG", "KMLM", "SLEEVE"))
-            pol, ben, _ = policy(s, H, K, Sl)
-            c = np.cumsum(np.log1p(pol) - np.log1p(ben))
-            out["curves"][sid] = [[d, round(float(v), 4)] for d, v in list(zip(dsa, c))[::5]]
-    ps = {sid: out["states"][sid]["verdict"]["on_high"]["p_newey_west"] for sid in PRIMARY if "verdict" in out["states"][sid]}
-    for sid, p in holm(ps, len(PRIMARY)).items():
-        out["states"][sid]["verdict"]["p_holm"] = p
+            # running sum of the policy's daily edge, each sample against its OWN average weight (review S3)
+            c, tot = [], 0.0
+            for sample in ("shape", "verdict"):
+                r = run_state(sv, sample, 1)
+                if r is None:
+                    continue
+                _, dsx, sx, (H, K, Sl) = r
+                pol, ben, _ = policy(sx, H, K, Sl)
+                cs = tot + np.cumsum(np.log1p(pol) - np.log1p(ben))
+                tot = float(cs[-1])
+                c += [[d, round(float(v), 4)] for d, v in list(zip(dsx, cs))[::5]]
+            out["curves"][sid] = c
+    for k in ("on_high", "on_low"):                                            # each direction has its own p (review S1)
+        ps = {sid: out["states"][sid]["verdict"][k]["p_newey_west"] for sid in PRIMARY if "verdict" in out["states"][sid]}
+        for sid, p in holm(ps, len(PRIMARY)).items():
+            out["states"][sid]["verdict"][k]["p_holm"] = p
+    for sid in PRIMARY:
+        out["states"][sid]["verdict"]["p_holm"] = out["states"][sid]["verdict"]["on_high"]["p_holm"]
     json.dump(out, open(os.path.join(HERE, "out", "dynsleeve.json"), "w"), indent=1)
     print("fixed", {k: {a: (round(b["growth"], 3), round(b["maxdd"], 3)) for a, b in v.items()} for k, v in out["fixed"].items()})
     for sid, row in out["states"].items():

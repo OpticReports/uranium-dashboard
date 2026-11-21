@@ -3,41 +3,45 @@
 
 <div class="card verdict">
 <ul>
-<li><b>No state works as a sleeve-weight switch.</b> {{n_pass}} of the 9 primary states pass the rule set in advance, in either direction. The best of all {{n_states}} states in either direction adds {{best_dg}} log-points a year over its constant book ({{best_name}}, {{best_dir}} sleeve while on), and it does not survive the checks.</li>
-<li><b>The weight matters far more than the timing.</b> Holding 15% sleeve instead of 50% all the time is worth {{gap}} log-points a year since 2015-06 ({{g15}} against {{g50}}, with a deepest fall of {{dd15}} against {{dd50}}). No switch moves the result by more than about a quarter of that, and none reliably.</li>
-<li><b>Defensive when the market is expensive: no support.</b> CAPE has been in the top tenth of its history on {{v1_on}} of days since 2015-06 and above its own 10-year median on {{va_on}}, so there is almost nothing to switch on. On the rebuilt 1994 to 2015 years the idea has the wrong sign: more sleeve while CAPE was above its 10-year median cost {{va_hi_shape}} a year ({{va_reg_shape}} regimes).</li>
-<li><b>Defensive when the market is stretched above its 20- or 50-day average: the wrong way round since 2015.</b> Those are the days the sleeve lags the other two engines most ({{su_spread}} a year). More sleeve while SPY is stretched above its 50-day average cost {{su_hi}} a year; the mirror, less sleeve, added {{su_lo}} (p {{su_p}}, {{su_holm}} after correction). It is absent on the rebuilt years ({{su_lo_shape}}) and shrinks to {{su_lo_wo}} without 2020 and 2022. A lead, not a rule.</li>
-<li><b>Risk-on when the market is washed out: only on the rebuilt years.</b> Less sleeve while SPY was far below its 50-day average added {{sd_lo_shape}} a year on 1994 to 2015 (p {{sd_p_shape}}) and {{sd_lo}} since 2015-06.</li>
-<li><b>Rates and oil: nothing.</b> Yield level and direction move the result by {{ra_hi}} and {{r1_hi}} a year; oil above its 200-day average has opposite signs on the two samples ({{oa_hi}}, {{oa_hi_shape}}).</li>
+<li><b>No state works as a sleeve-weight switch.</b> {{n_pass}} of the 9 primary states pass the rule set in advance, in either direction, and none did on the 126 other thresholds, weight pairs and lags the reviewer ran. The best of all {{n_states}} states adds {{best_dg}} log-points a year over its constant book ({{best_name}}, {{best_dir}} sleeve while on) and does not survive the checks.</li>
+<li><b>The weight matters far more than the timing.</b> Holding 15% sleeve instead of 50% all the time is worth {{gap}} log-points a year since 2015-06 on same-close fills ({{g15}} against {{g50}}, deepest fall {{dd15}} against {{dd50}}); {{gap_late}} one close late, where every constant book falls {{late_dd}}. No switch adds more than about a quarter of that, and the worst costs about a third ({{worst}}).</li>
+<li><b>Defensive when the market is expensive: no support.</b> CAPE has been in the top tenth of its history on {{v1_on}} of days since 2015-06 and above its own 10-year median on {{va_on}}, so there is almost nothing to switch on. On the rebuilt 1994 to 2015 years more sleeve while CAPE was above its 10-year median cost {{va_hi_shape}} a year ({{va_reg_shape}} regimes; {{va_hi_shape_late}} one close late).</li>
+<li><b>Defensive when the market is stretched above its 20- or 50-day average: the wrong way round, in one stretch.</b> More sleeve while SPY is stretched above its 50-day average cost {{su_hi}} a year since 2015-06 (p {{su_p}}, {{su_holm}} after correction); the mirror, less sleeve, added {{su_lo}} (its own p {{su_lo_p}}, {{su_lo_holm}} after correction). 2020 is {{su_2020}} of that; it is {{su_lo_shape}} on the rebuilt years and {{su_lo_real}} on the all-real years since 2021-06. A lead from one stretch, not a rule.</li>
+<li><b>Risk-on when the market is washed out: right in drawn-out bear markets, badly wrong in the 2020 crash.</b> Less sleeve while SPY was far below its 50-day average added {{sd_lo_shape}} a year on 1994 to 2015 (p {{sd_lo_p_shape}}) and {{sd_lo_real}} on the all-real years since 2021-06 (p {{sd_lo_p_real}}, {{sd_reg_real}} regimes, {{sd_2022}} of it 2022), and cost {{sd_lo_mid}} a year on 2015-06 to 2020-11 (2020 alone {{sd_2020}} log-points; deepest fall {{sd_lo_ddabs}} points deeper). Net since 2015-06: {{sd_lo}}. A lead, not a rule.</li>
+<li><b>Rates and oil: nothing.</b> Yield level and direction move the result by {{ra_hi}} and {{r1_hi}} a year; oil above its 200-day average has opposite signs on the two samples ({{oa_hi}}, p {{oa_p}}; {{oa_hi_shape}}).</li>
 </ul>
 </div>
 
 <div class="kpis">
-<div class="kpi"><b>{{n_pass}} of 9</b><span>primary states that pass as a sleeve-weight switch</span></div>
-<div class="kpi"><b>{{gap}}</b><span>log-points a year from holding 15% sleeve rather than 50%, constant, since 2015-06</span></div>
-<div class="kpi"><b>{{best_dg}}</b><span>the best any switch added over its constant book, before the checks</span></div>
+<div class="kpi"><b>{{n_pass}} of 9</b><span>primary states that pass as a sleeve-weight switch, in either direction</span></div>
+<div class="kpi"><b>{{gap}}</b><span>log-points a year from holding 15% sleeve rather than 50%, constant, since 2015-06 ({{gap_late}} one close late)</span></div>
+<div class="kpi"><b>{{best_dg}}</b><span>the best any switch added over its constant book, before the checks; 2020 is {{su_2020}} of it</span></div>
 <div class="kpi"><b>{{va_on}}</b><span>of days since 2015-06 with CAPE above its 10-year median: nothing to switch on</span></div>
 </div>
 
 <h2>1. What was tested</h2>
 <p>The sleeve weight is 50% while a state is on and 15% while it is off; the rest is split equally between Holy Grail and KMLM. The mirror swaps the two. A state read at one close moves the weights by the next close. The yardstick is a book with one constant sleeve weight equal to the switching book's own average, so a rule gets no credit for simply holding less sleeve.</p>
 {{t_fixed}}
-<p class="note">Growth in log-points a year (0.10 is roughly 10% more growth a year). "Stretched" means the distance above the average is in the top tenth of its last five years; "washed out" the bottom tenth. p is a test that allows for runs of similar days (Newey-West, 63 sessions), two-sided, so it covers both directions; "after 9" corrects for the nine primary states. The sentence on the averages could be read either way, so both directions are shown for every state.</p>
+<p class="note">Growth in log-points a year (0.10 is roughly 10% more growth a year). "SPY" is the S&P 500 index; QQQ is the fund from 1999-03 (dividend-adjusted) and the Nasdaq-100 before. "Stretched" means the distance above the average is in the top tenth of its last five years; "washed out" the bottom tenth. Each direction has its own p (a test that allows for runs of similar days: Newey-West, 63 sessions); a switch with no information loses about 0.005 a year to costs, so the two directions are not mirror images. "After 9" corrects for the nine primary states. The sentence on the averages could be read either way, so both directions are shown for every state.</p>
 
 <h2>2. The nine primary states</h2>
 {{ch_v}}
 {{t_prim}}
 {{t_rule}}
+<h3>Stretch by stretch</h3>
+{{t_stretch}}
+<p class="note">Growth against the constant book, each stretch with its own average weight. The split of 2015-06 on into two parts was added after review, because the two parts cancel for the washed-out states.</p>
 {{ch_s}}
 <details><summary>The primary states on 1994 to 2015 (rebuilt and modelled funds; shape only)</summary>{{t_prim_shape}}</details>
 {{ch_cum}}
 
-<h2>3. Leads (none actionable)</h2>
+<h2>3. Leads (none actionable; p-values here are uncorrected)</h2>
 <ul>
-<li><b>Less sleeve while the market is stretched up.</b> Sample: {{su_share}} of days since 2015-06 in {{su_reg}} regimes. SPY above its 50-day average: {{su_lo}} a year over the constant book (deepest fall {{su_lo_dd}} points), p {{su_p}}, {{su_holm}} after correction; QQQ {{suq_lo}} (p {{suq_p}}). Mirror: more sleeve on those days loses about as much. Against it: {{su_lo_shape}} on 1994 to 2015, {{su_lo_wo}} without 2020 and 2022, {{su_lo_late}} one close late, and about 12 switches a year. What it would take: the same sign on the next few years of live data, since the rebuilt years do not show it.</li>
-<li><b>Less sleeve while the market is washed out.</b> On 1994 to 2015 the sleeve lagged the other two most on those days ({{sd_spread_shape}} a year): {{sd_lo_shape}} a year over the constant book, {{sd_reg_shape}} regimes, {{sd_lo_late_shape}} one close late. Since 2015-06 it is {{sd_lo}}. This is addendum 61's finding again (the other engines earn most after selloffs on same-close fills), and it has not shown in the years with real funds.</li>
-<li><b>More sleeve while QQQ is above its 200-day average (less below).</b> The same sign on both samples: {{tq_hi}} since 2015-06 (p {{tq_p}}; {{tq_reg}} regimes; deepest fall {{tq_dd}} points deeper) and {{tq_hi_shape}} on 1994 to 2015 (p {{tq_p_shape}}). Not a primary state, so uncorrected; the deeper fall alone fails the rule.</li>
-<li><b>Less sleeve while stocks are dear (the opposite of the idea tested).</b> Rebuilt years only: {{va_lo_shape}} a year with CAPE above its 10-year median (p {{va_p_shape}}, {{va_reg_shape}} regimes: in effect the late 1990s) and the same for stocks dear against bonds ({{v3_reg_shape}} regimes). Two regimes cannot carry a rule, and since 2015 there is no variation to test.</li>
+<li><b>Less sleeve while the market is stretched up: one stretch.</b> Sample: {{su_share}} of days since 2015-06 in {{su_reg}} regimes, about 12 switches a year. SPY above its 50-day average: {{su_lo}} a year over the constant book (deepest fall {{su_lo_dd}} points), its own p {{su_lo_p}}; QQQ {{suq_lo}} (p {{suq_lo_p}}). Mirror: more sleeve on those days loses {{su_hi}}. Against it: {{su_lo_mid}} on 2015-06 to 2020-11 and {{su_lo_real}} on the all-real years since 2021-06 ({{su_reg_real}} regimes); {{su_lo_shape}} on 1994 to 2015; 2020 is {{su_2020}} of the total and its best 20 sessions are {{su_best20}}; {{su_lo_late}} one close late. The registered time-shift test reads p {{su_shift}} here, but it is too generous: the sleeve's gap to the other engines swings {{su_vol}} more on stretched days. What it would take: it already has five all-real years against it; a second stretch like 2019 to 2020 would be needed to revive it.</li>
+<li><b>Less sleeve while the market is washed out, or below its 200-day average: one idea, and it depends on the kind of fall.</b> All eight washed-out variants agree by stretch:
+{{t_washed}}
+The 20-day SPY version keeps it on the all-real years one close late and with a two-session lag: {{sd20_real}}. More sleeve while QQQ is above its 200-day average (so less below) is the same idea seen from the other side: {{tq_hi}} since 2015-06 (p {{tq_p}}; {{tq_off}} separate spells below the average; deepest fall {{tq_ddabs}} points deeper; {{tq_lag2}} with a two-session lag), {{tq_mid}} on 2015-06 to 2020-11, {{tq_real}} on the all-real years, {{tq_hi_shape}} on 1994 to 2015 (p {{tq_p_shape}}). Mirror: the opposite direction loses in the same stretches. Against it: 2022 is {{sd_2022}} of the all-real gain, and in the 2020 crash it cost {{sd_2020}} log-points in one year. This is addendum 61's mechanism (the other two engines earn most after selloffs). What it would take: a way to tell a crash from a grind before the fact, and more than {{sd_reg_real}} real regimes.</li>
+<li><b>Less sleeve while stocks are dear (the opposite of the idea tested): the late 1990s only.</b> Rebuilt years: {{va_lo_shape}} a year with CAPE above its 10-year median (p {{va_lo_p_shape}}, {{va_reg_shape}} regimes) and {{v3_lo_shape}} with stocks dear against bonds (p {{v3_lo_p_shape}}). Both are gone one close late ({{va_lo_late_shape}}, {{v3_lo_late_shape}}), and since 2015 there is no variation to test.</li>
 </ul>
 
 <h2>4. Every state</h2>
@@ -46,18 +50,19 @@
 
 <h2>5. What this does not settle</h2>
 <ul>
-<li><b>In sample, and short for slow states.</b> Eleven recent years hold three or fewer valuation or rate regimes; those ideas can be ruled "not shown", not ruled out.</li>
-<li><b>Forward earnings were not tested</b> (no point-in-time history of forward estimates is on file); CAPE and the earnings yield against real bond yields stand in.</li>
-<li><b>One pair of weights (15% and 50%) and one threshold per state</b>, fixed in advance and not tuned. A different threshold could look better on this sample; searching for it would prove nothing.</li>
-<li><b>Before 2015 the funds are rebuilt and, further back, modelled</b> (Holy Grail real from 2015-09, the sleeve from 2020-12, KMLM from 2021-06); the 2015-06 sample has no sessions from 2020-12-02 to 2021-06-01.</li>
-<li><b>Multiplicity:</b> {{n_states}} states, two directions, three samples; corrected only across the nine primary states.</li>
-<li><b>Same-close fills</b> in the engine paths; the one-close-late column is the bound. Moving money between symphonies is modelled as one session; in practice it settles the next evening. <b>Measurement basis:</b> daily mark-to-market; 5.9 basis points of each switch's turnover.</li>
+<li><b>In sample, and short for slow states.</b> Eleven recent years hold four or fewer regimes of the valuation and rate-level states; those ideas are "not shown", not ruled out.</li>
+<li><b>Forward earnings were not tested</b> (no point-in-time history of forward estimates is on file); CAPE and the earnings yield against real bond yields stand in. CAPE and CPI are today's vintages.</li>
+<li><b>One pair of weights and one threshold per state</b>, fixed in advance. The reviewer tried 126 other thresholds, weight pairs and lags without looking for a winner; none passes, and none has a gaining direction with p below 0.05 since 2015-06.</li>
+<li><b>Real, rebuilt, modelled.</b> Real funds: Holy Grail from 2015-09, the sleeve from 2020-12, KMLM from 2021-06. Before that: rebuilt funds (Holy Grail 2006-07 to 2015-08; the KMLM fund 1991-04 to 2020-12), and shape only for Holy Grail before 2006-07 and the sleeve before 2015-06; VIX funds are modelled before 2008. The 2015-06 sample has no sessions from 2020-12-02 to 2021-06-01.</li>
+<li><b>Not modelled:</b> taxes on about a dozen switches a year, each moving 35% of the book; settlement (a move between symphonies settles the next evening; one session is assumed); both books are reset to their weights daily at no cost.</li>
+<li><b>QQQ is dividend-adjusted here; a trader sees unadjusted prices.</b> The reviewer found that changes about 20 sessions and flips two of the smallest margins.</li>
+<li><b>Multiplicity:</b> {{n_states}} states, two directions, four samples; corrected only across the nine primary states. <b>Same-close fills</b> in the engine paths; the one-close-late columns are the bound. <b>Measurement basis:</b> daily mark-to-market; 5.9 basis points of each switch's turnover.</li>
 </ul>
 
 <h2>6. Open questions</h2>
 <div class="tw"><table><thead><tr><th>Priority</th><th>Question</th><th>What it would move</th><th>Status</th></tr></thead><tbody>
 <tr><td>P1</td><td>Owner: is the book's deepest fall or its growth the binding constraint?</td><td>The constant sleeve weight, which this study shows matters far more than timing it</td><td>asked 2026-11-21, open</td></tr>
-<tr><td>P2</td><td>Track "less sleeve while SPY is stretched above its 50-day average" forward on live data, definition frozen</td><td>Whether the one recent-years lead is real; nothing is traded on it</td><td>open, first asked 2026-11-21</td></tr>
+<tr><td>P2</td><td>Can a crash be told from a grind before the fact (speed of the fall, volatility term structure)?</td><td>The washed-out lead: it paid in 2000-02, 2008 and 2022 and failed in 2020</td><td>open, first asked 2026-11-21</td></tr>
 <tr><td>P3</td><td>A point-in-time history of forward earnings estimates</td><td>The forward-P/E version of the valuation idea</td><td>open, first asked 2026-11-21</td></tr>
 </tbody></table></div>
 
