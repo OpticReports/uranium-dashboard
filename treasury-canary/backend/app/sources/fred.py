@@ -39,25 +39,52 @@ def fred_key_error() -> str | None:
 
 
 # Series currently served from an old disk copy because their last FRED call failed
-# (series id -> copy age in hours). Cleared per series on its next successful fetch;
-# surfaced by /health and /refresh so a stale-but-plausible dashboard never looks live.
+# (tag -> mtime of the copy served; its age is computed when listed). Cleared per series on its
+# next good fetch or fresh disk hit; surfaced by /health and /refresh so a stale-but-plausible
+# dashboard never looks live.
 _stale_served: dict[str, float] = {}
+
+# Series whose FRED calls are failing, served stale or not (tag -> {"first": start of the failing
+# run, "last": latest failed call}); cleared on the next good fetch or fresh disk hit. Past the age
+# cap, or with no copy at all, a failing series is empty and absent from _stale_served: this keeps
+# the failure visible (/health).
+_failing: dict[str, dict[str, float]] = {}
+
+# Both lists show a series only while its latest failed call is under an hour old, and a failure
+# after a longer gap starts a new run. A caller that does not fetch again (a 6 h route cache, a tab
+# nobody opens) would otherwise read as an outage for hours after FRED came back (re-check B, round 5).
+_FAILING_RECENT_SECONDS = 3600
+
+
+def _recently_failing(tag: str, now: float) -> bool:
+    run = _failing.get(tag)
+    return run is not None and now - run["last"] <= _FAILING_RECENT_SECONDS
 
 
 def fred_stale_series() -> dict[str, float]:
-    return dict(sorted(_stale_served.items()))
-
-
-# Series whose last FRED call failed, served stale or not (tag -> time of the first failure in the
-# current failing run); cleared on the next good fetch. Past the age cap, or with no copy at all, a
-# failing series is empty and absent from _stale_served: this keeps the failure visible (/health).
-_failing: dict[str, float] = {}
+    """tag -> age (h), as of now, of the copy served; recently failing series only."""
+    now = time.time()
+    return {k: round((now - m) / 3600, 1) for k, m in sorted(_stale_served.items()) if _recently_failing(k, now)}
 
 
 def fred_failing_series() -> dict[str, float]:
-    """tag -> hours the series has been failing."""
+    """tag -> hours since the failing run began; recently failing series only."""
     now = time.time()
-    return {k: round((now - t) / 3600, 1) for k, t in sorted(_failing.items())}
+    return {k: round((now - r["first"]) / 3600, 1) for k, r in sorted(_failing.items())
+            if now - r["last"] <= _FAILING_RECENT_SECONDS}
+
+
+def _record_failure(tag: str, now: float) -> None:
+    run = _failing.get(tag)
+    if run is None or now - run["last"] > _FAILING_RECENT_SECONDS:
+        _failing[tag] = {"first": now, "last": now}   # first failure, or the first after a long gap
+    else:
+        run["last"] = now
+
+
+def _clear_failure(tag: str) -> None:
+    _stale_served.pop(tag, None)
+    _failing.pop(tag, None)
 
 
 def _stale_tag(series_id: str, start: str) -> str:
@@ -137,9 +164,14 @@ def fetch_series(
         if age < settings.cache_ttl_seconds:
             try:
                 raw = json.load(open(cache))
-                return _splice_frozen(series_id, *_parse(raw))
+                out = _splice_frozen(series_id, *_parse(raw))
             except Exception:  # noqa: BLE001
                 pass
+            else:
+                # only a good fetch writes this file: a fresh copy means the series is not failing
+                # (two callers of one series, one failed: re-check B, round 5)
+                _clear_failure(_stale_tag(series_id, start))
+                return out
 
     data = _get_with_backoff({
         "series_id": series_id, "api_key": settings.fred_api_key,
@@ -156,24 +188,25 @@ def fetch_series(
         # (every FRED metric STALE), never mask it with old copies; and past the age cap
         # an old copy goes empty too. What is served stale is listed (fred_stale_series).
         tag = _stale_tag(series_id, start)
-        _failing.setdefault(tag, time.time())
+        now = time.time()
+        _record_failure(tag, now)
         if _key_error["msg"]:
             _stale_served.pop(tag, None)
             return [], []
         stale = _read_cache(cache)
         _stale_served.pop(tag, None)           # re-recorded below only if a copy is served
         if stale is not None:
-            age_h = (time.time() - os.path.getmtime(cache)) / 3600
+            mtime = os.path.getmtime(cache)
+            age_h = (now - mtime) / 3600
             if age_h <= settings.fred_stale_max_age_hours:
-                _stale_served[tag] = round(age_h, 1)
+                _stale_served[tag] = mtime
                 logger.warning("FRED fetch failed for %s; serving the last good copy (%.1f h old)",
                                series_id, age_h)
                 return _splice_frozen(series_id, *_parse(stale))
             logger.warning("FRED fetch failed for %s; the disk copy is %.0f h old (cap %d h), "
                            "so the series is left empty", series_id, age_h, settings.fred_stale_max_age_hours)
         return [], []
-    _stale_served.pop(_stale_tag(series_id, start), None)
-    _failing.pop(_stale_tag(series_id, start), None)
+    _clear_failure(_stale_tag(series_id, start))
     try:
         from .fred_csv import _write_atomic          # temp file + rename: a crash mid-write keeps the old copy
         _write_atomic(cache, json.dumps(data))
