@@ -98,6 +98,14 @@ const cold = run("cold-fallback", { ...GDP_FIXTURE, build_error: "RuntimeError: 
 must("cold-fallback", cold, ["showing the frozen snapshot of"]);
 if (cold.includes("showing the previous build")) throw new Error("cold-fallback: a snapshot is called the previous build");
 
+// partial fallback: only the IMF inputs are the snapshot (2026-11-21: IMF API 404/429 while OECD answered)
+const part = run("partial-snapshot", { ...GDP_FIXTURE, status: { overall: "snapshot",
+  inputs: { yoy: "ok", qoq: "ok", pop: "snapshot", ngdpd: "snapshot", weo_growth: "snapshot" } } } as GdpWatch);
+must("partial-snapshot", part, ["IMF population, IMF GDP shares and IMF projections come from the frozen snapshot of 2026-11-16 (the live source did not answer); the rest is live."]);
+if (part.includes("The live sources did not answer")) throw new Error("partial-snapshot: says every live source failed");
+const allSnap = run("all-snapshot", GDP_FIXTURE);
+must("all-snapshot", allSnap, ["The live sources did not answer; showing the frozen snapshot of 2026-11-16."]);
+
 // 6. malformed payloads degrade, never throw
 run("empty", {} as GdpWatch);
 run("no-economies", { countries: [], aggregates: [] } as GdpWatch);

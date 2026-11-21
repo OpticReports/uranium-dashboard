@@ -335,6 +335,11 @@ export function GdpView({ data, initial }: { data: GdpWatch; initial?: GdpInitia
   const hidden = selected.length - visible.length;
   const notes = tableNotes(sel, measure);
   const st = statusLabel(data.status?.overall);
+  // which inputs fell back to the snapshot, by name (e.g. the IMF API down while OECD answers)
+  const INPUT_NAMES: Record<string, string> = { yoy: "OECD growth", qoq: "OECD quarterly growth", pop: "IMF population",
+    ngdpd: "IMF GDP shares", weo_growth: "IMF projections" };
+  const snapNames = Object.entries(data.status?.inputs ?? {}).filter(([, v]) => v === "snapshot").map(([k]) => INPUT_NAMES[k] ?? k);
+  const snapOf = data.snapshot_as_of ? ` of ${data.snapshot_as_of}` : "";
   const pooled = data.record?.pooled_ex_pandemic;
   const mName: Record<string, string> = { N: "last value holds", T: "trend only", A: "the rule (AR(1) toward trend)" };
 
@@ -347,7 +352,9 @@ export function GdpView({ data, initial }: { data: GdpWatch; initial?: GdpInitia
           <span className="font-mono text-[11px] text-slate-500">latest quarter {data.as_of ?? "n/a"} · generated {data.generated ?? "n/a"}{data.status?.overall === "snapshot" && data.snapshot_as_of ? ` · snapshot of ${data.snapshot_as_of}` : ""}</span>
         </div>
         {data.build_error && <p className="mt-1 text-[11px] text-slate-500">The last rebuild failed ({data.build_error}); {data.build_fallback === "snapshot" ? `showing the frozen snapshot${data.snapshot_as_of ? ` of ${data.snapshot_as_of}` : ""}` : "showing the previous build"}.</p>}
-        {!data.build_error && data.status?.overall === "snapshot" && <p className="mt-1 text-[11px] text-slate-500">The live sources did not answer; showing the frozen snapshot{data.snapshot_as_of ? ` of ${data.snapshot_as_of}` : ""}.</p>}
+        {!data.build_error && snapNames.length > 0 && <p className="mt-1 text-[11px] text-slate-500">{snapNames.length === Object.keys(data.status?.inputs ?? {}).length
+          ? `The live sources did not answer; showing the frozen snapshot${snapOf}.`
+          : `${listNames(snapNames)} ${snapNames.length > 1 ? "come" : "comes"} from the frozen snapshot${snapOf} (the live source did not answer); the rest is live.`}</p>}
         {data.status?.filled && Object.keys(data.status.filled).length > 0 && <p className="mt-1 text-[11px] text-slate-500">Missing from the live reply, kept from the snapshot: {Object.entries(data.status.filled).map(([k, v]) => `${k} ${v.join(", ")}`).join("; ")}.</p>}
       </div>
 
