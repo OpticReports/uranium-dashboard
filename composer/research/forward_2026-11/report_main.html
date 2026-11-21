@@ -6,8 +6,8 @@
 <li><b>Plan on a range, not on the backtest.</b> For today's book (31.8% sleeve), median return a year over ten years: {{ceil_10}} if the backtest since 2015 simply repeats (a ceiling), {{d_10}} if the engines keep half their simulated edge, {{e_10}} if they keep a quarter. Half and a quarter are what published studies of other strategies found between backtest and live; nothing yet measures the decay of these three.</li>
 <li><b>The risk grows faster than the return shrinks.</b> The scenarios keep the engines' swings and cut only their edge. Median deepest fall within ten years: {{b_dd}} on the backtest, {{d_dd}} at half the edge, {{e_dd}} at a quarter. At a quarter of the edge a fall deeper than 30% at some point is {{e_p30}} likely and deeper than 50% is {{e_p50}}.</li>
 <li><b>One year out, luck dominates.</b> One-year return, 1-in-20 bad / median / 1-in-20 good: {{d_1}} at half the edge and {{e_1}} at a quarter. Chance of ending a year below the start: {{d_loss1}} and {{e_loss1}}; after five years at a quarter of the edge it is still {{e_loss5}}.</li>
-<li><b>Sleeve weight: the same trade in every scenario, but the sleeve gets cheaper as the edge shrinks.</b> Median ten-year return at a 0 / 31.8 / 50% sleeve: {{w_b}} on the backtest, {{w_d}} at half the edge, {{w_e}} at a quarter. A 1-in-20 deepest fall at the same weights: {{w_b_dd}}, {{w_d_dd}}, {{w_e_dd}}. The less you trust the backtest, the less return the sleeve costs and the more fall it saves.</li>
-<li><b>A low-return decade for stocks barely moves it</b> ({{g_10}} a year): by these simulations the engines' return is mostly not the stock market's ({{beta_share}} of each engine's return over T-bills comes from its market beta).</li>
+<li><b>Sleeve weight: the same trade in every scenario, but the sleeve gets cheaper as the edge shrinks.</b> Median ten-year return at a 0 / 31.8 / 50% sleeve: {{w_b}} on the backtest, {{w_d}} at half the edge, {{w_e}} at a quarter. A 1-in-20 deepest fall at the same weights: {{w_b_dd}}, {{w_d_dd}}, {{w_e_dd}}. The less you trust the backtest, the less return the sleeve costs, for a similar cut in the deepest fall.</li>
+<li><b>A low-return decade for stocks barely moves it</b> ({{g_10}} a year): by these simulations the engines' return is mostly not the stock market's ({{beta_share}}).</li>
 <li><b>If every trade always filled a session late</b> the median is {{f_10}} a year with a median deepest fall of {{f_dd}}. Live fills have not been there; it prices execution failure, not a plan.</li>
 <li><b>Luck alone does not explain the backtest</b> (the best of 1,000 unskilled tries would show a Sharpe near {{def_best}}, against {{def_sr}}), and <b>the live record is ahead of the simulation so far</b> ({{live_txt}}). Neither says how much of the edge persists.</li>
 </ul>
@@ -30,7 +30,7 @@
 {{t_today}}
 {{ch_fan}}
 {{ch_fanE}}
-<p class="note">"1-in-20" is the 95th percentile of the deepest fall, or the 5th percentile of the return. A median is the middle path: half the draws do better, half worse.</p>
+<p class="note">"1-in-20" is the 95th percentile of the deepest fall, or the 5th percentile of the return. A median is the middle path: half the draws do better, half worse. The ceilings' ten-year multiples in the thousands are what compounding a backtest does on paper; no account could grow that far at these funds' trading volumes, which is one more reason they are ceilings.</p>
 
 <h2>3. By sleeve weight</h2>
 {{ch_w_ret}}

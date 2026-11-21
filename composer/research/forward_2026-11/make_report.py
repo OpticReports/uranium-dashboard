@@ -41,7 +41,7 @@ t_today = table(["Scenario", "Kind", "Horizon", "Return a year: 5th / median / 9
 yr = lambda fan: [[0, 1.0]] + [[i + 1, row[3]] for i, row in enumerate(fan[11::12])]       # noqa: E731  (median, yearly)
 XL = ["now"] + [f"{i}y" for i in range(1, 11)]
 CH["c_med"] = {"type": "line", "yfmt": "mult", "log": True, "logticks": [0.5, 1, 2, 5, 10, 30, 100, 300, 1000, 3000, 10000], "xnum": True, "xlabels": XL, "xunit": "",
-               "series": [{"name": SN[s], "slot": i + 1, "pts": yr(FAN[f"{s}.{T}"])} for i, s in enumerate(["B", "G", "D", "E", "F"])]}
+               "series": [{"name": SN[s], "slot": i + 1, "pts": yr(FAN[f"{s}.{T}"])} for i, s in enumerate(["B", "D", "E"])]}
 fanD = FAN[f"D.{T}"]
 CH["c_fan"] = {"type": "line", "yfmt": "mult", "log": True, "logticks": [0.25, 0.5, 1, 2, 5, 10, 30, 100, 300, 1000], "xnum": True, "xlabels": XL, "xunit": "",
                "series": [{"name": nm, "slot": sl, "pts": [[0, 1.0]] + [[i + 1, row[k]] for i, row in enumerate(fanD[11::12])]} for nm, sl, k in
@@ -63,7 +63,7 @@ def by_weight(h):
     return table(["Sleeve weight"] + WL, rows)
 
 
-CS = ["B", "G", "D", "E", "F"]
+CS = ["B", "D", "E"]
 CH["c_w_ret"] = {"type": "line", "yfmt": "pct0", "xnum": True, "xlabels": WL, "xunit": " sleeve", "zero": True,
                  "series": [{"name": SN[s], "slot": i + 1, "pts": [[j, MC[s][wt]["10y"]["per_yr"]["50"]] for j, wt in enumerate(WS)]} for i, s in enumerate(CS)]}
 CH["c_w_dd"] = {"type": "line", "yfmt": "pct0", "xnum": True, "xlabels": WL, "xunit": " sleeve", "zero": True,
@@ -132,7 +132,8 @@ subs = {
     "{{w_b_dd}}": f"{pu(v('B', wt='0.000')['maxdd_p95'])} / {pu(v('B')['maxdd_p95'])} / {pu(v('B', wt='0.500')['maxdd_p95'])}",
     "{{def_best}}": f"{DEF['B']['0.318']['1000']['expected_best_of_unskilled']:.2f}", "{{def_sr}}": f"{DEF['B']['0.318']['sharpe']:.2f}",
     "{{beta_txt}}": ", ".join(f"{EN[e]} {SIDE['beta_B'][i]:+.2f}" for i, e in enumerate(EK)),
-    "{{beta_share}}": ", ".join(f"{EN[e]} {pu(SIDE['beta_B'][i] * SIDE['spx_mean_over_tbills_per_yr_B'] / SIDE['engine_mean_over_tbills_per_yr_B'][i])}" for i, e in enumerate(EK)),
+    "{{beta_share}}": (f"about {pu(SIDE['beta_B'][0] * SIDE['spx_mean_over_tbills_per_yr_B'] / SIDE['engine_mean_over_tbills_per_yr_B'][0])} of Holy Grail's and "
+                       f"{pu(SIDE['beta_B'][1] * SIDE['spx_mean_over_tbills_per_yr_B'] / SIDE['engine_mean_over_tbills_per_yr_B'][1])} of KMLM's return over T-bills comes from market beta; the sleeve's beta is negative"),
     "{{live_txt}}": "; ".join(f"{EN[e]} {pc(x['live_return'])} live against {pc(x['simulated_return_same_dates'])} simulated over {x['sessions']} sessions" for e, x in LIVE.items()),
     "{{plan_lo}}": pc(v(lo_s)["per_yr"]["50"]), "{{plan_hi}}": pc(v(hi_s)["per_yr"]["50"]), "{{plan_lo_name}}": SN[lo_s].lower(), "{{plan_hi_name}}": SN[hi_s].lower(),
     "{{plan_1y}}": " to ".join(sorted((pc(v(s, "1y")["per_yr"]["50"]) for s in (lo_s, hi_s)), key=lambda z: float(z[:-1]))),
@@ -148,10 +149,10 @@ subs = {
     "{{drift_dd}}": f"{pu(v('B')['maxdd_median'])} against {pu(MC['B'][DR]['10y']['maxdd_median'])}", "{{drift_dd95}}": f"{pu(v('B')['maxdd_p95'])} against {pu(MC['B'][DR]['10y']['maxdd_p95'])}",
     "{{resets}}": f"{v('B')['resets_per_yr']:.1f}",
     "{{spx_b}}": pc(SIDE["spx_growth_per_yr_B"], 1), "{{paths}}": f"{F['meta']['paths']:,}", "{{block}}": str(F["meta"]["block"]),
-    "{{ch_med}}": chart("c_med", "Today's book (31.8% sleeve): the median path in each scenario", "Growth of $1 over ten years, log scale. Half of the drawn paths end above each line and half below. Ceilings A and C are left off; they sit around the top line."),
+    "{{ch_med}}": chart("c_med", "Today's book (31.8% sleeve): the median path in each scenario", "Growth of $1 over ten years, log scale. Half of the drawn paths end above each line and half below. The other four scenarios are in the table."),
     "{{ch_fan}}": chart("c_fan", "Today's book under \"half the edge\": the spread of outcomes", "Growth of $1, log scale. Nine in ten drawn paths end between the outer lines."),
     "{{ch_fanE}}": chart("c_fanE", "Today's book under \"a quarter of the edge\": the spread of outcomes", "Growth of $1, log scale."),
-    "{{ch_w_ret}}": chart("c_w_ret", "Median return a year over ten years, by sleeve weight", "More sleeve, less return in every scenario where the engines keep an edge."),
+    "{{ch_w_ret}}": chart("c_w_ret", "Median return a year over ten years, by sleeve weight", "More sleeve, less return in every scenario; the gap narrows as the edge shrinks."),
     "{{ch_w_bad}}": chart("c_w_bad", "A 1-in-20 bad five years, by sleeve weight", "Return a year at the 5th percentile after five years."),
     "{{ch_w_dd}}": chart("c_w_dd", "A 1-in-20 deepest fall within ten years, by sleeve weight", "More sleeve, smaller fall in every scenario."),
 }
