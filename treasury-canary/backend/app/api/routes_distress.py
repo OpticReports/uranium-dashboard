@@ -12,18 +12,18 @@ import time
 from fastapi import APIRouter
 
 from ..metrics.distress import bank_from_bundle, build_distress, qidx
-from ..sources.fred import fetch_bundle
+from ..sources.fred import fetch_bundle, ttl_for_bundle_build
 from ..sources.uscourts_f2 import load_history, new_quarters
 
 router = APIRouter(tags=["distress"])
 _TTL = 6 * 3600
-_cache: dict = {"ts": 0.0, "data": None}
+_cache: dict = {"ts": 0.0, "data": None, "ttl": _TTL}
 _lock = threading.Lock()
 
 
 def distress_payload(force: bool = False) -> dict:
     with _lock:
-        if not force and _cache["data"] is not None and time.time() - _cache["ts"] < _TTL:
+        if not force and _cache["data"] is not None and time.time() - _cache["ts"] < _cache.get("ttl", _TTL):
             return _cache["data"]
         hist = load_history()
         end = qidx(hist["history_end"])
@@ -31,9 +31,11 @@ def distress_payload(force: bool = False) -> dict:
             live = new_quarters((end // 4, end % 4 + 1))
         except Exception:  # noqa: BLE001 — a failed probe leaves the frozen history
             live = {}
-        bank = bank_from_bundle(fetch_bundle(), hist)
+        bundle = fetch_bundle()
+        ttl = ttl_for_bundle_build(_TTL)              # built on stale FRED copies: rebuild with the bundle
+        bank = bank_from_bundle(bundle, hist)
         data = build_distress(hist, live, bank)
-        _cache.update(ts=time.time(), data=data)
+        _cache.update(ts=time.time(), data=data, ttl=ttl)
         return data
 
 

@@ -430,12 +430,11 @@ def test_a_series_whose_caller_stopped_retrying_drops_off_after_six_hours(monkey
     assert fred.fred_failing_series() == {"NOCOPY": 0.0}
 
 
-def test_the_failing_window_covers_every_cache_that_holds_fred_api_data():
-    """raise one of these TTLs past the window and its panel can serve failure-built data under a green dot."""
-    from app.api import routes_cycle, routes_distress, routes_pins
-    w = fred._FAILING_RECENT_SECONDS
-    assert w >= max(fred._BUNDLE_TTL_SECONDS, rm._MODEL_TTL_SECONDS, routes_cycle._TTL, routes_distress._TTL,
-                    routes_pins._HIST_TTL_OK)
+def test_the_failing_window_covers_the_cache_fed_by_direct_fetches():
+    """/cycle builds from fetch_series directly and holds the board 6 h: a board built during a failure
+    must stay under an amber dot that long. Caches built from the bundle take ttl_for_bundle_build."""
+    from app.api import routes_cycle
+    assert fred._FAILING_RECENT_SECONDS >= routes_cycle._TTL
 
 
 def test_the_stale_copy_age_is_its_age_when_listed(monkeypatch, tmp_path):
@@ -469,3 +468,77 @@ def test_the_breaker_closes_before_a_degraded_bundle_retries():
     """re-check A, round 4 NOTE: a blip-degraded bundle recovers on its 15 min retry only because the
     10 min breaker has closed by then; a longer window would serve that retry stale again, and the next."""
     assert fred._BREAKER_SECONDS < fred._DEGRADED_TTL_SECONDS
+
+
+# ---------------------------------------------------------------------------- re-check B, round 6
+# A stale copy passes every "is the input complete?" check, so a cache built from a degraded bundle
+# kept that build for its full 6-12 h after FRED came back, under a green dot. Each now holds it only
+# as long as the bundle holds the stale copies (15 min), and keeps its own TTL when the bundle is good.
+def _bundle_now(monkeypatch, degraded):
+    monkeypatch.setattr(fred, "_bundle_cache", {"ts": time.time(), "data": _full_bundle(([1], [0.0])),
+                                                "degraded": degraded})
+
+
+def _rebuilds_after_16_min(build, cache, counter):
+    cache["ts"] = time.time() - fred._DEGRADED_TTL_SECONDS - 1
+    n = len(counter)
+    build()
+    return len(counter) == n + 1
+
+
+def test_a_recession_fit_on_a_degraded_bundle_refits_with_it(monkeypatch):
+    fits = []
+    monkeypatch.setattr(rm, "build_models", lambda *a, **k: fits.append(1) or {12: {"b0": -0.5, "b1": -0.6}})
+    monkeypatch.setattr(rm, "_model_cache", dict(rm._model_cache, models=None, adj_models=None))
+    for degraded, ttl in ((True, fred._DEGRADED_TTL_SECONDS), (False, rm._MODEL_TTL_SECONDS)):
+        _bundle_now(monkeypatch, degraded)
+        rm._fit_all()
+        assert rm._model_cache["ttl"] == ttl
+        rm._model_cache["ts"] = time.time() - fred._DEGRADED_TTL_SECONDS - 1
+        assert rm._fit_fresh() is (not degraded)       # 16 min on: a fit on stale copies is due
+
+
+def test_distress_built_on_a_degraded_bundle_rebuilds_with_it(monkeypatch):
+    from app.api import routes_distress as rd
+    builds = []
+    monkeypatch.setattr(rd, "load_history", lambda: {"history_end": "2026Q2"})
+    monkeypatch.setattr(rd, "qidx", lambda q: 8106)
+    monkeypatch.setattr(rd, "new_quarters", lambda q: {})
+    monkeypatch.setattr(rd, "bank_from_bundle", lambda bundle, hist: {})
+    monkeypatch.setattr(rd, "build_distress", lambda hist, live, bank: builds.append(1) or {"n": len(builds)})
+    monkeypatch.setattr(rd, "_cache", {"ts": 0.0, "data": None, "ttl": rd._TTL})
+    for degraded, ttl in ((True, fred._DEGRADED_TTL_SECONDS), (False, rd._TTL)):
+        _bundle_now(monkeypatch, degraded)
+        rd.distress_payload(force=True)
+        assert rd._cache["ttl"] == ttl
+        assert _rebuilds_after_16_min(rd.distress_payload, rd._cache, builds) is degraded
+
+
+def test_pins_history_built_on_a_degraded_bundle_rebuilds_with_it(monkeypatch):
+    from app.api import routes_pins as rp
+    builds = []
+    monkeypatch.setattr(rp, "_assemble_bundle", lambda with_auctions=False: {})
+    monkeypatch.setattr("app.sources.yahoo.fetch_spx_monthly", lambda: ([], []))
+    monkeypatch.setattr(rp, "build_pin_history", lambda bundle: builds.append(1) or {"n": len(builds)})
+    monkeypatch.setattr(rp, "_hist_complete", lambda data: True)
+    monkeypatch.setattr(rp, "_hist_cache", {"ts": 0.0, "data": None, "ok": False, "ttl": rp._HIST_TTL_FAIL})
+    for degraded, ttl in ((True, fred._DEGRADED_TTL_SECONDS), (False, rp._HIST_TTL_OK)):
+        _bundle_now(monkeypatch, degraded)
+        rp._hist_cache["data"] = None
+        rp.pin_history()
+        assert rp._hist_cache["ttl"] == ttl
+        assert _rebuilds_after_16_min(rp.pin_history, rp._hist_cache, builds) is degraded
+
+
+def test_severity_history_on_stale_copies_is_held_minutes_not_12_hours(monkeypatch):
+    from app.api import routes_severity as rs
+    builds = []
+    monkeypatch.setattr("app.metrics.severity_history.history_payload",
+                        lambda bundle, end: builds.append(1) or {"n": len(builds)})
+    monkeypatch.setattr(rs, "_complete", lambda bundle: True)       # complete: the stale copies pass
+    monkeypatch.setattr(rs, "_HIST", {"ts": 0.0, "data": None})
+    for degraded, ttl in ((True, fred._DEGRADED_TTL_SECONDS), (False, rs._HIST_TTL)):
+        _bundle_now(monkeypatch, degraded)
+        rs.warm_history(force=True)
+        assert rs._HIST["ttl"] == ttl
+        assert _rebuilds_after_16_min(rs.warm_history, rs._HIST, builds) is degraded

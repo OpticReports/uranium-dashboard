@@ -10,7 +10,7 @@ from fastapi import APIRouter
 
 from ..metrics.pin_history import build_pin_history
 from ..metrics.pins import build_pin_board
-from ..sources.fred import fetch_bundle
+from ..sources.fred import fetch_bundle, ttl_for_bundle_build
 from ..sources.fmp import fetch_gold
 from ..sources.treasury import fetch_recent_auctions
 
@@ -44,7 +44,11 @@ def pin_board():
 # hiccup can't pin an empty/partial hindcast on screen for 6 hours.
 _HIST_TTL_OK = 6 * 3600
 _HIST_TTL_FAIL = 600
-_hist_cache: dict[str, object] = {"ts": 0.0, "data": None, "ok": False}
+_hist_cache: dict[str, object] = {"ts": 0.0, "data": None, "ok": False, "ttl": _HIST_TTL_FAIL}
+
+
+def _hist_ttl() -> float:
+    return float(_hist_cache.get("ttl") or (_HIST_TTL_OK if _hist_cache["ok"] else _HIST_TTL_FAIL))  # type: ignore[arg-type]
 _hist_lock = threading.Lock()
 
 
@@ -56,15 +60,14 @@ def _hist_complete(data: dict) -> bool:
 @router.get("/pins/history")
 def pin_history():
     now = time.time()
-    ttl = _HIST_TTL_OK if _hist_cache["ok"] else _HIST_TTL_FAIL
-    if _hist_cache["data"] is not None and now - float(_hist_cache["ts"]) < ttl:
+    if _hist_cache["data"] is not None and now - float(_hist_cache["ts"]) < _hist_ttl():
         return _hist_cache["data"]
     with _hist_lock:
         now = time.time()
-        ttl = _HIST_TTL_OK if _hist_cache["ok"] else _HIST_TTL_FAIL
-        if _hist_cache["data"] is not None and now - float(_hist_cache["ts"]) < ttl:
+        if _hist_cache["data"] is not None and now - float(_hist_cache["ts"]) < _hist_ttl():
             return _hist_cache["data"]
         bundle = _assemble_bundle(with_auctions=False)
+        ttl_ok = ttl_for_bundle_build(_HIST_TTL_OK)   # built on stale FRED copies: rebuild with the bundle
         # SPX drawdown ground truth (Yahoo, keyless) — history endpoint only
         from ..sources.yahoo import fetch_spx_monthly
         bundle["spx_monthly"] = fetch_spx_monthly()
@@ -72,4 +75,5 @@ def pin_history():
         _hist_cache["data"] = data
         _hist_cache["ts"] = time.time()
         _hist_cache["ok"] = _hist_complete(data)
+        _hist_cache["ttl"] = ttl_ok if _hist_cache["ok"] else _HIST_TTL_FAIL
         return data

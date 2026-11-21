@@ -7,7 +7,7 @@ import threading
 import time
 
 from ..metrics.severity import build_severity
-from ..sources.fred import fetch_bundle
+from ..sources.fred import fetch_bundle, ttl_for_bundle_build
 
 router = APIRouter(tags=["severity"])
 
@@ -35,12 +35,13 @@ def warm_history(force: bool = False) -> dict:
 
     from ..metrics.severity_history import history_payload
     with _HIST_LOCK:
-        if force or _HIST["data"] is None or time.time() - _HIST["ts"] > _HIST_TTL:
+        if force or _HIST["data"] is None or time.time() - _HIST["ts"] > _HIST.get("ttl", _HIST_TTL):
             bundle = fetch_bundle()
+            ttl = ttl_for_bundle_build(_HIST_TTL)    # complete but on stale copies: hold it 15 min, not 12 h
             data = history_payload(bundle, end=date.today())
             if not _complete(bundle):
                 return data                      # serve, don't cache a degraded build
-            _HIST["data"], _HIST["ts"] = data, time.time()
+            _HIST["data"], _HIST["ts"], _HIST["ttl"] = data, time.time(), ttl
         return _HIST["data"]
 
 

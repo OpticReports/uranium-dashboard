@@ -169,14 +169,16 @@ def build_models(spread_dates: list[date], spread_vals: list[float | None],
 _MODEL_TTL_SECONDS = 6 * 3600
 _EMPTY_RETRY_SECONDS = 10 * 60  # no model fitted (data missing): try again soon, not in 6 h
 _model_cache: dict[str, object] = {"ts": 0.0, "models": None, "spread": None,
-                                   "adj_models": None, "adj_spread": None, "tp": None}
+                                   "adj_models": None, "adj_spread": None, "tp": None,
+                                   "ttl": _MODEL_TTL_SECONDS}
 _model_lock = threading.Lock()
 
 
 def _fit_all() -> None:
-    from ..sources.fred import fetch_bundle
+    from ..sources.fred import fetch_bundle, ttl_for_bundle_build
     from .curve import build_spread
     bundle = fetch_bundle()
+    ttl = ttl_for_bundle_build(_MODEL_TTL_SECONDS)     # a fit on stale copies refits with the bundle
     d3, v3 = bundle.get("3mo", ([], []))
     d10, v10 = bundle.get("10y", ([], []))
     sdates, spread = build_spread(d3, v3, d10, v10)     # 10y - 3m, daily
@@ -201,7 +203,7 @@ def _fit_all() -> None:
     _model_cache.update(models=models, spread=spread_now,
                         adj_models=build_models(adj_dates, adj_vals, rdates, rvals),
                         adj_spread=adj_vals[-1] if adj_vals else None,
-                        tp=next((v for v in reversed(tv) if v is not None), None), ts=time.time())
+                        tp=next((v for v in reversed(tv) if v is not None), None), ts=time.time(), ttl=ttl)
 
 
 def _fit_fresh() -> bool:
@@ -211,7 +213,8 @@ def _fit_fresh() -> bool:
     models = _model_cache["models"]
     if models is None:
         return False
-    ttl = _MODEL_TTL_SECONDS if (models and _model_cache["adj_models"]) else _EMPTY_RETRY_SECONDS
+    full = float(_model_cache.get("ttl") or _MODEL_TTL_SECONDS)   # type: ignore[arg-type]
+    ttl = full if (models and _model_cache["adj_models"]) else _EMPTY_RETRY_SECONDS
     return time.time() - float(_model_cache["ts"]) < ttl  # type: ignore[arg-type]
 
 

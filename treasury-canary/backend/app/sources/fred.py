@@ -50,9 +50,10 @@ _stale_served: dict[str, float] = {}
 _failing: dict[str, float] = {}
 
 # Both lists show a series for 6 h after its latest failed call: the longest a cache can hold data
-# built from that call (the bundle's healthy TTL, the recession fit, the /cycle, /distress and pins
-# history caches; gated). /health says when each series last failed. A caller that never fetches
-# again then drops off, instead of reading as an outage for half a day (re-check B, round 5).
+# built from that call (the /cycle route cache, which reads fetch_series directly; caches built from
+# the bundle hold a degraded build only 15 min, see ttl_for_bundle_build; both gated). /health says
+# when each series last failed. A caller that never fetches again then drops off, instead of reading
+# as an outage for half a day (re-check B, round 5).
 _FAILING_RECENT_SECONDS = 6 * 3600
 
 
@@ -279,6 +280,14 @@ def fetch_bundle(start: str = "1976-01-01", force: bool = False
         _bundle_cache["ts"] = time.time()
         _bundle_cache["degraded"] = bool(holes or stale)
         return bundle
+
+
+def ttl_for_bundle_build(normal: float) -> float:
+    """TTL for a cache built from fetch_bundle() just now: its own TTL, or the bundle's degraded
+    retry while the bundle holds an empty or stale-served series. A stale copy passes every
+    "is the input complete?" check, so a 6-12 h cache would keep a build from it long after FRED is
+    back and the header dot is green (re-check B, round 6). Read it right after fetch_bundle()."""
+    return _DEGRADED_TTL_SECONDS if _bundle_cache.get("degraded") else normal
 
 
 def _bundle_fresh() -> bool:
