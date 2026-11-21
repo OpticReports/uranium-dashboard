@@ -158,7 +158,7 @@ subs = {
     "{{dec_book}}": pc(SIDE["book_cagr_2000_2009"]), "{{dec_spx}}": pc(SIDE["spx_cagr_2000_2009"], 1), "{{pre_book}}": pc(SIDE["book_cagr_before_2015"]), "{{b_book}}": pc(SIDE["book_cagr_B"]),
     "{{top50}}": " / ".join(pu(SIDE["share_of_edge_from_best_50_sessions"][e]) for e in EK), "{{wo50}}": pc(SIDE["book_cagr_B_without_its_best_50_sessions"]), "{{wo2020}}": pc(SIDE["book_cagr_B_without_2020"]),
     "{{y2020}}": pc(SIDE["book_return_2020"]),
-    "{{hg_f}}": f"{pc(LIVE['HG']['live_return_funded'])} against {pc(LIVE['HG']['simulated_return_funded'])}", "{{hg_f_n}}": str(LIVE["HG"]["funded_sessions"]),
+    "{{hg_f}}": f"{pc(LIVE['HG']['live_return_funded'], 1)} against {pc(LIVE['HG']['simulated_return_funded'], 1)}", "{{hg_f_n}}": str(LIVE["HG"]["funded_sessions"]),
     "{{held}}": f"{pc(LIVE['three_as_held']['live_return'], 1)} live against {pc(LIVE['three_as_held']['simulated_return_same_weights'], 1)} simulated at the same weights",
     "{{d_1med}}": " to ".join(sorted((pc(BS["D"][b]["1y"]["per_yr"]["50"]) for b in ("5", "21", "63")), key=lambda z: float(z[:-1]))[::2]),
     "{{d_1loss}}": " to ".join(sorted((pu(BS["D"][b]["1y"]["p_below_start"]) for b in ("5", "21", "63")), key=lambda z: float(z[:-1]))[::2]),
