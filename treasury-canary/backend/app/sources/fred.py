@@ -276,18 +276,24 @@ def fetch_bundle(start: str = "1976-01-01", force: bool = False
         if holes or stale:
             logger.warning("FRED bundle: %d series empty (%s), %d served stale; retrying in %d min",
                            len(holes), ", ".join(holes[:8]) or "none", len(stale), _DEGRADED_TTL_SECONDS // 60)
-        _bundle_cache["data"] = bundle
-        _bundle_cache["ts"] = time.time()
-        _bundle_cache["degraded"] = bool(holes or stale)
+        # one step: a reader never pairs this bundle with the previous one's flag or timestamp
+        _bundle_cache.update(data=bundle, ts=time.time(), degraded=bool(holes or stale))
         return bundle
 
 
-def ttl_for_bundle_build(normal: float) -> float:
-    """TTL for a cache built from fetch_bundle() just now: its own TTL, or the bundle's degraded
-    retry while the bundle holds an empty or stale-served series. A stale copy passes every
-    "is the input complete?" check, so a 6-12 h cache would keep a build from it long after FRED is
-    back and the header dot is green (re-check B, round 6). Read it right after fetch_bundle()."""
-    return _DEGRADED_TTL_SECONDS if _bundle_cache.get("degraded") else normal
+def ttl_for_bundle_build(normal: float, bundle: dict) -> float:
+    """TTL for a cache built from `bundle`, the very object fetch_bundle() returned: the cache's own
+    TTL, or the bundle's degraded retry while that bundle holds an empty or stale-served series. A
+    stale copy passes every "is the input complete?" check, so a 6-24 h cache would keep a build from
+    it long after FRED is back and the header dot is green (re-check B, round 6).
+
+    A bundle replaced since it was fetched counts as degraded: its own flag is gone, and guessing
+    wrong then costs one early rebuild, never hours of stale data (re-check B, round 7: pins read the
+    flag after slow FMP fetches, by which time a rebuild could have swapped in a healthy bundle)."""
+    snap = _bundle_cache.copy()                       # bundle and flag from the same publish
+    if snap.get("data") is not bundle or snap.get("degraded"):
+        return _DEGRADED_TTL_SECONDS
+    return normal
 
 
 def _bundle_fresh() -> bool:

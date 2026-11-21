@@ -32,7 +32,7 @@ def distress_payload(force: bool = False) -> dict:
         except Exception:  # noqa: BLE001 — a failed probe leaves the frozen history
             live = {}
         bundle = fetch_bundle()
-        ttl = ttl_for_bundle_build(_TTL)              # built on stale FRED copies: rebuild with the bundle
+        ttl = ttl_for_bundle_build(_TTL, bundle)      # built on stale FRED copies: rebuild with the bundle
         bank = bank_from_bundle(bundle, hist)
         data = build_distress(hist, live, bank)
         _cache.update(ts=time.time(), data=data, ttl=ttl)

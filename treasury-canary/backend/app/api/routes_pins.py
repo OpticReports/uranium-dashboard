@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["pins"])
 
 
-def _assemble_bundle(with_auctions: bool = True) -> dict:
-    bundle = dict(fetch_bundle())
+def _assemble_bundle(with_auctions: bool = True, fred_bundle: dict | None = None) -> dict:
+    bundle = dict(fred_bundle if fred_bundle is not None else fetch_bundle())
     if with_auctions:
         # demand-strike channel: auction tape (FiscalData, keyless, cached 6h)
         bundle["auctions"] = fetch_recent_auctions()
@@ -66,8 +66,10 @@ def pin_history():
         now = time.time()
         if _hist_cache["data"] is not None and now - float(_hist_cache["ts"]) < _hist_ttl():
             return _hist_cache["data"]
-        bundle = _assemble_bundle(with_auctions=False)
-        ttl_ok = ttl_for_bundle_build(_HIST_TTL_OK)   # built on stale FRED copies: rebuild with the bundle
+        # the TTL comes from the FRED bundle this build uses, read before the slow FMP and Yahoo fetches
+        fred_bundle = fetch_bundle()
+        ttl_ok = ttl_for_bundle_build(_HIST_TTL_OK, fred_bundle)
+        bundle = _assemble_bundle(with_auctions=False, fred_bundle=fred_bundle)
         # SPX drawdown ground truth (Yahoo, keyless) — history endpoint only
         from ..sources.yahoo import fetch_spx_monthly
         bundle["spx_monthly"] = fetch_spx_monthly()

@@ -12,4 +12,4 @@ router = APIRouter(tags=["stat-regime"])
 
 @router.get("/stat-regime")
 def stat_regime():
-    return build_stat_regime(dict(fetch_bundle()))
+    return build_stat_regime(fetch_bundle())        # the object itself: its TTL follows that bundle

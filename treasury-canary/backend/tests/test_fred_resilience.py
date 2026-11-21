@@ -517,7 +517,7 @@ def test_distress_built_on_a_degraded_bundle_rebuilds_with_it(monkeypatch):
 def test_pins_history_built_on_a_degraded_bundle_rebuilds_with_it(monkeypatch):
     from app.api import routes_pins as rp
     builds = []
-    monkeypatch.setattr(rp, "_assemble_bundle", lambda with_auctions=False: {})
+    monkeypatch.setattr(rp, "_assemble_bundle", lambda with_auctions=False, fred_bundle=None: {})
     monkeypatch.setattr("app.sources.yahoo.fetch_spx_monthly", lambda: ([], []))
     monkeypatch.setattr(rp, "build_pin_history", lambda bundle: builds.append(1) or {"n": len(builds)})
     monkeypatch.setattr(rp, "_hist_complete", lambda data: True)
@@ -542,3 +542,58 @@ def test_severity_history_on_stale_copies_is_held_minutes_not_12_hours(monkeypat
         rs.warm_history(force=True)
         assert rs._HIST["ttl"] == ttl
         assert _rebuilds_after_16_min(rs.warm_history, rs._HIST, builds) is degraded
+
+
+# ---------------------------------------------------------------------------- the three small gaps (2026-11-21)
+def test_a_bundle_replaced_since_its_fetch_counts_as_degraded(monkeypatch):
+    """the race: a cache took degraded bundle B1, a rebuild swapped in healthy B2, then the cache read
+    the flag and got B2's: 6 h for a build on B1's stale copies. The TTL must follow B1."""
+    b1, b2 = _full_bundle(([1], [0.0])), _full_bundle(([1], [0.0]))
+    monkeypatch.setattr(fred, "_bundle_cache", {"ts": time.time(), "data": b1, "degraded": True})
+    fred._bundle_cache.update(data=b2, degraded=False)              # the healthy rebuild lands
+    assert fred.ttl_for_bundle_build(6 * 3600, b1) == fred._DEGRADED_TTL_SECONDS
+    assert fred.ttl_for_bundle_build(6 * 3600, b2) == 6 * 3600
+    assert fred.ttl_for_bundle_build(6 * 3600, dict(b2)) == fred._DEGRADED_TTL_SECONDS   # a copy can't vouch
+
+
+def test_pins_history_ttl_follows_the_bundle_it_built_on(monkeypatch):
+    """the TTL is read from the FRED bundle the build uses, before FMP and Yahoo, which can take 30 s
+    each; a healthy rebuild landing meanwhile must not hand the stale-copy build 6 h."""
+    from app.api import routes_pins as rp
+    _bundle_now(monkeypatch, True)                                  # degraded B1 cached
+
+    def slow_assemble(with_auctions=False, fred_bundle=None):
+        assert fred_bundle is not None and fred_bundle is fred._bundle_cache["data"]   # B1, passed in
+        fred._bundle_cache.update(data=_full_bundle(([1], [0.0])), degraded=False)      # B2 lands
+        return dict(fred_bundle)
+    monkeypatch.setattr(rp, "_assemble_bundle", slow_assemble)
+    monkeypatch.setattr("app.sources.yahoo.fetch_spx_monthly", lambda: ([], []))
+    monkeypatch.setattr(rp, "build_pin_history", lambda bundle: {"ok": 1})
+    monkeypatch.setattr(rp, "_hist_complete", lambda data: True)
+    monkeypatch.setattr(rp, "_hist_cache", {"ts": 0.0, "data": None, "ok": False, "ttl": rp._HIST_TTL_FAIL})
+    rp.pin_history()
+    assert rp._hist_cache["ttl"] == fred._DEGRADED_TTL_SECONDS
+
+
+def test_a_stat_regime_fit_on_a_degraded_bundle_is_held_15_min_not_24_h(monkeypatch):
+    from app.metrics import stat_regime as sr
+    fits = []
+    monkeypatch.setattr(sr, "_fit_current", lambda d, v: fits.append(1) or {"state": "CALM", "n": len(fits)})
+    monkeypatch.setattr(sr, "load_hindcast", lambda: [])
+    monkeypatch.setattr(sr, "_cache", {"ts": 0.0, "data": None, "ttl": sr._TTL})
+    for degraded, ttl in ((True, fred._DEGRADED_TTL_SECONDS), (False, sr._TTL)):
+        _bundle_now(monkeypatch, degraded)
+        sr._cache["data"] = None
+        sr.build_stat_regime(fred.fetch_bundle())
+        assert sr._cache["ttl"] == ttl
+        assert _rebuilds_after_16_min(lambda: sr.build_stat_regime(fred.fetch_bundle()), sr._cache, fits) is degraded
+
+
+def test_the_stat_regime_route_hands_over_the_bundle_itself(monkeypatch):
+    """a copy never matches the cached bundle, so every fit would get 15 min: pass the object."""
+    from app.api import routes_statregime as rsr
+    seen, sentinel = [], {"10y": ([], [])}
+    monkeypatch.setattr(rsr, "fetch_bundle", lambda: sentinel)
+    monkeypatch.setattr(rsr, "build_stat_regime", lambda bundle: seen.append(bundle) or {})
+    rsr.stat_regime()
+    assert seen and seen[0] is sentinel

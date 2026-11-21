@@ -33,7 +33,7 @@ _HINDCAST_PATH = os.path.join(os.path.dirname(__file__), "..", "data",
                               "stat_regime_hindcast.json")
 _WINDOW = 1890          # trailing obs for the current-state fit (~7.5y)
 _TTL = 24 * 3600
-_cache: dict[str, object] = {"ts": 0.0, "data": None}
+_cache: dict[str, object] = {"ts": 0.0, "data": None, "ttl": _TTL}
 _lock = threading.Lock()
 
 
@@ -89,21 +89,24 @@ def _fit_current(dates, vals) -> dict | None:
 
 
 def build_stat_regime(bundle: dict) -> dict:
+    """`bundle`: the object fetch_bundle() returned (not a copy), so a fit on stale FRED copies is
+    held only as long as the bundle holds them (15 min), not the 24 h a good fit gets."""
+    from ..sources.fred import ttl_for_bundle_build
+    ttl = ttl_for_bundle_build(_TTL, bundle)
     now = time.time()
-    if _cache["data"] is not None and now - float(_cache["ts"]) < _TTL:
+    if _cache["data"] is not None and now - float(_cache["ts"]) < float(_cache.get("ttl") or _TTL):  # type: ignore[arg-type]
         current = _cache["data"]
     else:
         with _lock:
             now = time.time()
-            if _cache["data"] is not None and now - float(_cache["ts"]) < _TTL:
+            if _cache["data"] is not None and now - float(_cache["ts"]) < float(_cache.get("ttl") or _TTL):  # type: ignore[arg-type]
                 current = _cache["data"]
             else:
                 d, v = bundle.get("10y", ([], []))
                 current = _fit_current(d, v)
                 # cache even None briefly via short-circuit: only cache real fits
                 if current is not None:
-                    _cache["data"] = current
-                    _cache["ts"] = time.time()
+                    _cache.update(data=current, ts=time.time(), ttl=ttl)
     return {
         "current": current,          # None => STALE (no data / deps / short tape)
         "hindcast": load_hindcast(),

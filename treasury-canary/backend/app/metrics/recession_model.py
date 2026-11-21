@@ -178,7 +178,7 @@ def _fit_all() -> None:
     from ..sources.fred import fetch_bundle, ttl_for_bundle_build
     from .curve import build_spread
     bundle = fetch_bundle()
-    ttl = ttl_for_bundle_build(_MODEL_TTL_SECONDS)     # a fit on stale copies refits with the bundle
+    ttl = ttl_for_bundle_build(_MODEL_TTL_SECONDS, bundle)   # a fit on stale copies refits with the bundle
     d3, v3 = bundle.get("3mo", ([], []))
     d10, v10 = bundle.get("10y", ([], []))
     sdates, spread = build_spread(d3, v3, d10, v10)     # 10y - 3m, daily

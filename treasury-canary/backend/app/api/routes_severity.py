@@ -37,7 +37,7 @@ def warm_history(force: bool = False) -> dict:
     with _HIST_LOCK:
         if force or _HIST["data"] is None or time.time() - _HIST["ts"] > _HIST.get("ttl", _HIST_TTL):
             bundle = fetch_bundle()
-            ttl = ttl_for_bundle_build(_HIST_TTL)    # complete but on stale copies: hold it 15 min, not 12 h
+            ttl = ttl_for_bundle_build(_HIST_TTL, bundle)   # complete but on stale copies: 15 min, not 12 h
             data = history_payload(bundle, end=date.today())
             if not _complete(bundle):
                 return data                      # serve, don't cache a degraded build
