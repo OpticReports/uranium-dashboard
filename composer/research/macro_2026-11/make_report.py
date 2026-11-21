@@ -6,7 +6,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 J = lambda k: json.load(open(os.path.join(HERE, "out", f"{k}.json")))                     # noqa: E731
-M, F, C, LI, RV = J("macro"), J("followup"), J("charts"), J("leanin"), J("review")
+M, F, C, LI, RV, RB = J("macro"), J("followup"), J("charts"), J("leanin"), J("review"), J("robust")
 OUT = sys.argv[1]
 lg = lambda x, d=2: "n/a" if x is None else f"{x:+.{d}f}"                                  # noqa: E731
 pu = lambda x, d=0: f"{x * 100:.{d}f}%"                                                    # noqa: E731
@@ -50,14 +50,17 @@ t_design = table(["Family", "States (each is the risk-off reading, fixed in adva
                  [[f.capitalize(), "; ".join(SINGLE[s] for s in ss), FROM[f]] for f, ss in FAMS.items()]
                  + [["Cross-engine", "Holy Grail's gate off; KMLM switch risk-off; sleeve's shock ladder out of cash; sleeve's inverse-fund test on; two of those three", "the engines' own history"],
                     ["Re-entry", "Baa spread narrowed 0.20 in a quarter; financial conditions easing over a quarter; S&P above its 50-day average (scored on Holy Grail's gate-off days only)", "1986"]])
+NWV, NWS = RV["nw"]["verdict"], RV["nw"]["shape"]
 oo = lambda r: "not scored" if r is None else f"{lg(r['on_per_yr'])} vs {lg(r['off_per_yr'])}"                                 # noqa: E731
 rows = []
 for sid in PRIM + ["T1"]:
     v, s = BV.get(sid), BS.get(sid)
     rg = REG.get(sid, {})
     rows.append([NAME[sid], "too rare" if v is None else pu(v["on_share"]), f"{rg.get('merged_regimes', '')} ({rg.get('switches_on', '')})", oo(v), "" if v is None else lg(v["diff_per_yr"]),
-                 "" if v is None else pv(v["p_two_sided"]), "" if v is None or "p_holm" not in v else pv(v["p_holm"]), oo(s), "" if s is None else f"{lg(s['diff_per_yr'])} (p {pv(s['p_two_sided'])})"])
-t_map = table(["State", "Share of days on, 2015-06 on", "Regimes (switches)", "Book growth on vs off, 2015-06 on", "Difference", "p", "p after 11", "On vs off, 1994-2015 (rebuilt)", "Difference (p)"], rows)
+                 "" if v is None else pv(v["p_two_sided"]), "" if v is None or "p_holm" not in v else pv(v["p_holm"]), "" if sid not in NWV else pv(max(NWV[sid])), oo(s),
+                 "" if s is None else f"{lg(s['diff_per_yr'])} (p {pv(s['p_two_sided'])}; {pv(max(NWS[sid])) if sid in NWS else 'n/a'})"])
+t_map = table(["State", "Share of days on, 2015-06 on", "Regimes (switches)", "Book growth on vs off, 2015-06 on", "Difference", "Shift p", "after 11", "Second test p", "On vs off, 1994-2015 (rebuilt)",
+               "Difference (shift p; second test)"], rows)
 order = [s for s in PRIM if s in BV]
 CH["c_map"] = {"type": "bars", "yfmt": "raw", "cats": [NAME[s] for s in order], "short": [SHORT[s] for s in order], "every": 1, "vals": [BV[s]["diff_per_yr"] for s in order]}
 t_singles = table(["Family", "State", "Share of days on", "Book on vs off, 2015-06 on", "Difference (p)", "On vs off, 1994-2015", "Difference (p)"],
@@ -160,10 +163,69 @@ eng_sum = {e: sum(v[e] for v in BY.values()) for e in ("HG", "KMLM", "SLEEVE")}
 top2 = sorted(BY, key=lambda y: -BY[y]["book_log"])[:2]
 lean = lambda v: (f"{lg(v['growth'])} a year against {lg(v['growth_mix'])} for the same cash held evenly (p {pv(v['p_growth'])}) and {lg(v['growth_full'])} for the full book; deepest fall {pu(v['maxdd'], 1)} against "   # noqa: E731
                   f"{pu(v['maxdd_mix'], 1)} and {pu(v['maxdd_full'], 1)}")
+T1R, GR, BVR, BSR = RB["t1"], RB["gold"], RB["book_verdict"], RB["book_shape"]
+sc, lt = (lambda v: v["same_close"]), (lambda v: v["one_close_late"])                     # noqa: E731
+pr = lambda *ps: pv(ps[0]) if pv(min(ps)) == pv(max(ps)) else f"{pv(min(ps))} to {pv(max(ps))}"   # noqa: E731
+nwr = lambda v: pr(v["p_newey_west_63"], v["p_newey_west_10"])                             # noqa: E731
+allp = lambda v: pr(v["p_two_sided"], v["p_newey_west_63"], v["p_newey_west_10"])          # noqa: E731
+RLAB = (("BOOK.verdict", "Book, 2015-06 on"), ("BOOK.2015-06..2020-12", "of which 2015-06 to 2020-12"), ("BOOK.real", "of which 2021-06 on (all real)"), ("BOOK.shape", "Book, 1994-2015 (rebuilt)"),
+        ("HG.verdict", "Holy Grail, 2006-07 on"), ("HG.real", "Holy Grail, 2015-09 on (real)"), ("HG.shape", "Holy Grail, 1991-2006 (modelled)"),
+        ("KMLM.verdict", "KMLM, 2021-06 on (real)"), ("KMLM.shape", "KMLM, 1991-2020 (rebuilt)"),
+        ("SLEEVE.verdict", "Sleeve, 2015-06 on"), ("SLEEVE.real", "Sleeve, 2020-12 on (real)"), ("SLEEVE.shape", "Sleeve, 1994-2015 (rebuilt)"))
+t_robust = table(["", "Days below the average", "Regimes (above the off-days' rate)", "Study's paths: below vs above", "Difference", "Shift p", "Second test p", "One close late: below vs above", "Difference", "Second test p"],
+                 [[lab, f"{round(sc(T1R[k])['n'] * sc(T1R[k])['on_share']):,}", f"{sc(T1R[k])['regimes']} ({sc(T1R[k])['regimes_above_off_rate']})", oo(sc(T1R[k])), lg(sc(T1R[k])["diff_per_yr"]), pv(sc(T1R[k])["p_two_sided"]),
+                   nwr(sc(T1R[k])), oo(lt(T1R[k])), lg(lt(T1R[k])["diff_per_yr"]), nwr(lt(T1R[k]))] for k, lab in RLAB])
+BARS = (("BOOK.verdict", "Book 2015-06 on"), ("BOOK.real", "Book 2021-06 on"), ("BOOK.shape", "Book rebuilt"), ("HG.verdict", "Holy Grail"), ("KMLM.verdict", "KMLM"), ("SLEEVE.verdict", "Sleeve"))
+CH["c_late"] = {"type": "bars", "yfmt": "raw", "every": 1, "cats": [f"{lab}, {w}" for k, lab in BARS for w in ("study's path", "one close late")],
+                "short": [x for k, lab in BARS for x in (lab.replace("Book ", "Book, ").replace("Holy Grail", "HG"), "late")],
+                "vals": [f_(T1R[k])["diff_per_yr"] for k, lab in BARS for f_ in (sc, lt)]}
+CV = RB["curves"]["BOOK"]
+CH["c_curve"] = {"type": "line", "yfmt": "mult", "log": True, "logticks": [0.5, 1, 3, 10, 30, 100, 300, 1000, 3000, 10000],
+                 "series": [{"name": "Book, trades at the signal's close (the study's path)", "slot": 1, "pts": CV["same_close"]}, {"name": "Book, every trade one close late", "slot": 2, "pts": CV["one_close_late"]}]}
+TB_, BL, AT, GRG, DL, VH, X1R = RB["t1_book"], RB["book_late"], RB["after_trade"], RB["gold_regime"], RB["dollar"], RB["volume_hg"], RB["x1"]
+PD = P1["BOOK.verdict"]["F_DOLLAR"]
+SN = {"C1": "Baa spread up more than 0.30 in a quarter", "M1": "volume 25% above its yearly average", "M3": "more than 60% of volume on down days"}
+XC = M["cross"]
 LQV, LQS, XR, PA = RV["liquidity"]["verdict"], RV["liquidity"]["shape"], RV["x1"], RV["p2_always_on"]
 LB = LQV["largest_off_block"]
 xw = XR["without_top_two"]
 subs = {
+    "{{t1_p1abs}}": f"{abs(P1['BOOK.verdict']['T1']['d_growth']):.3f}",
+    "{{l_p1p}}": pv(PL["p_growth"]), "{{l_p1h}}": pv(PL["p_holm_best_of_growth_or_fall"]),
+    "{{t1_yrs}}": f"{TB_['years_on_rate_higher']} of {TB_['years_with_both']}", "{{t1_nw}}": nwr(sc(T1R["BOOK.verdict"])),
+    "{{t1_2y_days}}": pu(TB_["share_of_on_days_2020_2022"]), "{{t1_2y_log}}": pu(TB_["share_of_on_log_2020_2022"]),
+    "{{t1_wo}}": f"{lg(TB_['without_2020_2022']['on_per_yr'])} against {lg(TB_['without_2020_2022']['off_per_yr'])} (p {allp(TB_['without_2020_2022'])})",
+    "{{t1_late_s}}": lg(lt(T1R["BOOK.shape"])["diff_per_yr"]), "{{t1_late_k}}": lg(lt(T1R["KMLM.verdict"])["diff_per_yr"]),
+    "{{t1_late_on}}": lg(lt(T1R["BOOK.verdict"])["on_per_yr"]), "{{t1_late_off}}": lg(lt(T1R["BOOK.verdict"])["off_per_yr"]), "{{t1_late_p}}": nwr(lt(T1R["BOOK.verdict"])),
+    "{{x1_same}}": pu(X1R["verdict"]["same_reading_as_T1"]), "{{x1_nw}}": nwr(sc(X1R["verdict"])), "{{rd_p}}": pv(R2["p_growth"]),
+    "{{x1_late}}": "; ".join(f"{lab}: {lg(lt(X1R[k])['diff_per_yr'])} (p {nwr(lt(X1R[k]))})" for k, lab in SP),
+    "{{g_nw}}": nwr(sc(GR["BOOK.verdict"])), "{{g_e4}}": lg(sc(GR["BOOK.2015-06..2020-12"])["diff_per_yr"]), "{{g_real_d}}": lg(sc(GR["BOOK.real"])["diff_per_yr"]),
+    "{{g_real_p}}": pv(sc(GR["BOOK.real"])["p_two_sided"]), "{{g_shape_d}}": lg(sc(GR["BOOK.shape"])["diff_per_yr"]),
+    "{{g_late}}": f"{lg(lt(GR['BOOK.verdict'])['diff_per_yr'])} (p {allp(lt(GR['BOOK.verdict']))})",
+    "{{bl_same}}": lg(BL["same_close"][0]), "{{bl_late}}": lg(BL["one_close_late"][0]), "{{bl_dd_same}}": pu(BL["same_close"][1]), "{{bl_dd_late}}": pu(BL["one_close_late"][1]),
+    "{{bl_eng}}": ", ".join(f"{EN[e]} {lg(v[0])} to {lg(v[1])}" for e, v in BL["by_engine"].items()),
+    "{{at_txt}}": ", ".join(f"{EN[e]} {pu(v['share_of_T1_on_growth_in_session_after_a_trade'])} (on {pu(v['share_of_T1_on_days_after_a_trade'])} of those days)" for e, v in AT.items()),
+    "{{t1_top20}}": pu(TB_["share_of_on_log_from_20_best_days"]), "{{t1_mv}}": f"{TB_['mean_over_vol_on']:.1f} against {TB_['mean_over_vol_off']:.1f}",
+    "{{d_txt}}": f"by {abs(PD['d_maxdd']) * 100:.1f} points, p {pv(PD['p_maxdd'])}; {pv(PD['p_holm_best_of_growth_or_fall'])} after correction",
+    "{{d_fall}}": f"{DL['book_deepest_fall'][0]} to {DL['book_deepest_fall'][1]}", "{{d_share}}": pu(DL["share_of_that_fall_with_dollar_on"]),
+    "{{gt_v}}": lg(RB["gate"]["2006-07 on"]["live_gated_tree_less_tbills_per_yr"]), "{{gt_s}}": lg(RB["gate"]["1991-2006"]["live_gated_tree_less_tbills_per_yr"]),
+    "{{t1_n}}": f"{RB['counts']['T1_on_days']:,}", "{{t1_reg}}": str(sc(T1R["BOOK.verdict"])["regimes"]), "{{t1_reg_up}}": str(sc(T1R["BOOK.verdict"])["regimes_above_off_rate"]),
+    "{{g2_txt}}": f"{lg(sc(BVR['G2'])['diff_per_yr'])}, p {allp(sc(BVR['G2']))}; one close late {lg(lt(BVR['G2'])['diff_per_yr'])}",
+    "{{gr_span}}": f"{GRG['from'][:7]} to {GRG['to'][:7]}", "{{gr_share}}": pu(GRG["share_of_on_log"]), "{{gr_wo}}": f"{lg(GRG['without']['diff_per_yr'])} (p {allp(GRG['without'])})",
+    "{{g_eng_own}}": ", ".join(f"{EN[e]} {lg(sc(GR[e + '.verdict'])['diff_per_yr'])} (p {pv(sc(GR[e + '.verdict'])['p_two_sided'])})" for e in ("HG", "KMLM", "SLEEVE")),
+    "{{g_k_all}}": lg(-GO["per_engine_diff"]["KMLM"]["diff_per_yr"]),
+    "{{l_nw}}": nwr(sc(BVR["F_LIQUIDITY"])), "{{l_late}}": f"{lg(lt(BVR['F_LIQUIDITY'])['diff_per_yr'])} (p {allp(lt(BVR['F_LIQUIDITY']))})",
+    "{{lq_within}}": f"each of the {LQV['years_tight_days_earned_less']}" if LQV["years_tight_days_earned_less"] == LQV["years_with_both"] else f"{LQV['years_tight_days_earned_less']} of the {LQV['years_with_both']}",
+    "{{same_txt}}": "; ".join(f"{SN[k]}: {lg(sc(BVR[k])['diff_per_yr'])} (shift p {pv(sc(BVR[k])['p_two_sided'])}, second test {nwr(sc(BVR[k]))}), rebuilt {lg(sc(BSR[k])['diff_per_yr'])} "
+                              f"(p {pv(sc(BSR[k])['p_two_sided'])}), {pu(BVR[k]['share_of_on_days_with_T1_on'])} of its days are below-average days, one close late {lg(lt(BVR[k])['diff_per_yr'])} and {lg(lt(BSR[k])['diff_per_yr'])}"
+                              for k in SN),
+    "{{x25_txt}}": f"{lg(XC['X2']['SLEEVE.verdict']['diff_per_yr'])} and {lg(XC['X5']['SLEEVE.verdict']['diff_per_yr'])} a year, shift p {pv(XC['X2']['SLEEVE.verdict']['p_two_sided'])} and {pv(XC['X5']['SLEEVE.verdict']['p_two_sided'])}",
+    "{{vol_n}}": str(VH["on_days"]), "{{vol_reg}}": str(sc(VH)["regimes"]), "{{vol_nw}}": nwr(sc(VH)), "{{vol_top3}}": pu(VH["share_of_on_log_from_3_best_days"]),
+    "{{vol_late}}": f"at a rate of {lg(lt(VH)['on_per_yr'])}",
+    "{{re1_txt}}": f"{lg(RE['verdict']['states']['RE1']['diff_per_yr'])} a year, p {pv(RE['verdict']['states']['RE1']['p_two_sided'])}, since 2006-07; {lg(RE['shape']['states']['RE1']['diff_per_yr'])}, p {pv(RE['shape']['states']['RE1']['p_two_sided'])}, before",
+    "{{t_robust}}": t_robust,
+    "{{ch_late}}": chart("c_late", "Growth rate below the 200-day average less the rate above it: the study's path, then one close late", "Log-points a year. Each pair is one sample; the second bar fills every trade one close later."),
+    "{{ch_curve}}": chart("c_curve", "The book since 2015-06: trades at the signal's close against one close late", "Growth of $1, log scale, simulated. One close late is a bound, not the expected live result."),
     "{{lq_l2}}": f"{LQV['on_days_L2_on']:,}", "{{lq_on}}": f"{LQV['on_days']:,}", "{{lq_sw}}": str(REG["F_LIQUIDITY"]["switches_on"]),
     "{{lq_blk}}": f"{LB['from'][:7]} to {LB['to'][:7]}", "{{lq_blk_share}}": pu(LB["off_days"] / LB["all_off_days"]), "{{lq_blk_log}}": pu(LB["off_log"] / LB["all_off_log"]),
     "{{lq_shape_l1}}": pu(LQS["on_days_L1_only"] / LQS["on_days"]),
@@ -198,13 +260,14 @@ subs = {
     "{{t_design}}": t_design, "{{t_map}}": t_map, "{{t_singles}}": t_singles, "{{t_p1}}": t_p1, "{{t_cross}}": t_cross, "{{t_cross2}}": t_cross2, "{{t_redeploy}}": t_redeploy, "{{t_p2}}": t_p2, "{{t_re}}": t_re,
     "{{t_years}}": t_years,
     "{{t_open}}": table(["Priority", "Question", "What it would move", "Status"], [
+        ["P1", "Measure decision price against fill on the live record (Composer and the mirror), per engine, with stressed days apart", "How much of the one-close-late gap applies live; it bounds every simulated number in addenda 58 to 61", "open, first asked 2026-11-21"],
         ["P1", "Owner: is the book's deepest fall or its growth the binding constraint?", "Whether any reserve held for stress states is worth its cost; the third leg's weight (addendum 60)", "asked 2026-11-21, open"],
         ["P2", "Track the gold-strong state forward from 2026-11-21 with the definition frozen", "Whether gold is a real risk-on state for this book or an accident of 2015-2021", "open, first asked 2026-11-21"],
         ["P2", "Daily gold before 2000-09 (London fix) in place of monthly averages", "A sharper test of gold on 1994-2000", "open, first asked 2026-11-21"],
         ["P2", "As-published vintages of CPI, M2 and the financial conditions index (ALFRED)", "Whether the liquidity result survives without revised data", "open, first asked 2026-11-21"],
         ["P2", "Owner: keep the inverse-fund half of the sleeve? (carried from addendum 60)", "Half the sleeve; both brokers and the logic book if changed", "asked 2026-11-21, open"],
         ["P3", "Rebuild UVXY and SVXY for 2006-2011 (carried from addendum 60)", "Longer part-real history for the sleeve and so the book", "open, first asked 2026-11-21"]]),
-    "{{ch_map}}": chart("c_map", "Book growth while each state is on, less while it is off, 2015-06 on", "Log-points a year. A risk-off state should sit well below zero. Liquidity and the dollar do; gold and credit stress sit well above."),
+    "{{ch_map}}": chart("c_map", "Book growth while each state is on, less while it is off, 2015-06 on", "Log-points a year. A risk-off state should sit well below zero. Liquidity and the dollar do; gold and credit stress sit well above. Sections 3 and 7 say how much of each survives."),
     "{{ch_t1}}": chart("c_t1", "Where the book's growth came from: S&P 500 below or above its 200-day average",
                        f"Running total of the book's daily log growth from 1994, split by the state the day before. The S&P was below its average on {pu(C['T1']['share_on'])} of days. Rebuilt before 2015."),
     "{{ch_gold}}": chart("c_gold", "The same split by gold: strong or not", f"Gold strong on {pu(C['F_GOLD']['share_on'])} of days. The gap opens after 2015; before it the two lines keep pace with their share of days."),
@@ -212,7 +275,10 @@ subs = {
     "{{charts}}": json.dumps(CH, separators=(",", ":")),
 }
 BODY = open(os.path.join(HERE, "..", "kmlm_2026-11", "report_body.html")).read()
-for a, b in (("<title>KMLM Switcher Windows</title>", "<title>Macro Regime Study</title>"),):
+for a, b in (("<title>KMLM Switcher Windows</title>", "<title>Macro Regime Study</title>"),
+             ("const yt=c.log?[.25,.5,1,2,4,8,16,32].filter(", "const yt=c.log?(c.logticks||[.25,.5,1,2,4,8,16,32]).filter("),
+             ('if(f==="mult")return (v>=10?v.toFixed(0):v.toFixed(2))+"×"',
+              'if(f==="mult")return (v>=1e9?(v/1e9).toFixed(0)+"B":v>=1e6?(v/1e6).toFixed(0)+"M":v>=1e3?(v/1e3).toFixed(0)+"k":v>=10?v.toFixed(0):v.toFixed(2))+"×"')):
     assert a in BODY, a
     BODY = BODY.replace(a, b)
 BODY = BODY.replace("{{main}}", open(os.path.join(HERE, "report_main.html")).read())

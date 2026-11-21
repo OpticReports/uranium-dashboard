@@ -48,3 +48,20 @@
 13. **Post hoc (`m4_leanin.py`):** the mirror of P1 on the S&P-below-its-200-day state and on gold (book at
     half size on the other days), scored also against the constant mix with the same deepest fall; book
     growth by year and engine.
+
+## After the statistics review (review B, 2026-11-21)
+14. **The shifted-state placebo is too generous for states tied to volatility** (the S&P below its 200-day
+    average, Holy Grail's gate, the shock ladder, credit, volume): the review's size check (equal means, the
+    observed volatility link, 2,000 draws) found it rejecting at the 5% level 14 to 31% of the time for those
+    states and about 6 to 8% for gold, the dollar and liquidity. The registered p-values stay in the tables;
+    a second p (Newey-West, 63 and 10 sessions) is reported beside them and is the one quoted in the verdict.
+15. **Post hoc (`m6_robust.py`):** every headline re-scored with each trade filled one close later than the
+    close its signal is read from (a bound); without 2020 and 2022; without the gold regime that earned the
+    most; the session after a trade; the live gated tree on gate-off days; regime-level counts.
+16. **Not done as registered:** the Holm correction over the five cross-engine signals was not applied to the
+    re-scored "other two engines" rows (deviation 3); the report says so. The S&P state (T1) is a reference
+    in PREREG, outside every correction, yet carries the main descriptive finding; the report says so.
+17. **The book has no data from 2020-12-02 to 2021-06-01** (KMLM uncovered, 124 sessions); samples that span
+    it are joined across the hole. Stated in the report.
+18. **Merged-regime counts, the by-year tables, the splits of 2015-06 on into 2015-06..2020-12 and 2021-06
+    on, and gold by engine** were all added after the first results; each is labelled in the report.

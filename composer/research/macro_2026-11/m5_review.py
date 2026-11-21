@@ -65,5 +65,37 @@ dev = np.abs(W - np.array([0.341, 0.341, 0.318])).sum(1) > 1e-9
 out["p2_always_on"] = {"d_growth": g(pol) - g((np.array([0.341, 0.341, 0.318]) * R).sum(1)), "first_tilted_day": ds[int(np.argmax(dev))], "days_tilted": int(dev.sum()), "n": len(ds),
                        "avg_weights": [float(v) for v in W[dev].mean(0)]}
 print("p2 always on", out["p2_always_on"])
+# ---- the second test (Newey-West, 63 and 10 sessions) for every composite on the book, both stretches
+import math  # noqa: E402
+
+
+def nw(sv, lr, lags=63):
+    x = sv - sv.mean()
+    b = (x @ lr) / (x @ x)
+    z = x * (lr - lr.mean() - b * x)
+    s0 = z @ z
+    for k in range(1, lags + 1):
+        s0 += 2 * (1 - k / (lags + 1)) * (z[k:] @ z[:-k])
+    return float(math.erfc(abs(b / (math.sqrt(s0) / (x @ x))) / math.sqrt(2)))
+
+
+out["nw"] = {}
+for which in ("verdict", "shape"):
+    dd, r, _ = m1.sample("BOOK", which)
+    ii = np.array([pos[d] for d in dd])
+    lr_ = np.log1p(r)
+    out["nw"][which] = {}
+    for sid in m1.md.PRIMARY + ["T1"]:
+        x = S[sid][ii]
+        ok = ~np.isnan(x)
+        if x[ok].sum() >= 40 and (1 - x[ok]).sum() >= 40:
+            out["nw"][which][sid] = [nw(x[ok], lr_[ok]), nw(x[ok], lr_[ok], 10)]
+print("nw verdict", {k: [round(z, 3) for z in v] for k, v in out["nw"]["verdict"].items()})
+# ---- liquidity: years that hold both tight and other days, and in how many the tight days earned less
+ly = m2.out["liquidity"]["verdict"]["by_year"]
+both_ = {y: v for y, v in ly.items() if 0.02 < v["on_share"] < 0.98}
+out["liquidity"]["verdict"]["years_with_both"] = len(both_)
+out["liquidity"]["verdict"]["years_tight_days_earned_less"] = int(sum(v["on_log"] / v["on_share"] < v["off_log"] / (1 - v["on_share"]) for v in both_.values()))
+print("liquidity within-year", out["liquidity"]["verdict"]["years_tight_days_earned_less"], "of", len(both_))
 json.dump(out, open(os.path.join(HERE, "out", "review.json.tmp"), "w"), indent=1)
 os.replace(os.path.join(HERE, "out", "review.json.tmp"), os.path.join(HERE, "out", "review.json"))
