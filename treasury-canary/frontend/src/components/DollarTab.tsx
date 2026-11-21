@@ -1,4 +1,5 @@
-import { Component, useEffect, useState, type ReactNode } from "react";
+import { Component, useState, type ReactNode } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import {
   CartesianGrid,
   Legend,
@@ -803,32 +804,14 @@ export default function DollarTab() {
   const [data, setData] = useState<DollarWatch | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    const dev = devOverride();
-    if (dev) {
-      setData(dev);
-      setLoading(false);
-      return;
-    }
-    api
-      .dollarWatch()
-      .then((d) => {
-        if (alive) {
-          setData(d ?? DOLLAR_ALL_NULL);
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (alive) {
-          setError(errorMessage(e));
-          setLoading(false);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad<DollarWatch | null>({
+    load: () => {
+      const dev = devOverride();
+      return dev ? Promise.resolve(dev) : api.dollarWatch();
+    },
+    onData: (d) => { setData(d ?? DOLLAR_ALL_NULL); setError(null); setLoading(false); },
+    onError: (e) => { setError(errorMessage(e)); setLoading(false); },
+  });
   return (
     <div className="flex flex-col gap-5">
       {loading && <Loading label="Loading the dollar watch…" />}

@@ -12,7 +12,8 @@
     "smoke:gdp": "esbuild scripts/gdp_smoke.tsx --bundle --platform=node --format=cjs --jsx=automatic --alias:recharts=./scripts/recharts_shim.tsx --define:import.meta.env.DEV=false --define:import.meta.env.VITE_API_BASE='\"\"' --outfile=node_modules/.cache/gdp_smoke.cjs --log-level=warning && node node_modules/.cache/gdp_smoke.cjs",
     "smoke:curve": "esbuild scripts/curve_smoke.tsx --bundle --platform=node --format=cjs --jsx=automatic --alias:recharts=./scripts/recharts_shim.tsx --define:import.meta.env.DEV=false --define:import.meta.env.VITE_API_BASE='\"\"' --outfile=node_modules/.cache/curve_smoke.cjs --log-level=warning && node node_modules/.cache/curve_smoke.cjs",
     "smoke:retry": "esbuild scripts/api_retry_smoke.ts --bundle --platform=node --format=cjs --define:import.meta.env.DEV=false --define:import.meta.env.VITE_API_BASE='\"\"' --outfile=node_modules/.cache/retry_smoke.cjs --log-level=warning && node node_modules/.cache/retry_smoke.cjs",
-    "smoke:freddot": "esbuild scripts/fred_dot_smoke.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/freddot_smoke.cjs --log-level=warning && node node_modules/.cache/freddot_smoke.cjs"
+    "smoke:freddot": "esbuild scripts/fred_dot_smoke.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/freddot_smoke.cjs --log-level=warning && node node_modules/.cache/freddot_smoke.cjs",
+    "e2e:refresh": "vite build --logLevel error && node scripts/refresh_e2e.cjs"
   },
   "dependencies": {
     "react": "^18.3.1",

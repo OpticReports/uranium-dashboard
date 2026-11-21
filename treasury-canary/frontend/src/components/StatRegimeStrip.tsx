@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import { api, type StatRegime } from "../lib/api";
 import { Panel } from "./ui";
 
@@ -43,13 +44,7 @@ function CurrentChip({ sr }: { sr: StatRegime }) {
 export default function StatRegimeStrip() {
   const [sr, setSr] = useState<StatRegime | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    api.statRegime().then((d) => alive && setSr(d)).catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({ load: () => api.statRegime(), onData: (d) => setSr(d) });
 
   if (!sr || sr.hindcast.length === 0) return null;
 

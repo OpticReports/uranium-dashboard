@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import {
   CartesianGrid,
   ComposedChart,
@@ -79,26 +80,11 @@ export default function FastLeverageStrip({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .marginFast()
-      .then((d) => {
-        if (alive) {
-          setData(d);
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (alive) {
-          setError(errorMessage(e));
-          setLoading(false);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.marginFast(),
+    onData: (d) => { setData(d); setError(null); setLoading(false); },
+    onError: (e) => { setError(errorMessage(e)); setLoading(false); },
+  });
 
   // Merge the four legs into one time-indexed table (σ values + natives).
   const rows: Row[] = useMemo(() => {

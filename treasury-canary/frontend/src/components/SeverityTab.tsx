@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import {
   ResponsiveContainer,
   LineChart,
@@ -146,28 +147,12 @@ export default function SeverityTab() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setError(null);
-    api
-      .severity()
-      .then((d) => {
-        if (alive) {
-          setData(d);
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (alive) {
-          setError(errorMessage(e));
-          setLoading(false);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.severity(),
+    onStart: () => { setLoading(true); setError(null); },
+    onData: (d) => { setData(d); setError(null); setLoading(false); },
+    onError: (e) => { setError(errorMessage(e)); setLoading(false); },
+  });
 
   return (
     <div className="flex flex-col gap-5">

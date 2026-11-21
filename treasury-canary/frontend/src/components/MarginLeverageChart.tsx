@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -115,26 +116,11 @@ export default function MarginLeverageChart() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .marginLeverage()
-      .then((d) => {
-        if (alive) {
-          setData(d);
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (alive) {
-          setError(errorMessage(e));
-          setLoading(false);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.marginLeverage(),
+    onData: (d) => { setData(d); setError(null); setLoading(false); },
+    onError: (e) => { setError(errorMessage(e)); setLoading(false); },
+  });
 
   const rows: ChartRow[] = useMemo(() => {
     if (!data?.series) return [];

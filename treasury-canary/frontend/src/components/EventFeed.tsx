@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import type { CanaryEvent, MetricStatus } from "../lib/api";
 import { api } from "../lib/api";
 import { Panel, InlineError, Loading } from "./ui";
@@ -67,38 +68,22 @@ export default function EventFeed() {
   const [error, setError] = useState<string | null>(null);
   const [alertError, setAlertError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .events(100)
-      .then((e) => {
-        if (alive) setEvents(e);
-      })
-      .catch((e) => {
-        if (alive) setError(errorMessage(e));
-      });
-    api
-      .alerts()
-      .then((a) => {
-        if (alive) setAlerts(a);
-      })
-      .catch((e) => {
-        if (alive) setAlertError(errorMessage(e));
-      });
-    api
-      .metrics()
-      .then((m) => {
-        if (alive)
-          setLiveStatus(new Map(m.metrics.map((x) => [x.metric_id, x.status])));
-      })
-      .catch(() => {
-        // No live grid -> can't tell recovered from active; show everything undimmed.
-        if (alive) setLiveStatus(null);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.events(100),
+    onData: (e) => { setEvents(e); setError(null); },
+    onError: (e) => setError(errorMessage(e)),
+  });
+  useRefreshingLoad({
+    load: () => api.alerts(),
+    onData: (a) => { setAlerts(a); setAlertError(null); },
+    onError: (e) => setAlertError(errorMessage(e)),
+  });
+  useRefreshingLoad({
+    load: () => api.metrics(),
+    onData: (m) => setLiveStatus(new Map(m.metrics.map((x) => [x.metric_id, x.status]))),
+    // No live grid -> can't tell recovered from active; show everything undimmed.
+    onError: () => setLiveStatus(null),
+  });
 
   // A metric_red entry is "recovered" only when the live grid confirms the
   // metric is now GREEN/YELLOW; unknown or STALE stays undimmed.

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import {
   api,
   ApiError,
@@ -376,24 +377,13 @@ export default function PinBoard() {
   const [history, setHistory] = useState<PinHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .pins()
-      .then((b) => alive && setBoard(b))
-      .catch((e: unknown) =>
-        alive &&
-        setError(e instanceof ApiError ? e.message : "failed to load pin board"),
-      );
-    // hindcast loads independently — the live board never waits on it
-    api
-      .pinsHistory()
-      .then((h) => alive && setHistory(h))
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.pins(),
+    onData: (b) => { setBoard(b); setError(null); },
+    onError: (e) => setError(e instanceof ApiError ? e.message : "failed to load pin board"),
+  });
+  // hindcast loads independently — the live board never waits on it
+  useRefreshingLoad({ load: () => api.pinsHistory(), onData: (h) => setHistory(h) });
 
   const title = (
     <>

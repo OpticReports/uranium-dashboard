@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import type { ReactNode } from "react";
 import type { Composite, HorizonStat, RecessionModel } from "../lib/api";
 import { api } from "../lib/api";
@@ -128,22 +129,15 @@ export default function StressGauge({
   const [recError, setRecError] = useState<string | null>(null);
   const [horizon, setHorizon] = useState<number>(12);
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .recessionModel()
-      .then((r) => {
-        if (!alive) return;
-        setRecModel(r);
-        if (r.default_horizon) setHorizon(r.default_horizon);
-      })
-      .catch((e) => {
-        if (alive) setRecError(errorMessage(e));
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.recessionModel(),
+    onData: (r, first) => {
+      setRecModel(r);
+      setRecError(null);
+      if (first && r.default_horizon) setHorizon(r.default_horizon);   // a refresh keeps the chosen horizon
+    },
+    onError: (e) => setRecError(errorMessage(e)),
+  });
 
   const horizonStat: HorizonStat | null = useMemo(() => {
     if (!recModel) return null;

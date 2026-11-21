@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import type { ReactNode } from "react";
 import {
   ResponsiveContainer,
@@ -44,27 +45,11 @@ export default function ReSteepenAlert() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setError(null);
-    api
-      .curveCanary(pair)
-      .then((d) => {
-        if (alive) {
-          setData(d);
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (alive) {
-          setError(errorMessage(e));
-          setLoading(false);
-        }
-      });
-    return () => {
-      alive = false;
-    };
+  useRefreshingLoad({
+    load: () => api.curveCanary(pair),
+    onStart: () => { setLoading(true); setError(null); },
+    onData: (d) => { setData(d); setError(null); setLoading(false); },
+    onError: (e) => { setError(errorMessage(e)); setLoading(false); },
   }, [pair]);
 
   const medianLag = useMemo(() => {

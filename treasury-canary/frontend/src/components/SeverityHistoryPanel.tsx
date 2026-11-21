@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import {
   CartesianGrid,
   Line,
@@ -33,16 +34,11 @@ export default function SeverityHistoryPanel() {
   const [data, setData] = useState<SeverityHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .severityHistory()
-      .then((d) => alive && setData(d))
-      .catch((e) => alive && setError(errorMessage(e)));
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.severityHistory(),
+    onData: (d) => { setData(d); setError(null); },
+    onError: (e) => setError(errorMessage(e)),
+  });
 
   const rows = useMemo(
     () =>

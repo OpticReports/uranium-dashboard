@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import type { ReactNode } from "react";
 import {
   ResponsiveContainer,
@@ -32,20 +33,11 @@ export default function FlightToQuality({ metrics }: { metrics: Metric[] }) {
   const [history, setHistory] = useState<CorrPoint[] | null>(null);
   const [histError, setHistError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .corrSeries()
-      .then((h) => {
-        if (alive) setHistory(h.series);
-      })
-      .catch((e) => {
-        if (alive) setHistError(errorMessage(e));
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.corrSeries(),
+    onData: (h) => { setHistory(h.series); setHistError(null); },
+    onError: (e) => setHistError(errorMessage(e)),
+  });
 
   const corrValue = corr?.value ?? null;
   const regime = interpretRegime(corrValue);

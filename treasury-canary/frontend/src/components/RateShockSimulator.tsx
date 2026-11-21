@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import {
   Area,
   CartesianGrid,
@@ -59,9 +60,7 @@ export default function RateShockSimulator() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    api.shockCalibration().then(setCalib).catch(() => {});
-  }, []);
+  useRefreshingLoad({ load: () => api.shockCalibration(), onData: (c) => setCalib(c) });
 
   useEffect(() => {
     let alive = true;

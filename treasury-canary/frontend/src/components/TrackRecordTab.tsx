@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import type { TrackRecord, TrackRecordRow } from "../lib/api";
 import { api } from "../lib/api";
 import { errorMessage, formatDate } from "../lib/format";
@@ -46,23 +47,11 @@ export default function TrackRecordTab() {
   const [data, setData] = useState<TrackRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .trackRecord()
-      .then((d) => {
-        if (!cancelled) {
-          setData(d);
-          setError(null);
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) setError(errorMessage(e));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.trackRecord(),
+    onData: (d) => { setData(d); setError(null); },
+    onError: (e) => setError(errorMessage(e)),
+  });
 
   if (error) {
     return <InlineError message={`Failed to load track record: ${error}`} />;

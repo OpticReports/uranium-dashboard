@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import {
   Bar,
   BarChart,
@@ -125,16 +126,11 @@ export default function DistressPanel() {
   const [data, setData] = useState<Distress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .distress()
-      .then((d) => alive && setData(d))
-      .catch((e) => alive && setError(errorMessage(e)));
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.distress(),
+    onData: (d) => { setData(d); setError(null); },
+    onError: (e) => setError(errorMessage(e)),
+  });
 
   const title = (
     <span className="flex items-center gap-2">

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import { api, ApiError, type FlowDestinations } from "../lib/api";
 import { InlineError, Loading, Panel } from "./ui";
 import InfoTip from "./InfoTip";
@@ -47,18 +48,11 @@ export default function FlowCompass() {
   const [data, setData] = useState<FlowDestinations | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .flowDestinations()
-      .then((d) => alive && setData(d))
-      .catch((e: unknown) =>
-        alive && setError(e instanceof ApiError ? e.message : "failed to load flows"),
-      );
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.flowDestinations(),
+    onData: (d) => { setData(d); setError(null); },
+    onError: (e) => setError(e instanceof ApiError ? e.message : "failed to load flows"),
+  });
 
   const title = (
     <>

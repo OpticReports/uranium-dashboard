@@ -1,4 +1,5 @@
-import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Component, useMemo, useState, type ReactNode } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import {
   Bar,
   BarChart,
@@ -425,32 +426,14 @@ export default function AiDebtTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    const dev = devOverride();
-    if (dev) {
-      setData(dev);
-      setLoading(false);
-      return;
-    }
-    api
-      .aiDebt()
-      .then((d) => {
-        if (alive) {
-          setData(d ?? AI_DEBT_ALL_NULL);
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (alive) {
-          setError(errorMessage(e));
-          setLoading(false);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad<AiDebt | null>({
+    load: () => {
+      const dev = devOverride();
+      return dev ? Promise.resolve(dev) : api.aiDebt();
+    },
+    onData: (d) => { setData(d ?? AI_DEBT_ALL_NULL); setError(null); setLoading(false); },
+    onError: (e) => { setError(errorMessage(e)); setLoading(false); },
+  });
 
   return (
     <div className="flex flex-col gap-5">

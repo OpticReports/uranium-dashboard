@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRefreshTick, useRefreshingLoad } from "../lib/refresh";
 import {
   ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip,
   ReferenceLine, ReferenceArea, CartesianGrid, ErrorBar,
@@ -89,17 +90,29 @@ export default function CycleTracker() {
     () => (localStorage.getItem("cycleRange") as any) || "5y");
   const [more, setMore] = useState(false);
 
-  useEffect(() => {
-    api.cycle()                     // getJson: 4-retry cold-boot handling
-      .then(setBoard)
-      .catch((e) => setErr(String(e?.message ?? e)));
-  }, []);
+  useRefreshingLoad({               // getJson: 4-retry cold-boot handling; refreshed quietly every 15 min
+    load: () => api.cycle(),
+    onData: (b) => { setBoard(b); setErr(null); },
+    onError: (e) => setErr(String((e as { message?: string } | null)?.message ?? e)),
+  });
   useEffect(() => { localStorage.setItem("cycleView", view); }, [view]);
   useEffect(() => {
     if (view === "analogs" && !analog && !analogErr)
       api.cycleAnalog().then(setAnalog)
         .catch((e) => setAnalogErr(String(e?.message ?? e)));
   }, [view, analog, analogErr]);
+  // a loaded analog view re-reads quietly on each refresh tick (a failed refresh keeps what it shows)
+  const tick = useRefreshTick();
+  const mountTick = useRef(tick);
+  useEffect(() => {
+    if (tick === mountTick.current || !analog) return;
+    let alive = true;
+    api.cycleAnalog().then((a) => alive && setAnalog(a)).catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick]);
   useEffect(() => { localStorage.setItem("cycleRange", range); }, [range]);
 
   const rows = useMemo(() => {

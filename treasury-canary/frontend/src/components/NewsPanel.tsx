@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import type { NewsItem, NewsTag } from "../lib/api";
 import { api } from "../lib/api";
 import { Panel, InlineError, Loading } from "./ui";
@@ -34,20 +35,11 @@ export default function NewsPanel() {
   const [items, setItems] = useState<NewsItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .news(40)
-      .then((r) => {
-        if (alive) setItems(r.items);
-      })
-      .catch((e) => {
-        if (alive) setError(errorMessage(e));
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad({
+    load: () => api.news(40),
+    onData: (r) => { setItems(r.items); setError(null); },
+    onError: (e) => setError(errorMessage(e)),
+  });
 
   const sorted = useMemo(
     () => [...(items ?? [])].sort((a, b) => publishedTs(b) - publishedTs(a)),

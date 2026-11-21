@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Composite, Health, MetricsResponse } from "./lib/api";
 import { api } from "./lib/api";
+import { RefreshTickContext, useRefreshTickSource } from "./lib/refresh";
 import { fredDotTitle, fredDotWarn } from "./lib/fredDot";
 import { errorMessage, formatDateTime } from "./lib/format";
 import { InlineError } from "./components/ui";
@@ -54,6 +55,7 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [tab, setTab] = useState<Tab>("monitor");
+  const refreshTick = useRefreshTickSource();   // load-once panels re-read quietly every 15 min
 
   const inFlight = useRef(false);
   const loadGen = useRef(0);
@@ -100,6 +102,7 @@ export default function App() {
     health !== null && (!health.fred_key_present || !!health.fred_key_error) && !bannerDismissed;
 
   return (
+    <RefreshTickContext.Provider value={refreshTick}>
     <div className="min-h-screen bg-slate-950 text-slate-200">
       <div className="mx-auto max-w-7xl px-4 py-6">
         {/* Header */}
@@ -254,6 +257,7 @@ export default function App() {
         </footer>
       </div>
     </div>
+    </RefreshTickContext.Provider>
   );
 }
 

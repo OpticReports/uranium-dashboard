@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useRefreshingLoad } from "../lib/refresh";
 import { Area, CartesianGrid, ComposedChart, Customized, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { GdpCountry, GdpMeasure, GdpWatch } from "../lib/api";
 import { api } from "../lib/api";
@@ -267,18 +268,14 @@ function devOverride(): GdpWatch | null {
 export default function GdpTab() {
   const [data, setData] = useState<GdpWatch | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    const dev = devOverride();
-    if (dev) {
-      setData(dev);
-      return;
-    }
-    api.gdpWatch().then((d) => alive && setData(d)).catch((e) => alive && setError(errorMessage(e)));
-    return () => {
-      alive = false;
-    };
-  }, []);
+  useRefreshingLoad<GdpWatch>({
+    load: () => {
+      const dev = devOverride();
+      return dev ? Promise.resolve(dev) : api.gdpWatch();
+    },
+    onData: (d) => { setData(d); setError(null); },
+    onError: (e) => setError(errorMessage(e)),
+  });
   if (error) return <InlineError message={`Failed to load /gdp-watch: ${error}`} />;
   if (!data) return <Loading label="Loading the GDP tab…" />;
   return <GdpView data={data} />;
