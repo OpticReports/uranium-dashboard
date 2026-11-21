@@ -228,13 +228,18 @@ def fetch_bundle(start: str = "1976-01-01", force: bool = False
         # older in-memory copy would bypass both its rules (a rejected key serves nothing;
         # copies only up to fred_stale_max_age_hours). A hole stays a hole, loudly STALE,
         # and the bundle retries it in minutes instead of holding it for 6 h.
-        holes = [k for k in _fred_plan() if not (bundle.get(k) or ([], []))[0]]
-        if holes:
-            logger.warning("FRED bundle: %d series empty (%s); retrying in %d min",
-                           len(holes), ", ".join(holes[:8]), _DEGRADED_TTL_SECONDS // 60)
+        plan = _fred_plan()
+        holes = [k for k in plan if not (bundle.get(k) or ([], []))[0]]
+        # A series served from its stale copy also retries soon: a short blip trips the breaker,
+        # which serves every remaining series stale; held for 6 h, that blip would become 6 h of
+        # the previous rebuild's copies (re-check). 15 min is past the breaker's 10 min window.
+        stale = [k for k, sid in plan.items() if _stale_tag(sid, start) in _stale_served]
+        if holes or stale:
+            logger.warning("FRED bundle: %d series empty (%s), %d served stale; retrying in %d min",
+                           len(holes), ", ".join(holes[:8]) or "none", len(stale), _DEGRADED_TTL_SECONDS // 60)
         _bundle_cache["data"] = bundle
         _bundle_cache["ts"] = time.time()
-        _bundle_cache["degraded"] = bool(holes)
+        _bundle_cache["degraded"] = bool(holes or stale)
         return bundle
 
 

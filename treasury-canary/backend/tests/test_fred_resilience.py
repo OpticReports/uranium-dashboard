@@ -34,6 +34,8 @@ def _key_and_cache(monkeypatch, tmp_path):
 
 def test_a_failed_fetch_serves_the_last_good_copy(monkeypatch, tmp_path):
     _key_and_cache(monkeypatch, tmp_path)
+    monkeypatch.setattr(fred, "_stale_served", {})
+    monkeypatch.setattr(fred, "_key_error", {"msg": None})
     path = fred._cache_path("USREC", "1976-01-01")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(OBS, fh)
@@ -316,3 +318,44 @@ def test_the_stale_list_is_keyed_by_start_and_cleared_when_the_copy_expires(monk
     monkeypatch.setattr(fred, "_key_error", {"msg": "api_key not registered"})
     fred.fetch_series("USREC", start="1945-01-01")
     assert fred.fred_stale_series() == {}
+
+
+# ---------------------------------------------------------------------------- re-check A, round 3
+def test_a_bundle_served_partly_stale_retries_in_minutes(monkeypatch):
+    """a short blip opens the breaker and every remaining series is served stale: that must not stand 6 h."""
+    monkeypatch.setattr(fred, "_bundle_cache", {"ts": 0.0, "data": None, "degraded": False})
+
+    def blip(start):
+        fred._stale_served[fred._stale_tag("USREC", start)] = 7.5       # served from the copy this pass
+        return _full_bundle(([1, 2], [0.0, 1.0]))                         # no holes
+    monkeypatch.setattr(fred, "_stale_served", {})
+    monkeypatch.setattr(fred, "_fetch_bundle_uncached", blip)
+    fred.fetch_bundle()
+    assert fred._bundle_cache["degraded"] is True
+
+
+def test_four_hundreds_never_open_the_breaker(monkeypatch):
+    monkeypatch.setattr(fred.httpx, "get", lambda *a, **k: _Resp(400, "series does not exist"))
+    for _ in range(fred._BREAKER_FAILS + 3):
+        assert fred._get_with_backoff({"series_id": "NOPE"}) is None
+    assert fred._breaker["open_until"] == 0.0 and fred._breaker["fails"] == 0
+
+
+def test_the_copy_is_written_atomically(monkeypatch, tmp_path):
+    _key_and_cache(monkeypatch, tmp_path)
+    from app.sources import fred_csv
+    writes = []
+    monkeypatch.setattr(fred_csv, "_write_atomic", lambda path, data: writes.append(path))
+    monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: OBS)
+    fred.fetch_series("USREC", use_cache=False)
+    assert writes == [fred._cache_path("USREC", "1976-01-01")]
+
+
+def test_no_number_means_no_basis(monkeypatch):
+    from datetime import date, timedelta
+    days = [date(2024, 1, 1) + timedelta(days=i) for i in range(400)]
+    monkeypatch.setattr(rc, "fetch_bundle", lambda: {"3mo": (days, [4.0] * 400), "10y": (days, [4.7] * 400),
+                                                    "recession": ([], [])})
+    monkeypatch.setattr("app.metrics.recession_model.cached_models_and_spread", lambda: ({}, None))
+    p = rc.canary(pair="3m10y")
+    assert p["recession_probability_pct"] is None and p["recession_probability_basis"] is None
