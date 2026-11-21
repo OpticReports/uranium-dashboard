@@ -209,7 +209,7 @@ def test_health_and_refresh_list_the_stale_served_series(monkeypatch):
     from app import main
     now = time.time()
     monkeypatch.setattr(fred, "_stale_served", {"USREC": now - 30 * 3600})      # mtime of the copy served
-    monkeypatch.setattr(fred, "_failing", {"USREC": {"first": now, "last": now}})
+    monkeypatch.setattr(fred, "_failing", {"USREC": now})
     body = TestClient(main.app).get("/health").json()
     assert body["fred_stale_series"] == {"USREC": 30.0} and "fred_key_error" in body
 
@@ -375,9 +375,9 @@ def test_a_failing_series_stays_visible_past_the_cap_or_with_no_copy(monkeypatch
     _old_copy(tmp_path, hours=80)                                   # past the 72 h cap
     assert fred.fetch_series("USREC") == ([], []) and fred.fetch_series("NOCOPY") == ([], [])
     assert fred.fred_stale_series() == {} and set(fred.fred_failing_series()) == {"USREC", "NOCOPY"}
-    fred._failing["USREC"]["first"] -= 2 * 3600                     # two hours into the failing run
-    fred.fetch_series("USREC")                                      # fails again: the run keeps its start
-    assert fred.fred_failing_series()["USREC"] == 2.0
+    fred._failing["USREC"] -= 2 * 3600                              # failed two hours ago...
+    fred.fetch_series("USREC")                                      # ...and again now: the latest failure counts
+    assert fred.fred_failing_series()["USREC"] == 0.0
     body = TestClient(main.app).get("/health").json()
     assert set(body["fred_failing_series"]) == {"USREC", "NOCOPY"}
     monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: OBS)
@@ -396,8 +396,7 @@ def test_the_refresh_job_reports_the_stale_and_failing_series(monkeypatch, tmp_p
     _offline_refresh(monkeypatch, [_m("curve.x", 1.0, Status.GREEN, date(2026, 10, 23))])
     now = time.time()
     monkeypatch.setattr(fred, "_stale_served", {"USREC": now - 30 * 3600})
-    monkeypatch.setattr(fred, "_failing", {"USREC": {"first": now - 3600, "last": now},
-                                           "NOCOPY": {"first": now - 2 * 3600, "last": now}})
+    monkeypatch.setattr(fred, "_failing", {"USREC": now - 3600, "NOCOPY": now - 2 * 3600})
     with SL() as s:
         out = refresh.run_refresh(s)
     assert out["fred_stale_series"] == {"USREC": 30.0}
@@ -413,19 +412,30 @@ def _failing_fred(monkeypatch, tmp_path):
     monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: None)
 
 
-def test_a_series_whose_caller_stopped_retrying_drops_off_after_an_hour(monkeypatch, tmp_path):
-    """a caller behind a 6 h route cache (cycle) failed once during a blip and never asked again: an hour
-    later neither list may still call it failing, and a failure after the gap starts a new run."""
+def test_a_series_whose_caller_stopped_retrying_drops_off_after_six_hours(monkeypatch, tmp_path):
+    """a caller (the labor board) failed once during a blip and never asked again. While a cache can
+    still hold data built from that call it is listed, saying when it last failed; then it drops off."""
     _failing_fred(monkeypatch, tmp_path)
     _old_copy(tmp_path, hours=30)
     fred.fetch_series("USREC")                                      # served from the 30 h copy
     fred.fetch_series("NOCOPY")                                     # nothing to serve
     assert set(fred.fred_failing_series()) == {"USREC", "NOCOPY"} and set(fred.fred_stale_series()) == {"USREC"}
-    for run in fred._failing.values():                              # 5 h ago, nothing retried for 61 min
-        run["first"], run["last"] = time.time() - 5 * 3600, time.time() - 3660
+    for tag in fred._failing:
+        fred._failing[tag] = time.time() - 5 * 3600                 # last failed 5 h ago, not retried
+    assert fred.fred_failing_series() == {"NOCOPY": 5.0, "USREC": 5.0} and set(fred.fred_stale_series()) == {"USREC"}
+    for tag in fred._failing:
+        fred._failing[tag] = time.time() - 6 * 3600 - 60            # past the window
     assert fred.fred_failing_series() == {} and fred.fred_stale_series() == {}
-    fred.fetch_series("NOCOPY")                                     # fails again after the gap
-    assert fred.fred_failing_series() == {"NOCOPY": 0.0}            # a new run, not "failing 5 h"
+    fred.fetch_series("NOCOPY")                                     # fails again
+    assert fred.fred_failing_series() == {"NOCOPY": 0.0}
+
+
+def test_the_failing_window_covers_every_cache_that_holds_fred_api_data():
+    """raise one of these TTLs past the window and its panel can serve failure-built data under a green dot."""
+    from app.api import routes_cycle, routes_distress, routes_pins
+    w = fred._FAILING_RECENT_SECONDS
+    assert w >= max(fred._BUNDLE_TTL_SECONDS, rm._MODEL_TTL_SECONDS, routes_cycle._TTL, routes_distress._TTL,
+                    routes_pins._HIST_TTL_OK)
 
 
 def test_the_stale_copy_age_is_its_age_when_listed(monkeypatch, tmp_path):
@@ -434,7 +444,7 @@ def test_the_stale_copy_age_is_its_age_when_listed(monkeypatch, tmp_path):
     fred.fetch_series("USREC")
     assert fred.fred_stale_series() == {"USREC": 30.0}
     later = time.time() + 2 * 3600
-    fred._failing["USREC"]["last"] = later - 60                     # still failing, two hours on
+    fred._failing["USREC"] = later - 60                             # still failing, two hours on
     monkeypatch.setattr(fred.time, "time", lambda: later)
     assert fred.fred_stale_series() == {"USREC": 32.0}              # not the 30.0 frozen when served
 

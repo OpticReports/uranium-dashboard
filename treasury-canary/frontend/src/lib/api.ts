@@ -22,8 +22,8 @@ export interface Health {
   service: string;
   fred_key_present: boolean;
   fred_key_error?: string | null;
-  fred_stale_series?: Record<string, number> | null;   // series -> age (h) of the copy served (failing in the last hour)
-  fred_failing_series?: Record<string, number> | null; // series failing in the last hour -> hours since the run began
+  fred_stale_series?: Record<string, number> | null;   // series -> age (h) of the copy served (failed in the last 6 h)
+  fred_failing_series?: Record<string, number> | null; // series that failed in the last 6 h -> hours since the latest failure
   scheduler: boolean;
   display_tz: string;
 }

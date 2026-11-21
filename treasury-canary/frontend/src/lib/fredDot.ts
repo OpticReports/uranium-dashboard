@@ -1,8 +1,8 @@
 import type { Health } from "./api";
 
 // The header's FRED dot (2026-11-21). Amber while a keyed FRED API call has failed within the last
-// hour with no good fetch since: the series is served from its last good copy, or (past the 72 h cap,
-// or never cached) not served at all. The keyless fredgraph CSV path (Dollar, AI-debt, GDP and other
+// 6 h (the longest a cache holds data built from it) with no good fetch since: the series is served
+// from its last good copy, or (past the 72 h cap, or never cached) not served at all. The keyless fredgraph CSV path (Dollar, AI-debt, GDP and other
 // tabs) does not feed this dot; those tabs show their own staleness.
 
 const MAX_ROWS = 5;   // an outage fails every series at once: name a few, count the rest
@@ -17,8 +17,10 @@ export function fredDotTitle(h: Health): string | undefined {
   const failing = Object.entries(h.fred_failing_series ?? {});
   const stale = h.fred_stale_series ?? {};
   if (!failing.length && !Object.keys(stale).length) return undefined;
-  const rows = (failing.length ? failing : Object.keys(stale).map((s) => [s, 0] as [string, number]))
-    .map(([s, hrs]) => `${s}${hrs ? ` failing ${hrs} h` : ""}: ${s in stale ? `last good copy (${stale[s]} h old)` : "no usable copy, STALE"}`);
+  const served = (s: string) => (s in stale ? `last good copy (${stale[s]} h old)` : "no usable copy, STALE");
+  const rows = failing.length
+    ? failing.map(([s, hrs]) => `${s} last failed ${hrs < 0.1 ? "just now" : `${hrs} h ago`}: ${served(s)}`)
+    : Object.keys(stale).map((s) => `${s}: ${served(s)}`);   // a server from before fred_failing_series
   const more = rows.length > MAX_ROWS ? `; and ${rows.length - MAX_ROWS} more` : "";
-  return `FRED calls failing (${rows.length}): ${rows.slice(0, MAX_ROWS).join("; ")}${more}`;
+  return `FRED calls failed in the last 6 h (${rows.length}): ${rows.slice(0, MAX_ROWS).join("; ")}${more}`;
 }

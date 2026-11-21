@@ -44,21 +44,21 @@ def fred_key_error() -> str | None:
 # dashboard never looks live.
 _stale_served: dict[str, float] = {}
 
-# Series whose FRED calls are failing, served stale or not (tag -> {"first": start of the failing
-# run, "last": latest failed call}); cleared on the next good fetch or fresh disk hit. Past the age
-# cap, or with no copy at all, a failing series is empty and absent from _stale_served: this keeps
-# the failure visible (/health).
-_failing: dict[str, dict[str, float]] = {}
+# Series whose FRED calls are failing, served stale or not (tag -> time of the latest failed call);
+# cleared on the next good fetch or fresh disk hit. Past the age cap, or with no copy at all, a
+# failing series is empty and absent from _stale_served: this keeps the failure visible (/health).
+_failing: dict[str, float] = {}
 
-# Both lists show a series only while its latest failed call is under an hour old, and a failure
-# after a longer gap starts a new run. A caller that does not fetch again (a 6 h route cache, a tab
-# nobody opens) would otherwise read as an outage for hours after FRED came back (re-check B, round 5).
-_FAILING_RECENT_SECONDS = 3600
+# Both lists show a series for 6 h after its latest failed call: the longest a cache can hold data
+# built from that call (the bundle's healthy TTL, the recession fit, the /cycle, /distress and pins
+# history caches; gated). /health says when each series last failed. A caller that never fetches
+# again then drops off, instead of reading as an outage for half a day (re-check B, round 5).
+_FAILING_RECENT_SECONDS = 6 * 3600
 
 
 def _recently_failing(tag: str, now: float) -> bool:
-    run = _failing.get(tag)
-    return run is not None and now - run["last"] <= _FAILING_RECENT_SECONDS
+    t = _failing.get(tag)
+    return t is not None and now - t <= _FAILING_RECENT_SECONDS
 
 
 def fred_stale_series() -> dict[str, float]:
@@ -68,18 +68,9 @@ def fred_stale_series() -> dict[str, float]:
 
 
 def fred_failing_series() -> dict[str, float]:
-    """tag -> hours since the failing run began; recently failing series only."""
+    """tag -> hours since its latest failed call; recently failing series only."""
     now = time.time()
-    return {k: round((now - r["first"]) / 3600, 1) for k, r in sorted(_failing.items())
-            if now - r["last"] <= _FAILING_RECENT_SECONDS}
-
-
-def _record_failure(tag: str, now: float) -> None:
-    run = _failing.get(tag)
-    if run is None or now - run["last"] > _FAILING_RECENT_SECONDS:
-        _failing[tag] = {"first": now, "last": now}   # first failure, or the first after a long gap
-    else:
-        run["last"] = now
+    return {k: round((now - t) / 3600, 1) for k, t in sorted(_failing.items()) if now - t <= _FAILING_RECENT_SECONDS}
 
 
 def _clear_failure(tag: str) -> None:
@@ -189,7 +180,7 @@ def fetch_series(
         # an old copy goes empty too. What is served stale is listed (fred_stale_series).
         tag = _stale_tag(series_id, start)
         now = time.time()
-        _record_failure(tag, now)
+        _failing[tag] = now
         if _key_error["msg"]:
             _stale_served.pop(tag, None)
             return [], []
