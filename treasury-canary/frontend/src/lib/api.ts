@@ -871,16 +871,21 @@ const MAX_RETRIES = 7;
 const RETRY_DELAYS_MS = [3000, 6000, 9000, 12000, 15000, 20000, 25000];
 const retryDelay = (attempt: number) => RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
 
-async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
+// Retries are for idempotent reads: a POST is retried only when the caller says it is safe
+// (shock-sim/run is a pure computation; /refresh is not), and a 503 that carries the app's own
+// JSON detail is a deliberate answer (a build failed with nothing cached), not a gateway blip.
+async function getJson<T>(path: string, init?: RequestInit, opts?: { retryPost?: boolean }): Promise<T> {
   let lastErr = new ApiError("unknown error", 0);
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const maxRetries = method === "GET" || method === "HEAD" || opts?.retryPost ? MAX_RETRIES : 0;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let res: Response;
     try {
       res = await fetch(`${BASE}${path}`, { headers: { Accept: "application/json" }, ...init });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "network error";
       lastErr = new ApiError(`Request failed: ${msg}`, 0);
-      if (attempt < MAX_RETRIES) { await sleep(retryDelay(attempt)); continue; }
+      if (attempt < maxRetries) { await sleep(retryDelay(attempt)); continue; }
       throw lastErr;
     }
     if (res.ok) {
@@ -891,7 +896,11 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
       }
     }
     lastErr = new ApiError(`HTTP ${res.status} for ${path}`, res.status);
-    if (RETRY_STATUSES.has(res.status) && attempt < MAX_RETRIES) {
+    if (res.status === 503 && (res.headers.get("content-type") ?? "").includes("application/json")) {
+      const detail = await res.json().then((j) => (j && typeof j === "object" ? (j as { detail?: unknown }).detail : undefined), () => undefined);
+      if (detail !== undefined) throw new ApiError(`HTTP 503 for ${path}: ${String(detail)}`, 503);
+    }
+    if (RETRY_STATUSES.has(res.status) && attempt < maxRetries) {
       await sleep(retryDelay(attempt)); // 3 s ... 25 s, ~90 s in all
       continue;
     }
@@ -1068,7 +1077,7 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    }),
+    }, { retryPost: true }),                       // a pure computation: safe to repeat
   shockCalibration: () => getJson<ShockCalibration>("/shock-sim/calibration"),
   flowDestinations: () => getJson<FlowDestinations>("/flows/destinations"),
   corrSeries: () => getJson<CorrSeries>("/crossasset/corr"),

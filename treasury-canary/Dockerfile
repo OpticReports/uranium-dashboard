@@ -27,4 +27,6 @@ EXPOSE 8000
 # Idle keep-alive 75 s, not uvicorn's 5 s default: a proxy that reuses a connection the
 # app has just closed gets an instant 502 (Render's troubleshooting guide names this
 # mismatch for intermittent 502s that match no app error; 2026-11-21 episodes).
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 75"]
+# exec: uvicorn becomes PID 1 and gets the deploy's SIGTERM (a shell left as PID 1 ignores it,
+# so the process was killed hard mid-write on every deploy).
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 75"]

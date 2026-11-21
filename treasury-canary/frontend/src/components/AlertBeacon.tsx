@@ -28,15 +28,14 @@ export default function AlertBeacon({
 
   useEffect(() => {
     let alive = true;
+    let busy = false;                        // a slow (retrying) poll is still running: skip this tick
     const load = () => {
-      api
-        .alerts()
-        .then((a) => alive && setAlerts(a))
-        .catch(() => alive && setAlerts(null));
-      api
-        .pins()
-        .then((p) => alive && setPins(p))
-        .catch(() => alive && setPins(null));
+      if (busy) return;
+      busy = true;
+      Promise.allSettled([
+        api.alerts().then((a) => alive && setAlerts(a)).catch(() => alive && setAlerts(null)),
+        api.pins().then((p) => alive && setPins(p)).catch(() => alive && setPins(null)),
+      ]).finally(() => { busy = false; });
     };
     load();
     const id = window.setInterval(load, POLL_MS);

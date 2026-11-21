@@ -48,6 +48,11 @@ def fred_stale_series() -> dict[str, float]:
     return dict(sorted(_stale_served.items()))
 
 
+def _stale_tag(series_id: str, start: str) -> str:
+    """the stale-list key: the series, plus its start when it is not the bundle's (USREC from 1945)."""
+    return series_id if start == "1976-01-01" else f"{series_id} (from {start})"
+
+
 # Circuit breaker: after _BREAKER_FAILS consecutive network/server failures FRED is treated as
 # down for _BREAKER_SECONDS and calls fail fast (served from the disk copy or empty). Without it
 # a bundle rebuild during an outage waits out 4 tries x 30 s for each of ~89 series while every
@@ -138,20 +143,23 @@ def fetch_series(
         # restart (2026-11-21). But a rejected key is a configuration error: fail loudly
         # (every FRED metric STALE), never mask it with old copies; and past the age cap
         # an old copy goes empty too. What is served stale is listed (fred_stale_series).
+        tag = _stale_tag(series_id, start)
         if _key_error["msg"]:
+            _stale_served.pop(tag, None)
             return [], []
         stale = _read_cache(cache)
+        _stale_served.pop(tag, None)           # re-recorded below only if a copy is served
         if stale is not None:
             age_h = (time.time() - os.path.getmtime(cache)) / 3600
             if age_h <= settings.fred_stale_max_age_hours:
-                _stale_served[series_id] = round(age_h, 1)
+                _stale_served[tag] = round(age_h, 1)
                 logger.warning("FRED fetch failed for %s; serving the last good copy (%.1f h old)",
                                series_id, age_h)
                 return _splice_frozen(series_id, *_parse(stale))
             logger.warning("FRED fetch failed for %s; the disk copy is %.0f h old (cap %d h), "
                            "so the series is left empty", series_id, age_h, settings.fred_stale_max_age_hours)
         return [], []
-    _stale_served.pop(series_id, None)
+    _stale_served.pop(_stale_tag(series_id, start), None)
     try:
         from .fred_csv import _write_atomic          # temp file + rename: a crash mid-write keeps the old copy
         _write_atomic(cache, json.dumps(data))
@@ -205,7 +213,7 @@ def fetch_bundle(start: str = "1976-01-01", force: bool = False
     Keys are provider-agnostic (tenor labels, "sofr", "hy_oas", ...). Missing or rejected
     key, or a failed series with no recent disk copy -> that entry is ([], []) and its
     metrics render STALE (a failed series with a recent copy is served from it and listed
-    by fred_stale_series()). A good series is never replaced by an empty one.
+    by fred_stale_series()). A bundle with an empty series retries after _DEGRADED_TTL_SECONDS.
     """
     cached = _bundle_cache["data"]
     if not force and cached is not None and _bundle_fresh():
@@ -216,18 +224,17 @@ def fetch_bundle(start: str = "1976-01-01", force: bool = False
         if not force and cached is not None and _bundle_fresh():
             return cached  # type: ignore[return-value]
         bundle = _fetch_bundle_uncached(start)
-        prev = cached or {}
+        # No in-memory fallback here: fetch_series already serves a recent disk copy, and an
+        # older in-memory copy would bypass both its rules (a rejected key serves nothing;
+        # copies only up to fred_stale_max_age_hours). A hole stays a hole, loudly STALE,
+        # and the bundle retries it in minutes instead of holding it for 6 h.
         holes = [k for k in _fred_plan() if not (bundle.get(k) or ([], []))[0]]
-        kept = [k for k in holes if (prev.get(k) or ([], []))[0]]   # type: ignore[union-attr]
-        for k in kept:                     # never swap a good series for an empty one
-            bundle[k] = prev[k]            # type: ignore[index]
-        missing = [k for k in holes if k not in kept]
         if holes:
-            logger.warning("FRED bundle: %d series failed (kept the previous copy of %s; "
-                           "still missing %s)", len(holes), kept or "none", missing or "none")
+            logger.warning("FRED bundle: %d series empty (%s); retrying in %d min",
+                           len(holes), ", ".join(holes[:8]), _DEGRADED_TTL_SECONDS // 60)
         _bundle_cache["data"] = bundle
         _bundle_cache["ts"] = time.time()
-        _bundle_cache["degraded"] = bool(missing)
+        _bundle_cache["degraded"] = bool(holes)
         return bundle
 
 

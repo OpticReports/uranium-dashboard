@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Composite, Health, MetricsResponse } from "./lib/api";
 import { api } from "./lib/api";
 import { errorMessage, formatDateTime } from "./lib/format";
@@ -54,7 +54,11 @@ export default function App() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [tab, setTab] = useState<Tab>("monitor");
 
+  const inFlight = useRef(false);
   const loadCore = useCallback(async () => {
+    if (inFlight.current) return;            // a slow (retrying) poll is still running: skip this tick
+    inFlight.current = true;
+    api.health().then(setHealth).catch(() => undefined);   // the header's FRED dot follows the server
     try {
       const [m, c] = await Promise.all([api.metrics(), api.composite()]);
       setMetrics(m);
@@ -63,12 +67,13 @@ export default function App() {
       setLastRefresh(new Date().toISOString());
     } catch (e) {
       setMetricsError(errorMessage(e));
+    } finally {
+      inFlight.current = false;
     }
   }, []);
 
   useEffect(() => {
-    void loadCore();
-    api.health().then(setHealth).catch(() => setHealth(null));
+    void loadCore();                          // also fetches /health, now on every poll
     const id = window.setInterval(() => void loadCore(), POLL_MS);
     return () => window.clearInterval(id);
   }, [loadCore]);
@@ -81,12 +86,11 @@ export default function App() {
       // Refresh trigger may be best-effort; still refetch below.
     }
     await loadCore();
-    api.health().then(setHealth).catch(() => undefined);
     setRefreshing(false);
   }, [loadCore]);
 
   const showFredBanner =
-    health !== null && !health.fred_key_present && !bannerDismissed;
+    health !== null && (!health.fred_key_present || !!health.fred_key_error) && !bannerDismissed;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
@@ -134,8 +138,8 @@ export default function App() {
         {showFredBanner && (
           <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-canary-yellow/50 bg-canary-yellow/12 px-4 py-2.5">
             <p className="text-xs text-amber-200">
-              <span className="font-semibold">FRED_API_KEY not set</span> — curve
-              / rates / recession metrics show STALE. Keyless sources still
+              <span className="font-semibold">{health?.fred_key_error ? "FRED rejected the API key" : "FRED_API_KEY not set"}</span> — curve
+              / rates / recession metrics show STALE{health?.fred_key_error ? " until the key on this service is fixed" : ""}. Keyless sources still
               populate.
             </p>
             <button

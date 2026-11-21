@@ -61,12 +61,14 @@ def _full_bundle(recession):
     return {k: ([1], [1.0]) for k in fred._fred_plan()} | {"recession": recession}
 
 
-def test_the_bundle_never_swaps_a_good_series_for_an_empty_one(monkeypatch):
+def test_a_running_process_never_masks_a_rejected_key_or_an_expired_copy(monkeypatch):
+    """re-check S1: an in-memory keep-previous merge bypassed the key rule and the age cap. A process that
+    already holds a good bundle must still let a series go empty (loudly STALE) when fetch_series says so."""
     good = ([1, 2], [0.0, 1.0])
     monkeypatch.setattr(fred, "_bundle_cache", {"ts": 0.0, "data": _full_bundle(good), "degraded": False})
-    monkeypatch.setattr(fred, "_fetch_bundle_uncached", lambda start: _full_bundle(([], [])))
-    b = fred.fetch_bundle()                             # expired: refetched, USREC failed this time
-    assert b["recession"] == good and fred._bundle_cache["degraded"] is False
+    monkeypatch.setattr(fred, "_fetch_bundle_uncached", lambda start: _full_bundle(([], [])))   # key rejected / >72 h
+    b = fred.fetch_bundle()
+    assert b["recession"] == ([], []) and fred._bundle_cache["degraded"] is True
 
 
 def test_a_degraded_bundle_retries_in_minutes_not_hours(monkeypatch):
@@ -293,3 +295,24 @@ def test_a_down_fred_fails_fast_after_a_few_failures(monkeypatch, tmp_path):
     fred._breaker["open_until"] = 0.0
     monkeypatch.setattr(fred.httpx, "get", lambda *a, **k: _Resp(200, payload={"observations": []}))
     assert fred._get_with_backoff({"series_id": "Z"}) == {"observations": []} and fred._breaker["fails"] == 0
+
+
+def test_the_stale_list_is_keyed_by_start_and_cleared_when_the_copy_expires(monkeypatch, tmp_path):
+    _key_and_cache(monkeypatch, tmp_path)
+    monkeypatch.setattr(fred, "_key_error", {"msg": None})
+    monkeypatch.setattr(fred, "_stale_served", {})
+    monkeypatch.setattr(fred.settings, "fred_stale_max_age_hours", 72)
+    monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: None)
+    for start in ("1976-01-01", "1945-01-01"):
+        path = fred._cache_path("USREC", start)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(OBS, fh)
+        os.utime(path, (time.time() - 30 * 3600,) * 2)
+        fred.fetch_series("USREC", start=start)
+    assert fred.fred_stale_series() == {"USREC": 30.0, "USREC (from 1945-01-01)": 30.0}
+    os.utime(fred._cache_path("USREC", "1976-01-01"), (time.time() - 80 * 3600,) * 2)   # past the cap
+    assert fred.fetch_series("USREC") == ([], [])
+    assert fred.fred_stale_series() == {"USREC (from 1945-01-01)": 30.0}                  # no stale age left behind
+    monkeypatch.setattr(fred, "_key_error", {"msg": "api_key not registered"})
+    fred.fetch_series("USREC", start="1945-01-01")
+    assert fred.fred_stale_series() == {}
