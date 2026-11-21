@@ -103,6 +103,15 @@ const part = run("partial-snapshot", { ...GDP_FIXTURE, status: { overall: "snaps
   inputs: { yoy: "ok", qoq: "ok", pop: "snapshot", ngdpd: "snapshot", weo_growth: "snapshot" } } } as GdpWatch);
 must("partial-snapshot", part, ["IMF population, IMF GDP shares and IMF projections come from the frozen snapshot of 2026-11-16 (the live source did not answer); the rest is live."]);
 if (part.includes("The live sources did not answer")) throw new Error("partial-snapshot: says every live source failed");
+const mixed = run("mixed-inputs", { ...GDP_FIXTURE, status: { overall: "snapshot",
+  inputs: { yoy: "stale", qoq: "stale", pop: "snapshot", ngdpd: "ok", weo_growth: "ok" } } } as GdpWatch);
+must("mixed-inputs", mixed, ["IMF population comes from the frozen snapshot of 2026-11-16; OECD growth and OECD quarterly growth are cached copies (the live sources did not answer); the rest is live."]);
+const missing = run("missing-input", { ...GDP_FIXTURE, status: { overall: "error",
+  inputs: { yoy: "ok", qoq: "error", pop: "ok", ngdpd: "ok", weo_growth: "ok" } } } as GdpWatch);
+must("missing-input", missing, ["OECD quarterly growth is unavailable (the live source did not answer); the rest is live."]);
+const none = run("none-live", { ...GDP_FIXTURE, status: { overall: "error",
+  inputs: { yoy: "snapshot", qoq: "snapshot", pop: "snapshot", ngdpd: "snapshot", weo_growth: "error" } } } as GdpWatch);
+if (none.includes("the rest is live")) throw new Error("none-live: says the rest is live with nothing live");
 const allSnap = run("all-snapshot", GDP_FIXTURE);
 must("all-snapshot", allSnap, ["The live sources did not answer; showing the frozen snapshot of 2026-11-16."]);
 
