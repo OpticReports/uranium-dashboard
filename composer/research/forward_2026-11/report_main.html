@@ -1,28 +1,29 @@
 <h1>What the next 1, 5 and 10 years could look like, by sleeve weight</h1>
-<p class="sub">Study of 2026-11-21 (addendum 62). Monte Carlo of the three-symphony book at six sleeve weights under seven scenarios, plus three other methods quants use. Every scenario resamples the engines' own simulated history; none is a forecast.</p>
+<p class="sub">Study of 2026-11-21 (addendum 62). Monte Carlo of the three-symphony book at six sleeve weights under ten scenarios, plus three other methods quants use. Every scenario resamples the engines' own simulated history, which the rules were built on; none is a forecast and none is a floor.</p>
 
 <div class="card verdict">
 <ul>
-<li><b>Plan on a range, not on the backtest.</b> For today's book (31.8% sleeve), median return a year over ten years: {{ceil_10}} if the backtest since 2015 simply repeats (a ceiling), {{d_10}} if the engines keep half their simulated edge, {{e_10}} if they keep a quarter. Half and a quarter are what published studies of other strategies found between backtest and live; nothing yet measures the decay of these three.</li>
-<li><b>The risk grows faster than the return shrinks.</b> The scenarios keep the engines' swings and cut only their edge. Median deepest fall within ten years: {{b_dd}} on the backtest, {{d_dd}} at half the edge, {{e_dd}} at a quarter. At a quarter of the edge a fall deeper than 30% at some point is {{e_p30}} likely and deeper than 50% is {{e_p50}}.</li>
-<li><b>One year out, luck dominates.</b> One-year return, 1-in-20 bad / median / 1-in-20 good: {{d_1}} at half the edge and {{e_1}} at a quarter. Chance of ending a year below the start: {{d_loss1}} and {{e_loss1}}; after five years at a quarter of the edge it is still {{e_loss5}}.</li>
-<li><b>Sleeve weight: the same trade in every scenario, but the sleeve gets cheaper as the edge shrinks.</b> Median ten-year return at a 0 / 31.8 / 50% sleeve: {{w_b}} on the backtest, {{w_d}} at half the edge, {{w_e}} at a quarter. A 1-in-20 deepest fall at the same weights: {{w_b_dd}}, {{w_d_dd}}, {{w_e_dd}}. The less you trust the backtest, the less return the sleeve costs, for a similar cut in the deepest fall.</li>
-<li><b>A low-return decade for stocks barely moves it</b> ({{g_10}} a year): by these simulations the engines' return is mostly not the stock market's ({{beta_share}}).</li>
-<li><b>If every trade always filled a session late</b> the median is {{f_10}} a year with a median deepest fall of {{f_dd}}. Live fills have not been there; it prices execution failure, not a plan.</li>
-<li><b>Luck alone does not explain the backtest</b> (the best of 1,000 unskilled tries would show a Sharpe near {{def_best}}, against {{def_sr}}), and <b>the live record is ahead of the simulation so far</b> ({{live_txt}}). Neither says how much of the edge persists.</li>
+<li><b>Plan on a range, not on the backtest.</b> For today's book (31.8% sleeve), median return a year over ten years: {{ceil_10}} if the backtest since 2015 simply repeats (a ceiling), {{d_10}} if the engines keep half their simulated edge, {{e_10}} if they keep a quarter, {{z_10}} if they keep none. The same haircuts on the longer, rougher 1994-on history give {{h_10}} and {{i_10}}. Half and a quarter are borrowed from studies of other people's strategies; nothing yet measures the decay of these three.</li>
+<li><b>No scenario is a floor.</b> If none of the edge survives, the swings alone cost about 2% a year: a {{z_loss}} chance of being below the start after 1 / 5 / 10 years, and a median deepest fall of {{z_ddm}}.</li>
+<li><b>Less edge means deeper falls, not only lower returns.</b> The scenarios keep the engines' swings and cut only their edge. Median deepest fall within ten years: {{b_dd}} on the backtest, {{d_dd}} at half the edge, {{e_dd}} at a quarter. At a quarter of the edge a fall deeper than 30% at some point is {{e_p30}} likely and deeper than 50% is {{e_p50}}.</li>
+<li><b>One year out, luck dominates.</b> One-year return, 1-in-20 bad / median / 1-in-20 good: {{d_1}} at half the edge and {{e_1}} at a quarter. Chance of ending a year below the start: {{d_1loss}} at half and {{e_loss1}} at a quarter; after five years at a quarter of the edge it is still {{e_loss5}}.</li>
+<li><b>Sleeve weight: more sleeve means less return and a smaller fall wherever an edge survives; how much it costs is not decided by the data.</b> Median ten-year return at a 0 / 31.8 / 50% sleeve: {{w_b}} on the backtest, {{w_d}} at half the edge, {{w_e}} at a quarter; a 1-in-20 deepest fall: {{w_b_dd}}, {{w_d_dd}}, {{w_e_dd}}. In points of return the sleeve costs less the lower the return ({{pts_bde}} points for a {{cut_rng}} point cut in the 1-in-20 fall), but that follows from giving all three engines the same haircut. Where each engine's decay is measured (1994-on history, one close late) going from no sleeve to 50% gives up {{sh_c}} and {{sh_f}} of the return against {{sh_b}} on the backtest, because the sleeve's own return shrinks most. With no edge at all the order flips: {{w_z}} a year, median deepest fall {{w_z_dd}}.</li>
+<li><b>If every trade always filled a session late</b> the median is {{f_10}} a year with a median deepest fall of {{f_dd}}; a one-session delay keeps {{kept_late}} of Holy Grail's / KMLM's / the sleeve's edge. Live fills have not been there; it prices execution failure, not a plan.</li>
+<li><b>Lowering the S&P 500 to 2% a year takes little off the 2015-on backtest</b> ({{g_10}}), because by this simulation the engines' return is timing, not market exposure. That is a statement about the backtest, not a low-return-decade estimate: in the rebuilt 2000 to 2009 history (modelled), with the S&P at {{dec_spx}} a year, the same book made about {{dec_book}} a year.</li>
+<li><b>Two checks that rule out less than they seem to.</b> Picking the best of 1,000 unskilled strategies would not produce this Sharpe ({{def_best}} against {{def_sr}}); that rules out one explanation only, not rules fitted to this history or same-close fills. And the live record neither confirms nor contradicts the simulation: each symphony is nominally ahead on its own dates, but Holy Grail since it was funded is behind ({{hg_f}}), and the gaps are a handful of sessions where live and simulated held different positions.</li>
 </ul>
 </div>
 
 <div class="kpis">
-<div class="kpi"><b>{{e_10}} to {{d_10}}</b><span>median return a year over ten years, today's book, keeping a quarter to half the simulated edge</span></div>
-<div class="kpi"><b>{{ceil_10}}</b><span>the same if the backtest since 2015 simply repeated (a ceiling)</span></div>
+<div class="kpi"><b>{{e_10}} to {{d_10}}</b><span>median return a year over ten years, today's book, keeping a quarter to half the simulated edge (2015-on source)</span></div>
+<div class="kpi"><b>{{z_10}}, fall {{z_ddm}}</b><span>median return a year and median deepest fall if none of the edge survives</span></div>
+<div class="kpi"><b>{{ceil_10}}</b><span>if the backtest since 2015 simply repeated (a ceiling)</span></div>
 <div class="kpi"><b>{{e_dd}}</b><span>median deepest fall within ten years at a quarter of the edge</span></div>
-<div class="kpi"><b>{{d_loss1}} to {{e_loss1}}</b><span>chance of ending a year below the start, half to a quarter of the edge</span></div>
 </div>
 
 <h2>1. The scenarios</h2>
 {{t_scen}}
-<p class="note">Each scenario draws {{paths}} ten-year paths by picking stretches of real sessions from its source (about a month at a time, so quiet and violent spells stay together) and replaying all three engines on the same sessions, so they move together as they did. "Shifted" scenarios take the same sessions and lower each engine's average daily return by a fixed amount, leaving its swings as they were. Weights drift, and all three are reset to target when any engine passes its own target plus 10 points (for today's book that is POLICY's 44% cap in effect). The S&P 500 grew {{spx_b}} a year on the 2015-06 source.</p>
+<p class="note">Each scenario draws {{paths}} ten-year paths by picking stretches of real sessions from its source (about a month at a time, so quiet and violent spells stay together) and replaying all three engines on the same sessions, so they move together as they did. "Shifted" scenarios take the same sessions and lower each engine's average daily return by a fixed amount, leaving its swings as they were; the book's Sharpe over T-bills goes from {{sr_tb}} to {{sr_d}} at half the edge and {{sr_e}} at a quarter. Weights drift, and all three are reset to target at once when any engine passes its own target plus 10 points (for today's book that is POLICY's 44% cap in effect; POLICY stages the reset over two sessions). The S&P 500 compounded at {{spx_b}} a year on the 2015-06 source. Monte Carlo error is about 0.3 points on a median and 0.5 on a probability.</p>
 <details><summary>What each source looks like on its own (simulated, in sample)</summary>{{t_hist}}</details>
 
 <h2>2. Today's book (31.8% sleeve)</h2>
@@ -31,11 +32,15 @@
 {{ch_fan}}
 {{ch_fanE}}
 <p class="note">"1-in-20" is the 95th percentile of the deepest fall, or the 5th percentile of the return. A median is the middle path: half the draws do better, half worse. The ceilings' ten-year multiples in the thousands are what compounding a backtest does on paper; no account could grow that far at these funds' trading volumes, which is one more reason they are ceilings.</p>
+<details><summary>How much the answers move with the length of the stretches drawn (added after review)</summary>{{t_block}}<p class="note">Ten-year returns and falls barely move. One-year medians and the chance of ending below the start do: {{d_1med}} for the one-year median at half the edge, {{e_10loss}} for the ten-year loss chance at a quarter.</p></details>
 
 <h2>3. By sleeve weight</h2>
 {{ch_w_ret}}
 {{ch_w_dd}}
 {{ch_w_bad}}
+<h3>What the sleeve costs and buys, scenario by scenario</h3>
+{{t_cost}}
+<p class="note">The rule fixed in advance: the answer to "which sleeve weight" is whichever ordering holds in every scenario. Two orderings hold wherever an edge survives: more sleeve, lower median return; more sleeve, smaller deepest fall. Two do not hold everywhere: the 1-in-20 bad five years and the chance of ending below the start favour less sleeve on the ceilings and more sleeve under the haircuts. And the price of the sleeve as a share of return depends on whose decay you assume: {{sh_d}} and {{sh_e}} under one haircut for all three engines, {{sh_c}} on the 1994-on history, {{sh_f}} one close late. Before 2015 Holy Grail / KMLM / the sleeve kept {{kept_pre}} of their 2015-on edge (rebuilt and modelled data, addendum 60), so a book whose sleeve decays like that pays more for it. Not decided by the data.</p>
 <h3>Ten years</h3>
 {{t_w10}}
 <details><summary>Five years</summary>{{t_w5}}</details>
@@ -43,7 +48,7 @@
 
 <h2>4. Drifting weights against a daily reset</h2>
 {{t_drift}}
-<p class="note">The earlier studies today reset the book to its target weights every session. The account does not: weights drift and POLICY resets them only at the cap. Same draws, 31.8% sleeve. Drift inside the cap turns out to change the deepest fall little on average, so it is not the main reason live falls ran deeper than the tables. In the one live fall the three-symphony book has had (2026-10-28 to 11-05) it fell 14.2% against 10.7% simulated: about 1.5 points of the gap were KMLM sitting at 40% of the book, and about 2 points were the engines themselves doing worse live than simulated over those six sessions (KMLM -36.3% against -32.9%).</p>
+<p class="note">The earlier studies today reset the book to its target weights every session. The account does not: weights drift and POLICY resets them only at the cap. Same draws, 31.8% sleeve. Drift inside the cap changes the deepest fall little, so it is not the main reason live falls ran deeper than the tables. In the one live fall the three symphonies' combined value has had (2026-10-28 to 11-05) it fell 14.2% against 10.7% simulated: about 1.5 points of the gap were KMLM sitting at 40% of the three, and about 2 points were the engines doing worse live than simulated over those six sessions (KMLM -36.3% against -32.9%, about 1.4 points; Holy Grail +1.4% against +3.6%, about 0.7).</p>
 <h3>The cap rule matters at a large sleeve</h3>
 {{t_cap}}
 <p class="note">I first registered one cap for all three engines (the largest target plus 10 points). At a 40 to 50% sleeve that lets Holy Grail or KMLM run from a 25 to 30% target up to 50 to 60% before anything resets, so the book stops being a large-sleeve book. The runs in this report give each engine its own cap; the registered rule is shown here for comparison. If the sleeve target is ever raised, POLICY's cap needs the same change.</p>
@@ -51,23 +56,26 @@
 <h2>5. Other methods quants use, and what each says here</h2>
 <h3>Could the backtest be luck? (deflated Sharpe ratio)</h3>
 {{t_def}}
-<p class="note">If someone tried N strategies with no skill at all and kept the best, this is the Sharpe that best one would be expected to show on a sample this long. The simulated Sharpe is far above it at every count, so trying many variants and keeping the best does not explain these backtests. The test assumes independent, bell-shaped daily returns and says nothing about rules shaped, knowingly or not, to fit this history, which is the more likely source of decay here.</p>
+<p class="note">If someone tried N strategies with no skill at all and kept the best, this is the Sharpe that best one would be expected to show on a sample this long (Sharpe here is not over T-bills; over T-bills today's book is {{sr_tb}}). The simulated Sharpe is far above it at every count, and the reviewer found the same with the returns' real skew and fat tails. So trying many variants and keeping the best does not explain these backtests. The test says nothing about rules shaped, knowingly or not, to fit this history, and it does not see execution: one session's delay alone cuts the Sharpe over T-bills from {{sr_tb}} to {{sr_late}}.</p>
 <h3>How much is just the stock market? (beta and what is left)</h3>
 {{t_beta}}
-<p class="note">Market beta explains a small part of Holy Grail's and KMLM's simulated return and none of the sleeve's (its beta is negative). So a decade of weak stock returns takes about 10 points a year off Holy Grail, 7 off KMLM and adds 4 to the sleeve: small beside the haircut scenarios. The beta is an average; these engines switch between leveraged long, inverse and cash, so their exposure on any one day is far from it.</p>
+<p class="note">On average, market beta explains a small part of Holy Grail's and KMLM's simulated return and none of the sleeve's. But one average beta is a poor description of engines that switch between leveraged long, inverse and cash: the reviewer measured half-year betas from -0.6 to +2.7 for Holy Grail and -1.7 to +2.6 for KMLM, and a fit that explains 4 to 18% of daily moves. So the "S&P at 2%" scenario shows only that the backtest's return is not market exposure. What these rules do through a decade when stocks go nowhere is better read from the rebuilt history: {{dec_book}} a year in 2000 to 2009 and {{pre_book}} a year over 1994 to 2015, against {{b_book}} since (all simulated; the earlier years on rebuilt and modelled funds).</p>
 <h3>The live record</h3>
 {{t_live}}
-<p class="note">All three are ahead of the simulation on their own dates. The sample is 94 to 238 sessions, and the rules were still being changed inside it (Holy Grail's gate went live 2026-10-18; the sleeve was assembled 2026-07), so this is not yet an out-of-sample record. It is the series that will eventually replace the borrowed haircuts.</p>
+<p class="note">Measured close to close, with the deposit day's own move taken out so both columns start at the same close. The record neither confirms nor contradicts the simulation. Each symphony is nominally ahead on its own dates, but Holy Grail ran on about $1,000 for its first 84 sessions and since it was funded it is behind; the reviewer found KMLM's whole lead is one session (2026-10-27: live +8.9%, simulated -0.1%) and most of the sleeve's is one too (2026-11-11). The three together at the weights actually held: {{held}}. The rules were also still being changed inside this window (Holy Grail's gate went live 2026-10-18; the sleeve was assembled 2026-07). This is the series that will eventually replace the borrowed haircuts.</p>
 <h3>Methods considered and what was done with them</h3>
 {{t_methods}}
 
 <h2>6. What this does not settle</h2>
 <ul>
-<li><b>Every draw is made of the engines' own simulated past.</b> A regime outside it is in no path: the 1970s, a change in how volatility products trade, a leveraged fund closing or being restructured.</li>
-<li><b>No draw has a day worse than the worst in its source.</b> Leveraged and inverse funds can lose most of their value in one session.</li>
-<li><b>The haircuts are borrowed.</b> The 50% and 73% figures come from studies of other people's strategies; nothing measures the decay of these three. The live record is too short to say.</li>
-<li><b>Shifting the average and keeping the swings is a simplification:</b> an edge that fades may fade on its best days first, which would change the shape of the falls too.</li>
-<li><b>Not modelled:</b> taxes, deposits and withdrawals, capacity at a larger size, any future change to the symphonies.</li>
+<li><b>Everything here is in sample.</b> The rules were built on this history; the ranges are scenarios, not forecasts, and the spread inside each scenario is luck around an assumed average. How wrong the average is shows up only as the choice of scenario.</li>
+<li><b>No scenario is a floor.</b> "None of the edge" still assumes the engines earn T-bills on average. A negative edge is possible and is worse.</li>
+<li><b>The haircuts are borrowed and equal across engines.</b> The published figures come from other people's strategies; the sleeve, KMLM and Holy Grail need not decay alike (before 2015 they kept {{kept_pre}} of their recent edge).</li>
+<li><b>The return is concentrated.</b> The best 50 of 2,761 sessions carry {{top50}} of Holy Grail's / KMLM's / the sleeve's return over T-bills since 2015-06. Without the book's own best 50 sessions the backtest is {{wo50}} a year, not {{b_book}}; 2020 alone was {{y2020}}, and without it the ceiling is {{wo2020}}.</li>
+<li><b>Every draw is made of the engines' own simulated past.</b> A regime outside it is in no path, and no draw has a day worse than the worst in its source. Leveraged and inverse funds can lose most of their value in one session.</li>
+<li><b>Shifting the average and keeping the swings</b> also takes the haircut off days an engine sits in cash (the sleeve is in cash on about two sessions in three). The reviewer checked that putting it on invested days only barely moves the results, and that an edge fading on its best days first would make the falls smaller than shown, not larger.</li>
+<li><b>Sources.</b> The 2015-06 source has no sessions from 2020-12-02 to 2021-06-01 (KMLM uncovered). Before 2015 the history is rebuilt funds and, further back, modelled ones; addenda 58 to 60 say which, leg by leg. It is weaker evidence than the recent years, not equal.</li>
+<li><b>Not modelled:</b> taxes, deposits and withdrawals, capacity at a larger size, a staged reset, any future change to the symphonies.</li>
 <li><b>Same-close fills</b> in every scenario but "one close late". <b>Measurement basis:</b> daily mark-to-market; 5.9 basis points on cap resets.</li>
 </ul>
 

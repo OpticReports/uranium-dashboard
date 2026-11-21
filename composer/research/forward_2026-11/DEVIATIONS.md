@@ -15,3 +15,25 @@
 3. **Scenario G was registered as a planning scenario and came out close to the ceiling**: the engines'
    simulated returns are mostly not market beta, so a low-return decade for stocks moves them little. It is
    reported under its registered label, with that said.
+
+## After the independent review (2026-11-21)
+4. **Three scenarios added** (appended, so A-G keep their draws): Z "none of the edge" (k = 0 on the 2015-on
+   source), H and I (the half and quarter haircuts on the 1994-on source). The review's point: the lowest
+   registered scenario still assumed about +21% a year, and the haircuts sat only on the friendliest source.
+5. **Scenario G relabelled "ceiling, shifted"** (PREREG called it a planning scenario): one average beta is
+   a poor description of engines that switch between leveraged long, inverse and cash (the review measured
+   half-year betas from -1.7 to +2.7), and the rebuilt 2000-2009 history is the better read of a
+   low-return decade. PREREG's "range to plan on is D to G" is withdrawn; the report gives D, E, H, I and Z.
+6. **Citations corrected.** Harvey and Liu (2015) describe the 50% rule of thumb and argue against it; they
+   are not support for it. McLean and Pontiff (2016) is 26% lower out of sample and 58% lower after
+   publication for 97 published predictors: "half" is a round number between them, not their finding, and
+   not a backtest-to-live measure. Suhonen, Lennkh and Perez (2017) confirmed from secondary summaries.
+7. **The live table's basis fixed**: Composer's deposit-adjusted series starts at the deposit, the
+   simulation at the first close; the deposit day's move is now taken out. Rows added: each symphony since
+   it held $10,000 or more, and the three together at the weights actually held.
+8. **Added after review:** block-length sensitivity (5 and 63 sessions, D and E at 31.8%); Sharpe over
+   T-bills in the source table; the share of return from the best 50 sessions and from 2020; the edge each
+   engine keeps one close late and before 2015; the beta share on the 1994-on source (promised in PREREG).
+9. **Not changed, disclosed:** the haircut is one constant per engine on every session, including the days
+   an engine sits in cash; the reset is instant (POLICY stages it); one generator runs through the
+   scenarios, so scenarios do not share draws.
