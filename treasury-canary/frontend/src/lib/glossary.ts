@@ -86,7 +86,14 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     what: "The estimated probability that a U.S. recession BEGINS within the selected horizon, based on today's 3m10y yield-curve spread.",
     calc: "P = Φ(β₀ + β₁·spread), a probit regression in the Estrella–Mishkin tradition. The coefficients are fit by maximum likelihood on decades of monthly FRED data: 3m10y spread vs. whether an NBER recession started within the following h months. Each horizon (6/12/18/24mo) has its own fitted coefficients.",
     read: "Read it with its confidence band and AUC, never alone. ~15–20% is near the unconditional base rate; the signal is when it pushes above ~30–40% (historically deep inversions).",
-    caveat: "It is a model estimate from ONE input (the curve), not a forecast. Post-2000 lead times have been longer and noisier — 2022–24 saw a deep inversion with a long delay. Marked (static) when today's fit is unavailable (FRED data missing): the value then uses fixed published coefficients, not the fitted model.",
+    caveat: "It is a model estimate from ONE input (the curve), not a forecast. Post-2000 lead times have been longer and noisier — 2022–24 saw a deep inversion with a long delay. When today's fit is unavailable (FRED data missing), the curve tile falls back to fixed published coefficients and says (static); the composite dial shows n/a.",
+  },
+  recession_prob_static: {
+    title: "Recession probability (12 months, fixed Estrella–Mishkin coefficients)",
+    what: "The probability that a U.S. recession begins within 12 months, from today's 3m10y spread and the published Estrella–Mishkin coefficients (β₀ = −0.5333, β₁ = −0.6330).",
+    calc: "P = Φ(−0.5333 − 0.6330 × spread). The coefficients are fixed, not refit: this row is the stable composite input. The model refit on today's FRED data is on the composite dial and the yield-curve tile.",
+    read: "About 30% at a flat curve, 50% near −0.8 points, single digits at a steep curve. Compare it with the refit value on the dial; a gap means the history since the paper moved the fit.",
+    caveat: "One input (the curve), not a forecast; post-2000 lead times have been longer and noisier.",
   },
   horizon: {
     title: "Horizon (6 / 12 / 18 / 24 months)",
@@ -613,6 +620,6 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
 export function glossaryFor(metricId: string): GlossaryEntry | undefined {
   if (GLOSSARY[metricId]) return GLOSSARY[metricId];
   if (metricId.startsWith("curve.")) return GLOSSARY.curve_pair;
-  if (metricId === "recession.prob") return GLOSSARY.recession_prob;
+  if (metricId === "recession.prob") return GLOSSARY.recession_prob_static;
   return undefined;
 }

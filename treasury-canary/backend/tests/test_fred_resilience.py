@@ -12,9 +12,16 @@ import json
 import os
 import time
 
+import pytest
+
 from app.api import routes_composite as rc
 from app.metrics import recession_model as rm
 from app.sources import fred
+
+
+@pytest.fixture(autouse=True)
+def _closed_breaker(monkeypatch):
+    monkeypatch.setattr(fred, "_breaker", {"fails": 0, "open_until": 0.0})
 
 OBS = {"observations": [{"date": "2020-03-01", "value": "1"}, {"date": "2020-04-01", "value": "1"},
                         {"date": "2020-05-01", "value": "0"}]}
@@ -76,16 +83,59 @@ def test_a_degraded_bundle_retries_in_minutes_not_hours(monkeypatch):
     assert fred._bundle_fresh()                         # a healthy bundle keeps its 6 h
 
 
-def test_an_empty_model_fit_is_retried_in_minutes(monkeypatch):
-    now = time.time()
-    monkeypatch.setattr(rm, "_model_cache", dict(rm._model_cache, models={}, ts=now - rm._EMPTY_RETRY_SECONDS - 1))
-    assert not rm._fit_fresh()
-    rm._model_cache["ts"] = now - 60
-    assert rm._fit_fresh()
-    rm._model_cache.update(models={12: {"b0": 0}}, ts=now - 5 * 3600)
-    assert rm._fit_fresh()                              # a real fit keeps its 6 h
-    rm._model_cache["ts"] = now - rm._MODEL_TTL_SECONDS - 1
-    assert not rm._fit_fresh()
+def _monthly_bundle(with_usrec: bool = True, with_tp: bool = True) -> dict:
+    """40 years of first-of-month data: the spread inverts in the 12 months before each recession."""
+    from datetime import date
+    days, spread, usrec, tp = [], [], [], []
+    rec_starts = [1984, 1992, 2000, 2008, 2016]
+    for y in range(1980, 2021):
+        for m in range(1, 13):
+            d = date(y, m, 1)
+            in_rec = any(y == r and m <= 8 for r in rec_starts)
+            before = any((y == r - 1 and m >= 8) or (y == r and m == 1) for r in rec_starts)
+            days.append(d)
+            spread.append(-0.6 if before else 1.8)
+            usrec.append(1.0 if in_rec else 0.0)
+            tp.append(0.4)
+    b = {"3mo": (days, [2.0] * len(days)), "10y": (days, [2.0 + s for s in spread]),
+         "recession": (days, usrec) if with_usrec else ([], []), "acm_tp10": (days, tp) if with_tp else ([], [])}
+    return b
+
+
+def _count_fits(monkeypatch, bundles):
+    calls = []
+
+    def fake_bundle():
+        calls.append(1)
+        return bundles[min(len(calls), len(bundles)) - 1]
+    monkeypatch.setattr("app.sources.fred.fetch_bundle", fake_bundle)
+    monkeypatch.setattr(rm, "_model_cache", {"ts": 0.0, "models": None, "spread": None,
+                                             "adj_models": None, "adj_spread": None, "tp": None})
+    return calls
+
+
+def test_an_empty_fit_is_refit_within_minutes_through_the_real_entry_point(monkeypatch):
+    """re-check M1: the gate drives cached_models_and_spread(), so restoring the old 6 h check fails it."""
+    calls = _count_fits(monkeypatch, [_monthly_bundle(with_usrec=False), _monthly_bundle()])
+    assert rm.cached_models_and_spread()[0] == {}                  # USREC missing: no model
+    rm.cached_models_and_spread()
+    assert len(calls) == 1                                          # inside the retry window: no refit herd
+    rm._model_cache["ts"] -= rm._EMPTY_RETRY_SECONDS + 1
+    models, _ = rm.cached_models_and_spread()
+    assert len(calls) == 2 and 12 in models                         # retried, and the recovered data fit
+    rm._model_cache["ts"] -= rm._EMPTY_RETRY_SECONDS + 1
+    rm.cached_models_and_spread()
+    assert len(calls) == 2                                          # a real fit keeps its 6 h
+
+
+def test_an_empty_adjusted_fit_is_retried_too(monkeypatch):
+    """re-check M4: the raw fit succeeds but the ACM term premium is missing, so the adjusted fit is empty."""
+    calls = _count_fits(monkeypatch, [_monthly_bundle(with_tp=False), _monthly_bundle()])
+    rm.cached_adjusted()
+    assert rm._model_cache["models"] and rm._model_cache["adj_models"] == {}
+    rm._model_cache["ts"] -= rm._EMPTY_RETRY_SECONDS + 1
+    adj, _, _ = rm.cached_adjusted()
+    assert len(calls) == 2 and 12 in adj
 
 
 def test_the_curve_says_when_its_probability_is_the_static_fallback(monkeypatch):
@@ -100,3 +150,146 @@ def test_the_curve_says_when_its_probability_is_the_static_fallback(monkeypatch)
     monkeypatch.setattr("app.metrics.recession_model.cached_models_and_spread",
                         lambda: ({12: {"b0": -0.5, "b1": -0.6, "cov": [[0.0, 0.0], [0.0, 0.0]]}}, 0.70))
     assert rc.canary(pair="3m10y")["recession_probability_basis"] == "fitted"
+
+
+# ---------------------------------------------------------------------------- re-check S1 (2026-11-21)
+def _old_copy(tmp_path, series="USREC", hours=30):
+    path = fred._cache_path(series, "1976-01-01")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(OBS, fh)
+    t = time.time() - hours * 3600
+    os.utime(path, (t, t))
+    return path
+
+
+def test_a_rejected_key_is_never_masked_by_old_copies(monkeypatch, tmp_path):
+    """re-check S1: with the key rejected, every FRED metric must go STALE as before, never look live."""
+    _key_and_cache(monkeypatch, tmp_path)
+    _old_copy(tmp_path)
+    monkeypatch.setattr(fred, "_key_error", {"msg": "Bad Request. The value for variable api_key is not registered."})
+    monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: None)
+    monkeypatch.setattr(fred, "_stale_served", {})
+    assert fred.fetch_series("USREC") == ([], []) and fred.fred_stale_series() == {}
+
+
+def test_an_old_copy_is_capped_and_what_is_served_stale_is_listed(monkeypatch, tmp_path):
+    _key_and_cache(monkeypatch, tmp_path)
+    monkeypatch.setattr(fred, "_key_error", {"msg": None})
+    monkeypatch.setattr(fred, "_stale_served", {})
+    monkeypatch.setattr(fred.settings, "fred_stale_max_age_hours", 168)
+    monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: None)
+    _old_copy(tmp_path, hours=200)                                  # past the 7-day cap
+    assert fred.fetch_series("USREC") == ([], [])
+    _old_copy(tmp_path, hours=30)
+    assert fred.fetch_series("USREC")[0] and fred.fred_stale_series() == {"USREC": 30.0}
+    fresh = {"observations": OBS["observations"] + [{"date": "2020-06-01", "value": "0"}]}
+    monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: fresh)
+    fred.fetch_series("USREC")
+    assert fred.fred_stale_series() == {}                           # cleared on the next good fetch
+
+
+def test_an_empty_reply_never_overwrites_the_good_copy(monkeypatch, tmp_path):
+    _key_and_cache(monkeypatch, tmp_path)
+    monkeypatch.setattr(fred, "_key_error", {"msg": None})
+    monkeypatch.setattr(fred, "_stale_served", {})
+    path = _old_copy(tmp_path, hours=30)
+    monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: {"observations": []})
+    assert len(fred.fetch_series("USREC")[0]) == 3
+    assert len(json.load(open(path, encoding="utf-8"))["observations"]) == 3
+
+
+def test_health_and_refresh_list_the_stale_served_series(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app import main
+    monkeypatch.setattr(fred, "_stale_served", {"USREC": 30.0})
+    body = TestClient(main.app).get("/health").json()
+    assert body["fred_stale_series"] == {"USREC": 30.0} and "fred_key_error" in body
+    import inspect
+
+    from app.jobs import refresh
+    assert "fred_stale_series" in inspect.getsource(refresh)
+
+
+# ---------------------------------------------------------------------------- re-check A (2026-11-21)
+class _Resp:
+    def __init__(self, code, text="", payload=None):
+        self.status_code, self.text, self._payload = code, text, payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+    def json(self):
+        return self._payload
+
+
+def test_a_real_api_key_rejection_sets_the_key_error_and_serves_nothing(monkeypatch, tmp_path):
+    _key_and_cache(monkeypatch, tmp_path)
+    monkeypatch.setattr(fred, "_key_error", {"msg": None})
+    monkeypatch.setattr(fred, "_stale_served", {})
+    _old_copy(tmp_path, hours=30)
+    body = "Bad Request.  The value for variable api_key is not registered."
+    monkeypatch.setattr(fred.httpx, "get", lambda *a, **k: _Resp(400, body))
+    assert fred.fetch_series("USREC") == ([], []) and fred.fred_key_error() and fred.fred_stale_series() == {}
+
+
+def test_the_stale_path_still_splices_the_frozen_ice_history(monkeypatch, tmp_path):
+    """re-check M2 mutant: without the splice an outage would shrink HY/IG OAS to FRED's truncated window."""
+    _key_and_cache(monkeypatch, tmp_path)
+    monkeypatch.setattr(fred, "_key_error", {"msg": None})
+    monkeypatch.setattr(fred, "_stale_served", {})
+    sid = "BAMLH0A0HYM2"
+    path = fred._cache_path(sid, "1976-01-01")
+    recent = {"observations": [{"date": "2026-05-01", "value": "3.1"}, {"date": "2026-05-04", "value": "3.0"}]}
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(recent, fh)
+    os.utime(path, (time.time() - 30 * 3600,) * 2)
+    monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: None)
+    dates, _ = fred.fetch_series(sid)
+    assert dates[0].year < 2026 and dates[-1].isoformat() == "2026-05-04"
+
+
+def test_twenty_waiting_callers_cause_one_fetch_and_one_fit(monkeypatch):
+    """re-check M7/M10 mutants: the double-checks inside both locks keep a refetch single-flight."""
+    import threading
+    fetches = []
+
+    def slow_uncached(start):
+        fetches.append(1)
+        time.sleep(0.3)
+        return _full_bundle(([1, 2], [0.0, 1.0]))
+    monkeypatch.setattr(fred, "_bundle_cache", {"ts": 0.0, "data": None, "degraded": False})
+    monkeypatch.setattr(fred, "_fetch_bundle_uncached", slow_uncached)
+    ts = [threading.Thread(target=fred.fetch_bundle) for _ in range(20)]
+    [t.start() for t in ts]
+    [t.join(10) for t in ts]
+    assert len(fetches) == 1
+    fits = _count_fits(monkeypatch, [_monthly_bundle()])
+    real_fit = rm._fit_all
+
+    def slow_fit():
+        time.sleep(0.2)
+        real_fit()
+    monkeypatch.setattr(rm, "_fit_all", slow_fit)
+    ts = [threading.Thread(target=rm.cached_models_and_spread) for _ in range(20)]
+    [t.start() for t in ts]
+    [t.join(10) for t in ts]
+    assert len(fits) == 1 and 12 in rm._model_cache["models"]
+
+
+def test_a_down_fred_fails_fast_after_a_few_failures(monkeypatch, tmp_path):
+    calls = []
+
+    def boom(*a, **k):
+        calls.append(1)
+        raise RuntimeError("connection refused")
+    monkeypatch.setattr(fred.httpx, "get", boom)
+    monkeypatch.setattr(fred.time, "sleep", lambda s: None)          # skip the backoff waits
+    for _ in range(fred._BREAKER_FAILS):
+        assert fred._get_with_backoff({"series_id": "X"}) is None
+    n = len(calls)
+    assert fred._get_with_backoff({"series_id": "Y"}) is None and len(calls) == n   # open: no network call
+    fred._breaker["open_until"] = 0.0
+    monkeypatch.setattr(fred.httpx, "get", lambda *a, **k: _Resp(200, payload={"observations": []}))
+    assert fred._get_with_backoff({"series_id": "Z"}) == {"observations": []} and fred._breaker["fails"] == 0

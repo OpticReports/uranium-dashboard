@@ -147,7 +147,8 @@ def _fetch_all(raw_override: dict | None = None) -> dict[str, dict[str, float]]:
         out[s] = _monthly(dates, vals, "mean" if s in _MEAN_COLLAPSE else "last")
     missing = [s for s in SERIES if not out.get(s)]
     if missing:
-        # fetch_series degrades to empty on FRED failure; a partial board would
+        # fetch_series degrades to empty on FRED failure (a missing/rejected key, or no
+        # disk copy younger than fred_stale_max_age_hours); a partial board would
         # silently recompute composites from fewer members (and can flip the
         # phase). Refuse instead - the route serves its stale cache / 503s.
         raise RuntimeError(f"cycle: no data for {missing}; refusing partial board")

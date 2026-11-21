@@ -262,7 +262,12 @@ function HealthBadge({
   }
   return (
     <div className="flex items-center gap-2 rounded border border-panelborder bg-slate-900/50 px-3 py-1.5 text-[10px]">
-      <Dot ok={health.fred_key_present} label="FRED" />
+      <Dot ok={health.fred_key_present && !health.fred_key_error} label="FRED"
+        warn={Object.keys(health.fred_stale_series ?? {}).length > 0}
+        title={health.fred_key_error ? `FRED rejected the API key: ${health.fred_key_error}`
+          : Object.keys(health.fred_stale_series ?? {}).length > 0
+            ? `FRED calls failing: ${Object.entries(health.fred_stale_series ?? {}).map(([s, h]) => `${s} (copy ${h} h old)`).join(", ")} served from the last good copy`
+            : undefined} />
       <Dot ok={health.scheduler} label="sched" />
       <span className="text-slate-500">
         last:{" "}
@@ -274,14 +279,14 @@ function HealthBadge({
   );
 }
 
-function Dot({ ok, label }: { ok: boolean; label: string }) {
+function Dot({ ok, label, warn, title }: { ok: boolean; label: string; warn?: boolean; title?: string }) {
   return (
-    <span className="flex items-center gap-1">
+    <span className="flex items-center gap-1" title={title}>
       <span
         className="h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: ok ? "#10b981" : "#6b7280" }}
+        style={{ backgroundColor: !ok ? "#6b7280" : warn ? "#f59e0b" : "#10b981" }}
       />
-      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-400">{label}{ok && warn ? " (stale)" : ""}</span>
     </span>
   );
 }

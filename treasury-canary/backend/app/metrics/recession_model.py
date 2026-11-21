@@ -181,8 +181,8 @@ def _fit_all() -> None:
     d10, v10 = bundle.get("10y", ([], []))
     sdates, spread = build_spread(d3, v3, d10, v10)     # 10y - 3m, daily
     rdates, rvals = bundle.get("recession", ([], []))
-    _model_cache["models"] = build_models(sdates, spread, rdates, rvals)
-    _model_cache["spread"] = next((v for v in reversed(spread) if v is not None), None)
+    models = build_models(sdates, spread, rdates, rvals)
+    spread_now = next((v for v in reversed(spread) if v is not None), None)
 
     # Term-premium-ADJUSTED variant (the Bernanke critique): subtract the ACM 10y
     # term premium so the input is the expectations component only. When QE pins
@@ -196,19 +196,22 @@ def _fit_all() -> None:
         if s is not None and tp is not None:
             adj_dates.append(d)
             adj_vals.append(s - tp)
-    _model_cache["adj_models"] = build_models(adj_dates, adj_vals, rdates, rvals)
-    _model_cache["adj_spread"] = adj_vals[-1] if adj_vals else None
-    _model_cache["tp"] = next((v for v in reversed(tv) if v is not None), None)
-    _model_cache["ts"] = time.time()
+    # Published in one step: a reader never sees new models beside the old timestamp or
+    # the previous adjusted fit (re-check NOTE-5).
+    _model_cache.update(models=models, spread=spread_now,
+                        adj_models=build_models(adj_dates, adj_vals, rdates, rvals),
+                        adj_spread=adj_vals[-1] if adj_vals else None,
+                        tp=next((v for v in reversed(tv) if v is not None), None), ts=time.time())
 
 
 def _fit_fresh() -> bool:
-    """An empty fit ({} when USREC or the spread was missing) is not a fit: it retries
-    after _EMPTY_RETRY_SECONDS instead of standing for the full TTL."""
+    """An empty fit ({} when USREC, the spread or the ACM term premium was missing) is not a
+    fit: it retries after _EMPTY_RETRY_SECONDS instead of standing for the full TTL. That
+    covers the term-premium-adjusted variant too (its own input can be the missing one)."""
     models = _model_cache["models"]
     if models is None:
         return False
-    ttl = _MODEL_TTL_SECONDS if models else _EMPTY_RETRY_SECONDS
+    ttl = _MODEL_TTL_SECONDS if (models and _model_cache["adj_models"]) else _EMPTY_RETRY_SECONDS
     return time.time() - float(_model_cache["ts"]) < ttl  # type: ignore[arg-type]
 
 

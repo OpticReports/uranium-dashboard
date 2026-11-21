@@ -67,16 +67,6 @@ export default function ReSteepenAlert() {
     };
   }, [pair]);
 
-  const chartRows: ChartRow[] = useMemo(() => {
-    if (!data?.series) return [];
-    return data.series.map((p) => ({
-      ts: toTs(p.date),
-      date: p.date,
-      spread: p.spread,
-      negative: p.spread < 0 ? p.spread : null,
-    }));
-  }, [data]);
-
   const medianLag = useMemo(() => {
     if (!data?.episodes) return null;
     const lags = data.episodes
@@ -92,11 +82,6 @@ export default function ReSteepenAlert() {
     set.add(pair);
     return Array.from(set);
   }, [data, pair]);
-
-  const domain: [number, number] | undefined =
-    chartRows.length > 0
-      ? [chartRows[0].ts, chartRows[chartRows.length - 1].ts]
-      : undefined;
 
   return (
     <Panel
@@ -135,126 +120,7 @@ export default function ReSteepenAlert() {
 
           <ReadoutRow data={data} />
 
-          {data.error || chartRows.length === 0 ? (
-            <div className="mt-4 flex h-56 items-center justify-center rounded border border-dashed border-panelborder text-center text-sm text-slate-500">
-              <div>
-                <p className="font-semibold text-slate-400">
-                  Curve history unavailable
-                </p>
-                <p className="mt-1 text-xs">
-                  {data.error ??
-                    "No spread series returned — a FRED_API_KEY may be required for curve data."}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4">
-              <ResponsiveContainer width="100%" height={320}>
-                <ComposedChart
-                  data={chartRows}
-                  margin={{ top: 8, right: 16, bottom: 4, left: 0 }}
-                >
-                  <CartesianGrid stroke="#1e293b" strokeDasharray="2 4" />
-                  <XAxis
-                    dataKey="ts"
-                    type="number"
-                    scale="time"
-                    domain={domain ?? ["auto", "auto"]}
-                    tick={{ fill: "#64748b", fontSize: 10 }}
-                    tickFormatter={(t: number) =>
-                      new Date(t).getUTCFullYear().toString()
-                    }
-                    minTickGap={40}
-                  />
-                  <YAxis
-                    tick={{ fill: "#64748b", fontSize: 10 }}
-                    width={44}
-                    tickFormatter={(v: number) => v.toFixed(1)}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#0f172a",
-                      border: "1px solid #1e293b",
-                      borderRadius: 6,
-                      fontSize: 12,
-                    }}
-                    labelFormatter={(t: number | string) =>
-                      new Date(Number(t)).toISOString().slice(0, 10)
-                    }
-                    formatter={(value: number | string, name: string) => {
-                      if (name === "negative") return [null, null] as [null, null];
-                      return [`${Number(value).toFixed(2)} pp`, "Spread"];
-                    }}
-                  />
-
-                  {/* NBER recession bands */}
-                  {data.recessions.map((r, i) => (
-                    <ReferenceArea
-                      key={`rec-${i}`}
-                      x1={toTs(r.start)}
-                      x2={toTs(r.end)}
-                      fill="#94a3b8"
-                      fillOpacity={0.12}
-                      stroke="none"
-                      ifOverflow="hidden"
-                    />
-                  ))}
-
-                  <ReferenceLine y={0} stroke="#f59e0b" strokeDasharray="4 3" />
-
-                  {/* Full spread line */}
-                  <Line
-                    type="monotone"
-                    dataKey="spread"
-                    stroke="#38bdf8"
-                    dot={false}
-                    strokeWidth={1.4}
-                    isAnimationActive={false}
-                  />
-                  {/* Inverted (negative) region emphasized in red */}
-                  <Area
-                    type="monotone"
-                    dataKey="negative"
-                    stroke="#ef4444"
-                    strokeWidth={1.4}
-                    fill="#ef4444"
-                    fillOpacity={0.25}
-                    connectNulls={false}
-                    isAnimationActive={false}
-                  />
-
-                  {/* Dis-inversion markers for sustained episodes */}
-                  {data.episodes
-                    .filter((e) => e.dis_inversion)
-                    .map((e, i) => (
-                      <ReferenceDot
-                        key={`dis-${i}`}
-                        x={toTs(e.dis_inversion as string)}
-                        y={0}
-                        r={e.sustained ? 5 : 3}
-                        fill={e.sustained ? "#dc2626" : "#f59e0b"}
-                        stroke="#020617"
-                        strokeWidth={1}
-                        isFront
-                      />
-                    ))}
-                </ComposedChart>
-              </ResponsiveContainer>
-
-              <div className="mt-1 flex flex-wrap gap-4 px-1 text-[10px] text-slate-500">
-                <LegendSwatch color="#38bdf8" label="Spread" />
-                <LegendSwatch color="#ef4444" label="Inverted (spread < 0)" />
-                <LegendSwatch color="#94a3b8" label="NBER recession" faded />
-                <LegendSwatch color="#dc2626" label="Dis-inversion (sustained)" dot />
-                <LegendSwatch color="#f59e0b" label="Dis-inversion (brief)" dot />
-              </div>
-              {data.recessions.length === 0 && (
-                <p className="mt-1 px-1 text-[10px] text-slate-500">
-                  NBER recession dates are unavailable right now (the FRED fetch failed), so no bands are drawn.
-                </p>
-              )}
-            </div>
-          )}
+          <CurveChart data={data} />
 
           <EpisodeCallouts data={data} />
 
@@ -267,6 +133,147 @@ export default function ReSteepenAlert() {
         </>
       )}
     </Panel>
+  );
+}
+
+
+/** The spread chart with its NBER bands, dis-inversion marks, legend and notes: rendered from the payload
+ * alone, so the smoke can check what is drawn (scripts/curve_smoke.tsx). */
+export function CurveChart({ data }: { data: CurveCanary }) {
+  const chartRows: ChartRow[] = useMemo(() => {
+    if (!data?.series) return [];
+    return data.series.map((p) => ({
+      ts: toTs(p.date),
+      date: p.date,
+      spread: p.spread,
+      negative: p.spread < 0 ? p.spread : null,
+    }));
+  }, [data]);
+  const domain: [number, number] | undefined =
+    chartRows.length > 0
+      ? [chartRows[0].ts, chartRows[chartRows.length - 1].ts]
+      : undefined;
+  return (
+    data.error || chartRows.length === 0 ? (
+        <div className="mt-4 flex h-56 items-center justify-center rounded border border-dashed border-panelborder text-center text-sm text-slate-500">
+          <div>
+            <p className="font-semibold text-slate-400">
+              Curve history unavailable
+            </p>
+            <p className="mt-1 text-xs">
+              {data.error ??
+                "No spread series returned — a FRED_API_KEY may be required for curve data."}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4">
+          <ResponsiveContainer width="100%" height={320}>
+            <ComposedChart
+              data={chartRows}
+              margin={{ top: 8, right: 16, bottom: 4, left: 0 }}
+            >
+              <CartesianGrid stroke="#1e293b" strokeDasharray="2 4" />
+              <XAxis
+                dataKey="ts"
+                type="number"
+                scale="time"
+                domain={domain ?? ["auto", "auto"]}
+                tick={{ fill: "#64748b", fontSize: 10 }}
+                tickFormatter={(t: number) =>
+                  new Date(t).getUTCFullYear().toString()
+                }
+                minTickGap={40}
+              />
+              <YAxis
+                tick={{ fill: "#64748b", fontSize: 10 }}
+                width={44}
+                tickFormatter={(v: number) => v.toFixed(1)}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#0f172a",
+                  border: "1px solid #1e293b",
+                  borderRadius: 6,
+                  fontSize: 12,
+                }}
+                labelFormatter={(t: number | string) =>
+                  new Date(Number(t)).toISOString().slice(0, 10)
+                }
+                formatter={(value: number | string, name: string) => {
+                  if (name === "negative") return [null, null] as [null, null];
+                  return [`${Number(value).toFixed(2)} pp`, "Spread"];
+                }}
+              />
+  
+              {/* NBER recession bands */}
+              {data.recessions.map((r, i) => (
+                <ReferenceArea
+                  key={`rec-${i}`}
+                  x1={toTs(r.start)}
+                  x2={toTs(r.end)}
+                  fill="#94a3b8"
+                  fillOpacity={0.12}
+                  stroke="none"
+                  ifOverflow="hidden"
+                />
+              ))}
+  
+              <ReferenceLine y={0} stroke="#f59e0b" strokeDasharray="4 3" />
+  
+              {/* Full spread line */}
+              <Line
+                type="monotone"
+                dataKey="spread"
+                stroke="#38bdf8"
+                dot={false}
+                strokeWidth={1.4}
+                isAnimationActive={false}
+              />
+              {/* Inverted (negative) region emphasized in red */}
+              <Area
+                type="monotone"
+                dataKey="negative"
+                stroke="#ef4444"
+                strokeWidth={1.4}
+                fill="#ef4444"
+                fillOpacity={0.25}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+  
+              {/* Dis-inversion markers for sustained episodes */}
+              {data.episodes
+                .filter((e) => e.dis_inversion)
+                .map((e, i) => (
+                  <ReferenceDot
+                    key={`dis-${i}`}
+                    x={toTs(e.dis_inversion as string)}
+                    y={0}
+                    r={e.sustained ? 5 : 3}
+                    fill={e.sustained ? "#dc2626" : "#f59e0b"}
+                    stroke="#020617"
+                    strokeWidth={1}
+                    isFront
+                  />
+                ))}
+            </ComposedChart>
+          </ResponsiveContainer>
+  
+          <div className="mt-1 flex flex-wrap gap-4 px-1 text-[10px] text-slate-500">
+            <LegendSwatch color="#38bdf8" label="Spread" />
+            <LegendSwatch color="#ef4444" label="Inverted (spread < 0)" />
+            <LegendSwatch color="#94a3b8" label="NBER recession" faded />
+            <LegendSwatch color="#dc2626" label="Dis-inversion (sustained)" dot />
+            <LegendSwatch color="#f59e0b" label="Dis-inversion (brief)" dot />
+          </div>
+          {data.recessions.length === 0 && (
+            <p className="mt-1 px-1 text-[10px] text-slate-500">
+              NBER recession dates are unavailable right now (the FRED fetch failed), so no bands are drawn.
+            </p>
+          )}
+        </div>
+      )
   );
 }
 
@@ -343,7 +350,7 @@ function StateBanner({
   );
 }
 
-function ReadoutRow({ data }: { data: CurveCanary }) {
+export function ReadoutRow({ data }: { data: CurveCanary }) {
   const spread = data.current_value;
   const bps = data.current_depth_bps;
   return (

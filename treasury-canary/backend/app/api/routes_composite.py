@@ -140,7 +140,7 @@ def canary(
         prob_basis = "fitted"
     else:                                   # say so: a silent fallback reads as the model
         prob = recession_probability(latest_3m10y)
-        prob_basis = "static"
+        prob_basis = "static" if prob is not None else None
     # Downsample the series for transport (chart doesn't need every daily point).
     series = [{"date": d.isoformat(), "spread": s}
               for d, s in zip(dates, spread) if s is not None]

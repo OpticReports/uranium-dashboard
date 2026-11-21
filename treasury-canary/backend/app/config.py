@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     http_timeout_seconds: float = 30.0
     cache_dir: str = "./data/cache"
     cache_ttl_seconds: int = 3600            # respect FRED etc.; daily data is stable
+    # A failed FRED call serves the last good disk copy only while it is younger than this;
+    # older, the series goes empty (loudly STALE). Never on a rejected API key.
+    fred_stale_max_age_hours: int = 72
     # EDGAR refuses requests without a descriptive User-Agent; the SEC asks for a
     # contact address in it. Set EDGAR_USER_AGENT on Render to add one — never
     # hard-code an email here.

@@ -383,7 +383,9 @@ function RecessionDial({
         </p>
       ) : (
         <p className="text-[10px] text-slate-600">
-          {model?.method ?? "Estrella–Mishkin probit"}
+          {model && !hasProb
+            ? "Fit unavailable right now (the FRED data it needs are missing); it retries within minutes."
+            : model?.method ?? "Estrella–Mishkin probit"}
         </p>
       )}
       <p className="mt-1 text-[10px] leading-snug text-slate-600">

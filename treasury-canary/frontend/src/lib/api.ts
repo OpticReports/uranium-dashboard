@@ -21,6 +21,8 @@ export interface Health {
   status: string;
   service: string;
   fred_key_present: boolean;
+  fred_key_error?: string | null;
+  fred_stale_series?: Record<string, number> | null;   // series id -> age (h) of the copy served
   scheduler: boolean;
   display_tz: string;
 }

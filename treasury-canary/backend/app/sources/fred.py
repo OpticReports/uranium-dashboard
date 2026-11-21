@@ -38,7 +38,29 @@ def fred_key_error() -> str | None:
     return _key_error["msg"]
 
 
+# Series currently served from an old disk copy because their last FRED call failed
+# (series id -> copy age in hours). Cleared per series on its next successful fetch;
+# surfaced by /health and /refresh so a stale-but-plausible dashboard never looks live.
+_stale_served: dict[str, float] = {}
+
+
+def fred_stale_series() -> dict[str, float]:
+    return dict(sorted(_stale_served.items()))
+
+
+# Circuit breaker: after _BREAKER_FAILS consecutive network/server failures FRED is treated as
+# down for _BREAKER_SECONDS and calls fail fast (served from the disk copy or empty). Without it
+# a bundle rebuild during an outage waits out 4 tries x 30 s for each of ~89 series while every
+# request holding the expired bundle waits on its lock. A 400 (bad key / no series) is not counted.
+_BREAKER_FAILS = 5
+_BREAKER_SECONDS = 600
+_breaker: dict[str, float] = {"fails": 0, "open_until": 0.0}
+_breaker_lock = threading.Lock()
+
+
 def _get_with_backoff(params: dict, tries: int = 4) -> dict | None:
+    if time.time() < _breaker["open_until"]:
+        return None
     delay = 1.0
     for attempt in range(tries):
         try:
@@ -57,10 +79,18 @@ def _get_with_backoff(params: dict, tries: int = 4) -> dict | None:
                 return None
             r.raise_for_status()
             _key_error["msg"] = None  # a successful call proves the key works
+            with _breaker_lock:
+                _breaker["fails"] = 0
             return r.json()
         except Exception as exc:  # noqa: BLE001
             if attempt == tries - 1:
                 logger.warning("FRED fetch failed for %s: %s", params.get("series_id"), exc)
+                with _breaker_lock:
+                    _breaker["fails"] += 1
+                    if _breaker["fails"] >= _BREAKER_FAILS:
+                        _breaker["open_until"] = time.time() + _BREAKER_SECONDS
+                        logger.warning("FRED looks down (%d failures in a row): failing fast for %d s",
+                                       _breaker["fails"], _BREAKER_SECONDS)
                 return None
             time.sleep(delay)
             delay *= 2
@@ -77,7 +107,9 @@ def _splice_frozen(series_id: str, dates, values):
 def fetch_series(
     series_id: str, start: str = "1976-01-01", use_cache: bool = True
 ) -> tuple[list[date], list[float | None]]:
-    """Return (dates, values) for a FRED series. Empty on missing key/failure."""
+    """Return (dates, values) for a FRED series. A failed call serves the last good disk
+    copy if it is younger than fred_stale_max_age_hours (recorded in _stale_served);
+    empty on a missing or rejected key, or when no usable copy exists."""
     if not settings.fred_api_key:
         logger.info("FRED_API_KEY not set — skipping %s (metric will show STALE)", series_id)
         return [], []
@@ -96,19 +128,33 @@ def fetch_series(
         "series_id": series_id, "api_key": settings.fred_api_key,
         "file_type": "json", "observation_start": start,
     })
+    if data is not None and not data.get("observations"):
+        logger.warning("FRED returned no observations for %s; keeping the disk copy", series_id)
+        data = None                        # never overwrite a good copy with an empty reply
     if data is None:
-        # A failed call (rate limit, outage) must never turn a series EMPTY while a
-        # good copy sits on disk: the bundle below is memoized for hours, so one bad
-        # call used to wipe the NBER bands and the fitted recession model until the
-        # next restart (2026-11-21). Stale data beats a hole; staleness shows by date.
+        # A failed call (rate limit, outage) must not turn a series EMPTY while a recent
+        # good copy sits on disk: the bundle below is memoized for hours, so one bad call
+        # used to wipe the NBER bands and the fitted recession model until the next
+        # restart (2026-11-21). But a rejected key is a configuration error: fail loudly
+        # (every FRED metric STALE), never mask it with old copies; and past the age cap
+        # an old copy goes empty too. What is served stale is listed (fred_stale_series).
+        if _key_error["msg"]:
+            return [], []
         stale = _read_cache(cache)
         if stale is not None:
-            logger.warning("FRED fetch failed for %s; serving the last good copy (%.1f h old)",
-                           series_id, (time.time() - os.path.getmtime(cache)) / 3600)
-            return _splice_frozen(series_id, *_parse(stale))
+            age_h = (time.time() - os.path.getmtime(cache)) / 3600
+            if age_h <= settings.fred_stale_max_age_hours:
+                _stale_served[series_id] = round(age_h, 1)
+                logger.warning("FRED fetch failed for %s; serving the last good copy (%.1f h old)",
+                               series_id, age_h)
+                return _splice_frozen(series_id, *_parse(stale))
+            logger.warning("FRED fetch failed for %s; the disk copy is %.0f h old (cap %d h), "
+                           "so the series is left empty", series_id, age_h, settings.fred_stale_max_age_hours)
         return [], []
+    _stale_served.pop(series_id, None)
     try:
-        json.dump(data, open(cache, "w"))
+        from .fred_csv import _write_atomic          # temp file + rename: a crash mid-write keeps the old copy
+        _write_atomic(cache, json.dumps(data))
     except Exception:  # noqa: BLE001
         pass
     return _splice_frozen(series_id, *_parse(data))
@@ -156,8 +202,10 @@ def fetch_bundle(start: str = "1976-01-01", force: bool = False
                  ) -> dict[str, tuple[list[date], list[float | None]]]:
     """Fetch the full FRED catalog into one logical-keyed bundle (memoized).
 
-    Keys are provider-agnostic (tenor labels, "sofr", "hy_oas", ...). Missing key or
-    failed series -> that entry is ([], []) and its metrics render STALE.
+    Keys are provider-agnostic (tenor labels, "sofr", "hy_oas", ...). Missing or rejected
+    key, or a failed series with no recent disk copy -> that entry is ([], []) and its
+    metrics render STALE (a failed series with a recent copy is served from it and listed
+    by fred_stale_series()). A good series is never replaced by an empty one.
     """
     cached = _bundle_cache["data"]
     if not force and cached is not None and _bundle_fresh():
