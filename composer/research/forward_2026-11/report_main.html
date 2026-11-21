@@ -1,0 +1,75 @@
+<h1>What the next 1, 5 and 10 years could look like, by sleeve weight</h1>
+<p class="sub">Study of 2026-11-21 (addendum 62). Monte Carlo of the three-symphony book at six sleeve weights under seven scenarios, plus three other methods quants use. Every scenario resamples the engines' own simulated history; none is a forecast.</p>
+
+<div class="card verdict">
+<ul>
+<li><b>Plan on a range, not on the backtest.</b> For today's book (31.8% sleeve) the three planning scenarios put the median ten-year return between {{plan_lo}} a year ({{plan_lo_name}}) and {{plan_hi}} a year ({{plan_hi_name}}). The backtest replayed as it stands gives {{ceil_10}}; that is a ceiling.</li>
+<li><b>One year out, luck dominates.</b> The median one-year return across the planning scenarios is {{plan_1y}}, a 1-in-20 bad year is {{plan_1y_bad}}, and the chance of finishing a year below the start is {{ploss_1y}}.</li>
+<li><b>Expect deeper falls than the tables you have seen.</b> Over ten years the median deepest fall for today's book is {{dd_plan}} and a 1-in-20 one is {{dd_plan95}}; the chance of a fall deeper than 30% at some point is {{p30_plan}}. Letting weights drift between cap resets, as the account actually runs, makes the median deepest fall {{drift_dd}} with a daily reset.</li>
+<li><b>Sleeve weight: the same trade in every scenario.</b> {{w_verdict}}</li>
+<li><b>If every trade always filled a session late</b> the median is {{f_10}} a year with a median deepest fall of {{f_dd}}. Live fills have not been there; it is the floor to keep in mind for execution failures, not a plan.</li>
+<li><b>Other methods, in one line each.</b> {{other_verdict}}</li>
+</ul>
+</div>
+
+<div class="kpis">
+<div class="kpi"><b>{{plan_lo}} to {{plan_hi}}</b><span>median return a year over ten years, today's book, planning scenarios</span></div>
+<div class="kpi"><b>{{ceil_10}}</b><span>the same if the backtest since 2015 simply repeated (a ceiling)</span></div>
+<div class="kpi"><b>{{dd_plan95}}</b><span>a 1-in-20 deepest fall within ten years, planning scenarios</span></div>
+<div class="kpi"><b>{{ploss_1y}}</b><span>chance of ending a year below the start, planning scenarios</span></div>
+</div>
+
+<h2>1. The scenarios</h2>
+{{t_scen}}
+<p class="note">Each scenario draws {{paths}} ten-year paths by picking stretches of real sessions from its source (about a month at a time, so quiet and violent spells stay together) and replaying all three engines on the same sessions, so they move together as they did. "Shifted" scenarios take the same sessions and lower each engine's average daily return by a fixed amount, leaving its swings as they were. Weights drift and are reset to target when any engine passes the largest target plus 10 points (44% today), as POLICY does. The S&P 500 grew {{spx_b}} a year on the 2015-06 source.</p>
+<details><summary>What each source looks like on its own (simulated, in sample)</summary>{{t_hist}}</details>
+
+<h2>2. Today's book (31.8% sleeve)</h2>
+{{ch_med}}
+{{t_today}}
+{{ch_fan}}
+{{ch_fanE}}
+<p class="note">"1-in-20" is the 95th percentile of the deepest fall, or the 5th percentile of the return. A median is the middle path: half the draws do better, half worse.</p>
+
+<h2>3. By sleeve weight</h2>
+{{ch_w_ret}}
+{{ch_w_dd}}
+{{ch_w_bad}}
+<h3>Ten years</h3>
+{{t_w10}}
+<details><summary>Five years</summary>{{t_w5}}</details>
+<details><summary>One year</summary>{{t_w1}}</details>
+
+<h2>4. Drifting weights against a daily reset</h2>
+{{t_drift}}
+<p class="note">The earlier studies today reset the book to its target weights every session. The account does not: weights drift and POLICY resets them only at the cap. Same draws, 31.8% sleeve. This is the gap you pointed to: in the one live fall the three-symphony book has had (2026-10-28 to 11-05) it fell 14.2% against 10.7% simulated with a daily reset, with KMLM at 40% of the book.</p>
+
+<h2>5. Other methods quants use, and what each says here</h2>
+<h3>Could the backtest be luck? (deflated Sharpe ratio)</h3>
+{{t_def}}
+<p class="note">If someone tried N strategies with no skill at all and kept the best, this is the Sharpe that best one would be expected to show on a sample this long. {{def_note}}</p>
+<h3>How much is just the stock market? (beta and what is left)</h3>
+{{t_beta}}
+<p class="note">{{beta_note}}</p>
+<h3>The live record</h3>
+{{t_live}}
+<p class="note">{{live_note}}</p>
+<h3>Methods considered and what was done with them</h3>
+{{t_methods}}
+
+<h2>6. What this does not settle</h2>
+<ul>
+<li><b>Every draw is made of the engines' own simulated past.</b> A regime outside it is in no path: the 1970s, a change in how volatility products trade, a leveraged fund closing or being restructured.</li>
+<li><b>No draw has a day worse than the worst in its source.</b> Leveraged and inverse funds can lose most of their value in one session.</li>
+<li><b>The haircuts are borrowed.</b> The 50% and 73% figures come from studies of other people's strategies; nothing measures the decay of these three. The live record is too short to say.</li>
+<li><b>Shifting the average and keeping the swings is a simplification:</b> an edge that fades may fade on its best days first, which would change the shape of the falls too.</li>
+<li><b>Not modelled:</b> taxes, deposits and withdrawals, capacity at a larger size, any future change to the symphonies.</li>
+<li><b>Same-close fills</b> in every scenario but "one close late". <b>Measurement basis:</b> daily mark-to-market; 5.9 basis points on cap resets.</li>
+</ul>
+
+<h2>7. Open questions</h2>
+{{t_open}}
+
+<details open><summary>Independent verification</summary>
+{{verification}}
+</details>
