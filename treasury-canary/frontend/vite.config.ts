@@ -28,6 +28,7 @@ const proxied = [
   "/recession-model",
   "/ai-debt",
   "/dollar-watch",
+  "/gdp-watch",
 ];
 
 export default defineConfig({

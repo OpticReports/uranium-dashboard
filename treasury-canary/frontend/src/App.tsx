@@ -28,10 +28,11 @@ import SeverityTab from "./components/SeverityTab";
 import TrackRecordTab from "./components/TrackRecordTab";
 import AiDebtTab from "./components/AiDebtTab";
 import DollarTab from "./components/DollarTab";
+import GdpTab from "./components/GdpTab";
 
 const POLL_MS = 60_000;
 
-type Tab = "monitor" | "playbook" | "severity" | "aidebt" | "dollar" | "track";
+type Tab = "monitor" | "playbook" | "severity" | "aidebt" | "dollar" | "gdp" | "track";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "monitor", label: "Monitor" },
@@ -39,6 +40,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "severity", label: "Severity" },
   { id: "aidebt", label: "AI debt" },
   { id: "dollar", label: "Dollar" },
+  { id: "gdp", label: "GDP" },
   { id: "track", label: "Track record" },
 ];
 
@@ -113,12 +115,12 @@ export default function App() {
         </header>
 
         {/* Tab bar (segmented control) */}
-        <div className="mb-4 inline-flex overflow-hidden rounded-lg border border-panelborder">
+        <div className="mb-4 inline-flex max-w-full overflow-x-auto rounded-lg border border-panelborder">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`border-r px-4 py-1.5 text-xs font-semibold transition-colors last:border-r-0 ${
+              className={`shrink-0 whitespace-nowrap border-r px-4 py-1.5 text-xs font-semibold transition-colors last:border-r-0 ${
                 tab === t.id
                   ? "border-sky-500 bg-sky-500/10 text-sky-300"
                   : "border-panelborder text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
@@ -232,6 +234,7 @@ export default function App() {
         {tab === "severity" && <SeverityTab />}
         {tab === "aidebt" && <AiDebtTab />}
         {tab === "dollar" && <DollarTab />}
+        {tab === "gdp" && <GdpTab />}
         {tab === "track" && <TrackRecordTab />}
 
         <footer className="mt-8 border-t border-panelborder pt-4 text-center text-[10px] text-slate-600">

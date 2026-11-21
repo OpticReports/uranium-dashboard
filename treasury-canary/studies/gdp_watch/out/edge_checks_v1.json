@@ -1,0 +1,434 @@
+{
+ "bias_correction": {
+  "1": {
+   "mirror": {
+    "change_pct": 2.5,
+    "mae_after": 0.571,
+    "mae_before": 0.557,
+    "n": 1180
+   },
+   "own": {
+    "change_pct": 4.0,
+    "mae_after": 0.58,
+    "mae_before": 0.557,
+    "n": 1180
+   },
+   "own_by_country": {
+    "AUS": {
+     "change_pct": 3.3,
+     "n": 62
+    },
+    "BRA": {
+     "change_pct": 4.0,
+     "n": 62
+    },
+    "CAN": {
+     "change_pct": 4.1,
+     "n": 63
+    },
+    "CHE": {
+     "change_pct": 3.7,
+     "n": 62
+    },
+    "CHN": {
+     "change_pct": -6.7,
+     "n": 24
+    },
+    "DEU": {
+     "change_pct": 4.2,
+     "n": 63
+    },
+    "ESP": {
+     "change_pct": 1.5,
+     "n": 63
+    },
+    "FRA": {
+     "change_pct": 3.1,
+     "n": 63
+    },
+    "GBR": {
+     "change_pct": 2.0,
+     "n": 63
+    },
+    "IDN": {
+     "change_pct": 13.4,
+     "n": 63
+    },
+    "IND": {
+     "change_pct": 3.2,
+     "n": 62
+    },
+    "ITA": {
+     "change_pct": -0.0,
+     "n": 63
+    },
+    "JPN": {
+     "change_pct": 1.5,
+     "n": 63
+    },
+    "KOR": {
+     "change_pct": 1.4,
+     "n": 63
+    },
+    "MEX": {
+     "change_pct": 3.3,
+     "n": 63
+    },
+    "NLD": {
+     "change_pct": 9.8,
+     "n": 63
+    },
+    "POL": {
+     "change_pct": 10.8,
+     "n": 63
+    },
+    "SAU": {
+     "change_pct": 15.8,
+     "n": 27
+    },
+    "TUR": {
+     "change_pct": 1.7,
+     "n": 62
+    },
+    "USA": {
+     "change_pct": 7.5,
+     "n": 63
+    }
+   },
+   "own_helped_in": [
+    "CHN"
+   ],
+   "placebo": {
+    "change_pct": 2.1,
+    "mae_after": 0.572,
+    "mae_before": 0.561,
+    "n": 1121
+   }
+  },
+  "2": {
+   "mirror": {
+    "change_pct": 5.0,
+    "mae_after": 0.961,
+    "mae_before": 0.915,
+    "n": 1160
+   },
+   "own": {
+    "change_pct": 6.4,
+    "mae_after": 0.974,
+    "mae_before": 0.915,
+    "n": 1160
+   },
+   "own_by_country": {
+    "AUS": {
+     "change_pct": -1.1,
+     "n": 61
+    },
+    "BRA": {
+     "change_pct": 7.2,
+     "n": 61
+    },
+    "CAN": {
+     "change_pct": 3.9,
+     "n": 62
+    },
+    "CHE": {
+     "change_pct": 4.6,
+     "n": 61
+    },
+    "CHN": {
+     "change_pct": -15.9,
+     "n": 23
+    },
+    "DEU": {
+     "change_pct": 3.0,
+     "n": 62
+    },
+    "ESP": {
+     "change_pct": 6.4,
+     "n": 62
+    },
+    "FRA": {
+     "change_pct": 8.1,
+     "n": 62
+    },
+    "GBR": {
+     "change_pct": 7.0,
+     "n": 62
+    },
+    "IDN": {
+     "change_pct": 20.4,
+     "n": 62
+    },
+    "IND": {
+     "change_pct": 11.9,
+     "n": 61
+    },
+    "ITA": {
+     "change_pct": 7.0,
+     "n": 62
+    },
+    "JPN": {
+     "change_pct": 3.8,
+     "n": 62
+    },
+    "KOR": {
+     "change_pct": -4.9,
+     "n": 62
+    },
+    "MEX": {
+     "change_pct": 2.6,
+     "n": 62
+    },
+    "NLD": {
+     "change_pct": 4.5,
+     "n": 62
+    },
+    "POL": {
+     "change_pct": 12.5,
+     "n": 62
+    },
+    "SAU": {
+     "change_pct": 25.9,
+     "n": 26
+    },
+    "TUR": {
+     "change_pct": 5.1,
+     "n": 61
+    },
+    "USA": {
+     "change_pct": 15.3,
+     "n": 62
+    }
+   },
+   "own_helped_in": [
+    "AUS",
+    "CHN",
+    "KOR"
+   ],
+   "placebo": {
+    "change_pct": 3.5,
+    "mae_after": 0.952,
+    "mae_before": 0.92,
+    "n": 1103
+   }
+  },
+  "3": {
+   "mirror": {
+    "change_pct": 6.8,
+    "mae_after": 1.262,
+    "mae_before": 1.181,
+    "n": 1140
+   },
+   "own": {
+    "change_pct": 10.3,
+    "mae_after": 1.302,
+    "mae_before": 1.181,
+    "n": 1140
+   },
+   "own_by_country": {
+    "AUS": {
+     "change_pct": -0.6,
+     "n": 60
+    },
+    "BRA": {
+     "change_pct": 11.6,
+     "n": 60
+    },
+    "CAN": {
+     "change_pct": 14.0,
+     "n": 61
+    },
+    "CHE": {
+     "change_pct": 5.5,
+     "n": 60
+    },
+    "CHN": {
+     "change_pct": -23.8,
+     "n": 22
+    },
+    "DEU": {
+     "change_pct": 6.9,
+     "n": 61
+    },
+    "ESP": {
+     "change_pct": 8.7,
+     "n": 61
+    },
+    "FRA": {
+     "change_pct": 16.7,
+     "n": 61
+    },
+    "GBR": {
+     "change_pct": 8.3,
+     "n": 61
+    },
+    "IDN": {
+     "change_pct": 23.7,
+     "n": 61
+    },
+    "IND": {
+     "change_pct": 12.0,
+     "n": 60
+    },
+    "ITA": {
+     "change_pct": 20.2,
+     "n": 61
+    },
+    "JPN": {
+     "change_pct": 6.4,
+     "n": 61
+    },
+    "KOR": {
+     "change_pct": 2.3,
+     "n": 61
+    },
+    "MEX": {
+     "change_pct": 10.8,
+     "n": 61
+    },
+    "NLD": {
+     "change_pct": 7.3,
+     "n": 61
+    },
+    "POL": {
+     "change_pct": 12.4,
+     "n": 61
+    },
+    "SAU": {
+     "change_pct": 21.8,
+     "n": 25
+    },
+    "TUR": {
+     "change_pct": 6.9,
+     "n": 60
+    },
+    "USA": {
+     "change_pct": 34.1,
+     "n": 61
+    }
+   },
+   "own_helped_in": [
+    "AUS",
+    "CHN"
+   ],
+   "placebo": {
+    "change_pct": 7.0,
+    "mae_after": 1.272,
+    "mae_before": 1.189,
+    "n": 1085
+   }
+  },
+  "4": {
+   "mirror": {
+    "change_pct": 9.5,
+    "mae_after": 1.554,
+    "mae_before": 1.42,
+    "n": 1120
+   },
+   "own": {
+    "change_pct": 12.0,
+    "mae_after": 1.591,
+    "mae_before": 1.42,
+    "n": 1120
+   },
+   "own_by_country": {
+    "AUS": {
+     "change_pct": -1.6,
+     "n": 59
+    },
+    "BRA": {
+     "change_pct": 11.0,
+     "n": 59
+    },
+    "CAN": {
+     "change_pct": 23.9,
+     "n": 60
+    },
+    "CHE": {
+     "change_pct": 3.9,
+     "n": 59
+    },
+    "CHN": {
+     "change_pct": -31.0,
+     "n": 21
+    },
+    "DEU": {
+     "change_pct": 7.6,
+     "n": 60
+    },
+    "ESP": {
+     "change_pct": 17.8,
+     "n": 60
+    },
+    "FRA": {
+     "change_pct": 27.5,
+     "n": 60
+    },
+    "GBR": {
+     "change_pct": 8.9,
+     "n": 60
+    },
+    "IDN": {
+     "change_pct": 22.1,
+     "n": 60
+    },
+    "IND": {
+     "change_pct": 9.9,
+     "n": 59
+    },
+    "ITA": {
+     "change_pct": 21.5,
+     "n": 60
+    },
+    "JPN": {
+     "change_pct": 9.2,
+     "n": 60
+    },
+    "KOR": {
+     "change_pct": 4.6,
+     "n": 60
+    },
+    "MEX": {
+     "change_pct": 17.3,
+     "n": 60
+    },
+    "NLD": {
+     "change_pct": 11.4,
+     "n": 60
+    },
+    "POL": {
+     "change_pct": 13.2,
+     "n": 60
+    },
+    "SAU": {
+     "change_pct": 14.5,
+     "n": 24
+    },
+    "TUR": {
+     "change_pct": 7.0,
+     "n": 59
+    },
+    "USA": {
+     "change_pct": 55.4,
+     "n": 60
+    }
+   },
+   "own_helped_in": [
+    "AUS",
+    "CHN"
+   ],
+   "placebo": {
+    "change_pct": 10.0,
+    "mae_after": 1.57,
+    "mae_before": 1.428,
+    "n": 1067
+   }
+  }
+ },
+ "min_past_misses": 8,
+ "trend_gap": {
+  "corr_gap_vs_miss_h4": -0.011,
+  "gap": "4 x (20-quarter median q/q - 40-quarter median q/q), points a year",
+  "n": 1340
+ }
+}
