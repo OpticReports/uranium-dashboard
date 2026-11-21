@@ -5093,3 +5093,69 @@ its ordinary days and the mirror, not on its average; a studentised max-statisti
 variants differ from the live rule on a handful of days.
 
 NO CHANGE to any symphony, gate, POLICY operation or the mirror. No service to redeploy.
+
+## Addendum 60 — The sleeve's weight: is its weak long record the data or the rule? (2026-11-21)
+
+Owner (2026-11-21): "yes, study the sleeve weight next" (the P1 question of addendum 59). Pre-registered
+(`research/sleeve_weight_2026-11/PREREG.md`, commit 646013f5); one independent review of the simulation,
+statistics and draft plus a delta check: every number reproduced, the first headline did not survive
+(`VERIFICATION.md`). Report with charts: `results/sleeve-weight-2026-11-21.html`.
+
+VERDICT: **unresolved, and the answer differs by half. The sleeve beats cash as a third leg on 2015-2020
+and since 2021-06 at any weight tested; what a third leg buys is a smaller fall, not growth. The weight is
+a risk-budget choice the data cannot make.**
+
+METHOD: the live sleeve's simulated path (addendum 59's) cut by how real its inputs are: E1 1994-06..2002-07
+(nothing real), E2 ..2011-10 (bond ETFs real, held funds rebuilt), E3 ..2015-05 (held funds real except
+LABD), E4 2015-06..2020-12 (every traded fund real; KMLM signal rebuilt), E5 ..2023-01, E6 real. Each half
+(InverseHold; FrontrunBonds = the shock ladder) run as its own tree; attribution by fund; E4 under four
+readings of its one rebuilt input; hedge table by era; book = third leg at w, rest split HG/KMLM, against
+T-bills at the same w (paired block bootstrap).
+
+RESULTS (simulated, in sample):
+- Sleeve by era: -4% / +4% / +3% a year (E1-E3), then +55% (fall 16%), +64% (13%), +39% (15%). E4 under
+  the four KMLM-signal variants: +50% to +60%. By the pre-registered rule "the data" (E4 log return +0.44
+  [0.21, 0.75] inside the real years' +0.39 [0.23, 0.56]); without 2020-02..04 it is +0.21 [0.09, 0.32]:
+  "in between". Reported as unresolved.
+- Shock ladder alone: +1% / +2% (E1-E2, volatility funds modelled), then +36%, +139%, +57%, +42%. Ten best
+  days carry each stretch (sleeve E4: 53% of log growth; without 2020-02..04 +23% a year). Its rarest
+  tests look fitted to March 2020: TLT 1-day > +6% true on 2 days in 32 years (2020-03-16, -20); < -3.5% on
+  6 days, 4 in 2020-03. 2024-08-05 (+58% for that half) fired inside a 0.1-wide band on SHY; without that
+  day the sleeve's E6 is +30% a year.
+- Inverse-fund half alone: -13%, +1%, -24%, -4% a year through 2020; +59% and +31% since 2020-12 (short
+  bonds 2022, short biotech 2021-22 and on). Rule or period.
+- Hedge: against HG and KMLM together never clearly positive in any era (t -1.3 to +1.2). Inverse half on
+  HG's worst days: positive in all six eras (t > 2 in four); standing short exposure, not timing (review).
+- Third leg at 31.8% against T-bills (book log growth a year [90%]): E1-E3 -0.03, +0.01, +0.01 (no);
+  E4 +0.14 [0.06, 0.25]; 2021-06 on +0.11 [0.06, 0.17]; deepest fall +0.8 and +1.8 points DEEPER than the
+  T-bill book. Passes equally at 10% and 50%. By half: ladder alone +0.10 / +0.29 / +0.11 (2011-15,
+  2015-20, 2021-06 on); inverse half alone -0.09 / -0.01 / +0.11.
+- Against no third leg (since 2021-06): +172% a year, fall 20% with none; +128%, 16% with the sleeve at
+  31.8%; +103%, 14% with T-bills there.
+
+CANDIDATE EDGES (edge rule; none actionable without the owner): (1) the ladder alone as the third leg beat
+the live sleeve by +0.09 [0.05, 0.15] (2011-15) and +0.15 [0.07, 0.24] (2015-20), level since 2021-06
+(-0.005); the only history that could contradict it (2002-2011) has modelled volatility funds, where its
+one-day tests fired on 172 days for nothing (review). (2) the ladder's overbought/oversold tests: 222 days
+since 2011-11, +4.48 summed, t 5.3, top three days 0.88; positive before costs on 1994-2011 too (review; no
+placebo run). (3) dropping the inverse half: the same numbers read the other way; one regime in its favour.
+
+HONESTY BOX: every real year, and March 2020, is in sample for the sleeve (assembled 2026-07 from two
+community strategies); period and data are confounded (volatility funds are models before 2011-10,
+leveraged funds before 2008-2010, bond funds before 2002-07, HYG before 2007-04); a few days decide each
+stretch, so bootstrap intervals understate the uncertainty; UVXY was 2x and SVXY -1x before 2018-02-28
+(about +50% a year for E4 at today's leverage); fills at the close assumed, 5.856 bps x turnover; before
+2020-12 the KMLM engine's path in the book is on the rebuilt KMLM fund (shape only); 2023-02-01 missing
+from the path. Measurement basis: daily mark-to-market.
+
+PENDING QUESTIONS (ranked, all first asked 2026-11-21): P1 owner: is the book's deepest fall or its growth
+the binding constraint (the third leg's weight trades one for the other)? P1 owner: keep the inverse-fund
+half? P2 were the ladder's thresholds fitted on March 2020? P2 rebuild UVXY/SVXY 2006-2011 from the
+published VIX futures index; P2 paper-track every ladder trigger with live fills; P3 15:51-versus-close
+sensitivity on shock days.
+
+LESSONS: cut a short-history rule by how real each input is before reading its long record; run each
+sub-strategy as its own tree; when a few days carry a result, find which test fired on each and how often
+that test has ever been true; a pass against cash says "better than cash", not "this weight".
+
+NO CHANGE to any symphony, gate, POLICY operation or the mirror. No service to redeploy.

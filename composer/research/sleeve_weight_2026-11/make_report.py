@@ -79,14 +79,15 @@ vs = lambda v: f"{lg(v['dlog_per_yr'], 3)} [{lg(v['ci90'][0], 3)}, {lg(v['ci90']
 bk = lambda v: f"{pc(v['cagr'])}, fall {pu(v['maxdd'], 1)}"                                # noqa: E731
 t_third = table(["Third leg at 31.8%"] + [f"{e}: book | growth against T-bills [90%]" for e in TL],
                 [[nm] + [f"{bk(TL[e]['book_stats'][k])} | {vs(TL[e][k + '_vs_tbills'])}" for e in TL] for k, nm in (("sleeve", "Live sleeve"), ("ladder", "Shock ladder alone"), ("inverse", "Inverse-fund half alone"))]
-                + [["T-bills"] + [bk(TL[e]["book_stats"]["tbills"]) for e in TL],
-                   ["Live sleeve at 10% | at 50%, against T-bills"] + [f"{vs(TL[e]['sleeve_vs_tbills_at_10pct'])} | {vs(TL[e]['sleeve_vs_tbills_at_50pct'])}" for e in TL]])
+                + [["T-bills"] + [f"{bk(TL[e]['book_stats']['tbills'])} | (the control)" for e in TL]])
 rt = RV["rare_tests"]
 sd = RV["single_days"]["2023-02 on without 2024-08-05"]
 E4K, RK = "2015-06 to 2020-12", "2021-06 to 2026-11"
 subs = {
     "{{e4_cagr}}": pc(Q1["sleeve"]["E4"]["cagr"]), "{{e6_cagr}}": pc(Q1["sleeve"]["E6"]["cagr"]), "{{e4_dd}}": pu(Q1["sleeve"]["E4"]["maxdd"]),
-    "{{e4_ci}}": c3(RV["e4_log_per_yr"]["all"]), "{{real_ci}}": c3(RV["e4_log_per_yr"]["real_years_from_2020_12"]), "{{e4x_ci}}": c3(RV["e4_log_per_yr"]["without_2020_02_to_04"]),
+    "{{e4_ci}}": ci(Q1["sleeve"]["E4"]), "{{real_ci}}": ci(Q1["real_years_from_2020_12"]),
+    "{{e3_fb_wo}}": pc(RV["single_days"]["2011-11 to 2015-05 without 2011-11-01"]["ladder"]["without"]), "{{e3_sl_wo}}": pc(RV["single_days"]["2011-11 to 2015-05 without 2011-11-01"]["sleeve"]["without"]),
+    "{{vt_10_50}}": "; ".join(f"{e}: {vs(TL[e]['sleeve_vs_tbills_at_10pct'])} and {vs(TL[e]['sleeve_vs_tbills_at_50pct'])}" for e in (E4K, RK)), "{{e4x_ci}}": c3(RV["e4_log_per_yr"]["without_2020_02_to_04"]),
     "{{t_var_inline}}": "; ".join(f"{k} {pc(v['cagr'])}, fall {pu(v['maxdd'])}" for k, v in ev.items()),
     "{{top_share}}": pu(C["sleeve"]["E4"]["best_10_days_log"] / C["sleeve"]["E4"]["total_log"]),
     "{{e4_wo}}": pc(e4w["sleeve"]["without 2020-02..04"]["cagr"]),

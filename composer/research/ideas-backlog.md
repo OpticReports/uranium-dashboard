@@ -347,3 +347,9 @@ deterministic rationale are listed.
     actionable: sleeve vs HG alone on HG's worst days (t 2.4 since 2021-06, 0.6 on 1994-2020); HG 15/30
     crossover (rebuilt years only). Tooling: `research/windows_2026-11/wsim.py` (generic variant
     builders for HG and SLEEVE, gated on Composer).
+29. Sleeve weight / data-or-rule (add. 60, 2026-11-21): OPEN on two owner questions, no build. Sleeve beats
+    cash as a third leg from 2015 at any weight; a third leg buys a smaller fall, not growth. Its two
+    halves differ: the shock ladder paid wherever volatility funds are real (but its rarest tests look
+    fitted to March 2020); the inverse-fund half lost 2011-2020 and paid since. Owner P1: growth or fall
+    as the binding constraint; keep the inverse-fund half? Next data: UVXY/SVXY rebuild 2006-2011;
+    paper-track ladder triggers. Tooling: `research/sleeve_weight_2026-11/s1_sleeve.py` (`half`, `path`).

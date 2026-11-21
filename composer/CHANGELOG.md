@@ -7,6 +7,18 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-21 — Study: the sleeve's weight, data or rule (results.md addendum 60)
+
+- Owner: "yes, study the sleeve weight next". Pre-registered; one independent review plus a delta check
+  (every number reproduced; the first headline, "mostly the data", was withdrawn).
+- Result: unresolved and split by half. The shock ladder paid wherever volatility funds are real, on a few
+  days, with its rarest tests looking fitted to March 2020; the inverse-fund half lost 2011-2020 and paid
+  since 2020-12. As a third leg the sleeve beats cash from 2015 at any weight; a third leg buys a smaller
+  fall, not growth.
+- NO change to any symphony, gate, POLICY operation or the mirror. Two owner questions open (growth or
+  fall as the constraint; keep the inverse-fund half). Logic book: `symphonies/why/SLEEVE.md` gains a row.
+  Report: `results/sleeve-weight-2026-11-21.html`.
+
 ## 2026-11-21 — Study: the KMLM fund rebuilt from its index rules; the switcher on 1991-2020 (results.md addendum 58)
 
 - Owner (2026-11-20): build a rules-exact synthetic instead of accepting the short sample ("ok go ahead

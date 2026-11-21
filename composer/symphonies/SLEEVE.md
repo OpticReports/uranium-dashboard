@@ -61,6 +61,7 @@ No reason for any of them is recorded.
 | A static VIXM leg | left as the owner's question | add. 54.3 |
 | Other windows for the IEF-vs-PSQ test, the LABD/TMV and KMLM tests, the ladder's RSI tests | 0 of 45 pass; level with the live windows | add. 59 |
 | The ladder's one-day returns and ranks over 2 to 5 days | behind on every stretch | add. 59 |
+| Another weight for the sleeve, the shock ladder alone, or dropping the inverse-fund half | the sleeve beats cash as a third leg at any weight from 2015; the ladder carries it before 2021; the weight is the owner's risk budget, not built | add. 60 |
 
 ## Known quirks and limits
 
