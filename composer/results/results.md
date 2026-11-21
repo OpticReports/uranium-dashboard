@@ -5325,3 +5325,73 @@ PENDING QUESTIONS (ranked): P1 owner: is the book's deepest fall or its growth t
 live-against-simulated table each quarter; start a live-decay estimate once a year of unchanged rules
 exists (first asked 2026-11-21). P2 per-engine caps in POLICY if the sleeve target changes. P2 split add.
 14b / 50 by weak-market days (carried from add. 61). P3 a worst-day stress outside the sample.
+
+## Addendum 63 — A sleeve weight that moves with the market: valuation, rates, oil, SPY/QQQ stretch (2026-11-21)
+
+Owner (2026-11-21): "perhaps the sleeve weight alternates based upon where things are at ... when markets
+are expensive ... flip to something a little more conservative like the 50% sleeve weight. When prices
+become lower ... go more risk on ... Another one could be switching based off the SMAs or the EMAs ... if
+it's really too high, relative on the 20 or the 50 ... specifically around maybe SPY or the QQs, oil prices,
+interest rates, cape." Pre-registered (`research/dynsleeve_2026-11/PREREG.md`, commit e76a2f54); one
+independent review (14 states rebuilt from raw, 0 sessions differing; all values reproduced; 113 other
+threshold / weight / lag combinations tried) plus a delta check (5,612 values, 0 mismatches); one verdict
+line of the first draft was false and the leads' p-values belonged to the other direction
+(`VERIFICATION.md`, `DEVIATIONS.md` 1-7). Report with charts:
+`results/dynamic-sleeve-weight-2026-11-21.html`.
+
+VERDICT: **no market state works as a sleeve-weight switch, in either direction; the constant weight
+matters far more than timing it. "Defensive when expensive" has nothing to switch on since 2015 and the
+wrong sign before; "defensive when stretched up" is the wrong way round in one stretch (2019-2020);
+"risk-on when washed out" pays in drawn-out bear markets and fails badly in a crash. Nothing built.**
+
+METHOD: sleeve at 50% while a 0/1 state is on, 15% while off (and the mirror), the rest split HG/KMLM; a
+state read at one close moves the weights by the next; 5.856 bps of the turnover. Benchmark: the book at
+ONE constant sleeve weight equal to the policy's own average (addenda 9, 26). 30 states: CAPE (three
+forms) and earnings yield against real yields; 10y yield level, direction, curve, fed funds; oil trend and
+spikes; SPY and QQQ stretched above / washed out below their 20- and 50-day simple and exponential averages
+(top / bottom tenth of the trailing 5 years); above the 200-day. 9 primaries, Holm. Samples: 2015-06 on
+(verdict), of which 2015-06..2020-11 and 2021-06 on (all real); 1994-2015 (shape). Each direction has its
+own Newey-West p; checks: one close late, two-session lag, without 2020 and 2022, regimes.
+
+RESULTS (simulated, in sample; log-points a year against the equal-average-weight book):
+- 0 of 9 primaries pass in either direction; no gaining direction has p < 0.05 since 2015-06 in the
+  registered set or in the reviewer's 113 other combinations (smallest 0.063).
+- Constant books since 2015-06: 15% sleeve +0.86 a year (fall 26%), 31.8% +0.78 (21%), 50% +0.69 (17%);
+  15% against 50% = +0.17 same close, +0.10 one close late (where the constant books fall 43-52%). The best
+  switch adds +0.040; the worst costs -0.053.
+- Valuation: CAPE in the top tenth of its history on 98% of days since 2015-06, above its 10-year median on
+  93%: nothing to switch on. 1994-2015: more sleeve while CAPE above its 10-year median -0.043 (p 0.011, 2
+  regimes; -0.007 one close late).
+- Stretched up (SPY above its 50-day average, top tenth): more sleeve -0.053 (p 0.044, 0.40 after 9); less
+  sleeve +0.040 (own p 0.11, 1.00 after 9). By stretch: -0.002 (1994-2015), +0.085 (2015-06..2020-11),
+  -0.002 (2021-06 on); 2020 is 83% of it; best 20 sessions 113%; +0.007 one close late. The sleeve lags the
+  other two most on those days (-1.74 against -0.41 a year, arithmetic).
+- Washed out (SPY below its 50-day, bottom tenth), less sleeve: +0.020 (1994-2015, p 0.17), -0.047
+  (2015-06..2020-11; 2020 alone -0.28 log-points; fall 4.6 points deeper), +0.041 (2021-06 on, p 0.087, 7
+  regimes, 77% of it 2022); net since 2015-06 -0.004. All 8 variants agree by stretch (all-real +0.020 to
+  +0.066; without 2022 +0.014 to +0.040; the 20-day SPY version +0.050 one close late, +0.051 at lag 2).
+  More sleeve while QQQ is above its 200-day (less below) is the same idea: +0.016 since 2015-06 (p 0.44,
+  fall 5.9 points deeper), +0.034 on 1994-2015 (p 0.029).
+- Rates: +0.002 (yield above its 5-year average), -0.003 (yield up 0.50 in a quarter). Oil above its
+  200-day: -0.037 (p 0.15) since 2015-06, +0.008 before.
+
+CANDIDATE EDGES (none actionable; p uncorrected): (1) less sleeve while washed out / below the 200-day:
+positive on the rebuilt years and on the all-real years, in every variant, and survives one close late in
+the 20-day form; fails in a fast crash (2020). What it would take: a way to tell a crash from a grind
+before the fact, and more than 7 real regimes. (2) less sleeve while stretched up: one stretch (2019-2020);
+five all-real years show nothing. (3) less sleeve while stocks are dear: late 1990s only (+0.036, 2
+regimes), gone one close late.
+
+HONESTY BOX: in sample; eleven recent years hold five or fewer regimes of the valuation and rate-level
+states ("not shown", not ruled out); forward earnings not tested (no point-in-time history); CAPE and CPI
+today's vintages; one weight pair and one threshold per state, fixed in advance; QQQ states on
+dividend-adjusted prices (unadjusted flips two of the smallest margins: reviewer); taxes, settlement and a
+free daily reset to weights not modelled; real funds only from 2015-09 (HG), 2020-12 (SLEEVE), 2021-06
+(KMLM), rebuilt and modelled before (VIX funds a model before launch); no sessions 2020-12-02..2021-06-01;
+30 states, two directions, four samples, corrected only across the 9 primaries; same-close fills, with the
+one-close-late columns as the bound. Measurement basis: daily mark-to-market.
+
+PENDING QUESTIONS (ranked): P1 owner: is the book's deepest fall or its growth the binding constraint
+(asked 2026-11-21, open): the constant weight is what moves the result. P2 can a crash be told from a grind
+before the fact (speed of the fall, volatility term structure)? (first asked 2026-11-21). P3 a
+point-in-time history of forward earnings estimates.

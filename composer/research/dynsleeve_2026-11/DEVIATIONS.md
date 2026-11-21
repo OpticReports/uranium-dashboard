@@ -13,7 +13,7 @@ After the independent review (2026-11-21); everything re-run.
 4. **"Without 2020 and 2022"** re-averages the benchmark's weight on the days kept.
 5. **The chart of running edges** uses each sample's own average weight (the first draft used one average
    over 1994-2026, which showed the static cost of holding more sleeve, not the timing).
-6. **Reported though registered only as a check:** the time-shift p (too generous for states tied to
+6. **Registered checks, reported for the stretched-SPY lead and in the JSON for every state:** the time-shift p (too generous for states tied to
    volatility: the sleeve's gap to the other engines swings 27% more on stretched days), the share of the
    edge from its best 20 sessions, on-regimes and off-regimes.
 7. **Not changed, disclosed:** QQQ states use the dividend-adjusted series (SPY states use the price index);

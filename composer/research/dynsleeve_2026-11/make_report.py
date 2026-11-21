@@ -84,7 +84,7 @@ t_stretch = table(["Primary state", "Direction"] + [lab for _, lab in STR],
 WO = [k for k in ST if k.startswith("SD.")]
 t_washed = table(["Washed-out state", "Less sleeve while on: 1994 to 2015", "2015-06 to 2020-11", "2021-06 on (all real)", "all real, one close late", "all real, without 2022"],
                  [[NAME[k], cellx(k, "shape", "on_low"), cellx(k, "mid", "on_low"), cellx(k, "real", "on_low"), lg(ST[k]["real"]["one_close_late"]["on_low"]["d_growth"]),
-                   lg((ST[k]["real"]["on_low"]["sum_of_daily_edge"] - ST[k]["real"]["on_low"]["by_year"].get("2022", 0.0)) / (ST[k]["real"]["n"] - 251) * 252)] for k in WO])
+                   lg(ST[k]["real"]["on_low"]["d_growth_without_2020_2022"])] for k in WO])
 t_prim = table(HEAD, [row(s) for s in PRIM])
 t_prim_shape = table(HEAD, [row(s, "shape") for s in PRIM])
 t_all = "".join(f"<h4>{f}</h4>" + table(HEAD, [row(s) for s in ids]) for f, ids in FAM)
@@ -124,11 +124,12 @@ subs = {
     "{{sd_lo_p_shape}}": dp(sd, "shape"), "{{sd_lo_real}}": dv(sd, "real"), "{{sd_lo_p_real}}": dp(sd, "real"), "{{sd_reg_real}}": str(sd["real"]["regimes"]),
     "{{sd_lo_mid}}": dv(sd, "mid"), "{{sd_2020}}": lg(sdl["by_year"]["2020"], 2), "{{sd_lo_dd}}": pp(sdl["d_maxdd"]),
     "{{sd_2022}}": pu(sd["real"]["on_low"]["by_year"]["2022"] / sd["real"]["on_low"]["sum_of_daily_edge"]),
-    "{{sd20_real}}": f"{dv(ST['SD.SPY.s.20'], 'real')} (p {dp(ST['SD.SPY.s.20'], 'real')}; one close late {lg(ST['SD.SPY.s.20']['real']['one_close_late']['on_low']['d_growth'])})",
+    "{{sd20_real}}": f"{dv(ST['SD.SPY.s.20'], 'real')} (p {dp(ST['SD.SPY.s.20'], 'real')}; one close late {lg(ST['SD.SPY.s.20']['real']['one_close_late']['on_low']['d_growth'])}; two-session lag {lg(ST['SD.SPY.s.20']['real']['lag2']['on_low']['d_growth'])})",
     "{{tq_real}}": lg(tq["real"]["on_high"]["d_growth"]), "{{tq_mid}}": lg(tq["mid"]["on_high"]["d_growth"]), "{{tq_lag2}}": lg(tq["verdict"]["lag2"]["on_high"]["d_growth"]), "{{tq_off}}": str(tq["verdict"]["regimes_off"]),
     "{{va_lo_p_shape}}": dp(va, "shape"), "{{va_lo_late_shape}}": lg(va["shape"]["one_close_late"]["on_low"]["d_growth"]),
     "{{v3_lo_shape}}": dv(ST["V3"], "shape"), "{{v3_lo_p_shape}}": dp(ST["V3"], "shape"), "{{v3_lo_late_shape}}": lg(ST["V3"]["shape"]["one_close_late"]["on_low"]["d_growth"]),
     "{{oa_p}}": pv(ST["OA"]["verdict"]["on_high"]["p_newey_west"]),
+    "{{sd_real_dd}}": f"{min(ST[k]['real']['on_low']['d_maxdd'] for k in WO) * 100:.1f} to {max(ST[k]['real']['on_low']['d_maxdd'] for k in WO) * 100:.1f}",
     "{{sd_lo_ddabs}}": f"{abs(sdl['d_maxdd']) * 100:.1f}", "{{tq_ddabs}}": f"{abs(tq['verdict']['on_high']['d_maxdd']) * 100:.1f}",
     "{{n_pass}}": str(n_pass), "{{n_states}}": str(len(ST)),
     "{{best_name}}": NAME[best[0]], "{{best_dir}}": "more" if best[1] == "on_high" else "less", "{{best_dg}}": lg(ST[best[0]]["verdict"][best[1]]["d_growth"]),
@@ -151,7 +152,7 @@ subs = {
     "{{ra_hi}}": lg(ST["RA"]["verdict"]["on_high"]["d_growth"]), "{{r1_hi}}": lg(ST["R1"]["verdict"]["on_high"]["d_growth"]),
     "{{ch_v}}": chart("c_v", "More sleeve while the state is on: growth against the constant book, 2015-06 on", "Hundredths of a log-point a year (1 = about 1% more growth a year). The mirror, less sleeve while on, is roughly the same bar upside down."),
     "{{ch_s}}": chart("c_s", "The same on 1994 to 2015 (rebuilt and modelled funds)", "Hundredths of a log-point a year."),
-    "{{ch_cum}}": chart("c_cum", "What three of the switches added or lost over time", "Running total of the policy's daily growth less the constant book's, from 1994 (more sleeve while the state is on). A rule that worked would climb steadily."),
+    "{{ch_cum}}": chart("c_cum", "What three of the switches added or lost over time", "Running total of the policy's daily growth less the constant book's, from 1994 (more sleeve while the state is on). A rule that worked would climb steadily. Each stretch is measured against its own average weight; the yardstick resets at 2015-06."),
     "{{charts}}": json.dumps(CH, separators=(",", ":")),
 }
 BODY = open(os.path.join(HERE, "..", "kmlm_2026-11", "report_body.html")).read()

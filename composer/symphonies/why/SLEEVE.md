@@ -52,6 +52,7 @@ No reason for any of them is recorded.
 | Another weight for the sleeve, the shock ladder alone, or dropping the inverse-fund half | the sleeve beats cash as a third leg at any weight from 2015; the ladder carries it before 2021; the weight is the owner's risk budget, not built | add. 60 |
 | Macro states as a risk-off switch or a tilt; this engine's own states as signals for the others | none passes; the ladder being out of cash says nothing consistent about the other engines; gold strong is a lead seen in this engine only | add. 61 |
 | Sleeve weights from 0 to 50% drawn forward 1, 5 and 10 years under ten scenarios (backtest as it stands, half / a quarter / none of the edge, one close late) | more sleeve means less return and a smaller fall wherever an edge survives; with no edge the order flips; what the sleeve costs as a share of return depends on whose decay is assumed: not decided, not built | add. 62 |
+| A sleeve weight that moves with the market: 50% or 15% by valuation, rates, oil, or SPY/QQQ stretched above or washed out below their 20-, 50- and 200-day averages (30 states, both directions) | none passes against a constant weight with the same average; the constant weight matters far more than timing it; less sleeve when washed out pays in drawn-out bear markets and failed in the 2020 crash: a lead, not built | add. 63 |
 
 ## Known quirks and limits
 

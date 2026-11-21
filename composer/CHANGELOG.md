@@ -7,6 +7,17 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-21 — Study: a sleeve weight that moves with the market (results.md addendum 63)
+
+- Owner asked whether the sleeve weight should move with valuation (CAPE), rates, oil, or how far SPY and
+  QQQ sit from their 20/50-day averages. Pre-registered; one independent review plus a delta check (all
+  values reproduced; one verdict line withdrawn; the leads' p-values corrected).
+- Result: no state works as a switch in either direction against a constant weight with the same average;
+  the constant weight matters far more than timing it. Lead only: less sleeve when the market is washed
+  out, which pays in drawn-out bear markets and failed in the 2020 crash.
+- NO change to any symphony, gate, POLICY operation or the mirror. Logic book: `symphonies/why/SLEEVE.md`
+  gains a row. Report: `results/dynamic-sleeve-weight-2026-11-21.html`.
+
 ## 2026-11-21 — Study: forward ranges by sleeve weight, Monte Carlo and other methods (results.md addendum 62)
 
 - Owner asked for Monte Carlo on the sleeve-weight options and other data-backed estimates for 1, 5 and 10

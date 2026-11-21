@@ -372,3 +372,13 @@ deterministic rationale are listed.
     has its own); per-engine caps in POLICY if targets change. Method notes: always include a zero-edge
     scenario; compare live and simulated at the weights actually held and from the same close. Tooling:
     `research/forward_2026-11/f1_mc.py` (`draw`, `run`), `fdata.py` (`source`, cached late paths).
+32. Dynamic sleeve weight (add. 63, 2026-11-21): REJECTED as tested; no build. Sleeve at 50% / 15% by 30
+    market states (CAPE, rates, oil, SPY/QQQ stretch against 20/50/200-day averages), both directions,
+    against the equal-average-weight constant book: 0 of 9 primaries pass; nothing in 113 other
+    combinations (reviewer). Constant 15% against 50% sleeve is worth +0.17 log-points a year since 2015-06
+    (+0.10 one close late); the best switch +0.040. Leads logged: less sleeve when washed out / below the
+    200-day (rebuilt years and all-real years agree; fails in the 2020 crash; reopen only with a
+    crash-against-grind discriminator); less sleeve when stretched up (2019-2020 only). Method notes: each
+    direction of a switch needs its own p (a no-information switch loses about 0.005 a year to costs);
+    always show the all-real sample and split a sample whose halves cancel. Tooling:
+    `research/dynsleeve_2026-11/ds1_run.py` (`states`, `policy`, `run_state`).
