@@ -1,58 +1,58 @@
 {
- "exposure": 3.0789939126401458,
+ "exposure": 3.0790621391840287,
  "calibration": {
   "months": [
-   "2008-04",
+   "2008-03",
    "2020-11"
   ],
-  "n": 152,
-  "all_22_markets_from": "2008-03-03"
+  "n": 153,
+  "all_22_markets_from": "2008-02-01"
  },
  "vs_index_monthly": {
   "2008-2020 (all 22 markets, today's rules)": {
-   "months": 152,
-   "corr": 0.9798109058565762,
-   "synthetic_vol": 0.14805678468271094,
-   "index_vol": 0.15093291637011277,
-   "tracking_error": 0.030175968317080238,
-   "mean_gap_per_yr": 0.0042575149955707565
+   "months": 153,
+   "corr": 0.979577175674289,
+   "synthetic_vol": 0.14765446891032355,
+   "index_vol": 0.15048077279990338,
+   "tracking_error": 0.030257956618584752,
+   "mean_gap_per_yr": 0.003036275633491259
   },
   "2005-2007 (EV rules, markets missing)": {
-   "months": 40,
-   "corr": 0.9550348190991329,
-   "synthetic_vol": 0.09778962860285549,
-   "index_vol": 0.09008938083071466,
-   "tracking_error": 0.02918155162057152,
-   "mean_gap_per_yr": 0.06876799389567509
+   "months": 39,
+   "corr": 0.955093046628788,
+   "synthetic_vol": 0.09827563939200344,
+   "index_vol": 0.09012982000115886,
+   "tracking_error": 0.02935791123864267,
+   "mean_gap_per_yr": 0.0665917121899999
   },
   "1988-2004 (the index used OLDER rules)": {
    "months": 143,
-   "corr": 0.6855118040375544,
-   "synthetic_vol": 0.11115624699109498,
+   "corr": 0.6858287147121577,
+   "synthetic_vol": 0.11122265419172601,
    "index_vol": 0.18705916948075943,
-   "tracking_error": 0.13725680665653486,
-   "mean_gap_per_yr": 0.0012772232968578812
+   "tracking_error": 0.13720051305940487,
+   "mean_gap_per_yr": 0.00043024529303609625
   }
  },
  "vs_fund": {
   "whole overlap": {
    "sessions": 776,
-   "daily_corr": 0.8886627949478668,
-   "monthly_corr": 0.970467087485648,
-   "flag_agreement": 0.9548387096774194,
+   "daily_corr": 0.8933749346351745,
+   "monthly_corr": 0.9753200776813594,
+   "flag_agreement": 0.9651612903225807,
    "flag_days": 775,
    "flips": 62,
-   "flips_matched_same_day": 38,
+   "flips_matched_same_day": 41,
    "synthetic": {
-    "return": 0.09307620253528115,
-    "vol": 0.14964038996484896
+    "return": 0.09108009650660676,
+    "vol": 0.1495974382876142
    },
    "fund": {
     "return": 0.08431151611481069,
     "vol": 0.16722481075652762
    },
-   "vol_ratio": 0.894845623014154,
-   "return_gap": 0.008764686420470458,
+   "vol_ratio": 0.8945887731062938,
+   "return_gap": 0.006768580391796064,
    "rymfx": {
     "daily_corr": 0.6124495664402029,
     "flag_agreement": 0.8696774193548387
@@ -67,22 +67,22 @@
   },
   "first part": {
    "sessions": 358,
-   "daily_corr": 0.8572043563289897,
-   "monthly_corr": 0.9636304277226129,
-   "flag_agreement": 0.9495798319327731,
+   "daily_corr": 0.8570693209867093,
+   "monthly_corr": 0.9637453447711508,
+   "flag_agreement": 0.9467787114845938,
    "flag_days": 357,
    "flips": 29,
-   "flips_matched_same_day": 13,
+   "flips_matched_same_day": 12,
    "synthetic": {
-    "return": 0.21556302098569335,
-    "vol": 0.15603812521989555
+    "return": 0.21459424331027632,
+    "vol": 0.1563001560202201
    },
    "fund": {
     "return": 0.1952436836633813,
     "vol": 0.18087849618612173
    },
-   "vol_ratio": 0.8626681916867235,
-   "return_gap": 0.02031933732231206,
+   "vol_ratio": 0.8641168481375983,
+   "return_gap": 0.019350559646895027,
    "rymfx": {
     "daily_corr": 0.6265175544820816,
     "flag_agreement": 0.896358543417367
@@ -91,22 +91,22 @@
   },
   "second part": {
    "sessions": 418,
-   "daily_corr": 0.9238763664524791,
-   "monthly_corr": 0.9690122643819945,
-   "flag_agreement": 0.9593301435406698,
+   "daily_corr": 0.9339008252999618,
+   "monthly_corr": 0.9801127594389818,
+   "flag_agreement": 0.9808612440191388,
    "flag_days": 418,
    "flips": 33,
-   "flips_matched_same_day": 25,
+   "flips_matched_same_day": 29,
    "synthetic": {
-    "return": -0.0019679107806542806,
-    "vol": 0.14387132226927837
+    "return": -0.00466930931332632,
+    "vol": 0.14353931785235902
    },
    "fund": {
     "return": -0.0024749828933239293,
     "vol": 0.1545935164392873
    },
-   "vol_ratio": 0.9306426658958897,
-   "return_gap": 0.0005070721126696487,
+   "vol_ratio": 0.9284950698998459,
+   "return_gap": -0.0021943264200023904,
    "rymfx": {
     "daily_corr": 0.6049251092041621,
     "flag_agreement": 0.84688995215311
@@ -121,31 +121,31 @@
   },
   "pre-registered second half": {
    "sessions": 81,
-   "daily_corr": 0.8863410892012024,
-   "monthly_corr": 0.9701771679488518,
-   "flag_agreement": 0.9382716049382716,
+   "daily_corr": 0.9206738577256186,
+   "monthly_corr": 0.9983937600155895,
+   "flag_agreement": 0.9629629629629629,
    "flag_days": 81,
    "flips": 7,
-   "flips_matched_same_day": 4,
+   "flips_matched_same_day": 5,
    "synthetic": {
-    "return": -0.0641670964004386,
-    "vol": 0.08621889107783215
+    "return": -0.074212635127333,
+    "vol": 0.08905161262968783
    },
    "fund": {
     "return": -0.05514777459487996,
     "vol": 0.10407040969110327
    },
-   "vol_ratio": 0.8284669132536604,
-   "return_gap": -0.009019321805558644,
+   "vol_ratio": 0.8556861925883303,
+   "return_gap": -0.019064860532453043,
    "rymfx": {
     "daily_corr": 0.27532606267128695,
     "flag_agreement": 0.7160493827160493
    },
    "constant_flag_agreement": 0.7037037037037037,
    "bars": {
-    "F1_daily_corr>=0.90": false,
-    "F2_flag>=0.95": false,
-    "F3_vol_within_15pct": false,
+    "F1_daily_corr>=0.90": true,
+    "F2_flag>=0.95": true,
+    "F3_vol_within_15pct": true,
     "F3_return_within_3pts": true
    }
   }
