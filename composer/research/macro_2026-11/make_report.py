@@ -140,7 +140,7 @@ for sid, v in P2["verdict"]["states"].items():
     s = P2["shape"]["states"].get(sid)
     rows.append([NAME[sid], pu(v["share_of_days_tilted"]), wts(v["avg_weights_when_tilted"]), f"{lg(v['d_growth'], 3)} (p {pv(v['p_growth'])})", pv(v["p_holm"]), lg(v["mirror_d_growth"], 3), pp(v["d_maxdd"]),
                  f"{lg(s['d_growth'], 3)} (mirror {lg(s['mirror_d_growth'], 3)})" if s else ""])
-t_p2 = table(["Tilt while on", "Share of days tilted, 2015-06 on", "Average weights while tilted", "Book growth vs the fixed book (p)", "p after 10", "Mirror (tilt while off)", "Deepest fall", "1994-2015 (rebuilt): growth (mirror)"], rows)
+t_p2 = table(["Tilt while on", "Share of days tilted, 2015-06 on", "Average weights while tilted", "Book growth vs the fixed book (p)", "p after 11", "Mirror (tilt while off)", "Deepest fall", "1994-2015 (rebuilt): growth (mirror)"], rows)
 RN = {"RE1": "Baa spread narrowed more than 0.20 in a quarter", "RE2": "Financial conditions easing over a quarter", "RE3": "S&P 500 above its 50-day average"}
 rows = []
 for k, lab in (("verdict", "2006-07 on"), ("shape", "1991-2006 (modelled)")):
@@ -208,6 +208,7 @@ subs = {
     "{{t1_top20}}": pu(TB_["share_of_on_log_from_20_best_days"]), "{{t1_mv}}": f"{TB_['mean_over_vol_on']:.1f} against {TB_['mean_over_vol_off']:.1f}",
     "{{d_txt}}": f"by {abs(PD['d_maxdd']) * 100:.1f} points, p {pv(PD['p_maxdd'])}; {pv(PD['p_holm_best_of_growth_or_fall'])} after correction",
     "{{d_fall}}": f"{DL['book_deepest_fall'][0]} to {DL['book_deepest_fall'][1]}", "{{d_share}}": pu(DL["share_of_that_fall_with_dollar_on"]),
+    "{{gt_r}}": lg(RB["gate"]["2015-09 on"]["live_gated_tree_less_tbills_per_yr"]),
     "{{gt_v}}": lg(RB["gate"]["2006-07 on"]["live_gated_tree_less_tbills_per_yr"]), "{{gt_s}}": lg(RB["gate"]["1991-2006"]["live_gated_tree_less_tbills_per_yr"]),
     "{{t1_n}}": f"{RB['counts']['T1_on_days']:,}", "{{t1_reg}}": str(sc(T1R["BOOK.verdict"])["regimes"]), "{{t1_reg_up}}": str(sc(T1R["BOOK.verdict"])["regimes_above_off_rate"]),
     "{{g2_txt}}": f"{lg(sc(BVR['G2'])['diff_per_yr'])}, p {allp(sc(BVR['G2']))}; one close late {lg(lt(BVR['G2'])['diff_per_yr'])}",
@@ -260,7 +261,7 @@ subs = {
     "{{t_design}}": t_design, "{{t_map}}": t_map, "{{t_singles}}": t_singles, "{{t_p1}}": t_p1, "{{t_cross}}": t_cross, "{{t_cross2}}": t_cross2, "{{t_redeploy}}": t_redeploy, "{{t_p2}}": t_p2, "{{t_re}}": t_re,
     "{{t_years}}": t_years,
     "{{t_open}}": table(["Priority", "Question", "What it would move", "Status"], [
-        ["P1", "Measure decision price against fill on the live record (Composer and the mirror), per engine, with stressed days apart", "How much of the one-close-late gap applies live; it bounds every simulated number in addenda 58 to 61", "open, first asked 2026-11-21"],
+        ["P2", "Split the measured-fill check (addendum 14b) and the 15:54-versus-close decision check (addendum 50) by weak-market days and by engine", "Whether the close assumption holds where the simulated return is concentrated; also what one missed rebalance costs on the mirror", "open, first asked 2026-11-21"],
         ["P1", "Owner: is the book's deepest fall or its growth the binding constraint?", "Whether any reserve held for stress states is worth its cost; the third leg's weight (addendum 60)", "asked 2026-11-21, open"],
         ["P2", "Track the gold-strong state forward from 2026-11-21 with the definition frozen", "Whether gold is a real risk-on state for this book or an accident of 2015-2021", "open, first asked 2026-11-21"],
         ["P2", "Daily gold before 2000-09 (London fix) in place of monthly averages", "A sharper test of gold on 1994-2000", "open, first asked 2026-11-21"],

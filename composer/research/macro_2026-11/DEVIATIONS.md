@@ -52,8 +52,9 @@
 ## After the statistics review (review B, 2026-11-21)
 14. **The shifted-state placebo is too generous for states tied to volatility** (the S&P below its 200-day
     average, Holy Grail's gate, the shock ladder, credit, volume): the review's size check (equal means, the
-    observed volatility link, 2,000 draws) found it rejecting at the 5% level 14 to 31% of the time for those
-    states and about 6 to 8% for gold, the dollar and liquidity. The registered p-values stay in the tables;
+    observed volatility link, 2,000 draws) found it rejecting at the 5% level 11 to 22% of the time for the
+    S&P state, 13 to 31% for the gate, 15 to 21% for credit, 13 to 38% for volume, 5 to 16% for the shock
+    ladder, and 6 to 9% for gold, the dollar and liquidity. The registered p-values stay in the tables;
     a second p (Newey-West, 63 and 10 sessions) is reported beside them and is the one quoted in the verdict.
 15. **Post hoc (`m6_robust.py`):** every headline re-scored with each trade filled one close later than the
     close its signal is read from (a bound); without 2020 and 2022; without the gold regime that earned the

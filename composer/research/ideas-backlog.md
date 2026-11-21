@@ -353,3 +353,13 @@ deterministic rationale are listed.
     fitted to March 2020); the inverse-fund half lost 2011-2020 and paid since. Owner P1: growth or fall
     as the binding constraint; keep the inverse-fund half? Next data: UVXY/SVXY rebuild 2006-2011;
     paper-track ladder triggers. Tooling: `research/sleeve_weight_2026-11/s1_sleeve.py` (`half`, `path`).
+30. Macro regime layer (add. 61, 2026-11-21): REJECTED as a switch, a tilt and a re-entry signal; no build.
+    Thirty states / eleven composites: none passes; the book earns more in weak markets on same-close
+    fills (the SETTLED mechanism again), which is itself conditional on 2020 and 2022 and mostly gone with
+    fills one close late. Leads logged, none actionable: gold strong as risk-on (one regime, one engine,
+    opposite sign to the registered one; track forward with the definition frozen); tight liquidity (one
+    episode). By-product: one close late the book's simulated growth since 2015-06 falls from +0.78 to
+    +0.32 log-points a year; add. 14b / 50 say live trading is not there, so it prices a MISSED rebalance.
+    Next data: split 14b and 50 by weak-market days; daily gold before 2000; real-time vintages. Method
+    note: the circular-shift placebo over-rejects for volatility-tied states (use a HAC second test).
+    Tooling: `research/macro_2026-11/mdata.py` (lagged state panel), `m6_robust.py` (`late_path`).

@@ -34,7 +34,8 @@ def late_path(held, P, cached, label):
         to[d] = sum(abs(h.get(k, 0) - hp.get(k, 0)) for k in set(h) | set(hp))
         same[d1] = sum(x * (P[t][d1] / P[t][d] - 1) for t, x in h.items())
         if all(t in P and d in P[t] and d1 in P[t] for t in hp):
-            # gross of the late holdings, less the cost the study's path paid that day (cached is net, same is gross)
+            # gross of the late holdings, less the cost the study's path paid that day (cached is net, same is gross).
+            # The cost lands one day off the trade it belongs to; the total is the same (review B: at most 0.0004 a year)
             late[d1] = sum(x * (P[t][d1] / P[t][d] - 1) for t, x in hp.items()) + ((cached[d1] - same[d1]) if d1 in cached else 0.0)
     gap = [abs(same[d] - cached[d]) for d in same if d in cached]
     print(f"  {label}: {len(same)} sessions; rebuilt-from-holdings vs cached path, median gap {np.median(gap):.6f}, max {max(gap):.5f}; late path missing on {len(same) - len(late)}", flush=True)

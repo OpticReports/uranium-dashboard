@@ -56,6 +56,7 @@ fund. It has no macro or rates input (addendum 33).
 | Overnight or pre-open exits | 44 of 47 rules lowered CAGR (the 3 positives are mirror controls, t of 1.3 or less); every conditioned exit with 5 or more cases negative | add. 53, 54.2 |
 | Other windows for the 10/20 crossover, the 20-day cash test, the SPY 200-day gate (50 to 300 days), the pick ranking; simple or exponential averages | 0 of 89 pass on 2006-2026; near-by windows level with the live ones, EMA no better than SMA | add. 59 |
 | Another RSI window for the pop, dip and SOXL tests (5 to 20 days), with matched or live thresholds | worse; distinguishably so at 5 days and at 17 to 20 | add. 59 |
+| Macro states (yields and curve, inflation, CAPE, gold, credit, dollar, volume, liquidity, oil) as a risk-off switch, a tilt away from this engine, or a re-entry signal for the SPY gate | none passes; the engine earns more with the S&P below its 200-day average on same-close fills, and less with fills one close late; on gate-off days the live tree earned as much as the ungated one over 2006-2026 | add. 61 |
 
 ## Known quirks and limits
 

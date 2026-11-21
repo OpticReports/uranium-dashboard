@@ -7,6 +7,17 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-21 — Study: macro states as a risk-on / risk-off layer (results.md addendum 61)
+
+- Owner asked for macro indicators (yields, CAPE, gold, rates of change, volume) as a risk-on/off layer
+  across the symphonies. Pre-registered; two independent reviews and a delta check (three data lags
+  corrected and re-run; three verdict lines of the first draft withdrawn).
+- Result: no macro state works as a switch, a tilt between engines or a re-entry signal. The book earned
+  more in weak markets on the simulated paths, conditional on same-close fills and on 2020 and 2022.
+  Gold strong is a lead (opposite sign to the registered one); liquidity is one episode.
+- NO change to any symphony, gate, POLICY operation or the mirror. Logic book: `symphonies/why/HG.md`,
+  `KMLM.md` and `SLEEVE.md` each gain a row. Report: `results/macro-regimes-2026-11-21.html`.
+
 ## 2026-11-21 — Study: the sleeve's weight, data or rule (results.md addendum 60)
 
 - Owner: "yes, study the sleeve weight next". Pre-registered; one independent review plus a delta check

@@ -33,3 +33,17 @@ number it recomputed to four decimals.
 | B12 | MINOR | Edges omitted (three single states with the same sign on both stretches; two cross signals into the sleeve; a re-entry state) and the volume lead's concentration. | ADDED to section 7. |
 | B13 | MINOR | Post hoc items not labelled. | LABELLED; DEVIATIONS 18. |
 | B16 | SERIOUS | `m6_robust.py` first dropped the wrong gold regime (the longest, not the one carrying the result). | FIXED before any report used it. |
+
+## Delta check by B on the re-run files and the rewrite. Verdict: signs off on the verdict bullets
+Every number B re-derived on the corrected files matched (`out/robust.json` cell by cell where checked:
+all one-close-late rows, after-trade shares, the live gated tree, the 98.3% overlap, the gold regime).
+`late_path` holdings and `nw()` confirmed; the cost in `late_path` lands one day off (at most 0.0004 a
+year; noted in the code). Required and applied: the exact size-check ranges in "Two p-values"; the gate
+note's 2015-09 on line (the gate gave up about +0.5 there; +1.54 is B's figure); "p after 11" on the tilt
+table; the concentration sentence in section 3 (B's trimmed gap and medians); the Baa state does not fade
+one close late on the recent years; the last verdict bullet reworded. B also pointed to addenda 14b and
+50: measured fills land within 3 bps a side of the close and decisions are read near 15:54, so the
+one-close-late bound is reported as a bound that live trading does not sit at, and the open question was
+narrowed to splitting those two checks by weak-market days. Not re-checked by B: the rates, inflation and
+re-entry numbers after the lag fix (A's sensitivity run covers their direction), the two new charts'
+series, and this log.

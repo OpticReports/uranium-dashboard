@@ -5159,3 +5159,87 @@ sub-strategy as its own tree; when a few days carry a result, find which test fi
 that test has ever been true; a pass against cash says "better than cash", not "this weight".
 
 NO CHANGE to any symphony, gate, POLICY operation or the mirror. No service to redeploy.
+
+## Addendum 61 — Macro states as a risk-on / risk-off layer across the symphonies (2026-11-21)
+
+Owner (2026-11-21): "look at scenarios on which the macro market like yields, CAPE, gold prices (adjusted
+and nominal), rates of changes in these asset classes as well, volume etc in order to see if there are
+macro indicators that we can use to improve risk on risk off switching ... a major focus is these
+symphonies moving in isolation." Pre-registered (`research/macro_2026-11/PREREG.md`, commit 6457e7d3);
+two independent reviews (construction; statistics and claims) and a delta check: every number reproduced,
+three data lags were corrected and everything re-run, and three verdict lines of the first draft did not
+survive (`VERIFICATION.md`, `DEVIATIONS.md` 1-18). Report with charts:
+`results/macro-regimes-2026-11-21.html`.
+
+VERDICT: **no macro state gives a usable risk-off switch for the book, a tilt between engines, or a
+re-entry signal for Holy Grail's gate. On the simulated paths the book earned MORE in the states an overlay
+would call risk-off (the mechanism already in the backlog's settled questions), and that result itself
+rests on same-close fills and on 2020 and 2022. Gold is a lead with the opposite sign to the registered
+one; liquidity is one episode. Nothing built.**
+
+METHOD: 30 states in nine families (rates and curve, inflation, CAPE, gold, credit, dollar, volume,
+liquidity, oil), each the risk-off reading fixed in advance, with publication lags; 11 family composites
+(primary); S&P below its 200-day average as a reference; 5 cross-engine and 3 re-entry states. Engine
+paths of addenda 58-60; book 34.1/34.1/31.8. Verdict sample: book and sleeve 2015-06 on (a third of the
+book is the rebuilt KMLM fund until 2020-12; a 124-session hole 2020-12-02..2021-06-01), HG 2006-07 on,
+KMLM 2021-06 on; earlier years shape only. Tests: on/off growth map; P1 de-risk to half against a
+constant mix of equal average exposure; P2 a 15-point tilt between engines; cross-engine; re-entry.
+p by every circular shift of the state, Holm over registered tests; a second p (Newey-West) added after
+review B showed the shift test over-rejects for volatility-tied states (11 to 38% at a nominal 5%).
+
+RESULTS (simulated, in sample; growth in log-points a year):
+- P1: 9 of the 10 scoreable composites fail the rule set in advance. Liquidity passes by the letter
+  (+0.060 over the even mix, p 0.002, 0.025 after Holm) and should not count: since 2015 it is one state
+  (Fed balance sheet shrinking, 1,771 of 1,790 on-days), before 2003 it is M2 alone, 61% of its off-days
+  are 2019-10..2022-08, two regimes, and one close late the on/off gap is -0.01. Dollar: cut the deepest
+  fall 3.2 points on the recent years (one episode, late 2018; 0.083 after Holm), deepened it on the
+  rebuilt ones.
+- S&P below its 200-day average (reference state): book +1.48 against +0.61 since 2015-06 (higher in 9
+  of 9 years; second-test p 0.006 to 0.012), +0.53 against +0.22 on 1994-2015 (rebuilt). De-risking there
+  costs 0.072 a year against the same cash held evenly. Conditions: 2020 and 2022 are 50% of those days
+  and 68% of their growth (without them +0.96 against +0.56, p about 0.1); with every trade filled ONE
+  CLOSE LATE the gap is +0.38 (p 0.11 to 0.16) on the book, negative for HG (-0.30) and the sleeve (-0.05),
+  -0.04 on the rebuilt years, and only KMLM since 2021-06 keeps it (+1.57). HG's gate-off state is the same
+  reading on 98% of days: the other two engines earned +1.02 more on those days since 2015-06, 80% of it in
+  2020 and 2022 (without them +0.08, p 0.83). Moving HG's weight to them: +0.020 a year (p 0.10), deeper
+  fall.
+- Holding a reserve and deploying it below the average (half size normally, 60% invested on average):
+  +0.55 against +0.49 for the even mix, but a plain book 87% invested has the same deepest fall and grows
+  +0.69.
+- Gold strong (at least 3 of 5 gold states): book +1.12 against +0.47 since 2015-06 (second-test p
+  0.001), the OPPOSITE of the registered sign; +1.05 on 2015-06..2020-12, +0.24 (p 0.39) since 2021-06,
+  -0.05 on the rebuilt years; one regime (2018-12..2020-11) holds 44% of it (without it +0.42, p 0.02 to
+  0.04); only the sleeve shows it on its own recent sample; one close late +0.23 (p 0.09 to 0.18).
+- Rates and curve, inflation, CAPE, oil, "any 2 / any 3 families": nothing distinguishable on either
+  stretch. Credit stress and heavy volume read risk-ON: the S&P result again (53 to 78% of their days).
+- P2 tilt: a static lean to KMLM (+0.098 with the state always on; the mirror gains as much). Re-entry
+  (RE1-RE3): none distinguishable; on gate-off days the ungated tree earned +0.69 over T-bills since
+  2006-07 and the LIVE gated tree +0.76, so the gate gave up nothing there (about +0.5 on 2015-09 on).
+- BY-PRODUCT (review B, reproduced in `m6_robust.py`): with every trade one close late, book growth since
+  2015-06 falls from +0.78 to +0.32 and the deepest fall from 21% to 47% (HG +0.61 to +0.06, KMLM +1.16
+  to +0.65, sleeve +0.40 to +0.07); 62% (HG) and 78% (sleeve) of below-average growth is earned in the
+  session after a trade. A bound, not live: measured fills land within 3 bps a side of the close (add.
+  14b) on decisions read near 15:54 (add. 50). It prices a missed or late rebalance, not normal trading.
+
+CANDIDATE EDGES (edge rule; none actionable): (1) weak markets as the book's best state: 549 days, 10
+regimes, mirror +0.067 over even cash; not usable without borrowing, and mostly gone one close late.
+(2) gold strong as risk-on: a lead; frozen definition to be tracked forward. (3) tight liquidity as
+risk-off: one episode. (4) Baa spread widening, heavy volume, down-day volume: same sign on both
+stretches, overlap the S&P state. (5) the sleeve's shock ladder out of cash -> other engines: +2.03
+(2015-2020), +0.92 (rebuilt), -0.60 since 2021-06; inconsistent. (6) volume shocks on HG: 83 days, three
+days are 53% of it, negative one close late.
+
+HONESTY BOX: in sample for all three engines; eleven recent years hold about one of each macro regime,
+so nothing here can confirm a macro rule; same-close fills in simulation; CPI, M2 and the financial
+conditions index are revised vintages (the conditions index reads differently as first published; its
+three states carry no result); composites change make-up before 2003; thresholds fixed once, not tuned;
+multiplicity corrected only within the eleven composites; the S&P state is a reference outside every
+correction; the size check of the shift test and three figures marked "(reviewer)" in the report are the
+reviewer's computations. Measurement basis: daily mark-to-market, 5.856 bps x turnover.
+
+PENDING QUESTIONS (ranked): P1 owner: is the book's deepest fall or its growth the binding constraint
+(asked 2026-11-21, open; also decides whether any reserve for weak markets is worth its cost). P2 track
+the frozen gold-strong state forward (first asked 2026-11-21); P2 split add. 14b's fill check and add.
+50's 15:54-versus-close check by weak-market days and by engine; P2 daily gold before 2000-09; P2
+as-published vintages of CPI, M2 and the conditions index; P2 owner: keep the sleeve's inverse-fund half
+(asked 2026-11-21, open); P3 rebuild UVXY/SVXY 2006-2011.
