@@ -363,3 +363,12 @@ deterministic rationale are listed.
     Next data: split 14b and 50 by weak-market days; daily gold before 2000; real-time vintages. Method
     note: the circular-shift placebo over-rejects for volatility-tied states (use a HAC second test).
     Tooling: `research/macro_2026-11/mdata.py` (lagged state panel), `m6_robust.py` (`late_path`).
+31. Forward ranges by sleeve weight (add. 62, 2026-11-21): DONE as scenario ranges; no build. Today's book,
+    10y median a year: +120% (2015-on backtest, ceiling) / +46% (half the edge) / +21% (a quarter) / -2.4%
+    (none); +24% / +11% for the haircuts on the 1994-on history; median deepest fall 21 / 32 / 45 / 73%.
+    Sleeve weight NOT decided by the data (same direction wherever an edge survives; flips at zero edge;
+    cost depends on per-engine decay). Owner P1 x2 open (growth or fall; which scenario to plan on).
+    Standing follow-ups: quarterly live-against-simulated table (the haircuts are borrowed until this book
+    has its own); per-engine caps in POLICY if targets change. Method notes: always include a zero-edge
+    scenario; compare live and simulated at the weights actually held and from the same close. Tooling:
+    `research/forward_2026-11/f1_mc.py` (`draw`, `run`), `fdata.py` (`source`, cached late paths).

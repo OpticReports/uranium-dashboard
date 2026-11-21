@@ -5243,3 +5243,85 @@ the frozen gold-strong state forward (first asked 2026-11-21); P2 split add. 14b
 50's 15:54-versus-close check by weak-market days and by engine; P2 daily gold before 2000-09; P2
 as-published vintages of CPI, M2 and the conditions index; P2 owner: keep the sleeve's inverse-fund half
 (asked 2026-11-21, open); P3 rebuild UVXY/SVXY 2006-2011.
+
+## Addendum 62 — Forward ranges for the book by sleeve weight: Monte Carlo and four other methods (2026-11-21)
+
+Owner (2026-11-21): "how about performing monte carlo simulations on these sleeves as well. Are there other
+methods for estimating future returns, data backed ones that quants use, that we can use here to add more
+estimates of what the next 1, 5, and 10 years looks like?" Pre-registered
+(`research/forward_2026-11/PREREG.md`, commit 779d0dae); one independent review (own re-implementation, 526
+of 528 comparisons within Monte Carlo error; citations checked on the web) plus a delta check; four
+verdict lines of the first draft did not survive and three scenarios were added (`VERIFICATION.md`,
+`DEVIATIONS.md` 1-9). Report with charts: `results/forward-ranges-2026-11-21.html`.
+
+VERDICT: **scenario ranges, not forecasts, and none is a floor. Today's book (31.8% sleeve), median return a
+year over ten years: +120% if the 2015-on backtest repeats (a ceiling), +46% at half the simulated edge,
++21% at a quarter, -2.4% at none; +24% and +11% for the same haircuts on the 1994-on history. Less edge
+means deeper falls. More sleeve means less return and a smaller fall wherever an edge survives; what the
+sleeve costs as a share of return is not decided by the data. Nothing built or changed.**
+
+METHOD: stationary bootstrap (mean block 21 sessions; the same sessions for all three engines), 10,000
+ten-year paths per scenario, one seed; third-leg weight 0 / 10 / 20 / 31.8 / 40 / 50%, the rest split
+HG/KMLM; weights DRIFT and all reset to target when an engine passes its own target + 10 points (POLICY
+operation 5 in effect at today's weights). Scenarios: A/B/C as simulated (2021-06 on; 2015-06 on; 1994 on);
+D/E each engine's mean over T-bills x 0.5 / 0.27 on B, swings unchanged (book Sharpe over T-bills 2.64 ->
+1.32 -> 0.71); H/I the same on C; Z x 0; F the one-close-late paths of addendum 61; G each engine less its
+average S&P beta x the shortfall of an S&P at 2% a year. Side methods: deflated Sharpe ratio, beta split,
+the live record.
+
+RESULTS (31.8% sleeve unless stated; simulated sources, in sample):
+| Scenario | 10y median a year (5th / 95th) | 1y: 5th / median / 95th | Ends below start 1y / 5y / 10y | Deepest fall in 10y: median / 1-in-20 |
+|---|---|---|---|---|
+| B as simulated, 2015 on (ceiling) | +120% (+84 / +171) | +33 / +113 / +331 | 0.2 / 0 / 0% | 21 / 28% |
+| C as simulated, 1994 on (ceiling) | +59% (+36 / +91) | -1 / +55 / +184 | 5.6 / 0 / 0% | 30 / 43% |
+| D half the edge | +46% (+23 / +78) | -12 / +40 / +185 | 12 / 0.4 / 0% | 32 / 46% |
+| E a quarter | +21% (+2 / +47) | -26 / +16 / +130 | 31 / 11 / 3% | 45 / 66% |
+| H half, 1994-on source | +24% (+6 / +48) | -23 / +20 / +120 | 26 / 6 / 1% | 42 / 61% |
+| I a quarter, 1994-on source | +11% (-5 / +32) | -31 / +7 / +95 | 40 / 24 / 15% | 52 / 75% |
+| Z none of the edge | -2.4% (-18 / +18) | -40 / -7 / +89 | 58 / 57 / 58% | 73 / 91% |
+| F one close late (bound) | +38% (+19 / +60) | -14 / +39 / +116 | 12 / 0.6 / 0% | 42 / 60% |
+| G S&P at 2% (ceiling, shifted) | +111% | | | 21 / 29% |
+- By sleeve weight, 10y median a year at 0 / 31.8 / 50%: B +153 / +120 / +101; D +54 / +46 / +40; E +23 /
+  +21 / +19; C +78 / +59 / +48; F +49 / +38 / +31; Z -6.0 / -2.4 / -1.4. 1-in-20 deepest fall: B 40 / 28 /
+  22%; D 62 / 46 / 39%; E 80 / 66 / 59%. Share of the return given up from 0% to 50% sleeve: 34% (B), 25%
+  and 16% under one haircut for all engines (D, E), 39% on the 1994-on history, 37% one close late: before
+  2015 HG / KMLM / SLEEVE kept 73 / 35 / 1% of their 2015-on edge, one close late 19 / 60 / 20%. The 1-in-20
+  bad five years favours less sleeve on the ceilings and more under the deep haircuts. NOT DECIDED.
+- Drift against a daily reset: deepest fall in 10y unchanged at the median (21% both on B; 32% both on D);
+  about 2 cap resets a year. The one live fall of the three (2026-10-28..11-05): 14.2% live against 10.7%
+  simulated = 1.5 points KMLM at 40% of the three + 2.0 points engines worse live (KMLM 1.4, HG 0.7).
+- Cap rule: one cap at "largest target + 10" (as registered) lets HG/KMLM drift to 50-60% at a 40-50%
+  sleeve (10y median +119% at a 50% target against +101% with per-engine caps): if the sleeve target is ever
+  raised POLICY's cap needs per-engine levels.
+- Block length (5 / 21 / 63): ten-year figures stable; D's one-year median +43 / +40 / +36%; E's ten-year
+  loss chance 2.6 / 3.1 / 4.9%.
+- Deflated Sharpe: the best of 1,000 unskilled tries would show 0.98 against 2.72 (holds with real skew and
+  kurtosis: reviewer). Rules out selection among random tries only; one session's delay alone takes the
+  Sharpe over T-bills from 2.64 to 1.14.
+- Beta: HG +1.05, KMLM +0.66, SLEEVE -0.44 (2015 on); beta explains 17% / 6% / none of the mean over
+  T-bills; R2 0.04-0.18 and half-year betas from -1.7 to +2.7 (reviewer), so G is a statement about the
+  backtest. The rebuilt 2000-2009 decade (S&P -1.7% a year): book +30% a year; 1994-2015 +35%; 2015 on +118%.
+- Live record (close to close, deposit-day move removed): HG +135.0% against +124.1% simulated (238
+  sessions) but +78.1% against +92.5% since it was funded (154); KMLM +31.3 / +23.8 (94); SLEEVE +20.7 /
+  +14.6 (94); the three at the weights held +28.7 / +24.3, of which 3.4 of the 4.4 points are one session
+  (2026-10-27). Neither confirms nor contradicts.
+- Concentration: the best 50 of 2,761 sessions carry 79 / 49 / 90% of HG / KMLM / SLEEVE return over
+  T-bills; without the book's best 50 the backtest is +54% a year; 2020 was +540%, without it +95%.
+
+CANDIDATE EDGES: none (a projection study). By-product for POLICY: per-engine caps if targets change.
+
+HONESTY BOX: every number is in sample and resamples the engines' own simulated history; the haircuts are
+borrowed (McLean-Pontiff 2016: 97 published predictors, 26% lower out of sample, 58% lower after
+publication; Suhonen-Lennkh-Perez 2017: median live Sharpe 73% below the backtest, 215 bank strategies,
+30% negative live, confirmed from secondary summaries; Harvey-Liu 2015 describe the 50% rule of thumb and
+argue against it) and applied equally to all three engines; no draw has a regime or a day outside its
+source; taxes, deposits, capacity and POLICY's staged reset are not modelled; same-close fills except F;
+real funds only from 2015-09 (HG), 2020-12 (SLEEVE), 2021-06 (KMLM); the 2015 source has no sessions
+2020-12-02..2021-06-01. Monte Carlo error about 0.3 points on a median, 0.5 on a probability. Measurement
+basis: daily mark-to-market, 5.856 bps on cap resets.
+
+PENDING QUESTIONS (ranked): P1 owner: is the book's deepest fall or its growth the binding constraint
+(asked 2026-11-21, open). P1 owner: which scenario to plan on (asked 2026-11-21). P2 re-run the
+live-against-simulated table each quarter; start a live-decay estimate once a year of unchanged rules
+exists (first asked 2026-11-21). P2 per-engine caps in POLICY if the sleeve target changes. P2 split add.
+14b / 50 by weak-market days (carried from add. 61). P3 a worst-day stress outside the sample.

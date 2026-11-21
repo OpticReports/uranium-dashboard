@@ -82,11 +82,11 @@ t_cap = table(["Scenario", "Cap rule"] + WL, [r for s_ in ("B", "D") for r in (
     ["", "&nbsp;&nbsp;chance of a fall deeper than 30%"] + [pu(MC[s_][wt + ".largest_cap"]["10y"]["p_fall_deeper"]["30"]) for wt in WS])])
 t_methods = table(["Method", "What it is", "Used here?"], [
     ["Block-bootstrap Monte Carlo", "resample stretches of the strategy's own daily returns into thousands of future paths", "yes: every scenario"],
-    ["Backtest haircut from published decay", "shrink the backtest's edge by what strategies have lost between backtest and live", "yes: scenarios D and E"],
-    ["Execution stress", "re-run with worse fills and see what survives", "yes: scenario F (one close late)"],
-    ["Building blocks / capital-market assumptions", "split return into market beta and the rest; put a forward view on the market part", "yes: scenario G and the beta table"],
+    ["Backtest haircut from published decay", "shrink the backtest's edge by what strategies have lost after discovery or between backtest and live", "yes: half, a quarter and none of the edge, on two sources"],
+    ["Execution stress", "re-run with worse fills and see what survives", "yes: one close late"],
+    ["Building blocks / capital-market assumptions", "split return into market beta and the rest; put a forward view on the market part", "tested as \"S&P at 2% a year\": a ceiling, because one average beta does not describe these engines; the rebuilt 2000-2009 decade is the better read"],
     ["Deflated Sharpe ratio / multiple-testing haircut", "ask whether the best of many tries could look this good by luck", "yes: table above; it cannot produce a forward number"],
-    ["Regime-conditioned bootstrap", "resample by market regime with chosen regime odds", "already on record (addendum 13); the long-history scenario C covers the hostile regimes here"],
+    ["Regime-conditioned bootstrap", "resample by market regime with chosen regime odds", "already on record (addendum 13); the 1994-on scenarios cover the hostile regimes here"],
     ["Live-record updating (Bayesian shrinkage)", "blend the backtest with live results as they accrue", "table only: 94 to 238 live sessions cannot move an estimate yet; worth re-running each quarter"],
     ["Parametric models (GARCH, regime-switching, fat-tailed fits)", "fit a return model and simulate from it", "no: GARCH was tried on the harvester and failed its test (addendum 31); a fitted model adds assumptions the bootstrap does not need"],
     ["Capacity and cost curves", "model how returns shrink as size grows", "no: on record for today's size (addenda 14b, 15); matters at about $1M and up"],
@@ -160,6 +160,7 @@ subs = {
     "{{y2020}}": pc(SIDE["book_return_2020"]),
     "{{hg_f}}": f"{pc(LIVE['HG']['live_return_funded'], 1)} against {pc(LIVE['HG']['simulated_return_funded'], 1)}", "{{hg_f_n}}": str(LIVE["HG"]["funded_sessions"]),
     "{{held}}": f"{pc(LIVE['three_as_held']['live_return'], 1)} live against {pc(LIVE['three_as_held']['simulated_return_same_weights'], 1)} simulated at the same weights",
+    "{{e_1loss}}": " to ".join(sorted((pu(BS["E"][b]["1y"]["p_below_start"]) for b in ("5", "21", "63")), key=lambda z: float(z[:-1]))[::2]),
     "{{d_1med}}": " to ".join(sorted((pc(BS["D"][b]["1y"]["per_yr"]["50"]) for b in ("5", "21", "63")), key=lambda z: float(z[:-1]))[::2]),
     "{{d_1loss}}": " to ".join(sorted((pu(BS["D"][b]["1y"]["p_below_start"]) for b in ("5", "21", "63")), key=lambda z: float(z[:-1]))[::2]),
     "{{e_10loss}}": " to ".join(sorted((pu(BS["E"][b]["10y"]["p_below_start"], 1) for b in ("5", "21", "63")), key=lambda z: float(z[:-1]))[::2]),

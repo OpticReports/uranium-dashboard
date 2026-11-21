@@ -7,6 +7,18 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-21 — Study: forward ranges by sleeve weight, Monte Carlo and other methods (results.md addendum 62)
+
+- Owner asked for Monte Carlo on the sleeve-weight options and other data-backed estimates for 1, 5 and 10
+  years. Pre-registered; one independent review (own re-implementation; citations checked) plus a delta
+  check: the simulation reproduced, four verdict lines were withdrawn, three scenarios added.
+- Result: scenario ranges, none a forecast or a floor. Today's book, ten-year median a year: +120% if the
+  2015-on backtest repeats, +46% at half the edge, +21% at a quarter, -2.4% at none; deeper falls as the
+  edge shrinks. Sleeve weight not decided by the data.
+- NO change to any symphony, gate, POLICY operation or the mirror. Noted for POLICY: operation 5's single
+  cap would need per-engine levels if the sleeve target were ever raised. Logic book:
+  `symphonies/why/SLEEVE.md` gains a row. Report: `results/forward-ranges-2026-11-21.html`.
+
 ## 2026-11-21 — Study: macro states as a risk-on / risk-off layer (results.md addendum 61)
 
 - Owner asked for macro indicators (yields, CAPE, gold, rates of change, volume) as a risk-on/off layer

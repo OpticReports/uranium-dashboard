@@ -25,3 +25,16 @@ exactly.
 Figures marked "reviewer" in the report (the single-session live gaps, rolling betas, the cash-day and
 fading-on-best-days checks, the deflated Sharpe with real skew and kurtosis) are the reviewer's own
 computations, not recomputed by me.
+
+## Delta check on the re-run and the rewrite. Verdict: signs off on the verdict bullets, tiles and notes
+Scenarios A-G unchanged (same draws). The added scenarios matched the reviewer's own runs within Monte
+Carlo error (none of the edge: -2.4% a year, 57-58% below the start, median fall 72-73%; the 1994-on
+haircuts +24% and +11%); the cost table, the block table, the side numbers and all five live rows
+reproduced. One figure adjudicated: "the three as held since 2026-07-07" is +28.7% live against +24.3% for
+the simulated engines at the same start-of-day weights; the reviewer's first-pass "+28.9% against +29.3%,
+level" used fixed target weights for the simulation and is withdrawn as not like for like. Qualifier
+required and added: 3.4 of the 4.4 points are one session (2026-10-27). Six wording residuals applied (the
+zero-edge sentence against T-bills; a range for the one-year loss chance at a quarter; "the backtest", not
+"the ceiling", without 2020; which legs are real, rebuilt or modelled, stated in the report; the methods
+table by name; a footnote on the single-path falls of the long haircut sources). Suhonen, Lennkh and Perez
+remains confirmed from secondary summaries only.

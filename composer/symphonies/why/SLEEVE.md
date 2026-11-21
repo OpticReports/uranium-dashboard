@@ -51,6 +51,7 @@ No reason for any of them is recorded.
 | The ladder's one-day returns and ranks over 2 to 5 days | behind on every stretch | add. 59 |
 | Another weight for the sleeve, the shock ladder alone, or dropping the inverse-fund half | the sleeve beats cash as a third leg at any weight from 2015; the ladder carries it before 2021; the weight is the owner's risk budget, not built | add. 60 |
 | Macro states as a risk-off switch or a tilt; this engine's own states as signals for the others | none passes; the ladder being out of cash says nothing consistent about the other engines; gold strong is a lead seen in this engine only | add. 61 |
+| Sleeve weights from 0 to 50% drawn forward 1, 5 and 10 years under ten scenarios (backtest as it stands, half / a quarter / none of the edge, one close late) | more sleeve means less return and a smaller fall wherever an edge survives; with no edge the order flips; what the sleeve costs as a share of return depends on whose decay is assumed: not decided, not built | add. 62 |
 
 ## Known quirks and limits
 
