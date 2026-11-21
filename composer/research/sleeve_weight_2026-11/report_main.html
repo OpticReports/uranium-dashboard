@@ -1,19 +1,20 @@
 <h1>The sleeve's weight: is its weak long record the data or the rule?</h1>
-<p class="sub">Study of 2026-11-21 (addendum 60). Follows addendum 59, which found the sleeve made about 10% a year with a 47% fall on rebuilt 1994-2020 history and did not hedge the other two engines. Questions and decision rules written before any number was computed. Simulated, in sample; nothing here is a forecast.</p>
+<p class="sub">Study of 2026-11-21 (addendum 60). Follows addendum 59, which found the sleeve made about 10% a year with a 47% fall on rebuilt 1994-2020 history and did not hedge the other two engines. Questions and decision rules written before any number was computed; corrected after independent review. Simulated, in sample; nothing here is a forecast.</p>
 
 <div class="card verdict">
 <ul>
-<li><b>Mostly the data.</b> Once every fund the sleeve trades is real (2015-06 on) it made {{e4_cagr}} a year to 2020, {{e5_cagr}} to 2023-01 and {{e6_cagr}} since, with falls of {{dd_rng}}. The one input still rebuilt before 2020-12, the KMLM signal, barely matters: four versions of it give {{e4_var}} a year. The weak record sits before 2015, where the funds it trades are rebuilt.</li>
-<li><b>But the return is a handful of days.</b> Half of the sleeve buys UVXY (leveraged volatility) the day after a bond or credit shock. Its ten best days carry each stretch: {{top_txt}}. Without 2020-02 to 04 the sleeve's 2015-2020 return is {{e4_wo}} a year, not {{e4_cagr}}.</li>
-<li><b>The two halves have different records.</b> The shock ladder made money in every stretch where its inputs are real ({{fb_txt}}). The inverse-fund half (short biotech, short bonds) made money only since 2020-12 ({{ih_real}}); before that it lost or was flat, including with real funds ({{ih_before}}).</li>
-<li><b>It is not a day-to-day hedge of Holy Grail and KMLM together in any stretch.</b> It pays on rare shock days, when those two are often already in cash or short. The inverse-fund half has offset Holy Grail's worst days in all six stretches, at a running cost.</li>
-<li><b>The 31.8% weight passes the test set in advance.</b> Against T-bills at the same weight the sleeve adds {{vt_e4}} log-points a year to the book on 2015-2020 and {{vt_real}} since 2021-06 (0.10 is roughly 10% more growth a year), with a deepest fall within two points of the T-bill book's. On the rebuilt years before 2015 it adds nothing.</li>
-<li><b>What the weight buys is a smaller fall, not growth.</b> Any third leg, sleeve or cash, lowers the book's growth and its deepest fall. At 31.8% against none: since 2021-06 the book grows {{w0_real}} a year instead of {{w318_real}}, and its deepest fall is {{dd318_real}} instead of {{dd0_real}}. That is a risk-budget choice; the data cannot pick the number.</li>
+<li><b>Unresolved, and the answer differs by half.</b> By the rule set in advance the result is "in between". 2015-2020, where every fund the sleeve trades is real, looks like the real years as a whole ({{e4_ci}} log-points a year against {{real_ci}}; 0.10 is roughly 10% more growth a year). Without February to April 2020 it does not ({{e4x_ci}}).</li>
+<li><b>The shock ladder (half the sleeve) made money wherever volatility funds are real</b>: {{fb_txt}}. It buys leveraged volatility or leveraged semiconductors after a large one-day bond or credit move or an overbought reading, and a few days carry each stretch.</li>
+<li><b>But its rarest tests look fitted to March 2020.</b> "TLT up more than 6% in a day" has been true on {{tlt_up_n}} days in 32 years, both in March 2020; "TLT down more than 3.5%" on {{tlt_dn_n}} days, {{tlt_dn_2020}} of them in March 2020. And the single best day since 2023 (2024-08-05, {{d0805}} for that half) fired because a short-bond fund rose 0.56%, inside a band 0.1 wide; without that day the sleeve made {{e6_wo}} a year since 2023-02, not {{e6_cagr}}.</li>
+<li><b>The inverse-fund half (short biotech, short long bonds) lost on real funds for nine years</b> ({{ih_before}}) and made money only since 2020-12 ({{ih_real}}): the rule, or the period. Half of the sleeve's return in the real years came from it.</li>
+<li><b>Not a hedge of Holy Grail and KMLM together in any stretch.</b> The inverse-fund half moved opposite to Holy Grail on its worst days in all six stretches; the reviewer showed that is standing short exposure, not timing.</li>
+<li><b>As a third leg the sleeve beats cash, at any weight.</b> At 31.8% against T-bills it adds {{vt_e4}} log-points a year to the book on 2015-2020 and {{vt_real}} since 2021-06, with a slightly deeper fall ({{vt_dd}}). The same holds at 10% and 50%: the test says "better than cash", not "31.8% is right". By half: the ladder alone beats cash on all three recent stretches; the inverse-fund half only since 2021-06.</li>
+<li><b>What a third leg buys is a smaller fall, not growth.</b> Since 2021-06 the book with no third leg grows {{w0_real}} a year with a deepest fall of {{dd0_real}}; with the sleeve at 31.8%, {{w318_real}} and {{dd318_real}}. That is a risk-budget choice; the data cannot pick the number.</li>
 </ul>
 </div>
 
 <div class="kpis">
-<div class="kpi"><b>{{e4_cagr}}</b><span>sleeve, 2015-06 to 2020-12, every traded fund real (fall {{e4_dd}})</span></div>
+<div class="kpi"><b>{{e4_cagr}}</b><span>sleeve, 2015-06 to 2020-12 (fall {{e4_dd}}); {{e4_wo}} without 2020-02 to 04</span></div>
 <div class="kpi"><b>{{top_share}}</b><span>of its 2015-2020 log growth from its ten best days</span></div>
 <div class="kpi"><b>{{vt_real}}</b><span>added to the book against T-bills at 31.8%, log-points a year, since 2021-06</span></div>
 <div class="kpi"><b>{{dd0_real}} → {{dd318_real}}</b><span>book's deepest fall, no third leg against the sleeve at 31.8%, since 2021-06</span></div>
@@ -23,41 +24,42 @@
 <p>The same simulated path as addendum 59, cut by how real its inputs are.</p>
 {{t_eras}}
 {{ch_growth}}
-<p class="note">Yearly log return with a 90% interval in brackets. The test set in advance: does 2015-2020, where every traded fund is real, look like the real years? It does ({{e4_ci}} against {{real_ci}}). The one rebuilt input in that stretch, four ways: {{t_var_inline}}.</p>
+<p class="note">Yearly log return with a 90% interval in brackets. The one rebuilt input in 2015-2020 (the KMLM signal), four ways: {{t_var_inline}}. So that input is not the issue. The 2011-2015 stretch has every held fund real except LABD (rebuilt as three times the inverse of a real biotech index) and was flat: not explained by rebuilt data. Before 2011-10 the volatility funds the ladder buys are models.</p>
 <h3>Where the money came from</h3>
 {{t_funds}}
-<p class="note">Sum of daily contributions (weight times next-day return) by fund, the largest five per stretch. BOXX is the cash leg (T-bills before its 2022 launch).</p>
+<p class="note">Sum of daily contributions (weight times next-day return) by fund, before trading costs, the largest five per stretch. BOXX is the cash leg (T-bills before its 2022 launch). 2015-2020 is all ladder (UVXY, SOXL); the real years are about half LABD and TMV.</p>
 
-<h2>2. A handful of days</h2>
+<h2>2. A few days, and how rarely the tests fire</h2>
 {{t_conc}}
 {{t_days}}
-<p class="note">Checked after the fact. The ladder's best days are UVXY held at 100% of its half on the day after a shock: March 2020, February 2018, August 2024. That is the "crash convexity" the sleeve was built for; it also means a stretch without such days earns little, and that the next shock has to be caught for the record to repeat.</p>
+<p class="note">Checked after the fact. The ladder's best days are UVXY at 100% of its half. Which test fired differs: 2020-03-16 on a 3% rise in the high-yield bond fund; 2018-02-02 and both 2021 days on an overbought reading in a leisure-stocks fund; 2024-08-05 on the short-bond band (reviewer's trace). No look-ahead: each decision uses the close it trades at. UVXY was a 2x fund before 2018-02-28 and is 1.5x now; at today's leverage 2015-2020 is about +50% a year (reviewer).</p>
 
 <h2>3. Is it a hedge?</h2>
 {{t_hedge}}
-<p class="note">The sleeve's (or one half's) average daily return on the other side's worst 5% of days, against its other days; t compares the two. A hedge would be clearly positive in the first column of each pair. Against the two engines together it never is. The inverse-fund half against Holy Grail alone is positive in all six stretches.</p>
+<p class="note">The sleeve's (or one half's) average daily return on the other side's worst 5% of days, against its other days; t compares the two. Against the two engines together it is never clearly positive. The inverse-fund half against Holy Grail is positive in all six stretches (t above 2 in four); on the long history it held its inverse funds on no more of Holy Grail's worst days than on ordinary days (reviewer), so this is short exposure that happens to pay on tech-led down days, not timing.</p>
 
 <h2>4. The weight</h2>
-<p>Book = the sleeve at weight w, the rest split equally between Holy Grail and KMLM, rebalanced daily. Control: T-bills in the sleeve's place.</p>
+<p>Book = a third leg at weight w, the rest split equally between Holy Grail and KMLM, rebalanced daily. Control: T-bills as the third leg.</p>
 {{ch_cagr}}
 {{ch_dd}}
 {{t_weight}}
 {{t_test}}
-<p class="note">"Earns its 31.8%" (set in advance): against T-bills at the same weight, growth higher with the 90% interval above zero, or the fall smaller on at least 90% of resampled paths with growth not lower. Before 2020-12 the KMLM engine's own path is on the rebuilt KMLM fund (shape only, addendum 58), and Holy Grail is rebuilt before 2015-09.</p>
+{{t_third}}
+<p class="note">The test set in advance: against T-bills at the same weight, growth higher with the 90% interval above zero, or the fall smaller on at least 90% of resampled paths with growth not lower. The sleeve passes on 2015-2020 and since 2021-06 and not before; it passes just as well at 10% and at 50%, so it does not single out 31.8%. The pass survives dropping the sleeve's ten best days (reviewer: +0.06 and +0.05). Before 2020-12 the KMLM engine's own path is on the rebuilt KMLM fund (shape only, addendum 58).</p>
 
 <h2>5. Candidate edges checked on the way</h2>
 <ul>
-<li><b>The shock ladder alone.</b> {{edge_fb}} Mirror: the same half on rebuilt 1994-2011 made nothing, where its shock tests almost never fire on proxy funds, so that is no test of it. What it would take to use more of it: evidence that the ladder catches shocks it was not fitted on. It was assembled in 2026 from strategies back-tested on 2022-23; 2015-2020 is the nearest thing to that evidence, and it is one crisis (March 2020) plus February 2018.</li>
-<li><b>The inverse-fund half as an offset to Holy Grail.</b> On Holy Grail's worst 5% of days it made {{ih_hg}} across the six stretches (t {{ih_hg_t}}), and lost on Holy Grail's best days. Its own return was negative in four of the six. An insurance leg with a premium, and the premium has been negative only since 2020-12.</li>
+<li><b>The shock ladder alone as the third leg.</b> Against the live sleeve at the same 31.8% the book grew {{la_e3}} more a year in 2011-2015, {{la_e4}} in 2015-2020 and {{la_real}} since 2021-06. Sample: three stretches, about 11%, 8% and 5% of days out of cash. Mirror: on 2002-2011, where the bond funds are real but the volatility funds are models, the ladder's one-day tests fired on 172 days and made almost nothing (reviewer), so the only history that could contradict it is modelled. Against it: its rarest tests are fitted to March 2020. What it would take: paper-tracking every ladder trigger from here, and a rebuild of UVXY and SVXY for 2006-2011 from the published futures index.</li>
+<li><b>Dropping the inverse-fund half.</b> The same numbers read the other way: it cost the book growth for nine years on real funds and has paid since 2020-12 (short bonds in 2022, short biotech in 2021-22 and since). One regime in its favour; the owner's call, not a finding.</li>
 </ul>
 
 <h2>6. What this does not settle</h2>
 <ul>
-<li><b>Every real year is in sample for the sleeve.</b> It was assembled in 2026-07 from two community strategies whose own backtests start in 2022-23. 2015-2020 was not used to build it, as far as the record shows, but its authors could see those years.</li>
-<li><b>Period and data move together.</b> The stretches where funds are rebuilt are also the earlier years; the test cannot fully separate "rebuilt data" from "an earlier market". The 2011-2015 stretch, with most funds real, was flat.</li>
-<li><b>Ten days decide each stretch.</b> Intervals from a block bootstrap understate how uncertain a return of that shape is.</li>
-<li><b>UVXY at the close after a shock</b> is simulated at the closing price with 5.9 basis points of cost; real fills on such days can be much worse.</li>
-<li><b>The book before 2020-12</b> uses the rebuilt KMLM fund for both the KMLM engine and the sleeve's signal (shape only).</li>
+<li><b>Every real year is in sample for the sleeve, and so is March 2020.</b> It was assembled in 2026-07 from two community strategies; the ladder's thresholds match that month's moves.</li>
+<li><b>Period and data move together.</b> Where funds are rebuilt is also the earlier market. Volatility funds are models before 2011-10, leveraged funds before 2008-2010, bond funds before 2002-07.</li>
+<li><b>A few days decide each stretch</b>, and one band 0.1 wide decided the best of them. Bootstrap intervals understate how uncertain a return of that shape is.</li>
+<li><b>Fills.</b> UVXY at the close after a shock is simulated at the closing price with 5.9 basis points of cost; the live rule decides about nine minutes before the close.</li>
+<li><b>One seam day</b> (2023-02-01) is missing from the sleeve's path and every book here.</li>
 </ul>
 
 <h2>7. Open questions</h2>
