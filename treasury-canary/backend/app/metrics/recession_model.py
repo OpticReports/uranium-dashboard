@@ -167,6 +167,7 @@ def build_models(spread_dates: list[date], spread_vals: list[float | None],
 
 # --- cached fit over the live FRED bundle ------------------------------------
 _MODEL_TTL_SECONDS = 6 * 3600
+_EMPTY_RETRY_SECONDS = 10 * 60  # no model fitted (data missing): try again soon, not in 6 h
 _model_cache: dict[str, object] = {"ts": 0.0, "models": None, "spread": None,
                                    "adj_models": None, "adj_spread": None, "tp": None}
 _model_lock = threading.Lock()
@@ -201,13 +202,21 @@ def _fit_all() -> None:
     _model_cache["ts"] = time.time()
 
 
+def _fit_fresh() -> bool:
+    """An empty fit ({} when USREC or the spread was missing) is not a fit: it retries
+    after _EMPTY_RETRY_SECONDS instead of standing for the full TTL."""
+    models = _model_cache["models"]
+    if models is None:
+        return False
+    ttl = _MODEL_TTL_SECONDS if models else _EMPTY_RETRY_SECONDS
+    return time.time() - float(_model_cache["ts"]) < ttl  # type: ignore[arg-type]
+
+
 def _ensure_fit() -> None:
-    now = time.time()
-    if _model_cache["models"] is not None and now - float(_model_cache["ts"]) < _MODEL_TTL_SECONDS:
+    if _fit_fresh():
         return
     with _model_lock:
-        now = time.time()
-        if _model_cache["models"] is not None and now - float(_model_cache["ts"]) < _MODEL_TTL_SECONDS:
+        if _fit_fresh():
             return
         _fit_all()
 

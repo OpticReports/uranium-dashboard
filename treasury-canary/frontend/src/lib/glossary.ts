@@ -86,7 +86,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     what: "The estimated probability that a U.S. recession BEGINS within the selected horizon, based on today's 3m10y yield-curve spread.",
     calc: "P = Φ(β₀ + β₁·spread), a probit regression in the Estrella–Mishkin tradition. The coefficients are fit by maximum likelihood on decades of monthly FRED data: 3m10y spread vs. whether an NBER recession started within the following h months. Each horizon (6/12/18/24mo) has its own fitted coefficients.",
     read: "Read it with its confidence band and AUC, never alone. ~15–20% is near the unconditional base rate; the signal is when it pushes above ~30–40% (historically deep inversions).",
-    caveat: "It is a model estimate from ONE input (the curve), not a forecast. Post-2000 lead times have been longer and noisier — 2022–24 saw a deep inversion with a long delay.",
+    caveat: "It is a model estimate from ONE input (the curve), not a forecast. Post-2000 lead times have been longer and noisier — 2022–24 saw a deep inversion with a long delay. Marked (static) when today's fit is unavailable (FRED data missing): the value then uses fixed published coefficients, not the fitted model.",
   },
   horizon: {
     title: "Horizon (6 / 12 / 18 / 24 months)",

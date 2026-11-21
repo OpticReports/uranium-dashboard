@@ -137,8 +137,10 @@ def canary(
     m12 = models.get(12)
     if m12 is not None and latest_3m10y is not None:
         prob = predict(m12["b0"], m12["b1"], m12["cov"], latest_3m10y)["probability_pct"]
-    else:
+        prob_basis = "fitted"
+    else:                                   # say so: a silent fallback reads as the model
         prob = recession_probability(latest_3m10y)
+        prob_basis = "static"
     # Downsample the series for transport (chart doesn't need every daily point).
     series = [{"date": d.isoformat(), "spread": s}
               for d, s in zip(dates, spread) if s is not None]
@@ -148,7 +150,7 @@ def canary(
         "current_depth_bps": a.current_depth_bps, "days_inverted": a.days_inverted,
         "dis_inversion_date": a.dis_inversion_date.isoformat() if a.dis_inversion_date else None,
         "last_change": a.last_change.isoformat() if a.last_change else None,
-        "recession_probability_pct": prob,
+        "recession_probability_pct": prob, "recession_probability_basis": prob_basis,
         "series": series[::step], "episodes": episodes, "recessions": bands,
         "available_pairs": list(PAIRS.keys()),
     }

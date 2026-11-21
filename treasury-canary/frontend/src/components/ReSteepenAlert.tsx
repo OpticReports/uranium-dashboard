@@ -196,6 +196,7 @@ export default function ReSteepenAlert() {
                       fill="#94a3b8"
                       fillOpacity={0.12}
                       stroke="none"
+                      ifOverflow="hidden"
                     />
                   ))}
 
@@ -247,6 +248,11 @@ export default function ReSteepenAlert() {
                 <LegendSwatch color="#dc2626" label="Dis-inversion (sustained)" dot />
                 <LegendSwatch color="#f59e0b" label="Dis-inversion (brief)" dot />
               </div>
+              {data.recessions.length === 0 && (
+                <p className="mt-1 px-1 text-[10px] text-slate-500">
+                  NBER recession dates are unavailable right now (the FRED fetch failed), so no bands are drawn.
+                </p>
+              )}
             </div>
           )}
 
@@ -377,7 +383,7 @@ function ReadoutRow({ data }: { data: CurveCanary }) {
         value={
           data.recession_probability_pct === null
             ? "n/a"
-            : `${data.recession_probability_pct.toFixed(1)}%`
+            : `${data.recession_probability_pct.toFixed(1)}%${data.recession_probability_basis === "static" ? " (static)" : ""}`
         }
       />
     </div>

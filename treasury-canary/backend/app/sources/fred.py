@@ -97,12 +97,31 @@ def fetch_series(
         "file_type": "json", "observation_start": start,
     })
     if data is None:
+        # A failed call (rate limit, outage) must never turn a series EMPTY while a
+        # good copy sits on disk: the bundle below is memoized for hours, so one bad
+        # call used to wipe the NBER bands and the fitted recession model until the
+        # next restart (2026-11-21). Stale data beats a hole; staleness shows by date.
+        stale = _read_cache(cache)
+        if stale is not None:
+            logger.warning("FRED fetch failed for %s; serving the last good copy (%.1f h old)",
+                           series_id, (time.time() - os.path.getmtime(cache)) / 3600)
+            return _splice_frozen(series_id, *_parse(stale))
         return [], []
     try:
         json.dump(data, open(cache, "w"))
     except Exception:  # noqa: BLE001
         pass
     return _splice_frozen(series_id, *_parse(data))
+
+
+def _read_cache(path: str) -> dict | None:
+    """The cached FRED JSON at `path`, any age, or None (absent or unreadable)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            raw = json.load(fh)
+        return raw if isinstance(raw, dict) and raw.get("observations") else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _parse(data: dict) -> tuple[list[date], list[float | None]]:
@@ -128,7 +147,8 @@ def _parse(data: dict) -> tuple[list[date], list[float | None]]:
 # FRED series, a thundering herd that times out / OOMs a small (free-tier) instance.
 # A lock serializes the cold fetch so concurrent callers share ONE network pass.
 _BUNDLE_TTL_SECONDS = 6 * 3600  # data is EOD/daily; a few hours stale is fine
-_bundle_cache: dict[str, object] = {"ts": 0.0, "data": None}
+_DEGRADED_TTL_SECONDS = 15 * 60  # a bundle with a FRED series missing retries soon
+_bundle_cache: dict[str, object] = {"ts": 0.0, "data": None, "degraded": False}
 _bundle_lock = threading.Lock()
 
 
@@ -139,31 +159,42 @@ def fetch_bundle(start: str = "1976-01-01", force: bool = False
     Keys are provider-agnostic (tenor labels, "sofr", "hy_oas", ...). Missing key or
     failed series -> that entry is ([], []) and its metrics render STALE.
     """
-    now = time.time()
     cached = _bundle_cache["data"]
-    if not force and cached is not None and now - float(_bundle_cache["ts"]) < _BUNDLE_TTL_SECONDS:
+    if not force and cached is not None and _bundle_fresh():
         return cached  # type: ignore[return-value]
     with _bundle_lock:
         # double-check: another thread may have populated it while we waited
-        now = time.time()
         cached = _bundle_cache["data"]
-        if not force and cached is not None and now - float(_bundle_cache["ts"]) < _BUNDLE_TTL_SECONDS:
+        if not force and cached is not None and _bundle_fresh():
             return cached  # type: ignore[return-value]
         bundle = _fetch_bundle_uncached(start)
+        prev = cached or {}
+        holes = [k for k in _fred_plan() if not (bundle.get(k) or ([], []))[0]]
+        kept = [k for k in holes if (prev.get(k) or ([], []))[0]]   # type: ignore[union-attr]
+        for k in kept:                     # never swap a good series for an empty one
+            bundle[k] = prev[k]            # type: ignore[index]
+        missing = [k for k in holes if k not in kept]
+        if holes:
+            logger.warning("FRED bundle: %d series failed (kept the previous copy of %s; "
+                           "still missing %s)", len(holes), kept or "none", missing or "none")
         _bundle_cache["data"] = bundle
         _bundle_cache["ts"] = time.time()
+        _bundle_cache["degraded"] = bool(missing)
         return bundle
 
 
-def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float | None]]]:
-    from concurrent.futures import ThreadPoolExecutor
+def _bundle_fresh() -> bool:
+    ttl = _DEGRADED_TTL_SECONDS if _bundle_cache.get("degraded") else _BUNDLE_TTL_SECONDS
+    return time.time() - float(_bundle_cache["ts"]) < ttl  # type: ignore[arg-type]
 
+
+def _fred_plan() -> dict[str, str]:
+    """logical bundle key -> FRED series id (the series fetch_series supplies)."""
     from ..config import (
         FRED_BREAKEVENS, FRED_CREDIT, FRED_DISTRESS, FRED_FLOWS, FRED_FOREIGN,
         FRED_FUNDING, FRED_LABOR, FRED_LEADING, FRED_MACRO, FRED_PINS,
         FRED_REAL_YIELDS, FRED_SEVERITY, FRED_TENORS, FRED_VOL,
     )
-    # logical key -> FRED series id
     plan: dict[str, str] = dict(FRED_TENORS)
     for extra in (FRED_LABOR, FRED_FLOWS, FRED_LEADING, FRED_PINS, FRED_FOREIGN,
                   FRED_SEVERITY, FRED_DISTRESS):
@@ -180,6 +211,13 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
     plan["nfci"] = FRED_MACRO["nfci"]
     plan["acm_tp10"] = FRED_MACRO["acm_tp10"]
     plan["recession"] = FRED_MACRO["recession"]
+    return plan
+
+
+def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float | None]]]:
+    from concurrent.futures import ThreadPoolExecutor
+
+    plan = _fred_plan()                    # logical key -> FRED series id
 
     # Fetch concurrently — ~25 sequential FRED calls would be slow on a cold
     # instance; the disk cache + this pool keep the cold path to a few seconds.

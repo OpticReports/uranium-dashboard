@@ -206,6 +206,7 @@ export interface CurveCanary {
   dis_inversion_date: string | null;
   last_change: string | null;
   recession_probability_pct: number | null;
+  recession_probability_basis?: "fitted" | "static" | null;
   series: CurveSeriesPoint[];
   episodes: CurveEpisode[];
   recessions: Recession[];
