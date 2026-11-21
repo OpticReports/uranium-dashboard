@@ -211,7 +211,7 @@ subs = {
     "{{t_hg_groups}}": groups_table(H, ("HAs", "HAe", "HBs", "HBe", "HCs", "HCe", "HDs", "HDe", "HEm", "HEr", "HF", "HG")), "{{t_hg_cells}}": cells_table(H),
     "{{t_sl_groups}}": groups_table(S, ("SA", "SB", "SC", "SD", "SE", "SFm", "SFr", "SGt", "SGp")), "{{t_sl_cells}}": cells_table(S),
     "{{t_open}}": table(["Priority", "Question", "What it would move", "Status"], [
-        ["P1", "Is the sleeve's weak 1994-2020 record (about +10% a year, a 46% fall, no hedge of the pair) the rebuilt data or the rule?", "Bears on its 31.8% weight in the book", "open, first asked 2026-11-21"],
+        ["P1", "Is the sleeve's weak 1994-2020 record (about +10% a year, a 47% fall, no hedge of the pair) the rebuilt data or the rule?", "Bears on its 31.8% weight in the book", "open, first asked 2026-11-21"],
         ["P2", "A KMLM rebuild that passes its fidelity bars (needs exchange settlement data)", "Lets the sleeve and the book be judged on 2008-2020 instead of 2020-12 on; fills the 2020-12 to 2021-05 gap in the book", "open, first asked 2026-11-20 (addendum 58)"],
         ["P2", "Do Holy Grail's crossover and SPY gate earn their keep on the rebuilt years? (no \"off\" variant was registered here; addenda 30 and 44 looked on other samples)", "What to expect from Holy Grail outside 2015-2026", "open, first asked 2026-11-21"],
         ["P3", "Real financing and fee histories for the leveraged funds before launch", "Tightens the rebuilt years for Holy Grail", "open, first asked 2026-11-21"],

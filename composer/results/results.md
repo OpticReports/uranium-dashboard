@@ -4966,7 +4966,7 @@ RESULTS (simulated, in sample):
 - EMA vs SMA at the same windows: crossovers -0.013 rebuilt / +0.014 real, cash test -0.007 / +0.009,
   gate -0.011 / -0.016; where both trend tests are slowed 2-5x the EMA loses less (+0.042 real, t 2.3)
   but every such variant is behind the live rule.
-- SLEEVE live: +10%/yr DD 46% (1994-2020 rebuilt), +64%/yr DD 13% (2020-12..2023-01), +39%/yr DD 15%
+- SLEEVE live: +10%/yr DD 47% (1994-2020 rebuilt), +64%/yr DD 13% (2020-12..2023-01), +39%/yr DD 15%
   (real). Best by t: KMLM window 5 in the two inverse-fund tests, +0.055 log/yr, t 1.84 against about
   2.84 needed (the registered bootstrap bar read 4.19, inflated by variants that differ from live on a
   handful of days). IEF window level 8-12. Ladder returns over 2-5 days: behind on every stretch
@@ -5000,7 +5000,7 @@ sleeve's verdict sample is 5.9 years with the ladder active on about 91 sessions
 Not modelled: intraday paths, taxes, capacity, near-ties of ranked picks. Measurement basis: daily
 mark-to-market of the simulated symphony, trades at the same close.
 
-PENDING QUESTIONS (ranked): P1 is the sleeve's weak 1994-2020 record (+10%/yr, 46% fall, no hedge of the
+PENDING QUESTIONS (ranked): P1 is the sleeve's weak 1994-2020 record (+10%/yr, 47% fall, no hedge of the
 pair) the rebuilt data or the rule? It bears on the 31.8% weight (first asked 2026-11-21). P2 a KMLM
 rebuild that passes its bars (add. 58; first asked 2026-11-20). P2 do HG's crossover and SPY gate earn
 their keep on the rebuilt years (no "off" variant registered; 2026-11-21). P3 real financing/fee
