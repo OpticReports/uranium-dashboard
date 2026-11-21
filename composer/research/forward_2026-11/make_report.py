@@ -166,6 +166,13 @@ BODY = BODY.replace("{{main}}", open(os.path.join(HERE, "report_main.html")).rea
 ver = os.path.join(HERE, "VERIFICATION.html")
 subs["{{verification}}"] = open(ver).read() if os.path.exists(ver) else "<p class='note'>Independent verification in progress.</p>"
 subs["{{charts}}"] = json.dumps(CH, separators=(",", ":"))
+subs["{{t_open}}"] = table(["Priority", "Question", "What it would move", "Status"], [
+    ["P1", "Owner: is the book's deepest fall or its growth the binding constraint?", "The sleeve weight: this study prices the trade in each scenario but cannot choose", "asked 2026-11-21, open"],
+    ["P1", "Owner: which scenario do you want to plan on (half the edge, a quarter, something else)?", "Every forward number quoted to you from here; the monitor's expectations", "asked 2026-11-21"],
+    ["P2", "Re-run the live-against-simulated table each quarter and start a live-decay estimate once a year of unchanged rules exists", "Replaces the borrowed 50% and 73% haircuts with this book's own", "open, first asked 2026-11-21"],
+    ["P2", "If the sleeve target changes: set each engine's cap from its own target", "POLICY operation 5; otherwise a large-sleeve book drifts back to a small-sleeve one", "open, first asked 2026-11-21"],
+    ["P2", "Split the measured-fill and 15:54-versus-close checks by weak-market days (carried from addendum 61)", "How far towards the one-close-late floor live trading can slip", "open, first asked 2026-11-21"],
+    ["P3", "A worst-day stress outside the sample (a leveraged fund losing most of its value in a session)", "The left tail no draw contains", "open, first asked 2026-11-21"]])
 CITE = json.load(open(os.path.join(HERE, "citations.json"))) if os.path.exists(os.path.join(HERE, "citations.json")) else {"cite_d": "McLean and Pontiff 2016; Harvey and Liu 2015", "cite_e": "Suhonen, Lennkh and Perez 2017: median 73% fall in Sharpe from backtest to live, 215 bank strategies"}
 for _ in range(2):
     for k, val in list(subs.items()) + [("{{" + k + "}}", x) for k, x in CITE.items()]:
