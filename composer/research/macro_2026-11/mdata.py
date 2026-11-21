@@ -149,7 +149,8 @@ def states():
     days = sessions()
     M = monthly()
     S = {}
-    y10, y2, c3m, c2y = asof(fred("DGS10"), 1), asof(fred("DGS2"), 1), asof(fred("T10Y3M"), 1), asof(fred("T10Y2Y"), 1)
+    # daily FRED series for session d-1 are published AFTER that close: lag 2 (PREREG "session before, plus extra lag 1"; review A)
+    y10, y2, c3m, c2y = asof(fred("DGS10"), 2), asof(fred("DGS2"), 2), asof(fred("T10Y3M"), 2), asof(fred("T10Y2Y"), 2)
     S["R1"] = flag(chg(y10, 63) > 0.50, ~np.isnan(chg(y10, 63)))
     S["R2"] = flag(chg(y2, 63) > 0.50, ~np.isnan(chg(y2, 63)))
     S["R3"] = flag(c3m < 0, ~np.isnan(c3m))
@@ -157,16 +158,16 @@ def states():
     was = np.convolve(inv, np.ones(252), mode="full")[:len(inv)] > 0
     S["R4"] = flag(was & (chg(c3m, 63) > 0.50), ~np.isnan(chg(c3m, 63)) & (np.arange(len(days)) >= np.argmax(~np.isnan(c3m)) + 252))
     S["R5"] = flag(c2y < 0, ~np.isnan(c2y))
-    ry = asof(fred("DFII10"), 1)
+    ry = asof(fred("DFII10"), 2)
     S["R6"] = flag(chg(ry, 63) > 0.40, ~np.isnan(chg(ry, 63)))
-    ff = asof(fred("DFF"), 1)
+    ff = asof(fred("DFF"), 2)
     S["R7"] = flag(chg(ff, 126) > 0.25, ~np.isnan(chg(ff, 126)))
-    be = asof(fred("T10YIE"), 1)
+    be = asof(fred("T10YIE"), 2)
     S["I1"] = flag(chg(be, 63) > 0.25, ~np.isnan(chg(be, 63)))
     cpi = M["cpi"]
     yoy = {m: cpi[m] / cpi[month_add(m, -12)] - 1 for m in cpi if month_add(m, -12) in cpi}
     acc = {m: yoy[m] - yoy[month_add(m, -6)] for m in yoy if month_add(m, -6) in yoy}
-    cpi_av = lambda m: month_add(m, 1) + "-15"                               # noqa: E731
+    cpi_av = lambda m: month_add(m, 1) + "-22"   # the 15th was before the release in most months (review A)                               # noqa: E731
     yoy_s, acc_s = asof(from_monthly(yoy, cpi_av), 1), asof(from_monthly(acc, cpi_av), 1)
     S["I2"] = flag(acc_s >= 0.010, ~np.isnan(acc_s))
     S["I3"] = flag(yoy_s > 0.04, ~np.isnan(yoy_s))
@@ -214,7 +215,7 @@ def states():
     cg = asof(yahoo("HG=F"), 1) / gd
     S["G4"] = flag(cg < sma(cg, 200), ~np.isnan(sma(cg, 200)))
     S["G5"] = np.where(daily, flag(roc(gd, 63) > 0.10, ~np.isnan(roc(gd, 63))), flag(g5m > 0.10, ~np.isnan(g5m)))
-    baa = asof(fred("BAA10Y"), 1)
+    baa = asof(fred("BAA10Y"), 2)
     S["C1"] = flag(chg(baa, 63) > 0.30, ~np.isnan(chg(baa, 63)))
     bp = pct_to_date(baa)
     S["C2"] = flag(bp > 0.80, ~np.isnan(bp))
@@ -226,6 +227,9 @@ def states():
     S["D2"] = flag(roc(dx, 63) > 0.05, ~np.isnan(roc(dx, 63)))
     vol = asof(yahoo("^GSPC", "volume"), 1)
     vol = np.where(vol > 0, vol, np.nan)
+    for i in range(1, len(vol)):                                             # a zero print (2023-05-24) must not blank a year of averages
+        if np.isnan(vol[i]) and not np.isnan(vol[i - 1]) and i > int(np.argmax(~np.isnan(vol))):
+            vol[i] = vol[i - 1]
     vr = sma(vol, 21) / sma(vol, 252)
     S["M1"] = flag(vr > 1.25, ~np.isnan(vr))
     S["M2"] = flag(vr < 0.85, ~np.isnan(vr))
@@ -236,7 +240,7 @@ def states():
     m2y = {m: m2[m] / m2[month_add(m, -12)] - 1 for m in m2 if month_add(m, -12) in m2}
     l1 = {m: float(m2y[m] < 0.05 and m2y[m] < m2y[month_add(m, -6)]) for m in m2y if month_add(m, -6) in m2y}
     S["L1"] = asof(from_monthly(l1, cape_av), 1)
-    wa = asof(fred("WALCL"), 2)
+    wa = asof(fred("WALCL"), 3)                        # H.4.1 comes out Thursday after the close
     S["L2"] = flag(chg(wa, 130) < 0, ~np.isnan(chg(wa, 130)))
     oil = asof(fred("DCOILWTICO"), 4)
     oil = np.where(oil > 5, oil, np.nan)

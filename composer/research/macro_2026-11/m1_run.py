@@ -62,9 +62,10 @@ def maxdd(r):
     return np.max(1 - lvl / np.maximum.accumulate(lvl, axis=-1), axis=-1)
 
 
-def holm(ps):
+def holm(ps, m=None):
+    """Holm over m registered tests (states that could not be scored still count)"""
     order = sorted(ps, key=ps.get)
-    out, run, m = {}, 0.0, len(order)
+    out, run, m = {}, 0.0, max(m or 0, len(order))
     for k, name in enumerate(order):
         run = max(run, min(1.0, (m - k) * ps[name]))
         out[name] = run
@@ -82,11 +83,12 @@ def map_row(s, r):
     act = stat(float(s @ lr))
     allk = stat(circ_all(s, lr)[63:n - 63])
     return {"n": int(n), "on_share": float(n1 / n), "episodes": episodes(s), "on_per_yr": float(s @ lr / n1 * 252), "off_per_yr": float((lr.sum() - s @ lr) / (n - n1) * 252),
-            "diff_per_yr": float(act), "p_two_sided": float(np.mean(np.abs(allk - allk.mean()) >= abs(act - allk.mean())))}, ok
+            "diff_per_yr": float(act), "p_two_sided": float((1 + np.sum(np.abs(allk - allk.mean()) >= abs(act - allk.mean()))) / (1 + len(allk)))}, ok
 
 
-def p1(s, r, tb, ks_shift):
-    """half exposure while the state is on, against a constant mix with the same average exposure"""
+def p1(s, r, tb, ks_shift=None):
+    """half exposure while the state is on, against a constant mix with the same average exposure.
+    The placebo uses EVERY circular shift from 63 to n-63 (ks_shift is ignored; kept for old callers)."""
     n = len(s)
     e = 1 - 0.5 * s
     turn = np.abs(np.diff(np.concatenate([[1.0], e])))
@@ -100,14 +102,17 @@ def p1(s, r, tb, ks_shift):
     mp = mir * r + (1 - mir) * tb
     mm = mir.mean() * r + (1 - mir.mean()) * tb
     act["mirror_d_growth"] = g(mp) - g(mm)
-    idx = (np.arange(n)[None, :] - ks_shift[:, None]) % n
-    Sh = s[idx]
-    Eh = 1 - 0.5 * Sh
-    Pm = Eh * r[None, :] + (1 - Eh) * tb[None, :]
-    dg = np.log1p(Pm).mean(1) * 252 - g(mix)
-    ddm = maxdd(Pm) - maxdd(mix)
-    act["p_growth"] = float(np.mean(dg >= act["d_growth"]))
-    act["p_maxdd"] = float(np.mean(ddm <= act["d_maxdd"]))
+    allk = np.arange(63, n - 63)
+    cg = cd = 0
+    for a in range(0, len(allk), 400):
+        idx = (np.arange(n)[None, :] - allk[a:a + 400, None]) % n
+        Eh = 1 - 0.5 * s[idx]
+        Pm = Eh * r[None, :] + (1 - Eh) * tb[None, :]
+        cg += int(np.sum(np.log1p(Pm).mean(1) * 252 - g(mix) >= act["d_growth"]))
+        cd += int(np.sum(maxdd(Pm) - maxdd(mix) <= act["d_maxdd"]))
+    act["p_growth"] = (1 + cg) / (1 + len(allk))
+    act["p_maxdd"] = (1 + cd) / (1 + len(allk))
+    act["shifts"] = len(allk)
     return act
 
 
@@ -157,7 +162,7 @@ def main():
                 out["map"][key]["states"][sid] = row
                 if sid in md.PRIMARY:
                     ps[sid] = row["p_two_sided"]
-            for sid, p in holm(ps).items():
+            for sid, p in holm(ps, len(md.PRIMARY)).items():
                 out["map"][key]["states"][sid]["p_holm"] = p
             if which == "real":
                 continue
@@ -175,7 +180,7 @@ def main():
                 out["p1"][key][sid]["episodes"] = episodes(s)
                 if sid in md.PRIMARY:
                     pg[sid] = min(out["p1"][key][sid]["p_growth"], out["p1"][key][sid]["p_maxdd"])
-            for sid, p in holm(pg).items():
+            for sid, p in holm(pg, len(md.PRIMARY)).items():
                 out["p1"][key][sid]["p_holm_best_of_growth_or_fall"] = p
     # ---------- 3. P2 tilt between engines (book)
     for which in ("verdict", "shape", "all"):
@@ -201,11 +206,11 @@ def main():
             mir, _ = tilt_path(1 - s, LR, R, ms)
             dg = np.array([g(tilt_path(np.roll(s, int(k)), LR, R, ms)[0]) for k in ksh[:400]]) - g(fixed)
             dev = np.abs(W - np.array([0.341, 0.341, 0.318])).sum(1) > 1e-9
-            row = {"d_growth": g(pol) - g(fixed), "d_maxdd": float(maxdd(pol) - maxdd(fixed)), "mirror_d_growth": g(mir) - g(fixed), "p_growth": float(np.mean(dg >= g(pol) - g(fixed))),
+            row = {"d_growth": g(pol) - g(fixed), "d_maxdd": float(maxdd(pol) - maxdd(fixed)), "mirror_d_growth": g(mir) - g(fixed), "p_growth": float((1 + np.sum(dg >= g(pol) - g(fixed))) / (1 + len(dg))),
                    "share_of_days_tilted": float(dev.mean()), "avg_weights_when_tilted": [float(v) for v in W[dev].mean(0)] if dev.any() else None, "episodes": episodes(s)}
             out["p2"][which]["states"][sid] = row
             pg[sid] = row["p_growth"]
-        for sid, p in holm(pg).items():
+        for sid, p in holm(pg, len(md.PRIMARY)).items():
             out["p2"][which]["states"][sid]["p_holm"] = p
     # ---------- 4. cross-engine signals (each known at the prior close)
     import s1_sleeve as s1
@@ -256,7 +261,7 @@ def main():
     a = w.simulate(ung, PL, w.SPAN["HG"]["M"][0], w.SPAN["HG"]["R"][1])
     b = w.simulate(ung, PRH, *w.SPAN["HG"]["A"])
     U = {**dict(zip(a["days"], a["ret"])), **dict(zip(b["days"], b["ret"]))}
-    baa, nf, px = md.asof(md.fred("BAA10Y"), 1), md.asof(md.fred("NFCI"), 4), md.asof(md.yahoo("^GSPC"), 1)
+    baa, nf, px = md.asof(md.fred("BAA10Y"), 2), md.asof(md.fred("NFCI"), 4), md.asof(md.yahoo("^GSPC"), 1)
     RE = {"RE1": md.flag(md.chg(baa, 63) < -0.20, ~np.isnan(md.chg(baa, 63))), "RE2": md.flag(md.chg(nf, 65) < 0, ~np.isnan(md.chg(nf, 65))), "RE3": md.flag(px > md.sma(px, 50), ~np.isnan(md.sma(px, 50)))}
     prev = {b_: a_ for a_, b_ in zip(days, days[1:])}
     for which, lo, hi in (("verdict", "2006-07-18", "9999"), ("shape", "1991-04-01", "2006-07-18")):
@@ -270,7 +275,7 @@ def main():
             if res:
                 out["reentry"][which]["states"][rid] = res[0]
                 ps[rid] = res[0]["p_two_sided"]
-        for rid, p in holm(ps).items():
+        for rid, p in holm(ps, 3).items():
             out["reentry"][which]["states"][rid]["p_holm"] = p
     json.dump(out, open(os.path.join(HERE, "out", "macro.json"), "w"), indent=1)
     # ---------- print

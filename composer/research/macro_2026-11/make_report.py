@@ -6,7 +6,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 J = lambda k: json.load(open(os.path.join(HERE, "out", f"{k}.json")))                     # noqa: E731
-M, F, C, LI = J("macro"), J("followup"), J("charts"), J("leanin")
+M, F, C, LI, RV = J("macro"), J("followup"), J("charts"), J("leanin"), J("review")
 OUT = sys.argv[1]
 lg = lambda x, d=2: "n/a" if x is None else f"{x:+.{d}f}"                                  # noqa: E731
 pu = lambda x, d=0: f"{x * 100:.{d}f}%"                                                    # noqa: E731
@@ -160,7 +160,16 @@ eng_sum = {e: sum(v[e] for v in BY.values()) for e in ("HG", "KMLM", "SLEEVE")}
 top2 = sorted(BY, key=lambda y: -BY[y]["book_log"])[:2]
 lean = lambda v: (f"{lg(v['growth'])} a year against {lg(v['growth_mix'])} for the same cash held evenly (p {pv(v['p_growth'])}) and {lg(v['growth_full'])} for the full book; deepest fall {pu(v['maxdd'], 1)} against "   # noqa: E731
                   f"{pu(v['maxdd_mix'], 1)} and {pu(v['maxdd_full'], 1)}")
+LQV, LQS, XR, PA = RV["liquidity"]["verdict"], RV["liquidity"]["shape"], RV["x1"], RV["p2_always_on"]
+LB = LQV["largest_off_block"]
+xw = XR["without_top_two"]
 subs = {
+    "{{lq_l2}}": f"{LQV['on_days_L2_on']:,}", "{{lq_on}}": f"{LQV['on_days']:,}", "{{lq_sw}}": str(REG["F_LIQUIDITY"]["switches_on"]),
+    "{{lq_blk}}": f"{LB['from'][:7]} to {LB['to'][:7]}", "{{lq_blk_share}}": pu(LB["off_days"] / LB["all_off_days"]), "{{lq_blk_log}}": pu(LB["off_log"] / LB["all_off_log"]),
+    "{{lq_shape_l1}}": pu(LQS["on_days_L1_only"] / LQS["on_days"]),
+    "{{x1_top}}": " and ".join(XR["top_two_years"]), "{{x1_top_share}}": pu(XR["top_two_on_log"] / XR["on_log_total"]),
+    "{{x1_wo}}": "not scored" if xw is None else f"{lg(xw['diff_per_yr'])} a year (p {pv(xw['p_two_sided'])})",
+    "{{p2_always}}": lg(PA["d_growth"], 3), "{{p2_first}}": PA["first_tilted_day"][:7],
     "{{lean_same}}": f"a plain book {pu(LT['verdict']['same_fall_mix']['exposure'])} invested has the same deepest fall and grows {lg(LT['verdict']['same_fall_mix']['growth'])}",
     "{{gold_same}}": (f"that book grew {lg(LI['lean_in']['F_GOLD']['verdict']['growth'])} with a deepest fall of {pu(LI['lean_in']['F_GOLD']['verdict']['maxdd'], 1)}; a plain book "
                       f"{pu(LI['lean_in']['F_GOLD']['verdict']['same_fall_mix']['exposure'], 1)} invested has the same fall and grows {lg(LI['lean_in']['F_GOLD']['verdict']['same_fall_mix']['growth'])}"),

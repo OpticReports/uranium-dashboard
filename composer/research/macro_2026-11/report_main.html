@@ -3,11 +3,11 @@
 
 <div class="card verdict">
 <ul>
-<li><b>No macro state gives a usable risk-off switch for the book.</b> Cutting the book to half while a state is on fails the rule set in advance for {{n_fail}} of the {{n_scored}} family composites that could be scored (volume shocks are too rare since 2015). The one that cleared it by the letter, liquidity, rests on two regimes and is not confirmed.</li>
+<li><b>No macro state gives a usable risk-off switch for the book.</b> Cutting the book to half while a state is on fails the rule set in advance for {{n_fail}} of the {{n_scored}} family composites that could be scored (volume shocks are too rare since 2015). The one that cleared it by the letter, liquidity, is in effect one state (the Fed's balance sheet shrinking) and one episode, and is not confirmed.</li>
 <li><b>Why: the book is already counter-cyclical.</b> It has earned more, not less, in the states an overlay would call risk-off. With the S&P 500 below its 200-day average it grew {{t1_on}} log-points a year against {{t1_off}} above it since 2015 (0.10 is roughly 10% more growth a year), and {{t1_on_s}} against {{t1_off_s}} on the rebuilt years before. De-risking there costs {{t1_p1}} a year against holding the same cash evenly.</li>
 <li><b>The symphonies are not working against each other.</b> While Holy Grail's trend gate is off, the other two engines earned {{x1_v}} log-points a year more than otherwise, on all four stretches of history. Holy Grail itself also earns well on those days, so moving its weight to the others adds almost nothing ({{rd_dg}} a year, with a deeper fall).</li>
 <li><b>Gold: a candidate, with the opposite sign to the one I registered.</b> Since 2015 the book grew {{g_on}} a year while gold was strong against {{g_off}} while it was not, in all three engines, and not only in 2020-2022. Before 2015 (rebuilt) there is nothing, and since 2021-06 alone the gap is not distinguishable. Not a rule.</li>
-<li><b>Liquidity: a candidate that rests on one episode.</b> The book grew less while money growth was slowing or the Fed's balance sheet shrinking ({{l_on}} against {{l_off}}), but that is two regimes; without 2020-2021 it is not distinguishable.</li>
+<li><b>Liquidity: one episode, not a signal yet.</b> The book grew less while the Fed's balance sheet was shrinking ({{l_on}} against {{l_off}} a year), but {{lq_blk_share}} of the days it was not shrinking are one stretch, {{lq_blk}}; without 2020-2021 it is not distinguishable.</li>
 <li><b>Nothing in yields and the curve, inflation, CAPE, the dollar or oil.</b> None is distinguishable on both the recent and the rebuilt years.</li>
 <li><b>Macro as a re-entry signal for Holy Grail's gate: no.</b> None of three re-entry states picks the gate-off days worth taking.</li>
 </ul>
@@ -23,7 +23,7 @@
 <h2>1. What was tested, and on what</h2>
 <p>Each state is yes/no every session and uses only data published before that session. A family's composite is on when at least half its states are on. Engines: the live rules' simulated daily returns from addenda 58 to 60; the book at 34.1 / 34.1 / 31.8.</p>
 {{t_design}}
-<p class="note">"Recent" is 2015-06 on for the book and the sleeve, 2006-07 on for Holy Grail, 2021-06 on for KMLM (its real fund); "rebuilt" is everything before, where funds or signals are rebuilt and results are shape only. The book's recent sample is eleven years with about one of each macro regime: a macro rule cannot be confirmed on it. p-values compare each result with 1,000 time-shifted copies of the same state, which keep its persistence. Earlier studies rejected de-risking overlays ten times (addenda 19b to 53); this one covers indicators and book-level questions those did not.</p>
+<p class="note">Daily yields and spreads are used two sessions back (they are published after the close); market prices and volume at the prior close, like the engines' own signals. "Recent" is 2015-06 on for the book and the sleeve, 2006-07 on for Holy Grail, 2021-06 on for KMLM (its real fund); "rebuilt" is everything before, where funds or signals are rebuilt and results are shape only. The book's recent sample is eleven years with about one of each macro regime: a macro rule cannot be confirmed on it. p-values compare each result with 1,000 time-shifted copies of the same state, which keep its persistence. Earlier studies rejected de-risking overlays ten times (addenda 19b to 53); this one covers indicators and book-level questions those did not.</p>
 
 <h2>2. The map: what the book earned in each state</h2>
 {{t_map}}
@@ -39,19 +39,19 @@
 <h2>3. De-risking on a state against holding the same cash all the time</h2>
 <p>The book at half size while the state is on, the rest in T-bills, compared with a book that always holds the same average amount of T-bills.</p>
 {{t_p1}}
-<p class="note">Positive growth difference means timing the cash beat spreading it evenly. The rule set in advance: beat the even mix on growth (or cut the deepest fall by 3 points without less growth), stand above the time-shifted copies after correcting for 11 states, agree in sign on the rebuilt years, beat the mirror, and have at least 8 episodes. Liquidity clears it by the letter ({{l_dg}} a year), but its 21 switches are two regimes, its timed book still falls {{l_ddp}} points deeper than the evenly-held one and grows {{l_pol}} against the full book's {{l_full}}, and without 2020-2021 its gain is {{l_wo}}. I report it as a candidate, which is a downgrade against the letter of the rule made after seeing the result. The dollar composite cut the deepest fall on the recent years and deepened it on the rebuilt ones.</p>
+<p class="note">Positive growth difference means timing the cash beat spreading it evenly. The rule set in advance: beat the even mix on growth (or cut the deepest fall by 3 points without less growth), stand above the time-shifted copies after correcting for 11 states, agree in sign on the rebuilt years, beat the mirror, and have at least 8 episodes. Liquidity clears it by the letter ({{l_dg}} a year). It should not count: since 2015 the composite is one state, the Fed's balance sheet smaller than six months before ({{lq_l2}} of its {{lq_on}} on-days), while before 2003 it is M2 growth alone, so "same sign on the rebuilt years" compares two different indicators; its {{lq_sw}} switches are two regimes, most of them flicker around a flat balance sheet in 2015-2017; {{lq_blk_share}} of its off-days and {{lq_blk_log}} of the growth earned on them sit in one stretch, {{lq_blk}}; its timed book still falls {{l_ddp}} points deeper than the evenly-held one and grows {{l_pol}} against the full book's {{l_full}}, and without 2020-2021 its gain is {{l_wo}}. I report it as a candidate, which is a downgrade against the letter of the rule made after seeing the result. The dollar composite cut the deepest fall on the recent years and deepened it on the rebuilt ones.</p>
 
 <h2>4. Across the engines</h2>
 <h3>Does one engine's state say anything about the others?</h3>
 {{t_cross}}
-<p class="note">The other two engines' growth (at their book weights) on days after the signal is on, against other days; the signalling engine is left out. Scored this way after the first results, because the registered book target contained the signalling engine. For the gate, the first and second other engines are KMLM and the sleeve; for the ladder, Holy Grail and KMLM.</p>
+<p class="note">The other two engines' growth (at their book weights) on days after the signal is on, against other days; the signalling engine is left out. Scored this way after the first results, because the registered book target contained the signalling engine. For the gate, the first and second other engines are KMLM and the sleeve; for the ladder, Holy Grail and KMLM. The gate-off result since 2015 is concentrated: {{x1_top}} supply {{x1_top_share}} of the growth the other two engines earned on gate-off days; without those two years the difference is {{x1_wo}}.</p>
 <details><summary>The other three registered signals, engine by engine</summary>{{t_cross2}}</details>
 <h3>Moving weight out of Holy Grail while its gate is off</h3>
 {{t_redeploy}}
 <p class="note">Defined after seeing the table above. Holy Grail on gate-off days is not idle: its dip-buying rules still trade, and it earned {{own_on}} log-points a year on those days since 2015. So the other engines are not better places for its weight.</p>
 <h3>A tilt between engines by macro state</h3>
 {{t_p2}}
-<p class="note">While a state is on, 15 points move from the engine that did worst to the one that did best in that state's earlier days. The gains are not specific to the state: the mirror (tilting when the state is off) gains as much, because the rule mostly just leans toward KMLM, the engine with the highest simulated return.</p>
+<p class="note">While a state is on, 15 points move from the engine that did worst to the one that did best in that state's earlier days. The gains are not specific to the state: the mirror (tilting when the state is off) gains as much, because the rule simply leans toward KMLM, the engine with the highest simulated return. With the state always on the same tilt adds {{p2_always}} a year; each state's gain is about that times its share of days. The five-year burn-in means tilting only starts in {{p2_first}}.</p>
 
 <h2>5. Macro as a re-entry signal</h2>
 {{t_re}}
@@ -71,7 +71,9 @@
 <ul>
 <li><b>Eleven recent years hold about one of each macro regime.</b> The study can rule states out and rank candidates; it cannot confirm a macro rule.</li>
 <li><b>The recent years are in sample for all three engines.</b> KMLM supplies {{kmlm_share}} of the book's simulated growth since 2015, and {{top2}} are the two biggest years ({{top2_share}} of the total); any state that lines up with those years looks good.</li>
-<li><b>Revised data.</b> CPI, M2 and the financial conditions index are today's vintages, not what was published then.</li>
+<li><b>Revised data.</b> CPI, M2 and the financial conditions index are today's vintages, not what was published then. The review fetched the conditions index as first published (from 2011-05): "above zero" is on in 8 weekly readings since 2015-06 on today's file and in 2 as published. The three states built on it (two credit, one re-entry) could not have been traded as tested; none of them carries a result here.</li>
+<li><b>Composites change make-up through time.</b> "At least half the states with data" means fewer states before 2003 (real yields, breakevens, the Fed's balance sheet) and before 2001 (daily gold and copper).</li>
+<li><b>Same-close assumption.</b> Engines decide on and trade at the same close, and the market states use that close too. The gap between a 15:51 decision and the close is largest on stressed days.</li>
 <li><b>Thresholds were fixed once, not tuned</b>, so a better-placed threshold could exist; searching for it on this sample would prove nothing.</li>
 <li><b>Before 2015 the book is largely rebuilt</b> (shape only), and daily gold starts in 2000.</li>
 <li><b>Measurement basis:</b> daily close to close; the state is known before the session it applies to; 5.9 basis points per unit of turnover.</li>

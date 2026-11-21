@@ -129,8 +129,8 @@ for step in (0.10, 0.20, 0.341):
             yrs[y] = float((np.log1p(pol[m]) - np.log1p(fixed[m])).sum())
         out["redeploy"].setdefault(f"{step:.3f}", {})[which] = {
             "span": [ds[0], ds[-1], n], "gate_off_share": float(s.mean()), "fixed": [g(fixed), float(m1.maxdd(fixed))], "policy": [g(pol), float(m1.maxdd(pol))],
-            "d_growth": g(pol) - g(fixed), "d_maxdd": float(m1.maxdd(pol) - m1.maxdd(fixed)), "mirror_d_growth": g(mir) - g(fixed), "p_growth": float(np.mean(dg >= g(pol) - g(fixed))),
-            "p_maxdd": float(np.mean(ddp <= m1.maxdd(pol) - m1.maxdd(fixed))), "by_year": yrs, "positive_years": int(sum(v > 0 for v in yrs.values())), "years_with_gate_off": int(sum(abs(v) > 1e-9 for v in yrs.values()))}
+            "d_growth": g(pol) - g(fixed), "d_maxdd": float(m1.maxdd(pol) - m1.maxdd(fixed)), "mirror_d_growth": g(mir) - g(fixed), "p_growth": float((1 + np.sum(dg >= g(pol) - g(fixed))) / (1 + len(dg))),
+            "p_maxdd": float((1 + np.sum(ddp <= m1.maxdd(pol) - m1.maxdd(fixed))) / (1 + len(ddp))), "by_year": yrs, "positive_years": int(sum(v > 0 for v in yrs.values())), "years_with_gate_off": int(sum(abs(v) > 1e-9 for v in yrs.values()))}
 json.dump(out, open(os.path.join(HERE, "out", "followup.json"), "w"), indent=1)
 print("regimes BOOK", {k: (v["switches_on"], v["merged_regimes"]) for k, v in out["regimes"]["BOOK"].items()})
 for name in ("liquidity", "gold_off"):
