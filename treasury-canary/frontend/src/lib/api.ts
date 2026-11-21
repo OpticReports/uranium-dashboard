@@ -23,6 +23,7 @@ export interface Health {
   fred_key_present: boolean;
   fred_key_error?: string | null;
   fred_stale_series?: Record<string, number> | null;   // series id -> age (h) of the copy served
+  fred_failing_series?: Record<string, number> | null; // series whose last call failed -> hours failing
   scheduler: boolean;
   display_tz: string;
 }

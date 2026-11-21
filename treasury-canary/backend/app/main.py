@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .sources.fred import fred_key_error, fred_stale_series
+from .sources.fred import fred_failing_series, fred_key_error, fred_stale_series
 from .store.db import init_db, session_scope
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -171,6 +171,7 @@ def health():
         "fred_key_present": bool(settings.fred_api_key),
         "fred_key_error": fred_key_error(),
         "fred_stale_series": fred_stale_series(),
+        "fred_failing_series": fred_failing_series(),
         "scheduler": bool(settings.run_scheduler),
         "display_tz": settings.display_tz,
         "storage": _storage_status(),

@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import FRED_TENORS, settings
-from ..sources.fred import fred_key_error, fred_stale_series
+from ..sources.fred import fred_failing_series, fred_key_error, fred_stale_series
 from ..metrics.auctions import build_auction_metrics
 from ..metrics.crossasset import build_crossasset_metrics
 from ..metrics.curve import build_curve_metrics
@@ -423,6 +423,7 @@ def run_refresh(session: Session) -> dict:
         "fred_key_present": bool(settings.fred_api_key),
         "fred_key_error": fred_key_error(),
         "fred_stale_series": fred_stale_series(),
+        "fred_failing_series": fred_failing_series(),
     }
 
 

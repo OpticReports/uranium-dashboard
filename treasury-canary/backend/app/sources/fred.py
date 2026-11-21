@@ -48,6 +48,18 @@ def fred_stale_series() -> dict[str, float]:
     return dict(sorted(_stale_served.items()))
 
 
+# Series whose last FRED call failed, served stale or not (tag -> time of the first failure in the
+# current failing run); cleared on the next good fetch. Past the age cap, or with no copy at all, a
+# failing series is empty and absent from _stale_served: this keeps the failure visible (/health).
+_failing: dict[str, float] = {}
+
+
+def fred_failing_series() -> dict[str, float]:
+    """tag -> hours the series has been failing."""
+    now = time.time()
+    return {k: round((now - t) / 3600, 1) for k, t in sorted(_failing.items())}
+
+
 def _stale_tag(series_id: str, start: str) -> str:
     """the stale-list key: the series, plus its start when it is not the bundle's (USREC from 1945)."""
     return series_id if start == "1976-01-01" else f"{series_id} (from {start})"
@@ -144,6 +156,7 @@ def fetch_series(
         # (every FRED metric STALE), never mask it with old copies; and past the age cap
         # an old copy goes empty too. What is served stale is listed (fred_stale_series).
         tag = _stale_tag(series_id, start)
+        _failing.setdefault(tag, time.time())
         if _key_error["msg"]:
             _stale_served.pop(tag, None)
             return [], []
@@ -160,6 +173,7 @@ def fetch_series(
                            "so the series is left empty", series_id, age_h, settings.fred_stale_max_age_hours)
         return [], []
     _stale_served.pop(_stale_tag(series_id, start), None)
+    _failing.pop(_stale_tag(series_id, start), None)
     try:
         from .fred_csv import _write_atomic          # temp file + rename: a crash mid-write keeps the old copy
         _write_atomic(cache, json.dumps(data))

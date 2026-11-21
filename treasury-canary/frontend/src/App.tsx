@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Composite, Health, MetricsResponse } from "./lib/api";
 import { api } from "./lib/api";
+import { fredDotTitle, fredDotWarn } from "./lib/fredDot";
 import { errorMessage, formatDateTime } from "./lib/format";
 import { InlineError } from "./components/ui";
 import StressGauge from "./components/StressGauge";
@@ -55,20 +56,26 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("monitor");
 
   const inFlight = useRef(false);
-  const loadCore = useCallback(async () => {
-    if (inFlight.current) return;            // a slow (retrying) poll is still running: skip this tick
+  const loadGen = useRef(0);
+  const loadCore = useCallback(async (force = false) => {
+    if (inFlight.current && !force) return;  // a slow (retrying) poll is still running: skip this tick
     inFlight.current = true;
-    api.health().then(setHealth).catch(() => undefined);   // the header's FRED dot follows the server
+    const gen = ++loadGen.current;           // a manual refresh supersedes a poll still in flight
     try {
-      const [m, c] = await Promise.all([api.metrics(), api.composite()]);
-      setMetrics(m);
-      setComposite(c);
-      setMetricsError(null);
-      setLastRefresh(new Date().toISOString());
-    } catch (e) {
-      setMetricsError(errorMessage(e));
+      // /health rides every poll, so the header's FRED dot follows the server; a failed read shows "unknown"
+      const [m, c, h] = await Promise.allSettled([api.metrics(), api.composite(), api.health()]);
+      if (gen !== loadGen.current) return;   // superseded: an older answer (or error) never overwrites a newer one
+      setHealth(h.status === "fulfilled" ? h.value : null);
+      if (m.status === "fulfilled" && c.status === "fulfilled") {
+        setMetrics(m.value);
+        setComposite(c.value);
+        setMetricsError(null);
+        setLastRefresh(new Date().toISOString());
+      } else {
+        setMetricsError(errorMessage(m.status === "rejected" ? m.reason : (c as PromiseRejectedResult).reason));
+      }
     } finally {
-      inFlight.current = false;
+      if (gen === loadGen.current) inFlight.current = false;
     }
   }, []);
 
@@ -85,7 +92,7 @@ export default function App() {
     } catch {
       // Refresh trigger may be best-effort; still refetch below.
     }
-    await loadCore();
+    await loadCore(true);                     // a manual refresh always re-reads, even mid-poll
     setRefreshing(false);
   }, [loadCore]);
 
@@ -267,11 +274,7 @@ function HealthBadge({
   return (
     <div className="flex items-center gap-2 rounded border border-panelborder bg-slate-900/50 px-3 py-1.5 text-[10px]">
       <Dot ok={health.fred_key_present && !health.fred_key_error} label="FRED"
-        warn={Object.keys(health.fred_stale_series ?? {}).length > 0}
-        title={health.fred_key_error ? `FRED rejected the API key: ${health.fred_key_error}`
-          : Object.keys(health.fred_stale_series ?? {}).length > 0
-            ? `FRED calls failing: ${Object.entries(health.fred_stale_series ?? {}).map(([s, h]) => `${s} (copy ${h} h old)`).join(", ")} served from the last good copy`
-            : undefined} />
+        warn={fredDotWarn(health)} title={fredDotTitle(health)} />
       <Dot ok={health.scheduler} label="sched" />
       <span className="text-slate-500">
         last:{" "}

@@ -22,6 +22,7 @@ from app.sources import fred
 @pytest.fixture(autouse=True)
 def _closed_breaker(monkeypatch):
     monkeypatch.setattr(fred, "_breaker", {"fails": 0, "open_until": 0.0})
+    monkeypatch.setattr(fred, "_failing", {})
 
 OBS = {"observations": [{"date": "2020-03-01", "value": "1"}, {"date": "2020-04-01", "value": "1"},
                         {"date": "2020-05-01", "value": "0"}]}
@@ -209,10 +210,6 @@ def test_health_and_refresh_list_the_stale_served_series(monkeypatch):
     monkeypatch.setattr(fred, "_stale_served", {"USREC": 30.0})
     body = TestClient(main.app).get("/health").json()
     assert body["fred_stale_series"] == {"USREC": 30.0} and "fred_key_error" in body
-    import inspect
-
-    from app.jobs import refresh
-    assert "fred_stale_series" in inspect.getsource(refresh)
 
 
 # ---------------------------------------------------------------------------- re-check A (2026-11-21)
@@ -359,3 +356,45 @@ def test_no_number_means_no_basis(monkeypatch):
     monkeypatch.setattr("app.metrics.recession_model.cached_models_and_spread", lambda: ({}, None))
     p = rc.canary(pair="3m10y")
     assert p["recession_probability_pct"] is None and p["recession_probability_basis"] is None
+
+
+# ---------------------------------------------------------------------------- re-check B, round 3
+def test_a_failing_series_stays_visible_past_the_cap_or_with_no_copy(monkeypatch, tmp_path):
+    """past the cap, or with no copy at all, a failing series is empty and not stale-served; /health must
+    still list it, or the header's FRED dot reads green while the metrics read STALE."""
+    from fastapi.testclient import TestClient
+
+    from app import main
+    _key_and_cache(monkeypatch, tmp_path)
+    monkeypatch.setattr(fred, "_key_error", {"msg": None})
+    monkeypatch.setattr(fred, "_stale_served", {})
+    monkeypatch.setattr(fred.settings, "fred_stale_max_age_hours", 72)
+    monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: None)
+    _old_copy(tmp_path, hours=80)                                   # past the 72 h cap
+    assert fred.fetch_series("USREC") == ([], []) and fred.fetch_series("NOCOPY") == ([], [])
+    assert fred.fred_stale_series() == {} and set(fred.fred_failing_series()) == {"USREC", "NOCOPY"}
+    fred._failing["USREC"] -= 2 * 3600                              # two hours into the failing run
+    fred.fetch_series("USREC")                                      # fails again: the run keeps its start
+    assert fred.fred_failing_series()["USREC"] == 2.0
+    body = TestClient(main.app).get("/health").json()
+    assert set(body["fred_failing_series"]) == {"USREC", "NOCOPY"}
+    monkeypatch.setattr(fred, "_get_with_backoff", lambda params, tries=4: OBS)
+    fred.fetch_series("USREC")
+    assert set(fred.fred_failing_series()) == {"NOCOPY"}            # cleared on the next good fetch
+
+
+def test_the_refresh_job_reports_the_stale_and_failing_series(monkeypatch, tmp_path):
+    """through the real run_refresh, offline (a name-in-source check passed on the import line alone)."""
+    from datetime import date
+
+    from app.jobs import refresh
+    from app.metrics.base import Status
+    from tests.test_flip_baseline import _m, _offline_refresh, _session_factory
+    SL = _session_factory(tmp_path)
+    _offline_refresh(monkeypatch, [_m("curve.x", 1.0, Status.GREEN, date(2026, 10, 23))])
+    monkeypatch.setattr(fred, "_stale_served", {"USREC": 30.0})
+    monkeypatch.setattr(fred, "_failing", {"USREC": time.time() - 3600, "NOCOPY": time.time() - 2 * 3600})
+    with SL() as s:
+        out = refresh.run_refresh(s)
+    assert out["fred_stale_series"] == {"USREC": 30.0}
+    assert out["fred_failing_series"] == {"NOCOPY": 2.0, "USREC": 1.0}
