@@ -49,23 +49,25 @@ def grid_chart(cid, st, grid, labels=None):
     C, g = st["cells"], w.GRIDS[grid]
     val = lambda c, k: C[c][k]["dlog_per_yr"] if c in C else 0.0                           # noqa: E731
     sp = st["spans"]
+    lab = {"M": "Modelled years", "R": "Rebuilt years", "A": "Real years"} if st["engine"] == "HG" else {"M": "Rebuilt, shape only", "R": "Part rebuilt", "A": "Real years"}
     CH[cid] = {"type": "line", "yfmt": "pp", "zero": True, "xnum": True, "xlabels": labels or [short(c).lstrip("abcdefghijklmnopqrstuvwxyz_") for c in g], "xunit": "",
-               "series": [{"name": f"Rebuilt years ({yr(sp['R'])})", "slot": 1, "pts": [[i, val(c, "R")] for i, c in enumerate(g)]},
-                          {"name": f"Real years ({yr(sp['A'])})", "slot": 2, "pts": [[i, val(c, "REAL")] for i, c in enumerate(g)]},
-                          {"name": f"Modelled years ({yr(sp['M'])})", "slot": 3, "pts": [[i, val(c, "M")] for i, c in enumerate(g)]}]}
+               "series": [{"name": f"{lab['R']} ({yr(sp['R'])})", "slot": 1, "pts": [[i, val(c, "R")] for i, c in enumerate(g)]},
+                          {"name": f"{lab['A']} ({yr(sp['A'])})", "slot": 2, "pts": [[i, val(c, "REAL")] for i, c in enumerate(g)]},
+                          {"name": f"{lab['M']} ({yr(sp['M'])})", "slot": 3, "pts": [[i, val(c, "M")] for i, c in enumerate(g)]}]}
 
 
 def groups_table(st, grids):
     def cell(g):
         if not g:
             return ""
-        return f"{lg(g['R']['dlog_per_yr'])} / {lg(g['A']['dlog_per_yr'])} / <b>{lg(g['joined']['dlog_per_yr'])}</b> (t {g['joined']['t']:+.1f}; {g['joined']['ahead']} of {g['cells']} ahead)"
+        return f"{lg(g['M']['dlog_per_yr'])} / {lg(g['R']['dlog_per_yr'])} / {lg(g['A']['dlog_per_yr'])} / <b>{lg(g['joined']['dlog_per_yr'])}</b> (t {g['joined']['t']:+.1f}; {g['joined']['ahead']} of {g['cells']} ahead)"
     rows = []
     for k in grids:
         v = st["groups"].get(k)
         if v:
             rows.append([GN[k], cell(v.get("shorter")), cell(v.get("longer"))])
-    return table(["Family", "Shorter or faster than live: rebuilt / real / <b>both</b>", "Longer or slower than live: rebuilt / real / <b>both</b>"], rows)
+    a, b, c = (("modelled", "rebuilt", "real") if st["engine"] == "HG" else ("rebuilt to 2020", "2020-12 to 2023-01", "real"))
+    return table(["Family", f"Shorter or faster than live: {a} / {b} / {c} / <b>verdict years</b>", f"Longer or slower than live: {a} / {b} / {c} / <b>verdict years</b>"], rows)
 
 
 def cells_table(st):
@@ -76,7 +78,8 @@ def cells_table(st):
         fails = "same as live" if v["same_as_live"] else ", ".join(k[0] for k, x in v["conditions"].items() if not x)
         rows.append([f"{short(c)}", GN[v["grid"]], lg(v["joined"]["dlog_per_yr"], 3), f"{v['joined']['t']:+.2f}", f"{v['joined']['p_fw']:.2f}",
                      f"{lg(v['R']['dlog_per_yr'], 3)} ({pu(v['R']['maxdd'])})", f"{lg(v['REAL']['dlog_per_yr'], 3)} ({pu(v['REAL']['maxdd'])})", lg(v["M"]["dlog_per_yr"], 3), fails])
-    return table(["Variant", "Family", "Rebuilt + real, log-pts/yr", "t", "Family-wise p", "Rebuilt (max drawdown)", "Real (max drawdown)", "Modelled", "Tests failed"], rows)
+    a, b, c = (("Modelled", "Rebuilt", "Real") if st["engine"] == "HG" else ("Rebuilt to 2020 (shape)", "2020-12 to 2023-01", "Real"))
+    return table(["Variant", "Family", "Verdict years, log-pts/yr", "t", "Family-wise p", f"{b} (max drawdown)", f"{c} (max drawdown)", a, "Tests failed"], rows)
 
 
 # ---- Holy Grail
@@ -94,6 +97,7 @@ D = BK["drawdowns"]
 bs = BK["spans"]
 seg = lambda pts, lo, hi: [p for p in pts if lo <= p[0] <= hi]                             # noqa: E731
 names = (("M", "Rebuilt years (shape only)", 3), ("R", "Holy Grail and KMLM real, sleeve part rebuilt", 1), ("A", "All three real", 2))
+LAB = {"HG": {"M": "Modelled", "R": "Rebuilt", "A": "Real"}, "SLEEVE": {"M": "Rebuilt, shape only", "R": "Part rebuilt", "A": "Real"}}
 CH["c_book"] = {"type": "line", "yfmt": "mult", "log": True, "logticks": [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9],
                 "series": [{"name": n, "slot": s, "pts": seg(D["BOOK"]["growth"], bs[k][0], bs[k][1])} for k, n, s in names]}
 CH["c_book_dd"] = {"type": "line", "yfmt": "pct0", "zero": True, "series": [{"name": n, "slot": s, "pts": D["BOOK"][k]["path"]} for k, n, s in names]}
@@ -108,14 +112,14 @@ ep = lambda d: f"{d['peak'][:7]} to {d['trough'][:7]}" + (f", back by {d['recove
 t_book = table(["", "Stretch", "Return a year", "Max drawdown", "Sharpe", "Deepest fall"],
                [[nm, f"{lab} ({yr(sp[k])})", pc(st[k]["cagr"]), pu(st[k]["maxdd"]), f"{st[k]['sharpe']:.2f}", ep(dd[k])]
                 for nm, st, sp, dd, labs in (("Holy Grail", H["base"], H["spans"], D["HG"], ("Modelled", "Rebuilt", "Real")),
-                                             ("Sleeve", S["base"], S["spans"], D["SLEEVE"], ("Modelled", "Rebuilt", "Real")),
+                                             ("Sleeve", S["base"], S["spans"], D["SLEEVE"], ("Rebuilt, shape only", "Part rebuilt", "Real")),
                                              ("Book", BK["live"], bs, D["BOOK"], ("Rebuilt, shape only", "Part rebuilt", "All real")))
                 for k, lab in zip("MRA", labs)])
 t_design = table(["", "Holy Grail", "Sleeve"], [
     ["Variants", f"{H['n_cells']}: crossover pairs (21), cash-test window (13), both scaled (11), SPY gate (11), RSI tests (18), pick ranking (11), all RSI together (4); simple and exponential averages",
      f"{S['n_cells']}: IEF window (9), PSQ window (6), both scaled (5), LABD/TMV window (6), KMLM window (5), ladder RSI windows (8), ladder returns and ranks over 2-5 days (6)"],
-    ["Modelled years (shape)", f"{H['spans']['M'][0][:7]} to {H['spans']['M'][1][:7]}", f"{S['spans']['M'][0][:7]} to {S['spans']['M'][1][:7]}"],
-    ["Rebuilt years", f"{H['spans']['R'][0][:7]} to {H['spans']['R'][1][:7]}", f"{S['spans']['R'][0][:7]} to {S['spans']['R'][1][:7]}"],
+    ["Shape only", f"{H['spans']['M'][0][:7]} to {H['spans']['M'][1][:7]} (VIX funds modelled)", f"{S['spans']['M'][0][:7]} to {S['spans']['M'][1][:7]} (rebuilt; the KMLM signal missed its fidelity bar)"],
+    ["Rebuilt years in the verdict", f"{H['spans']['R'][0][:7]} to {H['spans']['R'][1][:7]}", f"{S['spans']['R'][0][:7]} to {S['spans']['R'][1][:7]} (real KMLM; BOXX is T-bills)"],
     ["Real years", f"{H['spans']['A'][0][:7]} to {H['spans']['A'][1][:7]} (every fund trades)", f"{S['spans']['A'][0][:7]} to {S['spans']['A'][1][:7]} (from BOXX's launch)"],
     ["t needed after all tries", f"{H['critical_t_90']:.2f}", f"{S['critical_t_90']:.2f}"]])
 g1, g2 = GT["G1"], GT["G2"]
@@ -146,19 +150,24 @@ edges = "".join([
     edge(H, "HA.sma15x30", "Holy Grail on a slower crossover (15/30-day simple)", f"Its exponential twin shows {lg(HC_['HA.ema15x30']['R']['dlog_per_yr'], 3)} on the rebuilt years, so the gain does not survive a change of form. Would need to hold on the real years to be worth a look; it does not."),
     edge(H, "HD.sma100", "Holy Grail with a 100-day SPY gate", "Ahead on both verdict stretches, behind on the modelled one, never by a distinguishable amount."),
     edge(H, hb, f"Holy Grail's best by t ({short(hb)})", "A hundredth of a log-point."),
-    edge(S, sb_, f"The sleeve's best by t ({short(sb_)})", "Inside the noise."),
+    edge(S, sb_, f"The sleeve's best by t ({short(sb_)}: the KMLM window in its two hold tests at 5 days instead of 10)", "Ahead since 2020-12 on both stretches, flat on the 26 rebuilt years before. Six years, one of 45 tries: inside the noise. Would need the long history to agree, and it does not."),
     f"<li><b>Risk, not edge.</b> On rebuilt history each engine has fallen much further than in its real years (section 4). Holy Grail's {pu(H['base']['R']['maxdd'])} fall of 2011-12 at 34% of the book is about {H['base']['R']['maxdd'] * 34.1:.0f} points of book.</li>"])
 jd = [sw[e]["cells"][sw[e]["best_by_t"]]["joined"]["dlog_per_yr"] for e in ("HG", "KMLM", "SLEEVE")]
+excl = [nm for e, nm in (("HG", "Holy Grail's"), ("KMLM", "KMLM's"), ("SLEEVE", "the sleeve's")) if sw[e]["cells"][sw[e]["best_by_t"]]["joined"]["ci90"][0] > 0]
+book_ci = ("Every interval spans zero." if not excl else
+           f"The plain intervals for {' and '.join(excl)} best sit just above zero, but each is the best of its engine's tries picked after the fact; allowing for that pick none is distinguishable "
+           f"(family-wise p {HC_[hb]['joined']['p_fw']:.2f} and {SC_[sb_]['joined']['p_fw']:.2f} on their own engines).")
 subs = {
     "{{n_all}}": str(H["n_cells"] + S["n_cells"]), "{{hg_n}}": str(H["n_cells"]), "{{sl_n}}": str(S["n_cells"]),
-    "{{ema_txt}}": ema_txt, "{{sg_t}}": f"{sgt:+.1f}", "{{book_rng}}": f"{lg(min(jd), 3)} to {lg(max(jd), 3)}",
+    "{{ema_txt}}": ema_txt, "{{sg_t}}": f"{sgt:+.1f}", "{{sg_tm}}": f"{S['groups']['SGt']['longer']['M']['t']:+.1f}", "{{book_ci}}": book_ci,
+    "{{sl_all3}}": str(len(S["ahead_all_three"])) + (" (" + ", ".join(short(c) for c in S["ahead_all_three"]) + ")" if S["ahead_all_three"] else ""), "{{book_rng}}": f"{lg(min(jd), 3)} to {lg(max(jd), 3)}",
     "{{hg_r_dd}}": pu(H["base"]["R"]["maxdd"]), "{{hg_m_dd}}": pu(H["base"]["M"]["maxdd"]), "{{hg_a_dd}}": pu(H["base"]["A"]["maxdd"]),
     "{{sl_m_cagr}}": pc(S["base"]["M"]["cagr"]), "{{sl_m_dd}}": pu(S["base"]["M"]["maxdd"]), "{{sl_a_cagr}}": pc(S["base"]["A"]["cagr"]), "{{sl_a_dd}}": pu(S["base"]["A"]["maxdd"]),
     "{{bk_m_dd}}": pu(BK["live"]["M"]["maxdd"]), "{{bk_a_dd}}": pu(BK["live"]["A"]["maxdd"]),
     "{{hg_best}}": f"{short(hb)} ({GN[HC_[hb]['grid']].lower()})", "{{hg_best_t}}": f"{HC_[hb]['joined']['t']:.2f}", "{{hg_crit}}": f"{H['critical_t_90']:.2f}", "{{hg_best_p}}": f"{HC_[hb]['joined']['p_fw']:.2f}",
     "{{hg_ahead}}": str(len(H["ahead_joined"])), "{{hg_both}}": str(len(H["ahead_R_and_REAL"])) + (" (" + ", ".join(short(c) for c in H["ahead_R_and_REAL"]) + ")" if H["ahead_R_and_REAL"] else ""),
     "{{sl_best}}": f"{short(sb_)} ({GN[SC_[sb_]['grid']].lower()})", "{{sl_best_t}}": f"{SC_[sb_]['joined']['t']:.2f}", "{{sl_crit}}": f"{S['critical_t_90']:.2f}", "{{sl_best_p}}": f"{SC_[sb_]['joined']['p_fw']:.2f}",
-    "{{sl_ahead}}": str(len(S["ahead_joined"])), "{{sl_gain}}": f"{max(SC_[c]['joined']['dlog_per_yr'] for c in SC_):.3f}",
+    "{{sl_ahead}}": str(len(S["ahead_joined"])),
     "{{gates}}": f"{pu(okn / tot, 2)}",
     "{{bad_n}}": str(bad["days"]), "{{bad_others}}": pu(-bad["others_mean"], 1), "{{bad_sleeve}}": pc(bad["live_sleeve_mean"], 2), "{{bad_pos}}": pu(bad["live_sleeve_positive_share"]),
     "{{bad_all}}": pc(bad["live_sleeve_all_days_mean"], 2), "{{bad_20}}": pc(bad["next_20_sessions"]["sleeve"], 1), "{{bad_20o}}": pc(bad["next_20_sessions"]["others"], 1),

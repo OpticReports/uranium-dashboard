@@ -6,9 +6,9 @@
 <li><b>No window or moving-average change is supported in either symphony.</b> 0 of {{hg_n}} Holy Grail variants and 0 of {{sl_n}} sleeve variants pass the five tests set in advance.</li>
 <li><b>Holy Grail's windows sit on flat ground.</b> Crossover pairs near 10/20, the 20-day cash test at 10 to 50 days, the SPY gate at 100 to 300 days and the pick ranking at 8 to 14 days are all within noise of the live rule. Moving every RSI test off 10 days is worse, clearly so at 5 and at 17 to 20.</li>
 <li><b>Exponential averages are no better than simple ones.</b> Same windows, EMA minus SMA: {{ema_txt}}.</li>
-<li><b>The sleeve's windows are level too, and its one-day shock tests should stay one-day.</b> The bond switch is level from 8 to 14 days. Stretching the ladder's one-day returns to 2, 3 or 5 days is the one clearly worse family (t {{sg_t}}).</li>
-<li><b>At book level nothing moves.</b> The best single swap in each engine changes the book by {{book_rng}} log-points a year, every interval spanning zero.</li>
-<li><b>By-product worth knowing: all three engines look rougher on rebuilt history than on their real years.</b> Holy Grail fell {{hg_r_dd}} in 2011-12 and {{hg_m_dd}} in 2001 (real years: {{hg_a_dd}}). The sleeve made {{sl_m_cagr}} a year with a {{sl_m_dd}} fall on its rebuilt years (real: {{sl_a_cagr}}, {{sl_a_dd}}). The book's deepest rebuilt fall is {{bk_m_dd}} (real: {{bk_a_dd}}).</li>
+<li><b>The sleeve's windows are level too, and its one-day shock tests should stay one-day.</b> The bond switch is level from 8 to 12 days. Stretching the ladder's one-day returns to 2, 3 or 5 days is worse on every stretch (t {{sg_t}} on the verdict years, {{sg_tm}} on the 26 rebuilt years before them).</li>
+<li><b>At book level nothing moves.</b> The best single swap in each engine changes the book by {{book_rng}} log-points a year. {{book_ci}}</li>
+<li><b>By-product worth knowing: all three engines look rougher on rebuilt history than on their real years.</b> Holy Grail fell {{hg_r_dd}} in 2011-12 and {{hg_m_dd}} in 2001 (real years: {{hg_a_dd}}). The sleeve made {{sl_m_cagr}} a year with a {{sl_m_dd}} fall on its rebuilt 1994-2020 years (real: {{sl_a_cagr}}, {{sl_a_dd}}). The book's deepest rebuilt fall is {{bk_m_dd}}, in 2000 (real: {{bk_a_dd}}).</li>
 </ul>
 </div>
 
@@ -21,7 +21,7 @@
 
 <h2>1. What was varied, and on what history</h2>
 {{t_design}}
-<p class="note">Rebuilt years use the repo's long panel: a fund before its launch is its index times its leverage, bond funds are older mutual funds, VIX funds come from the VIX futures curve. Modelled years are those where a leg is a model of a market that did not trade (VIX futures before 2004) or, for the sleeve, where the KMLM signal is the rebuilt fund that missed its fidelity bar (addendum 58). The verdict is read on rebuilt plus real years; modelled years are shown for shape. "Matched" means a threshold was re-set, on the modelled years only, to fire as often as the live one.</p>
+<p class="note">Rebuilt years use the repo's long panel: a fund before its launch is its index times its leverage, bond funds are older mutual funds, VIX funds come from the VIX futures curve. "Shape only" years are those where a leg is a model of a market that did not trade (VIX futures before 2004) or, for the sleeve, where the KMLM signal it reads is the rebuilt fund that missed its fidelity bar (addendum 58): by the rule set in advance that moves the sleeve's 1994-2020 to shape only. The verdict is read on the two later stretches together. "Matched" means a threshold was re-set, on the modelled years only, to fire as often as the live one.</p>
 
 <h2>2. Holy Grail</h2>
 <p>Live: TQQQ's 10-day average above its 20-day; TQQQ and SOXL 10-day RSI tests at 80 and 30; TQQQ below its 20-day average sends it to cash; SPY above its 200-day average gates the trend baskets; picks ranked by 10-day RSI.</p>
@@ -36,12 +36,12 @@
 <h2>3. The crash sleeve</h2>
 <p>Live: hold the inverse funds when the 8-day RSI of IEF is below the 45-day RSI of PSQ, each only while its 20-day RSI is below KMLM's 10-day; and a ladder of one-day bond and credit shocks with RSI tests at 10 to 16 days. It has no moving average, so only windows were varied.</p>
 {{ch_sl_cells}}
-<p>Best by t: {{sl_best}} at {{sl_best_t}} (needed {{sl_crit}}; family-wise p {{sl_best_p}}). {{sl_ahead}} of {{sl_n}} are ahead; the gains are {{sl_gain}} log-points a year at most.</p>
+<p>Best by t: {{sl_best}} at {{sl_best_t}} (needed {{sl_crit}}; family-wise p {{sl_best_p}}). {{sl_ahead}} of {{sl_n}} are ahead on the verdict years (2020-12 on), {{sl_all3}} on all three stretches. The verdict sample is only {{sl_ver_yrs}} years, so the bar is high and the long rebuilt history is the better guide to shape.</p>
 <div class="two">{{ch_sl_ief}}{{ch_sl_ladder}}</div>
 {{t_sl_groups}}
 <details><summary>All {{sl_n}} sleeve variants</summary>{{t_sl_cells}}</details>
 <h3>Is it still a hedge?</h3>
-<p>On the worst 5% of days for Holy Grail and KMLM together ({{bad_n}} days, the pair down {{bad_others}} on average) the live sleeve made {{bad_sleeve}}, positive on {{bad_pos}} of them, against {{bad_all}} on an average day. Over the next 20 sessions it made {{bad_20}} while the pair rebounded {{bad_20o}}. No window variant pays more than {{bad_best}} basis points extra on those days.</p>
+<p>On the worst 5% of days for Holy Grail and KMLM together since 2021-06 ({{bad_n}} days, the pair down {{bad_others}} on average) the live sleeve made {{bad_sleeve}}, positive on {{bad_pos}} of them, against {{bad_all}} on an average day. Over the next 20 sessions it made {{bad_20}} while the pair rebounded {{bad_20o}}. No window variant pays more than {{bad_best}} basis points extra on those days.</p>
 
 <h2>4. The book</h2>
 <p>Holy Grail 34.1%, KMLM 34.1%, sleeve 31.8%, rebalanced daily, on the days all three have a simulated return.</p>
