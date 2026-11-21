@@ -74,6 +74,22 @@ DR = "0.318.daily_reset"
 t_drift = table(["Scenario", "Deepest fall in 10 years, weights drift (as run): median / 1-in-20", "Same, reset to target daily (earlier studies): median / 1-in-20", "Median return a year: drift / daily reset", "Cap resets a year"],
                 [[SN[s], f"{pu(MC[s][T]['10y']['maxdd_median'])} / {pu(MC[s][T]['10y']['maxdd_p95'])}", f"{pu(MC[s][DR]['10y']['maxdd_median'])} / {pu(MC[s][DR]['10y']['maxdd_p95'])}",
                   f"{pc(MC[s][T]['10y']['per_yr']['50'])} / {pc(MC[s][DR]['10y']['per_yr']['50'])}", f"{MC[s][T]['10y']['resets_per_yr']:.1f}"] for s in ORDER])
+t_cap = table(["Scenario", "Cap rule"] + WL, [r for s_ in ("B", "D") for r in (
+    [SN[s_], "each engine's own target + 10 points (used here): median return a year"] + [pc(MC[s_][wt]["10y"]["per_yr"]["50"]) for wt in WS],
+    ["", "&nbsp;&nbsp;chance of a fall deeper than 30%"] + [pu(MC[s_][wt]["10y"]["p_fall_deeper"]["30"]) for wt in WS],
+    ["", "one cap, largest target + 10 points (as registered): median return a year"] + [pc(MC[s_][wt + ".largest_cap"]["10y"]["per_yr"]["50"]) for wt in WS],
+    ["", "&nbsp;&nbsp;chance of a fall deeper than 30%"] + [pu(MC[s_][wt + ".largest_cap"]["10y"]["p_fall_deeper"]["30"]) for wt in WS])])
+t_methods = table(["Method", "What it is", "Used here?"], [
+    ["Block-bootstrap Monte Carlo", "resample stretches of the strategy's own daily returns into thousands of future paths", "yes: every scenario"],
+    ["Backtest haircut from published decay", "shrink the backtest's edge by what strategies have lost between backtest and live", "yes: scenarios D and E"],
+    ["Execution stress", "re-run with worse fills and see what survives", "yes: scenario F (one close late)"],
+    ["Building blocks / capital-market assumptions", "split return into market beta and the rest; put a forward view on the market part", "yes: scenario G and the beta table"],
+    ["Deflated Sharpe ratio / multiple-testing haircut", "ask whether the best of many tries could look this good by luck", "yes: table above; it cannot produce a forward number"],
+    ["Regime-conditioned bootstrap", "resample by market regime with chosen regime odds", "already on record (addendum 13); the long-history scenario C covers the hostile regimes here"],
+    ["Live-record updating (Bayesian shrinkage)", "blend the backtest with live results as they accrue", "table only: 94 to 238 live sessions cannot move an estimate yet; worth re-running each quarter"],
+    ["Parametric models (GARCH, regime-switching, fat-tailed fits)", "fit a return model and simulate from it", "no: GARCH was tried on the harvester and failed its test (addendum 31); a fitted model adds assumptions the bootstrap does not need"],
+    ["Capacity and cost curves", "model how returns shrink as size grows", "no: on record for today's size (addenda 14b, 15); matters at about $1M and up"],
+    ["Walk-forward / cross-validated backtests", "re-fit on one period, test on the next", "not applicable: the rules are fixed trees, not re-fitted; the rebuilt pre-2015 history is the nearest thing to an unseen period"]])
 t_hist = table(["Source", "Sessions", "Sleeve weight", "Return a year", "Deepest fall", "Sharpe", "Volatility"],
                [[SN[s] if wt == "0.000" else "", HIST[s][wt]["n"] if wt == "0.000" else "", WL[WS.index(wt)], pc(HIST[s][wt]["cagr"]), pu(HIST[s][wt]["maxdd"], 1), f"{HIST[s][wt]['sharpe']:.2f}", pu(HIST[s][wt]["vol"])]
                 for s in ORDER for wt in ("0.000", "0.318", "0.500")])
@@ -83,7 +99,7 @@ t_def = table(["Source", "Sleeve weight", "Simulated Sharpe", "Best of 10 unskil
 EK = ("HG", "KMLM", "SLEEVE")
 t_beta = table(["Engine", "Beta to the S&P 500, 2015-06 on", "Mean return over T-bills a year", "of which beta x the S&P's", "Lowered by, in the low-return decade", "Beta, 1994 on"],
                [[EN[e], f"{SIDE['beta_B'][i]:+.2f}", pc(SIDE["engine_mean_over_tbills_per_yr_B"][i]),
-                 pu(SIDE["beta_B"][i] * (SIDE["spx_growth_per_yr_B"] - SIDE["tbill_per_yr_B"]) / SIDE["engine_mean_over_tbills_per_yr_B"][i]), f"{SIDE['g_shift_per_yr'][i] * 100:.1f} points a year", f"{SIDE['beta_C'][i]:+.2f}"]
+                 pu(SIDE["beta_B"][i] * SIDE["spx_mean_over_tbills_per_yr_B"] / SIDE["engine_mean_over_tbills_per_yr_B"][i]), f"{SIDE['g_shift_per_yr'][i] * 100:.1f} points a year", f"{SIDE['beta_C'][i]:+.2f}"]
                 for i, e in enumerate(EK)])
 t_live = table(["Symphony", "Live from", "to", "Sessions", "Live return", "Simulated, same dates", "Deepest live fall"],
                [[EN[e], v["from"], v["to"], v["sessions"], pc(v["live_return"], 1), pc(v["simulated_return_same_dates"], 1), pu(v["live_deepest_fall"], 1)] for e, v in LIVE.items()])
@@ -101,7 +117,23 @@ lo_s = min(plan, key=lambda s: v(s)["per_yr"]["50"])
 hi_s = max(plan, key=lambda s: v(s)["per_yr"]["50"])
 subs = {
     "{{t_scen}}": t_scen, "{{t_today}}": t_today, "{{t_w10}}": by_weight("10y"), "{{t_w5}}": by_weight("5y"), "{{t_w1}}": by_weight("1y"), "{{t_drift}}": t_drift, "{{t_hist}}": t_hist, "{{t_def}}": t_def,
-    "{{t_beta}}": t_beta, "{{t_live}}": t_live,
+    "{{t_beta}}": t_beta, "{{t_live}}": t_live, "{{t_cap}}": t_cap, "{{t_methods}}": t_methods,
+    "{{d_10}}": pc(v("D")["per_yr"]["50"]), "{{e_10}}": pc(v("E")["per_yr"]["50"]), "{{g_10}}": pc(v("G")["per_yr"]["50"]),
+    "{{d_5}}": rng3(v("D", "5y")), "{{e_5}}": rng3(v("E", "5y")), "{{d_1}}": rng3(v("D", "1y")), "{{e_1}}": rng3(v("E", "1y")),
+    "{{d_dd}}": f"{pu(v('D')['maxdd_median'])} (1-in-20: {pu(v('D')['maxdd_p95'])})", "{{e_dd}}": f"{pu(v('E')['maxdd_median'])} (1-in-20: {pu(v('E')['maxdd_p95'])})",
+    "{{d_p30}}": pu(v("D")["p_fall_deeper"]["30"]), "{{e_p30}}": pu(v("E")["p_fall_deeper"]["30"]), "{{e_p50}}": pu(v("E")["p_fall_deeper"]["50"]), "{{d_p50}}": pu(v("D")["p_fall_deeper"]["50"]),
+    "{{d_loss1}}": pu(v("D", "1y")["p_below_start"]), "{{e_loss1}}": pu(v("E", "1y")["p_below_start"]), "{{e_loss5}}": pu(v("E", "5y")["p_below_start"]), "{{e_loss10}}": pu(v("E", "10y")["p_below_start"], 1),
+    "{{b_dd}}": f"{pu(v('B')['maxdd_median'])} (1-in-20: {pu(v('B')['maxdd_p95'])})",
+    "{{w_b}}": f"{pc(v('B', wt='0.000')['per_yr']['50'])} / {pc(v('B')['per_yr']['50'])} / {pc(v('B', wt='0.500')['per_yr']['50'])}",
+    "{{w_d}}": f"{pc(v('D', wt='0.000')['per_yr']['50'])} / {pc(v('D')['per_yr']['50'])} / {pc(v('D', wt='0.500')['per_yr']['50'])}",
+    "{{w_e}}": f"{pc(v('E', wt='0.000')['per_yr']['50'])} / {pc(v('E')['per_yr']['50'])} / {pc(v('E', wt='0.500')['per_yr']['50'])}",
+    "{{w_d_dd}}": f"{pu(v('D', wt='0.000')['maxdd_p95'])} / {pu(v('D')['maxdd_p95'])} / {pu(v('D', wt='0.500')['maxdd_p95'])}",
+    "{{w_e_dd}}": f"{pu(v('E', wt='0.000')['maxdd_p95'])} / {pu(v('E')['maxdd_p95'])} / {pu(v('E', wt='0.500')['maxdd_p95'])}",
+    "{{w_b_dd}}": f"{pu(v('B', wt='0.000')['maxdd_p95'])} / {pu(v('B')['maxdd_p95'])} / {pu(v('B', wt='0.500')['maxdd_p95'])}",
+    "{{def_best}}": f"{DEF['B']['0.318']['1000']['expected_best_of_unskilled']:.2f}", "{{def_sr}}": f"{DEF['B']['0.318']['sharpe']:.2f}",
+    "{{beta_txt}}": ", ".join(f"{EN[e]} {SIDE['beta_B'][i]:+.2f}" for i, e in enumerate(EK)),
+    "{{beta_share}}": ", ".join(f"{EN[e]} {pu(SIDE['beta_B'][i] * SIDE['spx_mean_over_tbills_per_yr_B'] / SIDE['engine_mean_over_tbills_per_yr_B'][i])}" for i, e in enumerate(EK)),
+    "{{live_txt}}": "; ".join(f"{EN[e]} {pc(x['live_return'])} live against {pc(x['simulated_return_same_dates'])} simulated over {x['sessions']} sessions" for e, x in LIVE.items()),
     "{{plan_lo}}": pc(v(lo_s)["per_yr"]["50"]), "{{plan_hi}}": pc(v(hi_s)["per_yr"]["50"]), "{{plan_lo_name}}": SN[lo_s].lower(), "{{plan_hi_name}}": SN[hi_s].lower(),
     "{{plan_1y}}": " to ".join(sorted((pc(v(s, "1y")["per_yr"]["50"]) for s in (lo_s, hi_s)), key=lambda z: float(z[:-1]))),
     "{{plan_1y_bad}}": " to ".join(sorted((pc(v(s, "1y")["per_yr"]["5"]) for s in plan), key=lambda z: float(z[:-1]))[::2]),

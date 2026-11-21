@@ -41,7 +41,7 @@ def scenarios():
     side = {"beta_B": beta.tolist(), "beta_C": beta_of(RC, tC, sC).tolist(), "spx_growth_per_yr_B": float(spx_mean_daily * 252), "spx_growth_per_yr_C": float(np.log1p(sC).mean() * 252),
             "spx_growth_after_shift": float(np.log1p(sB - (spx_mean_daily - low_daily)).mean() * 252),
             "engine_mean_over_tbills_per_yr_B": (ex * 252).tolist(), "engine_mean_over_tbills_per_yr_C": ((RC - tC[:, None]).mean(0) * 252).tolist(),
-            "tbill_per_yr_B": float(tB.mean() * 252), "g_shift_per_yr": (beta * (spx_mean_daily - low_daily) * 252).tolist()}
+            "tbill_per_yr_B": float(tB.mean() * 252), "spx_mean_over_tbills_per_yr_B": float((sB - tB).mean() * 252), "g_shift_per_yr": (beta * (spx_mean_daily - low_daily) * 252).tolist()}
     return S, side
 
 
@@ -56,11 +56,15 @@ def draw(n, rng):
     return idx
 
 
-def run(R, tb, idx, wt, daily=False):
-    """book paths for third-leg weight wt. Drift with a reset to target when any engine exceeds the largest
-    target + 10 points (POLICY operation 5); daily=True resets every session (the earlier studies' convention)."""
+def run(R, tb, idx, wt, daily=False, rule="own"):
+    """book paths for third-leg weight wt. Weights drift; all three are reset to target when an engine passes
+    its cap. rule="own": each engine's cap is its OWN target + 10 points (at today's 31.8% book that is
+    44.1 / 44.1 / 41.8, in effect POLICY's 44%); rule="largest": one cap for all, the largest target + 10
+    points (PREREG's literal reading, which at a 40-50% sleeve lets HG or KMLM run from 25-30% to 50-60%).
+    daily=True resets every session (the earlier studies' convention)."""
     tgt = np.array([(1 - wt) / 2, (1 - wt) / 2, wt])
-    cap = tgt.max() + 0.10
+    cap = (tgt + 0.10) if rule == "own" else np.full(3, tgt.max() + 0.10)
+    cap = np.where(tgt > 0, cap, 2.0)
     V = np.tile(tgt, (N, 1)).astype(np.float64)
     peak = np.ones(N)
     mdd = np.zeros(N)
@@ -72,7 +76,7 @@ def run(R, tb, idx, wt, daily=False):
         if daily:
             V = tot[:, None] * tgt[None, :]
         else:
-            hit = (V / tot[:, None]).max(1) > cap
+            hit = ((V / tot[:, None]) > cap[None, :]).any(1)
             if hit.any():
                 turn = np.abs(V[hit] / tot[hit, None] - tgt[None, :]).sum(1)
                 tot[hit] *= 1 - COST * turn
@@ -135,6 +139,9 @@ def main():
             out["hist"][sid][f"{wt:.3f}"] = {"cagr": float(lvl[-1] ** (252 / len(x)) - 1), "maxdd": float(np.max(1 - lvl / np.maximum.accumulate(lvl))), "sharpe": float(x.mean() / x.std(ddof=1) * math.sqrt(252)),
                                              "vol": float(x.std(ddof=1) * math.sqrt(252)), "n": len(x)}
         out["mc"][sid]["0.318.daily_reset"], _ = run(R, tb, idx, 0.318, daily=True)
+        if sid in ("B", "D"):
+            for wt in WEIGHTS:
+                out["mc"][sid][f"{wt:.3f}.largest_cap"], _ = run(R, tb, idx, wt, rule="largest")
         v = out["mc"][sid]["0.318"]
         print(sid, len(ds), "31.8%:", {h: (round(v[h]["per_yr"]["5"], 2), round(v[h]["per_yr"]["50"], 2), round(v[h]["per_yr"]["95"], 2), "P<1", round(v[h]["p_below_start"], 3), "dd", round(v[h]["maxdd_median"], 2), round(v[h]["maxdd_p95"], 2)) for h in HOR},
               "| daily reset 10y dd", round(out["mc"][sid]["0.318.daily_reset"]["10y"]["maxdd_median"], 2), "resets/yr", round(v["10y"]["resets_per_yr"], 2), flush=True)
@@ -145,7 +152,7 @@ def main():
     print("deflated B 31.8%", out["deflated"]["B"]["0.318"])
     print("live", out["live"])
     for sid in out["mc"]:
-        print(sid, "10y median per yr / P(fall>30%) by weight:", {wt: (round(v["10y"]["per_yr"]["50"], 2), round(v["10y"]["p_fall_deeper"]["30"], 2)) for wt, v in out["mc"][sid].items() if "daily" not in wt})
+        print(sid, "10y median per yr / P(fall>30%) by weight:", {wt: (round(v["10y"]["per_yr"]["50"], 2), round(v["10y"]["p_fall_deeper"]["30"], 2)) for wt, v in out["mc"][sid].items() if "daily" not in wt and "largest" not in wt})
 
 
 if __name__ == "__main__":
