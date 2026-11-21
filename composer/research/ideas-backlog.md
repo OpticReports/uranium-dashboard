@@ -333,4 +333,10 @@ deterministic rationale are listed.
     the 12-day switch+picks cell (t +1.49, family-wise p 0.84). Tooling left behind:
     `research/kmlm_2026-11/ksim.py` (variant builders + corridor path, gated on Composer's own
     backtests) for any later tree study.
-
+28. Windows / moving averages in HG and the sleeve, and the book (add. 59, 2026-11-21): CLOSED, no build.
+    0 of 89 (HG) and 0 of 45 (sleeve) pass on long history; EMA no better than SMA. Open from it: P1 is
+    the sleeve's weak 1994-2020 record (and its failure to hedge HG+KMLM together) the rebuilt data or
+    the rule; P2 do HG's crossover and gate earn their keep on 2006-2015. Candidate edges logged, none
+    actionable: sleeve vs HG alone on HG's worst days (t 2.4 since 2021-06, 0.6 on 1994-2020); HG 15/30
+    crossover (rebuilt years only). Tooling: `research/windows_2026-11/wsim.py` (generic variant
+    builders for HG and SLEEVE, gated on Composer).

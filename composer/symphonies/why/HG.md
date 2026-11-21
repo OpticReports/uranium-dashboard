@@ -54,6 +54,8 @@ fund. It has no macro or rates input (addendum 33).
 | Gating the dip-buys or every leveraged long; VIX or CAPE gates | rejected | add. 42 |
 | Canary signals | no change; CAPE of 35 or more is a watch item only | add. 43 |
 | Overnight or pre-open exits | 44 of 47 rules lowered CAGR (the 3 positives are mirror controls, t of 1.3 or less); every conditioned exit with 5 or more cases negative | add. 53, 54.2 |
+| Other windows for the 10/20 crossover, the 20-day cash test, the SPY 200-day gate (50 to 300 days), the pick ranking; simple or exponential averages | 0 of 89 pass on 2006-2026; near-by windows level with the live ones, EMA no better than SMA | add. 59 |
+| Another RSI window for the pop, dip and SOXL tests (5 to 20 days), with matched or live thresholds | worse; distinguishably so at 5 days and at 17 to 20 | add. 59 |
 
 ## Known quirks and limits
 

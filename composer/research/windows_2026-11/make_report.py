@@ -41,7 +41,7 @@ def cells_chart(cid, st):
     C = st["cells"]
     order = sorted((c for c in C if not C[c]["same_as_live"]), key=lambda c: C[c]["joined"]["t"])
     CH[cid] = {"type": "bars", "yfmt": "raw", "cats": [f"{short(c)} ({GN[C[c]['grid']]})" for c in order], "short": [short(c) for c in order], "every": max(4, len(order) // 12),
-               "vals": [round(C[c]["joined"]["t"], 2) for c in order], "ref": round(st["critical_t_90"], 2), "reflabel": f"needed to count after {len(order)} tries",
+               "vals": [round(C[c]["joined"]["t"], 2) for c in order], "ref": round(st["critical_t_90"] if st["engine"] == "HG" else st["critical_t_90_bonferroni"], 2), "reflabel": f"needed to count after {len(order)} tries",
                "name": "t-statistic against the live rule"}
 
 
@@ -76,10 +76,10 @@ def cells_table(st):
     for c in sorted(C, key=lambda c: -C[c]["joined"]["t"]):
         v = C[c]
         fails = "same as live" if v["same_as_live"] else ", ".join(k[0] for k, x in v["conditions"].items() if not x)
-        rows.append([f"{short(c)}", GN[v["grid"]], lg(v["joined"]["dlog_per_yr"], 3), f"{v['joined']['t']:+.2f}", f"{v['joined']['p_fw']:.2f}",
+        rows.append([f"{short(c)}", GN[v["grid"]], lg(v["joined"]["dlog_per_yr"], 3), f"{v['joined']['t']:+.2f} ({v['joined']['t_standardised']:+.2f})", f"{v['joined']['p_bonferroni']:.2f}", str(v["days_differing"]),
                      f"{lg(v['R']['dlog_per_yr'], 3)} ({pu(v['R']['maxdd'])})", f"{lg(v['REAL']['dlog_per_yr'], 3)} ({pu(v['REAL']['maxdd'])})", lg(v["M"]["dlog_per_yr"], 3), fails])
     a, b, c = (("Modelled", "Rebuilt", "Real") if st["engine"] == "HG" else ("Rebuilt to 2020 (shape)", "2020-12 to 2023-01", "Real"))
-    return table(["Variant", "Family", "Verdict years, log-pts/yr", "t", "Family-wise p", f"{b} (max drawdown)", f"{c} (max drawdown)", a, "Tests failed"], rows)
+    return table(["Variant", "Family", "Verdict years, log-pts/yr", "t (stretches weighted equally)", "p after all the tries", "Days it differs from live", f"{b} (max drawdown)", f"{c} (max drawdown)", a, "Tests failed"], rows)
 
 
 # ---- Holy Grail
@@ -121,7 +121,7 @@ t_design = table(["", "Holy Grail", "Sleeve"], [
     ["Shape only", f"{H['spans']['M'][0][:7]} to {H['spans']['M'][1][:7]} (VIX funds modelled)", f"{S['spans']['M'][0][:7]} to {S['spans']['M'][1][:7]} (rebuilt; the KMLM signal missed its fidelity bar)"],
     ["Rebuilt years in the verdict", f"{H['spans']['R'][0][:7]} to {H['spans']['R'][1][:7]}", f"{S['spans']['R'][0][:7]} to {S['spans']['R'][1][:7]} (real KMLM; BOXX is T-bills)"],
     ["Real years", f"{H['spans']['A'][0][:7]} to {H['spans']['A'][1][:7]} (every fund trades)", f"{S['spans']['A'][0][:7]} to {S['spans']['A'][1][:7]} (from BOXX's launch)"],
-    ["t needed after all tries", f"{H['critical_t_90']:.2f}", f"{S['critical_t_90']:.2f}"]])
+    ["t needed after all tries", f"{H['critical_t_90']:.2f}", f"about {S['critical_t_90_bonferroni']:.2f} (section 3)"]])
 g1, g2 = GT["G1"], GT["G2"]
 t_gates = table(["Check", "Sessions with the same holdings", "Return correlation", "Result"],
                 [[f"Live {e} against Composer's stored backtest", f"{v['holdings_same'][0]} of {v['holdings_same'][1]}", f"{v['corr']:.5f}", "pass" if v["pass"] else "FAIL"] for e, v in g1.items()]
@@ -155,33 +155,67 @@ edges = "".join([
 jd = [sw[e]["cells"][sw[e]["best_by_t"]]["joined"]["dlog_per_yr"] for e in ("HG", "KMLM", "SLEEVE")]
 excl = [nm for e, nm in (("HG", "Holy Grail's"), ("KMLM", "KMLM's"), ("SLEEVE", "the sleeve's")) if sw[e]["cells"][sw[e]["best_by_t"]]["joined"]["ci90"][0] > 0]
 book_ci = ("Every interval spans zero." if not excl else
-           f"The plain intervals for {' and '.join(excl)} best sit just above zero, but each is the best of its engine's tries picked after the fact; allowing for that pick none is distinguishable "
-           f"(family-wise p {HC_[hb]['joined']['p_fw']:.2f} and {SC_[sb_]['joined']['p_fw']:.2f} on their own engines).")
+           f"The plain intervals for {' and '.join(excl)} best sit just above zero, but each is the best of its engine's tries picked after the fact; allowing for that pick none is distinguishable.")
+HD_ = BK["hedge"]
+pb = lambda x: pc(x, 2)                                                                    # noqa: E731
+hrow = lambda lab, v: [lab, str(v["days"]), pb(v["other_mean_on_worst"]), pb(v["sleeve_on_worst"]), pb(v["sleeve_on_other_days"]), f"{v['t']:+.1f}", pb(v["sleeve_on_best"]), f"{v['corr']:+.2f}"]   # noqa: E731
+t_hedge = table(["Against", "Bad days", "Its average on them", "Sleeve on those days", "Sleeve on other days", "t", "Sleeve on its best 5%", "Daily correlation"],
+                [hrow(f"{nm}, {per}", HD_[k][o]) for k, per in (("verdict_years", "2021-06 on"), ("long_history", "1994-2020 rebuilt"))
+                 for o, nm in (("pair", "Holy Grail and KMLM together"), ("HG", "Holy Grail alone"), ("KMLM", "KMLM alone"))])
+fall = lambda e: f"{pu(e['depth'])} ({e['peak'][:7]} to {e['trough'][:7]}" + (f", back by {e['recovered'][:7]})" if e["recovered"] else ")")   # noqa: E731
+BF = BK["book_falls"]
+fams = sw["HG"]["families"] | sw["SLEEVE"]["families"]
+t_fams = table(["Family swapped into its engine", "Variants", "Average change in the book, log-pts/yr", "Range", "Ahead", "Average change in the book's deepest fall, 2021-06 to 2023-01"],
+               [[GN[g], str(v["n"]), lg(v["mean_dlog_per_yr"], 3), f"{lg(v['min'], 3)} to {lg(v['max'], 3)}", f"{v['ahead']} of {v['n']}", f"{v['mean_d_maxdd_R'] * 100:+.1f} pts"] for g, v in fams.items()])
+hbs = max((c for c in HC_ if not HC_[c]["same_as_live"]), key=lambda c: HC_[c]["joined"]["t_standardised"])
+sh = lambda v, k: (f"{v['share_of_gain_from_best_10_days'][k] * 100:.0f}%" if v["share_of_gain_from_best_10_days"][k] is not None else "n/a")   # noqa: E731
+hbn = lambda fam, k: sum(HC_[c][k]["dlog_per_yr"] > 0 for c in HC_ if HC_[c]["grid"] in fam)   # noqa: E731
+edges = "".join([
+    edge(H, "HA.sma15x30", "Holy Grail on a slower crossover (15/30-day simple)", f"{sh(HC_['HA.sma15x30'], 'R')} of the rebuilt-years gain is its best 10 days and the smaller drawdown is one episode (2011). Its exponential twin shows {lg(HC_['HA.ema15x30']['R']['dlog_per_yr'], 3)} on the rebuilt years, so the gain does not survive a change of form. Would need to hold on the real years; it does not."),
+    edge(H, "HD.sma100", "Holy Grail with a 100-day SPY gate", f"Ahead on both verdict stretches, behind on the modelled one, where its deepest fall is {pu(HC_['HD.sma100']['M']['maxdd'])} against the live {pu(H['base']['M']['maxdd'])}. The 10/30 crossover has the same profile (t {HC_['HA.sma10x30']['joined']['t']:+.2f})."),
+    edge(H, hb, f"Holy Grail's best by t ({short(hb)})", f"A hundredth of a log-point; {sh(HC_[hb], 'A')} of its real-years gain is its best 10 days."),
+    f"<li><b>The 20-day cash test looks fitted to the real years.</b> Its 13 other windows and forms are ahead of the live rule in {hbn(('HBs', 'HBe'), 'M')} of 13 on the modelled years and {hbn(('HBs', 'HBe'), 'R')} of 13 on the rebuilt years, and in {hbn(('HBs', 'HBe'), 'REAL')} of 13 on the real years. Each gap is small (under 0.05); it says the 20 is not special, not that another number is better.</li>",
+    edge(S, sb_, f"The sleeve's best by t ({short(sb_)}: the KMLM window in its two inverse-fund tests at 5 days instead of 10)", "Ahead since 2020-12 on both stretches, flat on the 26 rebuilt years before. Six years, one of 45 tries: inside the noise. Would need the long history to agree, and it does not."),
+    f"<li><b>The sleeve's IEF window at 14 or 20 days on the long history.</b> 1994-2020 (rebuilt, shape only): {lg(SC_['SA.ief14']['M']['dlog_per_yr'], 3)} and {lg(SC_['SA.ief20']['M']['dlog_per_yr'], 3)} log-points a year (t {SC_['SA.ief14']['M']['t']:+.1f} and {SC_['SA.ief20']['M']['t']:+.1f}), deepest fall {pu(SC_['SA.ief14']['M']['maxdd'])} against {pu(S['base']['M']['maxdd'])}. On the real years it is {lg(SC_['SA.ief14']['REAL']['dlog_per_yr'], 3)} and {lg(SC_['SA.ief20']['REAL']['dlog_per_yr'], 3)}. Fading over time and reversed where the funds are real: not usable.</li>",
+    f"<li><b>The sleeve against Holy Grail alone.</b> On Holy Grail's worst 5% of days since 2021-06 ({HD_['verdict_years']['HG']['days']} days) the sleeve made {pb(HD_['verdict_years']['HG']['sleeve_on_worst'])} against {pb(HD_['verdict_years']['HG']['sleeve_on_other_days'])} on other days (t {HD_['verdict_years']['HG']['t']:+.1f}); mirror: {pb(HD_['verdict_years']['HG']['sleeve_on_best'])} on Holy Grail's best days. On 1994-2020: {pb(HD_['long_history']['HG']['sleeve_on_worst'])} (t {HD_['long_history']['HG']['t']:+.1f}). A real but recent offset; it would take the long history agreeing, or more years, to size on it.</li>",
+    f"<li><b>Risk, not edge.</b> On rebuilt history each engine has fallen much further than in its real years, and the book has fallen {pu(BF[0]['depth'])} (section 4).</li>"])
 subs = {
     "{{n_all}}": str(H["n_cells"] + S["n_cells"]), "{{hg_n}}": str(H["n_cells"]), "{{sl_n}}": str(S["n_cells"]),
     "{{ema_txt}}": ema_txt, "{{sg_t}}": f"{sgt:+.1f}", "{{sg_tm}}": f"{S['groups']['SGt']['longer']['M']['t']:+.1f}", "{{book_ci}}": book_ci,
+    "{{ema_hc}}": f"{lg(em['HC']['R']['dlog_per_yr'], 3)} rebuilt, {lg(em['HC']['A']['dlog_per_yr'], 3)} real, t {em['HC']['A']['t']:+.1f}",
+    "{{hg_worse}}": ", ".join((f"the RSI tests at {c.split('rsi')[1]} days with {'the live' if c.startswith('HEr') else 'matched'} thresholds" if c.startswith("HE")
+                               else f"every RSI window at {c.split('all')[1]} days" if c.startswith("HG.") else short(c)) for c in H["worse_family_wise"]) or "none",
+    "{{bk_falls}}": ", ".join(fall(e) for e in BF[:3]), "{{bk_falls_long}}": "; ".join(fall(e) for e in BF[:4]),
+    "{{bk_2011}}": pu(BK["book_in_hg_2011_fall"]["max_fall"]), "{{bk_2011e}}": pu(-BK["book_in_hg_2011_fall"]["end_to_end"]),
+    "{{h_pair_w}}": pb(HD_["verdict_years"]["pair"]["sleeve_on_worst"]), "{{h_pair_o}}": pb(HD_["verdict_years"]["pair"]["sleeve_on_other_days"]), "{{h_pair_t}}": f"{HD_['verdict_years']['pair']['t']:.1f}",
+    "{{h_pair_b}}": pb(HD_["verdict_years"]["pair"]["sleeve_on_best"]), "{{h_pair_lw}}": pb(HD_["long_history"]["pair"]["sleeve_on_worst"]),
+    "{{h_hg_w}}": pb(HD_["verdict_years"]["HG"]["sleeve_on_worst"]), "{{h_hg_t}}": f"{HD_['verdict_years']['HG']['t']:.1f}", "{{h_hg_lw}}": pb(HD_["long_history"]["HG"]["sleeve_on_worst"]), "{{h_hg_lt}}": f"{HD_['long_history']['HG']['t']:.1f}",
+    "{{t_hedge}}": t_hedge, "{{t_fams}}": t_fams, "{{bad_unc}}": pc(bad["unconditional_next_20_sessions_others"], 1),
+    "{{hg_best_std}}": f"{short(hbs)} at t {HC_[hbs]['joined']['t_standardised']:.2f}", "{{hg_m_ahead}}": str(H["ahead_by_stretch"]["M"]),
+    "{{sl_bonf}}": f"{S['critical_t_90_bonferroni']:.2f}",
     "{{sl_all3}}": str(len(S["ahead_all_three"])) + (" (" + ", ".join(short(c) for c in S["ahead_all_three"]) + ")" if S["ahead_all_three"] else ""), "{{book_rng}}": f"{lg(min(jd), 3)} to {lg(max(jd), 3)}",
     "{{hg_r_dd}}": pu(H["base"]["R"]["maxdd"]), "{{hg_m_dd}}": pu(H["base"]["M"]["maxdd"]), "{{hg_a_dd}}": pu(H["base"]["A"]["maxdd"]),
     "{{sl_m_cagr}}": pc(S["base"]["M"]["cagr"]), "{{sl_m_dd}}": pu(S["base"]["M"]["maxdd"]), "{{sl_a_cagr}}": pc(S["base"]["A"]["cagr"]), "{{sl_a_dd}}": pu(S["base"]["A"]["maxdd"]),
     "{{bk_m_dd}}": pu(BK["live"]["M"]["maxdd"]), "{{bk_a_dd}}": pu(BK["live"]["A"]["maxdd"]),
     "{{hg_best}}": f"{short(hb)}, {GN[HC_[hb]['grid']]}", "{{hg_best_t}}": f"{HC_[hb]['joined']['t']:.2f}", "{{hg_crit}}": f"{H['critical_t_90']:.2f}", "{{hg_best_p}}": f"{HC_[hb]['joined']['p_fw']:.2f}",
     "{{hg_ahead}}": str(len(H["ahead_joined"])), "{{hg_both}}": str(len(H["ahead_R_and_REAL"])) + (" (" + ", ".join(short(c) for c in H["ahead_R_and_REAL"]) + ")" if H["ahead_R_and_REAL"] else ""),
-    "{{sl_best}}": f"{short(sb_)}, {GN[SC_[sb_]['grid']]}", "{{sl_best_t}}": f"{SC_[sb_]['joined']['t']:.2f}", "{{sl_crit}}": f"{S['critical_t_90']:.2f}", "{{sl_best_p}}": f"{SC_[sb_]['joined']['p_fw']:.2f}",
+    "{{sl_best}}": f"{short(sb_)}, {GN[SC_[sb_]['grid']]}", "{{sl_best_t}}": f"{SC_[sb_]['joined']['t']:.2f}", "{{sl_crit}}": f"{S['critical_t_90']:.2f}", 
     "{{sl_ahead}}": str(len(S["ahead_joined"])),
-    "{{gates}}": f"{pu(okn / tot, 2)}",
-    "{{bad_n}}": str(bad["days"]), "{{bad_others}}": pu(-bad["others_mean"], 1), "{{bad_sleeve}}": pc(bad["live_sleeve_mean"], 2), "{{bad_pos}}": pu(bad["live_sleeve_positive_share"]),
-    "{{bad_all}}": pc(bad["live_sleeve_all_days_mean"], 2), "{{bad_20}}": pc(bad["next_20_sessions"]["sleeve"], 1), "{{bad_20o}}": pc(bad["next_20_sessions"]["others"], 1),
+    "{{gates}}": f"{okn:,} of {tot:,}",
+    "{{bad_20}}": pc(bad["next_20_sessions"]["sleeve"], 1), "{{bad_20o}}": pc(bad["next_20_sessions"]["others"], 1),
     "{{bad_best}}": f"{max(bad['cells'].values()) * 1e4:.0f}",
     "{{bk_ver}}": f"{bs['R'][0][:7]} to {bs['A'][1][:7]}",
-    "{{hg_mde}}": f"{H['median_mde50']:.2f}", "{{sl_mde}}": f"{S['median_mde50']:.2f}", "{{sl_ver_yrs}}": f"{(S['spans']['R'][2] + S['spans']['A'][2]) / 252:.1f}",
+    "{{hg_mde}}": f"{H['median_mde50']:.2f}", "{{sl_mde}}": f"{S['median_mde50_bonferroni']:.2f}", "{{sl_ver_yrs}}": f"{(S['spans']['R'][2] + S['spans']['A'][2]) / 252:.1f}",
     "{{edges}}": edges,
     "{{t_design}}": t_design, "{{t_gates}}": t_gates, "{{t_book}}": t_book,
     "{{t_hg_groups}}": groups_table(H, ("HAs", "HAe", "HBs", "HBe", "HCs", "HCe", "HDs", "HDe", "HEm", "HEr", "HF", "HG")), "{{t_hg_cells}}": cells_table(H),
     "{{t_sl_groups}}": groups_table(S, ("SA", "SB", "SC", "SD", "SE", "SFm", "SFr", "SGt", "SGp")), "{{t_sl_cells}}": cells_table(S),
     "{{t_open}}": table(["Priority", "Question", "What it would move", "Status"], [
-        ["P2", "A KMLM rebuild that passes its fidelity bars (needs exchange settlement data)", "Lets the sleeve and the book be judged on 2008-2020 instead of 2020-12 on", "open, first asked 2026-11-20 (addendum 58)"],
-        ["P3", "Real financing and fee histories for the leveraged funds before launch", "Tightens the rebuilt years for Holy Grail", "open"],
-        ["P3", "Whether to study thresholds (80/30) as well as windows", "Not asked; a separate family of tries", "owner's call"]]),
+        ["P1", "Is the sleeve's weak 1994-2020 record (about +10% a year, a 46% fall, no hedge of the pair) the rebuilt data or the rule?", "Bears on its 31.8% weight in the book", "open, first asked 2026-11-21"],
+        ["P2", "A KMLM rebuild that passes its fidelity bars (needs exchange settlement data)", "Lets the sleeve and the book be judged on 2008-2020 instead of 2020-12 on; fills the 2020-12 to 2021-05 gap in the book", "open, first asked 2026-11-20 (addendum 58)"],
+        ["P2", "Do Holy Grail's crossover and SPY gate earn their keep on the rebuilt years? (no \"off\" variant was registered here; addenda 30 and 44 looked on other samples)", "What to expect from Holy Grail outside 2015-2026", "open, first asked 2026-11-21"],
+        ["P3", "Real financing and fee histories for the leveraged funds before launch", "Tightens the rebuilt years for Holy Grail", "open, first asked 2026-11-21"],
+        ["P3", "Whether to study thresholds (80/30) as well as windows", "Not asked; a separate family of tries", "owner's call, raised 2026-11-21"]]),
     "{{ch_hg_cells}}": chart("c_hg_cells", f"All {H['n_distinct']} Holy Grail variants", "t-statistic of each variant's growth against the live rule, rebuilt plus real years. The dashed line is what a variant needed."),
     "{{ch_hg_cross}}": chart("c_hg_cross", "Trend crossover pair (live 10/20)", "Growth against the live rule, log-points a year (×100), simple averages."),
     "{{ch_hg_rsi}}": chart("c_hg_rsi", "RSI window of the three tests (live 10)", "Thresholds re-set to fire as often as the live ones."),

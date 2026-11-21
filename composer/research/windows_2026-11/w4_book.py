@@ -85,6 +85,40 @@ def main():
     for c in out["swaps"]["SLEEVE"]["cells"]:
         r = np.array([by_day(eng["SLEEVE"], c)[d] for d in days])[ver]
         out["sleeve_on_bad_days"]["cells"][c] = float(r[bad].mean() - sl[bad].mean())
+    out["sleeve_on_bad_days"]["unconditional_next_20_sessions_others"] = float(np.mean([np.prod(1 + other[i + 1:i + 21]) - 1 for i in range(len(other) - 21)]))
+
+    def hedge(sl_, ot):
+        """the sleeve on the other side's worst and best 5% of days, against its ordinary days"""
+        lo_, hi_ = ot <= np.quantile(ot, 0.05), ot >= np.quantile(ot, 0.95)
+        rest = ~lo_
+        se_ = math.sqrt(sl_[lo_].var(ddof=1) / lo_.sum() + sl_[rest].var(ddof=1) / rest.sum())
+        return {"days": int(lo_.sum()), "other_mean_on_worst": float(ot[lo_].mean()), "sleeve_on_worst": float(sl_[lo_].mean()), "sleeve_median_on_worst": float(np.median(sl_[lo_])),
+                "sleeve_positive_share_on_worst": float((sl_[lo_] > 0).mean()), "sleeve_on_other_days": float(sl_[rest].mean()), "worst_minus_other": float(sl_[lo_].mean() - sl_[rest].mean()),
+                "t": float((sl_[lo_].mean() - sl_[rest].mean()) / se_), "sleeve_on_best": float(sl_[hi_].mean()), "corr": float(np.corrcoef(sl_, ot)[0, 1]),
+                "sleeve_on_worst_1pct": float(sl_[ot <= np.quantile(ot, 0.01)].mean()), "sleeve_worst_day_among_them": float(sl_[lo_].min())}
+    out["hedge"] = {}
+    for label, ii in (("verdict_years", ver), ("long_history", idx["M"])):
+        out["hedge"][label] = {"pair": hedge(L["SLEEVE"][ii], 0.5 * L["HG"][ii] + 0.5 * L["KMLM"][ii]), "HG": hedge(L["SLEEVE"][ii], L["HG"][ii]), "KMLM": hedge(L["SLEEVE"][ii], L["KMLM"][ii])}
+    # the book's deepest separate falls on the whole path, and the book inside HG's 2011-12 fall
+    lvl = np.cumprod(1 + book)
+    pk = np.maximum.accumulate(lvl)
+    dd = 1 - lvl / pk
+    eps, i = [], 0
+    while i < len(dd):
+        if dd[i] > 0:
+            j = i
+            while j < len(dd) and dd[j] > 0:
+                j += 1
+            k = i + int(np.argmax(dd[i:j]))
+            eps.append({"depth": float(dd[k]), "peak": days[i - 1] if i else days[0], "trough": days[k], "recovered": days[j] if j < len(dd) else None})
+            i = j
+        else:
+            i += 1
+    out["book_falls"] = sorted(eps, key=lambda e: -e["depth"])[:6]
+    hgd = dd_info(days, L["HG"])
+    lo_i, hi_i = days.index("2011-04-06"), days.index("2012-02-06")
+    seg = np.cumprod(1 + book[lo_i:hi_i + 1])
+    out["book_in_hg_2011_fall"] = {"max_fall": float(np.max(1 - seg / np.maximum.accumulate(seg))), "end_to_end": float(seg[-1] - 1)}
     # next 5 and 20 sessions after a bad day (add. 54.3: the sleeve pays in the sessions after)
     pos = np.flatnonzero(bad)
     for h in (5, 20):
@@ -125,6 +159,10 @@ def main():
             print("   best at book level:", s["best_book"], {k: round(v, 4) for k, v in s["cells"][s["best_book"]]["joined"].items() if isinstance(v, float)})
             for g, v in s["families"].items():
                 print("   ", g, {k: (round(x, 4) if isinstance(x, float) else x) for k, x in v.items()})
+    for label, v in out["hedge"].items():
+        for o, h in v.items():
+            print("hedge", label, o, {k: round(x, 4) for k, x in h.items()})
+    print("book falls", [(e["peak"], e["trough"], round(e["depth"], 3), e["recovered"]) for e in out["book_falls"]], out["book_in_hg_2011_fall"])
     sb = out["sleeve_on_bad_days"]
     print("sleeve on bad days", {k: v for k, v in sb.items() if k != "cells"})
     print("   variants better than live on bad days:", sorted(((round(v * 1e4, 1), c) for c, v in sb["cells"].items()), reverse=True)[:6])

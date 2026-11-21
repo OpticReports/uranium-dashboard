@@ -4926,3 +4926,89 @@ smallest detectable effect beside every "nothing passed"; a macro input must pre
 before it goes near the tree, and the bar must be set with the sample size in view.
 
 NO CHANGE to any symphony, gate, POLICY operation or the mirror. No service to redeploy.
+
+## Addendum 59 — Windows and moving averages in Holy Grail, the crash sleeve and the book (2026-11-21)
+
+Owner (2026-11-20): "Run this report and investigation on the other symphonies and the set to see if
+there's any improvement by variance of windows." Pre-registered before any variant was run
+(`research/windows_2026-11/PREREG.md`, commit 68269813), six deviations logged, two independent reviews
+(simulation: no blocking finding; statistics: every number reproduces, four claims corrected;
+`VERIFICATION.md`). Report with charts: `results/windows-hg-sleeve-book-2026-11-21.html`. HARV not
+studied (being closed).
+
+VERDICT: **no window or moving-average change is supported in Holy Grail or the sleeve; nothing moves at
+book level.** 0 of 89 HG variants and 0 of 45 sleeve variants pass the five pre-registered tests, and no
+alternative defensible test passes any.
+
+METHOD: only windows and the simple/exponential form change. HG (89): the 10/20 crossover pair (21), the
+20-day cash test (13), both scaled (11), the SPY 200-day gate (11), the three RSI tests at 5..20 days with
+matched and with live thresholds (18), the pick-ranking window (11), every RSI window together (4).
+SLEEVE (45): IEF window (9), PSQ window (6), both scaled (5), LABD/TMV window (6), KMLM window (5), the
+ladder's RSI windows scaled (8), its 1-day returns and ranks over 2-5 days (6). Simulator =
+shadow_runner's evaluator through `kmlm_2026-11/ksim.simulate`, daily rebalance, 5.856 bps x turnover;
+EMAs injected as flags. Gates: both live trees vs Composer's stored backtests (HG 2816/2818 sessions,
+corr 0.99987; sleeve 951/951, 0.999998); ten variants backtested on Composer itself (six by the study,
+four by the reviewer, incl. native EMA and a 3-day RSI), 99.89-100% of sessions. Two independent pandas
+re-implementations reproduce all 136 paths. History (long panel, CLAUDE.md "synthetic history first"):
+HG modelled 1991-04..2006-07 (shape), rebuilt 2006-07..2015-08, real 2015-09..2026-11; sleeve rebuilt
+1994-06..2020-12 (SHAPE ONLY: the KMLM signal it reads is the add. 58 synthetic, which missed its
+fidelity bar; the pre-registered fallback), then 2020-12..2023-01 and real 2023-02..2026-11. Verdict on
+the two later stretches joined; max-statistic stationary bootstrap, plus a Bonferroni bar after review.
+
+RESULTS (simulated, in sample):
+- HG live: +51%/yr DD 60% (modelled), +42%/yr DD 50% (rebuilt), +91%/yr DD 36% (real). Best variant by t:
+  pick window 11, +0.011 log/yr, t 1.42 against 3.11 needed (p 0.93); with stretches weighted equally the
+  best is the 15/30 SMA crossover at 1.35. 16 of 89 ahead on the verdict years, 4 on both stretches
+  (ema10x30, ema15x30, sma10x30, sma100), none on all three; 37 of 89 ahead on the modelled years.
+- HG flat zones: crossover pairs near 10/20, cash test 10-50 days, SPY gate 100-300 days, pick window
+  8-14. Distinguishably worse after multiplicity: RSI tests at 17 and 20 days with live thresholds, at 5
+  days matched, every RSI window at 5 days.
+- EMA vs SMA at the same windows: crossovers -0.013 rebuilt / +0.014 real, cash test -0.007 / +0.009,
+  gate -0.011 / -0.016; where both trend tests are slowed 2-5x the EMA loses less (+0.042 real, t 2.3)
+  but every such variant is behind the live rule.
+- SLEEVE live: +10%/yr DD 46% (1994-2020 rebuilt), +64%/yr DD 13% (2020-12..2023-01), +39%/yr DD 15%
+  (real). Best by t: KMLM window 5 in the two inverse-fund tests, +0.055 log/yr, t 1.84 against about
+  2.84 needed (the registered bootstrap bar read 4.19, inflated by variants that differ from live on a
+  handful of days). IEF window level 8-12. Ladder returns over 2-5 days: behind on every stretch
+  (t -1.5 verdict years, -2.7 on 1994-2020), and those "matched" cells are in effect a different ladder
+  (5 of 13 rungs never fire on the proxy funds).
+- BOOK (34.1/34.1/31.8; shape only to 2020-12, then 2021-06..2026-11): best swap per engine +0.014
+  (HG picks11), +0.019 (sleeve kmlm5), +0.027 (KMLM rsi12 switch+picks) log/yr; two plain intervals sit
+  just above zero but each is the best of its engine's tries, not distinguishable after the pick.
+- POWER: typical variant needed +0.10 log/yr (HG) and about +0.07 (sleeve) to stand out half the time.
+
+BY-PRODUCTS (edge rule; none clears a bar):
+- Every engine is rougher on rebuilt history than on its real years. Book's deepest simulated falls:
+  35% (2000-03..05), 32% (2003-09..2005-04, back by 2006-02), 29% (2010-11..2011-08); real years 11%.
+  Inside HG's 2011-12 fall the book fell 28% at worst.
+- THE SLEEVE READS AS UNCORRELATED WITH THE OTHER TWO, NOT AS A HEDGE OF THEM: on the worst 5% of days of
+  HG+KMLM since 2021-06 (69 days) it made +0.27% vs +0.15% on other days (t 0.4) and +0.55% on their best
+  days; on 1994-2020 (333 days) -0.09%. Against HG alone since 2021-06: +0.78% on HG's worst days vs
+  +0.13% otherwise (t 2.4; -0.39% on HG's best days); on 1994-2020 +0.11% (t 0.6). A recent offset to
+  HG; it would take the long history agreeing, or more years, to size on it.
+- HG 15/30 SMA crossover: rebuilt +0.112 (t 2.4), DD 36% vs 50%; real -0.016, DD 42% vs 36%; 80% of
+  the rebuilt gain is its best 10 days, its EMA twin +0.007. HG 100-day gate and 10/30 crossover: ahead
+  on both verdict stretches, behind on the modelled one (100-day gate DD 74% vs 60% there).
+- The 20-day cash test looks fitted to the real years: its 13 other forms are ahead in 12/13 modelled,
+  10/13 rebuilt and 0/13 real, each by under 0.05.
+- Sleeve IEF window 14/20 on 1994-2020: +0.03/+0.04 (t 2.6/2.7), fading, reversed on the real years.
+
+HONESTY BOX: all in sample, none a forecast; the real years are in sample for both live rules; rebuilt
+funds are index x leverage (about a fifth of HG's rebuilt sessions hold a fund before launch); the
+sleeve's verdict sample is 5.9 years with the ladder active on about 91 sessions; cost constant about
+15% above Composer's own (common to all variants); each engine corrected for its own tries, not all 134.
+Not modelled: intraday paths, taxes, capacity, near-ties of ranked picks. Measurement basis: daily
+mark-to-market of the simulated symphony, trades at the same close.
+
+PENDING QUESTIONS (ranked): P1 is the sleeve's weak 1994-2020 record (+10%/yr, 46% fall, no hedge of the
+pair) the rebuilt data or the rule? It bears on the 31.8% weight (first asked 2026-11-21). P2 a KMLM
+rebuild that passes its bars (add. 58; first asked 2026-11-20). P2 do HG's crossover and SPY gate earn
+their keep on the rebuilt years (no "off" variant registered; 2026-11-21). P3 real financing/fee
+histories for pre-launch leveraged funds; P3 whether to study the 80/30 thresholds (owner's call).
+
+LESSONS: run the long history first (both engines' real years were their best); gate the simulator on
+variants in each family incl. one EMA form; score a hedge on the bad days of what it hedges and against
+its ordinary days and the mirror, not on its average; a studentised max-statistic bar breaks when
+variants differ from the live rule on a handful of days.
+
+NO CHANGE to any symphony, gate, POLICY operation or the mirror. No service to redeploy.

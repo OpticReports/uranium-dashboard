@@ -59,6 +59,8 @@ No reason for any of them is recorded.
 | Leverage gates | "nothing moves" | add. 42 |
 | Book-wide rate gate | costs the sleeve -19.9% a year | add. 33 |
 | A static VIXM leg | left as the owner's question | add. 54.3 |
+| Other windows for the IEF-vs-PSQ test, the LABD/TMV and KMLM tests, the ladder's RSI tests | 0 of 45 pass; level with the live windows | add. 59 |
+| The ladder's one-day returns and ranks over 2 to 5 days | behind on every stretch | add. 59 |
 
 ## Known quirks and limits
 

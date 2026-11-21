@@ -7,6 +7,19 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-21 — Study: windows and moving averages in Holy Grail, the sleeve and the book (results.md addendum 59)
+
+- Owner (2026-11-20): run the window / EMA / SMA investigation on the other symphonies and the set.
+- Pre-registered 89 HG and 45 sleeve variants before any run; simulator gated on Composer's own backtests
+  (both live rules and ten variants); long history from the start; two independent reviews, no blocking
+  finding, corrections applied (`research/windows_2026-11/VERIFICATION.md`, `DEVIATIONS.md`).
+- Result: none passes in either engine; nothing moves at book level; EMA no better than SMA. By-products:
+  every engine is rougher on rebuilt history than on its real years; the sleeve reads as uncorrelated with
+  HG+KMLM together rather than a hedge of them (it has offset HG alone since 2021).
+- NO change to any symphony, gate, POLICY operation or the mirror. Logic book: `symphonies/why/HG.md` and
+  `why/SLEEVE.md` "Studied and not built" gain the rows. Report:
+  `results/windows-hg-sleeve-book-2026-11-21.html`.
+
 ## 2026-11-20 — Study: KMLM switcher windows, moving averages and macro inputs (results.md addendum 57)
 
 - Owner question (15:2x ET): is there a superior time frame / EMA / SMA window for the switcher's

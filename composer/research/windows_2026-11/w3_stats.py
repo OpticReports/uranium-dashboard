@@ -14,7 +14,10 @@ sys.path.insert(0, HERE)
 import wsim as w  # noqa: E402
 from q2_stats import boot_idx, stat  # noqa: E402
 
+from statistics import NormalDist  # noqa: E402
+
 DRAWS, SEED = 5000, 20261122
+MIN_DIFF = 75                      # days a variant must differ from the live rule to enter the restricted bar (DEVIATIONS.md 5)
 COST = w.ks.COST
 
 
@@ -60,6 +63,11 @@ def run(eng, r_start=None):
     t, mx, se = maxstat(J, DRAWS, rng)
     mean = J.mean(0)
     crit = float(np.quantile(mx, 0.90))
+    ndiff = (J != 0).sum(0)
+    wide = np.flatnonzero(ndiff >= MIN_DIFF)
+    _, mxw, _ = maxstat(J[:, wide], 2000, rng)
+    nd = NormalDist()
+    bonf = nd.inv_cdf(1 - 0.10 / len(ids))
     ts, mxs, _ = maxstat(Js, 2000, rng)
     alone = {}
     for k in ("R", "A", "M"):
@@ -71,6 +79,7 @@ def run(eng, r_start=None):
     yrs = {k: len(R[k]["base"]) / 252 for k in R}
     out = {"engine": eng, "spans": {"M": [ld[iM[0]], ld[iM[-1]], len(iM)] if iM else None, "R": [ld[iR[0]], ld[iR[-1]], len(iR)], "A": [rd[0], rd[-1], len(rd)]},
            "base": base, "critical_t_90": crit, "critical_t_95": float(np.quantile(mx, 0.95)), "critical_t_90_standardised": float(np.quantile(mxs, 0.90)),
+           "critical_t_90_bonferroni": bonf, "critical_t_90_restricted": float(np.quantile(mxw, 0.90)), "restricted_cells": int(len(wide)),
            "critical_alone": {k: v["crit90"] for k, v in alone.items()}, "cells": {}}
     for i, c in enumerate(ids):
         grid = w.GRIDS[o["cells"][c]["grid"]]
@@ -83,9 +92,17 @@ def run(eng, r_start=None):
                 "3_neighbours_ahead": all(beats(x) for x in nb),
                 "4_maxdd_within_5pts": bool(st["R"]["maxdd"] <= base["R"]["maxdd"] + 0.05 and st["A"]["maxdd"] <= base["A"]["maxdd"] + 0.05),
                 "5_ahead_at_2x_cost": bool(J2[:, i].mean() > 0)}
+        p_bonf = min(1.0, len(ids) * (1 - nd.cdf(float(t[i]))))
+        top = {}
+        for k in ("R", "A"):
+            tot = float(D[k][:, i].sum())
+            top[k] = float(np.sort(D[k][:, i])[-10:].sum() / tot) if tot > 0 else None
         out["cells"][c] = {
             "family": o["cells"][c]["family"], "grid": o["cells"][c]["grid"], "same_as_live": same, "neighbours": nb,
+            "days_differing": int(ndiff[i]), "share_of_gain_from_best_10_days": top,
             "joined": {"dlog_per_yr": float(mean[i] * 252), "t": float(t[i]), "p_fw": p, "mde50": float(crit * se[i] * 252),
+                       "p_bonferroni": p_bonf, "mde50_bonferroni": float(bonf * se[i] * 252),
+                       "passes_with_bonferroni": bool(not same and mean[i] > 0 and p_bonf < 0.10 and all(v for k_, v in cond.items() if not k_.startswith("1_"))),
                        "t_standardised": float(ts[i]), "p_fw_standardised": float((mxs >= ts[i]).mean())},
             **{n: {"dlog_per_yr": float(D[k][:, i].mean() * 252), "t": float(alone[k]["t"][i]), "p_fw_alone": alone[k]["p"][i], **st[k],
                    "turnover_per_yr": float(np.array(o["cells"][c]["long" if k != "A" else "real"]["to"])[(iM if k == "M" else iR) if k != "A" else slice(None)].sum() / yrs[k])}
@@ -101,6 +118,11 @@ def run(eng, r_start=None):
     out["best_alone"] = {n: max(ch, key=lambda c: out["cells"][c][n]["t"]) for n in ("R", "REAL", "M")}
     m = sorted(out["cells"][c]["joined"]["mde50"] for c in ch)
     out["median_mde50"] = m[len(m) // 2]
+    m = sorted(out["cells"][c]["joined"]["mde50_bonferroni"] for c in ch)
+    out["median_mde50_bonferroni"] = m[len(m) // 2]
+    out["passing_with_bonferroni"] = [c for c in ch if out["cells"][c]["joined"]["passes_with_bonferroni"]]
+    out["worse_family_wise"] = sorted((c for c in ch if out["cells"][c]["joined"]["t"] <= -bonf), key=lambda c: out["cells"][c]["joined"]["t"])
+    out["ahead_by_stretch"] = {n: int(sum(out["cells"][c][n]["dlog_per_yr"] > 0 for c in ch)) for n in ("M", "R", "REAL")}
     # group averages per grid: cells before the live position (shorter / faster) and after (longer / slower)
     out["groups"] = {}
 
@@ -139,6 +161,8 @@ def run(eng, r_start=None):
     for k in ("M", "R", "A"):
         b = base[k]
         print(f"LIVE {k}: {b['cagr']:+.1%}/yr DD {b['maxdd']:.1%} Sharpe {b['sharpe']:.2f}")
+    print(f"Bonferroni bar {bonf:.2f}; restricted bar {out['critical_t_90_restricted']:.2f} over {len(wide)} cells; passing with Bonferroni {out['passing_with_bonferroni'] or 'none'}; "
+          f"family-wise worse {out['worse_family_wise']}; ahead by stretch {out['ahead_by_stretch']}; median MDE (Bonferroni) {out['median_mde50_bonferroni']:.3f}")
     print(f"critical t 90% {crit:.2f} (standardised {out['critical_t_90_standardised']:.2f}; alone {out['critical_alone']}); passing {out['passing'] or 'none'}; "
           f"ahead joined {len(out['ahead_joined'])}/{len(ch)}; ahead in R and REAL {out['ahead_R_and_REAL']}; in all three {out['ahead_all_three']}; median MDE50 {out['median_mde50']:.3f}")
     print(f"{'cell':16s} {'joined':>7s} {'t':>6s} {'p_fw':>5s} {'t_std':>6s} {'MDE':>5s} | {'R':>7s} {'t':>5s} {'DD':>4s} | {'REAL':>7s} {'t':>5s} {'DD':>4s} | {'MODEL':>7s} {'t':>5s} | 1 2 3 4 5")
