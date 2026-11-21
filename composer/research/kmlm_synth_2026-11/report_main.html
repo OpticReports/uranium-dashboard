@@ -9,7 +9,7 @@
 <li><b>By-product, not evidence: the switch on years it was not fitted on.</b> On 2008-2020 the live switch beat its mirror image by {{sw_inv}} log-points a year (0.10 is roughly 10% more growth a year; t {{sw_inv_t}}, checked after the fact; {{sw_plc}} of 60 time-shifted switches matched it). Two crisis years carry it: without 2008 and 2020 it is {{sw_x}} (t {{sw_x_t}}), and against simply staying risk-on it is zero without 2008, a year when most of the tree's funds are models.</li>
 <li><b>On rebuilt history the live rule looks much rougher than on its real years</b> (all simulated). Rebuilt 2008-2020: {{r_cagr}} a year, with falls of {{f1_d}} ({{f1_w}}) and {{f2_d}} ({{f2_w}}). Modelled 1991-2008: {{m_cagr}} a year and a fall that reaches {{deep}} by {{deep_t}}. Real years: {{a_cagr}} a year, {{a_dd}} deepest fall.</li>
 <li><b>History reached: 1991, not 50 years.</b> A third of this symphony trades volatility funds and the VIX starts in 1990.</li>
-<li><b>Correction.</b> My first build read stale futures closes in 2009-2020. The construction review caught it; the numbers I gave earlier today from that build are withdrawn and everything here is from the corrected data.</li>
+<li><b>Corrections.</b> Independent review caught two defects in my futures loader: the first build read stale closes in 2009-2020, and my first fix dropped sessions (a six-month hole in sugar in 2023). Numbers I gave from either build are withdrawn; everything here is from the twice-corrected data, re-checked by the reviewers who found the defects.</li>
 </ul>
 </div>
 
@@ -71,7 +71,7 @@
 <ul>
 <li><b>The rebuilt years are not evidence-grade.</b> One bar missed on the whole overlap; fidelity of the switch cannot be checked before 2021 at all.</li>
 <li><b>The real years are in sample for the live rule</b> (fitted on 2022), and they carry most of every "behind" result for short windows and moving averages.</li>
-<li><b>Data.</b> Futures files end 2024-03 and are a public research dataset whose terms were not verified. A few market-years could not be matched to an independent close (heating oil 2016 and 2020, gasoline 2009, 2010 and 2020, the JGB throughout). Four commodity markets hold a later contract than the fund.</li>
+<li><b>Data.</b> Futures files end 2024-03 and are a public research dataset whose terms were not verified. The JGB has no independent close to check against, and the gilt in 2009 and 2020 could not be matched; about an eighth of market-sessions use a print stamped after the equity close. Four commodity markets hold a later contract than the fund.</li>
 <li><b>Before 2008 several legs are models</b>; SVIX and ZVOL are modelled through 2008-2020 as well.</li>
 <li><b>Not covered:</b> the 12 threshold variants on the long history; 2020-12 to 2021-05; decisions other than at the close.</li>
 <li><b>Measurement basis:</b> daily close to close, trades filled at the same close, 5.9 basis points per unit of turnover. Section 5 was run after the fact and two years carry it. Leveraged funds are index times leverage until their launches (2008-2010).</li>
@@ -86,7 +86,7 @@
 <h2>12. Method notes for next time</h2>
 <ul>
 <li>A check against the real instrument certifies only the years it covers. Check the raw data against an independent source in every year before building on it: the stale closes sat in 2009-2020, outside the overlap.</li>
-<li>The reviewer who did not write the loader found the defect in it. Keep that pass.</li>
+<li>Reviewers who did not write the loader found the defect in it, and then a second one in my fix. Keep that pass, and re-run it on the fix.</li>
 <li>Set the fidelity bars before building, and hold to them when the result is close.</li>
 <li>A rebuilt series can reproduce large effects and still not resolve small ones; measure that on the overlap before claiming more power.</li>
 <li>Check a fund's own distribution record against the data vendor's adjusted prices.</li>

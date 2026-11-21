@@ -78,7 +78,7 @@ def main():
     hr = ks.simulate(tree, {t: {d: v for d, v in s.items() if d <= V1} for t, s in Pc.items()}, q1.B_START, V1)
     hs = ks.simulate(tree, Ps, q1.B_START, V1)
     out["bars"] = {}
-    for name, lo in (("whole", q1.B_START), ("second part", MID)):
+    for name, lo in (("whole", q1.B_START), ("second part", MID), ("pre-registered second half", "2023-12-01")):
         days = [d for d in hr["target"] if d >= lo]
         same = sum(set(hr["target"][d]) == set(hs["target"][d]) for d in days)
         close = sum(max(abs(hr["held"][d].get(k, 0) - hs["held"][d].get(k, 0)) for k in set(hr["held"][d]) | set(hs["held"][d])) <= 0.10 for d in days)

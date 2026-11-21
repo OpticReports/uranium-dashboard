@@ -25,3 +25,26 @@ the real code and recomputed from the stored series.
 
 ## After the fix
 The corrected loader, the re-run and the rewritten report were checked by a third reviewer (below).
+
+## Second round, on the first fix and the rewritten report (commit 894d09af)
+
+### Review C: the corrected loader. Verdict: not yet; two defects in the fix
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| C-B1 | BLOCKING | The fix dropped every session of a "23:00 row" year that has no such row: 124 sessions of sugar in 2023 (inside the fidelity window, +28.6% booked on one day), 102 of the JGB in 2021-22, 452 market-sessions from 2008. The published fidelity figures were understated; the whole-overlap F1 miss does not change. | FIXED (DEVIATIONS 13c): any day with a print is kept. Everything re-run. |
+| C-S1 | SERIOUS | The selector compared percentage changes of the back-adjusted level, noise where that level is near zero or negative; the "unresolved" commodity years and every choice of reading (c) were artefacts of it, and (c) was partly tomorrow's close (gasoline 2010 and 2020, gilt 1994). | FIXED (13c): selector on the excess return; reading (c) removed; heating oil and gasoline now resolve (0.79-0.94). Left unresolved: the JGB (no independent close) and the gilt in 2009 and 2020. |
+| C-S2 | SERIOUS | F4/F5 were not scored on the pre-registered second half. | FIXED (15b); shown in the bars table. |
+| C-m | MINOR | Section 5 read as confirmation; stale joined-verdict fields remain in `long.json` (unused by the report); about 13% of market-sessions in 2008-2020 use a print stamped after the equity close (8-15 flag days either way); year-boundary splices are 1.8x noisier; copper's intraday prints are quantised 2014-2020; the Bund joins a month late (by the monthly reset). | Section 5 rewritten as a by-product; the rest disclosed here and in report section 9. |
+| C-n | NOTE | The reviewer's own four corrected rebuilds and the first reviewer's three agree with the author's series on 99.3-99.8% of switch days in 2008-2020, give the same picture on the 62 variants (best t 1.0-1.9 against 2.65-2.80), and keep the switch-against-mirror result at t 2.25-2.61. Exposure, all bars and the long-run figures reproduced exactly. | |
+
+### Review D: the rewritten report. Verdict: verdict stands, nearly every number reproduces; rewording required
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| D-B1 | BLOCKING (claim) | "The switch itself held up" was overstated: 2008 and 2020 carry 65% of it; without them t 1.1; against staying risk-on it is zero without 2008, when most of the tree's funds are models; the mirror row is the sum of the other two; "fairer read", "28%" and "re-rates" unsupported. | REWRITTEN as "by-product, not evidence" with those numbers (`v6_followup.py`), the post-2022-04 real-fund line and the edge-rule fields. KPI tile replaced. |
+| D-S | SERIOUS | Wrong recovery date (sampled series) and missing unbroken-path low (81%, 2008-10); "late 2018" was the second-deepest fall; "agree with the real ones" too strong (rank correlation 0.2); the moving-average row of the resolution table was true by construction; "nothing fitted to the fund" ignored that the signal rule was inferred from holdings; verification block empty. | All corrected; daily paths now used for every date. |
+| D-m | MINOR | Counts, duplicated names, euro date, missing 2024 diagnostic, wording, the VIX-model range, undefined terms, missing section 9 and 11 items. | Applied. |
+| D-n | NOTE (clean) | Sections 3, 4 and 10, the bars table and the tiles reproduce; the placebo is sound (3 of 240 on the reviewer's design); the mirror t is not inflated by compounding. | |
+
+## Third round
+The second fix (13c, 15b) and the re-run were sent back to the two reviewers who had built their own
+corrected series (A and C) for a delta check; result below.

@@ -100,3 +100,18 @@ long.json, extras.json as of commit 4b5652f7 and its report draft) is withdrawn.
     consulted. Left unresolved and listed in the manifest: heating oil 2016 and 2020, gasoline 2009, 2010
     and 2020 (best 0.30-0.41; the files hold a deferred contract and the reference is the front month), the
     JGB throughout and the gilt in 2009 and 2020 (no independent close; the US 10y is a weak reference).
+13c. **The second construction review found rule 13's implementation still wrong; corrected here before the
+    re-run (2026-11-21).** (i) A year read as "the 23:00 row" dropped every session that has no such row:
+    124 sessions of sugar in 2023 (inside the fidelity window), 102 of the JGB in 2021-22, 452
+    market-sessions from 2008 in all. Now any day with a print is kept (the chosen reading first, the
+    other print otherwise). (ii) The selector compared percentage changes of the back-adjusted LEVEL,
+    which is noise where that level is near zero or negative (gasoline 2020, heating oil 2016 and 2020,
+    gilt 1987 and 1994); it now compares the excess return itself (change in adjusted price over the held
+    contract's price). 13b's explanation of the "unresolved" years (deferred contract against front
+    month) was wrong: on the right basis those years resolve. (iii) Reading (c), the next day's 23:00
+    row, is REMOVED: where it was chosen it was an artefact of (ii) and on some days it was tomorrow's
+    close. Readings are now (a), (b) and (d). The outputs of the build between 13b and this item
+    (commit 894d09af) are superseded; the Holy Grail study of addendum 59 never read them, the sleeve's
+    and the book's shape-only years did and are re-run.
+15b. **F4 and F5 are also scored on the 2023-12 window** (81 sessions), as deviation 15 said all three
+    would be.

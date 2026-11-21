@@ -54,7 +54,7 @@ REF = {"CORN": "ZC=F", "CRUDE_W": "CL=F", "COPPER": "HG=F", "GOLD": "GC=F", "HEA
        "SOYBEAN": "ZS=F", "SUGAR11": "SB=F", "WHEAT": "ZW=F", "GASOILINE": "RB=F", "GBP": "6B=F", "CAD": "6C=F", "AUD": "6A=F",
        "EUR": "6E=F", "JPY": "6J=F", "CHF": "6S=F", "US10": "ZN=F"}
 BOND_REF = {"CAD10": 0, "BUND": 0, "GILT": 0, "JGB": 1}          # reference = the US 10y, this many sessions earlier
-READINGS = ("mark", "intraday", "mark_next", "per_day")
+READINGS = ("mark", "intraday", "per_day")
 _fut = {}
 
 
@@ -85,8 +85,7 @@ def _readings(rows):
     mark, intra = {}, {}
     for stamp, v in rows:
         (mark if stamp[11:] == "23:00:00" else intra)[stamp[:10]] = v
-    md = sorted(mark)
-    return {"mark": mark, "intraday": intra, "mark_next": {a: mark[b] for a, b in zip(md, md[1:])}}
+    return {"mark": mark, "intraday": intra}
 
 
 def _per_day(mark, intra):
@@ -107,6 +106,12 @@ def _rets(x):
     return {b: x[b] / x[a] - 1 for a, b in zip(ds, ds[1:]) if x[a] > 0}
 
 
+def _xr(adj, px):
+    """{day: excess return} of one reading: change in the back-adjusted price over the held contract's price"""
+    ds = sorted(set(adj) & set(px))
+    return {b: (adj[b] - adj[a]) / px[a] for a, b in zip(ds, ds[1:]) if px[a] > 0}
+
+
 def _corr(a, b):
     n = len(a)
     if n < 60:
@@ -120,15 +125,15 @@ def _reference(m):
     if m in REF:
         r = _rets(kdata.series(REF[m], field="close"))
         return {d: v for d, v in r.items() if abs(v) < 0.15}
-    us = _rets(futures("US10")[0])
+    us = _xr(*futures("US10"))
     ds = sorted(us)
     k = BOND_REF[m]
     return {ds[i]: us[ds[i - k]] for i in range(k, len(ds))}
 
 
 def futures(m):
-    """({day: back-adjusted price}, {day: held contract's price}), each year read the way that matches an
-    independent daily close best (DEVIATIONS.md 13). The choices are kept in choices(m)."""
+    """({day: back-adjusted price}, {day: held contract's price}), each year read the way whose excess
+    returns match an independent daily close best (DEVIATIONS.md 13, 13b, 13c). Choices: choices(m)."""
     if m in _fut:
         return _fut[m][0], _fut[m][1]
     adj_rows, px_rows = _rows(m)
@@ -138,7 +143,7 @@ def futures(m):
         X["per_day"] = {d: X[k][d] for d, k in which.items() if d in X[k]}
     ref = _reference(m)
     years = sorted({d[:4] for d in A["mark"]} | {d[:4] for d in A["intraday"]})
-    R = {k: _rets(v) for k, v in A.items()}
+    R = {k: _xr(A[k], P[k]) for k in READINGS}
     pick = {}
     for y in years:
         cs = {}
@@ -155,9 +160,9 @@ def futures(m):
             for d, v in src[k].items():
                 if d[:4] == y:
                     out[d] = v
-            if k != "mark":                               # a day the chosen reading lacks keeps its filed close
-                for d, v in src["mark"].items():
-                    if d[:4] == y and d not in out and k == "intraday":
+            for other in ("mark", "intraday"):            # no session with a print is dropped (DEVIATIONS.md 13c)
+                for d, v in src[other].items():
+                    if d[:4] == y and d not in out:
                         out[d] = v
     _fut[m] = (adj, px, pick)
     return adj, px

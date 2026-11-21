@@ -18,7 +18,7 @@ CH = {}
 C = L["cells"]
 F1_N = (3, 5, 7, 8, 9, 10, 11, 12, 14, 17, 20, 25, 30, 40, 60)
 W, S, S2 = fid["vs_fund"]["whole overlap"], fid["vs_fund"]["second part"], fid["vs_fund"]["pre-registered second half"]
-BW, BS = sym["bars"]["whole"], sym["bars"]["second part"]
+BW, BS, B3 = sym["bars"]["whole"], sym["bars"]["second part"], sym["bars"]["pre-registered second half"]
 chall = [c for c in C if not C[c]["is_live_rule"]]
 
 
@@ -53,8 +53,9 @@ t_bars = table(["Bar (set in advance)", "Whole overlap, 2021-03 to 2024-03 (wher
     ["Switch reads the same on at least 95% of days"] + [f"{pu(v['flag_agreement'], 1)} {ok(v['bars']['F2_flag>=0.95'])}" for v in (W, S, S2)] + [pu(W['rymfx']['flag_agreement'], 1)],
     ["Volatility within 15%, return within 3 points"] + [f3(v) for v in (W, S, S2)] + [""],
     ["Symphony holds the same funds on at least 95% of sessions; log growth within 10%", f"{pu(BW['same_target'], 1)}; log growth {pu(BW['log_growth']['ratio'], 1)} of the real run {ok(BW['F4_same_holdings>=0.95'] and BW['F4_growth_within_10pct'])}",
-     f"{pu(BS['same_target'], 1)}; {pu(BS['log_growth']['ratio'], 1)} {ok(BS['F4_same_holdings>=0.95'] and BS['F4_growth_within_10pct'])}", "not scored", ""],
-    ["Ranks the 74 variants like the real fund (at least 0.80)", f"{BW['spearman_74']:.2f} {ok(BW['F5_spearman>=0.80'])}", f"{BS['spearman_74']:.2f} {ok(BS['F5_spearman>=0.80'])}", "not scored", ""],
+     f"{pu(BS['same_target'], 1)}; {pu(BS['log_growth']['ratio'], 1)} {ok(BS['F4_same_holdings>=0.95'] and BS['F4_growth_within_10pct'])}",
+     f"{pu(B3['same_target'], 1)}; {pu(B3['log_growth']['ratio'], 1)} {ok(B3['F4_same_holdings>=0.95'] and B3['F4_growth_within_10pct'])}", ""],
+    ["Ranks the 74 variants like the real fund (at least 0.80)", f"{BW['spearman_74']:.2f} {ok(BW['F5_spearman>=0.80'])}", f"{BS['spearman_74']:.2f} {ok(BS['F5_spearman>=0.80'])}", f"{B3['spearman_74']:.2f} {ok(B3['F5_spearman>=0.80'])}", ""],
     ["Not a bar: monthly correlation with the published index, 2008-2020", f"{ix['corr']:.3f} ({ix['months']} months; volatility {pu(ix['synthetic_vol'], 1)} vs {pu(ix['index_vol'], 1)})", "", "", ""]])
 # ---- 2. stretches
 sp = L["spans"]
