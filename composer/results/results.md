@@ -4927,6 +4927,87 @@ before it goes near the tree, and the bar must be set with the sample size in vi
 
 NO CHANGE to any symphony, gate, POLICY operation or the mirror. No service to redeploy.
 
+## Addendum 58 — Rebuilding the KMLM fund from its index rules, and the switcher on 1991-2020 (2026-11-21)
+
+Owner (2026-11-20): "if you can understand and be exacting with the logic ... you can create a synthetic
+version of that instrument and then backtest it ... That's what we should be doing." Pre-registered
+before the build (`research/kmlm_synth_2026-11/PREREG.md`, c8e9471a; fidelity bars F1-F5), 15 deviations
+logged, three rounds of independent review (`VERIFICATION.md`). Report with charts:
+`results/kmlm-synthetic-history-2026-11-21.html`. Standing rule added to CLAUDE.md the same day.
+
+VERDICT: **keep the 10-day switch (addendum 57 stands). The rebuilt fund is a far better stand-in than
+RYMFX but MISSED one of its five pre-set bars on the whole overlap, so its years are shape only, not
+evidence.** Read for shape, 2008-2020 does not contradict addendum 57.
+
+BUILD: the KFA MLM index rule applied to 22 futures markets (pysystemtrade public files, to 2024-03):
+each market long or short by price against its 252-day average, phased over 21 days (rule INFERRED from
+the fund's holdings; the rulebook is not public), published basket weights, monthly reset, T-bills, 1.05%
+a year. One scalar (exposure 3.08x) calibrated on the PUBLISHED INDEX 2008-2020, never on the fund.
+Monthly correlation with the published index 2008-2020: 0.980.
+
+FIDELITY against the real fund (corrected total return), 2021-03..2024-03, old stand-in in brackets:
+- F1 daily correlation 0.893 against a 0.90 bar: MISS (RYMFX 0.61). 0.934 from 2022-08, 0.921 from
+  2023-12; 0.78 in 2021; 0.95 on 5-day returns.
+- F2 the switch reads the same on 96.5% of days: pass (87%). F3 vol 15.0% vs 16.7%, return within 0.7
+  points: pass. F4 the symphony holds the same funds on 97.1% of sessions, log growth 102% of the real
+  run: pass. F5 ranks the 74 variants alike (0.97): pass.
+- On the 81 sessions from 2023-12: F1-F3 and F5 pass, F4's growth ratio (1.23) misses.
+- The bars are read on the whole overlap: one miss, so by the pre-registration the long history is not
+  evidence.
+
+LONG HISTORY (62 switch variants; all simulated, in sample): 1991, not 50 years: a third of the tree
+trades volatility funds and the VIX starts in 1990. Modelled 1991-04..2008-01 (VIX futures did not trade
+before 2004; 15-21 of 22 markets); rebuilt 2008-02..2020-12 (all 22 markets); real 2021-06..2026-11.
+- Live rule: +30%/yr with a fall reaching 81% (2002-11..2008-10) on the modelled years; +81%/yr with
+  falls of 47% (2018-09..12) and 46% (2015-03..2016-02) on the rebuilt years; +329%/yr, 38% on the real.
+- Rebuilt years alone: no variant distinguishable (best t 1.94 against 2.71 needed, p 0.38, a window
+  vote that differs from the live rule on 30 sessions; next best t 1.2; 19 of 59 ahead). Short windows -0.06 (t -1.4), long windows +0.04 (t 0.7, 11 of 14 ahead; 0 of 14 on the real
+  fund), moving-average forms -0.07. Window rankings on rebuilt and real years do not line up (rank
+  correlation 0.22).
+- Resolution on the overlap: the rebuilt fund reproduces large effects but not the small differences
+  between neighbouring windows (median correlation of daily differences 0.37 for 9/11/12 days, 4 of 6
+  same sign). It does NOT make the test for a neighbouring window sharper.
+
+BY-PRODUCT (edge rule; post hoc, on shape-only years): the switch itself on 2008-2020 (3,231 sessions)
+beat its mirror image by +0.43 log/yr (t 2.5; 1 of 60 time-shifted copies as good), always risk-off by
++0.24 (t 2.1), always risk-on by +0.15 (t 1.2). Concentrated: 59% of the mirror gap is 2008 and 2020;
+without them +0.21 (t 1.3); against always-on it is zero without 2008, when most of the tree's funds are
+models; against a fixed mix at the switch's own share +0.14 (t 1.5). Real fund after the 2022-04-13
+backtest date: +1.68 (t 4.3). Modelled years: no edge. Nothing to change.
+
+ADDENDUM 57 ERRATUM: Yahoo's adjusted KMLM close understates the 2022-12-28 distribution ($2.48 against
+$4.04 paid; $4.04 reproduces the prospectus's 2022 return). Re-run on the corrected series: the switch
+differs on 6 sessions, no variant changes sign, the same five ahead, rank correlation 0.99; long-window
+cells moved by up to 0.07 log/yr; the live rule +321% -> +329%/yr. No conclusion of addendum 57 changes.
+
+WHAT WENT WRONG ON THE WAY: (1) my first loader read stale closes in 2009-2020 (the day's 23:00 row is
+often the previous close); the construction review caught it. (2) my first fix dropped sessions (a
+six-month hole in sugar in 2023) and chose readings on the wrong return basis; the re-review caught
+that. Both builds' numbers are withdrawn (`out/first_build_withdrawn/`, commit 894d09af). (3) the first
+report claimed "three times the evidence" and "the switch held up"; both were cut back by review.
+
+HONESTY BOX: not evidence-grade (bar missed; switch fidelity uncheckable before 2021); futures data end
+2024-03, licence unverified; crude, corn, wheat and soybeans are held in a later contract than the
+fund's (9% of notional); the JGB has no independent close to check against; about an eighth of
+market-sessions use a print stamped after the equity close; SVIX and ZVOL modelled through 2008-2020,
+leveraged funds index x leverage until launch; the real years are at least partly in sample for the live
+rule. Measurement basis: daily close to close, trades at the same close, 5.856 bps x turnover.
+
+PENDING QUESTIONS (ranked; all first asked 2026-11-20 unless dated): P2 exchange settlement prices for
+the 22 markets through 2026 (removes the stale-close problem at source and lets the bars be re-scored on
+six years); P2 front-contract histories for crude, corn, wheat, soybeans; P2 CBOE's VIX futures
+settlements 2004-2008; P3 the index rulebook; P3 when the switcher was last tuned (2026-11-21); P3 the
+fund's distribution record at source; P3 the dataset's licence; P3 whether to replace RYMFX with the
+rebuilt fund in the repo's long panel (needs its own review).
+
+LESSONS: a check against the real instrument certifies only the years it covers: check the raw data
+against an independent source in every year first; re-run independent review on the fix, not only on the
+first build; hold to the pre-set bar when the result is close; measure on the overlap whether a rebuilt
+series resolves small effects before claiming more power; check a fund's distribution record against the
+vendor's adjusted prices.
+
+NO CHANGE to any symphony, gate, POLICY operation or the mirror. No service to redeploy.
+
 ## Addendum 59 — Windows and moving averages in Holy Grail, the crash sleeve and the book (2026-11-21)
 
 Owner (2026-11-20): "Run this report and investigation on the other symphonies and the set to see if

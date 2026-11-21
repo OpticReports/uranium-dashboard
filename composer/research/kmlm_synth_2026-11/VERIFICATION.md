@@ -48,3 +48,21 @@ The corrected loader, the re-run and the rewritten report were checked by a thir
 ## Third round
 The second fix (13c, 15b) and the re-run were sent back to the two reviewers who had built their own
 corrected series (A and C) for a delta check; result below.
+Results of the third round (commit cfe38b1c):
+
+- **Reviewer C on the second loader fix: it holds; no blocking or serious finding.** An independent
+  rebuild matches the series to 6e-17 and the 62 long-run cells to 1e-17. No session with a print is
+  dropped from 2008 in any market; every value comes from a row stamped the same day; the reviewer's own
+  selector picks the same reading in every market-year; outside the JGB and the gilt no market-year
+  2008-2023 looks stale or misdated. Every headline number reproduced (exposure, the bars on three
+  windows, the long-run figures, the switch table, the follow-up checks). Minor, disclosed: the JGB's
+  filled sessions in 2021-22 use a print about 15 hours after the Tokyo close (8.5% of notional, about
+  1.5% of risk); the best-by-t variant on the rebuilt years differs from the live rule on only 30
+  sessions; F5 on the 81-session window is 0.882 with ties averaged (0.888 as scored; both pass); two
+  figures for the live rule on 2008-2020 (80.5% on the continuous path, 80.8% from a fresh start).
+  Verdict: "fit to be reported as a better stand-in than the old one, read for shape only".
+- **Reviewer D on the rewritten report: fit to send once three points were fixed**, all applied: the
+  resolution table printed an upper-middle value instead of the median; "old high regained in 2010-09"
+  held for only 15 sessions (now: touched 2010-09, held from 2012-03); the verification block was a
+  placeholder. Wording minors applied. Every other number reproduced; no sentence leans on the rebuilt
+  years as evidence.

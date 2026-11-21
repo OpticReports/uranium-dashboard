@@ -52,6 +52,7 @@ window ($41,463, from the original's liquidation) (CHANGELOG 07-06, 07-07). Targ
 | Caps, vol targeting, VIX gates, 2x or 1x funds on the 75% leg | "nothing in the data says to resize" | add. 54.1 |
 | Exit a leg on an overnight gap of -8% or worse | log line only | add. 54.2 |
 | Another RSI window on the switch (3 to 60 days), with or without the ranked picks | none of 30 passes; 5 to 60 days cannot be told apart from 10 on 5.5 years | add. 57 |
+| The same switch variants on a rebuilt KMLM fund, 1991-2020 (shape only: the rebuild missed one fidelity bar) | no variant distinguishable from the live rule on 2008-2020; does not contradict add. 57 | add. 58 |
 | The switch as a moving average (price vs SMA/EMA 10-200, crossovers) or relative momentum | all 26 below the live rule in both periods | add. 57 |
 | Pops and dips at 5, 7, 14, 20 days with frequency-matched thresholds; voting or splitting across windows | 11 of 12 below; votes and splits level with the live rule | add. 57 |
 | A macro input to the switch (credit, financial stress, stock-bond correlation, dollar, curve, real rates) | none detectable as a predictor on 2010-2026; not built into the tree | add. 57 |

@@ -333,6 +333,13 @@ deterministic rationale are listed.
     the 12-day switch+picks cell (t +1.49, family-wise p 0.84). Tooling left behind:
     `research/kmlm_2026-11/ksim.py` (variant builders + corridor path, gated on Composer's own
     backtests) for any later tree study.
+27. Synthetic KMLM from its index rules (add. 58, 2026-11-21): BUILT, shape only. Far better stand-in
+    than RYMFX (daily corr 0.893 vs 0.61; switch agreement 96.5% vs 87%) but missed the 0.90 bar on the
+    whole overlap, so not evidence-grade. Switcher verdict unchanged. Open: exchange settlement data
+    through 2026 (would fix the loader's stale-close problem at source), front contracts for four
+    commodity markets, CBOE VIX futures settlements 2004-2008, whether to put it in the long panel.
+    Candidate edge logged, not actionable: the switch vs its mirror on 2008-2020 (t 2.5, two crisis
+    years carry it). Tooling: `research/kmlm_synth_2026-11/sdata.py`, `ksynth.py`.
 28. Windows / moving averages in HG and the sleeve, and the book (add. 59, 2026-11-21): CLOSED, no build.
     0 of 89 (HG) and 0 of 45 (sleeve) pass on long history; EMA no better than SMA. Open from it: P1 is
     the sleeve's weak 1994-2020 record (and its failure to hedge HG+KMLM together) the rebuilt data or

@@ -7,6 +7,21 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-11-21 — Study: the KMLM fund rebuilt from its index rules; the switcher on 1991-2020 (results.md addendum 58)
+
+- Owner (2026-11-20): build a rules-exact synthetic instead of accepting the short sample ("ok go ahead
+  and build"). Standing rule added to CLAUDE.md and its mirrors the same day.
+- Fidelity bars set before the build; exposure calibrated on the published index, never on the fund.
+  Three rounds of independent review: two defects in the futures loader (stale closes; then dropped
+  sessions and a wrong selector basis) were found by reviewers and fixed, both earlier builds withdrawn;
+  the report's claims were cut back twice (`research/kmlm_synth_2026-11/VERIFICATION.md`, `DEVIATIONS.md`).
+- Result: daily correlation with the real fund 0.893 against a 0.90 bar (RYMFX 0.61), switch agreement
+  96.5% (87%): a far better stand-in, but one bar missed, so 1991-2020 is shape only. On 2008-2020 no
+  switch variant is distinguishable from the live rule. Addendum 57 re-run on corrected KMLM
+  distribution data: no conclusion changes. Recommendation unchanged: keep the switcher as is.
+- NO change to any symphony, gate, POLICY operation or the mirror. Logic book: `symphonies/why/KMLM.md`
+  gains a row. Report: `results/kmlm-synthetic-history-2026-11-21.html`.
+
 ## 2026-11-21 — Study: windows and moving averages in Holy Grail, the sleeve and the book (results.md addendum 59)
 
 - Owner (2026-11-20): run the window / EMA / SMA investigation on the other symphonies and the set.
