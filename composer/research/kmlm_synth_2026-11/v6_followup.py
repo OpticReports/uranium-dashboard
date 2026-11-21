@@ -76,7 +76,9 @@ while a < len(dd):
         a = b
     else:
         a += 1
-out["path"] = {"deepest": {"depth": float(dd[j]), "peak": ds[i], "trough": ds[j], "recovered": rec}, "depth_at_end_of_model_years": float(dd[m_end]),
+last_below = max((ds[k] for k in range(j, len(ds)) if lvl[k] < lvl[i]), default=None)
+out["path"] = {"deepest": {"depth": float(dd[j]), "peak": ds[i], "trough": ds[j], "recovered": rec, "last_session_below_old_high": last_below},
+               "depth_at_end_of_model_years": float(dd[m_end]),
                "falls_from_2008": sorted([e for e in eps if e["trough"] >= "2012-01-01"], key=lambda e: -e["depth"])[:4]}
 # what the live rule held through its deepest fall after 2012 (which funds lost the money)
 P = PL

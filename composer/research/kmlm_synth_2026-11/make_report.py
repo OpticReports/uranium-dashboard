@@ -4,6 +4,7 @@ Usage: python3 make_report.py OUT_HTML"""
 import json
 import os
 import re
+import statistics
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -64,7 +65,7 @@ mk = X["markets_by_year"]
 t_stretch = table(["Stretch", "Years", "KMLM leg", "Volatility funds", "Counts as"], [
     [f"Real, {sp['A'][0][:7]} to {sp['A'][1][:7]}", f"{yrs['A']:.1f}", "the real fund", "real (modelled before their 2022 and 2023 launches)", "evidence"],
     [f"Rebuilt, {sp['R'][0][:7]} to {sp['R'][1][:7]}", f"{yrs['R']:.1f}", "rebuilt, all 22 markets", "built from the real VIX futures curve; leveraged funds before launch are index × leverage", "shape only: a fidelity bar was missed"],
-    [f"Model, {sp['M'][0][:7]} to {sp['M'][1][:7]}", f"{yrs['M']:.1f}", f"rebuilt on {sum(mk['1991'].values())} to {sum(mk['2007'].values())} of 22 markets (no euro before 1999; JGB and Bund data start later)",
+    [f"Model, {sp['M'][0][:7]} to {sp['M'][1][:7]}", f"{yrs['M']:.1f}", f"rebuilt on {sum(mk['1991'].values())} to {sum(mk['2007'].values())} of 22 markets (no euro leg before 2000; JGB and Bund data start later)",
      "a model: VIX futures did not trade before 2004", "shape only"]])
 # ---- 3. window surface
 val = lambda c, k: 0.0 if C[c]["is_live_rule"] else C[c][k]["dlog_per_yr"]                 # noqa: E731
@@ -108,11 +109,11 @@ t_live = table(["Stretch", "Return a year", "Max drawdown", "Sharpe", "Deepest f
 SW, FS, FP = RV["switch"], FU["switch"], FU["path"]
 swc = lambda v: f"{lg(v['live_minus_log_per_yr'])} (t {v['t']:+.1f})"                       # noqa: E731
 t_switch = table(["Live rule minus", "Modelled 1991-2008", "Rebuilt 2008-2020", "Real fund 2021-2026"], [
-    [n] + [swc(SW[k][key]) for k in ("M", "R", "REAL")] for key, n in (("always_risk_on", "always risk-on"), ("always_risk_off", "always risk-off"), ("inverted", "the switch upside down"))]
-    + [["the switch upside down, leaving out 2008 and 2020", "", f"{lg(FS['R']['mirror_without_2008_2020']['log_per_yr'])} (t {FS['R']['mirror_without_2008_2020']['t']:+.1f})", ""],
+    [n] + [swc(SW[k][key]) for k in ("M", "R", "REAL")] for key, n in (("always_risk_on", "always risk-on"), ("always_risk_off", "always risk-off"), ("inverted", "its mirror image"))]
+    + [["its mirror image, leaving out 2008 and 2020", "", f"{lg(FS['R']['mirror_without_2008_2020']['log_per_yr'])} (t {FS['R']['mirror_without_2008_2020']['t']:+.1f})", ""],
        ["always risk-on, leaving out 2008", "", f"{lg(FS['R']['risk_on_without_2008']['log_per_yr'])} (t {FS['R']['risk_on_without_2008']['t']:+.1f})", ""],
        ["a fixed mix at the switch's own risk-on share", "", f"{lg(FS['R']['vs_static_mix']['log_per_yr'])} (t {FS['R']['vs_static_mix']['t']:+.1f})", f"{lg(FS['REAL']['vs_static_mix']['log_per_yr'])} (t {FS['REAL']['vs_static_mix']['t']:+.1f})"]]
-    + [["Placebo: slid switches at least as good, of 60", "not run", str(SW["R"]["placebo"]["at_or_above_live"]), str(SW["REAL"]["placebo"]["at_or_above_live"])],
+    + [["Placebo: time-shifted copies at least as good, of 60", "not run", str(SW["R"]["placebo"]["at_or_above_live"]), str(SW["REAL"]["placebo"]["at_or_above_live"])],
        ["Max drawdown: live rule / always risk-on"] + [f"{pu(SW[k]['live']['maxdd'])} / {pu(SW[k]['always_risk_on']['maxdd'])}" for k in ("M", "R", "REAL")]])
 RS = RV["resolution"]
 RG = {"Neighbouring windows (9, 11, 12 days)": [f"{f}.rsi{n}" for f in ("F1a", "F1b") for n in (9, 11, 12)], "Short windows (3 to 8)": [f"{f}.rsi{n}" for f in ("F1a", "F1b") for n in (3, 5, 7, 8)],
@@ -122,7 +123,7 @@ rrow = []
 for g, cs in RG.items():
     cs = [c for c in cs if c in RS["cells"]]
     v = [RS["cells"][c] for c in cs]
-    med = sorted(x["corr_of_daily_difference"] for x in v)[len(v) // 2]
+    med = statistics.median(x["corr_of_daily_difference"] for x in v)
     rrow.append([g, f"{med:.2f}", f"{sum((x['real_total'] > 0) == (x['synthetic_total'] > 0) for x in v)} of {len(v)}",
                  f"{(sum((x['real_total'] - x['synthetic_total']) ** 2 for x in v) / len(v)) ** 0.5 / yo:.2f}"])
 t_res = table(["Variants", "Typical correlation of daily differences, rebuilt vs real", "Same sign against the live rule", "Typical gap, log-pts/yr"], rrow)
@@ -131,7 +132,7 @@ t_open = table(["Priority", "Question", "What it would move", "Status"], [
     ["P2", "Front-contract histories for crude, corn, wheat and soybeans", "The four markets where the files hold a later contract than the fund", "open, first asked 2026-11-20"],
     ["P2", "CBOE's own VIX futures settlements for 2004-2008", "Would turn four modelled years into rebuilt ones", "open, first asked 2026-11-20; the CBOE file host is reachable, not yet built"],
     ["P3", "The index provider's rulebook (the signal rule here is inferred from holdings)", "Removes the largest assumption in the build", "open, first asked 2026-11-20"],
-    ["P3", "When the switcher's rule was fitted or adopted (the tree is stamped 2022-04-13)", "Which real years count as out of sample for the live rule", "open, first asked 2026-11-21"],
+    ["P3", "When the switcher's rule was last tuned or adopted (its description carries a backtest date of 2022-04-13)", "Which real years count as out of sample for the live rule", "open, first asked 2026-11-21"],
     ["P3", "The fund's own distribution record (its site refused the request)", "Confirms the $4.04 figure at source", "open, first asked 2026-11-20"],
     ["P3", "Licence terms of the public futures dataset", "Whether the rebuild can be kept in the repo's tooling", "open, first asked 2026-11-20"],
     ["P3", "Use the rebuilt fund in place of the RYMFX stand-in in the repo's long panel", "Every other long-history study that reads the KMLM switch", "proposal of 2026-11-20; needs its own review"]])
@@ -160,7 +161,7 @@ subs = {
     "{{sw_conc}}": pu(FS["R"]["share_of_mirror_from_2008_2020"]), "{{sw_mix}}": lg(FS["R"]["vs_static_mix"]["log_per_yr"]), "{{sw_mix_t}}": f"{FS['R']['vs_static_mix']['t']:.1f}",
     "{{sw_after}}": lg(FS["REAL"]["mirror_after_stamp"]["log_per_yr"]), "{{sw_after_t}}": f"{FS['REAL']['mirror_after_stamp']['t']:.1f}", "{{sw_after_n}}": f"{FS['REAL']['mirror_after_stamp']['sessions']:,}",
     "{{rk}}": f"{FU['ranks']['rebuilt_vs_real']:.2f}", "{{f1_2024}}": f"{FD['by_year']['2024']['corr']:.2f}",
-    "{{deep}}": pu(FP["deepest"]["depth"]), "{{deep_p}}": FP["deepest"]["peak"][:7], "{{deep_t}}": FP["deepest"]["trough"][:7], "{{deep_r}}": FP["deepest"]["recovered"][:7],
+    "{{deep}}": pu(FP["deepest"]["depth"]), "{{deep_p}}": FP["deepest"]["peak"][:7], "{{deep_t}}": FP["deepest"]["trough"][:7], "{{deep_r}}": FP["deepest"]["recovered"][:7], "{{deep_h}}": FP["deepest"]["last_session_below_old_high"][:7],
     "{{f1_d}}": pu(FP["falls_from_2008"][0]["depth"]), "{{f1_w}}": f"{FP['falls_from_2008'][0]['peak'][:7]} to {FP['falls_from_2008'][0]['trough'][:7]}",
     "{{f2_d}}": pu(FP["falls_from_2008"][1]["depth"]), "{{f2_w}}": f"{FP['falls_from_2008'][1]['peak'][:7]} to {FP['falls_from_2008'][1]['trough'][:7]}",
     "{{f1_funds}}": "the loss was mostly in " + ", ".join(list(FP["deepest_since_2012_by_fund"])[:3]),

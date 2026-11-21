@@ -71,7 +71,8 @@
    "depth": 0.8083252014716802,
    "peak": "2002-11-25",
    "trough": "2008-10-10",
-   "recovered": "2010-09-29"
+   "recovered": "2010-09-29",
+   "last_session_below_old_high": "2012-03-26"
   },
   "depth_at_end_of_model_years": 0.7592606296668294,
   "falls_from_2008": [
