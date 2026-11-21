@@ -860,11 +860,14 @@ export class ApiError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Free-tier hosting spins the service down after idle; the waking request 502/503s
-// for ~20s while the container boots. Retry those (and transient network errors) so
-// a cold start looks like a slow load, not an error.
+// Retry gateway errors (and transient network errors) so a restart or a router
+// episode looks like a slow load, not an error. 2026-11-21: Render's router returned
+// 502s in episodes of ~5 minutes (about half of requests failing); four retries over
+// ~30 s left several panels on an error box. Seven retries over ~90 s outlast that.
 const RETRY_STATUSES = new Set([502, 503, 504]);
-const MAX_RETRIES = 4;
+const MAX_RETRIES = 7;
+const RETRY_DELAYS_MS = [3000, 6000, 9000, 12000, 15000, 20000, 25000];
+const retryDelay = (attempt: number) => RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
 
 async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   let lastErr = new ApiError("unknown error", 0);
@@ -875,7 +878,7 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "network error";
       lastErr = new ApiError(`Request failed: ${msg}`, 0);
-      if (attempt < MAX_RETRIES) { await sleep(2000 * (attempt + 1)); continue; }
+      if (attempt < MAX_RETRIES) { await sleep(retryDelay(attempt)); continue; }
       throw lastErr;
     }
     if (res.ok) {
@@ -887,7 +890,7 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
     }
     lastErr = new ApiError(`HTTP ${res.status} for ${path}`, res.status);
     if (RETRY_STATUSES.has(res.status) && attempt < MAX_RETRIES) {
-      await sleep(3000 * (attempt + 1)); // 3s, 6s, 9s, 12s — covers a cold boot
+      await sleep(retryDelay(attempt)); // 3 s ... 25 s, ~90 s in all
       continue;
     }
     throw lastErr;
