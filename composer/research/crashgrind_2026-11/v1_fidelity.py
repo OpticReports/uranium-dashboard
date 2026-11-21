@@ -48,7 +48,15 @@ def bars(s, r):
     full = {y: sum(d[:4] == y for d in ds) > 200 for y in yrs}
     top = np.argsort(-np.abs(b))[:20]
     ratio = a[top] / b[top]
-    return {"from": ds[0], "to": ds[-1], "n": len(ds), "corr": float(np.corrcoef(a, b)[0, 1]), "log_gap_per_yr": float((np.log1p(a) - np.log1p(b)).mean() * 252),
+    la, lb = np.log1p(a), np.log1p(b)
+    multi = {}
+    for k in (2, 5):                                                           # added after the first run: is the daily miss timing or level?
+        n = len(la) // k
+        multi[str(k)] = float(np.corrcoef(la[:n * k].reshape(n, k).sum(1), lb[:n * k].reshape(n, k).sum(1))[0, 1])
+    ex = np.array([not ("2018-02-01" <= d <= "2018-02-28") for d in ds])
+    curve = [[d, float(f"{x:.4g}"), float(f"{y:.4g}")] for d, x, y in list(zip(ds, np.exp(np.cumsum(la)), np.exp(np.cumsum(lb))))[::5]]
+    return {"multi_day_corr": multi, "corr_without_2018_02": float(np.corrcoef(a[ex], b[ex])[0, 1]), "curve": curve,
+            "from": ds[0], "to": ds[-1], "n": len(ds), "corr": float(np.corrcoef(a, b)[0, 1]), "log_gap_per_yr": float((np.log1p(a) - np.log1p(b)).mean() * 252),
             "worst_year_gap": max(((y, v) for y, v in by.items() if full[y]), key=lambda z: abs(z[1])), "by_year": by,
             "top20_within": int(((ratio >= 0.8) & (ratio <= 1.25)).sum()), "top20": [[ds[i], round(float(b[i]), 4), round(float(a[i]), 4)] for i in top],
             "beta": float(np.cov(b, a)[0, 1] / a.var(ddof=1))}

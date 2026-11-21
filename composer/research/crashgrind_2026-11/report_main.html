@@ -1,0 +1,65 @@
+<h1>Can a crash be told from a grind?</h1>
+<p class="sub">Study of 2026-11-21 (addendum 64). Follow-up to addendum 63: holding less sleeve while the market is washed out paid in drawn-out bear markets and failed in the 2020 crash. To test whether the two can be told apart, the volatility funds were first rebuilt from the exchange's own VIX futures settlements back to 2006, so that 2007 to 2011 count as test cases. Simulated, in sample; not a forecast.</p>
+
+<div class="card verdict">
+<ul>
+<li><b>No. None of the four crash readings separates the falls where the sleeve should be kept from those where it should be cut.</b> Leaving 2020 out, the sleeve did worse against the other two engines on crash-flagged washed-out days than on the rest: {{d1_c}} a day against {{d1_g}} for the speed reading (p {{d1_p}}) and {{d2_c}} against {{d2_g}} for VIX above VIX3M (p {{d2_p}}).</li>
+<li><b>2020 was the exception, not the type.</b> Of the {{n_fast}} fast falls since 2006 ({{fast_list}}), the sleeve beat the other two engines in {{n_fast_win}}: {{fast_wins}}. In the fall of 2008, on volatility funds rebuilt from futures, the sleeve made {{e08_s}} log-points while the other two made {{e08_o}}.</li>
+<li><b>A three-level sleeve weight (15% in a grind, 50% in a crash, 31.8% otherwise) loses to a constant weight</b> without 2020: {{pol_wo}} a year with the speed reading, {{pol_wo2}} with the VIX one. Adding a crash reading does worse than using none.</li>
+<li><b>What is left of addendum 63's lead:</b> 15% sleeve on every washed-out day, no reading, against a constant weight: {{un_a}} a year on 2006 to 2011, {{un_b}} on 2011-11 to 2020-11, {{un_c}} since 2021-06; {{un_wo}} without 2020 and {{un_wo_late}} one close late. Small, and gone with late fills.</li>
+<li><b>The sleeve's crash payoff needs the entry at the shock-day close.</b> In the 2020 episode it made {{e20_s}} log-points on same-close fills and {{e20_late}} with every trade one close late; in August 2011, {{e11_s}} against {{e11_late}}.</li>
+<li><b>By-product: the volatility funds now have a sounder history to 2006.</b> Rebuilt from futures settlements, VIXY grows within {{gap}} a year of the real fund over 16 years (worst year {{gap_worst}}); the old model was off by {{mo_gap}} a year and by {{mo_worst}} in its worst year. Day by day it misses the bar I set (correlation {{corr}}, needed 0.98) because futures settle 15 minutes after the funds close; over five days it is {{corr5}}. By my own rule the rebuilt years are therefore shape only.</li>
+<li><b>The rebuild changes the sleeve's 2008:</b> from {{sl08}} log-points; the shock ladder alone lost {{lad08}} in 2008 and {{lad10}} in 2010.</li>
+</ul>
+</div>
+
+<div class="kpis">
+<div class="kpi"><b>{{n_fast_win}} of {{n_fast}}</b><span>fast falls since 2006 in which the sleeve beat the other two engines</span></div>
+<div class="kpi"><b>{{pol_wo}}</b><span>log-points a year for the crash-or-grind policy against a constant weight, without 2020</span></div>
+<div class="kpi"><b>{{e20_s}} → {{e20_late}}</b><span>the sleeve in the 2020 crash: same-close fills against one close late</span></div>
+<div class="kpi"><b>{{gap}} a year</b><span>rebuilt VIXY against the real fund, 2011 to 2026; {{bars_met}} of 5 fidelity bars met</span></div>
+</div>
+
+<h2>1. The rebuild</h2>
+<p>The sleeve's crash trades are in UVXY and SVXY, which launched in 2011-10. They track a published index of the first two VIX futures. I rebuilt that index from the exchange's daily settlement file for every monthly contract, added T-bills and fees, and applied each fund's leverage (2 x and -1 x before 2018-02-28, the convention of the existing history; today's 1.5 x and -0.5 x shown beside it).</p>
+{{ch_fid}}
+{{t_fid}}
+{{t_bars}}
+<p class="note">Three daily-accuracy bars are missed, two bars (yearly growth; the sleeve's own behaviour on the rebuilt funds) are met. The miss is timing, not level: futures settle at 16:15 and the funds close at 16:00, so a late-day move lands on different days in the two series (2018-02-05 is the extreme: the index rose 96% at settlement, the fund 34% at its close). The two-day and five-day columns were added after seeing this. On the rebuilt funds the sleeve's 2020 is {{a5_2020}} log-points on the real ones, so the rebuild understates that crash payoff. VIXM and VXZ (the mid-term index) are not rebuilt.</p>
+<h3>What it changes, 2006 to 2011</h3>
+{{t_eng}}
+<p class="note">Log growth by year. The sleeve changes on {{sl_changed}} sessions and Holy Grail on {{hg_changed}}. The shock ladder alone made {{lad_new}} log-points over 2006 to 2011 on the rebuilt funds against {{lad_old}} on the old model.</p>
+
+<h2>2. Episode by episode</h2>
+{{ch_ep}}
+{{t_ep}}
+<p class="note">Every separate episode since 2006 with the S&P 500 far below its 50-day average on at least 15 days. The four reading columns give the share of the episode's days each reading was on. Returns are log-points over the washed-out days only. Bold: the sleeve beat the other two engines. In the {{n_slow}} episodes not flagged as fast it did so in {{n_slow_win}}.</p>
+
+<h2>3. Day by day</h2>
+{{t_day}}
+<p class="note">p allows for runs of similar days (Newey-West). After correcting for the two primary readings the without-2020 figures are p {{d1_holm}} and {{d2_holm}}. The 2011-11 to 2020-11 rows are the only ones where flagged days favour the sleeve, and that is 2020.</p>
+
+<h2>4. As a policy</h2>
+{{t_pol}}
+<p class="note">Growth in log-points a year against a book at one constant sleeve weight equal to the policy's average. Weights move one close after the reading. The last three columns take the policy apart: only raising the sleeve on flagged days, only cutting it on unflagged ones, and cutting it on every washed-out day with no reading at all.</p>
+<details><summary>The other washed-out states and readings, without 2020</summary>{{t_other}}</details>
+
+<h2>5. What this does not settle</h2>
+<ul>
+<li><b>{{n_fast}} fast falls.</b> That is enough to see the pattern is not there in most of them; it could not have confirmed a rule either way.</li>
+<li><b>2006 to 2011 is shape only</b> by the bars set in advance: the rebuilt funds match the real ones' growth but not their daily timing. A fund rebuilt from its index also ignores what a real one faces in a crash (the 2018-02 event that cut these funds' leverage).</li>
+<li><b>The readings were written knowing what 2020 looked like.</b> That is why 2020 is left out of the test; it also means these four are not the only possible readings.</li>
+<li><b>Real, rebuilt, modelled.</b> Real funds: Holy Grail from 2015-09, the sleeve from 2020-12, KMLM from 2021-06. UVXY, SVXY and VIXY rebuilt from futures 2006-01 to launch; VIXM and VXZ on the old model; before 2006 nothing changes and VIX funds are a model of a market that did not exist before 2004. No sessions 2020-12-02 to 2021-06-01.</li>
+<li><b>Same-close fills</b> in the engine paths; the one-close-late columns are the bound. <b>Measurement basis:</b> daily mark-to-market.</li>
+</ul>
+
+<h2>6. Open questions</h2>
+<div class="tw"><table><thead><tr><th>Priority</th><th>Question</th><th>What it would move</th><th>Status</th></tr></thead><tbody>
+<tr><td>P2</td><td>Adopt the futures-based volatility funds in the long history used by every study (it would revise the sleeve's 2006 to 2011 in addenda 59 and 60)?</td><td>The sleeve's long record; nothing live</td><td>open, first asked 2026-11-21</td></tr>
+<tr><td>P2</td><td>Rebuild VIXM and VXZ the same way (fourth to seventh month futures; the files are already downloaded)</td><td>Holy Grail's and KMLM's volatility legs before 2011</td><td>open, first asked 2026-11-21</td></tr>
+<tr><td>P3</td><td>Intraday futures prices at 16:00 for the stress days, to close the 15-minute gap</td><td>Whether the rebuilt years can move from "shape only" to "rebuilt"</td><td>open, first asked 2026-11-21</td></tr>
+</tbody></table></div>
+
+<details open><summary>Independent verification</summary>
+{{verification}}
+</details>
