@@ -161,6 +161,9 @@ top2 = sorted(BY, key=lambda y: -BY[y]["book_log"])[:2]
 lean = lambda v: (f"{lg(v['growth'])} a year against {lg(v['growth_mix'])} for the same cash held evenly (p {pv(v['p_growth'])}) and {lg(v['growth_full'])} for the full book; deepest fall {pu(v['maxdd'], 1)} against "   # noqa: E731
                   f"{pu(v['maxdd_mix'], 1)} and {pu(v['maxdd_full'], 1)}")
 subs = {
+    "{{lean_same}}": f"a plain book {pu(LT['verdict']['same_fall_mix']['exposure'])} invested has the same deepest fall and grows {lg(LT['verdict']['same_fall_mix']['growth'])}",
+    "{{gold_same}}": (f"that book grew {lg(LI['lean_in']['F_GOLD']['verdict']['growth'])} with a deepest fall of {pu(LI['lean_in']['F_GOLD']['verdict']['maxdd'], 1)}; a plain book "
+                      f"{pu(LI['lean_in']['F_GOLD']['verdict']['same_fall_mix']['exposure'], 1)} invested has the same fall and grows {lg(LI['lean_in']['F_GOLD']['verdict']['same_fall_mix']['growth'])}"),
     "{{lean_v}}": lean(LT["verdict"]), "{{lean_s}}": lean(LT["shape"]), "{{lean_exp}}": pu(LT["verdict"]["avg_exposure"]),
     "{{kmlm_share}}": pu(eng_sum["KMLM"] / sum(eng_sum.values())), "{{top2}}": " and ".join(sorted(top2)), "{{top2_share}}": pu(sum(BY[y]["book_log"] for y in top2) / tot_b),
     "{{n_fail}}": str(n_fail), "{{n_scored}}": str(n_scored),
